@@ -1274,9 +1274,16 @@ def run_query(conn, p):
     ORDER BY t.TOUCHPOINT_NUM
     """
     df_post_signup_touchpoints = pd.read_sql(post_signup_touchpoint_query, conn)
-    
-    # Overwrite 1st Touchpoint with total New Platform Signups
+
+    # Internal-consistency guard: if there were no new platform signups in
+    # Key Metrics, the touchpoint cohort is by construction empty (it is
+    # joined FROM TEMP_NEW_PLATFORM_SIGNUPS). Any nonzero touchpoint count
+    # at this point means a stale/leaked read. Force them to zero so the
+    # bottom of the report cannot contradict the top.
     total_signups_count = int(df_summary['NEW_SIGNUPS'].iloc[0]) if not df_summary.empty and 'NEW_SIGNUPS' in df_summary.columns else 0
+    if total_signups_count == 0 and not df_post_signup_touchpoints.empty:
+        df_post_signup_touchpoints['USER_COUNT'] = 0
+        df_post_signup_touchpoints['PERCENTAGE'] = 0.0
     if not df_post_signup_touchpoints.empty:
         # Find the row with TOUCHPOINT_RANK = 1 and update it
         first_touchpoint_idx = df_post_signup_touchpoints[df_post_signup_touchpoints['TOUCHPOINT_RANK'] == 1].index

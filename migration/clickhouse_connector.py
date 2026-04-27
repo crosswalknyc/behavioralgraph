@@ -420,10 +420,13 @@ def translate_sql(sql: str) -> str:
         result = re.sub(rf'\b{alias}\.value\b', f'{alias}_value', result)
 
     # ── CREATE OR REPLACE TEMP TABLE → CH temporary table ─────────────────
-    # With AS subquery
+    # Snowflake "OR REPLACE" semantic = drop-then-create; we must emit an
+    # explicit DROP so stale rows from an earlier statement/session can't
+    # persist (CREATE TEMP TABLE IF NOT EXISTS would silently skip the
+    # SELECT if the table already exists in the session).
     result = re.sub(
         r'CREATE\s+OR\s+REPLACE\s+TEMP(?:ORARY)?\s+TABLE\s+(\w+)\s+AS\b',
-        r'CREATE TEMPORARY TABLE IF NOT EXISTS \1 ENGINE = Memory AS',
+        r'DROP TABLE IF EXISTS \1;\nCREATE TEMPORARY TABLE \1 ENGINE = Memory AS',
         result, flags=re.IGNORECASE
     )
     # With explicit column DDL (no AS) — translate Snowflake types
@@ -431,7 +434,8 @@ def translate_sql(sql: str) -> str:
         name = m.group(1)
         col_defs = m.group(2)
         translated_cols = _translate_column_defs(col_defs)
-        return f'CREATE TEMPORARY TABLE IF NOT EXISTS {name} ({translated_cols}) ENGINE = Memory'
+        return (f'DROP TABLE IF EXISTS {name};\n'
+                f'CREATE TEMPORARY TABLE {name} ({translated_cols}) ENGINE = Memory')
     result = re.sub(
         r'CREATE\s+OR\s+REPLACE\s+TEMP(?:ORARY)?\s+TABLE\s+(\w+)\s*\(([^)]+)\)',
         replace_temp_ddl, result, flags=re.IGNORECASE
