@@ -707,6 +707,27 @@
         .activity-item .time {
             font-size: 0.7rem;
             color: var(--text-secondary);
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        .credit-row-delete-btn {
+            background: transparent;
+            border: 1px solid var(--border-color);
+            color: var(--text-secondary);
+            width: 22px;
+            height: 22px;
+            border-radius: 50%;
+            font-size: 0.9rem;
+            line-height: 1;
+            cursor: pointer;
+            padding: 0;
+            transition: all 0.15s ease;
+        }
+        .credit-row-delete-btn:hover {
+            background: #ef4444;
+            border-color: #ef4444;
+            color: #fff;
         }
         .user-details-tabs {
             display: flex;
@@ -7166,11 +7187,23 @@
             // Total actions
             const totalActions = Object.values(featureUsage).reduce((a, b) => a + b, 0);
             
+            // Pool-aware "Credits Remaining": for pool users (company pool,
+            // no personal override), deductions land on the shared pool and
+            // never touch user.credits — so we display effective_remaining
+            // from the stats endpoint instead of the stale personal field.
+            const credCtx = data.credits_context || {};
+            const isPoolUser = !!credCtx.is_pool_user;
+            const remainingValue = (credCtx.effective_remaining != null)
+                ? credCtx.effective_remaining
+                : (user.credits == null ? 0 : user.credits);
+            const remainingDisplay = remainingValue === -1 ? '∞' : remainingValue;
+            const remainingLabel = isPoolUser ? 'Credits Remaining (pool)' : 'Credits Remaining';
+
             const content = `
                 <div class="user-stats-grid">
                     <div class="user-stat-card">
-                        <div class="stat-value">${user.credits === -1 ? '∞' : user.credits}</div>
-                        <div class="stat-label">Credits Remaining</div>
+                        <div class="stat-value">${remainingDisplay}</div>
+                        <div class="stat-label">${remainingLabel}</div>
                     </div>
                     <div class="user-stat-card">
                         <div class="stat-value">${user.credits_used || 0}</div>
@@ -7247,12 +7280,13 @@
                         <h4>💳 Credits Used and What For</h4>
                         <p style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 1rem;">Total credits used: <strong>${user.credits_used || 0}</strong></p>
                         <div class="recent-activity-list">
-                            ${(user.credit_usage_history && user.credit_usage_history.length > 0) ? user.credit_usage_history.slice(0, 100).map(entry => {
+                            ${(user.credit_usage_history && user.credit_usage_history.length > 0) ? user.credit_usage_history.slice(0, 100).map((entry, i) => {
                                 const dateStr = entry.used_at ? formatDateTimePST(entry.used_at) : '';
                                 const desc = entry.description || entry.pull_type || 'Analysis';
                                 const pull = entry.pull_type ? ` (${entry.pull_type})` : '';
                                 const n = entry.credits_used != null ? entry.credits_used : 1;
-                                return `<div class="activity-item"><span>${desc}${pull} — ${n} credit(s)</span><span class="time">${dateStr}</span></div>`;
+                                const delBtn = `<button type="button" class="credit-row-delete-btn" title="Delete this row and refund ${n} credit(s)" onclick="deleteUserCreditHistoryEntry('${username}','usage',${i})">&times;</button>`;
+                                return `<div class="activity-item"><span>${desc}${pull} — ${n} credit(s)</span><span class="time">${dateStr} ${delBtn}</span></div>`;
                             }).join('') : '<div style="color: var(--text-secondary); font-size: 0.85rem; padding: 1rem; text-align: center;">No credit usage recorded yet</div>'}
                         </div>
                     </div>
@@ -7260,14 +7294,18 @@
                         <h4>➕ Credits added / deducted (attributions)</h4>
                         <p style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 0.5rem;">Grants and charges recorded for this user.</p>
                         <div class="recent-activity-list">
-                            ${(user.credit_attribution_history && user.credit_attribution_history.length > 0) ? user.credit_attribution_history.slice(0, 100).map(entry => {
+                            ${(user.credit_attribution_history && user.credit_attribution_history.length > 0) ? user.credit_attribution_history.slice(0, 100).map((entry, i) => {
                                 const dateStr = entry.added_at ? formatDateTimePST(entry.added_at) : '';
                                 const reason = entry.reason || 'Credits change';
                                 const isDed = entry.type === 'deduction' || (entry.credits_deducted != null && entry.credits_deducted > 0);
                                 const n = isDed ? (entry.credits_deducted != null ? entry.credits_deducted : 0) : (entry.credits_added != null ? entry.credits_added : 0);
                                 const sign = isDed ? '−' : '+';
                                 const by = entry.added_by ? ` by ${entry.added_by}` : '';
-                                return `<div class="activity-item"><span>${reason} — ${sign}${n} credit(s)${by}</span><span class="time">${dateStr}</span></div>`;
+                                const tip = isDed
+                                    ? `Delete this row and refund ${n} credit(s)`
+                                    : `Delete this row and claw back ${n} credit(s)`;
+                                const delBtn = `<button type="button" class="credit-row-delete-btn" title="${tip}" onclick="deleteUserCreditHistoryEntry('${username}','attribution',${i})">&times;</button>`;
+                                return `<div class="activity-item"><span>${reason} — ${sign}${n} credit(s)${by}</span><span class="time">${dateStr} ${delBtn}</span></div>`;
                             }).join('') : '<div style="color: var(--text-secondary); font-size: 0.85rem; padding: 1rem; text-align: center;">No attributions yet</div>'}
                         </div>
                         ${user.credits !== -1 ? `
@@ -7423,6 +7461,34 @@
             a.click();
             URL.revokeObjectURL(a.href);
             if (typeof showToast === 'function') showToast('User activity exported to CSV');
+        }
+
+        async function deleteUserCreditHistoryEntry(username, listName, index) {
+            const listLabel = listName === 'usage' ? 'credits used' : 'attribution';
+            if (!confirm(`Delete this ${listLabel} row and auto-adjust the user's credit balance?\n\nIf it was an admin charge, its paired entry on the other list is also removed.`)) {
+                return;
+            }
+            try {
+                const response = await fetch(`/api/admin/users/${encodeURIComponent(username)}/credit-history/undo`, {
+                    method: 'POST',
+                    credentials: 'same-origin',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ list: listName, index, remove_paired: true })
+                });
+                const data = await response.json().catch(() => ({}));
+                if (response.ok && data.success) {
+                    const bal = data.credits === -1 ? '∞' : data.credits;
+                    const balLabel = data.credit_source === 'pool' ? 'Pool remaining' : 'Balance';
+                    if (typeof showToast === 'function') {
+                        showToast(`Row deleted. ${balLabel}: ${bal} • Credits used: ${data.credits_used}`);
+                    }
+                    showUserDetails(username);
+                } else {
+                    if (typeof showToast === 'function') showToast(data.error || 'Failed to delete row', true);
+                }
+            } catch (e) {
+                if (typeof showToast === 'function') showToast('Error: ' + (e.message || 'Could not delete row'), true);
+            }
         }
 
         async function addCreditsToUser(username) {

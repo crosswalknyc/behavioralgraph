@@ -3117,6 +3117,168 @@ def add_user_credits(username):
         return jsonify({'success': False, 'error': str(e)})
 
 
+@app.route('/api/admin/users/<username>/credit-history/undo', methods=['POST'])
+@requires_admin
+def undo_user_credit_history_entry(username):
+    """Delete a single row from a user's credit history and reverse its impact.
+
+    Body: ``{"list": "usage"|"attribution", "index": N, "remove_paired": true}``
+
+    * ``usage`` rows (from ``credit_usage_history``) are reversed by
+      decrementing ``user.credits_used`` by the row's amount. If the row
+      was an admin charge, credits are refunded to the personal balance
+      (or to the shared pool for pool users). If it was actual feature
+      usage (``consume_credit``), we also refund — deleting the row should
+      look like the event never happened, which is the admin's mental
+      model when they click delete.
+    * ``attribution`` rows (from ``credit_attribution_history``) are
+      reversed similarly. Deductions refund; additions are clawed back.
+    * When ``remove_paired`` is true (default), admin deductions have a
+      matching entry on the other list created with the same
+      ``added_at``/``used_at`` timestamp — we remove that paired row too
+      so the UI cleans up in one shot without double-reversing the
+      accounting.
+    """
+    try:
+        req = request.get_json() or {}
+        list_name = (req.get('list') or '').strip().lower()
+        index = req.get('index')
+        remove_paired = req.get('remove_paired', True)
+
+        if list_name not in ('usage', 'attribution'):
+            return jsonify({'success': False, 'error': "list must be 'usage' or 'attribution'"}), 400
+        try:
+            index = int(index)
+        except (TypeError, ValueError):
+            return jsonify({'success': False, 'error': 'index must be an integer'}), 400
+        if index < 0:
+            return jsonify({'success': False, 'error': 'index must be >= 0'}), 400
+
+        data = load_users()
+        if username not in data['users']:
+            return jsonify({'success': False, 'error': 'User not found'}), 404
+        user = data['users'][username]
+
+        usage_hist = user.get('credit_usage_history') or []
+        attr_hist = user.get('credit_attribution_history') or []
+
+        if list_name == 'usage':
+            if index >= len(usage_hist):
+                return jsonify({'success': False, 'error': 'usage index out of range'}), 400
+            target = usage_hist[index]
+        else:
+            if index >= len(attr_hist):
+                return jsonify({'success': False, 'error': 'attribution index out of range'}), 400
+            target = attr_hist[index]
+
+        company = (user.get('company') or '').strip()
+        pool = _get_company_pool(data, company)
+        use_pool = pool is not None and user.get('credit_source') != 'personal'
+
+        def _refund(amount):
+            """Put `amount` credits back, pool-aware."""
+            if amount <= 0:
+                return
+            if use_pool and pool is not None:
+                pu = pool.get('credit_pool_used', 0) or 0
+                pool['credit_pool_used'] = max(pu - amount, 0)
+            else:
+                bal = _numeric_credits_balance(user)
+                if bal != -1:  # -1 means unlimited; leave it alone
+                    user['credits'] = bal + amount
+
+        def _claw_back(amount):
+            """Undo a grant of `amount` credits, pool-aware."""
+            if amount <= 0:
+                return
+            if use_pool and pool is not None:
+                pt = pool.get('credit_pool')
+                if pt is not None and pt != -1:
+                    pu = pool.get('credit_pool_used', 0) or 0
+                    pool['credit_pool'] = max(pt - amount, pu)
+            else:
+                bal = _numeric_credits_balance(user)
+                if bal != -1:
+                    user['credits'] = max(bal - amount, 0)
+
+        removed_entry = None
+        removed_paired = None
+
+        if list_name == 'usage':
+            amount = int(target.get('credits_used') or 0)
+            ts = target.get('used_at') or ''
+            pull_type = target.get('pull_type') or ''
+            removed_entry = usage_hist.pop(index)
+
+            # Reverse: refund credits AND decrement credits_used.
+            _refund(amount)
+            user['credits_used'] = max(int(user.get('credits_used', 0) or 0) - amount, 0)
+
+            # Paired cleanup: admin charges also created a matching
+            # attribution deduction with the same timestamp.
+            if remove_paired and pull_type == 'Admin charge' and ts:
+                for i, a in enumerate(attr_hist):
+                    if (
+                        a.get('type') == 'deduction'
+                        and (a.get('added_at') == ts)
+                        and int(a.get('credits_deducted') or 0) == amount
+                    ):
+                        removed_paired = attr_hist.pop(i)
+                        break
+        else:
+            ts = target.get('added_at') or ''
+            is_deduction = (
+                target.get('type') == 'deduction'
+                or int(target.get('credits_deducted') or 0) > 0
+            )
+            removed_entry = attr_hist.pop(index)
+
+            if is_deduction:
+                amount = int(target.get('credits_deducted') or 0)
+                _refund(amount)
+                user['credits_used'] = max(int(user.get('credits_used', 0) or 0) - amount, 0)
+                # Paired usage row created at the same instant.
+                if remove_paired and ts:
+                    for i, u in enumerate(usage_hist):
+                        if (
+                            (u.get('pull_type') == 'Admin charge')
+                            and (u.get('used_at') == ts)
+                            and int(u.get('credits_used') or 0) == amount
+                        ):
+                            removed_paired = usage_hist.pop(i)
+                            break
+            else:
+                amount = int(target.get('credits_added') or 0)
+                _claw_back(amount)
+
+        user['credit_usage_history'] = usage_hist
+        user['credit_attribution_history'] = attr_hist
+        save_users(data)
+
+        try:
+            _has, effective_remaining = check_user_credits(username)
+        except Exception:
+            effective_remaining = _numeric_credits_balance(user)
+
+        return jsonify({
+            'success': True,
+            'removed': removed_entry,
+            'removed_paired': removed_paired,
+            'credits': effective_remaining,
+            'credits_used': user.get('credits_used', 0),
+            'credit_source': 'pool' if use_pool else 'personal',
+            'pool_remaining': (
+                (-1 if pool.get('credit_pool') == -1
+                 else max((pool.get('credit_pool') or 0) - (pool.get('credit_pool_used', 0) or 0), 0))
+                if (use_pool and pool is not None) else None
+            ),
+        })
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
 @app.route('/api/admin/users/<username>', methods=['DELETE'])
 @requires_admin
 def delete_user(username):
@@ -4111,11 +4273,50 @@ def get_user_stats(username):
         
         # Return user info (without password) and activity
         safe_user = {k: v for k, v in user.items() if k not in ['password_hash', 'activity']}
-        
+
+        # Pool-aware credit context — the admin modal's "Credits Remaining"
+        # tile should reflect the user's *effective* remaining credits. For
+        # pool users (company with shared pool, no personal override) the
+        # raw `user.credits` field is unused and never moves when admin
+        # deducts credits from the pool, so displaying it as
+        # "Credits Remaining" looked frozen even though the deduction
+        # was working correctly at the pool level.
+        company = (user.get('company') or '').strip()
+        pool = _get_company_pool(data, company)
+        has_personal_override = user.get('credit_source') == 'personal'
+        is_pool_user = pool is not None and not has_personal_override
+
+        credits_context = {
+            'is_pool_user': is_pool_user,
+            'credit_source': 'pool' if is_pool_user else 'personal',
+            'personal_credits': user.get('credits'),
+            'pool_total': None,
+            'pool_used': None,
+            'pool_remaining': None,
+            'ceiling': user.get('credit_ceiling', -1),
+        }
+        if is_pool_user and pool is not None:
+            pt = pool.get('credit_pool')
+            pu = pool.get('credit_pool_used', 0) or 0
+            if pt is None:
+                pt = 0
+            credits_context['pool_total'] = pt
+            credits_context['pool_used'] = pu
+            credits_context['pool_remaining'] = -1 if pt == -1 else max(pt - pu, 0)
+
+        # Effective remaining = what check_user_credits() would report
+        # (ceiling-aware, pool-aware). -1 means unlimited.
+        try:
+            _has, effective_remaining = check_user_credits(username)
+        except Exception:
+            effective_remaining = _numeric_credits_balance(user)
+        credits_context['effective_remaining'] = effective_remaining
+
         return jsonify({
             'success': True,
             'user': safe_user,
-            'activity': activity
+            'activity': activity,
+            'credits_context': credits_context,
         })
         
     except Exception as e:
