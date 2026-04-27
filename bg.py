@@ -2697,7 +2697,7 @@ def final_behavioral_sanity_check(df, archetype=None):
                         else:
                             df.at[cidx, cs_col] = f"{new_cs:.4f}"
                     else:
-                    df.at[cidx, cs_col] = new_cs
+                        df.at[cidx, cs_col] = new_cs
                 except (ValueError, TypeError):
                     pass
 
@@ -8976,7 +8976,7 @@ def ai_final_gut_check(df, brand_category, project_name, brands):
                 else:
                     df.at[row_idx, bp_col] = f"{new_bp:.4f}"
             else:
-            df.at[row_idx, bp_col] = new_bp
+                df.at[row_idx, bp_col] = new_bp
             df.at[row_idx, raw_col] = str(new_raw)
             if proj_col in df.columns:
                 df.at[row_idx, proj_col] = str(new_proj)
@@ -10238,26 +10238,26 @@ def ai_final_gut_check(df, brand_category, project_name, brands):
                     print(f"   ⚠️ Pass D error ({cat}): {e}")
     else:
         for cat, rank_prompt in pass_d_requests:
-        try:
-            resp = client.chat.completions.create(
-                model='gpt-4o',
-                messages=[{'role': 'user', 'content': rank_prompt}],
-                temperature=0.2,
+            try:
+                resp = client.chat.completions.create(
+                    model='gpt-4o',
+                    messages=[{'role': 'user', 'content': rank_prompt}],
+                    temperature=0.2,
                     max_tokens=4000,
                     timeout=OPENAI_CALL_TIMEOUT_SEC,
-            )
-            result = _parse_ai_json(resp.choices[0].message.content.strip())
+                )
+                result = _parse_ai_json(resp.choices[0].message.content.strip())
                 pass_d_results.append((cat, result))
             except Exception as e:
                 print(f"   ⚠️ Pass D error ({cat}): {e}")
 
     for cat, result in pass_d_results:
-            if result.get('status') == 'FIX' and 'adjustments' in result:
-                applied, _ = _apply_adjustments(
-                    result['adjustments'], all_item_lookup, '[RANK]')
-                pass_d_adjustments += applied
-                if applied > 0:
-                    print(f"   🔀 Pass D: {cat} — {applied} rank adjustments")
+        if result.get('status') == 'FIX' and 'adjustments' in result:
+            applied, _ = _apply_adjustments(
+                result['adjustments'], all_item_lookup, '[RANK]')
+            pass_d_adjustments += applied
+            if applied > 0:
+                print(f"   🔀 Pass D: {cat} — {applied} rank adjustments")
 
     # ──── PASS E: AI PERSONA-BASED VALUATION FOR UNMATCHED ITEMS ────
     # Items with no Gen Pop benchmark were capped at UNMATCHED_CEILING by
@@ -10390,7 +10390,7 @@ def ai_final_gut_check(df, brand_category, project_name, brands):
                                 else:
                                     df.at[idx, bp_col] = f"{new_bp:.4f}"
                             else:
-                            df.at[idx, bp_col] = new_bp
+                                df.at[idx, bp_col] = new_bp
                             df.at[idx, raw_col] = str(new_raw)
                             if proj_col in df.columns:
                                 df.at[idx, proj_col] = str(new_proj)
@@ -10496,7 +10496,7 @@ def ai_final_gut_check(df, brand_category, project_name, brands):
                             else:
                                 df.at[cidx, cs_col] = f"{new_cs:.4f}"
                         else:
-                        df.at[cidx, cs_col] = new_cs
+                            df.at[cidx, cs_col] = new_cs
                     except (ValueError, TypeError):
                         pass
         print(f"   🔗 Cross-category harmonization: {harmonized} values aligned")
@@ -13086,21 +13086,21 @@ def enforce_input_brand_100(df_behavior, input_brands):
                     else:
                         df_behavior.loc[idx, pct_col] = "100.0000"
                 else:
-                df_behavior.loc[idx, pct_col] = 100.0
+                    df_behavior.loc[idx, pct_col] = 100.0
                 
                 # Update Original Raw Numbers to sample size for 100% input brands
                 if sample_size is not None:
                     if 'Original Raw Numbers' in df_behavior.columns:
                         _cur_raw = df_behavior.loc[idx, 'Original Raw Numbers']
                         if isinstance(_cur_raw, str):
-                        df_behavior.loc[idx, 'Original Raw Numbers'] = str(sample_size)
+                            df_behavior.loc[idx, 'Original Raw Numbers'] = str(sample_size)
                         else:
                             df_behavior.loc[idx, 'Original Raw Numbers'] = float(sample_size)
                     
                 if 'Original Raw Numbers (Database)' in df_behavior.columns:
                         _cur_raw_db = df_behavior.loc[idx, 'Original Raw Numbers (Database)']
                         if isinstance(_cur_raw_db, str):
-                        df_behavior.loc[idx, 'Original Raw Numbers (Database)'] = str(sample_size)
+                            df_behavior.loc[idx, 'Original Raw Numbers (Database)'] = str(sample_size)
                         else:
                             df_behavior.loc[idx, 'Original Raw Numbers (Database)'] = float(sample_size)
                 
@@ -13113,14 +13113,14 @@ def enforce_input_brand_100(df_behavior, input_brands):
                         else:
                             df_behavior.loc[idx, 'Brand Penetration (Row)'] = "100.0000"
                     else:
-                    df_behavior.loc[idx, 'Brand Penetration (Row)'] = 100.0
+                        df_behavior.loc[idx, 'Brand Penetration (Row)'] = 100.0
                 
                 # Update US Gen Pop Projection if it exists
                 if 'US Gen Pop Projection' in df_behavior.columns:
                     us_projection = (sample_size / 10_000_000) * 329_900_000
                     _cur_proj = df_behavior.loc[idx, 'US Gen Pop Projection']
                     if isinstance(_cur_proj, str):
-                    df_behavior.loc[idx, 'US Gen Pop Projection'] = str(int(round(us_projection)))
+                        df_behavior.loc[idx, 'US Gen Pop Projection'] = str(int(round(us_projection)))
                     else:
                         df_behavior.loc[idx, 'US Gen Pop Projection'] = float(int(round(us_projection)))
                 
@@ -17133,24 +17133,24 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
     # ══════════════════════════════════════════════════════════════════
     if is_genpop:
         # ── GenPop: anchor to gen pop baseline (unchanged) ──────────────
-    print("🎯 Anchoring all values to Gen Pop baseline...")
-    df_final = anchor_to_genpop(df_final, sample_size=final_sample_size)
-    df_final = enforce_cross_category_brand_consistency(df_final)
-    df_final = sort_categories_by_percentage(df_final)
-    df_final = add_brand_penetration_column_using_final_raw(df_final)
-    df_final = add_us_gen_pop_projection(df_final)
+        print("🎯 Anchoring all values to Gen Pop baseline...")
+        df_final = anchor_to_genpop(df_final, sample_size=final_sample_size)
+        df_final = enforce_cross_category_brand_consistency(df_final)
+        df_final = sort_categories_by_percentage(df_final)
+        df_final = add_brand_penetration_column_using_final_raw(df_final)
+        df_final = add_us_gen_pop_projection(df_final)
         for col in ['Unique Purchase Confirmations', 'Raw Numbers',
                      'Actual Unique UID Count (DB)', 'Original Raw Numbers (Database)']:
-        if col in df_final.columns:
-            df_final = df_final.drop(columns=[col])
+            if col in df_final.columns:
+                df_final = df_final.drop(columns=[col])
         df_final = deduplicate_values_within_category(df_final)
-    df_final = ensure_percentage_four_decimals(df_final)
-    df_final = enforce_max_four_decimals_across_columns(df_final)
+        df_final = ensure_percentage_four_decimals(df_final)
+        df_final = enforce_max_four_decimals_across_columns(df_final)
         df_final = enforce_exact_210_dmas(df_final)
-    df_final = set_brand_input_raw_to_sample_size(df_final, is_genpop)
-    df_final = add_brand_penetration_column_using_final_raw(df_final)
-    df_final = add_us_gen_pop_projection(df_final)
-                else:
+        df_final = set_brand_input_raw_to_sample_size(df_final, is_genpop)
+        df_final = add_brand_penetration_column_using_final_raw(df_final)
+        df_final = add_us_gen_pop_projection(df_final)
+    else:
         # ── Non-GenPop: 3-Step Agent Pipeline ───────────────────────────
         # Drop intermediate columns before agent pipeline
         for col in ['Unique Purchase Confirmations', 'Raw Numbers',
@@ -17176,9 +17176,9 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
                         _sv = float(str(df_final.loc[_ss_m, _try_col].iloc[0]).replace(',', '').replace('%', ''))
                         if _sv > 1000:
                             _ss_agent = int(round(_sv))
-                                    break
-                except Exception:
-                    pass
+                            break
+                    except Exception:
+                        pass
 
         # Step 1: Persona Research Agent
         _subject_name = extract_profile_subject_from_df(df_final, project_name, brands)
@@ -17298,8 +17298,8 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
     # Post-ordering reconciliation (already done inside agent_pipeline_final_sanity_check
     # for non-genpop; genpop still needs the standard reconciliation path).
     if is_genpop:
-    df_final = reconcile_final_output_from_bp_and_sample_size(df_final)
-    df_final = add_us_gen_pop_projection(df_final)
+        df_final = reconcile_final_output_from_bp_and_sample_size(df_final)
+        df_final = add_us_gen_pop_projection(df_final)
     df_final = perturb_brand_penetration_avoid_dot_0000(df_final)
     df_final = reconcile_final_output_from_bp_and_sample_size(df_final)
     df_final = add_us_gen_pop_projection(df_final)
@@ -20816,19 +20816,19 @@ def set_brand_input_raw_to_sample_size(df, is_genpop=False):
                 if 'Original Raw Numbers (Database)' in df.columns:
                     _cur_raw_db = df.loc[idx, 'Original Raw Numbers (Database)']
                     if isinstance(_cur_raw_db, str):
-                    df.loc[idx, 'Original Raw Numbers (Database)'] = str(sample_size)
+                        df.loc[idx, 'Original Raw Numbers (Database)'] = str(sample_size)
                     else:
                         df.loc[idx, 'Original Raw Numbers (Database)'] = float(sample_size)
                 if 'Original Raw Numbers' in df.columns:
                     _cur_raw = df.loc[idx, 'Original Raw Numbers']
                     if isinstance(_cur_raw, str):
-                    df.loc[idx, 'Original Raw Numbers'] = str(sample_size)
+                        df.loc[idx, 'Original Raw Numbers'] = str(sample_size)
                     else:
                         df.loc[idx, 'Original Raw Numbers'] = float(sample_size)
                 if 'US Gen Pop Projection' in df.columns:
                     _cur_proj = df.loc[idx, 'US Gen Pop Projection']
                     if isinstance(_cur_proj, str):
-                    df.loc[idx, 'US Gen Pop Projection'] = str(gpp)
+                        df.loc[idx, 'US Gen Pop Projection'] = str(gpp)
                     else:
                         df.loc[idx, 'US Gen Pop Projection'] = float(gpp)
                 _cur_pct = df.loc[idx, 'Percentage']
@@ -20838,7 +20838,7 @@ def set_brand_input_raw_to_sample_size(df, is_genpop=False):
                     else:
                         df.loc[idx, 'Percentage'] = "100.0000"
                 else:
-                df.loc[idx, 'Percentage'] = 100.0
+                    df.loc[idx, 'Percentage'] = 100.0
     
             total_instances += len(matches)
             if not SILENCE_VERBOSE_OUTPUT:
@@ -30220,7 +30220,7 @@ def perturb_brand_penetration_avoid_dot_0000(df: pd.DataFrame) -> pd.DataFrame:
             if new_x > 99.9:
                 new_x = round(99.0 + frac, 4)
         new_x = max(0.1111, min(round(new_x, 4), 99.8999))
-            s = f"{new_x:.4f}"
+        s = f"{new_x:.4f}"
         df.at[idx, bp_col] = s
         n_adj += 1
     if n_adj:
