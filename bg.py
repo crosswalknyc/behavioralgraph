@@ -15459,11 +15459,20 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
                     continue
                 print(f"   {col}|{val}: {int(count):,} (should be ≤ {sample_size:,})")
             print("🔧 Fixing oversized values...")
-        # Fix the oversized values by capping them at the sample size
+        # Fix the oversized values by capping them at the sample size.
+        # ClickHouse Memory-engine TEMPORARY tables don't support UPDATE
+        # mutations, so we recreate the table with the cap applied via
+        # CASE. CREATE OR REPLACE TEMP TABLE is translated by the
+        # connector to DROP + CREATE TEMPORARY TABLE + INSERT SELECT,
+        # which is atomic from the caller's perspective.
         cur.execute(f"""
-            UPDATE BEHAVIOR_FINAL 
-            SET UID_COUNT = {sample_size}
-            WHERE UID_COUNT > {sample_size}
+            CREATE OR REPLACE TEMP TABLE BEHAVIOR_FINAL AS
+            SELECT
+                "COLUMN",
+                "VALUE",
+                CASE WHEN UID_COUNT > {sample_size} THEN {sample_size}
+                     ELSE UID_COUNT END AS UID_COUNT
+            FROM BEHAVIOR_FINAL
         """)
         if not SILENCE_VERBOSE_OUTPUT:
             print(f"✅ Capped {len(oversized_values)} oversized values to sample size")

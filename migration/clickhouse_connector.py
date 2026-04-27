@@ -514,11 +514,63 @@ def translate_sql(sql: str) -> str:
     # explicit DROP so stale rows from an earlier statement/session can't
     # persist (CREATE TEMP TABLE IF NOT EXISTS would silently skip the
     # SELECT if the table already exists in the session).
+    #
+    # Self-referential case (CREATE OR REPLACE TEMP TABLE X AS ... FROM X):
+    # if we just emitted DROP X then CREATE X AS SELECT FROM X, the SELECT
+    # would fail because X is gone. Snapshot via a swap temp table first so
+    # the rebuild is safe. This pattern is common in bg.py whenever an
+    # iterative pipeline applies a cap/sample/transform onto its own
+    # working table (PRE_SAMPLED_CLICKSTREAM, BEHAVIOR_EVENTS, BEHAVIOR_FINAL).
+    def _replace_create_or_replace_temp(m):
+        name = m.group(1)
+        # Look at the rest of the SQL after "AS" for any FROM <name> or
+        # JOIN <name> reference. We strip string literals first so a brand
+        # name like "Burger King X" doesn't false-positive.
+        after = result[m.end():]
+        after_sanitized = re.sub(r"'[^']*'", "''", after)
+        # Stop scanning at the first statement terminator outside strings.
+        stop = re.search(r';\s*$', after_sanitized, re.MULTILINE)
+        scope = after_sanitized[:stop.start()] if stop else after_sanitized
+        is_self_ref = bool(re.search(
+            rf'\b(?:FROM|JOIN)\s+{re.escape(name)}\b',
+            scope, re.IGNORECASE,
+        ))
+        if is_self_ref:
+            swap = f'_ch_swap_{name}'
+            return (
+                f'DROP TABLE IF EXISTS {swap};\n'
+                f'CREATE TEMPORARY TABLE {swap} ENGINE = Memory AS'
+            ), swap, name
+        return (
+            f'DROP TABLE IF EXISTS {name};\n'
+            f'CREATE TEMPORARY TABLE {name} ENGINE = Memory AS'
+        ), None, name
+
+    # We need post-processing for self-ref: after the SELECT body, append
+    # the swap → rename sequence. Easiest is two passes.
+    _swap_targets: list[tuple[str, str]] = []  # [(swap_name, real_name), ...]
+
+    def _ctas_pass1(m):
+        replacement, swap, name = _replace_create_or_replace_temp(m)
+        if swap:
+            _swap_targets.append((swap, name))
+        return replacement
+
     result = re.sub(
         r'CREATE\s+OR\s+REPLACE\s+TEMP(?:ORARY)?\s+TABLE\s+(\w+)\s+AS\b',
-        r'DROP TABLE IF EXISTS \1;\nCREATE TEMPORARY TABLE \1 ENGINE = Memory AS',
-        result, flags=re.IGNORECASE
+        _ctas_pass1, result, flags=re.IGNORECASE,
     )
+
+    # Append the swap sequence at the very end of the translated SQL for
+    # any self-referential rebuilds we detected. Order matters: each pair
+    # was emitted in source order, so we tail-append in the same order.
+    for swap, name in _swap_targets:
+        result = result.rstrip().rstrip(';') + (
+            f';\nDROP TABLE IF EXISTS {name};\n'
+            f'CREATE TEMPORARY TABLE {name} ENGINE = Memory AS '
+            f'SELECT * FROM {swap};\n'
+            f'DROP TABLE IF EXISTS {swap}'
+        )
     # With explicit column DDL (no AS) — translate Snowflake types
     def replace_temp_ddl(m):
         name = m.group(1)
