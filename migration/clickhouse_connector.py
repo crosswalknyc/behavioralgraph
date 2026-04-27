@@ -391,15 +391,37 @@ def translate_sql(sql: str) -> str:
     # Strategy: wrap the SELECT in a subquery and convert QUALIFY to WHERE.
     result = _rewrite_qualify(result)
 
-    # ── SAMPLE → ClickHouse LIMIT + ORDER BY rand() ──────────────────────
-    # Snowflake: FROM table SAMPLE (N ROWS) or SAMPLE (pct)
+    # ── LIKE ... ESCAPE 'x'  → strip ESCAPE clause ────────────────────────
+    # ClickHouse's LIKE uses '\' as the default escape character, which is
+    # exactly what Snowflake's  `ESCAPE '\\'`  requests.  ClickHouse rejects
+    # the explicit ESCAPE clause with a SYNTAX_ERROR, so we drop it.
+    # Only safe when the callers escape with '\' (bg.py's `_escape_brand_for_sql`
+    # does).  If a caller ever used a different escape char this would quietly
+    # change semantics, but we have none in this repo.
+    result = re.sub(
+        r"\s+ESCAPE\s+'(?:\\\\|\\|[^'])'",
+        '',
+        result,
+        flags=re.IGNORECASE,
+    )
+
+    # ── SAMPLE → ClickHouse LIMIT / strip ─────────────────────────────────
+    # Snowflake: FROM table SAMPLE (N ROWS)  → explicit row cap
     def replace_sample_rows(m):
         n = m.group(1).strip()
         return f'ORDER BY rand() LIMIT {n}'
     result = re.sub(r'\bSAMPLE\s*\(\s*(\d+)\s+ROWS?\s*\)',
                     replace_sample_rows, result, flags=re.IGNORECASE)
-    # Percentage-based: SAMPLE (50) → uses LIMIT with a subquery count
-    # Left as-is for now — ClickHouse supports SAMPLE natively for MergeTree
+    # Percentage-based: FROM table SAMPLE (N) / SAMPLE (N.N)
+    # ClickHouse supports SAMPLE natively ONLY when the MergeTree table was
+    # created with an explicit `SAMPLE BY` key — our clickstream_final (and
+    # every other production CH table in this repo) was not, so Snowflake's
+    # `SAMPLE (pct)` hint would raise "SAMPLE is not supported" here.
+    # Safest universal fix: strip the clause. Callers that used it were
+    # speed hints; downstream LIMIT/ORDER BY/partition pruning still cap
+    # the result correctly, just without Bernoulli sampling.
+    result = re.sub(r'\s+SAMPLE\s*\(\s*\d+(?:\.\d+)?\s*\)',
+                    '', result, flags=re.IGNORECASE)
 
     # ── LATERAL FLATTEN → ARRAY JOIN ──────────────────────────────────────
     _flatten_aliases = []
@@ -489,15 +511,36 @@ def translate_sql(sql: str) -> str:
     return result
 
 
+_CTAS_PREFIX_RE = re.compile(
+    r'^(\s*CREATE\s+(?:OR\s+REPLACE\s+)?(?:TEMP(?:ORARY)?\s+)?TABLE\s+\w+\s+AS\s+)',
+    re.IGNORECASE,
+)
+
+
+def _split_ctas_prefix(inner_sql: str) -> tuple[str, str]:
+    """If `inner_sql` starts with `CREATE [OR REPLACE] [TEMP] TABLE <name> AS`,
+    split off that prefix so QUALIFY wrapping happens *only* on the SELECT.
+    Returns (ctas_prefix, rest). When no CTAS prefix, ctas_prefix == ''.
+    """
+    m = _CTAS_PREFIX_RE.match(inner_sql)
+    if not m:
+        return '', inner_sql
+    return inner_sql[:m.end()], inner_sql[m.end():]
+
+
 def _rewrite_qualify(sql: str) -> str:
     """Rewrite QUALIFY clauses to nested subqueries.
 
     Handles patterns like:
       QUALIFY ROW_NUMBER() OVER (PARTITION BY x ORDER BY y) = 1
       QUALIFY rn <= N
+
+    When the enclosing statement is  ``CREATE [OR REPLACE] [TEMP] TABLE x AS
+    SELECT ... QUALIFY ...``  the wrapper must apply only to the SELECT, not
+    to the whole DDL, otherwise we emit  ``SELECT * FROM (CREATE TABLE ...)``
+    which ClickHouse (rightly) rejects.
     """
     # Pattern 1: QUALIFY ROW_NUMBER() OVER (...) = 1
-    # → wrap in subquery with ROW_NUMBER as _rn, filter WHERE _rn = 1
     qualify_match = re.search(
         r'\bQUALIFY\s+ROW_NUMBER\s*\(\s*\)\s*OVER\s*\(([^)]+)\)\s*=\s*(\d+)',
         sql, re.IGNORECASE
@@ -505,15 +548,18 @@ def _rewrite_qualify(sql: str) -> str:
     if qualify_match:
         partition_clause = qualify_match.group(1)
         target_val = qualify_match.group(2)
-        qualify_text = qualify_match.group(0)
-        inner_sql = sql[:qualify_match.start()].rstrip()
-        after_sql = sql[qualify_match.end():]
-        inner_sql_with_rn = re.sub(
+        head = sql[:qualify_match.start()].rstrip()
+        after = sql[qualify_match.end():]
+        ctas, inner_select = _split_ctas_prefix(head)
+        inner_select_with_rn = re.sub(
             r'\bFROM\b',
             f', ROW_NUMBER() OVER ({partition_clause}) AS _qual_rn FROM',
-            inner_sql, count=1, flags=re.IGNORECASE
+            inner_select, count=1, flags=re.IGNORECASE
         )
-        return f"SELECT * FROM ({inner_sql_with_rn}) _q WHERE _q._qual_rn = {target_val}{after_sql}"
+        return (
+            f"{ctas}SELECT * FROM ({inner_select_with_rn}) _q "
+            f"WHERE _q._qual_rn = {target_val}{after}"
+        )
 
     # Pattern 2: QUALIFY alias <= N or QUALIFY alias = N
     qualify_match2 = re.search(
@@ -524,9 +570,13 @@ def _rewrite_qualify(sql: str) -> str:
         alias = qualify_match2.group(1)
         op = qualify_match2.group(2)
         val = qualify_match2.group(3)
-        inner_sql = sql[:qualify_match2.start()].rstrip()
-        after_sql = sql[qualify_match2.end():]
-        return f"SELECT * FROM ({inner_sql}) _q WHERE _q.{alias} {op} {val}{after_sql}"
+        head = sql[:qualify_match2.start()].rstrip()
+        after = sql[qualify_match2.end():]
+        ctas, inner_select = _split_ctas_prefix(head)
+        return (
+            f"{ctas}SELECT * FROM ({inner_select}) _q "
+            f"WHERE _q.{alias} {op} {val}{after}"
+        )
 
     return sql
 

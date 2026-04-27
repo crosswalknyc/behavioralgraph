@@ -21283,27 +21283,38 @@ def calculate_frequency_metrics(conn, brands, behavior_start, behavior_end, purc
     """)
     
     # Map events to brands using COMMON_NAME to Brand mapping
+    # Pre-expand pipe-separated Brand values into one row per alias using
+    # LATERAL FLATTEN on Snowflake; ClickHouse's equivalent is ARRAY JOIN, but
+    # the connector's regex rewriter can't safely translate a LATERAL FLATTEN
+    # sitting between a LEFT JOIN and its ON clause. Instead we expand the
+    # brand list up-front in a CTE, giving the same cross-product rows in a
+    # portable way that both engines accept.
     cur.execute("""
         CREATE OR REPLACE TEMP TABLE FREQ_MAPPED_EVENTS AS
-            SELECT 
+        WITH brand_aliases AS (
+            SELECT
+                m.Brand,
+                TRIM(v.value) AS Brand_Alias
+            FROM BEHAVIORALGRAPH.PUBLIC.HOST_MAPPING m,
+                 LATERAL FLATTEN(input => SPLIT(m.Brand, '|')) v
+            WHERE m.Brand IS NOT NULL
+        )
+        SELECT
             e.*,
             m.Brand AS Mapped_Brand
         FROM FREQ_EVENTS AS e
         LEFT JOIN BEHAVIORALGRAPH.PUBLIC.HOST_MAPPING AS m
             ON LOWER(e.COMMON_NAME) = LOWER(m.Brand)
         WHERE m.Brand IS NOT NULL
-        
+
         UNION ALL
-        
-        -- Handle pipe-separated Brand values for frequency analysis
+
         SELECT
             e.*,
-            m.Brand AS Mapped_Brand
+            b.Brand AS Mapped_Brand
         FROM FREQ_EVENTS AS e
-        LEFT JOIN BEHAVIORALGRAPH.PUBLIC.HOST_MAPPING AS m
-        CROSS JOIN LATERAL FLATTEN(input => SPLIT(m.Brand, '|')) AS pipe_split
-            ON LOWER(e.COMMON_NAME) = LOWER(TRIM(pipe_split.value))
-        WHERE m.Brand IS NOT NULL
+        INNER JOIN brand_aliases AS b
+            ON LOWER(e.COMMON_NAME) = LOWER(b.Brand_Alias)
     """)
     
     # 1. Calculate average visits per user per brand
