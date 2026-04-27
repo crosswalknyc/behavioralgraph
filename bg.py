@@ -14562,14 +14562,14 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
                         ca.visit_count,
                         ca.first_visit,
                         ca.last_visit,
-                        hm.Brand as Mapped_Brand,
-                        hm.Category as InterestRaw,
-                        hm.Section as HostSection,
+                        hm.BRAND as Mapped_Brand,
+                        hm.CATEGORY as InterestRaw,
+                        hm.SECTION as HostSection,
                         SPLIT_PART(hm."Most Purchased Categories", '-', 1) as MPC_TRIM
                     FROM clickstream_activity ca
                     LEFT JOIN BEHAVIORALGRAPH.PUBLIC.HOST_MAPPING hm
-                        ON LOWER(ca.COMMON_NAME) = LOWER(hm.Brand)
-                    WHERE hm.Brand IS NOT NULL
+                        ON LOWER(ca.COMMON_NAME) = LOWER(hm.BRAND)
+                    WHERE hm.BRAND IS NOT NULL
                 )
                 SELECT * FROM mapped_behavior
             """)
@@ -14632,14 +14632,14 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
                         bp.visit_count,
                         bp.first_visit,
                         bp.last_visit,
-                        hm.Brand as Mapped_Brand,
-                        hm.Category as InterestRaw,
-                        hm.Section as HostSection,
+                        hm.BRAND as Mapped_Brand,
+                        hm.CATEGORY as InterestRaw,
+                        hm.SECTION as HostSection,
                         SPLIT_PART(hm."Most Purchased Categories", '-', 1) as MPC_TRIM
                     FROM brand_presence bp
                     LEFT JOIN BEHAVIORALGRAPH.PUBLIC.HOST_MAPPING hm 
-                        ON LOWER(bp.COMMON_NAME) = LOWER(hm.Brand)
-                    WHERE hm.Brand IS NOT NULL
+                        ON LOWER(bp.COMMON_NAME) = LOWER(hm.BRAND)
+                    WHERE hm.BRAND IS NOT NULL
                 )
                 SELECT * FROM mapped_behavior
             """)
@@ -15208,16 +15208,16 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
             SELECT 
                 lb.UID,
                 lb.COMMON_NAME,
-                m.Brand AS Mapped_Brand,
-                m.Category AS InterestRaw,
-                m.Section AS HostSection,
+                m.BRAND AS Mapped_Brand,
+                m.CATEGORY AS InterestRaw,
+                m.SECTION AS HostSection,
                     SPLIT_PART(m."Most Purchased Categories", '-', 1) AS MPC_TRIM,
                     1 as priority  -- Direct match has priority
             FROM limited_behavior lb
             INNER JOIN BEHAVIORALGRAPH.PUBLIC.HOST_MAPPING m 
-                ON LOWER(lb.COMMON_NAME) = LOWER(m.Brand)
-            WHERE m.Brand IS NOT NULL
-              AND m.Brand != ''
+                ON LOWER(lb.COMMON_NAME) = LOWER(m.BRAND)
+            WHERE m.BRAND IS NOT NULL
+              AND m.BRAND != ''
             )
             SELECT UID, COMMON_NAME, Mapped_Brand, InterestRaw, HostSection, MPC_TRIM
             FROM mapped_brands
@@ -21305,19 +21305,19 @@ def calculate_frequency_metrics(conn, brands, behavior_start, behavior_end, purc
         CREATE OR REPLACE TEMP TABLE FREQ_MAPPED_EVENTS AS
         WITH brand_aliases AS (
             SELECT
-                m.Brand,
+                m.BRAND,
                 TRIM(v.value) AS Brand_Alias
             FROM BEHAVIORALGRAPH.PUBLIC.HOST_MAPPING m,
-                 LATERAL FLATTEN(input => SPLIT(m.Brand, '|')) v
-            WHERE m.Brand IS NOT NULL
+                 LATERAL FLATTEN(input => SPLIT(m.BRAND, '|')) v
+            WHERE m.BRAND IS NOT NULL
         )
         SELECT
             e.*,
-            m.Brand AS Mapped_Brand
+            m.BRAND AS Mapped_Brand
         FROM FREQ_EVENTS AS e
         LEFT JOIN BEHAVIORALGRAPH.PUBLIC.HOST_MAPPING AS m
-            ON LOWER(e.COMMON_NAME) = LOWER(m.Brand)
-        WHERE m.Brand IS NOT NULL
+            ON LOWER(e.COMMON_NAME) = LOWER(m.BRAND)
+        WHERE m.BRAND IS NOT NULL
 
         UNION ALL
 
