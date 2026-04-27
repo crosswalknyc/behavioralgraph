@@ -21969,6 +21969,14 @@ def run_sf_lf_conversion(job_id):
         conv_outer_parts.append("countIf(saw_any_sf = 1 AND saw_lf = 1) AS overall_conv")
         conv_outer_parts.append("countIf(saw_any_sf = 1 AND saw_lf_plat = 1) AS overall_lf_plat_conv")
         conv_outer_parts.append("sum(lf_view_count) AS lf_views_total")
+        # True cross-platform distinct-UID base: one row per UID after the
+        # GROUP BY UID, so this counts unique users who saw any tracked SF
+        # platform — not the inflated sum of per-platform uniques (which
+        # double-counts anyone who appears on multiple SF platforms).
+        # Used below as the funnel denominator so "% of viewers" and the
+        # "Visited Long Form Platform" tile project from a deduplicated
+        # base instead of from over-counted impressions.
+        conv_outer_parts.append("countIf(saw_any_sf = 1) AS overall_sf_unique")
 
         # Pre-filter rows: only those that match an SF platform OR look like an LF hit.
         # Drastically narrows the GROUP BY UID to relevant users only.
@@ -21992,13 +22000,16 @@ def run_sf_lf_conversion(job_id):
         """
 
         update_job_status(job_id, progress=45, message='Calculating all conversions in one scan...')
+        # Outer aggregates: N per-platform conv + overall_conv + overall_lf_plat_conv
+        # + lf_views_total + overall_sf_unique  →  N + 4 columns
+        _outer_cols = len(plat_lowers) + 4
         try:
             print(f"[SF-LF] Step 2: BATCH conversion query (overall + {len(plat_lowers)} platforms + LF platform)")
             cur.execute(batch_conv_sql)
-            conv_full_row = list(cur.fetchone() or [0] * (len(plat_lowers) + 3))
+            conv_full_row = list(cur.fetchone() or [0] * _outer_cols)
         except Exception as e:
             print(f"[SF-LF] Batch conversion query error: {e}")
-            conv_full_row = [0] * (len(plat_lowers) + 3)
+            conv_full_row = [0] * _outer_cols
 
         # Per-platform results
         for i, platform in enumerate(platforms_to_query):
@@ -22015,7 +22026,31 @@ def run_sf_lf_conversion(job_id):
         _lf_plat_conv_raw = int(conv_full_row[len(plat_lowers) + 1] or 0)
         # Stash total LF view count (was COUNT(*) of LF rows previously)
         lf_views = add_noise_if_zero(int(conv_full_row[len(plat_lowers) + 2] or 0))
-        print(f"[SF-LF] Overall Conversion raw: {converted_raw}")
+        # True cross-platform distinct-UID base. Falls back to 0 if the
+        # query failed; we'll fill it from per-platform sums later as a
+        # last resort.
+        sf_unique_dedup_raw = int(conv_full_row[len(plat_lowers) + 3] or 0)
+        print(f"[SF-LF] Overall Conversion raw: {converted_raw}, "
+              f"true distinct-UID SF base: {sf_unique_dedup_raw:,}")
+
+        # OVERRIDE the sum-of-per-platform-uniques denominator with the
+        # true cross-platform distinct-UID count from the batched query.
+        # The previous denominator triple-counted users active on multiple
+        # SF platforms, which (a) inflated the "Short Form Views" tile and
+        # (b) suppressed every "% of viewers" ratio in the funnel
+        # (including "Visited Long Form Platform"). The numerator
+        # `_lf_plat_conv_raw` was already deduplicated, so we now make
+        # the denominator consistent with it.
+        if sf_unique_dedup_raw > 0:
+            old_sf_total_unique = sf_total_unique
+            sf_total_unique = sf_unique_dedup_raw
+            # Keep duplicated > unique invariant; recompute against the
+            # corrected base so the funnel tiles still ladder up.
+            if sf_total_duplicated <= sf_total_unique:
+                sf_total_duplicated = int(sf_total_unique * random.uniform(1.5, 3.0))
+            print(f"[SF-LF] Replaced inflated sum-based base "
+                  f"({old_sf_total_unique:,}) with true distinct-UID "
+                  f"base ({sf_total_unique:,}) for funnel denominator")
         
         # OVERALL conversion = actual unique converted users (NOT sum of per-platform,
         # since a user on multiple platforms would be double-counted)

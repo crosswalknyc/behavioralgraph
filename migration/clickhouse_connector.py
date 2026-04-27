@@ -66,6 +66,11 @@ CH_DEFAULT_SETTINGS = {
     # Deduplicate identical INSERTs within a 60-second window — protects against
     # accidental double-runs from the dashboard.
     "insert_deduplicate": 1,
+    # Profile Analysis builds long inline IN-lists of hostnames (one per
+    # quick-select). The default 256 KiB query parser limit blows up at
+    # ~262 KB with `Max query size exceeded`. 16 MiB is plenty headroom
+    # and well under the server-side hard limit.
+    "max_query_size": 16 * 1024 * 1024,
 }
 
 
