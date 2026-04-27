@@ -187,6 +187,93 @@ def translate_sql(sql: str) -> str:
         replace_date_trunc, result, flags=re.IGNORECASE
     )
 
+    # ── TO_CHAR(expr, 'FORMAT') → formatDateTime(expr, '%...') ─────────────
+    # Snowflake: TO_CHAR(ts, 'YYYY-MM')
+    # ClickHouse: formatDateTime(ts, '%Y-%m')
+    # Handles nested parens in `expr` (e.g. TO_CHAR(DATE_TRUNC('MONTH', ts), 'YYYY-MM')).
+    _SF_FMT_TOKENS = [
+        ('YYYY', '%Y'), ('YY', '%y'),
+        ('MM', '%m'), ('MON', '%b'), ('MONTH', '%B'),
+        ('DD', '%d'), ('DY', '%a'), ('DAY', '%A'),
+        ('HH24', '%H'), ('HH12', '%I'), ('HH', '%H'),
+        ('MI', '%M'), ('SS', '%S'),
+    ]
+    _SF_FMT_TOKENS.sort(key=lambda p: -len(p[0]))  # longest first to avoid partials
+
+    def _sf_format_to_ch(fmt: str) -> str:
+        out = []
+        i = 0
+        while i < len(fmt):
+            matched = False
+            for tok, repl in _SF_FMT_TOKENS:
+                if fmt[i:i + len(tok)].upper() == tok:
+                    out.append(repl)
+                    i += len(tok)
+                    matched = True
+                    break
+            if not matched:
+                out.append(fmt[i])
+                i += 1
+        return ''.join(out)
+
+    def _rewrite_to_char(text: str) -> str:
+        out = []
+        i = 0
+        n = len(text)
+        pat = re.compile(r'TO_CHAR\s*\(', re.IGNORECASE)
+        while i < n:
+            m = pat.search(text, i)
+            if not m:
+                out.append(text[i:])
+                break
+            out.append(text[i:m.start()])
+            # find balanced closing paren for the TO_CHAR call
+            depth = 1
+            j = m.end()
+            while j < n and depth > 0:
+                c = text[j]
+                if c == '(':
+                    depth += 1
+                elif c == ')':
+                    depth -= 1
+                    if depth == 0:
+                        break
+                elif c == "'":
+                    # skip to end of quoted string (handle '' escape)
+                    j += 1
+                    while j < n:
+                        if text[j] == "'" and (j + 1 >= n or text[j + 1] != "'"):
+                            break
+                        if text[j] == "'" and j + 1 < n and text[j + 1] == "'":
+                            j += 2
+                            continue
+                        j += 1
+                j += 1
+            if depth != 0:
+                out.append(text[m.start():])
+                break
+            inner = text[m.end():j]
+            # split on the last top-level comma before a quoted format literal
+            q = inner.rfind("'")
+            p = inner.rfind("'", 0, q) if q != -1 else -1
+            if q == -1 or p == -1:
+                out.append(text[m.start():j + 1])
+                i = j + 1
+                continue
+            comma = inner.rfind(',', 0, p)
+            if comma == -1:
+                out.append(text[m.start():j + 1])
+                i = j + 1
+                continue
+            expr = inner[:comma].strip()
+            fmt = inner[p + 1:q]
+            ch_fmt = _sf_format_to_ch(fmt)
+            out.append(f"formatDateTime({expr}, '{ch_fmt}')")
+            i = j + 1
+        return ''.join(out)
+
+    result = _rewrite_to_char(result)
+
     # Snowflake ::TYPE casts → ClickHouse-compatible types
     def replace_cast(m):
         sf_type = m.group(1).upper().strip()
