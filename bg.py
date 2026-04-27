@@ -14996,25 +14996,37 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
                     print(f"📊 Date range: {date_range_days} days | Representative sampling maintained")
                     print(f"🚀 60M row cap applied to prevent data explosion")
                 
-                # Create temp table with sampled UIDs using proper Snowflake syntax
-                # Snowflake limits VALUES list to 200,000 expressions - cap to avoid SQL compilation error
-                SNOWFLAKE_VALUES_LIMIT = 200_000
+                # Create temp table with sampled UIDs.
+                # ClickHouse: bulk-insert via the driver instead of inlining
+                # 200k+ VALUES into the SQL text (which exceeds the 256 KB
+                # max_query_size limit and triggers SYNTAX_ERROR Code 62).
+                SAMPLED_UIDS_LIMIT = 200_000
                 if sampled_uids:
-                    uids_for_table = sampled_uids[:SNOWFLAKE_VALUES_LIMIT]
-                    if len(sampled_uids) > SNOWFLAKE_VALUES_LIMIT and not SILENCE_VERBOSE_OUTPUT:
-                        print(f"⚠️ Capping UID list at {SNOWFLAKE_VALUES_LIMIT:,} (Snowflake VALUES limit); {len(sampled_uids):,} would exceed limit")
-                    uid_values = ",\n".join([f"('{uid}')" for uid in uids_for_table])
-                    cur.execute(f"""
-                        CREATE OR REPLACE TEMP TABLE TEMP_SAMPLED_UIDS AS
-                        SELECT column1 AS UID FROM VALUES {uid_values}
-                    """)
+                    uids_for_table = sampled_uids[:SAMPLED_UIDS_LIMIT]
+                    if len(sampled_uids) > SAMPLED_UIDS_LIMIT and not SILENCE_VERBOSE_OUTPUT:
+                        print(f"⚠️ Capping UID list at {SAMPLED_UIDS_LIMIT:,}; {len(sampled_uids):,} would exceed limit")
                 else:
-                    # Create empty temp table if no UIDs
-                    cur.execute("""
-                        CREATE OR REPLACE TEMP TABLE TEMP_SAMPLED_UIDS AS
-                        SELECT UID FROM PROCESSEDCLICKSTREAM.PUBLIC.CLICKSTREAM_FINAL WHERE 1=0
-                    """)
                     uids_for_table = []
+
+                cur.execute("DROP TABLE IF EXISTS TEMP_SAMPLED_UIDS")
+                cur.execute("""
+                    CREATE TEMPORARY TABLE TEMP_SAMPLED_UIDS (UID String) ENGINE = Memory
+                """)
+
+                if uids_for_table:
+                    raw_client = getattr(cur, '_client', None)
+                    if raw_client is not None and hasattr(raw_client, 'insert'):
+                        raw_client.insert(
+                            'TEMP_SAMPLED_UIDS',
+                            [[str(u)] for u in uids_for_table],
+                            column_names=['UID'],
+                        )
+                    else:
+                        CHUNK = 5_000
+                        for i in range(0, len(uids_for_table), CHUNK):
+                            chunk = uids_for_table[i:i + CHUNK]
+                            vals = ",".join(f"('{u}')" for u in chunk)
+                            cur.execute(f"INSERT INTO TEMP_SAMPLED_UIDS (UID) VALUES {vals}")
                 
                 uid_count = len(uids_for_table) if uids_for_table else sample_size
                 if not SILENCE_VERBOSE_OUTPUT:
