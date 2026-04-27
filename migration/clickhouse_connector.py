@@ -75,19 +75,15 @@ FUNC_REPLACEMENTS = [
     (r'\bNVL\s*\(([^,]+),\s*([^)]+)\)',  r'ifNull(\1, \2)'),
     # IFF → if
     (r'\bIFF\s*\(',                      r'if('),
-    # DATEADD
-    (r"DATEADD\s*\(\s*'?day'?\s*,\s*(-?\d+)\s*,\s*([^)]+)\)",
-     r'addDays(\2, \1)'),
-    (r"DATEADD\s*\(\s*'?month'?\s*,\s*(-?\d+)\s*,\s*([^)]+)\)",
-     r'addMonths(\2, \1)'),
+    # DATEADD: handled by _rewrite_dateadd (balanced-paren walker) before
+    # FUNC_REPLACEMENTS runs. Regex form left behind for reference only.
     # DATEDIFF
     (r"DATEDIFF\s*\(\s*'?day'?\s*,\s*([^,]+),\s*([^)]+)\)",
      r"dateDiff('day', \1, \2)"),
     # CONVERT_TIMEZONE
     (r"CONVERT_TIMEZONE\s*\([^,]+,\s*'([^']+)'\s*,\s*([^)]+)\)",
      r"toTimeZone(\2, '\1')"),
-    # TO_DATE
-    (r'\bTO_DATE\s*\(([^)]+)\)',        r'toDate(\1)'),
+    # TO_DATE handled by _rewrite_to_date before FUNC_REPLACEMENTS runs.
     # TO_TIMESTAMP
     (r'\bTO_TIMESTAMP\s*\(([^)]+)\)',   r'toDateTime(\1)'),
     # CURRENT_DATE → today()
@@ -164,6 +160,188 @@ CAST_TYPE_MAP = {
 }
 
 
+# ── Balanced-paren helpers for Snowflake→ClickHouse rewrites ─────────────────
+# These walkers correctly handle nested calls and quoted strings, which the
+# simple [^)]+ regexes in FUNC_REPLACEMENTS cannot.
+
+_SF_FMT_TOKENS = [
+    ('YYYY', '%Y'), ('YY', '%y'),
+    ('MONTH', '%B'), ('MON', '%b'), ('MM', '%m'),
+    ('DAY', '%A'), ('DY', '%a'), ('DD', '%d'),
+    ('HH24', '%H'), ('HH12', '%I'), ('HH', '%H'),
+    ('MI', '%M'), ('SS', '%S'),
+]
+_SF_FMT_TOKENS.sort(key=lambda p: -len(p[0]))
+
+
+def _sf_format_to_ch(fmt: str) -> str:
+    out = []
+    i = 0
+    while i < len(fmt):
+        matched = False
+        for tok, repl in _SF_FMT_TOKENS:
+            if fmt[i:i + len(tok)].upper() == tok:
+                out.append(repl)
+                i += len(tok)
+                matched = True
+                break
+        if not matched:
+            out.append(fmt[i])
+            i += 1
+    return ''.join(out)
+
+
+def _find_matching_paren(text: str, open_idx: int) -> int:
+    """Given the index of an opening '(' in text, return the index of its
+    matching ')'. Respects single-quoted strings (with '' escape). Returns -1
+    if no match."""
+    depth = 1
+    j = open_idx + 1
+    n = len(text)
+    while j < n and depth > 0:
+        c = text[j]
+        if c == '(':
+            depth += 1
+        elif c == ')':
+            depth -= 1
+            if depth == 0:
+                return j
+        elif c == "'":
+            j += 1
+            while j < n:
+                if text[j] == "'" and j + 1 < n and text[j + 1] == "'":
+                    j += 2
+                    continue
+                if text[j] == "'":
+                    break
+                j += 1
+        j += 1
+    return -1
+
+
+def _split_top_level_args(inner: str) -> list[str]:
+    """Split a comma-separated argument list at the top paren/quote level."""
+    args = []
+    depth = 0
+    buf = []
+    i = 0
+    n = len(inner)
+    while i < n:
+        c = inner[i]
+        if c == '(':
+            depth += 1
+            buf.append(c)
+        elif c == ')':
+            depth -= 1
+            buf.append(c)
+        elif c == "'":
+            buf.append(c)
+            i += 1
+            while i < n:
+                if inner[i] == "'" and i + 1 < n and inner[i + 1] == "'":
+                    buf.append("''")
+                    i += 2
+                    continue
+                buf.append(inner[i])
+                if inner[i] == "'":
+                    break
+                i += 1
+        elif c == ',' and depth == 0:
+            args.append(''.join(buf).strip())
+            buf = []
+        else:
+            buf.append(c)
+        i += 1
+    tail = ''.join(buf).strip()
+    if tail or args:
+        args.append(tail)
+    return args
+
+
+def _rewrite_call(text: str, name: str, handler) -> str:
+    """Find every case-insensitive call `name(...)` in text, pass its
+    balanced arg list to `handler(args) -> str`, and substitute."""
+    out = []
+    i = 0
+    n = len(text)
+    pat = re.compile(r'\b' + re.escape(name) + r'\s*\(', re.IGNORECASE)
+    while i < n:
+        m = pat.search(text, i)
+        if not m:
+            out.append(text[i:])
+            break
+        out.append(text[i:m.start()])
+        open_paren = m.end() - 1
+        close = _find_matching_paren(text, open_paren)
+        if close == -1:
+            out.append(text[m.start():])
+            break
+        inner = text[open_paren + 1:close]
+        args = _split_top_level_args(inner)
+        replacement = handler(args)
+        if replacement is None:
+            out.append(text[m.start():close + 1])
+        else:
+            out.append(replacement)
+        i = close + 1
+    return ''.join(out)
+
+
+def _rewrite_to_char(text: str) -> str:
+    def h(args):
+        if len(args) != 2:
+            return None
+        expr = args[0]
+        fmt_arg = args[1].strip()
+        if len(fmt_arg) >= 2 and fmt_arg[0] == "'" and fmt_arg[-1] == "'":
+            fmt = fmt_arg[1:-1]
+            return f"formatDateTime({expr}, '{_sf_format_to_ch(fmt)}')"
+        return None
+    return _rewrite_call(text, 'TO_CHAR', h)
+
+
+def _rewrite_to_date(text: str) -> str:
+    def h(args):
+        if len(args) == 1:
+            return f'toDate({args[0]})'
+        if len(args) == 2:
+            expr = args[0]
+            fmt_arg = args[1].strip()
+            if len(fmt_arg) >= 2 and fmt_arg[0] == "'" and fmt_arg[-1] == "'":
+                fmt = fmt_arg[1:-1].upper()
+                if fmt in ('YYYY-MM-DD', 'YYYY/MM/DD'):
+                    return f'toDate({expr})'
+                return f"toDate(parseDateTimeOrNull({expr}, '{_sf_format_to_ch(fmt)}'))"
+        return None
+    return _rewrite_call(text, 'TO_DATE', h)
+
+
+_DATEADD_UNIT_MAP = {
+    'DAY': 'addDays', 'DAYS': 'addDays',
+    'WEEK': 'addWeeks', 'WEEKS': 'addWeeks',
+    'MONTH': 'addMonths', 'MONTHS': 'addMonths',
+    'QUARTER': 'addQuarters', 'QUARTERS': 'addQuarters',
+    'YEAR': 'addYears', 'YEARS': 'addYears',
+    'HOUR': 'addHours', 'HOURS': 'addHours',
+    'MINUTE': 'addMinutes', 'MINUTES': 'addMinutes',
+    'SECOND': 'addSeconds', 'SECONDS': 'addSeconds',
+}
+
+
+def _rewrite_dateadd(text: str) -> str:
+    def h(args):
+        if len(args) != 3:
+            return None
+        unit = args[0].strip().strip("'").upper()
+        fn = _DATEADD_UNIT_MAP.get(unit)
+        if not fn:
+            return None
+        n_arg = args[1].strip()
+        expr = args[2].strip()
+        return f'{fn}({expr}, {n_arg})'
+    return _rewrite_call(text, 'DATEADD', h)
+
+
 def translate_sql(sql: str) -> str:
     """Translate Snowflake SQL to ClickHouse SQL."""
     result = sql
@@ -171,6 +349,13 @@ def translate_sql(sql: str) -> str:
     # Table name replacements (case-insensitive)
     for pattern, replacement in TABLE_MAP.items():
         result = re.sub(pattern, replacement, result, flags=re.IGNORECASE)
+
+    # ── Balanced-paren rewrites (must run before FUNC_REPLACEMENTS) ───────
+    # Handle nested calls like DATEADD(MONTH, 1, TO_DATE(x || '-01', 'YYYY-MM-DD'))
+    # that the FUNC_REPLACEMENTS regexes (which use [^)]+) would mangle.
+    result = _rewrite_to_char(result)
+    result = _rewrite_to_date(result)
+    result = _rewrite_dateadd(result)
 
     # Function replacements
     for pattern, replacement in FUNC_REPLACEMENTS:
@@ -186,93 +371,6 @@ def translate_sql(sql: str) -> str:
         r"DATE_TRUNC\s*\(\s*'(\w+)'\s*,\s*([^)]+)\)",
         replace_date_trunc, result, flags=re.IGNORECASE
     )
-
-    # ── TO_CHAR(expr, 'FORMAT') → formatDateTime(expr, '%...') ─────────────
-    # Snowflake: TO_CHAR(ts, 'YYYY-MM')
-    # ClickHouse: formatDateTime(ts, '%Y-%m')
-    # Handles nested parens in `expr` (e.g. TO_CHAR(DATE_TRUNC('MONTH', ts), 'YYYY-MM')).
-    _SF_FMT_TOKENS = [
-        ('YYYY', '%Y'), ('YY', '%y'),
-        ('MM', '%m'), ('MON', '%b'), ('MONTH', '%B'),
-        ('DD', '%d'), ('DY', '%a'), ('DAY', '%A'),
-        ('HH24', '%H'), ('HH12', '%I'), ('HH', '%H'),
-        ('MI', '%M'), ('SS', '%S'),
-    ]
-    _SF_FMT_TOKENS.sort(key=lambda p: -len(p[0]))  # longest first to avoid partials
-
-    def _sf_format_to_ch(fmt: str) -> str:
-        out = []
-        i = 0
-        while i < len(fmt):
-            matched = False
-            for tok, repl in _SF_FMT_TOKENS:
-                if fmt[i:i + len(tok)].upper() == tok:
-                    out.append(repl)
-                    i += len(tok)
-                    matched = True
-                    break
-            if not matched:
-                out.append(fmt[i])
-                i += 1
-        return ''.join(out)
-
-    def _rewrite_to_char(text: str) -> str:
-        out = []
-        i = 0
-        n = len(text)
-        pat = re.compile(r'TO_CHAR\s*\(', re.IGNORECASE)
-        while i < n:
-            m = pat.search(text, i)
-            if not m:
-                out.append(text[i:])
-                break
-            out.append(text[i:m.start()])
-            # find balanced closing paren for the TO_CHAR call
-            depth = 1
-            j = m.end()
-            while j < n and depth > 0:
-                c = text[j]
-                if c == '(':
-                    depth += 1
-                elif c == ')':
-                    depth -= 1
-                    if depth == 0:
-                        break
-                elif c == "'":
-                    # skip to end of quoted string (handle '' escape)
-                    j += 1
-                    while j < n:
-                        if text[j] == "'" and (j + 1 >= n or text[j + 1] != "'"):
-                            break
-                        if text[j] == "'" and j + 1 < n and text[j + 1] == "'":
-                            j += 2
-                            continue
-                        j += 1
-                j += 1
-            if depth != 0:
-                out.append(text[m.start():])
-                break
-            inner = text[m.end():j]
-            # split on the last top-level comma before a quoted format literal
-            q = inner.rfind("'")
-            p = inner.rfind("'", 0, q) if q != -1 else -1
-            if q == -1 or p == -1:
-                out.append(text[m.start():j + 1])
-                i = j + 1
-                continue
-            comma = inner.rfind(',', 0, p)
-            if comma == -1:
-                out.append(text[m.start():j + 1])
-                i = j + 1
-                continue
-            expr = inner[:comma].strip()
-            fmt = inner[p + 1:q]
-            ch_fmt = _sf_format_to_ch(fmt)
-            out.append(f"formatDateTime({expr}, '{ch_fmt}')")
-            i = j + 1
-        return ''.join(out)
-
-    result = _rewrite_to_char(result)
 
     # Snowflake ::TYPE casts → ClickHouse-compatible types
     def replace_cast(m):
