@@ -4,7 +4,7 @@ Input: date range, movie title, genre. Output: TOTAL HITS (MOVIE VIEWERS) → TH
 ticket sales projections, and demographics per theater and overall.
 """
 import pandas as pd
-import sys as _sys; _sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'migration')); _sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'migration'))
+import os, sys as _sys; _sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'migration')); _sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'migration'))
 from clickhouse_connector import connect_clickhouse
 from datetime import datetime
 from pathlib import Path

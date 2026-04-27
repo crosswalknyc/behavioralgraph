@@ -1,5 +1,5 @@
 import pandas as pd
-import sys as _sys; _sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'migration')); _sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'migration'))
+import os, sys as _sys; _sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'migration')); _sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'migration'))
 from clickhouse_connector import connect_clickhouse
 from datetime import datetime, timedelta
 from pathlib import Path
