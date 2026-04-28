@@ -14073,11 +14073,12 @@ def _persona_doc_from_previous_lookup(previous_demo_lookup: dict | None) -> dict
     """Rebuild a minimal persona_doc shape from a prior run's demographic lookup.
 
     `previous_demo_lookup` is `{normalize_lookup_key(category, value): percentage}`
-    where keys are lowercased "category|value" strings. Returns a persona_doc
-    with demographics + location populated; persona_summary and category_guidance
-    are intentionally empty/placeholder — on rerun we skip the persona LLM call
-    entirely and the per-category agents fall back to their built-in tier
-    baselines for any genuinely new items.
+    where keys are "UPPERCASE_CATEGORY|lowercase_value" strings (see
+    `normalize_lookup_key`). Returns a persona_doc with demographics + location
+    populated; persona_summary and category_guidance are intentionally empty/
+    placeholder — on rerun we skip the persona LLM call entirely and the
+    per-category agents fall back to their built-in tier baselines for any
+    genuinely new items.
     """
     demographics: dict[str, dict[str, float]] = {}
     location: list[dict] = []
@@ -14312,8 +14313,10 @@ def parallel_category_agents(df: pd.DataFrame, persona_doc: dict,
         new_items: list[str] = []
         carry: dict[str, float] = {}
         for v in vals:
-            # Lookup keys are lowercased "category|value" (see normalize_lookup_key)
-            lk = f"{cat.lower()}|{v.lower()}"
+            # Lookup keys come from normalize_lookup_key() which uppercases the
+            # CATEGORY half and lowercases the VALUE half, e.g.
+            # "SOCIAL MEDIA|youtube". Match that exact shape.
+            lk = f"{cat.upper()}|{v.lower()}"
             if lk in prev_bhv:
                 carry[v] = float(prev_bhv[lk])
             else:
