@@ -14069,13 +14069,60 @@ ADDITIONAL RULES:
     return []
 
 
+def _persona_doc_from_previous_lookup(previous_demo_lookup: dict | None) -> dict:
+    """Rebuild a minimal persona_doc shape from a prior run's demographic lookup.
+
+    `previous_demo_lookup` is `{normalize_lookup_key(category, value): percentage}`
+    where keys are lowercased "category|value" strings. Returns a persona_doc
+    with demographics + location populated; persona_summary and category_guidance
+    are intentionally empty/placeholder — on rerun we skip the persona LLM call
+    entirely and the per-category agents fall back to their built-in tier
+    baselines for any genuinely new items.
+    """
+    demographics: dict[str, dict[str, float]] = {}
+    location: list[dict] = []
+    if not previous_demo_lookup:
+        return {'persona_summary': '', 'demographics': {}, 'location': [], 'category_guidance': {}}
+    for key, pct in previous_demo_lookup.items():
+        if not isinstance(key, str) or '|' not in key:
+            continue
+        cat, val = key.split('|', 1)
+        cat_u = cat.strip().upper()
+        val_u = val.strip().upper()
+        try:
+            pct_f = float(pct)
+        except (TypeError, ValueError):
+            continue
+        if cat_u == 'LOCATION':
+            location.append({'dma': val_u, 'percentage': pct_f})
+        else:
+            demographics.setdefault(cat_u, {})[val_u] = pct_f
+    return {
+        'persona_summary': '(reused from prior run — demographics locked)',
+        'demographics': demographics,
+        'location': location,
+        'category_guidance': {},
+    }
+
+
 def parallel_category_agents(df: pd.DataFrame, persona_doc: dict,
-                              subject: str, brands: list[str] | None = None) -> pd.DataFrame:
+                              subject: str, brands: list[str] | None = None,
+                              previous_behavioral_lookup: dict | None = None,
+                              lock_demographics: bool = False) -> pd.DataFrame:
     """Step 2 — run one gpt-4o agent per behavioral category in parallel.
 
     Each agent receives the persona doc + the list of values from Snowflake for
     its category, and returns a BP for every row.  Demographics and Location are
     written directly from the persona_doc (Step 1 output), not via category agents.
+
+    Rerun-stability extensions (used when re-running a profile with new dates):
+        previous_behavioral_lookup: optional `{normalize_lookup_key(cat, val): pct}`
+            from the prior run. For any item present in the lookup, the prior BP
+            is carried forward with only ±0.01–0.02% jitter and the LLM is NOT
+            called for that item. Per-category agents fire only on net-new items.
+        lock_demographics: when True, write demographic + location values EXACTLY
+            from `persona_doc` with no ±1–3% noise wiggle, so a rerun's demos
+            match the reference run identically.
     """
     import concurrent.futures as _futures
 
@@ -14182,7 +14229,10 @@ def parallel_category_agents(df: pd.DataFrame, persona_doc: dict,
         print(f"   🗑️ Removing {len(drop_indices)} 'Prefer Not to Say'/'Other' rows from AGE/GENDER/ETHNICITY/INCOME")
         df = df.drop(drop_indices).reset_index(drop=True)
 
-    # Write persona_doc values to DataFrame with 4dp noise
+    # Write persona_doc values to DataFrame.
+    # When lock_demographics=True (rerun), write the EXACT prior values rounded
+    # to 4dp — no ±1-3% noise wiggle — so a rerun's demos match the reference
+    # run identically. Otherwise apply organic noise as before.
     for cat, buckets in demos.items():
         if not isinstance(buckets, dict):
             continue
@@ -14191,7 +14241,8 @@ def parallel_category_agents(df: pd.DataFrame, persona_doc: dict,
             val_u = _norm_bracket(str(df.at[idx, 'Value']))
             for bk, pct in buckets.items():
                 if _norm_bracket(bk) == val_u:
-                    noisy_bp = _demo_4dp_noise(float(pct))
+                    raw = float(pct)
+                    noisy_bp = round(raw, 4) if lock_demographics else _demo_4dp_noise(raw)
                     df.at[idx, bp_col] = noisy_bp
                     if pct_col and pct_col in df.columns:
                         df.at[idx, pct_col] = noisy_bp
@@ -14241,20 +14292,48 @@ def parallel_category_agents(df: pd.DataFrame, persona_doc: dict,
     behavioral_cats = [c for c in all_cats
                        if c not in _BEHAVIORAL_SKIP and c not in _DEMO_SET]
 
-    category_values: dict[str, tuple[list[str], list[int]]] = {}
+    # Split each category's items into:
+    #   carry_forward: items present in previous_behavioral_lookup → reuse prior BP
+    #   new_items:     items NOT in lookup → must call LLM for these only
+    # If previous_behavioral_lookup is empty, every item is "new" (fresh-pull
+    # behaviour preserved unchanged).
+    prev_bhv = previous_behavioral_lookup or {}
+
+    category_values: dict[str, tuple[list[str], list[int]]] = {}        # all items (kept for output write-back)
+    category_new_items: dict[str, list[str]] = {}                       # items needing LLM
+    category_carry: dict[str, dict[str, float]] = {}                    # value_upper -> prior_bp
     for cat in behavioral_cats:
         mask = df['Column'].astype(str).str.strip().str.upper() == cat
         vals = df.loc[mask, 'Value'].astype(str).str.strip().str.upper().tolist()
         idxs = df[mask].index.tolist()
-        if vals:
-            category_values[cat] = (vals, idxs)
+        if not vals:
+            continue
+        category_values[cat] = (vals, idxs)
+        new_items: list[str] = []
+        carry: dict[str, float] = {}
+        for v in vals:
+            # Lookup keys are lowercased "category|value" (see normalize_lookup_key)
+            lk = f"{cat.lower()}|{v.lower()}"
+            if lk in prev_bhv:
+                carry[v] = float(prev_bhv[lk])
+            else:
+                new_items.append(v)
+        category_new_items[cat] = new_items
+        category_carry[cat] = carry
 
-    print(f"🤖 Step 2: Launching {len(category_values)} parallel category agents …")
+    total_carry = sum(len(c) for c in category_carry.values())
+    total_new = sum(len(n) for n in category_new_items.values())
+    cats_needing_llm = [c for c, n in category_new_items.items() if n]
+    if prev_bhv:
+        print(f"🔁 Rerun carry-forward: {total_carry} items reuse prior BP, "
+              f"{total_new} new items across {len(cats_needing_llm)} categories will be scored fresh")
+
+    print(f"🤖 Step 2: Launching {len(cats_needing_llm)} parallel category agents (skipped {len(category_values) - len(cats_needing_llm)} fully-carried categories) …")
     results_map: dict[str, list[dict]] = {}
     with _futures.ThreadPoolExecutor(max_workers=12) as pool:
         future_to_cat = {
-            pool.submit(_run_single_category_agent, cat, vals, persona_doc, subject): cat
-            for cat, (vals, _) in category_values.items()
+            pool.submit(_run_single_category_agent, cat, category_new_items[cat], persona_doc, subject): cat
+            for cat in cats_needing_llm
         }
         for fut in _futures.as_completed(future_to_cat):
             cat = future_to_cat[fut]
@@ -14283,23 +14362,37 @@ def parallel_category_agents(df: pd.DataFrame, persona_doc: dict,
         v = integer_part + d1 * 0.1 + d2 * 0.01 + d3 * 0.001 + d4 * 0.0001
         return max(0.1111, min(99.8999, round(v, 4)))
 
+    def _carry_forward_jitter(prev_bp: float) -> float:
+        """Tiny ±0.01-0.02% absolute jitter on a carried-forward BP — keeps
+        the value visually distinct from the prior CSV without meaningful drift.
+        Caps at 4dp; clamps to [0.0001, 99.9999]."""
+        delta = random.uniform(0.01, 0.02) * random.choice([-1, 1])
+        out = round(max(0.0001, min(99.9999, prev_bp + delta)), 4)
+        return out
+
     rows_written = 0
+    rows_carried = 0
     for cat, (vals, idxs) in category_values.items():
         agent_result = results_map.get(cat, [])
-        if not agent_result:
-            continue
         bp_lookup = {}
         for entry in agent_result:
             if isinstance(entry, dict) and 'value' in entry and 'bp' in entry:
                 bp_lookup[str(entry['value']).strip().upper()] = float(entry['bp'])
+        carry = category_carry.get(cat, {})
         for idx in idxs:
             val_u = str(df.at[idx, 'Value']).strip().upper()
-            if val_u in bp_lookup:
+            if val_u in carry:
+                # Carry-forward path — reuse prior BP with tiny jitter, ignore LLM
+                df.at[idx, bp_col] = _carry_forward_jitter(carry[val_u])
+                rows_carried += 1
+            elif val_u in bp_lookup:
                 new_bp = max(0.0001, min(99.9999, bp_lookup[val_u]))
                 df.at[idx, bp_col] = _add_4dp_noise(new_bp)
                 rows_written += 1
 
-    print(f"   ✅ Wrote BP for {rows_written} behavioral rows across {len(results_map)} categories")
+    if rows_carried:
+        print(f"   ↩️  Carried forward {rows_carried} BP rows from prior run (±0.01–0.02% jitter)")
+    print(f"   ✅ Wrote BP for {rows_written} new behavioral rows across {len(results_map)} categories")
 
     print("   🛡️  Running post-agent quality gate...")
     df = post_agent_quality_gate(df, persona_doc, brands)
@@ -17343,10 +17436,37 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
         print(f"\n{'='*60}")
         print(f"  3-STEP AGENT PIPELINE for '{_subject_name}'")
         print(f"{'='*60}")
-        _persona_doc = persona_research_agent(_subject_name, brand_category)
+
+        # Rerun-stability path: when this is a rerun of a previously-pulled
+        # profile for the same brand input, reuse the prior persona doc
+        # (demographics + location) instead of re-querying the LLM. This keeps
+        # demographics IDENTICAL to the reference run (no ±2% drift), avoids
+        # one LLM round-trip, and dodges the persona-JSON failure mode entirely.
+        # Behavioral items already in the prior run are carried forward with
+        # only ±0.01-0.02% jitter; per-category agents fire only on net-new
+        # items that didn't exist in the prior pull.
+        _is_rerun_same_brand = bool(
+            previous_file_path
+            and (previous_demo_lookup or previous_behavioral_lookup)
+            and (previous_brand_input or '').strip().lower() == brand_input_str.strip().lower()
+        )
+        if _is_rerun_same_brand:
+            print("🔒 Rerun detected (same brand input as prior run)")
+            print("   • Demographics + location: locked to prior run values")
+            print(f"   • Behavioral items in prior run ({len(previous_behavioral_lookup)}): "
+                  f"carried forward with ±0.01–0.02% jitter")
+            print("   • Net-new behavioral items: scored fresh by per-category agents")
+            print("   • Persona research LLM call: SKIPPED (prior demographics reused)")
+            _persona_doc = _persona_doc_from_previous_lookup(previous_demo_lookup)
+        else:
+            _persona_doc = persona_research_agent(_subject_name, brand_category)
 
         # Step 2: Parallel Category Agents
-        df_final = parallel_category_agents(df_final, _persona_doc, _subject_name, brands)
+        df_final = parallel_category_agents(
+            df_final, _persona_doc, _subject_name, brands,
+            previous_behavioral_lookup=(previous_behavioral_lookup if _is_rerun_same_brand else None),
+            lock_demographics=_is_rerun_same_brand,
+        )
 
         # Step 3: Final Sanity Check
         print("🔒 Step 3: Final sanity check …")
