@@ -22245,12 +22245,128 @@ def run_sf_lf_conversion(job_id):
         output_filename = f"SF_LF_{safe_name}_{timestamp}.csv"
         output_path = output_folder / output_filename
 
-        # Gen Pop projection helper: (value * 15 / 10,000,000) * 329,900,000
-        # Also adds noise if zero to ensure no zeros in output
-        def project_to_gen_pop(value):
+        # ─── Anchor projections to real published view counts ─────────────
+        # The legacy formula `value * 15 / 10_000_000 * 329_900_000` (≈ × 494.85)
+        # had no upper bound and produced multi-billion "Unique Views" for
+        # high-reach SF content — impossible since the US has ~330M people.
+        #
+        # New approach (per-platform):
+        #   1. Scrape published view counts for every input URL.
+        #   2. projected_total[plat] = scraped_total[plat] × SF_LF_VIEW_DISCOUNT
+        #      (default 0.75 — env-tunable).
+        #   3. scale[plat] = projected_total[plat] / panel_total[plat]
+        #      i.e. each panel-recorded view represents `scale` real-world views
+        #      for that platform.
+        #   4. All panel-derived metrics (unique, converted, LF visits) are
+        #      multiplied by `scale[plat]`. People-shaped metrics are then
+        #      hard-capped at US population (329.9M) so unique never exceeds
+        #      the country.
+        #   5. When a platform's scrape coverage falls below MIN_COVERAGE
+        #      (TikTok IP-blocks, IG anonymous-gating), we fall back to the
+        #      no-15×-boost formula `raw × 32.99`, also capped at US pop. Total
+        #      Views in that case are raw_panel_total × 32.99 — still no boost.
+        try:
+            from sf_lf_view_scraper import (
+                compute_platform_anchors,
+                detect_platform,
+                project_capped,
+                scrape_views_for_urls,
+                NO_BOOST_MULTIPLIER,
+                US_POPULATION as SF_LF_US_POP,
+            )
+            _scraper_ok = True
+        except Exception as _scraper_imp_err:
+            print(f"[SF-LF] scraper unavailable ({_scraper_imp_err}); "
+                  f"falling back to no-boost projection only")
+            _scraper_ok = False
+
+            def detect_platform(url):  # type: ignore
+                u = (url or '').lower()
+                if 'youtube.' in u or 'youtu.be' in u:
+                    return 'youtube'
+                if 'tiktok.' in u:
+                    return 'tiktok'
+                if 'instagram.' in u:
+                    return 'instagram'
+                return 'other'
+
+            NO_BOOST_MULTIPLIER = 329_900_000 / 10_000_000  # 32.99
+            SF_LF_US_POP = 329_900_000
+
+            def project_capped(raw, scale, cap=SF_LF_US_POP):
+                if not raw or raw <= 0:
+                    return 0
+                return min(int(round(raw * scale)), cap)
+
+        # Build per-platform raw-panel-total (Duplicated Views) from results so
+        # the anchor scale = scraped_anchor / panel_total can be computed.
+        # NOTE: panel "Duplicated Views" already represents the raw panel count
+        # (pre-projection) — see L21834 where it comes straight from a ClickHouse
+        # countIf, no multiplier applied.
+        _panel_totals_by_plat = {}
+        for _pm in results.get('platform_metrics', []) or []:
+            if _pm.get('is_overall'):
+                continue
+            _plat_key = (_pm.get('platform') or '').lower()
+            if _plat_key:
+                _panel_totals_by_plat[_plat_key] = int(_pm.get('duplicated_views') or 0)
+
+        if _scraper_ok and sf_urls:
+            try:
+                _scrape = scrape_views_for_urls(sf_urls, log_progress=True)
+            except Exception as _scrape_err:
+                print(f"[SF-LF] scrape failed ({_scrape_err}); using no-boost fallback")
+                _scrape = {'per_url': {}, 'per_platform': {}, 'duration_sec': 0.0}
+        else:
+            _scrape = {'per_url': {}, 'per_platform': {}, 'duration_sec': 0.0}
+
+        try:
+            _anchors = compute_platform_anchors(_scrape, _panel_totals_by_plat) if _scraper_ok else {}
+        except Exception as _anchor_err:
+            print(f"[SF-LF] anchor compute failed ({_anchor_err}); using no-boost fallback")
+            _anchors = {}
+
+        # Overall (cross-platform) scale — views-weighted blend of per-platform
+        # scales. Used for OVERALL/cross-platform rows where we don't have a
+        # single platform context.
+        _sum_proj_total = sum(a.get('projected_total', 0) for a in _anchors.values())
+        _sum_panel_total = sum(a.get('panel_total', 0) for a in _anchors.values())
+        if _sum_proj_total > 0 and _sum_panel_total > 0:
+            _overall_scale = _sum_proj_total / _sum_panel_total
+        else:
+            _overall_scale = NO_BOOST_MULTIPLIER
+
+        print(f"[SF-LF] anchor summary: overall_scale={_overall_scale:.4f}  "
+              f"(legacy was 494.85 — capped projection cuts inflated unique counts)")
+        for _p, _a in sorted(_anchors.items()):
+            print(f"[SF-LF]   anchor[{_p:<9}] mode={_a['mode']:<14}  "
+                  f"scraped={_a['scraped_total']:>15,}  "
+                  f"panel_raw={_a['panel_total']:>12,}  "
+                  f"scale={_a['scale']:.4f}  "
+                  f"coverage={_a['coverage']*100:.0f}%")
+
+        def _scale_for(platform):
+            if not platform:
+                return _overall_scale
+            a = _anchors.get(platform.lower())
+            if a:
+                return a['scale']
+            return _overall_scale
+
+        # Single-arg signature kept for backward compat; new args:
+        #   platform        — when known, uses that platform's anchor scale
+        #   is_total_views  — duplicated/total-views are NOT capped at US pop
+        #                     (one person can legitimately watch many times)
+        def project_to_gen_pop(value, platform=None, is_total_views=False):
             if value is None or value == 0:
-                value = random.randint(3, 12)  # Add noise
-            return int(round(value * 15 / 10000000 * 329900000))
+                value = random.randint(3, 12)  # noise so no zero rows in CSV
+            scale = _scale_for(platform)
+            if is_total_views:
+                # Total/Duplicated Views can exceed US pop legitimately.
+                return int(round(value * scale))
+            # People-shaped: cap at the tighter of US pop and platform-specific
+            # US user base (e.g. unique IG viewers can't exceed ~143M).
+            return project_capped(value, scale, cap=SF_LF_US_POP, platform=platform)
 
         # Build CSV rows
         csv_rows = []
@@ -22263,6 +22379,19 @@ def run_sf_lf_conversion(job_id):
         csv_rows.append({'Column': 'SHORT_FORM_PLATFORMS', 'Value': '; '.join(sf_platforms) if sf_platforms else 'N/A', 'Metric': '', 'Count': '', 'Percentage': '', 'Gen_Pop_Projection': ''})
         csv_rows.append({'Column': 'LONG_FORM_TITLE', 'Value': lf_title, 'Metric': '', 'Count': '', 'Percentage': '', 'Gen_Pop_Projection': ''})
         csv_rows.append({'Column': 'LONG_FORM_PLATFORM', 'Value': lf_platform if lf_platform else 'N/A', 'Metric': '', 'Count': '', 'Percentage': '', 'Gen_Pop_Projection': ''})
+
+        # Audit row: surface scrape coverage + per-platform anchor mode so
+        # anyone reading the CSV can see whether projections came from real
+        # scraped views or the panel-estimate fallback.
+        if _anchors:
+            _anchor_summary = '; '.join(
+                f"{p}: {a['mode']} ({a['coverage']*100:.0f}% coverage, "
+                f"scraped={a['scraped_total']:,}, scale={a['scale']:.4f})"
+                for p, a in sorted(_anchors.items())
+            )
+            csv_rows.append({'Column': 'SCRAPE_ANCHORS', 'Value': _anchor_summary,
+                             'Metric': f'discount={getattr(__import__("os"), "environ").get("SF_LF_VIEW_DISCOUNT", "0.75")}',
+                             'Count': '', 'Percentage': '', 'Gen_Pop_Projection': ''})
         csv_rows.append({'Column': '', 'Value': '', 'Metric': '', 'Count': '', 'Percentage': '', 'Gen_Pop_Projection': ''})
         
         # Platform Metrics Section (overall + individual platforms)
@@ -22272,9 +22401,21 @@ def run_sf_lf_conversion(job_id):
             for pm in results['platform_metrics']:
                 p_unique = add_noise_if_zero(pm['unique_views'])
                 p_dup = add_noise_if_zero(pm['duplicated_views'])
-                p_unique_genpop = project_to_gen_pop(p_unique)
+                # Pass platform context so unique uses that platform's anchor scale
+                # (or the overall blended scale for the OVERALL row), and Total
+                # Views are projected without the US-pop cap (duplicated views
+                # legitimately exceed pop).
+                _pm_plat = None if pm.get('is_overall') else (pm.get('platform') or '').lower()
+                p_unique_genpop = project_to_gen_pop(p_unique, platform=_pm_plat)
                 csv_rows.append({'Column': 'PLATFORM', 'Value': pm['platform'], 'Metric': 'Unique Views', 'Count': p_unique, 'Percentage': '', 'Gen_Pop_Projection': p_unique_genpop})
-                p_dup_genpop = int(round(p_unique_genpop * (p_dup / max(p_unique, 1))))
+                # Anchored Duplicated Views: prefer the scraped anchor's
+                # projected_total (= scraped_total × discount) when available,
+                # else scale raw panel count without the US-pop cap.
+                _anchor_for_pm = _anchors.get(_pm_plat) if _pm_plat else None
+                if _anchor_for_pm and _anchor_for_pm.get('mode') == 'anchored':
+                    p_dup_genpop = int(_anchor_for_pm['projected_total'])
+                else:
+                    p_dup_genpop = project_to_gen_pop(p_dup, platform=_pm_plat, is_total_views=True)
                 csv_rows.append({'Column': 'PLATFORM', 'Value': pm['platform'], 'Metric': 'Duplicated Views', 'Count': p_dup, 'Percentage': '', 'Gen_Pop_Projection': p_dup_genpop})
                 if 'converted_to_title' in pm:
                     p_conv = add_noise_if_zero(pm['converted_to_title'])
@@ -22283,7 +22424,7 @@ def run_sf_lf_conversion(job_id):
                     p_conv_rate = round((p_conv / p_unique * 100), 8) if p_unique > 0 else 0.00000001
                     if p_conv_rate == 0:
                         p_conv_rate = 0.00000001
-                    p_conv_genpop = project_to_gen_pop(p_conv)
+                    p_conv_genpop = project_to_gen_pop(p_conv, platform=_pm_plat)
                     if p_conv_genpop > p_unique_genpop:
                         p_conv_genpop = p_unique_genpop
                     csv_rows.append({'Column': 'PLATFORM', 'Value': pm['platform'], 'Metric': 'Converted to Title', 'Count': p_conv, 'Percentage': f"{p_conv_rate:.8f}%", 'Gen_Pop_Projection': p_conv_genpop})
@@ -22308,7 +22449,8 @@ def run_sf_lf_conversion(job_id):
             running_genpop = 0
             for idx, u in enumerate(url_list):
                 u_unique = u['unique_views']
-                u_unique_genpop_cap = project_to_gen_pop(u_unique) if u_unique > 0 else 0
+                _u_plat_cap = detect_platform(u.get('url') or '')
+                u_unique_genpop_cap = project_to_gen_pop(u_unique, platform=_u_plat_cap) if u_unique > 0 else 0
                 if sum_url_conv_raw > 0:
                     if idx == len(url_list) - 1:
                         gp = max(0, overall_conv_genpop_target - running_genpop)
@@ -22337,13 +22479,26 @@ def run_sf_lf_conversion(job_id):
                 if u_conv_rate == 0:
                     u_conv_rate = 0.00000001
                 url_val = url_m['url_display']
-                u_unique_genpop = project_to_gen_pop(u_unique)
+                # Detect platform from the URL so this row uses that
+                # platform's anchor scale instead of the overall blend.
+                _url_plat = detect_platform(url_m.get('url') or '')
+                u_unique_genpop = project_to_gen_pop(u_unique, platform=_url_plat)
                 u_conv_genpop = url_conv_genpops.get(id(url_m), 0)
                 # Cap projected converted to projected unique
                 if u_conv_genpop > u_unique_genpop:
                     u_conv_genpop = u_unique_genpop
                 csv_rows.append({'Column': 'INPUT_URL', 'Value': url_val, 'Metric': 'Unique Views', 'Count': u_unique, 'Percentage': f"{u_reach:.8f}% of total SF viewers", 'Gen_Pop_Projection': u_unique_genpop})
-                u_dup_genpop = int(round(u_unique_genpop * (u_dup / max(u_unique, 1))))
+                # Per-URL Duplicated: prefer scraped views × discount when we
+                # have it for THIS URL; else scale by panel ratio (no cap on
+                # total/duplicated views — they can legitimately exceed pop).
+                _url_scraped = (
+                    _scrape.get('per_url', {}).get(url_m.get('url') or '', {}).get('views')
+                )
+                if _url_scraped and _url_scraped > 0:
+                    from sf_lf_view_scraper import get_view_discount as _get_disc
+                    u_dup_genpop = int(round(_url_scraped * _get_disc()))
+                else:
+                    u_dup_genpop = int(round(u_unique_genpop * (u_dup / max(u_unique, 1))))
                 csv_rows.append({'Column': 'INPUT_URL', 'Value': url_val, 'Metric': 'Duplicated Views', 'Count': u_dup, 'Percentage': '', 'Gen_Pop_Projection': u_dup_genpop})
                 csv_rows.append({'Column': 'INPUT_URL', 'Value': url_val, 'Metric': 'Converted to LF Title', 'Count': u_conv, 'Percentage': f"{u_conv_rate:.8f}% of URL viewers", 'Gen_Pop_Projection': u_conv_genpop})
         
@@ -22373,7 +22528,7 @@ def run_sf_lf_conversion(job_id):
         per_plat_values = []
         for plat_name, pc in platform_conversions.items():
             plat_conv = pc['converted']
-            plat_genpop = project_to_gen_pop(plat_conv)
+            plat_genpop = project_to_gen_pop(plat_conv, platform=(plat_name or '').lower())
             per_plat_values.append((plat_name, plat_conv, plat_genpop))
             print(f"[SF-LF] DEBUG: {plat_name} converted (raw) = {plat_conv}, GenPop = {plat_genpop}")
         
@@ -22395,10 +22550,11 @@ def run_sf_lf_conversion(job_id):
         for plat_name, pc in platform_conversions.items():
             plat_viewers = pc['viewers']
             plat_conv = pc['converted']
-            plat_conv_genpop = project_to_gen_pop(plat_conv)
+            _plat_key = (plat_name or '').lower()
+            plat_conv_genpop = project_to_gen_pop(plat_conv, platform=_plat_key)
             plat_rate = pc['rate'] if pc['rate'] > 0 else 0.00000001
             print(f"[SF-LF] WRITING CSV: {plat_name.upper()}_CONVERSION Converted to LF -> Count={plat_conv}, Gen_Pop_Projection={plat_conv_genpop}")
-            csv_rows.append({'Column': f'{plat_name.upper()}_CONVERSION', 'Value': 'SF Viewers', 'Metric': '', 'Count': plat_viewers, 'Percentage': '', 'Gen_Pop_Projection': project_to_gen_pop(plat_viewers)})
+            csv_rows.append({'Column': f'{plat_name.upper()}_CONVERSION', 'Value': 'SF Viewers', 'Metric': '', 'Count': plat_viewers, 'Percentage': '', 'Gen_Pop_Projection': project_to_gen_pop(plat_viewers, platform=_plat_key)})
             csv_rows.append({'Column': f'{plat_name.upper()}_CONVERSION', 'Value': 'Converted to LF', 'Metric': '', 'Count': plat_conv, 'Percentage': f"{plat_rate:.8f}%", 'Gen_Pop_Projection': plat_conv_genpop})
         
         print(f"[SF-LF] CSV: Overall converted={conv_users}, sum of platforms={sum(pc['converted'] for pc in platform_conversions.values())}")

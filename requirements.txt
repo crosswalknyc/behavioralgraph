@@ -21,3 +21,5 @@ google-auth-oauthlib==1.2.0
 google-auth-httplib2==0.2.0
 google-api-python-client==2.118.0
 PyGithub==2.1.1
+yt-dlp>=2025.10.14
+requests>=2.32.0
