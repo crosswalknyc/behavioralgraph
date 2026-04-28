@@ -13629,6 +13629,105 @@ _BEHAVIORAL_SKIP = {
 _DEMO_SET = set(_DEMO_CATEGORIES) | {'LOCATION'}
 
 
+def _repair_json_text(text: str) -> str:
+    """Cheap text-level repairs for almost-valid LLM JSON.
+
+    Handles the failure modes we actually see from gpt-4o-search-preview /
+    gpt-4o on the persona prompt: smart quotes, JS-style comments, trailing
+    commas, and unescaped double quotes inside short free-form string values
+    (e.g. category_guidance entries like "the audience says \"yes\" to ...").
+    Conservative — only edits text inside string literals where it's safe.
+    """
+    import re as _re
+
+    # Smart quotes → straight quotes
+    repl = {
+        '\u201c': '"', '\u201d': '"', '\u2018': "'", '\u2019': "'",
+        '\u2013': '-', '\u2014': '-', '\u2026': '...',
+        '\u00a0': ' ',
+    }
+    for k, v in repl.items():
+        text = text.replace(k, v)
+
+    # Strip // line comments and /* block comments (outside strings).
+    text = _re.sub(r'/\*.*?\*/', '', text, flags=_re.DOTALL)
+    text = _re.sub(r'(?m)^\s*//.*$', '', text)
+
+    # Trailing commas before } or ]
+    text = _re.sub(r',(\s*[}\]])', r'\1', text)
+
+    # Escape unescaped double quotes inside string values. We walk the text
+    # char-by-char tracking whether we're inside a string. A literal " inside a
+    # value is "unescaped" if the next non-whitespace char is NOT one of
+    # , } ] : (which would legally close the string).
+    out = []
+    i = 0
+    in_str = False
+    n = len(text)
+    while i < n:
+        ch = text[i]
+        if not in_str:
+            out.append(ch)
+            if ch == '"':
+                in_str = True
+            i += 1
+            continue
+        # inside string
+        if ch == '\\' and i + 1 < n:
+            out.append(ch)
+            out.append(text[i + 1])
+            i += 2
+            continue
+        if ch == '"':
+            # peek next non-whitespace char
+            j = i + 1
+            while j < n and text[j] in ' \t\r\n':
+                j += 1
+            nxt = text[j] if j < n else ''
+            if nxt in (',', '}', ']', ':'):
+                # legitimate string terminator
+                out.append(ch)
+                in_str = False
+                i += 1
+            else:
+                # unescaped quote inside the value → escape it
+                out.append('\\"')
+                i += 1
+            continue
+        if ch in '\n\r':
+            # raw newline inside string → escape (JSON forbids it)
+            out.append('\\n')
+            i += 1
+            continue
+        out.append(ch)
+        i += 1
+    return ''.join(out)
+
+
+def _parse_persona_json(text: str):
+    """Try json.loads, then repair-and-retry. Returns (dict_or_None, err_str)."""
+    import json as _json
+
+    # Strip markdown fences and isolate outermost { ... } first.
+    t = (text or '').strip()
+    if t.startswith('```'):
+        t = t.split('\n', 1)[1].rsplit('```', 1)[0].strip()
+    s = t.find('{')
+    e = t.rfind('}')
+    if s < 0 or e <= s:
+        return None, 'no JSON object found'
+    t = t[s:e + 1]
+
+    try:
+        return _json.loads(t), ''
+    except Exception as e1:
+        repaired = _repair_json_text(t)
+        try:
+            return _json.loads(repaired), ''
+        except Exception as e2:
+            return None, f"{type(e1).__name__}: {e1}; after repair: {type(e2).__name__}: {e2}"
+
+
 def persona_research_agent(subject: str, brand_category: str | None = None) -> dict:
     """Step 1 — single gpt-4o-search-preview call.
 
@@ -13762,6 +13861,9 @@ RULES:
 
     print(f"🔬 Step 1: Persona Research Agent researching '{subject}' …")
     text = ''
+    persona_doc = None
+    last_err = ''
+
     # Attempt 1: gpt-4o-search-preview (has web search)
     try:
         resp = client.chat.completions.create(
@@ -13773,31 +13875,66 @@ RULES:
         text = (resp.choices[0].message.content or '').strip()
         if text:
             print(f"   📡 search-preview returned {len(text)} chars")
+            persona_doc, last_err = _parse_persona_json(text)
+            if persona_doc is None:
+                print(f"   ⚠️ search-preview JSON unparseable → {last_err[:160]}")
     except Exception as e:
         print(f"   ⚠️ gpt-4o-search-preview failed ({e})")
 
-    # Attempt 2: gpt-4o fallback if search-preview gave nothing usable
-    if not text or '{' not in text:
-        print(f"   🔄 Falling back to gpt-4o …")
-        resp = client.chat.completions.create(
-            model='gpt-4o',
-            messages=[{'role': 'user', 'content': prompt}],
-            temperature=0.2,
-            max_tokens=4096,
+    # Attempt 2: gpt-4o (no web search) with strict JSON mode
+    if persona_doc is None:
+        print(f"   🔄 Falling back to gpt-4o (response_format=json_object) …")
+        try:
+            resp = client.chat.completions.create(
+                model='gpt-4o',
+                messages=[
+                    {'role': 'system', 'content': 'You return ONLY a single valid JSON object, no markdown, no commentary.'},
+                    {'role': 'user', 'content': prompt},
+                ],
+                temperature=0.2,
+                max_tokens=4096,
+                response_format={"type": "json_object"},
+            )
+            text = (resp.choices[0].message.content or '').strip()
+            print(f"   📡 gpt-4o returned {len(text)} chars")
+            persona_doc, last_err = _parse_persona_json(text)
+            if persona_doc is None:
+                print(f"   ⚠️ gpt-4o JSON unparseable → {last_err[:160]}")
+        except Exception as e:
+            print(f"   ⚠️ gpt-4o fallback failed ({e})")
+
+    # Attempt 3: ask gpt-4o to repair the bad JSON we already have
+    if persona_doc is None and text:
+        print(f"   🩹 Attempting JSON repair via gpt-4o …")
+        try:
+            repair_prompt = (
+                "The following text was supposed to be a single valid JSON object but it has "
+                f"a syntax error ({last_err}). Return ONLY the corrected JSON object — same "
+                "keys, same values, no commentary, no markdown. Preserve every key/value; only "
+                "fix the syntax (escape stray quotes, remove trailing commas, balance braces).\n\n"
+                f"---\n{text}\n---"
+            )
+            resp = client.chat.completions.create(
+                model='gpt-4o',
+                messages=[{'role': 'user', 'content': repair_prompt}],
+                temperature=0,
+                max_tokens=4096,
+                response_format={"type": "json_object"},
+            )
+            repaired = (resp.choices[0].message.content or '').strip()
+            persona_doc, last_err = _parse_persona_json(repaired)
+            if persona_doc is None:
+                print(f"   ⚠️ Repair attempt still unparseable → {last_err[:160]}")
+        except Exception as e:
+            print(f"   ⚠️ Repair call failed ({e})")
+
+    if persona_doc is None:
+        # Last-ditch diagnostic: dump a window around the parse error if we can
+        snippet = (text or '')[:1200]
+        raise RuntimeError(
+            f"Persona agent returned unparseable JSON after 3 attempts. "
+            f"Last error: {last_err}. First 1200 chars of raw response:\n{snippet}"
         )
-        text = (resp.choices[0].message.content or '').strip()
-        print(f"   📡 gpt-4o returned {len(text)} chars")
-
-    # Robust JSON extraction: strip markdown fences, find outermost { … }
-    if text.startswith('```'):
-        text = text.split('\n', 1)[1].rsplit('```', 1)[0].strip()
-    start_idx = text.find('{')
-    end_idx = text.rfind('}')
-    if start_idx < 0 or end_idx <= start_idx:
-        raise RuntimeError(f"Persona agent returned no parseable JSON. First 500 chars: {text[:500]}")
-    text = text[start_idx:end_idx + 1]
-
-    persona_doc = _json.loads(text)
 
     # Validate and normalise each demographic bucket to sum to exactly 100
     demos = persona_doc.get('demographics', {})
