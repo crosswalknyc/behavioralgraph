@@ -37489,7 +37489,7 @@
             btn.disabled = true;
             btn.textContent = '⏳ Checking...';
             resultsCard.style.display = 'block';
-            resultsDiv.innerHTML = '<div style="text-align:center;padding:2rem;color:var(--text-secondary);"><div style="font-size:2rem;margin-bottom:0.5rem;">⏳</div>Running full universe scan (same as Profile Analysis).<br>Usually takes 2-5 minutes.</div>';
+            resultsDiv.innerHTML = '<div style="text-align:center;padding:2rem;color:var(--text-secondary);"><div style="font-size:1.1rem;font-weight:600;color:var(--text-primary);margin-bottom:0.5rem;">Running full universe scan.</div><div style="font-size:0.8rem;margin-bottom:1rem;">Usually takes 2-5 minutes.</div><div style="width:100%;max-width:300px;margin:0 auto;height:4px;background:var(--bg-input);border-radius:4px;overflow:hidden;"><div style="height:100%;width:30%;background:linear-gradient(90deg,var(--accent-cyan),var(--accent-lime));border-radius:4px;animation:incidenceProgress 2s ease-in-out infinite;"></div></div></div><style>@keyframes incidenceProgress{0%{width:5%;margin-left:0}50%{width:40%;margin-left:30%}100%{width:5%;margin-left:95%}}</style>';
 
             try {
                 const resp = await fetch('/api/incidence-check', {
@@ -37503,6 +37503,11 @@
                         end_date: endDate,
                     })
                 });
+                const contentType = resp.headers.get('content-type') || '';
+                if (!contentType.includes('application/json')) {
+                    resultsDiv.innerHTML = `<div style="color:var(--accent-red);padding:1rem;">Server error (request may have timed out). Please try again or use a shorter date range.</div>`;
+                    return;
+                }
                 const data = await resp.json();
                 if (!resp.ok) {
                     resultsDiv.innerHTML = `<div style="color:var(--accent-red);padding:1rem;">Error: ${data.error || 'Unknown error'}</div>`;

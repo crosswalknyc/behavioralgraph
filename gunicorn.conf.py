@@ -27,7 +27,7 @@ bind = f"0.0.0.0:{os.environ.get('PORT', '8000')}"
 workers = int(os.environ.get('WEB_CONCURRENCY', '2'))
 threads = int(os.environ.get('WEB_THREADS', '4'))
 worker_class = 'gthread'
-timeout = int(os.environ.get('GUNICORN_TIMEOUT', '300'))
+timeout = int(os.environ.get('GUNICORN_TIMEOUT', '600'))
 graceful_timeout = int(os.environ.get('GUNICORN_GRACEFUL_TIMEOUT', '30'))
 keepalive = int(os.environ.get('GUNICORN_KEEPALIVE', '5'))
 
