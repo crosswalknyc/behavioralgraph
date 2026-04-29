@@ -14294,6 +14294,337 @@ Reply with ONLY a JSON array (no markdown, no commentary):
     return df
 
 
+# ---------------------------------------------------------------------------
+# Audience-calibration pass (wide-date-window reruns)
+# ---------------------------------------------------------------------------
+# Where delta-sanity REACTS to swings already in the data, the calibration
+# pass PROACTIVELY asks: given this persona + the new date window + real-world
+# context (seasonality, holidays, news, the persona's own event calendar),
+# which items should be RAISED, LOWERED, or INSERTED relative to a "neutral"
+# audience snapshot?
+#
+# Examples it should catch:
+#   • Sabrina Carpenter Q1 2026 → RAISE Coachella (she headlined Apr 11/18),
+#     RAISE Short n' Sweet tour items
+#   • Any Gen-Z persona in 2026 → LOWER Facebook, RAISE TikTok / BeReal
+#   • Q4 retail audience → RAISE holiday-shopping QSR + Where-They-Shop
+#   • Summer-window pop audience → RAISE festival/travel, LOWER ski/winter sports
+#
+# One LLM call per rerun (gpt-4o-search-preview so the model can web-search
+# the persona's recent calendar). Safety caps prevent runaway adjustments.
+
+_CALIBRATION_MAX_SHIFT_PP = 30.0    # max absolute pp move per item
+_CALIBRATION_MAX_ADJUSTMENTS = 60   # max items the agent may touch per run
+_CALIBRATION_MIN_FINAL_BP = 0.0001
+_CALIBRATION_MAX_FINAL_BP = 99.9999
+
+
+def _run_audience_calibration_pass(df: pd.DataFrame,
+                                    persona_doc: dict,
+                                    subject: str,
+                                    prior_dates_label: str,
+                                    new_dates_label: str,
+                                    bp_col: str) -> pd.DataFrame:
+    """Holistic audience-mood / temporal-context calibration for wide-window reruns.
+
+    Asks gpt-4o-search-preview: "Given this persona and this date window
+    (compared to the prior reference window), what would this audience
+    realistically do MORE of, LESS of, or that's missing entirely from
+    today's scoring?"
+
+    The agent returns a list of adjustments; each is one of:
+        RAISE  → bump an existing item's BP up (capped at +30pp)
+        LOWER  → trim an existing item's BP down (capped at -30pp)
+        INSERT → add a new (Column, Value) row that the panel didn't capture
+                 but the audience would plausibly engage with in this window
+
+    Modifications are in-place on df; df is returned. Logs every decision
+    to stdout for audit (visible in Render logs).
+    """
+    import json as _json
+
+    if bp_col not in df.columns:
+        return df
+
+    client = _get_openai_client()
+    if client is None:
+        print("   ⚠️ Audience calibration agent skipped (no OpenAI client)")
+        return df
+
+    behav_mask = ~df['Column'].astype(str).str.strip().str.upper().isin(
+        _DEMO_SET | _BEHAVIORAL_SKIP)
+    behav_df = df[behav_mask].copy()
+    if behav_df.empty:
+        return df
+
+    behav_df['_cat_u'] = behav_df['Column'].astype(str).str.strip().str.upper()
+    behav_df['_val_s'] = behav_df['Value'].astype(str).str.strip()
+    behav_df['_bp_f'] = pd.to_numeric(behav_df[bp_col], errors='coerce')
+
+    snapshot_lines: list[str] = []
+    valid_categories: set[str] = set()
+    for cat, grp in behav_df.dropna(subset=['_bp_f']).groupby('_cat_u'):
+        valid_categories.add(cat)
+        top = grp.sort_values('_bp_f', ascending=False).head(8)
+        items = ', '.join(f"{r['_val_s']} ({r['_bp_f']:.1f}%)" for _, r in top.iterrows())
+        snapshot_lines.append(f"  {cat}: {items}")
+    snapshot_block = '\n'.join(snapshot_lines[:80])
+
+    persona_summary = persona_doc.get('persona_summary') or '(reused from prior run)'
+    demo_snapshot = {k: v for k, v in persona_doc.get('demographics', {}).items()
+                     if k in ('AGE', 'GENDER', 'ETHNICITY', 'INCOME')}
+
+    prompt = f"""You are an audience-trends analyst auditing a behavioral panel profile for **{subject}**. The panel ran agents per category and produced BP values; your job is to apply real-world temporal context that those single-category agents could not see.
+
+PRIOR REFERENCE WINDOW: {prior_dates_label}
+NEW (CURRENT) WINDOW:   {new_dates_label}
+
+PERSONA SUMMARY:
+{persona_summary}
+
+KEY DEMOGRAPHICS (locked from prior run):
+{_json.dumps(demo_snapshot, indent=2)}
+
+CURRENT BEHAVIORAL SNAPSHOT (top items per category, BP = % of THIS audience that engaged via clickstream in the new window):
+{snapshot_block}
+
+Available categories you may target (you may NOT invent new categories):
+{sorted(valid_categories)}
+
+YOUR TASK:
+Given the persona + the new date window, propose targeted adjustments. Think about ALL of these:
+  • Persona-specific calendar events in the new window (concerts, releases, Coachella sets, scandals, awards, tour stops, new movies, sports playoffs they care about).
+  • Seasonality / holidays in the new window (Q4 holiday shopping, summer travel, back-to-school, election cycles, winter vs. summer sports).
+  • Ongoing platform / brand trends as of the new window (e.g. Facebook continues to bleed Gen-Z share, TikTok/BeReal/Reddit growing among younger audiences, streaming platform churn).
+  • Items that SHOULD be present for this persona in this window but are completely missing from the snapshot above.
+
+For each adjustment, return ONE of:
+  RAISE   — existing item should be HIGHER (give a target BP between current and current + {_CALIBRATION_MAX_SHIFT_PP}pp)
+  LOWER   — existing item should be LOWER (give a target BP between current - {_CALIBRATION_MAX_SHIFT_PP}pp and current)
+  INSERT  — item is missing from the snapshot but should plausibly be there (give a target BP between 1 and {int(_CALIBRATION_MAX_SHIFT_PP)}%; category MUST be from the available-categories list)
+
+Rules:
+  • Return AT MOST {_CALIBRATION_MAX_ADJUSTMENTS} adjustments total.
+  • Only propose adjustments where the temporal/seasonal/event context gives you HIGH confidence.
+  • Use the EXACT item name from the snapshot for RAISE/LOWER (case-insensitive match is ok).
+  • Each `target_bp` must be a number between 0.01 and 99 (inclusive).
+  • Reasoning must be ONE sentence, concrete, citing the event/season/trend.
+
+Reply with ONLY a JSON array (no markdown, no commentary):
+[
+  {{"action": "RAISE" | "LOWER" | "INSERT", "category": "<CATEGORY>", "value": "<item name>", "target_bp": <number>, "reasoning": "<one sentence>"}},
+  …
+]
+"""
+
+    decisions: list[dict] = []
+    last_err = ''
+
+    try:
+        resp = client.chat.completions.create(
+            model='gpt-4o-search-preview',
+            web_search_options={"search_context_size": "medium"},
+            messages=[{'role': 'user', 'content': prompt}],
+            max_tokens=4096,
+        )
+        text = (resp.choices[0].message.content or '').strip()
+        if text.startswith('```'):
+            text = text.split('\n', 1)[1].rsplit('```', 1)[0].strip()
+        start = text.find('[')
+        end = text.rfind(']') + 1
+        if start >= 0 and end > start:
+            parsed = _json.loads(text[start:end])
+            if isinstance(parsed, list):
+                decisions = [d for d in parsed if isinstance(d, dict)]
+    except Exception as e:
+        last_err = str(e)
+        print(f"   ⚠️ Audience calibration search-preview failed ({e}); falling back to gpt-4o")
+
+    if not decisions:
+        try:
+            resp = client.chat.completions.create(
+                model='gpt-4o',
+                messages=[{'role': 'user', 'content': prompt}],
+                temperature=0.0,
+                response_format={"type": "json_object"},
+                max_tokens=4096,
+            )
+            text = (resp.choices[0].message.content or '').strip()
+            obj = _json.loads(text)
+            if isinstance(obj, list):
+                decisions = [d for d in obj if isinstance(d, dict)]
+            elif isinstance(obj, dict):
+                for v in obj.values():
+                    if isinstance(v, list):
+                        decisions = [d for d in v if isinstance(d, dict)]
+                        break
+        except Exception as e:
+            print(f"   ⚠️ Audience calibration fallback failed ({e})")
+            return df
+
+    if not decisions:
+        print(f"   ⚠️ Audience calibration returned no actionable adjustments (last_err={last_err[:120]})")
+        return df
+
+    decisions = decisions[:_CALIBRATION_MAX_ADJUSTMENTS]
+    print(f"   🎯 Audience calibration: {len(decisions)} candidate adjustments from gpt-4o-search-preview")
+
+    cat_index: dict[tuple[str, str], int] = {}
+    for idx, row in df.iterrows():
+        try:
+            cat_u = str(row['Column']).strip().upper()
+            val_u = str(row['Value']).strip().upper()
+        except Exception:
+            continue
+        cat_index[(cat_u, val_u)] = idx
+
+    raised = lowered = inserted = skipped = 0
+    new_rows: list[dict] = []
+    template_row = df.iloc[0].to_dict() if len(df) else {}
+
+    for d in decisions:
+        try:
+            action = str(d.get('action', '')).strip().upper()
+            cat = str(d.get('category', '')).strip().upper()
+            val = str(d.get('value', '')).strip()
+            target = float(d.get('target_bp'))
+            reasoning = str(d.get('reasoning', ''))[:240]
+        except (TypeError, ValueError):
+            skipped += 1
+            continue
+
+        if not cat or not val or action not in ('RAISE', 'LOWER', 'INSERT'):
+            skipped += 1
+            continue
+        if cat in _DEMO_SET or cat in _BEHAVIORAL_SKIP:
+            skipped += 1
+            continue
+        if cat not in valid_categories:
+            print(f"   ⚠️  SKIP [{action}|{cat}|{val}] — category not present in data")
+            skipped += 1
+            continue
+        target = max(_CALIBRATION_MIN_FINAL_BP, min(_CALIBRATION_MAX_FINAL_BP, round(target, 4)))
+
+        idx = cat_index.get((cat, val.upper()))
+
+        if action == 'INSERT':
+            if idx is not None:
+                # Item actually exists; downgrade to RAISE/LOWER semantics
+                action = 'RAISE' if target > float(df.at[idx, bp_col] or 0) else 'LOWER'
+            else:
+                row_payload = {c: '' for c in df.columns}
+                for k in ('Original Raw Numbers', 'US Gen Pop Projection',
+                          'Category Share', 'Percentage'):
+                    if k in row_payload:
+                        row_payload[k] = 0
+                row_payload['Column'] = cat
+                row_payload['Value'] = val
+                row_payload[bp_col] = target
+                new_rows.append(row_payload)
+                inserted += 1
+                print(f"   ➕ INSERT [{cat}|{val}] @ {target:.2f}% — {reasoning}")
+                continue
+
+        if idx is None:
+            print(f"   ⚠️  SKIP [{action}|{cat}|{val}] — value not found in df")
+            skipped += 1
+            continue
+
+        try:
+            current = float(df.at[idx, bp_col])
+        except (TypeError, ValueError):
+            skipped += 1
+            continue
+
+        if action == 'RAISE':
+            capped = min(target, current + _CALIBRATION_MAX_SHIFT_PP)
+            capped = max(capped, current)  # never lowers on RAISE
+            capped = max(_CALIBRATION_MIN_FINAL_BP, min(_CALIBRATION_MAX_FINAL_BP, round(capped, 4)))
+            if abs(capped - current) < 0.01:
+                skipped += 1
+                continue
+            df.at[idx, bp_col] = capped
+            raised += 1
+            print(f"   ⬆️  RAISE [{cat}|{val}] {current:.2f}% → {capped:.2f}% — {reasoning}")
+        else:  # LOWER
+            capped = max(target, current - _CALIBRATION_MAX_SHIFT_PP)
+            capped = min(capped, current)  # never raises on LOWER
+            capped = max(_CALIBRATION_MIN_FINAL_BP, min(_CALIBRATION_MAX_FINAL_BP, round(capped, 4)))
+            if abs(capped - current) < 0.01:
+                skipped += 1
+                continue
+            df.at[idx, bp_col] = capped
+            lowered += 1
+            print(f"   ⬇️  LOWER [{cat}|{val}] {current:.2f}% → {capped:.2f}% — {reasoning}")
+
+    if new_rows:
+        new_df = pd.DataFrame(new_rows)
+        for _col in df.columns:
+            if _col not in new_df.columns:
+                new_df[_col] = ''
+        new_df = new_df[df.columns]
+        df = pd.concat([df, new_df], ignore_index=True)
+
+    print(f"   🎯 Audience calibration summary: {raised} raised, {lowered} lowered, "
+          f"{inserted} inserted, {skipped} skipped")
+    return df
+
+
+# ---------------------------------------------------------------------------
+# Anti-duplicate noise (wide-date-window reruns)
+# ---------------------------------------------------------------------------
+def _apply_anti_duplicate_jitter(df: pd.DataFrame, bp_col: str,
+                                  seed: int | None = None) -> pd.DataFrame:
+    """For wide-date-window reruns, ensure no two behavioral BP values are
+    exactly equal within a category.
+
+    Per-category agents tend to produce tier-templated values (e.g. 12 peer
+    artists all scored 9.99%). When two windows differ by more than a week,
+    the user expects every behavioral row to look distinct, so we add tiny
+    deterministic noise (±0.0001 to ±0.0099 pp) to break any exact ties.
+
+    Applied AFTER all scoring + calibration, so we don't disturb the agents'
+    tier ordering meaningfully — just makes the cluster visually distinct.
+    Demographics + LOCATION + structural rows are untouched.
+    """
+    import random as _random
+
+    if bp_col not in df.columns:
+        return df
+
+    rng = _random.Random(seed if seed is not None else 0xCAFEBABE)
+    cat_series = df['Column'].astype(str).str.strip().str.upper()
+    behav_mask = ~cat_series.isin(_DEMO_SET | _BEHAVIORAL_SKIP)
+
+    nudged = 0
+    for cat, grp in df[behav_mask].groupby(cat_series[behav_mask]):
+        bps = pd.to_numeric(grp[bp_col], errors='coerce')
+        seen: dict[float, list[int]] = {}
+        for idx, val in bps.items():
+            if pd.isna(val):
+                continue
+            seen.setdefault(round(float(val), 4), []).append(idx)
+
+        for value, idxs in seen.items():
+            if len(idxs) <= 1:
+                continue
+            for offset, idx in enumerate(idxs[1:], start=1):
+                jitter_units = (offset * 13 + rng.randint(1, 9))
+                jitter = (jitter_units % 99 + 1) * 0.0001
+                if jitter_units % 2 == 0:
+                    jitter = -jitter
+                new_val = round(max(_CALIBRATION_MIN_FINAL_BP,
+                                    min(_CALIBRATION_MAX_FINAL_BP, value + jitter)), 4)
+                if new_val == value:
+                    new_val = round(max(_CALIBRATION_MIN_FINAL_BP, value + 0.0001), 4)
+                df.at[idx, bp_col] = new_val
+                nudged += 1
+
+    if nudged:
+        print(f"   🎲 Anti-duplicate jitter: nudged {nudged} BP values to break exact ties (wide-window rerun)")
+    return df
+
+
 def parallel_category_agents(df: pd.DataFrame, persona_doc: dict,
                               subject: str, brands: list[str] | None = None,
                               previous_behavioral_lookup: dict | None = None,
@@ -14302,7 +14633,8 @@ def parallel_category_agents(df: pd.DataFrame, persona_doc: dict,
                               delta_sanity_lookup: dict | None = None,
                               delta_sanity_subject: str | None = None,
                               delta_sanity_prior_dates: str = '',
-                              delta_sanity_new_dates: str = '') -> pd.DataFrame:
+                              delta_sanity_new_dates: str = '',
+                              wide_window: bool = False) -> pd.DataFrame:
     """Step 2 — run one gpt-4o agent per behavioral category in parallel.
 
     Each agent receives the persona doc + the list of values from Snowflake for
@@ -14330,6 +14662,18 @@ def parallel_category_agents(df: pd.DataFrame, persona_doc: dict,
             "double-check" agent that either ACCEPTs the new value or REVISEs
             it in light of the persona + the new date window. Pairs with
             `delta_sanity_*_dates` for context.
+        wide_window: when True, runs two additional passes after delta-sanity:
+            (D4) `_run_audience_calibration_pass` — ONE gpt-4o-search-preview
+                 call that proposes RAISE/LOWER/INSERT adjustments based on
+                 real-world context the per-category agents cannot see
+                 (persona's calendar events in the window, seasonality,
+                 holidays, platform trend shifts). Safety-capped.
+            (D5) `_apply_anti_duplicate_jitter` — adds ±0.0001-0.0099 pp
+                 noise to break any exactly-equal BPs within a category, so
+                 every behavioral row in a wide-window rerun looks distinct
+                 (no two values identical when date ranges differ by >1 week).
+            Should be set to True iff the new behavior window starts more
+            than ~7 days from the prior reference's behavior window.
     """
     import concurrent.futures as _futures
 
@@ -14695,6 +15039,33 @@ def parallel_category_agents(df: pd.DataFrame, persona_doc: dict,
             new_dates_label=delta_sanity_new_dates or 'new rerun window',
             bp_col=bp_col,
         )
+
+    # --- D4) Audience calibration pass (wide-date-window reruns only) -------
+    # Holistic, persona-aware adjustment for things the per-category agents
+    # could not see: real-world calendar events for the persona in the new
+    # window (Coachella, album drop, scandal), seasonality/holidays
+    # (Q4 shopping, summer travel), platform trend shifts (Facebook ↓ TikTok
+    # ↑), and items that should be present but are missing entirely. ONE
+    # gpt-4o-search-preview call per rerun; safety-capped at ±30pp shift
+    # per item / 60 adjustments per run.
+    if wide_window and delta_sanity_lookup:
+        df = _run_audience_calibration_pass(
+            df,
+            persona_doc=persona_doc,
+            subject=delta_sanity_subject or subject,
+            prior_dates_label=delta_sanity_prior_dates or 'prior reference window',
+            new_dates_label=delta_sanity_new_dates or 'new rerun window',
+            bp_col=bp_col,
+        )
+
+    # --- D5) Anti-duplicate jitter (wide-date-window reruns only) -----------
+    # Per-category agents tend to produce identical "tier" BP values (e.g. 12
+    # peer artists all at 9.99%). When two date windows differ by more than a
+    # week the user expects every behavioral row to look distinct, so add tiny
+    # deterministic noise (±0.0001-0.0099 pp) to break exact ties without
+    # disturbing rank order. No-op for tight-window or fresh runs.
+    if wide_window:
+        df = _apply_anti_duplicate_jitter(df, bp_col)
 
     print("   🛡️  Running post-agent quality gate...")
     df = post_agent_quality_gate(df, persona_doc, brands)
@@ -17790,12 +18161,36 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
         _prior_behavior_dates = previous_behavior_dates or 'prior reference window'
         _subject_for_delta = _subject_name or (brands[0] if brands else 'this profile')
 
+        # Detect "wide-date-window" reruns. A wide window triggers two extra
+        # passes downstream:
+        #   (D4) audience calibration — RAISE/LOWER/INSERT based on real-world
+        #        events / seasonality / platform trends in the new window
+        #   (D5) anti-duplicate jitter — guarantees no two behavioral BPs are
+        #        exactly equal (per the user spec for >1-week date deltas)
+        _wide_window = False
+        if _is_rerun_same_brand and previous_behavior_dates:
+            try:
+                # previous_behavior_dates format: "YYYY-MM-DD TO YYYY-MM-DD"
+                _prior_start_str = previous_behavior_dates.split('TO')[0].strip()
+                _prior_start = pd.to_datetime(_prior_start_str)
+                _new_start = pd.to_datetime(behavior_start)
+                _wide_window = abs((_new_start - _prior_start).days) > 7
+            except Exception:
+                _wide_window = False
+        if _is_rerun_same_brand:
+            print(f"   • Wide-date-window detected: {_wide_window} "
+                  f"(prior='{previous_behavior_dates}', new='{behavior_start} to {behavior_end}')")
+            if _wide_window:
+                print("   • Audience calibration agent: ON (RAISE/LOWER/INSERT for events, seasonality, platform shifts)")
+                print("   • Anti-duplicate jitter: ON (no two behavioral BPs will be exactly equal)")
+
         # Step 2: Parallel Category Agents
         # Rerun-same-brand mode now passes:
         #   • previous_behavioral_lookup=None  → agents score every item fresh (no carry-forward of values)
         #   • lock_demographics=True            → demographics still pinned exactly to prior values
         #   • previous_bp_rows=...              → still re-add prior items missing from today's pull (with noise)
         #   • delta_sanity_lookup=...           → run gpt-4o second-look on any large swing vs. prior
+        #   • wide_window=...                   → run audience calibration + anti-dup jitter (>1 week apart)
         df_final = parallel_category_agents(
             df_final, _persona_doc, _subject_name, brands,
             previous_behavioral_lookup=None,
@@ -17805,6 +18200,7 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
             delta_sanity_subject=_subject_for_delta,
             delta_sanity_prior_dates=_prior_behavior_dates,
             delta_sanity_new_dates=_new_behavior_dates,
+            wide_window=_wide_window,
         )
 
         # Step 3: Final Sanity Check
