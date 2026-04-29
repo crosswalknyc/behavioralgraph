@@ -18216,8 +18216,16 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
             # Set a flag to indicate this is an exact match that needs post-processing
             exact_match_post_process = True
         
-        # Apply GenPop-specific variance rules only for GenPop runs when dates don't match
-        if is_genpop and not exact_match_required:
+        # GenPop reruns USED to apply a ±3pp variance cap here via
+        # `enforce_genpop_update_rules`. As of the agent-pipeline rollout for
+        # GenPop, that cap is dropped — the post-anchor agent trio
+        # (D3 delta-sanity + D4 audience calibration + D5 anti-dup jitter,
+        # fired in the GenPop branch below) subsumes the same job and lets
+        # legitimate temporal moves (e.g. Q4 holiday shopping spike,
+        # platform-share drift) flow through without artificial clamping.
+        # See the `if is_genpop:` block below — the agents fire iff a prior
+        # file is provided.
+        if False and is_genpop and not exact_match_required:
             df_final = enforce_genpop_update_rules(df_final, previous_demo_lookup, previous_behavioral_lookup,
                                                   current_sample_dates, current_behavior_dates,
                                                   previous_sample_dates, previous_behavior_dates)
@@ -18330,7 +18338,7 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
     # 3-STEP AGENT PIPELINE (non-genpop) vs. ANCHOR PATH (genpop)
     # ══════════════════════════════════════════════════════════════════
     if is_genpop:
-        # ── GenPop: anchor to gen pop baseline (unchanged) ──────────────
+        # ── GenPop: anchor to gen pop baseline ───────────────────────────
         print("🎯 Anchoring all values to Gen Pop baseline...")
         df_final = anchor_to_genpop(df_final, sample_size=final_sample_size)
         df_final = enforce_cross_category_brand_consistency(df_final)
@@ -18348,6 +18356,93 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
         df_final = set_brand_input_raw_to_sample_size(df_final, is_genpop)
         df_final = add_brand_penetration_column_using_final_raw(df_final)
         df_final = add_us_gen_pop_projection(df_final)
+
+        # ── GenPop rerun: post-anchor agent trio (D3 / D4 / D5) ──────────
+        # User spec: GenPop reruns should "act like the profile reruns just
+        # never changing the demographics". Demographics + LOCATION are
+        # already hard-coded above to GENPOP_DEMOGRAPHICS / GENPOP_DMA_
+        # PERCENTAGES, so they ARE locked. For behavioral items, layer the
+        # same trio that profile reruns get on top of the gen-pop anchor:
+        #   D3) delta-sanity vs. the prior file's BP values (catches wild
+        #       post-anchor swings — typically panel-noise artifacts)
+        #   D4) audience calibration on wide-window reruns (>7 days apart)
+        #       — RAISE/LOWER/INSERT for national-level temporal trends
+        #       (TikTok ↑, Facebook ↓, Q4 shopping spike, etc.). Uses a
+        #       GenPop-specific persona doc so the prompt asks about
+        #       broad national shifts, not persona calendar events.
+        #   D5) anti-duplicate jitter (>7 days apart) — breaks tier ties
+        # Same wide-window threshold as profiles (>7 days). No agent fires
+        # for fresh GenPop runs — only on reruns with a prior file.
+        _gp_is_rerun = bool(
+            previous_file_path
+            and (previous_demo_lookup or previous_behavioral_lookup)
+        )
+        if _gp_is_rerun:
+            _gp_bp_lookup = {}
+            _gp_bp_rows: list[tuple[str, str, float]] = []
+            try:
+                if (getattr(load_previous_run_data, '_last_bp_path', None) == previous_file_path):
+                    _gp_bp_lookup = getattr(load_previous_run_data, '_last_bp_lookup', {}) or {}
+                    _gp_bp_rows = getattr(load_previous_run_data, '_last_bp_rows', []) or []
+            except Exception:
+                _gp_bp_lookup = {}
+                _gp_bp_rows = []
+
+            def _fmt_dates_gp(s, e):
+                try:
+                    return f"{s} to {e}"
+                except Exception:
+                    return ''
+            _gp_new_dates = _fmt_dates_gp(behavior_start, behavior_end)
+            _gp_prior_dates = previous_behavior_dates or 'prior reference window'
+
+            _gp_wide_window = False
+            if previous_behavior_dates:
+                try:
+                    _prior_start_str = previous_behavior_dates.split('TO')[0].strip()
+                    _prior_start = pd.to_datetime(_prior_start_str)
+                    _new_start = pd.to_datetime(behavior_start)
+                    _gp_wide_window = abs((_new_start - _prior_start).days) > 7
+                except Exception:
+                    _gp_wide_window = False
+
+            _gp_persona_doc = _build_genpop_persona_doc()
+            _gp_subject = "the general U.S. adult population (GenPop baseline)"
+
+            print(f"\n{'='*60}")
+            print(f"  GENPOP RERUN: post-anchor agent trio (D3/D4/D5)")
+            print(f"{'='*60}")
+            print(f"   • Demographics + LOCATION: HARD-LOCKED to GENPOP_DEMOGRAPHICS / GENPOP_DMA_PERCENTAGES")
+            print(f"   • Prior reference: {len(_gp_bp_lookup)} BP values for delta-sanity comparison")
+            print(f"   • Wide-date-window detected: {_gp_wide_window} "
+                  f"(prior='{previous_behavior_dates}', new='{behavior_start} to {behavior_end}')")
+            if _gp_wide_window:
+                print(f"   • Audience calibration: ON — broad national trends (TikTok/FB shifts, Q4 shopping, election cycles, etc.)")
+                print(f"   • Anti-duplicate jitter: ON")
+            else:
+                print(f"   • Audience calibration + anti-dup jitter: OFF (date windows within 1 week of each other)")
+
+            _gp_bp_col = 'Brand Penetration (Row)' if 'Brand Penetration (Row)' in df_final.columns else None
+            if _gp_bp_col:
+                df_final = _apply_post_score_agents(
+                    df_final,
+                    persona_doc=_gp_persona_doc,
+                    subject=_gp_subject,
+                    delta_sanity_lookup=_gp_bp_lookup if _gp_bp_lookup else None,
+                    prior_dates_label=_gp_prior_dates,
+                    new_dates_label=_gp_new_dates,
+                    wide_window=_gp_wide_window,
+                    bp_col=_gp_bp_col,
+                )
+                # If the calibration agent INSERTED new rows we need to
+                # re-stamp downstream columns (BP column was edited in
+                # place; raw numbers + DMA enforcement should still hold,
+                # but recompute projections defensively).
+                df_final = enforce_max_four_decimals_across_columns(df_final)
+                df_final = add_us_gen_pop_projection(df_final)
+            else:
+                print("   ⚠️ Skipping GenPop agent trio — no BP column available")
+            print(f"{'='*60}\n")
     else:
         # ── Non-GenPop: 3-Step Agent Pipeline ───────────────────────────
         # Drop intermediate columns before agent pipeline
