@@ -15601,6 +15601,15 @@ s3_cache = {
 }
 S3_CACHE_TTL = 300  # 5 minutes cache
 S3_CACHE_KEY = 'system/s3_cache.json'  # Persisted cache location
+
+# Per-worker tracking so we can cheaply detect when *another* worker has
+# updated the persisted cache (e.g. after a purgatory release) without
+# downloading the full file on every /api/jobs hit. We HEAD the cache key,
+# compare ETags, and only GET when it actually changed. The throttle prevents
+# a flurry of dashboard polls from pounding S3.
+_persisted_cache_etag = None
+_persisted_cache_last_head_ts = 0.0
+_PERSISTED_CACHE_HEAD_INTERVAL_SECS = 3.0
 S3_DEMO_CACHE_KEY = 'system/demographics_cache.json'  # Cached demographic summaries
 S3_IMAGE_CACHE_KEY = 'system/profile_images_cache.json'  # Cached profile images
 
@@ -17519,7 +17528,7 @@ def get_all_profile_images():
 
 def load_persisted_cache():
     """Load the S3 file cache from S3 storage."""
-    global s3_cache
+    global s3_cache, _persisted_cache_etag
     if not s3_client:
         return False
     try:
@@ -17530,6 +17539,8 @@ def load_persisted_cache():
         s3_cache['last_updated'] = cached_data.get('last_updated')
         s3_cache['file_count'] = cached_data.get('file_count', 0)
         s3_cache['last_full_scan'] = cached_data.get('last_full_scan')
+        # Track ETag so other workers can detect changes via cheap HEAD requests.
+        _persisted_cache_etag = (response.get('ETag') or '').strip('"') or None
         print(f"✅ Loaded persisted cache: {len(s3_cache['jobs'])} files")
         return True
     except s3_client.exceptions.NoSuchKey:
@@ -17541,6 +17552,7 @@ def load_persisted_cache():
 
 def save_persisted_cache():
     """Save the S3 file cache to S3 storage."""
+    global _persisted_cache_etag, _persisted_cache_last_head_ts
     if not s3_client:
         return
     try:
@@ -17551,15 +17563,50 @@ def save_persisted_cache():
             'file_count': s3_cache.get('file_count', 0),
             'last_full_scan': s3_cache.get('last_full_scan')
         }
-        s3_client.put_object(
+        put_resp = s3_client.put_object(
             Bucket=S3_BUCKET,
             Key=S3_CACHE_KEY,
             Body=json.dumps(cache_data),
             ContentType='application/json'
         )
+        # Stamp our own ETag so we don't bounce-reload our own write on the
+        # next /api/jobs request (would be wasted work).
+        new_etag = (put_resp.get('ETag') or '').strip('"') or None
+        if new_etag:
+            _persisted_cache_etag = new_etag
+        _persisted_cache_last_head_ts = time.time()
         print(f"💾 Saved cache to S3: {len(s3_cache['jobs'])} files")
     except Exception as e:
         print(f"⚠️ Error saving persisted cache: {e}")
+
+
+def maybe_refresh_persisted_cache_if_changed():
+    """Cheap cross-worker propagation hook.
+
+    Does a throttled S3 HEAD on the persisted cache file. If another worker
+    updated it (different ETag), pulls the fresh copy. Throttled to at most
+    one HEAD per ~3 seconds per worker so dashboard polling can't pound S3.
+
+    Designed to be called from hot read endpoints (/api/jobs, /api/my-results)
+    so newly-released-from-purgatory items show up automatically without the
+    user having to click the refresh button.
+    """
+    global _persisted_cache_last_head_ts, _persisted_cache_etag
+    if not s3_client:
+        return
+    now = time.time()
+    if (now - _persisted_cache_last_head_ts) < _PERSISTED_CACHE_HEAD_INTERVAL_SECS:
+        return
+    _persisted_cache_last_head_ts = now
+    try:
+        head = s3_client.head_object(Bucket=S3_BUCKET, Key=S3_CACHE_KEY)
+        remote_etag = (head.get('ETag') or '').strip('"') or None
+        if remote_etag and remote_etag != _persisted_cache_etag:
+            load_persisted_cache()
+    except Exception as e:
+        # Silent best-effort — never fail a page load on this.
+        if not isinstance(e, getattr(s3_client.exceptions, 'NoSuchKey', Exception)):
+            print(f"⚠️ persisted-cache HEAD probe failed: {e}")
 
 
 def load_demographics_cache():
@@ -17750,7 +17797,19 @@ def list_jobs():
                 'loading': True
             })
         
-        # If refresh=1, load latest persisted cache (from any worker) then sync with S3 so new/updated files show up for all users
+        # Cheap cross-worker propagation: throttled HEAD on the persisted cache
+        # file — if another worker (e.g. the one that handled a purgatory
+        # release) updated it, pull the fresh copy. Adds ~0ms in steady state
+        # (in-memory throttle), ~20-30ms when ETag actually changed. Means
+        # newly-released profiles appear without the user clicking refresh.
+        if s3_client and cache_loading_complete:
+            try:
+                maybe_refresh_persisted_cache_if_changed()
+            except Exception as e:
+                print(f"⚠️ list_jobs cross-worker probe failed: {e}")
+
+        # If refresh=1, also do a full S3 listing sync (catches files written
+        # outside the in-app release path, e.g. manual uploads).
         if request.args.get('refresh') and s3_client and cache_loading_complete:
             try:
                 load_persisted_cache()  # Pick up cache saved by other workers (e.g. after release from purgatory)
