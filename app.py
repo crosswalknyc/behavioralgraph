@@ -7741,6 +7741,14 @@ def _llmo_daily_scheduler():
         from datetime import timezone
         pst = timezone(timedelta(hours=-8))
 
+    # Wait for gunicorn workers to finish booting + bind to $PORT before kicking
+    # off the heavy 50-200 MB summary download. Render's /healthz timeout is 5s
+    # and competing for the GIL during JSON parse can push cold-start /healthz
+    # past that, causing "Instance failed: HTTP health check timed out" loops.
+    _startup_delay = int(os.environ.get('LLMO_STARTUP_DELAY_SECS', '45'))
+    if _startup_delay > 0:
+        print(f"[LLMO Scheduler] Sleeping {_startup_delay}s before startup load (lets workers settle)...")
+        _time.sleep(_startup_delay)
     print("[LLMO Scheduler] Startup: loading summary from S3...")
     _llmo_do_background_load()
 
