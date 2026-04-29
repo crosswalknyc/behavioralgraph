@@ -14069,6 +14069,55 @@ ADDITIONAL RULES:
     return []
 
 
+def _build_genpop_persona_doc() -> dict:
+    """Synthesize a persona doc representing the U.S. GenPop baseline.
+
+    Used by the GenPop rerun flow so that D3 (delta-sanity) and D4 (audience
+    calibration) agents have a "subject" to reason about — namely the average
+    U.S. adult, with the hard-coded GENPOP_DEMOGRAPHICS / GENPOP_DMA_PERCENTAGES
+    distribution. Demographics + location are taken verbatim from the constants
+    so calibration prompts compare apples-to-apples vs. the current df rows.
+
+    No LLM call required; this is pure data assembly.
+    """
+    demographics: dict[str, dict[str, float]] = {}
+    for col, val, pct in GENPOP_DEMOGRAPHICS:
+        col_u = str(col).strip().upper()
+        val_norm = normalize_demo_value(val)
+        try:
+            pct_f = float(pct)
+        except (TypeError, ValueError):
+            continue
+        demographics.setdefault(col_u, {})[val_norm] = pct_f
+
+    location: list[dict] = []
+    for dma_name, pct in GENPOP_DMA_PERCENTAGES:
+        try:
+            location.append({
+                'dma': normalize_dma_for_display(dma_name),
+                'percentage': float(pct),
+            })
+        except (TypeError, ValueError):
+            continue
+
+    persona_summary = (
+        "U.S. general adult population baseline (GenPop). Demographics, location "
+        "distribution, and overall behavioral patterns reflect the average American "
+        "adult — no audience tilt, no fan-base skew. Calibration adjustments should "
+        "focus on broad national-level shifts (platform trends like TikTok ↑ / "
+        "Facebook ↓ for younger cohorts, seasonality/holidays such as Q4 shopping or "
+        "summer travel, election-cycle news consumption) rather than persona-"
+        "specific calendar events."
+    )
+
+    return {
+        'persona_summary': persona_summary,
+        'demographics': demographics,
+        'location': location,
+        'category_guidance': {},
+    }
+
+
 def _persona_doc_from_previous_lookup(previous_demo_lookup: dict | None) -> dict:
     """Rebuild a minimal persona_doc shape from a prior run's demographic lookup.
 
@@ -15183,54 +15232,94 @@ def parallel_category_agents(df: pd.DataFrame, persona_doc: dict,
             print(f"   ➕ Re-added {len(new_rows)} prior-run rows missing from today's pull "
                   f"across {len(added_per_cat)} categories ({preview}{'…' if len(added_per_cat) > 5 else ''})")
 
-    # --- D3) Delta sanity pass (rerun-mode, wide-date-window flow) ----------
-    # When a same-brand rerun spans a substantially different date window than
-    # the reference (e.g. Q1 vs. a 7-day window), per-category agents score
-    # every item fresh — so legitimate event-driven moves (Coachella for an
-    # artist who played it that quarter) need to be allowed, but hallucinated
-    # outliers should be caught. Send any item with |new-prior| >= 15pp (or
-    # >= 2.5x for small-value items) to a gpt-4o second-look that either
-    # ACCEPTS or REVISES the new value with persona + date-window context.
+    # --- D3 / D4 / D5 — rerun-mode "post-score" agents ---------------------
+    # Extracted into `_apply_post_score_agents` so the GenPop rerun flow can
+    # invoke the exact same trio (delta-sanity + audience calibration +
+    # anti-duplicate jitter) on top of the gen-pop anchor baseline without
+    # firing per-category agents (the anchor IS the GenPop baseline; only the
+    # date-window context needs agent treatment).
+    df = _apply_post_score_agents(
+        df,
+        persona_doc=persona_doc,
+        subject=delta_sanity_subject or subject,
+        delta_sanity_lookup=delta_sanity_lookup,
+        prior_dates_label=delta_sanity_prior_dates or 'prior reference window',
+        new_dates_label=delta_sanity_new_dates or 'new rerun window',
+        wide_window=wide_window,
+        bp_col=bp_col,
+    )
+
+    print("   🛡️  Running post-agent quality gate...")
+    df = post_agent_quality_gate(df, persona_doc, brands)
+
+    return df
+
+
+def _apply_post_score_agents(df: pd.DataFrame,
+                              persona_doc: dict,
+                              subject: str,
+                              delta_sanity_lookup: dict | None,
+                              prior_dates_label: str,
+                              new_dates_label: str,
+                              wide_window: bool,
+                              bp_col: str) -> pd.DataFrame:
+    """Run the D3/D4/D5 trio against an already-scored DataFrame.
+
+    Used by both:
+      • `parallel_category_agents` — after per-category fresh scoring on a
+        persona/profile rerun.
+      • The GenPop rerun branch — after `anchor_to_genpop` produces the
+        canonical baseline, so the rerun reflects new-window temporal context
+        (TikTok ↑, Facebook ↓, Q4 shopping spike, etc.) instead of just the
+        same static gen-pop CSV every time.
+
+    D3 (delta sanity): only fires when `delta_sanity_lookup` is provided.
+    D4 (audience calibration) + D5 (anti-duplicate jitter): only fire when
+    BOTH `wide_window` and `delta_sanity_lookup` are truthy (i.e. this is a
+    same-subject rerun whose new date window differs meaningfully from the
+    reference window).
+    """
+    if bp_col not in df.columns:
+        return df
+
+    # --- D3) Delta sanity pass (rerun-mode) ---------------------------------
+    # Send any item with |new-prior| >= 15pp (or >= 2.5x for small-value
+    # items) to a gpt-4o second-look that either ACCEPTS or REVISES the new
+    # value with persona + date-window context.
     if delta_sanity_lookup:
         df = _run_delta_sanity_pass(
             df,
             delta_sanity_lookup=delta_sanity_lookup,
             persona_doc=persona_doc,
-            subject=delta_sanity_subject or subject,
-            prior_dates_label=delta_sanity_prior_dates or 'prior reference window',
-            new_dates_label=delta_sanity_new_dates or 'new rerun window',
+            subject=subject,
+            prior_dates_label=prior_dates_label,
+            new_dates_label=new_dates_label,
             bp_col=bp_col,
         )
 
-    # --- D4) Audience calibration pass (wide-date-window reruns only) -------
-    # Holistic, persona-aware adjustment for things the per-category agents
-    # could not see: real-world calendar events for the persona in the new
-    # window (Coachella, album drop, scandal), seasonality/holidays
-    # (Q4 shopping, summer travel), platform trend shifts (Facebook ↓ TikTok
-    # ↑), and items that should be present but are missing entirely. ONE
-    # gpt-4o-search-preview call per rerun; safety-capped at ±30pp shift
-    # per item / 60 adjustments per run.
+    # --- D4) Audience calibration pass (wide-window reruns only) -----------
+    # Holistic, persona-aware adjustment for things per-category scoring
+    # cannot see: real-world calendar events for the audience in the new
+    # window, seasonality/holidays, platform trend shifts, items that should
+    # be present but are missing entirely. ONE gpt-4o-search-preview call;
+    # safety-capped at ±30pp shift / 60 adjustments per run.
     if wide_window and delta_sanity_lookup:
         df = _run_audience_calibration_pass(
             df,
             persona_doc=persona_doc,
-            subject=delta_sanity_subject or subject,
-            prior_dates_label=delta_sanity_prior_dates or 'prior reference window',
-            new_dates_label=delta_sanity_new_dates or 'new rerun window',
+            subject=subject,
+            prior_dates_label=prior_dates_label,
+            new_dates_label=new_dates_label,
             bp_col=bp_col,
         )
 
-    # --- D5) Anti-duplicate jitter (wide-date-window reruns only) -----------
-    # Per-category agents tend to produce identical "tier" BP values (e.g. 12
-    # peer artists all at 9.99%). When two date windows differ by more than a
-    # week the user expects every behavioral row to look distinct, so add tiny
-    # deterministic noise (±0.0001-0.0099 pp) to break exact ties without
-    # disturbing rank order. No-op for tight-window or fresh runs.
+    # --- D5) Anti-duplicate jitter (wide-window reruns only) ---------------
+    # Adds ±0.0001-0.0099 pp noise to break exact ties without disturbing
+    # rank order. Per-cat agents and gen-pop anchoring both produce tier
+    # values; this guarantees every behavioral row looks distinct in
+    # wide-window reruns.
     if wide_window:
         df = _apply_anti_duplicate_jitter(df, bp_col)
-
-    print("   🛡️  Running post-agent quality gate...")
-    df = post_agent_quality_gate(df, persona_doc, brands)
 
     return df
 

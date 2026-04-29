@@ -8,7 +8,7 @@ echo "PORT: ${PORT:-10000}"
 
 WORKERS="${GUNICORN_WORKERS:-1}"
 THREADS="${GUNICORN_THREADS:-1}"
-TIMEOUT="${GUNICORN_TIMEOUT:-300}"
+TIMEOUT="${GUNICORN_TIMEOUT:-600}"
 echo "Gunicorn: workers=${WORKERS} threads=${THREADS} timeout=${TIMEOUT}"
 
 # Use sync workers (NOT eventlet) to avoid DNS resolution issues with snowflake-connector
