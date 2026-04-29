@@ -14106,11 +14106,203 @@ def _persona_doc_from_previous_lookup(previous_demo_lookup: dict | None) -> dict
     }
 
 
+def _run_delta_sanity_pass(df: pd.DataFrame,
+                            delta_sanity_lookup: dict,
+                            persona_doc: dict,
+                            subject: str,
+                            prior_dates_label: str,
+                            new_dates_label: str,
+                            bp_col: str,
+                            pp_threshold: float = 15.0,
+                            ratio_threshold: float = 2.5,
+                            small_value_floor: float = 5.0) -> pd.DataFrame:
+    """Sanity-check large BP deltas between a rerun and its reference run.
+
+    For same-brand reruns where date ranges differ substantially (e.g. a Q1 pull
+    vs. a 7-day reference window), per-category agents legitimately produce
+    different BP values for the same item — Coachella jumping 4% → 47% for a
+    pop-star whose set was IN that quarter is a real signal, not noise. But it
+    can also be a hallucination or a panel-sample artifact, so we ask gpt-4o to
+    double-check large swings against the persona + new date range and either
+    ACCEPT the new value or REVISE it.
+
+    Flagging rule (item is sent to the agent if ANY apply):
+      • |new - prior| >= pp_threshold   (default 15 percentage points)
+      • max(prior, new) >= ratio_threshold * min(prior, new)
+        AND min(prior, new) < small_value_floor
+        (catches small-value items that swing wide proportionally)
+
+    Batches all flagged items in a category into ONE LLM call so the agent sees
+    related items together with shared persona/date context.
+
+    Modifies df in place where the agent decides REVISE; returns df.
+    """
+    import json as _json
+    import concurrent.futures as _futures
+
+    if not delta_sanity_lookup or bp_col not in df.columns:
+        return df
+
+    client = _get_openai_client()
+    if client is None:
+        print("   ⚠️ Delta sanity agent skipped (no OpenAI client)")
+        return df
+
+    flags_by_cat: dict[str, list[dict]] = {}
+    for idx, row in df.iterrows():
+        try:
+            cat_u = str(row['Column']).strip().upper()
+            val_raw = str(row['Value']).strip()
+        except Exception:
+            continue
+        if cat_u in _DEMO_SET or cat_u in _BEHAVIORAL_SKIP:
+            continue
+        key = f"{cat_u}|{val_raw.lower()}"
+        if key not in delta_sanity_lookup:
+            continue
+        try:
+            prior_bp = float(delta_sanity_lookup[key])
+            new_bp = float(row[bp_col])
+        except (TypeError, ValueError):
+            continue
+        if prior_bp <= 0 and new_bp <= 0:
+            continue
+        abs_delta = abs(new_bp - prior_bp)
+        lo = min(prior_bp, new_bp)
+        hi = max(prior_bp, new_bp)
+        ratio_trigger = (lo > 0 and hi >= ratio_threshold * lo and lo < small_value_floor)
+        if abs_delta < pp_threshold and not ratio_trigger:
+            continue
+        flags_by_cat.setdefault(cat_u, []).append({
+            'idx': idx,
+            'value': val_raw,
+            'prior_bp': round(prior_bp, 4),
+            'new_bp': round(new_bp, 4),
+            'abs_delta': round(abs_delta, 4),
+        })
+
+    if not flags_by_cat:
+        print("   ✅ Delta sanity check: no items exceeded threshold; nothing to review")
+        return df
+
+    total_flagged = sum(len(v) for v in flags_by_cat.values())
+    print(f"   🔎 Delta sanity check: {total_flagged} items across {len(flags_by_cat)} categories exceeded "
+          f"±{pp_threshold}pp or ≥{ratio_threshold}× threshold — sending to gpt-4o for review …")
+
+    demo_snapshot = {k: v for k, v in persona_doc.get('demographics', {}).items()
+                     if k in ('AGE', 'GENDER', 'ETHNICITY', 'INCOME')}
+    persona_summary = persona_doc.get('persona_summary') or '(reused from prior run)'
+
+    def _review_one_category(category: str, items: list[dict]) -> tuple[str, list[dict]]:
+        items_block = '\n'.join(
+            f"  - {it['value']}: prior={it['prior_bp']}% (window: {prior_dates_label}), "
+            f"new={it['new_bp']}% (window: {new_dates_label}), |Δ|={it['abs_delta']}pp"
+            for it in items
+        )
+        prompt = f"""You are auditing Brand Penetration (BP) values for the **{category}** category of a behavioral panel profile for **{subject}**.
+
+A prior reference run scored these same items in window [{prior_dates_label}]. A new rerun (different date window: [{new_dates_label}]) scored them again and the values shifted by more than 15 percentage points OR by more than 2.5× for sub-5% items. Your job: decide for EACH item whether the new value is plausible given the persona + the new date window, or whether it should be revised.
+
+PERSONA SUMMARY:
+{persona_summary}
+
+KEY DEMOGRAPHICS (locked from prior run):
+{_json.dumps(demo_snapshot, indent=2)}
+
+CATEGORY: {category}
+ITEMS TO REVIEW (one decision per item):
+{items_block}
+
+Brand Penetration = the % of THIS specific audience that engaged with the item via digital clickstream IN THE NEW DATE WINDOW. It is observed digital behavior, not popularity or awareness.
+
+Think carefully:
+- A celebrity who played Coachella in April should have a DRAMATICALLY higher BP for "Coachella" in a Q1-2026 window than in a random week with no festival.
+- Album releases, tour announcements, awards shows, viral moments, scandals → all legitimately swing BPs for related items in the corresponding window.
+- If the persona has no plausible reason for the swing (e.g. a regional credit union jumping from 1% → 30% for a pop star), revise it back to a sensible value.
+- A small-value item moving from 0.8% → 4.2% is rarely a "real" event-driven shift — usually noise; lean toward revising small ratio swings unless the date window has a clear causal event.
+
+For each item, return ONE of:
+  ACCEPT — new value is plausible; keep new_bp as-is
+  REVISE — give a corrected BP value (4-decimal-place, between 0.0001 and 99.9999)
+
+Reply with ONLY a JSON array (no markdown, no commentary):
+[
+  {{"value": "<exact item name from list>", "decision": "ACCEPT" | "REVISE", "value_pct": <number>, "reasoning": "<one sentence>"}},
+  …
+]
+"""
+        try:
+            resp = client.chat.completions.create(
+                model='gpt-4o',
+                messages=[{'role': 'user', 'content': prompt}],
+                temperature=0.0,
+                max_tokens=max(1024, len(items) * 80),
+            )
+            text = (resp.choices[0].message.content or '').strip()
+            if text.startswith('```'):
+                text = text.split('\n', 1)[1].rsplit('```', 1)[0].strip()
+            start = text.find('[')
+            end = text.rfind(']') + 1
+            if start >= 0 and end > start:
+                text = text[start:end]
+            decisions = _json.loads(text)
+            if isinstance(decisions, list):
+                return category, decisions
+        except Exception as e:
+            print(f"   ⚠️ Delta sanity agent [{category}] failed: {e}")
+        return category, []
+
+    decisions_by_cat: dict[str, list[dict]] = {}
+    with _futures.ThreadPoolExecutor(max_workers=8) as pool:
+        futures = [pool.submit(_review_one_category, cat, items) for cat, items in flags_by_cat.items()]
+        for fut in _futures.as_completed(futures):
+            try:
+                cat, decisions = fut.result()
+                decisions_by_cat[cat] = decisions
+            except Exception as e:
+                print(f"   ⚠️ Delta sanity worker raised: {e}")
+
+    accepted = 0
+    revised = 0
+    for cat, items in flags_by_cat.items():
+        decisions = decisions_by_cat.get(cat, [])
+        decision_lookup = {str(d.get('value', '')).strip().upper(): d
+                           for d in decisions if isinstance(d, dict)}
+        for it in items:
+            d = decision_lookup.get(it['value'].strip().upper())
+            if not d:
+                continue
+            decision = str(d.get('decision', '')).strip().upper()
+            reasoning = str(d.get('reasoning', ''))[:200]
+            if decision == 'REVISE':
+                try:
+                    new_val = float(d.get('value_pct'))
+                    new_val = max(0.0001, min(99.9999, round(new_val, 4)))
+                except (TypeError, ValueError):
+                    continue
+                df.at[it['idx'], bp_col] = new_val
+                revised += 1
+                print(f"   ✏️  REVISE [{cat}|{it['value']}] {it['new_bp']}% → {new_val}% "
+                      f"(prior={it['prior_bp']}%) — {reasoning}")
+            elif decision == 'ACCEPT':
+                accepted += 1
+                print(f"   ✅ ACCEPT [{cat}|{it['value']}] kept {it['new_bp']}% "
+                      f"(prior={it['prior_bp']}%) — {reasoning}")
+
+    print(f"   🔎 Delta sanity summary: {accepted} accepted, {revised} revised "
+          f"out of {total_flagged} flagged ({len(flags_by_cat)} categories)")
+    return df
+
+
 def parallel_category_agents(df: pd.DataFrame, persona_doc: dict,
                               subject: str, brands: list[str] | None = None,
                               previous_behavioral_lookup: dict | None = None,
                               lock_demographics: bool = False,
-                              previous_bp_rows: list[tuple[str, str, float]] | None = None) -> pd.DataFrame:
+                              previous_bp_rows: list[tuple[str, str, float]] | None = None,
+                              delta_sanity_lookup: dict | None = None,
+                              delta_sanity_subject: str | None = None,
+                              delta_sanity_prior_dates: str = '',
+                              delta_sanity_new_dates: str = '') -> pd.DataFrame:
     """Step 2 — run one gpt-4o agent per behavioral category in parallel.
 
     Each agent receives the persona doc + the list of values from Snowflake for
@@ -14119,12 +14311,25 @@ def parallel_category_agents(df: pd.DataFrame, persona_doc: dict,
 
     Rerun-stability extensions (used when re-running a profile with new dates):
         previous_behavioral_lookup: optional `{normalize_lookup_key(cat, val): pct}`
-            from the prior run. For any item present in the lookup, the prior BP
-            is carried forward with only ±0.01–0.02% jitter and the LLM is NOT
-            called for that item. Per-category agents fire only on net-new items.
+            from the prior run. When provided, items present in the lookup are
+            carried forward with only ±0.01–0.02% jitter and the LLM is NOT
+            called for them — used for tight-window reruns where you want
+            behavioral values pinned to the reference. For wide-window reruns
+            (different quarter, etc.), pass None and the agents will score
+            every item fresh from today's panel.
         lock_demographics: when True, write demographic + location values EXACTLY
             from `persona_doc` with no ±1–3% noise wiggle, so a rerun's demos
             match the reference run identically.
+        previous_bp_rows: when provided, any (Column, Value, BP) from the prior
+            run that is missing from today's df is re-inserted with prior_BP +
+            jitter, so per-category row counts stay stable across reruns.
+        delta_sanity_lookup: when provided (typically the prior run's BP-column
+            lookup), runs `_run_delta_sanity_pass` AFTER per-category agents
+            score every item fresh: any item whose new BP swings >15pp (or
+            ≥2.5× for small values) vs. the prior BP is sent to a gpt-4o
+            "double-check" agent that either ACCEPTs the new value or REVISEs
+            it in light of the persona + the new date window. Pairs with
+            `delta_sanity_*_dates` for context.
     """
     import concurrent.futures as _futures
 
@@ -14471,6 +14676,25 @@ def parallel_category_agents(df: pd.DataFrame, persona_doc: dict,
             preview = ', '.join(f"{c}:{n}" for c, n in top_cats)
             print(f"   ➕ Re-added {len(new_rows)} prior-run rows missing from today's pull "
                   f"across {len(added_per_cat)} categories ({preview}{'…' if len(added_per_cat) > 5 else ''})")
+
+    # --- D3) Delta sanity pass (rerun-mode, wide-date-window flow) ----------
+    # When a same-brand rerun spans a substantially different date window than
+    # the reference (e.g. Q1 vs. a 7-day window), per-category agents score
+    # every item fresh — so legitimate event-driven moves (Coachella for an
+    # artist who played it that quarter) need to be allowed, but hallucinated
+    # outliers should be caught. Send any item with |new-prior| >= 15pp (or
+    # >= 2.5x for small-value items) to a gpt-4o second-look that either
+    # ACCEPTS or REVISES the new value with persona + date-window context.
+    if delta_sanity_lookup:
+        df = _run_delta_sanity_pass(
+            df,
+            delta_sanity_lookup=delta_sanity_lookup,
+            persona_doc=persona_doc,
+            subject=delta_sanity_subject or subject,
+            prior_dates_label=delta_sanity_prior_dates or 'prior reference window',
+            new_dates_label=delta_sanity_new_dates or 'new rerun window',
+            bp_col=bp_col,
+        )
 
     print("   🛡️  Running post-agent quality gate...")
     df = post_agent_quality_gate(df, persona_doc, brands)
@@ -17544,21 +17768,43 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
 
         if _is_rerun_same_brand:
             print("🔒 Rerun detected (same brand input as prior run)")
-            print("   • Demographics + location: locked to prior run values")
-            print(f"   • Behavioral items in prior run ({len(_previous_bp_lookup)} with BP-column values): "
-                  f"carried forward with ±0.01–0.02% jitter")
-            print("   • Net-new behavioral items: scored fresh by per-category agents")
+            print("   • Demographics + location: LOCKED to prior run values (identical)")
+            print("   • Behavioral items: scored fresh by per-category agents from today's panel")
+            print(f"     (prior reference has {len(_previous_bp_lookup)} BP values for delta-sanity comparison)")
+            print(f"   • Missing prior items ({len(_previous_bp_rows)} candidates): re-added with prior BP + jitter "
+                  f"so per-category row counts stay stable")
+            print("   • Delta sanity agent: any item swinging >15pp or ≥2.5× vs. prior gets a gpt-4o second-look")
             print("   • Persona research LLM call: SKIPPED (prior demographics reused)")
             _persona_doc = _persona_doc_from_previous_lookup(previous_demo_lookup)
         else:
             _persona_doc = persona_research_agent(_subject_name, brand_category)
 
+        # Build date-range labels for the delta-sanity agent so it can reason
+        # about whether a swing is event-driven (e.g. Coachella in Q1).
+        def _fmt_dates(s, e):
+            try:
+                return f"{s} to {e}"
+            except Exception:
+                return ''
+        _new_behavior_dates = _fmt_dates(behavior_start, behavior_end)
+        _prior_behavior_dates = previous_behavior_dates or 'prior reference window'
+        _subject_for_delta = _subject_name or (brands[0] if brands else 'this profile')
+
         # Step 2: Parallel Category Agents
+        # Rerun-same-brand mode now passes:
+        #   • previous_behavioral_lookup=None  → agents score every item fresh (no carry-forward of values)
+        #   • lock_demographics=True            → demographics still pinned exactly to prior values
+        #   • previous_bp_rows=...              → still re-add prior items missing from today's pull (with noise)
+        #   • delta_sanity_lookup=...           → run gpt-4o second-look on any large swing vs. prior
         df_final = parallel_category_agents(
             df_final, _persona_doc, _subject_name, brands,
-            previous_behavioral_lookup=(_previous_bp_lookup if _is_rerun_same_brand else None),
+            previous_behavioral_lookup=None,
             lock_demographics=_is_rerun_same_brand,
             previous_bp_rows=(_previous_bp_rows if _is_rerun_same_brand else None),
+            delta_sanity_lookup=(_previous_bp_lookup if _is_rerun_same_brand else None),
+            delta_sanity_subject=_subject_for_delta,
+            delta_sanity_prior_dates=_prior_behavior_dates,
+            delta_sanity_new_dates=_new_behavior_dates,
         )
 
         # Step 3: Final Sanity Check
