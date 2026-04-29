@@ -14109,7 +14109,8 @@ def _persona_doc_from_previous_lookup(previous_demo_lookup: dict | None) -> dict
 def parallel_category_agents(df: pd.DataFrame, persona_doc: dict,
                               subject: str, brands: list[str] | None = None,
                               previous_behavioral_lookup: dict | None = None,
-                              lock_demographics: bool = False) -> pd.DataFrame:
+                              lock_demographics: bool = False,
+                              previous_bp_rows: list[tuple[str, str, float]] | None = None) -> pd.DataFrame:
     """Step 2 — run one gpt-4o agent per behavioral category in parallel.
 
     Each agent receives the persona doc + the list of values from Snowflake for
@@ -14396,6 +14397,80 @@ def parallel_category_agents(df: pd.DataFrame, persona_doc: dict,
     if rows_carried:
         print(f"   ↩️  Carried forward {rows_carried} BP rows from prior run (±0.01–0.02% jitter)")
     print(f"   ✅ Wrote BP for {rows_written} new behavioral rows across {len(results_map)} categories")
+
+    # --- D2) Re-add prior-run rows that today's ClickHouse pull dropped --------
+    # In rerun-same-brand mode, a value that existed in the prior CSV but is not
+    # in today's df (because the panel sample shifted) would otherwise vanish
+    # from the output, leaving the new run with FEWER rows per category than the
+    # reference. Re-insert those missing rows with the prior BP + tiny jitter so
+    # rerun deltas stay within the ±0.01–0.02% guarantee per category.
+    if previous_bp_rows:
+        existing_keys = set()
+        for _idx, _r in df.iterrows():
+            try:
+                _c = str(_r['Column']).strip().upper()
+                _v = str(_r['Value']).strip().lower()
+            except Exception:
+                continue
+            existing_keys.add(f"{_c}|{_v}")
+
+        # Build per-category template rows so re-added rows inherit sensible
+        # placeholder values for non-Value/non-BP columns (frequency, etc.).
+        template_by_cat: dict[str, dict] = {}
+        for _idx, _r in df.iterrows():
+            _c = str(_r['Column']).strip().upper()
+            if _c and _c not in template_by_cat:
+                template_by_cat[_c] = _r.to_dict()
+
+        # Skip categories that are demographic / structural — only behavioral
+        # categories should be backfilled here.
+        _skip_cats = set(_BEHAVIORAL_SKIP) | set(_DEMO_SET)
+        new_rows: list[dict] = []
+        added_per_cat: dict[str, int] = {}
+        for orig_col, orig_val, prev_bp in previous_bp_rows:
+            cat_u = str(orig_col).strip().upper()
+            if not cat_u or cat_u in _skip_cats:
+                continue
+            key = f"{cat_u}|{str(orig_val).strip().lower()}"
+            if key in existing_keys:
+                continue
+            tmpl = template_by_cat.get(cat_u)
+            if tmpl is None:
+                # Entire category is missing from today's df — skip rather than
+                # invent a row with no schema context.
+                continue
+            new_row = dict(tmpl)
+            new_row['Column'] = orig_col
+            new_row['Value'] = orig_val
+            new_row[bp_col] = _carry_forward_jitter(float(prev_bp))
+            # Blank out raw-count / frequency style columns since this row was
+            # not actually observed in today's pull. Reconciliation downstream
+            # will recompute Category Share from BP and the category total.
+            for _blank_col in ('Original Raw Numbers (Database)',
+                                'Original Raw Numbers',
+                                'Avg_Visit_Frequency',
+                                'Brand_Loyalty_Score',
+                                'High_Engagement_Users_Pct',
+                                'Avg_Days_Active',
+                                'Total_Users',
+                                'Median_Visits'):
+                if _blank_col in new_row:
+                    new_row[_blank_col] = '' if isinstance(new_row.get(_blank_col), str) else 0
+            new_rows.append(new_row)
+            added_per_cat[cat_u] = added_per_cat.get(cat_u, 0) + 1
+            existing_keys.add(key)
+
+        if new_rows:
+            backfill_df = pd.DataFrame(new_rows)
+            for _col in df.columns:
+                if _col not in backfill_df.columns:
+                    backfill_df[_col] = ''
+            backfill_df = backfill_df[df.columns]
+            df = pd.concat([df, backfill_df], ignore_index=True)
+            top_cats = sorted(added_per_cat.items(), key=lambda kv: -kv[1])[:5]
+            preview = ', '.join(f"{c}:{n}" for c, n in top_cats)
+            print(f"   ➕ Re-added {len(new_rows)} prior-run rows missing from today's pull "
+                  f"across {len(added_per_cat)} categories ({preview}{'…' if len(added_per_cat) > 5 else ''})")
 
     print("   🛡️  Running post-agent quality gate...")
     df = post_agent_quality_gate(df, persona_doc, brands)
@@ -17458,11 +17533,14 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
         # Category Share values used by the existing exact-match post-process).
         # This is the lookup we need for carry-forward into the new run's BP col.
         _previous_bp_lookup = {}
+        _previous_bp_rows: list[tuple[str, str, float]] = []
         try:
             if (getattr(load_previous_run_data, '_last_bp_path', None) == previous_file_path):
                 _previous_bp_lookup = getattr(load_previous_run_data, '_last_bp_lookup', {}) or {}
+                _previous_bp_rows = getattr(load_previous_run_data, '_last_bp_rows', []) or []
         except Exception:
             _previous_bp_lookup = {}
+            _previous_bp_rows = []
 
         if _is_rerun_same_brand:
             print("🔒 Rerun detected (same brand input as prior run)")
@@ -17480,6 +17558,7 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
             df_final, _persona_doc, _subject_name, brands,
             previous_behavioral_lookup=(_previous_bp_lookup if _is_rerun_same_brand else None),
             lock_demographics=_is_rerun_same_brand,
+            previous_bp_rows=(_previous_bp_rows if _is_rerun_same_brand else None),
         )
 
         # Step 3: Final Sanity Check
@@ -21931,6 +22010,11 @@ def load_previous_run_data(file_path):
         # into the new run's BP column. Stored as an attribute on the function
         # call itself so we don't break the public return signature.
         behavioral_bp_lookup = {}
+        # Also keep the original-cased (Column, Value, BP) tuples so that if the
+        # current run's ClickHouse pull is missing some long-tail values that
+        # existed in the prior run, we can re-insert them with proper casing and
+        # the prior BP (+jitter) — preserving rerun stability per category.
+        behavioral_bp_rows: list[tuple[str, str, float]] = []
         bp_col_name = 'Brand Penetration (Row)' if 'Brand Penetration (Row)' in previous_df.columns else None
         if bp_col_name is not None:
             for _, row in previous_behavioral.iterrows():
@@ -21944,14 +22028,17 @@ def load_previous_run_data(file_path):
                     except ValueError:
                         continue
                 try:
-                    behavioral_bp_lookup[key] = float(bp_value)
+                    bp_float = float(bp_value)
                 except (TypeError, ValueError):
                     continue
+                behavioral_bp_lookup[key] = bp_float
+                behavioral_bp_rows.append((str(row['Column']).strip(), str(row['Value']).strip(), bp_float))
         # Stash on a module-level attribute keyed by file path so `run_full_pipeline`
         # can pick it up without changing the function's tuple return shape (which
         # has callers in app.py / BG.py / new_bg.py that we don't want to break).
         try:
             load_previous_run_data._last_bp_lookup = behavioral_bp_lookup  # type: ignore[attr-defined]
+            load_previous_run_data._last_bp_rows = behavioral_bp_rows  # type: ignore[attr-defined]
             load_previous_run_data._last_bp_path = file_path  # type: ignore[attr-defined]
         except Exception:
             pass
