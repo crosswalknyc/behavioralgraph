@@ -15532,6 +15532,138 @@ def submit_analysis():
         return jsonify({'error': str(e)}), 500
 
 
+@app.route('/api/incidence-check', methods=['POST'])
+@requires_auth
+def incidence_check():
+    """Run only the universe scan + sample size pipeline (no full profile) and return the results."""
+    try:
+        import bg
+        
+        data = request.json
+        if not data.get('brands'):
+            return jsonify({'error': 'Missing required field: search terms'}), 400
+        if not data.get('start_date'):
+            return jsonify({'error': 'Missing required field: start date'}), 400
+        if not data.get('end_date'):
+            return jsonify({'error': 'Missing required field: end date'}), 400
+
+        project_name = (data.get('project_name') or data['brands'].split(',')[0]).strip()
+        brand_category = data.get('brand_category', 'GENERAL')
+        start_date = data['start_date']
+        end_date = data['end_date']
+
+        brands_raw = data['brands'].replace('\n', ',')
+        brands = []
+        for b in brands_raw.split(','):
+            b = b.strip()
+            if not b:
+                continue
+            match = re.search(r'https?://([^/]+)', b)
+            clean_brand = match.group(1).lower() if match else b.lower()
+            brands.append(clean_brand)
+
+        if not brands:
+            return jsonify({'error': 'No valid search terms provided'}), 400
+
+        if hasattr(bg, 'generate_brand_variations'):
+            expanded = []
+            for b in brands:
+                expanded.extend(bg.generate_brand_variations(b))
+            brands = list(dict.fromkeys(expanded))
+
+        GENPOP_SAMPLE_CAP = 10_000_000
+
+        genpop_result = None
+        genpop_sample = None
+        try:
+            genpop_pct, genpop_cat = bg.get_genpop_penetration_for_brand(project_name, brand_category, brands=brands)
+            if genpop_pct is not None and genpop_pct > 0:
+                genpop_sample = round(genpop_pct / 100 * GENPOP_SAMPLE_CAP)
+                genpop_sample = (genpop_sample // 10) * 10
+                genpop_sample = max(genpop_sample, 10_000)
+                genpop_result = {
+                    'penetration_pct': round(genpop_pct, 4),
+                    'category': genpop_cat,
+                    'derived_sample_size': genpop_sample,
+                }
+        except Exception as e:
+            print(f"⚠️ Incidence check: Gen Pop lookup failed: {e}")
+
+        universe_result = None
+        universe_sample = None
+        try:
+            conn = bg.connect_snowflake()
+            results = bg.perform_full_universe_scan(conn, brands, start_date, end_date, purchasers_only=False)
+            if results:
+                total_universe = results['total_universe']
+                total_visits = results.get('total_visits', 0)
+                bounded = min(int(total_universe), GENPOP_SAMPLE_CAP)
+                if bounded >= GENPOP_SAMPLE_CAP:
+                    bounded = GENPOP_SAMPLE_CAP - max(1, int(GENPOP_SAMPLE_CAP * 0.005))
+                INFLATION_OPTIONS = [35, 25, 5, 2.5, 1]
+                inflation_factor = 1
+                for mult in INFLATION_OPTIONS:
+                    if bounded * mult <= GENPOP_SAMPLE_CAP:
+                        inflation_factor = mult
+                        break
+                inflated_sample = min(int(bounded * inflation_factor), GENPOP_SAMPLE_CAP)
+                inflated_sample = (inflated_sample // 10) * 10
+
+                digital_panel_estimate = None
+                try:
+                    dp_est = bg.estimate_sample_size_for_unknown_brand(brand_category, actual_universe_size=total_universe)
+                    if dp_est:
+                        digital_panel_estimate = dp_est
+                except Exception:
+                    pass
+
+                universe_result = {
+                    'total_unique_users': total_universe,
+                    'total_visits': total_visits,
+                    'avg_visits_per_user': round(total_visits / total_universe, 2) if total_universe > 0 else 0,
+                    'inflation_factor': inflation_factor,
+                    'inflated_sample_size': inflated_sample,
+                    'digital_panel_estimate': digital_panel_estimate,
+                }
+            try:
+                conn.close()
+            except Exception:
+                pass
+        except Exception as e:
+            print(f"⚠️ Incidence check: Universe scan failed: {e}")
+            return jsonify({'error': f'Database query failed: {str(e)}'}), 500
+
+        final_sample_size = None
+        sample_size_source = None
+        if genpop_sample is not None:
+            final_sample_size = genpop_sample
+            sample_size_source = 'genpop'
+        elif universe_result and universe_result.get('digital_panel_estimate'):
+            final_sample_size = universe_result['digital_panel_estimate']
+            sample_size_source = 'digital_panel'
+        elif universe_result:
+            final_sample_size = universe_result['inflated_sample_size']
+            sample_size_source = 'inflation'
+
+        return jsonify({
+            'success': True,
+            'project_name': project_name,
+            'brands': brands[:10],
+            'brand_count': len(brands),
+            'brand_category': brand_category,
+            'date_range': f"{start_date} to {end_date}",
+            'genpop': genpop_result,
+            'universe': universe_result,
+            'final_sample_size': final_sample_size,
+            'sample_size_source': sample_size_source,
+        })
+
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
+
+
 @app.route('/api/status/<job_id>', strict_slashes=False)
 @app.route('/api/job-status/<job_id>', strict_slashes=False)
 @requires_auth

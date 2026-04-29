@@ -12892,6 +12892,11 @@
                         ⏱️ Share of Time
                     </button>
                     {% endif %}
+                    {% if 'profile_analysis' in analysis_iq_modules or role == 'super_admin' %}
+                    <button class="custom-analysis-tab" onclick="switchCustomAnalysisTab('incidence-check')" id="customAnalysisTabIncidenceCheck">
+                        🔍 Incidence Check <span style="font-size: 0.7em; opacity: 0.9;">(Free)</span>
+                    </button>
+                    {% endif %}
                 </div>
             </div>
             
@@ -14497,6 +14502,156 @@
                                 <span style="font-size:0.7rem;color:var(--text-secondary);line-height:1.3;">Runs All Ages + each individual bracket automatically</span>
                             </div>
                             <button type="button" id="iqSotRunBtn" onclick="iqSotRunAnalysis()" style="padding:0.5rem 1.5rem;background:linear-gradient(135deg,var(--accent-cyan),var(--accent-lime));border:none;border-radius:8px;color:#000;font-weight:700;font-size:0.85rem;cursor:pointer;white-space:nowrap;">Run Analysis</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Incidence Check Tab Content -->
+                <div id="customAnalysisTabContentIncidenceCheck" class="custom-analysis-tab-content">
+                    <div class="main-grid">
+                        <div class="card">
+                            <h2>🔍 Incidence Check</h2>
+                            <div style="margin: 0 0 0.75rem 0; font-size: 0.85rem; font-weight: 500; color: var(--text-secondary); font-style: italic;">No credits required</div>
+                            <p style="margin: 0 0 1rem 0; font-size: 0.85rem; color: var(--text-secondary); line-height: 1.45;">Quickly check the sample size and incidence rate for any search terms before running a full profile analysis. This runs only the universe scan and sample size pipeline (with all boosts applied) so you can see how many panelists match your criteria.</p>
+                            <form id="incidenceCheckForm" onsubmit="return false;">
+                                <div class="form-section">
+                                    <div class="form-section-title">Search Parameters</div>
+                                    <div class="form-row">
+                                        <div class="form-group">
+                                            <label>Project Name</label>
+                                            <input type="text" id="incidence_project_name" placeholder="e.g., Taylor Swift or Amazon" required>
+                                        </div>
+                                    </div>
+                                    <div class="form-row">
+                                        <div class="form-group">
+                                            <label>Category</label>
+                                            <select id="incidence_brand_category" style="width: 100%; padding: 0.5rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-primary);">
+                                                <option value="">-- Select Category --</option>
+                                                <optgroup label="📦 BRAND">
+                                                    <option value="ACCESSORIES">Accessories</option>
+                                                    <option value="ACTIVEWEAR">Activewear</option>
+                                                    <option value="AMUSEMENT PARKS">Amusement Parks</option>
+                                                    <option value="APPAREL">Apparel</option>
+                                                    <option value="AUTOMOBILE">Automobile</option>
+                                                    <option value="B2B">B2B</option>
+                                                    <option value="BANKS">Banks</option>
+                                                    <option value="BEAUTY">Beauty</option>
+                                                    <option value="BETTING">Betting</option>
+                                                    <option value="BEVERAGE">Beverage</option>
+                                                    <option value="CASUAL DINING">Casual Dining</option>
+                                                    <option value="CREDIT PROVIDERS">Credit Providers</option>
+                                                    <option value="DIGITAL BANKING">Digital Banking</option>
+                                                    <option value="EVENTS">Events</option>
+                                                    <option value="FOOTWEAR">Footwear</option>
+                                                    <option value="FRANCHISE">Franchise</option>
+                                                    <option value="GROCERY">Grocery</option>
+                                                    <option value="INTIMATES">Intimates</option>
+                                                    <option value="JEWELRY">Jewelry</option>
+                                                    <option value="MEMBERSHIP">Membership</option>
+                                                    <option value="NON PROFIT/CHARITY">Non Profit/Charity</option>
+                                                    <option value="PHARMA">Pharma</option>
+                                                    <option value="QSR">QSR</option>
+                                                    <option value="RETAILERS">Retailers</option>
+                                                    <option value="SECURITY">Security</option>
+                                                    <option value="TELECOM">Telecom</option>
+                                                    <option value="TICKETING">Ticketing</option>
+                                                    <option value="TOY">Toy</option>
+                                                    <option value="TRAVEL">Travel</option>
+                                                    <option value="VENUE">Venue</option>
+                                                    <option value="WORKOUT FACILITY">Workout Facility</option>
+                                                </optgroup>
+                                                <optgroup label="🎬 CONTENT">
+                                                    <option value="GAME PLAYERS">Game Players</option>
+                                                    <option value="GAMES">Games</option>
+                                                    <option value="GAMES - PLAYERS">Games - Players</option>
+                                                    <option value="MOVIE">Movie</option>
+                                                    <option value="MOVIE - NETFLIX">Movie - Netflix</option>
+                                                    <option value="PODCAST">Podcast</option>
+                                                    <option value="SERIES - AMAZON / MGM STUDIOS">Series - Amazon / MGM Studios</option>
+                                                    <option value="SERIES - APPLE">Series - Apple</option>
+                                                    <option value="SERIES - FOX">Series - Fox</option>
+                                                    <option value="SERIES - FXP">Series - FXP</option>
+                                                    <option value="SERIES - HBO ENTERTAINMENT">Series - HBO Entertainment</option>
+                                                    <option value="SERIES - HBO MAX">Series - HBO Max</option>
+                                                    <option value="SERIES - HULU">Series - Hulu</option>
+                                                    <option value="SERIES - LIONSGATE TELEVISION">Series - Lionsgate Television</option>
+                                                    <option value="SERIES - NETFLIX">Series - Netflix</option>
+                                                    <option value="SERIES - PARAMOUNT TV STUDIOS">Series - Paramount TV Studios</option>
+                                                    <option value="SERIES - SONY">Series - Sony</option>
+                                                    <option value="SERIES - UNIVERSAL TV">Series - Universal TV</option>
+                                                    <option value="SERIES - WBD">Series - WBD</option>
+                                                </optgroup>
+                                                <optgroup label="📊 GEN POP">
+                                                    <option value="GEN POP">Gen Pop</option>
+                                                </optgroup>
+                                                <optgroup label="📺 PLATFORMS">
+                                                    <option value="APP/PLATFORM">App/Platform</option>
+                                                    <option value="BROADCAST/CABLE">Broadcast/Cable</option>
+                                                    <option value="MEDIA">Media</option>
+                                                    <option value="MOVIE THEATER">Movie Theater</option>
+                                                    <option value="PLATFORMS">SVOD Platforms</option>
+                                                    <option value="SEARCH ENGINE/AI">Search Engine/AI</option>
+                                                    <option value="SOCIAL MEDIA">Social Media</option>
+                                                    <option value="STREAMING MUSIC">Streaming Music</option>
+                                                    <option value="STREAMING VIDEO">Streaming Video</option>
+                                                    <option value="VIRTUAL MVPD/FAST">Virtual MVPD/FAST</option>
+                                                </optgroup>
+                                                <optgroup label="⚽ SPORT">
+                                                    <option value="MILB">MiLB</option>
+                                                    <option value="MLB">MLB</option>
+                                                    <option value="NBA">NBA</option>
+                                                    <option value="NFL">NFL</option>
+                                                    <option value="SPORTS ORGANIZATIONS">Sports Organizations</option>
+                                                    <option value="WNBA">WNBA</option>
+                                                </optgroup>
+                                                <optgroup label="📈 TRENDS">
+                                                    <option value="TRENDS">Trends</option>
+                                                </optgroup>
+                                                <optgroup label="⭐ TALENT">
+                                                    <option value="ACTOR">Actor</option>
+                                                    <option value="ATHLETE">Athlete</option>
+                                                    <option value="CREATOR/INFLUENCER">Creator/Influencer</option>
+                                                    <option value="EMERGING TALENT">Emerging Talent</option>
+                                                    <option value="HOST/PERSONALITY">Host/Personality</option>
+                                                    <option value="MUSICIAN/BAND">Musician/Band</option>
+                                                    <option value="PODCASTER">Podcaster</option>
+                                                    <option value="POLITICS/ACTIVIST">Politics/Activist</option>
+                                                    <option value="WRITER/DIRECTOR/AUTHOR/ARTIST">Writer/Director/Author/Artist</option>
+                                                </optgroup>
+                                            </select>
+                                        </div>
+                                    </div>
+                                    <div class="form-group">
+                                        <label>Search Terms (comma-separated)</label>
+                                        <small style="display: block; color: var(--text-secondary); font-size: 0.7rem; font-style: italic; margin-bottom: 0.5rem;">Enter all name/brand variations exactly as you would for a full profile analysis.</small>
+                                        <textarea id="incidence_brands" placeholder="Kevin O' Leary, Kevin O Leary, Kevin OLeary, Mr. Wonderful, Mr Wonderful" rows="3" style="width: 100%; padding: 0.5rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-primary); font-size: 0.85rem; resize: vertical;"></textarea>
+                                    </div>
+                                </div>
+
+                                <div class="form-section">
+                                    <div class="form-section-title">Date Range</div>
+                                    <div class="form-row">
+                                        <div class="form-group">
+                                            <label>Start Date</label>
+                                            <input type="date" id="incidence_start_date" required>
+                                        </div>
+                                        <div class="form-group">
+                                            <label>End Date</label>
+                                            <input type="date" id="incidence_end_date" required>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <button type="button" class="btn btn-primary" id="incidenceCheckRunBtn" onclick="runIncidenceCheck()" style="width: 100%; padding: 0.65rem; font-size: 0.9rem; margin-top: 0.5rem;">
+                                    🔍 Check Incidence
+                                </button>
+                            </form>
+                        </div>
+
+                        <!-- Results Panel -->
+                        <div class="card" id="incidenceCheckResultsCard" style="display: none;">
+                            <h2>📊 Incidence Results</h2>
+                            <div id="incidenceCheckResults"></div>
                         </div>
                     </div>
                 </div>
@@ -22874,7 +23029,7 @@
                            'customAnalysisTabSVODAcquisition', 'customAnalysisTabCampaignROI', 'customAnalysisTabCrossShow',
                            'customAnalysisTabWatchTime', 'customAnalysisTabTicketSalesTracker', 'customAnalysisTabSFLFConversion',
                            'customAnalysisTabRoasIQ', 'customAnalysisTabEcommerceIQ', 'customAnalysisTabTalentFit', 'customAnalysisTabFlywheelConversion',
-                           'customAnalysisTabShareOfTime'];
+                           'customAnalysisTabShareOfTime', 'customAnalysisTabIncidenceCheck'];
             tabIds.forEach(id => {
                 const el = document.getElementById(id);
                 if (el) el.classList.remove('active');
@@ -22887,7 +23042,7 @@
                                'customAnalysisTabContentWatchTime', 'customAnalysisTabContentTicketSalesTracker',
                                'customAnalysisTabContentSFLFConversion', 'customAnalysisTabContentRoasIQ', 'customAnalysisTabContentEcommerceIQ',
                                'customAnalysisTabContentTalentFit', 'customAnalysisTabContentFlywheelConversion',
-                               'customAnalysisTabContentShareOfTime'];
+                               'customAnalysisTabContentShareOfTime', 'customAnalysisTabContentIncidenceCheck'];
             contentIds.forEach(id => {
                 const el = document.getElementById(id);
                 if (el) el.classList.remove('active');
@@ -22993,6 +23148,21 @@
                 const content = document.getElementById('customAnalysisTabContentShareOfTime');
                 if (tab) tab.classList.add('active');
                 if (content) content.classList.add('active');
+            } else if (tabName === 'incidence-check') {
+                const tab = document.getElementById('customAnalysisTabIncidenceCheck');
+                const content = document.getElementById('customAnalysisTabContentIncidenceCheck');
+                if (tab) tab.classList.add('active');
+                if (content) content.classList.add('active');
+                const startEl = document.getElementById('incidence_start_date');
+                const endEl = document.getElementById('incidence_end_date');
+                if (startEl && !startEl.value) {
+                    const oneYearAgo = new Date();
+                    oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
+                    startEl.value = oneYearAgo.toISOString().split('T')[0];
+                }
+                if (endEl && !endEl.value) {
+                    endEl.value = new Date().toISOString().split('T')[0];
+                }
             }
         }
         
@@ -37410,6 +37580,109 @@
                 } else {
                     alert(msg);
                 }
+            }
+        }
+
+        async function runIncidenceCheck() {
+            const btn = document.getElementById('incidenceCheckRunBtn');
+            const resultsCard = document.getElementById('incidenceCheckResultsCard');
+            const resultsDiv = document.getElementById('incidenceCheckResults');
+            const brandsVal = (document.getElementById('incidence_brands')?.value || '').trim();
+            const projectName = (document.getElementById('incidence_project_name')?.value || '').trim();
+            const category = document.getElementById('incidence_brand_category')?.value || 'GENERAL';
+            const startDate = document.getElementById('incidence_start_date')?.value || '';
+            const endDate = document.getElementById('incidence_end_date')?.value || '';
+
+            if (!brandsVal) { alert('Please enter search terms.'); return; }
+            if (!startDate || !endDate) { alert('Please select both start and end dates.'); return; }
+
+            btn.disabled = true;
+            btn.textContent = '⏳ Checking...';
+            resultsCard.style.display = 'block';
+            resultsDiv.innerHTML = '<div style="text-align:center;padding:2rem;color:var(--text-secondary);"><div style="font-size:2rem;margin-bottom:0.5rem;">⏳</div>Running universe scan... This may take 1-3 minutes.</div>';
+
+            try {
+                const resp = await fetch('/api/incidence-check', {
+                    method: 'POST',
+                    credentials: 'same-origin',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        project_name: projectName,
+                        brands: brandsVal,
+                        brand_category: category,
+                        start_date: startDate,
+                        end_date: endDate,
+                    })
+                });
+                const data = await resp.json();
+                if (!resp.ok) {
+                    resultsDiv.innerHTML = `<div style="color:var(--accent-red);padding:1rem;">Error: ${data.error || 'Unknown error'}</div>`;
+                    return;
+                }
+
+                let html = '';
+
+                html += `<div style="margin-bottom:1.5rem;">`;
+                html += `<div style="font-size:0.8rem;color:var(--text-secondary);margin-bottom:0.5rem;">Project: <strong style="color:var(--text-primary);">${data.project_name}</strong> &middot; ${data.date_range}</div>`;
+                html += `<div style="font-size:0.75rem;color:var(--text-secondary);">Search terms expanded to ${data.brand_count} variant${data.brand_count !== 1 ? 's' : ''}</div>`;
+                html += `</div>`;
+
+                // Final sample size (the headline number)
+                if (data.final_sample_size) {
+                    const sourceLabels = { genpop: 'Gen Pop Lookup', digital_panel: 'Digital Panel Estimate', inflation: 'Universe Inflation' };
+                    html += `<div style="background:linear-gradient(135deg, rgba(0,200,150,0.1), rgba(0,150,255,0.1)); border:1px solid var(--border-color); border-radius:12px; padding:1.5rem; margin-bottom:1.5rem; text-align:center;">`;
+                    html += `<div style="font-size:0.75rem;text-transform:uppercase;letter-spacing:0.1em;color:var(--text-secondary);margin-bottom:0.25rem;">Final Sample Size</div>`;
+                    html += `<div style="font-size:2.5rem;font-weight:800;color:var(--accent-cyan);line-height:1;">${Number(data.final_sample_size).toLocaleString()}</div>`;
+                    html += `<div style="font-size:0.7rem;color:var(--text-secondary);margin-top:0.35rem;">Source: ${sourceLabels[data.sample_size_source] || data.sample_size_source}</div>`;
+                    html += `</div>`;
+                }
+
+                // Universe scan results
+                if (data.universe) {
+                    const u = data.universe;
+                    html += `<div style="margin-bottom:1.25rem;">`;
+                    html += `<div style="font-size:0.85rem;font-weight:600;margin-bottom:0.75rem;color:var(--text-primary);">Universe Scan</div>`;
+                    html += `<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:0.75rem;">`;
+                    html += `<div style="background:var(--bg-secondary);border-radius:8px;padding:0.75rem;text-align:center;">`;
+                    html += `<div style="font-size:0.65rem;text-transform:uppercase;color:var(--text-secondary);margin-bottom:0.25rem;">Unique Users</div>`;
+                    html += `<div style="font-size:1.3rem;font-weight:700;color:var(--text-primary);">${Number(u.total_unique_users).toLocaleString()}</div>`;
+                    html += `</div>`;
+                    html += `<div style="background:var(--bg-secondary);border-radius:8px;padding:0.75rem;text-align:center;">`;
+                    html += `<div style="font-size:0.65rem;text-transform:uppercase;color:var(--text-secondary);margin-bottom:0.25rem;">Total Visits</div>`;
+                    html += `<div style="font-size:1.3rem;font-weight:700;color:var(--text-primary);">${Number(u.total_visits).toLocaleString()}</div>`;
+                    html += `</div>`;
+                    html += `<div style="background:var(--bg-secondary);border-radius:8px;padding:0.75rem;text-align:center;">`;
+                    html += `<div style="font-size:0.65rem;text-transform:uppercase;color:var(--text-secondary);margin-bottom:0.25rem;">Avg Visits/User</div>`;
+                    html += `<div style="font-size:1.3rem;font-weight:700;color:var(--text-primary);">${u.avg_visits_per_user}</div>`;
+                    html += `</div>`;
+                    html += `</div>`;
+                    html += `<div style="margin-top:0.75rem;font-size:0.75rem;color:var(--text-secondary);">Inflation factor: <strong>${u.inflation_factor}x</strong> &rarr; Inflated sample: <strong>${Number(u.inflated_sample_size).toLocaleString()}</strong></div>`;
+                    if (u.digital_panel_estimate) {
+                        html += `<div style="font-size:0.75rem;color:var(--text-secondary);">Digital panel estimate: <strong>${Number(u.digital_panel_estimate).toLocaleString()}</strong></div>`;
+                    }
+                    html += `</div>`;
+                }
+
+                // Gen Pop lookup
+                if (data.genpop) {
+                    const g = data.genpop;
+                    html += `<div style="margin-bottom:1rem;">`;
+                    html += `<div style="font-size:0.85rem;font-weight:600;margin-bottom:0.5rem;color:var(--text-primary);">Gen Pop Lookup</div>`;
+                    html += `<div style="background:var(--bg-secondary);border-radius:8px;padding:0.75rem;font-size:0.8rem;">`;
+                    html += `<div>Category: <strong>${g.category}</strong></div>`;
+                    html += `<div>Penetration: <strong>${g.penetration_pct}%</strong></div>`;
+                    html += `<div>Derived sample size: <strong>${Number(g.derived_sample_size).toLocaleString()}</strong></div>`;
+                    html += `</div></div>`;
+                } else {
+                    html += `<div style="font-size:0.75rem;color:var(--text-secondary);font-style:italic;">Not found in Gen Pop CSV.</div>`;
+                }
+
+                resultsDiv.innerHTML = html;
+            } catch (err) {
+                resultsDiv.innerHTML = `<div style="color:var(--accent-red);padding:1rem;">Network error: ${err.message}</div>`;
+            } finally {
+                btn.disabled = false;
+                btn.textContent = '🔍 Check Incidence';
             }
         }
 
