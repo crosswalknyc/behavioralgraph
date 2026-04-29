@@ -14193,13 +14193,24 @@ def _run_delta_sanity_pass(df: pd.DataFrame,
                      if k in ('AGE', 'GENDER', 'ETHNICITY', 'INCOME')}
     persona_summary = persona_doc.get('persona_summary') or '(reused from prior run)'
 
-    def _review_one_category(category: str, items: list[dict]) -> tuple[str, list[dict]]:
+    # gpt-4o caps completion tokens at 16,384. We budget ~80 output tokens per
+    # item (one JSON object with reasoning), leaving headroom for prompt-side
+    # tokens. CHUNK_SIZE = 180 → max_tokens ≈ 14,400, comfortably under 16k.
+    # For categories with > 180 flagged items (TALENT often has 500+), we
+    # split into multiple parallel chunks instead of a single oversized call.
+    _MAX_OUTPUT_TOKENS = 16000
+    _TOKENS_PER_ITEM = 80
+    _DELTA_CHUNK_SIZE = max(20, _MAX_OUTPUT_TOKENS // _TOKENS_PER_ITEM - 20)  # 180
+
+    def _review_one_chunk(category: str, items: list[dict],
+                          chunk_idx: int = 0, n_chunks: int = 1) -> tuple[str, list[dict]]:
         items_block = '\n'.join(
             f"  - {it['value']}: prior={it['prior_bp']}% (window: {prior_dates_label}), "
             f"new={it['new_bp']}% (window: {new_dates_label}), |Δ|={it['abs_delta']}pp"
             for it in items
         )
-        prompt = f"""You are auditing Brand Penetration (BP) values for the **{category}** category of a behavioral panel profile for **{subject}**.
+        chunk_label = f" (chunk {chunk_idx + 1}/{n_chunks})" if n_chunks > 1 else ""
+        prompt = f"""You are auditing Brand Penetration (BP) values for the **{category}** category{chunk_label} of a behavioral panel profile for **{subject}**.
 
 A prior reference run scored these same items in window [{prior_dates_label}]. A new rerun (different date window: [{new_dates_label}]) scored them again and the values shifted by more than 15 percentage points OR by more than 2.5× for sub-5% items. Your job: decide for EACH item whether the new value is plausible given the persona + the new date window, or whether it should be revised.
 
@@ -14218,6 +14229,7 @@ Brand Penetration = the % of THIS specific audience that engaged with the item v
 Think carefully:
 - A celebrity who played Coachella in April should have a DRAMATICALLY higher BP for "Coachella" in a Q1-2026 window than in a random week with no festival.
 - Album releases, tour announcements, awards shows, viral moments, scandals → all legitimately swing BPs for related items in the corresponding window.
+- For peer-artist / peer-celebrity items in a fan profile, a 30-50% prior BP rarely collapses to <2% just because the date window shifted by a quarter — the audience overlap is structural, not event-driven. Revise such collapses back toward the prior value unless you can name a specific reason.
 - If the persona has no plausible reason for the swing (e.g. a regional credit union jumping from 1% → 30% for a pop star), revise it back to a sensible value.
 - A small-value item moving from 0.8% → 4.2% is rarely a "real" event-driven shift — usually noise; lean toward revising small ratio swings unless the date window has a clear causal event.
 
@@ -14231,12 +14243,14 @@ Reply with ONLY a JSON array (no markdown, no commentary):
   …
 ]
 """
+        # Cap max_tokens strictly under model limit; size to actual chunk
+        chunk_max_tokens = max(1024, min(_MAX_OUTPUT_TOKENS, len(items) * _TOKENS_PER_ITEM + 512))
         try:
             resp = client.chat.completions.create(
                 model='gpt-4o',
                 messages=[{'role': 'user', 'content': prompt}],
                 temperature=0.0,
-                max_tokens=max(1024, len(items) * 80),
+                max_tokens=chunk_max_tokens,
             )
             text = (resp.choices[0].message.content or '').strip()
             if text.startswith('```'):
@@ -14249,16 +14263,30 @@ Reply with ONLY a JSON array (no markdown, no commentary):
             if isinstance(decisions, list):
                 return category, decisions
         except Exception as e:
-            print(f"   ⚠️ Delta sanity agent [{category}] failed: {e}")
+            print(f"   ⚠️ Delta sanity agent [{category}{chunk_label}] failed: {e}")
         return category, []
 
-    decisions_by_cat: dict[str, list[dict]] = {}
+    # Build (category, chunk) tasks: split big categories into ≤ _DELTA_CHUNK_SIZE batches
+    tasks: list[tuple[str, list[dict], int, int]] = []
+    for cat, items in flags_by_cat.items():
+        if len(items) <= _DELTA_CHUNK_SIZE:
+            tasks.append((cat, items, 0, 1))
+        else:
+            chunks = [items[i:i + _DELTA_CHUNK_SIZE]
+                      for i in range(0, len(items), _DELTA_CHUNK_SIZE)]
+            for ci, chunk in enumerate(chunks):
+                tasks.append((cat, chunk, ci, len(chunks)))
+            print(f"   📦 {cat}: {len(items)} flagged items → split into {len(chunks)} chunks "
+                  f"of ≤{_DELTA_CHUNK_SIZE} (max_tokens limit)")
+
+    decisions_by_cat: dict[str, list[dict]] = {cat: [] for cat in flags_by_cat}
     with _futures.ThreadPoolExecutor(max_workers=8) as pool:
-        futures = [pool.submit(_review_one_category, cat, items) for cat, items in flags_by_cat.items()]
+        futures = [pool.submit(_review_one_chunk, cat, items, ci, n)
+                   for cat, items, ci, n in tasks]
         for fut in _futures.as_completed(futures):
             try:
                 cat, decisions = fut.result()
-                decisions_by_cat[cat] = decisions
+                decisions_by_cat.setdefault(cat, []).extend(decisions)
             except Exception as e:
                 print(f"   ⚠️ Delta sanity worker raised: {e}")
 
@@ -14417,9 +14445,54 @@ Reply with ONLY a JSON array (no markdown, no commentary):
 ]
 """
 
+    def _parse_calibration_decisions(text: str) -> list[dict]:
+        """Robustly extract a list of decision objects from an LLM response.
+
+        Handles:
+          - Bare JSON arrays
+          - JSON objects wrapping a list under any key (e.g. {"adjustments": [...]})
+          - Markdown-fenced blocks
+          - Leading prose (search-preview likes to add a paragraph before JSON)
+        """
+        if not text:
+            return []
+        s = text.strip()
+        # Strip markdown fences
+        if s.startswith('```'):
+            try:
+                s = s.split('\n', 1)[1].rsplit('```', 1)[0].strip()
+            except Exception:
+                pass
+        # Try the array path
+        i, j = s.find('['), s.rfind(']')
+        if i >= 0 and j > i:
+            try:
+                arr = _json.loads(s[i:j + 1])
+                if isinstance(arr, list):
+                    return [d for d in arr if isinstance(d, dict)]
+            except Exception:
+                pass
+        # Try the object path
+        i, j = s.find('{'), s.rfind('}')
+        if i >= 0 and j > i:
+            try:
+                obj = _json.loads(s[i:j + 1])
+                if isinstance(obj, list):
+                    return [d for d in obj if isinstance(d, dict)]
+                if isinstance(obj, dict):
+                    for v in obj.values():
+                        if isinstance(v, list):
+                            return [d for d in v if isinstance(d, dict)]
+            except Exception:
+                pass
+        return []
+
     decisions: list[dict] = []
+    raw_text_search = ''
+    raw_text_fallback = ''
     last_err = ''
 
+    # Attempt 1: gpt-4o-search-preview (web access for persona-calendar context)
     try:
         resp = client.chat.completions.create(
             model='gpt-4o-search-preview',
@@ -14427,43 +14500,48 @@ Reply with ONLY a JSON array (no markdown, no commentary):
             messages=[{'role': 'user', 'content': prompt}],
             max_tokens=4096,
         )
-        text = (resp.choices[0].message.content or '').strip()
-        if text.startswith('```'):
-            text = text.split('\n', 1)[1].rsplit('```', 1)[0].strip()
-        start = text.find('[')
-        end = text.rfind(']') + 1
-        if start >= 0 and end > start:
-            parsed = _json.loads(text[start:end])
-            if isinstance(parsed, list):
-                decisions = [d for d in parsed if isinstance(d, dict)]
+        raw_text_search = (resp.choices[0].message.content or '').strip()
+        decisions = _parse_calibration_decisions(raw_text_search)
+        if decisions:
+            print(f"   📡 Audience calibration: search-preview returned {len(raw_text_search)} chars, parsed {len(decisions)} decisions")
+        else:
+            print(f"   📡 Audience calibration: search-preview returned {len(raw_text_search)} chars but parsed 0 decisions")
+            print(f"      first 400 chars: {raw_text_search[:400]!r}")
     except Exception as e:
         last_err = str(e)
-        print(f"   ⚠️ Audience calibration search-preview failed ({e}); falling back to gpt-4o")
+        print(f"   ⚠️ Audience calibration search-preview failed ({e})")
 
+    # Attempt 2: gpt-4o with strict JSON-object response_format (no web search)
     if not decisions:
+        print("   🔄 Audience calibration: falling back to gpt-4o with response_format=json_object")
         try:
+            json_prompt = prompt + (
+                '\n\nIMPORTANT: Respond with a JSON OBJECT shaped like '
+                '{"adjustments": [...]} where the array contains the decisions. '
+                'Do not respond with bare prose; if you have no high-confidence '
+                'adjustments, return {"adjustments": []} but try hard to find at '
+                'least 5-15 events/seasonality/trend-driven adjustments for this persona.'
+            )
             resp = client.chat.completions.create(
                 model='gpt-4o',
-                messages=[{'role': 'user', 'content': prompt}],
-                temperature=0.0,
+                messages=[{'role': 'user', 'content': json_prompt}],
+                temperature=0.2,
                 response_format={"type": "json_object"},
                 max_tokens=4096,
             )
-            text = (resp.choices[0].message.content or '').strip()
-            obj = _json.loads(text)
-            if isinstance(obj, list):
-                decisions = [d for d in obj if isinstance(d, dict)]
-            elif isinstance(obj, dict):
-                for v in obj.values():
-                    if isinstance(v, list):
-                        decisions = [d for d in v if isinstance(d, dict)]
-                        break
+            raw_text_fallback = (resp.choices[0].message.content or '').strip()
+            decisions = _parse_calibration_decisions(raw_text_fallback)
+            print(f"   🔄 Audience calibration fallback: {len(raw_text_fallback)} chars, parsed {len(decisions)} decisions")
+            if not decisions:
+                print(f"      first 400 chars: {raw_text_fallback[:400]!r}")
         except Exception as e:
+            last_err = str(e)
             print(f"   ⚠️ Audience calibration fallback failed ({e})")
-            return df
 
     if not decisions:
-        print(f"   ⚠️ Audience calibration returned no actionable adjustments (last_err={last_err[:120]})")
+        print(f"   ⚠️ Audience calibration returned no actionable adjustments "
+              f"(search_chars={len(raw_text_search)}, fallback_chars={len(raw_text_fallback)}, "
+              f"last_err={last_err[:120]})")
         return df
 
     decisions = decisions[:_CALIBRATION_MAX_ADJUSTMENTS]
