@@ -15535,10 +15535,16 @@ def submit_analysis():
 @app.route('/api/incidence-check', methods=['POST'])
 @requires_auth
 def incidence_check():
-    """Run only the universe scan + sample size pipeline (no full profile) and return the results."""
+    """Incidence check using the same universe scan as Profile Analysis.
+
+    Uses bg.connect_snowflake() + bg.perform_full_universe_scan() which go
+    through the ClickHouse connector with 1800s query timeout — the same
+    path that Profile Analysis uses successfully.
+    """
     try:
         import bg
-        
+        import time as _time
+
         data = request.json
         if not data.get('brands'):
             return jsonify({'error': 'Missing required field: search terms'}), 400
@@ -15573,6 +15579,7 @@ def incidence_check():
 
         GENPOP_SAMPLE_CAP = 10_000_000
 
+        # Gen Pop CSV lookup (instant, no DB hit)
         genpop_result = None
         genpop_sample = None
         try:
@@ -15589,14 +15596,21 @@ def incidence_check():
         except Exception as e:
             print(f"⚠️ Incidence check: Gen Pop lookup failed: {e}")
 
+        # Full universe scan (same as Profile Analysis)
         universe_result = None
-        universe_sample = None
+        query_seconds = None
         try:
             conn = bg.connect_snowflake()
+            print(f"🔍 Incidence check: {len(brands)} brand variants, {start_date} to {end_date}")
+            t0 = _time.time()
             results = bg.perform_full_universe_scan(conn, brands, start_date, end_date, purchasers_only=False)
+            query_seconds = round(_time.time() - t0, 1)
+            print(f"✅ Incidence check universe scan completed in {query_seconds}s")
+
             if results:
                 total_universe = results['total_universe']
                 total_visits = results.get('total_visits', 0)
+
                 bounded = min(int(total_universe), GENPOP_SAMPLE_CAP)
                 if bounded >= GENPOP_SAMPLE_CAP:
                     bounded = GENPOP_SAMPLE_CAP - max(1, int(GENPOP_SAMPLE_CAP * 0.005))
@@ -15631,6 +15645,8 @@ def incidence_check():
                 pass
         except Exception as e:
             print(f"⚠️ Incidence check: Universe scan failed: {e}")
+            import traceback
+            traceback.print_exc()
             return jsonify({'error': f'Database query failed: {str(e)}'}), 500
 
         final_sample_size = None
@@ -15656,6 +15672,7 @@ def incidence_check():
             'universe': universe_result,
             'final_sample_size': final_sample_size,
             'sample_size_source': sample_size_source,
+            'query_seconds': query_seconds,
         })
 
     except Exception as e:
