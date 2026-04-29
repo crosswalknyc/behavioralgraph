@@ -18052,37 +18052,49 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
     # POST-PROCESSING FOR EXACT MATCHES: Apply exact previous values after pipeline completion
     if exact_match_post_process and all_previous_lookup:
         print("🎯 EXACT MATCH POST-PROCESSING: Applying exact previous run values...")
-        
+
+        # The user always wants the "Previous Run" DISPLAY column to reflect
+        # the prior run's Brand Penetration (Row) value for behavioral rows,
+        # NOT its Category Share. The Percentage writeback below still uses
+        # all_previous_lookup (Category Share) so the restored Percentage
+        # column matches the prior run, but the display column reads from
+        # the BP lookup that load_previous_run_data() stashes.
+        _bp_lookup = getattr(load_previous_run_data, '_last_bp_lookup', None) or {}
+        _display_lookup = {**(previous_demo_lookup or {}), **_bp_lookup} if _bp_lookup else all_previous_lookup
+        if _bp_lookup:
+            print(f"   ✅ Using BP-column lookup for 'Previous Run' display ({len(_bp_lookup)} behavioral values)")
+        else:
+            print(f"   ⚠️ BP-column lookup unavailable; 'Previous Run' display will use legacy Category-Share values")
+
         # Add Previous Run column
         df_final['Previous Run'] = ''
-        
+
         for idx, row in df_final.iterrows():
             category = row['Column']
             value = row['Value']
             key = normalize_lookup_key(category, value)
-            
-            # Check if this exact value existed in previous run (same category)
+
             if key in all_previous_lookup:
-                # Use exact previous value
+                # Restore Percentage from Category-Share lookup (path's purpose)
                 prev_pct = all_previous_lookup[key]
                 df_final.loc[idx, 'Percentage'] = prev_pct
-                df_final.loc[idx, 'Previous Run'] = f"{prev_pct:.4f}"
+                # Display the prior BP for delta comparison
+                display_val = _display_lookup.get(key, prev_pct)
+                df_final.loc[idx, 'Previous Run'] = f"{display_val:.4f}"
             else:
                 # Check if value existed in previous run but in different category
                 value_found_in_other_category = False
-                for prev_key, prev_value in all_previous_lookup.items():
+                for prev_key, prev_value in _display_lookup.items():
                     if '|' in prev_key:
                         prev_category, prev_val = prev_key.split('|', 1)
                         if prev_val == value.lower():
-                            # Value existed in previous run but different category
                             df_final.loc[idx, 'Previous Run'] = f"{prev_value:.4f}"
                             value_found_in_other_category = True
                             break
-                
+
                 if not value_found_in_other_category:
-                    # Completely new value - mark as NEW
                     df_final.loc[idx, 'Previous Run'] = 'NEW'
-        
+
         print("✅ Exact match post-processing completed - previous values restored")
     
     # Add "Previous" column if updating from previous run - FINAL STEP
@@ -23008,6 +23020,14 @@ def add_previous_run_column(df_final, previous_demo_lookup, previous_behavioral_
     """
     Add a "Previous" column showing previous run values for comparison.
     Shows "NEW" for values that didn't exist in the previous run.
+
+    NOTE: For BEHAVIORAL rows the user always wants to compare against the
+    prior run's "Brand Penetration (Row)" value, NOT its "Category Share"
+    value. The legacy `previous_behavioral_lookup` parameter holds Category
+    Share (used by the exact-match Percentage writeback path), so we swap
+    in the BP-column lookup that load_previous_run_data() stashes on a
+    function attribute (added by the Apr 29 carry-forward fix). Falls back
+    to the Category-Share lookup if the BP stash isn't present.
     """
     # Create column name with dates
     if previous_sample_dates and previous_behavior_dates:
@@ -23022,8 +23042,17 @@ def add_previous_run_column(df_final, previous_demo_lookup, previous_behavioral_
     # Initialize the new column
     df_final[column_name] = ""
     
-    # Combine all previous lookups
-    all_previous_lookup = {**previous_demo_lookup, **previous_behavioral_lookup}
+    # Use the BP-column lookup for behavioral rows (what the user actually
+    # cares about for delta comparison); demo lookup is fine as-is because
+    # for demo rows BP == Percentage (a 25% AGE share IS its brand penetration).
+    bp_lookup = getattr(load_previous_run_data, '_last_bp_lookup', None) or {}
+    if bp_lookup:
+        behavioral_for_display = bp_lookup
+        print(f"   ✅ Using BP-column lookup for 'Previous' display ({len(bp_lookup)} behavioral values)")
+    else:
+        behavioral_for_display = previous_behavioral_lookup or {}
+        print(f"   ⚠️ BP-column lookup unavailable; falling back to legacy Category-Share lookup")
+    all_previous_lookup = {**previous_demo_lookup, **behavioral_for_display}
     
     # Populate the previous column
     for idx, row in df_final.iterrows():
@@ -29501,12 +29530,19 @@ def enforce_behavioral_fluctuation_caps(df, previous_behavioral_lookup):
     return df
 
 def handle_new_values_previous_run(df, previous_demo_lookup, previous_behavioral_lookup):
-    """Enhanced function to handle new values and category changes"""
+    """Enhanced function to handle new values and category changes.
+
+    NOTE: For BEHAVIORAL rows the displayed "Previous Run" value should be
+    the prior run's Brand Penetration (Row), not its Category Share. We
+    swap in the BP-column lookup that load_previous_run_data() stashes if
+    available; otherwise fall back to the legacy Category-Share lookup.
+    """
     # Add Previous Run column
     df['Previous Run'] = ''
-    
-    # Combine all previous lookups
-    all_previous_lookup = {**(previous_demo_lookup or {}), **(previous_behavioral_lookup or {})}
+
+    bp_lookup = getattr(load_previous_run_data, '_last_bp_lookup', None) or {}
+    behavioral_for_display = bp_lookup if bp_lookup else (previous_behavioral_lookup or {})
+    all_previous_lookup = {**(previous_demo_lookup or {}), **behavioral_for_display}
     
     for idx, row in df.iterrows():
         category = row['Column']
