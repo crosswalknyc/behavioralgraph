@@ -14649,6 +14649,90 @@ Reply with ONLY a JSON array (no markdown, no commentary):
 
 
 # ---------------------------------------------------------------------------
+# Drop blank-value demographic rows + redistribute their share
+# ---------------------------------------------------------------------------
+def _redistribute_blank_demo_values(df: pd.DataFrame) -> pd.DataFrame:
+    """For each demographic category, find rows with blank/NaN Value and
+    redistribute their Brand Penetration / Category Share / Original Raw
+    Numbers / US Gen Pop Projection / Percentage proportionally across the
+    remaining named rows in the same category, then drop the blank rows.
+
+    Demographics must never have an empty Value — every share has to belong
+    to a labeled bucket (an empty INCOME row makes the 100% lie about which
+    income brackets the audience falls into).
+
+    Behavioral categories are left alone (some flows intentionally use
+    placeholder rows there).
+    """
+    if 'Column' not in df.columns or 'Value' not in df.columns:
+        return df
+
+    demo_cats_upper = {c.upper() for c in _DEMO_CATEGORIES} | {'LOCATION'}
+
+    def _is_blank(v) -> bool:
+        if v is None:
+            return True
+        try:
+            if pd.isna(v):
+                return True
+        except (TypeError, ValueError):
+            pass
+        s = str(v).strip()
+        return s == '' or s.lower() in ('nan', 'none', 'null')
+
+    cat_upper_series = df['Column'].astype(str).str.strip().str.upper()
+    blank_mask = df['Value'].apply(_is_blank) & cat_upper_series.isin(demo_cats_upper)
+
+    if not blank_mask.any():
+        return df
+
+    redistribute_cols = [c for c in (
+        'Brand Penetration (Row)', 'Category Share', 'Original Raw Numbers',
+        'US Gen Pop Projection', 'Percentage'
+    ) if c in df.columns]
+
+    drop_indices: list[int] = []
+    total_blank = int(blank_mask.sum())
+
+    for cat_upper in cat_upper_series[blank_mask].unique():
+        cat_mask = (cat_upper_series == cat_upper)
+        cat_blank_mask = cat_mask & blank_mask
+        cat_named_mask = cat_mask & ~blank_mask
+
+        if not cat_named_mask.any():
+            # Edge case: ALL rows in this demo category are blank — leave the
+            # data as-is rather than silently dropping the whole category.
+            print(f"   ⚠️  Demo category {cat_upper}: all rows have blank Value; not redistributing")
+            continue
+
+        for col in redistribute_cols:
+            blank_total = pd.to_numeric(df.loc[cat_blank_mask, col], errors='coerce').fillna(0).sum()
+            if blank_total <= 0:
+                continue
+            named_vals = pd.to_numeric(df.loc[cat_named_mask, col], errors='coerce').fillna(0)
+            named_sum = named_vals.sum()
+            if named_sum <= 0:
+                # Named rows have no share to scale; split evenly instead
+                share_each = blank_total / len(named_vals)
+                df.loc[cat_named_mask, col] = (named_vals + share_each).round(4)
+            else:
+                weights = named_vals / named_sum
+                df.loc[cat_named_mask, col] = (named_vals + weights * blank_total).round(4)
+
+        cat_blank_indices = df.index[cat_blank_mask].tolist()
+        drop_indices.extend(cat_blank_indices)
+        named_count = int(cat_named_mask.sum())
+        print(f"   🧹 Demo {cat_upper}: redistributed {len(cat_blank_indices)} blank-value row(s) "
+              f"across {named_count} named buckets")
+
+    if drop_indices:
+        df = df.drop(index=drop_indices).reset_index(drop=True)
+        print(f"   🧹 Dropped {len(drop_indices)} blank-Value demographic row(s) ({total_blank} total flagged)")
+
+    return df
+
+
+# ---------------------------------------------------------------------------
 # Anti-duplicate noise (wide-date-window reruns)
 # ---------------------------------------------------------------------------
 def _apply_anti_duplicate_jitter(df: pd.DataFrame, bp_col: str,
@@ -18102,6 +18186,17 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
         df_final = add_previous_run_column(df_final, previous_demo_lookup, previous_behavioral_lookup, 
                                           previous_sample_dates, previous_behavior_dates)
     
+    # --- DROP/REDISTRIBUTE BLANK-VALUE ROWS IN DEMOGRAPHICS ----------------
+    # Sometimes a demographic category ends up with a row whose Value is blank
+    # or NaN — typically when ClickHouse returns a NULL bucket (e.g. INCOME
+    # respondents with no answer) and that row carries a tiny residual % so
+    # the category sums to 100. The user spec is that demographic rows should
+    # NEVER be empty — the residual must be redistributed proportionally
+    # across the remaining named buckets in the same category, then the
+    # blank-value row dropped. (Behavioral categories CAN have empty
+    # placeholder rows in some flows, so we only touch demographics here.)
+    df_final = _redistribute_blank_demo_values(df_final)
+
     # --- FINAL INPUT BRAND 100% ENFORCEMENT (ABSOLUTE LAST STEP) ---
     # Skip 100% enforcement for GenPop to allow natural brand percentages
     if not is_genpop:
