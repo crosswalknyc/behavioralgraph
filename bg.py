@@ -17453,10 +17453,21 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
             and (previous_demo_lookup or previous_behavioral_lookup)
             and (previous_brand_input or '').strip().lower() == brand_input_str.strip().lower()
         )
+        # Pull the Brand-Penetration-column lookup that load_previous_run_data
+        # stashed for us (separate from `previous_behavioral_lookup` which holds
+        # Category Share values used by the existing exact-match post-process).
+        # This is the lookup we need for carry-forward into the new run's BP col.
+        _previous_bp_lookup = {}
+        try:
+            if (getattr(load_previous_run_data, '_last_bp_path', None) == previous_file_path):
+                _previous_bp_lookup = getattr(load_previous_run_data, '_last_bp_lookup', {}) or {}
+        except Exception:
+            _previous_bp_lookup = {}
+
         if _is_rerun_same_brand:
             print("🔒 Rerun detected (same brand input as prior run)")
             print("   • Demographics + location: locked to prior run values")
-            print(f"   • Behavioral items in prior run ({len(previous_behavioral_lookup)}): "
+            print(f"   • Behavioral items in prior run ({len(_previous_bp_lookup)} with BP-column values): "
                   f"carried forward with ±0.01–0.02% jitter")
             print("   • Net-new behavioral items: scored fresh by per-category agents")
             print("   • Persona research LLM call: SKIPPED (prior demographics reused)")
@@ -17467,7 +17478,7 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
         # Step 2: Parallel Category Agents
         df_final = parallel_category_agents(
             df_final, _persona_doc, _subject_name, brands,
-            previous_behavioral_lookup=(previous_behavioral_lookup if _is_rerun_same_brand else None),
+            previous_behavioral_lookup=(_previous_bp_lookup if _is_rerun_same_brand else None),
             lock_demographics=_is_rerun_same_brand,
         )
 
@@ -21913,8 +21924,40 @@ def load_previous_run_data(file_path):
             if isinstance(pct_value, str):
                 pct_value = float(pct_value.replace(',', '').replace('%', ''))
             behavioral_lookup[key] = float(pct_value)
-        
-        print(f"📊 Found {len(demo_lookup)} demographic values and {len(behavioral_lookup)} behavioral values in previous run")
+
+        # Behavioral BP lookup — DIFFERENT from `behavioral_lookup` above (which
+        # holds Category Share / within-category share). The rerun stability
+        # path needs the actual `Brand Penetration (Row)` value to write back
+        # into the new run's BP column. Stored as an attribute on the function
+        # call itself so we don't break the public return signature.
+        behavioral_bp_lookup = {}
+        bp_col_name = 'Brand Penetration (Row)' if 'Brand Penetration (Row)' in previous_df.columns else None
+        if bp_col_name is not None:
+            for _, row in previous_behavioral.iterrows():
+                key = normalize_lookup_key(row['Column'], row['Value'])
+                bp_value = row.get(bp_col_name, None)
+                if bp_value is None:
+                    continue
+                if isinstance(bp_value, str):
+                    try:
+                        bp_value = float(bp_value.replace(',', '').replace('%', '').strip())
+                    except ValueError:
+                        continue
+                try:
+                    behavioral_bp_lookup[key] = float(bp_value)
+                except (TypeError, ValueError):
+                    continue
+        # Stash on a module-level attribute keyed by file path so `run_full_pipeline`
+        # can pick it up without changing the function's tuple return shape (which
+        # has callers in app.py / BG.py / new_bg.py that we don't want to break).
+        try:
+            load_previous_run_data._last_bp_lookup = behavioral_bp_lookup  # type: ignore[attr-defined]
+            load_previous_run_data._last_bp_path = file_path  # type: ignore[attr-defined]
+        except Exception:
+            pass
+
+        print(f"📊 Found {len(demo_lookup)} demographic values and {len(behavioral_lookup)} behavioral values in previous run "
+              f"(+{len(behavioral_bp_lookup)} BP-column values for rerun lock)")
         if previous_sample_size:
             print(f"📊 Reference sample size: {previous_sample_size:,}")
         print(f"📅 Previous Sample Dates: {previous_sample_dates}")
