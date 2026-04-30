@@ -17617,25 +17617,6 @@
                                 </div>
                             </div>
                             
-                            <!-- 2x2 Grid -->
-                            <div class="ticker-cards-grid four-columns" style="margin-bottom: 0.75rem;">
-                                <div class="stat-card has-tooltip" style="display: flex; flex-direction: column; justify-content: space-between; min-height: 80px; padding: 0.6rem 1rem;" data-tooltip="">
-                                    <div class="stat-label" style="font-size: 0.7rem;">💹 QTD Net Growth %</div>
-                                    <div class="stat-value" id="netGrowth" style="font-size: clamp(1rem, 2.5vw, 1.3rem);">--</div>
-                                </div>
-                                <div class="stat-card has-tooltip" style="display: flex; flex-direction: column; justify-content: space-between; min-height: 80px; padding: 0.6rem 1rem;" data-tooltip="">
-                                    <div class="stat-label" style="font-size: 0.7rem;">📊 Current Consumers QTD</div>
-                                    <div class="stat-value" id="currentConsumers" style="font-size: clamp(1rem, 2.5vw, 1.3rem);">--</div>
-                                </div>
-                                <div class="stat-card has-tooltip" style="display: flex; flex-direction: column; justify-content: space-between; min-height: 80px; padding: 0.6rem 1rem;" data-tooltip="">
-                                    <div class="stat-label" style="font-size: 0.7rem;">📈 Total Subs QTD</div>
-                                    <div class="stat-value" id="totalSubs" style="font-size: clamp(1rem, 2.5vw, 1.3rem);">--</div>
-                                </div>
-                                <div class="stat-card has-tooltip" style="display: flex; flex-direction: column; justify-content: space-between; min-height: 80px; padding: 0.6rem 1rem;" data-tooltip="">
-                                    <div class="stat-label" style="font-size: 0.7rem;">📉 Total Cancels QTD</div>
-                                    <div class="stat-value" id="totalCancels" style="font-size: clamp(1rem, 2.5vw, 1.3rem);">--</div>
-                                </div>
-                            </div>
                             </div><!-- End liveDataContent -->
                             
                         </div>
@@ -31253,11 +31234,16 @@
             // Get current quarter data for charts/tables
             const currentQuarterData = data.data.filter(d => d.Quarter === latestQuarter);
             
-            // Update stat cards with pre-calculated values (instant, no calculation delay)
-            document.getElementById('currentConsumers').textContent = (stats.current_consumers || 0).toLocaleString();
-            document.getElementById('totalSubs').textContent = (stats.total_subs || 0).toLocaleString();
-            document.getElementById('totalCancels').textContent = (stats.total_cancels || 0).toLocaleString();
-            document.getElementById('netGrowth').textContent = `${stats.net_growth_pct || 0}%`;
+            // QTD stat cards (Net Growth %, Current Consumers, Total Subs, Total Cancels)
+            // were removed from the Live Data tab — guard against missing elements.
+            const _ccEl = document.getElementById('currentConsumers');
+            if (_ccEl) _ccEl.textContent = (stats.current_consumers || 0).toLocaleString();
+            const _tsEl = document.getElementById('totalSubs');
+            if (_tsEl) _tsEl.textContent = (stats.total_subs || 0).toLocaleString();
+            const _tcEl = document.getElementById('totalCancels');
+            if (_tcEl) _tcEl.textContent = (stats.total_cancels || 0).toLocaleString();
+            const _ngEl = document.getElementById('netGrowth');
+            if (_ngEl) _ngEl.textContent = `${stats.net_growth_pct || 0}%`;
             
             // Update projected growth value
             const projectedGrowthElement = document.getElementById('projectedGrowth');
@@ -31276,26 +31262,8 @@
                 projectedCard.setAttribute('data-tooltip', `Projected net growth rate for ${latestQuarter}. Formula: average daily net growth rate % × total days in quarter. Daily rate = (daily net growth ÷ quarter-start consumers) × 100. Linear extrapolation from quarter-to-date performance. Click Refresh to recalculate from the latest data.`);
             }
             
-            // Set tooltips for QTD metric cards
-            const netGrowthCard = document.getElementById('netGrowth').closest('.stat-card');
-            if (netGrowthCard) {
-                netGrowthCard.setAttribute('data-tooltip', `Quarter-to-date (QTD) net growth percentage. This is the actual growth rate from the start of the current quarter through the latest data point. It represents the cumulative net growth achieved so far in the quarter.`);
-            }
-            
-            const currentConsumersCard = document.getElementById('currentConsumers').closest('.stat-card');
-            if (currentConsumersCard) {
-                currentConsumersCard.setAttribute('data-tooltip', `Current number of consumers quarter-to-date. This represents the total active consumers as of the latest data point in the current quarter.`);
-            }
-            
-            const totalSubsCard = document.getElementById('totalSubs').closest('.stat-card');
-            if (totalSubsCard) {
-                totalSubsCard.setAttribute('data-tooltip', `Total subscriptions quarter-to-date. This is the cumulative number of new subscriptions added from the start of the current quarter through the latest data point.`);
-            }
-            
-            const totalCancelsCard = document.getElementById('totalCancels').closest('.stat-card');
-            if (totalCancelsCard) {
-                totalCancelsCard.setAttribute('data-tooltip', `Total cancellations quarter-to-date. This is the cumulative number of cancellations from the start of the current quarter through the latest data point.`);
-            }
+            // QTD metric card tooltips removed — cards no longer rendered.
+            // Original IDs (netGrowth/currentConsumers/totalSubs/totalCancels) absent from DOM.
             
             // Tooltips are now set individually on each metric within the accuracy badge
             // No need to set a tooltip on the badge itself
