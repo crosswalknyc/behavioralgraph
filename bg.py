@@ -13975,11 +13975,56 @@ These structured anchors are the most important output of this prompt — the pe
     return persona_doc
 
 
+def _build_canonical_baseline_lookup() -> dict:
+    """Build {(CATEGORY_UPPER, VALUE_UPPER): canonical_bp} from the canonical
+    Gen Pop CSV. Used to inject "US baseline: X%" anchors into the per-category
+    agent prompt so the LLM has measured ground truth instead of guessing.
+
+    For GenPop runs, the agent should track baseline within ±5pp.
+    For profile runs, the agent should INDEX off baseline based on persona fit
+    (1.5-3x for expected_high items, 0.1-0.5x for expected_low, ~baseline for neutral).
+    """
+    gp = _load_genpop_csv()
+    if gp is None or gp.empty:
+        return {}
+    out: dict[tuple[str, str], float] = {}
+    try:
+        # Prefer named columns; fall back to positional.
+        cat_col = 'Column' if 'Column' in gp.columns else gp.columns[0]
+        val_col = 'Value' if 'Value' in gp.columns else gp.columns[1]
+        bp_col = ('Brand Penetration (Row)' if 'Brand Penetration (Row)' in gp.columns
+                  else gp.columns[2])
+        for _, r in gp.iterrows():
+            try:
+                cat = str(r[cat_col]).strip().upper()
+                val = str(r[val_col]).strip().upper()
+                bp = float(str(r[bp_col]).replace(',', '').replace('%', ''))
+                if cat and val and val != 'NAN':
+                    out[(cat, val)] = bp
+            except (ValueError, TypeError):
+                continue
+    except Exception as e:
+        print(f"   ⚠️ Canonical baseline lookup build failed: {e}")
+        return {}
+    return out
+
+
 def _run_single_category_agent(category: str, values: list[str],
-                                persona_doc: dict, subject: str) -> list[dict]:
+                                persona_doc: dict, subject: str,
+                                canonical_baseline_lookup: dict | None = None,
+                                anchor_mode: str = 'persona') -> list[dict]:
     """Worker for Step 2 — one gpt-4o call per category.
 
     Returns list of {value, bp, reason}.
+
+    canonical_baseline_lookup: optional {(CAT_UPPER, VAL_UPPER): canonical_bp}
+        from the measured U.S. Gen Pop CSV. When provided, each item is shown
+        with its measured baseline and the prompt enforces an anchoring rule
+        (see anchor_mode).
+    anchor_mode: 'genpop' → scores must stay within ±5pp of baseline (or
+        ±50% relative for items <5%). 'persona' → scores INDEX off baseline
+        based on persona fit (expected_high → 1.5-3x, expected_low → 0.1-0.5x,
+        neutral → 0.7-1.5x). Items with no canonical baseline use best estimate.
     """
     import json as _json
     client = _get_openai_client()
@@ -14014,7 +14059,67 @@ def _run_single_category_agent(category: str, values: list[str],
         if expected_low else '  (none specified — reason from persona summary)'
     )
 
-    values_list = '\n'.join(f"  - {v}" for v in values)
+    # Inject the canonical U.S. baseline next to each item if we have one.
+    # The agent uses this as ground truth: GenPop must stay within ±5pp,
+    # profiles must INDEX off it based on persona affinity.
+    cat_u = category.strip().upper()
+    baseline_lookup = canonical_baseline_lookup or {}
+    def _baseline_for(v: str) -> str:
+        v_u = str(v).strip().upper()
+        b = baseline_lookup.get((cat_u, v_u))
+        if b is None:
+            return 'not measured'
+        return f'{b:.2f}%'
+
+    if baseline_lookup:
+        # Pad item names so the baselines line up visually for the LLM.
+        max_len = max((len(str(v)) for v in values), default=10)
+        pad = min(max(max_len, 10), 50)
+        values_list = '\n'.join(
+            f"  - {str(v):<{pad}}  (US baseline: {_baseline_for(v)})"
+            for v in values
+        )
+    else:
+        values_list = '\n'.join(f"  - {v}" for v in values)
+
+    # Anchoring rules differ for GenPop vs profile audiences.
+    if anchor_mode == 'genpop':
+        anchor_rules = """═══════════════════════════════════════════════════════════════════
+CRITICAL — ANCHOR TO U.S. BASELINE (this is a GenPop scoring run)
+═══════════════════════════════════════════════════════════════════
+The "US baseline" shown next to each item is the MEASURED national digital engagement % from a real clickstream panel. It IS the answer for the average U.S. adult — your job is to honor it.
+
+  • For items WITH a baseline:
+      – If baseline >= 5%: your score MUST be within ±5 percentage points of baseline.
+        e.g. baseline 22.62% → score 17.6-27.6%; baseline 84.13% → score 79.1-89.1%.
+      – If baseline < 5%: your score MUST be within ±50% relative of baseline (and never above 8%).
+        e.g. baseline 0.55% → score 0.27-0.83%; baseline 3.20% → score 1.6-4.8%.
+  • For items WITHOUT a baseline ("not measured"): use your best estimate of what % of all U.S. online adults would actually click/visit/use this in a year. CPG / regional / luxury → low (0.3-5%); national mass → moderate (5-25%); near-universal → high (60-85%).
+  • Do NOT inflate "expected_high" items above the baseline ceiling. CHASE baseline is ~22% — its score is ~22%, NOT 84%. MASTERCARD baseline is ~42% — its score is ~42%, NOT 89%. Banks, credit, telecom, retail all have realistic ceilings; respect them.
+  • Do NOT pin items to 100% just because they're famous platforms. Even YouTube tops out around 84%.
+"""
+    elif baseline_lookup:
+        anchor_rules = """═══════════════════════════════════════════════════════════════════
+CRITICAL — ANCHOR TO U.S. BASELINE, THEN INDEX FOR PERSONA FIT
+═══════════════════════════════════════════════════════════════════
+The "US baseline" shown next to each item is the MEASURED national digital engagement % for the average U.S. adult. Your persona's score INDEXES OFF that baseline based on how well the item fits the audience:
+
+  • Items in the EXPECTED HIGH list above:
+      – Score 1.5x-3x baseline (cap at 95%).
+      – Example: Foot Locker baseline 4.5% → Nike audience 7-13%.
+      – Example: ESPN baseline 36% → sports-fan audience 55-90%.
+  • Items in the EXPECTED LOW list above:
+      – Score 0.1x-0.5x baseline (floor at 0.1%).
+      – Example: Nobu baseline 0.55% → Nike audience 0.05-0.27%.
+      – Even if the item is famous, persona fit is what determines BP.
+  • Neutral items (in neither list):
+      – Score 0.7x-1.5x baseline. Use your judgment for the persona's fit.
+  • Items WITHOUT a baseline ("not measured"):
+      – Use your best estimate of what % of THIS audience would engage digitally.
+  • Hard ceiling: NO score above 95% unless the item is in expected_high AND baseline >= 70% (e.g. YouTube/Google for any mass-online persona).
+"""
+    else:
+        anchor_rules = ''
 
     prompt = f"""You are a consumer-research analyst assigning Brand Penetration (BP) values for the **{category}** category of a behavioral panel profile for **{subject}**.
 
@@ -14046,17 +14151,19 @@ EXPECTED LOW-BP ITEMS for this audience in this category
 (items the persona research agent specifically called out as POOR fit — these MUST stay LOW even if they're famous/prestigious in absolute terms):
 {expected_low_block}
 
+{anchor_rules}
 ═══════════════════════════════════════════════════════════════════
 ROW-BY-ROW REASONING — required process
 ═══════════════════════════════════════════════════════════════════
 For EACH item in the list below, reason in this order:
-  1) Is this item in the EXPECTED HIGH list above? → score HIGH (use the upper end of what's plausible for this item type).
-  2) Is this item in the EXPECTED LOW list above? → score LOW (typically 0.3-5%) regardless of fame.
-  3) Is this a near-universal mass platform that nearly all US online adults touch (Google, YouTube, Amazon, Facebook, Gmail, Instagram, Netflix)? → if yes, score HIGH (60-85%) unless the persona explicitly rejects it.
-  4) Is the item bought IN-STORE for the majority of consumers (CPG, grocery, household goods)? → score LOW (1-8%) regardless of brand strength.
-  5) Is the item REGIONAL/geo-specific and the persona is NOT specifically tied to that geography? → score LOW (0.5-3%).
-  6) Is the item LUXURY/HNW and the persona INCOME skew is NOT $150K+? → score LOW (0.3-3%).
-  7) Otherwise: score by your best estimate of what % of this specific audience would actually click/visit/use this item online during a single year.
+  1) DOES IT HAVE A US BASELINE shown next to it? → start from that baseline and apply the anchoring rule above (GenPop: ±5pp; persona: index by fit). Do NOT ignore the baseline.
+  2) Is this item in the EXPECTED HIGH list above? → score HIGH RELATIVE TO ITS BASELINE (1.5-3x for personas; ≈baseline for GenPop). DO NOT pump it to 80-95% just because it's "expected high" — respect the baseline ceiling.
+  3) Is this item in the EXPECTED LOW list above? → score LOW (0.1-0.5x baseline for personas; ≈baseline for GenPop) regardless of fame.
+  4) Is this a near-universal mass platform (Google, YouTube, Amazon, Facebook, Gmail, Instagram, Netflix)? → score per its baseline (typically 60-85%) unless the persona explicitly rejects it.
+  5) Is the item bought IN-STORE for the majority of consumers (CPG, grocery, household goods)? → score LOW (1-8%) regardless of brand strength.
+  6) Is the item REGIONAL/geo-specific and the persona is NOT specifically tied to that geography? → score LOW (0.5-3%).
+  7) Is the item LUXURY/HNW and the persona INCOME skew is NOT $150K+? → score LOW (0.3-3%).
+  8) No baseline available? → use your best estimate of what % of this specific audience would actually click/visit/use this item online during a single year.
 
 ═══════════════════════════════════════════════════════════════════
 OUTPUT FORMAT
@@ -14984,7 +15091,9 @@ def parallel_category_agents(df: pd.DataFrame, persona_doc: dict,
                               delta_sanity_subject: str | None = None,
                               delta_sanity_prior_dates: str = '',
                               delta_sanity_new_dates: str = '',
-                              wide_window: bool = False) -> pd.DataFrame:
+                              wide_window: bool = False,
+                              canonical_baseline_lookup: dict | None = None,
+                              anchor_mode: str = 'persona') -> pd.DataFrame:
     """Step 2 — run one gpt-4o agent per behavioral category in parallel.
 
     Each agent receives the persona doc + the list of values from Snowflake for
@@ -15231,11 +15340,22 @@ def parallel_category_agents(df: pd.DataFrame, persona_doc: dict,
         print(f"🔁 Rerun carry-forward: {total_carry} items reuse prior BP, "
               f"{total_new} new items across {len(cats_needing_llm)} categories will be scored fresh")
 
+    # Lazy-load canonical baseline lookup if not passed in. The lookup is
+    # what gives the per-cat agents ground truth ("US baseline: 22.62%")
+    # next to each item — without it, GenPop scores drift to 80-99% on
+    # items whose realistic ceiling is 25%.
+    if canonical_baseline_lookup is None:
+        canonical_baseline_lookup = _build_canonical_baseline_lookup()
+    if canonical_baseline_lookup:
+        print(f"📐 Per-cat agents will anchor to {len(canonical_baseline_lookup)} canonical baselines (mode={anchor_mode})")
+
     print(f"🤖 Step 2: Launching {len(cats_needing_llm)} parallel category agents (skipped {len(category_values) - len(cats_needing_llm)} fully-carried categories) …")
     results_map: dict[str, list[dict]] = {}
     with _futures.ThreadPoolExecutor(max_workers=12) as pool:
         future_to_cat = {
-            pool.submit(_run_single_category_agent, cat, category_new_items[cat], persona_doc, subject): cat
+            pool.submit(_run_single_category_agent, cat,
+                         category_new_items[cat], persona_doc, subject,
+                         canonical_baseline_lookup, anchor_mode): cat
             for cat in cats_needing_llm
         }
         for fut in _futures.as_completed(future_to_cat):
@@ -18792,8 +18912,17 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
         # lock_demographics=True → persona_doc demographics (which come
         # from GENPOP_DEMOGRAPHICS) get written EXACTLY, no organic noise,
         # so the gen-pop demographic distribution stays canonical.
+        # CRITICAL: brands=[] for GenPop. For a profile run, `brands` is the
+        # one analyzed brand and gets pinned to 100% (correct). For GenPop,
+        # `brands` is the 14-brand seed list used to select the panel
+        # (.X.COM, .ZOOM.COM, AMAZON, FACEBOOK, GOOGLE, KROGER, MICROSOFT,
+        # NETFLIX, PAYPAL, etc). Pinning ALL of those to 100% in every
+        # category they appear is the bug that produced ZOOM=99.99%,
+        # PAYPAL=99.99%, KROGER=99.99% in WHERE THEY SHOP, etc. For GenPop
+        # the agent should score those items by canonical baseline like
+        # everything else.
         df_final = parallel_category_agents(
-            df_final, _gp_persona_doc, _gp_subject, brands,
+            df_final, _gp_persona_doc, _gp_subject, [],
             previous_behavioral_lookup=None,
             lock_demographics=True,
             previous_bp_rows=(_gp_bp_rows if _gp_is_rerun else None),
@@ -18802,12 +18931,15 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
             delta_sanity_prior_dates=_gp_prior_dates,
             delta_sanity_new_dates=_gp_new_dates,
             wide_window=_gp_wide_window,
+            anchor_mode='genpop',
         )
 
-        # Final sanity check (same as profile path) so brand inputs at
-        # 100% etc. stay enforced after the agents have written values.
+        # Final sanity check — GenPop passes brands=[] for the same reason
+        # as above (don't 100%-pin the seed brand list). The downstream
+        # set_brand_input_raw_to_sample_size(df_final, is_genpop=True) call
+        # already handles the BRAND INPUT row correctly for GenPop.
         print("🔒 GenPop sanity check …")
-        df_final = agent_pipeline_final_sanity_check(df_final, brands)
+        df_final = agent_pipeline_final_sanity_check(df_final, [])
 
         # Downstream cleanup that the legacy anchor path used to do.
         # All of these are post-write housekeeping (ordering, projections,
