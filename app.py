@@ -9079,83 +9079,101 @@ def llmo_iq_demographics():
         if from_summary is not None:
             return jsonify(from_summary)
 
-        import bg as _bg
-        conn = _bg.connect_snowflake()
+        # Live fallback (rare — only hit when the precomputed summary lacks
+        # llmo_demographics for the requested range). Native ClickHouse SQL
+        # against clickstream.llmo_events + userfiles.user_data_sanitized.
+        # No Snowflake / Cortex involved.
+        conn = _ch_connect()
         cur = conn.cursor()
-        cur.execute("USE WAREHOUSE LLMIQ")
 
-        if agent:
-            cur.execute("""
-                CREATE OR REPLACE TEMP TABLE TEMP_LLMO_AI_UIDS AS
-                SELECT DISTINCT UID, DELIVERED::DATE AS d
-                FROM PROCESSEDCLICKSTREAM.PUBLIC.LLMO
-                WHERE MATCH_TYPE = 'AI_AGENT'
-                  AND DELIVERED::DATE BETWEEN %s AND %s
-                  AND TRIM(COMMON_NAME) ILIKE %s
-            """, (date_str, date_end, f'%{agent}%'))
-        else:
-            cur.execute("""
-                CREATE OR REPLACE TEMP TABLE TEMP_LLMO_AI_UIDS AS
-                SELECT DISTINCT UID, DELIVERED::DATE AS d
-                FROM PROCESSEDCLICKSTREAM.PUBLIC.LLMO
-                WHERE MATCH_TYPE = 'AI_AGENT'
-                  AND DELIVERED::DATE BETWEEN %s AND %s
-            """, (date_str, date_end))
+        agent_filter_sql = "AND lower(trim(COMMON_NAME)) LIKE %(agent)s" if agent else ""
+        agent_param = {'agent': f'%{agent.lower()}%'} if agent else {}
+        params = {'d1': date_str, 'd2': date_end, **agent_param}
 
-        cur.execute("""
-            SELECT 'gender' AS cat, d.GENDER AS val, COUNT(DISTINCT u.UID) AS cnt
-            FROM TEMP_LLMO_AI_UIDS u JOIN PROCESSEDUSERFILES.PUBLIC.USER_DATA_SANITIZED d ON u.UID = d.UID
-            WHERE d.GENDER IS NOT NULL AND TRIM(d.GENDER) != '' AND UPPER(TRIM(d.GENDER)) NOT IN ('PREFER NOT TO SAY','NONE','N/A')
+        cur.execute(f"""
+            SELECT 'gender' AS cat, d.GENDER AS val, uniqExact(u.UID) AS cnt
+            FROM (SELECT DISTINCT UID FROM clickstream.llmo_events
+                  WHERE MATCH_TYPE = 'AI_AGENT' AND DELIVERED BETWEEN toDate(%(d1)s) AND toDate(%(d2)s)
+                    {agent_filter_sql}) u
+            INNER JOIN userfiles.user_data_sanitized d ON u.UID = d.UID
+            WHERE d.GENDER != '' AND upper(trim(d.GENDER)) NOT IN ('PREFER NOT TO SAY','NONE','N/A')
             GROUP BY d.GENDER
             UNION ALL
-            SELECT 'age', d.AGE, COUNT(DISTINCT u.UID)
-            FROM TEMP_LLMO_AI_UIDS u JOIN PROCESSEDUSERFILES.PUBLIC.USER_DATA_SANITIZED d ON u.UID = d.UID
-            WHERE d.AGE IS NOT NULL AND TRIM(d.AGE) != '' AND UPPER(TRIM(d.AGE)) NOT IN ('PREFER NOT TO SAY','NONE','N/A')
-            GROUP BY d.AGE
+            SELECT 'age', d.AGE_RANGE, uniqExact(u.UID)
+            FROM (SELECT DISTINCT UID FROM clickstream.llmo_events
+                  WHERE MATCH_TYPE = 'AI_AGENT' AND DELIVERED BETWEEN toDate(%(d1)s) AND toDate(%(d2)s)
+                    {agent_filter_sql}) u
+            INNER JOIN userfiles.user_data_sanitized d ON u.UID = d.UID
+            WHERE d.AGE_RANGE != '' AND upper(trim(d.AGE_RANGE)) NOT IN ('PREFER NOT TO SAY','NONE','N/A')
+            GROUP BY d.AGE_RANGE
             UNION ALL
-            SELECT 'ethnicity', d.ETHNICITY, COUNT(DISTINCT u.UID)
-            FROM TEMP_LLMO_AI_UIDS u JOIN PROCESSEDUSERFILES.PUBLIC.USER_DATA_SANITIZED d ON u.UID = d.UID
-            WHERE d.ETHNICITY IS NOT NULL AND TRIM(d.ETHNICITY) != '' AND UPPER(TRIM(d.ETHNICITY)) NOT IN ('PREFER NOT TO SAY','NONE','N/A')
+            SELECT 'ethnicity', d.ETHNICITY, uniqExact(u.UID)
+            FROM (SELECT DISTINCT UID FROM clickstream.llmo_events
+                  WHERE MATCH_TYPE = 'AI_AGENT' AND DELIVERED BETWEEN toDate(%(d1)s) AND toDate(%(d2)s)
+                    {agent_filter_sql}) u
+            INNER JOIN userfiles.user_data_sanitized d ON u.UID = d.UID
+            WHERE d.ETHNICITY != '' AND upper(trim(d.ETHNICITY)) NOT IN ('PREFER NOT TO SAY','NONE','N/A')
             GROUP BY d.ETHNICITY
             UNION ALL
-            SELECT 'income', d.INCOME, COUNT(DISTINCT u.UID)
-            FROM TEMP_LLMO_AI_UIDS u JOIN PROCESSEDUSERFILES.PUBLIC.USER_DATA_SANITIZED d ON u.UID = d.UID
-            WHERE d.INCOME IS NOT NULL AND TRIM(d.INCOME) != '' AND UPPER(TRIM(d.INCOME)) NOT IN ('PREFER NOT TO SAY','NONE','N/A')
-            GROUP BY d.INCOME
+            SELECT 'income', d.INCOME_RANGE, uniqExact(u.UID)
+            FROM (SELECT DISTINCT UID FROM clickstream.llmo_events
+                  WHERE MATCH_TYPE = 'AI_AGENT' AND DELIVERED BETWEEN toDate(%(d1)s) AND toDate(%(d2)s)
+                    {agent_filter_sql}) u
+            INNER JOIN userfiles.user_data_sanitized d ON u.UID = d.UID
+            WHERE d.INCOME_RANGE != '' AND upper(trim(d.INCOME_RANGE)) NOT IN ('PREFER NOT TO SAY','NONE','N/A')
+            GROUP BY d.INCOME_RANGE
             UNION ALL
-            SELECT 'education', d.EDUCATION, COUNT(DISTINCT u.UID)
-            FROM TEMP_LLMO_AI_UIDS u JOIN PROCESSEDUSERFILES.PUBLIC.USER_DATA_SANITIZED d ON u.UID = d.UID
-            WHERE d.EDUCATION IS NOT NULL AND TRIM(d.EDUCATION) != '' AND UPPER(TRIM(d.EDUCATION)) NOT IN ('PREFER NOT TO SAY','NONE','N/A')
+            SELECT 'education', d.EDUCATION, uniqExact(u.UID)
+            FROM (SELECT DISTINCT UID FROM clickstream.llmo_events
+                  WHERE MATCH_TYPE = 'AI_AGENT' AND DELIVERED BETWEEN toDate(%(d1)s) AND toDate(%(d2)s)
+                    {agent_filter_sql}) u
+            INNER JOIN userfiles.user_data_sanitized d ON u.UID = d.UID
+            WHERE d.EDUCATION != '' AND upper(trim(d.EDUCATION)) NOT IN ('PREFER NOT TO SAY','NONE','N/A')
             GROUP BY d.EDUCATION
-        """)
+        """, params)
         overall_rows = cur.fetchall()
 
-        cur.execute("""
-            SELECT 'gender' AS cat, u.d, d.GENDER AS val, COUNT(DISTINCT u.UID) AS cnt
-            FROM TEMP_LLMO_AI_UIDS u JOIN PROCESSEDUSERFILES.PUBLIC.USER_DATA_SANITIZED d ON u.UID = d.UID
-            WHERE d.GENDER IS NOT NULL AND TRIM(d.GENDER) != '' AND UPPER(TRIM(d.GENDER)) NOT IN ('PREFER NOT TO SAY','NONE','N/A')
+        cur.execute(f"""
+            SELECT 'gender' AS cat, toString(u.d) AS d, d.GENDER AS val, uniqExact(u.UID) AS cnt
+            FROM (SELECT DISTINCT UID, DELIVERED AS d FROM clickstream.llmo_events
+                  WHERE MATCH_TYPE = 'AI_AGENT' AND DELIVERED BETWEEN toDate(%(d1)s) AND toDate(%(d2)s)
+                    {agent_filter_sql}) u
+            INNER JOIN userfiles.user_data_sanitized d ON u.UID = d.UID
+            WHERE d.GENDER != '' AND upper(trim(d.GENDER)) NOT IN ('PREFER NOT TO SAY','NONE','N/A')
             GROUP BY u.d, d.GENDER
             UNION ALL
-            SELECT 'age', u.d, d.AGE, COUNT(DISTINCT u.UID)
-            FROM TEMP_LLMO_AI_UIDS u JOIN PROCESSEDUSERFILES.PUBLIC.USER_DATA_SANITIZED d ON u.UID = d.UID
-            WHERE d.AGE IS NOT NULL AND TRIM(d.AGE) != '' AND UPPER(TRIM(d.AGE)) NOT IN ('PREFER NOT TO SAY','NONE','N/A')
-            GROUP BY u.d, d.AGE
+            SELECT 'age', toString(u.d), d.AGE_RANGE, uniqExact(u.UID)
+            FROM (SELECT DISTINCT UID, DELIVERED AS d FROM clickstream.llmo_events
+                  WHERE MATCH_TYPE = 'AI_AGENT' AND DELIVERED BETWEEN toDate(%(d1)s) AND toDate(%(d2)s)
+                    {agent_filter_sql}) u
+            INNER JOIN userfiles.user_data_sanitized d ON u.UID = d.UID
+            WHERE d.AGE_RANGE != '' AND upper(trim(d.AGE_RANGE)) NOT IN ('PREFER NOT TO SAY','NONE','N/A')
+            GROUP BY u.d, d.AGE_RANGE
             UNION ALL
-            SELECT 'ethnicity', u.d, d.ETHNICITY, COUNT(DISTINCT u.UID)
-            FROM TEMP_LLMO_AI_UIDS u JOIN PROCESSEDUSERFILES.PUBLIC.USER_DATA_SANITIZED d ON u.UID = d.UID
-            WHERE d.ETHNICITY IS NOT NULL AND TRIM(d.ETHNICITY) != '' AND UPPER(TRIM(d.ETHNICITY)) NOT IN ('PREFER NOT TO SAY','NONE','N/A')
+            SELECT 'ethnicity', toString(u.d), d.ETHNICITY, uniqExact(u.UID)
+            FROM (SELECT DISTINCT UID, DELIVERED AS d FROM clickstream.llmo_events
+                  WHERE MATCH_TYPE = 'AI_AGENT' AND DELIVERED BETWEEN toDate(%(d1)s) AND toDate(%(d2)s)
+                    {agent_filter_sql}) u
+            INNER JOIN userfiles.user_data_sanitized d ON u.UID = d.UID
+            WHERE d.ETHNICITY != '' AND upper(trim(d.ETHNICITY)) NOT IN ('PREFER NOT TO SAY','NONE','N/A')
             GROUP BY u.d, d.ETHNICITY
             UNION ALL
-            SELECT 'income', u.d, d.INCOME, COUNT(DISTINCT u.UID)
-            FROM TEMP_LLMO_AI_UIDS u JOIN PROCESSEDUSERFILES.PUBLIC.USER_DATA_SANITIZED d ON u.UID = d.UID
-            WHERE d.INCOME IS NOT NULL AND TRIM(d.INCOME) != '' AND UPPER(TRIM(d.INCOME)) NOT IN ('PREFER NOT TO SAY','NONE','N/A')
-            GROUP BY u.d, d.INCOME
+            SELECT 'income', toString(u.d), d.INCOME_RANGE, uniqExact(u.UID)
+            FROM (SELECT DISTINCT UID, DELIVERED AS d FROM clickstream.llmo_events
+                  WHERE MATCH_TYPE = 'AI_AGENT' AND DELIVERED BETWEEN toDate(%(d1)s) AND toDate(%(d2)s)
+                    {agent_filter_sql}) u
+            INNER JOIN userfiles.user_data_sanitized d ON u.UID = d.UID
+            WHERE d.INCOME_RANGE != '' AND upper(trim(d.INCOME_RANGE)) NOT IN ('PREFER NOT TO SAY','NONE','N/A')
+            GROUP BY u.d, d.INCOME_RANGE
             UNION ALL
-            SELECT 'education', u.d, d.EDUCATION, COUNT(DISTINCT u.UID)
-            FROM TEMP_LLMO_AI_UIDS u JOIN PROCESSEDUSERFILES.PUBLIC.USER_DATA_SANITIZED d ON u.UID = d.UID
-            WHERE d.EDUCATION IS NOT NULL AND TRIM(d.EDUCATION) != '' AND UPPER(TRIM(d.EDUCATION)) NOT IN ('PREFER NOT TO SAY','NONE','N/A')
+            SELECT 'education', toString(u.d), d.EDUCATION, uniqExact(u.UID)
+            FROM (SELECT DISTINCT UID, DELIVERED AS d FROM clickstream.llmo_events
+                  WHERE MATCH_TYPE = 'AI_AGENT' AND DELIVERED BETWEEN toDate(%(d1)s) AND toDate(%(d2)s)
+                    {agent_filter_sql}) u
+            INNER JOIN userfiles.user_data_sanitized d ON u.UID = d.UID
+            WHERE d.EDUCATION != '' AND upper(trim(d.EDUCATION)) NOT IN ('PREFER NOT TO SAY','NONE','N/A')
             GROUP BY u.d, d.EDUCATION
-        """)
+        """, params)
         trend_rows = cur.fetchall()
         conn.close()
 
