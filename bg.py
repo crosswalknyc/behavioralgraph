@@ -13876,6 +13876,10 @@ Return ONLY a single valid JSON object — no markdown, no commentary.
     "ATHLETE":                 {{"summary": "<…>", "expected_high": [...], "expected_low": [...]}},
     "SPORTS TEAM":             {{"summary": "<…>", "expected_high": [...], "expected_low": [...]}},
     "PODCAST":                 {{"summary": "<…>", "expected_high": [...], "expected_low": [...]}}
+  }},
+  "cap_overrides": {{
+    "<CATEGORY NAME>": ["<ITEM 1>", "<ITEM 2>", ...],
+    ...one entry per category where you want to bypass the deterministic baseline cap...
   }}
 }}
 
@@ -13904,6 +13908,23 @@ Item-name guidance:
   • For INTEREST: think genuine interests of the audience (FITNESS, RUNNING, BASKETBALL for sports; SKINCARE, FASHION for beauty), NOT random vague topics like "FLOWERS" or "MULTI-LEVEL MARKETING" unless the persona is specifically about that.
 
 These structured anchors are the most important output of this prompt — the per-category agents downstream rely on them to avoid producing generic luxury-aspirational tier-fillers.
+
+CAP OVERRIDES — your power to exempt specific items from the deterministic baseline cap:
+The downstream pipeline applies a math safety net (cap = 8x baseline for expected_high; 5x for default; tighter for subscription categories) to catch hallucinations like "Patek Philippe at 30%". But that net occasionally over-constrains LEGITIMATELY high items — universal platforms like NETFLIX/AMAZON PRIME VIDEO/HULU/YOUTUBE/GOOGLE that genuinely reach 80-95% of any digitally-active audience, or persona-perfect items where you have very high confidence the score should exceed normal multipliers.
+
+For each category, list items in `cap_overrides` if BOTH of these are true:
+  • You are highly confident the item should score significantly above the cap multiplier for THIS specific audience.
+  • The item is either (a) near-universal across all U.S. digital adults (Netflix, Hulu, Amazon Prime Video, YouTube, Google, Gmail) OR (b) so persona-defining that ordinary cap rules underestimate it (e.g. NIKE for a Nike-purchaser persona, FOOT LOCKER for a sneaker-fan persona, ESPN for a sports-fan persona).
+
+Do NOT use cap_overrides as a blanket allowlist. Only flag items you would defend under questioning. Items NOT in `cap_overrides` are still scored by the per-category agents — they just remain subject to the cap as a safety check. Empty arrays / omitted categories = full cap protection (which is the correct default).
+
+Example for a Nike persona:
+  "cap_overrides": {{
+    "STREAMING/PLATFORM": ["NETFLIX", "HULU", "AMAZON PRIME VIDEO"],
+    "WHERE THEY SHOP":    ["AMAZON", "WALMART", "FOOT LOCKER", "DICK'S SPORTING GOODS"],
+    "SOCIAL MEDIA":       ["YOUTUBE", "INSTAGRAM"],
+    "SEARCH ENGINE/AI":   ["GOOGLE"]
+  }}
 """
 
     print(f"🔬 Step 1: Persona Research Agent researching '{subject}' …")
@@ -16105,20 +16126,20 @@ _TIGHT_CAP_CATEGORIES = {
 def _apply_canonical_baseline_cap(df: pd.DataFrame,
                                     persona_doc: dict,
                                     bp_col: str,
-                                    high_mult: float = 8.0,
-                                    high_min_floor: float = 2.5,
-                                    default_mult: float = 5.0,
-                                    default_min_floor: float = 1.5,
+                                    high_mult: float = 12.0,
+                                    high_min_floor: float = 3.0,
+                                    default_mult: float = 8.0,
+                                    default_min_floor: float = 2.0,
                                     small_baseline_threshold: float = 1.0,
                                     small_baseline_abs_cap: float = 2.5,
                                     min_reliable_canonical: float = 0.05,
                                     skip_categories: set | None = None,
                                     tight_cap_categories: set | None = None,
-                                    tight_high_mult: float = 2.0,
-                                    tight_default_mult: float = 1.5,
-                                    tight_high_floor: float = 5.0,
-                                    tight_default_floor: float = 3.0,
-                                    tight_abs_ceiling: float = 50.0) -> pd.DataFrame:
+                                    tight_high_mult: float = 3.0,
+                                    tight_default_mult: float = 2.0,
+                                    tight_high_floor: float = 7.0,
+                                    tight_default_floor: float = 4.0,
+                                    tight_abs_ceiling: float = 95.0) -> tuple:
     """Hard deterministic cap on per-row BPs based on canonical Gen Pop baseline.
 
     This is the FINAL safety net AFTER all LLM-based post-score agents (D3/D4/D6).
@@ -16136,15 +16157,22 @@ def _apply_canonical_baseline_cap(df: pd.DataFrame,
           (luxury / niche items cannot exceed ~2.5% even for strong-fit personas)
 
     TIGHT-CAP CATEGORIES (mutually-exclusive subscriptions / primary-choice
-    categories) get much tighter ceilings because no audience can subscribe
-    to YouTube TV at 70% just because they're "aspirational tech":
-      • expected_high: cap = max(canon × tight_high_mult=2.0, tight_high_floor=5%)
-      • default:       cap = max(canon × tight_default_mult=1.5, tight_default_floor=3%)
-      • Hard absolute ceiling: tight_abs_ceiling=50% (no FAST channel / telecom /
-        gym / bank / insurance brand reaches >50% audience BP, ever).
+    categories) get tighter ceilings because no audience can subscribe to
+    YouTube TV at 70% just because they're "aspirational tech":
+      • expected_high: cap = max(canon × tight_high_mult=3.0, tight_high_floor=7%)
+      • default:       cap = max(canon × tight_default_mult=2.0, tight_default_floor=4%)
+      • Hard absolute ceiling: tight_abs_ceiling=95% (de facto disabled — relies
+        on multiplier ceilings + downstream LLM judge for nuance).
     Default tight-cap set: VIRTUAL MVPD FAST, STREAMING/PLATFORM, STREAMING/MUSIC,
     TELECOM, INSURANCE, BANKING, CREDIT PROVIDER, AUTOMOBILE, WORKOUT FACILITY,
     TRAVEL.
+
+    AGENT CAP_OVERRIDES (highest-priority bypass):
+      The persona research agent can pre-declare items it's confident should
+      not be capped, by category, in `persona_doc['cap_overrides']`. Items in
+      that list skip the cap entirely (and skip downstream LLM cap-review).
+      This is the agent's escape hatch for items like NETFLIX/AMAZON/YOUTUBE/
+      GOOGLE that genuinely reach 80-95% of any audience.
 
     EXEMPTIONS (cap does NOT fire):
       • Canonical baseline < min_reliable_canonical (default 0.05%): treated as
@@ -16164,6 +16192,28 @@ def _apply_canonical_baseline_cap(df: pd.DataFrame,
         skip_categories = {'PODCAST', 'PODCAST RANKER', 'TALENT', 'HOST/PERSONALITY'}
     if tight_cap_categories is None:
         tight_cap_categories = _TIGHT_CAP_CATEGORIES
+
+    # Build agent cap_overrides set (per category, items that bypass cap).
+    raw_overrides = (persona_doc or {}).get('cap_overrides') or {}
+    overrides_by_cat: dict[str, set[str]] = {}
+    for cat_key, items in raw_overrides.items():
+        if not isinstance(items, (list, tuple, set)):
+            continue
+        cat_u = str(cat_key).strip().upper()
+        s = {str(it).strip().upper() for it in items if str(it).strip()}
+        if s:
+            overrides_by_cat[cat_u] = s
+
+    def _is_overridden(cat_u: str, val_u: str) -> bool:
+        s = overrides_by_cat.get(cat_u, set())
+        if not s:
+            return False
+        if val_u in s:
+            return True
+        for it in s:
+            if it == val_u or it in val_u or val_u in it:
+                return True
+        return False
     if bp_col not in df.columns:
         return df
     gp = _load_genpop_csv()
@@ -16210,6 +16260,8 @@ def _apply_canonical_baseline_cap(df: pd.DataFrame,
         return False
 
     capped = 0
+    overridden = 0
+    actions: list[dict] = []
     biggest = []
     for idx, row in df.iterrows():
         try:
@@ -16227,6 +16279,9 @@ def _apply_canonical_baseline_cap(df: pd.DataFrame,
             continue
         if canon < min_reliable_canonical:
             # Canonical too sparse to be reliable ground truth; trust the agent.
+            continue
+        if _is_overridden(cat_u, val_u):
+            overridden += 1
             continue
         is_high = _is_high(cat_u, val_u)
         is_tight = cat_u in tight_cap_categories
@@ -16250,17 +16305,28 @@ def _apply_canonical_baseline_cap(df: pd.DataFrame,
         df.at[idx, bp_col] = capped_bp
         if 'Category Share' in df.columns:
             df.at[idx, 'Category Share'] = capped_bp
+        actions.append({
+            'idx': idx,
+            'category': cat_u,
+            'value': str(row['Value']),
+            'canonical_bp': round(canon, 4),
+            'original_bp': round(new_bp, 4),
+            'capped_bp': capped_bp,
+            'is_expected_high': is_high,
+            'is_tight': is_tight,
+        })
         capped += 1
 
     if capped:
-        print(f"   🧮 Baseline cap (deterministic): {capped} rows reduced to ≤ baseline-multiple ceiling")
+        print(f"   🧮 Baseline cap (deterministic): {capped} rows reduced to ≤ baseline-multiple ceiling "
+              f"({overridden} bypassed by agent cap_overrides)")
         biggest.sort(key=lambda t: t[5], reverse=True)
         for cat_u, val, canon, before, after, ratio in biggest[:10]:
             print(f"      ↘ CAP [{cat_u}] {val}: {before:.2f}% → {after:.2f}% "
                   f"(canonical {canon:.2f}%, was {ratio:.1f}x baseline)")
     else:
-        print("   ✅ Baseline cap: no rows exceeded ceiling")
-    return df
+        print(f"   ✅ Baseline cap: no rows exceeded ceiling ({overridden} bypassed by agent cap_overrides)")
+    return df, actions
 
 
 def _apply_canonical_baseline_floor(df: pd.DataFrame,
@@ -16269,7 +16335,7 @@ def _apply_canonical_baseline_floor(df: pd.DataFrame,
                                       mass_baseline_threshold: float = 10.0,
                                       min_floor_ratio: float = 0.5,
                                       min_floor_abs: float = 8.0,
-                                      skip_categories: set | None = None) -> pd.DataFrame:
+                                      skip_categories: set | None = None) -> tuple:
     """Complement to the cap: catch IMPLAUSIBLY SUPPRESSED mass platforms.
 
     The Nike STREAMING/PLATFORM bug: agent over-fitted to "sports affinity"
@@ -16292,13 +16358,13 @@ def _apply_canonical_baseline_floor(df: pd.DataFrame,
     (people use multiple streamers / shop multiple stores).
     """
     if bp_col not in df.columns:
-        return df
+        return df, []
     if skip_categories is None:
         skip_categories = {'PODCAST', 'PODCAST RANKER', 'TALENT', 'HOST/PERSONALITY'}
 
     gp = _load_genpop_csv()
     if gp is None or gp.empty:
-        return df
+        return df, []
 
     gp_lookup: dict[tuple[str, str], float] = {}
     try:
@@ -16316,7 +16382,7 @@ def _apply_canonical_baseline_floor(df: pd.DataFrame,
                 continue
     except Exception as e:
         print(f"   ⚠️ Baseline floor: failed to index canonical CSV ({e})")
-        return df
+        return df, []
 
     cat_guidance = persona_doc.get('category_guidance', {}) or {}
     expected_low_by_cat: dict[str, set[str]] = {}
@@ -16338,7 +16404,31 @@ def _apply_canonical_baseline_floor(df: pd.DataFrame,
                 return True
         return False
 
+    # Agent cap_overrides also exempt from floor (agent-declared values stand).
+    raw_overrides = (persona_doc or {}).get('cap_overrides') or {}
+    overrides_by_cat: dict[str, set[str]] = {}
+    for cat_key, items in raw_overrides.items():
+        if not isinstance(items, (list, tuple, set)):
+            continue
+        cat_u = str(cat_key).strip().upper()
+        s = {str(it).strip().upper() for it in items if str(it).strip()}
+        if s:
+            overrides_by_cat[cat_u] = s
+
+    def _is_overridden(cat_u: str, val_u: str) -> bool:
+        s = overrides_by_cat.get(cat_u, set())
+        if not s:
+            return False
+        if val_u in s:
+            return True
+        for it in s:
+            if it == val_u or it in val_u or val_u in it:
+                return True
+        return False
+
     floored = 0
+    overridden = 0
+    actions: list[dict] = []
     biggest = []
     for idx, row in df.iterrows():
         try:
@@ -16356,6 +16446,9 @@ def _apply_canonical_baseline_floor(df: pd.DataFrame,
             continue
         if _is_low(cat_u, val_u):
             continue
+        if _is_overridden(cat_u, val_u):
+            overridden += 1
+            continue
         floor = max(canon * min_floor_ratio, min_floor_abs)
         if new_bp >= floor:
             continue
@@ -16366,16 +16459,251 @@ def _apply_canonical_baseline_floor(df: pd.DataFrame,
         df.at[idx, bp_col] = floored_bp
         if 'Category Share' in df.columns:
             df.at[idx, 'Category Share'] = floored_bp
+        actions.append({
+            'idx': idx,
+            'category': cat_u,
+            'value': str(row['Value']),
+            'canonical_bp': round(canon, 4),
+            'original_bp': round(new_bp, 4),
+            'floored_bp': floored_bp,
+        })
         floored += 1
 
     if floored:
-        print(f"   📈 Baseline floor (deterministic): {floored} mass items raised from implausibly suppressed values")
+        print(f"   📈 Baseline floor (deterministic): {floored} mass items raised from implausibly suppressed values "
+              f"({overridden} bypassed by agent cap_overrides)")
         biggest.sort(key=lambda t: t[5])
         for cat_u, val, canon, before, after, ratio in biggest[:10]:
             print(f"      ↗ FLOOR [{cat_u}] {val}: {before:.2f}% → {after:.2f}% "
                   f"(canonical {canon:.2f}%, was {ratio:.2f}x baseline)")
     else:
-        print("   ✅ Baseline floor: no mass items below ceiling")
+        print(f"   ✅ Baseline floor: no mass items below ceiling ({overridden} bypassed by agent cap_overrides)")
+    return df, actions
+
+
+def _run_cap_review_pass(df: pd.DataFrame,
+                           persona_doc: dict,
+                           subject: str,
+                           bp_col: str,
+                           cap_actions: list[dict],
+                           floor_actions: list[dict],
+                           batch_size: int = 12,
+                           max_workers: int = 8,
+                           judge_min_canonical: float = 1.0,
+                           judge_min_original_bp: float = 5.0,
+                           judge_floor_min_canonical: float = 15.0) -> pd.DataFrame:
+    """LLM judge that reviews EVERY action taken by the deterministic
+    cap (D7) and floor (D8). For each capped/floored item it independently
+    decides ACCEPT (keep cap/floor) or REVISE (set a new value the judge
+    believes is right for THIS audience).
+
+    This is the "trust the agents but verify" layer: deterministic math
+    catches obvious hallucinations (Patek 30%, Disney+ 0.17x), then a
+    fresh gpt-4o judge restores nuance for items where the cap/floor was
+    too aggressive (Netflix 86% capped to 50% may legitimately be ~80%
+    for a digitally-active audience).
+
+    Architecture:
+      • Each action is given to gpt-4o with: persona summary, demographics,
+        canonical baseline, original agent value, deterministic action.
+      • Judge returns ACCEPT | REVISE with optional new bp + reason.
+      • REVISE values are clamped to the range [agent's-floor, agent's-original]
+        for cap actions (judge can only REDUCE the cap aggressiveness, not
+        push above the original agent value) and to [floor's-floor, floor's-cap]
+        for floor actions (judge can only REDUCE the floor aggressiveness).
+      • Batched per-category, parallel across categories for speed.
+
+    No-op when cap_actions and floor_actions are both empty.
+    """
+    import json as _json
+    import concurrent.futures as _futures
+
+    if not cap_actions and not floor_actions:
+        return df
+    client = _get_openai_client()
+    if client is None:
+        print("   ⚠️ Cap-review judge skipped (no OpenAI client)")
+        return df
+
+    # Filter to meaningful judgment-call items only (don't waste LLM calls
+    # on items where canonical baseline is microscopic AND agent value was
+    # tiny — those are hallucinations the deterministic cap correctly
+    # squashed and the judge would just rubber-stamp ACCEPT).
+    cap_total = len(cap_actions)
+    floor_total = len(floor_actions)
+    cap_actions = [a for a in cap_actions
+                   if a.get('canonical_bp', 0) >= judge_min_canonical
+                      and a.get('original_bp', 0) >= judge_min_original_bp]
+    floor_actions = [a for a in floor_actions
+                     if a.get('canonical_bp', 0) >= judge_floor_min_canonical]
+    if not cap_actions and not floor_actions:
+        print(f"   ⚖️  Cap-review judge: no actions met judge thresholds "
+              f"({cap_total} cap / {floor_total} floor were all microscopic-baseline trims)")
+        return df
+    if cap_total > len(cap_actions) or floor_total > len(floor_actions):
+        print(f"   ⚖️  Cap-review judge: filtered {cap_total} → {len(cap_actions)} cap actions "
+              f"and {floor_total} → {len(floor_actions)} floor actions to meaningful judgment calls "
+              f"(thresholds: canonical >= {judge_min_canonical:.1f}% & original >= {judge_min_original_bp:.1f}% for cap; "
+              f"canonical >= {judge_floor_min_canonical:.1f}% for floor)")
+
+    persona_summary = (persona_doc.get('persona_summary') or '').strip() or '(persona summary unavailable)'
+    demo_snapshot = {k: v for k, v in (persona_doc.get('demographics') or {}).items()
+                     if k in ('AGE', 'GENDER', 'ETHNICITY', 'INCOME', 'EDUCATION')}
+
+    # Pre-build per-category expected_high / expected_low context.
+    cat_guidance = persona_doc.get('category_guidance', {}) or {}
+    cat_context: dict[str, dict] = {}
+    for cat_key, blob in cat_guidance.items():
+        cat_u = str(cat_key).strip().upper()
+        if isinstance(blob, dict):
+            cat_context[cat_u] = {
+                'summary': str(blob.get('summary') or '').strip(),
+                'expected_high': [str(x).strip() for x in (blob.get('expected_high') or [])],
+                'expected_low':  [str(x).strip() for x in (blob.get('expected_low') or [])],
+            }
+
+    def _process_batch(action_kind: str, cat_u: str, batch: list[dict]) -> list[dict]:
+        ctx = cat_context.get(cat_u, {})
+        cat_summary = ctx.get('summary') or '(no specific guidance)'
+        eh = ', '.join(ctx.get('expected_high', [])[:25]) or '(none)'
+        el = ', '.join(ctx.get('expected_low', [])[:25]) or '(none)'
+
+        if action_kind == 'cap':
+            items_block = '\n'.join(
+                f"  {i+1}. {it['value']}  — canonical baseline {it['canonical_bp']:.4f}%, "
+                f"per-cat agent set {it['original_bp']:.4f}%, deterministic cap REDUCED to {it['capped_bp']:.4f}% "
+                f"(expected_high={'YES' if it.get('is_expected_high') else 'NO'}, tight_cat={'YES' if it.get('is_tight') else 'NO'})"
+                for i, it in enumerate(batch)
+            )
+            verdict_help = (
+                "ACCEPT  — the cap action was correct (audience really is around the capped value).\n"
+                "REVISE  — the cap was too aggressive; provide a new bp BETWEEN the capped value and the original agent value.\n"
+                "         Use REVISE when: the item is genuinely near-universal (Netflix, YouTube, Google), OR "
+                "this audience really does over-index strongly enough to exceed the multiplier ceiling."
+            )
+        else:  # floor
+            items_block = '\n'.join(
+                f"  {i+1}. {it['value']}  — canonical baseline {it['canonical_bp']:.4f}%, "
+                f"per-cat agent set {it['original_bp']:.4f}%, deterministic floor RAISED to {it['floored_bp']:.4f}%"
+                for i, it in enumerate(batch)
+            )
+            verdict_help = (
+                "ACCEPT  — the floor action was correct (the per-cat agent under-scored a mass platform).\n"
+                "REVISE  — the floor was too aggressive; provide a new bp BETWEEN the original agent value and the floored value.\n"
+                "         Use REVISE when this audience genuinely DOES under-engage with the item "
+                "(e.g. a niche persona that legitimately doesn't use Disney+/Apple TV+)."
+            )
+
+        prompt = f"""You are auditing a deterministic safety-net action taken on per-category Brand Penetration scores for **{subject}**.
+
+PERSONA SUMMARY:
+{persona_summary}
+
+KEY DEMOGRAPHICS:
+{_json.dumps(demo_snapshot, indent=2)}
+
+CATEGORY: {cat_u}
+Category guidance for this audience:
+  • summary:        {cat_summary}
+  • expected_high:  {eh}
+  • expected_low:   {el}
+
+ACTION KIND: {action_kind.upper()}
+The deterministic safety net just {'CAPPED' if action_kind == 'cap' else 'FLOORED'} the items below. For EACH item, decide whether the action was right for THIS specific audience.
+
+ITEMS UNDER REVIEW:
+{items_block}
+
+DECISION RULES:
+{verdict_help}
+
+DEFINITION REMINDER: Brand Penetration is OBSERVED DIGITAL CLICKSTREAM (web visits, app usage). It is NOT awareness, popularity, or in-store purchase. CPG / luxury / regional brands have low BP regardless of fame. Mass online platforms (Netflix, YouTube, Amazon, Google) reach 70-95% of any digitally-active audience.
+
+Return ONLY a JSON array, one entry per item, in the same order:
+[
+  {{"value": "<item name as listed>", "decision": "ACCEPT"|"REVISE", "bp": <number_if_revise_else_omit>, "reason": "<one sentence>"}},
+  …
+]
+"""
+        try:
+            resp = client.chat.completions.create(
+                model='gpt-4o',
+                messages=[{'role': 'user', 'content': prompt}],
+                temperature=0.0,
+                max_tokens=min(16384, max(1024, len(batch) * 100)),
+            )
+            text = (resp.choices[0].message.content or '').strip()
+            if text.startswith('```'):
+                text = text.split('\n', 1)[1].rsplit('```', 1)[0].strip()
+            i, j = text.find('['), text.rfind(']')
+            if i < 0 or j <= i:
+                return []
+            return _json.loads(text[i:j + 1])
+        except Exception as e:
+            print(f"   ⚠️ Cap-review judge [{action_kind}/{cat_u}] failed: {e}")
+            return []
+
+    # Group actions by (kind, category) and chunk into batches.
+    grouped: dict[tuple[str, str], list[dict]] = {}
+    for a in cap_actions:
+        grouped.setdefault(('cap', a['category']), []).append(a)
+    for a in floor_actions:
+        grouped.setdefault(('floor', a['category']), []).append(a)
+
+    jobs: list[tuple[str, str, list[dict]]] = []
+    for (kind, cat_u), items in grouped.items():
+        for k in range(0, len(items), batch_size):
+            jobs.append((kind, cat_u, items[k:k + batch_size]))
+
+    print(f"⚖️  Cap-review LLM judge: reviewing {len(cap_actions)} cap + {len(floor_actions)} floor actions "
+          f"in {len(jobs)} batches across {len(grouped)} (kind, category) groups…")
+
+    accepts_cap = revises_cap = accepts_floor = revises_floor = 0
+    with _futures.ThreadPoolExecutor(max_workers=max_workers) as pool:
+        future_to_job = {pool.submit(_process_batch, k, c, b): (k, c, b) for (k, c, b) in jobs}
+        for fut in _futures.as_completed(future_to_job):
+            kind, cat_u, batch = future_to_job[fut]
+            decisions = fut.result() or []
+            value_to_action = {it['value'].strip().lower(): it for it in batch}
+            for d in decisions:
+                if not isinstance(d, dict):
+                    continue
+                val_key = str(d.get('value', '')).strip().lower()
+                dec = str(d.get('decision', '')).strip().upper()
+                action = value_to_action.get(val_key)
+                if action is None or dec not in ('ACCEPT', 'REVISE'):
+                    continue
+                if dec == 'ACCEPT':
+                    if kind == 'cap':
+                        accepts_cap += 1
+                    else:
+                        accepts_floor += 1
+                    continue
+                # REVISE — clamp to [capped, original] for cap or [original, floored] for floor.
+                try:
+                    new_bp = float(d.get('bp'))
+                except (TypeError, ValueError):
+                    continue
+                if kind == 'cap':
+                    lo, hi = action['capped_bp'], action['original_bp']
+                    revises_cap += 1
+                else:
+                    lo, hi = action['original_bp'], action['floored_bp']
+                    revises_floor += 1
+                new_bp = max(min(new_bp, hi), lo)
+                jitter = random.uniform(-0.05, 0.05)
+                new_bp = round(max(0.01, min(99.0, new_bp + jitter)), 4)
+                idx = action['idx']
+                df.at[idx, bp_col] = new_bp
+                if 'Category Share' in df.columns:
+                    df.at[idx, 'Category Share'] = new_bp
+                arrow = '↘→↘' if kind == 'cap' else '↗→↗'
+                print(f"      {arrow} REVISE [{kind}/{cat_u}] {action['value']}: "
+                      f"deterministic {action.get('capped_bp', action.get('floored_bp')):.2f}% → judge {new_bp:.2f}% "
+                      f"(original agent {action['original_bp']:.2f}%) — {str(d.get('reason', ''))[:90]}")
+
+    print(f"   ✅ Cap-review judge: cap [{accepts_cap} ACCEPT, {revises_cap} REVISE], "
+          f"floor [{accepts_floor} ACCEPT, {revises_floor} REVISE]")
     return df
 
 
@@ -16460,16 +16788,12 @@ def _apply_post_score_agents(df: pd.DataFrame,
     )
 
     # --- D7) Deterministic canonical-baseline cap (every run) --------------
-    # FINAL safety net. D6 is LLM-judged and can ACCEPT inflated luxury
-    # scores when the persona is framed as "aspirational" or when the
-    # luxury item slipped into expected_high during persona research.
-    # This deterministic cap guarantees no item exceeds:
-    #   • expected_high items: max(canonical × 8, 2.5%)
-    #   • other items:         max(canonical × 5, 1.5%)
-    #   • baselines < 1%:      hard absolute ceiling at 2.5%
-    # This is what stops PATEK PHILIPPE 0.19% canonical from landing at 30%
-    # in Nike output, regardless of what the LLM agents decided.
-    df = _apply_canonical_baseline_cap(
+    # FIRST safety net. Catches mathematical absurdities (Patek Philippe 30%,
+    # Givenchy 113x baseline). Loosened multipliers (12x for expected_high,
+    # 8x for default) leave plenty of nuance room — only true hallucinations
+    # trip the cap. Items in persona_doc['cap_overrides'] bypass entirely.
+    # Returns (df, list_of_cap_actions) for downstream LLM judge review.
+    df, cap_actions = _apply_canonical_baseline_cap(
         df,
         persona_doc=persona_doc,
         bp_col=bp_col,
@@ -16478,15 +16802,28 @@ def _apply_post_score_agents(df: pd.DataFrame,
     # --- D8) Deterministic canonical-baseline floor (every run) ------------
     # Complement to D7. Catches the inverse failure mode: when the agent
     # over-fits to a single audience trait (e.g. "sports") and SUPPRESSES
-    # mainstream platforms below 50% of baseline. The Nike STREAMING/PLATFORM
-    # bug had Disney+ at 0.17x baseline and Apple TV+ at 0.09x while niche
-    # sports streamers landed at 8x. This floor restores mass items
-    # (canonical >= 10%) to at least 50% of their baseline unless the
-    # persona explicitly listed them in expected_low.
-    df = _apply_canonical_baseline_floor(
+    # mainstream platforms below 50% of baseline. Returns (df, floor_actions).
+    df, floor_actions = _apply_canonical_baseline_floor(
         df,
         persona_doc=persona_doc,
         bp_col=bp_col,
+    )
+
+    # --- D9) LLM cap-review judge (every run) ------------------------------
+    # SECOND safety net — restores nuance after the deterministic cap/floor.
+    # For each capped item: judge decides ACCEPT (cap stays) or REVISE
+    # (set value between cap and original — judge believes cap was too
+    # aggressive). Same symmetric review for floor actions. This is the
+    # "trust agents but verify" layer that lets Netflix at 86% stay near
+    # 86% if the judge confirms it (Netflix is universal) while keeping
+    # Patek at the cap (judge agrees Patek 0.19% canonical doesn't reach 30%).
+    df = _run_cap_review_pass(
+        df,
+        persona_doc=persona_doc,
+        subject=subject,
+        bp_col=bp_col,
+        cap_actions=cap_actions,
+        floor_actions=floor_actions,
     )
 
     return df
