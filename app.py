@@ -18917,9 +18917,11 @@ def run_analysis(job_id, project_name, brands, sample_start, sample_end,
                         df = pd.read_csv(result_file)
                         
                         # 1. Enforce input brand to 100% (skip for GenPop)
+                        # MOST PURCHASED BRANDS exempted unless purchasers_only
+                        # is on — see enforce_input_brand_100 docstring.
                         if not is_genpop and hasattr(bg, 'enforce_input_brand_100'):
                             print("🎯 Enforcing input brand 100%...")
-                            df = bg.enforce_input_brand_100(df, brands)
+                            df = bg.enforce_input_brand_100(df, brands, purchasers_only=purchasers_only)
                         
                         # 2. Add input metadata to dataframe
                         if hasattr(bg, 'add_input_metadata_to_dataframe'):
@@ -18935,9 +18937,10 @@ def run_analysis(job_id, project_name, brands, sample_start, sample_end,
                                 print(f"⚠️ Purchase confirmations error: {e}")
                         
                         # 4. Enforce cross-category brand consistency
+                        # MOST PURCHASED BRANDS exempted unless purchasers_only.
                         if hasattr(bg, 'enforce_cross_category_brand_consistency'):
                             print("🔄 Enforcing cross-category brand consistency...")
-                            df = bg.enforce_cross_category_brand_consistency(df)
+                            df = bg.enforce_cross_category_brand_consistency(df, purchasers_only=purchasers_only)
                         
                         # 5. Remove dash variants from output
                         if hasattr(bg, 'remove_dash_variants_from_output'):

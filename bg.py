@@ -12930,13 +12930,27 @@ def capitalize_words(text):
                 
     return result
 
-def enforce_input_brand_100(df_behavior, input_brands):
+def enforce_input_brand_100(df_behavior, input_brands, purchasers_only: bool = False):
     """
     Ensure all normalized variations of input brands are set to 100% in every category where they appear.
     Uses comprehensive matching to catch all variations of the brand name.
     Original Raw Numbers will always equal the sample size for input brands.
+
+    purchasers_only:
+        - False (default): the input brand is pinned to 100% in every category
+          it appears in EXCEPT MOST PURCHASED BRANDS. Rationale: in a
+          non-purchasers-only pull, the brand-input panel selection is based on
+          digital engagement (visits/searches/usage), which is what 100%
+          across SOCIAL MEDIA / WHERE THEY SHOP / etc reflects. But MOST
+          PURCHASED BRANDS measures actual confirmed purchases — only a subset
+          of the panel actually purchased the brand, so it should reflect that
+          real fraction, not 100%.
+        - True: the panel was filtered to confirmed purchasers, so MOST
+          PURCHASED BRANDS legitimately is 100% and gets pinned like the
+          other categories.
     """
     brands_set_to_100 = 0
+    skipped_mpb = 0
     
     # Determine which column name to use (Percentage or Category Share)
     pct_col = 'Category Share' if 'Category Share' in df_behavior.columns else 'Percentage'
@@ -13078,6 +13092,17 @@ def enforce_input_brand_100(df_behavior, input_brands):
                     is_match = True
             
             if is_match:
+                # MOST PURCHASED BRANDS exemption (unless purchasers_only is on).
+                # The brand-input panel is selected on digital engagement, NOT
+                # actual purchase confirmation, so only a subset truly
+                # "purchased" the brand. Forcing it to 100% here would
+                # misrepresent the purchase signal.
+                row_col = str(row.get('Column', '')).strip().upper()
+                if (not purchasers_only) and row_col == 'MOST PURCHASED BRANDS':
+                    skipped_mpb += 1
+                    if not SILENCE_VERBOSE_OUTPUT:
+                        print(f"   ⏭️  Skipping 100% override for input brand '{input_brand}' in MOST PURCHASED BRANDS (purchasers_only=False)")
+                    continue
                 old_pct = float(row[pct_col])
                 _cur_pct = df_behavior.loc[idx, pct_col]
                 if isinstance(_cur_pct, str):
@@ -13137,7 +13162,9 @@ def enforce_input_brand_100(df_behavior, input_brands):
                 print(f"⚠️ Input brand '{input_brand}' not found in any categories")
     
     if not SILENCE_VERBOSE_OUTPUT:
-        print(f"🎯 Total input brands set to 100%: {brands_set_to_100}")
+        print(f"🎯 Total input brands set to 100%: {brands_set_to_100}"
+              + (f" (skipped {skipped_mpb} MOST PURCHASED BRANDS rows — purchasers_only off)"
+                 if skipped_mpb else ""))
     return df_behavior
 
 def remove_dash_variants_from_output(df_final, input_brands):
@@ -16063,11 +16090,13 @@ def post_agent_quality_gate(df: pd.DataFrame, persona_doc: dict | None = None,
 
 
 def agent_pipeline_final_sanity_check(df: pd.DataFrame,
-                                       brands: list[str] | None = None) -> pd.DataFrame:
+                                       brands: list[str] | None = None,
+                                       purchasers_only: bool = False) -> pd.DataFrame:
     """Step 3 — deterministic sanity check.
 
     Only two overrides plus math reconciliation:
-      1. Brand input locked to 100%
+      1. Brand input locked to 100% (with MOST PURCHASED BRANDS exemption
+         when purchasers_only=False — see enforce_input_brand_100 docstring)
       2. Same Value = highest BP across categories
       3. BP → raw → Category Share → US Gen Pop Projection
       4. Micro-noise to avoid .0000 endings
@@ -16076,10 +16105,11 @@ def agent_pipeline_final_sanity_check(df: pd.DataFrame,
 
     # 1. Brand input = 100%
     if brands:
-        df = enforce_input_brand_100(df, brands)
+        df = enforce_input_brand_100(df, brands, purchasers_only=purchasers_only)
 
-    # 2. Cross-category value consistency (highest BP wins)
-    df = enforce_value_consistency_across_categories(df)
+    # 2. Cross-category value consistency (highest BP wins).
+    # MOST PURCHASED BRANDS exempted unless purchasers_only — see fn docstring.
+    df = enforce_value_consistency_across_categories(df, purchasers_only=purchasers_only)
 
     # 3. Math reconciliation
     df = reconcile_final_output_from_bp_and_sample_size(df)
@@ -16092,7 +16122,7 @@ def agent_pipeline_final_sanity_check(df: pd.DataFrame,
 
     # Re-lock brand after noise
     if brands:
-        df = enforce_input_brand_100(df, brands)
+        df = enforce_input_brand_100(df, brands, purchasers_only=purchasers_only)
         df = reconcile_final_output_from_bp_and_sample_size(df)
         df = add_us_gen_pop_projection(df)
 
@@ -16103,7 +16133,7 @@ def agent_pipeline_final_sanity_check(df: pd.DataFrame,
     df = reconcile_final_output_from_bp_and_sample_size(df)
     df = add_us_gen_pop_projection(df)
     if brands:
-        df = enforce_input_brand_100(df, brands)
+        df = enforce_input_brand_100(df, brands, purchasers_only=purchasers_only)
 
     print("   ✅ Step 3: Sanity check complete (brand lock + consistency + reconciliation + quality gate)")
     return df
@@ -18817,7 +18847,7 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
     # --- FINAL INPUT BRAND 100% ENFORCEMENT (ABSOLUTE LAST STEP) ---
     # Skip 100% enforcement for GenPop to allow natural brand percentages
     if not is_genpop:
-        df_final = enforce_input_brand_100(df_final, brands)
+        df_final = enforce_input_brand_100(df_final, brands, purchasers_only=purchasers_only)
     else:
         if not SILENCE_VERBOSE_OUTPUT:
             print("🎯 GenPop mode: Skipping input brand 100% enforcement to allow natural percentages")
@@ -18839,7 +18869,7 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
     df_final['Value'] = df_final['Value'].str.upper()
 
     # Set BRAND INPUT raw number to SAMPLE SIZE
-    df_final = set_brand_input_raw_to_sample_size(df_final, is_genpop)
+    df_final = set_brand_input_raw_to_sample_size(df_final, is_genpop, purchasers_only=purchasers_only)
 
     # Compute initial raw numbers from percentages so anchor has something to work with
     df_final = set_demographic_original_raws_from_percentage(df_final)
@@ -18848,7 +18878,7 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
     # Finalize output raw numbers (rename DB column, enforce uniqueness)
     df_final = add_original_raw_numbers_sorted_view(df_final)
     df_final = finalize_original_raw_numbers_for_output(df_final)
-    df_final = set_brand_input_raw_to_sample_size(df_final, is_genpop)
+    df_final = set_brand_input_raw_to_sample_size(df_final, is_genpop, purchasers_only=purchasers_only)
 
     # Normalize naming for streaming platforms
     df_final = rename_streaming_max_to_hbo_max_upper(df_final)
@@ -18970,12 +19000,12 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
         # set_brand_input_raw_to_sample_size(df_final, is_genpop=True) call
         # already handles the BRAND INPUT row correctly for GenPop.
         print("🔒 GenPop sanity check …")
-        df_final = agent_pipeline_final_sanity_check(df_final, [])
+        df_final = agent_pipeline_final_sanity_check(df_final, [], purchasers_only=purchasers_only)
 
         # Downstream cleanup that the legacy anchor path used to do.
         # All of these are post-write housekeeping (ordering, projections,
         # decimal cleanup, DMA enforcement) — none of them recompute BPs.
-        df_final = enforce_cross_category_brand_consistency(df_final)
+        df_final = enforce_cross_category_brand_consistency(df_final, purchasers_only=purchasers_only)
         df_final = sort_categories_by_percentage(df_final)
         df_final = add_brand_penetration_column_using_final_raw(df_final)
         df_final = add_us_gen_pop_projection(df_final)
@@ -18983,7 +19013,7 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
         df_final = ensure_percentage_four_decimals(df_final)
         df_final = enforce_max_four_decimals_across_columns(df_final)
         df_final = enforce_exact_210_dmas(df_final)
-        df_final = set_brand_input_raw_to_sample_size(df_final, is_genpop)
+        df_final = set_brand_input_raw_to_sample_size(df_final, is_genpop, purchasers_only=purchasers_only)
         df_final = add_brand_penetration_column_using_final_raw(df_final)
         df_final = add_us_gen_pop_projection(df_final)
 
@@ -19121,7 +19151,7 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
 
         # Step 3: Final Sanity Check
         print("🔒 Step 3: Final sanity check …")
-        df_final = agent_pipeline_final_sanity_check(df_final, brands)
+        df_final = agent_pipeline_final_sanity_check(df_final, brands, purchasers_only=purchasers_only)
 
         # Ensure 210 DMAs present
         df_final = enforce_exact_210_dmas(df_final)
@@ -19191,7 +19221,7 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
     
     # Final required override: keep input brand at 100%.
     if not is_genpop:
-        df_final = enforce_input_brand_100(df_final, brands)
+        df_final = enforce_input_brand_100(df_final, brands, purchasers_only=purchasers_only)
     
     # Remove dash variants from output (keep only non-dash versions)
     # This allows dash variants to be found during parsing, but only non-dash appears in output
@@ -19352,7 +19382,7 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
 
     # Absolute pre-save lock (non-GenPop): brand input at 100%
     if not is_genpop and brands:
-        df_final = enforce_input_brand_100(df_final, brands)
+        df_final = enforce_input_brand_100(df_final, brands, purchasers_only=purchasers_only)
         df_final = finalize_output_metrics_like_edit_sample_size(df_final)
         for _fmt_col in ['Brand Penetration (Row)', 'Category Share', 'Percentage']:
             if _fmt_col in df_final.columns:
@@ -22430,7 +22460,7 @@ def set_behavioral_original_raws_from_percentage(df: pd.DataFrame) -> pd.DataFra
 
     return df
 
-def enforce_cross_category_brand_consistency(df):
+def enforce_cross_category_brand_consistency(df, purchasers_only: bool = False):
     """
     Ensure same brand across categories shares the same highest Percentage AND
     same highest 'Original Raw Numbers' (both Database and regular columns).
@@ -22442,6 +22472,15 @@ def enforce_cross_category_brand_consistency(df):
     This ensures that if "Starbucks" appears in QSR, INTEREST, and WHERE THEY DINE,
     it will have the same percentage and raw numbers across all three categories
     (using the highest value found in any of them).
+
+    purchasers_only:
+        - False (default) → MOST PURCHASED BRANDS is excluded so the input
+          brand's 100% in (e.g.) APPAREL/FOOTWEAR isn't propagated back into
+          MPB. MPB measures actual purchase confirmation, not digital
+          engagement, so it should reflect the agent's real purchase-rate
+          score (typically lower than 100%).
+        - True → MPB participates normally because the panel was filtered
+          to confirmed purchasers.
     """
     
 
@@ -22451,6 +22490,8 @@ def enforce_cross_category_brand_consistency(df):
     # Keep INTEREST independent: thematic signals should not be overwritten
     # by maxima from unrelated categories sharing the same token.
     skip_consistency_categories = {'INTEREST', 'INTERESTS'}
+    if not purchasers_only:
+        skip_consistency_categories.add('MOST PURCHASED BRANDS')
 
     # First pass: collect maxima
     for _, row in df.iterrows():
@@ -22573,7 +22614,8 @@ def enforce_cross_category_brand_consistency(df):
 
     return df
 
-def enforce_value_consistency_across_categories(df: pd.DataFrame) -> pd.DataFrame:
+def enforce_value_consistency_across_categories(df: pd.DataFrame,
+                                                  purchasers_only: bool = False) -> pd.DataFrame:
     """
     Final hard gate: for repeated behavioral/entity values that appear in multiple
     categories, enforce one shared BP/raw/projection so late AI/noise passes cannot
@@ -22581,6 +22623,15 @@ def enforce_value_consistency_across_categories(df: pd.DataFrame) -> pd.DataFram
 
     NOTE: Category Share is intentionally not forced identical because it is
     category-relative by design and is recomputed downstream.
+
+    purchasers_only:
+        - False (default) → MOST PURCHASED BRANDS is excluded from this
+          propagation. Otherwise the input brand's 100% (set in APPAREL/
+          FOOTWEAR / WHERE THEY SHOP / etc) would propagate back into MPB
+          and overwrite the agent's real purchase-rate score.
+        - True → MPB participates normally; the input brand legitimately
+          IS 100% in MPB because the panel was filtered to confirmed
+          purchasers.
     """
     if df is None or df.empty or 'Value' not in df.columns or 'Column' not in df.columns:
         return df
@@ -22592,6 +22643,8 @@ def enforce_value_consistency_across_categories(df: pd.DataFrame) -> pd.DataFram
         'INCOME', 'EDUCATION', 'RELATIONSHIP', 'PARENTAL_STATUS',
         'SEXUAL_ORIENTATION', 'OCCUPATION', 'LOCATION',
     }
+    if not purchasers_only:
+        excluded_cols.add('MOST PURCHASED BRANDS')
 
     def _to_num(v, default=np.nan):
         try:
@@ -22676,10 +22729,17 @@ def enforce_value_consistency_across_categories(df: pd.DataFrame) -> pd.DataFram
     work = work.drop(columns=['_consistency_key', '_consistency_col'], errors='ignore')
     return work
 
-def set_brand_input_raw_to_sample_size(df, is_genpop=False):
+def set_brand_input_raw_to_sample_size(df, is_genpop=False, purchasers_only: bool = False):
     """Set ALL instances of the input brand's Original Raw Numbers equal to SAMPLE SIZE and Percentage to 100%.
     This ensures the input brand always shows 100% with raw numbers matching sample size everywhere it appears.
-    Skip this for GenPop to allow natural brand percentages."""
+    Skip this for GenPop to allow natural brand percentages.
+
+    purchasers_only:
+        - False (default) → MOST PURCHASED BRANDS rows are skipped so the
+          agent's real purchase-rate score is preserved.
+        - True → MPB rows participate normally because the panel was
+          filtered to confirmed purchasers and 100% is correct.
+    """
     
     # Skip for GenPop to allow natural brand percentages
     if is_genpop:
@@ -22726,7 +22786,9 @@ def set_brand_input_raw_to_sample_size(df, is_genpop=False):
         brand_no_spaces = brand_name.replace(' ', '').upper()
         
         # Find ALL rows where the Value matches the brand name (case insensitive, with and without spaces)
+        # MOST PURCHASED BRANDS exempted unless purchasers_only — see fn docstring.
         matches = []
+        skipped_mpb = 0
         for idx, row in df.iterrows():
             value = str(row['Value']).strip()
             value_upper = value.upper()
@@ -22737,7 +22799,13 @@ def set_brand_input_raw_to_sample_size(df, is_genpop=False):
                 value_no_spaces == brand_no_spaces or
                 value_upper == brand_no_spaces or
                 value_no_spaces == brand_upper):
+                row_col = str(row.get('Column', '')).strip().upper()
+                if (not purchasers_only) and row_col == 'MOST PURCHASED BRANDS':
+                    skipped_mpb += 1
+                    continue
                 matches.append(idx)
+        if skipped_mpb and not SILENCE_VERBOSE_OUTPUT:
+            print(f"  ⏭️  Skipping {skipped_mpb} MOST PURCHASED BRANDS row(s) for '{brand_name}' (purchasers_only=False)")
         
         if matches:
             gpp = int(round((sample_size / 10_000_000) * 329_900_000))
@@ -23021,7 +23089,7 @@ def main():
             # --- FINAL INPUT BRAND 100% ENFORCEMENT (ABSOLUTE LAST STEP) ---
             # Skip 100% enforcement for GenPop to allow natural brand percentages
             if not is_genpop:
-                enhanced_df = enforce_input_brand_100(enhanced_df, brands)
+                enhanced_df = enforce_input_brand_100(enhanced_df, brands, purchasers_only=purchasers_only)
             else:
                 if not SILENCE_VERBOSE_OUTPUT:
                     print("🎯 GenPop mode: Skipping input brand 100% enforcement in enhanced dataframe")
@@ -23035,7 +23103,8 @@ def main():
             enhanced_df = add_unique_purchase_confirmations_column(enhanced_df, conn)
             
             # ENSURE CROSS-CATEGORY BRAND CONSISTENCY - Use highest percentage across all categories
-            enhanced_df = enforce_cross_category_brand_consistency(enhanced_df)
+            # MOST PURCHASED BRANDS exempted unless purchasers_only — see fn docstring.
+            enhanced_df = enforce_cross_category_brand_consistency(enhanced_df, purchasers_only=purchasers_only)
             
             # Skip PURCHASE SHARE & BRAND PENETRATION categories per request
             enhanced_df = enhanced_df
