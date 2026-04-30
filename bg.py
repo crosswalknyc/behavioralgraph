@@ -13825,26 +13825,32 @@ Return ONLY a single valid JSON object — no markdown, no commentary.
     ...top 15-20 DMAs with highest affinity; remainder auto-distributed
   ],
   "category_guidance": {{
-    "SOCIAL MEDIA": "<1-2 sentence guidance, e.g. TikTok-dominant young female audience…>",
-    "SEARCH ENGINE/AI": "<…>",
-    "INTEREST": "<…>",
-    "APP/PLATFORM USAGE": "<…>",
-    "STREAMING/PLATFORM": "<…>",
-    "STREAMING/MUSIC": "<…>",
-    "BROADCAST/CABLE": "<…>",
-    "MOST PURCHASED BRANDS": "<…>",
-    "MOST PURCHASED CATEGORIES": "<…>",
-    "WHERE THEY SHOP": "<…>",
-    "WHERE THEY DINE": "<…>",
-    "QSR": "<…>",
-    "WORKOUT FACILITY": "<…>",
-    "TRAVEL": "<…>",
-    "INSURANCE": "<…>",
-    "BANKING": "<…>",
-    "CREDIT PROVIDER": "<…>",
-    "TELECOM": "<…>",
-    "TECHNOLOGY/DEVICE": "<…>",
-    "AUTOMOBILE": "<…>"
+    "SOCIAL MEDIA":            {{"summary": "<1 sentence>", "expected_high": ["<PLATFORM 1>","<PLATFORM 2>",...], "expected_low": ["<PLATFORM>",...]}},
+    "SEARCH ENGINE/AI":        {{"summary": "<…>", "expected_high": [...], "expected_low": [...]}},
+    "INTEREST":                {{"summary": "<…>", "expected_high": [...], "expected_low": [...]}},
+    "APP/PLATFORM USAGE":      {{"summary": "<…>", "expected_high": [...], "expected_low": [...]}},
+    "STREAMING/PLATFORM":      {{"summary": "<…>", "expected_high": [...], "expected_low": [...]}},
+    "STREAMING/MUSIC":         {{"summary": "<…>", "expected_high": [...], "expected_low": [...]}},
+    "MEDIA":                   {{"summary": "<…>", "expected_high": [...], "expected_low": [...]}},
+    "MOST PURCHASED BRANDS":   {{"summary": "<…>", "expected_high": [...], "expected_low": [...]}},
+    "MOST PURCHASED CATEGORIES": {{"summary": "<…>", "expected_high": [...], "expected_low": [...]}},
+    "WHERE THEY SHOP":         {{"summary": "<…>", "expected_high": [...], "expected_low": [...]}},
+    "WHERE THEY DINE":         {{"summary": "<…>", "expected_high": [...], "expected_low": [...]}},
+    "QSR":                     {{"summary": "<…>", "expected_high": [...], "expected_low": [...]}},
+    "WORKOUT FACILITY":        {{"summary": "<…>", "expected_high": [...], "expected_low": [...]}},
+    "TRAVEL":                  {{"summary": "<…>", "expected_high": [...], "expected_low": [...]}},
+    "INSURANCE":               {{"summary": "<…>", "expected_high": [...], "expected_low": [...]}},
+    "BANKING":                 {{"summary": "<…>", "expected_high": [...], "expected_low": [...]}},
+    "CREDIT PROVIDER":         {{"summary": "<…>", "expected_high": [...], "expected_low": [...]}},
+    "TELECOM":                 {{"summary": "<…>", "expected_high": [...], "expected_low": [...]}},
+    "TECHNOLOGY/DEVICE":       {{"summary": "<…>", "expected_high": [...], "expected_low": [...]}},
+    "TECHNOLOGY BRAND":        {{"summary": "<…>", "expected_high": [...], "expected_low": [...]}},
+    "AUTOMOBILE":              {{"summary": "<…>", "expected_high": [...], "expected_low": [...]}},
+    "TALENT":                  {{"summary": "<…>", "expected_high": [...], "expected_low": [...]}},
+    "MUSICIAN/BAND":           {{"summary": "<…>", "expected_high": [...], "expected_low": [...]}},
+    "ATHLETE":                 {{"summary": "<…>", "expected_high": [...], "expected_low": [...]}},
+    "SPORTS TEAM":             {{"summary": "<…>", "expected_high": [...], "expected_low": [...]}},
+    "PODCAST":                 {{"summary": "<…>", "expected_high": [...], "expected_low": [...]}}
   }}
 }}
 
@@ -13856,7 +13862,22 @@ RULES:
 - AGE IS CRITICAL: The subject's OWN age heavily influences their audience age distribution. Research the subject's actual age. A 58-year-old actress will have an audience peaking in the 45-54 and 55-64 brackets (30%+ and 20%+ respectively), with much lower percentages for 18-24 (5-8%) and 17 AND UNDER (2-5%). A 20-year-old pop star will peak at 18-24 (35-45%) and 17 AND UNDER (15-25%). The audience's peak age bracket should align with or be slightly younger than the subject's own age bracket. Never give equal weight to age brackets that are 20+ years apart from the subject's age.
 - Do NOT include "Prefer Not to Say" or "Other" in AGE, GENDER, ETHNICITY, or INCOME. Those categories must only contain the exact buckets listed above.
 - LOCATION: Provide at least 15-20 top DMAs with realistic, varied percentages. The percentages should NOT be clustered — use a natural distribution where the #1 DMA might be 8-12%, #5 might be 4-6%, #10 might be 2-3%, #15 might be 1-2%, #20 might be 0.5-1%. The sum should be ≤ 100; remainder is auto-spread to the other 190+ DMAs with random variation.
-- category_guidance: cover every major behavioral category. Be specific about which items should rank high vs low for THIS audience.
+
+CATEGORY GUIDANCE — STRUCTURED FORMAT (THIS IS THE PRIMARY VALUE OF THIS PROMPT):
+For EVERY category in `category_guidance`, you MUST return an OBJECT with three fields:
+  • `summary`         — 1 sentence describing how this audience behaves in this category.
+  • `expected_high`   — array of 5-15 SPECIFIC item names (brands/platforms/people) that this audience engages with at HIGH digital BP. These become anchors for the per-category scoring agents.
+  • `expected_low`    — array of 5-15 SPECIFIC item names that are FAMOUS or PRESTIGIOUS in absolute terms but DO NOT fit this audience (e.g. for a Nike audience: Nobu, Cartier, Tiffany, Pavilions, NYT Cooking). These items must be flagged so the scoring agent does not over-rank them by absolute fame.
+
+Item-name guidance:
+  • Use real, recognizable brand/platform/person names — UPPERCASE.
+  • For WHERE THEY SHOP: think actual retailers (FOOT LOCKER, DICK'S SPORTING GOODS, JD SPORTS for sports audience; SEPHORA, ULTA, AMAZON for beauty audience).
+  • For WHERE THEY DINE: think actual restaurant chains (CHIPOTLE, CHICK-FIL-A, OLIVE GARDEN for mass; NOBU, CAPITAL GRILLE for HNW). NEVER pick luxury restaurants for non-HNW audiences.
+  • For MEDIA: think actual outlets (ESPN, BLEACHER REPORT, THE ATHLETIC for sports; HYPEBEAST, COMPLEX for streetwear; TODAY, GMA for daytime mass).
+  • For SOCIAL MEDIA: rank by audience reality (younger = TIKTOK/INSTAGRAM higher; older = FACEBOOK higher; mass brand = YOUTUBE near top regardless).
+  • For INTEREST: think genuine interests of the audience (FITNESS, RUNNING, BASKETBALL for sports; SKINCARE, FASHION for beauty), NOT random vague topics like "FLOWERS" or "MULTI-LEVEL MARKETING" unless the persona is specifically about that.
+
+These structured anchors are the most important output of this prompt — the per-category agents downstream rely on them to avoid producing generic luxury-aspirational tier-fillers.
 """
 
     print(f"🔬 Step 1: Persona Research Agent researching '{subject}' …")
@@ -13965,72 +13986,98 @@ def _run_single_category_agent(category: str, values: list[str],
     if client is None:
         return []
 
-    guidance = persona_doc.get('category_guidance', {}).get(category, '')
+    guidance_raw = persona_doc.get('category_guidance', {}).get(category, '')
     summary = persona_doc.get('persona_summary', '')
     demo_snapshot = {k: v for k, v in persona_doc.get('demographics', {}).items()
-                     if k in ('AGE', 'GENDER', 'ETHNICITY')}
+                     if k in ('AGE', 'GENDER', 'ETHNICITY', 'INCOME')}
+
+    # `category_guidance` may now be a dict with structured anchors:
+    #   {"summary": "...", "expected_high": ["FOOT LOCKER","DICK'S",...],
+    #    "expected_low": ["NOBU","CARTIER","PAVILIONS",...]}
+    # Older personas can still hand back a plain string. Normalize for the prompt.
+    expected_high: list[str] = []
+    expected_low: list[str] = []
+    guidance_summary = ''
+    if isinstance(guidance_raw, dict):
+        guidance_summary = str(guidance_raw.get('summary', '') or '').strip()
+        expected_high = [str(x).strip() for x in (guidance_raw.get('expected_high') or []) if str(x).strip()]
+        expected_low = [str(x).strip() for x in (guidance_raw.get('expected_low') or []) if str(x).strip()]
+    elif isinstance(guidance_raw, str):
+        guidance_summary = guidance_raw.strip()
+
+    expected_high_block = (
+        '\n'.join(f"  - {x}" for x in expected_high[:30])
+        if expected_high else '  (none specified — reason from persona summary)'
+    )
+    expected_low_block = (
+        '\n'.join(f"  - {x}" for x in expected_low[:30])
+        if expected_low else '  (none specified — reason from persona summary)'
+    )
 
     values_list = '\n'.join(f"  - {v}" for v in values)
 
-    prompt = f"""You are a consumer research analyst setting Brand Penetration (BP) values for the **{category}** category of a behavioral panel profile for **{subject}**.
+    prompt = f"""You are a consumer-research analyst assigning Brand Penetration (BP) values for the **{category}** category of a behavioral panel profile for **{subject}**.
 
-Brand Penetration = the % of THIS specific audience that engages with each item in a digital clickstream panel. This is NOT popularity, awareness, or favorability. It measures actual observed digital behavior — what fraction of panelists who follow/engage with {subject} ALSO visited, used, streamed, purchased, or clicked on each item during the study period.
+DEFINITION — read carefully:
+Brand Penetration = the % of THIS specific audience whose digital clickstream (web visits, app usage, searches, streams, purchases) shows engagement with the item during the study window. This is NOT popularity, awareness, favorability, or in-store purchase. It is purely OBSERVED DIGITAL BEHAVIOR.
 
-PERSONA:
+KEY CONSEQUENCES OF "DIGITAL ONLY":
+  • CPG / grocery / household brands (Tide, Oreo, Coca-Cola, Heinz, Kraft) are bought IN STORES — their DIGITAL clickstream BP is LOW (typically 1-8%) even when household penetration is huge.
+  • Mass online retailers (Amazon, Walmart.com, Target.com) have HIGH digital BP across nearly every audience because everyone visits the website.
+  • Regional or geo-specific brands (Pavilions, Wegmans, Menards, H-E-B) have LOW national BP unless the audience over-indexes on that region.
+  • Luxury brands (Cartier, Tiffany, Nobu, Mastros) have LOW BP unless the audience explicitly skews HNW / luxury.
+
+═══════════════════════════════════════════════════════════════════
+PERSONA — this is the audience you are scoring for
+═══════════════════════════════════════════════════════════════════
 {summary}
 
 KEY DEMOGRAPHICS:
 {_json.dumps(demo_snapshot, indent=2)}
 
-CATEGORY GUIDANCE:
-{guidance}
+CATEGORY-SPECIFIC GUIDANCE for {category}:
+{guidance_summary or '(use the persona summary above + your knowledge of the audience)'}
 
-ITEMS TO SCORE:
-{values_list}
+EXPECTED HIGH-BP ITEMS for this audience in this category
+(items the persona research agent specifically called out as strong fit — these SHOULD score HIGH if they appear in the list to score below):
+{expected_high_block}
 
+EXPECTED LOW-BP ITEMS for this audience in this category
+(items the persona research agent specifically called out as POOR fit — these MUST stay LOW even if they're famous/prestigious in absolute terms):
+{expected_low_block}
+
+═══════════════════════════════════════════════════════════════════
+ROW-BY-ROW REASONING — required process
+═══════════════════════════════════════════════════════════════════
+For EACH item in the list below, reason in this order:
+  1) Is this item in the EXPECTED HIGH list above? → score HIGH (use the upper end of what's plausible for this item type).
+  2) Is this item in the EXPECTED LOW list above? → score LOW (typically 0.3-5%) regardless of fame.
+  3) Is this a near-universal mass platform that nearly all US online adults touch (Google, YouTube, Amazon, Facebook, Gmail, Instagram, Netflix)? → if yes, score HIGH (60-85%) unless the persona explicitly rejects it.
+  4) Is the item bought IN-STORE for the majority of consumers (CPG, grocery, household goods)? → score LOW (1-8%) regardless of brand strength.
+  5) Is the item REGIONAL/geo-specific and the persona is NOT specifically tied to that geography? → score LOW (0.5-3%).
+  6) Is the item LUXURY/HNW and the persona INCOME skew is NOT $150K+? → score LOW (0.3-3%).
+  7) Otherwise: score by your best estimate of what % of this specific audience would actually click/visit/use this item online during a single year.
+
+═══════════════════════════════════════════════════════════════════
+OUTPUT FORMAT
+═══════════════════════════════════════════════════════════════════
 Return ONLY a JSON array — no markdown, no commentary:
 [
-  {{"value": "<ITEM NAME — exact spelling from list above>", "bp": <number>, "reason": "<one sentence>"}},
+  {{"value": "<ITEM NAME — exact spelling from list>", "bp": <number 0.01-95>, "reason": "<≤15 words: which rule fired and why>"}},
   …
 ]
 
-MANDATORY CALIBRATION — THESE ARE HARD CONSTRAINTS:
-Think of BP as "what % of this audience had clickstream activity on this item."  Use real-world digital behavior baselines:
+DECIMAL PRECISION — every BP must have 4 organic-looking decimals (14.3827, 7.0614, 22.9153, NOT 30.0000 or 14.1234).
 
-TIER 1 (60-85% BP) — ONLY for near-universal digital platforms that almost everyone uses daily:
-  Google, YouTube, Amazon, Gmail, Facebook, Netflix, Instagram.  At most 3-5 items in the ENTIRE profile should be in this tier.
+NON-NEGOTIABLE RULES:
+  • EVERY item from the list below MUST appear in your output (same exact spelling).
+  • RANK ORDER must reflect persona fit, not absolute fame. A Nike audience should rank Foot Locker > Cartier even though Cartier is more famous.
+  • An item being LUXURY or PRESTIGIOUS does NOT make it HIGH BP — only persona-relevance does.
+  • An item being LARGE or NATIONALLY-KNOWN does NOT make it HIGH BP if the persona doesn't engage with it digitally.
+  • Do NOT artificially compress the distribution — if the persona genuinely engages with 12 items in this category at 25%+, score all 12 at 25%+. There is NO cap on items per tier.
 
-TIER 2 (25-55% BP) — Major platforms with strong persona affinity:
-  e.g. TikTok for Gen-Z, Spotify for music fans, Hulu for cord-cutters, Target for suburban moms.  5-10 items per category max.
-
-TIER 3 (8-25% BP) — Moderate-affinity brands/platforms. This is where MOST items should land.
-  e.g. HBO Max, Starbucks, Nike, Sephora, Reddit, Disney+, Southwest Airlines.
-
-TIER 4 (1-8% BP) — Low-affinity or niche items. Many items should be here.
-  e.g. niche credit unions, regional brands, obscure apps, specialty retailers.
-
-TIER 5 (<1% BP) — Items with virtually no connection to this persona.
-  e.g. farm equipment brands for urban audiences, military brands for teen pop fans.
-
-DISTRIBUTION REQUIREMENT:
-- At least 50% of items MUST be below 15% BP
-- At least 25% of items MUST be below 5% BP
-- No more than 3 items per category above 50% BP
-- No more than 8 items per category above 30% BP
-
-EVENTS/VENUES CALIBRATION:
-Even for a celebrity closely associated with film festivals, most of their digital audience does NOT attend those events. Sundance Film Festival might be 5-12% for an indie film actress's audience, not 70%. Comic-Con might be 3-8% for a superhero actor. Music festivals 2-10% for a musician. Think about what % of the ONLINE audience actually buys tickets or engages with the event digitally.
-
-BANKING/FINANCIAL CALIBRATION:
-Regional credit unions should be 0.5-3% unless there is a specific geographic reason. National banks (Chase, BofA, Wells Fargo) typically 8-20%. Investment platforms (Vanguard, Fidelity) 3-12%. Fintech (SoFi, Robinhood) 2-10%.
-
-DECIMAL PRECISION:
-Every value MUST have 4 genuinely random-looking decimal places (simulating real panel data). Use varied, organic decimals like 14.3827, 7.0614, 22.9153, 3.4281. Do NOT use sequential patterns like x.1234, x.4321, x.5678 — those look fake. Each decimal should appear independently random.
-
-ADDITIONAL RULES:
-- Rank order must make sense for this specific persona
-- DIGITAL PANEL: CPG/grocery brands (Coca-Cola, Tide, Oreo) should be LOW (1-10%) — people buy these in stores, not online
-- Every item from the list MUST appear in your output
+ITEMS TO SCORE:
+{values_list}
 """
 
     token_budget = max(4096, len(values) * 80)
@@ -14101,20 +14148,112 @@ def _build_genpop_persona_doc() -> dict:
             continue
 
     persona_summary = (
-        "U.S. general adult population baseline (GenPop). Demographics, location "
-        "distribution, and overall behavioral patterns reflect the average American "
-        "adult — no audience tilt, no fan-base skew. Calibration adjustments should "
-        "focus on broad national-level shifts (platform trends like TikTok ↑ / "
-        "Facebook ↓ for younger cohorts, seasonality/holidays such as Q4 shopping or "
-        "summer travel, election-cycle news consumption) rather than persona-"
-        "specific calendar events."
+        "THE GENERAL U.S. ADULT POPULATION (GenPop baseline) — the average American adult age 18+. "
+        "No audience tilt, no fan-base skew; this is the population mean. "
+        "WHEN SCORING ANY ITEM, ask: \"What % of all U.S. online adults would have any clickstream "
+        "engagement with this in a year?\" Reason about it like polling national digital behavior:\n"
+        "  • Mass online platforms (Google, YouTube, Amazon, Walmart.com, Facebook, Gmail, Netflix) "
+        "    → very high (70-90%); near-universal usage among online adults.\n"
+        "  • CPG / grocery / household goods (Tide, Oreo, Coca-Cola, Heinz) → LOW (1-8%) digitally — "
+        "    Americans buy these in stores, not online; they almost never visit the brand website.\n"
+        "  • Casual-dining chains nationally distributed (Cheesecake Factory, Olive Garden, Chili's, "
+        "    Texas Roadhouse, Applebee's) → 5-12% digital BP for the average adult.\n"
+        "  • Luxury restaurants/jewelry/fashion (Nobu, Capital Grille, Mastros, Cartier, Tiffany) → "
+        "    LOW (0.3-2%); only the wealthy minority engage.\n"
+        "  • Regional brands (Pavilions, Wegmans, H-E-B, Menards, Stop & Shop) → LOW national BP (1-5%) "
+        "    because most Americans don't live in their footprint.\n"
+        "  • National retailers (Target, Costco, Best Buy, Home Depot, Kohl's, Macy's) → 15-50% BP.\n"
+        "  • Mainstream news (Google News, Yahoo News, CNN, Fox News, NBC, ABC, CBS) → 30-55% BP.\n"
+        "  • Sports media (ESPN, Bleacher Report, The Athletic) → 25-40% BP nationally.\n"
+        "  • Niche specialty interests (luxury travel, MLM, shooting sports, interior design, "
+        "    handbags, financial planning) → LOW (3-15%); only niche subsets engage.\n"
+        "Rank items inside each category by what fraction of all US adults would actually click/visit/"
+        "use the item online — not by absolute fame. A famous luxury brand can have very LOW digital "
+        "BP because its user base is small."
     )
+
+    # Structured anchors for the per-category agent. These tell the per-cat agent
+    # which items SHOULD score high vs which famous-but-low-fit items should stay
+    # low. Drives the same row-by-row reasoning that profile personas get, just
+    # with the "average US adult" as the audience.
+    category_guidance = {
+        'SOCIAL MEDIA': {
+            'summary': 'Older skew = Facebook still dominant; YouTube near-universal; TikTok/Instagram strong but below YouTube/FB nationally.',
+            'expected_high': ['YOUTUBE', 'FACEBOOK', 'TIKTOK', 'INSTAGRAM', 'SNAPCHAT', 'PINTEREST'],
+            'expected_low': ['ONLYFANS', 'BLUESKY', 'MASTODON', 'TUMBLR', 'PATREON'],
+        },
+        'SEARCH ENGINE/AI': {
+            'summary': 'Google near-universal; Bing/Yahoo distant 2nd/3rd; ChatGPT growing but still <30% of all US adults.',
+            'expected_high': ['GOOGLE', 'GOOGLE.COM', 'BING', 'YAHOO'],
+            'expected_low': ['YOU.COM', 'KAGI', 'NEEVA', 'BRAVE SEARCH'],
+        },
+        'INTEREST': {
+            'summary': 'Mass interests dominate: streaming, social media, music, movies/TV, news, cooking, sports, travel.',
+            'expected_high': ['SOCIAL MEDIA', 'STREAMING', 'MUSIC', 'MOVIES/TV', 'COOKING', 'NEWS', 'TRAVEL', 'SPORTS', 'TECHNOLOGY', 'READING DIGITAL MEDIA'],
+            'expected_low': ['MULTI-LEVEL MARKETING', 'SHOOTING SPORTS & MARKSMANSHIP', 'POLO', 'YACHTING', 'EQUESTRIAN', 'CIGARS', 'HORSE RACING'],
+        },
+        'WHERE THEY SHOP': {
+            'summary': 'National mass retailers + Amazon dominate; regional and luxury chains stay LOW for the average US adult.',
+            'expected_high': ['AMAZON', 'WALMART', 'TARGET', 'COSTCO', 'HOME DEPOT', 'BEST BUY', 'EBAY', 'KOHLS', 'CVS', 'WALGREENS', 'LOWES', 'MACYS'],
+            'expected_low': ['CARTIER', 'TIFFANY', 'HERMES', 'NEIMAN MARCUS', 'BERGDORF GOODMAN', 'PAVILIONS', 'MENARDS', 'KIRKLANDS', 'REDBUBBLE', 'MERCADO LIBRE'],
+        },
+        'WHERE THEY DINE': {
+            'summary': 'Mass casual-dining dominates: Cheesecake Factory, Olive Garden, Chili\'s, Texas Roadhouse, Applebee\'s, IHOP. Luxury restaurants stay LOW.',
+            'expected_high': ['THE CHEESECAKE FACTORY', 'OLIVE GARDEN', 'CHILIS', 'TEXAS ROADHOUSE', 'APPLEBEES GRILL + BAR', 'LONGHORN STEAKHOUSE', 'IHOP', 'DENNYS', 'OUTBACK STEAKHOUSE'],
+            'expected_low': ['NOBU', 'THE CAPITAL GRILLE', 'MASTROS RESTAURANTS', 'MORTONS THE STEAKHOUSE', 'RUTHS CHRIS STEAK HOUSE', 'BENIHANA', 'FOGO DE CHAO'],
+        },
+        'QSR': {
+            'summary': 'McDonalds/Starbucks lead; Chick-fil-A, Chipotle, Wendys, Subway, Taco Bell, Burger King all major.',
+            'expected_high': ['MCDONALDS', 'STARBUCKS', 'CHICK-FIL-A', 'CHIPOTLE MEXICAN GRILL', 'WENDYS', 'SUBWAY', 'TACO BELL', 'BURGER KING', 'DOMINOS', 'KFC', 'DUNKIN', 'PANERA BREAD'],
+            'expected_low': [],
+        },
+        'MEDIA': {
+            'summary': 'Mass news (Google News, CNN, Fox News, Yahoo News) and broadcast (NBC, ABC, CBS) lead; ESPN strongest single sports outlet; specialty/niche outlets stay LOW.',
+            'expected_high': ['GOOGLE NEWS', 'YAHOO NEWS', 'CNN', 'FOX NEWS', 'NBC NEWS', 'ABC NEWS', 'CBS', 'ESPN', 'NEW YORK TIMES', 'USA TODAY', 'APPLE NEWS', 'HUFFPOST'],
+            'expected_low': ['HYPEBEAST', 'COMPLEX', 'SNEAKER NEWS', 'SOLE COLLECTOR', 'FORTUNE', 'BARRONS', 'WALL STREET JOURNAL'],
+        },
+        'STREAMING/PLATFORM': {
+            'summary': 'Netflix, YouTube, Amazon Prime Video, Hulu, Disney+ lead; niche premium services lower.',
+            'expected_high': ['NETFLIX', 'YOUTUBE', 'AMAZON PRIME VIDEO', 'HULU', 'DISNEY PLUS', 'MAX', 'PEACOCK', 'PARAMOUNT PLUS'],
+            'expected_low': ['CRITERION CHANNEL', 'MUBI', 'BRITBOX', 'ACORN TV'],
+        },
+        'STREAMING/MUSIC': {
+            'summary': 'Spotify, YouTube Music, Apple Music, Amazon Music, Pandora cover the bulk.',
+            'expected_high': ['SPOTIFY', 'YOUTUBE MUSIC', 'APPLE MUSIC', 'AMAZON MUSIC', 'PANDORA', 'IHEARTRADIO'],
+            'expected_low': ['TIDAL', 'QOBUZ', 'DEEZER'],
+        },
+        'TELECOM': {
+            'summary': 'Verizon, AT&T, T-Mobile dominate the average US adult.',
+            'expected_high': ['VERIZON', 'AT&T', 'T-MOBILE', 'XFINITY', 'SPECTRUM'],
+            'expected_low': ['MINT MOBILE', 'CRICKET', 'BOOST MOBILE', 'TRACFONE'],
+        },
+        'BANKING': {
+            'summary': 'Chase, Bank of America, Wells Fargo, Capital One have the broadest digital footprints.',
+            'expected_high': ['CHASE', 'BANK OF AMERICA', 'WELLS FARGO', 'CAPITAL ONE', 'CITI', 'US BANK'],
+            'expected_low': ['REGIONAL CREDIT UNIONS', 'LOCAL COMMUNITY BANKS'],
+        },
+        'CREDIT PROVIDER': {
+            'summary': 'Visa/Mastercard/AmEx/Discover at top.',
+            'expected_high': ['VISA', 'MASTERCARD', 'AMERICAN EXPRESS', 'DISCOVER', 'PAYPAL'],
+            'expected_low': [],
+        },
+        'TECHNOLOGY/DEVICE': {
+            'summary': 'Apple/Samsung/Google dominate phones+devices for the average US adult.',
+            'expected_high': ['APPLE', 'SAMSUNG', 'GOOGLE', 'MICROSOFT', 'AMAZON DEVICES'],
+            'expected_low': [],
+        },
+        'TRAVEL': {
+            'summary': 'Mass-market OTAs and airlines dominate national bookings.',
+            'expected_high': ['EXPEDIA', 'BOOKING.COM', 'SOUTHWEST AIRLINES', 'DELTA', 'AMERICAN AIRLINES', 'UNITED', 'AIRBNB', 'HILTON', 'MARRIOTT'],
+            'expected_low': ['FOUR SEASONS', 'RITZ-CARLTON', 'AMAN', 'CRYSTAL CRUISES'],
+        },
+    }
 
     return {
         'persona_summary': persona_summary,
         'demographics': demographics,
         'location': location,
-        'category_guidance': {},
+        'category_guidance': category_guidance,
     }
 
 
@@ -15255,6 +15394,222 @@ def parallel_category_agents(df: pd.DataFrame, persona_doc: dict,
     return df
 
 
+def _run_genpop_mismatch_pass(df: pd.DataFrame,
+                               persona_doc: dict,
+                               subject: str,
+                               bp_col: str,
+                               ratio_threshold: float = 3.0,
+                               min_bp_floor: float = 5.0) -> pd.DataFrame:
+    """Sanity-check items whose new BP is implausibly higher than the
+    canonical Gen Pop baseline AND that the persona research agent did
+    NOT specifically flag as expected-high for this audience.
+
+    Catches the Nobu-for-Nike failure mode: an item whose absolute fame
+    led the per-category agent to over-rank it for an audience that has
+    no real reason to engage with it.
+
+    Flagging rule (item is sent to the agent if ALL apply):
+      • Item exists in the canonical gen-pop CSV with a known BP.
+      • Item's new BP >= ratio_threshold × canonical_bp  (default 3×).
+      • Item's new BP >= min_bp_floor                     (default 5%).
+      • Item is NOT in persona_doc.category_guidance[cat].expected_high
+        (case-insensitive, lenient substring match).
+
+    Sends flagged items to gpt-4o batched per-category for ACCEPT/REVISE.
+    No hardcoded brand values — only deterministic gating; the LLM makes
+    the actual ACCEPT/REVISE decision based on persona fit.
+    """
+    import json as _json
+    import concurrent.futures as _futures
+
+    if bp_col not in df.columns:
+        return df
+
+    gp = _load_genpop_csv()
+    if gp is None or gp.empty:
+        # No canonical to compare against — gate is a no-op
+        return df
+
+    client = _get_openai_client()
+    if client is None:
+        print("   ⚠️ Gen-pop mismatch agent skipped (no OpenAI client)")
+        return df
+
+    # Build canonical (cat, value) → bp lookup once.
+    gp_lookup: dict[tuple[str, str], float] = {}
+    try:
+        gp_col = gp.columns[0]
+        gp_val = gp.columns[1]
+        gp_bp = gp.columns[2]
+        for _, r in gp.iterrows():
+            try:
+                cat = str(r[gp_col]).strip().upper()
+                val = str(r[gp_val]).strip().upper()
+                bp = float(r[gp_bp])
+                if cat and val:
+                    gp_lookup[(cat, val)] = bp
+            except (ValueError, TypeError):
+                continue
+    except Exception as e:
+        print(f"   ⚠️ Gen-pop mismatch: failed to index canonical CSV ({e})")
+        return df
+
+    # Build per-category expected_high set from the persona doc.
+    cat_guidance = persona_doc.get('category_guidance', {}) or {}
+    expected_high_by_cat: dict[str, set[str]] = {}
+    for cat_key, blob in cat_guidance.items():
+        cat_u = str(cat_key).strip().upper()
+        items: list[str] = []
+        if isinstance(blob, dict):
+            items = [str(x).strip().upper() for x in (blob.get('expected_high') or []) if str(x).strip()]
+        expected_high_by_cat[cat_u] = set(items)
+
+    def _is_in_expected_high(cat_u: str, val_u: str) -> bool:
+        s = expected_high_by_cat.get(cat_u, set())
+        if not s:
+            return False
+        if val_u in s:
+            return True
+        # Lenient substring match to handle "FOOT LOCKER" vs "FOOTLOCKER",
+        # "WALMART" vs "WALMART.COM", etc.
+        for it in s:
+            if it == val_u or it in val_u or val_u in it:
+                return True
+        return False
+
+    flags_by_cat: dict[str, list[dict]] = {}
+    for idx, row in df.iterrows():
+        try:
+            cat_u = str(row['Column']).strip().upper()
+            val_u = str(row['Value']).strip().upper()
+            new_bp = float(row[bp_col])
+        except (TypeError, ValueError, KeyError):
+            continue
+        if cat_u in _DEMO_SET or cat_u in _BEHAVIORAL_SKIP:
+            continue
+        gp_bp_val = gp_lookup.get((cat_u, val_u))
+        if gp_bp_val is None or gp_bp_val <= 0:
+            continue
+        if new_bp < min_bp_floor:
+            continue
+        if new_bp < ratio_threshold * gp_bp_val:
+            continue
+        if _is_in_expected_high(cat_u, val_u):
+            continue
+        flags_by_cat.setdefault(cat_u, []).append({
+            'idx': idx,
+            'value': str(row['Value']).strip(),
+            'gp_bp': round(gp_bp_val, 4),
+            'new_bp': round(new_bp, 4),
+            'ratio': round(new_bp / max(gp_bp_val, 0.0001), 2),
+        })
+
+    if not flags_by_cat:
+        print("   ✅ Gen-pop mismatch gate: no items flagged")
+        return df
+
+    total_flagged = sum(len(v) for v in flags_by_cat.values())
+    print(f"   🚨 Gen-pop mismatch gate: {total_flagged} items across {len(flags_by_cat)} categories flagged "
+          f"(>= {ratio_threshold}x gen-pop baseline AND not in persona expected_high)")
+
+    persona_summary = persona_doc.get('persona_summary') or '(persona summary unavailable)'
+    demo_snapshot = {k: v for k, v in persona_doc.get('demographics', {}).items()
+                     if k in ('AGE', 'GENDER', 'ETHNICITY', 'INCOME')}
+
+    def _process_category(cat_u: str, items: list[dict]) -> list[dict]:
+        items_block = '\n'.join(
+            f"  {i+1}. {it['value']}  — gen-pop BP {it['gp_bp']:.2f}%, agent set NEW BP to {it['new_bp']:.2f}% ({it['ratio']}x baseline)"
+            for i, it in enumerate(items)
+        )
+        cat_high = sorted(expected_high_by_cat.get(cat_u, set()))
+        cat_high_block = ', '.join(cat_high[:30]) if cat_high else '(none specified)'
+        prompt = f"""You are auditing per-category brand-penetration scores for **{subject}**.
+
+Each item below was scored at >= {ratio_threshold}x the canonical Gen Pop baseline and was NOT specifically called out by the persona research as a strong fit. Decide for EACH item whether the elevation makes sense for this audience or whether the score should be REVISED downward.
+
+PERSONA SUMMARY:
+{persona_summary}
+
+KEY DEMOGRAPHICS:
+{_json.dumps(demo_snapshot, indent=2)}
+
+CATEGORY: {cat_u}
+Persona's expected-high items in this category (FOR REFERENCE ONLY — flagged items below are NOT in this list):
+  {cat_high_block}
+
+FLAGGED ITEMS (each with its gen-pop baseline and the agent's NEW score):
+{items_block}
+
+For each flagged item, decide:
+  • ACCEPT — the elevated BP makes sense for this specific audience (give the same value).
+  • REVISE — the score is wrong; the audience does NOT engage with this item at the elevated rate; provide a REVISED bp (typically closer to or below the gen-pop baseline).
+
+Return ONLY a JSON array, one entry per item, in the same order:
+[
+  {{"value": "<item name as listed above>", "decision": "ACCEPT"|"REVISE", "bp": <number>, "reason": "<one sentence>"}},
+  …
+]
+"""
+        try:
+            resp = client.chat.completions.create(
+                model='gpt-4o',
+                messages=[{'role': 'user', 'content': prompt}],
+                temperature=0.0,
+                max_tokens=min(16384, max(1024, len(items) * 80)),
+            )
+            text = (resp.choices[0].message.content or '').strip()
+            if text.startswith('```'):
+                text = text.split('\n', 1)[1].rsplit('```', 1)[0].strip()
+            i, j = text.find('['), text.rfind(']')
+            if i < 0 or j <= i:
+                return []
+            return _json.loads(text[i:j + 1])
+        except Exception as e:
+            print(f"   ⚠️ Gen-pop mismatch agent [{cat_u}] failed: {e}")
+            return []
+
+    revisions = 0
+    accepts = 0
+    with _futures.ThreadPoolExecutor(max_workers=8) as pool:
+        future_to_cat = {
+            pool.submit(_process_category, cat_u, items): (cat_u, items)
+            for cat_u, items in flags_by_cat.items()
+        }
+        for fut in _futures.as_completed(future_to_cat):
+            cat_u, items = future_to_cat[fut]
+            decisions = fut.result() or []
+            value_to_idx = {it['value'].strip().lower(): it['idx'] for it in items}
+            value_to_old = {it['value'].strip().lower(): it['new_bp'] for it in items}
+            for d in decisions:
+                if not isinstance(d, dict):
+                    continue
+                val = str(d.get('value', '')).strip().lower()
+                dec = str(d.get('decision', '')).strip().upper()
+                idx = value_to_idx.get(val)
+                if idx is None or dec not in ('ACCEPT', 'REVISE'):
+                    continue
+                if dec == 'ACCEPT':
+                    accepts += 1
+                    continue
+                try:
+                    new_bp = float(d.get('bp'))
+                except (TypeError, ValueError):
+                    continue
+                old_bp = value_to_old.get(val, 0.0)
+                # Add tiny noise to the revised value so it doesn't read as an
+                # obviously-LLM-rounded number.
+                jitter = random.uniform(-0.01, 0.01)
+                new_bp = round(max(0.01, min(95.0, new_bp + jitter)), 4)
+                df.at[idx, bp_col] = new_bp
+                if 'Category Share' in df.columns:
+                    df.at[idx, 'Category Share'] = new_bp
+                revisions += 1
+                print(f"      ↘ REVISE [{cat_u}] {d.get('value')}: {old_bp:.2f}% → {new_bp:.2f}% — {d.get('reason', '')[:90]}")
+
+    print(f"   ✅ Gen-pop mismatch gate: {accepts} ACCEPT, {revisions} REVISE")
+    return df
+
+
 def _apply_post_score_agents(df: pd.DataFrame,
                               persona_doc: dict,
                               subject: str,
@@ -15320,6 +15675,20 @@ def _apply_post_score_agents(df: pd.DataFrame,
     # wide-window reruns.
     if wide_window:
         df = _apply_anti_duplicate_jitter(df, bp_col)
+
+    # --- D6) Gen-pop mismatch gate (every run, not just reruns) ------------
+    # Catches the Nobu-for-Nike failure mode: per-cat agent over-ranks an
+    # item by absolute fame even though the audience has no real reason
+    # to engage with it. Items >= 3x canonical gen-pop baseline AND not
+    # called out in the persona's expected_high get sent to gpt-4o for
+    # ACCEPT/REVISE per category. No hardcoded brand values — the gate
+    # is purely deterministic flagging; the LLM makes the actual call.
+    df = _run_genpop_mismatch_pass(
+        df,
+        persona_doc=persona_doc,
+        subject=subject,
+        bp_col=bp_col,
+    )
 
     return df
 
@@ -18338,48 +18707,43 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
     # 3-STEP AGENT PIPELINE (non-genpop) vs. ANCHOR PATH (genpop)
     # ══════════════════════════════════════════════════════════════════
     if is_genpop:
-        # ── GenPop: anchor to gen pop baseline ───────────────────────────
-        print("🎯 Anchoring all values to Gen Pop baseline...")
-        df_final = anchor_to_genpop(df_final, sample_size=final_sample_size)
-        df_final = enforce_cross_category_brand_consistency(df_final)
-        df_final = sort_categories_by_percentage(df_final)
-        df_final = add_brand_penetration_column_using_final_raw(df_final)
-        df_final = add_us_gen_pop_projection(df_final)
-        for col in ['Unique Purchase Confirmations', 'Raw Numbers',
-                     'Actual Unique UID Count (DB)', 'Original Raw Numbers (Database)']:
-            if col in df_final.columns:
-                df_final = df_final.drop(columns=[col])
-        df_final = deduplicate_values_within_category(df_final)
-        df_final = ensure_percentage_four_decimals(df_final)
-        df_final = enforce_max_four_decimals_across_columns(df_final)
-        df_final = enforce_exact_210_dmas(df_final)
-        df_final = set_brand_input_raw_to_sample_size(df_final, is_genpop)
-        df_final = add_brand_penetration_column_using_final_raw(df_final)
-        df_final = add_us_gen_pop_projection(df_final)
+        # ── GenPop: route through the same agent pipeline as profiles ────
+        # Per user spec: GenPop should "act like any other profile" except
+        # demographics + LOCATION stay hard-locked to GENPOP_DEMOGRAPHICS /
+        # GENPOP_DMA_PERCENTAGES (already enforced upstream at line ~17701).
+        # The per-category agents then row-by-row reason about "what % of
+        # all U.S. online adults would have clickstream engagement with
+        # this item?" — so CPG/grocery/luxury/regional all fall LOW
+        # naturally, mass online platforms go HIGH naturally, no anchor
+        # math required.
+        #
+        # The legacy `anchor_to_genpop` index-and-anchor path is replaced
+        # because it was producing 2-3x drift from the canonical CSV even
+        # for pure GenPop runs (its [0.40, 2.20] index bounds were never
+        # meant for the gen-pop CSV against itself). The agent pipeline
+        # gives more accurate AND more legible results.
+        _gp_subject = "the general U.S. adult population (average American adult)"
+        _gp_persona_doc = _build_genpop_persona_doc()
 
-        # ── GenPop rerun: post-anchor agent trio (D3 / D4 / D5) ──────────
-        # User spec: GenPop reruns should "act like the profile reruns just
-        # never changing the demographics". Demographics + LOCATION are
-        # already hard-coded above to GENPOP_DEMOGRAPHICS / GENPOP_DMA_
-        # PERCENTAGES, so they ARE locked. For behavioral items, layer the
-        # same trio that profile reruns get on top of the gen-pop anchor:
-        #   D3) delta-sanity vs. the prior file's BP values (catches wild
-        #       post-anchor swings — typically panel-noise artifacts)
-        #   D4) audience calibration on wide-window reruns (>7 days apart)
-        #       — RAISE/LOWER/INSERT for national-level temporal trends
-        #       (TikTok ↑, Facebook ↓, Q4 shopping spike, etc.). Uses a
-        #       GenPop-specific persona doc so the prompt asks about
-        #       broad national shifts, not persona calendar events.
-        #   D5) anti-duplicate jitter (>7 days apart) — breaks tier ties
-        # Same wide-window threshold as profiles (>7 days). No agent fires
-        # for fresh GenPop runs — only on reruns with a prior file.
+        print(f"\n{'='*60}")
+        print(f"  GENPOP AGENT PIPELINE — '{_gp_subject}'")
+        print(f"{'='*60}")
+        print(f"   • Demographics + LOCATION: HARD-LOCKED to GENPOP_DEMOGRAPHICS / GENPOP_DMA_PERCENTAGES")
+        print(f"   • Behavioral: row-by-row digital-clickstream reasoning per category")
+        print(f"   • Persona category guidance: {len(_gp_persona_doc.get('category_guidance', {}))} categories with expected_high/low anchors")
+
+        # Build the rerun-context inputs (only meaningful when a prior file
+        # is supplied; for fresh GenPop runs these stay empty / None and
+        # only the per-category fresh scoring fires).
         _gp_is_rerun = bool(
             previous_file_path
             and (previous_demo_lookup or previous_behavioral_lookup)
         )
+        # Rerun-specific inputs (only used when prior file exists). Same
+        # logic as the profile branch's `_is_rerun_same_brand` plumbing.
+        _gp_bp_lookup: dict = {}
+        _gp_bp_rows: list[tuple[str, str, float]] = []
         if _gp_is_rerun:
-            _gp_bp_lookup = {}
-            _gp_bp_rows: list[tuple[str, str, float]] = []
             try:
                 if (getattr(load_previous_run_data, '_last_bp_path', None) == previous_file_path):
                     _gp_bp_lookup = getattr(load_previous_run_data, '_last_bp_lookup', {}) or {}
@@ -18388,61 +18752,81 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
                 _gp_bp_lookup = {}
                 _gp_bp_rows = []
 
-            def _fmt_dates_gp(s, e):
-                try:
-                    return f"{s} to {e}"
-                except Exception:
-                    return ''
-            _gp_new_dates = _fmt_dates_gp(behavior_start, behavior_end)
-            _gp_prior_dates = previous_behavior_dates or 'prior reference window'
+        def _fmt_dates_gp(s, e):
+            try:
+                return f"{s} to {e}"
+            except Exception:
+                return ''
+        _gp_new_dates = _fmt_dates_gp(behavior_start, behavior_end)
+        _gp_prior_dates = previous_behavior_dates or 'prior reference window'
 
-            _gp_wide_window = False
-            if previous_behavior_dates:
-                try:
-                    _prior_start_str = previous_behavior_dates.split('TO')[0].strip()
-                    _prior_start = pd.to_datetime(_prior_start_str)
-                    _new_start = pd.to_datetime(behavior_start)
-                    _gp_wide_window = abs((_new_start - _prior_start).days) > 7
-                except Exception:
-                    _gp_wide_window = False
+        _gp_wide_window = False
+        if _gp_is_rerun and previous_behavior_dates:
+            try:
+                _prior_start_str = previous_behavior_dates.split('TO')[0].strip()
+                _prior_start = pd.to_datetime(_prior_start_str)
+                _new_start = pd.to_datetime(behavior_start)
+                _gp_wide_window = abs((_new_start - _prior_start).days) > 7
+            except Exception:
+                _gp_wide_window = False
 
-            _gp_persona_doc = _build_genpop_persona_doc()
-            _gp_subject = "the general U.S. adult population (GenPop baseline)"
-
-            print(f"\n{'='*60}")
-            print(f"  GENPOP RERUN: post-anchor agent trio (D3/D4/D5)")
-            print(f"{'='*60}")
-            print(f"   • Demographics + LOCATION: HARD-LOCKED to GENPOP_DEMOGRAPHICS / GENPOP_DMA_PERCENTAGES")
-            print(f"   • Prior reference: {len(_gp_bp_lookup)} BP values for delta-sanity comparison")
-            print(f"   • Wide-date-window detected: {_gp_wide_window} "
+        if _gp_is_rerun:
+            print(f"   • Rerun mode: ON — prior reference has {len(_gp_bp_lookup)} BP values for delta-sanity")
+            print(f"   • Wide-date-window: {_gp_wide_window} "
                   f"(prior='{previous_behavior_dates}', new='{behavior_start} to {behavior_end}')")
-            if _gp_wide_window:
-                print(f"   • Audience calibration: ON — broad national trends (TikTok/FB shifts, Q4 shopping, election cycles, etc.)")
-                print(f"   • Anti-duplicate jitter: ON")
-            else:
-                print(f"   • Audience calibration + anti-dup jitter: OFF (date windows within 1 week of each other)")
+        else:
+            print(f"   • Fresh GenPop run (no prior file) — fresh per-category scoring only")
 
-            _gp_bp_col = 'Brand Penetration (Row)' if 'Brand Penetration (Row)' in df_final.columns else None
-            if _gp_bp_col:
-                df_final = _apply_post_score_agents(
-                    df_final,
-                    persona_doc=_gp_persona_doc,
-                    subject=_gp_subject,
-                    delta_sanity_lookup=_gp_bp_lookup if _gp_bp_lookup else None,
-                    prior_dates_label=_gp_prior_dates,
-                    new_dates_label=_gp_new_dates,
-                    wide_window=_gp_wide_window,
-                    bp_col=_gp_bp_col,
-                )
-                # If the calibration agent INSERTED new rows we need to
-                # re-stamp downstream columns (BP column was edited in
-                # place; raw numbers + DMA enforcement should still hold,
-                # but recompute projections defensively).
-                df_final = enforce_max_four_decimals_across_columns(df_final)
-                df_final = add_us_gen_pop_projection(df_final)
-            else:
-                print("   ⚠️ Skipping GenPop agent trio — no BP column available")
-            print(f"{'='*60}\n")
+        # Ensure df has the columns the agent pipeline expects before we
+        # hand it off (parallel_category_agents reads/writes these).
+        for col in ['Unique Purchase Confirmations', 'Raw Numbers',
+                     'Actual Unique UID Count (DB)', 'Original Raw Numbers (Database)']:
+            if col in df_final.columns:
+                df_final = df_final.drop(columns=[col])
+        if 'Brand Penetration (Row)' not in df_final.columns and 'Category Share' in df_final.columns:
+            df_final['Brand Penetration (Row)'] = df_final['Category Share']
+        if 'Original Raw Numbers' not in df_final.columns:
+            df_final['Original Raw Numbers'] = 0
+
+        # ── THE CALL — same agent pipeline as profiles ──
+        # lock_demographics=True → persona_doc demographics (which come
+        # from GENPOP_DEMOGRAPHICS) get written EXACTLY, no organic noise,
+        # so the gen-pop demographic distribution stays canonical.
+        df_final = parallel_category_agents(
+            df_final, _gp_persona_doc, _gp_subject, brands,
+            previous_behavioral_lookup=None,
+            lock_demographics=True,
+            previous_bp_rows=(_gp_bp_rows if _gp_is_rerun else None),
+            delta_sanity_lookup=(_gp_bp_lookup if _gp_is_rerun and _gp_bp_lookup else None),
+            delta_sanity_subject=_gp_subject,
+            delta_sanity_prior_dates=_gp_prior_dates,
+            delta_sanity_new_dates=_gp_new_dates,
+            wide_window=_gp_wide_window,
+        )
+
+        # Final sanity check (same as profile path) so brand inputs at
+        # 100% etc. stay enforced after the agents have written values.
+        print("🔒 GenPop sanity check …")
+        df_final = agent_pipeline_final_sanity_check(df_final, brands)
+
+        # Downstream cleanup that the legacy anchor path used to do.
+        # All of these are post-write housekeeping (ordering, projections,
+        # decimal cleanup, DMA enforcement) — none of them recompute BPs.
+        df_final = enforce_cross_category_brand_consistency(df_final)
+        df_final = sort_categories_by_percentage(df_final)
+        df_final = add_brand_penetration_column_using_final_raw(df_final)
+        df_final = add_us_gen_pop_projection(df_final)
+        df_final = deduplicate_values_within_category(df_final)
+        df_final = ensure_percentage_four_decimals(df_final)
+        df_final = enforce_max_four_decimals_across_columns(df_final)
+        df_final = enforce_exact_210_dmas(df_final)
+        df_final = set_brand_input_raw_to_sample_size(df_final, is_genpop)
+        df_final = add_brand_penetration_column_using_final_raw(df_final)
+        df_final = add_us_gen_pop_projection(df_final)
+
+        print(f"{'='*60}")
+        print(f"  GENPOP AGENT PIPELINE COMPLETE")
+        print(f"{'='*60}\n")
     else:
         # ── Non-GenPop: 3-Step Agent Pipeline ───────────────────────────
         # Drop intermediate columns before agent pipeline
