@@ -15279,20 +15279,51 @@ def parallel_category_agents(df: pd.DataFrame, persona_doc: dict,
                     break
             if not matched:
                 unmatched_indices.append(idx)
-        # Spread remainder across unmatched DMAs with random variation
+        # Spread remainder across unmatched DMAs.
+        #
+        # OLD BEHAVIOR (BUG): used random.uniform(0.3, 1.7) weights, which
+        # gave small markets like Greenville-Spartanburg ~0.41% and large
+        # markets like Tucson ~0.01% purely by luck of the random draw.
+        # Locations bottom-10 felt nothing like real US geography.
+        #
+        # NEW BEHAVIOR: weight by the canonical Gen Pop DMA distribution
+        # (GENPOP_DMA_PERCENTAGES), which IS the real US population share
+        # per DMA. Then the persona's affinity adjustments (NYC/LA/etc the
+        # LLM bumped up) sit ON TOP of an accurate population baseline,
+        # rather than on top of noise.
         remainder = max(0.0, 100.0 - assigned_total)
         if unmatched_indices and remainder > 0:
-            n_unmatched = len(unmatched_indices)
-            weights = [random.uniform(0.3, 1.7) for _ in range(n_unmatched)]
-            w_total = sum(weights)
+            # Build canonical baseline lookup (DMA name UPPER → US %).
+            try:
+                gp_dma_pct = {normalize_dma_for_display(str(name)).upper(): float(pct)
+                               for name, pct in GENPOP_DMA_PERCENTAGES}
+            except Exception:
+                gp_dma_pct = {}
+
+            # Compute baseline weight for each unmatched DMA. If a DMA isn't
+            # found in the canonical map (rare — name fuzziness), fall back
+            # to the median canonical weight so it doesn't get zero.
+            median_baseline = (sorted(gp_dma_pct.values())[len(gp_dma_pct)//2]
+                               if gp_dma_pct else 0.5)
+            weights = []
+            for idx in unmatched_indices:
+                val_u = str(df.at[idx, 'Value']).strip().upper()
+                w = gp_dma_pct.get(val_u)
+                if w is None:
+                    # Try substring match (handles "Springfield Holyoke MA"
+                    # vs "SPRINGFIELD-HOLYOKE" style differences).
+                    w = next((p for k, p in gp_dma_pct.items()
+                              if k in val_u or val_u in k), median_baseline)
+                weights.append(max(0.001, float(w)))
+            w_total = sum(weights) or 1.0
+
             for i, idx in enumerate(unmatched_indices):
                 raw_pct = (weights[i] / w_total) * remainder
-                d1 = random.randint(1, 9)
-                d2 = random.randint(1, 9)
-                d3 = random.randint(1, 9)
-                d4 = random.randint(1, 9)
-                frac = d1 * 0.001 + d2 * 0.0001
-                noisy_pct = round(max(0.0011, raw_pct + frac * random.choice([-1, 1])), 4)
+                # ±2% relative jitter (and at least ±0.0005 absolute) so
+                # values look organic / 4dp without distorting magnitude.
+                jitter_amount = max(0.0005, raw_pct * 0.02)
+                noisy_pct = raw_pct + random.uniform(-jitter_amount, jitter_amount)
+                noisy_pct = round(max(0.0011, noisy_pct), 4)
                 df.at[idx, bp_col] = noisy_pct
                 if pct_col and pct_col in df.columns:
                     df.at[idx, pct_col] = noisy_pct
