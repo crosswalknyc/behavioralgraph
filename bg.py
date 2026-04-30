@@ -13837,8 +13837,6 @@ Return ONLY a single valid JSON object — no markdown, no commentary.
       "NO": <percent>
     }},
     "OCCUPATION": {{
-      "EMPLOYED FULL-TIME": <percent>,
-      "EMPLOYED PART-TIME": <percent>,
       "SELF-EMPLOYED": <percent>,
       "STUDENT": <percent>,
       "HOMEMAKER": <percent>,
@@ -13888,6 +13886,7 @@ RULES:
 - ETHNICITY IS CRITICAL: Research the subject's OWN race/ethnicity/heritage. If the subject is a person of color (Asian, Black, Hispanic, etc.), their fan base will significantly over-index on that ethnicity vs. general US population. For example, a Chinese-American actor's audience should have ASIAN as one of the top ethnicities (30-50%+), not just 7% US average. A Black rapper's audience should have BLACK OR AFRICAN AMERICAN at 40-60%+. Never default to generic US census proportions — the subject's identity strongly shapes their audience demographics.
 - AGE IS CRITICAL: The subject's OWN age heavily influences their audience age distribution. Research the subject's actual age. A 58-year-old actress will have an audience peaking in the 45-54 and 55-64 brackets (30%+ and 20%+ respectively), with much lower percentages for 18-24 (5-8%) and 17 AND UNDER (2-5%). A 20-year-old pop star will peak at 18-24 (35-45%) and 17 AND UNDER (15-25%). The audience's peak age bracket should align with or be slightly younger than the subject's own age bracket. Never give equal weight to age brackets that are 20+ years apart from the subject's age.
 - Do NOT include "Prefer Not to Say" or "Other" in AGE, GENDER, ETHNICITY, or INCOME. Those categories must only contain the exact buckets listed above.
+- Do NOT include "EMPLOYED FULL-TIME" or "EMPLOYED PART-TIME" in OCCUPATION. Those values are forbidden — they are NOT real occupation categories. OCCUPATION must only use: SELF-EMPLOYED, STUDENT, HOMEMAKER, RETIRED, UNEMPLOYED, PREFER NOT TO SAY.
 - LOCATION: Provide at least 15-20 top DMAs with realistic, varied percentages. The percentages should NOT be clustered — use a natural distribution where the #1 DMA might be 8-12%, #5 might be 4-6%, #10 might be 2-3%, #15 might be 1-2%, #20 might be 0.5-1%. The sum should be ≤ 100; remainder is auto-spread to the other 190+ DMAs with random variation.
 
 CATEGORY GUIDANCE — STRUCTURED FORMAT (THIS IS THE PRIMARY VALUE OF THIS PROMPT):
@@ -14988,6 +14987,81 @@ Reply with ONLY a JSON array (no markdown, no commentary):
 # ---------------------------------------------------------------------------
 # Drop blank-value demographic rows + redistribute their share
 # ---------------------------------------------------------------------------
+# ─── DEMOGRAPHIC VALUE BLOCKLIST ──────────────────────────────────────
+# Values that must NEVER appear in a demographic category, regardless of
+# which agent / data source produced them. If they show up, the row is
+# dropped and its share is redistributed across the remaining named
+# rows in the same category (proportional to existing weights).
+_DEMO_VALUE_BLOCKLIST: dict[str, set[str]] = {
+    'OCCUPATION': {'EMPLOYED FULL-TIME', 'EMPLOYED PART-TIME'},
+}
+
+
+def _drop_blocklisted_demo_values(df: pd.DataFrame) -> pd.DataFrame:
+    """Remove forbidden Value rows from demographic categories and
+    redistribute their share across the remaining named rows.
+
+    Currently used to enforce the OCCUPATION schema — EMPLOYED FULL-TIME
+    and EMPLOYED PART-TIME are remnants from a legacy schema and conflict
+    with the real occupation taxonomy (SELF-EMPLOYED, STUDENT, HOMEMAKER,
+    RETIRED, UNEMPLOYED, PREFER NOT TO SAY). Even though the prompts
+    forbid them, agents and legacy data flows occasionally re-emit them;
+    this gate is the deterministic catch-all.
+    """
+    if 'Column' not in df.columns or 'Value' not in df.columns:
+        return df
+    if not _DEMO_VALUE_BLOCKLIST:
+        return df
+
+    cat_upper = df['Column'].astype(str).str.strip().str.upper()
+    val_upper = df['Value'].astype(str).str.strip().str.upper()
+
+    redistribute_cols = [c for c in (
+        'Brand Penetration (Row)', 'Category Share', 'Original Raw Numbers',
+        'US Gen Pop Projection', 'Percentage'
+    ) if c in df.columns]
+
+    drop_indices: list[int] = []
+    total_dropped = 0
+
+    for cat_u, blocked_vals in _DEMO_VALUE_BLOCKLIST.items():
+        cat_mask = (cat_upper == cat_u)
+        if not cat_mask.any():
+            continue
+        bad_mask = cat_mask & val_upper.isin(blocked_vals)
+        if not bad_mask.any():
+            continue
+        good_mask = cat_mask & ~bad_mask
+        if not good_mask.any():
+            print(f"   ⚠️  Demo {cat_u}: ALL rows are blocklisted; not dropping (would empty category)")
+            continue
+
+        for col in redistribute_cols:
+            bad_total = pd.to_numeric(df.loc[bad_mask, col], errors='coerce').fillna(0).sum()
+            if bad_total <= 0:
+                continue
+            good_vals = pd.to_numeric(df.loc[good_mask, col], errors='coerce').fillna(0)
+            good_sum = good_vals.sum()
+            if good_sum <= 0:
+                share_each = bad_total / len(good_vals)
+                df.loc[good_mask, col] = (good_vals + share_each).round(4)
+            else:
+                weights = good_vals / good_sum
+                df.loc[good_mask, col] = (good_vals + weights * bad_total).round(4)
+
+        bad_indices = df.index[bad_mask].tolist()
+        drop_indices.extend(bad_indices)
+        bad_values_present = sorted(df.loc[bad_mask, 'Value'].astype(str).str.strip().unique().tolist())
+        total_dropped += len(bad_indices)
+        print(f"   🚫 Demo {cat_u}: dropped {len(bad_indices)} blocklisted row(s) "
+              f"({', '.join(bad_values_present)}); share redistributed across {int(good_mask.sum())} remaining rows")
+
+    if drop_indices:
+        df = df.drop(index=drop_indices).reset_index(drop=True)
+
+    return df
+
+
 def _redistribute_blank_demo_values(df: pd.DataFrame) -> pd.DataFrame:
     """For each demographic category, find rows with blank/NaN Value and
     redistribute their Brand Penetration / Category Share / Original Raw
@@ -15365,8 +15439,8 @@ def parallel_category_agents(df: pd.DataFrame, persona_doc: dict,
         'SEXUAL_ORIENTATION': ['STRAIGHT / HETEROSEXUAL', 'GAY OR LESBIAN',
                                'ANOTHER SEXUAL ORIENTATION', 'PREFER NOT TO SAY'],
         'PARENTAL_STATUS': ['NO CHILDREN', 'HAS CHILDREN', 'PREFER NOT TO SAY'],
-        'OCCUPATION': ['EMPLOYED FULL-TIME', 'EMPLOYED PART-TIME', 'SELF-EMPLOYED', 'STUDENT',
-                       'HOMEMAKER', 'RETIRED', 'UNEMPLOYED', 'PREFER NOT TO SAY'],
+        'OCCUPATION': ['SELF-EMPLOYED', 'STUDENT', 'HOMEMAKER', 'RETIRED',
+                       'UNEMPLOYED', 'PREFER NOT TO SAY'],
     }
 
     def _norm_bracket(s: str) -> str:
@@ -19390,6 +19464,11 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
     # blank-value row dropped. (Behavioral categories CAN have empty
     # placeholder rows in some flows, so we only touch demographics here.)
     df_final = _redistribute_blank_demo_values(df_final)
+    # Drop blocklisted demographic values (e.g. EMPLOYED FULL-TIME / PART-TIME
+    # in OCCUPATION). These are forbidden values that occasionally slip through
+    # from agents or legacy data; their share is redistributed across the
+    # remaining valid OCCUPATION buckets.
+    df_final = _drop_blocklisted_demo_values(df_final)
 
     # --- FINAL INPUT BRAND 100% ENFORCEMENT (ABSOLUTE LAST STEP) ---
     # Skip 100% enforcement for GenPop to allow natural brand percentages

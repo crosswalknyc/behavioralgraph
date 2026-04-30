@@ -309,8 +309,6 @@ Return ONLY a single valid JSON object — no markdown, no commentary.
       "NO": <percent>
     }},
     "OCCUPATION": {{
-      "EMPLOYED FULL-TIME": <percent>,
-      "EMPLOYED PART-TIME": <percent>,
       "SELF-EMPLOYED": <percent>,
       "STUDENT": <percent>,
       "HOMEMAKER": <percent>,
