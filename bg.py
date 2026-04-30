@@ -16189,6 +16189,122 @@ def _apply_canonical_baseline_cap(df: pd.DataFrame,
     return df
 
 
+def _apply_canonical_baseline_floor(df: pd.DataFrame,
+                                      persona_doc: dict,
+                                      bp_col: str,
+                                      mass_baseline_threshold: float = 10.0,
+                                      min_floor_ratio: float = 0.5,
+                                      min_floor_abs: float = 8.0,
+                                      skip_categories: set | None = None) -> pd.DataFrame:
+    """Complement to the cap: catch IMPLAUSIBLY SUPPRESSED mass platforms.
+
+    The Nike STREAMING/PLATFORM bug: agent over-fitted to "sports affinity"
+    and pushed Disney+ down to 4.84% (vs canonical 27.91% — 0.17x baseline)
+    and Apple TV+ to 2.38% (vs 26.84% — 0.09x). Meanwhile niche sports
+    streamers like FIFA+ landed at 8x baseline. The audience clearly uses
+    Disney+ at near-baseline; the agent simply ranked them below sports
+    items by mistake.
+
+    For each behavioral row whose canonical baseline >= mass_baseline_threshold:
+      • If the agent's value is < canonical × min_floor_ratio
+      • AND the item is NOT in persona's expected_low for this category
+      → REVISE upward to canonical × min_floor_ratio.
+
+    Only fires for "mass" items (canonical >= 10%) — niche items are
+    legitimately suppressible. Items the persona explicitly called out as
+    expected_low are left alone (low fit is intentional).
+
+    No renormalization — most behavioral categories don't sum to 100
+    (people use multiple streamers / shop multiple stores).
+    """
+    if bp_col not in df.columns:
+        return df
+    if skip_categories is None:
+        skip_categories = {'PODCAST', 'PODCAST RANKER', 'TALENT', 'HOST/PERSONALITY'}
+
+    gp = _load_genpop_csv()
+    if gp is None or gp.empty:
+        return df
+
+    gp_lookup: dict[tuple[str, str], float] = {}
+    try:
+        gp_col = gp.columns[0]
+        gp_val = gp.columns[1]
+        gp_bp = gp.columns[2]
+        for _, r in gp.iterrows():
+            try:
+                cat_u = str(r[gp_col]).strip().upper()
+                val_u = str(r[gp_val]).strip().upper()
+                bpv = float(r[gp_bp])
+                if cat_u and val_u:
+                    gp_lookup[(cat_u, val_u)] = bpv
+            except (ValueError, TypeError):
+                continue
+    except Exception as e:
+        print(f"   ⚠️ Baseline floor: failed to index canonical CSV ({e})")
+        return df
+
+    cat_guidance = persona_doc.get('category_guidance', {}) or {}
+    expected_low_by_cat: dict[str, set[str]] = {}
+    for cat_key, blob in cat_guidance.items():
+        cat_u = str(cat_key).strip().upper()
+        items = []
+        if isinstance(blob, dict):
+            items = [str(x).strip().upper() for x in (blob.get('expected_low') or []) if str(x).strip()]
+        expected_low_by_cat[cat_u] = set(items)
+
+    def _is_low(cat_u: str, val_u: str) -> bool:
+        s = expected_low_by_cat.get(cat_u, set())
+        if not s:
+            return False
+        if val_u in s:
+            return True
+        for it in s:
+            if it == val_u or it in val_u or val_u in it:
+                return True
+        return False
+
+    floored = 0
+    biggest = []
+    for idx, row in df.iterrows():
+        try:
+            cat_u = str(row['Column']).strip().upper()
+            val_u = str(row['Value']).strip().upper()
+            new_bp = float(row[bp_col])
+        except (TypeError, ValueError, KeyError):
+            continue
+        if cat_u in _DEMO_SET or cat_u in _BEHAVIORAL_SKIP:
+            continue
+        if cat_u in skip_categories:
+            continue
+        canon = gp_lookup.get((cat_u, val_u))
+        if canon is None or canon < mass_baseline_threshold:
+            continue
+        if _is_low(cat_u, val_u):
+            continue
+        floor = max(canon * min_floor_ratio, min_floor_abs)
+        if new_bp >= floor:
+            continue
+        ratio_before = new_bp / max(canon, 0.0001)
+        jitter = random.uniform(-0.05, 0.05)
+        floored_bp = round(max(0.01, floor + jitter), 4)
+        biggest.append((cat_u, str(row['Value']), canon, new_bp, floored_bp, ratio_before))
+        df.at[idx, bp_col] = floored_bp
+        if 'Category Share' in df.columns:
+            df.at[idx, 'Category Share'] = floored_bp
+        floored += 1
+
+    if floored:
+        print(f"   📈 Baseline floor (deterministic): {floored} mass items raised from implausibly suppressed values")
+        biggest.sort(key=lambda t: t[5])
+        for cat_u, val, canon, before, after, ratio in biggest[:10]:
+            print(f"      ↗ FLOOR [{cat_u}] {val}: {before:.2f}% → {after:.2f}% "
+                  f"(canonical {canon:.2f}%, was {ratio:.2f}x baseline)")
+    else:
+        print("   ✅ Baseline floor: no mass items below ceiling")
+    return df
+
+
 def _apply_post_score_agents(df: pd.DataFrame,
                               persona_doc: dict,
                               subject: str,
@@ -16280,6 +16396,20 @@ def _apply_post_score_agents(df: pd.DataFrame,
     # This is what stops PATEK PHILIPPE 0.19% canonical from landing at 30%
     # in Nike output, regardless of what the LLM agents decided.
     df = _apply_canonical_baseline_cap(
+        df,
+        persona_doc=persona_doc,
+        bp_col=bp_col,
+    )
+
+    # --- D8) Deterministic canonical-baseline floor (every run) ------------
+    # Complement to D7. Catches the inverse failure mode: when the agent
+    # over-fits to a single audience trait (e.g. "sports") and SUPPRESSES
+    # mainstream platforms below 50% of baseline. The Nike STREAMING/PLATFORM
+    # bug had Disney+ at 0.17x baseline and Apple TV+ at 0.09x while niche
+    # sports streamers landed at 8x. This floor restores mass items
+    # (canonical >= 10%) to at least 50% of their baseline unless the
+    # persona explicitly listed them in expected_low.
+    df = _apply_canonical_baseline_floor(
         df,
         persona_doc=persona_doc,
         bp_col=bp_col,
