@@ -16014,6 +16014,20 @@ Return ONLY a JSON array, one entry per item, in the same order:
     return df
 
 
+_TIGHT_CAP_CATEGORIES = {
+    'VIRTUAL MVPD FAST',     # YouTube TV, FuboTV, Pluto, Sling — subscription / FAST
+    'STREAMING/PLATFORM',    # Netflix, Disney+, Max — paid streaming subs
+    'STREAMING/MUSIC',       # Spotify, Apple Music — primary music sub
+    'TELECOM',               # Verizon, AT&T, T-Mobile — primary carrier (exclusive)
+    'INSURANCE',             # auto/health/life insurance — primary policy
+    'BANKING',               # Chase, Wells Fargo, BofA — primary bank
+    'CREDIT PROVIDER',       # Visa/MC/Amex — primary card brand
+    'AUTOMOBILE',            # current vehicle make
+    'WORKOUT FACILITY',      # Planet Fitness, Equinox — primary gym
+    'TRAVEL',                # specific airline/hotel/site loyalty
+}
+
+
 def _apply_canonical_baseline_cap(df: pd.DataFrame,
                                     persona_doc: dict,
                                     bp_col: str,
@@ -16024,7 +16038,13 @@ def _apply_canonical_baseline_cap(df: pd.DataFrame,
                                     small_baseline_threshold: float = 1.0,
                                     small_baseline_abs_cap: float = 2.5,
                                     min_reliable_canonical: float = 0.05,
-                                    skip_categories: set | None = None) -> pd.DataFrame:
+                                    skip_categories: set | None = None,
+                                    tight_cap_categories: set | None = None,
+                                    tight_high_mult: float = 2.0,
+                                    tight_default_mult: float = 1.5,
+                                    tight_high_floor: float = 5.0,
+                                    tight_default_floor: float = 3.0,
+                                    tight_abs_ceiling: float = 50.0) -> pd.DataFrame:
     """Hard deterministic cap on per-row BPs based on canonical Gen Pop baseline.
 
     This is the FINAL safety net AFTER all LLM-based post-score agents (D3/D4/D6).
@@ -16040,6 +16060,17 @@ def _apply_canonical_baseline_cap(df: pd.DataFrame,
       • EXTRA RULE for tiny baselines (< small_baseline_threshold = 1%):
           cap = min(cap, small_baseline_abs_cap)  → 2.5% absolute hard ceiling.
           (luxury / niche items cannot exceed ~2.5% even for strong-fit personas)
+
+    TIGHT-CAP CATEGORIES (mutually-exclusive subscriptions / primary-choice
+    categories) get much tighter ceilings because no audience can subscribe
+    to YouTube TV at 70% just because they're "aspirational tech":
+      • expected_high: cap = max(canon × tight_high_mult=2.0, tight_high_floor=5%)
+      • default:       cap = max(canon × tight_default_mult=1.5, tight_default_floor=3%)
+      • Hard absolute ceiling: tight_abs_ceiling=50% (no FAST channel / telecom /
+        gym / bank / insurance brand reaches >50% audience BP, ever).
+    Default tight-cap set: VIRTUAL MVPD FAST, STREAMING/PLATFORM, STREAMING/MUSIC,
+    TELECOM, INSURANCE, BANKING, CREDIT PROVIDER, AUTOMOBILE, WORKOUT FACILITY,
+    TRAVEL.
 
     EXEMPTIONS (cap does NOT fire):
       • Canonical baseline < min_reliable_canonical (default 0.05%): treated as
@@ -16057,6 +16088,8 @@ def _apply_canonical_baseline_cap(df: pd.DataFrame,
     """
     if skip_categories is None:
         skip_categories = {'PODCAST', 'PODCAST RANKER', 'TALENT', 'HOST/PERSONALITY'}
+    if tight_cap_categories is None:
+        tight_cap_categories = _TIGHT_CAP_CATEGORIES
     if bp_col not in df.columns:
         return df
     gp = _load_genpop_csv()
@@ -16122,11 +16155,18 @@ def _apply_canonical_baseline_cap(df: pd.DataFrame,
             # Canonical too sparse to be reliable ground truth; trust the agent.
             continue
         is_high = _is_high(cat_u, val_u)
-        mult = high_mult if is_high else default_mult
-        floor = high_min_floor if is_high else default_min_floor
-        cap = max(canon * mult, floor)
-        if canon < small_baseline_threshold:
-            cap = min(cap, small_baseline_abs_cap)
+        is_tight = cat_u in tight_cap_categories
+        if is_tight:
+            mult = tight_high_mult if is_high else tight_default_mult
+            floor = tight_high_floor if is_high else tight_default_floor
+            cap = max(canon * mult, floor)
+            cap = min(cap, tight_abs_ceiling)
+        else:
+            mult = high_mult if is_high else default_mult
+            floor = high_min_floor if is_high else default_min_floor
+            cap = max(canon * mult, floor)
+            if canon < small_baseline_threshold:
+                cap = min(cap, small_baseline_abs_cap)
         if new_bp <= cap:
             continue
         ratio_before = new_bp / max(canon, 0.0001)
