@@ -14144,6 +14144,21 @@ The "US baseline" shown next to each item is the MEASURED national digital engag
   • Items WITHOUT a baseline ("not measured"):
       – Use your best estimate of what % of THIS audience would engage digitally.
   • Hard ceiling: NO score above 95% unless the item is in expected_high AND baseline >= 70% (e.g. YouTube/Google for any mass-online persona).
+
+ABSOLUTE LUXURY / SMALL-BASELINE RULE — NON-NEGOTIABLE:
+  • If baseline is < 1% (luxury brands, niche retailers, ultra-premium items like
+    PATEK PHILIPPE, HERMES, BOTTEGA VENETA, GIVENCHY, DIOR, BALENCIAGA, MYTHERESA,
+    CETTIRE, STADIUM GOODS, NET-A-PORTER, YVES SAINT LAURENT, STITCHFIX, etc.):
+      – Maximum allowed score = max(baseline × 5, 2.5%). Period.
+      – Example: Patek Philippe baseline 0.19% → MAX 2.5% even for HNW persona.
+      – Example: Hermes baseline 0.48% → MAX 2.5%.
+      – Example: Bottega Veneta baseline 0.53% → MAX 2.65%.
+      – These items have low DIGITAL clickstream regardless of brand desire.
+        Aspirational does NOT mean people are visiting patekphilippe.com.
+  • If baseline is 1-3% (mid-luxury / specialty: LOUIS VUITTON, GUCCI, PRADA,
+    BURBERRY, NEIMAN MARCUS):
+      – Maximum allowed score = baseline × 5. Period.
+      – Example: Louis Vuitton baseline 1.02% → MAX 5.1%.
 """
     else:
         anchor_rules = ''
@@ -15788,6 +15803,141 @@ Return ONLY a JSON array, one entry per item, in the same order:
     return df
 
 
+def _apply_canonical_baseline_cap(df: pd.DataFrame,
+                                    persona_doc: dict,
+                                    bp_col: str,
+                                    high_mult: float = 8.0,
+                                    high_min_floor: float = 2.5,
+                                    default_mult: float = 5.0,
+                                    default_min_floor: float = 1.5,
+                                    small_baseline_threshold: float = 1.0,
+                                    small_baseline_abs_cap: float = 2.5,
+                                    min_reliable_canonical: float = 0.05,
+                                    skip_categories: set | None = None) -> pd.DataFrame:
+    """Hard deterministic cap on per-row BPs based on canonical Gen Pop baseline.
+
+    This is the FINAL safety net AFTER all LLM-based post-score agents (D3/D4/D6).
+    It catches the failure mode where the per-cat agent over-scores luxury / niche
+    items by 50-160x baseline because the persona was framed as "aspirational" and
+    the LLM ignored the soft 1.5-3x indexing rule in the prompt.
+
+    For each behavioral row whose canonical baseline is known:
+      • If item is in persona_doc.category_guidance[cat].expected_high:
+          cap = max(canonical_bp × high_mult, high_min_floor)
+      • Otherwise:
+          cap = max(canonical_bp × default_mult, default_min_floor)
+      • EXTRA RULE for tiny baselines (< small_baseline_threshold = 1%):
+          cap = min(cap, small_baseline_abs_cap)  → 2.5% absolute hard ceiling.
+          (luxury / niche items cannot exceed ~2.5% even for strong-fit personas)
+
+    EXEMPTIONS (cap does NOT fire):
+      • Canonical baseline < min_reliable_canonical (default 0.05%): treated as
+        "no reliable ground truth" — the canonical CSV doesn't measure these
+        items well enough to enforce a cap. This protects PODCAST/PODCAST RANKER
+        rows where Joe Rogan's measured clickstream is 0.0004% but real
+        listenership is meaningfully larger.
+      • Categories in skip_categories (default: PODCAST, PODCAST RANKER, TALENT,
+        HOST/PERSONALITY) are skipped entirely. These categories' canonical
+        values are systematically under-counted by clickstream measurement.
+
+    Capped values get a tiny ±0.05pp jitter so they don't read as round LLM numbers.
+    Items with new_bp <= cap are left untouched. Items without a canonical baseline
+    are left untouched (no ground truth to compare against).
+    """
+    if skip_categories is None:
+        skip_categories = {'PODCAST', 'PODCAST RANKER', 'TALENT', 'HOST/PERSONALITY'}
+    if bp_col not in df.columns:
+        return df
+    gp = _load_genpop_csv()
+    if gp is None or gp.empty:
+        print("   ⚠️ Baseline cap skipped (no canonical Gen Pop CSV)")
+        return df
+
+    gp_lookup: dict[tuple[str, str], float] = {}
+    try:
+        gp_col = gp.columns[0]
+        gp_val = gp.columns[1]
+        gp_bp = gp.columns[2]
+        for _, r in gp.iterrows():
+            try:
+                cat_u = str(r[gp_col]).strip().upper()
+                val_u = str(r[gp_val]).strip().upper()
+                bpv = float(r[gp_bp])
+                if cat_u and val_u:
+                    gp_lookup[(cat_u, val_u)] = bpv
+            except (ValueError, TypeError):
+                continue
+    except Exception as e:
+        print(f"   ⚠️ Baseline cap: failed to index canonical CSV ({e})")
+        return df
+
+    cat_guidance = persona_doc.get('category_guidance', {}) or {}
+    expected_high_by_cat: dict[str, set[str]] = {}
+    for cat_key, blob in cat_guidance.items():
+        cat_u = str(cat_key).strip().upper()
+        items = []
+        if isinstance(blob, dict):
+            items = [str(x).strip().upper() for x in (blob.get('expected_high') or []) if str(x).strip()]
+        expected_high_by_cat[cat_u] = set(items)
+
+    def _is_high(cat_u: str, val_u: str) -> bool:
+        s = expected_high_by_cat.get(cat_u, set())
+        if not s:
+            return False
+        if val_u in s:
+            return True
+        for it in s:
+            if it == val_u or it in val_u or val_u in it:
+                return True
+        return False
+
+    capped = 0
+    biggest = []
+    for idx, row in df.iterrows():
+        try:
+            cat_u = str(row['Column']).strip().upper()
+            val_u = str(row['Value']).strip().upper()
+            new_bp = float(row[bp_col])
+        except (TypeError, ValueError, KeyError):
+            continue
+        if cat_u in _DEMO_SET or cat_u in _BEHAVIORAL_SKIP:
+            continue
+        if cat_u in skip_categories:
+            continue
+        canon = gp_lookup.get((cat_u, val_u))
+        if canon is None or canon <= 0:
+            continue
+        if canon < min_reliable_canonical:
+            # Canonical too sparse to be reliable ground truth; trust the agent.
+            continue
+        is_high = _is_high(cat_u, val_u)
+        mult = high_mult if is_high else default_mult
+        floor = high_min_floor if is_high else default_min_floor
+        cap = max(canon * mult, floor)
+        if canon < small_baseline_threshold:
+            cap = min(cap, small_baseline_abs_cap)
+        if new_bp <= cap:
+            continue
+        ratio_before = new_bp / max(canon, 0.0001)
+        jitter = random.uniform(-0.05, 0.05)
+        capped_bp = round(max(0.01, cap + jitter), 4)
+        biggest.append((cat_u, str(row['Value']), canon, new_bp, capped_bp, ratio_before))
+        df.at[idx, bp_col] = capped_bp
+        if 'Category Share' in df.columns:
+            df.at[idx, 'Category Share'] = capped_bp
+        capped += 1
+
+    if capped:
+        print(f"   🧮 Baseline cap (deterministic): {capped} rows reduced to ≤ baseline-multiple ceiling")
+        biggest.sort(key=lambda t: t[5], reverse=True)
+        for cat_u, val, canon, before, after, ratio in biggest[:10]:
+            print(f"      ↘ CAP [{cat_u}] {val}: {before:.2f}% → {after:.2f}% "
+                  f"(canonical {canon:.2f}%, was {ratio:.1f}x baseline)")
+    else:
+        print("   ✅ Baseline cap: no rows exceeded ceiling")
+    return df
+
+
 def _apply_post_score_agents(df: pd.DataFrame,
                               persona_doc: dict,
                               subject: str,
@@ -15865,6 +16015,22 @@ def _apply_post_score_agents(df: pd.DataFrame,
         df,
         persona_doc=persona_doc,
         subject=subject,
+        bp_col=bp_col,
+    )
+
+    # --- D7) Deterministic canonical-baseline cap (every run) --------------
+    # FINAL safety net. D6 is LLM-judged and can ACCEPT inflated luxury
+    # scores when the persona is framed as "aspirational" or when the
+    # luxury item slipped into expected_high during persona research.
+    # This deterministic cap guarantees no item exceeds:
+    #   • expected_high items: max(canonical × 8, 2.5%)
+    #   • other items:         max(canonical × 5, 1.5%)
+    #   • baselines < 1%:      hard absolute ceiling at 2.5%
+    # This is what stops PATEK PHILIPPE 0.19% canonical from landing at 30%
+    # in Nike output, regardless of what the LLM agents decided.
+    df = _apply_canonical_baseline_cap(
+        df,
+        persona_doc=persona_doc,
         bp_col=bp_col,
     )
 
