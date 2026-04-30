@@ -15124,6 +15124,166 @@ def _apply_anti_duplicate_jitter(df: pd.DataFrame, bp_col: str,
     return df
 
 
+# ─── LOCATION INTELLIGENCE AGENT (all 210 DMAs) ───────────────────────
+def _run_location_intelligence_agent(persona_doc: dict, subject: str) -> dict:
+    """LLM-powered persona-affinity multipliers for ALL 210 US DMAs.
+
+    Why this exists:
+      The persona research agent only emits 15-20 top DMAs by affinity.
+      Everything outside that list previously got Gen Pop weights with no
+      persona adjustment — so for a Black-skewing audience, ATLANTA above
+      the top-20 cutoff would still index 1.0x baseline and Memphis 1.0x
+      baseline, even though the audience clearly over-indexes there.
+
+    What this returns:
+      dict[DMA_NAME_UPPER, float] — a multiplier for EVERY DMA in
+      GENPOP_DMA_PERCENTAGES. 1.0 = same as US baseline; 2.0 = audience
+      twice as concentrated; 0.3 = audience under-represented.
+
+      Range hints in prompt: 0.05 – 8.0 (LLM is free to pick).
+
+    How callers use it:
+      raw_share[dma]  = baseline_share[dma] * multiplier[dma]
+      final_share[dma] = (raw_share[dma] / sum(raw_share)) * 100
+      → guarantees sums to 100 AND every DMA has persona-aware weight.
+
+    Batched in chunks of ~70 DMAs to keep token output manageable.
+    Returns {} on failure → caller falls back to existing
+    persona_doc.location top-N + Gen Pop backfill behavior.
+    """
+    import json as _json
+    import concurrent.futures as _futures
+
+    client = _get_openai_client()
+    if client is None:
+        print("   ⚠️ Location intelligence agent skipped (no OpenAI client)")
+        return {}
+
+    try:
+        all_dmas = [(normalize_dma_for_display(str(name)), float(pct))
+                    for name, pct in GENPOP_DMA_PERCENTAGES]
+    except Exception as e:
+        print(f"   ⚠️ Location intelligence agent skipped (DMA list error: {e})")
+        return {}
+
+    if not all_dmas:
+        return {}
+
+    persona_summary = (persona_doc.get('persona_summary') or '').strip() or '(persona summary unavailable)'
+    demo_snapshot = {k: v for k, v in (persona_doc.get('demographics') or {}).items()
+                     if k in ('AGE', 'GENDER', 'ETHNICITY', 'INCOME', 'EDUCATION')}
+
+    # Persona's named top DMAs (if any) — pass to the agent so it stays
+    # consistent with the high-level persona research.
+    top_named = []
+    for e in (persona_doc.get('location') or [])[:20]:
+        if isinstance(e, dict) and 'dma' in e:
+            try:
+                top_named.append((str(e['dma']).strip(), float(e.get('percentage', 0.0))))
+            except (TypeError, ValueError):
+                continue
+    top_named_block = '\n'.join(f"  • {n} → {p:.2f}%" for n, p in top_named) or '  (none specified)'
+
+    chunk_size = 70
+    chunks: list[list[tuple[str, float]]] = [all_dmas[i:i + chunk_size]
+                                              for i in range(0, len(all_dmas), chunk_size)]
+
+    def _process_chunk(chunk_idx: int, chunk: list[tuple[str, float]]) -> dict:
+        items_block = '\n'.join(
+            f"  {i+1}. {name}  (US baseline {pct:.4f}%)"
+            for i, (name, pct) in enumerate(chunk)
+        )
+        prompt = f"""You are scoring per-DMA audience-affinity MULTIPLIERS for a behavioral panel profile of **{subject}**.
+
+PERSONA SUMMARY:
+{persona_summary}
+
+KEY DEMOGRAPHICS:
+{_json.dumps(demo_snapshot, indent=2)}
+
+PERSONA'S TOP-AFFINITY DMAS (already identified by lead persona research — keep your scoring consistent with these):
+{top_named_block}
+
+═══════════════════════════════════════════════════════════════════
+YOUR TASK
+═══════════════════════════════════════════════════════════════════
+For each DMA below, output a MULTIPLIER on the U.S. Gen Pop baseline that reflects how concentrated THIS audience is in that market.
+
+  • 1.0 = same concentration as the average U.S. adult (no skew).
+  • > 1.0 = audience over-indexes here. Heavy over-index = 2-4x. Extreme = 5-8x (rare; only if persona is very tightly tied to that geography).
+  • < 1.0 = audience under-indexes here. Mild under-index = 0.5-0.8x. Strong under-index = 0.1-0.3x.
+  • Floor 0.05, ceiling 8.0.
+
+REASONING GUIDANCE — use everything you know about each DMA:
+  • Ethnicity/race composition (ATLANTA, MEMPHIS, BIRMINGHAM = high Black share; LOS ANGELES, MIAMI, HOUSTON, SAN ANTONIO, EL PASO = high Hispanic; SAN FRANCISCO, NEW YORK, LOS ANGELES, SEATTLE, HONOLULU = high Asian).
+  • Urbanicity (large metro vs. small/rural — affects luxury, tech, and youth-cultural personas).
+  • Income / cost-of-living tier (NEW YORK, SAN FRANCISCO, BOSTON skew HNW; small Southern / Midwest / Appalachian DMAs skew lower-income).
+  • Age skew (FLORIDA / Sunbelt retirement DMAs skew older; college-town and tech-hub DMAs skew younger).
+  • Genre / subculture (NASHVILLE for country music; MIAMI for Latin music & nightlife; AUSTIN for tech/indie; LAS VEGAS for entertainment; PORTLAND/SEATTLE for outdoor/indie; DALLAS/HOUSTON for sports & corporate; LOS ANGELES for entertainment industry; PHOENIX for retirees + Latin growth).
+  • Regional brand fit (Pacific Northwest for outdoorsy brands; Northeast for finance/media; Texas for energy/sports/QSR; California coastal for tech/wellness/luxury).
+
+HARD RULES:
+  • You MUST return a multiplier for EVERY DMA listed below — do not skip any.
+  • Do NOT return percentages — return MULTIPLIERS only.
+  • Do NOT return narrative — return ONLY the JSON array described.
+
+DMAS TO SCORE (chunk {chunk_idx + 1} of {len(chunks)}):
+{items_block}
+
+Return ONLY a JSON array, one entry per DMA, in the same order:
+[
+  {{"dma": "<DMA name as listed>", "mult": <float>}},
+  …
+]
+"""
+        try:
+            resp = client.chat.completions.create(
+                model='gpt-4o',
+                messages=[{'role': 'user', 'content': prompt}],
+                temperature=0.2,
+                max_tokens=min(16384, max(2048, len(chunk) * 60)),
+            )
+            text = (resp.choices[0].message.content or '').strip()
+            if text.startswith('```'):
+                text = text.split('\n', 1)[1].rsplit('```', 1)[0].strip()
+            i, j = text.find('['), text.rfind(']')
+            if i < 0 or j <= i:
+                return {}
+            arr = _json.loads(text[i:j + 1])
+            out: dict = {}
+            for entry in arr:
+                if not isinstance(entry, dict):
+                    continue
+                name = str(entry.get('dma', '')).strip().upper()
+                try:
+                    mult = float(entry.get('mult'))
+                except (TypeError, ValueError):
+                    continue
+                if not name:
+                    continue
+                # Clamp to safety range
+                mult = max(0.05, min(8.0, mult))
+                out[name] = mult
+            return out
+        except Exception as e:
+            print(f"   ⚠️ Location intelligence agent chunk {chunk_idx + 1} failed: {e}")
+            return {}
+
+    print(f"📍 Location intelligence agent: scoring {len(all_dmas)} DMAs in {len(chunks)} chunks…")
+    multipliers: dict = {}
+    with _futures.ThreadPoolExecutor(max_workers=min(6, len(chunks))) as pool:
+        futures = {pool.submit(_process_chunk, i, c): i for i, c in enumerate(chunks)}
+        for fut in _futures.as_completed(futures):
+            multipliers.update(fut.result() or {})
+
+    coverage = len(multipliers) / max(1, len(all_dmas))
+    print(f"   ✅ Location intelligence agent: scored {len(multipliers)}/{len(all_dmas)} DMAs ({coverage:.0%})")
+    if coverage < 0.5:
+        print(f"   ⚠️ Coverage too low — falling back to persona top-N + Gen Pop backfill")
+        return {}
+    return multipliers
+
+
 def parallel_category_agents(df: pd.DataFrame, persona_doc: dict,
                               subject: str, brands: list[str] | None = None,
                               previous_behavioral_lookup: dict | None = None,
@@ -15300,75 +15460,126 @@ def parallel_category_agents(df: pd.DataFrame, persona_doc: dict,
                         df.at[idx, pct_col] = noisy_bp
                     break
 
-    # --- B) Write location from persona_doc ------------------------------
+    # --- B) Write location ------------------------------------------------
+    # Two-tier strategy:
+    #   1) Run the location intelligence agent across ALL 210 DMAs to get a
+    #      persona-affinity multiplier for every market. Apply that to the
+    #      canonical Gen Pop baseline, then renormalize to sum to 100.
+    #      → Every DMA (not just the top 15-20 from persona research) gets
+    #         intelligent weighting based on ethnicity / urbanicity / income
+    #         / age / regional fit.
+    #   2) If the agent fails or returns < 50% coverage, fall back to the
+    #      previous behavior: persona_doc.location top-N hits + Gen Pop
+    #      backfill for the rest.
     loc_entries = persona_doc.get('location', [])
-    if loc_entries:
-        loc_mask = df['Column'].astype(str).str.strip().str.upper() == 'LOCATION'
-        loc_lookup = {e['dma'].strip().upper(): float(e['percentage'])
-                      for e in loc_entries if isinstance(e, dict) and 'dma' in e}
-        assigned_total = 0.0
-        unmatched_indices = []
-        for idx in df[loc_mask].index:
-            val_u = str(df.at[idx, 'Value']).strip().upper()
-            matched = False
-            for dma_key, pct in loc_lookup.items():
-                if dma_key in val_u or val_u in dma_key:
-                    df.at[idx, bp_col] = round(pct, 4)
-                    if pct_col and pct_col in df.columns:
-                        df.at[idx, pct_col] = round(pct, 4)
-                    assigned_total += pct
-                    matched = True
-                    break
-            if not matched:
-                unmatched_indices.append(idx)
-        # Spread remainder across unmatched DMAs.
-        #
-        # OLD BEHAVIOR (BUG): used random.uniform(0.3, 1.7) weights, which
-        # gave small markets like Greenville-Spartanburg ~0.41% and large
-        # markets like Tucson ~0.01% purely by luck of the random draw.
-        # Locations bottom-10 felt nothing like real US geography.
-        #
-        # NEW BEHAVIOR: weight by the canonical Gen Pop DMA distribution
-        # (GENPOP_DMA_PERCENTAGES), which IS the real US population share
-        # per DMA. Then the persona's affinity adjustments (NYC/LA/etc the
-        # LLM bumped up) sit ON TOP of an accurate population baseline,
-        # rather than on top of noise.
-        remainder = max(0.0, 100.0 - assigned_total)
-        if unmatched_indices and remainder > 0:
-            # Build canonical baseline lookup (DMA name UPPER → US %).
-            try:
-                gp_dma_pct = {normalize_dma_for_display(str(name)).upper(): float(pct)
-                               for name, pct in GENPOP_DMA_PERCENTAGES}
-            except Exception:
-                gp_dma_pct = {}
+    loc_mask = df['Column'].astype(str).str.strip().str.upper() == 'LOCATION'
+    loc_indices = df[loc_mask].index.tolist()
 
-            # Compute baseline weight for each unmatched DMA. If a DMA isn't
-            # found in the canonical map (rare — name fuzziness), fall back
-            # to the median canonical weight so it doesn't get zero.
-            median_baseline = (sorted(gp_dma_pct.values())[len(gp_dma_pct)//2]
-                               if gp_dma_pct else 0.5)
-            weights = []
-            for idx in unmatched_indices:
+    if loc_indices:
+        try:
+            gp_dma_pct = {normalize_dma_for_display(str(name)).upper(): float(pct)
+                           for name, pct in GENPOP_DMA_PERCENTAGES}
+        except Exception:
+            gp_dma_pct = {}
+
+        # Run the location intelligence agent (all 210 DMAs).
+        loc_multipliers = _run_location_intelligence_agent(persona_doc, subject) if gp_dma_pct else {}
+
+        if loc_multipliers and gp_dma_pct:
+            # ── Tier 1: agent-driven, every DMA scored ──
+            # Compute raw weighted shares then renormalize so they sum to 100.
+            raw_share = {}
+            for dma_u, baseline in gp_dma_pct.items():
+                mult = loc_multipliers.get(dma_u)
+                if mult is None:
+                    # Try substring fuzzy match (handles minor name diffs).
+                    mult = next((m for k, m in loc_multipliers.items()
+                                 if k in dma_u or dma_u in k), 1.0)
+                raw_share[dma_u] = max(0.0001, baseline * float(mult))
+            total_raw = sum(raw_share.values()) or 1.0
+            final_share = {k: (v / total_raw) * 100.0 for k, v in raw_share.items()}
+
+            # Optional: let persona_doc.location top-N anchor exact %s when
+            # the persona research was very confident. We blend 50/50 with
+            # the agent value to keep the agent's all-DMA renormalization
+            # mostly intact.
+            persona_overrides = {}
+            for e in (loc_entries or []):
+                if not (isinstance(e, dict) and 'dma' in e):
+                    continue
+                try:
+                    persona_overrides[str(e['dma']).strip().upper()] = float(e.get('percentage', 0.0))
+                except (TypeError, ValueError):
+                    continue
+
+            assigned = 0
+            for idx in loc_indices:
                 val_u = str(df.at[idx, 'Value']).strip().upper()
-                w = gp_dma_pct.get(val_u)
-                if w is None:
-                    # Try substring match (handles "Springfield Holyoke MA"
-                    # vs "SPRINGFIELD-HOLYOKE" style differences).
-                    w = next((p for k, p in gp_dma_pct.items()
-                              if k in val_u or val_u in k), median_baseline)
-                weights.append(max(0.001, float(w)))
-            w_total = sum(weights) or 1.0
-
-            for i, idx in enumerate(unmatched_indices):
-                raw_pct = (weights[i] / w_total) * remainder
-                # ±2% relative jitter (and at least ±0.0005 absolute) so
-                # values look organic / 4dp without distorting magnitude.
-                jitter_amount = max(0.0005, raw_pct * 0.02)
-                noisy_pct = raw_pct + random.uniform(-jitter_amount, jitter_amount)
+                # Find matching DMA share — exact then substring.
+                share = final_share.get(val_u)
+                if share is None:
+                    share = next((s for k, s in final_share.items()
+                                  if k in val_u or val_u in k), None)
+                if share is None:
+                    share = 0.01
+                # Apply persona override blend if this DMA was top-N.
+                override = persona_overrides.get(val_u)
+                if override is None:
+                    override = next((o for k, o in persona_overrides.items()
+                                     if k in val_u or val_u in k), None)
+                if override is not None and override > 0:
+                    share = (share + override) / 2.0
+                # ±2% relative jitter for organic 4dp values.
+                jitter_amount = max(0.0005, share * 0.02)
+                noisy_pct = share + random.uniform(-jitter_amount, jitter_amount)
                 noisy_pct = round(max(0.0011, noisy_pct), 4)
                 df.at[idx, bp_col] = noisy_pct
                 if pct_col and pct_col in df.columns:
                     df.at[idx, pct_col] = noisy_pct
+                assigned += 1
+            print(f"   📍 Location: wrote {assigned} DMAs using location intelligence agent (persona-weighted across all 210)")
+
+        elif loc_entries:
+            # ── Tier 2 fallback: legacy persona top-N + Gen Pop backfill ──
+            loc_lookup = {e['dma'].strip().upper(): float(e['percentage'])
+                          for e in loc_entries if isinstance(e, dict) and 'dma' in e}
+            assigned_total = 0.0
+            unmatched_indices = []
+            for idx in loc_indices:
+                val_u = str(df.at[idx, 'Value']).strip().upper()
+                matched = False
+                for dma_key, pct in loc_lookup.items():
+                    if dma_key in val_u or val_u in dma_key:
+                        df.at[idx, bp_col] = round(pct, 4)
+                        if pct_col and pct_col in df.columns:
+                            df.at[idx, pct_col] = round(pct, 4)
+                        assigned_total += pct
+                        matched = True
+                        break
+                if not matched:
+                    unmatched_indices.append(idx)
+            remainder = max(0.0, 100.0 - assigned_total)
+            if unmatched_indices and remainder > 0:
+                median_baseline = (sorted(gp_dma_pct.values())[len(gp_dma_pct)//2]
+                                   if gp_dma_pct else 0.5)
+                weights = []
+                for idx in unmatched_indices:
+                    val_u = str(df.at[idx, 'Value']).strip().upper()
+                    w = gp_dma_pct.get(val_u)
+                    if w is None:
+                        w = next((p for k, p in gp_dma_pct.items()
+                                  if k in val_u or val_u in k), median_baseline)
+                    weights.append(max(0.001, float(w)))
+                w_total = sum(weights) or 1.0
+                for i, idx in enumerate(unmatched_indices):
+                    raw_pct = (weights[i] / w_total) * remainder
+                    jitter_amount = max(0.0005, raw_pct * 0.02)
+                    noisy_pct = raw_pct + random.uniform(-jitter_amount, jitter_amount)
+                    noisy_pct = round(max(0.0011, noisy_pct), 4)
+                    df.at[idx, bp_col] = noisy_pct
+                    if pct_col and pct_col in df.columns:
+                        df.at[idx, pct_col] = noisy_pct
+            print(f"   📍 Location: fallback path (persona top-N + Gen Pop backfill)")
 
     # --- C) Collect behavioral categories and dispatch agents -------------
     all_cats = df['Column'].astype(str).str.strip().str.upper().unique()
