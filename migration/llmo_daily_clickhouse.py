@@ -165,60 +165,76 @@ def is_ai_match(common_name: str | None, url: str | None, domain: str | None) ->
 
 # ── Step 1: Build llmo_events for a given date ───────────────────────────────
 
-INSERT_LLMO_EVENTS_SQL = """
+# The AI/post-AI tagging needs window functions over a per-(UID, DELIVERED)
+# event sequence, but materializing all ~130M rows/day for the window blows
+# memory on the URL column. The fix: pre-filter to only UIDs that have AT LEAST
+# ONE ai_match() event in the day (~350k UIDs/day vs ~70M total UIDs/day),
+# then run the window function on just those rows. ~30-50x memory reduction.
+_AI_MATCH_EXPR = """(
+    match(lower(coalesce(trim(splitByChar('|', COMMON_NAME)[1]), '')),
+          '(ai\\\\s*agent|chat\\\\s*-?\\\\s*gpt|chatgpt|openai|gpt-?\\\\d*|claude|claude\\\\s*ai|anthropic|gemini|google\\\\s*gemini|bard|copilot|microsoft\\\\s*copilot|bing\\\\s*chat|perplexity|grok|xai|llama|meta\\\\s*ai|mistral|le\\\\s*chat|deep\\\\s*seek|deepseek|qwen|kimi|character\\\\.ai|char\\\\s*ai|poe|pi\\\\.ai|you\\\\.com|phind|blackbox\\\\s*ai|midjourney|jasper)')
+    OR match(lower(coalesce(URL, '')),
+          'claude\\\\.ai|\\\\.claude\\\\.|anthropic\\\\.com|console\\\\.anthropic|claude\\\\.com|deepseek\\\\.com|chat\\\\.deepseek')
+    OR match(lower(coalesce(DOMAIN, '')),
+          'claude\\\\.ai|anthropic\\\\.com|deepseek\\\\.com')
+)"""
+
+INSERT_LLMO_EVENTS_SQL = f"""
 INSERT INTO clickstream.llmo_events
     (UID, BROWSER, PLATFORM, URL, VISIT_TS, DELIVERED,
      COMMON_NAME, TICKER, DOMAIN, MATCH_TYPE, LLMO_RUN_TS)
+WITH ai_user_days AS (
+    SELECT DISTINCT UID, DELIVERED
+    FROM clickstream.clickstream_final
+    WHERE DELIVERED BETWEEN {{date_from:Date}} AND {{date_to:Date}}
+      AND {_AI_MATCH_EXPR}
+),
+base AS (
+    SELECT
+        f.UID, f.BROWSER, f.PLATFORM, f.URL, f.VISIT_TS, f.DELIVERED,
+        trim(splitByChar('|', f.COMMON_NAME)[1]) AS cn_first,
+        f.TICKER, f.DOMAIN,
+        if(
+            match(lower(coalesce(trim(splitByChar('|', f.COMMON_NAME)[1]), '')),
+                  '(ai\\\\s*agent|chat\\\\s*-?\\\\s*gpt|chatgpt|openai|gpt-?\\\\d*|claude|claude\\\\s*ai|anthropic|gemini|google\\\\s*gemini|bard|copilot|microsoft\\\\s*copilot|bing\\\\s*chat|perplexity|grok|xai|llama|meta\\\\s*ai|mistral|le\\\\s*chat|deep\\\\s*seek|deepseek|qwen|kimi|character\\\\.ai|char\\\\s*ai|poe|pi\\\\.ai|you\\\\.com|phind|blackbox\\\\s*ai|midjourney|jasper)')
+            OR match(lower(coalesce(f.URL, '')),
+                  'claude\\\\.ai|\\\\.claude\\\\.|anthropic\\\\.com|console\\\\.anthropic|claude\\\\.com|deepseek\\\\.com|chat\\\\.deepseek')
+            OR match(lower(coalesce(f.DOMAIN, '')),
+                  'claude\\\\.ai|anthropic\\\\.com|deepseek\\\\.com'),
+            1, 0
+        ) AS is_ai
+    FROM clickstream.clickstream_final f
+    INNER JOIN ai_user_days a ON f.UID = a.UID AND f.DELIVERED = a.DELIVERED
+    WHERE f.DELIVERED BETWEEN {{date_from:Date}} AND {{date_to:Date}}
+),
+sequenced AS (
+    SELECT
+        UID, BROWSER, PLATFORM, URL, VISIT_TS, DELIVERED, cn_first, TICKER, DOMAIN, is_ai,
+        lagInFrame(is_ai, 1) OVER w AS prev_is_ai,
+        lagInFrame(is_ai, 2) OVER w AS prev2_is_ai,
+        lagInFrame(is_ai, 3) OVER w AS prev3_is_ai
+    FROM base
+    WINDOW w AS (PARTITION BY UID, DELIVERED
+                 ORDER BY VISIT_TS, URL, cn_first, PLATFORM, BROWSER
+                 ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW)
+)
 SELECT
     UID, BROWSER, PLATFORM, URL, VISIT_TS, DELIVERED,
-    cn_first AS COMMON_NAME, TICKER, DOMAIN,
-    MATCH_TYPE, now() AS LLMO_RUN_TS
-FROM (
-    WITH base AS (
-        SELECT
-            f.UID, f.BROWSER, f.PLATFORM, f.URL, f.VISIT_TS, f.DELIVERED,
-            f.COMMON_NAME AS COMMON_NAME_RAW, f.TICKER, f.DOMAIN,
-            trim(splitByChar('|', f.COMMON_NAME)[1]) AS cn_first,
-            if(
-                match(lower(coalesce(trim(splitByChar('|', f.COMMON_NAME)[1]), '')),
-                      '(ai\\\\s*agent|chat\\\\s*-?\\\\s*gpt|chatgpt|openai|gpt-?\\\\d*|claude|claude\\\\s*ai|anthropic|gemini|google\\\\s*gemini|bard|copilot|microsoft\\\\s*copilot|bing\\\\s*chat|perplexity|grok|xai|llama|meta\\\\s*ai|mistral|le\\\\s*chat|deep\\\\s*seek|deepseek|qwen|kimi|character\\\\.ai|char\\\\s*ai|poe|pi\\\\.ai|you\\\\.com|phind|blackbox\\\\s*ai|midjourney|jasper)')
-                OR match(lower(coalesce(f.URL, '')),
-                      'claude\\\\.ai|\\\\.claude\\\\.|anthropic\\\\.com|console\\\\.anthropic|claude\\\\.com|deepseek\\\\.com|chat\\\\.deepseek')
-                OR match(lower(coalesce(f.DOMAIN, '')),
-                      'claude\\\\.ai|anthropic\\\\.com|deepseek\\\\.com'),
-                1, 0
-            ) AS is_ai
-        FROM clickstream.clickstream_final f
-        WHERE f.DELIVERED BETWEEN {date_from:Date} AND {date_to:Date}
-    ),
-    sequenced AS (
-        SELECT
-            base.*,
-            lagInFrame(is_ai, 1) OVER w AS prev_is_ai,
-            lagInFrame(is_ai, 2) OVER w AS prev2_is_ai,
-            lagInFrame(is_ai, 3) OVER w AS prev3_is_ai
-        FROM base
-        WINDOW w AS (PARTITION BY UID, DELIVERED
-                     ORDER BY VISIT_TS, URL, cn_first, PLATFORM, BROWSER
-                     ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW)
-    )
-    SELECT
-        UID, BROWSER, PLATFORM, URL, VISIT_TS, DELIVERED,
-        nullIf(trim(cn_first), '') AS cn_first, TICKER, DOMAIN,
-        multiIf(
-            is_ai = 1, 'AI_AGENT',
-            is_ai = 0 AND prev_is_ai  = 1, 'POST_AI_NON_AGENT',
-            is_ai = 0 AND prev2_is_ai = 1 AND prev_is_ai = 0, 'POST_AI_2ND',
-            is_ai = 0 AND prev3_is_ai = 1 AND prev2_is_ai = 0 AND prev_is_ai = 0, 'POST_AI_3RD',
-            ''
-        ) AS MATCH_TYPE
-    FROM sequenced
-    WHERE (is_ai = 1
-        OR (is_ai = 0 AND prev_is_ai = 1)
-        OR (is_ai = 0 AND prev2_is_ai = 1 AND prev_is_ai = 0)
-        OR (is_ai = 0 AND prev3_is_ai = 1 AND prev2_is_ai = 0 AND prev_is_ai = 0))
-      AND lower(trim(coalesce(cn_first, ''))) NOT IN ('afc bournemouth', 'chelmico', 'unknown')
-)
+    nullIf(trim(cn_first), '') AS COMMON_NAME, TICKER, DOMAIN,
+    multiIf(
+        is_ai = 1, 'AI_AGENT',
+        is_ai = 0 AND prev_is_ai  = 1, 'POST_AI_NON_AGENT',
+        is_ai = 0 AND prev2_is_ai = 1 AND prev_is_ai = 0, 'POST_AI_2ND',
+        is_ai = 0 AND prev3_is_ai = 1 AND prev2_is_ai = 0 AND prev_is_ai = 0, 'POST_AI_3RD',
+        ''
+    ) AS MATCH_TYPE,
+    now() AS LLMO_RUN_TS
+FROM sequenced
+WHERE (is_ai = 1
+    OR (is_ai = 0 AND prev_is_ai = 1)
+    OR (is_ai = 0 AND prev2_is_ai = 1 AND prev_is_ai = 0)
+    OR (is_ai = 0 AND prev3_is_ai = 1 AND prev2_is_ai = 0 AND prev_is_ai = 0))
+  AND lower(trim(coalesce(cn_first, ''))) NOT IN ('afc bournemouth', 'chelmico', 'unknown')
 """
 
 
@@ -999,7 +1015,7 @@ def main() -> int:
 
     logger.info("Building summary JSON...")
     t0 = time.time()
-    summary = build_summary(ch)
+    summary = build_summary(ch, recent_days=RECENT_DAYS)
     summary_seconds = time.time() - t0
     logger.info("Summary built in %.1fs (%d dates)", summary_seconds, len(summary.get('dates', [])))
 
