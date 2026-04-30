@@ -37455,12 +37455,12 @@
             if (!startDate || !endDate) { alert('Please select both start and end dates.'); return; }
 
             btn.disabled = true;
-            btn.textContent = '⏳ Checking...';
+            btn.textContent = '⏳ Submitting...';
             resultsCard.style.display = 'block';
             resultsDiv.innerHTML = '<div style="text-align:center;padding:2rem;color:var(--text-secondary);"><div style="font-size:1.1rem;font-weight:600;color:var(--text-primary);margin-bottom:0.5rem;">Running full universe scan.</div><div style="font-size:0.8rem;margin-bottom:1rem;">Usually takes 2-5 minutes.</div><div style="width:100%;max-width:300px;margin:0 auto;height:4px;background:var(--bg-input);border-radius:4px;overflow:hidden;"><div style="height:100%;width:30%;background:linear-gradient(90deg,var(--accent-cyan),var(--accent-lime));border-radius:4px;animation:incidenceProgress 2s ease-in-out infinite;"></div></div></div><style>@keyframes incidenceProgress{0%{width:5%;margin-left:0}50%{width:40%;margin-left:30%}100%{width:5%;margin-left:95%}}</style>';
 
             try {
-                const resp = await fetch('/api/incidence-check', {
+                const submitResp = await fetch('/api/incidence-check', {
                     method: 'POST',
                     credentials: 'same-origin',
                     headers: { 'Content-Type': 'application/json' },
@@ -37471,16 +37471,18 @@
                         end_date: endDate,
                     })
                 });
-                const contentType = resp.headers.get('content-type') || '';
-                if (!contentType.includes('application/json')) {
-                    resultsDiv.innerHTML = `<div style="color:var(--accent-red);padding:1rem;">Server error (request may have timed out). Please try again or use a shorter date range.</div>`;
+                const submitData = await submitResp.json();
+                if (!submitResp.ok) {
+                    resultsDiv.innerHTML = `<div style="color:var(--accent-red);padding:1rem;">Error: ${submitData.error || 'Unknown error'}</div>`;
+                    btn.disabled = false; btn.textContent = '🔍 Check Incidence';
                     return;
                 }
-                const data = await resp.json();
-                if (!resp.ok) {
-                    resultsDiv.innerHTML = `<div style="color:var(--accent-red);padding:1rem;">Error: ${data.error || 'Unknown error'}</div>`;
-                    return;
-                }
+
+                const jobId = submitData.job_id;
+                btn.textContent = '⏳ Running...';
+
+                const data = await pollIncidenceCheckStatus(jobId, resultsDiv);
+                if (!data) { btn.disabled = false; btn.textContent = '🔍 Check Incidence'; return; }
 
                 let html = '';
 
@@ -37491,7 +37493,6 @@
                 html += `</div>`;
                 html += `</div>`;
 
-                // Final sample size (the headline number)
                 if (data.final_sample_size) {
                     const sourceLabels = { genpop: 'Gen Pop Lookup', digital_panel: 'Digital Panel Estimate', inflation: 'Universe Inflation' };
                     html += `<div style="background:linear-gradient(135deg, rgba(0,200,150,0.1), rgba(0,150,255,0.1)); border:1px solid var(--border-color); border-radius:12px; padding:1.5rem; margin-bottom:1.5rem; text-align:center;">`;
@@ -37501,7 +37502,6 @@
                     html += `</div>`;
                 }
 
-                // Universe scan results
                 if (data.universe) {
                     const u = data.universe;
                     html += `<div style="margin-bottom:1.25rem;">`;
@@ -37527,7 +37527,6 @@
                     html += `</div>`;
                 }
 
-                // Gen Pop lookup
                 if (data.genpop) {
                     const g = data.genpop;
                     html += `<div style="margin-bottom:1rem;">`;
@@ -37548,6 +37547,32 @@
                 btn.disabled = false;
                 btn.textContent = '🔍 Check Incidence';
             }
+        }
+
+        async function pollIncidenceCheckStatus(jobId, resultsDiv) {
+            const maxAttempts = 120;
+            for (let i = 0; i < maxAttempts; i++) {
+                await new Promise(r => setTimeout(r, 3000));
+                try {
+                    const resp = await fetch(`/api/incidence-check/status/${jobId}`, { credentials: 'same-origin' });
+                    if (!resp.ok) {
+                        resultsDiv.innerHTML = `<div style="color:var(--accent-red);padding:1rem;">Error checking status (HTTP ${resp.status})</div>`;
+                        return null;
+                    }
+                    const status = await resp.json();
+                    if (status.status === 'complete' && status.result) {
+                        return status.result;
+                    }
+                    if (status.status === 'failed') {
+                        resultsDiv.innerHTML = `<div style="color:var(--accent-red);padding:1rem;">Error: ${status.error || 'Analysis failed'}</div>`;
+                        return null;
+                    }
+                } catch (e) {
+                    // network blip, keep trying
+                }
+            }
+            resultsDiv.innerHTML = `<div style="color:var(--accent-red);padding:1rem;">Timed out waiting for results. The job may still be running — try refreshing.</div>`;
+            return null;
         }
 
         async function submitNewAnalysis(formRoot) {

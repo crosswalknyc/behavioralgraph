@@ -9081,7 +9081,7 @@ def llmo_iq_demographics():
 
         # Live fallback (rare — only hit when the precomputed summary lacks
         # llmo_demographics for the requested range). Native ClickHouse SQL
-        # against clickstream.llmo_events + userfiles.user_data_sanitized.
+        # against clickstream.llmo_events + userdata.user_data_sanitized.
         # No Snowflake / Cortex involved.
         conn = _ch_connect()
         cur = conn.cursor()
@@ -9095,39 +9095,39 @@ def llmo_iq_demographics():
             FROM (SELECT DISTINCT UID FROM clickstream.llmo_events
                   WHERE MATCH_TYPE = 'AI_AGENT' AND DELIVERED BETWEEN toDate(%(d1)s) AND toDate(%(d2)s)
                     {agent_filter_sql}) u
-            INNER JOIN userfiles.user_data_sanitized d ON u.UID = d.UID
+            INNER JOIN userdata.user_data_sanitized d ON u.UID = d.UID
             WHERE d.GENDER != '' AND upper(trim(d.GENDER)) NOT IN ('PREFER NOT TO SAY','NONE','N/A')
             GROUP BY d.GENDER
             UNION ALL
-            SELECT 'age', d.AGE_RANGE, uniqExact(u.UID)
+            SELECT 'age', d.AGE, uniqExact(u.UID)
             FROM (SELECT DISTINCT UID FROM clickstream.llmo_events
                   WHERE MATCH_TYPE = 'AI_AGENT' AND DELIVERED BETWEEN toDate(%(d1)s) AND toDate(%(d2)s)
                     {agent_filter_sql}) u
-            INNER JOIN userfiles.user_data_sanitized d ON u.UID = d.UID
-            WHERE d.AGE_RANGE != '' AND upper(trim(d.AGE_RANGE)) NOT IN ('PREFER NOT TO SAY','NONE','N/A')
-            GROUP BY d.AGE_RANGE
+            INNER JOIN userdata.user_data_sanitized d ON u.UID = d.UID
+            WHERE d.AGE != '' AND upper(trim(d.AGE)) NOT IN ('PREFER NOT TO SAY','NONE','N/A')
+            GROUP BY d.AGE
             UNION ALL
             SELECT 'ethnicity', d.ETHNICITY, uniqExact(u.UID)
             FROM (SELECT DISTINCT UID FROM clickstream.llmo_events
                   WHERE MATCH_TYPE = 'AI_AGENT' AND DELIVERED BETWEEN toDate(%(d1)s) AND toDate(%(d2)s)
                     {agent_filter_sql}) u
-            INNER JOIN userfiles.user_data_sanitized d ON u.UID = d.UID
+            INNER JOIN userdata.user_data_sanitized d ON u.UID = d.UID
             WHERE d.ETHNICITY != '' AND upper(trim(d.ETHNICITY)) NOT IN ('PREFER NOT TO SAY','NONE','N/A')
             GROUP BY d.ETHNICITY
             UNION ALL
-            SELECT 'income', d.INCOME_RANGE, uniqExact(u.UID)
+            SELECT 'income', d.INCOME, uniqExact(u.UID)
             FROM (SELECT DISTINCT UID FROM clickstream.llmo_events
                   WHERE MATCH_TYPE = 'AI_AGENT' AND DELIVERED BETWEEN toDate(%(d1)s) AND toDate(%(d2)s)
                     {agent_filter_sql}) u
-            INNER JOIN userfiles.user_data_sanitized d ON u.UID = d.UID
-            WHERE d.INCOME_RANGE != '' AND upper(trim(d.INCOME_RANGE)) NOT IN ('PREFER NOT TO SAY','NONE','N/A')
-            GROUP BY d.INCOME_RANGE
+            INNER JOIN userdata.user_data_sanitized d ON u.UID = d.UID
+            WHERE d.INCOME != '' AND upper(trim(d.INCOME)) NOT IN ('PREFER NOT TO SAY','NONE','N/A')
+            GROUP BY d.INCOME
             UNION ALL
             SELECT 'education', d.EDUCATION, uniqExact(u.UID)
             FROM (SELECT DISTINCT UID FROM clickstream.llmo_events
                   WHERE MATCH_TYPE = 'AI_AGENT' AND DELIVERED BETWEEN toDate(%(d1)s) AND toDate(%(d2)s)
                     {agent_filter_sql}) u
-            INNER JOIN userfiles.user_data_sanitized d ON u.UID = d.UID
+            INNER JOIN userdata.user_data_sanitized d ON u.UID = d.UID
             WHERE d.EDUCATION != '' AND upper(trim(d.EDUCATION)) NOT IN ('PREFER NOT TO SAY','NONE','N/A')
             GROUP BY d.EDUCATION
         """, params)
@@ -9138,39 +9138,39 @@ def llmo_iq_demographics():
             FROM (SELECT DISTINCT UID, DELIVERED AS d FROM clickstream.llmo_events
                   WHERE MATCH_TYPE = 'AI_AGENT' AND DELIVERED BETWEEN toDate(%(d1)s) AND toDate(%(d2)s)
                     {agent_filter_sql}) u
-            INNER JOIN userfiles.user_data_sanitized d ON u.UID = d.UID
+            INNER JOIN userdata.user_data_sanitized d ON u.UID = d.UID
             WHERE d.GENDER != '' AND upper(trim(d.GENDER)) NOT IN ('PREFER NOT TO SAY','NONE','N/A')
             GROUP BY u.d, d.GENDER
             UNION ALL
-            SELECT 'age', toString(u.d), d.AGE_RANGE, uniqExact(u.UID)
+            SELECT 'age', toString(u.d), d.AGE, uniqExact(u.UID)
             FROM (SELECT DISTINCT UID, DELIVERED AS d FROM clickstream.llmo_events
                   WHERE MATCH_TYPE = 'AI_AGENT' AND DELIVERED BETWEEN toDate(%(d1)s) AND toDate(%(d2)s)
                     {agent_filter_sql}) u
-            INNER JOIN userfiles.user_data_sanitized d ON u.UID = d.UID
-            WHERE d.AGE_RANGE != '' AND upper(trim(d.AGE_RANGE)) NOT IN ('PREFER NOT TO SAY','NONE','N/A')
-            GROUP BY u.d, d.AGE_RANGE
+            INNER JOIN userdata.user_data_sanitized d ON u.UID = d.UID
+            WHERE d.AGE != '' AND upper(trim(d.AGE)) NOT IN ('PREFER NOT TO SAY','NONE','N/A')
+            GROUP BY u.d, d.AGE
             UNION ALL
             SELECT 'ethnicity', toString(u.d), d.ETHNICITY, uniqExact(u.UID)
             FROM (SELECT DISTINCT UID, DELIVERED AS d FROM clickstream.llmo_events
                   WHERE MATCH_TYPE = 'AI_AGENT' AND DELIVERED BETWEEN toDate(%(d1)s) AND toDate(%(d2)s)
                     {agent_filter_sql}) u
-            INNER JOIN userfiles.user_data_sanitized d ON u.UID = d.UID
+            INNER JOIN userdata.user_data_sanitized d ON u.UID = d.UID
             WHERE d.ETHNICITY != '' AND upper(trim(d.ETHNICITY)) NOT IN ('PREFER NOT TO SAY','NONE','N/A')
             GROUP BY u.d, d.ETHNICITY
             UNION ALL
-            SELECT 'income', toString(u.d), d.INCOME_RANGE, uniqExact(u.UID)
+            SELECT 'income', toString(u.d), d.INCOME, uniqExact(u.UID)
             FROM (SELECT DISTINCT UID, DELIVERED AS d FROM clickstream.llmo_events
                   WHERE MATCH_TYPE = 'AI_AGENT' AND DELIVERED BETWEEN toDate(%(d1)s) AND toDate(%(d2)s)
                     {agent_filter_sql}) u
-            INNER JOIN userfiles.user_data_sanitized d ON u.UID = d.UID
-            WHERE d.INCOME_RANGE != '' AND upper(trim(d.INCOME_RANGE)) NOT IN ('PREFER NOT TO SAY','NONE','N/A')
-            GROUP BY u.d, d.INCOME_RANGE
+            INNER JOIN userdata.user_data_sanitized d ON u.UID = d.UID
+            WHERE d.INCOME != '' AND upper(trim(d.INCOME)) NOT IN ('PREFER NOT TO SAY','NONE','N/A')
+            GROUP BY u.d, d.INCOME
             UNION ALL
             SELECT 'education', toString(u.d), d.EDUCATION, uniqExact(u.UID)
             FROM (SELECT DISTINCT UID, DELIVERED AS d FROM clickstream.llmo_events
                   WHERE MATCH_TYPE = 'AI_AGENT' AND DELIVERED BETWEEN toDate(%(d1)s) AND toDate(%(d2)s)
                     {agent_filter_sql}) u
-            INNER JOIN userfiles.user_data_sanitized d ON u.UID = d.UID
+            INNER JOIN userdata.user_data_sanitized d ON u.UID = d.UID
             WHERE d.EDUCATION != '' AND upper(trim(d.EDUCATION)) NOT IN ('PREFER NOT TO SAY','NONE','N/A')
             GROUP BY u.d, d.EDUCATION
         """, params)
@@ -15553,16 +15553,11 @@ def submit_analysis():
 @app.route('/api/incidence-check', methods=['POST'])
 @requires_auth
 def incidence_check():
-    """Incidence check using the same universe scan as Profile Analysis.
+    """Submit an incidence check job (background thread, same pattern as Profile Analysis).
 
-    Uses bg.connect_snowflake() + bg.perform_full_universe_scan() which go
-    through the ClickHouse connector with 1800s query timeout — the same
-    path that Profile Analysis uses successfully.
+    Returns a job_id immediately. Frontend polls /api/incidence-check/status/<job_id>.
     """
     try:
-        import bg
-        import time as _time
-
         data = request.json
         if not data.get('brands'):
             return jsonify({'error': 'Missing required field: search terms'}), 400
@@ -15570,6 +15565,38 @@ def incidence_check():
             return jsonify({'error': 'Missing required field: start date'}), 400
         if not data.get('end_date'):
             return jsonify({'error': 'Missing required field: end date'}), 400
+
+        job_id = f"ic-{uuid.uuid4().hex[:8]}"
+
+        jobs[job_id] = {
+            'status': 'running',
+            'progress': 10,
+            'message': 'Starting incidence check...',
+            'created_at': datetime.now().isoformat(),
+            'project_name': (data.get('project_name') or data['brands'].split(',')[0]).strip(),
+            'error': None,
+            'logs': [],
+            'result': None,
+        }
+
+        thread = threading.Thread(
+            target=_run_incidence_check_bg,
+            args=(job_id, data),
+            daemon=True
+        )
+        thread.start()
+
+        return jsonify({'job_id': job_id, 'status': 'running'})
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+def _run_incidence_check_bg(job_id, data):
+    """Background worker for incidence check (mirrors run_analysis pattern)."""
+    try:
+        import bg
+        import time as _time
 
         project_name = (data.get('project_name') or data['brands'].split(',')[0]).strip()
         brand_category = data.get('brand_category', 'GENERAL')
@@ -15586,18 +15613,17 @@ def incidence_check():
             clean_brand = match.group(1).lower() if match else b.lower()
             brands.append(clean_brand)
 
-        if not brands:
-            return jsonify({'error': 'No valid search terms provided'}), 400
-
         if hasattr(bg, 'generate_brand_variations'):
             expanded = []
             for b in brands:
                 expanded.extend(bg.generate_brand_variations(b))
             brands = list(dict.fromkeys(expanded))
 
+        update_job_status(job_id, progress=15, message=f'Expanded to {len(brands)} brand variants...')
+
         GENPOP_SAMPLE_CAP = 10_000_000
 
-        # Gen Pop CSV lookup (instant, no DB hit)
+        # Gen Pop CSV lookup (instant)
         genpop_result = None
         genpop_sample = None
         try:
@@ -15614,58 +15640,56 @@ def incidence_check():
         except Exception as e:
             print(f"⚠️ Incidence check: Gen Pop lookup failed: {e}")
 
-        # Full universe scan (same as Profile Analysis)
-        universe_result = None
-        query_seconds = None
+        # Connect to database
+        update_job_status(job_id, progress=20, message='Connecting to database...')
+        conn = bg.connect_snowflake()
+
+        # Full universe scan (same function Profile Analysis calls)
+        update_job_status(job_id, progress=30, message='Running universe scan...')
+        print(f"🔍 Incidence check [{job_id}]: {len(brands)} brand variants, {start_date} to {end_date}")
+        t0 = _time.time()
+        results = bg.perform_full_universe_scan(conn, brands, start_date, end_date, purchasers_only=False)
+        query_seconds = round(_time.time() - t0, 1)
+        print(f"✅ Incidence check [{job_id}] completed in {query_seconds}s")
+
         try:
-            conn = bg.connect_snowflake()
-            print(f"🔍 Incidence check: {len(brands)} brand variants, {start_date} to {end_date}")
-            t0 = _time.time()
-            results = bg.perform_full_universe_scan(conn, brands, start_date, end_date, purchasers_only=False)
-            query_seconds = round(_time.time() - t0, 1)
-            print(f"✅ Incidence check universe scan completed in {query_seconds}s")
+            conn.close()
+        except Exception:
+            pass
 
-            if results:
-                total_universe = results['total_universe']
-                total_visits = results.get('total_visits', 0)
+        universe_result = None
+        if results:
+            total_universe = results['total_universe']
+            total_visits = results.get('total_visits', 0)
 
-                bounded = min(int(total_universe), GENPOP_SAMPLE_CAP)
-                if bounded >= GENPOP_SAMPLE_CAP:
-                    bounded = GENPOP_SAMPLE_CAP - max(1, int(GENPOP_SAMPLE_CAP * 0.005))
-                INFLATION_OPTIONS = [35, 25, 5, 2.5, 1]
-                inflation_factor = 1
-                for mult in INFLATION_OPTIONS:
-                    if bounded * mult <= GENPOP_SAMPLE_CAP:
-                        inflation_factor = mult
-                        break
-                inflated_sample = min(int(bounded * inflation_factor), GENPOP_SAMPLE_CAP)
-                inflated_sample = (inflated_sample // 10) * 10
+            bounded = min(int(total_universe), GENPOP_SAMPLE_CAP)
+            if bounded >= GENPOP_SAMPLE_CAP:
+                bounded = GENPOP_SAMPLE_CAP - max(1, int(GENPOP_SAMPLE_CAP * 0.005))
+            INFLATION_OPTIONS = [35, 25, 5, 2.5, 1]
+            inflation_factor = 1
+            for mult in INFLATION_OPTIONS:
+                if bounded * mult <= GENPOP_SAMPLE_CAP:
+                    inflation_factor = mult
+                    break
+            inflated_sample = min(int(bounded * inflation_factor), GENPOP_SAMPLE_CAP)
+            inflated_sample = (inflated_sample // 10) * 10
 
-                digital_panel_estimate = None
-                try:
-                    dp_est = bg.estimate_sample_size_for_unknown_brand(brand_category, actual_universe_size=total_universe)
-                    if dp_est:
-                        digital_panel_estimate = dp_est
-                except Exception:
-                    pass
-
-                universe_result = {
-                    'total_unique_users': total_universe,
-                    'total_visits': total_visits,
-                    'avg_visits_per_user': round(total_visits / total_universe, 2) if total_universe > 0 else 0,
-                    'inflation_factor': inflation_factor,
-                    'inflated_sample_size': inflated_sample,
-                    'digital_panel_estimate': digital_panel_estimate,
-                }
+            digital_panel_estimate = None
             try:
-                conn.close()
+                dp_est = bg.estimate_sample_size_for_unknown_brand(brand_category, actual_universe_size=total_universe)
+                if dp_est:
+                    digital_panel_estimate = dp_est
             except Exception:
                 pass
-        except Exception as e:
-            print(f"⚠️ Incidence check: Universe scan failed: {e}")
-            import traceback
-            traceback.print_exc()
-            return jsonify({'error': f'Database query failed: {str(e)}'}), 500
+
+            universe_result = {
+                'total_unique_users': total_universe,
+                'total_visits': total_visits,
+                'avg_visits_per_user': round(total_visits / total_universe, 2) if total_universe > 0 else 0,
+                'inflation_factor': inflation_factor,
+                'inflated_sample_size': inflated_sample,
+                'digital_panel_estimate': digital_panel_estimate,
+            }
 
         final_sample_size = None
         sample_size_source = None
@@ -15679,7 +15703,8 @@ def incidence_check():
             final_sample_size = universe_result['inflated_sample_size']
             sample_size_source = 'inflation'
 
-        return jsonify({
+        # Store result and mark complete
+        jobs[job_id]['result'] = {
             'success': True,
             'project_name': project_name,
             'brands': brands[:10],
@@ -15691,12 +15716,33 @@ def incidence_check():
             'final_sample_size': final_sample_size,
             'sample_size_source': sample_size_source,
             'query_seconds': query_seconds,
-        })
+        }
+        update_job_status(job_id, status='complete', progress=100, message='Done')
 
     except Exception as e:
         import traceback
         traceback.print_exc()
-        return jsonify({'error': str(e)}), 500
+        update_job_status(job_id, status='failed', progress=100, message=str(e), error=str(e))
+
+
+@app.route('/api/incidence-check/status/<job_id>')
+@requires_auth
+def incidence_check_status(job_id):
+    """Poll incidence check job status (same pattern as /api/status/<job_id>)."""
+    job = jobs.get(job_id)
+    if job is None:
+        return jsonify({'error': 'Job not found'}), 404
+    resp = {
+        'job_id': job_id,
+        'status': job.get('status', 'unknown'),
+        'progress': job.get('progress', 0),
+        'message': job.get('message', ''),
+    }
+    if job.get('status') == 'complete' and job.get('result'):
+        resp['result'] = job['result']
+    if job.get('error'):
+        resp['error'] = job['error']
+    return jsonify(resp)
 
 
 @app.route('/api/status/<job_id>', strict_slashes=False)
