@@ -18758,7 +18758,7 @@ def _shorten_error_for_ui(error_str, max_len=4000):
     return error_str[:half] + '\n\n... [truncated] ...\n\n' + error_str[-half:]
 
 
-def update_job_status(job_id, status=None, progress=None, message=None, error=None, result_file=None, demographic_validation=None, s3_key=None):
+def update_job_status(job_id, status=None, progress=None, message=None, error=None, result_file=None, demographic_validation=None, s3_key=None, estimated_remaining_seconds=None):
     """Update job status - simplified to avoid verbose terminal output."""
     if job_id in jobs:
         if status:
@@ -18777,8 +18777,27 @@ def update_job_status(job_id, status=None, progress=None, message=None, error=No
             jobs[job_id]['demographic_validation'] = demographic_validation
         if s3_key:
             jobs[job_id]['s3_key'] = s3_key
+        if estimated_remaining_seconds is not None:
+            jobs[job_id]['estimated_remaining_seconds'] = estimated_remaining_seconds
         if s3_client:
             _save_job_status_to_s3(job_id, jobs[job_id])
+
+
+# Timing-based step weights derived from observed Nike profile run (~66 min total).
+# Each weight represents approximate % of total wall-clock time for that phase.
+_PROFILE_STEP_WEIGHTS = {
+    'init':           1,   # ~2s   - import, seed, ref download
+    'db_connect':     1,   # ~2s   - connect to DB
+    'universe_scan':  34,  # ~23m  - ClickHouse universe scan
+    'pipeline':       50,  # ~33m  - bg.run_full_pipeline (includes 3-step agent)
+    'post_process':   2,   # ~1m   - frequency/listener adjustments
+    'save':           12,  # ~2m   - purgatory upload + notifications
+}
+_PROFILE_STEP_ORDER = ['init', 'db_connect', 'universe_scan', 'pipeline', 'post_process', 'save']
+
+def _profile_step_progress(completed_steps):
+    """Return cumulative progress (0-99) based on which steps have finished."""
+    return min(sum(_PROFILE_STEP_WEIGHTS[s] for s in _PROFILE_STEP_ORDER if s in completed_steps), 99)
 
 
 def run_analysis(job_id, project_name, brands, sample_start, sample_end, 
@@ -18789,7 +18808,11 @@ def run_analysis(job_id, project_name, brands, sample_start, sample_end,
                  reference_file_key=None, geo_zip_codes=None, geo_dma=None):
     """Run the behavioral graph analysis pipeline with demographic consistency validation."""
     try:
-        update_job_status(job_id, status='running', progress=5, message='Initializing...')
+        import time as _time
+        _analysis_start = _time.time()
+        _completed_steps = set()
+
+        update_job_status(job_id, status='running', progress=_profile_step_progress(_completed_steps), message='Initializing...')
         
         # Import the bg module (same as local when run from finished_codes; see startup path setup)
         try:
@@ -18826,7 +18849,7 @@ def run_analysis(job_id, project_name, brands, sample_start, sample_end,
         actual_previous_file = previous_file_path
         if reference_file_key and s3_client and not previous_file_path:
             try:
-                update_job_status(job_id, progress=8, message='Loading reference file for consistency...')
+                update_job_status(job_id, progress=_profile_step_progress(_completed_steps), message='Loading reference file for consistency...')
                 print(f"📥 Downloading reference file: {reference_file_key}")
                 
                 # Download reference file to temp location
@@ -18842,8 +18865,8 @@ def run_analysis(job_id, project_name, brands, sample_start, sample_end,
             except Exception as e:
                 print(f"⚠️ Could not download reference file: {e}")
         
-        # Connect to Snowflake
-        update_job_status(job_id, progress=15, message='Connecting to database...')
+        _completed_steps.add('init')
+        update_job_status(job_id, progress=_profile_step_progress(_completed_steps), message='Connecting to database...')
         
         try:
             conn = bg.connect_snowflake()
@@ -18853,7 +18876,8 @@ def run_analysis(job_id, project_name, brands, sample_start, sample_end,
         
         # ========== UNIVERSE SCAN (matches terminal behavior) ==========
         # This is critical for getting correct sample sizes
-        update_job_status(job_id, progress=18, message='Performing universe scan...')
+        _completed_steps.add('db_connect')
+        update_job_status(job_id, progress=_profile_step_progress(_completed_steps), message='Scanning universe...')
         
         if geo_zip_codes and geo_dma:
             print("📍 Geographic profile - skipping brand universe scan (geo cohort will determine size)")
@@ -18876,7 +18900,17 @@ def run_analysis(job_id, project_name, brands, sample_start, sample_end,
                 print(f"⚠️ Universe scan error: {e}, proceeding with default size")
                 bg.run_full_pipeline.universe_size = 1000000
         
-        update_job_status(job_id, progress=25, message='Running analysis...')
+        _completed_steps.add('universe_scan')
+        _scan_elapsed = _time.time() - _analysis_start
+        _scan_pct = sum(_PROFILE_STEP_WEIGHTS[s] for s in _completed_steps)
+        _remaining_pct = 100 - _scan_pct
+        _est_remaining = int(_scan_elapsed / max(_scan_pct, 1) * _remaining_pct) if _scan_pct > 0 else None
+        update_job_status(
+            job_id,
+            progress=_profile_step_progress(_completed_steps),
+            message='Running analysis pipeline...',
+            estimated_remaining_seconds=_est_remaining,
+        )
         
         # Use /tmp/bg_pipeline on Render (app dir often read-only); same flow for new run and rerun
         pipeline_out = '/tmp/bg_pipeline'
@@ -18905,7 +18939,8 @@ def run_analysis(job_id, project_name, brands, sample_start, sample_end,
                 geo_dma=geo_dma
             )
             
-            update_job_status(job_id, progress=85, message='Processing results...')
+            _completed_steps.add('pipeline')
+            update_job_status(job_id, progress=_profile_step_progress(_completed_steps), message='Processing results...')
             
             # If path returned but file missing (e.g. path mismatch on server), find by project_name in output dir
             if result_file and not os.path.exists(result_file) and pipeline_out and os.path.isdir(pipeline_out):
@@ -18928,7 +18963,7 @@ def run_analysis(job_id, project_name, brands, sample_start, sample_end,
                 if include_frequency and not is_genpop:
                     try:
                         print("📊 Adding frequency metrics (matching terminal behavior)...")
-                        update_job_status(job_id, progress=87, message='Adding frequency analysis...')
+                        update_job_status(job_id, progress=_profile_step_progress(_completed_steps) + 1, message='Adding frequency analysis...')
                         
                         import pandas as pd
                         df = pd.read_csv(result_file)
@@ -18975,7 +19010,8 @@ def run_analysis(job_id, project_name, brands, sample_start, sample_end,
                 # ========== POST-PROCESSING only when include_frequency (matches terminal exactly) ==========
                 # Terminal: when frequency is OFF, run_full_pipeline output is final; when ON, terminal runs this sequence after adding frequency.
                 if include_frequency and not is_genpop:
-                    update_job_status(job_id, progress=88, message='Applying final processing...')
+                    _completed_steps.add('post_process')
+                    update_job_status(job_id, progress=_profile_step_progress(_completed_steps), message='Applying final processing...')
                     try:
                         import pandas as pd
                         df = pd.read_csv(result_file)
@@ -19133,6 +19169,7 @@ def run_analysis(job_id, project_name, brands, sample_start, sample_end,
                         print(f"Demographic validation error: {e}")
                 
                 # Copy to OUTPUT_DIR then upload to S3 purgatory (same for new run and rerun)
+                _completed_steps.add('post_process')  # ensure post_process is marked even if skipped
                 output_filename = f"{job_id}_{project_name}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
                 output_path = os.path.join(OUTPUT_DIR, output_filename)
                 import shutil
@@ -19140,11 +19177,12 @@ def run_analysis(job_id, project_name, brands, sample_start, sample_end,
                     shutil.copy2(result_file, output_path)
                 except OSError:
                     output_path = result_file  # e.g. Render: use pipeline file directly if OUTPUT_DIR not writable
-                update_job_status(job_id, progress=95, message='Saving to purgatory...')
+                update_job_status(job_id, progress=_profile_step_progress(_completed_steps), message='Saving to purgatory...')
                 created_by = jobs.get(job_id, {}).get('created_by', '')
                 s3_key = upload_to_s3(output_path, project_name, sample_start, sample_end, created_by=created_by, use_purgatory=True, category=brand_category or 'GENERAL')
                 if s3_key:
                     _add_user_profile(s3_key, created_by)
+                _completed_steps.add('save')
                 update_job_status(
                     job_id,
                     status='completed',
@@ -19152,7 +19190,8 @@ def run_analysis(job_id, project_name, brands, sample_start, sample_end,
                     message='Complete!',
                     result_file=output_path,
                     demographic_validation=demographic_validation,
-                    s3_key=s3_key
+                    s3_key=s3_key,
+                    estimated_remaining_seconds=0,
                 )
             else:
                 if result_file:
