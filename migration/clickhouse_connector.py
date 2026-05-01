@@ -1,18 +1,21 @@
 """
-clickhouse_connector.py  —  ClickHouse adapter that mimics the
-snowflake.connector DBAPI (cursor / execute / fetch*).
+clickhouse_connector.py  —  Drop-in replacement for snowflake.connector
 
-Originally written as a drop-in replacement during the Snowflake -> ClickHouse
-migration. The migration is now complete; SF is fully decommissioned.
-Translates legacy SF SQL patterns to ClickHouse SQL automatically.
-
-Usage:
-    from clickhouse_connector import connect_clickhouse
+Makes ClickHouse look identical to the Snowflake API:
     conn = connect_clickhouse()
     cur  = conn.cursor()
     cur.execute("SELECT ...")
     rows = cur.fetchall()
     conn.close()
+
+Also translates common Snowflake SQL patterns to ClickHouse SQL automatically.
+
+Usage in any script — change ONE import:
+    # OLD:
+    conn = connect_snowflake()
+    # NEW:
+    from migration.clickhouse_connector import connect_clickhouse as connect_snowflake
+    conn = connect_snowflake()
 """
 
 import os

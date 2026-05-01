@@ -959,6 +959,56 @@ def get_s3_client():
         return None
 
 # ============================================================================
+# GENPOP PIPELINE OUTPUT CACHE (S3-backed, 24h TTL)
+# ============================================================================
+
+_GENPOP_CACHE_PREFIX = 'genpop_cache/'
+_GENPOP_CACHE_TTL_HOURS = 24
+
+def _genpop_cache_key(behavior_start: str, behavior_end: str) -> str:
+    """Deterministic S3 key for a cached GenPop pipeline output."""
+    return f"{_GENPOP_CACHE_PREFIX}{GEN_POP_CANONICAL_KEY}_{behavior_start}_{behavior_end}.csv"
+
+def _load_genpop_cache(behavior_start: str, behavior_end: str):
+    """Return cached GenPop DataFrame if fresh (< 24h), else None."""
+    s3 = get_s3_client()
+    if s3 is None:
+        return None
+    key = _genpop_cache_key(behavior_start, behavior_end)
+    try:
+        head = s3.head_object(Bucket=S3_BUCKET, Key=key)
+        last_mod = head['LastModified']
+        from datetime import datetime, timezone, timedelta
+        age = datetime.now(timezone.utc) - last_mod
+        if age > timedelta(hours=_GENPOP_CACHE_TTL_HOURS):
+            print(f"⏳ GenPop cache expired ({age.total_seconds()/3600:.1f}h old), will re-run pipeline")
+            return None
+        obj = s3.get_object(Bucket=S3_BUCKET, Key=key)
+        df = pd.read_csv(obj['Body'])
+        print(f"✅ Loaded GenPop pipeline output from cache ({len(df)} rows, {age.total_seconds()/3600:.1f}h old)")
+        return df
+    except s3.exceptions.NoSuchKey:
+        return None
+    except Exception as e:
+        print(f"⚠️ GenPop cache load failed: {e}")
+        return None
+
+def _save_genpop_cache(df, behavior_start: str, behavior_end: str):
+    """Persist GenPop pipeline output to S3."""
+    s3 = get_s3_client()
+    if s3 is None:
+        return
+    key = _genpop_cache_key(behavior_start, behavior_end)
+    try:
+        import io
+        buf = io.StringIO()
+        df.to_csv(buf, index=False)
+        s3.put_object(Bucket=S3_BUCKET, Key=key, Body=buf.getvalue().encode('utf-8'))
+        print(f"💾 Saved GenPop pipeline output to cache: {key} ({len(df)} rows)")
+    except Exception as e:
+        print(f"⚠️ GenPop cache save failed: {e}")
+
+# ============================================================================
 # GEN POP PENETRATION LOOKUP FOR SAMPLE SIZE CALIBRATION
 # ============================================================================
 
@@ -10238,7 +10288,21 @@ def ai_final_gut_check(df, brand_category, project_name, brands):
                     except Exception as e:
                         print(f"   ⚠️ Pass D error ({cat}): {e}")
             except TimeoutError:
-                print(f"   ⚠️ Pass D as_completed timeout (300s): some categories did not finish")
+                done_cats = {cat for cat, _ in pass_d_results}
+                timed_out = [(cat, prompt) for cat, prompt in pass_d_requests if cat not in done_cats]
+                print(f"   🔄 Pass D timeout: retrying {len(timed_out)} categories sequentially…")
+                for cat, prompt in timed_out:
+                    for _att in range(1, 4):
+                        try:
+                            resp = client.chat.completions.create(
+                                model='gpt-4o', messages=[{'role': 'user', 'content': prompt}],
+                                temperature=0.2, max_tokens=4000, timeout=OPENAI_CALL_TIMEOUT_SEC)
+                            result = _parse_ai_json(resp.choices[0].message.content.strip())
+                            pass_d_results.append((cat, result))
+                            break
+                        except Exception as e:
+                            if _att == 3:
+                                print(f"   ❌ Pass D [{cat}] failed after 3 retries: {e}")
     else:
         for cat, rank_prompt in pass_d_requests:
             try:
@@ -11662,16 +11726,14 @@ def boost_clamp_renorm(
 
     return df.drop(columns=["Projected_Count", "Capped_Count"])
 
-def connect_db():
-    """Connect to ClickHouse via clickhouse_connector. Function name was
-    historically connect_db() during the SF→CH migration shim period."""
-    import os, sys as _sys
-    _here = os.path.dirname(os.path.abspath(__file__))
-    for _p in (os.path.join(_here, "migration"), os.path.join(_here, "..", "migration")):
-        if _p not in _sys.path:
-            _sys.path.insert(0, _p)
-    from clickhouse_connector import connect_clickhouse
-    return connect_clickhouse()
+def connect_snowflake():
+    if not SILENCE_VERBOSE_OUTPUT:
+        print("🔌 Connecting to ClickHouse...")
+    conn = connect_clickhouse()
+    if not SILENCE_VERBOSE_OUTPUT:
+        print("✅ Connected to ClickHouse.")
+    return conn
+
 def clean_brand(brand):
     return re.sub(r'\W+', '', brand.strip().lower())
 
@@ -11777,8 +11839,10 @@ def run_talent_fit_analysis(conn, brand, talents, start_date, end_date):
     with conn.cursor() as cur:
         # Try dedicated TALENTFIT warehouse first, fall back to BEHAVIORGRAPH6X
         try:
+            cur.execute("USE WAREHOUSE TALENTFIT")
             print("🚀 Using TALENTFIT warehouse (6X-Large) for Talent Fit analysis")
         except Exception:
+            cur.execute("USE WAREHOUSE BEHAVIORGRAPH6X")
             print("🚀 Using BEHAVIORGRAPH6X warehouse for Talent Fit analysis")
         cur.execute("ALTER SESSION SET USE_CACHED_RESULT = TRUE")
         cur.execute("ALTER SESSION SET STATEMENT_TIMEOUT_IN_SECONDS = 3600")
@@ -11885,8 +11949,10 @@ def find_talent_for_brand(conn, brand, start_date, end_date, limit=50):
     with conn.cursor() as cur:
         # Try dedicated TALENTFIT warehouse first, fall back to BEHAVIORGRAPH6X
         try:
+            cur.execute("USE WAREHOUSE TALENTFIT")
             print("🚀 Using TALENTFIT warehouse (6X-Large) for Find Talent")
         except Exception:
+            cur.execute("USE WAREHOUSE BEHAVIORGRAPH6X")
             print("🚀 Using BEHAVIORGRAPH6X warehouse for Find Talent")
         cur.execute("ALTER SESSION SET USE_CACHED_RESULT = TRUE")
         cur.execute("ALTER SESSION SET STATEMENT_TIMEOUT_IN_SECONDS = 3600")
@@ -12068,6 +12134,7 @@ def perform_full_universe_scan(conn, brands, start_date, end_date, purchasers_on
             print("💾 Caching enabled - subsequent runs with same parameters will be much faster!")
             
             # Ensure we're using 6X-Large warehouse for maximum speed
+            cur.execute("USE WAREHOUSE BEHAVIORGRAPH6X")
             print("🚀 Using BEHAVIORGRAPH6X warehouse (6X-Large) for universe count")
             
             # Add query optimization hints for faster execution and caching
@@ -14642,12 +14709,29 @@ Reply with ONLY a JSON array (no markdown, no commentary):
     with _futures.ThreadPoolExecutor(max_workers=8) as pool:
         futures = [pool.submit(_review_one_chunk, cat, items, ci, n)
                    for cat, items, ci, n in tasks]
-        for fut in _futures.as_completed(futures, timeout=300):
-            try:
-                cat, decisions = fut.result()
-                decisions_by_cat.setdefault(cat, []).extend(decisions)
-            except Exception as e:
-                print(f"   ⚠️ Delta sanity worker raised: {e}")
+        _completed_tasks = set()
+        try:
+            for fut in _futures.as_completed(futures, timeout=300):
+                try:
+                    cat, decisions = fut.result()
+                    decisions_by_cat.setdefault(cat, []).extend(decisions)
+                    _completed_tasks.add(id(fut))
+                except Exception as e:
+                    _completed_tasks.add(id(fut))
+                    print(f"   ⚠️ Delta sanity worker raised: {e}")
+        except TimeoutError:
+            timed_out = [(cat, items, ci, n) for (cat, items, ci, n), f
+                         in zip(tasks, futures) if id(f) not in _completed_tasks]
+            print(f"   🔄 Delta sanity timeout: retrying {len(timed_out)} chunks sequentially…")
+            for cat, items, ci, n in timed_out:
+                for _att in range(1, 4):
+                    try:
+                        cat_r, decisions = _review_one_chunk(cat, items, ci, n)
+                        decisions_by_cat.setdefault(cat_r, []).extend(decisions)
+                        break
+                    except Exception as e:
+                        if _att == 3:
+                            print(f"   ❌ Delta sanity [{cat}] chunk {ci} failed after 3 retries: {e}")
 
     accepted = 0
     revised = 0
@@ -15371,8 +15455,23 @@ Return ONLY a JSON array, one entry per DMA, in the same order:
     multipliers: dict = {}
     with _futures.ThreadPoolExecutor(max_workers=min(6, len(chunks))) as pool:
         futures = {pool.submit(_process_chunk, i, c): i for i, c in enumerate(chunks)}
-        for fut in _futures.as_completed(futures, timeout=300):
-            multipliers.update(fut.result() or {})
+        _done_idxs = set()
+        try:
+            for fut in _futures.as_completed(futures, timeout=300):
+                idx = futures[fut]
+                _done_idxs.add(idx)
+                multipliers.update(fut.result() or {})
+        except TimeoutError:
+            timed_out = [(i, c) for i, c in enumerate(chunks) if i not in _done_idxs]
+            print(f"   🔄 Location agent timeout: retrying {len(timed_out)} chunks sequentially…")
+            for i, c in timed_out:
+                for _att in range(1, 4):
+                    try:
+                        multipliers.update(_process_chunk(i, c) or {})
+                        break
+                    except Exception as e:
+                        if _att == 3:
+                            print(f"   ❌ Location chunk {i} failed after 3 retries: {e}")
 
     coverage = len(multipliers) / max(1, len(all_dmas))
     print(f"   ✅ Location intelligence agent: scored {len(multipliers)}/{len(all_dmas)} DMAs ({coverage:.0%})")
@@ -15733,7 +15832,8 @@ def parallel_category_agents(df: pd.DataFrame, persona_doc: dict,
 
     print(f"🤖 Step 2: Launching {len(cats_needing_llm)} parallel category agents (skipped {len(category_values) - len(cats_needing_llm)} fully-carried categories) …")
     results_map: dict[str, list[dict]] = {}
-    with _futures.ThreadPoolExecutor(max_workers=12) as pool:
+    _MAX_AGENT_RETRIES = 3
+    with _futures.ThreadPoolExecutor(max_workers=25) as pool:
         future_to_cat = {
             pool.submit(_run_single_category_agent, cat,
                          category_new_items[cat], persona_doc, subject,
@@ -15750,9 +15850,19 @@ def parallel_category_agents(df: pd.DataFrame, persona_doc: dict,
                     results_map[cat] = []
         except TimeoutError:
             timed_out = [c for c in cats_needing_llm if c not in results_map]
-            print(f"   ⚠️ as_completed timeout (300s): {len(timed_out)} categories did not finish, skipping them")
+            print(f"   🔄 as_completed timeout: retrying {len(timed_out)} categories sequentially…")
             for c in timed_out:
-                results_map[c] = []
+                for _attempt in range(1, _MAX_AGENT_RETRIES + 1):
+                    try:
+                        results_map[c] = _run_single_category_agent(
+                            c, category_new_items[c], persona_doc, subject,
+                            canonical_baseline_lookup, anchor_mode)
+                        print(f"   ✅ Retry {_attempt}/{_MAX_AGENT_RETRIES} for [{c}] succeeded")
+                        break
+                    except Exception as _e:
+                        if _attempt == _MAX_AGENT_RETRIES:
+                            print(f"   ❌ [{c}] failed after {_MAX_AGENT_RETRIES} retries: {_e}")
+                            results_map[c] = []
 
     # --- D) Write agent BP values back into DataFrame --------------------
     def _add_4dp_noise(val: float) -> float:
@@ -16060,7 +16170,7 @@ Return ONLY a JSON array, one entry per item, in the same order:
 """
         try:
             resp = client.chat.completions.create(
-                model='gpt-4o',
+                model='gpt-4o-mini',
                 messages=[{'role': 'user', 'content': prompt}],
                 temperature=0.0,
                 max_tokens=min(16384, max(1024, len(items) * 80)),
@@ -16079,41 +16189,59 @@ Return ONLY a JSON array, one entry per item, in the same order:
 
     revisions = 0
     accepts = 0
+
+    def _apply_genpop_decisions(cat_u, items, decisions):
+        nonlocal accepts, revisions
+        value_to_idx = {it['value'].strip().lower(): it['idx'] for it in items}
+        value_to_old = {it['value'].strip().lower(): it['new_bp'] for it in items}
+        for d in decisions:
+            if not isinstance(d, dict):
+                continue
+            val = str(d.get('value', '')).strip().lower()
+            dec = str(d.get('decision', '')).strip().upper()
+            idx = value_to_idx.get(val)
+            if idx is None or dec not in ('ACCEPT', 'REVISE'):
+                continue
+            if dec == 'ACCEPT':
+                accepts += 1
+                continue
+            try:
+                new_bp = float(d.get('bp'))
+            except (TypeError, ValueError):
+                continue
+            old_bp = value_to_old.get(val, 0.0)
+            jitter = random.uniform(-0.01, 0.01)
+            new_bp = round(max(0.01, min(95.0, new_bp + jitter)), 4)
+            df.at[idx, bp_col] = new_bp
+            if 'Category Share' in df.columns:
+                df.at[idx, 'Category Share'] = new_bp
+            revisions += 1
+            print(f"      ↘ REVISE [{cat_u}] {d.get('value')}: {old_bp:.2f}% → {new_bp:.2f}% — {d.get('reason', '')[:90]}")
+
     with _futures.ThreadPoolExecutor(max_workers=8) as pool:
         future_to_cat = {
             pool.submit(_process_category, cat_u, items): (cat_u, items)
             for cat_u, items in flags_by_cat.items()
         }
-        for fut in _futures.as_completed(future_to_cat, timeout=300):
-            cat_u, items = future_to_cat[fut]
-            decisions = fut.result() or []
-            value_to_idx = {it['value'].strip().lower(): it['idx'] for it in items}
-            value_to_old = {it['value'].strip().lower(): it['new_bp'] for it in items}
-            for d in decisions:
-                if not isinstance(d, dict):
-                    continue
-                val = str(d.get('value', '')).strip().lower()
-                dec = str(d.get('decision', '')).strip().upper()
-                idx = value_to_idx.get(val)
-                if idx is None or dec not in ('ACCEPT', 'REVISE'):
-                    continue
-                if dec == 'ACCEPT':
-                    accepts += 1
-                    continue
-                try:
-                    new_bp = float(d.get('bp'))
-                except (TypeError, ValueError):
-                    continue
-                old_bp = value_to_old.get(val, 0.0)
-                # Add tiny noise to the revised value so it doesn't read as an
-                # obviously-LLM-rounded number.
-                jitter = random.uniform(-0.01, 0.01)
-                new_bp = round(max(0.01, min(95.0, new_bp + jitter)), 4)
-                df.at[idx, bp_col] = new_bp
-                if 'Category Share' in df.columns:
-                    df.at[idx, 'Category Share'] = new_bp
-                revisions += 1
-                print(f"      ↘ REVISE [{cat_u}] {d.get('value')}: {old_bp:.2f}% → {new_bp:.2f}% — {d.get('reason', '')[:90]}")
+        _done_cats = set()
+        try:
+            for fut in _futures.as_completed(future_to_cat, timeout=300):
+                cat_u, items = future_to_cat[fut]
+                _done_cats.add(cat_u)
+                decisions = fut.result() or []
+                _apply_genpop_decisions(cat_u, items, decisions)
+        except TimeoutError:
+            timed_out = [(cu, it) for cu, it in flags_by_cat.items() if cu not in _done_cats]
+            print(f"   🔄 Gen-pop mismatch timeout: retrying {len(timed_out)} categories sequentially…")
+            for cu, it in timed_out:
+                for _att in range(1, 4):
+                    try:
+                        decisions = _process_category(cu, it)
+                        _apply_genpop_decisions(cu, it, decisions or [])
+                        break
+                    except Exception as e:
+                        if _att == 3:
+                            print(f"   ❌ Gen-pop mismatch [{cu}] failed after 3 retries: {e}")
 
     print(f"   ✅ Gen-pop mismatch gate: {accepts} ACCEPT, {revisions} REVISE")
     return df
@@ -16637,7 +16765,7 @@ Return ONLY a JSON array, one entry per item, in the same order:
 """
         try:
             resp = client.chat.completions.create(
-                model='gpt-4o',
+                model='gpt-4o-mini',
                 messages=[{'role': 'user', 'content': prompt}],
                 temperature=0.0,
                 max_tokens=min(16384, max(1024, len(batch) * 100)),
@@ -16670,48 +16798,68 @@ Return ONLY a JSON array, one entry per item, in the same order:
           f"in {len(jobs)} batches across {len(grouped)} (kind, category) groups…")
 
     accepts_cap = revises_cap = accepts_floor = revises_floor = 0
+
+    def _apply_cap_decisions(kind, cat_u, batch, decisions):
+        nonlocal accepts_cap, revises_cap, accepts_floor, revises_floor
+        value_to_action = {it['value'].strip().lower(): it for it in batch}
+        for d in decisions:
+            if not isinstance(d, dict):
+                continue
+            val_key = str(d.get('value', '')).strip().lower()
+            dec = str(d.get('decision', '')).strip().upper()
+            action = value_to_action.get(val_key)
+            if action is None or dec not in ('ACCEPT', 'REVISE'):
+                continue
+            if dec == 'ACCEPT':
+                if kind == 'cap':
+                    accepts_cap += 1
+                else:
+                    accepts_floor += 1
+                continue
+            try:
+                new_bp = float(d.get('bp'))
+            except (TypeError, ValueError):
+                continue
+            if kind == 'cap':
+                lo, hi = action['capped_bp'], action['original_bp']
+                revises_cap += 1
+            else:
+                lo, hi = action['original_bp'], action['floored_bp']
+                revises_floor += 1
+            new_bp = max(min(new_bp, hi), lo)
+            jitter = random.uniform(-0.05, 0.05)
+            new_bp = round(max(0.01, min(99.0, new_bp + jitter)), 4)
+            idx = action['idx']
+            df.at[idx, bp_col] = new_bp
+            if 'Category Share' in df.columns:
+                df.at[idx, 'Category Share'] = new_bp
+            arrow = '↘→↘' if kind == 'cap' else '↗→↗'
+            print(f"      {arrow} REVISE [{kind}/{cat_u}] {action['value']}: "
+                  f"deterministic {action.get('capped_bp', action.get('floored_bp')):.2f}% → judge {new_bp:.2f}% "
+                  f"(original agent {action['original_bp']:.2f}%) — {str(d.get('reason', ''))[:90]}")
+
     with _futures.ThreadPoolExecutor(max_workers=max_workers) as pool:
         future_to_job = {pool.submit(_process_batch, k, c, b): (k, c, b) for (k, c, b) in jobs}
-        for fut in _futures.as_completed(future_to_job, timeout=300):
-            kind, cat_u, batch = future_to_job[fut]
-            decisions = fut.result() or []
-            value_to_action = {it['value'].strip().lower(): it for it in batch}
-            for d in decisions:
-                if not isinstance(d, dict):
-                    continue
-                val_key = str(d.get('value', '')).strip().lower()
-                dec = str(d.get('decision', '')).strip().upper()
-                action = value_to_action.get(val_key)
-                if action is None or dec not in ('ACCEPT', 'REVISE'):
-                    continue
-                if dec == 'ACCEPT':
-                    if kind == 'cap':
-                        accepts_cap += 1
-                    else:
-                        accepts_floor += 1
-                    continue
-                # REVISE — clamp to [capped, original] for cap or [original, floored] for floor.
-                try:
-                    new_bp = float(d.get('bp'))
-                except (TypeError, ValueError):
-                    continue
-                if kind == 'cap':
-                    lo, hi = action['capped_bp'], action['original_bp']
-                    revises_cap += 1
-                else:
-                    lo, hi = action['original_bp'], action['floored_bp']
-                    revises_floor += 1
-                new_bp = max(min(new_bp, hi), lo)
-                jitter = random.uniform(-0.05, 0.05)
-                new_bp = round(max(0.01, min(99.0, new_bp + jitter)), 4)
-                idx = action['idx']
-                df.at[idx, bp_col] = new_bp
-                if 'Category Share' in df.columns:
-                    df.at[idx, 'Category Share'] = new_bp
-                arrow = '↘→↘' if kind == 'cap' else '↗→↗'
-                print(f"      {arrow} REVISE [{kind}/{cat_u}] {action['value']}: "
-                      f"deterministic {action.get('capped_bp', action.get('floored_bp')):.2f}% → judge {new_bp:.2f}% "
-                      f"(original agent {action['original_bp']:.2f}%) — {str(d.get('reason', ''))[:90]}")
+        _done_jobs = set()
+        try:
+            for fut in _futures.as_completed(future_to_job, timeout=300):
+                kind, cat_u, batch = future_to_job[fut]
+                _done_jobs.add(id(fut))
+                decisions = fut.result() or []
+                _apply_cap_decisions(kind, cat_u, batch, decisions)
+        except TimeoutError:
+            timed_out = [(k, c, b) for (k, c, b), f in zip(jobs, [f for f in future_to_job])
+                         if id(f) not in _done_jobs]
+            print(f"   🔄 Cap-review timeout: retrying {len(timed_out)} batches sequentially…")
+            for k, c, b in timed_out:
+                for _att in range(1, 4):
+                    try:
+                        decisions = _process_batch(k, c, b)
+                        _apply_cap_decisions(k, c, b, decisions or [])
+                        break
+                    except Exception as e:
+                        if _att == 3:
+                            print(f"   ❌ Cap-review [{k}/{c}] failed after 3 retries: {e}")
 
     print(f"   ✅ Cap-review judge: cap [{accepts_cap} ACCEPT, {revises_cap} REVISE], "
           f"floor [{accepts_floor} ACCEPT, {revises_floor} REVISE]")
@@ -17134,6 +17282,7 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
     
     # Ensure we're using 6X-Large warehouse for the entire pipeline
     with conn.cursor() as cur:
+        cur.execute("USE WAREHOUSE BEHAVIORGRAPH6X")
         cur.execute("ALTER WAREHOUSE BEHAVIORGRAPH6X SET WAREHOUSE_SIZE = '6X-Large'")
         cur.execute("ALTER WAREHOUSE BEHAVIORGRAPH6X SET QUERY_ACCELERATION_MAX_SCALE_FACTOR = 25")
         print("🚀 Pipeline starting with BEHAVIORGRAPH6X warehouse (6X-Large with 25x acceleration)")
@@ -17188,6 +17337,7 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
 
     if is_geo_profile or (use_full_population_fastpath and not is_genpop):
         cur = conn.cursor()
+        cur.execute("USE WAREHOUSE BEHAVIORGRAPH6X")
         if is_geo_profile:
             cur.execute("ALTER SESSION SET STATEMENT_TIMEOUT_IN_SECONDS = 14400")
 
@@ -17746,6 +17896,7 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
         # ULTRA-OPTIMIZATION: Set query hints for maximum speed
         cur = conn.cursor()
         # Explicitly ensure we're using BEHAVIORGRAPH6X warehouse
+        cur.execute("USE WAREHOUSE BEHAVIORGRAPH6X")
         cur.execute("ALTER SESSION SET USE_CACHED_RESULT = TRUE")
         cur.execute("ALTER SESSION SET QUERY_TAG = 'BEHAVIORAL_CTE_OPTIMIZED'")
         
@@ -18699,6 +18850,7 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
         if final_sample_size is None:
             try:
                 cur = conn.cursor()
+                cur.execute("USE WAREHOUSE BEHAVIORGRAPH6X")
                 actual_sample_size = getattr(run_full_pipeline, 'universe_size', None)
                 if actual_sample_size is None:
                     try:
@@ -19858,138 +20010,121 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
     # 3-STEP AGENT PIPELINE (non-genpop) vs. ANCHOR PATH (genpop)
     # ══════════════════════════════════════════════════════════════════
     if is_genpop:
-        # ── GenPop: route through the same agent pipeline as profiles ────
-        # Per user spec: GenPop should "act like any other profile" except
-        # demographics + LOCATION stay hard-locked to GENPOP_DEMOGRAPHICS /
-        # GENPOP_DMA_PERCENTAGES (already enforced upstream at line ~17701).
-        # The per-category agents then row-by-row reason about "what % of
-        # all U.S. online adults would have clickstream engagement with
-        # this item?" — so CPG/grocery/luxury/regional all fall LOW
-        # naturally, mass online platforms go HIGH naturally, no anchor
-        # math required.
-        #
-        # The legacy `anchor_to_genpop` index-and-anchor path is replaced
-        # because it was producing 2-3x drift from the canonical CSV even
-        # for pure GenPop runs (its [0.40, 2.20] index bounds were never
-        # meant for the gen-pop CSV against itself). The agent pipeline
-        # gives more accurate AND more legible results.
-        _gp_subject = "the general U.S. adult population (average American adult)"
-        _gp_persona_doc = _build_genpop_persona_doc()
-
-        print(f"\n{'='*60}")
-        print(f"  GENPOP AGENT PIPELINE — '{_gp_subject}'")
-        print(f"{'='*60}")
-        print(f"   • Demographics + LOCATION: HARD-LOCKED to GENPOP_DEMOGRAPHICS / GENPOP_DMA_PERCENTAGES")
-        print(f"   • Behavioral: row-by-row digital-clickstream reasoning per category")
-        print(f"   • Persona category guidance: {len(_gp_persona_doc.get('category_guidance', {}))} categories with expected_high/low anchors")
-
-        # Build the rerun-context inputs (only meaningful when a prior file
-        # is supplied; for fresh GenPop runs these stay empty / None and
-        # only the per-category fresh scoring fires).
-        _gp_is_rerun = bool(
-            previous_file_path
-            and (previous_demo_lookup or previous_behavioral_lookup)
-        )
-        # Rerun-specific inputs (only used when prior file exists). Same
-        # logic as the profile branch's `_is_rerun_same_brand` plumbing.
-        _gp_bp_lookup: dict = {}
-        _gp_bp_rows: list[tuple[str, str, float]] = []
-        if _gp_is_rerun:
-            try:
-                if (getattr(load_previous_run_data, '_last_bp_path', None) == previous_file_path):
-                    _gp_bp_lookup = getattr(load_previous_run_data, '_last_bp_lookup', {}) or {}
-                    _gp_bp_rows = getattr(load_previous_run_data, '_last_bp_rows', []) or []
-            except Exception:
-                _gp_bp_lookup = {}
-                _gp_bp_rows = []
-
-        def _fmt_dates_gp(s, e):
-            try:
-                return f"{s} to {e}"
-            except Exception:
-                return ''
-        _gp_new_dates = _fmt_dates_gp(behavior_start, behavior_end)
-        _gp_prior_dates = previous_behavior_dates or 'prior reference window'
-
-        _gp_wide_window = False
-        if _gp_is_rerun and previous_behavior_dates:
-            try:
-                _prior_start_str = previous_behavior_dates.split('TO')[0].strip()
-                _prior_start = pd.to_datetime(_prior_start_str)
-                _new_start = pd.to_datetime(behavior_start)
-                _gp_wide_window = abs((_new_start - _prior_start).days) > 7
-            except Exception:
-                _gp_wide_window = False
-
-        if _gp_is_rerun:
-            print(f"   • Rerun mode: ON — prior reference has {len(_gp_bp_lookup)} BP values for delta-sanity")
-            print(f"   • Wide-date-window: {_gp_wide_window} "
-                  f"(prior='{previous_behavior_dates}', new='{behavior_start} to {behavior_end}')")
+        # ── GenPop: check S3 cache first ──────────────────────────────────
+        _cached_gp = _load_genpop_cache(behavior_start, behavior_end)
+        if _cached_gp is not None:
+            df_final = _cached_gp
+            print(f"{'='*60}")
+            print(f"  GENPOP AGENT PIPELINE — LOADED FROM CACHE")
+            print(f"{'='*60}\n")
         else:
-            print(f"   • Fresh GenPop run (no prior file) — fresh per-category scoring only")
+            # ── GenPop: route through the same agent pipeline as profiles ────
+            # Per user spec: GenPop should "act like any other profile" except
+            # demographics + LOCATION stay hard-locked to GENPOP_DEMOGRAPHICS /
+            # GENPOP_DMA_PERCENTAGES (already enforced upstream at line ~17701).
+            # The per-category agents then row-by-row reason about "what % of
+            # all U.S. online adults would have clickstream engagement with
+            # this item?" — so CPG/grocery/luxury/regional all fall LOW
+            # naturally, mass online platforms go HIGH naturally, no anchor
+            # math required.
+            #
+            # The legacy `anchor_to_genpop` index-and-anchor path is replaced
+            # because it was producing 2-3x drift from the canonical CSV even
+            # for pure GenPop runs (its [0.40, 2.20] index bounds were never
+            # meant for the gen-pop CSV against itself). The agent pipeline
+            # gives more accurate AND more legible results.
+            _gp_subject = "the general U.S. adult population (average American adult)"
+            _gp_persona_doc = _build_genpop_persona_doc()
 
-        # Ensure df has the columns the agent pipeline expects before we
-        # hand it off (parallel_category_agents reads/writes these).
-        for col in ['Unique Purchase Confirmations', 'Raw Numbers',
-                     'Actual Unique UID Count (DB)', 'Original Raw Numbers (Database)']:
-            if col in df_final.columns:
-                df_final = df_final.drop(columns=[col])
-        if 'Brand Penetration (Row)' not in df_final.columns and 'Category Share' in df_final.columns:
-            df_final['Brand Penetration (Row)'] = df_final['Category Share']
-        if 'Original Raw Numbers' not in df_final.columns:
-            df_final['Original Raw Numbers'] = 0
+            print(f"\n{'='*60}")
+            print(f"  GENPOP AGENT PIPELINE — '{_gp_subject}'")
+            print(f"{'='*60}")
+            print(f"   • Demographics + LOCATION: HARD-LOCKED to GENPOP_DEMOGRAPHICS / GENPOP_DMA_PERCENTAGES")
+            print(f"   • Behavioral: row-by-row digital-clickstream reasoning per category")
+            print(f"   • Persona category guidance: {len(_gp_persona_doc.get('category_guidance', {}))} categories with expected_high/low anchors")
 
-        # ── THE CALL — same agent pipeline as profiles ──
-        # lock_demographics=True → persona_doc demographics (which come
-        # from GENPOP_DEMOGRAPHICS) get written EXACTLY, no organic noise,
-        # so the gen-pop demographic distribution stays canonical.
-        # CRITICAL: brands=[] for GenPop. For a profile run, `brands` is the
-        # one analyzed brand and gets pinned to 100% (correct). For GenPop,
-        # `brands` is the 14-brand seed list used to select the panel
-        # (.X.COM, .ZOOM.COM, AMAZON, FACEBOOK, GOOGLE, KROGER, MICROSOFT,
-        # NETFLIX, PAYPAL, etc). Pinning ALL of those to 100% in every
-        # category they appear is the bug that produced ZOOM=99.99%,
-        # PAYPAL=99.99%, KROGER=99.99% in WHERE THEY SHOP, etc. For GenPop
-        # the agent should score those items by canonical baseline like
-        # everything else.
-        df_final = parallel_category_agents(
-            df_final, _gp_persona_doc, _gp_subject, [],
-            previous_behavioral_lookup=None,
-            lock_demographics=True,
-            previous_bp_rows=(_gp_bp_rows if _gp_is_rerun else None),
-            delta_sanity_lookup=(_gp_bp_lookup if _gp_is_rerun and _gp_bp_lookup else None),
-            delta_sanity_subject=_gp_subject,
-            delta_sanity_prior_dates=_gp_prior_dates,
-            delta_sanity_new_dates=_gp_new_dates,
-            wide_window=_gp_wide_window,
-            anchor_mode='genpop',
-        )
+            _gp_is_rerun = bool(
+                previous_file_path
+                and (previous_demo_lookup or previous_behavioral_lookup)
+            )
+            _gp_bp_lookup: dict = {}
+            _gp_bp_rows: list[tuple[str, str, float]] = []
+            if _gp_is_rerun:
+                try:
+                    if (getattr(load_previous_run_data, '_last_bp_path', None) == previous_file_path):
+                        _gp_bp_lookup = getattr(load_previous_run_data, '_last_bp_lookup', {}) or {}
+                        _gp_bp_rows = getattr(load_previous_run_data, '_last_bp_rows', []) or []
+                except Exception:
+                    _gp_bp_lookup = {}
+                    _gp_bp_rows = []
 
-        # Final sanity check — GenPop passes brands=[] for the same reason
-        # as above (don't 100%-pin the seed brand list). The downstream
-        # set_brand_input_raw_to_sample_size(df_final, is_genpop=True) call
-        # already handles the BRAND INPUT row correctly for GenPop.
-        print("🔒 GenPop sanity check …")
-        df_final = agent_pipeline_final_sanity_check(df_final, [], purchasers_only=purchasers_only)
+            def _fmt_dates_gp(s, e):
+                try:
+                    return f"{s} to {e}"
+                except Exception:
+                    return ''
+            _gp_new_dates = _fmt_dates_gp(behavior_start, behavior_end)
+            _gp_prior_dates = previous_behavior_dates or 'prior reference window'
 
-        # Downstream cleanup that the legacy anchor path used to do.
-        # All of these are post-write housekeeping (ordering, projections,
-        # decimal cleanup, DMA enforcement) — none of them recompute BPs.
-        df_final = enforce_cross_category_brand_consistency(df_final, purchasers_only=purchasers_only)
-        df_final = sort_categories_by_percentage(df_final)
-        df_final = add_brand_penetration_column_using_final_raw(df_final)
-        df_final = add_us_gen_pop_projection(df_final)
-        df_final = deduplicate_values_within_category(df_final)
-        df_final = ensure_percentage_four_decimals(df_final)
-        df_final = enforce_max_four_decimals_across_columns(df_final)
-        df_final = enforce_exact_210_dmas(df_final)
-        df_final = set_brand_input_raw_to_sample_size(df_final, is_genpop, purchasers_only=purchasers_only)
-        df_final = add_brand_penetration_column_using_final_raw(df_final)
-        df_final = add_us_gen_pop_projection(df_final)
+            _gp_wide_window = False
+            if _gp_is_rerun and previous_behavior_dates:
+                try:
+                    _prior_start_str = previous_behavior_dates.split('TO')[0].strip()
+                    _prior_start = pd.to_datetime(_prior_start_str)
+                    _new_start = pd.to_datetime(behavior_start)
+                    _gp_wide_window = abs((_new_start - _prior_start).days) > 7
+                except Exception:
+                    _gp_wide_window = False
 
-        print(f"{'='*60}")
-        print(f"  GENPOP AGENT PIPELINE COMPLETE")
-        print(f"{'='*60}\n")
+            if _gp_is_rerun:
+                print(f"   • Rerun mode: ON — prior reference has {len(_gp_bp_lookup)} BP values for delta-sanity")
+                print(f"   • Wide-date-window: {_gp_wide_window} "
+                      f"(prior='{previous_behavior_dates}', new='{behavior_start} to {behavior_end}')")
+            else:
+                print(f"   • Fresh GenPop run (no prior file) — fresh per-category scoring only")
+
+            for col in ['Unique Purchase Confirmations', 'Raw Numbers',
+                         'Actual Unique UID Count (DB)', 'Original Raw Numbers (Database)']:
+                if col in df_final.columns:
+                    df_final = df_final.drop(columns=[col])
+            if 'Brand Penetration (Row)' not in df_final.columns and 'Category Share' in df_final.columns:
+                df_final['Brand Penetration (Row)'] = df_final['Category Share']
+            if 'Original Raw Numbers' not in df_final.columns:
+                df_final['Original Raw Numbers'] = 0
+
+            df_final = parallel_category_agents(
+                df_final, _gp_persona_doc, _gp_subject, [],
+                previous_behavioral_lookup=None,
+                lock_demographics=True,
+                previous_bp_rows=(_gp_bp_rows if _gp_is_rerun else None),
+                delta_sanity_lookup=(_gp_bp_lookup if _gp_is_rerun and _gp_bp_lookup else None),
+                delta_sanity_subject=_gp_subject,
+                delta_sanity_prior_dates=_gp_prior_dates,
+                delta_sanity_new_dates=_gp_new_dates,
+                wide_window=_gp_wide_window,
+                anchor_mode='genpop',
+            )
+
+            print("🔒 GenPop sanity check …")
+            df_final = agent_pipeline_final_sanity_check(df_final, [], purchasers_only=purchasers_only)
+
+            df_final = enforce_cross_category_brand_consistency(df_final, purchasers_only=purchasers_only)
+            df_final = sort_categories_by_percentage(df_final)
+            df_final = add_brand_penetration_column_using_final_raw(df_final)
+            df_final = add_us_gen_pop_projection(df_final)
+            df_final = deduplicate_values_within_category(df_final)
+            df_final = ensure_percentage_four_decimals(df_final)
+            df_final = enforce_max_four_decimals_across_columns(df_final)
+            df_final = enforce_exact_210_dmas(df_final)
+            df_final = set_brand_input_raw_to_sample_size(df_final, is_genpop, purchasers_only=purchasers_only)
+            df_final = add_brand_penetration_column_using_final_raw(df_final)
+            df_final = add_us_gen_pop_projection(df_final)
+
+            _save_genpop_cache(df_final, behavior_start, behavior_end)
+
+            print(f"{'='*60}")
+            print(f"  GENPOP AGENT PIPELINE COMPLETE")
+            print(f"{'='*60}\n")
     else:
         # ── Non-GenPop: 3-Step Agent Pipeline ───────────────────────────
         # Drop intermediate columns before agent pipeline
@@ -24024,7 +24159,7 @@ def main():
         if not platform_name:
             platform_name = None
     
-    conn = connect_db()
+    conn = connect_snowflake()
     
     # Always perform full universe scan to get actual total users
     print("🔍 Performing full universe scan...")
@@ -24186,6 +24321,7 @@ def calculate_frequency_metrics(conn, brands, behavior_start, behavior_end, purc
     
     with conn.cursor() as cur:
         # Explicitly ensure we're using BEHAVIORGRAPH6X warehouse
+        cur.execute("USE WAREHOUSE BEHAVIORGRAPH6X")
         if not SILENCE_VERBOSE_OUTPUT:
             print("📊 Calculating visit frequency metrics...")
     
