@@ -356,7 +356,7 @@ def _get_openai_client():
         return None
     try:
         from openai import OpenAI
-        _bg_openai_client = OpenAI(api_key=api_key)
+        _bg_openai_client = OpenAI(api_key=api_key, timeout=120.0)
         return _bg_openai_client
     except Exception as e:
         print(f"⚠️ OpenAI client init failed in bg.py: {e}")

@@ -262,7 +262,7 @@ def get_openai_client():
             http_proxy = os.environ.pop('HTTP_PROXY', None)
             https_proxy = os.environ.pop('HTTPS_PROXY', None)
             try:
-                openai_client = OpenAI(api_key=api_key)
+                openai_client = OpenAI(api_key=api_key, timeout=120.0)
                 print("✅ OpenAI client initialized successfully")
             finally:
                 # Restore proxy settings if they were set
