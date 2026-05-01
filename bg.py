@@ -10228,14 +10228,17 @@ def ai_final_gut_check(df, brand_category, project_name, brands):
                 ): cat
                 for cat, prompt in pass_d_requests
             }
-            for future in _futures.as_completed(future_to_cat):
-                cat = future_to_cat[future]
-                try:
-                    resp = future.result()
-                    result = _parse_ai_json(resp.choices[0].message.content.strip())
-                    pass_d_results.append((cat, result))
-                except Exception as e:
-                    print(f"   ⚠️ Pass D error ({cat}): {e}")
+            try:
+                for future in _futures.as_completed(future_to_cat, timeout=300):
+                    cat = future_to_cat[future]
+                    try:
+                        resp = future.result()
+                        result = _parse_ai_json(resp.choices[0].message.content.strip())
+                        pass_d_results.append((cat, result))
+                    except Exception as e:
+                        print(f"   ⚠️ Pass D error ({cat}): {e}")
+            except TimeoutError:
+                print(f"   ⚠️ Pass D as_completed timeout (300s): some categories did not finish")
     else:
         for cat, rank_prompt in pass_d_requests:
             try:
@@ -14642,7 +14645,7 @@ Reply with ONLY a JSON array (no markdown, no commentary):
     with _futures.ThreadPoolExecutor(max_workers=8) as pool:
         futures = [pool.submit(_review_one_chunk, cat, items, ci, n)
                    for cat, items, ci, n in tasks]
-        for fut in _futures.as_completed(futures):
+        for fut in _futures.as_completed(futures, timeout=300):
             try:
                 cat, decisions = fut.result()
                 decisions_by_cat.setdefault(cat, []).extend(decisions)
@@ -15371,7 +15374,7 @@ Return ONLY a JSON array, one entry per DMA, in the same order:
     multipliers: dict = {}
     with _futures.ThreadPoolExecutor(max_workers=min(6, len(chunks))) as pool:
         futures = {pool.submit(_process_chunk, i, c): i for i, c in enumerate(chunks)}
-        for fut in _futures.as_completed(futures):
+        for fut in _futures.as_completed(futures, timeout=300):
             multipliers.update(fut.result() or {})
 
     coverage = len(multipliers) / max(1, len(all_dmas))
@@ -15740,13 +15743,19 @@ def parallel_category_agents(df: pd.DataFrame, persona_doc: dict,
                          canonical_baseline_lookup, anchor_mode): cat
             for cat in cats_needing_llm
         }
-        for fut in _futures.as_completed(future_to_cat):
-            cat = future_to_cat[fut]
-            try:
-                results_map[cat] = fut.result()
-            except Exception as e:
-                print(f"   ⚠️ Agent [{cat}] raised: {e}")
-                results_map[cat] = []
+        try:
+            for fut in _futures.as_completed(future_to_cat, timeout=300):
+                cat = future_to_cat[fut]
+                try:
+                    results_map[cat] = fut.result()
+                except Exception as e:
+                    print(f"   ⚠️ Agent [{cat}] raised: {e}")
+                    results_map[cat] = []
+        except TimeoutError:
+            timed_out = [c for c in cats_needing_llm if c not in results_map]
+            print(f"   ⚠️ as_completed timeout (300s): {len(timed_out)} categories did not finish, skipping them")
+            for c in timed_out:
+                results_map[c] = []
 
     # --- D) Write agent BP values back into DataFrame --------------------
     def _add_4dp_noise(val: float) -> float:
@@ -16078,7 +16087,7 @@ Return ONLY a JSON array, one entry per item, in the same order:
             pool.submit(_process_category, cat_u, items): (cat_u, items)
             for cat_u, items in flags_by_cat.items()
         }
-        for fut in _futures.as_completed(future_to_cat):
+        for fut in _futures.as_completed(future_to_cat, timeout=300):
             cat_u, items = future_to_cat[fut]
             decisions = fut.result() or []
             value_to_idx = {it['value'].strip().lower(): it['idx'] for it in items}
@@ -16666,7 +16675,7 @@ Return ONLY a JSON array, one entry per item, in the same order:
     accepts_cap = revises_cap = accepts_floor = revises_floor = 0
     with _futures.ThreadPoolExecutor(max_workers=max_workers) as pool:
         future_to_job = {pool.submit(_process_batch, k, c, b): (k, c, b) for (k, c, b) in jobs}
-        for fut in _futures.as_completed(future_to_job):
+        for fut in _futures.as_completed(future_to_job, timeout=300):
             kind, cat_u, batch = future_to_job[fut]
             decisions = fut.result() or []
             value_to_action = {it['value'].strip().lower(): it for it in batch}
