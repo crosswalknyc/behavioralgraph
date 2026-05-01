@@ -15441,8 +15441,9 @@ def submit_analysis():
         except ValueError:
             return jsonify({'error': 'Invalid date format. Use YYYY-MM-DD'}), 400
         
-        # Optional parameters
-        is_genpop = data.get('is_genpop', True)
+        # Optional parameters — auto-detect GenPop from brand names if caller omits is_genpop
+        _brand_lower = [b.strip().lower() for b in brands]
+        is_genpop = data.get('is_genpop', any(b in ('gen pop', 'gen_pop', 'genpop') for b in _brand_lower))
         purchasers_only = data.get('purchasers_only', False)
         brand_category = data.get('brand_category', 'GENERAL')
         include_frequency = data.get('include_frequency', False)
@@ -18786,12 +18787,12 @@ def update_job_status(job_id, status=None, progress=None, message=None, error=No
 # Timing-based step weights derived from observed Nike profile run (~66 min total).
 # Each weight represents approximate % of total wall-clock time for that phase.
 _PROFILE_STEP_WEIGHTS = {
-    'init':           1,   # ~2s   - import, seed, ref download
-    'db_connect':     1,   # ~2s   - connect to DB
-    'universe_scan':  34,  # ~23m  - ClickHouse universe scan
-    'pipeline':       50,  # ~33m  - bg.run_full_pipeline (includes 3-step agent)
-    'post_process':   2,   # ~1m   - frequency/listener adjustments
-    'save':           12,  # ~2m   - purgatory upload + notifications
+    'init':           2,   # ~1m   - import, seed, ref download
+    'db_connect':     2,   # ~30s  - connect to DB
+    'universe_scan':  35,  # ~23m  - ClickHouse universe scan (unchanged)
+    'pipeline':       40,  # ~20m  - bg.run_full_pipeline (faster with tiered models)
+    'post_process':   5,   # ~2m   - frequency/listener adjustments
+    'save':           16,  # ~5m   - purgatory upload + notifications
 }
 _PROFILE_STEP_ORDER = ['init', 'db_connect', 'universe_scan', 'pipeline', 'post_process', 'save']
 

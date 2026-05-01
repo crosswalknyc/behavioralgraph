@@ -295,6 +295,34 @@ import glob
 from datetime import datetime
 from genpop_calibration import calibrate_to_genpop
 import json as _json_mod
+import time as _time
+
+# ── Model tier constants ────────────────────────────────────────────────────
+MODEL_RESEARCH = 'gpt-4o-search-preview'   # web search, persona doc
+MODEL_QUALITY  = 'gpt-4o'                  # priority categories + location + demos
+MODEL_SCORING  = 'gpt-4o-mini'             # other category agents + delta sanity
+MODEL_JUDGE    = 'gpt-4.1-nano'            # mismatch + cap review (ACCEPT/REVISE)
+
+PRIORITY_CATEGORIES = {
+    'SOCIAL MEDIA', 'SEARCH ENGINE/AI',
+    'MOST PURCHASED BRANDS', 'WHERE THEY SHOP',
+    'INTERESTS', 'APPS/PLATFORM',
+}
+
+
+def _timed_completion(client, *, label="", **kwargs):
+    """Thin wrapper around client.chat.completions.create that logs timing."""
+    t0 = _time.perf_counter()
+    try:
+        resp = client.chat.completions.create(**kwargs)
+        elapsed = _time.perf_counter() - t0
+        tokens = getattr(resp.usage, 'total_tokens', 0) if resp.usage else 0
+        print(f"   [AGENT-TIMING] {label}: {elapsed:.1f}s | {tokens} tok | model={kwargs.get('model','?')}")
+        return resp
+    except Exception as e:
+        elapsed = _time.perf_counter() - t0
+        print(f"   [AGENT-TIMING] {label}: FAILED after {elapsed:.1f}s | {type(e).__name__}: {e}")
+        raise
 
 
 def _soft_clamp_index(raw_index, lo, hi):
@@ -14001,8 +14029,10 @@ Example for a Nike persona:
 
     # Attempt 1: gpt-4o-search-preview (has web search)
     try:
-        resp = client.chat.completions.create(
-            model='gpt-4o-search-preview',
+        resp = _timed_completion(
+            client,
+            label="persona/search-preview",
+            model=MODEL_RESEARCH,
             web_search_options={"search_context_size": "high"},
             messages=[{'role': 'user', 'content': prompt}],
             max_tokens=4096,
@@ -14020,8 +14050,10 @@ Example for a Nike persona:
     if persona_doc is None:
         print(f"   🔄 Falling back to gpt-4o (response_format=json_object) …")
         try:
-            resp = client.chat.completions.create(
-                model='gpt-4o',
+            resp = _timed_completion(
+                client,
+                label="persona/gpt-4o-fallback",
+                model=MODEL_QUALITY,
                 messages=[
                     {'role': 'system', 'content': 'You return ONLY a single valid JSON object, no markdown, no commentary.'},
                     {'role': 'user', 'content': prompt},
@@ -14049,8 +14081,10 @@ Example for a Nike persona:
                 "fix the syntax (escape stray quotes, remove trailing commas, balance braces).\n\n"
                 f"---\n{text}\n---"
             )
-            resp = client.chat.completions.create(
-                model='gpt-4o',
+            resp = _timed_completion(
+                client,
+                label="persona/json-repair",
+                model=MODEL_QUALITY,
                 messages=[{'role': 'user', 'content': repair_prompt}],
                 temperature=0,
                 max_tokens=4096,
@@ -14320,8 +14354,11 @@ ITEMS TO SCORE:
     token_budget = min(token_budget, 16384)
 
     try:
-        resp = client.chat.completions.create(
-            model='gpt-4o',
+        _model = MODEL_QUALITY if category.upper() in PRIORITY_CATEGORIES else MODEL_SCORING
+        resp = _timed_completion(
+            client,
+            label=f"cat-agent/{category.upper()}",
+            model=_model,
             messages=[{'role': 'user', 'content': prompt}],
             temperature=0.0,
             max_tokens=token_budget,
@@ -14671,8 +14708,10 @@ Reply with ONLY a JSON array (no markdown, no commentary):
         # Cap max_tokens strictly under model limit; size to actual chunk
         chunk_max_tokens = max(1024, min(_MAX_OUTPUT_TOKENS, len(items) * _TOKENS_PER_ITEM + 512))
         try:
-            resp = client.chat.completions.create(
-                model='gpt-4o',
+            resp = _timed_completion(
+                client,
+                label=f"delta-sanity/chunk",
+                model=MODEL_SCORING,
                 messages=[{'role': 'user', 'content': prompt}],
                 temperature=0.0,
                 max_tokens=chunk_max_tokens,
@@ -15418,8 +15457,10 @@ Return ONLY a JSON array, one entry per DMA, in the same order:
 ]
 """
         try:
-            resp = client.chat.completions.create(
-                model='gpt-4o',
+            resp = _timed_completion(
+                client,
+                label=f"location-intel/chunk",
+                model=MODEL_QUALITY,
                 messages=[{'role': 'user', 'content': prompt}],
                 temperature=0.2,
                 max_tokens=min(16384, max(2048, len(chunk) * 60)),
@@ -15817,6 +15858,7 @@ def parallel_category_agents(df: pd.DataFrame, persona_doc: dict,
     total_carry = sum(len(c) for c in category_carry.values())
     total_new = sum(len(n) for n in category_new_items.values())
     cats_needing_llm = [c for c, n in category_new_items.items() if n]
+    cats_needing_llm.sort(key=lambda c: len(category_new_items[c]), reverse=True)
     if prev_bhv:
         print(f"🔁 Rerun carry-forward: {total_carry} items reuse prior BP, "
               f"{total_new} new items across {len(cats_needing_llm)} categories will be scored fresh")
@@ -15831,9 +15873,14 @@ def parallel_category_agents(df: pd.DataFrame, persona_doc: dict,
         print(f"📐 Per-cat agents will anchor to {len(canonical_baseline_lookup)} canonical baselines (mode={anchor_mode})")
 
     print(f"🤖 Step 2: Launching {len(cats_needing_llm)} parallel category agents (skipped {len(category_values) - len(cats_needing_llm)} fully-carried categories) …")
+    if cats_needing_llm:
+        _top = cats_needing_llm[:10]
+        print(f"   📊 Category sizes (top 10, largest-first): "
+              + ", ".join(f"{c}:{len(category_new_items[c])}" for c in _top))
     results_map: dict[str, list[dict]] = {}
     _MAX_AGENT_RETRIES = 3
-    with _futures.ThreadPoolExecutor(max_workers=25) as pool:
+    _cat_phase_t0 = _time.perf_counter()
+    with _futures.ThreadPoolExecutor(max_workers=35) as pool:
         future_to_cat = {
             pool.submit(_run_single_category_agent, cat,
                          category_new_items[cat], persona_doc, subject,
@@ -15863,6 +15910,10 @@ def parallel_category_agents(df: pd.DataFrame, persona_doc: dict,
                         if _attempt == _MAX_AGENT_RETRIES:
                             print(f"   ❌ [{c}] failed after {_MAX_AGENT_RETRIES} retries: {_e}")
                             results_map[c] = []
+
+    _cat_phase_elapsed = _time.perf_counter() - _cat_phase_t0
+    print(f"   [AGENT-SUMMARY] {len(results_map)} categories scored in {_cat_phase_elapsed:.0f}s "
+          f"(avg {_cat_phase_elapsed/max(len(results_map),1):.1f}s/cat)")
 
     # --- D) Write agent BP values back into DataFrame --------------------
     def _add_4dp_noise(val: float) -> float:
@@ -16169,8 +16220,10 @@ Return ONLY a JSON array, one entry per item, in the same order:
 ]
 """
         try:
-            resp = client.chat.completions.create(
-                model='gpt-4o-mini',
+            resp = _timed_completion(
+                client,
+                label=f"genpop-mismatch/{cat_name}",
+                model=MODEL_JUDGE,
                 messages=[{'role': 'user', 'content': prompt}],
                 temperature=0.0,
                 max_tokens=min(16384, max(1024, len(items) * 80)),
@@ -16764,8 +16817,10 @@ Return ONLY a JSON array, one entry per item, in the same order:
 ]
 """
         try:
-            resp = client.chat.completions.create(
-                model='gpt-4o-mini',
+            resp = _timed_completion(
+                client,
+                label=f"cap-review/batch",
+                model=MODEL_JUDGE,
                 messages=[{'role': 'user', 'content': prompt}],
                 temperature=0.0,
                 max_tokens=min(16384, max(1024, len(batch) * 100)),
