@@ -68,18 +68,14 @@ def calculate_boost_multiplier(raw_value):
     return boost_multiplier
 
 
-# =========================
-# === Snowflake creds ====
-# =========================
-# ⚠️ Hard-coded credentials (note: insecure for production use)
-
-
-# =========================
-# === Snowflake connect ===
-# =========================
+# ===========================
+# === ClickHouse connection ==
+# ===========================
+# Impact IQ runs entirely on ClickHouse. Connection details come from the
+# environment (CH_HOST/CH_PORT/CH_USER/CH_PASSWORD) via clickhouse_connector.
+# No Snowflake involvement at runtime.
 def connect_db():
-    """Connect to ClickHouse via clickhouse_connector. Function name was
-    historically connect_db() during the SF→CH migration shim period."""
+    """Connect to ClickHouse via clickhouse_connector."""
     import os, sys as _sys
     _here = os.path.dirname(os.path.abspath(__file__))
     for _p in (os.path.join(_here, 'migration'), os.path.join(_here, '..', 'migration')):
@@ -87,6 +83,13 @@ def connect_db():
             _sys.path.insert(0, _p)
     from clickhouse_connector import connect_clickhouse
     return connect_clickhouse()
+
+
+# Back-compat alias: bg-webapp/app.py's run_talent_theater() does
+# `module.connect_snowflake()`, a leftover name from the SF era. Keep this
+# alias so Flask doesn't AttributeError; the underlying call still goes to
+# ClickHouse through connect_db() above.
+connect_snowflake = connect_db
 # ====================================
 # === Brand variation generation ===
 # ====================================

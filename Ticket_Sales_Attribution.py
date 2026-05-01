@@ -77,13 +77,21 @@ def calculate_boost_multiplier(raw_value):
 # ===========================
 # === ClickHouse connection ==
 # ===========================
-# Impact IQ runs entirely on ClickHouse. Connection details come from the
-# environment (CH_HOST/CH_PORT/CH_USER/CH_PASSWORD) via clickhouse_connector.
+# Ticket Sales Tracker runs entirely on ClickHouse. Connection details come
+# from the environment (CH_HOST/CH_PORT/CH_USER/CH_PASSWORD) via
+# clickhouse_connector. No Snowflake involvement at runtime.
 def connect_db():
     print("Connecting to ClickHouse...")
     conn = connect_clickhouse()
     print("Connected to ClickHouse.")
     return conn
+
+
+# Back-compat alias: bg-webapp/app.py's run_ticket_sales_tracker() does
+# `module.connect_snowflake()`, a leftover name from the SF era. Keep this
+# alias so Flask doesn't AttributeError; the underlying call still goes to
+# ClickHouse through connect_db() above.
+connect_snowflake = connect_db
 
 
 # ====================================
