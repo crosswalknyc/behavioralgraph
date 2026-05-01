@@ -98,6 +98,9 @@ def connect_db():
             _sys.path.insert(0, _p)
     from clickhouse_connector import connect_clickhouse
     return connect_clickhouse()
+
+connect_snowflake = connect_db
+
 # ====================================
 # === Brand variation generation ===
 # ====================================
