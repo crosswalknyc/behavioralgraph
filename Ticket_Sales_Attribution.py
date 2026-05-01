@@ -74,18 +74,12 @@ def calculate_boost_multiplier(raw_value):
         return max(1, max_safe_multiplier)
 
 
-# =========================
-# === Snowflake creds ====
-# =========================
-SNOWFLAKE_USER = "hotdogsandcheezeits"
-SNOWFLAKE_PASSWORD = "S3nshine2282!"
-SNOWFLAKE_ACCOUNT = "qsodrkt-hgb46445"
-SNOWFLAKE_WAREHOUSE = "TICKETS_SALES_WH_6XL"
-SNOWFLAKE_DATABASE = "PROCESSEDCLICKSTREAM"
-SNOWFLAKE_SCHEMA = "PUBLIC"
-
-
-def connect_snowflake():
+# ===========================
+# === ClickHouse connection ==
+# ===========================
+# Impact IQ runs entirely on ClickHouse. Connection details come from the
+# environment (CH_HOST/CH_PORT/CH_USER/CH_PASSWORD) via clickhouse_connector.
+def connect_db():
     print("Connecting to ClickHouse...")
     conn = connect_clickhouse()
     print("Connected to ClickHouse.")
@@ -285,40 +279,48 @@ def run_query(conn, p):
 
     # Step 1: Movie viewers in date range
     print("🎥 Step 1: Finding movie viewers...")
+    cur.execute("DROP TABLE IF EXISTS TEMP_MOVIE_VIEWERS")
     cur.execute(f"""
-        CREATE OR REPLACE TEMP TABLE TEMP_MOVIE_VIEWERS AS
+        CREATE TEMPORARY TABLE TEMP_MOVIE_VIEWERS ENGINE = Memory AS
         SELECT DISTINCT UID
-        FROM PROCESSEDCLICKSTREAM.PUBLIC.CLICKSTREAM_FINAL
-        WHERE DELIVERED BETWEEN '{p['start_date'].date()}' AND '{p['end_date'].date()}'
+        FROM clickstream.clickstream_final
+        WHERE DELIVERED BETWEEN toDate('{p['start_date'].date()}') AND toDate('{p['end_date'].date()}')
           AND ({movie_filter})
     """)
-    result = cur.execute("SELECT COUNT(*) FROM TEMP_MOVIE_VIEWERS").fetchone()
+    result = cur.execute("SELECT count() FROM TEMP_MOVIE_VIEWERS").fetchone()
     total_movie_viewers = int(result[0]) if result and result[0] else 0
     print(f"   ✅ Found {total_movie_viewers:,} unique movie viewers\n")
 
     # Step 2: Theater visits for movie viewers
     print("🎬 Step 2: Finding theater platform visits for movie viewers...")
+    cur.execute("DROP TABLE IF EXISTS TEMP_THEATER_VISITS_MOVIE_VIEWERS")
     cur.execute(f"""
-        CREATE OR REPLACE TEMP TABLE TEMP_THEATER_VISITS_MOVIE_VIEWERS AS
+        CREATE TEMPORARY TABLE TEMP_THEATER_VISITS_MOVIE_VIEWERS ENGINE = Memory AS
         SELECT tv.UID, tv.COMMON_NAME AS THEATER_PLATFORM
-        FROM PROCESSEDCLICKSTREAM.PUBLIC.CLICKSTREAM_FINAL tv
-        WHERE tv.DELIVERED BETWEEN '{p['start_date'].date()}' AND '{p['end_date'].date()}'
+        FROM clickstream.clickstream_final tv
+        WHERE tv.DELIVERED BETWEEN toDate('{p['start_date'].date()}') AND toDate('{p['end_date'].date()}')
           AND ({theater_filter})
           AND tv.UID IN (SELECT UID FROM TEMP_MOVIE_VIEWERS)
     """)
-    result = cur.execute("SELECT COUNT(DISTINCT UID) FROM TEMP_THEATER_VISITS_MOVIE_VIEWERS").fetchone()
+    result = cur.execute("SELECT uniqExact(UID) FROM TEMP_THEATER_VISITS_MOVIE_VIEWERS").fetchone()
     theater_viewers_count = int(result[0]) if result and result[0] else 0
     print(f"   ✅ Found {theater_viewers_count:,} unique theater visitors among movie viewers\n")
 
     # Step 3: Theater by platform (TOTAL HITS)
     print("📊 Step 3: Theater by platform breakdown...")
+    # Wrapped in a subquery so the outer SELECT can expose the column as
+    # THEATER_PLATFORM (downstream code reads df["THEATER_PLATFORM"]). ClickHouse
+    # rejects an aggregate alias that collides with a column referenced in GROUP BY,
+    # which Snowflake tolerated.
     theater_by_platform_query = """
-        SELECT
-            MAX(THEATER_PLATFORM) AS THEATER_PLATFORM,
-            COUNT(DISTINCT UID) AS HITS
-        FROM TEMP_THEATER_VISITS_MOVIE_VIEWERS
-        GROUP BY UPPER(TRIM(THEATER_PLATFORM))
-        ORDER BY HITS DESC
+        SELECT t.PLATFORM_NAME AS THEATER_PLATFORM, t.HITS
+        FROM (
+            SELECT max(THEATER_PLATFORM) AS PLATFORM_NAME,
+                   uniqExact(UID)        AS HITS
+            FROM TEMP_THEATER_VISITS_MOVIE_VIEWERS
+            GROUP BY upper(trim(THEATER_PLATFORM))
+        ) t
+        ORDER BY t.HITS DESC
     """
     df_theater = pd.read_sql(theater_by_platform_query, conn)
 
@@ -337,36 +339,39 @@ def run_query(conn, p):
 
     # Step 4: Demographics - create TEMP_DEMOS for movie viewers who visited theaters
     print("📊 Step 4: Fetching demographics for theater UIDs...")
+    cur.execute("DROP TABLE IF EXISTS TEMP_THEATER_UIDS")
     cur.execute("""
-        CREATE OR REPLACE TEMP TABLE TEMP_THEATER_UIDS AS
+        CREATE TEMPORARY TABLE TEMP_THEATER_UIDS ENGINE = Memory AS
         SELECT DISTINCT UID, THEATER_PLATFORM
         FROM TEMP_THEATER_VISITS_MOVIE_VIEWERS
     """)
+    cur.execute("DROP TABLE IF EXISTS TEMP_DEMOS")
     cur.execute("""
-        CREATE OR REPLACE TEMP TABLE TEMP_DEMOS AS
+        CREATE TEMPORARY TABLE TEMP_DEMOS ENGINE = Memory AS
         SELECT d.UID, d.GENDER, d.AGE, d.ETHNICITY, d.INCOME, d.DMA, d.DMA_PROVINCE, d.DMA_COUNTRY
-        FROM PROCESSEDUSERFILES.PUBLIC.USER_DATA_SANITIZED d
+        FROM userdata.user_data_sanitized d
         INNER JOIN TEMP_THEATER_UIDS u ON d.UID = u.UID
     """)
     # Join with theater platform for per-theater demographics
+    cur.execute("DROP TABLE IF EXISTS TEMP_DEMOS_WITH_THEATER")
     cur.execute("""
-        CREATE OR REPLACE TEMP TABLE TEMP_DEMOS_WITH_THEATER AS
+        CREATE TEMPORARY TABLE TEMP_DEMOS_WITH_THEATER ENGINE = Memory AS
         SELECT td.*, tu.THEATER_PLATFORM
         FROM TEMP_DEMOS td
         INNER JOIN TEMP_THEATER_UIDS tu ON td.UID = tu.UID
     """)
 
-    # Get demographics as dataframe (overall and per theater) - same structure as bg.py
+    # Get demographics as dataframe (overall and per theater) - same structure as bg.py.
+    # DMA_PROVINCE is non-Nullable String in CH, so the IS NOT NULL guard collapses
+    # to the empty-string check via trim().
     demo_query_overall = """
         SELECT UID, GENDER, AGE, ETHNICITY, INCOME,
-               CASE WHEN DMA_PROVINCE IS NOT NULL AND TRIM(DMA_PROVINCE) != ''
-                    THEN CONCAT(DMA, ' ', DMA_PROVINCE) ELSE DMA END AS LOCATION
+               if(trim(DMA_PROVINCE) != '', concat(DMA, ' ', DMA_PROVINCE), DMA) AS LOCATION
         FROM TEMP_DEMOS
     """
     demo_query_per_theater = """
         SELECT UID, THEATER_PLATFORM, GENDER, AGE, ETHNICITY, INCOME,
-               CASE WHEN DMA_PROVINCE IS NOT NULL AND TRIM(DMA_PROVINCE) != ''
-                    THEN CONCAT(DMA, ' ', DMA_PROVINCE) ELSE DMA END AS LOCATION
+               if(trim(DMA_PROVINCE) != '', concat(DMA, ' ', DMA_PROVINCE), DMA) AS LOCATION
         FROM TEMP_DEMOS_WITH_THEATER
     """
     df_demo_overall = pd.read_sql(demo_query_overall, conn)
@@ -528,11 +533,6 @@ def _default_ticket_demo_plan(genre):
 
 
 def ai_align_ticket_sales_totals_and_demographics(movie_name, genre, total_tickets, total_tickets_gen_pop, projected_sales_base, projected_sales_gen_pop, demo_overall):
-    """
-    Final AI pass for Ticket Sales Tracker:
-    - Validate US-only projected ticket sales against research (downward-only adjustment)
-    - Align overall AGE/GENDER demographics to title audience profile
-    """
     api_key = os.environ.get("OPENAI_API_KEY")
     if not api_key:
         return total_tickets, total_tickets_gen_pop, projected_sales_base, projected_sales_gen_pop, demo_overall, []
@@ -646,26 +646,23 @@ def write_output(results, p):
             platform_totals[canonical] = hits
 
     # Total Tickets = sum of the 5 displayed platform hits only
-    total_tickets_raw = sum(platform_totals.values())
-    total_tickets_gen_pop_raw = gen_pop_projection(total_tickets_raw)
-    NON_SALES_BOOST = 7.5
-    total_tickets = int(round(total_tickets_raw * NON_SALES_BOOST))
-    total_tickets_gen_pop = total_tickets_gen_pop_raw * NON_SALES_BOOST
+    total_tickets = sum(platform_totals.values())
+    total_tickets_gen_pop = gen_pop_projection(total_tickets)
 
-    # 15x factor applied, then 75% of that as final projected ticket sales (uses raw counts)
-    TICKET_PRICE = 15.0
-    PROJECTION_FACTOR = 15
-    FINAL_PCT = 0.75
-    after_factor_base = total_tickets_raw * TICKET_PRICE * PROJECTION_FACTOR
-    after_factor_gen_pop = total_tickets_gen_pop_raw * TICKET_PRICE * PROJECTION_FACTOR
-    projected_sales_base = after_factor_base * FINAL_PCT
-    projected_sales_gen_pop = after_factor_gen_pop * FINAL_PCT
+    # Genre check for 2x factor (family or animation)
+    genre_lower = (p.get("genre") or "").lower()
+    is_family_animation = "family" in genre_lower or "animation" in genre_lower
+    ticket_multiplier = 2.0 if is_family_animation else 1.0
+
+    # Projected ticket sales: total * $15, then * multiplier if family/animation
+    projected_sales_base = total_tickets * 15.0 * ticket_multiplier
+    projected_sales_gen_pop = total_tickets_gen_pop * 15.0 * ticket_multiplier
 
     rows = [
         ("", "TICKET SALES ATTRIBUTION RESULTS", "", "", "", ""),
         ("", "", "", "", "", ""),
         ("Movie", "", p["movie_name"], "", "", ""),
-        ("Genre", "", p.get("genre", ""), "(15x factor, then 75% as final projection)", "", ""),
+        ("Genre", "", p.get("genre", ""), f"(2x factor: {'Yes' if is_family_animation else 'No'})", "", ""),
         ("Date Range", "", f"{p['start_date'].date()} to {p['end_date'].date()}", "", "", ""),
         ("", "", "", "", "", ""),
         ("", "TOTAL HITS (MOVIE VIEWERS) → THEATER BY PLATFORM", "", "", "", ""),
@@ -673,22 +670,19 @@ def write_output(results, p):
     ]
 
     for platform in THEATER_PLATFORMS:
-        hits_raw = platform_totals[platform]
-        hits = int(round(hits_raw * NON_SALES_BOOST))
-        genpop = format_gen_pop_full(gen_pop_projection(hits_raw) * NON_SALES_BOOST)
+        hits = platform_totals[platform]
+        genpop = format_gen_pop_full(gen_pop_projection(hits))
         rows.append((platform, hits, genpop, "", "", ""))
 
     rows.extend([
         ("", "", "", "", "", ""),
         ("Total Tickets Sold (sum of theater hits)", total_tickets, format_gen_pop_full(total_tickets_gen_pop), "", "", ""),
-        ("Projected Ticket Sales (Total × $15 × 15 × 75%)", f"${projected_sales_base:,.2f}", f"${projected_sales_gen_pop:,.2f}", "", "", ""),
+        ("Projected Ticket Sales (Total × $15" + (" × 2" if is_family_animation else "") + ")", f"${projected_sales_base:,.2f}", f"${projected_sales_gen_pop:,.2f}", "", "", ""),
         ("", "", "", "", "", ""),
     ])
 
     # Demographics - overall
     demo_overall = compute_demographics(df_demo_overall)
-
-    # Final AI validation/alignment (US ticket sales + demographics)
     total_tickets, total_tickets_gen_pop, projected_sales_base, projected_sales_gen_pop, demo_overall, ai_changes = ai_align_ticket_sales_totals_and_demographics(
         p["movie_name"],
         p.get("genre", ""),
@@ -748,7 +742,7 @@ def main():
     print("=" * 60 + "\n")
 
     params = get_user_input()
-    conn = connect_snowflake()
+    conn = connect_db()
     try:
         results = run_query(conn, params)
     finally:
