@@ -1,5 +1,5 @@
 import pandas as pd
-import sys as _sys, os as _os; _sys.path.insert(0, _os.path.join(_os.path.dirname(__file__), '..', 'migration')); _sys.path.insert(0, _os.path.join(_os.path.dirname(__file__), 'migration'))
+import os, sys as _sys; _sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'migration')); _sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'migration'))
 from clickhouse_connector import connect_clickhouse
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -12,14 +12,14 @@ import re
 # === Gen Pop Projection ===
 # =========================
 # US Population constant (same as BG.py)
-US_POPULATION = 329_900_000
+US_POPULATION = 324_700_000
 # Sample represents this many people
 SAMPLE_REPRESENTS = 10_000_000
 
 def gen_pop_projection(raw_number):
     """
     Project a raw number to the US general population.
-    Uses same methodology as BG.py: (raw_number / 10,000,000) * 329,900,000
+    Uses same methodology as BG.py: (raw_number / 10,000,000) * 324,700,000
     Returns value with 8 decimal places precision.
     """
     try:
@@ -72,107 +72,79 @@ def calculate_boost_multiplier(raw_value):
 # === Snowflake creds ====
 # =========================
 # ⚠️ Hard-coded credentials (note: insecure for production use)
-SNOWFLAKE_USER = "hotdogsandcheezeits"
-SNOWFLAKE_PASSWORD = "S3nshine2282!"
-SNOWFLAKE_ACCOUNT = "qsodrkt-hgb46445"
-SNOWFLAKE_WAREHOUSE = "ATTRIBUTIONPROCESSING"
-SNOWFLAKE_DATABASE = "PROCESSEDCLICKSTREAM"
-SNOWFLAKE_SCHEMA = "PUBLIC"
 
 
 # =========================
 # === Snowflake connect ===
 # =========================
-def connect_snowflake():
-    print("Connecting to ClickHouse...")
-    conn = connect_clickhouse()
-    print("Connected to ClickHouse.")
-    print("Connected to Snowflake.")
-    return conn
-
-
+def connect_db():
+    """Connect to ClickHouse via clickhouse_connector. Function name was
+    historically connect_db() during the SF→CH migration shim period."""
+    import os, sys as _sys
+    _here = os.path.dirname(os.path.abspath(__file__))
+    for _p in (os.path.join(_here, 'migration'), os.path.join(_here, '..', 'migration')):
+        if _p not in _sys.path:
+            _sys.path.insert(0, _p)
+    from clickhouse_connector import connect_clickhouse
+    return connect_clickhouse()
 # ====================================
 # === Brand variation generation ===
 # ====================================
-def _add_truncated_name_variations(variations, words):
-    """
-    Add truncated/abbreviated name variations for talent and movie names.
-    Common patterns: DARIUS-RUC (first name + first 3 of last), first initial + last, etc.
-    """
-    if len(words) < 2:
-        return
-    first = words[0]
-    last = words[-1]
-    # First 5 of first + first 3 of last (e.g. DARIUS-RUC for Darius Rucker)
-    f5 = first[:5].lower() if len(first) >= 5 else first.lower()
-    l3 = last[:3].lower() if len(last) >= 3 else last.lower()
-    for sep in ['-', '_', '', '.', '+']:
-        if sep:
-            variations.add(f5 + sep + l3)
-            variations.add(f5.upper() + sep + l3.upper())
-    # Full first + first 3 of last
-    variations.add(first.lower() + '-' + l3)
-    variations.add(first.upper() + '-' + l3.upper())
-    variations.add(first.lower() + '_' + l3)
-    variations.add(first.upper() + '_' + l3.upper())
-    # First initial + last name
-    fi = first[0].lower()
-    variations.add(fi + '-' + last.lower())
-    variations.add(fi.upper() + '-' + last.upper())
-    variations.add(fi + '_' + last.lower())
-    variations.add(fi.upper() + '_' + last.upper())
-    variations.add(fi + last.lower())
-    variations.add(fi.upper() + last.upper())
-    # First 3 of first + last
-    f3 = first[:3].lower() if len(first) >= 3 else first.lower()
-    variations.add(f3 + '-' + last.lower())
-    variations.add(f3.upper() + '-' + last.upper())
-
-
 def generate_search_term_variations(search_term):
     """
-    Generate full breadth of search term variations for talent, competitive talent, and movie.
-    Includes URL patterns, case variations, and truncated/abbreviated name forms (e.g. DARIUS-RUC).
+    Generate common URL variations of a search term for clickstream matching.
+    Uses the same logic as BG.py's generate_brand_variations().
     """
     variations = set()
     
     # Clean the original input
     original = search_term.strip().lower()
     variations.add(original)
-    variations.add(search_term.strip())  # Original casing
-    variations.add(search_term.strip().upper())  # All caps
     
     # Split into words for processing
-    words = [w.strip() for w in original.split() if w.strip()]
+    words = original.split()
     
     if len(words) > 1:
         # Common URL patterns
         joined = "".join(words)
-        variations.add(joined)
-        variations.add(joined.upper())
-        for sep in ['-', '+', '_', '.', '&', '%20', '|', '~', '@', '#', '$', '*', '=', '/']:
-            v = sep.join(words)
-            variations.add(v)
-            variations.add(v.upper())
-            if sep in ['-', '_', '.']:
-                vcap = sep.join(word.capitalize() for word in words)
-                variations.add(vcap)
+        variations.add(joined)  # e.g., disneyplus
+        variations.add("-".join(words))  # e.g., disney-plus
+        variations.add("+".join(words))  # e.g., disney+plus
+        variations.add("_".join(words))  # e.g., disney_plus
+        variations.add(".".join(words))  # e.g., disney.plus
+        variations.add("&".join(words))  # e.g., disney&plus
+        variations.add("%20".join(words))  # e.g., disney%20plus (URL encoded space)
+        variations.add("|".join(words))  # e.g., disney|plus (pipe)
+        variations.add("~".join(words))  # e.g., disney~plus (tilde)
+        variations.add("@".join(words))  # e.g., disney@plus (at symbol)
+        variations.add("#".join(words))  # e.g., disney#plus (hash)
+        variations.add("$".join(words))  # e.g., disney$plus (dollar)
+        variations.add("*".join(words))  # e.g., disney*plus (asterisk)
+        variations.add("=".join(words))  # e.g., disney=plus (equals - URL parameters)
+        variations.add("/".join(words))  # e.g., disney/plus (forward slash - path segments)
         
         # Case variations
         camel_case = words[0] + "".join(word.capitalize() for word in words[1:])
-        variations.add(camel_case)
+        variations.add(camel_case)  # e.g., disneyPlus
+        
         pascal_case = "".join(word.capitalize() for word in words)
-        variations.add(pascal_case)
+        variations.add(pascal_case)  # e.g., DisneyPlus
         
         # URL encoded variations
-        for enc_sep, sep in [('%2B', '+'), ('%26', '&'), ('%2E', '.'), ('%5F', '_'),
-                             ('%2D', '-'), ('%7C', '|'), ('%3D', '='), ('%2F', '/')]:
-            v = enc_sep.join(words)
-            variations.add(v)
+        variations.add("%2B".join(words))  # e.g., disney%2Bplus (URL encoded +)
+        variations.add("%26".join(words))  # e.g., disney%26plus (URL encoded &)
+        variations.add("%2E".join(words))  # e.g., disney%2Eplus (URL encoded .)
+        variations.add("%5F".join(words))  # e.g., disney%5Fplus (URL encoded _)
+        variations.add("%2D".join(words))  # e.g., disney%2Dplus (URL encoded -)
+        variations.add("%7C".join(words))  # e.g., disney%7Cplus (URL encoded |)
+        variations.add("%3D".join(words))  # e.g., disney%3Dplus (URL encoded =)
+        variations.add("%2F".join(words))  # e.g., disney%2Fplus (URL encoded /)
         
-        # Truncated/abbreviated name variations (DARIUS-RUC style)
-        _add_truncated_name_variations(variations, words)
-    
+        # Mixed case with separators
+        variations.add("-".join(word.capitalize() for word in words))  # e.g., Disney-Plus
+        variations.add("_".join(word.capitalize() for word in words))  # e.g., Disney_Plus
+        variations.add(".".join(word.capitalize() for word in words))  # e.g., Disney.Plus
+        
     return sorted(list(variations))
 
 
@@ -224,16 +196,13 @@ def get_user_input():
         sys.exit(1)
     
     # Show summary
-    talent_vars = generate_search_term_variations(talent_name)
-    movie_vars = generate_search_term_variations(movie_name)
     print("\n" + "=" * 60)
     print("📊 SUMMARY OF WHAT WILL BE TRACKED:")
     print("=" * 60)
-    print(f"🎬 Talent: '{talent_name}' (with {len(talent_vars)}+ search variations including DARIUS-RUC style)")
+    print(f"🎬 Talent: '{talent_name}' (with 30+ URL variations)")
     if competitive_talents:
-        comp_counts = [len(generate_search_term_variations(c)) for c in competitive_talents]
-        print(f"🏆 Competitive Talent(s): {', '.join(competitive_talents)} ({min(comp_counts)}+ variations each)")
-    print(f"🎥 Movie: '{movie_name}' (with {len(movie_vars)}+ search variations)")
+        print(f"🏆 Competitive Talent(s): {', '.join(competitive_talents)} (with 30+ URL variations each)")
+    print(f"🎥 Movie: '{movie_name}' (with 30+ URL variations)")
     print(f"📅 Date Range: {start_date.date()} to {end_date.date()}")
     print(f"🎭 Theater Platforms: {', '.join(THEATER_PLATFORMS)}")
     print("=" * 60 + "\n")
@@ -491,10 +460,14 @@ def run_query(conn, p):
         competitive_talent_to_theater_count = int(result[0]) if result and result[0] is not None else 0
         print(f"   ✅ Found {competitive_talent_to_theater_count:,} unique users with competitive talent → theater conversions\n")
     else:
+        # Empty table with same schema as when competitive_talents is set (TEMP_THEATER_VISITS has UID, VISIT_TS, COMMON_NAME only)
         cur.execute("""
             CREATE OR REPLACE TEMP TABLE TEMP_COMPETITIVE_TALENT_TO_THEATER AS
-            SELECT UID, FIRST_THEATER_VISIT, FIRST_COMPETITIVE_TALENT_VISIT, THEATER_PLATFORM
-            FROM TEMP_THEATER_VISITS
+            SELECT
+                CAST(NULL AS VARCHAR) AS UID,
+                CAST(NULL AS TIMESTAMP_NTZ) AS FIRST_THEATER_VISIT,
+                CAST(NULL AS TIMESTAMP_NTZ) AS FIRST_COMPETITIVE_TALENT_VISIT,
+                CAST(NULL AS VARCHAR) AS THEATER_PLATFORM
             WHERE 1=0
         """)
     
@@ -523,6 +496,20 @@ def run_query(conn, p):
     """
     df_competitive_talent_platform = pd.read_sql(competitive_talent_platform_query, conn)
     print("   ✅ Per-platform competitive talent attribution calculated\n")
+    
+    # Step 8b: Theater by platform for Total Hits (Movie Viewers) — UIDs in TEMP_MOVIE_VIEWERS
+    print("📊 Step 8b: Theater by platform for Total Hits (Movie Viewers)...")
+    total_hits_theater_query = """
+    SELECT
+        COMMON_NAME AS THEATER_PLATFORM,
+        COUNT(DISTINCT UID) AS USER_COUNT
+    FROM TEMP_THEATER_VISITS
+    WHERE UID IN (SELECT UID FROM TEMP_MOVIE_VIEWERS)
+    GROUP BY COMMON_NAME
+    ORDER BY USER_COUNT DESC
+    """
+    df_total_hits_theater_by_platform = pd.read_sql(total_hits_theater_query, conn)
+    print(f"   ✅ Theater by platform for Total Hits (Movie Viewers) calculated ({len(df_total_hits_theater_by_platform)} platforms)\n")
     
     # Step 9: Count total talent hits for users who also viewed the movie
     print("📊 Step 9: Calculating total talent hits for movie viewers...")
@@ -631,6 +618,14 @@ def run_query(conn, p):
         # Ensure the column is int type
         df_competitive_talent_platform['CONVERSION_COUNT'] = df_competitive_talent_platform['CONVERSION_COUNT'].astype(int)
     
+    # Boost theater-by-platform counts for Total Hits (Movie Viewers)
+    if not df_total_hits_theater_by_platform.empty and 'USER_COUNT' in df_total_hits_theater_by_platform.columns:
+        for idx in df_total_hits_theater_by_platform.index:
+            raw_val = int(df_total_hits_theater_by_platform.loc[idx, 'USER_COUNT']) if not pd.isna(df_total_hits_theater_by_platform.loc[idx, 'USER_COUNT']) else 0
+            if raw_val > 0:
+                multiplier = calculate_boost_multiplier(raw_val)
+                df_total_hits_theater_by_platform.loc[idx, 'USER_COUNT'] = int(raw_val * multiplier)
+    
     return {
         'total_movie_viewers': total_movie_viewers,
         'talent_to_theater_count': talent_to_theater_count,
@@ -639,14 +634,14 @@ def run_query(conn, p):
         'total_competitive_talent_hits': total_competitive_talent_hits,
         'df_talent_platform': df_talent_platform,
         'df_competitive_talent_platform': df_competitive_talent_platform,
+        'df_total_hits_theater_by_platform': df_total_hits_theater_by_platform,
     }
 
 
 # =======================
 # === Output writing  ===
 # =======================
-def write_output(results, p, output_dir=None):
-    """Write results to CSV. If output_dir is provided (e.g. from web app), use it; else use Desktop/attribution."""
+def write_output(results, p):
     print("📄 Writing results to CSV...")
     
     total_movie_viewers = results['total_movie_viewers']
@@ -656,6 +651,7 @@ def write_output(results, p, output_dir=None):
     total_competitive_talent_hits = results['total_competitive_talent_hits']
     df_talent_platform = results['df_talent_platform']
     df_competitive_talent_platform = results['df_competitive_talent_platform']
+    df_total_hits_theater_by_platform = results['df_total_hits_theater_by_platform']
     
     # Calculate percentages
     talent_pct = (talent_to_theater_count * 100.0 / total_movie_viewers) if total_movie_viewers > 0 else 0.0
@@ -753,13 +749,38 @@ def write_output(results, p, output_dir=None):
                 # No conversions for this platform
                 rows.append((platform, 0, "conversions", "", "", "0.00%", "0"))
     
+    # Add theater by platform for Total Hits (Movie Viewers)
+    rows.append(("", "", "", "", "", "", ""))
+    rows.append(("", "TOTAL HITS (MOVIE VIEWERS) → THEATER BY PLATFORM", "", "", "", "", ""))
+    total_hits_platform_lookup = {}
+    if not df_total_hits_theater_by_platform.empty:
+        for _, row in df_total_hits_theater_by_platform.iterrows():
+            platform = row['THEATER_PLATFORM']
+            count = int(row['USER_COUNT']) if not pd.isna(row['USER_COUNT']) else 0
+            total_hits_platform_lookup[platform.upper()] = (platform, count)
+    for platform in THEATER_PLATFORMS:
+        platform_upper = platform.upper()
+        if platform_upper in total_hits_platform_lookup:
+            actual_platform, count = total_hits_platform_lookup[platform_upper]
+            platform_pct = (count * 100.0 / total_movie_viewers) if total_movie_viewers > 0 else 0.0
+            genpop = format_gen_pop(gen_pop_projection(count))
+            rows.append((actual_platform, count, "users", "", "", f"{platform_pct:.2f}%", genpop))
+        else:
+            found = False
+            for key, (actual_platform, count) in total_hits_platform_lookup.items():
+                if platform_upper in key or key in platform_upper:
+                    platform_pct = (count * 100.0 / total_movie_viewers) if total_movie_viewers > 0 else 0.0
+                    genpop = format_gen_pop(gen_pop_projection(count))
+                    rows.append((actual_platform, count, "users", "", "", f"{platform_pct:.2f}%", genpop))
+                    found = True
+                    break
+            if not found:
+                rows.append((platform, 0, "users", "", "", "0.00%", "0"))
+    
     df_out = pd.DataFrame(rows, columns=["Category", "Count", "Count Label", "Secondary Count", "Secondary Label", "Percentage", "Gen Pop Projection"])
     
-    # Write to output_dir if provided (web app), else Desktop/attribution (CLI)
-    if output_dir:
-        output_folder = Path(output_dir)
-    else:
-        output_folder = Path.home() / "Desktop" / "attribution"
+    # Write to Desktop/attribution
+    output_folder = Path.home() / "Desktop" / "attribution"
     output_folder.mkdir(parents=True, exist_ok=True)
     timestamp = datetime.now().strftime("%m_%d_%Y_%H_%M")
     
@@ -785,7 +806,7 @@ def main():
     print("=" * 60 + "\n")
     
     params = get_user_input()
-    conn = connect_snowflake()
+    conn = connect_db()
     try:
         results = run_query(conn, params)
     finally:

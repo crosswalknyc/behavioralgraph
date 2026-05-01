@@ -82,7 +82,6 @@ A modern web interface for the BG.py behavioral analysis pipeline. This applicat
 Create a `config.py` file with your Snowflake credentials:
 
 ```python
-SNOWFLAKE_CONFIG = {
     'user': 'your_username',
     'password': 'your_password',
     'account': 'your_account',

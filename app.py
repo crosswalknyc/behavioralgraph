@@ -7502,7 +7502,6 @@ def _fetch_clickstream_ranker_payload(common_name_substring, today_str):
     import bg
     conn = bg.connect_snowflake()
     cur = conn.cursor()
-    cur.execute(f"USE WAREHOUSE {CLICKSTREAM_RANKER_WAREHOUSE}")
     pattern = f"%{common_name_substring}%"
     sql = """
         SELECT
@@ -14089,8 +14088,6 @@ def backfill_search_queries():
         import bg as _bg
         conn = _bg.connect_snowflake()
         cur = conn.cursor()
-        cur.execute("USE WAREHOUSE BEHAVIORGRAPH6X")
-
         # Step A: Build audience UIDs from COMMON_NAME matches (fast indexed lookup)
         # The brand_variants are URL slugs; look up the actual COMMON_NAME values
         # from HOST_MAPPING that correspond to the brand
@@ -18824,11 +18821,6 @@ def run_analysis(job_id, project_name, brands, sample_start, sample_end,
         except ImportError as e:
             update_job_status(job_id, status='failed', error=f'Module import failed: {str(e)}')
             return
-        try:
-            from config import SNOWFLAKE_CONFIG
-        except ImportError:
-            SNOWFLAKE_CONFIG = None
-        
         # ========== EXPAND BRANDS TO ALL NAME COMBOS (matches terminal "Auto Format Inputs? Y") ==========
         if hasattr(bg, 'generate_brand_variations') and brands:
             expanded = []
@@ -21969,7 +21961,7 @@ def run_sf_lf_conversion(job_id):
         # ClickHouse has no concept of warehouses or session-level statement
         # timeouts. Per-query timeout is controlled via the `max_execution_time`
         # setting (default 1800s = 30 min for this endpoint), which we apply on
-        # each cur.execute() that needs it. The previous USE WAREHOUSE /
+        # each cur.execute() that needs it. The previous warehouse-switching /
         # ALTER SESSION block was leftover Snowflake code from before the
         # migration and has been removed.
         print(f"[SF-LF] Ready (ClickHouse, default per-query timeout)")
@@ -25334,8 +25326,6 @@ def _run_roas_iq(job_id):
         import bg as _bg
         conn = _bg.connect_snowflake()
         cur = conn.cursor()
-        cur.execute("USE WAREHOUSE ROASIQ")
-
         ROAS_MAX_UIDS = 50000
         ROAS_MAX_URL_ROWS = 500000
 
@@ -25908,8 +25898,6 @@ def _run_ecommerce_iq(job_id):
         import bg as _bg
         conn = _bg.connect_snowflake()
         cur = conn.cursor()
-        cur.execute("USE WAREHOUSE ECOMIQ")
-
         update_job_status(job_id, progress=20, message='Finding audience from search terms...')
         uid_count = _build_temp_uids_from_terms(cur, search_terms, start_date, end_date)
         if uid_count == 0:

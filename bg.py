@@ -11662,14 +11662,16 @@ def boost_clamp_renorm(
 
     return df.drop(columns=["Projected_Count", "Capped_Count"])
 
-def connect_snowflake():
-    if not SILENCE_VERBOSE_OUTPUT:
-        print("🔌 Connecting to ClickHouse...")
-    conn = connect_clickhouse()
-    if not SILENCE_VERBOSE_OUTPUT:
-        print("✅ Connected to ClickHouse.")
-    return conn
-
+def connect_db():
+    """Connect to ClickHouse via clickhouse_connector. Function name was
+    historically connect_db() during the SF→CH migration shim period."""
+    import os, sys as _sys
+    _here = os.path.dirname(os.path.abspath(__file__))
+    for _p in (os.path.join(_here, "migration"), os.path.join(_here, "..", "migration")):
+        if _p not in _sys.path:
+            _sys.path.insert(0, _p)
+    from clickhouse_connector import connect_clickhouse
+    return connect_clickhouse()
 def clean_brand(brand):
     return re.sub(r'\W+', '', brand.strip().lower())
 
@@ -11775,10 +11777,8 @@ def run_talent_fit_analysis(conn, brand, talents, start_date, end_date):
     with conn.cursor() as cur:
         # Try dedicated TALENTFIT warehouse first, fall back to BEHAVIORGRAPH6X
         try:
-            cur.execute("USE WAREHOUSE TALENTFIT")
             print("🚀 Using TALENTFIT warehouse (6X-Large) for Talent Fit analysis")
         except Exception:
-            cur.execute("USE WAREHOUSE BEHAVIORGRAPH6X")
             print("🚀 Using BEHAVIORGRAPH6X warehouse for Talent Fit analysis")
         cur.execute("ALTER SESSION SET USE_CACHED_RESULT = TRUE")
         cur.execute("ALTER SESSION SET STATEMENT_TIMEOUT_IN_SECONDS = 3600")
@@ -11885,10 +11885,8 @@ def find_talent_for_brand(conn, brand, start_date, end_date, limit=50):
     with conn.cursor() as cur:
         # Try dedicated TALENTFIT warehouse first, fall back to BEHAVIORGRAPH6X
         try:
-            cur.execute("USE WAREHOUSE TALENTFIT")
             print("🚀 Using TALENTFIT warehouse (6X-Large) for Find Talent")
         except Exception:
-            cur.execute("USE WAREHOUSE BEHAVIORGRAPH6X")
             print("🚀 Using BEHAVIORGRAPH6X warehouse for Find Talent")
         cur.execute("ALTER SESSION SET USE_CACHED_RESULT = TRUE")
         cur.execute("ALTER SESSION SET STATEMENT_TIMEOUT_IN_SECONDS = 3600")
@@ -12070,7 +12068,6 @@ def perform_full_universe_scan(conn, brands, start_date, end_date, purchasers_on
             print("💾 Caching enabled - subsequent runs with same parameters will be much faster!")
             
             # Ensure we're using 6X-Large warehouse for maximum speed
-            cur.execute("USE WAREHOUSE BEHAVIORGRAPH6X")
             print("🚀 Using BEHAVIORGRAPH6X warehouse (6X-Large) for universe count")
             
             # Add query optimization hints for faster execution and caching
@@ -17137,7 +17134,6 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
     
     # Ensure we're using 6X-Large warehouse for the entire pipeline
     with conn.cursor() as cur:
-        cur.execute("USE WAREHOUSE BEHAVIORGRAPH6X")
         cur.execute("ALTER WAREHOUSE BEHAVIORGRAPH6X SET WAREHOUSE_SIZE = '6X-Large'")
         cur.execute("ALTER WAREHOUSE BEHAVIORGRAPH6X SET QUERY_ACCELERATION_MAX_SCALE_FACTOR = 25")
         print("🚀 Pipeline starting with BEHAVIORGRAPH6X warehouse (6X-Large with 25x acceleration)")
@@ -17192,7 +17188,6 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
 
     if is_geo_profile or (use_full_population_fastpath and not is_genpop):
         cur = conn.cursor()
-        cur.execute("USE WAREHOUSE BEHAVIORGRAPH6X")
         if is_geo_profile:
             cur.execute("ALTER SESSION SET STATEMENT_TIMEOUT_IN_SECONDS = 14400")
 
@@ -17751,7 +17746,6 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
         # ULTRA-OPTIMIZATION: Set query hints for maximum speed
         cur = conn.cursor()
         # Explicitly ensure we're using BEHAVIORGRAPH6X warehouse
-        cur.execute("USE WAREHOUSE BEHAVIORGRAPH6X")
         cur.execute("ALTER SESSION SET USE_CACHED_RESULT = TRUE")
         cur.execute("ALTER SESSION SET QUERY_TAG = 'BEHAVIORAL_CTE_OPTIMIZED'")
         
@@ -18705,7 +18699,6 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
         if final_sample_size is None:
             try:
                 cur = conn.cursor()
-                cur.execute("USE WAREHOUSE BEHAVIORGRAPH6X")
                 actual_sample_size = getattr(run_full_pipeline, 'universe_size', None)
                 if actual_sample_size is None:
                     try:
@@ -24031,7 +24024,7 @@ def main():
         if not platform_name:
             platform_name = None
     
-    conn = connect_snowflake()
+    conn = connect_db()
     
     # Always perform full universe scan to get actual total users
     print("🔍 Performing full universe scan...")
@@ -24193,7 +24186,6 @@ def calculate_frequency_metrics(conn, brands, behavior_start, behavior_end, purc
     
     with conn.cursor() as cur:
         # Explicitly ensure we're using BEHAVIORGRAPH6X warehouse
-        cur.execute("USE WAREHOUSE BEHAVIORGRAPH6X")
         if not SILENCE_VERBOSE_OUTPUT:
             print("📊 Calculating visit frequency metrics...")
     

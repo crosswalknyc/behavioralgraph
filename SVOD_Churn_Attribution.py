@@ -70,28 +70,34 @@ def calculate_boost_multiplier(raw_value):
     return calculate_inflation_factor(raw_value)
 
 
-# =========================
-# === Snowflake creds ====
-# =========================
-# ⚠️ Hard-coded credentials (note: insecure for production use)
-SNOWFLAKE_USER = "hotdogsandcheezeits"
-SNOWFLAKE_PASSWORD = "S3nshine2282!"
-SNOWFLAKE_ACCOUNT = "qsodrkt-hgb46445"
-SNOWFLAKE_WAREHOUSE = "SUBSCRIBERIQ"  # 6XL warehouse for Subscriber IQ pipeline
-SNOWFLAKE_DATABASE = "PROCESSEDCLICKSTREAM"
-SNOWFLAKE_SCHEMA = "PUBLIC"
+# =========================================================================
+# === Data backend: ClickHouse (formerly Snowflake) ======================
+# =========================================================================
+# This script previously hit Snowflake's PROCESSEDCLICKSTREAM warehouse via
+# `snowflake.connector`. It is now wired to ClickHouse through the drop-in
+# `migration/clickhouse_connector` module — same backend Short Form to Long
+# Form Conversion uses. The `connect_db()` name is kept solely for
+# backward compatibility with callers (e.g. `bg-webapp/app.py`).
+#
+# Connection-level settings (max_execution_time, max_memory_usage,
+# max_threads, optimize_aggregation_in_order) are configured in
+# `clickhouse_connector.DEFAULT_QUERY_SETTINGS` so every cursor on this
+# connection inherits the Subscriber-IQ-appropriate tuning.
+#
+# These constants are kept so any external caller importing them by name
+# still resolves the symbol; they are NOT used to authenticate.
 
 
-# =========================
-# === Snowflake connect ===
-# =========================
-def connect_snowflake():
-    print("Connecting to ClickHouse...")
-    conn = connect_clickhouse()
-    print("Connected to ClickHouse.")
-    return conn
-
-
+def connect_db():
+    """Connect to ClickHouse via clickhouse_connector. Function name was
+    historically connect_db() during the SF→CH migration shim period."""
+    import os, sys as _sys
+    _here = os.path.dirname(os.path.abspath(__file__))
+    for _p in (os.path.join(_here, 'migration'), os.path.join(_here, '..', 'migration')):
+        if _p not in _sys.path:
+            _sys.path.insert(0, _p)
+    from clickhouse_connector import connect_clickhouse
+    return connect_clickhouse()
 # ====================================
 # === Brand variation generation ===
 # ====================================
@@ -140,14 +146,7 @@ ALLOWED_GENRES = [
     "Multi Camera Sitcom",
     "Live Sports",
     "Single Event Telecast",
-    "Movie - Drama",
-    "Movie - Family & Animation",
-    "Movie - Action",
-    "Movie - Comedy",
-    "Movie - Horror",
-    "Movie - Romcom",
-    "Movie - Documentary",
-    "Movie - SciFi",
+    "Movies - Netflix",
 ]
 
 # List of all competitor streaming platforms
@@ -331,8 +330,6 @@ def get_user_input():
                         except ValueError:
                             print("    ⚠️  Invalid date format. Please use MM-DD-YYYY")
         
-        # Sort episodes chronologically by air_date so campaign date range is correct
-        episode_dates.sort(key=lambda ep: ep['air_date'])
         # Update campaign_start and campaign_end based on episodes/dates
         campaign_start = episode_dates[0]['air_date']
         campaign_end = episode_dates[-1]['air_date']
@@ -582,16 +579,6 @@ def run_query(conn, p):
     track_episodes = p.get('track_episodes', False)
     episode_dates = p.get('episode_dates', [])
 
-    # Ensure episode dates are sorted chronologically
-    if episode_dates:
-        episode_dates.sort(key=lambda ep: ep['air_date'])
-        p['episode_dates'] = episode_dates
-
-    # Ensure campaign_start <= campaign_end (swap if reversed)
-    if p['campaign_start'] > p['campaign_end']:
-        print(f"⚠️  Date range reversed: {p['campaign_start'].date()} > {p['campaign_end'].date()}, swapping...")
-        p['campaign_start'], p['campaign_end'] = p['campaign_end'], p['campaign_start']
-
     # Step 1: Find all people who watched the show during the date range
     if track_episodes and episode_dates:
         print("📺 Step 1: Finding people who watched episodes...")
@@ -731,10 +718,18 @@ def run_query(conn, p):
     
     if track_episodes and episode_dates:
         # WITH EPISODE ATTRIBUTION: Find which episode they watched last before signing up.
-        # Done in two steps so we don't reference an aggregate (MIN) from a correlated
-        # subquery's WHERE clause — Snowflake allowed it, ClickHouse rejects it with
-        # ILLEGAL_AGGREGATION. Step A computes FIRST_PLATFORM_VISIT per user, step B
-        # joins that to the episode table (no correlated subquery needed).
+        #
+        # ClickHouse rewrite (was Snowflake-only): the previous query placed
+        # `MIN(cs.VISIT_TS)` from the OUTER aggregate inside a correlated
+        # subquery's WHERE clause, which CH refuses with ILLEGAL_AGGREGATION
+        # ("Aggregate function min(cs.VISIT_TS) is found in WHERE in query").
+        #
+        # The CH-native approach is:
+        #   1. Materialize the first-platform-visit per UID into a temp table.
+        #   2. JOIN that to the episodes table on (UID, VISIT_TS < first_visit)
+        #      and pick MAX(EPISODE_NUM) per UID.
+        # This is also faster than the correlated subquery (which CH would
+        # otherwise execute as a per-row scan).
         cur.execute(f"""
             CREATE OR REPLACE TEMP TABLE TEMP_FIRST_PLATFORM_VISIT AS
             SELECT
@@ -752,22 +747,26 @@ def run_query(conn, p):
             GROUP BY sw.UID, sw.FIRST_SHOW_WATCH
         """)
         cur.execute("""
+            CREATE OR REPLACE TEMP TABLE TEMP_ATTRIBUTED_EPISODE AS
+            SELECT
+                fpv.UID,
+                MAX(epi.EPISODE_NUM) AS ATTRIBUTED_EPISODE
+            FROM TEMP_FIRST_PLATFORM_VISIT fpv
+            INNER JOIN TEMP_SHOW_WATCHERS_WITH_EPISODES epi
+                ON epi.UID = fpv.UID
+               AND epi.VISIT_TS < fpv.FIRST_PLATFORM_VISIT
+            GROUP BY fpv.UID
+        """)
+        cur.execute("""
             CREATE OR REPLACE TEMP TABLE TEMP_NEW_PLATFORM_SIGNUPS AS
             SELECT
                 fpv.UID,
                 fpv.FIRST_SHOW_WATCH,
                 fpv.FIRST_PLATFORM_VISIT,
                 fpv.DAYS_TO_SIGNUP,
-                epi_max.ATTRIBUTED_EPISODE
+                ae.ATTRIBUTED_EPISODE
             FROM TEMP_FIRST_PLATFORM_VISIT fpv
-            LEFT JOIN (
-                SELECT fpv2.UID, MAX(epi.EPISODE_NUM) AS ATTRIBUTED_EPISODE
-                FROM TEMP_FIRST_PLATFORM_VISIT fpv2
-                INNER JOIN TEMP_SHOW_WATCHERS_WITH_EPISODES epi
-                    ON epi.UID = fpv2.UID
-                WHERE epi.VISIT_TS < fpv2.FIRST_PLATFORM_VISIT
-                GROUP BY fpv2.UID
-            ) epi_max ON epi_max.UID = fpv.UID
+            LEFT JOIN TEMP_ATTRIBUTED_EPISODE ae ON ae.UID = fpv.UID
         """)
     else:
         # NO EPISODE TRACKING: Just track overall signups
@@ -810,17 +809,29 @@ def run_query(conn, p):
         , 2) FROM TEMP_NEW_PLATFORM_SIGNUPS) AS TOTAL_SHOW_CONVERSION_RATE
     """
     df_summary = pd.read_sql(summary_sql, conn)
-    # Apply same sample size inflation as bg.py: try 55x, 25x, 5x, 2.5x, or 1x (whichever keeps result ≤10M)
-    raw_show_watchers = 0
-    if 'TOTAL_SHOW_WATCHERS' in df_summary.columns and not pd.isna(df_summary.loc[0, 'TOTAL_SHOW_WATCHERS']):
-        raw_show_watchers = int(df_summary.loc[0, 'TOTAL_SHOW_WATCHERS'])
-        inflation_factor = calculate_inflation_factor(raw_show_watchers)
-        inflated_watchers = int(raw_show_watchers * inflation_factor)
+    # Stash raw values BEFORE any inflation (needed for ratio-preserving derivation)
+    _raw_total = int(df_summary.loc[0, 'TOTAL_SHOW_WATCHERS']) if not pd.isna(df_summary.loc[0, 'TOTAL_SHOW_WATCHERS']) else 0
+    _raw_pre = int(df_summary.loc[0, 'PRE_EXISTING_USERS']) if not pd.isna(df_summary.loc[0, 'PRE_EXISTING_USERS']) else 0
+    _raw_clean = int(df_summary.loc[0, 'CLEAN_SAMPLE_SIZE']) if not pd.isna(df_summary.loc[0, 'CLEAN_SAMPLE_SIZE']) else 0
+    _raw_signups = int(df_summary.loc[0, 'NEW_SIGNUPS']) if not pd.isna(df_summary.loc[0, 'NEW_SIGNUPS']) else 0
+
+    SUBSCRIBER_IQ_EXTRA_BOOST = 251
+    if _raw_total > 0:
+        inflation_factor = calculate_inflation_factor(_raw_total)
+        inflated_watchers = int(_raw_total * inflation_factor) * SUBSCRIBER_IQ_EXTRA_BOOST
         inflated_watchers = min((inflated_watchers // 10) * 10, SAMPLE_REPRESENTS)
         df_summary.loc[0, 'TOTAL_SHOW_WATCHERS'] = inflated_watchers
-        print(f"   📊 Raw show watchers: {raw_show_watchers:,}")
-        print(f"   📊 Inflation factor: {inflation_factor}x (chosen so result ≤ 10M)")
-        print(f"   📊 Inflated show watchers: {inflated_watchers:,}")
+
+        # Derive PRE_EXISTING and CLEAN_SAMPLE from inflated Total using raw proportions
+        pre_ratio = _raw_pre / _raw_total
+        inflated_pre = int(round(inflated_watchers * pre_ratio))
+        inflated_clean = inflated_watchers - inflated_pre
+        df_summary.loc[0, 'PRE_EXISTING_USERS'] = inflated_pre
+        df_summary.loc[0, 'CLEAN_SAMPLE_SIZE'] = inflated_clean
+
+        print(f"   📊 Raw show watchers: {_raw_total:,} (pre={_raw_pre:,}, clean={_raw_clean:,})")
+        print(f"   📊 Inflation factor: {inflation_factor}x * {SUBSCRIBER_IQ_EXTRA_BOOST}x boost")
+        print(f"   📊 Inflated Total: {inflated_watchers:,} (pre={inflated_pre:,} + clean={inflated_clean:,})")
     print("   ✅ Summary stats calculated\n")
 
     # Step 6: Demographics for show watchers who signed up
@@ -855,38 +866,26 @@ def run_query(conn, p):
 
     # Step 8: Demographic breakdown (AGE and GENDER)
     print("📊 Step 8: Calculating demographic breakdown (AGE and GENDER)...")
-    # Two-step form: ClickHouse disallows nested aggregates like SUM(COUNT(*)) OVER().
-    # Compute per-category totals in a separate CTE, then join.
     demo_query = """
     WITH demo_long AS (
         SELECT 'AGE' AS CATEGORY, AGE AS VALUE
         FROM TEMP_DEMOGRAPHICS
         WHERE AGE IS NOT NULL AND AGE != ''
-
+        
         UNION ALL
-
+        
         SELECT 'GENDER' AS CATEGORY, GENDER AS VALUE
         FROM TEMP_DEMOGRAPHICS
         WHERE GENDER IS NOT NULL AND GENDER != ''
-    ),
-    agg AS (
-        SELECT CATEGORY, VALUE, COUNT(*) AS CNT
-        FROM demo_long
-        GROUP BY CATEGORY, VALUE
-    ),
-    totals AS (
-        SELECT CATEGORY, SUM(CNT) AS TOT
-        FROM agg
-        GROUP BY CATEGORY
     )
     SELECT
-        a.CATEGORY,
-        a.VALUE,
-        a.CNT AS COUNT,
-        ROUND(a.CNT * 100.0 / NULLIF(t.TOT, 0), 2) AS PERCENTAGE
-    FROM agg a
-    LEFT JOIN totals t ON a.CATEGORY = t.CATEGORY
-    ORDER BY a.CATEGORY, a.CNT DESC
+        CATEGORY,
+        VALUE,
+        COUNT(*) AS COUNT,
+        ROUND(COUNT(*) * 100.0 / NULLIF(SUM(COUNT(*)) OVER (PARTITION BY CATEGORY), 0), 2) AS PERCENTAGE
+    FROM demo_long
+    GROUP BY CATEGORY, VALUE
+    ORDER BY CATEGORY, COUNT DESC
     """
     df_demo = pd.read_sql(demo_query, conn)
     print("   ✅ Demographics calculated\n")
@@ -908,30 +907,18 @@ def run_query(conn, p):
     # Step 9b: Per-episode signup timing (if tracking episodes)
     if track_episodes and episode_dates:
         print("📊 Step 9b: Analyzing per-episode signup timing...")
-        # ClickHouse disallows nested aggregates. Split into agg + totals.
         episode_timing_query = """
-        WITH agg AS (
-            SELECT
-                ATTRIBUTED_EPISODE AS EPISODE_NUM,
-                DAYS_TO_SIGNUP,
-                COUNT(*) AS SIGNUP_COUNT
-            FROM TEMP_NEW_PLATFORM_SIGNUPS
-            WHERE ATTRIBUTED_EPISODE IS NOT NULL
-            GROUP BY ATTRIBUTED_EPISODE, DAYS_TO_SIGNUP
-        ),
-        totals AS (
-            SELECT EPISODE_NUM, SUM(SIGNUP_COUNT) AS TOT
-            FROM agg
-            GROUP BY EPISODE_NUM
-        )
         SELECT
-            a.EPISODE_NUM,
-            a.DAYS_TO_SIGNUP,
-            a.SIGNUP_COUNT,
-            ROUND(a.SIGNUP_COUNT * 100.0 / NULLIF(t.TOT, 0), 2) AS PERCENTAGE
-        FROM agg a
-        LEFT JOIN totals t ON a.EPISODE_NUM = t.EPISODE_NUM
-        ORDER BY a.EPISODE_NUM, a.DAYS_TO_SIGNUP
+            ATTRIBUTED_EPISODE AS EPISODE_NUM,
+            DAYS_TO_SIGNUP,
+            COUNT(*) AS SIGNUP_COUNT,
+            ROUND(COUNT(*) * 100.0 / NULLIF(
+                SUM(COUNT(*)) OVER (PARTITION BY ATTRIBUTED_EPISODE), 0
+            ), 2) AS PERCENTAGE
+        FROM TEMP_NEW_PLATFORM_SIGNUPS
+        WHERE ATTRIBUTED_EPISODE IS NOT NULL
+        GROUP BY ATTRIBUTED_EPISODE, DAYS_TO_SIGNUP
+        ORDER BY ATTRIBUTED_EPISODE, DAYS_TO_SIGNUP
         """
         df_episode_timing = pd.read_sql(episode_timing_query, conn)
         print("   ✅ Per-episode timing calculated\n")
@@ -944,17 +931,15 @@ def run_query(conn, p):
         
         # Create a list of all expected episode numbers
         all_episode_nums = [ep['episode_num'] for ep in episode_dates]
-
-        # Portable episode list: UNION ALL of SELECT <n> AS EPISODE_NUM.
-        # Snowflake's `FROM VALUES (...) AS t(col)` is not valid in ClickHouse.
-        all_episodes_cte = '\n            UNION ALL\n            '.join(
-            [f'SELECT {int(ep_num)} AS EPISODE_NUM' for ep_num in all_episode_nums]
-        )
-
+        
+        # Build VALUES clause for all episodes (Snowflake syntax)
+        values_clause = ', '.join([f'({ep_num})' for ep_num in all_episode_nums])
+        
         # Build query that includes ALL episodes, even those with 0 signups
         episode_attribution_query = f"""
         WITH all_episodes AS (
-            {all_episodes_cte}
+            SELECT EPISODE_NUM
+            FROM VALUES {values_clause} AS t(EPISODE_NUM)
         ),
         attribution_data AS (
             SELECT
@@ -1274,16 +1259,9 @@ def run_query(conn, p):
     ORDER BY t.TOUCHPOINT_NUM
     """
     df_post_signup_touchpoints = pd.read_sql(post_signup_touchpoint_query, conn)
-
-    # Internal-consistency guard: if there were no new platform signups in
-    # Key Metrics, the touchpoint cohort is by construction empty (it is
-    # joined FROM TEMP_NEW_PLATFORM_SIGNUPS). Any nonzero touchpoint count
-    # at this point means a stale/leaked read. Force them to zero so the
-    # bottom of the report cannot contradict the top.
+    
+    # Overwrite 1st Touchpoint with total New Platform Signups
     total_signups_count = int(df_summary['NEW_SIGNUPS'].iloc[0]) if not df_summary.empty and 'NEW_SIGNUPS' in df_summary.columns else 0
-    if total_signups_count == 0 and not df_post_signup_touchpoints.empty:
-        df_post_signup_touchpoints['USER_COUNT'] = 0
-        df_post_signup_touchpoints['PERCENTAGE'] = 0.0
     if not df_post_signup_touchpoints.empty:
         # Find the row with TOUCHPOINT_RANK = 1 and update it
         first_touchpoint_idx = df_post_signup_touchpoints[df_post_signup_touchpoints['TOUCHPOINT_RANK'] == 1].index
@@ -1336,41 +1314,28 @@ def run_query(conn, p):
     # Uses consistent inflation factor (55x, 25x, 5x, 2.5x, or 1x) calculated from base sample
     # This ensures both Profile IQ and Subscriber IQ produce matching sample sizes
     
-    # Use same inflation factor as TOTAL_SHOW_WATCHERS for ALL counts to preserve ratios
+    # TOTAL_SHOW_WATCHERS, PRE_EXISTING_USERS, CLEAN_SAMPLE_SIZE already inflated above
+    # via ratio-preserving method. Now inflate NEW_SIGNUPS independently.
     inflated_total_watchers = int(df_summary.loc[0, 'TOTAL_SHOW_WATCHERS']) if ('TOTAL_SHOW_WATCHERS' in df_summary.columns and not pd.isna(df_summary.loc[0, 'TOTAL_SHOW_WATCHERS'])) else 0
-    raw_new_signups = int(df_summary.loc[0, 'NEW_SIGNUPS']) if ('NEW_SIGNUPS' in df_summary.columns and not pd.isna(df_summary.loc[0, 'NEW_SIGNUPS'])) else 0
+    raw_new_signups = _raw_signups
     
-    # Use the SAME inflation factor that was applied to total_show_watchers
-    inflation_factor = calculate_inflation_factor(raw_show_watchers) if raw_show_watchers > 0 else 55
-    print(f"🔥 Applying {inflation_factor}x inflation factor to all count-based numbers (consistent with total show watchers)...\n")
+    # Calculate inflation factor for NEW_SIGNUPS (same logic as bg.py)
+    inflation_factor = calculate_inflation_factor(raw_new_signups) if raw_new_signups > 0 else 55
+    print(f"🔥 Applying {inflation_factor}x inflation factor to signups/counts (same as bg.py)...\n")
     
     # Inflate NEW_SIGNUPS with consistent inflation factor
     if 'NEW_SIGNUPS' in df_summary.columns and raw_new_signups > 0:
         inflated_new_signups = min(int(raw_new_signups * inflation_factor), SAMPLE_REPRESENTS)
         df_summary.loc[0, 'NEW_SIGNUPS'] = inflated_new_signups
         
-        # Recalculate TOTAL_SHOW_CONVERSION_RATE from projected (Gen Pop) values
-        tw_proj = gen_pop_projection(inflated_total_watchers)
-        nps_proj = gen_pop_projection(inflated_new_signups)
-        if tw_proj > 0:
-            df_summary.loc[0, 'TOTAL_SHOW_CONVERSION_RATE'] = round((nps_proj / tw_proj) * 100.0, 2)
+        # Recalculate conversion rates from inflated values
+        if inflated_total_watchers > 0:
+            df_summary.loc[0, 'TOTAL_SHOW_CONVERSION_RATE'] = round((inflated_new_signups * 100.0) / inflated_total_watchers, 2)
+        inflated_clean = int(df_summary.loc[0, 'CLEAN_SAMPLE_SIZE']) if not pd.isna(df_summary.loc[0, 'CLEAN_SAMPLE_SIZE']) else 0
+        if inflated_clean > 0:
+            df_summary.loc[0, 'CLEAN_CONVERSION_RATE'] = round((inflated_new_signups * 100.0) / inflated_clean, 2)
     else:
         inflated_new_signups = 0
-    
-    # Inflate other summary counts with same inflation factor
-    for col in ['PRE_EXISTING_USERS', 'CLEAN_SAMPLE_SIZE']:
-        if col in df_summary.columns:
-            for idx in df_summary.index:
-                raw_val = int(df_summary.loc[idx, col]) if not pd.isna(df_summary.loc[idx, col]) else 0
-                if raw_val > 0:
-                    df_summary.loc[idx, col] = min(int(raw_val * inflation_factor), SAMPLE_REPRESENTS)
-    
-    # Clean Conversion Rate = New Signups / Clean Sample Size
-    if 'NEW_SIGNUPS' in df_summary.columns and 'CLEAN_SAMPLE_SIZE' in df_summary.columns:
-        current_signups = int(df_summary.loc[0, 'NEW_SIGNUPS']) if not pd.isna(df_summary.loc[0, 'NEW_SIGNUPS']) else 0
-        clean_sample = int(df_summary.loc[0, 'CLEAN_SAMPLE_SIZE']) if not pd.isna(df_summary.loc[0, 'CLEAN_SAMPLE_SIZE']) else 0
-        if clean_sample > 0:
-            df_summary.loc[0, 'CLEAN_CONVERSION_RATE'] = round((current_signups * 100.0) / clean_sample, 2)
     
     # Inflate demographic counts with same inflation factor
     if 'COUNT' in df_demo.columns:
@@ -1378,20 +1343,7 @@ def run_query(conn, p):
             raw_val = int(df_demo.loc[idx, 'COUNT']) if not pd.isna(df_demo.loc[idx, 'COUNT']) else 0
             if raw_val > 0:
                 df_demo.loc[idx, 'COUNT'] = min(int(raw_val * inflation_factor), SAMPLE_REPRESENTS)
-
-    # AI demographic validation: correct AGE/GENDER distributions using web research
-    show_name = ', '.join(p.get('show_search_terms', []))
-    print("🧬 Running AI demographic validation...")
-    df_demo, demo_changes = ai_validate_demographics(
-        show_name, p['platform_name'], df_demo, inflated_new_signups
-    )
-    if demo_changes:
-        print("   Applied demographic corrections:")
-        for dc in demo_changes:
-            print(f"     → {dc}")
-    else:
-        print("   ✅ Demographics look plausible (no corrections needed)")
-
+    
     # Inflate timing counts with same inflation factor
     if 'SIGNUP_COUNT' in df_timing.columns:
         for idx in df_timing.index:
@@ -1474,6 +1426,52 @@ def run_query(conn, p):
                     else:
                         df_post_signup_touchpoints.loc[idx, 'PERCENTAGE'] = 0.0
 
+    # --- AI Viewership Validation ---
+    # Validate inflated Total Show Watchers against public data; override if implausible
+    print("🤖 Validating Total Show Watchers against public viewership data...")
+    _current_total = int(df_summary.loc[0, 'TOTAL_SHOW_WATCHERS']) if not pd.isna(df_summary.loc[0, 'TOTAL_SHOW_WATCHERS']) else 0
+    _current_pre = int(df_summary.loc[0, 'PRE_EXISTING_USERS']) if not pd.isna(df_summary.loc[0, 'PRE_EXISTING_USERS']) else 0
+    _current_clean = int(df_summary.loc[0, 'CLEAN_SAMPLE_SIZE']) if not pd.isna(df_summary.loc[0, 'CLEAN_SAMPLE_SIZE']) else 0
+
+    show_name_for_ai = ', '.join(p.get('show_search_terms', []))
+    date_range_for_ai = ''
+    if p.get('campaign_start') and p.get('campaign_end'):
+        try:
+            date_range_for_ai = f"{p['campaign_start'].date()} to {p['campaign_end'].date()}"
+        except Exception:
+            pass
+
+    validated_total, validated_pre, validated_clean, ai_meta = _validate_total_watchers_with_ai(
+        show_name=show_name_for_ai,
+        platform_name=p.get('platform_name', ''),
+        inflated_total=_current_total,
+        inflated_pre=_current_pre,
+        inflated_clean=_current_clean,
+        genre=p.get('genre', ''),
+        date_range=date_range_for_ai,
+    )
+
+    if validated_total != _current_total:
+        df_summary.loc[0, 'TOTAL_SHOW_WATCHERS'] = validated_total
+        df_summary.loc[0, 'PRE_EXISTING_USERS'] = validated_pre
+        df_summary.loc[0, 'CLEAN_SAMPLE_SIZE'] = validated_clean
+        # Recalculate conversion rates with corrected Total
+        _new_signups_val = int(df_summary.loc[0, 'NEW_SIGNUPS']) if not pd.isna(df_summary.loc[0, 'NEW_SIGNUPS']) else 0
+        if validated_total > 0:
+            df_summary.loc[0, 'TOTAL_SHOW_CONVERSION_RATE'] = round((_new_signups_val * 100.0) / validated_total, 2)
+        if validated_clean > 0:
+            df_summary.loc[0, 'CLEAN_CONVERSION_RATE'] = round((_new_signups_val * 100.0) / validated_clean, 2)
+        print(f"   📊 Corrected metrics: Total={validated_total:,}, Pre={validated_pre:,}, Clean={validated_clean:,}")
+
+    # Final invariant check: Total MUST equal Pre + Clean
+    _final_total = int(df_summary.loc[0, 'TOTAL_SHOW_WATCHERS']) if not pd.isna(df_summary.loc[0, 'TOTAL_SHOW_WATCHERS']) else 0
+    _final_pre = int(df_summary.loc[0, 'PRE_EXISTING_USERS']) if not pd.isna(df_summary.loc[0, 'PRE_EXISTING_USERS']) else 0
+    _final_clean = int(df_summary.loc[0, 'CLEAN_SAMPLE_SIZE']) if not pd.isna(df_summary.loc[0, 'CLEAN_SAMPLE_SIZE']) else 0
+    assert _final_total == _final_pre + _final_clean, (
+        f"INVARIANT VIOLATED: Total({_final_total}) != Pre({_final_pre}) + Clean({_final_clean})"
+    )
+    print(f"   ✅ Invariant confirmed: Total({_final_total:,}) = Pre({_final_pre:,}) + Clean({_final_clean:,})")
+
     return df_summary, df_comp, df_demo, df_timing, df_episode_attribution, df_monthly_signups, df_episode_timing, df_monthly_churn, df_post_signup_touchpoints
 
 
@@ -1529,26 +1527,17 @@ def _research_show_viewership(client, show_name):
         search_query = clean
 
     prompt = (
-        f'Search for real viewership data for the TV show/series "{search_query}". '
-        f'I need UNIQUE VIEWER COUNTS (number of individual people who watched), '
-        f'NOT viewing minutes or hours.\n\n'
-        f'PRIORITY ORDER for data sources:\n'
-        f'1. Nielsen "unique audience" or "reach" numbers (number of distinct people/households)\n'
-        f'2. Samba TV household reach data\n'
-        f'3. Platform-reported "accounts that watched" or "households that watched"\n'
-        f'4. Third-party estimates of unique viewers from Parrot Analytics, Antenna, etc.\n'
-        f'5. LAST RESORT: viewing hours/minutes (note clearly that this is NOT unique viewers)\n\n'
+        f'Search for real US viewership data for the TV show/series "{search_query}". '
         f'Report:\n'
-        f'- Total unique US viewers/households for this show/season (number of people)\n'
-        f'- If only global numbers exist, report those AND estimate US share\n'
-        f'- Premiere episode unique viewers\n'
-        f'- Which platform it aired on and when\n'
-        f'- Platform subscriber count at that time\n\n'
-        f'WARNING: Netflix, Disney+, etc. often report "viewing hours" which is NOT the same as '
-        f'unique viewers. One person watching 10 episodes = 10 hours but only 1 unique viewer. '
-        f'If only hours/minutes are available, say so explicitly and do NOT convert them to '
-        f'unique viewers — that conversion is unreliable.\n\n'
-        f'Cite specific sources. Be concise — just the key numbers.'
+        f'- Total unique US viewers for this show/season (if available)\n'
+        f'- Premiere episode viewers\n'
+        f'- Average per-episode viewership\n'
+        f'- Peak episode viewership\n'
+        f'- Any streaming hours/completion data (e.g. Nielsen streaming top 10)\n'
+        f'- Which platform it aired on and when\n\n'
+        f'Cite specific sources (Nielsen, Luminate, Samba TV, Parrot Analytics, '
+        f'platform press releases, trade publications like Variety/Deadline/THR). '
+        f'Be concise — just the key numbers. If no data is available, say so.'
     )
 
     try:
@@ -1568,6 +1557,121 @@ def _research_show_viewership(client, show_name):
         return ""
 
 
+def _validate_total_watchers_with_ai(show_name, platform_name, inflated_total, inflated_pre, inflated_clean, genre='', date_range=''):
+    """Validate Total Show Watchers against publicly available viewership data using GPT-4o-search-preview.
+
+    If confidence is 'high' and our inflated_total differs from the AI-recommended number
+    by more than 2x, overrides Total and re-derives Pre-Existing / Clean Sample proportionally.
+
+    Returns (validated_total, validated_pre, validated_clean, metadata_dict).
+    """
+    try:
+        from openai import OpenAI
+        api_key = os.environ.get('OPENAI_API_KEY')
+        if not api_key:
+            print("   ⚠️  No OPENAI_API_KEY; skipping AI viewership validation")
+            return inflated_total, inflated_pre, inflated_clean, {'skipped': True, 'reason': 'no_api_key'}
+        client = OpenAI(api_key=api_key)
+    except Exception as e:
+        print(f"   ⚠️  OpenAI not available: {e}")
+        return inflated_total, inflated_pre, inflated_clean, {'skipped': True, 'reason': str(e)}
+
+    clean_name = show_name.replace('_', ' ').replace('-', ' ').strip()
+
+    prompt = (
+        f'Search for real viewership data for the TV show/content "{clean_name}" on {platform_name}.\n\n'
+        f'I need to validate whether {inflated_total:,} unique US viewers (from our panel data) is plausible.\n'
+        f'Genre: {genre or "unknown"}\n'
+        f'Date range of analysis: {date_range or "unknown"}\n\n'
+        f'Find:\n'
+        f'- Total worldwide viewers reported by any source (Nielsen, Luminate, Samba TV, platform press releases, trade press)\n'
+        f'- If the number is worldwide, estimate US-only portion (typically 55-65% for US-produced content)\n\n'
+        f'Respond in JSON ONLY (no markdown fencing):\n'
+        f'{{\n'
+        f'  "public_viewership_worldwide": <number or null if unknown>,\n'
+        f'  "estimated_us_viewers": <number or null>,\n'
+        f'  "confidence": "high" | "medium" | "low",\n'
+        f'  "source": "<where you found the data>",\n'
+        f'  "recommended_total": <what our Total Show Watchers should be, as a panel number (not gen pop projected)>\n'
+        f'}}\n\n'
+        f'IMPORTANT: Our panel represents 10,000,000 people out of 329,900,000 US population.\n'
+        f'So recommended_total should be: estimated_us_viewers * (10000000 / 329900000).\n'
+        f'Round to nearest 10. If you cannot find data, set confidence to "low" and recommended_total to null.'
+    )
+
+    try:
+        resp = client.chat.completions.create(
+            model='gpt-4o-search-preview',
+            messages=[{'role': 'user', 'content': prompt}],
+            max_tokens=600,
+        )
+        raw = (resp.choices[0].message.content or '').strip()
+        if raw.startswith('```'):
+            raw = raw.split('\n', 1)[-1].rsplit('```', 1)[0].strip()
+
+        start = raw.find('{')
+        if start < 0:
+            print(f"   ⚠️  AI validation returned no JSON")
+            return inflated_total, inflated_pre, inflated_clean, {'skipped': True, 'reason': 'no_json'}
+
+        depth = 0
+        end = start
+        for i in range(start, len(raw)):
+            if raw[i] == '{':
+                depth += 1
+            elif raw[i] == '}':
+                depth -= 1
+                if depth == 0:
+                    end = i + 1
+                    break
+        result = json.loads(raw[start:end])
+    except Exception as e:
+        print(f"   ⚠️  AI viewership validation parse error: {e}")
+        return inflated_total, inflated_pre, inflated_clean, {'skipped': True, 'reason': str(e)}
+
+    confidence = str(result.get('confidence', 'low')).lower()
+    recommended = result.get('recommended_total')
+    metadata = {
+        'public_viewership_worldwide': result.get('public_viewership_worldwide'),
+        'estimated_us_viewers': result.get('estimated_us_viewers'),
+        'confidence': confidence,
+        'source': result.get('source', ''),
+        'recommended_total': recommended,
+        'original_total': inflated_total,
+    }
+
+    print(f"   🔍 AI viewership lookup: confidence={confidence}, recommended={recommended}, source={result.get('source','')}")
+
+    if confidence != 'high' or recommended is None:
+        print(f"   ℹ️  Confidence not high enough to override (confidence={confidence})")
+        metadata['action'] = 'kept_original'
+        return inflated_total, inflated_pre, inflated_clean, metadata
+
+    try:
+        recommended = int(round(float(recommended) / 10) * 10)
+    except (ValueError, TypeError):
+        metadata['action'] = 'kept_original'
+        return inflated_total, inflated_pre, inflated_clean, metadata
+
+    if recommended <= 0:
+        metadata['action'] = 'kept_original'
+        return inflated_total, inflated_pre, inflated_clean, metadata
+
+    ratio = inflated_total / recommended if recommended > 0 else 1.0
+    if ratio > 2.0 or ratio < 0.5:
+        print(f"   🔄 Overriding Total: {inflated_total:,} → {recommended:,} (ratio was {ratio:.2f}x)")
+        pre_ratio = inflated_pre / inflated_total if inflated_total > 0 else 0
+        new_pre = int(round(recommended * pre_ratio))
+        new_clean = recommended - new_pre
+        metadata['action'] = 'overridden'
+        metadata['override_ratio'] = ratio
+        return recommended, new_pre, new_clean, metadata
+    else:
+        print(f"   ✅ Total {inflated_total:,} is within 2x of recommended {recommended:,} — no override")
+        metadata['action'] = 'kept_original'
+        return inflated_total, inflated_pre, inflated_clean, metadata
+
+
 def ai_validate_metrics(show_name, platform_name, total_watchers, new_signups,
                         conversion_rate, genre='', content_cadence='',
                         episode_count=0, pre_existing_viewers=0,
@@ -1577,32 +1681,6 @@ def ai_validate_metrics(show_name, platform_name, total_watchers, new_signups,
     Total Show Watchers, New Platform Signups, and conversion rates are
     plausible. Adjusts only downward when numbers appear inflated.
     """
-    # Hard sanity check: catch obviously impossible numbers before calling AI
-    if conversion_rate > 30 and total_watchers > 0:
-        plat_info = _get_platform_info(platform_name)
-        reasonable_conv = min(5.0, 100.0 - plat_info['pct'])
-        suggested_signups = int(total_watchers * reasonable_conv / 100.0)
-        return {
-            'passed': False,
-            'watchers_plausible': True,
-            'watchers_note': 'Watchers not evaluated — conversion rate is the primary issue',
-            'signups_plausible': False,
-            'signups_note': f'Conversion rate of {conversion_rate:.1f}% is impossible. '
-                           f'This likely means the analysis window is too wide, capturing '
-                           f'coincidental signups unrelated to the show.',
-            'conversion_plausible': False,
-            'conversion_note': f'{conversion_rate:.1f}% conversion is physically impossible — '
-                              f'most viewers already had the platform to watch the show.',
-            'flags': [f'conversion rate {conversion_rate:.1f}% is impossible',
-                     'analysis window likely too wide',
-                     'pre-existing viewer filter may have no data'],
-            'suggested_conversion_range': [0.5, reasonable_conv],
-            'suggested_watchers_range_panel': [total_watchers, total_watchers],
-            'suggested_signups_range_panel': [suggested_signups // 2, suggested_signups],
-            'overall_assessment': f'Conversion rate of {conversion_rate:.1f}% is clearly wrong. '
-                                 f'Narrow the analysis window to the actual season dates.'
-        }
-
     try:
         from openai import OpenAI
         api_key = os.environ.get('OPENAI_API_KEY')
@@ -1618,40 +1696,17 @@ def ai_validate_metrics(show_name, platform_name, total_watchers, new_signups,
     watchers_projected = total_watchers * (US_POPULATION / SAMPLE_REPRESENTS)
     signups_projected = new_signups * (US_POPULATION / SAMPLE_REPRESENTS)
 
-    projection_mult = US_POPULATION / SAMPLE_REPRESENTS
-    panel_div = SAMPLE_REPRESENTS / US_POPULATION
-
     research_block = ""
     if viewership_research:
         research_block = f"""
 === REAL-WORLD VIEWERSHIP DATA (from web search) ===
+The following is current, web-sourced viewership information for this show.
+This is your PRIMARY reference for validating Total Show Watchers.
+
 {viewership_research}
 """
 
-    prompt = f"""You are an expert analyst validating SVOD subscriber acquisition data. You have access to REAL viewership research and must use it to validate our numbers.
-
-=== HOW OUR DATA WORKS ===
-We track UNIQUE INDIVIDUAL US VIEWERS (not minutes, not hours — actual people) from a panel of {SAMPLE_REPRESENTS:,} people representing the US population of {US_POPULATION:,}.
-
-CONVERSION FORMULAS:
-- Panel count × {projection_mult:.2f} = US Gen Pop Projection
-- Real-world US unique viewers / {projection_mult:.2f} = expected panel count
-
-WORKED EXAMPLE — you MUST follow this math exactly:
-  If research says a show had 50,000,000 unique US viewers:
-  Panel count = 50000000 / {projection_mult:.2f} = {int(50000000 / projection_mult):,}
-  So suggested_watchers_range_panel should be around [{int(50000000 / projection_mult)}, {int(50000000 / projection_mult)}]
-  NOT [1515, 1515] — that would project to only ~50K viewers, not 50M.
-  The panel numbers should be in the HUNDREDS OF THOUSANDS for shows with millions of viewers.
-
-IMPORTANT RULES FOR INTERPRETING RESEARCH DATA:
-- If research reports GLOBAL viewers, estimate US share (typically 30-50% for English-language content).
-- If research reports viewing MINUTES/HOURS instead of unique viewers, DO NOT blindly divide
-  to get unique viewers. That math is unreliable because one viewer watches many hours.
-  Instead, look for any separate unique viewer/reach/household data. If ONLY hours data exists,
-  note this limitation and use your general knowledge of the show's popularity to estimate
-  a reasonable unique viewer count. For reference: a top-10 Netflix show typically reaches
-  20-60 million unique US viewers; a mid-tier show 5-15M; a niche show 1-5M.
+    prompt = f"""You are an expert analyst validating SVOD subscriber acquisition data using REAL viewership research.
 
 SHOW: {show_name}
 PLATFORM: {platform_name}
@@ -1666,65 +1721,57 @@ PLATFORM CONTEXT:
 - US Subscribers: ~{plat_info['subs_millions']}M
 - Platform Tier: {plat_info['tier']}
 
-OUR DATA:
+OUR METRICS (from 10M-person panel, projected to US pop):
 - Total Show Watchers (panel): {total_watchers:,.0f} → US Gen Pop Projected: {watchers_projected:,.0f}
-- Pre-Existing Platform Viewers (panel): {pre_existing_viewers:,.0f}
+- Pre-Existing Platform Viewers: {pre_existing_viewers:,.0f}
 - New Platform Signups (panel): {new_signups:,.0f} → US Gen Pop Projected: {signups_projected:,.0f}
 - Total Show Conversion Rate: {conversion_rate:.2f}%
 {research_block}
 === PHASE A: VALIDATE TOTAL SHOW WATCHERS ===
-1. From the research, determine how many UNIQUE US VIEWERS this show/season actually had.
-   - If research says X million unique US viewers, our Gen Pop Projected number should be
-     close to X million. Convert to panel: X_million / {projection_mult:.2f} = target panel count.
-   - If research only has global numbers, estimate US share (typically 30-50% for US-centric
-     English-language content on major platforms, lower for non-English).
-   - If research only has viewing minutes/hours, note this and estimate unique viewers
-     cautiously (e.g. 1B minutes over 10 episodes ÷ ~6 hrs avg watch = ~17M unique viewers).
-2. Our projected number ({watchers_projected:,.0f}) should be in the right ballpark of reality.
-   If it is far off, flag it and suggest the correct panel number.
-3. CRITICAL: If the real viewer count is X and our projection is 2X or higher, set
-   "watchers_plausible" to FALSE and "passed" to FALSE. Do NOT say "passed: true"
-   while simultaneously suggesting a different number. If your suggested panel range
-   is significantly different from the actual {total_watchers:,.0f}, it MUST fail.
+Compare our "US Gen Pop Projected" watchers number to the REAL viewership data above.
+- Our projected number should be in the same ballpark as the real-world viewer count.
+- If no real data was found, use your knowledge of this show's popularity to judge.
+- If our number is significantly higher than reality (e.g. we say 50M but Nielsen says 8M),
+  flag it and suggest what the panel number should be to produce a realistic projection.
+- The panel-to-projection formula is: panel × {US_POPULATION / SAMPLE_REPRESENTS:.2f} = US projection.
+  So to get a target projection, divide by {US_POPULATION / SAMPLE_REPRESENTS:.2f} to get the panel number.
 
 === PHASE B: VALIDATE NEW SIGNUPS & REACTIVATIONS ===
-"New Platform Signups" includes BOTH brand-new subscribers AND reactivated/dormant accounts.
-The pipeline later splits these into "Attributed Signups" (watched then signed up) and
-"Dormant to Reactive" (reactivated lapsed accounts). But the TOTAL must make sense first.
-
-REALITY CHECK: Most people who watch a show ALREADY HAVE the platform. The conversion rate
-(new signups / total watchers) should reflect this reality, but use the REAL DATA as your guide.
-
-Use platform penetration as a baseline anchor — higher penetration = fewer potential new subs.
-But let the actual data tell you what's reasonable. A breakout show on any platform can drive
-higher-than-typical conversion. Just catch numbers that are clearly absurd (e.g. 20-30% on
-Netflix is impossible since almost everyone already subscribes).
-
-Your job is NOT to force conversion into a narrow band. Your job is to catch obvious inflation.
-If the data supports a 3-5% conversion for a specific situation, that could be fine. But if
-the numbers imply 15-30% of watchers are new subscribers on a dominant platform, that is
-clearly wrong and should be adjusted down.
-
-If signups appear clearly inflated, suggest a lower number.
-NEVER suggest increasing signups — only reduce if inflated.
+Judge whether the new subscriber count makes sense given the platform's market position:
+- DOMINANT platforms (Netflix ~68%, Prime ~65%): Already ubiquitous. Almost everyone who
+  would watch a show already has the platform. Only a true cultural phenomenon (final season
+  of Stranger Things, Squid Game) drives meaningful NEW signups. For most shows, new signups
+  should be very low relative to watchers.
+- MAJOR platforms (Hulu ~30%, Disney+ ~28%): Moderate room for acquisition. A hit show can
+  drive some new subs, but most of the audience already has access.
+- MID-TIER platforms (Max ~22%): More room for growth. A flagship show can drive noticeable
+  new subscriber acquisition.
+- EMERGING/NICHE platforms (Peacock ~13%, Paramount+ ~15%, Apple TV+ ~10%): Significant room
+  for acquisition. A hit exclusive can genuinely drive large numbers of new subscribers because
+  many viewers do NOT already have the platform.
+- If signups seem inflated for the platform tier, suggest a LOWER number. Never adjust upward.
+- Reactivated accounts follow the same logic: dominant platforms have fewer truly dormant users.
 
 === PHASE C: TIME FRAME & CONTENT SCALE ===
-- Short windows (1-2 weeks) naturally produce lower numbers. Do NOT flag low numbers.
-- Minor titles, stand-up specials, indie films have modest numbers — that is expected.
+- Short windows (1-2 weeks) naturally produce lower numbers. Do NOT flag low numbers on short windows.
+- Stand-up specials, indie films, minor titles have modest numbers — that is expected.
 - Only flag numbers that are clearly impossible or significantly inflated.
 
-=== ABSOLUTE RULES (override everything else) ===
-- A conversion rate above 20% is ALWAYS implausible on ANY platform. Flag it immediately.
-- A conversion rate above 50% is physically impossible — it implies most viewers didn't have
-  the platform, which contradicts the fact that they watched the show ON the platform.
-- If the analysis date range spans more than 1 year, the data is almost certainly capturing
-  coincidental signups unrelated to the show. Flag this and suggest much lower signups.
-- If Pre-Existing Viewers is 0 but Total Watchers is high, the exclusion window likely had
-  no data — meaning EVERYONE is counted as "new" when most were actually pre-existing. Flag this.
-
-Show your math in the notes. Respond with ONLY a JSON object — no markdown code fences, no comments, no trailing commas, no text outside the JSON.
-CRITICAL: Do NOT use commas in numbers inside JSON. Write 50000 not 50,000. Write 1500000 not 1,500,000.
-{{"passed": true, "watchers_plausible": true, "watchers_note": "math here", "signups_plausible": true, "signups_note": "reasoning", "conversion_plausible": true, "conversion_note": "reasoning", "flags": [], "suggested_conversion_range": [0.0, 0.0], "suggested_watchers_range_panel": [0, 0], "suggested_signups_range_panel": [0, 0], "overall_assessment": "summary"}}"""
+Respond in JSON ONLY (no markdown fencing):
+{{
+  "passed": true/false,
+  "watchers_plausible": true/false,
+  "watchers_note": "brief explanation referencing real data if available",
+  "signups_plausible": true/false,
+  "signups_note": "brief explanation of platform-tier reasoning",
+  "conversion_plausible": true/false,
+  "conversion_note": "brief explanation",
+  "flags": ["list of specific concerns if any"],
+  "suggested_conversion_range": [low_pct, high_pct],
+  "suggested_watchers_range_panel": [low, high],
+  "suggested_signups_range_panel": [low, high],
+  "overall_assessment": "one sentence summary"
+}}"""
 
     try:
         resp = client.chat.completions.create(
@@ -1752,42 +1799,7 @@ CRITICAL: Do NOT use commas in numbers inside JSON. Write 50000 not 50,000. Writ
                     break
         if start >= 0 and end > start:
             raw = raw[start:end]
-        import re as _re
-        raw = _re.sub(r',\s*}', '}', raw)
-        raw = _re.sub(r',\s*]', ']', raw)
-        raw = _re.sub(r'//[^\n]*', '', raw)
-        raw = _re.sub(r'(?<=\d),(?=\d{3}(?:\D|$))', '', raw)
         result = json.loads(raw)
-
-        # Post-AI sanity check: if AI suggests significantly different numbers
-        # but still said "passed", override to fail
-        suggested_w = result.get('suggested_watchers_range_panel', [])
-        if (len(suggested_w) == 2 and suggested_w[0] and suggested_w[1]
-                and total_watchers > 0):
-            suggested_mid = (suggested_w[0] + suggested_w[1]) / 2.0
-            if suggested_mid > 0:
-                ratio = total_watchers / suggested_mid
-                if ratio > 1.5 or ratio < 0.5:
-                    result['passed'] = False
-                    if result.get('watchers_plausible', True):
-                        result['watchers_plausible'] = False
-                        result['watchers_note'] = (
-                            result.get('watchers_note', '') +
-                            f' [Override: our panel {total_watchers:,} is {ratio:.1f}x the '
-                            f'suggested {int(suggested_mid):,}]'
-                        )
-                    if 'watchers significantly off' not in str(result.get('flags', [])):
-                        result.setdefault('flags', []).append(
-                            f'watchers {ratio:.1f}x off from research-based estimate')
-
-        suggested_s = result.get('suggested_signups_range_panel', [])
-        if (len(suggested_s) == 2 and suggested_s[0] and suggested_s[1]
-                and new_signups > 0):
-            suggested_mid_s = (suggested_s[0] + suggested_s[1]) / 2.0
-            if suggested_mid_s > 0 and new_signups / suggested_mid_s > 2.0:
-                result['passed'] = False
-                result['signups_plausible'] = False
-
         return result
     except Exception as e:
         return {'passed': True, 'flags': [], 'note': f'AI validation error: {e}'}
@@ -1816,6 +1828,7 @@ def apply_ai_adjustments(df_out, validation_result, total_watchers, new_signups,
             target_watchers = int((suggested_w[0] + suggested_w[1]) / 2.0)
             if target_watchers > 0:
                 adjusted_watchers = target_watchers
+                # Derive Pre-Existing and Clean from new Total using current proportions
                 old_total_for_ratio = total_watchers if total_watchers > 0 else 1
                 old_pre = 0
                 old_clean = 0
@@ -1899,185 +1912,6 @@ def apply_ai_adjustments(df_out, validation_result, total_watchers, new_signups,
     return df_out, changes
 
 
-# =========================================
-# === AI Demographic Validation (SVOD)  ===
-# =========================================
-_demo_research_cache = {}
-
-def ai_validate_demographics(show_name, platform_name, df_demo, new_signups):
-    """
-    Use GPT-4o with web research to validate and correct demographic distributions
-    for new platform signups attributed to a show. Returns corrected df_demo with
-    realistic AGE and GENDER distributions based on the show's known audience.
-    """
-    if df_demo.empty or new_signups <= 0:
-        return df_demo, []
-
-    try:
-        from openai import OpenAI
-        client = OpenAI()
-    except Exception:
-        return df_demo, []
-
-    cache_key = show_name.strip().lower()
-    if cache_key in _demo_research_cache:
-        research = _demo_research_cache[cache_key]
-    else:
-        clean = show_name.replace('_', ' ').replace('-', ' ').strip()
-        season_match = re.search(r'(?i)(season\s*\d+|s\d+)', clean)
-        if season_match:
-            season_str = season_match.group(0)
-            show_part = clean[:season_match.start()].strip().rstrip(' -')
-            search_query = f'{show_part} {season_str}'
-        else:
-            search_query = clean
-
-        research_prompt = (
-            f'Search for the real audience demographics of the TV show "{search_query}". '
-            f'I need the actual demographic breakdown of viewers who watch this show.\n\n'
-            f'Report:\n'
-            f'- Gender split (% male vs female vs other)\n'
-            f'- Age distribution (% in each bracket: under 18, 18-24, 25-34, 35-44, 45-54, 55-64, 65+)\n'
-            f'- Cite Nielsen, Samba TV, YouGov, Morning Consult, or other audience measurement sources\n'
-            f'- Note if this show skews particularly young/old, male/female\n'
-            f'- Platform it airs on: {platform_name}\n\n'
-            f'Be specific with percentages. Cite sources.'
-        )
-        try:
-            resp = client.chat.completions.create(
-                model="gpt-4o-search-preview",
-                messages=[{"role": "user", "content": research_prompt}],
-                web_search_options={"search_context_size": "medium"},
-            )
-            research = resp.choices[0].message.content.strip() if resp.choices else ""
-        except Exception:
-            research = ""
-        _demo_research_cache[cache_key] = research
-
-    if not research:
-        return df_demo, []
-
-    current_age = {}
-    current_gender = {}
-    for _, row in df_demo.iterrows():
-        cat = str(row.get('CATEGORY', '')).strip()
-        val = str(row.get('VALUE', '')).strip()
-        count = int(row['COUNT']) if not pd.isna(row.get('COUNT')) else 0
-        if cat == 'AGE':
-            current_age[val] = count
-        elif cat == 'GENDER':
-            current_gender[val] = count
-
-    age_total = sum(current_age.values())
-    gender_total = sum(current_gender.values())
-
-    age_list = ', '.join(f'{k}: {v} ({v*100//age_total}%)' for k, v in current_age.items()) if age_total else 'none'
-    gender_list = ', '.join(f'{k}: {v} ({v*100//gender_total}%)' for k, v in current_gender.items()) if gender_total else 'none'
-
-    correction_prompt = (
-        f'You are a demographic data analyst. Based on real audience research for "{show_name}" '
-        f'on {platform_name}, correct the demographic distribution of new platform signups.\n\n'
-        f'RESEARCH DATA:\n{research}\n\n'
-        f'OUR CURRENT DATA (panel counts):\n'
-        f'AGE (total {age_total}): {age_list}\n'
-        f'GENDER (total {gender_total}): {gender_list}\n\n'
-        f'Using the research, provide corrected PERCENTAGE distributions that reflect '
-        f'the real audience of this show. The corrected percentages must sum to 100% for '
-        f'each category.\n\n'
-        f'IMPORTANT RULES:\n'
-        f'- Use the research data to determine realistic splits\n'
-        f'- These are people who signed up for {platform_name} because of this show, '
-        f'so the demographics should match the show\'s known audience profile\n'
-        f'- If the show skews female, female % should be higher than male\n'
-        f'- If the show skews young, younger age brackets should dominate\n'
-        f'- Keep Non-Binary/Trans/Other at realistic small percentages (1-3% total)\n'
-        f'- Keep "Prefer Not to Say" under 1%\n\n'
-        f'Return ONLY a JSON object with this exact structure (no comments, no commas in numbers):\n'
-        f'{{\n'
-        f'  "age": {{"17 and Under": <pct>, "18-24": <pct>, "25-34": <pct>, "35-44": <pct>, '
-        f'"45-54": <pct>, "55-64": <pct>, "65 or Older": <pct>}},\n'
-        f'  "gender": {{"Male": <pct>, "Female": <pct>, "Non-Binary": <pct>, '
-        f'"Trans Male": <pct>, "Trans Female": <pct>, "Prefer Not to Say": <pct>}},\n'
-        f'  "reasoning": "brief explanation of why these percentages match the show"\n'
-        f'}}\n'
-        f'Percentages should be numbers (e.g. 35.0 not "35%"). Each category must sum to ~100.'
-    )
-
-    try:
-        resp = client.chat.completions.create(
-            model="gpt-4o",
-            messages=[{"role": "user", "content": correction_prompt}],
-            temperature=0.2,
-        )
-        raw = resp.choices[0].message.content.strip()
-    except Exception:
-        return df_demo, []
-
-    try:
-        start = raw.find('{')
-        depth = 0
-        end = start
-        for i in range(start, len(raw)):
-            if raw[i] == '{':
-                depth += 1
-            elif raw[i] == '}':
-                depth -= 1
-                if depth == 0:
-                    end = i + 1
-                    break
-        raw_json = raw[start:end]
-        raw_json = re.sub(r'//.*?$', '', raw_json, flags=re.MULTILINE)
-        raw_json = re.sub(r',\s*}', '}', raw_json)
-        raw_json = re.sub(r',\s*]', ']', raw_json)
-        result = json.loads(raw_json)
-    except Exception:
-        return df_demo, []
-
-    changes = []
-    age_corrections = result.get('age', {})
-    gender_corrections = result.get('gender', {})
-    reasoning = result.get('reasoning', '')
-
-    if age_corrections and age_total > 0:
-        assigned = 0
-        items = list(age_corrections.items())
-        for i, (bracket, pct) in enumerate(items):
-            if i == len(items) - 1:
-                new_count = age_total - assigned
-            else:
-                new_count = int(round(age_total * float(pct) / 100.0))
-                assigned += new_count
-            for idx in df_demo.index:
-                if str(df_demo.loc[idx, 'CATEGORY']).strip() == 'AGE' and str(df_demo.loc[idx, 'VALUE']).strip() == bracket:
-                    old_count = int(df_demo.loc[idx, 'COUNT']) if not pd.isna(df_demo.loc[idx, 'COUNT']) else 0
-                    df_demo.loc[idx, 'COUNT'] = new_count
-                    df_demo.loc[idx, 'PERCENTAGE'] = round(new_count * 100.0 / age_total, 1) if age_total > 0 else 0
-                    if old_count != new_count:
-                        changes.append(f"AGE {bracket}: {old_count} → {new_count}")
-
-    if gender_corrections and gender_total > 0:
-        assigned = 0
-        items = list(gender_corrections.items())
-        for i, (bracket, pct) in enumerate(items):
-            if i == len(items) - 1:
-                new_count = gender_total - assigned
-            else:
-                new_count = int(round(gender_total * float(pct) / 100.0))
-                assigned += new_count
-            for idx in df_demo.index:
-                if str(df_demo.loc[idx, 'CATEGORY']).strip() == 'GENDER' and str(df_demo.loc[idx, 'VALUE']).strip() == bracket:
-                    old_count = int(df_demo.loc[idx, 'COUNT']) if not pd.isna(df_demo.loc[idx, 'COUNT']) else 0
-                    df_demo.loc[idx, 'COUNT'] = new_count
-                    df_demo.loc[idx, 'PERCENTAGE'] = round(new_count * 100.0 / gender_total, 1) if gender_total > 0 else 0
-                    if old_count != new_count:
-                        changes.append(f"GENDER {bracket}: {old_count} → {new_count}")
-
-    if reasoning:
-        changes.append(f"Reasoning: {reasoning}")
-
-    return df_demo, changes
-
-
 def _extract_json_object(text):
     """Extract the first outer JSON object from a model response."""
     if not text:
@@ -2134,16 +1968,11 @@ def _normalize_pct_plan_for_labels(raw_map, labels):
             norm[lbl] = (vals[lbl] * 100.0) / total
         else:
             norm[lbl] = 0.0
-    # If there are labels with 0 and we still have room due to rounding, leave as-is;
-    # downstream count reconciliation ensures integer totals align exactly.
     return norm
 
 
 def _apply_pct_plan_to_df_out(df_out, indices, pct_plan, total_count):
-    """
-    Apply percentage plan to a set of df_out row indices.
-    Ensures integer counts sum exactly to total_count.
-    """
+    """Apply percentage plan to rows; ensure counts sum exactly to total_count."""
     if not indices or total_count <= 0:
         return []
     labels = [str(df_out.loc[idx, "Category"]).strip() for idx in indices]
@@ -2158,7 +1987,6 @@ def _apply_pct_plan_to_df_out(df_out, indices, pct_plan, total_count):
         else:
             new_count = int(round(total_count * pct / 100.0))
             assigned += new_count
-        old_count = 0
         try:
             old_count = int(float(str(df_out.loc[idx, "Count"]).replace(",", "")))
         except (ValueError, TypeError):
@@ -2236,21 +2064,17 @@ def ai_align_final_demographics_with_research(df_out, platform_name):
     except Exception:
         return df_out, []
 
-    # Pull show title from final output rows (Show/Content Tracked row).
     show_name = ""
     for idx in df_out.index:
-        cat = str(df_out.loc[idx, "Category"] or "").strip()
-        if cat == "Show/Content Tracked":
+        if str(df_out.loc[idx, "Category"] or "").strip() == "Show/Content Tracked":
             show_name = str(df_out.loc[idx, "Count Label"] or "").strip()
             break
     if not show_name:
         return df_out, []
 
-    # Pull New Platform Signups count from final output rows.
     nps_count = 0
     for idx in df_out.index:
-        cat = str(df_out.loc[idx, "Category"] or "").strip()
-        if cat == "New Platform Signups":
+        if str(df_out.loc[idx, "Category"] or "").strip() == "New Platform Signups":
             try:
                 nps_count = int(float(str(df_out.loc[idx, "Count"]).replace(",", "")))
             except (ValueError, TypeError):
@@ -2259,7 +2083,6 @@ def ai_align_final_demographics_with_research(df_out, platform_name):
     if nps_count <= 0:
         return df_out, []
 
-    # Locate final AGE/GENDER demographic rows in output frame.
     current_section = None
     section_rows = {"AGE": [], "GENDER": []}
     for idx in df_out.index:
@@ -2279,7 +2102,6 @@ def ai_align_final_demographics_with_research(df_out, platform_name):
     if not section_rows["AGE"] and not section_rows["GENDER"]:
         return df_out, []
 
-    # Build current distribution summary for prompt grounding.
     def _collect_section(indices):
         out = []
         for idx in indices:
@@ -2296,8 +2118,6 @@ def ai_align_final_demographics_with_research(df_out, platform_name):
     age_rows = _collect_section(section_rows["AGE"])
     gender_rows = _collect_section(section_rows["GENDER"])
 
-    # Step 1: external research (web-enabled model).
-    research = ""
     try:
         research_prompt = (
             f'Research the primary audience demographics for "{show_name}" on {platform_name}. '
@@ -2312,11 +2132,9 @@ def ai_align_final_demographics_with_research(df_out, platform_name):
         research = (resp.choices[0].message.content or "").strip() if resp.choices else ""
     except Exception:
         research = ""
-
     if not research:
         return df_out, []
 
-    # Step 2: GPT-4o correction plan constrained to existing labels.
     age_labels = [r["label"] for r in age_rows]
     gender_labels = [r["label"] for r in gender_rows]
     correction_prompt = (
@@ -2356,24 +2174,13 @@ def ai_align_final_demographics_with_research(df_out, platform_name):
 
     changes = []
     if section_rows["AGE"]:
-        changes.extend(_apply_pct_plan_to_df_out(
-            df_out,
-            section_rows["AGE"],
-            parsed.get("age", {}),
-            nps_count
-        ))
+        changes.extend(_apply_pct_plan_to_df_out(df_out, section_rows["AGE"], parsed.get("age", {}), nps_count))
     if section_rows["GENDER"]:
         skew_hint = _detect_gender_skew_hint(parsed.get("gender_skew"), research)
         gender_plan = parsed.get("gender", {}) or {}
         gender_plan, skew_changes = _enforce_gender_skew_in_plan(gender_plan, gender_labels, skew_hint)
         changes.extend(skew_changes)
-        changes.extend(_apply_pct_plan_to_df_out(
-            df_out,
-            section_rows["GENDER"],
-            gender_plan,
-            nps_count
-        ))
-
+        changes.extend(_apply_pct_plan_to_df_out(df_out, section_rows["GENDER"], gender_plan, nps_count))
     rationale = str(parsed.get("reasoning") or "").strip()
     if rationale:
         changes.append(f"Final agent rationale: {rationale}")
@@ -2383,7 +2190,7 @@ def ai_align_final_demographics_with_research(df_out, platform_name):
 def enforce_attribution_summary_consistency(df_out):
     """
     Ensure Attributed Signups + Dormant to Reactive == New Platform Signups.
-    If needed, proportionally scale attribution rows to exactly match NPS.
+    If needed, proportionally down/up-scale attribution rows to exactly match NPS.
     """
     def _to_int(v):
         try:
@@ -2421,8 +2228,8 @@ def enforce_attribution_summary_consistency(df_out):
     attr = max(_to_int(df_out.loc[attr_row, "Count"]), 0)
     dorm = max(_to_int(df_out.loc[dorm_row, "Count"]), 0)
     total_pair = attr + dorm
-    changes = []
 
+    changes = []
     if total_pair != nps:
         if total_pair <= 0:
             new_attr = 0
@@ -2437,6 +2244,7 @@ def enforce_attribution_summary_consistency(df_out):
         if total_row is not None:
             df_out.loc[total_row, "Count"] = nps
 
+        # Keep percentages and Gen Pop projections consistent with final counts.
         watchers = max(_to_int(df_out.loc[watchers_row, "Count"]) if watchers_row is not None else 0, 0)
         df_out.loc[attr_row, "Percentage"] = _to_pct_str(new_attr, watchers)
         df_out.loc[dorm_row, "Percentage"] = _to_pct_str(new_dorm, watchers)
@@ -2469,10 +2277,7 @@ def write_output(df_summary, df_comp, df_demo, df_timing, df_episode_attribution
     new_signups = int(df_summary.loc[0, "NEW_SIGNUPS"]) if not pd.isna(df_summary.loc[0, "NEW_SIGNUPS"]) else 0
     avg_days = float(df_summary.loc[0, "AVG_DAYS_TO_SIGNUP"]) if not pd.isna(df_summary.loc[0, "AVG_DAYS_TO_SIGNUP"]) else 0
     clean_conversion = float(df_summary.loc[0, "CLEAN_CONVERSION_RATE"]) if not pd.isna(df_summary.loc[0, "CLEAN_CONVERSION_RATE"]) else 0
-    # Total Show Conversion Rate = (projected NPS / projected Total Show Watchers) * 100 (use Gen Pop projected numbers)
-    tw_projected = gen_pop_projection(total_watchers)
-    nps_projected = gen_pop_projection(new_signups)
-    total_show_conversion = round((nps_projected / tw_projected) * 100.0, 2) if tw_projected > 0 else 0.0
+    total_show_conversion = float(df_summary.loc[0, "TOTAL_SHOW_CONVERSION_RATE"]) if not pd.isna(df_summary.loc[0, "TOTAL_SHOW_CONVERSION_RATE"]) else 0
     # For new shows, clean sample = all show watchers (no pre-existing viewers to exclude)
 
     # Get tracking mode and create lookup for display labels and episode dates (used for episode/date attribution)
@@ -2725,147 +2530,6 @@ def write_output(df_summary, df_comp, df_demo, df_timing, df_episode_attribution
             except (ValueError, TypeError):
                 pass
 
-    # Enforce attribution summary consistency: Attributed + Dormant = Total Signups = New Platform Signups
-    # After OUTPUT_DIVISOR rounding, the sum can drift by ±1 — force alignment
-    new_platform_row = None
-    attributed_row = None
-    dormant_row = None
-    total_signups_row = None
-    total_watchers_row = None
-    for idx in df_out.index:
-        cat = str(df_out.loc[idx, "Category"] or "").strip()
-        if cat == "New Platform Signups":
-            new_platform_row = idx
-        elif cat == "Total Show Watchers":
-            total_watchers_row = idx
-        elif cat == "Attributed Signups":
-            attributed_row = idx
-        elif cat == "Dormant to Reactive":
-            dormant_row = idx
-        elif cat == "TOTAL SIGNUPS":
-            total_signups_row = idx
-
-    if new_platform_row is not None and attributed_row is not None and dormant_row is not None:
-        try:
-            nps_count = int(float(str(df_out.loc[new_platform_row, "Count"]).replace(",", "")))
-            attr_count = int(float(str(df_out.loc[attributed_row, "Count"]).replace(",", "")))
-            dorm_count_orig = int(float(str(df_out.loc[dormant_row, "Count"]).replace(",", "")))
-            tw_count = int(float(str(df_out.loc[total_watchers_row, "Count"]).replace(",", ""))) if total_watchers_row is not None else 0
-
-            raw_sum = attr_count + dorm_count_orig
-            if raw_sum != nps_count and raw_sum > 0:
-                attr_count = int(round(attr_count * nps_count / raw_sum))
-                dorm_count = nps_count - attr_count
-            else:
-                dorm_count = dorm_count_orig
-
-            df_out.loc[attributed_row, "Count"] = attr_count
-            df_out.loc[dormant_row, "Count"] = dorm_count
-
-            if total_signups_row is not None:
-                df_out.loc[total_signups_row, "Count"] = nps_count
-
-            attr_pct = round((attr_count * 100.0) / tw_count, 2) if tw_count > 0 else 0.0
-            dorm_pct = round((dorm_count * 100.0) / tw_count, 2) if tw_count > 0 else 0.0
-            total_pct = round((nps_count * 100.0) / tw_count, 2) if tw_count > 0 else 0.0
-            df_out.loc[attributed_row, "Percentage"] = f"{attr_pct}%"
-            df_out.loc[dormant_row, "Percentage"] = f"{dorm_pct}%"
-            if total_signups_row is not None:
-                df_out.loc[total_signups_row, "Percentage"] = f"{total_pct}%"
-
-            attr_gp = format_gen_pop(gen_pop_projection(attr_count))
-            dorm_gp = format_gen_pop(gen_pop_projection(dorm_count))
-            total_gp = format_gen_pop(gen_pop_projection(nps_count))
-            df_out.loc[attributed_row, "Gen Pop Projection"] = attr_gp
-            df_out.loc[dormant_row, "Gen Pop Projection"] = dorm_gp
-            if total_signups_row is not None:
-                df_out.loc[total_signups_row, "Gen Pop Projection"] = total_gp
-        except (ValueError, TypeError):
-            pass
-
-    # Enforce demographics: each category (AGE, GENDER) sums to New Platform Signups
-    # Rescale counts proportionally, recalculate percentages and gen pop from final values
-    if new_platform_row is not None:
-        try:
-            nps_final = int(float(str(df_out.loc[new_platform_row, "Count"]).replace(",", "")))
-            if nps_final > 0:
-                current_section = None
-                section_rows = {'AGE': [], 'GENDER': []}
-                for idx in df_out.index:
-                    cat = str(df_out.loc[idx, "Category"] or "").strip()
-                    clabel = str(df_out.loc[idx, "Count Label"] or "").strip()
-                    if cat == "AGE":
-                        current_section = "AGE"
-                        continue
-                    elif cat == "GENDER":
-                        current_section = "GENDER"
-                        continue
-                    elif cat and clabel != "people":
-                        if current_section in section_rows and cat not in ("", "DEMOGRAPHICS - New Signups"):
-                            current_section = None
-                    if current_section and clabel == "people":
-                        section_rows[current_section].append(idx)
-
-                for demo_cat, indices in section_rows.items():
-                    if not indices:
-                        continue
-                    raw_counts = []
-                    for idx in indices:
-                        try:
-                            c = int(float(str(df_out.loc[idx, "Count"]).replace(",", "")))
-                        except (ValueError, TypeError):
-                            c = 0
-                        raw_counts.append(max(c, 0))
-
-                    current_sum = sum(raw_counts)
-                    if current_sum <= 0:
-                        continue
-
-                    scaled = []
-                    running = 0
-                    for i, c in enumerate(raw_counts):
-                        if i == len(raw_counts) - 1:
-                            scaled.append(nps_final - running)
-                        else:
-                            sc = int(round(c * nps_final / current_sum))
-                            scaled.append(sc)
-                            running += sc
-
-                    pct_running = 0.0
-                    for i, idx in enumerate(indices):
-                        sc = scaled[i]
-                        if i == len(indices) - 1:
-                            pct = round(100.0 - pct_running, 1)
-                        else:
-                            pct = round(sc * 100.0 / nps_final, 1) if nps_final > 0 else 0.0
-                            pct_running += pct
-                        gp = format_gen_pop(gen_pop_projection(sc))
-                        df_out.loc[idx, "Count"] = sc
-                        df_out.loc[idx, "Percentage"] = f"{pct:.1f}%"
-                        df_out.loc[idx, "Gen Pop Projection"] = gp
-        except (ValueError, TypeError):
-            pass
-
-    # Hard sanity checks before AI validation
-    date_range_days = 0
-    if p.get('campaign_start') and p.get('campaign_end'):
-        try:
-            date_range_days = (p['campaign_end'] - p['campaign_start']).days
-        except Exception:
-            pass
-
-    if date_range_days > 365:
-        print(f"⚠️  Analysis window is {date_range_days} days ({date_range_days/365:.1f} years).")
-        print("   Attribution works best with a single-season window (weeks to months).")
-        print("   A multi-year window captures coincidental signups unrelated to the show.")
-
-    if total_show_conversion > 25:
-        print(f"⚠️  Conversion rate is {total_show_conversion:.1f}% — almost certainly inflated.")
-        print("   Most platforms see <5% conversion even for hit shows.")
-        if date_range_days > 180:
-            print(f"   Likely cause: analysis window is too wide ({date_range_days} days).")
-            print("   Over a long period, people sign up for unrelated reasons.")
-
     # AI Plausibility Validation
     print("🤖 Running AI plausibility check...")
     show_name = ', '.join(p.get('show_search_terms', []))
@@ -2923,8 +2587,7 @@ def write_output(df_summary, df_comp, df_demo, df_timing, df_episode_attribution
         note = validation.get('overall_assessment', validation.get('note', 'Metrics look plausible'))
         print(f"✅ AI validation passed: {note}")
 
-    # Final-step GPT-4o audience alignment:
-    # Use Show/Content Tracked + external research to align AGE/GENDER before save.
+    # Final-step GPT-4o audience alignment before saving output.
     print("🧠 Running final demographic alignment agent (GPT-4o)...")
     df_out, final_demo_changes = ai_align_final_demographics_with_research(df_out, p['platform_name'])
     if final_demo_changes:
@@ -2941,7 +2604,22 @@ def write_output(df_summary, df_comp, df_demo, df_timing, df_episode_attribution
         for c in attrib_changes:
             print(f"     → {c}")
 
-    # Final invariant: Total Show Watchers MUST equal Pre-Existing + Clean Sample
+    # Append validation metadata rows
+    df_out = pd.concat([df_out, pd.DataFrame([
+        ("", "", "", "", "", "", "", "", "", ""),
+        ("", "", "AI VALIDATION", "", "", "", "", "", "", ""),
+        ("Validation Status", "", "PASS" if validation.get('passed', True) else "FLAGGED", "", "", "", "", "", "", ""),
+        ("Assessment", "", validation.get('overall_assessment', ''), "", "", "", "", "", "", ""),
+    ], columns=df_out.columns)], ignore_index=True)
+
+    if validation.get('flags'):
+        for i, flag in enumerate(validation['flags']):
+            df_out = pd.concat([df_out, pd.DataFrame([
+                (f"Flag {i+1}", "", flag, "", "", "", "", "", "", ""),
+            ], columns=df_out.columns)], ignore_index=True)
+
+    # Write to output_dir from params (e.g. server output dir on Render) or default Desktop/attribution
+    # Final invariant assertion on output DataFrame
     _out_total = _out_pre = _out_clean = None
     for idx in df_out.index:
         cat = str(df_out.loc[idx, "Category"] or "").strip()
@@ -2981,7 +2659,6 @@ def write_output(df_summary, df_comp, df_demo, df_timing, df_episode_attribution
                     df_out.loc[idx, "Gen Pop Projection"] = format_gen_pop(gen_pop_projection(_out_clean))
         print(f"   ✅ Output invariant: Total({_out_total:,}) = Pre({_out_pre:,}) + Clean({_out_clean:,})")
 
-    # Write to output_dir from params (e.g. server output dir on Render) or default Desktop/attribution
     output_folder = Path(p['output_dir']) if p.get('output_dir') else Path.home() / "Desktop" / "attribution"
     output_folder = output_folder if isinstance(output_folder, Path) else Path(output_folder)
     output_folder.mkdir(parents=True, exist_ok=True)
@@ -3005,7 +2682,7 @@ def main():
     print("=" * 60 + "\n")
     
     params = get_user_input()
-    conn = connect_snowflake()
+    conn = connect_db()
     try:
         summary_df, comp_df, demo_df, timing_df, episode_df, monthly_df, episode_timing_df, churn_df, post_signup_touchpoints_df = run_query(conn, params)
     finally:

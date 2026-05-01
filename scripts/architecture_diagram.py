@@ -73,10 +73,10 @@ def draw_diagram(c, w, h, margin):
     draw_arrow(col2_x + box_w / 2 + 20, top_y - box_h - v_gap - 8, col1_x + box_w / 2, y + box_h + 4, "")
     draw_arrow(col2_x + 60 + box_w / 2, y + box_h + 4, col2_x + box_w / 2 + 20, y + box_h + 4, "upload")
 
-    # Row 4: Snowflake
+    # Row 4: ClickHouse
     y -= box_h + v_gap
-    draw_box(col1_x, y, box_w, box_h, ["Snowflake", "BEHAVIORALGRAPH"], fill=(0.85, 0.92, 1.0))
-    draw_box(col2_x + 40, y, box_w, box_h, ["Snowflake", "PROCESSEDCLICKSTREAM"], fill=(0.85, 0.92, 1.0))
+    draw_box(col1_x, y, box_w, box_h, ["ClickHouse", "behavioralgraph"], fill=(0.85, 0.92, 1.0))
+    draw_box(col2_x + 40, y, box_w, box_h, ["ClickHouse", "clickstream"], fill=(0.85, 0.92, 1.0))
     draw_arrow(col1_x + box_w / 2, y + box_h + 4, col1_x + box_w / 2, y + box_h + v_gap - 4, "query")
     draw_arrow(col1_x + box_w / 2, top_y - 2 * (box_h + v_gap) - 8, col1_x + box_w / 2, y + box_h + 4, "clickstream")
     draw_arrow(col2_x + 60 + box_w / 2, top_y - 2 * (box_h + v_gap) - 8, col2_x + 40 + box_w / 2, y + box_h + 4, "attribution")
@@ -148,18 +148,18 @@ def main():
 
     add_section(c, margin, w, h, y_ref, "1. High-level data flow", [
         "• User opens dashboard in browser, logs in (session; users.json or S3). Credits tracked per user.",
-        "• Profile IQ: User submits job (brand, date ranges, filters) → app runs run_analysis() in background → bg.py connects to Snowflake BEHAVIORALGRAPH, runs full pipeline (universe scan, behavioral graph, boosting, ESPN consistency) → result CSV written → app uploads to S3 dashboard-inputs, updates job status (in-memory + S3 system/jobs_status.json), updates profile list cache (system/s3_cache.json).",
-        "• Hedge Fund IQ: Ticker list and CSV data from S3 aggregated-tickers. Ticker images, profile mappings, SEC actuals from S3 dashboard-inputs/metadata/ (ticker_images_cache.json, ticker_profile_mappings.json, hedge_fund_sec_actuals.json). No Snowflake for ticker data; all from S3.",
-        "• Subscriber IQ: Profile list and CSV data from S3 svod-acquisition. Attribution: user runs SVOD job → app runs SVOD_Churn_Attribution.py → Snowflake PROCESSEDCLICKSTREAM → result CSV uploaded to S3.",
-        "• Ticket Sales IQ: List and data from S3 ticket-sales-iq. Ticket Sales Tracker: S3 ticket-sales-tracker. Attribution jobs run Ticket_Sales_Attribution.py (and related) against Snowflake PROCESSEDCLICKSTREAM; results uploaded to respective S3 buckets.",
-        "• Netflix Ranker: App queries Snowflake BEHAVIORALGRAPH.PUBLIC.NETFLIX (by date, show, season, episode). Results cached in S3 dashboard-inputs for fast repeat loads; backfill runs in background for historical days.",
+        "• Profile IQ: User submits job (brand, date ranges, filters) → app runs run_analysis() in background → bg.py connects to ClickHouse (behavioralgraph), runs full pipeline (universe scan, behavioral graph, boosting, ESPN consistency) → result CSV written → app uploads to S3 dashboard-inputs, updates job status (in-memory + S3 system/jobs_status.json), updates profile list cache (system/s3_cache.json).",
+        "• Hedge Fund IQ: Ticker list and CSV data from S3 aggregated-tickers. Ticker images, profile mappings, SEC actuals from S3 dashboard-inputs/metadata/ (ticker_images_cache.json, ticker_profile_mappings.json, hedge_fund_sec_actuals.json). No ClickHouse for ticker data; all from S3.",
+        "• Subscriber IQ: Profile list and CSV data from S3 svod-acquisition. Attribution: user runs SVOD job → app runs SVOD_Churn_Attribution.py → ClickHouse (clickstream) → result CSV uploaded to S3.",
+        "• Ticket Sales IQ: List and data from S3 ticket-sales-iq. Ticket Sales Tracker: S3 ticket-sales-tracker. Attribution jobs run Ticket_Sales_Attribution.py (and related) against ClickHouse (clickstream); results uploaded to respective S3 buckets.",
+        "• Netflix Ranker: App queries ClickHouse (behavioralgraph.netflix) (by date, show, season, episode). Results cached in S3 dashboard-inputs for fast repeat loads; backfill runs in background for historical days.",
     ])
 
     add_section(c, margin, w, h, y_ref, "2. Components (in-depth)", [
         "Render (host)",
-        "  • Flask app (app.py): All HTTP routes, /api/* endpoints, session-based auth, user/credit management, job queue (in-memory jobs dict + S3 jobs_status.json for persistence across workers). S3 clients (boto3) for dashboard-inputs, svod-acquisition, ticket-sales-iq, ticket-sales-tracker, aggregated-tickers. Snowflake used indirectly via bg.py and attribution scripts.",
-        "  • bg.py: Behavioral graph pipeline. Connects to Snowflake (BEHAVIORALGRAPH, warehouse BEHAVIORGRAPH6X), performs universe scan, runs full pipeline (brand expansion, clickstream queries, behavioral categories, 2x universal boost, sports boosts, ESPN consistency, sample size inflation, post-save divisions). Outputs CSV; app uploads to S3.",
-        "  • Attribution scripts: Talent_Theater_Attribution.py, Ticket_Sales_Attribution.py, SVOD_Churn_Attribution.py, etc. Each connects to Snowflake (PROCESSEDCLICKSTREAM or dedicated WH), runs attribution logic, writes CSV; app uploads to S3.",
+        "  • Flask app (app.py): All HTTP routes, /api/* endpoints, session-based auth, user/credit management, job queue (in-memory jobs dict + S3 jobs_status.json for persistence across workers). S3 clients (boto3) for dashboard-inputs, svod-acquisition, ticket-sales-iq, ticket-sales-tracker, aggregated-tickers. ClickHouse used indirectly via bg.py and attribution scripts.",
+        "  • bg.py: Behavioral graph pipeline. Connects to ClickHouse (behavioralgraph), performs universe scan, runs full pipeline (brand expansion, clickstream queries, behavioral categories, 2x universal boost, sports boosts, ESPN consistency, sample size inflation, post-save divisions). Outputs CSV; app uploads to S3.",
+        "  • Attribution scripts: Talent_Theater_Attribution.py, Ticket_Sales_Attribution.py, SVOD_Churn_Attribution.py, etc. Each connects to ClickHouse (clickstream), runs attribution logic, writes CSV; app uploads to S3.",
         "",
         "AWS S3 (region us-east-2)",
         "  • dashboard-inputs: Profile result CSVs (per job); metadata/ (ticker_images_cache.json, ticker_profile_mappings.json, hedge_fund_sec_actuals.json); purgatory/ (files awaiting admin release); system/jobs_status.json (cross-worker job status); system/s3_cache.json (profile list cache); Netflix Ranker cache.",
@@ -168,13 +168,13 @@ def main():
         "  • ticket-sales-tracker: Ticket Sales Tracker CSV files (movie viewers → theater).",
         "  • aggregated-tickers: Hedge Fund IQ ticker CSV files.",
         "",
-        "Snowflake",
+        "ClickHouse",
         "  • BEHAVIORALGRAPH database, BEHAVIORGRAPH6X warehouse: Raw clickstream tables (loaded by send_to_snow.py from lordata CSVs); used by bg.py for Profile IQ. NETFLIX table used for Netflix Ranker.",
         "  • PROCESSEDCLICKSTREAM database: Attribution warehouses (e.g. TICKETS_SALES_WH_6XL, ATTRIBUTIONPROCESSING) for Ticket Sales, SVOD, Talent Theater attribution scripts.",
         "",
         "Data ingestion (offline)",
         "  • lordata_part1 / lordata_part2: Raw clickstream data → normalized CSV (columns e.g. visit_ts, browser, platform, url, uid, Delivered).",
-        "  • send_to_snow.py: Scans local CSV folder, PUT to Snowflake stage, COPY INTO clickstream tables (CLICKBRAND_2XL warehouse).",
+        "  • send_to_snow.py: Scans local CSV folder, INSERT into ClickHouse clickstream tables.",
         "",
         "External",
         "  • OpenAI: AI-generated insights, persona, marketing strategy, business deck, profile comparison (API key in env).",
@@ -189,7 +189,7 @@ def main():
         "1. User submits via /api/submit (POST) with project_name, brands, sample_start/end, behavior_start/end, filters, options.",
         "2. App creates job_id (UUID), stores job in memory (jobs[job_id]) and persists status to S3 system/jobs_status.json.",
         "3. run_analysis() runs in background thread: imports bg, expands brands via generate_brand_variations, sets deterministic seed, optionally downloads reference file from S3 for demographic consistency.",
-        "4. bg.connect_snowflake() (token or password auth). perform_full_universe_scan() for sample sizing. bg.run_full_pipeline() runs full behavioral graph (queries, boosting, ESPN, divisions), writes CSV to temp file.",
+        "4. bg.connect_db() (CH via clickhouse_connector). perform_full_universe_scan() for sample sizing. bg.run_full_pipeline() runs full behavioral graph (queries, boosting, ESPN, divisions), writes CSV to temp file.",
         "5. App uploads result CSV to S3 dashboard-inputs, updates job status to completed, triggers smart_cache_update so profile list includes new file.",
         "6. User sees job complete; can open profile (data loaded via presigned S3 URL or /api/job-data). Frontend renders demographics, behavioral charts, AI insights (OpenAI), compare profiles.",
     ])
@@ -200,7 +200,7 @@ def main():
         "Hedge Fund IQ",
         "  • Ticker-centric. Ticker list and CSV data from S3 aggregated-tickers. Metadata (images, profile mappings, SEC actuals) from dashboard-inputs/metadata/. User picks ticker → sees linked customer profiles (up to 5 per ticker), SEC actuals by quarter, accuracy/MAPE, historic performance.",
         "Subscriber IQ",
-        "  • Profile list from S3 svod-acquisition (merged with dashboard-inputs cache for single list). View CSV data (subscriber metrics). Run SVOD attribution job → SVOD_Churn_Attribution.py → Snowflake PROCESSEDCLICKSTREAM → result CSV to S3.",
+        "  • Profile list from S3 svod-acquisition (merged with dashboard-inputs cache for single list). View CSV data (subscriber metrics). Run SVOD attribution job → SVOD_Churn_Attribution.py → ClickHouse (clickstream) → result CSV to S3.",
         "Ticket Sales IQ",
         "  • List and data from S3 ticket-sales-iq. Talent-to-theater attribution. Run attribution job → Ticket_Sales_Attribution.py → Snowflake → result to S3. Admin can set display name, category, image per file.",
         "Ticket Sales Tracker",
@@ -231,7 +231,7 @@ def main():
 
     add_section(c, margin, w, h, y_ref, "7. Deployment & tech stack", [
         "• Host: Render (render.com). Web service from render.yaml / render-native.yaml; buildCommand (build.sh), startCommand (start.sh), healthCheckPath /healthz. Gunicorn (workers/threads configurable via env).",
-        "• Python: Flask, flask-cors, flask-socketio, pandas, numpy, snowflake-connector-python, boto3, openai, google-api-python-client, reportlab, etc. (see requirements.txt).",
+        "• Python: Flask, flask-cors, flask-socketio, pandas, numpy, clickhouse-connect, boto3, openai, google-api-python-client, reportlab, etc. (see requirements.txt).",
         "• Frontend: Single-page app in templates/index.html (Chart.js, Socket.IO for real-time). Admin UI in templates/admin.html.",
         "• Config: Environment variables (APP_USERNAME, APP_PASSWORD, SNOWFLAKE_*, AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, OPENAI_API_KEY, etc.). config.py (Snowflake) not committed; use env or Render env vars.",
     ])
