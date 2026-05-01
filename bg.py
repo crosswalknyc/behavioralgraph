@@ -14258,6 +14258,7 @@ ITEMS TO SCORE:
             messages=[{'role': 'user', 'content': prompt}],
             temperature=0.0,
             max_tokens=token_budget,
+            timeout=120,
         )
         text = resp.choices[0].message.content.strip()
         if text.startswith('```'):
@@ -14608,6 +14609,7 @@ Reply with ONLY a JSON array (no markdown, no commentary):
                 messages=[{'role': 'user', 'content': prompt}],
                 temperature=0.0,
                 max_tokens=chunk_max_tokens,
+                timeout=120,
             )
             text = (resp.choices[0].message.content or '').strip()
             if text.startswith('```'):
@@ -15337,6 +15339,7 @@ Return ONLY a JSON array, one entry per DMA, in the same order:
                 messages=[{'role': 'user', 'content': prompt}],
                 temperature=0.2,
                 max_tokens=min(16384, max(2048, len(chunk) * 60)),
+                timeout=120,
             )
             text = (resp.choices[0].message.content or '').strip()
             if text.startswith('```'):
@@ -16055,6 +16058,7 @@ Return ONLY a JSON array, one entry per item, in the same order:
                 messages=[{'role': 'user', 'content': prompt}],
                 temperature=0.0,
                 max_tokens=min(16384, max(1024, len(items) * 80)),
+                timeout=120,
             )
             text = (resp.choices[0].message.content or '').strip()
             if text.startswith('```'):
@@ -16631,6 +16635,7 @@ Return ONLY a JSON array, one entry per item, in the same order:
                 messages=[{'role': 'user', 'content': prompt}],
                 temperature=0.0,
                 max_tokens=min(16384, max(1024, len(batch) * 100)),
+                timeout=120,
             )
             text = (resp.choices[0].message.content or '').strip()
             if text.startswith('```'):
