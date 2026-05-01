@@ -1816,6 +1816,25 @@ def apply_ai_adjustments(df_out, validation_result, total_watchers, new_signups,
             target_watchers = int((suggested_w[0] + suggested_w[1]) / 2.0)
             if target_watchers > 0:
                 adjusted_watchers = target_watchers
+                old_total_for_ratio = total_watchers if total_watchers > 0 else 1
+                old_pre = 0
+                old_clean = 0
+                for idx in df_out.index:
+                    cat = str(df_out.loc[idx, "Category"] or "").strip()
+                    if cat == "Pre-Existing Series Viewers":
+                        try:
+                            old_pre = int(float(str(df_out.loc[idx, "Count"]).replace(",", "")))
+                        except (ValueError, TypeError):
+                            pass
+                    elif cat == "Clean Sample (New First Time Viewers)":
+                        try:
+                            old_clean = int(float(str(df_out.loc[idx, "Count"]).replace(",", "")))
+                        except (ValueError, TypeError):
+                            pass
+                pre_ratio = old_pre / old_total_for_ratio if old_total_for_ratio > 0 else 0
+                new_pre = int(round(target_watchers * pre_ratio))
+                new_clean = target_watchers - new_pre
+
                 for idx in df_out.index:
                     cat = str(df_out.loc[idx, "Category"] or "").strip()
                     if cat == "Total Show Watchers":
@@ -1823,6 +1842,12 @@ def apply_ai_adjustments(df_out, validation_result, total_watchers, new_signups,
                         df_out.loc[idx, "Count"] = target_watchers
                         df_out.loc[idx, "Gen Pop Projection"] = format_gen_pop(gen_pop_projection(target_watchers))
                         changes.append(f"Total Show Watchers: {old_val} → {target_watchers} (anchored to real viewership data)")
+                    elif cat == "Pre-Existing Series Viewers":
+                        df_out.loc[idx, "Count"] = new_pre
+                        df_out.loc[idx, "Gen Pop Projection"] = format_gen_pop(gen_pop_projection(new_pre))
+                    elif cat == "Clean Sample (New First Time Viewers)":
+                        df_out.loc[idx, "Count"] = new_clean
+                        df_out.loc[idx, "Gen Pop Projection"] = format_gen_pop(gen_pop_projection(new_clean))
 
     # Signups: only adjust DOWNWARD
     if not validation_result.get('signups_plausible', True):
@@ -2915,6 +2940,46 @@ def write_output(df_summary, df_comp, df_demo, df_timing, df_episode_attribution
         print("   Applied attribution reconciliation:")
         for c in attrib_changes:
             print(f"     → {c}")
+
+    # Final invariant: Total Show Watchers MUST equal Pre-Existing + Clean Sample
+    _out_total = _out_pre = _out_clean = None
+    for idx in df_out.index:
+        cat = str(df_out.loc[idx, "Category"] or "").strip()
+        if cat == "Total Show Watchers":
+            try:
+                _out_total = int(float(str(df_out.loc[idx, "Count"]).replace(",", "")))
+            except (ValueError, TypeError):
+                pass
+        elif cat == "Pre-Existing Series Viewers":
+            try:
+                _out_pre = int(float(str(df_out.loc[idx, "Count"]).replace(",", "")))
+            except (ValueError, TypeError):
+                pass
+        elif cat == "Clean Sample (New First Time Viewers)":
+            try:
+                _out_clean = int(float(str(df_out.loc[idx, "Count"]).replace(",", "")))
+            except (ValueError, TypeError):
+                pass
+    if _out_total is not None and _out_pre is not None and _out_clean is not None:
+        if _out_total != _out_pre + _out_clean:
+            print(f"⚠️  INVARIANT FIX: Total({_out_total}) != Pre({_out_pre}) + Clean({_out_clean})")
+            if _out_pre > _out_total:
+                pre_ratio = _out_pre / (_out_pre + _out_clean) if (_out_pre + _out_clean) > 0 else 0.5
+                _out_pre = int(round(_out_total * pre_ratio))
+                _out_clean = _out_total - _out_pre
+                print(f"   Proportionally rescaled: Pre={_out_pre}, Clean={_out_clean}")
+            else:
+                _out_clean = _out_total - _out_pre
+                print(f"   Forced Clean = Total - Pre = {_out_clean}")
+            for idx in df_out.index:
+                cat = str(df_out.loc[idx, "Category"] or "").strip()
+                if cat == "Pre-Existing Series Viewers":
+                    df_out.loc[idx, "Count"] = _out_pre
+                    df_out.loc[idx, "Gen Pop Projection"] = format_gen_pop(gen_pop_projection(_out_pre))
+                elif cat == "Clean Sample (New First Time Viewers)":
+                    df_out.loc[idx, "Count"] = _out_clean
+                    df_out.loc[idx, "Gen Pop Projection"] = format_gen_pop(gen_pop_projection(_out_clean))
+        print(f"   ✅ Output invariant: Total({_out_total:,}) = Pre({_out_pre:,}) + Clean({_out_clean:,})")
 
     # Write to output_dir from params (e.g. server output dir on Render) or default Desktop/attribution
     output_folder = Path(p['output_dir']) if p.get('output_dir') else Path.home() / "Desktop" / "attribution"
