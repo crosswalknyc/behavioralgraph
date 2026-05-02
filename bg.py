@@ -13992,10 +13992,6 @@ Return ONLY a single valid JSON object — no markdown, no commentary.
     "ATHLETE":                 {{"summary": "<…>", "expected_high": [...], "expected_low": [...]}},
     "SPORTS TEAM":             {{"summary": "<…>", "expected_high": [...], "expected_low": [...]}},
     "PODCAST":                 {{"summary": "<…>", "expected_high": [...], "expected_low": [...]}}
-  }},
-  "cap_overrides": {{
-    "<CATEGORY NAME>": ["<ITEM 1>", "<ITEM 2>", ...],
-    ...one entry per category where you want to bypass the deterministic baseline cap...
   }}
 }}
 
@@ -14010,10 +14006,20 @@ RULES:
 - LOCATION: Provide at least 15-20 top DMAs with realistic, varied percentages. The percentages should NOT be clustered — use a natural distribution where the #1 DMA might be 8-12%, #5 might be 4-6%, #10 might be 2-3%, #15 might be 1-2%, #20 might be 0.5-1%. The sum should be ≤ 100; remainder is auto-spread to the other 190+ DMAs with random variation.
 
 CATEGORY GUIDANCE — STRUCTURED FORMAT (THIS IS THE PRIMARY VALUE OF THIS PROMPT):
+
+DIGITAL IDENTITY — reason about WHO this audience is BEFORE filling guidance:
+Before writing category_guidance, deeply consider this audience's core digital identity:
+- What subculture(s) do they belong to? (sneaker culture, beauty community, gaming, sports fandom, streetwear, fitness, etc.)
+- Where do they ACTUALLY buy this brand's products online? Think about the specific retailers whose websites they visit.
+- What media do they ACTUALLY consume given their age, ethnicity, and interests? Not generic outlets — the SPECIFIC ones this audience reads/watches.
+- What are their genuine interests driven by the brand category? The brand's own product category (e.g. SNEAKERS, FOOTWEAR, RUNNING for Nike; SKINCARE for a beauty brand) MUST be in expected_high for INTEREST.
+- Every expected_high item across ALL categories should be directly tied to this identity.
+- Every expected_low item should be aggressively flagged as irrelevant regardless of fame (e.g., NPR and ARCHITECTURAL DIGEST for a young athletic audience; ESPN and BARSTOOL for a beauty audience; ULTA BEAUTY and CLINIQUE for an athletic/sneaker audience).
+
 For EVERY category in `category_guidance`, you MUST return an OBJECT with three fields:
   • `summary`         — 1 sentence describing how this audience behaves in this category.
-  • `expected_high`   — array of 5-15 SPECIFIC item names (brands/platforms/people) that this audience engages with at HIGH digital BP. These become anchors for the per-category scoring agents.
-  • `expected_low`    — array of 5-15 SPECIFIC item names that are FAMOUS or PRESTIGIOUS in absolute terms but DO NOT fit this audience (e.g. for a Nike audience: Nobu, Cartier, Tiffany, Pavilions, NYT Cooking). These items must be flagged so the scoring agent does not over-rank them by absolute fame.
+  • `expected_high`   — array of 5-15 SPECIFIC item names (brands/platforms/people) that this audience engages with at HIGH digital BP. These become anchors for the per-category scoring agents. These MUST be items this specific audience would actually visit/click/use — not generic popular items.
+  • `expected_low`    — array of 5-15 SPECIFIC item names that are FAMOUS or PRESTIGIOUS in absolute terms but DO NOT fit this audience (e.g. for a Nike audience: Nobu, Cartier, Tiffany, Pavilions, NYT Cooking, Ulta Beauty, Clinique). These items must be flagged so the scoring agent does not over-rank them by absolute fame.
 
 Item-name guidance:
   • Use real, recognizable brand/platform/person names — UPPERCASE.
@@ -14025,22 +14031,7 @@ Item-name guidance:
 
 These structured anchors are the most important output of this prompt — the per-category agents downstream rely on them to avoid producing generic luxury-aspirational tier-fillers.
 
-CAP OVERRIDES — your power to exempt specific items from the deterministic baseline cap:
-The downstream pipeline applies a math safety net (cap = 8x baseline for expected_high; 5x for default; tighter for subscription categories) to catch hallucinations like "Patek Philippe at 30%". But that net occasionally over-constrains LEGITIMATELY high items — universal platforms like NETFLIX/AMAZON PRIME VIDEO/HULU/YOUTUBE/GOOGLE that genuinely reach 80-95% of any digitally-active audience, or persona-perfect items where you have very high confidence the score should exceed normal multipliers.
-
-For each category, list items in `cap_overrides` if BOTH of these are true:
-  • You are highly confident the item should score significantly above the cap multiplier for THIS specific audience.
-  • The item is either (a) near-universal across all U.S. digital adults (Netflix, Hulu, Amazon Prime Video, YouTube, Google, Gmail) OR (b) so persona-defining that ordinary cap rules underestimate it (e.g. NIKE for a Nike-purchaser persona, FOOT LOCKER for a sneaker-fan persona, ESPN for a sports-fan persona).
-
-Do NOT use cap_overrides as a blanket allowlist. Only flag items you would defend under questioning. Items NOT in `cap_overrides` are still scored by the per-category agents — they just remain subject to the cap as a safety check. Empty arrays / omitted categories = full cap protection (which is the correct default).
-
-Example for a Nike persona:
-  "cap_overrides": {{
-    "STREAMING/PLATFORM": ["NETFLIX", "HULU", "AMAZON PRIME VIDEO"],
-    "WHERE THEY SHOP":    ["AMAZON", "WALMART", "FOOT LOCKER", "DICK'S SPORTING GOODS"],
-    "SOCIAL MEDIA":       ["YOUTUBE", "INSTAGRAM"],
-    "SEARCH ENGINE/AI":   ["GOOGLE"]
-  }}
+NOTE: There are NO deterministic caps downstream. The per-category scoring agents have full freedom to score based on persona fit. Your expected_high and expected_low lists are the PRIMARY guardrails — make them specific and accurate.
 """
 
     print(f"🔬 Step 1: Persona Research Agent researching '{subject}' …")
@@ -14270,38 +14261,28 @@ The "US baseline" shown next to each item is the MEASURED national digital engag
 """
     elif baseline_lookup:
         anchor_rules = """═══════════════════════════════════════════════════════════════════
-CRITICAL — ANCHOR TO U.S. BASELINE, THEN INDEX FOR PERSONA FIT
+U.S. BASELINE — REFERENCE CONTEXT (not a constraint)
 ═══════════════════════════════════════════════════════════════════
-The "US baseline" shown next to each item is the MEASURED national digital engagement % for the average U.S. adult. Your persona's score INDEXES OFF that baseline based on how well the item fits the audience:
+The "US baseline" shown next to each item is the MEASURED national digital engagement % for the average U.S. adult. It tells you what "normal" looks like for the general population. You are NOT bound by any multiplier of this baseline. Use it as context, then score based on PERSONA FIT.
 
+HOW TO USE THE BASELINE:
   • Items in the EXPECTED HIGH list above:
-      – Score 1.5x-3x baseline (cap at 95%).
-      – Example: Foot Locker baseline 4.5% → Nike audience 7-13%.
-      – Example: ESPN baseline 36% → sports-fan audience 55-90%.
+      – Score HIGH based on how central they are to this audience's digital life.
+      – A sneaker retailer for a Nike audience = 35-60%, even if its Gen Pop baseline is 4%.
+      – A sports media outlet for a sports audience = 50-80%, even if baseline is 15%.
+      – The baseline tells you the floor for the general public; this audience is NOT general public.
   • Items in the EXPECTED LOW list above:
-      – Score 0.1x-0.5x baseline (floor at 0.1%).
-      – Example: Nobu baseline 0.55% → Nike audience 0.05-0.27%.
-      – Even if the item is famous, persona fit is what determines BP.
+      – Score LOW (0.1-5%) regardless of fame or baseline.
+      – A luxury brand irrelevant to this audience = 0.3-2% even if baseline is 3%.
   • Neutral items (in neither list):
-      – Score 0.7x-1.5x baseline. Use your judgment for the persona's fit.
+      – Score based on YOUR judgment of persona fit.
+      – If irrelevant to this audience, score BELOW baseline even if the item is famous.
+      – If relevant, score ABOVE baseline.
   • Items WITHOUT a baseline ("not measured"):
       – Use your best estimate of what % of THIS audience would engage digitally.
-  • Hard ceiling: NO score above 95% unless the item is in expected_high AND baseline >= 70% (e.g. YouTube/Google for any mass-online persona).
+  • Hard floor: 0.01%. Hard ceiling: 96%.
 
-ABSOLUTE LUXURY / SMALL-BASELINE RULE — NON-NEGOTIABLE:
-  • If baseline is < 1% (luxury brands, niche retailers, ultra-premium items like
-    PATEK PHILIPPE, HERMES, BOTTEGA VENETA, GIVENCHY, DIOR, BALENCIAGA, MYTHERESA,
-    CETTIRE, STADIUM GOODS, NET-A-PORTER, YVES SAINT LAURENT, STITCHFIX, etc.):
-      – Maximum allowed score = max(baseline × 5, 2.5%). Period.
-      – Example: Patek Philippe baseline 0.19% → MAX 2.5% even for HNW persona.
-      – Example: Hermes baseline 0.48% → MAX 2.5%.
-      – Example: Bottega Veneta baseline 0.53% → MAX 2.65%.
-      – These items have low DIGITAL clickstream regardless of brand desire.
-        Aspirational does NOT mean people are visiting patekphilippe.com.
-  • If baseline is 1-3% (mid-luxury / specialty: LOUIS VUITTON, GUCCI, PRADA,
-    BURBERRY, NEIMAN MARCUS):
-      – Maximum allowed score = baseline × 5. Period.
-      – Example: Louis Vuitton baseline 1.02% → MAX 5.1%.
+KEY PRINCIPLE: The RANK ORDER of your scores must reflect this specific audience's affinity, NOT general population popularity. A low-baseline item that is core to this persona should score ABOVE a high-baseline item that is irrelevant.
 """
     else:
         anchor_rules = ''
@@ -14334,6 +14315,7 @@ AUDIENCE-SPECIFIC DIGITAL BEHAVIOR — CRITICAL:
   • Ask yourself: "Would a typical member of this audience actually type this brand's URL into a browser, search for it, or use its app?" If no, score LOW.
   • Stores where the audience BUYS the brand's products should rank HIGH in WHERE THEY SHOP (e.g., Foot Locker for Nike, not Redbubble).
   • MEDIA items should reflect what this audience actually reads/watches online — a young, diverse, athletic audience skews toward sports media (ESPN, Bleacher Report) and social-native media, not toward cable news.
+  • For INTEREST: the brand's OWN product category (e.g., SNEAKERS/FOOTWEAR for Nike, SKINCARE for a beauty brand, GAMING for a game studio) MUST be among the highest-scoring items (70%+). If the audience digitally engages with this brand, they definitionally engage with its product category. Related activity interests (BASKETBALL, RUNNING, FITNESS for Nike) should also score high (40-70%).
 
 ═══════════════════════════════════════════════════════════════════
 PERSONA — this is the audience you are scoring for
@@ -17112,44 +17094,13 @@ def _apply_post_score_agents(df: pd.DataFrame,
         bp_col=bp_col,
     )
 
-    # --- D7) Deterministic canonical-baseline cap (every run) --------------
-    # FIRST safety net. Catches mathematical absurdities (Patek Philippe 30%,
-    # Givenchy 113x baseline). Loosened multipliers (12x for expected_high,
-    # 8x for default) leave plenty of nuance room — only true hallucinations
-    # trip the cap. Items in persona_doc['cap_overrides'] bypass entirely.
-    # Returns (df, list_of_cap_actions) for downstream LLM judge review.
-    df, cap_actions = _apply_canonical_baseline_cap(
-        df,
-        persona_doc=persona_doc,
-        bp_col=bp_col,
-    )
-
-    # --- D8) Deterministic canonical-baseline floor (every run) ------------
-    # Complement to D7. Catches the inverse failure mode: when the agent
-    # over-fits to a single audience trait (e.g. "sports") and SUPPRESSES
-    # mainstream platforms below 50% of baseline. Returns (df, floor_actions).
-    df, floor_actions = _apply_canonical_baseline_floor(
-        df,
-        persona_doc=persona_doc,
-        bp_col=bp_col,
-    )
-
-    # --- D9) LLM cap-review judge (every run) ------------------------------
-    # SECOND safety net — restores nuance after the deterministic cap/floor.
-    # For each capped item: judge decides ACCEPT (cap stays) or REVISE
-    # (set value between cap and original — judge believes cap was too
-    # aggressive). Same symmetric review for floor actions. This is the
-    # "trust agents but verify" layer that lets Netflix at 86% stay near
-    # 86% if the judge confirms it (Netflix is universal) while keeping
-    # Patek at the cap (judge agrees Patek 0.19% canonical doesn't reach 30%).
-    df = _run_cap_review_pass(
-        df,
-        persona_doc=persona_doc,
-        subject=subject,
-        bp_col=bp_col,
-        cap_actions=cap_actions,
-        floor_actions=floor_actions,
-    )
+    # --- D7-D9) Deterministic baseline cap/floor/review DISABLED -----------
+    # Agent scores now flow through unconstrained. Gen Pop baseline is shown
+    # to agents as reference context only; no post-hoc math clamps.
+    # Only basic sanity bounds apply (0.01% floor, 96% ceiling) via the
+    # floor/ceiling already in the agent prompt.
+    cap_actions = []
+    floor_actions = []
 
     return df
 
