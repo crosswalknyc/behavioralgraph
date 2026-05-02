@@ -303,6 +303,8 @@ MODEL_QUALITY  = 'gpt-4o'                  # all category agents + location + de
 MODEL_SCORING  = 'gpt-4o'                  # all category agents + delta sanity (upgraded from gpt-4o-mini)
 MODEL_JUDGE    = 'gpt-4.1-nano'            # mismatch + cap review (ACCEPT/REVISE)
 
+_FIRST_CAT_PROMPT_LOGGED = False  # flipped to True after one sample prompt is logged
+
 PRIORITY_CATEGORIES = {
     'SOCIAL MEDIA', 'SEARCH ENGINE/AI',
     'MOST PURCHASED BRANDS', 'WHERE THEY SHOP',
@@ -13965,34 +13967,7 @@ Return ONLY a single valid JSON object — no markdown, no commentary.
     {{"dma": "<DMA name, e.g. NEW YORK>", "percentage": <percent>}},
     ...top 15-20 DMAs with highest affinity; remainder auto-distributed
   ],
-  "category_guidance": {{
-    "SOCIAL MEDIA":            {{"summary": "<1 sentence>", "expected_high": ["<PLATFORM 1>","<PLATFORM 2>",...], "expected_low": ["<PLATFORM>",...]}},
-    "SEARCH ENGINE/AI":        {{"summary": "<…>", "expected_high": [...], "expected_low": [...]}},
-    "INTEREST":                {{"summary": "<…>", "expected_high": [...], "expected_low": [...]}},
-    "APP/PLATFORM USAGE":      {{"summary": "<…>", "expected_high": [...], "expected_low": [...]}},
-    "STREAMING/PLATFORM":      {{"summary": "<…>", "expected_high": [...], "expected_low": [...]}},
-    "STREAMING/MUSIC":         {{"summary": "<…>", "expected_high": [...], "expected_low": [...]}},
-    "MEDIA":                   {{"summary": "<…>", "expected_high": [...], "expected_low": [...]}},
-    "MOST PURCHASED BRANDS":   {{"summary": "<…>", "expected_high": [...], "expected_low": [...]}},
-    "MOST PURCHASED CATEGORIES": {{"summary": "<…>", "expected_high": [...], "expected_low": [...]}},
-    "WHERE THEY SHOP":         {{"summary": "<…>", "expected_high": [...], "expected_low": [...]}},
-    "WHERE THEY DINE":         {{"summary": "<…>", "expected_high": [...], "expected_low": [...]}},
-    "QSR":                     {{"summary": "<…>", "expected_high": [...], "expected_low": [...]}},
-    "WORKOUT FACILITY":        {{"summary": "<…>", "expected_high": [...], "expected_low": [...]}},
-    "TRAVEL":                  {{"summary": "<…>", "expected_high": [...], "expected_low": [...]}},
-    "INSURANCE":               {{"summary": "<…>", "expected_high": [...], "expected_low": [...]}},
-    "BANKING":                 {{"summary": "<…>", "expected_high": [...], "expected_low": [...]}},
-    "CREDIT PROVIDER":         {{"summary": "<…>", "expected_high": [...], "expected_low": [...]}},
-    "TELECOM":                 {{"summary": "<…>", "expected_high": [...], "expected_low": [...]}},
-    "TECHNOLOGY/DEVICE":       {{"summary": "<…>", "expected_high": [...], "expected_low": [...]}},
-    "TECHNOLOGY BRAND":        {{"summary": "<…>", "expected_high": [...], "expected_low": [...]}},
-    "AUTOMOBILE":              {{"summary": "<…>", "expected_high": [...], "expected_low": [...]}},
-    "TALENT":                  {{"summary": "<…>", "expected_high": [...], "expected_low": [...]}},
-    "MUSICIAN/BAND":           {{"summary": "<…>", "expected_high": [...], "expected_low": [...]}},
-    "ATHLETE":                 {{"summary": "<…>", "expected_high": [...], "expected_low": [...]}},
-    "SPORTS TEAM":             {{"summary": "<…>", "expected_high": [...], "expected_low": [...]}},
-    "PODCAST":                 {{"summary": "<…>", "expected_high": [...], "expected_low": [...]}}
-  }}
+  "digital_identity": "<2-4 paragraph DEEP analysis of this audience's digital footprint — see instructions below>"
 }}
 
 RULES:
@@ -14005,33 +13980,20 @@ RULES:
 - Do NOT include "EMPLOYED FULL-TIME" or "EMPLOYED PART-TIME" in OCCUPATION. Those values are forbidden — they are NOT real occupation categories. OCCUPATION must only use: SELF-EMPLOYED, STUDENT, HOMEMAKER, RETIRED, UNEMPLOYED, PREFER NOT TO SAY.
 - LOCATION: Provide at least 15-20 top DMAs with realistic, varied percentages. The percentages should NOT be clustered — use a natural distribution where the #1 DMA might be 8-12%, #5 might be 4-6%, #10 might be 2-3%, #15 might be 1-2%, #20 might be 0.5-1%. The sum should be ≤ 100; remainder is auto-spread to the other 190+ DMAs with random variation.
 
-CATEGORY GUIDANCE — STRUCTURED FORMAT (THIS IS THE PRIMARY VALUE OF THIS PROMPT):
+DIGITAL IDENTITY — THIS IS THE MOST IMPORTANT FIELD:
+The `digital_identity` field is a rich text block (2-4 paragraphs) that will be passed VERBATIM to per-category scoring agents. Make it specific, opinionated, and grounded in real audience data. It MUST address all five areas below:
 
-DIGITAL IDENTITY — reason about WHO this audience is BEFORE filling guidance:
-Before writing category_guidance, deeply consider this audience's core digital identity:
-- What subculture(s) do they belong to? (sneaker culture, beauty community, gaming, sports fandom, streetwear, fitness, etc.)
-- Where do they ACTUALLY buy this brand's products online? Think about the specific retailers whose websites they visit.
-- What media do they ACTUALLY consume given their age, ethnicity, and interests? Not generic outlets — the SPECIFIC ones this audience reads/watches.
-- What are their genuine interests driven by the brand category? The brand's own product category (e.g. SNEAKERS, FOOTWEAR, RUNNING for Nike; SKINCARE for a beauty brand) MUST be in expected_high for INTEREST.
-- Every expected_high item across ALL categories should be directly tied to this identity.
-- Every expected_low item should be aggressively flagged as irrelevant regardless of fame (e.g., NPR and ARCHITECTURAL DIGEST for a young athletic audience; ESPN and BARSTOOL for a beauty audience; ULTA BEAUTY and CLINIQUE for an athletic/sneaker audience).
+1. SUBCULTURE: What digital subcultures does this audience belong to? Be specific — not just "sports fans" but "sneakerheads, basketball fans, fitness enthusiasts, streetwear culture."
 
-For EVERY category in `category_guidance`, you MUST return an OBJECT with three fields:
-  • `summary`         — 1 sentence describing how this audience behaves in this category.
-  • `expected_high`   — array of 5-15 SPECIFIC item names (brands/platforms/people) that this audience engages with at HIGH digital BP. These become anchors for the per-category scoring agents. These MUST be items this specific audience would actually visit/click/use — not generic popular items.
-  • `expected_low`    — array of 5-15 SPECIFIC item names that are FAMOUS or PRESTIGIOUS in absolute terms but DO NOT fit this audience (e.g. for a Nike audience: Nobu, Cartier, Tiffany, Pavilions, NYT Cooking, Ulta Beauty, Clinique). These items must be flagged so the scoring agent does not over-rank them by absolute fame.
+2. WHERE THEY SHOP ONLINE: Name 8-12 specific retailers whose websites/apps this audience actually visits. For Nike: Foot Locker, Dick's Sporting Goods, Finish Line, JD Sports, Champs Sports, Eastbay, GOAT, StockX. NOT luxury retailers unless the audience is explicitly HNW.
 
-Item-name guidance:
-  • Use real, recognizable brand/platform/person names — UPPERCASE.
-  • For WHERE THEY SHOP: think actual retailers (FOOT LOCKER, DICK'S SPORTING GOODS, JD SPORTS for sports audience; SEPHORA, ULTA, AMAZON for beauty audience).
-  • For WHERE THEY DINE: think actual restaurant chains (CHIPOTLE, CHICK-FIL-A, OLIVE GARDEN for mass; NOBU, CAPITAL GRILLE for HNW). NEVER pick luxury restaurants for non-HNW audiences.
-  • For MEDIA: think actual outlets (ESPN, BLEACHER REPORT, THE ATHLETIC for sports; HYPEBEAST, COMPLEX for streetwear; TODAY, GMA for daytime mass).
-  • For SOCIAL MEDIA: rank by audience reality (younger = TIKTOK/INSTAGRAM higher; older = FACEBOOK higher; mass brand = YOUTUBE near top regardless).
-  • For INTEREST: think genuine interests of the audience (FITNESS, RUNNING, BASKETBALL for sports; SKINCARE, FASHION for beauty), NOT random vague topics like "FLOWERS" or "MULTI-LEVEL MARKETING" unless the persona is specifically about that.
+3. MEDIA THEY CONSUME: Name 8-12 specific media outlets/apps this audience uses. For a young athletic audience: ESPN, Bleacher Report, Complex, Hypebeast, The Athletic, House of Highlights. NOT NPR, Architectural Digest, or cable news unless the persona explicitly skews that way.
 
-These structured anchors are the most important output of this prompt — the per-category agents downstream rely on them to avoid producing generic luxury-aspirational tier-fillers.
+4. CORE INTERESTS: Name the 5-10 interest categories this audience gravitates toward. The brand's OWN product category MUST be listed first (e.g., SNEAKERS/FOOTWEAR for Nike, SKINCARE for a beauty brand).
 
-NOTE: There are NO deterministic caps downstream. The per-category scoring agents have full freedom to score based on persona fit. Your expected_high and expected_low lists are the PRIMARY guardrails — make them specific and accurate.
+5. EXPLICITLY IRRELEVANT: Name 8-12 categories/brands/outlets that are famous but WRONG for this audience. For Nike: luxury dining (Nobu, Capital Grille), beauty (Clinique, Ulta, Rhode Skin), CPG (Purina, Heinz, Kraft), cable news (NPR, PBS), niche hobbies (Role Play Games, Cooking, Gardening).
+
+This text replaces the old per-category expected_high/expected_low lists. Per-category item-specific guidance is now generated by a separate item-aware agent that sees the actual items.
 """
 
     print(f"🔬 Step 1: Persona Research Agent researching '{subject}' …")
@@ -14131,7 +14093,32 @@ NOTE: There are NO deterministic caps downstream. The per-category scoring agent
 
     print(f"   ✅ Persona doc built — summary length {len(persona_doc.get('persona_summary', ''))} chars, "
           f"{len(persona_doc.get('location', []))} DMAs, "
-          f"{len(persona_doc.get('category_guidance', {}))} category hints")
+          f"digital_identity {len(persona_doc.get('digital_identity', ''))} chars")
+
+    # ── PHASE-1 LOGGING: full persona doc dump so we can diagnose guidance issues ──
+    print(f"\n{'─'*60}")
+    print(f"📋 PERSONA RESEARCH AGENT — FULL OUTPUT")
+    print(f"{'─'*60}")
+    print(f"PERSONA SUMMARY:\n{persona_doc.get('persona_summary', '(empty)')}\n")
+    _di = persona_doc.get('digital_identity', '')
+    if _di:
+        print(f"DIGITAL IDENTITY:\n{_di}\n")
+    else:
+        print("DIGITAL IDENTITY: (empty — this is a problem!)\n")
+    # Legacy fallback: if model still returns category_guidance, log it
+    _cg = persona_doc.get('category_guidance', {}) or {}
+    if _cg:
+        print(f"LEGACY CATEGORY GUIDANCE ({len(_cg)} categories — should be empty with new prompt):")
+        for _cg_cat, _cg_blob in sorted(_cg.items()):
+            _cg_hi = _cg_blob.get('expected_high', []) if isinstance(_cg_blob, dict) else []
+            _cg_lo = _cg_blob.get('expected_low', []) if isinstance(_cg_blob, dict) else []
+            _cg_sum = (_cg_blob.get('summary', '') if isinstance(_cg_blob, dict) else str(_cg_blob))[:120]
+            print(f"  [{_cg_cat}]")
+            print(f"    summary: {_cg_sum}")
+            print(f"    expected_high: {_cg_hi[:15]}")
+            print(f"    expected_low:  {_cg_lo[:15]}")
+    print(f"{'─'*60}\n")
+
     return persona_doc
 
 
@@ -14169,23 +14156,103 @@ def _build_canonical_baseline_lookup() -> dict:
     return out
 
 
+# ── Item-Aware Guidance Agent ─────────────────────────────────────────────
+# Runs BEFORE the scoring agent for each category. Sees the actual item names
+# + the persona's digital_identity text. Returns grounded expected_high /
+# expected_low lists from REAL items, not blind guesses.
+
+MODEL_GUIDANCE = 'gpt-4.1-nano'
+
+def _run_item_guidance_agent(category: str, item_names: list[str],
+                              persona_doc: dict, subject: str) -> dict:
+    """Return {"expected_high": [...], "expected_low": [...], "summary": "..."}
+    grounded in the actual items for this category.
+
+    Uses gpt-4.1-nano for speed/cost — this is a classification task.
+    """
+    import json as _json
+    client = _get_openai_client()
+    if client is None:
+        return {}
+
+    persona_summary = persona_doc.get('persona_summary', '')
+    digital_identity = persona_doc.get('digital_identity', '')
+    demo_snapshot = {k: v for k, v in persona_doc.get('demographics', {}).items()
+                     if k in ('AGE', 'GENDER', 'ETHNICITY', 'INCOME')}
+
+    items_block = '\n'.join(f"  - {name}" for name in item_names)
+
+    prompt = f"""You are classifying items in the **{category}** category for a behavioral panel profile of **{subject}**.
+
+PERSONA SUMMARY:
+{persona_summary}
+
+DIGITAL IDENTITY:
+{digital_identity}
+
+KEY DEMOGRAPHICS:
+{_json.dumps(demo_snapshot, indent=2)}
+
+Below are the ACTUAL items in this category. Your job is to classify which ones this audience would engage with at HIGH digital BP and which ones are IRRELEVANT despite being famous.
+
+ITEMS IN THIS CATEGORY:
+{items_block}
+
+Return ONLY a JSON object with three fields:
+{{
+  "summary": "<1 sentence: how does this audience behave in {category}?>",
+  "expected_high": ["<ITEM 1>", "<ITEM 2>", ...],
+  "expected_low": ["<ITEM 1>", "<ITEM 2>", ...]
+}}
+
+RULES:
+- expected_high: Pick 5-15 items from the list above that this SPECIFIC audience would engage with at HIGH digital BP. Only pick items that genuinely fit the persona's digital identity. Spell them EXACTLY as they appear in the list above.
+- expected_low: Pick 5-15 items from the list above that are FAMOUS/PRESTIGIOUS but DO NOT fit this audience. These must be scored LOW by the downstream agent regardless of their general popularity. Spell them EXACTLY as they appear in the list above.
+- Items not in either list are "neutral" — the downstream agent will score them on its own judgment.
+- Do NOT put items in expected_high just because they are popular nationally. Only items that THIS persona would actually click/visit/use online.
+- Do NOT put niche/unknown items in expected_low — only items that are famous enough that a less-informed agent might over-rank them.
+- summary should be 1 concrete sentence about this audience's behavior in this category.
+"""
+
+    try:
+        resp = _timed_completion(
+            client,
+            label=f"item-guidance/{category.upper()}",
+            model=MODEL_GUIDANCE,
+            messages=[
+                {'role': 'system', 'content': 'Return ONLY valid JSON. No markdown, no commentary.'},
+                {'role': 'user', 'content': prompt},
+            ],
+            temperature=0.0,
+            max_tokens=2048,
+            response_format={"type": "json_object"},
+            timeout=30,
+        )
+        text = (resp.choices[0].message.content or '').strip()
+        doc = _json.loads(text)
+        if isinstance(doc, dict):
+            eh = [str(x).strip() for x in (doc.get('expected_high') or []) if str(x).strip()]
+            el = [str(x).strip() for x in (doc.get('expected_low') or []) if str(x).strip()]
+            sm = str(doc.get('summary', '') or '').strip()
+            return {'expected_high': eh, 'expected_low': el, 'summary': sm}
+    except Exception as e:
+        print(f"   ⚠️ Item-guidance agent [{category}] failed: {e}")
+    return {}
+
+
 def _run_single_category_agent(category: str, values: list[str],
                                 persona_doc: dict, subject: str,
                                 canonical_baseline_lookup: dict | None = None,
                                 anchor_mode: str = 'persona',
-                                study_dates: str = '') -> list[dict]:
+                                study_dates: str = '',
+                                item_guidance: dict | None = None) -> list[dict]:
     """Worker for Step 2 — one gpt-4o call per category.
 
     Returns list of {value, bp, reason}.
 
-    canonical_baseline_lookup: optional {(CAT_UPPER, VAL_UPPER): canonical_bp}
-        from the measured U.S. Gen Pop CSV. When provided, each item is shown
-        with its measured baseline and the prompt enforces an anchoring rule
-        (see anchor_mode).
-    anchor_mode: 'genpop' → scores must stay within ±5pp of baseline (or
-        ±50% relative for items <5%). 'persona' → scores INDEX off baseline
-        based on persona fit (expected_high → 1.5-3x, expected_low → 0.1-0.5x,
-        neutral → 0.7-1.5x). Items with no canonical baseline use best estimate.
+    item_guidance: optional output from _run_item_guidance_agent. When
+        provided, its grounded expected_high/expected_low lists replace
+        any blind guidance from the persona doc's category_guidance.
     """
     import json as _json
     client = _get_openai_client()
@@ -14194,17 +14261,20 @@ def _run_single_category_agent(category: str, values: list[str],
 
     guidance_raw = persona_doc.get('category_guidance', {}).get(category, '')
     summary = persona_doc.get('persona_summary', '')
+    digital_identity = persona_doc.get('digital_identity', '')
     demo_snapshot = {k: v for k, v in persona_doc.get('demographics', {}).items()
                      if k in ('AGE', 'GENDER', 'ETHNICITY', 'INCOME')}
 
-    # `category_guidance` may now be a dict with structured anchors:
-    #   {"summary": "...", "expected_high": ["FOOT LOCKER","DICK'S",...],
-    #    "expected_low": ["NOBU","CARTIER","PAVILIONS",...]}
-    # Older personas can still hand back a plain string. Normalize for the prompt.
+    # Prefer item-aware guidance (grounded in real items) over blind persona guidance.
     expected_high: list[str] = []
     expected_low: list[str] = []
     guidance_summary = ''
-    if isinstance(guidance_raw, dict):
+
+    if item_guidance and isinstance(item_guidance, dict):
+        guidance_summary = str(item_guidance.get('summary', '') or '').strip()
+        expected_high = [str(x).strip() for x in (item_guidance.get('expected_high') or []) if str(x).strip()]
+        expected_low = [str(x).strip() for x in (item_guidance.get('expected_low') or []) if str(x).strip()]
+    elif isinstance(guidance_raw, dict):
         guidance_summary = str(guidance_raw.get('summary', '') or '').strip()
         expected_high = [str(x).strip() for x in (guidance_raw.get('expected_high') or []) if str(x).strip()]
         expected_low = [str(x).strip() for x in (guidance_raw.get('expected_low') or []) if str(x).strip()]
@@ -14322,6 +14392,9 @@ PERSONA — this is the audience you are scoring for
 ═══════════════════════════════════════════════════════════════════
 {summary}
 
+DIGITAL IDENTITY (from persona research — read carefully):
+{digital_identity or '(not available — use persona summary above)'}
+
 KEY DEMOGRAPHICS:
 {_json.dumps(demo_snapshot, indent=2)}
 
@@ -14374,6 +14447,18 @@ ITEMS TO SCORE:
 
     token_budget = max(4096, len(values) * 80)
     token_budget = min(token_budget, 16384)
+
+    # ── PHASE-1 LOGGING: sample one category prompt so we can inspect what scoring agent sees ──
+    global _FIRST_CAT_PROMPT_LOGGED
+    if not _FIRST_CAT_PROMPT_LOGGED:
+        _FIRST_CAT_PROMPT_LOGGED = True
+        print(f"\n{'─'*60}")
+        print(f"📋 SAMPLE CATEGORY AGENT PROMPT — [{category}] ({len(values)} items)")
+        print(f"{'─'*60}")
+        print(f"EXPECTED HIGH BLOCK:\n{expected_high_block}")
+        print(f"\nEXPECTED LOW BLOCK:\n{expected_low_block}")
+        print(f"\nGUIDANCE SUMMARY: {guidance_summary[:200]}")
+        print(f"{'─'*60}\n")
 
     try:
         _model = MODEL_QUALITY if category.upper() in PRIORITY_CATEGORIES else MODEL_SCORING
@@ -15941,6 +16026,8 @@ def parallel_category_agents(df: pd.DataFrame, persona_doc: dict,
         print(f"📐 Per-cat agents will anchor to {len(canonical_baseline_lookup)} canonical baselines (mode={anchor_mode})")
 
     print(f"🤖 Step 2: Launching {len(cats_needing_llm)} parallel category agents (skipped {len(category_values) - len(cats_needing_llm)} fully-carried categories) …")
+    global _FIRST_CAT_PROMPT_LOGGED
+    _FIRST_CAT_PROMPT_LOGGED = False
     if cats_needing_llm:
         _top = cats_needing_llm[:10]
         print(f"   📊 Category sizes (top 10, largest-first): "
@@ -15964,11 +16051,44 @@ def parallel_category_agents(df: pd.DataFrame, persona_doc: dict,
 
     _chunk_results: dict[str, list[list[dict]]] = {cat: [] for cat in cats_needing_llm}
 
+    # ── WAVE 1: Item-aware guidance agents (nano, one per category) ──────
+    # Runs BEFORE scoring so each category agent gets grounded expected_high/low
+    # lists from REAL items instead of the persona agent's blind guesses.
+    _guidance_map: dict[str, dict] = {}
+    if anchor_mode != 'genpop':
+        _guidance_t0 = _time.perf_counter()
+        print(f"🧭 Wave 1: Launching {len(cats_needing_llm)} item-aware guidance agents ({MODEL_GUIDANCE}) …")
+        with _futures.ThreadPoolExecutor(max_workers=35) as pool:
+            _guid_futures = {
+                pool.submit(_run_item_guidance_agent, cat,
+                             category_new_items[cat], persona_doc, subject): cat
+                for cat in cats_needing_llm
+            }
+            for fut in _futures.as_completed(_guid_futures, timeout=60):
+                cat = _guid_futures[fut]
+                try:
+                    result = fut.result()
+                    if result:
+                        _guidance_map[cat] = result
+                except Exception as e:
+                    print(f"   ⚠️ Guidance agent [{cat}] failed: {e}")
+        _guidance_elapsed = _time.perf_counter() - _guidance_t0
+        _n_with_guidance = sum(1 for g in _guidance_map.values() if g.get('expected_high'))
+        print(f"   ✅ Guidance wave: {_n_with_guidance}/{len(cats_needing_llm)} categories "
+              f"got grounded expected_high/low in {_guidance_elapsed:.1f}s")
+        # Log a sample
+        for _g_cat, _g_doc in list(_guidance_map.items())[:3]:
+            print(f"      [{_g_cat}] high={_g_doc.get('expected_high', [])[:8]} | "
+                  f"low={_g_doc.get('expected_low', [])[:8]}")
+
+    # ── WAVE 2: Scoring agents (gpt-4o, one per chunk) ───────────────────
+    print(f"🤖 Wave 2: Launching {len(_work_units)} scoring agent calls …")
     with _futures.ThreadPoolExecutor(max_workers=35) as pool:
         future_to_unit = {
             pool.submit(_run_single_category_agent, cat,
                          chunk, persona_doc, subject,
-                         canonical_baseline_lookup, anchor_mode, study_dates): (cat, ci)
+                         canonical_baseline_lookup, anchor_mode, study_dates,
+                         _guidance_map.get(cat)): (cat, ci)
             for cat, chunk, ci in _work_units
         }
         _done_units: set[tuple[str, int]] = set()
@@ -15990,7 +16110,8 @@ def parallel_category_agents(df: pd.DataFrame, persona_doc: dict,
                     try:
                         _chunk_results[cat].append(_run_single_category_agent(
                             cat, chunk, persona_doc, subject,
-                            canonical_baseline_lookup, anchor_mode, study_dates))
+                            canonical_baseline_lookup, anchor_mode, study_dates,
+                            _guidance_map.get(cat)))
                         print(f"   ✅ Retry {_attempt}/{_MAX_AGENT_RETRIES} for [{cat}] chunk {ci} succeeded")
                         break
                     except Exception as _e:
@@ -16148,10 +16269,11 @@ def parallel_category_agents(df: pd.DataFrame, persona_doc: dict,
         new_dates_label=delta_sanity_new_dates or 'new rerun window',
         wide_window=wide_window,
         bp_col=bp_col,
+        grounded_guidance=_guidance_map,
     )
 
     print("   🛡️  Running post-agent quality gate...")
-    df = post_agent_quality_gate(df, persona_doc, brands)
+    df = post_agent_quality_gate(df, persona_doc, brands, grounded_guidance=_guidance_map)
 
     return df
 
@@ -16161,7 +16283,8 @@ def _run_genpop_mismatch_pass(df: pd.DataFrame,
                                subject: str,
                                bp_col: str,
                                ratio_threshold: float = 3.0,
-                               min_bp_floor: float = 5.0) -> pd.DataFrame:
+                               min_bp_floor: float = 5.0,
+                               grounded_guidance: dict | None = None) -> pd.DataFrame:
     """Sanity-check items whose new BP is implausibly higher than the
     canonical Gen Pop baseline AND that the persona research agent did
     NOT specifically flag as expected-high for this audience.
@@ -16216,15 +16339,23 @@ def _run_genpop_mismatch_pass(df: pd.DataFrame,
         print(f"   ⚠️ Gen-pop mismatch: failed to index canonical CSV ({e})")
         return df
 
-    # Build per-category expected_high set from the persona doc.
+    # Build per-category expected_high set — prefer grounded guidance, fallback to persona.
+    grounded_guidance = grounded_guidance or {}
     cat_guidance = persona_doc.get('category_guidance', {}) or {}
     expected_high_by_cat: dict[str, set[str]] = {}
+    for cat_key, blob in grounded_guidance.items():
+        cat_u = str(cat_key).strip().upper()
+        items: list[str] = [str(x).strip().upper() for x in (blob.get('expected_high') or []) if str(x).strip()]
+        if items:
+            expected_high_by_cat[cat_u] = set(items)
     for cat_key, blob in cat_guidance.items():
         cat_u = str(cat_key).strip().upper()
-        items: list[str] = []
+        if cat_u in expected_high_by_cat:
+            continue
+        items_list: list[str] = []
         if isinstance(blob, dict):
-            items = [str(x).strip().upper() for x in (blob.get('expected_high') or []) if str(x).strip()]
-        expected_high_by_cat[cat_u] = set(items)
+            items_list = [str(x).strip().upper() for x in (blob.get('expected_high') or []) if str(x).strip()]
+        expected_high_by_cat[cat_u] = set(items_list)
 
     def _is_in_expected_high(cat_u: str, val_u: str) -> bool:
         s = expected_high_by_cat.get(cat_u, set())
@@ -16350,6 +16481,8 @@ Return ONLY a JSON array, one entry per item, in the same order:
                 continue
             if dec == 'ACCEPT':
                 accepts += 1
+                _old = value_to_old.get(val, 0.0)
+                print(f"      ✓ ACCEPT [{cat_u}] {d.get('value')}: {_old:.2f}% (kept) — {d.get('reason', '')[:90]}")
                 continue
             try:
                 new_bp = float(d.get('bp'))
@@ -17021,7 +17154,8 @@ def _apply_post_score_agents(df: pd.DataFrame,
                               prior_dates_label: str,
                               new_dates_label: str,
                               wide_window: bool,
-                              bp_col: str) -> pd.DataFrame:
+                              bp_col: str,
+                              grounded_guidance: dict | None = None) -> pd.DataFrame:
     """Run the D3/D4/D5 trio against an already-scored DataFrame.
 
     Used by both:
@@ -17092,15 +17226,81 @@ def _apply_post_score_agents(df: pd.DataFrame,
         persona_doc=persona_doc,
         subject=subject,
         bp_col=bp_col,
+        grounded_guidance=grounded_guidance,
     )
 
-    # --- D7-D9) Deterministic baseline cap/floor/review DISABLED -----------
-    # Agent scores now flow through unconstrained. Gen Pop baseline is shown
-    # to agents as reference context only; no post-hoc math clamps.
-    # Only basic sanity bounds apply (0.01% floor, 96% ceiling) via the
-    # floor/ceiling already in the agent prompt.
-    cap_actions = []
-    floor_actions = []
+    # --- D7) Soft hallucination cap (replaces old hard multiplier caps) ------
+    # If an item's BP > 10x its gen-pop baseline AND the item is NOT in the
+    # grounded expected_high list, hard-cap it at 10x baseline. This catches
+    # obvious hallucinations (Publix at 84% when baseline is 2%) without
+    # constraining persona-relevant items that the guidance agent endorsed.
+    _HALLUCINATION_RATIO = 10.0
+    gp_csv = _load_genpop_csv()
+    if gp_csv is not None and not gp_csv.empty and bp_col in df.columns:
+        _gp_cap_lookup: dict[tuple[str, str], float] = {}
+        try:
+            _gc = gp_csv.columns[0]
+            _gv = gp_csv.columns[1]
+            _gb = gp_csv.columns[2]
+            for _, _r in gp_csv.iterrows():
+                try:
+                    _gp_cat = str(_r[_gc]).strip().upper()
+                    _gp_val = str(_r[_gv]).strip().upper()
+                    _gp_bp = float(_r[_gb])
+                    if _gp_cat and _gp_val and _gp_bp > 0:
+                        _gp_cap_lookup[(_gp_cat, _gp_val)] = _gp_bp
+                except (TypeError, ValueError):
+                    continue
+        except Exception:
+            _gp_cap_lookup = {}
+
+        _grounded = grounded_guidance or {}
+        _grounded_high_by_cat: dict[str, set[str]] = {}
+        for _gc_cat, _gc_blob in _grounded.items():
+            _cat_u = str(_gc_cat).strip().upper()
+            _items_set = {str(x).strip().upper() for x in (_gc_blob.get('expected_high') or []) if str(x).strip()}
+            if _items_set:
+                _grounded_high_by_cat[_cat_u] = _items_set
+
+        _cap_count = 0
+        for idx, row in df.iterrows():
+            try:
+                cat_u = str(row['Column']).strip().upper()
+                val_u = str(row['Value']).strip().upper()
+                curr_bp = float(row[bp_col])
+            except (TypeError, ValueError, KeyError):
+                continue
+            if cat_u in _DEMO_SET or cat_u in _BEHAVIORAL_SKIP:
+                continue
+            gp_baseline = _gp_cap_lookup.get((cat_u, val_u))
+            if gp_baseline is None or gp_baseline <= 0:
+                continue
+            cap_val = gp_baseline * _HALLUCINATION_RATIO
+            if curr_bp <= cap_val:
+                continue
+            _eh_set = _grounded_high_by_cat.get(cat_u, set())
+            if val_u in _eh_set:
+                continue
+            # Lenient substring match for expected_high
+            _is_endorsed = False
+            for _eh_item in _eh_set:
+                if _eh_item == val_u or _eh_item in val_u or val_u in _eh_item:
+                    _is_endorsed = True
+                    break
+            if _is_endorsed:
+                continue
+            new_bp = round(cap_val + random.uniform(-0.02, 0.02), 4)
+            new_bp = max(0.01, min(96.0, new_bp))
+            print(f"      🧱 SOFT CAP [{cat_u}] {row.get('Value', val_u)}: "
+                  f"{curr_bp:.2f}% → {new_bp:.2f}% (>{_HALLUCINATION_RATIO}x baseline {gp_baseline:.2f}%, not in expected_high)")
+            df.at[idx, bp_col] = new_bp
+            if 'Category Share' in df.columns:
+                df.at[idx, 'Category Share'] = new_bp
+            _cap_count += 1
+        if _cap_count:
+            print(f"   🧱 Soft hallucination cap: capped {_cap_count} items at {_HALLUCINATION_RATIO}x baseline")
+        else:
+            print(f"   ✅ Soft hallucination cap: no items exceeded {_HALLUCINATION_RATIO}x baseline")
 
     return df
 
@@ -17151,7 +17351,8 @@ def _has_bad_decimals(val: float) -> bool:
 
 
 def post_agent_quality_gate(df: pd.DataFrame, persona_doc: dict | None = None,
-                            brands: list[str] | None = None) -> pd.DataFrame:
+                            brands: list[str] | None = None,
+                            grounded_guidance: dict | None = None) -> pd.DataFrame:
     """Run all quality validators on the DataFrame after agent processing.
 
     Called between Step 2 (parallel_category_agents) and Step 3 (sanity check).
