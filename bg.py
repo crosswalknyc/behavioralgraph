@@ -14388,69 +14388,29 @@ The "US baseline" shown next to each item is the MEASURED national digital engag
 """
     elif baseline_lookup:
         anchor_rules = """═══════════════════════════════════════════════════════════════════
-U.S. BASELINE — CRITICAL ANCHORING DATA
+U.S. BASELINE — YOUR STARTING POINT
 ═══════════════════════════════════════════════════════════════════
-The "US baseline" shown next to each item is the MEASURED national digital engagement % for the average U.S. adult. This is REAL DATA. Treat it as your starting point.
+The "US baseline" next to each item is REAL MEASURED DATA: the % of average U.S. adults who show this item in their digital clickstream. Use it as your anchor.
 
-BASELINE GRAVITY — THE MOST IMPORTANT CONCEPT:
-Most items should score CLOSE to their baseline. The baseline is the DEFAULT. You need a SPECIFIC, COMPELLING reason to deviate significantly. Real audiences don't differ from the national average by 10x on most things — they differ by 0.5x to 2x on most items, with only a few extreme outliers.
+HOW TO SCORE:
+For each item, start from the baseline and ask ONE question:
+  "Would this SPECIFIC audience engage with this item MORE, LESS, or ABOUT THE SAME as the average American?"
 
-SCORING TIERS (based on baseline size):
+  • SAME as average → score near baseline (0.85-1.15x). THIS IS THE DEFAULT FOR MOST ITEMS.
+  • Slightly MORE → 1.2-1.5x baseline
+  • Much MORE (core to persona) → 2-4x baseline (rare — only 5-15 items per category)
+  • Slightly LESS → 0.6-0.85x baseline
+  • Much LESS (anti-fit) → 0.1-0.4x baseline
+  • DOES NOT ENGAGE AT ALL (CPG/in-store, foreign, wrong demographic) → 0.01-0.1x baseline
 
-TIER 1 — NEAR-UNIVERSAL (baseline > 40%):
-  Items like Netflix, Walmart, Amazon, YouTube, Target, Hulu, Apple, Cooking (interest).
-  These are used by MOST Americans regardless of demographic. A Nike audience
-  still uses Netflix, still shops at Walmart, still has Amazon.
-  → Score 0.7–1.2x baseline for NEUTRAL items. This is the DEFAULT.
-  → Score 1.2–1.5x ONLY if the persona explicitly over-indexes (e.g., Streaming for a media audience).
-  → Score 0.5–0.7x if the persona slightly under-indexes.
-  → FLOOR = 30%. Only go below 30% if the persona EXPLICITLY and ACTIVELY avoids this item.
-  → CRITICAL: Do NOT boost high-baseline items just because the persona is young/active. Cooking at 55% baseline should stay at ~55% for most audiences, NOT jump to 88%. Only boost if the persona SPECIFICALLY engages with this interest more than average.
+KEY PRINCIPLE: Most items score near their baseline. An audience of Nike fans is still made up of regular Americans who watch Netflix, shop at Walmart, visit Disney World, and have car insurance. They just ALSO engage more with sneaker culture, sports media, and athletic retailers.
 
-TIER 2 — MASS-MARKET (baseline 15–40%):
-  Items like Samsung, Costco, Disney+, HBO Max, Peacock, State Farm, GEICO, Hanes.
-  Widely used but not universal.
-  → Score 0.7–1.2x baseline for NEUTRAL items (the DEFAULT).
-  → Score 1.5–2.5x for strong persona fit.
-  → Score 0.3–0.6x for weak persona fit.
-  → Score 0.1–0.3x for anti-fit (beauty for non-beauty audience, etc.)
-  → CRITICAL: Samsung (32.7% baseline) for a young urban audience should score 25-40%, NOT 3%. These are mass-market devices used by everyone.
-
-TIER 3 — MAINSTREAM (baseline 5–15%):
-  Items like Foot Locker, Nike (as brand), Tesla, Roblox, Disney World, Ulta Beauty.
-  Used by a meaningful segment. Persona fit matters MORE here.
-  → Score 0.5–1.2x baseline for NEUTRAL items.
-  → Score 2.0–4.0x for strong persona fit (e.g. Nike brand 32% → 90%+ if core brand).
-  → Score 0.2–0.5x for weak/anti-fit.
-  → STREETWEAR/SNEAKER brands (Kith, New Era, GOAT, StockX) are persona-core for athletic audiences → score 2-5x if persona fits.
-
-TIER 4 — NICHE (baseline < 5%):
-  Items like Kith, GOAT, StockX, Zalando, niche apps.
-  This is where persona fit can create the biggest multiples.
-  → Score 0.2–6.0x baseline for persona-relevant niche items.
-  → But NEVER score a niche item above 30% without extraordinary justification.
-  → Foreign/non-US items with <1% baseline → score 0.01–0.5% (this is a US panel).
-
-WHEN TO DEVIATE STRONGLY:
-  ✅ Core brand or its direct category (Nike for a Nike audience → 3-5x)
-  ✅ Persona subculture items (StockX for sneakerheads → 3-5x)
-  ✅ CPG/in-store items (Clorox, Pampers, Tide → 0.1-0.3x because digital BP is low)
-  ✅ Beauty/skincare for non-beauty audiences → 0.1-0.3x
-  ✅ Luxury for non-HNW audiences → 0.2-0.5x
-  ✅ Foreign platforms on a US panel → 0.01-0.5%
-
-WHEN NOT TO DEVIATE:
-  ❌ Do NOT crush major streaming services below 20% — everyone streams.
-  ❌ Do NOT crush major retailers (Walmart, Target, Costco) below 20% — everyone shops online.
-  ❌ Do NOT crush major theme parks (Disney, Universal, Six Flags) below 3% — most Americans visit theme parks.
-  ❌ Do NOT inflate niche sports services (FuboTV 6.8% baseline) to 70%+ — even sports fans don't all subscribe.
-  ❌ Do NOT assume Apple > Android for young urban audiences unless income data shows $100K+.
-  ❌ Do NOT score children's items (Roblox, YouTube Kids, Barbie) high for adult audiences (18-34) without parental indicators.
-
-REALITY CHECK — ask yourself:
-  "If I surveyed 1000 members of this audience, would X% really show this item in their clickstream?"
-  Netflix at 5%? That means 950 out of 1000 Nike fans never visit netflix.com. That's absurd.
-  FuboTV at 73%? That means 730 out of 1000 Nike fans subscribe to FuboTV. Also absurd.
+ITEMS THAT SHOULD DEVIATE DOWN (regardless of baseline):
+  • CPG / in-store brands (Clorox, Pampers, Tide, Gillette, Purina) → 0.1-0.3x (digital BP is tiny)
+  • Beauty/cosmetics for non-beauty audiences → 0.3-0.5x
+  • Foreign platforms with no US presence (Zalando, Sony LIV) → <1% absolute
+  • Children's items (Roblox, YouTube Kids, Barbie) for adult audiences → 0.3-0.5x
+  • Luxury/aspirational (Porsche, McLaren) for audiences with income <$100K → 0.3-0.5x
 
   • Hard floor: 0.01%. Hard ceiling: 96%.
 """
@@ -14469,32 +14429,28 @@ REALITY CHECK — ask yourself:
     prompt = f"""You are a consumer-research analyst assigning Brand Penetration (BP) values for the **{category}** category of a behavioral panel profile for **{subject}**.
 {date_context_block}
 DEFINITION — read carefully:
-Brand Penetration = the % of THIS specific audience whose digital clickstream (web visits, app usage, searches, streams, purchases) shows engagement with the item during the study window. This is NOT popularity, awareness, favorability, or in-store purchase. It is purely OBSERVED DIGITAL BEHAVIOR.
+Brand Penetration = the % of THIS specific audience whose digital clickstream (web visits, app usage, searches, streams, purchases) shows engagement with the item during the study window. This is NOT popularity, awareness, favorability, or in-store purchase. It is purely OBSERVED DIGITAL BEHAVIOR on a U.S. PANEL.
 
-KEY CONSEQUENCES OF "DIGITAL ONLY":
-  • CPG / grocery / household brands (Tide, Oreo, Coca-Cola, Heinz, Kraft, Purina) are bought IN STORES — their DIGITAL clickstream BP is LOW (typically 1-8%) even when household penetration is huge.
-  • Mass online retailers (Amazon, Walmart.com, Target.com) have HIGH digital BP across nearly every audience because everyone visits the website.
-  • Regional or geo-specific brands (Pavilions, Wegmans, Menards, H-E-B) have LOW national BP unless the audience over-indexes on that region.
-  • Luxury brands (Cartier, Tiffany, Nobu, Mastros) have LOW BP unless the audience explicitly skews HNW / luxury.
+THIS IS A U.S. DIGITAL PANEL:
+  • Every person in this panel is a U.S. resident whose web/app activity is tracked.
+  • Foreign-only platforms (Zalando, Sony LIV, international leagues with no US audience) should score <1%.
+  • Items people buy IN STORES but never search/visit online (CPG, grocery, household) have LOW digital BP even if everyone owns them.
+  • Items people USE ONLINE (streaming, shopping, social, news, search) have HIGH digital BP proportional to how many people actually visit them.
 
-AUDIENCE-SPECIFIC DIGITAL BEHAVIOR — CRITICAL:
-  You are scoring for a SPECIFIC audience defined by the persona below, not the general population.
-  Think about what THIS audience would actually do ONLINE given who they are:
-  • Read the DIGITAL IDENTITY carefully. It tells you the audience's subcultures, shopping habits, media diet, interests, and what they DON'T care about.
-  • For every item, ask: "Would a typical member of this audience actually type this brand's URL into a browser, search for it, or use its app?" If no, score LOW.
-  • The RANK ORDER of items matters as much as absolute values. Items the persona would ACTUALLY visit/engage with digitally MUST rank ABOVE items they wouldn't.
-  • BUT: "scoring LOW" for a near-universal item (Netflix, Walmart) means scoring 0.6-0.9x its baseline, NOT 0.05x. These items don't disappear from anyone's clickstream.
-  • For INTEREST: the brand's OWN product category MUST be among the highest-scoring items (70%+). Closely related interests also score high (40-70%).
-  • For WHERE THEY SHOP: stores where the audience BUYS the brand's products should rank HIGH. But ALSO major mass retailers (Amazon, Walmart, Target) must stay near their high baselines — everyone shops there.
-  • For STREAMING/PLATFORM: ALL major services (Netflix, Hulu, Amazon Prime, Disney+) should score near their baselines (40-70%). Only persona-specific niche services should deviate significantly.
-  • For MEDIA: outlets serving the audience's subculture should rank HIGH; but generic mass media should still score near baseline, not crash to 1%.
-  • For AUTOMOBILE: Score cars people in this demographic ACTUALLY drive, not aspirational cars. Young urban consumers drive Toyotas, Hondas, Hyundais — not Porsches and McLarens unless income >$150K.
-  • For TECHNOLOGY/DEVICE: Young urban consumers skew Android/Samsung, not exclusively Apple. Score based on actual demographic device usage patterns.
-  • For GAMES: Consider the age of the audience. Roblox, YouTube Kids, and Barbie skew pre-teen/children. For an 18-34 ADULT audience, these should score 0.3-0.7x baseline. Adult gamers play NBA 2K, Madden, FIFA/EA Sports FC, Call of Duty, GTA — not primarily Roblox and LEGO. Sports-related games should score HIGH for sports audiences.
-  • For WHERE THEY SHOP: Beauty retailers (Ulta, Sephora) should score BELOW baseline (0.3-0.6x) for non-beauty audiences like athletic/sports personas. Athletic retailers (Foot Locker, Dick's, Champs, Finish Line) should score ABOVE baseline for athletic audiences. Do not boost beauty retailers just because the audience is young.
-  • For INTEREST: HIGH-BASELINE INTERESTS (Cooking 55%, Dining Out 60%, Travel 55%) should score NEAR their baselines (0.8-1.1x) for most audiences — do NOT boost them unless the persona SPECIFICALLY over-indexes on that interest. The persona's CORE interests (e.g., Sneakers, Footwear, Basketball for Nike) should score well ABOVE their baselines (2-4x).
-  • For AMUSEMENT PARKS: Major national parks (Disney World, Disneyland, Universal Studios, Six Flags) should score 0.5-1.2x their baselines. These are mainstream American entertainment — most audiences visit them at near-normal rates. Only boost TopGolf/Dave&Busters for young urban audiences.
-  • THIS IS A U.S. PANEL. Foreign-only platforms (Zalando, Sony LIV, foreign sports leagues with no US audience) should score very low (<1%).
+YOUR JOB IS SIMPLE:
+Read the persona below. For each item, ask yourself:
+  "What percentage of THIS audience would show this item in their digital clickstream?"
+Start from the US baseline (the average American's rate), then adjust up or down based on whether THIS audience engages MORE or LESS than average.
+
+Most items should score near their baseline — this audience is still made up of Americans who watch Netflix, shop at Walmart, visit Disney World, have car insurance, and use streaming services. They just ALSO have specific interests and subcultures that make some items score higher and some lower.
+
+AUDIENCE-SPECIFIC SCORING:
+  You are scoring for a SPECIFIC U.S. digital audience defined by the persona below.
+  For EVERY item, ask: "Would a typical member of this audience show this in their clickstream — MORE, LESS, or SAME as the average American?"
+
+  • Read the DIGITAL IDENTITY. It describes who this audience IS — their subcultures, age, income, ethnicity, shopping habits, media diet, and what they DON'T care about.
+  • The RANK ORDER matters: items this audience truly engages with MUST rank above items they don't.
+  • This is a U.S. digital panel — score based on actual digital behavior of real Americans, not aspirations or assumptions.
 
 ═══════════════════════════════════════════════════════════════════
 PERSONA — this is the audience you are scoring for
@@ -14520,25 +14476,18 @@ EXPECTED LOW-BP ITEMS for this audience in this category
 
 {anchor_rules}
 ═══════════════════════════════════════════════════════════════════
-ROW-BY-ROW REASONING — required process
+ROW-BY-ROW REASONING
 ═══════════════════════════════════════════════════════════════════
-For EACH item in the list below, reason in this order:
-  1) CHECK THE BASELINE FIRST: What is this item's US baseline? This is your STARTING POINT. Most items should stay within 0.5-2x of baseline.
-  2) READ THE PERSONA: What does the digital identity say about this audience's relationship with this item's CATEGORY?
-  3) CLASSIFY THE DEVIATION: Is this item…
-     a) CORE to the persona (brand's own category, persona subculture)? → Score 2-5x baseline.
-     b) NEUTRAL (not mentioned in persona, mainstream item)? → Score 0.8-1.1x baseline. This is the DEFAULT for MOST items. DO NOT boost neutral items — keep them near their baseline.
-     c) WEAK FIT (persona leans away from this category)? → Score 0.4-0.7x baseline.
-     d) ANTI-FIT (CPG/in-store, beauty for non-beauty, luxury for non-HNW, foreign on US panel)? → Score 0.05-0.3x baseline.
-     e) KIDS-FOCUSED and audience is adults (18-34) without parental indicators? → Score 0.3-0.7x baseline.
-  4) APPLY TIER FLOORS: If baseline >40%, the score must be ≥30% unless the persona ACTIVELY avoids it. If baseline 15-40%, score must be ≥5%.
-  5) CHECK EXPECTED HIGH/LOW lists for additional signals, but these are supplementary — baseline gravity is primary.
-  6) Is this a NEAR-UNIVERSAL platform (Netflix, YouTube, Amazon, Walmart, Google, Facebook, Instagram, Hulu, Target, Spotify)? → score 0.6-1.2x baseline. These don't drop below 30%.
-  7) Is the item primarily bought IN-STORE (CPG, grocery, household, pet food, personal care, diapers, cleaning products)? → score 0.1-0.3x baseline (1-8% typical). Their digital BP is low even in gen pop.
-  8) Is the item FOREIGN with no significant US presence? → score <1%. This is a US panel.
-  9) Is the item aimed at CHILDREN (Roblox, YouTube Kids, Barbie, Bluey) and the audience is adults without strong parental indicators? → score 0.3-0.5x baseline.
-  10) Is the item LUXURY/ASPIRATIONAL (Porsche, McLaren, Ferrari, Cartier) and audience income <$100K? → score 0.3-0.8x baseline. Don't assume aspiration = digital engagement.
-  11) Is the item a CAR BRAND? Score based on what this DEMOGRAPHIC actually drives, not what they aspire to. Young urban = Honda, Toyota, Hyundai, Nissan. Suburban families = Ford, Toyota, Honda, Chevy. HNW = BMW, Mercedes, Tesla.
+For EACH item, ask yourself these questions in order:
+
+  1) WHAT IS THE BASELINE? Start here. This is what the average American does.
+  2) WOULD THIS PERSONA ENGAGE MORE OR LESS? Read the digital identity and demographics. Does this audience have a reason to engage with this item more or less than average?
+     • If no strong reason either way → score 0.85-1.15x baseline (MOST items fall here)
+     • If persona is a strong fit → score 1.5-4x baseline
+     • If persona is a weak fit → score 0.4-0.7x baseline
+  3) IS THIS AN IN-STORE/CPG ITEM? (Clorox, Pampers, Tide, Gillette, pet food, cleaning products) → score 0.1-0.3x baseline. People buy these in stores, not online.
+  4) IS THIS FOREIGN with no US presence? → score <1%.
+  5) REALITY CHECK: "If I surveyed 1000 people from this audience, how many would show this in their clickstream?" Netflix at 5% means 950/1000 never visit netflix.com — absurd. FuboTV at 73% means 730/1000 subscribe — also absurd.
 
 ═══════════════════════════════════════════════════════════════════
 OUTPUT FORMAT
@@ -14553,16 +14502,10 @@ DECIMAL PRECISION — every BP must have 4 organic-looking decimals (14.3827, 7.
 
 NON-NEGOTIABLE RULES:
   • EVERY item from the list below MUST appear in your output (same exact spelling).
-  • RANK ORDER must reflect persona fit, not absolute fame or baseline size.
-  • BASELINE GRAVITY: Most items (70%+) should score within 0.7-1.2x their baseline. Only extreme persona-fit or anti-fit items should deviate beyond 2x. If you find yourself boosting more than 10 items above 1.5x baseline, you're probably over-indexing on persona fit.
-  • NEUTRAL = NEAR BASELINE: If an item is not specifically mentioned in the persona or guidance, it should score 0.8-1.1x its baseline. Do NOT boost items just because the audience is young, urban, or active. Cooking, Dining Out, Travel, Weather — these are near-universal interests that should stay close to their baselines for ALL audiences.
-  • NEAR-UNIVERSAL FLOOR: Items with >40% baseline MUST score ≥30%. Netflix, Walmart, Hulu, Target, Amazon Prime — everyone uses these. A Nike fan still watches Netflix.
-  • CPG/IN-STORE CEILING: Household products (Clorox, Pampers, Tide, Gillette, Purina) have inflated baselines from OFFLINE purchases. Their DIGITAL BP should be 0.1-0.3x baseline (typically 1-5%).
-  • U.S. PANEL: Foreign platforms with negligible US presence (Zalando, Sony LIV, international-only items) must score <1%.
-  • NO ASPIRATION BIAS: A young urban audience does NOT digitally engage with Porsche, McLaren, or luxury brands more than average unless their income data says $150K+. Score cars they ACTUALLY drive.
-  • AGE APPROPRIATE: Kids-focused items (Roblox, YouTube Kids, Barbie) should score LOW for 18-34 adult audiences unless there are parental indicators.
-  • Do NOT artificially compress the distribution — if the persona genuinely engages with 12 items in this category at 25%+, score all 12 at 25%+. There is NO cap on items per tier.
-  • SANITY CHECK: Before finalizing, look at your top 5 and bottom 5 scores. Do they pass the "survey 1000 people" test? Would 950/1000 members of this audience really never visit Netflix? Would 730/1000 really use FuboTV? If not, adjust.
+  • MOST ITEMS SCORE NEAR BASELINE. Only 10-20% of items should deviate beyond 1.5x or below 0.5x. The rest stay near their baseline.
+  • U.S. DIGITAL PANEL: This data comes from real Americans' digital behavior. Foreign items score <1%. In-store CPG items score low (digital BP is tiny).
+  • RANK ORDER must reflect persona fit. Items the persona actually engages with digitally MUST rank above items they don't.
+  • SANITY CHECK every score: "Would X out of 1000 members of this audience really show this in their clickstream?"
 
 ITEMS TO SCORE:
 {values_list}
@@ -15623,6 +15566,23 @@ def _run_location_intelligence_agent(persona_doc: dict, subject: str) -> dict:
     demo_snapshot = {k: v for k, v in (persona_doc.get('demographics') or {}).items()
                      if k in ('AGE', 'GENDER', 'ETHNICITY', 'INCOME', 'EDUCATION')}
 
+    ethnicity_block = ""
+    eth = demo_snapshot.get('ETHNICITY') or {}
+    if eth:
+        sorted_eth = sorted(eth.items(), key=lambda x: float(x[1]) if isinstance(x[1], (int, float)) else 0, reverse=True)
+        top_eth = [(k, float(v)) for k, v in sorted_eth[:5] if float(v) > 5]
+        if top_eth:
+            eth_lines = '\n'.join(f"  • {k}: {v:.1f}%" for k, v in top_eth)
+            ethnicity_block = f"""
+ETHNICITY BREAKDOWN (CRITICAL for location scoring):
+{eth_lines}
+
+USE THIS TO SCORE DMAs:
+  • If audience skews {top_eth[0][0]} ({top_eth[0][1]:.0f}%), DMAs with high {top_eth[0][0]} populations MUST get higher multipliers (1.5-3x).
+  • Cross-reference ethnicity with urbanicity: a young, diverse, urban audience concentrates in major metros (New York, Los Angeles, Atlanta, Houston, Chicago, Miami, Philadelphia, Detroit, Dallas), NOT in small rural DMAs.
+  • DMAs with predominantly different demographics and no urban center should get 0.4-0.8x.
+"""
+
     # Persona's named top DMAs (if any) — pass to the agent so it stays
     # consistent with the high-level persona research.
     top_named = []
@@ -15650,7 +15610,7 @@ PERSONA SUMMARY:
 
 KEY DEMOGRAPHICS:
 {_json.dumps(demo_snapshot, indent=2)}
-
+{ethnicity_block}
 PERSONA'S TOP-AFFINITY DMAS (already identified by lead persona research — keep your scoring consistent with these):
 {top_named_block}
 
