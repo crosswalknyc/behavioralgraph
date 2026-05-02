@@ -1758,8 +1758,16 @@ def _try_s3_archetype(project_name, brands):
                     continue
                 if 'Gen_Pop' in key:
                     continue
-                fn_clean = key.lower().replace('.csv', '').replace('_', '').replace('-', '').replace(' ', '')
-                if brand_clean not in fn_clean:
+                fn_lower = key.lower().replace('.csv', '')
+                # Strip date suffix (_MM_DD_YYYY_HH_MM) to get brand name part
+                _m = re.match(r'^(.+?)_\d{2}_\d{2}_\d{4}_\d{2}_\d{2}$', fn_lower)
+                fn_name = _m.group(1) if _m else fn_lower
+                fn_segments = set(fn_name.replace('-', '_').split('_'))
+                fn_joined = fn_name.replace('_', '').replace('-', '')
+                if not (fn_name == brand_clean or
+                        fn_name.startswith(brand_clean + '_') or
+                        brand_clean in fn_segments or
+                        fn_joined == brand_clean):
                     continue
                 if best_match is None or obj['LastModified'] > best_match['LastModified']:
                     best_match = obj
@@ -19982,10 +19990,9 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
     # For new runs, the pipeline is complete - go straight to save
     # For previous runs, the pipeline is also complete - go straight to save
     
-    # Insert 'Brand Input' row at the top before saving (rerun: use reference file's full brand list)
-    if previous_brand_input and previous_brand_input.strip():
-        brand_input_str = previous_brand_input.strip()
-    elif brands and isinstance(brands, list) and len(brands) == 1:
+    # Insert 'Brand Input' row at the top before saving
+    # ALWAYS use the submitted brands -- never override with a previous run's brand input
+    if brands and isinstance(brands, list) and len(brands) == 1:
         brand_input_str = brands[0]
     else:
         brand_input_str = ', '.join(brands) if brands else ''
@@ -20319,6 +20326,10 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
             and (previous_demo_lookup or previous_behavioral_lookup)
             and (previous_brand_input or '').strip().lower() == brand_input_str.strip().lower()
         )
+
+        if previous_file_path and not _is_rerun_same_brand:
+            print(f"⚠️  Previous file found but brand mismatch — submitted '{brand_input_str}' "
+                  f"vs previous '{previous_brand_input}'. NOT entering rerun mode.")
         # Pull the Brand-Penetration-column lookup that load_previous_run_data
         # stashed for us (separate from `previous_behavioral_lookup` which holds
         # Category Share values used by the existing exact-match post-process).

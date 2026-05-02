@@ -1729,17 +1729,36 @@ def check_s3_for_existing(brand_search, start_date, end_date):
                 if key.startswith('system/'):
                     continue
                 
-                # Extract filename without extension and date portion
-                # Format: BrandName_MM_DD_YYYY_HH_MM.csv
-                filename = key.replace('.csv', '')
+                # Extract the "name part" of the filename (before the date suffix).
+                # Format: BrandName_MM_DD_YYYY_HH_MM.csv  or  path/BrandName_MM_DD_YYYY_HH_MM.csv
+                filename = key.rsplit('/', 1)[-1].replace('.csv', '')
                 filename_lower = filename.lower()
                 
-                # Check if filename contains the brand (multiple matching strategies)
+                # Strip the trailing _MM_DD_YYYY_HH_MM date portion to get just the brand name part.
+                _name_part_match = re.match(r'^(.+?)_\d{2}_\d{2}_\d{4}_\d{2}_\d{2}$', filename_lower)
+                name_part = _name_part_match.group(1) if _name_part_match else filename_lower
+                
+                # Split the name part into word segments for boundary matching
+                name_segments = set(name_part.replace('-', '_').split('_'))
+                name_joined = name_part.replace('_', '').replace('-', '')
+                
+                brand_lower = brand_search.lower().strip()
+                brand_no_sep = brand_lower.replace(' ', '').replace('_', '').replace('-', '')
+                
+                # Match only if the brand IS the name part (or a segment of it), not an
+                # accidental substring inside an unrelated word.  Strategies:
+                #   1. Exact: name_part == normalized brand (e.g. "nke" == "nke")
+                #   2. Prefix: name_part starts with brand (e.g. "nike_shoes" starts with "nike")
+                #   3. Segment: brand matches one of the underscore-delimited segments
+                #   4. Joined exact: brand with separators removed == name with separators removed
                 filename_match = (
-                    normalized_brand in filename_lower or 
-                    search_lower in filename_lower or
-                    brand_search.lower() in filename_lower or
-                    brand_search.lower().replace(' ', '') in filename_lower.replace('_', '')
+                    name_part == normalized_brand or
+                    name_part.startswith(normalized_brand + '_') or
+                    normalized_brand in name_segments or
+                    name_part == search_lower or
+                    name_part.startswith(search_lower + '_') or
+                    search_lower in name_segments or
+                    name_joined == brand_no_sep
                 )
                 
                 if not filename_match:
