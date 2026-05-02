@@ -13861,7 +13861,8 @@ def _parse_persona_json(text: str):
 
 
 def persona_research_agent(subject: str, brand_category: str | None = None,
-                           study_start: str = '', study_end: str = '') -> dict:
+                           study_start: str = '', study_end: str = '',
+                           category_names: list[str] | None = None) -> dict:
     """Step 1 — single gpt-4o-search-preview call.
 
     Researches *subject* online and returns a PersonaDoc dict:
@@ -13888,8 +13889,18 @@ def persona_research_agent(subject: str, brand_category: str | None = None,
             "this period, the persona and category guidance should reflect those events.\n"
         )
 
+    categories_block = ""
+    if category_names:
+        _cat_list = ', '.join(category_names[:60])
+        categories_block = f"""
+
+CATEGORIES TO BE SCORED:
+The following behavioral categories will be scored by downstream agents. Your `category_signals` field MUST include a 1-2 sentence guidance note for each one:
+{_cat_list}
+"""
+
     prompt = f"""You are a senior audience-research analyst.  Research **{subject}** ({cat_label}) using real, current online data (fan demographics surveys, social-media analytics, press coverage, industry reports).
-{date_context}
+{date_context}{categories_block}
 
 Return ONLY a single valid JSON object — no markdown, no commentary.
 
@@ -13967,7 +13978,11 @@ Return ONLY a single valid JSON object — no markdown, no commentary.
     {{"dma": "<DMA name, e.g. NEW YORK>", "percentage": <percent>}},
     ...top 15-20 DMAs with highest affinity; remainder auto-distributed
   ],
-  "digital_identity": "<2-4 paragraph DEEP analysis of this audience's digital footprint — see instructions below>"
+  "digital_identity": "<2-4 paragraph DEEP analysis of this audience's digital footprint — see instructions below>",
+  "category_signals": {{
+    "<CATEGORY NAME>": "<1-2 sentences: what does this audience do/not do in this category? What types of items should score HIGH vs LOW?>",
+    ...one entry per category from the CATEGORIES TO BE SCORED list above
+  }}
 }}
 
 RULES:
@@ -13983,17 +13998,30 @@ RULES:
 DIGITAL IDENTITY — THIS IS THE MOST IMPORTANT FIELD:
 The `digital_identity` field is a rich text block (2-4 paragraphs) that will be passed VERBATIM to per-category scoring agents. Make it specific, opinionated, and grounded in real audience data. It MUST address all five areas below:
 
-1. SUBCULTURE: What digital subcultures does this audience belong to? Be specific — not just "sports fans" but "sneakerheads, basketball fans, fitness enthusiasts, streetwear culture."
+1. SUBCULTURE: What digital subcultures does this audience belong to? Be specific — not just "sports fans" but the exact communities (e.g. sneakerheads, fantasy football, K-beauty, car modding, etc.).
 
-2. WHERE THEY SHOP ONLINE: Name 8-12 specific retailers whose websites/apps this audience actually visits. For Nike: Foot Locker, Dick's Sporting Goods, Finish Line, JD Sports, Champs Sports, Eastbay, GOAT, StockX. NOT luxury retailers unless the audience is explicitly HNW.
+2. WHERE THEY SHOP ONLINE: Name 8-12 specific retailers/e-commerce sites this audience visits. Think about what stores sell products this audience actually buys. Be specific to the brand's world — athletic brands → athletic retailers, beauty brands → beauty retailers, etc.
 
-3. MEDIA THEY CONSUME: Name 8-12 specific media outlets/apps this audience uses. For a young athletic audience: ESPN, Bleacher Report, Complex, Hypebeast, The Athletic, House of Highlights. NOT NPR, Architectural Digest, or cable news unless the persona explicitly skews that way.
+3. MEDIA THEY CONSUME: Name 8-12 specific media outlets, apps, YouTube channels, or podcasts this audience uses. These must be specific to the subculture, NOT generic mass media unless the audience genuinely skews there.
 
-4. CORE INTERESTS: Name the 5-10 interest categories this audience gravitates toward. The brand's OWN product category MUST be listed first (e.g., SNEAKERS/FOOTWEAR for Nike, SKINCARE for a beauty brand).
+4. CORE INTERESTS: Name the 5-10 interest categories this audience gravitates toward. The brand's OWN product category MUST be listed first (e.g., FOOTWEAR for a shoe brand, SKINCARE for a beauty brand, STREAMING for a media company).
 
-5. EXPLICITLY IRRELEVANT: Name 8-12 categories/brands/outlets that are famous but WRONG for this audience. For Nike: luxury dining (Nobu, Capital Grille), beauty (Clinique, Ulta, Rhode Skin), CPG (Purina, Heinz, Kraft), cable news (NPR, PBS), niche hobbies (Role Play Games, Cooking, Gardening).
+5. WHAT THIS AUDIENCE DOES NOT CARE ABOUT: This is critical for scoring accuracy. Describe the CATEGORIES of things this audience under-indexes on. Think in terms of product categories, not specific brands. Examples:
+   - "This audience does not engage with luxury dining, beauty/skincare, CPG/household goods, cable news, or niche craft hobbies."
+   - "This audience does not engage with athletic/sports culture, fast food, gaming, or streetwear."
+   Frame these as CATEGORY-LEVEL anti-affinities so scoring agents can apply them to ANY item, not just ones you name.
 
 This text replaces the old per-category expected_high/expected_low lists. Per-category item-specific guidance is now generated by a separate item-aware agent that sees the actual items.
+
+CATEGORY SIGNALS — PER-CATEGORY GUIDANCE:
+The `category_signals` field is a JSON object where each key is a category name (from the CATEGORIES TO BE SCORED list above) and each value is 1-2 sentences telling the downstream scoring agent what this audience does and doesn't engage with IN THAT SPECIFIC CATEGORY.
+
+For each category, describe:
+- What TYPES of items should score HIGH (e.g., "athletic retailers" not specific store names)
+- What TYPES of items should score LOW (e.g., "beauty retailers, grocery chains")
+- Any nuances specific to this audience (e.g., "favors sneaker resale platforms over traditional department stores")
+
+These signals are the primary guidance that scoring agents use to reason about individual items. Make them specific and opinionated based on your research. If you don't have the category list, you may omit this field.
 """
 
     print(f"🔬 Step 1: Persona Research Agent researching '{subject}' …")
@@ -14009,7 +14037,7 @@ This text replaces the old per-category expected_high/expected_low lists. Per-ca
             model=MODEL_RESEARCH,
             web_search_options={"search_context_size": "high"},
             messages=[{'role': 'user', 'content': prompt}],
-            max_tokens=4096,
+            max_tokens=8192,
         )
         text = (resp.choices[0].message.content or '').strip()
         if text:
@@ -14117,6 +14145,11 @@ This text replaces the old per-category expected_high/expected_low lists. Per-ca
             print(f"    summary: {_cg_sum}")
             print(f"    expected_high: {_cg_hi[:15]}")
             print(f"    expected_low:  {_cg_lo[:15]}")
+    _cs = persona_doc.get('category_signals', {}) or {}
+    if _cs:
+        print(f"CATEGORY SIGNALS ({len(_cs)} categories):")
+        for _cs_cat, _cs_sig in sorted(_cs.items()):
+            print(f"  [{_cs_cat}] {str(_cs_sig)[:150]}")
     print(f"{'─'*60}\n")
 
     return persona_doc
@@ -14271,13 +14304,18 @@ def _run_single_category_agent(category: str, values: list[str],
     demo_snapshot = {k: v for k, v in persona_doc.get('demographics', {}).items()
                      if k in ('AGE', 'GENDER', 'ETHNICITY', 'INCOME')}
 
-    # Prefer item-aware guidance (grounded in real items) over blind persona guidance.
+    # Category signal from persona research agent (primary guidance).
+    _cat_signals = persona_doc.get('category_signals') or {}
+    _persona_cat_signal = str(_cat_signals.get(category, '') or _cat_signals.get(category.upper(), '') or '').strip()
+
     expected_high: list[str] = []
     expected_low: list[str] = []
-    guidance_summary = ''
+    guidance_summary = _persona_cat_signal
 
+    # Item-guidance agent provides supplementary expected_high/low lists.
     if item_guidance and isinstance(item_guidance, dict):
-        guidance_summary = str(item_guidance.get('summary', '') or '').strip()
+        if not guidance_summary:
+            guidance_summary = str(item_guidance.get('summary', '') or '').strip()
         expected_high = [str(x).strip() for x in (item_guidance.get('expected_high') or []) if str(x).strip()]
         expected_low = [str(x).strip() for x in (item_guidance.get('expected_low') or []) if str(x).strip()]
     elif isinstance(guidance_raw, dict):
@@ -14339,29 +14377,24 @@ The "US baseline" shown next to each item is the MEASURED national digital engag
         anchor_rules = """═══════════════════════════════════════════════════════════════════
 U.S. BASELINE — REFERENCE CONTEXT (not a constraint)
 ═══════════════════════════════════════════════════════════════════
-The "US baseline" shown next to each item is the MEASURED national digital engagement % for the average U.S. adult. It tells you what "normal" looks like for the general population. You are NOT bound by any multiplier of this baseline. Use it as context, then score based on PERSONA FIT.
+The "US baseline" shown next to each item is the MEASURED national digital engagement % for the average U.S. adult. It tells you what "normal" looks like for the general population. You are NOT bound by any multiplier of this baseline.
 
-HOW TO USE THE BASELINE:
-  • Items in the EXPECTED HIGH list above:
-      – Score HIGH based on how central they are to this audience's digital life.
-      – A sneaker retailer for a Nike audience = 35-60%, even if its Gen Pop baseline is 4%.
-      – A sports media outlet for a sports audience = 50-80%, even if baseline is 15%.
-      – The baseline tells you the floor for the general public; this audience is NOT general public.
-  • Items in the EXPECTED LOW list above:
-      – Score LOW (0.1-5%) regardless of fame or baseline.
-      – A luxury brand irrelevant to this audience = 0.3-2% even if baseline is 3%.
-  • Neutral items (in neither list):
-      – Ask: "Would this specific audience engage with this item DIGITALLY more or less than the average American?"
-      – If the answer is "less" or "no connection to this persona", score at 0.1-0.3x baseline.
-        Example: Clinique at 35% gen-pop baseline for a Nike audience → ~3-7% (this audience UNDER-INDEXES heavily on beauty brands).
-      – If the answer is "about the same", score near baseline.
-      – If the answer is "more", score above baseline.
-      – A high gen-pop baseline does NOT mean the score should be high. It means MORE Americans use it on average — but this audience may drastically under-index.
-  • Items WITHOUT a baseline ("not measured"):
-      – Use your best estimate of what % of THIS audience would engage digitally.
+YOUR PRIMARY JOB: Read the PERSONA and DIGITAL IDENTITY above, then for EACH item ask yourself:
+"Does this audience engage with this item MORE, LESS, or about the SAME as the average American?"
+
+  • MORE than average → score ABOVE baseline (1.5-5x for strong fit)
+  • About the SAME → score near baseline
+  • LESS than average → score BELOW baseline (0.1-0.3x for clearly irrelevant)
+  • MUCH LESS (audience has no reason to engage) → score at 0.01-0.1x baseline
+
+The expected_high and expected_low lists above are HINTS — they help you calibrate. But they are NOT complete. Many items won't be in either list. YOU must reason about every item independently using the persona:
+  - Read the DIGITAL IDENTITY section. It describes what categories this audience cares about and what they DON'T.
+  - If an item falls into a category the persona says the audience doesn't care about, score it LOW regardless of its baseline.
+  - If an item falls into a category core to the persona, score it HIGH regardless of its baseline.
+
+COMMON MISTAKE: Scoring a high-baseline item near its baseline just because it's "famous" or "not in expected_low." If the persona says this audience doesn't engage with beauty/skincare, then ALL beauty/skincare brands should score low — even ones with 30%+ baselines. The baseline reflects the AVERAGE American, not this specific audience.
+
   • Hard floor: 0.01%. Hard ceiling: 96%.
-
-KEY PRINCIPLE: The RANK ORDER of your scores must reflect this specific audience's affinity, NOT general population popularity. A low-baseline item that is core to this persona should score ABOVE a high-baseline item that is irrelevant. When you see a HIGH gen-pop baseline on an item that has NOTHING to do with this audience's interests, that is a signal to score it WELL BELOW baseline (0.1-0.3x), not near it.
 """
     else:
         anchor_rules = ''
@@ -14389,12 +14422,12 @@ KEY CONSEQUENCES OF "DIGITAL ONLY":
 AUDIENCE-SPECIFIC DIGITAL BEHAVIOR — CRITICAL:
   You are scoring for a SPECIFIC audience defined by the persona below, not the general population.
   Think about what THIS audience would actually do ONLINE given who they are:
-  • For an athletic/sportswear brand audience: athletic retailers (Foot Locker, Dick's Sporting Goods, Finish Line, Eastbay, Champs Sports) should index HIGH (15-50%). Beauty brands (Clinique, Rhode Skin), luxury fashion (Tory Burch, Gucci), and CPG (Purina, Heinz) should be LOW (<5%) unless the persona explicitly indicates affinity.
+  • Read the DIGITAL IDENTITY carefully. It tells you the audience's subcultures, shopping habits, media diet, interests, and what they DON'T care about.
+  • For every item, ask: "Would a typical member of this audience actually type this brand's URL into a browser, search for it, or use its app?" If no, score LOW.
   • The RANK ORDER of items matters as much as absolute values. Items the persona would ACTUALLY visit/engage with digitally MUST rank ABOVE items they wouldn't.
-  • Ask yourself: "Would a typical member of this audience actually type this brand's URL into a browser, search for it, or use its app?" If no, score LOW.
-  • Stores where the audience BUYS the brand's products should rank HIGH in WHERE THEY SHOP (e.g., Foot Locker for Nike, not Redbubble).
-  • MEDIA items should reflect what this audience actually reads/watches online — a young, diverse, athletic audience skews toward sports media (ESPN, Bleacher Report) and social-native media, not toward cable news.
-  • For INTEREST: the brand's OWN product category (e.g., SNEAKERS/FOOTWEAR for Nike, SKINCARE for a beauty brand, GAMING for a game studio) MUST be among the highest-scoring items (70%+). If the audience digitally engages with this brand, they definitionally engage with its product category. Related activity interests (BASKETBALL, RUNNING, FITNESS for Nike) should also score high (40-70%).
+  • For INTEREST: the brand's OWN product category MUST be among the highest-scoring items (70%+). If the audience digitally engages with this brand, they definitionally engage with its product category. Closely related activity interests should also score high (40-70%).
+  • For WHERE THEY SHOP: stores where the audience BUYS the brand's products should rank HIGH.
+  • For MEDIA: outlets that serve this audience's subculture should rank HIGH; generic mass media should only score high if the persona explicitly skews there.
 
 ═══════════════════════════════════════════════════════════════════
 PERSONA — this is the audience you are scoring for
@@ -14423,15 +14456,17 @@ EXPECTED LOW-BP ITEMS for this audience in this category
 ROW-BY-ROW REASONING — required process
 ═══════════════════════════════════════════════════════════════════
 For EACH item in the list below, reason in this order:
-  1) DOES IT HAVE A US BASELINE shown next to it? → Note it. The baseline is NOT your starting score — it is the national average. For persona runs, your score can be drastically ABOVE or BELOW this number based on fit.
-  2) Is this item in the EXPECTED HIGH list above? → score HIGH RELATIVE TO ITS BASELINE (1.5-3x for personas; ≈baseline for GenPop). DO NOT pump it to 80-95% just because it's "expected high" — respect the baseline ceiling.
-  3) Is this item in the EXPECTED LOW list above? → score LOW (0.1-0.5x baseline for personas; ≈baseline for GenPop) regardless of fame.
-  4) Is this a near-universal mass platform (Google, YouTube, Amazon, Facebook, Gmail, Instagram, Netflix)? → score per its baseline (typically 60-85%) unless the persona explicitly rejects it.
-  5) Is the item bought IN-STORE for the majority of consumers (CPG, grocery, household goods, pet food, personal care)? → score LOW (1-8%) regardless of brand strength or gen-pop baseline. High gen-pop baseline for CPG reflects OFFLINE purchase behavior, not digital engagement.
-  6) Is the item REGIONAL/geo-specific and the persona is NOT specifically tied to that geography? → score LOW (0.5-3%).
-  7) Is the item LUXURY/HNW and the persona INCOME skew is NOT $150K+? → score LOW (0.3-3%).
-  8) NOT in any list above AND not relevant to this persona? → score at 0.1-0.3x baseline. Do NOT default to "near baseline" just because it's a well-known brand.
-  9) No baseline available? → use your best estimate of what % of this specific audience would actually click/visit/use this item online during a single year.
+  1) READ THE PERSONA: What does the digital identity say about this audience? What do they care about? What don't they care about?
+  2) CLASSIFY THIS ITEM: What category does this item fall into? (athletic, beauty, CPG, luxury, media, tech, etc.)
+  3) DOES THIS AUDIENCE ENGAGE? Would a typical member of this audience actually search for, visit, or use this item online? If the persona's digital identity describes anti-affinity with this item's category, score LOW (0.1-0.3x baseline) regardless of fame.
+  4) CHECK THE BASELINE: If the item has a US baseline, use it as context. High baseline + irrelevant to persona = score well BELOW baseline. Low baseline + core to persona = score well ABOVE baseline.
+  5) Is this item in the EXPECTED HIGH list? → additional confirmation to score high. But items CAN score high even without being listed — use your judgment.
+  6) Is this item in the EXPECTED LOW list? → additional confirmation to score low. But items CAN score low even without being listed — use your judgment.
+  7) Is this a near-universal mass platform (Google, YouTube, Amazon, Facebook, Gmail, Instagram, Netflix)? → score per its baseline (typically 60-85%) unless the persona explicitly rejects it.
+  8) Is the item primarily bought IN-STORE (CPG, grocery, household goods, pet food, personal care)? → score LOW (1-8%). High gen-pop baseline for CPG reflects OFFLINE purchase, not digital engagement.
+  9) Is the item REGIONAL and the persona is NOT tied to that geography? → score LOW (0.5-3%).
+  10) Is the item LUXURY and the persona income is NOT $150K+? → score LOW (0.3-3%).
+  11) No baseline available? → estimate what % of THIS audience would actually engage digitally.
 
 ═══════════════════════════════════════════════════════════════════
 OUTPUT FORMAT
@@ -14446,10 +14481,10 @@ DECIMAL PRECISION — every BP must have 4 organic-looking decimals (14.3827, 7.
 
 NON-NEGOTIABLE RULES:
   • EVERY item from the list below MUST appear in your output (same exact spelling).
-  • RANK ORDER must reflect persona fit, not absolute fame. A Nike audience should rank Foot Locker > Cartier even though Cartier is more famous.
+  • RANK ORDER must reflect persona fit, not absolute fame or baseline size.
   • An item being LUXURY or PRESTIGIOUS does NOT make it HIGH BP — only persona-relevance does.
   • An item being LARGE or NATIONALLY-KNOWN does NOT make it HIGH BP if the persona doesn't engage with it digitally.
-  • HIGH GEN-POP BASELINE ≠ HIGH SCORE. If Clinique has a 35% gen-pop baseline but this audience is sneaker/athletic culture, Clinique should score ~3-7%. The gen-pop number tells you the NATIONAL AVERAGE; this audience is NOT average.
+  • HIGH GEN-POP BASELINE ≠ HIGH SCORE. If a beauty brand has a 35% gen-pop baseline but the audience is athletic culture, the beauty brand should score 3-7%. The gen-pop number is the NATIONAL AVERAGE — this audience is NOT average.
   • Do NOT artificially compress the distribution — if the persona genuinely engages with 12 items in this category at 25%+, score all 12 at 25%+. There is NO cap on items per tier.
 
 ITEMS TO SCORE:
@@ -16293,7 +16328,7 @@ def _run_genpop_mismatch_pass(df: pd.DataFrame,
                                persona_doc: dict,
                                subject: str,
                                bp_col: str,
-                               ratio_threshold: float = 3.0,
+                               ratio_threshold: float = 5.0,
                                min_bp_floor: float = 5.0,
                                grounded_guidance: dict | None = None) -> pd.DataFrame:
     """Sanity-check items whose new BP is implausibly higher than the
@@ -16458,7 +16493,7 @@ Return ONLY a JSON array, one entry per item, in the same order:
             resp = _timed_completion(
                 client,
                 label=f"genpop-mismatch/{cat_u}",
-                model=MODEL_JUDGE,
+                model=MODEL_QUALITY,
                 messages=[{'role': 'user', 'content': prompt}],
                 temperature=0.0,
                 max_tokens=min(16384, max(1024, len(items) * 80)),
@@ -20560,8 +20595,18 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
             print("   • Persona research LLM call: SKIPPED (prior demographics reused)")
             _persona_doc = _persona_doc_from_previous_lookup(previous_demo_lookup)
         else:
+            _behavioral_cats = sorted({
+                str(c).strip().upper() for c in df_final['Column'].unique()
+                if str(c).strip().upper() not in {
+                    'SAMPLE SIZE', 'BRAND INPUT', 'INPUT_METADATA', 'BRAND CATEGORY',
+                    'AGE', 'GENDER', 'ETHNICITY', 'INCOME', 'EDUCATION',
+                    'RELATIONSHIP', 'SEXUAL_ORIENTATION', 'PARENTAL_STATUS',
+                    'OCCUPATION', 'LOCATION',
+                }
+            })
             _persona_doc = persona_research_agent(_subject_name, brand_category,
-                                                    study_start=behavior_start, study_end=behavior_end)
+                                                    study_start=behavior_start, study_end=behavior_end,
+                                                    category_names=_behavioral_cats)
 
         # Build date-range labels for the delta-sanity agent so it can reason
         # about whether a swing is event-driven (e.g. Coachella in Q1).
