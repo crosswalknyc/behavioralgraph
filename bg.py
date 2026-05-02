@@ -14207,7 +14207,13 @@ Return ONLY a JSON object with three fields:
 
 RULES:
 - expected_high: Pick 5-15 items from the list above that this SPECIFIC audience would engage with at HIGH digital BP. Only pick items that genuinely fit the persona's digital identity. Spell them EXACTLY as they appear in the list above.
-- expected_low: Pick 5-15 items from the list above that are FAMOUS/PRESTIGIOUS but DO NOT fit this audience. These must be scored LOW by the downstream agent regardless of their general popularity. Spell them EXACTLY as they appear in the list above.
+- expected_low: Pick 10-20 items from the list above that are FAMOUS/WELL-KNOWN but DO NOT fit this audience. These must be scored LOW by the downstream agent regardless of their general popularity. Spell them EXACTLY as they appear in the list above.
+- CRITICAL FOR expected_low: Include ALL of these categories of irrelevant items, not just luxury brands:
+  * CPG / household brands (Purina, Olay, Heinz, Kraft, Tide, Clorox, etc.) — high Gen Pop baseline but low DIGITAL engagement for most audiences
+  * Beauty / cosmetics brands (Clinique, Ulta Beauty, Sephora, Rhode Skin, etc.) — unless the persona is explicitly beauty-focused
+  * Luxury brands irrelevant to this audience (Tiffany, Gucci, Cartier, etc.)
+  * Grocery/drugstore chains (Publix, Albertsons, Kroger, CVS, Walgreens, etc.) — unless the persona is specifically tied to grocery
+  * Cable news / general interest media (NPR, PBS, Architectural Digest, etc.) — unless the persona skews that way
 - Items not in either list are "neutral" — the downstream agent will score them on its own judgment.
 - Do NOT put items in expected_high just because they are popular nationally. Only items that THIS persona would actually click/visit/use online.
 - Do NOT put niche/unknown items in expected_low — only items that are famous enough that a less-informed agent might over-rank them.
@@ -14418,7 +14424,7 @@ For EACH item in the list below, reason in this order:
   2) Is this item in the EXPECTED HIGH list above? → score HIGH RELATIVE TO ITS BASELINE (1.5-3x for personas; ≈baseline for GenPop). DO NOT pump it to 80-95% just because it's "expected high" — respect the baseline ceiling.
   3) Is this item in the EXPECTED LOW list above? → score LOW (0.1-0.5x baseline for personas; ≈baseline for GenPop) regardless of fame.
   4) Is this a near-universal mass platform (Google, YouTube, Amazon, Facebook, Gmail, Instagram, Netflix)? → score per its baseline (typically 60-85%) unless the persona explicitly rejects it.
-  5) Is the item bought IN-STORE for the majority of consumers (CPG, grocery, household goods)? → score LOW (1-8%) regardless of brand strength.
+  5) Is the item bought IN-STORE for the majority of consumers (CPG, grocery, household goods, pet food, personal care)? → score LOW (1-8%) regardless of brand strength or gen-pop baseline. High gen-pop baseline for CPG reflects OFFLINE purchase behavior, not digital engagement.
   6) Is the item REGIONAL/geo-specific and the persona is NOT specifically tied to that geography? → score LOW (0.5-3%).
   7) Is the item LUXURY/HNW and the persona INCOME skew is NOT $150K+? → score LOW (0.3-3%).
   8) No baseline available? → use your best estimate of what % of this specific audience would actually click/visit/use this item online during a single year.
@@ -16446,7 +16452,7 @@ Return ONLY a JSON array, one entry per item, in the same order:
         try:
             resp = _timed_completion(
                 client,
-                label=f"genpop-mismatch/{cat_name}",
+                label=f"genpop-mismatch/{cat_u}",
                 model=MODEL_JUDGE,
                 messages=[{'role': 'user', 'content': prompt}],
                 temperature=0.0,
@@ -17256,13 +17262,19 @@ def _apply_post_score_agents(df: pd.DataFrame,
 
         _grounded = grounded_guidance or {}
         _grounded_high_by_cat: dict[str, set[str]] = {}
+        _grounded_low_by_cat: dict[str, set[str]] = {}
         for _gc_cat, _gc_blob in _grounded.items():
             _cat_u = str(_gc_cat).strip().upper()
             _items_set = {str(x).strip().upper() for x in (_gc_blob.get('expected_high') or []) if str(x).strip()}
             if _items_set:
                 _grounded_high_by_cat[_cat_u] = _items_set
+            _low_set = {str(x).strip().upper() for x in (_gc_blob.get('expected_low') or []) if str(x).strip()}
+            if _low_set:
+                _grounded_low_by_cat[_cat_u] = _low_set
 
+        _EXPECTED_LOW_RATIO = 3.0
         _cap_count = 0
+        _low_cap_count = 0
         for idx, row in df.iterrows():
             try:
                 cat_u = str(row['Column']).strip().upper()
@@ -17275,13 +17287,30 @@ def _apply_post_score_agents(df: pd.DataFrame,
             gp_baseline = _gp_cap_lookup.get((cat_u, val_u))
             if gp_baseline is None or gp_baseline <= 0:
                 continue
+
+            _el_set = _grounded_low_by_cat.get(cat_u, set())
+            _in_expected_low = val_u in _el_set or any(
+                _el == val_u or _el in val_u or val_u in _el for _el in _el_set
+            )
+            if _in_expected_low:
+                low_cap = gp_baseline * _EXPECTED_LOW_RATIO
+                if curr_bp > low_cap:
+                    new_bp = round(low_cap + random.uniform(-0.02, 0.02), 4)
+                    new_bp = max(0.01, min(96.0, new_bp))
+                    print(f"      🔻 LOW CAP [{cat_u}] {row.get('Value', val_u)}: "
+                          f"{curr_bp:.2f}% → {new_bp:.2f}% (expected_low, >{_EXPECTED_LOW_RATIO}x baseline {gp_baseline:.2f}%)")
+                    df.at[idx, bp_col] = new_bp
+                    if 'Category Share' in df.columns:
+                        df.at[idx, 'Category Share'] = new_bp
+                    _low_cap_count += 1
+                continue
+
             cap_val = gp_baseline * _HALLUCINATION_RATIO
             if curr_bp <= cap_val:
                 continue
             _eh_set = _grounded_high_by_cat.get(cat_u, set())
             if val_u in _eh_set:
                 continue
-            # Lenient substring match for expected_high
             _is_endorsed = False
             for _eh_item in _eh_set:
                 if _eh_item == val_u or _eh_item in val_u or val_u in _eh_item:
@@ -17297,10 +17326,11 @@ def _apply_post_score_agents(df: pd.DataFrame,
             if 'Category Share' in df.columns:
                 df.at[idx, 'Category Share'] = new_bp
             _cap_count += 1
-        if _cap_count:
-            print(f"   🧱 Soft hallucination cap: capped {_cap_count} items at {_HALLUCINATION_RATIO}x baseline")
+        if _cap_count or _low_cap_count:
+            print(f"   🧱 Soft hallucination cap: capped {_cap_count} items at {_HALLUCINATION_RATIO}x baseline, "
+                  f"{_low_cap_count} expected_low items at {_EXPECTED_LOW_RATIO}x baseline")
         else:
-            print(f"   ✅ Soft hallucination cap: no items exceeded {_HALLUCINATION_RATIO}x baseline")
+            print(f"   ✅ Soft hallucination cap: no items exceeded thresholds")
 
     return df
 
