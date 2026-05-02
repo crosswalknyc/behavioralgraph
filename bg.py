@@ -14398,27 +14398,31 @@ Most items should score CLOSE to their baseline. The baseline is the DEFAULT. Yo
 SCORING TIERS (based on baseline size):
 
 TIER 1 — NEAR-UNIVERSAL (baseline > 40%):
-  Items like Netflix, Walmart, Amazon, YouTube, Target, Hulu, Apple.
+  Items like Netflix, Walmart, Amazon, YouTube, Target, Hulu, Apple, Cooking (interest).
   These are used by MOST Americans regardless of demographic. A Nike audience
   still uses Netflix, still shops at Walmart, still has Amazon.
-  → Score 0.6–1.3x baseline. FLOOR = 30%.
-  → Only go below 30% if the persona EXPLICITLY and ACTIVELY avoids this item.
-  → A 67% baseline item should score 40-80%, NOT 5%.
+  → Score 0.7–1.2x baseline for NEUTRAL items. This is the DEFAULT.
+  → Score 1.2–1.5x ONLY if the persona explicitly over-indexes (e.g., Streaming for a media audience).
+  → Score 0.5–0.7x if the persona slightly under-indexes.
+  → FLOOR = 30%. Only go below 30% if the persona EXPLICITLY and ACTIVELY avoids this item.
+  → CRITICAL: Do NOT boost high-baseline items just because the persona is young/active. Cooking at 55% baseline should stay at ~55% for most audiences, NOT jump to 88%. Only boost if the persona SPECIFICALLY engages with this interest more than average.
 
 TIER 2 — MASS-MARKET (baseline 15–40%):
-  Items like Samsung, Costco, Disney+, HBO Max, Peacock, State Farm, GEICO.
+  Items like Samsung, Costco, Disney+, HBO Max, Peacock, State Farm, GEICO, Hanes.
   Widely used but not universal.
-  → Score 0.4–2.0x baseline for neutral items.
-  → Score 2.0–3.0x for strong persona fit.
-  → Score 0.2–0.4x for weak persona fit (but still > 3%).
-  → A 33% baseline item should score 13-66%, NOT 3%.
+  → Score 0.7–1.2x baseline for NEUTRAL items (the DEFAULT).
+  → Score 1.5–2.5x for strong persona fit.
+  → Score 0.3–0.6x for weak persona fit.
+  → Score 0.1–0.3x for anti-fit (beauty for non-beauty audience, etc.)
+  → CRITICAL: Samsung (32.7% baseline) for a young urban audience should score 25-40%, NOT 3%. These are mass-market devices used by everyone.
 
 TIER 3 — MAINSTREAM (baseline 5–15%):
-  Items like Foot Locker, Nike (as brand), Tesla, Roblox, Disney World.
-  Used by a meaningful segment. Persona fit matters more here.
-  → Score 0.3–4.0x baseline.
-  → Strong persona fit can push to 4–5x (e.g. Nike brand 32% → 90%+ if core brand).
-  → Weak fit = 0.3–0.5x baseline.
+  Items like Foot Locker, Nike (as brand), Tesla, Roblox, Disney World, Ulta Beauty.
+  Used by a meaningful segment. Persona fit matters MORE here.
+  → Score 0.5–1.2x baseline for NEUTRAL items.
+  → Score 2.0–4.0x for strong persona fit (e.g. Nike brand 32% → 90%+ if core brand).
+  → Score 0.2–0.5x for weak/anti-fit.
+  → STREETWEAR/SNEAKER brands (Kith, New Era, GOAT, StockX) are persona-core for athletic audiences → score 2-5x if persona fits.
 
 TIER 4 — NICHE (baseline < 5%):
   Items like Kith, GOAT, StockX, Zalando, niche apps.
@@ -14486,7 +14490,10 @@ AUDIENCE-SPECIFIC DIGITAL BEHAVIOR — CRITICAL:
   • For MEDIA: outlets serving the audience's subculture should rank HIGH; but generic mass media should still score near baseline, not crash to 1%.
   • For AUTOMOBILE: Score cars people in this demographic ACTUALLY drive, not aspirational cars. Young urban consumers drive Toyotas, Hondas, Hyundais — not Porsches and McLarens unless income >$150K.
   • For TECHNOLOGY/DEVICE: Young urban consumers skew Android/Samsung, not exclusively Apple. Score based on actual demographic device usage patterns.
-  • For GAMES: Consider the age of the audience. Roblox and YouTube Kids skew pre-teen. Adult gamers play different games.
+  • For GAMES: Consider the age of the audience. Roblox, YouTube Kids, and Barbie skew pre-teen/children. For an 18-34 ADULT audience, these should score 0.3-0.7x baseline. Adult gamers play NBA 2K, Madden, FIFA/EA Sports FC, Call of Duty, GTA — not primarily Roblox and LEGO. Sports-related games should score HIGH for sports audiences.
+  • For WHERE THEY SHOP: Beauty retailers (Ulta, Sephora) should score BELOW baseline (0.3-0.6x) for non-beauty audiences like athletic/sports personas. Athletic retailers (Foot Locker, Dick's, Champs, Finish Line) should score ABOVE baseline for athletic audiences. Do not boost beauty retailers just because the audience is young.
+  • For INTEREST: HIGH-BASELINE INTERESTS (Cooking 55%, Dining Out 60%, Travel 55%) should score NEAR their baselines (0.8-1.1x) for most audiences — do NOT boost them unless the persona SPECIFICALLY over-indexes on that interest. The persona's CORE interests (e.g., Sneakers, Footwear, Basketball for Nike) should score well ABOVE their baselines (2-4x).
+  • For AMUSEMENT PARKS: Major national parks (Disney World, Disneyland, Universal Studios, Six Flags) should score 0.5-1.2x their baselines. These are mainstream American entertainment — most audiences visit them at near-normal rates. Only boost TopGolf/Dave&Busters for young urban audiences.
   • THIS IS A U.S. PANEL. Foreign-only platforms (Zalando, Sony LIV, foreign sports leagues with no US audience) should score very low (<1%).
 
 ═══════════════════════════════════════════════════════════════════
@@ -14520,10 +14527,11 @@ For EACH item in the list below, reason in this order:
   2) READ THE PERSONA: What does the digital identity say about this audience's relationship with this item's CATEGORY?
   3) CLASSIFY THE DEVIATION: Is this item…
      a) CORE to the persona (brand's own category, persona subculture)? → Score 2-5x baseline.
-     b) NEUTRAL (not mentioned in persona, mainstream item)? → Score 0.7-1.2x baseline. This is the DEFAULT for most items.
-     c) WEAK FIT (persona leans away from this category)? → Score 0.3-0.6x baseline.
+     b) NEUTRAL (not mentioned in persona, mainstream item)? → Score 0.8-1.1x baseline. This is the DEFAULT for MOST items. DO NOT boost neutral items — keep them near their baseline.
+     c) WEAK FIT (persona leans away from this category)? → Score 0.4-0.7x baseline.
      d) ANTI-FIT (CPG/in-store, beauty for non-beauty, luxury for non-HNW, foreign on US panel)? → Score 0.05-0.3x baseline.
-  4) APPLY TIER FLOORS: If baseline >40%, the score must be ≥30% unless the persona ACTIVELY avoids it. If baseline 15-40%, score must be ≥3%.
+     e) KIDS-FOCUSED and audience is adults (18-34) without parental indicators? → Score 0.3-0.7x baseline.
+  4) APPLY TIER FLOORS: If baseline >40%, the score must be ≥30% unless the persona ACTIVELY avoids it. If baseline 15-40%, score must be ≥5%.
   5) CHECK EXPECTED HIGH/LOW lists for additional signals, but these are supplementary — baseline gravity is primary.
   6) Is this a NEAR-UNIVERSAL platform (Netflix, YouTube, Amazon, Walmart, Google, Facebook, Instagram, Hulu, Target, Spotify)? → score 0.6-1.2x baseline. These don't drop below 30%.
   7) Is the item primarily bought IN-STORE (CPG, grocery, household, pet food, personal care, diapers, cleaning products)? → score 0.1-0.3x baseline (1-8% typical). Their digital BP is low even in gen pop.
@@ -14546,7 +14554,8 @@ DECIMAL PRECISION — every BP must have 4 organic-looking decimals (14.3827, 7.
 NON-NEGOTIABLE RULES:
   • EVERY item from the list below MUST appear in your output (same exact spelling).
   • RANK ORDER must reflect persona fit, not absolute fame or baseline size.
-  • BASELINE GRAVITY: Most items (70%+) should score within 0.5-1.5x their baseline. Only extreme persona-fit or anti-fit items should deviate beyond 2x.
+  • BASELINE GRAVITY: Most items (70%+) should score within 0.7-1.2x their baseline. Only extreme persona-fit or anti-fit items should deviate beyond 2x. If you find yourself boosting more than 10 items above 1.5x baseline, you're probably over-indexing on persona fit.
+  • NEUTRAL = NEAR BASELINE: If an item is not specifically mentioned in the persona or guidance, it should score 0.8-1.1x its baseline. Do NOT boost items just because the audience is young, urban, or active. Cooking, Dining Out, Travel, Weather — these are near-universal interests that should stay close to their baselines for ALL audiences.
   • NEAR-UNIVERSAL FLOOR: Items with >40% baseline MUST score ≥30%. Netflix, Walmart, Hulu, Target, Amazon Prime — everyone uses these. A Nike fan still watches Netflix.
   • CPG/IN-STORE CEILING: Household products (Clorox, Pampers, Tide, Gillette, Purina) have inflated baselines from OFFLINE purchases. Their DIGITAL BP should be 0.1-0.3x baseline (typically 1-5%).
   • U.S. PANEL: Foreign platforms with negligible US presence (Zalando, Sony LIV, international-only items) must score <1%.
@@ -15651,9 +15660,31 @@ YOUR TASK
 For each DMA below, output a MULTIPLIER on the U.S. Gen Pop baseline that reflects how concentrated THIS audience is in that market.
 
   • 1.0 = same concentration as the average U.S. adult (no skew).
-  • > 1.0 = audience over-indexes here. Heavy over-index = 2-4x. Extreme = 5-8x (rare; only if persona is very tightly tied to that geography).
-  • < 1.0 = audience under-indexes here. Mild under-index = 0.5-0.8x. Strong under-index = 0.1-0.3x.
-  • Floor 0.05, ceiling 8.0.
+  • > 1.0 = audience over-indexes here. Heavy over-index = 1.5-3x. Extreme = 4-6x (rare; only if persona is very tightly tied to that geography, e.g. a Nashville artist's audience in Nashville).
+  • < 1.0 = audience under-indexes here. Mild under-index = 0.5-0.8x. Strong under-index = 0.2-0.5x.
+  • Floor 0.15, ceiling 6.0.
+
+CRITICAL — POPULATION-AWARE SCORING:
+  Most Americans live in MAJOR METROS. Any national brand/audience has significant presence in the top 30 DMAs simply because that's where the people are.
+
+  TOP 30 DMAs (by population — these MUST get reasonable multipliers):
+    New York, Los Angeles, Chicago, Philadelphia, Dallas-Ft Worth, Houston,
+    Washington DC, Atlanta, Boston, San Francisco, Phoenix, Seattle, Tampa,
+    Minneapolis, Denver, Miami, Orlando, Sacramento, St Louis, Portland OR,
+    Charlotte, Indianapolis, San Diego, Nashville, Hartford, Kansas City,
+    Columbus, Milwaukee, San Antonio, Austin.
+    → These DMAs should have multipliers between 0.4 and 4.0.
+    → A national audience CANNOT have 0% presence in Washington DC or Boston.
+    → Default multiplier for a major metro with no specific persona tie = 0.7-1.0.
+
+  SMALL/RURAL DMAs (baseline < 0.15% of US population):
+    Fairbanks AK, Glendive MT, North Platte NE, Alpena MI, Zanesville OH, etc.
+    → These MUST get multipliers ≤ 1.5 unless the persona has a VERY specific tie to that exact geography.
+    → Default for a small rural DMA with no persona tie = 0.3-0.8.
+    → Do NOT randomly boost tiny markets — a national brand audience is NOT concentrated in Fairbanks or Glendive.
+
+  MEDIUM DMAs (baseline 0.15% - 1.0%):
+    → Default multiplier with no specific persona tie = 0.5-1.2.
 
 REASONING GUIDANCE — use everything you know about each DMA:
   • Ethnicity/race composition (ATLANTA, MEMPHIS, BIRMINGHAM = high Black share; LOS ANGELES, MIAMI, HOUSTON, SAN ANTONIO, EL PASO = high Hispanic; SAN FRANCISCO, NEW YORK, LOS ANGELES, SEATTLE, HONOLULU = high Asian).
@@ -15706,7 +15737,7 @@ Return ONLY a JSON array, one entry per DMA, in the same order:
                 if not name:
                     continue
                 # Clamp to safety range
-                mult = max(0.05, min(8.0, mult))
+                mult = max(0.15, min(6.0, mult))
                 out[name] = mult
             return out
         except Exception as e:
