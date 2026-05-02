@@ -299,8 +299,8 @@ import time as _time
 
 # ── Model tier constants ────────────────────────────────────────────────────
 MODEL_RESEARCH = 'gpt-4o-search-preview'   # web search, persona doc
-MODEL_QUALITY  = 'gpt-4o'                  # priority categories + location + demos
-MODEL_SCORING  = 'gpt-4o-mini'             # other category agents + delta sanity
+MODEL_QUALITY  = 'gpt-4o'                  # all category agents + location + demos
+MODEL_SCORING  = 'gpt-4o'                  # all category agents + delta sanity (upgraded from gpt-4o-mini)
 MODEL_JUDGE    = 'gpt-4.1-nano'            # mismatch + cap review (ACCEPT/REVISE)
 
 PRIORITY_CATEGORIES = {
@@ -14321,10 +14321,19 @@ DEFINITION — read carefully:
 Brand Penetration = the % of THIS specific audience whose digital clickstream (web visits, app usage, searches, streams, purchases) shows engagement with the item during the study window. This is NOT popularity, awareness, favorability, or in-store purchase. It is purely OBSERVED DIGITAL BEHAVIOR.
 
 KEY CONSEQUENCES OF "DIGITAL ONLY":
-  • CPG / grocery / household brands (Tide, Oreo, Coca-Cola, Heinz, Kraft) are bought IN STORES — their DIGITAL clickstream BP is LOW (typically 1-8%) even when household penetration is huge.
+  • CPG / grocery / household brands (Tide, Oreo, Coca-Cola, Heinz, Kraft, Purina) are bought IN STORES — their DIGITAL clickstream BP is LOW (typically 1-8%) even when household penetration is huge.
   • Mass online retailers (Amazon, Walmart.com, Target.com) have HIGH digital BP across nearly every audience because everyone visits the website.
   • Regional or geo-specific brands (Pavilions, Wegmans, Menards, H-E-B) have LOW national BP unless the audience over-indexes on that region.
   • Luxury brands (Cartier, Tiffany, Nobu, Mastros) have LOW BP unless the audience explicitly skews HNW / luxury.
+
+AUDIENCE-SPECIFIC DIGITAL BEHAVIOR — CRITICAL:
+  You are scoring for a SPECIFIC audience defined by the persona below, not the general population.
+  Think about what THIS audience would actually do ONLINE given who they are:
+  • For an athletic/sportswear brand audience: athletic retailers (Foot Locker, Dick's Sporting Goods, Finish Line, Eastbay, Champs Sports) should index HIGH (15-50%). Beauty brands (Clinique, Rhode Skin), luxury fashion (Tory Burch, Gucci), and CPG (Purina, Heinz) should be LOW (<5%) unless the persona explicitly indicates affinity.
+  • The RANK ORDER of items matters as much as absolute values. Items the persona would ACTUALLY visit/engage with digitally MUST rank ABOVE items they wouldn't.
+  • Ask yourself: "Would a typical member of this audience actually type this brand's URL into a browser, search for it, or use its app?" If no, score LOW.
+  • Stores where the audience BUYS the brand's products should rank HIGH in WHERE THEY SHOP (e.g., Foot Locker for Nike, not Redbubble).
+  • MEDIA items should reflect what this audience actually reads/watches online — a young, diverse, athletic audience skews toward sports media (ESPN, Bleacher Report) and social-native media, not toward cable news.
 
 ═══════════════════════════════════════════════════════════════════
 PERSONA — this is the audience you are scoring for
@@ -15925,6 +15934,15 @@ def parallel_category_agents(df: pd.DataFrame, persona_doc: dict,
                   f"(values covered by {', '.join(_PARENT_CATS)}): "
                   + ', '.join(_skipped_dup))
         cats_needing_llm = _kept
+
+    # ── Unconditionally skip categories whose items appear elsewhere ──
+    _SKIP_CATS = {'FRANCHISE'}
+    _before_skip = len(cats_needing_llm)
+    cats_needing_llm = [c for c in cats_needing_llm if c.upper() not in _SKIP_CATS]
+    _n_skipped_explicit = _before_skip - len(cats_needing_llm)
+    if _n_skipped_explicit:
+        print(f"   ⏭️  Skipping {_n_skipped_explicit} categories (items appear in other categories): "
+              + ', '.join(sorted(_SKIP_CATS)))
 
     cats_needing_llm.sort(key=lambda c: len(category_new_items[c]), reverse=True)
     if prev_bhv:
