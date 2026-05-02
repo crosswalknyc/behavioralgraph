@@ -17280,13 +17280,17 @@ def post_agent_quality_gate(df: pd.DataFrame, persona_doc: dict | None = None,
             except (ValueError, TypeError):
                 continue
             if v in seen_vals:
-                d4 = random.randint(1, 9)
-                jitter = d4 * 0.0001 * random.choice([-1, 1])
-                new_v = round(max(0.0011, v + jitter), 4)
-                while new_v in seen_vals:
-                    d4 = random.randint(1, 9)
+                new_v = None
+                for _widen in range(1, 500):
+                    scale = 1 + (_widen // 18)
+                    d4 = random.randint(1, 9) * scale
                     jitter = d4 * 0.0001 * random.choice([-1, 1])
-                    new_v = round(max(0.0011, v + jitter), 4)
+                    candidate = round(max(0.0011, v + jitter), 4)
+                    if candidate not in seen_vals:
+                        new_v = candidate
+                        break
+                if new_v is None:
+                    new_v = round(v + random.uniform(0.001, 0.05), 4)
                 df.at[idx, bp_col] = new_v
                 if pct_col in df.columns:
                     df.at[idx, pct_col] = new_v
