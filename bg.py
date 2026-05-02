@@ -306,7 +306,7 @@ MODEL_JUDGE    = 'gpt-4.1-nano'            # mismatch + cap review (ACCEPT/REVIS
 PRIORITY_CATEGORIES = {
     'SOCIAL MEDIA', 'SEARCH ENGINE/AI',
     'MOST PURCHASED BRANDS', 'WHERE THEY SHOP',
-    'INTERESTS', 'APPS/PLATFORM',
+    'INTEREST', 'APP/PLATFORM USAGE',
 }
 
 
@@ -13850,7 +13850,8 @@ def _parse_persona_json(text: str):
             return None, f"{type(e1).__name__}: {e1}; after repair: {type(e2).__name__}: {e2}"
 
 
-def persona_research_agent(subject: str, brand_category: str | None = None) -> dict:
+def persona_research_agent(subject: str, brand_category: str | None = None,
+                           study_start: str = '', study_end: str = '') -> dict:
     """Step 1 — single gpt-4o-search-preview call.
 
     Researches *subject* online and returns a PersonaDoc dict:
@@ -13866,7 +13867,19 @@ def persona_research_agent(subject: str, brand_category: str | None = None) -> d
 
     cat_label = brand_category or "general entertainment"
 
+    date_context = ""
+    if study_start and study_end:
+        date_context = (
+            f"\n\nSTUDY WINDOW: {study_start} to {study_end}\n"
+            "Factor in any major events, product launches, sponsorship deals, scandals, "
+            "viral moments, seasonal patterns, or cultural shifts that occurred during "
+            "this specific window that would affect digital engagement with this brand/subject. "
+            "For example, if a major collaboration dropped or a controversy erupted during "
+            "this period, the persona and category guidance should reflect those events.\n"
+        )
+
     prompt = f"""You are a senior audience-research analyst.  Research **{subject}** ({cat_label}) using real, current online data (fan demographics surveys, social-media analytics, press coverage, industry reports).
+{date_context}
 
 Return ONLY a single valid JSON object — no markdown, no commentary.
 
@@ -14160,7 +14173,8 @@ def _build_canonical_baseline_lookup() -> dict:
 def _run_single_category_agent(category: str, values: list[str],
                                 persona_doc: dict, subject: str,
                                 canonical_baseline_lookup: dict | None = None,
-                                anchor_mode: str = 'persona') -> list[dict]:
+                                anchor_mode: str = 'persona',
+                                study_dates: str = '') -> list[dict]:
     """Worker for Step 2 — one gpt-4o call per category.
 
     Returns list of {value, bp, reason}.
@@ -14284,8 +14298,17 @@ ABSOLUTE LUXURY / SMALL-BASELINE RULE — NON-NEGOTIABLE:
     else:
         anchor_rules = ''
 
-    prompt = f"""You are a consumer-research analyst assigning Brand Penetration (BP) values for the **{category}** category of a behavioral panel profile for **{subject}**.
+    date_context_block = ""
+    if study_dates:
+        date_context_block = (
+            f"\nSTUDY WINDOW: {study_dates}\n"
+            "Consider whether any events during this window (product launches, viral moments, "
+            "sponsorship deals, seasonal patterns, award shows, controversies, album/movie releases) "
+            "would increase or decrease digital engagement with specific items in this category.\n"
+        )
 
+    prompt = f"""You are a consumer-research analyst assigning Brand Penetration (BP) values for the **{category}** category of a behavioral panel profile for **{subject}**.
+{date_context_block}
 DEFINITION — read carefully:
 Brand Penetration = the % of THIS specific audience whose digital clickstream (web visits, app usage, searches, streams, purchases) shows engagement with the item during the study window. This is NOT popularity, awareness, favorability, or in-store purchase. It is purely OBSERVED DIGITAL BEHAVIOR.
 
@@ -15533,7 +15556,8 @@ def parallel_category_agents(df: pd.DataFrame, persona_doc: dict,
                               delta_sanity_new_dates: str = '',
                               wide_window: bool = False,
                               canonical_baseline_lookup: dict | None = None,
-                              anchor_mode: str = 'persona') -> pd.DataFrame:
+                              anchor_mode: str = 'persona',
+                              study_dates: str = '') -> pd.DataFrame:
     """Step 2 — run one gpt-4o agent per behavioral category in parallel.
 
     Each agent receives the persona doc + the list of values from Snowflake for
@@ -15858,6 +15882,38 @@ def parallel_category_agents(df: pd.DataFrame, persona_doc: dict,
     total_carry = sum(len(c) for c in category_carry.values())
     total_new = sum(len(n) for n in category_new_items.values())
     cats_needing_llm = [c for c, n in category_new_items.items() if n]
+
+    # ── Skip categories whose items are fully duplicated in a parent ──
+    # MOST PURCHASED BRANDS and TALENT are scored independently; any child
+    # category whose items all exist in one of these parents can be skipped
+    # because enforce_cross_category_brand_consistency() will propagate
+    # the highest BP for each item across every category it appears in.
+    _PARENT_CATS = {'MOST PURCHASED BRANDS', 'TALENT'}
+    _parent_items: set[str] = set()
+    for pc in _PARENT_CATS:
+        for v in category_new_items.get(pc, []):
+            _parent_items.add(v.strip().upper())
+        for v in category_carry.get(pc, {}).keys():
+            _parent_items.add(v.strip().upper())
+    if _parent_items:
+        _before = len(cats_needing_llm)
+        _skipped_dup = []
+        _kept = []
+        for cat in cats_needing_llm:
+            if cat.upper() in _PARENT_CATS:
+                _kept.append(cat)
+                continue
+            items_upper = {v.strip().upper() for v in category_new_items[cat]}
+            if items_upper and items_upper.issubset(_parent_items):
+                _skipped_dup.append(cat)
+            else:
+                _kept.append(cat)
+        if _skipped_dup:
+            print(f"   ⏭️  Skipping {len(_skipped_dup)} duplicate-subset categories "
+                  f"(values covered by {', '.join(_PARENT_CATS)}): "
+                  + ', '.join(_skipped_dup))
+        cats_needing_llm = _kept
+
     cats_needing_llm.sort(key=lambda c: len(category_new_items[c]), reverse=True)
     if prev_bhv:
         print(f"🔁 Rerun carry-forward: {total_carry} items reuse prior BP, "
@@ -15880,36 +15936,61 @@ def parallel_category_agents(df: pd.DataFrame, persona_doc: dict,
     results_map: dict[str, list[dict]] = {}
     _MAX_AGENT_RETRIES = 3
     _cat_phase_t0 = _time.perf_counter()
+
+    # ── Chunk large categories so no single API call exceeds ~80 items ──
+    _CHUNK_MAX = 80
+    _work_units: list[tuple[str, list[str], int]] = []  # (cat, items_chunk, chunk_idx)
+    for cat in cats_needing_llm:
+        items = category_new_items[cat]
+        if len(items) <= _CHUNK_MAX:
+            _work_units.append((cat, items, 0))
+        else:
+            chunks = [items[i:i + _CHUNK_MAX] for i in range(0, len(items), _CHUNK_MAX)]
+            for ci, chunk in enumerate(chunks):
+                _work_units.append((cat, chunk, ci))
+            print(f"   🔪 Chunked [{cat}] ({len(items)} items) → {len(chunks)} chunks of ≤{_CHUNK_MAX}")
+
+    _chunk_results: dict[str, list[list[dict]]] = {cat: [] for cat in cats_needing_llm}
+
     with _futures.ThreadPoolExecutor(max_workers=35) as pool:
-        future_to_cat = {
+        future_to_unit = {
             pool.submit(_run_single_category_agent, cat,
-                         category_new_items[cat], persona_doc, subject,
-                         canonical_baseline_lookup, anchor_mode): cat
-            for cat in cats_needing_llm
+                         chunk, persona_doc, subject,
+                         canonical_baseline_lookup, anchor_mode, study_dates): (cat, ci)
+            for cat, chunk, ci in _work_units
         }
+        _done_units: set[tuple[str, int]] = set()
         try:
-            for fut in _futures.as_completed(future_to_cat, timeout=300):
-                cat = future_to_cat[fut]
+            for fut in _futures.as_completed(future_to_unit, timeout=300):
+                cat, ci = future_to_unit[fut]
+                _done_units.add((cat, ci))
                 try:
-                    results_map[cat] = fut.result()
+                    _chunk_results[cat].append(fut.result())
                 except Exception as e:
-                    print(f"   ⚠️ Agent [{cat}] raised: {e}")
-                    results_map[cat] = []
+                    print(f"   ⚠️ Agent [{cat}] chunk {ci} raised: {e}")
+                    _chunk_results[cat].append([])
         except TimeoutError:
-            timed_out = [c for c in cats_needing_llm if c not in results_map]
-            print(f"   🔄 as_completed timeout: retrying {len(timed_out)} categories sequentially…")
-            for c in timed_out:
+            timed_out_units = [(cat, chunk, ci) for cat, chunk, ci in _work_units
+                               if (cat, ci) not in _done_units]
+            print(f"   🔄 as_completed timeout: retrying {len(timed_out_units)} work units sequentially…")
+            for cat, chunk, ci in timed_out_units:
                 for _attempt in range(1, _MAX_AGENT_RETRIES + 1):
                     try:
-                        results_map[c] = _run_single_category_agent(
-                            c, category_new_items[c], persona_doc, subject,
-                            canonical_baseline_lookup, anchor_mode)
-                        print(f"   ✅ Retry {_attempt}/{_MAX_AGENT_RETRIES} for [{c}] succeeded")
+                        _chunk_results[cat].append(_run_single_category_agent(
+                            cat, chunk, persona_doc, subject,
+                            canonical_baseline_lookup, anchor_mode, study_dates))
+                        print(f"   ✅ Retry {_attempt}/{_MAX_AGENT_RETRIES} for [{cat}] chunk {ci} succeeded")
                         break
                     except Exception as _e:
                         if _attempt == _MAX_AGENT_RETRIES:
-                            print(f"   ❌ [{c}] failed after {_MAX_AGENT_RETRIES} retries: {_e}")
-                            results_map[c] = []
+                            print(f"   ❌ [{cat}] chunk {ci} failed after {_MAX_AGENT_RETRIES} retries: {_e}")
+                            _chunk_results[cat].append([])
+
+    for cat in cats_needing_llm:
+        merged = []
+        for chunk_list in _chunk_results[cat]:
+            merged.extend(chunk_list)
+        results_map[cat] = merged
 
     _cat_phase_elapsed = _time.perf_counter() - _cat_phase_t0
     print(f"   [AGENT-SUMMARY] {len(results_map)} categories scored in {_cat_phase_elapsed:.0f}s "
@@ -20158,6 +20239,7 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
                 delta_sanity_new_dates=_gp_new_dates,
                 wide_window=_gp_wide_window,
                 anchor_mode='genpop',
+                study_dates=f"{behavior_start} to {behavior_end}",
             )
 
             print("🔒 GenPop sanity check …")
@@ -20254,7 +20336,8 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
             print("   • Persona research LLM call: SKIPPED (prior demographics reused)")
             _persona_doc = _persona_doc_from_previous_lookup(previous_demo_lookup)
         else:
-            _persona_doc = persona_research_agent(_subject_name, brand_category)
+            _persona_doc = persona_research_agent(_subject_name, brand_category,
+                                                    study_start=behavior_start, study_end=behavior_end)
 
         # Build date-range labels for the delta-sanity agent so it can reason
         # about whether a swing is event-driven (e.g. Coachella in Q1).
@@ -20307,6 +20390,7 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
             delta_sanity_prior_dates=_prior_behavior_dates,
             delta_sanity_new_dates=_new_behavior_dates,
             wide_window=_wide_window,
+            study_dates=_new_behavior_dates,
         )
 
         # Step 3: Final Sanity Check
