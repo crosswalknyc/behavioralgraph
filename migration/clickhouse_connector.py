@@ -117,9 +117,9 @@ FUNC_REPLACEMENTS = [
     (r'\bIFF\s*\(',                      r'if('),
     # DATEADD: handled by _rewrite_dateadd (balanced-paren walker) before
     # FUNC_REPLACEMENTS runs. Regex form left behind for reference only.
-    # DATEDIFF
-    (r"DATEDIFF\s*\(\s*'?day'?\s*,\s*([^,]+),\s*([^)]+)\)",
-     r"dateDiff('day', \1, \2)"),
+    # DATEDIFF — all common units (day, minute, second, hour, week, month, year)
+    (r"DATEDIFF\s*\(\s*'?(day|minute|second|hour|week|month|year)s?'?\s*,\s*([^,]+),\s*([^)]+)\)",
+     lambda m: f"dateDiff('{m.group(1).lower()}', {m.group(2)}, {m.group(3)})"),
     # CONVERT_TIMEZONE
     (r"CONVERT_TIMEZONE\s*\([^,]+,\s*'([^']+)'\s*,\s*([^)]+)\)",
      r"toTimeZone(\2, '\1')"),
