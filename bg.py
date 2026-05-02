@@ -20584,26 +20584,33 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
             _previous_bp_lookup = {}
             _previous_bp_rows = []
 
+        _behavioral_cats = sorted({
+            str(c).strip().upper() for c in df_final['Column'].unique()
+            if str(c).strip().upper() not in {
+                'SAMPLE SIZE', 'BRAND INPUT', 'INPUT_METADATA', 'BRAND CATEGORY',
+                'AGE', 'GENDER', 'ETHNICITY', 'INCOME', 'EDUCATION',
+                'RELATIONSHIP', 'SEXUAL_ORIENTATION', 'PARENTAL_STATUS',
+                'OCCUPATION', 'LOCATION',
+            }
+        })
+
         if _is_rerun_same_brand:
             print("🔒 Rerun detected (same brand input as prior run)")
             print("   • Demographics + location: LOCKED to prior run values (identical)")
+            print("   • Persona research agent: RUNNING for digital_identity + category_signals")
             print("   • Behavioral items: scored fresh by per-category agents from today's panel")
             print(f"     (prior reference has {len(_previous_bp_lookup)} BP values for delta-sanity comparison)")
             print(f"   • Missing prior items ({len(_previous_bp_rows)} candidates): re-added with prior BP + jitter "
                   f"so per-category row counts stay stable")
             print("   • Delta sanity agent: any item swinging >15pp or ≥2.5× vs. prior gets a gpt-4o second-look")
-            print("   • Persona research LLM call: SKIPPED (prior demographics reused)")
-            _persona_doc = _persona_doc_from_previous_lookup(previous_demo_lookup)
+            _persona_doc = persona_research_agent(_subject_name, brand_category,
+                                                    study_start=behavior_start, study_end=behavior_end,
+                                                    category_names=_behavioral_cats)
+            _locked_demo = _persona_doc_from_previous_lookup(previous_demo_lookup)
+            _persona_doc['demographics'] = _locked_demo.get('demographics', _persona_doc.get('demographics', {}))
+            _persona_doc['location'] = _locked_demo.get('location', _persona_doc.get('location', []))
+            print("   • Demographics + location overwritten with locked prior-run values")
         else:
-            _behavioral_cats = sorted({
-                str(c).strip().upper() for c in df_final['Column'].unique()
-                if str(c).strip().upper() not in {
-                    'SAMPLE SIZE', 'BRAND INPUT', 'INPUT_METADATA', 'BRAND CATEGORY',
-                    'AGE', 'GENDER', 'ETHNICITY', 'INCOME', 'EDUCATION',
-                    'RELATIONSHIP', 'SEXUAL_ORIENTATION', 'PARENTAL_STATUS',
-                    'OCCUPATION', 'LOCATION',
-                }
-            })
             _persona_doc = persona_research_agent(_subject_name, brand_category,
                                                     study_start=behavior_start, study_end=behavior_end,
                                                     category_names=_behavioral_cats)
