@@ -15884,11 +15884,15 @@ def parallel_category_agents(df: pd.DataFrame, persona_doc: dict,
     cats_needing_llm = [c for c, n in category_new_items.items() if n]
 
     # ── Skip categories whose items are fully duplicated in a parent ──
-    # MOST PURCHASED BRANDS and TALENT are scored independently; any child
-    # category whose items all exist in one of these parents can be skipped
-    # because enforce_cross_category_brand_consistency() will propagate
-    # the highest BP for each item across every category it appears in.
-    _PARENT_CATS = {'MOST PURCHASED BRANDS', 'TALENT'}
+    # MOST PURCHASED BRANDS, TALENT, and SPORTS TEAM are scored
+    # independently; any child category whose items all exist in one of
+    # these parents can be skipped because
+    # enforce_cross_category_brand_consistency() will propagate the
+    # highest BP for each item across every category it appears in.
+    # For sports this means NFL divisions, NBA divisions, MLS, MLB,
+    # Premier League, La Liga, WNBA, SOCCER etc. are all covered by
+    # the parent SPORTS TEAM scoring.
+    _PARENT_CATS = {'MOST PURCHASED BRANDS', 'TALENT', 'SPORTS TEAM'}
     _parent_items: set[str] = set()
     for pc in _PARENT_CATS:
         for v in category_new_items.get(pc, []):
