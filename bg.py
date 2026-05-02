@@ -14351,14 +14351,17 @@ HOW TO USE THE BASELINE:
       – Score LOW (0.1-5%) regardless of fame or baseline.
       – A luxury brand irrelevant to this audience = 0.3-2% even if baseline is 3%.
   • Neutral items (in neither list):
-      – Score based on YOUR judgment of persona fit.
-      – If irrelevant to this audience, score BELOW baseline even if the item is famous.
-      – If relevant, score ABOVE baseline.
+      – Ask: "Would this specific audience engage with this item DIGITALLY more or less than the average American?"
+      – If the answer is "less" or "no connection to this persona", score at 0.1-0.3x baseline.
+        Example: Clinique at 35% gen-pop baseline for a Nike audience → ~3-7% (this audience UNDER-INDEXES heavily on beauty brands).
+      – If the answer is "about the same", score near baseline.
+      – If the answer is "more", score above baseline.
+      – A high gen-pop baseline does NOT mean the score should be high. It means MORE Americans use it on average — but this audience may drastically under-index.
   • Items WITHOUT a baseline ("not measured"):
       – Use your best estimate of what % of THIS audience would engage digitally.
   • Hard floor: 0.01%. Hard ceiling: 96%.
 
-KEY PRINCIPLE: The RANK ORDER of your scores must reflect this specific audience's affinity, NOT general population popularity. A low-baseline item that is core to this persona should score ABOVE a high-baseline item that is irrelevant.
+KEY PRINCIPLE: The RANK ORDER of your scores must reflect this specific audience's affinity, NOT general population popularity. A low-baseline item that is core to this persona should score ABOVE a high-baseline item that is irrelevant. When you see a HIGH gen-pop baseline on an item that has NOTHING to do with this audience's interests, that is a signal to score it WELL BELOW baseline (0.1-0.3x), not near it.
 """
     else:
         anchor_rules = ''
@@ -14420,14 +14423,15 @@ EXPECTED LOW-BP ITEMS for this audience in this category
 ROW-BY-ROW REASONING — required process
 ═══════════════════════════════════════════════════════════════════
 For EACH item in the list below, reason in this order:
-  1) DOES IT HAVE A US BASELINE shown next to it? → start from that baseline and apply the anchoring rule above (GenPop: ±5pp; persona: index by fit). Do NOT ignore the baseline.
+  1) DOES IT HAVE A US BASELINE shown next to it? → Note it. The baseline is NOT your starting score — it is the national average. For persona runs, your score can be drastically ABOVE or BELOW this number based on fit.
   2) Is this item in the EXPECTED HIGH list above? → score HIGH RELATIVE TO ITS BASELINE (1.5-3x for personas; ≈baseline for GenPop). DO NOT pump it to 80-95% just because it's "expected high" — respect the baseline ceiling.
   3) Is this item in the EXPECTED LOW list above? → score LOW (0.1-0.5x baseline for personas; ≈baseline for GenPop) regardless of fame.
   4) Is this a near-universal mass platform (Google, YouTube, Amazon, Facebook, Gmail, Instagram, Netflix)? → score per its baseline (typically 60-85%) unless the persona explicitly rejects it.
   5) Is the item bought IN-STORE for the majority of consumers (CPG, grocery, household goods, pet food, personal care)? → score LOW (1-8%) regardless of brand strength or gen-pop baseline. High gen-pop baseline for CPG reflects OFFLINE purchase behavior, not digital engagement.
   6) Is the item REGIONAL/geo-specific and the persona is NOT specifically tied to that geography? → score LOW (0.5-3%).
   7) Is the item LUXURY/HNW and the persona INCOME skew is NOT $150K+? → score LOW (0.3-3%).
-  8) No baseline available? → use your best estimate of what % of this specific audience would actually click/visit/use this item online during a single year.
+  8) NOT in any list above AND not relevant to this persona? → score at 0.1-0.3x baseline. Do NOT default to "near baseline" just because it's a well-known brand.
+  9) No baseline available? → use your best estimate of what % of this specific audience would actually click/visit/use this item online during a single year.
 
 ═══════════════════════════════════════════════════════════════════
 OUTPUT FORMAT
@@ -14445,6 +14449,7 @@ NON-NEGOTIABLE RULES:
   • RANK ORDER must reflect persona fit, not absolute fame. A Nike audience should rank Foot Locker > Cartier even though Cartier is more famous.
   • An item being LUXURY or PRESTIGIOUS does NOT make it HIGH BP — only persona-relevance does.
   • An item being LARGE or NATIONALLY-KNOWN does NOT make it HIGH BP if the persona doesn't engage with it digitally.
+  • HIGH GEN-POP BASELINE ≠ HIGH SCORE. If Clinique has a 35% gen-pop baseline but this audience is sneaker/athletic culture, Clinique should score ~3-7%. The gen-pop number tells you the NATIONAL AVERAGE; this audience is NOT average.
   • Do NOT artificially compress the distribution — if the persona genuinely engages with 12 items in this category at 25%+, score all 12 at 25%+. There is NO cap on items per tier.
 
 ITEMS TO SCORE:
