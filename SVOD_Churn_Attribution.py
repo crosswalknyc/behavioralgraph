@@ -935,14 +935,13 @@ def run_query(conn, p):
         # Create a list of all expected episode numbers
         all_episode_nums = [ep['episode_num'] for ep in episode_dates]
         
-        # Build VALUES clause for all episodes (Snowflake syntax)
-        values_clause = ', '.join([f'({ep_num})' for ep_num in all_episode_nums])
+        # Build UNION ALL clause for all episodes (ClickHouse compatible)
+        union_selects = ' UNION ALL '.join([f'SELECT {ep_num} AS EPISODE_NUM' for ep_num in all_episode_nums])
         
         # Build query that includes ALL episodes, even those with 0 signups
         episode_attribution_query = f"""
         WITH all_episodes AS (
-            SELECT EPISODE_NUM
-            FROM VALUES {values_clause} AS t(EPISODE_NUM)
+            {union_selects}
         ),
         attribution_data AS (
             SELECT
