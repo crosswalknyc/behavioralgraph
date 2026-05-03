@@ -14324,6 +14324,43 @@ Return ONLY a single valid JSON object — no markdown, no commentary.
     ...top 15-20 DMAs with highest affinity; remainder auto-distributed
   ],
   "digital_identity": "<2-4 paragraph DEEP analysis of this audience's digital footprint — see instructions below>",
+  "subsegments": [
+    {{
+      "name": "<short descriptive name, e.g. 'Sneakerhead / hypebeast'>",
+      "weight_pct": <integer 0-100; subsegment weights should sum to ~100>,
+      "age_band": "<e.g. '18-28'>",
+      "cultural_markers": ["<5-10 specific markers: subcultures, music genres, apps, retailers, athletes, content sources defining this segment>"],
+      "cross_shops": ["<5-10 brands/services this subsegment specifically engages with>"],
+      "anti_fit": ["<3-6 categories this subsegment AVOIDS>"]
+    }},
+    ...3-6 subsegments that together describe the audience
+  ],
+  "cultural_anchors": {{
+    "sports": ["<specific teams/leagues this audience watches>"],
+    "music": ["<specific artists/genres>"],
+    "athletes": ["<specific athletes>"],
+    "media": ["<specific outlets/publications>"],
+    "apps": ["<specific apps>"],
+    "social_platforms_ranked": ["<ordered list, most-used first>"],
+    "shopping": ["<specific retailers>"],
+    "dining": ["<specific restaurant brands>"],
+    "drinks": ["<specific beverage brands>"],
+    "tech": ["<specific tech brands/devices>"],
+    "fitness": ["<specific gym chains/fitness brands>"],
+    "streaming": ["<specific streaming services>"],
+    "travel": ["<specific travel brands>"]
+  }},
+  "anti_fit_explicit": {{
+    "<category label, e.g. 'ultra_luxury_dining'>": ["<5-15 specific named items in this anti-fit category that this audience would NOT engage with>"],
+    "<category label, e.g. 'luxury_fashion'>": [...],
+    "<category label, e.g. 'rural_americana'>": [...],
+    "<category label, e.g. 'boomer_media'>": [...]
+  }},
+  "cross_shop_network": {{
+    "apparel": ["<brands this audience genuinely cross-shops with the subject>"],
+    "retail": ["<retailers this audience uses alongside the subject>"],
+    "negative_overlap": ["<brands this audience does NOT meaningfully overlap with despite seeming related>"]
+  }},
   "category_signals": {{
     "<CATEGORY NAME>": "<1-2 sentences: what does this audience do/not do in this category? What types of items should score HIGH vs LOW?>",
     ...one entry per category from the CATEGORIES TO BE SCORED list above
@@ -14340,7 +14377,33 @@ RULES:
 - Do NOT include "EMPLOYED FULL-TIME" or "EMPLOYED PART-TIME" in OCCUPATION. Those values are forbidden — they are NOT real occupation categories. OCCUPATION must only use: SELF-EMPLOYED, STUDENT, HOMEMAKER, RETIRED, UNEMPLOYED, PREFER NOT TO SAY.
 - LOCATION: Provide at least 15-20 top DMAs with realistic, varied percentages. The percentages should NOT be clustered — use a natural distribution where the #1 DMA might be 8-12%, #5 might be 4-6%, #10 might be 2-3%, #15 might be 1-2%, #20 might be 0.5-1%. The sum should be ≤ 100; remainder is auto-spread to the other 190+ DMAs with random variation.
 
-DIGITAL IDENTITY — THIS IS THE MOST IMPORTANT FIELD:
+SUB-SEGMENTS, CULTURAL ANCHORS, ANTI-FIT, CROSS-SHOP NETWORK — REQUIRED:
+The downstream scoring agent uses these structured fields directly to reason
+about whether THIS audience would engage with each item it scores. Generic or
+vague entries here cause the scoring agent to default to neutral on most items
+(which produces a confabulated 27% for everything obscure). Be specific and
+concrete:
+
+  • subsegments: 3-6 distinct slices of this audience with weight_pct summing
+    to ~100. Each subsegment must have a unique cultural identity. Example for
+    Nike's audience: sneakerhead (~22%), performance athlete (~28%), lifestyle
+    casual (~30%), youth-sports parent (~15%), women's training (~15%).
+  • cultural_anchors: For each key, give 6-12 SPECIFIC named items. NEVER write
+    "various sports brands" or "popular music" — name them. The scoring agent
+    treats anything in cultural_anchors as a definite high-affinity item.
+  • anti_fit_explicit: Pick 3-6 category labels that describe items this
+    audience does NOT engage with, and for each list 5-15 specific named items.
+    This is what protects against confabulation: if Bar Masa is in
+    `ultra_luxury_dining`, the scoring agent KNOWS to score it low even if
+    it doesn't otherwise recognize the name. Categories to consider include
+    (but are not limited to): ultra_luxury_dining, luxury_fashion,
+    rural_americana, boomer_media, niche_unknowns, foreign_only_platforms,
+    children_only (if audience is adult).
+  • cross_shop_network: Real brands the audience actively uses alongside the
+    subject (apparel + retail + negative_overlap). Used by the scoring agent
+    to decide rank ordering within a category.
+
+DIGITAL IDENTITY — THIS IS ALSO CRITICAL:
 The `digital_identity` field is a rich text block (2-4 paragraphs) that will be passed VERBATIM to per-category scoring agents. Make it specific, opinionated, and grounded in real audience data. It MUST address all five areas below:
 
 1. SUBCULTURE: What digital subcultures does this audience belong to? Be specific — not just "sports fans" but the exact communities (e.g. sneakerheads, fantasy football, K-beauty, car modding, etc.).
@@ -14518,6 +14581,37 @@ EXAMPLE category_signals (for a hypothetical athletic-brand audience — adapt t
         print(f"CATEGORY SIGNALS ({len(_cs)} categories):")
         for _cs_cat, _cs_sig in sorted(_cs.items()):
             print(f"  [{_cs_cat}] {str(_cs_sig)[:150]}")
+    _ss = persona_doc.get('subsegments', []) or []
+    if _ss:
+        print(f"SUB-SEGMENTS ({len(_ss)}):")
+        for _s in _ss:
+            if isinstance(_s, dict):
+                print(f"  • {_s.get('name','?')} (~{_s.get('weight_pct','?')}%, age {_s.get('age_band','')}): "
+                      + ', '.join(str(m) for m in (_s.get('cultural_markers') or [])[:6]))
+    else:
+        print("SUB-SEGMENTS: (empty — scoring will be less nuanced!)")
+    _ca = persona_doc.get('cultural_anchors', {}) or {}
+    if _ca:
+        print(f"CULTURAL ANCHORS ({len(_ca)} categories):")
+        for _k, _v in list(_ca.items())[:14]:
+            if isinstance(_v, list):
+                print(f"  {_k}: {', '.join(str(x) for x in _v[:8])}")
+    else:
+        print("CULTURAL ANCHORS: (empty — scoring may default to gen-pop!)")
+    _af = persona_doc.get('anti_fit_explicit', {}) or {}
+    if _af:
+        print(f"ANTI-FIT EXPLICIT ({len(_af)} categories):")
+        for _k, _v in _af.items():
+            if isinstance(_v, list):
+                print(f"  {_k}: {', '.join(str(x) for x in _v[:8])}")
+    else:
+        print("ANTI-FIT EXPLICIT: (empty — scoring agent has nothing to push back with on luxury/niche items!)")
+    _xs = persona_doc.get('cross_shop_network', {}) or {}
+    if _xs:
+        print(f"CROSS-SHOP NETWORK ({len(_xs)} buckets):")
+        for _k, _v in _xs.items():
+            if isinstance(_v, list):
+                print(f"  {_k}: {', '.join(str(x) for x in _v[:8])}")
     print(f"{'─'*60}\n")
 
     return persona_doc
@@ -14626,6 +14720,165 @@ def _build_canonical_baseline_lookup() -> dict:
 
 MODEL_GUIDANCE = 'gpt-4.1-nano'
 
+# Item-classification agent uses a stronger model — it has to actually know
+# what each obscure item IS, classify its target audience, and flag genuinely
+# unknown items. Nano hallucinates too much for this; gpt-4o-mini gives us
+# real world knowledge at ~10% the cost of full gpt-4o.
+MODEL_CLASSIFY = 'gpt-4o-mini'
+
+# Maximum items per item-classification call. The agent has to think about
+# each item, so smaller batches keep response quality high.
+_CLASSIFY_BATCH = 30
+
+
+def _run_item_classification_agent(items: list[str]) -> dict[str, dict]:
+    """Classify a batch of items by what they actually ARE.
+
+    For each item, the agent returns rich per-item attributes that downstream
+    scoring uses to reason about persona fit:
+        what_is_it          1-2 sentence description
+        target_demo         {age, income, ethnicity_skew, geography}
+        price_tier          luxury/premium/mid/value/discount/NA
+        cultural_code       list of tags (urban-streetwear, rural-americana,
+                            luxury, boomer-traditional, niche-subculture, ...)
+        adjacent_brands     a few brands this item competes with / sits alongside
+        confidence          high/medium/low — low means the agent doesn't
+                            recognize the item; downstream drops these when
+                            no panel signal and no gen-pop baseline exists,
+                            instead of fabricating a 27% from default affinity.
+
+    Returns: {value_upper: classification_dict}
+
+    This step replaces the old "score blind from a thin persona summary"
+    failure mode that produced the 27% confabulation cluster.
+    """
+    import json as _json
+    client = _get_openai_client()
+    if client is None or not items:
+        return {}
+
+    items_block = '\n'.join(f"  - {it}" for it in items)
+
+    prompt = f"""You are a research analyst classifying consumer-facing items by what they ARE.
+
+For each item below, output a structured classification. The downstream scoring
+agent will use your output to decide whether a specific audience (e.g. the
+"digital Nike consumer") would engage with this item.
+
+CRITICAL RULES:
+1. If you genuinely do not recognize an item (made-up-sounding name, hyper-niche
+   regional business, no clear consumer-facing brand), set confidence="low".
+   Downstream will drop these instead of fabricating a default score. Do NOT
+   guess — flag and move on.
+2. Be specific in `what_is_it`: name the category, price tier, and 1-2
+   distinguishing facts (e.g. "$595 omakase by Masa Takayama at Mandarin
+   Oriental NYC", not "fine dining restaurant").
+3. `cultural_code` is a small set of tags from this controlled list (use
+   multiple where they apply):
+   urban-streetwear, suburban-mainstream, rural-americana, luxury,
+   ultra-luxury, boomer-traditional, gen-z-youth, parent-family,
+   niche-subculture, athletic-mainstream, athletic-niche, tech-mainstream,
+   tech-luxury, latin/hispanic, black-cultural, asian-cultural, lgbtq,
+   foreign-only, women-focused, men-focused
+4. `target_demo` should reflect who the item is built for, not who *might*
+   buy it once. Example: "Hermès" → income $500K+, age 35-65, neutral
+   ethnicity. "Tractor Supply" → income $40-100K, age 35-70, rural geography.
+
+ITEMS TO CLASSIFY:
+{items_block}
+
+Return ONLY a JSON object mapping each item (exact spelling, uppercased) to
+its classification. No markdown, no commentary.
+
+{{
+  "<ITEM NAME UPPERCASE>": {{
+    "what_is_it": "<1-2 sentence concrete description>",
+    "target_demo": {{
+      "age": "<band like '18-34' or 'all'>",
+      "income": "<band like '$45-150K' or 'all'>",
+      "ethnicity_skew": "<'neutral' or e.g. 'Black 1.6x', 'Hispanic 1.3x'>",
+      "geography": "<'national-mainstream' / 'urban-elite' / 'rural' / etc.>"
+    }},
+    "price_tier": "<luxury|premium|mid|value|discount|NA>",
+    "cultural_code": ["<tag1>", "<tag2>"],
+    "adjacent_brands": ["<comp1>", "<comp2>"],
+    "confidence": "<high|medium|low>"
+  }},
+  ...
+}}
+"""
+
+    try:
+        resp = _timed_completion(
+            client,
+            label=f"item-classify/{len(items)}",
+            model=MODEL_CLASSIFY,
+            messages=[
+                {'role': 'system', 'content': 'Return ONLY valid JSON. No markdown, no commentary.'},
+                {'role': 'user', 'content': prompt},
+            ],
+            temperature=0.0,
+            max_tokens=4096,
+            response_format={"type": "json_object"},
+            timeout=60,
+        )
+        text = (resp.choices[0].message.content or '').strip()
+        doc = _json.loads(text)
+        if not isinstance(doc, dict):
+            return {}
+        out: dict[str, dict] = {}
+        for k, v in doc.items():
+            if not isinstance(v, dict):
+                continue
+            key_u = str(k).strip().upper()
+            out[key_u] = v
+        return out
+    except Exception as e:
+        print(f"   ⚠️ Item-classification batch failed ({len(items)} items): {e}")
+        return {}
+
+
+def _run_item_classification_parallel(unique_items: list[str],
+                                       max_workers: int = 35) -> dict[str, dict]:
+    """Classify every unique item in the run in parallel batches.
+
+    This is called ONCE near the start of `parallel_category_agents` so every
+    downstream scoring agent gets the same per-item classifications regardless
+    of which category the item ends up scored in.
+    """
+    import concurrent.futures as _futures
+
+    if not unique_items:
+        return {}
+    items = sorted({str(x).strip() for x in unique_items if str(x).strip()})
+    batches = [items[i:i + _CLASSIFY_BATCH] for i in range(0, len(items), _CLASSIFY_BATCH)]
+    print(f"🔎 Item classification: {len(items)} unique items in {len(batches)} batches "
+          f"of ≤{_CLASSIFY_BATCH} ({MODEL_CLASSIFY}) …")
+    t0 = _time.perf_counter()
+    out: dict[str, dict] = {}
+    with _futures.ThreadPoolExecutor(max_workers=min(max_workers, max(1, len(batches)))) as pool:
+        future_to_batch = {pool.submit(_run_item_classification_agent, b): bi
+                           for bi, b in enumerate(batches)}
+        for fut in _futures.as_completed(future_to_batch):
+            try:
+                result = fut.result()
+                if result:
+                    out.update(result)
+            except Exception as e:
+                print(f"   ⚠️ classify batch {future_to_batch[fut]} raised: {e}")
+    elapsed = _time.perf_counter() - t0
+    n_high = sum(1 for c in out.values() if str(c.get('confidence', '')).lower() == 'high')
+    n_med = sum(1 for c in out.values() if str(c.get('confidence', '')).lower() == 'medium')
+    n_low = sum(1 for c in out.values() if str(c.get('confidence', '')).lower() == 'low')
+    print(f"   ✅ Item classification done in {elapsed:.1f}s — {len(out)} classified "
+          f"(high={n_high}, medium={n_med}, low={n_low})")
+    if n_low:
+        sample_low = [k for k, v in out.items()
+                       if str(v.get('confidence', '')).lower() == 'low'][:10]
+        print(f"   ℹ️  Sample low-confidence (will drop if no panel/baseline): "
+              f"{', '.join(sample_low)}")
+    return out
+
 def _run_item_guidance_agent(category: str, item_names: list[str],
                               persona_doc: dict, subject: str) -> dict:
     """Return {"expected_high": [...], "expected_low": [...], "summary": "..."}
@@ -14711,23 +14964,18 @@ RULES:
 
 # ─── Affinity-to-BP deterministic translator ─────────────────────────
 def _affinity_to_bp(affinity: float, gen_pop: float | None) -> float:
-    """Convert an agent-returned affinity score (0-100) to a BP (%).
+    """LEGACY — affinity 0-100 to BP (%). Retained for any non-scoring callers.
 
-    Affinity contract (LLM returns this, code does the math):
-        0   -> persona actively avoids this item (0.1x gen_pop)
-        25  -> persona under-indexes vs gen pop  (0.5x)
-        50  -> persona matches gen pop behavior  (1.0x)
-        75  -> persona over-indexes              (2.0x)
-        100 -> strong cultural identifier        (3.5x)
+    The primary scoring path now uses agent-returned `estimated_bp_pct`
+    directly (see `_run_single_category_agent`); this function is no longer
+    invoked from that path. We keep it for any downstream callers that still
+    pass an affinity and need a deterministic translation.
 
-    Linear segments through (0, 0.1x), (50, 1.0x), (100, 3.5x).
-
-    When gen_pop is None or 0 (no measured baseline), we fall back to
-    affinity-as-percent: BP ≈ affinity * 0.55 so 100 -> 55%, 50 -> 27.5%.
-    Falling back this way avoids a hard zero floor while keeping niche
-    items reasonable.
-
-    Result is always clamped to [0.01, 96.0].
+    NOTE: the previous `bp = affinity * 0.55` fallback (used when gen_pop was
+    missing) was the source of the "27% confabulation cluster" — affinity 50
+    with no baseline became 27.5% on every niche/unknown item. That fallback
+    is now a small floor (0.05%) so unknown items collapse instead of
+    fabricating a plausible-looking number.
     """
     try:
         a = float(affinity)
@@ -14735,19 +14983,14 @@ def _affinity_to_bp(affinity: float, gen_pop: float | None) -> float:
         a = 50.0
     a = max(0.0, min(100.0, a))
 
-    # Smooth piecewise-linear multiplier
     if a <= 50.0:
-        # 0 -> 0.1x, 50 -> 1.0x
         multiplier = 0.1 + (a / 50.0) * (1.0 - 0.1)
     else:
-        # 50 -> 1.0x, 100 -> 3.5x
         multiplier = 1.0 + ((a - 50.0) / 50.0) * (3.5 - 1.0)
 
     if gen_pop is None or gen_pop <= 0.0:
-        bp = a * 0.55
-    else:
-        bp = float(gen_pop) * multiplier
-
+        return 0.05
+    bp = float(gen_pop) * multiplier
     return max(0.01, min(96.0, bp))
 
 
@@ -14806,15 +15049,29 @@ def _run_single_category_agent(category: str, values: list[str],
                                 canonical_baseline_lookup: dict | None = None,
                                 anchor_mode: str = 'persona',
                                 study_dates: str = '',
-                                item_guidance: dict | None = None) -> list[dict]:
-    """Worker for Step 2 — one gpt-4o call per category.
+                                item_guidance: dict | None = None,
+                                item_classifications: dict | None = None,
+                                panel_lookup: dict | None = None) -> list[dict]:
+    """Per-category scoring agent (gpt-4o).
 
-    Returns list of {value, affinity, reason}. The caller translates
-    affinity (0-100) into a deterministic BP via `_affinity_to_bp`.
+    NEW BEHAVIOR (agent-led, panel-as-evidence):
+        The agent receives a richly-structured persona doc, per-item
+        classifications (from `_run_item_classification_agent`), the panel
+        measurement (`panel_bp`, `n_panel`), and the gen-pop baseline.
+        It returns `estimated_bp_pct` directly — no affinity-to-BP math
+        downstream — along with `panel_decision` ("agree", "override_low",
+        "override_high") and a short reason. The agent IS the source of truth;
+        panel + baseline are evidence it weighs.
 
-    item_guidance: optional output from _run_item_guidance_agent. When
-        provided, its grounded expected_high/expected_low lists replace
-        any blind guidance from the persona doc's category_guidance.
+    For each entry returned the caller gets:
+        {value, bp, estimated_bp_pct, panel_decision, reason, confidence}
+
+    `bp` is aliased from `estimated_bp_pct` so existing writeback code at
+    bg.py:16924 (which reads entry['bp']) keeps working unchanged.
+
+    item_classifications: {VALUE_UPPER: {what_is_it, target_demo, price_tier,
+                                          cultural_code, confidence, ...}}
+    panel_lookup:         {(CAT_UPPER, VALUE_UPPER): (panel_bp, n_panel)}
     """
     import json as _json
     client = _get_openai_client()
@@ -14827,15 +15084,55 @@ def _run_single_category_agent(category: str, values: list[str],
     demo_snapshot = {k: v for k, v in persona_doc.get('demographics', {}).items()
                      if k in ('AGE', 'GENDER', 'ETHNICITY', 'INCOME')}
 
-    # Category signal from persona research agent (primary guidance).
     _cat_signals = persona_doc.get('category_signals') or {}
     _persona_cat_signal = str(_cat_signals.get(category, '') or _cat_signals.get(category.upper(), '') or '').strip()
+
+    # ── Rich persona structures (subsegments, cultural anchors, anti-fit) ──
+    subsegments = persona_doc.get('subsegments') or []
+    cultural_anchors = persona_doc.get('cultural_anchors') or {}
+    anti_fit_explicit = persona_doc.get('anti_fit_explicit') or {}
+    cross_shop_network = persona_doc.get('cross_shop_network') or {}
+
+    def _fmt_subsegments() -> str:
+        if not subsegments:
+            return '(persona research did not provide structured subsegments — reason from summary)'
+        out = []
+        for s in subsegments[:6]:
+            if not isinstance(s, dict):
+                continue
+            name = s.get('name', '?')
+            wt = s.get('weight_pct', '?')
+            band = s.get('age_band', '')
+            markers = s.get('cultural_markers') or []
+            out.append(f"  • {name} (~{wt}% of audience, age {band}): "
+                       + ', '.join(str(m) for m in markers[:8]))
+        return '\n'.join(out) if out else '(no subsegments)'
+
+    def _fmt_cultural_anchors() -> str:
+        if not cultural_anchors:
+            return '(no structured cultural anchors)'
+        rows = []
+        for k, v in list(cultural_anchors.items())[:14]:
+            if isinstance(v, list):
+                rows.append(f"  {k}: {', '.join(str(x) for x in v[:10])}")
+            elif v:
+                rows.append(f"  {k}: {v}")
+        return '\n'.join(rows) if rows else '(no anchors)'
+
+    def _fmt_anti_fit() -> str:
+        if not anti_fit_explicit:
+            return '(no explicit anti-fit categories — reason from persona)'
+        rows = []
+        for k, v in anti_fit_explicit.items():
+            if isinstance(v, list):
+                rows.append(f"  {k}: {', '.join(str(x) for x in v[:12])}")
+            elif v:
+                rows.append(f"  {k}: {v}")
+        return '\n'.join(rows) if rows else '(none)'
 
     expected_high: list[str] = []
     expected_low: list[str] = []
     guidance_summary = _persona_cat_signal
-
-    # Item-guidance agent provides supplementary expected_high/low lists.
     if item_guidance and isinstance(item_guidance, dict):
         if not guidance_summary:
             guidance_summary = str(item_guidance.get('summary', '') or '').strip()
@@ -14848,148 +15145,187 @@ def _run_single_category_agent(category: str, values: list[str],
     elif isinstance(guidance_raw, str):
         guidance_summary = guidance_raw.strip()
 
+    cat_u = category.strip().upper()
+    baseline_lookup = canonical_baseline_lookup or {}
+    panel = panel_lookup or {}
+    classifications = item_classifications or {}
+
+    # ── Build per-item evidence block: classification + panel + baseline ──
+    # The agent sees, for each item, what we already know about it. This is
+    # the fix for the old "blind affinity" scoring that produced 27% defaults.
+    def _evidence_for(v: str) -> str:
+        v_u = str(v).strip().upper()
+        cls = classifications.get(v_u) or {}
+        what = str(cls.get('what_is_it') or '').strip()
+        tier = str(cls.get('price_tier') or '').strip()
+        code = cls.get('cultural_code') or []
+        conf = str(cls.get('confidence') or '').strip()
+        td = cls.get('target_demo') or {}
+        td_str = ''
+        if isinstance(td, dict) and td:
+            parts = []
+            if td.get('age'): parts.append(f"age {td['age']}")
+            if td.get('income'): parts.append(f"inc {td['income']}")
+            if td.get('ethnicity_skew') and str(td.get('ethnicity_skew')).lower() not in ('neutral', ''):
+                parts.append(str(td['ethnicity_skew']))
+            if td.get('geography'): parts.append(str(td['geography']))
+            td_str = '; '.join(parts)
+        panel_entry = panel.get((cat_u, v_u))
+        if panel_entry:
+            try:
+                pbp, npan = float(panel_entry[0]), int(panel_entry[1])
+                panel_str = f"panel {pbp:.2f}% (n={npan})"
+            except (TypeError, ValueError):
+                panel_str = "panel n/a"
+        else:
+            panel_str = "panel 0% (not measured)"
+        base_v = baseline_lookup.get((cat_u, v_u))
+        base_str = f"genpop {base_v:.2f}%" if isinstance(base_v, (int, float)) else "genpop n/a"
+
+        bits = [panel_str, base_str]
+        if what: bits.append(f'is: "{what}"')
+        if tier: bits.append(f"tier:{tier}")
+        if code: bits.append(f"code:{','.join(str(c) for c in code[:4])}")
+        if td_str: bits.append(f"target:{td_str}")
+        if conf: bits.append(f"conf:{conf}")
+        return ' | '.join(bits)
+
+    values_list = '\n'.join(f"  - {str(v)}\n      {_evidence_for(v)}"
+                             for v in values)
+
     expected_high_block = (
         '\n'.join(f"  - {x}" for x in expected_high[:30])
-        if expected_high else '  (none specified — reason from persona summary)'
+        if expected_high else '  (none specified)'
     )
     expected_low_block = (
         '\n'.join(f"  - {x}" for x in expected_low[:30])
-        if expected_low else '  (none specified — reason from persona summary)'
+        if expected_low else '  (none specified)'
     )
 
-    # Inject the canonical U.S. baseline next to each item if we have one.
-    # The agent uses this as ground truth: GenPop must stay within ±5pp,
-    # profiles must INDEX off it based on persona affinity.
-    cat_u = category.strip().upper()
-    baseline_lookup = canonical_baseline_lookup or {}
-    def _baseline_for(v: str) -> str:
-        v_u = str(v).strip().upper()
-        b = baseline_lookup.get((cat_u, v_u))
-        if b is None:
-            return 'not measured'
-        return f'{b:.2f}%'
-
-    if baseline_lookup:
-        # Pad item names so the baselines line up visually for the LLM.
-        max_len = max((len(str(v)) for v in values), default=10)
-        pad = min(max(max_len, 10), 50)
-        values_list = '\n'.join(
-            f"  - {str(v):<{pad}}  (US baseline: {_baseline_for(v)})"
-            for v in values
-        )
-    else:
-        values_list = '\n'.join(f"  - {v}" for v in values)
-
-    # ── Affinity-based scoring (0-100) — code converts to BP deterministically ──
-    # Anchoring rules differ for GenPop vs profile audiences.
     if anchor_mode == 'genpop':
         anchor_rules = """═══════════════════════════════════════════════════════════════════
-CRITICAL — THIS IS A GENPOP SCORING RUN
+THIS IS A GENPOP SCORING RUN
 ═══════════════════════════════════════════════════════════════════
-For GenPop, the answer is "the average U.S. adult" — there is no audience tilt.
-That means EVERY item should score affinity 50 (matches gen pop) unless the
-item is genuinely cross-cultural fluctuating (e.g. niche subculture vs mass).
-"""
-    elif baseline_lookup:
-        anchor_rules = """═══════════════════════════════════════════════════════════════════
-HOW TO SCORE (affinity, not %)
-═══════════════════════════════════════════════════════════════════
-You return AFFINITY 0-100. The pipeline converts your affinity to a BP using the U.S. baseline shown beside each item — DO NOT compute percentages yourself.
-
-AFFINITY ANCHORS:
-  • 0   = persona actively avoids / cannot engage (foreign, wrong demo, CPG-only)
-  • 25  = persona under-indexes vs. average American
-  • 50  = persona engages at the average American rate (DEFAULT for most items)
-  • 75  = persona over-indexes (clear fit with the digital identity)
-  • 100 = strong cultural identifier / icon for this audience
-
-DEFAULT IS 50. If you have no specific reason that THIS persona engages more or less than the average American, score 50. The baseline shown next to each item is what the average American does — affinity 50 means "matches that".
-
-PERSONA-FIT MOVEMENT (only when persona research clearly supports it):
-  • Cultural anchor for the audience (e.g. Nike → LeBron, sneakers, basketball) → 80-100
-  • Strong subculture / lifestyle fit                                              → 65-80
-  • Mild fit                                                                        → 55-65
-  • Mild anti-fit                                                                   → 35-45
-  • Strong anti-fit (foreign platform, opposite demographic, CPG-only)              → 5-25
-  • Hard zero (not relevant at all in U.S. digital)                                 → 0-10
+The audience is "the average U.S. adult" — there is no audience tilt.
+For each item, your `estimated_bp_pct` should match the gen-pop baseline
+shown in evidence (within ~±2pp). If the panel measurement disagrees with
+gen-pop and you have a reason to trust the panel, you may use that.
 """
     else:
-        anchor_rules = ''
+        anchor_rules = """═══════════════════════════════════════════════════════════════════
+HOW TO ESTIMATE BP — you are the source of truth
+═══════════════════════════════════════════════════════════════════
+For each item, output `estimated_bp_pct` — the % of THIS audience that has
+any digital engagement with the item over a year. You see, per item:
+
+  • panel — what the actual panel measured for this audience
+  • genpop — what the average US adult does (n/a means not in canonical CSV)
+  • is: — what the item ACTUALLY is (from the classification agent)
+  • tier / code / target — who the item is built for
+  • conf — confidence the classifier had in identifying the item
+
+DECISION FRAMEWORK (apply for each item):
+  1) Look at "is:" — what is this thing actually? An ultra-luxury sushi spot
+     ($595/pp) cannot have 28% BP among $65K mid-income athletic mainstream;
+     a category-leading athletic retailer SHOULD have 25-35% BP among them.
+  2) Look at panel:
+       • If panel is plausible given the item + persona → AGREE.
+       • If panel under-captures (mainstream item, panel << genpop, persona
+         clearly engages) → OVERRIDE_LOW: lift to a sensible number.
+         Examples: Dick's panel 1.8% / genpop 18% → 25-35% for athletic
+         audience. In-store-dominant retailers under-report digitally.
+       • If panel over-captures (panel >> genpop and item is implausibly
+         high — likely a mapping bleed like Yahoo Mail bleeding into Yahoo
+         News) → OVERRIDE_HIGH: pull down to realistic number for the actual
+         item among this audience.
+  3) For low-confidence (`conf:low`) items with NO panel signal AND no
+     genpop baseline: leave estimated_bp_pct around 0.05-0.5%. Downstream
+     will likely drop them. Do NOT fabricate a default 27%.
+
+PERSONA-FIT GUIDANCE (translate persona engagement to absolute %s):
+  • Cultural anchor / icon (named in subsegments / cultural_anchors) → 60-95%
+  • Mass mainstream item that everyone uses (Netflix, Amazon, Google) → 80-95%
+  • Strong subculture fit (named in cross_shop_network)               → 25-55%
+  • Mild fit                                                          → 8-25%
+  • Mild anti-fit                                                     → 1-8%
+  • Strong anti-fit (named in anti_fit_explicit)                      → 0.05-2%
+  • Hard zero (foreign-only, opposite demo, ultra-luxury for mid-inc) → 0.05-1%
+"""
 
     date_context_block = ""
     if study_dates:
         date_context_block = (
             f"\nSTUDY WINDOW: {study_dates}\n"
-            "Consider whether any events during this window (product launches, viral moments, "
-            "sponsorship deals, seasonal patterns, award shows, controversies, album/movie releases) "
-            "would increase or decrease digital engagement with specific items in this category.\n"
+            "Consider events in this window (launches, viral moments, sponsorships, "
+            "controversies, releases) that would increase or decrease engagement.\n"
         )
 
-    prompt = f"""You are a consumer-research analyst rating audience AFFINITY for items in the **{category}** category for a behavioral panel profile of **{subject}**.
-{date_context_block}
-WHAT YOU RETURN — read carefully:
-You return an AFFINITY score 0-100 for each item. The pipeline will convert your affinity to a final Brand Penetration % using the measured U.S. baseline. DO NOT compute percentages yourself.
-
-  • 0   = persona actively avoids / cannot engage
-  • 25  = under-indexes vs. average American
-  • 50  = matches the average American (DEFAULT)
-  • 75  = over-indexes
-  • 100 = cultural identifier / icon for this audience
-
-DEFAULT IS 50. Most items should be 40-60 because this audience is still made up of Americans who watch Netflix, shop at Walmart, visit Disney World, and use mainstream services. They just ALSO have a few specific subcultures that score higher and a few anti-fits that score lower.
-
+    # ── Assemble persona doc fragments for the prompt ──
+    persona_block = f"""═══════════════════════════════════════════════════════════════════
+PERSONA — the audience you are scoring for
 ═══════════════════════════════════════════════════════════════════
-PERSONA — this is the audience you are scoring for
-═══════════════════════════════════════════════════════════════════
+SUMMARY:
 {summary}
 
-DIGITAL IDENTITY (from persona research — read carefully):
+DIGITAL IDENTITY:
 {digital_identity or '(not available — use persona summary above)'}
 
 KEY DEMOGRAPHICS:
 {_json.dumps(demo_snapshot, indent=2)}
 
-CATEGORY-SPECIFIC GUIDANCE for {category}:
-{guidance_summary or '(use the persona summary above + your knowledge of the audience)'}
+SUB-SEGMENTS (audience is not monolithic):
+{_fmt_subsegments()}
 
-EXPECTED HIGH-AFFINITY ITEMS for this audience
-(persona research called these out as strong fit — these should score 70-100):
+CULTURAL ANCHORS (what defines this audience — high-affinity markers):
+{_fmt_cultural_anchors()}
+
+EXPLICIT ANTI-FIT (low-affinity by definition — items in these categories
+should score very low for this audience even if famous nationally):
+{_fmt_anti_fit()}
+
+CATEGORY-SPECIFIC GUIDANCE for {category}:
+{guidance_summary or '(use persona above + your judgment)'}
+
+EXPECTED HIGH-FIT ITEMS for this category (persona research):
 {expected_high_block}
 
-EXPECTED LOW-AFFINITY ITEMS for this audience
-(persona research called these out as POOR fit — these should score 5-30 even if famous):
+EXPECTED LOW-FIT ITEMS (famous but persona doesn't engage):
 {expected_low_block}
+"""
+
+    prompt = f"""You are a senior consumer-research analyst estimating Brand Penetration % for items in the **{category}** category for a behavioral panel profile of **{subject}**.
+{date_context_block}
+{persona_block}
 
 {anchor_rules}
-═══════════════════════════════════════════════════════════════════
-ROW-BY-ROW REASONING
-═══════════════════════════════════════════════════════════════════
-For EACH item, ask in order:
-  1) Is this item a CULTURAL IDENTIFIER for this audience (named in persona research, defines their identity)? → 80-100.
-  2) Is this item a clear PERSONA FIT (matches the digital identity / demographics)? → 65-80.
-  3) Is this item a clear ANTI-FIT (foreign, wrong demographic, CPG-only, opposite subculture)? → 5-30.
-  4) Otherwise → 50 (default — matches the average American).
-
 ═══════════════════════════════════════════════════════════════════
 OUTPUT FORMAT
 ═══════════════════════════════════════════════════════════════════
 Return ONLY a JSON array — no markdown, no commentary:
 [
-  {{"value": "<ITEM NAME — exact spelling from list>", "affinity": <integer 0-100>, "reason": "<≤12 words>"}},
+  {{
+    "value": "<ITEM NAME — exact spelling from list>",
+    "estimated_bp_pct": <float 0.05 to 96.0 — the % of THIS audience that engages digitally>,
+    "panel_decision": "<agree|override_low|override_high|no_panel>",
+    "reason": "<≤18 words: what is this + why this BP for this audience>"
+  }},
   …
 ]
 
-NON-NEGOTIABLE RULES:
-  • EVERY item from the list below MUST appear in your output with the EXACT spelling.
-  • Affinity is an INTEGER 0-100. Do not return percentages or decimals.
-  • Most items should be 40-60. Only 10-20% should deviate above 70 or below 30.
-  • RANK ORDER must reflect persona fit — items truly central to the audience MUST score above peripheral items.
+NON-NEGOTIABLE:
+  • EVERY item from the list MUST appear in your output with EXACT spelling.
+  • estimated_bp_pct is a FLOAT in [0.05, 96.0].
+  • Reason must reference what the item IS and why your number fits this audience.
+  • RANK ORDER must reflect actual fit. Cultural anchors > mainstream > subculture > mild > anti-fit.
 
-ITEMS TO SCORE:
+ITEMS TO SCORE (each line shows item + evidence we already have):
 {values_list}
 """
 
-    token_budget = max(4096, len(values) * 80)
+    # Each item now requires ~110 tokens of output (value + bp + decision +
+    # short reason). Old budget of ~80/item was tuned for the smaller affinity
+    # response and would truncate larger chunks.
+    token_budget = max(4096, len(values) * 120)
     token_budget = min(token_budget, 16384)
 
     # ── PHASE-1 LOGGING: sample one category prompt so we can inspect what scoring agent sees ──
@@ -15035,32 +15371,53 @@ ITEMS TO SCORE:
             else:
                 raise
         if isinstance(result, list):
-            # ── Affinity → BP translation (deterministic, baseline-anchored) ──
-            # The agent now returns {value, affinity, reason}. Compute BP here
-            # so the rest of the pipeline (which reads entry['bp']) is
-            # unchanged. We also preserve 'affinity' on each entry for
-            # propagation/debugging.
+            # ── Direct BP from agent (NEW agent-led architecture) ──
+            # Agent returns estimated_bp_pct directly; we alias to 'bp' so the
+            # existing writeback (which reads entry['bp']) keeps working.
+            # Legacy `affinity` payloads are still accepted for safety during
+            # transition: if estimated_bp_pct is missing but affinity is present,
+            # we fall back to _affinity_to_bp using the canonical baseline.
             converted: list[dict] = []
             for entry in result:
                 if not isinstance(entry, dict) or 'value' not in entry:
                     continue
                 v_u = str(entry['value']).strip().upper()
-                aff_raw = entry.get('affinity', entry.get('bp', 50))
+                cls = (item_classifications or {}).get(v_u) or {}
+                conf = str(cls.get('confidence', '')).strip().lower()
+
+                bp_raw = entry.get('estimated_bp_pct',
+                                    entry.get('bp', None))
+                if bp_raw is None and 'affinity' in entry:
+                    try:
+                        aff = float(entry['affinity'])
+                    except (TypeError, ValueError):
+                        aff = 50.0
+                    bp_raw = _affinity_to_bp(aff, baseline_lookup.get((cat_u, v_u)))
+
                 try:
-                    aff = float(aff_raw)
+                    bp = float(bp_raw)
                 except (TypeError, ValueError):
-                    aff = 50.0
-                # If 'affinity' wasn't supplied but a legacy 'bp' was, treat
-                # the bp as a fallback affinity (clamped 0-100). This keeps
-                # the parser tolerant during the transition.
-                if 'affinity' not in entry and 'bp' in entry:
-                    aff = max(0.0, min(100.0, aff))
-                gen_pop = baseline_lookup.get((cat_u, v_u))
-                bp = _affinity_to_bp(aff, gen_pop)
+                    bp = 0.05
+
+                bp = max(0.05, min(96.0, bp))
+
+                panel_decision = str(entry.get('panel_decision', '') or '').strip().lower()
+                panel_entry = (panel_lookup or {}).get((cat_u, v_u))
+                try:
+                    panel_bp = float(panel_entry[0]) if panel_entry else None
+                    n_panel = int(panel_entry[1]) if panel_entry else 0
+                except (TypeError, ValueError, IndexError):
+                    panel_bp, n_panel = None, 0
+
                 out = {
                     'value': entry['value'],
-                    'affinity': aff,
                     'bp': round(bp, 4),
+                    'estimated_bp_pct': round(bp, 4),
+                    'panel_bp': panel_bp,
+                    'n_panel': n_panel,
+                    'panel_decision': panel_decision or 'no_panel',
+                    'baseline_bp': baseline_lookup.get((cat_u, v_u)),
+                    'classification_confidence': conf or 'unknown',
                     'reason': entry.get('reason', ''),
                 }
                 converted.append(out)
@@ -16840,6 +17197,49 @@ def parallel_category_agents(df: pd.DataFrame, persona_doc: dict,
 
     _chunk_results: dict[str, list[list[dict]]] = {cat: [] for cat in cats_needing_llm}
 
+    # ── PANEL-MEASUREMENT LOOKUP ────────────────────────────────────────────
+    # Build {(CATEGORY_UPPER, VALUE_UPPER): (panel_bp_pct, n_panel_uids)} from
+    # the existing DataFrame BEFORE running agents. This is the actual measured
+    # behavior of the audience — what UID_COUNT users out of sample_size touched
+    # each item. We surface it to the scoring agent as evidence so the agent
+    # can decide AGREE / OVERRIDE_LOW / OVERRIDE_HIGH per item, instead of
+    # scoring blind.
+    _panel_lookup: dict[tuple[str, str], tuple[float, int]] = {}
+    _bp_src_col = bp_col  # 'Brand Penetration (Row)' — already populated from BEHAVIOR_PCT.PERCENTAGE
+    _raw_col = ('Original Raw Numbers (Database)' if 'Original Raw Numbers (Database)' in df.columns
+                else 'Original Raw Numbers' if 'Original Raw Numbers' in df.columns
+                else None)
+    for _idx, _r in df.iterrows():
+        _c = str(_r.get('Column', '')).strip().upper()
+        if not _c or _c in _BEHAVIORAL_SKIP or _c in _DEMO_SET:
+            continue
+        _v = str(_r.get('Value', '')).strip().upper()
+        if not _v:
+            continue
+        try:
+            _bp = float(_r.get(_bp_src_col, 0) or 0)
+        except (TypeError, ValueError):
+            _bp = 0.0
+        _np = 0
+        if _raw_col:
+            try:
+                _np = int(float(str(_r.get(_raw_col, 0) or 0).replace(',', '')))
+            except (TypeError, ValueError):
+                _np = 0
+        _panel_lookup[(_c, _v)] = (_bp, _np)
+    print(f"   📊 Panel lookup built: {len(_panel_lookup)} (cat,value) measurements available to scoring agents")
+
+    # ── ITEM CLASSIFICATION (NEW) ───────────────────────────────────────────
+    # For every unique item across all categories, classify what it ACTUALLY
+    # IS so the scoring agent has grounded item attributes to reason against.
+    # This replaces the old "score blind from a thin persona summary" failure
+    # mode that produced the 27% confabulation cluster on niche/unknown items.
+    _item_classifications: dict[str, dict] = {}
+    if anchor_mode != 'genpop':
+        _all_unique = sorted({str(v).strip()
+                               for items in unique_items_by_cat.values() for v in items})
+        _item_classifications = _run_item_classification_parallel(_all_unique)
+
     # ── WAVE 1: Item-aware guidance agents (nano, one per category) ──────
     # Runs BEFORE scoring so each category agent gets grounded expected_high/low
     # lists from REAL items instead of the persona agent's blind guesses.
@@ -16880,7 +17280,8 @@ def parallel_category_agents(df: pd.DataFrame, persona_doc: dict,
             pool.submit(_run_single_category_agent, cat,
                          chunk, persona_doc, subject,
                          canonical_baseline_lookup, anchor_mode, study_dates,
-                         _guidance_map.get(cat)): (cat, ci)
+                         _guidance_map.get(cat),
+                         _item_classifications, _panel_lookup): (cat, ci)
             for cat, chunk, ci in _work_units
         }
         _done_units: set[tuple[str, int]] = set()
@@ -16903,7 +17304,8 @@ def parallel_category_agents(df: pd.DataFrame, persona_doc: dict,
                         _chunk_results[cat].append(_run_single_category_agent(
                             cat, chunk, persona_doc, subject,
                             canonical_baseline_lookup, anchor_mode, study_dates,
-                            _guidance_map.get(cat)))
+                            _guidance_map.get(cat),
+                            _item_classifications, _panel_lookup))
                         print(f"   ✅ Retry {_attempt}/{_MAX_AGENT_RETRIES} for [{cat}] chunk {ci} succeeded")
                         break
                     except Exception as _e:
@@ -16955,6 +17357,17 @@ def parallel_category_agents(df: pd.DataFrame, persona_doc: dict,
     # category the value appears in. This guarantees byte-identical Nike
     # across MOST PURCHASED BRANDS / APPAREL/FOOTWEAR / WHERE THEY SHOP, etc.
     global_value_bp_raw: dict[str, float] = {}
+    # ── Decision log: per-(cat, value) record of what the agent decided ──
+    # Written to _agent_decisions.json alongside the CSV so the user can audit
+    # which items the agent overrode panel on, and why.
+    agent_decisions: list[dict] = []
+    # ── Low-confidence drop set: items the classifier flagged as confidence=low
+    # AND that have no panel signal AND no canonical baseline. These get
+    # removed from the output entirely instead of polluting category top-Ns
+    # with fabricated 27% defaults. (Per the v2 plan: agent leads, but if it
+    # genuinely doesn't recognize an item and there's no other evidence, we
+    # drop rather than guess.)
+    drop_values: set[str] = set()
     for cat, agent_result in results_map.items():
         for entry in agent_result:
             if not isinstance(entry, dict) or 'value' not in entry or 'bp' not in entry:
@@ -16967,6 +17380,26 @@ def parallel_category_agents(df: pd.DataFrame, persona_doc: dict,
             if v_u not in global_value_bp_raw:
                 global_value_bp_raw[v_u] = bp
 
+            agent_decisions.append({
+                'category': cat,
+                'value': entry['value'],
+                'agent_bp': round(bp, 4),
+                'panel_bp': entry.get('panel_bp'),
+                'n_panel': entry.get('n_panel'),
+                'baseline_bp': entry.get('baseline_bp'),
+                'panel_decision': entry.get('panel_decision'),
+                'classification_confidence': entry.get('classification_confidence'),
+                'reason': entry.get('reason'),
+            })
+
+            conf = str(entry.get('classification_confidence', '')).lower()
+            n_panel = entry.get('n_panel') or 0
+            baseline = entry.get('baseline_bp')
+            if (conf == 'low'
+                    and (not n_panel or n_panel == 0)
+                    and (baseline is None or baseline <= 0.0)):
+                drop_values.add(v_u)
+
     # Apply organic noise ONCE per unique value, freezing the canonical BP.
     global_value_bp: dict[str, float] = {}
     for v_u, raw_bp in global_value_bp_raw.items():
@@ -16975,6 +17408,19 @@ def parallel_category_agents(df: pd.DataFrame, persona_doc: dict,
 
     print(f"   🔁 Propagation: {len(global_value_bp)} unique values scored — propagating to all categories "
           f"(byte-identical across categories)")
+
+    if drop_values:
+        print(f"   🗑️  Dropping {len(drop_values)} low-confidence items with no panel and no baseline "
+              f"(prevents 27% confabulation cluster — sample: "
+              f"{', '.join(sorted(drop_values)[:8])}{'…' if len(drop_values) > 8 else ''})")
+
+    # Stash decision log + drop list on df attrs so run_full_pipeline can
+    # serialize them alongside the final CSV.
+    try:
+        df.attrs['_agent_decisions'] = agent_decisions
+        df.attrs['_dropped_low_confidence'] = sorted(drop_values)
+    except Exception:
+        pass
 
     # ── Apply carry-forward jitter ONCE per unique value ─────────────────
     # Reruns previously called `_carry_forward_jitter(carry[val_u])` per row,
@@ -16993,11 +17439,18 @@ def parallel_category_agents(df: pd.DataFrame, persona_doc: dict,
     rows_written = 0
     rows_carried = 0
     rows_propagated = 0
+    rows_to_drop: list[int] = []
     for cat, (vals, idxs) in category_values.items():
         carry = category_carry.get(cat, {})
         primary_set = {v.strip().upper() for v in unique_items_by_cat.get(cat, [])}
         for idx in idxs:
             val_u = str(df.at[idx, 'Value']).strip().upper()
+            # Low-confidence drop: classifier didn't recognize the item AND
+            # there's no panel signal AND no canonical baseline. Remove the
+            # row entirely instead of leaving it at a fabricated default.
+            if val_u in drop_values:
+                rows_to_drop.append(idx)
+                continue
             if val_u in carry:
                 # Carry-forward: same value across categories gets the SAME
                 # jittered BP. Pull from global_carry_bp (jitter applied once).
@@ -17012,6 +17465,17 @@ def parallel_category_agents(df: pd.DataFrame, persona_doc: dict,
                     rows_written += 1
                 else:
                     rows_propagated += 1
+
+    if rows_to_drop:
+        df = df.drop(rows_to_drop).reset_index(drop=True)
+        # Re-stash attrs after reset_index (pandas may not always preserve them).
+        try:
+            df.attrs['_agent_decisions'] = agent_decisions
+            df.attrs['_dropped_low_confidence'] = sorted(drop_values)
+        except Exception:
+            pass
+        print(f"   🗑️  Removed {len(rows_to_drop)} rows for low-confidence items "
+              f"({len(drop_values)} unique values dropped from output)")
 
     if rows_carried:
         print(f"   ↩️  Carried forward {rows_carried} BP rows from prior run (±0.01–0.02% jitter)")
@@ -21858,6 +22322,47 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
         fallback_file = os.path.join(base_dir, f"fallback_{timestamp}.csv")
         df_final.to_csv(fallback_file, index=False)
         final_file = fallback_file
+
+    # ── Emit agent-decision log alongside CSV ──────────────────────────────
+    # The scoring agent records its reasoning per-(category, value) — what it
+    # decided to do with the panel measurement (agree / override_low /
+    # override_high), the agent's BP estimate, the panel BP, the gen-pop
+    # baseline, and a short reason. Lets the operator see WHY the agent
+    # overrode a panel measurement (e.g. Yahoo News mapping bleed pulled
+    # down from 86% to 12%, Dick's Sporting Goods lifted from 1.8% to 28%).
+    try:
+        import json as _json
+        decisions = []
+        dropped = []
+        try:
+            decisions = list(df_final.attrs.get('_agent_decisions') or [])
+            dropped = list(df_final.attrs.get('_dropped_low_confidence') or [])
+        except Exception:
+            decisions = []
+            dropped = []
+        if decisions or dropped:
+            decisions_path = final_file.rsplit('.', 1)[0] + '_agent_decisions.json'
+            payload = {
+                'csv_file': os.path.basename(final_file),
+                'n_decisions': len(decisions),
+                'n_dropped_low_confidence': len(dropped),
+                'dropped_low_confidence': dropped,
+                'decisions': sorted(
+                    decisions,
+                    key=lambda d: abs(float(d.get('agent_bp', 0) or 0)
+                                       - float(d.get('panel_bp') or 0)),
+                    reverse=True,
+                ),
+            }
+            try:
+                with open(decisions_path, 'w') as _fp:
+                    _json.dump(payload, _fp, default=str, indent=2)
+                print(f"📝 Wrote agent-decision log: {decisions_path} "
+                      f"({len(decisions)} decisions, {len(dropped)} drops)")
+            except OSError as _e:
+                print(f"   ⚠️ Could not write agent-decision log: {_e}")
+    except Exception as _e:
+        print(f"   ⚠️ Agent-decision log emit failed: {_e}")
     
     # Calculate total time
     pipeline_end_time = time.time()
