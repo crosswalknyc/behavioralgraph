@@ -17914,6 +17914,10 @@ _BRAND_CATEGORY_TO_INTERESTS = {
     'QSR': ['DINING OUT', 'FAST FOOD'],
     'AUTOMOBILE': ['AUTOMOTIVE', 'CARS'],
     'MEDIA': ['NEWS', 'MEDIA'],
+    'SPORTS': ['SPORTS', 'FITNESS', 'LIVE EVENTS'],
+    'TELECOM': ['TECHNOLOGY'],
+    'TRAVEL': ['TRAVEL'],
+    'HOME/OUTDOOR': ['HOME IMPROVEMENT', 'OUTDOOR LIFE'],
 }
 
 
@@ -18047,11 +18051,34 @@ def _apply_genpop_anchored_guardrails(df: pd.DataFrame,
                     if cat_prefix in cat_key.upper():
                         core_interest_keywords.update(k.upper() for k in keywords)
 
+    # Fallback: detect brand category from the scored DataFrame itself
+    # (handles cases where gen pop lookup misses the brand)
+    if not core_interest_keywords and brand_variants:
+        for idx in df.index:
+            try:
+                v = str(df.at[idx, 'Value']).strip().upper()
+                c = str(df.at[idx, 'Column']).strip().upper()
+                b = float(df.at[idx, bp_col])
+            except (ValueError, TypeError, KeyError):
+                continue
+            if v in brand_variants and b >= 95.0:
+                for cat_prefix, keywords in _BRAND_CATEGORY_TO_INTERESTS.items():
+                    if cat_prefix in c:
+                        core_interest_keywords.update(k.upper() for k in keywords)
+
+    if core_interest_keywords:
+        print(f"   📊 Guardrails: core interest keywords detected: {sorted(core_interest_keywords)}")
+    else:
+        print(f"   ⚠️  Guardrails: NO core interest keywords detected (brands={brands})")
+
     for idx in df.index:
         try:
             cat = str(df.at[idx, 'Column']).strip().upper()
             val = str(df.at[idx, 'Value']).strip().upper()
-            bp = float(df.at[idx, bp_col])
+            raw_bp = df.at[idx, bp_col]
+            if isinstance(raw_bp, str):
+                raw_bp = raw_bp.replace('%', '').replace(',', '').strip()
+            bp = float(raw_bp)
         except (ValueError, TypeError, KeyError):
             continue
 
@@ -18124,11 +18151,17 @@ def _apply_genpop_anchored_guardrails(df: pd.DataFrame,
 
         # ── Rule 7: Core Interest Floor ────────────────────────────────
         if cat == 'INTEREST' and core_interest_keywords:
-            if val in core_interest_keywords:
+            is_core = val in core_interest_keywords
+            if not is_core:
+                for kw in core_interest_keywords:
+                    if kw in val or val in kw:
+                        is_core = True
+                        break
+            if is_core:
                 interest_floor = gen_pop * 1.1
                 if bp < interest_floor:
                     bp = _organic_4dp(interest_floor)
-                    print(f"   🔒 R7 interest-floor: {cat}/{val} {original_bp:.2f}% → {bp:.2f}% (core interest)")
+                    print(f"   🔒 R7 interest-floor: {cat}/{val} {original_bp:.2f}% → {bp:.2f}% (core interest, gen_pop={gen_pop:.2f}%)")
                     floors_applied += 1
 
         if bp != original_bp:
@@ -18158,6 +18191,39 @@ def _apply_genpop_anchored_guardrails(df: pd.DataFrame,
 
     total = caps_applied + floors_applied
     print(f"   🔒 GenPop Guardrails: {total} corrections ({caps_applied} caps, {floors_applied} floors)")
+
+    # Post-check: verify core interest items are above floor
+    if core_interest_keywords:
+        for idx in df.index:
+            try:
+                c = str(df.at[idx, 'Column']).strip().upper()
+                v = str(df.at[idx, 'Value']).strip().upper()
+                raw_b = df.at[idx, bp_col]
+                if isinstance(raw_b, str):
+                    raw_b = raw_b.replace('%', '').replace(',', '').strip()
+                b = float(raw_b)
+            except (ValueError, TypeError, KeyError):
+                continue
+            if c != 'INTEREST':
+                continue
+            is_core = v in core_interest_keywords
+            if not is_core:
+                for kw in core_interest_keywords:
+                    if kw in v or v in kw:
+                        is_core = True
+                        break
+            if is_core:
+                gp = gp_lookup.get(('INTEREST', v))
+                if gp:
+                    expected = gp * 1.1
+                    status = "OK" if b >= expected - 0.5 else "BELOW FLOOR"
+                    print(f"   📊 R7 verify: INTEREST/{v} = {b:.2f}% (gen_pop={gp:.2f}%, floor={expected:.2f}%) [{status}]")
+                    if b < expected - 0.5:
+                        bp_new = _organic_4dp(expected)
+                        df.at[idx, bp_col] = bp_new
+                        print(f"   🔒 R7 emergency-floor: INTEREST/{v} {b:.2f}% → {bp_new:.2f}%")
+                        floors_applied += 1
+
     return df
 
 
