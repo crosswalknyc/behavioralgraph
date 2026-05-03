@@ -16119,13 +16119,17 @@ For each DMA, output an AFFINITY score 0-100 reflecting how well this market FIT
 The pipeline will combine your affinity with the DMA's actual U.S. population baseline to compute a final percentage — DO NOT factor population size into your affinity score. A small DMA can have affinity 80 if it fits the persona, and a giant DMA can have affinity 40 if it doesn't.
 
 AFFINITY ANCHORS:
-  • 0   = persona has zero cultural / demographic fit with this DMA
-  • 25  = clear under-index (wrong demographics, wrong region for this lifestyle)
+  • 30  = clear under-index (wrong demographics, wrong region for this lifestyle).
+         **Use 30, NOT 0**, for a persona-mismatched mid-to-large US metro.
+         A real American DMA always has SOME audience presence — affinity 0 is
+         reserved for "this DMA doesn't exist" not "this DMA isn't a match."
   • 50  = matches the average American — DEFAULT when no specific reason to deviate
   • 75  = clear over-index (ethnicity match, subculture hub, regional brand fit)
   • 100 = iconic geographic identifier for this audience (e.g. Nashville for country, Detroit for techno, Atlanta for hip-hop)
 
 DEFAULT IS 50. If you have NO specific reason that THIS persona over- or under-indexes in this DMA, score 50. Do not randomly assign high or low scores. The math handles "where the people are" via baseline weight — your job is purely persona-fit.
+
+**DO NOT score below 30** for any U.S. DMA listed below — they are all real American metros with real audiences. The lowest legitimate affinity is around 30 ("this metro under-indexes"). Use 0-25 only if a metro is a complete persona mismatch in every cultural/demographic dimension simultaneously, which is rare.
 
 REASONING SIGNALS (in priority order):
   1. Ethnicity match: cross-reference persona ethnicity with DMA composition (Atlanta/Memphis/Birmingham = high Black share; LA/Miami/Houston/San Antonio/El Paso = high Hispanic; SF/NYC/Seattle/Honolulu = high Asian).
@@ -16258,19 +16262,22 @@ Return ONLY a JSON array, one entry per DMA, in the same order:
     # plan. Affinity 0 collapses naturally; tiny affinity * tiny gen_pop
     # collapses Ottumwa; affinity ~50 * large gen_pop keeps NYC near baseline.
     multipliers: dict = {}
+    raw_affinities: dict = {}
     n_aff = 0
     n_mult = 0
-    # Floor the multiplier at 0.2 (i.e. 5x under-index max) so that even
-    # when the agent assigns affinity=0 to a real US metro (Boston, DC,
-    # Phoenix, Raleigh — observed in prior runs), the DMA still receives
-    # ~20% of its gen-pop baseline weight after global renormalization.
-    # The previous floor of 0.001 (1000x under-index) was crushing major
-    # markets to ~0.01% BP whenever the agent over-applied affinity 0.
-    AFFINITY_MULT_FLOOR = 0.2
+    # Floor the multiplier at 0.5 (i.e. 2x under-index max) for any DMA the
+    # agent scored at the bottom. Major US metros (Boston, DC, Phoenix,
+    # Raleigh) were collapsing to 0.01-0.03% BP whenever the agent stamped
+    # affinity 0 on them, even after global renormalization. A 0.5 floor
+    # caps that worst-case at half-baseline (~1% for a 2% gen-pop DMA),
+    # which is realistic for "agent thinks this metro doesn't fit the
+    # persona" rather than "this metro doesn't exist."
+    AFFINITY_MULT_FLOOR = 0.5
     for name, payload in raw_results.items():
         if isinstance(payload, tuple) and len(payload) == 2:
             kind, val = payload
             if kind == 'affinity':
+                raw_affinities[name] = float(val)
                 multipliers[name] = max(AFFINITY_MULT_FLOOR, float(val) / 50.0)
                 n_aff += 1
             else:
@@ -16282,6 +16289,19 @@ Return ONLY a JSON array, one entry per DMA, in the same order:
                 n_mult += 1
             except (TypeError, ValueError):
                 continue
+
+    # Diagnostic: print affinity histogram + the bottom-10 DMAs by raw
+    # affinity, so we can tell whether the agent itself assigns extreme
+    # zeros vs. some downstream code crushing major markets.
+    if raw_affinities:
+        bins = [0, 0, 0, 0, 0]  # [0-19, 20-39, 40-59, 60-79, 80-100]
+        for v in raw_affinities.values():
+            idx = min(int(v / 20), 4)
+            bins[idx] += 1
+        print(f"   📍 Affinity histogram: 0-19={bins[0]} 20-39={bins[1]} 40-59={bins[2]} 60-79={bins[3]} 80-100={bins[4]}")
+        bottom = sorted(raw_affinities.items(), key=lambda kv: kv[1])[:10]
+        print(f"   📍 Bottom-10 affinity DMAs: " +
+              ", ".join(f"{n}={int(v)}" for n, v in bottom))
 
     coverage = len(multipliers) / max(1, len(all_dmas))
     print(f"   ✅ Location intelligence agent: scored {len(multipliers)}/{len(all_dmas)} DMAs ({coverage:.0%}) "
