@@ -150,49 +150,38 @@ All ESPN entries in the output CSV will have:
 ✅ No ESPN+ entries (all renamed to ESPN)
 
 ================================================================================
-                    🎯 BRAND INPUT 100% ENFORCEMENT (2 Layers)
+                    🎯 BRAND INPUT BP ENFORCEMENT (2 Layers)
 ================================================================================
 
-LAYER 1: Standard Enforcement (Line 3955)
-------------------------------------------
+LAYER 1: Conditional Enforcement (Line 3955)
+---------------------------------------------
 Function: enforce_input_brand_100(df_final, brands)
 When: After previous run column is added
 What:
-  - Finds all variations of input brand (case-insensitive, exact match)
-  - Sets percentage to 100.0% in EVERY category where brand appears
-  - Updates raw numbers to match sample size
+  - Checks if the input brand appears in MOST PURCHASED BRANDS (MPB)
+  - If brand IS in MPB → agent score is canonical, no 100% override.
+    Cross-category consistency gate ensures single shared BP.
+  - If brand is NOT in MPB → 100.0% in EVERY category where it appears.
   - Skipped for GenPop runs (natural percentages preserved)
 
-Example:
-  Input Brand: "Wyndham"
-  Found in:
-  - BRAND INPUT: 95% → 100%
+Example (brand IN MPB — e.g. Nike):
+  Found in MPB at agent score ~65%
+  - APPAREL/FOOTWEAR: ~65% (consistency-gated)
+  - WHERE THEY SHOP: ~65% (consistency-gated)
+  - MOST PURCHASED BRANDS: ~65% (agent score)
+
+Example (brand NOT in MPB — e.g. Wyndham):
   - INTEREST: 87% → 100%
   - WHERE THEY STAY: 92% → 100%
-  - MOST PURCHASED BRANDS: 98% → 100%
 
 LAYER 2: FINAL Pre-Save Enforcement (Line 4235)
 ------------------------------------------------
-Function: enforce_input_brand_100(df_final, brands)
-When: Right before saving CSV (absolute last step, after ESPN enforcement)
-What:
-  - FINAL CHECK to ensure brand input is 100% everywhere
-  - Runs even after all other processing (divisions, enforcements, etc.)
-  - Guarantees brand input = 100% in saved output
-  - THIS IS THE FINAL SAFEGUARD before output
-
-Example:
-  If divisions or other processing changed brand input:
-  - BRAND INPUT: 100%
-  - INTEREST: 50% (after ÷2 division)
-  → Brand input forced back to 100% everywhere
+Same conditional logic, runs as final safeguard before output.
 
 RESULT GUARANTEE:
-All brand input entries in the output CSV will have:
-✅ 100.0% in every category where the brand appears
-✅ Raw numbers = Sample Size for perfect 100% calculation
-✅ Consistent across all categories
-✅ (GenPop exception: natural percentages if GenPop run)
+Brand in MPB  → agent score everywhere, consistency-gated
+Brand not MPB → 100.0% everywhere
+GenPop        → natural percentages preserved
 
 ================================================================================
                     📋 FULL PIPELINE EXECUTION ORDER
@@ -206,7 +195,7 @@ All brand input entries in the output CSV will have:
 6.  Sports 40x/4.36x Boost → Major leagues and other sports
 7.  Dynamic Threshold Boosts → SEARCH ENGINE/AI (65% threshold)
 8.  🔄 ESPN Layer 2: enforce_cross_category_brand_consistency() - ESPN gets max
-9.  🎯 Brand Input Layer 1: enforce_input_brand_100() - Set to 100%
+9.  🎯 Brand Input Layer 1: enforce_input_brand_100() - Conditional (100% if not in MPB, agent score if in MPB)
 10. Add Previous Run Column → Historical comparison data
 11. Final Calculations → Brand Penetration, US Gen Pop Projection
 12. Post-Save Divisions:
@@ -215,7 +204,7 @@ All brand input entries in the output CSV will have:
     - Sports global brand consistency
 13. 🔄 ESPN Layer 3 (FINAL): enforce_espn_consistency_final() - Last ESPN check
 14. 📉 ESPN Division: divide_espn_by_2_final() - Divide all ESPN values by 2
-15. 🎯 Brand Input Layer 2 (FINAL): enforce_input_brand_100() - Last 100% check
+15. 🎯 Brand Input Layer 2 (FINAL): enforce_input_brand_100() - Conditional final check
 16. 💾 SAVE TO CSV → Output file
 
 ================================================================================
@@ -13329,54 +13318,41 @@ def capitalize_words(text):
 
 def enforce_input_brand_100(df_behavior, input_brands, purchasers_only: bool = False):
     """
-    Ensure all normalized variations of input brands are set to 100% in every category where they appear.
-    Uses comprehensive matching to catch all variations of the brand name.
-    Original Raw Numbers will always equal the sample size for input brands.
+    Conditionally enforce input-brand BP based on whether the brand appears
+    in MOST PURCHASED BRANDS (MPB).
 
-    purchasers_only:
-        - False (default): the input brand is pinned to 100% in every category
-          it appears in EXCEPT MOST PURCHASED BRANDS. Rationale: in a
-          non-purchasers-only pull, the brand-input panel selection is based on
-          digital engagement (visits/searches/usage), which is what 100%
-          across SOCIAL MEDIA / WHERE THEY SHOP / etc reflects. But MOST
-          PURCHASED BRANDS measures actual confirmed purchases — only a subset
-          of the panel actually purchased the brand, so it should reflect that
-          real fraction, not 100%.
-        - True: the panel was filtered to confirmed purchasers, so MOST
-          PURCHASED BRANDS legitimately is 100% and gets pinned like the
-          other categories.
+    Logic:
+      - If the brand appears in MPB, the panel has a real purchase-rate
+        signal. That agent-scored value is the canonical BP and should be
+        used consistently across ALL categories (no 100% forcing). The
+        cross-category consistency gate handles propagation.
+      - If the brand does NOT appear in MPB (e.g. a streaming service or
+        telecom provider), the panel was selected purely on digital
+        engagement so 100% is the correct BP in every category.
+      - purchasers_only=True: the panel was pre-filtered to confirmed
+        purchasers, so even MPB legitimately IS 100%.
     """
-    brands_set_to_100 = 0
-    skipped_mpb = 0
-    
-    # Determine which column name to use (Percentage or Category Share)
+    if not input_brands:
+        return df_behavior
+
+    import re
+    import urllib.parse
+
     pct_col = 'Category Share' if 'Category Share' in df_behavior.columns else 'Percentage'
-    
-    # Get sample size once at the beginning
+
     sample_size = None
     sample_size_mask = df_behavior['Column'].str.upper() == 'SAMPLE SIZE'
     if sample_size_mask.any():
         try:
             sample_size_value = df_behavior.loc[sample_size_mask, pct_col].iloc[0]
             sample_size = int(float(str(sample_size_value).replace(',', '')))
-        except:
+        except Exception:
             pass
-    
-    import re
-    import urllib.parse
 
     def _domain_core(value: str) -> str:
-        """
-        Extract the core domain label from URL/domain-like text.
-        Examples:
-          google.com -> google
-          https://www.instagram.com/reel/... -> instagram
-          m.youtube.com -> youtube
-        """
         s = str(value or '').strip().lower()
         if not s:
             return ''
-        # Add a scheme for robust urlparse on plain domains.
         if '://' not in s and re.match(r'^[a-z0-9][a-z0-9.-]+\.[a-z]{2,}', s):
             s = f"https://{s}"
         try:
@@ -13388,20 +13364,11 @@ def enforce_input_brand_100(df_behavior, input_brands, purchasers_only: bool = F
         labels = [x for x in host.split('.') if x]
         if not labels:
             return ''
-        # Strip common non-brand subdomains
         while labels and labels[0] in {'www', 'm', 'mobile', 'amp'}:
             labels.pop(0)
-        if not labels:
-            return ''
-        return labels[0]
+        return labels[0] if labels else ''
 
     def _compact_token(value: str) -> str:
-        """
-        Canonical compact matcher token:
-        - URL decode
-        - strip common domain suffixes if present
-        - remove non-alphanumeric characters
-        """
         s = str(value or '').strip().lower()
         if not s:
             return ''
@@ -13411,157 +13378,132 @@ def enforce_input_brand_100(df_behavior, input_brands, purchasers_only: bool = F
             pass
         s = re.sub(r'^(https?://)', '', s)
         s = s.split('?', 1)[0].split('#', 1)[0]
-        # If a slash path exists, keep only host-ish prefix for domain strings.
         if '/' in s and ' ' not in s:
             s = s.split('/', 1)[0]
-        # Strip common TLD endings for direct domain inputs.
         s = re.sub(r'\.(com|org|net|io|co|ai|app|tv|gg|edu|gov|mil|biz|info|us|co\.uk|uk)$', '', s)
         s = re.sub(r'[^a-z0-9]+', '', s)
         return s
-    
-    for input_brand in input_brands:
-        # Generate all possible variations of the input brand
+
+    def _build_variations(input_brand):
         brand_variations = generate_brand_variations(input_brand)
-        
-        # Also add the normalized version
         normalized_brand = normalize_demo_value(input_brand)
         brand_variations.append(normalized_brand)
-        # Add domain-derived core token for .com/.org/.net inputs
         domain_core = _domain_core(input_brand)
         if domain_core:
             brand_variations.append(domain_core)
-        
-        # Create a comprehensive set of variations for matching
-        all_variations = set()
-        compact_variations = set()
+        all_vars = set()
+        compact_vars = set()
         for variation in brand_variations:
-            # Add the variation as-is
-            all_variations.add(variation.lower().strip())
-            # Add without spaces
-            all_variations.add(variation.lower().replace(' ', ''))
-            # Add with different case patterns
-            all_variations.add(variation.upper())
-            all_variations.add(variation.title())
-            # Add common URL patterns (excluding dashes - user doesn't want dash variations)
-            all_variations.add(variation.lower().replace(' ', '_'))
-            all_variations.add(variation.lower().replace(' ', '.'))
-            # Compact canonical token for robust matching
+            all_vars.add(variation.lower().strip())
+            all_vars.add(variation.lower().replace(' ', ''))
+            all_vars.add(variation.upper())
+            all_vars.add(variation.title())
+            all_vars.add(variation.lower().replace(' ', '_'))
+            all_vars.add(variation.lower().replace(' ', '.'))
             cvar = _compact_token(variation)
             if cvar and len(cvar) >= 3:
-                compact_variations.add(cvar)
-        
-        # Check if original input_brand contains a dash
-        input_brand_has_dash = '-' in input_brand
-        
-        # Find all matches in the dataframe (case-insensitive)
-        matches_found = False
+                compact_vars.add(cvar)
+        return all_vars, compact_vars
+
+    def _is_match(row_value, all_vars, compact_vars):
+        value_lower = row_value.lower()
+        value_no_spaces = value_lower.replace(' ', '')
+        value_compact = _compact_token(row_value)
+        value_dc = _domain_core(row_value)
+        for variation in all_vars:
+            vl = variation.lower().strip()
+            vns = vl.replace(' ', '').replace('-', '')
+            vns2 = value_no_spaces.replace('-', '')
+            if (vl == value_lower or vns == value_no_spaces or
+                    vl == value_no_spaces or vns == value_lower or
+                    vns == vns2):
+                return True
+        if compact_vars:
+            if value_compact in compact_vars:
+                return True
+            if value_dc and value_dc in compact_vars:
+                return True
+        return False
+
+    brands_set = 0
+    brands_skipped = 0
+
+    for input_brand in input_brands:
+        all_vars, compact_vars = _build_variations(input_brand)
+
+        # Detect whether the brand appears in MOST PURCHASED BRANDS
+        brand_in_mpb = False
+        for idx, row in df_behavior.iterrows():
+            row_col = str(row.get('Column', '')).strip().upper()
+            if row_col != 'MOST PURCHASED BRANDS':
+                continue
+            value = str(row['Value']).strip()
+            if _is_match(value, all_vars, compact_vars):
+                brand_in_mpb = True
+                break
+
+        if brand_in_mpb and not purchasers_only:
+            if not SILENCE_VERBOSE_OUTPUT:
+                print(f"🎯 Input brand '{input_brand}' found in MOST PURCHASED BRANDS — "
+                      f"using agent score everywhere (no 100% override)")
+            brands_skipped += 1
+            continue
+
+        # Brand is NOT in MPB (or purchasers_only) → force 100% everywhere
         for idx, row in df_behavior.iterrows():
             value = str(row['Value']).strip()
-            value_lower = value.lower()
-            value_no_spaces = value_lower.replace(' ', '')
-            value_compact = _compact_token(value)
-            value_domain_core = _domain_core(value)
-            
-            # Check if this value matches any of our variations
-            # Match if the value contains the variation or vice versa (case-insensitive)
-            # We allow matching dash variations during parsing (e.g., "Hot-Topic" matches "Hot Topic")
-            is_match = False
-            for variation in all_variations:
-                variation_lower = variation.lower().strip()
-                variation_no_spaces = variation_lower.replace(' ', '').replace('-', '')
-                value_no_spaces_no_dash = value_no_spaces.replace('-', '')
-                
-                # Exact match (with or without spaces or dashes)
-                # This allows "Hot Topic" to match "Hot-Topic" during parsing
-                if (variation_lower == value_lower or 
-                    variation_no_spaces == value_no_spaces or
-                    variation_lower == value_no_spaces or
-                    variation_no_spaces == value_lower or
-                    variation_no_spaces == value_no_spaces_no_dash):
-                    is_match = True
-                    break
+            if not _is_match(value, all_vars, compact_vars):
+                continue
 
-            # URL/domain-aware compact matching (google.com -> GOOGLE)
-            if (not is_match) and compact_variations:
-                if value_compact in compact_variations:
-                    is_match = True
-                elif value_domain_core and value_domain_core in compact_variations:
-                    is_match = True
-            
-            if is_match:
-                # MOST PURCHASED BRANDS exemption (unless purchasers_only is on).
-                # The brand-input panel is selected on digital engagement, NOT
-                # actual purchase confirmation, so only a subset truly
-                # "purchased" the brand. Forcing it to 100% here would
-                # misrepresent the purchase signal.
-                row_col = str(row.get('Column', '')).strip().upper()
-                if (not purchasers_only) and row_col == 'MOST PURCHASED BRANDS':
-                    skipped_mpb += 1
-                    if not SILENCE_VERBOSE_OUTPUT:
-                        print(f"   ⏭️  Skipping 100% override for input brand '{input_brand}' in MOST PURCHASED BRANDS (purchasers_only=False)")
-                    continue
-                old_pct = float(row[pct_col])
-                _cur_pct = df_behavior.loc[idx, pct_col]
-                if isinstance(_cur_pct, str):
-                    if '%' in _cur_pct:
-                        df_behavior.loc[idx, pct_col] = "100.0000%"
+            old_pct = 0.0
+            try:
+                old_pct = float(str(row[pct_col]).replace('%', '').replace(',', ''))
+            except Exception:
+                pass
+
+            _cur_pct = df_behavior.loc[idx, pct_col]
+            if isinstance(_cur_pct, str):
+                df_behavior.loc[idx, pct_col] = "100.0000%" if '%' in _cur_pct else "100.0000"
+            else:
+                df_behavior.loc[idx, pct_col] = 100.0
+
+            if sample_size is not None:
+                if 'Original Raw Numbers' in df_behavior.columns:
+                    _cur_raw = df_behavior.loc[idx, 'Original Raw Numbers']
+                    if isinstance(_cur_raw, str):
+                        df_behavior.loc[idx, 'Original Raw Numbers'] = str(sample_size)
                     else:
-                        df_behavior.loc[idx, pct_col] = "100.0000"
-                else:
-                    df_behavior.loc[idx, pct_col] = 100.0
-                
-                # Update Original Raw Numbers to sample size for 100% input brands
-                if sample_size is not None:
-                    if 'Original Raw Numbers' in df_behavior.columns:
-                        _cur_raw = df_behavior.loc[idx, 'Original Raw Numbers']
-                        if isinstance(_cur_raw, str):
-                            df_behavior.loc[idx, 'Original Raw Numbers'] = str(sample_size)
-                        else:
-                            df_behavior.loc[idx, 'Original Raw Numbers'] = float(sample_size)
-                    
+                        df_behavior.loc[idx, 'Original Raw Numbers'] = float(sample_size)
                 if 'Original Raw Numbers (Database)' in df_behavior.columns:
-                        _cur_raw_db = df_behavior.loc[idx, 'Original Raw Numbers (Database)']
-                        if isinstance(_cur_raw_db, str):
-                            df_behavior.loc[idx, 'Original Raw Numbers (Database)'] = str(sample_size)
-                        else:
-                            df_behavior.loc[idx, 'Original Raw Numbers (Database)'] = float(sample_size)
-                
-                # Also update Brand Penetration to 100.0 if it exists
-                if 'Brand Penetration (Row)' in df_behavior.columns:
-                    _cur_bp = df_behavior.loc[idx, 'Brand Penetration (Row)']
-                    if isinstance(_cur_bp, str):
-                        if '%' in _cur_bp:
-                            df_behavior.loc[idx, 'Brand Penetration (Row)'] = "100.0000%"
-                        else:
-                            df_behavior.loc[idx, 'Brand Penetration (Row)'] = "100.0000"
+                    _cur_raw_db = df_behavior.loc[idx, 'Original Raw Numbers (Database)']
+                    if isinstance(_cur_raw_db, str):
+                        df_behavior.loc[idx, 'Original Raw Numbers (Database)'] = str(sample_size)
                     else:
-                        df_behavior.loc[idx, 'Brand Penetration (Row)'] = 100.0
-                
-                # Update US Gen Pop Projection if it exists
-                if 'US Gen Pop Projection' in df_behavior.columns:
-                    us_projection = (sample_size / 10_000_000) * 329_900_000
-                    _cur_proj = df_behavior.loc[idx, 'US Gen Pop Projection']
-                    if isinstance(_cur_proj, str):
-                        df_behavior.loc[idx, 'US Gen Pop Projection'] = str(int(round(us_projection)))
-                    else:
-                        df_behavior.loc[idx, 'US Gen Pop Projection'] = float(int(round(us_projection)))
-                
-                brands_set_to_100 += 1
-                matches_found = True
-                if not SILENCE_VERBOSE_OUTPUT:
-                    print(f"🎯 Set input brand '{input_brand}' (exact match '{value}') to 100% in {row['Column']} (was {old_pct:.2f}%)")
-        
-        if matches_found:
+                        df_behavior.loc[idx, 'Original Raw Numbers (Database)'] = float(sample_size)
+
+            if 'Brand Penetration (Row)' in df_behavior.columns:
+                _cur_bp = df_behavior.loc[idx, 'Brand Penetration (Row)']
+                if isinstance(_cur_bp, str):
+                    df_behavior.loc[idx, 'Brand Penetration (Row)'] = "100.0000%" if '%' in _cur_bp else "100.0000"
+                else:
+                    df_behavior.loc[idx, 'Brand Penetration (Row)'] = 100.0
+
+            if 'US Gen Pop Projection' in df_behavior.columns and sample_size:
+                us_projection = (sample_size / 10_000_000) * 329_900_000
+                _cur_proj = df_behavior.loc[idx, 'US Gen Pop Projection']
+                if isinstance(_cur_proj, str):
+                    df_behavior.loc[idx, 'US Gen Pop Projection'] = str(int(round(us_projection)))
+                else:
+                    df_behavior.loc[idx, 'US Gen Pop Projection'] = float(int(round(us_projection)))
+
+            brands_set += 1
             if not SILENCE_VERBOSE_OUTPUT:
-                print(f"✅ Input brand '{input_brand}' set to 100% in all matching categories")
-        else:
-            if not SILENCE_VERBOSE_OUTPUT:
-                print(f"⚠️ Input brand '{input_brand}' not found in any categories")
-    
+                print(f"🎯 Set input brand '{input_brand}' (match '{value}') to 100% "
+                      f"in {row['Column']} (was {old_pct:.2f}%) — brand NOT in MPB")
+
     if not SILENCE_VERBOSE_OUTPUT:
-        print(f"🎯 Total input brands set to 100%: {brands_set_to_100}"
-              + (f" (skipped {skipped_mpb} MOST PURCHASED BRANDS rows — purchasers_only off)"
-                 if skipped_mpb else ""))
+        print(f"🎯 enforce_input_brand_100: {brands_set} set to 100%, "
+              f"{brands_skipped} use agent score (brand in MPB)")
     return df_behavior
 
 def remove_dash_variants_from_output(df_final, input_brands):
@@ -17895,10 +17837,44 @@ _CHILDRENS_ITEMS = {
     'NICK JR', 'HOOKED ON PHONICS', 'ABCMOUSE', 'LEAPFROG', 'VTECH',
 }
 
+_YOUNG_SKEWING_GAMES = {
+    'MINECRAFT', 'SUPER MARIO', 'POKEMON GO', 'ANIMAL CROSSING',
+    'CANDY CRUSH', 'HARRY POTTER', 'AMONG US',
+}
+
 _CPG_INSTORE_ITEMS = {
     'CLOROX', 'PAMPERS', 'TIDE', 'PURINA', 'BOUNTY', 'CHARMIN', 'DOWNY',
     'LYSOL', 'WINDEX', 'SWIFFER', 'DAWN', 'MR CLEAN', 'FEBREZE', 'GLAD',
     'REYNOLDS WRAP', 'ZIPLOC', 'SUAVE', 'COTTONELLE', 'SCOTT', 'VIVA',
+}
+
+_CPG_LOW_DIGITAL_SIGNAL = {
+    'LISTERINE', 'PRINGLES', 'MCCORMICK', 'SNICKERS', 'TUMS', 'TWIX',
+    'CHEETOS', 'DORITOS', 'OREO', 'KRAFT', 'JELL-O', 'VELVEETA',
+    'RITZ', 'TRISCUIT', 'WHEAT THINS', 'SKIPPY', 'JIF', 'HUNTS',
+    'BETTY CROCKER', 'PILLSBURY', 'DUNCAN HINES', 'CAMPBELL',
+    'PROGRESSO', 'CHEF BOYARDEE', 'SPAM', 'HORMEL', 'OSCAR MAYER',
+    'HEINZ', 'FRENCH', 'HIDDEN VALLEY', 'RANCH', 'HELLMANNS',
+    'MIRACLE WHIP', 'HAWAIIAN TROPIC',
+}
+
+_MAJOR_THEME_PARKS = {
+    'DISNEY WORLD', 'DISNEYLAND', 'UNIVERSAL ORLANDO RESORT',
+    'UNIVERSAL STUDIOS HOLLYWOOD', 'UNIVERSAL STUDIOS',
+    'KNOTT\'S BERRY FARM', 'SEA WORLD', 'SEAWORLD', 'BUSCH GARDENS',
+    'LEGOLAND', 'CEDAR POINT', 'SIX FLAGS', 'HERSHEYPARK',
+    'TOP GOLF', 'TOPGOLF', 'DAVE & BUSTERS', 'DAVE AND BUSTERS',
+}
+
+_MAJOR_QSR = {
+    'MCDONALDS', "MCDONALD'S", 'STARBUCKS', 'SUBWAY', 'WENDYS', "WENDY'S",
+    'DUNKIN', "DUNKIN'", 'DOMINOS', "DOMINO'S", 'PIZZA HUT',
+}
+
+_MAJOR_GYMS = {
+    'PLANET FITNESS', 'YMCA', '24 HOUR FITNESS', 'LA FITNESS',
+    'EQUINOX', 'GOLD\'S GYM', 'GOLDS GYM', 'ANYTIME FITNESS',
+    'ORANGETHEORY', 'ORANGETHEORY FITNESS',
 }
 
 _ATHLETE_CATEGORIES = {
@@ -17992,7 +17968,7 @@ def _apply_genpop_anchored_guardrails(df: pd.DataFrame,
                                        brands: list[str] | None = None) -> pd.DataFrame:
     """Validator 0 — clamp/floor BP values using gen-pop baselines.
 
-    Seven rules enforce proportionality so LLM scoring errors
+    Rules enforce proportionality so LLM scoring errors
     (children's games boosted for adults, universal platforms crushed, etc.)
     are corrected before downstream validators run.
     """
@@ -18088,12 +18064,12 @@ def _apply_genpop_anchored_guardrails(df: pd.DataFrame,
 
         original_bp = bp
 
-        # ── Rule 1: Universal Max Multiplier Cap (5x) ──────────────────
+        # ── Rule 1: Universal Max Multiplier Cap (4x) ──────────────────
         if gen_pop >= 0.5 and val not in brand_variants:
-            max_bp = gen_pop * 5.0
+            max_bp = gen_pop * 4.0
             if bp > max_bp:
-                bp = _organic_4dp(gen_pop * 4.5)
-                print(f"   🔒 R1 5x-cap: {cat}/{val} {original_bp:.2f}% → {bp:.2f}% (gen_pop={gen_pop:.2f}%)")
+                bp = _organic_4dp(gen_pop * 3.5)
+                print(f"   🔒 R1 4x-cap: {cat}/{val} {original_bp:.2f}% → {bp:.2f}% (gen_pop={gen_pop:.2f}%)")
                 caps_applied += 1
 
         # ── Rule 2: Children's Items Cap for Adult Audiences ───────────
@@ -18139,14 +18115,22 @@ def _apply_genpop_anchored_guardrails(df: pd.DataFrame,
         # ── Rule 6: Athlete Proportionality ────────────────────────────
         if cat in _ATHLETE_CATEGORIES:
             if gen_pop >= 0.5 and val not in brand_variants:
-                ath_cap = gen_pop * 5.0
+                ath_cap = gen_pop * 4.0
                 if bp > ath_cap:
-                    bp = _organic_4dp(gen_pop * 4.5)
+                    bp = _organic_4dp(gen_pop * 3.5)
                     print(f"   🔒 R6 athlete-cap: {cat}/{val} {original_bp:.2f}% → {bp:.2f}% (gen_pop={gen_pop:.2f}%)")
                     caps_applied += 1
             if bp > 80.0 and val not in _UNIVERSAL_HIGH_BP:
                 bp = _organic_4dp(78.0)
                 print(f"   🔒 R6 athlete-abs-cap: {cat}/{val} {original_bp:.2f}% → {bp:.2f}% (80% ceiling)")
+                caps_applied += 1
+
+        # ── Rule 6b: HOST/PERSONALITY Max Multiplier ─────────────────────
+        if cat == 'HOST/PERSONALITY' and gen_pop >= 0.5 and val not in brand_variants:
+            host_cap = gen_pop * 2.5
+            if bp > host_cap:
+                bp = _organic_4dp(gen_pop * 2.0)
+                print(f"   🔒 R6b host-cap: {cat}/{val} {original_bp:.2f}% → {bp:.2f}% (gen_pop={gen_pop:.2f}%)")
                 caps_applied += 1
 
         # ── Rule 7: Core Interest Floor ────────────────────────────────
@@ -18163,6 +18147,78 @@ def _apply_genpop_anchored_guardrails(df: pd.DataFrame,
                     bp = _organic_4dp(interest_floor)
                     print(f"   🔒 R7 interest-floor: {cat}/{val} {original_bp:.2f}% → {bp:.2f}% (core interest, gen_pop={gen_pop:.2f}%)")
                     floors_applied += 1
+
+        # ── Rule 8: Young-Skewing Games Cap ──────────────────────────────
+        if cat == 'GAMES' and val in _YOUNG_SKEWING_GAMES:
+            if median_age is not None and median_age >= 20:
+                game_cap = gen_pop * 2.0
+                if bp > game_cap:
+                    bp = _organic_4dp(game_cap)
+                    print(f"   🔒 R8 young-game-cap: {cat}/{val} {original_bp:.2f}% → {bp:.2f}% (young-skewing, median_age={median_age:.0f})")
+                    caps_applied += 1
+
+        # ── Rule 9: Major Amusement Park Floor ───────────────────────────
+        if cat == 'AMUSEMENT PARKS':
+            is_major = val in _MAJOR_THEME_PARKS
+            if not is_major:
+                for park in _MAJOR_THEME_PARKS:
+                    if park in val or val in park:
+                        is_major = True
+                        break
+            if is_major:
+                park_floor = gen_pop * 0.8
+                if bp < park_floor:
+                    bp = _organic_4dp(park_floor)
+                    print(f"   🔒 R9 park-floor: {cat}/{val} {original_bp:.2f}% → {bp:.2f}% (major park, gen_pop={gen_pop:.2f}%)")
+                    floors_applied += 1
+            else:
+                obscure_cap = gen_pop * 3.0
+                if bp > obscure_cap:
+                    bp = _organic_4dp(gen_pop * 2.5)
+                    print(f"   🔒 R9 obscure-park-cap: {cat}/{val} {original_bp:.2f}% → {bp:.2f}% (obscure park, gen_pop={gen_pop:.2f}%)")
+                    caps_applied += 1
+
+        # ── Rule 10: CPG Low-Digital-Signal Cap ──────────────────────────
+        if val in _CPG_LOW_DIGITAL_SIGNAL:
+            cpg_dig_cap = gen_pop * 2.0
+            if bp > cpg_dig_cap:
+                bp = _organic_4dp(cpg_dig_cap)
+                print(f"   🔒 R10 cpg-digital-cap: {cat}/{val} {original_bp:.2f}% → {bp:.2f}% (low-digital CPG, gen_pop={gen_pop:.2f}%)")
+                caps_applied += 1
+
+        # ── Rule 11: Major QSR Floor ─────────────────────────────────────
+        if cat == 'QSR' and val in _MAJOR_QSR:
+            qsr_floor = gen_pop * 0.5
+            if bp < qsr_floor:
+                bp = _organic_4dp(qsr_floor)
+                print(f"   🔒 R11 qsr-floor: {cat}/{val} {original_bp:.2f}% → {bp:.2f}% (major QSR, gen_pop={gen_pop:.2f}%)")
+                floors_applied += 1
+
+        # ── Rule 12: Major Gym Floor ─────────────────────────────────────
+        if cat == 'WORKOUT FACILITY' and val in _MAJOR_GYMS:
+            gym_floor = gen_pop * 0.6
+            if bp < gym_floor:
+                bp = _organic_4dp(gym_floor)
+                print(f"   🔒 R12 gym-floor: {cat}/{val} {original_bp:.2f}% → {bp:.2f}% (major gym, gen_pop={gen_pop:.2f}%)")
+                floors_applied += 1
+
+        # ── Rule 13: Location Max Multiplier Cap ─────────────────────────
+        if cat == 'LOCATION' and gen_pop >= 0.01:
+            loc_max = gen_pop * 10.0
+            if bp > loc_max:
+                bp = _organic_4dp(gen_pop * 3.0)
+                print(f"   🔒 R13 location-cap: {cat}/{val} {original_bp:.2f}% → {bp:.2f}% (>10x gen_pop={gen_pop:.2f}%)")
+                caps_applied += 1
+            if gen_pop >= 1.0 and bp < gen_pop * 0.05:
+                bp = _organic_4dp(gen_pop * 0.15)
+                print(f"   🔒 R13 location-floor: {cat}/{val} {original_bp:.2f}% → {bp:.2f}% (major DMA crushed, gen_pop={gen_pop:.2f}%)")
+                floors_applied += 1
+
+        # ── Rule 14: Negative BP Floor ───────────────────────────────────
+        if bp < 0.01:
+            bp = _organic_4dp(max(0.01, gen_pop * 0.01))
+            print(f"   🔒 R14 neg-floor: {cat}/{val} {original_bp:.4f}% → {bp:.4f}% (negative/zero BP)")
+            floors_applied += 1
 
         if bp != original_bp:
             df.at[idx, bp_col] = bp
@@ -18457,15 +18513,15 @@ def agent_pipeline_final_sanity_check(df: pd.DataFrame,
     """Step 3 — deterministic sanity check.
 
     Only two overrides plus math reconciliation:
-      1. Brand input locked to 100% (with MOST PURCHASED BRANDS exemption
-         when purchasers_only=False — see enforce_input_brand_100 docstring)
+      1. Brand input BP enforcement (100% only if brand not in MPB;
+         agent score if brand IS in MPB — see enforce_input_brand_100)
       2. Same Value = highest BP across categories
       3. BP → raw → Category Share → US Gen Pop Projection
       4. Micro-noise to avoid .0000 endings
     """
     df = df.copy()
 
-    # 1. Brand input = 100%
+    # 1. Brand input BP enforcement (conditional on MPB presence)
     if brands:
         df = enforce_input_brand_100(df, brands, purchasers_only=purchasers_only)
 
@@ -21210,13 +21266,13 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
     # remaining valid OCCUPATION buckets.
     df_final = _drop_blocklisted_demo_values(df_final)
 
-    # --- FINAL INPUT BRAND 100% ENFORCEMENT (ABSOLUTE LAST STEP) ---
-    # Skip 100% enforcement for GenPop to allow natural brand percentages
+    # --- FINAL INPUT BRAND BP ENFORCEMENT ---
+    # Conditional: 100% only if brand not in MPB; agent score if in MPB
     if not is_genpop:
         df_final = enforce_input_brand_100(df_final, brands, purchasers_only=purchasers_only)
     else:
         if not SILENCE_VERBOSE_OUTPUT:
-            print("🎯 GenPop mode: Skipping input brand 100% enforcement to allow natural percentages")
+            print("🎯 GenPop mode: Skipping input brand enforcement to allow natural percentages")
     
     # Final verification pipeline removed per user request (no caps/special rules)
     
@@ -21594,7 +21650,7 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
     if 'Percentage' in df_final.columns:
         df_final = df_final.rename(columns={'Percentage': 'Category Share'})
     
-    # Final required override: keep input brand at 100%.
+    # Final required override: input brand BP enforcement (conditional on MPB).
     if not is_genpop:
         df_final = enforce_input_brand_100(df_final, brands, purchasers_only=purchasers_only)
     
@@ -21755,7 +21811,7 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
         if _str_col in df_final.columns:
             df_final[_str_col] = df_final[_str_col].astype(str)
 
-    # Absolute pre-save lock (non-GenPop): brand input at 100%
+    # Absolute pre-save lock (non-GenPop): brand input BP enforcement
     if not is_genpop and brands:
         df_final = enforce_input_brand_100(df_final, brands, purchasers_only=purchasers_only)
         df_final = finalize_output_metrics_like_edit_sample_size(df_final)
@@ -24999,14 +25055,9 @@ def enforce_value_consistency_across_categories(df: pd.DataFrame,
     NOTE: Category Share is intentionally not forced identical because it is
     category-relative by design and is recomputed downstream.
 
-    purchasers_only:
-        - False (default) → MOST PURCHASED BRANDS is excluded from this
-          propagation. Otherwise the input brand's 100% (set in APPAREL/
-          FOOTWEAR / WHERE THEY SHOP / etc) would propagate back into MPB
-          and overwrite the agent's real purchase-rate score.
-        - True → MPB participates normally; the input brand legitimately
-          IS 100% in MPB because the panel was filtered to confirmed
-          purchasers.
+    MOST PURCHASED BRANDS always participates in consistency propagation so
+    that input brands whose agent score originates there carry a single
+    coherent BP across all categories.
     """
     if df is None or df.empty or 'Value' not in df.columns or 'Column' not in df.columns:
         return df
@@ -25018,8 +25069,6 @@ def enforce_value_consistency_across_categories(df: pd.DataFrame,
         'INCOME', 'EDUCATION', 'RELATIONSHIP', 'PARENTAL_STATUS',
         'SEXUAL_ORIENTATION', 'OCCUPATION', 'LOCATION',
     }
-    if not purchasers_only:
-        excluded_cols.add('MOST PURCHASED BRANDS')
 
     def _to_num(v, default=np.nan):
         try:
@@ -25109,11 +25158,14 @@ def set_brand_input_raw_to_sample_size(df, is_genpop=False, purchasers_only: boo
     This ensures the input brand always shows 100% with raw numbers matching sample size everywhere it appears.
     Skip this for GenPop to allow natural brand percentages.
 
+    NOTE: If the brand appears in MOST PURCHASED BRANDS the agent score is
+    the canonical signal and this function becomes a no-op — the
+    cross-category consistency gate handles propagation instead.
+
     purchasers_only:
-        - False (default) → MOST PURCHASED BRANDS rows are skipped so the
-          agent's real purchase-rate score is preserved.
-        - True → MPB rows participate normally because the panel was
-          filtered to confirmed purchasers and 100% is correct.
+        - False (default) → If brand is in MPB, skip all 100% forcing.
+          If brand is NOT in MPB, set to 100% everywhere.
+        - True → All categories get 100% including MPB (confirmed purchasers).
     """
     
     # Skip for GenPop to allow natural brand percentages
@@ -25153,34 +25205,44 @@ def set_brand_input_raw_to_sample_size(df, is_genpop=False, purchasers_only: boo
     for brand_name in brand_names:
         if not brand_name:
             continue
-            
-        # Create variations for matching
+
         brand_upper = brand_name.upper()
         brand_lower = brand_name.lower()
         brand_title = brand_name.title()
         brand_no_spaces = brand_name.replace(' ', '').upper()
+
+        # Check if brand appears in MOST PURCHASED BRANDS
+        brand_in_mpb = False
+        if not purchasers_only:
+            for idx, row in df.iterrows():
+                row_col = str(row.get('Column', '')).strip().upper()
+                if row_col != 'MOST PURCHASED BRANDS':
+                    continue
+                value = str(row['Value']).strip()
+                value_upper = value.upper()
+                value_no_spaces = value.replace(' ', '').upper()
+                if (value_upper == brand_upper or value_no_spaces == brand_no_spaces or
+                        value_upper == brand_no_spaces or value_no_spaces == brand_upper):
+                    brand_in_mpb = True
+                    break
+
+        if brand_in_mpb and not purchasers_only:
+            if not SILENCE_VERBOSE_OUTPUT:
+                print(f"  ⏭️  set_brand_input_raw: '{brand_name}' in MPB — skipping 100% override (agent score is canonical)")
+            continue
         
-        # Find ALL rows where the Value matches the brand name (case insensitive, with and without spaces)
-        # MOST PURCHASED BRANDS exempted unless purchasers_only — see fn docstring.
+        # Brand NOT in MPB — force 100% everywhere
         matches = []
-        skipped_mpb = 0
         for idx, row in df.iterrows():
             value = str(row['Value']).strip()
             value_upper = value.upper()
             value_no_spaces = value.replace(' ', '').upper()
             
-            # Check for exact match (case insensitive, with or without spaces)
             if (value_upper == brand_upper or 
                 value_no_spaces == brand_no_spaces or
                 value_upper == brand_no_spaces or
                 value_no_spaces == brand_upper):
-                row_col = str(row.get('Column', '')).strip().upper()
-                if (not purchasers_only) and row_col == 'MOST PURCHASED BRANDS':
-                    skipped_mpb += 1
-                    continue
                 matches.append(idx)
-        if skipped_mpb and not SILENCE_VERBOSE_OUTPUT:
-            print(f"  ⏭️  Skipping {skipped_mpb} MOST PURCHASED BRANDS row(s) for '{brand_name}' (purchasers_only=False)")
         
         if matches:
             gpp = int(round((sample_size / 10_000_000) * 329_900_000))
@@ -25461,8 +25523,8 @@ def main():
             # Add frequency columns to main dataframe
             enhanced_df = add_frequency_columns_to_main_df(main_df, frequency_df)
             
-            # --- FINAL INPUT BRAND 100% ENFORCEMENT (ABSOLUTE LAST STEP) ---
-            # Skip 100% enforcement for GenPop to allow natural brand percentages
+            # --- FINAL INPUT BRAND BP ENFORCEMENT ---
+            # Conditional: 100% only if brand not in MPB; agent score if in MPB
             if not is_genpop:
                 enhanced_df = enforce_input_brand_100(enhanced_df, brands, purchasers_only=purchasers_only)
             else:
