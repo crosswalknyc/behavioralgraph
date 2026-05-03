@@ -16768,6 +16768,20 @@ def parallel_category_agents(df: pd.DataFrame, persona_doc: dict,
     print(f"   🔁 Propagation: {len(global_value_bp)} unique values scored — propagating to all categories "
           f"(byte-identical across categories)")
 
+    # ── Apply carry-forward jitter ONCE per unique value ─────────────────
+    # Reruns previously called `_carry_forward_jitter(carry[val_u])` per row,
+    # which produced independent ±0.01-0.02 noise on each occurrence of the
+    # same value (e.g. NIKE in MOST PURCHASED BRANDS vs APPAREL/FOOTWEAR
+    # ended up 95.39% vs 95.43%). Same architectural fix as the agent path:
+    # jitter once, propagate the same BP everywhere. The cross-category
+    # consistency gate is NOT a substitute — by then the per-row jitter is
+    # already baked in.
+    global_carry_bp: dict[str, float] = {}
+    for cat, carry in category_carry.items():
+        for v_u, prev_bp in carry.items():
+            if v_u not in global_carry_bp:
+                global_carry_bp[v_u] = _carry_forward_jitter(prev_bp)
+
     rows_written = 0
     rows_carried = 0
     rows_propagated = 0
@@ -16777,8 +16791,9 @@ def parallel_category_agents(df: pd.DataFrame, persona_doc: dict,
         for idx in idxs:
             val_u = str(df.at[idx, 'Value']).strip().upper()
             if val_u in carry:
-                # Carry-forward path — reuse prior BP with tiny jitter, ignore LLM
-                df.at[idx, bp_col] = _carry_forward_jitter(carry[val_u])
+                # Carry-forward: same value across categories gets the SAME
+                # jittered BP. Pull from global_carry_bp (jitter applied once).
+                df.at[idx, bp_col] = global_carry_bp[val_u]
                 rows_carried += 1
             elif val_u in global_value_bp:
                 # Single source of truth: same BP applied wherever this value
@@ -17830,117 +17845,17 @@ def _apply_post_score_agents(df: pd.DataFrame,
     if wide_window:
         df = _apply_anti_duplicate_jitter(df, bp_col)
 
-    # --- D6) Gen-pop mismatch gate (every run, not just reruns) ------------
-    # Catches the Nobu-for-Nike failure mode: per-cat agent over-ranks an
-    # item by absolute fame even though the audience has no real reason
-    # to engage with it. Items >= 3x canonical gen-pop baseline AND not
-    # called out in the persona's expected_high get sent to gpt-4o for
-    # ACCEPT/REVISE per category. No hardcoded brand values — the gate
-    # is purely deterministic flagging; the LLM makes the actual call.
-    df = _run_genpop_mismatch_pass(
-        df,
-        persona_doc=persona_doc,
-        subject=subject,
-        bp_col=bp_col,
-        grounded_guidance=grounded_guidance,
-    )
-
-    # --- D7) Soft hallucination cap (replaces old hard multiplier caps) ------
-    # If an item's BP > 10x its gen-pop baseline AND the item is NOT in the
-    # grounded expected_high list, hard-cap it at 10x baseline. This catches
-    # obvious hallucinations (Publix at 84% when baseline is 2%) without
-    # constraining persona-relevant items that the guidance agent endorsed.
-    _HALLUCINATION_RATIO = 10.0
-    gp_csv = _load_genpop_csv()
-    if gp_csv is not None and not gp_csv.empty and bp_col in df.columns:
-        _gp_cap_lookup: dict[tuple[str, str], float] = {}
-        try:
-            _gc = gp_csv.columns[0]
-            _gv = gp_csv.columns[1]
-            _gb = gp_csv.columns[2]
-            for _, _r in gp_csv.iterrows():
-                try:
-                    _gp_cat = str(_r[_gc]).strip().upper()
-                    _gp_val = str(_r[_gv]).strip().upper()
-                    _gp_bp = float(_r[_gb])
-                    if _gp_cat and _gp_val and _gp_bp > 0:
-                        _gp_cap_lookup[(_gp_cat, _gp_val)] = _gp_bp
-                except (TypeError, ValueError):
-                    continue
-        except Exception:
-            _gp_cap_lookup = {}
-
-        _grounded = grounded_guidance or {}
-        _grounded_high_by_cat: dict[str, set[str]] = {}
-        _grounded_low_by_cat: dict[str, set[str]] = {}
-        for _gc_cat, _gc_blob in _grounded.items():
-            _cat_u = str(_gc_cat).strip().upper()
-            _items_set = {str(x).strip().upper() for x in (_gc_blob.get('expected_high') or []) if str(x).strip()}
-            if _items_set:
-                _grounded_high_by_cat[_cat_u] = _items_set
-            _low_set = {str(x).strip().upper() for x in (_gc_blob.get('expected_low') or []) if str(x).strip()}
-            if _low_set:
-                _grounded_low_by_cat[_cat_u] = _low_set
-
-        _EXPECTED_LOW_RATIO = 3.0
-        _cap_count = 0
-        _low_cap_count = 0
-        for idx, row in df.iterrows():
-            try:
-                cat_u = str(row['Column']).strip().upper()
-                val_u = str(row['Value']).strip().upper()
-                curr_bp = float(row[bp_col])
-            except (TypeError, ValueError, KeyError):
-                continue
-            if cat_u in _DEMO_SET or cat_u in _BEHAVIORAL_SKIP:
-                continue
-            gp_baseline = _gp_cap_lookup.get((cat_u, val_u))
-            if gp_baseline is None or gp_baseline <= 0:
-                continue
-
-            _el_set = _grounded_low_by_cat.get(cat_u, set())
-            _in_expected_low = val_u in _el_set or any(
-                _el == val_u or _el in val_u or val_u in _el for _el in _el_set
-            )
-            if _in_expected_low:
-                low_cap = gp_baseline * _EXPECTED_LOW_RATIO
-                if curr_bp > low_cap:
-                    new_bp = round(low_cap + random.uniform(-0.02, 0.02), 4)
-                    new_bp = max(0.01, min(96.0, new_bp))
-                    print(f"      🔻 LOW CAP [{cat_u}] {row.get('Value', val_u)}: "
-                          f"{curr_bp:.2f}% → {new_bp:.2f}% (expected_low, >{_EXPECTED_LOW_RATIO}x baseline {gp_baseline:.2f}%)")
-                    df.at[idx, bp_col] = new_bp
-                    if 'Category Share' in df.columns:
-                        df.at[idx, 'Category Share'] = new_bp
-                    _low_cap_count += 1
-                continue
-
-            cap_val = gp_baseline * _HALLUCINATION_RATIO
-            if curr_bp <= cap_val:
-                continue
-            _eh_set = _grounded_high_by_cat.get(cat_u, set())
-            if val_u in _eh_set:
-                continue
-            _is_endorsed = False
-            for _eh_item in _eh_set:
-                if _eh_item == val_u or _eh_item in val_u or val_u in _eh_item:
-                    _is_endorsed = True
-                    break
-            if _is_endorsed:
-                continue
-            new_bp = round(cap_val + random.uniform(-0.02, 0.02), 4)
-            new_bp = max(0.01, min(96.0, new_bp))
-            print(f"      🧱 SOFT CAP [{cat_u}] {row.get('Value', val_u)}: "
-                  f"{curr_bp:.2f}% → {new_bp:.2f}% (>{_HALLUCINATION_RATIO}x baseline {gp_baseline:.2f}%, not in expected_high)")
-            df.at[idx, bp_col] = new_bp
-            if 'Category Share' in df.columns:
-                df.at[idx, 'Category Share'] = new_bp
-            _cap_count += 1
-        if _cap_count or _low_cap_count:
-            print(f"   🧱 Soft hallucination cap: capped {_cap_count} items at {_HALLUCINATION_RATIO}x baseline, "
-                  f"{_low_cap_count} expected_low items at {_EXPECTED_LOW_RATIO}x baseline")
-        else:
-            print(f"   ✅ Soft hallucination cap: no items exceeded thresholds")
+    # --- D6/D7 REMOVED ----------------------------------------------------
+    # The old D6 (gen-pop mismatch agent) + D7 (soft hallucination cap)
+    # patched the failure mode where an agent over-ranked an item by absolute
+    # fame. With the architectural rewrite (affinity 0-100 -> BP via gen_pop
+    # multiplier, capped at 3.5x gen_pop), no item can land >5x gen_pop unless
+    # propagated from another category — and propagation is byte-identical
+    # by construction. D7 also re-randomized BPs per-row (random.uniform
+    # jitter), which broke the score-once-propagate guarantee.
+    #
+    # If an outlier slips through in the future, fix the affinity scoring,
+    # not the post-processing.
 
     return df
 
