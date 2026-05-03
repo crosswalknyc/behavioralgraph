@@ -14329,11 +14329,14 @@ For each category, your guidance MUST be grounded in reality:
 These signals are the primary guidance that scoring agents use to reason about individual items. Make them specific and opinionated but REALISTIC — do not tell agents to crush near-universal items.
 
 EXAMPLE category_signals (for a hypothetical athletic-brand audience — adapt to the actual subject):
+  "SOCIAL MEDIA": "Major platforms (YouTube, TikTok, Instagram, Snapchat) are near-universal for this young audience — score them at 1.0-1.4x baseline. TikTok is THE dominant platform for young, urban, diverse Americans — DO NOT crush it. Facebook skews older — score 0.7-0.9x baseline. Discord near baseline for gamers/young men. Niche platforms (BeReal, Lemon8) near or below baseline.",
   "AMUSEMENT PARKS": "Major theme parks (Disney World, Universal Studios, Six Flags) are mainstream American entertainment — score near or slightly below baseline. Don't crush them. Water parks and local amusement parks score near baseline too. Only niche/foreign parks score low.",
   "TECHNOLOGY/DEVICE": "This audience skews young and urban. Both Apple (iPhone, iPad) and Samsung (Galaxy) are mass-market — score Apple at 0.8-1.0x baseline, Samsung at 1.0-1.2x if audience skews Android. Don't crush either brand. Smart home devices and wearables near baseline.",
-  "GAMES": "This audience is 18-34 adults. Adult/sports games (NBA 2K, Madden, FIFA, Call of Duty, GTA) should score ABOVE baseline. Children's games (Roblox, LEGO, Barbie, Disney Dreamlight) should score BELOW baseline — these are NOT what adults play. Candy Crush/casual games near baseline.",
+  "GAMES": "This audience is 18-34 adults who like sports. Sports games (NBA 2K, Madden, EA Sports FC, EA Sports NFL) should score 2-4x baseline — these are core to the audience. Adult action games (GTA, Call of Duty, Assassin's Creed) score 1.5-2x. Children's games (Roblox, LEGO, Barbie, Disney Dreamlight) should score BELOW baseline (0.5-0.8x) — adults don't play these. Minecraft and Fortnite are cross-generational, cap at 1.5x baseline. NBA 2K MUST outscore Roblox.",
   "WHERE THEY SHOP": "Retailers that sell the subject's product category (e.g. Foot Locker, Dick's Sporting Goods, Finish Line for athletic) should score ABOVE baseline. Mass retailers (Amazon, Walmart, Target) stay near baseline — everyone shops there. CPG/grocery retailers (Kroger, Publix) score BELOW baseline on a digital panel. Luxury boutiques (Tiffany, Nordstrom) depend on audience income.",
-  "STREAMING/PLATFORM": "Major streaming (Netflix, Hulu, Amazon Prime Video, Disney+, YouTube) are near-universal — score 0.85-1.15x baseline. Don't crush them. Sports-specific streaming (ESPN+, FuboTV) may score above baseline if audience is sports-oriented. Niche/foreign platforms score very low."
+  "STREAMING/PLATFORM": "Major streaming (Netflix, Hulu, Amazon Prime Video, Disney+, YouTube) are near-universal — score 0.85-1.15x baseline. Don't crush them. Sports-specific streaming (ESPN+, FuboTV) may score above baseline if audience is sports-oriented. Niche/foreign platforms score very low.",
+  "ATHLETE": "The subject's own sponsored athletes should score 2-4x their baseline — not 10x. Only the single most iconic athlete (like LeBron for Nike) gets 5x+. Other athletes score 1.0-1.5x baseline. Don't inflate obscure athletes to 50%+ just because they have a brand deal.",
+  "INTEREST": "The subject's CORE interest category (e.g. 'SPORTS' for a sports brand) MUST score ABOVE baseline — typically 1.2-1.5x. Related interests (sneakers, fitness, live events, rap & hip hop) also above baseline. Generic interests (cooking, home improvement, weather) near or slightly below baseline. The audience's primary passion should ALWAYS rank in the top 10 interests."
 """
 
     print(f"🔬 Step 1: Persona Research Agent researching '{subject}' …")
@@ -14708,8 +14711,19 @@ ITEMS THAT SHOULD DEVIATE DOWN (regardless of baseline):
   • CPG / in-store brands (Clorox, Pampers, Tide, Gillette, Purina) → 0.1-0.3x (digital BP is tiny)
   • Beauty/cosmetics for non-beauty audiences → 0.3-0.5x
   • Foreign platforms with no US presence (Zalando, Sony LIV) → <1% absolute
-  • Children's items (Roblox, YouTube Kids, Barbie) for adult audiences → 0.3-0.5x
+  • Children's games/items (Roblox, YouTube Kids, Barbie, LEGO, Disney Dreamlight) for adult audiences → 0.5-0.8x baseline (NOT boosted)
   • Luxury/aspirational (Porsche, McLaren) for audiences with income <$100K → 0.3-0.5x
+
+ITEMS THAT MUST NOT BE CRUSHED (regardless of persona specificity):
+  • Major social media (TikTok, Instagram, YouTube, Snapchat) for audiences 18-34 → 1.0-1.4x baseline. These are mainstream platforms.
+  • Major streaming (Netflix, Hulu, Amazon Prime, Disney+) → 0.8-1.2x baseline.
+  • The audience's CORE interest category (e.g. "SPORTS" for sports brand audience) → MUST be above baseline, 1.2-1.5x.
+
+ATHLETES — PROPORTIONAL BOOST RULE:
+  • Only the #1 most iconic athlete for this brand (e.g. LeBron for Nike) can go 5x+ baseline.
+  • Other sponsored athletes: 2-4x baseline MAX.
+  • Unrelated athletes: 1.0-1.5x baseline.
+  • NO athlete should score above 60% unless they are the #1 icon.
 
   • Hard floor: 0.01%. Hard ceiling: 96%.
 """
@@ -14754,10 +14768,14 @@ AUDIENCE-SPECIFIC SCORING:
 COMMON PITFALLS TO AVOID:
   • CPG/HOUSEHOLD (Clorox, Pampers, Tide, Gillette, Purina, Olay) → 0.1-0.3x baseline. People buy these in stores. Their DIGITAL engagement is tiny.
   • THEME PARKS (Disney World, Universal, Six Flags) → 0.7-1.0x baseline. Mainstream American entertainment — don't crush them just because the persona isn't "theme park focused."
-  • GAMES for ADULT audiences (18-34) → Children's games (LEGO, Roblox, Barbie) should NOT outscore adult/sports games (NBA 2K, Madden, GTA, Call of Duty). If the audience is adults, adult games rank higher.
+  • SOCIAL MEDIA: Major platforms (YouTube, TikTok, Instagram, Facebook, Snapchat) are used by MOST Americans. For young audiences (18-34), TikTok and Instagram should be AT OR ABOVE their baseline (1.0-1.4x) — these are THE dominant platforms for young, urban, diverse audiences. YouTube is near-universal (0.95-1.2x). Facebook skews older (0.7-0.9x for young audiences). NEVER crush TikTok or Instagram below their baseline for any audience under 40. Discord should also be near baseline for young audiences.
+  • GAMES for ADULT audiences (18-34) → Children's games (Roblox, LEGO, Barbie, Disney Dreamlight Valley) should score BELOW baseline (0.5-0.8x) for adult audiences. Sports/action games (NBA 2K, Madden, FIFA/EA Sports FC, GTA, Call of Duty) should score ABOVE baseline (2-4x) for sports/athletic audiences. Minecraft and Fortnite are cross-generational but cap at 1.5x baseline for adult audiences. THE RANK ORDER MUST BE: sports/action games > cross-generational games > children's games. If NBA 2K scores lower than Roblox for an adult sports audience, something is wrong.
+  • ATHLETES/TALENT: Brand sponsorship boosts an athlete but proportionally. A brand-sponsored athlete at 5% baseline should score 2-4x (10-20%), NOT 10x (50%). Only the single most iconic athlete deeply tied to the brand (e.g. LeBron James for Nike, Tom Brady for Under Armour in their era) should score 5x+ baseline. All other sponsored athletes cap at 3-4x. If an athlete has no known brand connection, score 1.0-1.5x baseline. Never score ANY athlete above 60% unless they're the single most dominant figure (e.g. LeBron for Nike).
+  • INTEREST: The audience's CORE category interest (sports for a sports brand, beauty for a beauty brand, gaming for a gaming brand) MUST score ABOVE its gen-pop baseline — typically 1.2-1.5x. It should NEVER score below baseline for the subject's own category. Related sub-interests (sneakers, live events, fitness, rap & hip hop for an athletic brand) should also score above baseline. Generic interests (cooking, home, weather) should be near or slightly below baseline.
   • TECHNOLOGY: Apple AND Samsung/Android are BOTH mass-market. Even if this audience skews Android, Apple should be 0.7-0.9x baseline (NOT 0.4x). Samsung should be at or above baseline if audience skews Android. Half of Americans use Apple products.
   • FOREIGN-ONLY items (Zalando, Sony LIV, international-only platforms) → less than 1%. This is a U.S. panel.
   • STREAMING: Major services (Netflix, Hulu, Amazon Prime, Disney+) are used by MOST Americans. Score them 0.8-1.2x baseline. Don't crush mainstream streaming just because it's not persona-specific.
+  • HORSE RACING / NICHE SPECTATOR EVENTS: Unless the persona has a specific connection to horse racing or motorsports, score near or slightly below baseline (0.8-1.0x). Don't boost niche spectator events just because the audience likes "sports" generally — these are very different audiences.
 
 ═══════════════════════════════════════════════════════════════════
 PERSONA — this is the audience you are scoring for
