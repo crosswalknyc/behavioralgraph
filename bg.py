@@ -16128,6 +16128,15 @@ Return ONLY a JSON array, one entry per DMA, in the same order:
 
     print(f"📍 Location intelligence agent: scoring {len(all_dmas)} DMAs in {len(chunks)} chunks…")
     raw_results: dict = {}  # name -> (kind, value) tuples from chunks
+
+    # Track per-chunk coverage so we can retry chunks where the LLM dropped
+    # items (returned a JSON array shorter than the input). This is the most
+    # common failure mode — silent partial-response — and previously left
+    # major DMAs (Boston, DC, Phoenix, Raleigh) with NO multiplier, which
+    # downstream defaulted to a bad fuzzy-substring match producing near-zero BPs.
+    def _expected_keys_for_chunk(chunk: list[tuple[str, float]]) -> set[str]:
+        return {normalize_dma_for_display(name).upper() for name, _ in chunk}
+
     with _futures.ThreadPoolExecutor(max_workers=min(6, len(chunks))) as pool:
         futures = {pool.submit(_process_chunk, i, c): i for i, c in enumerate(chunks)}
         _done_idxs = set()
@@ -16147,6 +16156,32 @@ Return ONLY a JSON array, one entry per DMA, in the same order:
                     except Exception as e:
                         if _att == 3:
                             print(f"   ❌ Location chunk {i} failed after 3 retries: {e}")
+
+    # ── Per-chunk coverage retry ──────────────────────────────────────────
+    # For any chunk where the agent returned <90% of expected DMAs, retry
+    # that chunk up to 2 more times. Without this, Boston/DC/Phoenix etc.
+    # silently drop to mult=1.0 (or worse, fuzzy-match noise) and end up
+    # at 0.01% BP after global normalization.
+    for retry_round in range(2):
+        incomplete = []
+        for i, c in enumerate(chunks):
+            expected = _expected_keys_for_chunk(c)
+            got = sum(1 for k in expected if k in raw_results)
+            if got < len(expected) * 0.9:
+                incomplete.append((i, c, got, len(expected)))
+        if not incomplete:
+            break
+        print(f"   🔄 Location retry round {retry_round + 1}: "
+              f"{len(incomplete)} chunks under-returned "
+              f"({', '.join(f'#{i}={g}/{t}' for i, _, g, t in incomplete)})")
+        for i, c, _g, _t in incomplete:
+            try:
+                fresh = _process_chunk(i, c) or {}
+                # Merge: only fill in missing keys; don't overwrite good values.
+                for k, v in fresh.items():
+                    raw_results.setdefault(k, v)
+            except Exception as e:
+                print(f"   ❌ Location chunk {i} retry failed: {e}")
 
     # ── Convert chunk results to a multiplier dict ─────────────────────────
     # Affinity-mode entries (the new contract) translate as:
@@ -16396,14 +16431,25 @@ def parallel_category_agents(df: pd.DataFrame, persona_doc: dict,
         if loc_multipliers and gp_dma_pct:
             # ── Tier 1: agent-driven, every DMA scored ──
             # Compute raw weighted shares then renormalize so they sum to 100.
+            #
+            # IMPORTANT: NO substring fuzzy match here. The previous version
+            # used `next((m for k,m in loc_multipliers.items() if k in dma_u
+            # or dma_u in k), 1.0)` which would match e.g. "MA" inside
+            # "BOSTON MA MANCHESTER NH" and silently return the wrong DMA's
+            # tiny multiplier, crushing major markets to ~0.01% BP. If a DMA
+            # is missing from the agent's response, default to mult=1.0
+            # (gen-pop baseline) explicitly and log it.
             raw_share = {}
+            missing_dmas: list[str] = []
             for dma_u, baseline in gp_dma_pct.items():
                 mult = loc_multipliers.get(dma_u)
                 if mult is None:
-                    # Try substring fuzzy match (handles minor name diffs).
-                    mult = next((m for k, m in loc_multipliers.items()
-                                 if k in dma_u or dma_u in k), 1.0)
+                    mult = 1.0
+                    missing_dmas.append(dma_u)
                 raw_share[dma_u] = max(0.0001, baseline * float(mult))
+            if missing_dmas:
+                print(f"   ℹ️  Location: {len(missing_dmas)} DMAs missing from agent — using gen-pop baseline (mult=1.0): "
+                      f"{', '.join(missing_dmas[:8])}{'…' if len(missing_dmas) > 8 else ''}")
             total_raw = sum(raw_share.values()) or 1.0
             final_share = {k: (v / total_raw) * 100.0 for k, v in raw_share.items()}
 
@@ -16423,18 +16469,17 @@ def parallel_category_agents(df: pd.DataFrame, persona_doc: dict,
             assigned = 0
             for idx in loc_indices:
                 val_u = str(df.at[idx, 'Value']).strip().upper()
-                # Find matching DMA share — exact then substring.
+                # Exact-match only — substring fuzzy matching has been removed
+                # because it produced cross-DMA contamination (e.g. matching
+                # "MA" inside "BOSTON MA MANCHESTER NH" against an unrelated
+                # DMA's multiplier). If no exact match, fall back to the
+                # df row's own gen-pop baseline normalized into final_share
+                # (which we computed above for every DMA in gp_dma_pct).
                 share = final_share.get(val_u)
                 if share is None:
-                    share = next((s for k, s in final_share.items()
-                                  if k in val_u or val_u in k), None)
-                if share is None:
                     share = 0.01
-                # Apply persona override blend if this DMA was top-N.
+                # Apply persona override blend ONLY on exact match.
                 override = persona_overrides.get(val_u)
-                if override is None:
-                    override = next((o for k, o in persona_overrides.items()
-                                     if k in val_u or val_u in k), None)
                 if override is not None and override > 0:
                     share = (share + override) / 2.0
                 # ±2% relative jitter for organic 4dp values.
@@ -18050,6 +18095,10 @@ def _apply_genpop_anchored_guardrails(df: pd.DataFrame,
     caps_applied = 0
     floors_applied = 0
 
+    # Once-per-value cache for the R0 ceiling jitter so the same Value gets
+    # the same capped BP in every category it appears in.
+    r0_cap_cache: dict[str, float] = {}
+
     for idx in df.index:
         try:
             cat = str(df.at[idx, 'Column']).strip().upper()
@@ -18065,8 +18114,22 @@ def _apply_genpop_anchored_guardrails(df: pd.DataFrame,
         gen_pop = gp_lookup.get((cat, val))
 
         # ── R0: Universal floor/ceiling ──────────────────────────────────
+        # IMPORTANT: cap to organic 95.xxxx not flat 96.0000. A flat 96.0000
+        # gets caught by Validator 4's `_has_bad_decimals` check and gets
+        # replaced with a fresh `_organic_4dp(96)` per row — which can swing
+        # ±1-3% INDEPENDENTLY per occurrence of the same value, breaking
+        # cross-category byte-identical propagation (e.g. Nike-MPB vs
+        # Nike-APPAREL/FOOTWEAR drifted 3.48% apart in the prior run).
+        # Cache the cap value per Value so every occurrence of e.g. NIKE
+        # over the cap gets the SAME capped BP across all categories.
         if bp > 96.0:
-            bp = 96.0
+            if val in r0_cap_cache:
+                bp = r0_cap_cache[val]
+            else:
+                d1 = random.randint(1, 9); d2 = random.randint(1, 9)
+                d3 = random.randint(1, 9); d4 = random.randint(1, 9)
+                bp = round(95.0 + d1 * 0.1 + d2 * 0.01 + d3 * 0.001 + d4 * 0.0001, 4)
+                r0_cap_cache[val] = bp
             caps_applied += 1
         elif bp < 0.01:
             # See R14 below for the gen-pop-aware version when we have one
@@ -18194,7 +18257,14 @@ def post_agent_quality_gate(df: pd.DataFrame, persona_doc: dict | None = None,
                 seen_vals[v] = idx
 
     # ── Validator 4: Noise Quality Check ──────────────────────────────
+    # CRITICAL: jitter ONCE per unique Value, not per row. The previous
+    # version called _organic_4dp() independently for every row, which
+    # produced wildly different results for the same value across categories
+    # (e.g. Nike-MPB became 97.9059 and Nike-APPAREL/FOOTWEAR became 94.4220
+    # from the same 96.0000 starting point). The architectural rewrite
+    # guarantees byte-identical propagation; this validator must respect it.
     skip_cats = {'INPUT_METADATA', 'SAMPLE SIZE'}
+    value_jitter_cache: dict[tuple[float, str], float] = {}
     for idx in df.index:
         cat = str(df.at[idx, 'Column']).strip().upper()
         if cat in skip_cats:
@@ -18206,7 +18276,13 @@ def post_agent_quality_gate(df: pd.DataFrame, persona_doc: dict | None = None,
         if v >= 99.999 or v <= 0.0001:
             continue
         if _has_bad_decimals(v):
-            new_v = _organic_4dp(v)
+            val_key = str(df.at[idx, 'Value']).strip().upper()
+            cache_key = (round(v, 4), val_key)
+            if cache_key in value_jitter_cache:
+                new_v = value_jitter_cache[cache_key]
+            else:
+                new_v = _organic_4dp(v)
+                value_jitter_cache[cache_key] = new_v
             df.at[idx, bp_col] = new_v
             if pct_col in df.columns:
                 df.at[idx, pct_col] = new_v
@@ -34409,6 +34485,12 @@ def perturb_brand_penetration_avoid_dot_0000(df: pd.DataFrame) -> pd.DataFrame:
     brand input / sample) are left unchanged. After this, run
     ``reconcile_final_output_from_bp_and_sample_size`` + ``add_us_gen_pop_projection``
     so raws and projections stay consistent with BP.
+
+    IMPORTANT: jitter is computed ONCE per (Value, current-int-BP) pair so the
+    same value gets the same nudge in every category — a `Roblox` row in
+    GAMES and FRANCHISE that both arrive here at 56.0000 will both leave at
+    e.g. 56.4663, NOT 56.4596 vs 56.4663. This is what preserves the
+    score-once-propagate guarantee from `parallel_category_agents`.
     """
     if df is None or df.empty or 'Brand Penetration (Row)' not in df.columns:
         return df
@@ -34418,6 +34500,7 @@ def perturb_brand_penetration_avoid_dot_0000(df: pd.DataFrame) -> pd.DataFrame:
         'INPUT_METADATA',
     }
     n_adj = 0
+    nudge_cache: dict[tuple[int, str], float] = {}
     for idx in df.index:
         cat = str(df.at[idx, 'Column']).strip().upper()
         if cat in skip_cats:
@@ -34438,26 +34521,34 @@ def perturb_brand_penetration_avoid_dot_0000(df: pd.DataFrame) -> pd.DataFrame:
         if frac_mod != 0:
             df.at[idx, bp_col] = f"{x4:.4f}"
             continue
-        # Exactly *.0000 at 4dp (or zero): replace with organic-looking value
-        d1 = random.randint(1, 9)
-        d2 = random.randint(1, 9)
-        d3 = random.randint(1, 9)
-        d4 = random.randint(1, 9)
-        frac = d1 * 0.1 + d2 * 0.01 + d3 * 0.001 + d4 * 0.0001
-        if x4 <= 0:
-            new_x = round(frac, 4)
+
+        # Exactly *.0000 at 4dp (or zero): replace with organic-looking value.
+        val_key = str(df.at[idx, 'Value']).strip().upper()
+        int_part = int(x4) if x4 > 0 else 0
+        cache_key = (int_part, val_key)
+
+        if cache_key in nudge_cache:
+            new_x = nudge_cache[cache_key]
         else:
-            integer_part = int(x4)
-            new_x = round(integer_part + frac, 4)
-            if new_x > 99.9:
-                new_x = round(99.0 + frac, 4)
-        new_x = max(0.1111, min(round(new_x, 4), 99.8999))
-        s = f"{new_x:.4f}"
-        df.at[idx, bp_col] = s
+            d1 = random.randint(1, 9)
+            d2 = random.randint(1, 9)
+            d3 = random.randint(1, 9)
+            d4 = random.randint(1, 9)
+            frac = d1 * 0.1 + d2 * 0.01 + d3 * 0.001 + d4 * 0.0001
+            if x4 <= 0:
+                new_x = round(frac, 4)
+            else:
+                new_x = round(int_part + frac, 4)
+                if new_x > 99.9:
+                    new_x = round(99.0 + frac, 4)
+            new_x = max(0.1111, min(round(new_x, 4), 99.8999))
+            nudge_cache[cache_key] = new_x
+
+        df.at[idx, bp_col] = f"{new_x:.4f}"
         n_adj += 1
     if n_adj:
         print(f"   🎲 Brand Penetration: added micro-variation to {n_adj} "
-              f"rows to avoid .0000 endings")
+              f"rows to avoid .0000 endings ({len(nudge_cache)} unique value-jitters)")
     return df
 
 
