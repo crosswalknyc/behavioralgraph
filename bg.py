@@ -16559,26 +16559,69 @@ def parallel_category_agents(df: pd.DataFrame, persona_doc: dict,
                 except (TypeError, ValueError):
                     continue
 
-            # Drop non-canonical LOCATION rows (e.g. abbreviated stray
-            # entries like "BOSTON MA" alongside the canonical
-            # "BOSTON MA MANCHESTER NH") BEFORE writing shares. Otherwise
-            # they get assigned share=0.01, then R14 floors them to ~0.5-1%,
-            # then V1 in post_agent_quality_gate sees LOCATION sum > 110%
-            # and proportionally scales every canonical DMA down — which
-            # crushed Boston/DC/Phoenix/Raleigh to ~0.01% BP in earlier runs.
+            # ── Canonicalize LOCATION rows BEFORE writing shares ──────────────
+            # Two failure modes:
+            #
+            # 1. Non-canonical strays. ClickHouse user_data sometimes returns
+            #    abbreviated DMA names like "BOSTON MA" alongside (or instead
+            #    of) the canonical "BOSTON MA MANCHESTER NH". The stray
+            #    survives normalize_dma_for_display() unchanged (it's already
+            #    a valid display string) so we drop it; otherwise it would
+            #    get share=0.01, R14 would floor it to 0.5-1%, V1 would see
+            #    LOCATION sum > 110% and proportionally scale every canonical
+            #    DMA down — crushing Boston/DC/Phoenix/Raleigh to 0.01% BP.
+            #
+            # 2. Canonical missing entirely. If the Nike sample data has the
+            #    Boston DMA only as "BOSTON MA" (stray) and no row exists for
+            #    canonical "BOSTON MA MANCHESTER NH", dropping the stray
+            #    leaves no Boston row at all. Then enforce_exact_210_dmas()
+            #    later adds canonical Boston with random.uniform(0.01, 0.05),
+            #    bypassing the agent's actual affinity score. In the previous
+            #    Nike run this is exactly what happened: ~21 major DMAs
+            #    (Boston, Phoenix, Raleigh, DC, Tucson, Pittsburgh, Birmingham,
+            #    El Paso, Mobile, Ft Wayne, Washington DC) all landed in the
+            #    0.005-0.05% BP range from that random fallback.
+            #
+            # Fix: drop strays AND inject any missing canonical rows so the
+            # writeback loop populates them with their `final_share` values.
             canonical_keys_upper = set(gp_dma_pct.keys())
+
             drop_indices = []
+            present_canonical: set[str] = set()
             for idx in loc_indices:
                 val_u = str(df.at[idx, 'Value']).strip().upper()
-                if val_u not in canonical_keys_upper:
+                if val_u in canonical_keys_upper:
+                    present_canonical.add(val_u)
+                else:
                     drop_indices.append(idx)
             if drop_indices:
                 df = df.drop(drop_indices).reset_index(drop=True)
-                # Recompute loc_indices on the renumbered frame.
-                loc_mask = df['Column'].astype(str).str.strip().str.upper() == 'LOCATION'
-                loc_indices = df[loc_mask].index.tolist()
                 print(f"   📍 Location: dropped {len(drop_indices)} non-canonical LOCATION rows "
                       f"(stray DMA names like 'BOSTON MA' / 'PHOENIX AZ')")
+
+            missing_canonical = canonical_keys_upper - present_canonical
+            if missing_canonical:
+                # Reverse-map upper→display from GENPOP_DMA_PERCENTAGES so we
+                # write the same casing/formatting users see elsewhere.
+                upper_to_display = {
+                    normalize_dma_for_display(str(name)).upper(): normalize_dma_for_display(str(name))
+                    for name, _ in GENPOP_DMA_PERCENTAGES
+                }
+                new_rows = []
+                for canonical_u in missing_canonical:
+                    display_name = upper_to_display.get(canonical_u, canonical_u.title())
+                    row = {col: None for col in df.columns}
+                    row['Column'] = 'LOCATION'
+                    row['Value'] = display_name
+                    new_rows.append(row)
+                df = pd.concat([df, pd.DataFrame(new_rows)], ignore_index=True)
+                print(f"   📍 Location: injected {len(missing_canonical)} missing canonical DMAs "
+                      f"(Nike sample didn't include them; would otherwise get random tiny BP from "
+                      f"enforce_exact_210_dmas) — agent affinity will populate via final_share")
+
+            # Recompute loc_indices on the renumbered frame.
+            loc_mask = df['Column'].astype(str).str.strip().str.upper() == 'LOCATION'
+            loc_indices = df[loc_mask].index.tolist()
 
             assigned = 0
             for idx in loc_indices:
