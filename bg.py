@@ -16559,15 +16559,35 @@ def parallel_category_agents(df: pd.DataFrame, persona_doc: dict,
                 except (TypeError, ValueError):
                     continue
 
+            # Drop non-canonical LOCATION rows (e.g. abbreviated stray
+            # entries like "BOSTON MA" alongside the canonical
+            # "BOSTON MA MANCHESTER NH") BEFORE writing shares. Otherwise
+            # they get assigned share=0.01, then R14 floors them to ~0.5-1%,
+            # then V1 in post_agent_quality_gate sees LOCATION sum > 110%
+            # and proportionally scales every canonical DMA down — which
+            # crushed Boston/DC/Phoenix/Raleigh to ~0.01% BP in earlier runs.
+            canonical_keys_upper = set(gp_dma_pct.keys())
+            drop_indices = []
+            for idx in loc_indices:
+                val_u = str(df.at[idx, 'Value']).strip().upper()
+                if val_u not in canonical_keys_upper:
+                    drop_indices.append(idx)
+            if drop_indices:
+                df = df.drop(drop_indices).reset_index(drop=True)
+                # Recompute loc_indices on the renumbered frame.
+                loc_mask = df['Column'].astype(str).str.strip().str.upper() == 'LOCATION'
+                loc_indices = df[loc_mask].index.tolist()
+                print(f"   📍 Location: dropped {len(drop_indices)} non-canonical LOCATION rows "
+                      f"(stray DMA names like 'BOSTON MA' / 'PHOENIX AZ')")
+
             assigned = 0
             for idx in loc_indices:
                 val_u = str(df.at[idx, 'Value']).strip().upper()
                 # Exact-match only — substring fuzzy matching has been removed
                 # because it produced cross-DMA contamination (e.g. matching
                 # "MA" inside "BOSTON MA MANCHESTER NH" against an unrelated
-                # DMA's multiplier). If no exact match, fall back to the
-                # df row's own gen-pop baseline normalized into final_share
-                # (which we computed above for every DMA in gp_dma_pct).
+                # DMA's multiplier). After the stray-drop above, every
+                # remaining loc row should match exactly.
                 share = final_share.get(val_u)
                 if share is None:
                     share = 0.01
