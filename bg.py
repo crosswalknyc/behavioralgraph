@@ -15405,6 +15405,16 @@ median customer, NOT an artifact of incidental clicks (e.g. "MATH &
 STATS" for a Nike audience is implausible — clicking a Khan Academy
 link for a kid's homework once doesn't make it a primary interest).
 
+GENERIC-CATEGORY GUARD inside INTEREST:
+Generic functional categories like "SOCIAL MEDIA", "JOB SEARCH",
+"TECHNOLOGY", "AMERICAN FOOD", "COMMUNICATION", "INTERNET", "WEATHER",
+"NEWS", "SHOPPING" are NOT primary interests/identities. People don't
+list "social media" as a hobby. Cap these at 25–40% no matter what the
+panel says, because the year-window inflates them like mass platforms.
+Reserve the 55–85% top band for INTEREST items that are actual
+identity-defining hobbies: SPORTS, BASKETBALL, FOOTWEAR, SNEAKERS,
+EXERCISE & FITNESS, FASHION, GAMING, COOKING, MUSIC GENRE TAGS, etc.
+
 GUARDRAIL 5 — MASS-MARKET FLOOR (panel too low → override_low)
 If genpop is known AND the item is a MASS-MARKET brand by real-world
 customer base (>10M U.S. customers / members / subscribers / users),
@@ -17687,6 +17697,7 @@ def parallel_category_agents(df: pd.DataFrame, persona_doc: dict,
     try:
         import json as _json_dec
         import tempfile as _tmp
+        import time as _time_dec
         _dec_dir = os.environ.get('BG_DECISIONS_DIR') or _tmp.gettempdir()
         os.makedirs(_dec_dir, exist_ok=True)
         _dec_path = os.path.join(_dec_dir, '_bg_last_agent_decisions.json')
@@ -17694,7 +17705,7 @@ def parallel_category_agents(df: pd.DataFrame, persona_doc: dict,
             _json_dec.dump({
                 'agent_decisions': agent_decisions,
                 'dropped_low_confidence': sorted(drop_values),
-                'written_at': time.time(),
+                'written_at': _time_dec.time(),
             }, _fp, default=str, indent=2)
         print(f"   📝 Wrote agent-decision sidecar: {_dec_path} "
               f"({len(agent_decisions)} decisions, {len(drop_values)} drops)")
