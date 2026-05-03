@@ -13431,8 +13431,12 @@ def enforce_input_brand_100(df_behavior, input_brands, purchasers_only: bool = F
     for input_brand in input_brands:
         all_vars, compact_vars = _build_variations(input_brand)
 
-        # Detect whether the brand appears in MOST PURCHASED BRANDS
+        # Detect whether the brand appears in MOST PURCHASED BRANDS,
+        # and capture its MPB BP/raw if so — that's the canonical agent
+        # score that all other-category rows for this brand must mirror.
         brand_in_mpb = False
+        mpb_bp_str: str | None = None
+        mpb_raw_str: str | None = None
         for idx, row in df_behavior.iterrows():
             row_col = str(row.get('Column', '')).strip().upper()
             if row_col != 'MOST PURCHASED BRANDS':
@@ -13440,10 +13444,72 @@ def enforce_input_brand_100(df_behavior, input_brands, purchasers_only: bool = F
             value = str(row['Value']).strip()
             if _is_match(value, all_vars, compact_vars):
                 brand_in_mpb = True
+                if 'Brand Penetration (Row)' in df_behavior.columns:
+                    cell = df_behavior.loc[idx, 'Brand Penetration (Row)']
+                    mpb_bp_str = str(cell) if not isinstance(cell, str) else cell
+                if 'Original Raw Numbers' in df_behavior.columns:
+                    raw_cell = df_behavior.loc[idx, 'Original Raw Numbers']
+                    mpb_raw_str = str(raw_cell) if not isinstance(raw_cell, str) else raw_cell
                 break
 
         if brand_in_mpb and not purchasers_only:
-            if not SILENCE_VERBOSE_OUTPUT:
+            # Propagate the MPB BP to every other-category occurrence of
+            # this brand. This guarantees byte-identical Nike-MPB ==
+            # Nike-APPAREL/FOOTWEAR == Nike-WHERE-THEY-SHOP, surviving
+            # downstream `enforce_no_perfect_trailing_zeros` per-category
+            # jitter (which previously broke MPB consistency by treating
+            # MPB independently from other categories).
+            if mpb_bp_str is not None:
+                # Strip stale '%' for clean numeric comparisons later.
+                bp_propagate = mpb_bp_str.replace('%', '').strip() if isinstance(mpb_bp_str, str) else str(mpb_bp_str)
+                propagated = 0
+                for idx, row in df_behavior.iterrows():
+                    row_col = str(row.get('Column', '')).strip().upper()
+                    if row_col == 'MOST PURCHASED BRANDS':
+                        continue
+                    if row_col in ('INPUT_METADATA', 'BRAND INPUT', 'SAMPLE SIZE',
+                                   'AVID FAN', 'CASUAL FAN', 'PURCHASE SHARE',
+                                   'BRAND PENETRATION'):
+                        continue
+                    value = str(row['Value']).strip()
+                    if not _is_match(value, all_vars, compact_vars):
+                        continue
+                    if 'Brand Penetration (Row)' in df_behavior.columns:
+                        cur = df_behavior.loc[idx, 'Brand Penetration (Row)']
+                        if isinstance(cur, str):
+                            df_behavior.loc[idx, 'Brand Penetration (Row)'] = (
+                                bp_propagate + '%' if '%' in cur else bp_propagate
+                            )
+                        else:
+                            try:
+                                df_behavior.loc[idx, 'Brand Penetration (Row)'] = float(bp_propagate)
+                            except (ValueError, TypeError):
+                                pass
+                    if pct_col in df_behavior.columns:
+                        cur = df_behavior.loc[idx, pct_col]
+                        if isinstance(cur, str):
+                            df_behavior.loc[idx, pct_col] = (
+                                bp_propagate + '%' if '%' in cur else bp_propagate
+                            )
+                        else:
+                            try:
+                                df_behavior.loc[idx, pct_col] = float(bp_propagate)
+                            except (ValueError, TypeError):
+                                pass
+                    if mpb_raw_str is not None and 'Original Raw Numbers' in df_behavior.columns:
+                        cur = df_behavior.loc[idx, 'Original Raw Numbers']
+                        if isinstance(cur, str):
+                            df_behavior.loc[idx, 'Original Raw Numbers'] = mpb_raw_str
+                        else:
+                            try:
+                                df_behavior.loc[idx, 'Original Raw Numbers'] = float(mpb_raw_str)
+                            except (ValueError, TypeError):
+                                pass
+                    propagated += 1
+                if not SILENCE_VERBOSE_OUTPUT:
+                    print(f"🎯 Input brand '{input_brand}' in MPB → propagated MPB BP "
+                          f"({bp_propagate}) to {propagated} other-category rows")
+            elif not SILENCE_VERBOSE_OUTPUT:
                 print(f"🎯 Input brand '{input_brand}' found in MOST PURCHASED BRANDS — "
                       f"using agent score everywhere (no 100% override)")
             brands_skipped += 1
@@ -16194,11 +16260,18 @@ Return ONLY a JSON array, one entry per DMA, in the same order:
     multipliers: dict = {}
     n_aff = 0
     n_mult = 0
+    # Floor the multiplier at 0.2 (i.e. 5x under-index max) so that even
+    # when the agent assigns affinity=0 to a real US metro (Boston, DC,
+    # Phoenix, Raleigh — observed in prior runs), the DMA still receives
+    # ~20% of its gen-pop baseline weight after global renormalization.
+    # The previous floor of 0.001 (1000x under-index) was crushing major
+    # markets to ~0.01% BP whenever the agent over-applied affinity 0.
+    AFFINITY_MULT_FLOOR = 0.2
     for name, payload in raw_results.items():
         if isinstance(payload, tuple) and len(payload) == 2:
             kind, val = payload
             if kind == 'affinity':
-                multipliers[name] = max(0.001, float(val) / 50.0)
+                multipliers[name] = max(AFFINITY_MULT_FLOOR, float(val) / 50.0)
                 n_aff += 1
             else:
                 multipliers[name] = max(0.05, min(8.0, float(val)))
@@ -21620,8 +21693,13 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
         if _str_col in df_final.columns:
             df_final[_str_col] = df_final[_str_col].astype(str)
 
-    # Absolute pre-save lock (non-GenPop): brand input BP enforcement
+    # Absolute pre-save lock (non-GenPop): brand input BP enforcement.
+    # Also run a final cross-category byte-identical pass to undo any
+    # within-category jitter introduced by `enforce_no_perfect_trailing_zeros`
+    # so multi-category values (Roblox, Adidas, Yeti, etc.) emit identical
+    # BPs everywhere — same guarantee we apply to input brands.
     if not is_genpop and brands:
+        df_final = enforce_value_consistency_across_categories(df_final, purchasers_only=purchasers_only)
         df_final = enforce_input_brand_100(df_final, brands, purchasers_only=purchasers_only)
         df_final = finalize_output_metrics_like_edit_sample_size(df_final)
         for _fmt_col in ['Brand Penetration (Row)', 'Category Share', 'Percentage']:
