@@ -1917,15 +1917,36 @@ def _try_gpt_archetype(project_name, brands, brand_category=None):
         f'  * Texas teams: Significant HISPANIC presence\n'
         f'- Hip-hop/R&B artists: Strong BLACK audience\n'
         f'- K-pop artists: Strong ASIAN audience\n'
-        f'- Latin music artists: Strong HISPANIC audience\n\n'
+        f'- Latin music artists: Strong HISPANIC audience\n'
+        f'- ATHLETIC FOOTWEAR / SNEAKER BRANDS (Nike, Adidas, Jordan, Reebok, Puma,\n'
+        f'  New Balance, Converse, Foot Locker, Champs, Finish Line): Strong\n'
+        f'  BLACK + HISPANIC over-index even when mass-market. Roots in basketball,\n'
+        f'  hip-hop, and streetwear culture means typical breakdown: BLACK ~25-30%,\n'
+        f'  HISPANIC ~22-26%, WHITE ~45-55%, ASIAN ~6-8% (NOT census 60/19/13).\n'
+        f'- ATHLETIC APPAREL with sports/streetwear DNA (Lululemon partial, Champion,\n'
+        f'  Fila, Under Armour): BLACK + HISPANIC modest over-index.\n'
+        f'- URBAN-ROOTED MASS BRANDS (McDonalds, Wingstop, Popeyes, Kia, Honda,\n'
+        f'  Allstate, Cricket Wireless, MetroPCS, Boost Mobile, T-Mobile prepaid):\n'
+        f'  BLACK + HISPANIC over-index due to brand history and customer base.\n'
+        f'- A "MASS BRAND" with deep cultural roots in basketball, hip-hop, soccer,\n'
+        f'  Latin music, or streetwear can simultaneously be (a) mostly mainstream\n'
+        f'  middle-American consumers AND (b) have meaningful Black/Hispanic\n'
+        f'  over-indexing. These are NOT mutually exclusive. Mass-market does\n'
+        f'  NOT mean "ethnically gen-pop average".\n\n'
         f'Available behavioral categories: {CATS}\n\n'
         f'Examples:\n'
+        f'- Nike: balanced gender, balanced age, strong BLACK + HISPANIC over-index\n'
+        f'  (athletic + streetwear + basketball culture). SPORTS/EXERCISE high.\n'
+        f'- Adidas: similar to Nike — BLACK + HISPANIC over-index, soccer-leaning\n'
+        f'  for HISPANIC, basketball/streetwear-leaning for BLACK.\n'
         f'- Mookie Betts (LA Dodgers): male, HISPANIC + BLACK over-index (baseball + LA market)\n'
         f'- Shohei Ohtani: male, HISPANIC + ASIAN over-index (baseball + Japanese star)\n'
         f'- Bad Bunny: balanced gender, younger, very strong HISPANIC over-index\n'
         f'- LeBron James: male, strong BLACK over-index, SPORTS/BETTING high\n'
         f'- Taylor Swift: female, younger, WHITE skew, BEAUTY/WELLNESS/APPAREL high\n'
-        f'- NFL: male, diverse but BLACK over-index, SPORTS/BETTING high\n\n'
+        f'- NFL: male, diverse but BLACK over-index, SPORTS/BETTING high\n'
+        f'- Walmart: balanced, mass-market, BLACK + HISPANIC modest over-index\n'
+        f'  (urban + Sun-Belt store density), WHITE not above gen-pop.\n\n'
         f'Return ONLY the JSON object.'
     )
     try:
@@ -2077,36 +2098,45 @@ def validate_demographics(df, archetype, sample_size):
         gp_val = gp_demo.get('ETHNICITY', {}).get(val, cur)
         eth_data[idx] = {'val': val, 'cur': cur, 'gp': gp_val}
     
-    # Target thresholds for expected ethnicities based on category context
+    # Target thresholds for expected ethnicities based on category context.
+    # These reflect ACTUAL audience demographics for brands/talents/sports
+    # with deep cultural roots, NOT census gen-pop. When the archetype
+    # agent flags an ethnicity as `ethnicity_over_index`, we lift to AT
+    # LEAST these floors so the panel-derived numbers (which often
+    # under-represent minorities due to sample bias) don't dilute the
+    # documented audience composition.
     ETH_MIN_TARGETS = {
-        'HISPANIC': 20.0,  # For baseball/soccer audiences, should be at least 20%
-        'LATINO': 20.0,
-        'BLACK': 25.0,     # For basketball/urban audiences, should be at least 25%
-        'AFRICAN AMERICAN': 25.0,
-        'ASIAN': 10.0,     # For K-pop/anime/tech audiences
+        'HISPANIC':         24.0,  # baseball/soccer/Latin music/Sun-Belt brands
+        'LATINO':           24.0,
+        'BLACK':            28.0,  # basketball/hip-hop/streetwear/athletic brands
+        'AFRICAN AMERICAN': 28.0,
+        'ASIAN':            10.0,  # K-pop/anime/tech audiences
     }
-    
+
     for idx, data in eth_data.items():
         val = data['val']
         cur = data['cur']
         gp_val = data['gp']
         if gp_val <= 0:
             gp_val = cur if cur > 0 else 5.0  # Fallback
-        
+
         is_expected = any(exp in val or val in exp for exp in expected_high)
-        
+
         # BOOST: If this ethnicity is expected to over-index but is too low
         if is_expected:
-            # Find target minimum for this ethnicity
             target_min = None
             for eth_key, min_val in ETH_MIN_TARGETS.items():
                 if eth_key in val:
                     target_min = min_val
                     break
-            
+
             if target_min and cur < target_min:
-                # Boost toward target (blend: 60% target, 40% current)
-                new_val = round(target_min * 0.6 + cur * 0.4, 4)
+                # Aggressive blend: 75% target, 25% current. Earlier 60/40
+                # under-shot — for Nike with cur=19% target=28% the old
+                # blend produced 22.6%, leaving Black still 6pp below
+                # documented audience reality. 75/25 produces 25.75%,
+                # which lands inside the 25-30% documented band.
+                new_val = round(target_min * 0.75 + cur * 0.25, 4)
                 df.at[idx, pct_col] = f"{new_val:.4f}"
                 if bp_col and bp_col in df.columns:
                     df.at[idx, bp_col] = f"{new_val:.4f}"
@@ -14391,6 +14421,25 @@ interesting one?"
     (Planet Fitness, Family Dollar, Chilis, Walmart, Honda) in the
     downstream scoring. AVOID THIS. Write the PERSONA OF THE MEDIAN
     CUSTOMER, with subcultures as named subsegments at REAL weight.
+
+  • CRITICAL — MASS-MARKET ≠ ETHNICALLY GEN-POP AVERAGE. Some mass
+    brands are deeply rooted in Black/Hispanic culture and continue to
+    meaningfully over-index ethnically EVEN in their fully mass-market
+    state. The "median Nike customer is a suburban parent in Ohio"
+    framing is correct on income/lifestyle but WRONG if interpreted as
+    "ethnically average". Nike's customer base in reality is roughly
+    BLACK ~25-30%, HISPANIC ~22-26%, WHITE ~45-55%, ASIAN ~6-8% — well
+    above the U.S. census 13/19/58/6 baseline for Black and Hispanic.
+    Same pattern for Adidas, Jordan, Foot Locker, Champion, McDonalds,
+    Popeyes, Wingstop, Kia, Cricket Wireless, MetroPCS, T-Mobile
+    prepaid, Allstate, State Farm, and any brand with deep ties to
+    basketball / hip-hop / streetwear / soccer / Latin music culture.
+    For these brands, the persona's median customer is still suburban
+    + middle-income, but the audience as a whole is meaningfully more
+    Black and Hispanic than gen-pop. Reflect that in demographics +
+    cultural_anchors + cross_shop_network — name Black and Latino
+    cultural touchstones (specific artists, shows, magazines, retail
+    chains) as subsegment cultural anchors, not as a token mention.
 
 ═══════════════════════════════════════════════════════════════════
 SUB-SEGMENTS, CULTURAL ANCHORS, ANTI-FIT, CROSS-SHOP NETWORK — REQUIRED:
