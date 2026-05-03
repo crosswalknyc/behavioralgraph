@@ -19246,23 +19246,68 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
         
         print(f"⚡ Scaled clickstream sampling: {clickstream_sample_pct}% for {uid_count:,} UIDs (optimized for depth)")
         
+        # ── ClickHouse-native, memory-friendly rewrite ────────────────────
+        # The previous form combined two memory hogs that pushed full-year
+        # Nike runs over the 100 GiB per-query profile cap once the
+        # clickstream backfill grew the table past ~150 B rows:
+        #
+        #   1. `FROM (SELECT * FROM clickstream_final SAMPLE (N)) c`
+        #      The connector translates SAMPLE(N) into a `cityHash64(UID) %
+        #      10000 < bucket` predicate but wraps it in its own subquery,
+        #      which prevents the outer DELIVERED date filter from pushing
+        #      down past the hash compute. ClickHouse then evaluates
+        #      cityHash64 over every row of the join input, accumulating
+        #      ~GB-per-thread of state across 48 threads.
+        #
+        #   2. `ROW_NUMBER() OVER (PARTITION BY UID ...) ... QUALIFY rn <= N`
+        #      Window functions in ClickHouse build the full per-partition
+        #      state in RAM; they don't spill. With a ~30 B-row join input
+        #      this alone could exceed 50 GiB.
+        #
+        # Two fixes — neither requires a server-side profile change:
+        #
+        #   A. INLINE `cityHash64(c.UID) % 100 < N` in the WHERE clause
+        #      alongside DELIVERED + COMMON_NAME. All three predicates now
+        #      get combined and pushed down to the MergeTree read path,
+        #      so the partition prune by DELIVERED happens BEFORE hashing.
+        #
+        #   B. Replace `ROW_NUMBER() OVER + QUALIFY rn <= N` with the
+        #      inline-ROW_NUMBER form `QUALIFY ROW_NUMBER() OVER (...) <= N`,
+        #      which the connector's `_rewrite_qualify` fast path translates
+        #      to native `ORDER BY ... LIMIT N BY c.UID`. LIMIT BY streams
+        #      the top-N per group instead of materializing the window.
+        #
+        # We also override `max_memory_usage` to 300 GiB and bump the
+        # external-spill thresholds for this one statement. The host has
+        # 730 GiB free; the connection default of 120 GiB (and the
+        # clickhouse user profile's 100 GiB cap when stricter) stays in
+        # place for everything else.
+        _pre_sampled_settings = {
+            'max_memory_usage':                    300 * 1024 * 1024 * 1024,
+            'max_bytes_before_external_group_by':  100 * 1024 * 1024 * 1024,
+            'max_bytes_before_external_sort':      100 * 1024 * 1024 * 1024,
+            'max_execution_time':                  3600,
+            # Rely on parallel_hash for the small-side ELIGIBLE_UIDS join;
+            # fall back to grace_hash if the planner thinks the build side
+            # is too large (should never trigger here — ELIGIBLE_UIDS is
+            # ≤ uid_count rows).
+            'join_algorithm': 'parallel_hash,grace_hash,partial_merge',
+        }
         cur.execute(f"""
             CREATE OR REPLACE TEMP TABLE PRE_SAMPLED_CLICKSTREAM AS
-            SELECT 
+            SELECT
                 c.UID,
                 c.COMMON_NAME,
-                c.DELIVERED,
-                ROW_NUMBER() OVER (PARTITION BY c.UID ORDER BY c.DELIVERED DESC) as rn
-            FROM (
-                SELECT * FROM PROCESSEDCLICKSTREAM.PUBLIC.CLICKSTREAM_FINAL SAMPLE ({clickstream_sample_pct})
-            ) c
+                c.DELIVERED
+            FROM PROCESSEDCLICKSTREAM.PUBLIC.CLICKSTREAM_FINAL c
             INNER JOIN ELIGIBLE_UIDS u ON c.UID = u.UID
             WHERE c.DELIVERED BETWEEN '{behavior_start}' AND '{behavior_end}'
               AND c.COMMON_NAME IS NOT NULL
               AND c.COMMON_NAME != ''
               AND c.COMMON_NAME != ' '
-            QUALIFY rn <= {visits_per_user}
-        """)
+              AND cityHash64(c.UID) % 100 < {clickstream_sample_pct}
+            QUALIFY ROW_NUMBER() OVER (PARTITION BY c.UID ORDER BY c.DELIVERED DESC) <= {visits_per_user}
+        """, settings=_pre_sampled_settings)
         
         # Check pre-sampled data volume
         pre_sample_count = cur.execute("SELECT COUNT(*) FROM PRE_SAMPLED_CLICKSTREAM").fetchone()[0]
@@ -19296,7 +19341,6 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
             WITH limited_behavior AS (
                 SELECT UID, COMMON_NAME, DELIVERED
                 FROM PRE_SAMPLED_CLICKSTREAM
-                WHERE rn <= {visits_per_user}
             ),
             mapped_brands AS (
             SELECT 

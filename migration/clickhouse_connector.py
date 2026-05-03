@@ -74,8 +74,16 @@ CH_DEFAULT_SETTINGS = {
 }
 
 
-def connect_clickhouse():
-    """Connect to ClickHouse. Returns a Snowflake-compatible wrapper."""
+def connect_clickhouse(settings: Optional[dict] = None):
+    """Connect to ClickHouse. Returns a Snowflake-compatible wrapper.
+
+    `settings` (optional) overrides/augments CH_DEFAULT_SETTINGS for every
+    query made on this connection. Per-call overrides on a specific
+    statement still take precedence (pass `settings=` to `cur.execute`).
+    """
+    merged_settings = dict(CH_DEFAULT_SETTINGS)
+    if settings:
+        merged_settings.update(settings)
     client = clickhouse_connect.get_client(
         host=CH_HOST,
         port=CH_PORT,
@@ -84,9 +92,9 @@ def connect_clickhouse():
         database=CH_DATABASE,
         connect_timeout=30,
         send_receive_timeout=3600,
-        settings=CH_DEFAULT_SETTINGS,
+        settings=merged_settings,
     )
-    return ClickHouseConnection(client)
+    return ClickHouseConnection(client, query_settings=merged_settings)
 
 
 # ── SQL translation ───────────────────────────────────────────────────────────
@@ -757,15 +765,17 @@ def _translate_column_defs(col_defs: str) -> str:
 class ClickHouseCursor:
     """Mimics snowflake.connector.cursor for full Snowflake API compatibility."""
 
-    def __init__(self, client: clickhouse_connect.driver.Client):
+    def __init__(self, client: clickhouse_connect.driver.Client,
+                 default_settings: Optional[dict] = None):
         self._client = client
+        self._default_settings = dict(default_settings or {})
         self._rows:   list[tuple] = []
         self._pos:    int = 0
         self._description = None
         self.rowcount: int = -1
         self._column_names: list[str] = []
 
-    def execute(self, sql: str, params=None):
+    def execute(self, sql: str, params=None, settings: Optional[dict] = None):
         sql_stripped = sql.strip().upper()
         ignore_prefixes = (
             'USE WAREHOUSE', 'ALTER WAREHOUSE', 'ALTER SESSION',
@@ -780,17 +790,33 @@ class ClickHouseCursor:
 
         translated = translate_sql(sql)
 
+        # Per-query settings = cursor defaults overlaid with caller overrides.
+        # Plumbed through to BOTH client.query() (SELECT path) and
+        # client.command() (DDL/DML path) so per-statement budgets like
+        # `max_memory_usage` actually take effect on CTAS and INSERT, not
+        # just on plain SELECT. Profile Analysis's PRE_SAMPLED_CLICKSTREAM
+        # CTAS hit the connection-default 100-120 GiB cap on full-year
+        # ranges before this; the call site can now bump it to 300 GiB
+        # for that one statement and leave the default everywhere else.
+        merged_settings = dict(self._default_settings)
+        if settings:
+            merged_settings.update(settings)
+
         # Handle compound statements (DROP + CREATE from CREATE OR REPLACE TABLE)
         if ';\n' in translated:
             statements = [s.strip() for s in translated.split(';\n') if s.strip()]
             for stmt in statements[:-1]:
-                self._client.command(stmt)
+                self._client.command(stmt, settings=merged_settings or None)
             translated = statements[-1]
 
         upper = translated.strip().upper()
         if upper.startswith('SELECT') or upper.startswith('WITH') or upper.startswith('SHOW'):
             try:
-                result = self._client.query(translated, parameters=params or {})
+                result = self._client.query(
+                    translated,
+                    parameters=params or {},
+                    settings=merged_settings or None,
+                )
                 self._rows = [tuple(row) for row in result.result_rows]
                 self._column_names = result.column_names if hasattr(result, 'column_names') else []
                 self._description = [
@@ -801,7 +827,7 @@ class ClickHouseCursor:
                 logger.warning("ClickHouse query error: %s\nSQL: %s", e, translated[:500])
                 raise
         else:
-            self._client.command(translated)
+            self._client.command(translated, settings=merged_settings or None)
             self._rows = []
             self._column_names = []
             self._description = []
@@ -857,11 +883,13 @@ class ClickHouseCursor:
 class ClickHouseConnection:
     """Mimics snowflake.connector.SnowflakeConnection for full API compatibility."""
 
-    def __init__(self, client: clickhouse_connect.driver.Client):
+    def __init__(self, client: clickhouse_connect.driver.Client,
+                 query_settings: Optional[dict] = None):
         self._client = client
+        self._query_settings = dict(query_settings or {})
 
     def cursor(self) -> ClickHouseCursor:
-        return ClickHouseCursor(self._client)
+        return ClickHouseCursor(self._client, default_settings=self._query_settings)
 
     def close(self):
         self._client.close()
