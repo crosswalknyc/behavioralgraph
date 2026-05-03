@@ -15212,44 +15212,141 @@ shown in evidence (within ~±2pp). If the panel measurement disagrees with
 gen-pop and you have a reason to trust the panel, you may use that.
 """
     else:
-        anchor_rules = """═══════════════════════════════════════════════════════════════════
+        # NOTE on what "panel" means:
+        # the panel measurement is built from a CLICKSTREAM that captures BOTH
+        # web URL traffic AND mobile-app activity from the same panelists.
+        # That matters for two opposite biases the agent has to push back on:
+        #   (a) Mass app-driven brands (banks, gyms, airlines, big-box retail)
+        #       still get under-measured when the brand's app surface isn't
+        #       fully stitched into the host_mapping — Bank of America has
+        #       60M+ customers and a heavily-used app, so a 2% panel reading
+        #       is implausible and means the mapping is missing app traffic;
+        #       lift to real-world-share-grounded BP.
+        #   (b) Year-long sampling makes mass platforms (Apple, Microsoft,
+        #       Netflix, Spotify, Google, Instagram) ceiling out at 90%+
+        #       because every panelist touches at least one surface in 12
+        #       months. That's "technically true" but useless for audience
+        #       differentiation. Compress to a number that actually
+        #       distinguishes this audience from the average American.
+        # Both biases are corrected by the rules below.
+
+        anchor_rules = r"""═══════════════════════════════════════════════════════════════════
 HOW TO ESTIMATE BP — you are the source of truth
 ═══════════════════════════════════════════════════════════════════
-For each item, output `estimated_bp_pct` — the % of THIS audience that has
-any digital engagement with the item over a year. You see, per item:
+The panel measurement is built from a CLICKSTREAM that captures BOTH web
+URL traffic AND mobile-app activity from the same panelists. So when you
+think "would this audience engage digitally", include app usage:
+  • A Bank of America customer opening the BofA app to deposit a check
+    counts. So does a Planet Fitness member opening the PF app to scan
+    their gym barcode. So does a Delta passenger opening the Delta app.
+  • Brands with heavily-used consumer apps SHOULD show meaningful BP among
+    audiences whose demographic is plausibly a customer base.
 
-  • panel — what the actual panel measured for this audience
+For each item, output `estimated_bp_pct` — the % of THIS audience that
+has any digital engagement (app OR web) with the item over a year. You
+see, per item:
+  • panel  — what the panel measured for this audience
   • genpop — what the average US adult does (n/a means not in canonical CSV)
-  • is: — what the item ACTUALLY is (from the classification agent)
+  • is:    — what the item ACTUALLY is (from the classification agent)
   • tier / code / target — who the item is built for
-  • conf — confidence the classifier had in identifying the item
+  • conf   — confidence the classifier had in identifying the item
 
-DECISION FRAMEWORK (apply for each item):
-  1) Look at "is:" — what is this thing actually? An ultra-luxury sushi spot
-     ($595/pp) cannot have 28% BP among $65K mid-income athletic mainstream;
-     a category-leading athletic retailer SHOULD have 25-35% BP among them.
+═══════════════════════════════════════════════════════════════════
+FOUR GUARDRAILS — apply IN ORDER for every item
+═══════════════════════════════════════════════════════════════════
+
+GUARDRAIL 1 — YEAR-WINDOW CEILING COMPRESSOR (panel too high → override_high)
+If panel >= 85% AND the item is a MASS PLATFORM (any of: tech device
+maker, OS, mass streaming service, mass social platform, mass search/AI,
+mass mobile carrier, mass food/coffee chain, mega-retailer, mega-bank
+website), the year-long window is just measuring "did anyone touch any
+surface in 12 months". Compress to preserve audience differentiation:
+  • Apple, Microsoft, Google, Samsung, Android, Adobe          → 60–80%
+  • Netflix, YouTube, Spotify, Instagram, TikTok               → 70–90%
+  • Amazon (mega-retail), Walmart, Target                       → 70–88%
+  • Starbucks, McDonalds (mega-food)                            → 50–80%
+  • Verizon, AT&T, T-Mobile (carriers)                          → 35–60%
+Use the high end when the audience clearly over-indexes (e.g. iPhone for
+high-income; Spotify for young), the low end when they don't. NEVER
+leave any of these at 90%+ for ALL audiences — that defeats the metric.
+Emit panel_decision="override_high" (panel was over-stated by year window).
+
+GUARDRAIL 2 — APP-AWARE FLOOR LIFTER (panel too low → override_low)
+If panel <= 6% AND the item is a MAINSTREAM brand with a known consumer
+APP and a plausible customer base in this audience's demographic, the
+panel is under-measuring app traffic (mapping doesn't fully cover app
+surfaces). Lift to a real-world-share-grounded BP. Examples:
+  • Bank of America (60M+ customers, BofA app)         → 25–45%
+  • Chase, Wells Fargo, Capital One                     → 25–45%
+  • Planet Fitness (18M+ members, PF app for check-in) → 8–25%
+  • LA Fitness, Equinox, 24 Hour, Crunch (gym apps)    → 4–18%
+  • Major airlines (Delta, United, AA, Southwest)      → 20–40%
+  • Major hotel apps (Marriott Bonvoy, Hilton Honors)  → 15–35%
+  • CVS, Walgreens (prescription/store apps)           → 30–60%
+  • Major QSR with app (Chipotle, Chick-fil-A, Wendys) → 15–45%
+This rule applies ONLY when the audience demographic plausibly contains
+the customer base. Don't lift Bank of America for a teen audience; don't
+lift Planet Fitness for a gen-pop senior audience. Use persona to gate.
+Emit panel_decision="override_low" (panel was under-stated by missing app
+traffic).
+
+GUARDRAIL 3 — MAPPING-BLEED SNIFF TEST (panel too high → override_high)
+If panel >= 12% AND any of these classification flags are true, the panel
+is almost certainly measuring traffic that bled in from a related host
+that should have been mapped to a different brand:
+  • tier = luxury / ultra-luxury, AND audience is mid-income or below
+  • code includes niche-subculture / foreign-only / ultra-luxury
+  • item is a defunct / bankrupt brand (Smile Direct Club, BedBath2024,
+    Toys R Us shell sites)
+  • item is a hyper-niche premium product (single-product hair-care,
+    boutique rum, regional luxury hotel) that mass audiences don't visit
+Pull DOWN to a tier-appropriate level (typically 0.5–6%). Reason should
+explicitly say "mapping bleed suspected" so the operator can audit. Emit
+panel_decision="override_high".
+
+GUARDRAIL 4 — INTEREST-CATEGORY CONTRACT (special handling)
+If category == "INTEREST", do NOT score "did the panelist touch this
+topic in a year" (which gives 90–96% for everything). Score "is this a
+PRIMARY interest of the audience" — answer the question "what would this
+audience list in their top 5 hobbies/interests if asked?". Calibrated
+ranges for INTEREST:
+  • Audience's defining interest (sports for Nike, beauty for Sephora) → 55–85%
+  • Strong interest                                                    → 30–55%
+  • Mild / casual interest                                             → 12–30%
+  • Tangential interest                                                → 4–12%
+  • Not an interest of this audience                                   → 0.5–4%
+Do NOT let INTEREST top out in the 95s — the metric loses meaning. The
+spread inside INTEREST should reflect what the audience actually CARES
+about, not what they happen to have clicked once.
+
+═══════════════════════════════════════════════════════════════════
+DEFAULT DECISION FRAMEWORK (when no guardrail fires)
+═══════════════════════════════════════════════════════════════════
+  1) Look at "is:" — what is this thing actually? An ultra-luxury sushi
+     spot ($595/pp) cannot have 28% BP among $65K mid-income athletic
+     mainstream; a category-leading athletic retailer SHOULD have 25-35%
+     BP among them.
   2) Look at panel:
-       • If panel is plausible given the item + persona → AGREE.
-       • If panel under-captures (mainstream item, panel << genpop, persona
-         clearly engages) → OVERRIDE_LOW: lift to a sensible number.
-         Examples: Dick's panel 1.8% / genpop 18% → 25-35% for athletic
-         audience. In-store-dominant retailers under-report digitally.
-       • If panel over-captures (panel >> genpop and item is implausibly
-         high — likely a mapping bleed like Yahoo Mail bleeding into Yahoo
-         News) → OVERRIDE_HIGH: pull down to realistic number for the actual
-         item among this audience.
+     • If panel is plausible given the item + persona → AGREE.
+     • If panel under-captures (mainstream item, panel << genpop, persona
+       clearly engages) → OVERRIDE_LOW: lift to a sensible number.
+     • If panel over-captures (panel >> genpop, implausibly high — likely
+       mapping bleed like Yahoo Mail bleeding into Yahoo News) →
+       OVERRIDE_HIGH (pull DOWN to realistic). [Yes the label is
+       "override_high" historically; it means "I'm overriding because
+       panel is high"; emit the override decision.]
   3) For low-confidence (`conf:low`) items with NO panel signal AND no
      genpop baseline: leave estimated_bp_pct around 0.05-0.5%. Downstream
-     will likely drop them. Do NOT fabricate a default 27%.
+     will drop them. Do NOT fabricate a default 27%.
 
 PERSONA-FIT GUIDANCE (translate persona engagement to absolute %s):
   • Cultural anchor / icon (named in subsegments / cultural_anchors) → 60-95%
-  • Mass mainstream item that everyone uses (Netflix, Amazon, Google) → 80-95%
-  • Strong subculture fit (named in cross_shop_network)               → 25-55%
-  • Mild fit                                                          → 8-25%
-  • Mild anti-fit                                                     → 1-8%
-  • Strong anti-fit (named in anti_fit_explicit)                      → 0.05-2%
-  • Hard zero (foreign-only, opposite demo, ultra-luxury for mid-inc) → 0.05-1%
+  • Mass mainstream item used by everyone (post-Guardrail-1)         → 60-90%
+  • Strong subculture fit (named in cross_shop_network)              → 25-55%
+  • Mild fit                                                         → 8-25%
+  • Mild anti-fit                                                    → 1-8%
+  • Strong anti-fit (named in anti_fit_explicit)                     → 0.05-2%
+  • Hard zero (foreign-only, opposite demo, ultra-luxury for mid-inc)→ 0.05-1%
 """
 
     date_context_block = ""

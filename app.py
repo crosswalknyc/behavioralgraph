@@ -1950,7 +1950,20 @@ def upload_to_s3(file_path, brand_name, start_date, end_date, created_by=None, u
         base_key = f"{safe_brand_name}_{timestamp}.csv"
         s3_key = (S3_PURGATORY_PREFIX + base_key) if use_purgatory else base_key
         s3_client.upload_file(file_path, target_bucket, s3_key)
-        
+
+        # Sidecar: agent-decision log written by run_full_pipeline next to the
+        # CSV. Upload alongside the CSV so the operator can audit which BPs
+        # the agent overrode and why (panel mapping bleeds, app-aware lifts,
+        # year-window ceiling compression).
+        try:
+            decisions_local = file_path.rsplit('.', 1)[0] + '_agent_decisions.json'
+            if os.path.exists(decisions_local):
+                decisions_key = s3_key.rsplit('.', 1)[0] + '_agent_decisions.json'
+                s3_client.upload_file(decisions_local, target_bucket, decisions_key)
+                print(f"✅ Uploaded agent-decision log: {decisions_key}")
+        except Exception as _decisions_err:
+            print(f"⚠️ Could not upload agent-decision log: {_decisions_err}")
+
         # If using purgatory, add to purgatory metadata for tracking
         if use_purgatory and created_by:
             add_to_purgatory(
