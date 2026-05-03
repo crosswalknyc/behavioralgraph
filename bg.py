@@ -14194,6 +14194,44 @@ The following behavioral categories will be scored by downstream agents. Your `c
     prompt = f"""You are a senior audience-research analyst.  Research **{subject}** ({cat_label}) using real, current online data (fan demographics surveys, social-media analytics, press coverage, industry reports).
 {date_context}{categories_block}
 
+RESEARCH METHODOLOGY — follow these steps IN ORDER before generating the persona:
+
+STEP 1 — IDENTIFY THE SUBJECT
+  Search for: "{subject}" — what is it? (brand, person, team, media company, etc.)
+  Key facts to find: industry, founding year, market position, product category, price point, target demographic.
+  If it's a brand: what specific products/services? Who are their competitors?
+  If it's a person: what do they do? Age? Ethnicity/heritage? Known affiliations?
+
+STEP 2 — RESEARCH THE AUDIENCE (CRITICAL — use web search)
+  Search for: "{subject} audience demographics", "{subject} customer demographics", "{subject} fan demographics"
+  You MUST find real published data on:
+  - Age distribution (what age bracket is the core audience?)
+  - Gender split (what % male vs female?)
+  - Ethnicity/race composition (does the subject over-index with any ethnicity?)
+  - Income level (what economic bracket?)
+  - Geographic concentration (urban/suburban/rural? which regions?)
+  DO NOT guess. If you can't find data, search harder with alternative queries.
+
+STEP 3 — RESEARCH THE CULTURAL CONTEXT
+  Search for: "{subject} culture", "{subject} community", "{subject} lifestyle"
+  Find the SUBCULTURES and COMMUNITIES:
+  - What social media platforms does this audience actually use?
+  - What other brands/products do they buy?
+  - What content do they consume (podcasts, YouTube channels, media)?
+  - What events/experiences do they attend?
+  - What are the ANTI-affinities? (What does this audience NOT care about?)
+
+STEP 4 — CROSS-CHECK YOUR ASSUMPTIONS
+  Before writing the persona, verify:
+  - Does the age distribution match the subject's known audience? (A children's brand should peak at 17-AND-UNDER and 25-34 parents, NOT 55-64)
+  - Does the ethnicity distribution reflect the subject's actual audience? (Don't default to US census for subjects with strong ethnic affinity)
+  - Are the core interests consistent with the subject? (A sports brand's audience MUST have SPORTS as a top interest)
+  - Do the category signals provide ACTIONABLE guidance? (Not vague "score high/low" but specific item types and multiplier ranges)
+  - Does the digital identity mention 8-12 SPECIFIC platforms/retailers by name?
+
+STEP 5 — WRITE THE PERSONA
+  Now generate the full persona JSON with all fields. Every field must reflect your research, not generic assumptions.
+
 Return ONLY a single valid JSON object — no markdown, no commentary.
 
 {{
@@ -14468,6 +14506,68 @@ EXAMPLE category_signals (for a hypothetical athletic-brand audience — adapt t
     print(f"{'─'*60}\n")
 
     return persona_doc
+
+
+def _validate_persona_quality(persona_doc: dict, subject: str) -> tuple[bool, list[str]]:
+    """Check persona doc for completeness and specificity before scoring.
+
+    Returns (is_valid, issues) where issues is a list of warning strings.
+    The pipeline logs warnings but does NOT block on failures.
+    """
+    issues: list[str] = []
+
+    required_demo_cats = {'AGE', 'GENDER', 'ETHNICITY', 'INCOME', 'EDUCATION',
+                          'RELATIONSHIP', 'SEXUAL_ORIENTATION', 'PARENTAL_STATUS', 'OCCUPATION'}
+    demos = persona_doc.get('demographics', {})
+    if not demos or not isinstance(demos, dict):
+        issues.append("demographics field is missing or empty")
+    else:
+        present = {k.strip().upper() for k in demos}
+        missing = required_demo_cats - present
+        if missing:
+            issues.append(f"demographics missing categories: {', '.join(sorted(missing))}")
+
+    di = persona_doc.get('digital_identity', '')
+    if not di or len(di) < 500:
+        issues.append(f"digital_identity too short ({len(di or '')} chars, need ≥500)")
+
+    cs = persona_doc.get('category_signals', {})
+    if not cs or not isinstance(cs, dict):
+        issues.append("category_signals field is missing or empty")
+    else:
+        if len(cs) < 10:
+            issues.append(f"category_signals has only {len(cs)} entries (need ≥10)")
+        short_signals = [cat for cat, sig in cs.items()
+                         if not sig or len(str(sig)) < 50]
+        if short_signals:
+            issues.append(f"category_signals too short (<50 chars) for: {', '.join(short_signals[:8])}")
+
+    sports_keywords = {'SPORT', 'SPORTS', 'ATHLETIC', 'ATHLETICS', 'FITNESS'}
+    subject_upper = (subject or '').upper()
+    is_sports_related = any(kw in subject_upper for kw in sports_keywords)
+    if not is_sports_related and cs and isinstance(cs, dict):
+        for cat_prefix in ('APPAREL/FOOTWEAR', 'ATHLETIC', 'SPORTS'):
+            for cat_key in cs:
+                if cat_prefix in cat_key.upper():
+                    is_sports_related = True
+                    break
+    if is_sports_related and cs and isinstance(cs, dict):
+        interest_sig = ''
+        for cat_key, sig in cs.items():
+            if 'INTEREST' in cat_key.upper():
+                interest_sig = str(sig).upper()
+                break
+        if interest_sig and not any(kw in interest_sig for kw in sports_keywords):
+            issues.append("sports-related subject but INTEREST category_signal doesn't mention sports/athletic")
+
+    is_valid = len(issues) == 0
+    if issues:
+        print(f"   ⚠️  Persona Quality Check for '{subject}': {len(issues)} issue(s)")
+        for iss in issues:
+            print(f"      • {iss}")
+    else:
+        print(f"   ✅ Persona Quality Check for '{subject}': PASSED")
+    return is_valid, issues
 
 
 def _build_canonical_baseline_lookup() -> dict:
@@ -17789,6 +17889,33 @@ _UNIVERSAL_HIGH_BP = {
 
 _CLAMP_EXEMPT_CATS = {'BRAND INPUT', 'SAMPLE SIZE', 'INPUT_METADATA', 'BRAND CATEGORY'}
 
+_CHILDRENS_ITEMS = {
+    'ROBLOX', 'LEGO', 'BARBIE', 'DISNEY DREAMLIGHT VALLEY', 'YOUTUBE KIDS',
+    'COCOMELON', 'PAW PATROL', 'PEPPA PIG', 'BLUEY', 'BABY SHARK',
+    'NICK JR', 'HOOKED ON PHONICS', 'ABCMOUSE', 'LEAPFROG', 'VTECH',
+}
+
+_CPG_INSTORE_ITEMS = {
+    'CLOROX', 'PAMPERS', 'TIDE', 'PURINA', 'BOUNTY', 'CHARMIN', 'DOWNY',
+    'LYSOL', 'WINDEX', 'SWIFFER', 'DAWN', 'MR CLEAN', 'FEBREZE', 'GLAD',
+    'REYNOLDS WRAP', 'ZIPLOC', 'SUAVE', 'COTTONELLE', 'SCOTT', 'VIVA',
+}
+
+_ATHLETE_CATEGORIES = {
+    'ATHLETE', 'NBA ATHLETE', 'NFL ATHLETE', 'MLB ATHLETE',
+    'SOCCER ATHLETE', 'WNBA ATHLETE', 'NHL ATHLETE', 'MLS ATHLETE',
+}
+
+_BRAND_CATEGORY_TO_INTERESTS = {
+    'APPAREL/FOOTWEAR': ['SPORTS', 'FOOTWEAR', 'SNEAKERS', 'FITNESS'],
+    'BEAUTY/WELLNESS': ['BEAUTY', 'SKINCARE', 'WELLNESS'],
+    'STREAMING/PLATFORM': ['STREAMING', 'ENTERTAINMENT', 'TV'],
+    'GAMES': ['GAMING', 'ESPORTS'],
+    'QSR': ['DINING OUT', 'FAST FOOD'],
+    'AUTOMOBILE': ['AUTOMOTIVE', 'CARS'],
+    'MEDIA': ['NEWS', 'MEDIA'],
+}
+
 
 def _organic_4dp(val: float) -> float:
     """Generate an organic value near `val` with 4 non-zero decimal digits."""
@@ -17820,6 +17947,220 @@ def _has_bad_decimals(val: float) -> bool:
     return False
 
 
+# ═══════════════════════════════════════════════════════════════════════
+#  GenPop-Anchored Guardrails (Validator 0)
+#  Clamps/floors scored BP values relative to measured gen-pop baselines
+#  so LLM nondeterminism can't produce absurd outliers.
+# ═══════════════════════════════════════════════════════════════════════
+
+def _median_age_from_persona(persona_doc: dict | None) -> float | None:
+    """Extract weighted median age from persona demographics AGE distribution."""
+    if not persona_doc:
+        return None
+    demos = persona_doc.get('demographics', {})
+    age_dist = demos.get('AGE', {})
+    if not age_dist or not isinstance(age_dist, dict):
+        return None
+
+    age_midpoints = {
+        '17 AND UNDER': 14, '18-24': 21, '25-34': 29.5, '35-44': 39.5,
+        '45-54': 49.5, '55-64': 59.5, '65 OR OLDER': 70,
+    }
+    weighted_sum = 0.0
+    total_pct = 0.0
+    for bucket, pct in age_dist.items():
+        try:
+            p = float(pct)
+        except (ValueError, TypeError):
+            continue
+        mid = age_midpoints.get(bucket.strip().upper())
+        if mid is None:
+            continue
+        weighted_sum += mid * p
+        total_pct += p
+    if total_pct <= 0:
+        return None
+    return weighted_sum / total_pct
+
+
+def _apply_genpop_anchored_guardrails(df: pd.DataFrame,
+                                       persona_doc: dict | None = None,
+                                       brands: list[str] | None = None) -> pd.DataFrame:
+    """Validator 0 — clamp/floor BP values using gen-pop baselines.
+
+    Seven rules enforce proportionality so LLM scoring errors
+    (children's games boosted for adults, universal platforms crushed, etc.)
+    are corrected before downstream validators run.
+    """
+    gp = _load_genpop_csv()
+    if gp is None or gp.empty:
+        print("   ⚠️  GenPop Guardrails: gen pop CSV unavailable — skipping")
+        return df
+
+    df = df.copy()
+    bp_col = 'Brand Penetration (Row)'
+    if bp_col not in df.columns:
+        return df
+
+    # Build fast lookup: {(CATEGORY, VALUE): genpop_bp}
+    gp_lookup: dict[tuple[str, str], float] = {}
+    cat_col = 'Column' if 'Column' in gp.columns else gp.columns[0]
+    val_col = 'Value' if 'Value' in gp.columns else gp.columns[1]
+    gp_bp_col = 'Brand Penetration (Row)' if 'Brand Penetration (Row)' in gp.columns else gp.columns[2]
+    for _, r in gp.iterrows():
+        try:
+            c = str(r[cat_col]).strip().upper()
+            v = str(r[val_col]).strip().upper()
+            bp = float(str(r[gp_bp_col]).replace(',', '').replace('%', ''))
+            if c and v and v != 'NAN':
+                gp_lookup[(c, v)] = bp
+        except (ValueError, TypeError):
+            continue
+
+    brand_variants: set[str] = set()
+    if brands:
+        for b in brands:
+            bu = b.strip().upper()
+            brand_variants.add(bu)
+            brand_variants.add(bu.replace(' ', '-'))
+            brand_variants.add(bu.replace(' ', '_'))
+            brand_variants.add(bu.replace(' ', ''))
+
+    median_age = _median_age_from_persona(persona_doc)
+    caps_applied = 0
+    floors_applied = 0
+
+    # Detect core interest keywords from brand category
+    core_interest_keywords: set[str] = set()
+    if brands and gp_lookup:
+        for b_var in brand_variants:
+            for (cat, val), _ in gp_lookup.items():
+                if val == b_var:
+                    for cat_prefix, keywords in _BRAND_CATEGORY_TO_INTERESTS.items():
+                        if cat_prefix in cat:
+                            core_interest_keywords.update(k.upper() for k in keywords)
+        # Also check persona_doc category_signals for hints
+        if persona_doc:
+            cs = persona_doc.get('category_signals', {}) or {}
+            for cat_key in cs:
+                for cat_prefix, keywords in _BRAND_CATEGORY_TO_INTERESTS.items():
+                    if cat_prefix in cat_key.upper():
+                        core_interest_keywords.update(k.upper() for k in keywords)
+
+    for idx in df.index:
+        try:
+            cat = str(df.at[idx, 'Column']).strip().upper()
+            val = str(df.at[idx, 'Value']).strip().upper()
+            bp = float(df.at[idx, bp_col])
+        except (ValueError, TypeError, KeyError):
+            continue
+
+        gen_pop = gp_lookup.get((cat, val))
+        if gen_pop is None:
+            continue
+
+        original_bp = bp
+
+        # ── Rule 1: Universal Max Multiplier Cap (5x) ──────────────────
+        if gen_pop >= 0.5 and val not in brand_variants:
+            max_bp = gen_pop * 5.0
+            if bp > max_bp:
+                bp = _organic_4dp(gen_pop * 4.5)
+                print(f"   🔒 R1 5x-cap: {cat}/{val} {original_bp:.2f}% → {bp:.2f}% (gen_pop={gen_pop:.2f}%)")
+                caps_applied += 1
+
+        # ── Rule 2: Children's Items Cap for Adult Audiences ───────────
+        if val in _CHILDRENS_ITEMS and median_age is not None and median_age > 22:
+            child_cap = max(gen_pop * 1.0, gen_pop)
+            if bp > child_cap:
+                bp = _organic_4dp(gen_pop)
+                print(f"   🔒 R2 child-cap: {cat}/{val} {original_bp:.2f}% → {bp:.2f}% (adult audience, median_age={median_age:.0f})")
+                caps_applied += 1
+
+        # ── Rule 3: CPG/In-Store Digital Penalty ───────────────────────
+        if val in _CPG_INSTORE_ITEMS:
+            cpg_cap = gen_pop * 0.5
+            if bp > cpg_cap:
+                bp = _organic_4dp(cpg_cap)
+                print(f"   🔒 R3 CPG-cap: {cat}/{val} {original_bp:.2f}% → {bp:.2f}% (digital panel penalty)")
+                caps_applied += 1
+
+        # ── Rule 4: Universal Platform Floor ───────────────────────────
+        if gen_pop > 50.0 and gen_pop >= 1.0:
+            platform_floor = gen_pop * 0.7
+            if bp < platform_floor:
+                bp = _organic_4dp(platform_floor)
+                print(f"   🔒 R4 platform-floor: {cat}/{val} {original_bp:.2f}% → {bp:.2f}% (universal platform)")
+                floors_applied += 1
+
+        # ── Rule 5: Young Audience Social Media Floor ──────────────────
+        if median_age is not None:
+            social_floor = None
+            if median_age < 35:
+                if val in ('TIKTOK', 'INSTAGRAM'):
+                    social_floor = gen_pop * 0.9
+                elif val == 'SNAPCHAT':
+                    social_floor = gen_pop * 0.8
+            elif median_age < 45:
+                if val in ('TIKTOK', 'INSTAGRAM'):
+                    social_floor = gen_pop * 0.7
+            if social_floor is not None and bp < social_floor:
+                bp = _organic_4dp(social_floor)
+                print(f"   🔒 R5 social-floor: {cat}/{val} {original_bp:.2f}% → {bp:.2f}% (young audience, median_age={median_age:.0f})")
+                floors_applied += 1
+
+        # ── Rule 6: Athlete Proportionality ────────────────────────────
+        if cat in _ATHLETE_CATEGORIES:
+            if gen_pop >= 0.5 and val not in brand_variants:
+                ath_cap = gen_pop * 5.0
+                if bp > ath_cap:
+                    bp = _organic_4dp(gen_pop * 4.5)
+                    print(f"   🔒 R6 athlete-cap: {cat}/{val} {original_bp:.2f}% → {bp:.2f}% (gen_pop={gen_pop:.2f}%)")
+                    caps_applied += 1
+            if bp > 80.0 and val not in _UNIVERSAL_HIGH_BP:
+                bp = _organic_4dp(78.0)
+                print(f"   🔒 R6 athlete-abs-cap: {cat}/{val} {original_bp:.2f}% → {bp:.2f}% (80% ceiling)")
+                caps_applied += 1
+
+        # ── Rule 7: Core Interest Floor ────────────────────────────────
+        if cat == 'INTEREST' and core_interest_keywords:
+            if val in core_interest_keywords:
+                interest_floor = gen_pop * 1.1
+                if bp < interest_floor:
+                    bp = _organic_4dp(interest_floor)
+                    print(f"   🔒 R7 interest-floor: {cat}/{val} {original_bp:.2f}% → {bp:.2f}% (core interest)")
+                    floors_applied += 1
+
+        if bp != original_bp:
+            df.at[idx, bp_col] = bp
+
+    # ── Rule 6 supplemental: #1 athlete per category can't exceed 80% ──
+    for ath_cat in _ATHLETE_CATEGORIES:
+        mask = df['Column'].astype(str).str.strip().str.upper() == ath_cat
+        if not mask.any():
+            continue
+        ath_rows = []
+        for idx in df[mask].index:
+            try:
+                ath_rows.append((idx, float(df.at[idx, bp_col])))
+            except (ValueError, TypeError):
+                continue
+        if not ath_rows:
+            continue
+        ath_rows.sort(key=lambda x: -x[1])
+        top_idx, top_bp = ath_rows[0]
+        top_val = str(df.at[top_idx, 'Value']).strip().upper()
+        if top_bp > 80.0 and top_val not in _UNIVERSAL_HIGH_BP:
+            new_bp = _organic_4dp(78.0)
+            df.at[top_idx, bp_col] = new_bp
+            print(f"   🔒 R6 #1-athlete-cap: {ath_cat}/{top_val} {top_bp:.2f}% → {new_bp:.2f}%")
+            caps_applied += 1
+
+    total = caps_applied + floors_applied
+    print(f"   🔒 GenPop Guardrails: {total} corrections ({caps_applied} caps, {floors_applied} floors)")
+    return df
+
+
 def post_agent_quality_gate(df: pd.DataFrame, persona_doc: dict | None = None,
                             brands: list[str] | None = None,
                             grounded_guidance: dict | None = None) -> pd.DataFrame:
@@ -17834,6 +18175,9 @@ def post_agent_quality_gate(df: pd.DataFrame, persona_doc: dict | None = None,
 
     if bp_col not in df.columns:
         return df
+
+    # ── Validator 0: GenPop-Anchored Guardrails ────────────────────
+    df = _apply_genpop_anchored_guardrails(df, persona_doc, brands)
 
     brand_variants = set()
     if brands:
@@ -21014,6 +21358,8 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
             _persona_doc = persona_research_agent(_subject_name, brand_category,
                                                     study_start=behavior_start, study_end=behavior_end,
                                                     category_names=_behavioral_cats)
+
+        _validate_persona_quality(_persona_doc, _subject_name)
 
         # Build date-range labels for the delta-sanity agent so it can reason
         # about whether a swing is event-driven (e.g. Coachella in Q1).
