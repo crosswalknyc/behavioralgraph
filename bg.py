@@ -11483,6 +11483,298 @@ GENPOP_DMA_PERCENTAGES = [
     ("Glendive Mt", 0.003),
 ]
 
+# ─── DMA DEMOGRAPHICS (Census/ACS approximations) ──────────────────────────
+# pop_rank: 1-210 by DMA population; pct_*: approximate ethnic percentages;
+# urban: True if DMA contains a major metro area.
+# Used by _compute_ethnicity_affinity to data-drive location scoring.
+DMA_DEMOGRAPHICS = {
+    "NEW YORK NY": {"pop_rank": 1, "pct_white": 44.0, "pct_black": 17.0, "pct_hispanic": 25.0, "pct_asian": 12.0, "urban": True},
+    "LOS ANGELES CA": {"pop_rank": 2, "pct_white": 30.0, "pct_black": 7.0, "pct_hispanic": 45.0, "pct_asian": 15.0, "urban": True},
+    "CHICAGO IL": {"pop_rank": 3, "pct_white": 52.0, "pct_black": 16.0, "pct_hispanic": 22.0, "pct_asian": 7.0, "urban": True},
+    "DALLAS FT WORTH TX": {"pop_rank": 4, "pct_white": 45.0, "pct_black": 15.0, "pct_hispanic": 29.0, "pct_asian": 7.0, "urban": True},
+    "PHILADELPHIA PA": {"pop_rank": 5, "pct_white": 57.0, "pct_black": 21.0, "pct_hispanic": 12.0, "pct_asian": 6.0, "urban": True},
+    "HOUSTON TX": {"pop_rank": 6, "pct_white": 34.0, "pct_black": 17.0, "pct_hispanic": 38.0, "pct_asian": 8.0, "urban": True},
+    "ATLANTA GA": {"pop_rank": 7, "pct_white": 42.0, "pct_black": 34.0, "pct_hispanic": 12.0, "pct_asian": 6.0, "urban": True},
+    "WASHINGTON DC HAGERSTOWN MD": {"pop_rank": 8, "pct_white": 42.0, "pct_black": 26.0, "pct_hispanic": 16.0, "pct_asian": 10.0, "urban": True},
+    "BOSTON MA MANCHESTER NH": {"pop_rank": 9, "pct_white": 68.0, "pct_black": 8.0, "pct_hispanic": 12.0, "pct_asian": 8.0, "urban": True},
+    "SAN FRANCISCO OAKLAND SAN JOSE CA": {"pop_rank": 10, "pct_white": 35.0, "pct_black": 6.0, "pct_hispanic": 24.0, "pct_asian": 30.0, "urban": True},
+    "TAMPA ST PETERSBURG SARASOTA FL": {"pop_rank": 11, "pct_white": 62.0, "pct_black": 12.0, "pct_hispanic": 19.0, "pct_asian": 4.0, "urban": True},
+    "PHOENIX PRESCOTT AZ": {"pop_rank": 12, "pct_white": 54.0, "pct_black": 6.0, "pct_hispanic": 32.0, "pct_asian": 4.0, "urban": True},
+    "SEATTLE TACOMA WA": {"pop_rank": 13, "pct_white": 60.0, "pct_black": 6.0, "pct_hispanic": 11.0, "pct_asian": 16.0, "urban": True},
+    "DETROIT MI": {"pop_rank": 14, "pct_white": 57.0, "pct_black": 23.0, "pct_hispanic": 5.0, "pct_asian": 4.0, "urban": True},
+    "ORLANDO DAYTONA BEACH MELBOURNE FL": {"pop_rank": 15, "pct_white": 50.0, "pct_black": 16.0, "pct_hispanic": 28.0, "pct_asian": 4.0, "urban": True},
+    "MINNEAPOLIS ST PAUL MN": {"pop_rank": 16, "pct_white": 70.0, "pct_black": 9.0, "pct_hispanic": 7.0, "pct_asian": 8.0, "urban": True},
+    "DENVER CO": {"pop_rank": 17, "pct_white": 60.0, "pct_black": 5.0, "pct_hispanic": 25.0, "pct_asian": 5.0, "urban": True},
+    "MIAMI FT LAUDERDALE FL": {"pop_rank": 18, "pct_white": 30.0, "pct_black": 21.0, "pct_hispanic": 44.0, "pct_asian": 3.0, "urban": True},
+    "CLEVELAND AKRON CANTON OH": {"pop_rank": 19, "pct_white": 68.0, "pct_black": 20.0, "pct_hispanic": 5.0, "pct_asian": 3.0, "urban": True},
+    "SACRAMENTO STOCKTON MODESTO CA": {"pop_rank": 20, "pct_white": 44.0, "pct_black": 7.0, "pct_hispanic": 26.0, "pct_asian": 16.0, "urban": True},
+    "CHARLOTTE NC": {"pop_rank": 21, "pct_white": 53.0, "pct_black": 23.0, "pct_hispanic": 14.0, "pct_asian": 5.0, "urban": True},
+    "RALEIGH DURHAM FAYETTEVILLE NC": {"pop_rank": 22, "pct_white": 52.0, "pct_black": 22.0, "pct_hispanic": 12.0, "pct_asian": 6.0, "urban": True},
+    "PORTLAND OR": {"pop_rank": 23, "pct_white": 70.0, "pct_black": 3.0, "pct_hispanic": 13.0, "pct_asian": 8.0, "urban": True},
+    "ST LOUIS MO": {"pop_rank": 24, "pct_white": 65.0, "pct_black": 22.0, "pct_hispanic": 4.0, "pct_asian": 3.0, "urban": True},
+    "NASHVILLE TN": {"pop_rank": 25, "pct_white": 63.0, "pct_black": 16.0, "pct_hispanic": 11.0, "pct_asian": 4.0, "urban": True},
+    "INDIANAPOLIS IN": {"pop_rank": 26, "pct_white": 68.0, "pct_black": 15.0, "pct_hispanic": 8.0, "pct_asian": 4.0, "urban": True},
+    "SALT LAKE CITY UT": {"pop_rank": 27, "pct_white": 72.0, "pct_black": 2.0, "pct_hispanic": 18.0, "pct_asian": 4.0, "urban": True},
+    "PITTSBURGH PA": {"pop_rank": 28, "pct_white": 80.0, "pct_black": 11.0, "pct_hispanic": 3.0, "pct_asian": 3.0, "urban": True},
+    "BALTIMORE MD": {"pop_rank": 29, "pct_white": 51.0, "pct_black": 30.0, "pct_hispanic": 7.0, "pct_asian": 6.0, "urban": True},
+    "SAN DIEGO CA": {"pop_rank": 30, "pct_white": 43.0, "pct_black": 5.0, "pct_hispanic": 34.0, "pct_asian": 13.0, "urban": True},
+    "SAN ANTONIO TX": {"pop_rank": 31, "pct_white": 30.0, "pct_black": 7.0, "pct_hispanic": 57.0, "pct_asian": 3.0, "urban": True},
+    "HARTFORD & NEW HAVEN CT": {"pop_rank": 32, "pct_white": 62.0, "pct_black": 12.0, "pct_hispanic": 17.0, "pct_asian": 5.0, "urban": True},
+    "AUSTIN TX": {"pop_rank": 33, "pct_white": 48.0, "pct_black": 8.0, "pct_hispanic": 34.0, "pct_asian": 7.0, "urban": True},
+    "COLUMBUS OH": {"pop_rank": 34, "pct_white": 67.0, "pct_black": 16.0, "pct_hispanic": 6.0, "pct_asian": 5.0, "urban": True},
+    "KANSAS CITY MO": {"pop_rank": 35, "pct_white": 66.0, "pct_black": 13.0, "pct_hispanic": 11.0, "pct_asian": 3.0, "urban": True},
+    "GREENVILLE SPARTANBURG SC ASHEVILLE NC ANDERSON SC": {"pop_rank": 36, "pct_white": 70.0, "pct_black": 17.0, "pct_hispanic": 8.0, "pct_asian": 2.0, "urban": True},
+    "CINCINNATI OH": {"pop_rank": 37, "pct_white": 74.0, "pct_black": 14.0, "pct_hispanic": 4.0, "pct_asian": 3.0, "urban": True},
+    "WEST PALM BEACH FT PIERCE FL": {"pop_rank": 38, "pct_white": 50.0, "pct_black": 20.0, "pct_hispanic": 24.0, "pct_asian": 3.0, "urban": True},
+    "MILWAUKEE WI": {"pop_rank": 39, "pct_white": 65.0, "pct_black": 17.0, "pct_hispanic": 12.0, "pct_asian": 4.0, "urban": True},
+    "LAS VEGAS NV": {"pop_rank": 40, "pct_white": 42.0, "pct_black": 12.0, "pct_hispanic": 32.0, "pct_asian": 10.0, "urban": True},
+    "JACKSONVILLE FL": {"pop_rank": 41, "pct_white": 58.0, "pct_black": 22.0, "pct_hispanic": 10.0, "pct_asian": 5.0, "urban": True},
+    "HARRISBURG LANCASTER LEBANON YORK PA": {"pop_rank": 42, "pct_white": 78.0, "pct_black": 8.0, "pct_hispanic": 9.0, "pct_asian": 3.0, "urban": True},
+    "GRAND RAPIDS KALAMAZOO BATTLE CREEK MI": {"pop_rank": 43, "pct_white": 76.0, "pct_black": 9.0, "pct_hispanic": 9.0, "pct_asian": 3.0, "urban": True},
+    "NORFOLK PORTSMOUTH NEWPORT NEWS VA": {"pop_rank": 44, "pct_white": 51.0, "pct_black": 31.0, "pct_hispanic": 8.0, "pct_asian": 4.0, "urban": True},
+    "BIRMINGHAM ANNISTON AND TUSCALOOSA AL": {"pop_rank": 45, "pct_white": 57.0, "pct_black": 35.0, "pct_hispanic": 5.0, "pct_asian": 2.0, "urban": True},
+    "OKLAHOMA CITY OK": {"pop_rank": 46, "pct_white": 60.0, "pct_black": 11.0, "pct_hispanic": 17.0, "pct_asian": 4.0, "urban": True},
+    "GREENSBORO HIGH POINT WINSTON SALEM NC": {"pop_rank": 47, "pct_white": 57.0, "pct_black": 24.0, "pct_hispanic": 10.0, "pct_asian": 4.0, "urban": True},
+    "ALBUQUERQUE SANTA FE NM": {"pop_rank": 48, "pct_white": 37.0, "pct_black": 3.0, "pct_hispanic": 50.0, "pct_asian": 2.0, "urban": True},
+    "LOUISVILLE KY": {"pop_rank": 49, "pct_white": 74.0, "pct_black": 14.0, "pct_hispanic": 5.0, "pct_asian": 3.0, "urban": True},
+    "MEMPHIS TN": {"pop_rank": 50, "pct_white": 40.0, "pct_black": 47.0, "pct_hispanic": 7.0, "pct_asian": 2.0, "urban": True},
+    "NEW ORLEANS LA": {"pop_rank": 51, "pct_white": 48.0, "pct_black": 35.0, "pct_hispanic": 10.0, "pct_asian": 3.0, "urban": True},
+    "PROVIDENCE RI NEW BEDFORD MA": {"pop_rank": 52, "pct_white": 68.0, "pct_black": 6.0, "pct_hispanic": 16.0, "pct_asian": 4.0, "urban": True},
+    "FT MYERS NAPLES FL": {"pop_rank": 53, "pct_white": 62.0, "pct_black": 9.0, "pct_hispanic": 24.0, "pct_asian": 2.0, "urban": True},
+    "FRESNO VISALIA CA": {"pop_rank": 54, "pct_white": 30.0, "pct_black": 5.0, "pct_hispanic": 54.0, "pct_asian": 9.0, "urban": True},
+    "BUFFALO NY": {"pop_rank": 55, "pct_white": 73.0, "pct_black": 13.0, "pct_hispanic": 6.0, "pct_asian": 4.0, "urban": True},
+    "RICHMOND PETERSBURG VA": {"pop_rank": 56, "pct_white": 52.0, "pct_black": 31.0, "pct_hispanic": 7.0, "pct_asian": 5.0, "urban": True},
+    "MOBILE AL PENSACOLA FT WALTON BEACH FL": {"pop_rank": 57, "pct_white": 63.0, "pct_black": 24.0, "pct_hispanic": 7.0, "pct_asian": 3.0, "urban": True},
+    "KNOXVILLE TN": {"pop_rank": 58, "pct_white": 85.0, "pct_black": 6.0, "pct_hispanic": 5.0, "pct_asian": 2.0, "urban": True},
+    "WILKES BARRE SCRANTON HAZLETON PA": {"pop_rank": 59, "pct_white": 82.0, "pct_black": 4.0, "pct_hispanic": 10.0, "pct_asian": 2.0, "urban": True},
+    "LITTLE ROCK PINE BLUFF AR": {"pop_rank": 60, "pct_white": 60.0, "pct_black": 28.0, "pct_hispanic": 7.0, "pct_asian": 2.0, "urban": True},
+    "ALBANY SCHENECTADY TROY NY": {"pop_rank": 61, "pct_white": 76.0, "pct_black": 10.0, "pct_hispanic": 7.0, "pct_asian": 4.0, "urban": True},
+    "TULSA OK": {"pop_rank": 62, "pct_white": 62.0, "pct_black": 9.0, "pct_hispanic": 13.0, "pct_asian": 3.0, "urban": True},
+    "LEXINGTON KY": {"pop_rank": 63, "pct_white": 80.0, "pct_black": 9.0, "pct_hispanic": 5.0, "pct_asian": 3.0, "urban": True},
+    "SPOKANE WA": {"pop_rank": 64, "pct_white": 84.0, "pct_black": 2.0, "pct_hispanic": 7.0, "pct_asian": 3.0, "urban": True},
+    "TUCSON SIERRA VISTA AZ": {"pop_rank": 65, "pct_white": 44.0, "pct_black": 4.0, "pct_hispanic": 42.0, "pct_asian": 3.0, "urban": True},
+    "DAYTON OH": {"pop_rank": 66, "pct_white": 73.0, "pct_black": 15.0, "pct_hispanic": 4.0, "pct_asian": 3.0, "urban": True},
+    "DES MOINES AMES IA": {"pop_rank": 67, "pct_white": 80.0, "pct_black": 5.0, "pct_hispanic": 8.0, "pct_asian": 4.0, "urban": True},
+    "GREEN BAY APPLETON WI": {"pop_rank": 68, "pct_white": 83.0, "pct_black": 2.0, "pct_hispanic": 8.0, "pct_asian": 4.0, "urban": True},
+    "HONOLULU HI": {"pop_rank": 69, "pct_white": 22.0, "pct_black": 3.0, "pct_hispanic": 10.0, "pct_asian": 54.0, "urban": True},
+    "WICHITA HUTCHINSON KS PLUS": {"pop_rank": 70, "pct_white": 70.0, "pct_black": 8.0, "pct_hispanic": 15.0, "pct_asian": 4.0, "urban": True},
+    "OMAHA NE": {"pop_rank": 71, "pct_white": 72.0, "pct_black": 9.0, "pct_hispanic": 13.0, "pct_asian": 3.0, "urban": True},
+    "ROANOKE LYNCHBURG VA": {"pop_rank": 72, "pct_white": 76.0, "pct_black": 16.0, "pct_hispanic": 4.0, "pct_asian": 2.0, "urban": True},
+    "HUNTSVILLE DECATUR FLORENCE AL": {"pop_rank": 73, "pct_white": 65.0, "pct_black": 24.0, "pct_hispanic": 6.0, "pct_asian": 3.0, "urban": True},
+    "FLINT SAGINAW BAY CITY MI": {"pop_rank": 74, "pct_white": 72.0, "pct_black": 16.0, "pct_hispanic": 7.0, "pct_asian": 2.0, "urban": True},
+    "SPRINGFIELD MO": {"pop_rank": 75, "pct_white": 88.0, "pct_black": 3.0, "pct_hispanic": 4.0, "pct_asian": 2.0, "urban": True},
+    "COLUMBIA SC": {"pop_rank": 76, "pct_white": 50.0, "pct_black": 37.0, "pct_hispanic": 7.0, "pct_asian": 3.0, "urban": True},
+    "PORTLAND AUBURN ME": {"pop_rank": 77, "pct_white": 91.0, "pct_black": 2.0, "pct_hispanic": 2.0, "pct_asian": 2.0, "urban": True},
+    "MADISON WI": {"pop_rank": 78, "pct_white": 78.0, "pct_black": 5.0, "pct_hispanic": 7.0, "pct_asian": 6.0, "urban": True},
+    "ROCHESTER NY": {"pop_rank": 79, "pct_white": 72.0, "pct_black": 13.0, "pct_hispanic": 9.0, "pct_asian": 4.0, "urban": True},
+    "HARLINGEN WESLACO BROWNSVILLE MCALLEN TX": {"pop_rank": 80, "pct_white": 8.0, "pct_black": 1.0, "pct_hispanic": 90.0, "pct_asian": 1.0, "urban": True},
+    "TOLEDO OH": {"pop_rank": 81, "pct_white": 72.0, "pct_black": 14.0, "pct_hispanic": 8.0, "pct_asian": 2.0, "urban": False},
+    "WACO TEMPLE BRYAN TX": {"pop_rank": 82, "pct_white": 52.0, "pct_black": 16.0, "pct_hispanic": 27.0, "pct_asian": 3.0, "urban": False},
+    "CHARLESTON HUNTINGTON WV": {"pop_rank": 83, "pct_white": 90.0, "pct_black": 5.0, "pct_hispanic": 2.0, "pct_asian": 1.0, "urban": False},
+    "CHARLESTON SC": {"pop_rank": 84, "pct_white": 58.0, "pct_black": 29.0, "pct_hispanic": 7.0, "pct_asian": 2.0, "urban": True},
+    "SAVANNAH GA": {"pop_rank": 85, "pct_white": 50.0, "pct_black": 37.0, "pct_hispanic": 7.0, "pct_asian": 3.0, "urban": False},
+    "CHATTANOOGA TN": {"pop_rank": 86, "pct_white": 74.0, "pct_black": 16.0, "pct_hispanic": 6.0, "pct_asian": 2.0, "urban": False},
+    "SYRACUSE NY": {"pop_rank": 87, "pct_white": 78.0, "pct_black": 10.0, "pct_hispanic": 6.0, "pct_asian": 4.0, "urban": False},
+    "COLORADO SPRINGS PUEBLO CO": {"pop_rank": 88, "pct_white": 62.0, "pct_black": 6.0, "pct_hispanic": 22.0, "pct_asian": 3.0, "urban": False},
+    "EL PASO TX LAS CRUCES NM": {"pop_rank": 89, "pct_white": 13.0, "pct_black": 3.0, "pct_hispanic": 82.0, "pct_asian": 1.0, "urban": True},
+    "CHAMPAIGN & SPRINGFIELD DECATUR IL": {"pop_rank": 90, "pct_white": 76.0, "pct_black": 12.0, "pct_hispanic": 5.0, "pct_asian": 4.0, "urban": False},
+    "BURLINGTON VT PLATTSBURGH NY": {"pop_rank": 91, "pct_white": 90.0, "pct_black": 2.0, "pct_hispanic": 3.0, "pct_asian": 3.0, "urban": False},
+    "SHREVEPORT LA": {"pop_rank": 92, "pct_white": 50.0, "pct_black": 40.0, "pct_hispanic": 5.0, "pct_asian": 1.0, "urban": False},
+    "PADUCAH KY CAPE GIRARDEAU MO HARRISBURG IL": {"pop_rank": 93, "pct_white": 85.0, "pct_black": 9.0, "pct_hispanic": 3.0, "pct_asian": 1.0, "urban": False},
+    "CEDAR RAPIDS WATERLOO IOWA CITY & DUBUQUE IA": {"pop_rank": 94, "pct_white": 85.0, "pct_black": 5.0, "pct_hispanic": 5.0, "pct_asian": 3.0, "urban": False},
+    "FT SMITH FAYETTEVILLE SPRINGDALE ROGERS AR": {"pop_rank": 95, "pct_white": 70.0, "pct_black": 4.0, "pct_hispanic": 18.0, "pct_asian": 4.0, "urban": False},
+    "BATON ROUGE LA": {"pop_rank": 96, "pct_white": 48.0, "pct_black": 39.0, "pct_hispanic": 5.0, "pct_asian": 3.0, "urban": False},
+    "BOISE ID": {"pop_rank": 97, "pct_white": 80.0, "pct_black": 1.0, "pct_hispanic": 14.0, "pct_asian": 2.0, "urban": False},
+    "MYRTLE BEACH FLORENCE SC": {"pop_rank": 98, "pct_white": 58.0, "pct_black": 30.0, "pct_hispanic": 7.0, "pct_asian": 1.0, "urban": False},
+    "SOUTH BEND ELKHART IN": {"pop_rank": 99, "pct_white": 74.0, "pct_black": 11.0, "pct_hispanic": 11.0, "pct_asian": 2.0, "urban": False},
+    "JACKSON MS": {"pop_rank": 100, "pct_white": 38.0, "pct_black": 52.0, "pct_hispanic": 4.0, "pct_asian": 1.0, "urban": False},
+    "TRI CITIES TN VA": {"pop_rank": 101, "pct_white": 90.0, "pct_black": 4.0, "pct_hispanic": 3.0, "pct_asian": 1.0, "urban": False},
+    "GREENVILLE NEW BERN WASHINGTON NC": {"pop_rank": 102, "pct_white": 52.0, "pct_black": 33.0, "pct_hispanic": 9.0, "pct_asian": 2.0, "urban": False},
+    "RENO NV": {"pop_rank": 103, "pct_white": 58.0, "pct_black": 3.0, "pct_hispanic": 26.0, "pct_asian": 7.0, "urban": False},
+    "TALLAHASSEE FL THOMASVILLE GA": {"pop_rank": 104, "pct_white": 50.0, "pct_black": 35.0, "pct_hispanic": 9.0, "pct_asian": 3.0, "urban": False},
+    "DAVENPORT IA ROCK ISLAND MOLINE IL": {"pop_rank": 105, "pct_white": 77.0, "pct_black": 8.0, "pct_hispanic": 10.0, "pct_asian": 2.0, "urban": False},
+    "TYLER LONGVIEW LUFKIN & NACOGDOCHES TX": {"pop_rank": 106, "pct_white": 58.0, "pct_black": 20.0, "pct_hispanic": 18.0, "pct_asian": 1.0, "urban": False},
+    "LINCOLN & HASTINGS KEARNEY NE": {"pop_rank": 107, "pct_white": 82.0, "pct_black": 4.0, "pct_hispanic": 9.0, "pct_asian": 3.0, "urban": False},
+    "FT WAYNE IN": {"pop_rank": 108, "pct_white": 76.0, "pct_black": 11.0, "pct_hispanic": 8.0, "pct_asian": 3.0, "urban": False},
+    "AUGUSTA GA AIKEN SC": {"pop_rank": 109, "pct_white": 50.0, "pct_black": 37.0, "pct_hispanic": 7.0, "pct_asian": 2.0, "urban": False},
+    "EVANSVILLE IN": {"pop_rank": 110, "pct_white": 85.0, "pct_black": 7.0, "pct_hispanic": 4.0, "pct_asian": 1.0, "urban": False},
+    "JOHNSTOWN ALTOONA STATE COLLEGE PA": {"pop_rank": 111, "pct_white": 90.0, "pct_black": 4.0, "pct_hispanic": 3.0, "pct_asian": 2.0, "urban": False},
+    "SIOUX FALLS MITCHELL SD": {"pop_rank": 112, "pct_white": 82.0, "pct_black": 5.0, "pct_hispanic": 5.0, "pct_asian": 3.0, "urban": False},
+    "SPRINGFIELD HOLYOKE MA": {"pop_rank": 113, "pct_white": 64.0, "pct_black": 8.0, "pct_hispanic": 22.0, "pct_asian": 3.0, "urban": False},
+    "FARGO ND": {"pop_rank": 114, "pct_white": 85.0, "pct_black": 5.0, "pct_hispanic": 3.0, "pct_asian": 3.0, "urban": False},
+    "LANSING MI": {"pop_rank": 115, "pct_white": 72.0, "pct_black": 12.0, "pct_hispanic": 9.0, "pct_asian": 4.0, "urban": False},
+    "YAKIMA PASCO RICHLAND KENNEWICK WA": {"pop_rank": 116, "pct_white": 48.0, "pct_black": 2.0, "pct_hispanic": 44.0, "pct_asian": 3.0, "urban": False},
+    "TRAVERSE CITY CADILLAC MI": {"pop_rank": 117, "pct_white": 92.0, "pct_black": 1.0, "pct_hispanic": 4.0, "pct_asian": 1.0, "urban": False},
+    "YOUNGSTOWN OH": {"pop_rank": 118, "pct_white": 78.0, "pct_black": 13.0, "pct_hispanic": 5.0, "pct_asian": 1.0, "urban": False},
+    "EUGENE OR": {"pop_rank": 119, "pct_white": 82.0, "pct_black": 1.0, "pct_hispanic": 10.0, "pct_asian": 3.0, "urban": False},
+    "MACON GA": {"pop_rank": 120, "pct_white": 42.0, "pct_black": 45.0, "pct_hispanic": 7.0, "pct_asian": 2.0, "urban": False},
+    "BAKERSFIELD CA": {"pop_rank": 121, "pct_white": 30.0, "pct_black": 6.0, "pct_hispanic": 54.0, "pct_asian": 5.0, "urban": False},
+    "PEORIA BLOOMINGTON IL": {"pop_rank": 122, "pct_white": 79.0, "pct_black": 10.0, "pct_hispanic": 5.0, "pct_asian": 3.0, "urban": False},
+    "SANTA BARBARA SANTA MARIA SAN LUIS OBISPO CA": {"pop_rank": 123, "pct_white": 46.0, "pct_black": 2.0, "pct_hispanic": 42.0, "pct_asian": 6.0, "urban": False},
+    "LAFAYETTE LA": {"pop_rank": 124, "pct_white": 57.0, "pct_black": 30.0, "pct_hispanic": 5.0, "pct_asian": 2.0, "urban": False},
+    "WILMINGTON NC": {"pop_rank": 125, "pct_white": 68.0, "pct_black": 17.0, "pct_hispanic": 8.0, "pct_asian": 2.0, "urban": False},
+    "COLUMBUS GA OPELIKA AL": {"pop_rank": 126, "pct_white": 42.0, "pct_black": 43.0, "pct_hispanic": 9.0, "pct_asian": 3.0, "urban": False},
+    "MONTEREY SALINAS CA": {"pop_rank": 127, "pct_white": 32.0, "pct_black": 4.0, "pct_hispanic": 52.0, "pct_asian": 8.0, "urban": False},
+    "MONTGOMERY SELMA AL": {"pop_rank": 128, "pct_white": 38.0, "pct_black": 50.0, "pct_hispanic": 5.0, "pct_asian": 2.0, "urban": False},
+    "LA CROSSE EAU CLAIRE WI": {"pop_rank": 129, "pct_white": 90.0, "pct_black": 1.0, "pct_hispanic": 3.0, "pct_asian": 4.0, "urban": False},
+    "CORPUS CHRISTI TX": {"pop_rank": 130, "pct_white": 24.0, "pct_black": 4.0, "pct_hispanic": 68.0, "pct_asian": 2.0, "urban": False},
+    "SALISBURY MD": {"pop_rank": 131, "pct_white": 67.0, "pct_black": 20.0, "pct_hispanic": 7.0, "pct_asian": 2.0, "urban": False},
+    "AMARILLO TX": {"pop_rank": 132, "pct_white": 52.0, "pct_black": 7.0, "pct_hispanic": 36.0, "pct_asian": 3.0, "urban": False},
+    "WAUSAU RHINELANDER WI": {"pop_rank": 133, "pct_white": 90.0, "pct_black": 1.0, "pct_hispanic": 3.0, "pct_asian": 4.0, "urban": False},
+    "COLUMBIA JEFFERSON CITY MO": {"pop_rank": 134, "pct_white": 80.0, "pct_black": 10.0, "pct_hispanic": 4.0, "pct_asian": 3.0, "urban": False},
+    "CHICO REDDING CA": {"pop_rank": 135, "pct_white": 72.0, "pct_black": 2.0, "pct_hispanic": 17.0, "pct_asian": 4.0, "urban": False},
+    "COLUMBUS TUPELO WEST POINT MS": {"pop_rank": 136, "pct_white": 52.0, "pct_black": 40.0, "pct_hispanic": 4.0, "pct_asian": 1.0, "urban": False},
+    "ROCKFORD IL": {"pop_rank": 137, "pct_white": 68.0, "pct_black": 12.0, "pct_hispanic": 15.0, "pct_asian": 3.0, "urban": False},
+    "DULUTH MN SUPERIOR WI": {"pop_rank": 138, "pct_white": 89.0, "pct_black": 2.0, "pct_hispanic": 2.0, "pct_asian": 2.0, "urban": False},
+    "MEDFORD KLAMATH FALLS OR": {"pop_rank": 139, "pct_white": 82.0, "pct_black": 1.0, "pct_hispanic": 12.0, "pct_asian": 2.0, "urban": False},
+    "TOPEKA KS": {"pop_rank": 140, "pct_white": 74.0, "pct_black": 8.0, "pct_hispanic": 12.0, "pct_asian": 2.0, "urban": False},
+    "LUBBOCK TX": {"pop_rank": 141, "pct_white": 43.0, "pct_black": 8.0, "pct_hispanic": 44.0, "pct_asian": 2.0, "urban": False},
+    "ANCHORAGE AK": {"pop_rank": 142, "pct_white": 58.0, "pct_black": 5.0, "pct_hispanic": 9.0, "pct_asian": 10.0, "urban": False},
+    "BEAUMONT PORT ARTHUR TX": {"pop_rank": 143, "pct_white": 48.0, "pct_black": 27.0, "pct_hispanic": 20.0, "pct_asian": 4.0, "urban": False},
+    "MONROE LA EL DORADO AR": {"pop_rank": 144, "pct_white": 48.0, "pct_black": 42.0, "pct_hispanic": 4.0, "pct_asian": 1.0, "urban": False},
+    "PALM SPRINGS CA": {"pop_rank": 145, "pct_white": 38.0, "pct_black": 5.0, "pct_hispanic": 50.0, "pct_asian": 4.0, "urban": False},
+    "ODESSA MIDLAND TX": {"pop_rank": 146, "pct_white": 32.0, "pct_black": 6.0, "pct_hispanic": 58.0, "pct_asian": 2.0, "urban": False},
+    "PANAMA CITY FL": {"pop_rank": 147, "pct_white": 74.0, "pct_black": 14.0, "pct_hispanic": 7.0, "pct_asian": 2.0, "urban": False},
+    "BISMARCK MINOT DICKINSON WILLISTON ND": {"pop_rank": 148, "pct_white": 87.0, "pct_black": 3.0, "pct_hispanic": 4.0, "pct_asian": 1.0, "urban": False},
+    "WICHITA FALLS TX & LAWTON OK": {"pop_rank": 149, "pct_white": 60.0, "pct_black": 14.0, "pct_hispanic": 18.0, "pct_asian": 3.0, "urban": False},
+    "SIOUX CITY IA": {"pop_rank": 150, "pct_white": 72.0, "pct_black": 4.0, "pct_hispanic": 17.0, "pct_asian": 3.0, "urban": False},
+    "JOPLIN MO PITTSBURG KS": {"pop_rank": 151, "pct_white": 84.0, "pct_black": 3.0, "pct_hispanic": 7.0, "pct_asian": 1.0, "urban": False},
+    "ALBANY GA": {"pop_rank": 152, "pct_white": 35.0, "pct_black": 55.0, "pct_hispanic": 5.0, "pct_asian": 1.0, "urban": False},
+    "ROCHESTER MN MASON CITY IA AUSTIN MN": {"pop_rank": 153, "pct_white": 82.0, "pct_black": 5.0, "pct_hispanic": 5.0, "pct_asian": 5.0, "urban": False},
+    "ERIE PA": {"pop_rank": 154, "pct_white": 82.0, "pct_black": 8.0, "pct_hispanic": 5.0, "pct_asian": 2.0, "urban": False},
+    "IDAHO FALLS POCATELLO ID JACKSON WY": {"pop_rank": 155, "pct_white": 82.0, "pct_black": 1.0, "pct_hispanic": 13.0, "pct_asian": 1.0, "urban": False},
+    "GAINESVILLE FL": {"pop_rank": 156, "pct_white": 58.0, "pct_black": 22.0, "pct_hispanic": 12.0, "pct_asian": 5.0, "urban": False},
+    "BANGOR ME": {"pop_rank": 157, "pct_white": 93.0, "pct_black": 1.0, "pct_hispanic": 2.0, "pct_asian": 1.0, "urban": False},
+    "BILOXI GULFPORT MS": {"pop_rank": 158, "pct_white": 58.0, "pct_black": 27.0, "pct_hispanic": 7.0, "pct_asian": 4.0, "urban": False},
+    "SHERMAN TX ADA OK": {"pop_rank": 159, "pct_white": 68.0, "pct_black": 8.0, "pct_hispanic": 14.0, "pct_asian": 2.0, "urban": False},
+    "TERRE HAUTE IN": {"pop_rank": 160, "pct_white": 89.0, "pct_black": 4.0, "pct_hispanic": 3.0, "pct_asian": 1.0, "urban": False},
+    "MISSOULA MT": {"pop_rank": 161, "pct_white": 89.0, "pct_black": 1.0, "pct_hispanic": 4.0, "pct_asian": 2.0, "urban": False},
+    "BINGHAMTON NY": {"pop_rank": 162, "pct_white": 84.0, "pct_black": 5.0, "pct_hispanic": 5.0, "pct_asian": 4.0, "urban": False},
+    "YUMA AZ EL CENTRO CA": {"pop_rank": 163, "pct_white": 18.0, "pct_black": 3.0, "pct_hispanic": 76.0, "pct_asian": 2.0, "urban": False},
+    "WHEELING WV STEUBENVILLE OH": {"pop_rank": 164, "pct_white": 92.0, "pct_black": 4.0, "pct_hispanic": 2.0, "pct_asian": 1.0, "urban": False},
+    "DOTHAN AL": {"pop_rank": 165, "pct_white": 60.0, "pct_black": 32.0, "pct_hispanic": 5.0, "pct_asian": 1.0, "urban": False},
+    "BILLINGS MT": {"pop_rank": 166, "pct_white": 88.0, "pct_black": 1.0, "pct_hispanic": 6.0, "pct_asian": 1.0, "urban": False},
+    "ABILENE SWEETWATER TX": {"pop_rank": 167, "pct_white": 52.0, "pct_black": 9.0, "pct_hispanic": 33.0, "pct_asian": 2.0, "urban": False},
+    "BLUEFIELD BECKLEY OAK HILL WV": {"pop_rank": 168, "pct_white": 88.0, "pct_black": 7.0, "pct_hispanic": 2.0, "pct_asian": 1.0, "urban": False},
+    "HATTIESBURG LAUREL MS": {"pop_rank": 169, "pct_white": 52.0, "pct_black": 40.0, "pct_hispanic": 4.0, "pct_asian": 1.0, "urban": False},
+    "RAPID CITY SD": {"pop_rank": 170, "pct_white": 78.0, "pct_black": 1.0, "pct_hispanic": 5.0, "pct_asian": 1.0, "urban": False},
+    "UTICA NY": {"pop_rank": 171, "pct_white": 80.0, "pct_black": 8.0, "pct_hispanic": 7.0, "pct_asian": 4.0, "urban": False},
+    "HARRISONBURG VA": {"pop_rank": 172, "pct_white": 82.0, "pct_black": 5.0, "pct_hispanic": 8.0, "pct_asian": 2.0, "urban": False},
+    "CHARLOTTESVILLE VA": {"pop_rank": 173, "pct_white": 70.0, "pct_black": 16.0, "pct_hispanic": 6.0, "pct_asian": 5.0, "urban": False},
+    "CLARKSBURG WESTON WV": {"pop_rank": 174, "pct_white": 94.0, "pct_black": 2.0, "pct_hispanic": 1.0, "pct_asian": 1.0, "urban": False},
+    "LAKE CHARLES LA": {"pop_rank": 175, "pct_white": 58.0, "pct_black": 30.0, "pct_hispanic": 5.0, "pct_asian": 2.0, "urban": False},
+    "JACKSON TN": {"pop_rank": 176, "pct_white": 52.0, "pct_black": 38.0, "pct_hispanic": 5.0, "pct_asian": 1.0, "urban": False},
+    "QUINCY IL HANNIBAL MO KEOKUK IA": {"pop_rank": 177, "pct_white": 91.0, "pct_black": 3.0, "pct_hispanic": 3.0, "pct_asian": 1.0, "urban": False},
+    "BOWLING GREEN KY": {"pop_rank": 178, "pct_white": 82.0, "pct_black": 6.0, "pct_hispanic": 5.0, "pct_asian": 3.0, "urban": False},
+    "ELMIRA CORNING NY": {"pop_rank": 179, "pct_white": 88.0, "pct_black": 5.0, "pct_hispanic": 4.0, "pct_asian": 2.0, "urban": False},
+    "WATERTOWN NY": {"pop_rank": 180, "pct_white": 85.0, "pct_black": 6.0, "pct_hispanic": 5.0, "pct_asian": 2.0, "urban": False},
+    "MARQUETTE MI": {"pop_rank": 181, "pct_white": 92.0, "pct_black": 2.0, "pct_hispanic": 2.0, "pct_asian": 1.0, "urban": False},
+    "JONESBORO AR": {"pop_rank": 182, "pct_white": 72.0, "pct_black": 18.0, "pct_hispanic": 5.0, "pct_asian": 1.0, "urban": False},
+    "ALEXANDRIA LA": {"pop_rank": 183, "pct_white": 52.0, "pct_black": 38.0, "pct_hispanic": 4.0, "pct_asian": 1.0, "urban": False},
+    "BUTTE BOZEMAN MT": {"pop_rank": 184, "pct_white": 91.0, "pct_black": 1.0, "pct_hispanic": 4.0, "pct_asian": 1.0, "urban": False},
+    "LAREDO TX": {"pop_rank": 185, "pct_white": 4.0, "pct_black": 1.0, "pct_hispanic": 95.0, "pct_asian": 1.0, "urban": False},
+    "BEND OR": {"pop_rank": 186, "pct_white": 86.0, "pct_black": 1.0, "pct_hispanic": 9.0, "pct_asian": 2.0, "urban": False},
+    "GRAND JUNCTION MONTROSE CO": {"pop_rank": 187, "pct_white": 76.0, "pct_black": 1.0, "pct_hispanic": 18.0, "pct_asian": 1.0, "urban": False},
+    "TWIN FALLS ID": {"pop_rank": 188, "pct_white": 74.0, "pct_black": 1.0, "pct_hispanic": 21.0, "pct_asian": 1.0, "urban": False},
+    "LAFAYETTE IN": {"pop_rank": 189, "pct_white": 74.0, "pct_black": 5.0, "pct_hispanic": 11.0, "pct_asian": 7.0, "urban": False},
+    "LIMA OH": {"pop_rank": 190, "pct_white": 82.0, "pct_black": 10.0, "pct_hispanic": 4.0, "pct_asian": 1.0, "urban": False},
+    "GREAT FALLS MT": {"pop_rank": 191, "pct_white": 86.0, "pct_black": 2.0, "pct_hispanic": 5.0, "pct_asian": 1.0, "urban": False},
+    "MERIDIAN MS": {"pop_rank": 192, "pct_white": 42.0, "pct_black": 50.0, "pct_hispanic": 4.0, "pct_asian": 1.0, "urban": False},
+    "EUREKA CA": {"pop_rank": 193, "pct_white": 74.0, "pct_black": 1.0, "pct_hispanic": 13.0, "pct_asian": 3.0, "urban": False},
+    "CHEYENNE WY SCOTTSBLUFF NE": {"pop_rank": 194, "pct_white": 76.0, "pct_black": 2.0, "pct_hispanic": 16.0, "pct_asian": 1.0, "urban": False},
+    "PARKERSBURG WV": {"pop_rank": 195, "pct_white": 94.0, "pct_black": 2.0, "pct_hispanic": 1.0, "pct_asian": 1.0, "urban": False},
+    "GREENWOOD GREENVILLE MS": {"pop_rank": 196, "pct_white": 32.0, "pct_black": 62.0, "pct_hispanic": 3.0, "pct_asian": 1.0, "urban": False},
+    "SAN ANGELO TX": {"pop_rank": 197, "pct_white": 40.0, "pct_black": 5.0, "pct_hispanic": 48.0, "pct_asian": 2.0, "urban": False},
+    "CASPER RIVERTON WY": {"pop_rank": 198, "pct_white": 86.0, "pct_black": 1.0, "pct_hispanic": 8.0, "pct_asian": 1.0, "urban": False},
+    "MANKATO MN": {"pop_rank": 199, "pct_white": 88.0, "pct_black": 4.0, "pct_hispanic": 4.0, "pct_asian": 2.0, "urban": False},
+    "OTTUMWA IA KIRKSVILLE MO": {"pop_rank": 200, "pct_white": 89.0, "pct_black": 2.0, "pct_hispanic": 6.0, "pct_asian": 1.0, "urban": False},
+    "ST JOSEPH MO": {"pop_rank": 201, "pct_white": 84.0, "pct_black": 6.0, "pct_hispanic": 5.0, "pct_asian": 1.0, "urban": False},
+    "FAIRBANKS AK": {"pop_rank": 202, "pct_white": 64.0, "pct_black": 5.0, "pct_hispanic": 8.0, "pct_asian": 5.0, "urban": False},
+    "HELENA MT": {"pop_rank": 203, "pct_white": 91.0, "pct_black": 1.0, "pct_hispanic": 4.0, "pct_asian": 1.0, "urban": False},
+    "ZANESVILLE OH": {"pop_rank": 204, "pct_white": 90.0, "pct_black": 4.0, "pct_hispanic": 2.0, "pct_asian": 1.0, "urban": False},
+    "VICTORIA TX": {"pop_rank": 205, "pct_white": 34.0, "pct_black": 8.0, "pct_hispanic": 54.0, "pct_asian": 2.0, "urban": False},
+    "PRESQUE ISLE ME": {"pop_rank": 206, "pct_white": 94.0, "pct_black": 1.0, "pct_hispanic": 2.0, "pct_asian": 1.0, "urban": False},
+    "JUNEAU AK": {"pop_rank": 207, "pct_white": 62.0, "pct_black": 1.0, "pct_hispanic": 7.0, "pct_asian": 7.0, "urban": False},
+    "ALPENA MI": {"pop_rank": 208, "pct_white": 94.0, "pct_black": 1.0, "pct_hispanic": 2.0, "pct_asian": 1.0, "urban": False},
+    "NORTH PLATTE NE": {"pop_rank": 209, "pct_white": 87.0, "pct_black": 1.0, "pct_hispanic": 9.0, "pct_asian": 1.0, "urban": False},
+    "GLENDIVE MT": {"pop_rank": 210, "pct_white": 93.0, "pct_black": 1.0, "pct_hispanic": 3.0, "pct_asian": 1.0, "urban": False},
+}
+
+
+def _compute_ethnicity_affinity(dma_key: str, persona_ethnicity: dict) -> float:
+    """Return a data-driven ethnicity multiplier for *dma_key*.
+
+    persona_ethnicity: e.g. {"WHITE": 35.0, "BLACK OR AFRICAN AMERICAN": 40.0, "HISPANIC": 18.0, "ASIAN": 5.0, ...}
+    Returns a multiplier centered at 1.0. Range: 0.6 – 2.0.
+    """
+    demo = DMA_DEMOGRAPHICS.get(dma_key.upper())
+    if not demo or not persona_ethnicity:
+        return 1.0
+
+    eth_map = {
+        "WHITE": demo.get("pct_white", 60.0),
+        "BLACK OR AFRICAN AMERICAN": demo.get("pct_black", 13.0),
+        "HISPANIC": demo.get("pct_hispanic", 18.0),
+        "ASIAN": demo.get("pct_asian", 6.0),
+    }
+    us_avg = {"WHITE": 58.0, "BLACK OR AFRICAN AMERICAN": 13.0, "HISPANIC": 19.0, "ASIAN": 6.0}
+
+    weighted_sim = 0.0
+    total_weight = 0.0
+    for eth_key, persona_pct in persona_ethnicity.items():
+        try:
+            persona_pct = float(persona_pct)
+        except (TypeError, ValueError):
+            continue
+        if persona_pct < 3.0:
+            continue
+        canon = eth_key.strip().upper()
+        dma_pct = None
+        for mkey in eth_map:
+            if mkey in canon or canon in mkey:
+                dma_pct = eth_map[mkey]
+                break
+        if dma_pct is None:
+            continue
+        avg = us_avg.get(next((k for k in us_avg if k in canon or canon in k), ''), 15.0)
+        if avg < 1:
+            avg = 1.0
+        dma_ratio = dma_pct / avg
+        weight = persona_pct / 100.0
+        weighted_sim += dma_ratio * weight
+        total_weight += weight
+
+    if total_weight < 0.05:
+        return 1.0
+
+    raw = weighted_sim / total_weight
+    return max(0.6, min(2.0, raw))
+
+
+def _apply_location_guardrails(loc_multipliers: dict) -> dict:
+    """Programmatic post-processing clamps on LLM-generated location multipliers.
+
+    - Top 30 DMAs (pop_rank 1-30): floor 0.4, ceiling 4.0
+    - Small/rural DMAs (pop_rank > 150 or not urban): ceiling 1.5
+    - Unknown DMAs: default to 0.9
+    """
+    out = {}
+    for dma_key, mult in loc_multipliers.items():
+        demo = DMA_DEMOGRAPHICS.get(dma_key.upper())
+        if demo is None:
+            out[dma_key] = max(0.15, min(1.5, mult))
+            continue
+        rank = demo.get("pop_rank", 999)
+        urban = demo.get("urban", False)
+        if rank <= 30:
+            mult = max(0.4, min(4.0, mult))
+        elif rank > 150 or not urban:
+            mult = max(0.15, min(1.5, mult))
+        else:
+            mult = max(0.2, min(4.0, mult))
+        out[dma_key] = mult
+    return out
+
 def normalize_demo_value(s: str) -> str:
     """
     Lowercase, strip whitespace, and collapse any 'space-hyphen-space' or en-dash
@@ -14035,6 +14327,13 @@ For each category, your guidance MUST be grounded in reality:
 - THIS IS A U.S. PANEL: flag any foreign-only items that should score very low
 
 These signals are the primary guidance that scoring agents use to reason about individual items. Make them specific and opinionated but REALISTIC — do not tell agents to crush near-universal items.
+
+EXAMPLE category_signals (for a hypothetical athletic-brand audience — adapt to the actual subject):
+  "AMUSEMENT PARKS": "Major theme parks (Disney World, Universal Studios, Six Flags) are mainstream American entertainment — score near or slightly below baseline. Don't crush them. Water parks and local amusement parks score near baseline too. Only niche/foreign parks score low.",
+  "TECHNOLOGY/DEVICE": "This audience skews young and urban. Both Apple (iPhone, iPad) and Samsung (Galaxy) are mass-market — score Apple at 0.8-1.0x baseline, Samsung at 1.0-1.2x if audience skews Android. Don't crush either brand. Smart home devices and wearables near baseline.",
+  "GAMES": "This audience is 18-34 adults. Adult/sports games (NBA 2K, Madden, FIFA, Call of Duty, GTA) should score ABOVE baseline. Children's games (Roblox, LEGO, Barbie, Disney Dreamlight) should score BELOW baseline — these are NOT what adults play. Candy Crush/casual games near baseline.",
+  "WHERE THEY SHOP": "Retailers that sell the subject's product category (e.g. Foot Locker, Dick's Sporting Goods, Finish Line for athletic) should score ABOVE baseline. Mass retailers (Amazon, Walmart, Target) stay near baseline — everyone shops there. CPG/grocery retailers (Kroger, Publix) score BELOW baseline on a digital panel. Luxury boutiques (Tiffany, Nordstrom) depend on audience income.",
+  "STREAMING/PLATFORM": "Major streaming (Netflix, Hulu, Amazon Prime Video, Disney+, YouTube) are near-universal — score 0.85-1.15x baseline. Don't crush them. Sports-specific streaming (ESPN+, FuboTV) may score above baseline if audience is sports-oriented. Niche/foreign platforms score very low."
 """
 
     print(f"🔬 Step 1: Persona Research Agent researching '{subject}' …")
@@ -14451,6 +14750,14 @@ AUDIENCE-SPECIFIC SCORING:
   • Read the DIGITAL IDENTITY. It describes who this audience IS — their subcultures, age, income, ethnicity, shopping habits, media diet, and what they DON'T care about.
   • The RANK ORDER matters: items this audience truly engages with MUST rank above items they don't.
   • This is a U.S. digital panel — score based on actual digital behavior of real Americans, not aspirations or assumptions.
+
+COMMON PITFALLS TO AVOID:
+  • CPG/HOUSEHOLD (Clorox, Pampers, Tide, Gillette, Purina, Olay) → 0.1-0.3x baseline. People buy these in stores. Their DIGITAL engagement is tiny.
+  • THEME PARKS (Disney World, Universal, Six Flags) → 0.7-1.0x baseline. Mainstream American entertainment — don't crush them just because the persona isn't "theme park focused."
+  • GAMES for ADULT audiences (18-34) → Children's games (LEGO, Roblox, Barbie) should NOT outscore adult/sports games (NBA 2K, Madden, GTA, Call of Duty). If the audience is adults, adult games rank higher.
+  • TECHNOLOGY: Apple AND Samsung/Android are BOTH mass-market. Even if this audience skews Android, Apple should be 0.7-0.9x baseline (NOT 0.4x). Samsung should be at or above baseline if audience skews Android. Half of Americans use Apple products.
+  • FOREIGN-ONLY items (Zalando, Sony LIV, international-only platforms) → less than 1%. This is a U.S. panel.
+  • STREAMING: Major services (Netflix, Hulu, Amazon Prime, Disney+) are used by MOST Americans. Score them 0.8-1.2x baseline. Don't crush mainstream streaming just because it's not persona-specific.
 
 ═══════════════════════════════════════════════════════════════════
 PERSONA — this is the audience you are scoring for
@@ -15646,6 +15953,8 @@ CRITICAL — POPULATION-AWARE SCORING:
   MEDIUM DMAs (baseline 0.15% - 1.0%):
     → Default multiplier with no specific persona tie = 0.5-1.2.
 
+  DEFAULT RULE: If you have NO specific reason to boost or reduce a DMA, use 0.8-1.0x as a safe default. Do NOT randomly assign high or low multipliers.
+
 REASONING GUIDANCE — use everything you know about each DMA:
   • Ethnicity/race composition (ATLANTA, MEMPHIS, BIRMINGHAM = high Black share; LOS ANGELES, MIAMI, HOUSTON, SAN ANTONIO, EL PASO = high Hispanic; SAN FRANCISCO, NEW YORK, LOS ANGELES, SEATTLE, HONOLULU = high Asian).
   • Urbanicity (large metro vs. small/rural — affects luxury, tech, and youth-cultural personas).
@@ -15935,6 +16244,20 @@ def parallel_category_agents(df: pd.DataFrame, persona_doc: dict,
 
         # Run the location intelligence agent (all 210 DMAs).
         loc_multipliers = _run_location_intelligence_agent(persona_doc, subject) if gp_dma_pct else {}
+
+        if loc_multipliers:
+            persona_eth = (persona_doc.get('demographics') or {}).get('ETHNICITY') or {}
+            if persona_eth and DMA_DEMOGRAPHICS:
+                eth_adjusted = 0
+                for dma_key, llm_mult in loc_multipliers.items():
+                    eth_mult = _compute_ethnicity_affinity(dma_key, persona_eth)
+                    if abs(eth_mult - 1.0) > 0.05:
+                        loc_multipliers[dma_key] = llm_mult * eth_mult
+                        eth_adjusted += 1
+                if eth_adjusted:
+                    print(f"   📊 Ethnicity affinity: adjusted {eth_adjusted} DMAs based on Census data")
+            loc_multipliers = _apply_location_guardrails(loc_multipliers)
+            print(f"   🔒 Location guardrails applied (top-30 floors, rural caps)")
 
         if loc_multipliers and gp_dma_pct:
             # ── Tier 1: agent-driven, every DMA scored ──
