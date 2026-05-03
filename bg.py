@@ -14377,7 +14377,50 @@ RULES:
 - Do NOT include "EMPLOYED FULL-TIME" or "EMPLOYED PART-TIME" in OCCUPATION. Those values are forbidden — they are NOT real occupation categories. OCCUPATION must only use: SELF-EMPLOYED, STUDENT, HOMEMAKER, RETIRED, UNEMPLOYED, PREFER NOT TO SAY.
 - LOCATION: Provide at least 15-20 top DMAs with realistic, varied percentages. The percentages should NOT be clustered — use a natural distribution where the #1 DMA might be 8-12%, #5 might be 4-6%, #10 might be 2-3%, #15 might be 1-2%, #20 might be 0.5-1%. The sum should be ≤ 100; remainder is auto-spread to the other 190+ DMAs with random variation.
 
+═══════════════════════════════════════════════════════════════════
+AUDIENCE SCALE & REPRESENTATIVENESS — READ THIS FIRST
+═══════════════════════════════════════════════════════════════════
+Before writing the persona, ask: "How big is this audience in real life,
+and what is the MEDIAN customer like — not the most culturally
+interesting one?"
+
+  • If the subject is a MASS BRAND (>10M U.S. customers — Nike, Walmart,
+    McDonalds, Target, Apple, Verizon, AT&T, Chase, Bank of America,
+    State Farm, GEICO, Olive Garden, etc.), the audience IS the U.S.
+    mass-market consumer. The median customer is a 35-45 year old
+    middle-income suburban or small-city American — NOT an urban
+    sneakerhead, NOT a Brooklyn creative, NOT a coastal-elite. Those
+    sub-cultures exist within the audience but are 15-25% of it AT
+    MOST. The mass-market core (working-class, lower-middle-income,
+    value-conscious, suburban/exurban) is 50-70% of subsegment weight.
+
+  • Concrete check for Nike specifically: Nike has ~120M U.S. customers
+    out of ~260M U.S. adults. That means roughly HALF of all American
+    adults wear Nike. Half of America is not Brooklyn hypebeasts. The
+    median Nike customer is a 38-year-old suburban parent in Ohio
+    buying running shoes at Dick's or Foot Locker for themselves and
+    soccer cleats for their kid. They go to Planet Fitness (or no
+    gym), not Equinox. They drive a Honda or a Toyota, not a Tesla.
+    They watch network sports on cable or YouTube TV, not just niche
+    streaming. They eat at Chilis and Cheesecake Factory more than at
+    omakase spots.
+
+  • If the subject is a NICHE BRAND (<2M U.S. customers — Equinox,
+    Goyard, Bar Masa, Erewhon, Patek Philippe), the persona CAN be
+    aspirational/coastal-elite, because the actual customer base is
+    small and skewed.
+
+  • COMMON FAILURE: writing the "interesting" version of a mass-brand
+    audience (the sneakerhead Nike consumer, the foodie McDonalds
+    consumer, the fashion-forward Walmart consumer) inflates premium
+    items (Peloton, Equinox, Bar Masa, Apple) and deflates value items
+    (Planet Fitness, Family Dollar, Chilis, Walmart, Honda) in the
+    downstream scoring. AVOID THIS. Write the PERSONA OF THE MEDIAN
+    CUSTOMER, with subcultures as named subsegments at REAL weight.
+
+═══════════════════════════════════════════════════════════════════
 SUB-SEGMENTS, CULTURAL ANCHORS, ANTI-FIT, CROSS-SHOP NETWORK — REQUIRED:
+═══════════════════════════════════════════════════════════════════
 The downstream scoring agent uses these structured fields directly to reason
 about whether THIS audience would engage with each item it scores. Generic or
 vague entries here cause the scoring agent to default to neutral on most items
@@ -14385,9 +14428,25 @@ vague entries here cause the scoring agent to default to neutral on most items
 concrete:
 
   • subsegments: 3-6 distinct slices of this audience with weight_pct summing
-    to ~100. Each subsegment must have a unique cultural identity. Example for
-    Nike's audience: sneakerhead (~22%), performance athlete (~28%), lifestyle
-    casual (~30%), youth-sports parent (~15%), women's training (~15%).
+    to ~100. Each subsegment must have a unique cultural identity. CRITICAL:
+    if the subject is a MASS BRAND (>10M U.S. customers), the mass-market
+    core MUST be at least 50% of subsegment weight. Example for Nike's
+    audience (true mass-market weighting):
+       • mass-market value-conscious suburban parent (~32%)
+       • lifestyle casual / non-athletic everyday wearer (~22%)
+       • performance athlete (high-school + adult rec) (~18%)
+       • youth-sports parent (~12%)
+       • urban sneakerhead / hypebeast (~10%)
+       • women's training / fitness studio (~6%)
+    NOT this (the "interesting" but unrepresentative version):
+       • sneakerhead (~22%) — too high, sneakerheads are <5% of Nike
+         customers
+       • performance athlete (~28%) — too high, real performance
+         athletes are ~10-15%
+       • lifestyle casual (~30%) — too vague
+       • youth-sports parent (~15%) — fine
+       • women's training (~15%) — too high relative to mass-market
+         core
   • cultural_anchors: For each key, give 6-12 SPECIFIC named items. NEVER write
     "various sports brands" or "popular music" — name them. The scoring agent
     treats anything in cultural_anchors as a definite high-affinity item.
@@ -15256,20 +15315,43 @@ FOUR GUARDRAILS — apply IN ORDER for every item
 ═══════════════════════════════════════════════════════════════════
 
 GUARDRAIL 1 — YEAR-WINDOW CEILING COMPRESSOR (panel too high → override_high)
-If panel >= 85% AND the item is a MASS PLATFORM (any of: tech device
+If panel >= 75% AND the item is a MASS PLATFORM (any of: tech device
 maker, OS, mass streaming service, mass social platform, mass search/AI,
 mass mobile carrier, mass food/coffee chain, mega-retailer, mega-bank
-website), the year-long window is just measuring "did anyone touch any
-surface in 12 months". Compress to preserve audience differentiation:
-  • Apple, Microsoft, Google, Samsung, Android, Adobe          → 60–80%
-  • Netflix, YouTube, Spotify, Instagram, TikTok               → 70–90%
-  • Amazon (mega-retail), Walmart, Target                       → 70–88%
-  • Starbucks, McDonalds (mega-food)                            → 50–80%
-  • Verizon, AT&T, T-Mobile (carriers)                          → 35–60%
-Use the high end when the audience clearly over-indexes (e.g. iPhone for
-high-income; Spotify for young), the low end when they don't. NEVER
-leave any of these at 90%+ for ALL audiences — that defeats the metric.
-Emit panel_decision="override_high" (panel was over-stated by year window).
+website, mainstream news/media, virtual MVPD/FAST), the year-long window
+is just measuring "did anyone touch any surface in 12 months". Compress
+to preserve audience differentiation. **Default to the LOWER end of the
+band** unless the persona's subsegments / cultural_anchors explicitly
+mark this audience as a heavy user; only then go higher.
+  • Apple, Microsoft, Samsung, Android, Adobe                  → 55–78%
+  • Netflix, YouTube, Spotify, Instagram, TikTok               → 65–88%
+  • Amazon (mega-retail), Walmart, Target                       → 60–85%
+  • Starbucks, McDonalds (mega-food)                            → 35–70%
+  • Verizon, AT&T, T-Mobile (carriers)                          → 25–55%
+  • Google, Bing, ChatGPT (search/AI)                           → 70–92%
+  • Mainstream news/media (Google News, MSNBC, CBS News, ABC
+    News, Fox News, NPR, BBC, USA Today, etc.)                  → 18–55%
+    [news outlets compress especially hard — "having clicked one
+    headline link in 12 months" doesn't mean this is their primary
+    media; only top this band for explicit news-junkie audiences]
+  • vMVPD / FAST (YouTube TV, Hulu Live, FuboTV, Pluto TV,
+    Tubi, Roku Channel, Sling TV, Xumo, Philo)                  → 8–28%
+    [these are not universal — most US households still use cable
+    or major SVOD; pick low end unless audience is cord-cutter
+    skewed]
+  • Major QSR chains (Chick-fil-A, Wendys, Taco Bell, Burger
+    King, Subway, Dominos)                                       → 25–55%
+NEVER leave any of these at 90%+ for ALL audiences — that defeats the
+metric. Emit panel_decision="override_high".
+
+GUARDRAIL 1B — SUB-CEILING SPREAD WITHIN A CATEGORY
+If 3+ items in this category all return panel >= 75% (the "ceiling
+stack" — Netflix 84, Hulu 80, Disney+ 75, Amazon Prime 70 all together),
+the category has bunched at the year-window ceiling. Force a SPREAD of
+at least 25 percentage points between the highest and lowest item in
+that ceiling stack. The audience does NOT engage with all four equally;
+pick a likely #1 (the most culturally aligned) at the top of its band
+and rank the others down accordingly.
 
 GUARDRAIL 2 — APP-AWARE FLOOR LIFTER (panel too low → override_low)
 If panel <= 6% AND the item is a MAINSTREAM brand with a known consumer
@@ -15317,7 +15399,85 @@ ranges for INTEREST:
   • Not an interest of this audience                                   → 0.5–4%
 Do NOT let INTEREST top out in the 95s — the metric loses meaning. The
 spread inside INTEREST should reflect what the audience actually CARES
-about, not what they happen to have clicked once.
+about, not what they happen to have clicked once. ALSO: any INTEREST
+item that scores in the top 5 must be plausibly a hobby/identity of the
+median customer, NOT an artifact of incidental clicks (e.g. "MATH &
+STATS" for a Nike audience is implausible — clicking a Khan Academy
+link for a kid's homework once doesn't make it a primary interest).
+
+GUARDRAIL 5 — MASS-MARKET FLOOR (panel too low → override_low)
+If genpop is known AND the item is a MASS-MARKET brand by real-world
+customer base (>10M U.S. customers / members / subscribers / users),
+estimated_bp_pct CANNOT fall below 0.5 × genpop UNLESS the persona's
+demographic explicitly excludes this customer base (e.g. don't apply to
+a teen-only audience for AARP). Reasoning: mass brands by definition
+serve the median U.S. consumer, and the median consumer is in nearly
+every audience. Examples (with realistic genpop floors for a typical
+mass audience):
+  • Planet Fitness (18M members, largest U.S. gym)              → 8–22%
+  • Walmart (~150M weekly visitors)                              → 65–88%
+  • Target (~100M monthly shoppers)                              → 55–80%
+  • Family Dollar / Dollar Tree / Dollar General                 → 25–55%
+  • Olive Garden / Applebees / Chilis (mass casual dining)       → 6–22%
+  • Cheesecake Factory / Texas Roadhouse / Outback               → 5–18%
+  • Honda / Toyota / Ford (mass auto)                            → 15–45%
+  • State Farm / Allstate / GEICO / Progressive (mass insurance) → 25–55%
+  • Bank of America / Chase / Wells Fargo / Cap One              → 25–50%
+  • Disney World / Universal Studios / Six Flags (mass parks)    → 8–25%
+  • USPS (universal)                                             → 65–90%
+  • CVS / Walgreens / Rite Aid                                   → 30–60%
+The intuition: half of America wears Nike. Half of America also goes to
+Planet Fitness or Walmart or eats at Olive Garden. The Nike audience
+cannot have NEAR-ZERO Planet Fitness any more than it can have
+NEAR-ZERO Walmart. If panel says 2.5%, the panel is wrong (probably
+because PF's app traffic is in the clickstream but not stitched to
+"PLANET FITNESS" in host_mapping). Emit panel_decision="override_low".
+
+GUARDRAIL 6 — PREMIUM-TIER CEILING (panel too high → override_high)
+If the item is PREMIUM/LUXURY/NICHE by classifier tier AND its real-world
+U.S. customer base is small (<5M members/subscribers/customers),
+estimated_bp_pct CANNOT exceed 4 × the realistic adoption rate for the
+audience. Specifically, premium-tier items with small bases have hard
+ceilings:
+  • Peloton (~3M connected + ~3M digital subs out of 260M U.S.
+    adults = ~2-3% adoption) — even fitness-skewed audiences
+    cannot exceed                                                → 8–14%
+  • Equinox (~600K members, ultra-premium gym)                   → 1–4%
+  • Orangetheory (~1.5M members)                                 → 2–6%
+  • SoulCycle (~400K members, premium boutique)                  → 0.5–2%
+  • F45 (~600K members, premium boutique)                        → 0.5–3%
+  • Erewhon (regional grocery, ~100K customers)                  → 0.1–1%
+  • Tesla (~2M U.S. owners)                                      → 1–8%
+  • Patagonia (premium outdoor, niche)                           → 2–8%
+The intuition: Peloton has FEWER total subscribers than Planet Fitness
+has members in NYC alone. Even a fitness-obsessed audience cannot have
+more Peloton owners than Planet Fitness members. If you're tempted to
+score Peloton higher than Planet Fitness for a mass audience, you are
+wrong. Emit panel_decision="override_high".
+
+GUARDRAIL 7 — MAINSTREAM-BRAND MAPPING-BLEED (panel too high → override_high)
+This is Guardrail 3's twin for mainstream brands (the original
+Guardrail 3 only triggers on luxury/niche/defunct). If panel >= 3 ×
+genpop AND the audience does NOT plausibly over-index that hard, the
+panel is almost certainly catching a mapping bleed (a related host
+mistakenly tagged to this brand — e.g. vw.de subdomains tagged to
+Volkswagen, Wikipedia math articles tagged to "MATH & STATS"). Pull
+DOWN to genpop × the persona's plausible skew (typically 0.5x to 2.5x
+genpop). Reason should say "mainstream mapping bleed suspected (panel
+{Nx} of genpop, audience doesn't over-index)". Emit
+panel_decision="override_high".
+
+GUARDRAIL 8 — DEVIATION JUSTIFICATION RULE (every override)
+If your estimated_bp_pct deviates by more than 3x from the genpop
+baseline (in either direction), your `reason` field MUST explicitly say
+why — naming the specific persona attribute (subsegment, cultural
+anchor, anti-fit, demographic) that justifies the deviation. If you
+cannot articulate a strong reason, your default should be:
+    estimated_bp_pct = genpop × audience_skew_factor
+where audience_skew_factor is between 0.3x and 2.5x for non-anchor
+items, 2.5x to 8x for cultural-anchor items, and 0.05x to 0.3x for
+explicit-anti-fit items. Don't passively rubber-stamp panel readings
+that imply > 3x genpop deviation without a real reason.
 
 ═══════════════════════════════════════════════════════════════════
 DEFAULT DECISION FRAMEWORK (when no guardrail fires)
@@ -17518,6 +17678,28 @@ def parallel_category_agents(df: pd.DataFrame, persona_doc: dict,
         df.attrs['_dropped_low_confidence'] = sorted(drop_values)
     except Exception:
         pass
+
+    # Belt-and-suspenders: also write to a deterministic temp file. df.attrs
+    # is fragile across pandas operations (.copy(), pd.concat(), to_csv +
+    # read_csv all drop attrs). Writing a file ensures run_full_pipeline can
+    # always find the decisions log even if the attrs got cleared by the
+    # post-agent quality gate, perturbation passes, or rerun-merge logic.
+    try:
+        import json as _json_dec
+        import tempfile as _tmp
+        _dec_dir = os.environ.get('BG_DECISIONS_DIR') or _tmp.gettempdir()
+        os.makedirs(_dec_dir, exist_ok=True)
+        _dec_path = os.path.join(_dec_dir, '_bg_last_agent_decisions.json')
+        with open(_dec_path, 'w') as _fp:
+            _json_dec.dump({
+                'agent_decisions': agent_decisions,
+                'dropped_low_confidence': sorted(drop_values),
+                'written_at': time.time(),
+            }, _fp, default=str, indent=2)
+        print(f"   📝 Wrote agent-decision sidecar: {_dec_path} "
+              f"({len(agent_decisions)} decisions, {len(drop_values)} drops)")
+    except Exception as _dec_err:
+        print(f"   ⚠️ Could not write agent-decision sidecar: {_dec_err}")
 
     # ── Apply carry-forward jitter ONCE per unique value ─────────────────
     # Reruns previously called `_carry_forward_jitter(carry[val_u])` per row,
@@ -22429,14 +22611,34 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
     # down from 86% to 12%, Dick's Sporting Goods lifted from 1.8% to 28%).
     try:
         import json as _json
+        import tempfile as _tmp
         decisions = []
         dropped = []
+        # Primary source: df.attrs (fragile — can be cleared by pandas ops).
         try:
             decisions = list(df_final.attrs.get('_agent_decisions') or [])
             dropped = list(df_final.attrs.get('_dropped_low_confidence') or [])
         except Exception:
             decisions = []
             dropped = []
+        # Fallback: the deterministic temp-file sidecar that
+        # parallel_category_agents writes immediately after scoring (so we
+        # don't lose it if df.attrs gets dropped by post-agent pipeline
+        # passes). This ensures the audit log makes it to S3 even when
+        # df.attrs has been cleared.
+        if not decisions:
+            try:
+                _dec_dir = os.environ.get('BG_DECISIONS_DIR') or _tmp.gettempdir()
+                _sidecar = os.path.join(_dec_dir, '_bg_last_agent_decisions.json')
+                if os.path.exists(_sidecar):
+                    with open(_sidecar) as _fp:
+                        _sidecar_data = _json.load(_fp)
+                    decisions = list(_sidecar_data.get('agent_decisions') or [])
+                    dropped = list(_sidecar_data.get('dropped_low_confidence') or [])
+                    print(f"   📥 Loaded decisions from sidecar: {len(decisions)} decisions, "
+                          f"{len(dropped)} drops")
+            except Exception as _scerr:
+                print(f"   ⚠️ Could not load decisions sidecar: {_scerr}")
         if decisions or dropped:
             decisions_path = final_file.rsplit('.', 1)[0] + '_agent_decisions.json'
             payload = {
