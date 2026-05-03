@@ -18254,6 +18254,37 @@ def post_agent_quality_gate(df: pd.DataFrame, persona_doc: dict | None = None,
             brand_variants.add(bu.replace(' ', '_'))
             brand_variants.add(bu.replace(' ', ''))
 
+    # Build core interest keywords for Validator 2 exemption
+    _v2_core_interest_items: set[str] = set()
+    if brands:
+        gp = _load_genpop_csv()
+        if gp is not None and not gp.empty:
+            _gp_cat_col = 'Column' if 'Column' in gp.columns else gp.columns[0]
+            _gp_val_col = 'Value' if 'Value' in gp.columns else gp.columns[1]
+            for _, r in gp.iterrows():
+                try:
+                    c = str(r[_gp_cat_col]).strip().upper()
+                    v = str(r[_gp_val_col]).strip().upper()
+                except Exception:
+                    continue
+                if v in brand_variants:
+                    for cat_prefix, keywords in _BRAND_CATEGORY_TO_INTERESTS.items():
+                        if cat_prefix in c:
+                            _v2_core_interest_items.update(k.upper() for k in keywords)
+        # Fallback: detect from scored DataFrame
+        if not _v2_core_interest_items:
+            for idx in df.index:
+                try:
+                    v = str(df.at[idx, 'Value']).strip().upper()
+                    c = str(df.at[idx, 'Column']).strip().upper()
+                    b = float(df.at[idx, bp_col])
+                except (ValueError, TypeError, KeyError):
+                    continue
+                if v in brand_variants and b >= 95.0:
+                    for cat_prefix, keywords in _BRAND_CATEGORY_TO_INTERESTS.items():
+                        if cat_prefix in c:
+                            _v2_core_interest_items.update(k.upper() for k in keywords)
+
     corrections = 0
 
     # ── Validator 1: Demographic + Location Sum Check ───────────────
@@ -18305,12 +18336,24 @@ def post_agent_quality_gate(df: pd.DataFrame, persona_doc: dict | None = None,
             continue
 
         above_50 = [(idx, v) for idx, v in bp_vals if v > 50.0]
-        if len(above_50) > 3:
+        # INTEREST has 250+ items — many can legitimately be above 50%
+        max_above_50 = 8 if cat == 'INTEREST' else 3
+        if len(above_50) > max_above_50:
             above_50_sorted = sorted(above_50, key=lambda x: -x[1])
-            for idx, v in above_50_sorted[3:]:
+            for idx, v in above_50_sorted[max_above_50:]:
                 val_name = str(df.at[idx, 'Value']).strip().upper()
                 if val_name in _UNIVERSAL_HIGH_BP or val_name in brand_variants:
                     continue
+                # Exempt core interest items that were floored by R7 guardrails
+                if cat == 'INTEREST' and _v2_core_interest_items:
+                    is_core = val_name in _v2_core_interest_items
+                    if not is_core:
+                        for kw in _v2_core_interest_items:
+                            if kw in val_name or val_name in kw:
+                                is_core = True
+                                break
+                    if is_core:
+                        continue
                 clamped = _organic_4dp(random.uniform(25.0, 45.0))
                 df.at[idx, bp_col] = clamped
                 if pct_col in df.columns:
