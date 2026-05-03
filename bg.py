@@ -13467,7 +13467,14 @@ def enforce_input_brand_100(df_behavior, input_brands, purchasers_only: bool = F
                     row_col = str(row.get('Column', '')).strip().upper()
                     if row_col == 'MOST PURCHASED BRANDS':
                         continue
-                    if row_col in ('INPUT_METADATA', 'BRAND INPUT', 'SAMPLE SIZE',
+                    # NOTE: BRAND INPUT is intentionally NOT excluded — per
+                    # user spec, "all iterations of that value should be the
+                    # agent score" when the brand is in MPB. Without this,
+                    # BRAND INPUT stays at 100 then gets randomly perturbed by
+                    # `enforce_no_perfect_trailing_zeros` to a value that
+                    # differs from MPB BP (e.g. v8 had MPB=94.5852 but
+                    # BRAND INPUT=95.8474).
+                    if row_col in ('INPUT_METADATA', 'SAMPLE SIZE',
                                    'AVID FAN', 'CASUAL FAN', 'PURCHASE SHARE',
                                    'BRAND PENETRATION'):
                         continue
