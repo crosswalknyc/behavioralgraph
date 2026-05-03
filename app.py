@@ -19208,6 +19208,15 @@ def run_analysis(job_id, project_name, brands, sample_start, sample_end,
                 import shutil
                 try:
                     shutil.copy2(result_file, output_path)
+                    # Also copy the agent-decision sidecar so upload_to_s3 finds it.
+                    src_sidecar = result_file.rsplit('.', 1)[0] + '_agent_decisions.json'
+                    if os.path.exists(src_sidecar):
+                        dst_sidecar = output_path.rsplit('.', 1)[0] + '_agent_decisions.json'
+                        try:
+                            shutil.copy2(src_sidecar, dst_sidecar)
+                            print(f"📋 Copied agent-decision sidecar to {dst_sidecar}")
+                        except Exception as _sc_err:
+                            print(f"⚠️ Could not copy agent-decision sidecar: {_sc_err}")
                 except OSError:
                     output_path = result_file  # e.g. Render: use pipeline file directly if OUTPUT_DIR not writable
                 update_job_status(job_id, progress=_profile_step_progress(_completed_steps), message='Saving to purgatory...')

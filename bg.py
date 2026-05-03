@@ -187,7 +187,7 @@ GenPop        → natural percentages preserved
                     📋 FULL PIPELINE EXECUTION ORDER
 ================================================================================
 
-1.  Data Loading → Load from Snowflake database
+1.  Data Loading → Load from ClickHouse
 2.  Normalization → Standardize category/value names
 3.  🔄 ESPN Layer 1: consolidate_espn_brands() - Initial ESPN+/ESPN merge
 4.  Set Raw Numbers → From percentages using sample size (35x max down to 1x, capped at 10M)
@@ -529,11 +529,11 @@ def _research_brand_demographics(client, subject_name, brand_category):
 # ══════════════════════════════════════════════════════════════════════════════
 # RESEARCH-FIRST PROFILE BUILDER
 # ══════════════════════════════════════════════════════════════════════════════
-# Instead of reviewing Snowflake data and fixing outliers, this approach:
+# Instead of reviewing ClickHouse data and fixing outliers, this approach:
 # 1. Deeply researches WHO the profile is about
 # 2. Builds complete demographic/behavioral profile from research
 # 3. Sets ALL values based on the researched persona (with noise)
-# 4. Research becomes the source of truth — not Snowflake data
+# 4. Research becomes the source of truth — not ClickHouse data
 # ══════════════════════════════════════════════════════════════════════════════
 
 _research_profile_cache = {}
@@ -724,11 +724,11 @@ Return ONLY valid JSON (no markdown):
 
 
 def _apply_research_profile_to_df(df, research_profile, subject_clean):
-    """Compare Snowflake data against research and update if misaligned.
+    """Compare ClickHouse data against research and update if misaligned.
     
     Research establishes what the persona SHOULD look like.
-    - If Snowflake data aligns with persona → keep it (add slight noise)
-    - If Snowflake data conflicts with persona → update to match research
+    - If ClickHouse data aligns with persona → keep it (add slight noise)
+    - If ClickHouse data conflicts with persona → update to match research
     """
     if not research_profile:
         return df
@@ -767,8 +767,8 @@ def _apply_research_profile_to_df(df, research_profile, subject_clean):
         if not mask.any():
             continue
         
-        # Extract current Snowflake distribution for this category
-        snowflake_dist = {}
+        # Extract current ClickHouse distribution for this category
+        ch_dist = {}
         total_bp = 0.0
         cat_items = []
         
@@ -787,15 +787,15 @@ def _apply_research_profile_to_df(df, research_profile, subject_clean):
         
         # Convert to percentages
         for val, val_upper, bp, idx in cat_items:
-            snowflake_dist[val_upper] = bp / total_bp * 100 if total_bp > 0 else 0
+            ch_dist[val_upper] = bp / total_bp * 100 if total_bp > 0 else 0
         
-        # Compare Snowflake vs Research - check if they align with persona
+        # Compare ClickHouse data vs Research - check if they align with persona
         # "Aligns" means the distribution pattern matches (not exact numbers)
-        is_aligned = _check_distribution_alignment(snowflake_dist, research_dist, cat_upper)
+        is_aligned = _check_distribution_alignment(ch_dist, research_dist, cat_upper)
         
         if is_aligned:
-            # Snowflake data aligns with persona - keep it, just add slight noise
-            print(f"   ✓ {cat}: Snowflake data aligns with persona — keeping with noise")
+            # ClickHouse data aligns with persona - keep it, just add slight noise
+            print(f"   ✓ {cat}: ClickHouse data aligns with persona — keeping with noise")
             for val, val_upper, bp, idx in cat_items:
                 current_pct = bp / total_bp * 100 if total_bp > 0 else 0
                 noisy_pct = _add_realistic_noise(current_pct, 0.2)
@@ -811,8 +811,8 @@ def _apply_research_profile_to_df(df, research_profile, subject_clean):
                     df.at[idx, cs_col] = f'{noisy_pct:.4f}%'
             kept_cats += 1
         else:
-            # Snowflake data conflicts with persona - update to match research
-            print(f"   ✗ {cat}: Snowflake data conflicts with persona — updating from research")
+            # ClickHouse data conflicts with persona - update to match research
+            print(f"   ✗ {cat}: ClickHouse data conflicts with persona — updating from research")
             for val, val_upper, bp, idx in cat_items:
                 # Find matching label in research profile
                 matched_pct = None
@@ -840,17 +840,17 @@ def _apply_research_profile_to_df(df, research_profile, subject_clean):
     return df
 
 
-def _check_distribution_alignment(snowflake_dist, research_dist, category):
-    """Check if Snowflake distribution aligns with research-based persona.
+def _check_distribution_alignment(ch_dist, research_dist, category):
+    """Check if ClickHouse distribution aligns with research-based persona.
     
     Returns True if distributions are reasonably aligned, False if they conflict.
     
     Alignment means:
-    - The general SHAPE matches (if research says young audience, Snowflake should show young)
-    - No extreme contradictions (research says 5% X, Snowflake says 60% X)
+    - The general SHAPE matches (if research says young audience, ClickHouse should show young)
+    - No extreme contradictions (research says 5% X, ClickHouse says 60% X)
     - Allows for natural variation in exact percentages
     """
-    if not snowflake_dist or not research_dist:
+    if not ch_dist or not research_dist:
         return False
     
     # Normalize research keys to uppercase for comparison
@@ -860,7 +860,7 @@ def _check_distribution_alignment(snowflake_dist, research_dist, category):
     comparisons = 0
     severe_conflicts = 0
     
-    for sf_key, sf_val in snowflake_dist.items():
+    for sf_key, sf_val in ch_dist.items():
         # Find matching research key
         research_val = None
         for r_key, r_val in research_upper.items():
@@ -874,10 +874,10 @@ def _check_distribution_alignment(snowflake_dist, research_dist, category):
             comparisons += 1
             
             # Check for severe conflicts
-            # If research says <10% but Snowflake says >50%, that's a severe conflict
+            # If research says <10% but ClickHouse says >50%, that's a severe conflict
             if research_val < 10 and sf_val > 50:
                 severe_conflicts += 1
-            # If research says >40% but Snowflake says <10%, that's a severe conflict
+            # If research says >40% but ClickHouse says <10%, that's a severe conflict
             elif research_val > 40 and sf_val < 10:
                 severe_conflicts += 1
             # If difference is >40 percentage points, that's severe
@@ -900,7 +900,7 @@ def _check_distribution_alignment(snowflake_dist, research_dist, category):
 def research_first_demographic_review(df, brand_category, project_name, brands):
     """MASTER FUNCTION: Research-first demographic review.
     
-    Instead of reviewing Snowflake data and fixing outliers:
+    Instead of reviewing ClickHouse data and fixing outliers:
     1. Deep research on WHO the profile is about
     2. Build complete demographic profile from research
     3. Set ALL values based on researched persona (with noise)
@@ -1962,7 +1962,7 @@ def _try_gpt_archetype(project_name, brands, brand_category=None):
 def validate_demographics(df, archetype, sample_size):
     """Validate raw demographics against archetype; reshape only when gut-check fails.
 
-    Demographics are NOT anchored to Gen Pop -- raw Snowflake data passes through.
+    Demographics are NOT anchored to Gen Pop -- raw ClickHouse data passes through.
     This function only intervenes when the distribution clearly contradicts the
     archetype (e.g. 65+ as #2 age group for a younger-skewing brand).
     """
@@ -7132,7 +7132,7 @@ def ai_research_first_demographic_audit(df, brand_category, project_name, brands
     """Final research-first demographic audit.
 
     Goal:
-    - Keep Snowflake-derived demographics when they are plausible.
+    - Keep ClickHouse-derived demographics when they are plausible.
     - Adjust only values that conflict with web-sourced evidence.
     - Return 4dp percentages that sum to 100 per demographic category.
     """
@@ -7245,7 +7245,7 @@ relationship, parental status, sexual orientation) and return a complete persona
 
 Rules:
 - US context only.
-- Keep plausible Snowflake signal when it is evidence-consistent.
+- Keep plausible ClickHouse signal when it is evidence-consistent.
 - Do NOT blindly overwrite with stereotypes.
 - For each corrected category, output all existing labels from CURRENT exactly as given.
 - Every corrected category must sum to exactly 100.0000.
@@ -7668,7 +7668,7 @@ Return exactly:
                     # Confidence-weighted blend:
                     # - AI estimate (primary)
                     # - soft prior (US composition mapped to present labels)
-                    # - current Snowflake composition (inertia)
+                    # - current ClickHouse composition (inertia)
                     blended = {}
                     for k in post_eth.keys():
                         baseline_mix = 0.65 * float(prior_eth.get(k, 0.0)) + 0.35 * float(post_eth.get(k, 0.0))
@@ -8024,7 +8024,7 @@ JSON only.
 
         # Sixth pass (deterministic): hard anti-template validator.
         # If any demographic category still looks synthetic/equalized, repair it by
-        # blending back toward the original Snowflake shape before final math.
+        # blending back toward the original ClickHouse shape before final math.
         try:
             def _dist_now(_cat):
                 _cm = df['Column'].str.upper().str.strip() == _cat
@@ -8188,7 +8188,7 @@ JSON only.
                 _base = current.get(_cat, {}) or {}
                 _base_is_templated = _looks_templated_strict(_base)
 
-                # If we have original Snowflake shape for this category, anchor to it.
+                # If we have original ClickHouse shape for this category, anchor to it.
                 # Otherwise keep current but inject variance.
                 _mix_to_base = 0.78 if _cat in {'AGE', 'ETHNICITY', 'INCOME'} else 0.72
                 _fixed = {}
@@ -11001,10 +11001,12 @@ apply_limited_changes = False
 # Global verbosity toggle
 SILENCE_VERBOSE_OUTPUT = True
 
-# Cost tracking variables
-CREDIT_RATE_PER_DOLLAR = 5.12  # $5.12 per credit for 6X-Large warehouse
+# Legacy cost-tracking globals (Snowflake-era). Retained because some
+# functions still read CREDIT_RATE_PER_DOLLAR; ClickHouse has no
+# per-query billing so the values are decorative.
+CREDIT_RATE_PER_DOLLAR = 0.0
 total_credits_used = 0.0
-saved_query_ids = []  # Store query IDs for later cost checking
+saved_query_ids = []
 
 # Allowed US DMA list for LOCATION filtering
 ALLOWED_DMAS = set([
@@ -12045,13 +12047,17 @@ def boost_clamp_renorm(
 
     return df.drop(columns=["Projected_Count", "Capped_Count"])
 
-def connect_snowflake():
+def connect_db():
     if not SILENCE_VERBOSE_OUTPUT:
         print("🔌 Connecting to ClickHouse...")
     conn = connect_clickhouse()
     if not SILENCE_VERBOSE_OUTPUT:
         print("✅ Connected to ClickHouse.")
     return conn
+
+# Backwards-compat alias — pre-migration code (and any external imports of
+# bg.connect_snowflake) referenced this name; it now connects to ClickHouse.
+connect_snowflake = connect_db
 
 def clean_brand(brand):
     return re.sub(r'\W+', '', brand.strip().lower())
@@ -12156,16 +12162,8 @@ def run_talent_fit_analysis(conn, brand, talents, start_date, end_date):
     }
     
     with conn.cursor() as cur:
-        # Try dedicated TALENTFIT warehouse first, fall back to BEHAVIORGRAPH6X
-        try:
-            cur.execute("USE WAREHOUSE TALENTFIT")
-            print("🚀 Using TALENTFIT warehouse (6X-Large) for Talent Fit analysis")
-        except Exception:
-            cur.execute("USE WAREHOUSE BEHAVIORGRAPH6X")
-            print("🚀 Using BEHAVIORGRAPH6X warehouse for Talent Fit analysis")
-        cur.execute("ALTER SESSION SET USE_CACHED_RESULT = TRUE")
-        cur.execute("ALTER SESSION SET STATEMENT_TIMEOUT_IN_SECONDS = 3600")
-        
+        print("🚀 Running on ClickHouse for Talent Fit analysis")
+
         # Handle comma-separated brands
         brand_terms = [b.strip() for b in brand.split(',') if b.strip()]
         brand_filters = []
@@ -12266,16 +12264,8 @@ def find_talent_for_brand(conn, brand, start_date, end_date, limit=50):
     }
     
     with conn.cursor() as cur:
-        # Try dedicated TALENTFIT warehouse first, fall back to BEHAVIORGRAPH6X
-        try:
-            cur.execute("USE WAREHOUSE TALENTFIT")
-            print("🚀 Using TALENTFIT warehouse (6X-Large) for Find Talent")
-        except Exception:
-            cur.execute("USE WAREHOUSE BEHAVIORGRAPH6X")
-            print("🚀 Using BEHAVIORGRAPH6X warehouse for Find Talent")
-        cur.execute("ALTER SESSION SET USE_CACHED_RESULT = TRUE")
-        cur.execute("ALTER SESSION SET STATEMENT_TIMEOUT_IN_SECONDS = 3600")
-        
+        print("🚀 Running on ClickHouse for Find Talent")
+
         # Handle comma-separated brands
         brand_terms = [b.strip() for b in brand.split(',') if b.strip()]
         brand_filters = []
@@ -12380,8 +12370,6 @@ def stop_progress_monitor(monitor_thread):
 def scale_warehouse_up(cur, max_warehouse_size, max_acceleration_factor):
     """Scale warehouse up for complex queries"""
     try:
-        cur.execute(f"ALTER WAREHOUSE BEHAVIORGRAPH6X SET WAREHOUSE_SIZE = '{max_warehouse_size}'")
-        cur.execute(f"ALTER WAREHOUSE BEHAVIORGRAPH6X SET QUERY_ACCELERATION_MAX_SCALE_FACTOR = {max_acceleration_factor}")
         if not SILENCE_VERBOSE_OUTPUT:
             print(f"🚀 Scaled up to {max_warehouse_size} with {max_acceleration_factor}x acceleration")
     except Exception as e:
@@ -12391,8 +12379,6 @@ def scale_warehouse_up(cur, max_warehouse_size, max_acceleration_factor):
 def scale_warehouse_down(cur, base_warehouse_size, base_acceleration_factor):
     """Scale warehouse down for cost efficiency"""
     try:
-        cur.execute(f"ALTER WAREHOUSE BEHAVIORGRAPH6X SET WAREHOUSE_SIZE = '{base_warehouse_size}'")
-        cur.execute(f"ALTER WAREHOUSE BEHAVIORGRAPH6X SET QUERY_ACCELERATION_MAX_SCALE_FACTOR = {base_acceleration_factor}")
         if not SILENCE_VERBOSE_OUTPUT:
             print(f"💰 Scaled down to {base_warehouse_size} with {base_acceleration_factor}x acceleration")
     except Exception as e:
@@ -12418,10 +12404,7 @@ def perform_full_universe_scan(conn, brands, start_date, end_date, purchasers_on
     
     with conn.cursor() as cur:
         # Scale up warehouse for full scan
-        cur.execute("ALTER WAREHOUSE BEHAVIORGRAPH6X SET WAREHOUSE_SIZE = '6X-Large'")
-        cur.execute("ALTER WAREHOUSE BEHAVIORGRAPH6X SET QUERY_ACCELERATION_MAX_SCALE_FACTOR = 25")
-        cur.execute("ALTER WAREHOUSE BEHAVIORGRAPH6X SET STATEMENT_TIMEOUT_IN_SECONDS = 14400")  # 4 hour timeout
-        print("🚀 Using BEHAVIORGRAPH6X warehouse (6X-Large with 25x acceleration) for full universe scan")
+        print("🚀 Running on ClickHouse (37.27.140.111) for full universe scan")
         
         try:
             # Add purchasers filter if requested
@@ -12452,9 +12435,7 @@ def perform_full_universe_scan(conn, brands, start_date, end_date, purchasers_on
             print(f"🔍 Brand filter complexity: {len(brand_filter)} characters")
             print("💾 Caching enabled - subsequent runs with same parameters will be much faster!")
             
-            # Ensure we're using 6X-Large warehouse for maximum speed
-            cur.execute("USE WAREHOUSE BEHAVIORGRAPH6X")
-            print("🚀 Using BEHAVIORGRAPH6X warehouse (6X-Large) for universe count")
+            print("🚀 Running on ClickHouse for universe count")
             
             # Add query optimization hints for faster execution and caching
             cur.execute("ALTER SESSION SET QUERY_TAG = 'UNIVERSE_COUNT_OPTIMIZED'")
@@ -12512,9 +12493,7 @@ def perform_full_universe_scan(conn, brands, start_date, end_date, purchasers_on
             return None
         finally:
             # Scale down warehouse after scan
-            cur.execute("ALTER WAREHOUSE BEHAVIORGRAPH6X SET WAREHOUSE_SIZE = '6X-Large'")
-            cur.execute("ALTER WAREHOUSE BEHAVIORGRAPH6X SET QUERY_ACCELERATION_MAX_SCALE_FACTOR = 25")
-            print("✅ Keeping BEHAVIORGRAPH6X warehouse (6X-Large with 25x acceleration) for optimal performance")
+            print("✅ ClickHouse pool ready")
 
 
 
@@ -12581,13 +12560,8 @@ def check_saved_query_costs(cur):
     try:
         # Get costs for all saved query IDs
         query_ids_str = "', '".join([qid for qid, _ in saved_query_ids])
-        cost_results = cur.execute(f"""
-            SELECT QUERY_ID, CREDITS_USED, TOTAL_ELAPSED_TIME, WAREHOUSE_SIZE
-            FROM SNOWFLAKE.ACCOUNT_USAGE.QUERY_HISTORY 
-            WHERE QUERY_ID IN ('{query_ids_str}')
-              AND WAREHOUSE_NAME = 'BEHAVIORGRAPH6X'
-        """).fetchall()
-        
+        # ClickHouse: no per-query credits; skip billing lookup
+        cost_results = []
         # Create a mapping of query ID to cost
         query_costs = {qid: credits for qid, credits, _, _ in cost_results if credits}
         
@@ -12661,7 +12635,7 @@ def estimate_query_cost(cur, query_description=""):
 
 def track_query_cost(cur, query_description=""):
     """
-    Track the cost of a Snowflake query (simplified - actual costs retrieved at end).
+    Track the cost of a ClickHouse query (simplified - actual costs retrieved at end).
     """
     # Simplified - we'll get actual costs from query history at the end
     return 0
@@ -17068,7 +17042,7 @@ def parallel_category_agents(df: pd.DataFrame, persona_doc: dict,
                               study_dates: str = '') -> pd.DataFrame:
     """Step 2 — run one gpt-4o agent per behavioral category in parallel.
 
-    Each agent receives the persona doc + the list of values from Snowflake for
+    Each agent receives the persona doc + the list of values from ClickHouse for
     its category, and returns a BP for every row.  Demographics and Location are
     written directly from the persona_doc (Step 1 output), not via category agents.
 
@@ -19417,12 +19391,8 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
     # Ensure the output directory exists
     os.makedirs(base_dir, exist_ok=True)
     
-    # Ensure we're using 6X-Large warehouse for the entire pipeline
     with conn.cursor() as cur:
-        cur.execute("USE WAREHOUSE BEHAVIORGRAPH6X")
-        cur.execute("ALTER WAREHOUSE BEHAVIORGRAPH6X SET WAREHOUSE_SIZE = '6X-Large'")
-        cur.execute("ALTER WAREHOUSE BEHAVIORGRAPH6X SET QUERY_ACCELERATION_MAX_SCALE_FACTOR = 25")
-        print("🚀 Pipeline starting with BEHAVIORGRAPH6X warehouse (6X-Large with 25x acceleration)")
+        print("🚀 Pipeline starting on ClickHouse")
     
     with conn.cursor() as cur:
         # Load previous run data if provided
@@ -19456,9 +19426,9 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
     else:
         # Show which processing approach will be used
         if use_full_population_fastpath and not is_genpop:
-            print("🚀 Using FAST PATH: Streaming aggregation for 6X-Large warehouse optimization")
+            print("🚀 Using FAST PATH: Streaming aggregation on ClickHouse")
         else:
-            print("📊 Using DEFAULT PATH: Traditional 100% sampling approach with 6X-Large warehouse")
+            print("📊 Using DEFAULT PATH: Traditional 100% sampling approach on ClickHouse")
 
     # Initialize brand_filter from all variants (same as perform_full_universe_scan) with SQL escaping
     if not is_genpop and brands:
@@ -19474,9 +19444,7 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
 
     if is_geo_profile or (use_full_population_fastpath and not is_genpop):
         cur = conn.cursor()
-        cur.execute("USE WAREHOUSE BEHAVIORGRAPH6X")
         if is_geo_profile:
-            cur.execute("ALTER SESSION SET STATEMENT_TIMEOUT_IN_SECONDS = 14400")
 
             cur.execute(f"""
                 CREATE OR REPLACE TEMP TABLE GEO_UIDS AS
@@ -19557,7 +19525,6 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
                 
                 if date_range_days > 30:
                     print(f"⚠️ Large date range detected ({date_range_days} days) - using chunked processing hints")
-                    cur.execute("ALTER SESSION SET STATEMENT_QUEUING_TIMEOUT_IN_SECONDS = 300")
                 else:
                     print(f"📅 Date range: {date_range_days} days")
             except ValueError as e:
@@ -19565,8 +19532,6 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
             
             print("📊 Computing per-UID brand presence in streaming mode...")
             
-            cur.execute("ALTER SESSION SET USE_CACHED_RESULT = FALSE")
-            cur.execute("ALTER SESSION SET STATEMENT_TIMEOUT_IN_SECONDS = 14400")
             
             cur.execute(f"""
                 CREATE OR REPLACE TEMP TABLE MAPPED_EVENTS AS
@@ -19767,10 +19732,12 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
         # Scale factor = 1 / sample_rate (to scale back to full universe)
         # This will be recalculated later after dynamic sampling is determined
         universe_scale_factor = 1  # Placeholder, will be updated
-        base_warehouse_size = '6X-Large'  # Use 6X-Large for everything - fastest and most cost-effective
-        max_warehouse_size = '6X-Large'  # Consistent 6X-Large for all operations
-        base_acceleration_factor = 25  # Maximum acceleration for all operations
-        max_acceleration_factor = 25  # Maximum acceleration for all operations
+        # Legacy warehouse-tuning vars kept for backwards-compat with downstream
+        # references; all SQL now runs on ClickHouse via the connector shim.
+        base_warehouse_size = 'CH'
+        max_warehouse_size = 'CH'
+        base_acceleration_factor = 1
+        max_acceleration_factor = 1
         
         # Create master UID pool from the actual input date range
         # This ensures consistent UID sets across different analysis periods
@@ -19781,13 +19748,8 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
             print(f"📊 Creating master UID pool from {master_start_date} to {master_end_date}")
             print(f"📊 Analysis period: {sample_start} to {sample_end} ({date_range_days} days)")
         
-        # Apply intelligent warehouse scaling for cost optimization and run sampling count in same cursor
         with conn.cursor() as cur:
-            # Use dedicated 6X-Large warehouse for optimal performance
-            cur.execute("ALTER WAREHOUSE BEHAVIORGRAPH6X SET WAREHOUSE_SIZE = '6X-Large'")
-            cur.execute("ALTER WAREHOUSE BEHAVIORGRAPH6X SET QUERY_ACCELERATION_MAX_SCALE_FACTOR = 25")
-            cur.execute("ALTER WAREHOUSE BEHAVIORGRAPH6X SET STATEMENT_TIMEOUT_IN_SECONDS = 14400")  # 4 hour timeout for large queries
-            print(f"🚀 Using BEHAVIORGRAPH6X warehouse (6X-Large) with 25x acceleration (optimized for speed and cost)")
+            print(f"🚀 Running on ClickHouse")
             
             # STEP 1: OPTIMIZED UID finding with smart sampling and limits
             if not SILENCE_VERBOSE_OUTPUT:
@@ -20018,7 +19980,7 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
 
         # OPTIMIZED: Use streaming CTE instead of temp tables for better performance
         print("🚀 Using optimized streaming processing (no temp tables)...")
-        print("🚀 Using BEHAVIORGRAPH6X warehouse (6X-Large) with 25x acceleration for all operations")
+        print("🚀 Running on ClickHouse with 25x acceleration for all operations")
         print("⚡ This will process 113M+ clickstream records at maximum speed")
         
         monitor = progress_monitor("Processing behavioral data with streaming CTEs", conn)
@@ -20030,18 +19992,11 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
         # Use pre-sampled UIDs instead of applying sampling to entire dataset
         # This ensures consistent sample sizes across different date ranges
         
-        # ULTRA-OPTIMIZATION: Set query hints for maximum speed
         cur = conn.cursor()
-        # Explicitly ensure we're using BEHAVIORGRAPH6X warehouse
-        cur.execute("USE WAREHOUSE BEHAVIORGRAPH6X")
-        cur.execute("ALTER SESSION SET USE_CACHED_RESULT = TRUE")
+        # ALTER SESSION lines below are no-ops on ClickHouse (the connector
+        # swallows them); kept only as documentation of historical intent.
         cur.execute("ALTER SESSION SET QUERY_TAG = 'BEHAVIORAL_CTE_OPTIMIZED'")
-        
-        # Set statement timeout to 3 hours to prevent 4-hour timeout
-        cur.execute("ALTER SESSION SET STATEMENT_TIMEOUT_IN_SECONDS = 10800")  # 3 hours
-        print("⏱️  Query timeout set to 3 hours to ensure completion before 4-hour limit")
-        
-        # Scale up warehouse for complex behavioral analysis
+        cur.execute("ALTER SESSION SET STATEMENT_TIMEOUT_IN_SECONDS = 10800")  # historical 3h cap
         scale_warehouse_up(cur, max_warehouse_size, max_acceleration_factor)
         
         # ULTRA-FAST: Set aggressive query optimization parameters
@@ -20348,8 +20303,7 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
         final_count = cur.execute("SELECT COUNT(*) FROM BEHAVIOR_FINAL").fetchone()[0]
         print(f"📊 Final behavioral data rows: {final_count:,}")
         
-        # Keep 6X-Large warehouse for all operations - faster and more powerful
-        print("✅ Behavioral processing complete - keeping 6X-Large for optimal performance")
+        print("✅ Behavioral processing complete")
         
         # Create TEMP_UIDS for downstream compatibility (using pre-sampled UIDs)
         demo_filter_clause = apply_demographic_filters(filters)
@@ -21031,7 +20985,6 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
         if final_sample_size is None:
             try:
                 cur = conn.cursor()
-                cur.execute("USE WAREHOUSE BEHAVIORGRAPH6X")
                 actual_sample_size = getattr(run_full_pipeline, 'universe_size', None)
                 if actual_sample_size is None:
                     try:
@@ -21936,7 +21889,7 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
         
         # create_smooth_decay_from_locked_top DISABLED — it replaced ALL
         # behavioral percentages with synthetic exponential decay curves,
-        # destroying the actual Snowflake signal.  The AI gut check now
+        # destroying the actual ClickHouse signal.  The AI gut check now
         # handles unrealistic values with full audience context.
         # df_final = create_smooth_decay_from_locked_top(df_final)
         
@@ -22801,14 +22754,9 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
     print(f"🎉 Done! Saved to {final_file}")
     print(f"⏱️ Total processing time: {time_str}")
     
-    # Estimate costs
-    processing_hours = total_time_seconds / 3600.0
-    estimated_credits = 512 * processing_hours  # 6X-Large rate (512 credits/hour)
-    actual_cost = estimated_credits * CREDIT_RATE_PER_DOLLAR
-    print(f"💰 Total Snowflake credits used: {estimated_credits:.2f} (estimated from 6X-Large warehouse, {processing_hours:.2f} hours)")
-    print(f"💵 Estimated cost: ${actual_cost:.2f} (at ${CREDIT_RATE_PER_DOLLAR:.2f} per credit)")
-    
-    print("✅ Keeping BEHAVIORGRAPH6X warehouse (6X-Large with 25x acceleration) for optimal performance")
+    # ClickHouse runs on dedicated hardware — no per-query billing.
+    print(f"💰 ClickHouse run complete (no per-query credits)")
+    print(f"⏱️  Wall-clock cost basis: {total_time_seconds/3600.0:.2f}h on Hetzner AX162-S")
     
     return final_file
 
@@ -26437,11 +26385,11 @@ def main():
         if not platform_name:
             platform_name = None
     
-    conn = connect_snowflake()
+    conn = connect_db()
     
     # Always perform full universe scan to get actual total users
     print("🔍 Performing full universe scan...")
-    print("🚀 Using BEHAVIORGRAPH6X warehouse (6X-Large with 25x acceleration) throughout entire process")
+    print("🚀 Running on ClickHouse (37.27.140.111) throughout entire process")
     universe_results = perform_full_universe_scan(conn, brands, s1, e1, purchasers_only)
     if universe_results:
         print(f"🌍 Universe scan complete. True universe size: {universe_results['total_universe']:,} users")
@@ -26598,8 +26546,6 @@ def calculate_frequency_metrics(conn, brands, behavior_start, behavior_end, purc
         print(f"🔒 Frequency analysis using deterministic seed: {deterministic_seed}")
     
     with conn.cursor() as cur:
-        # Explicitly ensure we're using BEHAVIORGRAPH6X warehouse
-        cur.execute("USE WAREHOUSE BEHAVIORGRAPH6X")
         if not SILENCE_VERBOSE_OUTPUT:
             print("📊 Calculating visit frequency metrics...")
     
@@ -28460,11 +28406,11 @@ REQUIRED_DEMOGRAPHICS = {
     ]
 }
 
-# Valid demographic values observed in Snowflake source table:
+# Valid demographic values observed in ClickHouse source table:
 # PROCESSEDUSERFILES.PUBLIC.USER_DATA_SANITIZED
 # Used to prevent invalid labels (e.g., ETHNICITY values not present in source data)
 # from surviving into final CSV output.
-VALID_SNOWFLAKE_DEMOGRAPHIC_OPTIONS = {
+VALID_DEMOGRAPHIC_OPTIONS = {
     'AGE': {
         '17 AND UNDER',
         '18-24',
@@ -28556,7 +28502,7 @@ def ensure_all_demographic_values(df_final, sample_size=None):
     Normalize demographics with strict source-option enforcement.
 
     Rules:
-    - Use Snowflake-valid options only (except LOCATION handled elsewhere).
+    - Use ClickHouse-valid options only (except LOCATION handled elsewhere).
     - Split combined ETHNICITY values with commas into separate options.
       Example: "BLACK OR AFRICAN AMERICAN, HISPANIC OR LATINO" becomes
       separate rows for each option.
@@ -28587,7 +28533,7 @@ def ensure_all_demographic_values(df_final, sample_size=None):
     
     MULT = 329_900_000 / 10_000_000  # Projection multiplier
     
-    print("🔍 Normalizing demographics (Snowflake-valid options, min 0.01%)...")
+    print("🔍 Normalizing demographics (ClickHouse-valid options, min 0.01%)...")
     MIN_PCT = 0.01
 
     # Demographic categories to check (excluding LOCATION)
@@ -28638,7 +28584,7 @@ def ensure_all_demographic_values(df_final, sample_size=None):
     # 1) Split comma-combined ETHNICITY values into separate rows
     split_rows = []
     split_count = 0
-    eth_valid = VALID_SNOWFLAKE_DEMOGRAPHIC_OPTIONS.get('ETHNICITY', set())
+    eth_valid = VALID_DEMOGRAPHIC_OPTIONS.get('ETHNICITY', set())
     eth_mask = df['Column'].astype(str).str.upper().str.strip() == 'ETHNICITY'
     for idx in df[eth_mask].index.tolist():
         raw_val = str(df.at[idx, 'Value']).strip()
@@ -28666,7 +28612,7 @@ def ensure_all_demographic_values(df_final, sample_size=None):
     # 2) Remove invalid options and add all missing valid options
     removed_invalid = 0
     added_missing = 0
-    for category, valid_set in VALID_SNOWFLAKE_DEMOGRAPHIC_OPTIONS.items():
+    for category, valid_set in VALID_DEMOGRAPHIC_OPTIONS.items():
         mask = df['Column'].astype(str).str.upper().str.strip() == category
         cat_idx = df[mask].index.tolist()
 
@@ -28712,12 +28658,12 @@ def ensure_all_demographic_values(df_final, sample_size=None):
     # 3) Consolidate duplicates by (category, value) by summing percentages.
     # Uses canonical category-value key to collapse label variants.
     dedup_drops = []
-    for category in VALID_SNOWFLAKE_DEMOGRAPHIC_OPTIONS.keys():
+    for category in VALID_DEMOGRAPHIC_OPTIONS.keys():
         mask = df['Column'].astype(str).str.upper().str.strip() == category
         idxs = df[mask].index.tolist()
         canonical_valid = {
             _canonical_demo_value(category, v): v
-            for v in VALID_SNOWFLAKE_DEMOGRAPHIC_OPTIONS.get(category, set())
+            for v in VALID_DEMOGRAPHIC_OPTIONS.get(category, set())
         }
         groups = {}
         for idx in idxs:
