@@ -14636,6 +14636,98 @@ RULES:
     return {}
 
 
+# ─── Affinity-to-BP deterministic translator ─────────────────────────
+def _affinity_to_bp(affinity: float, gen_pop: float | None) -> float:
+    """Convert an agent-returned affinity score (0-100) to a BP (%).
+
+    Affinity contract (LLM returns this, code does the math):
+        0   -> persona actively avoids this item (0.1x gen_pop)
+        25  -> persona under-indexes vs gen pop  (0.5x)
+        50  -> persona matches gen pop behavior  (1.0x)
+        75  -> persona over-indexes              (2.0x)
+        100 -> strong cultural identifier        (3.5x)
+
+    Linear segments through (0, 0.1x), (50, 1.0x), (100, 3.5x).
+
+    When gen_pop is None or 0 (no measured baseline), we fall back to
+    affinity-as-percent: BP ≈ affinity * 0.55 so 100 -> 55%, 50 -> 27.5%.
+    Falling back this way avoids a hard zero floor while keeping niche
+    items reasonable.
+
+    Result is always clamped to [0.01, 96.0].
+    """
+    try:
+        a = float(affinity)
+    except (TypeError, ValueError):
+        a = 50.0
+    a = max(0.0, min(100.0, a))
+
+    # Smooth piecewise-linear multiplier
+    if a <= 50.0:
+        # 0 -> 0.1x, 50 -> 1.0x
+        multiplier = 0.1 + (a / 50.0) * (1.0 - 0.1)
+    else:
+        # 50 -> 1.0x, 100 -> 3.5x
+        multiplier = 1.0 + ((a - 50.0) / 50.0) * (3.5 - 1.0)
+
+    if gen_pop is None or gen_pop <= 0.0:
+        bp = a * 0.55
+    else:
+        bp = float(gen_pop) * multiplier
+
+    return max(0.01, min(96.0, bp))
+
+
+def _build_unique_value_index(df: pd.DataFrame,
+                                category_new_items: dict[str, list[str]],
+                                skip_cats: set[str] | None = None
+                                ) -> tuple[dict[str, str], dict[str, list[str]]]:
+    """Build a deduplicated unique-value index across all behavioral categories.
+
+    Each unique value is assigned exactly one *primary* category — the category
+    with the LARGEST item count (ties broken alphabetically) — so that when the
+    value is scored, it's seen alongside items of similar nature. The result
+    drives the new "score-each-value-once" architecture: a value's affinity
+    is decided in its primary category and then the resulting BP is propagated
+    to every other category in which it appears.
+
+    Returns:
+        primary_for: {value_upper: primary_category_upper}
+        unique_items_by_cat: {primary_category: [value, ...] in original order}
+    """
+    skip_cats = skip_cats or set()
+
+    # Count category sizes once (largest-first preference)
+    cat_size = {c: len(items) for c, items in category_new_items.items()
+                if c.upper() not in skip_cats}
+
+    # Map: value_upper -> set(categories where it appears)
+    value_cats: dict[str, set[str]] = {}
+    # Preserve original casing to feed back into the agent as-is
+    value_original: dict[str, str] = {}
+    for cat, items in category_new_items.items():
+        if cat.upper() in skip_cats:
+            continue
+        for v in items:
+            v_u = str(v).strip().upper()
+            if not v_u:
+                continue
+            value_cats.setdefault(v_u, set()).add(cat)
+            value_original.setdefault(v_u, str(v).strip())
+
+    primary_for: dict[str, str] = {}
+    unique_items_by_cat: dict[str, list[str]] = {c: [] for c in cat_size}
+
+    # For each value, pick the largest category as primary (alphabetical tiebreak)
+    for v_u, cats in value_cats.items():
+        cats_sorted = sorted(cats, key=lambda c: (-cat_size.get(c, 0), c))
+        primary = cats_sorted[0]
+        primary_for[v_u] = primary
+        unique_items_by_cat.setdefault(primary, []).append(value_original[v_u])
+
+    return primary_for, unique_items_by_cat
+
+
 def _run_single_category_agent(category: str, values: list[str],
                                 persona_doc: dict, subject: str,
                                 canonical_baseline_lookup: dict | None = None,
@@ -14644,7 +14736,8 @@ def _run_single_category_agent(category: str, values: list[str],
                                 item_guidance: dict | None = None) -> list[dict]:
     """Worker for Step 2 — one gpt-4o call per category.
 
-    Returns list of {value, bp, reason}.
+    Returns list of {value, affinity, reason}. The caller translates
+    affinity (0-100) into a deterministic BP via `_affinity_to_bp`.
 
     item_guidance: optional output from _run_item_guidance_agent. When
         provided, its grounded expected_high/expected_low lists replace
@@ -14714,60 +14807,38 @@ def _run_single_category_agent(category: str, values: list[str],
     else:
         values_list = '\n'.join(f"  - {v}" for v in values)
 
+    # ── Affinity-based scoring (0-100) — code converts to BP deterministically ──
     # Anchoring rules differ for GenPop vs profile audiences.
     if anchor_mode == 'genpop':
         anchor_rules = """═══════════════════════════════════════════════════════════════════
-CRITICAL — ANCHOR TO U.S. BASELINE (this is a GenPop scoring run)
+CRITICAL — THIS IS A GENPOP SCORING RUN
 ═══════════════════════════════════════════════════════════════════
-The "US baseline" shown next to each item is the MEASURED national digital engagement % from a real clickstream panel. It IS the answer for the average U.S. adult — your job is to honor it.
-
-  • For items WITH a baseline:
-      – If baseline >= 5%: your score MUST be within ±5 percentage points of baseline.
-        e.g. baseline 22.62% → score 17.6-27.6%; baseline 84.13% → score 79.1-89.1%.
-      – If baseline < 5%: your score MUST be within ±50% relative of baseline (and never above 8%).
-        e.g. baseline 0.55% → score 0.27-0.83%; baseline 3.20% → score 1.6-4.8%.
-  • For items WITHOUT a baseline ("not measured"): use your best estimate of what % of all U.S. online adults would actually click/visit/use this in a year. CPG / regional / luxury → low (0.3-5%); national mass → moderate (5-25%); near-universal → high (60-85%).
-  • Do NOT inflate "expected_high" items above the baseline ceiling. CHASE baseline is ~22% — its score is ~22%, NOT 84%. MASTERCARD baseline is ~42% — its score is ~42%, NOT 89%. Banks, credit, telecom, retail all have realistic ceilings; respect them.
-  • Do NOT pin items to 100% just because they're famous platforms. Even YouTube tops out around 84%.
+For GenPop, the answer is "the average U.S. adult" — there is no audience tilt.
+That means EVERY item should score affinity 50 (matches gen pop) unless the
+item is genuinely cross-cultural fluctuating (e.g. niche subculture vs mass).
 """
     elif baseline_lookup:
         anchor_rules = """═══════════════════════════════════════════════════════════════════
-U.S. BASELINE — YOUR STARTING POINT
+HOW TO SCORE (affinity, not %)
 ═══════════════════════════════════════════════════════════════════
-The "US baseline" next to each item is REAL MEASURED DATA: the % of average U.S. adults who show this item in their digital clickstream. Use it as your anchor.
+You return AFFINITY 0-100. The pipeline converts your affinity to a BP using the U.S. baseline shown beside each item — DO NOT compute percentages yourself.
 
-HOW TO SCORE:
-For each item, start from the baseline and ask ONE question:
-  "Would this SPECIFIC audience engage with this item MORE, LESS, or ABOUT THE SAME as the average American?"
+AFFINITY ANCHORS:
+  • 0   = persona actively avoids / cannot engage (foreign, wrong demo, CPG-only)
+  • 25  = persona under-indexes vs. average American
+  • 50  = persona engages at the average American rate (DEFAULT for most items)
+  • 75  = persona over-indexes (clear fit with the digital identity)
+  • 100 = strong cultural identifier / icon for this audience
 
-  • SAME as average → score near baseline (0.85-1.15x). THIS IS THE DEFAULT FOR MOST ITEMS.
-  • Slightly MORE → 1.2-1.5x baseline
-  • Much MORE (core to persona) → 2-4x baseline (rare — only 5-15 items per category)
-  • Slightly LESS → 0.6-0.85x baseline
-  • Much LESS (anti-fit) → 0.1-0.4x baseline
-  • DOES NOT ENGAGE AT ALL (CPG/in-store, foreign, wrong demographic) → 0.01-0.1x baseline
+DEFAULT IS 50. If you have no specific reason that THIS persona engages more or less than the average American, score 50. The baseline shown next to each item is what the average American does — affinity 50 means "matches that".
 
-KEY PRINCIPLE: Most items score near their baseline. An audience of Nike fans is still made up of regular Americans who watch Netflix, shop at Walmart, visit Disney World, and have car insurance. They just ALSO engage more with sneaker culture, sports media, and athletic retailers.
-
-ITEMS THAT SHOULD DEVIATE DOWN (regardless of baseline):
-  • CPG / in-store brands (Clorox, Pampers, Tide, Gillette, Purina) → 0.1-0.3x (digital BP is tiny)
-  • Beauty/cosmetics for non-beauty audiences → 0.3-0.5x
-  • Foreign platforms with no US presence (Zalando, Sony LIV) → <1% absolute
-  • Children's games/items (Roblox, YouTube Kids, Barbie, LEGO, Disney Dreamlight) for adult audiences → 0.5-0.8x baseline (NOT boosted)
-  • Luxury/aspirational (Porsche, McLaren) for audiences with income <$100K → 0.3-0.5x
-
-ITEMS THAT MUST NOT BE CRUSHED (regardless of persona specificity):
-  • Major social media (TikTok, Instagram, YouTube, Snapchat) for audiences 18-34 → 1.0-1.4x baseline. These are mainstream platforms.
-  • Major streaming (Netflix, Hulu, Amazon Prime, Disney+) → 0.8-1.2x baseline.
-  • The audience's CORE interest category (e.g. "SPORTS" for sports brand audience) → MUST be above baseline, 1.2-1.5x.
-
-ATHLETES — PROPORTIONAL BOOST RULE:
-  • Only the #1 most iconic athlete for this brand (e.g. LeBron for Nike) can go 5x+ baseline.
-  • Other sponsored athletes: 2-4x baseline MAX.
-  • Unrelated athletes: 1.0-1.5x baseline.
-  • NO athlete should score above 60% unless they are the #1 icon.
-
-  • Hard floor: 0.01%. Hard ceiling: 96%.
+PERSONA-FIT MOVEMENT (only when persona research clearly supports it):
+  • Cultural anchor for the audience (e.g. Nike → LeBron, sneakers, basketball) → 80-100
+  • Strong subculture / lifestyle fit                                              → 65-80
+  • Mild fit                                                                        → 55-65
+  • Mild anti-fit                                                                   → 35-45
+  • Strong anti-fit (foreign platform, opposite demographic, CPG-only)              → 5-25
+  • Hard zero (not relevant at all in U.S. digital)                                 → 0-10
 """
     else:
         anchor_rules = ''
@@ -14781,43 +14852,18 @@ ATHLETES — PROPORTIONAL BOOST RULE:
             "would increase or decrease digital engagement with specific items in this category.\n"
         )
 
-    prompt = f"""You are a consumer-research analyst assigning Brand Penetration (BP) values for the **{category}** category of a behavioral panel profile for **{subject}**.
+    prompt = f"""You are a consumer-research analyst rating audience AFFINITY for items in the **{category}** category for a behavioral panel profile of **{subject}**.
 {date_context_block}
-DEFINITION — read carefully:
-Brand Penetration = the % of THIS specific audience whose digital clickstream (web visits, app usage, searches, streams, purchases) shows engagement with the item during the study window. This is NOT popularity, awareness, favorability, or in-store purchase. It is purely OBSERVED DIGITAL BEHAVIOR on a U.S. PANEL.
+WHAT YOU RETURN — read carefully:
+You return an AFFINITY score 0-100 for each item. The pipeline will convert your affinity to a final Brand Penetration % using the measured U.S. baseline. DO NOT compute percentages yourself.
 
-THIS IS A U.S. DIGITAL PANEL:
-  • Every person in this panel is a U.S. resident whose web/app activity is tracked.
-  • Foreign-only platforms (Zalando, Sony LIV, international leagues with no US audience) should score <1%.
-  • Items people buy IN STORES but never search/visit online (CPG, grocery, household) have LOW digital BP even if everyone owns them.
-  • Items people USE ONLINE (streaming, shopping, social, news, search) have HIGH digital BP proportional to how many people actually visit them.
+  • 0   = persona actively avoids / cannot engage
+  • 25  = under-indexes vs. average American
+  • 50  = matches the average American (DEFAULT)
+  • 75  = over-indexes
+  • 100 = cultural identifier / icon for this audience
 
-YOUR JOB IS SIMPLE:
-Read the persona below. For each item, ask yourself:
-  "What percentage of THIS audience would show this item in their digital clickstream?"
-Start from the US baseline (the average American's rate), then adjust up or down based on whether THIS audience engages MORE or LESS than average.
-
-Most items should score near their baseline — this audience is still made up of Americans who watch Netflix, shop at Walmart, visit Disney World, have car insurance, and use streaming services. They just ALSO have specific interests and subcultures that make some items score higher and some lower.
-
-AUDIENCE-SPECIFIC SCORING:
-  You are scoring for a SPECIFIC U.S. digital audience defined by the persona below.
-  For EVERY item, ask: "Would a typical member of this audience show this in their clickstream — MORE, LESS, or SAME as the average American?"
-
-  • Read the DIGITAL IDENTITY. It describes who this audience IS — their subcultures, age, income, ethnicity, shopping habits, media diet, and what they DON'T care about.
-  • The RANK ORDER matters: items this audience truly engages with MUST rank above items they don't.
-  • This is a U.S. digital panel — score based on actual digital behavior of real Americans, not aspirations or assumptions.
-
-COMMON PITFALLS TO AVOID:
-  • CPG/HOUSEHOLD (Clorox, Pampers, Tide, Gillette, Purina, Olay) → 0.1-0.3x baseline. People buy these in stores. Their DIGITAL engagement is tiny.
-  • THEME PARKS (Disney World, Universal, Six Flags) → 0.7-1.0x baseline. Mainstream American entertainment — don't crush them just because the persona isn't "theme park focused."
-  • SOCIAL MEDIA: Major platforms (YouTube, TikTok, Instagram, Facebook, Snapchat) are used by MOST Americans. For young audiences (18-34), TikTok and Instagram should be AT OR ABOVE their baseline (1.0-1.4x) — these are THE dominant platforms for young, urban, diverse audiences. YouTube is near-universal (0.95-1.2x). Facebook skews older (0.7-0.9x for young audiences). NEVER crush TikTok or Instagram below their baseline for any audience under 40. Discord should also be near baseline for young audiences.
-  • GAMES for ADULT audiences (18-34) → Children's games (Roblox, LEGO, Barbie, Disney Dreamlight Valley) should score BELOW baseline (0.5-0.8x) for adult audiences. Sports/action games (NBA 2K, Madden, FIFA/EA Sports FC, GTA, Call of Duty) should score ABOVE baseline (2-4x) for sports/athletic audiences. Minecraft and Fortnite are cross-generational but cap at 1.5x baseline for adult audiences. THE RANK ORDER MUST BE: sports/action games > cross-generational games > children's games. If NBA 2K scores lower than Roblox for an adult sports audience, something is wrong.
-  • ATHLETES/TALENT: Brand sponsorship boosts an athlete but proportionally. A brand-sponsored athlete at 5% baseline should score 2-4x (10-20%), NOT 10x (50%). Only the single most iconic athlete deeply tied to the brand (e.g. LeBron James for Nike, Tom Brady for Under Armour in their era) should score 5x+ baseline. All other sponsored athletes cap at 3-4x. If an athlete has no known brand connection, score 1.0-1.5x baseline. Never score ANY athlete above 60% unless they're the single most dominant figure (e.g. LeBron for Nike).
-  • INTEREST: The audience's CORE category interest (sports for a sports brand, beauty for a beauty brand, gaming for a gaming brand) MUST score ABOVE its gen-pop baseline — typically 1.2-1.5x. It should NEVER score below baseline for the subject's own category. Related sub-interests (sneakers, live events, fitness, rap & hip hop for an athletic brand) should also score above baseline. Generic interests (cooking, home, weather) should be near or slightly below baseline.
-  • TECHNOLOGY: Apple AND Samsung/Android are BOTH mass-market. Even if this audience skews Android, Apple should be 0.7-0.9x baseline (NOT 0.4x). Samsung should be at or above baseline if audience skews Android. Half of Americans use Apple products.
-  • FOREIGN-ONLY items (Zalando, Sony LIV, international-only platforms) → less than 1%. This is a U.S. panel.
-  • STREAMING: Major services (Netflix, Hulu, Amazon Prime, Disney+) are used by MOST Americans. Score them 0.8-1.2x baseline. Don't crush mainstream streaming just because it's not persona-specific.
-  • HORSE RACING / NICHE SPECTATOR EVENTS: Unless the persona has a specific connection to horse racing or motorsports, score near or slightly below baseline (0.8-1.0x). Don't boost niche spectator events just because the audience likes "sports" generally — these are very different audiences.
+DEFAULT IS 50. Most items should be 40-60 because this audience is still made up of Americans who watch Netflix, shop at Walmart, visit Disney World, and use mainstream services. They just ALSO have a few specific subcultures that score higher and a few anti-fits that score lower.
 
 ═══════════════════════════════════════════════════════════════════
 PERSONA — this is the audience you are scoring for
@@ -14833,46 +14879,38 @@ KEY DEMOGRAPHICS:
 CATEGORY-SPECIFIC GUIDANCE for {category}:
 {guidance_summary or '(use the persona summary above + your knowledge of the audience)'}
 
-EXPECTED HIGH-BP ITEMS for this audience in this category
-(items the persona research agent specifically called out as strong fit — these SHOULD score HIGH if they appear in the list to score below):
+EXPECTED HIGH-AFFINITY ITEMS for this audience
+(persona research called these out as strong fit — these should score 70-100):
 {expected_high_block}
 
-EXPECTED LOW-BP ITEMS for this audience in this category
-(items the persona research agent specifically called out as POOR fit — these MUST stay LOW even if they're famous/prestigious in absolute terms):
+EXPECTED LOW-AFFINITY ITEMS for this audience
+(persona research called these out as POOR fit — these should score 5-30 even if famous):
 {expected_low_block}
 
 {anchor_rules}
 ═══════════════════════════════════════════════════════════════════
 ROW-BY-ROW REASONING
 ═══════════════════════════════════════════════════════════════════
-For EACH item, ask yourself these questions in order:
-
-  1) WHAT IS THE BASELINE? Start here. This is what the average American does.
-  2) WOULD THIS PERSONA ENGAGE MORE OR LESS? Read the digital identity and demographics. Does this audience have a reason to engage with this item more or less than average?
-     • If no strong reason either way → score 0.85-1.15x baseline (MOST items fall here)
-     • If persona is a strong fit → score 1.5-4x baseline
-     • If persona is a weak fit → score 0.4-0.7x baseline
-  3) IS THIS AN IN-STORE/CPG ITEM? (Clorox, Pampers, Tide, Gillette, pet food, cleaning products) → score 0.1-0.3x baseline. People buy these in stores, not online.
-  4) IS THIS FOREIGN with no US presence? → score <1%.
-  5) REALITY CHECK: "If I surveyed 1000 people from this audience, how many would show this in their clickstream?" Netflix at 5% means 950/1000 never visit netflix.com — absurd. FuboTV at 73% means 730/1000 subscribe — also absurd.
+For EACH item, ask in order:
+  1) Is this item a CULTURAL IDENTIFIER for this audience (named in persona research, defines their identity)? → 80-100.
+  2) Is this item a clear PERSONA FIT (matches the digital identity / demographics)? → 65-80.
+  3) Is this item a clear ANTI-FIT (foreign, wrong demographic, CPG-only, opposite subculture)? → 5-30.
+  4) Otherwise → 50 (default — matches the average American).
 
 ═══════════════════════════════════════════════════════════════════
 OUTPUT FORMAT
 ═══════════════════════════════════════════════════════════════════
 Return ONLY a JSON array — no markdown, no commentary:
 [
-  {{"value": "<ITEM NAME — exact spelling from list>", "bp": <number 0.01-95>, "reason": "<≤15 words: which rule fired and why>"}},
+  {{"value": "<ITEM NAME — exact spelling from list>", "affinity": <integer 0-100>, "reason": "<≤12 words>"}},
   …
 ]
 
-DECIMAL PRECISION — every BP must have 4 organic-looking decimals (14.3827, 7.0614, 22.9153, NOT 30.0000 or 14.1234).
-
 NON-NEGOTIABLE RULES:
-  • EVERY item from the list below MUST appear in your output (same exact spelling).
-  • MOST ITEMS SCORE NEAR BASELINE. Only 10-20% of items should deviate beyond 1.5x or below 0.5x. The rest stay near their baseline.
-  • U.S. DIGITAL PANEL: This data comes from real Americans' digital behavior. Foreign items score <1%. In-store CPG items score low (digital BP is tiny).
-  • RANK ORDER must reflect persona fit. Items the persona actually engages with digitally MUST rank above items they don't.
-  • SANITY CHECK every score: "Would X out of 1000 members of this audience really show this in their clickstream?"
+  • EVERY item from the list below MUST appear in your output with the EXACT spelling.
+  • Affinity is an INTEGER 0-100. Do not return percentages or decimals.
+  • Most items should be 40-60. Only 10-20% should deviate above 70 or below 30.
+  • RANK ORDER must reflect persona fit — items truly central to the audience MUST score above peripheral items.
 
 ITEMS TO SCORE:
 {values_list}
@@ -14924,7 +14962,36 @@ ITEMS TO SCORE:
             else:
                 raise
         if isinstance(result, list):
-            return result
+            # ── Affinity → BP translation (deterministic, baseline-anchored) ──
+            # The agent now returns {value, affinity, reason}. Compute BP here
+            # so the rest of the pipeline (which reads entry['bp']) is
+            # unchanged. We also preserve 'affinity' on each entry for
+            # propagation/debugging.
+            converted: list[dict] = []
+            for entry in result:
+                if not isinstance(entry, dict) or 'value' not in entry:
+                    continue
+                v_u = str(entry['value']).strip().upper()
+                aff_raw = entry.get('affinity', entry.get('bp', 50))
+                try:
+                    aff = float(aff_raw)
+                except (TypeError, ValueError):
+                    aff = 50.0
+                # If 'affinity' wasn't supplied but a legacy 'bp' was, treat
+                # the bp as a fallback affinity (clamped 0-100). This keeps
+                # the parser tolerant during the transition.
+                if 'affinity' not in entry and 'bp' in entry:
+                    aff = max(0.0, min(100.0, aff))
+                gen_pop = baseline_lookup.get((cat_u, v_u))
+                bp = _affinity_to_bp(aff, gen_pop)
+                out = {
+                    'value': entry['value'],
+                    'affinity': aff,
+                    'bp': round(bp, 4),
+                    'reason': entry.get('reason', ''),
+                }
+                converted.append(out)
+            return converted
     except Exception as e:
         print(f"   ⚠️ Category agent [{category}] failed: {e}")
     return []
@@ -15941,13 +16008,10 @@ def _run_location_intelligence_agent(persona_doc: dict, subject: str) -> dict:
         if top_eth:
             eth_lines = '\n'.join(f"  • {k}: {v:.1f}%" for k, v in top_eth)
             ethnicity_block = f"""
-ETHNICITY BREAKDOWN (CRITICAL for location scoring):
+ETHNICITY BREAKDOWN — use this to inform DMA affinity:
 {eth_lines}
 
-USE THIS TO SCORE DMAs:
-  • If audience skews {top_eth[0][0]} ({top_eth[0][1]:.0f}%), DMAs with high {top_eth[0][0]} populations MUST get higher multipliers (1.5-3x).
-  • Cross-reference ethnicity with urbanicity: a young, diverse, urban audience concentrates in major metros (New York, Los Angeles, Atlanta, Houston, Chicago, Miami, Philadelphia, Detroit, Dallas), NOT in small rural DMAs.
-  • DMAs with predominantly different demographics and no urban center should get 0.4-0.8x.
+If the audience skews {top_eth[0][0]} ({top_eth[0][1]:.0f}%), DMAs with high {top_eth[0][0]} populations should naturally score higher AFFINITY (60-85). DMAs with low {top_eth[0][0]} share should score lower AFFINITY (30-45). This is a fit signal — population size is handled separately by the math, so do not factor metro size into your affinity score.
 """
 
     # Persona's named top DMAs (if any) — pass to the agent so it stays
@@ -15970,7 +16034,7 @@ USE THIS TO SCORE DMAs:
             f"  {i+1}. {name}  (US baseline {pct:.4f}%)"
             for i, (name, pct) in enumerate(chunk)
         )
-        prompt = f"""You are scoring per-DMA audience-affinity MULTIPLIERS for a behavioral panel profile of **{subject}**.
+        prompt = f"""You are scoring per-DMA AFFINITY for a behavioral panel profile of **{subject}**.
 
 PERSONA SUMMARY:
 {persona_summary}
@@ -15978,62 +16042,43 @@ PERSONA SUMMARY:
 KEY DEMOGRAPHICS:
 {_json.dumps(demo_snapshot, indent=2)}
 {ethnicity_block}
-PERSONA'S TOP-AFFINITY DMAS (already identified by lead persona research — keep your scoring consistent with these):
+PERSONA'S TOP-AFFINITY DMAS (already identified by lead persona research):
 {top_named_block}
 
 ═══════════════════════════════════════════════════════════════════
-YOUR TASK
+YOUR TASK — RETURN AFFINITY 0-100, NOT MULTIPLIERS, NOT %
 ═══════════════════════════════════════════════════════════════════
-For each DMA below, output a MULTIPLIER on the U.S. Gen Pop baseline that reflects how concentrated THIS audience is in that market.
+For each DMA, output an AFFINITY score 0-100 reflecting how well this market FITS the persona's lifestyle, culture, and demographics.
 
-  • 1.0 = same concentration as the average U.S. adult (no skew).
-  • > 1.0 = audience over-indexes here. Heavy over-index = 1.5-3x. Extreme = 4-6x (rare; only if persona is very tightly tied to that geography, e.g. a Nashville artist's audience in Nashville).
-  • < 1.0 = audience under-indexes here. Mild under-index = 0.5-0.8x. Strong under-index = 0.2-0.5x.
-  • Floor 0.15, ceiling 6.0.
+The pipeline will combine your affinity with the DMA's actual U.S. population baseline to compute a final percentage — DO NOT factor population size into your affinity score. A small DMA can have affinity 80 if it fits the persona, and a giant DMA can have affinity 40 if it doesn't.
 
-CRITICAL — POPULATION-AWARE SCORING:
-  Most Americans live in MAJOR METROS. Any national brand/audience has significant presence in the top 30 DMAs simply because that's where the people are.
+AFFINITY ANCHORS:
+  • 0   = persona has zero cultural / demographic fit with this DMA
+  • 25  = clear under-index (wrong demographics, wrong region for this lifestyle)
+  • 50  = matches the average American — DEFAULT when no specific reason to deviate
+  • 75  = clear over-index (ethnicity match, subculture hub, regional brand fit)
+  • 100 = iconic geographic identifier for this audience (e.g. Nashville for country, Detroit for techno, Atlanta for hip-hop)
 
-  TOP 30 DMAs (by population — these MUST get reasonable multipliers):
-    New York, Los Angeles, Chicago, Philadelphia, Dallas-Ft Worth, Houston,
-    Washington DC, Atlanta, Boston, San Francisco, Phoenix, Seattle, Tampa,
-    Minneapolis, Denver, Miami, Orlando, Sacramento, St Louis, Portland OR,
-    Charlotte, Indianapolis, San Diego, Nashville, Hartford, Kansas City,
-    Columbus, Milwaukee, San Antonio, Austin.
-    → These DMAs should have multipliers between 0.4 and 4.0.
-    → A national audience CANNOT have 0% presence in Washington DC or Boston.
-    → Default multiplier for a major metro with no specific persona tie = 0.7-1.0.
+DEFAULT IS 50. If you have NO specific reason that THIS persona over- or under-indexes in this DMA, score 50. Do not randomly assign high or low scores. The math handles "where the people are" via baseline weight — your job is purely persona-fit.
 
-  SMALL/RURAL DMAs (baseline < 0.15% of US population):
-    Fairbanks AK, Glendive MT, North Platte NE, Alpena MI, Zanesville OH, etc.
-    → These MUST get multipliers ≤ 1.5 unless the persona has a VERY specific tie to that exact geography.
-    → Default for a small rural DMA with no persona tie = 0.3-0.8.
-    → Do NOT randomly boost tiny markets — a national brand audience is NOT concentrated in Fairbanks or Glendive.
-
-  MEDIUM DMAs (baseline 0.15% - 1.0%):
-    → Default multiplier with no specific persona tie = 0.5-1.2.
-
-  DEFAULT RULE: If you have NO specific reason to boost or reduce a DMA, use 0.8-1.0x as a safe default. Do NOT randomly assign high or low multipliers.
-
-REASONING GUIDANCE — use everything you know about each DMA:
-  • Ethnicity/race composition (ATLANTA, MEMPHIS, BIRMINGHAM = high Black share; LOS ANGELES, MIAMI, HOUSTON, SAN ANTONIO, EL PASO = high Hispanic; SAN FRANCISCO, NEW YORK, LOS ANGELES, SEATTLE, HONOLULU = high Asian).
-  • Urbanicity (large metro vs. small/rural — affects luxury, tech, and youth-cultural personas).
-  • Income / cost-of-living tier (NEW YORK, SAN FRANCISCO, BOSTON skew HNW; small Southern / Midwest / Appalachian DMAs skew lower-income).
-  • Age skew (FLORIDA / Sunbelt retirement DMAs skew older; college-town and tech-hub DMAs skew younger).
-  • Genre / subculture (NASHVILLE for country music; MIAMI for Latin music & nightlife; AUSTIN for tech/indie; LAS VEGAS for entertainment; PORTLAND/SEATTLE for outdoor/indie; DALLAS/HOUSTON for sports & corporate; LOS ANGELES for entertainment industry; PHOENIX for retirees + Latin growth).
-  • Regional brand fit (Pacific Northwest for outdoorsy brands; Northeast for finance/media; Texas for energy/sports/QSR; California coastal for tech/wellness/luxury).
+REASONING SIGNALS (in priority order):
+  1. Ethnicity match: cross-reference persona ethnicity with DMA composition (Atlanta/Memphis/Birmingham = high Black share; LA/Miami/Houston/San Antonio/El Paso = high Hispanic; SF/NYC/Seattle/Honolulu = high Asian).
+  2. Subculture / regional brand fit: Nashville=country, Miami=Latin, Austin=tech/indie, LA=entertainment, NYC=finance/media, Portland/Seattle=outdoor, Texas=sports/energy.
+  3. Income / cost-of-living tier: NYC/SF/Boston skew HNW; rural Southern/Appalachian DMAs skew lower-income.
+  4. Age skew: Florida/Sunbelt retirement DMAs skew older; college-town and tech-hub DMAs skew younger.
 
 HARD RULES:
-  • You MUST return a multiplier for EVERY DMA listed below — do not skip any.
-  • Do NOT return percentages — return MULTIPLIERS only.
-  • Do NOT return narrative — return ONLY the JSON array described.
+  • Return AFFINITY 0-100 (integer) for EVERY DMA listed — do not skip any.
+  • Do NOT return percentages or multipliers.
+  • Do NOT factor population size into affinity — population is handled by the math.
+  • Return ONLY the JSON array described.
 
 DMAS TO SCORE (chunk {chunk_idx + 1} of {len(chunks)}):
 {items_block}
 
 Return ONLY a JSON array, one entry per DMA, in the same order:
 [
-  {{"dma": "<DMA name as listed>", "mult": <float>}},
+  {{"dma": "<DMA name as listed>", "affinity": <integer 0-100>}},
   …
 ]
 """
@@ -16059,22 +16104,30 @@ Return ONLY a JSON array, one entry per DMA, in the same order:
                 if not isinstance(entry, dict):
                     continue
                 name = str(entry.get('dma', '')).strip().upper()
-                try:
-                    mult = float(entry.get('mult'))
-                except (TypeError, ValueError):
-                    continue
+                # Accept 'affinity' (new contract) or 'mult' (legacy)
+                if 'affinity' in entry:
+                    try:
+                        aff = float(entry['affinity'])
+                    except (TypeError, ValueError):
+                        continue
+                    aff = max(0.0, min(100.0, aff))
+                    out[name] = ('affinity', aff)
+                else:
+                    try:
+                        mult = float(entry.get('mult'))
+                    except (TypeError, ValueError):
+                        continue
+                    mult = max(0.05, min(8.0, mult))
+                    out[name] = ('mult', mult)
                 if not name:
                     continue
-                # Clamp to safety range
-                mult = max(0.15, min(6.0, mult))
-                out[name] = mult
             return out
         except Exception as e:
             print(f"   ⚠️ Location intelligence agent chunk {chunk_idx + 1} failed: {e}")
             return {}
 
     print(f"📍 Location intelligence agent: scoring {len(all_dmas)} DMAs in {len(chunks)} chunks…")
-    multipliers: dict = {}
+    raw_results: dict = {}  # name -> (kind, value) tuples from chunks
     with _futures.ThreadPoolExecutor(max_workers=min(6, len(chunks))) as pool:
         futures = {pool.submit(_process_chunk, i, c): i for i, c in enumerate(chunks)}
         _done_idxs = set()
@@ -16082,21 +16135,49 @@ Return ONLY a JSON array, one entry per DMA, in the same order:
             for fut in _futures.as_completed(futures, timeout=300):
                 idx = futures[fut]
                 _done_idxs.add(idx)
-                multipliers.update(fut.result() or {})
+                raw_results.update(fut.result() or {})
         except TimeoutError:
             timed_out = [(i, c) for i, c in enumerate(chunks) if i not in _done_idxs]
             print(f"   🔄 Location agent timeout: retrying {len(timed_out)} chunks sequentially…")
             for i, c in timed_out:
                 for _att in range(1, 4):
                     try:
-                        multipliers.update(_process_chunk(i, c) or {})
+                        raw_results.update(_process_chunk(i, c) or {})
                         break
                     except Exception as e:
                         if _att == 3:
                             print(f"   ❌ Location chunk {i} failed after 3 retries: {e}")
 
+    # ── Convert chunk results to a multiplier dict ─────────────────────────
+    # Affinity-mode entries (the new contract) translate as:
+    #     mult = affinity / 50.0   (so affinity 50 -> mult 1.0, affinity 100 -> mult 2.0,
+    #                               affinity 0 -> mult 0.0)
+    # The downstream caller multiplies by gen_pop and renormalizes globally
+    # to sum=100%, which is the "weight = affinity * gen_pop" math from the
+    # plan. Affinity 0 collapses naturally; tiny affinity * tiny gen_pop
+    # collapses Ottumwa; affinity ~50 * large gen_pop keeps NYC near baseline.
+    multipliers: dict = {}
+    n_aff = 0
+    n_mult = 0
+    for name, payload in raw_results.items():
+        if isinstance(payload, tuple) and len(payload) == 2:
+            kind, val = payload
+            if kind == 'affinity':
+                multipliers[name] = max(0.001, float(val) / 50.0)
+                n_aff += 1
+            else:
+                multipliers[name] = max(0.05, min(8.0, float(val)))
+                n_mult += 1
+        else:
+            try:
+                multipliers[name] = max(0.05, min(8.0, float(payload)))
+                n_mult += 1
+            except (TypeError, ValueError):
+                continue
+
     coverage = len(multipliers) / max(1, len(all_dmas))
-    print(f"   ✅ Location intelligence agent: scored {len(multipliers)}/{len(all_dmas)} DMAs ({coverage:.0%})")
+    print(f"   ✅ Location intelligence agent: scored {len(multipliers)}/{len(all_dmas)} DMAs ({coverage:.0%}) "
+          f"[affinity={n_aff}, legacy_mult={n_mult}]")
     if coverage < 0.5:
         print(f"   ⚠️ Coverage too low — falling back to persona top-N + Gen Pop backfill")
         return {}
@@ -16303,21 +16384,14 @@ def parallel_category_agents(df: pd.DataFrame, persona_doc: dict,
             gp_dma_pct = {}
 
         # Run the location intelligence agent (all 210 DMAs).
+        # The agent now returns AFFINITY 0-100 per DMA. Aggregation in
+        # _run_location_intelligence_agent() converts affinity to a multiplier
+        # (mult = affinity / 50.0) so legacy callers see the same shape.
+        # No post-LLM Census ethnicity multiplication or top-30/rural forcing
+        # — the agent factors ethnicity from `ethnicity_block` and the
+        # gen_pop * mult global renormalization handles population weighting
+        # naturally. Smart, not forced.
         loc_multipliers = _run_location_intelligence_agent(persona_doc, subject) if gp_dma_pct else {}
-
-        if loc_multipliers:
-            persona_eth = (persona_doc.get('demographics') or {}).get('ETHNICITY') or {}
-            if persona_eth and DMA_DEMOGRAPHICS:
-                eth_adjusted = 0
-                for dma_key, llm_mult in loc_multipliers.items():
-                    eth_mult = _compute_ethnicity_affinity(dma_key, persona_eth)
-                    if abs(eth_mult - 1.0) > 0.05:
-                        loc_multipliers[dma_key] = llm_mult * eth_mult
-                        eth_adjusted += 1
-                if eth_adjusted:
-                    print(f"   📊 Ethnicity affinity: adjusted {eth_adjusted} DMAs based on Census data")
-            loc_multipliers = _apply_location_guardrails(loc_multipliers)
-            print(f"   🔒 Location guardrails applied (top-30 floors, rural caps)")
 
         if loc_multipliers and gp_dma_pct:
             # ── Tier 1: agent-driven, every DMA scored ──
@@ -16513,29 +16587,48 @@ def parallel_category_agents(df: pd.DataFrame, persona_doc: dict,
     if canonical_baseline_lookup:
         print(f"📐 Per-cat agents will anchor to {len(canonical_baseline_lookup)} canonical baselines (mode={anchor_mode})")
 
+    # ── UNIQUE-VALUE INDEX ────────────────────────────────────────────────
+    # Build the dedup index across ALL behavioral categories that need scoring.
+    # Each unique value gets scored exactly once in its "primary" (largest)
+    # category, then the resulting BP is propagated to every other category
+    # the value appears in. This guarantees byte-identical BPs across
+    # categories (Nike in MOST PURCHASED BRANDS == Nike in APPAREL/FOOTWEAR)
+    # and removes the need for `enforce_value_consistency_across_categories`
+    # `np.nanmax` reconciliation hack.
+    _items_for_index = {c: category_new_items[c] for c in cats_needing_llm}
+    primary_for, unique_items_by_cat = _build_unique_value_index(
+        df, _items_for_index, skip_cats=set())
+    _n_total_items = sum(len(v) for v in _items_for_index.values())
+    _n_unique = sum(len(v) for v in unique_items_by_cat.values())
+    print(f"   🔁 Unique-value index: {_n_unique} unique values across {len(unique_items_by_cat)} primary cats "
+          f"(deduped from {_n_total_items} total occurrences — {_n_total_items - _n_unique} duplicates)")
+
     print(f"🤖 Step 2: Launching {len(cats_needing_llm)} parallel category agents (skipped {len(category_values) - len(cats_needing_llm)} fully-carried categories) …")
     global _FIRST_CAT_PROMPT_LOGGED
     _FIRST_CAT_PROMPT_LOGGED = False
     if cats_needing_llm:
         _top = cats_needing_llm[:10]
-        print(f"   📊 Category sizes (top 10, largest-first): "
-              + ", ".join(f"{c}:{len(category_new_items[c])}" for c in _top))
+        print(f"   📊 Category sizes (top 10 unique-only, largest-first): "
+              + ", ".join(f"{c}:{len(unique_items_by_cat.get(c, []))}" for c in _top))
     results_map: dict[str, list[dict]] = {}
     _MAX_AGENT_RETRIES = 3
     _cat_phase_t0 = _time.perf_counter()
 
     # ── Chunk large categories so no single API call exceeds ~80 items ──
+    # Now uses unique_items_by_cat (deduplicated) instead of category_new_items.
     _CHUNK_MAX = 80
     _work_units: list[tuple[str, list[str], int]] = []  # (cat, items_chunk, chunk_idx)
     for cat in cats_needing_llm:
-        items = category_new_items[cat]
+        items = unique_items_by_cat.get(cat, [])
+        if not items:
+            continue
         if len(items) <= _CHUNK_MAX:
             _work_units.append((cat, items, 0))
         else:
             chunks = [items[i:i + _CHUNK_MAX] for i in range(0, len(items), _CHUNK_MAX)]
             for ci, chunk in enumerate(chunks):
                 _work_units.append((cat, chunk, ci))
-            print(f"   🔪 Chunked [{cat}] ({len(items)} items) → {len(chunks)} chunks of ≤{_CHUNK_MAX}")
+            print(f"   🔪 Chunked [{cat}] ({len(items)} unique items) → {len(chunks)} chunks of ≤{_CHUNK_MAX}")
 
     _chunk_results: dict[str, list[list[dict]]] = {cat: [] for cat in cats_needing_llm}
 
@@ -16545,12 +16638,15 @@ def parallel_category_agents(df: pd.DataFrame, persona_doc: dict,
     _guidance_map: dict[str, dict] = {}
     if anchor_mode != 'genpop':
         _guidance_t0 = _time.perf_counter()
-        print(f"🧭 Wave 1: Launching {len(cats_needing_llm)} item-aware guidance agents ({MODEL_GUIDANCE}) …")
+        # Guidance agents see the UNIQUE items their category will actually score,
+        # so expected_high/expected_low lists are grounded in the same item set.
+        _guid_cats = [c for c in cats_needing_llm if unique_items_by_cat.get(c)]
+        print(f"🧭 Wave 1: Launching {len(_guid_cats)} item-aware guidance agents ({MODEL_GUIDANCE}) …")
         with _futures.ThreadPoolExecutor(max_workers=35) as pool:
             _guid_futures = {
                 pool.submit(_run_item_guidance_agent, cat,
-                             category_new_items[cat], persona_doc, subject): cat
-                for cat in cats_needing_llm
+                             unique_items_by_cat[cat], persona_doc, subject): cat
+                for cat in _guid_cats
             }
             for fut in _futures.as_completed(_guid_futures, timeout=60):
                 cat = _guid_futures[fut]
@@ -16644,28 +16740,60 @@ def parallel_category_agents(df: pd.DataFrame, persona_doc: dict,
         out = round(max(0.0001, min(99.9999, prev_bp + delta)), 4)
         return out
 
+    # ── Build GLOBAL value→BP lookup from all categories' results ──────────
+    # Because the unique-value index assigns each value to a single primary
+    # category, only that primary scored it. We apply the 4dp organic-noise
+    # transform ONCE per unique value, then write the exact same BP to every
+    # category the value appears in. This guarantees byte-identical Nike
+    # across MOST PURCHASED BRANDS / APPAREL/FOOTWEAR / WHERE THEY SHOP, etc.
+    global_value_bp_raw: dict[str, float] = {}
+    for cat, agent_result in results_map.items():
+        for entry in agent_result:
+            if not isinstance(entry, dict) or 'value' not in entry or 'bp' not in entry:
+                continue
+            v_u = str(entry['value']).strip().upper()
+            try:
+                bp = float(entry['bp'])
+            except (TypeError, ValueError):
+                continue
+            if v_u not in global_value_bp_raw:
+                global_value_bp_raw[v_u] = bp
+
+    # Apply organic noise ONCE per unique value, freezing the canonical BP.
+    global_value_bp: dict[str, float] = {}
+    for v_u, raw_bp in global_value_bp_raw.items():
+        clamped = max(0.0001, min(99.9999, raw_bp))
+        global_value_bp[v_u] = _add_4dp_noise(clamped)
+
+    print(f"   🔁 Propagation: {len(global_value_bp)} unique values scored — propagating to all categories "
+          f"(byte-identical across categories)")
+
     rows_written = 0
     rows_carried = 0
+    rows_propagated = 0
     for cat, (vals, idxs) in category_values.items():
-        agent_result = results_map.get(cat, [])
-        bp_lookup = {}
-        for entry in agent_result:
-            if isinstance(entry, dict) and 'value' in entry and 'bp' in entry:
-                bp_lookup[str(entry['value']).strip().upper()] = float(entry['bp'])
         carry = category_carry.get(cat, {})
+        primary_set = {v.strip().upper() for v in unique_items_by_cat.get(cat, [])}
         for idx in idxs:
             val_u = str(df.at[idx, 'Value']).strip().upper()
             if val_u in carry:
                 # Carry-forward path — reuse prior BP with tiny jitter, ignore LLM
                 df.at[idx, bp_col] = _carry_forward_jitter(carry[val_u])
                 rows_carried += 1
-            elif val_u in bp_lookup:
-                new_bp = max(0.0001, min(99.9999, bp_lookup[val_u]))
-                df.at[idx, bp_col] = _add_4dp_noise(new_bp)
-                rows_written += 1
+            elif val_u in global_value_bp:
+                # Single source of truth: same BP applied wherever this value
+                # appears. Primary-category and duplicate-category writes
+                # both pull from `global_value_bp`.
+                df.at[idx, bp_col] = global_value_bp[val_u]
+                if val_u in primary_set:
+                    rows_written += 1
+                else:
+                    rows_propagated += 1
 
     if rows_carried:
         print(f"   ↩️  Carried forward {rows_carried} BP rows from prior run (±0.01–0.02% jitter)")
+    if rows_propagated:
+        print(f"   🔁 Propagated {rows_propagated} BP rows from primary-category scores to duplicate categories")
     print(f"   ✅ Wrote BP for {rows_written} new behavioral rows across {len(results_map)} categories")
 
     # --- D2) Re-add prior-run rows that today's ClickHouse pull dropped --------
@@ -17966,11 +18094,17 @@ def _median_age_from_persona(persona_doc: dict | None) -> float | None:
 def _apply_genpop_anchored_guardrails(df: pd.DataFrame,
                                        persona_doc: dict | None = None,
                                        brands: list[str] | None = None) -> pd.DataFrame:
-    """Validator 0 — clamp/floor BP values using gen-pop baselines.
+    """Validator 0 — minimal safety guardrails.
 
-    Rules enforce proportionality so LLM scoring errors
-    (children's games boosted for adults, universal platforms crushed, etc.)
-    are corrected before downstream validators run.
+    The architectural rewrite (affinity * gen_pop math + unique-value index)
+    naturally produces proportional results, so the 12 ad-hoc caps/floors
+    that previously patched LLM number-noise (R1-R3, R6-R13) are no longer
+    needed. We keep only:
+
+      • R0  Universal floor/ceiling: BP ∈ [0.01%, 96.0%]
+      • R5  Young-audience social-media floor (legitimate persona-specific
+            override — TikTok/Instagram/Snapchat for audiences <45)
+      • R14 Negative/zero BP floor (safety net for any leftover edge case)
     """
     gp = _load_genpop_csv()
     if gp is None or gp.empty:
@@ -17982,7 +18116,7 @@ def _apply_genpop_anchored_guardrails(df: pd.DataFrame,
     if bp_col not in df.columns:
         return df
 
-    # Build fast lookup: {(CATEGORY, VALUE): genpop_bp}
+    # Build fast lookup for R5 (gen_pop baseline next to TikTok/Instagram/etc.)
     gp_lookup: dict[tuple[str, str], float] = {}
     cat_col = 'Column' if 'Column' in gp.columns else gp.columns[0]
     val_col = 'Value' if 'Value' in gp.columns else gp.columns[1]
@@ -17997,55 +18131,9 @@ def _apply_genpop_anchored_guardrails(df: pd.DataFrame,
         except (ValueError, TypeError):
             continue
 
-    brand_variants: set[str] = set()
-    if brands:
-        for b in brands:
-            bu = b.strip().upper()
-            brand_variants.add(bu)
-            brand_variants.add(bu.replace(' ', '-'))
-            brand_variants.add(bu.replace(' ', '_'))
-            brand_variants.add(bu.replace(' ', ''))
-
     median_age = _median_age_from_persona(persona_doc)
     caps_applied = 0
     floors_applied = 0
-
-    # Detect core interest keywords from brand category
-    core_interest_keywords: set[str] = set()
-    if brands and gp_lookup:
-        for b_var in brand_variants:
-            for (cat, val), _ in gp_lookup.items():
-                if val == b_var:
-                    for cat_prefix, keywords in _BRAND_CATEGORY_TO_INTERESTS.items():
-                        if cat_prefix in cat:
-                            core_interest_keywords.update(k.upper() for k in keywords)
-        # Also check persona_doc category_signals for hints
-        if persona_doc:
-            cs = persona_doc.get('category_signals', {}) or {}
-            for cat_key in cs:
-                for cat_prefix, keywords in _BRAND_CATEGORY_TO_INTERESTS.items():
-                    if cat_prefix in cat_key.upper():
-                        core_interest_keywords.update(k.upper() for k in keywords)
-
-    # Fallback: detect brand category from the scored DataFrame itself
-    # (handles cases where gen pop lookup misses the brand)
-    if not core_interest_keywords and brand_variants:
-        for idx in df.index:
-            try:
-                v = str(df.at[idx, 'Value']).strip().upper()
-                c = str(df.at[idx, 'Column']).strip().upper()
-                b = float(df.at[idx, bp_col])
-            except (ValueError, TypeError, KeyError):
-                continue
-            if v in brand_variants and b >= 95.0:
-                for cat_prefix, keywords in _BRAND_CATEGORY_TO_INTERESTS.items():
-                    if cat_prefix in c:
-                        core_interest_keywords.update(k.upper() for k in keywords)
-
-    if core_interest_keywords:
-        print(f"   📊 Guardrails: core interest keywords detected: {sorted(core_interest_keywords)}")
-    else:
-        print(f"   ⚠️  Guardrails: NO core interest keywords detected (brands={brands})")
 
     for idx in df.index:
         try:
@@ -18058,46 +18146,22 @@ def _apply_genpop_anchored_guardrails(df: pd.DataFrame,
         except (ValueError, TypeError, KeyError):
             continue
 
-        gen_pop = gp_lookup.get((cat, val))
-        if gen_pop is None:
-            continue
-
         original_bp = bp
+        gen_pop = gp_lookup.get((cat, val))
 
-        # ── Rule 1: Universal Max Multiplier Cap (4x) ──────────────────
-        if gen_pop >= 0.5 and val not in brand_variants:
-            max_bp = gen_pop * 4.0
-            if bp > max_bp:
-                bp = _organic_4dp(gen_pop * 3.5)
-                print(f"   🔒 R1 4x-cap: {cat}/{val} {original_bp:.2f}% → {bp:.2f}% (gen_pop={gen_pop:.2f}%)")
-                caps_applied += 1
+        # ── R0: Universal floor/ceiling ──────────────────────────────────
+        if bp > 96.0:
+            bp = 96.0
+            caps_applied += 1
+        elif bp < 0.01:
+            # See R14 below for the gen-pop-aware version when we have one
+            pass
 
-        # ── Rule 2: Children's Items Cap for Adult Audiences ───────────
-        if val in _CHILDRENS_ITEMS and median_age is not None and median_age > 22:
-            child_cap = max(gen_pop * 1.0, gen_pop)
-            if bp > child_cap:
-                bp = _organic_4dp(gen_pop)
-                print(f"   🔒 R2 child-cap: {cat}/{val} {original_bp:.2f}% → {bp:.2f}% (adult audience, median_age={median_age:.0f})")
-                caps_applied += 1
-
-        # ── Rule 3: CPG/In-Store Digital Penalty ───────────────────────
-        if val in _CPG_INSTORE_ITEMS:
-            cpg_cap = gen_pop * 0.5
-            if bp > cpg_cap:
-                bp = _organic_4dp(cpg_cap)
-                print(f"   🔒 R3 CPG-cap: {cat}/{val} {original_bp:.2f}% → {bp:.2f}% (digital panel penalty)")
-                caps_applied += 1
-
-        # ── Rule 4: Universal Platform Floor ───────────────────────────
-        if gen_pop > 50.0 and gen_pop >= 1.0:
-            platform_floor = gen_pop * 0.7
-            if bp < platform_floor:
-                bp = _organic_4dp(platform_floor)
-                print(f"   🔒 R4 platform-floor: {cat}/{val} {original_bp:.2f}% → {bp:.2f}% (universal platform)")
-                floors_applied += 1
-
-        # ── Rule 5: Young Audience Social Media Floor ──────────────────
-        if median_age is not None:
+        # ── R5: Young-audience social-media floor ───────────────────────
+        # Legitimate persona-specific override: TikTok / Instagram / Snapchat
+        # are dominant platforms for audiences under 45 — even if the agent
+        # under-scores them, panel reality keeps them near baseline.
+        if gen_pop is not None and median_age is not None:
             social_floor = None
             if median_age < 35:
                 if val in ('TIKTOK', 'INSTAGRAM'):
@@ -18109,177 +18173,22 @@ def _apply_genpop_anchored_guardrails(df: pd.DataFrame,
                     social_floor = gen_pop * 0.7
             if social_floor is not None and bp < social_floor:
                 bp = _organic_4dp(social_floor)
-                print(f"   🔒 R5 social-floor: {cat}/{val} {original_bp:.2f}% → {bp:.2f}% (young audience, median_age={median_age:.0f})")
+                print(f"   🔒 R5 social-floor: {cat}/{val} {original_bp:.2f}% → {bp:.2f}% "
+                      f"(young audience, median_age={median_age:.0f})")
                 floors_applied += 1
 
-        # ── Rule 6: Athlete Proportionality ────────────────────────────
-        if cat in _ATHLETE_CATEGORIES:
-            if gen_pop >= 0.5 and val not in brand_variants:
-                ath_cap = gen_pop * 4.0
-                if bp > ath_cap:
-                    bp = _organic_4dp(gen_pop * 3.5)
-                    print(f"   🔒 R6 athlete-cap: {cat}/{val} {original_bp:.2f}% → {bp:.2f}% (gen_pop={gen_pop:.2f}%)")
-                    caps_applied += 1
-            if bp > 80.0 and val not in _UNIVERSAL_HIGH_BP:
-                bp = _organic_4dp(78.0)
-                print(f"   🔒 R6 athlete-abs-cap: {cat}/{val} {original_bp:.2f}% → {bp:.2f}% (80% ceiling)")
-                caps_applied += 1
-
-        # ── Rule 6b: HOST/PERSONALITY Max Multiplier ─────────────────────
-        if cat == 'HOST/PERSONALITY' and gen_pop >= 0.5 and val not in brand_variants:
-            host_cap = gen_pop * 2.5
-            if bp > host_cap:
-                bp = _organic_4dp(gen_pop * 2.0)
-                print(f"   🔒 R6b host-cap: {cat}/{val} {original_bp:.2f}% → {bp:.2f}% (gen_pop={gen_pop:.2f}%)")
-                caps_applied += 1
-
-        # ── Rule 7: Core Interest Floor ────────────────────────────────
-        if cat == 'INTEREST' and core_interest_keywords:
-            is_core = val in core_interest_keywords
-            if not is_core:
-                for kw in core_interest_keywords:
-                    if kw in val or val in kw:
-                        is_core = True
-                        break
-            if is_core:
-                interest_floor = gen_pop * 1.1
-                if bp < interest_floor:
-                    bp = _organic_4dp(interest_floor)
-                    print(f"   🔒 R7 interest-floor: {cat}/{val} {original_bp:.2f}% → {bp:.2f}% (core interest, gen_pop={gen_pop:.2f}%)")
-                    floors_applied += 1
-
-        # ── Rule 8: Young-Skewing Games Cap ──────────────────────────────
-        if cat == 'GAMES' and val in _YOUNG_SKEWING_GAMES:
-            if median_age is not None and median_age >= 20:
-                game_cap = gen_pop * 2.0
-                if bp > game_cap:
-                    bp = _organic_4dp(game_cap)
-                    print(f"   🔒 R8 young-game-cap: {cat}/{val} {original_bp:.2f}% → {bp:.2f}% (young-skewing, median_age={median_age:.0f})")
-                    caps_applied += 1
-
-        # ── Rule 9: Major Amusement Park Floor ───────────────────────────
-        if cat == 'AMUSEMENT PARKS':
-            is_major = val in _MAJOR_THEME_PARKS
-            if not is_major:
-                for park in _MAJOR_THEME_PARKS:
-                    if park in val or val in park:
-                        is_major = True
-                        break
-            if is_major:
-                park_floor = gen_pop * 0.8
-                if bp < park_floor:
-                    bp = _organic_4dp(park_floor)
-                    print(f"   🔒 R9 park-floor: {cat}/{val} {original_bp:.2f}% → {bp:.2f}% (major park, gen_pop={gen_pop:.2f}%)")
-                    floors_applied += 1
-            else:
-                obscure_cap = gen_pop * 3.0
-                if bp > obscure_cap:
-                    bp = _organic_4dp(gen_pop * 2.5)
-                    print(f"   🔒 R9 obscure-park-cap: {cat}/{val} {original_bp:.2f}% → {bp:.2f}% (obscure park, gen_pop={gen_pop:.2f}%)")
-                    caps_applied += 1
-
-        # ── Rule 10: CPG Low-Digital-Signal Cap ──────────────────────────
-        if val in _CPG_LOW_DIGITAL_SIGNAL:
-            cpg_dig_cap = gen_pop * 2.0
-            if bp > cpg_dig_cap:
-                bp = _organic_4dp(cpg_dig_cap)
-                print(f"   🔒 R10 cpg-digital-cap: {cat}/{val} {original_bp:.2f}% → {bp:.2f}% (low-digital CPG, gen_pop={gen_pop:.2f}%)")
-                caps_applied += 1
-
-        # ── Rule 11: Major QSR Floor ─────────────────────────────────────
-        if cat == 'QSR' and val in _MAJOR_QSR:
-            qsr_floor = gen_pop * 0.5
-            if bp < qsr_floor:
-                bp = _organic_4dp(qsr_floor)
-                print(f"   🔒 R11 qsr-floor: {cat}/{val} {original_bp:.2f}% → {bp:.2f}% (major QSR, gen_pop={gen_pop:.2f}%)")
-                floors_applied += 1
-
-        # ── Rule 12: Major Gym Floor ─────────────────────────────────────
-        if cat == 'WORKOUT FACILITY' and val in _MAJOR_GYMS:
-            gym_floor = gen_pop * 0.6
-            if bp < gym_floor:
-                bp = _organic_4dp(gym_floor)
-                print(f"   🔒 R12 gym-floor: {cat}/{val} {original_bp:.2f}% → {bp:.2f}% (major gym, gen_pop={gen_pop:.2f}%)")
-                floors_applied += 1
-
-        # ── Rule 13: Location Max Multiplier Cap ─────────────────────────
-        if cat == 'LOCATION' and gen_pop >= 0.01:
-            loc_max = gen_pop * 10.0
-            if bp > loc_max:
-                bp = _organic_4dp(gen_pop * 3.0)
-                print(f"   🔒 R13 location-cap: {cat}/{val} {original_bp:.2f}% → {bp:.2f}% (>10x gen_pop={gen_pop:.2f}%)")
-                caps_applied += 1
-            if gen_pop >= 1.0 and bp < gen_pop * 0.05:
-                bp = _organic_4dp(gen_pop * 0.15)
-                print(f"   🔒 R13 location-floor: {cat}/{val} {original_bp:.2f}% → {bp:.2f}% (major DMA crushed, gen_pop={gen_pop:.2f}%)")
-                floors_applied += 1
-
-        # ── Rule 14: Negative BP Floor ───────────────────────────────────
+        # ── R14: Negative / zero BP safety floor ────────────────────────
         if bp < 0.01:
-            bp = _organic_4dp(max(0.01, gen_pop * 0.01))
-            print(f"   🔒 R14 neg-floor: {cat}/{val} {original_bp:.4f}% → {bp:.4f}% (negative/zero BP)")
+            fallback = max(0.01, (gen_pop or 0.5) * 0.01)
+            bp = _organic_4dp(fallback)
+            print(f"   🔒 R14 neg-floor: {cat}/{val} {original_bp:.4f}% → {bp:.4f}%")
             floors_applied += 1
 
         if bp != original_bp:
             df.at[idx, bp_col] = bp
 
-    # ── Rule 6 supplemental: #1 athlete per category can't exceed 80% ──
-    for ath_cat in _ATHLETE_CATEGORIES:
-        mask = df['Column'].astype(str).str.strip().str.upper() == ath_cat
-        if not mask.any():
-            continue
-        ath_rows = []
-        for idx in df[mask].index:
-            try:
-                ath_rows.append((idx, float(df.at[idx, bp_col])))
-            except (ValueError, TypeError):
-                continue
-        if not ath_rows:
-            continue
-        ath_rows.sort(key=lambda x: -x[1])
-        top_idx, top_bp = ath_rows[0]
-        top_val = str(df.at[top_idx, 'Value']).strip().upper()
-        if top_bp > 80.0 and top_val not in _UNIVERSAL_HIGH_BP:
-            new_bp = _organic_4dp(78.0)
-            df.at[top_idx, bp_col] = new_bp
-            print(f"   🔒 R6 #1-athlete-cap: {ath_cat}/{top_val} {top_bp:.2f}% → {new_bp:.2f}%")
-            caps_applied += 1
-
     total = caps_applied + floors_applied
-    print(f"   🔒 GenPop Guardrails: {total} corrections ({caps_applied} caps, {floors_applied} floors)")
-
-    # Post-check: verify core interest items are above floor
-    if core_interest_keywords:
-        for idx in df.index:
-            try:
-                c = str(df.at[idx, 'Column']).strip().upper()
-                v = str(df.at[idx, 'Value']).strip().upper()
-                raw_b = df.at[idx, bp_col]
-                if isinstance(raw_b, str):
-                    raw_b = raw_b.replace('%', '').replace(',', '').strip()
-                b = float(raw_b)
-            except (ValueError, TypeError, KeyError):
-                continue
-            if c != 'INTEREST':
-                continue
-            is_core = v in core_interest_keywords
-            if not is_core:
-                for kw in core_interest_keywords:
-                    if kw in v or v in kw:
-                        is_core = True
-                        break
-            if is_core:
-                gp = gp_lookup.get(('INTEREST', v))
-                if gp:
-                    expected = gp * 1.1
-                    status = "OK" if b >= expected - 0.5 else "BELOW FLOOR"
-                    print(f"   📊 R7 verify: INTEREST/{v} = {b:.2f}% (gen_pop={gp:.2f}%, floor={expected:.2f}%) [{status}]")
-                    if b < expected - 0.5:
-                        bp_new = _organic_4dp(expected)
-                        df.at[idx, bp_col] = bp_new
-                        print(f"   🔒 R7 emergency-floor: INTEREST/{v} {b:.2f}% → {bp_new:.2f}%")
-                        floors_applied += 1
-
+    print(f"   🔒 GenPop Guardrails (slim): {total} corrections ({caps_applied} caps, {floors_applied} floors)")
     return df
 
 
@@ -18300,46 +18209,6 @@ def post_agent_quality_gate(df: pd.DataFrame, persona_doc: dict | None = None,
 
     # ── Validator 0: GenPop-Anchored Guardrails ────────────────────
     df = _apply_genpop_anchored_guardrails(df, persona_doc, brands)
-
-    brand_variants = set()
-    if brands:
-        for b in brands:
-            bu = b.strip().upper()
-            brand_variants.add(bu)
-            brand_variants.add(bu.replace(' ', '-'))
-            brand_variants.add(bu.replace(' ', '_'))
-            brand_variants.add(bu.replace(' ', ''))
-
-    # Build core interest keywords for Validator 2 exemption
-    _v2_core_interest_items: set[str] = set()
-    if brands:
-        gp = _load_genpop_csv()
-        if gp is not None and not gp.empty:
-            _gp_cat_col = 'Column' if 'Column' in gp.columns else gp.columns[0]
-            _gp_val_col = 'Value' if 'Value' in gp.columns else gp.columns[1]
-            for _, r in gp.iterrows():
-                try:
-                    c = str(r[_gp_cat_col]).strip().upper()
-                    v = str(r[_gp_val_col]).strip().upper()
-                except Exception:
-                    continue
-                if v in brand_variants:
-                    for cat_prefix, keywords in _BRAND_CATEGORY_TO_INTERESTS.items():
-                        if cat_prefix in c:
-                            _v2_core_interest_items.update(k.upper() for k in keywords)
-        # Fallback: detect from scored DataFrame
-        if not _v2_core_interest_items:
-            for idx in df.index:
-                try:
-                    v = str(df.at[idx, 'Value']).strip().upper()
-                    c = str(df.at[idx, 'Column']).strip().upper()
-                    b = float(df.at[idx, bp_col])
-                except (ValueError, TypeError, KeyError):
-                    continue
-                if v in brand_variants and b >= 95.0:
-                    for cat_prefix, keywords in _BRAND_CATEGORY_TO_INTERESTS.items():
-                        if cat_prefix in c:
-                            _v2_core_interest_items.update(k.upper() for k in keywords)
 
     corrections = 0
 
@@ -18371,64 +18240,13 @@ def post_agent_quality_gate(df: pd.DataFrame, persona_doc: dict | None = None,
                     df.at[idx, pct_col] = new_v
                 corrections += 1
 
-    # ── Validator 2: BP Distribution Gate ─────────────────────────────
-    all_cats = df['Column'].astype(str).str.strip().str.upper().unique()
-    behavioral_cats = [c for c in all_cats
-                       if c not in _DEMO_SUM_CATEGORIES
-                       and c not in _CLAMP_EXEMPT_CATS
-                       and c != 'LOCATION']
-    for cat in behavioral_cats:
-        mask = df['Column'].astype(str).str.strip().str.upper() == cat
-        if not mask.any():
-            continue
-        idxs = df[mask].index.tolist()
-        bp_vals = []
-        for idx in idxs:
-            try:
-                bp_vals.append((idx, float(df.at[idx, bp_col])))
-            except (ValueError, TypeError):
-                continue
-        if not bp_vals:
-            continue
-
-        above_50 = [(idx, v) for idx, v in bp_vals if v > 50.0]
-        # INTEREST has 250+ items — many can legitimately be above 50%
-        max_above_50 = 8 if cat == 'INTEREST' else 3
-        if len(above_50) > max_above_50:
-            above_50_sorted = sorted(above_50, key=lambda x: -x[1])
-            for idx, v in above_50_sorted[max_above_50:]:
-                val_name = str(df.at[idx, 'Value']).strip().upper()
-                if val_name in _UNIVERSAL_HIGH_BP or val_name in brand_variants:
-                    continue
-                # Exempt core interest items that were floored by R7 guardrails
-                if cat == 'INTEREST' and _v2_core_interest_items:
-                    is_core = val_name in _v2_core_interest_items
-                    if not is_core:
-                        for kw in _v2_core_interest_items:
-                            if kw in val_name or val_name in kw:
-                                is_core = True
-                                break
-                    if is_core:
-                        continue
-                clamped = _organic_4dp(random.uniform(25.0, 45.0))
-                df.at[idx, bp_col] = clamped
-                if pct_col in df.columns:
-                    df.at[idx, pct_col] = clamped
-                corrections += 1
-                print(f"   ⚠️  QualityGate: {cat}/{val_name} clamped {v:.2f}% → {clamped:.4f}% (>3 items above 50%)")
-
-        for idx, v in bp_vals:
-            val_name = str(df.at[idx, 'Value']).strip().upper()
-            if v > 90.0 and val_name not in _UNIVERSAL_HIGH_BP and val_name not in brand_variants:
-                cat_upper = str(df.at[idx, 'Column']).strip().upper()
-                if cat_upper in _CLAMP_EXEMPT_CATS:
-                    continue
-                clamped = _organic_4dp(random.uniform(55.0, 80.0))
-                df.at[idx, bp_col] = clamped
-                if pct_col in df.columns:
-                    df.at[idx, pct_col] = clamped
-                corrections += 1
-                print(f"   ⚠️  QualityGate: {cat}/{val_name} clamped {v:.2f}% → {clamped:.4f}% (>90% non-universal)")
+    # ── Validator 2: REMOVED ─────────────────────────────────────────
+    # The architectural rewrite (affinity * gen_pop math + score-once-propagate)
+    # naturally produces proportional BPs that respect their gen_pop ceilings.
+    # The legacy >50% / >90% blanket clamps were patching LLM number-noise
+    # that no longer exists. If a value legitimately scores 92% (e.g. core
+    # cultural identifier), clamping to a random 55-80% destroys the signal.
+    # R0 in the guardrail (BP <= 96%) is the only ceiling we need now.
 
     # ── Validator 3: Location Uniqueness ──────────────────────────────
     loc_mask = df['Column'].astype(str).str.strip().str.upper() == 'LOCATION'
