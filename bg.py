@@ -15311,8 +15311,11 @@ see, per item:
   • conf   — confidence the classifier had in identifying the item
 
 ═══════════════════════════════════════════════════════════════════
-FOUR GUARDRAILS — apply IN ORDER for every item
+GUARDRAILS — apply IN ORDER for every item
 ═══════════════════════════════════════════════════════════════════
+Never let panel reading > 4× genpop go unchallenged. Year-window
+inflation is the #1 source of error. When in doubt, anchor to genpop ×
+persona_skew, not to panel.
 
 GUARDRAIL 1 — YEAR-WINDOW CEILING COMPRESSOR (panel too high → override_high)
 If panel >= 75% AND the item is a MASS PLATFORM (any of: tech device
@@ -15415,6 +15418,81 @@ Reserve the 55–85% top band for INTEREST items that are actual
 identity-defining hobbies: SPORTS, BASKETBALL, FOOTWEAR, SNEAKERS,
 EXERCISE & FITNESS, FASHION, GAMING, COOKING, MUSIC GENRE TAGS, etc.
 
+GUARDRAIL 4B — UNIVERSAL YEAR-WINDOW INFLATION CATCH-ALL (panel too high → override_high)
+This is the BIG ONE. Year-window inflation is universal — any site or
+brand where any panelist clicked once in 12 months gets inflated. The
+specific lists in Guardrails 1, 3, 6 only catch known archetypes; this
+rule catches EVERYTHING ELSE. Trigger conditions (apply if ANY one is
+true):
+  • panel >= 4 × genpop (when genpop is known)
+  • panel >= 25% AND classifier confidence is low or item not on
+    audience's cultural_anchors
+  • panel >= 15% AND tier=niche / code=regional / code=declining /
+    code=foreign / code=specialty / code=intent-based / code=seasonal
+  • panel >= 10% AND tier=premium AND classifier suggests small
+    customer base (DTC / boutique / single-product brand)
+
+When triggered, do NOT use the panel reading. Instead:
+  estimated_bp_pct = max(0.1, genpop_or_2.0) × persona_skew_factor
+  where persona_skew_factor is 0.3x to 2.5x (rarely higher).
+
+Worked examples that this rule catches (with target BPs for a
+mass-market Nike audience):
+  • Craigslist (declining, niche-use → ~10% genpop) → 8–18%
+  • Job Search / Indeed / LinkedIn Jobs (intent-based, only ~10%
+    of US adults actively job-searching at any time)             → 6–18%
+  • Bet365 Sportsbook (UK-headquartered, legal in <20 US states,
+    ~2M US users)                                                 → 1–5%
+  • Southern Living (regional + older skew, ~6% genpop)            → 3–12%
+  • Delish (recipe site for casual cooks, ~10% genpop)             → 6–18%
+  • Party City (seasonal/occasional, ~4% genpop)                   → 1–8%
+  • Living Spaces (regional furniture, West-coast)                 → 0.5–3%
+  • Liquid Death (DTC premium water, ~$200M revenue)               → 1–6%
+  • Tommy Bahama (premium tropical apparel, niche)                 → 1–6%
+  • Canada Goose (premium outerwear, niche)                        → 0.5–4%
+  • Bombas (DTC premium socks, ~$300M revenue)                     → 2–8%
+  • Spanx (premium shapewear)                                      → 2–8%
+  • Kendra Scott (mid-premium jewelry, niche)                      → 2–8%
+  • David Yurman (premium jewelry, very niche)                     → 0.3–2%
+  • The Farmers Dog (DTC premium pet food)                         → 1–5%
+  • Boston Marathon / NYRR / specific marathons (intent-based,
+    <100K participants nationally)                                 → 0.3–3%
+  • Specific MLB teams except home-region team (year-window
+    inflated by anyone who clicked once)                          → 1–5%
+    [genpop fan share for specific MLB team is 1-4%; even a Nike
+    audience cannot have 40% Boston Red Sox unless audience is
+    explicitly Boston-located]
+
+Reason field for these should explicitly say "year-window inflation"
+or "panel reading inflated by passive exposure".
+
+GUARDRAIL 4C — INTENT-vs-EXPOSURE (special compression for intent categories)
+The panel measures CLICKSTREAM EXPOSURE, not active intent. Several
+categories ONLY make sense when measured as active intent. For these,
+multiply the panel reading by 0.2–0.4 to get realistic active-engagement %.
+Categories where exposure ≠ intent:
+  • BETTING: only ~20% of US adults gamble in a year; sportsbooks
+    have <10M US active users total. A panel reading of 30% for
+    Bet365 means "saw an ad/clicked once", not active betting.
+    Cap items at 8–25% for sports-skewed audience, 1–8% otherwise.
+  • JOB SEARCH (Indeed, LinkedIn Jobs, ZipRecruiter, Glassdoor):
+    only ~10% of US adults actively job-searching at any moment.
+    Cap at 4–15% even for job-search-friendly audiences.
+  • REAL ESTATE / MORTGAGE (Zillow, Realtor, Rocket Mortgage):
+    only ~5-8% buying or refinancing per year. Cap at 8–25%.
+  • AUTO PURCHASE INTENT (CarGurus, AutoTrader, Carvana, Edmunds):
+    only ~15-20% buying a car per year. Cap at 8–22%.
+  • EDUCATION (Coursera, Udemy, MasterClass, Skillshare):
+    most people aren't actively taking courses. Cap at 3–12%.
+  • COLLEGE/UNIVERSITY pages (specific schools):
+    only students/applicants/alumni really engage. Generic
+    audience touch is incidental. Cap at 0.5–4% per school
+    unless school is the home-region public flagship.
+  • HEALTHCARE PROVIDERS (specific hospitals like NYU Langone):
+    only people in that geographic area. Cap at 0.5–4% nationally.
+
+Reason field: "intent-not-exposure compression".
+
 GUARDRAIL 5 — MASS-MARKET FLOOR (panel too low → override_low)
 If genpop is known AND the item is a MASS-MARKET brand by real-world
 customer base (>10M U.S. customers / members / subscribers / users),
@@ -15443,27 +15521,51 @@ NEAR-ZERO Walmart. If panel says 2.5%, the panel is wrong (probably
 because PF's app traffic is in the clickstream but not stitched to
 "PLANET FITNESS" in host_mapping). Emit panel_decision="override_low".
 
-GUARDRAIL 6 — PREMIUM-TIER CEILING (panel too high → override_high)
-If the item is PREMIUM/LUXURY/NICHE by classifier tier AND its real-world
-U.S. customer base is small (<5M members/subscribers/customers),
+GUARDRAIL 6 — PREMIUM-TIER / DTC-NICHE CEILING (panel too high → override_high)
+If the item is PREMIUM/LUXURY/NICHE/DTC by classifier tier AND its
+real-world U.S. customer base is small (<5M members/subscribers/customers),
 estimated_bp_pct CANNOT exceed 4 × the realistic adoption rate for the
-audience. Specifically, premium-tier items with small bases have hard
-ceilings:
-  • Peloton (~3M connected + ~3M digital subs out of 260M U.S.
-    adults = ~2-3% adoption) — even fitness-skewed audiences
-    cannot exceed                                                → 8–14%
-  • Equinox (~600K members, ultra-premium gym)                   → 1–4%
-  • Orangetheory (~1.5M members)                                 → 2–6%
-  • SoulCycle (~400K members, premium boutique)                  → 0.5–2%
-  • F45 (~600K members, premium boutique)                        → 0.5–3%
-  • Erewhon (regional grocery, ~100K customers)                  → 0.1–1%
+audience. Specifically, premium/DTC-niche items with small bases have
+hard ceilings:
+
+  Boutique fitness:
+  • Peloton (~3M connected + ~3M digital subs)                   → 4–14%
+  • Equinox (~600K members)                                      → 0.5–4%
+  • Orangetheory (~1.5M members)                                 → 1–6%
+  • SoulCycle (~400K members)                                    → 0.3–2%
+  • F45 (~600K members)                                          → 0.3–3%
+
+  Premium apparel/accessories (small US customer base):
+  • Tommy Bahama (~$1B revenue, niche tropical)                  → 1–6%
+  • Canada Goose (premium outerwear)                             → 0.5–4%
+  • Bombas (~$300M revenue, premium socks)                       → 2–8%
+  • Spanx (premium shapewear)                                    → 2–8%
+  • Kendra Scott (mid-premium jewelry)                           → 2–8%
+  • David Yurman (luxury jewelry)                                → 0.3–2%
+  • Allbirds, Rothys, M.Gemi (DTC footwear)                      → 0.5–4%
+  • Skims (premium shapewear)                                    → 3–12%
+
+  Premium DTC consumables / services:
+  • Liquid Death (premium DTC water)                             → 1–6%
+  • The Farmers Dog (DTC premium pet food)                       → 1–5%
+  • Erewhon (regional luxury grocery, ~100K customers)           → 0.1–1%
+  • Sweetgreen (~200 locations, premium fast-casual)             → 1–5%
+  • Cava (~300 locations, premium fast-casual)                   → 1–5%
+  • Joe & The Juice / Le Pain Quotidien (premium urban)          → 0.3–3%
+
+  Premium tech / cars:
   • Tesla (~2M U.S. owners)                                      → 1–8%
   • Patagonia (premium outdoor, niche)                           → 2–8%
+  • Rivian (~50K U.S. owners)                                    → 0.1–1%
+
 The intuition: Peloton has FEWER total subscribers than Planet Fitness
-has members in NYC alone. Even a fitness-obsessed audience cannot have
-more Peloton owners than Planet Fitness members. If you're tempted to
-score Peloton higher than Planet Fitness for a mass audience, you are
-wrong. Emit panel_decision="override_high".
+has members in NYC alone. Tommy Bahama has fewer total customers than
+Walmart has in a single state. Even a fitness-obsessed or
+fashion-forward audience cannot have more Peloton owners than Planet
+Fitness members, or 13% Tommy Bahama wearers. If panel says these are
+high, panel is just measuring "anyone who clicked the website once in
+12 months" — the brand's real customer base puts a hard ceiling on
+audience BP. Emit panel_decision="override_high".
 
 GUARDRAIL 7 — MAINSTREAM-BRAND MAPPING-BLEED (panel too high → override_high)
 This is Guardrail 3's twin for mainstream brands (the original
@@ -15508,6 +15610,14 @@ DEFAULT DECISION FRAMEWORK (when no guardrail fires)
   3) For low-confidence (`conf:low`) items with NO panel signal AND no
      genpop baseline: leave estimated_bp_pct around 0.05-0.5%. Downstream
      will drop them. Do NOT fabricate a default 27%.
+  4) For medium-or-low confidence items WITH a high panel reading
+     (panel >= 15%) but where you cannot confidently identify the brand
+     or articulate why this audience would engage: ANCHOR TO GENPOP, not
+     to panel. Specifically:
+        if genpop is known: estimated_bp_pct = genpop × 1.0  (within 0.5–2x)
+        if genpop is n/a:   estimated_bp_pct = 1.5%          (default low)
+     This stops the agent from rubber-stamping inflated panel readings
+     for niche items it doesn't recognize.
 
 PERSONA-FIT GUIDANCE (translate persona engagement to absolute %s):
   • Cultural anchor / icon (named in subsegments / cultural_anchors) → 60-95%
