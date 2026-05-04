@@ -8478,6 +8478,7 @@ Current total: {current_total:.2f}% (should be 100%)
    - San Antonio Spurs → San Antonio 8-12%, Austin 3-5%, Houston 2-4%
    - Atlanta Hawks → Atlanta 10-15%, nearby Southern markets elevated
    - In-N-Out → California markets dominate, minimal elsewhere
+   - **Active pro athlete studied as a person (not a FMCG brand)** → over-weight their **current team's home DMA** + gateway cities matching research, not only global population rank
 
 2. **US BASE ASSUMPTION (MANDATORY)**: This profile is built from a US gen-pop
    audience base of ~10 million people. Treat this as US-first behavior.
@@ -8947,8 +8948,10 @@ def ai_final_gut_check(df, brand_category, project_name, brands):
                 f"2. If this is a NATIONAL brand, does the distribution roughly follow US "
                 f"population with reasonable regional variation?\n"
                 f"3. Are there DMAs that are way too high or low given this audience?\n"
-                f"4. For sports teams: the home city DMA should be in the top 3 with heavy "
-                f"over-indexing. Nearby DMAs should also over-index.\n"
+                f"4. For sports TEAMS: the home city DMA should be in the top 3 with heavy "
+                f"over-indexing; commuter and nearby regional rivalry DMAs should read elevated vs gen-pop. "
+                f"For star-driven INDIVIDUAL athletes (person/talent, not FMCG branding), bias toward "
+                f"their current club/home geography plus researched national gateways — not flat population weights.\n"
                 f"5. For regional restaurant chains: markets where they operate should over-index.\n\n"
                 f"Return ONLY valid JSON:\n"
                 f'If OK: {{"status":"OK","notes":"reason"}}\n'
@@ -14343,11 +14346,127 @@ def _format_persona_interest_rank_block(persona_doc: dict) -> str:
     return '\n'.join(lines)
 
 
-def _category_pass1_calibration_block(category: str) -> str:
+def _persona_subject_archetype(persona_doc: dict | None) -> str:
+    return str((persona_doc or {}).get('subject_archetype') or '').strip().lower()
+
+
+def _sport_persona_subject_blob(persona_doc: dict | None) -> str:
+    doc = persona_doc or {}
+    return (
+        str(doc.get('persona_summary', '') or '') + '\n'
+        + str(doc.get('digital_identity', '') or '') + '\n'
+        + str(doc.get('archetype_rationale', '') or '')
+    ).lower()
+
+
+def _is_pro_athlete_individual(persona_doc: dict | None) -> bool:
+    """celebrity_or_creator whose research blob clearly centers elite pro sports."""
+    if _persona_subject_archetype(persona_doc) != 'celebrity_or_creator':
+        return False
+    blob = _sport_persona_subject_blob(persona_doc)
+    keys = (
+        'nba', 'nfl', 'mlb', 'nhl', 'mls', 'wnba', 'professional athlete',
+        'professional football', 'professional basketball', 'pitcher ',
+        'quarterback ', ' midfielder', 'goalie ', ' goaltender', ' outfielder ',
+        'tight end ', 'linebacker', ' olympic ',
+    )
+    return any(k in blob for k in keys)
+
+
+def _sports_fan_commerce_calibration_block(cat_u: str, persona_doc: dict | None, *,
+                                           phase: str) -> str:
+    """Franchises + pro-athlete personas — sponsors, roster stars, venues."""
+    team = _persona_subject_archetype(persona_doc) == 'sports_team_league_org'
+    ind_ath = _is_pro_athlete_individual(persona_doc)
+    short = phase == 'pass2'
+
+    if team and cat_u in {'ATHLETE', 'ATHLETES'}:
+        if short:
+            return """═══════════════════════════════════════════════════════════════════
+SPORTS TEAM — ATHLETE CATEGORY
+═══════════════════════════════════════════════════════════════════
+Top tiers should prioritize **national-name franchise roster players + enduring club legends** appearing in CSV rows — bury unrelated athletes who lack THIS-team linkage."""
+
+        return (
+            "**`sports_team_league_org`:** ATHLETE tiers elevate **CURRENT headline roster talent**, "
+            "blockbuster offseason adds, perpetual All-Stars, **franchise-icon veterans** when present in CSV — unrelated "
+            "league-famous names without THIS club storyline stay mid/low.\n"
+            "• Predicted tops emphasize research-backed marquee names appearing in inventory."
+        )
+
+    if team and cat_u in {'MOST PURCHASED BRANDS', 'WHERE THEY SHOP'}:
+        if short:
+            return """═══════════════════════════════════════════════════════════════════
+SPORTS TEAM — SPONSORS / RETAIL
+═══════════════════════════════════════════════════════════════════
+Weight **verified jersey/arena naming / broadcast sponsors** cited in persona before generic prestige mall brands."""
+
+        return (
+            "Fans convert sponsorship exposure digitally — elevate partners named in `cross_shop_network` / "
+            "`digital_identity` (kit/apparel sponsors, pouring rights cards, ticketing/payment partners).\n"
+            "Luxury retail stays demo-income gated without proof."
+        )
+
+    if team and cat_u in {'AMUSEMENT PARKS', 'FRANCHISE'}:
+        if short:
+            return """═══════════════════════════════════════════════════════════════════
+SPORTS TEAM — VENUE / FRANCHISE
+═══════════════════════════════════════════════════════════════════
+**Home stadium naming + official team-shop / league app ecosystems** outrank unrelated destination parks lacking club storyline."""
+
+        return (
+            "**Venue realism:** Naming-rights home field, flagship team ecommerce, loyalty/team membership apps dominate "
+            "over generic amusement rows unless persona shows deliberate sports tourism binge.\n"
+            "Rivals receive derby nuance, not accidental sky-high spikes."
+        )
+
+    if team and cat_u in {'TICKETING', 'EVENTS'}:
+        if short:
+            return """═══════════════════════════════════════════════════════════════════
+SPORTS TEAM — LIVE EVENT ROWS
+═══════════════════════════════════════════════════════════════════
+Home schedule + postseason + verified league/official exchange partners outperform random festivals."""
+
+        return (
+            "Reflect **fixture + playoff ticketing** realism — elevate official resale/partner surfaces named "
+            "in persona research ahead of stray entertainment aggregators lacking team contracts."
+        )
+
+    if ind_ath and cat_u in {'ATHLETE', 'ATHLETES'}:
+        if short:
+            return """═══════════════════════════════════════════════════════════════════
+PRO ATHLETE PERSONA — ATHLETE CATEGORY
+═══════════════════════════════════════════════════════════════════
+**Subject athlete + storyline-linked teammates / rivalry counterstars** lead — deflate unrelated leaderboard filler."""
+
+        return (
+            "**Pro athlete persona:** Top tiers prioritize **THIS subject athlete**, collaborators teammates named in "
+            "research, rivalry counterstars anchoring narratives — unrelated stars lacking storyline tie stay lower."
+        )
+
+    if ind_ath and cat_u in {'MOST PURCHASED BRANDS', 'WHERE THEY SHOP'}:
+        if short:
+            return """═══════════════════════════════════════════════════════════════════
+PRO ATHLETE PERSONA — ENDORSEMENTS / RETAIL
+═══════════════════════════════════════════════════════════════════
+**Documented endorsement / equipment / hydration / telecom / auto sponsors** inflate — stray luxe lacks proof stays cautious."""
+
+        return (
+            "**Sponsor fidelity:** amplify brands surfaced in persona `cultural_anchors`/`cross_shop_network` representing "
+            "signature deals fans emulate digitally."
+        )
+
+    return ''
+
+
+def _category_pass1_calibration_block(category: str,
+                                      persona_doc: dict | None = None) -> str:
     """Category-specific hard calibration for the Pass 1 Category Rule Agent."""
     u = (category or '').strip().upper()
+    sections: list[str] = []
+
     if u == 'HEALTH & WELLNESS':
-        return (
+        sections.append(
             "This column measures **digital** behavior (websites, apps, patient portals, national health info), "
             "not the share of people who physically visited a hospital campus.\n"
             "• **Named regional hospital systems / flagship city hospitals** (e.g. large NYC systems) have "
@@ -14359,8 +14478,8 @@ def _category_pass1_calibration_block(category: str) -> str:
             "apps / fitness tech** that US consumers actually open online. Put **most single-metro hospital "
             "brands** in low tiers or `anti_fit_in_category` unless geography in the persona proves overlap."
         )
-    if u == 'MOST PURCHASED BRANDS':
-        return (
+    elif u == 'MOST PURCHASED BRANDS':
+        sections.append(
             "**Digital panel** — rows reflect **logged-in / web / app** purchase & research signals, not "
             "offline-only drugstore runs.\n"
             "• **Makeup / fragrance / commodity CPG / household consumables** often move through "
@@ -14378,8 +14497,8 @@ def _category_pass1_calibration_block(category: str) -> str:
             "Default national qualified cohort ⇒ treat strong regionals as mid/low or `anti_fit_in_category`.\n"
             "• Prefer `predicted_top_5` that respects this coherence check."
         )
-    if u == 'WHERE THEY SHOP':
-        return (
+    elif u == 'WHERE THEY SHOP':
+        sections.append(
             "**Geography-first retail realism:** banners are not national fungible tokens — store chains have "
             "**footprints**. Tier placement MUST align with persona **`location`/DMA skew** "
             "(if top DMAs are Northeast/midwestern metros vs Texas vs Southeast vs coastal West).\n"
@@ -14396,8 +14515,8 @@ def _category_pass1_calibration_block(category: str) -> str:
             "remain allowable high tiers alongside genuinely national department stores.\n"
             "• `predicted_top_5` should not be dominated by a single-chain regional grocer that contradicts the DMA map."
         )
-    if u in {'SEARCH ENGINE/AI', 'SEARCH ENGINE'}:
-        return (
+    elif u in {'SEARCH ENGINE/AI', 'SEARCH ENGINE'}:
+        sections.append(
             "**Google** (map to the rows named Google / Google Search / google.com consistently with the CSV) "
             "is the **default #1**: for mainstream US-qualified cohorts, annual meaningful digital touching "
             "points usually land **≥78% BP** and should lead `predicted_top_5`. Bing is a distant #2 window; "
@@ -14406,14 +14525,23 @@ def _category_pass1_calibration_block(category: str) -> str:
             "or the study input is explicitly about non-Google search. Set `category_ceiling_pct` ~88–92; "
             "Google owns the top tier band (~78–90 BP)."
         )
-    return ''
+
+    sx = _sports_fan_commerce_calibration_block(u, persona_doc, phase='pass1').strip()
+    if sx:
+        sections.append(sx)
+
+    return '\n\n'.join(sections).strip()
 
 
-def _category_pass2_calibration_block(cat_upper: str) -> str:
+def _category_pass2_calibration_block(cat_upper: str,
+                                      persona_doc: dict | None = None) -> str:
     """Extra Pass 2 (chunk scorer) reminders — keyed by canonical category headers."""
     u = (cat_upper or '').strip().upper()
+    parts: list[str] = []
+
     if u == 'HEALTH & WELLNESS':
-        return """═══════════════════════════════════════════════════════════════════
+        parts.append(
+            """═══════════════════════════════════════════════════════════════════
 CATEGORY HARD CALIBRATION — HEALTH & WELLNESS (this scoring pass only)
 ═══════════════════════════════════════════════════════════════════
 Do not award high BP to **named regional hospital / single-metro academic medical centers**
@@ -14421,9 +14549,11 @@ unless the persona is explicitly local-health or healthcare-worker concentrated.
 National median audiences touch those systems online at **trace** rates.
 National digital-health publishers, telehealth, fitness apps, and retail pharmacy portals
 are appropriate high-BP archetypes."""
+        )
 
     if u == 'MOST PURCHASED BRANDS':
-        return """═══════════════════════════════════════════════════════════════════
+        parts.append(
+            """═══════════════════════════════════════════════════════════════════
 CATEGORY HARD CALIBRATION — MOST PURCHASED BRANDS (digital footprints)
 ═══════════════════════════════════════════════════════════════════
 Commodity cosmetics / packaged goods often spike in raw panel noise but lack **digital**
@@ -14436,9 +14566,11 @@ are **proportionally elevated** — otherwise lower the CPG cluster toward mid t
 **Regional-only or strong geo-skew brands** (sold mainly in one region — e.g. deep-South / Texas-heavy
 grocery or ice-cream labels): keep BP **low** unless persona `location` DMA mix or subsegments prove that
 geography — otherwise panel noise is inflating irrelevant regionals."""
+        )
 
     if u == 'WHERE THEY SHOP':
-        return """═══════════════════════════════════════════════════════════════════
+        parts.append(
+            """═══════════════════════════════════════════════════════════════════
 CATEGORY HARD CALIBRATION — WHERE THEY SHOP (regional footprints)
 ═══════════════════════════════════════════════════════════════════
 Grocery / super-regional banners (H-E-B, Publix, Pavilions-style chains, etc.) only score **high**
@@ -14448,17 +14580,24 @@ when persona LOCATION/DMA mix plausibly contains that footprint.
 **Florida-only personas** ⇒ West-banner labels that do not operate there belong **low** unless omnichannel/digital proof.
 
 Honor national mass ecommerce + Walmart/Target/Costco when list contains them."""
+        )
 
     if u in {'SEARCH ENGINE/AI', 'SEARCH ENGINE'}:
-        return """═══════════════════════════════════════════════════════════════════
+        parts.append(
+            """═══════════════════════════════════════════════════════════════════
 CATEGORY HARD CALIBRATION — SEARCH ENGINE/AI
 ═══════════════════════════════════════════════════════════════════
 **Google-class rows** (~78–90% BP for typical US conditioned cohorts) should **normally outrank everything**
 unless the persona is an extreme Bing/DDG/Yahoo-only niche.
 Rank AI-only tools below Google for general consumers.
 Honor the CATEGORY RULE tiers but never leave Google materially below challenger engines without explicit persona rationale."""
+        )
 
-    return ''
+    sx = _sports_fan_commerce_calibration_block(u, persona_doc, phase='pass2').strip()
+    if sx:
+        parts.append(sx)
+
+    return '\n\n'.join(parts) if parts else ''
 
 
 def persona_research_agent(subject: str, brand_category: str | None = None,
@@ -14607,9 +14746,7 @@ STEP 1b — ASSIGN SUBJECT ARCHETYPE (you MUST branch — downstream agents copy
     • tv_film_or_streaming_title: age/skew flows from CONTENT RATING + genre + where it airs — kids' cartoons vs prestige drama vs anime vs reality; parasocial extremes are a SUBSEGMENT, not the median viewer.
     • videogame_interactive_entertainment: cohort is PLAYERS/watchers-as-entertainment — platform fracture matters (mobile vs PC vs console vs Roblox/metaverse). Do not force Foot Locker–centric digital_identity unless the game actually implies it.
     • mobile_app_saas_platform: prioritize real app-store category + habitual daily use patterns; cross-shop is other apps/digital wallets/ads ecosystems — not malls first.
-    • publisher_or_media_platform: audience is diffuse — often nearer gen-pop DIGITALLY except for partisan news or locked ecosystems; avoid writing a persona that only fits one vertical show unless the INPUT subject really is just that slate.
-
-STEP 2 — RESEARCH THE AUDIENCE (CRITICAL — use web search)
+    • sports_team_league_org: **Geography is part of the story** — LOCATION must reflect home-market + regional fan footprint; research **current sponsors, venue naming, marquee athletes** and write them into anchors + cross_shop — downstream scoring uses them for ATHLETE / RETAIL / TICKETING realism. Do not output a team persona that reads like a generic national toothpaste brand.
   Search for: "{subject} audience demographics", "{subject} customer demographics", "{subject} fan demographics"
   You MUST find real published data on:
   - Age distribution (what age bracket is the core audience?)
@@ -14636,6 +14773,19 @@ STEP 4 — CROSS-CHECK YOUR ASSUMPTIONS
   - Are the core interests consistent with the subject? (e.g., a sports EQUIPMENT BRAND anchors SPORTS/FITNESS; a K-pop group's audience anchors MUSIC/K-BEAUTY + related social video — do NOT force mismatched aisles.)
   - Do the category signals provide ACTIONABLE guidance? (Not vague "score high/low" but specific item types and multiplier ranges)
   - Does the digital identity mention 8-12 SPECIFIC platforms/retailers by name?
+
+STEP 5a — SPORTS FRANCHISE / TEAM (`subject_archetype` MUST be `sports_team_league_org` when the input is that team/program)
+  When this applies — BEFORE finalizing JSON — verify research-backed hooks exist:
+  • **`location`** over-weights **home market DMA + realistically adjacent commuter / regional rally belts** (not a flat census). Note any away-game-heavy corridors ONLY if sourcing supports elevated fan diasporas (e.g. historic transplant cities).
+  • **`cultural_anchors.athletes`**: headline **today's marquee roster names + evergreen franchise legends** routinely discussed locally/nationally — not random league talent who never wore the colors.
+  • **`cross_shop_network` + opening `digital_identity` paragraph**: cite **current major sponsors/partners —
+    jersey/kit brand, marquee broadcast advertisers (beverages, telecom, insurance, autos), ticketing/payments partners,
+    recognizable equipment suppliers — PLUS **exact stadium or arena naming** fans encounter on broadcasts & apps.
+
+STEP 5b — PROFESSIONAL ATHLETE PERSON (`celebrity_or_creator` WHEN research proves elite pro competitor)
+  • **`location`**: overweight **current team's HOME metro** + national gateways proportional to superstar reach; mention trade history only if materially shifting fan geography.
+  • Surface **endorsed sponsors / signature product lines / league official partners tied to persona** across `cultural_anchors`, `cross_shop_network`, MPB/WTS-oriented `category_signals`.
+  • `category_signals["ATHLETE"]` should instruct scoring to privilege **THIS subject athlete**, teammate/co-star figures named in anchors, rivalry counterstars shaping narrative arcs — not unrelated leaderboard filler.
 
 STEP 5 — WRITE THE PERSONA
   Now generate the full persona JSON with all fields. Every field must reflect your research, not generic assumptions.
@@ -15532,7 +15682,7 @@ def _run_item_guidance_agent(category: str, item_names: list[str],
         if _idb.strip():
             interest_prior_block = _idb
 
-    rubric_calibration_block = _category_pass1_calibration_block(category)
+    rubric_calibration_block = _category_pass1_calibration_block(category, persona_doc)
 
     prompt = f"""You are a senior consumer-research analyst writing a SCORING RUBRIC for the **{category}** category, for **{subject}**.
 
@@ -16201,7 +16351,7 @@ panel × 0.2–0.4 to get realistic active-engagement %:
 This isn't a math rule — it's just realistic context for your reasoning.
 """
 
-    _tier2_hard = _category_pass2_calibration_block(cat_u).strip()
+    _tier2_hard = _category_pass2_calibration_block(cat_u, persona_doc).strip()
     if _tier2_hard:
         anchor_rules = anchor_rules.rstrip() + "\n\n" + _tier2_hard + "\n"
 
