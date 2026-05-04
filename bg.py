@@ -14466,6 +14466,73 @@ PRO ATHLETE PERSONA — ENDORSEMENTS / RETAIL
     return ''
 
 
+def _celebrity_talent_calibration_block(cat_u: str, persona_doc: dict | None, *,
+                                        phase: str) -> str:
+    """Entertainment talent personas — endorsement visibility + network→SVOD fit (capped vs Netflix/Hulu)."""
+    if _persona_subject_archetype(persona_doc) != 'celebrity_or_creator':
+        return ''
+    short = phase == 'pass2'
+
+    if cat_u == 'TALENT':
+        if short:
+            return """═══════════════════════════════════════════════════════════════════
+CELEBRITY / TALENT PERSONA — TALENT CATEGORY
+═══════════════════════════════════════════════════════════════════
+**Every research-backed endorsement, ambassador deal, and paid partnership brand** tied to this subject
+must read **visible** (high-mid / top band) when those exact names appear as TALENT rows — burying them
+behind unrelated names is wrong. Co-stars / coach figures / obvious peer talent from the same show may
+elevate; random chart noise deflates."""
+
+        return (
+            "**`celebrity_or_creator`:** TALENT tiers must **surface documented brand deals + marque co-talent "
+            "named in persona** (ambassadors, recurring co-stars, rivalry/duet figures in the same universe). "
+            "Obscure leaderboard filler without storyline tie to the subject stays low.\n"
+            "• `predicted_top_5` should include **the subject row** (when present) plus deal / show-ecosystem hooks the inventory allows."
+        )
+
+    if cat_u == 'STREAMING/PLATFORM':
+        if short:
+            return """═══════════════════════════════════════════════════════════════════
+CELEBRITY PERSONA — STREAMING / NETWORK FIT
+═══════════════════════════════════════════════════════════════════
+Map the subject's **current linear / cable / flagship streamer home** (from persona research) onto the
+matching corporate SVOD row when present (e.g. NBC→Peacock ecosystem, Showtime/CBS→Paramount+, ABC/FX→Hulu/Disney+,
+HBO→Max, etc. — verify rights; do not invent exclusives).
+
+• **Network-synergy apps** may **jump ahead of WRONG-network SVOD peers** in the mid-pack.
+• **HARD CEILING:** **Netflix must still lead** `predicted_top_5` for mainstream US talent audiences
+and **Hulu must stay in the top 3–4** SVOD slots — never rank Peacock, Paramount+, Max, Disney+, or any
+other synergy app **above** Netflix or **above** Hulu regardless of perfect network match.
+• Other broad services (Prime Video, Disney+, Max, …) stay realistic gen-pop mass — synergy rows compete
+**under** the Netflix+Hulu anchor layer."""
+
+        return (
+            "**Network / platform alignment:** If persona research ties the subject to a **specific broadcaster "
+            "or premium cabler**, elevate the **matching first-party SVOD** (Peacock for NBCUniversal linear "
+            "heavy; Paramount+ for Paramount/Showtime-era properties; Hulu/Disney+ for ABC/FX/Disney footprints; "
+            "Max for HBO-class IP, etc.) **relative to mismatched network apps**.\n"
+            "• **Universal floor — Netflix + Hulu:** Maintain **Netflix as #1** and **Hulu in the top SVOD cluster** "
+            "for typical fan cohorts. Peacock/Paramount+/etc. **never outrank** Netflix or Hulu — they only "
+            "reshuffle **below** that pair against each other and other mass streamers."
+        )
+
+    if cat_u == 'MOST PURCHASED BRANDS':
+        if short:
+            return """═══════════════════════════════════════════════════════════════════
+CELEBRITY PERSONA — MPB DEAL VISIBILITY
+═══════════════════════════════════════════════════════════════════
+Consumer brands from **confirmed endorsements / licensing / collaborator products** cited in persona
+belong in **elevated tiers** when CSV rows exist — do not swamp them with unrelated aisle noise."""
+
+        return (
+            "**Endorsement MPB realism:** amplify **partner consumer brands + beverage / automotive / telecom / beauty "
+            "deals explicitly named** in persona `cultural_anchors`, `digital_identity`, or `cross_shop_network` when "
+            "those labels exist in MOST PURCHASED BRANDS inventory."
+        )
+
+    return ''
+
+
 def _category_pass1_calibration_block(category: str,
                                       persona_doc: dict | None = None) -> str:
     """Category-specific hard calibration for the Pass 1 Category Rule Agent."""
@@ -14544,6 +14611,9 @@ def _category_pass1_calibration_block(category: str,
     sx = _sports_fan_commerce_calibration_block(u, persona_doc, phase='pass1').strip()
     if sx:
         sections.append(sx)
+    cx = _celebrity_talent_calibration_block(u, persona_doc, phase='pass1').strip()
+    if cx:
+        sections.append(cx)
 
     return '\n\n'.join(sections).strip()
 
@@ -14614,6 +14684,9 @@ Honor the CATEGORY RULE tiers but never leave Google materially below challenger
     sx = _sports_fan_commerce_calibration_block(u, persona_doc, phase='pass2').strip()
     if sx:
         parts.append(sx)
+    cx = _celebrity_talent_calibration_block(u, persona_doc, phase='pass2').strip()
+    if cx:
+        parts.append(cx)
 
     return '\n\n'.join(parts) if parts else ''
 
@@ -14760,7 +14833,7 @@ STEP 1b — ASSIGN SUBJECT ARCHETYPE (you MUST branch — downstream agents copy
 
   ARCHETYPE RULES (do not confuse these):
     • consumer_brand: use mass-market MEDIAN-buyer framing when reach is tens of millions; luxury/niche when reach is tiny. Detailed athletic-apparel EXAMPLES (heavy sneaker skew, suburban parent core) apply ONLY when the subject truly is THAT kind of brand — not for a TikTok comedian or Pokémon Go.
-    • celebrity_or_creator: demographics track the SUBJECT'S audience research (Stan culture, geography of fanbases, genre), not Nike-style "median shopper." Still avoid caricature superfans dominating the weights unless data supports it (most celebrity engagement is casual).
+    • celebrity_or_creator: demographics track the SUBJECT'S audience research (Stan culture, geography of fanbases, genre), not Nike-style "median shopper." Still avoid caricature superfans dominating the weights unless data supports it (most celebrity engagement is casual). **Enumerate verifiable brand deals + distributor network** (STEP 5c) so downstream TALENT / MPB / STREAMING agents see them.
     • tv_film_or_streaming_title: age/skew flows from CONTENT RATING + genre + where it airs — kids' cartoons vs prestige drama vs anime vs reality; parasocial extremes are a SUBSEGMENT, not the median viewer.
     • videogame_interactive_entertainment: cohort is PLAYERS/watchers-as-entertainment — platform fracture matters (mobile vs PC vs console vs Roblox/metaverse). Do not force Foot Locker–centric digital_identity unless the game actually implies it.
     • mobile_app_saas_platform: prioritize real app-store category + habitual daily use patterns; cross-shop is other apps/digital wallets/ads ecosystems — not malls first.
@@ -14804,6 +14877,11 @@ STEP 5b — PROFESSIONAL ATHLETE PERSON (`celebrity_or_creator` WHEN research pr
   • **`location`**: overweight **current team's HOME metro** + national gateways proportional to superstar reach; mention trade history only if materially shifting fan geography.
   • Surface **endorsed sponsors / signature product lines / league official partners tied to persona** across `cultural_anchors`, `cross_shop_network`, MPB/WTS-oriented `category_signals`.
   • `category_signals["ATHLETE"]` should instruct scoring to privilege **THIS subject athlete**, teammate/co-star figures named in anchors, rivalry counterstars shaping narrative arcs — not unrelated leaderboard filler.
+
+STEP 5c — ENTERTAINMENT / CELEBRITY TALENT (`celebrity_or_creator`, including actors, hosts, musicians, influencers — WHEN the studied subject is THAT person, not a brand mascot or a fictional title-only study)
+  • **Brand deals ALWAYS surface:** Document **every notable current endorsement, ambassador role, collaborator product, beverage/auto/telecom/fashion/skin-care partner** tied to credible sources. Reflect them plainly in **`cultural_anchors`, `digital_identity`, `cross_shop_network`, and MPB/WTS/TALENT `category_signals`.** Downstream scoring must keep those names **visible in high tiers** whenever they appear as inventory rows — missing a famous deal is worse than overcautious damping.
+  • **Where their show lives:** Capture **distribution reality** — linear network, cabler/FAST sibling, flagship streamer premiere window (verify with research). Examples shape *relative* SVOD cues (long-running NBC-era talent → elevate **Peacock** vs wrong-network apps; premium Showtime-era talent → elevate **Paramount+** vs Peacock-type mismatches). **Never** fabricate exclusives.
+  • **Streaming ceiling:** In `category_signals["STREAMING/PLATFORM"]` write explicitly that **network-matched SVOD may beat OTHER non-home apps** in the stack but **never outrank Netflix** and **never slot above Hulu** for median fan cohorts — Netflix #1 discipline, Hulu pinned to the flagship mass tier.
 
 STEP 5 — WRITE THE PERSONA
   Now generate the full persona JSON with all fields. Every field must reflect your research, not generic assumptions.
@@ -15146,7 +15224,7 @@ Anchor each category note to `subject_archetype` — e.g. MUSICIAN → prioritiz
 For each category, your guidance MUST be grounded in reality:
 - What TYPES of items should score ABOVE their baseline (not "high" in absolute terms — above their gen-pop baseline)
 - What TYPES of items should score BELOW their baseline
-- CRITICAL: For categories with near-universal items (STREAMING/PLATFORM, WHERE THEY SHOP, TECHNOLOGY/DEVICE), remind the agent that major services (Netflix, Hulu, Amazon Prime, Walmart, Target) should stay near their baselines. Only persona-specific niche items should deviate significantly.
+- CRITICAL: For categories with near-universal items (STREAMING/PLATFORM, WHERE THEY SHOP, TECHNOLOGY/DEVICE), remind the agent that major services (Netflix, Hulu, Amazon Prime, Walmart, Target) should stay near their baselines. Only persona-specific niche items should deviate significantly — **EXCEPT** under `celebrity_or_creator` you still encode **research-backed endorsement visibility + network-aligned SVOD** per STEP 5c while honoring the **Netflix #1 / Hulu top-cluster** ceiling.
 - For AUTOMOBILE: specify what cars this demographic ACTUALLY drives based on age and income, not aspirational vehicles
 - For TECHNOLOGY/DEVICE: specify the likely device ecosystem (Android vs iOS) based on demographics
 - For GAMES: specify age-appropriate games, not children's games for adult audiences
@@ -15158,10 +15236,10 @@ For each category, your guidance MUST be grounded in reality:
   (that incorrectly implies nearly half the audience engages those specific systems online yearly). Tie high scores to persona geography or medical roles only.
 - MOST PURCHASED BRANDS (digital semantics): Split **purchase paths**. (a) **Mass-market CPG / grocery aisles / big-box consumables / mainstream drugstore SKU behavior** ⇒ if personas push many aisle leaders toward the TOP, **`category_signals` must demand Instacart + Walmart/Target grocery-digital pickups + grocery DoorDash/Uber stacks ALSO read VERY high**, then aisle peers can spike coherently. (b) **Prestige / luxury skincare & cosmetics sourced via Sephora / prestige Ulta / department flagship / prestige DTC** ⇒ **omit** grocery-delivery coherence — prestige brands dominate via browse/reviews/apps without implying Instacart must trend. (c) **Regional-distribution** mass brands stay low unless persona `location`/DMA proves that macro‑region match.
 - WHERE THEY SHOP: **Geographic footprints matter.** Regional chains belong high only when persona `location`/DMA skew **matches** that retailer’s real geography — East Coast vs Pacific Northwest vs SoCal vs Texas vs inland South vs Midwest, etc.; **whatever the input persona’s footprint is**, use it as the compass. Wrong-macro‑region dominance in either direction ⇒ score LOW unless research proves crossover (travel, ecommerce-only edge cases rarely justify mass BP).
+- TALENT (panel rows): **`celebrity_or_creator`** personas must elevate **research-backed ambassador / co-star / sibling-act names** cited in anchors — burying marquee deal partners appearing as TALENT inventory is wrong unless anti_fit proves hate-following.
+- STREAMING/PLATFORM: **`celebrity_or_creator`:** encode **distribution-accurate** SVOD cues (broadcast/cable/streamer home ⇒ matching corporate apps such as NBC↔Peacock, Showtime/Paramount↔Paramount+, ABC/Disney/FX footprints↔Hulu/Disney+, HBO-era↔Max when research supports). Relative ranks among **those** synergy apps vs wrong-network rivals may widen — yet **Netflix must lead** predicted SVOD stacks and **Hulu stays pinned to the top mass SVOD tier** (#2-ish band alongside other broad anchors). **Never** rank Peacock, Paramount+, nor any other synergy label **above Hulu or Netflix** for median viewers.
 - SEARCH ENGINE/AI: **Google (~78%+ annual credible digital touching points for mainstream US conditioned cohorts) should ordinarily lead**.
-  Respect niche-only Yahoo/Bing/AI-research personas; default mass-market ⇒ Google tier #1, AI assistants chase but seldom clear #1 absent explicit evidence.
-
-These signals are the primary guidance that scoring agents use to reason about individual items. Make them specific and opinionated but REALISTIC — do not tell agents to crush near-universal items.
+  Respect niche-only Yahoo/Bing/AI-research personas; default mass-market ⇒ Google tier #1, AI assistants chase but seldom clear #1 absent explicit evidence. Make them specific and opinionated but REALISTIC — do not tell agents to crush near-universal items.
 
 EXAMPLE category_signals (hypothetical `consumer_brand` athletic-equipment cohort ONLY — transpose structure, not wording, when archetype differs):
   "SOCIAL MEDIA": "Major platforms (YouTube, TikTok, Instagram, Snapchat) are near-universal for this young audience — score them at 1.0-1.4x baseline. TikTok is THE dominant platform for young, urban, diverse Americans — DO NOT crush it. Facebook skews older — score 0.7-0.9x baseline. Discord near baseline for gamers/young men. Niche platforms (BeReal, Lemon8) near or below baseline.",
