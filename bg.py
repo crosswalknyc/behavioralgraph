@@ -15633,6 +15633,7 @@ For each category, your guidance MUST be grounded in reality:
 - For TECHNOLOGY/DEVICE: specify the likely device ecosystem (Android vs iOS) based on demographics
 - For GAMES: specify age-appropriate games, not children's games for adult audiences
 - For INSURANCE: major insurers (GEICO, State Farm, Progressive) have high digital engagement — score near baseline
+- For BETTING (legal US sports-wagering digital touch cohorts): DraftKings + FanDuel are the endemic mass‑tier omnichannel leaders; BetMGM / Caesars / ESPN Bet plausible mass seconds from national marketing. Overseas‑anchored brands (**Bet365** class and similar offshore-first books) belong **meaningfully BELOW DK/FD** in predicted tiers unless persona + research proves explicit UK/Ireland/Europe wagering geography — panel spikes ≠ override.
 - For AMUSEMENT PARKS: major theme parks (Disney, Universal, Six Flags) are visited by most Americans — keep near baseline
 - THIS IS A U.S. PANEL: flag any foreign-only items that should score very low
 - HEALTH & WELLNESS: Reward **digital** health (research sites, telehealth, fitness wearables apps, pharmacy logins).
@@ -24285,6 +24286,15 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
                     lambda _v: str(int(round(float(str(_v).replace(',', '')))))
                     if str(_v).strip() != '' else _v
                 )
+
+    df_final = enforce_behavioral_category_plausibility(
+        df_final,
+        brand_category=brand_category,
+        project_name=str(project_name) if project_name is not None else None,
+        brands=brands,
+    )
+    df_final = finalize_output_metrics_like_edit_sample_size(df_final)
+    df_final = ensure_bp_driven_metric_alignment(df_final)
 
     # Save to CSV
     try:
@@ -32985,6 +32995,17 @@ def enforce_behavioral_category_plausibility(df, brand_category=None, project_na
         if val in ('MALE', 'TRANS MALE'):
             male_pct += p
     amask = out['Column'].astype(str).str.upper().str.strip() == 'AGE'
+
+    identity_blob_raw = " ".join(
+        [str(project_name or ""), str(brand_category or "")]
+        + [str(b) for b in (brands or [])]
+    ).upper().replace('_', ' ')
+    _pad = f" {identity_blob_raw} "
+    is_uk_context = any(tok in _pad for tok in (
+        ' UK ', ' BRIT ', ' BRITISH ', ' LONDON ', ' ENGLAND ',
+        ' SCOTLAND ', ' BBC ', ' EURO ',
+    ))
+
     for _, row in out[amask].iterrows():
         val = str(row.get('Value', '')).strip().upper()
         p = _to_num(row.get(cs_col, row.get(pct_col, 0)))
@@ -33032,27 +33053,40 @@ def enforce_behavioral_category_plausibility(df, brand_category=None, project_na
 
     fixes = 0
 
-    # 1) BETTING: DK/FD over Bet365 only for likely US sports-betting audience shape
-    sports_betting_shape = (male_pct >= 52.0) or (young_pct >= 45.0) or (black_pct >= 25.0 and male_pct >= 45.0)
-    if sports_betting_shape:
+    # 1) BETTING — US panel: DK + FanDuel should materially lead Bet365 in digital tiers
+    #    unless the brief is explicitly UK/Euro anchored. The old male/young DEMO gate skipped
+    #    many Nike-like profiles so Bet365 usurped DK/FD from stray panel spikes.
+
+    if not is_uk_context:
         bet365_idx = _find_idx('BETTING', ['BET365'])
-        dk_idx = _find_idx('BETTING', ['DRAFTKINGS', 'DRAFT KINGS'])
+        dk_idx = _find_idx('BETTING', ['DRAFTKINGS', 'DRAFT KINGS', 'DRAFTKING'])
         fd_idx = _find_idx('BETTING', ['FANDUEL', 'FAN DUEL'])
         if bet365_idx is not None and (dk_idx is not None or fd_idx is not None):
-            b = _bp(bet365_idx)
-            dk = _bp(dk_idx) if dk_idx is not None else None
-            fd = _bp(fd_idx) if fd_idx is not None else None
-            leader = max([x for x in [dk, fd] if x is not None] or [0.0])
-            if b > leader and leader > 0:
-                target_b = max(0.01, leader * 0.92)
-                _write_bp(bet365_idx, target_b)
+            b_now = float(_bp(bet365_idx))
+            dk_now_v = float(_bp(dk_idx)) if dk_idx is not None else None
+            fd_now_v = float(_bp(fd_idx)) if fd_idx is not None else None
+            peers = [v for v in [dk_now_v, fd_now_v] if v is not None]
+            leader = float(max(peers)) if peers else max(13.9, float(b_now) * 0.93)
+
+            if b_now >= leader * 1.008:
+                new_b365 = max(1.05, leader * 0.78)
+                _write_bp(bet365_idx, min(b_now, new_b365))
                 fixes += 1
-                b = target_b
-            if dk_idx is not None and dk is not None and dk < b * 1.05:
-                _write_bp(dk_idx, min(95.0, b * 1.08))
+                b_now = float(_bp(bet365_idx))
+
+            cap_ref = float(max(b_now, 1.95))
+            want_fd_v = max(fd_now_v or 0.0, cap_ref + max(8.6, cap_ref * 0.185))
+            want_dk_v = max(dk_now_v or 0.0, cap_ref + max(14.0, cap_ref * 0.27))
+            if dk_idx is not None and fd_idx is not None:
+                want_dk_v = max(want_dk_v, want_fd_v + 6.95)
+            if fd_idx is not None and dk_idx is not None:
+                want_fd_v = min(want_fd_v, want_dk_v - 3.95)
+
+            if dk_idx is not None and abs(want_dk_v - (dk_now_v or 0)) >= 0.02:
+                _write_bp(dk_idx, min(95.0, want_dk_v))
                 fixes += 1
-            if fd_idx is not None and fd is not None and fd < b * 1.05:
-                _write_bp(fd_idx, min(95.0, b * 1.08))
+            if fd_idx is not None and abs(want_fd_v - (fd_now_v or 0)) >= 0.02:
+                _write_bp(fd_idx, min(95.0, want_fd_v))
                 fixes += 1
 
     # 2) MEDIA: TODAY/TODAY SHOW should not dominate younger/male-skewing audiences
@@ -33063,12 +33097,8 @@ def enforce_behavioral_category_plausibility(df, brand_category=None, project_na
             fixes += 1
 
     # 2b) MEDIA: For US audiences, BBC should not lead mainstream US publications.
-    # Allow exceptions only when project/brand clearly signals UK/international focus.
-    identity_blob = " ".join(
-        [str(project_name or ""), str(brand_category or "")]
-        + [str(b) for b in (brands or [])]
-    ).upper()
-    is_uk_context = any(tok in identity_blob for tok in [' UK ', ' BRIT', ' BRITISH', ' LONDON ', ' ENGLAND ', ' BBC'])
+    # is_uk_context is derived above from project/category/brands (+ UK-ish tokens).
+
     if not is_uk_context:
         bbc_idx = _find_idx('MEDIA', ['BRITISH BROADCASTING CORPORATION', 'BBC'])
         if bbc_idx is not None:
