@@ -9620,6 +9620,13 @@ def ai_final_gut_check(df, brand_category, project_name, brands):
                 f"or clicked online can plausibly be higher.\n"
                 f"- Commodity/offline-heavy purchases (e.g., basic staples) usually should not "
                 f"appear as strong over-index leaders unless persona evidence is explicit.\n"
+                f"- **CPG/makeup/skin care/household consumables spike easily in raw panel signal but often lack branded digital loyalty** — "
+                f"don't let them crowd the leaderboard without a plausible online path "
+                f"(subs, reorder apps, DTC-heavy brands).\n"
+                f"- **Basket coherence (digital choreography): if multiple CPG / beauty HOUSEHOLD names sit near the top**, "
+                f"either LOWER THEM toward mid-tier OR ensure **digital grocery proxies** "
+                f"(INSTACART when listed, WALMART / TARGET pickup & grocery proxies, grocery delivery Uber Eats / DoorDash) "
+                f"score comparably HIGH — contradictory spreads are persona-wrong.\n"
                 f"- Niche lifestyle/streetwear/luxury labels should only over-index strongly when "
                 f"the persona has clear cultural fit.\n\n"
                 f"Persona-rank sanity:\n"
@@ -9716,7 +9723,10 @@ def ai_final_gut_check(df, brand_category, project_name, brands):
                 f"6) For youth pop profiles, weak-fit life-stage interests (job search, parenting/kids, mortgages-style)\n"
                 f"   should not outrank core youth digital/fandom interests without explicit evidence.\n"
                 f"7) For MOST PURCHASED BRANDS, teen/gen-z brands should generally outrank older-skew legacy brands\n"
-                f"   unless profile evidence supports the legacy dominance.\n\n"
+                f"   unless profile evidence supports the legacy dominance.\n"
+                f"8) **MOST PURCHASED BRANDS digital coherence:** if makeup/CPG leaders are extremely high, "
+                f"INSTACART + major digital-grocery/stacked pickup proxies in the SAME category must ALSO be elevated; "
+                f"otherwise LOWER the CPG bloc.\n\n"
                 f"For EACH row, decide KEEP / LOWER / RAISE.\n"
                 f"Only include LOWER/RAISE rows in adjustments.\n"
                 f"Return ONLY valid JSON:\n"
@@ -9879,9 +9889,12 @@ def ai_final_gut_check(df, brand_category, project_name, brands):
                 f"For young profiles, TikTok and YouTube should generally not sit below Instagram without strong evidence.\n"
                 f"3) SOCIAL MEDIA: niche platforms (Patreon, Discord, Letterboxd, Tumblr, Bluesky) should not outrank "
                 f"mainstream mass-reach platforms unless explicit evidence strongly supports it.\n"
-                f"4) SEARCH ENGINE/AI: Google should be the dominant #1 search engine for mainstream US audiences. "
-                f"Quora/Perplexity/AI tools may be meaningful but should not outrank Google without explicit evidence.\n"
-                f"5) Avoid blanket boosts/cuts; make row-level corrections with plausible absolute targets.\n\n"
+                f"4) SEARCH ENGINE/AI: **Google / Google Search MUST ordinarily be #1 by BP** (~78–92% plausible annual digital-touch cohort share for BROAD US-conditioned audiences vs year window). "
+                f"Raise Google if materially below Bing/ChatGPT/Perplexity without explicit persona evidence "
+                f"(narrow privacy researcher cohort, deliberate Yahoo-centric study, banned-device edge cases).\n"
+                f"5) SEARCH ENGINE secondary engines stay realistic: Bing is mainstream #2 distance; Yahoo Search tertiary older skew. "
+                f"Standalone AI wrappers (ChatGPT/Copilot/etc.) HOT but should not CLEARLY eclipse Google BP for mass-market personas — LOWER them if they wrongly lead.\n"
+                f"6) Avoid blanket boosts/cuts; make row-level corrections with plausible absolute targets.\n\n"
                 f"For EACH row, decide KEEP / LOWER / RAISE.\n"
                 f"Only include LOWER/RAISE rows in adjustments.\n"
                 f"Return ONLY valid JSON:\n"
@@ -14320,6 +14333,86 @@ def _format_persona_interest_rank_block(persona_doc: dict) -> str:
     return '\n'.join(lines)
 
 
+def _category_pass1_calibration_block(category: str) -> str:
+    """Category-specific hard calibration for the Pass 1 Category Rule Agent."""
+    u = (category or '').strip().upper()
+    if u == 'HEALTH & WELLNESS':
+        return (
+            "This column measures **digital** behavior (websites, apps, patient portals, national health info), "
+            "not the share of people who physically visited a hospital campus.\n"
+            "• **Named regional hospital systems / flagship city hospitals** (e.g. large NYC systems) have "
+            "tiny digital reach NATIONALLY — only locals, actual patients, staff, and students touch those "
+            "properties. It is NOT plausible that ~half the qualified cohort has meaningful annual digital "
+            "engagement with several different metro hospital brands unless the persona is explicitly "
+            "healthcare-geo-constrained (med students, hospital employees, hyper-local health study).\n"
+            "• Reserve top tiers for **national health publishers / telehealth / retail pharmacy & benefits "
+            "apps / fitness tech** that US consumers actually open online. Put **most single-metro hospital "
+            "brands** in low tiers or `anti_fit_in_category` unless geography in the persona proves overlap."
+        )
+    if u == 'MOST PURCHASED BRANDS':
+        return (
+            "**Digital panel** — rows reflect **logged-in / web / app** purchase & research signals, not "
+            "offline-only drugstore runs.\n"
+            "• **Makeup / fragrance / commodity CPG / household consumables** often move through "
+            "brick-and-mortar or generic merchant checkout with **weak brand-property digital footprints**. "
+            "If many of those labels crowd the top of your rubric, either **demote them** or explain a "
+            "digitally native path (DTC subs, heavy app reorder, Amazon Subscribe & Save patterns).\n"
+            "• **Basket coherence:** if mass CPG / beauty leaders are truly high for this cohort, "
+            "**grocery-delivery and digital-grocery intermediaries** (Instacart when present, Walmart grocery / "
+            "Target pickup proxies, DoorDash/Uber Eats grocery when in list) should also sit **very high** — "
+            "that is how those baskets often show up digitally. If they do not, your tier assignments are "
+            "internally inconsistent; fix them.\n"
+            "• Prefer `predicted_top_5` that respects this coherence check."
+        )
+    if u in {'SEARCH ENGINE/AI', 'SEARCH ENGINE'}:
+        return (
+            "**Google** (map to the rows named Google / Google Search / google.com consistently with the CSV) "
+            "is the **default #1**: for mainstream US-qualified cohorts, annual meaningful digital touching "
+            "points usually land **≥78% BP** and should lead `predicted_top_5`. Bing is a distant #2 window; "
+            "Yahoo Search older-skew tertiary. Dedicated AI assistants (ChatGPT, Perplexity, Copilot…) may be "
+            "high but should **not outrank Google** unless the persona is unusually privacy/search-alternative "
+            "or the study input is explicitly about non-Google search. Set `category_ceiling_pct` ~88–92; "
+            "Google owns the top tier band (~78–90 BP)."
+        )
+    return ''
+
+
+def _category_pass2_calibration_block(cat_upper: str) -> str:
+    """Extra Pass 2 (chunk scorer) reminders — keyed by canonical category headers."""
+    u = (cat_upper or '').strip().upper()
+    if u == 'HEALTH & WELLNESS':
+        return """═══════════════════════════════════════════════════════════════════
+CATEGORY HARD CALIBRATION — HEALTH & WELLNESS (this scoring pass only)
+═══════════════════════════════════════════════════════════════════
+Do not award high BP to **named regional hospital / single-metro academic medical centers**
+unless the persona is explicitly local-health or healthcare-worker concentrated.
+National median audiences touch those systems online at **/trace** rates.
+National digital-health publishers, telehealth, fitness apps, and retail pharmacy portals
+are appropriate high-BP archetypes."""
+
+    if u == 'MOST PURCHASED BRANDS':
+        return """═══════════════════════════════════════════════════════════════════
+CATEGORY HARD CALIBRATION — MOST PURCHASED BRANDS (digital footprints)
+═══════════════════════════════════════════════════════════════════
+Commodity cosmetics / packaged goods often spike in raw panel noise but lack **digital**
+loyalty surfaces — keep BP honest vs offline replenishment.
+
+If multiple CPG / beauty leaders score high, ensure **digital grocery proxies**
+(Instacart, Walmart/Target grocery pickup stack, grocery delivery apps in this list)
+are **proportionally elevated** — otherwise lower the CPG cluster toward mid tiers."""
+
+    if u in {'SEARCH ENGINE/AI', 'SEARCH ENGINE'}:
+        return """═══════════════════════════════════════════════════════════════════
+CATEGORY HARD CALIBRATION — SEARCH ENGINE/AI
+═══════════════════════════════════════════════════════════════════
+**Google-class rows** (~78–90% BP for typical US conditioned cohorts) should **normally outrank everything**
+unless the persona is an extreme Bing/DDG/Yahoo-only niche.
+Rank AI-only tools below Google for general consumers.
+Honor the CATEGORY RULE tiers but never leave Google materially below challenger engines without explicit persona rationale."""
+
+    return ''
+
+
 def persona_research_agent(subject: str, brand_category: str | None = None,
                            study_start: str = '', study_end: str = '',
                            category_names: list[str] | None = None,
@@ -14844,6 +14937,14 @@ For each category, your guidance MUST be grounded in reality:
 - For INSURANCE: major insurers (GEICO, State Farm, Progressive) have high digital engagement — score near baseline
 - For AMUSEMENT PARKS: major theme parks (Disney, Universal, Six Flags) are visited by most Americans — keep near baseline
 - THIS IS A U.S. PANEL: flag any foreign-only items that should score very low
+- HEALTH & WELLNESS: Reward **digital** health (research sites, telehealth, fitness wearables apps, pharmacy logins).
+  **Named metro hospital systems** are GEO-SPARSE — nationally they should almost never occupy multiple top tiers at 30–45% BP each
+  (that incorrectly implies nearly half the audience engages those specific systems online yearly). Tie high scores to persona geography or medical roles only.
+- MOST PURCHASED BRANDS (digital semantics): Makeup/fragrance/snack/soap **CPG** often purchased offline — do not stack them atop the leaderboard
+  without a digital rationale. Coherence rule: heavy CPG / beauty leaderboard ⇒ **Instacart + major digital grocery / pickup proxies** must also spike;
+  otherwise pull CPG downward.
+- SEARCH ENGINE/AI: **Google (~78%+ annual credible digital touching points for mainstream US conditioned cohorts) should ordinarily lead**.
+  Respect niche-only Yahoo/Bing/AI-research personas; default mass-market ⇒ Google tier #1, AI assistants chase but seldom clear #1 absent explicit evidence.
 
 These signals are the primary guidance that scoring agents use to reason about individual items. Make them specific and opinionated but REALISTIC — do not tell agents to crush near-universal items.
 
@@ -14855,7 +14956,10 @@ EXAMPLE category_signals (hypothetical `consumer_brand` athletic-equipment cohor
   "WHERE THEY SHOP": "Retailers that sell the subject's product category (e.g. Foot Locker, Dick's Sporting Goods, Finish Line for athletic) should score ABOVE baseline. Mass retailers (Amazon, Walmart, Target) stay near baseline — everyone shops there. CPG/grocery retailers (Kroger, Publix) score BELOW baseline on a digital panel. Luxury boutiques (Tiffany, Nordstrom) depend on audience income.",
   "STREAMING/PLATFORM": "Major streaming (Netflix, Hulu, Amazon Prime Video, Disney+, YouTube) are near-universal — score 0.85-1.15x baseline. Don't crush them. Sports-specific streaming (ESPN+, FuboTV) may score above baseline if audience is sports-oriented. Niche/foreign platforms score very low.",
   "ATHLETE": "The subject's own sponsored athletes should score 2-4x their baseline — not 10x. Only the single most iconic athlete (like LeBron for Nike) gets 5x+. Other athletes score 1.0-1.5x baseline. Don't inflate obscure athletes to 50%+ just because they have a brand deal.",
-  "INTEREST": "The panel uses a fixed global list of interest labels (see `interest_top_25` / `interest_bottom_25` in your JSON when the inventory block is present). Your subject's CORE themes MUST dominate the top of that ranking vs generic ubiquitous rows. Generic-functional rows (JOB SEARCH, SOCIAL MEDIA-as-interest, HOME IMPROVEMENT, COOKING) sit mid/low unless persona research proves otherwise — never crowd out spine hobbies."
+  "INTEREST": "The panel uses a fixed global list of interest labels (see `interest_top_25` / `interest_bottom_25` in your JSON when the inventory block is present). Your subject's CORE themes MUST dominate the top of that ranking vs generic ubiquitous rows. Generic-functional rows (JOB SEARCH, SOCIAL MEDIA-as-interest, HOME IMPROVEMENT, COOKING) sit mid/low unless persona research proves otherwise — never crowd out spine hobbies.",
+  "HEALTH & WELLNESS": "Prefer national digital-health surfaces consumers actually browse or open in-app. Metro hospital SYSTEM brands imply tiny national digital footprints unless the persona is explicitly health-staff heavy or geographically concentrated patients — never pretend ~half the cohort annually engages several different NYC-named hospital stacks online.",
+  "MOST PURCHASED BRANDS": "This is digital-attribution MOST PURCHASED: makeup/snack CPG leaders need DTC or subscription justification or belong mid-tier. If they dominate the top anyway, grocery-delivery anchors (Instacart, Walmart/Target digital grocery proxies in this list, DoorDash grocery if present) must ALSO read very high; otherwise deflate the noisy CPG stack.",
+  "SEARCH ENGINE/AI": "Google/Google Search should virtually always lead (~78–90 BP for mainstream US-conditioned cohorts) and occupy predicted_top_5 #1 unless the profile is unusually Bing/Yahoo/DDG-exclusive. Dedicated AI wrappers may be high but should not cleanly #1 generic consumers vs Google."
 """
 
     print(f"🔬 Step 1: Persona Research Agent researching '{subject}' …")
@@ -15379,6 +15483,8 @@ def _run_item_guidance_agent(category: str, item_names: list[str],
         if _idb.strip():
             interest_prior_block = _idb
 
+    rubric_calibration_block = _category_pass1_calibration_block(category)
+
     prompt = f"""You are a senior consumer-research analyst writing a SCORING RUBRIC for the **{category}** category, for **{subject}**.
 
 SAMPLING: The cohort is **U.S. general-population panelists who QUALIFY ON measured engagement with "{subject}"** (the pipeline input — brand, personality, venue, asset, etc., as modeled).
@@ -15420,6 +15526,11 @@ CROSS-SHOP NETWORK (brands the audience genuinely uses alongside the subject):
 {_fmt_dict_of_lists(cross_shop_network)}
 
 {interest_prior_block}
+{rubric_calibration_block and f'''═══════════════════════════════════════════════════════════════════
+CATEGORY HARD CALIBRATION ({category}) — REQUIRED RUBRIC CONSTRAINTS
+═══════════════════════════════════════════════════════════════════
+{rubric_calibration_block}
+''' or ''}
 ═══════════════════════════════════════════════════════════════════
 ITEMS IN THE {category} CATEGORY (every one will be scored against your rubric)
 ═══════════════════════════════════════════════════════════════════
@@ -16036,8 +16147,14 @@ panel × 0.2–0.4 to get realistic active-engagement %:
   • AUTO PURCHASE INTENT — only ~15-20% buying a car per year
   • COLLEGE/UNIVERSITY pages — only students/applicants/alumni engage
   • SPECIFIC HOSPITALS — only people in that geographic area
+  • HEALTH & WELLNESS — **named metropolitan hospital stacks** behave like SPECIFIC_HOSPITALS:
+    most US panelists anywhere do NOT digitally engage Mount Sinai/NYU Langone/etc.; high BP requires proven local/medical-role persona
 This isn't a math rule — it's just realistic context for your reasoning.
 """
+
+    _tier2_hard = _category_pass2_calibration_block(cat_u).strip()
+    if _tier2_hard:
+        anchor_rules = anchor_rules.rstrip() + "\n\n" + _tier2_hard + "\n"
 
     date_context_block = ""
     if study_dates:
@@ -16498,8 +16615,8 @@ def _build_genpop_persona_doc() -> dict:
             'expected_low': ['ONLYFANS', 'BLUESKY', 'MASTODON', 'TUMBLR', 'PATREON'],
         },
         'SEARCH ENGINE/AI': {
-            'summary': 'Google near-universal; Bing/Yahoo distant 2nd/3rd; ChatGPT growing but still <30% of all US adults.',
-            'expected_high': ['GOOGLE', 'GOOGLE.COM', 'BING', 'YAHOO'],
+            'summary': 'Google/Google Search dominates US digital (~80%+ plausible annual-touch cohort BP for broadly representative adults); Bing/Yahoo distant 2–3rd; standalone AI wrappers hot but ordinarily chase Google—not above it—for mass personas.',
+            'expected_high': ['GOOGLE', 'GOOGLE SEARCH', 'GOOGLE.COM', 'BING', 'YAHOO', 'CHATGPT'],
             'expected_low': ['YOU.COM', 'KAGI', 'NEEVA', 'BRAVE SEARCH'],
         },
         'INTEREST': {
