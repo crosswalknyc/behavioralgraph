@@ -33565,6 +33565,7 @@ def deduplicate_values_within_category(df):
             return 0.0
 
     out = df.copy()
+    out['_ROW_POS'] = range(len(out))
     out['_CAT_KEY'] = out['Column'].astype(str).str.strip().str.upper()
     out['_VAL_KEY'] = out.apply(
         lambda r: _canonical_demo_value(str(r['Column']), str(r['Value'])),
@@ -33572,10 +33573,11 @@ def deduplicate_values_within_category(df):
     )
 
     keep_rows = []
-    for (cat_key, val_key), g in out.groupby(['_CAT_KEY', '_VAL_KEY'], dropna=False):
+    for (cat_key, val_key), g in out.groupby(['_CAT_KEY', '_VAL_KEY'], dropna=False, sort=False):
         row = g.iloc[0].copy()
         row['Column'] = cat_key
         row['Value'] = str(g.iloc[0]['Value']).strip()
+        row['_ROW_POS'] = int(g['_ROW_POS'].min())
         # Sum numeric-like metrics where present
         if bp_col:
             row[bp_col] = sum(_num(v) for v in g[bp_col].tolist())
@@ -33589,7 +33591,10 @@ def deduplicate_values_within_category(df):
             row[proj_col] = int(round(sum(_num(v) for v in g[proj_col].tolist())))
         keep_rows.append(row)
 
-    result = pd.DataFrame(keep_rows).drop(columns=['_CAT_KEY', '_VAL_KEY'], errors='ignore')
+    result = pd.DataFrame(keep_rows)
+    if '_ROW_POS' in result.columns:
+        result = result.sort_values(by=['_ROW_POS'], kind='stable')
+    result = result.drop(columns=['_CAT_KEY', '_VAL_KEY', '_ROW_POS'], errors='ignore')
     if not SILENCE_VERBOSE_OUTPUT:
         removed = len(df) - len(result)
         if removed > 0:
