@@ -8966,36 +8966,7 @@ def apply_deterministic_us_panel_realism(df, sample_raw):
                 tweaks += 2
                 _recalc_cat_cs_after_raw_updates(df, 'APP/PLATFORM USAGE', bp_col, cs_col, raw_col)
 
-    # --- Known bad panels: defunct brand + overseas tabloid ---
-    def _cap_named_brands(value_substrings, cats, bp_max):
-        nonlocal tweaks
-        cols_touched = set()
-        for subs in value_substrings:
-            for idx, row in df.iterrows():
-                col = str(row.get('Column', '')).strip().upper()
-                if col in DEMO_META:
-                    continue
-                if cats is not None and col not in cats:
-                    continue
-                val = str(row.get('Value', '')).strip().upper()
-                if subs not in val:
-                    continue
-                try:
-                    cur = float(str(row.get(bp_col, 0)).replace('%', '').replace(',', ''))
-                except (ValueError, TypeError):
-                    cur = 0.0
-                if cur <= bp_max:
-                    continue
-                _set_bp_raw_proj(idx, bp_max)
-                cols_touched.add(col)
-                tweaks += 1
-        for _ct in cols_touched:
-            _recalc_cat_cs_after_raw_updates(df, _ct, bp_col, cs_col, raw_col)
-
-    _cap_named_brands(
-        ('SMILE DIRECT',),
-        None,
-        10.0)
+    # --- Known bad panels: overseas tabloid (UK sheets on US personas) ---
     uk_tabs = frozenset({
         'DAILY MAIL', 'MAIL ONLINE', 'THE SUN', 'THE MIRROR',
         'DAILY MIRROR', 'METRO.UK'})
@@ -10035,7 +10006,8 @@ def ai_final_gut_check(df, brand_category, project_name, brands):
                 f"Skip this rule entirely for prestige **Sephora-/luxury-skin**/makeup personas where leadership is prestige brands + flagship DTC without grocery-cart behavior.\n"
                 f"9) **MOST PURCHASED BRANDS — CPG restraint:** Avoid many unrelated national CPG/snack/OTC aisles-heavy leaders "
                 f"simultaneously above ~22% BP unless a plausible **grocery-cart spine** (Instacart, Walmart/Target grocery pickup/order-ahead rows, grocery DoorDash/Uber stacks) is also strong.\n"
-                f"10) **Defunct / reorganized DTC (e.g. Smile Direct Club):** Treat as dead brand for 2026 audiences — do not place in top tiers; compress to low single digits even if raw panel shows a ghost hit.\n\n"
+                f"10) **Commercial viability audit:** Honor web-backed PERSONA.`commercial_viability_audit` facts "
+                f"(inactive franchises, liquidation, nationally withdrawn SKUs, mothballed US replenishment paths). Never promote audited-inactive equities to headline tiers from stray traces; absent-traffic profiles should compress toward baseline or ≤1.0% BP clusters.\n\n"
                 f"For EACH row, decide KEEP / LOWER / RAISE.\n"
                 f"Only include LOWER/RAISE rows in adjustments.\n"
                 f"Return ONLY valid JSON:\n"
@@ -15404,6 +15376,7 @@ Return ONLY a single valid JSON object — no markdown, no commentary.
     "retail": ["<retailers this audience uses alongside the subject>"],
     "negative_overlap": ["<brands this audience does NOT meaningfully overlap with despite seeming related>"]
   }},
+  "commercial_viability_audit": "<REQUIRED STRING — NEVER empty. After web search, write 4-9 sentences on ANY consumer-facing franchises, marquee SKUs, or national DTC programs adjacent to THIS subject/category where credible sources imply **weak or ended US replenishment continuity through the STUDY WINDOW** versus an obviously active competitor set (liquidation/Ch 7/11 with no ongoing consumer fulfillment, mothballed ordering surfaces, SKU withdrawn nationally, shuttered storefront + no successor continuity, materially discontinued orthodontic/cosmetics programs tied to THAT brand name instead of successor mark, etc.). For each named equity, instruct downstream tiers: lingering click traces should behave like absent traffic (**baseline/trace band — cohort share usually ≤ ~1–2%%** unless anchored by explicit revived retail evidence). Tie claims to source + timing in prose.**If painstaking search proves NONE pertinent to inventories that could appear for '{subject}', output EXACTLY:** AUDIT CLEAN — verified no materially inactive audited franchises pertinent to downstream inventories for this subject.",
 {(interest_json_lines + chr(10)) if interest_json_lines else ''}  "category_signals": {{
     "<CATEGORY NAME>": "<1-2 sentences: what does this audience do/not do in this category? What types of items should score HIGH vs LOW?>",
     ...one entry per category from the CATEGORIES TO BE SCORED list above
@@ -15411,6 +15384,7 @@ Return ONLY a single valid JSON object — no markdown, no commentary.
 }}
 
 RULES:
+- **`commercial_viability_audit` is mandatory.** Write researched inactive-equity prose OR the exact AUDIT CLEAN sentence — never leave blank or omit the key (downstream validators bind decisions to this field).
 - If the FIXED LABEL INVENTORY (INTEREST) section appears earlier in this prompt, you MUST
   populate `interest_top_25` and `interest_bottom_25` exclusively with verbatim copied strings from
   that inventory (respect the cardinality and disjointness rules stated there — no overlaps between arrays).
@@ -15827,6 +15801,12 @@ EXAMPLE category_signals (hypothetical `consumer_brand` athletic-equipment cohor
         _cks = persona_doc.get('interest_inventory_checksum', '?')
         print(f"INTEREST RANK PRIORS ({_cks}): top {len(_itop)} → {_itop[:10]}{'…' if len(_itop) > 10 else ''}")
         print(f"INTEREST rank priors — bottom {len(_ibot)} → {_ibot[:10]}{'…' if len(_ibot) > 10 else ''}")
+    _cva_dump = persona_doc.get('commercial_viability_audit')
+    if _cva_dump:
+        print(f"COMMERCIAL VIABILITY AUDIT ({len(str(_cva_dump))} chars): "
+              f"{str(_cva_dump)[:380]}{'…' if len(str(_cva_dump)) > 380 else ''}")
+    else:
+        print("COMMERCIAL VIABILITY AUDIT: (MISSING)")
     print(f"{'─'*60}\n")
 
     return persona_doc
@@ -15859,6 +15839,16 @@ def _validate_persona_quality(persona_doc: dict, subject: str) -> tuple[bool, li
         issues.append(
             "subject_archetype missing — downstream agents infer archetype manually "
             "(higher variance for talent / IP / interactive subjects)"
+        )
+
+    _cva = str(persona_doc.get('commercial_viability_audit') or '').strip()
+    if len(_cva) < 40 or (
+        len(_cva) < 80
+        and 'AUDIT CLEAN' not in _cva.upper()
+    ):
+        issues.append(
+            "commercial_viability_audit missing or too thin — downstream scoring lacks binding stalled-equity prose "
+            "(use researched paragraph OR exact AUDIT CLEAN sentence)"
         )
 
     cs = persona_doc.get('category_signals', {})
@@ -16221,6 +16211,9 @@ ANTI-FIT (what the audience does NOT engage with, even if famous):
 CROSS-SHOP NETWORK (brands the audience genuinely uses alongside the subject):
 {_fmt_dict_of_lists(cross_shop_network)}
 
+COMMERCIAL VIABILITY AUDIT (stalled / inactive US franchises — use to build anti_fit + bottom tiers):
+{(str(persona_doc.get('commercial_viability_audit') or '').strip())[:4000] if str(persona_doc.get('commercial_viability_audit') or '').strip() else '(not provided — still list defunct/stalled items in anti_fit_in_category when visible in item list)'}
+
 {interest_prior_block}
 {rubric_calibration_block and f'''═══════════════════════════════════════════════════════════════════
 CATEGORY HARD CALIBRATION ({category}) — REQUIRED RUBRIC CONSTRAINTS
@@ -16529,6 +16522,7 @@ def _run_single_category_agent(category: str, values: list[str],
     cultural_anchors = persona_doc.get('cultural_anchors') or {}
     anti_fit_explicit = persona_doc.get('anti_fit_explicit') or {}
     cross_shop_network = persona_doc.get('cross_shop_network') or {}
+    commercial_viability_audit = str(persona_doc.get('commercial_viability_audit') or '').strip()
 
     persona_archetype_block = _format_persona_archetype(persona_doc)
 
@@ -16757,6 +16751,12 @@ For each item you receive `panel`, `genpop`, `is:` (what it actually is),
   0) DIGITAL ENGAGEMENT GATE (persona-facing first):
      Name the **digital surface** you'd expect (website X, app X, authenticated property Y). If persona + item reality say **almost nobody like them routinely uses that DIGITAL SURFACE**, do NOT inflate BP just because incidental traffic exists in `panel_bp`. Conversely, ubiquitous utilities (mega search/social/carrier/bank/streaming ecosystems) SHOULD stay realistically high ONLY when personas plausibly use them digitally—not because "everyone hears the brand name".
 
+  0b) PERSONA **`commercial_viability_audit`** GATE:
+     Read the audited paragraph in PERSONA below. **If THIS inventory row matches (or is an obvious synonym of) ANY consumer franchise named therein as stalled, liquidating, SKU-withdrawn, or materially absent replenishment for the STUDY YEAR**, scoring MUST treat lingering clicks as noise: **estimated_bp_pct** usually **≤ 1–2%** absent explicit audit text documenting US continuity/relaunch. **`override_high` is disallowed as cover for audited dead equity.** Quote the audit briefly in `reason`.
+
+  0c) SPARSE-N PANEL GATE (generic, scales to any inventory):
+     If evidence shows **`n≤25`** in the measured panel parentheses **and** the row is absent from anchors, subsegments, cross-shop lists **and not supported by CATEGORY RULE tier examples**, **`override_high` above ~min(14, max(8, genpop × 25)) PP is disallowed** (use `no_panel`, `agree`, or restrained `override_low` instead). Explain "sparse/noisy measurement" when used.
+
   1) IS THE ITEM IN THE CATEGORY-RULE'S anti_fit_in_category LIST?
      → score 0.05–5%. The persona does not engage. Cite "anti-fit" in
        reason.
@@ -16888,6 +16888,9 @@ EXPLICIT ANTI-FIT (low-affinity by definition — items in these categories
 should score very low for this audience even if famous nationally):
 {_fmt_anti_fit()}
 
+COMMERCIAL VIABILITY AUDIT — research-backed stalled/inactive US consumer equities (BINDING):
+{commercial_viability_audit[:3500] if commercial_viability_audit else '(omit only if persona JSON lacked key — infer conservatively; never invent euphemistic tier labels not listed in CATEGORY RULE)'}
+
 {interest_prior_block_cat}CATEGORY-SPECIFIC GUIDANCE for {category}:
 {guidance_summary or '(use persona above + your judgment)'}
 
@@ -16932,8 +16935,9 @@ Return ONLY a JSON array — no markdown, no commentary:
 NON-NEGOTIABLE:
   • EVERY item from the list MUST appear in your output with EXACT spelling.
   • estimated_bp_pct is a FLOAT in [0.05, 88.0]. (Universal 90% backstop applied programmatically.)
-  • tier_assigned MUST match a tier_name from the CATEGORY RULE — match by closest archetype.
-  • reason MUST cite a persona attribute or tier name. Generic "this is a popular brand" is INSUFFICIENT.
+  • tier_assigned MUST be copied **verbatim character-for-character** from ONE of the enumerated `tier_name` strings in CATEGORY RULE "TIER RULES" above (the `[i] Name — BP …` lines). **Forbidden:** free-text euphemisms like "national health tech platform".
+  • If PERSONA.COMMERCIAL VIABILITY AUDIT names THIS row's franchise/sub-brand as materially inactive for the study era, **`estimated_bp_pct` ≤ 2.0** (usually ~0.05–1.0%) unless audit text explicitly documents renewed US replenishment continuity.
+  • reason MUST cite a persona attribute OR tier EXACT NAME OR "**commercial viability audit**". Generic "popular brand" is INSUFFICIENT.
   • RANK ORDER within your chunk must follow the tier hierarchy in the CATEGORY RULE.
   • Items in CATEGORY RULE.anti_fit_in_category MUST score ≤ 5%. No exceptions.
 
@@ -17132,6 +17136,8 @@ def _run_category_validator_agent(category: str,
 
     ceiling_str = f"{ceiling:.0f}%" if isinstance(ceiling, (int, float)) else 'unspecified'
 
+    _audit = str(persona_doc.get('commercial_viability_audit') or '').strip()
+
     prompt = f"""You are the Pass 3 Category Validator for **{category}** in the **{subject}** profile.
 
 Each BP should reflect **creditable DIGITAL footprint** among panelists conditioned on "{subject}". If a ranked item trades on fame but persona + item reality imply **almost nobody like them routinely opens THAT web/app surface**, deflate it—even if stray panel bursts exist.
@@ -17148,6 +17154,9 @@ SUMMARY:
 
 KEY DEMOGRAPHICS:
 {_json.dumps(demo_snapshot, indent=2)}
+
+COMMERCIAL VIABILITY AUDIT (persona-authored — authoritative for stalled/inactive consumer franchises/SKUs):
+{_audit[:4000] if _audit else '(missing — escalate via corrections only when obvious liquidation mismatch vs headline BP)'}
 
 ═══════════════════════════════════════════════════════════════════
 CATEGORY RULE (Pass 1 rubric — what the scoring agents were supposed to follow)
@@ -17186,6 +17195,8 @@ WHAT TO CHECK
   5) DIGITAL ENGAGEMENT CREDIBILITY vs FAME HALO — does a top-ranked item plausibly have **routine DIGITAL footprints** among THIS persona members (authenticated apps/sites/ordering flows—not offline-only prestige awareness)? Override down if prestige/niche/geographic outliers beat mass digital utilities unjustified.
 
   6) PERSONA-FIT SANITY — across the FULL reviewed set (TOP {top_n}), does ranking reflect BOTH persona specificity AND plausible national digital commons (search/social/carrier/banking) where applicable?
+
+  7) COMMERCIAL VIABILITY BINDING — Entities named in COMMERCIAL VIABILITY AUDIT as materially inactive/absent replenishment MUST NOT appear in headline BP bands (normally compress toward ≤1–2% unless audit text permits otherwise). Corrections referencing check #7 MUST quote audit phrasing briefly.
 
 ═══════════════════════════════════════════════════════════════════
 OUTPUT FORMAT
@@ -24294,9 +24305,8 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
     df_final = finalize_output_metrics_like_edit_sample_size(df_final)
     df_final = ensure_bp_driven_metric_alignment(df_final)
 
-    # Deterministic panel realism (search mix, Play vs App Store, UK tabloid trim,
-    # defunct Smile Direct rows) — was only reachable via ai_final_gut_check;
-    # run here so Render/web jobs get the same caps before S3 audit logs.
+    # Deterministic panel realism (search mix, Play vs App Store, UK tabloid trim)
+    # — reachable from ai_final_gut_check; run here so web/Render pipelines match.
     if not is_genpop:
         _pipe_sample_raw = 132040
         try:
@@ -27638,24 +27648,13 @@ def enforce_value_consistency_across_categories(df: pd.DataFrame,
     if eligible.empty:
         return df
 
-    def _cross_category_behavioral_ceiling(consistency_key: str):
-        ck = consistency_key.upper()
-        # Panel mapping often leaves defunct/overstated equities in HEALTH/INTEREST;
-        # `canonical_bp = max(all categories)` otherwise re-inflates MPB rows.
-        if 'SMILE DIRECT' in ck:
-            return 10.0
-        return None
-
-    for consistency_key, idxs in eligible.groupby('_consistency_key').groups.items():
+    for _, idxs in eligible.groupby('_consistency_key').groups.items():
         idx_list = list(idxs)
         if len(idx_list) < 2:
             continue
 
         # Canonical source rule: always use the highest BP seen across categories.
         canonical_bp = np.nanmax([_to_num(work.at[i, bp_col], default=np.nan) for i in idx_list])
-        _ceil = _cross_category_behavioral_ceiling(str(consistency_key))
-        if _ceil is not None and np.isfinite(canonical_bp):
-            canonical_bp = min(float(canonical_bp), float(_ceil))
         canonical_raw = np.nan
         canonical_proj = np.nan
         if np.isfinite(canonical_bp) and sample_size and 'Original Raw Numbers' in work.columns:
@@ -33181,54 +33180,6 @@ def enforce_behavioral_category_plausibility(df, brand_category=None, project_na
                 if abs(new_v - cur) >= 0.15:
                     _write_bp(idx, new_v)
                     fixes += 1
-
-    # 6) ATHLETE/TALENT: Nike-signature marquee — burying LeBron for a NIKE-centric
-    #    profile contradicts persona guidance (mega-deal ambassador).
-    nike_context = ('NIKE' in identity_blob_raw) or any(
-        'NIKE' in str(b or '').strip().upper() for b in (brands or []))
-    if nike_context:
-        peer_best_all = 0.0
-        for acat in ('ATHLETE', 'NBA ATHLETE', 'TALENT'):
-            for _i, vlab, vb in sorted(_cat_rows(acat), key=lambda x: -x[2])[:12]:
-                if 'LEBRON' in str(vlab).upper():
-                    continue
-                peer_best_all = max(peer_best_all, float(vb))
-        target_global = float(min(
-            49.9,
-            max(
-                21.9,
-                24.95,
-                peer_best_all * 1.07 + 3.95,
-                peer_best_all * 1.06 + 2.8,
-            ),
-        ))
-        for acat in ('ATHLETE', 'NBA ATHLETE', 'TALENT'):
-            for idx, vlab2, cur_row in _cat_rows(acat):
-                if 'LEBRON' not in str(vlab2).upper():
-                    continue
-                cur_l = float(cur_row)
-                if cur_l >= 24.5:
-                    continue
-                if target_global > cur_l + 0.35:
-                    _write_bp(idx, target_global)
-                    fixes += 1
-
-    # 7) Defunct Smile Direct persists in single categories (mapping bleed); consistency
-    #    only clamps when the same Value appears in 2+ columns — cap every row here.
-    for idx, row in out.iterrows():
-        col_u = str(row.get('Column', '')).strip().upper()
-        if col_u in {
-            'SAMPLE SIZE', 'INPUT_METADATA', 'BRAND INPUT', 'AVID FAN', 'CASUAL FAN',
-            'AGE', 'GENDER', 'ETHNICITY', 'INCOME', 'EDUCATION', 'RELATIONSHIP',
-            'SEXUAL_ORIENTATION', 'PARENTAL_STATUS', 'OCCUPATION', 'LOCATION',
-        }:
-            continue
-        if 'SMILE DIRECT' not in str(row.get('Value', '')).strip().upper():
-            continue
-        if _bp(idx) <= 10.04:
-            continue
-        _write_bp(idx, 10.0)
-        fixes += 1
 
     if not SILENCE_VERBOSE_OUTPUT and fixes:
         print(f"🛡️ Behavioral plausibility guard: {fixes} deterministic correction(s)")
