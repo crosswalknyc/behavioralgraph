@@ -14670,6 +14670,18 @@ def _normalize_persona_interest_rankings(persona_doc: dict,
 
     top = _filt(persona_doc.get('interest_top_25'))
     bot = _filt(persona_doc.get('interest_bottom_25'))
+
+    raw_top_full = persona_doc.get('interest_top_25') or []
+    raw_bot_full = persona_doc.get('interest_bottom_25') or []
+    stray = sorted({
+        str(x).strip()
+        for x in list(raw_top_full) + list(raw_bot_full)
+        if str(x).strip() and str(x).strip() not in inv_set
+    })
+    if stray:
+        print(f"   ⚠️ persona interests: {len(stray)} label(s) not in CSV inventory (verbatim mismatch) — "
+              f"examples: {stray[:8]}{'…' if len(stray) > 8 else ''} — fix spelling or INTEREST priors stay thin.")
+
     top_set = set(top)
     bot = [b for b in bot if b not in top_set]
     persona_doc['interest_top_25'] = top[:25]
@@ -14984,6 +14996,27 @@ def _category_pass1_calibration_block(category: str,
             "or the study input is explicitly about non-Google search. Set `category_ceiling_pct` ~88–92; "
             "Google owns the top tier band (~78–90 BP)."
         )
+    elif u == 'BETTING':
+        sections.append(
+            "**BETTING — US legal market + intent vs exposure (this pass only):**\n"
+            "• **Do not treat clickstream proximity to sports media as proof everyone bets.** "
+            "Panel exposure to sportsbook domains often overstates *active* wagering; compress toward "
+            "**real US participation** (~low tens % of adults with meaningful annual sportsbook digital touch) "
+            "unless persona + `category_signals['BETTING']` + `INTEREST` explicitly describe betting/fantasy "
+            "as a spine behavior.\n"
+            "• **Mass-market US order (digital sports-wagering brands):** **DraftKings** and **FanDuel** are the "
+            "endemic **duopoly leaders** — `predicted_top_5` should normally include both near the top for "
+            "US-profile sports/gaming-adjacent cohorts. **BetMGM, Caesars / Caesars Sportsbook, ESPN Bet** are "
+            "plausible **high seconds** from national TV/APP marketing but should **not** beat both DK and FD "
+            "unless persona proves a state/marketing skew.\n"
+            "• **Overseas-first / UK–Ireland–global books** (e.g. **Bet365**, **Ladbrokes**, **Paddy Power**, "
+            "**William Hill** where UK-global, **TAB**-class non-US) belong **materially below DK/FD** for "
+            "typical **US** qualified panels — panel spikes or generic sports fandom are **not** evidence of "
+            "European book preference.\n"
+            "• **`INTEREST` coherence:** If persona `interest_top_25` does **not** rank fantasy/sports wagering "
+            "adjacent labels high, keep most sportsbook rows **mid or lower** vs gen-pop — do not let "
+            "incidental NFL/NBA interest justify duopoly-tier BP for every book."
+        )
 
     sx = _sports_fan_commerce_calibration_block(u, persona_doc, phase='pass1').strip()
     if sx:
@@ -15081,6 +15114,23 @@ CATEGORY HARD CALIBRATION — SEARCH ENGINE/AI
 unless the persona is an extreme Bing/DDG/Yahoo-only niche.
 Rank AI-only tools below Google for general consumers.
 Honor the CATEGORY RULE tiers but never leave Google materially below challenger engines without explicit persona rationale."""
+        )
+
+    if u == 'BETTING':
+        parts.append(
+            """═══════════════════════════════════════════════════════════════════
+CATEGORY HARD CALIBRATION — BETTING (US panel)
+═══════════════════════════════════════════════════════════════════
+**Intent:** Sportsbook rows measure **digital touch** — default **compress** vs raw panel when persona lacks
+betting/fantasy spine (see Pass-1 rule). Do not award **duopoly-tier BP** to every book because the cohort watches sports.
+
+**US market stack:** **DraftKings** and **FanDuel** should **lead** among US-legal omnichannel books for typical
+US profiles. **BetMGM, Caesars, ESPN Bet** may sit **high but below** that pair unless persona proves otherwise.
+**Bet365 / Ladbrokes / Paddy Power / UK-global William Hill / non-US TAB-class** → **lower tiers** than DK/FD
+for US audiences unless persona explicitly anchors UK/Europe wagering geography.
+
+**INTEREST check:** If persona interest priors do not elevate wagering/fantasy-adjacent labels, **no single
+sportsbook should approach universal BP** — keep the whole category dispersed and realistic."""
         )
 
     sx = _sports_fan_commerce_calibration_block(u, persona_doc, phase='pass2').strip()
@@ -33128,21 +33178,48 @@ def enforce_behavioral_category_plausibility(df, brand_category=None, project_na
 
     fixes = 0
 
-    # 1) BETTING — US panel: DK + FanDuel should materially lead Bet365 in digital tiers
-    #    unless the brief is explicitly UK/Euro anchored. The old male/young DEMO gate skipped
-    #    many Nike-like profiles so Bet365 usurped DK/FD from stray panel spikes.
+    # 1) BETTING — US panel: DK + FanDuel should materially lead offshore / UK-global books
+    #    in digital tiers unless the brief is explicitly UK/Euro anchored. Also lift DK/FD
+    #    above stray panel spikes on Bet365-class and similar non-US-first operators.
 
     if not is_uk_context:
+        dk_idx = _find_idx('BETTING', ['DRAFTKINGS', 'DRAFT KINGS', 'DRAFTKING', 'DRAFTKINGS SPORTSBOOK'])
+        fd_idx = _find_idx('BETTING', ['FANDUEL', 'FAN DUEL', 'FANDUEL SPORTSBOOK'])
+        # Non-US-first books — cap vs DK/FD when duopoly rows exist (Bet365 handled below with DK/FD lift).
+        offshore_groups = (
+            ['LADBROKES', 'LAD BROKES'],
+            ['PADDY POWER', 'PADDYPOWER'],
+            ['WILLIAM HILL'],
+            ['CORAL'],
+            ['BETFAIR'],
+            ['UNIBET'],
+        )
+        dk_now_v = float(_bp(dk_idx)) if dk_idx is not None else None
+        fd_now_v = float(_bp(fd_idx)) if fd_idx is not None else None
+        peers = [v for v in [dk_now_v, fd_now_v] if v is not None]
+        leader_seed = float(max(peers)) if peers else None
+
+        for needles in offshore_groups:
+            off_idx = _find_idx('BETTING', needles)
+            if off_idx is None or leader_seed is None:
+                continue
+            b_now = float(_bp(off_idx))
+            leader = leader_seed if leader_seed > 1.0 else max(13.9, float(b_now) * 0.93)
+            if b_now >= leader * 1.008:
+                new_off = max(1.05, leader * 0.78)
+                _write_bp(off_idx, min(b_now, new_off))
+                fixes += 1
+
+        # Original lift: only when Bet365 is in the sheet — avoids inflating DK/FD on profiles
+        # where the duopoly already looks sane and no offshore spike triggered review.
         bet365_idx = _find_idx('BETTING', ['BET365'])
-        dk_idx = _find_idx('BETTING', ['DRAFTKINGS', 'DRAFT KINGS', 'DRAFTKING'])
-        fd_idx = _find_idx('BETTING', ['FANDUEL', 'FAN DUEL'])
         if bet365_idx is not None and (dk_idx is not None or fd_idx is not None):
             b_now = float(_bp(bet365_idx))
-            dk_now_v = float(_bp(dk_idx)) if dk_idx is not None else None
-            fd_now_v = float(_bp(fd_idx)) if fd_idx is not None else None
-            peers = [v for v in [dk_now_v, fd_now_v] if v is not None]
-            leader = float(max(peers)) if peers else max(13.9, float(b_now) * 0.93)
-
+            peers_live = [v for v in [
+                float(_bp(dk_idx)) if dk_idx is not None else None,
+                float(_bp(fd_idx)) if fd_idx is not None else None,
+            ] if v is not None]
+            leader = float(max(peers_live)) if peers_live else max(13.9, float(b_now) * 0.93)
             if b_now >= leader * 1.008:
                 new_b365 = max(1.05, leader * 0.78)
                 _write_bp(bet365_idx, min(b_now, new_b365))
@@ -33154,7 +33231,6 @@ def enforce_behavioral_category_plausibility(df, brand_category=None, project_na
             want_dk_v = max(dk_now_v or 0.0, cap_ref + max(14.0, cap_ref * 0.27))
             if dk_idx is not None and fd_idx is not None:
                 want_dk_v = max(want_dk_v, want_fd_v + 6.95)
-            if fd_idx is not None and dk_idx is not None:
                 want_fd_v = min(want_fd_v, want_dk_v - 3.95)
 
             if dk_idx is not None and abs(want_dk_v - (dk_now_v or 0)) >= 0.02:
@@ -33163,6 +33239,31 @@ def enforce_behavioral_category_plausibility(df, brand_category=None, project_na
             if fd_idx is not None and abs(want_fd_v - (fd_now_v or 0)) >= 0.02:
                 _write_bp(fd_idx, min(95.0, want_fd_v))
                 fixes += 1
+
+        # 1b) Second-tier US legal books: should not sit above BOTH DK and FanDuel.
+        second_tier_needles = (
+            ('BETMGM', ['BETMGM', 'BET MGM']),
+            ('CAESARS', ['CAESARS', 'CAESARS SPORTS']),
+            ('ESPN BET', ['ESPN BET', 'ESPNBET']),
+            ('BARSTOOL', ['BARSTOOL']),
+            ('POINTSBET', ['POINTSBET', 'POINTS BET']),
+            ('SUPERBOOK', ['SUPERBOOK']),
+        )
+        if dk_idx is not None or fd_idx is not None:
+            top_us = max(
+                float(_bp(dk_idx)) if dk_idx is not None else 0.0,
+                float(_bp(fd_idx)) if fd_idx is not None else 0.0,
+            )
+            if top_us > 1.0:
+                cap2 = max(1.5, top_us * 0.965)
+                for _label, nlist in second_tier_needles:
+                    sidx = _find_idx('BETTING', nlist)
+                    if sidx is None:
+                        continue
+                    sbp = float(_bp(sidx))
+                    if sbp > cap2 * 1.008 and dk_idx is not None and fd_idx is not None:
+                        _write_bp(sidx, min(sbp, cap2))
+                        fixes += 1
 
     # 2) MEDIA: TODAY/TODAY SHOW should not dominate younger/male-skewing audiences
     if (male_pct >= 55.0 and young_pct >= 40.0) or (black_pct >= 25.0):
