@@ -1578,11 +1578,33 @@ _profile_analysis_queue_worker_lock = threading.Lock()
 def _profile_analysis_queue_worker():
     """Background consumer: executes run_analysis jobs strictly one-after-another."""
     while True:
-        run_fn, run_args, run_kwargs = _profile_analysis_job_queue.get()
+        run_fn, run_args, run_kwargs, queued_job_id = _profile_analysis_job_queue.get()
         try:
+            # Explicit handoff from queue -> execution so jobs don't appear
+            # indefinitely queued if startup work takes time.
+            if queued_job_id and queued_job_id in jobs:
+                try:
+                    if jobs[queued_job_id].get('status') == 'queued':
+                        update_job_status(queued_job_id, message='Dequeued — starting run...')
+                except Exception:
+                    pass
             run_fn(*run_args, **run_kwargs)
-        except Exception:
+        except Exception as e:
             traceback.print_exc()
+            # If the callable fails before it can set its own status (e.g. arg
+            # mismatch before entering run_analysis), don't leave the job stuck
+            # in queued forever.
+            if queued_job_id and queued_job_id in jobs:
+                try:
+                    update_job_status(
+                        queued_job_id,
+                        status='failed',
+                        progress=100,
+                        message='Queue worker failed before analysis start',
+                        error=f'Queue worker exception: {e}',
+                    )
+                except Exception:
+                    pass
         finally:
             _profile_analysis_job_queue.task_done()
 
@@ -1600,7 +1622,7 @@ def enqueue_profile_analysis_run(run_fn, run_args, run_kwargs=None, queued_job_i
             wt.start()
             _profile_analysis_queue_worker_started.set()
 
-    _profile_analysis_job_queue.put((run_fn, run_args, run_kwargs))
+    _profile_analysis_job_queue.put((run_fn, run_args, run_kwargs, queued_job_id))
 
     if queued_job_id and queued_job_id in jobs:
         try:
