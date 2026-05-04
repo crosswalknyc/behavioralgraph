@@ -14598,6 +14598,21 @@ def _category_pass1_calibration_block(category: str,
             "remain allowable high tiers alongside genuinely national department stores.\n"
             "• `predicted_top_5` should not be dominated by a single-chain regional grocer that contradicts the DMA map."
         )
+    elif u == 'MEDIA':
+        sections.append(
+            "**Regional + outlet-type realism:**\n"
+            "• **Metro / hometown journalism:** When `location`/DMA skew OR `subject_archetype` ties to a **place-bound** "
+            "affinity (club, hometown hero brand, intra-state-heavy audience), elevate **credibly local dailies, TV station digital, "
+            "Hearst-/Gannett-class metro sites in THAT market** (e.g. San Antonio Spurs profile → Express-News / SA beat coverage) "
+            "**above gen-pop** — but **never** pretend they outrank **mass national portals** aggregators/wires (CNN, Fox News, Yahoo News, "
+            "Google News-class rows) plus **category-obvious nationals** (**ESPN** for sports-heavy cohorts, NYT/USAT tiers). "
+            "Local ⇒ **elevated middle / upper-mid tiers**, never default #1–2 BP.\n"
+            "• **Entertainment-trade press default OFF for fans:** Rows like **Variety, Hollywood Reporter, Deadline, Wrap** behave like **industry B2B** "
+            "readership — hold them **mid/low** or `anti_fit_in_category` **unless** persona research proves "
+            "**Hollywood/exec/producer/industry obsessive** calibration (directors, guild-adjacent professionals, journalists covering deals, "
+            "hard-core trade junkie parasocial demos). Casual moviegoers, sports fans, FMCG cohorts ⇒ trades must not lead.\n"
+            "• `predicted_top_5`: national staples first; weave regional lift + anti-trade posture per evidence."
+        )
     elif u in {'SEARCH ENGINE/AI', 'SEARCH ENGINE'}:
         sections.append(
             "**Google** (map to the rows named Google / Google Search / google.com consistently with the CSV) "
@@ -14669,6 +14684,19 @@ Albertsons-banner West families, etc.) only score **high** when persona LOCATION
 Mismatch in **any direction** ⇒ **low** or anti-fit (not only «North vs Texas»).
 
 Honor national mass ecommerce + Walmart/Target/Costco when list contains them."""
+        )
+
+    if u == 'MEDIA':
+        parts.append(
+            """═══════════════════════════════════════════════════════════════════
+CATEGORY HARD CALIBRATION — MEDIA (regional beats + trades)
+═══════════════════════════════════════════════════════════════════
+**Metro / team / place-skew personas:** Bump hometown newspapers + local TV-news digital stacks **moderately upward**
+vs unconditional gen-pop — still **UNDER** ubiquitous national news brands + ESPN for sports-heavy profiles.
+Locals should impress as **raised mid-pack**, not chart-toppers.
+
+**Variety / Hollywood Reporter / Deadline / The Wrap-class trades:** **Never** elite BP unless the persona screams
+(industry insider, executive, filmmaker, obsessed trade reader). Casual fans ⇒ keep trades low."""
         )
 
     if u in {'SEARCH ENGINE/AI', 'SEARCH ENGINE'}:
@@ -14873,6 +14901,7 @@ STEP 5a — SPORTS FRANCHISE / TEAM (`subject_archetype` MUST be `sports_team_le
   • **`cross_shop_network` + opening `digital_identity` paragraph**: cite **current major sponsors/partners —
     jersey/kit brand, marquee broadcast advertisers (beverages, telecom, insurance, autos), ticketing/payments partners,
     recognizable equipment suppliers — PLUS **exact stadium or arena naming** fans encounter on broadcasts & apps.
+  • **`category_signals[\"MEDIA\"]`** (fans, not reporters): elevate **metro beat / hometown paper + local TV-news digital tied to HOME market DMA** moderately above census — Express-News–style anchors stay **below** ESPN + CNN/Fox/New York Times–tier nationals + major aggregators. **Industry trades** (Variety, THR, Deadline, Wrap) stay low unless you proved insider readership.
 
 STEP 5b — PROFESSIONAL ATHLETE PERSON (`celebrity_or_creator` WHEN research proves elite pro competitor)
   • **`location`**: overweight **current team's HOME metro** + national gateways proportional to superstar reach; mention trade history only if materially shifting fan geography.
@@ -14883,6 +14912,7 @@ STEP 5c — ENTERTAINMENT / CELEBRITY TALENT (`celebrity_or_creator`, including 
   • **Brand deals ALWAYS surface:** Document **every notable current endorsement, ambassador role, collaborator product, beverage/auto/telecom/fashion/skin-care partner** tied to credible sources. Reflect them plainly in **`cultural_anchors`, `digital_identity`, `cross_shop_network`, and MPB/WTS/TALENT `category_signals`.** Downstream scoring must keep those names **visible in high tiers** whenever they appear as inventory rows — missing a famous deal is worse than overcautious damping.
   • **Where their show lives:** Capture **distribution reality** — linear network, cabler/FAST sibling, flagship streamer premiere window (verify with research). Examples shape *relative* SVOD cues (long-running NBC-era talent → elevate **Peacock** vs wrong-network apps; premium Showtime-era talent → elevate **Paramount+** vs Peacock-type mismatches). **Never** fabricate exclusives.
   • **Streaming ceiling:** In `category_signals["STREAMING/PLATFORM"]` write explicitly that **network-matched SVOD may beat OTHER non-home apps** in the stack but **never outrank Netflix** and **never slot above Hulu** for median fan cohorts — Netflix #1 discipline, Hulu pinned to the flagship mass tier.
+  • **`category_signals[\"MEDIA\"]`** for **industry-facing** subjects (exec, showrunner, prolific director, deal press core demo): **Variety / THR / Deadline** may tier **materially higher than fan-only cohorts** yet still usually **below** Google News + NYT/CNN-class omnivore rows unless research proves trade-digital obsession.
 
 STEP 5 — WRITE THE PERSONA
   Now generate the full persona JSON with all fields. Every field must reflect your research, not generic assumptions.
@@ -15237,7 +15267,7 @@ For each category, your guidance MUST be grounded in reality:
   (that incorrectly implies nearly half the audience engages those specific systems online yearly). Tie high scores to persona geography or medical roles only.
 - MOST PURCHASED BRANDS (digital semantics): Split **purchase paths**. (a) **Mass-market CPG / grocery aisles / big-box consumables / mainstream drugstore SKU behavior** ⇒ if personas push many aisle leaders toward the TOP, **`category_signals` must demand Instacart + Walmart/Target grocery-digital pickups + grocery DoorDash/Uber stacks ALSO read VERY high**, then aisle peers can spike coherently. (b) **Prestige / luxury skincare & cosmetics sourced via Sephora / prestige Ulta / department flagship / prestige DTC** ⇒ **omit** grocery-delivery coherence — prestige brands dominate via browse/reviews/apps without implying Instacart must trend. (c) **Regional-distribution** mass brands stay low unless persona `location`/DMA proves that macro‑region match.
 - WHERE THEY SHOP: **Geographic footprints matter.** Regional chains belong high only when persona `location`/DMA skew **matches** that retailer’s real geography — East Coast vs Pacific Northwest vs SoCal vs Texas vs inland South vs Midwest, etc.; **whatever the input persona’s footprint is**, use it as the compass. Wrong-macro‑region dominance in either direction ⇒ score LOW unless research proves crossover (travel, ecommerce-only edge cases rarely justify mass BP).
-- TALENT (panel rows): **`celebrity_or_creator`** personas must elevate **research-backed ambassador / co-star / sibling-act names** cited in anchors — burying marquee deal partners appearing as TALENT inventory is wrong unless anti_fit proves hate-following.
+- MEDIA: **`location`/subject regionality** — metro dailies / hometown TV-news digital tied to the study’s DMA (e.g. Spurs → San Antonio Express-News tier) may **outperform gen-pop** modestly but **must sit under** ubiquitous national news + Google News–class aggregators + **ESPN when the cohort is sports-heavy**. **Variety, Hollywood Reporter, Deadline, Wrap** and similar **trade** rows default **low** unless persona is **industry / executive / filmmaker / hard-core trade obsessive** with explicit research — never top for generic fans. **`celebrity_or_creator`** personas must elevate **research-backed ambassador / co-star / sibling-act names** cited in anchors — burying marquee deal partners appearing as TALENT inventory is wrong unless anti_fit proves hate-following.
 - STREAMING/PLATFORM: **`celebrity_or_creator`:** encode **distribution-accurate** SVOD cues (broadcast/cable/streamer home ⇒ matching corporate apps such as NBC↔Peacock, Showtime/Paramount↔Paramount+, ABC/Disney/FX footprints↔Hulu/Disney+, HBO-era↔Max when research supports). Relative ranks among **those** synergy apps vs wrong-network rivals may widen — yet **Netflix must lead** predicted SVOD stacks and **Hulu stays pinned to the top mass SVOD tier** (#2-ish band alongside other broad anchors). **Never** rank Peacock, Paramount+, nor any other synergy label **above Hulu or Netflix** for median viewers.
 - SEARCH ENGINE/AI: **Google (~78%+ annual credible digital touching points for mainstream US conditioned cohorts) should ordinarily lead**.
   Respect niche-only Yahoo/Bing/AI-research personas; default mass-market ⇒ Google tier #1, AI assistants chase but seldom clear #1 absent explicit evidence. Make them specific and opinionated but REALISTIC — do not tell agents to crush near-universal items.
@@ -16934,7 +16964,7 @@ def _build_genpop_persona_doc() -> dict:
             'expected_low': [],
         },
         'MEDIA': {
-            'summary': 'Mass news (Google News, CNN, Fox News, Yahoo News) and broadcast (NBC, ABC, CBS) lead; ESPN strongest single sports outlet; specialty/niche outlets stay LOW.',
+            'summary': 'Nationals + aggregators dominate (Google News, Yahoo, CNN, Fox, broadcast nets, NYT/USAT). Sports cohorts see ESPN high. Regional metro dailies/local TV digital may sit **above unconditional gen-pop when LOCATION/persona proves home-market skew** but remain **below those nationals**. Entertainment trades (Variety, THR, Deadline) stay low unless industry persona.',
             'expected_high': ['GOOGLE NEWS', 'YAHOO NEWS', 'CNN', 'FOX NEWS', 'NBC NEWS', 'ABC NEWS', 'CBS', 'ESPN', 'NEW YORK TIMES', 'USA TODAY', 'APPLE NEWS', 'HUFFPOST'],
             'expected_low': ['HYPEBEAST', 'COMPLEX', 'SNEAKER NEWS', 'SOLE COLLECTOR', 'FORTUNE', 'BARRONS', 'WALL STREET JOURNAL'],
         },
