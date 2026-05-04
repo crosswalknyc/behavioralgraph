@@ -9914,11 +9914,11 @@ def ai_final_gut_check(df, brand_category, project_name, brands):
                 f"- Build ranking from this profile's persona only (demographics + research + behavior).\n"
                 f"- Do not apply canned archetypes; if a brand ranks high, there must be explicit persona evidence.\n"
                 f"- Preserve mainstream anchors when justified, but move weak-fit brands down when they dominate.\n\n"
-                f"Youth-audience ranking sanity:\n"
-                f"- For young pop audiences, teen/gen-z fashion/beauty and digitally-native brands should generally\n"
-                f"  outrank older-skew legacy housewares/classic brands unless explicit evidence contradicts this.\n"
-                f"- If legacy/older-skew brands dominate the top ranks without evidence, LOWER them and promote\n"
-                f"  stronger youth-fit alternatives.\n\n"
+                f"Youth-audience ranking sanity (**apply ONLY if DEMOGRAPHIC SKEW shows majority under ~34 "
+                f"or persona/subsegments explicitly youth-weighted**):\n"
+                f"- Teen/gen-Z fashion/beauty and digitally-native labels may outrank legacy housewares when evidence fits THAT cohort.\n"
+                f"- If the profile skews mature/parental/35+ weighted, **do not** mechanically favor youth tiktok-era brands "
+                f"over credible household/category leaders — use life-stage coherence instead.\n\n"
                 f"Use research + demographics + index direction. Avoid blanket dampening.\n"
                 f"Return ONLY valid JSON:\n"
                 f'If no changes: {{"status":"OK","notes":"all rows believable"}}\n'
@@ -10001,10 +10001,12 @@ def ai_final_gut_check(df, brand_category, project_name, brands):
                 f"persona fit rather than generic panel artifacts.\n"
                 f"5) This is digital-engagement behavior; ranking should reflect what this cohort actually follows, shops, "
                 f"and engages with online.\n\n"
-                f"6) For youth pop profiles, weak-fit life-stage interests (job search, parenting/kids, mortgages-style)\n"
-                f"   should not outrank core youth digital/fandom interests without explicit evidence.\n"
-                f"7) For MOST PURCHASED BRANDS, teen/gen-z brands should generally outrank older-skew legacy brands\n"
-                f"   unless profile evidence supports the legacy dominance.\n"
+                f"6) For youth-majority personas, weak-fit INTEREST rows (generic job-search, mortgages-style anchors) "
+                f"should not outrank core youth digital/fandom interests without explicit evidence — skip tightening this "
+                f"rule when the persona is mature/balanced-age weighted.\n"
+                f"7) **MOST PURCHASED BRANDS — youth-vs-legacy (conditional):** Use **only** when demographics/persona show a "
+                f"**youth-majority / under-34 core**; skip for mature, parental, or general mass-market profiles. Where youth fits, digitally-native teen/gen-Z–skew MPB brands may rank above unrelated legacy staples; "
+                f"otherwise prioritize **endorsed sponsors, archetype-aligned category leaders, and plausible household nationals** — do not inflate youth labels without evidence.\n"
                 f"8) **MOST PURCHASED BRANDS coherence — conditional:** For **mass CPG/grocery/big-box replenishment** profiles, "
                 f"when many aisle / household snacks / OTC-style leaders spike, **elevate INSTACART + Walmart/Target pickup & grocery proxy rows + grocery DoorDash/Uber stacks** alongside them; lacking that grocery spine ⇒ LOWER only *that cluster*. "
                 f"Skip this rule entirely for prestige **Sephora-/luxury-skin**/makeup personas where leadership is prestige brands + flagship DTC without grocery-cart behavior.\n"
@@ -14939,7 +14941,11 @@ def _category_pass1_calibration_block(category: str,
             "**that same** footprint. Infer the SKU’s plausible geography from name + inventory + persona research — "
             "**do not** assume southern/Texas is the default case. Treat strong regionals as mid/low or `anti_fit_in_category` "
             "whenever DMA evidence points elsewhere.\n"
-            "• Prefer `predicted_top_5` grounded in **`location`/DMA geography** plus the **mass CPG vs prestige-beauty** channel split above."
+            "• Prefer `predicted_top_5` grounded in **`location`/DMA geography** plus the **mass CPG vs prestige-beauty** channel split above.\n"
+            "• **Life-stage vs rank heuristics:** `teen/gen-Z outrank legacy` rules in later pipeline passes apply **only when** persona "
+            "demographics + summary show a **median or mode audience under ~34** OR explicit youth-weighted subsegments — **never** bake "
+            "youth-fashion dominance into tiers for mature, parental, or older-skew qualified cohorts; there, credible **household replenishment "
+            "+ category-relevant nationals** belong higher than random trendy labels."
         )
     elif u == 'WHERE THEY SHOP':
         sections.append(
@@ -15064,7 +15070,10 @@ Regional-only SKU caveats remain: keep BP honest vs offline replenishment.
 
 **Regional-only or strong geo-skew brands** (sold mainly in one US macro-region — infer from persona + row name + research):
 keep BP **low** unless persona `location` DMA mix or subsegments prove **that specific** geography — never default to imagining
-the skew is southern/Texas unless evidence says so."""
+the skew is southern/Texas unless evidence says so.
+
+**Life-stage:** Tier **endorsed / persona-named deal partners** and **category-coherent nationals** appropriately for median age —
+do **not** let generic youth-trend proxies outrank plausible mass replenishment rows on **middle-age or family-heavy** personas."""
         )
 
     if u == 'WHERE THEY SHOP':
