@@ -19322,7 +19322,7 @@ def parallel_category_agents(df: pd.DataFrame, persona_doc: dict,
                                  cat, persona_doc, subject,
                                  _guidance_map.get(cat) or {},
                                  results_map.get(cat, []),
-                                 20): cat
+                                 min(35, max(20, len(results_map.get(cat, []))))): cat
                     for cat in _val_cats
                 }
                 for fut in _futures.as_completed(_val_futures, timeout=180):
@@ -19374,22 +19374,17 @@ def parallel_category_agents(df: pd.DataFrame, persona_doc: dict,
 
     # --- D) Write agent BP values back into DataFrame --------------------
     def _add_4dp_noise(val: float) -> float:
-        """Add organic noise so the value looks like real panel data.
+        """Tiny, accuracy-safe jitter (4dp) to avoid perfectly round outputs.
 
-        Preserves the approximate magnitude while ensuring all 4 decimal
-        digits are non-zero. Example: 12.0 → 11.7294 or 12.3618.
+        Earlier logic rebuilt decimals from random digits and could swing near
+        rule thresholds (e.g., anti-fit <=5%). Keep movement microscopic so
+        validator/category-rule constraints remain intact.
         """
-        pct_shift = random.uniform(0.005, 0.02) * random.choice([-1, 1])
-        shift = max(0.1, abs(val * pct_shift)) * (1 if pct_shift > 0 else -1)
-        base = val + shift
-        base = max(0.1, min(99.9, base))
-        integer_part = int(base)
-        d1 = random.randint(1, 9)
-        d2 = random.randint(1, 9)
-        d3 = random.randint(1, 9)
-        d4 = random.randint(1, 9)
-        v = integer_part + d1 * 0.1 + d2 * 0.01 + d3 * 0.001 + d4 * 0.0001
-        return max(0.1111, min(99.8999, round(v, 4)))
+        base = max(0.0001, min(99.9999, float(val)))
+        # +/- 0.015 percentage points max keeps ordering/constraints stable.
+        jitter = random.uniform(-0.015, 0.015)
+        out = round(max(0.0001, min(99.9999, base + jitter)), 4)
+        return out
 
     def _carry_forward_jitter(prev_bp: float) -> float:
         """Tiny ±0.01-0.02% absolute jitter on a carried-forward BP — keeps
@@ -19454,13 +19449,59 @@ def parallel_category_agents(df: pd.DataFrame, persona_doc: dict,
                 drop_values.add(v_u)
 
     # Apply organic noise ONCE per unique value, freezing the canonical BP.
+    # Also enforce strict per-value max caps derived from category rules across
+    # every category where the value appears (ceiling + anti-fit<=5).
+    value_hard_cap: dict[str, float] = {}
+    try:
+        for _cat, (_vals, _idxs) in category_values.items():
+            _rule = (_guidance_map or {}).get(_cat) or {}
+            _ceil = _rule.get('category_ceiling_pct')
+            _cat_cap = None
+            try:
+                if _ceil is not None:
+                    _cat_cap = float(_ceil)
+            except Exception:
+                _cat_cap = None
+            _anti = {
+                str(x).strip().upper()
+                for x in (_rule.get('anti_fit_in_category') or [])
+                if str(x).strip()
+            }
+            for _idx in (_idxs or []):
+                _vu = str(df.at[_idx, 'Value']).strip().upper()
+                if not _vu:
+                    continue
+                _cur_cap = value_hard_cap.get(_vu, 95.0)
+                if isinstance(_cat_cap, (int, float)) and _cat_cap > 0:
+                    _cur_cap = min(_cur_cap, float(_cat_cap))
+                if _vu in _anti:
+                    _cur_cap = min(_cur_cap, 5.0)
+                value_hard_cap[_vu] = _cur_cap
+    except Exception as _cap_err:
+        print(f"   ⚠️ Could not build global value hard caps: {_cap_err}")
+
     global_value_bp: dict[str, float] = {}
     for v_u, raw_bp in global_value_bp_raw.items():
         clamped = max(0.0001, min(99.9999, raw_bp))
-        global_value_bp[v_u] = _add_4dp_noise(clamped)
+        _hard_cap = value_hard_cap.get(v_u)
+        if isinstance(_hard_cap, (int, float)) and _hard_cap > 0:
+            clamped = min(clamped, max(0.0001, float(_hard_cap)))
+        out_bp = _add_4dp_noise(clamped)
+        # Belt-and-suspenders: jitter should never violate rule-derived cap.
+        if isinstance(_hard_cap, (int, float)) and _hard_cap > 0 and out_bp > float(_hard_cap):
+            out_bp = round(max(0.0001, float(_hard_cap)), 4)
+        global_value_bp[v_u] = out_bp
 
     print(f"   🔁 Propagation: {len(global_value_bp)} unique values scored — propagating to all categories "
           f"(byte-identical across categories)")
+    if value_hard_cap:
+        _capped_n = sum(
+            1 for _vu, _raw in global_value_bp_raw.items()
+            if _vu in value_hard_cap and float(_raw) > float(value_hard_cap[_vu]) + 1e-9
+        )
+        if _capped_n:
+            print(f"   🔒 Global rule caps enforced on {_capped_n} propagated values "
+                  f"(ceiling/anti-fit across all category appearances)")
 
     if drop_values:
         print(f"   🗑️  Dropping {len(drop_values)} low-confidence items with no panel and no baseline "
@@ -19560,7 +19601,11 @@ def parallel_category_agents(df: pd.DataFrame, persona_doc: dict,
     for cat, carry in category_carry.items():
         for v_u, prev_bp in carry.items():
             if v_u not in global_carry_bp:
-                global_carry_bp[v_u] = _carry_forward_jitter(prev_bp)
+                _bp = _carry_forward_jitter(prev_bp)
+                _hard_cap = value_hard_cap.get(v_u)
+                if isinstance(_hard_cap, (int, float)) and _hard_cap > 0:
+                    _bp = round(min(_bp, float(_hard_cap)), 4)
+                global_carry_bp[v_u] = _bp
 
     rows_written = 0
     rows_carried = 0
