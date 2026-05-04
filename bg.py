@@ -14392,13 +14392,14 @@ def _sports_fan_commerce_calibration_block(cat_u: str, persona_doc: dict | None,
             return """═══════════════════════════════════════════════════════════════════
 SPORTS TEAM — ATHLETE CATEGORY
 ═══════════════════════════════════════════════════════════════════
-Top tiers should prioritize **national-name franchise roster players + enduring club legends** appearing in CSV rows — bury unrelated athletes who lack THIS-team linkage."""
+Top tiers should hold **several** national-name **starters / All-Stars / big-contract core** on THIS roster + **enduring club legends** when they appear in CSV — not a single MVP only. Bury unrelated athletes who never suited up for the club."""
 
         return (
-            "**`sports_team_league_org`:** ATHLETE tiers elevate **CURRENT headline roster talent**, "
-            "blockbuster offseason adds, perpetual All-Stars, **franchise-icon veterans** when present in CSV — unrelated "
+            "**`sports_team_league_org`:** ATHLETE tiers elevate **multiple CURRENT top players** (headline starters, "
+            "perennial All-Stars / Pro Bowlers, marquee offseason adds, **iconic franchise veterans** still in conversation) — "
+            "not lone-superstar tunnel vision. Spread high tiers across **the whole star cluster** research names; unrelated "
             "league-famous names without THIS club storyline stay mid/low.\n"
-            "• Predicted tops emphasize research-backed marquee names appearing in inventory."
+            "• `predicted_top_5` should list **several** roster-backed names when inventory permits, not one hero + filler."
         )
 
     if team and cat_u in {'MOST PURCHASED BRANDS', 'WHERE THEY SHOP'}:
@@ -14837,7 +14838,7 @@ STEP 1b — ASSIGN SUBJECT ARCHETYPE (you MUST branch — downstream agents copy
     • tv_film_or_streaming_title: age/skew flows from CONTENT RATING + genre + where it airs — kids' cartoons vs prestige drama vs anime vs reality; parasocial extremes are a SUBSEGMENT, not the median viewer.
     • videogame_interactive_entertainment: cohort is PLAYERS/watchers-as-entertainment — platform fracture matters (mobile vs PC vs console vs Roblox/metaverse). Do not force Foot Locker–centric digital_identity unless the game actually implies it.
     • mobile_app_saas_platform: prioritize real app-store category + habitual daily use patterns; cross-shop is other apps/digital wallets/ads ecosystems — not malls first.
-    • sports_team_league_org: **Geography is part of the story** — LOCATION must reflect home-market + regional fan footprint; research **current sponsors, venue naming, marquee athletes** and write them into anchors + cross_shop — downstream scoring uses them for ATHLETE / RETAIL / TICKETING realism. Do not output a team persona that reads like a generic national toothpaste brand.
+    • sports_team_league_org: **Geography is part of the story** — LOCATION must reflect home-market + regional fan footprint; research **current sponsors, venue naming, several marquee players on the active roster (not just one star)** and write them into anchors + cross_shop — downstream scoring uses them for ATHLETE / RETAIL / TICKETING realism. Do not output a team persona that reads like a generic national toothpaste brand.
   Search for: "{subject} audience demographics", "{subject} customer demographics", "{subject} fan demographics"
   You MUST find real published data on:
   - Age distribution (what age bracket is the core audience?)
@@ -14868,7 +14869,7 @@ STEP 4 — CROSS-CHECK YOUR ASSUMPTIONS
 STEP 5a — SPORTS FRANCHISE / TEAM (`subject_archetype` MUST be `sports_team_league_org` when the input is that team/program)
   When this applies — BEFORE finalizing JSON — verify research-backed hooks exist:
   • **`location`** over-weights **home market DMA + realistically adjacent commuter / regional rally belts** (not a flat census). Note any away-game-heavy corridors ONLY if sourcing supports elevated fan diasporas (e.g. historic transplant cities).
-  • **`cultural_anchors.athletes`**: headline **today's marquee roster names + evergreen franchise legends** routinely discussed locally/nationally — not random league talent who never wore the colors.
+  • **`cultural_anchors.athletes`**: name **several** **today's biggest on-roster stars** (starting core, All-Stars/high-usage players, cult-favorite standouts fans actually discuss) **plus** evergreen franchise legends — not a single face-of-team only and not random league talent who never wore the colors.
   • **`cross_shop_network` + opening `digital_identity` paragraph**: cite **current major sponsors/partners —
     jersey/kit brand, marquee broadcast advertisers (beverages, telecom, insurance, autos), ticketing/payments partners,
     recognizable equipment suppliers — PLUS **exact stadium or arena naming** fans encounter on broadcasts & apps.
