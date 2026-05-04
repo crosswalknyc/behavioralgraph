@@ -9543,10 +9543,12 @@ def ai_final_gut_check(df, brand_category, project_name, brands):
                 f"Regional retail footprint (critical):\n"
                 f"- Grocery / supermarket banners often only operate in subsets of the US.\n"
                 f"- BEFORE keeping a high BP, ask: Does THIS profile's LOCATION / DMA geography plausibly include that footprint?\n"
-                f"- Examples — **H-E-B** / Texas-heavy groceries need Texas/Southwest DMA weight;\n"
-                f"  **Publix** / similar need Southeast–Florida corridor weight;\n"
-                f"  **Pavilions** / western Albertsons-banner names skew coastal West/Southwest — do not treat them "
-                f"like a Florida-exclusive footprint.\n"
+                f"- Examples (illustrative — map each SKU to **its own** geography vs persona):\n"
+                f"  **H-E-B** / similar need Texas/Central‑South corridor DMA weight;\n"
+                f"  **Publix**‑class banners need Southeast–Florida corridor weight;\n"
+                f"  **Pavilions**/western Albertsons‑banner names skew coastal West/mountain Southwest — incompatible with purely Florida‑without‑West footprints;\n"
+                f"  **Wegmans** / many Northeast supermarket leaders need Northeast/Mid‑Atlantic DMA concentration;\n"
+                f"  **Fred Meyer**/PNW‑heavy grocer families need Pacific Northwest / inland‑NW weight.\n"
                 f"- LOWER rows where a banner is geographically misaligned unless web research cites national ecommerce mastery.\n\n"
                 f"Return ONLY valid JSON:\n"
                 f'If no changes: {{"status":"OK","notes":"all rows believable"}}\n'
@@ -9638,8 +9640,10 @@ def ai_final_gut_check(df, brand_category, project_name, brands):
                 f"either LOWER THEM toward mid-tier OR ensure **digital grocery proxies** "
                 f"(INSTACART when listed, WALMART / TARGET pickup & grocery proxies, grocery delivery Uber Eats / DoorDash) "
                 f"score comparably HIGH — contradictory spreads are persona-wrong.\n"
-                f"- **Regional / limited-distribution CPG:** if a brand is primarily available in one US region (heavy South, Texas corridor, etc.), "
-                f"it must NOT rank high for nationally representative audiences unless THIS profile's LOCATION / DMA evidence shows that regional concentration — otherwise LOWER.\n"
+                f"- **Regional / limited-distribution CPG:** if a brand is primarily available in one US macro-region "
+                f"(whatever shape — Northeast corridor, Midwest/Great Lakes, Pacific Northwest/NorCal, SoCal/coastal mountain West, Texas/plains, inland/southeast/coastal South, etc.), "
+                f"it must NOT rank high unless THIS profile's LOCATION / DMA + persona narrative shows **that same** concentration — infer from research + geography, "
+                f"don't assume southern/Texas by default — otherwise LOWER.\n"
                 f"- Niche lifestyle/streetwear/luxury labels should only over-index strongly when "
                 f"the persona has clear cultural fit.\n\n"
                 f"Persona-rank sanity:\n"
@@ -14491,10 +14495,13 @@ def _category_pass1_calibration_block(category: str,
             "Target pickup proxies, DoorDash/Uber Eats grocery when in list) should also sit **very high** — "
             "that is how those baskets often show up digitally. If they do not, your tier assignments are "
             "internally inconsistent; fix them.\n"
-            "• **Regional availability / mass-market vs niche:** Brands sold only in parts of the US (e.g. strong "
-            "Southern / Texas-only or regional-only ice cream or grocery labels) should **not** sit in top tiers for a "
-            "**nationally dispersed** persona unless `location` + subsegments show a heavy concentration in that footprint. "
-            "Default national qualified cohort ⇒ treat strong regionals as mid/low or `anti_fit_in_category`.\n"
+            "• **Regional availability / mass-market vs niche:** Brands sold mainly in **one macro-region** "
+            "(however shaped — Northeast/I-95, Great Lakes/Midwest, Pacific Northwest/NorCal, coastal SoCal/Arizona corridors, "
+            "Texas/Central plains, inland/southeast/coastal South, Rockies, Alaska/Hawaii footprints, etc.) should **not** sit in "
+            "top tiers for a **nationally dispersed** persona unless `location` + subsegments show concentration in "
+            "**that same** footprint. Infer the SKU’s plausible geography from name + inventory + persona research — "
+            "**do not** assume southern/Texas is the default case. Treat strong regionals as mid/low or `anti_fit_in_category` "
+            "whenever DMA evidence points elsewhere.\n"
             "• Prefer `predicted_top_5` that respects this coherence check."
         )
     elif u == 'WHERE THEY SHOP':
@@ -14508,9 +14515,10 @@ def _category_pass1_calibration_block(category: str,
             "  — **Southeast / Florida core:** Publix, Winn-Dixie; Southeastern Grocers banners.\n"
             "  — **West Coast / Southwest Albertsons-era:** Pavilions, Vons, Safeway-heavy coast/mountain West skew "
             "(verify row naming — do not confuse a Florida shopper with banners that barely exist there).\n"
-            "• **Misaligned regions are anti-fit archetypes:** e.g. Publix or H-E-B in top tiers while persona "
-            "LOCATION shows **Northern-only** footprint with negligible Texas/Southeast weight; "
-            "Pavilions very high while persona is entirely **Florida-centric** without West DMA mass. "
+            "• **Misaligned footprints are anti-fit:** a banner whose stores cluster in **Macro-region A** "
+            "must not lead when persona **`location`/DMA skew** overwhelmingly lives in **Macro-region B** with no plausible overlap — "
+            "applies **symmetrically** (e.g. Pacific-Northwest-heavy chains vs all-Southeast DMA maps; Northeast-centric "
+            "supermarkets vs Texas/Southwest-only maps; inland South banners vs coastal California-only LOCATION). "
             "Put misplaced regionals in **low tiers** or `anti_fit_in_category`. National ecommerce + Walmart/Target/Costco "
             "remain allowable high tiers alongside genuinely national department stores.\n"
             "• `predicted_top_5` should not be dominated by a single-chain regional grocer that contradicts the DMA map."
@@ -14563,9 +14571,9 @@ If multiple CPG / beauty leaders score high, ensure **digital grocery proxies**
 (Instacart, Walmart/Target grocery pickup stack, grocery delivery apps in this list)
 are **proportionally elevated** — otherwise lower the CPG cluster toward mid tiers.
 
-**Regional-only or strong geo-skew brands** (sold mainly in one region — e.g. deep-South / Texas-heavy
-grocery or ice-cream labels): keep BP **low** unless persona `location` DMA mix or subsegments prove that
-geography — otherwise panel noise is inflating irrelevant regionals."""
+**Regional-only or strong geo-skew brands** (sold mainly in one US macro-region — infer from persona + row name + research):
+keep BP **low** unless persona `location` DMA mix or subsegments prove **that specific** geography — never default to imagining
+the skew is southern/Texas unless evidence says so."""
         )
 
     if u == 'WHERE THEY SHOP':
@@ -14573,11 +14581,10 @@ geography — otherwise panel noise is inflating irrelevant regionals."""
             """═══════════════════════════════════════════════════════════════════
 CATEGORY HARD CALIBRATION — WHERE THEY SHOP (regional footprints)
 ═══════════════════════════════════════════════════════════════════
-Grocery / super-regional banners (H-E-B, Publix, Pavilions-style chains, etc.) only score **high**
-when persona LOCATION/DMA mix plausibly contains that footprint.
+Super-regional grocery / mass banners (whatever region they serve — H-E-B, Publix, Wegmans, Fred Meyer‑class names,
+Albertsons-banner West families, etc.) only score **high** when persona LOCATION/DMA mix **overlaps that chain’s geography**.
 
-**Northern-skew personas** ⇒ Texas/Southeast-only leaders should sit **low** or anti-fit tier.
-**Florida-only personas** ⇒ West-banner labels that do not operate there belong **low** unless omnichannel/digital proof.
+Mismatch in **any direction** ⇒ **low** or anti-fit (not only «North vs Texas»).
 
 Honor national mass ecommerce + Walmart/Target/Costco when list contains them."""
         )
@@ -15140,8 +15147,8 @@ For each category, your guidance MUST be grounded in reality:
   (that incorrectly implies nearly half the audience engages those specific systems online yearly). Tie high scores to persona geography or medical roles only.
 - MOST PURCHASED BRANDS (digital semantics): Makeup/fragrance/snack/soap **CPG** often purchased offline — do not stack them atop the leaderboard
   without a digital rationale. Coherence rule: heavy CPG / beauty leaderboard ⇒ **Instacart + major digital grocery / pickup proxies** must also spike;
-  otherwise pull CPG downward. **Regional-distribution brands** (strong in one US region only) stay low unless persona `location`/DMA mix proves that geography.
-- WHERE THEY SHOP: **Geographic footprints matter** — e.g. H-E-B skews Texas-heavy; Publix / Winn-Dixie skew Southeast–Florida corridors; banners like **Pavilions** skew West‑coastal / Southwest Albertsons footprints, not interchangeable with purely Florida-heavy DMA maps. Wrong‑region dominance (Southern chains atop a Northern‑footprint persona, or coastal‑West banners high when LOCATION is wholly Florida‑centric without West weight) ⇒ score LOW unless research proves crossover (travel, ecommerce-only edge cases rarely justify mass BP).
+  otherwise pull CPG downward. **Regional-distribution brands** (strong in one US macro-region only — match that region to the persona, not to a canned southern/Texas default) stay low unless persona `location`/DMA mix proves **that same** geography.
+- WHERE THEY SHOP: **Geographic footprints matter.** Regional chains belong high only when persona `location`/DMA skew **matches** that retailer’s real geography — East Coast vs Pacific Northwest vs SoCal vs Texas vs inland South vs Midwest, etc.; **whatever the input persona’s footprint is**, use it as the compass. Wrong-macro‑region dominance in either direction ⇒ score LOW unless research proves crossover (travel, ecommerce-only edge cases rarely justify mass BP).
 - SEARCH ENGINE/AI: **Google (~78%+ annual credible digital touching points for mainstream US conditioned cohorts) should ordinarily lead**.
   Respect niche-only Yahoo/Bing/AI-research personas; default mass-market ⇒ Google tier #1, AI assistants chase but seldom clear #1 absent explicit evidence.
 
@@ -15152,12 +15159,12 @@ EXAMPLE category_signals (hypothetical `consumer_brand` athletic-equipment cohor
   "AMUSEMENT PARKS": "Major theme parks (Disney World, Universal Studios, Six Flags) are mainstream American entertainment — score near or slightly below baseline. Don't crush them. Water parks and local amusement parks score near baseline too. Only niche/foreign parks score low.",
   "TECHNOLOGY/DEVICE": "This audience skews young and urban. Both Apple (iPhone, iPad) and Samsung (Galaxy) are mass-market — score Apple at 0.8-1.0x baseline, Samsung at 1.0-1.2x if audience skews Android. Don't crush either brand. Smart home devices and wearables near baseline.",
   "GAMES": "This audience is 18-34 adults who like sports. Sports games (NBA 2K, Madden, EA Sports FC, EA Sports NFL) should score 2-4x baseline — these are core to the audience. Adult action games (GTA, Call of Duty, Assassin's Creed) score 1.5-2x. Children's games (Roblox, LEGO, Barbie, Disney Dreamlight) should score BELOW baseline (0.5-0.8x) — adults don't play these. Minecraft and Fortnite are cross-generational, cap at 1.5x baseline. NBA 2K MUST outscore Roblox.",
-  "WHERE THEY SHOP": "Category sellers tied to subject (Foot Locker, Dick's, Finish Line for athletic) lift when personas actually browse there digitally. Nationals (Amazon, Walmart, Target, Costco) stay wide-but-realistic. Regional supermarket banners (**H‑E‑B** Texas-heavy, **Publix** Southeast/Florida, **Pavilions** / Vons-heavy West footprints) spike ONLY when LOCATION/DMA mix matches footprint — wrong geography ⇒ keep low regardless of stray panel spikes.",
+  "WHERE THEY SHOP": "Category sellers tied to subject (Foot Locker, Dick's, Finish Line for athletic) lift when personas actually browse there digitally. Nationals (Amazon, Walmart, Target, Costco) stay wide-but-realistic. Regional supermarket banners (examples: Texas‑heavy chains, Southeast/Florida grocers, Northeast/I‑95 banners, Northwest club stores, coastal Albertsons-banner families …) spike ONLY when LOCATION/DMA mix matches **that** footprint — mismatched macro‑region ⇒ keep low regardless of stray panel spikes.",
   "STREAMING/PLATFORM": "Major streaming (Netflix, Hulu, Amazon Prime Video, Disney+, YouTube) are near-universal — score 0.85-1.15x baseline. Don't crush them. Sports-specific streaming (ESPN+, FuboTV) may score above baseline if audience is sports-oriented. Niche/foreign platforms score very low.",
   "ATHLETE": "The subject's own sponsored athletes should score 2-4x their baseline — not 10x. Only the single most iconic athlete (like LeBron for Nike) gets 5x+. Other athletes score 1.0-1.5x baseline. Don't inflate obscure athletes to 50%+ just because they have a brand deal.",
   "INTEREST": "The panel uses a fixed global list of interest labels (see `interest_top_25` / `interest_bottom_25` in your JSON when the inventory block is present). Your subject's CORE themes MUST dominate the top of that ranking vs generic ubiquitous rows. Generic-functional rows (JOB SEARCH, SOCIAL MEDIA-as-interest, HOME IMPROVEMENT, COOKING) sit mid/low unless persona research proves otherwise — never crowd out spine hobbies.",
   "HEALTH & WELLNESS": "Prefer national digital-health surfaces consumers actually browse or open in-app. Metro hospital SYSTEM brands imply tiny national digital footprints unless the persona is explicitly health-staff heavy or geographically concentrated patients — never pretend ~half the cohort annually engages several different NYC-named hospital stacks online.",
-  "MOST PURCHASED BRANDS": "This is digital-attribution MOST PURCHASED: makeup/snack CPG leaders need DTC or subscription justification or belong mid-tier. If they dominate the top anyway, grocery-delivery anchors (Instacart, Walmart/Target digital grocery proxies in this list, DoorDash grocery if present) must ALSO read very high; otherwise deflate the noisy CPG stack. Brands with region-limited grocery distribution (heavy South/Texas-only type footprints) belong low unless LOCATION/DMA in the persona proves that concentration.",
+  "MOST PURCHASED BRANDS": "This is digital-attribution MOST PURCHASED: makeup/snack CPG leaders need DTC or subscription justification or belong mid-tier. If they dominate the top anyway, grocery-delivery anchors (Instacart, Walmart/Target digital grocery proxies in this list, DoorDash grocery if present) must ALSO read very high; otherwise deflate the noisy CPG stack. Brands with region-limited distribution belong low unless LOCATION/DMA in the persona proves **the same regional concentration** implied by inventory + research (any US macro‑region — not a fixed southern/Texas template).",
   "SEARCH ENGINE/AI": "Google/Google Search should virtually always lead (~78–90 BP for mainstream US-conditioned cohorts) and occupy predicted_top_5 #1 unless the profile is unusually Bing/Yahoo/DDG-exclusive. Dedicated AI wrappers may be high but should not cleanly #1 generic consumers vs Google."
 """
 
@@ -16824,7 +16831,7 @@ def _build_genpop_persona_doc() -> dict:
             'expected_low': ['MULTI-LEVEL MARKETING', 'SHOOTING SPORTS & MARKSMANSHIP', 'POLO', 'YACHTING', 'EQUESTRIAN', 'CIGARS', 'HORSE RACING'],
         },
         'WHERE THEY SHOP': {
-            'summary': 'National ecommerce + Walmart/Target/Costco/Best Buy-style breadth dominate digital GenPop; heavy regional supermarkets (Texas H-E-B, Southeast Publix, West-banner names like Pavilions/Vons families) stay low nationally unless LOCATION proves that footprint.',
+            'summary': 'National ecommerce + Walmart/Target/Costco/Best Buy-style breadth dominate digital GenPop; heavy regional supermarket banners (whatever US macro-region each serves — Texas-heavy, Northeast I-95-class, Southeast/Florida, Pacific Northwest/coastal West, inland/Midwest, etc.) stay low nationally unless LOCATION proves overlapping footprint.',
             'expected_high': ['AMAZON', 'WALMART', 'TARGET', 'COSTCO', 'HOME DEPOT', 'BEST BUY', 'EBAY', 'KOHLS', 'CVS', 'WALGREENS', 'LOWES', 'MACYS'],
             'expected_low': ['CARTIER', 'TIFFANY', 'HERMES', 'NEIMAN MARCUS', 'BERGDORF GOODMAN', 'PAVILIONS', 'HEB', 'H-E-B', 'PUBLIX', 'WINN-DIXIE', 'MENARDS', 'KIRKLANDS', 'REDBUBBLE', 'MERCADO LIBRE'],
         },
