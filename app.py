@@ -21629,6 +21629,7 @@ def admin_kill_job():
         jobs[job_id]['status'] = 'failed'
         jobs[job_id]['error'] = 'Killed by admin'
         jobs[job_id]['message'] = 'Killed by admin'
+        jobs[job_id]['progress'] = 100
         _save_job_status_to_s3(job_id, jobs[job_id])
         del jobs[job_id]
         killed = True
@@ -21637,6 +21638,8 @@ def admin_kill_job():
         if job_id in s3_jobs:
             s3_jobs[job_id]['status'] = 'failed'
             s3_jobs[job_id]['error'] = 'Killed by admin'
+            s3_jobs[job_id]['message'] = 'Killed by admin'
+            s3_jobs[job_id]['progress'] = 100
             try:
                 s3_client.put_object(
                     Bucket=S3_BUCKET,
