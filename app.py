@@ -19,6 +19,7 @@ import uuid
 import json
 import csv
 import threading
+import queue as _stdlib_queue
 import traceback
 import re
 import io
@@ -1563,6 +1564,60 @@ def requires_purgatory_access(f):
 jobs = {}
 OUTPUT_DIR = os.path.join(os.path.dirname(__file__), 'outputs')
 os.makedirs(OUTPUT_DIR, exist_ok=True)
+
+# ── Serialize Profile Analysis (run_analysis) ─────────────────────────────────
+# One run at a time per Python process / Render replica in FIFO submission order,
+# so overlapping universe scans do not saturate ClickHouse. Queued UI message is updated
+# when more than zero jobs wait in this process; with multiple replicas, load may still
+# fan out unless requests hit one instance — run Render with a single replica for strict global FIFO.
+_profile_analysis_job_queue = _stdlib_queue.Queue()
+_profile_analysis_queue_worker_started = threading.Event()
+_profile_analysis_queue_worker_lock = threading.Lock()
+
+
+def _profile_analysis_queue_worker():
+    """Background consumer: executes run_analysis jobs strictly one-after-another."""
+    while True:
+        run_fn, run_args, run_kwargs = _profile_analysis_job_queue.get()
+        try:
+            run_fn(*run_args, **run_kwargs)
+        except Exception:
+            traceback.print_exc()
+        finally:
+            _profile_analysis_job_queue.task_done()
+
+
+def enqueue_profile_analysis_run(run_fn, run_args, run_kwargs=None, queued_job_id=None):
+    """Queue a profile pipeline behind any earlier submissions (same process FIFO)."""
+    run_kwargs = run_kwargs or {}
+    with _profile_analysis_queue_worker_lock:
+        if not _profile_analysis_queue_worker_started.is_set():
+            wt = threading.Thread(
+                target=_profile_analysis_queue_worker,
+                daemon=True,
+                name='profile-analysis-queue',
+            )
+            wt.start()
+            _profile_analysis_queue_worker_started.set()
+
+    _profile_analysis_job_queue.put((run_fn, run_args, run_kwargs))
+
+    if queued_job_id and queued_job_id in jobs:
+        try:
+            ahead = max(0, _profile_analysis_job_queue.qsize() - 1)
+            if ahead > 0:
+                update_job_status(queued_job_id, message=f'Queued ({ahead} profile run(s) ahead)')
+        except Exception:
+            pass
+
+
+def profile_analysis_run_queue_depth():
+    """Rough number of queued (not necessarily running) profile jobs in this process."""
+    try:
+        return _profile_analysis_job_queue.qsize()
+    except Exception:
+        return -1
+
 
 # ============================================================================
 # S3 CACHE FUNCTIONS
@@ -9875,16 +9930,16 @@ def submit_rerun():
         }
         if s3_client:
             _save_job_status_to_s3(job_id, jobs[job_id])
-        thread = threading.Thread(
-            target=run_analysis,
-            args=(job_id, project_name, brands, sample_start, sample_end,
-                  behavior_start, behavior_end, filters, skew_settings,
-                  is_genpop_rerun, False, brand_category,
-                  False, is_listener_watcher, platform_name, None,
-                  reference_demographics, reference_sample_size, s3_key)
+        enqueue_profile_analysis_run(
+            run_analysis,
+            (job_id, project_name, brands, sample_start, sample_end,
+             behavior_start, behavior_end, filters, skew_settings,
+             is_genpop_rerun, False, brand_category,
+             False, is_listener_watcher, platform_name, None,
+             reference_demographics, reference_sample_size, s3_key),
+            {},
+            queued_job_id=job_id,
         )
-        thread.daemon = True
-        thread.start()
         desc = f"{project_name} rerun {sample_start}–{sample_end}"
         consume_credit(username, description=desc, job_id=job_id, pull_type='Profile Analysis', credits_used=CREDITS_PROFILE_ANALYSIS)
         _, credits_left = check_user_credits(username)
@@ -15551,18 +15606,16 @@ def submit_analysis():
         if s3_client:
             _save_job_status_to_s3(job_id, jobs[job_id])
         
-        # Start processing
-        thread = threading.Thread(
-            target=run_analysis,
-            args=(job_id, project_name, brands, start_date, end_date, 
-                  behavior_start, behavior_end, filters, skew_settings, 
-                  is_genpop, purchasers_only, brand_category, 
-                  include_frequency, is_listener_watcher, platform_name, previous_file,
-                  reference_demographics, reference_sample_size, reference_file_key),
-            kwargs={'geo_zip_codes': geo_zip_codes, 'geo_dma': geo_dma}
+        enqueue_profile_analysis_run(
+            run_analysis,
+            (job_id, project_name, brands, start_date, end_date,
+             behavior_start, behavior_end, filters, skew_settings,
+             is_genpop, purchasers_only, brand_category,
+             include_frequency, is_listener_watcher, platform_name, previous_file,
+             reference_demographics, reference_sample_size, reference_file_key),
+            {'geo_zip_codes': geo_zip_codes, 'geo_dma': geo_dma},
+            queued_job_id=job_id,
         )
-        thread.daemon = True
-        thread.start()
         
         # Consume credits for this run (record what it was used for)
         desc = f"{project_name} ({brand_label} {start_date}–{end_date})"
