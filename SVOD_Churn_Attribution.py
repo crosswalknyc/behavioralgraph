@@ -1644,8 +1644,8 @@ def _validate_total_watchers_with_ai(show_name, platform_name, inflated_total, i
 
     print(f"   🔍 AI viewership lookup: confidence={confidence}, recommended={recommended}, source={result.get('source','')}")
 
-    if confidence != 'high' or recommended is None:
-        print(f"   ℹ️  Confidence not high enough to override (confidence={confidence})")
+    if confidence == 'low' or recommended is None:
+        print(f"   ℹ️  Confidence too low to override (confidence={confidence})")
         metadata['action'] = 'kept_original'
         return inflated_total, inflated_pre, inflated_clean, metadata
 
@@ -1660,8 +1660,12 @@ def _validate_total_watchers_with_ai(show_name, platform_name, inflated_total, i
         return inflated_total, inflated_pre, inflated_clean, metadata
 
     ratio = inflated_total / recommended if recommended > 0 else 1.0
-    if ratio > 2.0 or ratio < 0.5:
-        print(f"   🔄 Overriding Total: {inflated_total:,} → {recommended:,} (ratio was {ratio:.2f}x)")
+
+    # For "high" confidence: override when off by more than 2x
+    # For "medium" confidence: override when off by more than 5x (extreme mismatch)
+    override_threshold = 2.0 if confidence == 'high' else 5.0
+    if ratio > override_threshold or ratio < (1.0 / override_threshold):
+        print(f"   🔄 Overriding Total: {inflated_total:,} → {recommended:,} (ratio was {ratio:.2f}x, confidence={confidence})")
         pre_ratio = inflated_pre / inflated_total if inflated_total > 0 else 0
         new_pre = int(round(recommended * pre_ratio))
         new_clean = recommended - new_pre
@@ -1669,7 +1673,7 @@ def _validate_total_watchers_with_ai(show_name, platform_name, inflated_total, i
         metadata['override_ratio'] = ratio
         return recommended, new_pre, new_clean, metadata
     else:
-        print(f"   ✅ Total {inflated_total:,} is within 2x of recommended {recommended:,} — no override")
+        print(f"   ✅ Total {inflated_total:,} is within {override_threshold}x of recommended {recommended:,} — no override")
         metadata['action'] = 'kept_original'
         return inflated_total, inflated_pre, inflated_clean, metadata
 
