@@ -16037,9 +16037,10 @@ def _run_item_classification_agent(items: list[str]) -> dict[str, dict]:
                             luxury, boomer-traditional, niche-subculture, ...)
         adjacent_brands     a few brands this item competes with / sits alongside
         confidence          high/medium/low — low means the agent doesn't
-                            recognize the item; downstream drops these when
-                            no panel signal and no gen-pop baseline exists,
-                            instead of fabricating a 27% from default affinity.
+                            recognize the item; downstream keeps these with
+                            conservative sub-1% caps when there is no panel
+                            signal and no gen-pop baseline, instead of
+                            fabricating a mid-range default.
 
     Returns: {value_upper: classification_dict}
 
@@ -16064,7 +16065,7 @@ not vague name recognition offline.
 CRITICAL RULES:
 1. If you genuinely do not recognize an item (made-up-sounding name, hyper-niche
    regional business, no clear consumer-facing brand), set confidence="low".
-   Downstream will drop these instead of fabricating a default score. Do NOT
+   Downstream will keep these conservatively (sub-1% when unsupported). Do NOT
    guess — flag and move on.
 2. Be specific in `what_is_it`: name the category, price tier, and 1-2
    distinguishing facts (e.g. "$595 omakase by Masa Takayama at Mandarin
@@ -16171,7 +16172,7 @@ def _run_item_classification_parallel(unique_items: list[str],
     if n_low:
         sample_low = [k for k, v in out.items()
                        if str(v.get('confidence', '')).lower() == 'low'][:10]
-        print(f"   ℹ️  Sample low-confidence (will drop if no panel/baseline): "
+        print(f"   ℹ️  Sample low-confidence (kept conservatively if no panel/baseline): "
               f"{', '.join(sample_low)}")
     return out
 
@@ -16882,11 +16883,10 @@ For each item you receive `panel`, `genpop`, `is:` (what it actually is),
        anchor key, anti-fit category, demographic) that drove your
        multiplier. Do NOT just rubber-stamp panel × 1.0.
 
-  6) GEN-POP UNKNOWN AND PANEL >= 15% AND classifier conf=low?
-     → likely year-window inflation on an item the agent doesn't
-       recognize. Default to 1.5–4% (the "I don't know what this is, so
-       it can't be a primary fit" answer). Cite "low confidence + no
-       baseline → conservative default" in reason.
+  6) GEN-POP UNKNOWN + classifier conf=low + no panel signal?
+     → unknown/unsupported row. Keep NONZERO but tiny:
+       default **0.05–0.95%** (never mid-pack). Cite
+       "low confidence + no baseline/panel → conservative sub-1% keep".
 
   7) GEN-POP UNKNOWN AND ITEM IS RECOGNIZABLE BUT NOT IN ANCHORS:
      → reason about it: would the persona realistically engage? At what
@@ -16920,6 +16920,10 @@ Every item's `reason` MUST cite at least one of:
 If you can't articulate a reason, your default is genpop × 1.0 (or 1.5%
 if no genpop). Do NOT rubber-stamp panel readings. Do NOT default to a
 generic 27%-style middle.
+
+Never drop/zero a row solely because gen-pop is missing. Missing baseline
+means "reason from persona + item reality"; only unknown/unsupported rows
+should be kept in the conservative sub-1% band.
 
 ═══════════════════════════════════════════════════════════════════
 INTENT-vs-EXPOSURE compression (semantic guidance)
@@ -19405,13 +19409,11 @@ def parallel_category_agents(df: pd.DataFrame, persona_doc: dict,
     # Written to _agent_decisions.json alongside the CSV so the user can audit
     # which items the agent overrode panel on, and why.
     agent_decisions: list[dict] = []
-    # ── Low-confidence drop set: items the classifier flagged as confidence=low
-    # AND that have no panel signal AND no canonical baseline. These get
-    # removed from the output entirely instead of polluting category top-Ns
-    # with fabricated 27% defaults. (Per the v2 plan: agent leads, but if it
-    # genuinely doesn't recognize an item and there's no other evidence, we
-    # drop rather than guess.)
-    drop_values: set[str] = set()
+    # ── Low-confidence conservative set: items the classifier flagged as
+    # confidence=low AND that have no panel signal AND no canonical baseline.
+    # Keep these rows, but force tiny sub-1% BPs so we preserve every value
+    # without letting unknowns dominate rank order.
+    low_confidence_conservative_values: set[str] = set()
     for cat, agent_result in results_map.items():
         for entry in agent_result:
             if not isinstance(entry, dict) or 'value' not in entry or 'bp' not in entry:
@@ -19446,7 +19448,7 @@ def parallel_category_agents(df: pd.DataFrame, persona_doc: dict,
             if (conf == 'low'
                     and (not n_panel or n_panel == 0)
                     and (baseline is None or baseline <= 0.0)):
-                drop_values.add(v_u)
+                low_confidence_conservative_values.add(v_u)
 
     # Apply organic noise ONCE per unique value, freezing the canonical BP.
     # Also enforce strict per-value max caps derived from category rules across
@@ -19483,6 +19485,11 @@ def parallel_category_agents(df: pd.DataFrame, persona_doc: dict,
     global_value_bp: dict[str, float] = {}
     for v_u, raw_bp in global_value_bp_raw.items():
         clamped = max(0.0001, min(99.9999, raw_bp))
+        if v_u in low_confidence_conservative_values:
+            # Keep unknown/unsupported rows visible but safely tiny.
+            tiny = max(0.05, min(0.95, clamped if clamped < 1.0 else (0.22 + random.uniform(0.0, 0.45))))
+            global_value_bp[v_u] = round(tiny, 4)
+            continue
         _hard_cap = value_hard_cap.get(v_u)
         if isinstance(_hard_cap, (int, float)) and _hard_cap > 0:
             clamped = min(clamped, max(0.0001, float(_hard_cap)))
@@ -19503,16 +19510,17 @@ def parallel_category_agents(df: pd.DataFrame, persona_doc: dict,
             print(f"   🔒 Global rule caps enforced on {_capped_n} propagated values "
                   f"(ceiling/anti-fit across all category appearances)")
 
-    if drop_values:
-        print(f"   🗑️  Dropping {len(drop_values)} low-confidence items with no panel and no baseline "
-              f"(prevents 27% confabulation cluster — sample: "
-              f"{', '.join(sorted(drop_values)[:8])}{'…' if len(drop_values) > 8 else ''})")
+    if low_confidence_conservative_values:
+        print(f"   🧯 Conservative keep for {len(low_confidence_conservative_values)} low-confidence items "
+              f"(no panel + no baseline) — forcing sub-1% BP band; sample: "
+              f"{', '.join(sorted(low_confidence_conservative_values)[:8])}"
+              f"{'…' if len(low_confidence_conservative_values) > 8 else ''}")
 
     # Stash decision log + drop list on df attrs so run_full_pipeline can
     # serialize them alongside the final CSV.
     try:
         df.attrs['_agent_decisions'] = agent_decisions
-        df.attrs['_dropped_low_confidence'] = sorted(drop_values)
+        df.attrs['_low_confidence_capped_under_1'] = sorted(low_confidence_conservative_values)
     except Exception:
         pass
 
@@ -19579,13 +19587,15 @@ def parallel_category_agents(df: pd.DataFrame, persona_doc: dict,
                 'category_rules': _category_rules_compact,
                 'validator_corrections': _validator_compact,
                 'agent_decisions': agent_decisions,
-                'dropped_low_confidence': sorted(drop_values),
+                'dropped_low_confidence': [],
+                'low_confidence_capped_under_1': sorted(low_confidence_conservative_values),
                 'written_at': _time_dec.time(),
             }, _fp, default=str, indent=2)
         _val_total = sum(len(v) for v in (_validator_compact or {}).values())
         print(f"   📝 Wrote v16 audit sidecar: {_dec_path} "
               f"({len(agent_decisions)} decisions, {len(_category_rules_compact)} rules, "
-              f"{_val_total} validator overrides, {len(drop_values)} drops)")
+              f"{_val_total} validator overrides, "
+              f"{len(low_confidence_conservative_values)} conservative sub-1% values)")
     except Exception as _dec_err:
         print(f"   ⚠️ Could not write agent-decision sidecar: {_dec_err}")
 
@@ -19610,18 +19620,11 @@ def parallel_category_agents(df: pd.DataFrame, persona_doc: dict,
     rows_written = 0
     rows_carried = 0
     rows_propagated = 0
-    rows_to_drop: list[int] = []
     for cat, (vals, idxs) in category_values.items():
         carry = category_carry.get(cat, {})
         primary_set = {v.strip().upper() for v in unique_items_by_cat.get(cat, [])}
         for idx in idxs:
             val_u = str(df.at[idx, 'Value']).strip().upper()
-            # Low-confidence drop: classifier didn't recognize the item AND
-            # there's no panel signal AND no canonical baseline. Remove the
-            # row entirely instead of leaving it at a fabricated default.
-            if val_u in drop_values:
-                rows_to_drop.append(idx)
-                continue
             if val_u in carry:
                 # Carry-forward: same value across categories gets the SAME
                 # jittered BP. Pull from global_carry_bp (jitter applied once).
@@ -19636,17 +19639,6 @@ def parallel_category_agents(df: pd.DataFrame, persona_doc: dict,
                     rows_written += 1
                 else:
                     rows_propagated += 1
-
-    if rows_to_drop:
-        df = df.drop(rows_to_drop).reset_index(drop=True)
-        # Re-stash attrs after reset_index (pandas may not always preserve them).
-        try:
-            df.attrs['_agent_decisions'] = agent_decisions
-            df.attrs['_dropped_low_confidence'] = sorted(drop_values)
-        except Exception:
-            pass
-        print(f"   🗑️  Removed {len(rows_to_drop)} rows for low-confidence items "
-              f"({len(drop_values)} unique values dropped from output)")
 
     if rows_carried:
         print(f"   ↩️  Carried forward {rows_carried} BP rows from prior run (±0.01–0.02% jitter)")
@@ -24528,14 +24520,14 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
         import json as _json
         import tempfile as _tmp
         decisions = []
-        dropped = []
+        conservative_capped = []
         # Primary source: df.attrs (fragile — can be cleared by pandas ops).
         try:
             decisions = list(df_final.attrs.get('_agent_decisions') or [])
-            dropped = list(df_final.attrs.get('_dropped_low_confidence') or [])
+            conservative_capped = list(df_final.attrs.get('_low_confidence_capped_under_1') or [])
         except Exception:
             decisions = []
-            dropped = []
+            conservative_capped = []
         # Fallback: the deterministic temp-file sidecar that
         # parallel_category_agents writes immediately after scoring (so we
         # don't lose it if df.attrs gets dropped by post-agent pipeline
@@ -24549,18 +24541,20 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
                     with open(_sidecar) as _fp:
                         _sidecar_data = _json.load(_fp)
                     decisions = list(_sidecar_data.get('agent_decisions') or [])
-                    dropped = list(_sidecar_data.get('dropped_low_confidence') or [])
+                    conservative_capped = list(_sidecar_data.get('low_confidence_capped_under_1') or [])
                     print(f"   📥 Loaded decisions from sidecar: {len(decisions)} decisions, "
-                          f"{len(dropped)} drops")
+                          f"{len(conservative_capped)} conservative sub-1%")
             except Exception as _scerr:
                 print(f"   ⚠️ Could not load decisions sidecar: {_scerr}")
-        if decisions or dropped:
+        if decisions or conservative_capped:
             decisions_path = final_file.rsplit('.', 1)[0] + '_agent_decisions.json'
             payload = {
                 'csv_file': os.path.basename(final_file),
                 'n_decisions': len(decisions),
-                'n_dropped_low_confidence': len(dropped),
-                'dropped_low_confidence': dropped,
+                'n_dropped_low_confidence': 0,
+                'dropped_low_confidence': [],
+                'n_low_confidence_capped_under_1': len(conservative_capped),
+                'low_confidence_capped_under_1': conservative_capped,
                 'decisions': sorted(
                     decisions,
                     key=lambda d: abs(float(d.get('agent_bp', 0) or 0)
@@ -24572,7 +24566,7 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
                 with open(decisions_path, 'w') as _fp:
                     _json.dump(payload, _fp, default=str, indent=2)
                 print(f"📝 Wrote agent-decision log: {decisions_path} "
-                      f"({len(decisions)} decisions, {len(dropped)} drops)")
+                      f"({len(decisions)} decisions, {len(conservative_capped)} conservative sub-1%)")
             except OSError as _e:
                 print(f"   ⚠️ Could not write agent-decision log: {_e}")
     except Exception as _e:
