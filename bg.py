@@ -594,6 +594,11 @@ def _research_brand_demographics(client, subject_name, brand_category):
 
 _research_profile_cache = {}
 
+# Profile IQ depth mode (always on per product direction):
+# keep/score full observed category tails instead of top-N truncation in
+# late sanity/reorder review passes.
+DEEP_OUTPUT_MODE_PROFILE_IQ = True
+
 def _add_realistic_noise(value, noise_range=0.5):
     """Add small random noise to a value to avoid perfect round numbers."""
     import random
@@ -692,8 +697,7 @@ Return ONLY valid JSON (no markdown):
         "BLACK OR AFRICAN AMERICAN": <percent>,
         "HISPANIC OR LATINO": <percent>,
         "ASIAN": <percent>,
-        "NATIVE AMERICAN / ALASKA NATIVE": <percent>,
-        "ANOTHER RACE/ETHNICITY": <percent>
+        "OTHER": <percent>
     }},
     "INCOME": {{
         "UNDER $25,000": <percent>,
@@ -709,7 +713,7 @@ Return ONLY valid JSON (no markdown):
         "SOME COLLEGE": <percent>,
         "ASSOCIATE DEGREE": <percent>,
         "BACHELOR'S DEGREE": <percent>,
-        "GRADUATE DEGREE": <percent>
+        "GRADUATE OR PROFESSIONAL DEGREE": <percent>
     }},
     "SEXUAL_ORIENTATION": {{
         "STRAIGHT / HETEROSEXUAL": <percent>,
@@ -9545,7 +9549,9 @@ def ai_final_gut_check(df, brand_category, project_name, brands):
             cur_bp = float(str(df.at[idx, bp_col]).replace('%', '').replace(',', ''))
             cur_cs = float(str(df.at[idx, cs_col]).replace('%', '').replace(',', ''))
             refreshed.append((name, cur_bp, cur_cs, idx))
-        sorted_items = sorted(refreshed, key=lambda x: -x[1])[:25]
+        sorted_items = sorted(refreshed, key=lambda x: -x[1])
+        if not DEEP_OUTPUT_MODE_PROFILE_IQ:
+            sorted_items = sorted_items[:25]
         current_batch[cat] = sorted_items
         current_items += len(sorted_items)
         if current_items >= 100:
@@ -10346,7 +10352,7 @@ def ai_final_gut_check(df, brand_category, project_name, brands):
             if len(cat_items) < 6:
                 continue
             cat_items.sort(key=lambda x: -x[1])
-            top_items = cat_items[:80]
+            top_items = cat_items if DEEP_OUTPUT_MODE_PROFILE_IQ else cat_items[:80]
 
             lines = []
             for name, bp, gp_bp in top_items:
@@ -10507,7 +10513,9 @@ def ai_final_gut_check(df, brand_category, project_name, brands):
             if cat not in flagged_cats:
                 continue
             over_count, total_with_gp, over_pct, cat_items_with_index = flagged_cats[cat]
-            cat_items_sorted = sorted(cat_items_with_index, key=lambda x: -x[1])[:200]
+            cat_items_sorted = sorted(cat_items_with_index, key=lambda x: -x[1])
+            if not DEEP_OUTPUT_MODE_PROFILE_IQ:
+                cat_items_sorted = cat_items_sorted[:200]
             lines = []
             for name, bp, gp_bp, idx_val, _ in cat_items_sorted:
                 idx_int = int(round(idx_val * 100))
@@ -10613,7 +10621,7 @@ def ai_final_gut_check(df, brand_category, project_name, brands):
             gp_bp = gp_bp_lookup.get((cat, name.strip().upper()), 0)
             cat_ranked.append((name, cur_bp, gp_bp, idx))
         cat_ranked.sort(key=lambda x: -x[1])
-        top_items = cat_ranked[:40]
+        top_items = cat_ranked if DEEP_OUTPUT_MODE_PROFILE_IQ else cat_ranked[:40]
         if len(top_items) < 5:
             continue
 
@@ -11068,7 +11076,9 @@ def item_level_ai_review(df, archetype, project_name, brands):
     current_batch = {}
     current_items = 0
     for cat, items in categories_to_review.items():
-        sorted_items = sorted(items, key=lambda x: -x[1])[:15]
+        sorted_items = sorted(items, key=lambda x: -x[1])
+        if not DEEP_OUTPUT_MODE_PROFILE_IQ:
+            sorted_items = sorted_items[:15]
         current_batch[cat] = sorted_items
         current_items += len(sorted_items)
         if current_items >= 40:
@@ -15377,7 +15387,7 @@ Return ONLY a single valid JSON object — no markdown, no commentary.
       "BLACK OR AFRICAN AMERICAN": <percent>,
       "HISPANIC OR LATINO": <percent>,
       "ASIAN": <percent>,
-      "NATIVE AMERICAN / ALASKA NATIVE": <percent>
+      "OTHER": <percent>
     }},
     "INCOME": {{
       "UNDER $25,000": <percent>,
@@ -15394,7 +15404,7 @@ Return ONLY a single valid JSON object — no markdown, no commentary.
       "SOME COLLEGE": <percent>,
       "ASSOCIATE DEGREE": <percent>,
       "BACHELOR'S DEGREE": <percent>,
-      "GRADUATE DEGREE": <percent>
+      "GRADUATE OR PROFESSIONAL DEGREE": <percent>
     }},
     "RELATIONSHIP": {{
       "SINGLE": <percent>,
@@ -15415,10 +15425,9 @@ Return ONLY a single valid JSON object — no markdown, no commentary.
       "NO": <percent>
     }},
     "OCCUPATION": {{
-      "SELF-EMPLOYED": <percent>,
       "STUDENT": <percent>,
       "HOMEMAKER": <percent>,
-      "RETIRED": <percent>,
+      "OTHER": <percent>,
       "UNEMPLOYED": <percent>,
       "PREFER NOT TO SAY": <percent>
     }}
@@ -15484,7 +15493,7 @@ RULES:
 - ETHNICITY IS CRITICAL: Research the subject's OWN race/ethnicity/heritage. If the subject is a person of color (Asian, Black, Hispanic, etc.), their fan base will significantly over-index on that ethnicity vs. general US population. For example, a Chinese-American actor's audience should have ASIAN as one of the top ethnicities (30-50%+), not just 7% US average. A Black rapper's audience should have BLACK OR AFRICAN AMERICAN at 40-60%+. Never default to generic US census proportions — the subject's identity strongly shapes their audience demographics.
 - AGE IS CRITICAL: The subject's OWN age heavily influences their audience age distribution. Research the subject's actual age. A 58-year-old actress will have an audience peaking in the 45-54 and 55-64 brackets (30%+ and 20%+ respectively), with much lower percentages for 18-24 (5-8%) and 17 AND UNDER (2-5%). A 20-year-old pop star will peak at 18-24 (35-45%) and 17 AND UNDER (15-25%). The audience's peak age bracket should align with or be slightly younger than the subject's own age bracket. Never give equal weight to age brackets that are 20+ years apart from the subject's age.
 - Do NOT include "Prefer Not to Say" or "Other" in AGE, GENDER, ETHNICITY, or INCOME. Those categories must only contain the exact buckets listed above.
-- Do NOT include "EMPLOYED FULL-TIME" or "EMPLOYED PART-TIME" in OCCUPATION. Those values are forbidden — they are NOT real occupation categories. OCCUPATION must only use: SELF-EMPLOYED, STUDENT, HOMEMAKER, RETIRED, UNEMPLOYED, PREFER NOT TO SAY.
+- Do NOT include "EMPLOYED FULL-TIME", "EMPLOYED PART-TIME", "SELF-EMPLOYED", or "RETIRED" in OCCUPATION. Those values are forbidden in final output normalization. OCCUPATION must only use: STUDENT, HOMEMAKER, OTHER, UNEMPLOYED, PREFER NOT TO SAY.
 - LOCATION: Provide at least 15-20 top DMAs with realistic, varied percentages. The percentages should NOT be clustered — use a natural distribution where the #1 DMA might be 8-12%, #5 might be 4-6%, #10 might be 2-3%, #15 might be 1-2%, #20 might be 0.5-1%. The sum should be ≤ 100; remainder is auto-spread to the other 190+ DMAs with random variation.
 
 ═══════════════════════════════════════════════════════════════════
@@ -18684,17 +18693,16 @@ def parallel_category_agents(df: pd.DataFrame, persona_doc: dict,
         'AGE': ['17 AND UNDER', '18-24', '25-34', '35-44', '45-54', '55-64', '65 OR OLDER'],
         'GENDER': ['FEMALE', 'MALE', 'NON-BINARY', 'TRANS FEMALE', 'TRANS MALE'],
         'ETHNICITY': ['WHITE', 'BLACK OR AFRICAN AMERICAN', 'HISPANIC OR LATINO', 'ASIAN',
-                       'NATIVE AMERICAN / ALASKA NATIVE'],
+                       'OTHER'],
         'INCOME': ['UNDER $25,000', '$25,000-$49,999', '$50,000-$74,999', '$75,000-$99,999',
                    '$100,000-$149,999', '$150,000-$249,999', '$250,000 OR MORE'],
         'EDUCATION': ['LESS THAN HIGH SCHOOL', 'HIGH SCHOOL GRADUATE', 'SOME COLLEGE',
-                      'ASSOCIATE DEGREE', "BACHELOR'S DEGREE", 'GRADUATE DEGREE'],
+                     'ASSOCIATE DEGREE', "BACHELOR'S DEGREE", 'GRADUATE OR PROFESSIONAL DEGREE'],
         'RELATIONSHIP': ['SINGLE', 'MARRIED', 'IN A RELATIONSHIP', 'DIVORCED', 'WIDOWED', 'PREFER NOT TO SAY'],
         'SEXUAL_ORIENTATION': ['STRAIGHT / HETEROSEXUAL', 'GAY OR LESBIAN',
                                'ANOTHER SEXUAL ORIENTATION', 'PREFER NOT TO SAY'],
         'PARENTAL_STATUS': ['NO CHILDREN', 'HAS CHILDREN', 'PREFER NOT TO SAY'],
-        'OCCUPATION': ['SELF-EMPLOYED', 'STUDENT', 'HOMEMAKER', 'RETIRED',
-                       'UNEMPLOYED', 'PREFER NOT TO SAY'],
+        'OCCUPATION': ['STUDENT', 'HOMEMAKER', 'OTHER', 'UNEMPLOYED', 'PREFER NOT TO SAY'],
     }
 
     def _norm_bracket(s: str) -> str:
@@ -18755,9 +18763,10 @@ def parallel_category_agents(df: pd.DataFrame, persona_doc: dict,
                 df.at[idx, 'Value'] = expected
                 break
 
-    # Remove "Prefer Not to Say" / "Other" rows from AGE, GENDER, ETHNICITY, INCOME
-    _NO_PNTS_CATS = {'AGE', 'GENDER', 'ETHNICITY', 'INCOME'}
-    _DROP_VALUES = {'PREFER NOT TO SAY', 'OTHER', 'ANOTHER RACE/ETHNICITY'}
+    # Remove "Prefer Not to Say" / "Other" rows from non-ethnicity demographics.
+    # ETHNICITY keeps OTHER as a valid output bucket.
+    _NO_PNTS_CATS = {'AGE', 'GENDER', 'INCOME'}
+    _DROP_VALUES = {'PREFER NOT TO SAY', 'OTHER'}
     drop_indices = []
     for cat in _NO_PNTS_CATS:
         cat_mask = df['Column'].astype(str).str.strip().str.upper() == cat
@@ -18766,7 +18775,7 @@ def parallel_category_agents(df: pd.DataFrame, persona_doc: dict,
             if val_u in _DROP_VALUES:
                 drop_indices.append(idx)
     if drop_indices:
-        print(f"   🗑️ Removing {len(drop_indices)} 'Prefer Not to Say'/'Other' rows from AGE/GENDER/ETHNICITY/INCOME")
+        print(f"   🗑️ Removing {len(drop_indices)} 'Prefer Not to Say'/'Other' rows from AGE/GENDER/INCOME")
         df = df.drop(drop_indices).reset_index(drop=True)
 
     # Write persona_doc values to DataFrame.
@@ -24397,6 +24406,9 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
 
     # Final text cleanup (mojibake/smart punctuation + canonical AGE labels).
     df_final = normalize_output_text_values(df_final)
+    # Merge any demographic alias rows introduced by canonical label mapping
+    # (e.g., Native American/Alaska Native -> OTHER; Self-employed/Retired -> OTHER).
+    df_final = deduplicate_values_within_category(df_final)
 
     # Last math reconciliation so raws/CS/projection stay in sync.
     df_final = finalize_output_metrics_like_edit_sample_size(df_final)
@@ -30251,7 +30263,7 @@ VALID_DEMOGRAPHIC_OPTIONS = {
         'SOME COLLEGE / ASSOCIATE DEGREE',
     },
     'ETHNICITY': {
-        'ANOTHER RACE/ETHNICITY',
+        'OTHER',
         'ASIAN',
         'BLACK OR AFRICAN AMERICAN',
         'HISPANIC OR LATINO',
@@ -30299,7 +30311,6 @@ VALID_DEMOGRAPHIC_OPTIONS = {
         'PUBLIC SAFETY & PROTECTIVE SERVICES',
         'SALES & RETAIL',
         'SCIENCE, TECHNOLOGY & TECHNICAL PROFESSIONS',
-        'SELF-EMPLOYED',
         'SERVICE & HOSPITALITY',
         'SKILLED TRADES/CONSTRUCTION OR MAINTENANCE',
         'TRANSPORTATION & LOGISTICS',
@@ -30316,6 +30327,14 @@ def _canonical_demo_value(category: str, value: str) -> str:
         # Normalize spacing around hyphens so "$50,000-$74,999" == "$50,000 - $74,999"
         v = re.sub(r'\s*-\s*', ' - ', v)
         v = re.sub(r'\s+', ' ', v).strip()
+    if cat == 'ETHNICITY' and v in {
+        'NATIVE AMERICAN / ALASKA NATIVE', 'NATIVE AMERICAN', 'ALASKA NATIVE', 'ANOTHER RACE/ETHNICITY'
+    }:
+        v = 'OTHER'
+    if cat == 'EDUCATION' and v == 'GRADUATE DEGREE':
+        v = 'GRADUATE OR PROFESSIONAL DEGREE'
+    if cat == 'OCCUPATION' and v in {'SELF-EMPLOYED', 'RETIRED'}:
+        v = 'OTHER'
     return v
 
 def ensure_all_demographic_values(df_final, sample_size=None):
@@ -38017,9 +38036,33 @@ def normalize_output_text_values(df):
         }
         return age_map.get(t, _clean(s))
 
+    def _canonical_demo_label(cat: str, val: str) -> str:
+        c = str(cat).upper().strip()
+        v = _clean(val)
+        vu = v.upper()
+        if c == 'ETHNICITY':
+            if vu in {
+                'NATIVE AMERICAN / ALASKA NATIVE',
+                'NATIVE AMERICAN',
+                'ALASKA NATIVE',
+                'ANOTHER RACE/ETHNICITY',
+            }:
+                return 'OTHER'
+        elif c == 'EDUCATION':
+            if vu == 'GRADUATE DEGREE':
+                return 'GRADUATE OR PROFESSIONAL DEGREE'
+        elif c == 'OCCUPATION':
+            if vu in {'SELF-EMPLOYED', 'RETIRED'}:
+                return 'OTHER'
+        return v
+
     value_series = out['Value'].map(_clean)
     age_mask = out['Column'].astype(str).str.upper().str.strip() == 'AGE'
     value_series.loc[age_mask] = value_series.loc[age_mask].map(_canonical_age_label)
+    value_series = [
+        _canonical_demo_label(cat, val)
+        for cat, val in zip(out['Column'].tolist(), value_series.tolist())
+    ]
     out['Value'] = value_series
     return out
 
