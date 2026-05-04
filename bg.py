@@ -14509,7 +14509,7 @@ def _category_pass1_calibration_block(category: str,
             "**that same** footprint. Infer the SKU’s plausible geography from name + inventory + persona research — "
             "**do not** assume southern/Texas is the default case. Treat strong regionals as mid/low or `anti_fit_in_category` "
             "whenever DMA evidence points elsewhere.\n"
-            "• Prefer `predicted_top_5` that respects this coherence check."
+            "• Prefer `predicted_top_5` grounded in **`location`/DMA geography** plus the **mass CPG vs prestige-beauty** channel split above."
         )
     elif u == 'WHERE THEY SHOP':
         sections.append(
