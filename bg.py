@@ -14203,6 +14203,26 @@ def _repair_json_text(text: str) -> str:
     return ''.join(out)
 
 
+def _format_persona_archetype(persona_doc: dict | None) -> str:
+    """Compact lines for downstream agents (category rule + scoring). Optional fields."""
+    if not persona_doc:
+        return '(no persona)'
+    arch = str((persona_doc.get('subject_archetype') or '')).strip()
+    rationale = str((persona_doc.get('archetype_rationale') or '')).strip()
+    if not arch and not rationale:
+        return (
+            '(Persona did not set subject_archetype — infer archetype from the SUBJECT '
+            'name/category + persona SUMMARY below; branch mass-brand vs talent vs '
+            'IP vs interactive product yourself.)'
+        )
+    bits = []
+    if arch:
+        bits.append(f'PRIMARY ARCHETYPE: {arch}')
+    if rationale:
+        bits.append(f'ARCHETYPE NOTES: {rationale}')
+    return '\n'.join(bits)
+
+
 def _parse_persona_json(text: str):
     """Try json.loads, then repair-and-retry. Returns (dict_or_None, err_str)."""
     import json as _json
@@ -14304,6 +14324,28 @@ STEP 1 — IDENTIFY THE SUBJECT
   If it's a brand: what specific products/services? Who are their competitors?
   If it's a person: what do they do? Age? Ethnicity/heritage? Known affiliations?
 
+STEP 1b — ASSIGN SUBJECT ARCHETYPE (you MUST branch — downstream agents copy your judgment)
+  After you know what "{subject}" IS, classify it using EXACTLY ONE primary label below
+  and write `subject_archetype` + `archetype_rationale` in JSON.
+  Allowed `subject_archetype` values (pick the single best fit):
+    • consumer_brand — physical services/goods cos. (mass or niche retailer, manufacturer, restaurant chain, airline, insurer, telco bundle, bank, …)
+    • celebrity_or_creator — individual talent driving fandom (actor, musician, streamer, author, influencer, pundit…)
+    • sports_team_league_org — franchises, leagues, collegiate programs treated as affinity objects
+    • tv_film_or_streaming_title — scripted/unscripted show, documentary series, streamed special, anthology — audience is VIEWERS/listeners — not "customers" in Nike's sense but still has demographics + anti-fit
+    • videogame_interactive_entertainment — a specific game/franchise/season pass (not always the publisher — separate publisher_or_platform below)
+    • mobile_app_saas_platform — downloadable app / subscription software / gig platform studied as THAT product — score against app usage + adjacent digital behavior realistically (not retail-shoe logic)
+    • publisher_or_media_platform — YouTube-as-company, major studio/streamer conglomerate studied as PARENT — behaves differently than a single title inside it
+    • venue_experience_landmark — theme park circuit, touring festival, stadium as subject, mega live event IP
+    • institution_nonprofit_news — uni, gov program, NGO, major newspaper — affinity + skeptic cohorts vary by archetype
+
+  ARCHETYPE RULES (do not confuse these):
+    • consumer_brand: use mass-market MEDIAN-buyer framing when reach is tens of millions; luxury/niche when reach is tiny. Detailed athletic-apparel EXAMPLES (heavy sneaker skew, suburban parent core) apply ONLY when the subject truly is THAT kind of brand — not for a TikTok comedian or Pokémon Go.
+    • celebrity_or_creator: demographics track the SUBJECT'S audience research (Stan culture, geography of fanbases, genre), not Nike-style "median shopper." Still avoid caricature superfans dominating the weights unless data supports it (most celebrity engagement is casual).
+    • tv_film_or_streaming_title: age/skew flows from CONTENT RATING + genre + where it airs — kids' cartoons vs prestige drama vs anime vs reality; parasocial extremes are a SUBSEGMENT, not the median viewer.
+    • videogame_interactive_entertainment: cohort is PLAYERS/watchers-as-entertainment — platform fracture matters (mobile vs PC vs console vs Roblox/metaverse). Do not force Foot Locker–centric digital_identity unless the game actually implies it.
+    • mobile_app_saas_platform: prioritize real app-store category + habitual daily use patterns; cross-shop is other apps/digital wallets/ads ecosystems — not malls first.
+    • publisher_or_media_platform: audience is diffuse — often nearer gen-pop DIGITALLY except for partisan news or locked ecosystems; avoid writing a persona that only fits one vertical show unless the INPUT subject really is just that slate.
+
 STEP 2 — RESEARCH THE AUDIENCE (CRITICAL — use web search)
   Search for: "{subject} audience demographics", "{subject} customer demographics", "{subject} fan demographics"
   You MUST find real published data on:
@@ -14325,9 +14367,10 @@ STEP 3 — RESEARCH THE CULTURAL CONTEXT
 
 STEP 4 — CROSS-CHECK YOUR ASSUMPTIONS
   Before writing the persona, verify:
+  - Does your `subject_archetype` match what "{subject}" is? Do `digital_identity` and `cross_shop_network` sound like THAT archetype (not a pasted retail template for a comedian or Minecraft)?
   - Does the age distribution match the subject's known audience? (A children's brand should peak at 17-AND-UNDER and 25-34 parents, NOT 55-64)
   - Does the ethnicity distribution reflect the subject's actual audience? (Don't default to US census for subjects with strong ethnic affinity)
-  - Are the core interests consistent with the subject? (A sports brand's audience MUST have SPORTS as a top interest)
+  - Are the core interests consistent with the subject? (e.g., a sports EQUIPMENT BRAND anchors SPORTS/FITNESS; a K-pop group's audience anchors MUSIC/K-BEAUTY + related social video — do NOT force mismatched aisles.)
   - Do the category signals provide ACTIONABLE guidance? (Not vague "score high/low" but specific item types and multiplier ranges)
   - Does the digital identity mention 8-12 SPECIFIC platforms/retailers by name?
 
@@ -14337,6 +14380,8 @@ STEP 5 — WRITE THE PERSONA
 Return ONLY a single valid JSON object — no markdown, no commentary.
 
 {{
+  "subject_archetype": "<exactly ONE label from STEP 1b list>",
+  "archetype_rationale": "<2-6 sentences: what you keyed off — why NOT the other plausible archetypes — one pitfall downstream agents must avoid for THIS archetype>",
   "persona_summary": "<3-5 sentence description of the audience — lifestyle, interests, values, median age, skew>",
   "demographics": {{
     "AGE": {{
@@ -14598,9 +14643,11 @@ SPECIFIC WRITING RULES
 
   • subsegments: 3-6 distinct slices of this audience with weight_pct summing
     to ~100. Each subsegment must have a unique cultural identity. CRITICAL:
-    if the subject is a MASS BRAND (>10M U.S. customers), the mass-market
-    core MUST be at least 50% of subsegment weight. Example for Nike's
-    audience (true mass-market weighting):
+    if the subject is a MASS consumer_brand (>10M U.S. reachable customers /
+    habitual mass buyers), the mass-market core MUST be at least 50% of
+    subsegment weight. **Illustrative pattern only — athletic footwear/apparel
+    giants** — do NOT transplant these archetypes onto celebrities, standalone
+    games, or scripted IP unless research says identical structure:
        • mass-market value-conscious suburban parent (~32%)
        • lifestyle casual / non-athletic everyday wearer (~22%)
        • performance athlete (high-school + adult rec) (~18%)
@@ -14636,11 +14683,11 @@ The `digital_identity` field is a rich text block (2-4 paragraphs) that will be 
 
 1. SUBCULTURE: What digital subcultures does this audience belong to? Be specific — not just "sports fans" but the exact communities (e.g. sneakerheads, fantasy football, K-beauty, car modding, etc.).
 
-2. WHERE THEY SHOP ONLINE: Name 8-12 specific retailers/e-commerce sites this audience visits. Think about what stores sell products this audience actually buys. Be specific to the brand's world — athletic brands → athletic retailers, beauty brands → beauty retailers, etc.
+2. WHERE THEY SHOP ONLINE / SPEND WALLET SHARE: Name 8-12 specific retailers/e-commerce sites OR MARKETPLACE PATTERNS this audience touches. Tune to archetype — physical brands → category retailers + marketplaces; digital-native IP → merch DTC yes, but also ticketing, subs, DLC stores, Patreon/support patterns; SaaS/mobile → app stores/subscription portals BEFORE defaulting to Foot Locker/Target unless persona evidence supports them.
 
 3. MEDIA THEY CONSUME: Name 8-12 specific media outlets, apps, YouTube channels, or podcasts this audience uses. These must be specific to the subculture, NOT generic mass media unless the audience genuinely skews there.
 
-4. CORE INTERESTS: Name the 5-10 interest categories this audience gravitates toward. The brand's OWN product category MUST be listed first (e.g., FOOTWEAR for a shoe brand, SKINCARE for a beauty brand, STREAMING for a media company).
+4. CORE INTERESTS: Name the 5-10 interest categories this audience gravitates toward. List FIRST the spine affinity that matches YOUR chosen `subject_archetype`: e.g. FOOTWEAR for footwear brands; MUSIC / FORMAT for musicians; GENRE + release format for TV/film/IP; PLATFORM + GAME GENRE tags for videogames; habitual APP CATEGORY + job-to-be-done for mobile apps/SaaS. Never force athletic retail as #1 unless the subject truly is THAT kind of commerce brand.
 
 5. WHAT THIS AUDIENCE DOES NOT CARE ABOUT: This is critical for scoring accuracy. Describe the CATEGORIES of things this audience under-indexes on. Think in terms of product categories, not specific brands. Examples:
    - "This audience does not engage with luxury dining, beauty/skincare, CPG/household goods, cable news, or niche craft hobbies."
@@ -14659,6 +14706,8 @@ The `digital_identity` field is a rich text block (2-4 paragraphs) that will be 
 CATEGORY SIGNALS — PER-CATEGORY GUIDANCE:
 The `category_signals` field is a JSON object where each key is a category name (from the CATEGORIES TO BE SCORED list above) and each value is 1-2 sentences telling the downstream scoring agent what this audience does and doesn't engage with IN THAT SPECIFIC CATEGORY.
 
+Anchor each category note to `subject_archetype` — e.g. MUSICIAN → prioritize ARTIST / STREAMING / PODCAST / TICKETING patterns; AAA GAME → prioritize GAMES / platforms / adjacent hardware; TV SERIES → MEDIA + streaming behavior of that demo; consumer_brand FMCG → retailer + CPG aisles. Do NOT reuse an athletic-footwear template for unrelated archetypes.
+
 For each category, your guidance MUST be grounded in reality:
 - What TYPES of items should score ABOVE their baseline (not "high" in absolute terms — above their gen-pop baseline)
 - What TYPES of items should score BELOW their baseline
@@ -14672,7 +14721,7 @@ For each category, your guidance MUST be grounded in reality:
 
 These signals are the primary guidance that scoring agents use to reason about individual items. Make them specific and opinionated but REALISTIC — do not tell agents to crush near-universal items.
 
-EXAMPLE category_signals (for a hypothetical athletic-brand audience — adapt to the actual subject):
+EXAMPLE category_signals (hypothetical `consumer_brand` athletic-equipment cohort ONLY — transpose structure, not wording, when archetype differs):
   "SOCIAL MEDIA": "Major platforms (YouTube, TikTok, Instagram, Snapchat) are near-universal for this young audience — score them at 1.0-1.4x baseline. TikTok is THE dominant platform for young, urban, diverse Americans — DO NOT crush it. Facebook skews older — score 0.7-0.9x baseline. Discord near baseline for gamers/young men. Niche platforms (BeReal, Lemon8) near or below baseline.",
   "AMUSEMENT PARKS": "Major theme parks (Disney World, Universal Studios, Six Flags) are mainstream American entertainment — score near or slightly below baseline. Don't crush them. Water parks and local amusement parks score near baseline too. Only niche/foreign parks score low.",
   "TECHNOLOGY/DEVICE": "This audience skews young and urban. Both Apple (iPhone, iPad) and Samsung (Galaxy) are mass-market — score Apple at 0.8-1.0x baseline, Samsung at 1.0-1.2x if audience skews Android. Don't crush either brand. Smart home devices and wearables near baseline.",
@@ -14787,6 +14836,10 @@ EXAMPLE category_signals (for a hypothetical athletic-brand audience — adapt t
     print(f"📋 PERSONA RESEARCH AGENT — FULL OUTPUT")
     print(f"{'─'*60}")
     print(f"PERSONA SUMMARY:\n{persona_doc.get('persona_summary', '(empty)')}\n")
+    _arch = str(persona_doc.get('subject_archetype', '') or '').strip()
+    _argr = str(persona_doc.get('archetype_rationale', '') or '').strip()
+    if _arch or _argr:
+        print(f"SUBJECT ARCHETYPE: {_arch or '(unset)'}\nARCHETYPE NOTES: {_argr or '(none)'}\n")
     _di = persona_doc.get('digital_identity', '')
     if _di:
         print(f"DIGITAL IDENTITY:\n{_di}\n")
@@ -14867,6 +14920,12 @@ def _validate_persona_quality(persona_doc: dict, subject: str) -> tuple[bool, li
     di = persona_doc.get('digital_identity', '')
     if not di or len(di) < 500:
         issues.append(f"digital_identity too short ({len(di or '')} chars, need ≥500)")
+
+    if not str(persona_doc.get('subject_archetype') or '').strip():
+        issues.append(
+            "subject_archetype missing — downstream agents infer archetype manually "
+            "(higher variance for talent / IP / interactive subjects)"
+        )
 
     cs = persona_doc.get('category_signals', {})
     if not cs or not isinstance(cs, dict):
@@ -15150,6 +15209,8 @@ def _run_item_guidance_agent(category: str, item_names: list[str],
     anti_fit_explicit = persona_doc.get('anti_fit_explicit') or {}
     cross_shop_network = persona_doc.get('cross_shop_network') or {}
 
+    persona_archetype_block = _format_persona_archetype(persona_doc)
+
     def _fmt_subsegments() -> str:
         if not subsegments:
             return '(no subsegments)'
@@ -15181,6 +15242,7 @@ def _run_item_guidance_agent(category: str, item_names: list[str],
     prompt = f"""You are a senior consumer-research analyst writing a SCORING RUBRIC for the **{category}** category, for **{subject}**.
 
 SAMPLING: The cohort is **U.S. general-population panelists who QUALIFY ON measured engagement with "{subject}"** (the pipeline input — brand, personality, venue, asset, etc., as modeled).
+ARCHETYPE DISCIPLINE: Follow **SUBJECT ARCHETYPE** lines below — a Netflix talent profile is NOT a footwear merchandising profile; AAA game fans are NOT default sneaker demographics unless research ties them.
 
 MISSION (Pass 2 will execute this ROW BY ROW): tiers must encode "**what share of THAT persona truly had meaningful DIGITAL touching points** (purposeful repeat website/app/order/check-in/streaming/account actions — mapped to measured panel signals) vs this archetype**, not vibes or fame.** Your bp_range bands are the scaffolding for answering that ONE question consistently across chunks.
 
@@ -15193,6 +15255,9 @@ The rubric you write here will be used by every chunked scoring agent in this ca
 ═══════════════════════════════════════════════════════════════════
 PERSONA — the audience you are writing the rubric for
 ═══════════════════════════════════════════════════════════════════
+SUBJECT ARCHETYPE (persona Step 1b — branch tiers for THIS kind of asset, not a canned retail narrative):
+{persona_archetype_block}
+
 SUMMARY:
 {persona_summary}
 
@@ -15517,6 +15582,8 @@ def _run_single_category_agent(category: str, values: list[str],
     anti_fit_explicit = persona_doc.get('anti_fit_explicit') or {}
     cross_shop_network = persona_doc.get('cross_shop_network') or {}
 
+    persona_archetype_block = _format_persona_archetype(persona_doc)
+
     def _fmt_subsegments() -> str:
         if not subsegments:
             return '(persona research did not provide structured subsegments — reason from summary)'
@@ -15839,6 +15906,9 @@ PERSONA — the audience you are scoring for (qualified on **{subject}**)
 ═══════════════════════════════════════════════════════════════════
 Framing: persona + evidence describe whoever **entered the analytic sample via engagement criteria for "{subject}"** — the same conditioned cohort persona research targeted, not unconditional national strangers.
 
+SUBJECT ARCHETYPE (persona Step 1b — keep retail/sports templates from polluting creators, games, scripted IP…):
+{persona_archetype_block}
+
 SUMMARY:
 {summary}
 
@@ -15871,6 +15941,7 @@ EXPECTED LOW-FIT ITEMS (famous but persona doesn't engage):
     prompt = f"""You are a senior consumer-research analyst.
 
 PRODUCT CORE: Up-stream research distilled **WHO** is in the sample (**panelists conditioned on measurable engagement with "{subject}"**, described by PERSONA below). YOUR job — **every single row:** ask "**Would plausible members of THIS persona—with their income/life stage/anchors/explicit anti-fits—produce meaningful DIGITAL footprints** (opening apps, ordering/barcode check-ins/streaming/music/betting/sports/account flows/search & maps/authenticated journeys on branded properties — **not offline-only familiarity or accidental one-click noise**) tied to THIS exact item name in **{category}** during the study window?"
+Honor the **SUBJECT ARCHETYPE** section in the persona block: do not score a K-pop act's fans as if they were generic sneaker-CPG panelists unless research + item evidence justify that overlap.
 Turn that calibrated judgment into **`estimated_bp_pct`** (share of persona cohort showing that credible digital touching pattern), using CATEGORY RULE + item evidence (`panel`/genpop/classification)— never pure fame.
 
 ═══════════════════════════════════════════════════════════════════
@@ -18315,6 +18386,8 @@ def parallel_category_agents(df: pd.DataFrame, persona_doc: dict,
         try:
             _persona_compact = {
                 'subject': subject,
+                'subject_archetype': persona_doc.get('subject_archetype', ''),
+                'archetype_rationale': persona_doc.get('archetype_rationale', ''),
                 'persona_summary': persona_doc.get('persona_summary', ''),
                 'digital_identity': (persona_doc.get('digital_identity') or '')[:3000],
                 'demographics': persona_doc.get('demographics', {}),
