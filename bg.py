@@ -14176,6 +14176,11 @@ def persona_research_agent(subject: str, brand_category: str | None = None,
                            category_names: list[str] | None = None) -> dict:
     """Step 1 — single gpt-4o-search-preview call.
 
+    The downstream profile estimates behavior among **U.S. general-population
+    panelists who qualify on brand engagement** (digital exposure mapped to this
+    subject), not unconditional all-U.S.-adults behavior. Persona bridges
+    research + realism for that conditioned cohort.
+
     Researches *subject* online and returns a PersonaDoc dict:
         demographics  – dict[category_name, list[{bucket, percentage}]]
         location      – list[{dma, percentage}] (top 15-20 DMAs)
@@ -14211,6 +14216,28 @@ The following behavioral categories will be scored by downstream agents. Your `c
 """
 
     prompt = f"""You are a senior audience-research analyst.  Research **{subject}** ({cat_label}) using real, current online data (fan demographics surveys, social-media analytics, press coverage, industry reports).
+
+═══════════════════════════════════════════════════════════════════
+SAMPLING FRAME (READ FIRST — aligns persona with how the CSV is measured)
+═══════════════════════════════════════════════════════════════════
+The behavioral profile you are powering describes **respondents sampled from the
+U.S. general-population analytic panel WHO MEET ENGAGEMENT QUALIFICATION FOR "{subject}"**
+(e.g. measured digital exposure mapped to this brand/properties in the behavior window).
+• This is **NOT** the same cohort as unconditional "all U.S. adults" internet behavior —
+  respondents who QUALIFY ON **"{subject}"** should over-index only on demographics/interests that
+  real research ties to this subject — derive from Steps 3–5; do NOT invent a canned list of verticals.
+
+• It is ALSO **NOT** only "superfans/influencers" — for **national mass-market subjects with very broad
+  U.S. reach**, the qualified panel can still be huge and heterogeneous. Describe the **median qualified
+  respondent** and reserve narrow subculture slices for research-backed minorities of the cohort.
+
+• When writing `digital_identity`, `category_signals`, and demographics: describe whoever **actually
+  qualifies on measured engagement with "{subject}"**, not uninformed strangers, and not an influencer caricature.
+
+The published **national Gen Pop baseline CSV** stays the yardstick analysts use to phrase
+"*vs US digital baseline*" — profile rows answer: **among qualified panelists for this brand**,
+who engages digitally with each item?
+
 {date_context}{categories_block}
 
 RESEARCH METHODOLOGY — follow these steps IN ORDER before generating the persona:
@@ -14906,9 +14933,11 @@ def _run_item_classification_agent(items: list[str]) -> dict[str, dict]:
 
     prompt = f"""You are a research analyst classifying consumer-facing items by what they ARE.
 
-For each item below, output a structured classification. The downstream scoring
-agent will use your output to decide whether a specific audience (e.g. the
-"digital Nike consumer") would engage with this item.
+For each item below, output a structured classification. Downstream scoring
+will use your output plus a researched persona to decide whether cohort members
+(conditioned-on the profile input) would **plausibly have meaningful digital
+engagement** with that entity (websites/apps/authenticated flows where applicable),
+not vague name recognition offline.
 
 CRITICAL RULES:
 1. If you genuinely do not recognize an item (made-up-sounding name, hyper-niche
@@ -15100,7 +15129,11 @@ def _run_item_guidance_agent(category: str, item_names: list[str],
 
     items_block = '\n'.join(f"  - {name}" for name in item_names)
 
-    prompt = f"""You are a senior consumer-research analyst writing a SCORING RUBRIC for the **{category}** category, for a behavioral panel profile of **{subject}**.
+    prompt = f"""You are a senior consumer-research analyst writing a SCORING RUBRIC for the **{category}** category, for **{subject}**.
+
+SAMPLING: The cohort is **U.S. general-population panelists who QUALIFY ON measured engagement with "{subject}"** (the pipeline input — brand, personality, venue, asset, etc., as modeled).
+
+MISSION (Pass 2 will execute this ROW BY ROW): tiers must encode "**what share of THAT persona truly had meaningful DIGITAL touching points** (purposeful repeat website/app/order/check-in/streaming/account actions — mapped to measured panel signals) vs this archetype**, not vibes or fame.** Your bp_range bands are the scaffolding for answering that ONE question consistently across chunks.
 
 The rubric you write here will be used by every chunked scoring agent in this category. They will all rank items against your tiers. So your rubric must be:
   • SPECIFIC to this persona (no generic "famous brands rank high")
@@ -15615,18 +15648,30 @@ shown in evidence (within ~±2pp). If the panel measurement disagrees with
 gen-pop and you have a reason to trust the panel, you may use that.
 """
     else:
-        anchor_rules = r"""═══════════════════════════════════════════════════════════════════
+        anchor_rules = f"""═══════════════════════════════════════════════════════════════════
 HOW TO ESTIMATE BP — persona-led reasoning (v16)
 ═══════════════════════════════════════════════════════════════════
 You are the source of truth. The panel reading is EVIDENCE, not the
-answer. Year-window inflation is universal — any item where any panelist
+answer.
+
+WHO IS «THIS AUDIENCE»: analytic panel respondents who **QUALIFY on measured engagement with "{subject}"** (the profile input: brand, personality, venue, asset, etc.) — **not** random U.S. adults who fail that qualification.
+
+Year-window inflation is universal — any item where any panelist
 clicked once in 12 months gets inflated by clickstream exposure. Your job
 is to read the persona + the category rule + the per-item evidence, and
-estimate `estimated_bp_pct` — the % of THIS audience that has genuine
-digital engagement (web OR app) with the item over a year.
+estimate `estimated_bp_pct` — the **% of THIS PERSONA COHORT who plausibly had meaningful DIGITAL touching points** mapped to THAT row (during the analytic window):
+
+  • INCLUDED: habitual or intentional branded **web/mobile web**, authenticated **native app** flows (ordering, pickups, memberships, barcode check-ins, mobile banking/card apps, substantive streaming/music/sports/booking account actions, search/maps sessions on that enterprise when the row represents that enterprise, etc.).
+  • EXCLUDED BY DEFAULT unless persona plausibly does it digitally: "**they buy it in-store with no footprint**," passive TV/audio mention, billboard awareness, stray one-off accidental clicks unless the taxonomy is inherently exposure-like.
+
+Treat `panel_bp`/`genpop` as **weak directional evidence**, not sacred truth — your answer is ALWAYS "**would THEY (this persona)** do credible digital touches on THIS exact brand/entity.**"
+
+Before numbers, each row gets a SILENT sanity check:
+  «Within this persona life + demos + anchors + explicit anti-fit, is there an honest digital pathway to engagement with THIS NAMED ROW in-window?»
+  • If pathway is unrealistic → low BP regardless of rogue panel multiples.
 
 The CLICKSTREAM captures BOTH web URLs AND mobile-app activity, so when
-you think "would this audience engage digitally", include app usage:
+you judge engagement, INCLUDE real app workflows:
 opening the BofA app to deposit a check, the Planet Fitness app to scan
 a barcode, the Delta app on a flight — those count. Mass brands with
 heavily-used consumer apps SHOULD show meaningful BP for any audience
@@ -15638,6 +15683,9 @@ DECISION FRAMEWORK — apply IN ORDER for every item
 ═══════════════════════════════════════════════════════════════════
 For each item you receive `panel`, `genpop`, `is:` (what it actually is),
 `tier`, `cultural_code`, `target`, and `conf`. Reason in this order:
+
+  0) DIGITAL ENGAGEMENT GATE (persona-facing first):
+     Name the **digital surface** you'd expect (website X, app X, authenticated property Y). If persona + item reality say **almost nobody like them routinely uses that DIGITAL SURFACE**, do NOT inflate BP just because incidental traffic exists in `panel_bp`. Conversely, ubiquitous utilities (mega search/social/carrier/bank/streaming ecosystems) SHOULD stay realistically high ONLY when personas plausibly use them digitally—not because "everyone hears the brand name".
 
   1) IS THE ITEM IN THE CATEGORY-RULE'S anti_fit_in_category LIST?
      → score 0.05–5%. The persona does not engage. Cite "anti-fit" in
@@ -15652,9 +15700,12 @@ For each item you receive `panel`, `genpop`, `is:` (what it actually is),
        cross-shop). Cite the tier name in tier_assigned and reason.
 
   3) IS THE ITEM EXPLICITLY NAMED IN persona.cultural_anchors OR IN A
-     SUBSEGMENT'S cultural_markers?
-     → high BP (60–90%, top of the tier band). Cite which anchor in
-       reason ("cultural anchor: NBA / hip-hop / SNKRS app").
+     SUBSEGMENT'S cultural_markers (exact brand/entity spelled or clear synonym)?
+     → elevate BP **within the tier/rule band** ONLY for that evidenced touchpoint —
+       hitting the **TOP (70–88%) slice** demands you explicitly tie the PERSONA ROW
+       to **routine DIGITAL habits** naming that asset (anchors/cross-shop); **do NOT**
+       award "mass-fame halo" percentages to prestige/niche/global entities the median
+       persona never opens online.
 
   4) IS THE ITEM IN persona.anti_fit_explicit (any sub-list)?
      → low BP (0.05–5%). Cite "explicit anti-fit" in reason.
@@ -15662,9 +15713,9 @@ For each item you receive `panel`, `genpop`, `is:` (what it actually is),
   5) IS GEN-POP KNOWN FOR THIS ITEM?
      → estimate genpop × persona_skew where persona_skew is a multiplier
        you reason about:
-          • cultural anchor / icon                      → 2.5–6×
-          • strong subsegment fit / cross-shop          → 1.4–2.5×
-          • neutral fit                                 → 0.7–1.3×
+          • cultural anchor / named digital habit (documented in anchors)   → 1.9–3.3×
+          • strong subsegment fit / cross-shop          → 1.2–2.0×
+          • neutral fit                                 → 0.75–1.2×
           • mild anti-fit                               → 0.3–0.7×
           • strong anti-fit                             → 0.05–0.3×
        Cite the specific persona attribute (subsegment name, cultural
@@ -15735,8 +15786,10 @@ This isn't a math rule — it's just realistic context for your reasoning.
 
     # ── Assemble persona doc fragments for the prompt ──
     persona_block = f"""═══════════════════════════════════════════════════════════════════
-PERSONA — the audience you are scoring for
+PERSONA — the audience you are scoring for (qualified on **{subject}**)
 ═══════════════════════════════════════════════════════════════════
+Framing: persona + evidence describe whoever **entered the analytic sample via engagement criteria for "{subject}"** — the same conditioned cohort persona research targeted, not unconditional national strangers.
+
 SUMMARY:
 {summary}
 
@@ -15766,7 +15819,15 @@ EXPECTED LOW-FIT ITEMS (famous but persona doesn't engage):
 {expected_low_block}
 """
 
-    prompt = f"""You are a senior consumer-research analyst estimating Brand Penetration % for items in the **{category}** category for a behavioral panel profile of **{subject}**.
+    prompt = f"""You are a senior consumer-research analyst.
+
+PRODUCT CORE: Up-stream research distilled **WHO** is in the sample (**panelists conditioned on measurable engagement with "{subject}"**, described by PERSONA below). YOUR job — **every single row:** ask "**Would plausible members of THIS persona—with their income/life stage/anchors/explicit anti-fits—produce meaningful DIGITAL footprints** (opening apps, ordering/barcode check-ins/streaming/music/betting/sports/account flows/search & maps/authenticated journeys on branded properties — **not offline-only familiarity or accidental one-click noise**) tied to THIS exact item name in **{category}** during the study window?"
+Turn that calibrated judgment into **`estimated_bp_pct`** (share of persona cohort showing that credible digital touching pattern), using CATEGORY RULE + item evidence (`panel`/genpop/classification)— never pure fame.
+
+═══════════════════════════════════════════════════════════════════
+CATEGORY CONTEXT
+═══════════════════════════════════════════════════════════════════
+Items in category **{category}** — behavioral panel profile **{subject}**.
 {date_context_block}
 {persona_block}
 
@@ -15780,7 +15841,7 @@ Return ONLY a JSON array — no markdown, no commentary:
 [
   {{
     "value": "<ITEM NAME — exact spelling from list>",
-    "estimated_bp_pct": <float 0.05 to 88.0 — the % of THIS audience that engages digitally>,
+    "estimated_bp_pct": <float 0.05 to 88.0 — persona COHORT share with credible DIGITAL touching points for THIS item>,
     "tier_assigned": "<EXACT tier_name from CATEGORY RULE that this item fits, or 'unmatched' if none>",
     "panel_decision": "<agree|override_low|override_high|no_panel>",
     "reason": "<≤22 words: cite the persona attribute (subsegment / cultural anchor / anti-fit) OR tier name that drove your number — REQUIRED>"
@@ -15993,11 +16054,16 @@ def _run_category_validator_agent(category: str,
 
     prompt = f"""You are the Pass 3 Category Validator for **{category}** in the **{subject}** profile.
 
-The Pass 2 scoring agents (one per chunk) have just finished scoring this category. Your job is to review the top {top_n} items as a coherent set and issue any corrections needed before the result is finalized.
+Each BP should reflect **creditable DIGITAL footprint** among panelists conditioned on "{subject}". If a ranked item trades on fame but persona + item reality imply **almost nobody like them routinely opens THAT web/app surface**, deflate it—even if stray panel bursts exist.
+
+Review the TOP {top_n} jointly; intervene only where clear contradiction vs purposeful digital habits (apps, carts, memberships, substantive sessions—not offline-only prestige).
 
 ═══════════════════════════════════════════════════════════════════
-PERSONA SUMMARY
+PERSONA SNIPPET — digital lens
 ═══════════════════════════════════════════════════════════════════
+{digital_identity[:3500]}
+
+SUMMARY:
 {persona_summary[:2000]}
 
 KEY DEMOGRAPHICS:
@@ -16037,10 +16103,9 @@ WHAT TO CHECK
   4) IMPLAUSIBLE SPREAD: are 5+ items all clustered within 3pp at the
      ceiling? That's year-window inflation; force a 15-25pp spread by
      pulling lower-tier items down.
-  5) PERSONA-FIT SANITY: does the actual top-5 plausibly reflect what THIS
-     audience actually engages with most digitally? If something feels off
-     (e.g., an aspirational/luxury item top-ranked for a mass-market
-     audience, or a foreign-only platform top-ranked nationally), override.
+  5) DIGITAL ENGAGEMENT CREDIBILITY vs FAME HALO — does a top-ranked item plausibly have **routine DIGITAL footprints** among THIS persona members (authenticated apps/sites/ordering flows—not offline-only prestige awareness)? Override down if prestige/niche/geographic outliers beat mass digital utilities unjustified.
+
+  6) PERSONA-FIT SANITY — does top-10 reflect BOTH persona specificity AND plausible national digital commons (search/social/carrier/banking) where applicable?
 
 ═══════════════════════════════════════════════════════════════════
 OUTPUT FORMAT
