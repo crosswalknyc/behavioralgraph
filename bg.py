@@ -9633,13 +9633,16 @@ def ai_final_gut_check(df, brand_category, project_name, brands):
                 f"or clicked online can plausibly be higher.\n"
                 f"- Commodity/offline-heavy purchases (e.g., basic staples) usually should not "
                 f"appear as strong over-index leaders unless persona evidence is explicit.\n"
-                f"- **CPG/makeup/skin care/household consumables spike easily in raw panel signal but often lack branded digital loyalty** — "
-                f"don't let them crowd the leaderboard without a plausible online path "
-                f"(subs, reorder apps, DTC-heavy brands).\n"
-                f"- **Basket coherence (digital choreography): if multiple CPG / beauty HOUSEHOLD names sit near the top**, "
-                f"either LOWER THEM toward mid-tier OR ensure **digital grocery proxies** "
-                f"(INSTACART when listed, WALMART / TARGET pickup & grocery proxies, grocery delivery Uber Eats / DoorDash) "
-                f"score comparably HIGH — contradictory spreads are persona-wrong.\n"
+                f"- **Mass-market CPG / pantry / soda / detergent / salty snacks / big-box OTC-style labels**: "
+                f"often spike without matching digital loyalty unless the cohort actually shops carts online.\n"
+                f"- **Prestige / luxury skincare & color cosmetics**: heavy site traffic, Shade Finder/class content, reorder apps "
+                f"justify high BP WITHOUT treating Instacart as a prerequisite — omit grocery-proxy checks for THAT cluster.\n"
+                f"- **Grocery coherence (digital choreography) ONLY for mass replenishment personas:** "
+                f"if MULTIPLE warehouse-club-, grocery-, or drugstore-heavy **consumable HOUSEHOLD** names dominate the TOP, "
+                f"FIRST ensure rows like **INSTACART, WALMART / TARGET pickup & grocery-digital proxies, grocery DoorDash / Uber Eats** "
+                f"score **comparably HIGH** when listed — contradictory spreads imply wrong persona channel. AFTER those anchors justify high tiers, "
+                f"elevating sibling aisle CPG is internally consistent.\n"
+                f"- **Do NOT** force grocery-delivery rows up purely because prestige Sephora-style beauty spikes — that cohort’s digital spine is prestige retail + DTC, not carts.\n"
                 f"- **Regional / limited-distribution CPG:** if a brand is primarily available in one US macro-region "
                 f"(whatever shape — Northeast corridor, Midwest/Great Lakes, Pacific Northwest/NorCal, SoCal/coastal mountain West, Texas/plains, inland/southeast/coastal South, etc.), "
                 f"it must NOT rank high unless THIS profile's LOCATION / DMA + persona narrative shows **that same** concentration — infer from research + geography, "
@@ -9741,9 +9744,9 @@ def ai_final_gut_check(df, brand_category, project_name, brands):
                 f"   should not outrank core youth digital/fandom interests without explicit evidence.\n"
                 f"7) For MOST PURCHASED BRANDS, teen/gen-z brands should generally outrank older-skew legacy brands\n"
                 f"   unless profile evidence supports the legacy dominance.\n"
-                f"8) **MOST PURCHASED BRANDS digital coherence:** if makeup/CPG leaders are extremely high, "
-                f"INSTACART + major digital-grocery/stacked pickup proxies in the SAME category must ALSO be elevated; "
-                f"otherwise LOWER the CPG bloc.\n\n"
+                f"8) **MOST PURCHASED BRANDS coherence — conditional:** For **mass CPG/grocery/big-box replenishment** profiles, "
+                f"when many aisle / household snacks / OTC-style leaders spike, **elevate INSTACART + Walmart/Target pickup & grocery proxy rows + grocery DoorDash/Uber stacks** alongside them; lacking that grocery spine ⇒ LOWER only *that cluster*. "
+                f"Skip this rule entirely for prestige **Sephora-/luxury-skin**/makeup personas where leadership is prestige brands + flagship DTC without grocery-cart behavior.\n\n"
                 f"For EACH row, decide KEEP / LOWER / RAISE.\n"
                 f"Only include LOWER/RAISE rows in adjustments.\n"
                 f"Return ONLY valid JSON:\n"
@@ -14485,16 +14488,20 @@ def _category_pass1_calibration_block(category: str,
     elif u == 'MOST PURCHASED BRANDS':
         sections.append(
             "**Digital panel** — rows reflect **logged-in / web / app** purchase & research signals, not "
-            "offline-only drugstore runs.\n"
-            "• **Makeup / fragrance / commodity CPG / household consumables** often move through "
-            "brick-and-mortar or generic merchant checkout with **weak brand-property digital footprints**. "
-            "If many of those labels crowd the top of your rubric, either **demote them** or explain a "
-            "digitally native path (DTC subs, heavy app reorder, Amazon Subscribe & Save patterns).\n"
-            "• **Basket coherence:** if mass CPG / beauty leaders are truly high for this cohort, "
-            "**grocery-delivery and digital-grocery intermediaries** (Instacart when present, Walmart grocery / "
-            "Target pickup proxies, DoorDash/Uber Eats grocery when in list) should also sit **very high** — "
-            "that is how those baskets often show up digitally. If they do not, your tier assignments are "
-            "internally inconsistent; fix them.\n"
+            "offline-only receipts.\n"
+            "• **Two purchase contexts — do not confuse them:**\n"
+            "  — **Mass CPG / grocery-aisle / big-box consumables / mainstream drugstore OTC-style SKUs**: "
+            "these often spike in panel noise tied to replenishment carts. "
+            "**Grocery coherence:** If you place many **grocery/big-box drug** leaders high, **`predicted_top_5` MUST also treat "
+            "**very high tier** brands like **Instacart, Walmart/Target pickup & grocery-digital proxies, DoorDash/Uber grocery** "
+            "when those rows appear — that trio is often how bulk CPG/digital grocery shows up. "
+            "**Once those delivery/pickup surfaces read high**, it becomes internally consistent for **other aisle CPG/snacks/household** "
+            "rows to tier high alongside them for the **same persona**.\n"
+            "  — **Prestige / luxury skincare & color cosmetics (Sephora-/Ulta prestige mix-/department-/DTC-heavy path)**: "
+            "premium beauty has **digital-native** footprints (reviews, Shade Finder, reorder apps). **Do not** apply the Instacart / "
+            "grocery-proxy coherence check — flagship prestige labels may lead **without** forcing Instacart or mass grocery-deliver brands up.\n"
+            "• **Generic commodity bleed:** If unrelated mass staples crowd the rubric **without** either (a) mass-grocery coherence above "
+            "or (b) prestige-brand justification below, either **demote** or cite an explicit digitally native rationale.\n"
             "• **Regional availability / mass-market vs niche:** Brands sold mainly in **one macro-region** "
             "(however shaped — Northeast/I-95, Great Lakes/Midwest, Pacific Northwest/NorCal, coastal SoCal/Arizona corridors, "
             "Texas/Central plains, inland/southeast/coastal South, Rockies, Alaska/Hawaii footprints, etc.) should **not** sit in "
@@ -14564,12 +14571,16 @@ are appropriate high-BP archetypes."""
             """═══════════════════════════════════════════════════════════════════
 CATEGORY HARD CALIBRATION — MOST PURCHASED BRANDS (digital footprints)
 ═══════════════════════════════════════════════════════════════════
-Commodity cosmetics / packaged goods often spike in raw panel noise but lack **digital**
-loyalty surfaces — keep BP honest vs offline replenishment.
+**Mass-market CPG / grocery / big-box replenishment personas:** If many aisle / household / snack /
+mainstream OTC cluster rows score high — **elevate grocery-delivery + pickup proxies** proportionally first
+(Instacart when listed; Walmart/Target grocery-heavy rows; grocery DoorDash/Uber Eats stacks). THEN other
+matching CPG/big-box grocery labels can tier high consistently.
 
-If multiple CPG / beauty leaders score high, ensure **digital grocery proxies**
-(Instacart, Walmart/Target grocery pickup stack, grocery delivery apps in this list)
-are **proportionally elevated** — otherwise lower the CPG cluster toward mid tiers.
+**Prestige / luxury skincare & cosmetics** (typically Sephora / prestige Ulta bays / dept store / flagship DTC) —
+SKIP the Instacart/grocery coherence rule; prestige brands get high BP on merit of site/app/browse/reviews without
+fabricating grocery-delivery uplift.
+
+Regional-only SKU caveats remain: keep BP honest vs offline replenishment.
 
 **Regional-only or strong geo-skew brands** (sold mainly in one US macro-region — infer from persona + row name + research):
 keep BP **low** unless persona `location` DMA mix or subsegments prove **that specific** geography — never default to imagining
@@ -15145,9 +15156,7 @@ For each category, your guidance MUST be grounded in reality:
 - HEALTH & WELLNESS: Reward **digital** health (research sites, telehealth, fitness wearables apps, pharmacy logins).
   **Named metro hospital systems** are GEO-SPARSE — nationally they should almost never occupy multiple top tiers at 30–45% BP each
   (that incorrectly implies nearly half the audience engages those specific systems online yearly). Tie high scores to persona geography or medical roles only.
-- MOST PURCHASED BRANDS (digital semantics): Makeup/fragrance/snack/soap **CPG** often purchased offline — do not stack them atop the leaderboard
-  without a digital rationale. Coherence rule: heavy CPG / beauty leaderboard ⇒ **Instacart + major digital grocery / pickup proxies** must also spike;
-  otherwise pull CPG downward. **Regional-distribution brands** (strong in one US macro-region only — match that region to the persona, not to a canned southern/Texas default) stay low unless persona `location`/DMA mix proves **that same** geography.
+- MOST PURCHASED BRANDS (digital semantics): Split **purchase paths**. (a) **Mass-market CPG / grocery aisles / big-box consumables / mainstream drugstore SKU behavior** ⇒ if personas push many aisle leaders toward the TOP, **`category_signals` must demand Instacart + Walmart/Target grocery-digital pickups + grocery DoorDash/Uber stacks ALSO read VERY high**, then aisle peers can spike coherently. (b) **Prestige / luxury skincare & cosmetics sourced via Sephora / prestige Ulta / department flagship / prestige DTC** ⇒ **omit** grocery-delivery coherence — prestige brands dominate via browse/reviews/apps without implying Instacart must trend. (c) **Regional-distribution** mass brands stay low unless persona `location`/DMA proves that macro‑region match.
 - WHERE THEY SHOP: **Geographic footprints matter.** Regional chains belong high only when persona `location`/DMA skew **matches** that retailer’s real geography — East Coast vs Pacific Northwest vs SoCal vs Texas vs inland South vs Midwest, etc.; **whatever the input persona’s footprint is**, use it as the compass. Wrong-macro‑region dominance in either direction ⇒ score LOW unless research proves crossover (travel, ecommerce-only edge cases rarely justify mass BP).
 - SEARCH ENGINE/AI: **Google (~78%+ annual credible digital touching points for mainstream US conditioned cohorts) should ordinarily lead**.
   Respect niche-only Yahoo/Bing/AI-research personas; default mass-market ⇒ Google tier #1, AI assistants chase but seldom clear #1 absent explicit evidence.
@@ -15164,7 +15173,7 @@ EXAMPLE category_signals (hypothetical `consumer_brand` athletic-equipment cohor
   "ATHLETE": "The subject's own sponsored athletes should score 2-4x their baseline — not 10x. Only the single most iconic athlete (like LeBron for Nike) gets 5x+. Other athletes score 1.0-1.5x baseline. Don't inflate obscure athletes to 50%+ just because they have a brand deal.",
   "INTEREST": "The panel uses a fixed global list of interest labels (see `interest_top_25` / `interest_bottom_25` in your JSON when the inventory block is present). Your subject's CORE themes MUST dominate the top of that ranking vs generic ubiquitous rows. Generic-functional rows (JOB SEARCH, SOCIAL MEDIA-as-interest, HOME IMPROVEMENT, COOKING) sit mid/low unless persona research proves otherwise — never crowd out spine hobbies.",
   "HEALTH & WELLNESS": "Prefer national digital-health surfaces consumers actually browse or open in-app. Metro hospital SYSTEM brands imply tiny national digital footprints unless the persona is explicitly health-staff heavy or geographically concentrated patients — never pretend ~half the cohort annually engages several different NYC-named hospital stacks online.",
-  "MOST PURCHASED BRANDS": "This is digital-attribution MOST PURCHASED: makeup/snack CPG leaders need DTC or subscription justification or belong mid-tier. If they dominate the top anyway, grocery-delivery anchors (Instacart, Walmart/Target digital grocery proxies in this list, DoorDash grocery if present) must ALSO read very high; otherwise deflate the noisy CPG stack. Brands with region-limited distribution belong low unless LOCATION/DMA in the persona proves **the same regional concentration** implied by inventory + research (any US macro‑region — not a fixed southern/Texas template).",
+  "MOST PURCHASED BRANDS": "Digital MPB hinges on WHICH channel dominates: Mass CPG replenishment ⇒ lift Instacart + Walmart/Target pickup & grocery-heavy rows + grocery DoorDash BEFORE blessing a wall of Pepsi/Tide/snack OTC labels near the top — once delivery/pickup spines justify high tiers, stacking matching aisle giants is plausible. Prestige skincare/makeup ⇒ permit flagship prestige labels + Sephora/Ulta prestige + luxury DTC to lead **without** an Instacart guardrail — do not artificially spike grocery carts to match La Mer traffic. Limited-distribution regional caveats unchanged.",
   "SEARCH ENGINE/AI": "Google/Google Search should virtually always lead (~78–90 BP for mainstream US-conditioned cohorts) and occupy predicted_top_5 #1 unless the profile is unusually Bing/Yahoo/DDG-exclusive. Dedicated AI wrappers may be high but should not cleanly #1 generic consumers vs Google."
 """
 
