@@ -291,6 +291,12 @@ MODEL_RESEARCH = 'gpt-4o-search-preview'   # web search, persona doc
 MODEL_QUALITY  = 'gpt-4o'                  # all category agents + location + demos
 MODEL_SCORING  = 'gpt-4o'                  # all category agents + delta sanity (upgraded from gpt-4o-mini)
 MODEL_JUDGE    = 'gpt-4.1-nano'            # mismatch + cap review (ACCEPT/REVISE)
+# Item classification (~100s of batches per run): mini is cheaper; full gpt-4o catches obscure rows + cuts "low/noise" cascading into trash BPs.
+# Set BG_MODEL_CLASSIFY=gpt-4o (or env in Render) when quality beats cost latency.
+# Optional tuning: BG_CLASSIFY_BATCH (5–40, default 30), BG_CLASSIFY_TIMEOUT_SEC (30–300, default 120).
+MODEL_CLASSIFY = (
+    os.environ.get('BG_MODEL_CLASSIFY') or os.environ.get('MODEL_CLASSIFY') or 'gpt-4o-mini'
+).strip() or 'gpt-4o-mini'
 
 _FIRST_CAT_PROMPT_LOGGED = False  # flipped to True after one sample prompt is logged
 
@@ -14892,15 +14898,12 @@ def _build_canonical_baseline_lookup() -> dict:
 
 MODEL_GUIDANCE = 'gpt-4.1-nano'
 
-# Item-classification agent uses a stronger model — it has to actually know
-# what each obscure item IS, classify its target audience, and flag genuinely
-# unknown items. Nano hallucinates too much for this; gpt-4o-mini gives us
-# real world knowledge at ~10% the cost of full gpt-4o.
-MODEL_CLASSIFY = 'gpt-4o-mini'
+# Classification batch count is set below; MODEL_CLASSIFY is defined with other model tiers (supports BG_MODEL_CLASSIFY).
 
 # Maximum items per item-classification call. The agent has to think about
 # each item, so smaller batches keep response quality high.
-_CLASSIFY_BATCH = 30
+_CLASSIFY_BATCH = max(5, min(40, int(os.environ.get('BG_CLASSIFY_BATCH', '30') or 30)))
+_CLASSIFY_TIMEOUT_SEC = max(30, min(300, int(os.environ.get('BG_CLASSIFY_TIMEOUT_SEC', '120') or 120)))
 
 
 def _run_item_classification_agent(items: list[str]) -> dict[str, dict]:
@@ -14994,7 +14997,7 @@ its classification. No markdown, no commentary.
             temperature=0.0,
             max_tokens=4096,
             response_format={"type": "json_object"},
-            timeout=60,
+            timeout=_CLASSIFY_TIMEOUT_SEC,
         )
         text = (resp.choices[0].message.content or '').strip()
         doc = _json.loads(text)
@@ -19712,6 +19715,13 @@ def post_agent_quality_gate(df: pd.DataFrame, persona_doc: dict | None = None,
 
     # ── Validator 0: GenPop-Anchored Guardrails ────────────────────
     df = _apply_genpop_anchored_guardrails(df, persona_doc, brands)
+
+    # ── Validator 0b: Deterministic baseline cap/floor vs Gen Pop CSV ───────
+    try:
+        df, _ = _apply_canonical_baseline_cap(df, persona_doc or {}, bp_col)
+        df, _ = _apply_canonical_baseline_floor(df, persona_doc or {}, bp_col)
+    except Exception as _e_gut:
+        print(f"   ⚠️  Baseline cap/floor skipped: {_e_gut}")
 
     corrections = 0
 
