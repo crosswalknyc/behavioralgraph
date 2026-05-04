@@ -9537,6 +9537,14 @@ def ai_final_gut_check(df, brand_category, project_name, brands):
                 f"- LOWER when value is implausibly high for this persona\n"
                 f"- RAISE when value is implausibly low for this persona\n"
                 f"- KEEP when value is directionally and magnitude-wise believable\n\n"
+                f"Regional retail footprint (critical):\n"
+                f"- Grocery / supermarket banners often only operate in subsets of the US.\n"
+                f"- BEFORE keeping a high BP, ask: Does THIS profile's LOCATION / DMA geography plausibly include that footprint?\n"
+                f"- Examples — **H-E-B** / Texas-heavy groceries need Texas/Southwest DMA weight;\n"
+                f"  **Publix** / similar need Southeast–Florida corridor weight;\n"
+                f"  **Pavilions** / western Albertsons-banner names skew coastal West/Southwest — do not treat them "
+                f"like a Florida-exclusive footprint.\n"
+                f"- LOWER rows where a banner is geographically misaligned unless web research cites national ecommerce mastery.\n\n"
                 f"Return ONLY valid JSON:\n"
                 f'If no changes: {{"status":"OK","notes":"all rows believable"}}\n'
                 f'If changes: {{"status":"FIX","notes":"summary",'
@@ -14370,6 +14378,24 @@ def _category_pass1_calibration_block(category: str) -> str:
             "Default national qualified cohort ⇒ treat strong regionals as mid/low or `anti_fit_in_category`.\n"
             "• Prefer `predicted_top_5` that respects this coherence check."
         )
+    if u == 'WHERE THEY SHOP':
+        return (
+            "**Geography-first retail realism:** banners are not national fungible tokens — store chains have "
+            "**footprints**. Tier placement MUST align with persona **`location`/DMA skew** "
+            "(if top DMAs are Northeast/midwestern metros vs Texas vs Southeast vs coastal West).\n"
+            "• Illustrative footprints (research if unsure — do not blindly trust fuzzy names):\n"
+            "  — **Texas / Gulf-adjacent heavy:** H-E-B, Central Market (TX-heavy); many Fiesta / regional "
+            "Hispanic-heavy independents skew Texas/Southwest.\n"
+            "  — **Southeast / Florida core:** Publix, Winn-Dixie; Southeastern Grocers banners.\n"
+            "  — **West Coast / Southwest Albertsons-era:** Pavilions, Vons, Safeway-heavy coast/mountain West skew "
+            "(verify row naming — do not confuse a Florida shopper with banners that barely exist there).\n"
+            "• **Misaligned regions are anti-fit archetypes:** e.g. Publix or H-E-B in top tiers while persona "
+            "LOCATION shows **Northern-only** footprint with negligible Texas/Southeast weight; "
+            "Pavilions very high while persona is entirely **Florida-centric** without West DMA mass. "
+            "Put misplaced regionals in **low tiers** or `anti_fit_in_category`. National ecommerce + Walmart/Target/Costco "
+            "remain allowable high tiers alongside genuinely national department stores.\n"
+            "• `predicted_top_5` should not be dominated by a single-chain regional grocer that contradicts the DMA map."
+        )
     if u in {'SEARCH ENGINE/AI', 'SEARCH ENGINE'}:
         return (
             "**Google** (map to the rows named Google / Google Search / google.com consistently with the CSV) "
@@ -14410,6 +14436,18 @@ are **proportionally elevated** — otherwise lower the CPG cluster toward mid t
 **Regional-only or strong geo-skew brands** (sold mainly in one region — e.g. deep-South / Texas-heavy
 grocery or ice-cream labels): keep BP **low** unless persona `location` DMA mix or subsegments prove that
 geography — otherwise panel noise is inflating irrelevant regionals."""
+
+    if u == 'WHERE THEY SHOP':
+        return """═══════════════════════════════════════════════════════════════════
+CATEGORY HARD CALIBRATION — WHERE THEY SHOP (regional footprints)
+═══════════════════════════════════════════════════════════════════
+Grocery / super-regional banners (H-E-B, Publix, Pavilions-style chains, etc.) only score **high**
+when persona LOCATION/DMA mix plausibly contains that footprint.
+
+**Northern-skew personas** ⇒ Texas/Southeast-only leaders should sit **low** or anti-fit tier.
+**Florida-only personas** ⇒ West-banner labels that do not operate there belong **low** unless omnichannel/digital proof.
+
+Honor national mass ecommerce + Walmart/Target/Costco when list contains them."""
 
     if u in {'SEARCH ENGINE/AI', 'SEARCH ENGINE'}:
         return """═══════════════════════════════════════════════════════════════════
@@ -14953,6 +14991,7 @@ For each category, your guidance MUST be grounded in reality:
 - MOST PURCHASED BRANDS (digital semantics): Makeup/fragrance/snack/soap **CPG** often purchased offline — do not stack them atop the leaderboard
   without a digital rationale. Coherence rule: heavy CPG / beauty leaderboard ⇒ **Instacart + major digital grocery / pickup proxies** must also spike;
   otherwise pull CPG downward. **Regional-distribution brands** (strong in one US region only) stay low unless persona `location`/DMA mix proves that geography.
+- WHERE THEY SHOP: **Geographic footprints matter** — e.g. H-E-B skews Texas-heavy; Publix / Winn-Dixie skew Southeast–Florida corridors; banners like **Pavilions** skew West‑coastal / Southwest Albertsons footprints, not interchangeable with purely Florida-heavy DMA maps. Wrong‑region dominance (Southern chains atop a Northern‑footprint persona, or coastal‑West banners high when LOCATION is wholly Florida‑centric without West weight) ⇒ score LOW unless research proves crossover (travel, ecommerce-only edge cases rarely justify mass BP).
 - SEARCH ENGINE/AI: **Google (~78%+ annual credible digital touching points for mainstream US conditioned cohorts) should ordinarily lead**.
   Respect niche-only Yahoo/Bing/AI-research personas; default mass-market ⇒ Google tier #1, AI assistants chase but seldom clear #1 absent explicit evidence.
 
@@ -14963,7 +15002,7 @@ EXAMPLE category_signals (hypothetical `consumer_brand` athletic-equipment cohor
   "AMUSEMENT PARKS": "Major theme parks (Disney World, Universal Studios, Six Flags) are mainstream American entertainment — score near or slightly below baseline. Don't crush them. Water parks and local amusement parks score near baseline too. Only niche/foreign parks score low.",
   "TECHNOLOGY/DEVICE": "This audience skews young and urban. Both Apple (iPhone, iPad) and Samsung (Galaxy) are mass-market — score Apple at 0.8-1.0x baseline, Samsung at 1.0-1.2x if audience skews Android. Don't crush either brand. Smart home devices and wearables near baseline.",
   "GAMES": "This audience is 18-34 adults who like sports. Sports games (NBA 2K, Madden, EA Sports FC, EA Sports NFL) should score 2-4x baseline — these are core to the audience. Adult action games (GTA, Call of Duty, Assassin's Creed) score 1.5-2x. Children's games (Roblox, LEGO, Barbie, Disney Dreamlight) should score BELOW baseline (0.5-0.8x) — adults don't play these. Minecraft and Fortnite are cross-generational, cap at 1.5x baseline. NBA 2K MUST outscore Roblox.",
-  "WHERE THEY SHOP": "Retailers that sell the subject's product category (e.g. Foot Locker, Dick's Sporting Goods, Finish Line for athletic) should score ABOVE baseline. Mass retailers (Amazon, Walmart, Target) stay near baseline — everyone shops there. CPG/grocery retailers (Kroger, Publix) score BELOW baseline on a digital panel. Luxury boutiques (Tiffany, Nordstrom) depend on audience income.",
+  "WHERE THEY SHOP": "Category sellers tied to subject (Foot Locker, Dick's, Finish Line for athletic) lift when personas actually browse there digitally. Nationals (Amazon, Walmart, Target, Costco) stay wide-but-realistic. Regional supermarket banners (**H‑E‑B** Texas-heavy, **Publix** Southeast/Florida, **Pavilions** / Vons-heavy West footprints) spike ONLY when LOCATION/DMA mix matches footprint — wrong geography ⇒ keep low regardless of stray panel spikes.",
   "STREAMING/PLATFORM": "Major streaming (Netflix, Hulu, Amazon Prime Video, Disney+, YouTube) are near-universal — score 0.85-1.15x baseline. Don't crush them. Sports-specific streaming (ESPN+, FuboTV) may score above baseline if audience is sports-oriented. Niche/foreign platforms score very low.",
   "ATHLETE": "The subject's own sponsored athletes should score 2-4x their baseline — not 10x. Only the single most iconic athlete (like LeBron for Nike) gets 5x+. Other athletes score 1.0-1.5x baseline. Don't inflate obscure athletes to 50%+ just because they have a brand deal.",
   "INTEREST": "The panel uses a fixed global list of interest labels (see `interest_top_25` / `interest_bottom_25` in your JSON when the inventory block is present). Your subject's CORE themes MUST dominate the top of that ranking vs generic ubiquitous rows. Generic-functional rows (JOB SEARCH, SOCIAL MEDIA-as-interest, HOME IMPROVEMENT, COOKING) sit mid/low unless persona research proves otherwise — never crowd out spine hobbies.",
@@ -16635,9 +16674,9 @@ def _build_genpop_persona_doc() -> dict:
             'expected_low': ['MULTI-LEVEL MARKETING', 'SHOOTING SPORTS & MARKSMANSHIP', 'POLO', 'YACHTING', 'EQUESTRIAN', 'CIGARS', 'HORSE RACING'],
         },
         'WHERE THEY SHOP': {
-            'summary': 'National mass retailers + Amazon dominate; regional and luxury chains stay LOW for the average US adult.',
+            'summary': 'National ecommerce + Walmart/Target/Costco/Best Buy-style breadth dominate digital GenPop; heavy regional supermarkets (Texas H-E-B, Southeast Publix, West-banner names like Pavilions/Vons families) stay low nationally unless LOCATION proves that footprint.',
             'expected_high': ['AMAZON', 'WALMART', 'TARGET', 'COSTCO', 'HOME DEPOT', 'BEST BUY', 'EBAY', 'KOHLS', 'CVS', 'WALGREENS', 'LOWES', 'MACYS'],
-            'expected_low': ['CARTIER', 'TIFFANY', 'HERMES', 'NEIMAN MARCUS', 'BERGDORF GOODMAN', 'PAVILIONS', 'MENARDS', 'KIRKLANDS', 'REDBUBBLE', 'MERCADO LIBRE'],
+            'expected_low': ['CARTIER', 'TIFFANY', 'HERMES', 'NEIMAN MARCUS', 'BERGDORF GOODMAN', 'PAVILIONS', 'HEB', 'H-E-B', 'PUBLIX', 'WINN-DIXIE', 'MENARDS', 'KIRKLANDS', 'REDBUBBLE', 'MERCADO LIBRE'],
         },
         'WHERE THEY DINE': {
             'summary': 'Mass casual-dining dominates: Cheesecake Factory, Olive Garden, Chili\'s, Texas Roadhouse, Applebee\'s, IHOP. Luxury restaurants stay LOW.',
