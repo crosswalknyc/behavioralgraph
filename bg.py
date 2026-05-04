@@ -14510,6 +14510,66 @@ def _repair_json_text(text: str) -> str:
     return ''.join(out)
 
 
+def _balance_truncated_llm_json_fragment(s: str) -> str:
+    """Append missing closers when the assistant truncates mid-JSON.
+
+    Covers the Nike failure mode where output stops after `"MALE": 54.371` leaving
+    GENDER/demographics/persona object unbalanced.
+    """
+    s = _repair_json_text((s or '').strip())
+
+    while s.endswith(','):
+        s = s[:-1].rstrip()
+
+    import re as _re
+    for _ in range(10):
+        s2 = _re.sub(r',\s*"[^"]*$', '', s).rstrip()
+        if s2 == s:
+            break
+        s = s2
+
+    stk = []
+    in_str = False
+    esc = False
+    i = 0
+    n = len(s)
+    while i < n:
+        ch = s[i]
+        if not in_str:
+            if ch == '"':
+                in_str = True
+                esc = False
+            elif ch == '{':
+                stk.append('}')
+            elif ch == '[':
+                stk.append(']')
+            elif ch == '}':
+                if stk and stk[-1] == '}':
+                    stk.pop()
+                # unmatched `}` from model drift — ignore
+            elif ch == ']':
+                if stk and stk[-1] == ']':
+                    stk.pop()
+            i += 1
+            continue
+
+        if esc:
+            esc = False
+        elif ch == '\\':
+            esc = True
+        elif ch == '"':
+            in_str = False
+        i += 1
+
+    if in_str:
+        s = s + '"'
+
+    tail = ''
+    while stk:
+        tail += stk.pop()
+    return s + tail
+
+
 def _format_persona_archetype(persona_doc: dict | None) -> str:
     """Compact lines for downstream agents (category rule + scoring). Optional fields."""
     if not persona_doc:
@@ -14531,27 +14591,66 @@ def _format_persona_archetype(persona_doc: dict | None) -> str:
 
 
 def _parse_persona_json(text: str):
-    """Try json.loads, then repair-and-retry. Returns (dict_or_None, err_str)."""
+    """Parse persona JSON robustly — includes salvage for search-preview truncation.
+
+    Do NOT clip with ``rfind('}')``: long persona payloads often cut mid-stream
+    (e.g. ``"GENDER":{"MALE": 54``. Clipping loses the incomplete tail and hides
+    the real truncation; ``JSONDecoder.raw_decode`` plus bracket-balancing fixes it.
+
+    Still tries a greedy ``{ ... last }`` slice second — helps when text follows JSON.
+    """
     import json as _json
 
-    # Strip markdown fences and isolate outermost { ... } first.
-    t = (text or '').strip()
-    if t.startswith('```'):
-        t = t.split('\n', 1)[1].rsplit('```', 1)[0].strip()
-    s = t.find('{')
-    e = t.rfind('}')
-    if s < 0 or e <= s:
-        return None, 'no JSON object found'
-    t = t[s:e + 1]
+    decoder = _json.JSONDecoder()
 
-    try:
-        return _json.loads(t), ''
-    except Exception as e1:
-        repaired = _repair_json_text(t)
-        try:
-            return _json.loads(repaired), ''
-        except Exception as e2:
-            return None, f"{type(e1).__name__}: {e1}; after repair: {type(e2).__name__}: {e2}"
+    raw = (text or '').strip()
+    if not raw:
+        return None, 'empty response'
+    if raw.startswith('```'):
+        raw = raw.split('\n', 1)[1].rsplit('```', 1)[0].strip()
+
+    s = raw.find('{')
+    if s < 0:
+        return None, 'no JSON object found'
+
+    # Primary: from first ``{`` through end of assistant output (possibly truncated).
+    errs_acc: list[str] = []
+
+    def _run(fragment: str) -> dict | None:
+        frag = fragment.strip()
+        errs: list[str] = []
+        seen: set[int] = set()
+        queue = [('tail', frag), ('repair', _repair_json_text(frag)),
+                 ('balanced', _balance_truncated_llm_json_fragment(frag))]
+        for tag, cand in queue:
+            cand = cand.strip()
+            if not cand.startswith('{'):
+                continue
+            hk = hash(cand)
+            if hk in seen:
+                continue
+            seen.add(hk)
+            try:
+                obj, _end = decoder.raw_decode(cand)
+                if isinstance(obj, dict):
+                    return obj
+            except Exception as e:
+                errs.append(f'{tag}: {type(e).__name__}: {e}')
+        errs_acc.extend(errs)
+        return None
+
+    got = _run(raw[s:])
+    if got is not None:
+        return got, ''
+
+    e = raw.rfind('}')
+    if e > s:
+        got = _run(raw[s:e + 1])
+        if got is not None:
+            return got, ''
+
+    msg = errs_acc[-3:] if errs_acc else ['parse exhausted']
+    return None, '; '.join(str(x) for x in msg)
 
 
 def _extract_interest_catalog_from_df(df: pd.DataFrame) -> list[str]:
@@ -15573,7 +15672,7 @@ EXAMPLE category_signals (hypothetical `consumer_brand` athletic-equipment cohor
             model=MODEL_RESEARCH,
             web_search_options={"search_context_size": "high"},
             messages=[{'role': 'user', 'content': prompt}],
-            max_tokens=12000,
+            max_tokens=16384,
         )
         text = (resp.choices[0].message.content or '').strip()
         if text:
@@ -15597,7 +15696,7 @@ EXAMPLE category_signals (hypothetical `consumer_brand` athletic-equipment cohor
                     {'role': 'user', 'content': prompt},
                 ],
                 temperature=0.2,
-                max_tokens=4096,
+                max_tokens=12288,
                 response_format={"type": "json_object"},
             )
             text = (resp.choices[0].message.content or '').strip()
@@ -15625,7 +15724,7 @@ EXAMPLE category_signals (hypothetical `consumer_brand` athletic-equipment cohor
                 model=MODEL_QUALITY,
                 messages=[{'role': 'user', 'content': repair_prompt}],
                 temperature=0,
-                max_tokens=4096,
+                max_tokens=12288,
                 response_format={"type": "json_object"},
             )
             repaired = (resp.choices[0].message.content or '').strip()
