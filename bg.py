@@ -14966,6 +14966,14 @@ def _category_pass1_calibration_block(category: str,
             "hard-core trade junkie parasocial demos). Casual moviegoers, sports fans, FMCG cohorts ⇒ trades must not lead.\n"
             "• `predicted_top_5`: national staples first; weave regional lift + anti-trade posture per evidence."
         )
+    elif u == 'GAMES':
+        sections.append(
+            "**GAMES — demographic spine, not panel noise:** This column is **not** “anyone who ever clicked a game ad.”\n"
+            "• **Default (no gaming spine):** If persona + `category_signals[\"GAMES\"]` + `INTEREST` do **not** describe habitual players, design tiers so **most SKUs sit low** — only **Wordle / NYT-style puzzles / crosswords / light mobile casual** may occupy the **highest still-modest** band; **AAA, sports sims, kid live-services** stay **trace–low**.\n"
+            "• **When gaming IS a legitimate interest:** Match **AGE + GENDER + subculture** to genre — e.g. **older/casual** ⇒ puzzle/word; **urban young male + competitive** ⇒ GTA/CoD/FIFA/Madden/NBA2K per evidence; **kids/teens** ⇒ Roblox/Fortnite/Minecraft **only** when minors + narrative support.\n"
+            "• **`PARENTAL_STATUS` guard:** **Roblox / kid-first / toy-adjacent live services** must **not** exceed what **PARENT share + explicit kid tablet / shared-device / family gaming** evidence allows. **Parents without that proof** ⇒ those rows → **`anti_fit_in_category`** or bottom tiers — they must **not outrank** adult-appropriate casual or AAA *for that adult-skew cohort*.\n"
+            "• **`predicted_top_5`** must mirror the above — no accidental “Roblox #1” on middle-aged non-gaming FMCG profiles."
+        )
     elif u in {'SEARCH ENGINE/AI', 'SEARCH ENGINE'}:
         sections.append(
             "**Google** (map to the rows named Google / Google Search / google.com consistently with the CSV) "
@@ -15050,6 +15058,18 @@ Locals should impress as **raised mid-pack**, not chart-toppers.
 
 **Variety / Hollywood Reporter / Deadline / The Wrap-class trades:** **Never** elite BP unless the persona screams
 (industry insider, executive, filmmaker, obsessed trade reader). Casual fans ⇒ keep trades low."""
+        )
+
+    if u == 'GAMES':
+        parts.append(
+            """═══════════════════════════════════════════════════════════════════
+CATEGORY HARD CALIBRATION — GAMES (this scoring pass only)
+═══════════════════════════════════════════════════════════════════
+**Non-gaming cohort (persona does NOT treat play as a spine hobby):** keep BP **compressed** — Wordle/puzzle/casual may be the only “high-ish” rows and still **below** streaming/social universals; **Roblox, Fortnite, GTA, sports sims** → **low/trace** unless inventory + persona explicitly contradict.
+
+**Gaming cohort:** tier **genre to demo** (older ⇒ puzzles/word; kids/teens ⇒ Roblox/Minecraft **only** with minor evidence; young men + competitive urban ⇒ mature AAA / sports sims when persona supports).
+
+**Parents / device-handoff trap:** if `PARENTAL_STATUS` is material but persona lacks **kids actually playing** on logged digital surfaces, **Roblox & kid-first live services must not spike** — cap like **ambient child bleed**, never above adult-facing titles appropriate to the same median adult."""
         )
 
     if u in {'SEARCH ENGINE/AI', 'SEARCH ENGINE'}:
@@ -15600,6 +15620,7 @@ The `digital_identity` field is a rich text block (2-4 paragraphs) that will be 
    - What device ecosystem? (young urban with income <$80K skews Android/Samsung; higher income skews Apple)
    - What insurance do they have? (major digital insurers: GEICO, Progressive, State Farm have high digital engagement for everyone)
    - Are they parents? If not, children's brands (Roblox, YouTube Kids, Pampers, Barbie) should score LOW.
+     If they ARE parents **but** persona does **not** describe kids actually playing games on shared accounts / tablets (no “device handoff”, no kid subsegment, no family-gaming cues), treat **kid-first titles (Roblox, many LEGO/world-builder kids’ rows)** like **ambient noise** — they must **not** lead the GAMES sheet or exceed plausible **kid-mediated** share; default them **low/trace** versus adult casual titles.
    - THIS IS A U.S. PANEL: foreign-only platforms and retailers have negligible engagement.
 
 CATEGORY SIGNALS — PER-CATEGORY GUIDANCE:
@@ -15613,7 +15634,7 @@ For each category, your guidance MUST be grounded in reality:
 - CRITICAL: For categories with near-universal items (STREAMING/PLATFORM, WHERE THEY SHOP, TECHNOLOGY/DEVICE), remind the agent that major services (Netflix, Hulu, Amazon Prime, Walmart, Target) should stay near their baselines. Only persona-specific niche items should deviate significantly — **EXCEPT** under `celebrity_or_creator` you still encode **research-backed endorsement visibility + network-aligned SVOD** per STEP 5c while honoring the **Netflix #1 / Hulu top-cluster** ceiling.
 - For AUTOMOBILE: specify what cars this demographic ACTUALLY drives based on age and income, not aspirational vehicles
 - For TECHNOLOGY/DEVICE: specify the likely device ecosystem (Android vs iOS) based on demographics
-- For GAMES: specify age-appropriate games, not children's games for adult audiences
+- For GAMES: **Three-way gate — (1) Is gaming a real spine interest for THIS cohort?** If persona/`INTEREST`/`subsegments` do **not** support habitual play, keep **almost all SKUs moderately low**: only **light casual / crossword / puzzle / Wordle-class** touches may exceed trace levels; AAA and kid live-services stay **near baseline−**. **(2) Age + genre coherence when gaming IS justified:** teens/kids-heavy ⇒ Roblox/Fortnite/Minecraft-class can rise **only if** demographics + narrative support minors; mature adults ⇒ Wordle/NYT Games/casual puzzles may lead; young men + urban + sports/competitive ⇒ sports sims (FIFA/Madden/NBA 2K) or mature AAA **GTA/CoD**-class plausible **per persona** — do not transpose one template onto another archetype. **(3) Parents without kid-gaming proof:** **`PARENT` share must cap kid-first BP** — no Roblox/child-MMO tiers above plausible household-kid mediated traffic absent explicit shared-device / “my kids play” research; inflated child rows commonly mean **panel bleed from handoffs**.
 - For INSURANCE: major insurers (GEICO, State Farm, Progressive) have high digital engagement — score near baseline
 - For BETTING (legal US sports-wagering digital touch cohorts): DraftKings + FanDuel are the endemic mass‑tier omnichannel leaders; BetMGM / Caesars / ESPN Bet plausible mass seconds from national marketing. Overseas‑anchored brands (**Bet365** class and similar offshore-first books) belong **meaningfully BELOW DK/FD** in predicted tiers unless persona + research proves explicit UK/Ireland/Europe wagering geography — panel spikes ≠ override.
 - For AMUSEMENT PARKS: major theme parks (Disney, Universal, Six Flags) are visited by most Americans — keep near baseline
@@ -15632,7 +15653,7 @@ EXAMPLE category_signals (hypothetical `consumer_brand` athletic-equipment cohor
   "SOCIAL MEDIA": "Major platforms (YouTube, TikTok, Instagram, Snapchat) are near-universal for this young audience — score them at 1.0-1.4x baseline. TikTok is THE dominant platform for young, urban, diverse Americans — DO NOT crush it. Facebook skews older — score 0.7-0.9x baseline. Discord near baseline for gamers/young men. Niche platforms (BeReal, Lemon8) near or below baseline.",
   "AMUSEMENT PARKS": "Major theme parks (Disney World, Universal Studios, Six Flags) are mainstream American entertainment — score near or slightly below baseline. Don't crush them. Water parks and local amusement parks score near baseline too. Only niche/foreign parks score low.",
   "TECHNOLOGY/DEVICE": "This audience skews young and urban. Both Apple (iPhone, iPad) and Samsung (Galaxy) are mass-market — score Apple at 0.8-1.0x baseline, Samsung at 1.0-1.2x if audience skews Android. Don't crush either brand. Smart home devices and wearables near baseline.",
-  "GAMES": "This audience is 18-34 adults who like sports. Sports games (NBA 2K, Madden, EA Sports FC, EA Sports NFL) should score 2-4x baseline — these are core to the audience. Adult action games (GTA, Call of Duty, Assassin's Creed) score 1.5-2x. Children's games (Roblox, LEGO, Barbie, Disney Dreamlight) should score BELOW baseline (0.5-0.8x) — adults don't play these. Minecraft and Fortnite are cross-generational, cap at 1.5x baseline. NBA 2K MUST outscore Roblox.",
+  "GAMES": "Only use this archetype mapping when persona proves **gaming is a backbone behavior** — otherwise nearly all rows modest with **casual/word/puzzle tops**. When gaming IS justified: **Young sports fans** ⇒ sports sims (NBA 2K, Madden, EA FC) lead; mature action skew ⇒ GTA/COD-class only with matching demo; **older/low-intensity gamers** ⇒ Wordle/NYT Games/spelling bee/crosswords higher than Fortnite; **teens/gen-Z** ⇒ Roblox/Fortnite/Minecraft plausible only if CHILD–teen share + persona say so — if parents dominate without kid-gaming narrative, **Roblox must stay LOW** vs adult titles. Never let child-first live services outrank demographics + explicit family-gaming evidence.",
   "WHERE THEY SHOP": "Category sellers tied to subject (Foot Locker, Dick's, Finish Line for athletic) lift when personas actually browse there digitally. Nationals (Amazon, Walmart, Target, Costco) stay wide-but-realistic. When MPB/life-stage implies **grocery carts through Instacart, DoorDash/Uber grocery, or Walmart/Target pickup apps**, also elevate **the regional supermarket banners** those merchants default to for persona LOCATION (SoCal skew ⇒ Ralphs/Vons/Pavilions-class; Southeast/Florida ⇒ Publix-class; Texas/Gulf ⇒ H‑E‑B-class; Northeast ⇒ Wegmans/Stop&Giant-class as research fits; dispersed US ⇒ Kroger-banner + Albertsons-banner mosaic). **Drugstore OTC skew** ⇒ CVS + Walgreens credible. Spike regionals ONLY when DMA map matches footprint.",
   "STREAMING/PLATFORM": "Major streaming (Netflix, Hulu, Amazon Prime Video, Disney+, YouTube) are near-universal — score 0.85-1.15x baseline. Don't crush them. Sports-specific streaming (ESPN+, FuboTV) may score above baseline if audience is sports-oriented. Niche/foreign platforms score very low.",
   "ATHLETE": "The subject's own sponsored athletes should score 2-4x their baseline — not 10x. Only the single most iconic athlete (like LeBron for Nike) gets 5x+. Other athletes score 1.0-1.5x baseline. Don't inflate obscure athletes to 50%+ just because they have a brand deal.",
@@ -17118,8 +17139,11 @@ def _run_category_validator_agent(category: str,
 
     persona_summary = persona_doc.get('persona_summary', '')
     digital_identity = persona_doc.get('digital_identity', '')
-    demo_snapshot = {k: v for k, v in persona_doc.get('demographics', {}).items()
-                     if k in ('AGE', 'GENDER', 'ETHNICITY', 'INCOME')}
+    cat_u_val = category.strip().upper()
+    _demo_keys = ('AGE', 'GENDER', 'ETHNICITY', 'INCOME', 'PARENTAL_STATUS') if cat_u_val == 'GAMES' else (
+        'AGE', 'GENDER', 'ETHNICITY', 'INCOME')
+    demo_snapshot = {k: v for k, v in (persona_doc.get('demographics') or {}).items()
+                     if k in _demo_keys}
 
     rule_summary = str(category_rule.get('summary', '') or '').strip()
     ceiling = category_rule.get('category_ceiling_pct')
@@ -17147,6 +17171,16 @@ def _run_category_validator_agent(category: str,
     ceiling_str = f"{ceiling:.0f}%" if isinstance(ceiling, (int, float)) else 'unspecified'
 
     _audit = str(persona_doc.get('commercial_viability_audit') or '').strip()
+
+    _games_validator_checks = ''
+    if cat_u_val == 'GAMES':
+        _games_validator_checks = """
+  8) GAMES — **Non-gaming persona:** If persona + GAMES `category_signals` + summary do **not** encode habitual play, the whole TOP set should look **compressed** (no Roblox/Fortnite/GTA headlines). **Kid-first / Roblox-class** rows materially above **Wordle / crossword / NYT-style puzzle** titles on a **middle-aged or parent-heavy** profile without explicit kid-device narrative ⇒ override kid rows **DOWN**.
+
+  9) GAMES — **Parent / handoff discipline:** Material **PARENT** share + **no** explicit “kids play on my tablet / shared account” language ⇒ **Roblox & kid-first live services must not lead** and should not beat **age-appropriate adult** rows. Parents + proof of minor gamers ⇒ child titles may rise but still **cohere with AGE buckets** in KEY DEMOGRAPHICS.
+
+  10) GAMES — **When gaming IS on-brief:** Genre must match demo (e.g. **GTA/CoD** for young adult male competitive only with supporting text; **sports sims** for sports-heavy young adults; **casual/puzzle** dominant for 55+ defaults). Fix inversions where a misfit genre outranks the archetype implied by persona.
+"""
 
     prompt = f"""You are the Pass 3 Category Validator for **{category}** in the **{subject}** profile.
 
@@ -17207,7 +17241,7 @@ WHAT TO CHECK
   6) PERSONA-FIT SANITY — across the FULL reviewed set (TOP {top_n}), does ranking reflect BOTH persona specificity AND plausible national digital commons (search/social/carrier/banking) where applicable?
 
   7) COMMERCIAL VIABILITY BINDING — Entities named in COMMERCIAL VIABILITY AUDIT as materially inactive/absent replenishment MUST NOT appear in headline BP bands (normally compress toward ≤1–2% unless audit text permits otherwise). Corrections referencing check #7 MUST quote audit phrasing briefly.
-
+{_games_validator_checks}
 ═══════════════════════════════════════════════════════════════════
 OUTPUT FORMAT
 ═══════════════════════════════════════════════════════════════════
