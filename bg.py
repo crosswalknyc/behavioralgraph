@@ -14247,15 +14247,95 @@ def _parse_persona_json(text: str):
             return None, f"{type(e1).__name__}: {e1}; after repair: {type(e2).__name__}: {e2}"
 
 
+def _extract_interest_catalog_from_df(df: pd.DataFrame) -> list[str]:
+    """Canonical INTEREST / INTERESTS labels exactly as stored in `df` (sorted, deduped).
+
+    Every profile uses this same taxonomy; downstream INTEREST ordering is driven only
+    by persona + scoring (row order in CSV is not authoritative).
+    """
+    if df is None or getattr(df, 'empty', True):
+        return []
+    cols = getattr(df, 'columns', None)
+    if cols is None or 'Column' not in cols or 'Value' not in cols:
+        return []
+    col_series = df['Column'].astype(str).str.strip().str.upper()
+    mask = col_series.isin({'INTEREST', 'INTERESTS'})
+    vals = df.loc[mask, 'Value'].astype(str).str.strip()
+    vals = vals[vals.ne('')]
+    uniq = vals.unique()
+    return sorted(str(x).strip() for x in uniq if str(x).strip())
+
+
+def _normalize_persona_interest_rankings(persona_doc: dict,
+                                           inventory: list[str] | None) -> None:
+    """Clamp `interest_top_25` / `interest_bottom_25` to the pipeline inventory."""
+    inv = inventory or []
+    inv_set = set(inv)
+    if not inv_set:
+        persona_doc.pop('interest_top_25', None)
+        persona_doc.pop('interest_bottom_25', None)
+        persona_doc.pop('interest_inventory_checksum', None)
+        return
+
+    def _filt(seq):
+        seen: set[str] = set()
+        out: list[str] = []
+        for x in (seq or []):
+            s = str(x).strip()
+            if s in inv_set and s not in seen:
+                seen.add(s)
+                out.append(s)
+        return out
+
+    top = _filt(persona_doc.get('interest_top_25'))
+    bot = _filt(persona_doc.get('interest_bottom_25'))
+    top_set = set(top)
+    bot = [b for b in bot if b not in top_set]
+    persona_doc['interest_top_25'] = top[:25]
+    persona_doc['interest_bottom_25'] = bot[:25]
+    persona_doc['interest_inventory_checksum'] = f"{len(inv)} labels"
+
+
+def _format_persona_interest_rank_block(persona_doc: dict) -> str:
+    """Snippet for INTEREST-category Pass 1 / Pass 2 prompts."""
+    top = persona_doc.get('interest_top_25') or []
+    bot = persona_doc.get('interest_bottom_25') or []
+    if not top and not bot:
+        return ''
+    lines = [
+        "═══════════════════════════════════════════════════════════════════",
+        "INTEREST — PERSONA RANK PRIORS (fixed panel labels — only fit changes by subject)",
+        "═══════════════════════════════════════════════════════════════════",
+    ]
+    if top:
+        lines.append("STRONG ALIGNMENT (prefer top tiers / descending): "
+                     + '; '.join(top[:25]))
+    if bot:
+        lines.append("WEAK / ANTI-FIT ANCHORS (bottom tiers ≤5% BP where rubric agrees): "
+                     + '; '.join(bot[:25]))
+    lines.append(
+        "When an item appears in BOTH this list AND your rubric tiers, reconcile so "
+        "rank order is coherent with persona priors.")
+    lines.append("")
+    return '\n'.join(lines)
+
+
 def persona_research_agent(subject: str, brand_category: str | None = None,
                            study_start: str = '', study_end: str = '',
-                           category_names: list[str] | None = None) -> dict:
+                           category_names: list[str] | None = None,
+                           interest_catalog: list[str] | None = None) -> dict:
     """Step 1 — single gpt-4o-search-preview call.
 
     The downstream profile estimates behavior among **U.S. general-population
     panelists who qualify on brand engagement** (digital exposure mapped to this
     subject), not unconditional all-U.S.-adults behavior. Persona bridges
     research + realism for that conditioned cohort.
+
+    When *interest_catalog* is provided (distinct `Value`s for INTEREST/INTERESTS
+    rows from the pipeline dataframe), the model must populate `interest_top_25`
+    and `interest_bottom_25` using **exact spelling** only from that list — the
+    same canonical taxonomy appears on every brand profile (e.g. Nike); only ranking
+    changes with the subject.
 
     Researches *subject* online and returns a PersonaDoc dict:
         demographics  – dict[category_name, list[{bucket, percentage}]]
@@ -14291,6 +14371,48 @@ The following behavioral categories will be scored by downstream agents. Your `c
 {_cat_list}
 """
 
+    interest_catalog_block = ""
+    interest_json_lines = ""
+    if interest_catalog:
+        numbered = '\n'.join(
+            f"  {i + 1}. {lab}" for i, lab in enumerate(interest_catalog)
+        )
+        _n_lab = len(interest_catalog)
+        _pair_rule = (
+            "Exactly 25 entries in each array — no duplicates; the two arrays must NOT overlap. "
+            "Every string must appear VERBATIM from the FIXED LABEL INVENTORY (character-for-character)."
+            if _n_lab >= 50
+            else (
+                f"The inventory has fewer than 50 labels ({_n_lab} total): use up to "
+                f"min(25, {_n_lab // 3}) entries per array, disjoint sets, verbatim spelling only."
+            )
+        )
+        interest_catalog_block = f"""
+
+═══════════════════════════════════════════════════════════════════
+INTEREST CATEGORY — FIXED LABEL INVENTORY (canonical panel taxonomy)
+═══════════════════════════════════════════════════════════════════
+The behavioral profile spreadsheet uses EXACTLY the following interest labels for
+every brand. They are identical across Nike, Disney, etc. — row order differs by
+pipeline input, NOT spelling.
+
+You MUST output `interest_top_25` and `interest_bottom_25` selecting ONLY strings
+copied verbatim from this list (no paraphrasing, no new labels).
+
+{_pair_rule}
+
+FIXED LABEL INVENTORY ({len(interest_catalog)} items, enumerated for reference — order is arbitrary):
+{numbered}
+"""
+        interest_json_lines = (
+            '  "interest_top_25": [\n'
+            '    "<EXACT LABEL from FIXED LABEL INVENTORY — rank 1 = strongest persona fit … slot 25>"\n'
+            '  ],\n'
+            '  "interest_bottom_25": [\n'
+            '    "<EXACT LABEL — strongest anti-fit / wrong cohort first … slot 25>"\n'
+            '  ],\n'
+        )
+
     prompt = f"""You are a senior audience-research analyst.  Research **{subject}** ({cat_label}) using real, current online data (fan demographics surveys, social-media analytics, press coverage, industry reports).
 
 ═══════════════════════════════════════════════════════════════════
@@ -14314,7 +14436,7 @@ The published **national Gen Pop baseline CSV** stays the yardstick analysts use
 "*vs US digital baseline*" — profile rows answer: **among qualified panelists for this brand**,
 who engages digitally with each item?
 
-{date_context}{categories_block}
+{date_context}{categories_block}{interest_catalog_block}
 
 RESEARCH METHODOLOGY — follow these steps IN ORDER before generating the persona:
 
@@ -14493,13 +14615,17 @@ Return ONLY a single valid JSON object — no markdown, no commentary.
     "retail": ["<retailers this audience uses alongside the subject>"],
     "negative_overlap": ["<brands this audience does NOT meaningfully overlap with despite seeming related>"]
   }},
-  "category_signals": {{
+{(interest_json_lines + chr(10)) if interest_json_lines else ''}  "category_signals": {{
     "<CATEGORY NAME>": "<1-2 sentences: what does this audience do/not do in this category? What types of items should score HIGH vs LOW?>",
     ...one entry per category from the CATEGORIES TO BE SCORED list above
   }}
 }}
 
 RULES:
+- If the FIXED LABEL INVENTORY (INTEREST) section appears earlier in this prompt, you MUST
+  populate `interest_top_25` and `interest_bottom_25` exclusively with verbatim copied strings from
+  that inventory (respect the cardinality and disjointness rules stated there — no overlaps between arrays).
+  When that section does not appear, omit both keys from your JSON entirely.
 - Each demographic category MUST sum to exactly 100.
 - NEVER return round numbers. Every value must have meaningful variation in all 4 decimal places, as if from a real survey. Good: 29.6283, 44.3718, 7.8142, 15.2694. Bad: 30.0000, 45.0000, 8.0000, 15.0000. The integer part should also not be a clean multiple of 5 when possible (use 29.6 instead of 30.0, 44.3 instead of 45.0).
 - Trans population ≈ 0.5-1% of US; Native American ≈ 1%; LGBTQ+ ≈ 7% (higher only if brand has known affinity).
@@ -14729,7 +14855,7 @@ EXAMPLE category_signals (hypothetical `consumer_brand` athletic-equipment cohor
   "WHERE THEY SHOP": "Retailers that sell the subject's product category (e.g. Foot Locker, Dick's Sporting Goods, Finish Line for athletic) should score ABOVE baseline. Mass retailers (Amazon, Walmart, Target) stay near baseline — everyone shops there. CPG/grocery retailers (Kroger, Publix) score BELOW baseline on a digital panel. Luxury boutiques (Tiffany, Nordstrom) depend on audience income.",
   "STREAMING/PLATFORM": "Major streaming (Netflix, Hulu, Amazon Prime Video, Disney+, YouTube) are near-universal — score 0.85-1.15x baseline. Don't crush them. Sports-specific streaming (ESPN+, FuboTV) may score above baseline if audience is sports-oriented. Niche/foreign platforms score very low.",
   "ATHLETE": "The subject's own sponsored athletes should score 2-4x their baseline — not 10x. Only the single most iconic athlete (like LeBron for Nike) gets 5x+. Other athletes score 1.0-1.5x baseline. Don't inflate obscure athletes to 50%+ just because they have a brand deal.",
-  "INTEREST": "The subject's CORE interest category (e.g. 'SPORTS' for a sports brand) MUST score ABOVE baseline — typically 1.2-1.5x. Related interests (sneakers, fitness, live events, rap & hip hop) also above baseline. Generic interests (cooking, home improvement, weather) near or slightly below baseline. The audience's primary passion should ALWAYS rank in the top 10 interests."
+  "INTEREST": "The panel uses a fixed global list of interest labels (see `interest_top_25` / `interest_bottom_25` in your JSON when the inventory block is present). Your subject's CORE themes MUST dominate the top of that ranking vs generic ubiquitous rows. Generic-functional rows (JOB SEARCH, SOCIAL MEDIA-as-interest, HOME IMPROVEMENT, COOKING) sit mid/low unless persona research proves otherwise — never crowd out spine hobbies."
 """
 
     print(f"🔬 Step 1: Persona Research Agent researching '{subject}' …")
@@ -14827,6 +14953,8 @@ EXAMPLE category_signals (hypothetical `consumer_brand` athletic-equipment cohor
         for k in buckets:
             buckets[k] = round(float(buckets[k]) * factor, 4)
 
+    _normalize_persona_interest_rankings(persona_doc, interest_catalog)
+
     print(f"   ✅ Persona doc built — summary length {len(persona_doc.get('persona_summary', ''))} chars, "
           f"{len(persona_doc.get('location', []))} DMAs, "
           f"digital_identity {len(persona_doc.get('digital_identity', ''))} chars")
@@ -14893,6 +15021,12 @@ EXAMPLE category_signals (hypothetical `consumer_brand` athletic-equipment cohor
         for _k, _v in _xs.items():
             if isinstance(_v, list):
                 print(f"  {_k}: {', '.join(str(x) for x in _v[:8])}")
+    _itop = persona_doc.get('interest_top_25') or []
+    _ibot = persona_doc.get('interest_bottom_25') or []
+    if _itop or _ibot:
+        _cks = persona_doc.get('interest_inventory_checksum', '?')
+        print(f"INTEREST RANK PRIORS ({_cks}): top {len(_itop)} → {_itop[:10]}{'…' if len(_itop) > 10 else ''}")
+        print(f"INTEREST rank priors — bottom {len(_ibot)} → {_ibot[:10]}{'…' if len(_ibot) > 10 else ''}")
     print(f"{'─'*60}\n")
 
     return persona_doc
@@ -15239,6 +15373,12 @@ def _run_item_guidance_agent(category: str, item_names: list[str],
 
     items_block = '\n'.join(f"  - {name}" for name in item_names)
 
+    interest_prior_block = ''
+    if category.strip().upper() in {'INTEREST', 'INTERESTS'}:
+        _idb = _format_persona_interest_rank_block(persona_doc)
+        if _idb.strip():
+            interest_prior_block = _idb
+
     prompt = f"""You are a senior consumer-research analyst writing a SCORING RUBRIC for the **{category}** category, for **{subject}**.
 
 SAMPLING: The cohort is **U.S. general-population panelists who QUALIFY ON measured engagement with "{subject}"** (the pipeline input — brand, personality, venue, asset, etc., as modeled).
@@ -15279,6 +15419,7 @@ ANTI-FIT (what the audience does NOT engage with, even if famous):
 CROSS-SHOP NETWORK (brands the audience genuinely uses alongside the subject):
 {_fmt_dict_of_lists(cross_shop_network)}
 
+{interest_prior_block}
 ═══════════════════════════════════════════════════════════════════
 ITEMS IN THE {category} CATEGORY (every one will be scored against your rubric)
 ═══════════════════════════════════════════════════════════════════
@@ -15665,6 +15806,12 @@ def _run_single_category_agent(category: str, values: list[str],
     panel = panel_lookup or {}
     classifications = item_classifications or {}
 
+    interest_prior_block_cat = ''
+    if cat_u in {'INTEREST', 'INTERESTS'}:
+        _ipbc = _format_persona_interest_rank_block(persona_doc)
+        if _ipbc.strip():
+            interest_prior_block_cat = _ipbc + '\n'
+
     # ── Build per-item evidence block: classification + panel + baseline ──
     # The agent sees, for each item, what we already know about it. This is
     # the fix for the old "blind affinity" scoring that produced 27% defaults.
@@ -15928,7 +16075,7 @@ EXPLICIT ANTI-FIT (low-affinity by definition — items in these categories
 should score very low for this audience even if famous nationally):
 {_fmt_anti_fit()}
 
-CATEGORY-SPECIFIC GUIDANCE for {category}:
+{interest_prior_block_cat}CATEGORY-SPECIFIC GUIDANCE for {category}:
 {guidance_summary or '(use persona above + your judgment)'}
 
 EXPECTED HIGH-FIT ITEMS for this category (persona research):
@@ -22989,6 +23136,10 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
             }
         })
 
+        _interest_catalog = _extract_interest_catalog_from_df(df_final)
+        if _interest_catalog:
+            print(f"   ℹ️ INTEREST canonical inventory: {len(_interest_catalog)} labels (from dataframe)")
+
         if _is_rerun_same_brand:
             print("🔒 Rerun detected (same brand input as prior run)")
             print("   • Demographics + location: LOCKED to prior run values (identical)")
@@ -23000,7 +23151,8 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
             print("   • Delta sanity agent: any item swinging >15pp or ≥2.5× vs. prior gets a gpt-4o second-look")
             _persona_doc = persona_research_agent(_subject_name, brand_category,
                                                     study_start=behavior_start, study_end=behavior_end,
-                                                    category_names=_behavioral_cats)
+                                                    category_names=_behavioral_cats,
+                                                    interest_catalog=_interest_catalog or None)
             _locked_demo = _persona_doc_from_previous_lookup(previous_demo_lookup)
             _persona_doc['demographics'] = _locked_demo.get('demographics', _persona_doc.get('demographics', {}))
             _persona_doc['location'] = _locked_demo.get('location', _persona_doc.get('location', []))
@@ -23008,7 +23160,8 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
         else:
             _persona_doc = persona_research_agent(_subject_name, brand_category,
                                                     study_start=behavior_start, study_end=behavior_end,
-                                                    category_names=_behavioral_cats)
+                                                    category_names=_behavioral_cats,
+                                                    interest_catalog=_interest_catalog or None)
 
         _validate_persona_quality(_persona_doc, _subject_name)
 
