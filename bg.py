@@ -164,7 +164,7 @@ What:
   - If brand is NOT in MPB → 100.0% in EVERY category where it appears.
   - Skipped for GenPop runs (natural percentages preserved)
 
-Example (brand IN MPB — e.g. Nike):
+Example (brand IN MPB — e.g. a household national brand appearing in buyer survey):
   Found in MPB at agent score ~65%
   - APPAREL/FOOTWEAR: ~65% (consistency-gated)
   - WHERE THEY SHOP: ~65% (consistency-gated)
@@ -291,12 +291,62 @@ MODEL_RESEARCH = 'gpt-4o-search-preview'   # web search, persona doc
 MODEL_QUALITY  = 'gpt-4o'                  # all category agents + location + demos
 MODEL_SCORING  = 'gpt-4o'                  # all category agents + delta sanity (upgraded from gpt-4o-mini)
 MODEL_JUDGE    = 'gpt-4.1-nano'            # mismatch + cap review (ACCEPT/REVISE)
-# Item classification (~100s of batches per run): mini is cheaper; full gpt-4o catches obscure rows + cuts "low/noise" cascading into trash BPs.
-# Set BG_MODEL_CLASSIFY=gpt-4o (or env in Render) when quality beats cost latency.
-# Optional tuning: BG_CLASSIFY_BATCH (5–40, default 30), BG_CLASSIFY_TIMEOUT_SEC (30–300, default 120).
-MODEL_CLASSIFY = (
-    os.environ.get('BG_MODEL_CLASSIFY') or os.environ.get('MODEL_CLASSIFY') or 'gpt-4o-mini'
-).strip() or 'gpt-4o-mini'
+
+
+def _parse_profile_quality_tier() -> str:
+    """Pipeline quality preset for ANY subject brand — not keyed to one label.
+
+    BG_PROFILE_QUALITY (aliases):
+      balanced (default) — gpt-4o-mini classify; good cost/latency.
+      priority | gutcheck | high — gpt-4o classify unless BG_MODEL_CLASSIFY overrides;
+                                   smaller batches + longer timeouts unless BG_CLASSIFY_* overrides.
+      economy | cheap     — explicitly cost-first classify (still mini).
+
+    Explicit BG_MODEL_CLASSIFY / BG_CLASSIFY_BATCH / BG_CLASSIFY_TIMEOUT_SEC always win.
+    """
+    raw = (os.environ.get('BG_PROFILE_QUALITY') or 'balanced').strip().lower()
+    if raw in ('priority', 'gutcheck', 'high', 'max'):
+        return 'priority'
+    if raw in ('economy', 'cheap', 'fast'):
+        return 'economy'
+    return 'balanced'
+
+
+_PROFILE_QUALITY_TIER = _parse_profile_quality_tier()
+
+_explicit_classify_model = (
+    os.environ.get('BG_MODEL_CLASSIFY') or os.environ.get('MODEL_CLASSIFY') or ''
+).strip()
+if _explicit_classify_model:
+    MODEL_CLASSIFY = _explicit_classify_model
+elif _PROFILE_QUALITY_TIER == 'priority':
+    MODEL_CLASSIFY = 'gpt-4o'
+elif _PROFILE_QUALITY_TIER == 'economy':
+    MODEL_CLASSIFY = 'gpt-4o-mini'
+else:
+    MODEL_CLASSIFY = 'gpt-4o-mini'
+
+
+def _effective_classify_batch() -> int:
+    raw = os.environ.get('BG_CLASSIFY_BATCH')
+    if raw is not None and str(raw).strip() != '':
+        return max(5, min(40, int(raw)))
+    if _PROFILE_QUALITY_TIER == 'priority':
+        return 22
+    return 30
+
+
+def _effective_classify_timeout_sec() -> int:
+    raw = os.environ.get('BG_CLASSIFY_TIMEOUT_SEC')
+    if raw is not None and str(raw).strip() != '':
+        return max(30, min(300, int(raw)))
+    if _PROFILE_QUALITY_TIER == 'priority':
+        return 150
+    return 120
+
+
+_CLASSIFY_BATCH = _effective_classify_batch()
+_CLASSIFY_TIMEOUT_SEC = _effective_classify_timeout_sec()
 
 _FIRST_CAT_PROMPT_LOGGED = False  # flipped to True after one sample prompt is logged
 
@@ -14431,16 +14481,14 @@ interesting one?"
     MOST. The mass-market core (working-class, lower-middle-income,
     value-conscious, suburban/exurban) is 50-70% of subsegment weight.
 
-  • Concrete check for Nike specifically: Nike has ~120M U.S. customers
-    out of ~260M U.S. adults. That means roughly HALF of all American
-    adults wear Nike. Half of America is not Brooklyn hypebeasts. The
-    median Nike customer is a 38-year-old suburban parent in Ohio
-    buying running shoes at Dick's or Foot Locker for themselves and
-    soccer cleats for their kid. They go to Planet Fitness (or no
-    gym), not Equinox. They drive a Honda or a Toyota, not a Tesla.
-    They watch network sports on cable or YouTube TV, not just niche
-    streaming. They eat at Chilis and Cheesecake Factory more than at
-    omakase spots.
+  • Concrete check — category leaders with fifty million+ reachable U.S. adults:
+    roughly half or more of U.S. adults may use the category; they are NOT
+    all urban tastemakers or "superfans." Picture a 38-year-old suburban
+    parent buying the product where most people buy it (national retail,
+    mass e‑commerce, mainstream carrier/streaming bundles). Typical gym =
+    Planet Fitness or none, not boutique luxury. Typical car = Accord/Civic/RAV4,
+    not only premium EVs. TV = broadcast/cable/big streamers — not ONLY niche SVOD.
+    Dining skews broadly casual chains vs. prestige dining for the median buyer.
 
   • If the subject is a NICHE BRAND (<2M U.S. customers — Equinox,
     Goyard, Bar Masa, Erewhon, Patek Philippe), the persona CAN be
@@ -14448,7 +14496,7 @@ interesting one?"
     small and skewed.
 
   • COMMON FAILURE: writing the "interesting" version of a mass-brand
-    audience (the sneakerhead Nike consumer, the foodie McDonalds
+    audience (the enthusiast sneaker consumer, the foodie McDonalds
     consumer, the fashion-forward Walmart consumer) inflates premium
     items (Peloton, Equinox, Bar Masa, Apple) and deflates value items
     (Planet Fitness, Family Dollar, Chilis, Walmart, Honda) in the
@@ -14458,12 +14506,13 @@ interesting one?"
   • CRITICAL — MASS-MARKET ≠ ETHNICALLY GEN-POP AVERAGE. Some mass
     brands are deeply rooted in Black/Hispanic culture and continue to
     meaningfully over-index ethnically EVEN in their fully mass-market
-    state. The "median Nike customer is a suburban parent in Ohio"
-    framing is correct on income/lifestyle but WRONG if interpreted as
-    "ethnically average". Nike's customer base in reality is roughly
-    BLACK ~25-30%, HISPANIC ~22-26%, WHITE ~45-55%, ASIAN ~6-8% — well
-    above the U.S. census 13/19/58/6 baseline for Black and Hispanic.
-    Same pattern for Adidas, Jordan, Foot Locker, Champion, McDonalds,
+    state. The framing "median mass-brand buyer is suburban/value-aware"
+    is correct on income/lifestyle but WRONG if interpreted as
+    "ethnically census-average." Brands with deep roots in Black/Hispanic
+    culture (streetwear/sport, certain QSR, prepaid/carrier multicultural
+    staples, Latino-forward retail) often land roughly BLACK ~25-35%,
+    HISPANIC ~20-28%+ vs. generic census baselines (~13%/19%).
+    Same pattern applies across Adidas, Jordan, Foot Locker, Champion, McDonalds,
     Popeyes, Wingstop, Kia, Cricket Wireless, MetroPCS, T-Mobile
     prepaid, Allstate, State Farm, and any brand with deep ties to
     basketball / hip-hop / streetwear / soccer / Latin music culture.
@@ -14485,7 +14534,8 @@ scores. Be specific and concrete.
 ═══════════════════════════════════════════════════════════════════
 WORKED PERSONA TEMPLATE (use as STRUCTURAL guide for ANY subject)
 ═══════════════════════════════════════════════════════════════════
-Below is a complete worked persona for a Nike-style athletic-brand subject.
+Below is a complete worked persona for a high-awareness consumer brand
+(athletic, QSR, retail, telecom, streaming, etc.) —
 It's the SHAPE you should aim for — comprehensive sub-segments with weights,
 cultural anchors organized by domain, explicit named anti-fit, cross-shop
 network. Adapt every field to YOUR subject. If your subject is Disney,
@@ -14898,12 +14948,8 @@ def _build_canonical_baseline_lookup() -> dict:
 
 MODEL_GUIDANCE = 'gpt-4.1-nano'
 
-# Classification batch count is set below; MODEL_CLASSIFY is defined with other model tiers (supports BG_MODEL_CLASSIFY).
-
-# Maximum items per item-classification call. The agent has to think about
-# each item, so smaller batches keep response quality high.
-_CLASSIFY_BATCH = max(5, min(40, int(os.environ.get('BG_CLASSIFY_BATCH', '30') or 30)))
-_CLASSIFY_TIMEOUT_SEC = max(30, min(300, int(os.environ.get('BG_CLASSIFY_TIMEOUT_SEC', '120') or 120)))
+# Classification: MODEL_CLASSIFY, _CLASSIFY_BATCH, _CLASSIFY_TIMEOUT_SEC are set
+# with the model tiers (BG_PROFILE_QUALITY, BG_MODEL_CLASSIFY, BG_CLASSIFY_*).
 
 
 def _run_item_classification_agent(items: list[str]) -> dict[str, dict]:
@@ -15030,7 +15076,7 @@ def _run_item_classification_parallel(unique_items: list[str],
     items = sorted({str(x).strip() for x in unique_items if str(x).strip()})
     batches = [items[i:i + _CLASSIFY_BATCH] for i in range(0, len(items), _CLASSIFY_BATCH)]
     print(f"🔎 Item classification: {len(items)} unique items in {len(batches)} batches "
-          f"of ≤{_CLASSIFY_BATCH} ({MODEL_CLASSIFY}) …")
+          f"of ≤{_CLASSIFY_BATCH} ({MODEL_CLASSIFY}), BG_PROFILE_QUALITY={_PROFILE_QUALITY_TIER} …")
     t0 = _time.perf_counter()
     out: dict[str, dict] = {}
     with _futures.ThreadPoolExecutor(max_workers=min(max_workers, max(1, len(batches)))) as pool:
