@@ -8737,6 +8737,295 @@ def _build_profile_summary(df):
     return '\n'.join(summary_parts) if summary_parts else 'No demographic data available'
 
 
+def _android_share_from_technology_rows(df):
+    """Rough Android vs Apple mobile skew from TECHNOLOGY/DEVICE (or TECHNOLOGY BRAND) BP.
+
+    Returns None if insufficient signal (>0 BP on fewer than both sides combined).
+    """
+    if df is None or df.empty:
+        return None
+    bp_col = 'Brand Penetration (Row)'
+    if bp_col not in df.columns:
+        return None
+    tech_masks = df['Column'].astype(str).str.upper().isin(
+        {'TECHNOLOGY/DEVICE', 'TECHNOLOGY BRAND', 'DEVICE'})
+    if not tech_masks.any():
+        return None
+    android_bp = 0.0
+    apple_bp = 0.0
+    for _, row in df[tech_masks].iterrows():
+        val = str(row.get('Value', '') or '').upper()
+        try:
+            bp = float(str(row.get(bp_col, 0)).replace('%', '').replace(',', ''))
+        except (ValueError, TypeError):
+            bp = 0.0
+        if bp <= 0:
+            continue
+        if 'ANDROID' in val or 'GOOGLE PIXEL' in val:
+            android_bp += bp
+        elif ('IPHONE' in val or ' IOS' in f' {val}' or val.endswith(' IOS')
+              or ('APPLE WATCH' in val) or (val.startswith('APPLE ') and 'TV' not in val
+              and 'MUSIC' not in val and 'PODCAST' not in val)):
+            apple_bp += bp
+    denom = android_bp + apple_bp
+    if denom < 8.0:
+        return None
+    return android_bp / denom
+
+
+def _recalc_cat_cs_after_raw_updates(df, category, bp_col, cs_col, raw_col):
+    """Recompute Category Share within one behavioral ``category`` from raw counts."""
+    cm = df['Column'].astype(str).str.upper().str.strip() == category.upper()
+    if not cm.any():
+        return
+    total_raw = 0
+    for cidx in df[cm].index:
+        try:
+            total_raw += int(float(str(df.at[cidx, raw_col]).replace(',', '').strip()))
+        except (ValueError, TypeError):
+            pass
+    if total_raw <= 0:
+        return
+    for cidx in df[cm].index:
+        try:
+            raw_i = int(float(str(df.at[cidx, raw_col]).replace(',', '').strip()))
+            new_cs = round((raw_i / total_raw) * 100.0, 4)
+            cur = df.at[cidx, cs_col]
+            if isinstance(cur, str) and '%' in cur:
+                df.at[cidx, cs_col] = f'{new_cs:.4f}%'
+            else:
+                df.at[cidx, cs_col] = new_cs
+        except (ValueError, TypeError):
+            pass
+
+
+def apply_deterministic_us_panel_realism(df, sample_raw):
+    """Non-AI tweaks after GPT passes harmonize noisy panel artifacts.
+
+    - SEARCH ENGINE*: cap legacy portal engines vs 2026 US digital reality; bump AI wrappers.
+    - APP/PLATFORM: if TECHNOLOGY/DEVICE skews Android, Google Play must not trail App Store BP.
+    - Defunct/overseas-heavy brands: Smile Direct Club, Daily Mail–class UK tabloid caps.
+    """
+    if df is None or df.empty:
+        return df
+    bp_col = 'Brand Penetration (Row)'
+    cs_col = 'Category Share' if 'Category Share' in df.columns else 'Percentage'
+    raw_col = 'Original Raw Numbers'
+    proj_col = 'US Gen Pop Projection'
+    if bp_col not in df.columns or raw_col not in df.columns:
+        return df
+    try:
+        n = max(1, int(sample_raw))
+    except (ValueError, TypeError):
+        n = 1
+    DEMO_META = {'AGE', 'GENDER', 'ETHNICITY', 'INCOME', 'EDUCATION', 'RELATIONSHIP',
+                 'SEXUAL_ORIENTATION', 'PARENTAL_STATUS', 'OCCUPATION', 'LOCATION',
+                 'INPUT_METADATA', 'BRAND INPUT', 'SAMPLE SIZE', 'AVID FAN', 'CASUAL FAN',
+                 'BRAND CATEGORY'}
+    MULT = 329_900_000 / 10_000_000
+
+    def _set_bp_raw_proj(idx, new_bp):
+        new_bp = max(0.0, float(new_bp))
+        new_raw = max(1, int(round(new_bp / 100.0 * n)))
+        cur_bp = df.at[idx, bp_col]
+        if isinstance(cur_bp, str) and '%' in cur_bp:
+            df.at[idx, bp_col] = f'{new_bp:.4f}%'
+        elif isinstance(cur_bp, str):
+            df.at[idx, bp_col] = f'{new_bp:.4f}'
+        else:
+            df.at[idx, bp_col] = new_bp
+        df.at[idx, raw_col] = str(new_raw)
+        if proj_col in df.columns:
+            df.at[idx, proj_col] = str(int(round(new_raw * MULT)))
+
+    tweaks = 0
+
+    # --- SEARCH ENGINE / AI: legacy engines down; AI assistants up ---
+    search_cats = {'SEARCH ENGINE/AI', 'SEARCH ENGINE'}
+    for cat_upper in search_cats:
+        cm = df['Column'].astype(str).str.upper().str.strip() == cat_upper
+        if not cm.any():
+            continue
+        indices = df[cm].index.tolist()
+        by_val = {}
+        for idx in indices:
+            vu = str(df.at[idx, 'Value']).strip().upper().replace('\u00A0', ' ')
+            vu = ' '.join(vu.split())
+            by_val.setdefault(vu, []).append(idx)
+        ai_keys_need_boost = frozenset({
+            'CHATGPT', 'CHAT GPT', 'OPENAI CHATGPT', 'COPILOT', 'MICROSOFT COPILOT',
+            'GEMINI', 'GOOGLE GEMINI', 'PERPLEXITY', 'CLAUDE', 'ANTHROPIC CLAUDE',
+            'META AI', 'GROK'})
+        google_bp = 0.0
+        google_idx_first = None
+        for vk, idl in by_val.items():
+            if vk in ('GOOGLE', 'GOOGLE SEARCH'):
+                try:
+                    b0 = float(str(df.at[idl[0], bp_col]).replace('%', '').replace(',', ''))
+                except (ValueError, TypeError):
+                    b0 = 0.0
+                if google_idx_first is None or b0 > google_bp:
+                    google_bp = b0
+                    google_idx_first = idl[0]
+        pooled = 0.0
+        ref = max(google_bp, 45.0) if google_idx_first else 55.0
+
+        def _legacy_engine_cap_bp(vu: str):
+            vu = (vu or '').strip().upper()
+            if vu.startswith('BING'):
+                return min(22.0, ref * 0.28)
+            if vu.startswith('YAHOO') and 'FINANCE' not in vu:
+                return min(14.5, ref * 0.20)
+            if vu.startswith('MSN'):
+                return 12.5
+            vn_compact = ''.join(ch for ch in vu if ch.isalnum())
+            if vn_compact == 'DUCKDUCKGO' or vu.startswith('DUCK DUCK GO'):
+                # Trim only runaway outliers; privacy cohorts can still index high.
+                return min(28.5, ref * 0.35)
+            if vu.startswith('AOL') or vu.startswith('ASK'):
+                return min(13.5, ref * 0.20)
+            return None
+
+        for idx in indices:
+            vu = str(df.at[idx, 'Value']).strip().upper()
+            cap = _legacy_engine_cap_bp(vu)
+            if cap is None:
+                continue
+            try:
+                cur = float(str(df.at[idx, bp_col]).replace('%', '').replace(',', ''))
+            except (ValueError, TypeError):
+                cur = 0.0
+            if cur > cap:
+                pooled += cur - cap
+                _set_bp_raw_proj(idx, cap)
+                tweaks += 1
+        if pooled <= 0.01:
+            _recalc_cat_cs_after_raw_updates(df, cat_upper, bp_col, cs_col, raw_col)
+            continue
+        boost_targets = []
+        for bk in ai_keys_need_boost:
+            for idx in by_val.get(bk, []):
+                boost_targets.append(idx)
+        # Also fuzzy: values containing substring
+        for idx in indices:
+            vu = str(df.at[idx, 'Value']).strip().upper()
+            if any(tok in vu for tok in ('CHATGPT', 'CHAT GPT', 'COPILOT', 'GEMINI',
+                                         'PERPLEXITY', 'CLAUDE')):
+                if idx not in boost_targets:
+                    boost_targets.append(idx)
+        boost_targets = list(dict.fromkeys(boost_targets))
+        if not boost_targets:
+            _recalc_cat_cs_after_raw_updates(df, cat_upper, bp_col, cs_col, raw_col)
+            continue
+        weights = []
+        for idx in boost_targets:
+            try:
+                weights.append(max(1.0, float(str(df.at[idx, bp_col]).replace('%', '').replace(',', ''))))
+            except (ValueError, TypeError):
+                weights.append(1.0)
+        wsum = sum(weights)
+        for idx, w in zip(boost_targets, weights):
+            share = (w / wsum) if wsum > 0 else (1.0 / len(boost_targets))
+            bump = pooled * share
+            try:
+                cur = float(str(df.at[idx, bp_col]).replace('%', '').replace(',', ''))
+            except (ValueError, TypeError):
+                cur = 0.0
+            _set_bp_raw_proj(idx, min(94.5, cur + bump))
+            tweaks += 1
+        _recalc_cat_cs_after_raw_updates(df, cat_upper, bp_col, cs_col, raw_col)
+
+    # --- APP / PLATFORM vs Android skew ---
+    andr_frac = _android_share_from_technology_rows(df)
+    if andr_frac is not None and andr_frac >= 0.53:
+        cm_app = df['Column'].astype(str).str.upper().str.strip() == 'APP/PLATFORM USAGE'
+        if cm_app.any():
+            gp_idx = ap_idx = None
+            gp_bp = ap_bp = 0.0
+            for idx in df[cm_app].index:
+                vu = str(df.at[idx, 'Value']).strip().upper()
+                if 'GOOGLE PLAY' in vu:
+                    gp_idx = idx
+                    try:
+                        gp_bp = float(str(df.at[idx, bp_col]).replace('%', '').replace(',', ''))
+                    except (ValueError, TypeError):
+                        gp_bp = 0.0
+                if vu in {'APPLE APP STORE', 'APP STORE'} or vu.startswith('APPLE APP STORE'):
+                    ap_idx = idx
+                    try:
+                        ap_bp = float(str(df.at[idx, bp_col]).replace('%', '').replace(',', ''))
+                    except (ValueError, TypeError):
+                        ap_bp = 0.0
+            if gp_idx is not None and ap_idx is not None and gp_bp + 1e-6 < ap_bp:
+                target_gp = float(min(93.5, max(ap_bp * 1.04, gp_bp + 0.035 * max(ap_bp, 1))))
+                shave = float(max(1.5, target_gp - gp_bp))
+                new_ap = max(5.5, ap_bp - 0.45 * shave)
+                new_gp = gp_bp + (ap_bp - new_ap)
+                _set_bp_raw_proj(ap_idx, new_ap)
+                _set_bp_raw_proj(gp_idx, new_gp)
+                tweaks += 2
+                _recalc_cat_cs_after_raw_updates(df, 'APP/PLATFORM USAGE', bp_col, cs_col, raw_col)
+
+    # --- Known bad panels: defunct brand + overseas tabloid ---
+    def _cap_named_brands(value_substrings, cats, bp_max):
+        nonlocal tweaks
+        cols_touched = set()
+        for subs in value_substrings:
+            for idx, row in df.iterrows():
+                col = str(row.get('Column', '')).strip().upper()
+                if col in DEMO_META:
+                    continue
+                if cats is not None and col not in cats:
+                    continue
+                val = str(row.get('Value', '')).strip().upper()
+                if subs not in val:
+                    continue
+                try:
+                    cur = float(str(row.get(bp_col, 0)).replace('%', '').replace(',', ''))
+                except (ValueError, TypeError):
+                    cur = 0.0
+                if cur <= bp_max:
+                    continue
+                _set_bp_raw_proj(idx, bp_max)
+                cols_touched.add(col)
+                tweaks += 1
+        for _ct in cols_touched:
+            _recalc_cat_cs_after_raw_updates(df, _ct, bp_col, cs_col, raw_col)
+
+    _cap_named_brands(
+        ('SMILE DIRECT',),
+        frozenset({
+            'MOST PURCHASED BRANDS',
+            'HEALTH AND WELLNESS', 'HEALTH/WELLNESS', 'BEAUTY/WELLNESS',
+            'HEALTH & WELLNESS',}),
+        10.0)
+    uk_tabs = frozenset({
+        'DAILY MAIL', 'MAIL ONLINE', 'THE SUN', 'THE MIRROR',
+        'DAILY MIRROR', 'METRO.UK'})
+    cm_media = ~(df['Column'].astype(str).str.upper().str.strip().isin(DEMO_META))
+    uk_cats_touch = set()
+    for idx, row in df[cm_media].iterrows():
+        val = str(row.get('Value', '')).strip().upper()
+        if val not in uk_tabs:
+            continue
+        try:
+            cur = float(str(row.get(bp_col, 0)).replace('%', '').replace(',', ''))
+        except (ValueError, TypeError):
+            cur = 0.0
+        if cur <= 9.5:
+            continue
+        _set_bp_raw_proj(idx, min(cur, max(9.5, cur * 0.55)))
+        tweaks += 1
+        uk_cats_touch.add(str(row.get('Column', '')).strip().upper())
+    for _cat in uk_cats_touch:
+        _recalc_cat_cs_after_raw_updates(df, _cat, bp_col, cs_col, raw_col)
+
+    if tweaks:
+        print(f"   📐 Deterministic US panel realism: {tweaks} penetration/raw adjustments")
+
+    return df
+
+
 def ai_final_gut_check(df, brand_category, project_name, brands):
     """Comprehensive final review of the entire profile output.
 
@@ -9746,7 +10035,9 @@ def ai_final_gut_check(df, brand_category, project_name, brands):
                 f"   unless profile evidence supports the legacy dominance.\n"
                 f"8) **MOST PURCHASED BRANDS coherence — conditional:** For **mass CPG/grocery/big-box replenishment** profiles, "
                 f"when many aisle / household snacks / OTC-style leaders spike, **elevate INSTACART + Walmart/Target pickup & grocery proxy rows + grocery DoorDash/Uber stacks** alongside them; lacking that grocery spine ⇒ LOWER only *that cluster*. "
-                f"Skip this rule entirely for prestige **Sephora-/luxury-skin**/makeup personas where leadership is prestige brands + flagship DTC without grocery-cart behavior.\n\n"
+                f"Skip this rule entirely for prestige **Sephora-/luxury-skin**/makeup personas where leadership is prestige brands + flagship DTC without grocery-cart behavior.\n"
+                f"9) **MOST PURCHASED BRANDS — CPG restraint:** Avoid many unrelated national CPG/snack/OTC aisles-heavy leaders "
+                f"simultaneously above ~22% BP unless a plausible **grocery-cart spine** (Instacart, Walmart/Target grocery pickup/order-ahead rows, grocery DoorDash/Uber stacks) is also strong.\n\n"
                 f"For EACH row, decide KEEP / LOWER / RAISE.\n"
                 f"Only include LOWER/RAISE rows in adjustments.\n"
                 f"Return ONLY valid JSON:\n"
@@ -9825,8 +10116,10 @@ def ai_final_gut_check(df, brand_category, project_name, brands):
                 f"2) Keep mainstream, broad-use apps plausibly high when evidence supports it.\n"
                 f"3) Niche/utility/finance/professional apps should not outrank broad youth-digital platforms "
                 f"without explicit profile evidence.\n"
-                f"4) Avoid platform inflation where many unrelated apps are all top-tier.\n\n"
-                f"5) For young entertainment/social personas, finance/credit and logistics/workflow tools "
+                f"4) Avoid platform inflation where many unrelated apps are all top-tier.\n"
+                f"5) PLATFORM vs DEVICE: When TECHNOLOGY/DEVICE clearly skews **Android** vs Apple mobile OS/iPhone, "
+                f"**Google Play** generally should **not trail Apple App Store** BP by a wide margin unless this profile carries explicit Apple-only cohort evidence.\n\n"
+                f"6) For young entertainment/social personas, finance/credit and logistics/workflow tools "
                 f"(e.g., Credit Karma, USPS/FedEx, Slack, Grammarly, Craigslist) should generally remain "
                 f"below core consumer/digital-life utilities unless explicit evidence supports dominance.\n\n"
                 f"For EACH row, decide KEEP / LOWER / RAISE.\n"
@@ -9909,12 +10202,12 @@ def ai_final_gut_check(df, brand_category, project_name, brands):
                 f"For young profiles, TikTok and YouTube should generally not sit below Instagram without strong evidence.\n"
                 f"3) SOCIAL MEDIA: niche platforms (Patreon, Discord, Letterboxd, Tumblr, Bluesky) should not outrank "
                 f"mainstream mass-reach platforms unless explicit evidence strongly supports it.\n"
-                f"4) SEARCH ENGINE/AI: **Google / Google Search MUST ordinarily be #1 by BP** (~78–92% plausible annual digital-touch cohort share for BROAD US-conditioned audiences vs year window). "
-                f"Raise Google if materially below Bing/ChatGPT/Perplexity without explicit persona evidence "
-                f"(narrow privacy researcher cohort, deliberate Yahoo-centric study, banned-device edge cases).\n"
-                f"5) SEARCH ENGINE secondary engines stay realistic: Bing is mainstream #2 distance; Yahoo Search tertiary older skew. "
-                f"Standalone AI wrappers (ChatGPT/Copilot/etc.) HOT but should not CLEARLY eclipse Google BP for mass-market personas — LOWER them if they wrongly lead.\n"
-                f"6) Avoid blanket boosts/cuts; make row-level corrections with plausible absolute targets.\n\n"
+                f"4) SEARCH ENGINE/AI (**2026 US-conditioned digital realism** — still Google-centric): **Google must stay #1** "
+                f"for almost all BROAD personas, BUT **standalone AI wrappers** "
+                f"(ChatGPT, Copilot, Gemini, Claude, Meta AI, Perplexity/Grok-class assistants) ordinarily **outrank Bing/Yahoo/MSN‑tier legacy portals**. "
+                f"\nCeil Bing/Yahoo/MSN when they read like AI co‑leaders vs major assistants; lift at least two major AI assistants if they look secondary "
+                f"vs Bing/Yahoo without a narrow deliberate cohort rationale (privacy researchers, captive enterprise defaults, deliberate Yahoo portals).\n"
+                f"5) Avoid blanket boosts/cuts; make row-level corrections with plausible absolute targets.\n\n"
                 f"For EACH row, decide KEEP / LOWER / RAISE.\n"
                 f"Only include LOWER/RAISE rows in adjustments.\n"
                 f"Return ONLY valid JSON:\n"
@@ -10713,6 +11006,8 @@ def ai_final_gut_check(df, brand_category, project_name, brands):
                     except (ValueError, TypeError):
                         pass
         print(f"   🔗 Cross-category harmonization: {harmonized} values aligned")
+
+    df = apply_deterministic_us_panel_realism(df, sample_raw)
 
     print(f"🔍 Final gut check for {subject_clean}: "
           f"{total_adjustments + pass_e_adjustments} total adjustments "
@@ -12555,45 +12850,24 @@ def perform_full_universe_scan(conn, brands, start_date, end_date, purchasers_on
             print("💾 Caching enabled - subsequent runs with same parameters will be much faster!")
             
             print("🚀 Running on ClickHouse for universe count")
-            
-            # Add query optimization hints for faster execution and caching
-            cur.execute("ALTER SESSION SET QUERY_TAG = 'UNIVERSE_COUNT_OPTIMIZED'")
-            cur.execute("ALTER SESSION SET USE_CACHED_RESULT = TRUE")  # Enable caching for speed
-            cur.execute("ALTER SESSION SET QUERY_RESULT_FORMAT = 'JSON'")  # Optimize result format
-            cur.execute("ALTER SESSION SET CLIENT_SESSION_KEEP_ALIVE = TRUE")  # Keep session alive for caching
-            
-            # Use deterministic query for better caching
+
+            # Single pass over clickstream: same semantics as the old two-query plan.
+            # - Distinct UIDs with ≥1 matching row (GROUP BY ... HAVING COUNT(*) >= 1 was redundant).
+            # - Row count = total qualifying visits (matches previous COUNT(*)).
+            # uniqExact(UID) is ClickHouse's exact distinct count; connector targets CH only here.
             universe_result = cur.execute(f"""
-                SELECT COUNT(DISTINCT UID) as total_universe
-                FROM (
-                    SELECT UID, COUNT(*) as visit_count
-                    FROM PROCESSEDCLICKSTREAM.PUBLIC.CLICKSTREAM_FINAL
-                    WHERE DELIVERED >= '{start_date}'::DATE 
-                      AND DELIVERED <= '{end_date}'::DATE
-                      AND ({brand_filter})
-                      AND COMMON_NAME IS NOT NULL
-                      AND COMMON_NAME != ''
-                      AND COMMON_NAME != ' '
-                    GROUP BY UID
-                    HAVING COUNT(*) >= 1
-                )
-            """).fetchone()
-            
-            total_universe = universe_result[0] if universe_result else 0
-            
-            # Also get total visits for context
-            visits_result = cur.execute(f"""
-                SELECT COUNT(*) as total_visits
+                SELECT uniqExact(UID) AS total_universe, count() AS total_visits
                 FROM PROCESSEDCLICKSTREAM.PUBLIC.CLICKSTREAM_FINAL
-                WHERE DELIVERED >= '{start_date}'::DATE 
+                WHERE DELIVERED >= '{start_date}'::DATE
                   AND DELIVERED <= '{end_date}'::DATE
                   AND ({brand_filter})
                   AND COMMON_NAME IS NOT NULL
                   AND COMMON_NAME != ''
                   AND COMMON_NAME != ' '
             """).fetchone()
-            
-            total_visits = visits_result[0] if visits_result else 0
+
+            total_universe = int(universe_result[0] or 0) if universe_result else 0
+            total_visits = int(universe_result[1] or 0) if universe_result else 0
             
             print(f"🌍 FULL UNIVERSE RESULTS:")
             print(f"   📊 Total Unique Users: {total_universe:,}")
@@ -25508,20 +25782,6 @@ def enforce_search_engine_ai_google_chatgpt_minimums(df: pd.DataFrame) -> pd.Dat
             changed = True
             if not SILENCE_VERBOSE_OUTPUT:
                 print(f"📈 SEARCH ENGINE/AI: ChatGPT Brand Penetration (Row) {pct:.2f}% → {target:.2f}% (min 25%)")
-
-    # Ensure Yahoo, Copilot, Bing, Duck Duck Go, Perplexity, MSN, Quora, Gemini are always over 38% (never exactly 38)
-    SEARCH_ENGINE_AI_OVER_38 = {'YAHOO', 'COPILOT', 'BING', 'DUCK DUCK GO', 'DUCKDUCKGO', 'PERPLEXITY', 'MSN', 'QUORA', 'GEMINI'}
-    for idx in cat_indices:
-        val_upper = str(df.at[idx, 'Value']).strip().upper()
-        val_no_space = val_upper.replace(' ', '')
-        if val_upper in SEARCH_ENGINE_AI_OVER_38 or val_no_space in {s.replace(' ', '') for s in SEARCH_ENGINE_AI_OVER_38}:
-            pct = get_penetration(idx)
-            if pct <= 38.0:
-                target = round(random.uniform(38.01, 41.99), 4)
-                df.at[idx, bp_col] = target
-                changed = True
-                if not SILENCE_VERBOSE_OUTPUT:
-                    print(f"📈 SEARCH ENGINE/AI: {val_upper} Brand Penetration (Row) {pct:.2f}% → {target:.2f}% (must be >38%)")
 
     if not changed:
         return df
