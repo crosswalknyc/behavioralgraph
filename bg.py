@@ -16105,7 +16105,7 @@ WHAT TO CHECK
      pulling lower-tier items down.
   5) DIGITAL ENGAGEMENT CREDIBILITY vs FAME HALO — does a top-ranked item plausibly have **routine DIGITAL footprints** among THIS persona members (authenticated apps/sites/ordering flows—not offline-only prestige awareness)? Override down if prestige/niche/geographic outliers beat mass digital utilities unjustified.
 
-  6) PERSONA-FIT SANITY — does top-10 reflect BOTH persona specificity AND plausible national digital commons (search/social/carrier/banking) where applicable?
+  6) PERSONA-FIT SANITY — across the FULL reviewed set (TOP {top_n}), does ranking reflect BOTH persona specificity AND plausible national digital commons (search/social/carrier/banking) where applicable?
 
 ═══════════════════════════════════════════════════════════════════
 OUTPUT FORMAT
