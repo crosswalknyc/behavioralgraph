@@ -14444,11 +14444,74 @@ interesting one?"
 ═══════════════════════════════════════════════════════════════════
 SUB-SEGMENTS, CULTURAL ANCHORS, ANTI-FIT, CROSS-SHOP NETWORK — REQUIRED:
 ═══════════════════════════════════════════════════════════════════
-The downstream scoring agent uses these structured fields directly to reason
-about whether THIS audience would engage with each item it scores. Generic or
-vague entries here cause the scoring agent to default to neutral on most items
-(which produces a confabulated 27% for everything obscure). Be specific and
-concrete:
+The downstream Pass 1 Category Rule Agent and Pass 2 Scoring Agents use these
+structured fields directly to write the per-category rubric and score items
+against it. Generic or vague entries here cascade into bad rubrics and bad
+scores. Be specific and concrete.
+
+═══════════════════════════════════════════════════════════════════
+WORKED PERSONA TEMPLATE (use as STRUCTURAL guide for ANY subject)
+═══════════════════════════════════════════════════════════════════
+Below is a complete worked persona for a Nike-style athletic-brand subject.
+It's the SHAPE you should aim for — comprehensive sub-segments with weights,
+cultural anchors organized by domain, explicit named anti-fit, cross-shop
+network. Adapt every field to YOUR subject. If your subject is Disney,
+Chase Bank, McDonalds, or anything else, the SHAPE is the same — only the
+specific items and weights change.
+
+  DEMOGRAPHIC PROFILE
+    Age: bracketed distribution; note skew vs gen-pop
+    Gender: M/F split; note any growth segment
+    Ethnicity: list each major group with multiplier vs gen-pop
+              (e.g., "~22% Black (1.6x gen-pop)", "~22% Hispanic (1.3x)")
+    Income: median band + tail; note any premium / value tier split
+    Education: dominant level
+    Geography: urban/suburban/rural skew, named over-indexing DMAs
+    Family: parent % if relevant for the category
+
+  PERSONA SUB-SEGMENTS (audience is NOT monolithic — score with these in mind)
+    1. <Sub-segment 1 name> (~weight_pct%):
+         <age band>, <key cultural identity>, <2-3 defining apps/brands>,
+         <2-3 cross-shops>, <social media skew>
+    2. <Sub-segment 2 name> (~weight_pct%):
+         ...
+    (3-6 sub-segments, weights sum to ~100; mass-brand core ≥ 50%)
+
+  CULTURAL ANCHORS (high-affinity defining markers)
+    Sports:    <specific teams/leagues/events>
+    Music:     <specific artists/genres/labels>
+    Athletes:  <specific athletes by name>
+    Media:     <specific outlets/publications/podcasts>
+    Apps:      <specific apps>
+    Social:    <ranked social platforms most-to-least used>
+    Shopping:  <specific retailers>
+    Dining:    <specific restaurant brands>
+    Drink:     <specific beverage brands>
+    Tech:      <specific tech brands/devices, with iOS/Android skew>
+    Fitness:   <specific gyms/fitness brands>
+    Streaming: <specific streaming services>
+    Travel:    <specific airlines/hotels/destinations>
+
+  ANTI-FIT (low-affinity guardrails — should score 0-25%)
+    Group items by ANTI-FIT CATEGORY and name SPECIFIC items in each:
+      Ultra-luxury dining: Bar Masa, Per Se, Atelier Crenn, EMP, Le Bernardin
+      Luxury fashion: Hermès, Chanel, Bottega Veneta, Brunello Cucinelli
+      Rural Americana: Tractor Supply, Bass Pro, John Deere, NASCAR, Boot Barn
+      Older / boomer media: Yahoo News, Pluto TV, Roku Channel, Family Feud
+      Foreign-only / niche unknowns: <specific named items>
+
+  CROSS-SHOP NETWORK
+    Apparel: <brands the audience buys alongside the subject>
+    Retail: <retailers used alongside>
+    Negative overlap: <brands that SEEM related but don't meaningfully overlap>
+
+This template generalizes — it works for ANY subject. The downstream agents
+use these structured fields exhaustively, so quality here determines the
+quality of the whole pipeline. Generic = bad. Specific & named = good.
+
+═══════════════════════════════════════════════════════════════════
+SPECIFIC WRITING RULES
+═══════════════════════════════════════════════════════════════════
 
   • subsegments: 3-6 distinct slices of this audience with weight_pct summing
     to ~100. Each subsegment must have a unique cultural identity. CRITICAL:
@@ -14963,10 +15026,37 @@ def _run_item_classification_parallel(unique_items: list[str],
 
 def _run_item_guidance_agent(category: str, item_names: list[str],
                               persona_doc: dict, subject: str) -> dict:
-    """Return {"expected_high": [...], "expected_low": [...], "summary": "..."}
-    grounded in the actual items for this category.
+    """v16 — Category Rule Agent (Pass 1 of the three-pass scoring flow).
 
-    Uses gpt-4.1-nano for speed/cost — this is a classification task.
+    Reads the persona doc + the FULL list of items in this category, then
+    produces a category-specific scoring rubric that all chunked scoring
+    agents (Pass 2) consume. This is what gives every chunk a SHARED tier
+    rubric so they don't drift apart — the root fix for cases like
+    "Six Flags Darien Lake at #1 in AMUSEMENT PARKS" (where chunk 1 had no
+    awareness of where chunk 2 placed Disney World).
+
+    Returns a dict with:
+        tier_rules            ordered list of {tier_name, bp_range, criteria,
+                                                example_items[]}
+        category_ceiling_pct  hard upper bound for any single item
+        anti_fit_in_category  named items the persona explicitly avoids in
+                              this category (force-low)
+        predicted_top_5       sanity reference: which items SHOULD lead this
+                              category for this persona (validator uses it)
+        summary               1-2 sentences on how this persona behaves in
+                              this category
+        expected_high/low     LEGACY: kept for backward compatibility with
+                              callers that still read these fields. Derived
+                              from tier_rules (top tiers) and anti_fit.
+
+    Backward compat: existing scoring-agent code that reads expected_high /
+    expected_low still works unchanged. New scoring code (Pass 2 rewrite)
+    additionally consumes tier_rules / anti_fit_in_category /
+    category_ceiling_pct.
+
+    Model: upgraded from gpt-4.1-nano (v14) to gpt-4o because this rubric
+    drives every BP in the category. The cost delta (~$0.02 per category)
+    is trivial vs. the accuracy gain.
     """
     import json as _json
     client = _get_openai_client()
@@ -14977,12 +15067,51 @@ def _run_item_guidance_agent(category: str, item_names: list[str],
     digital_identity = persona_doc.get('digital_identity', '')
     demo_snapshot = {k: v for k, v in persona_doc.get('demographics', {}).items()
                      if k in ('AGE', 'GENDER', 'ETHNICITY', 'INCOME')}
+    subsegments = persona_doc.get('subsegments') or []
+    cultural_anchors = persona_doc.get('cultural_anchors') or {}
+    anti_fit_explicit = persona_doc.get('anti_fit_explicit') or {}
+    cross_shop_network = persona_doc.get('cross_shop_network') or {}
+
+    def _fmt_subsegments() -> str:
+        if not subsegments:
+            return '(no subsegments)'
+        out = []
+        for s in subsegments[:6]:
+            if not isinstance(s, dict):
+                continue
+            name = s.get('name', '?')
+            wt = s.get('weight_pct', '?')
+            band = s.get('age_band', '')
+            markers = s.get('cultural_markers') or []
+            out.append(f"  • {name} (~{wt}%, age {band}): "
+                       + ', '.join(str(m) for m in markers[:6]))
+        return '\n'.join(out) if out else '(no subsegments)'
+
+    def _fmt_dict_of_lists(d: dict, max_items: int = 10) -> str:
+        if not d:
+            return '(none)'
+        rows = []
+        for k, v in list(d.items())[:14]:
+            if isinstance(v, list):
+                rows.append(f"  {k}: {', '.join(str(x) for x in v[:max_items])}")
+            elif v:
+                rows.append(f"  {k}: {v}")
+        return '\n'.join(rows) if rows else '(none)'
 
     items_block = '\n'.join(f"  - {name}" for name in item_names)
 
-    prompt = f"""You are classifying items in the **{category}** category for a behavioral panel profile of **{subject}**.
+    prompt = f"""You are a senior consumer-research analyst writing a SCORING RUBRIC for the **{category}** category, for a behavioral panel profile of **{subject}**.
 
-PERSONA SUMMARY:
+The rubric you write here will be used by every chunked scoring agent in this category. They will all rank items against your tiers. So your rubric must be:
+  • SPECIFIC to this persona (no generic "famous brands rank high")
+  • COMPLETE (cover every item type that appears in the item list below)
+  • REASONED (every tier's BP range must reflect realistic engagement for THIS audience, not generic gen-pop)
+  • RANK-ORDERED (tiers go from highest BP to lowest — the order is the rubric)
+
+═══════════════════════════════════════════════════════════════════
+PERSONA — the audience you are writing the rubric for
+═══════════════════════════════════════════════════════════════════
+SUMMARY:
 {persona_summary}
 
 DIGITAL IDENTITY:
@@ -14991,56 +15120,187 @@ DIGITAL IDENTITY:
 KEY DEMOGRAPHICS:
 {_json.dumps(demo_snapshot, indent=2)}
 
-Below are the ACTUAL items in this category. Your job is to classify which ones this audience would engage with at HIGH digital BP and which ones are IRRELEVANT despite being famous.
+SUB-SEGMENTS (audience is not monolithic — your rubric must reflect this mix):
+{_fmt_subsegments()}
 
-ITEMS IN THIS CATEGORY:
+CULTURAL ANCHORS (what the audience is genuinely passionate about):
+{_fmt_dict_of_lists(cultural_anchors)}
+
+ANTI-FIT (what the audience does NOT engage with, even if famous):
+{_fmt_dict_of_lists(anti_fit_explicit)}
+
+CROSS-SHOP NETWORK (brands the audience genuinely uses alongside the subject):
+{_fmt_dict_of_lists(cross_shop_network)}
+
+═══════════════════════════════════════════════════════════════════
+ITEMS IN THE {category} CATEGORY (every one will be scored against your rubric)
+═══════════════════════════════════════════════════════════════════
 {items_block}
 
-Return ONLY a JSON object with three fields:
+═══════════════════════════════════════════════════════════════════
+HOW TO BUILD THE RUBRIC
+═══════════════════════════════════════════════════════════════════
+Walk through the items above and group them into 3-7 tiers ordered from
+highest expected BP to lowest. For each tier:
+  • tier_name: short label ("national mega-park", "regional small-metro park",
+    "DTC premium niche", "cultural-anchor / icon", "anti-fit luxury", etc.)
+  • bp_range: numeric range like "55-85" or "0.5-3" — the % of THIS audience
+    that has any digital (web OR app) engagement in a year. Tighten this to
+    realistic actual-engagement %s; do NOT default to year-window-inflated panel
+    readings. Examples of realistic ranges by item archetype:
+      - Cultural anchor / persona-defining brand        → 60-90%
+      - Mass mainstream item used by everyone           → 35-70%
+      - Strong subculture fit / cross-shop brand        → 15-45%
+      - Mild / casual fit                                → 4-18%
+      - Mild anti-fit                                    → 1-5%
+      - Strong / explicit anti-fit                       → 0.05-2%
+      - Hard zero (foreign-only, opposite demo)          → 0.05-1%
+    For INTEREST category specifically: top tier should be 55-85% (a primary
+    identity-defining hobby), generic functional categories like "SOCIAL MEDIA"
+    or "JOB SEARCH" max 25-40% (year-window inflates them; not real interests).
+  • criteria: 1 sentence describing what kind of item belongs in this tier
+    for THIS persona (not generic).
+  • example_items: 3-8 EXACT-spelling item names from the list above that
+    belong in this tier. Spell them exactly as they appear.
+
+THINK IN ARCHETYPES, NOT ITEMS. The rubric must be REUSABLE — any item the
+scoring agent encounters should fit into one of your tiers based on what it
+IS, not whether you happened to name it. So tier_name + criteria together
+must communicate the archetype clearly.
+
+═══════════════════════════════════════════════════════════════════
+ANTI-FIT-IN-CATEGORY
+═══════════════════════════════════════════════════════════════════
+List 5-25 items from the item list above that are SPECIFIC anti-fits for
+this persona in this category — items the audience either has no genuine
+relationship with, or that pure year-window panel exposure would otherwise
+inflate (regional brands outside the audience's geo, foreign-only platforms,
+defunct brands, hyper-niche luxury, etc.). The scoring agent will be told
+"any item in anti_fit_in_category cannot exceed 5% BP" — this is your
+mechanism to enforce specific corrections you know the persona requires.
+
+═══════════════════════════════════════════════════════════════════
+PREDICTED TOP-5
+═══════════════════════════════════════════════════════════════════
+List the 5 EXACT-spelling items from the list above that you predict SHOULD
+end up in the top 5 for this persona, in rank order. The Pass 3 validator
+will compare this against the actual scored top-5 — if they differ
+significantly, the validator will trigger corrections.
+
+═══════════════════════════════════════════════════════════════════
+CATEGORY CEILING
+═══════════════════════════════════════════════════════════════════
+Set category_ceiling_pct — no item in this category should exceed this BP
+(this absorbs year-window inflation). For mass-platform categories
+(STREAMING, SEARCH ENGINE/AI, SOCIAL MEDIA, BANKING, INSURANCE, MEDIA),
+ceiling can go to 88-90. For everything else, choose a realistic ceiling
+based on what the absolute top item should be (e.g., AMUSEMENT PARKS top
+out around 18-25 since most Americans don't visit theme parks every year;
+APPAREL/FOOTWEAR can go higher because everyone wears clothes).
+
+═══════════════════════════════════════════════════════════════════
+OUTPUT FORMAT
+═══════════════════════════════════════════════════════════════════
+Return ONLY a JSON object — no markdown, no commentary:
+
 {{
-  "summary": "<1 sentence: how does this audience behave in {category}?>",
-  "expected_high": ["<ITEM 1>", "<ITEM 2>", ...],
-  "expected_low": ["<ITEM 1>", "<ITEM 2>", ...]
+  "summary": "<1-2 sentence behavioral summary of this audience in {category}>",
+  "category_ceiling_pct": <number 5-92>,
+  "tier_rules": [
+    {{
+      "tier_name": "<short label>",
+      "bp_range": "<lo-hi>",
+      "criteria": "<1 sentence on what archetype belongs in this tier>",
+      "example_items": ["<EXACT item name 1>", "<EXACT item name 2>", ...]
+    }},
+    ...
+  ],
+  "anti_fit_in_category": ["<EXACT item name>", ...],
+  "predicted_top_5": ["<EXACT item 1>", "<EXACT item 2>", "<EXACT item 3>", "<EXACT item 4>", "<EXACT item 5>"],
+  "expected_high": ["<EXACT item 1>", ...],
+  "expected_low": ["<EXACT item 1>", ...]
 }}
 
 RULES:
-- expected_high: Pick 5-15 items from the list above that this SPECIFIC audience would engage with at HIGH digital BP. Only pick items that genuinely fit the persona's digital identity. Spell them EXACTLY as they appear in the list above.
-- expected_low: Pick 10-20 items from the list above that are FAMOUS/WELL-KNOWN but DO NOT fit this audience. These must be scored LOW by the downstream agent regardless of their general popularity. Spell them EXACTLY as they appear in the list above.
-- CRITICAL FOR expected_low: Include ALL of these categories of irrelevant items, not just luxury brands:
-  * CPG / household brands (Purina, Olay, Heinz, Kraft, Tide, Clorox, etc.) — high Gen Pop baseline but low DIGITAL engagement for most audiences
-  * Beauty / cosmetics brands (Clinique, Ulta Beauty, Sephora, Rhode Skin, etc.) — unless the persona is explicitly beauty-focused
-  * Luxury brands irrelevant to this audience (Tiffany, Gucci, Cartier, etc.)
-  * Grocery/drugstore chains (Publix, Albertsons, Kroger, CVS, Walgreens, etc.) — unless the persona is specifically tied to grocery
-  * Cable news / general interest media (NPR, PBS, Architectural Digest, etc.) — unless the persona skews that way
-- Items not in either list are "neutral" — the downstream agent will score them on its own judgment.
-- Do NOT put items in expected_high just because they are popular nationally. Only items that THIS persona would actually click/visit/use online.
-- Do NOT put niche/unknown items in expected_low — only items that are famous enough that a less-informed agent might over-rank them.
-- summary should be 1 concrete sentence about this audience's behavior in this category.
+  • tier_rules must be ORDERED from highest BP to lowest.
+  • Every example_items spelling MUST match the item list above EXACTLY.
+  • expected_high = items from your top 1-2 tiers (5-15 items).
+  • expected_low = anti_fit_in_category UNION items from your bottom tier (10-20 items).
+  • Cover the WHOLE item list across your tiers — no item should be unclassifiable.
+  • If the persona is a MASS BRAND (>10M U.S. customers), keep your tier
+    BP ranges grounded in the median customer (suburban/value-conscious),
+    not the most culturally interesting subsegment.
 """
 
     try:
         resp = _timed_completion(
             client,
-            label=f"item-guidance/{category.upper()}",
-            model=MODEL_GUIDANCE,
+            label=f"category-rule/{category.upper()}",
+            model=MODEL_QUALITY,
             messages=[
                 {'role': 'system', 'content': 'Return ONLY valid JSON. No markdown, no commentary.'},
                 {'role': 'user', 'content': prompt},
             ],
             temperature=0.0,
-            max_tokens=2048,
+            max_tokens=4096,
             response_format={"type": "json_object"},
-            timeout=30,
+            timeout=60,
         )
         text = (resp.choices[0].message.content or '').strip()
         doc = _json.loads(text)
-        if isinstance(doc, dict):
-            eh = [str(x).strip() for x in (doc.get('expected_high') or []) if str(x).strip()]
-            el = [str(x).strip() for x in (doc.get('expected_low') or []) if str(x).strip()]
-            sm = str(doc.get('summary', '') or '').strip()
-            return {'expected_high': eh, 'expected_low': el, 'summary': sm}
+        if not isinstance(doc, dict):
+            return {}
+
+        sm = str(doc.get('summary', '') or '').strip()
+        ceiling = doc.get('category_ceiling_pct')
+        try:
+            ceiling = float(ceiling) if ceiling is not None else None
+        except (TypeError, ValueError):
+            ceiling = None
+
+        tier_rules: list[dict] = []
+        for t in (doc.get('tier_rules') or []):
+            if not isinstance(t, dict):
+                continue
+            tier_rules.append({
+                'tier_name': str(t.get('tier_name', '') or '').strip(),
+                'bp_range': str(t.get('bp_range', '') or '').strip(),
+                'criteria': str(t.get('criteria', '') or '').strip(),
+                'example_items': [str(x).strip() for x in (t.get('example_items') or [])
+                                  if str(x).strip()],
+            })
+
+        anti_fit = [str(x).strip() for x in (doc.get('anti_fit_in_category') or [])
+                    if str(x).strip()]
+        top5 = [str(x).strip() for x in (doc.get('predicted_top_5') or [])
+                if str(x).strip()]
+
+        eh = [str(x).strip() for x in (doc.get('expected_high') or []) if str(x).strip()]
+        el = [str(x).strip() for x in (doc.get('expected_low') or []) if str(x).strip()]
+
+        if not eh and tier_rules:
+            for t in tier_rules[:2]:
+                eh.extend(t.get('example_items', []))
+            seen = set()
+            eh = [x for x in eh if not (x.upper() in seen or seen.add(x.upper()))]
+        if not el and tier_rules:
+            el.extend(anti_fit)
+            if tier_rules:
+                el.extend(tier_rules[-1].get('example_items', []))
+            seen = set()
+            el = [x for x in el if not (x.upper() in seen or seen.add(x.upper()))]
+
+        return {
+            'summary': sm,
+            'tier_rules': tier_rules,
+            'category_ceiling_pct': ceiling,
+            'anti_fit_in_category': anti_fit,
+            'predicted_top_5': top5,
+            'expected_high': eh,
+            'expected_low': el,
+        }
     except Exception as e:
-        print(f"   ⚠️ Item-guidance agent [{category}] failed: {e}")
+        print(f"   ⚠️ Category-rule agent [{category}] failed: {e}")
     return {}
 
 
@@ -15215,11 +15475,35 @@ def _run_single_category_agent(category: str, values: list[str],
     expected_high: list[str] = []
     expected_low: list[str] = []
     guidance_summary = _persona_cat_signal
+    tier_rules: list[dict] = []
+    category_ceiling_pct: float | None = None
+    anti_fit_in_category: list[str] = []
+    predicted_top_5: list[str] = []
     if item_guidance and isinstance(item_guidance, dict):
         if not guidance_summary:
             guidance_summary = str(item_guidance.get('summary', '') or '').strip()
         expected_high = [str(x).strip() for x in (item_guidance.get('expected_high') or []) if str(x).strip()]
         expected_low = [str(x).strip() for x in (item_guidance.get('expected_low') or []) if str(x).strip()]
+        _tr = item_guidance.get('tier_rules') or []
+        if isinstance(_tr, list):
+            for t in _tr:
+                if isinstance(t, dict):
+                    tier_rules.append({
+                        'tier_name': str(t.get('tier_name', '') or '').strip(),
+                        'bp_range': str(t.get('bp_range', '') or '').strip(),
+                        'criteria': str(t.get('criteria', '') or '').strip(),
+                        'example_items': [str(x).strip() for x in (t.get('example_items') or [])
+                                          if str(x).strip()],
+                    })
+        try:
+            _c = item_guidance.get('category_ceiling_pct')
+            category_ceiling_pct = float(_c) if _c is not None else None
+        except (TypeError, ValueError):
+            category_ceiling_pct = None
+        anti_fit_in_category = [str(x).strip() for x in (item_guidance.get('anti_fit_in_category') or [])
+                                if str(x).strip()]
+        predicted_top_5 = [str(x).strip() for x in (item_guidance.get('predicted_top_5') or [])
+                           if str(x).strip()]
     elif isinstance(guidance_raw, dict):
         guidance_summary = str(guidance_raw.get('summary', '') or '').strip()
         expected_high = [str(x).strip() for x in (guidance_raw.get('expected_high') or []) if str(x).strip()]
@@ -15284,6 +15568,43 @@ def _run_single_category_agent(category: str, values: list[str],
         if expected_low else '  (none specified)'
     )
 
+    # ── Format the category rule (Pass 1 output) for inclusion in the prompt ──
+    def _fmt_tier_rules() -> str:
+        if not tier_rules:
+            return '(no category rule available — reason from persona alone)'
+        rows = []
+        for i, t in enumerate(tier_rules, 1):
+            line = f"  [{i}] {t.get('tier_name','')} — BP {t.get('bp_range','')}%"
+            if t.get('criteria'):
+                line += f"\n      criteria: {t['criteria']}"
+            ex = t.get('example_items') or []
+            if ex:
+                line += f"\n      examples: {', '.join(ex[:8])}"
+            rows.append(line)
+        return '\n'.join(rows)
+
+    category_rule_block = f"""═══════════════════════════════════════════════════════════════════
+CATEGORY RULE (Pass 1 — shared rubric for {category})
+═══════════════════════════════════════════════════════════════════
+This rubric was written by the Pass 1 Category Rule Agent based on the
+persona doc and the FULL list of items in this category. Every chunked
+scoring agent in this category sees the SAME rubric, so your output will
+be consistent with parallel chunks.
+
+CATEGORY SUMMARY: {guidance_summary or '(no summary)'}
+
+CATEGORY CEILING: {f'{category_ceiling_pct:.0f}%' if isinstance(category_ceiling_pct, (int, float)) else '(no ceiling specified — use 90% absolute max)'}
+
+TIER RULES (highest BP → lowest):
+{_fmt_tier_rules()}
+
+ANTI-FIT IN CATEGORY (items the persona does NOT engage with — must score ≤ 5%):
+{', '.join(anti_fit_in_category[:30]) if anti_fit_in_category else '(none specified)'}
+
+PREDICTED TOP-5 (sanity reference — these items SHOULD lead the category):
+{', '.join(predicted_top_5[:5]) if predicted_top_5 else '(none specified)'}
+"""
+
     if anchor_mode == 'genpop':
         anchor_rules = """═══════════════════════════════════════════════════════════════════
 THIS IS A GENPOP SCORING RUN
@@ -15294,362 +15615,114 @@ shown in evidence (within ~±2pp). If the panel measurement disagrees with
 gen-pop and you have a reason to trust the panel, you may use that.
 """
     else:
-        # NOTE on what "panel" means:
-        # the panel measurement is built from a CLICKSTREAM that captures BOTH
-        # web URL traffic AND mobile-app activity from the same panelists.
-        # That matters for two opposite biases the agent has to push back on:
-        #   (a) Mass app-driven brands (banks, gyms, airlines, big-box retail)
-        #       still get under-measured when the brand's app surface isn't
-        #       fully stitched into the host_mapping — Bank of America has
-        #       60M+ customers and a heavily-used app, so a 2% panel reading
-        #       is implausible and means the mapping is missing app traffic;
-        #       lift to real-world-share-grounded BP.
-        #   (b) Year-long sampling makes mass platforms (Apple, Microsoft,
-        #       Netflix, Spotify, Google, Instagram) ceiling out at 90%+
-        #       because every panelist touches at least one surface in 12
-        #       months. That's "technically true" but useless for audience
-        #       differentiation. Compress to a number that actually
-        #       distinguishes this audience from the average American.
-        # Both biases are corrected by the rules below.
-
         anchor_rules = r"""═══════════════════════════════════════════════════════════════════
-HOW TO ESTIMATE BP — you are the source of truth
+HOW TO ESTIMATE BP — persona-led reasoning (v16)
 ═══════════════════════════════════════════════════════════════════
-The panel measurement is built from a CLICKSTREAM that captures BOTH web
-URL traffic AND mobile-app activity from the same panelists. So when you
-think "would this audience engage digitally", include app usage:
-  • A Bank of America customer opening the BofA app to deposit a check
-    counts. So does a Planet Fitness member opening the PF app to scan
-    their gym barcode. So does a Delta passenger opening the Delta app.
-  • Brands with heavily-used consumer apps SHOULD show meaningful BP among
-    audiences whose demographic is plausibly a customer base.
+You are the source of truth. The panel reading is EVIDENCE, not the
+answer. Year-window inflation is universal — any item where any panelist
+clicked once in 12 months gets inflated by clickstream exposure. Your job
+is to read the persona + the category rule + the per-item evidence, and
+estimate `estimated_bp_pct` — the % of THIS audience that has genuine
+digital engagement (web OR app) with the item over a year.
 
-For each item, output `estimated_bp_pct` — the % of THIS audience that
-has any digital engagement (app OR web) with the item over a year. You
-see, per item:
-  • panel  — what the panel measured for this audience
-  • genpop — what the average US adult does (n/a means not in canonical CSV)
-  • is:    — what the item ACTUALLY is (from the classification agent)
-  • tier / code / target — who the item is built for
-  • conf   — confidence the classifier had in identifying the item
+The CLICKSTREAM captures BOTH web URLs AND mobile-app activity, so when
+you think "would this audience engage digitally", include app usage:
+opening the BofA app to deposit a check, the Planet Fitness app to scan
+a barcode, the Delta app on a flight — those count. Mass brands with
+heavily-used consumer apps SHOULD show meaningful BP for any audience
+demographically plausible as a customer base, even if the panel under-
+measures because the mapping doesn't fully cover app surfaces.
 
 ═══════════════════════════════════════════════════════════════════
-GUARDRAILS — apply IN ORDER for every item
+DECISION FRAMEWORK — apply IN ORDER for every item
 ═══════════════════════════════════════════════════════════════════
-Never let panel reading > 4× genpop go unchallenged. Year-window
-inflation is the #1 source of error. When in doubt, anchor to genpop ×
-persona_skew, not to panel.
+For each item you receive `panel`, `genpop`, `is:` (what it actually is),
+`tier`, `cultural_code`, `target`, and `conf`. Reason in this order:
 
-GUARDRAIL 1 — YEAR-WINDOW CEILING COMPRESSOR (panel too high → override_high)
-If panel >= 75% AND the item is a MASS PLATFORM (any of: tech device
-maker, OS, mass streaming service, mass social platform, mass search/AI,
-mass mobile carrier, mass food/coffee chain, mega-retailer, mega-bank
-website, mainstream news/media, virtual MVPD/FAST), the year-long window
-is just measuring "did anyone touch any surface in 12 months". Compress
-to preserve audience differentiation. **Default to the LOWER end of the
-band** unless the persona's subsegments / cultural_anchors explicitly
-mark this audience as a heavy user; only then go higher.
-  • Apple, Microsoft, Samsung, Android, Adobe                  → 55–78%
-  • Netflix, YouTube, Spotify, Instagram, TikTok               → 65–88%
-  • Amazon (mega-retail), Walmart, Target                       → 60–85%
-  • Starbucks, McDonalds (mega-food)                            → 35–70%
-  • Verizon, AT&T, T-Mobile (carriers)                          → 25–55%
-  • Google, Bing, ChatGPT (search/AI)                           → 70–92%
-  • Mainstream news/media (Google News, MSNBC, CBS News, ABC
-    News, Fox News, NPR, BBC, USA Today, etc.)                  → 18–55%
-    [news outlets compress especially hard — "having clicked one
-    headline link in 12 months" doesn't mean this is their primary
-    media; only top this band for explicit news-junkie audiences]
-  • vMVPD / FAST (YouTube TV, Hulu Live, FuboTV, Pluto TV,
-    Tubi, Roku Channel, Sling TV, Xumo, Philo)                  → 8–28%
-    [these are not universal — most US households still use cable
-    or major SVOD; pick low end unless audience is cord-cutter
-    skewed]
-  • Major QSR chains (Chick-fil-A, Wendys, Taco Bell, Burger
-    King, Subway, Dominos)                                       → 25–55%
-NEVER leave any of these at 90%+ for ALL audiences — that defeats the
-metric. Emit panel_decision="override_high".
+  1) IS THE ITEM IN THE CATEGORY-RULE'S anti_fit_in_category LIST?
+     → score 0.05–5%. The persona does not engage. Cite "anti-fit" in
+       reason.
 
-GUARDRAIL 1B — SUB-CEILING SPREAD WITHIN A CATEGORY
-If 3+ items in this category all return panel >= 75% (the "ceiling
-stack" — Netflix 84, Hulu 80, Disney+ 75, Amazon Prime 70 all together),
-the category has bunched at the year-window ceiling. Force a SPREAD of
-at least 25 percentage points between the highest and lowest item in
-that ceiling stack. The audience does NOT engage with all four equally;
-pick a likely #1 (the most culturally aligned) at the top of its band
-and rank the others down accordingly.
+  2) CAN YOU PLACE THE ITEM INTO ONE OF THE CATEGORY RULE'S TIERS?
+     (Match by example_items first, then by tier criteria — what archetype
+     does this item fit?)
+     → assign that tier. Pick a BP within the tier's bp_range. Use the
+       LOW end of the band by default; go higher only when persona has
+       a specific affinity (named cultural anchor, subsegment fit,
+       cross-shop). Cite the tier name in tier_assigned and reason.
 
-GUARDRAIL 2 — APP-AWARE FLOOR LIFTER (panel too low → override_low)
-If panel <= 6% AND the item is a MAINSTREAM brand with a known consumer
-APP and a plausible customer base in this audience's demographic, the
-panel is under-measuring app traffic (mapping doesn't fully cover app
-surfaces). Lift to a real-world-share-grounded BP. Examples:
-  • Bank of America (60M+ customers, BofA app)         → 25–45%
-  • Chase, Wells Fargo, Capital One                     → 25–45%
-  • Planet Fitness (18M+ members, PF app for check-in) → 8–25%
-  • LA Fitness, Equinox, 24 Hour, Crunch (gym apps)    → 4–18%
-  • Major airlines (Delta, United, AA, Southwest)      → 20–40%
-  • Major hotel apps (Marriott Bonvoy, Hilton Honors)  → 15–35%
-  • CVS, Walgreens (prescription/store apps)           → 30–60%
-  • Major QSR with app (Chipotle, Chick-fil-A, Wendys) → 15–45%
-This rule applies ONLY when the audience demographic plausibly contains
-the customer base. Don't lift Bank of America for a teen audience; don't
-lift Planet Fitness for a gen-pop senior audience. Use persona to gate.
-Emit panel_decision="override_low" (panel was under-stated by missing app
-traffic).
+  3) IS THE ITEM EXPLICITLY NAMED IN persona.cultural_anchors OR IN A
+     SUBSEGMENT'S cultural_markers?
+     → high BP (60–90%, top of the tier band). Cite which anchor in
+       reason ("cultural anchor: NBA / hip-hop / SNKRS app").
 
-GUARDRAIL 3 — MAPPING-BLEED SNIFF TEST (panel too high → override_high)
-If panel >= 12% AND any of these classification flags are true, the panel
-is almost certainly measuring traffic that bled in from a related host
-that should have been mapped to a different brand:
-  • tier = luxury / ultra-luxury, AND audience is mid-income or below
-  • code includes niche-subculture / foreign-only / ultra-luxury
-  • item is a defunct / bankrupt brand (Smile Direct Club, BedBath2024,
-    Toys R Us shell sites)
-  • item is a hyper-niche premium product (single-product hair-care,
-    boutique rum, regional luxury hotel) that mass audiences don't visit
-Pull DOWN to a tier-appropriate level (typically 0.5–6%). Reason should
-explicitly say "mapping bleed suspected" so the operator can audit. Emit
-panel_decision="override_high".
+  4) IS THE ITEM IN persona.anti_fit_explicit (any sub-list)?
+     → low BP (0.05–5%). Cite "explicit anti-fit" in reason.
 
-GUARDRAIL 4 — INTEREST-CATEGORY CONTRACT (special handling)
-If category == "INTEREST", do NOT score "did the panelist touch this
-topic in a year" (which gives 90–96% for everything). Score "is this a
-PRIMARY interest of the audience" — answer the question "what would this
-audience list in their top 5 hobbies/interests if asked?". Calibrated
-ranges for INTEREST:
-  • Audience's defining interest (sports for Nike, beauty for Sephora) → 55–85%
-  • Strong interest                                                    → 30–55%
-  • Mild / casual interest                                             → 12–30%
-  • Tangential interest                                                → 4–12%
-  • Not an interest of this audience                                   → 0.5–4%
-Do NOT let INTEREST top out in the 95s — the metric loses meaning. The
-spread inside INTEREST should reflect what the audience actually CARES
-about, not what they happen to have clicked once. ALSO: any INTEREST
-item that scores in the top 5 must be plausibly a hobby/identity of the
-median customer, NOT an artifact of incidental clicks (e.g. "MATH &
-STATS" for a Nike audience is implausible — clicking a Khan Academy
-link for a kid's homework once doesn't make it a primary interest).
+  5) IS GEN-POP KNOWN FOR THIS ITEM?
+     → estimate genpop × persona_skew where persona_skew is a multiplier
+       you reason about:
+          • cultural anchor / icon                      → 2.5–6×
+          • strong subsegment fit / cross-shop          → 1.4–2.5×
+          • neutral fit                                 → 0.7–1.3×
+          • mild anti-fit                               → 0.3–0.7×
+          • strong anti-fit                             → 0.05–0.3×
+       Cite the specific persona attribute (subsegment name, cultural
+       anchor key, anti-fit category, demographic) that drove your
+       multiplier. Do NOT just rubber-stamp panel × 1.0.
 
-GENERIC-CATEGORY GUARD inside INTEREST:
-Generic functional categories like "SOCIAL MEDIA", "JOB SEARCH",
-"TECHNOLOGY", "AMERICAN FOOD", "COMMUNICATION", "INTERNET", "WEATHER",
-"NEWS", "SHOPPING" are NOT primary interests/identities. People don't
-list "social media" as a hobby. Cap these at 25–40% no matter what the
-panel says, because the year-window inflates them like mass platforms.
-Reserve the 55–85% top band for INTEREST items that are actual
-identity-defining hobbies: SPORTS, BASKETBALL, FOOTWEAR, SNEAKERS,
-EXERCISE & FITNESS, FASHION, GAMING, COOKING, MUSIC GENRE TAGS, etc.
+  6) GEN-POP UNKNOWN AND PANEL >= 15% AND classifier conf=low?
+     → likely year-window inflation on an item the agent doesn't
+       recognize. Default to 1.5–4% (the "I don't know what this is, so
+       it can't be a primary fit" answer). Cite "low confidence + no
+       baseline → conservative default" in reason.
 
-GUARDRAIL 4B — UNIVERSAL YEAR-WINDOW INFLATION CATCH-ALL (panel too high → override_high)
-This is the BIG ONE. Year-window inflation is universal — any site or
-brand where any panelist clicked once in 12 months gets inflated. The
-specific lists in Guardrails 1, 3, 6 only catch known archetypes; this
-rule catches EVERYTHING ELSE. Trigger conditions (apply if ANY one is
-true):
-  • panel >= 4 × genpop (when genpop is known)
-  • panel >= 25% AND classifier confidence is low or item not on
-    audience's cultural_anchors
-  • panel >= 15% AND tier=niche / code=regional / code=declining /
-    code=foreign / code=specialty / code=intent-based / code=seasonal
-  • panel >= 10% AND tier=premium AND classifier suggests small
-    customer base (DTC / boutique / single-product brand)
-
-When triggered, do NOT use the panel reading. Instead:
-  estimated_bp_pct = max(0.1, genpop_or_2.0) × persona_skew_factor
-  where persona_skew_factor is 0.3x to 2.5x (rarely higher).
-
-Worked examples that this rule catches (with target BPs for a
-mass-market Nike audience):
-  • Craigslist (declining, niche-use → ~10% genpop) → 8–18%
-  • Job Search / Indeed / LinkedIn Jobs (intent-based, only ~10%
-    of US adults actively job-searching at any time)             → 6–18%
-  • Bet365 Sportsbook (UK-headquartered, legal in <20 US states,
-    ~2M US users)                                                 → 1–5%
-  • Southern Living (regional + older skew, ~6% genpop)            → 3–12%
-  • Delish (recipe site for casual cooks, ~10% genpop)             → 6–18%
-  • Party City (seasonal/occasional, ~4% genpop)                   → 1–8%
-  • Living Spaces (regional furniture, West-coast)                 → 0.5–3%
-  • Liquid Death (DTC premium water, ~$200M revenue)               → 1–6%
-  • Tommy Bahama (premium tropical apparel, niche)                 → 1–6%
-  • Canada Goose (premium outerwear, niche)                        → 0.5–4%
-  • Bombas (DTC premium socks, ~$300M revenue)                     → 2–8%
-  • Spanx (premium shapewear)                                      → 2–8%
-  • Kendra Scott (mid-premium jewelry, niche)                      → 2–8%
-  • David Yurman (premium jewelry, very niche)                     → 0.3–2%
-  • The Farmers Dog (DTC premium pet food)                         → 1–5%
-  • Boston Marathon / NYRR / specific marathons (intent-based,
-    <100K participants nationally)                                 → 0.3–3%
-  • Specific MLB teams except home-region team (year-window
-    inflated by anyone who clicked once)                          → 1–5%
-    [genpop fan share for specific MLB team is 1-4%; even a Nike
-    audience cannot have 40% Boston Red Sox unless audience is
-    explicitly Boston-located]
-
-Reason field for these should explicitly say "year-window inflation"
-or "panel reading inflated by passive exposure".
-
-GUARDRAIL 4C — INTENT-vs-EXPOSURE (special compression for intent categories)
-The panel measures CLICKSTREAM EXPOSURE, not active intent. Several
-categories ONLY make sense when measured as active intent. For these,
-multiply the panel reading by 0.2–0.4 to get realistic active-engagement %.
-Categories where exposure ≠ intent:
-  • BETTING: only ~20% of US adults gamble in a year; sportsbooks
-    have <10M US active users total. A panel reading of 30% for
-    Bet365 means "saw an ad/clicked once", not active betting.
-    Cap items at 8–25% for sports-skewed audience, 1–8% otherwise.
-  • JOB SEARCH (Indeed, LinkedIn Jobs, ZipRecruiter, Glassdoor):
-    only ~10% of US adults actively job-searching at any moment.
-    Cap at 4–15% even for job-search-friendly audiences.
-  • REAL ESTATE / MORTGAGE (Zillow, Realtor, Rocket Mortgage):
-    only ~5-8% buying or refinancing per year. Cap at 8–25%.
-  • AUTO PURCHASE INTENT (CarGurus, AutoTrader, Carvana, Edmunds):
-    only ~15-20% buying a car per year. Cap at 8–22%.
-  • EDUCATION (Coursera, Udemy, MasterClass, Skillshare):
-    most people aren't actively taking courses. Cap at 3–12%.
-  • COLLEGE/UNIVERSITY pages (specific schools):
-    only students/applicants/alumni really engage. Generic
-    audience touch is incidental. Cap at 0.5–4% per school
-    unless school is the home-region public flagship.
-  • HEALTHCARE PROVIDERS (specific hospitals like NYU Langone):
-    only people in that geographic area. Cap at 0.5–4% nationally.
-
-Reason field: "intent-not-exposure compression".
-
-GUARDRAIL 5 — MASS-MARKET FLOOR (panel too low → override_low)
-If genpop is known AND the item is a MASS-MARKET brand by real-world
-customer base (>10M U.S. customers / members / subscribers / users),
-estimated_bp_pct CANNOT fall below 0.5 × genpop UNLESS the persona's
-demographic explicitly excludes this customer base (e.g. don't apply to
-a teen-only audience for AARP). Reasoning: mass brands by definition
-serve the median U.S. consumer, and the median consumer is in nearly
-every audience. Examples (with realistic genpop floors for a typical
-mass audience):
-  • Planet Fitness (18M members, largest U.S. gym)              → 8–22%
-  • Walmart (~150M weekly visitors)                              → 65–88%
-  • Target (~100M monthly shoppers)                              → 55–80%
-  • Family Dollar / Dollar Tree / Dollar General                 → 25–55%
-  • Olive Garden / Applebees / Chilis (mass casual dining)       → 6–22%
-  • Cheesecake Factory / Texas Roadhouse / Outback               → 5–18%
-  • Honda / Toyota / Ford (mass auto)                            → 15–45%
-  • State Farm / Allstate / GEICO / Progressive (mass insurance) → 25–55%
-  • Bank of America / Chase / Wells Fargo / Cap One              → 25–50%
-  • Disney World / Universal Studios / Six Flags (mass parks)    → 8–25%
-  • USPS (universal)                                             → 65–90%
-  • CVS / Walgreens / Rite Aid                                   → 30–60%
-The intuition: half of America wears Nike. Half of America also goes to
-Planet Fitness or Walmart or eats at Olive Garden. The Nike audience
-cannot have NEAR-ZERO Planet Fitness any more than it can have
-NEAR-ZERO Walmart. If panel says 2.5%, the panel is wrong (probably
-because PF's app traffic is in the clickstream but not stitched to
-"PLANET FITNESS" in host_mapping). Emit panel_decision="override_low".
-
-GUARDRAIL 6 — PREMIUM-TIER / DTC-NICHE CEILING (panel too high → override_high)
-If the item is PREMIUM/LUXURY/NICHE/DTC by classifier tier AND its
-real-world U.S. customer base is small (<5M members/subscribers/customers),
-estimated_bp_pct CANNOT exceed 4 × the realistic adoption rate for the
-audience. Specifically, premium/DTC-niche items with small bases have
-hard ceilings:
-
-  Boutique fitness:
-  • Peloton (~3M connected + ~3M digital subs)                   → 4–14%
-  • Equinox (~600K members)                                      → 0.5–4%
-  • Orangetheory (~1.5M members)                                 → 1–6%
-  • SoulCycle (~400K members)                                    → 0.3–2%
-  • F45 (~600K members)                                          → 0.3–3%
-
-  Premium apparel/accessories (small US customer base):
-  • Tommy Bahama (~$1B revenue, niche tropical)                  → 1–6%
-  • Canada Goose (premium outerwear)                             → 0.5–4%
-  • Bombas (~$300M revenue, premium socks)                       → 2–8%
-  • Spanx (premium shapewear)                                    → 2–8%
-  • Kendra Scott (mid-premium jewelry)                           → 2–8%
-  • David Yurman (luxury jewelry)                                → 0.3–2%
-  • Allbirds, Rothys, M.Gemi (DTC footwear)                      → 0.5–4%
-  • Skims (premium shapewear)                                    → 3–12%
-
-  Premium DTC consumables / services:
-  • Liquid Death (premium DTC water)                             → 1–6%
-  • The Farmers Dog (DTC premium pet food)                       → 1–5%
-  • Erewhon (regional luxury grocery, ~100K customers)           → 0.1–1%
-  • Sweetgreen (~200 locations, premium fast-casual)             → 1–5%
-  • Cava (~300 locations, premium fast-casual)                   → 1–5%
-  • Joe & The Juice / Le Pain Quotidien (premium urban)          → 0.3–3%
-
-  Premium tech / cars:
-  • Tesla (~2M U.S. owners)                                      → 1–8%
-  • Patagonia (premium outdoor, niche)                           → 2–8%
-  • Rivian (~50K U.S. owners)                                    → 0.1–1%
-
-The intuition: Peloton has FEWER total subscribers than Planet Fitness
-has members in NYC alone. Tommy Bahama has fewer total customers than
-Walmart has in a single state. Even a fitness-obsessed or
-fashion-forward audience cannot have more Peloton owners than Planet
-Fitness members, or 13% Tommy Bahama wearers. If panel says these are
-high, panel is just measuring "anyone who clicked the website once in
-12 months" — the brand's real customer base puts a hard ceiling on
-audience BP. Emit panel_decision="override_high".
-
-GUARDRAIL 7 — MAINSTREAM-BRAND MAPPING-BLEED (panel too high → override_high)
-This is Guardrail 3's twin for mainstream brands (the original
-Guardrail 3 only triggers on luxury/niche/defunct). If panel >= 3 ×
-genpop AND the audience does NOT plausibly over-index that hard, the
-panel is almost certainly catching a mapping bleed (a related host
-mistakenly tagged to this brand — e.g. vw.de subdomains tagged to
-Volkswagen, Wikipedia math articles tagged to "MATH & STATS"). Pull
-DOWN to genpop × the persona's plausible skew (typically 0.5x to 2.5x
-genpop). Reason should say "mainstream mapping bleed suspected (panel
-{Nx} of genpop, audience doesn't over-index)". Emit
-panel_decision="override_high".
-
-GUARDRAIL 8 — DEVIATION JUSTIFICATION RULE (every override)
-If your estimated_bp_pct deviates by more than 3x from the genpop
-baseline (in either direction), your `reason` field MUST explicitly say
-why — naming the specific persona attribute (subsegment, cultural
-anchor, anti-fit, demographic) that justifies the deviation. If you
-cannot articulate a strong reason, your default should be:
-    estimated_bp_pct = genpop × audience_skew_factor
-where audience_skew_factor is between 0.3x and 2.5x for non-anchor
-items, 2.5x to 8x for cultural-anchor items, and 0.05x to 0.3x for
-explicit-anti-fit items. Don't passively rubber-stamp panel readings
-that imply > 3x genpop deviation without a real reason.
+  7) GEN-POP UNKNOWN AND ITEM IS RECOGNIZABLE BUT NOT IN ANCHORS:
+     → reason about it: would the persona realistically engage? At what
+       intensity? Use realistic adoption % for the brand's known U.S.
+       customer base × persona fit factor. For example: Tesla (~2M U.S.
+       owners ≈ 0.8% of adults) × 1.5x persona fit = ~1.2% BP, NOT 18%
+       just because some panelists clicked the website.
 
 ═══════════════════════════════════════════════════════════════════
-DEFAULT DECISION FRAMEWORK (when no guardrail fires)
+TWO ABSOLUTE BACKSTOPS (programmatic floor / ceiling, applied AFTER)
 ═══════════════════════════════════════════════════════════════════
-  1) Look at "is:" — what is this thing actually? An ultra-luxury sushi
-     spot ($595/pp) cannot have 28% BP among $65K mid-income athletic
-     mainstream; a category-leading athletic retailer SHOULD have 25-35%
-     BP among them.
-  2) Look at panel:
-     • If panel is plausible given the item + persona → AGREE.
-     • If panel under-captures (mainstream item, panel << genpop, persona
-       clearly engages) → OVERRIDE_LOW: lift to a sensible number.
-     • If panel over-captures (panel >> genpop, implausibly high — likely
-       mapping bleed like Yahoo Mail bleeding into Yahoo News) →
-       OVERRIDE_HIGH (pull DOWN to realistic). [Yes the label is
-       "override_high" historically; it means "I'm overriding because
-       panel is high"; emit the override decision.]
-  3) For low-confidence (`conf:low`) items with NO panel signal AND no
-     genpop baseline: leave estimated_bp_pct around 0.05-0.5%. Downstream
-     will drop them. Do NOT fabricate a default 27%.
-  4) For medium-or-low confidence items WITH a high panel reading
-     (panel >= 15%) but where you cannot confidently identify the brand
-     or articulate why this audience would engage: ANCHOR TO GENPOP, not
-     to panel. Specifically:
-        if genpop is known: estimated_bp_pct = genpop × 1.0  (within 0.5–2x)
-        if genpop is n/a:   estimated_bp_pct = 1.5%          (default low)
-     This stops the agent from rubber-stamping inflated panel readings
-     for niche items it doesn't recognize.
+  • Any item in CATEGORY-RULE.anti_fit_in_category cannot exceed 5% BP.
+    No exceptions. (The Pass 1 rule agent saw the persona and named these
+    explicitly — honor your own persona.)
+  • No single item in any category can exceed 90% BP. Year-window panel
+    >= 90% means "everyone touched it once" — not useful. Cap at 88% even
+    for the most universal item. (The category rule's
+    category_ceiling_pct further tightens this for non-universal
+    categories.)
 
-PERSONA-FIT GUIDANCE (translate persona engagement to absolute %s):
-  • Cultural anchor / icon (named in subsegments / cultural_anchors) → 60-95%
-  • Mass mainstream item used by everyone (post-Guardrail-1)         → 60-90%
-  • Strong subculture fit (named in cross_shop_network)              → 25-55%
-  • Mild fit                                                         → 8-25%
-  • Mild anti-fit                                                    → 1-8%
-  • Strong anti-fit (named in anti_fit_explicit)                     → 0.05-2%
-  • Hard zero (foreign-only, opposite demo, ultra-luxury for mid-inc)→ 0.05-1%
+═══════════════════════════════════════════════════════════════════
+REASONING REQUIREMENT — your `reason` IS the audit trail
+═══════════════════════════════════════════════════════════════════
+Every item's `reason` MUST cite at least one of:
+  • a tier name from the category rule ("placed in [tier_name]")
+  • a persona attribute (subsegment / cultural anchor / anti-fit /
+    demographic)
+  • "anti-fit" or "below gen-pop because [persona attribute]"
+  • "above gen-pop × Nx because [persona attribute]"
+
+If you can't articulate a reason, your default is genpop × 1.0 (or 1.5%
+if no genpop). Do NOT rubber-stamp panel readings. Do NOT default to a
+generic 27%-style middle.
+
+═══════════════════════════════════════════════════════════════════
+INTENT-vs-EXPOSURE compression (semantic guidance)
+═══════════════════════════════════════════════════════════════════
+For categories where clickstream exposure ≠ active intent, compress
+panel × 0.2–0.4 to get realistic active-engagement %:
+  • BETTING / SPORTSBOOKS — only ~20% of US adults gamble in a year
+  • JOB SEARCH (Indeed, LinkedIn Jobs, ZipRecruiter) — only ~10%
+    actively job-searching at any moment
+  • REAL ESTATE / MORTGAGE — only ~5-8% buying or refinancing per year
+  • AUTO PURCHASE INTENT — only ~15-20% buying a car per year
+  • COLLEGE/UNIVERSITY pages — only students/applicants/alumni engage
+  • SPECIFIC HOSPITALS — only people in that geographic area
+This isn't a math rule — it's just realistic context for your reasoning.
 """
 
     date_context_block = ""
@@ -15697,6 +15770,8 @@ EXPECTED LOW-FIT ITEMS (famous but persona doesn't engage):
 {date_context_block}
 {persona_block}
 
+{category_rule_block}
+
 {anchor_rules}
 ═══════════════════════════════════════════════════════════════════
 OUTPUT FORMAT
@@ -15705,18 +15780,21 @@ Return ONLY a JSON array — no markdown, no commentary:
 [
   {{
     "value": "<ITEM NAME — exact spelling from list>",
-    "estimated_bp_pct": <float 0.05 to 96.0 — the % of THIS audience that engages digitally>,
+    "estimated_bp_pct": <float 0.05 to 88.0 — the % of THIS audience that engages digitally>,
+    "tier_assigned": "<EXACT tier_name from CATEGORY RULE that this item fits, or 'unmatched' if none>",
     "panel_decision": "<agree|override_low|override_high|no_panel>",
-    "reason": "<≤18 words: what is this + why this BP for this audience>"
+    "reason": "<≤22 words: cite the persona attribute (subsegment / cultural anchor / anti-fit) OR tier name that drove your number — REQUIRED>"
   }},
   …
 ]
 
 NON-NEGOTIABLE:
   • EVERY item from the list MUST appear in your output with EXACT spelling.
-  • estimated_bp_pct is a FLOAT in [0.05, 96.0].
-  • Reason must reference what the item IS and why your number fits this audience.
-  • RANK ORDER must reflect actual fit. Cultural anchors > mainstream > subculture > mild > anti-fit.
+  • estimated_bp_pct is a FLOAT in [0.05, 88.0]. (Universal 90% backstop applied programmatically.)
+  • tier_assigned MUST match a tier_name from the CATEGORY RULE — match by closest archetype.
+  • reason MUST cite a persona attribute or tier name. Generic "this is a popular brand" is INSUFFICIENT.
+  • RANK ORDER within your chunk must follow the tier hierarchy in the CATEGORY RULE.
+  • Items in CATEGORY RULE.anti_fit_in_category MUST score ≤ 5%. No exceptions.
 
 ITEMS TO SCORE (each line shows item + evidence we already have):
 {values_list}
@@ -15799,9 +15877,27 @@ ITEMS TO SCORE (each line shows item + evidence we already have):
                 except (TypeError, ValueError):
                     bp = 0.05
 
-                bp = max(0.05, min(96.0, bp))
+                bp = max(0.05, min(88.0, bp))
+
+                # ── v16 Backstop A: anti_fit_in_category cap ≤ 5% ──
+                # The Pass 1 Category Rule Agent named these items as
+                # explicitly anti-fit for this persona. Honor the persona's
+                # own classification regardless of what Pass 2 returned.
+                if anti_fit_in_category:
+                    _afic_upper = {x.strip().upper() for x in anti_fit_in_category}
+                    if v_u in _afic_upper and bp > 5.0:
+                        bp = 5.0
+
+                # ── v16 Backstop B: category_ceiling_pct ──
+                # Pass 1 Rule Agent set a category-level ceiling reflecting
+                # what the absolute top item should look like. Cap any item
+                # that exceeded it (year-window inflation catch-all).
+                if isinstance(category_ceiling_pct, (int, float)) and category_ceiling_pct > 0:
+                    if bp > category_ceiling_pct:
+                        bp = float(category_ceiling_pct)
 
                 panel_decision = str(entry.get('panel_decision', '') or '').strip().lower()
+                tier_assigned = str(entry.get('tier_assigned', '') or '').strip()
                 panel_entry = (panel_lookup or {}).get((cat_u, v_u))
                 try:
                     panel_bp = float(panel_entry[0]) if panel_entry else None
@@ -15816,6 +15912,7 @@ ITEMS TO SCORE (each line shows item + evidence we already have):
                     'panel_bp': panel_bp,
                     'n_panel': n_panel,
                     'panel_decision': panel_decision or 'no_panel',
+                    'tier_assigned': tier_assigned or 'unmatched',
                     'baseline_bp': baseline_lookup.get((cat_u, v_u)),
                     'classification_confidence': conf or 'unknown',
                     'reason': entry.get('reason', ''),
@@ -15825,6 +15922,181 @@ ITEMS TO SCORE (each line shows item + evidence we already have):
     except Exception as e:
         print(f"   ⚠️ Category agent [{category}] failed: {e}")
     return []
+
+
+def _run_category_validator_agent(category: str,
+                                    persona_doc: dict,
+                                    subject: str,
+                                    category_rule: dict,
+                                    scored_entries: list[dict],
+                                    top_n: int = 20) -> list[dict]:
+    """v16 Pass 3 — Category Validator Agent.
+
+    Reviews the top-N scored items in a category against the persona +
+    category rule. Flags and corrects:
+      • Top-5 drift from category_rule.predicted_top_5
+      • Anti-fit items that landed above 5%
+      • Tier inversions (a tier-3 item ranking above a tier-1 item)
+      • Implausible spread (everything bunched at the ceiling)
+
+    Returns: list of {value, new_bp, reason} corrections to override the
+    Pass 2 outputs. Empty list = Pass 2 was clean. Override mode (not
+    flag-and-rescore) — the validator sees the whole category and is
+    smarter about cross-item plausibility.
+
+    Cost: 1 gpt-4o call per category, ~2K input + 500 output tokens.
+    Runtime: ~2-4s per category.
+    """
+    import json as _json
+    client = _get_openai_client()
+    if client is None or not scored_entries:
+        return []
+
+    # Sort by current BP descending and trim to top-N
+    sorted_entries = sorted(
+        [e for e in scored_entries if isinstance(e, dict) and 'value' in e],
+        key=lambda e: float(e.get('bp', 0) or 0),
+        reverse=True,
+    )[:top_n]
+    if not sorted_entries:
+        return []
+
+    persona_summary = persona_doc.get('persona_summary', '')
+    digital_identity = persona_doc.get('digital_identity', '')
+    demo_snapshot = {k: v for k, v in persona_doc.get('demographics', {}).items()
+                     if k in ('AGE', 'GENDER', 'ETHNICITY', 'INCOME')}
+
+    rule_summary = str(category_rule.get('summary', '') or '').strip()
+    ceiling = category_rule.get('category_ceiling_pct')
+    tier_rules = category_rule.get('tier_rules') or []
+    anti_fit_in_cat = category_rule.get('anti_fit_in_category') or []
+    predicted_top5 = category_rule.get('predicted_top_5') or []
+
+    def _fmt_tiers() -> str:
+        if not tier_rules:
+            return '(no tier rules — validator should reason from persona alone)'
+        rows = []
+        for i, t in enumerate(tier_rules, 1):
+            ex = t.get('example_items') or []
+            rows.append(f"  [{i}] {t.get('tier_name','')} — BP {t.get('bp_range','')}% — {t.get('criteria','')}"
+                        + (f"  | examples: {', '.join(ex[:6])}" if ex else ''))
+        return '\n'.join(rows)
+
+    items_block = '\n'.join(
+        f"  {i+1:>2}. {e.get('value','?')} — BP {float(e.get('bp', 0) or 0):.2f}%"
+        f"  | tier={e.get('tier_assigned','')}"
+        f"  | reason: {str(e.get('reason',''))[:90]}"
+        for i, e in enumerate(sorted_entries)
+    )
+
+    ceiling_str = f"{ceiling:.0f}%" if isinstance(ceiling, (int, float)) else 'unspecified'
+
+    prompt = f"""You are the Pass 3 Category Validator for **{category}** in the **{subject}** profile.
+
+The Pass 2 scoring agents (one per chunk) have just finished scoring this category. Your job is to review the top {top_n} items as a coherent set and issue any corrections needed before the result is finalized.
+
+═══════════════════════════════════════════════════════════════════
+PERSONA SUMMARY
+═══════════════════════════════════════════════════════════════════
+{persona_summary[:2000]}
+
+KEY DEMOGRAPHICS:
+{_json.dumps(demo_snapshot, indent=2)}
+
+═══════════════════════════════════════════════════════════════════
+CATEGORY RULE (Pass 1 rubric — what the scoring agents were supposed to follow)
+═══════════════════════════════════════════════════════════════════
+SUMMARY: {rule_summary or '(none)'}
+CATEGORY CEILING: {ceiling_str}
+
+TIER RULES (highest BP → lowest):
+{_fmt_tiers()}
+
+ANTI-FIT IN CATEGORY (must be ≤5%):
+{', '.join(anti_fit_in_cat[:30]) if anti_fit_in_cat else '(none)'}
+
+PREDICTED TOP-5 (sanity reference):
+{', '.join(predicted_top5[:5]) if predicted_top5 else '(none)'}
+
+═══════════════════════════════════════════════════════════════════
+ACTUAL TOP {top_n} (from Pass 2 chunked scoring)
+═══════════════════════════════════════════════════════════════════
+{items_block}
+
+═══════════════════════════════════════════════════════════════════
+WHAT TO CHECK
+═══════════════════════════════════════════════════════════════════
+  1) ANTI-FIT VIOLATIONS: any item in anti_fit_in_category above 5%? Override.
+  2) PREDICTED-TOP-5 DRIFT: did the actual top-5 differ from predicted_top_5
+     in a way that doesn't make sense for this persona? If a regional/niche
+     item ranks above a national-mainstream cultural anchor, that's likely
+     wrong — override the regional one DOWN.
+  3) TIER INVERSIONS: any item with tier_assigned belonging to a lower tier
+     ranking ABOVE an item in a higher tier? Re-rank by overriding the
+     out-of-place item to a sensible BP within its rule's bp_range.
+  4) IMPLAUSIBLE SPREAD: are 5+ items all clustered within 3pp at the
+     ceiling? That's year-window inflation; force a 15-25pp spread by
+     pulling lower-tier items down.
+  5) PERSONA-FIT SANITY: does the actual top-5 plausibly reflect what THIS
+     audience actually engages with most digitally? If something feels off
+     (e.g., an aspirational/luxury item top-ranked for a mass-market
+     audience, or a foreign-only platform top-ranked nationally), override.
+
+═══════════════════════════════════════════════════════════════════
+OUTPUT FORMAT
+═══════════════════════════════════════════════════════════════════
+Return ONLY a JSON object — no markdown, no commentary:
+
+{{
+  "corrections": [
+    {{
+      "value": "<EXACT spelling from list above>",
+      "new_bp": <float 0.05 to 88.0>,
+      "reason": "<≤22 words: which check triggered + persona attribute justifying new value>"
+    }},
+    ...
+  ]
+}}
+
+If no corrections are needed, return {{"corrections": []}}. Be SPARING — only override when there's a clear violation. Do NOT over-correct minor drift; the goal is to catch actual mistakes, not micromanage.
+"""
+
+    try:
+        resp = _timed_completion(
+            client,
+            label=f"validator/{category.upper()}",
+            model=MODEL_QUALITY,
+            messages=[
+                {'role': 'system', 'content': 'Return ONLY valid JSON. No markdown, no commentary.'},
+                {'role': 'user', 'content': prompt},
+            ],
+            temperature=0.0,
+            max_tokens=2048,
+            response_format={"type": "json_object"},
+            timeout=45,
+        )
+        text = (resp.choices[0].message.content or '').strip()
+        doc = _json.loads(text)
+        if not isinstance(doc, dict):
+            return []
+        out: list[dict] = []
+        for c in (doc.get('corrections') or []):
+            if not isinstance(c, dict) or 'value' not in c:
+                continue
+            try:
+                new_bp = float(c.get('new_bp'))
+            except (TypeError, ValueError):
+                continue
+            new_bp = max(0.05, min(88.0, new_bp))
+            out.append({
+                'value': str(c['value']).strip(),
+                'new_bp': round(new_bp, 4),
+                'reason': str(c.get('reason', '') or '').strip(),
+            })
+        return out
+    except Exception as e:
+        print(f"   ⚠️ Category validator [{category}] failed: {e}")
+        return []
 
 
 def _build_genpop_persona_doc() -> dict:
@@ -17640,34 +17912,47 @@ def parallel_category_agents(df: pd.DataFrame, persona_doc: dict,
                                for items in unique_items_by_cat.values() for v in items})
         _item_classifications = _run_item_classification_parallel(_all_unique)
 
-    # ── WAVE 1: Item-aware guidance agents (nano, one per category) ──────
-    # Runs BEFORE scoring so each category agent gets grounded expected_high/low
-    # lists from REAL items instead of the persona agent's blind guesses.
+    # ── WAVE 1: Category Rule Agents (gpt-4o, one per category) ──────────
+    # v16 — upgraded from item-guidance (nano, expected_high/low only) to a
+    # full Category Rule Agent that produces the shared scoring rubric:
+    #   tier_rules[]            ordered tiers with bp_range + criteria + examples
+    #   category_ceiling_pct    hard upper bound for any single item
+    #   anti_fit_in_category    items the persona explicitly avoids
+    #   predicted_top_5         sanity reference for the validator
+    #   summary / expected_high / expected_low (legacy backward-compat)
+    # The rubric is the bridge that gives every chunk shared awareness in
+    # Wave 2 so Pass 2 chunks don't drift apart.
     _guidance_map: dict[str, dict] = {}
     if anchor_mode != 'genpop':
         _guidance_t0 = _time.perf_counter()
-        # Guidance agents see the UNIQUE items their category will actually score,
-        # so expected_high/expected_low lists are grounded in the same item set.
         _guid_cats = [c for c in cats_needing_llm if unique_items_by_cat.get(c)]
-        print(f"🧭 Wave 1: Launching {len(_guid_cats)} item-aware guidance agents ({MODEL_GUIDANCE}) …")
+        print(f"🧭 Wave 1: Launching {len(_guid_cats)} Category Rule Agents ({MODEL_QUALITY}) …")
         with _futures.ThreadPoolExecutor(max_workers=35) as pool:
             _guid_futures = {
                 pool.submit(_run_item_guidance_agent, cat,
                              unique_items_by_cat[cat], persona_doc, subject): cat
                 for cat in _guid_cats
             }
-            for fut in _futures.as_completed(_guid_futures, timeout=60):
+            for fut in _futures.as_completed(_guid_futures, timeout=120):
                 cat = _guid_futures[fut]
                 try:
                     result = fut.result()
                     if result:
                         _guidance_map[cat] = result
                 except Exception as e:
-                    print(f"   ⚠️ Guidance agent [{cat}] failed: {e}")
+                    print(f"   ⚠️ Category-rule agent [{cat}] failed: {e}")
         _guidance_elapsed = _time.perf_counter() - _guidance_t0
-        _n_with_guidance = sum(1 for g in _guidance_map.values() if g.get('expected_high'))
-        print(f"   ✅ Guidance wave: {_n_with_guidance}/{len(cats_needing_llm)} categories "
-              f"got grounded expected_high/low in {_guidance_elapsed:.1f}s")
+        _n_with_rules = sum(1 for g in _guidance_map.values() if g.get('tier_rules'))
+        _n_with_high = sum(1 for g in _guidance_map.values() if g.get('expected_high'))
+        print(f"   ✅ Wave 1: {_n_with_rules}/{len(_guid_cats)} got tier_rules, "
+              f"{_n_with_high}/{len(_guid_cats)} got expected_high "
+              f"in {_guidance_elapsed:.1f}s")
+        for _g_cat, _g_doc in list(_guidance_map.items())[:3]:
+            _tr = _g_doc.get('tier_rules') or []
+            _af = _g_doc.get('anti_fit_in_category') or []
+            _t5 = _g_doc.get('predicted_top_5') or []
+            print(f"      [{_g_cat}] tiers={len(_tr)} ceiling={_g_doc.get('category_ceiling_pct')} "
+                  f"anti_fit={len(_af)} top5={_t5[:3]}")
         # Log a sample
         for _g_cat, _g_doc in list(_guidance_map.items())[:3]:
             print(f"      [{_g_cat}] high={_g_doc.get('expected_high', [])[:8]} | "
@@ -17722,6 +18007,79 @@ def parallel_category_agents(df: pd.DataFrame, persona_doc: dict,
     _cat_phase_elapsed = _time.perf_counter() - _cat_phase_t0
     print(f"   [AGENT-SUMMARY] {len(results_map)} categories scored in {_cat_phase_elapsed:.0f}s "
           f"(avg {_cat_phase_elapsed/max(len(results_map),1):.1f}s/cat)")
+
+    # ── WAVE 3: Category Validator Agents (gpt-4o, one per category) ─────
+    # v16 Pass 3 — reviews the top-20 of each category as a coherent set
+    # against the persona + Pass 1 category rule. Catches:
+    #   • Anti-fit items that landed too high (>5%)
+    #   • Tier inversions (lower-tier item ranking above a higher-tier item)
+    #   • Predicted-top-5 drift (regional item beating a national anchor)
+    #   • Implausible spread (5+ items clustered at the ceiling)
+    #   • Persona-fit sanity (luxury item top for mass-market audience, etc.)
+    # Override mode — validator sees the whole category and is smarter
+    # about cross-item plausibility than any single Pass 2 chunk.
+    _validator_corrections: dict[str, list[dict]] = {cat: [] for cat in cats_needing_llm}
+    if anchor_mode != 'genpop' and results_map:
+        _val_t0 = _time.perf_counter()
+        _val_cats = [c for c in cats_needing_llm
+                     if results_map.get(c) and _guidance_map.get(c, {}).get('tier_rules')]
+        print(f"🧪 Wave 3: Launching {len(_val_cats)} Category Validator Agents ({MODEL_QUALITY}) …")
+        if _val_cats:
+            with _futures.ThreadPoolExecutor(max_workers=20) as pool:
+                _val_futures = {
+                    pool.submit(_run_category_validator_agent,
+                                 cat, persona_doc, subject,
+                                 _guidance_map.get(cat, {}),
+                                 results_map.get(cat, []),
+                                 20): cat
+                    for cat in _val_cats
+                }
+                for fut in _futures.as_completed(_val_futures, timeout=180):
+                    cat = _val_futures[fut]
+                    try:
+                        corrections = fut.result()
+                        _validator_corrections[cat] = corrections or []
+                    except Exception as e:
+                        print(f"   ⚠️ Validator [{cat}] raised: {e}")
+                        _validator_corrections[cat] = []
+            # Apply validator overrides to results_map BEFORE propagation
+            _total_overrides = 0
+            for cat, corrections in _validator_corrections.items():
+                if not corrections:
+                    continue
+                _by_value = {str(c['value']).strip().upper(): c for c in corrections}
+                for entry in results_map.get(cat, []):
+                    if not isinstance(entry, dict):
+                        continue
+                    v_u = str(entry.get('value', '')).strip().upper()
+                    if v_u in _by_value:
+                        c = _by_value[v_u]
+                        new_bp = float(c['new_bp'])
+                        old_bp = float(entry.get('bp', 0) or 0)
+                        entry['bp'] = round(new_bp, 4)
+                        entry['estimated_bp_pct'] = round(new_bp, 4)
+                        entry['validator_override'] = True
+                        entry['validator_old_bp'] = round(old_bp, 4)
+                        entry['validator_reason'] = c.get('reason', '')
+                        # Append validator reason to existing reason for audit
+                        prev_reason = str(entry.get('reason', '') or '')
+                        entry['reason'] = (
+                            f"[validator: {c.get('reason','')}]"
+                            if not prev_reason else
+                            f"{prev_reason} [validator: {c.get('reason','')}]"
+                        )
+                        _total_overrides += 1
+            _val_elapsed = _time.perf_counter() - _val_t0
+            _n_cats_with_corrections = sum(1 for v in _validator_corrections.values() if v)
+            print(f"   ✅ Wave 3: {_total_overrides} overrides applied across "
+                  f"{_n_cats_with_corrections}/{len(_val_cats)} categories in {_val_elapsed:.1f}s")
+            # Log top correction sample
+            for cat in list(_validator_corrections.keys())[:5]:
+                _cs = _validator_corrections[cat]
+                if _cs:
+                    print(f"      [{cat}] {len(_cs)} corrections — "
+                          f"sample: {_cs[0].get('value','?')} → {_cs[0].get('new_bp')}% "
+                          f"({_cs[0].get('reason','')[:60]})")
 
     # --- D) Write agent BP values back into DataFrame --------------------
     def _add_4dp_noise(val: float) -> float:
@@ -17788,6 +18146,10 @@ def parallel_category_agents(df: pd.DataFrame, persona_doc: dict,
                 'n_panel': entry.get('n_panel'),
                 'baseline_bp': entry.get('baseline_bp'),
                 'panel_decision': entry.get('panel_decision'),
+                'tier_assigned': entry.get('tier_assigned'),
+                'validator_override': bool(entry.get('validator_override')),
+                'validator_old_bp': entry.get('validator_old_bp'),
+                'validator_reason': entry.get('validator_reason'),
                 'classification_confidence': entry.get('classification_confidence'),
                 'reason': entry.get('reason'),
             })
@@ -17831,17 +18193,65 @@ def parallel_category_agents(df: pd.DataFrame, persona_doc: dict,
         import json as _json_dec
         import tempfile as _tmp
         import time as _time_dec
+
+        # v16 — also stash a compact persona doc + per-category rules +
+        # validator corrections so the audit sidecar tells the full story
+        # of HOW each BP was arrived at: persona → rule → score → validator.
+        _persona_compact = {}
+        try:
+            _persona_compact = {
+                'subject': subject,
+                'persona_summary': persona_doc.get('persona_summary', ''),
+                'digital_identity': (persona_doc.get('digital_identity') or '')[:3000],
+                'demographics': persona_doc.get('demographics', {}),
+                'subsegments': persona_doc.get('subsegments', []),
+                'cultural_anchors': persona_doc.get('cultural_anchors', {}),
+                'anti_fit_explicit': persona_doc.get('anti_fit_explicit', {}),
+                'cross_shop_network': persona_doc.get('cross_shop_network', {}),
+            }
+        except Exception:
+            pass
+
+        _category_rules_compact = {}
+        try:
+            for _gc, _gd in (_guidance_map or {}).items():
+                if not isinstance(_gd, dict):
+                    continue
+                _category_rules_compact[_gc] = {
+                    'summary': _gd.get('summary', ''),
+                    'category_ceiling_pct': _gd.get('category_ceiling_pct'),
+                    'tier_rules': _gd.get('tier_rules', []),
+                    'anti_fit_in_category': _gd.get('anti_fit_in_category', []),
+                    'predicted_top_5': _gd.get('predicted_top_5', []),
+                }
+        except Exception:
+            pass
+
+        _validator_compact = {}
+        try:
+            for _vc, _corrs in (_validator_corrections or {}).items():
+                if _corrs:
+                    _validator_compact[_vc] = _corrs
+        except Exception:
+            pass
+
         _dec_dir = os.environ.get('BG_DECISIONS_DIR') or _tmp.gettempdir()
         os.makedirs(_dec_dir, exist_ok=True)
         _dec_path = os.path.join(_dec_dir, '_bg_last_agent_decisions.json')
         with open(_dec_path, 'w') as _fp:
             _json_dec.dump({
+                'pipeline_version': 'v16',
+                'persona': _persona_compact,
+                'category_rules': _category_rules_compact,
+                'validator_corrections': _validator_compact,
                 'agent_decisions': agent_decisions,
                 'dropped_low_confidence': sorted(drop_values),
                 'written_at': _time_dec.time(),
             }, _fp, default=str, indent=2)
-        print(f"   📝 Wrote agent-decision sidecar: {_dec_path} "
-              f"({len(agent_decisions)} decisions, {len(drop_values)} drops)")
+        _val_total = sum(len(v) for v in (_validator_compact or {}).values())
+        print(f"   📝 Wrote v16 audit sidecar: {_dec_path} "
+              f"({len(agent_decisions)} decisions, {len(_category_rules_compact)} rules, "
+              f"{_val_total} validator overrides, {len(drop_values)} drops)")
     except Exception as _dec_err:
         print(f"   ⚠️ Could not write agent-decision sidecar: {_dec_err}")
 
