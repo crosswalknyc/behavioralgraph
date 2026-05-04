@@ -19217,6 +19217,33 @@ def parallel_category_agents(df: pd.DataFrame, persona_doc: dict,
             print(f"      [{_g_cat}] high={_g_doc.get('expected_high', [])[:8]} | "
                   f"low={_g_doc.get('expected_low', [])[:8]}")
 
+        # ── Wave 1b: Retry once when tier_rules missing — weak rubric lets chunks
+        # drift; validators used to skip these categories entirely.
+        _need_rule_retry = [c for c in _guid_cats
+                            if not (_guidance_map.get(c) or {}).get('tier_rules')]
+        if _need_rule_retry:
+            print(f"   🔄 Wave 1b retry: {len(_need_rule_retry)} categories missing tier_rules …")
+            with _futures.ThreadPoolExecutor(max_workers=12) as _rpool:
+                _rfut = {
+                    _rpool.submit(_run_item_guidance_agent, c,
+                                   unique_items_by_cat[c], persona_doc, subject): c
+                    for c in _need_rule_retry if unique_items_by_cat.get(c)
+                }
+                for fut in _futures.as_completed(_rfut, timeout=120):
+                    rc = _rfut[fut]
+                    try:
+                        r2 = fut.result()
+                        if r2 and r2.get('tier_rules'):
+                            _guidance_map[rc] = r2
+                    except Exception as _e_rb:
+                        print(f"   ⚠️ Category-rule retry [{rc}] failed: {_e_rb}")
+            _still_bad = [c for c in _need_rule_retry
+                          if not (_guidance_map.get(c) or {}).get('tier_rules')]
+            if _still_bad:
+                print(f"   ⚠️ Still no tier_rules after retry ({len(_still_bad)}): "
+                      f"{', '.join(_still_bad[:8])}{' …' if len(_still_bad) > 8 else ''} "
+                      f"— Pass 3 will run in persona+inventory-only mode.")
+
     # ── WAVE 2: Scoring agents (gpt-4o, one per chunk) ───────────────────
     print(f"🤖 Wave 2: Launching {len(_work_units)} scoring agent calls …")
     with _futures.ThreadPoolExecutor(max_workers=35) as pool:
@@ -19280,15 +19307,20 @@ def parallel_category_agents(df: pd.DataFrame, persona_doc: dict,
     _validator_corrections: dict[str, list[dict]] = {cat: [] for cat in cats_needing_llm}
     if anchor_mode != 'genpop' and results_map:
         _val_t0 = _time.perf_counter()
-        _val_cats = [c for c in cats_needing_llm
-                     if results_map.get(c) and _guidance_map.get(c, {}).get('tier_rules')]
-        print(f"🧪 Wave 3: Launching {len(_val_cats)} Category Validator Agents ({MODEL_QUALITY}) …")
+        # Every category with Pass 2 output gets a validator pass. When tier_rules
+        # are missing, the validator prompt already falls back to persona + inventory
+        # reasoning (see _fmt_tiers empty state) — skipping those cats left gaps.
+        _val_cats = [c for c in cats_needing_llm if results_map.get(c)]
+        _val_with_tiers = sum(1 for c in _val_cats
+                              if (_guidance_map.get(c) or {}).get('tier_rules'))
+        print(f"🧪 Wave 3: Launching {len(_val_cats)} Category Validator Agents ({MODEL_QUALITY}) "
+              f"({_val_with_tiers} with full tier_rules, {len(_val_cats) - _val_with_tiers} persona-led only) …")
         if _val_cats:
             with _futures.ThreadPoolExecutor(max_workers=20) as pool:
                 _val_futures = {
                     pool.submit(_run_category_validator_agent,
                                  cat, persona_doc, subject,
-                                 _guidance_map.get(cat, {}),
+                                 _guidance_map.get(cat) or {},
                                  results_map.get(cat, []),
                                  20): cat
                     for cat in _val_cats
