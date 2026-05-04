@@ -9627,6 +9627,8 @@ def ai_final_gut_check(df, brand_category, project_name, brands):
                 f"either LOWER THEM toward mid-tier OR ensure **digital grocery proxies** "
                 f"(INSTACART when listed, WALMART / TARGET pickup & grocery proxies, grocery delivery Uber Eats / DoorDash) "
                 f"score comparably HIGH — contradictory spreads are persona-wrong.\n"
+                f"- **Regional / limited-distribution CPG:** if a brand is primarily available in one US region (heavy South, Texas corridor, etc.), "
+                f"it must NOT rank high for nationally representative audiences unless THIS profile's LOCATION / DMA evidence shows that regional concentration — otherwise LOWER.\n"
                 f"- Niche lifestyle/streetwear/luxury labels should only over-index strongly when "
                 f"the persona has clear cultural fit.\n\n"
                 f"Persona-rank sanity:\n"
@@ -14362,6 +14364,10 @@ def _category_pass1_calibration_block(category: str) -> str:
             "Target pickup proxies, DoorDash/Uber Eats grocery when in list) should also sit **very high** — "
             "that is how those baskets often show up digitally. If they do not, your tier assignments are "
             "internally inconsistent; fix them.\n"
+            "• **Regional availability / mass-market vs niche:** Brands sold only in parts of the US (e.g. strong "
+            "Southern / Texas-only or regional-only ice cream or grocery labels) should **not** sit in top tiers for a "
+            "**nationally dispersed** persona unless `location` + subsegments show a heavy concentration in that footprint. "
+            "Default national qualified cohort ⇒ treat strong regionals as mid/low or `anti_fit_in_category`.\n"
             "• Prefer `predicted_top_5` that respects this coherence check."
         )
     if u in {'SEARCH ENGINE/AI', 'SEARCH ENGINE'}:
@@ -14386,7 +14392,7 @@ CATEGORY HARD CALIBRATION — HEALTH & WELLNESS (this scoring pass only)
 ═══════════════════════════════════════════════════════════════════
 Do not award high BP to **named regional hospital / single-metro academic medical centers**
 unless the persona is explicitly local-health or healthcare-worker concentrated.
-National median audiences touch those systems online at **/trace** rates.
+National median audiences touch those systems online at **trace** rates.
 National digital-health publishers, telehealth, fitness apps, and retail pharmacy portals
 are appropriate high-BP archetypes."""
 
@@ -14399,7 +14405,11 @@ loyalty surfaces — keep BP honest vs offline replenishment.
 
 If multiple CPG / beauty leaders score high, ensure **digital grocery proxies**
 (Instacart, Walmart/Target grocery pickup stack, grocery delivery apps in this list)
-are **proportionally elevated** — otherwise lower the CPG cluster toward mid tiers."""
+are **proportionally elevated** — otherwise lower the CPG cluster toward mid tiers.
+
+**Regional-only or strong geo-skew brands** (sold mainly in one region — e.g. deep-South / Texas-heavy
+grocery or ice-cream labels): keep BP **low** unless persona `location` DMA mix or subsegments prove that
+geography — otherwise panel noise is inflating irrelevant regionals."""
 
     if u in {'SEARCH ENGINE/AI', 'SEARCH ENGINE'}:
         return """═══════════════════════════════════════════════════════════════════
@@ -14942,7 +14952,7 @@ For each category, your guidance MUST be grounded in reality:
   (that incorrectly implies nearly half the audience engages those specific systems online yearly). Tie high scores to persona geography or medical roles only.
 - MOST PURCHASED BRANDS (digital semantics): Makeup/fragrance/snack/soap **CPG** often purchased offline — do not stack them atop the leaderboard
   without a digital rationale. Coherence rule: heavy CPG / beauty leaderboard ⇒ **Instacart + major digital grocery / pickup proxies** must also spike;
-  otherwise pull CPG downward.
+  otherwise pull CPG downward. **Regional-distribution brands** (strong in one US region only) stay low unless persona `location`/DMA mix proves that geography.
 - SEARCH ENGINE/AI: **Google (~78%+ annual credible digital touching points for mainstream US conditioned cohorts) should ordinarily lead**.
   Respect niche-only Yahoo/Bing/AI-research personas; default mass-market ⇒ Google tier #1, AI assistants chase but seldom clear #1 absent explicit evidence.
 
@@ -14958,7 +14968,7 @@ EXAMPLE category_signals (hypothetical `consumer_brand` athletic-equipment cohor
   "ATHLETE": "The subject's own sponsored athletes should score 2-4x their baseline — not 10x. Only the single most iconic athlete (like LeBron for Nike) gets 5x+. Other athletes score 1.0-1.5x baseline. Don't inflate obscure athletes to 50%+ just because they have a brand deal.",
   "INTEREST": "The panel uses a fixed global list of interest labels (see `interest_top_25` / `interest_bottom_25` in your JSON when the inventory block is present). Your subject's CORE themes MUST dominate the top of that ranking vs generic ubiquitous rows. Generic-functional rows (JOB SEARCH, SOCIAL MEDIA-as-interest, HOME IMPROVEMENT, COOKING) sit mid/low unless persona research proves otherwise — never crowd out spine hobbies.",
   "HEALTH & WELLNESS": "Prefer national digital-health surfaces consumers actually browse or open in-app. Metro hospital SYSTEM brands imply tiny national digital footprints unless the persona is explicitly health-staff heavy or geographically concentrated patients — never pretend ~half the cohort annually engages several different NYC-named hospital stacks online.",
-  "MOST PURCHASED BRANDS": "This is digital-attribution MOST PURCHASED: makeup/snack CPG leaders need DTC or subscription justification or belong mid-tier. If they dominate the top anyway, grocery-delivery anchors (Instacart, Walmart/Target digital grocery proxies in this list, DoorDash grocery if present) must ALSO read very high; otherwise deflate the noisy CPG stack.",
+  "MOST PURCHASED BRANDS": "This is digital-attribution MOST PURCHASED: makeup/snack CPG leaders need DTC or subscription justification or belong mid-tier. If they dominate the top anyway, grocery-delivery anchors (Instacart, Walmart/Target digital grocery proxies in this list, DoorDash grocery if present) must ALSO read very high; otherwise deflate the noisy CPG stack. Brands with region-limited grocery distribution (heavy South/Texas-only type footprints) belong low unless LOCATION/DMA in the persona proves that concentration.",
   "SEARCH ENGINE/AI": "Google/Google Search should virtually always lead (~78–90 BP for mainstream US-conditioned cohorts) and occupy predicted_top_5 #1 unless the profile is unusually Bing/Yahoo/DDG-exclusive. Dedicated AI wrappers may be high but should not cleanly #1 generic consumers vs Google."
 """
 
