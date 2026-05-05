@@ -1622,27 +1622,40 @@ def _validate_total_watchers_with_ai(show_name, platform_name, inflated_total, i
         print(f"   ⚠️  OpenAI not available: {e}")
         return inflated_total, inflated_pre, inflated_clean, {'skipped': True, 'reason': str(e)}
 
-    clean_name = show_name.replace('_', ' ').replace('-', ' ').strip()
+    raw_terms = [t.strip() for t in show_name.replace('_', ' ').replace('-', ' ').split(',') if t.strip()]
+    season_terms = [t for t in raw_terms if 'season' in t.lower()]
+    if season_terms:
+        clean_name = season_terms[0].title()
+    elif raw_terms:
+        clean_name = max(raw_terms, key=len).title()
+    else:
+        clean_name = show_name.replace('_', ' ').strip().title()
 
     prompt = (
-        f'Search for real viewership data for the TV show/content "{clean_name}" on {platform_name}.\n\n'
-        f'I need to validate whether {inflated_total:,} unique US viewers (from our panel data) is plausible.\n'
-        f'Genre: {genre or "unknown"}\n'
-        f'Date range of analysis: {date_range or "unknown"}\n\n'
-        f'Find:\n'
-        f'- Total worldwide viewers reported by any source (Nielsen, Luminate, Samba TV, platform press releases, trade press)\n'
-        f'- If the number is worldwide, estimate US-only portion (typically 55-65% for US-produced content)\n\n'
+        f'How many Americans watched "{clean_name}" on {platform_name}?\n\n'
+        f'Search for the total US viewership numbers for this show. I need the actual number '
+        f'of unique American viewers who watched this content.\n\n'
+        f'Look for data from:\n'
+        f'- Nielsen streaming ratings and Top 10 lists\n'
+        f'- Samba TV or Luminate data\n'
+        f'- Platform press releases or earnings calls\n'
+        f'- Trade press (Variety, Deadline, THR, What\'s on Netflix, etc.)\n\n'
+        f'Context:\n'
+        f'- Platform: {platform_name}\n'
+        f'- Genre: {genre or "unknown"}\n'
+        f'- Date range: {date_range or "unknown"}\n\n'
+        f'If data is reported worldwide, estimate the US portion (typically 55-65% for US-produced content).\n'
+        f'If data is reported in "viewing hours" or "minutes watched", estimate unique viewers by dividing '
+        f'by average hours/minutes per viewer for that type of content.\n\n'
         f'Respond in JSON ONLY (no markdown fencing):\n'
         f'{{\n'
-        f'  "public_viewership_worldwide": <number or null if unknown>,\n'
-        f'  "estimated_us_viewers": <number or null>,\n'
+        f'  "estimated_us_viewers": <number of unique US viewers as an integer, or null if unknown>,\n'
+        f'  "public_viewership_worldwide": <worldwide viewers if found, or null>,\n'
         f'  "confidence": "high" | "medium" | "low",\n'
-        f'  "source": "<where you found the data>",\n'
-        f'  "recommended_total": <what our Total Show Watchers should be, as a panel number (not gen pop projected)>\n'
+        f'  "source": "<specific source — e.g. Nielsen week of 3/3, Variety article from 4/1, etc.>"\n'
         f'}}\n\n'
-        f'IMPORTANT: Our panel represents 10,000,000 people out of 329,900,000 US population.\n'
-        f'So recommended_total should be: estimated_us_viewers * (10000000 / 329900000).\n'
-        f'Round to nearest 10. If you cannot find data, set confidence to "low" and recommended_total to null.'
+        f'IMPORTANT: Return estimated_us_viewers as the raw number of Americans who watched '
+        f'(e.g. 5400000 for 5.4 million). If you cannot find any viewership data, set estimated_us_viewers to null.'
     )
 
     try:
@@ -1676,37 +1689,40 @@ def _validate_total_watchers_with_ai(show_name, platform_name, inflated_total, i
         return inflated_total, inflated_pre, inflated_clean, {'skipped': True, 'reason': str(e)}
 
     confidence = str(result.get('confidence', 'low')).lower()
-    recommended = result.get('recommended_total')
+    estimated_us = result.get('estimated_us_viewers')
     metadata = {
         'public_viewership_worldwide': result.get('public_viewership_worldwide'),
-        'estimated_us_viewers': result.get('estimated_us_viewers'),
+        'estimated_us_viewers': estimated_us,
         'confidence': confidence,
         'source': result.get('source', ''),
-        'recommended_total': recommended,
         'original_total': inflated_total,
     }
 
-    print(f"   🔍 AI viewership lookup: confidence={confidence}, recommended={recommended}, source={result.get('source','')}")
+    print(f"   🔍 AI viewership lookup: confidence={confidence}, estimated_us={estimated_us}, source={result.get('source','')}")
 
-    if recommended is None:
-        print(f"   ℹ️  AI returned no recommended_total (confidence={confidence}) — keeping original")
+    # Compute panel number ourselves from estimated US viewers
+    recommended = None
+    if estimated_us is not None:
+        try:
+            us_num = float(estimated_us)
+            if us_num > 0:
+                recommended = int(round(us_num * (SAMPLE_REPRESENTS / US_POPULATION) / 10) * 10)
+                print(f"   📐 Computed panel from {us_num:,.0f} US viewers → {recommended:,}")
+        except (ValueError, TypeError):
+            pass
+
+    if recommended is None or recommended <= 0:
+        print(f"   ℹ️  AI returned no usable viewer estimate (confidence={confidence}) — keeping original")
         metadata['action'] = 'kept_original'
         return inflated_total, inflated_pre, inflated_clean, metadata
 
-    try:
-        recommended = int(round(float(recommended) / 10) * 10)
-    except (ValueError, TypeError):
-        metadata['action'] = 'kept_original'
-        return inflated_total, inflated_pre, inflated_clean, metadata
-
-    if recommended <= 0:
-        metadata['action'] = 'kept_original'
-        return inflated_total, inflated_pre, inflated_clean, metadata
-
-    # Apply 8% conservative discount — our panel slightly under-represents real viewership
+    # Apply 8% conservative discount
     raw_recommended = recommended
     recommended = int(round(recommended * 0.92 / 10) * 10)
+    if recommended <= 0:
+        recommended = raw_recommended
     print(f"   📉 Applied 8% discount: {raw_recommended:,} → {recommended:,}")
+    metadata['recommended_total'] = recommended
 
     ratio = inflated_total / recommended if recommended > 0 else 1.0
     print(f"   🔄 Overriding Total: {inflated_total:,} → {recommended:,} (ratio={ratio:.2f}x, confidence={confidence})")
