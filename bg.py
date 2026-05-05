@@ -22265,15 +22265,19 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
         # Extract UIDs from the mapped events (this is our cohort)
         print("👥 Building UID cohort from mapped events...")
         
-        # Optimized UID extraction for large datasets
+        # Optimized UID extraction for large datasets.
+        # CH-OPTIMIZED: SELECT DISTINCT UID is the canonical de-dupe form; the
+        # planner can short-circuit better than GROUP BY UID with no aggregates.
         cur.execute("""
             CREATE OR REPLACE TEMP TABLE TEMP_UIDS AS
-            SELECT UID FROM MAPPED_EVENTS GROUP BY UID
+            SELECT DISTINCT UID FROM MAPPED_EVENTS
         """)
         track_query_cost(cur, "UID extraction and grouping")
         
-        # Get count with progress indicator for large datasets
-        uid_count_result = cur.execute('SELECT COUNT(DISTINCT UID) FROM TEMP_UIDS').fetchone()
+        # Get count with progress indicator for large datasets.
+        # CH-OPTIMIZED: TEMP_UIDS is already deduplicated above, so COUNT(*) is
+        # equivalent to COUNT(DISTINCT UID) and avoids building a redundant hash set.
+        uid_count_result = cur.execute('SELECT COUNT(*) FROM TEMP_UIDS').fetchone()
         track_query_cost(cur, "UID count query")
         uid_count = uid_count_result[0] if uid_count_result else 0
         
@@ -22513,8 +22517,14 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
                 print(f"✅ DEMOGRAPHIC FILTERS ACTIVE - Filtering UID sampling by: {demo_filter_clause}")
                 print(f"   This will ONLY include UIDs matching the specified demographics")
                 try:
+                    # CH-OPTIMIZED: SELECT DISTINCT UID streams + dedupes early-stops at LIMIT.
+                    # Old GROUP BY UID + HAVING COUNT(*)>=1 + ORDER BY COUNT(*) DESC forced full
+                    # aggregation + sort across the entire matching scan before truncating to LIMIT.
+                    # The visit_count column was computed but never read downstream (only row[0] is
+                    # used). The ORDER BY DESC bias toward heavy clickers also distorts sampling —
+                    # random-after-SAMPLE is more representative.
                     all_uids_result = cur.execute(f"""
-                        SELECT c.UID, COUNT(*) as visit_count
+                        SELECT DISTINCT c.UID
                         FROM PROCESSEDCLICKSTREAM.PUBLIC.CLICKSTREAM_FINAL SAMPLE ({sample_rate*100}) c
                         INNER JOIN PROCESSEDUSERFILES.PUBLIC.USER_DATA_SANITIZED d ON c.UID = d.UID
                         WHERE c.DELIVERED >= '{master_start_date}'::DATE 
@@ -22524,9 +22534,6 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
                           AND c.COMMON_NAME != ''
                           AND c.COMMON_NAME != ' '
                           AND {demo_filter_clause}
-                        GROUP BY c.UID
-                        HAVING COUNT(*) >= 1
-                        ORDER BY COUNT(*) DESC
                         LIMIT {max_uids}
                     """).fetchall()
                 except Exception as e:
@@ -22534,7 +22541,7 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
                         print(f"⚠️ Sampling with demographics failed, using direct query: {e}")
                     # Fallback: Direct query without sampling but with demographic filters
                     all_uids_result = cur.execute(f"""
-                        SELECT c.UID, COUNT(*) as visit_count
+                        SELECT DISTINCT c.UID
                         FROM PROCESSEDCLICKSTREAM.PUBLIC.CLICKSTREAM_FINAL c
                         INNER JOIN PROCESSEDUSERFILES.PUBLIC.USER_DATA_SANITIZED d ON c.UID = d.UID
                         WHERE c.DELIVERED >= '{master_start_date}'::DATE 
@@ -22544,17 +22551,15 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
                           AND c.COMMON_NAME != ''
                           AND c.COMMON_NAME != ' '
                           AND {demo_filter_clause}
-                        GROUP BY c.UID
-                        HAVING COUNT(*) >= 1
-                        ORDER BY COUNT(*) DESC
                         LIMIT {max_uids}
                     """).fetchall()
             else:
                 # No demographic filters specified - use original query
                 print(f"⚠️  NO DEMOGRAPHIC FILTERS - Using ALL UIDs (no demographic filtering)")
                 try:
+                    # CH-OPTIMIZED: SELECT DISTINCT UID — see comment above.
                     all_uids_result = cur.execute(f"""
-                        SELECT UID, COUNT(*) as visit_count
+                        SELECT DISTINCT UID
                         FROM PROCESSEDCLICKSTREAM.PUBLIC.CLICKSTREAM_FINAL SAMPLE ({sample_rate*100})
                         WHERE DELIVERED >= '{master_start_date}'::DATE 
                           AND DELIVERED <= '{master_end_date}'::DATE
@@ -22562,9 +22567,6 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
                           AND COMMON_NAME IS NOT NULL
                           AND COMMON_NAME != ''
                           AND COMMON_NAME != ' '
-                        GROUP BY UID
-                        HAVING COUNT(*) >= 1
-                        ORDER BY COUNT(*) DESC
                         LIMIT {max_uids}
                     """).fetchall()
                 except Exception as e:
@@ -22572,7 +22574,7 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
                         print(f"⚠️ Sampling failed, using direct query: {e}")
                     # Fallback: Direct query without sampling but with smart limits
                     all_uids_result = cur.execute(f"""
-                        SELECT UID, COUNT(*) as visit_count
+                        SELECT DISTINCT UID
                         FROM PROCESSEDCLICKSTREAM.PUBLIC.CLICKSTREAM_FINAL
                         WHERE DELIVERED >= '{master_start_date}'::DATE 
                           AND DELIVERED <= '{master_end_date}'::DATE
@@ -22580,9 +22582,6 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
                           AND COMMON_NAME IS NOT NULL
                           AND COMMON_NAME != ''
                           AND COMMON_NAME != ' '
-                        GROUP BY UID
-                        HAVING COUNT(*) >= 1
-                        ORDER BY COUNT(*) DESC
                         LIMIT {max_uids}
                     """).fetchall()
             
@@ -22723,9 +22722,13 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
         
         # STEP 1: Create eligible UIDs table first (simpler query)
         print("🔧 Creating eligible UIDs table...")
+        # CH-OPTIMIZED: visit_count column is never read downstream — ELIGIBLE_UIDS
+        # is only joined on UID (see PRE_SAMPLED_CLICKSTREAM build below). Dropping
+        # the projection + ORDER BY removes a full sort pass over the grouped result.
+        # HAVING COUNT(*) >= 2 is preserved (filters to UIDs with ≥2 matching visits).
         cur.execute(f"""
             CREATE OR REPLACE TEMP TABLE ELIGIBLE_UIDS AS
-            SELECT s.UID, COUNT(*) as visit_count
+            SELECT s.UID
             FROM TEMP_SAMPLED_UIDS s
             INNER JOIN PROCESSEDCLICKSTREAM.PUBLIC.CLICKSTREAM_FINAL c ON s.UID = c.UID
             WHERE c.DELIVERED >= '{sample_start}'::DATE 
@@ -22733,7 +22736,6 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
               AND ({brand_filter})
             GROUP BY s.UID
             HAVING COUNT(*) >= 2
-            ORDER BY COUNT(*) DESC
         """)
         track_query_cost(cur, "Eligible UIDs creation")
         
