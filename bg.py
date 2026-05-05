@@ -34164,16 +34164,55 @@ def enforce_behavioral_category_plausibility(df, brand_category=None, project_na
     # ── PRO ATHLETE — SPORTS TEAM home-team guardrail ──────────────────────
     # If the profile subject is a known pro athlete, their current team must lead
     # their respective league category. We detect this from project_name / brands.
+    # League peers — top NBA stars that ANY NBA fan recognizes and follows.
+    # Used to over-index marquee names in NBA ATHLETE / ATHLETE for any
+    # NBA athlete profile.
+    _NBA_MARQUEE_PEERS = [
+        'GIANNIS ANTETOKOUNMPO', 'NIKOLA JOKIC', 'LUKA DONCIC', 'JAYSON TATUM',
+        'SHAI GILGEOUS-ALEXANDER', 'JOEL EMBIID', 'DAMIAN LILLARD',
+        'ANTHONY DAVIS', 'JIMMY BUTLER', 'KAWHI LEONARD', 'PAUL GEORGE',
+        'DEVIN BOOKER', 'DONOVAN MITCHELL', 'JA MORANT', 'ANTHONY EDWARDS',
+        'TRAE YOUNG', 'TYRESE HALIBURTON', 'KARL-ANTHONY TOWNS',
+        'DE\'AARON FOX', 'DAMIAN LILLARD', 'JAMAL MURRAY', 'RUSSELL WESTBROOK',
+        'JAMES HARDEN', 'CHRIS PAUL', 'KYRIE IRVING', 'BRADLEY BEAL',
+        'PASCAL SIAKAM', 'BAM ADEBAYO', 'VICTOR WEMBANYAMA', 'ZION WILLIAMSON',
+    ]
     _ATHLETE_TEAM_MAP = {
-        'KEVIN DURANT': {'team': 'HOUSTON ROCKETS', 'league': 'NBA',
-                         'city_teams': ['HOUSTON TEXANS', 'HOUSTON ASTROS', 'HOUSTON DYNAMO'],
-                         'home_dma': 'HOUSTON TX'},
-        'LEBRON JAMES': {'team': 'LOS ANGELES LAKERS', 'league': 'NBA',
-                         'city_teams': ['LOS ANGELES RAMS', 'LOS ANGELES DODGERS', 'LA GALAXY', 'LOS ANGELES CHARGERS'],
-                         'home_dma': 'LOS ANGELES CA'},
-        'STEPHEN CURRY': {'team': 'GOLDEN STATE WARRIORS', 'league': 'NBA',
-                          'city_teams': ['SAN FRANCISCO 49ERS', 'SAN FRANCISCO GIANTS', 'SAN JOSE EARTHQUAKES'],
-                          'home_dma': 'SAN FRANCISCO OAKLAND SAN JOSE CA'},
+        'KEVIN DURANT': {
+            'team': 'HOUSTON ROCKETS', 'league': 'NBA',
+            'city_teams': ['HOUSTON TEXANS', 'HOUSTON ASTROS', 'HOUSTON DYNAMO'],
+            'home_dma': 'HOUSTON TX',
+            'current_teammates': [
+                'ALPEREN SENGUN', 'JABARI SMITH JR.', 'JABARI SMITH',
+                'AMEN THOMPSON', 'TARI EASON', 'FRED VANVLEET',
+                'DILLON BROOKS', 'REED SHEPPARD', 'CAM WHITMORE',
+                'JAE\'SEAN TATE', 'JAESEAN TATE', 'STEVEN ADAMS',
+                'JOCK LANDALE', 'AARON HOLIDAY',
+            ],
+            'league_peers': _NBA_MARQUEE_PEERS,
+        },
+        'LEBRON JAMES': {
+            'team': 'LOS ANGELES LAKERS', 'league': 'NBA',
+            'city_teams': ['LOS ANGELES RAMS', 'LOS ANGELES DODGERS', 'LA GALAXY', 'LOS ANGELES CHARGERS'],
+            'home_dma': 'LOS ANGELES CA',
+            'current_teammates': [
+                'ANTHONY DAVIS', 'AUSTIN REAVES', 'D\'ANGELO RUSSELL',
+                'RUI HACHIMURA', 'DALTON KNECHT', 'MAX CHRISTIE',
+                'JARRED VANDERBILT', 'GABE VINCENT', 'CHRISTIAN WOOD',
+            ],
+            'league_peers': _NBA_MARQUEE_PEERS,
+        },
+        'STEPHEN CURRY': {
+            'team': 'GOLDEN STATE WARRIORS', 'league': 'NBA',
+            'city_teams': ['SAN FRANCISCO 49ERS', 'SAN FRANCISCO GIANTS', 'SAN JOSE EARTHQUAKES'],
+            'home_dma': 'SAN FRANCISCO OAKLAND SAN JOSE CA',
+            'current_teammates': [
+                'KLAY THOMPSON', 'DRAYMOND GREEN', 'ANDREW WIGGINS',
+                'JONATHAN KUMINGA', 'MOSES MOODY', 'BRANDIN PODZIEMSKI',
+                'KEVON LOONEY', 'BUDDY HIELD', 'DE\'ANTHONY MELTON',
+            ],
+            'league_peers': _NBA_MARQUEE_PEERS,
+        },
     }
 
     # Try to match project_name against known athletes
@@ -34278,6 +34317,185 @@ def enforce_behavioral_category_plausibility(df, brand_category=None, project_na
                             print(f"   📍 Boosted {home_dma} to {target:.2f}% in LOCATION "
                                   f"(athlete home market — was rank {home_rank}, BP {home_cur_bp:.2f}%); "
                                   f"rescaled {len(loc_rows)-1} other DMAs by {scale:.4f}")
+
+        # ── ATHLETE: current teammates + league peers should over-index ────
+        # The scoring agent doesn't reliably know who's currently on the
+        # subject's roster, and it tends to anchor name recognition to
+        # NYC/LA stars rather than the athlete's actual circle. Boost:
+        #  - Current teammates to 25-40% BP (they share locker room
+        #    storylines and Houston-market overlap)
+        #  - Marquee league peers to 35-55% BP (any NBA fan knows them)
+        current_teammates = matched_athlete.get('current_teammates') or []
+        league_peers = matched_athlete.get('league_peers') or []
+        for cat_check in ['NBA ATHLETE', 'NFL ATHLETE', 'MLB ATHLETE',
+                          'NHL ATHLETE', 'MLS ATHLETE', 'ATHLETE']:
+            rows = _cat_rows(cat_check)
+            if not rows:
+                continue
+            for idx, val, cur_bp in rows:
+                vu = val.upper().strip()
+                if vu in current_teammates and cur_bp < 22.0:
+                    import random as _rnd
+                    target = 25.0 + _rnd.uniform(0, 12)  # 25-37%
+                    _write_bp(idx, target)
+                    fixes += 1
+                    if not SILENCE_VERBOSE_OUTPUT:
+                        print(f"   🏀 Boosted teammate {val} to {target:.2f}% in {cat_check}")
+                elif vu in league_peers and cur_bp < 32.0:
+                    import random as _rnd
+                    target = 35.0 + _rnd.uniform(0, 18)  # 35-53%
+                    _write_bp(idx, target)
+                    fixes += 1
+                    if not SILENCE_VERBOSE_OUTPUT:
+                        print(f"   🏀 Boosted league peer {val} to {target:.2f}% in {cat_check}")
+
+    # ── QSR major-chain floor ───────────────────────────────────────────
+    # National QSR chains have huge real-world reach regardless of persona.
+    # Wave 2 scoring agents repeatedly crush them to 0.01-5% because they
+    # over-fit the persona signal and forget mass-market baseline. Hard floor
+    # per chain so Pizza Hut / Sonic / DQ / Wendy's / BK / Subway etc. can
+    # never appear absurdly low. These floors are conservative — well below
+    # actual gen-pop reach so persona-aware over-indexing is still possible.
+    _QSR_MAJOR_FLOORS = {
+        'MCDONALDS': 35.0, "MCDONALD'S": 35.0,
+        'STARBUCKS': 30.0,
+        'SUBWAY': 28.0,
+        'TACO BELL': 28.0,
+        'WENDYS': 25.0, "WENDY'S": 25.0,
+        'CHICK-FIL-A': 22.0, 'CHICK FIL A': 22.0,
+        'BURGER KING': 22.0,
+        'DUNKIN': 20.0, 'DUNKIN DONUTS': 20.0, "DUNKIN'": 20.0,
+        'CHIPOTLE MEXICAN GRILL': 20.0, 'CHIPOTLE': 20.0,
+        'KFC': 18.0,
+        'DOMINOS': 18.0, "DOMINO'S": 18.0, 'DOMINOS PIZZA': 18.0,
+        'POPEYES': 14.0, 'POPEYES LOUISIANA KITCHEN': 14.0,
+        'LITTLE CAESARS': 14.0,
+        'PIZZA HUT': 14.0,
+        'SONIC': 13.0, 'SONIC DRIVE-IN': 13.0, 'SONIC DRIVE IN': 13.0,
+        'DAIRY QUEEN': 13.0,
+        'PANERA BREAD': 12.0,
+        'PAPA JOHNS': 11.0, "PAPA JOHN'S": 11.0,
+        'ARBYS': 11.0, "ARBY'S": 11.0,
+        'JACK IN THE BOX': 9.0,
+        'JIMMY JOHNS': 8.0, "JIMMY JOHN'S": 8.0,
+        'PANDA EXPRESS': 9.0,
+        'BUFFALO WILD WINGS': 9.0,
+        'JERSEY MIKES SUBS': 7.0, "JERSEY MIKE'S SUBS": 7.0, 'JERSEY MIKES': 7.0,
+        'FIVE GUYS': 8.0,
+        'CHIPOTLE': 18.0,
+    }
+    qsr_rows = _cat_rows('QSR')
+    qsr_fixes = 0
+    for idx, val, cur_bp in qsr_rows:
+        vu = val.upper().strip()
+        floor = _QSR_MAJOR_FLOORS.get(vu)
+        if floor is None:
+            continue
+        if cur_bp < floor:
+            import random as _rnd
+            # Add a little jitter so brands don't all land on the floor exactly
+            target = floor + _rnd.uniform(0, 4.0)
+            _write_bp(idx, target)
+            qsr_fixes += 1
+            if not SILENCE_VERBOSE_OUTPUT:
+                print(f"   🍔 QSR floor: {val} {cur_bp:.2f}% → {target:.2f}%")
+    fixes += qsr_fixes
+    if qsr_fixes and not SILENCE_VERBOSE_OUTPUT:
+        print(f"   🍔 QSR major-chain floor applied to {qsr_fixes} brand(s)")
+
+    # ── Major digital platform floor ────────────────────────────────────
+    # Mass online platforms reach 70-95% of any digitally-active audience.
+    # Wave 2 scoring repeatedly under-scores YouTube/Netflix/Amazon for
+    # narrow personas (e.g. KD's NBA fans got YouTube=50%). Floor per
+    # platform across the categories where it shows up.
+    _PLATFORM_FLOORS = {
+        # category -> {brand: floor_bp}
+        'SOCIAL MEDIA': {
+            'YOUTUBE': 78.0,
+            'INSTAGRAM': 65.0,
+            'FACEBOOK': 55.0,
+        },
+        'STREAMING/PLATFORM': {
+            'NETFLIX': 75.0,
+            'YOUTUBE': 78.0,
+            'AMAZON PRIME VIDEO': 55.0,
+            'HULU': 52.0,
+            'DISNEY+': 38.0,
+        },
+        'STREAMING/MUSIC': {
+            'YOUTUBE MUSIC': 35.0,
+            'SPOTIFY': 50.0,
+        },
+        'APP/PLATFORM USAGE': {
+            'GOOGLE': 80.0,
+            'GOOGLE SEARCH': 80.0,
+            'GMAIL': 70.0,
+            'GOOGLE MAPS': 65.0,
+        },
+        'SEARCH ENGINE/AI': {
+            'GOOGLE': 80.0,
+        },
+    }
+    plat_fixes = 0
+    for cat_name, brand_floors in _PLATFORM_FLOORS.items():
+        rows = _cat_rows(cat_name)
+        if not rows:
+            continue
+        for idx, val, cur_bp in rows:
+            vu = val.upper().strip()
+            floor = brand_floors.get(vu)
+            if floor is None:
+                continue
+            if cur_bp < floor:
+                import random as _rnd
+                target = floor + _rnd.uniform(0, 6.0)
+                _write_bp(idx, target)
+                plat_fixes += 1
+                if not SILENCE_VERBOSE_OUTPUT:
+                    print(f"   📱 Platform floor [{cat_name}]: {val} {cur_bp:.2f}% → {target:.2f}%")
+    fixes += plat_fixes
+
+    # ── Creator primary-platform booster ────────────────────────────────
+    # If the subject is a known creator/influencer whose brand is built on
+    # a single platform, that platform should dominate SOCIAL MEDIA.
+    # Mirrors _ATHLETE_TEAM_MAP — small static map as safety net.
+    _PRIMARY_PLATFORM_MAP = {
+        # Subject upper -> (platform_brand_in_SOCIAL_MEDIA, expected_bp_range)
+        'MRBEAST': ('YOUTUBE', (94.0, 99.0)),
+        'JIMMY DONALDSON': ('YOUTUBE', (94.0, 99.0)),
+        'PEWDIEPIE': ('YOUTUBE', (94.0, 99.0)),
+        'MARKIPLIER': ('YOUTUBE', (92.0, 98.0)),
+        'KAI CENAT': ('TWITCH', (88.0, 96.0)),
+        'KAICENAT': ('TWITCH', (88.0, 96.0)),
+        'NINJA': ('TWITCH', (85.0, 95.0)),
+        'POKIMANE': ('TWITCH', (85.0, 95.0)),
+        'CHARLI DAMELIO': ('TIKTOK', (90.0, 98.0)),
+        'CHARLI D\'AMELIO': ('TIKTOK', (90.0, 98.0)),
+        'ADDISON RAE': ('TIKTOK', (88.0, 96.0)),
+        'KHABY LAME': ('TIKTOK', (88.0, 96.0)),
+        'LOGAN PAUL': ('YOUTUBE', (88.0, 96.0)),
+        'JAKE PAUL': ('YOUTUBE', (88.0, 96.0)),
+        'JOE ROGAN': ('SPOTIFY', (88.0, 96.0)),
+    }
+    proj_clean = str(project_name or '').upper().replace('_', ' ').strip()
+    matched_creator = None
+    for ck, cv in _PRIMARY_PLATFORM_MAP.items():
+        if ck in proj_clean:
+            matched_creator = cv
+            break
+    if matched_creator:
+        primary_brand, (lo, hi) = matched_creator
+        sm_rows = _cat_rows('SOCIAL MEDIA')
+        for idx, val, cur_bp in sm_rows:
+            if val.upper().strip() == primary_brand and cur_bp < lo:
+                import random as _rnd
+                target = lo + _rnd.uniform(0, hi - lo)
+                _write_bp(idx, target)
+                fixes += 1
+                if not SILENCE_VERBOSE_OUTPUT:
+                    print(f"   🎬 Creator primary platform: {primary_brand} forced to "
+                          f"{target:.2f}% in SOCIAL MEDIA (was {cur_bp:.2f}%)")
+                break
 
     if not SILENCE_VERBOSE_OUTPUT and fixes:
         print(f"🛡️ Behavioral plausibility guard: {fixes} deterministic correction(s)")
