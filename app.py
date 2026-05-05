@@ -22135,21 +22135,37 @@ def run_sf_lf_conversion(job_id):
         if lf_platform:
             _, lf_plat_esc = _escape_for_sf_lf_sql(lf_platform)
             lf_platform_filter = f"LOWER(COMMON_NAME) = '{lf_plat_esc.lower()}'"
-        
+
+        # Campaign-URL match expression for ClickHouse. Used to gate every
+        # platform / temp-table / conversion query so we only count clickstream
+        # events that match a supplied campaign URL — instead of every event on
+        # the platform during the date range (which was the original bug that
+        # produced cap-saturated 196.9M / 143M / 150M totals on the dashboard).
+        # multiSearchAnyCaseInsensitive is the fast path for a needles array;
+        # ClickHouse short-circuits on first hit.
+        sf_url_needles_lower = [
+            (u or '').lower().replace("\\", "\\\\").replace("'", "''")
+            for u in sf_urls if u
+        ]
+        if sf_url_needles_lower:
+            _needles_arr_all = '[' + ', '.join(f"'{n}'" for n in sf_url_needles_lower) + ']'
+            sf_url_match_expr = f"multiSearchAnyCaseInsensitive(URL, {_needles_arr_all}) > 0"
+        else:
+            sf_url_match_expr = "0"  # no URLs => no rows match (was previously unfiltered)
+
         # ===== CONVERSION-FOCUSED APPROACH WITH PER-PLATFORM BREAKDOWN =====
-        # Helper function to add noise to zero values
         import random
+        # Identity passthrough — we used to inject random integers when the
+        # underlying panel count was 0, which masked real zeros and made the
+        # dashboard look populated even when nobody saw the campaign. We now
+        # surface true zeros so customers see honest numbers.
         def add_noise_if_zero(value, min_noise=50, max_noise=500):
-            """Add noise to zero values so nothing is ever exactly 0"""
-            if value is None or value == 0:
-                return random.randint(min_noise, max_noise)
-            return value
-        
+            """Identity (was: replace 0 with random int). Kept for call-site compat."""
+            return value if value is not None else 0
+
         def add_small_noise(value):
-            """Add smaller noise for conversion counts"""
-            if value is None or value == 0:
-                return random.randint(15, 75)
-            return value
+            """Identity (was: replace 0 with random int). Kept for call-site compat."""
+            return value if value is not None else 0
         
         # Determine which platforms to analyze
         platforms_to_query = sf_platforms if sf_platforms else ['YouTube', 'TikTok', 'Instagram']
@@ -22170,14 +22186,21 @@ def run_sf_lf_conversion(job_id):
             plat_select_parts.append(f"uniqExactIf(UID, LOWER(COMMON_NAME) = '{pl_esc}') AS p{i}_uniq")
             plat_select_parts.append(f"countIf(LOWER(COMMON_NAME) = '{pl_esc}') AS p{i}_total")
 
+        # URL-filtered platform totals: only count events on a tracked SF
+        # platform that ALSO match a supplied campaign URL. Without the URL
+        # filter this query was returning the entire platform's user/event
+        # count for the date range (which produced the 143M IG / 150M TT
+        # cap-saturated values customers saw on the dashboard).
         batch_plat_sql = f"""
             SELECT {', '.join(plat_select_parts)}
             FROM clickstream.clickstream_final
             WHERE DELIVERED BETWEEN '{start_date}' AND '{end_date}'
               AND LOWER(COMMON_NAME) IN ({plat_list_sql})
+              AND {sf_url_match_expr}
         """
         try:
-            print(f"[SF-LF] Step 1: BATCH per-platform query for {len(plat_lowers)} platforms...")
+            print(f"[SF-LF] Step 1: BATCH per-platform query for {len(plat_lowers)} platforms "
+                  f"(URL-filtered against {len(sf_url_needles_lower)} campaign URLs)...")
             cur.execute(batch_plat_sql)
             plat_row = list(cur.fetchone() or [0] * (2 * len(plat_lowers)))
         except Exception as e:
@@ -22187,41 +22210,30 @@ def run_sf_lf_conversion(job_id):
         for i, platform in enumerate(platforms_to_query):
             plat_unique = int(plat_row[i * 2] or 0)
             plat_total  = int(plat_row[i * 2 + 1] or 0)
-            noisy_unique = add_noise_if_zero(plat_unique)
-            noisy_dup    = add_noise_if_zero(plat_total)
-            if noisy_dup <= noisy_unique:
-                noisy_dup = int(noisy_unique * random.uniform(1.5, 3.0))
+            # No noise injection / no synthetic duplicated>unique fudge — surface
+            # true counts. If a platform legitimately has 0 campaign-matching
+            # events the dashboard should show 0, not random noise.
             per_platform_data[platform] = {
-                'unique_views':     noisy_unique,
-                'duplicated_views': noisy_dup,
+                'unique_views':     plat_unique,
+                'duplicated_views': plat_total,
                 'raw_unique':       plat_unique,
                 'raw_duplicated':   plat_total
             }
-            print(f"[SF-LF]   {platform}: {noisy_unique:,} unique, {noisy_dup:,} duplicated")
+            print(f"[SF-LF]   {platform}: {plat_unique:,} unique, {plat_total:,} events "
+                  f"(URL-filtered)")
         
-        # ===== COMPUTE OVERALL AS SUM OF ALL PLATFORMS =====
-        # OVERALL = Sum of all platform viewers (represents total engagements across platforms)
-        # This ensures OVERALL is always >= any individual platform
+        # ===== INITIAL OVERALL (will be REPLACED by true distinct-UID base) =====
+        # Provisional values from the sum of per-platform counts. The OVERALL
+        # `unique_views` is overwritten below by the batched conversion query's
+        # `overall_sf_unique` (a real `countIf(saw_any_sf=1)` over GROUP BY UID),
+        # which deduplicates users active on multiple SF platforms. Duplicated
+        # (= event count) stays as a sum since events don't dedupe across
+        # platforms. No noise / fudge — true zero shows as zero.
         sf_total_unique = sum(pd['raw_unique'] for pd in per_platform_data.values())
         sf_total_duplicated = sum(pd['raw_duplicated'] for pd in per_platform_data.values())
-        
-        # Apply noise if needed
-        sf_total_unique = add_noise_if_zero(sf_total_unique)
-        sf_total_duplicated = add_noise_if_zero(sf_total_duplicated)
-        
-        # Ensure duplicated > unique at overall level too
-        if sf_total_duplicated <= sf_total_unique:
-            sf_total_duplicated = int(sf_total_unique * random.uniform(1.5, 3.0))
-        
-        # Ensure OVERALL is at least the max of any individual platform (sanity check)
-        max_plat_unique = max((pd['unique_views'] for pd in per_platform_data.values()), default=0)
-        max_plat_dup = max((pd['duplicated_views'] for pd in per_platform_data.values()), default=0)
-        if sf_total_unique < max_plat_unique:
-            sf_total_unique = max_plat_unique + random.randint(100, 500)
-        if sf_total_duplicated < max_plat_dup:
-            sf_total_duplicated = max_plat_dup + random.randint(1000, 5000)
-        
-        print(f"[SF-LF] OVERALL: {sf_total_unique:,} unique, {sf_total_duplicated:,} total")
+        print(f"[SF-LF] OVERALL (provisional sum): {sf_total_unique:,} unique, "
+              f"{sf_total_duplicated:,} total — will be replaced with true "
+              f"distinct-UID count from batched conv query")
         
         # Create temp table for ALL combined SF viewers (for conversion queries)
         sf_temp_table = f"SF_VIEWERS_{job_id.replace('-', '_')[:15]}"
@@ -22230,14 +22242,18 @@ def run_sf_lf_conversion(job_id):
         
         try:
             cur.execute(f"DROP TABLE IF EXISTS {sf_temp_table}")
+            # URL-filtered: only UIDs that touched a tracked SF platform AND
+            # saw a supplied campaign URL. This is the right cohort for
+            # downstream demographics + LF-conversion joins.
             cur.execute(f"""
                 CREATE TEMPORARY TABLE {sf_temp_table} AS
                 SELECT DISTINCT UID
                 FROM PROCESSEDCLICKSTREAM.PUBLIC.CLICKSTREAM_FINAL
                 WHERE {platform_where}
+                  AND {sf_url_match_expr}
                   AND DELIVERED BETWEEN '{start_date}' AND '{end_date}'
             """)
-            print(f"[SF-LF] Created temp table for conversion queries")
+            print(f"[SF-LF] Created URL-filtered temp table for conversion queries")
         except Exception as e:
             print(f"[SF-LF] Error creating SF viewers table: {e}")
             raise
@@ -22396,10 +22412,21 @@ def run_sf_lf_conversion(job_id):
             lf_plat_match_expr = "0"
 
         conv_inner_parts = []
+        # URL-filtered: saw_p{i} / saw_any_sf require BOTH a platform match
+        # AND a supplied campaign URL match. Without this, the funnel
+        # denominator (`overall_sf_unique`) was every UID active on the
+        # platform during the date range — vastly inflating "Short Form
+        # Views" and crushing every downstream conversion ratio.
         for i, pl in enumerate(plat_lowers):
             pl_esc = pl.replace("'", "''")
-            conv_inner_parts.append(f"maxIf(1, LOWER(COMMON_NAME) = '{pl_esc}') AS saw_p{i}")
-        conv_inner_parts.append(f"maxIf(1, LOWER(COMMON_NAME) IN ({plat_list_sql})) AS saw_any_sf")
+            conv_inner_parts.append(
+                f"maxIf(1, LOWER(COMMON_NAME) = '{pl_esc}' "
+                f"AND {sf_url_match_expr}) AS saw_p{i}"
+            )
+        conv_inner_parts.append(
+            f"maxIf(1, LOWER(COMMON_NAME) IN ({plat_list_sql}) "
+            f"AND {sf_url_match_expr}) AS saw_any_sf"
+        )
         conv_inner_parts.append(f"maxIf(1, {lf_match_expr}) AS saw_lf")
         conv_inner_parts.append(f"maxIf(1, {lf_plat_match_expr}) AS saw_lf_plat")
         conv_inner_parts.append(f"countIf({lf_match_expr}) AS lf_view_count")
@@ -22420,15 +22447,22 @@ def run_sf_lf_conversion(job_id):
         # base instead of from over-counted impressions.
         conv_outer_parts.append("countIf(saw_any_sf = 1) AS overall_sf_unique")
 
-        # Pre-filter rows: only those that match an SF platform OR look like an LF hit.
-        # Drastically narrows the GROUP BY UID to relevant users only.
+        # Pre-filter rows: only those that match (a campaign URL on a
+        # tracked SF platform) OR (an LF hit). Restricting the SF side
+        # to URL-matched events (not the whole platform) keeps the
+        # GROUP BY UID limited to users actually exposed to the campaign,
+        # which is what downstream "% of SF viewers" funnels expect.
         if lf_platform:
-            conv_prefilter = (f"(LOWER(COMMON_NAME) IN ({plat_list_sql}) "
-                              f"OR LOWER(COMMON_NAME) = '{lf_plat_q}' "
-                              f"OR positionCaseInsensitive(URL, '{lf_title_pattern}') > 0)")
+            conv_prefilter = (
+                f"((LOWER(COMMON_NAME) IN ({plat_list_sql}) AND {sf_url_match_expr}) "
+                f"OR LOWER(COMMON_NAME) = '{lf_plat_q}' "
+                f"OR positionCaseInsensitive(URL, '{lf_title_pattern}') > 0)"
+            )
         else:
-            conv_prefilter = (f"(LOWER(COMMON_NAME) IN ({plat_list_sql}) "
-                              f"OR positionCaseInsensitive(URL, '{lf_title_pattern}') > 0)")
+            conv_prefilter = (
+                f"((LOWER(COMMON_NAME) IN ({plat_list_sql}) AND {sf_url_match_expr}) "
+                f"OR positionCaseInsensitive(URL, '{lf_title_pattern}') > 0)"
+            )
 
         batch_conv_sql = f"""
             SELECT {', '.join(conv_outer_parts)}
@@ -22483,16 +22517,29 @@ def run_sf_lf_conversion(job_id):
         # (including "Visited Long Form Platform"). The numerator
         # `_lf_plat_conv_raw` was already deduplicated, so we now make
         # the denominator consistent with it.
-        if sf_unique_dedup_raw > 0:
-            old_sf_total_unique = sf_total_unique
-            sf_total_unique = sf_unique_dedup_raw
-            # Keep duplicated > unique invariant; recompute against the
-            # corrected base so the funnel tiles still ladder up.
-            if sf_total_duplicated <= sf_total_unique:
-                sf_total_duplicated = int(sf_total_unique * random.uniform(1.5, 3.0))
-            print(f"[SF-LF] Replaced inflated sum-based base "
-                  f"({old_sf_total_unique:,}) with true distinct-UID "
-                  f"base ({sf_total_unique:,}) for funnel denominator")
+        old_sf_total_unique = sf_total_unique
+        sf_total_unique = sf_unique_dedup_raw  # may be 0 — that's a true zero
+        # Duplicated stays as the per-platform sum (events don't dedup across
+        # platforms — a user watching on YT and IG generates 2 events).
+        # No random-fudge bump: if duplicated <= unique that's a real signal
+        # (e.g. each user saw the campaign once), not something to mask.
+        print(f"[SF-LF] Replaced sum-based unique base "
+              f"({old_sf_total_unique:,}) with true distinct-UID base "
+              f"({sf_total_unique:,}) for funnel denominator")
+
+        # Propagate the corrected OVERALL into the result dicts. The OVERALL
+        # rows in url_metrics/platform_metrics were populated earlier with the
+        # provisional sum-based value; without this update the dashboard tile
+        # ("Short Form Views") still showed the inflated number even though
+        # the funnel denominator was correct.
+        for _um in results.get('url_metrics', []):
+            if _um.get('is_overall'):
+                _um['unique_views'] = sf_total_unique
+                _um['duplicated_views'] = sf_total_duplicated
+        for _pm in results.get('platform_metrics', []):
+            if _pm.get('is_overall'):
+                _pm['unique_views'] = sf_total_unique
+                _pm['duplicated_views'] = sf_total_duplicated
         
         # OVERALL conversion = actual unique converted users (NOT sum of per-platform,
         # since a user on multiple platforms would be double-counted)
@@ -22800,8 +22847,11 @@ def run_sf_lf_conversion(job_id):
         #   is_total_views  — duplicated/total-views are NOT capped at US pop
         #                     (one person can legitimately watch many times)
         def project_to_gen_pop(value, platform=None, is_total_views=False):
+            # Surface true zeros — previously this branch injected random 3..12
+            # so "no zero rows in CSV", which made an empty platform look
+            # populated in the dashboard. Customers need honest projections.
             if value is None or value == 0:
-                value = random.randint(3, 12)  # noise so no zero rows in CSV
+                return 0
             scale = _scale_for(platform)
             if is_total_views:
                 # Total/Duplicated Views can exceed US pop legitimately.
