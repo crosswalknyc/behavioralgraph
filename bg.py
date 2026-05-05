@@ -15423,10 +15423,7 @@ Return ONLY a single valid JSON object — no markdown, no commentary.
       "NO": <percent>
     }},
     "OCCUPATION": {{
-      "STUDENT": <percent>,
-      "HOMEMAKER": <percent>,
       "OTHER": <percent>,
-      "UNEMPLOYED": <percent>,
       "PREFER NOT TO SAY": <percent>
     }}
   }},
@@ -15491,7 +15488,7 @@ RULES:
 - ETHNICITY IS CRITICAL: Research the subject's OWN race/ethnicity/heritage. If the subject is a person of color (Asian, Black, Hispanic, etc.), their fan base will significantly over-index on that ethnicity vs. general US population. For example, a Chinese-American actor's audience should have ASIAN as one of the top ethnicities (30-50%+), not just 7% US average. A Black rapper's audience should have BLACK OR AFRICAN AMERICAN at 40-60%+. Never default to generic US census proportions — the subject's identity strongly shapes their audience demographics.
 - AGE IS CRITICAL: The subject's OWN age heavily influences their audience age distribution. Research the subject's actual age. A 58-year-old actress will have an audience peaking in the 45-54 and 55-64 brackets (30%+ and 20%+ respectively), with much lower percentages for 18-24 (5-8%) and 17 AND UNDER (2-5%). A 20-year-old pop star will peak at 18-24 (35-45%) and 17 AND UNDER (15-25%). The audience's peak age bracket should align with or be slightly younger than the subject's own age bracket. Never give equal weight to age brackets that are 20+ years apart from the subject's age.
 - Do NOT include "Prefer Not to Say" or "Other" in AGE, GENDER, ETHNICITY, or INCOME. Those categories must only contain the exact buckets listed above.
-- Do NOT include "EMPLOYED FULL-TIME", "EMPLOYED PART-TIME", "SELF-EMPLOYED", or "RETIRED" in OCCUPATION. Those values are forbidden in final output normalization. OCCUPATION must only use: STUDENT, HOMEMAKER, OTHER, UNEMPLOYED, PREFER NOT TO SAY.
+- Do NOT include "EMPLOYED FULL-TIME", "EMPLOYED PART-TIME", "SELF-EMPLOYED", "RETIRED", "STUDENT", "HOMEMAKER", or "UNEMPLOYED" in OCCUPATION. Those values are forbidden in final output normalization. OCCUPATION must only use: OTHER, PREFER NOT TO SAY.
 - LOCATION: Provide at least 15-20 top DMAs with realistic, varied percentages. The percentages should NOT be clustered — use a natural distribution where the #1 DMA might be 8-12%, #5 might be 4-6%, #10 might be 2-3%, #15 might be 1-2%, #20 might be 0.5-1%. The sum should be ≤ 100; remainder is auto-spread to the other 190+ DMAs with random variation.
 
 ═══════════════════════════════════════════════════════════════════
@@ -18118,7 +18115,7 @@ Reply with ONLY a JSON array (no markdown, no commentary):
 # dropped and its share is redistributed across the remaining named
 # rows in the same category (proportional to existing weights).
 _DEMO_VALUE_BLOCKLIST: dict[str, set[str]] = {
-    'OCCUPATION': {'EMPLOYED FULL-TIME', 'EMPLOYED PART-TIME'},
+    'OCCUPATION': {'EMPLOYED FULL-TIME', 'EMPLOYED PART-TIME', 'STUDENT', 'HOMEMAKER', 'UNEMPLOYED', 'RETIRED'},
 }
 
 
@@ -18126,12 +18123,11 @@ def _drop_blocklisted_demo_values(df: pd.DataFrame) -> pd.DataFrame:
     """Remove forbidden Value rows from demographic categories and
     redistribute their share across the remaining named rows.
 
-    Currently used to enforce the OCCUPATION schema — EMPLOYED FULL-TIME
-    and EMPLOYED PART-TIME are remnants from a legacy schema and conflict
-    with the real occupation taxonomy (SELF-EMPLOYED, STUDENT, HOMEMAKER,
-    RETIRED, UNEMPLOYED, PREFER NOT TO SAY). Even though the prompts
-    forbid them, agents and legacy data flows occasionally re-emit them;
-    this gate is the deterministic catch-all.
+    Currently used to enforce the OCCUPATION schema — EMPLOYED FULL-TIME,
+    EMPLOYED PART-TIME, STUDENT, HOMEMAKER, UNEMPLOYED, and RETIRED are
+    remapped to OTHER. Even though the prompts forbid them, agents and
+    legacy data flows occasionally re-emit them; this gate is the
+    deterministic catch-all.
     """
     if 'Column' not in df.columns or 'Value' not in df.columns:
         return df
@@ -18700,7 +18696,7 @@ def parallel_category_agents(df: pd.DataFrame, persona_doc: dict,
         'SEXUAL_ORIENTATION': ['STRAIGHT / HETEROSEXUAL', 'GAY OR LESBIAN',
                                'ANOTHER SEXUAL ORIENTATION', 'PREFER NOT TO SAY'],
         'PARENTAL_STATUS': ['NO CHILDREN', 'HAS CHILDREN', 'PREFER NOT TO SAY'],
-        'OCCUPATION': ['STUDENT', 'HOMEMAKER', 'OTHER', 'UNEMPLOYED', 'PREFER NOT TO SAY'],
+        'OCCUPATION': ['OTHER', 'PREFER NOT TO SAY'],
     }
 
     def _norm_bracket(s: str) -> str:
@@ -30335,7 +30331,7 @@ def _canonical_demo_value(category: str, value: str) -> str:
         v = 'HIGH SCHOOL OR LESS'
     if cat == 'RELATIONSHIP' and v in {'DIVORCED', 'SEPARATED'}:
         v = 'DIVORCED OR SEPARATED'
-    if cat == 'OCCUPATION' and v in {'SELF-EMPLOYED', 'RETIRED'}:
+    if cat == 'OCCUPATION' and v in {'SELF-EMPLOYED', 'RETIRED', 'STUDENT', 'HOMEMAKER', 'UNEMPLOYED'}:
         v = 'OTHER'
     return v
 
@@ -38064,7 +38060,7 @@ def normalize_output_text_values(df):
             if vu in {'DIVORCED', 'SEPARATED'}:
                 return 'DIVORCED OR SEPARATED'
         elif c == 'OCCUPATION':
-            if vu in {'SELF-EMPLOYED', 'RETIRED'}:
+            if vu in {'SELF-EMPLOYED', 'RETIRED', 'STUDENT', 'HOMEMAKER', 'UNEMPLOYED'}:
                 return 'OTHER'
         return v
 
