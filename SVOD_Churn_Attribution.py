@@ -1453,17 +1453,60 @@ def run_query(conn, p):
         date_range=date_range_for_ai,
     )
 
-    if validated_total != _current_total:
+    if validated_total != _current_total and _current_total > 0:
+        scale_factor = validated_total / _current_total
+        print(f"   📊 AI override scale factor: {scale_factor:.2f}x ({_current_total:,} → {validated_total:,})")
+
         df_summary.loc[0, 'TOTAL_SHOW_WATCHERS'] = validated_total
         df_summary.loc[0, 'PRE_EXISTING_USERS'] = validated_pre
         df_summary.loc[0, 'CLEAN_SAMPLE_SIZE'] = validated_clean
-        # Recalculate conversion rates with corrected Total
-        _new_signups_val = int(df_summary.loc[0, 'NEW_SIGNUPS']) if not pd.isna(df_summary.loc[0, 'NEW_SIGNUPS']) else 0
+
+        # Scale NEW_SIGNUPS proportionally
+        _old_signups = int(df_summary.loc[0, 'NEW_SIGNUPS']) if not pd.isna(df_summary.loc[0, 'NEW_SIGNUPS']) else 0
+        _new_signups_val = int(round(_old_signups * scale_factor))
+        df_summary.loc[0, 'NEW_SIGNUPS'] = _new_signups_val
+
+        # Recalculate conversion rates with corrected values
         if validated_total > 0:
             df_summary.loc[0, 'TOTAL_SHOW_CONVERSION_RATE'] = round((_new_signups_val * 100.0) / validated_total, 2)
         if validated_clean > 0:
             df_summary.loc[0, 'CLEAN_CONVERSION_RATE'] = round((_new_signups_val * 100.0) / validated_clean, 2)
-        print(f"   📊 Corrected metrics: Total={validated_total:,}, Pre={validated_pre:,}, Clean={validated_clean:,}")
+
+        # Scale all downstream dataframe counts by the same factor
+        def _scale_col(df, col):
+            if col in df.columns:
+                for idx in df.index:
+                    val = df.loc[idx, col]
+                    if not pd.isna(val):
+                        try:
+                            df.loc[idx, col] = int(round(float(val) * scale_factor))
+                        except (ValueError, TypeError):
+                            pass
+
+        _scale_col(df_demo, 'COUNT')
+        _scale_col(df_timing, 'SIGNUP_COUNT')
+        if not df_episode_attribution.empty:
+            _scale_col(df_episode_attribution, 'SIGNUPS_ATTRIBUTED')
+            _scale_col(df_episode_attribution, 'TOTAL_VIEWS')
+        if not df_monthly_signups.empty:
+            _scale_col(df_monthly_signups, 'UNIQUE_SIGNUPS')
+            _scale_col(df_monthly_signups, 'ENGAGED_WITH_SHOW')
+        if not df_episode_timing.empty:
+            _scale_col(df_episode_timing, 'SIGNUP_COUNT')
+        if not df_monthly_churn.empty:
+            for _churn_col in ['ACTIVE_USERS', 'PREV_MONTH_ACTIVE', 'CHURNED_USERS']:
+                _scale_col(df_monthly_churn, _churn_col)
+        if not df_post_signup_touchpoints.empty:
+            _scale_col(df_post_signup_touchpoints, 'USER_COUNT')
+            # Recalculate percentages vs new total
+            if 'PERCENTAGE' in df_post_signup_touchpoints.columns and validated_total > 0:
+                for idx in df_post_signup_touchpoints.index:
+                    uc = df_post_signup_touchpoints.loc[idx, 'USER_COUNT']
+                    if not pd.isna(uc):
+                        df_post_signup_touchpoints.loc[idx, 'PERCENTAGE'] = round(float(uc) * 100.0 / validated_total, 2)
+
+        print(f"   📊 Scaled all downstream counts by {scale_factor:.2f}x")
+        print(f"   📊 Corrected metrics: Total={validated_total:,}, Pre={validated_pre:,}, Clean={validated_clean:,}, Signups={_new_signups_val:,}")
 
     # Final invariant check: Total MUST equal Pre + Clean
     _final_total = int(df_summary.loc[0, 'TOTAL_SHOW_WATCHERS']) if not pd.isna(df_summary.loc[0, 'TOTAL_SHOW_WATCHERS']) else 0
