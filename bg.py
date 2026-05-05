@@ -14835,6 +14835,30 @@ PRO ATHLETE PERSONA — ENDORSEMENTS / RETAIL
             "signature deals fans emulate digitally."
         )
 
+    if ind_ath and cat_u in {'SPORTS TEAM', 'NBA', 'NFL', 'MLB', 'MLS', 'NHL',
+                              'NBA TEAM', 'NFL TEAM', 'MLB TEAM', 'MLS TEAM', 'NHL TEAM',
+                              'NFC EAST', 'NFC WEST', 'NFC SOUTH', 'NFC NORTH',
+                              'AFC EAST', 'AFC WEST', 'AFC SOUTH', 'AFC NORTH'}:
+        if short:
+            return """═══════════════════════════════════════════════════════════════════
+PRO ATHLETE PERSONA — SPORTS TEAM CATEGORY
+═══════════════════════════════════════════════════════════════════
+**The athlete's CURRENT TEAM must be #1 in this category at 25-40% BP.**
+Prior teams (trade history): 10-18% BP each.
+Same-city teams in other leagues (e.g., if athlete plays for Houston Rockets,
+then Houston Texans + Houston Astros should be 8-12% each).
+Rival/marquee teams: 10-20%.
+Brooklyn Nets should NOT lead for a current Rockets player."""
+
+        return (
+            "**Pro athlete persona — SPORTS TEAM:** The subject's **CURRENT team** must dominate their league "
+            "category at **25-40% BP** (non-negotiable). Prior teams from trade history should score **10-18%**. "
+            "Same-city teams in other sports should be **elevated to 8-12%** due to geographic fan overlap "
+            "(e.g., KD on Rockets → Texans 8-12%, Astros 8-12%). Rival/marquee league teams 10-20%.\n"
+            "• `predicted_top_5`: CURRENT TEAM first, then prior teams + same-city cross-sport.\n"
+            "• `anti_fit_in_category`: Teams from markets with no storyline connection to this athlete."
+        )
+
     return ''
 
 
@@ -15404,6 +15428,7 @@ STEP 5a — SPORTS FRANCHISE / TEAM (`subject_archetype` MUST be `sports_team_le
 
 STEP 5b — PROFESSIONAL ATHLETE PERSON (`celebrity_or_creator` WHEN research proves elite pro competitor)
   • **`location`**: The **current team's HOME MARKET DMA must be the #1 or #2 DMA at 8-15%** — this is non-negotiable for active players. Example: if KD plays for Houston Rockets, "HOUSTON" must be 8-15%. Prior team markets (OKC, Golden State, Brooklyn, Phoenix) should score 3-5%. National gateway cities (NYC, LA) fill their usual 6-10% only if they are NOT the home market. Do NOT flatten to generic population weights — fans cluster in the player's current city.
+  • **`category_signals["SPORTS TEAM"]` and league-specific (NBA/NFL/MLB/etc.)**: The athlete's **CURRENT TEAM must be explicitly named as the predicted #1** in their league category at 25-40% BP. Prior teams should be 8-15%. Rival/marquee teams 10-20%. Other Houston-market teams (Texans, Astros, Dynamo) should be elevated to 8-12% due to geographic fan overlap. This is the single most important signal for athlete profiles — fans of KD follow the Rockets first.
   • Surface **endorsed sponsors / signature product lines / league official partners tied to persona** across `cultural_anchors`, `cross_shop_network`, MPB/WTS-oriented `category_signals`.
   • `category_signals["ATHLETE"]` should instruct scoring to privilege **THIS subject athlete**, teammate/co-star figures named in anchors, rivalry counterstars shaping narrative arcs — not unrelated leaderboard filler.
 
@@ -33495,6 +33520,70 @@ def enforce_behavioral_category_plausibility(df, brand_category=None, project_na
                 if abs(new_v - cur) >= 0.15:
                     _write_bp(idx, new_v)
                     fixes += 1
+
+    # ── PRO ATHLETE — SPORTS TEAM home-team guardrail ──────────────────────
+    # If the profile subject is a known pro athlete, their current team must lead
+    # their respective league category. We detect this from project_name / brands.
+    _ATHLETE_TEAM_MAP = {
+        'KEVIN DURANT': {'team': 'HOUSTON ROCKETS', 'league': 'NBA',
+                         'city_teams': ['HOUSTON TEXANS', 'HOUSTON ASTROS', 'HOUSTON DYNAMO']},
+        'LEBRON JAMES': {'team': 'LOS ANGELES LAKERS', 'league': 'NBA',
+                         'city_teams': ['LOS ANGELES RAMS', 'LOS ANGELES DODGERS', 'LA GALAXY', 'LOS ANGELES CHARGERS']},
+        'STEPHEN CURRY': {'team': 'GOLDEN STATE WARRIORS', 'league': 'NBA',
+                          'city_teams': ['SAN FRANCISCO 49ERS', 'SAN FRANCISCO GIANTS', 'SAN JOSE EARTHQUAKES']},
+    }
+
+    # Try to match project_name against known athletes
+    proj_upper = str(project_name or '').upper().replace('_', ' ')
+    matched_athlete = None
+    for ath_name, ath_info in _ATHLETE_TEAM_MAP.items():
+        if ath_name in proj_upper:
+            matched_athlete = ath_info
+            break
+
+    if matched_athlete:
+        team_name = matched_athlete['team']
+        league_cat = matched_athlete['league']
+        city_teams = matched_athlete['city_teams']
+
+        for cat_check in [league_cat, 'SPORTS TEAM']:
+            rows = _cat_rows(cat_check)
+            if not rows:
+                continue
+            # Find team row
+            team_idx = None
+            max_bp = 0.0
+            max_idx = None
+            for idx, val, cur_bp in rows:
+                if val.upper().strip() == team_name:
+                    team_idx = idx
+                if cur_bp > max_bp:
+                    max_bp = cur_bp
+                    max_idx = idx
+            if team_idx is not None:
+                cur_team_bp = _bp(team_idx)
+                if cur_team_bp < max_bp * 0.9:
+                    # Boost current team to lead with 28-35% BP
+                    import random as _rnd
+                    target = max(max_bp + 3.0, 28.0 + _rnd.uniform(0, 7))
+                    target = min(target, 40.0)
+                    _write_bp(team_idx, target)
+                    fixes += 1
+                    if not SILENCE_VERBOSE_OUTPUT:
+                        print(f"   🏀 Boosted {team_name} to {target:.2f}% in {cat_check} (athlete home team)")
+
+        # Boost city teams
+        for city_team in city_teams:
+            for cat_check in ['SPORTS TEAM', 'NFL', 'MLB', 'MLS', 'NHL']:
+                rows = _cat_rows(cat_check)
+                for idx, val, cur_bp in rows:
+                    if val.upper().strip() == city_team and cur_bp < 8.0:
+                        import random as _rnd
+                        target = 8.0 + _rnd.uniform(0, 4)
+                        _write_bp(idx, target)
+                        fixes += 1
+                        if not SILENCE_VERBOSE_OUTPUT:
+                            print(f"   🏟️ Boosted {city_team} to {target:.2f}% (same-city as athlete)")
 
     # ── APP/PLATFORM USAGE ceiling guardrail ──────────────────────────────
     # Gen Pop baselines are the realistic ceiling for digital engagement.
