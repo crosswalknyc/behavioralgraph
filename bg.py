@@ -19038,6 +19038,270 @@ Return ONLY a JSON array, one entry per DMA, in the same order:
     return multipliers
 
 
+def _run_unified_scoring_pass(
+    cats_needing_llm: list,
+    unique_items_by_cat: dict,
+    persona_doc: dict,
+    subject: str,
+    panel_lookup: dict,
+    canonical_baseline_lookup: dict | None = None,
+    item_classifications: dict | None = None,
+    timeout_sec: int = 600,
+) -> dict:
+    """
+    UNIFIED SCORING PASS — replaces 50-category Pass 1 + Pass 2 + Pass 3
+    with a single gpt-5.5 reasoning call.
+
+    The agent sees the WHOLE profile inventory at once (every category, every
+    item, panel BP, gen pop baseline, persona) and produces final BP scores
+    for everything in one reasoning pass. This is the architecture that
+    matches the cognitive bandwidth of modern reasoning models.
+
+    Inputs match what Waves 1/2/3 receive in parallel_category_agents:
+        cats_needing_llm:           list of categories to score
+        unique_items_by_cat:        {cat: [item_str, ...]}
+        persona_doc:                full persona dictionary
+        subject:                    e.g. "Kevin Durant"
+        panel_lookup:               {(CAT_UPPER, VAL_UPPER): (panel_bp, n_panel)}
+        canonical_baseline_lookup:  {(CAT_UPPER, VAL_UPPER): genpop_bp}
+        item_classifications:       {VAL_UPPER: {what_is_it, ...}}
+
+    Returns:
+        results_map: {cat: [{value, bp, estimated_bp_pct, panel_decision,
+                              reason, confidence}, ...]}
+
+    Raises on hard failure so the caller can fall back to Waves 1/2/3.
+
+    Env knobs:
+        BG_UNIFIED_AUDIT_MODEL        (default 'gpt-5.5')
+        BG_UNIFIED_REASONING_EFFORT   (default 'high')
+        BG_UNIFIED_MAX_ITEMS_PER_CAT  (default 80)
+    """
+    import json as _json
+    import time as _time
+
+    client = _get_openai_client()
+    if client is None:
+        raise RuntimeError("OpenAI client unavailable")
+
+    if not cats_needing_llm:
+        return {}
+
+    model = os.getenv('BG_UNIFIED_AUDIT_MODEL', 'gpt-5.5').strip()
+    reasoning_effort = os.getenv('BG_UNIFIED_REASONING_EFFORT', 'high').strip().lower()
+    if reasoning_effort not in {'minimal', 'low', 'medium', 'high', 'xhigh'}:
+        reasoning_effort = 'high'
+    max_items_per_cat = int(os.getenv('BG_UNIFIED_MAX_ITEMS_PER_CAT', '80'))
+
+    # ── Build the inventory snapshot block ──────────────────────────────────
+    # For each category we list items sorted by panel BP desc, capped at
+    # max_items_per_cat. Each line: "ITEM | panel:X.X% gp:Y.Y%" (very compact).
+    blocks: list[str] = []
+    total_items = 0
+    items_by_cat_clamped: dict[str, list[str]] = {}
+
+    for cat in sorted(cats_needing_llm):
+        items = unique_items_by_cat.get(cat) or []
+        if not items:
+            continue
+        cat_u = cat.strip().upper()
+        # Build (item, panel_bp, gp_bp) triples
+        triples = []
+        for v in items:
+            v_u = str(v).strip().upper()
+            panel_bp, _np = panel_lookup.get((cat_u, v_u), (0.0, 0))
+            gp_bp = 0.0
+            if canonical_baseline_lookup:
+                gp_bp = float(canonical_baseline_lookup.get((cat_u, v_u), 0) or 0)
+            triples.append((str(v), float(panel_bp or 0), gp_bp))
+        # Sort: items WITH panel signal first (by panel BP desc), then alphabetic for the long tail
+        triples.sort(key=lambda t: (-t[1], t[0]))
+        if len(triples) > max_items_per_cat:
+            triples = triples[:max_items_per_cat]
+
+        items_by_cat_clamped[cat] = [t[0] for t in triples]
+
+        lines = []
+        for name, panel_bp, gp_bp in triples:
+            gp_str = f"gp:{gp_bp:.2f}%" if gp_bp > 0 else "gp:n/a"
+            lines.append(f"  {name} | panel:{panel_bp:.2f}% {gp_str}")
+        blocks.append(f"{cat} ({len(triples)} items):\n" + "\n".join(lines))
+        total_items += len(triples)
+
+    inventory_block = "\n\n".join(blocks)
+
+    # ── Compact persona summary ─────────────────────────────────────────────
+    persona_summary = persona_doc.get('persona_summary', '') or ''
+    digital_identity = persona_doc.get('digital_identity', '') or ''
+    archetype = persona_doc.get('subject_archetype', '') or ''
+    archetype_rationale = persona_doc.get('archetype_rationale', '') or ''
+    cat_signals = persona_doc.get('category_signals') or {}
+    cultural_anchors = persona_doc.get('cultural_anchors') or {}
+    anti_fit = persona_doc.get('anti_fit_explicit') or {}
+
+    demos = persona_doc.get('demographics') or {}
+    demo_lines = []
+    for d_cat in ('AGE', 'GENDER', 'ETHNICITY', 'INCOME', 'EDUCATION', 'RELATIONSHIP'):
+        d = demos.get(d_cat)
+        if isinstance(d, dict) and d:
+            top = sorted(d.items(), key=lambda kv: -float(kv[1] or 0))[:3]
+            demo_lines.append(f"  {d_cat}: " + ", ".join(f"{k}={float(v):.0f}%" for k, v in top))
+
+    cat_signal_lines = []
+    for k, v in list(cat_signals.items())[:15]:
+        s = str(v).strip()
+        if s:
+            cat_signal_lines.append(f"  {k}: {s[:200]}")
+
+    persona_block = (
+        f"SUBJECT: {subject}\n"
+        f"ARCHETYPE: {archetype}\n"
+        f"ARCHETYPE RATIONALE: {archetype_rationale[:400]}\n\n"
+        f"PERSONA SUMMARY:\n{persona_summary[:1200]}\n\n"
+        f"DIGITAL IDENTITY:\n{digital_identity[:600]}\n\n"
+        f"DEMOGRAPHICS:\n" + ("\n".join(demo_lines) if demo_lines else "  (n/a)") + "\n\n"
+        f"CATEGORY SIGNALS (persona's category-specific cues):\n"
+        + ("\n".join(cat_signal_lines) if cat_signal_lines else "  (none provided)") + "\n\n"
+        f"CULTURAL ANCHORS: {_json.dumps(cultural_anchors)[:400] if cultural_anchors else '(none)'}\n"
+        f"ANTI-FIT (avoid): {_json.dumps(anti_fit)[:300] if anti_fit else '(none)'}"
+    )
+
+    # ── Build the prompt ────────────────────────────────────────────────────
+    prompt = (
+        f"You are a senior US consumer research analyst scoring an audience profile end-to-end.\n"
+        f"You see the WHOLE profile inventory at once — every category, every item, with the\n"
+        f"measured panel BP and the US Gen Pop baseline. Your job: produce the final per-item\n"
+        f"Brand Penetration (BP) for THIS persona by reasoning about each category in context\n"
+        f"of every other category — exactly like a smart human analyst would.\n\n"
+        f"=== PERSONA ===\n"
+        f"{persona_block}\n\n"
+        f"=== HOW TO SCORE ===\n"
+        f"For every item, decide its final BP using:\n"
+        f"1. **Persona fit**: Does this item match the audience's archetype, demographics,\n"
+        f"   and category signals? Items in the persona's wheelhouse should over-index;\n"
+        f"   anti-fit items should under-index.\n"
+        f"2. **Panel evidence**: Treat panel BP as a real-world measurement, not noise.\n"
+        f"   Anchor near it unless the persona has a strong reason to override.\n"
+        f"3. **Gen Pop comparison**: Index vs Gen Pop should make sense for this persona.\n"
+        f"4. **Cross-category coherence**: A LeBron-fan persona's QSR should match urban\n"
+        f"   sports-viewing patterns. A premium-Apple persona's banking should reflect that.\n"
+        f"   Make sure rankings WITHIN and ACROSS categories tell one coherent story.\n"
+        f"5. **Distribution health**: Each category should have a clear leader and natural\n"
+        f"   tail. Avoid flat top-5s (5+ items within 4% BP at the top is unrealistic).\n"
+        f"6. **Realistic ceilings**: Persona-driven, not arbitrary. A Zoom company audience\n"
+        f"   CAN have Zoom near 90%; an indie-music audience cannot have Spotify at 95%.\n\n"
+        f"=== ITEM INVENTORY ({len(items_by_cat_clamped)} cats, {total_items} items, sorted by panel BP) ===\n"
+        f"{inventory_block}\n\n"
+        f"=== OUTPUT FORMAT ===\n"
+        f"Return ONLY valid JSON. Score EVERY item listed above. Use this exact structure:\n"
+        f'{{"scores":{{"CATEGORY_NAME":[{{"value":"ITEM","bp":12.34,"reason":"brief"}},...],...}}}}\n\n'
+        f"BP must be a number between 0.05 and 99.0. Keep `reason` to <50 chars.\n"
+        f"Score every item — do not omit any. JSON only, no markdown fences."
+    )
+
+    # ── Call gpt-5.5 with reasoning ─────────────────────────────────────────
+    is_reasoning = model.lower().startswith(('gpt-5', 'o1', 'o3', 'o4'))
+    print(f"🚀 Unified scoring: model={model} effort={reasoning_effort if is_reasoning else 'N/A'} "
+          f"({len(items_by_cat_clamped)} cats, {total_items} items)")
+    t0 = _time.perf_counter()
+
+    text = None
+    if is_reasoning and hasattr(client, 'responses'):
+        try:
+            resp = client.responses.create(
+                model=model,
+                input=[
+                    {'role': 'system',
+                     'content': 'You are a senior US consumer research analyst. Return only valid JSON.'},
+                    {'role': 'user', 'content': prompt},
+                ],
+                reasoning={'effort': reasoning_effort},
+                max_output_tokens=60000,
+                timeout=timeout_sec,
+            )
+            text = (getattr(resp, 'output_text', None) or '').strip()
+            if not text:
+                for block in (getattr(resp, 'output', None) or []):
+                    for part in (getattr(block, 'content', None) or []):
+                        t = getattr(part, 'text', None)
+                        if t:
+                            text = (text or '') + t
+                text = (text or '').strip()
+        except Exception as e_resp:
+            print(f"   ⚠️ Responses API failed ({e_resp}); falling back to chat.completions")
+            text = None
+
+    if not text:
+        cc_kwargs = {
+            'model': model,
+            'messages': [
+                {'role': 'system',
+                 'content': 'You are a senior US consumer research analyst. Return only valid JSON.'},
+                {'role': 'user', 'content': prompt},
+            ],
+            'max_tokens': 60000,
+            'timeout': timeout_sec,
+        }
+        if not is_reasoning:
+            cc_kwargs['temperature'] = 0.1
+        resp = client.chat.completions.create(**cc_kwargs)
+        text = resp.choices[0].message.content.strip()
+
+    elapsed = _time.perf_counter() - t0
+
+    # Strip code fences / extract first JSON block
+    if text.startswith('```'):
+        text = text.split('\n', 1)[1].rsplit('```', 1)[0].strip()
+    depth = 0
+    end = 0
+    for i, c in enumerate(text):
+        if c == '{':
+            depth += 1
+        elif c == '}':
+            depth -= 1
+            if depth == 0:
+                end = i + 1
+                break
+    if end > 0:
+        text = text[:end]
+
+    parsed = _json.loads(text)
+    raw_scores = parsed.get('scores') or parsed  # accept either {scores:{...}} or {...} top-level
+
+    # ── Convert to results_map shape (matches _run_single_category_agent output)
+    results_map: dict[str, list[dict]] = {}
+    n_items_returned = 0
+    for cat in cats_needing_llm:
+        cat_entries = raw_scores.get(cat) or raw_scores.get(cat.upper()) or []
+        out_list = []
+        if isinstance(cat_entries, list):
+            for entry in cat_entries:
+                if not isinstance(entry, dict):
+                    continue
+                val = str(entry.get('value', '')).strip()
+                if not val:
+                    continue
+                try:
+                    bp = float(entry.get('bp', entry.get('estimated_bp_pct', 0)) or 0)
+                except (ValueError, TypeError):
+                    bp = 0.0
+                bp = max(0.05, min(99.0, bp))
+                out_list.append({
+                    'value': val,
+                    'bp': round(bp, 4),
+                    'estimated_bp_pct': round(bp, 4),
+                    'panel_decision': 'unified',
+                    'reason': str(entry.get('reason', ''))[:200],
+                    'confidence': 0.85,
+                })
+        results_map[cat] = out_list
+        n_items_returned += len(out_list)
+
+    print(f"   ✅ Unified scoring done in {elapsed:.1f}s — {n_items_returned} items scored across "
+          f"{sum(1 for v in results_map.values() if v)}/{len(cats_needing_llm)} cats")
+    return results_map
+
+
 def parallel_category_agents(df: pd.DataFrame, persona_doc: dict,
                               subject: str, brands: list[str] | None = None,
                               previous_behavioral_lookup: dict | None = None,
@@ -19602,6 +19866,38 @@ def parallel_category_agents(df: pd.DataFrame, persona_doc: dict,
                                for items in unique_items_by_cat.values() for v in items})
         _item_classifications = _run_item_classification_parallel(_all_unique)
 
+    # ──────── UNIFIED SCORING PASS (replaces Waves 1/2/3 when enabled) ────────
+    # ONE gpt-5.5 reasoning call sees the WHOLE inventory at once and produces
+    # final BPs for every item across every category — instead of 50+ Pass 1
+    # rule agents + 50+ Pass 2 scoring agents + 50+ Pass 3 validators.
+    #
+    # Toggle via BG_UNIFIED_SCORING env var (default: OFF for safety).
+    # When ON: runs the unified pass. On success, skips Waves 1/2/3.
+    # On failure: falls back to Waves 1/2/3 (so the pipeline never breaks).
+    _unified_results: dict | None = None
+    USE_UNIFIED_SCORING = os.getenv("BG_UNIFIED_SCORING", "0").strip().lower() not in {"0", "false", "no", "off", ""}
+    if USE_UNIFIED_SCORING and anchor_mode != 'genpop' and cats_needing_llm:
+        try:
+            _unified_results = _run_unified_scoring_pass(
+                cats_needing_llm=cats_needing_llm,
+                unique_items_by_cat=unique_items_by_cat,
+                persona_doc=persona_doc,
+                subject=subject,
+                panel_lookup=_panel_lookup,
+                canonical_baseline_lookup=canonical_baseline_lookup,
+                item_classifications=_item_classifications,
+                timeout_sec=int(os.getenv("BG_UNIFIED_TIMEOUT_SEC", "600")),
+            )
+            if _unified_results:
+                _covered = sum(1 for v in _unified_results.values() if v)
+                print(f"   🎯 Unified scoring covered {_covered}/{len(cats_needing_llm)} cats — skipping Waves 1/2/3")
+            else:
+                print(f"   ⚠️ Unified scoring returned empty — falling back to Waves 1/2/3")
+                _unified_results = None
+        except Exception as _e_unified:
+            print(f"   ⚠️ Unified scoring failed: {_e_unified} — falling back to Waves 1/2/3")
+            _unified_results = None
+
     # ── WAVE 1: Category Rule Agents (gpt-4o, one per category) ──────────
     # v16 — upgraded from item-guidance (nano, expected_high/low only) to a
     # full Category Rule Agent that produces the shared scoring rubric:
@@ -19613,7 +19909,7 @@ def parallel_category_agents(df: pd.DataFrame, persona_doc: dict,
     # The rubric is the bridge that gives every chunk shared awareness in
     # Wave 2 so Pass 2 chunks don't drift apart.
     _guidance_map: dict[str, dict] = {}
-    if anchor_mode != 'genpop':
+    if _unified_results is None and anchor_mode != 'genpop':
         _guidance_t0 = _time.perf_counter()
         _guid_cats = [c for c in cats_needing_llm if unique_items_by_cat.get(c)]
         print(f"🧭 Wave 1: Launching {len(_guid_cats)} Category Rule Agents ({MODEL_QUALITY}) …")
@@ -19676,6 +19972,14 @@ def parallel_category_agents(df: pd.DataFrame, persona_doc: dict,
                       f"— Pass 3 will run in persona+inventory-only mode.")
 
     # ── WAVE 2: Scoring agents (gpt-4o, one per chunk) ───────────────────
+    # When unified scoring is on, replace work_units with an empty list so
+    # Wave 2 becomes a no-op, and we populate _chunk_results from the
+    # unified result instead.
+    if _unified_results is not None:
+        print(f"   ⏭️  Wave 2 skipped — populating from unified scoring")
+        _work_units = []
+        for cat in cats_needing_llm:
+            _chunk_results[cat] = [_unified_results.get(cat, [])]
     print(f"🤖 Wave 2: Launching {len(_work_units)} scoring agent calls …")
     with _futures.ThreadPoolExecutor(max_workers=35) as pool:
         future_to_unit = {
@@ -19735,8 +20039,12 @@ def parallel_category_agents(df: pd.DataFrame, persona_doc: dict,
     #   • Persona-fit sanity (luxury item top for mass-market audience, etc.)
     # Override mode — validator sees the whole category and is smarter
     # about cross-item plausibility than any single Pass 2 chunk.
+    # SKIPPED when unified scoring is on — the unified call already does
+    # holistic cross-category validation in one reasoning pass.
     _validator_corrections: dict[str, list[dict]] = {cat: [] for cat in cats_needing_llm}
-    if anchor_mode != 'genpop' and results_map:
+    if _unified_results is not None:
+        print(f"   ⏭️  Wave 3 (validator) skipped (unified scoring covers it)")
+    elif anchor_mode != 'genpop' and results_map:
         _val_t0 = _time.perf_counter()
         # Every category with Pass 2 output gets a validator pass. When tier_rules
         # are missing, the validator prompt already falls back to persona + inventory
