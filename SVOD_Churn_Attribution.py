@@ -1794,11 +1794,6 @@ def _validate_total_watchers_with_ai(show_name, platform_name, inflated_total, i
     print(f"   🔍 AI viewership lookup: confidence={confidence}, estimated_us={estimated_us}, "
           f"ai_recommended={ai_recommended}, source={result.get('source','')}")
 
-    if confidence == 'low':
-        print(f"   ℹ️  Confidence too low to override (confidence={confidence})")
-        metadata['action'] = 'kept_original'
-        return inflated_total, inflated_pre, inflated_clean, metadata
-
     # Compute panel number ourselves from estimated_us_viewers (don't trust AI math)
     recommended = None
     if estimated_us is not None:
@@ -1818,20 +1813,42 @@ def _validate_total_watchers_with_ai(show_name, platform_name, inflated_total, i
         except (ValueError, TypeError):
             pass
 
+    # Platform-based minimum panel counts for any show on a major SVOD.
+    _PLATFORM_MIN_VIEWERS = {
+        'dominant': 3_000_000, 'major': 2_000_000, 'mid': 1_500_000,
+        'emerging': 800_000, 'niche': 400_000, 'unknown': 1_000_000,
+    }
+    plat_info = _get_platform_info(platform_name)
+    plat_tier = plat_info.get('tier', 'unknown')
+    min_us_viewers = _PLATFORM_MIN_VIEWERS.get(plat_tier, 1_000_000)
+    min_panel = int(round(min_us_viewers * (SAMPLE_REPRESENTS / US_POPULATION) / 10) * 10)
+
     if recommended is None or recommended <= 0:
-        print(f"   ℹ️  No valid recommendation available")
-        metadata['action'] = 'kept_original'
-        return inflated_total, inflated_pre, inflated_clean, metadata
+        if confidence == 'low' and inflated_total < min_panel:
+            recommended = min_panel
+            print(f"   ⚠️  No AI data + panel {inflated_total:,} is absurdly low → "
+                  f"using {plat_tier} tier minimum: {min_us_viewers:,} US viewers → {min_panel:,} panel")
+        elif confidence == 'low':
+            print(f"   ℹ️  Confidence too low to override (confidence={confidence})")
+            metadata['action'] = 'kept_original'
+            return inflated_total, inflated_pre, inflated_clean, metadata
+        else:
+            print(f"   ℹ️  No valid recommendation available")
+            metadata['action'] = 'kept_original'
+            return inflated_total, inflated_pre, inflated_clean, metadata
 
     metadata['recommended_total'] = recommended
 
-    # Sanity floor: never let Total Show Watchers drop below 10,000 panel
-    # (≈330K gen pop). Any popular show on a major platform will exceed this.
     MIN_PANEL_FLOOR = 10_000
     if recommended < MIN_PANEL_FLOOR:
-        print(f"   ⚠️  AI recommendation {recommended:,} is below floor {MIN_PANEL_FLOOR:,} — keeping original")
-        metadata['action'] = 'kept_original_below_floor'
-        return inflated_total, inflated_pre, inflated_clean, metadata
+        if inflated_total < MIN_PANEL_FLOOR:
+            recommended = min_panel
+            print(f"   ⚠️  Both AI ({recommended:,}) and panel ({inflated_total:,}) below floor → "
+                  f"using tier minimum: {min_panel:,}")
+        else:
+            print(f"   ⚠️  AI recommendation {recommended:,} is below floor {MIN_PANEL_FLOOR:,} — keeping original")
+            metadata['action'] = 'kept_original_below_floor'
+            return inflated_total, inflated_pre, inflated_clean, metadata
 
     ratio = inflated_total / recommended if recommended > 0 else 1.0
 
