@@ -2842,13 +2842,13 @@ def write_output(df_summary, df_comp, df_demo, df_timing, df_episode_attribution
 
         _insert_pos = _nps_idx + 1
         _new_rows = pd.DataFrame([
-            {"Category": "  True New Subscribers", "Count Label": "", "Count": _true_new,
-             "Duration Value": "", "Duration Label": "", "Timing Value": "",
-             "Timing Label": "", "Touchpoint": "", "Percentage": f"{(1 - _react_rate) * 100:.1f}%",
+            {"Category": "  True New Subscribers", "Episode Date": "", "Count": _true_new,
+             "Count Label": "", "Secondary Count": "", "Secondary Label": "",
+             "Tertiary Count": "", "Tertiary Label": "", "Percentage": f"{(1 - _react_rate) * 100:.1f}%",
              "Gen Pop Projection": format_gen_pop(gen_pop_projection(_true_new))},
-            {"Category": "  Reactivated Subscribers", "Count Label": "", "Count": _reactivated,
-             "Duration Value": "", "Duration Label": "", "Timing Value": "",
-             "Timing Label": "", "Touchpoint": "", "Percentage": f"{_react_rate * 100:.1f}%",
+            {"Category": "  Reactivated Subscribers", "Episode Date": "", "Count": _reactivated,
+             "Count Label": "", "Secondary Count": "", "Secondary Label": "",
+             "Tertiary Count": "", "Tertiary Label": "", "Percentage": f"{_react_rate * 100:.1f}%",
              "Gen Pop Projection": format_gen_pop(gen_pop_projection(_reactivated))},
         ])
         df_top = df_out.iloc[:_insert_pos]
