@@ -34166,11 +34166,14 @@ def enforce_behavioral_category_plausibility(df, brand_category=None, project_na
     # their respective league category. We detect this from project_name / brands.
     _ATHLETE_TEAM_MAP = {
         'KEVIN DURANT': {'team': 'HOUSTON ROCKETS', 'league': 'NBA',
-                         'city_teams': ['HOUSTON TEXANS', 'HOUSTON ASTROS', 'HOUSTON DYNAMO']},
+                         'city_teams': ['HOUSTON TEXANS', 'HOUSTON ASTROS', 'HOUSTON DYNAMO'],
+                         'home_dma': 'HOUSTON TX'},
         'LEBRON JAMES': {'team': 'LOS ANGELES LAKERS', 'league': 'NBA',
-                         'city_teams': ['LOS ANGELES RAMS', 'LOS ANGELES DODGERS', 'LA GALAXY', 'LOS ANGELES CHARGERS']},
+                         'city_teams': ['LOS ANGELES RAMS', 'LOS ANGELES DODGERS', 'LA GALAXY', 'LOS ANGELES CHARGERS'],
+                         'home_dma': 'LOS ANGELES CA'},
         'STEPHEN CURRY': {'team': 'GOLDEN STATE WARRIORS', 'league': 'NBA',
-                          'city_teams': ['SAN FRANCISCO 49ERS', 'SAN FRANCISCO GIANTS', 'SAN JOSE EARTHQUAKES']},
+                          'city_teams': ['SAN FRANCISCO 49ERS', 'SAN FRANCISCO GIANTS', 'SAN JOSE EARTHQUAKES'],
+                          'home_dma': 'SAN FRANCISCO OAKLAND SAN JOSE CA'},
     }
 
     # Try to match project_name against known athletes
@@ -34224,6 +34227,57 @@ def enforce_behavioral_category_plausibility(df, brand_category=None, project_na
                         fixes += 1
                         if not SILENCE_VERBOSE_OUTPUT:
                             print(f"   🏟️ Boosted {city_team} to {target:.2f}% (same-city as athlete)")
+
+        # ── LOCATION home-DMA boost ───────────────────────────────────────
+        # The location intelligence agent's affinity→multiplier math is
+        # capped at 2× (mult = affinity/50). For an active pro athlete with
+        # a small home market (e.g. Houston ~2% gen-pop vs NYC ~6%), max
+        # affinity still cannot push the home market past NYC after global
+        # renormalization. Fans concentrate in their team's city far more
+        # than 2× population, so we apply a deterministic boost: force the
+        # home DMA to 10-13% BP and rescale the rest of LOCATION to keep
+        # the column summing to 100%.
+        home_dma = matched_athlete.get('home_dma')
+        if home_dma:
+            loc_rows = _cat_rows('LOCATION')
+            if loc_rows:
+                # Find the home DMA row (case-insensitive)
+                home_idx = None
+                home_cur_bp = 0.0
+                for idx, val, cur_bp in loc_rows:
+                    if val.upper().strip() == home_dma.upper().strip():
+                        home_idx = idx
+                        home_cur_bp = cur_bp
+                        break
+                # Determine current top BP and rank
+                sorted_loc = sorted(loc_rows, key=lambda x: x[2], reverse=True)
+                top_bp = sorted_loc[0][2] if sorted_loc else 0.0
+                home_rank = next((i + 1 for i, (idx, _, _) in enumerate(sorted_loc)
+                                  if idx == home_idx), None)
+                # Boost only if home market isn't already top-2 with strong BP
+                if home_idx is not None and (home_rank is None or home_rank > 2 or home_cur_bp < 8.0):
+                    import random as _rnd
+                    target = 10.0 + _rnd.uniform(0, 3)  # 10-13%
+                    # Make sure target beats the current top by a clear margin
+                    target = max(target, top_bp * 1.15)
+                    target = min(target, 15.0)  # cap to avoid absurdity
+                    # Compute renormalization: scale all other DMAs so that
+                    # total LOCATION still sums to 100%.
+                    other_total = sum(bp for idx, _, bp in loc_rows if idx != home_idx)
+                    if other_total > 0:
+                        scale = (100.0 - target) / other_total
+                        # Write home first
+                        _write_bp(home_idx, target)
+                        # Rescale every other DMA
+                        for idx, _, cur_bp in loc_rows:
+                            if idx == home_idx:
+                                continue
+                            _write_bp(idx, max(0.001, cur_bp * scale))
+                        fixes += 1
+                        if not SILENCE_VERBOSE_OUTPUT:
+                            print(f"   📍 Boosted {home_dma} to {target:.2f}% in LOCATION "
+                                  f"(athlete home market — was rank {home_rank}, BP {home_cur_bp:.2f}%); "
+                                  f"rescaled {len(loc_rows)-1} other DMAs by {scale:.4f}")
 
     if not SILENCE_VERBOSE_OUTPUT and fixes:
         print(f"🛡️ Behavioral plausibility guard: {fixes} deterministic correction(s)")
