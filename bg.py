@@ -708,8 +708,7 @@ Return ONLY valid JSON (no markdown):
         "$150,000 OR MORE": <percent>
     }},
     "EDUCATION": {{
-        "LESS THAN HIGH SCHOOL": <percent>,
-        "HIGH SCHOOL GRADUATE": <percent>,
+        "HIGH SCHOOL OR LESS": <percent>,
         "SOME COLLEGE": <percent>,
         "ASSOCIATE DEGREE": <percent>,
         "BACHELOR'S DEGREE": <percent>,
@@ -729,7 +728,7 @@ Return ONLY valid JSON (no markdown):
         "SINGLE": <percent>,
         "MARRIED": <percent>,
         "IN A RELATIONSHIP": <percent>,
-        "DIVORCED": <percent>,
+        "DIVORCED OR SEPARATED": <percent>,
         "WIDOWED": <percent>,
         "PREFER NOT TO SAY": <percent>
     }}
@@ -15399,8 +15398,7 @@ Return ONLY a single valid JSON object — no markdown, no commentary.
       "$250,000 OR MORE": <percent>
     }},
     "EDUCATION": {{
-      "LESS THAN HIGH SCHOOL": <percent>,
-      "HIGH SCHOOL GRADUATE": <percent>,
+      "HIGH SCHOOL OR LESS": <percent>,
       "SOME COLLEGE": <percent>,
       "ASSOCIATE DEGREE": <percent>,
       "BACHELOR'S DEGREE": <percent>,
@@ -15410,7 +15408,7 @@ Return ONLY a single valid JSON object — no markdown, no commentary.
       "SINGLE": <percent>,
       "MARRIED": <percent>,
       "IN A RELATIONSHIP": <percent>,
-      "DIVORCED": <percent>,
+      "DIVORCED OR SEPARATED": <percent>,
       "WIDOWED": <percent>,
       "PREFER NOT TO SAY": <percent>
     }},
@@ -18696,9 +18694,9 @@ def parallel_category_agents(df: pd.DataFrame, persona_doc: dict,
                        'OTHER'],
         'INCOME': ['UNDER $25,000', '$25,000-$49,999', '$50,000-$74,999', '$75,000-$99,999',
                    '$100,000-$149,999', '$150,000-$249,999', '$250,000 OR MORE'],
-        'EDUCATION': ['LESS THAN HIGH SCHOOL', 'HIGH SCHOOL GRADUATE', 'SOME COLLEGE',
+        'EDUCATION': ['HIGH SCHOOL OR LESS', 'SOME COLLEGE',
                      'ASSOCIATE DEGREE', "BACHELOR'S DEGREE", 'GRADUATE OR PROFESSIONAL DEGREE'],
-        'RELATIONSHIP': ['SINGLE', 'MARRIED', 'IN A RELATIONSHIP', 'DIVORCED', 'WIDOWED', 'PREFER NOT TO SAY'],
+        'RELATIONSHIP': ['SINGLE', 'MARRIED', 'IN A RELATIONSHIP', 'DIVORCED OR SEPARATED', 'WIDOWED', 'PREFER NOT TO SAY'],
         'SEXUAL_ORIENTATION': ['STRAIGHT / HETEROSEXUAL', 'GAY OR LESBIAN',
                                'ANOTHER SEXUAL ORIENTATION', 'PREFER NOT TO SAY'],
         'PARENTAL_STATUS': ['NO CHILDREN', 'HAS CHILDREN', 'PREFER NOT TO SAY'],
@@ -25219,7 +25217,7 @@ def get_hardcoded_genpop_demographics():
             ('SINGLE', 28.9944, 2899440),
             ('IN A RELATIONSHIP', 28.5708, 2857079),
             ('MARRIED', 27.2408, 2724080),
-            ('DIVORCED', 15.1939, 1519390)
+            ('DIVORCED OR SEPARATED', 15.1939, 1519390)
         ],
         'SEXUAL ORIENTATION': [
             ('PREFER NOT TO SAY', 60.6658, 6066579),
@@ -30331,8 +30329,12 @@ def _canonical_demo_value(category: str, value: str) -> str:
         'NATIVE AMERICAN / ALASKA NATIVE', 'NATIVE AMERICAN', 'ALASKA NATIVE', 'ANOTHER RACE/ETHNICITY'
     }:
         v = 'OTHER'
-    if cat == 'EDUCATION' and v == 'GRADUATE DEGREE':
+    if cat == 'EDUCATION' and v in {'GRADUATE DEGREE'}:
         v = 'GRADUATE OR PROFESSIONAL DEGREE'
+    if cat == 'EDUCATION' and v in {'LESS THAN HIGH SCHOOL', 'HIGH SCHOOL GRADUATE'}:
+        v = 'HIGH SCHOOL OR LESS'
+    if cat == 'RELATIONSHIP' and v in {'DIVORCED', 'SEPARATED'}:
+        v = 'DIVORCED OR SEPARATED'
     if cat == 'OCCUPATION' and v in {'SELF-EMPLOYED', 'RETIRED'}:
         v = 'OTHER'
     return v
@@ -38054,8 +38056,13 @@ def normalize_output_text_values(df):
             }:
                 return 'OTHER'
         elif c == 'EDUCATION':
-            if vu == 'GRADUATE DEGREE':
+            if vu in {'GRADUATE DEGREE'}:
                 return 'GRADUATE OR PROFESSIONAL DEGREE'
+            if vu in {'LESS THAN HIGH SCHOOL', 'HIGH SCHOOL GRADUATE'}:
+                return 'HIGH SCHOOL OR LESS'
+        elif c == 'RELATIONSHIP':
+            if vu in {'DIVORCED', 'SEPARATED'}:
+                return 'DIVORCED OR SEPARATED'
         elif c == 'OCCUPATION':
             if vu in {'SELF-EMPLOYED', 'RETIRED'}:
                 return 'OTHER'
