@@ -971,6 +971,8 @@ def main() -> int:
                         help='Run aggregations but skip ingest writes and S3 upload')
     parser.add_argument('--no-themes',   action='store_true',
                         help='Skip OpenAI search_themes classification')
+    parser.add_argument('--run-now',     action='store_true',
+                        help='Run immediately (default behavior; accepted for Render cron compat)')
     args = parser.parse_args()
 
     if args.no_themes:
