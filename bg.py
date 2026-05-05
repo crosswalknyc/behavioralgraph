@@ -15345,7 +15345,7 @@ STEP 5a — SPORTS FRANCHISE / TEAM (`subject_archetype` MUST be `sports_team_le
   • **`category_signals[\"MEDIA\"]`** (fans, not reporters): elevate **metro beat / hometown paper + local TV-news digital tied to HOME market DMA** moderately above census — Express-News–style anchors stay **below** ESPN + CNN/Fox/New York Times–tier nationals + major aggregators. **Industry trades** (Variety, THR, Deadline, Wrap) stay low unless you proved insider readership.
 
 STEP 5b — PROFESSIONAL ATHLETE PERSON (`celebrity_or_creator` WHEN research proves elite pro competitor)
-  • **`location`**: overweight **current team's HOME metro** + national gateways proportional to superstar reach; mention trade history only if materially shifting fan geography.
+  • **`location`**: The **current team's HOME MARKET DMA must be the #1 or #2 DMA at 8-15%** — this is non-negotiable for active players. Example: if KD plays for Houston Rockets, "HOUSTON" must be 8-15%. Prior team markets (OKC, Golden State, Brooklyn, Phoenix) should score 3-5%. National gateway cities (NYC, LA) fill their usual 6-10% only if they are NOT the home market. Do NOT flatten to generic population weights — fans cluster in the player's current city.
   • Surface **endorsed sponsors / signature product lines / league official partners tied to persona** across `cultural_anchors`, `cross_shop_network`, MPB/WTS-oriented `category_signals`.
   • `category_signals["ATHLETE"]` should instruct scoring to privilege **THIS subject athlete**, teammate/co-star figures named in anchors, rivalry counterstars shaping narrative arcs — not unrelated leaderboard filler.
 
@@ -18365,8 +18365,22 @@ def _run_location_intelligence_agent(persona_doc: dict, subject: str) -> dict:
         return {}
 
     persona_summary = (persona_doc.get('persona_summary') or '').strip() or '(persona summary unavailable)'
+    digital_identity = (persona_doc.get('digital_identity') or '').strip()
+    archetype = (persona_doc.get('subject_archetype') or '').strip()
+    archetype_rationale = (persona_doc.get('archetype_rationale') or '').strip()
     demo_snapshot = {k: v for k, v in (persona_doc.get('demographics') or {}).items()
                      if k in ('AGE', 'GENDER', 'ETHNICITY', 'INCOME', 'EDUCATION')}
+
+    # Build geo-critical context block from persona identity fields
+    geo_context_block = ""
+    if digital_identity or archetype_rationale:
+        geo_context_block = "\nGEO-CRITICAL CONTEXT (use to identify HOME MARKET and regional affinity):\n"
+        if archetype:
+            geo_context_block += f"  Subject archetype: {archetype}\n"
+        if archetype_rationale:
+            geo_context_block += f"  Archetype details: {archetype_rationale}\n"
+        if digital_identity:
+            geo_context_block += f"  Digital identity: {digital_identity[:600]}\n"
 
     ethnicity_block = ""
     eth = demo_snapshot.get('ETHNICITY') or {}
@@ -18406,7 +18420,7 @@ If the audience skews {top_eth[0][0]} ({top_eth[0][1]:.0f}%), DMAs with high {to
 
 PERSONA SUMMARY:
 {persona_summary}
-
+{geo_context_block}
 KEY DEMOGRAPHICS:
 {_json.dumps(demo_snapshot, indent=2)}
 {ethnicity_block}
@@ -18443,6 +18457,7 @@ HARD RULES:
   • Return AFFINITY 0-100 (integer) for EVERY DMA listed — do not skip any.
   • Do NOT return percentages or multipliers.
   • Do NOT factor population size into affinity — population is handled by the math.
+  • **HOME MARKET RULE**: If the subject is a professional athlete or sports team, their CURRENT TEAM'S HOME DMA must score 85-100 affinity. Prior team markets score 65-80. This is non-negotiable — fans concentrate in their team's city.
   • Return ONLY the JSON array described.
 
 DMAS TO SCORE (chunk {chunk_idx + 1} of {len(chunks)}):
