@@ -8836,6 +8836,241 @@ def _holistic_profile_audit(df, *, subject_clean, brand_category,
         return df, 0
 
 
+def _holistic_profile_audit(df, *, subject_clean, brand_category,
+                             audience_context, gp_bp_lookup, sample_raw,
+                             bp_col, cs_col, raw_col, proj_col,
+                             apply_adjustments_fn, parse_json_fn,
+                             timeout_sec=180, model=None):
+    """
+    HOLISTIC FINAL AUDIT — one smart agent looking at the whole profile.
+
+    This replaces 9+ narrow sub-passes (A, B, B2, B2C, B2B, B2D, B2E, B2G, B2F)
+    with a single reasoning-model call that gets a whole-profile view (top
+    items per category + indices vs gen pop + persona context) and returns a
+    unified list of adjustments.
+
+    Why this is faster AND smarter:
+    - 1 round trip vs 50+ round trips (less network overhead)
+    - The agent sees CROSS-CATEGORY context (e.g., "Mbappe ranked above LeBron
+      contradicts the Nike persona") which narrow agents cannot see
+    - Distribution patterns (flat top-5, missing leaders) are visible at once
+    - Demographic + behavioral coherence checked together, not separately
+    - GPT-5.5 with reasoning_effort=high THINKS through contradictions before
+      committing to adjustments — the closest model approximation of how a
+      human analyst (or Claude) audits a profile holistically.
+
+    Model selection (env-configurable):
+    - BG_HOLISTIC_AUDIT_MODEL  (default: 'gpt-5.5')
+    - BG_HOLISTIC_REASONING_EFFORT  (default: 'high'; only used for gpt-5.x)
+
+    For gpt-5.x models, uses the Responses API (proper reasoning support).
+    For gpt-4o and similar, falls back to Chat Completions API.
+
+    Returns: (df, adjustments_count) — df with adjustments applied
+    """
+    import json as _json
+    import time as _time
+
+    client = _get_openai_client()
+    if client is None:
+        return df, 0
+
+    DEMO_CATS = {'AGE', 'GENDER', 'ETHNICITY', 'INCOME', 'EDUCATION',
+                 'RELATIONSHIP', 'SEXUAL_ORIENTATION', 'PARENTAL_STATUS',
+                 'OCCUPATION'}
+    META_CATS = {'INPUT_METADATA', 'BRAND INPUT', 'SAMPLE SIZE',
+                 'AVID FAN', 'CASUAL FAN', 'BRAND CATEGORY', 'LOCATION'}
+
+    # ── Build whole-profile snapshot: top items per category + index vs Gen Pop
+    cat_data: dict[str, list[tuple]] = {}
+    for idx, row in df.iterrows():
+        cat = str(row.get('Column', '')).strip().upper()
+        if cat in DEMO_CATS or cat in META_CATS:
+            continue
+        val = str(row.get('Value', '')).strip()
+        try:
+            bp = float(str(row.get(bp_col, 0)).replace('%', '').replace(',', ''))
+        except (ValueError, TypeError):
+            bp = 0
+        if bp > 0:
+            cat_data.setdefault(cat, []).append((val, bp, idx))
+
+    if not cat_data:
+        return df, 0
+
+    PER_CAT_TOP_N = 25
+    MAX_TOTAL_ITEMS = 800
+
+    snapshot_blocks: list[str] = []
+    total_items_in_snapshot = 0
+    skipped_cats: list[str] = []
+
+    for cat in sorted(cat_data.keys()):
+        items = sorted(cat_data[cat], key=lambda x: -x[1])
+        top_items = items[:PER_CAT_TOP_N]
+
+        if len(items) >= 5:
+            top5 = [it[1] for it in items[:5]]
+            top5_spread = top5[0] - top5[4]
+            flat_flag = " ⚠️FLAT" if top5_spread < 4.0 and top5[0] > 8.0 else ""
+        else:
+            flat_flag = ""
+
+        if total_items_in_snapshot + len(top_items) > MAX_TOTAL_ITEMS:
+            skipped_cats.append(f"{cat} ({len(items)} rows)")
+            continue
+
+        lines = []
+        for name, bp, _ in top_items:
+            gp_bp = gp_bp_lookup.get((cat, name.upper()), 0)
+            if gp_bp > 0:
+                idx_int = int(round((bp / gp_bp) * 100))
+                idx_meta = f" [GP:{gp_bp:.1f}% idx:{idx_int}]"
+            else:
+                idx_meta = ""
+            lines.append(f"  {name}: {bp:.2f}%{idx_meta}")
+
+        header = f"{cat} ({len(items)} rows){flat_flag}:"
+        snapshot_blocks.append(header + "\n" + "\n".join(lines))
+        total_items_in_snapshot += len(top_items)
+
+    if skipped_cats:
+        print(f"   📋 Holistic audit: {len(skipped_cats)} long-tail cats deferred to narrow passes")
+
+    profile_snapshot = "\n\n".join(snapshot_blocks)
+
+    prompt = (
+        f"You are a SENIOR US consumer research analyst doing a holistic final audit of a "
+        f"behavioral audience profile. You are the LAST quality gate before the CSV ships.\n\n"
+        f"{audience_context}\n"
+        f"=== HOW TO THINK ===\n"
+        f"You see the WHOLE profile at once — not category by category in isolation. Your job:\n"
+        f"1. **Identify cross-category contradictions.** If the persona is a US NBA player, "
+        f"   a French soccer star ranked above LeBron in ATHLETE is wrong. If the persona is "
+        f"   urban premium, Whataburger leading QSR is wrong.\n"
+        f"2. **Check distribution health.** Items marked ⚠️FLAT have unrealistically tight "
+        f"   top-5 clustering — real audiences have clear winners with gaps.\n"
+        f"3. **Check leader plausibility.** Each category should have an obvious leader for "
+        f"   THIS persona. If the leader is wrong, fix it. (e.g., Nike audience → LeBron #1 "
+        f"   in athletes; Kevin Durant profile → Houston Rockets #1 in NBA).\n"
+        f"4. **Check index direction (Gen Pop comparison).** If a persona OVER-indexes a "
+        f"   category they should AVOID, fix it. If they UNDER-index something they're "
+        f"   passionate about, fix it.\n"
+        f"5. **Persona drives ceilings, not arbitrary caps.** A Zoom company profile CAN "
+        f"   have Zoom near 90%. An AI lab CAN have ChatGPT lead. Don't apply blanket "
+        f"   ceilings — apply persona reasoning.\n\n"
+        f"=== PROFILE SNAPSHOT (top {PER_CAT_TOP_N} items per category, indices vs US Gen Pop) ===\n"
+        f"{profile_snapshot}\n\n"
+        f"=== YOUR TASK ===\n"
+        f"Review the whole profile holistically. Return adjustments for items that are clearly "
+        f"wrong for THIS specific persona. Keep adjustments meaningful — don't nitpick small "
+        f"deviations. Aim for ~5-40 high-confidence adjustments that genuinely improve the profile.\n\n"
+        f"For each adjustment, you can use:\n"
+        f"- factor (multiplier on current BP, e.g. 0.5 = halve, 2.0 = double)\n"
+        f"- target_bp (absolute BP value to set)\n"
+        f"Use target_bp when you know the right number, factor when you want directional change.\n\n"
+        f"Return ONLY valid JSON:\n"
+        f'{{"status":"FIX","summary":"1-2 sentence overview of what was wrong",'
+        f'"adjustments":[{{"category":"CAT","item":"ITEM",'
+        f'"target_bp":34.0,"reason":"brief explanation tied to persona"}},...]}}\n\n'
+        f'OR if everything looks good: {{"status":"OK","summary":"profile is internally consistent"}}\n\n'
+        f"JSON only. No markdown fences."
+    )
+
+    # Resolve model + reasoning effort from env (with safe defaults)
+    if model is None:
+        model = os.getenv('BG_HOLISTIC_AUDIT_MODEL', 'gpt-5.5').strip()
+    reasoning_effort = os.getenv('BG_HOLISTIC_REASONING_EFFORT', 'high').strip().lower()
+    if reasoning_effort not in {'minimal', 'low', 'medium', 'high', 'xhigh'}:
+        reasoning_effort = 'high'
+
+    is_reasoning_model = model.lower().startswith(('gpt-5', 'o1', 'o3', 'o4'))
+
+    print(f"   🧠 Holistic audit: model={model} effort={reasoning_effort if is_reasoning_model else 'N/A'} "
+          f"({len(cat_data)} cats, {total_items_in_snapshot} items)")
+    t0 = _time.perf_counter()
+
+    try:
+        text = None
+        if is_reasoning_model and hasattr(client, 'responses'):
+            # Use Responses API for proper reasoning support
+            try:
+                resp = client.responses.create(
+                    model=model,
+                    input=[
+                        {'role': 'system',
+                         'content': 'You are a senior US consumer research analyst. Return only valid JSON.'},
+                        {'role': 'user', 'content': prompt},
+                    ],
+                    reasoning={'effort': reasoning_effort},
+                    max_output_tokens=12000,
+                    timeout=timeout_sec,
+                )
+                text = (getattr(resp, 'output_text', None) or '').strip()
+                if not text:
+                    # Fallback parser: extract from output blocks
+                    for block in (getattr(resp, 'output', None) or []):
+                        for part in (getattr(block, 'content', None) or []):
+                            t = getattr(part, 'text', None)
+                            if t:
+                                text = (text or '') + t
+                    text = (text or '').strip()
+            except Exception as e_resp:
+                print(f"   ⚠️ Responses API failed ({e_resp}); falling back to chat.completions")
+                text = None
+
+        if not text:
+            # Standard Chat Completions path (gpt-4o, fallback)
+            cc_kwargs = {
+                'model': model,
+                'messages': [
+                    {'role': 'system',
+                     'content': 'You are a senior US consumer research analyst. Return only valid JSON.'},
+                    {'role': 'user', 'content': prompt},
+                ],
+                'max_tokens': 12000,
+                'timeout': timeout_sec,
+            }
+            # Reasoning models don't accept temperature; non-reasoning do
+            if not is_reasoning_model:
+                cc_kwargs['temperature'] = 0.1
+            resp = client.chat.completions.create(**cc_kwargs)
+            text = resp.choices[0].message.content.strip()
+
+        elapsed = _time.perf_counter() - t0
+        result = parse_json_fn(text)
+
+        if result.get('status') == 'OK':
+            print(f"   🧠 Holistic audit OK ({elapsed:.1f}s): {result.get('summary', '')[:120]}")
+            return df, 0
+
+        adjustments = result.get('adjustments', [])
+        summary = result.get('summary', '')
+        print(f"   🧠 Holistic audit ({elapsed:.1f}s): {len(adjustments)} adjustments — {summary[:120]}")
+
+        all_item_lookup = {}
+        for cat, items in cat_data.items():
+            for name, bp, idx in items:
+                try:
+                    cur_bp = float(str(df.at[idx, bp_col]).replace('%', '').replace(',', ''))
+                except (ValueError, TypeError):
+                    cur_bp = bp
+                try:
+                    cur_cs = float(str(df.at[idx, cs_col]).replace('%', '').replace(',', ''))
+                except (ValueError, TypeError):
+                    cur_cs = 0
+                all_item_lookup[(cat, name.strip().upper())] = (name, cur_bp, cur_cs, idx)
+
+        applied, _ = apply_adjustments_fn(adjustments[:300], all_item_lookup, '[HOLISTIC]')
+        print(f"   🧠 Holistic audit applied: {applied} adjustments")
+        return df, applied
+
+    except Exception as e:
+        elapsed = _time.perf_counter() - t0
+        print(f"   ⚠️ Holistic audit failed after {elapsed:.1f}s: {e}")
+        return df, 0
+
+
 def ai_final_gut_check(df, brand_category, project_name, brands):
     """Comprehensive final review of the entire profile output.
 
@@ -9282,6 +9517,9 @@ def ai_final_gut_check(df, brand_category, project_name, brands):
     USE_HOLISTIC_AUDIT = os.getenv("BG_USE_HOLISTIC_AUDIT", "1").strip().lower() not in {"0", "false", "no", "off"}
 
     if USE_HOLISTIC_AUDIT and not _budget_exhausted("Holistic audit start"):
+        # Reasoning models need more time; non-reasoning fall back to standard timeout.
+        # Env override: BG_HOLISTIC_TIMEOUT_SEC (default 240s for gpt-5.x reasoning).
+        holistic_timeout = int(os.getenv("BG_HOLISTIC_TIMEOUT_SEC", "240"))
         df, holistic_adj = _holistic_profile_audit(
             df,
             subject_clean=subject_clean,
@@ -9295,9 +9533,8 @@ def ai_final_gut_check(df, brand_category, project_name, brands):
             proj_col=proj_col,
             apply_adjustments_fn=_apply_adjustments,
             parse_json_fn=_parse_ai_json,
-            timeout_sec=OPENAI_CALL_TIMEOUT_SEC * 2,  # holistic gets more time
+            timeout_sec=holistic_timeout,
         )
-        # Refresh categories_data + lookup with new BPs after holistic pass
         if holistic_adj > 0:
             for cat, items in list(categories_data.items()):
                 refreshed = []
@@ -9316,7 +9553,7 @@ def ai_final_gut_check(df, brand_category, project_name, brands):
 
     # When holistic audit is enabled, skip the narrow row-by-row passes (A, B, B2, B2C, B2B, B2D, B2E, B2G, B2F).
     # Keep B3 (location), C (demographic alignment), D (rank reorder), E (unmatched persona)
-    # because those are different concerns the holistic pass doesn't fully cover.
+    # because those handle different concerns the holistic pass doesn't fully cover.
     SKIP_NARROW_PASSES = USE_HOLISTIC_AUDIT
 
     # ──── PASS A: OUTLIER SWING REVIEW ────
@@ -9420,7 +9657,6 @@ def ai_final_gut_check(df, brand_category, project_name, brands):
     spot_batches = []
     if SKIP_NARROW_PASSES:
         print(f"   ⏭️  Pass B skipped (holistic audit handles persona spot checks)")
-        # leave spot_batches empty so the loop below is a no-op
     current_batch = {}
     current_items = 0
     pass_b_skip_cats = {
