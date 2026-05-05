@@ -482,23 +482,14 @@ PLATFORM_COMMON_NAMES = {
 def make_platform_filter_sql(platform_name, alias=''):
     """Return a SQL expression for filtering by platform COMMON_NAME.
 
-    Uses exact IN(...) matching when the platform is in our known lookup,
-    falling back to LIKE for unknown platforms. Exact matches leverage the
-    sparse index on COMMON_NAME (3rd sort key) and avoid full string scans.
-
-    Args:
-        platform_name: The platform to filter for (e.g. 'Hulu', 'Netflix')
-        alias: Optional table alias prefix (e.g. 'cs' produces 'cs.COMMON_NAME')
+    ClickHouse COMMON_NAME values are lowercase pipe-delimited compounds
+    (e.g. 'hulu', 'google | hulu'), so we use LIKE with the lowercase
+    platform keyword. The ngrambf_v1 bloom filter index on COMMON_NAME
+    provides skip-pruning even with LIKE patterns.
     """
     col = f"{alias}.COMMON_NAME" if alias else "COMMON_NAME"
-    key = platform_name.strip().lower()
-    known = PLATFORM_COMMON_NAMES.get(key)
-    if known:
-        escaped = [n.replace("'", "''") for n in known]
-        in_list = ', '.join(f"'{n}'" for n in escaped)
-        return f"{col} IN ({in_list})"
-    safe = format_search_term(platform_name)
-    return f"LOWER({col}) LIKE '%{safe}%'"
+    safe = format_search_term(platform_name).lower()
+    return f"{col} LIKE '%{safe}%'"
 
 
 def make_common_name_filter(search_terms):

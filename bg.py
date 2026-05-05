@@ -150,55 +150,44 @@ All ESPN entries in the output CSV will have:
 ✅ No ESPN+ entries (all renamed to ESPN)
 
 ================================================================================
-                    🎯 BRAND INPUT 100% ENFORCEMENT (2 Layers)
+                    🎯 BRAND INPUT BP ENFORCEMENT (2 Layers)
 ================================================================================
 
-LAYER 1: Standard Enforcement (Line 3955)
-------------------------------------------
+LAYER 1: Conditional Enforcement (Line 3955)
+---------------------------------------------
 Function: enforce_input_brand_100(df_final, brands)
 When: After previous run column is added
 What:
-  - Finds all variations of input brand (case-insensitive, exact match)
-  - Sets percentage to 100.0% in EVERY category where brand appears
-  - Updates raw numbers to match sample size
+  - Checks if the input brand appears in MOST PURCHASED BRANDS (MPB)
+  - If brand IS in MPB → agent score is canonical, no 100% override.
+    Cross-category consistency gate ensures single shared BP.
+  - If brand is NOT in MPB → 100.0% in EVERY category where it appears.
   - Skipped for GenPop runs (natural percentages preserved)
 
-Example:
-  Input Brand: "Wyndham"
-  Found in:
-  - BRAND INPUT: 95% → 100%
+Example (brand IN MPB — e.g. a household national brand appearing in buyer survey):
+  Found in MPB at agent score ~65%
+  - APPAREL/FOOTWEAR: ~65% (consistency-gated)
+  - WHERE THEY SHOP: ~65% (consistency-gated)
+  - MOST PURCHASED BRANDS: ~65% (agent score)
+
+Example (brand NOT in MPB — e.g. Wyndham):
   - INTEREST: 87% → 100%
   - WHERE THEY STAY: 92% → 100%
-  - MOST PURCHASED BRANDS: 98% → 100%
 
 LAYER 2: FINAL Pre-Save Enforcement (Line 4235)
 ------------------------------------------------
-Function: enforce_input_brand_100(df_final, brands)
-When: Right before saving CSV (absolute last step, after ESPN enforcement)
-What:
-  - FINAL CHECK to ensure brand input is 100% everywhere
-  - Runs even after all other processing (divisions, enforcements, etc.)
-  - Guarantees brand input = 100% in saved output
-  - THIS IS THE FINAL SAFEGUARD before output
-
-Example:
-  If divisions or other processing changed brand input:
-  - BRAND INPUT: 100%
-  - INTEREST: 50% (after ÷2 division)
-  → Brand input forced back to 100% everywhere
+Same conditional logic, runs as final safeguard before output.
 
 RESULT GUARANTEE:
-All brand input entries in the output CSV will have:
-✅ 100.0% in every category where the brand appears
-✅ Raw numbers = Sample Size for perfect 100% calculation
-✅ Consistent across all categories
-✅ (GenPop exception: natural percentages if GenPop run)
+Brand in MPB  → agent score everywhere, consistency-gated
+Brand not MPB → 100.0% everywhere
+GenPop        → natural percentages preserved
 
 ================================================================================
                     📋 FULL PIPELINE EXECUTION ORDER
 ================================================================================
 
-1.  Data Loading → Load from Snowflake database
+1.  Data Loading → Load from ClickHouse
 2.  Normalization → Standardize category/value names
 3.  🔄 ESPN Layer 1: consolidate_espn_brands() - Initial ESPN+/ESPN merge
 4.  Set Raw Numbers → From percentages using sample size (35x max down to 1x, capped at 10M)
@@ -206,7 +195,7 @@ All brand input entries in the output CSV will have:
 6.  Sports 40x/4.36x Boost → Major leagues and other sports
 7.  Dynamic Threshold Boosts → SEARCH ENGINE/AI (65% threshold)
 8.  🔄 ESPN Layer 2: enforce_cross_category_brand_consistency() - ESPN gets max
-9.  🎯 Brand Input Layer 1: enforce_input_brand_100() - Set to 100%
+9.  🎯 Brand Input Layer 1: enforce_input_brand_100() - Conditional (100% if not in MPB, agent score if in MPB)
 10. Add Previous Run Column → Historical comparison data
 11. Final Calculations → Brand Penetration, US Gen Pop Projection
 12. Post-Save Divisions:
@@ -215,7 +204,7 @@ All brand input entries in the output CSV will have:
     - Sports global brand consistency
 13. 🔄 ESPN Layer 3 (FINAL): enforce_espn_consistency_final() - Last ESPN check
 14. 📉 ESPN Division: divide_espn_by_2_final() - Divide all ESPN values by 2
-15. 🎯 Brand Input Layer 2 (FINAL): enforce_input_brand_100() - Last 100% check
+15. 🎯 Brand Input Layer 2 (FINAL): enforce_input_brand_100() - Conditional final check
 16. 💾 SAVE TO CSV → Output file
 
 ================================================================================
@@ -299,9 +288,67 @@ import time as _time
 
 # ── Model tier constants ────────────────────────────────────────────────────
 MODEL_RESEARCH = 'gpt-4o-search-preview'   # web search, persona doc
-MODEL_QUALITY  = 'gpt-4o'                  # priority categories + location + demos
-MODEL_SCORING  = 'gpt-4o-mini'             # other category agents + delta sanity
+MODEL_QUALITY  = 'gpt-4o'                  # all category agents + location + demos
+MODEL_SCORING  = 'gpt-4o'                  # all category agents + delta sanity (upgraded from gpt-4o-mini)
 MODEL_JUDGE    = 'gpt-4.1-nano'            # mismatch + cap review (ACCEPT/REVISE)
+
+
+def _parse_profile_quality_tier() -> str:
+    """Pipeline quality preset for ANY subject brand — not keyed to one label.
+
+    BG_PROFILE_QUALITY (aliases):
+      balanced (default) — gpt-4o-mini classify; good cost/latency.
+      priority | gutcheck | high — gpt-4o classify unless BG_MODEL_CLASSIFY overrides;
+                                   smaller batches + longer timeouts unless BG_CLASSIFY_* overrides.
+      economy | cheap     — explicitly cost-first classify (still mini).
+
+    Explicit BG_MODEL_CLASSIFY / BG_CLASSIFY_BATCH / BG_CLASSIFY_TIMEOUT_SEC always win.
+    """
+    raw = (os.environ.get('BG_PROFILE_QUALITY') or 'balanced').strip().lower()
+    if raw in ('priority', 'gutcheck', 'high', 'max'):
+        return 'priority'
+    if raw in ('economy', 'cheap', 'fast'):
+        return 'economy'
+    return 'balanced'
+
+
+_PROFILE_QUALITY_TIER = _parse_profile_quality_tier()
+
+_explicit_classify_model = (
+    os.environ.get('BG_MODEL_CLASSIFY') or os.environ.get('MODEL_CLASSIFY') or ''
+).strip()
+if _explicit_classify_model:
+    MODEL_CLASSIFY = _explicit_classify_model
+elif _PROFILE_QUALITY_TIER == 'priority':
+    MODEL_CLASSIFY = 'gpt-4o'
+elif _PROFILE_QUALITY_TIER == 'economy':
+    MODEL_CLASSIFY = 'gpt-4o-mini'
+else:
+    MODEL_CLASSIFY = 'gpt-4o-mini'
+
+
+def _effective_classify_batch() -> int:
+    raw = os.environ.get('BG_CLASSIFY_BATCH')
+    if raw is not None and str(raw).strip() != '':
+        return max(5, min(40, int(raw)))
+    if _PROFILE_QUALITY_TIER == 'priority':
+        return 22
+    return 30
+
+
+def _effective_classify_timeout_sec() -> int:
+    raw = os.environ.get('BG_CLASSIFY_TIMEOUT_SEC')
+    if raw is not None and str(raw).strip() != '':
+        return max(30, min(300, int(raw)))
+    if _PROFILE_QUALITY_TIER == 'priority':
+        return 150
+    return 120
+
+
+_CLASSIFY_BATCH = _effective_classify_batch()
+_CLASSIFY_TIMEOUT_SEC = _effective_classify_timeout_sec()
+
+_FIRST_CAT_PROMPT_LOGGED = False  # flipped to True after one sample prompt is logged
 
 PRIORITY_CATEGORIES = {
     'SOCIAL MEDIA', 'SEARCH ENGINE/AI',
@@ -538,14 +585,19 @@ def _research_brand_demographics(client, subject_name, brand_category):
 # ══════════════════════════════════════════════════════════════════════════════
 # RESEARCH-FIRST PROFILE BUILDER
 # ══════════════════════════════════════════════════════════════════════════════
-# Instead of reviewing Snowflake data and fixing outliers, this approach:
+# Instead of reviewing ClickHouse data and fixing outliers, this approach:
 # 1. Deeply researches WHO the profile is about
 # 2. Builds complete demographic/behavioral profile from research
 # 3. Sets ALL values based on the researched persona (with noise)
-# 4. Research becomes the source of truth — not Snowflake data
+# 4. Research becomes the source of truth — not ClickHouse data
 # ══════════════════════════════════════════════════════════════════════════════
 
 _research_profile_cache = {}
+
+# Profile IQ depth mode (always on per product direction):
+# keep/score full observed category tails instead of top-N truncation in
+# late sanity/reorder review passes.
+DEEP_OUTPUT_MODE_PROFILE_IQ = True
 
 def _add_realistic_noise(value, noise_range=0.5):
     """Add small random noise to a value to avoid perfect round numbers."""
@@ -645,8 +697,7 @@ Return ONLY valid JSON (no markdown):
         "BLACK OR AFRICAN AMERICAN": <percent>,
         "HISPANIC OR LATINO": <percent>,
         "ASIAN": <percent>,
-        "NATIVE AMERICAN / ALASKA NATIVE": <percent>,
-        "ANOTHER RACE/ETHNICITY": <percent>
+        "OTHER": <percent>
     }},
     "INCOME": {{
         "UNDER $25,000": <percent>,
@@ -657,12 +708,11 @@ Return ONLY valid JSON (no markdown):
         "$150,000 OR MORE": <percent>
     }},
     "EDUCATION": {{
-        "LESS THAN HIGH SCHOOL": <percent>,
-        "HIGH SCHOOL GRADUATE": <percent>,
+        "HIGH SCHOOL OR LESS": <percent>,
         "SOME COLLEGE": <percent>,
         "ASSOCIATE DEGREE": <percent>,
         "BACHELOR'S DEGREE": <percent>,
-        "GRADUATE DEGREE": <percent>
+        "GRADUATE OR PROFESSIONAL DEGREE": <percent>
     }},
     "SEXUAL_ORIENTATION": {{
         "STRAIGHT / HETEROSEXUAL": <percent>,
@@ -678,7 +728,7 @@ Return ONLY valid JSON (no markdown):
         "SINGLE": <percent>,
         "MARRIED": <percent>,
         "IN A RELATIONSHIP": <percent>,
-        "DIVORCED": <percent>,
+        "DIVORCED OR SEPARATED": <percent>,
         "WIDOWED": <percent>,
         "PREFER NOT TO SAY": <percent>
     }}
@@ -733,11 +783,11 @@ Return ONLY valid JSON (no markdown):
 
 
 def _apply_research_profile_to_df(df, research_profile, subject_clean):
-    """Compare Snowflake data against research and update if misaligned.
+    """Compare ClickHouse data against research and update if misaligned.
     
     Research establishes what the persona SHOULD look like.
-    - If Snowflake data aligns with persona → keep it (add slight noise)
-    - If Snowflake data conflicts with persona → update to match research
+    - If ClickHouse data aligns with persona → keep it (add slight noise)
+    - If ClickHouse data conflicts with persona → update to match research
     """
     if not research_profile:
         return df
@@ -776,8 +826,8 @@ def _apply_research_profile_to_df(df, research_profile, subject_clean):
         if not mask.any():
             continue
         
-        # Extract current Snowflake distribution for this category
-        snowflake_dist = {}
+        # Extract current ClickHouse distribution for this category
+        ch_dist = {}
         total_bp = 0.0
         cat_items = []
         
@@ -796,15 +846,15 @@ def _apply_research_profile_to_df(df, research_profile, subject_clean):
         
         # Convert to percentages
         for val, val_upper, bp, idx in cat_items:
-            snowflake_dist[val_upper] = bp / total_bp * 100 if total_bp > 0 else 0
+            ch_dist[val_upper] = bp / total_bp * 100 if total_bp > 0 else 0
         
-        # Compare Snowflake vs Research - check if they align with persona
+        # Compare ClickHouse data vs Research - check if they align with persona
         # "Aligns" means the distribution pattern matches (not exact numbers)
-        is_aligned = _check_distribution_alignment(snowflake_dist, research_dist, cat_upper)
+        is_aligned = _check_distribution_alignment(ch_dist, research_dist, cat_upper)
         
         if is_aligned:
-            # Snowflake data aligns with persona - keep it, just add slight noise
-            print(f"   ✓ {cat}: Snowflake data aligns with persona — keeping with noise")
+            # ClickHouse data aligns with persona - keep it, just add slight noise
+            print(f"   ✓ {cat}: ClickHouse data aligns with persona — keeping with noise")
             for val, val_upper, bp, idx in cat_items:
                 current_pct = bp / total_bp * 100 if total_bp > 0 else 0
                 noisy_pct = _add_realistic_noise(current_pct, 0.2)
@@ -820,8 +870,8 @@ def _apply_research_profile_to_df(df, research_profile, subject_clean):
                     df.at[idx, cs_col] = f'{noisy_pct:.4f}%'
             kept_cats += 1
         else:
-            # Snowflake data conflicts with persona - update to match research
-            print(f"   ✗ {cat}: Snowflake data conflicts with persona — updating from research")
+            # ClickHouse data conflicts with persona - update to match research
+            print(f"   ✗ {cat}: ClickHouse data conflicts with persona — updating from research")
             for val, val_upper, bp, idx in cat_items:
                 # Find matching label in research profile
                 matched_pct = None
@@ -849,17 +899,17 @@ def _apply_research_profile_to_df(df, research_profile, subject_clean):
     return df
 
 
-def _check_distribution_alignment(snowflake_dist, research_dist, category):
-    """Check if Snowflake distribution aligns with research-based persona.
+def _check_distribution_alignment(ch_dist, research_dist, category):
+    """Check if ClickHouse distribution aligns with research-based persona.
     
     Returns True if distributions are reasonably aligned, False if they conflict.
     
     Alignment means:
-    - The general SHAPE matches (if research says young audience, Snowflake should show young)
-    - No extreme contradictions (research says 5% X, Snowflake says 60% X)
+    - The general SHAPE matches (if research says young audience, ClickHouse should show young)
+    - No extreme contradictions (research says 5% X, ClickHouse says 60% X)
     - Allows for natural variation in exact percentages
     """
-    if not snowflake_dist or not research_dist:
+    if not ch_dist or not research_dist:
         return False
     
     # Normalize research keys to uppercase for comparison
@@ -869,7 +919,7 @@ def _check_distribution_alignment(snowflake_dist, research_dist, category):
     comparisons = 0
     severe_conflicts = 0
     
-    for sf_key, sf_val in snowflake_dist.items():
+    for sf_key, sf_val in ch_dist.items():
         # Find matching research key
         research_val = None
         for r_key, r_val in research_upper.items():
@@ -883,10 +933,10 @@ def _check_distribution_alignment(snowflake_dist, research_dist, category):
             comparisons += 1
             
             # Check for severe conflicts
-            # If research says <10% but Snowflake says >50%, that's a severe conflict
+            # If research says <10% but ClickHouse says >50%, that's a severe conflict
             if research_val < 10 and sf_val > 50:
                 severe_conflicts += 1
-            # If research says >40% but Snowflake says <10%, that's a severe conflict
+            # If research says >40% but ClickHouse says <10%, that's a severe conflict
             elif research_val > 40 and sf_val < 10:
                 severe_conflicts += 1
             # If difference is >40 percentage points, that's severe
@@ -909,7 +959,7 @@ def _check_distribution_alignment(snowflake_dist, research_dist, category):
 def research_first_demographic_review(df, brand_category, project_name, brands):
     """MASTER FUNCTION: Research-first demographic review.
     
-    Instead of reviewing Snowflake data and fixing outliers:
+    Instead of reviewing ClickHouse data and fixing outliers:
     1. Deep research on WHO the profile is about
     2. Build complete demographic profile from research
     3. Set ALL values based on researched persona (with noise)
@@ -1758,8 +1808,16 @@ def _try_s3_archetype(project_name, brands):
                     continue
                 if 'Gen_Pop' in key:
                     continue
-                fn_clean = key.lower().replace('.csv', '').replace('_', '').replace('-', '').replace(' ', '')
-                if brand_clean not in fn_clean:
+                fn_lower = key.lower().replace('.csv', '')
+                # Strip date suffix (_MM_DD_YYYY_HH_MM) to get brand name part
+                _m = re.match(r'^(.+?)_\d{2}_\d{2}_\d{4}_\d{2}_\d{2}$', fn_lower)
+                fn_name = _m.group(1) if _m else fn_lower
+                fn_segments = set(fn_name.replace('-', '_').split('_'))
+                fn_joined = fn_name.replace('_', '').replace('-', '')
+                if not (fn_name == brand_clean or
+                        fn_name.startswith(brand_clean + '_') or
+                        brand_clean in fn_segments or
+                        fn_joined == brand_clean):
                     continue
                 if best_match is None or obj['LastModified'] > best_match['LastModified']:
                     best_match = obj
@@ -1918,15 +1976,36 @@ def _try_gpt_archetype(project_name, brands, brand_category=None):
         f'  * Texas teams: Significant HISPANIC presence\n'
         f'- Hip-hop/R&B artists: Strong BLACK audience\n'
         f'- K-pop artists: Strong ASIAN audience\n'
-        f'- Latin music artists: Strong HISPANIC audience\n\n'
+        f'- Latin music artists: Strong HISPANIC audience\n'
+        f'- ATHLETIC FOOTWEAR / SNEAKER BRANDS (Nike, Adidas, Jordan, Reebok, Puma,\n'
+        f'  New Balance, Converse, Foot Locker, Champs, Finish Line): Strong\n'
+        f'  BLACK + HISPANIC over-index even when mass-market. Roots in basketball,\n'
+        f'  hip-hop, and streetwear culture means typical breakdown: BLACK ~25-30%,\n'
+        f'  HISPANIC ~22-26%, WHITE ~45-55%, ASIAN ~6-8% (NOT census 60/19/13).\n'
+        f'- ATHLETIC APPAREL with sports/streetwear DNA (Lululemon partial, Champion,\n'
+        f'  Fila, Under Armour): BLACK + HISPANIC modest over-index.\n'
+        f'- URBAN-ROOTED MASS BRANDS (McDonalds, Wingstop, Popeyes, Kia, Honda,\n'
+        f'  Allstate, Cricket Wireless, MetroPCS, Boost Mobile, T-Mobile prepaid):\n'
+        f'  BLACK + HISPANIC over-index due to brand history and customer base.\n'
+        f'- A "MASS BRAND" with deep cultural roots in basketball, hip-hop, soccer,\n'
+        f'  Latin music, or streetwear can simultaneously be (a) mostly mainstream\n'
+        f'  middle-American consumers AND (b) have meaningful Black/Hispanic\n'
+        f'  over-indexing. These are NOT mutually exclusive. Mass-market does\n'
+        f'  NOT mean "ethnically gen-pop average".\n\n'
         f'Available behavioral categories: {CATS}\n\n'
         f'Examples:\n'
+        f'- Nike: balanced gender, balanced age, strong BLACK + HISPANIC over-index\n'
+        f'  (athletic + streetwear + basketball culture). SPORTS/EXERCISE high.\n'
+        f'- Adidas: similar to Nike — BLACK + HISPANIC over-index, soccer-leaning\n'
+        f'  for HISPANIC, basketball/streetwear-leaning for BLACK.\n'
         f'- Mookie Betts (LA Dodgers): male, HISPANIC + BLACK over-index (baseball + LA market)\n'
         f'- Shohei Ohtani: male, HISPANIC + ASIAN over-index (baseball + Japanese star)\n'
         f'- Bad Bunny: balanced gender, younger, very strong HISPANIC over-index\n'
         f'- LeBron James: male, strong BLACK over-index, SPORTS/BETTING high\n'
         f'- Taylor Swift: female, younger, WHITE skew, BEAUTY/WELLNESS/APPAREL high\n'
-        f'- NFL: male, diverse but BLACK over-index, SPORTS/BETTING high\n\n'
+        f'- NFL: male, diverse but BLACK over-index, SPORTS/BETTING high\n'
+        f'- Walmart: balanced, mass-market, BLACK + HISPANIC modest over-index\n'
+        f'  (urban + Sun-Belt store density), WHITE not above gen-pop.\n\n'
         f'Return ONLY the JSON object.'
     )
     try:
@@ -1963,7 +2042,7 @@ def _try_gpt_archetype(project_name, brands, brand_category=None):
 def validate_demographics(df, archetype, sample_size):
     """Validate raw demographics against archetype; reshape only when gut-check fails.
 
-    Demographics are NOT anchored to Gen Pop -- raw Snowflake data passes through.
+    Demographics are NOT anchored to Gen Pop -- raw ClickHouse data passes through.
     This function only intervenes when the distribution clearly contradicts the
     archetype (e.g. 65+ as #2 age group for a younger-skewing brand).
     """
@@ -2078,36 +2157,45 @@ def validate_demographics(df, archetype, sample_size):
         gp_val = gp_demo.get('ETHNICITY', {}).get(val, cur)
         eth_data[idx] = {'val': val, 'cur': cur, 'gp': gp_val}
     
-    # Target thresholds for expected ethnicities based on category context
+    # Target thresholds for expected ethnicities based on category context.
+    # These reflect ACTUAL audience demographics for brands/talents/sports
+    # with deep cultural roots, NOT census gen-pop. When the archetype
+    # agent flags an ethnicity as `ethnicity_over_index`, we lift to AT
+    # LEAST these floors so the panel-derived numbers (which often
+    # under-represent minorities due to sample bias) don't dilute the
+    # documented audience composition.
     ETH_MIN_TARGETS = {
-        'HISPANIC': 20.0,  # For baseball/soccer audiences, should be at least 20%
-        'LATINO': 20.0,
-        'BLACK': 25.0,     # For basketball/urban audiences, should be at least 25%
-        'AFRICAN AMERICAN': 25.0,
-        'ASIAN': 10.0,     # For K-pop/anime/tech audiences
+        'HISPANIC':         24.0,  # baseball/soccer/Latin music/Sun-Belt brands
+        'LATINO':           24.0,
+        'BLACK':            28.0,  # basketball/hip-hop/streetwear/athletic brands
+        'AFRICAN AMERICAN': 28.0,
+        'ASIAN':            10.0,  # K-pop/anime/tech audiences
     }
-    
+
     for idx, data in eth_data.items():
         val = data['val']
         cur = data['cur']
         gp_val = data['gp']
         if gp_val <= 0:
             gp_val = cur if cur > 0 else 5.0  # Fallback
-        
+
         is_expected = any(exp in val or val in exp for exp in expected_high)
-        
+
         # BOOST: If this ethnicity is expected to over-index but is too low
         if is_expected:
-            # Find target minimum for this ethnicity
             target_min = None
             for eth_key, min_val in ETH_MIN_TARGETS.items():
                 if eth_key in val:
                     target_min = min_val
                     break
-            
+
             if target_min and cur < target_min:
-                # Boost toward target (blend: 60% target, 40% current)
-                new_val = round(target_min * 0.6 + cur * 0.4, 4)
+                # Aggressive blend: 75% target, 25% current. Earlier 60/40
+                # under-shot — for Nike with cur=19% target=28% the old
+                # blend produced 22.6%, leaving Black still 6pp below
+                # documented audience reality. 75/25 produces 25.75%,
+                # which lands inside the 25-30% documented band.
+                new_val = round(target_min * 0.75 + cur * 0.25, 4)
                 df.at[idx, pct_col] = f"{new_val:.4f}"
                 if bp_col and bp_col in df.columns:
                     df.at[idx, bp_col] = f"{new_val:.4f}"
@@ -7133,7 +7221,7 @@ def ai_research_first_demographic_audit(df, brand_category, project_name, brands
     """Final research-first demographic audit.
 
     Goal:
-    - Keep Snowflake-derived demographics when they are plausible.
+    - Keep ClickHouse-derived demographics when they are plausible.
     - Adjust only values that conflict with web-sourced evidence.
     - Return 4dp percentages that sum to 100 per demographic category.
     """
@@ -7246,7 +7334,7 @@ relationship, parental status, sexual orientation) and return a complete persona
 
 Rules:
 - US context only.
-- Keep plausible Snowflake signal when it is evidence-consistent.
+- Keep plausible ClickHouse signal when it is evidence-consistent.
 - Do NOT blindly overwrite with stereotypes.
 - For each corrected category, output all existing labels from CURRENT exactly as given.
 - Every corrected category must sum to exactly 100.0000.
@@ -7669,7 +7757,7 @@ Return exactly:
                     # Confidence-weighted blend:
                     # - AI estimate (primary)
                     # - soft prior (US composition mapped to present labels)
-                    # - current Snowflake composition (inertia)
+                    # - current ClickHouse composition (inertia)
                     blended = {}
                     for k in post_eth.keys():
                         baseline_mix = 0.65 * float(prior_eth.get(k, 0.0)) + 0.35 * float(post_eth.get(k, 0.0))
@@ -8025,7 +8113,7 @@ JSON only.
 
         # Sixth pass (deterministic): hard anti-template validator.
         # If any demographic category still looks synthetic/equalized, repair it by
-        # blending back toward the original Snowflake shape before final math.
+        # blending back toward the original ClickHouse shape before final math.
         try:
             def _dist_now(_cat):
                 _cm = df['Column'].str.upper().str.strip() == _cat
@@ -8189,7 +8277,7 @@ JSON only.
                 _base = current.get(_cat, {}) or {}
                 _base_is_templated = _looks_templated_strict(_base)
 
-                # If we have original Snowflake shape for this category, anchor to it.
+                # If we have original ClickHouse shape for this category, anchor to it.
                 # Otherwise keep current but inject variance.
                 _mix_to_base = 0.78 if _cat in {'AGE', 'ETHNICITY', 'INCOME'} else 0.72
                 _fixed = {}
@@ -8393,6 +8481,7 @@ Current total: {current_total:.2f}% (should be 100%)
    - San Antonio Spurs → San Antonio 8-12%, Austin 3-5%, Houston 2-4%
    - Atlanta Hawks → Atlanta 10-15%, nearby Southern markets elevated
    - In-N-Out → California markets dominate, minimal elsewhere
+   - **Active pro athlete studied as a person (not a FMCG brand)** → over-weight their **current team's home DMA** + gateway cities matching research, not only global population rank
 
 2. **US BASE ASSUMPTION (MANDATORY)**: This profile is built from a US gen-pop
    audience base of ~10 million people. Treat this as US-first behavior.
@@ -8651,189 +8740,261 @@ def _build_profile_summary(df):
     return '\n'.join(summary_parts) if summary_parts else 'No demographic data available'
 
 
-def _holistic_profile_audit(df, *, subject_clean, brand_category,
-                             audience_context, gp_bp_lookup, sample_raw,
-                             bp_col, cs_col, raw_col, proj_col,
-                             apply_adjustments_fn, parse_json_fn,
-                             timeout_sec=120, model='gpt-4o'):
+def _android_share_from_technology_rows(df):
+    """Rough Android vs Apple mobile skew from TECHNOLOGY/DEVICE (or TECHNOLOGY BRAND) BP.
+
+    Returns None if insufficient signal (>0 BP on fewer than both sides combined).
     """
-    HOLISTIC FINAL AUDIT — one smart agent looking at the whole profile.
-
-    This replaces 9+ narrow sub-passes (A, B, B2, B2C, B2B, B2D, B2E, B2G, B2F)
-    with a single GPT-4o call that gets a whole-profile view (top items per
-    category + indices vs gen pop + persona context) and returns a unified
-    list of adjustments.
-
-    Why this is faster AND smarter:
-    - 1 round trip vs 50+ round trips (less network overhead)
-    - The agent sees CROSS-CATEGORY context (e.g., "Mbappe ranked above LeBron
-      contradicts the Nike persona") which narrow agents cannot see
-    - Distribution patterns (flat top-5, missing leaders) are visible at once
-    - Demographic + behavioral coherence checked together, not separately
-
-    Returns: (df, adjustments_count) — df with adjustments applied
-    """
-    import json as _json
-    import time as _time
-
-    client = _get_openai_client()
-    if client is None:
-        return df, 0
-
-    DEMO_CATS = {'AGE', 'GENDER', 'ETHNICITY', 'INCOME', 'EDUCATION',
-                 'RELATIONSHIP', 'SEXUAL_ORIENTATION', 'PARENTAL_STATUS',
-                 'OCCUPATION'}
-    META_CATS = {'INPUT_METADATA', 'BRAND INPUT', 'SAMPLE SIZE',
-                 'AVID FAN', 'CASUAL FAN', 'BRAND CATEGORY', 'LOCATION'}
-
-    # ── Build whole-profile snapshot: top items per category + index vs Gen Pop
-    cat_data: dict[str, list[tuple]] = {}
-    for idx, row in df.iterrows():
-        cat = str(row.get('Column', '')).strip().upper()
-        if cat in DEMO_CATS or cat in META_CATS:
-            continue
-        val = str(row.get('Value', '')).strip()
+    if df is None or df.empty:
+        return None
+    bp_col = 'Brand Penetration (Row)'
+    if bp_col not in df.columns:
+        return None
+    tech_masks = df['Column'].astype(str).str.upper().isin(
+        {'TECHNOLOGY/DEVICE', 'TECHNOLOGY BRAND', 'DEVICE'})
+    if not tech_masks.any():
+        return None
+    android_bp = 0.0
+    apple_bp = 0.0
+    for _, row in df[tech_masks].iterrows():
+        val = str(row.get('Value', '') or '').upper()
         try:
             bp = float(str(row.get(bp_col, 0)).replace('%', '').replace(',', ''))
         except (ValueError, TypeError):
-            bp = 0
-        if bp > 0:
-            cat_data.setdefault(cat, []).append((val, bp, idx))
-
-    if not cat_data:
-        return df, 0
-
-    # Sort each category descending and take top items + add distribution stats
-    PER_CAT_TOP_N = 25       # show top 25 items per category to the agent
-    MAX_TOTAL_ITEMS = 800    # cap total items to keep prompt manageable
-
-    snapshot_blocks: list[str] = []
-    total_items_in_snapshot = 0
-    skipped_cats: list[str] = []
-
-    for cat in sorted(cat_data.keys()):
-        items = sorted(cat_data[cat], key=lambda x: -x[1])
-        top_items = items[:PER_CAT_TOP_N]
-
-        # Distribution health metrics
-        if len(items) >= 5:
-            top5 = [it[1] for it in items[:5]]
-            top5_spread = top5[0] - top5[4]
-            flat_flag = " ⚠️FLAT" if top5_spread < 4.0 and top5[0] > 8.0 else ""
-        else:
-            flat_flag = ""
-
-        if total_items_in_snapshot + len(top_items) > MAX_TOTAL_ITEMS:
-            skipped_cats.append(f"{cat} ({len(items)} rows)")
+            bp = 0.0
+        if bp <= 0:
             continue
+        if 'ANDROID' in val or 'GOOGLE PIXEL' in val:
+            android_bp += bp
+        elif ('IPHONE' in val or ' IOS' in f' {val}' or val.endswith(' IOS')
+              or ('APPLE WATCH' in val) or (val.startswith('APPLE ') and 'TV' not in val
+              and 'MUSIC' not in val and 'PODCAST' not in val)):
+            apple_bp += bp
+    denom = android_bp + apple_bp
+    if denom < 8.0:
+        return None
+    return android_bp / denom
 
-        lines = []
-        for name, bp, _ in top_items:
-            gp_bp = gp_bp_lookup.get((cat, name.upper()), 0)
-            if gp_bp > 0:
-                idx_int = int(round((bp / gp_bp) * 100))
-                idx_meta = f" [GP:{gp_bp:.1f}% idx:{idx_int}]"
+
+def _recalc_cat_cs_after_raw_updates(df, category, bp_col, cs_col, raw_col):
+    """Recompute Category Share within one behavioral ``category`` from raw counts."""
+    cm = df['Column'].astype(str).str.upper().str.strip() == category.upper()
+    if not cm.any():
+        return
+    total_raw = 0
+    for cidx in df[cm].index:
+        try:
+            total_raw += int(float(str(df.at[cidx, raw_col]).replace(',', '').strip()))
+        except (ValueError, TypeError):
+            pass
+    if total_raw <= 0:
+        return
+    for cidx in df[cm].index:
+        try:
+            raw_i = int(float(str(df.at[cidx, raw_col]).replace(',', '').strip()))
+            new_cs = round((raw_i / total_raw) * 100.0, 4)
+            cur = df.at[cidx, cs_col]
+            if isinstance(cur, str) and '%' in cur:
+                df.at[cidx, cs_col] = f'{new_cs:.4f}%'
             else:
-                idx_meta = ""
-            lines.append(f"  {name}: {bp:.2f}%{idx_meta}")
+                df.at[cidx, cs_col] = new_cs
+        except (ValueError, TypeError):
+            pass
 
-        header = f"{cat} ({len(items)} rows){flat_flag}:"
-        snapshot_blocks.append(header + "\n" + "\n".join(lines))
-        total_items_in_snapshot += len(top_items)
 
-    if skipped_cats:
-        print(f"   📋 Holistic audit: {len(skipped_cats)} long-tail cats deferred to narrow passes")
+def apply_deterministic_us_panel_realism(df, sample_raw):
+    """Non-AI tweaks after GPT passes harmonize noisy panel artifacts.
 
-    profile_snapshot = "\n\n".join(snapshot_blocks)
-
-    # ── Build the prompt — explicit, opinionated, persona-driven
-    prompt = (
-        f"You are a SENIOR US consumer research analyst doing a holistic final audit of a "
-        f"behavioral audience profile. You are the LAST quality gate before the CSV ships.\n\n"
-        f"{audience_context}\n"
-        f"=== HOW TO THINK ===\n"
-        f"You see the WHOLE profile at once — not category by category in isolation. Your job:\n"
-        f"1. **Identify cross-category contradictions.** If the persona is a US NBA player, "
-        f"   a French soccer star ranked above LeBron in ATHLETE is wrong. If the persona is "
-        f"   urban premium, Whataburger leading QSR is wrong.\n"
-        f"2. **Check distribution health.** Items marked ⚠️FLAT have unrealistically tight "
-        f"   top-5 clustering — real audiences have clear winners with gaps.\n"
-        f"3. **Check leader plausibility.** Each category should have an obvious leader for "
-        f"   THIS persona. If the leader is wrong, fix it. (e.g., Nike audience → LeBron #1 "
-        f"   in athletes; Kevin Durant profile → Houston Rockets #1 in NBA).\n"
-        f"4. **Check index direction (Gen Pop comparison).** If a persona OVER-indexes a "
-        f"   category they should AVOID, fix it. If they UNDER-index something they're "
-        f"   passionate about, fix it.\n"
-        f"5. **Persona drives ceilings, not arbitrary caps.** A Zoom company profile CAN "
-        f"   have Zoom near 90%. An AI lab CAN have ChatGPT lead. Don't apply blanket "
-        f"   ceilings — apply persona reasoning.\n\n"
-        f"=== PROFILE SNAPSHOT (top {PER_CAT_TOP_N} items per category, indices vs US Gen Pop) ===\n"
-        f"{profile_snapshot}\n\n"
-        f"=== YOUR TASK ===\n"
-        f"Review the whole profile holistically. Return adjustments for items that are clearly "
-        f"wrong for THIS specific persona. Keep adjustments meaningful — don't nitpick small "
-        f"deviations. Aim for ~5-40 high-confidence adjustments that genuinely improve the profile.\n\n"
-        f"For each adjustment, you can use:\n"
-        f"- factor (multiplier on current BP, e.g. 0.5 = halve, 2.0 = double)\n"
-        f"- target_bp (absolute BP value to set)\n"
-        f"Use target_bp when you know the right number, factor when you want directional change.\n\n"
-        f"Return ONLY valid JSON:\n"
-        f'{{"status":"FIX","summary":"1-2 sentence overview of what was wrong",'
-        f'"adjustments":[{{"category":"CAT","item":"ITEM",'
-        f'"target_bp":34.0,"reason":"brief explanation tied to persona"}},...]}}\n\n'
-        f'OR if everything looks good: {{"status":"OK","summary":"profile is internally consistent"}}\n\n'
-        f"JSON only. No markdown fences."
-    )
-
-    print(f"   🧠 Holistic audit: {len(cat_data)} categories, {total_items_in_snapshot} items in snapshot")
-    t0 = _time.perf_counter()
-
+    - SEARCH ENGINE*: cap legacy portal engines vs 2026 US digital reality; bump AI wrappers.
+    - APP/PLATFORM: if TECHNOLOGY/DEVICE skews Android, Google Play must not trail App Store BP.
+    - Defunct/overseas-heavy brands: Smile Direct Club, Daily Mail–class UK tabloid caps.
+    """
+    if df is None or df.empty:
+        return df
+    bp_col = 'Brand Penetration (Row)'
+    cs_col = 'Category Share' if 'Category Share' in df.columns else 'Percentage'
+    raw_col = 'Original Raw Numbers'
+    proj_col = 'US Gen Pop Projection'
+    if bp_col not in df.columns or raw_col not in df.columns:
+        return df
     try:
-        resp = client.chat.completions.create(
-            model=model,
-            messages=[
-                {'role': 'system',
-                 'content': 'You are a senior US consumer research analyst. Return only valid JSON.'},
-                {'role': 'user', 'content': prompt},
-            ],
-            temperature=0.1,
-            max_tokens=8000,
-            timeout=timeout_sec,
-        )
-        elapsed = _time.perf_counter() - t0
-        text = resp.choices[0].message.content.strip()
-        result = parse_json_fn(text)
+        n = max(1, int(sample_raw))
+    except (ValueError, TypeError):
+        n = 1
+    DEMO_META = {'AGE', 'GENDER', 'ETHNICITY', 'INCOME', 'EDUCATION', 'RELATIONSHIP',
+                 'SEXUAL_ORIENTATION', 'PARENTAL_STATUS', 'OCCUPATION', 'LOCATION',
+                 'INPUT_METADATA', 'BRAND INPUT', 'SAMPLE SIZE', 'AVID FAN', 'CASUAL FAN',
+                 'BRAND CATEGORY'}
+    MULT = 329_900_000 / 10_000_000
 
-        if result.get('status') == 'OK':
-            print(f"   🧠 Holistic audit OK ({elapsed:.1f}s): {result.get('summary', '')[:120]}")
-            return df, 0
+    def _set_bp_raw_proj(idx, new_bp):
+        new_bp = max(0.0, float(new_bp))
+        new_raw = max(1, int(round(new_bp / 100.0 * n)))
+        cur_bp = df.at[idx, bp_col]
+        if isinstance(cur_bp, str) and '%' in cur_bp:
+            df.at[idx, bp_col] = f'{new_bp:.4f}%'
+        elif isinstance(cur_bp, str):
+            df.at[idx, bp_col] = f'{new_bp:.4f}'
+        else:
+            df.at[idx, bp_col] = new_bp
+        df.at[idx, raw_col] = str(new_raw)
+        if proj_col in df.columns:
+            df.at[idx, proj_col] = str(int(round(new_raw * MULT)))
 
-        adjustments = result.get('adjustments', [])
-        summary = result.get('summary', '')
-        print(f"   🧠 Holistic audit ({elapsed:.1f}s): {len(adjustments)} adjustments — {summary[:120]}")
+    tweaks = 0
 
-        # Build item lookup for the apply function
-        all_item_lookup = {}
-        for cat, items in cat_data.items():
-            for name, bp, idx in items:
+    # --- SEARCH ENGINE / AI: legacy engines down; AI assistants up ---
+    search_cats = {'SEARCH ENGINE/AI', 'SEARCH ENGINE'}
+    for cat_upper in search_cats:
+        cm = df['Column'].astype(str).str.upper().str.strip() == cat_upper
+        if not cm.any():
+            continue
+        indices = df[cm].index.tolist()
+        by_val = {}
+        for idx in indices:
+            vu = str(df.at[idx, 'Value']).strip().upper().replace('\u00A0', ' ')
+            vu = ' '.join(vu.split())
+            by_val.setdefault(vu, []).append(idx)
+        ai_keys_need_boost = frozenset({
+            'CHATGPT', 'CHAT GPT', 'OPENAI CHATGPT', 'COPILOT', 'MICROSOFT COPILOT',
+            'GEMINI', 'GOOGLE GEMINI', 'PERPLEXITY', 'CLAUDE', 'ANTHROPIC CLAUDE',
+            'META AI', 'GROK'})
+        google_bp = 0.0
+        google_idx_first = None
+        for vk, idl in by_val.items():
+            if vk in ('GOOGLE', 'GOOGLE SEARCH'):
                 try:
-                    cur_bp = float(str(df.at[idx, bp_col]).replace('%', '').replace(',', ''))
+                    b0 = float(str(df.at[idl[0], bp_col]).replace('%', '').replace(',', ''))
                 except (ValueError, TypeError):
-                    cur_bp = bp
-                try:
-                    cur_cs = float(str(df.at[idx, cs_col]).replace('%', '').replace(',', ''))
-                except (ValueError, TypeError):
-                    cur_cs = 0
-                all_item_lookup[(cat, name.strip().upper())] = (name, cur_bp, cur_cs, idx)
+                    b0 = 0.0
+                if google_idx_first is None or b0 > google_bp:
+                    google_bp = b0
+                    google_idx_first = idl[0]
+        pooled = 0.0
+        ref = max(google_bp, 45.0) if google_idx_first else 55.0
 
-        applied, _ = apply_adjustments_fn(adjustments[:300], all_item_lookup, '[HOLISTIC]')
-        print(f"   🧠 Holistic audit applied: {applied} adjustments")
-        return df, applied
+        def _legacy_engine_cap_bp(vu: str):
+            vu = (vu or '').strip().upper()
+            if vu.startswith('BING'):
+                return min(22.0, ref * 0.28)
+            if vu.startswith('YAHOO') and 'FINANCE' not in vu:
+                return min(14.5, ref * 0.20)
+            if vu.startswith('MSN'):
+                return 12.5
+            vn_compact = ''.join(ch for ch in vu if ch.isalnum())
+            if vn_compact == 'DUCKDUCKGO' or vu.startswith('DUCK DUCK GO'):
+                # Trim only runaway outliers; privacy cohorts can still index high.
+                return min(28.5, ref * 0.35)
+            if vu.startswith('AOL') or vu.startswith('ASK'):
+                return min(13.5, ref * 0.20)
+            return None
 
-    except Exception as e:
-        elapsed = _time.perf_counter() - t0
-        print(f"   ⚠️ Holistic audit failed after {elapsed:.1f}s: {e}")
-        return df, 0
+        for idx in indices:
+            vu = str(df.at[idx, 'Value']).strip().upper()
+            cap = _legacy_engine_cap_bp(vu)
+            if cap is None:
+                continue
+            try:
+                cur = float(str(df.at[idx, bp_col]).replace('%', '').replace(',', ''))
+            except (ValueError, TypeError):
+                cur = 0.0
+            if cur > cap:
+                pooled += cur - cap
+                _set_bp_raw_proj(idx, cap)
+                tweaks += 1
+        if pooled <= 0.01:
+            _recalc_cat_cs_after_raw_updates(df, cat_upper, bp_col, cs_col, raw_col)
+            continue
+        boost_targets = []
+        for bk in ai_keys_need_boost:
+            for idx in by_val.get(bk, []):
+                boost_targets.append(idx)
+        # Also fuzzy: values containing substring
+        for idx in indices:
+            vu = str(df.at[idx, 'Value']).strip().upper()
+            if any(tok in vu for tok in ('CHATGPT', 'CHAT GPT', 'COPILOT', 'GEMINI',
+                                         'PERPLEXITY', 'CLAUDE')):
+                if idx not in boost_targets:
+                    boost_targets.append(idx)
+        boost_targets = list(dict.fromkeys(boost_targets))
+        if not boost_targets:
+            _recalc_cat_cs_after_raw_updates(df, cat_upper, bp_col, cs_col, raw_col)
+            continue
+        weights = []
+        for idx in boost_targets:
+            try:
+                weights.append(max(1.0, float(str(df.at[idx, bp_col]).replace('%', '').replace(',', ''))))
+            except (ValueError, TypeError):
+                weights.append(1.0)
+        wsum = sum(weights)
+        for idx, w in zip(boost_targets, weights):
+            share = (w / wsum) if wsum > 0 else (1.0 / len(boost_targets))
+            bump = pooled * share
+            try:
+                cur = float(str(df.at[idx, bp_col]).replace('%', '').replace(',', ''))
+            except (ValueError, TypeError):
+                cur = 0.0
+            _set_bp_raw_proj(idx, min(94.5, cur + bump))
+            tweaks += 1
+        _recalc_cat_cs_after_raw_updates(df, cat_upper, bp_col, cs_col, raw_col)
+
+    # --- APP / PLATFORM vs Android skew ---
+    andr_frac = _android_share_from_technology_rows(df)
+    if andr_frac is not None and andr_frac >= 0.53:
+        cm_app = df['Column'].astype(str).str.upper().str.strip() == 'APP/PLATFORM USAGE'
+        if cm_app.any():
+            gp_idx = ap_idx = None
+            gp_bp = ap_bp = 0.0
+            for idx in df[cm_app].index:
+                vu = str(df.at[idx, 'Value']).strip().upper()
+                if 'GOOGLE PLAY' in vu:
+                    gp_idx = idx
+                    try:
+                        gp_bp = float(str(df.at[idx, bp_col]).replace('%', '').replace(',', ''))
+                    except (ValueError, TypeError):
+                        gp_bp = 0.0
+                if vu in {'APPLE APP STORE', 'APP STORE'} or vu.startswith('APPLE APP STORE'):
+                    ap_idx = idx
+                    try:
+                        ap_bp = float(str(df.at[idx, bp_col]).replace('%', '').replace(',', ''))
+                    except (ValueError, TypeError):
+                        ap_bp = 0.0
+            if gp_idx is not None and ap_idx is not None and gp_bp + 1e-6 < ap_bp:
+                target_gp = float(min(93.5, max(ap_bp * 1.04, gp_bp + 0.035 * max(ap_bp, 1))))
+                shave = float(max(1.5, target_gp - gp_bp))
+                new_ap = max(5.5, ap_bp - 0.45 * shave)
+                new_gp = gp_bp + (ap_bp - new_ap)
+                _set_bp_raw_proj(ap_idx, new_ap)
+                _set_bp_raw_proj(gp_idx, new_gp)
+                tweaks += 2
+                _recalc_cat_cs_after_raw_updates(df, 'APP/PLATFORM USAGE', bp_col, cs_col, raw_col)
+
+    # --- Known bad panels: overseas tabloid (UK sheets on US personas) ---
+    uk_tabs = frozenset({
+        'DAILY MAIL', 'MAIL ONLINE', 'THE SUN', 'THE MIRROR',
+        'DAILY MIRROR', 'METRO.UK'})
+    cm_media = ~(df['Column'].astype(str).str.upper().str.strip().isin(DEMO_META))
+    uk_cats_touch = set()
+    for idx, row in df[cm_media].iterrows():
+        val = str(row.get('Value', '')).strip().upper()
+        if val not in uk_tabs:
+            continue
+        try:
+            cur = float(str(row.get(bp_col, 0)).replace('%', '').replace(',', ''))
+        except (ValueError, TypeError):
+            cur = 0.0
+        if cur <= 9.5:
+            continue
+        _set_bp_raw_proj(idx, min(cur, max(9.5, cur * 0.55)))
+        tweaks += 1
+        uk_cats_touch.add(str(row.get('Column', '')).strip().upper())
+    for _cat in uk_cats_touch:
+        _recalc_cat_cs_after_raw_updates(df, _cat, bp_col, cs_col, raw_col)
+
+    if tweaks:
+        print(f"   📐 Deterministic US panel realism: {tweaks} penetration/raw adjustments")
+
+    return df
 
 
 def _holistic_profile_audit(df, *, subject_clean, brand_category,
@@ -9282,8 +9443,10 @@ def ai_final_gut_check(df, brand_category, project_name, brands):
                 f"2. If this is a NATIONAL brand, does the distribution roughly follow US "
                 f"population with reasonable regional variation?\n"
                 f"3. Are there DMAs that are way too high or low given this audience?\n"
-                f"4. For sports teams: the home city DMA should be in the top 3 with heavy "
-                f"over-indexing. Nearby DMAs should also over-index.\n"
+                f"4. For sports TEAMS: the home city DMA should be in the top 3 with heavy "
+                f"over-indexing; commuter and nearby regional rivalry DMAs should read elevated vs gen-pop. "
+                f"For star-driven INDIVIDUAL athletes (person/talent, not FMCG branding), bias toward "
+                f"their current club/home geography plus researched national gateways — not flat population weights.\n"
                 f"5. For regional restaurant chains: markets where they operate should over-index.\n\n"
                 f"Return ONLY valid JSON:\n"
                 f'If OK: {{"status":"OK","notes":"reason"}}\n'
@@ -9672,7 +9835,9 @@ def ai_final_gut_check(df, brand_category, project_name, brands):
             cur_bp = float(str(df.at[idx, bp_col]).replace('%', '').replace(',', ''))
             cur_cs = float(str(df.at[idx, cs_col]).replace('%', '').replace(',', ''))
             refreshed.append((name, cur_bp, cur_cs, idx))
-        sorted_items = sorted(refreshed, key=lambda x: -x[1])[:25]
+        sorted_items = sorted(refreshed, key=lambda x: -x[1])
+        if not DEEP_OUTPUT_MODE_PROFILE_IQ:
+            sorted_items = sorted_items[:25]
         current_batch[cat] = sorted_items
         current_items += len(sorted_items)
         if current_items >= 100:
@@ -9928,6 +10093,19 @@ def ai_final_gut_check(df, brand_category, project_name, brands):
                 f"- LOWER when value is implausibly high for this persona\n"
                 f"- RAISE when value is implausibly low for this persona\n"
                 f"- KEEP when value is directionally and magnitude-wise believable\n\n"
+                f"Regional retail footprint (critical):\n"
+                f"- Grocery / supermarket banners often only operate in subsets of the US.\n"
+                f"- BEFORE keeping a high BP, ask: Does THIS profile's LOCATION / DMA geography plausibly include that footprint?\n"
+                f"- Examples (illustrative — map each banner to persona metros; research when unsure):\n"
+                f"  **Southern California / heavy SoCal LOCATION:** Kroger-Albertsons–era **Ralphs, Vons, Pavilions** (and cousins) plausible when DMAs skew LA/OC/SD/Inland Empire — weak SoCal ⇒ do not bury them artificially OR inflate them elsewhere.\n"
+                f"  **Texas / Gulf / Central South:** **H‑E‑B**, Central Market‑class; Fiesta‑style independents skew Texas/Southwest.\n"
+                f"  **Southeast / Florida:** **Publix**, Winn‑Dixie, Southeastern Grocers banners.\n"
+                f"  **Pacific Northwest:** Fred Meyer‑class, NW‑heavy Costco adjacency patterns.\n"
+                f"  **Northeast / Mid‑Atlantic cores:** **Wegmans**, Stop & Shop / Giant‑class banners, ShopRite density where personas map there.\n"
+                f"  **National/coast‑to‑coast footprints without dominant region:** **Albertsons‑banner mosaic, Kroger‑banner mosaic, Safeway‑named rows, Costco/Sam's, Walmart/Target** often float high — coherent with dispersed LOCATION.\n"
+                f"- **Delivery / pickup merchant‑of‑record coherence (critical):** If the SAME profile shows strong **INSTACART, DoorDash‑grocery/Uber‑Eats‑grocery, Walmart/Target pickup & grocery pickup apps** in MPB/APP rows (evident from persona or parallel category context), then **supermarket banners that dominate those apps' default stores in THIS geography** should read **materially high** in WHERE THEY SHOP when present in inventory — not just national big‑box. RAISE under‑indexed regional grocers that match the delivery spine + DMA map; LOWER same if geography contradicts.\n"
+                f"- **OTC / drugstore aisle clusters** (when MPB skews drugstore consumables): **CVS, Walgreens, Rite Aid** (where still relevant) should show **credible digital appointment + Rx + retail app** tiers for that persona — not absent while unrelated grocers monopolize.\n"
+                f"- LOWER rows where a banner is geographically misaligned unless web research cites national ecommerce mastery.\n\n"
                 f"Return ONLY valid JSON:\n"
                 f'If no changes: {{"status":"OK","notes":"all rows believable"}}\n'
                 f'If changes: {{"status":"FIX","notes":"summary",'
@@ -10013,17 +10191,32 @@ def ai_final_gut_check(df, brand_category, project_name, brands):
                 f"or clicked online can plausibly be higher.\n"
                 f"- Commodity/offline-heavy purchases (e.g., basic staples) usually should not "
                 f"appear as strong over-index leaders unless persona evidence is explicit.\n"
+                f"- **Mass-market CPG / pantry / soda / detergent / salty snacks / big-box OTC-style labels**: "
+                f"often spike without matching digital loyalty unless the cohort actually shops carts online.\n"
+                f"- **Prestige / luxury skincare & color cosmetics**: heavy site traffic, Shade Finder/class content, reorder apps "
+                f"justify high BP WITHOUT treating Instacart as a prerequisite — omit grocery-proxy checks for THAT cluster.\n"
+                f"- **Grocery coherence (digital choreography) ONLY for mass replenishment personas:** "
+                f"if MULTIPLE warehouse-club-, grocery-, or drugstore-heavy **consumable HOUSEHOLD** names dominate the TOP, "
+                f"FIRST ensure rows like **INSTACART, WALMART / TARGET pickup & grocery-digital proxies, grocery DoorDash / Uber Eats** "
+                f"score **comparably HIGH** when listed — contradictory spreads imply wrong persona channel. AFTER those anchors justify high tiers, "
+                f"elevating sibling aisle CPG is internally consistent.\n"
+                f"- **Merchant banners behind carts (paired realism):** those delivery/pickup surfaces almost always imply **specific supermarket or drugstore brands** dominate the shopper's actual \"store\" picker in‑app — in later **WHERE THEY SHOP** reconciliation the file should ultimately show regionally consonant grocer leaders (**SoCal Ralphs/Vons/Pavilions; Southeast Publix; Texas H‑E‑B; Northeast Wegmans‑class examples; dispersed national ⇒ Kroger/Albertsons-banner + Walmart/Target/Costco mix** research-first). OTC-heavy ⇒ **CVS/Walgreens**. You cannot emit WHERE THEY SHOP rows from this MPB‑only batch, but **do not sanction CPG-heavy tops that contradict an obvious geography + delivery spine** without noting the inconsistency internally.\n"
+                f"- **Do NOT** force grocery-delivery rows up purely because prestige Sephora-style beauty spikes — that cohort’s digital spine is prestige retail + DTC, not carts.\n"
+                f"- **Regional / limited-distribution CPG:** if a brand is primarily available in one US macro-region "
+                f"(whatever shape — Northeast corridor, Midwest/Great Lakes, Pacific Northwest/NorCal, SoCal/coastal mountain West, Texas/plains, inland/southeast/coastal South, etc.), "
+                f"it must NOT rank high unless THIS profile's LOCATION / DMA + persona narrative shows **that same** concentration — infer from research + geography, "
+                f"don't assume southern/Texas by default — otherwise LOWER.\n"
                 f"- Niche lifestyle/streetwear/luxury labels should only over-index strongly when "
                 f"the persona has clear cultural fit.\n\n"
                 f"Persona-rank sanity:\n"
                 f"- Build ranking from this profile's persona only (demographics + research + behavior).\n"
                 f"- Do not apply canned archetypes; if a brand ranks high, there must be explicit persona evidence.\n"
                 f"- Preserve mainstream anchors when justified, but move weak-fit brands down when they dominate.\n\n"
-                f"Youth-audience ranking sanity:\n"
-                f"- For young pop audiences, teen/gen-z fashion/beauty and digitally-native brands should generally\n"
-                f"  outrank older-skew legacy housewares/classic brands unless explicit evidence contradicts this.\n"
-                f"- If legacy/older-skew brands dominate the top ranks without evidence, LOWER them and promote\n"
-                f"  stronger youth-fit alternatives.\n\n"
+                f"Youth-audience ranking sanity (**apply ONLY if DEMOGRAPHIC SKEW shows majority under ~34 "
+                f"or persona/subsegments explicitly youth-weighted**):\n"
+                f"- Teen/gen-Z fashion/beauty and digitally-native labels may outrank legacy housewares when evidence fits THAT cohort.\n"
+                f"- If the profile skews mature/parental/35+ weighted, **do not** mechanically favor youth tiktok-era brands "
+                f"over credible household/category leaders — use life-stage coherence instead.\n\n"
                 f"Use research + demographics + index direction. Avoid blanket dampening.\n"
                 f"Return ONLY valid JSON:\n"
                 f'If no changes: {{"status":"OK","notes":"all rows believable"}}\n'
@@ -10108,10 +10301,20 @@ def ai_final_gut_check(df, brand_category, project_name, brands):
                 f"persona fit rather than generic panel artifacts.\n"
                 f"5) This is digital-engagement behavior; ranking should reflect what this cohort actually follows, shops, "
                 f"and engages with online.\n\n"
-                f"6) For youth pop profiles, weak-fit life-stage interests (job search, parenting/kids, mortgages-style)\n"
-                f"   should not outrank core youth digital/fandom interests without explicit evidence.\n"
-                f"7) For MOST PURCHASED BRANDS, teen/gen-z brands should generally outrank older-skew legacy brands\n"
-                f"   unless profile evidence supports the legacy dominance.\n\n"
+                f"6) For youth-majority personas, weak-fit INTEREST rows (generic job-search, mortgages-style anchors) "
+                f"should not outrank core youth digital/fandom interests without explicit evidence — skip tightening this "
+                f"rule when the persona is mature/balanced-age weighted.\n"
+                f"7) **MOST PURCHASED BRANDS — youth-vs-legacy (conditional):** Use **only** when demographics/persona show a "
+                f"**youth-majority / under-34 core**; skip for mature, parental, or general mass-market profiles. Where youth fits, digitally-native teen/gen-Z–skew MPB brands may rank above unrelated legacy staples; "
+                f"otherwise prioritize **endorsed sponsors, archetype-aligned category leaders, and plausible household nationals** — do not inflate youth labels without evidence.\n"
+                f"8) **MOST PURCHASED BRANDS coherence — conditional:** For **mass CPG/grocery/big-box replenishment** profiles, "
+                f"when many aisle / household snacks / OTC-style leaders spike, **elevate INSTACART + Walmart/Target pickup & grocery proxy rows + grocery DoorDash/Uber stacks** alongside them; lacking that grocery spine ⇒ LOWER only *that cluster*. "
+                f"Skip this rule entirely for prestige **Sephora-/luxury-skin**/makeup personas where leadership is prestige brands + flagship DTC without grocery-cart behavior.\n"
+                f"9) **MOST PURCHASED BRANDS — CPG restraint:** Avoid many unrelated national CPG/snack/OTC aisles-heavy leaders "
+                f"simultaneously above ~22% BP unless a plausible **grocery-cart spine** (Instacart, Walmart/Target grocery pickup/order-ahead rows, grocery DoorDash/Uber stacks) is also strong.\n"
+                f"10) **CPG carts ⇒ regional grocer + pharmacy coherence (paired with WHERE THEY SHOP in pipeline):** If rule (8)-(9) fire, LOCATION/DMA should eventually support **merchant-of-record realism** — the supermarket banners shoppers actually attach to Instacart/DoorDash/pickup carts in THAT geography (**e.g.** SoCal-weighted LOCATION ⇒ Ralphs/Vons/Pavilions-class leaders plausible; Southeast ⇒ Publix-class; Texas ⇒ H‑E‑B‑class; Northeast ⇒ Wegmans/Stop&Giant-class — **research exact inventory strings**); dispersed national footprints ⇒ Kroger-banner / Albertsons-banner mosaic + Costco/Walmart/Target. **Heavy OTC/snack replenishment ⇒ CVS/Walgreens** digital footprints should coexist. Use `notes` in JSON briefly if MPB spikes look incompatible with LOCATION without obvious national banners.\n"
+                f"11) **Commercial viability audit:** Honor web-backed PERSONA.`commercial_viability_audit` facts "
+                f"(inactive franchises, liquidation, nationally withdrawn SKUs, mothballed US replenishment paths). Never promote audited-inactive equities to headline tiers from stray traces; absent-traffic profiles should compress toward baseline or ≤1.0% BP clusters.\n\n"
                 f"For EACH row, decide KEEP / LOWER / RAISE.\n"
                 f"Only include LOWER/RAISE rows in adjustments.\n"
                 f"Return ONLY valid JSON:\n"
@@ -10192,8 +10395,10 @@ def ai_final_gut_check(df, brand_category, project_name, brands):
                 f"2) Keep mainstream, broad-use apps plausibly high when evidence supports it.\n"
                 f"3) Niche/utility/finance/professional apps should not outrank broad youth-digital platforms "
                 f"without explicit profile evidence.\n"
-                f"4) Avoid platform inflation where many unrelated apps are all top-tier.\n\n"
-                f"5) For young entertainment/social personas, finance/credit and logistics/workflow tools "
+                f"4) Avoid platform inflation where many unrelated apps are all top-tier.\n"
+                f"5) PLATFORM vs DEVICE: When TECHNOLOGY/DEVICE clearly skews **Android** vs Apple mobile OS/iPhone, "
+                f"**Google Play** generally should **not trail Apple App Store** BP by a wide margin unless this profile carries explicit Apple-only cohort evidence.\n\n"
+                f"6) For young entertainment/social personas, finance/credit and logistics/workflow tools "
                 f"(e.g., Credit Karma, USPS/FedEx, Slack, Grammarly, Craigslist) should generally remain "
                 f"below core consumer/digital-life utilities unless explicit evidence supports dominance.\n\n"
                 f"For EACH row, decide KEEP / LOWER / RAISE.\n"
@@ -10278,8 +10483,11 @@ def ai_final_gut_check(df, brand_category, project_name, brands):
                 f"For young profiles, TikTok and YouTube should generally not sit below Instagram without strong evidence.\n"
                 f"3) SOCIAL MEDIA: niche platforms (Patreon, Discord, Letterboxd, Tumblr, Bluesky) should not outrank "
                 f"mainstream mass-reach platforms unless explicit evidence strongly supports it.\n"
-                f"4) SEARCH ENGINE/AI: Google should be the dominant #1 search engine for mainstream US audiences. "
-                f"Quora/Perplexity/AI tools may be meaningful but should not outrank Google without explicit evidence.\n"
+                f"4) SEARCH ENGINE/AI (**2026 US-conditioned digital realism** — still Google-centric): **Google must stay #1** "
+                f"for almost all BROAD personas, BUT **standalone AI wrappers** "
+                f"(ChatGPT, Copilot, Gemini, Claude, Meta AI, Perplexity/Grok-class assistants) ordinarily **outrank Bing/Yahoo/MSN‑tier legacy portals**. "
+                f"\nCeil Bing/Yahoo/MSN when they read like AI co‑leaders vs major assistants; lift at least two major AI assistants if they look secondary "
+                f"vs Bing/Yahoo without a narrow deliberate cohort rationale (privacy researchers, captive enterprise defaults, deliberate Yahoo portals).\n"
                 f"5) Avoid blanket boosts/cuts; make row-level corrections with plausible absolute targets.\n\n"
                 f"For EACH row, decide KEEP / LOWER / RAISE.\n"
                 f"Only include LOWER/RAISE rows in adjustments.\n"
@@ -10444,7 +10652,7 @@ def ai_final_gut_check(df, brand_category, project_name, brands):
             if len(cat_items) < 6:
                 continue
             cat_items.sort(key=lambda x: -x[1])
-            top_items = cat_items[:80]
+            top_items = cat_items if DEEP_OUTPUT_MODE_PROFILE_IQ else cat_items[:80]
 
             lines = []
             for name, bp, gp_bp in top_items:
@@ -10605,7 +10813,9 @@ def ai_final_gut_check(df, brand_category, project_name, brands):
             if cat not in flagged_cats:
                 continue
             over_count, total_with_gp, over_pct, cat_items_with_index = flagged_cats[cat]
-            cat_items_sorted = sorted(cat_items_with_index, key=lambda x: -x[1])[:200]
+            cat_items_sorted = sorted(cat_items_with_index, key=lambda x: -x[1])
+            if not DEEP_OUTPUT_MODE_PROFILE_IQ:
+                cat_items_sorted = cat_items_sorted[:200]
             lines = []
             for name, bp, gp_bp, idx_val, _ in cat_items_sorted:
                 idx_int = int(round(idx_val * 100))
@@ -10711,7 +10921,7 @@ def ai_final_gut_check(df, brand_category, project_name, brands):
             gp_bp = gp_bp_lookup.get((cat, name.strip().upper()), 0)
             cat_ranked.append((name, cur_bp, gp_bp, idx))
         cat_ranked.sort(key=lambda x: -x[1])
-        top_items = cat_ranked[:40]
+        top_items = cat_ranked if DEEP_OUTPUT_MODE_PROFILE_IQ else cat_ranked[:40]
         if len(top_items) < 5:
             continue
 
@@ -11082,6 +11292,8 @@ def ai_final_gut_check(df, brand_category, project_name, brands):
                         pass
         print(f"   🔗 Cross-category harmonization: {harmonized} values aligned")
 
+    df = apply_deterministic_us_panel_realism(df, sample_raw)
+
     print(f"🔍 Final gut check for {subject_clean}: "
           f"{total_adjustments + pass_e_adjustments} total adjustments "
           f"(Pass A: outlier, Pass B: {len(spot_batches)} spot-check, "
@@ -11164,7 +11376,9 @@ def item_level_ai_review(df, archetype, project_name, brands):
     current_batch = {}
     current_items = 0
     for cat, items in categories_to_review.items():
-        sorted_items = sorted(items, key=lambda x: -x[1])[:15]
+        sorted_items = sorted(items, key=lambda x: -x[1])
+        if not DEEP_OUTPUT_MODE_PROFILE_IQ:
+            sorted_items = sorted_items[:15]
         current_batch[cat] = sorted_items
         current_items += len(sorted_items)
         if current_items >= 40:
@@ -11488,10 +11702,12 @@ apply_limited_changes = False
 # Global verbosity toggle
 SILENCE_VERBOSE_OUTPUT = True
 
-# Cost tracking variables
-CREDIT_RATE_PER_DOLLAR = 5.12  # $5.12 per credit for 6X-Large warehouse
+# Legacy cost-tracking globals (Snowflake-era). Retained because some
+# functions still read CREDIT_RATE_PER_DOLLAR; ClickHouse has no
+# per-query billing so the values are decorative.
+CREDIT_RATE_PER_DOLLAR = 0.0
 total_credits_used = 0.0
-saved_query_ids = []  # Store query IDs for later cost checking
+saved_query_ids = []
 
 # Allowed US DMA list for LOCATION filtering
 ALLOWED_DMAS = set([
@@ -11959,6 +12175,298 @@ GENPOP_DMA_PERCENTAGES = [
     ("Glendive Mt", 0.003),
 ]
 
+# ─── DMA DEMOGRAPHICS (Census/ACS approximations) ──────────────────────────
+# pop_rank: 1-210 by DMA population; pct_*: approximate ethnic percentages;
+# urban: True if DMA contains a major metro area.
+# Used by _compute_ethnicity_affinity to data-drive location scoring.
+DMA_DEMOGRAPHICS = {
+    "NEW YORK NY": {"pop_rank": 1, "pct_white": 44.0, "pct_black": 17.0, "pct_hispanic": 25.0, "pct_asian": 12.0, "urban": True},
+    "LOS ANGELES CA": {"pop_rank": 2, "pct_white": 30.0, "pct_black": 7.0, "pct_hispanic": 45.0, "pct_asian": 15.0, "urban": True},
+    "CHICAGO IL": {"pop_rank": 3, "pct_white": 52.0, "pct_black": 16.0, "pct_hispanic": 22.0, "pct_asian": 7.0, "urban": True},
+    "DALLAS FT WORTH TX": {"pop_rank": 4, "pct_white": 45.0, "pct_black": 15.0, "pct_hispanic": 29.0, "pct_asian": 7.0, "urban": True},
+    "PHILADELPHIA PA": {"pop_rank": 5, "pct_white": 57.0, "pct_black": 21.0, "pct_hispanic": 12.0, "pct_asian": 6.0, "urban": True},
+    "HOUSTON TX": {"pop_rank": 6, "pct_white": 34.0, "pct_black": 17.0, "pct_hispanic": 38.0, "pct_asian": 8.0, "urban": True},
+    "ATLANTA GA": {"pop_rank": 7, "pct_white": 42.0, "pct_black": 34.0, "pct_hispanic": 12.0, "pct_asian": 6.0, "urban": True},
+    "WASHINGTON DC HAGERSTOWN MD": {"pop_rank": 8, "pct_white": 42.0, "pct_black": 26.0, "pct_hispanic": 16.0, "pct_asian": 10.0, "urban": True},
+    "BOSTON MA MANCHESTER NH": {"pop_rank": 9, "pct_white": 68.0, "pct_black": 8.0, "pct_hispanic": 12.0, "pct_asian": 8.0, "urban": True},
+    "SAN FRANCISCO OAKLAND SAN JOSE CA": {"pop_rank": 10, "pct_white": 35.0, "pct_black": 6.0, "pct_hispanic": 24.0, "pct_asian": 30.0, "urban": True},
+    "TAMPA ST PETERSBURG SARASOTA FL": {"pop_rank": 11, "pct_white": 62.0, "pct_black": 12.0, "pct_hispanic": 19.0, "pct_asian": 4.0, "urban": True},
+    "PHOENIX PRESCOTT AZ": {"pop_rank": 12, "pct_white": 54.0, "pct_black": 6.0, "pct_hispanic": 32.0, "pct_asian": 4.0, "urban": True},
+    "SEATTLE TACOMA WA": {"pop_rank": 13, "pct_white": 60.0, "pct_black": 6.0, "pct_hispanic": 11.0, "pct_asian": 16.0, "urban": True},
+    "DETROIT MI": {"pop_rank": 14, "pct_white": 57.0, "pct_black": 23.0, "pct_hispanic": 5.0, "pct_asian": 4.0, "urban": True},
+    "ORLANDO DAYTONA BEACH MELBOURNE FL": {"pop_rank": 15, "pct_white": 50.0, "pct_black": 16.0, "pct_hispanic": 28.0, "pct_asian": 4.0, "urban": True},
+    "MINNEAPOLIS ST PAUL MN": {"pop_rank": 16, "pct_white": 70.0, "pct_black": 9.0, "pct_hispanic": 7.0, "pct_asian": 8.0, "urban": True},
+    "DENVER CO": {"pop_rank": 17, "pct_white": 60.0, "pct_black": 5.0, "pct_hispanic": 25.0, "pct_asian": 5.0, "urban": True},
+    "MIAMI FT LAUDERDALE FL": {"pop_rank": 18, "pct_white": 30.0, "pct_black": 21.0, "pct_hispanic": 44.0, "pct_asian": 3.0, "urban": True},
+    "CLEVELAND AKRON CANTON OH": {"pop_rank": 19, "pct_white": 68.0, "pct_black": 20.0, "pct_hispanic": 5.0, "pct_asian": 3.0, "urban": True},
+    "SACRAMENTO STOCKTON MODESTO CA": {"pop_rank": 20, "pct_white": 44.0, "pct_black": 7.0, "pct_hispanic": 26.0, "pct_asian": 16.0, "urban": True},
+    "CHARLOTTE NC": {"pop_rank": 21, "pct_white": 53.0, "pct_black": 23.0, "pct_hispanic": 14.0, "pct_asian": 5.0, "urban": True},
+    "RALEIGH DURHAM FAYETTEVILLE NC": {"pop_rank": 22, "pct_white": 52.0, "pct_black": 22.0, "pct_hispanic": 12.0, "pct_asian": 6.0, "urban": True},
+    "PORTLAND OR": {"pop_rank": 23, "pct_white": 70.0, "pct_black": 3.0, "pct_hispanic": 13.0, "pct_asian": 8.0, "urban": True},
+    "ST LOUIS MO": {"pop_rank": 24, "pct_white": 65.0, "pct_black": 22.0, "pct_hispanic": 4.0, "pct_asian": 3.0, "urban": True},
+    "NASHVILLE TN": {"pop_rank": 25, "pct_white": 63.0, "pct_black": 16.0, "pct_hispanic": 11.0, "pct_asian": 4.0, "urban": True},
+    "INDIANAPOLIS IN": {"pop_rank": 26, "pct_white": 68.0, "pct_black": 15.0, "pct_hispanic": 8.0, "pct_asian": 4.0, "urban": True},
+    "SALT LAKE CITY UT": {"pop_rank": 27, "pct_white": 72.0, "pct_black": 2.0, "pct_hispanic": 18.0, "pct_asian": 4.0, "urban": True},
+    "PITTSBURGH PA": {"pop_rank": 28, "pct_white": 80.0, "pct_black": 11.0, "pct_hispanic": 3.0, "pct_asian": 3.0, "urban": True},
+    "BALTIMORE MD": {"pop_rank": 29, "pct_white": 51.0, "pct_black": 30.0, "pct_hispanic": 7.0, "pct_asian": 6.0, "urban": True},
+    "SAN DIEGO CA": {"pop_rank": 30, "pct_white": 43.0, "pct_black": 5.0, "pct_hispanic": 34.0, "pct_asian": 13.0, "urban": True},
+    "SAN ANTONIO TX": {"pop_rank": 31, "pct_white": 30.0, "pct_black": 7.0, "pct_hispanic": 57.0, "pct_asian": 3.0, "urban": True},
+    "HARTFORD & NEW HAVEN CT": {"pop_rank": 32, "pct_white": 62.0, "pct_black": 12.0, "pct_hispanic": 17.0, "pct_asian": 5.0, "urban": True},
+    "AUSTIN TX": {"pop_rank": 33, "pct_white": 48.0, "pct_black": 8.0, "pct_hispanic": 34.0, "pct_asian": 7.0, "urban": True},
+    "COLUMBUS OH": {"pop_rank": 34, "pct_white": 67.0, "pct_black": 16.0, "pct_hispanic": 6.0, "pct_asian": 5.0, "urban": True},
+    "KANSAS CITY MO": {"pop_rank": 35, "pct_white": 66.0, "pct_black": 13.0, "pct_hispanic": 11.0, "pct_asian": 3.0, "urban": True},
+    "GREENVILLE SPARTANBURG SC ASHEVILLE NC ANDERSON SC": {"pop_rank": 36, "pct_white": 70.0, "pct_black": 17.0, "pct_hispanic": 8.0, "pct_asian": 2.0, "urban": True},
+    "CINCINNATI OH": {"pop_rank": 37, "pct_white": 74.0, "pct_black": 14.0, "pct_hispanic": 4.0, "pct_asian": 3.0, "urban": True},
+    "WEST PALM BEACH FT PIERCE FL": {"pop_rank": 38, "pct_white": 50.0, "pct_black": 20.0, "pct_hispanic": 24.0, "pct_asian": 3.0, "urban": True},
+    "MILWAUKEE WI": {"pop_rank": 39, "pct_white": 65.0, "pct_black": 17.0, "pct_hispanic": 12.0, "pct_asian": 4.0, "urban": True},
+    "LAS VEGAS NV": {"pop_rank": 40, "pct_white": 42.0, "pct_black": 12.0, "pct_hispanic": 32.0, "pct_asian": 10.0, "urban": True},
+    "JACKSONVILLE FL": {"pop_rank": 41, "pct_white": 58.0, "pct_black": 22.0, "pct_hispanic": 10.0, "pct_asian": 5.0, "urban": True},
+    "HARRISBURG LANCASTER LEBANON YORK PA": {"pop_rank": 42, "pct_white": 78.0, "pct_black": 8.0, "pct_hispanic": 9.0, "pct_asian": 3.0, "urban": True},
+    "GRAND RAPIDS KALAMAZOO BATTLE CREEK MI": {"pop_rank": 43, "pct_white": 76.0, "pct_black": 9.0, "pct_hispanic": 9.0, "pct_asian": 3.0, "urban": True},
+    "NORFOLK PORTSMOUTH NEWPORT NEWS VA": {"pop_rank": 44, "pct_white": 51.0, "pct_black": 31.0, "pct_hispanic": 8.0, "pct_asian": 4.0, "urban": True},
+    "BIRMINGHAM ANNISTON AND TUSCALOOSA AL": {"pop_rank": 45, "pct_white": 57.0, "pct_black": 35.0, "pct_hispanic": 5.0, "pct_asian": 2.0, "urban": True},
+    "OKLAHOMA CITY OK": {"pop_rank": 46, "pct_white": 60.0, "pct_black": 11.0, "pct_hispanic": 17.0, "pct_asian": 4.0, "urban": True},
+    "GREENSBORO HIGH POINT WINSTON SALEM NC": {"pop_rank": 47, "pct_white": 57.0, "pct_black": 24.0, "pct_hispanic": 10.0, "pct_asian": 4.0, "urban": True},
+    "ALBUQUERQUE SANTA FE NM": {"pop_rank": 48, "pct_white": 37.0, "pct_black": 3.0, "pct_hispanic": 50.0, "pct_asian": 2.0, "urban": True},
+    "LOUISVILLE KY": {"pop_rank": 49, "pct_white": 74.0, "pct_black": 14.0, "pct_hispanic": 5.0, "pct_asian": 3.0, "urban": True},
+    "MEMPHIS TN": {"pop_rank": 50, "pct_white": 40.0, "pct_black": 47.0, "pct_hispanic": 7.0, "pct_asian": 2.0, "urban": True},
+    "NEW ORLEANS LA": {"pop_rank": 51, "pct_white": 48.0, "pct_black": 35.0, "pct_hispanic": 10.0, "pct_asian": 3.0, "urban": True},
+    "PROVIDENCE RI NEW BEDFORD MA": {"pop_rank": 52, "pct_white": 68.0, "pct_black": 6.0, "pct_hispanic": 16.0, "pct_asian": 4.0, "urban": True},
+    "FT MYERS NAPLES FL": {"pop_rank": 53, "pct_white": 62.0, "pct_black": 9.0, "pct_hispanic": 24.0, "pct_asian": 2.0, "urban": True},
+    "FRESNO VISALIA CA": {"pop_rank": 54, "pct_white": 30.0, "pct_black": 5.0, "pct_hispanic": 54.0, "pct_asian": 9.0, "urban": True},
+    "BUFFALO NY": {"pop_rank": 55, "pct_white": 73.0, "pct_black": 13.0, "pct_hispanic": 6.0, "pct_asian": 4.0, "urban": True},
+    "RICHMOND PETERSBURG VA": {"pop_rank": 56, "pct_white": 52.0, "pct_black": 31.0, "pct_hispanic": 7.0, "pct_asian": 5.0, "urban": True},
+    "MOBILE AL PENSACOLA FT WALTON BEACH FL": {"pop_rank": 57, "pct_white": 63.0, "pct_black": 24.0, "pct_hispanic": 7.0, "pct_asian": 3.0, "urban": True},
+    "KNOXVILLE TN": {"pop_rank": 58, "pct_white": 85.0, "pct_black": 6.0, "pct_hispanic": 5.0, "pct_asian": 2.0, "urban": True},
+    "WILKES BARRE SCRANTON HAZLETON PA": {"pop_rank": 59, "pct_white": 82.0, "pct_black": 4.0, "pct_hispanic": 10.0, "pct_asian": 2.0, "urban": True},
+    "LITTLE ROCK PINE BLUFF AR": {"pop_rank": 60, "pct_white": 60.0, "pct_black": 28.0, "pct_hispanic": 7.0, "pct_asian": 2.0, "urban": True},
+    "ALBANY SCHENECTADY TROY NY": {"pop_rank": 61, "pct_white": 76.0, "pct_black": 10.0, "pct_hispanic": 7.0, "pct_asian": 4.0, "urban": True},
+    "TULSA OK": {"pop_rank": 62, "pct_white": 62.0, "pct_black": 9.0, "pct_hispanic": 13.0, "pct_asian": 3.0, "urban": True},
+    "LEXINGTON KY": {"pop_rank": 63, "pct_white": 80.0, "pct_black": 9.0, "pct_hispanic": 5.0, "pct_asian": 3.0, "urban": True},
+    "SPOKANE WA": {"pop_rank": 64, "pct_white": 84.0, "pct_black": 2.0, "pct_hispanic": 7.0, "pct_asian": 3.0, "urban": True},
+    "TUCSON SIERRA VISTA AZ": {"pop_rank": 65, "pct_white": 44.0, "pct_black": 4.0, "pct_hispanic": 42.0, "pct_asian": 3.0, "urban": True},
+    "DAYTON OH": {"pop_rank": 66, "pct_white": 73.0, "pct_black": 15.0, "pct_hispanic": 4.0, "pct_asian": 3.0, "urban": True},
+    "DES MOINES AMES IA": {"pop_rank": 67, "pct_white": 80.0, "pct_black": 5.0, "pct_hispanic": 8.0, "pct_asian": 4.0, "urban": True},
+    "GREEN BAY APPLETON WI": {"pop_rank": 68, "pct_white": 83.0, "pct_black": 2.0, "pct_hispanic": 8.0, "pct_asian": 4.0, "urban": True},
+    "HONOLULU HI": {"pop_rank": 69, "pct_white": 22.0, "pct_black": 3.0, "pct_hispanic": 10.0, "pct_asian": 54.0, "urban": True},
+    "WICHITA HUTCHINSON KS PLUS": {"pop_rank": 70, "pct_white": 70.0, "pct_black": 8.0, "pct_hispanic": 15.0, "pct_asian": 4.0, "urban": True},
+    "OMAHA NE": {"pop_rank": 71, "pct_white": 72.0, "pct_black": 9.0, "pct_hispanic": 13.0, "pct_asian": 3.0, "urban": True},
+    "ROANOKE LYNCHBURG VA": {"pop_rank": 72, "pct_white": 76.0, "pct_black": 16.0, "pct_hispanic": 4.0, "pct_asian": 2.0, "urban": True},
+    "HUNTSVILLE DECATUR FLORENCE AL": {"pop_rank": 73, "pct_white": 65.0, "pct_black": 24.0, "pct_hispanic": 6.0, "pct_asian": 3.0, "urban": True},
+    "FLINT SAGINAW BAY CITY MI": {"pop_rank": 74, "pct_white": 72.0, "pct_black": 16.0, "pct_hispanic": 7.0, "pct_asian": 2.0, "urban": True},
+    "SPRINGFIELD MO": {"pop_rank": 75, "pct_white": 88.0, "pct_black": 3.0, "pct_hispanic": 4.0, "pct_asian": 2.0, "urban": True},
+    "COLUMBIA SC": {"pop_rank": 76, "pct_white": 50.0, "pct_black": 37.0, "pct_hispanic": 7.0, "pct_asian": 3.0, "urban": True},
+    "PORTLAND AUBURN ME": {"pop_rank": 77, "pct_white": 91.0, "pct_black": 2.0, "pct_hispanic": 2.0, "pct_asian": 2.0, "urban": True},
+    "MADISON WI": {"pop_rank": 78, "pct_white": 78.0, "pct_black": 5.0, "pct_hispanic": 7.0, "pct_asian": 6.0, "urban": True},
+    "ROCHESTER NY": {"pop_rank": 79, "pct_white": 72.0, "pct_black": 13.0, "pct_hispanic": 9.0, "pct_asian": 4.0, "urban": True},
+    "HARLINGEN WESLACO BROWNSVILLE MCALLEN TX": {"pop_rank": 80, "pct_white": 8.0, "pct_black": 1.0, "pct_hispanic": 90.0, "pct_asian": 1.0, "urban": True},
+    "TOLEDO OH": {"pop_rank": 81, "pct_white": 72.0, "pct_black": 14.0, "pct_hispanic": 8.0, "pct_asian": 2.0, "urban": False},
+    "WACO TEMPLE BRYAN TX": {"pop_rank": 82, "pct_white": 52.0, "pct_black": 16.0, "pct_hispanic": 27.0, "pct_asian": 3.0, "urban": False},
+    "CHARLESTON HUNTINGTON WV": {"pop_rank": 83, "pct_white": 90.0, "pct_black": 5.0, "pct_hispanic": 2.0, "pct_asian": 1.0, "urban": False},
+    "CHARLESTON SC": {"pop_rank": 84, "pct_white": 58.0, "pct_black": 29.0, "pct_hispanic": 7.0, "pct_asian": 2.0, "urban": True},
+    "SAVANNAH GA": {"pop_rank": 85, "pct_white": 50.0, "pct_black": 37.0, "pct_hispanic": 7.0, "pct_asian": 3.0, "urban": False},
+    "CHATTANOOGA TN": {"pop_rank": 86, "pct_white": 74.0, "pct_black": 16.0, "pct_hispanic": 6.0, "pct_asian": 2.0, "urban": False},
+    "SYRACUSE NY": {"pop_rank": 87, "pct_white": 78.0, "pct_black": 10.0, "pct_hispanic": 6.0, "pct_asian": 4.0, "urban": False},
+    "COLORADO SPRINGS PUEBLO CO": {"pop_rank": 88, "pct_white": 62.0, "pct_black": 6.0, "pct_hispanic": 22.0, "pct_asian": 3.0, "urban": False},
+    "EL PASO TX LAS CRUCES NM": {"pop_rank": 89, "pct_white": 13.0, "pct_black": 3.0, "pct_hispanic": 82.0, "pct_asian": 1.0, "urban": True},
+    "CHAMPAIGN & SPRINGFIELD DECATUR IL": {"pop_rank": 90, "pct_white": 76.0, "pct_black": 12.0, "pct_hispanic": 5.0, "pct_asian": 4.0, "urban": False},
+    "BURLINGTON VT PLATTSBURGH NY": {"pop_rank": 91, "pct_white": 90.0, "pct_black": 2.0, "pct_hispanic": 3.0, "pct_asian": 3.0, "urban": False},
+    "SHREVEPORT LA": {"pop_rank": 92, "pct_white": 50.0, "pct_black": 40.0, "pct_hispanic": 5.0, "pct_asian": 1.0, "urban": False},
+    "PADUCAH KY CAPE GIRARDEAU MO HARRISBURG IL": {"pop_rank": 93, "pct_white": 85.0, "pct_black": 9.0, "pct_hispanic": 3.0, "pct_asian": 1.0, "urban": False},
+    "CEDAR RAPIDS WATERLOO IOWA CITY & DUBUQUE IA": {"pop_rank": 94, "pct_white": 85.0, "pct_black": 5.0, "pct_hispanic": 5.0, "pct_asian": 3.0, "urban": False},
+    "FT SMITH FAYETTEVILLE SPRINGDALE ROGERS AR": {"pop_rank": 95, "pct_white": 70.0, "pct_black": 4.0, "pct_hispanic": 18.0, "pct_asian": 4.0, "urban": False},
+    "BATON ROUGE LA": {"pop_rank": 96, "pct_white": 48.0, "pct_black": 39.0, "pct_hispanic": 5.0, "pct_asian": 3.0, "urban": False},
+    "BOISE ID": {"pop_rank": 97, "pct_white": 80.0, "pct_black": 1.0, "pct_hispanic": 14.0, "pct_asian": 2.0, "urban": False},
+    "MYRTLE BEACH FLORENCE SC": {"pop_rank": 98, "pct_white": 58.0, "pct_black": 30.0, "pct_hispanic": 7.0, "pct_asian": 1.0, "urban": False},
+    "SOUTH BEND ELKHART IN": {"pop_rank": 99, "pct_white": 74.0, "pct_black": 11.0, "pct_hispanic": 11.0, "pct_asian": 2.0, "urban": False},
+    "JACKSON MS": {"pop_rank": 100, "pct_white": 38.0, "pct_black": 52.0, "pct_hispanic": 4.0, "pct_asian": 1.0, "urban": False},
+    "TRI CITIES TN VA": {"pop_rank": 101, "pct_white": 90.0, "pct_black": 4.0, "pct_hispanic": 3.0, "pct_asian": 1.0, "urban": False},
+    "GREENVILLE NEW BERN WASHINGTON NC": {"pop_rank": 102, "pct_white": 52.0, "pct_black": 33.0, "pct_hispanic": 9.0, "pct_asian": 2.0, "urban": False},
+    "RENO NV": {"pop_rank": 103, "pct_white": 58.0, "pct_black": 3.0, "pct_hispanic": 26.0, "pct_asian": 7.0, "urban": False},
+    "TALLAHASSEE FL THOMASVILLE GA": {"pop_rank": 104, "pct_white": 50.0, "pct_black": 35.0, "pct_hispanic": 9.0, "pct_asian": 3.0, "urban": False},
+    "DAVENPORT IA ROCK ISLAND MOLINE IL": {"pop_rank": 105, "pct_white": 77.0, "pct_black": 8.0, "pct_hispanic": 10.0, "pct_asian": 2.0, "urban": False},
+    "TYLER LONGVIEW LUFKIN & NACOGDOCHES TX": {"pop_rank": 106, "pct_white": 58.0, "pct_black": 20.0, "pct_hispanic": 18.0, "pct_asian": 1.0, "urban": False},
+    "LINCOLN & HASTINGS KEARNEY NE": {"pop_rank": 107, "pct_white": 82.0, "pct_black": 4.0, "pct_hispanic": 9.0, "pct_asian": 3.0, "urban": False},
+    "FT WAYNE IN": {"pop_rank": 108, "pct_white": 76.0, "pct_black": 11.0, "pct_hispanic": 8.0, "pct_asian": 3.0, "urban": False},
+    "AUGUSTA GA AIKEN SC": {"pop_rank": 109, "pct_white": 50.0, "pct_black": 37.0, "pct_hispanic": 7.0, "pct_asian": 2.0, "urban": False},
+    "EVANSVILLE IN": {"pop_rank": 110, "pct_white": 85.0, "pct_black": 7.0, "pct_hispanic": 4.0, "pct_asian": 1.0, "urban": False},
+    "JOHNSTOWN ALTOONA STATE COLLEGE PA": {"pop_rank": 111, "pct_white": 90.0, "pct_black": 4.0, "pct_hispanic": 3.0, "pct_asian": 2.0, "urban": False},
+    "SIOUX FALLS MITCHELL SD": {"pop_rank": 112, "pct_white": 82.0, "pct_black": 5.0, "pct_hispanic": 5.0, "pct_asian": 3.0, "urban": False},
+    "SPRINGFIELD HOLYOKE MA": {"pop_rank": 113, "pct_white": 64.0, "pct_black": 8.0, "pct_hispanic": 22.0, "pct_asian": 3.0, "urban": False},
+    "FARGO ND": {"pop_rank": 114, "pct_white": 85.0, "pct_black": 5.0, "pct_hispanic": 3.0, "pct_asian": 3.0, "urban": False},
+    "LANSING MI": {"pop_rank": 115, "pct_white": 72.0, "pct_black": 12.0, "pct_hispanic": 9.0, "pct_asian": 4.0, "urban": False},
+    "YAKIMA PASCO RICHLAND KENNEWICK WA": {"pop_rank": 116, "pct_white": 48.0, "pct_black": 2.0, "pct_hispanic": 44.0, "pct_asian": 3.0, "urban": False},
+    "TRAVERSE CITY CADILLAC MI": {"pop_rank": 117, "pct_white": 92.0, "pct_black": 1.0, "pct_hispanic": 4.0, "pct_asian": 1.0, "urban": False},
+    "YOUNGSTOWN OH": {"pop_rank": 118, "pct_white": 78.0, "pct_black": 13.0, "pct_hispanic": 5.0, "pct_asian": 1.0, "urban": False},
+    "EUGENE OR": {"pop_rank": 119, "pct_white": 82.0, "pct_black": 1.0, "pct_hispanic": 10.0, "pct_asian": 3.0, "urban": False},
+    "MACON GA": {"pop_rank": 120, "pct_white": 42.0, "pct_black": 45.0, "pct_hispanic": 7.0, "pct_asian": 2.0, "urban": False},
+    "BAKERSFIELD CA": {"pop_rank": 121, "pct_white": 30.0, "pct_black": 6.0, "pct_hispanic": 54.0, "pct_asian": 5.0, "urban": False},
+    "PEORIA BLOOMINGTON IL": {"pop_rank": 122, "pct_white": 79.0, "pct_black": 10.0, "pct_hispanic": 5.0, "pct_asian": 3.0, "urban": False},
+    "SANTA BARBARA SANTA MARIA SAN LUIS OBISPO CA": {"pop_rank": 123, "pct_white": 46.0, "pct_black": 2.0, "pct_hispanic": 42.0, "pct_asian": 6.0, "urban": False},
+    "LAFAYETTE LA": {"pop_rank": 124, "pct_white": 57.0, "pct_black": 30.0, "pct_hispanic": 5.0, "pct_asian": 2.0, "urban": False},
+    "WILMINGTON NC": {"pop_rank": 125, "pct_white": 68.0, "pct_black": 17.0, "pct_hispanic": 8.0, "pct_asian": 2.0, "urban": False},
+    "COLUMBUS GA OPELIKA AL": {"pop_rank": 126, "pct_white": 42.0, "pct_black": 43.0, "pct_hispanic": 9.0, "pct_asian": 3.0, "urban": False},
+    "MONTEREY SALINAS CA": {"pop_rank": 127, "pct_white": 32.0, "pct_black": 4.0, "pct_hispanic": 52.0, "pct_asian": 8.0, "urban": False},
+    "MONTGOMERY SELMA AL": {"pop_rank": 128, "pct_white": 38.0, "pct_black": 50.0, "pct_hispanic": 5.0, "pct_asian": 2.0, "urban": False},
+    "LA CROSSE EAU CLAIRE WI": {"pop_rank": 129, "pct_white": 90.0, "pct_black": 1.0, "pct_hispanic": 3.0, "pct_asian": 4.0, "urban": False},
+    "CORPUS CHRISTI TX": {"pop_rank": 130, "pct_white": 24.0, "pct_black": 4.0, "pct_hispanic": 68.0, "pct_asian": 2.0, "urban": False},
+    "SALISBURY MD": {"pop_rank": 131, "pct_white": 67.0, "pct_black": 20.0, "pct_hispanic": 7.0, "pct_asian": 2.0, "urban": False},
+    "AMARILLO TX": {"pop_rank": 132, "pct_white": 52.0, "pct_black": 7.0, "pct_hispanic": 36.0, "pct_asian": 3.0, "urban": False},
+    "WAUSAU RHINELANDER WI": {"pop_rank": 133, "pct_white": 90.0, "pct_black": 1.0, "pct_hispanic": 3.0, "pct_asian": 4.0, "urban": False},
+    "COLUMBIA JEFFERSON CITY MO": {"pop_rank": 134, "pct_white": 80.0, "pct_black": 10.0, "pct_hispanic": 4.0, "pct_asian": 3.0, "urban": False},
+    "CHICO REDDING CA": {"pop_rank": 135, "pct_white": 72.0, "pct_black": 2.0, "pct_hispanic": 17.0, "pct_asian": 4.0, "urban": False},
+    "COLUMBUS TUPELO WEST POINT MS": {"pop_rank": 136, "pct_white": 52.0, "pct_black": 40.0, "pct_hispanic": 4.0, "pct_asian": 1.0, "urban": False},
+    "ROCKFORD IL": {"pop_rank": 137, "pct_white": 68.0, "pct_black": 12.0, "pct_hispanic": 15.0, "pct_asian": 3.0, "urban": False},
+    "DULUTH MN SUPERIOR WI": {"pop_rank": 138, "pct_white": 89.0, "pct_black": 2.0, "pct_hispanic": 2.0, "pct_asian": 2.0, "urban": False},
+    "MEDFORD KLAMATH FALLS OR": {"pop_rank": 139, "pct_white": 82.0, "pct_black": 1.0, "pct_hispanic": 12.0, "pct_asian": 2.0, "urban": False},
+    "TOPEKA KS": {"pop_rank": 140, "pct_white": 74.0, "pct_black": 8.0, "pct_hispanic": 12.0, "pct_asian": 2.0, "urban": False},
+    "LUBBOCK TX": {"pop_rank": 141, "pct_white": 43.0, "pct_black": 8.0, "pct_hispanic": 44.0, "pct_asian": 2.0, "urban": False},
+    "ANCHORAGE AK": {"pop_rank": 142, "pct_white": 58.0, "pct_black": 5.0, "pct_hispanic": 9.0, "pct_asian": 10.0, "urban": False},
+    "BEAUMONT PORT ARTHUR TX": {"pop_rank": 143, "pct_white": 48.0, "pct_black": 27.0, "pct_hispanic": 20.0, "pct_asian": 4.0, "urban": False},
+    "MONROE LA EL DORADO AR": {"pop_rank": 144, "pct_white": 48.0, "pct_black": 42.0, "pct_hispanic": 4.0, "pct_asian": 1.0, "urban": False},
+    "PALM SPRINGS CA": {"pop_rank": 145, "pct_white": 38.0, "pct_black": 5.0, "pct_hispanic": 50.0, "pct_asian": 4.0, "urban": False},
+    "ODESSA MIDLAND TX": {"pop_rank": 146, "pct_white": 32.0, "pct_black": 6.0, "pct_hispanic": 58.0, "pct_asian": 2.0, "urban": False},
+    "PANAMA CITY FL": {"pop_rank": 147, "pct_white": 74.0, "pct_black": 14.0, "pct_hispanic": 7.0, "pct_asian": 2.0, "urban": False},
+    "BISMARCK MINOT DICKINSON WILLISTON ND": {"pop_rank": 148, "pct_white": 87.0, "pct_black": 3.0, "pct_hispanic": 4.0, "pct_asian": 1.0, "urban": False},
+    "WICHITA FALLS TX & LAWTON OK": {"pop_rank": 149, "pct_white": 60.0, "pct_black": 14.0, "pct_hispanic": 18.0, "pct_asian": 3.0, "urban": False},
+    "SIOUX CITY IA": {"pop_rank": 150, "pct_white": 72.0, "pct_black": 4.0, "pct_hispanic": 17.0, "pct_asian": 3.0, "urban": False},
+    "JOPLIN MO PITTSBURG KS": {"pop_rank": 151, "pct_white": 84.0, "pct_black": 3.0, "pct_hispanic": 7.0, "pct_asian": 1.0, "urban": False},
+    "ALBANY GA": {"pop_rank": 152, "pct_white": 35.0, "pct_black": 55.0, "pct_hispanic": 5.0, "pct_asian": 1.0, "urban": False},
+    "ROCHESTER MN MASON CITY IA AUSTIN MN": {"pop_rank": 153, "pct_white": 82.0, "pct_black": 5.0, "pct_hispanic": 5.0, "pct_asian": 5.0, "urban": False},
+    "ERIE PA": {"pop_rank": 154, "pct_white": 82.0, "pct_black": 8.0, "pct_hispanic": 5.0, "pct_asian": 2.0, "urban": False},
+    "IDAHO FALLS POCATELLO ID JACKSON WY": {"pop_rank": 155, "pct_white": 82.0, "pct_black": 1.0, "pct_hispanic": 13.0, "pct_asian": 1.0, "urban": False},
+    "GAINESVILLE FL": {"pop_rank": 156, "pct_white": 58.0, "pct_black": 22.0, "pct_hispanic": 12.0, "pct_asian": 5.0, "urban": False},
+    "BANGOR ME": {"pop_rank": 157, "pct_white": 93.0, "pct_black": 1.0, "pct_hispanic": 2.0, "pct_asian": 1.0, "urban": False},
+    "BILOXI GULFPORT MS": {"pop_rank": 158, "pct_white": 58.0, "pct_black": 27.0, "pct_hispanic": 7.0, "pct_asian": 4.0, "urban": False},
+    "SHERMAN TX ADA OK": {"pop_rank": 159, "pct_white": 68.0, "pct_black": 8.0, "pct_hispanic": 14.0, "pct_asian": 2.0, "urban": False},
+    "TERRE HAUTE IN": {"pop_rank": 160, "pct_white": 89.0, "pct_black": 4.0, "pct_hispanic": 3.0, "pct_asian": 1.0, "urban": False},
+    "MISSOULA MT": {"pop_rank": 161, "pct_white": 89.0, "pct_black": 1.0, "pct_hispanic": 4.0, "pct_asian": 2.0, "urban": False},
+    "BINGHAMTON NY": {"pop_rank": 162, "pct_white": 84.0, "pct_black": 5.0, "pct_hispanic": 5.0, "pct_asian": 4.0, "urban": False},
+    "YUMA AZ EL CENTRO CA": {"pop_rank": 163, "pct_white": 18.0, "pct_black": 3.0, "pct_hispanic": 76.0, "pct_asian": 2.0, "urban": False},
+    "WHEELING WV STEUBENVILLE OH": {"pop_rank": 164, "pct_white": 92.0, "pct_black": 4.0, "pct_hispanic": 2.0, "pct_asian": 1.0, "urban": False},
+    "DOTHAN AL": {"pop_rank": 165, "pct_white": 60.0, "pct_black": 32.0, "pct_hispanic": 5.0, "pct_asian": 1.0, "urban": False},
+    "BILLINGS MT": {"pop_rank": 166, "pct_white": 88.0, "pct_black": 1.0, "pct_hispanic": 6.0, "pct_asian": 1.0, "urban": False},
+    "ABILENE SWEETWATER TX": {"pop_rank": 167, "pct_white": 52.0, "pct_black": 9.0, "pct_hispanic": 33.0, "pct_asian": 2.0, "urban": False},
+    "BLUEFIELD BECKLEY OAK HILL WV": {"pop_rank": 168, "pct_white": 88.0, "pct_black": 7.0, "pct_hispanic": 2.0, "pct_asian": 1.0, "urban": False},
+    "HATTIESBURG LAUREL MS": {"pop_rank": 169, "pct_white": 52.0, "pct_black": 40.0, "pct_hispanic": 4.0, "pct_asian": 1.0, "urban": False},
+    "RAPID CITY SD": {"pop_rank": 170, "pct_white": 78.0, "pct_black": 1.0, "pct_hispanic": 5.0, "pct_asian": 1.0, "urban": False},
+    "UTICA NY": {"pop_rank": 171, "pct_white": 80.0, "pct_black": 8.0, "pct_hispanic": 7.0, "pct_asian": 4.0, "urban": False},
+    "HARRISONBURG VA": {"pop_rank": 172, "pct_white": 82.0, "pct_black": 5.0, "pct_hispanic": 8.0, "pct_asian": 2.0, "urban": False},
+    "CHARLOTTESVILLE VA": {"pop_rank": 173, "pct_white": 70.0, "pct_black": 16.0, "pct_hispanic": 6.0, "pct_asian": 5.0, "urban": False},
+    "CLARKSBURG WESTON WV": {"pop_rank": 174, "pct_white": 94.0, "pct_black": 2.0, "pct_hispanic": 1.0, "pct_asian": 1.0, "urban": False},
+    "LAKE CHARLES LA": {"pop_rank": 175, "pct_white": 58.0, "pct_black": 30.0, "pct_hispanic": 5.0, "pct_asian": 2.0, "urban": False},
+    "JACKSON TN": {"pop_rank": 176, "pct_white": 52.0, "pct_black": 38.0, "pct_hispanic": 5.0, "pct_asian": 1.0, "urban": False},
+    "QUINCY IL HANNIBAL MO KEOKUK IA": {"pop_rank": 177, "pct_white": 91.0, "pct_black": 3.0, "pct_hispanic": 3.0, "pct_asian": 1.0, "urban": False},
+    "BOWLING GREEN KY": {"pop_rank": 178, "pct_white": 82.0, "pct_black": 6.0, "pct_hispanic": 5.0, "pct_asian": 3.0, "urban": False},
+    "ELMIRA CORNING NY": {"pop_rank": 179, "pct_white": 88.0, "pct_black": 5.0, "pct_hispanic": 4.0, "pct_asian": 2.0, "urban": False},
+    "WATERTOWN NY": {"pop_rank": 180, "pct_white": 85.0, "pct_black": 6.0, "pct_hispanic": 5.0, "pct_asian": 2.0, "urban": False},
+    "MARQUETTE MI": {"pop_rank": 181, "pct_white": 92.0, "pct_black": 2.0, "pct_hispanic": 2.0, "pct_asian": 1.0, "urban": False},
+    "JONESBORO AR": {"pop_rank": 182, "pct_white": 72.0, "pct_black": 18.0, "pct_hispanic": 5.0, "pct_asian": 1.0, "urban": False},
+    "ALEXANDRIA LA": {"pop_rank": 183, "pct_white": 52.0, "pct_black": 38.0, "pct_hispanic": 4.0, "pct_asian": 1.0, "urban": False},
+    "BUTTE BOZEMAN MT": {"pop_rank": 184, "pct_white": 91.0, "pct_black": 1.0, "pct_hispanic": 4.0, "pct_asian": 1.0, "urban": False},
+    "LAREDO TX": {"pop_rank": 185, "pct_white": 4.0, "pct_black": 1.0, "pct_hispanic": 95.0, "pct_asian": 1.0, "urban": False},
+    "BEND OR": {"pop_rank": 186, "pct_white": 86.0, "pct_black": 1.0, "pct_hispanic": 9.0, "pct_asian": 2.0, "urban": False},
+    "GRAND JUNCTION MONTROSE CO": {"pop_rank": 187, "pct_white": 76.0, "pct_black": 1.0, "pct_hispanic": 18.0, "pct_asian": 1.0, "urban": False},
+    "TWIN FALLS ID": {"pop_rank": 188, "pct_white": 74.0, "pct_black": 1.0, "pct_hispanic": 21.0, "pct_asian": 1.0, "urban": False},
+    "LAFAYETTE IN": {"pop_rank": 189, "pct_white": 74.0, "pct_black": 5.0, "pct_hispanic": 11.0, "pct_asian": 7.0, "urban": False},
+    "LIMA OH": {"pop_rank": 190, "pct_white": 82.0, "pct_black": 10.0, "pct_hispanic": 4.0, "pct_asian": 1.0, "urban": False},
+    "GREAT FALLS MT": {"pop_rank": 191, "pct_white": 86.0, "pct_black": 2.0, "pct_hispanic": 5.0, "pct_asian": 1.0, "urban": False},
+    "MERIDIAN MS": {"pop_rank": 192, "pct_white": 42.0, "pct_black": 50.0, "pct_hispanic": 4.0, "pct_asian": 1.0, "urban": False},
+    "EUREKA CA": {"pop_rank": 193, "pct_white": 74.0, "pct_black": 1.0, "pct_hispanic": 13.0, "pct_asian": 3.0, "urban": False},
+    "CHEYENNE WY SCOTTSBLUFF NE": {"pop_rank": 194, "pct_white": 76.0, "pct_black": 2.0, "pct_hispanic": 16.0, "pct_asian": 1.0, "urban": False},
+    "PARKERSBURG WV": {"pop_rank": 195, "pct_white": 94.0, "pct_black": 2.0, "pct_hispanic": 1.0, "pct_asian": 1.0, "urban": False},
+    "GREENWOOD GREENVILLE MS": {"pop_rank": 196, "pct_white": 32.0, "pct_black": 62.0, "pct_hispanic": 3.0, "pct_asian": 1.0, "urban": False},
+    "SAN ANGELO TX": {"pop_rank": 197, "pct_white": 40.0, "pct_black": 5.0, "pct_hispanic": 48.0, "pct_asian": 2.0, "urban": False},
+    "CASPER RIVERTON WY": {"pop_rank": 198, "pct_white": 86.0, "pct_black": 1.0, "pct_hispanic": 8.0, "pct_asian": 1.0, "urban": False},
+    "MANKATO MN": {"pop_rank": 199, "pct_white": 88.0, "pct_black": 4.0, "pct_hispanic": 4.0, "pct_asian": 2.0, "urban": False},
+    "OTTUMWA IA KIRKSVILLE MO": {"pop_rank": 200, "pct_white": 89.0, "pct_black": 2.0, "pct_hispanic": 6.0, "pct_asian": 1.0, "urban": False},
+    "ST JOSEPH MO": {"pop_rank": 201, "pct_white": 84.0, "pct_black": 6.0, "pct_hispanic": 5.0, "pct_asian": 1.0, "urban": False},
+    "FAIRBANKS AK": {"pop_rank": 202, "pct_white": 64.0, "pct_black": 5.0, "pct_hispanic": 8.0, "pct_asian": 5.0, "urban": False},
+    "HELENA MT": {"pop_rank": 203, "pct_white": 91.0, "pct_black": 1.0, "pct_hispanic": 4.0, "pct_asian": 1.0, "urban": False},
+    "ZANESVILLE OH": {"pop_rank": 204, "pct_white": 90.0, "pct_black": 4.0, "pct_hispanic": 2.0, "pct_asian": 1.0, "urban": False},
+    "VICTORIA TX": {"pop_rank": 205, "pct_white": 34.0, "pct_black": 8.0, "pct_hispanic": 54.0, "pct_asian": 2.0, "urban": False},
+    "PRESQUE ISLE ME": {"pop_rank": 206, "pct_white": 94.0, "pct_black": 1.0, "pct_hispanic": 2.0, "pct_asian": 1.0, "urban": False},
+    "JUNEAU AK": {"pop_rank": 207, "pct_white": 62.0, "pct_black": 1.0, "pct_hispanic": 7.0, "pct_asian": 7.0, "urban": False},
+    "ALPENA MI": {"pop_rank": 208, "pct_white": 94.0, "pct_black": 1.0, "pct_hispanic": 2.0, "pct_asian": 1.0, "urban": False},
+    "NORTH PLATTE NE": {"pop_rank": 209, "pct_white": 87.0, "pct_black": 1.0, "pct_hispanic": 9.0, "pct_asian": 1.0, "urban": False},
+    "GLENDIVE MT": {"pop_rank": 210, "pct_white": 93.0, "pct_black": 1.0, "pct_hispanic": 3.0, "pct_asian": 1.0, "urban": False},
+}
+
+
+def _compute_ethnicity_affinity(dma_key: str, persona_ethnicity: dict) -> float:
+    """Return a data-driven ethnicity multiplier for *dma_key*.
+
+    persona_ethnicity: e.g. {"WHITE": 35.0, "BLACK OR AFRICAN AMERICAN": 40.0, "HISPANIC": 18.0, "ASIAN": 5.0, ...}
+    Returns a multiplier centered at 1.0. Range: 0.6 – 2.0.
+    """
+    demo = DMA_DEMOGRAPHICS.get(dma_key.upper())
+    if not demo or not persona_ethnicity:
+        return 1.0
+
+    eth_map = {
+        "WHITE": demo.get("pct_white", 60.0),
+        "BLACK OR AFRICAN AMERICAN": demo.get("pct_black", 13.0),
+        "HISPANIC": demo.get("pct_hispanic", 18.0),
+        "ASIAN": demo.get("pct_asian", 6.0),
+    }
+    us_avg = {"WHITE": 58.0, "BLACK OR AFRICAN AMERICAN": 13.0, "HISPANIC": 19.0, "ASIAN": 6.0}
+
+    weighted_sim = 0.0
+    total_weight = 0.0
+    for eth_key, persona_pct in persona_ethnicity.items():
+        try:
+            persona_pct = float(persona_pct)
+        except (TypeError, ValueError):
+            continue
+        if persona_pct < 3.0:
+            continue
+        canon = eth_key.strip().upper()
+        dma_pct = None
+        for mkey in eth_map:
+            if mkey in canon or canon in mkey:
+                dma_pct = eth_map[mkey]
+                break
+        if dma_pct is None:
+            continue
+        avg = us_avg.get(next((k for k in us_avg if k in canon or canon in k), ''), 15.0)
+        if avg < 1:
+            avg = 1.0
+        dma_ratio = dma_pct / avg
+        weight = persona_pct / 100.0
+        weighted_sim += dma_ratio * weight
+        total_weight += weight
+
+    if total_weight < 0.05:
+        return 1.0
+
+    raw = weighted_sim / total_weight
+    return max(0.6, min(2.0, raw))
+
+
+def _apply_location_guardrails(loc_multipliers: dict) -> dict:
+    """Programmatic post-processing clamps on LLM-generated location multipliers.
+
+    - Top 30 DMAs (pop_rank 1-30): floor 0.4, ceiling 4.0
+    - Small/rural DMAs (pop_rank > 150 or not urban): ceiling 1.5
+    - Unknown DMAs: default to 0.9
+    """
+    out = {}
+    for dma_key, mult in loc_multipliers.items():
+        demo = DMA_DEMOGRAPHICS.get(dma_key.upper())
+        if demo is None:
+            out[dma_key] = max(0.15, min(1.5, mult))
+            continue
+        rank = demo.get("pop_rank", 999)
+        urban = demo.get("urban", False)
+        if rank <= 30:
+            mult = max(0.4, min(4.0, mult))
+        elif rank > 150 or not urban:
+            mult = max(0.15, min(1.5, mult))
+        else:
+            mult = max(0.2, min(4.0, mult))
+        out[dma_key] = mult
+    return out
+
 def normalize_demo_value(s: str) -> str:
     """
     Lowercase, strip whitespace, and collapse any 'space-hyphen-space' or en-dash
@@ -12240,13 +12748,17 @@ def boost_clamp_renorm(
 
     return df.drop(columns=["Projected_Count", "Capped_Count"])
 
-def connect_snowflake():
+def connect_db():
     if not SILENCE_VERBOSE_OUTPUT:
         print("🔌 Connecting to ClickHouse...")
     conn = connect_clickhouse()
     if not SILENCE_VERBOSE_OUTPUT:
         print("✅ Connected to ClickHouse.")
     return conn
+
+# Backwards-compat alias — pre-migration code (and any external imports of
+# bg.connect_snowflake) referenced this name; it now connects to ClickHouse.
+connect_snowflake = connect_db
 
 def clean_brand(brand):
     return re.sub(r'\W+', '', brand.strip().lower())
@@ -12351,16 +12863,8 @@ def run_talent_fit_analysis(conn, brand, talents, start_date, end_date):
     }
     
     with conn.cursor() as cur:
-        # Try dedicated TALENTFIT warehouse first, fall back to BEHAVIORGRAPH6X
-        try:
-            cur.execute("USE WAREHOUSE TALENTFIT")
-            print("🚀 Using TALENTFIT warehouse (6X-Large) for Talent Fit analysis")
-        except Exception:
-            cur.execute("USE WAREHOUSE BEHAVIORGRAPH6X")
-            print("🚀 Using BEHAVIORGRAPH6X warehouse for Talent Fit analysis")
-        cur.execute("ALTER SESSION SET USE_CACHED_RESULT = TRUE")
-        cur.execute("ALTER SESSION SET STATEMENT_TIMEOUT_IN_SECONDS = 3600")
-        
+        print("🚀 Running on ClickHouse for Talent Fit analysis")
+
         # Handle comma-separated brands
         brand_terms = [b.strip() for b in brand.split(',') if b.strip()]
         brand_filters = []
@@ -12461,16 +12965,8 @@ def find_talent_for_brand(conn, brand, start_date, end_date, limit=50):
     }
     
     with conn.cursor() as cur:
-        # Try dedicated TALENTFIT warehouse first, fall back to BEHAVIORGRAPH6X
-        try:
-            cur.execute("USE WAREHOUSE TALENTFIT")
-            print("🚀 Using TALENTFIT warehouse (6X-Large) for Find Talent")
-        except Exception:
-            cur.execute("USE WAREHOUSE BEHAVIORGRAPH6X")
-            print("🚀 Using BEHAVIORGRAPH6X warehouse for Find Talent")
-        cur.execute("ALTER SESSION SET USE_CACHED_RESULT = TRUE")
-        cur.execute("ALTER SESSION SET STATEMENT_TIMEOUT_IN_SECONDS = 3600")
-        
+        print("🚀 Running on ClickHouse for Find Talent")
+
         # Handle comma-separated brands
         brand_terms = [b.strip() for b in brand.split(',') if b.strip()]
         brand_filters = []
@@ -12575,8 +13071,6 @@ def stop_progress_monitor(monitor_thread):
 def scale_warehouse_up(cur, max_warehouse_size, max_acceleration_factor):
     """Scale warehouse up for complex queries"""
     try:
-        cur.execute(f"ALTER WAREHOUSE BEHAVIORGRAPH6X SET WAREHOUSE_SIZE = '{max_warehouse_size}'")
-        cur.execute(f"ALTER WAREHOUSE BEHAVIORGRAPH6X SET QUERY_ACCELERATION_MAX_SCALE_FACTOR = {max_acceleration_factor}")
         if not SILENCE_VERBOSE_OUTPUT:
             print(f"🚀 Scaled up to {max_warehouse_size} with {max_acceleration_factor}x acceleration")
     except Exception as e:
@@ -12586,8 +13080,6 @@ def scale_warehouse_up(cur, max_warehouse_size, max_acceleration_factor):
 def scale_warehouse_down(cur, base_warehouse_size, base_acceleration_factor):
     """Scale warehouse down for cost efficiency"""
     try:
-        cur.execute(f"ALTER WAREHOUSE BEHAVIORGRAPH6X SET WAREHOUSE_SIZE = '{base_warehouse_size}'")
-        cur.execute(f"ALTER WAREHOUSE BEHAVIORGRAPH6X SET QUERY_ACCELERATION_MAX_SCALE_FACTOR = {base_acceleration_factor}")
         if not SILENCE_VERBOSE_OUTPUT:
             print(f"💰 Scaled down to {base_warehouse_size} with {base_acceleration_factor}x acceleration")
     except Exception as e:
@@ -12613,10 +13105,7 @@ def perform_full_universe_scan(conn, brands, start_date, end_date, purchasers_on
     
     with conn.cursor() as cur:
         # Scale up warehouse for full scan
-        cur.execute("ALTER WAREHOUSE BEHAVIORGRAPH6X SET WAREHOUSE_SIZE = '6X-Large'")
-        cur.execute("ALTER WAREHOUSE BEHAVIORGRAPH6X SET QUERY_ACCELERATION_MAX_SCALE_FACTOR = 25")
-        cur.execute("ALTER WAREHOUSE BEHAVIORGRAPH6X SET STATEMENT_TIMEOUT_IN_SECONDS = 14400")  # 4 hour timeout
-        print("🚀 Using BEHAVIORGRAPH6X warehouse (6X-Large with 25x acceleration) for full universe scan")
+        print("🚀 Running on ClickHouse (37.27.140.111) for full universe scan")
         
         try:
             # Add purchasers filter if requested
@@ -12647,48 +13136,25 @@ def perform_full_universe_scan(conn, brands, start_date, end_date, purchasers_on
             print(f"🔍 Brand filter complexity: {len(brand_filter)} characters")
             print("💾 Caching enabled - subsequent runs with same parameters will be much faster!")
             
-            # Ensure we're using 6X-Large warehouse for maximum speed
-            cur.execute("USE WAREHOUSE BEHAVIORGRAPH6X")
-            print("🚀 Using BEHAVIORGRAPH6X warehouse (6X-Large) for universe count")
-            
-            # Add query optimization hints for faster execution and caching
-            cur.execute("ALTER SESSION SET QUERY_TAG = 'UNIVERSE_COUNT_OPTIMIZED'")
-            cur.execute("ALTER SESSION SET USE_CACHED_RESULT = TRUE")  # Enable caching for speed
-            cur.execute("ALTER SESSION SET QUERY_RESULT_FORMAT = 'JSON'")  # Optimize result format
-            cur.execute("ALTER SESSION SET CLIENT_SESSION_KEEP_ALIVE = TRUE")  # Keep session alive for caching
-            
-            # Use deterministic query for better caching
+            print("🚀 Running on ClickHouse for universe count")
+
+            # Single pass over clickstream: same semantics as the old two-query plan.
+            # - Distinct UIDs with ≥1 matching row (GROUP BY ... HAVING COUNT(*) >= 1 was redundant).
+            # - Row count = total qualifying visits (matches previous COUNT(*)).
+            # uniqExact(UID) is ClickHouse's exact distinct count; connector targets CH only here.
             universe_result = cur.execute(f"""
-                SELECT COUNT(DISTINCT UID) as total_universe
-                FROM (
-                    SELECT UID, COUNT(*) as visit_count
-                    FROM PROCESSEDCLICKSTREAM.PUBLIC.CLICKSTREAM_FINAL
-                    WHERE DELIVERED >= '{start_date}'::DATE 
-                      AND DELIVERED <= '{end_date}'::DATE
-                      AND ({brand_filter})
-                      AND COMMON_NAME IS NOT NULL
-                      AND COMMON_NAME != ''
-                      AND COMMON_NAME != ' '
-                    GROUP BY UID
-                    HAVING COUNT(*) >= 1
-                )
-            """).fetchone()
-            
-            total_universe = universe_result[0] if universe_result else 0
-            
-            # Also get total visits for context
-            visits_result = cur.execute(f"""
-                SELECT COUNT(*) as total_visits
+                SELECT uniqExact(UID) AS total_universe, count() AS total_visits
                 FROM PROCESSEDCLICKSTREAM.PUBLIC.CLICKSTREAM_FINAL
-                WHERE DELIVERED >= '{start_date}'::DATE 
+                WHERE DELIVERED >= '{start_date}'::DATE
                   AND DELIVERED <= '{end_date}'::DATE
                   AND ({brand_filter})
                   AND COMMON_NAME IS NOT NULL
                   AND COMMON_NAME != ''
                   AND COMMON_NAME != ' '
             """).fetchone()
-            
-            total_visits = visits_result[0] if visits_result else 0
+
+            total_universe = int(universe_result[0] or 0) if universe_result else 0
+            total_visits = int(universe_result[1] or 0) if universe_result else 0
             
             print(f"🌍 FULL UNIVERSE RESULTS:")
             print(f"   📊 Total Unique Users: {total_universe:,}")
@@ -12707,9 +13173,7 @@ def perform_full_universe_scan(conn, brands, start_date, end_date, purchasers_on
             return None
         finally:
             # Scale down warehouse after scan
-            cur.execute("ALTER WAREHOUSE BEHAVIORGRAPH6X SET WAREHOUSE_SIZE = '6X-Large'")
-            cur.execute("ALTER WAREHOUSE BEHAVIORGRAPH6X SET QUERY_ACCELERATION_MAX_SCALE_FACTOR = 25")
-            print("✅ Keeping BEHAVIORGRAPH6X warehouse (6X-Large with 25x acceleration) for optimal performance")
+            print("✅ ClickHouse pool ready")
 
 
 
@@ -12776,13 +13240,8 @@ def check_saved_query_costs(cur):
     try:
         # Get costs for all saved query IDs
         query_ids_str = "', '".join([qid for qid, _ in saved_query_ids])
-        cost_results = cur.execute(f"""
-            SELECT QUERY_ID, CREDITS_USED, TOTAL_ELAPSED_TIME, WAREHOUSE_SIZE
-            FROM SNOWFLAKE.ACCOUNT_USAGE.QUERY_HISTORY 
-            WHERE QUERY_ID IN ('{query_ids_str}')
-              AND WAREHOUSE_NAME = 'BEHAVIORGRAPH6X'
-        """).fetchall()
-        
+        # ClickHouse: no per-query credits; skip billing lookup
+        cost_results = []
         # Create a mapping of query ID to cost
         query_costs = {qid: credits for qid, credits, _, _ in cost_results if credits}
         
@@ -12856,7 +13315,7 @@ def estimate_query_cost(cur, query_description=""):
 
 def track_query_cost(cur, query_description=""):
     """
-    Track the cost of a Snowflake query (simplified - actual costs retrieved at end).
+    Track the cost of a ClickHouse query (simplified - actual costs retrieved at end).
     """
     # Simplified - we'll get actual costs from query history at the end
     return 0
@@ -13513,54 +13972,41 @@ def capitalize_words(text):
 
 def enforce_input_brand_100(df_behavior, input_brands, purchasers_only: bool = False):
     """
-    Ensure all normalized variations of input brands are set to 100% in every category where they appear.
-    Uses comprehensive matching to catch all variations of the brand name.
-    Original Raw Numbers will always equal the sample size for input brands.
+    Conditionally enforce input-brand BP based on whether the brand appears
+    in MOST PURCHASED BRANDS (MPB).
 
-    purchasers_only:
-        - False (default): the input brand is pinned to 100% in every category
-          it appears in EXCEPT MOST PURCHASED BRANDS. Rationale: in a
-          non-purchasers-only pull, the brand-input panel selection is based on
-          digital engagement (visits/searches/usage), which is what 100%
-          across SOCIAL MEDIA / WHERE THEY SHOP / etc reflects. But MOST
-          PURCHASED BRANDS measures actual confirmed purchases — only a subset
-          of the panel actually purchased the brand, so it should reflect that
-          real fraction, not 100%.
-        - True: the panel was filtered to confirmed purchasers, so MOST
-          PURCHASED BRANDS legitimately is 100% and gets pinned like the
-          other categories.
+    Logic:
+      - If the brand appears in MPB, the panel has a real purchase-rate
+        signal. That agent-scored value is the canonical BP and should be
+        used consistently across ALL categories (no 100% forcing). The
+        cross-category consistency gate handles propagation.
+      - If the brand does NOT appear in MPB (e.g. a streaming service or
+        telecom provider), the panel was selected purely on digital
+        engagement so 100% is the correct BP in every category.
+      - purchasers_only=True: the panel was pre-filtered to confirmed
+        purchasers, so even MPB legitimately IS 100%.
     """
-    brands_set_to_100 = 0
-    skipped_mpb = 0
-    
-    # Determine which column name to use (Percentage or Category Share)
+    if not input_brands:
+        return df_behavior
+
+    import re
+    import urllib.parse
+
     pct_col = 'Category Share' if 'Category Share' in df_behavior.columns else 'Percentage'
-    
-    # Get sample size once at the beginning
+
     sample_size = None
     sample_size_mask = df_behavior['Column'].str.upper() == 'SAMPLE SIZE'
     if sample_size_mask.any():
         try:
             sample_size_value = df_behavior.loc[sample_size_mask, pct_col].iloc[0]
             sample_size = int(float(str(sample_size_value).replace(',', '')))
-        except:
+        except Exception:
             pass
-    
-    import re
-    import urllib.parse
 
     def _domain_core(value: str) -> str:
-        """
-        Extract the core domain label from URL/domain-like text.
-        Examples:
-          google.com -> google
-          https://www.instagram.com/reel/... -> instagram
-          m.youtube.com -> youtube
-        """
         s = str(value or '').strip().lower()
         if not s:
             return ''
-        # Add a scheme for robust urlparse on plain domains.
         if '://' not in s and re.match(r'^[a-z0-9][a-z0-9.-]+\.[a-z]{2,}', s):
             s = f"https://{s}"
         try:
@@ -13572,20 +14018,11 @@ def enforce_input_brand_100(df_behavior, input_brands, purchasers_only: bool = F
         labels = [x for x in host.split('.') if x]
         if not labels:
             return ''
-        # Strip common non-brand subdomains
         while labels and labels[0] in {'www', 'm', 'mobile', 'amp'}:
             labels.pop(0)
-        if not labels:
-            return ''
-        return labels[0]
+        return labels[0] if labels else ''
 
     def _compact_token(value: str) -> str:
-        """
-        Canonical compact matcher token:
-        - URL decode
-        - strip common domain suffixes if present
-        - remove non-alphanumeric characters
-        """
         s = str(value or '').strip().lower()
         if not s:
             return ''
@@ -13595,157 +14032,205 @@ def enforce_input_brand_100(df_behavior, input_brands, purchasers_only: bool = F
             pass
         s = re.sub(r'^(https?://)', '', s)
         s = s.split('?', 1)[0].split('#', 1)[0]
-        # If a slash path exists, keep only host-ish prefix for domain strings.
         if '/' in s and ' ' not in s:
             s = s.split('/', 1)[0]
-        # Strip common TLD endings for direct domain inputs.
         s = re.sub(r'\.(com|org|net|io|co|ai|app|tv|gg|edu|gov|mil|biz|info|us|co\.uk|uk)$', '', s)
         s = re.sub(r'[^a-z0-9]+', '', s)
         return s
-    
-    for input_brand in input_brands:
-        # Generate all possible variations of the input brand
+
+    def _build_variations(input_brand):
         brand_variations = generate_brand_variations(input_brand)
-        
-        # Also add the normalized version
         normalized_brand = normalize_demo_value(input_brand)
         brand_variations.append(normalized_brand)
-        # Add domain-derived core token for .com/.org/.net inputs
         domain_core = _domain_core(input_brand)
         if domain_core:
             brand_variations.append(domain_core)
-        
-        # Create a comprehensive set of variations for matching
-        all_variations = set()
-        compact_variations = set()
+        all_vars = set()
+        compact_vars = set()
         for variation in brand_variations:
-            # Add the variation as-is
-            all_variations.add(variation.lower().strip())
-            # Add without spaces
-            all_variations.add(variation.lower().replace(' ', ''))
-            # Add with different case patterns
-            all_variations.add(variation.upper())
-            all_variations.add(variation.title())
-            # Add common URL patterns (excluding dashes - user doesn't want dash variations)
-            all_variations.add(variation.lower().replace(' ', '_'))
-            all_variations.add(variation.lower().replace(' ', '.'))
-            # Compact canonical token for robust matching
+            all_vars.add(variation.lower().strip())
+            all_vars.add(variation.lower().replace(' ', ''))
+            all_vars.add(variation.upper())
+            all_vars.add(variation.title())
+            all_vars.add(variation.lower().replace(' ', '_'))
+            all_vars.add(variation.lower().replace(' ', '.'))
             cvar = _compact_token(variation)
             if cvar and len(cvar) >= 3:
-                compact_variations.add(cvar)
-        
-        # Check if original input_brand contains a dash
-        input_brand_has_dash = '-' in input_brand
-        
-        # Find all matches in the dataframe (case-insensitive)
-        matches_found = False
+                compact_vars.add(cvar)
+        return all_vars, compact_vars
+
+    def _is_match(row_value, all_vars, compact_vars):
+        value_lower = row_value.lower()
+        value_no_spaces = value_lower.replace(' ', '')
+        value_compact = _compact_token(row_value)
+        value_dc = _domain_core(row_value)
+        for variation in all_vars:
+            vl = variation.lower().strip()
+            vns = vl.replace(' ', '').replace('-', '')
+            vns2 = value_no_spaces.replace('-', '')
+            if (vl == value_lower or vns == value_no_spaces or
+                    vl == value_no_spaces or vns == value_lower or
+                    vns == vns2):
+                return True
+        if compact_vars:
+            if value_compact in compact_vars:
+                return True
+            if value_dc and value_dc in compact_vars:
+                return True
+        return False
+
+    brands_set = 0
+    brands_skipped = 0
+
+    for input_brand in input_brands:
+        all_vars, compact_vars = _build_variations(input_brand)
+
+        # Detect whether the brand appears in MOST PURCHASED BRANDS,
+        # and capture its MPB BP/raw if so — that's the canonical agent
+        # score that all other-category rows for this brand must mirror.
+        brand_in_mpb = False
+        mpb_bp_str: str | None = None
+        mpb_raw_str: str | None = None
+        for idx, row in df_behavior.iterrows():
+            row_col = str(row.get('Column', '')).strip().upper()
+            if row_col != 'MOST PURCHASED BRANDS':
+                continue
+            value = str(row['Value']).strip()
+            if _is_match(value, all_vars, compact_vars):
+                brand_in_mpb = True
+                if 'Brand Penetration (Row)' in df_behavior.columns:
+                    cell = df_behavior.loc[idx, 'Brand Penetration (Row)']
+                    mpb_bp_str = str(cell) if not isinstance(cell, str) else cell
+                if 'Original Raw Numbers' in df_behavior.columns:
+                    raw_cell = df_behavior.loc[idx, 'Original Raw Numbers']
+                    mpb_raw_str = str(raw_cell) if not isinstance(raw_cell, str) else raw_cell
+                break
+
+        if brand_in_mpb and not purchasers_only:
+            # Propagate the MPB BP to every other-category occurrence of
+            # this brand. This guarantees byte-identical Nike-MPB ==
+            # Nike-APPAREL/FOOTWEAR == Nike-WHERE-THEY-SHOP, surviving
+            # downstream `enforce_no_perfect_trailing_zeros` per-category
+            # jitter (which previously broke MPB consistency by treating
+            # MPB independently from other categories).
+            if mpb_bp_str is not None:
+                # Strip stale '%' for clean numeric comparisons later.
+                bp_propagate = mpb_bp_str.replace('%', '').strip() if isinstance(mpb_bp_str, str) else str(mpb_bp_str)
+                propagated = 0
+                for idx, row in df_behavior.iterrows():
+                    row_col = str(row.get('Column', '')).strip().upper()
+                    if row_col == 'MOST PURCHASED BRANDS':
+                        continue
+                    # NOTE: BRAND INPUT is intentionally NOT excluded — per
+                    # user spec, "all iterations of that value should be the
+                    # agent score" when the brand is in MPB. Without this,
+                    # BRAND INPUT stays at 100 then gets randomly perturbed by
+                    # `enforce_no_perfect_trailing_zeros` to a value that
+                    # differs from MPB BP (e.g. v8 had MPB=94.5852 but
+                    # BRAND INPUT=95.8474).
+                    if row_col in ('INPUT_METADATA', 'SAMPLE SIZE',
+                                   'AVID FAN', 'CASUAL FAN', 'PURCHASE SHARE',
+                                   'BRAND PENETRATION'):
+                        continue
+                    value = str(row['Value']).strip()
+                    if not _is_match(value, all_vars, compact_vars):
+                        continue
+                    if 'Brand Penetration (Row)' in df_behavior.columns:
+                        cur = df_behavior.loc[idx, 'Brand Penetration (Row)']
+                        if isinstance(cur, str):
+                            df_behavior.loc[idx, 'Brand Penetration (Row)'] = (
+                                bp_propagate + '%' if '%' in cur else bp_propagate
+                            )
+                        else:
+                            try:
+                                df_behavior.loc[idx, 'Brand Penetration (Row)'] = float(bp_propagate)
+                            except (ValueError, TypeError):
+                                pass
+                    if pct_col in df_behavior.columns:
+                        cur = df_behavior.loc[idx, pct_col]
+                        if isinstance(cur, str):
+                            df_behavior.loc[idx, pct_col] = (
+                                bp_propagate + '%' if '%' in cur else bp_propagate
+                            )
+                        else:
+                            try:
+                                df_behavior.loc[idx, pct_col] = float(bp_propagate)
+                            except (ValueError, TypeError):
+                                pass
+                    if mpb_raw_str is not None and 'Original Raw Numbers' in df_behavior.columns:
+                        cur = df_behavior.loc[idx, 'Original Raw Numbers']
+                        if isinstance(cur, str):
+                            df_behavior.loc[idx, 'Original Raw Numbers'] = mpb_raw_str
+                        else:
+                            try:
+                                df_behavior.loc[idx, 'Original Raw Numbers'] = float(mpb_raw_str)
+                            except (ValueError, TypeError):
+                                pass
+                    propagated += 1
+                if not SILENCE_VERBOSE_OUTPUT:
+                    print(f"🎯 Input brand '{input_brand}' in MPB → propagated MPB BP "
+                          f"({bp_propagate}) to {propagated} other-category rows")
+            elif not SILENCE_VERBOSE_OUTPUT:
+                print(f"🎯 Input brand '{input_brand}' found in MOST PURCHASED BRANDS — "
+                      f"using agent score everywhere (no 100% override)")
+            brands_skipped += 1
+            continue
+
+        # Brand is NOT in MPB (or purchasers_only) → force 100% everywhere
         for idx, row in df_behavior.iterrows():
             value = str(row['Value']).strip()
-            value_lower = value.lower()
-            value_no_spaces = value_lower.replace(' ', '')
-            value_compact = _compact_token(value)
-            value_domain_core = _domain_core(value)
-            
-            # Check if this value matches any of our variations
-            # Match if the value contains the variation or vice versa (case-insensitive)
-            # We allow matching dash variations during parsing (e.g., "Hot-Topic" matches "Hot Topic")
-            is_match = False
-            for variation in all_variations:
-                variation_lower = variation.lower().strip()
-                variation_no_spaces = variation_lower.replace(' ', '').replace('-', '')
-                value_no_spaces_no_dash = value_no_spaces.replace('-', '')
-                
-                # Exact match (with or without spaces or dashes)
-                # This allows "Hot Topic" to match "Hot-Topic" during parsing
-                if (variation_lower == value_lower or 
-                    variation_no_spaces == value_no_spaces or
-                    variation_lower == value_no_spaces or
-                    variation_no_spaces == value_lower or
-                    variation_no_spaces == value_no_spaces_no_dash):
-                    is_match = True
-                    break
+            if not _is_match(value, all_vars, compact_vars):
+                continue
 
-            # URL/domain-aware compact matching (google.com -> GOOGLE)
-            if (not is_match) and compact_variations:
-                if value_compact in compact_variations:
-                    is_match = True
-                elif value_domain_core and value_domain_core in compact_variations:
-                    is_match = True
-            
-            if is_match:
-                # MOST PURCHASED BRANDS exemption (unless purchasers_only is on).
-                # The brand-input panel is selected on digital engagement, NOT
-                # actual purchase confirmation, so only a subset truly
-                # "purchased" the brand. Forcing it to 100% here would
-                # misrepresent the purchase signal.
-                row_col = str(row.get('Column', '')).strip().upper()
-                if (not purchasers_only) and row_col == 'MOST PURCHASED BRANDS':
-                    skipped_mpb += 1
-                    if not SILENCE_VERBOSE_OUTPUT:
-                        print(f"   ⏭️  Skipping 100% override for input brand '{input_brand}' in MOST PURCHASED BRANDS (purchasers_only=False)")
-                    continue
-                old_pct = float(row[pct_col])
-                _cur_pct = df_behavior.loc[idx, pct_col]
-                if isinstance(_cur_pct, str):
-                    if '%' in _cur_pct:
-                        df_behavior.loc[idx, pct_col] = "100.0000%"
+            old_pct = 0.0
+            try:
+                old_pct = float(str(row[pct_col]).replace('%', '').replace(',', ''))
+            except Exception:
+                pass
+
+            _cur_pct = df_behavior.loc[idx, pct_col]
+            if isinstance(_cur_pct, str):
+                df_behavior.loc[idx, pct_col] = "100.0000%" if '%' in _cur_pct else "100.0000"
+            else:
+                df_behavior.loc[idx, pct_col] = 100.0
+
+            if sample_size is not None:
+                if 'Original Raw Numbers' in df_behavior.columns:
+                    _cur_raw = df_behavior.loc[idx, 'Original Raw Numbers']
+                    if isinstance(_cur_raw, str):
+                        df_behavior.loc[idx, 'Original Raw Numbers'] = str(sample_size)
                     else:
-                        df_behavior.loc[idx, pct_col] = "100.0000"
-                else:
-                    df_behavior.loc[idx, pct_col] = 100.0
-                
-                # Update Original Raw Numbers to sample size for 100% input brands
-                if sample_size is not None:
-                    if 'Original Raw Numbers' in df_behavior.columns:
-                        _cur_raw = df_behavior.loc[idx, 'Original Raw Numbers']
-                        if isinstance(_cur_raw, str):
-                            df_behavior.loc[idx, 'Original Raw Numbers'] = str(sample_size)
-                        else:
-                            df_behavior.loc[idx, 'Original Raw Numbers'] = float(sample_size)
-                    
+                        df_behavior.loc[idx, 'Original Raw Numbers'] = float(sample_size)
                 if 'Original Raw Numbers (Database)' in df_behavior.columns:
-                        _cur_raw_db = df_behavior.loc[idx, 'Original Raw Numbers (Database)']
-                        if isinstance(_cur_raw_db, str):
-                            df_behavior.loc[idx, 'Original Raw Numbers (Database)'] = str(sample_size)
-                        else:
-                            df_behavior.loc[idx, 'Original Raw Numbers (Database)'] = float(sample_size)
-                
-                # Also update Brand Penetration to 100.0 if it exists
-                if 'Brand Penetration (Row)' in df_behavior.columns:
-                    _cur_bp = df_behavior.loc[idx, 'Brand Penetration (Row)']
-                    if isinstance(_cur_bp, str):
-                        if '%' in _cur_bp:
-                            df_behavior.loc[idx, 'Brand Penetration (Row)'] = "100.0000%"
-                        else:
-                            df_behavior.loc[idx, 'Brand Penetration (Row)'] = "100.0000"
+                    _cur_raw_db = df_behavior.loc[idx, 'Original Raw Numbers (Database)']
+                    if isinstance(_cur_raw_db, str):
+                        df_behavior.loc[idx, 'Original Raw Numbers (Database)'] = str(sample_size)
                     else:
-                        df_behavior.loc[idx, 'Brand Penetration (Row)'] = 100.0
-                
-                # Update US Gen Pop Projection if it exists
-                if 'US Gen Pop Projection' in df_behavior.columns:
-                    us_projection = (sample_size / 10_000_000) * 329_900_000
-                    _cur_proj = df_behavior.loc[idx, 'US Gen Pop Projection']
-                    if isinstance(_cur_proj, str):
-                        df_behavior.loc[idx, 'US Gen Pop Projection'] = str(int(round(us_projection)))
-                    else:
-                        df_behavior.loc[idx, 'US Gen Pop Projection'] = float(int(round(us_projection)))
-                
-                brands_set_to_100 += 1
-                matches_found = True
-                if not SILENCE_VERBOSE_OUTPUT:
-                    print(f"🎯 Set input brand '{input_brand}' (exact match '{value}') to 100% in {row['Column']} (was {old_pct:.2f}%)")
-        
-        if matches_found:
+                        df_behavior.loc[idx, 'Original Raw Numbers (Database)'] = float(sample_size)
+
+            if 'Brand Penetration (Row)' in df_behavior.columns:
+                _cur_bp = df_behavior.loc[idx, 'Brand Penetration (Row)']
+                if isinstance(_cur_bp, str):
+                    df_behavior.loc[idx, 'Brand Penetration (Row)'] = "100.0000%" if '%' in _cur_bp else "100.0000"
+                else:
+                    df_behavior.loc[idx, 'Brand Penetration (Row)'] = 100.0
+
+            if 'US Gen Pop Projection' in df_behavior.columns and sample_size:
+                us_projection = (sample_size / 10_000_000) * 329_900_000
+                _cur_proj = df_behavior.loc[idx, 'US Gen Pop Projection']
+                if isinstance(_cur_proj, str):
+                    df_behavior.loc[idx, 'US Gen Pop Projection'] = str(int(round(us_projection)))
+                else:
+                    df_behavior.loc[idx, 'US Gen Pop Projection'] = float(int(round(us_projection)))
+
+            brands_set += 1
             if not SILENCE_VERBOSE_OUTPUT:
-                print(f"✅ Input brand '{input_brand}' set to 100% in all matching categories")
-        else:
-            if not SILENCE_VERBOSE_OUTPUT:
-                print(f"⚠️ Input brand '{input_brand}' not found in any categories")
-    
+                print(f"🎯 Set input brand '{input_brand}' (match '{value}') to 100% "
+                      f"in {row['Column']} (was {old_pct:.2f}%) — brand NOT in MPB")
+
     if not SILENCE_VERBOSE_OUTPUT:
-        print(f"🎯 Total input brands set to 100%: {brands_set_to_100}"
-              + (f" (skipped {skipped_mpb} MOST PURCHASED BRANDS rows — purchasers_only off)"
-                 if skipped_mpb else ""))
+        print(f"🎯 enforce_input_brand_100: {brands_set} set to 100%, "
+              f"{brands_skipped} use agent score (brand in MPB)")
     return df_behavior
 
 def remove_dash_variants_from_output(df_final, input_brands):
@@ -14312,33 +14797,794 @@ def _repair_json_text(text: str) -> str:
     return ''.join(out)
 
 
+def _balance_truncated_llm_json_fragment(s: str) -> str:
+    """Append missing closers when the assistant truncates mid-JSON.
+
+    Covers the Nike failure mode where output stops after `"MALE": 54.371` leaving
+    GENDER/demographics/persona object unbalanced.
+    """
+    s = _repair_json_text((s or '').strip())
+
+    while s.endswith(','):
+        s = s[:-1].rstrip()
+
+    import re as _re
+    for _ in range(10):
+        s2 = _re.sub(r',\s*"[^"]*$', '', s).rstrip()
+        if s2 == s:
+            break
+        s = s2
+
+    stk = []
+    in_str = False
+    esc = False
+    i = 0
+    n = len(s)
+    while i < n:
+        ch = s[i]
+        if not in_str:
+            if ch == '"':
+                in_str = True
+                esc = False
+            elif ch == '{':
+                stk.append('}')
+            elif ch == '[':
+                stk.append(']')
+            elif ch == '}':
+                if stk and stk[-1] == '}':
+                    stk.pop()
+                # unmatched `}` from model drift — ignore
+            elif ch == ']':
+                if stk and stk[-1] == ']':
+                    stk.pop()
+            i += 1
+            continue
+
+        if esc:
+            esc = False
+        elif ch == '\\':
+            esc = True
+        elif ch == '"':
+            in_str = False
+        i += 1
+
+    if in_str:
+        s = s + '"'
+
+    tail = ''
+    while stk:
+        tail += stk.pop()
+    return s + tail
+
+
+def _format_persona_archetype(persona_doc: dict | None) -> str:
+    """Compact lines for downstream agents (category rule + scoring). Optional fields."""
+    if not persona_doc:
+        return '(no persona)'
+    arch = str((persona_doc.get('subject_archetype') or '')).strip()
+    rationale = str((persona_doc.get('archetype_rationale') or '')).strip()
+    if not arch and not rationale:
+        return (
+            '(Persona did not set subject_archetype — infer archetype from the SUBJECT '
+            'name/category + persona SUMMARY below; branch mass-brand vs talent vs '
+            'IP vs interactive product yourself.)'
+        )
+    bits = []
+    if arch:
+        bits.append(f'PRIMARY ARCHETYPE: {arch}')
+    if rationale:
+        bits.append(f'ARCHETYPE NOTES: {rationale}')
+    return '\n'.join(bits)
+
+
 def _parse_persona_json(text: str):
-    """Try json.loads, then repair-and-retry. Returns (dict_or_None, err_str)."""
+    """Parse persona JSON robustly — includes salvage for search-preview truncation.
+
+    Do NOT clip with ``rfind('}')``: long persona payloads often cut mid-stream
+    (e.g. ``"GENDER":{"MALE": 54``. Clipping loses the incomplete tail and hides
+    the real truncation; ``JSONDecoder.raw_decode`` plus bracket-balancing fixes it.
+
+    Still tries a greedy ``{ ... last }`` slice second — helps when text follows JSON.
+    """
     import json as _json
 
-    # Strip markdown fences and isolate outermost { ... } first.
-    t = (text or '').strip()
-    if t.startswith('```'):
-        t = t.split('\n', 1)[1].rsplit('```', 1)[0].strip()
-    s = t.find('{')
-    e = t.rfind('}')
-    if s < 0 or e <= s:
-        return None, 'no JSON object found'
-    t = t[s:e + 1]
+    decoder = _json.JSONDecoder()
 
-    try:
-        return _json.loads(t), ''
-    except Exception as e1:
-        repaired = _repair_json_text(t)
-        try:
-            return _json.loads(repaired), ''
-        except Exception as e2:
-            return None, f"{type(e1).__name__}: {e1}; after repair: {type(e2).__name__}: {e2}"
+    raw = (text or '').strip()
+    if not raw:
+        return None, 'empty response'
+    if raw.startswith('```'):
+        raw = raw.split('\n', 1)[1].rsplit('```', 1)[0].strip()
+
+    s = raw.find('{')
+    if s < 0:
+        return None, 'no JSON object found'
+
+    # Primary: from first ``{`` through end of assistant output (possibly truncated).
+    errs_acc: list[str] = []
+
+    def _run(fragment: str) -> dict | None:
+        frag = fragment.strip()
+        errs: list[str] = []
+        seen: set[int] = set()
+        queue = [('tail', frag), ('repair', _repair_json_text(frag)),
+                 ('balanced', _balance_truncated_llm_json_fragment(frag))]
+        for tag, cand in queue:
+            cand = cand.strip()
+            if not cand.startswith('{'):
+                continue
+            hk = hash(cand)
+            if hk in seen:
+                continue
+            seen.add(hk)
+            try:
+                obj, _end = decoder.raw_decode(cand)
+                if isinstance(obj, dict):
+                    return obj
+            except Exception as e:
+                errs.append(f'{tag}: {type(e).__name__}: {e}')
+        errs_acc.extend(errs)
+        return None
+
+    got = _run(raw[s:])
+    if got is not None:
+        return got, ''
+
+    e = raw.rfind('}')
+    if e > s:
+        got = _run(raw[s:e + 1])
+        if got is not None:
+            return got, ''
+
+    msg = errs_acc[-3:] if errs_acc else ['parse exhausted']
+    return None, '; '.join(str(x) for x in msg)
+
+
+def _extract_interest_catalog_from_df(df: pd.DataFrame) -> list[str]:
+    """Canonical INTEREST / INTERESTS labels exactly as stored in `df` (sorted, deduped).
+
+    Every profile uses this same taxonomy; downstream INTEREST ordering is driven only
+    by persona + scoring (row order in CSV is not authoritative).
+    """
+    if df is None or getattr(df, 'empty', True):
+        return []
+    cols = getattr(df, 'columns', None)
+    if cols is None or 'Column' not in cols or 'Value' not in cols:
+        return []
+    col_series = df['Column'].astype(str).str.strip().str.upper()
+    mask = col_series.isin({'INTEREST', 'INTERESTS'})
+    vals = df.loc[mask, 'Value'].astype(str).str.strip()
+    vals = vals[vals.ne('')]
+    uniq = vals.unique()
+    return sorted(str(x).strip() for x in uniq if str(x).strip())
+
+
+def _normalize_persona_interest_rankings(persona_doc: dict,
+                                           inventory: list[str] | None) -> None:
+    """Clamp `interest_top_25` / `interest_bottom_25` to the pipeline inventory."""
+    inv = inventory or []
+    inv_set = set(inv)
+    if not inv_set:
+        persona_doc.pop('interest_top_25', None)
+        persona_doc.pop('interest_bottom_25', None)
+        persona_doc.pop('interest_inventory_checksum', None)
+        return
+
+    def _filt(seq):
+        seen: set[str] = set()
+        out: list[str] = []
+        for x in (seq or []):
+            s = str(x).strip()
+            if s in inv_set and s not in seen:
+                seen.add(s)
+                out.append(s)
+        return out
+
+    top = _filt(persona_doc.get('interest_top_25'))
+    bot = _filt(persona_doc.get('interest_bottom_25'))
+
+    raw_top_full = persona_doc.get('interest_top_25') or []
+    raw_bot_full = persona_doc.get('interest_bottom_25') or []
+    stray = sorted({
+        str(x).strip()
+        for x in list(raw_top_full) + list(raw_bot_full)
+        if str(x).strip() and str(x).strip() not in inv_set
+    })
+    if stray:
+        print(f"   ⚠️ persona interests: {len(stray)} label(s) not in CSV inventory (verbatim mismatch) — "
+              f"examples: {stray[:8]}{'…' if len(stray) > 8 else ''} — fix spelling or INTEREST priors stay thin.")
+
+    top_set = set(top)
+    bot = [b for b in bot if b not in top_set]
+    persona_doc['interest_top_25'] = top[:25]
+    persona_doc['interest_bottom_25'] = bot[:25]
+    persona_doc['interest_inventory_checksum'] = f"{len(inv)} labels"
+
+
+def _format_persona_interest_rank_block(persona_doc: dict) -> str:
+    """Snippet for INTEREST-category Pass 1 / Pass 2 prompts."""
+    top = persona_doc.get('interest_top_25') or []
+    bot = persona_doc.get('interest_bottom_25') or []
+    if not top and not bot:
+        return ''
+    lines = [
+        "═══════════════════════════════════════════════════════════════════",
+        "INTEREST — PERSONA RANK PRIORS (fixed panel labels — only fit changes by subject)",
+        "═══════════════════════════════════════════════════════════════════",
+    ]
+    if top:
+        lines.append("STRONG ALIGNMENT (prefer top tiers / descending): "
+                     + '; '.join(top[:25]))
+    if bot:
+        lines.append("WEAK / ANTI-FIT ANCHORS (bottom tiers ≤5% BP where rubric agrees): "
+                     + '; '.join(bot[:25]))
+    lines.append(
+        "When an item appears in BOTH this list AND your rubric tiers, reconcile so "
+        "rank order is coherent with persona priors.")
+    lines.append("")
+    return '\n'.join(lines)
+
+
+def _persona_subject_archetype(persona_doc: dict | None) -> str:
+    return str((persona_doc or {}).get('subject_archetype') or '').strip().lower()
+
+
+def _sport_persona_subject_blob(persona_doc: dict | None) -> str:
+    doc = persona_doc or {}
+    return (
+        str(doc.get('persona_summary', '') or '') + '\n'
+        + str(doc.get('digital_identity', '') or '') + '\n'
+        + str(doc.get('archetype_rationale', '') or '')
+    ).lower()
+
+
+def _is_pro_athlete_individual(persona_doc: dict | None) -> bool:
+    """celebrity_or_creator whose research blob clearly centers elite pro sports."""
+    if _persona_subject_archetype(persona_doc) != 'celebrity_or_creator':
+        return False
+    blob = _sport_persona_subject_blob(persona_doc)
+    keys = (
+        'nba', 'nfl', 'mlb', 'nhl', 'mls', 'wnba', 'professional athlete',
+        'professional football', 'professional basketball', 'pitcher ',
+        'quarterback ', ' midfielder', 'goalie ', ' goaltender', ' outfielder ',
+        'tight end ', 'linebacker', ' olympic ',
+    )
+    return any(k in blob for k in keys)
+
+
+def _sports_fan_commerce_calibration_block(cat_u: str, persona_doc: dict | None, *,
+                                           phase: str) -> str:
+    """Franchises + pro-athlete personas — sponsors, roster stars, venues."""
+    team = _persona_subject_archetype(persona_doc) == 'sports_team_league_org'
+    ind_ath = _is_pro_athlete_individual(persona_doc)
+    short = phase == 'pass2'
+
+    if team and cat_u in {'ATHLETE', 'ATHLETES'}:
+        if short:
+            return """═══════════════════════════════════════════════════════════════════
+SPORTS TEAM — ATHLETE CATEGORY
+═══════════════════════════════════════════════════════════════════
+Top tiers should hold **several** national-name **starters / All-Stars / big-contract core** on THIS roster + **enduring club legends** when they appear in CSV — not a single MVP only. Bury unrelated athletes who never suited up for the club."""
+
+        return (
+            "**`sports_team_league_org`:** ATHLETE tiers elevate **multiple CURRENT top players** (headline starters, "
+            "perennial All-Stars / Pro Bowlers, marquee offseason adds, **iconic franchise veterans** still in conversation) — "
+            "not lone-superstar tunnel vision. Spread high tiers across **the whole star cluster** research names; unrelated "
+            "league-famous names without THIS club storyline stay mid/low.\n"
+            "• `predicted_top_5` should list **several** roster-backed names when inventory permits, not one hero + filler."
+        )
+
+    if team and cat_u in {'MOST PURCHASED BRANDS', 'WHERE THEY SHOP'}:
+        if short:
+            return """═══════════════════════════════════════════════════════════════════
+SPORTS TEAM — SPONSORS / RETAIL
+═══════════════════════════════════════════════════════════════════
+Weight **verified jersey/arena naming / broadcast sponsors** cited in persona before generic prestige mall brands."""
+
+        return (
+            "Fans convert sponsorship exposure digitally — elevate partners named in `cross_shop_network` / "
+            "`digital_identity` (kit/apparel sponsors, pouring rights cards, ticketing/payment partners).\n"
+            "Luxury retail stays demo-income gated without proof."
+        )
+
+    if team and cat_u in {'AMUSEMENT PARKS', 'FRANCHISE'}:
+        if short:
+            return """═══════════════════════════════════════════════════════════════════
+SPORTS TEAM — VENUE / FRANCHISE
+═══════════════════════════════════════════════════════════════════
+**Home stadium naming + official team-shop / league app ecosystems** outrank unrelated destination parks lacking club storyline."""
+
+        return (
+            "**Venue realism:** Naming-rights home field, flagship team ecommerce, loyalty/team membership apps dominate "
+            "over generic amusement rows unless persona shows deliberate sports tourism binge.\n"
+            "Rivals receive derby nuance, not accidental sky-high spikes."
+        )
+
+    if team and cat_u in {'TICKETING', 'EVENTS'}:
+        if short:
+            return """═══════════════════════════════════════════════════════════════════
+SPORTS TEAM — LIVE EVENT ROWS
+═══════════════════════════════════════════════════════════════════
+Home schedule + postseason + verified league/official exchange partners outperform random festivals."""
+
+        return (
+            "Reflect **fixture + playoff ticketing** realism — elevate official resale/partner surfaces named "
+            "in persona research ahead of stray entertainment aggregators lacking team contracts."
+        )
+
+    if ind_ath and cat_u in {'ATHLETE', 'ATHLETES'}:
+        if short:
+            return """═══════════════════════════════════════════════════════════════════
+PRO ATHLETE PERSONA — ATHLETE CATEGORY
+═══════════════════════════════════════════════════════════════════
+**Subject athlete + storyline-linked teammates / rivalry counterstars** lead — deflate unrelated leaderboard filler."""
+
+        return (
+            "**Pro athlete persona:** Top tiers prioritize **THIS subject athlete**, collaborators teammates named in "
+            "research, rivalry counterstars anchoring narratives — unrelated stars lacking storyline tie stay lower."
+        )
+
+    if ind_ath and cat_u in {'MOST PURCHASED BRANDS', 'WHERE THEY SHOP'}:
+        if short:
+            return """═══════════════════════════════════════════════════════════════════
+PRO ATHLETE PERSONA — ENDORSEMENTS / RETAIL
+═══════════════════════════════════════════════════════════════════
+**Documented endorsement / equipment / hydration / telecom / auto sponsors** inflate — stray luxe lacks proof stays cautious."""
+
+        return (
+            "**Sponsor fidelity:** amplify brands surfaced in persona `cultural_anchors`/`cross_shop_network` representing "
+            "signature deals fans emulate digitally."
+        )
+
+    if ind_ath and cat_u in {'SPORTS TEAM', 'NBA', 'NFL', 'MLB', 'MLS', 'NHL',
+                              'NBA TEAM', 'NFL TEAM', 'MLB TEAM', 'MLS TEAM', 'NHL TEAM',
+                              'NFC EAST', 'NFC WEST', 'NFC SOUTH', 'NFC NORTH',
+                              'AFC EAST', 'AFC WEST', 'AFC SOUTH', 'AFC NORTH'}:
+        if short:
+            return """═══════════════════════════════════════════════════════════════════
+PRO ATHLETE PERSONA — SPORTS TEAM CATEGORY
+═══════════════════════════════════════════════════════════════════
+**The athlete's CURRENT TEAM must be #1 in this category at 25-40% BP.**
+Prior teams (trade history): 10-18% BP each.
+Same-city teams in other leagues (e.g., if athlete plays for Houston Rockets,
+then Houston Texans + Houston Astros should be 8-12% each).
+Rival/marquee teams: 10-20%.
+Brooklyn Nets should NOT lead for a current Rockets player."""
+
+        return (
+            "**Pro athlete persona — SPORTS TEAM:** The subject's **CURRENT team** must dominate their league "
+            "category at **25-40% BP** (non-negotiable). Prior teams from trade history should score **10-18%**. "
+            "Same-city teams in other sports should be **elevated to 8-12%** due to geographic fan overlap "
+            "(e.g., KD on Rockets → Texans 8-12%, Astros 8-12%). Rival/marquee league teams 10-20%.\n"
+            "• `predicted_top_5`: CURRENT TEAM first, then prior teams + same-city cross-sport.\n"
+            "• `anti_fit_in_category`: Teams from markets with no storyline connection to this athlete."
+        )
+
+    return ''
+
+
+def _celebrity_talent_calibration_block(cat_u: str, persona_doc: dict | None, *,
+                                        phase: str) -> str:
+    """Entertainment talent personas — endorsement visibility + network→SVOD fit (capped vs Netflix/Hulu)."""
+    if _persona_subject_archetype(persona_doc) != 'celebrity_or_creator':
+        return ''
+    short = phase == 'pass2'
+
+    if cat_u == 'TALENT':
+        if short:
+            return """═══════════════════════════════════════════════════════════════════
+CELEBRITY / TALENT PERSONA — TALENT CATEGORY
+═══════════════════════════════════════════════════════════════════
+**Every research-backed endorsement, ambassador deal, and paid partnership brand** tied to this subject
+must read **visible** (high-mid / top band) when those exact names appear as TALENT rows — burying them
+behind unrelated names is wrong. Co-stars / coach figures / obvious peer talent from the same show may
+elevate; random chart noise deflates."""
+
+        return (
+            "**`celebrity_or_creator`:** TALENT tiers must **surface documented brand deals + marque co-talent "
+            "named in persona** (ambassadors, recurring co-stars, rivalry/duet figures in the same universe). "
+            "Obscure leaderboard filler without storyline tie to the subject stays low.\n"
+            "• `predicted_top_5` should include **the subject row** (when present) plus deal / show-ecosystem hooks the inventory allows."
+        )
+
+    if cat_u == 'STREAMING/PLATFORM':
+        if short:
+            return """═══════════════════════════════════════════════════════════════════
+CELEBRITY PERSONA — STREAMING / NETWORK FIT
+═══════════════════════════════════════════════════════════════════
+Map the subject's **current linear / cable / flagship streamer home** (from persona research) onto the
+matching corporate SVOD row when present (e.g. NBC→Peacock ecosystem, Showtime/CBS→Paramount+, ABC/FX→Hulu/Disney+,
+HBO→Max, etc. — verify rights; do not invent exclusives).
+
+• **Network-synergy apps** may **jump ahead of WRONG-network SVOD peers** in the mid-pack.
+• **HARD CEILING:** **Netflix must still lead** `predicted_top_5` for mainstream US talent audiences
+and **Hulu must stay in the top 3–4** SVOD slots — never rank Peacock, Paramount+, Max, Disney+, or any
+other synergy app **above** Netflix or **above** Hulu regardless of perfect network match.
+• Other broad services (Prime Video, Disney+, Max, …) stay realistic gen-pop mass — synergy rows compete
+**under** the Netflix+Hulu anchor layer."""
+
+        return (
+            "**Network / platform alignment:** If persona research ties the subject to a **specific broadcaster "
+            "or premium cabler**, elevate the **matching first-party SVOD** (Peacock for NBCUniversal linear "
+            "heavy; Paramount+ for Paramount/Showtime-era properties; Hulu/Disney+ for ABC/FX/Disney footprints; "
+            "Max for HBO-class IP, etc.) **relative to mismatched network apps**.\n"
+            "• **Universal floor — Netflix + Hulu:** Maintain **Netflix as #1** and **Hulu in the top SVOD cluster** "
+            "for typical fan cohorts. Peacock/Paramount+/etc. **never outrank** Netflix or Hulu — they only "
+            "reshuffle **below** that pair against each other and other mass streamers."
+        )
+
+    if cat_u == 'MOST PURCHASED BRANDS':
+        if short:
+            return """═══════════════════════════════════════════════════════════════════
+CELEBRITY PERSONA — MPB DEAL VISIBILITY
+═══════════════════════════════════════════════════════════════════
+Consumer brands from **confirmed endorsements / licensing / collaborator products** cited in persona
+belong in **elevated tiers** when CSV rows exist — do not swamp them with unrelated aisle noise."""
+
+        return (
+            "**Endorsement MPB realism:** amplify **partner consumer brands + beverage / automotive / telecom / beauty "
+            "deals explicitly named** in persona `cultural_anchors`, `digital_identity`, or `cross_shop_network` when "
+            "those labels exist in MOST PURCHASED BRANDS inventory."
+        )
+
+    return ''
+
+
+def _category_pass1_calibration_block(category: str,
+                                      persona_doc: dict | None = None) -> str:
+    """Category-specific hard calibration for the Pass 1 Category Rule Agent."""
+    u = (category or '').strip().upper()
+    sections: list[str] = []
+
+    if u == 'HEALTH & WELLNESS':
+        sections.append(
+            "This column measures **digital** behavior (websites, apps, patient portals, national health info), "
+            "not the share of people who physically visited a hospital campus.\n"
+            "• **Named regional hospital systems / flagship city hospitals** (e.g. large NYC systems) have "
+            "tiny digital reach NATIONALLY — only locals, actual patients, staff, and students touch those "
+            "properties. It is NOT plausible that ~half the qualified cohort has meaningful annual digital "
+            "engagement with several different metro hospital brands unless the persona is explicitly "
+            "healthcare-geo-constrained (med students, hospital employees, hyper-local health study).\n"
+            "• Reserve top tiers for **national health publishers / telehealth / retail pharmacy & benefits "
+            "apps / fitness tech** that US consumers actually open online. Put **most single-metro hospital "
+            "brands** in low tiers or `anti_fit_in_category` unless geography in the persona proves overlap."
+        )
+    elif u == 'MOST PURCHASED BRANDS':
+        sections.append(
+            "**Digital panel** — rows reflect **logged-in / web / app** purchase & research signals, not "
+            "offline-only receipts.\n"
+            "• **Two purchase contexts — do not confuse them:**\n"
+            "  — **Mass CPG / grocery-aisle / big-box consumables / mainstream drugstore OTC-style SKUs**: "
+            "these often spike in panel noise tied to replenishment carts. "
+            "**Grocery coherence:** If you place many **grocery/big-box drug** leaders high, **`predicted_top_5` MUST also treat "
+            "**very high tier** brands like **Instacart, Walmart/Target pickup & grocery-digital proxies, DoorDash/Uber grocery** "
+            "when those rows appear — that trio is often how bulk CPG/digital grocery shows up. "
+            "**Once those delivery/pickup surfaces read high**, it becomes internally consistent for **other aisle CPG/snacks/household** "
+            "rows to tier high alongside them for the **same persona** — and **`WHERE THEY SHOP`** must allow headline tiers for "
+            "**regional supermarkets + CVS/Walgreens** that merchants actually expose in‑app for persona metros "
+            "(illustrative: SoCal Ralphs/Vons/Pavilions‑class families; Southeast Publix‑class; Texas H‑E‑B‑class; Northeast Wegmans‑class examples; dispersed national footprints ⇒ Kroger/Albertsons-banner + Walmart/Target/Costco — inventory-accurate research required).\n"
+            "  — **Prestige / luxury skincare & color cosmetics (Sephora-/Ulta prestige mix-/department-/DTC-heavy path)**: "
+            "premium beauty has **digital-native** footprints (reviews, Shade Finder, reorder apps). **Do not** apply the Instacart / "
+            "grocery-proxy coherence check — flagship prestige labels may lead **without** forcing Instacart or mass grocery-deliver brands up.\n"
+            "• **Generic commodity bleed:** If unrelated mass staples crowd the rubric **without** either (a) mass-grocery coherence above "
+            "or (b) prestige-brand justification below, either **demote** or cite an explicit digitally native rationale.\n"
+            "• **Regional availability / mass-market vs niche:** Brands sold mainly in **one macro-region** "
+            "(however shaped — Northeast/I-95, Great Lakes/Midwest, Pacific Northwest/NorCal, coastal SoCal/Arizona corridors, "
+            "Texas/Central plains, inland/southeast/coastal South, Rockies, Alaska/Hawaii footprints, etc.) should **not** sit in "
+            "top tiers for a **nationally dispersed** persona unless `location` + subsegments show concentration in "
+            "**that same** footprint. Infer the SKU’s plausible geography from name + inventory + persona research — "
+            "**do not** assume southern/Texas is the default case. Treat strong regionals as mid/low or `anti_fit_in_category` "
+            "whenever DMA evidence points elsewhere.\n"
+            "• Prefer `predicted_top_5` grounded in **`location`/DMA geography** plus the **mass CPG vs prestige-beauty** channel split above.\n"
+            "• **Life-stage vs rank heuristics:** `teen/gen-Z outrank legacy` rules in later pipeline passes apply **only when** persona "
+            "demographics + summary show a **median or mode audience under ~34** OR explicit youth-weighted subsegments — **never** bake "
+            "youth-fashion dominance into tiers for mature, parental, or older-skew qualified cohorts; there, credible **household replenishment "
+            "+ category-relevant nationals** belong higher than random trendy labels."
+        )
+    elif u == 'WHERE THEY SHOP':
+        sections.append(
+            "**Geography-first retail realism:** banners are not national fungible tokens — store chains have "
+            "**footprints**. Tier placement MUST align with persona **`location`/DMA skew** "
+            "(if top DMAs are Northeast/midwestern metros vs Texas vs Southeast vs coastal West).\n"
+            "• Illustrative footprints (research if unsure — do not blindly trust fuzzy names):\n"
+            "  — **Texas / Gulf-adjacent heavy:** H-E-B, Central Market (TX-heavy); many Fiesta / regional "
+            "Hispanic-heavy independents skew Texas/Southwest.\n"
+            "  — **Southeast / Florida core:** Publix, Winn-Dixie; Southeastern Grocers banners.\n"
+            "  — **West Coast / Southwest Albertsons-era:** Pavilions, Vons, **Ralphs** (SoCal-heavy), Safeway-heavy coast/mountain West skew "
+            "(verify row naming — do not confuse a Florida shopper with banners that barely exist there).\n"
+            "  — **Great Lakes / Midwest / multi-state Kroger mosaic:** Kroger-branded and Kroger-owned banners when DMAs map there.\n"
+            "  — **Northeast / Mid-Atlantic:** Wegmans-class, Ahold-Delhaize–era Stop & Shop / Giant / Food Lion density varies by state — research row vs persona.\n"
+            "• **Pickup / delivery merchant-of-record:** Mass grocery + Instacart/DoorDash/Uber grocery + Walmart/Target grocery-app evidence in the persona implies **the specific supermarket + pharmacy chains that dominate those pickers in THIS geography** should land in **high/mid tiers** when inventory lists them — not only Amazon. **OTC-heavy** personas need **CVS/Walgreens** credibility.\n"
+            "• **Misaligned footprints are anti-fit:** a banner whose stores cluster in **Macro-region A** "
+            "must not lead when persona **`location`/DMA skew** overwhelmingly lives in **Macro-region B** with no plausible overlap — "
+            "applies **symmetrically** (e.g. Pacific-Northwest-heavy chains vs all-Southeast DMA maps; Northeast-centric "
+            "supermarkets vs Texas/Southwest-only maps; inland South banners vs coastal California-only LOCATION). "
+            "Put misplaced regionals in **low tiers** or `anti_fit_in_category`. National ecommerce + Walmart/Target/Costco "
+            "remain allowable high tiers alongside genuinely national department stores.\n"
+            "• `predicted_top_5` should not be dominated by a single-chain regional grocer that contradicts the DMA map."
+        )
+    elif u == 'MEDIA':
+        sections.append(
+            "**Regional + outlet-type realism:**\n"
+            "• **Metro / hometown journalism:** When `location`/DMA skew OR `subject_archetype` ties to a **place-bound** "
+            "affinity (club, hometown hero brand, intra-state-heavy audience), elevate **credibly local dailies, TV station digital, "
+            "Hearst-/Gannett-class metro sites in THAT market** (e.g. San Antonio Spurs profile → Express-News / SA beat coverage) "
+            "**above gen-pop** — but **never** pretend they outrank **mass national portals** aggregators/wires (CNN, Fox News, Yahoo News, "
+            "Google News-class rows) plus **category-obvious nationals** (**ESPN** for sports-heavy cohorts, NYT/USAT tiers). "
+            "Local ⇒ **elevated middle / upper-mid tiers**, never default #1–2 BP.\n"
+            "• **Entertainment-trade press default OFF for fans:** Rows like **Variety, Hollywood Reporter, Deadline, Wrap** behave like **industry B2B** "
+            "readership — hold them **mid/low** or `anti_fit_in_category` **unless** persona research proves "
+            "**Hollywood/exec/producer/industry obsessive** calibration (directors, guild-adjacent professionals, journalists covering deals, "
+            "hard-core trade junkie parasocial demos). Casual moviegoers, sports fans, FMCG cohorts ⇒ trades must not lead.\n"
+            "• `predicted_top_5`: national staples first; weave regional lift + anti-trade posture per evidence."
+        )
+    elif u == 'GAMES':
+        sections.append(
+            "**GAMES — demographic spine, not panel noise:** This column is **not** “anyone who ever clicked a game ad.”\n"
+            "• **Default (no gaming spine):** If persona + `category_signals[\"GAMES\"]` + `INTEREST` do **not** describe habitual players, design tiers so **most SKUs sit low** — only **Wordle / NYT-style puzzles / crosswords / light mobile casual** may occupy the **highest still-modest** band; **AAA, sports sims, kid live-services** stay **trace–low**.\n"
+            "• **When gaming IS a legitimate interest:** Match **AGE + GENDER + subculture** to genre — e.g. **older/casual** ⇒ puzzle/word; **urban young male + competitive** ⇒ GTA/CoD/FIFA/Madden/NBA2K per evidence; **kids/teens** ⇒ Roblox/Fortnite/Minecraft **only** when minors + narrative support.\n"
+            "• **`PARENTAL_STATUS` guard:** **Roblox / kid-first / toy-adjacent live services** must **not** exceed what **PARENT share + explicit kid tablet / shared-device / family gaming** evidence allows. **Parents without that proof** ⇒ those rows → **`anti_fit_in_category`** or bottom tiers — they must **not outrank** adult-appropriate casual or AAA *for that adult-skew cohort*.\n"
+            "• **`predicted_top_5`** must mirror the above — no accidental “Roblox #1” on middle-aged non-gaming FMCG profiles."
+        )
+    elif u == 'APP/PLATFORM USAGE':
+        sections.append(
+            "**APP/PLATFORM USAGE — realistic digital engagement (NOT install base):**\n"
+            "This category measures **meaningful annual digital engagement** (logged visits, active sessions, "
+            "transactions) — NOT whether an app is installed on someone’s phone.\n"
+            "• **Gen Pop reality anchors for context:** Google Maps ~73%, Gmail ~65%, Wikipedia ~43%, "
+            "Yahoo Mail ~42%, iCloud ~41%, Google Calendar ~39%. Use these as reference points, not hard "
+            "ceilings — a productivity-focused or tech persona COULD have higher usage for relevant tools.\n"
+            "• **Spread is mandatory:** The category must have a WIDE distribution with clear tiers "
+            "and gaps between them. A cluster of 5+ items all within 3% of each other is NEVER realistic. "
+            "Think: which apps does THIS persona use daily (high), weekly (mid), rarely (low)?\n"
+            "• **Platform exclusivity matters:** iCloud is Apple-only (~55% US share), "
+            "Google Play is Android-only (~45% US). They cannot both be near-universal for the same persona. "
+            "Think about which ecosystem THIS audience skews toward.\n"
+            "• **Persona relevance drives rank order:** A Zoom company profile → Zoom should lead. "
+            "A student profile → Google Classroom should be high. A food delivery persona → DoorDash/Uber Eats "
+            "should be elevated. Don’t apply generic Gen Pop order — think about THIS audience.\n"
+            "• `predicted_top_5`: Universal utilities (Maps, email) PLUS persona-relevant apps.\n"
+            "• `anti_fit_in_category`: Tools that clearly don’t match the persona’s lifestyle/occupation."
+        )
+    elif u == 'QSR':
+        sections.append(
+            "**QSR — digital engagement, not brand aspiration:**\n"
+            "This category measures **digital engagement** (app orders, web visits, loyalty programs, delivery "
+            "platforms) — NOT brand aspiration or lifestyle alignment.\n"
+            "• **Mass-market chains have massive digital reach** regardless of audience. McDonald's is the "
+            "#1 QSR digitally in the US (~65-70% gen pop). Don't penalize mass chains for not being "
+            "'aspirational' — even health-conscious audiences use McDonald's app/delivery.\n"
+            "• **Premium fast-casual CAN lead for the right persona** (Chipotle, Starbucks, Sweetgreen "
+            "for urban/health/young) — but mass chains should still be within striking distance, not 3x lower.\n"
+            "• **Think about THIS persona:** A McDonald's company profile → McDonald's leads. A vegan "
+            "wellness brand → Sweetgreen/Panera may lead, but McDonald's is still present at meaningful BP. "
+            "A rural/value audience → McDonald's/Taco Bell/Wendy's should lead over Shake Shack.\n"
+            "• **Starbucks vs Dunkin:** Differentiate by persona — urban/premium/coastal → Starbucks leads. "
+            "Northeast/value-oriented → Dunkin leads. They should NOT be identical.\n"
+            "• **Regional awareness:** Whataburger is Texas/South, In-N-Out is West Coast, Culver's is "
+            "Midwest. Match to persona DMA footprint.\n"
+            "• `predicted_top_5`: Think about what THIS audience actually orders digitally.\n"
+            "• `anti_fit_in_category`: Hyper-regional chains outside the persona's DMA footprint."
+        )
+    elif u in {'SEARCH ENGINE/AI', 'SEARCH ENGINE'}:
+        sections.append(
+            "**Google** is the default #1 for mainstream US audiences (~78-90% BP). "
+            "Bing is a distant #2; Yahoo Search older-skew tertiary.\n"
+            "• **AI assistants are growing fast but still have lower reach than traditional search.** "
+            "Gen Pop baselines: ChatGPT ~18-25%, Gemini ~8-15%, Perplexity ~3-8%, Claude ~2-5%, "
+            "Copilot ~5-10%. For tech-savvy/young audiences these can be higher — use persona judgment. "
+            "For an AI company or tech-forward persona, AI tools CAN be elevated significantly.\n"
+            "• **Quora** is a Q&A forum, not a search engine. Gen Pop reach ~8-12%. "
+            "Only elevate if persona has strong Q&A/knowledge-seeking signals.\n"
+            "• **Key principle:** The distribution should have clear tiers with gaps — NOT a flat wall "
+            "where Google, ChatGPT, Quora, and Gemini are all within 10% of each other. "
+            "Think about which tools THIS persona actually uses daily vs occasionally.\n"
+            "• Set `category_ceiling_pct` ~88-92.\n"
+            "• `predicted_top_5`: Google first, then rank by persona relevance."
+        )
+    elif u == 'BETTING':
+        sections.append(
+            "**BETTING — US legal market + intent vs exposure (this pass only):**\n"
+            "• **Do not treat clickstream proximity to sports media as proof everyone bets.** "
+            "Panel exposure to sportsbook domains often overstates *active* wagering; compress toward "
+            "**real US participation** (~low tens % of adults with meaningful annual sportsbook digital touch) "
+            "unless persona + `category_signals['BETTING']` + `INTEREST` explicitly describe betting/fantasy "
+            "as a spine behavior.\n"
+            "• **Mass-market US order (digital sports-wagering brands):** **DraftKings** and **FanDuel** are the "
+            "endemic **duopoly leaders** — `predicted_top_5` should normally include both near the top for "
+            "US-profile sports/gaming-adjacent cohorts. **BetMGM, Caesars / Caesars Sportsbook, ESPN Bet** are "
+            "plausible **high seconds** from national TV/APP marketing but should **not** beat both DK and FD "
+            "unless persona proves a state/marketing skew.\n"
+            "• **Overseas-first / UK–Ireland–global books** (e.g. **Bet365**, **Ladbrokes**, **Paddy Power**, "
+            "**William Hill** where UK-global, **TAB**-class non-US) belong **materially below DK/FD** for "
+            "typical **US** qualified panels — panel spikes or generic sports fandom are **not** evidence of "
+            "European book preference.\n"
+            "• **`INTEREST` coherence:** If persona `interest_top_25` does **not** rank fantasy/sports wagering "
+            "adjacent labels high, keep most sportsbook rows **mid or lower** vs gen-pop — do not let "
+            "incidental NFL/NBA interest justify duopoly-tier BP for every book."
+        )
+
+    sx = _sports_fan_commerce_calibration_block(u, persona_doc, phase='pass1').strip()
+    if sx:
+        sections.append(sx)
+    cx = _celebrity_talent_calibration_block(u, persona_doc, phase='pass1').strip()
+    if cx:
+        sections.append(cx)
+
+    return '\n\n'.join(sections).strip()
+
+
+def _category_pass2_calibration_block(cat_upper: str,
+                                      persona_doc: dict | None = None) -> str:
+    """Extra Pass 2 (chunk scorer) reminders — keyed by canonical category headers."""
+    u = (cat_upper or '').strip().upper()
+    parts: list[str] = []
+
+    if u == 'HEALTH & WELLNESS':
+        parts.append(
+            """═══════════════════════════════════════════════════════════════════
+CATEGORY HARD CALIBRATION — HEALTH & WELLNESS (this scoring pass only)
+═══════════════════════════════════════════════════════════════════
+Do not award high BP to **named regional hospital / single-metro academic medical centers**
+unless the persona is explicitly local-health or healthcare-worker concentrated.
+National median audiences touch those systems online at **trace** rates.
+National digital-health publishers, telehealth, fitness apps, and retail pharmacy portals
+are appropriate high-BP archetypes."""
+        )
+
+    if u == 'MOST PURCHASED BRANDS':
+        parts.append(
+            """═══════════════════════════════════════════════════════════════════
+CATEGORY HARD CALIBRATION — MOST PURCHASED BRANDS (digital footprints)
+═══════════════════════════════════════════════════════════════════
+**Mass-market CPG / grocery / big-box replenishment personas:** If many aisle / household / snack /
+mainstream OTC cluster rows score high — **elevate grocery-delivery + pickup proxies** proportionally first
+(Instacart when listed; Walmart/Target grocery-heavy rows; grocery DoorDash/Uber Eats stacks). THEN other
+matching CPG/big-box grocery labels can tier high consistently.
+
+**Prestige / luxury skincare & cosmetics** (typically Sephora / prestige Ulta bays / dept store / flagship DTC) —
+SKIP the Instacart/grocery coherence rule; prestige brands get high BP on merit of site/app/browse/reviews without
+fabricating grocery-delivery uplift.
+
+Regional-only SKU caveats remain: keep BP honest vs offline replenishment.
+
+**Regional-only or strong geo-skew brands** (sold mainly in one US macro-region — infer from persona + row name + research):
+keep BP **low** unless persona `location` DMA mix or subsegments prove **that specific** geography — never default to imagining
+the skew is southern/Texas unless evidence says so.
+
+**Life-stage:** Tier **endorsed / persona-named deal partners** and **category-coherent nationals** appropriately for median age —
+do **not** let generic youth-trend proxies outrank plausible mass replenishment rows on **middle-age or family-heavy** personas."""
+        )
+
+    if u == 'WHERE THEY SHOP':
+        parts.append(
+            """═══════════════════════════════════════════════════════════════════
+CATEGORY HARD CALIBRATION — WHERE THEY SHOP (regional footprints)
+═══════════════════════════════════════════════════════════════════
+Super-regional grocery / mass banners (whatever region they serve — H-E-B, Publix, Wegmans, Fred Meyer‑class names,
+Albertsons-banner West families, etc.) only score **high** when persona LOCATION/DMA mix **overlaps that chain’s geography**.
+
+Mismatch in **any direction** ⇒ **low** or anti-fit (not only «North vs Texas»).
+
+Honor national mass ecommerce + Walmart/Target/Costco when list contains them."""
+        )
+
+    if u == 'MEDIA':
+        parts.append(
+            """═══════════════════════════════════════════════════════════════════
+CATEGORY HARD CALIBRATION — MEDIA (regional beats + trades)
+═══════════════════════════════════════════════════════════════════
+**Metro / team / place-skew personas:** Bump hometown newspapers + local TV-news digital stacks **moderately upward**
+vs unconditional gen-pop — still **UNDER** ubiquitous national news brands + ESPN for sports-heavy profiles.
+Locals should impress as **raised mid-pack**, not chart-toppers.
+
+**Variety / Hollywood Reporter / Deadline / The Wrap-class trades:** **Never** elite BP unless the persona screams
+(industry insider, executive, filmmaker, obsessed trade reader). Casual fans ⇒ keep trades low."""
+        )
+
+    if u == 'GAMES':
+        parts.append(
+            """═══════════════════════════════════════════════════════════════════
+CATEGORY HARD CALIBRATION — GAMES (this scoring pass only)
+═══════════════════════════════════════════════════════════════════
+**Non-gaming cohort (persona does NOT treat play as a spine hobby):** keep BP **compressed** — Wordle/puzzle/casual may be the only “high-ish” rows and still **below** streaming/social universals; **Roblox, Fortnite, GTA, sports sims** → **low/trace** unless inventory + persona explicitly contradict.
+
+**Gaming cohort:** tier **genre to demo** (older ⇒ puzzles/word; kids/teens ⇒ Roblox/Minecraft **only** with minor evidence; young men + competitive urban ⇒ mature AAA / sports sims when persona supports).
+
+**Parents / device-handoff trap:** if `PARENTAL_STATUS` is material but persona lacks **kids actually playing** on logged digital surfaces, **Roblox & kid-first live services must not spike** — cap like **ambient child bleed**, never above adult-facing titles appropriate to the same median adult."""
+        )
+
+    if u == 'APP/PLATFORM USAGE':
+        parts.append(
+            """═══════════════════════════════════════════════════════════════════
+CATEGORY HARD CALIBRATION — APP/PLATFORM USAGE (realistic digital ceilings)
+═══════════════════════════════════════════════════════════════════
+**CRITICAL — DO NOT INFLATE UBIQUITOUS APPS TO NEAR-100%.** This is the most common scoring error in this category.
+
+REALISTIC CEILINGS (Gen Pop baselines as anchors):
+• Google Maps ~73%, Gmail ~65%, Wikipedia ~43%, Yahoo Mail ~42%, iCloud ~41%
+• Google Calendar ~39%, USPS ~38%, Google Drive ~34%, Reddit ~34%, Zoom ~32%
+• Microsoft Outlook ~31%, Google Play ~30%, Google Photos ~29%, WhatsApp ~25%
+• Microsoft Teams ~23%, Apple Maps ~23%, FedEx ~21%, UPS ~21%, Weather ~20%
+
+A BRAND-SPECIFIC audience may index 1.1x–1.5x above gen pop for relevant platforms
+(e.g., a tech-savvy younger audience → Google Suite apps at 1.2-1.3x baseline).
+But NEVER 2-3x baseline. Here's why:
+
+• iCloud at 95% means "95 out of 100 panelists digitally engaged with iCloud" — impossible
+  when ~45% of US adults use Android. Realistic ceiling for iCloud: 45-55% even for
+  Apple-heavy audiences.
+• Gmail at 95% is impossible — real panel measurement shows ~65% gen pop. A tech audience
+  might push to 70-75% max.
+• IMDB at 95% is absurd — it's a reference site, not a utility. Realistic: 15-35%.
+• Google Meet at 95% is impossible — it's a work tool used by ~13% of gen pop. Even for
+  corporate audiences: 20-35% max.
+• Craigslist at 95% is impossible — ~13% gen pop baseline, max realistic: 15-25%.
+
+SCORING RULES:
+1. Start from Gen Pop baseline, then apply a MODEST persona multiplier (0.8x–1.5x).
+2. The #1 item in this category should rarely exceed 80% BP (only Google Maps/Gmail for universal audiences).
+3. Items ranked 5-10 should typically be 30-50% BP, NOT 90%+.
+4. Items ranked 20+ should be 10-25%, NOT 70%+.
+5. Niche/specialized apps (Grammarly, Google Scholar, Canva) should be 5-20% for most audiences.
+6. The spread within the category should be WIDE — top item might be 75%, item #10 might be 35%, item #30 might be 12%.
+   A flat wall of 94-96% values is NEVER realistic."""
+        )
+
+    if u in {'SEARCH ENGINE/AI', 'SEARCH ENGINE'}:
+        parts.append(
+            """═══════════════════════════════════════════════════════════════════
+CATEGORY HARD CALIBRATION — SEARCH ENGINE/AI
+═══════════════════════════════════════════════════════════════════
+**Google-class rows** (~78–90% BP for typical US conditioned cohorts) should **normally outrank everything**
+unless the persona is an extreme Bing/DDG/Yahoo-only niche.
+Rank AI-only tools below Google for general consumers.
+Honor the CATEGORY RULE tiers but never leave Google materially below challenger engines without explicit persona rationale."""
+        )
+
+    if u == 'BETTING':
+        parts.append(
+            """═══════════════════════════════════════════════════════════════════
+CATEGORY HARD CALIBRATION — BETTING (US panel)
+═══════════════════════════════════════════════════════════════════
+**Intent:** Sportsbook rows measure **digital touch** — default **compress** vs raw panel when persona lacks
+betting/fantasy spine (see Pass-1 rule). Do not award **duopoly-tier BP** to every book because the cohort watches sports.
+
+**US market stack:** **DraftKings** and **FanDuel** should **lead** among US-legal omnichannel books for typical
+US profiles. **BetMGM, Caesars, ESPN Bet** may sit **high but below** that pair unless persona proves otherwise.
+**Bet365 / Ladbrokes / Paddy Power / UK-global William Hill / non-US TAB-class** → **lower tiers** than DK/FD
+for US audiences unless persona explicitly anchors UK/Europe wagering geography.
+
+**INTEREST check:** If persona interest priors do not elevate wagering/fantasy-adjacent labels, **no single
+sportsbook should approach universal BP** — keep the whole category dispersed and realistic."""
+        )
+
+    sx = _sports_fan_commerce_calibration_block(u, persona_doc, phase='pass2').strip()
+    if sx:
+        parts.append(sx)
+    cx = _celebrity_talent_calibration_block(u, persona_doc, phase='pass2').strip()
+    if cx:
+        parts.append(cx)
+
+    return '\n\n'.join(parts) if parts else ''
 
 
 def persona_research_agent(subject: str, brand_category: str | None = None,
-                           study_start: str = '', study_end: str = '') -> dict:
+                           study_start: str = '', study_end: str = '',
+                           category_names: list[str] | None = None,
+                           interest_catalog: list[str] | None = None) -> dict:
     """Step 1 — single gpt-4o-search-preview call.
+
+    The downstream profile estimates behavior among **U.S. general-population
+    panelists who qualify on brand engagement** (digital exposure mapped to this
+    subject), not unconditional all-U.S.-adults behavior. Persona bridges
+    research + realism for that conditioned cohort.
+
+    When *interest_catalog* is provided (distinct `Value`s for INTEREST/INTERESTS
+    rows from the pipeline dataframe), the model must populate `interest_top_25`
+    and `interest_bottom_25` using **exact spelling** only from that list — the
+    same canonical taxonomy appears on every brand profile (e.g. Nike); only ranking
+    changes with the subject.
 
     Researches *subject* online and returns a PersonaDoc dict:
         demographics  – dict[category_name, list[{bucket, percentage}]]
@@ -14364,12 +15610,168 @@ def persona_research_agent(subject: str, brand_category: str | None = None,
             "this period, the persona and category guidance should reflect those events.\n"
         )
 
+    categories_block = ""
+    if category_names:
+        _cat_list = ', '.join(category_names[:60])
+        categories_block = f"""
+
+CATEGORIES TO BE SCORED:
+The following behavioral categories will be scored by downstream agents. Your `category_signals` field MUST include a 1-2 sentence guidance note for each one:
+{_cat_list}
+"""
+
+    interest_catalog_block = ""
+    interest_json_lines = ""
+    if interest_catalog:
+        numbered = '\n'.join(
+            f"  {i + 1}. {lab}" for i, lab in enumerate(interest_catalog)
+        )
+        _n_lab = len(interest_catalog)
+        _pair_rule = (
+            "Exactly 25 entries in each array — no duplicates; the two arrays must NOT overlap. "
+            "Every string must appear VERBATIM from the FIXED LABEL INVENTORY (character-for-character)."
+            if _n_lab >= 50
+            else (
+                f"The inventory has fewer than 50 labels ({_n_lab} total): use up to "
+                f"min(25, {_n_lab // 3}) entries per array, disjoint sets, verbatim spelling only."
+            )
+        )
+        interest_catalog_block = f"""
+
+═══════════════════════════════════════════════════════════════════
+INTEREST CATEGORY — FIXED LABEL INVENTORY (canonical panel taxonomy)
+═══════════════════════════════════════════════════════════════════
+The behavioral profile spreadsheet uses EXACTLY the following interest labels for
+every brand. They are identical across Nike, Disney, etc. — row order differs by
+pipeline input, NOT spelling.
+
+You MUST output `interest_top_25` and `interest_bottom_25` selecting ONLY strings
+copied verbatim from this list (no paraphrasing, no new labels).
+
+{_pair_rule}
+
+FIXED LABEL INVENTORY ({len(interest_catalog)} items, enumerated for reference — order is arbitrary):
+{numbered}
+"""
+        interest_json_lines = (
+            '  "interest_top_25": [\n'
+            '    "<EXACT LABEL from FIXED LABEL INVENTORY — rank 1 = strongest persona fit … slot 25>"\n'
+            '  ],\n'
+            '  "interest_bottom_25": [\n'
+            '    "<EXACT LABEL — strongest anti-fit / wrong cohort first … slot 25>"\n'
+            '  ],\n'
+        )
+
     prompt = f"""You are a senior audience-research analyst.  Research **{subject}** ({cat_label}) using real, current online data (fan demographics surveys, social-media analytics, press coverage, industry reports).
-{date_context}
+
+═══════════════════════════════════════════════════════════════════
+SAMPLING FRAME (READ FIRST — aligns persona with how the CSV is measured)
+═══════════════════════════════════════════════════════════════════
+The behavioral profile you are powering describes **respondents sampled from the
+U.S. general-population analytic panel WHO MEET ENGAGEMENT QUALIFICATION FOR "{subject}"**
+(e.g. measured digital exposure mapped to this brand/properties in the behavior window).
+• This is **NOT** the same cohort as unconditional "all U.S. adults" internet behavior —
+  respondents who QUALIFY ON **"{subject}"** should over-index only on demographics/interests that
+  real research ties to this subject — derive from Steps 3–5; do NOT invent a canned list of verticals.
+
+• It is ALSO **NOT** only "superfans/influencers" — for **national mass-market subjects with very broad
+  U.S. reach**, the qualified panel can still be huge and heterogeneous. Describe the **median qualified
+  respondent** and reserve narrow subculture slices for research-backed minorities of the cohort.
+
+• When writing `digital_identity`, `category_signals`, and demographics: describe whoever **actually
+  qualifies on measured engagement with "{subject}"**, not uninformed strangers, and not an influencer caricature.
+
+The published **national Gen Pop baseline CSV** stays the yardstick analysts use to phrase
+"*vs US digital baseline*" — profile rows answer: **among qualified panelists for this brand**,
+who engages digitally with each item?
+
+{date_context}{categories_block}{interest_catalog_block}
+
+RESEARCH METHODOLOGY — follow these steps IN ORDER before generating the persona:
+
+STEP 1 — IDENTIFY THE SUBJECT
+  Search for: "{subject}" — what is it? (brand, person, team, media company, etc.)
+  Key facts to find: industry, founding year, market position, product category, price point, target demographic.
+  If it's a brand: what specific products/services? Who are their competitors?
+  If it's a person: what do they do? Age? Ethnicity/heritage? Known affiliations?
+
+STEP 1b — ASSIGN SUBJECT ARCHETYPE (you MUST branch — downstream agents copy your judgment)
+  After you know what "{subject}" IS, classify it using EXACTLY ONE primary label below
+  and write `subject_archetype` + `archetype_rationale` in JSON.
+  Allowed `subject_archetype` values (pick the single best fit):
+    • consumer_brand — physical services/goods cos. (mass or niche retailer, manufacturer, restaurant chain, airline, insurer, telco bundle, bank, …)
+    • celebrity_or_creator — individual talent driving fandom (actor, musician, streamer, author, influencer, pundit…)
+    • sports_team_league_org — franchises, leagues, collegiate programs treated as affinity objects
+    • tv_film_or_streaming_title — scripted/unscripted show, documentary series, streamed special, anthology — audience is VIEWERS/listeners — not "customers" in Nike's sense but still has demographics + anti-fit
+    • videogame_interactive_entertainment — a specific game/franchise/season pass (not always the publisher — separate publisher_or_platform below)
+    • mobile_app_saas_platform — downloadable app / subscription software / gig platform studied as THAT product — score against app usage + adjacent digital behavior realistically (not retail-shoe logic)
+    • publisher_or_media_platform — YouTube-as-company, major studio/streamer conglomerate studied as PARENT — behaves differently than a single title inside it
+    • venue_experience_landmark — theme park circuit, touring festival, stadium as subject, mega live event IP
+    • institution_nonprofit_news — uni, gov program, NGO, major newspaper — affinity + skeptic cohorts vary by archetype
+
+  ARCHETYPE RULES (do not confuse these):
+    • consumer_brand: use mass-market MEDIAN-buyer framing when reach is tens of millions; luxury/niche when reach is tiny. Detailed athletic-apparel EXAMPLES (heavy sneaker skew, suburban parent core) apply ONLY when the subject truly is THAT kind of brand — not for a TikTok comedian or Pokémon Go.
+    • celebrity_or_creator: demographics track the SUBJECT'S audience research (Stan culture, geography of fanbases, genre), not Nike-style "median shopper." Still avoid caricature superfans dominating the weights unless data supports it (most celebrity engagement is casual). **Enumerate verifiable brand deals + distributor network** (STEP 5c) so downstream TALENT / MPB / STREAMING agents see them.
+    • tv_film_or_streaming_title: age/skew flows from CONTENT RATING + genre + where it airs — kids' cartoons vs prestige drama vs anime vs reality; parasocial extremes are a SUBSEGMENT, not the median viewer.
+    • videogame_interactive_entertainment: cohort is PLAYERS/watchers-as-entertainment — platform fracture matters (mobile vs PC vs console vs Roblox/metaverse). Do not force Foot Locker–centric digital_identity unless the game actually implies it.
+    • mobile_app_saas_platform: prioritize real app-store category + habitual daily use patterns; cross-shop is other apps/digital wallets/ads ecosystems — not malls first.
+    • sports_team_league_org: **Geography is part of the story** — LOCATION must reflect home-market + regional fan footprint; research **current sponsors, venue naming, several marquee players on the active roster (not just one star)** and write them into anchors + cross_shop — downstream scoring uses them for ATHLETE / RETAIL / TICKETING realism. Do not output a team persona that reads like a generic national toothpaste brand.
+  Search for: "{subject} audience demographics", "{subject} customer demographics", "{subject} fan demographics"
+  You MUST find real published data on:
+  - Age distribution (what age bracket is the core audience?)
+  - Gender split (what % male vs female?)
+  - Ethnicity/race composition (does the subject over-index with any ethnicity?)
+  - Income level (what economic bracket?)
+  - Geographic concentration (urban/suburban/rural? which regions?)
+  DO NOT guess. If you can't find data, search harder with alternative queries.
+
+STEP 3 — RESEARCH THE CULTURAL CONTEXT
+  Search for: "{subject} culture", "{subject} community", "{subject} lifestyle"
+  Find the SUBCULTURES and COMMUNITIES:
+  - What social media platforms does this audience actually use?
+  - What other brands/products do they buy?
+  - What content do they consume (podcasts, YouTube channels, media)?
+  - What events/experiences do they attend?
+  - What are the ANTI-affinities? (What does this audience NOT care about?)
+
+STEP 4 — CROSS-CHECK YOUR ASSUMPTIONS
+  Before writing the persona, verify:
+  - Does your `subject_archetype` match what "{subject}" is? Do `digital_identity` and `cross_shop_network` sound like THAT archetype (not a pasted retail template for a comedian or Minecraft)?
+  - Does the age distribution match the subject's known audience? (A children's brand should peak at 17-AND-UNDER and 25-34 parents, NOT 55-64)
+  - Does the ethnicity distribution reflect the subject's actual audience? (Don't default to US census for subjects with strong ethnic affinity)
+  - Are the core interests consistent with the subject? (e.g., a sports EQUIPMENT BRAND anchors SPORTS/FITNESS; a K-pop group's audience anchors MUSIC/K-BEAUTY + related social video — do NOT force mismatched aisles.)
+  - Do the category signals provide ACTIONABLE guidance? (Not vague "score high/low" but specific item types and multiplier ranges)
+  - Does the digital identity mention 8-12 SPECIFIC platforms/retailers by name?
+
+STEP 5a — SPORTS FRANCHISE / TEAM (`subject_archetype` MUST be `sports_team_league_org` when the input is that team/program)
+  When this applies — BEFORE finalizing JSON — verify research-backed hooks exist:
+  • **`location`** over-weights **home market DMA + realistically adjacent commuter / regional rally belts** (not a flat census). Note any away-game-heavy corridors ONLY if sourcing supports elevated fan diasporas (e.g. historic transplant cities).
+  • **`cultural_anchors.athletes`**: name **several** **today's biggest on-roster stars** (starting core, All-Stars/high-usage players, cult-favorite standouts fans actually discuss) **plus** evergreen franchise legends — not a single face-of-team only and not random league talent who never wore the colors.
+  • **`cross_shop_network` + opening `digital_identity` paragraph**: cite **current major sponsors/partners —
+    jersey/kit brand, marquee broadcast advertisers (beverages, telecom, insurance, autos), ticketing/payments partners,
+    recognizable equipment suppliers — PLUS **exact stadium or arena naming** fans encounter on broadcasts & apps.
+  • **`category_signals[\"MEDIA\"]`** (fans, not reporters): elevate **metro beat / hometown paper + local TV-news digital tied to HOME market DMA** moderately above census — Express-News–style anchors stay **below** ESPN + CNN/Fox/New York Times–tier nationals + major aggregators. **Industry trades** (Variety, THR, Deadline, Wrap) stay low unless you proved insider readership.
+
+STEP 5b — PROFESSIONAL ATHLETE PERSON (`celebrity_or_creator` WHEN research proves elite pro competitor)
+  • **`location`**: The **current team's HOME MARKET DMA must be the #1 or #2 DMA at 8-15%** — this is non-negotiable for active players. Example: if KD plays for Houston Rockets, "HOUSTON" must be 8-15%. Prior team markets (OKC, Golden State, Brooklyn, Phoenix) should score 3-5%. National gateway cities (NYC, LA) fill their usual 6-10% only if they are NOT the home market. Do NOT flatten to generic population weights — fans cluster in the player's current city.
+  • **`category_signals["SPORTS TEAM"]` and league-specific (NBA/NFL/MLB/etc.)**: The athlete's **CURRENT TEAM must be explicitly named as the predicted #1** in their league category at 25-40% BP. Prior teams should be 8-15%. Rival/marquee teams 10-20%. Other Houston-market teams (Texans, Astros, Dynamo) should be elevated to 8-12% due to geographic fan overlap. This is the single most important signal for athlete profiles — fans of KD follow the Rockets first.
+  • Surface **endorsed sponsors / signature product lines / league official partners tied to persona** across `cultural_anchors`, `cross_shop_network`, MPB/WTS-oriented `category_signals`.
+  • `category_signals["ATHLETE"]` should instruct scoring to privilege **THIS subject athlete**, teammate/co-star figures named in anchors, rivalry counterstars shaping narrative arcs — not unrelated leaderboard filler.
+
+STEP 5c — ENTERTAINMENT / CELEBRITY TALENT (`celebrity_or_creator`, including actors, hosts, musicians, influencers — WHEN the studied subject is THAT person, not a brand mascot or a fictional title-only study)
+  • **Brand deals ALWAYS surface:** Document **every notable current endorsement, ambassador role, collaborator product, beverage/auto/telecom/fashion/skin-care partner** tied to credible sources. Reflect them plainly in **`cultural_anchors`, `digital_identity`, `cross_shop_network`, and MPB/WTS/TALENT `category_signals`.** Downstream scoring must keep those names **visible in high tiers** whenever they appear as inventory rows — missing a famous deal is worse than overcautious damping.
+  • **Where their show lives:** Capture **distribution reality** — linear network, cabler/FAST sibling, flagship streamer premiere window (verify with research). Examples shape *relative* SVOD cues (long-running NBC-era talent → elevate **Peacock** vs wrong-network apps; premium Showtime-era talent → elevate **Paramount+** vs Peacock-type mismatches). **Never** fabricate exclusives.
+  • **Streaming ceiling:** In `category_signals["STREAMING/PLATFORM"]` write explicitly that **network-matched SVOD may beat OTHER non-home apps** in the stack but **never outrank Netflix** and **never slot above Hulu** for median fan cohorts — Netflix #1 discipline, Hulu pinned to the flagship mass tier.
+  • **`category_signals[\"MEDIA\"]`** for **industry-facing** subjects (exec, showrunner, prolific director, deal press core demo): **Variety / THR / Deadline** may tier **materially higher than fan-only cohorts** yet still usually **below** Google News + NYT/CNN-class omnivore rows unless research proves trade-digital obsession.
+
+STEP 5 — WRITE THE PERSONA
+  Now generate the full persona JSON with all fields. Every field must reflect your research, not generic assumptions.
 
 Return ONLY a single valid JSON object — no markdown, no commentary.
 
 {{
+  "subject_archetype": "<exactly ONE label from STEP 1b list>",
+  "archetype_rationale": "<2-6 sentences: what you keyed off — why NOT the other plausible archetypes — one pitfall downstream agents must avoid for THIS archetype>",
   "persona_summary": "<3-5 sentence description of the audience — lifestyle, interests, values, median age, skew>",
   "demographics": {{
     "AGE": {{
@@ -14393,7 +15795,7 @@ Return ONLY a single valid JSON object — no markdown, no commentary.
       "BLACK OR AFRICAN AMERICAN": <percent>,
       "HISPANIC OR LATINO": <percent>,
       "ASIAN": <percent>,
-      "NATIVE AMERICAN / ALASKA NATIVE": <percent>
+      "OTHER": <percent>
     }},
     "INCOME": {{
       "UNDER $25,000": <percent>,
@@ -14405,18 +15807,17 @@ Return ONLY a single valid JSON object — no markdown, no commentary.
       "$250,000 OR MORE": <percent>
     }},
     "EDUCATION": {{
-      "LESS THAN HIGH SCHOOL": <percent>,
-      "HIGH SCHOOL GRADUATE": <percent>,
+      "HIGH SCHOOL OR LESS": <percent>,
       "SOME COLLEGE": <percent>,
       "ASSOCIATE DEGREE": <percent>,
       "BACHELOR'S DEGREE": <percent>,
-      "GRADUATE DEGREE": <percent>
+      "GRADUATE OR PROFESSIONAL DEGREE": <percent>
     }},
     "RELATIONSHIP": {{
       "SINGLE": <percent>,
       "MARRIED": <percent>,
       "IN A RELATIONSHIP": <percent>,
-      "DIVORCED": <percent>,
+      "DIVORCED OR SEPARATED": <percent>,
       "WIDOWED": <percent>,
       "PREFER NOT TO SAY": <percent>
     }},
@@ -14431,11 +15832,7 @@ Return ONLY a single valid JSON object — no markdown, no commentary.
       "NO": <percent>
     }},
     "OCCUPATION": {{
-      "SELF-EMPLOYED": <percent>,
-      "STUDENT": <percent>,
-      "HOMEMAKER": <percent>,
-      "RETIRED": <percent>,
-      "UNEMPLOYED": <percent>,
+      "OTHER": <percent>,
       "PREFER NOT TO SAY": <percent>
     }}
   }},
@@ -14443,82 +15840,299 @@ Return ONLY a single valid JSON object — no markdown, no commentary.
     {{"dma": "<DMA name, e.g. NEW YORK>", "percentage": <percent>}},
     ...top 15-20 DMAs with highest affinity; remainder auto-distributed
   ],
-  "category_guidance": {{
-    "SOCIAL MEDIA":            {{"summary": "<1 sentence>", "expected_high": ["<PLATFORM 1>","<PLATFORM 2>",...], "expected_low": ["<PLATFORM>",...]}},
-    "SEARCH ENGINE/AI":        {{"summary": "<…>", "expected_high": [...], "expected_low": [...]}},
-    "INTEREST":                {{"summary": "<…>", "expected_high": [...], "expected_low": [...]}},
-    "APP/PLATFORM USAGE":      {{"summary": "<…>", "expected_high": [...], "expected_low": [...]}},
-    "STREAMING/PLATFORM":      {{"summary": "<…>", "expected_high": [...], "expected_low": [...]}},
-    "STREAMING/MUSIC":         {{"summary": "<…>", "expected_high": [...], "expected_low": [...]}},
-    "MEDIA":                   {{"summary": "<…>", "expected_high": [...], "expected_low": [...]}},
-    "MOST PURCHASED BRANDS":   {{"summary": "<…>", "expected_high": [...], "expected_low": [...]}},
-    "MOST PURCHASED CATEGORIES": {{"summary": "<…>", "expected_high": [...], "expected_low": [...]}},
-    "WHERE THEY SHOP":         {{"summary": "<…>", "expected_high": [...], "expected_low": [...]}},
-    "WHERE THEY DINE":         {{"summary": "<…>", "expected_high": [...], "expected_low": [...]}},
-    "QSR":                     {{"summary": "<…>", "expected_high": [...], "expected_low": [...]}},
-    "WORKOUT FACILITY":        {{"summary": "<…>", "expected_high": [...], "expected_low": [...]}},
-    "TRAVEL":                  {{"summary": "<…>", "expected_high": [...], "expected_low": [...]}},
-    "INSURANCE":               {{"summary": "<…>", "expected_high": [...], "expected_low": [...]}},
-    "BANKING":                 {{"summary": "<…>", "expected_high": [...], "expected_low": [...]}},
-    "CREDIT PROVIDER":         {{"summary": "<…>", "expected_high": [...], "expected_low": [...]}},
-    "TELECOM":                 {{"summary": "<…>", "expected_high": [...], "expected_low": [...]}},
-    "TECHNOLOGY/DEVICE":       {{"summary": "<…>", "expected_high": [...], "expected_low": [...]}},
-    "TECHNOLOGY BRAND":        {{"summary": "<…>", "expected_high": [...], "expected_low": [...]}},
-    "AUTOMOBILE":              {{"summary": "<…>", "expected_high": [...], "expected_low": [...]}},
-    "TALENT":                  {{"summary": "<…>", "expected_high": [...], "expected_low": [...]}},
-    "MUSICIAN/BAND":           {{"summary": "<…>", "expected_high": [...], "expected_low": [...]}},
-    "ATHLETE":                 {{"summary": "<…>", "expected_high": [...], "expected_low": [...]}},
-    "SPORTS TEAM":             {{"summary": "<…>", "expected_high": [...], "expected_low": [...]}},
-    "PODCAST":                 {{"summary": "<…>", "expected_high": [...], "expected_low": [...]}}
+  "digital_identity": "<2-4 paragraph DEEP analysis of this audience's digital footprint — see instructions below>",
+  "subsegments": [
+    {{
+      "name": "<short descriptive name, e.g. 'Sneakerhead / hypebeast'>",
+      "weight_pct": <integer 0-100; subsegment weights should sum to ~100>,
+      "age_band": "<e.g. '18-28'>",
+      "cultural_markers": ["<5-10 specific markers: subcultures, music genres, apps, retailers, athletes, content sources defining this segment>"],
+      "cross_shops": ["<5-10 brands/services this subsegment specifically engages with>"],
+      "anti_fit": ["<3-6 categories this subsegment AVOIDS>"]
+    }},
+    ...3-6 subsegments that together describe the audience
+  ],
+  "cultural_anchors": {{
+    "sports": ["<specific teams/leagues this audience watches>"],
+    "music": ["<specific artists/genres>"],
+    "athletes": ["<specific athletes>"],
+    "media": ["<specific outlets/publications>"],
+    "apps": ["<specific apps>"],
+    "social_platforms_ranked": ["<ordered list, most-used first>"],
+    "shopping": ["<specific retailers>"],
+    "dining": ["<specific restaurant brands>"],
+    "drinks": ["<specific beverage brands>"],
+    "tech": ["<specific tech brands/devices>"],
+    "fitness": ["<specific gym chains/fitness brands>"],
+    "streaming": ["<specific streaming services>"],
+    "travel": ["<specific travel brands>"]
   }},
-  "cap_overrides": {{
-    "<CATEGORY NAME>": ["<ITEM 1>", "<ITEM 2>", ...],
-    ...one entry per category where you want to bypass the deterministic baseline cap...
+  "anti_fit_explicit": {{
+    "<category label, e.g. 'ultra_luxury_dining'>": ["<5-15 specific named items in this anti-fit category that this audience would NOT engage with>"],
+    "<category label, e.g. 'luxury_fashion'>": [...],
+    "<category label, e.g. 'rural_americana'>": [...],
+    "<category label, e.g. 'boomer_media'>": [...]
+  }},
+  "cross_shop_network": {{
+    "apparel": ["<brands this audience genuinely cross-shops with the subject>"],
+    "retail": ["<retailers this audience uses alongside the subject>"],
+    "negative_overlap": ["<brands this audience does NOT meaningfully overlap with despite seeming related>"]
+  }},
+  "commercial_viability_audit": "<REQUIRED STRING — NEVER empty. After web search, write 4-9 sentences on ANY consumer-facing franchises, marquee SKUs, or national DTC programs adjacent to THIS subject/category where credible sources imply **weak or ended US replenishment continuity through the STUDY WINDOW** versus an obviously active competitor set (liquidation/Ch 7/11 with no ongoing consumer fulfillment, mothballed ordering surfaces, SKU withdrawn nationally, shuttered storefront + no successor continuity, materially discontinued orthodontic/cosmetics programs tied to THAT brand name instead of successor mark, etc.). For each named equity, instruct downstream tiers: lingering click traces should behave like absent traffic (**baseline/trace band — cohort share usually ≤ ~1–2%%** unless anchored by explicit revived retail evidence). Tie claims to source + timing in prose.**If painstaking search proves NONE pertinent to inventories that could appear for '{subject}', output EXACTLY:** AUDIT CLEAN — verified no materially inactive audited franchises pertinent to downstream inventories for this subject.",
+{(interest_json_lines + chr(10)) if interest_json_lines else ''}  "category_signals": {{
+    "<CATEGORY NAME>": "<1-2 sentences: what does this audience do/not do in this category? What types of items should score HIGH vs LOW?>",
+    ...one entry per category from the CATEGORIES TO BE SCORED list above
   }}
 }}
 
 RULES:
+- **`commercial_viability_audit` is mandatory.** Write researched inactive-equity prose OR the exact AUDIT CLEAN sentence — never leave blank or omit the key (downstream validators bind decisions to this field).
+- If the FIXED LABEL INVENTORY (INTEREST) section appears earlier in this prompt, you MUST
+  populate `interest_top_25` and `interest_bottom_25` exclusively with verbatim copied strings from
+  that inventory (respect the cardinality and disjointness rules stated there — no overlaps between arrays).
+  When that section does not appear, omit both keys from your JSON entirely.
 - Each demographic category MUST sum to exactly 100.
 - NEVER return round numbers. Every value must have meaningful variation in all 4 decimal places, as if from a real survey. Good: 29.6283, 44.3718, 7.8142, 15.2694. Bad: 30.0000, 45.0000, 8.0000, 15.0000. The integer part should also not be a clean multiple of 5 when possible (use 29.6 instead of 30.0, 44.3 instead of 45.0).
 - Trans population ≈ 0.5-1% of US; Native American ≈ 1%; LGBTQ+ ≈ 7% (higher only if brand has known affinity).
 - ETHNICITY IS CRITICAL: Research the subject's OWN race/ethnicity/heritage. If the subject is a person of color (Asian, Black, Hispanic, etc.), their fan base will significantly over-index on that ethnicity vs. general US population. For example, a Chinese-American actor's audience should have ASIAN as one of the top ethnicities (30-50%+), not just 7% US average. A Black rapper's audience should have BLACK OR AFRICAN AMERICAN at 40-60%+. Never default to generic US census proportions — the subject's identity strongly shapes their audience demographics.
 - AGE IS CRITICAL: The subject's OWN age heavily influences their audience age distribution. Research the subject's actual age. A 58-year-old actress will have an audience peaking in the 45-54 and 55-64 brackets (30%+ and 20%+ respectively), with much lower percentages for 18-24 (5-8%) and 17 AND UNDER (2-5%). A 20-year-old pop star will peak at 18-24 (35-45%) and 17 AND UNDER (15-25%). The audience's peak age bracket should align with or be slightly younger than the subject's own age bracket. Never give equal weight to age brackets that are 20+ years apart from the subject's age.
 - Do NOT include "Prefer Not to Say" or "Other" in AGE, GENDER, ETHNICITY, or INCOME. Those categories must only contain the exact buckets listed above.
-- Do NOT include "EMPLOYED FULL-TIME" or "EMPLOYED PART-TIME" in OCCUPATION. Those values are forbidden — they are NOT real occupation categories. OCCUPATION must only use: SELF-EMPLOYED, STUDENT, HOMEMAKER, RETIRED, UNEMPLOYED, PREFER NOT TO SAY.
+- Do NOT include "EMPLOYED FULL-TIME", "EMPLOYED PART-TIME", "SELF-EMPLOYED", "RETIRED", "STUDENT", "HOMEMAKER", or "UNEMPLOYED" in OCCUPATION. Those values are forbidden in final output normalization. OCCUPATION must only use: OTHER, PREFER NOT TO SAY.
 - LOCATION: Provide at least 15-20 top DMAs with realistic, varied percentages. The percentages should NOT be clustered — use a natural distribution where the #1 DMA might be 8-12%, #5 might be 4-6%, #10 might be 2-3%, #15 might be 1-2%, #20 might be 0.5-1%. The sum should be ≤ 100; remainder is auto-spread to the other 190+ DMAs with random variation.
 
-CATEGORY GUIDANCE — STRUCTURED FORMAT (THIS IS THE PRIMARY VALUE OF THIS PROMPT):
-For EVERY category in `category_guidance`, you MUST return an OBJECT with three fields:
-  • `summary`         — 1 sentence describing how this audience behaves in this category.
-  • `expected_high`   — array of 5-15 SPECIFIC item names (brands/platforms/people) that this audience engages with at HIGH digital BP. These become anchors for the per-category scoring agents.
-  • `expected_low`    — array of 5-15 SPECIFIC item names that are FAMOUS or PRESTIGIOUS in absolute terms but DO NOT fit this audience (e.g. for a Nike audience: Nobu, Cartier, Tiffany, Pavilions, NYT Cooking). These items must be flagged so the scoring agent does not over-rank them by absolute fame.
+═══════════════════════════════════════════════════════════════════
+AUDIENCE SCALE & REPRESENTATIVENESS — READ THIS FIRST
+═══════════════════════════════════════════════════════════════════
+Before writing the persona, ask: "How big is this audience in real life,
+and what is the MEDIAN customer like — not the most culturally
+interesting one?"
 
-Item-name guidance:
-  • Use real, recognizable brand/platform/person names — UPPERCASE.
-  • For WHERE THEY SHOP: think actual retailers (FOOT LOCKER, DICK'S SPORTING GOODS, JD SPORTS for sports audience; SEPHORA, ULTA, AMAZON for beauty audience).
-  • For WHERE THEY DINE: think actual restaurant chains (CHIPOTLE, CHICK-FIL-A, OLIVE GARDEN for mass; NOBU, CAPITAL GRILLE for HNW). NEVER pick luxury restaurants for non-HNW audiences.
-  • For MEDIA: think actual outlets (ESPN, BLEACHER REPORT, THE ATHLETIC for sports; HYPEBEAST, COMPLEX for streetwear; TODAY, GMA for daytime mass).
-  • For SOCIAL MEDIA: rank by audience reality (younger = TIKTOK/INSTAGRAM higher; older = FACEBOOK higher; mass brand = YOUTUBE near top regardless).
-  • For INTEREST: think genuine interests of the audience (FITNESS, RUNNING, BASKETBALL for sports; SKINCARE, FASHION for beauty), NOT random vague topics like "FLOWERS" or "MULTI-LEVEL MARKETING" unless the persona is specifically about that.
+  • If the subject is a MASS BRAND (>10M U.S. customers — Nike, Walmart,
+    McDonalds, Target, Apple, Verizon, AT&T, Chase, Bank of America,
+    State Farm, GEICO, Olive Garden, etc.), the audience IS the U.S.
+    mass-market consumer. The median customer is a 35-45 year old
+    middle-income suburban or small-city American — NOT an urban
+    sneakerhead, NOT a Brooklyn creative, NOT a coastal-elite. Those
+    sub-cultures exist within the audience but are 15-25% of it AT
+    MOST. The mass-market core (working-class, lower-middle-income,
+    value-conscious, suburban/exurban) is 50-70% of subsegment weight.
 
-These structured anchors are the most important output of this prompt — the per-category agents downstream rely on them to avoid producing generic luxury-aspirational tier-fillers.
+  • Concrete check — category leaders with fifty million+ reachable U.S. adults:
+    roughly half or more of U.S. adults may use the category; they are NOT
+    all urban tastemakers or "superfans." Picture a 38-year-old suburban
+    parent buying the product where most people buy it (national retail,
+    mass e‑commerce, mainstream carrier/streaming bundles). Typical gym =
+    Planet Fitness or none, not boutique luxury. Typical car = Accord/Civic/RAV4,
+    not only premium EVs. TV = broadcast/cable/big streamers — not ONLY niche SVOD.
+    Dining skews broadly casual chains vs. prestige dining for the median buyer.
 
-CAP OVERRIDES — your power to exempt specific items from the deterministic baseline cap:
-The downstream pipeline applies a math safety net (cap = 8x baseline for expected_high; 5x for default; tighter for subscription categories) to catch hallucinations like "Patek Philippe at 30%". But that net occasionally over-constrains LEGITIMATELY high items — universal platforms like NETFLIX/AMAZON PRIME VIDEO/HULU/YOUTUBE/GOOGLE that genuinely reach 80-95% of any digitally-active audience, or persona-perfect items where you have very high confidence the score should exceed normal multipliers.
+  • If the subject is a NICHE BRAND (<2M U.S. customers — Equinox,
+    Goyard, Bar Masa, Erewhon, Patek Philippe), the persona CAN be
+    aspirational/coastal-elite, because the actual customer base is
+    small and skewed.
 
-For each category, list items in `cap_overrides` if BOTH of these are true:
-  • You are highly confident the item should score significantly above the cap multiplier for THIS specific audience.
-  • The item is either (a) near-universal across all U.S. digital adults (Netflix, Hulu, Amazon Prime Video, YouTube, Google, Gmail) OR (b) so persona-defining that ordinary cap rules underestimate it (e.g. NIKE for a Nike-purchaser persona, FOOT LOCKER for a sneaker-fan persona, ESPN for a sports-fan persona).
+  • COMMON FAILURE: writing the "interesting" version of a mass-brand
+    audience (the enthusiast sneaker consumer, the foodie McDonalds
+    consumer, the fashion-forward Walmart consumer) inflates premium
+    items (Peloton, Equinox, Bar Masa, Apple) and deflates value items
+    (Planet Fitness, Family Dollar, Chilis, Walmart, Honda) in the
+    downstream scoring. AVOID THIS. Write the PERSONA OF THE MEDIAN
+    CUSTOMER, with subcultures as named subsegments at REAL weight.
 
-Do NOT use cap_overrides as a blanket allowlist. Only flag items you would defend under questioning. Items NOT in `cap_overrides` are still scored by the per-category agents — they just remain subject to the cap as a safety check. Empty arrays / omitted categories = full cap protection (which is the correct default).
+  • CRITICAL — MASS-MARKET ≠ ETHNICALLY GEN-POP AVERAGE. Some mass
+    brands are deeply rooted in Black/Hispanic culture and continue to
+    meaningfully over-index ethnically EVEN in their fully mass-market
+    state. The framing "median mass-brand buyer is suburban/value-aware"
+    is correct on income/lifestyle but WRONG if interpreted as
+    "ethnically census-average." Brands with deep roots in Black/Hispanic
+    culture (streetwear/sport, certain QSR, prepaid/carrier multicultural
+    staples, Latino-forward retail) often land roughly BLACK ~25-35%,
+    HISPANIC ~20-28%+ vs. generic census baselines (~13%/19%).
+    Same pattern applies across Adidas, Jordan, Foot Locker, Champion, McDonalds,
+    Popeyes, Wingstop, Kia, Cricket Wireless, MetroPCS, T-Mobile
+    prepaid, Allstate, State Farm, and any brand with deep ties to
+    basketball / hip-hop / streetwear / soccer / Latin music culture.
+    For these brands, the persona's median customer is still suburban
+    + middle-income, but the audience as a whole is meaningfully more
+    Black and Hispanic than gen-pop. Reflect that in demographics +
+    cultural_anchors + cross_shop_network — name Black and Latino
+    cultural touchstones (specific artists, shows, magazines, retail
+    chains) as subsegment cultural anchors, not as a token mention.
 
-Example for a Nike persona:
-  "cap_overrides": {{
-    "STREAMING/PLATFORM": ["NETFLIX", "HULU", "AMAZON PRIME VIDEO"],
-    "WHERE THEY SHOP":    ["AMAZON", "WALMART", "FOOT LOCKER", "DICK'S SPORTING GOODS"],
-    "SOCIAL MEDIA":       ["YOUTUBE", "INSTAGRAM"],
-    "SEARCH ENGINE/AI":   ["GOOGLE"]
-  }}
+═══════════════════════════════════════════════════════════════════
+SUB-SEGMENTS, CULTURAL ANCHORS, ANTI-FIT, CROSS-SHOP NETWORK — REQUIRED:
+═══════════════════════════════════════════════════════════════════
+The downstream Pass 1 Category Rule Agent and Pass 2 Scoring Agents use these
+structured fields directly to write the per-category rubric and score items
+against it. Generic or vague entries here cascade into bad rubrics and bad
+scores. Be specific and concrete.
+
+═══════════════════════════════════════════════════════════════════
+WORKED PERSONA TEMPLATE (use as STRUCTURAL guide for ANY subject)
+═══════════════════════════════════════════════════════════════════
+Below is a complete worked persona for a high-awareness consumer brand
+(athletic, QSR, retail, telecom, streaming, etc.) —
+It's the SHAPE you should aim for — comprehensive sub-segments with weights,
+cultural anchors organized by domain, explicit named anti-fit, cross-shop
+network. Adapt every field to YOUR subject. If your subject is Disney,
+Chase Bank, McDonalds, or anything else, the SHAPE is the same — only the
+specific items and weights change.
+
+  DEMOGRAPHIC PROFILE
+    Age: bracketed distribution; note skew vs gen-pop
+    Gender: M/F split; note any growth segment
+    Ethnicity: list each major group with multiplier vs gen-pop
+              (e.g., "~22% Black (1.6x gen-pop)", "~22% Hispanic (1.3x)")
+    Income: median band + tail; note any premium / value tier split
+    Education: dominant level
+    Geography: urban/suburban/rural skew, named over-indexing DMAs
+    Family: parent % if relevant for the category
+
+  PERSONA SUB-SEGMENTS (audience is NOT monolithic — score with these in mind)
+    1. <Sub-segment 1 name> (~weight_pct%):
+         <age band>, <key cultural identity>, <2-3 defining apps/brands>,
+         <2-3 cross-shops>, <social media skew>
+    2. <Sub-segment 2 name> (~weight_pct%):
+         ...
+    (3-6 sub-segments, weights sum to ~100; mass-brand core ≥ 50%)
+
+  CULTURAL ANCHORS (high-affinity defining markers)
+    Sports:    <specific teams/leagues/events>
+    Music:     <specific artists/genres/labels>
+    Athletes:  <specific athletes by name>
+    Media:     <specific outlets/publications/podcasts>
+    Apps:      <specific apps>
+    Social:    <ranked social platforms most-to-least used>
+    Shopping:  <specific retailers>
+    Dining:    <specific restaurant brands>
+    Drink:     <specific beverage brands>
+    Tech:      <specific tech brands/devices, with iOS/Android skew>
+    Fitness:   <specific gyms/fitness brands>
+    Streaming: <specific streaming services>
+    Travel:    <specific airlines/hotels/destinations>
+
+  ANTI-FIT (low-affinity guardrails — should score 0-25%)
+    Group items by ANTI-FIT CATEGORY and name SPECIFIC items in each:
+      Ultra-luxury dining: Bar Masa, Per Se, Atelier Crenn, EMP, Le Bernardin
+      Luxury fashion: Hermès, Chanel, Bottega Veneta, Brunello Cucinelli
+      Rural Americana: Tractor Supply, Bass Pro, John Deere, NASCAR, Boot Barn
+      Older / boomer media: Yahoo News, Pluto TV, Roku Channel, Family Feud
+      Foreign-only / niche unknowns: <specific named items>
+
+  CROSS-SHOP NETWORK
+    Apparel: <brands the audience buys alongside the subject>
+    Retail: <retailers used alongside>
+    Negative overlap: <brands that SEEM related but don't meaningfully overlap>
+
+This template generalizes — it works for ANY subject. The downstream agents
+use these structured fields exhaustively, so quality here determines the
+quality of the whole pipeline. Generic = bad. Specific & named = good.
+
+═══════════════════════════════════════════════════════════════════
+SPECIFIC WRITING RULES
+═══════════════════════════════════════════════════════════════════
+
+  • subsegments: 3-6 distinct slices of this audience with weight_pct summing
+    to ~100. Each subsegment must have a unique cultural identity. CRITICAL:
+    if the subject is a MASS consumer_brand (>10M U.S. reachable customers /
+    habitual mass buyers), the mass-market core MUST be at least 50% of
+    subsegment weight. **Illustrative pattern only — athletic footwear/apparel
+    giants** — do NOT transplant these archetypes onto celebrities, standalone
+    games, or scripted IP unless research says identical structure:
+       • mass-market value-conscious suburban parent (~32%)
+       • lifestyle casual / non-athletic everyday wearer (~22%)
+       • performance athlete (high-school + adult rec) (~18%)
+       • youth-sports parent (~12%)
+       • urban sneakerhead / hypebeast (~10%)
+       • women's training / fitness studio (~6%)
+    NOT this (the "interesting" but unrepresentative version):
+       • sneakerhead (~22%) — too high, sneakerheads are <5% of Nike
+         customers
+       • performance athlete (~28%) — too high, real performance
+         athletes are ~10-15%
+       • lifestyle casual (~30%) — too vague
+       • youth-sports parent (~15%) — fine
+       • women's training (~15%) — too high relative to mass-market
+         core
+  • cultural_anchors: For each key, give 6-12 SPECIFIC named items. NEVER write
+    "various sports brands" or "popular music" — name them. The scoring agent
+    treats anything in cultural_anchors as a definite high-affinity item.
+  • anti_fit_explicit: Pick 3-6 category labels that describe items this
+    audience does NOT engage with, and for each list 5-15 specific named items.
+    This is what protects against confabulation: if Bar Masa is in
+    `ultra_luxury_dining`, the scoring agent KNOWS to score it low even if
+    it doesn't otherwise recognize the name. Categories to consider include
+    (but are not limited to): ultra_luxury_dining, luxury_fashion,
+    rural_americana, boomer_media, niche_unknowns, foreign_only_platforms,
+    children_only (if audience is adult).
+  • cross_shop_network: Real brands the audience actively uses alongside the
+    subject (apparel + retail + negative_overlap). Used by the scoring agent
+    to decide rank ordering within a category.
+
+DIGITAL IDENTITY — THIS IS ALSO CRITICAL:
+The `digital_identity` field is a rich text block (2-4 paragraphs) that will be passed VERBATIM to per-category scoring agents. Make it specific, opinionated, and grounded in real audience data. It MUST address all five areas below:
+
+1. SUBCULTURE: What digital subcultures does this audience belong to? Be specific — not just "sports fans" but the exact communities (e.g. sneakerheads, fantasy football, K-beauty, car modding, etc.).
+
+2. WHERE THEY SHOP ONLINE / SPEND WALLET SHARE: Name 8-12 specific retailers/e-commerce sites OR MARKETPLACE PATTERNS this audience touches. Tune to archetype — physical brands → category retailers + marketplaces; digital-native IP → merch DTC yes, but also ticketing, subs, DLC stores, Patreon/support patterns; SaaS/mobile → app stores/subscription portals BEFORE defaulting to Foot Locker/Target unless persona evidence supports them.
+
+3. MEDIA THEY CONSUME: Name 8-12 specific media outlets, apps, YouTube channels, or podcasts this audience uses. These must be specific to the subculture, NOT generic mass media unless the audience genuinely skews there.
+
+4. CORE INTERESTS: Name the 5-10 interest categories this audience gravitates toward. List FIRST the spine affinity that matches YOUR chosen `subject_archetype`: e.g. FOOTWEAR for footwear brands; MUSIC / FORMAT for musicians; GENRE + release format for TV/film/IP; PLATFORM + GAME GENRE tags for videogames; habitual APP CATEGORY + job-to-be-done for mobile apps/SaaS. Never force athletic retail as #1 unless the subject truly is THAT kind of commerce brand.
+
+5. WHAT THIS AUDIENCE DOES NOT CARE ABOUT: This is critical for scoring accuracy. Describe the CATEGORIES of things this audience under-indexes on. Think in terms of product categories, not specific brands. Examples:
+   - "This audience does not engage with luxury dining, beauty/skincare, CPG/household goods, cable news, or niche craft hobbies."
+   - "This audience does not engage with athletic/sports culture, fast food, gaming, or streetwear."
+   Frame these as CATEGORY-LEVEL anti-affinities so scoring agents can apply them to ANY item, not just ones you name.
+
+6. WHAT THIS AUDIENCE STILL USES LIKE EVERYONE ELSE: This is equally critical. Describe the near-universal services/platforms this audience uses at NORMAL rates. Most Americans use Netflix, shop at Walmart/Target/Amazon, visit Disney World, have car insurance, use mainstream streaming services. Just because someone is a sneakerhead doesn't mean they cancel Netflix. List the mainstream items that should NOT be crushed just because they aren't persona-specific.
+
+7. DEMOGRAPHIC REALISM: Based on the age, income, and location data:
+   - What cars do they ACTUALLY drive? (young urban = Honda, Toyota, Hyundai; not Porsche, McLaren)
+   - What device ecosystem? (young urban with income <$80K skews Android/Samsung; higher income skews Apple)
+   - What insurance do they have? (major digital insurers: GEICO, Progressive, State Farm have high digital engagement for everyone)
+   - Are they parents? If not, children's brands (Roblox, YouTube Kids, Pampers, Barbie) should score LOW.
+     If they ARE parents **but** persona does **not** describe kids actually playing games on shared accounts / tablets (no “device handoff”, no kid subsegment, no family-gaming cues), treat **kid-first titles (Roblox, many LEGO/world-builder kids’ rows)** like **ambient noise** — they must **not** lead the GAMES sheet or exceed plausible **kid-mediated** share; default them **low/trace** versus adult casual titles.
+   - THIS IS A U.S. PANEL: foreign-only platforms and retailers have negligible engagement.
+
+CATEGORY SIGNALS — PER-CATEGORY GUIDANCE:
+The `category_signals` field is a JSON object where each key is a category name (from the CATEGORIES TO BE SCORED list above) and each value is 1-2 sentences telling the downstream scoring agent what this audience does and doesn't engage with IN THAT SPECIFIC CATEGORY.
+
+Anchor each category note to `subject_archetype` — e.g. MUSICIAN → prioritize ARTIST / STREAMING / PODCAST / TICKETING patterns; AAA GAME → prioritize GAMES / platforms / adjacent hardware; TV SERIES → MEDIA + streaming behavior of that demo; consumer_brand FMCG → retailer + CPG aisles. Do NOT reuse an athletic-footwear template for unrelated archetypes.
+
+For each category, your guidance MUST be grounded in reality:
+- What TYPES of items should score ABOVE their baseline (not "high" in absolute terms — above their gen-pop baseline)
+- What TYPES of items should score BELOW their baseline
+- CRITICAL: For categories with near-universal items (STREAMING/PLATFORM, WHERE THEY SHOP, TECHNOLOGY/DEVICE), remind the agent that major services (Netflix, Hulu, Amazon Prime, Walmart, Target) should stay near their baselines. Only persona-specific niche items should deviate significantly — **EXCEPT** under `celebrity_or_creator` you still encode **research-backed endorsement visibility + network-aligned SVOD** per STEP 5c while honoring the **Netflix #1 / Hulu top-cluster** ceiling.
+- For AUTOMOBILE: specify what cars this demographic ACTUALLY drives based on age and income, not aspirational vehicles
+- For TECHNOLOGY/DEVICE: specify the likely device ecosystem (Android vs iOS) based on demographics
+- For GAMES: **Three-way gate — (1) Is gaming a real spine interest for THIS cohort?** If persona/`INTEREST`/`subsegments` do **not** support habitual play, keep **almost all SKUs moderately low**: only **light casual / crossword / puzzle / Wordle-class** touches may exceed trace levels; AAA and kid live-services stay **near baseline−**. **(2) Age + genre coherence when gaming IS justified:** teens/kids-heavy ⇒ Roblox/Fortnite/Minecraft-class can rise **only if** demographics + narrative support minors; mature adults ⇒ Wordle/NYT Games/casual puzzles may lead; young men + urban + sports/competitive ⇒ sports sims (FIFA/Madden/NBA 2K) or mature AAA **GTA/CoD**-class plausible **per persona** — do not transpose one template onto another archetype. **(3) Parents without kid-gaming proof:** **`PARENT` share must cap kid-first BP** — no Roblox/child-MMO tiers above plausible household-kid mediated traffic absent explicit shared-device / “my kids play” research; inflated child rows commonly mean **panel bleed from handoffs**.
+- For INSURANCE: major insurers (GEICO, State Farm, Progressive) have high digital engagement — score near baseline
+- For BETTING (legal US sports-wagering digital touch cohorts): DraftKings + FanDuel are the endemic mass‑tier omnichannel leaders; BetMGM / Caesars / ESPN Bet plausible mass seconds from national marketing. Overseas‑anchored brands (**Bet365** class and similar offshore-first books) belong **meaningfully BELOW DK/FD** in predicted tiers unless persona + research proves explicit UK/Ireland/Europe wagering geography — panel spikes ≠ override.
+- For AMUSEMENT PARKS: major theme parks (Disney, Universal, Six Flags) are visited by most Americans — keep near baseline
+- THIS IS A U.S. PANEL: flag any foreign-only items that should score very low
+- HEALTH & WELLNESS: Reward **digital** health (research sites, telehealth, fitness wearables apps, pharmacy logins).
+  **Named metro hospital systems** are GEO-SPARSE — nationally they should almost never occupy multiple top tiers at 30–45% BP each
+  (that incorrectly implies nearly half the audience engages those specific systems online yearly). Tie high scores to persona geography or medical roles only.
+- MOST PURCHASED BRANDS (digital semantics): Split **purchase paths**. (a) **Mass-market CPG / grocery aisles / big-box consumables / mainstream drugstore SKU behavior** ⇒ if personas push many aisle leaders toward the TOP, **`category_signals` must demand Instacart + Walmart/Target grocery-digital pickups + grocery DoorDash/Uber stacks ALSO read VERY high**, then aisle peers can spike coherently; **pair with `WHERE THEY SHOP` language** so **regional supermarket banners + CVS/Walgreens** that those delivery/pickup flows actually attach to in persona metros also read credibly high (geography-first Ralphs/Vons/Pavilions vs Publix vs H‑E‑B vs Wegmans‑class examples — research, not guessing). (b) **Prestige / luxury skincare & cosmetics sourced via Sephora / prestige Ulta / department flagship / prestige DTC** ⇒ **omit** grocery-delivery coherence — prestige brands dominate via browse/reviews/apps without implying Instacart must trend. (c) **Regional-distribution** mass brands stay low unless persona `location`/DMA proves that macro‑region match.
+- WHERE THEY SHOP: **Geographic footprints matter.** Regional chains belong high only when persona `location`/DMA skew **matches** that retailer’s real geography — East Coast vs Pacific Northwest vs SoCal vs Texas vs inland South vs Midwest, etc.; **whatever the input persona’s footprint is**, use it as the compass. Wrong-macro‑region dominance in either direction ⇒ score LOW unless research proves crossover (travel, ecommerce-only edge cases rarely justify mass BP). **When personas + MPB signal grocery carts via Instacart/DoorDash/pickup**, prioritize banners those apps expose in-market (SoCal Albertsons-banner family, Southeast Publix-class, Texas H‑E‑B-class, Northeast supermarket leaders, national Kroger/Albertsons mosaic + Walmart/Target/Costco) plus matching **CVS/Walgreens** for OTC-heavy replenishment.
+- MEDIA: **`location`/subject regionality** — metro dailies / hometown TV-news digital tied to the study’s DMA (e.g. Spurs → San Antonio Express-News tier) may **outperform gen-pop** modestly but **must sit under** ubiquitous national news + Google News–class aggregators + **ESPN when the cohort is sports-heavy**. **Variety, Hollywood Reporter, Deadline, Wrap** and similar **trade** rows default **low** unless persona is **industry / executive / filmmaker / hard-core trade obsessive** with explicit research — never top for generic fans. **`celebrity_or_creator`** personas must elevate **research-backed ambassador / co-star / sibling-act names** cited in anchors — burying marquee deal partners appearing as TALENT inventory is wrong unless anti_fit proves hate-following.
+- STREAMING/PLATFORM: **`celebrity_or_creator`:** encode **distribution-accurate** SVOD cues (broadcast/cable/streamer home ⇒ matching corporate apps such as NBC↔Peacock, Showtime/Paramount↔Paramount+, ABC/Disney/FX footprints↔Hulu/Disney+, HBO-era↔Max when research supports). Relative ranks among **those** synergy apps vs wrong-network rivals may widen — yet **Netflix must lead** predicted SVOD stacks and **Hulu stays pinned to the top mass SVOD tier** (#2-ish band alongside other broad anchors). **Never** rank Peacock, Paramount+, nor any other synergy label **above Hulu or Netflix** for median viewers.
+- SEARCH ENGINE/AI: **Google (~78%+ annual credible digital touching points for mainstream US conditioned cohorts) should ordinarily lead**.
+  Respect niche-only Yahoo/Bing/AI-research personas; default mass-market ⇒ Google tier #1, AI assistants chase but seldom clear #1 absent explicit evidence. Make them specific and opinionated but REALISTIC — do not tell agents to crush near-universal items.
+
+EXAMPLE category_signals (hypothetical `consumer_brand` athletic-equipment cohort ONLY — transpose structure, not wording, when archetype differs):
+  "SOCIAL MEDIA": "Major platforms (YouTube, TikTok, Instagram, Snapchat) are near-universal for this young audience — score them at 1.0-1.4x baseline. TikTok is THE dominant platform for young, urban, diverse Americans — DO NOT crush it. Facebook skews older — score 0.7-0.9x baseline. Discord near baseline for gamers/young men. Niche platforms (BeReal, Lemon8) near or below baseline.",
+  "AMUSEMENT PARKS": "Major theme parks (Disney World, Universal Studios, Six Flags) are mainstream American entertainment — score near or slightly below baseline. Don't crush them. Water parks and local amusement parks score near baseline too. Only niche/foreign parks score low.",
+  "TECHNOLOGY/DEVICE": "This audience skews young and urban. Both Apple (iPhone, iPad) and Samsung (Galaxy) are mass-market — score Apple at 0.8-1.0x baseline, Samsung at 1.0-1.2x if audience skews Android. Don't crush either brand. Smart home devices and wearables near baseline.",
+  "GAMES": "Only use this archetype mapping when persona proves **gaming is a backbone behavior** — otherwise nearly all rows modest with **casual/word/puzzle tops**. When gaming IS justified: **Young sports fans** ⇒ sports sims (NBA 2K, Madden, EA FC) lead; mature action skew ⇒ GTA/COD-class only with matching demo; **older/low-intensity gamers** ⇒ Wordle/NYT Games/spelling bee/crosswords higher than Fortnite; **teens/gen-Z** ⇒ Roblox/Fortnite/Minecraft plausible only if CHILD–teen share + persona say so — if parents dominate without kid-gaming narrative, **Roblox must stay LOW** vs adult titles. Never let child-first live services outrank demographics + explicit family-gaming evidence.",
+  "WHERE THEY SHOP": "Category sellers tied to subject (Foot Locker, Dick's, Finish Line for athletic) lift when personas actually browse there digitally. Nationals (Amazon, Walmart, Target, Costco) stay wide-but-realistic. When MPB/life-stage implies **grocery carts through Instacart, DoorDash/Uber grocery, or Walmart/Target pickup apps**, also elevate **the regional supermarket banners** those merchants default to for persona LOCATION (SoCal skew ⇒ Ralphs/Vons/Pavilions-class; Southeast/Florida ⇒ Publix-class; Texas/Gulf ⇒ H‑E‑B-class; Northeast ⇒ Wegmans/Stop&Giant-class as research fits; dispersed US ⇒ Kroger-banner + Albertsons-banner mosaic). **Drugstore OTC skew** ⇒ CVS + Walgreens credible. Spike regionals ONLY when DMA map matches footprint.",
+  "STREAMING/PLATFORM": "Major streaming (Netflix, Hulu, Amazon Prime Video, Disney+, YouTube) are near-universal — score 0.85-1.15x baseline. Don't crush them. Sports-specific streaming (ESPN+, FuboTV) may score above baseline if audience is sports-oriented. Niche/foreign platforms score very low.",
+  "ATHLETE": "The subject's own sponsored athletes should score 2-4x their baseline — not 10x. Only the single most iconic athlete (like LeBron for Nike) gets 5x+. Other athletes score 1.0-1.5x baseline. Don't inflate obscure athletes to 50%+ just because they have a brand deal.",
+  "INTEREST": "The panel uses a fixed global list of interest labels (see `interest_top_25` / `interest_bottom_25` in your JSON when the inventory block is present). Your subject's CORE themes MUST dominate the top of that ranking vs generic ubiquitous rows. Generic-functional rows (JOB SEARCH, SOCIAL MEDIA-as-interest, HOME IMPROVEMENT, COOKING) sit mid/low unless persona research proves otherwise — never crowd out spine hobbies.",
+  "HEALTH & WELLNESS": "Prefer national digital-health surfaces consumers actually browse or open in-app. Metro hospital SYSTEM brands imply tiny national digital footprints unless the persona is explicitly health-staff heavy or geographically concentrated patients — never pretend ~half the cohort annually engages several different NYC-named hospital stacks online.",
+  "MOST PURCHASED BRANDS": "Digital MPB hinges on WHICH channel dominates: Mass CPG replenishment ⇒ lift Instacart + Walmart/Target pickup & grocery-heavy rows + grocery DoorDash BEFORE blessing a wall of Pepsi/Tide/snack OTC labels near the top — once delivery/pickup spines justify high tiers, stacking matching aisle giants is plausible AND **WHERE THEY SHOP must echo the grocer + pharmacy merchants** those carts use in persona geography. Prestige skincare/makeup ⇒ permit flagship prestige labels + Sephora/Ulta prestige + luxury DTC to lead **without** an Instacart guardrail — do not artificially spike grocery carts to match La Mer traffic. Limited-distribution regional caveats unchanged.",
+  "SEARCH ENGINE/AI": "Google/Google Search should virtually always lead (~78–90 BP for mainstream US-conditioned cohorts) and occupy predicted_top_5 #1 unless the profile is unusually Bing/Yahoo/DDG-exclusive. Dedicated AI wrappers may be high but should not cleanly #1 generic consumers vs Google."
 """
 
     print(f"🔬 Step 1: Persona Research Agent researching '{subject}' …")
@@ -14534,7 +16148,7 @@ Example for a Nike persona:
             model=MODEL_RESEARCH,
             web_search_options={"search_context_size": "high"},
             messages=[{'role': 'user', 'content': prompt}],
-            max_tokens=4096,
+            max_tokens=16384,
         )
         text = (resp.choices[0].message.content or '').strip()
         if text:
@@ -14558,7 +16172,7 @@ Example for a Nike persona:
                     {'role': 'user', 'content': prompt},
                 ],
                 temperature=0.2,
-                max_tokens=4096,
+                max_tokens=12288,
                 response_format={"type": "json_object"},
             )
             text = (resp.choices[0].message.content or '').strip()
@@ -14586,7 +16200,7 @@ Example for a Nike persona:
                 model=MODEL_QUALITY,
                 messages=[{'role': 'user', 'content': repair_prompt}],
                 temperature=0,
-                max_tokens=4096,
+                max_tokens=12288,
                 response_format={"type": "json_object"},
             )
             repaired = (resp.choices[0].message.content or '').strip()
@@ -14616,10 +16230,167 @@ Example for a Nike persona:
         for k in buckets:
             buckets[k] = round(float(buckets[k]) * factor, 4)
 
+    _normalize_persona_interest_rankings(persona_doc, interest_catalog)
+
     print(f"   ✅ Persona doc built — summary length {len(persona_doc.get('persona_summary', ''))} chars, "
           f"{len(persona_doc.get('location', []))} DMAs, "
-          f"{len(persona_doc.get('category_guidance', {}))} category hints")
+          f"digital_identity {len(persona_doc.get('digital_identity', ''))} chars")
+
+    # ── PHASE-1 LOGGING: full persona doc dump so we can diagnose guidance issues ──
+    print(f"\n{'─'*60}")
+    print(f"📋 PERSONA RESEARCH AGENT — FULL OUTPUT")
+    print(f"{'─'*60}")
+    print(f"PERSONA SUMMARY:\n{persona_doc.get('persona_summary', '(empty)')}\n")
+    _arch = str(persona_doc.get('subject_archetype', '') or '').strip()
+    _argr = str(persona_doc.get('archetype_rationale', '') or '').strip()
+    if _arch or _argr:
+        print(f"SUBJECT ARCHETYPE: {_arch or '(unset)'}\nARCHETYPE NOTES: {_argr or '(none)'}\n")
+    _di = persona_doc.get('digital_identity', '')
+    if _di:
+        print(f"DIGITAL IDENTITY:\n{_di}\n")
+    else:
+        print("DIGITAL IDENTITY: (empty — this is a problem!)\n")
+    # Legacy fallback: if model still returns category_guidance, log it
+    _cg = persona_doc.get('category_guidance', {}) or {}
+    if _cg:
+        print(f"LEGACY CATEGORY GUIDANCE ({len(_cg)} categories — should be empty with new prompt):")
+        for _cg_cat, _cg_blob in sorted(_cg.items()):
+            _cg_hi = _cg_blob.get('expected_high', []) if isinstance(_cg_blob, dict) else []
+            _cg_lo = _cg_blob.get('expected_low', []) if isinstance(_cg_blob, dict) else []
+            _cg_sum = (_cg_blob.get('summary', '') if isinstance(_cg_blob, dict) else str(_cg_blob))[:120]
+            print(f"  [{_cg_cat}]")
+            print(f"    summary: {_cg_sum}")
+            print(f"    expected_high: {_cg_hi[:15]}")
+            print(f"    expected_low:  {_cg_lo[:15]}")
+    _cs = persona_doc.get('category_signals', {}) or {}
+    if _cs:
+        print(f"CATEGORY SIGNALS ({len(_cs)} categories):")
+        for _cs_cat, _cs_sig in sorted(_cs.items()):
+            print(f"  [{_cs_cat}] {str(_cs_sig)[:150]}")
+    _ss = persona_doc.get('subsegments', []) or []
+    if _ss:
+        print(f"SUB-SEGMENTS ({len(_ss)}):")
+        for _s in _ss:
+            if isinstance(_s, dict):
+                print(f"  • {_s.get('name','?')} (~{_s.get('weight_pct','?')}%, age {_s.get('age_band','')}): "
+                      + ', '.join(str(m) for m in (_s.get('cultural_markers') or [])[:6]))
+    else:
+        print("SUB-SEGMENTS: (empty — scoring will be less nuanced!)")
+    _ca = persona_doc.get('cultural_anchors', {}) or {}
+    if _ca:
+        print(f"CULTURAL ANCHORS ({len(_ca)} categories):")
+        for _k, _v in list(_ca.items())[:14]:
+            if isinstance(_v, list):
+                print(f"  {_k}: {', '.join(str(x) for x in _v[:8])}")
+    else:
+        print("CULTURAL ANCHORS: (empty — scoring may default to gen-pop!)")
+    _af = persona_doc.get('anti_fit_explicit', {}) or {}
+    if _af:
+        print(f"ANTI-FIT EXPLICIT ({len(_af)} categories):")
+        for _k, _v in _af.items():
+            if isinstance(_v, list):
+                print(f"  {_k}: {', '.join(str(x) for x in _v[:8])}")
+    else:
+        print("ANTI-FIT EXPLICIT: (empty — scoring agent has nothing to push back with on luxury/niche items!)")
+    _xs = persona_doc.get('cross_shop_network', {}) or {}
+    if _xs:
+        print(f"CROSS-SHOP NETWORK ({len(_xs)} buckets):")
+        for _k, _v in _xs.items():
+            if isinstance(_v, list):
+                print(f"  {_k}: {', '.join(str(x) for x in _v[:8])}")
+    _itop = persona_doc.get('interest_top_25') or []
+    _ibot = persona_doc.get('interest_bottom_25') or []
+    if _itop or _ibot:
+        _cks = persona_doc.get('interest_inventory_checksum', '?')
+        print(f"INTEREST RANK PRIORS ({_cks}): top {len(_itop)} → {_itop[:10]}{'…' if len(_itop) > 10 else ''}")
+        print(f"INTEREST rank priors — bottom {len(_ibot)} → {_ibot[:10]}{'…' if len(_ibot) > 10 else ''}")
+    _cva_dump = persona_doc.get('commercial_viability_audit')
+    if _cva_dump:
+        print(f"COMMERCIAL VIABILITY AUDIT ({len(str(_cva_dump))} chars): "
+              f"{str(_cva_dump)[:380]}{'…' if len(str(_cva_dump)) > 380 else ''}")
+    else:
+        print("COMMERCIAL VIABILITY AUDIT: (MISSING)")
+    print(f"{'─'*60}\n")
+
     return persona_doc
+
+
+def _validate_persona_quality(persona_doc: dict, subject: str) -> tuple[bool, list[str]]:
+    """Check persona doc for completeness and specificity before scoring.
+
+    Returns (is_valid, issues) where issues is a list of warning strings.
+    The pipeline logs warnings but does NOT block on failures.
+    """
+    issues: list[str] = []
+
+    required_demo_cats = {'AGE', 'GENDER', 'ETHNICITY', 'INCOME', 'EDUCATION',
+                          'RELATIONSHIP', 'SEXUAL_ORIENTATION', 'PARENTAL_STATUS', 'OCCUPATION'}
+    demos = persona_doc.get('demographics', {})
+    if not demos or not isinstance(demos, dict):
+        issues.append("demographics field is missing or empty")
+    else:
+        present = {k.strip().upper() for k in demos}
+        missing = required_demo_cats - present
+        if missing:
+            issues.append(f"demographics missing categories: {', '.join(sorted(missing))}")
+
+    di = persona_doc.get('digital_identity', '')
+    if not di or len(di) < 500:
+        issues.append(f"digital_identity too short ({len(di or '')} chars, need ≥500)")
+
+    if not str(persona_doc.get('subject_archetype') or '').strip():
+        issues.append(
+            "subject_archetype missing — downstream agents infer archetype manually "
+            "(higher variance for talent / IP / interactive subjects)"
+        )
+
+    _cva = str(persona_doc.get('commercial_viability_audit') or '').strip()
+    if len(_cva) < 40 or (
+        len(_cva) < 80
+        and 'AUDIT CLEAN' not in _cva.upper()
+    ):
+        issues.append(
+            "commercial_viability_audit missing or too thin — downstream scoring lacks binding stalled-equity prose "
+            "(use researched paragraph OR exact AUDIT CLEAN sentence)"
+        )
+
+    cs = persona_doc.get('category_signals', {})
+    if not cs or not isinstance(cs, dict):
+        issues.append("category_signals field is missing or empty")
+    else:
+        if len(cs) < 10:
+            issues.append(f"category_signals has only {len(cs)} entries (need ≥10)")
+        short_signals = [cat for cat, sig in cs.items()
+                         if not sig or len(str(sig)) < 50]
+        if short_signals:
+            issues.append(f"category_signals too short (<50 chars) for: {', '.join(short_signals[:8])}")
+
+    sports_keywords = {'SPORT', 'SPORTS', 'ATHLETIC', 'ATHLETICS', 'FITNESS'}
+    subject_upper = (subject or '').upper()
+    is_sports_related = any(kw in subject_upper for kw in sports_keywords)
+    if not is_sports_related and cs and isinstance(cs, dict):
+        for cat_prefix in ('APPAREL/FOOTWEAR', 'ATHLETIC', 'SPORTS'):
+            for cat_key in cs:
+                if cat_prefix in cat_key.upper():
+                    is_sports_related = True
+                    break
+    if is_sports_related and cs and isinstance(cs, dict):
+        interest_sig = ''
+        for cat_key, sig in cs.items():
+            if 'INTEREST' in cat_key.upper():
+                interest_sig = str(sig).upper()
+                break
+        if interest_sig and not any(kw in interest_sig for kw in sports_keywords):
+            issues.append("sports-related subject but INTEREST category_signal doesn't mention sports/athletic")
+
+    is_valid = len(issues) == 0
+    if issues:
+        print(f"   ⚠️  Persona Quality Check for '{subject}': {len(issues)} issue(s)")
+        for iss in issues:
+            print(f"      • {iss}")
+    else:
+        print(f"   ✅ Persona Quality Check for '{subject}': PASSED")
+    return is_valid, issues
 
 
 def _build_canonical_baseline_lookup() -> dict:
@@ -14656,23 +16427,585 @@ def _build_canonical_baseline_lookup() -> dict:
     return out
 
 
+# ── Item-Aware Guidance Agent ─────────────────────────────────────────────
+# Runs BEFORE the scoring agent for each category. Sees the actual item names
+# + the persona's digital_identity text. Returns grounded expected_high /
+# expected_low lists from REAL items, not blind guesses.
+
+MODEL_GUIDANCE = 'gpt-4.1-nano'
+
+# Classification: MODEL_CLASSIFY, _CLASSIFY_BATCH, _CLASSIFY_TIMEOUT_SEC are set
+# with the model tiers (BG_PROFILE_QUALITY, BG_MODEL_CLASSIFY, BG_CLASSIFY_*).
+
+
+def _run_item_classification_agent(items: list[str]) -> dict[str, dict]:
+    """Classify a batch of items by what they actually ARE.
+
+    For each item, the agent returns rich per-item attributes that downstream
+    scoring uses to reason about persona fit:
+        what_is_it          1-2 sentence description
+        target_demo         {age, income, ethnicity_skew, geography}
+        price_tier          luxury/premium/mid/value/discount/NA
+        cultural_code       list of tags (urban-streetwear, rural-americana,
+                            luxury, boomer-traditional, niche-subculture, ...)
+        adjacent_brands     a few brands this item competes with / sits alongside
+        confidence          high/medium/low — low means the agent doesn't
+                            recognize the item; downstream keeps these with
+                            conservative sub-1% caps when there is no panel
+                            signal and no gen-pop baseline, instead of
+                            fabricating a mid-range default.
+
+    Returns: {value_upper: classification_dict}
+
+    This step replaces the old "score blind from a thin persona summary"
+    failure mode that produced the 27% confabulation cluster.
+    """
+    import json as _json
+    client = _get_openai_client()
+    if client is None or not items:
+        return {}
+
+    items_block = '\n'.join(f"  - {it}" for it in items)
+
+    prompt = f"""You are a research analyst classifying consumer-facing items by what they ARE.
+
+For each item below, output a structured classification. Downstream scoring
+will use your output plus a researched persona to decide whether cohort members
+(conditioned-on the profile input) would **plausibly have meaningful digital
+engagement** with that entity (websites/apps/authenticated flows where applicable),
+not vague name recognition offline.
+
+CRITICAL RULES:
+1. If you genuinely do not recognize an item (made-up-sounding name, hyper-niche
+   regional business, no clear consumer-facing brand), set confidence="low".
+   Downstream will keep these conservatively (sub-1% when unsupported). Do NOT
+   guess — flag and move on.
+2. Be specific in `what_is_it`: name the category, price tier, and 1-2
+   distinguishing facts (e.g. "$595 omakase by Masa Takayama at Mandarin
+   Oriental NYC", not "fine dining restaurant").
+3. `cultural_code` is a small set of tags from this controlled list (use
+   multiple where they apply):
+   urban-streetwear, suburban-mainstream, rural-americana, luxury,
+   ultra-luxury, boomer-traditional, gen-z-youth, parent-family,
+   niche-subculture, athletic-mainstream, athletic-niche, tech-mainstream,
+   tech-luxury, latin/hispanic, black-cultural, asian-cultural, lgbtq,
+   foreign-only, women-focused, men-focused
+4. `target_demo` should reflect who the item is built for, not who *might*
+   buy it once. Example: "Hermès" → income $500K+, age 35-65, neutral
+   ethnicity. "Tractor Supply" → income $40-100K, age 35-70, rural geography.
+
+ITEMS TO CLASSIFY:
+{items_block}
+
+Return ONLY a JSON object mapping each item (exact spelling, uppercased) to
+its classification. No markdown, no commentary.
+
+{{
+  "<ITEM NAME UPPERCASE>": {{
+    "what_is_it": "<1-2 sentence concrete description>",
+    "target_demo": {{
+      "age": "<band like '18-34' or 'all'>",
+      "income": "<band like '$45-150K' or 'all'>",
+      "ethnicity_skew": "<'neutral' or e.g. 'Black 1.6x', 'Hispanic 1.3x'>",
+      "geography": "<'national-mainstream' / 'urban-elite' / 'rural' / etc.>"
+    }},
+    "price_tier": "<luxury|premium|mid|value|discount|NA>",
+    "cultural_code": ["<tag1>", "<tag2>"],
+    "adjacent_brands": ["<comp1>", "<comp2>"],
+    "confidence": "<high|medium|low>"
+  }},
+  ...
+}}
+"""
+
+    try:
+        resp = _timed_completion(
+            client,
+            label=f"item-classify/{len(items)}",
+            model=MODEL_CLASSIFY,
+            messages=[
+                {'role': 'system', 'content': 'Return ONLY valid JSON. No markdown, no commentary.'},
+                {'role': 'user', 'content': prompt},
+            ],
+            temperature=0.0,
+            max_tokens=4096,
+            response_format={"type": "json_object"},
+            timeout=_CLASSIFY_TIMEOUT_SEC,
+        )
+        text = (resp.choices[0].message.content or '').strip()
+        doc = _json.loads(text)
+        if not isinstance(doc, dict):
+            return {}
+        out: dict[str, dict] = {}
+        for k, v in doc.items():
+            if not isinstance(v, dict):
+                continue
+            key_u = str(k).strip().upper()
+            out[key_u] = v
+        return out
+    except Exception as e:
+        print(f"   ⚠️ Item-classification batch failed ({len(items)} items): {e}")
+        return {}
+
+
+def _run_item_classification_parallel(unique_items: list[str],
+                                       max_workers: int = 35) -> dict[str, dict]:
+    """Classify every unique item in the run in parallel batches.
+
+    This is called ONCE near the start of `parallel_category_agents` so every
+    downstream scoring agent gets the same per-item classifications regardless
+    of which category the item ends up scored in.
+    """
+    import concurrent.futures as _futures
+
+    if not unique_items:
+        return {}
+    items = sorted({str(x).strip() for x in unique_items if str(x).strip()})
+    batches = [items[i:i + _CLASSIFY_BATCH] for i in range(0, len(items), _CLASSIFY_BATCH)]
+    print(f"🔎 Item classification: {len(items)} unique items in {len(batches)} batches "
+          f"of ≤{_CLASSIFY_BATCH} ({MODEL_CLASSIFY}), BG_PROFILE_QUALITY={_PROFILE_QUALITY_TIER} …")
+    t0 = _time.perf_counter()
+    out: dict[str, dict] = {}
+    with _futures.ThreadPoolExecutor(max_workers=min(max_workers, max(1, len(batches)))) as pool:
+        future_to_batch = {pool.submit(_run_item_classification_agent, b): bi
+                           for bi, b in enumerate(batches)}
+        for fut in _futures.as_completed(future_to_batch):
+            try:
+                result = fut.result()
+                if result:
+                    out.update(result)
+            except Exception as e:
+                print(f"   ⚠️ classify batch {future_to_batch[fut]} raised: {e}")
+    elapsed = _time.perf_counter() - t0
+    n_high = sum(1 for c in out.values() if str(c.get('confidence', '')).lower() == 'high')
+    n_med = sum(1 for c in out.values() if str(c.get('confidence', '')).lower() == 'medium')
+    n_low = sum(1 for c in out.values() if str(c.get('confidence', '')).lower() == 'low')
+    print(f"   ✅ Item classification done in {elapsed:.1f}s — {len(out)} classified "
+          f"(high={n_high}, medium={n_med}, low={n_low})")
+    if n_low:
+        sample_low = [k for k, v in out.items()
+                       if str(v.get('confidence', '')).lower() == 'low'][:10]
+        print(f"   ℹ️  Sample low-confidence (kept conservatively if no panel/baseline): "
+              f"{', '.join(sample_low)}")
+    return out
+
+def _run_item_guidance_agent(category: str, item_names: list[str],
+                              persona_doc: dict, subject: str) -> dict:
+    """v16 — Category Rule Agent (Pass 1 of the three-pass scoring flow).
+
+    Reads the persona doc + the FULL list of items in this category, then
+    produces a category-specific scoring rubric that all chunked scoring
+    agents (Pass 2) consume. This is what gives every chunk a SHARED tier
+    rubric so they don't drift apart — the root fix for cases like
+    "Six Flags Darien Lake at #1 in AMUSEMENT PARKS" (where chunk 1 had no
+    awareness of where chunk 2 placed Disney World).
+
+    Returns a dict with:
+        tier_rules            ordered list of {tier_name, bp_range, criteria,
+                                                example_items[]}
+        category_ceiling_pct  hard upper bound for any single item
+        anti_fit_in_category  named items the persona explicitly avoids in
+                              this category (force-low)
+        predicted_top_5       sanity reference: which items SHOULD lead this
+                              category for this persona (validator uses it)
+        summary               1-2 sentences on how this persona behaves in
+                              this category
+        expected_high/low     LEGACY: kept for backward compatibility with
+                              callers that still read these fields. Derived
+                              from tier_rules (top tiers) and anti_fit.
+
+    Backward compat: existing scoring-agent code that reads expected_high /
+    expected_low still works unchanged. New scoring code (Pass 2 rewrite)
+    additionally consumes tier_rules / anti_fit_in_category /
+    category_ceiling_pct.
+
+    Model: upgraded from gpt-4.1-nano (v14) to gpt-4o because this rubric
+    drives every BP in the category. The cost delta (~$0.02 per category)
+    is trivial vs. the accuracy gain.
+    """
+    import json as _json
+    client = _get_openai_client()
+    if client is None:
+        return {}
+
+    persona_summary = persona_doc.get('persona_summary', '')
+    digital_identity = persona_doc.get('digital_identity', '')
+    demo_snapshot = {k: v for k, v in persona_doc.get('demographics', {}).items()
+                     if k in ('AGE', 'GENDER', 'ETHNICITY', 'INCOME')}
+    subsegments = persona_doc.get('subsegments') or []
+    cultural_anchors = persona_doc.get('cultural_anchors') or {}
+    anti_fit_explicit = persona_doc.get('anti_fit_explicit') or {}
+    cross_shop_network = persona_doc.get('cross_shop_network') or {}
+
+    persona_archetype_block = _format_persona_archetype(persona_doc)
+
+    def _fmt_subsegments() -> str:
+        if not subsegments:
+            return '(no subsegments)'
+        out = []
+        for s in subsegments[:6]:
+            if not isinstance(s, dict):
+                continue
+            name = s.get('name', '?')
+            wt = s.get('weight_pct', '?')
+            band = s.get('age_band', '')
+            markers = s.get('cultural_markers') or []
+            out.append(f"  • {name} (~{wt}%, age {band}): "
+                       + ', '.join(str(m) for m in markers[:6]))
+        return '\n'.join(out) if out else '(no subsegments)'
+
+    def _fmt_dict_of_lists(d: dict, max_items: int = 10) -> str:
+        if not d:
+            return '(none)'
+        rows = []
+        for k, v in list(d.items())[:14]:
+            if isinstance(v, list):
+                rows.append(f"  {k}: {', '.join(str(x) for x in v[:max_items])}")
+            elif v:
+                rows.append(f"  {k}: {v}")
+        return '\n'.join(rows) if rows else '(none)'
+
+    items_block = '\n'.join(f"  - {name}" for name in item_names)
+
+    interest_prior_block = ''
+    if category.strip().upper() in {'INTEREST', 'INTERESTS'}:
+        _idb = _format_persona_interest_rank_block(persona_doc)
+        if _idb.strip():
+            interest_prior_block = _idb
+
+    rubric_calibration_block = _category_pass1_calibration_block(category, persona_doc)
+
+    prompt = f"""You are a senior consumer-research analyst writing a SCORING RUBRIC for the **{category}** category, for **{subject}**.
+
+SAMPLING: The cohort is **U.S. general-population panelists who QUALIFY ON measured engagement with "{subject}"** (the pipeline input — brand, personality, venue, asset, etc., as modeled).
+ARCHETYPE DISCIPLINE: Follow **SUBJECT ARCHETYPE** lines below — a Netflix talent profile is NOT a footwear merchandising profile; AAA game fans are NOT default sneaker demographics unless research ties them.
+
+MISSION (Pass 2 will execute this ROW BY ROW): tiers must encode "**what share of THAT persona truly had meaningful DIGITAL touching points** (purposeful repeat website/app/order/check-in/streaming/account actions — mapped to measured panel signals) vs this archetype**, not vibes or fame.** Your bp_range bands are the scaffolding for answering that ONE question consistently across chunks.
+
+The rubric you write here will be used by every chunked scoring agent in this category. They will all rank items against your tiers. So your rubric must be:
+  • SPECIFIC to this persona (no generic "famous brands rank high")
+  • COMPLETE (cover every item type that appears in the item list below)
+  • REASONED (every tier's BP range must reflect realistic engagement for THIS audience, not generic gen-pop)
+  • RANK-ORDERED (tiers go from highest BP to lowest — the order is the rubric)
+
+═══════════════════════════════════════════════════════════════════
+PERSONA — the audience you are writing the rubric for
+═══════════════════════════════════════════════════════════════════
+SUBJECT ARCHETYPE (persona Step 1b — branch tiers for THIS kind of asset, not a canned retail narrative):
+{persona_archetype_block}
+
+SUMMARY:
+{persona_summary}
+
+DIGITAL IDENTITY:
+{digital_identity}
+
+KEY DEMOGRAPHICS:
+{_json.dumps(demo_snapshot, indent=2)}
+
+SUB-SEGMENTS (audience is not monolithic — your rubric must reflect this mix):
+{_fmt_subsegments()}
+
+CULTURAL ANCHORS (what the audience is genuinely passionate about):
+{_fmt_dict_of_lists(cultural_anchors)}
+
+ANTI-FIT (what the audience does NOT engage with, even if famous):
+{_fmt_dict_of_lists(anti_fit_explicit)}
+
+CROSS-SHOP NETWORK (brands the audience genuinely uses alongside the subject):
+{_fmt_dict_of_lists(cross_shop_network)}
+
+COMMERCIAL VIABILITY AUDIT (stalled / inactive US franchises — use to build anti_fit + bottom tiers):
+{(str(persona_doc.get('commercial_viability_audit') or '').strip())[:4000] if str(persona_doc.get('commercial_viability_audit') or '').strip() else '(not provided — still list defunct/stalled items in anti_fit_in_category when visible in item list)'}
+
+{interest_prior_block}
+{rubric_calibration_block and f'''═══════════════════════════════════════════════════════════════════
+CATEGORY HARD CALIBRATION ({category}) — REQUIRED RUBRIC CONSTRAINTS
+═══════════════════════════════════════════════════════════════════
+{rubric_calibration_block}
+''' or ''}
+═══════════════════════════════════════════════════════════════════
+ITEMS IN THE {category} CATEGORY (every one will be scored against your rubric)
+═══════════════════════════════════════════════════════════════════
+{items_block}
+
+═══════════════════════════════════════════════════════════════════
+HOW TO BUILD THE RUBRIC
+═══════════════════════════════════════════════════════════════════
+Walk through the items above and group them into 3-7 tiers ordered from
+highest expected BP to lowest. For each tier:
+  • tier_name: short label ("national mega-park", "regional small-metro park",
+    "DTC premium niche", "cultural-anchor / icon", "anti-fit luxury", etc.)
+  • bp_range: numeric range like "55-85" or "0.5-3" — the % of THIS audience
+    that has any digital (web OR app) engagement in a year. Tighten this to
+    realistic actual-engagement %s; do NOT default to year-window-inflated panel
+    readings. Examples of realistic ranges by item archetype:
+      - Cultural anchor / persona-defining brand        → 60-90%
+      - Mass mainstream item used by everyone           → 35-70%
+      - Strong subculture fit / cross-shop brand        → 15-45%
+      - Mild / casual fit                                → 4-18%
+      - Mild anti-fit                                    → 1-5%
+      - Strong / explicit anti-fit                       → 0.05-2%
+      - Hard zero (foreign-only, opposite demo)          → 0.05-1%
+    For INTEREST category specifically: top tier should be 55-85% (a primary
+    identity-defining hobby), generic functional categories like "SOCIAL MEDIA"
+    or "JOB SEARCH" max 25-40% (year-window inflates them; not real interests).
+  • criteria: 1 sentence describing what kind of item belongs in this tier
+    for THIS persona (not generic).
+  • example_items: 3-8 EXACT-spelling item names from the list above that
+    belong in this tier. Spell them exactly as they appear.
+
+THINK IN ARCHETYPES, NOT ITEMS. The rubric must be REUSABLE — any item the
+scoring agent encounters should fit into one of your tiers based on what it
+IS, not whether you happened to name it. So tier_name + criteria together
+must communicate the archetype clearly.
+
+═══════════════════════════════════════════════════════════════════
+ANTI-FIT-IN-CATEGORY
+═══════════════════════════════════════════════════════════════════
+List 5-25 items from the item list above that are SPECIFIC anti-fits for
+this persona in this category — items the audience either has no genuine
+relationship with, or that pure year-window panel exposure would otherwise
+inflate (regional brands outside the audience's geo, foreign-only platforms,
+defunct brands, hyper-niche luxury, etc.). The scoring agent will be told
+"any item in anti_fit_in_category cannot exceed 5% BP" — this is your
+mechanism to enforce specific corrections you know the persona requires.
+
+═══════════════════════════════════════════════════════════════════
+PREDICTED TOP-5
+═══════════════════════════════════════════════════════════════════
+List the 5 EXACT-spelling items from the list above that you predict SHOULD
+end up in the top 5 for this persona, in rank order. The Pass 3 validator
+will compare this against the actual scored top-5 — if they differ
+significantly, the validator will trigger corrections.
+
+═══════════════════════════════════════════════════════════════════
+CATEGORY CEILING
+═══════════════════════════════════════════════════════════════════
+Set category_ceiling_pct — no item in this category should exceed this BP
+(this absorbs year-window inflation). For mass-platform categories
+(STREAMING, SEARCH ENGINE/AI, SOCIAL MEDIA, BANKING, INSURANCE, MEDIA),
+ceiling can go to 88-90. For everything else, choose a realistic ceiling
+based on what the absolute top item should be (e.g., AMUSEMENT PARKS top
+out around 18-25 since most Americans don't visit theme parks every year;
+APPAREL/FOOTWEAR can go higher because everyone wears clothes).
+
+═══════════════════════════════════════════════════════════════════
+OUTPUT FORMAT
+═══════════════════════════════════════════════════════════════════
+Return ONLY a JSON object — no markdown, no commentary:
+
+{{
+  "summary": "<1-2 sentence behavioral summary of this audience in {category}>",
+  "category_ceiling_pct": <number 5-92>,
+  "tier_rules": [
+    {{
+      "tier_name": "<short label>",
+      "bp_range": "<lo-hi>",
+      "criteria": "<1 sentence on what archetype belongs in this tier>",
+      "example_items": ["<EXACT item name 1>", "<EXACT item name 2>", ...]
+    }},
+    ...
+  ],
+  "anti_fit_in_category": ["<EXACT item name>", ...],
+  "predicted_top_5": ["<EXACT item 1>", "<EXACT item 2>", "<EXACT item 3>", "<EXACT item 4>", "<EXACT item 5>"],
+  "expected_high": ["<EXACT item 1>", ...],
+  "expected_low": ["<EXACT item 1>", ...]
+}}
+
+RULES:
+  • tier_rules must be ORDERED from highest BP to lowest.
+  • Every example_items spelling MUST match the item list above EXACTLY.
+  • expected_high = items from your top 1-2 tiers (5-15 items).
+  • expected_low = anti_fit_in_category UNION items from your bottom tier (10-20 items).
+  • Cover the WHOLE item list across your tiers — no item should be unclassifiable.
+  • If the persona is a MASS BRAND (>10M U.S. customers), keep your tier
+    BP ranges grounded in the median customer (suburban/value-conscious),
+    not the most culturally interesting subsegment.
+"""
+
+    try:
+        resp = _timed_completion(
+            client,
+            label=f"category-rule/{category.upper()}",
+            model=MODEL_QUALITY,
+            messages=[
+                {'role': 'system', 'content': 'Return ONLY valid JSON. No markdown, no commentary.'},
+                {'role': 'user', 'content': prompt},
+            ],
+            temperature=0.0,
+            max_tokens=4096,
+            response_format={"type": "json_object"},
+            timeout=60,
+        )
+        text = (resp.choices[0].message.content or '').strip()
+        doc = _json.loads(text)
+        if not isinstance(doc, dict):
+            return {}
+
+        sm = str(doc.get('summary', '') or '').strip()
+        ceiling = doc.get('category_ceiling_pct')
+        try:
+            ceiling = float(ceiling) if ceiling is not None else None
+        except (TypeError, ValueError):
+            ceiling = None
+
+        tier_rules: list[dict] = []
+        for t in (doc.get('tier_rules') or []):
+            if not isinstance(t, dict):
+                continue
+            tier_rules.append({
+                'tier_name': str(t.get('tier_name', '') or '').strip(),
+                'bp_range': str(t.get('bp_range', '') or '').strip(),
+                'criteria': str(t.get('criteria', '') or '').strip(),
+                'example_items': [str(x).strip() for x in (t.get('example_items') or [])
+                                  if str(x).strip()],
+            })
+
+        anti_fit = [str(x).strip() for x in (doc.get('anti_fit_in_category') or [])
+                    if str(x).strip()]
+        top5 = [str(x).strip() for x in (doc.get('predicted_top_5') or [])
+                if str(x).strip()]
+
+        eh = [str(x).strip() for x in (doc.get('expected_high') or []) if str(x).strip()]
+        el = [str(x).strip() for x in (doc.get('expected_low') or []) if str(x).strip()]
+
+        if not eh and tier_rules:
+            for t in tier_rules[:2]:
+                eh.extend(t.get('example_items', []))
+            seen = set()
+            eh = [x for x in eh if not (x.upper() in seen or seen.add(x.upper()))]
+        if not el and tier_rules:
+            el.extend(anti_fit)
+            if tier_rules:
+                el.extend(tier_rules[-1].get('example_items', []))
+            seen = set()
+            el = [x for x in el if not (x.upper() in seen or seen.add(x.upper()))]
+
+        return {
+            'summary': sm,
+            'tier_rules': tier_rules,
+            'category_ceiling_pct': ceiling,
+            'anti_fit_in_category': anti_fit,
+            'predicted_top_5': top5,
+            'expected_high': eh,
+            'expected_low': el,
+        }
+    except Exception as e:
+        print(f"   ⚠️ Category-rule agent [{category}] failed: {e}")
+    return {}
+
+
+# ─── Affinity-to-BP deterministic translator ─────────────────────────
+def _affinity_to_bp(affinity: float, gen_pop: float | None) -> float:
+    """LEGACY — affinity 0-100 to BP (%). Retained for any non-scoring callers.
+
+    The primary scoring path now uses agent-returned `estimated_bp_pct`
+    directly (see `_run_single_category_agent`); this function is no longer
+    invoked from that path. We keep it for any downstream callers that still
+    pass an affinity and need a deterministic translation.
+
+    NOTE: the previous `bp = affinity * 0.55` fallback (used when gen_pop was
+    missing) was the source of the "27% confabulation cluster" — affinity 50
+    with no baseline became 27.5% on every niche/unknown item. That fallback
+    is now a small floor (0.05%) so unknown items collapse instead of
+    fabricating a plausible-looking number.
+    """
+    try:
+        a = float(affinity)
+    except (TypeError, ValueError):
+        a = 50.0
+    a = max(0.0, min(100.0, a))
+
+    if a <= 50.0:
+        multiplier = 0.1 + (a / 50.0) * (1.0 - 0.1)
+    else:
+        multiplier = 1.0 + ((a - 50.0) / 50.0) * (3.5 - 1.0)
+
+    if gen_pop is None or gen_pop <= 0.0:
+        return 0.05
+    bp = float(gen_pop) * multiplier
+    return max(0.01, min(96.0, bp))
+
+
+def _build_unique_value_index(df: pd.DataFrame,
+                                category_new_items: dict[str, list[str]],
+                                skip_cats: set[str] | None = None
+                                ) -> tuple[dict[str, str], dict[str, list[str]]]:
+    """Build a deduplicated unique-value index across all behavioral categories.
+
+    Each unique value is assigned exactly one *primary* category — the category
+    with the LARGEST item count (ties broken alphabetically) — so that when the
+    value is scored, it's seen alongside items of similar nature. The result
+    drives the new "score-each-value-once" architecture: a value's affinity
+    is decided in its primary category and then the resulting BP is propagated
+    to every other category in which it appears.
+
+    Returns:
+        primary_for: {value_upper: primary_category_upper}
+        unique_items_by_cat: {primary_category: [value, ...] in original order}
+    """
+    skip_cats = skip_cats or set()
+
+    # Count category sizes once (largest-first preference)
+    cat_size = {c: len(items) for c, items in category_new_items.items()
+                if c.upper() not in skip_cats}
+
+    # Map: value_upper -> set(categories where it appears)
+    value_cats: dict[str, set[str]] = {}
+    # Preserve original casing to feed back into the agent as-is
+    value_original: dict[str, str] = {}
+    for cat, items in category_new_items.items():
+        if cat.upper() in skip_cats:
+            continue
+        for v in items:
+            v_u = str(v).strip().upper()
+            if not v_u:
+                continue
+            value_cats.setdefault(v_u, set()).add(cat)
+            value_original.setdefault(v_u, str(v).strip())
+
+    primary_for: dict[str, str] = {}
+    unique_items_by_cat: dict[str, list[str]] = {c: [] for c in cat_size}
+
+    # For each value, pick the largest category as primary (alphabetical tiebreak)
+    for v_u, cats in value_cats.items():
+        cats_sorted = sorted(cats, key=lambda c: (-cat_size.get(c, 0), c))
+        primary = cats_sorted[0]
+        primary_for[v_u] = primary
+        unique_items_by_cat.setdefault(primary, []).append(value_original[v_u])
+
+    return primary_for, unique_items_by_cat
+
+
 def _run_single_category_agent(category: str, values: list[str],
                                 persona_doc: dict, subject: str,
                                 canonical_baseline_lookup: dict | None = None,
                                 anchor_mode: str = 'persona',
-                                study_dates: str = '') -> list[dict]:
-    """Worker for Step 2 — one gpt-4o call per category.
+                                study_dates: str = '',
+                                item_guidance: dict | None = None,
+                                item_classifications: dict | None = None,
+                                panel_lookup: dict | None = None) -> list[dict]:
+    """Per-category scoring agent (gpt-4o).
 
-    Returns list of {value, bp, reason}.
+    NEW BEHAVIOR (agent-led, panel-as-evidence):
+        The agent receives a richly-structured persona doc, per-item
+        classifications (from `_run_item_classification_agent`), the panel
+        measurement (`panel_bp`, `n_panel`), and the gen-pop baseline.
+        It returns `estimated_bp_pct` directly — no affinity-to-BP math
+        downstream — along with `panel_decision` ("agree", "override_low",
+        "override_high") and a short reason. The agent IS the source of truth;
+        panel + baseline are evidence it weighs.
 
-    canonical_baseline_lookup: optional {(CAT_UPPER, VAL_UPPER): canonical_bp}
-        from the measured U.S. Gen Pop CSV. When provided, each item is shown
-        with its measured baseline and the prompt enforces an anchoring rule
-        (see anchor_mode).
-    anchor_mode: 'genpop' → scores must stay within ±5pp of baseline (or
-        ±50% relative for items <5%). 'persona' → scores INDEX off baseline
-        based on persona fit (expected_high → 1.5-3x, expected_low → 0.1-0.5x,
-        neutral → 0.7-1.5x). Items with no canonical baseline use best estimate.
+    For each entry returned the caller gets:
+        {value, bp, estimated_bp_pct, panel_decision, reason, confidence}
+
+    `bp` is aliased from `estimated_bp_pct` so existing writeback code at
+    bg.py:16924 (which reads entry['bp']) keeps working unchanged.
+
+    item_classifications: {VALUE_UPPER: {what_is_it, target_demo, price_tier,
+                                          cultural_code, confidence, ...}}
+    panel_lookup:         {(CAT_UPPER, VALUE_UPPER): (panel_bp, n_panel)}
     """
     import json as _json
     client = _get_openai_client()
@@ -14681,186 +17014,461 @@ def _run_single_category_agent(category: str, values: list[str],
 
     guidance_raw = persona_doc.get('category_guidance', {}).get(category, '')
     summary = persona_doc.get('persona_summary', '')
+    digital_identity = persona_doc.get('digital_identity', '')
     demo_snapshot = {k: v for k, v in persona_doc.get('demographics', {}).items()
                      if k in ('AGE', 'GENDER', 'ETHNICITY', 'INCOME')}
 
-    # `category_guidance` may now be a dict with structured anchors:
-    #   {"summary": "...", "expected_high": ["FOOT LOCKER","DICK'S",...],
-    #    "expected_low": ["NOBU","CARTIER","PAVILIONS",...]}
-    # Older personas can still hand back a plain string. Normalize for the prompt.
+    _cat_signals = persona_doc.get('category_signals') or {}
+    _persona_cat_signal = str(_cat_signals.get(category, '') or _cat_signals.get(category.upper(), '') or '').strip()
+
+    # ── Rich persona structures (subsegments, cultural anchors, anti-fit) ──
+    subsegments = persona_doc.get('subsegments') or []
+    cultural_anchors = persona_doc.get('cultural_anchors') or {}
+    anti_fit_explicit = persona_doc.get('anti_fit_explicit') or {}
+    cross_shop_network = persona_doc.get('cross_shop_network') or {}
+    commercial_viability_audit = str(persona_doc.get('commercial_viability_audit') or '').strip()
+
+    persona_archetype_block = _format_persona_archetype(persona_doc)
+
+    def _fmt_subsegments() -> str:
+        if not subsegments:
+            return '(persona research did not provide structured subsegments — reason from summary)'
+        out = []
+        for s in subsegments[:6]:
+            if not isinstance(s, dict):
+                continue
+            name = s.get('name', '?')
+            wt = s.get('weight_pct', '?')
+            band = s.get('age_band', '')
+            markers = s.get('cultural_markers') or []
+            out.append(f"  • {name} (~{wt}% of audience, age {band}): "
+                       + ', '.join(str(m) for m in markers[:8]))
+        return '\n'.join(out) if out else '(no subsegments)'
+
+    def _fmt_cultural_anchors() -> str:
+        if not cultural_anchors:
+            return '(no structured cultural anchors)'
+        rows = []
+        for k, v in list(cultural_anchors.items())[:14]:
+            if isinstance(v, list):
+                rows.append(f"  {k}: {', '.join(str(x) for x in v[:10])}")
+            elif v:
+                rows.append(f"  {k}: {v}")
+        return '\n'.join(rows) if rows else '(no anchors)'
+
+    def _fmt_anti_fit() -> str:
+        if not anti_fit_explicit:
+            return '(no explicit anti-fit categories — reason from persona)'
+        rows = []
+        for k, v in anti_fit_explicit.items():
+            if isinstance(v, list):
+                rows.append(f"  {k}: {', '.join(str(x) for x in v[:12])}")
+            elif v:
+                rows.append(f"  {k}: {v}")
+        return '\n'.join(rows) if rows else '(none)'
+
     expected_high: list[str] = []
     expected_low: list[str] = []
-    guidance_summary = ''
-    if isinstance(guidance_raw, dict):
+    guidance_summary = _persona_cat_signal
+    tier_rules: list[dict] = []
+    category_ceiling_pct: float | None = None
+    anti_fit_in_category: list[str] = []
+    predicted_top_5: list[str] = []
+    if item_guidance and isinstance(item_guidance, dict):
+        if not guidance_summary:
+            guidance_summary = str(item_guidance.get('summary', '') or '').strip()
+        expected_high = [str(x).strip() for x in (item_guidance.get('expected_high') or []) if str(x).strip()]
+        expected_low = [str(x).strip() for x in (item_guidance.get('expected_low') or []) if str(x).strip()]
+        _tr = item_guidance.get('tier_rules') or []
+        if isinstance(_tr, list):
+            for t in _tr:
+                if isinstance(t, dict):
+                    tier_rules.append({
+                        'tier_name': str(t.get('tier_name', '') or '').strip(),
+                        'bp_range': str(t.get('bp_range', '') or '').strip(),
+                        'criteria': str(t.get('criteria', '') or '').strip(),
+                        'example_items': [str(x).strip() for x in (t.get('example_items') or [])
+                                          if str(x).strip()],
+                    })
+        try:
+            _c = item_guidance.get('category_ceiling_pct')
+            category_ceiling_pct = float(_c) if _c is not None else None
+        except (TypeError, ValueError):
+            category_ceiling_pct = None
+        anti_fit_in_category = [str(x).strip() for x in (item_guidance.get('anti_fit_in_category') or [])
+                                if str(x).strip()]
+        predicted_top_5 = [str(x).strip() for x in (item_guidance.get('predicted_top_5') or [])
+                           if str(x).strip()]
+    elif isinstance(guidance_raw, dict):
         guidance_summary = str(guidance_raw.get('summary', '') or '').strip()
         expected_high = [str(x).strip() for x in (guidance_raw.get('expected_high') or []) if str(x).strip()]
         expected_low = [str(x).strip() for x in (guidance_raw.get('expected_low') or []) if str(x).strip()]
     elif isinstance(guidance_raw, str):
         guidance_summary = guidance_raw.strip()
 
+    cat_u = category.strip().upper()
+    baseline_lookup = canonical_baseline_lookup or {}
+    panel = panel_lookup or {}
+    classifications = item_classifications or {}
+
+    interest_prior_block_cat = ''
+    if cat_u in {'INTEREST', 'INTERESTS'}:
+        _ipbc = _format_persona_interest_rank_block(persona_doc)
+        if _ipbc.strip():
+            interest_prior_block_cat = _ipbc + '\n'
+
+    # ── Build per-item evidence block: classification + panel + baseline ──
+    # The agent sees, for each item, what we already know about it. This is
+    # the fix for the old "blind affinity" scoring that produced 27% defaults.
+    def _evidence_for(v: str) -> str:
+        v_u = str(v).strip().upper()
+        cls = classifications.get(v_u) or {}
+        what = str(cls.get('what_is_it') or '').strip()
+        tier = str(cls.get('price_tier') or '').strip()
+        code = cls.get('cultural_code') or []
+        conf = str(cls.get('confidence') or '').strip()
+        td = cls.get('target_demo') or {}
+        td_str = ''
+        if isinstance(td, dict) and td:
+            parts = []
+            if td.get('age'): parts.append(f"age {td['age']}")
+            if td.get('income'): parts.append(f"inc {td['income']}")
+            if td.get('ethnicity_skew') and str(td.get('ethnicity_skew')).lower() not in ('neutral', ''):
+                parts.append(str(td['ethnicity_skew']))
+            if td.get('geography'): parts.append(str(td['geography']))
+            td_str = '; '.join(parts)
+        panel_entry = panel.get((cat_u, v_u))
+        if panel_entry:
+            try:
+                pbp, npan = float(panel_entry[0]), int(panel_entry[1])
+                panel_str = f"panel {pbp:.2f}% (n={npan})"
+            except (TypeError, ValueError):
+                panel_str = "panel n/a"
+        else:
+            panel_str = "panel 0% (not measured)"
+        base_v = baseline_lookup.get((cat_u, v_u))
+        base_str = f"genpop {base_v:.2f}%" if isinstance(base_v, (int, float)) else "genpop n/a"
+
+        bits = [panel_str, base_str]
+        if what: bits.append(f'is: "{what}"')
+        if tier: bits.append(f"tier:{tier}")
+        if code: bits.append(f"code:{','.join(str(c) for c in code[:4])}")
+        if td_str: bits.append(f"target:{td_str}")
+        if conf: bits.append(f"conf:{conf}")
+        return ' | '.join(bits)
+
+    values_list = '\n'.join(f"  - {str(v)}\n      {_evidence_for(v)}"
+                             for v in values)
+
     expected_high_block = (
         '\n'.join(f"  - {x}" for x in expected_high[:30])
-        if expected_high else '  (none specified — reason from persona summary)'
+        if expected_high else '  (none specified)'
     )
     expected_low_block = (
         '\n'.join(f"  - {x}" for x in expected_low[:30])
-        if expected_low else '  (none specified — reason from persona summary)'
+        if expected_low else '  (none specified)'
     )
 
-    # Inject the canonical U.S. baseline next to each item if we have one.
-    # The agent uses this as ground truth: GenPop must stay within ±5pp,
-    # profiles must INDEX off it based on persona affinity.
-    cat_u = category.strip().upper()
-    baseline_lookup = canonical_baseline_lookup or {}
-    def _baseline_for(v: str) -> str:
-        v_u = str(v).strip().upper()
-        b = baseline_lookup.get((cat_u, v_u))
-        if b is None:
-            return 'not measured'
-        return f'{b:.2f}%'
+    # ── Format the category rule (Pass 1 output) for inclusion in the prompt ──
+    def _fmt_tier_rules() -> str:
+        if not tier_rules:
+            return '(no category rule available — reason from persona alone)'
+        rows = []
+        for i, t in enumerate(tier_rules, 1):
+            line = f"  [{i}] {t.get('tier_name','')} — BP {t.get('bp_range','')}%"
+            if t.get('criteria'):
+                line += f"\n      criteria: {t['criteria']}"
+            ex = t.get('example_items') or []
+            if ex:
+                line += f"\n      examples: {', '.join(ex[:8])}"
+            rows.append(line)
+        return '\n'.join(rows)
 
-    if baseline_lookup:
-        # Pad item names so the baselines line up visually for the LLM.
-        max_len = max((len(str(v)) for v in values), default=10)
-        pad = min(max(max_len, 10), 50)
-        values_list = '\n'.join(
-            f"  - {str(v):<{pad}}  (US baseline: {_baseline_for(v)})"
-            for v in values
-        )
-    else:
-        values_list = '\n'.join(f"  - {v}" for v in values)
+    category_rule_block = f"""═══════════════════════════════════════════════════════════════════
+CATEGORY RULE (Pass 1 — shared rubric for {category})
+═══════════════════════════════════════════════════════════════════
+This rubric was written by the Pass 1 Category Rule Agent based on the
+persona doc and the FULL list of items in this category. Every chunked
+scoring agent in this category sees the SAME rubric, so your output will
+be consistent with parallel chunks.
 
-    # Anchoring rules differ for GenPop vs profile audiences.
+CATEGORY SUMMARY: {guidance_summary or '(no summary)'}
+
+CATEGORY CEILING: {f'{category_ceiling_pct:.0f}%' if isinstance(category_ceiling_pct, (int, float)) else '(no ceiling specified — use 90% absolute max)'}
+
+TIER RULES (highest BP → lowest):
+{_fmt_tier_rules()}
+
+ANTI-FIT IN CATEGORY (items the persona does NOT engage with — must score ≤ 5%):
+{', '.join(anti_fit_in_category[:30]) if anti_fit_in_category else '(none specified)'}
+
+PREDICTED TOP-5 (sanity reference — these items SHOULD lead the category):
+{', '.join(predicted_top_5[:5]) if predicted_top_5 else '(none specified)'}
+"""
+
     if anchor_mode == 'genpop':
         anchor_rules = """═══════════════════════════════════════════════════════════════════
-CRITICAL — ANCHOR TO U.S. BASELINE (this is a GenPop scoring run)
+THIS IS A GENPOP SCORING RUN
 ═══════════════════════════════════════════════════════════════════
-The "US baseline" shown next to each item is the MEASURED national digital engagement % from a real clickstream panel. It IS the answer for the average U.S. adult — your job is to honor it.
-
-  • For items WITH a baseline:
-      – If baseline >= 5%: your score MUST be within ±5 percentage points of baseline.
-        e.g. baseline 22.62% → score 17.6-27.6%; baseline 84.13% → score 79.1-89.1%.
-      – If baseline < 5%: your score MUST be within ±50% relative of baseline (and never above 8%).
-        e.g. baseline 0.55% → score 0.27-0.83%; baseline 3.20% → score 1.6-4.8%.
-  • For items WITHOUT a baseline ("not measured"): use your best estimate of what % of all U.S. online adults would actually click/visit/use this in a year. CPG / regional / luxury → low (0.3-5%); national mass → moderate (5-25%); near-universal → high (60-85%).
-  • Do NOT inflate "expected_high" items above the baseline ceiling. CHASE baseline is ~22% — its score is ~22%, NOT 84%. MASTERCARD baseline is ~42% — its score is ~42%, NOT 89%. Banks, credit, telecom, retail all have realistic ceilings; respect them.
-  • Do NOT pin items to 100% just because they're famous platforms. Even YouTube tops out around 84%.
-"""
-    elif baseline_lookup:
-        anchor_rules = """═══════════════════════════════════════════════════════════════════
-CRITICAL — ANCHOR TO U.S. BASELINE, THEN INDEX FOR PERSONA FIT
-═══════════════════════════════════════════════════════════════════
-The "US baseline" shown next to each item is the MEASURED national digital engagement % for the average U.S. adult. Your persona's score INDEXES OFF that baseline based on how well the item fits the audience:
-
-  • Items in the EXPECTED HIGH list above:
-      – Score 1.5x-3x baseline (cap at 95%).
-      – Example: Foot Locker baseline 4.5% → Nike audience 7-13%.
-      – Example: ESPN baseline 36% → sports-fan audience 55-90%.
-  • Items in the EXPECTED LOW list above:
-      – Score 0.1x-0.5x baseline (floor at 0.1%).
-      – Example: Nobu baseline 0.55% → Nike audience 0.05-0.27%.
-      – Even if the item is famous, persona fit is what determines BP.
-  • Neutral items (in neither list):
-      – Score 0.7x-1.5x baseline. Use your judgment for the persona's fit.
-  • Items WITHOUT a baseline ("not measured"):
-      – Use your best estimate of what % of THIS audience would engage digitally.
-  • Hard ceiling: NO score above 95% unless the item is in expected_high AND baseline >= 70% (e.g. YouTube/Google for any mass-online persona).
-
-ABSOLUTE LUXURY / SMALL-BASELINE RULE — NON-NEGOTIABLE:
-  • If baseline is < 1% (luxury brands, niche retailers, ultra-premium items like
-    PATEK PHILIPPE, HERMES, BOTTEGA VENETA, GIVENCHY, DIOR, BALENCIAGA, MYTHERESA,
-    CETTIRE, STADIUM GOODS, NET-A-PORTER, YVES SAINT LAURENT, STITCHFIX, etc.):
-      – Maximum allowed score = max(baseline × 5, 2.5%). Period.
-      – Example: Patek Philippe baseline 0.19% → MAX 2.5% even for HNW persona.
-      – Example: Hermes baseline 0.48% → MAX 2.5%.
-      – Example: Bottega Veneta baseline 0.53% → MAX 2.65%.
-      – These items have low DIGITAL clickstream regardless of brand desire.
-        Aspirational does NOT mean people are visiting patekphilippe.com.
-  • If baseline is 1-3% (mid-luxury / specialty: LOUIS VUITTON, GUCCI, PRADA,
-    BURBERRY, NEIMAN MARCUS):
-      – Maximum allowed score = baseline × 5. Period.
-      – Example: Louis Vuitton baseline 1.02% → MAX 5.1%.
+The audience is "the average U.S. adult" — there is no audience tilt.
+For each item, your `estimated_bp_pct` should match the gen-pop baseline
+shown in evidence (within ~±2pp). If the panel measurement disagrees with
+gen-pop and you have a reason to trust the panel, you may use that.
 """
     else:
-        anchor_rules = ''
+        anchor_rules = f"""═══════════════════════════════════════════════════════════════════
+HOW TO ESTIMATE BP — persona-led reasoning (v16)
+═══════════════════════════════════════════════════════════════════
+You are the source of truth. The panel reading is EVIDENCE, not the
+answer.
+
+WHO IS «THIS AUDIENCE»: analytic panel respondents who **QUALIFY on measured engagement with "{subject}"** (the profile input: brand, personality, venue, asset, etc.) — **not** random U.S. adults who fail that qualification.
+
+Year-window inflation is universal — any item where any panelist
+clicked once in 12 months gets inflated by clickstream exposure. Your job
+is to read the persona + the category rule + the per-item evidence, and
+estimate `estimated_bp_pct` — the **% of THIS PERSONA COHORT who plausibly had meaningful DIGITAL touching points** mapped to THAT row (during the analytic window):
+
+  • INCLUDED: habitual or intentional branded **web/mobile web**, authenticated **native app** flows (ordering, pickups, memberships, barcode check-ins, mobile banking/card apps, substantive streaming/music/sports/booking account actions, search/maps sessions on that enterprise when the row represents that enterprise, etc.).
+  • EXCLUDED BY DEFAULT unless persona plausibly does it digitally: "**they buy it in-store with no footprint**," passive TV/audio mention, billboard awareness, stray one-off accidental clicks unless the taxonomy is inherently exposure-like.
+
+Treat `panel_bp`/`genpop` as **weak directional evidence**, not sacred truth — your answer is ALWAYS "**would THEY (this persona)** do credible digital touches on THIS exact brand/entity.**"
+
+Before numbers, each row gets a SILENT sanity check:
+  «Within this persona life + demos + anchors + explicit anti-fit, is there an honest digital pathway to engagement with THIS NAMED ROW in-window?»
+  • If pathway is unrealistic → low BP regardless of rogue panel multiples.
+
+The CLICKSTREAM captures BOTH web URLs AND mobile-app activity, so when
+you judge engagement, INCLUDE real app workflows:
+opening the BofA app to deposit a check, the Planet Fitness app to scan
+a barcode, the Delta app on a flight — those count. Mass brands with
+heavily-used consumer apps SHOULD show meaningful BP for any audience
+demographically plausible as a customer base, even if the panel under-
+measures because the mapping doesn't fully cover app surfaces.
+
+═══════════════════════════════════════════════════════════════════
+DECISION FRAMEWORK — apply IN ORDER for every item
+═══════════════════════════════════════════════════════════════════
+For each item you receive `panel`, `genpop`, `is:` (what it actually is),
+`tier`, `cultural_code`, `target`, and `conf`. Reason in this order:
+
+  0) DIGITAL ENGAGEMENT GATE (persona-facing first):
+     Name the **digital surface** you'd expect (website X, app X, authenticated property Y). If persona + item reality say **almost nobody like them routinely uses that DIGITAL SURFACE**, do NOT inflate BP just because incidental traffic exists in `panel_bp`. Conversely, ubiquitous utilities (mega search/social/carrier/bank/streaming ecosystems) SHOULD stay realistically high ONLY when personas plausibly use them digitally—not because "everyone hears the brand name".
+
+  0b) PERSONA **`commercial_viability_audit`** GATE:
+     Read the audited paragraph in PERSONA below. **If THIS inventory row matches (or is an obvious synonym of) ANY consumer franchise named therein as stalled, liquidating, SKU-withdrawn, or materially absent replenishment for the STUDY YEAR**, scoring MUST treat lingering clicks as noise: **estimated_bp_pct** usually **≤ 1–2%** absent explicit audit text documenting US continuity/relaunch. **`override_high` is disallowed as cover for audited dead equity.** Quote the audit briefly in `reason`.
+
+  0c) SPARSE-N PANEL GATE (generic, scales to any inventory):
+     If evidence shows **`n≤25`** in the measured panel parentheses **and** the row is absent from anchors, subsegments, cross-shop lists **and not supported by CATEGORY RULE tier examples**, **`override_high` above ~min(14, max(8, genpop × 25)) PP is disallowed** (use `no_panel`, `agree`, or restrained `override_low` instead). Explain "sparse/noisy measurement" when used.
+
+  1) IS THE ITEM IN THE CATEGORY-RULE'S anti_fit_in_category LIST?
+     → score 0.05–5%. The persona does not engage. Cite "anti-fit" in
+       reason.
+
+  2) CAN YOU PLACE THE ITEM INTO ONE OF THE CATEGORY RULE'S TIERS?
+     (Match by example_items first, then by tier criteria — what archetype
+     does this item fit?)
+     → assign that tier. Pick a BP within the tier's bp_range. Use the
+       LOW end of the band by default; go higher only when persona has
+       a specific affinity (named cultural anchor, subsegment fit,
+       cross-shop). Cite the tier name in tier_assigned and reason.
+
+  3) IS THE ITEM EXPLICITLY NAMED IN persona.cultural_anchors OR IN A
+     SUBSEGMENT'S cultural_markers (exact brand/entity spelled or clear synonym)?
+     → elevate BP **within the tier/rule band** ONLY for that evidenced touchpoint —
+       hitting the **TOP (70–88%) slice** demands you explicitly tie the PERSONA ROW
+       to **routine DIGITAL habits** naming that asset (anchors/cross-shop); **do NOT**
+       award "mass-fame halo" percentages to prestige/niche/global entities the median
+       persona never opens online.
+
+  4) IS THE ITEM IN persona.anti_fit_explicit (any sub-list)?
+     → low BP (0.05–5%). Cite "explicit anti-fit" in reason.
+
+  5) IS GEN-POP KNOWN FOR THIS ITEM?
+     → estimate genpop × persona_skew where persona_skew is a multiplier
+       you reason about:
+          • cultural anchor / named digital habit (documented in anchors)   → 1.9–3.3×
+          • strong subsegment fit / cross-shop          → 1.2–2.0×
+          • neutral fit                                 → 0.75–1.2×
+          • mild anti-fit                               → 0.3–0.7×
+          • strong anti-fit                             → 0.05–0.3×
+       Cite the specific persona attribute (subsegment name, cultural
+       anchor key, anti-fit category, demographic) that drove your
+       multiplier. Do NOT just rubber-stamp panel × 1.0.
+
+  6) GEN-POP UNKNOWN + classifier conf=low + no panel signal?
+     → unknown/unsupported row. Keep NONZERO but tiny:
+       default **0.05–0.95%** (never mid-pack). Cite
+       "low confidence + no baseline/panel → conservative sub-1% keep".
+
+  7) GEN-POP UNKNOWN AND ITEM IS RECOGNIZABLE BUT NOT IN ANCHORS:
+     → reason about it: would the persona realistically engage? At what
+       intensity? Use realistic adoption % for the brand's known U.S.
+       customer base × persona fit factor. For example: Tesla (~2M U.S.
+       owners ≈ 0.8% of adults) × 1.5x persona fit = ~1.2% BP, NOT 18%
+       just because some panelists clicked the website.
+
+═══════════════════════════════════════════════════════════════════
+TWO ABSOLUTE BACKSTOPS (programmatic floor / ceiling, applied AFTER)
+═══════════════════════════════════════════════════════════════════
+  • Any item in CATEGORY-RULE.anti_fit_in_category cannot exceed 5% BP.
+    No exceptions. (The Pass 1 rule agent saw the persona and named these
+    explicitly — honor your own persona.)
+  • No single item in any category can exceed 90% BP. Year-window panel
+    >= 90% means "everyone touched it once" — not useful. Cap at 88% even
+    for the most universal item. (The category rule's
+    category_ceiling_pct further tightens this for non-universal
+    categories.)
+
+═══════════════════════════════════════════════════════════════════
+REASONING REQUIREMENT — your `reason` IS the audit trail
+═══════════════════════════════════════════════════════════════════
+Every item's `reason` MUST cite at least one of:
+  • a tier name from the category rule ("placed in [tier_name]")
+  • a persona attribute (subsegment / cultural anchor / anti-fit /
+    demographic)
+  • "anti-fit" or "below gen-pop because [persona attribute]"
+  • "above gen-pop × Nx because [persona attribute]"
+
+If you can't articulate a reason, your default is genpop × 1.0 (or 1.5%
+if no genpop). Do NOT rubber-stamp panel readings. Do NOT default to a
+generic 27%-style middle.
+
+Never drop/zero a row solely because gen-pop is missing. Missing baseline
+means "reason from persona + item reality"; only unknown/unsupported rows
+should be kept in the conservative sub-1% band.
+
+═══════════════════════════════════════════════════════════════════
+INTENT-vs-EXPOSURE compression (semantic guidance)
+═══════════════════════════════════════════════════════════════════
+For categories where clickstream exposure ≠ active intent, compress
+panel × 0.2–0.4 to get realistic active-engagement %:
+  • BETTING / SPORTSBOOKS — only ~20% of US adults gamble in a year
+  • JOB SEARCH (Indeed, LinkedIn Jobs, ZipRecruiter) — only ~10%
+    actively job-searching at any moment
+  • REAL ESTATE / MORTGAGE — only ~5-8% buying or refinancing per year
+  • AUTO PURCHASE INTENT — only ~15-20% buying a car per year
+  • COLLEGE/UNIVERSITY pages — only students/applicants/alumni engage
+  • SPECIFIC HOSPITALS — only people in that geographic area
+  • HEALTH & WELLNESS — **named metropolitan hospital stacks** behave like SPECIFIC_HOSPITALS:
+    most US panelists anywhere do NOT digitally engage Mount Sinai/NYU Langone/etc.; high BP requires proven local/medical-role persona
+This isn't a math rule — it's just realistic context for your reasoning.
+"""
+
+    _tier2_hard = _category_pass2_calibration_block(cat_u, persona_doc).strip()
+    if _tier2_hard:
+        anchor_rules = anchor_rules.rstrip() + "\n\n" + _tier2_hard + "\n"
 
     date_context_block = ""
     if study_dates:
         date_context_block = (
             f"\nSTUDY WINDOW: {study_dates}\n"
-            "Consider whether any events during this window (product launches, viral moments, "
-            "sponsorship deals, seasonal patterns, award shows, controversies, album/movie releases) "
-            "would increase or decrease digital engagement with specific items in this category.\n"
+            "Consider events in this window (launches, viral moments, sponsorships, "
+            "controversies, releases) that would increase or decrease engagement.\n"
         )
 
-    prompt = f"""You are a consumer-research analyst assigning Brand Penetration (BP) values for the **{category}** category of a behavioral panel profile for **{subject}**.
-{date_context_block}
-DEFINITION — read carefully:
-Brand Penetration = the % of THIS specific audience whose digital clickstream (web visits, app usage, searches, streams, purchases) shows engagement with the item during the study window. This is NOT popularity, awareness, favorability, or in-store purchase. It is purely OBSERVED DIGITAL BEHAVIOR.
-
-KEY CONSEQUENCES OF "DIGITAL ONLY":
-  • CPG / grocery / household brands (Tide, Oreo, Coca-Cola, Heinz, Kraft) are bought IN STORES — their DIGITAL clickstream BP is LOW (typically 1-8%) even when household penetration is huge.
-  • Mass online retailers (Amazon, Walmart.com, Target.com) have HIGH digital BP across nearly every audience because everyone visits the website.
-  • Regional or geo-specific brands (Pavilions, Wegmans, Menards, H-E-B) have LOW national BP unless the audience over-indexes on that region.
-  • Luxury brands (Cartier, Tiffany, Nobu, Mastros) have LOW BP unless the audience explicitly skews HNW / luxury.
-
+    # ── Assemble persona doc fragments for the prompt ──
+    persona_block = f"""═══════════════════════════════════════════════════════════════════
+PERSONA — the audience you are scoring for (qualified on **{subject}**)
 ═══════════════════════════════════════════════════════════════════
-PERSONA — this is the audience you are scoring for
-═══════════════════════════════════════════════════════════════════
+Framing: persona + evidence describe whoever **entered the analytic sample via engagement criteria for "{subject}"** — the same conditioned cohort persona research targeted, not unconditional national strangers.
+
+SUBJECT ARCHETYPE (persona Step 1b — keep retail/sports templates from polluting creators, games, scripted IP…):
+{persona_archetype_block}
+
+SUMMARY:
 {summary}
+
+DIGITAL IDENTITY:
+{digital_identity or '(not available — use persona summary above)'}
 
 KEY DEMOGRAPHICS:
 {_json.dumps(demo_snapshot, indent=2)}
 
-CATEGORY-SPECIFIC GUIDANCE for {category}:
-{guidance_summary or '(use the persona summary above + your knowledge of the audience)'}
+SUB-SEGMENTS (audience is not monolithic):
+{_fmt_subsegments()}
 
-EXPECTED HIGH-BP ITEMS for this audience in this category
-(items the persona research agent specifically called out as strong fit — these SHOULD score HIGH if they appear in the list to score below):
+CULTURAL ANCHORS (what defines this audience — high-affinity markers):
+{_fmt_cultural_anchors()}
+
+EXPLICIT ANTI-FIT (low-affinity by definition — items in these categories
+should score very low for this audience even if famous nationally):
+{_fmt_anti_fit()}
+
+COMMERCIAL VIABILITY AUDIT — research-backed stalled/inactive US consumer equities (BINDING):
+{commercial_viability_audit[:3500] if commercial_viability_audit else '(omit only if persona JSON lacked key — infer conservatively; never invent euphemistic tier labels not listed in CATEGORY RULE)'}
+
+{interest_prior_block_cat}CATEGORY-SPECIFIC GUIDANCE for {category}:
+{guidance_summary or '(use persona above + your judgment)'}
+
+EXPECTED HIGH-FIT ITEMS for this category (persona research):
 {expected_high_block}
 
-EXPECTED LOW-BP ITEMS for this audience in this category
-(items the persona research agent specifically called out as POOR fit — these MUST stay LOW even if they're famous/prestigious in absolute terms):
+EXPECTED LOW-FIT ITEMS (famous but persona doesn't engage):
 {expected_low_block}
+"""
+
+    prompt = f"""You are a senior consumer-research analyst.
+
+PRODUCT CORE: Up-stream research distilled **WHO** is in the sample (**panelists conditioned on measurable engagement with "{subject}"**, described by PERSONA below). YOUR job — **every single row:** ask "**Would plausible members of THIS persona—with their income/life stage/anchors/explicit anti-fits—produce meaningful DIGITAL footprints** (opening apps, ordering/barcode check-ins/streaming/music/betting/sports/account flows/search & maps/authenticated journeys on branded properties — **not offline-only familiarity or accidental one-click noise**) tied to THIS exact item name in **{category}** during the study window?"
+Honor the **SUBJECT ARCHETYPE** section in the persona block: do not score a K-pop act's fans as if they were generic sneaker-CPG panelists unless research + item evidence justify that overlap.
+Turn that calibrated judgment into **`estimated_bp_pct`** (share of persona cohort showing that credible digital touching pattern), using CATEGORY RULE + item evidence (`panel`/genpop/classification)— never pure fame.
+
+═══════════════════════════════════════════════════════════════════
+CATEGORY CONTEXT
+═══════════════════════════════════════════════════════════════════
+Items in category **{category}** — behavioral panel profile **{subject}**.
+{date_context_block}
+{persona_block}
+
+{category_rule_block}
 
 {anchor_rules}
-═══════════════════════════════════════════════════════════════════
-ROW-BY-ROW REASONING — required process
-═══════════════════════════════════════════════════════════════════
-For EACH item in the list below, reason in this order:
-  1) DOES IT HAVE A US BASELINE shown next to it? → start from that baseline and apply the anchoring rule above (GenPop: ±5pp; persona: index by fit). Do NOT ignore the baseline.
-  2) Is this item in the EXPECTED HIGH list above? → score HIGH RELATIVE TO ITS BASELINE (1.5-3x for personas; ≈baseline for GenPop). DO NOT pump it to 80-95% just because it's "expected high" — respect the baseline ceiling.
-  3) Is this item in the EXPECTED LOW list above? → score LOW (0.1-0.5x baseline for personas; ≈baseline for GenPop) regardless of fame.
-  4) Is this a near-universal mass platform (Google, YouTube, Amazon, Facebook, Gmail, Instagram, Netflix)? → score per its baseline (typically 60-85%) unless the persona explicitly rejects it.
-  5) Is the item bought IN-STORE for the majority of consumers (CPG, grocery, household goods)? → score LOW (1-8%) regardless of brand strength.
-  6) Is the item REGIONAL/geo-specific and the persona is NOT specifically tied to that geography? → score LOW (0.5-3%).
-  7) Is the item LUXURY/HNW and the persona INCOME skew is NOT $150K+? → score LOW (0.3-3%).
-  8) No baseline available? → use your best estimate of what % of this specific audience would actually click/visit/use this item online during a single year.
-
 ═══════════════════════════════════════════════════════════════════
 OUTPUT FORMAT
 ═══════════════════════════════════════════════════════════════════
 Return ONLY a JSON array — no markdown, no commentary:
 [
-  {{"value": "<ITEM NAME — exact spelling from list>", "bp": <number 0.01-95>, "reason": "<≤15 words: which rule fired and why>"}},
+  {{
+    "value": "<ITEM NAME — exact spelling from list>",
+    "estimated_bp_pct": <float 0.05 to 88.0 — persona COHORT share with credible DIGITAL touching points for THIS item>,
+    "tier_assigned": "<EXACT tier_name from CATEGORY RULE that this item fits, or 'unmatched' if none>",
+    "panel_decision": "<agree|override_low|override_high|no_panel>",
+    "reason": "<≤22 words: cite the persona attribute (subsegment / cultural anchor / anti-fit) OR tier name that drove your number — REQUIRED>"
+  }},
   …
 ]
 
-DECIMAL PRECISION — every BP must have 4 organic-looking decimals (14.3827, 7.0614, 22.9153, NOT 30.0000 or 14.1234).
+NON-NEGOTIABLE:
+  • EVERY item from the list MUST appear in your output with EXACT spelling.
+  • estimated_bp_pct is a FLOAT in [0.05, 88.0]. (Universal 90% backstop applied programmatically.)
+  • tier_assigned MUST be copied **verbatim character-for-character** from ONE of the enumerated `tier_name` strings in CATEGORY RULE "TIER RULES" above (the `[i] Name — BP …` lines). **Forbidden:** free-text euphemisms like "national health tech platform".
+  • If PERSONA.COMMERCIAL VIABILITY AUDIT names THIS row's franchise/sub-brand as materially inactive for the study era, **`estimated_bp_pct` ≤ 2.0** (usually ~0.05–1.0%) unless audit text explicitly documents renewed US replenishment continuity.
+  • reason MUST cite a persona attribute OR tier EXACT NAME OR "**commercial viability audit**". Generic "popular brand" is INSUFFICIENT.
+  • RANK ORDER within your chunk must follow the tier hierarchy in the CATEGORY RULE.
+  • Items in CATEGORY RULE.anti_fit_in_category MUST score ≤ 5%. No exceptions.
 
-NON-NEGOTIABLE RULES:
-  • EVERY item from the list below MUST appear in your output (same exact spelling).
-  • RANK ORDER must reflect persona fit, not absolute fame. A Nike audience should rank Foot Locker > Cartier even though Cartier is more famous.
-  • An item being LUXURY or PRESTIGIOUS does NOT make it HIGH BP — only persona-relevance does.
-  • An item being LARGE or NATIONALLY-KNOWN does NOT make it HIGH BP if the persona doesn't engage with it digitally.
-  • Do NOT artificially compress the distribution — if the persona genuinely engages with 12 items in this category at 25%+, score all 12 at 25%+. There is NO cap on items per tier.
-
-ITEMS TO SCORE:
+ITEMS TO SCORE (each line shows item + evidence we already have):
 {values_list}
 """
 
-    token_budget = max(4096, len(values) * 80)
+    # Each item now requires ~110 tokens of output (value + bp + decision +
+    # short reason). Old budget of ~80/item was tuned for the smaller affinity
+    # response and would truncate larger chunks.
+    token_budget = max(4096, len(values) * 120)
     token_budget = min(token_budget, 16384)
+
+    # ── PHASE-1 LOGGING: sample one category prompt so we can inspect what scoring agent sees ──
+    global _FIRST_CAT_PROMPT_LOGGED
+    if not _FIRST_CAT_PROMPT_LOGGED:
+        _FIRST_CAT_PROMPT_LOGGED = True
+        print(f"\n{'─'*60}")
+        print(f"📋 SAMPLE CATEGORY AGENT PROMPT — [{category}] ({len(values)} items)")
+        print(f"{'─'*60}")
+        print(f"EXPECTED HIGH BLOCK:\n{expected_high_block}")
+        print(f"\nEXPECTED LOW BLOCK:\n{expected_low_block}")
+        print(f"\nGUIDANCE SUMMARY: {guidance_summary[:200]}")
+        print(f"{'─'*60}\n")
 
     try:
         _model = MODEL_QUALITY if category.upper() in PRIORITY_CATEGORIES else MODEL_SCORING
@@ -14893,10 +17501,278 @@ ITEMS TO SCORE:
             else:
                 raise
         if isinstance(result, list):
-            return result
+            # ── Direct BP from agent (NEW agent-led architecture) ──
+            # Agent returns estimated_bp_pct directly; we alias to 'bp' so the
+            # existing writeback (which reads entry['bp']) keeps working.
+            # Legacy `affinity` payloads are still accepted for safety during
+            # transition: if estimated_bp_pct is missing but affinity is present,
+            # we fall back to _affinity_to_bp using the canonical baseline.
+            converted: list[dict] = []
+            for entry in result:
+                if not isinstance(entry, dict) or 'value' not in entry:
+                    continue
+                v_u = str(entry['value']).strip().upper()
+                cls = (item_classifications or {}).get(v_u) or {}
+                conf = str(cls.get('confidence', '')).strip().lower()
+
+                bp_raw = entry.get('estimated_bp_pct',
+                                    entry.get('bp', None))
+                if bp_raw is None and 'affinity' in entry:
+                    try:
+                        aff = float(entry['affinity'])
+                    except (TypeError, ValueError):
+                        aff = 50.0
+                    bp_raw = _affinity_to_bp(aff, baseline_lookup.get((cat_u, v_u)))
+
+                try:
+                    bp = float(bp_raw)
+                except (TypeError, ValueError):
+                    bp = 0.05
+
+                bp = max(0.05, min(88.0, bp))
+
+                # ── v16 Backstop A: anti_fit_in_category cap ≤ 5% ──
+                # The Pass 1 Category Rule Agent named these items as
+                # explicitly anti-fit for this persona. Honor the persona's
+                # own classification regardless of what Pass 2 returned.
+                if anti_fit_in_category:
+                    _afic_upper = {x.strip().upper() for x in anti_fit_in_category}
+                    if v_u in _afic_upper and bp > 5.0:
+                        bp = 5.0
+
+                # ── v16 Backstop B: category_ceiling_pct ──
+                # Pass 1 Rule Agent set a category-level ceiling reflecting
+                # what the absolute top item should look like. Cap any item
+                # that exceeded it (year-window inflation catch-all).
+                if isinstance(category_ceiling_pct, (int, float)) and category_ceiling_pct > 0:
+                    if bp > category_ceiling_pct:
+                        bp = float(category_ceiling_pct)
+
+                panel_decision = str(entry.get('panel_decision', '') or '').strip().lower()
+                tier_assigned = str(entry.get('tier_assigned', '') or '').strip()
+                panel_entry = (panel_lookup or {}).get((cat_u, v_u))
+                try:
+                    panel_bp = float(panel_entry[0]) if panel_entry else None
+                    n_panel = int(panel_entry[1]) if panel_entry else 0
+                except (TypeError, ValueError, IndexError):
+                    panel_bp, n_panel = None, 0
+
+                out = {
+                    'value': entry['value'],
+                    'bp': round(bp, 4),
+                    'estimated_bp_pct': round(bp, 4),
+                    'panel_bp': panel_bp,
+                    'n_panel': n_panel,
+                    'panel_decision': panel_decision or 'no_panel',
+                    'tier_assigned': tier_assigned or 'unmatched',
+                    'baseline_bp': baseline_lookup.get((cat_u, v_u)),
+                    'classification_confidence': conf or 'unknown',
+                    'reason': entry.get('reason', ''),
+                }
+                converted.append(out)
+            return converted
     except Exception as e:
         print(f"   ⚠️ Category agent [{category}] failed: {e}")
     return []
+
+
+def _run_category_validator_agent(category: str,
+                                    persona_doc: dict,
+                                    subject: str,
+                                    category_rule: dict,
+                                    scored_entries: list[dict],
+                                    top_n: int = 20) -> list[dict]:
+    """v16 Pass 3 — Category Validator Agent.
+
+    Reviews the top-N scored items in a category against the persona +
+    category rule. Flags and corrects:
+      • Top-5 drift from category_rule.predicted_top_5
+      • Anti-fit items that landed above 5%
+      • Tier inversions (a tier-3 item ranking above a tier-1 item)
+      • Implausible spread (everything bunched at the ceiling)
+
+    Returns: list of {value, new_bp, reason} corrections to override the
+    Pass 2 outputs. Empty list = Pass 2 was clean. Override mode (not
+    flag-and-rescore) — the validator sees the whole category and is
+    smarter about cross-item plausibility.
+
+    Cost: 1 gpt-4o call per category, ~2K input + 500 output tokens.
+    Runtime: ~2-4s per category.
+    """
+    import json as _json
+    client = _get_openai_client()
+    if client is None or not scored_entries:
+        return []
+
+    # Sort by current BP descending and trim to top-N
+    sorted_entries = sorted(
+        [e for e in scored_entries if isinstance(e, dict) and 'value' in e],
+        key=lambda e: float(e.get('bp', 0) or 0),
+        reverse=True,
+    )[:top_n]
+    if not sorted_entries:
+        return []
+
+    persona_summary = persona_doc.get('persona_summary', '')
+    digital_identity = persona_doc.get('digital_identity', '')
+    cat_u_val = category.strip().upper()
+    _demo_keys = ('AGE', 'GENDER', 'ETHNICITY', 'INCOME', 'PARENTAL_STATUS') if cat_u_val == 'GAMES' else (
+        'AGE', 'GENDER', 'ETHNICITY', 'INCOME')
+    demo_snapshot = {k: v for k, v in (persona_doc.get('demographics') or {}).items()
+                     if k in _demo_keys}
+
+    rule_summary = str(category_rule.get('summary', '') or '').strip()
+    ceiling = category_rule.get('category_ceiling_pct')
+    tier_rules = category_rule.get('tier_rules') or []
+    anti_fit_in_cat = category_rule.get('anti_fit_in_category') or []
+    predicted_top5 = category_rule.get('predicted_top_5') or []
+
+    def _fmt_tiers() -> str:
+        if not tier_rules:
+            return '(no tier rules — validator should reason from persona alone)'
+        rows = []
+        for i, t in enumerate(tier_rules, 1):
+            ex = t.get('example_items') or []
+            rows.append(f"  [{i}] {t.get('tier_name','')} — BP {t.get('bp_range','')}% — {t.get('criteria','')}"
+                        + (f"  | examples: {', '.join(ex[:6])}" if ex else ''))
+        return '\n'.join(rows)
+
+    items_block = '\n'.join(
+        f"  {i+1:>2}. {e.get('value','?')} — BP {float(e.get('bp', 0) or 0):.2f}%"
+        f"  | tier={e.get('tier_assigned','')}"
+        f"  | reason: {str(e.get('reason',''))[:90]}"
+        for i, e in enumerate(sorted_entries)
+    )
+
+    ceiling_str = f"{ceiling:.0f}%" if isinstance(ceiling, (int, float)) else 'unspecified'
+
+    _audit = str(persona_doc.get('commercial_viability_audit') or '').strip()
+
+    _games_validator_checks = ''
+    if cat_u_val == 'GAMES':
+        _games_validator_checks = """
+  8) GAMES — **Non-gaming persona:** If persona + GAMES `category_signals` + summary do **not** encode habitual play, the whole TOP set should look **compressed** (no Roblox/Fortnite/GTA headlines). **Kid-first / Roblox-class** rows materially above **Wordle / crossword / NYT-style puzzle** titles on a **middle-aged or parent-heavy** profile without explicit kid-device narrative ⇒ override kid rows **DOWN**.
+
+  9) GAMES — **Parent / handoff discipline:** Material **PARENT** share + **no** explicit “kids play on my tablet / shared account” language ⇒ **Roblox & kid-first live services must not lead** and should not beat **age-appropriate adult** rows. Parents + proof of minor gamers ⇒ child titles may rise but still **cohere with AGE buckets** in KEY DEMOGRAPHICS.
+
+  10) GAMES — **When gaming IS on-brief:** Genre must match demo (e.g. **GTA/CoD** for young adult male competitive only with supporting text; **sports sims** for sports-heavy young adults; **casual/puzzle** dominant for 55+ defaults). Fix inversions where a misfit genre outranks the archetype implied by persona.
+"""
+
+    prompt = f"""You are the Pass 3 Category Validator for **{category}** in the **{subject}** profile.
+
+Each BP should reflect **creditable DIGITAL footprint** among panelists conditioned on "{subject}". If a ranked item trades on fame but persona + item reality imply **almost nobody like them routinely opens THAT web/app surface**, deflate it—even if stray panel bursts exist.
+
+Review the TOP {top_n} jointly; intervene only where clear contradiction vs purposeful digital habits (apps, carts, memberships, substantive sessions—not offline-only prestige).
+
+═══════════════════════════════════════════════════════════════════
+PERSONA SNIPPET — digital lens
+═══════════════════════════════════════════════════════════════════
+{digital_identity[:3500]}
+
+SUMMARY:
+{persona_summary[:2000]}
+
+KEY DEMOGRAPHICS:
+{_json.dumps(demo_snapshot, indent=2)}
+
+COMMERCIAL VIABILITY AUDIT (persona-authored — authoritative for stalled/inactive consumer franchises/SKUs):
+{_audit[:4000] if _audit else '(missing — escalate via corrections only when obvious liquidation mismatch vs headline BP)'}
+
+═══════════════════════════════════════════════════════════════════
+CATEGORY RULE (Pass 1 rubric — what the scoring agents were supposed to follow)
+═══════════════════════════════════════════════════════════════════
+SUMMARY: {rule_summary or '(none)'}
+CATEGORY CEILING: {ceiling_str}
+
+TIER RULES (highest BP → lowest):
+{_fmt_tiers()}
+
+ANTI-FIT IN CATEGORY (must be ≤5%):
+{', '.join(anti_fit_in_cat[:30]) if anti_fit_in_cat else '(none)'}
+
+PREDICTED TOP-5 (sanity reference):
+{', '.join(predicted_top5[:5]) if predicted_top5 else '(none)'}
+
+═══════════════════════════════════════════════════════════════════
+ACTUAL TOP {top_n} (from Pass 2 chunked scoring)
+═══════════════════════════════════════════════════════════════════
+{items_block}
+
+═══════════════════════════════════════════════════════════════════
+WHAT TO CHECK
+═══════════════════════════════════════════════════════════════════
+  1) ANTI-FIT VIOLATIONS: any item in anti_fit_in_category above 5%? Override.
+  2) PREDICTED-TOP-5 DRIFT: did the actual top-5 differ from predicted_top_5
+     in a way that doesn't make sense for this persona? If a regional/niche
+     item ranks above a national-mainstream cultural anchor, that's likely
+     wrong — override the regional one DOWN.
+  3) TIER INVERSIONS: any item with tier_assigned belonging to a lower tier
+     ranking ABOVE an item in a higher tier? Re-rank by overriding the
+     out-of-place item to a sensible BP within its rule's bp_range.
+  4) IMPLAUSIBLE SPREAD: are 5+ items all clustered within 3pp at the
+     ceiling? That's year-window inflation; force a 15-25pp spread by
+     pulling lower-tier items down.
+  5) DIGITAL ENGAGEMENT CREDIBILITY vs FAME HALO — does a top-ranked item plausibly have **routine DIGITAL footprints** among THIS persona members (authenticated apps/sites/ordering flows—not offline-only prestige awareness)? Override down if prestige/niche/geographic outliers beat mass digital utilities unjustified.
+
+  6) PERSONA-FIT SANITY — across the FULL reviewed set (TOP {top_n}), does ranking reflect BOTH persona specificity AND plausible national digital commons (search/social/carrier/banking) where applicable?
+
+  7) COMMERCIAL VIABILITY BINDING — Entities named in COMMERCIAL VIABILITY AUDIT as materially inactive/absent replenishment MUST NOT appear in headline BP bands (normally compress toward ≤1–2% unless audit text permits otherwise). Corrections referencing check #7 MUST quote audit phrasing briefly.
+{_games_validator_checks}
+═══════════════════════════════════════════════════════════════════
+OUTPUT FORMAT
+═══════════════════════════════════════════════════════════════════
+Return ONLY a JSON object — no markdown, no commentary:
+
+{{
+  "corrections": [
+    {{
+      "value": "<EXACT spelling from list above>",
+      "new_bp": <float 0.05 to 88.0>,
+      "reason": "<≤22 words: which check triggered + persona attribute justifying new value>"
+    }},
+    ...
+  ]
+}}
+
+If no corrections are needed, return {{"corrections": []}}. Be SPARING — only override when there's a clear violation. Do NOT over-correct minor drift; the goal is to catch actual mistakes, not micromanage.
+"""
+
+    try:
+        resp = _timed_completion(
+            client,
+            label=f"validator/{category.upper()}",
+            model=MODEL_QUALITY,
+            messages=[
+                {'role': 'system', 'content': 'Return ONLY valid JSON. No markdown, no commentary.'},
+                {'role': 'user', 'content': prompt},
+            ],
+            temperature=0.0,
+            max_tokens=2048,
+            response_format={"type": "json_object"},
+            timeout=45,
+        )
+        text = (resp.choices[0].message.content or '').strip()
+        doc = _json.loads(text)
+        if not isinstance(doc, dict):
+            return []
+        out: list[dict] = []
+        for c in (doc.get('corrections') or []):
+            if not isinstance(c, dict) or 'value' not in c:
+                continue
+            try:
+                new_bp = float(c.get('new_bp'))
+            except (TypeError, ValueError):
+                continue
+            new_bp = max(0.05, min(88.0, new_bp))
+            out.append({
+                'value': str(c['value']).strip(),
+                'new_bp': round(new_bp, 4),
+                'reason': str(c.get('reason', '') or '').strip(),
+            })
+        return out
+    except Exception as e:
+        print(f"   ⚠️ Category validator [{category}] failed: {e}")
+        return []
 
 
 def _build_genpop_persona_doc() -> dict:
@@ -14966,8 +17842,8 @@ def _build_genpop_persona_doc() -> dict:
             'expected_low': ['ONLYFANS', 'BLUESKY', 'MASTODON', 'TUMBLR', 'PATREON'],
         },
         'SEARCH ENGINE/AI': {
-            'summary': 'Google near-universal; Bing/Yahoo distant 2nd/3rd; ChatGPT growing but still <30% of all US adults.',
-            'expected_high': ['GOOGLE', 'GOOGLE.COM', 'BING', 'YAHOO'],
+            'summary': 'Google/Google Search dominates US digital (~80%+ plausible annual-touch cohort BP for broadly representative adults); Bing/Yahoo distant 2–3rd; standalone AI wrappers hot but ordinarily chase Google—not above it—for mass personas.',
+            'expected_high': ['GOOGLE', 'GOOGLE SEARCH', 'GOOGLE.COM', 'BING', 'YAHOO', 'CHATGPT'],
             'expected_low': ['YOU.COM', 'KAGI', 'NEEVA', 'BRAVE SEARCH'],
         },
         'INTEREST': {
@@ -14976,9 +17852,9 @@ def _build_genpop_persona_doc() -> dict:
             'expected_low': ['MULTI-LEVEL MARKETING', 'SHOOTING SPORTS & MARKSMANSHIP', 'POLO', 'YACHTING', 'EQUESTRIAN', 'CIGARS', 'HORSE RACING'],
         },
         'WHERE THEY SHOP': {
-            'summary': 'National mass retailers + Amazon dominate; regional and luxury chains stay LOW for the average US adult.',
+            'summary': 'National ecommerce + Walmart/Target/Costco/Best Buy-style breadth dominate digital GenPop; heavy regional supermarket banners (whatever US macro-region each serves — Texas-heavy, Northeast I-95-class, Southeast/Florida, Pacific Northwest/coastal West, inland/Midwest, etc.) stay low nationally unless LOCATION proves overlapping footprint.',
             'expected_high': ['AMAZON', 'WALMART', 'TARGET', 'COSTCO', 'HOME DEPOT', 'BEST BUY', 'EBAY', 'KOHLS', 'CVS', 'WALGREENS', 'LOWES', 'MACYS'],
-            'expected_low': ['CARTIER', 'TIFFANY', 'HERMES', 'NEIMAN MARCUS', 'BERGDORF GOODMAN', 'PAVILIONS', 'MENARDS', 'KIRKLANDS', 'REDBUBBLE', 'MERCADO LIBRE'],
+            'expected_low': ['CARTIER', 'TIFFANY', 'HERMES', 'NEIMAN MARCUS', 'BERGDORF GOODMAN', 'PAVILIONS', 'HEB', 'H-E-B', 'PUBLIX', 'WINN-DIXIE', 'MENARDS', 'KIRKLANDS', 'REDBUBBLE', 'MERCADO LIBRE'],
         },
         'WHERE THEY DINE': {
             'summary': 'Mass casual-dining dominates: Cheesecake Factory, Olive Garden, Chili\'s, Texas Roadhouse, Applebee\'s, IHOP. Luxury restaurants stay LOW.',
@@ -14991,7 +17867,7 @@ def _build_genpop_persona_doc() -> dict:
             'expected_low': [],
         },
         'MEDIA': {
-            'summary': 'Mass news (Google News, CNN, Fox News, Yahoo News) and broadcast (NBC, ABC, CBS) lead; ESPN strongest single sports outlet; specialty/niche outlets stay LOW.',
+            'summary': 'Nationals + aggregators dominate (Google News, Yahoo, CNN, Fox, broadcast nets, NYT/USAT). Sports cohorts see ESPN high. Regional metro dailies/local TV digital may sit **above unconditional gen-pop when LOCATION/persona proves home-market skew** but remain **below those nationals**. Entertainment trades (Variety, THR, Deadline) stay low unless industry persona.',
             'expected_high': ['GOOGLE NEWS', 'YAHOO NEWS', 'CNN', 'FOX NEWS', 'NBC NEWS', 'ABC NEWS', 'CBS', 'ESPN', 'NEW YORK TIMES', 'USA TODAY', 'APPLE NEWS', 'HUFFPOST'],
             'expected_low': ['HYPEBEAST', 'COMPLEX', 'SNEAKER NEWS', 'SOLE COLLECTOR', 'FORTUNE', 'BARRONS', 'WALL STREET JOURNAL'],
         },
@@ -15648,7 +18524,7 @@ Reply with ONLY a JSON array (no markdown, no commentary):
 # dropped and its share is redistributed across the remaining named
 # rows in the same category (proportional to existing weights).
 _DEMO_VALUE_BLOCKLIST: dict[str, set[str]] = {
-    'OCCUPATION': {'EMPLOYED FULL-TIME', 'EMPLOYED PART-TIME'},
+    'OCCUPATION': {'EMPLOYED FULL-TIME', 'EMPLOYED PART-TIME', 'STUDENT', 'HOMEMAKER', 'UNEMPLOYED', 'RETIRED'},
 }
 
 
@@ -15656,12 +18532,11 @@ def _drop_blocklisted_demo_values(df: pd.DataFrame) -> pd.DataFrame:
     """Remove forbidden Value rows from demographic categories and
     redistribute their share across the remaining named rows.
 
-    Currently used to enforce the OCCUPATION schema — EMPLOYED FULL-TIME
-    and EMPLOYED PART-TIME are remnants from a legacy schema and conflict
-    with the real occupation taxonomy (SELF-EMPLOYED, STUDENT, HOMEMAKER,
-    RETIRED, UNEMPLOYED, PREFER NOT TO SAY). Even though the prompts
-    forbid them, agents and legacy data flows occasionally re-emit them;
-    this gate is the deterministic catch-all.
+    Currently used to enforce the OCCUPATION schema — EMPLOYED FULL-TIME,
+    EMPLOYED PART-TIME, STUDENT, HOMEMAKER, UNEMPLOYED, and RETIRED are
+    remapped to OTHER. Even though the prompts forbid them, agents and
+    legacy data flows occasionally re-emit them; this gate is the
+    deterministic catch-all.
     """
     if 'Column' not in df.columns or 'Value' not in df.columns:
         return df
@@ -15899,8 +18774,36 @@ def _run_location_intelligence_agent(persona_doc: dict, subject: str) -> dict:
         return {}
 
     persona_summary = (persona_doc.get('persona_summary') or '').strip() or '(persona summary unavailable)'
+    digital_identity = (persona_doc.get('digital_identity') or '').strip()
+    archetype = (persona_doc.get('subject_archetype') or '').strip()
+    archetype_rationale = (persona_doc.get('archetype_rationale') or '').strip()
     demo_snapshot = {k: v for k, v in (persona_doc.get('demographics') or {}).items()
                      if k in ('AGE', 'GENDER', 'ETHNICITY', 'INCOME', 'EDUCATION')}
+
+    # Build geo-critical context block from persona identity fields
+    geo_context_block = ""
+    if digital_identity or archetype_rationale:
+        geo_context_block = "\nGEO-CRITICAL CONTEXT (use to identify HOME MARKET and regional affinity):\n"
+        if archetype:
+            geo_context_block += f"  Subject archetype: {archetype}\n"
+        if archetype_rationale:
+            geo_context_block += f"  Archetype details: {archetype_rationale}\n"
+        if digital_identity:
+            geo_context_block += f"  Digital identity: {digital_identity[:600]}\n"
+
+    ethnicity_block = ""
+    eth = demo_snapshot.get('ETHNICITY') or {}
+    if eth:
+        sorted_eth = sorted(eth.items(), key=lambda x: float(x[1]) if isinstance(x[1], (int, float)) else 0, reverse=True)
+        top_eth = [(k, float(v)) for k, v in sorted_eth[:5] if float(v) > 5]
+        if top_eth:
+            eth_lines = '\n'.join(f"  • {k}: {v:.1f}%" for k, v in top_eth)
+            ethnicity_block = f"""
+ETHNICITY BREAKDOWN — use this to inform DMA affinity:
+{eth_lines}
+
+If the audience skews {top_eth[0][0]} ({top_eth[0][1]:.0f}%), DMAs with high {top_eth[0][0]} populations should naturally score higher AFFINITY (60-85). DMAs with low {top_eth[0][0]} share should score lower AFFINITY (30-45). This is a fit signal — population size is handled separately by the math, so do not factor metro size into your affinity score.
+"""
 
     # Persona's named top DMAs (if any) — pass to the agent so it stays
     # consistent with the high-level persona research.
@@ -15922,46 +18825,56 @@ def _run_location_intelligence_agent(persona_doc: dict, subject: str) -> dict:
             f"  {i+1}. {name}  (US baseline {pct:.4f}%)"
             for i, (name, pct) in enumerate(chunk)
         )
-        prompt = f"""You are scoring per-DMA audience-affinity MULTIPLIERS for a behavioral panel profile of **{subject}**.
+        prompt = f"""You are scoring per-DMA AFFINITY for a behavioral panel profile of **{subject}**.
 
 PERSONA SUMMARY:
 {persona_summary}
-
+{geo_context_block}
 KEY DEMOGRAPHICS:
 {_json.dumps(demo_snapshot, indent=2)}
-
-PERSONA'S TOP-AFFINITY DMAS (already identified by lead persona research — keep your scoring consistent with these):
+{ethnicity_block}
+PERSONA'S TOP-AFFINITY DMAS (already identified by lead persona research):
 {top_named_block}
 
 ═══════════════════════════════════════════════════════════════════
-YOUR TASK
+YOUR TASK — RETURN AFFINITY 0-100, NOT MULTIPLIERS, NOT %
 ═══════════════════════════════════════════════════════════════════
-For each DMA below, output a MULTIPLIER on the U.S. Gen Pop baseline that reflects how concentrated THIS audience is in that market.
+For each DMA, output an AFFINITY score 0-100 reflecting how well this market FITS the persona's lifestyle, culture, and demographics.
 
-  • 1.0 = same concentration as the average U.S. adult (no skew).
-  • > 1.0 = audience over-indexes here. Heavy over-index = 2-4x. Extreme = 5-8x (rare; only if persona is very tightly tied to that geography).
-  • < 1.0 = audience under-indexes here. Mild under-index = 0.5-0.8x. Strong under-index = 0.1-0.3x.
-  • Floor 0.05, ceiling 8.0.
+The pipeline will combine your affinity with the DMA's actual U.S. population baseline to compute a final percentage — DO NOT factor population size into your affinity score. A small DMA can have affinity 80 if it fits the persona, and a giant DMA can have affinity 40 if it doesn't.
 
-REASONING GUIDANCE — use everything you know about each DMA:
-  • Ethnicity/race composition (ATLANTA, MEMPHIS, BIRMINGHAM = high Black share; LOS ANGELES, MIAMI, HOUSTON, SAN ANTONIO, EL PASO = high Hispanic; SAN FRANCISCO, NEW YORK, LOS ANGELES, SEATTLE, HONOLULU = high Asian).
-  • Urbanicity (large metro vs. small/rural — affects luxury, tech, and youth-cultural personas).
-  • Income / cost-of-living tier (NEW YORK, SAN FRANCISCO, BOSTON skew HNW; small Southern / Midwest / Appalachian DMAs skew lower-income).
-  • Age skew (FLORIDA / Sunbelt retirement DMAs skew older; college-town and tech-hub DMAs skew younger).
-  • Genre / subculture (NASHVILLE for country music; MIAMI for Latin music & nightlife; AUSTIN for tech/indie; LAS VEGAS for entertainment; PORTLAND/SEATTLE for outdoor/indie; DALLAS/HOUSTON for sports & corporate; LOS ANGELES for entertainment industry; PHOENIX for retirees + Latin growth).
-  • Regional brand fit (Pacific Northwest for outdoorsy brands; Northeast for finance/media; Texas for energy/sports/QSR; California coastal for tech/wellness/luxury).
+AFFINITY ANCHORS:
+  • 30  = clear under-index (wrong demographics, wrong region for this lifestyle).
+         **Use 30, NOT 0**, for a persona-mismatched mid-to-large US metro.
+         A real American DMA always has SOME audience presence — affinity 0 is
+         reserved for "this DMA doesn't exist" not "this DMA isn't a match."
+  • 50  = matches the average American — DEFAULT when no specific reason to deviate
+  • 75  = clear over-index (ethnicity match, subculture hub, regional brand fit)
+  • 100 = iconic geographic identifier for this audience (e.g. Nashville for country, Detroit for techno, Atlanta for hip-hop)
+
+DEFAULT IS 50. If you have NO specific reason that THIS persona over- or under-indexes in this DMA, score 50. Do not randomly assign high or low scores. The math handles "where the people are" via baseline weight — your job is purely persona-fit.
+
+**DO NOT score below 30** for any U.S. DMA listed below — they are all real American metros with real audiences. The lowest legitimate affinity is around 30 ("this metro under-indexes"). Use 0-25 only if a metro is a complete persona mismatch in every cultural/demographic dimension simultaneously, which is rare.
+
+REASONING SIGNALS (in priority order):
+  1. Ethnicity match: cross-reference persona ethnicity with DMA composition (Atlanta/Memphis/Birmingham = high Black share; LA/Miami/Houston/San Antonio/El Paso = high Hispanic; SF/NYC/Seattle/Honolulu = high Asian).
+  2. Subculture / regional brand fit: Nashville=country, Miami=Latin, Austin=tech/indie, LA=entertainment, NYC=finance/media, Portland/Seattle=outdoor, Texas=sports/energy.
+  3. Income / cost-of-living tier: NYC/SF/Boston skew HNW; rural Southern/Appalachian DMAs skew lower-income.
+  4. Age skew: Florida/Sunbelt retirement DMAs skew older; college-town and tech-hub DMAs skew younger.
 
 HARD RULES:
-  • You MUST return a multiplier for EVERY DMA listed below — do not skip any.
-  • Do NOT return percentages — return MULTIPLIERS only.
-  • Do NOT return narrative — return ONLY the JSON array described.
+  • Return AFFINITY 0-100 (integer) for EVERY DMA listed — do not skip any.
+  • Do NOT return percentages or multipliers.
+  • Do NOT factor population size into affinity — population is handled by the math.
+  • **HOME MARKET RULE**: If the subject is a professional athlete or sports team, their CURRENT TEAM'S HOME DMA must score 85-100 affinity. Prior team markets score 65-80. This is non-negotiable — fans concentrate in their team's city.
+  • Return ONLY the JSON array described.
 
 DMAS TO SCORE (chunk {chunk_idx + 1} of {len(chunks)}):
 {items_block}
 
 Return ONLY a JSON array, one entry per DMA, in the same order:
 [
-  {{"dma": "<DMA name as listed>", "mult": <float>}},
+  {{"dma": "<DMA name as listed>", "affinity": <integer 0-100>}},
   …
 ]
 """
@@ -15987,22 +18900,39 @@ Return ONLY a JSON array, one entry per DMA, in the same order:
                 if not isinstance(entry, dict):
                     continue
                 name = str(entry.get('dma', '')).strip().upper()
-                try:
-                    mult = float(entry.get('mult'))
-                except (TypeError, ValueError):
-                    continue
+                # Accept 'affinity' (new contract) or 'mult' (legacy)
+                if 'affinity' in entry:
+                    try:
+                        aff = float(entry['affinity'])
+                    except (TypeError, ValueError):
+                        continue
+                    aff = max(0.0, min(100.0, aff))
+                    out[name] = ('affinity', aff)
+                else:
+                    try:
+                        mult = float(entry.get('mult'))
+                    except (TypeError, ValueError):
+                        continue
+                    mult = max(0.05, min(8.0, mult))
+                    out[name] = ('mult', mult)
                 if not name:
                     continue
-                # Clamp to safety range
-                mult = max(0.05, min(8.0, mult))
-                out[name] = mult
             return out
         except Exception as e:
             print(f"   ⚠️ Location intelligence agent chunk {chunk_idx + 1} failed: {e}")
             return {}
 
     print(f"📍 Location intelligence agent: scoring {len(all_dmas)} DMAs in {len(chunks)} chunks…")
-    multipliers: dict = {}
+    raw_results: dict = {}  # name -> (kind, value) tuples from chunks
+
+    # Track per-chunk coverage so we can retry chunks where the LLM dropped
+    # items (returned a JSON array shorter than the input). This is the most
+    # common failure mode — silent partial-response — and previously left
+    # major DMAs (Boston, DC, Phoenix, Raleigh) with NO multiplier, which
+    # downstream defaulted to a bad fuzzy-substring match producing near-zero BPs.
+    def _expected_keys_for_chunk(chunk: list[tuple[str, float]]) -> set[str]:
+        return {normalize_dma_for_display(name).upper() for name, _ in chunk}
+
     with _futures.ThreadPoolExecutor(max_workers=min(6, len(chunks))) as pool:
         futures = {pool.submit(_process_chunk, i, c): i for i, c in enumerate(chunks)}
         _done_idxs = set()
@@ -16010,25 +18940,366 @@ Return ONLY a JSON array, one entry per DMA, in the same order:
             for fut in _futures.as_completed(futures, timeout=300):
                 idx = futures[fut]
                 _done_idxs.add(idx)
-                multipliers.update(fut.result() or {})
+                raw_results.update(fut.result() or {})
         except TimeoutError:
             timed_out = [(i, c) for i, c in enumerate(chunks) if i not in _done_idxs]
             print(f"   🔄 Location agent timeout: retrying {len(timed_out)} chunks sequentially…")
             for i, c in timed_out:
                 for _att in range(1, 4):
                     try:
-                        multipliers.update(_process_chunk(i, c) or {})
+                        raw_results.update(_process_chunk(i, c) or {})
                         break
                     except Exception as e:
                         if _att == 3:
                             print(f"   ❌ Location chunk {i} failed after 3 retries: {e}")
 
+    # ── Per-chunk coverage retry ──────────────────────────────────────────
+    # For any chunk where the agent returned <90% of expected DMAs, retry
+    # that chunk up to 2 more times. Without this, Boston/DC/Phoenix etc.
+    # silently drop to mult=1.0 (or worse, fuzzy-match noise) and end up
+    # at 0.01% BP after global normalization.
+    for retry_round in range(2):
+        incomplete = []
+        for i, c in enumerate(chunks):
+            expected = _expected_keys_for_chunk(c)
+            got = sum(1 for k in expected if k in raw_results)
+            if got < len(expected) * 0.9:
+                incomplete.append((i, c, got, len(expected)))
+        if not incomplete:
+            break
+        print(f"   🔄 Location retry round {retry_round + 1}: "
+              f"{len(incomplete)} chunks under-returned "
+              f"({', '.join(f'#{i}={g}/{t}' for i, _, g, t in incomplete)})")
+        for i, c, _g, _t in incomplete:
+            try:
+                fresh = _process_chunk(i, c) or {}
+                # Merge: only fill in missing keys; don't overwrite good values.
+                for k, v in fresh.items():
+                    raw_results.setdefault(k, v)
+            except Exception as e:
+                print(f"   ❌ Location chunk {i} retry failed: {e}")
+
+    # ── Convert chunk results to a multiplier dict ─────────────────────────
+    # Affinity-mode entries (the new contract) translate as:
+    #     mult = affinity / 50.0   (so affinity 50 -> mult 1.0, affinity 100 -> mult 2.0,
+    #                               affinity 0 -> mult 0.0)
+    # The downstream caller multiplies by gen_pop and renormalizes globally
+    # to sum=100%, which is the "weight = affinity * gen_pop" math from the
+    # plan. Affinity 0 collapses naturally; tiny affinity * tiny gen_pop
+    # collapses Ottumwa; affinity ~50 * large gen_pop keeps NYC near baseline.
+    multipliers: dict = {}
+    raw_affinities: dict = {}
+    n_aff = 0
+    n_mult = 0
+    # Floor the multiplier at 0.5 (i.e. 2x under-index max) for any DMA the
+    # agent scored at the bottom. Major US metros (Boston, DC, Phoenix,
+    # Raleigh) were collapsing to 0.01-0.03% BP whenever the agent stamped
+    # affinity 0 on them, even after global renormalization. A 0.5 floor
+    # caps that worst-case at half-baseline (~1% for a 2% gen-pop DMA),
+    # which is realistic for "agent thinks this metro doesn't fit the
+    # persona" rather than "this metro doesn't exist."
+    AFFINITY_MULT_FLOOR = 0.5
+    for name, payload in raw_results.items():
+        if isinstance(payload, tuple) and len(payload) == 2:
+            kind, val = payload
+            if kind == 'affinity':
+                raw_affinities[name] = float(val)
+                multipliers[name] = max(AFFINITY_MULT_FLOOR, float(val) / 50.0)
+                n_aff += 1
+            else:
+                multipliers[name] = max(0.05, min(8.0, float(val)))
+                n_mult += 1
+        else:
+            try:
+                multipliers[name] = max(0.05, min(8.0, float(payload)))
+                n_mult += 1
+            except (TypeError, ValueError):
+                continue
+
+    # Diagnostic: print affinity histogram + the bottom-10 DMAs by raw
+    # affinity, so we can tell whether the agent itself assigns extreme
+    # zeros vs. some downstream code crushing major markets.
+    if raw_affinities:
+        bins = [0, 0, 0, 0, 0]  # [0-19, 20-39, 40-59, 60-79, 80-100]
+        for v in raw_affinities.values():
+            idx = min(int(v / 20), 4)
+            bins[idx] += 1
+        print(f"   📍 Affinity histogram: 0-19={bins[0]} 20-39={bins[1]} 40-59={bins[2]} 60-79={bins[3]} 80-100={bins[4]}")
+        bottom = sorted(raw_affinities.items(), key=lambda kv: kv[1])[:10]
+        print(f"   📍 Bottom-10 affinity DMAs: " +
+              ", ".join(f"{n}={int(v)}" for n, v in bottom))
+
     coverage = len(multipliers) / max(1, len(all_dmas))
-    print(f"   ✅ Location intelligence agent: scored {len(multipliers)}/{len(all_dmas)} DMAs ({coverage:.0%})")
+    print(f"   ✅ Location intelligence agent: scored {len(multipliers)}/{len(all_dmas)} DMAs ({coverage:.0%}) "
+          f"[affinity={n_aff}, legacy_mult={n_mult}]")
     if coverage < 0.5:
         print(f"   ⚠️ Coverage too low — falling back to persona top-N + Gen Pop backfill")
         return {}
     return multipliers
+
+
+def _run_unified_scoring_pass(
+    cats_needing_llm: list,
+    unique_items_by_cat: dict,
+    persona_doc: dict,
+    subject: str,
+    panel_lookup: dict,
+    canonical_baseline_lookup: dict | None = None,
+    item_classifications: dict | None = None,
+    timeout_sec: int = 600,
+) -> dict:
+    """
+    UNIFIED SCORING PASS — replaces 50-category Pass 1 + Pass 2 + Pass 3
+    with a single gpt-5.5 reasoning call.
+
+    The agent sees the WHOLE profile inventory at once (every category, every
+    item, panel BP, gen pop baseline, persona) and produces final BP scores
+    for everything in one reasoning pass. This is the architecture that
+    matches the cognitive bandwidth of modern reasoning models.
+
+    Inputs match what Waves 1/2/3 receive in parallel_category_agents:
+        cats_needing_llm:           list of categories to score
+        unique_items_by_cat:        {cat: [item_str, ...]}
+        persona_doc:                full persona dictionary
+        subject:                    e.g. "Kevin Durant"
+        panel_lookup:               {(CAT_UPPER, VAL_UPPER): (panel_bp, n_panel)}
+        canonical_baseline_lookup:  {(CAT_UPPER, VAL_UPPER): genpop_bp}
+        item_classifications:       {VAL_UPPER: {what_is_it, ...}}
+
+    Returns:
+        results_map: {cat: [{value, bp, estimated_bp_pct, panel_decision,
+                              reason, confidence}, ...]}
+
+    Raises on hard failure so the caller can fall back to Waves 1/2/3.
+
+    Env knobs:
+        BG_UNIFIED_AUDIT_MODEL        (default 'gpt-5.5')
+        BG_UNIFIED_REASONING_EFFORT   (default 'high')
+        BG_UNIFIED_MAX_ITEMS_PER_CAT  (default 80)
+    """
+    import json as _json
+    import time as _time
+
+    client = _get_openai_client()
+    if client is None:
+        raise RuntimeError("OpenAI client unavailable")
+
+    if not cats_needing_llm:
+        return {}
+
+    model = os.getenv('BG_UNIFIED_AUDIT_MODEL', 'gpt-5.5').strip()
+    reasoning_effort = os.getenv('BG_UNIFIED_REASONING_EFFORT', 'high').strip().lower()
+    if reasoning_effort not in {'minimal', 'low', 'medium', 'high', 'xhigh'}:
+        reasoning_effort = 'high'
+    max_items_per_cat = int(os.getenv('BG_UNIFIED_MAX_ITEMS_PER_CAT', '80'))
+
+    # ── Build the inventory snapshot block ──────────────────────────────────
+    # For each category we list items sorted by panel BP desc, capped at
+    # max_items_per_cat. Each line: "ITEM | panel:X.X% gp:Y.Y%" (very compact).
+    blocks: list[str] = []
+    total_items = 0
+    items_by_cat_clamped: dict[str, list[str]] = {}
+
+    for cat in sorted(cats_needing_llm):
+        items = unique_items_by_cat.get(cat) or []
+        if not items:
+            continue
+        cat_u = cat.strip().upper()
+        # Build (item, panel_bp, gp_bp) triples
+        triples = []
+        for v in items:
+            v_u = str(v).strip().upper()
+            panel_bp, _np = panel_lookup.get((cat_u, v_u), (0.0, 0))
+            gp_bp = 0.0
+            if canonical_baseline_lookup:
+                gp_bp = float(canonical_baseline_lookup.get((cat_u, v_u), 0) or 0)
+            triples.append((str(v), float(panel_bp or 0), gp_bp))
+        # Sort: items WITH panel signal first (by panel BP desc), then alphabetic for the long tail
+        triples.sort(key=lambda t: (-t[1], t[0]))
+        if len(triples) > max_items_per_cat:
+            triples = triples[:max_items_per_cat]
+
+        items_by_cat_clamped[cat] = [t[0] for t in triples]
+
+        lines = []
+        for name, panel_bp, gp_bp in triples:
+            gp_str = f"gp:{gp_bp:.2f}%" if gp_bp > 0 else "gp:n/a"
+            lines.append(f"  {name} | panel:{panel_bp:.2f}% {gp_str}")
+        blocks.append(f"{cat} ({len(triples)} items):\n" + "\n".join(lines))
+        total_items += len(triples)
+
+    inventory_block = "\n\n".join(blocks)
+
+    # ── Compact persona summary ─────────────────────────────────────────────
+    persona_summary = persona_doc.get('persona_summary', '') or ''
+    digital_identity = persona_doc.get('digital_identity', '') or ''
+    archetype = persona_doc.get('subject_archetype', '') or ''
+    archetype_rationale = persona_doc.get('archetype_rationale', '') or ''
+    cat_signals = persona_doc.get('category_signals') or {}
+    cultural_anchors = persona_doc.get('cultural_anchors') or {}
+    anti_fit = persona_doc.get('anti_fit_explicit') or {}
+
+    demos = persona_doc.get('demographics') or {}
+    demo_lines = []
+    for d_cat in ('AGE', 'GENDER', 'ETHNICITY', 'INCOME', 'EDUCATION', 'RELATIONSHIP'):
+        d = demos.get(d_cat)
+        if isinstance(d, dict) and d:
+            top = sorted(d.items(), key=lambda kv: -float(kv[1] or 0))[:3]
+            demo_lines.append(f"  {d_cat}: " + ", ".join(f"{k}={float(v):.0f}%" for k, v in top))
+
+    cat_signal_lines = []
+    for k, v in list(cat_signals.items())[:15]:
+        s = str(v).strip()
+        if s:
+            cat_signal_lines.append(f"  {k}: {s[:200]}")
+
+    persona_block = (
+        f"SUBJECT: {subject}\n"
+        f"ARCHETYPE: {archetype}\n"
+        f"ARCHETYPE RATIONALE: {archetype_rationale[:400]}\n\n"
+        f"PERSONA SUMMARY:\n{persona_summary[:1200]}\n\n"
+        f"DIGITAL IDENTITY:\n{digital_identity[:600]}\n\n"
+        f"DEMOGRAPHICS:\n" + ("\n".join(demo_lines) if demo_lines else "  (n/a)") + "\n\n"
+        f"CATEGORY SIGNALS (persona's category-specific cues):\n"
+        + ("\n".join(cat_signal_lines) if cat_signal_lines else "  (none provided)") + "\n\n"
+        f"CULTURAL ANCHORS: {_json.dumps(cultural_anchors)[:400] if cultural_anchors else '(none)'}\n"
+        f"ANTI-FIT (avoid): {_json.dumps(anti_fit)[:300] if anti_fit else '(none)'}"
+    )
+
+    # ── Build the prompt ────────────────────────────────────────────────────
+    prompt = (
+        f"You are a senior US consumer research analyst scoring an audience profile end-to-end.\n"
+        f"You see the WHOLE profile inventory at once — every category, every item, with the\n"
+        f"measured panel BP and the US Gen Pop baseline. Your job: produce the final per-item\n"
+        f"Brand Penetration (BP) for THIS persona by reasoning about each category in context\n"
+        f"of every other category — exactly like a smart human analyst would.\n\n"
+        f"=== PERSONA ===\n"
+        f"{persona_block}\n\n"
+        f"=== HOW TO SCORE ===\n"
+        f"For every item, decide its final BP using:\n"
+        f"1. **Persona fit**: Does this item match the audience's archetype, demographics,\n"
+        f"   and category signals? Items in the persona's wheelhouse should over-index;\n"
+        f"   anti-fit items should under-index.\n"
+        f"2. **Panel evidence**: Treat panel BP as a real-world measurement, not noise.\n"
+        f"   Anchor near it unless the persona has a strong reason to override.\n"
+        f"3. **Gen Pop comparison**: Index vs Gen Pop should make sense for this persona.\n"
+        f"4. **Cross-category coherence**: A LeBron-fan persona's QSR should match urban\n"
+        f"   sports-viewing patterns. A premium-Apple persona's banking should reflect that.\n"
+        f"   Make sure rankings WITHIN and ACROSS categories tell one coherent story.\n"
+        f"5. **Distribution health**: Each category should have a clear leader and natural\n"
+        f"   tail. Avoid flat top-5s (5+ items within 4% BP at the top is unrealistic).\n"
+        f"6. **Realistic ceilings**: Persona-driven, not arbitrary. A Zoom company audience\n"
+        f"   CAN have Zoom near 90%; an indie-music audience cannot have Spotify at 95%.\n\n"
+        f"=== ITEM INVENTORY ({len(items_by_cat_clamped)} cats, {total_items} items, sorted by panel BP) ===\n"
+        f"{inventory_block}\n\n"
+        f"=== OUTPUT FORMAT ===\n"
+        f"Return ONLY valid JSON. Score EVERY item listed above. Use this exact structure:\n"
+        f'{{"scores":{{"CATEGORY_NAME":[{{"value":"ITEM","bp":12.34,"reason":"brief"}},...],...}}}}\n\n'
+        f"BP must be a number between 0.05 and 99.0. Keep `reason` to <50 chars.\n"
+        f"Score every item — do not omit any. JSON only, no markdown fences."
+    )
+
+    # ── Call gpt-5.5 with reasoning ─────────────────────────────────────────
+    is_reasoning = model.lower().startswith(('gpt-5', 'o1', 'o3', 'o4'))
+    print(f"🚀 Unified scoring: model={model} effort={reasoning_effort if is_reasoning else 'N/A'} "
+          f"({len(items_by_cat_clamped)} cats, {total_items} items)")
+    t0 = _time.perf_counter()
+
+    text = None
+    if is_reasoning and hasattr(client, 'responses'):
+        try:
+            resp = client.responses.create(
+                model=model,
+                input=[
+                    {'role': 'system',
+                     'content': 'You are a senior US consumer research analyst. Return only valid JSON.'},
+                    {'role': 'user', 'content': prompt},
+                ],
+                reasoning={'effort': reasoning_effort},
+                max_output_tokens=60000,
+                timeout=timeout_sec,
+            )
+            text = (getattr(resp, 'output_text', None) or '').strip()
+            if not text:
+                for block in (getattr(resp, 'output', None) or []):
+                    for part in (getattr(block, 'content', None) or []):
+                        t = getattr(part, 'text', None)
+                        if t:
+                            text = (text or '') + t
+                text = (text or '').strip()
+        except Exception as e_resp:
+            print(f"   ⚠️ Responses API failed ({e_resp}); falling back to chat.completions")
+            text = None
+
+    if not text:
+        cc_kwargs = {
+            'model': model,
+            'messages': [
+                {'role': 'system',
+                 'content': 'You are a senior US consumer research analyst. Return only valid JSON.'},
+                {'role': 'user', 'content': prompt},
+            ],
+            'max_tokens': 60000,
+            'timeout': timeout_sec,
+        }
+        if not is_reasoning:
+            cc_kwargs['temperature'] = 0.1
+        resp = client.chat.completions.create(**cc_kwargs)
+        text = resp.choices[0].message.content.strip()
+
+    elapsed = _time.perf_counter() - t0
+
+    # Strip code fences / extract first JSON block
+    if text.startswith('```'):
+        text = text.split('\n', 1)[1].rsplit('```', 1)[0].strip()
+    depth = 0
+    end = 0
+    for i, c in enumerate(text):
+        if c == '{':
+            depth += 1
+        elif c == '}':
+            depth -= 1
+            if depth == 0:
+                end = i + 1
+                break
+    if end > 0:
+        text = text[:end]
+
+    parsed = _json.loads(text)
+    raw_scores = parsed.get('scores') or parsed  # accept either {scores:{...}} or {...} top-level
+
+    # ── Convert to results_map shape (matches _run_single_category_agent output)
+    results_map: dict[str, list[dict]] = {}
+    n_items_returned = 0
+    for cat in cats_needing_llm:
+        cat_entries = raw_scores.get(cat) or raw_scores.get(cat.upper()) or []
+        out_list = []
+        if isinstance(cat_entries, list):
+            for entry in cat_entries:
+                if not isinstance(entry, dict):
+                    continue
+                val = str(entry.get('value', '')).strip()
+                if not val:
+                    continue
+                try:
+                    bp = float(entry.get('bp', entry.get('estimated_bp_pct', 0)) or 0)
+                except (ValueError, TypeError):
+                    bp = 0.0
+                bp = max(0.05, min(99.0, bp))
+                out_list.append({
+                    'value': val,
+                    'bp': round(bp, 4),
+                    'estimated_bp_pct': round(bp, 4),
+                    'panel_decision': 'unified',
+                    'reason': str(entry.get('reason', ''))[:200],
+                    'confidence': 0.85,
+                })
+        results_map[cat] = out_list
+        n_items_returned += len(out_list)
+
+    print(f"   ✅ Unified scoring done in {elapsed:.1f}s — {n_items_returned} items scored across "
+          f"{sum(1 for v in results_map.values() if v)}/{len(cats_needing_llm)} cats")
+    return results_map
 
 
 def parallel_category_agents(df: pd.DataFrame, persona_doc: dict,
@@ -16046,7 +19317,7 @@ def parallel_category_agents(df: pd.DataFrame, persona_doc: dict,
                               study_dates: str = '') -> pd.DataFrame:
     """Step 2 — run one gpt-4o agent per behavioral category in parallel.
 
-    Each agent receives the persona doc + the list of values from Snowflake for
+    Each agent receives the persona doc + the list of values from ClickHouse for
     its category, and returns a BP for every row.  Demographics and Location are
     written directly from the persona_doc (Step 1 output), not via category agents.
 
@@ -16104,17 +19375,16 @@ def parallel_category_agents(df: pd.DataFrame, persona_doc: dict,
         'AGE': ['17 AND UNDER', '18-24', '25-34', '35-44', '45-54', '55-64', '65 OR OLDER'],
         'GENDER': ['FEMALE', 'MALE', 'NON-BINARY', 'TRANS FEMALE', 'TRANS MALE'],
         'ETHNICITY': ['WHITE', 'BLACK OR AFRICAN AMERICAN', 'HISPANIC OR LATINO', 'ASIAN',
-                       'NATIVE AMERICAN / ALASKA NATIVE'],
+                       'OTHER'],
         'INCOME': ['UNDER $25,000', '$25,000-$49,999', '$50,000-$74,999', '$75,000-$99,999',
                    '$100,000-$149,999', '$150,000-$249,999', '$250,000 OR MORE'],
-        'EDUCATION': ['LESS THAN HIGH SCHOOL', 'HIGH SCHOOL GRADUATE', 'SOME COLLEGE',
-                      'ASSOCIATE DEGREE', "BACHELOR'S DEGREE", 'GRADUATE DEGREE'],
-        'RELATIONSHIP': ['SINGLE', 'MARRIED', 'IN A RELATIONSHIP', 'DIVORCED', 'WIDOWED', 'PREFER NOT TO SAY'],
+        'EDUCATION': ['HIGH SCHOOL OR LESS', 'SOME COLLEGE',
+                     'ASSOCIATE DEGREE', "BACHELOR'S DEGREE", 'GRADUATE OR PROFESSIONAL DEGREE'],
+        'RELATIONSHIP': ['SINGLE', 'MARRIED', 'IN A RELATIONSHIP', 'DIVORCED OR SEPARATED', 'WIDOWED', 'PREFER NOT TO SAY'],
         'SEXUAL_ORIENTATION': ['STRAIGHT / HETEROSEXUAL', 'GAY OR LESBIAN',
                                'ANOTHER SEXUAL ORIENTATION', 'PREFER NOT TO SAY'],
         'PARENTAL_STATUS': ['NO CHILDREN', 'HAS CHILDREN', 'PREFER NOT TO SAY'],
-        'OCCUPATION': ['SELF-EMPLOYED', 'STUDENT', 'HOMEMAKER', 'RETIRED',
-                       'UNEMPLOYED', 'PREFER NOT TO SAY'],
+        'OCCUPATION': ['OTHER', 'PREFER NOT TO SAY'],
     }
 
     def _norm_bracket(s: str) -> str:
@@ -16175,9 +19445,10 @@ def parallel_category_agents(df: pd.DataFrame, persona_doc: dict,
                 df.at[idx, 'Value'] = expected
                 break
 
-    # Remove "Prefer Not to Say" / "Other" rows from AGE, GENDER, ETHNICITY, INCOME
-    _NO_PNTS_CATS = {'AGE', 'GENDER', 'ETHNICITY', 'INCOME'}
-    _DROP_VALUES = {'PREFER NOT TO SAY', 'OTHER', 'ANOTHER RACE/ETHNICITY'}
+    # Remove "Prefer Not to Say" / "Other" rows from non-ethnicity demographics.
+    # ETHNICITY keeps OTHER as a valid output bucket.
+    _NO_PNTS_CATS = {'AGE', 'GENDER', 'INCOME'}
+    _DROP_VALUES = {'PREFER NOT TO SAY', 'OTHER'}
     drop_indices = []
     for cat in _NO_PNTS_CATS:
         cat_mask = df['Column'].astype(str).str.strip().str.upper() == cat
@@ -16186,7 +19457,7 @@ def parallel_category_agents(df: pd.DataFrame, persona_doc: dict,
             if val_u in _DROP_VALUES:
                 drop_indices.append(idx)
     if drop_indices:
-        print(f"   🗑️ Removing {len(drop_indices)} 'Prefer Not to Say'/'Other' rows from AGE/GENDER/ETHNICITY/INCOME")
+        print(f"   🗑️ Removing {len(drop_indices)} 'Prefer Not to Say'/'Other' rows from AGE/GENDER/INCOME")
         df = df.drop(drop_indices).reset_index(drop=True)
 
     # Write persona_doc values to DataFrame.
@@ -16231,19 +19502,37 @@ def parallel_category_agents(df: pd.DataFrame, persona_doc: dict,
             gp_dma_pct = {}
 
         # Run the location intelligence agent (all 210 DMAs).
+        # The agent now returns AFFINITY 0-100 per DMA. Aggregation in
+        # _run_location_intelligence_agent() converts affinity to a multiplier
+        # (mult = affinity / 50.0) so legacy callers see the same shape.
+        # No post-LLM Census ethnicity multiplication or top-30/rural forcing
+        # — the agent factors ethnicity from `ethnicity_block` and the
+        # gen_pop * mult global renormalization handles population weighting
+        # naturally. Smart, not forced.
         loc_multipliers = _run_location_intelligence_agent(persona_doc, subject) if gp_dma_pct else {}
 
         if loc_multipliers and gp_dma_pct:
             # ── Tier 1: agent-driven, every DMA scored ──
             # Compute raw weighted shares then renormalize so they sum to 100.
+            #
+            # IMPORTANT: NO substring fuzzy match here. The previous version
+            # used `next((m for k,m in loc_multipliers.items() if k in dma_u
+            # or dma_u in k), 1.0)` which would match e.g. "MA" inside
+            # "BOSTON MA MANCHESTER NH" and silently return the wrong DMA's
+            # tiny multiplier, crushing major markets to ~0.01% BP. If a DMA
+            # is missing from the agent's response, default to mult=1.0
+            # (gen-pop baseline) explicitly and log it.
             raw_share = {}
+            missing_dmas: list[str] = []
             for dma_u, baseline in gp_dma_pct.items():
                 mult = loc_multipliers.get(dma_u)
                 if mult is None:
-                    # Try substring fuzzy match (handles minor name diffs).
-                    mult = next((m for k, m in loc_multipliers.items()
-                                 if k in dma_u or dma_u in k), 1.0)
+                    mult = 1.0
+                    missing_dmas.append(dma_u)
                 raw_share[dma_u] = max(0.0001, baseline * float(mult))
+            if missing_dmas:
+                print(f"   ℹ️  Location: {len(missing_dmas)} DMAs missing from agent — using gen-pop baseline (mult=1.0): "
+                      f"{', '.join(missing_dmas[:8])}{'…' if len(missing_dmas) > 8 else ''}")
             total_raw = sum(raw_share.values()) or 1.0
             final_share = {k: (v / total_raw) * 100.0 for k, v in raw_share.items()}
 
@@ -16260,21 +19549,83 @@ def parallel_category_agents(df: pd.DataFrame, persona_doc: dict,
                 except (TypeError, ValueError):
                     continue
 
+            # ── Canonicalize LOCATION rows BEFORE writing shares ──────────────
+            # Two failure modes:
+            #
+            # 1. Non-canonical strays. ClickHouse user_data sometimes returns
+            #    abbreviated DMA names like "BOSTON MA" alongside (or instead
+            #    of) the canonical "BOSTON MA MANCHESTER NH". The stray
+            #    survives normalize_dma_for_display() unchanged (it's already
+            #    a valid display string) so we drop it; otherwise it would
+            #    get share=0.01, R14 would floor it to 0.5-1%, V1 would see
+            #    LOCATION sum > 110% and proportionally scale every canonical
+            #    DMA down — crushing Boston/DC/Phoenix/Raleigh to 0.01% BP.
+            #
+            # 2. Canonical missing entirely. If the Nike sample data has the
+            #    Boston DMA only as "BOSTON MA" (stray) and no row exists for
+            #    canonical "BOSTON MA MANCHESTER NH", dropping the stray
+            #    leaves no Boston row at all. Then enforce_exact_210_dmas()
+            #    later adds canonical Boston with random.uniform(0.01, 0.05),
+            #    bypassing the agent's actual affinity score. In the previous
+            #    Nike run this is exactly what happened: ~21 major DMAs
+            #    (Boston, Phoenix, Raleigh, DC, Tucson, Pittsburgh, Birmingham,
+            #    El Paso, Mobile, Ft Wayne, Washington DC) all landed in the
+            #    0.005-0.05% BP range from that random fallback.
+            #
+            # Fix: drop strays AND inject any missing canonical rows so the
+            # writeback loop populates them with their `final_share` values.
+            canonical_keys_upper = set(gp_dma_pct.keys())
+
+            drop_indices = []
+            present_canonical: set[str] = set()
+            for idx in loc_indices:
+                val_u = str(df.at[idx, 'Value']).strip().upper()
+                if val_u in canonical_keys_upper:
+                    present_canonical.add(val_u)
+                else:
+                    drop_indices.append(idx)
+            if drop_indices:
+                df = df.drop(drop_indices).reset_index(drop=True)
+                print(f"   📍 Location: dropped {len(drop_indices)} non-canonical LOCATION rows "
+                      f"(stray DMA names like 'BOSTON MA' / 'PHOENIX AZ')")
+
+            missing_canonical = canonical_keys_upper - present_canonical
+            if missing_canonical:
+                # Reverse-map upper→display from GENPOP_DMA_PERCENTAGES so we
+                # write the same casing/formatting users see elsewhere.
+                upper_to_display = {
+                    normalize_dma_for_display(str(name)).upper(): normalize_dma_for_display(str(name))
+                    for name, _ in GENPOP_DMA_PERCENTAGES
+                }
+                new_rows = []
+                for canonical_u in missing_canonical:
+                    display_name = upper_to_display.get(canonical_u, canonical_u.title())
+                    row = {col: None for col in df.columns}
+                    row['Column'] = 'LOCATION'
+                    row['Value'] = display_name
+                    new_rows.append(row)
+                df = pd.concat([df, pd.DataFrame(new_rows)], ignore_index=True)
+                print(f"   📍 Location: injected {len(missing_canonical)} missing canonical DMAs "
+                      f"(Nike sample didn't include them; would otherwise get random tiny BP from "
+                      f"enforce_exact_210_dmas) — agent affinity will populate via final_share")
+
+            # Recompute loc_indices on the renumbered frame.
+            loc_mask = df['Column'].astype(str).str.strip().str.upper() == 'LOCATION'
+            loc_indices = df[loc_mask].index.tolist()
+
             assigned = 0
             for idx in loc_indices:
                 val_u = str(df.at[idx, 'Value']).strip().upper()
-                # Find matching DMA share — exact then substring.
+                # Exact-match only — substring fuzzy matching has been removed
+                # because it produced cross-DMA contamination (e.g. matching
+                # "MA" inside "BOSTON MA MANCHESTER NH" against an unrelated
+                # DMA's multiplier). After the stray-drop above, every
+                # remaining loc row should match exactly.
                 share = final_share.get(val_u)
                 if share is None:
-                    share = next((s for k, s in final_share.items()
-                                  if k in val_u or val_u in k), None)
-                if share is None:
                     share = 0.01
-                # Apply persona override blend if this DMA was top-N.
+                # Apply persona override blend ONLY on exact match.
                 override = persona_overrides.get(val_u)
-                if override is None:
-                    override = next((o for k, o in persona_overrides.items()
-                                     if k in val_u or val_u in k), None)
                 if override is not None and override > 0:
                     share = (share + override) / 2.0
                 # ±2% relative jitter for organic 4dp values.
@@ -16404,6 +19755,15 @@ def parallel_category_agents(df: pd.DataFrame, persona_doc: dict,
                   + ', '.join(_skipped_dup))
         cats_needing_llm = _kept
 
+    # ── Unconditionally skip categories whose items appear elsewhere ──
+    _SKIP_CATS = {'FRANCHISE'}
+    _before_skip = len(cats_needing_llm)
+    cats_needing_llm = [c for c in cats_needing_llm if c.upper() not in _SKIP_CATS]
+    _n_skipped_explicit = _before_skip - len(cats_needing_llm)
+    if _n_skipped_explicit:
+        print(f"   ⏭️  Skipping {_n_skipped_explicit} categories (items appear in other categories): "
+              + ', '.join(sorted(_SKIP_CATS)))
+
     cats_needing_llm.sort(key=lambda c: len(category_new_items[c]), reverse=True)
     if prev_bhv:
         print(f"🔁 Rerun carry-forward: {total_carry} items reuse prior BP, "
@@ -16418,35 +19778,216 @@ def parallel_category_agents(df: pd.DataFrame, persona_doc: dict,
     if canonical_baseline_lookup:
         print(f"📐 Per-cat agents will anchor to {len(canonical_baseline_lookup)} canonical baselines (mode={anchor_mode})")
 
+    # ── UNIQUE-VALUE INDEX ────────────────────────────────────────────────
+    # Build the dedup index across ALL behavioral categories that need scoring.
+    # Each unique value gets scored exactly once in its "primary" (largest)
+    # category, then the resulting BP is propagated to every other category
+    # the value appears in. This guarantees byte-identical BPs across
+    # categories (Nike in MOST PURCHASED BRANDS == Nike in APPAREL/FOOTWEAR)
+    # and removes the need for `enforce_value_consistency_across_categories`
+    # `np.nanmax` reconciliation hack.
+    _items_for_index = {c: category_new_items[c] for c in cats_needing_llm}
+    primary_for, unique_items_by_cat = _build_unique_value_index(
+        df, _items_for_index, skip_cats=set())
+    _n_total_items = sum(len(v) for v in _items_for_index.values())
+    _n_unique = sum(len(v) for v in unique_items_by_cat.values())
+    print(f"   🔁 Unique-value index: {_n_unique} unique values across {len(unique_items_by_cat)} primary cats "
+          f"(deduped from {_n_total_items} total occurrences — {_n_total_items - _n_unique} duplicates)")
+
     print(f"🤖 Step 2: Launching {len(cats_needing_llm)} parallel category agents (skipped {len(category_values) - len(cats_needing_llm)} fully-carried categories) …")
+    global _FIRST_CAT_PROMPT_LOGGED
+    _FIRST_CAT_PROMPT_LOGGED = False
     if cats_needing_llm:
         _top = cats_needing_llm[:10]
-        print(f"   📊 Category sizes (top 10, largest-first): "
-              + ", ".join(f"{c}:{len(category_new_items[c])}" for c in _top))
+        print(f"   📊 Category sizes (top 10 unique-only, largest-first): "
+              + ", ".join(f"{c}:{len(unique_items_by_cat.get(c, []))}" for c in _top))
     results_map: dict[str, list[dict]] = {}
     _MAX_AGENT_RETRIES = 3
     _cat_phase_t0 = _time.perf_counter()
 
     # ── Chunk large categories so no single API call exceeds ~80 items ──
+    # Now uses unique_items_by_cat (deduplicated) instead of category_new_items.
     _CHUNK_MAX = 80
     _work_units: list[tuple[str, list[str], int]] = []  # (cat, items_chunk, chunk_idx)
     for cat in cats_needing_llm:
-        items = category_new_items[cat]
+        items = unique_items_by_cat.get(cat, [])
+        if not items:
+            continue
         if len(items) <= _CHUNK_MAX:
             _work_units.append((cat, items, 0))
         else:
             chunks = [items[i:i + _CHUNK_MAX] for i in range(0, len(items), _CHUNK_MAX)]
             for ci, chunk in enumerate(chunks):
                 _work_units.append((cat, chunk, ci))
-            print(f"   🔪 Chunked [{cat}] ({len(items)} items) → {len(chunks)} chunks of ≤{_CHUNK_MAX}")
+            print(f"   🔪 Chunked [{cat}] ({len(items)} unique items) → {len(chunks)} chunks of ≤{_CHUNK_MAX}")
 
     _chunk_results: dict[str, list[list[dict]]] = {cat: [] for cat in cats_needing_llm}
 
+    # ── PANEL-MEASUREMENT LOOKUP ────────────────────────────────────────────
+    # Build {(CATEGORY_UPPER, VALUE_UPPER): (panel_bp_pct, n_panel_uids)} from
+    # the existing DataFrame BEFORE running agents. This is the actual measured
+    # behavior of the audience — what UID_COUNT users out of sample_size touched
+    # each item. We surface it to the scoring agent as evidence so the agent
+    # can decide AGREE / OVERRIDE_LOW / OVERRIDE_HIGH per item, instead of
+    # scoring blind.
+    _panel_lookup: dict[tuple[str, str], tuple[float, int]] = {}
+    _bp_src_col = bp_col  # 'Brand Penetration (Row)' — already populated from BEHAVIOR_PCT.PERCENTAGE
+    _raw_col = ('Original Raw Numbers (Database)' if 'Original Raw Numbers (Database)' in df.columns
+                else 'Original Raw Numbers' if 'Original Raw Numbers' in df.columns
+                else None)
+    for _idx, _r in df.iterrows():
+        _c = str(_r.get('Column', '')).strip().upper()
+        if not _c or _c in _BEHAVIORAL_SKIP or _c in _DEMO_SET:
+            continue
+        _v = str(_r.get('Value', '')).strip().upper()
+        if not _v:
+            continue
+        try:
+            _bp = float(_r.get(_bp_src_col, 0) or 0)
+        except (TypeError, ValueError):
+            _bp = 0.0
+        _np = 0
+        if _raw_col:
+            try:
+                _np = int(float(str(_r.get(_raw_col, 0) or 0).replace(',', '')))
+            except (TypeError, ValueError):
+                _np = 0
+        _panel_lookup[(_c, _v)] = (_bp, _np)
+    print(f"   📊 Panel lookup built: {len(_panel_lookup)} (cat,value) measurements available to scoring agents")
+
+    # ── ITEM CLASSIFICATION (NEW) ───────────────────────────────────────────
+    # For every unique item across all categories, classify what it ACTUALLY
+    # IS so the scoring agent has grounded item attributes to reason against.
+    # This replaces the old "score blind from a thin persona summary" failure
+    # mode that produced the 27% confabulation cluster on niche/unknown items.
+    _item_classifications: dict[str, dict] = {}
+    if anchor_mode != 'genpop':
+        _all_unique = sorted({str(v).strip()
+                               for items in unique_items_by_cat.values() for v in items})
+        _item_classifications = _run_item_classification_parallel(_all_unique)
+
+    # ──────── UNIFIED SCORING PASS (replaces Waves 1/2/3 when enabled) ────────
+    # ONE gpt-5.5 reasoning call sees the WHOLE inventory at once and produces
+    # final BPs for every item across every category — instead of 50+ Pass 1
+    # rule agents + 50+ Pass 2 scoring agents + 50+ Pass 3 validators.
+    #
+    # Toggle via BG_UNIFIED_SCORING env var (default: OFF for safety).
+    # When ON: runs the unified pass. On success, skips Waves 1/2/3.
+    # On failure: falls back to Waves 1/2/3 (so the pipeline never breaks).
+    _unified_results: dict | None = None
+    USE_UNIFIED_SCORING = os.getenv("BG_UNIFIED_SCORING", "0").strip().lower() not in {"0", "false", "no", "off", ""}
+    if USE_UNIFIED_SCORING and anchor_mode != 'genpop' and cats_needing_llm:
+        try:
+            _unified_results = _run_unified_scoring_pass(
+                cats_needing_llm=cats_needing_llm,
+                unique_items_by_cat=unique_items_by_cat,
+                persona_doc=persona_doc,
+                subject=subject,
+                panel_lookup=_panel_lookup,
+                canonical_baseline_lookup=canonical_baseline_lookup,
+                item_classifications=_item_classifications,
+                timeout_sec=int(os.getenv("BG_UNIFIED_TIMEOUT_SEC", "600")),
+            )
+            if _unified_results:
+                _covered = sum(1 for v in _unified_results.values() if v)
+                print(f"   🎯 Unified scoring covered {_covered}/{len(cats_needing_llm)} cats — skipping Waves 1/2/3")
+            else:
+                print(f"   ⚠️ Unified scoring returned empty — falling back to Waves 1/2/3")
+                _unified_results = None
+        except Exception as _e_unified:
+            print(f"   ⚠️ Unified scoring failed: {_e_unified} — falling back to Waves 1/2/3")
+            _unified_results = None
+
+    # ── WAVE 1: Category Rule Agents (gpt-4o, one per category) ──────────
+    # v16 — upgraded from item-guidance (nano, expected_high/low only) to a
+    # full Category Rule Agent that produces the shared scoring rubric:
+    #   tier_rules[]            ordered tiers with bp_range + criteria + examples
+    #   category_ceiling_pct    hard upper bound for any single item
+    #   anti_fit_in_category    items the persona explicitly avoids
+    #   predicted_top_5         sanity reference for the validator
+    #   summary / expected_high / expected_low (legacy backward-compat)
+    # The rubric is the bridge that gives every chunk shared awareness in
+    # Wave 2 so Pass 2 chunks don't drift apart.
+    _guidance_map: dict[str, dict] = {}
+    if _unified_results is None and anchor_mode != 'genpop':
+        _guidance_t0 = _time.perf_counter()
+        _guid_cats = [c for c in cats_needing_llm if unique_items_by_cat.get(c)]
+        print(f"🧭 Wave 1: Launching {len(_guid_cats)} Category Rule Agents ({MODEL_QUALITY}) …")
+        with _futures.ThreadPoolExecutor(max_workers=35) as pool:
+            _guid_futures = {
+                pool.submit(_run_item_guidance_agent, cat,
+                             unique_items_by_cat[cat], persona_doc, subject): cat
+                for cat in _guid_cats
+            }
+            for fut in _futures.as_completed(_guid_futures, timeout=120):
+                cat = _guid_futures[fut]
+                try:
+                    result = fut.result()
+                    if result:
+                        _guidance_map[cat] = result
+                except Exception as e:
+                    print(f"   ⚠️ Category-rule agent [{cat}] failed: {e}")
+        _guidance_elapsed = _time.perf_counter() - _guidance_t0
+        _n_with_rules = sum(1 for g in _guidance_map.values() if g.get('tier_rules'))
+        _n_with_high = sum(1 for g in _guidance_map.values() if g.get('expected_high'))
+        print(f"   ✅ Wave 1: {_n_with_rules}/{len(_guid_cats)} got tier_rules, "
+              f"{_n_with_high}/{len(_guid_cats)} got expected_high "
+              f"in {_guidance_elapsed:.1f}s")
+        for _g_cat, _g_doc in list(_guidance_map.items())[:3]:
+            _tr = _g_doc.get('tier_rules') or []
+            _af = _g_doc.get('anti_fit_in_category') or []
+            _t5 = _g_doc.get('predicted_top_5') or []
+            print(f"      [{_g_cat}] tiers={len(_tr)} ceiling={_g_doc.get('category_ceiling_pct')} "
+                  f"anti_fit={len(_af)} top5={_t5[:3]}")
+        # Log a sample
+        for _g_cat, _g_doc in list(_guidance_map.items())[:3]:
+            print(f"      [{_g_cat}] high={_g_doc.get('expected_high', [])[:8]} | "
+                  f"low={_g_doc.get('expected_low', [])[:8]}")
+
+        # ── Wave 1b: Retry once when tier_rules missing — weak rubric lets chunks
+        # drift; validators used to skip these categories entirely.
+        _need_rule_retry = [c for c in _guid_cats
+                            if not (_guidance_map.get(c) or {}).get('tier_rules')]
+        if _need_rule_retry:
+            print(f"   🔄 Wave 1b retry: {len(_need_rule_retry)} categories missing tier_rules …")
+            with _futures.ThreadPoolExecutor(max_workers=12) as _rpool:
+                _rfut = {
+                    _rpool.submit(_run_item_guidance_agent, c,
+                                   unique_items_by_cat[c], persona_doc, subject): c
+                    for c in _need_rule_retry if unique_items_by_cat.get(c)
+                }
+                for fut in _futures.as_completed(_rfut, timeout=120):
+                    rc = _rfut[fut]
+                    try:
+                        r2 = fut.result()
+                        if r2 and r2.get('tier_rules'):
+                            _guidance_map[rc] = r2
+                    except Exception as _e_rb:
+                        print(f"   ⚠️ Category-rule retry [{rc}] failed: {_e_rb}")
+            _still_bad = [c for c in _need_rule_retry
+                          if not (_guidance_map.get(c) or {}).get('tier_rules')]
+            if _still_bad:
+                print(f"   ⚠️ Still no tier_rules after retry ({len(_still_bad)}): "
+                      f"{', '.join(_still_bad[:8])}{' …' if len(_still_bad) > 8 else ''} "
+                      f"— Pass 3 will run in persona+inventory-only mode.")
+
+    # ── WAVE 2: Scoring agents (gpt-4o, one per chunk) ───────────────────
+    # When unified scoring is on, replace work_units with an empty list so
+    # Wave 2 becomes a no-op, and we populate _chunk_results from the
+    # unified result instead.
+    if _unified_results is not None:
+        print(f"   ⏭️  Wave 2 skipped — populating from unified scoring")
+        _work_units = []
+        for cat in cats_needing_llm:
+            _chunk_results[cat] = [_unified_results.get(cat, [])]
+    print(f"🤖 Wave 2: Launching {len(_work_units)} scoring agent calls …")
     with _futures.ThreadPoolExecutor(max_workers=35) as pool:
         future_to_unit = {
             pool.submit(_run_single_category_agent, cat,
                          chunk, persona_doc, subject,
-                         canonical_baseline_lookup, anchor_mode, study_dates): (cat, ci)
+                         canonical_baseline_lookup, anchor_mode, study_dates,
+                         _guidance_map.get(cat),
+                         _item_classifications, _panel_lookup): (cat, ci)
             for cat, chunk, ci in _work_units
         }
         _done_units: set[tuple[str, int]] = set()
@@ -16468,7 +20009,9 @@ def parallel_category_agents(df: pd.DataFrame, persona_doc: dict,
                     try:
                         _chunk_results[cat].append(_run_single_category_agent(
                             cat, chunk, persona_doc, subject,
-                            canonical_baseline_lookup, anchor_mode, study_dates))
+                            canonical_baseline_lookup, anchor_mode, study_dates,
+                            _guidance_map.get(cat),
+                            _item_classifications, _panel_lookup))
                         print(f"   ✅ Retry {_attempt}/{_MAX_AGENT_RETRIES} for [{cat}] chunk {ci} succeeded")
                         break
                     except Exception as _e:
@@ -16486,24 +20029,101 @@ def parallel_category_agents(df: pd.DataFrame, persona_doc: dict,
     print(f"   [AGENT-SUMMARY] {len(results_map)} categories scored in {_cat_phase_elapsed:.0f}s "
           f"(avg {_cat_phase_elapsed/max(len(results_map),1):.1f}s/cat)")
 
+    # ── WAVE 3: Category Validator Agents (gpt-4o, one per category) ─────
+    # v16 Pass 3 — reviews the top-20 of each category as a coherent set
+    # against the persona + Pass 1 category rule. Catches:
+    #   • Anti-fit items that landed too high (>5%)
+    #   • Tier inversions (lower-tier item ranking above a higher-tier item)
+    #   • Predicted-top-5 drift (regional item beating a national anchor)
+    #   • Implausible spread (5+ items clustered at the ceiling)
+    #   • Persona-fit sanity (luxury item top for mass-market audience, etc.)
+    # Override mode — validator sees the whole category and is smarter
+    # about cross-item plausibility than any single Pass 2 chunk.
+    # SKIPPED when unified scoring is on — the unified call already does
+    # holistic cross-category validation in one reasoning pass.
+    _validator_corrections: dict[str, list[dict]] = {cat: [] for cat in cats_needing_llm}
+    if _unified_results is not None:
+        print(f"   ⏭️  Wave 3 (validator) skipped (unified scoring covers it)")
+    elif anchor_mode != 'genpop' and results_map:
+        _val_t0 = _time.perf_counter()
+        # Every category with Pass 2 output gets a validator pass. When tier_rules
+        # are missing, the validator prompt already falls back to persona + inventory
+        # reasoning (see _fmt_tiers empty state) — skipping those cats left gaps.
+        _val_cats = [c for c in cats_needing_llm if results_map.get(c)]
+        _val_with_tiers = sum(1 for c in _val_cats
+                              if (_guidance_map.get(c) or {}).get('tier_rules'))
+        print(f"🧪 Wave 3: Launching {len(_val_cats)} Category Validator Agents ({MODEL_QUALITY}) "
+              f"({_val_with_tiers} with full tier_rules, {len(_val_cats) - _val_with_tiers} persona-led only) …")
+        if _val_cats:
+            with _futures.ThreadPoolExecutor(max_workers=20) as pool:
+                _val_futures = {
+                    pool.submit(_run_category_validator_agent,
+                                 cat, persona_doc, subject,
+                                 _guidance_map.get(cat) or {},
+                                 results_map.get(cat, []),
+                                 min(35, max(20, len(results_map.get(cat, []))))): cat
+                    for cat in _val_cats
+                }
+                for fut in _futures.as_completed(_val_futures, timeout=180):
+                    cat = _val_futures[fut]
+                    try:
+                        corrections = fut.result()
+                        _validator_corrections[cat] = corrections or []
+                    except Exception as e:
+                        print(f"   ⚠️ Validator [{cat}] raised: {e}")
+                        _validator_corrections[cat] = []
+            # Apply validator overrides to results_map BEFORE propagation
+            _total_overrides = 0
+            for cat, corrections in _validator_corrections.items():
+                if not corrections:
+                    continue
+                _by_value = {str(c['value']).strip().upper(): c for c in corrections}
+                for entry in results_map.get(cat, []):
+                    if not isinstance(entry, dict):
+                        continue
+                    v_u = str(entry.get('value', '')).strip().upper()
+                    if v_u in _by_value:
+                        c = _by_value[v_u]
+                        new_bp = float(c['new_bp'])
+                        old_bp = float(entry.get('bp', 0) or 0)
+                        entry['bp'] = round(new_bp, 4)
+                        entry['estimated_bp_pct'] = round(new_bp, 4)
+                        entry['validator_override'] = True
+                        entry['validator_old_bp'] = round(old_bp, 4)
+                        entry['validator_reason'] = c.get('reason', '')
+                        # Append validator reason to existing reason for audit
+                        prev_reason = str(entry.get('reason', '') or '')
+                        entry['reason'] = (
+                            f"[validator: {c.get('reason','')}]"
+                            if not prev_reason else
+                            f"{prev_reason} [validator: {c.get('reason','')}]"
+                        )
+                        _total_overrides += 1
+            _val_elapsed = _time.perf_counter() - _val_t0
+            _n_cats_with_corrections = sum(1 for v in _validator_corrections.values() if v)
+            print(f"   ✅ Wave 3: {_total_overrides} overrides applied across "
+                  f"{_n_cats_with_corrections}/{len(_val_cats)} categories in {_val_elapsed:.1f}s")
+            # Log top correction sample
+            for cat in list(_validator_corrections.keys())[:5]:
+                _cs = _validator_corrections[cat]
+                if _cs:
+                    print(f"      [{cat}] {len(_cs)} corrections — "
+                          f"sample: {_cs[0].get('value','?')} → {_cs[0].get('new_bp')}% "
+                          f"({_cs[0].get('reason','')[:60]})")
+
     # --- D) Write agent BP values back into DataFrame --------------------
     def _add_4dp_noise(val: float) -> float:
-        """Add organic noise so the value looks like real panel data.
+        """Tiny, accuracy-safe jitter (4dp) to avoid perfectly round outputs.
 
-        Preserves the approximate magnitude while ensuring all 4 decimal
-        digits are non-zero. Example: 12.0 → 11.7294 or 12.3618.
+        Earlier logic rebuilt decimals from random digits and could swing near
+        rule thresholds (e.g., anti-fit <=5%). Keep movement microscopic so
+        validator/category-rule constraints remain intact.
         """
-        pct_shift = random.uniform(0.005, 0.02) * random.choice([-1, 1])
-        shift = max(0.1, abs(val * pct_shift)) * (1 if pct_shift > 0 else -1)
-        base = val + shift
-        base = max(0.1, min(99.9, base))
-        integer_part = int(base)
-        d1 = random.randint(1, 9)
-        d2 = random.randint(1, 9)
-        d3 = random.randint(1, 9)
-        d4 = random.randint(1, 9)
-        v = integer_part + d1 * 0.1 + d2 * 0.01 + d3 * 0.001 + d4 * 0.0001
-        return max(0.1111, min(99.8999, round(v, 4)))
+        base = max(0.0001, min(99.9999, float(val)))
+        # +/- 0.015 percentage points max keeps ordering/constraints stable.
+        jitter = random.uniform(-0.015, 0.015)
+        out = round(max(0.0001, min(99.9999, base + jitter)), 4)
+        return out
 
     def _carry_forward_jitter(prev_bp: float) -> float:
         """Tiny ±0.01-0.02% absolute jitter on a carried-forward BP — keeps
@@ -16513,28 +20133,252 @@ def parallel_category_agents(df: pd.DataFrame, persona_doc: dict,
         out = round(max(0.0001, min(99.9999, prev_bp + delta)), 4)
         return out
 
+    # ── Build GLOBAL value→BP lookup from all categories' results ──────────
+    # Because the unique-value index assigns each value to a single primary
+    # category, only that primary scored it. We apply the 4dp organic-noise
+    # transform ONCE per unique value, then write the exact same BP to every
+    # category the value appears in. This guarantees byte-identical Nike
+    # across MOST PURCHASED BRANDS / APPAREL/FOOTWEAR / WHERE THEY SHOP, etc.
+    global_value_bp_raw: dict[str, float] = {}
+    # ── Decision log: per-(cat, value) record of what the agent decided ──
+    # Written to _agent_decisions.json alongside the CSV so the user can audit
+    # which items the agent overrode panel on, and why.
+    agent_decisions: list[dict] = []
+    # ── Low-confidence conservative set: items the classifier flagged as
+    # confidence=low AND that have no panel signal AND no canonical baseline.
+    # Keep these rows, but force tiny sub-1% BPs so we preserve every value
+    # without letting unknowns dominate rank order.
+    low_confidence_conservative_values: set[str] = set()
+    for cat, agent_result in results_map.items():
+        for entry in agent_result:
+            if not isinstance(entry, dict) or 'value' not in entry or 'bp' not in entry:
+                continue
+            v_u = str(entry['value']).strip().upper()
+            try:
+                bp = float(entry['bp'])
+            except (TypeError, ValueError):
+                continue
+            if v_u not in global_value_bp_raw:
+                global_value_bp_raw[v_u] = bp
+
+            agent_decisions.append({
+                'category': cat,
+                'value': entry['value'],
+                'agent_bp': round(bp, 4),
+                'panel_bp': entry.get('panel_bp'),
+                'n_panel': entry.get('n_panel'),
+                'baseline_bp': entry.get('baseline_bp'),
+                'panel_decision': entry.get('panel_decision'),
+                'tier_assigned': entry.get('tier_assigned'),
+                'validator_override': bool(entry.get('validator_override')),
+                'validator_old_bp': entry.get('validator_old_bp'),
+                'validator_reason': entry.get('validator_reason'),
+                'classification_confidence': entry.get('classification_confidence'),
+                'reason': entry.get('reason'),
+            })
+
+            conf = str(entry.get('classification_confidence', '')).lower()
+            n_panel = entry.get('n_panel') or 0
+            baseline = entry.get('baseline_bp')
+            if (conf == 'low'
+                    and (not n_panel or n_panel == 0)
+                    and (baseline is None or baseline <= 0.0)):
+                low_confidence_conservative_values.add(v_u)
+
+    # Apply organic noise ONCE per unique value, freezing the canonical BP.
+    # Also enforce strict per-value max caps derived from category rules across
+    # every category where the value appears (ceiling + anti-fit<=5).
+    value_hard_cap: dict[str, float] = {}
+    try:
+        for _cat, (_vals, _idxs) in category_values.items():
+            _rule = (_guidance_map or {}).get(_cat) or {}
+            _ceil = _rule.get('category_ceiling_pct')
+            _cat_cap = None
+            try:
+                if _ceil is not None:
+                    _cat_cap = float(_ceil)
+            except Exception:
+                _cat_cap = None
+            _anti = {
+                str(x).strip().upper()
+                for x in (_rule.get('anti_fit_in_category') or [])
+                if str(x).strip()
+            }
+            for _idx in (_idxs or []):
+                _vu = str(df.at[_idx, 'Value']).strip().upper()
+                if not _vu:
+                    continue
+                _cur_cap = value_hard_cap.get(_vu, 95.0)
+                if isinstance(_cat_cap, (int, float)) and _cat_cap > 0:
+                    _cur_cap = min(_cur_cap, float(_cat_cap))
+                if _vu in _anti:
+                    _cur_cap = min(_cur_cap, 5.0)
+                value_hard_cap[_vu] = _cur_cap
+    except Exception as _cap_err:
+        print(f"   ⚠️ Could not build global value hard caps: {_cap_err}")
+
+    global_value_bp: dict[str, float] = {}
+    for v_u, raw_bp in global_value_bp_raw.items():
+        clamped = max(0.0001, min(99.9999, raw_bp))
+        if v_u in low_confidence_conservative_values:
+            # Keep unknown/unsupported rows visible but safely tiny.
+            tiny = max(0.05, min(0.95, clamped if clamped < 1.0 else (0.22 + random.uniform(0.0, 0.45))))
+            global_value_bp[v_u] = round(tiny, 4)
+            continue
+        _hard_cap = value_hard_cap.get(v_u)
+        if isinstance(_hard_cap, (int, float)) and _hard_cap > 0:
+            clamped = min(clamped, max(0.0001, float(_hard_cap)))
+        out_bp = _add_4dp_noise(clamped)
+        # Belt-and-suspenders: jitter should never violate rule-derived cap.
+        if isinstance(_hard_cap, (int, float)) and _hard_cap > 0 and out_bp > float(_hard_cap):
+            out_bp = round(max(0.0001, float(_hard_cap)), 4)
+        global_value_bp[v_u] = out_bp
+
+    print(f"   🔁 Propagation: {len(global_value_bp)} unique values scored — propagating to all categories "
+          f"(byte-identical across categories)")
+    if value_hard_cap:
+        _capped_n = sum(
+            1 for _vu, _raw in global_value_bp_raw.items()
+            if _vu in value_hard_cap and float(_raw) > float(value_hard_cap[_vu]) + 1e-9
+        )
+        if _capped_n:
+            print(f"   🔒 Global rule caps enforced on {_capped_n} propagated values "
+                  f"(ceiling/anti-fit across all category appearances)")
+
+    if low_confidence_conservative_values:
+        print(f"   🧯 Conservative keep for {len(low_confidence_conservative_values)} low-confidence items "
+              f"(no panel + no baseline) — forcing sub-1% BP band; sample: "
+              f"{', '.join(sorted(low_confidence_conservative_values)[:8])}"
+              f"{'…' if len(low_confidence_conservative_values) > 8 else ''}")
+
+    # Stash decision log + drop list on df attrs so run_full_pipeline can
+    # serialize them alongside the final CSV.
+    try:
+        df.attrs['_agent_decisions'] = agent_decisions
+        df.attrs['_low_confidence_capped_under_1'] = sorted(low_confidence_conservative_values)
+    except Exception:
+        pass
+
+    # Belt-and-suspenders: also write to a deterministic temp file. df.attrs
+    # is fragile across pandas operations (.copy(), pd.concat(), to_csv +
+    # read_csv all drop attrs). Writing a file ensures run_full_pipeline can
+    # always find the decisions log even if the attrs got cleared by the
+    # post-agent quality gate, perturbation passes, or rerun-merge logic.
+    try:
+        import json as _json_dec
+        import tempfile as _tmp
+        import time as _time_dec
+
+        # v16 — also stash a compact persona doc + per-category rules +
+        # validator corrections so the audit sidecar tells the full story
+        # of HOW each BP was arrived at: persona → rule → score → validator.
+        _persona_compact = {}
+        try:
+            _persona_compact = {
+                'subject': subject,
+                'subject_archetype': persona_doc.get('subject_archetype', ''),
+                'archetype_rationale': persona_doc.get('archetype_rationale', ''),
+                'persona_summary': persona_doc.get('persona_summary', ''),
+                'digital_identity': (persona_doc.get('digital_identity') or '')[:3000],
+                'demographics': persona_doc.get('demographics', {}),
+                'subsegments': persona_doc.get('subsegments', []),
+                'cultural_anchors': persona_doc.get('cultural_anchors', {}),
+                'anti_fit_explicit': persona_doc.get('anti_fit_explicit', {}),
+                'cross_shop_network': persona_doc.get('cross_shop_network', {}),
+            }
+        except Exception:
+            pass
+
+        _category_rules_compact = {}
+        try:
+            for _gc, _gd in (_guidance_map or {}).items():
+                if not isinstance(_gd, dict):
+                    continue
+                _category_rules_compact[_gc] = {
+                    'summary': _gd.get('summary', ''),
+                    'category_ceiling_pct': _gd.get('category_ceiling_pct'),
+                    'tier_rules': _gd.get('tier_rules', []),
+                    'anti_fit_in_category': _gd.get('anti_fit_in_category', []),
+                    'predicted_top_5': _gd.get('predicted_top_5', []),
+                }
+        except Exception:
+            pass
+
+        _validator_compact = {}
+        try:
+            for _vc, _corrs in (_validator_corrections or {}).items():
+                if _corrs:
+                    _validator_compact[_vc] = _corrs
+        except Exception:
+            pass
+
+        _dec_dir = os.environ.get('BG_DECISIONS_DIR') or _tmp.gettempdir()
+        os.makedirs(_dec_dir, exist_ok=True)
+        _dec_path = os.path.join(_dec_dir, '_bg_last_agent_decisions.json')
+        with open(_dec_path, 'w') as _fp:
+            _json_dec.dump({
+                'pipeline_version': 'v16',
+                'persona': _persona_compact,
+                'category_rules': _category_rules_compact,
+                'validator_corrections': _validator_compact,
+                'agent_decisions': agent_decisions,
+                'dropped_low_confidence': [],
+                'low_confidence_capped_under_1': sorted(low_confidence_conservative_values),
+                'written_at': _time_dec.time(),
+            }, _fp, default=str, indent=2)
+        _val_total = sum(len(v) for v in (_validator_compact or {}).values())
+        print(f"   📝 Wrote v16 audit sidecar: {_dec_path} "
+              f"({len(agent_decisions)} decisions, {len(_category_rules_compact)} rules, "
+              f"{_val_total} validator overrides, "
+              f"{len(low_confidence_conservative_values)} conservative sub-1% values)")
+    except Exception as _dec_err:
+        print(f"   ⚠️ Could not write agent-decision sidecar: {_dec_err}")
+
+    # ── Apply carry-forward jitter ONCE per unique value ─────────────────
+    # Reruns previously called `_carry_forward_jitter(carry[val_u])` per row,
+    # which produced independent ±0.01-0.02 noise on each occurrence of the
+    # same value (e.g. NIKE in MOST PURCHASED BRANDS vs APPAREL/FOOTWEAR
+    # ended up 95.39% vs 95.43%). Same architectural fix as the agent path:
+    # jitter once, propagate the same BP everywhere. The cross-category
+    # consistency gate is NOT a substitute — by then the per-row jitter is
+    # already baked in.
+    global_carry_bp: dict[str, float] = {}
+    for cat, carry in category_carry.items():
+        for v_u, prev_bp in carry.items():
+            if v_u not in global_carry_bp:
+                _bp = _carry_forward_jitter(prev_bp)
+                _hard_cap = value_hard_cap.get(v_u)
+                if isinstance(_hard_cap, (int, float)) and _hard_cap > 0:
+                    _bp = round(min(_bp, float(_hard_cap)), 4)
+                global_carry_bp[v_u] = _bp
+
     rows_written = 0
     rows_carried = 0
+    rows_propagated = 0
     for cat, (vals, idxs) in category_values.items():
-        agent_result = results_map.get(cat, [])
-        bp_lookup = {}
-        for entry in agent_result:
-            if isinstance(entry, dict) and 'value' in entry and 'bp' in entry:
-                bp_lookup[str(entry['value']).strip().upper()] = float(entry['bp'])
         carry = category_carry.get(cat, {})
+        primary_set = {v.strip().upper() for v in unique_items_by_cat.get(cat, [])}
         for idx in idxs:
             val_u = str(df.at[idx, 'Value']).strip().upper()
             if val_u in carry:
-                # Carry-forward path — reuse prior BP with tiny jitter, ignore LLM
-                df.at[idx, bp_col] = _carry_forward_jitter(carry[val_u])
+                # Carry-forward: same value across categories gets the SAME
+                # jittered BP. Pull from global_carry_bp (jitter applied once).
+                df.at[idx, bp_col] = global_carry_bp[val_u]
                 rows_carried += 1
-            elif val_u in bp_lookup:
-                new_bp = max(0.0001, min(99.9999, bp_lookup[val_u]))
-                df.at[idx, bp_col] = _add_4dp_noise(new_bp)
-                rows_written += 1
+            elif val_u in global_value_bp:
+                # Single source of truth: same BP applied wherever this value
+                # appears. Primary-category and duplicate-category writes
+                # both pull from `global_value_bp`.
+                df.at[idx, bp_col] = global_value_bp[val_u]
+                if val_u in primary_set:
+                    rows_written += 1
+                else:
+                    rows_propagated += 1
 
     if rows_carried:
         print(f"   ↩️  Carried forward {rows_carried} BP rows from prior run (±0.01–0.02% jitter)")
+    if rows_propagated:
+        print(f"   🔁 Propagated {rows_propagated} BP rows from primary-category scores to duplicate categories")
     print(f"   ✅ Wrote BP for {rows_written} new behavioral rows across {len(results_map)} categories")
 
     # --- D2) Re-add prior-run rows that today's ClickHouse pull dropped --------
@@ -16626,10 +20470,11 @@ def parallel_category_agents(df: pd.DataFrame, persona_doc: dict,
         new_dates_label=delta_sanity_new_dates or 'new rerun window',
         wide_window=wide_window,
         bp_col=bp_col,
+        grounded_guidance=_guidance_map,
     )
 
     print("   🛡️  Running post-agent quality gate...")
-    df = post_agent_quality_gate(df, persona_doc, brands)
+    df = post_agent_quality_gate(df, persona_doc, brands, grounded_guidance=_guidance_map)
 
     return df
 
@@ -16638,8 +20483,9 @@ def _run_genpop_mismatch_pass(df: pd.DataFrame,
                                persona_doc: dict,
                                subject: str,
                                bp_col: str,
-                               ratio_threshold: float = 3.0,
-                               min_bp_floor: float = 5.0) -> pd.DataFrame:
+                               ratio_threshold: float = 5.0,
+                               min_bp_floor: float = 5.0,
+                               grounded_guidance: dict | None = None) -> pd.DataFrame:
     """Sanity-check items whose new BP is implausibly higher than the
     canonical Gen Pop baseline AND that the persona research agent did
     NOT specifically flag as expected-high for this audience.
@@ -16694,15 +20540,23 @@ def _run_genpop_mismatch_pass(df: pd.DataFrame,
         print(f"   ⚠️ Gen-pop mismatch: failed to index canonical CSV ({e})")
         return df
 
-    # Build per-category expected_high set from the persona doc.
+    # Build per-category expected_high set — prefer grounded guidance, fallback to persona.
+    grounded_guidance = grounded_guidance or {}
     cat_guidance = persona_doc.get('category_guidance', {}) or {}
     expected_high_by_cat: dict[str, set[str]] = {}
+    for cat_key, blob in grounded_guidance.items():
+        cat_u = str(cat_key).strip().upper()
+        items: list[str] = [str(x).strip().upper() for x in (blob.get('expected_high') or []) if str(x).strip()]
+        if items:
+            expected_high_by_cat[cat_u] = set(items)
     for cat_key, blob in cat_guidance.items():
         cat_u = str(cat_key).strip().upper()
-        items: list[str] = []
+        if cat_u in expected_high_by_cat:
+            continue
+        items_list: list[str] = []
         if isinstance(blob, dict):
-            items = [str(x).strip().upper() for x in (blob.get('expected_high') or []) if str(x).strip()]
-        expected_high_by_cat[cat_u] = set(items)
+            items_list = [str(x).strip().upper() for x in (blob.get('expected_high') or []) if str(x).strip()]
+        expected_high_by_cat[cat_u] = set(items_list)
 
     def _is_in_expected_high(cat_u: str, val_u: str) -> bool:
         s = expected_high_by_cat.get(cat_u, set())
@@ -16793,8 +20647,8 @@ Return ONLY a JSON array, one entry per item, in the same order:
         try:
             resp = _timed_completion(
                 client,
-                label=f"genpop-mismatch/{cat_name}",
-                model=MODEL_JUDGE,
+                label=f"genpop-mismatch/{cat_u}",
+                model=MODEL_QUALITY,
                 messages=[{'role': 'user', 'content': prompt}],
                 temperature=0.0,
                 max_tokens=min(16384, max(1024, len(items) * 80)),
@@ -16828,6 +20682,8 @@ Return ONLY a JSON array, one entry per item, in the same order:
                 continue
             if dec == 'ACCEPT':
                 accepts += 1
+                _old = value_to_old.get(val, 0.0)
+                print(f"      ✓ ACCEPT [{cat_u}] {d.get('value')}: {_old:.2f}% (kept) — {d.get('reason', '')[:90]}")
                 continue
             try:
                 new_bp = float(d.get('bp'))
@@ -17499,7 +21355,8 @@ def _apply_post_score_agents(df: pd.DataFrame,
                               prior_dates_label: str,
                               new_dates_label: str,
                               wide_window: bool,
-                              bp_col: str) -> pd.DataFrame:
+                              bp_col: str,
+                              grounded_guidance: dict | None = None) -> pd.DataFrame:
     """Run the D3/D4/D5 trio against an already-scored DataFrame.
 
     Used by both:
@@ -17558,58 +21415,17 @@ def _apply_post_score_agents(df: pd.DataFrame,
     if wide_window:
         df = _apply_anti_duplicate_jitter(df, bp_col)
 
-    # --- D6) Gen-pop mismatch gate (every run, not just reruns) ------------
-    # Catches the Nobu-for-Nike failure mode: per-cat agent over-ranks an
-    # item by absolute fame even though the audience has no real reason
-    # to engage with it. Items >= 3x canonical gen-pop baseline AND not
-    # called out in the persona's expected_high get sent to gpt-4o for
-    # ACCEPT/REVISE per category. No hardcoded brand values — the gate
-    # is purely deterministic flagging; the LLM makes the actual call.
-    df = _run_genpop_mismatch_pass(
-        df,
-        persona_doc=persona_doc,
-        subject=subject,
-        bp_col=bp_col,
-    )
-
-    # --- D7) Deterministic canonical-baseline cap (every run) --------------
-    # FIRST safety net. Catches mathematical absurdities (Patek Philippe 30%,
-    # Givenchy 113x baseline). Loosened multipliers (12x for expected_high,
-    # 8x for default) leave plenty of nuance room — only true hallucinations
-    # trip the cap. Items in persona_doc['cap_overrides'] bypass entirely.
-    # Returns (df, list_of_cap_actions) for downstream LLM judge review.
-    df, cap_actions = _apply_canonical_baseline_cap(
-        df,
-        persona_doc=persona_doc,
-        bp_col=bp_col,
-    )
-
-    # --- D8) Deterministic canonical-baseline floor (every run) ------------
-    # Complement to D7. Catches the inverse failure mode: when the agent
-    # over-fits to a single audience trait (e.g. "sports") and SUPPRESSES
-    # mainstream platforms below 50% of baseline. Returns (df, floor_actions).
-    df, floor_actions = _apply_canonical_baseline_floor(
-        df,
-        persona_doc=persona_doc,
-        bp_col=bp_col,
-    )
-
-    # --- D9) LLM cap-review judge (every run) ------------------------------
-    # SECOND safety net — restores nuance after the deterministic cap/floor.
-    # For each capped item: judge decides ACCEPT (cap stays) or REVISE
-    # (set value between cap and original — judge believes cap was too
-    # aggressive). Same symmetric review for floor actions. This is the
-    # "trust agents but verify" layer that lets Netflix at 86% stay near
-    # 86% if the judge confirms it (Netflix is universal) while keeping
-    # Patek at the cap (judge agrees Patek 0.19% canonical doesn't reach 30%).
-    df = _run_cap_review_pass(
-        df,
-        persona_doc=persona_doc,
-        subject=subject,
-        bp_col=bp_col,
-        cap_actions=cap_actions,
-        floor_actions=floor_actions,
-    )
+    # --- D6/D7 REMOVED ----------------------------------------------------
+    # The old D6 (gen-pop mismatch agent) + D7 (soft hallucination cap)
+    # patched the failure mode where an agent over-ranked an item by absolute
+    # fame. With the architectural rewrite (affinity 0-100 -> BP via gen_pop
+    # multiplier, capped at 3.5x gen_pop), no item can land >5x gen_pop unless
+    # propagated from another category — and propagation is byte-identical
+    # by construction. D7 also re-randomized BPs per-row (random.uniform
+    # jitter), which broke the score-once-propagate guarantee.
+    #
+    # If an outlier slips through in the future, fix the affinity scoring,
+    # not the post-processing.
 
     return df
 
@@ -17627,6 +21443,71 @@ _UNIVERSAL_HIGH_BP = {
 }
 
 _CLAMP_EXEMPT_CATS = {'BRAND INPUT', 'SAMPLE SIZE', 'INPUT_METADATA', 'BRAND CATEGORY'}
+
+_CHILDRENS_ITEMS = {
+    'ROBLOX', 'LEGO', 'BARBIE', 'DISNEY DREAMLIGHT VALLEY', 'YOUTUBE KIDS',
+    'COCOMELON', 'PAW PATROL', 'PEPPA PIG', 'BLUEY', 'BABY SHARK',
+    'NICK JR', 'HOOKED ON PHONICS', 'ABCMOUSE', 'LEAPFROG', 'VTECH',
+}
+
+_YOUNG_SKEWING_GAMES = {
+    'MINECRAFT', 'SUPER MARIO', 'POKEMON GO', 'ANIMAL CROSSING',
+    'CANDY CRUSH', 'HARRY POTTER', 'AMONG US',
+}
+
+_CPG_INSTORE_ITEMS = {
+    'CLOROX', 'PAMPERS', 'TIDE', 'PURINA', 'BOUNTY', 'CHARMIN', 'DOWNY',
+    'LYSOL', 'WINDEX', 'SWIFFER', 'DAWN', 'MR CLEAN', 'FEBREZE', 'GLAD',
+    'REYNOLDS WRAP', 'ZIPLOC', 'SUAVE', 'COTTONELLE', 'SCOTT', 'VIVA',
+}
+
+_CPG_LOW_DIGITAL_SIGNAL = {
+    'LISTERINE', 'PRINGLES', 'MCCORMICK', 'SNICKERS', 'TUMS', 'TWIX',
+    'CHEETOS', 'DORITOS', 'OREO', 'KRAFT', 'JELL-O', 'VELVEETA',
+    'RITZ', 'TRISCUIT', 'WHEAT THINS', 'SKIPPY', 'JIF', 'HUNTS',
+    'BETTY CROCKER', 'PILLSBURY', 'DUNCAN HINES', 'CAMPBELL',
+    'PROGRESSO', 'CHEF BOYARDEE', 'SPAM', 'HORMEL', 'OSCAR MAYER',
+    'HEINZ', 'FRENCH', 'HIDDEN VALLEY', 'RANCH', 'HELLMANNS',
+    'MIRACLE WHIP', 'HAWAIIAN TROPIC',
+}
+
+_MAJOR_THEME_PARKS = {
+    'DISNEY WORLD', 'DISNEYLAND', 'UNIVERSAL ORLANDO RESORT',
+    'UNIVERSAL STUDIOS HOLLYWOOD', 'UNIVERSAL STUDIOS',
+    'KNOTT\'S BERRY FARM', 'SEA WORLD', 'SEAWORLD', 'BUSCH GARDENS',
+    'LEGOLAND', 'CEDAR POINT', 'SIX FLAGS', 'HERSHEYPARK',
+    'TOP GOLF', 'TOPGOLF', 'DAVE & BUSTERS', 'DAVE AND BUSTERS',
+}
+
+_MAJOR_QSR = {
+    'MCDONALDS', "MCDONALD'S", 'STARBUCKS', 'SUBWAY', 'WENDYS', "WENDY'S",
+    'DUNKIN', "DUNKIN'", 'DOMINOS', "DOMINO'S", 'PIZZA HUT',
+}
+
+_MAJOR_GYMS = {
+    'PLANET FITNESS', 'YMCA', '24 HOUR FITNESS', 'LA FITNESS',
+    'EQUINOX', 'GOLD\'S GYM', 'GOLDS GYM', 'ANYTIME FITNESS',
+    'ORANGETHEORY', 'ORANGETHEORY FITNESS',
+}
+
+_ATHLETE_CATEGORIES = {
+    'ATHLETE', 'NBA ATHLETE', 'NFL ATHLETE', 'MLB ATHLETE',
+    'SOCCER ATHLETE', 'WNBA ATHLETE', 'NHL ATHLETE', 'MLS ATHLETE',
+}
+
+_BRAND_CATEGORY_TO_INTERESTS = {
+    'APPAREL/FOOTWEAR': ['SPORTS', 'FOOTWEAR', 'SNEAKERS', 'FITNESS'],
+    'BEAUTY/WELLNESS': ['BEAUTY', 'SKINCARE', 'WELLNESS'],
+    'STREAMING/PLATFORM': ['STREAMING', 'ENTERTAINMENT', 'TV'],
+    'GAMES': ['GAMING', 'ESPORTS'],
+    'QSR': ['DINING OUT', 'FAST FOOD'],
+    'AUTOMOBILE': ['AUTOMOTIVE', 'CARS'],
+    'MEDIA': ['NEWS', 'MEDIA'],
+    'SPORTS': ['SPORTS', 'FITNESS', 'LIVE EVENTS'],
+    'TELECOM': ['TECHNOLOGY'],
+    'TRAVEL': ['TRAVEL'],
+    'HOME/OUTDOOR': ['HOME IMPROVEMENT', 'OUTDOOR LIFE'],
+}
 
 
 def _organic_4dp(val: float) -> float:
@@ -17659,8 +21540,164 @@ def _has_bad_decimals(val: float) -> bool:
     return False
 
 
+# ═══════════════════════════════════════════════════════════════════════
+#  GenPop-Anchored Guardrails (Validator 0)
+#  Clamps/floors scored BP values relative to measured gen-pop baselines
+#  so LLM nondeterminism can't produce absurd outliers.
+# ═══════════════════════════════════════════════════════════════════════
+
+def _median_age_from_persona(persona_doc: dict | None) -> float | None:
+    """Extract weighted median age from persona demographics AGE distribution."""
+    if not persona_doc:
+        return None
+    demos = persona_doc.get('demographics', {})
+    age_dist = demos.get('AGE', {})
+    if not age_dist or not isinstance(age_dist, dict):
+        return None
+
+    age_midpoints = {
+        '17 AND UNDER': 14, '18-24': 21, '25-34': 29.5, '35-44': 39.5,
+        '45-54': 49.5, '55-64': 59.5, '65 OR OLDER': 70,
+    }
+    weighted_sum = 0.0
+    total_pct = 0.0
+    for bucket, pct in age_dist.items():
+        try:
+            p = float(pct)
+        except (ValueError, TypeError):
+            continue
+        mid = age_midpoints.get(bucket.strip().upper())
+        if mid is None:
+            continue
+        weighted_sum += mid * p
+        total_pct += p
+    if total_pct <= 0:
+        return None
+    return weighted_sum / total_pct
+
+
+def _apply_genpop_anchored_guardrails(df: pd.DataFrame,
+                                       persona_doc: dict | None = None,
+                                       brands: list[str] | None = None) -> pd.DataFrame:
+    """Validator 0 — minimal safety guardrails.
+
+    The architectural rewrite (affinity * gen_pop math + unique-value index)
+    naturally produces proportional results, so the 12 ad-hoc caps/floors
+    that previously patched LLM number-noise (R1-R3, R6-R13) are no longer
+    needed. We keep only:
+
+      • R0  Universal floor/ceiling: BP ∈ [0.01%, 96.0%]
+      • R5  Young-audience social-media floor (legitimate persona-specific
+            override — TikTok/Instagram/Snapchat for audiences <45)
+      • R14 Negative/zero BP floor (safety net for any leftover edge case)
+    """
+    gp = _load_genpop_csv()
+    if gp is None or gp.empty:
+        print("   ⚠️  GenPop Guardrails: gen pop CSV unavailable — skipping")
+        return df
+
+    df = df.copy()
+    bp_col = 'Brand Penetration (Row)'
+    if bp_col not in df.columns:
+        return df
+
+    # Build fast lookup for R5 (gen_pop baseline next to TikTok/Instagram/etc.)
+    gp_lookup: dict[tuple[str, str], float] = {}
+    cat_col = 'Column' if 'Column' in gp.columns else gp.columns[0]
+    val_col = 'Value' if 'Value' in gp.columns else gp.columns[1]
+    gp_bp_col = 'Brand Penetration (Row)' if 'Brand Penetration (Row)' in gp.columns else gp.columns[2]
+    for _, r in gp.iterrows():
+        try:
+            c = str(r[cat_col]).strip().upper()
+            v = str(r[val_col]).strip().upper()
+            bp = float(str(r[gp_bp_col]).replace(',', '').replace('%', ''))
+            if c and v and v != 'NAN':
+                gp_lookup[(c, v)] = bp
+        except (ValueError, TypeError):
+            continue
+
+    median_age = _median_age_from_persona(persona_doc)
+    caps_applied = 0
+    floors_applied = 0
+
+    # Once-per-value cache for the R0 ceiling jitter so the same Value gets
+    # the same capped BP in every category it appears in.
+    r0_cap_cache: dict[str, float] = {}
+
+    for idx in df.index:
+        try:
+            cat = str(df.at[idx, 'Column']).strip().upper()
+            val = str(df.at[idx, 'Value']).strip().upper()
+            raw_bp = df.at[idx, bp_col]
+            if isinstance(raw_bp, str):
+                raw_bp = raw_bp.replace('%', '').replace(',', '').strip()
+            bp = float(raw_bp)
+        except (ValueError, TypeError, KeyError):
+            continue
+
+        original_bp = bp
+        gen_pop = gp_lookup.get((cat, val))
+
+        # ── R0: Universal floor/ceiling ──────────────────────────────────
+        # IMPORTANT: cap to organic 95.xxxx not flat 96.0000. A flat 96.0000
+        # gets caught by Validator 4's `_has_bad_decimals` check and gets
+        # replaced with a fresh `_organic_4dp(96)` per row — which can swing
+        # ±1-3% INDEPENDENTLY per occurrence of the same value, breaking
+        # cross-category byte-identical propagation (e.g. Nike-MPB vs
+        # Nike-APPAREL/FOOTWEAR drifted 3.48% apart in the prior run).
+        # Cache the cap value per Value so every occurrence of e.g. NIKE
+        # over the cap gets the SAME capped BP across all categories.
+        if bp > 96.0:
+            if val in r0_cap_cache:
+                bp = r0_cap_cache[val]
+            else:
+                d1 = random.randint(1, 9); d2 = random.randint(1, 9)
+                d3 = random.randint(1, 9); d4 = random.randint(1, 9)
+                bp = round(95.0 + d1 * 0.1 + d2 * 0.01 + d3 * 0.001 + d4 * 0.0001, 4)
+                r0_cap_cache[val] = bp
+            caps_applied += 1
+        elif bp < 0.01:
+            # See R14 below for the gen-pop-aware version when we have one
+            pass
+
+        # ── R5: Young-audience social-media floor ───────────────────────
+        # Legitimate persona-specific override: TikTok / Instagram / Snapchat
+        # are dominant platforms for audiences under 45 — even if the agent
+        # under-scores them, panel reality keeps them near baseline.
+        if gen_pop is not None and median_age is not None:
+            social_floor = None
+            if median_age < 35:
+                if val in ('TIKTOK', 'INSTAGRAM'):
+                    social_floor = gen_pop * 0.9
+                elif val == 'SNAPCHAT':
+                    social_floor = gen_pop * 0.8
+            elif median_age < 45:
+                if val in ('TIKTOK', 'INSTAGRAM'):
+                    social_floor = gen_pop * 0.7
+            if social_floor is not None and bp < social_floor:
+                bp = _organic_4dp(social_floor)
+                print(f"   🔒 R5 social-floor: {cat}/{val} {original_bp:.2f}% → {bp:.2f}% "
+                      f"(young audience, median_age={median_age:.0f})")
+                floors_applied += 1
+
+        # ── R14: Negative / zero BP safety floor ────────────────────────
+        if bp < 0.01:
+            fallback = max(0.01, (gen_pop or 0.5) * 0.01)
+            bp = _organic_4dp(fallback)
+            print(f"   🔒 R14 neg-floor: {cat}/{val} {original_bp:.4f}% → {bp:.4f}%")
+            floors_applied += 1
+
+        if bp != original_bp:
+            df.at[idx, bp_col] = bp
+
+    total = caps_applied + floors_applied
+    print(f"   🔒 GenPop Guardrails (slim): {total} corrections ({caps_applied} caps, {floors_applied} floors)")
+    return df
+
+
 def post_agent_quality_gate(df: pd.DataFrame, persona_doc: dict | None = None,
-                            brands: list[str] | None = None) -> pd.DataFrame:
+                            brands: list[str] | None = None,
+                            grounded_guidance: dict | None = None) -> pd.DataFrame:
     """Run all quality validators on the DataFrame after agent processing.
 
     Called between Step 2 (parallel_category_agents) and Step 3 (sanity check).
@@ -17673,14 +21710,15 @@ def post_agent_quality_gate(df: pd.DataFrame, persona_doc: dict | None = None,
     if bp_col not in df.columns:
         return df
 
-    brand_variants = set()
-    if brands:
-        for b in brands:
-            bu = b.strip().upper()
-            brand_variants.add(bu)
-            brand_variants.add(bu.replace(' ', '-'))
-            brand_variants.add(bu.replace(' ', '_'))
-            brand_variants.add(bu.replace(' ', ''))
+    # ── Validator 0: GenPop-Anchored Guardrails ────────────────────
+    df = _apply_genpop_anchored_guardrails(df, persona_doc, brands)
+
+    # ── Validator 0b: Deterministic baseline cap/floor vs Gen Pop CSV ───────
+    try:
+        df, _ = _apply_canonical_baseline_cap(df, persona_doc or {}, bp_col)
+        df, _ = _apply_canonical_baseline_floor(df, persona_doc or {}, bp_col)
+    except Exception as _e_gut:
+        print(f"   ⚠️  Baseline cap/floor skipped: {_e_gut}")
 
     corrections = 0
 
@@ -17712,52 +21750,13 @@ def post_agent_quality_gate(df: pd.DataFrame, persona_doc: dict | None = None,
                     df.at[idx, pct_col] = new_v
                 corrections += 1
 
-    # ── Validator 2: BP Distribution Gate ─────────────────────────────
-    all_cats = df['Column'].astype(str).str.strip().str.upper().unique()
-    behavioral_cats = [c for c in all_cats
-                       if c not in _DEMO_SUM_CATEGORIES
-                       and c not in _CLAMP_EXEMPT_CATS
-                       and c != 'LOCATION']
-    for cat in behavioral_cats:
-        mask = df['Column'].astype(str).str.strip().str.upper() == cat
-        if not mask.any():
-            continue
-        idxs = df[mask].index.tolist()
-        bp_vals = []
-        for idx in idxs:
-            try:
-                bp_vals.append((idx, float(df.at[idx, bp_col])))
-            except (ValueError, TypeError):
-                continue
-        if not bp_vals:
-            continue
-
-        above_50 = [(idx, v) for idx, v in bp_vals if v > 50.0]
-        if len(above_50) > 3:
-            above_50_sorted = sorted(above_50, key=lambda x: -x[1])
-            for idx, v in above_50_sorted[3:]:
-                val_name = str(df.at[idx, 'Value']).strip().upper()
-                if val_name in _UNIVERSAL_HIGH_BP or val_name in brand_variants:
-                    continue
-                clamped = _organic_4dp(random.uniform(25.0, 45.0))
-                df.at[idx, bp_col] = clamped
-                if pct_col in df.columns:
-                    df.at[idx, pct_col] = clamped
-                corrections += 1
-                print(f"   ⚠️  QualityGate: {cat}/{val_name} clamped {v:.2f}% → {clamped:.4f}% (>3 items above 50%)")
-
-        for idx, v in bp_vals:
-            val_name = str(df.at[idx, 'Value']).strip().upper()
-            if v > 90.0 and val_name not in _UNIVERSAL_HIGH_BP and val_name not in brand_variants:
-                cat_upper = str(df.at[idx, 'Column']).strip().upper()
-                if cat_upper in _CLAMP_EXEMPT_CATS:
-                    continue
-                clamped = _organic_4dp(random.uniform(55.0, 80.0))
-                df.at[idx, bp_col] = clamped
-                if pct_col in df.columns:
-                    df.at[idx, pct_col] = clamped
-                corrections += 1
-                print(f"   ⚠️  QualityGate: {cat}/{val_name} clamped {v:.2f}% → {clamped:.4f}% (>90% non-universal)")
+    # ── Validator 2: REMOVED ─────────────────────────────────────────
+    # The architectural rewrite (affinity * gen_pop math + score-once-propagate)
+    # naturally produces proportional BPs that respect their gen_pop ceilings.
+    # The legacy >50% / >90% blanket clamps were patching LLM number-noise
+    # that no longer exists. If a value legitimately scores 92% (e.g. core
+    # cultural identifier), clamping to a random 55-80% destroys the signal.
+    # R0 in the guardrail (BP <= 96%) is the only ceiling we need now.
 
     # ── Validator 3: Location Uniqueness ──────────────────────────────
     loc_mask = df['Column'].astype(str).str.strip().str.upper() == 'LOCATION'
@@ -17790,7 +21789,14 @@ def post_agent_quality_gate(df: pd.DataFrame, persona_doc: dict | None = None,
                 seen_vals[v] = idx
 
     # ── Validator 4: Noise Quality Check ──────────────────────────────
+    # CRITICAL: jitter ONCE per unique Value, not per row. The previous
+    # version called _organic_4dp() independently for every row, which
+    # produced wildly different results for the same value across categories
+    # (e.g. Nike-MPB became 97.9059 and Nike-APPAREL/FOOTWEAR became 94.4220
+    # from the same 96.0000 starting point). The architectural rewrite
+    # guarantees byte-identical propagation; this validator must respect it.
     skip_cats = {'INPUT_METADATA', 'SAMPLE SIZE'}
+    value_jitter_cache: dict[tuple[float, str], float] = {}
     for idx in df.index:
         cat = str(df.at[idx, 'Column']).strip().upper()
         if cat in skip_cats:
@@ -17802,7 +21808,13 @@ def post_agent_quality_gate(df: pd.DataFrame, persona_doc: dict | None = None,
         if v >= 99.999 or v <= 0.0001:
             continue
         if _has_bad_decimals(v):
-            new_v = _organic_4dp(v)
+            val_key = str(df.at[idx, 'Value']).strip().upper()
+            cache_key = (round(v, 4), val_key)
+            if cache_key in value_jitter_cache:
+                new_v = value_jitter_cache[cache_key]
+            else:
+                new_v = _organic_4dp(v)
+                value_jitter_cache[cache_key] = new_v
             df.at[idx, bp_col] = new_v
             if pct_col in df.columns:
                 df.at[idx, pct_col] = new_v
@@ -17842,15 +21854,15 @@ def agent_pipeline_final_sanity_check(df: pd.DataFrame,
     """Step 3 — deterministic sanity check.
 
     Only two overrides plus math reconciliation:
-      1. Brand input locked to 100% (with MOST PURCHASED BRANDS exemption
-         when purchasers_only=False — see enforce_input_brand_100 docstring)
+      1. Brand input BP enforcement (100% only if brand not in MPB;
+         agent score if brand IS in MPB — see enforce_input_brand_100)
       2. Same Value = highest BP across categories
       3. BP → raw → Category Share → US Gen Pop Projection
       4. Micro-noise to avoid .0000 endings
     """
     df = df.copy()
 
-    # 1. Brand input = 100%
+    # 1. Brand input BP enforcement (conditional on MPB presence)
     if brands:
         df = enforce_input_brand_100(df, brands, purchasers_only=purchasers_only)
 
@@ -17910,12 +21922,8 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
     # Ensure the output directory exists
     os.makedirs(base_dir, exist_ok=True)
     
-    # Ensure we're using 6X-Large warehouse for the entire pipeline
     with conn.cursor() as cur:
-        cur.execute("USE WAREHOUSE BEHAVIORGRAPH6X")
-        cur.execute("ALTER WAREHOUSE BEHAVIORGRAPH6X SET WAREHOUSE_SIZE = '6X-Large'")
-        cur.execute("ALTER WAREHOUSE BEHAVIORGRAPH6X SET QUERY_ACCELERATION_MAX_SCALE_FACTOR = 25")
-        print("🚀 Pipeline starting with BEHAVIORGRAPH6X warehouse (6X-Large with 25x acceleration)")
+        print("🚀 Pipeline starting on ClickHouse")
     
     with conn.cursor() as cur:
         # Load previous run data if provided
@@ -17949,9 +21957,9 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
     else:
         # Show which processing approach will be used
         if use_full_population_fastpath and not is_genpop:
-            print("🚀 Using FAST PATH: Streaming aggregation for 6X-Large warehouse optimization")
+            print("🚀 Using FAST PATH: Streaming aggregation on ClickHouse")
         else:
-            print("📊 Using DEFAULT PATH: Traditional 100% sampling approach with 6X-Large warehouse")
+            print("📊 Using DEFAULT PATH: Traditional 100% sampling approach on ClickHouse")
 
     # Initialize brand_filter from all variants (same as perform_full_universe_scan) with SQL escaping
     if not is_genpop and brands:
@@ -17967,9 +21975,7 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
 
     if is_geo_profile or (use_full_population_fastpath and not is_genpop):
         cur = conn.cursor()
-        cur.execute("USE WAREHOUSE BEHAVIORGRAPH6X")
         if is_geo_profile:
-            cur.execute("ALTER SESSION SET STATEMENT_TIMEOUT_IN_SECONDS = 14400")
 
             cur.execute(f"""
                 CREATE OR REPLACE TEMP TABLE GEO_UIDS AS
@@ -18050,7 +22056,6 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
                 
                 if date_range_days > 30:
                     print(f"⚠️ Large date range detected ({date_range_days} days) - using chunked processing hints")
-                    cur.execute("ALTER SESSION SET STATEMENT_QUEUING_TIMEOUT_IN_SECONDS = 300")
                 else:
                     print(f"📅 Date range: {date_range_days} days")
             except ValueError as e:
@@ -18058,8 +22063,6 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
             
             print("📊 Computing per-UID brand presence in streaming mode...")
             
-            cur.execute("ALTER SESSION SET USE_CACHED_RESULT = FALSE")
-            cur.execute("ALTER SESSION SET STATEMENT_TIMEOUT_IN_SECONDS = 14400")
             
             cur.execute(f"""
                 CREATE OR REPLACE TEMP TABLE MAPPED_EVENTS AS
@@ -18260,10 +22263,12 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
         # Scale factor = 1 / sample_rate (to scale back to full universe)
         # This will be recalculated later after dynamic sampling is determined
         universe_scale_factor = 1  # Placeholder, will be updated
-        base_warehouse_size = '6X-Large'  # Use 6X-Large for everything - fastest and most cost-effective
-        max_warehouse_size = '6X-Large'  # Consistent 6X-Large for all operations
-        base_acceleration_factor = 25  # Maximum acceleration for all operations
-        max_acceleration_factor = 25  # Maximum acceleration for all operations
+        # Legacy warehouse-tuning vars kept for backwards-compat with downstream
+        # references; all SQL now runs on ClickHouse via the connector shim.
+        base_warehouse_size = 'CH'
+        max_warehouse_size = 'CH'
+        base_acceleration_factor = 1
+        max_acceleration_factor = 1
         
         # Create master UID pool from the actual input date range
         # This ensures consistent UID sets across different analysis periods
@@ -18274,13 +22279,8 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
             print(f"📊 Creating master UID pool from {master_start_date} to {master_end_date}")
             print(f"📊 Analysis period: {sample_start} to {sample_end} ({date_range_days} days)")
         
-        # Apply intelligent warehouse scaling for cost optimization and run sampling count in same cursor
         with conn.cursor() as cur:
-            # Use dedicated 6X-Large warehouse for optimal performance
-            cur.execute("ALTER WAREHOUSE BEHAVIORGRAPH6X SET WAREHOUSE_SIZE = '6X-Large'")
-            cur.execute("ALTER WAREHOUSE BEHAVIORGRAPH6X SET QUERY_ACCELERATION_MAX_SCALE_FACTOR = 25")
-            cur.execute("ALTER WAREHOUSE BEHAVIORGRAPH6X SET STATEMENT_TIMEOUT_IN_SECONDS = 14400")  # 4 hour timeout for large queries
-            print(f"🚀 Using BEHAVIORGRAPH6X warehouse (6X-Large) with 25x acceleration (optimized for speed and cost)")
+            print(f"🚀 Running on ClickHouse")
             
             # STEP 1: OPTIMIZED UID finding with smart sampling and limits
             if not SILENCE_VERBOSE_OUTPUT:
@@ -18511,7 +22511,7 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
 
         # OPTIMIZED: Use streaming CTE instead of temp tables for better performance
         print("🚀 Using optimized streaming processing (no temp tables)...")
-        print("🚀 Using BEHAVIORGRAPH6X warehouse (6X-Large) with 25x acceleration for all operations")
+        print("🚀 Running on ClickHouse with 25x acceleration for all operations")
         print("⚡ This will process 113M+ clickstream records at maximum speed")
         
         monitor = progress_monitor("Processing behavioral data with streaming CTEs", conn)
@@ -18523,18 +22523,11 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
         # Use pre-sampled UIDs instead of applying sampling to entire dataset
         # This ensures consistent sample sizes across different date ranges
         
-        # ULTRA-OPTIMIZATION: Set query hints for maximum speed
         cur = conn.cursor()
-        # Explicitly ensure we're using BEHAVIORGRAPH6X warehouse
-        cur.execute("USE WAREHOUSE BEHAVIORGRAPH6X")
-        cur.execute("ALTER SESSION SET USE_CACHED_RESULT = TRUE")
+        # ALTER SESSION lines below are no-ops on ClickHouse (the connector
+        # swallows them); kept only as documentation of historical intent.
         cur.execute("ALTER SESSION SET QUERY_TAG = 'BEHAVIORAL_CTE_OPTIMIZED'")
-        
-        # Set statement timeout to 3 hours to prevent 4-hour timeout
-        cur.execute("ALTER SESSION SET STATEMENT_TIMEOUT_IN_SECONDS = 10800")  # 3 hours
-        print("⏱️  Query timeout set to 3 hours to ensure completion before 4-hour limit")
-        
-        # Scale up warehouse for complex behavioral analysis
+        cur.execute("ALTER SESSION SET STATEMENT_TIMEOUT_IN_SECONDS = 10800")  # historical 3h cap
         scale_warehouse_up(cur, max_warehouse_size, max_acceleration_factor)
         
         # ULTRA-FAST: Set aggressive query optimization parameters
@@ -18603,23 +22596,68 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
         
         print(f"⚡ Scaled clickstream sampling: {clickstream_sample_pct}% for {uid_count:,} UIDs (optimized for depth)")
         
+        # ── ClickHouse-native, memory-friendly rewrite ────────────────────
+        # The previous form combined two memory hogs that pushed full-year
+        # Nike runs over the 100 GiB per-query profile cap once the
+        # clickstream backfill grew the table past ~150 B rows:
+        #
+        #   1. `FROM (SELECT * FROM clickstream_final SAMPLE (N)) c`
+        #      The connector translates SAMPLE(N) into a `cityHash64(UID) %
+        #      10000 < bucket` predicate but wraps it in its own subquery,
+        #      which prevents the outer DELIVERED date filter from pushing
+        #      down past the hash compute. ClickHouse then evaluates
+        #      cityHash64 over every row of the join input, accumulating
+        #      ~GB-per-thread of state across 48 threads.
+        #
+        #   2. `ROW_NUMBER() OVER (PARTITION BY UID ...) ... QUALIFY rn <= N`
+        #      Window functions in ClickHouse build the full per-partition
+        #      state in RAM; they don't spill. With a ~30 B-row join input
+        #      this alone could exceed 50 GiB.
+        #
+        # Two fixes — neither requires a server-side profile change:
+        #
+        #   A. INLINE `cityHash64(c.UID) % 100 < N` in the WHERE clause
+        #      alongside DELIVERED + COMMON_NAME. All three predicates now
+        #      get combined and pushed down to the MergeTree read path,
+        #      so the partition prune by DELIVERED happens BEFORE hashing.
+        #
+        #   B. Replace `ROW_NUMBER() OVER + QUALIFY rn <= N` with the
+        #      inline-ROW_NUMBER form `QUALIFY ROW_NUMBER() OVER (...) <= N`,
+        #      which the connector's `_rewrite_qualify` fast path translates
+        #      to native `ORDER BY ... LIMIT N BY c.UID`. LIMIT BY streams
+        #      the top-N per group instead of materializing the window.
+        #
+        # We also override `max_memory_usage` to 300 GiB and bump the
+        # external-spill thresholds for this one statement. The host has
+        # 730 GiB free; the connection default of 120 GiB (and the
+        # clickhouse user profile's 100 GiB cap when stricter) stays in
+        # place for everything else.
+        _pre_sampled_settings = {
+            'max_memory_usage':                    300 * 1024 * 1024 * 1024,
+            'max_bytes_before_external_group_by':  100 * 1024 * 1024 * 1024,
+            'max_bytes_before_external_sort':      100 * 1024 * 1024 * 1024,
+            'max_execution_time':                  3600,
+            # Rely on parallel_hash for the small-side ELIGIBLE_UIDS join;
+            # fall back to grace_hash if the planner thinks the build side
+            # is too large (should never trigger here — ELIGIBLE_UIDS is
+            # ≤ uid_count rows).
+            'join_algorithm': 'parallel_hash,grace_hash,partial_merge',
+        }
         cur.execute(f"""
             CREATE OR REPLACE TEMP TABLE PRE_SAMPLED_CLICKSTREAM AS
-            SELECT 
+            SELECT
                 c.UID,
                 c.COMMON_NAME,
-                c.DELIVERED,
-                ROW_NUMBER() OVER (PARTITION BY c.UID ORDER BY c.DELIVERED DESC) as rn
-            FROM (
-                SELECT * FROM PROCESSEDCLICKSTREAM.PUBLIC.CLICKSTREAM_FINAL SAMPLE ({clickstream_sample_pct})
-            ) c
+                c.DELIVERED
+            FROM PROCESSEDCLICKSTREAM.PUBLIC.CLICKSTREAM_FINAL c
             INNER JOIN ELIGIBLE_UIDS u ON c.UID = u.UID
             WHERE c.DELIVERED BETWEEN '{behavior_start}' AND '{behavior_end}'
               AND c.COMMON_NAME IS NOT NULL
               AND c.COMMON_NAME != ''
               AND c.COMMON_NAME != ' '
-            QUALIFY rn <= {visits_per_user}
-        """)
+              AND cityHash64(c.UID) % 100 < {clickstream_sample_pct}
+            QUALIFY ROW_NUMBER() OVER (PARTITION BY c.UID ORDER BY c.DELIVERED DESC) <= {visits_per_user}
+        """, settings=_pre_sampled_settings)
         
         # Check pre-sampled data volume
         pre_sample_count = cur.execute("SELECT COUNT(*) FROM PRE_SAMPLED_CLICKSTREAM").fetchone()[0]
@@ -18653,7 +22691,6 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
             WITH limited_behavior AS (
                 SELECT UID, COMMON_NAME, DELIVERED
                 FROM PRE_SAMPLED_CLICKSTREAM
-                WHERE rn <= {visits_per_user}
             ),
             mapped_brands AS (
             SELECT 
@@ -18797,8 +22834,7 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
         final_count = cur.execute("SELECT COUNT(*) FROM BEHAVIOR_FINAL").fetchone()[0]
         print(f"📊 Final behavioral data rows: {final_count:,}")
         
-        # Keep 6X-Large warehouse for all operations - faster and more powerful
-        print("✅ Behavioral processing complete - keeping 6X-Large for optimal performance")
+        print("✅ Behavioral processing complete")
         
         # Create TEMP_UIDS for downstream compatibility (using pre-sampled UIDs)
         demo_filter_clause = apply_demographic_filters(filters)
@@ -19480,7 +23516,6 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
         if final_sample_size is None:
             try:
                 cur = conn.cursor()
-                cur.execute("USE WAREHOUSE BEHAVIORGRAPH6X")
                 actual_sample_size = getattr(run_full_pipeline, 'universe_size', None)
                 if actual_sample_size is None:
                     try:
@@ -20385,7 +24420,7 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
         
         # create_smooth_decay_from_locked_top DISABLED — it replaced ALL
         # behavioral percentages with synthetic exponential decay curves,
-        # destroying the actual Snowflake signal.  The AI gut check now
+        # destroying the actual ClickHouse signal.  The AI gut check now
         # handles unrealistic values with full audience context.
         # df_final = create_smooth_decay_from_locked_top(df_final)
         
@@ -20468,10 +24503,9 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
     # For new runs, the pipeline is complete - go straight to save
     # For previous runs, the pipeline is also complete - go straight to save
     
-    # Insert 'Brand Input' row at the top before saving (rerun: use reference file's full brand list)
-    if previous_brand_input and previous_brand_input.strip():
-        brand_input_str = previous_brand_input.strip()
-    elif brands and isinstance(brands, list) and len(brands) == 1:
+    # Insert 'Brand Input' row at the top before saving
+    # ALWAYS use the submitted brands -- never override with a previous run's brand input
+    if brands and isinstance(brands, list) and len(brands) == 1:
         brand_input_str = brands[0]
     else:
         brand_input_str = ', '.join(brands) if brands else ''
@@ -20596,13 +24630,13 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
     # remaining valid OCCUPATION buckets.
     df_final = _drop_blocklisted_demo_values(df_final)
 
-    # --- FINAL INPUT BRAND 100% ENFORCEMENT (ABSOLUTE LAST STEP) ---
-    # Skip 100% enforcement for GenPop to allow natural brand percentages
+    # --- FINAL INPUT BRAND BP ENFORCEMENT ---
+    # Conditional: 100% only if brand not in MPB; agent score if in MPB
     if not is_genpop:
         df_final = enforce_input_brand_100(df_final, brands, purchasers_only=purchasers_only)
     else:
         if not SILENCE_VERBOSE_OUTPUT:
-            print("🎯 GenPop mode: Skipping input brand 100% enforcement to allow natural percentages")
+            print("🎯 GenPop mode: Skipping input brand enforcement to allow natural percentages")
     
     # Final verification pipeline removed per user request (no caps/special rules)
     
@@ -20805,6 +24839,10 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
             and (previous_demo_lookup or previous_behavioral_lookup)
             and (previous_brand_input or '').strip().lower() == brand_input_str.strip().lower()
         )
+
+        if previous_file_path and not _is_rerun_same_brand:
+            print(f"⚠️  Previous file found but brand mismatch — submitted '{brand_input_str}' "
+                  f"vs previous '{previous_brand_input}'. NOT entering rerun mode.")
         # Pull the Brand-Penetration-column lookup that load_previous_run_data
         # stashed for us (separate from `previous_behavioral_lookup` which holds
         # Category Share values used by the existing exact-match post-process).
@@ -20819,19 +24857,44 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
             _previous_bp_lookup = {}
             _previous_bp_rows = []
 
+        _behavioral_cats = sorted({
+            str(c).strip().upper() for c in df_final['Column'].unique()
+            if str(c).strip().upper() not in {
+                'SAMPLE SIZE', 'BRAND INPUT', 'INPUT_METADATA', 'BRAND CATEGORY',
+                'AGE', 'GENDER', 'ETHNICITY', 'INCOME', 'EDUCATION',
+                'RELATIONSHIP', 'SEXUAL_ORIENTATION', 'PARENTAL_STATUS',
+                'OCCUPATION', 'LOCATION',
+            }
+        })
+
+        _interest_catalog = _extract_interest_catalog_from_df(df_final)
+        if _interest_catalog:
+            print(f"   ℹ️ INTEREST canonical inventory: {len(_interest_catalog)} labels (from dataframe)")
+
         if _is_rerun_same_brand:
             print("🔒 Rerun detected (same brand input as prior run)")
             print("   • Demographics + location: LOCKED to prior run values (identical)")
+            print("   • Persona research agent: RUNNING for digital_identity + category_signals")
             print("   • Behavioral items: scored fresh by per-category agents from today's panel")
             print(f"     (prior reference has {len(_previous_bp_lookup)} BP values for delta-sanity comparison)")
             print(f"   • Missing prior items ({len(_previous_bp_rows)} candidates): re-added with prior BP + jitter "
                   f"so per-category row counts stay stable")
             print("   • Delta sanity agent: any item swinging >15pp or ≥2.5× vs. prior gets a gpt-4o second-look")
-            print("   • Persona research LLM call: SKIPPED (prior demographics reused)")
-            _persona_doc = _persona_doc_from_previous_lookup(previous_demo_lookup)
+            _persona_doc = persona_research_agent(_subject_name, brand_category,
+                                                    study_start=behavior_start, study_end=behavior_end,
+                                                    category_names=_behavioral_cats,
+                                                    interest_catalog=_interest_catalog or None)
+            _locked_demo = _persona_doc_from_previous_lookup(previous_demo_lookup)
+            _persona_doc['demographics'] = _locked_demo.get('demographics', _persona_doc.get('demographics', {}))
+            _persona_doc['location'] = _locked_demo.get('location', _persona_doc.get('location', []))
+            print("   • Demographics + location overwritten with locked prior-run values")
         else:
             _persona_doc = persona_research_agent(_subject_name, brand_category,
-                                                    study_start=behavior_start, study_end=behavior_end)
+                                                    study_start=behavior_start, study_end=behavior_end,
+                                                    category_names=_behavioral_cats,
+                                                    interest_catalog=_interest_catalog or None)
+
+        _validate_persona_quality(_persona_doc, _subject_name)
 
         # Build date-range labels for the delta-sanity agent so it can reason
         # about whether a swing is event-driven (e.g. Coachella in Q1).
@@ -20957,7 +25020,7 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
     if 'Percentage' in df_final.columns:
         df_final = df_final.rename(columns={'Percentage': 'Category Share'})
     
-    # Final required override: keep input brand at 100%.
+    # Final required override: input brand BP enforcement (conditional on MPB).
     if not is_genpop:
         df_final = enforce_input_brand_100(df_final, brands, purchasers_only=purchasers_only)
     
@@ -21069,6 +25132,9 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
 
     # Final text cleanup (mojibake/smart punctuation + canonical AGE labels).
     df_final = normalize_output_text_values(df_final)
+    # Merge any demographic alias rows introduced by canonical label mapping
+    # (e.g., Native American/Alaska Native -> OTHER; Self-employed/Retired -> OTHER).
+    df_final = deduplicate_values_within_category(df_final)
 
     # Last math reconciliation so raws/CS/projection stay in sync.
     df_final = finalize_output_metrics_like_edit_sample_size(df_final)
@@ -21118,8 +25184,13 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
         if _str_col in df_final.columns:
             df_final[_str_col] = df_final[_str_col].astype(str)
 
-    # Absolute pre-save lock (non-GenPop): brand input at 100%
+    # Absolute pre-save lock (non-GenPop): brand input BP enforcement.
+    # Also run a final cross-category byte-identical pass to undo any
+    # within-category jitter introduced by `enforce_no_perfect_trailing_zeros`
+    # so multi-category values (Roblox, Adidas, Yeti, etc.) emit identical
+    # BPs everywhere — same guarantee we apply to input brands.
     if not is_genpop and brands:
+        df_final = enforce_value_consistency_across_categories(df_final, purchasers_only=purchasers_only)
         df_final = enforce_input_brand_100(df_final, brands, purchasers_only=purchasers_only)
         df_final = finalize_output_metrics_like_edit_sample_size(df_final)
         for _fmt_col in ['Brand Penetration (Row)', 'Category Share', 'Percentage']:
@@ -21135,6 +25206,43 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
                     if str(_v).strip() != '' else _v
                 )
 
+    df_final = enforce_behavioral_category_plausibility(
+        df_final,
+        brand_category=brand_category,
+        project_name=str(project_name) if project_name is not None else None,
+        brands=brands,
+    )
+    df_final = enforce_distribution_realism(
+        df_final,
+        brand_category=brand_category,
+        project_name=str(project_name) if project_name is not None else None,
+        brands=brands,
+    )
+    df_final = finalize_output_metrics_like_edit_sample_size(df_final)
+    df_final = ensure_bp_driven_metric_alignment(df_final)
+
+    # Deterministic panel realism (search mix, Play vs App Store, UK tabloid trim)
+    # — reachable from ai_final_gut_check; run here so web/Render pipelines match.
+    if not is_genpop:
+        _pipe_sample_raw = 132040
+        try:
+            ss_m = df_final['Column'].astype(str).str.upper().str.strip() == 'SAMPLE SIZE'
+            if ss_m.any() and 'Original Raw Numbers' in df_final.columns:
+                _pipe_sample_raw = max(
+                    1,
+                    int(round(float(
+                        str(df_final.loc[ss_m, 'Original Raw Numbers'].iloc[0]).replace(',', '')
+                    ))),
+                )
+        except Exception:
+            pass
+        try:
+            df_final = apply_deterministic_us_panel_realism(df_final, _pipe_sample_raw)
+            df_final = finalize_output_metrics_like_edit_sample_size(df_final)
+            df_final = ensure_bp_driven_metric_alignment(df_final)
+        except Exception as _deterr:
+            print(f"   ⚠️ apply_deterministic_us_panel_realism skipped: {_deterr}")
+
     # Save to CSV
     try:
         df_final.to_csv(final_file, index=False)
@@ -21144,6 +25252,69 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
         fallback_file = os.path.join(base_dir, f"fallback_{timestamp}.csv")
         df_final.to_csv(fallback_file, index=False)
         final_file = fallback_file
+
+    # ── Emit agent-decision log alongside CSV ──────────────────────────────
+    # The scoring agent records its reasoning per-(category, value) — what it
+    # decided to do with the panel measurement (agree / override_low /
+    # override_high), the agent's BP estimate, the panel BP, the gen-pop
+    # baseline, and a short reason. Lets the operator see WHY the agent
+    # overrode a panel measurement (e.g. Yahoo News mapping bleed pulled
+    # down from 86% to 12%, Dick's Sporting Goods lifted from 1.8% to 28%).
+    try:
+        import json as _json
+        import tempfile as _tmp
+        decisions = []
+        conservative_capped = []
+        # Primary source: df.attrs (fragile — can be cleared by pandas ops).
+        try:
+            decisions = list(df_final.attrs.get('_agent_decisions') or [])
+            conservative_capped = list(df_final.attrs.get('_low_confidence_capped_under_1') or [])
+        except Exception:
+            decisions = []
+            conservative_capped = []
+        # Fallback: the deterministic temp-file sidecar that
+        # parallel_category_agents writes immediately after scoring (so we
+        # don't lose it if df.attrs gets dropped by post-agent pipeline
+        # passes). This ensures the audit log makes it to S3 even when
+        # df.attrs has been cleared.
+        if not decisions:
+            try:
+                _dec_dir = os.environ.get('BG_DECISIONS_DIR') or _tmp.gettempdir()
+                _sidecar = os.path.join(_dec_dir, '_bg_last_agent_decisions.json')
+                if os.path.exists(_sidecar):
+                    with open(_sidecar) as _fp:
+                        _sidecar_data = _json.load(_fp)
+                    decisions = list(_sidecar_data.get('agent_decisions') or [])
+                    conservative_capped = list(_sidecar_data.get('low_confidence_capped_under_1') or [])
+                    print(f"   📥 Loaded decisions from sidecar: {len(decisions)} decisions, "
+                          f"{len(conservative_capped)} conservative sub-1%")
+            except Exception as _scerr:
+                print(f"   ⚠️ Could not load decisions sidecar: {_scerr}")
+        if decisions or conservative_capped:
+            decisions_path = final_file.rsplit('.', 1)[0] + '_agent_decisions.json'
+            payload = {
+                'csv_file': os.path.basename(final_file),
+                'n_decisions': len(decisions),
+                'n_dropped_low_confidence': 0,
+                'dropped_low_confidence': [],
+                'n_low_confidence_capped_under_1': len(conservative_capped),
+                'low_confidence_capped_under_1': conservative_capped,
+                'decisions': sorted(
+                    decisions,
+                    key=lambda d: abs(float(d.get('agent_bp', 0) or 0)
+                                       - float(d.get('panel_bp') or 0)),
+                    reverse=True,
+                ),
+            }
+            try:
+                with open(decisions_path, 'w') as _fp:
+                    _json.dump(payload, _fp, default=str, indent=2)
+                print(f"📝 Wrote agent-decision log: {decisions_path} "
+                      f"({len(decisions)} decisions, {len(conservative_capped)} conservative sub-1%)")
+            except OSError as _e:
+                print(f"   ⚠️ Could not write agent-decision log: {_e}")
+    except Exception as _e:
+        print(f"   ⚠️ Agent-decision log emit failed: {_e}")
     
     # Calculate total time
     pipeline_end_time = time.time()
@@ -21162,14 +25333,9 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
     print(f"🎉 Done! Saved to {final_file}")
     print(f"⏱️ Total processing time: {time_str}")
     
-    # Estimate costs
-    processing_hours = total_time_seconds / 3600.0
-    estimated_credits = 512 * processing_hours  # 6X-Large rate (512 credits/hour)
-    actual_cost = estimated_credits * CREDIT_RATE_PER_DOLLAR
-    print(f"💰 Total Snowflake credits used: {estimated_credits:.2f} (estimated from 6X-Large warehouse, {processing_hours:.2f} hours)")
-    print(f"💵 Estimated cost: ${actual_cost:.2f} (at ${CREDIT_RATE_PER_DOLLAR:.2f} per credit)")
-    
-    print("✅ Keeping BEHAVIORGRAPH6X warehouse (6X-Large with 25x acceleration) for optimal performance")
+    # ClickHouse runs on dedicated hardware — no per-query billing.
+    print(f"💰 ClickHouse run complete (no per-query credits)")
+    print(f"⏱️  Wall-clock cost basis: {total_time_seconds/3600.0:.2f}h on Hetzner AX162-S")
     
     return final_file
 
@@ -21785,7 +25951,7 @@ def get_hardcoded_genpop_demographics():
             ('SINGLE', 28.9944, 2899440),
             ('IN A RELATIONSHIP', 28.5708, 2857079),
             ('MARRIED', 27.2408, 2724080),
-            ('DIVORCED', 15.1939, 1519390)
+            ('DIVORCED OR SEPARATED', 15.1939, 1519390)
         ],
         'SEXUAL ORIENTATION': [
             ('PREFER NOT TO SAY', 60.6658, 6066579),
@@ -22674,20 +26840,6 @@ def enforce_search_engine_ai_google_chatgpt_minimums(df: pd.DataFrame) -> pd.Dat
             changed = True
             if not SILENCE_VERBOSE_OUTPUT:
                 print(f"📈 SEARCH ENGINE/AI: ChatGPT Brand Penetration (Row) {pct:.2f}% → {target:.2f}% (min 25%)")
-
-    # Ensure Yahoo, Copilot, Bing, Duck Duck Go, Perplexity, MSN, Quora, Gemini are always over 38% (never exactly 38)
-    SEARCH_ENGINE_AI_OVER_38 = {'YAHOO', 'COPILOT', 'BING', 'DUCK DUCK GO', 'DUCKDUCKGO', 'PERPLEXITY', 'MSN', 'QUORA', 'GEMINI'}
-    for idx in cat_indices:
-        val_upper = str(df.at[idx, 'Value']).strip().upper()
-        val_no_space = val_upper.replace(' ', '')
-        if val_upper in SEARCH_ENGINE_AI_OVER_38 or val_no_space in {s.replace(' ', '') for s in SEARCH_ENGINE_AI_OVER_38}:
-            pct = get_penetration(idx)
-            if pct <= 38.0:
-                target = round(random.uniform(38.01, 41.99), 4)
-                df.at[idx, bp_col] = target
-                changed = True
-                if not SILENCE_VERBOSE_OUTPUT:
-                    print(f"📈 SEARCH ENGINE/AI: {val_upper} Brand Penetration (Row) {pct:.2f}% → {target:.2f}% (must be >38%)")
 
     if not changed:
         return df
@@ -24362,14 +28514,9 @@ def enforce_value_consistency_across_categories(df: pd.DataFrame,
     NOTE: Category Share is intentionally not forced identical because it is
     category-relative by design and is recomputed downstream.
 
-    purchasers_only:
-        - False (default) → MOST PURCHASED BRANDS is excluded from this
-          propagation. Otherwise the input brand's 100% (set in APPAREL/
-          FOOTWEAR / WHERE THEY SHOP / etc) would propagate back into MPB
-          and overwrite the agent's real purchase-rate score.
-        - True → MPB participates normally; the input brand legitimately
-          IS 100% in MPB because the panel was filtered to confirmed
-          purchasers.
+    MOST PURCHASED BRANDS always participates in consistency propagation so
+    that input brands whose agent score originates there carry a single
+    coherent BP across all categories.
     """
     if df is None or df.empty or 'Value' not in df.columns or 'Column' not in df.columns:
         return df
@@ -24381,8 +28528,6 @@ def enforce_value_consistency_across_categories(df: pd.DataFrame,
         'INCOME', 'EDUCATION', 'RELATIONSHIP', 'PARENTAL_STATUS',
         'SEXUAL_ORIENTATION', 'OCCUPATION', 'LOCATION',
     }
-    if not purchasers_only:
-        excluded_cols.add('MOST PURCHASED BRANDS')
 
     def _to_num(v, default=np.nan):
         try:
@@ -24472,11 +28617,14 @@ def set_brand_input_raw_to_sample_size(df, is_genpop=False, purchasers_only: boo
     This ensures the input brand always shows 100% with raw numbers matching sample size everywhere it appears.
     Skip this for GenPop to allow natural brand percentages.
 
+    NOTE: If the brand appears in MOST PURCHASED BRANDS the agent score is
+    the canonical signal and this function becomes a no-op — the
+    cross-category consistency gate handles propagation instead.
+
     purchasers_only:
-        - False (default) → MOST PURCHASED BRANDS rows are skipped so the
-          agent's real purchase-rate score is preserved.
-        - True → MPB rows participate normally because the panel was
-          filtered to confirmed purchasers and 100% is correct.
+        - False (default) → If brand is in MPB, skip all 100% forcing.
+          If brand is NOT in MPB, set to 100% everywhere.
+        - True → All categories get 100% including MPB (confirmed purchasers).
     """
     
     # Skip for GenPop to allow natural brand percentages
@@ -24516,34 +28664,44 @@ def set_brand_input_raw_to_sample_size(df, is_genpop=False, purchasers_only: boo
     for brand_name in brand_names:
         if not brand_name:
             continue
-            
-        # Create variations for matching
+
         brand_upper = brand_name.upper()
         brand_lower = brand_name.lower()
         brand_title = brand_name.title()
         brand_no_spaces = brand_name.replace(' ', '').upper()
+
+        # Check if brand appears in MOST PURCHASED BRANDS
+        brand_in_mpb = False
+        if not purchasers_only:
+            for idx, row in df.iterrows():
+                row_col = str(row.get('Column', '')).strip().upper()
+                if row_col != 'MOST PURCHASED BRANDS':
+                    continue
+                value = str(row['Value']).strip()
+                value_upper = value.upper()
+                value_no_spaces = value.replace(' ', '').upper()
+                if (value_upper == brand_upper or value_no_spaces == brand_no_spaces or
+                        value_upper == brand_no_spaces or value_no_spaces == brand_upper):
+                    brand_in_mpb = True
+                    break
+
+        if brand_in_mpb and not purchasers_only:
+            if not SILENCE_VERBOSE_OUTPUT:
+                print(f"  ⏭️  set_brand_input_raw: '{brand_name}' in MPB — skipping 100% override (agent score is canonical)")
+            continue
         
-        # Find ALL rows where the Value matches the brand name (case insensitive, with and without spaces)
-        # MOST PURCHASED BRANDS exempted unless purchasers_only — see fn docstring.
+        # Brand NOT in MPB — force 100% everywhere
         matches = []
-        skipped_mpb = 0
         for idx, row in df.iterrows():
             value = str(row['Value']).strip()
             value_upper = value.upper()
             value_no_spaces = value.replace(' ', '').upper()
             
-            # Check for exact match (case insensitive, with or without spaces)
             if (value_upper == brand_upper or 
                 value_no_spaces == brand_no_spaces or
                 value_upper == brand_no_spaces or
                 value_no_spaces == brand_upper):
-                row_col = str(row.get('Column', '')).strip().upper()
-                if (not purchasers_only) and row_col == 'MOST PURCHASED BRANDS':
-                    skipped_mpb += 1
-                    continue
                 matches.append(idx)
-        if skipped_mpb and not SILENCE_VERBOSE_OUTPUT:
-            print(f"  ⏭️  Skipping {skipped_mpb} MOST PURCHASED BRANDS row(s) for '{brand_name}' (purchasers_only=False)")
         
         if matches:
             gpp = int(round((sample_size / 10_000_000) * 329_900_000))
@@ -24792,11 +28950,11 @@ def main():
         if not platform_name:
             platform_name = None
     
-    conn = connect_snowflake()
+    conn = connect_db()
     
     # Always perform full universe scan to get actual total users
     print("🔍 Performing full universe scan...")
-    print("🚀 Using BEHAVIORGRAPH6X warehouse (6X-Large with 25x acceleration) throughout entire process")
+    print("🚀 Running on ClickHouse (37.27.140.111) throughout entire process")
     universe_results = perform_full_universe_scan(conn, brands, s1, e1, purchasers_only)
     if universe_results:
         print(f"🌍 Universe scan complete. True universe size: {universe_results['total_universe']:,} users")
@@ -24824,8 +28982,8 @@ def main():
             # Add frequency columns to main dataframe
             enhanced_df = add_frequency_columns_to_main_df(main_df, frequency_df)
             
-            # --- FINAL INPUT BRAND 100% ENFORCEMENT (ABSOLUTE LAST STEP) ---
-            # Skip 100% enforcement for GenPop to allow natural brand percentages
+            # --- FINAL INPUT BRAND BP ENFORCEMENT ---
+            # Conditional: 100% only if brand not in MPB; agent score if in MPB
             if not is_genpop:
                 enhanced_df = enforce_input_brand_100(enhanced_df, brands, purchasers_only=purchasers_only)
             else:
@@ -24953,8 +29111,6 @@ def calculate_frequency_metrics(conn, brands, behavior_start, behavior_end, purc
         print(f"🔒 Frequency analysis using deterministic seed: {deterministic_seed}")
     
     with conn.cursor() as cur:
-        # Explicitly ensure we're using BEHAVIORGRAPH6X warehouse
-        cur.execute("USE WAREHOUSE BEHAVIORGRAPH6X")
         if not SILENCE_VERBOSE_OUTPUT:
             print("📊 Calculating visit frequency metrics...")
     
@@ -26815,11 +30971,11 @@ REQUIRED_DEMOGRAPHICS = {
     ]
 }
 
-# Valid demographic values observed in Snowflake source table:
+# Valid demographic values observed in ClickHouse source table:
 # PROCESSEDUSERFILES.PUBLIC.USER_DATA_SANITIZED
 # Used to prevent invalid labels (e.g., ETHNICITY values not present in source data)
 # from surviving into final CSV output.
-VALID_SNOWFLAKE_DEMOGRAPHIC_OPTIONS = {
+VALID_DEMOGRAPHIC_OPTIONS = {
     'AGE': {
         '17 AND UNDER',
         '18-24',
@@ -26839,7 +30995,7 @@ VALID_SNOWFLAKE_DEMOGRAPHIC_OPTIONS = {
         'SOME COLLEGE / ASSOCIATE DEGREE',
     },
     'ETHNICITY': {
-        'ANOTHER RACE/ETHNICITY',
+        'OTHER',
         'ASIAN',
         'BLACK OR AFRICAN AMERICAN',
         'HISPANIC OR LATINO',
@@ -26887,7 +31043,6 @@ VALID_SNOWFLAKE_DEMOGRAPHIC_OPTIONS = {
         'PUBLIC SAFETY & PROTECTIVE SERVICES',
         'SALES & RETAIL',
         'SCIENCE, TECHNOLOGY & TECHNICAL PROFESSIONS',
-        'SELF-EMPLOYED',
         'SERVICE & HOSPITALITY',
         'SKILLED TRADES/CONSTRUCTION OR MAINTENANCE',
         'TRANSPORTATION & LOGISTICS',
@@ -26904,6 +31059,18 @@ def _canonical_demo_value(category: str, value: str) -> str:
         # Normalize spacing around hyphens so "$50,000-$74,999" == "$50,000 - $74,999"
         v = re.sub(r'\s*-\s*', ' - ', v)
         v = re.sub(r'\s+', ' ', v).strip()
+    if cat == 'ETHNICITY' and v in {
+        'NATIVE AMERICAN / ALASKA NATIVE', 'NATIVE AMERICAN', 'ALASKA NATIVE', 'ANOTHER RACE/ETHNICITY'
+    }:
+        v = 'OTHER'
+    if cat == 'EDUCATION' and v in {'GRADUATE DEGREE'}:
+        v = 'GRADUATE OR PROFESSIONAL DEGREE'
+    if cat == 'EDUCATION' and v in {'LESS THAN HIGH SCHOOL', 'HIGH SCHOOL GRADUATE'}:
+        v = 'HIGH SCHOOL OR LESS'
+    if cat == 'RELATIONSHIP' and v in {'DIVORCED', 'SEPARATED'}:
+        v = 'DIVORCED OR SEPARATED'
+    if cat == 'OCCUPATION' and v in {'SELF-EMPLOYED', 'RETIRED', 'STUDENT', 'HOMEMAKER', 'UNEMPLOYED'}:
+        v = 'OTHER'
     return v
 
 def ensure_all_demographic_values(df_final, sample_size=None):
@@ -26911,7 +31078,7 @@ def ensure_all_demographic_values(df_final, sample_size=None):
     Normalize demographics with strict source-option enforcement.
 
     Rules:
-    - Use Snowflake-valid options only (except LOCATION handled elsewhere).
+    - Use ClickHouse-valid options only (except LOCATION handled elsewhere).
     - Split combined ETHNICITY values with commas into separate options.
       Example: "BLACK OR AFRICAN AMERICAN, HISPANIC OR LATINO" becomes
       separate rows for each option.
@@ -26942,7 +31109,7 @@ def ensure_all_demographic_values(df_final, sample_size=None):
     
     MULT = 329_900_000 / 10_000_000  # Projection multiplier
     
-    print("🔍 Normalizing demographics (Snowflake-valid options, min 0.01%)...")
+    print("🔍 Normalizing demographics (ClickHouse-valid options, min 0.01%)...")
     MIN_PCT = 0.01
 
     # Demographic categories to check (excluding LOCATION)
@@ -26993,7 +31160,7 @@ def ensure_all_demographic_values(df_final, sample_size=None):
     # 1) Split comma-combined ETHNICITY values into separate rows
     split_rows = []
     split_count = 0
-    eth_valid = VALID_SNOWFLAKE_DEMOGRAPHIC_OPTIONS.get('ETHNICITY', set())
+    eth_valid = VALID_DEMOGRAPHIC_OPTIONS.get('ETHNICITY', set())
     eth_mask = df['Column'].astype(str).str.upper().str.strip() == 'ETHNICITY'
     for idx in df[eth_mask].index.tolist():
         raw_val = str(df.at[idx, 'Value']).strip()
@@ -27021,7 +31188,7 @@ def ensure_all_demographic_values(df_final, sample_size=None):
     # 2) Remove invalid options and add all missing valid options
     removed_invalid = 0
     added_missing = 0
-    for category, valid_set in VALID_SNOWFLAKE_DEMOGRAPHIC_OPTIONS.items():
+    for category, valid_set in VALID_DEMOGRAPHIC_OPTIONS.items():
         mask = df['Column'].astype(str).str.upper().str.strip() == category
         cat_idx = df[mask].index.tolist()
 
@@ -27067,12 +31234,12 @@ def ensure_all_demographic_values(df_final, sample_size=None):
     # 3) Consolidate duplicates by (category, value) by summing percentages.
     # Uses canonical category-value key to collapse label variants.
     dedup_drops = []
-    for category in VALID_SNOWFLAKE_DEMOGRAPHIC_OPTIONS.keys():
+    for category in VALID_DEMOGRAPHIC_OPTIONS.keys():
         mask = df['Column'].astype(str).str.upper().str.strip() == category
         idxs = df[mask].index.tolist()
         canonical_valid = {
             _canonical_demo_value(category, v): v
-            for v in VALID_SNOWFLAKE_DEMOGRAPHIC_OPTIONS.get(category, set())
+            for v in VALID_DEMOGRAPHIC_OPTIONS.get(category, set())
         }
         groups = {}
         for idx in idxs:
@@ -29788,6 +33955,17 @@ def enforce_behavioral_category_plausibility(df, brand_category=None, project_na
         if val in ('MALE', 'TRANS MALE'):
             male_pct += p
     amask = out['Column'].astype(str).str.upper().str.strip() == 'AGE'
+
+    identity_blob_raw = " ".join(
+        [str(project_name or ""), str(brand_category or "")]
+        + [str(b) for b in (brands or [])]
+    ).upper().replace('_', ' ')
+    _pad = f" {identity_blob_raw} "
+    is_uk_context = any(tok in _pad for tok in (
+        ' UK ', ' BRIT ', ' BRITISH ', ' LONDON ', ' ENGLAND ',
+        ' SCOTLAND ', ' BBC ', ' EURO ',
+    ))
+
     for _, row in out[amask].iterrows():
         val = str(row.get('Value', '')).strip().upper()
         p = _to_num(row.get(cs_col, row.get(pct_col, 0)))
@@ -29835,28 +34013,92 @@ def enforce_behavioral_category_plausibility(df, brand_category=None, project_na
 
     fixes = 0
 
-    # 1) BETTING: DK/FD over Bet365 only for likely US sports-betting audience shape
-    sports_betting_shape = (male_pct >= 52.0) or (young_pct >= 45.0) or (black_pct >= 25.0 and male_pct >= 45.0)
-    if sports_betting_shape:
+    # 1) BETTING — US panel: DK + FanDuel should materially lead offshore / UK-global books
+    #    in digital tiers unless the brief is explicitly UK/Euro anchored. Also lift DK/FD
+    #    above stray panel spikes on Bet365-class and similar non-US-first operators.
+
+    if not is_uk_context:
+        dk_idx = _find_idx('BETTING', ['DRAFTKINGS', 'DRAFT KINGS', 'DRAFTKING', 'DRAFTKINGS SPORTSBOOK'])
+        fd_idx = _find_idx('BETTING', ['FANDUEL', 'FAN DUEL', 'FANDUEL SPORTSBOOK'])
+        # Non-US-first books — cap vs DK/FD when duopoly rows exist (Bet365 handled below with DK/FD lift).
+        offshore_groups = (
+            ['LADBROKES', 'LAD BROKES'],
+            ['PADDY POWER', 'PADDYPOWER'],
+            ['WILLIAM HILL'],
+            ['CORAL'],
+            ['BETFAIR'],
+            ['UNIBET'],
+        )
+        dk_now_v = float(_bp(dk_idx)) if dk_idx is not None else None
+        fd_now_v = float(_bp(fd_idx)) if fd_idx is not None else None
+        peers = [v for v in [dk_now_v, fd_now_v] if v is not None]
+        leader_seed = float(max(peers)) if peers else None
+
+        for needles in offshore_groups:
+            off_idx = _find_idx('BETTING', needles)
+            if off_idx is None or leader_seed is None:
+                continue
+            b_now = float(_bp(off_idx))
+            leader = leader_seed if leader_seed > 1.0 else max(13.9, float(b_now) * 0.93)
+            if b_now >= leader * 1.008:
+                new_off = max(1.05, leader * 0.78)
+                _write_bp(off_idx, min(b_now, new_off))
+                fixes += 1
+
+        # Original lift: only when Bet365 is in the sheet — avoids inflating DK/FD on profiles
+        # where the duopoly already looks sane and no offshore spike triggered review.
         bet365_idx = _find_idx('BETTING', ['BET365'])
-        dk_idx = _find_idx('BETTING', ['DRAFTKINGS', 'DRAFT KINGS'])
-        fd_idx = _find_idx('BETTING', ['FANDUEL', 'FAN DUEL'])
         if bet365_idx is not None and (dk_idx is not None or fd_idx is not None):
-            b = _bp(bet365_idx)
-            dk = _bp(dk_idx) if dk_idx is not None else None
-            fd = _bp(fd_idx) if fd_idx is not None else None
-            leader = max([x for x in [dk, fd] if x is not None] or [0.0])
-            if b > leader and leader > 0:
-                target_b = max(0.01, leader * 0.92)
-                _write_bp(bet365_idx, target_b)
+            b_now = float(_bp(bet365_idx))
+            peers_live = [v for v in [
+                float(_bp(dk_idx)) if dk_idx is not None else None,
+                float(_bp(fd_idx)) if fd_idx is not None else None,
+            ] if v is not None]
+            leader = float(max(peers_live)) if peers_live else max(13.9, float(b_now) * 0.93)
+            if b_now >= leader * 1.008:
+                new_b365 = max(1.05, leader * 0.78)
+                _write_bp(bet365_idx, min(b_now, new_b365))
                 fixes += 1
-                b = target_b
-            if dk_idx is not None and dk is not None and dk < b * 1.05:
-                _write_bp(dk_idx, min(95.0, b * 1.08))
+                b_now = float(_bp(bet365_idx))
+
+            cap_ref = float(max(b_now, 1.95))
+            want_fd_v = max(fd_now_v or 0.0, cap_ref + max(8.6, cap_ref * 0.185))
+            want_dk_v = max(dk_now_v or 0.0, cap_ref + max(14.0, cap_ref * 0.27))
+            if dk_idx is not None and fd_idx is not None:
+                want_dk_v = max(want_dk_v, want_fd_v + 6.95)
+                want_fd_v = min(want_fd_v, want_dk_v - 3.95)
+
+            if dk_idx is not None and abs(want_dk_v - (dk_now_v or 0)) >= 0.02:
+                _write_bp(dk_idx, min(95.0, want_dk_v))
                 fixes += 1
-            if fd_idx is not None and fd is not None and fd < b * 1.05:
-                _write_bp(fd_idx, min(95.0, b * 1.08))
+            if fd_idx is not None and abs(want_fd_v - (fd_now_v or 0)) >= 0.02:
+                _write_bp(fd_idx, min(95.0, want_fd_v))
                 fixes += 1
+
+        # 1b) Second-tier US legal books: should not sit above BOTH DK and FanDuel.
+        second_tier_needles = (
+            ('BETMGM', ['BETMGM', 'BET MGM']),
+            ('CAESARS', ['CAESARS', 'CAESARS SPORTS']),
+            ('ESPN BET', ['ESPN BET', 'ESPNBET']),
+            ('BARSTOOL', ['BARSTOOL']),
+            ('POINTSBET', ['POINTSBET', 'POINTS BET']),
+            ('SUPERBOOK', ['SUPERBOOK']),
+        )
+        if dk_idx is not None or fd_idx is not None:
+            top_us = max(
+                float(_bp(dk_idx)) if dk_idx is not None else 0.0,
+                float(_bp(fd_idx)) if fd_idx is not None else 0.0,
+            )
+            if top_us > 1.0:
+                cap2 = max(1.5, top_us * 0.965)
+                for _label, nlist in second_tier_needles:
+                    sidx = _find_idx('BETTING', nlist)
+                    if sidx is None:
+                        continue
+                    sbp = float(_bp(sidx))
+                    if sbp > cap2 * 1.008 and dk_idx is not None and fd_idx is not None:
+                        _write_bp(sidx, min(sbp, cap2))
+                        fixes += 1
 
     # 2) MEDIA: TODAY/TODAY SHOW should not dominate younger/male-skewing audiences
     if (male_pct >= 55.0 and young_pct >= 40.0) or (black_pct >= 25.0):
@@ -29866,12 +34108,8 @@ def enforce_behavioral_category_plausibility(df, brand_category=None, project_na
             fixes += 1
 
     # 2b) MEDIA: For US audiences, BBC should not lead mainstream US publications.
-    # Allow exceptions only when project/brand clearly signals UK/international focus.
-    identity_blob = " ".join(
-        [str(project_name or ""), str(brand_category or "")]
-        + [str(b) for b in (brands or [])]
-    ).upper()
-    is_uk_context = any(tok in identity_blob for tok in [' UK ', ' BRIT', ' BRITISH', ' LONDON ', ' ENGLAND ', ' BBC'])
+    # is_uk_context is derived above from project/category/brands (+ UK-ish tokens).
+
     if not is_uk_context:
         bbc_idx = _find_idx('MEDIA', ['BRITISH BROADCASTING CORPORATION', 'BBC'])
         if bbc_idx is not None:
@@ -29923,10 +34161,232 @@ def enforce_behavioral_category_plausibility(df, brand_category=None, project_na
                     _write_bp(idx, new_v)
                     fixes += 1
 
+    # ── PRO ATHLETE — SPORTS TEAM home-team guardrail ──────────────────────
+    # If the profile subject is a known pro athlete, their current team must lead
+    # their respective league category. We detect this from project_name / brands.
+    _ATHLETE_TEAM_MAP = {
+        'KEVIN DURANT': {'team': 'HOUSTON ROCKETS', 'league': 'NBA',
+                         'city_teams': ['HOUSTON TEXANS', 'HOUSTON ASTROS', 'HOUSTON DYNAMO']},
+        'LEBRON JAMES': {'team': 'LOS ANGELES LAKERS', 'league': 'NBA',
+                         'city_teams': ['LOS ANGELES RAMS', 'LOS ANGELES DODGERS', 'LA GALAXY', 'LOS ANGELES CHARGERS']},
+        'STEPHEN CURRY': {'team': 'GOLDEN STATE WARRIORS', 'league': 'NBA',
+                          'city_teams': ['SAN FRANCISCO 49ERS', 'SAN FRANCISCO GIANTS', 'SAN JOSE EARTHQUAKES']},
+    }
+
+    # Try to match project_name against known athletes
+    proj_upper = str(project_name or '').upper().replace('_', ' ')
+    matched_athlete = None
+    for ath_name, ath_info in _ATHLETE_TEAM_MAP.items():
+        if ath_name in proj_upper:
+            matched_athlete = ath_info
+            break
+
+    if matched_athlete:
+        team_name = matched_athlete['team']
+        league_cat = matched_athlete['league']
+        city_teams = matched_athlete['city_teams']
+
+        for cat_check in [league_cat, 'SPORTS TEAM']:
+            rows = _cat_rows(cat_check)
+            if not rows:
+                continue
+            # Find team row
+            team_idx = None
+            max_bp = 0.0
+            max_idx = None
+            for idx, val, cur_bp in rows:
+                if val.upper().strip() == team_name:
+                    team_idx = idx
+                if cur_bp > max_bp:
+                    max_bp = cur_bp
+                    max_idx = idx
+            if team_idx is not None:
+                cur_team_bp = _bp(team_idx)
+                if cur_team_bp < max_bp * 0.9:
+                    # Boost current team to lead with 28-35% BP
+                    import random as _rnd
+                    target = max(max_bp + 3.0, 28.0 + _rnd.uniform(0, 7))
+                    target = min(target, 40.0)
+                    _write_bp(team_idx, target)
+                    fixes += 1
+                    if not SILENCE_VERBOSE_OUTPUT:
+                        print(f"   🏀 Boosted {team_name} to {target:.2f}% in {cat_check} (athlete home team)")
+
+        # Boost city teams
+        for city_team in city_teams:
+            for cat_check in ['SPORTS TEAM', 'NFL', 'MLB', 'MLS', 'NHL']:
+                rows = _cat_rows(cat_check)
+                for idx, val, cur_bp in rows:
+                    if val.upper().strip() == city_team and cur_bp < 8.0:
+                        import random as _rnd
+                        target = 8.0 + _rnd.uniform(0, 4)
+                        _write_bp(idx, target)
+                        fixes += 1
+                        if not SILENCE_VERBOSE_OUTPUT:
+                            print(f"   🏟️ Boosted {city_team} to {target:.2f}% (same-city as athlete)")
+
     if not SILENCE_VERBOSE_OUTPUT and fixes:
         print(f"🛡️ Behavioral plausibility guard: {fixes} deterministic correction(s)")
 
     return out
+
+
+def enforce_distribution_realism(df, brand_category=None, project_name=None, brands=None):
+    """
+    Final-pass auto-audit that detects and fixes STRUCTURAL distribution problems
+    without hard-capping any individual item. Context-aware: uses the profile's own
+    identity (project_name, brand_category) to avoid penalising items that SHOULD
+    be high for that persona.
+
+    What it fixes:
+    1. Flat top-N clusters — items suspiciously close in BP (always wrong)
+    2. Flat mid-tier walls — large blocks of items at near-identical BP
+
+    What it does NOT do:
+    - Hard-cap any item to an absolute number (Zoom SHOULD be high for a Zoom profile)
+    - Force specific leaders (the scoring agents + calibration blocks handle that)
+    """
+    import pandas as pd
+    import random as _rnd
+
+    if 'Column' not in df.columns or 'Value' not in df.columns:
+        return df
+
+    out = df.copy()
+    bp_col = 'Brand Penetration (Row)' if 'Brand Penetration (Row)' in out.columns else None
+    if not bp_col:
+        return out
+    cs_col = 'Category Share' if 'Category Share' in out.columns else 'Percentage'
+    pct_col = 'Percentage' if 'Percentage' in out.columns else cs_col
+    raw_col = 'Original Raw Numbers' if 'Original Raw Numbers' in out.columns else None
+    proj_col = 'US Gen Pop Projection' if 'US Gen Pop Projection' in out.columns else None
+    MULT = 329_900_000 / 10_000_000
+
+    sample_size = 132040
+    if raw_col:
+        ss_mask = out['Column'].astype(str).str.upper().str.strip() == 'SAMPLE SIZE'
+        if ss_mask.any():
+            try:
+                sample_size = max(1, int(float(str(out.loc[ss_mask, raw_col].iloc[0]).replace(',', ''))))
+            except Exception:
+                pass
+
+    SKIP_CATS = {'AGE', 'GENDER', 'ETHNICITY', 'INCOME', 'EDUCATION', 'RELATIONSHIP',
+                 'SEXUAL_ORIENTATION', 'PARENTAL_STATUS', 'OCCUPATION', 'LOCATION',
+                 'SAMPLE SIZE', 'BRAND INPUT', 'BRAND CATEGORY', 'FOOTWEAR',
+                 'AVID FAN', 'CASUAL FAN', 'TOTAL FAN'}
+
+    def _to_num(v):
+        try:
+            return float(str(v).replace(',', '').replace('%', ''))
+        except Exception:
+            return 0.0
+
+    def _write_bp(idx, new_bp):
+        new_bp = max(0.01, min(float(new_bp), 99.0))
+        s = f"{new_bp:.4f}"
+        out.at[idx, bp_col] = s
+        if cs_col in out.columns:
+            out.at[idx, cs_col] = s
+        if pct_col in out.columns:
+            out.at[idx, pct_col] = s
+        if raw_col:
+            raw = max(1, int(round(new_bp / 100.0 * sample_size)))
+            out.at[idx, raw_col] = str(raw)
+            if proj_col:
+                out.at[idx, proj_col] = str(int(round(raw * MULT)))
+
+    def _cat_rows(cat):
+        m = out['Column'].astype(str).str.upper().str.strip() == str(cat).upper()
+        rows = []
+        for idx, row in out[m].iterrows():
+            rows.append((idx, str(row.get('Value', '')).strip(), _to_num(row.get(bp_col, 0))))
+        rows.sort(key=lambda x: -x[2])
+        return rows
+
+    fixes = 0
+    audit_log = []
+
+    # ─── 1) ANTI-FLAT TOP-N: break up suspiciously flat top clusters ─────
+    # A "wall" of 5+ items within <4% of each other (all above 8% BP)
+    # is never realistic — real distributions have clear tiers with gaps.
+    all_cats = out['Column'].astype(str).str.upper().str.strip().unique()
+    for cat in all_cats:
+        if cat in SKIP_CATS:
+            continue
+        rows = _cat_rows(cat)
+        if len(rows) < 5:
+            continue
+
+        top5_bps = [r[2] for r in rows[:5]]
+        spread = top5_bps[0] - top5_bps[4]
+
+        if spread < 4.0 and top5_bps[0] > 8.0:
+            base_top = top5_bps[0]
+            decay_targets = [
+                base_top,
+                base_top * _rnd.uniform(0.82, 0.90),
+                base_top * _rnd.uniform(0.70, 0.80),
+                base_top * _rnd.uniform(0.60, 0.72),
+                base_top * _rnd.uniform(0.50, 0.64),
+            ]
+            for i in range(1, min(5, len(rows))):
+                idx, val, cur_bp = rows[i]
+                target = decay_targets[i]
+                if target < cur_bp:
+                    _write_bp(idx, target)
+                    fixes += 1
+
+            # Also spread items 6-10 if they're bunched against items 1-5
+            if len(rows) >= 10:
+                tier2_base = decay_targets[4] * _rnd.uniform(0.75, 0.88)
+                for i in range(5, min(10, len(rows))):
+                    idx, val, cur_bp = rows[i]
+                    target = tier2_base * (1.0 - (i - 5) * _rnd.uniform(0.04, 0.08))
+                    if cur_bp > target + 2.0:
+                        _write_bp(idx, target)
+                        fixes += 1
+
+            audit_log.append(f"FLAT-FIX {cat}: top-5 spread was {spread:.1f}%, redistributed")
+
+    # ─── 2) ANTI-FLAT MID-TIER WALLS ─────────────────────────────────────
+    # Detect blocks of 8+ consecutive items within <1.5% of each other
+    # in the middle of a category and spread them with natural decay.
+    for cat in all_cats:
+        if cat in SKIP_CATS:
+            continue
+        rows = _cat_rows(cat)
+        if len(rows) < 12:
+            continue
+
+        i = 3  # start checking after top 3
+        while i < len(rows) - 4:
+            block_start = i
+            while i < len(rows) - 1 and abs(rows[i][2] - rows[i + 1][2]) < 1.5 and rows[i][2] > 1.0:
+                i += 1
+            block_len = i - block_start + 1
+            if block_len >= 8:
+                anchor_bp = rows[block_start][2]
+                for j in range(block_start, i + 1):
+                    step = j - block_start
+                    decay = anchor_bp * (1.0 - step * _rnd.uniform(0.02, 0.05))
+                    decay = max(decay, 0.01)
+                    if abs(rows[j][2] - decay) > 0.5:
+                        _write_bp(rows[j][0], decay)
+                        fixes += 1
+                audit_log.append(
+                    f"WALL-FIX {cat}: {block_len} items bunched at ~{anchor_bp:.1f}%, spread with decay"
+                )
+            i += 1
+
+    # ─── 3) PRINT AUDIT SUMMARY ──────────────────────────────────────────
+    if not SILENCE_VERBOSE_OUTPUT and audit_log:
+        print(f"\n🔍 Distribution realism audit: {fixes} fix(es)")
+        for entry in audit_log:
+            print(f"   • {entry}")
+
+    return out
+
 
 def enforce_behavioral_bp_uniqueness(df):
     """
@@ -30063,6 +34523,7 @@ def deduplicate_values_within_category(df):
             return 0.0
 
     out = df.copy()
+    out['_ROW_POS'] = range(len(out))
     out['_CAT_KEY'] = out['Column'].astype(str).str.strip().str.upper()
     out['_VAL_KEY'] = out.apply(
         lambda r: _canonical_demo_value(str(r['Column']), str(r['Value'])),
@@ -30070,10 +34531,11 @@ def deduplicate_values_within_category(df):
     )
 
     keep_rows = []
-    for (cat_key, val_key), g in out.groupby(['_CAT_KEY', '_VAL_KEY'], dropna=False):
+    for (cat_key, val_key), g in out.groupby(['_CAT_KEY', '_VAL_KEY'], dropna=False, sort=False):
         row = g.iloc[0].copy()
         row['Column'] = cat_key
         row['Value'] = str(g.iloc[0]['Value']).strip()
+        row['_ROW_POS'] = int(g['_ROW_POS'].min())
         # Sum numeric-like metrics where present
         if bp_col:
             row[bp_col] = sum(_num(v) for v in g[bp_col].tolist())
@@ -30087,7 +34549,10 @@ def deduplicate_values_within_category(df):
             row[proj_col] = int(round(sum(_num(v) for v in g[proj_col].tolist())))
         keep_rows.append(row)
 
-    result = pd.DataFrame(keep_rows).drop(columns=['_CAT_KEY', '_VAL_KEY'], errors='ignore')
+    result = pd.DataFrame(keep_rows)
+    if '_ROW_POS' in result.columns:
+        result = result.sort_values(by=['_ROW_POS'], kind='stable')
+    result = result.drop(columns=['_CAT_KEY', '_VAL_KEY', '_ROW_POS'], errors='ignore')
     if not SILENCE_VERBOSE_OUTPUT:
         removed = len(df) - len(result)
         if removed > 0:
@@ -33977,6 +38442,12 @@ def perturb_brand_penetration_avoid_dot_0000(df: pd.DataFrame) -> pd.DataFrame:
     brand input / sample) are left unchanged. After this, run
     ``reconcile_final_output_from_bp_and_sample_size`` + ``add_us_gen_pop_projection``
     so raws and projections stay consistent with BP.
+
+    IMPORTANT: jitter is computed ONCE per (Value, current-int-BP) pair so the
+    same value gets the same nudge in every category — a `Roblox` row in
+    GAMES and FRANCHISE that both arrive here at 56.0000 will both leave at
+    e.g. 56.4663, NOT 56.4596 vs 56.4663. This is what preserves the
+    score-once-propagate guarantee from `parallel_category_agents`.
     """
     if df is None or df.empty or 'Brand Penetration (Row)' not in df.columns:
         return df
@@ -33986,6 +38457,7 @@ def perturb_brand_penetration_avoid_dot_0000(df: pd.DataFrame) -> pd.DataFrame:
         'INPUT_METADATA',
     }
     n_adj = 0
+    nudge_cache: dict[tuple[int, str], float] = {}
     for idx in df.index:
         cat = str(df.at[idx, 'Column']).strip().upper()
         if cat in skip_cats:
@@ -34006,26 +38478,34 @@ def perturb_brand_penetration_avoid_dot_0000(df: pd.DataFrame) -> pd.DataFrame:
         if frac_mod != 0:
             df.at[idx, bp_col] = f"{x4:.4f}"
             continue
-        # Exactly *.0000 at 4dp (or zero): replace with organic-looking value
-        d1 = random.randint(1, 9)
-        d2 = random.randint(1, 9)
-        d3 = random.randint(1, 9)
-        d4 = random.randint(1, 9)
-        frac = d1 * 0.1 + d2 * 0.01 + d3 * 0.001 + d4 * 0.0001
-        if x4 <= 0:
-            new_x = round(frac, 4)
+
+        # Exactly *.0000 at 4dp (or zero): replace with organic-looking value.
+        val_key = str(df.at[idx, 'Value']).strip().upper()
+        int_part = int(x4) if x4 > 0 else 0
+        cache_key = (int_part, val_key)
+
+        if cache_key in nudge_cache:
+            new_x = nudge_cache[cache_key]
         else:
-            integer_part = int(x4)
-            new_x = round(integer_part + frac, 4)
-            if new_x > 99.9:
-                new_x = round(99.0 + frac, 4)
-        new_x = max(0.1111, min(round(new_x, 4), 99.8999))
-        s = f"{new_x:.4f}"
-        df.at[idx, bp_col] = s
+            d1 = random.randint(1, 9)
+            d2 = random.randint(1, 9)
+            d3 = random.randint(1, 9)
+            d4 = random.randint(1, 9)
+            frac = d1 * 0.1 + d2 * 0.01 + d3 * 0.001 + d4 * 0.0001
+            if x4 <= 0:
+                new_x = round(frac, 4)
+            else:
+                new_x = round(int_part + frac, 4)
+                if new_x > 99.9:
+                    new_x = round(99.0 + frac, 4)
+            new_x = max(0.1111, min(round(new_x, 4), 99.8999))
+            nudge_cache[cache_key] = new_x
+
+        df.at[idx, bp_col] = f"{new_x:.4f}"
         n_adj += 1
     if n_adj:
         print(f"   🎲 Brand Penetration: added micro-variation to {n_adj} "
-              f"rows to avoid .0000 endings")
+              f"rows to avoid .0000 endings ({len(nudge_cache)} unique value-jitters)")
     return df
 
 
@@ -34519,9 +38999,38 @@ def normalize_output_text_values(df):
         }
         return age_map.get(t, _clean(s))
 
+    def _canonical_demo_label(cat: str, val: str) -> str:
+        c = str(cat).upper().strip()
+        v = _clean(val)
+        vu = v.upper()
+        if c == 'ETHNICITY':
+            if vu in {
+                'NATIVE AMERICAN / ALASKA NATIVE',
+                'NATIVE AMERICAN',
+                'ALASKA NATIVE',
+                'ANOTHER RACE/ETHNICITY',
+            }:
+                return 'OTHER'
+        elif c == 'EDUCATION':
+            if vu in {'GRADUATE DEGREE'}:
+                return 'GRADUATE OR PROFESSIONAL DEGREE'
+            if vu in {'LESS THAN HIGH SCHOOL', 'HIGH SCHOOL GRADUATE'}:
+                return 'HIGH SCHOOL OR LESS'
+        elif c == 'RELATIONSHIP':
+            if vu in {'DIVORCED', 'SEPARATED'}:
+                return 'DIVORCED OR SEPARATED'
+        elif c == 'OCCUPATION':
+            if vu in {'SELF-EMPLOYED', 'RETIRED', 'STUDENT', 'HOMEMAKER', 'UNEMPLOYED'}:
+                return 'OTHER'
+        return v
+
     value_series = out['Value'].map(_clean)
     age_mask = out['Column'].astype(str).str.upper().str.strip() == 'AGE'
     value_series.loc[age_mask] = value_series.loc[age_mask].map(_canonical_age_label)
+    value_series = [
+        _canonical_demo_label(cat, val)
+        for cat, val in zip(out['Column'].tolist(), value_series.tolist())
+    ]
     out['Value'] = value_series
     return out
 
@@ -34714,6 +39223,44 @@ def enforce_no_perfect_trailing_zeros(df):
 
         if abs(suffix_comp) > 0:
             vals[anchor] = round(max(0.0001, vals[anchor] - suffix_comp), 4)
+
+        # In-category spacing pass: avoid machine-tight adjacency like
+        # 70.0012 vs 70.0013 by enforcing a minimum gap between neighbors
+        # in descending rank order.
+        sep_comp = 0.0
+        ranked = sorted(idxs, key=lambda k: (-vals[k], k))
+        for j in range(1, len(ranked)):
+            prev_i = ranked[j - 1]
+            cur_i = ranked[j]
+            prev_v = round(vals[prev_i], 4)
+            cur_v = round(vals[cur_i], 4)
+            if prev_v <= cur_v:
+                continue
+            if prev_v >= 99.99:
+                continue
+
+            # Stronger spacing for larger values so top rows don't look templated.
+            if prev_v >= 10.0:
+                min_gap = 0.0060
+            elif prev_v >= 1.0:
+                min_gap = 0.0030
+            else:
+                min_gap = 0.0008
+
+            gap = round(prev_v - cur_v, 4)
+            if gap >= min_gap:
+                continue
+
+            target = round(max(0.0001, prev_v - min_gap), 4)
+            if target >= cur_v:
+                continue
+            old = cur_v
+            vals[cur_i] = target
+            sep_comp = round(sep_comp + (target - old), 4)
+            touched += 1
+
+        if abs(sep_comp) > 0:
+            vals[anchor] = round(max(0.0001, vals[anchor] - sep_comp), 4)
 
         # Final drift correction at 4dp precision.
         new_total = round(sum(vals[i] for i in idxs), 4)
