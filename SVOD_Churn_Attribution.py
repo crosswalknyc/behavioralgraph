@@ -1623,27 +1623,44 @@ def _validate_total_watchers_with_ai(show_name, platform_name, inflated_total, i
         print(f"   ⚠️  OpenAI not available: {e}")
         return inflated_total, inflated_pre, inflated_clean, {'skipped': True, 'reason': str(e)}
 
-    clean_name = show_name.replace('_', ' ').replace('-', ' ').strip()
+    # Extract a clean show name from the search terms (pick the most descriptive one)
+    raw_terms = [t.strip() for t in show_name.replace('_', ' ').replace('-', ' ').split(',') if t.strip()]
+    # Prefer terms with "season" in them, otherwise pick the longest one
+    season_terms = [t for t in raw_terms if 'season' in t.lower()]
+    if season_terms:
+        clean_name = season_terms[0].title()
+    elif raw_terms:
+        clean_name = max(raw_terms, key=len).title()
+    else:
+        clean_name = show_name.replace('_', ' ').strip().title()
 
     prompt = (
-        f'Search for real viewership data for the TV show/content "{clean_name}" on {platform_name}.\n\n'
-        f'I need to validate whether {inflated_total:,} unique US viewers (from our panel data) is plausible.\n'
-        f'Genre: {genre or "unknown"}\n'
-        f'Date range of analysis: {date_range or "unknown"}\n\n'
-        f'Find:\n'
-        f'- Total worldwide viewers reported by any source (Nielsen, Luminate, Samba TV, platform press releases, trade press)\n'
-        f'- If the number is worldwide, estimate US-only portion (typically 55-65% for US-produced content)\n\n'
+        f'How many Americans watched "{clean_name}" on {platform_name}?\n\n'
+        f'Search for the total US viewership numbers for this show. I need the actual number '
+        f'of unique American viewers who watched this content.\n\n'
+        f'Look for data from:\n'
+        f'- Nielsen streaming ratings and Top 10 lists\n'
+        f'- Samba TV or Luminate data\n'
+        f'- Platform press releases or earnings calls\n'
+        f'- Trade press (Variety, Deadline, THR, What\'s on Netflix, etc.)\n\n'
+        f'Context:\n'
+        f'- Platform: {platform_name}\n'
+        f'- Genre: {genre or "unknown"}\n'
+        f'- Date range: {date_range or "unknown"}\n\n'
+        f'If data is reported worldwide, estimate the US portion (typically 55-65% for US-produced content).\n'
+        f'If data is reported in "viewing hours" or "minutes watched", estimate unique viewers by dividing '
+        f'by average hours/minutes per viewer for that type of content.\n\n'
         f'Respond in JSON ONLY (no markdown fencing):\n'
         f'{{\n'
-        f'  "public_viewership_worldwide": <number or null if unknown>,\n'
-        f'  "estimated_us_viewers": <number or null>,\n'
+        f'  "show_name": "<the actual show name you searched for>",\n'
+        f'  "estimated_us_viewers": <number of unique US viewers, as an integer, or null if unknown>,\n'
+        f'  "public_viewership_worldwide": <worldwide viewers if found, or null>,\n'
         f'  "confidence": "high" | "medium" | "low",\n'
-        f'  "source": "<where you found the data>",\n'
-        f'  "recommended_total": <what our Total Show Watchers should be, as a panel number (not gen pop projected)>\n'
+        f'  "source": "<specific source — e.g. Nielsen week of 3/3, Variety article from 4/1, etc.>"\n'
         f'}}\n\n'
-        f'IMPORTANT: Our panel represents 10,000,000 people out of 329,900,000 US population.\n'
-        f'So recommended_total should be: estimated_us_viewers * (10000000 / 329900000).\n'
-        f'Round to nearest 10. If you cannot find data, set confidence to "low" and recommended_total to null.'
+        f'IMPORTANT: Return estimated_us_viewers as the raw number of Americans who watched '
+        f'(e.g. 5400000 for 5.4 million). Do NOT convert to any panel scale. '
+        f'If you cannot find any viewership data, set confidence to "low" and estimated_us_viewers to null.'
     )
 
     try:
