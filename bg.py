@@ -15001,6 +15001,27 @@ def _category_pass1_calibration_block(category: str,
             "• **`PARENTAL_STATUS` guard:** **Roblox / kid-first / toy-adjacent live services** must **not** exceed what **PARENT share + explicit kid tablet / shared-device / family gaming** evidence allows. **Parents without that proof** ⇒ those rows → **`anti_fit_in_category`** or bottom tiers — they must **not outrank** adult-appropriate casual or AAA *for that adult-skew cohort*.\n"
             "• **`predicted_top_5`** must mirror the above — no accidental “Roblox #1” on middle-aged non-gaming FMCG profiles."
         )
+    elif u == 'APP/PLATFORM USAGE':
+        sections.append(
+            "**APP/PLATFORM USAGE — realistic digital engagement ceilings (NOT install base):**\n"
+            "This category measures **meaningful annual digital engagement** (logged visits, active sessions, "
+            "transactions) — NOT whether an app is installed on someone’s phone.\n"
+            "• **Gen Pop reality anchors:** Google Maps ~73%, Gmail ~65%, Wikipedia ~43%, Yahoo Mail ~42%, "
+            "iCloud ~41%, Google Calendar ~39%. These are the REAL ceiling for most audiences.\n"
+            "• **CRITICAL: Set `category_ceiling_pct` between 75-82%.** No app should exceed ~80% BP "
+            "for any realistic audience. Even Google Maps (the most universal US digital utility) only "
+            "hits ~73% in gen pop measurement.\n"
+            "• **Spread is mandatory:** The category must have a WIDE distribution — top app 65-78%, "
+            "#5 item 30-45%, #10 item 20-30%, #20 item 8-18%, long tail 1-8%. A cluster of 10+ items "
+            "all above 90% is NEVER realistic.\n"
+            "• **Platform exclusivity matters:** iCloud is Apple-only (~55% US share) — cap at 45-55%. "
+            "Google Play is Android-only (~45% US) — cap at 30-40%. They CANNOT both be 95%.\n"
+            "• **Niche/professional tools:** Canva, Grammarly, Google Scholar, Google Classroom — "
+            "these are used by 5-15% of gen pop. Even for educated/professional audiences: 15-25% max.\n"
+            "• `predicted_top_5`: Google Maps, Gmail, a weather app, a navigation/maps tool, "
+            "and one persona-relevant app (e.g., sports audience → ESPN app; young → TikTok/Snapchat).\n"
+            "• `anti_fit_in_category`: Niche professional tools that don’t match the persona’s occupation/education."
+        )
     elif u in {'SEARCH ENGINE/AI', 'SEARCH ENGINE'}:
         sections.append(
             "**Google** (map to the rows named Google / Google Search / google.com consistently with the CSV) "
@@ -15121,6 +15142,43 @@ CATEGORY HARD CALIBRATION — GAMES (this scoring pass only)
 **Gaming cohort:** tier **genre to demo** (older ⇒ puzzles/word; kids/teens ⇒ Roblox/Minecraft **only** with minor evidence; young men + competitive urban ⇒ mature AAA / sports sims when persona supports).
 
 **Parents / device-handoff trap:** if `PARENTAL_STATUS` is material but persona lacks **kids actually playing** on logged digital surfaces, **Roblox & kid-first live services must not spike** — cap like **ambient child bleed**, never above adult-facing titles appropriate to the same median adult."""
+        )
+
+    if u == 'APP/PLATFORM USAGE':
+        parts.append(
+            """═══════════════════════════════════════════════════════════════════
+CATEGORY HARD CALIBRATION — APP/PLATFORM USAGE (realistic digital ceilings)
+═══════════════════════════════════════════════════════════════════
+**CRITICAL — DO NOT INFLATE UBIQUITOUS APPS TO NEAR-100%.** This is the most common scoring error in this category.
+
+REALISTIC CEILINGS (Gen Pop baselines as anchors):
+• Google Maps ~73%, Gmail ~65%, Wikipedia ~43%, Yahoo Mail ~42%, iCloud ~41%
+• Google Calendar ~39%, USPS ~38%, Google Drive ~34%, Reddit ~34%, Zoom ~32%
+• Microsoft Outlook ~31%, Google Play ~30%, Google Photos ~29%, WhatsApp ~25%
+• Microsoft Teams ~23%, Apple Maps ~23%, FedEx ~21%, UPS ~21%, Weather ~20%
+
+A BRAND-SPECIFIC audience may index 1.1x–1.5x above gen pop for relevant platforms
+(e.g., a tech-savvy younger audience → Google Suite apps at 1.2-1.3x baseline).
+But NEVER 2-3x baseline. Here's why:
+
+• iCloud at 95% means "95 out of 100 panelists digitally engaged with iCloud" — impossible
+  when ~45% of US adults use Android. Realistic ceiling for iCloud: 45-55% even for
+  Apple-heavy audiences.
+• Gmail at 95% is impossible — real panel measurement shows ~65% gen pop. A tech audience
+  might push to 70-75% max.
+• IMDB at 95% is absurd — it's a reference site, not a utility. Realistic: 15-35%.
+• Google Meet at 95% is impossible — it's a work tool used by ~13% of gen pop. Even for
+  corporate audiences: 20-35% max.
+• Craigslist at 95% is impossible — ~13% gen pop baseline, max realistic: 15-25%.
+
+SCORING RULES:
+1. Start from Gen Pop baseline, then apply a MODEST persona multiplier (0.8x–1.5x).
+2. The #1 item in this category should rarely exceed 80% BP (only Google Maps/Gmail for universal audiences).
+3. Items ranked 5-10 should typically be 30-50% BP, NOT 90%+.
+4. Items ranked 20+ should be 10-25%, NOT 70%+.
+5. Niche/specialized apps (Grammarly, Google Scholar, Canva) should be 5-20% for most audiences.
+6. The spread within the category should be WIDE — top item might be 75%, item #10 might be 35%, item #30 might be 12%.
+   A flat wall of 94-96% values is NEVER realistic."""
         )
 
     if u in {'SEARCH ENGINE/AI', 'SEARCH ENGINE'}:
@@ -33437,6 +33495,38 @@ def enforce_behavioral_category_plausibility(df, brand_category=None, project_na
                 if abs(new_v - cur) >= 0.15:
                     _write_bp(idx, new_v)
                     fixes += 1
+
+    # ── APP/PLATFORM USAGE ceiling guardrail ──────────────────────────────
+    # Gen Pop baselines are the realistic ceiling for digital engagement.
+    # No item should exceed 1.5x its gen pop baseline (or 80% absolute max).
+    _APP_PLATFORM_CEILINGS = {
+        'GOOGLE MAPS': 80.0, 'GMAIL': 72.0, 'WIKIPEDIA': 50.0,
+        'YAHOO MAIL': 48.0, 'ICLOUD': 52.0, 'GOOGLE CALENDAR': 45.0,
+        'USPS': 44.0, 'GOOGLE DRIVE': 42.0, 'REDDIT': 42.0,
+        'ZOOM': 40.0, 'MICROSOFT OUTLOOK MAIL': 38.0, 'GOOGLE PLAY': 38.0,
+        'GOOGLE PHOTOS': 36.0, 'WHATSAPP': 32.0, 'MICROSOFT TEAMS': 30.0,
+        'APPLE MAPS': 30.0, 'FEDEX': 28.0, 'UPS': 28.0, 'WEATHER': 28.0,
+        'GOOGLE DOCS': 26.0, 'DOORDASH': 25.0, 'GOOGLE MEET': 22.0,
+        'CRAIGSLIST': 20.0, 'CANVA': 20.0, 'IMDB': 22.0,
+        'ACCUWEATHER': 18.0, 'ZILLOW': 18.0, 'GOOGLE SCHOLAR': 16.0,
+        'GRAMMARLY': 16.0, 'GOOGLE CLASSROOM': 15.0,
+    }
+    _ABSOLUTE_APP_CEILING = 80.0
+
+    app_rows = _cat_rows('APP/PLATFORM USAGE')
+    app_caps_applied = 0
+    for idx, val, cur_bp in app_rows:
+        val_u = val.upper()
+        specific_cap = _APP_PLATFORM_CEILINGS.get(val_u)
+        cap = specific_cap if specific_cap else _ABSOLUTE_APP_CEILING
+        if cur_bp > cap:
+            _write_bp(idx, cap - 0.5 + (hash(val_u) % 100) * 0.01)
+            app_caps_applied += 1
+
+    if app_caps_applied > 0:
+        fixes += app_caps_applied
+        if not SILENCE_VERBOSE_OUTPUT:
+            print(f"   📱 APP/PLATFORM USAGE ceiling guard: capped {app_caps_applied} inflated values")
 
     if not SILENCE_VERBOSE_OUTPUT and fixes:
         print(f"🛡️ Behavioral plausibility guard: {fixes} deterministic correction(s)")
