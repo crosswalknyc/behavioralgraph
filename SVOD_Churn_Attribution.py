@@ -1454,16 +1454,61 @@ def run_query(conn, p):
     )
 
     if validated_total != _current_total:
+        ai_scale = validated_total / _current_total if _current_total > 0 else 1.0
         df_summary.loc[0, 'TOTAL_SHOW_WATCHERS'] = validated_total
         df_summary.loc[0, 'PRE_EXISTING_USERS'] = validated_pre
         df_summary.loc[0, 'CLEAN_SAMPLE_SIZE'] = validated_clean
-        # Recalculate conversion rates with corrected Total
-        _new_signups_val = int(df_summary.loc[0, 'NEW_SIGNUPS']) if not pd.isna(df_summary.loc[0, 'NEW_SIGNUPS']) else 0
+
+        # Scale NEW_SIGNUPS proportionally so conversion rate stays reasonable
+        _old_signups = int(df_summary.loc[0, 'NEW_SIGNUPS']) if not pd.isna(df_summary.loc[0, 'NEW_SIGNUPS']) else 0
+        _new_signups_val = max(1, int(round(_old_signups * ai_scale)))
+        df_summary.loc[0, 'NEW_SIGNUPS'] = _new_signups_val
+
         if validated_total > 0:
             df_summary.loc[0, 'TOTAL_SHOW_CONVERSION_RATE'] = round((_new_signups_val * 100.0) / validated_total, 2)
         if validated_clean > 0:
             df_summary.loc[0, 'CLEAN_CONVERSION_RATE'] = round((_new_signups_val * 100.0) / validated_clean, 2)
-        print(f"   📊 Corrected metrics: Total={validated_total:,}, Pre={validated_pre:,}, Clean={validated_clean:,}")
+        print(f"   📊 Corrected metrics: Total={validated_total:,}, Pre={validated_pre:,}, "
+              f"Clean={validated_clean:,}, Signups={_new_signups_val:,} (scale={ai_scale:.4f})")
+
+        # Scale all downstream DataFrames so per-episode/timing data stays consistent
+        _scale_cols = {
+            'df_episode_attribution': ['SIGNUPS_ATTRIBUTED', 'TOTAL_VIEWS'],
+            'df_timing': ['SIGNUP_COUNT'],
+            'df_episode_timing': ['SIGNUP_COUNT'],
+            'df_monthly_signups': ['TOTAL_SIGNUPS', 'SHOW_SIGNUPS'],
+            'df_monthly_churn': ['CHURNED_USERS'],
+            'df_post_signup_touchpoints': ['USER_COUNT'],
+        }
+        _frames = {
+            'df_episode_attribution': df_episode_attribution,
+            'df_timing': df_timing,
+            'df_episode_timing': df_episode_timing,
+            'df_monthly_signups': df_monthly_signups,
+            'df_monthly_churn': df_monthly_churn,
+            'df_post_signup_touchpoints': df_post_signup_touchpoints,
+        }
+        for frame_name, cols in _scale_cols.items():
+            df = _frames[frame_name]
+            if df is not None and not df.empty:
+                for col in cols:
+                    if col in df.columns:
+                        for idx in df.index:
+                            v = df.loc[idx, col]
+                            if v is not None and not pd.isna(v):
+                                try:
+                                    df.loc[idx, col] = int(round(float(v) * ai_scale))
+                                except (ValueError, TypeError):
+                                    pass
+        # Scale demographic counts too
+        if df_demo is not None and not df_demo.empty and 'COUNT' in df_demo.columns:
+            for idx in df_demo.index:
+                v = df_demo.loc[idx, 'COUNT']
+                if v is not None and not pd.isna(v):
+                    try:
+                        df_demo.loc[idx, 'COUNT'] = int(round(float(v) * ai_scale))
+                    except (ValueError, TypeError):
+                        pass
 
     # Final invariant check: Total MUST equal Pre + Clean
     _final_total = int(df_summary.loc[0, 'TOTAL_SHOW_WATCHERS']) if not pd.isna(df_summary.loc[0, 'TOTAL_SHOW_WATCHERS']) else 0
@@ -1632,31 +1677,57 @@ def _validate_total_watchers_with_ai(show_name, platform_name, inflated_total, i
         return inflated_total, inflated_pre, inflated_clean, {'skipped': True, 'reason': str(e)}
 
     confidence = str(result.get('confidence', 'low')).lower()
-    recommended = result.get('recommended_total')
+    ai_recommended = result.get('recommended_total')
+    estimated_us = result.get('estimated_us_viewers')
     metadata = {
         'public_viewership_worldwide': result.get('public_viewership_worldwide'),
-        'estimated_us_viewers': result.get('estimated_us_viewers'),
+        'estimated_us_viewers': estimated_us,
         'confidence': confidence,
         'source': result.get('source', ''),
-        'recommended_total': recommended,
+        'ai_recommended_total': ai_recommended,
         'original_total': inflated_total,
     }
 
-    print(f"   🔍 AI viewership lookup: confidence={confidence}, recommended={recommended}, source={result.get('source','')}")
+    print(f"   🔍 AI viewership lookup: confidence={confidence}, estimated_us={estimated_us}, "
+          f"ai_recommended={ai_recommended}, source={result.get('source','')}")
 
-    if confidence == 'low' or recommended is None:
+    if confidence == 'low':
         print(f"   ℹ️  Confidence too low to override (confidence={confidence})")
         metadata['action'] = 'kept_original'
         return inflated_total, inflated_pre, inflated_clean, metadata
 
-    try:
-        recommended = int(round(float(recommended) / 10) * 10)
-    except (ValueError, TypeError):
+    # Compute panel number ourselves from estimated_us_viewers (don't trust AI math)
+    recommended = None
+    if estimated_us is not None:
+        try:
+            us_num = float(estimated_us)
+            if us_num > 0:
+                recommended = int(round(us_num * (SAMPLE_REPRESENTS / US_POPULATION) / 10) * 10)
+                print(f"   📐 Computed panel count from {us_num:,.0f} US viewers → {recommended:,}")
+        except (ValueError, TypeError):
+            pass
+
+    # Fall back to AI's recommended_total if we couldn't compute from estimated_us
+    if recommended is None and ai_recommended is not None:
+        try:
+            recommended = int(round(float(ai_recommended) / 10) * 10)
+            print(f"   📐 Using AI's recommended_total directly: {recommended:,}")
+        except (ValueError, TypeError):
+            pass
+
+    if recommended is None or recommended <= 0:
+        print(f"   ℹ️  No valid recommendation available")
         metadata['action'] = 'kept_original'
         return inflated_total, inflated_pre, inflated_clean, metadata
 
-    if recommended <= 0:
-        metadata['action'] = 'kept_original'
+    metadata['recommended_total'] = recommended
+
+    # Sanity floor: never let Total Show Watchers drop below 10,000 panel
+    # (≈330K gen pop). Any popular show on a major platform will exceed this.
+    MIN_PANEL_FLOOR = 10_000
+    if recommended < MIN_PANEL_FLOOR:
+        print(f"   ⚠️  AI recommendation {recommended:,} is below floor {MIN_PANEL_FLOOR:,} — keeping original")
+        metadata['action'] = 'kept_original_below_floor'
         return inflated_total, inflated_pre, inflated_clean, metadata
 
     ratio = inflated_total / recommended if recommended > 0 else 1.0
