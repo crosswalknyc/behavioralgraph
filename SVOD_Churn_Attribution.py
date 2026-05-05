@@ -1047,6 +1047,7 @@ def run_query(conn, p):
             FROM PROCESSEDCLICKSTREAM.PUBLIC.CLICKSTREAM_FINAL
             WHERE DELIVERED BETWEEN {exclusion_start} AND '{p['campaign_start'].date()}'
               AND LOWER(COMMON_NAME) LIKE '%{platform_filter}%'
+              AND UID IN (SELECT UID FROM TEMP_SHOW_WATCHERS)
         """)
     else:
         cur.execute("""
@@ -1687,8 +1688,8 @@ def _validate_total_watchers_with_ai(show_name, platform_name, inflated_total, i
 
     print(f"   🔍 AI viewership lookup: confidence={confidence}, recommended={recommended}, source={result.get('source','')}")
 
-    if confidence != 'high' or recommended is None:
-        print(f"   ℹ️  Confidence not high enough to override (confidence={confidence})")
+    if recommended is None:
+        print(f"   ℹ️  AI returned no recommended_total (confidence={confidence}) — keeping original")
         metadata['action'] = 'kept_original'
         return inflated_total, inflated_pre, inflated_clean, metadata
 
@@ -1703,18 +1704,13 @@ def _validate_total_watchers_with_ai(show_name, platform_name, inflated_total, i
         return inflated_total, inflated_pre, inflated_clean, metadata
 
     ratio = inflated_total / recommended if recommended > 0 else 1.0
-    if ratio > 2.0 or ratio < 0.5:
-        print(f"   🔄 Overriding Total: {inflated_total:,} → {recommended:,} (ratio was {ratio:.2f}x)")
-        pre_ratio = inflated_pre / inflated_total if inflated_total > 0 else 0
-        new_pre = int(round(recommended * pre_ratio))
-        new_clean = recommended - new_pre
-        metadata['action'] = 'overridden'
-        metadata['override_ratio'] = ratio
-        return recommended, new_pre, new_clean, metadata
-    else:
-        print(f"   ✅ Total {inflated_total:,} is within 2x of recommended {recommended:,} — no override")
-        metadata['action'] = 'kept_original'
-        return inflated_total, inflated_pre, inflated_clean, metadata
+    print(f"   🔄 Overriding Total: {inflated_total:,} → {recommended:,} (ratio={ratio:.2f}x, confidence={confidence})")
+    pre_ratio = inflated_pre / inflated_total if inflated_total > 0 else 0
+    new_pre = int(round(recommended * pre_ratio))
+    new_clean = recommended - new_pre
+    metadata['action'] = 'overridden'
+    metadata['override_ratio'] = ratio
+    return recommended, new_pre, new_clean, metadata
 
 
 def ai_validate_metrics(show_name, platform_name, total_watchers, new_signups,
