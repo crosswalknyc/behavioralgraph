@@ -9123,8 +9123,14 @@ def _holistic_profile_audit(df, *, subject_clean, brand_category,
         f"=== JUDGMENT PATTERNS — REASON LIKE A SENIOR ANALYST ===\n"
         f"A. CO-STAR / SAME-TEAM CONSISTENCY: documented co-stars on the same championship-era team should be within ~30% of each other. If Tatum is at 41% and Jaylen Brown (his 2024 Finals MVP co-star) is at 4%, that's wrong — fix Brown to ~35-42%. Same logic: Klay/Draymond same Warriors run; Curry/Klay; Shai/Chet; Booker/Beal; Mahomes/Kelce.\n"
         f"B. RECENT FINALS / CHAMPIONSHIP MVPs are EVERGREEN: anyone who won Finals MVP / Conference Finals MVP / Super Bowl MVP / WS MVP in the last 5 years belongs in marquee tier (35%+) for any audience that follows that league.\n"
-        f"C. SUBJECT'S DOCUMENTED CAREER ARC: if the persona is an athlete, every team they've played for and every documented teammate from those eras should over-index. KD's arc: Sonics→OKC→Warriors→Brooklyn→Suns→Houston: Westbrook/Harden/Carmelo (OKC), Curry/Klay/Draymond/Iguodala (GSW), Kyrie/Mikal Bridges/Dinwiddie/Joe Harris (BKN), Booker/CP3 (PHX). None at floor.\n"
-        f"D. DOCUMENTED CLOSE PERSONAL RELATIONSHIPS: subject's well-known close friends, business partners, Olympic teammates, podcast cohosts should never be at floor. (KD–Carmelo USA Basketball + close friendship; LeBron–Wade banana boat; Brady–Edelman.)\n"
+        f"C. SUBJECT'S DOCUMENTED CAREER ARC (apply to ANY athlete subject): every team they've played for and every documented teammate from those eras should over-index. The pattern is universal — only the names change per subject:\n"
+        f"   • KD: Sonics→OKC→Warriors→Brooklyn→Suns→Houston (Westbrook/Harden/Carmelo from OKC, Curry/Klay/Draymond/Iguodala from GSW, Kyrie/Mikal Bridges/Dinwiddie/Joe Harris from BKN, Booker/CP3 from PHX).\n"
+        f"   • LeBron: Cavs1→Heat→Cavs2→Lakers (Wade/Bosh/Allen from Heat, Kyrie/Love/JR Smith/Tristan from Cavs2, Westbrook/Carmelo from Lakers).\n"
+        f"   • Steph Curry: career-long Warriors (KD/Iguodala/Livingston/Lee/Bogut/Barnes/Cousins/Poole/Wiseman/Chris Paul as former GSW teammates).\n"
+        f"   • Tom Brady: Patriots→Buccaneers (Edelman/Gronkowski/Welker from NE, Evans/Godwin from TB).\n"
+        f"   • Patrick Mahomes: Chiefs (Kelce/Hill/Hardman/Pacheco — current and recent Chiefs).\n"
+        f"   None of the subject's career-arc teammates should be at floor — apply this to whoever the subject is.\n"
+        f"D. DOCUMENTED CLOSE PERSONAL RELATIONSHIPS (universal): subject's well-known close friends, business partners, Olympic teammates, podcast cohosts should never be at floor. Examples of the PATTERN: KD–Carmelo (USA Basketball + close friendship); LeBron–Wade (banana boat); Brady–Edelman; Caitlin Clark–Kate Martin; Mahomes–Travis Kelce. Apply to whoever the subject is.\n"
         f"E. CROSS-CATEGORY SIGNAL COHERENCE: if INTEREST shows Fantasy Sports >50%, top NFL stars (Pro Bowl QBs, top WRs, top RBs) MUST index 15%+ even on a non-NFL profile. If Casino/Gambling high → sportsbooks high. If Gaming high → gaming creators must index. Cross-signals are non-negotiable.\n"
         f"F. YOUNG STARS WITH HIGH SOCIAL FOLLOWING: LaMelo, Wemby, Holmgren, Banchero, Caitlin Clark, Shedeur Sanders — marquee tier for any audience over-indexing their league. Rookie-status doesn't matter; mindshare does.\n"
         f"G. DOMESTIC COUNTERPART RULE: if an international star indexes high, the domestic counterpart at the same position should index in the same tier (Holmgren ~ Wemby; Banchero ~ Doncic).\n"
@@ -15778,7 +15784,13 @@ STEP 5a — SPORTS FRANCHISE / TEAM (`subject_archetype` MUST be `sports_team_le
 STEP 5b — PROFESSIONAL ATHLETE PERSON (`celebrity_or_creator` WHEN research proves elite pro competitor)
   • **`location`**: The **current team's HOME MARKET DMA must be the #1 or #2 DMA at 8-15%** — this is non-negotiable for active players. Example: if KD plays for Houston Rockets, "HOUSTON" must be 8-15%. Prior team markets (OKC, Golden State, Brooklyn, Phoenix) should score 3-5%. National gateway cities (NYC, LA) fill their usual 6-10% only if they are NOT the home market. Do NOT flatten to generic population weights — fans cluster in the player's current city.
   • **`category_signals["SPORTS TEAM"]` and league-specific (NBA/NFL/MLB/etc.)**: The athlete's **CURRENT TEAM must be explicitly named as the predicted #1** in their league category at 25-40% BP. Prior teams should be 8-15%. Rival/marquee teams 10-20%. Other Houston-market teams (Texans, Astros, Dynamo) should be elevated to 8-12% due to geographic fan overlap. This is the single most important signal for athlete profiles — fans of KD follow the Rockets first.
-  • **CAREER-ARC TEAMMATE LIST (mandatory):** In `category_signals` for the relevant league ATHLETE bucket (e.g. `"NBA ATHLETE"`), enumerate the FULL list of every teammate from every team the subject has played for. Walk the career chronologically. Example for KD: OKC era → Russell Westbrook, James Harden, Carmelo Anthony, Serge Ibaka, Steven Adams, Reggie Jackson, Nick Collison, Enes Kanter, Paul George; Warriors era → Stephen Curry, Klay Thompson, Draymond Green, Andre Iguodala, Shaun Livingston, DeMarcus Cousins; Brooklyn era → Kyrie Irving, James Harden, Mikal Bridges, Spencer Dinwiddie, Joe Harris, Cameron Johnson, Nic Claxton; Phoenix era → Devin Booker, Bradley Beal, Chris Paul, Deandre Ayton; Houston (current) → Alperen Sengun, Jabari Smith Jr., Amen Thompson, Tari Eason, Fred VanVleet, Dillon Brooks, Cason Wallace, Max Christie, Aaron Wiggins. Every named teammate over-indexes — never leave the list incomplete.
+  • **CAREER-ARC TEAMMATE LIST (mandatory, applies to EVERY athlete subject):** In `category_signals` for the relevant league ATHLETE bucket (e.g. `"NBA ATHLETE"`, `"NFL ATHLETE"`, `"WNBA ATHLETE"`), enumerate the FULL list of every teammate from every team the subject has played for. Walk the career chronologically. Examples (the PATTERN is universal — only the names change per subject):
+    - KD example: OKC era → Russell Westbrook, James Harden, Carmelo Anthony, Serge Ibaka, Steven Adams, Reggie Jackson, Nick Collison, Enes Kanter, Paul George; Warriors era → Stephen Curry, Klay Thompson, Draymond Green, Andre Iguodala, Shaun Livingston, DeMarcus Cousins; Brooklyn era → Kyrie Irving, James Harden, Mikal Bridges, Spencer Dinwiddie, Joe Harris, Cameron Johnson, Nic Claxton; Phoenix era → Devin Booker, Bradley Beal, Chris Paul, Deandre Ayton; Houston (current) → Alperen Sengun, Jabari Smith Jr., Amen Thompson, Tari Eason, Fred VanVleet, Dillon Brooks, Cason Wallace, Max Christie, Aaron Wiggins.
+    - LeBron example: Cavs era 1 → Kyrie Irving, Kevin Love, Tristan Thompson, JR Smith, Iman Shumpert, Mo Williams; Heat era → Dwyane Wade, Chris Bosh, Ray Allen, Shane Battier, Mario Chalmers, Udonis Haslem; Lakers era → Anthony Davis, Russell Westbrook, Carmelo Anthony, Austin Reaves, Bronny James (and current Lakers roster).
+    - Steph Curry example: career-long Warriors → Klay Thompson, Draymond Green, Andre Iguodala, Kevin Durant (former), Shaun Livingston, David Lee, Andrew Bogut, Harrison Barnes, DeMarcus Cousins, Jordan Poole, Jimmy Butler (current).
+    - Tom Brady example: Patriots era → Julian Edelman, Rob Gronkowski, Wes Welker, Randy Moss, Deion Branch; Buccaneers era → Mike Evans, Chris Godwin, Leonard Fournette.
+    - Patrick Mahomes example: Chiefs (entire career) → Travis Kelce, Tyreek Hill (former), Mecole Hardman, Isiah Pacheco, Xavier Worthy, Rashee Rice, Marquise Brown.
+    Apply this PATTERN to whoever the subject is. Every named teammate over-indexes — never leave the list incomplete; missing names cause downstream scoring agents to floor real teammates.
   • **CO-STARS / SAME-TEAM PEERS:** Document explicitly which current-league peers are documented co-stars of marquee teammates (e.g., Jaylen Brown is Jayson Tatum's co-star on the Celtics — both should over-index together). Apply to all current championship-era pairs: Klay/Draymond, Curry/Klay, Shai/Chet, Booker/Beal, Mahomes/Kelce.
   • **DOCUMENTED CLOSE PERSONAL RELATIONSHIPS:** Surface the subject's well-known close friendships, business partners, Olympic teammates, podcast cohosts, banana-boat-tier relationships. For KD: Carmelo Anthony (close friend + multi-cycle USA Basketball teammate + OKC teammate) is non-negotiable.
   • **YOUNG STARS WITH HIGH SOCIAL FOLLOWING:** For audiences over-indexing a league, document marquee young stars (NBA: LaMelo Ball, Wemby, Holmgren, Banchero, Cooper Flagg; NFL: Caleb Williams, Jayden Daniels, CeeDee Lamb, Bijan Robinson; MLB: Elly De La Cruz, Bobby Witt Jr.; NHL: Connor Bedard, Macklin Celebrini). They earn marquee tier from social/cultural mindshare even if rookie-status.
@@ -19222,8 +19234,14 @@ def _run_unified_scoring_pass(
         f"=== JUDGMENT PATTERNS (apply to EVERY athlete/celebrity profile) ===\n"
         f"A. CO-STAR CONSISTENCY: documented same-team co-stars within ~30% of each other (Tatum/Brown, Klay/Draymond, Curry/Klay, Shai/Chet, Booker/Beal, Mahomes/Kelce, Hurts/A.J. Brown).\n"
         f"B. RECENT FINALS/CHAMPIONSHIP MVPs are EVERGREEN (35%+) for any audience that follows that league.\n"
-        f"C. SUBJECT'S CAREER ARC: when subject is an athlete, every team + every documented teammate from those eras over-indexes. KD: Westbrook/Harden/Carmelo (OKC), Curry/Klay/Draymond/Iguodala (GSW), Kyrie/Mikal Bridges/Dinwiddie/Joe Harris (BKN), Booker/CP3 (PHX), current Houston roster — none at floor.\n"
-        f"D. DOCUMENTED CLOSE PERSONAL RELATIONSHIPS: never at floor.\n"
+        f"C. SUBJECT'S CAREER ARC (universal — apply to ANY athlete subject): every team + every documented teammate from those eras over-indexes. The PATTERN is constant; only the names change:\n"
+        f"   • KD: OKC (Westbrook/Harden/Carmelo) → GSW (Curry/Klay/Draymond/Iguodala) → BKN (Kyrie/Mikal Bridges/Dinwiddie/Joe Harris) → PHX (Booker/CP3) → current Houston roster.\n"
+        f"   • LeBron: Cavs (Kyrie/Love/JR/Tristan) → Heat (Wade/Bosh/Allen) → Lakers (Westbrook/Carmelo + current).\n"
+        f"   • Curry: career-long GSW (KD/Iguodala/Livingston/Lee/Bogut/Cousins as past Warriors).\n"
+        f"   • Brady: Patriots (Edelman/Gronk/Welker) → Buccaneers (Evans/Godwin).\n"
+        f"   • Mahomes: Chiefs (Kelce/Hill/Hardman/Pacheco).\n"
+        f"   None of the subject's career-arc teammates should be at floor.\n"
+        f"D. DOCUMENTED CLOSE PERSONAL RELATIONSHIPS (universal): never at floor (KD–Carmelo, LeBron–Wade, Brady–Edelman, Mahomes–Kelce, Caitlin Clark–Kate Martin — apply to whoever the subject is).\n"
         f"E. CROSS-CATEGORY SIGNAL: Fantasy Sports >50% → top NFL stars 15%+ on non-NFL profiles. Gambling high → sportsbooks high. Gaming high → top gaming creators index.\n"
         f"F. YOUNG STARS WITH HIGH SOCIAL FOLLOWING: LaMelo, Wemby, Holmgren, Banchero, Caitlin Clark, Shedeur — marquee tier.\n"
         f"G. DOMESTIC COUNTERPART RULE: international high → domestic counterpart same tier (Holmgren ~ Wemby).\n"
@@ -34269,6 +34287,23 @@ def enforce_behavioral_category_plausibility(df, brand_category=None, project_na
                 'ANTHONY DAVIS', 'AUSTIN REAVES', 'D\'ANGELO RUSSELL',
                 'RUI HACHIMURA', 'DALTON KNECHT', 'MAX CHRISTIE',
                 'JARRED VANDERBILT', 'GABE VINCENT', 'CHRISTIAN WOOD',
+                'BRONNY JAMES',
+            ],
+            'former_teammates': [
+                # Cavs era 1 (2003-2010)
+                'KYRIE IRVING', 'KEVIN LOVE', 'TRISTAN THOMPSON',
+                'JR SMITH', 'IMAN SHUMPERT', 'MO WILLIAMS',
+                'DELONTE WEST', 'ZYDRUNAS ILGAUSKAS', 'ANDERSON VAREJAO',
+                # Miami Heat era (2010-2014)
+                'DWYANE WADE', 'CHRIS BOSH', 'RAY ALLEN',
+                'SHANE BATTIER', 'MARIO CHALMERS', 'NORRIS COLE',
+                'UDONIS HASLEM',
+                # Cavs era 2 (2014-2018) — overlaps Cavs 1
+                'CHANNING FRYE', 'KYLE KORVER',
+                # Lakers era (2018-present, prior teammates)
+                'RUSSELL WESTBROOK', 'CARMELO ANTHONY', 'DENNIS SCHRODER',
+                'PATRICK BEVERLEY', 'LONZO BALL', 'KENTAVIOUS CALDWELL-POPE',
+                'MONTREZL HARRELL', 'WESLEY MATTHEWS',
             ],
             'league_peers': _NBA_MARQUEE_PEERS,
         },
@@ -34280,6 +34315,19 @@ def enforce_behavioral_category_plausibility(df, brand_category=None, project_na
                 'KLAY THOMPSON', 'DRAYMOND GREEN', 'ANDREW WIGGINS',
                 'JONATHAN KUMINGA', 'MOSES MOODY', 'BRANDIN PODZIEMSKI',
                 'KEVON LOONEY', 'BUDDY HIELD', 'DE\'ANTHONY MELTON',
+                'JIMMY BUTLER',
+            ],
+            'former_teammates': [
+                # Curry has been Warriors his whole career — "former" = past Warriors teammates
+                'KEVIN DURANT', 'ANDRE IGUODALA', 'SHAUN LIVINGSTON',
+                'DAVID LEE', 'ANDREW BOGUT', 'HARRISON BARNES',
+                'FESTUS EZELI', 'LEANDRO BARBOSA', 'ZAZA PACHULIA',
+                'JAVALE MCGEE', 'NICK YOUNG', 'PATRICK MCCAW',
+                'DEMARCUS COUSINS', 'DAMION LEE', 'KENT BAZEMORE',
+                'GARY PAYTON II', 'OTTO PORTER JR.', 'JORDAN POOLE',
+                'JAMES WISEMAN', 'CHRIS PAUL', 'GARY PAYTON II',
+                'DARIO SARIC', 'KEVON LOONEY', 'MONTA ELLIS',
+                'BARON DAVIS', 'JASON RICHARDSON',
             ],
             'league_peers': _NBA_MARQUEE_PEERS,
         },
