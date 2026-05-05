@@ -15046,6 +15046,28 @@ def _category_pass1_calibration_block(category: str,
             "and one persona-relevant app (e.g., sports audience → ESPN app; young → TikTok/Snapchat).\n"
             "• `anti_fit_in_category`: Niche professional tools that don’t match the persona’s occupation/education."
         )
+    elif u == 'QSR':
+        sections.append(
+            "**QSR — mass-market digital reach drives the top, not aspirational brand fit:**\n"
+            "This category measures **digital engagement** (app orders, web visits, loyalty programs, delivery "
+            "platforms) — NOT brand aspiration or lifestyle alignment.\n"
+            "• **McDonald's is the #1 QSR digitally in the US** for virtually every audience. Gen Pop "
+            "digital reach is ~65-70%. Even for premium/health-conscious/athletic audiences, McDonald's "
+            "should be **45-60% BP** — it is the most-visited QSR in America and has massive app/delivery "
+            "digital footprint. Do NOT penalize it for not being 'aspirational.'\n"
+            "• **Mass-market chain floors:** Taco Bell (~35-45%), Wendy's (~25-35%), Burger King (~20-30%), "
+            "Subway (~25-35%), Domino's (~25-35%), KFC (~15-25%), Pizza Hut (~15-25%). These chains have "
+            "enormous digital ordering/app ecosystems that every demographic touches.\n"
+            "• **Premium fast-casual CAN lead** (Chipotle, Starbucks, Chick-fil-A, Shake Shack, Panera) "
+            "for upscale/young/urban personas — but they should NOT be 3x the BP of McDonald's. "
+            "A realistic spread: Chipotle 55-65%, Starbucks 55-65%, McDonald's 45-60%, Chick-fil-A 40-55%.\n"
+            "• **Starbucks vs Dunkin:** Starbucks leads for urban/premium/coastal personas. Dunkin leads "
+            "for Northeast/value-oriented. They should NOT be identical — differentiate by 5-15 points.\n"
+            "• **category_ceiling_pct:** Set to 72-78%. No single QSR should exceed ~75% BP.\n"
+            "• `predicted_top_5`: Must include McDonald's AND Starbucks for virtually every US audience. "
+            "Add Chipotle/Chick-fil-A/Taco Bell based on persona fit.\n"
+            "• `anti_fit_in_category`: Hyper-regional chains outside the persona's DMA footprint."
+        )
     elif u in {'SEARCH ENGINE/AI', 'SEARCH ENGINE'}:
         sections.append(
             "**Google** (map to the rows named Google / Google Search / google.com consistently with the CSV) "
@@ -33584,6 +33606,47 @@ def enforce_behavioral_category_plausibility(df, brand_category=None, project_na
                         fixes += 1
                         if not SILENCE_VERBOSE_OUTPUT:
                             print(f"   🏟️ Boosted {city_team} to {target:.2f}% (same-city as athlete)")
+
+    # ── QSR floor guardrail ────────────────────────────────────────────────
+    # Mass-market QSR chains have enormous digital reach; the scoring agent
+    # often under-scores them by treating "brand fit" as "aspirational fit."
+    _QSR_FLOORS = {
+        'MCDONALDS': 45.0, "MCDONALD'S": 45.0,
+        'STARBUCKS': 50.0,
+        'TACO BELL': 30.0,
+        'WENDYS': 22.0, "WENDY'S": 22.0,
+        'BURGER KING': 20.0,
+        'SUBWAY': 22.0,
+        'DOMINOS': 22.0, "DOMINO'S": 22.0,
+        'KFC': 15.0,
+        'PIZZA HUT': 15.0,
+        'CHICK-FIL-A': 35.0, 'CHICKFILA': 35.0, 'CHICK FIL A': 35.0,
+        'CHIPOTLE MEXICAN GRILL': 40.0, 'CHIPOTLE': 40.0,
+        'DUNKIN': 35.0, "DUNKIN'": 35.0, 'DUNKIN DONUTS': 35.0,
+        'PANERA BREAD': 25.0, 'PANERA': 25.0,
+        'POPEYES': 15.0,
+    }
+    _QSR_CEILING = 75.0
+
+    qsr_rows = _cat_rows('QSR')
+    qsr_fixes = 0
+    for idx, val, cur_bp in qsr_rows:
+        val_u = val.upper().strip()
+        floor = _QSR_FLOORS.get(val_u)
+        if floor is not None and cur_bp < floor:
+            import random as _rnd
+            target = floor + _rnd.uniform(0, 5)
+            target = min(target, _QSR_CEILING)
+            _write_bp(idx, target)
+            qsr_fixes += 1
+        elif cur_bp > _QSR_CEILING:
+            _write_bp(idx, _QSR_CEILING - 0.5 + (hash(val_u) % 100) * 0.01)
+            qsr_fixes += 1
+
+    if qsr_fixes > 0:
+        fixes += qsr_fixes
+        if not SILENCE_VERBOSE_OUTPUT:
+            print(f"   🍔 QSR floor/ceiling guard: adjusted {qsr_fixes} values")
 
     # ── APP/PLATFORM USAGE ceiling guardrail ──────────────────────────────
     # Gen Pop baselines are the realistic ceiling for digital engagement.
