@@ -9120,6 +9120,29 @@ def _holistic_profile_audit(df, *, subject_clean, brand_category,
         f"5. **Persona drives ceilings, not arbitrary caps.** A Zoom company profile CAN "
         f"   have Zoom near 90%. An AI lab CAN have ChatGPT lead. Don't apply blanket "
         f"   ceilings — apply persona reasoning.\n\n"
+        f"=== JUDGMENT PATTERNS — REASON LIKE A SENIOR ANALYST ===\n"
+        f"A. CO-STAR / SAME-TEAM CONSISTENCY: documented co-stars on the same championship-era team should be within ~30% of each other. If Tatum is at 41% and Jaylen Brown (his 2024 Finals MVP co-star) is at 4%, that's wrong — fix Brown to ~35-42%. Same logic: Klay/Draymond same Warriors run; Curry/Klay; Shai/Chet; Booker/Beal; Mahomes/Kelce.\n"
+        f"B. RECENT FINALS / CHAMPIONSHIP MVPs are EVERGREEN: anyone who won Finals MVP / Conference Finals MVP / Super Bowl MVP / WS MVP in the last 5 years belongs in marquee tier (35%+) for any audience that follows that league.\n"
+        f"C. SUBJECT'S DOCUMENTED CAREER ARC: if the persona is an athlete, every team they've played for and every documented teammate from those eras should over-index. KD's arc: Sonics→OKC→Warriors→Brooklyn→Suns→Houston: Westbrook/Harden/Carmelo (OKC), Curry/Klay/Draymond/Iguodala (GSW), Kyrie/Mikal Bridges/Dinwiddie/Joe Harris (BKN), Booker/CP3 (PHX). None at floor.\n"
+        f"D. DOCUMENTED CLOSE PERSONAL RELATIONSHIPS: subject's well-known close friends, business partners, Olympic teammates, podcast cohosts should never be at floor. (KD–Carmelo USA Basketball + close friendship; LeBron–Wade banana boat; Brady–Edelman.)\n"
+        f"E. CROSS-CATEGORY SIGNAL COHERENCE: if INTEREST shows Fantasy Sports >50%, top NFL stars (Pro Bowl QBs, top WRs, top RBs) MUST index 15%+ even on a non-NFL profile. If Casino/Gambling high → sportsbooks high. If Gaming high → gaming creators must index. Cross-signals are non-negotiable.\n"
+        f"F. YOUNG STARS WITH HIGH SOCIAL FOLLOWING: LaMelo, Wemby, Holmgren, Banchero, Caitlin Clark, Shedeur Sanders — marquee tier for any audience over-indexing their league. Rookie-status doesn't matter; mindshare does.\n"
+        f"G. DOMESTIC COUNTERPART RULE: if an international star indexes high, the domestic counterpart at the same position should index in the same tier (Holmgren ~ Wemby; Banchero ~ Doncic).\n"
+        f"H. GENDER / ARCHETYPE ALIGNMENT: 60%+ male sports-fan audience: feminine cosmetics (Anastasia Beverly Hills, Kylie Cosmetics, Too Faced) NOT above 8-12%; niche-diet (Beyond Meat, Impossible Foods) NOT above 4-7%. Reverse for female-skewed personas.\n"
+        f"I. FACTORY FLOOR DETECTION: items at exactly 0.01% BP that obviously shouldn't be at floor for this persona are scoring failures — fix them. Mass-recognition names (top 20 NFL/NBA/MLB players, McDonald's, YouTube, Netflix, Amazon) at 0.01% are virtually always wrong.\n"
+        f"J. TAXONOMY/PLACEMENT CHECK: Reddit IS social media (not just an app); ESPN+ is streaming AND a sports product; PayPal is digital banking AND fintech. Flag missing-from-correct-bucket items.\n\n"
+        f"=== EXPERT PRIORS — TYPICAL US RANGES TO ANCHOR REASONING (anchors, not caps) ===\n"
+        f"SOCIAL MEDIA (US adults 2025): INSTAGRAM gen pop 50-60% / 18-44 70-85%; YOUTUBE 85-92% universal, sports/gaming/creator audiences 90-97%; TIKTOK 65/45/25 by decade (18-29/30-44/45+); FACEBOOK total 58-65%; X/TWITTER gen pop 22-28%, sports-male cap 50-55% (NEVER 80%); REDDIT gen pop 35-40%, fantasy/gaming/sneakers/tech 18-44 male 45-55%; SNAPCHAT 70/45/30/15 by decade; TWITCH 25-35% gaming-male / 12-18% broader; DISCORD 30-40% gaming-male / 18-25% broader; LINKEDIN 50-65% white-collar / 25-35% broader; THREADS 8-15%; PINTEREST 50% female / 25% male / 30% total; BLUESKY 3-8%; TRUTH SOCIAL conservative 3-5% / non-conservative <2%; LETTERBOXD 1-3%; TELEGRAM 5-10%.\n"
+        f"STREAMING/PLATFORM: NETFLIX 85-92% universal; AMAZON PRIME VIDEO 55-65%; HULU 50-60% (18-44); DISNEY+ parents 55-65% / broader 35-45%; MAX 25-35%; PEACOCK 20-30%; PARAMOUNT+ 15-25%; APPLE TV+ 10-18%; ESPN+ 35-50% sports / 10-15% broader.\n"
+        f"STREAMING/MUSIC: SPOTIFY 65-75% (18-34) / 40-55% (35-54); APPLE MUSIC 25-35%; YOUTUBE MUSIC 25-40%; AMAZON MUSIC 25-30%; PANDORA 15-25% (older); SIRIUSXM 15-25% (commuters); TIDAL 3-8% (rap/hip-hop higher).\n"
+        f"SEARCH/AI: GOOGLE 92-97%; CHATGPT 25-40% gen pop / 45-60% (18-34 tech); GEMINI 15-25% Android; COPILOT 10-20% office; BING 10-18%; YAHOO 10-15% older; DUCKDUCKGO 5-10%; CLAUDE 4-10%; PERPLEXITY 3-8%.\n"
+        f"APP/PLATFORM USAGE (utilities, NOT social media bucket): GOOGLE MAPS 80-90%; GMAIL 75-85%; ICLOUD 50-65% iPhone household / 35-45% broader; WHATSAPP 30-40% gen pop / 60-75% Latino-international; ZOOM 50-65%; UBER EATS/DOORDASH 30-45% urban; GOOGLE DOCS/DRIVE/PHOTOS 25-55% (NEVER identical to each other); WIKIPEDIA 25-40% (NOT clustered with daily-use Gmail).\n"
+        f"QSR: MCDONALDS 65-75; STARBUCKS 45-55; CHICK-FIL-A 35-50; SUBWAY 40-50; TACO BELL 40-50; WENDYS 38-48; BURGER KING 30-40; CHIPOTLE 30-40 (younger); DOMINOS 30-40; PIZZA HUT 28-38; DUNKIN 25-40 (NE skew); KFC 25-35; SONIC 18-28; DAIRY QUEEN 25-35.\n"
+        f"DIGITAL BANKING: PAYPAL 75-85; VENMO 55-70 (18-44 urban); CASH APP 50-65 (Black/Hispanic skew higher); APPLE PAY 60-75 iPhone household; ZELLE 30-45; CHIME/SOFI/VARO 10-20% (18-34) / 5-10% broader.\n"
+        f"BEAUTY (gender-aware): female 25-44 — Sephora/Ulta core 30-50, ABH/KYLIE/TOO FACED 15-30; male-skew (>55% M) — feminine cosmetics CAP 8-15, men's grooming leads.\n"
+        f"CPG NICHE-DIET: BEYOND MEAT/IMPOSSIBLE/OATLY — male/sports cap 4-7; female urban progressive 8-15.\n"
+        f"AUTOMOBILE: TOYOTA/HONDA/FORD/CHEVY 25-40 in home demos; premium (BMW/MERC/AUDI/LEXUS) high-income 25-44 10-20 / gen pop 5-10; TESLA 12-22 tech-affluent / 6-10 broader.\n"
+        f"USE PRIORS as starting points; deviate only when the persona justifies it.\n\n"
         f"=== PROFILE SNAPSHOT (top {PER_CAT_TOP_N} items per category, indices vs US Gen Pop) ===\n"
         f"{profile_snapshot}\n\n"
         f"=== YOUR TASK ===\n"
@@ -15755,6 +15778,12 @@ STEP 5a — SPORTS FRANCHISE / TEAM (`subject_archetype` MUST be `sports_team_le
 STEP 5b — PROFESSIONAL ATHLETE PERSON (`celebrity_or_creator` WHEN research proves elite pro competitor)
   • **`location`**: The **current team's HOME MARKET DMA must be the #1 or #2 DMA at 8-15%** — this is non-negotiable for active players. Example: if KD plays for Houston Rockets, "HOUSTON" must be 8-15%. Prior team markets (OKC, Golden State, Brooklyn, Phoenix) should score 3-5%. National gateway cities (NYC, LA) fill their usual 6-10% only if they are NOT the home market. Do NOT flatten to generic population weights — fans cluster in the player's current city.
   • **`category_signals["SPORTS TEAM"]` and league-specific (NBA/NFL/MLB/etc.)**: The athlete's **CURRENT TEAM must be explicitly named as the predicted #1** in their league category at 25-40% BP. Prior teams should be 8-15%. Rival/marquee teams 10-20%. Other Houston-market teams (Texans, Astros, Dynamo) should be elevated to 8-12% due to geographic fan overlap. This is the single most important signal for athlete profiles — fans of KD follow the Rockets first.
+  • **CAREER-ARC TEAMMATE LIST (mandatory):** In `category_signals` for the relevant league ATHLETE bucket (e.g. `"NBA ATHLETE"`), enumerate the FULL list of every teammate from every team the subject has played for. Walk the career chronologically. Example for KD: OKC era → Russell Westbrook, James Harden, Carmelo Anthony, Serge Ibaka, Steven Adams, Reggie Jackson, Nick Collison, Enes Kanter, Paul George; Warriors era → Stephen Curry, Klay Thompson, Draymond Green, Andre Iguodala, Shaun Livingston, DeMarcus Cousins; Brooklyn era → Kyrie Irving, James Harden, Mikal Bridges, Spencer Dinwiddie, Joe Harris, Cameron Johnson, Nic Claxton; Phoenix era → Devin Booker, Bradley Beal, Chris Paul, Deandre Ayton; Houston (current) → Alperen Sengun, Jabari Smith Jr., Amen Thompson, Tari Eason, Fred VanVleet, Dillon Brooks, Cason Wallace, Max Christie, Aaron Wiggins. Every named teammate over-indexes — never leave the list incomplete.
+  • **CO-STARS / SAME-TEAM PEERS:** Document explicitly which current-league peers are documented co-stars of marquee teammates (e.g., Jaylen Brown is Jayson Tatum's co-star on the Celtics — both should over-index together). Apply to all current championship-era pairs: Klay/Draymond, Curry/Klay, Shai/Chet, Booker/Beal, Mahomes/Kelce.
+  • **DOCUMENTED CLOSE PERSONAL RELATIONSHIPS:** Surface the subject's well-known close friendships, business partners, Olympic teammates, podcast cohosts, banana-boat-tier relationships. For KD: Carmelo Anthony (close friend + multi-cycle USA Basketball teammate + OKC teammate) is non-negotiable.
+  • **YOUNG STARS WITH HIGH SOCIAL FOLLOWING:** For audiences over-indexing a league, document marquee young stars (NBA: LaMelo Ball, Wemby, Holmgren, Banchero, Cooper Flagg; NFL: Caleb Williams, Jayden Daniels, CeeDee Lamb, Bijan Robinson; MLB: Elly De La Cruz, Bobby Witt Jr.; NHL: Connor Bedard, Macklin Celebrini). They earn marquee tier from social/cultural mindshare even if rookie-status.
+  • **DOMESTIC COUNTERPART RULE:** Whenever you tier an international star high (Wemby, Mbappe, Vinicius, Haaland, Doncic), explicitly tier the equivalent-position domestic counterpart (Holmgren ~ Wemby; Banchero ~ Doncic) in the same band.
+  • **CROSS-CATEGORY SPORTS SIGNAL:** If the persona over-indexes Fantasy Sports (>50%), Sports Betting, or Sports Talk Radio, document explicitly that top NFL stars (Pro Bowl QBs, top WRs, top RBs — Mahomes, Allen, Hurts, Lamar, Burrow, CeeDee, Tyreek, Saquon, Bijan, McCaffrey) MUST index 15%+ even on a non-NFL profile.
   • Surface **endorsed sponsors / signature product lines / league official partners tied to persona** across `cultural_anchors`, `cross_shop_network`, MPB/WTS-oriented `category_signals`.
   • `category_signals["ATHLETE"]` should instruct scoring to privilege **THIS subject athlete**, teammate/co-star figures named in anchors, rivalry counterstars shaping narrative arcs — not unrelated leaderboard filler.
 
@@ -19190,6 +19219,34 @@ def _run_unified_scoring_pass(
         f"   tail. Avoid flat top-5s (5+ items within 4% BP at the top is unrealistic).\n"
         f"6. **Realistic ceilings**: Persona-driven, not arbitrary. A Zoom company audience\n"
         f"   CAN have Zoom near 90%; an indie-music audience cannot have Spotify at 95%.\n\n"
+        f"=== JUDGMENT PATTERNS (apply to EVERY athlete/celebrity profile) ===\n"
+        f"A. CO-STAR CONSISTENCY: documented same-team co-stars within ~30% of each other (Tatum/Brown, Klay/Draymond, Curry/Klay, Shai/Chet, Booker/Beal, Mahomes/Kelce, Hurts/A.J. Brown).\n"
+        f"B. RECENT FINALS/CHAMPIONSHIP MVPs are EVERGREEN (35%+) for any audience that follows that league.\n"
+        f"C. SUBJECT'S CAREER ARC: when subject is an athlete, every team + every documented teammate from those eras over-indexes. KD: Westbrook/Harden/Carmelo (OKC), Curry/Klay/Draymond/Iguodala (GSW), Kyrie/Mikal Bridges/Dinwiddie/Joe Harris (BKN), Booker/CP3 (PHX), current Houston roster — none at floor.\n"
+        f"D. DOCUMENTED CLOSE PERSONAL RELATIONSHIPS: never at floor.\n"
+        f"E. CROSS-CATEGORY SIGNAL: Fantasy Sports >50% → top NFL stars 15%+ on non-NFL profiles. Gambling high → sportsbooks high. Gaming high → top gaming creators index.\n"
+        f"F. YOUNG STARS WITH HIGH SOCIAL FOLLOWING: LaMelo, Wemby, Holmgren, Banchero, Caitlin Clark, Shedeur — marquee tier.\n"
+        f"G. DOMESTIC COUNTERPART RULE: international high → domestic counterpart same tier (Holmgren ~ Wemby).\n"
+        f"H. GENDER / ARCHETYPE ALIGNMENT: 60%+ male sports-fan: feminine cosmetics CAP 8-15%; niche-diet (Beyond Meat, Impossible) CAP 4-7%. Reverse for female-skewed.\n\n"
+        f"=== EXPERT PRIORS — TYPICAL US RANGES TO ANCHOR YOUR SCORES ===\n"
+        f"SOCIAL MEDIA: INSTAGRAM 50-85% (18-44 high); YOUTUBE 85-97% (creator/sports/gaming 92%+); TIKTOK 25/45/65 (45+/30-44/18-29); FACEBOOK 58-65%; X gen pop 22-28%, sports-male cap 50-55% (NEVER 80%); REDDIT gen pop 35-40%, fantasy/gaming/sneakers 18-44 male 45-55%; SNAPCHAT 70/45/30/15 by decade; TWITCH 25-35% gaming-male / 12-18% broader; DISCORD 30-40% gaming-male / 18-25% broader; LINKEDIN 50-65% white-collar / 25-35% broader; THREADS 8-15%; PINTEREST 50% female / 25% male; BLUESKY 3-8%; TRUTH SOCIAL conservative 3-5% / non-conservative <2%; LETTERBOXD 1-3%.\n"
+        f"STREAMING/PLATFORM: NETFLIX 85-92%; HULU 50-60% (18-44); AMAZON PRIME VIDEO 55-65%; DISNEY+ 35-65%; MAX 25-35%; PEACOCK 20-30%; PARAMOUNT+ 15-25%; APPLE TV+ 10-18%; ESPN+ 35-50% sports / 10-15% broader.\n"
+        f"STREAMING/MUSIC: SPOTIFY 65-75% (18-34) / 40-55% (35-54); APPLE MUSIC 25-35%; YOUTUBE MUSIC 25-40%; AMAZON MUSIC 25-30%; PANDORA 15-25% (older); SIRIUSXM 15-25% (commuter); TIDAL 3-8% (rap/hip-hop higher).\n"
+        f"SEARCH/AI: GOOGLE 92-97%; CHATGPT 25-40% / 45-60% (18-34 tech); GEMINI 15-25% Android; COPILOT 10-20%; BING 10-18%; YAHOO 10-15%; DUCKDUCKGO 5-10%; CLAUDE 4-10%; PERPLEXITY 3-8%.\n"
+        f"APP/PLATFORM USAGE: GOOGLE MAPS 80-90%; GMAIL 75-85%; ICLOUD 50-65% iPhone household / 35-45% broader; WHATSAPP 30-40% / 60-75% Latino-international; ZOOM 50-65%; UBER EATS/DOORDASH 30-45% urban; GOOGLE DOCS/DRIVE/PHOTOS 25-55% (NEVER identical); WIKIPEDIA 25-40% (NOT clustered with Gmail).\n"
+        f"QSR: MCDONALDS 65-75; STARBUCKS 45-55; CHICK-FIL-A 35-50; SUBWAY 40-50; TACO BELL 40-50; WENDYS 38-48; BURGER KING 30-40; CHIPOTLE 30-40; DOMINOS 30-40; PIZZA HUT 28-38; DUNKIN 25-40; KFC 25-35; SONIC 18-28; DAIRY QUEEN 25-35.\n"
+        f"DIGITAL BANKING: PAYPAL 75-85; VENMO 55-70 (18-44 urban); CASH APP 50-65 (Black/Hispanic skew higher); APPLE PAY 60-75 iPhone household; ZELLE 30-45.\n"
+        f"BEAUTY (gender-aware): female 25-44 — Sephora/Ulta 30-50, ABH/KYLIE/TOO FACED 15-30; male-skew >55% M — feminine cosmetics CAP 8-15.\n"
+        f"CPG NICHE-DIET: BEYOND MEAT/IMPOSSIBLE/OATLY — male/sports cap 4-7; female urban progressive 8-15.\n"
+        f"AUTOMOBILE: TOYOTA/HONDA/FORD/CHEVY 25-40 home demos; premium 10-20 high-income / 5-10 broader; TESLA 12-22 tech-affluent / 6-10 broader.\n"
+        f"USE THESE AS STARTING POINTS. Deviate when the persona justifies it.\n\n"
+        f"=== PER-CATEGORY REASONING DISCIPLINE ===\n"
+        f"Before scoring each category, mentally run this 5-step check (drives your scores):\n"
+        f"1. Demo skew — what gender/age/ethnicity/income drives this category for THIS persona?\n"
+        f"2. Cross-signals — which INTEREST / archetype signals push items up or down?\n"
+        f"3. Leader sanity — for THIS persona, who SHOULD be #1 in this category? Does your top item match? If not, fix it.\n"
+        f"4. Tail sanity — what's at floor (0.01-1%)? Are any famous mass-recognition names there that obviously shouldn't be?\n"
+        f"5. Distribution — clear leader + natural decay, not flat? Any items at IDENTICAL BPs (a flat-jitter scoring failure)?\n\n"
         f"=== ITEM INVENTORY ({len(items_by_cat_clamped)} cats, {total_items} items, sorted by panel BP) ===\n"
         f"{inventory_block}\n\n"
         f"=== OUTPUT FORMAT ===\n"
@@ -34188,6 +34245,19 @@ def enforce_behavioral_category_plausibility(df, brand_category=None, project_na
                 'DILLON BROOKS', 'REED SHEPPARD', 'CAM WHITMORE',
                 'JAE\'SEAN TATE', 'JAESEAN TATE', 'STEVEN ADAMS',
                 'JOCK LANDALE', 'AARON HOLIDAY',
+                'CASON WALLACE', 'MAX CHRISTIE', 'AARON WIGGINS',
+            ],
+            'former_teammates': [
+                'RUSSELL WESTBROOK', 'JAMES HARDEN', 'CARMELO ANTHONY',
+                'SERGE IBAKA', 'REGGIE JACKSON', 'PAUL GEORGE',
+                'ENES KANTER', 'NICK COLLISON',
+                'STEPHEN CURRY', 'KLAY THOMPSON', 'DRAYMOND GREEN',
+                'ANDRE IGUODALA', 'SHAUN LIVINGSTON', 'DEMARCUS COUSINS',
+                'KYRIE IRVING', 'MIKAL BRIDGES', 'SPENCER DINWIDDIE',
+                'JOE HARRIS', 'CAMERON JOHNSON', 'NIC CLAXTON',
+                'CARIS LEVERT', 'JARRETT ALLEN',
+                'DEVIN BOOKER', 'BRADLEY BEAL', 'CHRIS PAUL',
+                'DEANDRE AYTON', 'GRAYSON ALLEN', 'JUSUF NURKIC',
             ],
             'league_peers': _NBA_MARQUEE_PEERS,
         },
@@ -34326,9 +34396,10 @@ def enforce_behavioral_category_plausibility(df, brand_category=None, project_na
         #    storylines and Houston-market overlap)
         #  - Marquee league peers to 35-55% BP (any NBA fan knows them)
         current_teammates = matched_athlete.get('current_teammates') or []
+        former_teammates = matched_athlete.get('former_teammates') or []
         league_peers = matched_athlete.get('league_peers') or []
         for cat_check in ['NBA ATHLETE', 'NFL ATHLETE', 'MLB ATHLETE',
-                          'NHL ATHLETE', 'MLS ATHLETE', 'ATHLETE']:
+                          'NHL ATHLETE', 'MLS ATHLETE', 'ATHLETE', 'TALENT']:
             rows = _cat_rows(cat_check)
             if not rows:
                 continue
@@ -34336,14 +34407,21 @@ def enforce_behavioral_category_plausibility(df, brand_category=None, project_na
                 vu = val.upper().strip()
                 if vu in current_teammates and cur_bp < 22.0:
                     import random as _rnd
-                    target = 25.0 + _rnd.uniform(0, 12)  # 25-37%
+                    target = 25.0 + _rnd.uniform(0, 12)
                     _write_bp(idx, target)
                     fixes += 1
                     if not SILENCE_VERBOSE_OUTPUT:
-                        print(f"   🏀 Boosted teammate {val} to {target:.2f}% in {cat_check}")
+                        print(f"   🏀 Boosted current teammate {val} to {target:.2f}% in {cat_check}")
+                elif vu in former_teammates and cur_bp < 18.0:
+                    import random as _rnd
+                    target = 18.0 + _rnd.uniform(0, 12)
+                    _write_bp(idx, target)
+                    fixes += 1
+                    if not SILENCE_VERBOSE_OUTPUT:
+                        print(f"   🏀 Boosted former teammate {val} to {target:.2f}% in {cat_check}")
                 elif vu in league_peers and cur_bp < 32.0:
                     import random as _rnd
-                    target = 35.0 + _rnd.uniform(0, 18)  # 35-53%
+                    target = 35.0 + _rnd.uniform(0, 18)
                     _write_bp(idx, target)
                     fixes += 1
                     if not SILENCE_VERBOSE_OUTPUT:
