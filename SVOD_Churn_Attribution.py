@@ -1703,6 +1703,11 @@ def _validate_total_watchers_with_ai(show_name, platform_name, inflated_total, i
         metadata['action'] = 'kept_original'
         return inflated_total, inflated_pre, inflated_clean, metadata
 
+    # Apply 8% conservative discount — our panel slightly under-represents real viewership
+    raw_recommended = recommended
+    recommended = int(round(recommended * 0.92 / 10) * 10)
+    print(f"   📉 Applied 8% discount: {raw_recommended:,} → {recommended:,}")
+
     ratio = inflated_total / recommended if recommended > 0 else 1.0
     print(f"   🔄 Overriding Total: {inflated_total:,} → {recommended:,} (ratio={ratio:.2f}x, confidence={confidence})")
     pre_ratio = inflated_pre / inflated_total if inflated_total > 0 else 0
