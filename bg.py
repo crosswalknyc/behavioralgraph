@@ -1087,6 +1087,125 @@ def _save_genpop_cache(df, behavior_start: str, behavior_end: str):
         print(f"⚠️ GenPop cache save failed: {e}")
 
 # ============================================================================
+# PERSONA RESEARCH CACHE (S3-backed, 30-day TTL)
+# ============================================================================
+# The persona_research_agent uses gpt-4o-search-preview (web search) and takes
+# 30-90 s per call.  Subjects repeat constantly across runs (Nike, KD, Eiza,
+# etc.), so a stable hash-keyed S3 cache turns repeat runs into instant hits.
+#
+# Cache key includes the study window so that runs with different windows still
+# get fresh research (events / seasonality matter).  Set BG_PERSONA_CACHE_OFF=1
+# to force-bypass the cache for a debugging run.
+
+_PERSONA_CACHE_PREFIX = 'persona_cache/'
+_PERSONA_CACHE_TTL_DAYS = 30
+# Bumped whenever persona_research_agent's prompt changes meaningfully so old
+# entries get invalidated automatically.
+_PERSONA_CACHE_VERSION = 'v2'
+
+def _persona_cache_key(subject: str,
+                       brand_category: str | None,
+                       study_start: str,
+                       study_end: str) -> str:
+    """Deterministic S3 key for a cached persona research doc."""
+    norm_subject = (subject or '').strip().lower()
+    norm_cat = (brand_category or '').strip().lower()
+    payload = f"{_PERSONA_CACHE_VERSION}|{norm_subject}|{norm_cat}|{study_start}|{study_end}"
+    digest = hashlib.sha256(payload.encode('utf-8')).hexdigest()[:16]
+    safe_subject = re.sub(r'[^a-z0-9]+', '_', norm_subject)[:40] or 'subject'
+    return f"{_PERSONA_CACHE_PREFIX}{safe_subject}_{digest}.json"
+
+def _load_persona_cache(subject: str,
+                         brand_category: str | None,
+                         study_start: str,
+                         study_end: str) -> dict | None:
+    """Return cached persona doc if fresh (< 30d), else None."""
+    if os.environ.get('BG_PERSONA_CACHE_OFF') == '1':
+        return None
+    s3 = get_s3_client()
+    if s3 is None:
+        return None
+    key = _persona_cache_key(subject, brand_category, study_start, study_end)
+    try:
+        head = s3.head_object(Bucket=S3_BUCKET, Key=key)
+        last_mod = head['LastModified']
+        from datetime import datetime, timezone, timedelta
+        age = datetime.now(timezone.utc) - last_mod
+        if age > timedelta(days=_PERSONA_CACHE_TTL_DAYS):
+            print(f"⏳ Persona cache expired ({age.days}d old), will re-research")
+            return None
+        obj = s3.get_object(Bucket=S3_BUCKET, Key=key)
+        doc = _json_mod.loads(obj['Body'].read().decode('utf-8'))
+        print(f"✅ Persona research cache HIT for '{subject}' "
+              f"({age.total_seconds()/3600:.1f}h old) — skipped LLM web-search call")
+        return doc
+    except s3.exceptions.NoSuchKey:
+        return None
+    except s3.exceptions.ClientError as e:
+        if e.response.get('Error', {}).get('Code') in ('NoSuchKey', '404'):
+            return None
+        print(f"⚠️ Persona cache load failed: {e}")
+        return None
+    except Exception as e:
+        print(f"⚠️ Persona cache load failed: {e}")
+        return None
+
+def _save_persona_cache(persona_doc: dict,
+                         subject: str,
+                         brand_category: str | None,
+                         study_start: str,
+                         study_end: str) -> None:
+    """Persist persona research doc to S3."""
+    if os.environ.get('BG_PERSONA_CACHE_OFF') == '1':
+        return
+    s3 = get_s3_client()
+    if s3 is None:
+        return
+    if not isinstance(persona_doc, dict) or not persona_doc:
+        return
+    key = _persona_cache_key(subject, brand_category, study_start, study_end)
+    try:
+        body = _json_mod.dumps(persona_doc, ensure_ascii=False).encode('utf-8')
+        s3.put_object(Bucket=S3_BUCKET, Key=key, Body=body,
+                      ContentType='application/json')
+        print(f"💾 Cached persona research for '{subject}' → s3://{S3_BUCKET}/{key}")
+    except Exception as e:
+        print(f"⚠️ Persona cache save failed: {e}")
+
+def persona_research_agent_cached(subject: str,
+                                    brand_category: str | None = None,
+                                    study_start: str = '',
+                                    study_end: str = '',
+                                    category_names: list[str] | None = None,
+                                    interest_catalog: list[str] | None = None) -> dict:
+    """Cache-aware wrapper around persona_research_agent.
+
+    Cache hit → return cached doc instantly (no LLM call).
+    Cache miss → call persona_research_agent, save result, return.
+    """
+    cached = _load_persona_cache(subject, brand_category, study_start, study_end)
+    if cached is not None:
+        # If the caller has a fresher interest_catalog than what was cached,
+        # re-clamp the interest rankings against today's inventory so we don't
+        # ship stale labels that no longer exist in the dataframe.
+        if interest_catalog:
+            try:
+                _normalize_persona_interest_rankings(cached, interest_catalog)
+            except Exception:
+                pass
+        return cached
+    doc = persona_research_agent(
+        subject,
+        brand_category=brand_category,
+        study_start=study_start,
+        study_end=study_end,
+        category_names=category_names,
+        interest_catalog=interest_catalog,
+    )
+    _save_persona_cache(doc, subject, brand_category, study_start, study_end)
+    return doc
+
+# ============================================================================
 # GEN POP PENETRATION LOOKUP FOR SAMPLE SIZE CALIBRATION
 # ============================================================================
 
@@ -25046,7 +25165,7 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
             print(f"   • Missing prior items ({len(_previous_bp_rows)} candidates): re-added with prior BP + jitter "
                   f"so per-category row counts stay stable")
             print("   • Delta sanity agent: any item swinging >15pp or ≥2.5× vs. prior gets a gpt-4o second-look")
-            _persona_doc = persona_research_agent(_subject_name, brand_category,
+            _persona_doc = persona_research_agent_cached(_subject_name, brand_category,
                                                     study_start=behavior_start, study_end=behavior_end,
                                                     category_names=_behavioral_cats,
                                                     interest_catalog=_interest_catalog or None)
@@ -25055,7 +25174,7 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
             _persona_doc['location'] = _locked_demo.get('location', _persona_doc.get('location', []))
             print("   • Demographics + location overwritten with locked prior-run values")
         else:
-            _persona_doc = persona_research_agent(_subject_name, brand_category,
+            _persona_doc = persona_research_agent_cached(_subject_name, brand_category,
                                                     study_start=behavior_start, study_end=behavior_end,
                                                     category_names=_behavioral_cats,
                                                     interest_catalog=_interest_catalog or None)
