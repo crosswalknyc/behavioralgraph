@@ -8997,6 +8997,187 @@ def apply_deterministic_us_panel_realism(df, sample_raw):
     return df
 
 
+def _holistic_profile_audit(df, *, subject_clean, brand_category,
+                             audience_context, gp_bp_lookup, sample_raw,
+                             bp_col, cs_col, raw_col, proj_col,
+                             apply_adjustments_fn, parse_json_fn,
+                             timeout_sec=120, model='gpt-4o'):
+    """
+    HOLISTIC FINAL AUDIT — one smart agent looking at the whole profile.
+
+    This replaces 9+ narrow sub-passes (A, B, B2, B2C, B2B, B2D, B2E, B2G, B2F)
+    with a single GPT-4o call that gets a whole-profile view (top items per
+    category + indices vs gen pop + persona context) and returns a unified
+    list of adjustments.
+
+    Why this is faster AND smarter:
+    - 1 round trip vs 50+ round trips (less network overhead)
+    - The agent sees CROSS-CATEGORY context (e.g., "Mbappe ranked above LeBron
+      contradicts the Nike persona") which narrow agents cannot see
+    - Distribution patterns (flat top-5, missing leaders) are visible at once
+    - Demographic + behavioral coherence checked together, not separately
+
+    Returns: (df, adjustments_count) — df with adjustments applied
+    """
+    import json as _json
+    import time as _time
+
+    client = _get_openai_client()
+    if client is None:
+        return df, 0
+
+    DEMO_CATS = {'AGE', 'GENDER', 'ETHNICITY', 'INCOME', 'EDUCATION',
+                 'RELATIONSHIP', 'SEXUAL_ORIENTATION', 'PARENTAL_STATUS',
+                 'OCCUPATION'}
+    META_CATS = {'INPUT_METADATA', 'BRAND INPUT', 'SAMPLE SIZE',
+                 'AVID FAN', 'CASUAL FAN', 'BRAND CATEGORY', 'LOCATION'}
+
+    # ── Build whole-profile snapshot: top items per category + index vs Gen Pop
+    cat_data: dict[str, list[tuple]] = {}
+    for idx, row in df.iterrows():
+        cat = str(row.get('Column', '')).strip().upper()
+        if cat in DEMO_CATS or cat in META_CATS:
+            continue
+        val = str(row.get('Value', '')).strip()
+        try:
+            bp = float(str(row.get(bp_col, 0)).replace('%', '').replace(',', ''))
+        except (ValueError, TypeError):
+            bp = 0
+        if bp > 0:
+            cat_data.setdefault(cat, []).append((val, bp, idx))
+
+    if not cat_data:
+        return df, 0
+
+    PER_CAT_TOP_N = 25
+    MAX_TOTAL_ITEMS = 800
+
+    snapshot_blocks: list[str] = []
+    total_items_in_snapshot = 0
+    skipped_cats: list[str] = []
+
+    for cat in sorted(cat_data.keys()):
+        items = sorted(cat_data[cat], key=lambda x: -x[1])
+        top_items = items[:PER_CAT_TOP_N]
+
+        if len(items) >= 5:
+            top5 = [it[1] for it in items[:5]]
+            top5_spread = top5[0] - top5[4]
+            flat_flag = " ⚠️FLAT" if top5_spread < 4.0 and top5[0] > 8.0 else ""
+        else:
+            flat_flag = ""
+
+        if total_items_in_snapshot + len(top_items) > MAX_TOTAL_ITEMS:
+            skipped_cats.append(f"{cat} ({len(items)} rows)")
+            continue
+
+        lines = []
+        for name, bp, _ in top_items:
+            gp_bp = gp_bp_lookup.get((cat, name.upper()), 0)
+            if gp_bp > 0:
+                idx_int = int(round((bp / gp_bp) * 100))
+                idx_meta = f" [GP:{gp_bp:.1f}% idx:{idx_int}]"
+            else:
+                idx_meta = ""
+            lines.append(f"  {name}: {bp:.2f}%{idx_meta}")
+
+        header = f"{cat} ({len(items)} rows){flat_flag}:"
+        snapshot_blocks.append(header + "\n" + "\n".join(lines))
+        total_items_in_snapshot += len(top_items)
+
+    if skipped_cats:
+        print(f"   📋 Holistic audit: {len(skipped_cats)} long-tail cats deferred to narrow passes")
+
+    profile_snapshot = "\n\n".join(snapshot_blocks)
+
+    prompt = (
+        f"You are a SENIOR US consumer research analyst doing a holistic final audit of a "
+        f"behavioral audience profile. You are the LAST quality gate before the CSV ships.\n\n"
+        f"{audience_context}\n"
+        f"=== HOW TO THINK ===\n"
+        f"You see the WHOLE profile at once — not category by category in isolation. Your job:\n"
+        f"1. **Identify cross-category contradictions.** If the persona is a US NBA player, "
+        f"   a French soccer star ranked above LeBron in ATHLETE is wrong. If the persona is "
+        f"   urban premium, Whataburger leading QSR is wrong.\n"
+        f"2. **Check distribution health.** Items marked ⚠️FLAT have unrealistically tight "
+        f"   top-5 clustering — real audiences have clear winners with gaps.\n"
+        f"3. **Check leader plausibility.** Each category should have an obvious leader for "
+        f"   THIS persona. If the leader is wrong, fix it. (e.g., Nike audience → LeBron #1 "
+        f"   in athletes; Kevin Durant profile → Houston Rockets #1 in NBA).\n"
+        f"4. **Check index direction (Gen Pop comparison).** If a persona OVER-indexes a "
+        f"   category they should AVOID, fix it. If they UNDER-index something they're "
+        f"   passionate about, fix it.\n"
+        f"5. **Persona drives ceilings, not arbitrary caps.** A Zoom company profile CAN "
+        f"   have Zoom near 90%. An AI lab CAN have ChatGPT lead. Don't apply blanket "
+        f"   ceilings — apply persona reasoning.\n\n"
+        f"=== PROFILE SNAPSHOT (top {PER_CAT_TOP_N} items per category, indices vs US Gen Pop) ===\n"
+        f"{profile_snapshot}\n\n"
+        f"=== YOUR TASK ===\n"
+        f"Review the whole profile holistically. Return adjustments for items that are clearly "
+        f"wrong for THIS specific persona. Keep adjustments meaningful — don't nitpick small "
+        f"deviations. Aim for ~5-40 high-confidence adjustments that genuinely improve the profile.\n\n"
+        f"For each adjustment, you can use:\n"
+        f"- factor (multiplier on current BP, e.g. 0.5 = halve, 2.0 = double)\n"
+        f"- target_bp (absolute BP value to set)\n"
+        f"Use target_bp when you know the right number, factor when you want directional change.\n\n"
+        f"Return ONLY valid JSON:\n"
+        f'{{"status":"FIX","summary":"1-2 sentence overview of what was wrong",'
+        f'"adjustments":[{{"category":"CAT","item":"ITEM",'
+        f'"target_bp":34.0,"reason":"brief explanation tied to persona"}},...]}}\n\n'
+        f'OR if everything looks good: {{"status":"OK","summary":"profile is internally consistent"}}\n\n'
+        f"JSON only. No markdown fences."
+    )
+
+    print(f"   🧠 Holistic audit: {len(cat_data)} categories, {total_items_in_snapshot} items in snapshot")
+    t0 = _time.perf_counter()
+
+    try:
+        resp = client.chat.completions.create(
+            model=model,
+            messages=[
+                {'role': 'system',
+                 'content': 'You are a senior US consumer research analyst. Return only valid JSON.'},
+                {'role': 'user', 'content': prompt},
+            ],
+            temperature=0.1,
+            max_tokens=8000,
+            timeout=timeout_sec,
+        )
+        elapsed = _time.perf_counter() - t0
+        text = resp.choices[0].message.content.strip()
+        result = parse_json_fn(text)
+
+        if result.get('status') == 'OK':
+            print(f"   🧠 Holistic audit OK ({elapsed:.1f}s): {result.get('summary', '')[:120]}")
+            return df, 0
+
+        adjustments = result.get('adjustments', [])
+        summary = result.get('summary', '')
+        print(f"   🧠 Holistic audit ({elapsed:.1f}s): {len(adjustments)} adjustments — {summary[:120]}")
+
+        all_item_lookup = {}
+        for cat, items in cat_data.items():
+            for name, bp, idx in items:
+                try:
+                    cur_bp = float(str(df.at[idx, bp_col]).replace('%', '').replace(',', ''))
+                except (ValueError, TypeError):
+                    cur_bp = bp
+                try:
+                    cur_cs = float(str(df.at[idx, cs_col]).replace('%', '').replace(',', ''))
+                except (ValueError, TypeError):
+                    cur_cs = 0
+                all_item_lookup[(cat, name.strip().upper())] = (name, cur_bp, cur_cs, idx)
+
+        applied, _ = apply_adjustments_fn(adjustments[:300], all_item_lookup, '[HOLISTIC]')
+        print(f"   🧠 Holistic audit applied: {applied} adjustments")
+        return df, applied
+
+    except Exception as e:
+        elapsed = _time.perf_counter() - t0
+        print(f"   ⚠️ Holistic audit failed after {elapsed:.1f}s: {e}")
+        return df, 0
+
+
 def ai_final_gut_check(df, brand_category, project_name, brands):
     """Comprehensive final review of the entire profile output.
 
@@ -9438,20 +9619,66 @@ def ai_final_gut_check(df, brand_category, project_name, brands):
         for name, bp, cs, idx in items:
             all_item_lookup[(cat, name.strip().upper())] = (name, bp, cs, idx)
 
+    # ──── HOLISTIC AUDIT (replaces narrow passes A, B, B2, B2C, B2B, B2D, B2E, B2G, B2F) ────
+    # ONE smart agent looking at the whole profile cross-category. Fast and smarter
+    # than 9 narrow agents because it sees contradictions across categories.
+    # Toggle via BG_USE_HOLISTIC_AUDIT env var (default: enabled).
+    USE_HOLISTIC_AUDIT = os.getenv("BG_USE_HOLISTIC_AUDIT", "1").strip().lower() not in {"0", "false", "no", "off"}
+
+    if USE_HOLISTIC_AUDIT and not _budget_exhausted("Holistic audit start"):
+        df, holistic_adj = _holistic_profile_audit(
+            df,
+            subject_clean=subject_clean,
+            brand_category=bc,
+            audience_context=audience_context,
+            gp_bp_lookup=gp_bp_lookup,
+            sample_raw=sample_raw,
+            bp_col=bp_col,
+            cs_col=cs_col,
+            raw_col=raw_col,
+            proj_col=proj_col,
+            apply_adjustments_fn=_apply_adjustments,
+            parse_json_fn=_parse_ai_json,
+            timeout_sec=OPENAI_CALL_TIMEOUT_SEC * 2,
+        )
+        if holistic_adj > 0:
+            for cat, items in list(categories_data.items()):
+                refreshed = []
+                for name, _, _, idx in items:
+                    try:
+                        cur_bp = float(str(df.at[idx, bp_col]).replace('%', '').replace(',', ''))
+                    except (ValueError, TypeError):
+                        cur_bp = 0
+                    try:
+                        cur_cs = float(str(df.at[idx, cs_col]).replace('%', '').replace(',', ''))
+                    except (ValueError, TypeError):
+                        cur_cs = 0
+                    refreshed.append((name, cur_bp, cur_cs, idx))
+                    all_item_lookup[(cat, name.strip().upper())] = (name, cur_bp, cur_cs, idx)
+                categories_data[cat] = refreshed
+
+    # When holistic audit is enabled, skip the narrow row-by-row passes (A, B, B2, B2C, B2B, B2D, B2E, B2G, B2F).
+    # Keep B3 (location), C (demographic alignment), D (rank reorder), E (unmatched persona)
+    # because those handle different concerns the holistic pass doesn't fully cover.
+    SKIP_NARROW_PASSES = USE_HOLISTIC_AUDIT
+
     # ──── PASS A: OUTLIER SWING REVIEW ────
     # Collect items with extreme indices vs Gen Pop (>160 or <50).
     # Send to AI in small batches — "which of these are unrealistic?"
     outliers = []
-    for cat, items in categories_data.items():
-        for name, bp, cs, idx in items:
-            if bp < MIN_BP_FOR_HEAVY_REVIEW:
-                continue
-            gp_bp = gp_bp_lookup.get((cat, name.upper()), 0)
-            if gp_bp <= 0:
-                continue
-            index_val = bp / gp_bp
-            if index_val > 1.60 or index_val < 0.50:
-                outliers.append((cat, name, bp, gp_bp, index_val, idx))
+    if SKIP_NARROW_PASSES:
+        print(f"   ⏭️  Pass A skipped (holistic audit handles outliers)")
+    else:
+        for cat, items in categories_data.items():
+            for name, bp, cs, idx in items:
+                if bp < MIN_BP_FOR_HEAVY_REVIEW:
+                    continue
+                gp_bp = gp_bp_lookup.get((cat, name.upper()), 0)
+                if gp_bp <= 0:
+                    continue
+                index_val = bp / gp_bp
+                if index_val > 1.60 or index_val < 0.50:
+                    outliers.append((cat, name, bp, gp_bp, index_val, idx))
 
     if outliers and not _budget_exhausted("Pass A start"):
         # Prioritize most extreme swings and cap total workload to avoid OOM.
@@ -9534,13 +9761,16 @@ def ai_final_gut_check(df, brand_category, project_name, brands):
     # Send top items per category to AI with current indices. Ask it to
     # spot-check: flag only items that are clearly wrong for this persona.
     spot_batches = []
+    if SKIP_NARROW_PASSES:
+        print(f"   ⏭️  Pass B skipped (holistic audit handles persona spot checks)")
     current_batch = {}
     current_items = 0
     pass_b_skip_cats = {
         'INTEREST', 'INTERESTS', 'WHERE THEY SHOP', 'MOST PURCHASED BRANDS',
         'APP/PLATFORM USAGE', 'SOCIAL MEDIA', 'SEARCH ENGINE/AI', 'SEARCH ENGINE'
     }
-    for cat, items in sorted(categories_data.items()):
+    _b_iter = sorted(categories_data.items()) if not SKIP_NARROW_PASSES else []
+    for cat, items in _b_iter:
         if cat in pass_b_skip_cats:
             continue
         refreshed = []
@@ -9653,7 +9883,9 @@ def ai_final_gut_check(df, brand_category, project_name, brands):
     # ChatGPT (gpt-4o) decides which values to lower, raise, or keep based on
     # persona + research + Gen Pop direction, in batches that cover all INTEREST rows.
     interest_cats = [c for c in categories_data.keys() if c in {'INTEREST', 'INTERESTS'}]
-    if interest_cats and not _budget_exhausted("Pass B2 start"):
+    if SKIP_NARROW_PASSES:
+        print(f"   ⏭️  Pass B2 (INTEREST) skipped (holistic audit covers it)")
+    elif interest_cats and not _budget_exhausted("Pass B2 start"):
         all_item_lookup.clear()
         for cat, items in categories_data.items():
             for name, bp_orig, cs_orig, idx in items:
@@ -9751,7 +9983,9 @@ def ai_final_gut_check(df, brand_category, project_name, brands):
     # This category was frequently over-clamped by deterministic ranges.
     # Make AI research/persona review the primary decision-maker row-by-row.
     shop_cats = [c for c in categories_data.keys() if c == 'WHERE THEY SHOP']
-    if shop_cats and not _budget_exhausted("Pass B2C start"):
+    if SKIP_NARROW_PASSES:
+        print(f"   ⏭️  Pass B2C (WHERE THEY SHOP) skipped (holistic audit covers it)")
+    elif shop_cats and not _budget_exhausted("Pass B2C start"):
         all_item_lookup.clear()
         for cat, items in categories_data.items():
             for name, bp_orig, cs_orig, idx in items:
@@ -9846,7 +10080,9 @@ def ai_final_gut_check(df, brand_category, project_name, brands):
     # AI reviews ALL rows in this category with a digital-engagement lens.
     # Goal: avoid implausible niche/frequency outcomes for the persona.
     mpb_cats = [c for c in categories_data.keys() if c == 'MOST PURCHASED BRANDS']
-    if mpb_cats and not _budget_exhausted("Pass B2B start"):
+    if SKIP_NARROW_PASSES:
+        print(f"   ⏭️  Pass B2B (MOST PURCHASED BRANDS) skipped (holistic audit covers it)")
+    elif mpb_cats and not _budget_exhausted("Pass B2B start"):
         all_item_lookup.clear()
         for cat, items in categories_data.items():
             for name, bp_orig, cs_orig, idx in items:
@@ -9956,7 +10192,9 @@ def ai_final_gut_check(df, brand_category, project_name, brands):
     # Extra research-first pass to enforce profile-specific coherence.
     # Focuses on mismatches where generic panel artifacts overtake persona signal.
     cohort_cats = [c for c in categories_data.keys() if c in {'INTEREST', 'INTERESTS', 'MOST PURCHASED BRANDS'}]
-    if cohort_cats and not _budget_exhausted("Pass B2D start"):
+    if SKIP_NARROW_PASSES:
+        print(f"   ⏭️  Pass B2D (cohort coherence) skipped (holistic audit covers it)")
+    elif cohort_cats and not _budget_exhausted("Pass B2D start"):
         all_item_lookup.clear()
         for cat, items in categories_data.items():
             for name, bp_orig, cs_orig, idx in items:
@@ -10053,7 +10291,9 @@ def ai_final_gut_check(df, brand_category, project_name, brands):
     # Prevent niche/productivity/finance apps from dominating young digital-fandom
     # profiles without strong profile evidence.
     app_cats = [c for c in categories_data.keys() if c == 'APP/PLATFORM USAGE']
-    if app_cats and not _budget_exhausted("Pass B2E start"):
+    if SKIP_NARROW_PASSES:
+        print(f"   ⏭️  Pass B2E (APP/PLATFORM USAGE) skipped (holistic audit covers it)")
+    elif app_cats and not _budget_exhausted("Pass B2E start"):
         all_item_lookup.clear()
         for cat, items in categories_data.items():
             for name, bp_orig, cs_orig, idx in items:
@@ -10137,7 +10377,9 @@ def ai_final_gut_check(df, brand_category, project_name, brands):
     # Dedicated row-by-row pass for two categories that frequently drift into implausible
     # rank order when treated inside generic spot-check batches.
     ss_cats = [c for c in categories_data.keys() if c in {'SOCIAL MEDIA', 'SEARCH ENGINE/AI', 'SEARCH ENGINE'}]
-    if ss_cats and not _budget_exhausted("Pass B2G start"):
+    if SKIP_NARROW_PASSES:
+        print(f"   ⏭️  Pass B2G (SOCIAL MEDIA + SEARCH) skipped (holistic audit covers it)")
+    elif ss_cats and not _budget_exhausted("Pass B2G start"):
         all_item_lookup.clear()
         for cat, items in categories_data.items():
             for name, bp_orig, cs_orig, idx in items:
@@ -10221,7 +10463,9 @@ def ai_final_gut_check(df, brand_category, project_name, brands):
 
     # ──── PASS B2F: AUTOMOBILE row-by-row life-stage plausibility review ────
     auto_cats = [c for c in categories_data.keys() if c == 'AUTOMOBILE']
-    if auto_cats and not _budget_exhausted("Pass B2F start"):
+    if SKIP_NARROW_PASSES:
+        print(f"   ⏭️  Pass B2F (AUTOMOBILE) skipped (holistic audit covers it)")
+    elif auto_cats and not _budget_exhausted("Pass B2F start"):
         all_item_lookup.clear()
         for cat, items in categories_data.items():
             for name, bp_orig, cs_orig, idx in items:
