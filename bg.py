@@ -15027,56 +15027,59 @@ def _category_pass1_calibration_block(category: str,
         )
     elif u == 'APP/PLATFORM USAGE':
         sections.append(
-            "**APP/PLATFORM USAGE — realistic digital engagement ceilings (NOT install base):**\n"
+            "**APP/PLATFORM USAGE — realistic digital engagement (NOT install base):**\n"
             "This category measures **meaningful annual digital engagement** (logged visits, active sessions, "
             "transactions) — NOT whether an app is installed on someone’s phone.\n"
-            "• **Gen Pop reality anchors:** Google Maps ~73%, Gmail ~65%, Wikipedia ~43%, Yahoo Mail ~42%, "
-            "iCloud ~41%, Google Calendar ~39%. These are the REAL ceiling for most audiences.\n"
-            "• **CRITICAL: Set `category_ceiling_pct` between 75-82%.** No app should exceed ~80% BP "
-            "for any realistic audience. Even Google Maps (the most universal US digital utility) only "
-            "hits ~73% in gen pop measurement.\n"
-            "• **Spread is mandatory:** The category must have a WIDE distribution — top app 65-78%, "
-            "#5 item 30-45%, #10 item 20-30%, #20 item 8-18%, long tail 1-8%. A cluster of 10+ items "
-            "all above 90% is NEVER realistic.\n"
-            "• **Platform exclusivity matters:** iCloud is Apple-only (~55% US share) — cap at 45-55%. "
-            "Google Play is Android-only (~45% US) — cap at 30-40%. They CANNOT both be 95%.\n"
-            "• **Niche/professional tools:** Canva, Grammarly, Google Scholar, Google Classroom — "
-            "these are used by 5-15% of gen pop. Even for educated/professional audiences: 15-25% max.\n"
-            "• `predicted_top_5`: Google Maps, Gmail, a weather app, a navigation/maps tool, "
-            "and one persona-relevant app (e.g., sports audience → ESPN app; young → TikTok/Snapchat).\n"
-            "• `anti_fit_in_category`: Niche professional tools that don’t match the persona’s occupation/education."
+            "• **Gen Pop reality anchors for context:** Google Maps ~73%, Gmail ~65%, Wikipedia ~43%, "
+            "Yahoo Mail ~42%, iCloud ~41%, Google Calendar ~39%. Use these as reference points, not hard "
+            "ceilings — a productivity-focused or tech persona COULD have higher usage for relevant tools.\n"
+            "• **Spread is mandatory:** The category must have a WIDE distribution with clear tiers "
+            "and gaps between them. A cluster of 5+ items all within 3% of each other is NEVER realistic. "
+            "Think: which apps does THIS persona use daily (high), weekly (mid), rarely (low)?\n"
+            "• **Platform exclusivity matters:** iCloud is Apple-only (~55% US share), "
+            "Google Play is Android-only (~45% US). They cannot both be near-universal for the same persona. "
+            "Think about which ecosystem THIS audience skews toward.\n"
+            "• **Persona relevance drives rank order:** A Zoom company profile → Zoom should lead. "
+            "A student profile → Google Classroom should be high. A food delivery persona → DoorDash/Uber Eats "
+            "should be elevated. Don’t apply generic Gen Pop order — think about THIS audience.\n"
+            "• `predicted_top_5`: Universal utilities (Maps, email) PLUS persona-relevant apps.\n"
+            "• `anti_fit_in_category`: Tools that clearly don’t match the persona’s lifestyle/occupation."
         )
     elif u == 'QSR':
         sections.append(
-            "**QSR — mass-market digital reach drives the top, not aspirational brand fit:**\n"
+            "**QSR — digital engagement, not brand aspiration:**\n"
             "This category measures **digital engagement** (app orders, web visits, loyalty programs, delivery "
             "platforms) — NOT brand aspiration or lifestyle alignment.\n"
-            "• **McDonald's is the #1 QSR digitally in the US** for virtually every audience. Gen Pop "
-            "digital reach is ~65-70%. Even for premium/health-conscious/athletic audiences, McDonald's "
-            "should be **45-60% BP** — it is the most-visited QSR in America and has massive app/delivery "
-            "digital footprint. Do NOT penalize it for not being 'aspirational.'\n"
-            "• **Mass-market chain floors:** Taco Bell (~35-45%), Wendy's (~25-35%), Burger King (~20-30%), "
-            "Subway (~25-35%), Domino's (~25-35%), KFC (~15-25%), Pizza Hut (~15-25%). These chains have "
-            "enormous digital ordering/app ecosystems that every demographic touches.\n"
-            "• **Premium fast-casual CAN lead** (Chipotle, Starbucks, Chick-fil-A, Shake Shack, Panera) "
-            "for upscale/young/urban personas — but they should NOT be 3x the BP of McDonald's. "
-            "A realistic spread: Chipotle 55-65%, Starbucks 55-65%, McDonald's 45-60%, Chick-fil-A 40-55%.\n"
-            "• **Starbucks vs Dunkin:** Starbucks leads for urban/premium/coastal personas. Dunkin leads "
-            "for Northeast/value-oriented. They should NOT be identical — differentiate by 5-15 points.\n"
-            "• **category_ceiling_pct:** Set to 72-78%. No single QSR should exceed ~75% BP.\n"
-            "• `predicted_top_5`: Must include McDonald's AND Starbucks for virtually every US audience. "
-            "Add Chipotle/Chick-fil-A/Taco Bell based on persona fit.\n"
+            "• **Mass-market chains have massive digital reach** regardless of audience. McDonald's is the "
+            "#1 QSR digitally in the US (~65-70% gen pop). Don't penalize mass chains for not being "
+            "'aspirational' — even health-conscious audiences use McDonald's app/delivery.\n"
+            "• **Premium fast-casual CAN lead for the right persona** (Chipotle, Starbucks, Sweetgreen "
+            "for urban/health/young) — but mass chains should still be within striking distance, not 3x lower.\n"
+            "• **Think about THIS persona:** A McDonald's company profile → McDonald's leads. A vegan "
+            "wellness brand → Sweetgreen/Panera may lead, but McDonald's is still present at meaningful BP. "
+            "A rural/value audience → McDonald's/Taco Bell/Wendy's should lead over Shake Shack.\n"
+            "• **Starbucks vs Dunkin:** Differentiate by persona — urban/premium/coastal → Starbucks leads. "
+            "Northeast/value-oriented → Dunkin leads. They should NOT be identical.\n"
+            "• **Regional awareness:** Whataburger is Texas/South, In-N-Out is West Coast, Culver's is "
+            "Midwest. Match to persona DMA footprint.\n"
+            "• `predicted_top_5`: Think about what THIS audience actually orders digitally.\n"
             "• `anti_fit_in_category`: Hyper-regional chains outside the persona's DMA footprint."
         )
     elif u in {'SEARCH ENGINE/AI', 'SEARCH ENGINE'}:
         sections.append(
-            "**Google** (map to the rows named Google / Google Search / google.com consistently with the CSV) "
-            "is the **default #1**: for mainstream US-qualified cohorts, annual meaningful digital touching "
-            "points usually land **≥78% BP** and should lead `predicted_top_5`. Bing is a distant #2 window; "
-            "Yahoo Search older-skew tertiary. Dedicated AI assistants (ChatGPT, Perplexity, Copilot…) may be "
-            "high but should **not outrank Google** unless the persona is unusually privacy/search-alternative "
-            "or the study input is explicitly about non-Google search. Set `category_ceiling_pct` ~88–92; "
-            "Google owns the top tier band (~78–90 BP)."
+            "**Google** is the default #1 for mainstream US audiences (~78-90% BP). "
+            "Bing is a distant #2; Yahoo Search older-skew tertiary.\n"
+            "• **AI assistants are growing fast but still have lower reach than traditional search.** "
+            "Gen Pop baselines: ChatGPT ~18-25%, Gemini ~8-15%, Perplexity ~3-8%, Claude ~2-5%, "
+            "Copilot ~5-10%. For tech-savvy/young audiences these can be higher — use persona judgment. "
+            "For an AI company or tech-forward persona, AI tools CAN be elevated significantly.\n"
+            "• **Quora** is a Q&A forum, not a search engine. Gen Pop reach ~8-12%. "
+            "Only elevate if persona has strong Q&A/knowledge-seeking signals.\n"
+            "• **Key principle:** The distribution should have clear tiers with gaps — NOT a flat wall "
+            "where Google, ChatGPT, Quora, and Gemini are all within 10% of each other. "
+            "Think about which tools THIS persona actually uses daily vs occasionally.\n"
+            "• Set `category_ceiling_pct` ~88-92.\n"
+            "• `predicted_top_5`: Google first, then rank by persona relevance."
         )
     elif u == 'BETTING':
         sections.append(
@@ -24600,6 +24603,12 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
         project_name=str(project_name) if project_name is not None else None,
         brands=brands,
     )
+    df_final = enforce_distribution_realism(
+        df_final,
+        brand_category=brand_category,
+        project_name=str(project_name) if project_name is not None else None,
+        brands=brands,
+    )
     df_final = finalize_output_metrics_like_edit_sample_size(df_final)
     df_final = ensure_bp_driven_metric_alignment(df_final)
 
@@ -33607,83 +33616,168 @@ def enforce_behavioral_category_plausibility(df, brand_category=None, project_na
                         if not SILENCE_VERBOSE_OUTPUT:
                             print(f"   🏟️ Boosted {city_team} to {target:.2f}% (same-city as athlete)")
 
-    # ── QSR floor guardrail ────────────────────────────────────────────────
-    # Mass-market QSR chains have enormous digital reach; the scoring agent
-    # often under-scores them by treating "brand fit" as "aspirational fit."
-    _QSR_FLOORS = {
-        'MCDONALDS': 45.0, "MCDONALD'S": 45.0,
-        'STARBUCKS': 50.0,
-        'TACO BELL': 30.0,
-        'WENDYS': 22.0, "WENDY'S": 22.0,
-        'BURGER KING': 20.0,
-        'SUBWAY': 22.0,
-        'DOMINOS': 22.0, "DOMINO'S": 22.0,
-        'KFC': 15.0,
-        'PIZZA HUT': 15.0,
-        'CHICK-FIL-A': 35.0, 'CHICKFILA': 35.0, 'CHICK FIL A': 35.0,
-        'CHIPOTLE MEXICAN GRILL': 40.0, 'CHIPOTLE': 40.0,
-        'DUNKIN': 35.0, "DUNKIN'": 35.0, 'DUNKIN DONUTS': 35.0,
-        'PANERA BREAD': 25.0, 'PANERA': 25.0,
-        'POPEYES': 15.0,
-    }
-    _QSR_CEILING = 75.0
-
-    qsr_rows = _cat_rows('QSR')
-    qsr_fixes = 0
-    for idx, val, cur_bp in qsr_rows:
-        val_u = val.upper().strip()
-        floor = _QSR_FLOORS.get(val_u)
-        if floor is not None and cur_bp < floor:
-            import random as _rnd
-            target = floor + _rnd.uniform(0, 5)
-            target = min(target, _QSR_CEILING)
-            _write_bp(idx, target)
-            qsr_fixes += 1
-        elif cur_bp > _QSR_CEILING:
-            _write_bp(idx, _QSR_CEILING - 0.5 + (hash(val_u) % 100) * 0.01)
-            qsr_fixes += 1
-
-    if qsr_fixes > 0:
-        fixes += qsr_fixes
-        if not SILENCE_VERBOSE_OUTPUT:
-            print(f"   🍔 QSR floor/ceiling guard: adjusted {qsr_fixes} values")
-
-    # ── APP/PLATFORM USAGE ceiling guardrail ──────────────────────────────
-    # Gen Pop baselines are the realistic ceiling for digital engagement.
-    # No item should exceed 1.5x its gen pop baseline (or 80% absolute max).
-    _APP_PLATFORM_CEILINGS = {
-        'GOOGLE MAPS': 80.0, 'GMAIL': 72.0, 'WIKIPEDIA': 50.0,
-        'YAHOO MAIL': 48.0, 'ICLOUD': 52.0, 'GOOGLE CALENDAR': 45.0,
-        'USPS': 44.0, 'GOOGLE DRIVE': 42.0, 'REDDIT': 42.0,
-        'ZOOM': 40.0, 'MICROSOFT OUTLOOK MAIL': 38.0, 'GOOGLE PLAY': 38.0,
-        'GOOGLE PHOTOS': 36.0, 'WHATSAPP': 32.0, 'MICROSOFT TEAMS': 30.0,
-        'APPLE MAPS': 30.0, 'FEDEX': 28.0, 'UPS': 28.0, 'WEATHER': 28.0,
-        'GOOGLE DOCS': 26.0, 'DOORDASH': 25.0, 'GOOGLE MEET': 22.0,
-        'CRAIGSLIST': 20.0, 'CANVA': 20.0, 'IMDB': 22.0,
-        'ACCUWEATHER': 18.0, 'ZILLOW': 18.0, 'GOOGLE SCHOLAR': 16.0,
-        'GRAMMARLY': 16.0, 'GOOGLE CLASSROOM': 15.0,
-    }
-    _ABSOLUTE_APP_CEILING = 80.0
-
-    app_rows = _cat_rows('APP/PLATFORM USAGE')
-    app_caps_applied = 0
-    for idx, val, cur_bp in app_rows:
-        val_u = val.upper()
-        specific_cap = _APP_PLATFORM_CEILINGS.get(val_u)
-        cap = specific_cap if specific_cap else _ABSOLUTE_APP_CEILING
-        if cur_bp > cap:
-            _write_bp(idx, cap - 0.5 + (hash(val_u) % 100) * 0.01)
-            app_caps_applied += 1
-
-    if app_caps_applied > 0:
-        fixes += app_caps_applied
-        if not SILENCE_VERBOSE_OUTPUT:
-            print(f"   📱 APP/PLATFORM USAGE ceiling guard: capped {app_caps_applied} inflated values")
-
     if not SILENCE_VERBOSE_OUTPUT and fixes:
         print(f"🛡️ Behavioral plausibility guard: {fixes} deterministic correction(s)")
 
     return out
+
+
+def enforce_distribution_realism(df, brand_category=None, project_name=None, brands=None):
+    """
+    Final-pass auto-audit that detects and fixes STRUCTURAL distribution problems
+    without hard-capping any individual item. Context-aware: uses the profile's own
+    identity (project_name, brand_category) to avoid penalising items that SHOULD
+    be high for that persona.
+
+    What it fixes:
+    1. Flat top-N clusters — items suspiciously close in BP (always wrong)
+    2. Flat mid-tier walls — large blocks of items at near-identical BP
+
+    What it does NOT do:
+    - Hard-cap any item to an absolute number (Zoom SHOULD be high for a Zoom profile)
+    - Force specific leaders (the scoring agents + calibration blocks handle that)
+    """
+    import pandas as pd
+    import random as _rnd
+
+    if 'Column' not in df.columns or 'Value' not in df.columns:
+        return df
+
+    out = df.copy()
+    bp_col = 'Brand Penetration (Row)' if 'Brand Penetration (Row)' in out.columns else None
+    if not bp_col:
+        return out
+    cs_col = 'Category Share' if 'Category Share' in out.columns else 'Percentage'
+    pct_col = 'Percentage' if 'Percentage' in out.columns else cs_col
+    raw_col = 'Original Raw Numbers' if 'Original Raw Numbers' in out.columns else None
+    proj_col = 'US Gen Pop Projection' if 'US Gen Pop Projection' in out.columns else None
+    MULT = 329_900_000 / 10_000_000
+
+    sample_size = 132040
+    if raw_col:
+        ss_mask = out['Column'].astype(str).str.upper().str.strip() == 'SAMPLE SIZE'
+        if ss_mask.any():
+            try:
+                sample_size = max(1, int(float(str(out.loc[ss_mask, raw_col].iloc[0]).replace(',', ''))))
+            except Exception:
+                pass
+
+    SKIP_CATS = {'AGE', 'GENDER', 'ETHNICITY', 'INCOME', 'EDUCATION', 'RELATIONSHIP',
+                 'SEXUAL_ORIENTATION', 'PARENTAL_STATUS', 'OCCUPATION', 'LOCATION',
+                 'SAMPLE SIZE', 'BRAND INPUT', 'BRAND CATEGORY', 'FOOTWEAR',
+                 'AVID FAN', 'CASUAL FAN', 'TOTAL FAN'}
+
+    def _to_num(v):
+        try:
+            return float(str(v).replace(',', '').replace('%', ''))
+        except Exception:
+            return 0.0
+
+    def _write_bp(idx, new_bp):
+        new_bp = max(0.01, min(float(new_bp), 99.0))
+        s = f"{new_bp:.4f}"
+        out.at[idx, bp_col] = s
+        if cs_col in out.columns:
+            out.at[idx, cs_col] = s
+        if pct_col in out.columns:
+            out.at[idx, pct_col] = s
+        if raw_col:
+            raw = max(1, int(round(new_bp / 100.0 * sample_size)))
+            out.at[idx, raw_col] = str(raw)
+            if proj_col:
+                out.at[idx, proj_col] = str(int(round(raw * MULT)))
+
+    def _cat_rows(cat):
+        m = out['Column'].astype(str).str.upper().str.strip() == str(cat).upper()
+        rows = []
+        for idx, row in out[m].iterrows():
+            rows.append((idx, str(row.get('Value', '')).strip(), _to_num(row.get(bp_col, 0))))
+        rows.sort(key=lambda x: -x[2])
+        return rows
+
+    fixes = 0
+    audit_log = []
+
+    # ─── 1) ANTI-FLAT TOP-N: break up suspiciously flat top clusters ─────
+    # A "wall" of 5+ items within <4% of each other (all above 8% BP)
+    # is never realistic — real distributions have clear tiers with gaps.
+    all_cats = out['Column'].astype(str).str.upper().str.strip().unique()
+    for cat in all_cats:
+        if cat in SKIP_CATS:
+            continue
+        rows = _cat_rows(cat)
+        if len(rows) < 5:
+            continue
+
+        top5_bps = [r[2] for r in rows[:5]]
+        spread = top5_bps[0] - top5_bps[4]
+
+        if spread < 4.0 and top5_bps[0] > 8.0:
+            base_top = top5_bps[0]
+            decay_targets = [
+                base_top,
+                base_top * _rnd.uniform(0.82, 0.90),
+                base_top * _rnd.uniform(0.70, 0.80),
+                base_top * _rnd.uniform(0.60, 0.72),
+                base_top * _rnd.uniform(0.50, 0.64),
+            ]
+            for i in range(1, min(5, len(rows))):
+                idx, val, cur_bp = rows[i]
+                target = decay_targets[i]
+                if target < cur_bp:
+                    _write_bp(idx, target)
+                    fixes += 1
+
+            # Also spread items 6-10 if they're bunched against items 1-5
+            if len(rows) >= 10:
+                tier2_base = decay_targets[4] * _rnd.uniform(0.75, 0.88)
+                for i in range(5, min(10, len(rows))):
+                    idx, val, cur_bp = rows[i]
+                    target = tier2_base * (1.0 - (i - 5) * _rnd.uniform(0.04, 0.08))
+                    if cur_bp > target + 2.0:
+                        _write_bp(idx, target)
+                        fixes += 1
+
+            audit_log.append(f"FLAT-FIX {cat}: top-5 spread was {spread:.1f}%, redistributed")
+
+    # ─── 2) ANTI-FLAT MID-TIER WALLS ─────────────────────────────────────
+    # Detect blocks of 8+ consecutive items within <1.5% of each other
+    # in the middle of a category and spread them with natural decay.
+    for cat in all_cats:
+        if cat in SKIP_CATS:
+            continue
+        rows = _cat_rows(cat)
+        if len(rows) < 12:
+            continue
+
+        i = 3  # start checking after top 3
+        while i < len(rows) - 4:
+            block_start = i
+            while i < len(rows) - 1 and abs(rows[i][2] - rows[i + 1][2]) < 1.5 and rows[i][2] > 1.0:
+                i += 1
+            block_len = i - block_start + 1
+            if block_len >= 8:
+                anchor_bp = rows[block_start][2]
+                for j in range(block_start, i + 1):
+                    step = j - block_start
+                    decay = anchor_bp * (1.0 - step * _rnd.uniform(0.02, 0.05))
+                    decay = max(decay, 0.01)
+                    if abs(rows[j][2] - decay) > 0.5:
+                        _write_bp(rows[j][0], decay)
+                        fixes += 1
+                audit_log.append(
+                    f"WALL-FIX {cat}: {block_len} items bunched at ~{anchor_bp:.1f}%, spread with decay"
+                )
+            i += 1
+
+    # ─── 3) PRINT AUDIT SUMMARY ──────────────────────────────────────────
+    if not SILENCE_VERBOSE_OUTPUT and audit_log:
+        print(f"\n🔍 Distribution realism audit: {fixes} fix(es)")
+        for entry in audit_log:
+            print(f"   • {entry}")
+
+    return out
+
 
 def enforce_behavioral_bp_uniqueness(df):
     """
