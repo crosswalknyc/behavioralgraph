@@ -9001,14 +9001,14 @@ def _holistic_profile_audit(df, *, subject_clean, brand_category,
                              audience_context, gp_bp_lookup, sample_raw,
                              bp_col, cs_col, raw_col, proj_col,
                              apply_adjustments_fn, parse_json_fn,
-                             timeout_sec=120, model='gpt-4o'):
+                             timeout_sec=180, model=None):
     """
     HOLISTIC FINAL AUDIT — one smart agent looking at the whole profile.
 
     This replaces 9+ narrow sub-passes (A, B, B2, B2C, B2B, B2D, B2E, B2G, B2F)
-    with a single GPT-4o call that gets a whole-profile view (top items per
-    category + indices vs gen pop + persona context) and returns a unified
-    list of adjustments.
+    with a single reasoning-model call that gets a whole-profile view (top
+    items per category + indices vs gen pop + persona context) and returns a
+    unified list of adjustments.
 
     Why this is faster AND smarter:
     - 1 round trip vs 50+ round trips (less network overhead)
@@ -9016,6 +9016,16 @@ def _holistic_profile_audit(df, *, subject_clean, brand_category,
       contradicts the Nike persona") which narrow agents cannot see
     - Distribution patterns (flat top-5, missing leaders) are visible at once
     - Demographic + behavioral coherence checked together, not separately
+    - GPT-5.5 with reasoning_effort=high THINKS through contradictions before
+      committing to adjustments — the closest model approximation of how a
+      human analyst (or Claude) audits a profile holistically.
+
+    Model selection (env-configurable):
+    - BG_HOLISTIC_AUDIT_MODEL  (default: 'gpt-5.5')
+    - BG_HOLISTIC_REASONING_EFFORT  (default: 'high'; only used for gpt-5.x)
+
+    For gpt-5.x models, uses the Responses API (proper reasoning support).
+    For gpt-4o and similar, falls back to Chat Completions API.
 
     Returns: (df, adjustments_count) — df with adjustments applied
     """
@@ -9128,23 +9138,67 @@ def _holistic_profile_audit(df, *, subject_clean, brand_category,
         f"JSON only. No markdown fences."
     )
 
-    print(f"   🧠 Holistic audit: {len(cat_data)} categories, {total_items_in_snapshot} items in snapshot")
+    # Resolve model + reasoning effort from env (with safe defaults)
+    if model is None:
+        model = os.getenv('BG_HOLISTIC_AUDIT_MODEL', 'gpt-5.5').strip()
+    reasoning_effort = os.getenv('BG_HOLISTIC_REASONING_EFFORT', 'high').strip().lower()
+    if reasoning_effort not in {'minimal', 'low', 'medium', 'high', 'xhigh'}:
+        reasoning_effort = 'high'
+
+    is_reasoning_model = model.lower().startswith(('gpt-5', 'o1', 'o3', 'o4'))
+
+    print(f"   🧠 Holistic audit: model={model} effort={reasoning_effort if is_reasoning_model else 'N/A'} "
+          f"({len(cat_data)} cats, {total_items_in_snapshot} items)")
     t0 = _time.perf_counter()
 
     try:
-        resp = client.chat.completions.create(
-            model=model,
-            messages=[
-                {'role': 'system',
-                 'content': 'You are a senior US consumer research analyst. Return only valid JSON.'},
-                {'role': 'user', 'content': prompt},
-            ],
-            temperature=0.1,
-            max_tokens=8000,
-            timeout=timeout_sec,
-        )
+        text = None
+        if is_reasoning_model and hasattr(client, 'responses'):
+            # Use Responses API for proper reasoning support
+            try:
+                resp = client.responses.create(
+                    model=model,
+                    input=[
+                        {'role': 'system',
+                         'content': 'You are a senior US consumer research analyst. Return only valid JSON.'},
+                        {'role': 'user', 'content': prompt},
+                    ],
+                    reasoning={'effort': reasoning_effort},
+                    max_output_tokens=12000,
+                    timeout=timeout_sec,
+                )
+                text = (getattr(resp, 'output_text', None) or '').strip()
+                if not text:
+                    # Fallback parser: extract from output blocks
+                    for block in (getattr(resp, 'output', None) or []):
+                        for part in (getattr(block, 'content', None) or []):
+                            t = getattr(part, 'text', None)
+                            if t:
+                                text = (text or '') + t
+                    text = (text or '').strip()
+            except Exception as e_resp:
+                print(f"   ⚠️ Responses API failed ({e_resp}); falling back to chat.completions")
+                text = None
+
+        if not text:
+            # Standard Chat Completions path (gpt-4o, fallback)
+            cc_kwargs = {
+                'model': model,
+                'messages': [
+                    {'role': 'system',
+                     'content': 'You are a senior US consumer research analyst. Return only valid JSON.'},
+                    {'role': 'user', 'content': prompt},
+                ],
+                'max_tokens': 12000,
+                'timeout': timeout_sec,
+            }
+            # Reasoning models don't accept temperature; non-reasoning do
+            if not is_reasoning_model:
+                cc_kwargs['temperature'] = 0.1
+            resp = client.chat.completions.create(**cc_kwargs)
+            text = resp.choices[0].message.content.strip()
+
         elapsed = _time.perf_counter() - t0
-        text = resp.choices[0].message.content.strip()
         result = parse_json_fn(text)
 
         if result.get('status') == 'OK':
@@ -9626,6 +9680,9 @@ def ai_final_gut_check(df, brand_category, project_name, brands):
     USE_HOLISTIC_AUDIT = os.getenv("BG_USE_HOLISTIC_AUDIT", "1").strip().lower() not in {"0", "false", "no", "off"}
 
     if USE_HOLISTIC_AUDIT and not _budget_exhausted("Holistic audit start"):
+        # Reasoning models need more time; non-reasoning fall back to standard timeout.
+        # Env override: BG_HOLISTIC_TIMEOUT_SEC (default 240s for gpt-5.x reasoning).
+        holistic_timeout = int(os.getenv("BG_HOLISTIC_TIMEOUT_SEC", "240"))
         df, holistic_adj = _holistic_profile_audit(
             df,
             subject_clean=subject_clean,
@@ -9639,7 +9696,7 @@ def ai_final_gut_check(df, brand_category, project_name, brands):
             proj_col=proj_col,
             apply_adjustments_fn=_apply_adjustments,
             parse_json_fn=_parse_ai_json,
-            timeout_sec=OPENAI_CALL_TIMEOUT_SEC * 2,
+            timeout_sec=holistic_timeout,
         )
         if holistic_adj > 0:
             for cat, items in list(categories_data.items()):
