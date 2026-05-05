@@ -1823,39 +1823,27 @@ def _validate_total_watchers_with_ai(show_name, platform_name, inflated_total, i
     min_us_viewers = _PLATFORM_MIN_VIEWERS.get(plat_tier, 1_000_000)
     min_panel = int(round(min_us_viewers * (SAMPLE_REPRESENTS / US_POPULATION) / 10) * 10)
 
+    # If AI returned a number, accept it regardless of confidence label.
+    # Only fall back to the platform-tier minimum when estimated_us is null.
     if recommended is None or recommended <= 0:
-        if confidence == 'low' and inflated_total < min_panel:
+        if inflated_total < min_panel:
             recommended = min_panel
-            print(f"   ⚠️  No AI data + panel {inflated_total:,} is absurdly low → "
-                  f"using {plat_tier} tier minimum: {min_us_viewers:,} US viewers → {min_panel:,} panel")
-        elif confidence == 'low':
-            print(f"   ℹ️  Confidence too low to override (confidence={confidence})")
-            metadata['action'] = 'kept_original'
-            return inflated_total, inflated_pre, inflated_clean, metadata
+            print(f"   ⚠️  No AI viewer estimate + panel {inflated_total:,} too low → "
+                  f"using {plat_tier} tier floor: {min_us_viewers:,} US viewers → {min_panel:,} panel")
         else:
-            print(f"   ℹ️  No valid recommendation available")
+            print(f"   ℹ️  No AI viewer estimate available; panel {inflated_total:,} looks reasonable — keeping")
             metadata['action'] = 'kept_original'
             return inflated_total, inflated_pre, inflated_clean, metadata
 
+    # Never let the recommendation drop below 10K panel (~330K gen pop)
     metadata['recommended_total'] = recommended
-
     MIN_PANEL_FLOOR = 10_000
     if recommended < MIN_PANEL_FLOOR:
-        if inflated_total < MIN_PANEL_FLOOR:
-            recommended = min_panel
-            print(f"   ⚠️  Both AI ({recommended:,}) and panel ({inflated_total:,}) below floor → "
-                  f"using tier minimum: {min_panel:,}")
-        else:
-            print(f"   ⚠️  AI recommendation {recommended:,} is below floor {MIN_PANEL_FLOOR:,} — keeping original")
-            metadata['action'] = 'kept_original_below_floor'
-            return inflated_total, inflated_pre, inflated_clean, metadata
+        recommended = max(min_panel, MIN_PANEL_FLOOR)
+        print(f"   ⚠️  AI recommendation below floor → bumped to {recommended:,}")
 
     ratio = inflated_total / recommended if recommended > 0 else 1.0
-
-    # For "high" confidence: override when off by more than 2x
-    # For "medium" confidence: override when off by more than 5x (extreme mismatch)
-    override_threshold = 2.0 if confidence == 'high' else 5.0
-    if ratio > override_threshold or ratio < (1.0 / override_threshold):
+    if ratio > 2.0 or ratio < 0.5:
         print(f"   🔄 Overriding Total: {inflated_total:,} → {recommended:,} (ratio was {ratio:.2f}x, confidence={confidence})")
         pre_ratio = inflated_pre / inflated_total if inflated_total > 0 else 0
         new_pre = int(round(recommended * pre_ratio))
@@ -1864,7 +1852,7 @@ def _validate_total_watchers_with_ai(show_name, platform_name, inflated_total, i
         metadata['override_ratio'] = ratio
         return recommended, new_pre, new_clean, metadata
     else:
-        print(f"   ✅ Total {inflated_total:,} is within {override_threshold}x of recommended {recommended:,} — no override")
+        print(f"   ✅ Total {inflated_total:,} is within 2x of recommended {recommended:,} — no override")
         metadata['action'] = 'kept_original'
         return inflated_total, inflated_pre, inflated_clean, metadata
 
