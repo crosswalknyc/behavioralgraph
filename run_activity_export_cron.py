@@ -102,8 +102,13 @@ def main():
     alpha_ok = run_fin_iq_alpha()
 
     results = {'sync': sync_ok, 'exports': export_ok, 'alpha': alpha_ok}
+    critical = {'sync': sync_ok, 'exports': export_ok}
     if all(results.values()):
         print("=== ALL STEPS OK ===")
+        sys.exit(0)
+    elif all(critical.values()):
+        summary = '  '.join(f"{k}={'OK' if v else 'FAIL'}" for k, v in results.items())
+        print(f"=== DONE (non-critical failure)  {summary} ===")
         sys.exit(0)
     else:
         summary = '  '.join(f"{k}={'OK' if v else 'FAIL'}" for k, v in results.items())
