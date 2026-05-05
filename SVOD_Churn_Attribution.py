@@ -1742,19 +1742,22 @@ Compare our "US Gen Pop Projected" watchers number to the REAL viewership data a
 - The panel-to-projection formula is: panel × {US_POPULATION / SAMPLE_REPRESENTS:.2f} = US projection.
   So to get a target projection, divide by {US_POPULATION / SAMPLE_REPRESENTS:.2f} to get the panel number.
 
-=== PHASE B: VALIDATE NEW SIGNUPS & REACTIVATIONS ===
-Judge whether the new subscriber count makes sense given the platform's market position:
-- DOMINANT platforms (Netflix ~68%, Prime ~65%): Already ubiquitous. Almost everyone who
-  would watch a show already has the platform. Only a true cultural phenomenon (final season
-  of Stranger Things, Squid Game) drives meaningful NEW signups. For most shows, new signups
-  should be very low relative to watchers.
-- MAJOR platforms (Hulu ~30%, Disney+ ~28%): Moderate room for acquisition. A hit show can
-  drive some new subs, but most of the audience already has access.
-- MID-TIER platforms (Max ~22%): More room for growth. A flagship show can drive noticeable
-  new subscriber acquisition.
-- EMERGING/NICHE platforms (Peacock ~13%, Paramount+ ~15%, Apple TV+ ~10%): Significant room
-  for acquisition. A hit exclusive can genuinely drive large numbers of new subscribers because
-  many viewers do NOT already have the platform.
+=== PHASE B: VALIDATE NEW SIGNUPS & CONVERSION RATE ===
+Judge whether the new subscriber count and conversion rate make sense given the platform's
+market position. Use these HARD BOUNDS on Total Show Conversion Rate:
+
+- DOMINANT platforms (Netflix ~68%, Prime ~65%): typical 0.1-2%, absolute max 4%.
+  Already ubiquitous — only cultural phenomena drive meaningful new signups.
+- MAJOR platforms (Hulu ~30%, Disney+ ~28%): typical 0.5-4%, absolute max 6%.
+  Moderate room — a hit show can drive some new subs but most viewers already have access.
+- MID-TIER platforms (Max ~22%): typical 1-5%, absolute max 8%.
+  More room for growth — a flagship show can drive noticeable acquisition.
+- EMERGING/NICHE platforms (Peacock ~13%, Paramount+ ~15%, Apple TV+ ~10%): typical 2-8%, absolute max 12%.
+  Significant room — a hit exclusive can genuinely drive large new subscriber numbers.
+
+CRITICAL: If our Total Show Conversion Rate exceeds the "absolute max" for this platform tier,
+you MUST set conversion_plausible=false and signups_plausible=false, then suggest a signup count
+that produces a conversion rate within the "typical" range for the tier.
 - If signups seem inflated for the platform tier, suggest a LOWER number. Never adjust upward.
 - Reactivated accounts follow the same logic: dominant platforms have fewer truly dormant users.
 
@@ -1821,7 +1824,12 @@ def apply_ai_adjustments(df_out, validation_result, total_watchers, new_signups,
     - Conversion rate: recalculated from adjusted signups/watchers
     """
     changes = []
-    if validation_result.get('passed', True):
+    # Don't bail on passed==True; check individual metrics so we can still
+    # correct signups/conversion even when the overall assessment passes.
+    all_ok = (validation_result.get('watchers_plausible', True)
+              and validation_result.get('signups_plausible', True)
+              and validation_result.get('conversion_plausible', True))
+    if validation_result.get('passed', True) and all_ok:
         return df_out, changes
 
     adjusted_watchers = total_watchers
@@ -2564,7 +2572,11 @@ def write_output(df_summary, df_comp, df_demo, df_timing, df_episode_attribution
         is_new_show=p.get('is_new_show', False),
     )
 
-    if not validation.get('passed', True):
+    _needs_adj = (not validation.get('passed', True)
+                   or not validation.get('watchers_plausible', True)
+                   or not validation.get('signups_plausible', True)
+                   or not validation.get('conversion_plausible', True))
+    if _needs_adj:
         print(f"⚠️  AI flagged potential issues:")
         for flag in validation.get('flags', []):
             print(f"   • {flag}")
@@ -2579,7 +2591,6 @@ def write_output(df_summary, df_comp, df_demo, df_timing, df_episode_attribution
             print("   Applied corrections:")
             for c in ai_changes:
                 print(f"     → {c}")
-            # Recalculate Gen Pop for adjusted rows
             for idx in df_out.index:
                 cat = str(df_out.loc[idx, "Category"] or "").strip()
                 if cat in ("New Platform Signups", "Total Show Watchers", "TOTAL SIGNUPS"):
@@ -2592,6 +2603,63 @@ def write_output(df_summary, df_comp, df_demo, df_timing, df_episode_attribution
     else:
         note = validation.get('overall_assessment', validation.get('note', 'Metrics look plausible'))
         print(f"✅ AI validation passed: {note}")
+
+    # --- Deterministic conversion rate hard cap (safety net) ---
+    # Even if AI passes, enforce max conversion rates per platform tier.
+    _plat_info = _get_platform_info(p['platform_name'])
+    _tier = _plat_info.get('tier', 'major').lower()
+    _max_conv = {'dominant': 4.0, 'major': 6.0, 'mid': 8.0, 'mid-tier': 8.0, 'emerging': 12.0, 'niche': 12.0}.get(_tier, 8.0)
+    _cur_total = _cur_signups = 0
+    for idx in df_out.index:
+        cat = str(df_out.loc[idx, "Category"] or "").strip()
+        if cat == "Total Show Watchers":
+            try: _cur_total = int(float(str(df_out.loc[idx, "Count"]).replace(",", "")))
+            except (ValueError, TypeError): pass
+        elif cat == "New Platform Signups":
+            try: _cur_signups = int(float(str(df_out.loc[idx, "Count"]).replace(",", "")))
+            except (ValueError, TypeError): pass
+    if _cur_total > 0 and _cur_signups > 0:
+        _cur_conv = (_cur_signups / _cur_total) * 100.0
+        if _cur_conv > _max_conv:
+            _capped_signups = int(round(_cur_total * _max_conv / 100.0))
+            _scale = _capped_signups / _cur_signups if _cur_signups > 0 else 1.0
+            print(f"🔒 Conversion rate cap: {_cur_conv:.1f}% exceeds {_tier} tier max {_max_conv}% → capping signups {_cur_signups:,} → {_capped_signups:,}")
+            for idx in df_out.index:
+                cat = str(df_out.loc[idx, "Category"] or "").strip()
+                if cat == "New Platform Signups":
+                    df_out.loc[idx, "Count"] = _capped_signups
+                    df_out.loc[idx, "Gen Pop Projection"] = format_gen_pop(gen_pop_projection(_capped_signups))
+                elif cat == "Attributed Signups":
+                    try:
+                        old_v = int(float(str(df_out.loc[idx, "Count"]).replace(",", "")))
+                        new_v = int(round(old_v * _scale))
+                        df_out.loc[idx, "Count"] = new_v
+                        df_out.loc[idx, "Gen Pop Projection"] = format_gen_pop(gen_pop_projection(new_v))
+                        df_out.loc[idx, "Percentage"] = f"{(new_v / _cur_total * 100.0):.2f}%" if _cur_total > 0 else df_out.loc[idx, "Percentage"]
+                    except (ValueError, TypeError): pass
+                elif cat == "Dormant to Reactive":
+                    try:
+                        old_v = int(float(str(df_out.loc[idx, "Count"]).replace(",", "")))
+                        new_v = int(round(old_v * _scale))
+                        df_out.loc[idx, "Count"] = new_v
+                        df_out.loc[idx, "Gen Pop Projection"] = format_gen_pop(gen_pop_projection(new_v))
+                        df_out.loc[idx, "Percentage"] = f"{(new_v / _cur_total * 100.0):.2f}%" if _cur_total > 0 else df_out.loc[idx, "Percentage"]
+                    except (ValueError, TypeError): pass
+                elif cat == "TOTAL SIGNUPS":
+                    df_out.loc[idx, "Count"] = _capped_signups
+                    df_out.loc[idx, "Gen Pop Projection"] = format_gen_pop(gen_pop_projection(_capped_signups))
+                    df_out.loc[idx, "Percentage"] = f"{_max_conv:.2f}%"
+                elif cat == "Total Show Conversion Rate":
+                    df_out.loc[idx, "Percentage"] = f"{_max_conv:.2f}%"
+                elif cat == "Clean Conversion Rate":
+                    _cur_clean = 0
+                    for jdx in df_out.index:
+                        if str(df_out.loc[jdx, "Category"] or "").strip() == "Clean Sample (New First Time Viewers)":
+                            try: _cur_clean = int(float(str(df_out.loc[jdx, "Count"]).replace(",", "")))
+                            except (ValueError, TypeError): pass
+                            break
+                    if _cur_clean > 0:
+                        df_out.loc[idx, "Percentage"] = f"{(_capped_signups / _cur_clean * 100.0):.2f}%"
 
     # Final-step GPT-4o audience alignment before saving output.
     print("🧠 Running final demographic alignment agent (GPT-4o)...")
