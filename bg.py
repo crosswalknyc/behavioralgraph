@@ -38261,6 +38261,44 @@ def enforce_no_perfect_trailing_zeros(df):
         if abs(suffix_comp) > 0:
             vals[anchor] = round(max(0.0001, vals[anchor] - suffix_comp), 4)
 
+        # In-category spacing pass: avoid machine-tight adjacency like
+        # 70.0012 vs 70.0013 by enforcing a minimum gap between neighbors
+        # in descending rank order.
+        sep_comp = 0.0
+        ranked = sorted(idxs, key=lambda k: (-vals[k], k))
+        for j in range(1, len(ranked)):
+            prev_i = ranked[j - 1]
+            cur_i = ranked[j]
+            prev_v = round(vals[prev_i], 4)
+            cur_v = round(vals[cur_i], 4)
+            if prev_v <= cur_v:
+                continue
+            if prev_v >= 99.99:
+                continue
+
+            # Stronger spacing for larger values so top rows don't look templated.
+            if prev_v >= 10.0:
+                min_gap = 0.0060
+            elif prev_v >= 1.0:
+                min_gap = 0.0030
+            else:
+                min_gap = 0.0008
+
+            gap = round(prev_v - cur_v, 4)
+            if gap >= min_gap:
+                continue
+
+            target = round(max(0.0001, prev_v - min_gap), 4)
+            if target >= cur_v:
+                continue
+            old = cur_v
+            vals[cur_i] = target
+            sep_comp = round(sep_comp + (target - old), 4)
+            touched += 1
+
+        if abs(sep_comp) > 0:
+            vals[anchor] = round(max(0.0001, vals[anchor] - sep_comp), 4)
+
         # Final drift correction at 4dp precision.
         new_total = round(sum(vals[i] for i in idxs), 4)
         drift = round(original_total - new_total, 4)
