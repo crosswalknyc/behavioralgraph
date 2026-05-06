@@ -1467,59 +1467,72 @@ def run_query(conn, p):
         ai_meta = {'skipped': True, 'reason': f'exception: {e}'}
 
     if validated_total != _current_total and _current_total > 0:
-        scale_factor = validated_total / _current_total
-        print(f"   📊 AI override scale factor: {scale_factor:.2f}x ({_current_total:,} → {validated_total:,})")
+        # validated_total is now a REAL-WORLD viewer count from the AI web search.
+        # Derive ALL downstream numbers from raw-data proportions applied to this real total.
+        p['_ai_real_world'] = True
+        print(f"   📊 AI real-world override: {_current_total:,} (inflated panel) → {validated_total:,} (real US viewers)")
+
+        # Re-derive Pre-Existing / Clean Sample from raw proportions
+        _pre_ratio = _raw_pre / _raw_total if _raw_total > 0 else 0.5
+        validated_pre = int(round(validated_total * _pre_ratio))
+        validated_clean = validated_total - validated_pre
 
         df_summary.loc[0, 'TOTAL_SHOW_WATCHERS'] = validated_total
         df_summary.loc[0, 'PRE_EXISTING_USERS'] = validated_pre
         df_summary.loc[0, 'CLEAN_SAMPLE_SIZE'] = validated_clean
 
-        # Scale NEW_SIGNUPS proportionally
-        _old_signups = int(df_summary.loc[0, 'NEW_SIGNUPS']) if not pd.isna(df_summary.loc[0, 'NEW_SIGNUPS']) else 0
-        _new_signups_val = int(round(_old_signups * scale_factor))
-        df_summary.loc[0, 'NEW_SIGNUPS'] = _new_signups_val
+        # Derive signups using raw conversion rate (preserves panel-observed proportion)
+        _raw_conv_rate = _raw_signups / _raw_clean if _raw_clean > 0 else 0.0
+        validated_signups = int(round(validated_clean * _raw_conv_rate))
+        df_summary.loc[0, 'NEW_SIGNUPS'] = validated_signups
 
-        # Recalculate conversion rates with corrected values
+        # Recalculate conversion rates
         if validated_total > 0:
-            df_summary.loc[0, 'TOTAL_SHOW_CONVERSION_RATE'] = round((_new_signups_val * 100.0) / validated_total, 2)
+            df_summary.loc[0, 'TOTAL_SHOW_CONVERSION_RATE'] = round((validated_signups * 100.0) / validated_total, 2)
         if validated_clean > 0:
-            df_summary.loc[0, 'CLEAN_CONVERSION_RATE'] = round((_new_signups_val * 100.0) / validated_clean, 2)
+            df_summary.loc[0, 'CLEAN_CONVERSION_RATE'] = round((validated_signups * 100.0) / validated_clean, 2)
 
-        # Scale all downstream dataframe counts by the same factor
-        def _scale_col(df, col):
+        # Scale signup-based DataFrames: ratio of real signups to pre-override inflated signups
+        _inflated_signups = int(raw_new_signups * (calculate_inflation_factor(raw_new_signups) if raw_new_signups > 0 else 55))
+        _signup_sf = validated_signups / _inflated_signups if _inflated_signups > 0 else 1.0
+
+        # Scale watcher-based DataFrames
+        _watcher_sf = validated_total / _current_total if _current_total > 0 else 1.0
+
+        def _scale_col(df, col, sf):
             if col in df.columns:
                 for idx in df.index:
                     val = df.loc[idx, col]
                     if not pd.isna(val):
                         try:
-                            df.loc[idx, col] = int(round(float(val) * scale_factor))
+                            df.loc[idx, col] = int(round(float(val) * sf))
                         except (ValueError, TypeError):
                             pass
 
-        _scale_col(df_demo, 'COUNT')
-        _scale_col(df_timing, 'SIGNUP_COUNT')
+        _scale_col(df_demo, 'COUNT', _signup_sf)
+        _scale_col(df_timing, 'SIGNUP_COUNT', _signup_sf)
         if not df_episode_attribution.empty:
-            _scale_col(df_episode_attribution, 'SIGNUPS_ATTRIBUTED')
-            _scale_col(df_episode_attribution, 'TOTAL_VIEWS')
+            _scale_col(df_episode_attribution, 'SIGNUPS_ATTRIBUTED', _signup_sf)
+            _scale_col(df_episode_attribution, 'TOTAL_VIEWS', _watcher_sf)
         if not df_monthly_signups.empty:
-            _scale_col(df_monthly_signups, 'UNIQUE_SIGNUPS')
-            _scale_col(df_monthly_signups, 'ENGAGED_WITH_SHOW')
+            _scale_col(df_monthly_signups, 'UNIQUE_SIGNUPS', _signup_sf)
+            _scale_col(df_monthly_signups, 'ENGAGED_WITH_SHOW', _watcher_sf)
         if not df_episode_timing.empty:
-            _scale_col(df_episode_timing, 'SIGNUP_COUNT')
+            _scale_col(df_episode_timing, 'SIGNUP_COUNT', _signup_sf)
         if not df_monthly_churn.empty:
             for _churn_col in ['ACTIVE_USERS', 'PREV_MONTH_ACTIVE', 'CHURNED_USERS']:
-                _scale_col(df_monthly_churn, _churn_col)
+                _scale_col(df_monthly_churn, _churn_col, _watcher_sf)
         if not df_post_signup_touchpoints.empty:
-            _scale_col(df_post_signup_touchpoints, 'USER_COUNT')
-            # Recalculate percentages vs new total
-            if 'PERCENTAGE' in df_post_signup_touchpoints.columns and validated_total > 0:
+            _scale_col(df_post_signup_touchpoints, 'USER_COUNT', _signup_sf)
+            if 'PERCENTAGE' in df_post_signup_touchpoints.columns and validated_signups > 0:
                 for idx in df_post_signup_touchpoints.index:
                     uc = df_post_signup_touchpoints.loc[idx, 'USER_COUNT']
                     if not pd.isna(uc):
-                        df_post_signup_touchpoints.loc[idx, 'PERCENTAGE'] = round(float(uc) * 100.0 / validated_total, 2)
+                        df_post_signup_touchpoints.loc[idx, 'PERCENTAGE'] = round(float(uc) * 100.0 / validated_signups, 2)
 
-        print(f"   📊 Scaled all downstream counts by {scale_factor:.2f}x")
-        print(f"   📊 Corrected metrics: Total={validated_total:,}, Pre={validated_pre:,}, Clean={validated_clean:,}, Signups={_new_signups_val:,}")
+        print(f"   📊 Signup scale factor: {_signup_sf:.4f}x | Watcher scale factor: {_watcher_sf:.4f}x")
+        print(f"   📊 Real-world metrics: Total={validated_total:,}, Pre={validated_pre:,}, Clean={validated_clean:,}, Signups={validated_signups:,}")
+        print(f"   📊 Conversion rate: {_raw_conv_rate*100:.2f}% (preserved from raw panel data)")
 
     # Final invariant check: Total MUST equal Pre + Clean
     _final_total = int(df_summary.loc[0, 'TOTAL_SHOW_WATCHERS']) if not pd.isna(df_summary.loc[0, 'TOTAL_SHOW_WATCHERS']) else 0
@@ -1616,10 +1629,12 @@ def _research_show_viewership(client, show_name):
 
 
 def _validate_total_watchers_with_ai(show_name, platform_name, inflated_total, inflated_pre, inflated_clean, genre='', date_range=''):
-    """Validate Total Show Watchers against publicly available viewership data using GPT-4o-search-preview.
+    """Search for real US viewership data and return it directly as the Total Show Watchers.
 
-    If confidence is 'high' and our inflated_total differs from the AI-recommended number
-    by more than 2x, overrides Total and re-derives Pre-Existing / Clean Sample proportionally.
+    Uses GPT-4o-search-preview to find actual US viewer counts from Nielsen, press releases,
+    and trade press.  The returned number is a real-world viewer count (with 8 % discount),
+    NOT a panel equivalent.  Caller is responsible for deriving downstream numbers from
+    raw-data proportions applied to this total.
 
     Returns (validated_total, validated_pre, validated_clean, metadata_dict).
     """
@@ -1717,14 +1732,14 @@ def _validate_total_watchers_with_ai(show_name, platform_name, inflated_total, i
 
     print(f"   🔍 AI viewership lookup: confidence={confidence}, estimated_us={estimated_us}, source={result.get('source','')}")
 
-    # Compute panel number ourselves from estimated US viewers
+    # Use the real US viewers number directly (no panel conversion)
     recommended = None
     if estimated_us is not None:
         try:
             us_num = float(estimated_us)
             if us_num > 0:
-                recommended = int(round(us_num * (SAMPLE_REPRESENTS / US_POPULATION) / 10) * 10)
-                print(f"   📐 Computed panel from {us_num:,.0f} US viewers → {recommended:,}")
+                recommended = int(round(us_num / 1000) * 1000)
+                print(f"   📐 Using real US viewers directly: {us_num:,.0f} → {recommended:,}")
         except (ValueError, TypeError):
             pass
 
@@ -1735,7 +1750,7 @@ def _validate_total_watchers_with_ai(show_name, platform_name, inflated_total, i
 
     # Apply 8% conservative discount
     raw_recommended = recommended
-    recommended = int(round(recommended * 0.92 / 10) * 10)
+    recommended = int(round(recommended * 0.92 / 1000) * 1000)
     if recommended <= 0:
         recommended = raw_recommended
     print(f"   📉 Applied 8% discount: {raw_recommended:,} → {recommended:,}")
@@ -2357,6 +2372,13 @@ def write_output(df_summary, df_comp, df_demo, df_timing, df_episode_attribution
     avg_days = float(df_summary.loc[0, "AVG_DAYS_TO_SIGNUP"]) if not pd.isna(df_summary.loc[0, "AVG_DAYS_TO_SIGNUP"]) else 0
     clean_conversion = float(df_summary.loc[0, "CLEAN_CONVERSION_RATE"]) if not pd.isna(df_summary.loc[0, "CLEAN_CONVERSION_RATE"]) else 0
     total_show_conversion = float(df_summary.loc[0, "TOTAL_SHOW_CONVERSION_RATE"]) if not pd.isna(df_summary.loc[0, "TOTAL_SHOW_CONVERSION_RATE"]) else 0
+
+    # When AI real-world override is active, counts are already real US viewer/signup numbers.
+    # Skip the OUTPUT_DIVISOR and Gen Pop projection (which assume panel-scale inputs).
+    ai_real_world = p.get('_ai_real_world', False)
+    if ai_real_world:
+        print("   📊 AI real-world mode: counts are actual US estimates, skipping panel scaling")
+
     # For new shows, clean sample = all show watchers (no pre-existing viewers to exclude)
 
     # Get tracking mode and create lookup for display labels and episode dates (used for episode/date attribution)
@@ -2569,7 +2591,8 @@ def write_output(df_summary, df_comp, df_demo, df_timing, df_episode_attribution
     df_out = pd.DataFrame(rows, columns=["Category", "Episode Date", "Count", "Count Label", "Secondary Count", "Secondary Label", "Tertiary Count", "Tertiary Label", "Percentage", "Gen Pop Projection"])
 
     # Scale all final count and Gen Pop numbers by 1/10 (outputs were 10x too high)
-    OUTPUT_DIVISOR = 10
+    # When AI real-world mode is active, counts are already real-world numbers — skip division.
+    OUTPUT_DIVISOR = 1 if ai_real_world else 10
     for idx in df_out.index:
         cat = str(df_out.loc[idx, "Category"] or "")
         # Count: scale if numeric; skip Exclusion/Attribution window (days)
@@ -2737,6 +2760,18 @@ def write_output(df_summary, df_comp, df_demo, df_timing, df_episode_attribution
                     df_out.loc[idx, "Count"] = _out_clean
                     df_out.loc[idx, "Gen Pop Projection"] = format_gen_pop(gen_pop_projection(_out_clean))
         print(f"   ✅ Output invariant: Total({_out_total:,}) = Pre({_out_pre:,}) + Clean({_out_clean:,})")
+
+    # Final pass: when AI real-world mode is active, Gen Pop Projection = Count
+    # (counts are already real US estimates; the 33x panel multiplier doesn't apply).
+    if ai_real_world:
+        for idx in df_out.index:
+            c = df_out.loc[idx, "Count"]
+            if c != "" and c is not None and not pd.isna(c):
+                try:
+                    n = int(float(str(c).replace(",", "")))
+                    df_out.loc[idx, "Gen Pop Projection"] = f"{n:,}"
+                except (ValueError, TypeError):
+                    pass
 
     output_folder = Path(p['output_dir']) if p.get('output_dir') else Path.home() / "Desktop" / "attribution"
     output_folder = output_folder if isinstance(output_folder, Path) else Path(output_folder)
