@@ -1444,15 +1444,27 @@ def run_query(conn, p):
         except Exception:
             pass
 
-    validated_total, validated_pre, validated_clean, ai_meta = _validate_total_watchers_with_ai(
-        show_name=show_name_for_ai,
-        platform_name=p.get('platform_name', ''),
-        inflated_total=_current_total,
-        inflated_pre=_current_pre,
-        inflated_clean=_current_clean,
-        genre=p.get('genre', ''),
-        date_range=date_range_for_ai,
-    )
+    print(f"   🔎 Calling AI viewership validation with inflated_total={_current_total:,}")
+    try:
+        validated_total, validated_pre, validated_clean, ai_meta = _validate_total_watchers_with_ai(
+            show_name=show_name_for_ai,
+            platform_name=p.get('platform_name', ''),
+            inflated_total=_current_total,
+            inflated_pre=_current_pre,
+            inflated_clean=_current_clean,
+            genre=p.get('genre', ''),
+            date_range=date_range_for_ai,
+        )
+        print(f"   🔎 AI returned: validated_total={validated_total:,}, action={ai_meta.get('action','?')}, "
+              f"estimated_us={ai_meta.get('estimated_us_viewers')}, skipped={ai_meta.get('skipped', False)}")
+    except Exception as e:
+        print(f"   ❌ AI viewership validation CRASHED: {e}")
+        import traceback
+        traceback.print_exc()
+        validated_total = _current_total
+        validated_pre = _current_pre
+        validated_clean = _current_clean
+        ai_meta = {'skipped': True, 'reason': f'exception: {e}'}
 
     if validated_total != _current_total and _current_total > 0:
         scale_factor = validated_total / _current_total
@@ -1659,18 +1671,20 @@ def _validate_total_watchers_with_ai(show_name, platform_name, inflated_total, i
     )
 
     try:
+        print(f"   🌐 Calling gpt-4o-search-preview for viewership data...")
         resp = client.chat.completions.create(
             model='gpt-4o-search-preview',
             messages=[{'role': 'user', 'content': prompt}],
             max_tokens=600,
         )
         raw = (resp.choices[0].message.content or '').strip()
+        print(f"   🌐 AI raw response ({len(raw)} chars): {raw[:200]}...")
         if raw.startswith('```'):
             raw = raw.split('\n', 1)[-1].rsplit('```', 1)[0].strip()
 
         start = raw.find('{')
         if start < 0:
-            print(f"   ⚠️  AI validation returned no JSON")
+            print(f"   ⚠️  AI validation returned no JSON in response")
             return inflated_total, inflated_pre, inflated_clean, {'skipped': True, 'reason': 'no_json'}
 
         depth = 0
@@ -1684,8 +1698,11 @@ def _validate_total_watchers_with_ai(show_name, platform_name, inflated_total, i
                     end = i + 1
                     break
         result = json.loads(raw[start:end])
+        print(f"   🌐 Parsed result: {result}")
     except Exception as e:
-        print(f"   ⚠️  AI viewership validation parse error: {e}")
+        print(f"   ⚠️  AI viewership validation error: {type(e).__name__}: {e}")
+        import traceback
+        traceback.print_exc()
         return inflated_total, inflated_pre, inflated_clean, {'skipped': True, 'reason': str(e)}
 
     confidence = str(result.get('confidence', 'low')).lower()
