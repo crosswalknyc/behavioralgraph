@@ -22193,6 +22193,29 @@ def run_sf_lf_conversion(job_id):
         # Back-compat alias used in some log lines below
         sf_url_needles_lower = sf_url_slugs
 
+        # LF title is a comma-separated KEYWORD LIST (e.g.
+        # "Doc Hulu, doc tv show, doc season 2") meant to be matched as
+        # alternatives, not a single literal. Treating it as one literal
+        # was the bug behind every "0 conversions" funnel: clickstream
+        # URLs never contain the joined string with commas + spaces, AND
+        # using it inside an OR'd prefilter caused full-table scans
+        # (the v3 conv query hung on this).
+        #
+        # We split on commas, drop tokens shorter than 3 chars, and use
+        # multiSearchAnyCaseInsensitive for an Aho-Corasick-fast OR.
+        lf_keywords = []
+        _seen_lf = set()
+        for _k in (lf_title or '').split(','):
+            _k = _k.strip().lower()
+            if len(_k) >= 3 and _k not in _seen_lf:
+                _seen_lf.add(_k)
+                lf_keywords.append(_k.replace("\\", "\\\\").replace("'", "''"))
+        if lf_keywords:
+            _lf_arr = '[' + ', '.join(f"'{k}'" for k in lf_keywords) + ']'
+            lf_url_keyword_match = f"multiSearchAnyCaseInsensitive(URL, {_lf_arr}) > 0"
+        else:
+            lf_url_keyword_match = "0"
+
         # ===== CONVERSION-FOCUSED APPROACH WITH PER-PLATFORM BREAKDOWN =====
         import random
         # Identity passthrough — we used to inject random integers when the
@@ -22344,20 +22367,48 @@ def run_sf_lf_conversion(job_id):
             update_job_status(job_id, progress=30, message=f'Querying {len(urls_to_query)} URLs (batched)...')
             print(f"[SF-LF] Step 1b: BATCH per-URL query for {len(urls_to_query)} URLs")
 
-            url_lowers = [u.lower() for u in urls_to_query]
-            url_escaped = [u.replace("\\", "\\\\").replace("'", "''") for u in url_lowers]
-            needles_arr = '[' + ', '.join(f"'{u}'" for u in url_escaped) + ']'
+            # Per-URL match uses the SLUG (post id) of each URL — matches the
+            # platform query in the previous step. Full URLs would miss any
+            # event with a trailing slash, query string, mobile host, or
+            # different protocol; slugs (e.g. pLqAhadtDBs , DSqxkUrkqQr )
+            # uniquely identify the post regardless of URL form.
+            #
+            # Mapping is preserved 1-to-1 with urls_to_query: index i in the
+            # output corresponds to urls_to_query[i] even if its slug is
+            # short/unknown (in which case the per-URL counts stay at 0).
+            per_url_slugs = []
+            for u in urls_to_query:
+                s = _slug_for_sf_url(u)
+                s = (s or '').replace("\\", "\\\\").replace("'", "''")
+                per_url_slugs.append(s if len(s) >= 6 else '')
+            # Dedup'd needles for the WHERE-clause prefilter only (the
+            # conditional aggregates still preserve per-URL identity above).
+            uniq_slugs = sorted({s for s in per_url_slugs if s})
+            needles_arr = '[' + ', '.join(f"'{s}'" for s in uniq_slugs) + ']' if uniq_slugs else "['__no_slug__']"
 
             # ---- Query A: per-URL unique + total in ONE scan ----
             sel_parts = []
-            for i, ue in enumerate(url_escaped):
-                sel_parts.append(f"uniqExactIf(UID, positionCaseInsensitive(URL, '{ue}') > 0) AS u{i}_uniq")
-                sel_parts.append(f"countIf(positionCaseInsensitive(URL, '{ue}') > 0) AS u{i}_total")
+            for i, slug in enumerate(per_url_slugs):
+                if slug:
+                    sel_parts.append(f"uniqExactIf(UID, positionCaseInsensitive(URL, '{slug}') > 0) AS u{i}_uniq")
+                    sel_parts.append(f"countIf(positionCaseInsensitive(URL, '{slug}') > 0) AS u{i}_total")
+                else:
+                    sel_parts.append(f"toUInt64(0) AS u{i}_uniq")
+                    sel_parts.append(f"toUInt64(0) AS u{i}_total")
 
+            # Same coarse path prefilter used in Step 1 — drops 80-95% of
+            # platform events before the per-URL conditional aggregates run.
+            _per_url_prefilter = (
+                "(positionCaseInsensitive(URL, '/shorts/') > 0 "
+                "OR positionCaseInsensitive(URL, '/reel/') > 0 "
+                "OR positionCaseInsensitive(URL, '/reels/') > 0 "
+                "OR positionCaseInsensitive(URL, '/video/') > 0)"
+            )
             batch_url_sql = f"""
                 SELECT {', '.join(sel_parts)}
                 FROM clickstream.clickstream_final
                 WHERE DELIVERED BETWEEN '{start_date}' AND '{end_date}'
+                  AND {_per_url_prefilter}
                   AND multiSearchAnyCaseInsensitive(URL, {needles_arr}) > 0
             """
             try:
@@ -22368,23 +22419,43 @@ def run_sf_lf_conversion(job_id):
                 url_row = [0] * (2 * len(urls_to_query))
 
             # ---- Query B: per-URL conversion in ONE scan via user-state CTE ----
-            lf_title_pattern = lf_title.lower().replace("\\", "\\\\").replace("'", "''")
+            # LF match uses the comma-split keyword list (lf_url_keyword_match)
+            # built once at the top of this function — see comment there.
             if lf_platform:
                 lf_plat_q = lf_platform.lower().replace("'", "''")
-                lf_match_expr = (f"(positionCaseInsensitive(URL, '{lf_title_pattern}') > 0 "
+                lf_match_expr = (f"({lf_url_keyword_match} "
                                  f"AND LOWER(COMMON_NAME) = '{lf_plat_q}')")
             else:
-                lf_match_expr = f"positionCaseInsensitive(URL, '{lf_title_pattern}') > 0"
+                lf_match_expr = lf_url_keyword_match
 
-            inner_parts = [
-                f"maxIf(1, positionCaseInsensitive(URL, '{ue}') > 0) AS saw_u{i}"
-                for i, ue in enumerate(url_escaped)
-            ]
+            # Per-URL conv inner: same slug-based saw_u{i} as the unique-views
+            # query above. Empty slugs become 0 so indices line up.
+            inner_parts = []
+            for i, slug in enumerate(per_url_slugs):
+                if slug:
+                    inner_parts.append(
+                        f"maxIf(1, positionCaseInsensitive(URL, '{slug}') > 0) AS saw_u{i}"
+                    )
+                else:
+                    inner_parts.append(f"toUInt8(0) AS saw_u{i}")
             inner_parts.append(f"maxIf(1, {lf_match_expr}) AS saw_lf")
             sel_conv_parts = [
                 f"countIf(saw_u{i} = 1 AND saw_lf = 1) AS u{i}_conv"
                 for i in range(len(urls_to_query))
             ]
+
+            # Prefilter: rows that match either a campaign-URL slug (with the
+            # short-form path prefix to skip channel pages) OR the LF
+            # platform / LF keyword. Without the SF path-prefix prefilter the
+            # outer scan was full-table; with it ClickHouse skips 80-95% of
+            # rows before the per-URL slug and LF-keyword multi-search.
+            if lf_platform:
+                _lf_prefilter_clause = (
+                    f"(LOWER(COMMON_NAME) = '{lf_plat_q}' "
+                    f"OR {lf_url_keyword_match})"
+                )
+            else:
+                _lf_prefilter_clause = lf_url_keyword_match
 
             batch_url_conv_sql = f"""
                 SELECT {', '.join(sel_conv_parts)}
@@ -22392,8 +22463,9 @@ def run_sf_lf_conversion(job_id):
                     SELECT UID, {', '.join(inner_parts)}
                     FROM clickstream.clickstream_final
                     WHERE DELIVERED BETWEEN '{start_date}' AND '{end_date}'
-                      AND (multiSearchAnyCaseInsensitive(URL, {needles_arr}) > 0
-                           OR positionCaseInsensitive(URL, '{lf_title_pattern}') > 0)
+                      AND (({_per_url_prefilter}
+                            AND multiSearchAnyCaseInsensitive(URL, {needles_arr}) > 0)
+                           OR {_lf_prefilter_clause})
                     GROUP BY UID
                 )
             """
@@ -22410,11 +22482,12 @@ def run_sf_lf_conversion(job_id):
                 url_total     = int(url_row[i * 2 + 1] or 0)
                 url_converted = int(conv_row[i] or 0)
 
-                url_unique_final = add_noise_if_zero(url_unique, min_noise=100, max_noise=2000)
-                url_reach_rate = round((url_unique_final / sf_total_unique * 100), 8) if sf_total_unique > 0 else 0.00000001
-                url_dup_final = add_noise_if_zero(url_total, min_noise=200, max_noise=5000)
-                if url_dup_final <= url_unique_final:
-                    url_dup_final = int(url_unique_final * random.uniform(1.5, 3.0))
+                # Honest numbers: unique = uniqExactIf(UID, ...), total = countIf(URL, ...).
+                # By definition total >= unique (each distinct UID contributes >= 1 event),
+                # so we never need the legacy 1.5-3x duplicated-events fabrication.
+                url_unique_final = int(url_unique)
+                url_dup_final = int(url_total)
+                url_reach_rate = round((url_unique_final / sf_total_unique * 100), 8) if sf_total_unique > 0 else 0
 
                 results['individual_url_metrics'].append({
                     'url': url_clean,
@@ -22424,7 +22497,7 @@ def run_sf_lf_conversion(job_id):
                     'reach_rate': url_reach_rate,
                     'raw_converted': url_converted,
                     'converted_to_lf': 0,
-                    'conversion_rate': 0.00000001
+                    'conversion_rate': 0
                 })
                 print(f"[SF-LF]     URL {i+1}/{len(urls_to_query)}: {url_unique_final:,} unique "
                       f"({url_reach_rate:.6f}% reach), raw conv: {url_converted}")
@@ -22437,18 +22510,22 @@ def run_sf_lf_conversion(job_id):
         # ===== ALL CONVERSIONS IN ONE BATCHED QUERY (was 1 + 3*N scans, now 1) =====
         # Single user-state CTE: per UID, did they see each platform / LF title / LF platform?
         # Outer aggregates derive overall + per-platform conversions in a single pass.
-        lf_title_pattern = lf_title.lower().replace("\\", "\\\\").replace("'", "''")
         # Kept for downstream demographics query that still uses sf_temp_table join
         lf_platform_clause = ""
         if lf_platform:
             lf_platform_clause = f"AND LOWER(c.COMMON_NAME) = '{lf_platform.lower()}'"
+        # LF match now uses lf_url_keyword_match (comma-split keywords) defined
+        # near the top of this function. The previous single-literal match
+        # against lf_title (e.g. "doc hulu, doc tv show, doc season 2") never
+        # matched any URL — and worse, when OR'd into the conv prefilter it
+        # forced a full-table scan that hung the v3 conv query at Step 2.
         if lf_platform:
             lf_plat_q = lf_platform.lower().replace("'", "''")
-            lf_match_expr = (f"(positionCaseInsensitive(URL, '{lf_title_pattern}') > 0 "
+            lf_match_expr = (f"({lf_url_keyword_match} "
                              f"AND LOWER(COMMON_NAME) = '{lf_plat_q}')")
             lf_plat_match_expr = f"LOWER(COMMON_NAME) = '{lf_plat_q}'"
         else:
-            lf_match_expr = f"positionCaseInsensitive(URL, '{lf_title_pattern}') > 0"
+            lf_match_expr = lf_url_keyword_match
             lf_plat_match_expr = "0"
 
         conv_inner_parts = []
@@ -22492,16 +22569,20 @@ def run_sf_lf_conversion(job_id):
         # to URL-matched events (not the whole platform) keeps the
         # GROUP BY UID limited to users actually exposed to the campaign,
         # which is what downstream "% of SF viewers" funnels expect.
+        # Use the comma-split LF-keyword match here too (instead of the single
+        # literal lf_title_pattern). The literal version forced a full-table
+        # scan and effectively never matched any URL — see lf_url_keyword_match
+        # comment above.
         if lf_platform:
             conv_prefilter = (
                 f"((LOWER(COMMON_NAME) IN ({plat_list_sql}) AND {sf_url_match_expr}) "
                 f"OR LOWER(COMMON_NAME) = '{lf_plat_q}' "
-                f"OR positionCaseInsensitive(URL, '{lf_title_pattern}') > 0)"
+                f"OR {lf_url_keyword_match})"
             )
         else:
             conv_prefilter = (
                 f"((LOWER(COMMON_NAME) IN ({plat_list_sql}) AND {sf_url_match_expr}) "
-                f"OR positionCaseInsensitive(URL, '{lf_title_pattern}') > 0)"
+                f"OR {lf_url_keyword_match})"
             )
 
         batch_conv_sql = f"""
@@ -22713,12 +22794,14 @@ def run_sf_lf_conversion(job_id):
         print(f"[SF-LF] Step 3: Get demographics of converted users")
         
         # ===== 4. Demographics of Converted Users (using temp table) =====
+        # LF match is the keyword-list multiSearchAny (lf_url_keyword_match),
+        # built once near the top of this function.
         demo_query = f"""
             WITH converted_uids AS (
                 SELECT DISTINCT c.UID
                 FROM PROCESSEDCLICKSTREAM.PUBLIC.CLICKSTREAM_FINAL c
                 INNER JOIN {sf_temp_table} sf ON c.UID = sf.UID
-                WHERE LOWER(c.URL) LIKE '%{lf_title_pattern}%'
+                WHERE {lf_url_keyword_match.replace('URL', 'c.URL')}
                   {lf_platform_clause}
                   AND c.DELIVERED BETWEEN '{start_date}' AND '{end_date}'
             )
