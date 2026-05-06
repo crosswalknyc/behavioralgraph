@@ -22173,8 +22173,25 @@ def run_sf_lf_conversion(job_id):
             if _s and len(_s) >= 6 and _s not in _seen_slugs:
                 _seen_slugs.add(_s)
                 sf_url_slugs.append(_s.replace("\\", "\\\\").replace("'", "''"))
+        # ClickHouse caps multiSearchAnyCaseInsensitive at 255 needles per
+        # call. Real campaigns can submit thousands of URLs (the production
+        # error that surfaced this had 3,282), so we chunk the needle list
+        # into groups of <=200 and OR the chunks together. The Aho-Corasick
+        # cost is roughly linear in (chunk_size * scanned_rows), so 200 is a
+        # safe margin under the 255 hard limit while keeping the per-row
+        # work bounded.
+        def _multisearch_or(col, needles, chunk=200):
+            if not needles:
+                return "0"
+            parts = []
+            for i in range(0, len(needles), chunk):
+                arr = '[' + ', '.join(f"'{n}'" for n in needles[i:i + chunk]) + ']'
+                parts.append(f"multiSearchAnyCaseInsensitive({col}, {arr}) > 0")
+            if len(parts) == 1:
+                return parts[0]
+            return '(' + ' OR '.join(parts) + ')'
+
         if sf_url_slugs:
-            _needles_arr_all = '[' + ', '.join(f"'{s}'" for s in sf_url_slugs) + ']'
             # Coarse prefilter: only rows whose URL contains a short-form path
             # marker — kills the vast majority of irrelevant platform traffic
             # before the multi-needle scan.
@@ -22186,7 +22203,7 @@ def run_sf_lf_conversion(job_id):
             )
             sf_url_match_expr = (
                 f"({_prefilter} "
-                f"AND multiSearchAnyCaseInsensitive(URL, {_needles_arr_all}) > 0)"
+                f"AND {_multisearch_or('URL', sf_url_slugs)})"
             )
         else:
             sf_url_match_expr = "0"  # no URLs => no rows match (was previously unfiltered)
@@ -22210,11 +22227,10 @@ def run_sf_lf_conversion(job_id):
             if len(_k) >= 3 and _k not in _seen_lf:
                 _seen_lf.add(_k)
                 lf_keywords.append(_k.replace("\\", "\\\\").replace("'", "''"))
-        if lf_keywords:
-            _lf_arr = '[' + ', '.join(f"'{k}'" for k in lf_keywords) + ']'
-            lf_url_keyword_match = f"multiSearchAnyCaseInsensitive(URL, {_lf_arr}) > 0"
-        else:
-            lf_url_keyword_match = "0"
+        # Same 255-needle cap applies — chunk via _multisearch_or even though
+        # most LF title keyword lists are tiny (a 5-needle helper still
+        # produces a single multiSearchAnyCaseInsensitive call).
+        lf_url_keyword_match = _multisearch_or('URL', lf_keywords) if lf_keywords else "0"
 
         # ===== CONVERSION-FOCUSED APPROACH WITH PER-PLATFORM BREAKDOWN =====
         import random
@@ -22383,8 +22399,9 @@ def run_sf_lf_conversion(job_id):
                 per_url_slugs.append(s if len(s) >= 6 else '')
             # Dedup'd needles for the WHERE-clause prefilter only (the
             # conditional aggregates still preserve per-URL identity above).
+            # Chunked via _multisearch_or to stay under ClickHouse's 255 cap.
             uniq_slugs = sorted({s for s in per_url_slugs if s})
-            needles_arr = '[' + ', '.join(f"'{s}'" for s in uniq_slugs) + ']' if uniq_slugs else "['__no_slug__']"
+            per_url_needle_match = _multisearch_or('URL', uniq_slugs) if uniq_slugs else "0"
 
             # ---- Query A: per-URL unique + total in ONE scan ----
             sel_parts = []
@@ -22409,7 +22426,7 @@ def run_sf_lf_conversion(job_id):
                 FROM clickstream.clickstream_final
                 WHERE DELIVERED BETWEEN '{start_date}' AND '{end_date}'
                   AND {_per_url_prefilter}
-                  AND multiSearchAnyCaseInsensitive(URL, {needles_arr}) > 0
+                  AND {per_url_needle_match}
             """
             try:
                 cur.execute(batch_url_sql)
@@ -22464,7 +22481,7 @@ def run_sf_lf_conversion(job_id):
                     FROM clickstream.clickstream_final
                     WHERE DELIVERED BETWEEN '{start_date}' AND '{end_date}'
                       AND (({_per_url_prefilter}
-                            AND multiSearchAnyCaseInsensitive(URL, {needles_arr}) > 0)
+                            AND {per_url_needle_match})
                            OR {_lf_prefilter_clause})
                     GROUP BY UID
                 )
