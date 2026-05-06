@@ -16001,6 +16001,16 @@ STEP 5c — ENTERTAINMENT / CELEBRITY TALENT (`celebrity_or_creator`, including 
   • **Streaming ceiling:** In `category_signals["STREAMING/PLATFORM"]` write explicitly that **network-matched SVOD may beat OTHER non-home apps** in the stack but **never outrank Netflix** and **never slot above Hulu** for median fan cohorts — Netflix #1 discipline, Hulu pinned to the flagship mass tier.
   • **`category_signals[\"MEDIA\"]`** for **industry-facing** subjects (exec, showrunner, prolific director, deal press core demo): **Variety / THR / Deadline** may tier **materially higher than fan-only cohorts** yet still usually **below** Google News + NYT/CNN-class omnivore rows unless research proves trade-digital obsession.
 
+STEP 5c-DIGITAL — DIGITAL-NATIVE CREATOR / INFLUENCER (apply IN ADDITION to STEP 5c when subject's primary fame is YouTube/TikTok/Twitch/Instagram/Podcast/X — e.g. MrBeast, IShowSpeed, KSI, Kai Cenat, Charli D'Amelio, MKBHD, Mark Rober, Joe Rogan, Alex Cooper, Hasan Piker, Theo Von, Emma Chamberlain, etc.)
+  • **PRIMARY PLATFORM DOMINATES SOCIAL MEDIA (mandatory):** Identify which platform built the subject's audience and write explicitly in `category_signals["SOCIAL MEDIA"]` that this platform sits at the TOP of the stack at 85-99% BP — YouTube creator → YouTube 88-99%; TikTok creator → TikTok 85-98%; Twitch streamer → Twitch 80-95%; podcast host → Spotify (or Apple Podcasts) 80-95%. Their FOLLOWERS live on that platform; treating it as a generic-mass row is the single biggest scoring failure for creator profiles.
+  • **PEER-CREATOR LIST (mandatory):** Enumerate 5-10 same-vertical creators whose audiences overlap heavily with the subject's. The subject's followers also follow these peers. Examples (apply pattern, not list): MrBeast → Mark Rober/Dude Perfect/Airrack/Ryan Trahan/KSI; IShowSpeed → Kai Cenat/Adin Ross/KSI/Sneako/Logan Paul; MKBHD → Linus Tech Tips/iJustine/Unbox Therapy/Mrwhosetheboss; Charli D'Amelio → Addison Rae/Dixie/Bella Poarch/Khaby Lame; Joe Rogan → Theo Von/Andrew Schulz/Tom Segura/Jordan Peterson; Alex Cooper → Bobbi Althoff/Emma Chamberlain. These names MUST appear in TALENT/HOST/PERSONALITY top tier, not floor.
+  • **CONTENT VERTICAL → INTEREST/CATEGORY OVER-INDEX:** The subject's content vertical drives interest signals. Gaming creator → boost GAMES (Steam/Epic/specific titles they play), TWITCH/DISCORD social media, ESPORTS interest. Tech creator → boost TECHNOLOGY/DEVICE (Apple/Samsung/Sony/specific gear), TECHNOLOGY interest. Beauty creator → BEAUTY/WELLNESS (their endorsed brands marquee), MAKEUP-SKINCARE-FRAGRANCE interests. Fitness creator → WORKOUT FACILITY, supplement brands, HEALTH & WELLNESS. Comedy/podcast → SPOTIFY/APPLE PODCASTS top, related podcasts surface. Make this explicit in `category_signals` for the relevant categories.
+  • **AUDIENCE AGE SKEW:** Digital-native creator audiences skew **younger** than legacy celebrities. Express in `demographics["AGE"]`: TikTok-primary → 13-24 dominates 50-70%; YouTube-gaming → 13-29 dominates; YouTube-tech → 18-34 dominates; Twitch → 18-29 dominates; podcast-comedy → 18-44; podcast-news/political → 25-54. Don't default to gen-pop age curves.
+  • **AUDIENCE GENDER SKEW:** Inherit from content. Sports/gaming/tech/cars/finance creators skew 65-80% male; beauty/lifestyle/dance/fashion creators skew 65-85% female; comedy/podcast often near 50/50. Apply this skew downstream — male-skew creator → feminine cosmetics CAP 8-15% per the GENDER ALIGNMENT pattern; female-skew creator → male grooming CAP 8-15%.
+  • **SUBSCRIBER / FOLLOWER COUNT AS INTENSITY SIGNAL:** Note the subject's headline platform sub/follower count in `persona_summary` if known (e.g., 'MrBeast: 350M YouTube subs — top 5 creator globally'). Bigger creator → broader US-name-recognition → higher cross-category penetration. Niche creator (1-5M subs) → audience is concentrated, peer creators in same micro-niche over-index harder, mainstream rows can stay closer to gen-pop.
+  • **OWN PRODUCTS / VENTURES surface explicitly:** MrBeast → Beast Burger/Feastables/MrBeast.Store; KSI → Prime Hydration; Logan Paul → Prime/Maverick; Emma Chamberlain → Chamberlain Coffee; Alex Cooper → Unwell/The Unwell Network. These appear in MPB/QSR/CPG/MEDIA where the inventory permits.
+  • **STREAMING MUSIC BIAS:** YouTube creators → audience uses **YouTube Music** or **Spotify** (still Spotify #1 overall but YouTube Music elevated 35-45% for YouTube-native cohorts). Hip-hop/Black-creator audience → SoundCloud/Tidal lift. Country/rock creator → Pandora lift.
+
 STEP 5d — CONSUMER BRAND (`subject_archetype` MUST be `consumer_brand` when the input is a physical/services/goods brand)
   • **DIRECT COMPETITORS (mandatory):** In `category_signals` for the brand's home category, name the direct competitors explicitly and instruct that they appear in the SAME tier as the subject (NOT at floor). Examples: Nike → Adidas/Under Armour/Puma/New Balance/ASICS in marquee tier; Apple iPhone → Samsung/Pixel; Chase → Bank of America/Wells Fargo/Citi; Coca-Cola → Pepsi (rival but still high). The audience knows competitors — never floor them.
   • **BRAND PORTFOLIO SIBLINGS (mandatory):** If the brand is part of a larger portfolio, enumerate every sibling brand and instruct they over-index. Examples: Apple → Apple TV+/Apple Music/Apple Pay/iCloud/AirPods/Beats; PepsiCo → Pepsi/Mountain Dew/Gatorade/Lays/Doritos/Tropicana/Quaker; Disney → Disney+/ESPN/ABC/Marvel/Pixar/Hulu/Star Wars; Nike → Jordan/Converse; Coca-Cola Co → Sprite/Fanta/Dasani/smartwater/Powerade.
@@ -34838,21 +34848,69 @@ def enforce_behavioral_category_plausibility(df, brand_category=None, project_na
     # Mirrors _ATHLETE_TEAM_MAP — small static map as safety net.
     _PRIMARY_PLATFORM_MAP = {
         # Subject upper -> (platform_brand_in_SOCIAL_MEDIA, expected_bp_range)
+        # YouTube-primary
         'MRBEAST': ('YOUTUBE', (94.0, 99.0)),
+        'MR BEAST': ('YOUTUBE', (94.0, 99.0)),
         'JIMMY DONALDSON': ('YOUTUBE', (94.0, 99.0)),
         'PEWDIEPIE': ('YOUTUBE', (94.0, 99.0)),
         'MARKIPLIER': ('YOUTUBE', (92.0, 98.0)),
+        'LOGAN PAUL': ('YOUTUBE', (88.0, 96.0)),
+        'JAKE PAUL': ('YOUTUBE', (88.0, 96.0)),
+        'KSI': ('YOUTUBE', (88.0, 96.0)),
+        'ISHOWSPEED': ('YOUTUBE', (90.0, 98.0)),
+        'I SHOW SPEED': ('YOUTUBE', (90.0, 98.0)),
+        'DARREN WATKINS': ('YOUTUBE', (90.0, 98.0)),
+        'MARK ROBER': ('YOUTUBE', (88.0, 96.0)),
+        'MKBHD': ('YOUTUBE', (85.0, 94.0)),
+        'MARQUES BROWNLEE': ('YOUTUBE', (85.0, 94.0)),
+        'LINUS TECH TIPS': ('YOUTUBE', (85.0, 94.0)),
+        'LINUS SEBASTIAN': ('YOUTUBE', (85.0, 94.0)),
+        'CASEY NEISTAT': ('YOUTUBE', (82.0, 92.0)),
+        'EMMA CHAMBERLAIN': ('YOUTUBE', (82.0, 92.0)),
+        'DUDE PERFECT': ('YOUTUBE', (88.0, 96.0)),
+        'SMOSH': ('YOUTUBE', (85.0, 94.0)),
+        'VERITASIUM': ('YOUTUBE', (82.0, 92.0)),
+        'DANTDM': ('YOUTUBE', (82.0, 92.0)),
+        'DREAM': ('YOUTUBE', (85.0, 94.0)),
+        'DAVID DOBRIK': ('YOUTUBE', (82.0, 92.0)),
+        'RYAN TRAHAN': ('YOUTUBE', (82.0, 92.0)),
+        'AIRRACK': ('YOUTUBE', (82.0, 92.0)),
+        'TANNER FOX': ('YOUTUBE', (78.0, 90.0)),
+        'JEFFREE STAR': ('YOUTUBE', (82.0, 92.0)),
+        'JAMES CHARLES': ('YOUTUBE', (82.0, 92.0)),
+        # Twitch / streaming-primary
         'KAI CENAT': ('TWITCH', (88.0, 96.0)),
         'KAICENAT': ('TWITCH', (88.0, 96.0)),
         'NINJA': ('TWITCH', (85.0, 95.0)),
         'POKIMANE': ('TWITCH', (85.0, 95.0)),
+        'XQC': ('TWITCH', (85.0, 95.0)),
+        'HASAN PIKER': ('TWITCH', (80.0, 92.0)),
+        'HASANABI': ('TWITCH', (80.0, 92.0)),
+        'AMOURANTH': ('TWITCH', (75.0, 90.0)),
+        'SUMMIT1G': ('TWITCH', (75.0, 90.0)),
+        'SHROUD': ('TWITCH', (78.0, 90.0)),
+        'TFUE': ('TWITCH', (75.0, 88.0)),
+        # TikTok-primary
         'CHARLI DAMELIO': ('TIKTOK', (90.0, 98.0)),
         'CHARLI D\'AMELIO': ('TIKTOK', (90.0, 98.0)),
         'ADDISON RAE': ('TIKTOK', (88.0, 96.0)),
         'KHABY LAME': ('TIKTOK', (88.0, 96.0)),
-        'LOGAN PAUL': ('YOUTUBE', (88.0, 96.0)),
-        'JAKE PAUL': ('YOUTUBE', (88.0, 96.0)),
+        'BELLA POARCH': ('TIKTOK', (85.0, 95.0)),
+        'DIXIE DAMELIO': ('TIKTOK', (82.0, 92.0)),
+        'ZACH KING': ('TIKTOK', (85.0, 94.0)),
+        # Podcast / Spotify-primary
         'JOE ROGAN': ('SPOTIFY', (88.0, 96.0)),
+        'THE JOE ROGAN EXPERIENCE': ('SPOTIFY', (88.0, 96.0)),
+        'ALEX COOPER': ('SPOTIFY', (85.0, 94.0)),
+        'CALL HER DADDY': ('SPOTIFY', (85.0, 94.0)),
+        'THEO VON': ('SPOTIFY', (82.0, 92.0)),
+        'BOBBY LEE': ('SPOTIFY', (78.0, 90.0)),
+        'TIGER BELLY': ('SPOTIFY', (78.0, 90.0)),
+        # X / Twitter-primary
+        'TUCKER CARLSON': ('X', (75.0, 88.0)),
+        'ELON MUSK': ('X', (78.0, 92.0)),
+        # Kick (newer streaming platform — fall back to Twitch slot if Kick row missing)
+        'ADIN ROSS': ('TWITCH', (70.0, 85.0)),
     }
     proj_clean = str(project_name or '').upper().replace('_', ' ').strip()
     matched_creator = None
