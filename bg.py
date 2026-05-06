@@ -9345,6 +9345,10 @@ def _holistic_profile_audit(df, *, subject_clean, brand_category,
         f"These names are recognized by virtually all US sports/entertainment audiences and should NEVER be at 0.01% / floor regardless of subject sport: Tiger Woods, Shohei Ohtani, Aaron Judge, Connor McDavid, Sidney Crosby, Coco Gauff, Carlos Alcaraz, Novak Djokovic, Erling Haaland, Vinicius Jr, Jude Bellingham, Mbappé, Pat McAfee, Joe Rogan, Stephen A Smith, Shaq, Charles Barkley, Spike Lee, Jordan Peele. If you see any of them at 0.01% in ATHLETE/TALENT/HOST/PERSONALITY/WRITER for a US audience, raise to a defensible single/double-digit BP.\n\n"
         f"=== ENDORSEMENT-DRIVEN LEADER BOOST ===\n"
         f"If subject_persona indicates an active endorsement / sponsorship / signature-product deal with a brand, that brand should clearly lead its category for the subject's audience by ~1.3-1.5× over its typical #2. Examples to reason from (NOT exhaustive — apply the pattern): Nike-signed athlete → Nike #1 in APPAREL/FOOTWEAR with strong gap; Curry → Under Armour #1 over Nike for HIS audience; LeBron → Beats by Dre #1 in TECHNOLOGY BRAND audio; Coinbase ambassador → Coinbase top in DIGITAL BANKING; Chase Sapphire ambassador → Chase #1 BANKING; signature-line athlete → that line over generic options.\n\n"
+        f"=== AUDIENCE-AGE-GATED CATEGORIES (run on every profile) ===\n"
+        f"Read `demographics[\"AGE\"]`. If 50%+ is under 25 OR 25%+ is under 18 (kids/teen-heavy audience — typical for YouTube/TikTok creators, Disney/Nickelodeon talent, kids-content shows), these INTEREST rows MUST be capped: BETTING/GAMBLING ≤5% (legally minors cannot bet), LUXURY SHOPPING ≤8%, LUXURY CARS ≤10%, HANDBAGS ≤6%, INVESTING ≤5%, RESORTS ≤10%, INTERIOR DESIGN ≤15%, SUSTAINABILITY ≤22%, ENVIRONMENTAL CAUSES ≤18%, DIETING & WEIGHT LOSS ≤12%, ELECTRIC & HYBRID CARS ≤14%. The TOP of INTEREST should be: GAMING, COMEDY, MUSIC, MOVIES/TV, STREAMING, SOCIAL MEDIA, CELEBRITY GOSSIP, INFLUENCER STYLE, POP CULTURE, ANIME (each 60-95%). For PORN MEDIA on under-18-heavy audiences: cap entire category at 1.5% per row, NEVER allow it to lead. Note: WEBTOON is a comics platform NOT porn — if Webtoon shows up in PORN MEDIA, drop it (taxonomy bug at data layer).\n\n"
+        f"=== NON-ENGLISH / INTERNATIONAL CREATOR LOCATION + HOST CHECK ===\n"
+        f"If `subject_persona` indicates a non-English-language or international creator (Spanish/LATAM, Portuguese/Brazilian, Korean, Japanese, French, Hindi/Indian, Mandarin, Arabic), apply two corrections: (1) LOCATION: MIAMI must be top-3 for Spanish/LATAM creators (LATAM-Hispanic US capital DMA); NY/NJ/SF/Houston for Indian-diaspora; LA/NY/SF for K-pop/Asian-American audiences. Boost Miami to ~4-6% BP for Spanish-LATAM creator audiences. (2) HOST/PERSONALITY: random older English-celebrity gen-pop names (Heidi Klum, Martha Stewart, Ellen DeGeneres, Howard Stern, Don Lemon, Andy Cohen, Tony Robbins, Oprah, Bill Gates) should NOT lead — demote them to <3% BP. The real top-tier hosts for non-English creators are same-language peer creators (Luisito Comunica/ElRubius/Garmendia for Spanish; Whindersson/Felipe Neto for Portuguese; CarryMinati/Bhuvan Bam for Hindi). Even if those names aren't in the inventory, demote the gen-pop English celebs.\n\n"
         f"=== PROFILE SNAPSHOT (top {PER_CAT_TOP_N} items per category, indices vs US Gen Pop) ===\n"
         f"{profile_snapshot}\n\n"
         f"=== YOUR TASK ===\n"
@@ -16004,8 +16008,11 @@ STEP 5c — ENTERTAINMENT / CELEBRITY TALENT (`celebrity_or_creator`, including 
 STEP 5c-DIGITAL — DIGITAL-NATIVE CREATOR / INFLUENCER (apply IN ADDITION to STEP 5c when subject's primary fame is YouTube/TikTok/Twitch/Instagram/Podcast/X — e.g. MrBeast, IShowSpeed, KSI, Kai Cenat, Charli D'Amelio, MKBHD, Mark Rober, Joe Rogan, Alex Cooper, Hasan Piker, Theo Von, Emma Chamberlain, etc.)
   • **PRIMARY PLATFORM DOMINATES SOCIAL MEDIA (mandatory):** Identify which platform built the subject's audience and write explicitly in `category_signals["SOCIAL MEDIA"]` that this platform sits at the TOP of the stack at 85-99% BP — YouTube creator → YouTube 88-99%; TikTok creator → TikTok 85-98%; Twitch streamer → Twitch 80-95%; podcast host → Spotify (or Apple Podcasts) 80-95%. Their FOLLOWERS live on that platform; treating it as a generic-mass row is the single biggest scoring failure for creator profiles.
   • **PEER-CREATOR LIST (mandatory):** Enumerate 5-10 same-vertical creators whose audiences overlap heavily with the subject's. The subject's followers also follow these peers. Examples (apply pattern, not list): MrBeast → Mark Rober/Dude Perfect/Airrack/Ryan Trahan/KSI; IShowSpeed → Kai Cenat/Adin Ross/KSI/Sneako/Logan Paul; MKBHD → Linus Tech Tips/iJustine/Unbox Therapy/Mrwhosetheboss; Charli D'Amelio → Addison Rae/Dixie/Bella Poarch/Khaby Lame; Joe Rogan → Theo Von/Andrew Schulz/Tom Segura/Jordan Peterson; Alex Cooper → Bobbi Althoff/Emma Chamberlain. These names MUST appear in TALENT/HOST/PERSONALITY top tier, not floor.
+  • **NON-ENGLISH / INTERNATIONAL CREATOR PEERS (mandatory when subject's primary content language is NOT English):** Identify the subject's content language and home region in `persona_summary`. Then enumerate same-language peer creators in TALENT/HOST/PERSONALITY signals — DO NOT default to English-language peer lists. Examples (apply pattern, not list): SPANISH/LATAM creators (Alejo Igoa, Luisito Comunica, Yuya, Mr. Stiven Tc, Auronplay, ElRubius, German Garmendia, Mikecrack, Vegetta777, El Rubius, Juega German, Auronplay, JuanSGuarnizo, TheGrefg, ibai Llanos) → peer roster: Luisito Comunica, ElRubius, German Garmendia, Auronplay, Mikecrack, Vegetta777, JuanSGuarnizo, TheGrefg, Yuya, Mr. Stiven Tc, Felipe Neto, Whindersson Nunes; PORTUGUESE/BRAZIL creators (Whindersson, Felipe Neto, Felipe Castanhares) → peer roster includes other Brazilian Portuguese YouTubers; KOREAN creators (Boram, Jang Won, J.Fla, JFlaMusic) → peer roster includes other K-creators + K-pop talent; JAPANESE creators (Hikakin, Hajime Shacho, Yuka Kinoshita) → peer roster other JP creators + anime/manga talent; FRENCH creators (Squeezie, Cyprien, Norman) → peer roster other French YouTubers; HINDI/INDIAN (CarryMinati, Bhuvan Bam, Ashish Chanchlani) → other Hindi peers. The HOST/PERSONALITY top tier for a non-English creator should be DOMINATED by same-language peers, NOT random older English-celeb gen-pop (Heidi Klum, Martha Stewart, Ellen DeGeneres, Howard Stern, Don Lemon, Andy Cohen, Tony Robbins, Oprah). Demote those gen-pop names to <3% for non-English-creator audiences.
+  • **AUDIENCE LANGUAGE / ETHNICITY DRIVES LOCATION:** Spanish/LATAM creator audience → MIAMI is the #2-3 DMA in the US (LATAM-Hispanic capital), Houston / LA #2-3 also; do not default to NY/LA-only. Hindi/Indian creator → NY, NJ, SF Bay, Houston-Dallas (Indian diaspora). Korean/JP creator → LA, NY, SF Bay (Asian-American DMAs). Reflect explicitly in `category_signals["LOCATION"]`.
   • **CONTENT VERTICAL → INTEREST/CATEGORY OVER-INDEX:** The subject's content vertical drives interest signals. Gaming creator → boost GAMES (Steam/Epic/specific titles they play), TWITCH/DISCORD social media, ESPORTS interest. Tech creator → boost TECHNOLOGY/DEVICE (Apple/Samsung/Sony/specific gear), TECHNOLOGY interest. Beauty creator → BEAUTY/WELLNESS (their endorsed brands marquee), MAKEUP-SKINCARE-FRAGRANCE interests. Fitness creator → WORKOUT FACILITY, supplement brands, HEALTH & WELLNESS. Comedy/podcast → SPOTIFY/APPLE PODCASTS top, related podcasts surface. Make this explicit in `category_signals` for the relevant categories.
   • **AUDIENCE AGE SKEW:** Digital-native creator audiences skew **younger** than legacy celebrities. Express in `demographics["AGE"]`: TikTok-primary → 13-24 dominates 50-70%; YouTube-gaming → 13-29 dominates; YouTube-tech → 18-34 dominates; Twitch → 18-29 dominates; podcast-comedy → 18-44; podcast-news/political → 25-54. Don't default to gen-pop age curves.
+  • **AGE-GATED INTEREST CATEGORIES (mandatory for under-25-heavy audiences):** When 50%+ of audience is under 25, or 25%+ is under 18, the following INTEREST rows MUST be capped at single-digits (NEVER at the top of INTEREST): BETTING/GAMBLING ≤5% (legally cannot bet under 21), LUXURY SHOPPING ≤8%, LUXURY CARS ≤10%, HANDBAGS ≤6%, INVESTING ≤5%, INTERIOR DESIGN ≤15%, SUSTAINABILITY ≤22%, ENVIRONMENTAL CAUSES ≤18%, DIETING & WEIGHT LOSS ≤12%, RESORTS ≤10%, ELECTRIC & HYBRID CARS ≤14%. Instead, the top INTEREST rows should be: GAMING 70-90%, COMEDY 75-90%, MUSIC 85-95%, MOVIES/TV 75-90%, STREAMING 75-88%, SOCIAL MEDIA 85-95%, CELEBRITY GOSSIP 50-70%, INFLUENCER STYLE 60-80%, ANIME 30-65% (kids/teen audiences). State this explicitly in `category_signals["INTEREST"]`.
   • **AUDIENCE GENDER SKEW:** Inherit from content. Sports/gaming/tech/cars/finance creators skew 65-80% male; beauty/lifestyle/dance/fashion creators skew 65-85% female; comedy/podcast often near 50/50. Apply this skew downstream — male-skew creator → feminine cosmetics CAP 8-15% per the GENDER ALIGNMENT pattern; female-skew creator → male grooming CAP 8-15%.
   • **SUBSCRIBER / FOLLOWER COUNT AS INTENSITY SIGNAL:** Note the subject's headline platform sub/follower count in `persona_summary` if known (e.g., 'MrBeast: 350M YouTube subs — top 5 creator globally'). Bigger creator → broader US-name-recognition → higher cross-category penetration. Niche creator (1-5M subs) → audience is concentrated, peer creators in same micro-niche over-index harder, mainstream rows can stay closer to gen-pop.
   • **OWN PRODUCTS / VENTURES surface explicitly:** MrBeast → Beast Burger/Feastables/MrBeast.Store; KSI → Prime Hydration; Logan Paul → Prime/Maverick; Emma Chamberlain → Chamberlain Coffee; Alex Cooper → Unwell/The Unwell Network. These appear in MPB/QSR/CPG/MEDIA where the inventory permits.
@@ -19517,6 +19524,10 @@ def _run_unified_scoring_pass(
         f"Tiger Woods, Shohei Ohtani, Aaron Judge, Connor McDavid, Sidney Crosby, Coco Gauff, Carlos Alcaraz, Djokovic, Erling Haaland, Vinicius Jr, Bellingham, Mbappé, Pat McAfee, Joe Rogan, Stephen A, Shaq, Charles Barkley, Spike Lee, Jordan Peele. If you see them at floor in ATHLETE/TALENT/HOST/WRITER, raise to a defensible single/double-digit BP.\n\n"
         f"=== ENDORSEMENT-DRIVEN LEADER BOOST ===\n"
         f"If subject has documented endorsement / sponsorship / signature-product deal with a brand, that brand should clearly lead its category for THIS audience by ~1.3-1.5× over typical #2. Examples (apply pattern): Nike-signed athlete → Nike #1 APPAREL/FOOTWEAR; Curry → UA #1 over Nike for HIS audience; LeBron → Beats #1 audio; Coinbase ambassador → Coinbase top DIGITAL BANKING; signature-line athlete → that line over generic.\n\n"
+        f"=== AUDIENCE-AGE-GATED CATEGORIES ===\n"
+        f"Read demographics AGE. If 50%+ under 25 OR 25%+ under 18 (kids/teen creator audience), CAP these INTEREST rows: BETTING/GAMBLING ≤5%, LUXURY SHOPPING ≤8%, LUXURY CARS ≤10%, HANDBAGS ≤6%, INVESTING ≤5%, RESORTS ≤10%, INTERIOR DESIGN ≤15%, SUSTAINABILITY ≤22%, ENVIRONMENTAL CAUSES ≤18%, DIETING & WEIGHT LOSS ≤12%, ELECTRIC & HYBRID CARS ≤14%. INTEREST top should be GAMING/COMEDY/MUSIC/MOVIES-TV/STREAMING/SOCIAL MEDIA/CELEBRITY GOSSIP/INFLUENCER STYLE/POP CULTURE/ANIME (60-95%). PORN MEDIA on under-18-heavy audiences: cap every row ≤1.5% — never let it lead. WEBTOON is comics NOT porn (taxonomy bug — drop if seen as PORN MEDIA).\n\n"
+        f"=== NON-ENGLISH / INTERNATIONAL CREATOR (Spanish/LATAM, Portuguese, Korean, Japanese, French, Hindi, Mandarin, Arabic) ===\n"
+        f"LOCATION: MIAMI must be top-3 for Spanish/LATAM creators (LATAM-Hispanic capital DMA, ~4-6% BP); NY/NJ/SF/Houston for Indian-diaspora; LA/NY/SF for K-pop/Asian-American. HOST/PERSONALITY: demote random older English celebrity gen-pop (Heidi Klum, Martha Stewart, Ellen, Howard Stern, Don Lemon, Andy Cohen, Tony Robbins, Oprah, Bill Gates) to <3% BP — they don't lead non-English-creator audiences. Real top-tier = same-language peer creators (Luisito Comunica/ElRubius/Garmendia/Auronplay/Mikecrack for Spanish; Whindersson/Felipe Neto for Portuguese; CarryMinati/Bhuvan Bam for Hindi).\n\n"
         f"=== PER-CATEGORY REASONING DISCIPLINE ===\n"
         f"Before scoring each category, mentally run this 5-step check (drives your scores):\n"
         f"1. Demo skew — what gender/age/ethnicity/income drives this category for THIS persona?\n"
@@ -34302,17 +34313,27 @@ def enforce_behavioral_category_plausibility(df, brand_category=None, project_na
         ' SCOTLAND ', ' BBC ', ' EURO ',
     ))
 
+    under_17_pct = 0.0
+    under_25_pct = 0.0
     for _, row in out[amask].iterrows():
         val = str(row.get('Value', '')).strip().upper()
         p = _to_num(row.get(cs_col, row.get(pct_col, 0)))
         if any(x in val for x in ['18-24', '25-34', '18 -', '25 -', 'GEN Z', 'MILLENNIAL']):
             young_pct += p
+        if any(x in val for x in ['17 AND UNDER', 'UNDER 17', 'UNDER 18', '13-17', '13 -', 'UNDER-17']):
+            under_17_pct += p
+            under_25_pct += p
+        if any(x in val for x in ['18-24', '18 -']):
+            under_25_pct += p
     emask = out['Column'].astype(str).str.upper().str.strip() == 'ETHNICITY'
+    hispanic_pct = 0.0
     for _, row in out[emask].iterrows():
         val = str(row.get('Value', '')).strip().upper()
         p = _to_num(row.get(cs_col, row.get(pct_col, 0)))
         if 'BLACK' in val and 'AFRICAN' in val:
             black_pct += p
+        if 'HISPANIC' in val or 'LATINO' in val or 'LATIN' in val:
+            hispanic_pct += p
 
     def _cat_rows(cat):
         m = out['Column'].astype(str).str.upper().str.strip() == str(cat).upper()
@@ -34348,6 +34369,81 @@ def enforce_behavioral_category_plausibility(df, brand_category=None, project_na
                 out.at[idx, proj_col] = str(int(round(raw * MULT)))
 
     fixes = 0
+
+    # 0a) TAXONOMY BUG: WEBTOON is a comics platform, not porn — drop unconditionally if it
+    #     ever appears in PORN MEDIA. Same for "TAPAS" (comics), "RADISH" (fiction app).
+    try:
+        for _bad in ('WEBTOON', 'TAPAS', 'RADISH', 'WATTPAD'):
+            mask_bad = (
+                (out['Column'].astype(str).str.upper().str.strip() == 'PORN MEDIA')
+                & (out['Value'].astype(str).str.upper().str.contains(_bad, na=False))
+            )
+            if mask_bad.any():
+                out = out.loc[~mask_bad].reset_index(drop=True)
+                fixes += 1
+    except Exception:
+        pass
+
+    # 0b) AUDIENCE-AGE GATE — kids/teen-heavy audience (e.g. YouTube-creator profiles where
+    #     35%+ of audience is under 17, or 50%+ under 25): cap luxury/gambling/investing-class
+    #     INTEREST rows that legally or socially do not match a young audience, and floor PORN
+    #     MEDIA so it never leads. Narrow, directional fix only.
+    is_kids_heavy = (under_17_pct >= 20.0) or (under_25_pct >= 55.0)
+    if is_kids_heavy:
+        AGE_GATED_INTEREST_CAPS = {
+            'BETTING/GAMBLING': 5.0,
+            'GAMBLING': 5.0,
+            'LUXURY SHOPPING': 8.0,
+            'LUXURY CARS': 10.0,
+            'LUXURY GOODS': 8.0,
+            'HANDBAGS': 6.0,
+            'INVESTING': 5.0,
+            'RESORTS': 10.0,
+            'INTERIOR DESIGN': 15.0,
+            'SUSTAINABILITY': 22.0,
+            'ENVIRONMENTAL CAUSES': 18.0,
+            'DIETING & WEIGHT LOSS': 12.0,
+            'ELECTRIC & HYBRID CARS': 14.0,
+        }
+        try:
+            int_mask = out['Column'].astype(str).str.upper().str.strip() == 'INTEREST'
+            for idx, row in out[int_mask].iterrows():
+                val_up = str(row.get('Value', '')).strip().upper()
+                cur = _to_num(row.get(bp_col, 0))
+                for needle, cap in AGE_GATED_INTEREST_CAPS.items():
+                    if needle in val_up and cur > cap:
+                        _write_bp(idx, cap)
+                        fixes += 1
+                        break
+        except Exception:
+            pass
+
+        # Floor PORN MEDIA — under-18-heavy audience should not have any porn row over 1.5%.
+        if under_17_pct >= 20.0:
+            try:
+                porn_cap = 1.5
+                porn_mask = out['Column'].astype(str).str.upper().str.strip() == 'PORN MEDIA'
+                for idx, row in out[porn_mask].iterrows():
+                    cur = _to_num(row.get(bp_col, 0))
+                    if cur > porn_cap:
+                        _write_bp(idx, porn_cap * 0.85)
+                        fixes += 1
+            except Exception:
+                pass
+
+    # 0c) LATAM-HISPANIC LOCATION — Miami is the LATAM-Hispanic capital DMA. If the audience
+    #     is heavily Hispanic (proxy for Spanish-language / LATAM creator), boost Miami into
+    #     top-3 by raising its BP to ~4.6% if currently below.
+    if hispanic_pct >= 22.0:
+        try:
+            miami_idx = _find_idx('LOCATION', ['MIAMI'])
+            if miami_idx is not None:
+                cur = _to_num(out.at[miami_idx, bp_col])
+                if cur < 4.0:
+                    _write_bp(miami_idx, 4.6)
+                    fixes += 1
+        except Exception:
+            pass
 
     # 1) BETTING — US panel: DK + FanDuel should materially lead offshore / UK-global books
     #    in digital tiers unless the brief is explicitly UK/Euro anchored. Also lift DK/FD
