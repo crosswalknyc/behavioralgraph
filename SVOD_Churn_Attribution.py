@@ -1481,9 +1481,26 @@ def run_query(conn, p):
         df_summary.loc[0, 'PRE_EXISTING_USERS'] = validated_pre
         df_summary.loc[0, 'CLEAN_SAMPLE_SIZE'] = validated_clean
 
-        # Derive signups using raw conversion rate (preserves panel-observed proportion)
+        # Use the Conversion Reasoning Agent to determine a realistic conversion rate
         _raw_conv_rate = _raw_signups / _raw_clean if _raw_clean > 0 else 0.0
-        validated_signups = int(round(validated_clean * _raw_conv_rate))
+        _raw_total_conv = _raw_signups / _raw_total if _raw_total > 0 else 0.0
+        _plat_info = _get_platform_info(p.get('platform_name', ''))
+
+        _agent_rate = _reason_conversion_rate(
+            show_name=show_name_for_ai,
+            platform_name=p.get('platform_name', ''),
+            genre=p.get('genre', ''),
+            content_cadence=p.get('content_cadence', ''),
+            episode_count=len(p.get('episode_dates', [])),
+            date_range=date_range_for_ai,
+            raw_panel_conv_rate=_raw_total_conv,
+            ai_total_viewers=validated_total,
+            platform_info=_plat_info,
+        )
+
+        validated_signups = int(round(validated_total * _agent_rate))
+        print(f"   🧠 Conversion agent rate: {_agent_rate*100:.2f}% → {validated_signups:,} signups "
+              f"(raw panel total conv was {_raw_total_conv*100:.1f}%)")
         df_summary.loc[0, 'NEW_SIGNUPS'] = validated_signups
 
         # Recalculate conversion rates
@@ -1628,6 +1645,155 @@ def _research_show_viewership(client, show_name):
         return ""
 
 
+def _reason_conversion_rate(show_name, platform_name, genre, content_cadence,
+                            episode_count, date_range, raw_panel_conv_rate,
+                            ai_total_viewers, platform_info):
+    """Use GPT-4o to determine a realistic Total Show Conversion Rate.
+
+    Weighs raw panel signal (directional truth), show quality/buzz, platform
+    economics, and real-world benchmarks.  Returns a float between 0 and 1.
+    Falls back to a static tier-based cap on any failure.
+    """
+    # Hard ceilings — safety net regardless of what the model says
+    _hard_ceiling = {
+        'dominant': 0.06, 'major': 0.10, 'mid': 0.12,
+        'emerging': 0.15, 'niche': 0.18, 'unknown': 0.10,
+    }
+    tier = platform_info.get('tier', 'unknown')
+    ceiling = _hard_ceiling.get(tier, 0.10)
+
+    # Static fallback with deterministic jitter (used if API call fails)
+    import hashlib
+    _jitter_seed = hashlib.md5(f"{platform_name}-{ai_total_viewers}".encode()).hexdigest()
+    _jitter = (int(_jitter_seed[:8], 16) % 1000) / 10000.0 - 0.05
+    fallback_rate = ceiling * (1 + _jitter)
+
+    try:
+        from openai import OpenAI
+        api_key = os.environ.get('OPENAI_API_KEY')
+        if not api_key:
+            print("   ⚠️  No OPENAI_API_KEY; using static conversion cap")
+            return fallback_rate
+        client = OpenAI(api_key=api_key)
+    except Exception as e:
+        print(f"   ⚠️  OpenAI not available for conversion reasoning: {e}")
+        return fallback_rate
+
+    raw_terms = [t.strip() for t in show_name.replace('_', ' ').replace('-', ' ').split(',') if t.strip()]
+    season_terms = [t for t in raw_terms if 'season' in t.lower()]
+    if season_terms:
+        clean_name = season_terms[0].title()
+    elif raw_terms:
+        clean_name = max(raw_terms, key=len).title()
+    else:
+        clean_name = show_name.replace('_', ' ').strip().title()
+
+    prompt = f"""You are a senior streaming media analyst. Your job is to determine what percentage
+of people who watched a TV show would realistically sign up for the streaming platform
+FOR THE FIRST TIME as a result of that show.
+
+SHOW: {clean_name}
+PLATFORM: {platform_name}
+GENRE: {genre or 'Unknown'}
+CONTENT CADENCE: {content_cadence or 'Unknown'}
+EPISODES: {episode_count or 'N/A'}
+DATE RANGE: {date_range or 'Unknown'}
+
+PLATFORM ECONOMICS:
+- US Household Penetration: ~{platform_info.get('pct', 15)}%
+- US Subscribers: ~{platform_info.get('subs_millions', 20)}M
+- Platform Tier: {tier}
+
+REAL US VIEWERSHIP (from external data): {ai_total_viewers:,} viewers
+
+RAW PANEL SIGNAL: Our behavioral panel observed a {raw_panel_conv_rate*100:.1f}% total show
+conversion rate (signups / total watchers). This is DIRECTIONALLY meaningful:
+- If the panel shows LOW conversion (under 5%), the show likely is NOT driving many new signups.
+  Trust this signal and keep the rate low.
+- If the panel shows HIGH conversion (over 15%), it is likely inflated by panel-scale effects
+  and should be adjusted downward to a realistic level.
+- If the panel shows MODERATE conversion (5-15%), the show is driving some real signups;
+  use your judgment to calibrate.
+
+BENCHMARK REFERENCE (Total Show Conversion = new signups / total watchers):
+- DOMINANT platforms (Netflix ~68%, Amazon ~65%): 1-4%. Everyone already has it. Only a
+  cultural phenomenon (Squid Game, Stranger Things finale) reaches 3-5%.
+- MAJOR platforms (Hulu ~30%, Disney+ ~28%): 3-7%. A hit show can drive noticeable signups.
+  A massive hit might reach 7-8%.
+- MID-TIER platforms (Max ~22%): 4-9%. Prestige exclusives drive meaningful acquisition.
+- EMERGING platforms (Paramount+ ~15%, Peacock ~13%): 5-12%. Big exclusives can drive
+  significant new subscribers because many viewers don't have the platform.
+- NICHE platforms (Apple TV+ ~10%, Starz ~5%): 6-15%. Very low penetration means a hit
+  show can drive high percentage acquisition.
+
+INSTRUCTIONS:
+1. Consider the show's cultural impact and buzz relative to its platform.
+2. Consider whether this is a new show vs returning season (returning seasons convert lower
+   since fans already subscribed for Season 1).
+3. Use the raw panel signal directionally — if it's low, your answer should be low.
+4. Be precise — give a specific rate like 5.8%, not a range.
+5. The rate must be between 0.5% and {ceiling*100:.0f}% (hard ceiling for this platform tier).
+
+Respond in JSON ONLY (no markdown fencing):
+{{
+  "recommended_rate": <decimal like 0.058 for 5.8%>,
+  "reasoning": "<2-3 sentences explaining your logic>",
+  "confidence": "high" | "medium" | "low"
+}}"""
+
+    try:
+        print(f"   🧠 Asking GPT-4o to reason about conversion rate (raw panel: {raw_panel_conv_rate*100:.1f}%)...")
+        resp = client.chat.completions.create(
+            model='gpt-4o',
+            messages=[{'role': 'user', 'content': prompt}],
+            temperature=0.2,
+            max_tokens=400,
+        )
+        raw = (resp.choices[0].message.content or '').strip()
+        if raw.startswith('```'):
+            raw = raw.split('\n', 1)[-1].rsplit('```', 1)[0].strip()
+
+        start = raw.find('{')
+        if start < 0:
+            print(f"   ⚠️  Conversion agent returned no JSON — using fallback")
+            return fallback_rate
+
+        depth = 0
+        end = start
+        for i in range(start, len(raw)):
+            if raw[i] == '{':
+                depth += 1
+            elif raw[i] == '}':
+                depth -= 1
+                if depth == 0:
+                    end = i + 1
+                    break
+        result = json.loads(raw[start:end])
+
+        rate = float(result.get('recommended_rate', 0))
+        reasoning = result.get('reasoning', '')
+        confidence = result.get('confidence', 'low')
+
+        if rate <= 0 or rate > 1:
+            print(f"   ⚠️  Conversion agent returned invalid rate {rate} — using fallback")
+            return fallback_rate
+
+        # Clamp to hard ceiling
+        if rate > ceiling:
+            print(f"   ⚠️  Agent rate {rate*100:.1f}% exceeds {tier} ceiling {ceiling*100:.0f}% — clamping")
+            rate = ceiling * (1 + _jitter)
+
+        print(f"   🧠 Conversion agent: {rate*100:.2f}% (confidence={confidence})")
+        print(f"   🧠 Reasoning: {reasoning}")
+        return rate
+
+    except Exception as e:
+        print(f"   ⚠️  Conversion reasoning agent failed: {e}")
+        import traceback
+        traceback.print_exc()
+        return fallback_rate
+
+
 def _validate_total_watchers_with_ai(show_name, platform_name, inflated_total, inflated_pre, inflated_clean, genre='', date_range=''):
     """Search for real US viewership data and return it directly as the Total Show Watchers.
 
@@ -1659,9 +1825,10 @@ def _validate_total_watchers_with_ai(show_name, platform_name, inflated_total, i
         clean_name = show_name.replace('_', ' ').strip().title()
 
     prompt = (
-        f'How many Americans watched "{clean_name}" on {platform_name}?\n\n'
-        f'Search for the total US viewership numbers for this show. I need the actual number '
-        f'of unique American viewers who watched this content.\n\n'
+        f'What is the HIGHEST reported US viewership for "{clean_name}" on {platform_name}?\n\n'
+        f'Search for the peak or highest reported US viewership number for this show. '
+        f'I want the LARGEST credible number — for example, a finale audience, a record-breaking '
+        f'episode, or the highest weekly total reported by Nielsen or the platform.\n\n'
         f'Look for data from:\n'
         f'- Nielsen streaming ratings and Top 10 lists\n'
         f'- Samba TV or Luminate data\n'
@@ -1671,6 +1838,7 @@ def _validate_total_watchers_with_ai(show_name, platform_name, inflated_total, i
         f'- Platform: {platform_name}\n'
         f'- Genre: {genre or "unknown"}\n'
         f'- Date range: {date_range or "unknown"}\n\n'
+        f'If multiple numbers are reported, use the HIGHEST one.\n'
         f'If data is reported worldwide, estimate the US portion (typically 55-65% for US-produced content).\n'
         f'If data is reported in "viewing hours" or "minutes watched", estimate unique viewers by dividing '
         f'by average hours/minutes per viewer for that type of content.\n\n'
@@ -1682,7 +1850,8 @@ def _validate_total_watchers_with_ai(show_name, platform_name, inflated_total, i
         f'  "source": "<specific source — e.g. Nielsen week of 3/3, Variety article from 4/1, etc.>"\n'
         f'}}\n\n'
         f'IMPORTANT: Return estimated_us_viewers as the raw number of Americans who watched '
-        f'(e.g. 5400000 for 5.4 million). If you cannot find any viewership data, set estimated_us_viewers to null.'
+        f'(e.g. 5400000 for 5.4 million). Use the highest credible number you find. '
+        f'If you cannot find any viewership data, set estimated_us_viewers to null.'
     )
 
     try:
