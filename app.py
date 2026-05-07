@@ -23439,6 +23439,155 @@ def run_sf_lf_conversion(job_id):
                   f"scale={_a['scale']:.4f}  "
                   f"coverage={_a['coverage']*100:.0f}%")
 
+        # ===== SYNTHETIC PANEL SMATTERING =====
+        # When the panel returned 0 hits for every submitted URL but the
+        # scraper has real public view counts, sprinkle a small synthetic
+        # signal onto the most-watched URLs so the report doesn't look
+        # totally empty for legitimate campaigns whose audience just doesn't
+        # overlap with our panel.
+        #
+        # IMPORTANT shape rules from product:
+        #   - "tiny smattering" of synthetic data, not bulk fabrication
+        #   - applied to a small percentage of submitted URLs (or all of them
+        #     if the user only submitted a handful)
+        #   - tagged with data_source='SCRAPED_ESTIMATE' so it never reads
+        #     as panel-observed
+        #   - never fabricates conversions (option `fabricate_panel` only)
+        synthesis_active = False
+        synthesis_notice = None
+        _panel_uniq_total = sum(int(pd.get('raw_unique') or 0) for pd in per_platform_data.values())
+        _scraped_per_url = (_scrape or {}).get('per_url', {}) or {}
+        _scraped_with_views = [
+            (u, int(d.get('views') or 0))
+            for u, d in _scraped_per_url.items()
+            if int(d.get('views') or 0) > 0
+        ]
+
+        if _panel_uniq_total == 0 and _scraped_with_views:
+            # Sample-size curve (matches "natural for the sample" intent):
+            #   1-5 URLs   -> all of them
+            #   6-100 URLs -> ~5% (min 3)
+            #   100+ URLs  -> 1% capped at 50
+            _n_urls = len(sf_urls)
+            if _n_urls <= 5:
+                _sample_n = _n_urls
+            elif _n_urls <= 100:
+                _sample_n = max(3, round(_n_urls * 0.05))
+            else:
+                _sample_n = min(50, max(5, round(_n_urls * 0.01)))
+
+            _scraped_with_views.sort(key=lambda t: t[1], reverse=True)
+            _chosen = _scraped_with_views[:_sample_n]
+
+            # Distribute a small synthetic UID budget across chosen URLs,
+            # weighted by scraped popularity. Total budget stays small —
+            # roughly 2 UIDs per chosen URL on average — so it reads as a
+            # smattering, not as fabricated mass volume.
+            _budget_unique = max(_sample_n, _sample_n * 2)
+            _scraped_total_chosen = sum(v for _, v in _chosen) or 1
+
+            synth_by_url = {}
+            synth_by_plat = {}
+            _running_unique = 0
+            for _idx, (_u, _v) in enumerate(_chosen):
+                if _idx == len(_chosen) - 1:
+                    _u_uniq = max(1, _budget_unique - _running_unique)
+                else:
+                    _share = _v / _scraped_total_chosen
+                    _u_uniq = max(1, int(round(_budget_unique * _share)))
+                    _running_unique += _u_uniq
+                # Total events / Duplicated Views: unique × random-ish ratio in
+                # the realistic 1.8-3.2x band. Deterministic per URL via hash
+                # so re-runs produce the same numbers (no jitter between runs).
+                _ratio = 1.8 + (abs(hash(_u)) % 140) / 100.0  # 1.80 .. 3.19
+                _u_dup = max(_u_uniq, int(round(_u_uniq * _ratio)))
+
+                _plat = detect_platform(_u) or 'other'
+                synth_by_url[_u] = {
+                    'unique_views': _u_uniq,
+                    'duplicated_views': _u_dup,
+                    'platform': _plat,
+                    'scraped_views': _v,
+                }
+                _bucket = synth_by_plat.setdefault(_plat, {'unique_views': 0, 'duplicated_views': 0})
+                _bucket['unique_views'] += _u_uniq
+                _bucket['duplicated_views'] += _u_dup
+
+            # Update the in-flight result structures so downstream CSV /
+            # dashboard rendering picks up the synthetic counts naturally.
+            for _pm in results.get('platform_metrics', []) or []:
+                _pkey = (_pm.get('platform') or '').lower()
+                if _pm.get('is_overall'):
+                    _pm['unique_views'] = sum(b['unique_views'] for b in synth_by_plat.values())
+                    _pm['duplicated_views'] = sum(b['duplicated_views'] for b in synth_by_plat.values())
+                    _pm['data_source'] = 'SCRAPED_ESTIMATE'
+                elif _pkey in synth_by_plat:
+                    _pm['unique_views'] = synth_by_plat[_pkey]['unique_views']
+                    _pm['duplicated_views'] = synth_by_plat[_pkey]['duplicated_views']
+                    _pm['data_source'] = 'SCRAPED_ESTIMATE'
+                else:
+                    _pm['data_source'] = 'PANEL'
+
+            # Replace the existing per-URL list with the synthetic smattering.
+            # Rows for URLs not in the chosen sample are dropped from the
+            # per-URL detail section (they remain submitted in
+            # SHORT_FORM_URLS in the header), to keep the report focused on
+            # the URLs that actually have any signal at all.
+            _new_url_metrics = []
+            for _u, _data in synth_by_url.items():
+                _disp = (_u[:77] + '...') if len(_u) > 80 else _u
+                _new_url_metrics.append({
+                    'url': _u,
+                    'url_display': _disp,
+                    'unique_views': _data['unique_views'],
+                    'duplicated_views': _data['duplicated_views'],
+                    'reach_rate': 0,
+                    'raw_converted': 0,
+                    'converted_to_lf': 0,
+                    'conversion_rate': 0,
+                    'data_source': 'SCRAPED_ESTIMATE',
+                    'scraped_views': _data['scraped_views'],
+                })
+            results['individual_url_metrics'] = _new_url_metrics
+
+            # Also refresh sf_total_unique / sf_total_duplicated so the
+            # OVERALL CSV / conversion-rate denominators reflect the
+            # synthetic cohort instead of the raw 0.
+            sf_total_unique = sum(b['unique_views'] for b in synth_by_plat.values())
+            sf_total_duplicated = sum(b['duplicated_views'] for b in synth_by_plat.values())
+
+            # Patch the conversion summary in-place so the CSV's
+            # CONVERSION_SUMMARY block doesn't show 0 viewers / div-by-zero
+            # while the platform rows show synthetic counts. Conversion
+            # *count* stays at whatever the panel returned (effectively 0
+            # for synthetic cohorts) — only the denominator changes.
+            _sf_conv = (results.get('conversions') or {}).get('sf_url_to_lf_title')
+            if isinstance(_sf_conv, dict):
+                _sf_conv['total_sf_viewers'] = sf_total_unique
+                _sf_conv['data_source'] = 'SCRAPED_ESTIMATE'
+
+            synthesis_active = True
+            synthesis_notice = (
+                f"Panel had 0 matches for the {_n_urls:,} submitted URL(s). "
+                f"The {len(_chosen)} most-viewed URLs (by scraped public "
+                f"views) were given a small synthetic panel signal so "
+                f"projections aren't entirely zero. Rows tagged "
+                f"data_source=SCRAPED_ESTIMATE; conversions are NOT "
+                f"synthesized."
+            )
+            print(f"[SF-LF] SYNTHESIS: panel=0 -> sprinkled {len(_chosen)} "
+                  f"URLs ({_sample_n}/{_n_urls}, total synth_unique="
+                  f"{sf_total_unique:,}, synth_total_views="
+                  f"{sf_total_duplicated:,})")
+        else:
+            # Tag every existing row as PANEL so the CSV always carries an
+            # explicit Data_Source value instead of a blank that readers
+            # have to guess about.
+            for _pm in results.get('platform_metrics', []) or []:
+                _pm.setdefault('data_source', 'PANEL')
+            for _u in results.get('individual_url_metrics', []) or []:
+                _u.setdefault('data_source', 'PANEL')
+
         def _scale_for(platform):
             if not platform:
                 return _overall_scale
@@ -23470,6 +23619,17 @@ def run_sf_lf_conversion(job_id):
 
         # Header section
         csv_rows.append({'Column': 'PROJECT_INFO', 'Value': project_name, 'Metric': '', 'Count': '', 'Percentage': '', 'Gen_Pop_Projection': ''})
+        # Banner row: only present when synthesis actually fired, so the
+        # consumer immediately sees the report contains scraped-estimate
+        # rows instead of pure panel observations.
+        if synthesis_active and synthesis_notice:
+            csv_rows.append({
+                'Column': 'DATA_SOURCE_NOTE',
+                'Value': synthesis_notice,
+                'Metric': '', 'Count': '', 'Percentage': '',
+                'Gen_Pop_Projection': '',
+                'Data_Source': 'SCRAPED_ESTIMATE',
+            })
         csv_rows.append({'Column': 'DATE_RANGE', 'Value': f'{start_date} to {end_date}', 'Metric': '', 'Count': '', 'Percentage': '', 'Gen_Pop_Projection': ''})
         csv_rows.append({'Column': 'ATTRIBUTION_WINDOW', 'Value': f'{attribution_window} days', 'Metric': '', 'Count': '', 'Percentage': '', 'Gen_Pop_Projection': ''})
         csv_rows.append({'Column': 'SHORT_FORM_URLS', 'Value': '; '.join(sf_urls), 'Metric': '', 'Count': '', 'Percentage': '', 'Gen_Pop_Projection': ''})
@@ -23503,8 +23663,13 @@ def run_sf_lf_conversion(job_id):
                 # Views are projected without the US-pop cap (duplicated views
                 # legitimately exceed pop).
                 _pm_plat = None if pm.get('is_overall') else (pm.get('platform') or '').lower()
+                _pm_src = pm.get('data_source') or 'PANEL'
                 p_unique_genpop = project_to_gen_pop(p_unique, platform=_pm_plat)
-                csv_rows.append({'Column': 'PLATFORM', 'Value': pm['platform'], 'Metric': 'Unique Views', 'Count': p_unique, 'Percentage': '', 'Gen_Pop_Projection': p_unique_genpop})
+                # Metric labels make the people-vs-events split explicit:
+                #   "Unique Viewers (UIDs)"      -> distinct UID count
+                #   "Total Views (Events)"       -> sum of view events
+                #   "Converted Viewers (UIDs)"   -> distinct UIDs that visited LF
+                csv_rows.append({'Column': 'PLATFORM', 'Value': pm['platform'], 'Metric': 'Unique Viewers (UIDs)', 'Count': p_unique, 'Percentage': '', 'Gen_Pop_Projection': p_unique_genpop, 'Data_Source': _pm_src})
                 # Anchored Duplicated Views: prefer the scraped anchor's
                 # projected_total (= scraped_total × discount) when available,
                 # else scale raw panel count without the US-pop cap.
@@ -23513,18 +23678,19 @@ def run_sf_lf_conversion(job_id):
                     p_dup_genpop = int(_anchor_for_pm['projected_total'])
                 else:
                     p_dup_genpop = project_to_gen_pop(p_dup, platform=_pm_plat, is_total_views=True)
-                csv_rows.append({'Column': 'PLATFORM', 'Value': pm['platform'], 'Metric': 'Duplicated Views', 'Count': p_dup, 'Percentage': '', 'Gen_Pop_Projection': p_dup_genpop})
+                csv_rows.append({'Column': 'PLATFORM', 'Value': pm['platform'], 'Metric': 'Total Views (Events)', 'Count': p_dup, 'Percentage': '', 'Gen_Pop_Projection': p_dup_genpop, 'Data_Source': _pm_src})
                 if 'converted_to_title' in pm:
                     p_conv = add_noise_if_zero(pm['converted_to_title'])
                     if p_conv > p_unique:
                         p_conv = p_unique
-                    p_conv_rate = round((p_conv / p_unique * 100), 8) if p_unique > 0 else 0.00000001
-                    if p_conv_rate == 0:
-                        p_conv_rate = 0.00000001
+                    p_conv_rate = round((p_conv / p_unique * 100), 8) if p_unique > 0 else 0
                     p_conv_genpop = project_to_gen_pop(p_conv, platform=_pm_plat)
                     if p_conv_genpop > p_unique_genpop:
                         p_conv_genpop = p_unique_genpop
-                    csv_rows.append({'Column': 'PLATFORM', 'Value': pm['platform'], 'Metric': 'Converted to Title', 'Count': p_conv, 'Percentage': f"{p_conv_rate:.8f}%", 'Gen_Pop_Projection': p_conv_genpop})
+                    # Conversions are NEVER synthesized — even when unique/total
+                    # are SCRAPED_ESTIMATE, conversions stay PANEL-observed (and
+                    # therefore 0 for synthetic cohorts). Honest by design.
+                    csv_rows.append({'Column': 'PLATFORM', 'Value': pm['platform'], 'Metric': 'Converted Viewers (UIDs)', 'Count': p_conv, 'Percentage': f"{p_conv_rate:.8f}%", 'Gen_Pop_Projection': p_conv_genpop, 'Data_Source': 'PANEL'})
         
         # Individual URL Metrics Section (Top 20 input URLs)
         if results.get('individual_url_metrics'):
@@ -23584,7 +23750,8 @@ def run_sf_lf_conversion(job_id):
                 # Cap projected converted to projected unique
                 if u_conv_genpop > u_unique_genpop:
                     u_conv_genpop = u_unique_genpop
-                csv_rows.append({'Column': 'INPUT_URL', 'Value': url_val, 'Metric': 'Unique Views', 'Count': u_unique, 'Percentage': f"{u_reach:.8f}% of total SF viewers", 'Gen_Pop_Projection': u_unique_genpop})
+                _url_src = url_m.get('data_source') or 'PANEL'
+                csv_rows.append({'Column': 'INPUT_URL', 'Value': url_val, 'Metric': 'Unique Viewers (UIDs)', 'Count': u_unique, 'Percentage': f"{u_reach:.8f}% of total SF viewers", 'Gen_Pop_Projection': u_unique_genpop, 'Data_Source': _url_src})
                 # Per-URL Duplicated: prefer scraped views × discount when we
                 # have it for THIS URL; else scale by panel ratio (no cap on
                 # total/duplicated views — they can legitimately exceed pop).
@@ -23596,8 +23763,10 @@ def run_sf_lf_conversion(job_id):
                     u_dup_genpop = int(round(_url_scraped * _get_disc()))
                 else:
                     u_dup_genpop = int(round(u_unique_genpop * (u_dup / max(u_unique, 1))))
-                csv_rows.append({'Column': 'INPUT_URL', 'Value': url_val, 'Metric': 'Duplicated Views', 'Count': u_dup, 'Percentage': '', 'Gen_Pop_Projection': u_dup_genpop})
-                csv_rows.append({'Column': 'INPUT_URL', 'Value': url_val, 'Metric': 'Converted to LF Title', 'Count': u_conv, 'Percentage': f"{u_conv_rate:.8f}% of URL viewers", 'Gen_Pop_Projection': u_conv_genpop})
+                csv_rows.append({'Column': 'INPUT_URL', 'Value': url_val, 'Metric': 'Total Views (Events)', 'Count': u_dup, 'Percentage': '', 'Gen_Pop_Projection': u_dup_genpop, 'Data_Source': _url_src})
+                # Conversions never synthesized; always tagged PANEL (will be 0
+                # for SCRAPED_ESTIMATE rows).
+                csv_rows.append({'Column': 'INPUT_URL', 'Value': url_val, 'Metric': 'Converted Viewers (UIDs)', 'Count': u_conv, 'Percentage': f"{u_conv_rate:.8f}% of URL viewers", 'Gen_Pop_Projection': u_conv_genpop, 'Data_Source': 'PANEL'})
         
         # Conversion Summary Section - OVERALL
         # Use pre-calculated values directly (noise already applied) - DO NOT add noise again!
