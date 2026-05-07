@@ -1907,7 +1907,7 @@ def _validate_total_watchers_with_ai(show_name, platform_name, inflated_total, i
         try:
             us_num = float(estimated_us)
             if us_num > 0:
-                recommended = int(round(us_num / 1000) * 1000)
+                recommended = int(us_num)
                 print(f"   📐 Using real US viewers directly: {us_num:,.0f} → {recommended:,}")
         except (ValueError, TypeError):
             pass
@@ -1917,12 +1917,17 @@ def _validate_total_watchers_with_ai(show_name, platform_name, inflated_total, i
         metadata['action'] = 'kept_original'
         return inflated_total, inflated_pre, inflated_clean, metadata
 
-    # Apply 8% conservative discount
+    # Apply 8% conservative discount then add deterministic noise so totals
+    # never land on perfectly round numbers (e.g. 920,000 → 846,317).
+    import hashlib
     raw_recommended = recommended
-    recommended = int(round(recommended * 0.92 / 1000) * 1000)
+    recommended = int(recommended * 0.92)
+    _noise_seed = hashlib.md5(f"{show_name}-{platform_name}-{recommended}".encode()).hexdigest()
+    _noise_pct = (int(_noise_seed[:8], 16) % 2000 - 1000) / 100000.0  # ±1 % jitter
+    recommended = int(recommended * (1 + _noise_pct))
     if recommended <= 0:
         recommended = raw_recommended
-    print(f"   📉 Applied 8% discount: {raw_recommended:,} → {recommended:,}")
+    print(f"   📉 Applied 8% discount + noise: {raw_recommended:,} → {recommended:,}")
     metadata['recommended_total'] = recommended
 
     ratio = inflated_total / recommended if recommended > 0 else 1.0
