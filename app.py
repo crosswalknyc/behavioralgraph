@@ -1571,6 +1571,122 @@ os.makedirs(OUTPUT_DIR, exist_ok=True)
 # so overlapping universe scans do not saturate ClickHouse. Queued UI message is updated
 # when more than zero jobs wait in this process; with multiple replicas, load may still
 # fan out unless requests hit one instance — run Render with a single replica for strict global FIFO.
+# ============================================================================
+# GLOBAL HEAVY-ANALYSIS THROTTLE
+# ============================================================================
+# All analysis tools that hit ClickHouse hard or run long LLM agent chains
+# share a single counting semaphore. Profile Analysis, Subscriber IQ, ROAS IQ,
+# Talent Theater, Watch Time, Cross Show, Campaign ROI, Ticket Sales Tracker,
+# SF/LF Conversion, Flywheel Conversion, Ecommerce IQ, Talent Search — all of
+# them go through `spawn_heavy_analysis()` which acquires one slot before
+# running. This prevents the dashboard from thrashing ClickHouse when several
+# users / pulls fire at once. Tunable via BG_HEAVY_ANALYSIS_CONCURRENCY.
+# ============================================================================
+try:
+    BG_HEAVY_ANALYSIS_CONCURRENCY = max(1, int(os.environ.get('BG_HEAVY_ANALYSIS_CONCURRENCY', '2')))
+except Exception:
+    BG_HEAVY_ANALYSIS_CONCURRENCY = 2
+
+_heavy_analysis_semaphore = threading.BoundedSemaphore(BG_HEAVY_ANALYSIS_CONCURRENCY)
+_heavy_state_lock = threading.Lock()
+_heavy_inflight = {}    # job_id -> {tool, queued_at, started_at, username}
+_heavy_waiting = {}     # job_id -> {tool, queued_at, username}
+
+
+def _heavy_status_snapshot():
+    """Best-effort dict of currently-running and currently-waiting heavy jobs."""
+    with _heavy_state_lock:
+        return {
+            'inflight': dict(_heavy_inflight),
+            'waiting': dict(_heavy_waiting),
+        }
+
+
+def _heavy_ahead_count(self_job_id=None):
+    """How many heavy slots are spoken for ahead of `self_job_id`."""
+    with _heavy_state_lock:
+        ahead = len(_heavy_inflight) + len(_heavy_waiting)
+    if self_job_id and self_job_id in _heavy_waiting:
+        ahead = max(0, ahead - 1)
+    return ahead
+
+
+def heavy_analysis_acquire(job_id, tool, username=None):
+    """Block until a global heavy-analysis slot is free. Updates job status to
+    'queued' with a useful message while waiting. Returns True on success."""
+    info = {'tool': tool, 'queued_at': time.time(), 'username': username}
+    with _heavy_state_lock:
+        _heavy_waiting[job_id] = info
+
+    # Try non-blocking first so the common case (slots free) doesn't show a
+    # spurious "Waiting for compute slot" message.
+    if _heavy_analysis_semaphore.acquire(blocking=False):
+        with _heavy_state_lock:
+            _heavy_waiting.pop(job_id, None)
+            _heavy_inflight[job_id] = {**info, 'started_at': time.time()}
+        return True
+
+    # Slots are full — surface this in the UI before blocking.
+    try:
+        if job_id and job_id in jobs:
+            ahead = _heavy_ahead_count(self_job_id=job_id)
+            update_job_status(
+                job_id,
+                status='queued',
+                message=f'Waiting for compute slot ({ahead} heavy run(s) ahead)',
+            )
+    except Exception:
+        pass
+
+    _heavy_analysis_semaphore.acquire()
+    with _heavy_state_lock:
+        _heavy_waiting.pop(job_id, None)
+        _heavy_inflight[job_id] = {**info, 'started_at': time.time()}
+
+    # Flip status back to running once we have a slot, but only if the run
+    # function won't immediately do the same. We pass through to the run fn
+    # which will set its own status anyway; no-op here is fine.
+    return True
+
+
+def heavy_analysis_release(job_id):
+    """Release the global heavy-analysis slot held by `job_id` (idempotent)."""
+    with _heavy_state_lock:
+        was_inflight = _heavy_inflight.pop(job_id, None) is not None
+        _heavy_waiting.pop(job_id, None)
+    if was_inflight:
+        try:
+            _heavy_analysis_semaphore.release()
+        except ValueError:
+            # Bounded semaphore overshoot — somebody else released first.
+            pass
+
+
+def spawn_heavy_analysis(target, args=(), kwargs=None, *, tool, job_id=None, username=None, daemon=True):
+    """Spawn a background thread that runs `target(*args, **kwargs)` only after
+    acquiring one slot of the shared heavy-analysis semaphore. Use this in
+    place of `threading.Thread(target=run_X, ...)` for any IQ tool that does
+    serious ClickHouse or LLM work.
+
+    Returns the started Thread."""
+    kwargs = kwargs or {}
+
+    def _runner():
+        try:
+            heavy_analysis_acquire(job_id, tool, username=username)
+        except Exception as e:
+            # Failsafe: don't deadlock the UI if acquisition itself blew up.
+            print(f"[Heavy Throttle] acquire failed for {tool}/{job_id}: {e}")
+        try:
+            target(*args, **kwargs)
+        finally:
+            heavy_analysis_release(job_id)
+
+    t = threading.Thread(target=_runner, daemon=daemon, name=f'heavy-{tool}-{job_id or "x"}')
+    t.start()
+    return t
+
+
 _profile_analysis_job_queue = _stdlib_queue.Queue()
 _profile_analysis_queue_worker_lock = threading.Lock()
 _profile_analysis_queue_workers = []          # list of started worker Threads
@@ -1588,11 +1704,21 @@ except Exception:
 
 
 def _profile_analysis_queue_worker(worker_id: int):
-    """Background consumer: pulls jobs FIFO and runs them. Multiple workers run concurrently."""
+    """Background consumer: pulls jobs FIFO and runs them. Multiple workers run
+    concurrently, but each acquires a shared heavy-analysis slot before
+    actually running so Profile Analysis competes fairly with Subscriber IQ /
+    ROAS IQ / Talent Theater / etc. for ClickHouse capacity."""
     while True:
         run_fn, run_args, run_kwargs, queued_job_id = _profile_analysis_job_queue.get()
+        # Best-effort: who submitted this run? Used for throttle telemetry.
         try:
-            # Track in-flight set so /api/queue/status can report concurrency truthfully.
+            username = jobs.get(queued_job_id, {}).get('created_by') if queued_job_id else None
+        except Exception:
+            username = None
+        try:
+            # Track in-flight set so /api/queue/status can report queue-level
+            # concurrency truthfully. The heavy-throttle in-flight set is
+            # tracked separately in _heavy_inflight.
             if queued_job_id:
                 with _profile_analysis_queue_inflight_lock:
                     _profile_analysis_queue_inflight.add(queued_job_id)
@@ -1604,7 +1730,16 @@ def _profile_analysis_queue_worker(worker_id: int):
                         update_job_status(queued_job_id, message='Dequeued — starting run...')
                 except Exception:
                     pass
-            run_fn(*run_args, **run_kwargs)
+            # Acquire the global heavy-analysis slot. May block if the
+            # dashboard is busy with other tools.
+            try:
+                heavy_analysis_acquire(queued_job_id, 'profile_analysis', username=username)
+            except Exception as e:
+                print(f"[Queue Worker {worker_id}] heavy slot acquire failed: {e}")
+            try:
+                run_fn(*run_args, **run_kwargs)
+            finally:
+                heavy_analysis_release(queued_job_id)
         except Exception as e:
             traceback.print_exc()
             # If the callable fails before it can set its own status (e.g. arg
@@ -1621,6 +1756,9 @@ def _profile_analysis_queue_worker(worker_id: int):
                     )
                 except Exception:
                     pass
+            # Belt-and-braces: ensure the heavy slot is released even if the
+            # run path threw before our finally above fired.
+            heavy_analysis_release(queued_job_id)
         finally:
             if queued_job_id:
                 with _profile_analysis_queue_inflight_lock:
@@ -18162,23 +18300,57 @@ def extract_demographics_summary(csv_content):
 @app.route('/api/queue/status', strict_slashes=False)
 @requires_auth
 def get_queue_status():
-    """Return live state of the profile-analysis queue:
-       - configured worker count
-       - currently in-flight jobs (and their ids)
-       - queue depth (jobs waiting for an idle worker)
+    """Return live state of the cross-tool analysis throttle:
+       - profile-analysis queue: configured workers, queued, in-flight
+       - heavy-analysis throttle: capacity, in-flight (per-tool), waiting (per-tool)
        - heartbeat / stale-sweep tunables, for visibility from the UI
+
+    The heavy-analysis throttle is shared across Profile Analysis,
+    Subscriber IQ (SVOD Acquisition), ROAS IQ, Talent Theater / Search,
+    Watch Time, Cross Show, Campaign ROI, Ticket Sales Tracker,
+    SF/LF + Flywheel Conversion, and Ecommerce IQ.
     """
     try:
         with _profile_analysis_queue_inflight_lock:
-            inflight_ids = list(_profile_analysis_queue_inflight)
+            pa_inflight_ids = list(_profile_analysis_queue_inflight)
         depth = profile_analysis_run_queue_depth()
+        snap = _heavy_status_snapshot()
+
+        def _by_tool(d):
+            counts = {}
+            for info in d.values():
+                t = (info or {}).get('tool') or 'unknown'
+                counts[t] = counts.get(t, 0) + 1
+            return counts
+
         return jsonify({
+            'profile_analysis_queue': {
+                'workers': _PROFILE_QUEUE_WORKERS,
+                'inflight': len(pa_inflight_ids),
+                'inflight_ids': pa_inflight_ids,
+                'queued': max(0, depth),
+                'capacity': _PROFILE_QUEUE_WORKERS,
+                'free_slots': max(0, _PROFILE_QUEUE_WORKERS - len(pa_inflight_ids)),
+            },
+            'heavy_throttle': {
+                'capacity': BG_HEAVY_ANALYSIS_CONCURRENCY,
+                'inflight': len(snap['inflight']),
+                'inflight_ids': list(snap['inflight'].keys()),
+                'inflight_by_tool': _by_tool(snap['inflight']),
+                'waiting': len(snap['waiting']),
+                'waiting_ids': list(snap['waiting'].keys()),
+                'waiting_by_tool': _by_tool(snap['waiting']),
+                'free_slots': max(0, BG_HEAVY_ANALYSIS_CONCURRENCY - len(snap['inflight'])),
+            },
+            # Back-compat: keep the old top-level fields so existing UI code
+            # (anything pointing at workers/inflight/queued at the root) keeps
+            # working. New consumers should use the structured fields above.
             'workers': _PROFILE_QUEUE_WORKERS,
-            'inflight': len(inflight_ids),
-            'inflight_ids': inflight_ids,
+            'inflight': len(pa_inflight_ids),
+            'inflight_ids': pa_inflight_ids,
             'queued': max(0, depth),
             'capacity': _PROFILE_QUEUE_WORKERS,
-            'free_slots': max(0, _PROFILE_QUEUE_WORKERS - len(inflight_ids)),
+            'free_slots': max(0, _PROFILE_QUEUE_WORKERS - len(pa_inflight_ids)),
             'stale_after_seconds': BG_JOB_STALE_AFTER_SECONDS,
             'heartbeat_interval_seconds': BG_HEARTBEAT_INTERVAL_SECONDS,
             'sweep_interval_seconds': BG_STALE_SWEEP_INTERVAL_SECONDS,
@@ -21249,9 +21421,8 @@ def submit_talent_search():
         }
         
         # Start job in background thread
-        thread = threading.Thread(target=run_talent_search, args=(job_id,))
-        thread.daemon = True
-        thread.start()
+        spawn_heavy_analysis(run_talent_search, args=(job_id,),
+                             tool='talent_search', job_id=job_id, username=username)
         
         return jsonify({
             'job_id': job_id,
@@ -21328,9 +21499,8 @@ def submit_talent_theater():
         desc = f"{talent_name} / {movie_name} ({start_date}–{end_date})"
         if not consume_credit(username, description=desc, job_id=job_id, pull_type='Ticket Sales', credits_used=CREDITS_TICKET_SALES):
             return jsonify({'error': 'Insufficient credits.'}), 403
-        thread = threading.Thread(target=run_talent_theater, args=(job_id,))
-        thread.daemon = True
-        thread.start()
+        spawn_heavy_analysis(run_talent_theater, args=(job_id,),
+                             tool='talent_theater', job_id=job_id, username=username)
         
         return jsonify({
             'job_id': job_id,
@@ -22131,9 +22301,8 @@ def submit_ticket_sales_tracker():
         desc = f"{movie_name} / {genre} ({start_date}–{end_date})"
         if not consume_credit(username, description=desc, job_id=job_id, pull_type='Ticket Sales Tracker', credits_used=CREDITS_TICKET_SALES_TRACKER):
             return jsonify({'error': 'Insufficient credits.'}), 403
-        thread = threading.Thread(target=run_ticket_sales_tracker, args=(job_id,))
-        thread.daemon = True
-        thread.start()
+        spawn_heavy_analysis(run_ticket_sales_tracker, args=(job_id,),
+                             tool='ticket_sales_tracker', job_id=job_id, username=username)
         return jsonify({'job_id': job_id, 'message': 'Ticket Sales Tracker job submitted successfully', 'status': 'queued'})
     except Exception as e:
         return jsonify({'error': str(e)}), 500
@@ -22289,9 +22458,8 @@ def submit_sf_lf_conversion():
         if not consume_credit(username, description=desc, job_id=job_id, pull_type='SF-LF Conversion', credits_used=CREDITS_SF_LF_CONVERSION):
             return jsonify({'error': 'Insufficient credits.'}), 403
         
-        thread = threading.Thread(target=run_sf_lf_conversion, args=(job_id,))
-        thread.daemon = True
-        thread.start()
+        spawn_heavy_analysis(run_sf_lf_conversion, args=(job_id,),
+                             tool='sf_lf_conversion', job_id=job_id, username=username)
         
         return jsonify({'job_id': job_id, 'message': 'SF-LF Conversion job submitted successfully', 'status': 'queued'})
     except Exception as e:
@@ -24046,9 +24214,8 @@ def submit_flywheel_conversion():
         if not consume_credit(username, description=desc, job_id=job_id, pull_type='Flywheel Conversion', credits_used=CREDITS_FLYWHEEL_CONVERSION):
             return jsonify({'error': 'Insufficient credits.'}), 403
         
-        thread = threading.Thread(target=run_flywheel_conversion, args=(job_id,))
-        thread.daemon = True
-        thread.start()
+        spawn_heavy_analysis(run_flywheel_conversion, args=(job_id,),
+                             tool='flywheel_conversion', job_id=job_id, username=username)
         
         return jsonify({'job_id': job_id, 'message': 'Flywheel Conversion job submitted successfully', 'status': 'queued'})
     except Exception as e:
@@ -25179,9 +25346,8 @@ def submit_svod_acquisition():
         desc = f"{project_name} ({campaign_start}–{campaign_end})"
         if not consume_credit(username, description=desc, job_id=job_id, pull_type='SVOD', credits_used=CREDITS_SVOD):
             return jsonify({'error': 'Insufficient credits.'}), 403
-        thread = threading.Thread(target=run_svod_acquisition, args=(job_id,))
-        thread.daemon = True
-        thread.start()
+        spawn_heavy_analysis(run_svod_acquisition, args=(job_id,),
+                             tool='svod_acquisition', job_id=job_id, username=username)
         
         return jsonify({
             'job_id': job_id,
@@ -25269,9 +25435,8 @@ def submit_campaign_roi():
         desc = f"{project_name} ({campaign_start}–{campaign_end})"
         if not consume_credit(username, description=desc, job_id=job_id, pull_type='Campaign ROI', credits_used=CREDITS_CAMPAIGN_ROI):
             return jsonify({'error': 'Insufficient credits.'}), 403
-        thread = threading.Thread(target=run_campaign_roi, args=(job_id,))
-        thread.daemon = True
-        thread.start()
+        spawn_heavy_analysis(run_campaign_roi, args=(job_id,),
+                             tool='campaign_roi', job_id=job_id, username=username)
         
         return jsonify({
             'job_id': job_id,
@@ -25609,9 +25774,8 @@ def submit_cross_show():
         }
         
         # Start job in background thread
-        thread = threading.Thread(target=run_cross_show, args=(job_id,))
-        thread.daemon = True
-        thread.start()
+        spawn_heavy_analysis(run_cross_show, args=(job_id,),
+                             tool='cross_show', job_id=job_id, username=username)
         
         return jsonify({
             'job_id': job_id,
@@ -25683,9 +25847,8 @@ def submit_watch_time():
         desc = f"Watch Time ({start_date}–{end_date})"
         if not consume_credit(username, description=desc, job_id=job_id, pull_type='Watch Time', credits_used=CREDITS_WATCH_TIME):
             return jsonify({'error': 'Insufficient credits.'}), 403
-        thread = threading.Thread(target=run_watch_time, args=(job_id,))
-        thread.daemon = True
-        thread.start()
+        spawn_heavy_analysis(run_watch_time, args=(job_id,),
+                             tool='watch_time', job_id=job_id, username=username)
         
         return jsonify({
             'job_id': job_id,
@@ -26408,9 +26571,8 @@ def submit_roas_iq():
         if not consume_credit(username, description=desc, job_id=job_id, pull_type='ROAS IQ', credits_used=CREDITS_ROAS_IQ):
             return jsonify({'error': f'ROAS IQ requires {CREDITS_ROAS_IQ} credits. Insufficient credits.'}), 403
 
-        thread = threading.Thread(target=_run_roas_iq, args=(job_id,))
-        thread.daemon = True
-        thread.start()
+        spawn_heavy_analysis(_run_roas_iq, args=(job_id,),
+                             tool='roas_iq', job_id=job_id, username=username)
 
         return jsonify({'job_id': job_id, 'message': 'ROAS IQ job submitted', 'status': 'queued', 'project_name': project_name})
     except Exception as e:
@@ -26610,9 +26772,8 @@ def submit_ecommerce_iq():
         if s3_client:
             _save_job_status_to_s3(job_id, jobs[job_id])
 
-        thread = threading.Thread(target=_run_ecommerce_iq, args=(job_id,))
-        thread.daemon = True
-        thread.start()
+        spawn_heavy_analysis(_run_ecommerce_iq, args=(job_id,),
+                             tool='ecommerce_iq', job_id=job_id, username=username)
 
         return jsonify({'job_id': job_id, 'message': 'E-Commerce IQ job submitted', 'status': 'queued'})
     except Exception as e:
