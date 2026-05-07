@@ -13998,9 +13998,12 @@
                                     <div class="form-section-title">Short Form Content</div>
                                     <div class="form-row">
                                         <div class="form-group" style="grid-column: 1 / -1;">
-                                            <label>Short Form URLs <span style="font-weight: 400; color: var(--text-secondary);">(comma-separated or one per line)</span></label>
-                                            <textarea id="sflfShortFormUrls" rows="5" placeholder="youtube.com/watch?v=abc123&#10;tiktok.com/@user/video/123&#10;instagram.com/reel/xyz&#10;&#10;Or comma-separated: url1, url2, url3" required style="width: 100%; padding: 8px 12px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--bg-primary); color: var(--text-primary); font-size: 14px; resize: vertical;"></textarea>
-                                            <small style="color: var(--text-secondary); font-size: 0.75rem;">Paste URLs from Excel (one per row) or enter comma-separated</small>
+                                            <label>Short Form URLs <span style="font-weight: 400; color: var(--text-secondary);">(comma-separated or one per line, max 100 per run)</span></label>
+                                            <textarea id="sflfShortFormUrls" rows="5" oninput="updateSFLFUrlCount()" placeholder="youtube.com/watch?v=abc123&#10;tiktok.com/@user/video/123&#10;instagram.com/reel/xyz&#10;&#10;Or comma-separated: url1, url2, url3" required style="width: 100%; padding: 8px 12px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--bg-primary); color: var(--text-primary); font-size: 14px; resize: vertical;"></textarea>
+                                            <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 4px;">
+                                                <small style="color: var(--text-secondary); font-size: 0.75rem;">Paste URLs from Excel (one per row) or enter comma-separated. For campaigns with more than 100 URLs, split into multiple runs.</small>
+                                                <small id="sflfUrlCounter" style="color: var(--text-secondary); font-size: 0.75rem; font-weight: 600; white-space: nowrap;">0 / 100</small>
+                                            </div>
                                         </div>
                                     </div>
                                     <div class="form-row">
@@ -28391,7 +28394,27 @@
 
         // ===================== SF-LF CONVERSION =====================
         let sflfConversionResults = [];
-        
+
+        // Live URL counter under the textarea. Mirrors the server-side
+        // SF_LF_MAX_URLS=100 cap so the user sees an immediate signal as
+        // they paste / type. Color shifts amber when nearing the cap and
+        // red when over.
+        function updateSFLFUrlCount() {
+            const ta = document.getElementById('sflfShortFormUrls');
+            const counter = document.getElementById('sflfUrlCounter');
+            if (!ta || !counter) return;
+            const MAX = 100;
+            const n = (ta.value || '').split(/[,;\n\r]+/).map(s => s.trim()).filter(Boolean).length;
+            counter.textContent = `${n.toLocaleString()} / ${MAX}`;
+            if (n > MAX) {
+                counter.style.color = 'var(--accent-red, #ff4d4d)';
+            } else if (n > MAX * 0.8) {
+                counter.style.color = '#f0a830';
+            } else {
+                counter.style.color = 'var(--text-secondary)';
+            }
+        }
+
         async function submitSFLFConversion() {
             const sfUrls = document.getElementById('sflfShortFormUrls')?.value?.trim();
             const sfPlatforms = document.getElementById('sflfShortFormPlatforms')?.value?.trim();
@@ -28406,7 +28429,24 @@
                 alert('Please fill in all required fields (Short Form URLs, Long Form Title, Dates, Project Name)');
                 return;
             }
-            
+
+            // Client-side guard mirrors the server cap so users get an
+            // immediate error instead of waiting for the round-trip. Server
+            // is still authoritative — it re-checks and returns 400 with
+            // the same message if anyone bypasses this (scripts, etc.).
+            const SF_LF_MAX_URLS = 100;
+            const _urlCount = sfUrls.split(/[,;\n\r]+/).map(s => s.trim()).filter(Boolean).length;
+            if (_urlCount > SF_LF_MAX_URLS) {
+                alert(
+                    `Too many URLs submitted: ${_urlCount.toLocaleString()}.\n\n` +
+                    `Please submit at most ${SF_LF_MAX_URLS} URLs per run.\n\n` +
+                    `For larger campaigns, split into separate runs of ` +
+                    `${SF_LF_MAX_URLS} URLs each — each run completes in ` +
+                    `2-3 minutes and the dashboard preserves per-run reports.`
+                );
+                return;
+            }
+
             try {
                 const response = await fetch('/api/attribution/sf-lf-conversion', {
                     method: 'POST',

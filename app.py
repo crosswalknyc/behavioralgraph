@@ -22457,6 +22457,28 @@ def submit_sf_lf_conversion():
             return jsonify({'error': 'Start date and end date are required'}), 400
         if not project_name:
             return jsonify({'error': 'Project name is required'}), 400
+
+        # Hard cap on number of submitted URLs. Each URL adds ~3 conditional
+        # aggregates to a single ClickHouse scan in the per-URL detail
+        # query, and uncapped inputs (e.g. 3,000+ URLs) push that query past
+        # ClickHouse's plan-time / memory limits or hit gunicorn's worker
+        # timeout. 100 keeps every campaign run fast and predictable; bigger
+        # campaigns split into multiple runs (one per 100-URL chunk).
+        SF_LF_MAX_URLS = 100
+        import re as _re_cap
+        _url_count = sum(1 for _u in _re_cap.split(r'[,;\n\r]+', sf_urls) if _u.strip())
+        if _url_count > SF_LF_MAX_URLS:
+            return jsonify({
+                'error': (
+                    f'Too many URLs submitted: {_url_count:,}. '
+                    f'Please submit at most {SF_LF_MAX_URLS} URLs per run. '
+                    f'For larger campaigns, split into separate runs of '
+                    f'{SF_LF_MAX_URLS} URLs each — each run completes in '
+                    f'2-3 minutes and the dashboard preserves per-run reports.'
+                ),
+                'submitted_count': _url_count,
+                'max_urls': SF_LF_MAX_URLS,
+            }), 400
         
         username = session.get('username', 'unknown')
         if not has_credits_for(username, CREDITS_SF_LF_CONVERSION):
