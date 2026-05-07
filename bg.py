@@ -25078,19 +25078,45 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
             _gp_prior_dates = previous_behavior_dates or 'prior reference window'
 
             _gp_wide_window = False
+            _gp_dates_identical = False
             if _gp_is_rerun and previous_behavior_dates:
                 try:
-                    _prior_start_str = previous_behavior_dates.split('TO')[0].strip()
+                    # previous_behavior_dates format: "YYYY-MM-DD TO YYYY-MM-DD"
+                    _parts = [p.strip() for p in previous_behavior_dates.split('TO')]
+                    _prior_start_str = _parts[0] if _parts else ''
+                    _prior_end_str = _parts[1] if len(_parts) > 1 else ''
                     _prior_start = pd.to_datetime(_prior_start_str)
+                    _prior_end = pd.to_datetime(_prior_end_str) if _prior_end_str else None
                     _new_start = pd.to_datetime(behavior_start)
-                    _gp_wide_window = abs((_new_start - _prior_start).days) > 7
+                    _new_end = pd.to_datetime(behavior_end)
+                    _start_delta = abs((_new_start - _prior_start).days)
+                    _end_delta = abs((_new_end - _prior_end).days) if _prior_end is not None else _start_delta
+                    _gp_wide_window = max(_start_delta, _end_delta) > 7
+                    # IDENTICAL DATES → agents must NOT override the baseline.
+                    # If both endpoints match exactly, this is the same data
+                    # window as the reference run; any "change" the agents
+                    # make is hallucination, not signal.
+                    _gp_dates_identical = (_start_delta == 0 and _end_delta == 0)
                 except Exception:
                     _gp_wide_window = False
+                    _gp_dates_identical = False
+
+            # When dates are identical, force the carry-forward path: every
+            # item present in the prior run reuses its prior BP verbatim, no
+            # LLM agent gets to revisit it. Only NET-NEW items (items the
+            # prior pull never saw) go through fresh scoring.
+            _gp_carry_lookup = None
+            if _gp_dates_identical and _gp_is_rerun and previous_behavioral_lookup:
+                _gp_carry_lookup = previous_behavioral_lookup
 
             if _gp_is_rerun:
-                print(f"   • Rerun mode: ON — prior reference has {len(_gp_bp_lookup)} BP values for delta-sanity")
-                print(f"   • Wide-date-window: {_gp_wide_window} "
-                      f"(prior='{previous_behavior_dates}', new='{behavior_start} to {behavior_end}')")
+                if _gp_dates_identical:
+                    print(f"   • Rerun mode: ON — SAME DATES as reference; carrying forward {len(_gp_carry_lookup or {})} prior BP values verbatim")
+                    print(f"   • Delta-sanity / audience-calibration agents: OFF (no agent override on same-date rerun)")
+                else:
+                    print(f"   • Rerun mode: ON — prior reference has {len(_gp_bp_lookup)} BP values for delta-sanity")
+                    print(f"   • Wide-date-window: {_gp_wide_window} "
+                          f"(prior='{previous_behavior_dates}', new='{behavior_start} to {behavior_end}')")
             else:
                 print(f"   • Fresh GenPop run (no prior file) — fresh per-category scoring only")
 
@@ -25103,16 +25129,21 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
             if 'Original Raw Numbers' not in df_final.columns:
                 df_final['Original Raw Numbers'] = 0
 
+            # Same-date rerun → suppress every agent that could mutate prior BPs:
+            #   • previous_behavioral_lookup → carry forward (skips LLM for those items)
+            #   • delta_sanity_lookup=None    → D3 doesn't fire
+            #   • wide_window=False           → D4 (audience calibration) and
+            #                                   D5 (anti-dup jitter) don't fire
             df_final = parallel_category_agents(
                 df_final, _gp_persona_doc, _gp_subject, [],
-                previous_behavioral_lookup=None,
+                previous_behavioral_lookup=_gp_carry_lookup,
                 lock_demographics=True,
                 previous_bp_rows=(_gp_bp_rows if _gp_is_rerun else None),
-                delta_sanity_lookup=(_gp_bp_lookup if _gp_is_rerun and _gp_bp_lookup else None),
+                delta_sanity_lookup=(None if _gp_dates_identical else (_gp_bp_lookup if _gp_is_rerun and _gp_bp_lookup else None)),
                 delta_sanity_subject=_gp_subject,
                 delta_sanity_prior_dates=_gp_prior_dates,
                 delta_sanity_new_dates=_gp_new_dates,
-                wide_window=_gp_wide_window,
+                wide_window=(False if _gp_dates_identical else _gp_wide_window),
                 anchor_mode='genpop',
                 study_dates=f"{behavior_start} to {behavior_end}",
             )
@@ -25260,40 +25291,80 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
         #        events / seasonality / platform trends in the new window
         #   (D5) anti-duplicate jitter — guarantees no two behavioral BPs are
         #        exactly equal (per the user spec for >1-week date deltas)
+        # Same-date and wide-date detection.
+        #
+        # Same-date (both endpoints exact match): the underlying clickstream
+        # window is identical to the reference run, so AI agents must NOT
+        # re-score or override any prior value. We force carry-forward for
+        # every item that existed in the prior pull and disable D3/D4/D5.
+        # Only NET-NEW items get fresh scoring. This is what guarantees that
+        # rerunning the same input on the same dates reproduces the prior
+        # output (within tiny numerical noise) instead of drifting.
+        #
+        # Wide-window (>7d delta on either endpoint): triggers D4 (audience
+        # calibration via gpt-4o-search-preview) and D5 (anti-duplicate
+        # jitter). These agents only adjust when there's a logical real-world
+        # reason something would have moved during the date difference.
         _wide_window = False
+        _dates_identical = False
         if _is_rerun_same_brand and previous_behavior_dates:
             try:
                 # previous_behavior_dates format: "YYYY-MM-DD TO YYYY-MM-DD"
-                _prior_start_str = previous_behavior_dates.split('TO')[0].strip()
+                _parts = [p.strip() for p in previous_behavior_dates.split('TO')]
+                _prior_start_str = _parts[0] if _parts else ''
+                _prior_end_str = _parts[1] if len(_parts) > 1 else ''
                 _prior_start = pd.to_datetime(_prior_start_str)
+                _prior_end = pd.to_datetime(_prior_end_str) if _prior_end_str else None
                 _new_start = pd.to_datetime(behavior_start)
-                _wide_window = abs((_new_start - _prior_start).days) > 7
+                _new_end = pd.to_datetime(behavior_end)
+                _start_delta = abs((_new_start - _prior_start).days)
+                _end_delta = abs((_new_end - _prior_end).days) if _prior_end is not None else _start_delta
+                _wide_window = max(_start_delta, _end_delta) > 7
+                _dates_identical = (_start_delta == 0 and _end_delta == 0)
             except Exception:
                 _wide_window = False
+                _dates_identical = False
+
+        # Carry-forward map for same-date reruns. parallel_category_agents()
+        # already splits items into "in lookup → reuse prior BP verbatim" vs
+        # "not in lookup → call LLM"; passing the actual lookup here is what
+        # locks the prior values in place.
+        _carry_forward_lookup = (
+            previous_behavioral_lookup
+            if (_dates_identical and _is_rerun_same_brand and previous_behavioral_lookup)
+            else None
+        )
+
         if _is_rerun_same_brand:
-            print(f"   • Wide-date-window detected: {_wide_window} "
-                  f"(prior='{previous_behavior_dates}', new='{behavior_start} to {behavior_end}')")
-            if _wide_window:
-                print("   • Audience calibration agent: ON (RAISE/LOWER/INSERT for events, seasonality, platform shifts)")
-                print("   • Anti-duplicate jitter: ON (no two behavioral BPs will be exactly equal)")
+            if _dates_identical:
+                print(f"   • Same-date rerun detected — agents WILL NOT override prior values")
+                print(f"   • Carrying forward {len(_carry_forward_lookup or {})} prior BP values verbatim")
+                print("   • Delta-sanity (D3): OFF | Audience-calibration (D4): OFF | Anti-dup jitter (D5): OFF")
+                print("   • Only net-new items (not present in the prior pull) will be scored")
+            else:
+                print(f"   • Wide-date-window detected: {_wide_window} "
+                      f"(prior='{previous_behavior_dates}', new='{behavior_start} to {behavior_end}')")
+                if _wide_window:
+                    print("   • Audience calibration agent: ON (RAISE/LOWER/INSERT for events, seasonality, platform shifts)")
+                    print("   • Anti-duplicate jitter: ON (no two behavioral BPs will be exactly equal)")
 
         # Step 2: Parallel Category Agents
-        # Rerun-same-brand mode now passes:
-        #   • previous_behavioral_lookup=None  → agents score every item fresh (no carry-forward of values)
+        # Rerun-same-brand mode passes:
+        #   • previous_behavioral_lookup=...    → carry forward (only on same-date reruns); else None = score all fresh
         #   • lock_demographics=True            → demographics still pinned exactly to prior values
         #   • previous_bp_rows=...              → still re-add prior items missing from today's pull (with noise)
-        #   • delta_sanity_lookup=...           → run gpt-4o second-look on any large swing vs. prior
+        #   • delta_sanity_lookup=...           → run gpt-4o second-look on large swings (suppressed on same-date)
         #   • wide_window=...                   → run audience calibration + anti-dup jitter (>1 week apart)
         df_final = parallel_category_agents(
             df_final, _persona_doc, _subject_name, brands,
-            previous_behavioral_lookup=None,
+            previous_behavioral_lookup=_carry_forward_lookup,
             lock_demographics=_is_rerun_same_brand,
             previous_bp_rows=(_previous_bp_rows if _is_rerun_same_brand else None),
-            delta_sanity_lookup=(_previous_bp_lookup if _is_rerun_same_brand else None),
+            delta_sanity_lookup=(None if _dates_identical else (_previous_bp_lookup if _is_rerun_same_brand else None)),
             delta_sanity_subject=_subject_for_delta,
             delta_sanity_prior_dates=_prior_behavior_dates,
             delta_sanity_new_dates=_new_behavior_dates,
-            wide_window=_wide_window,
+            wide_window=(False if _dates_identical else _wide_window),
             study_dates=_new_behavior_dates,
         )
 
