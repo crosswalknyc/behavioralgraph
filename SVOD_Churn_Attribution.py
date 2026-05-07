@@ -2930,8 +2930,21 @@ def write_output(df_summary, df_comp, df_demo, df_timing, df_episode_attribution
                     df_out.loc[idx, "Gen Pop Projection"] = format_gen_pop(gen_pop_projection(_out_clean))
         print(f"   ✅ Output invariant: Total({_out_total:,}) = Pre({_out_pre:,}) + Clean({_out_clean:,})")
 
-    # Gen Pop Projection is always the standard 33x panel-to-population multiplier,
-    # even when counts come from AI real-world overrides.
+    # When AI real-world mode is active, the counts in the DataFrame are already
+    # real-world US numbers (e.g. 920K viewers).  That real-world number belongs in
+    # Gen Pop Projection; Count should be the panel-equivalent (real / 32.99).
+    if ai_real_world:
+        GPP_DIVISOR = US_POPULATION / SAMPLE_REPRESENTS  # ~32.99
+        for idx in df_out.index:
+            c = df_out.loc[idx, "Count"]
+            if c != "" and c is not None and not pd.isna(c):
+                try:
+                    real_world = int(float(str(c).replace(",", "")))
+                    panel_equiv = int(round(real_world / GPP_DIVISOR))
+                    df_out.loc[idx, "Gen Pop Projection"] = f"{real_world:,}"
+                    df_out.loc[idx, "Count"] = panel_equiv
+                except (ValueError, TypeError):
+                    pass
 
     output_folder = Path(p['output_dir']) if p.get('output_dir') else Path.home() / "Desktop" / "attribution"
     output_folder = output_folder if isinstance(output_folder, Path) else Path(output_folder)
