@@ -26,6 +26,7 @@ import io
 import gzip
 import hashlib
 import secrets
+import time
 from html import escape
 from datetime import datetime, timedelta, date
 from functools import wraps
@@ -1571,15 +1572,30 @@ os.makedirs(OUTPUT_DIR, exist_ok=True)
 # when more than zero jobs wait in this process; with multiple replicas, load may still
 # fan out unless requests hit one instance — run Render with a single replica for strict global FIFO.
 _profile_analysis_job_queue = _stdlib_queue.Queue()
-_profile_analysis_queue_worker_started = threading.Event()
 _profile_analysis_queue_worker_lock = threading.Lock()
+_profile_analysis_queue_workers = []          # list of started worker Threads
+_profile_analysis_queue_inflight = set()      # set of job_ids currently executing
+_profile_analysis_queue_inflight_lock = threading.Lock()
+
+# Configurable concurrency. Default is 2: ClickHouse can handle two concurrent
+# universe scans without thrashing, and the LLM-bound phase parallelizes freely.
+# Tune via env var BG_PROFILE_QUEUE_WORKERS (1-4 reasonable; >4 risks CH/OpenAI
+# rate limits and Render memory pressure on Starter plan).
+try:
+    _PROFILE_QUEUE_WORKERS = max(1, int(os.environ.get('BG_PROFILE_QUEUE_WORKERS', '2')))
+except Exception:
+    _PROFILE_QUEUE_WORKERS = 2
 
 
-def _profile_analysis_queue_worker():
-    """Background consumer: executes run_analysis jobs strictly one-after-another."""
+def _profile_analysis_queue_worker(worker_id: int):
+    """Background consumer: pulls jobs FIFO and runs them. Multiple workers run concurrently."""
     while True:
         run_fn, run_args, run_kwargs, queued_job_id = _profile_analysis_job_queue.get()
         try:
+            # Track in-flight set so /api/queue/status can report concurrency truthfully.
+            if queued_job_id:
+                with _profile_analysis_queue_inflight_lock:
+                    _profile_analysis_queue_inflight.add(queued_job_id)
             # Explicit handoff from queue -> execution so jobs don't appear
             # indefinitely queued if startup work takes time.
             if queued_job_id and queued_job_id in jobs:
@@ -1606,28 +1622,53 @@ def _profile_analysis_queue_worker():
                 except Exception:
                     pass
         finally:
+            if queued_job_id:
+                with _profile_analysis_queue_inflight_lock:
+                    _profile_analysis_queue_inflight.discard(queued_job_id)
             _profile_analysis_job_queue.task_done()
 
 
-def enqueue_profile_analysis_run(run_fn, run_args, run_kwargs=None, queued_job_id=None):
-    """Queue a profile pipeline behind any earlier submissions (same process FIFO)."""
-    run_kwargs = run_kwargs or {}
+def _ensure_queue_workers_started():
+    """Lazily spin up N worker threads on first enqueue."""
     with _profile_analysis_queue_worker_lock:
-        if not _profile_analysis_queue_worker_started.is_set():
+        # Reap any threads that died (defensive; daemon threads on crash).
+        alive = [t for t in _profile_analysis_queue_workers if t.is_alive()]
+        _profile_analysis_queue_workers[:] = alive
+        while len(_profile_analysis_queue_workers) < _PROFILE_QUEUE_WORKERS:
+            wid = len(_profile_analysis_queue_workers) + 1
             wt = threading.Thread(
                 target=_profile_analysis_queue_worker,
+                args=(wid,),
                 daemon=True,
-                name='profile-analysis-queue',
+                name=f'profile-analysis-queue-{wid}',
             )
             wt.start()
-            _profile_analysis_queue_worker_started.set()
+            _profile_analysis_queue_workers.append(wt)
+
+
+def enqueue_profile_analysis_run(run_fn, run_args, run_kwargs=None, queued_job_id=None):
+    """Queue a profile pipeline. Multiple workers process FIFO concurrently
+    (capped by BG_PROFILE_QUEUE_WORKERS). Submissions never block — each call
+    returns immediately after putting the job on the queue."""
+    run_kwargs = run_kwargs or {}
+    _ensure_queue_workers_started()
 
     _profile_analysis_job_queue.put((run_fn, run_args, run_kwargs, queued_job_id))
 
     if queued_job_id and queued_job_id in jobs:
         try:
-            ahead = max(0, _profile_analysis_job_queue.qsize() - 1)
-            if ahead > 0:
+            # Show the user a useful queue-position message. With N workers, the
+            # first N submissions start immediately; only the (N+1)th and later
+            # see "X ahead" in their status line.
+            with _profile_analysis_queue_inflight_lock:
+                inflight = len(_profile_analysis_queue_inflight)
+            qsz = _profile_analysis_job_queue.qsize()
+            ahead = max(0, qsz - 1)
+            slots = max(0, _PROFILE_QUEUE_WORKERS - inflight)
+            if ahead == 0 and slots > 0:
+                # Will be picked up by an idle worker almost immediately.
+                pass
+            elif ahead > 0:
                 update_job_status(queued_job_id, message=f'Queued ({ahead} profile run(s) ahead)')
         except Exception:
             pass
@@ -1639,6 +1680,17 @@ def profile_analysis_run_queue_depth():
         return _profile_analysis_job_queue.qsize()
     except Exception:
         return -1
+
+
+def profile_analysis_inflight_count():
+    """Number of profile runs currently executing across the worker pool."""
+    with _profile_analysis_queue_inflight_lock:
+        return len(_profile_analysis_queue_inflight)
+
+
+def profile_analysis_inflight_ids():
+    with _profile_analysis_queue_inflight_lock:
+        return list(_profile_analysis_queue_inflight)
 
 
 # ============================================================================
@@ -18107,6 +18159,34 @@ def extract_demographics_summary(csv_content):
 # Cache loading is handled in background thread - see quick_startup_cache()
 
 
+@app.route('/api/queue/status', strict_slashes=False)
+@requires_auth
+def get_queue_status():
+    """Return live state of the profile-analysis queue:
+       - configured worker count
+       - currently in-flight jobs (and their ids)
+       - queue depth (jobs waiting for an idle worker)
+       - heartbeat / stale-sweep tunables, for visibility from the UI
+    """
+    try:
+        with _profile_analysis_queue_inflight_lock:
+            inflight_ids = list(_profile_analysis_queue_inflight)
+        depth = profile_analysis_run_queue_depth()
+        return jsonify({
+            'workers': _PROFILE_QUEUE_WORKERS,
+            'inflight': len(inflight_ids),
+            'inflight_ids': inflight_ids,
+            'queued': max(0, depth),
+            'capacity': _PROFILE_QUEUE_WORKERS,
+            'free_slots': max(0, _PROFILE_QUEUE_WORKERS - len(inflight_ids)),
+            'stale_after_seconds': BG_JOB_STALE_AFTER_SECONDS,
+            'heartbeat_interval_seconds': BG_HEARTBEAT_INTERVAL_SECONDS,
+            'sweep_interval_seconds': BG_STALE_SWEEP_INTERVAL_SECONDS,
+        })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
 @app.route('/api/jobs')
 @requires_auth
 def list_jobs():
@@ -18847,6 +18927,7 @@ def _save_job_status_to_s3(job_id, job_data):
             'created_by': job_data.get('created_by') or job_data.get('username'),
             'type': job_data.get('type', 'profile_analysis'),
             'brands': job_data.get('brands'),
+            'last_heartbeat': job_data.get('last_heartbeat'),
         }
         all_jobs[job_id] = safe
         s3_client.put_object(Bucket=S3_BUCKET, Key=JOBS_STATUS_S3_KEY, Body=json.dumps(all_jobs), ContentType='application/json')
@@ -18867,7 +18948,11 @@ def _shorten_error_for_ui(error_str, max_len=4000):
 
 
 def update_job_status(job_id, status=None, progress=None, message=None, error=None, result_file=None, demographic_validation=None, s3_key=None, estimated_remaining_seconds=None):
-    """Update job status - simplified to avoid verbose terminal output."""
+    """Update job status - simplified to avoid verbose terminal output.
+
+    Every call refreshes ``last_heartbeat`` so we can detect crashed workers
+    (e.g. Render redeploy mid-run) and mark those jobs as failed instead of
+    leaving them indefinitely 'running'."""
     if job_id in jobs:
         if status:
             jobs[job_id]['status'] = status
@@ -18887,8 +18972,180 @@ def update_job_status(job_id, status=None, progress=None, message=None, error=No
             jobs[job_id]['s3_key'] = s3_key
         if estimated_remaining_seconds is not None:
             jobs[job_id]['estimated_remaining_seconds'] = estimated_remaining_seconds
+        # Always pulse the heartbeat. If the job has finished (completed/failed),
+        # leave the heartbeat as-is so the stale-job sweep ignores it.
+        cur_status = jobs[job_id].get('status')
+        if cur_status not in ('completed', 'failed', 'cancelled'):
+            jobs[job_id]['last_heartbeat'] = datetime.utcnow().isoformat() + 'Z'
         if s3_client:
             _save_job_status_to_s3(job_id, jobs[job_id])
+
+
+# ============================================================================
+# HEARTBEAT + STALE-JOB SWEEP
+# ============================================================================
+#
+# Long-running pipeline runs (60-120 min) can outlive their gunicorn worker if
+# Render redeploys or the dyno OOMs. Without explicit detection, the job stays
+# 'running' forever in the dashboard. To handle this:
+#
+#   1. update_job_status writes last_heartbeat on every status change.
+#   2. _profile_heartbeat_pulser ticks every 30s and refreshes last_heartbeat
+#      for in-flight jobs even when the pipeline is in a long quiet phase
+#      (e.g. waiting on a single ClickHouse universe scan).
+#   3. _sweep_stale_running_jobs runs at startup and every 5 min thereafter,
+#      scanning S3 for jobs marked 'running' whose last_heartbeat is older
+#      than BG_JOB_STALE_AFTER_SECONDS (default 1800 = 30 min).  Those get
+#      marked 'failed' with a clear message.  This is intentionally lenient:
+#      polling never gives up on a job that's still alive.
+# ============================================================================
+
+try:
+    BG_JOB_STALE_AFTER_SECONDS = int(os.environ.get('BG_JOB_STALE_AFTER_SECONDS', '1800'))
+except Exception:
+    BG_JOB_STALE_AFTER_SECONDS = 1800
+
+try:
+    BG_HEARTBEAT_INTERVAL_SECONDS = max(10, int(os.environ.get('BG_HEARTBEAT_INTERVAL_SECONDS', '30')))
+except Exception:
+    BG_HEARTBEAT_INTERVAL_SECONDS = 30
+
+try:
+    BG_STALE_SWEEP_INTERVAL_SECONDS = max(60, int(os.environ.get('BG_STALE_SWEEP_INTERVAL_SECONDS', '300')))
+except Exception:
+    BG_STALE_SWEEP_INTERVAL_SECONDS = 300
+
+
+def _profile_heartbeat_pulser():
+    """Refresh last_heartbeat every BG_HEARTBEAT_INTERVAL_SECONDS for jobs that
+    are currently in-flight in this process. Pipelines that block in a long
+    quiet phase (e.g. a 25-minute ClickHouse scan) still get a fresh heartbeat
+    so the sweep doesn't mistakenly mark them stale."""
+    while True:
+        try:
+            ids = profile_analysis_inflight_ids()
+            now_iso = datetime.utcnow().isoformat() + 'Z'
+            for jid in ids:
+                if jid in jobs:
+                    cur = jobs[jid].get('status')
+                    if cur not in ('completed', 'failed', 'cancelled'):
+                        jobs[jid]['last_heartbeat'] = now_iso
+                        if s3_client:
+                            try:
+                                _save_job_status_to_s3(jid, jobs[jid])
+                            except Exception:
+                                pass
+        except Exception as e:
+            print(f"[Heartbeat] tick error: {e}")
+        time.sleep(BG_HEARTBEAT_INTERVAL_SECONDS)
+
+
+def _parse_iso_ts(ts):
+    if not ts:
+        return None
+    try:
+        s = str(ts).strip()
+        if s.endswith('Z'):
+            s = s[:-1] + '+00:00'
+        return datetime.fromisoformat(s)
+    except Exception:
+        return None
+
+
+def _sweep_stale_running_jobs():
+    """Mark any job stuck in 'running'/'queued' with no heartbeat in
+    BG_JOB_STALE_AFTER_SECONDS as 'failed'. Skips jobs we know are still
+    in-flight in this process."""
+    if not s3_client:
+        return 0
+    try:
+        all_jobs = _load_jobs_status_from_s3()
+    except Exception as e:
+        print(f"[Stale Sweep] load failed: {e}")
+        return 0
+
+    inflight_ids = set(profile_analysis_inflight_ids())
+    now = datetime.utcnow()
+    threshold = timedelta(seconds=BG_JOB_STALE_AFTER_SECONDS)
+    swept = 0
+
+    for jid, job in list(all_jobs.items()):
+        st = (job.get('status') or '').lower()
+        if st not in ('running', 'queued', 'in_progress', 'processing'):
+            continue
+        if jid in inflight_ids:
+            continue
+        last_hb = _parse_iso_ts(job.get('last_heartbeat'))
+        if last_hb is None:
+            # Fall back to created_at; if that's also missing, skip rather
+            # than risk false-positive killing a fresh job.
+            last_hb = _parse_iso_ts(job.get('created_at'))
+        if last_hb is None:
+            continue
+        # Normalize tz-naive vs tz-aware
+        try:
+            if last_hb.tzinfo is not None:
+                last_hb = last_hb.replace(tzinfo=None)
+        except Exception:
+            continue
+        age = now - last_hb
+        if age <= threshold:
+            continue
+        msg = (
+            f'No heartbeat for {int(age.total_seconds() / 60)} min — '
+            'worker likely crashed/restarted. Resubmit if you still need this run.'
+        )
+        # Update both in-memory (best-effort, may not be in this process) + S3.
+        if jid in jobs:
+            jobs[jid]['status'] = 'failed'
+            jobs[jid]['progress'] = 100
+            jobs[jid]['message'] = 'Crashed: no heartbeat'
+            jobs[jid]['error'] = msg
+            try:
+                _save_job_status_to_s3(jid, jobs[jid])
+            except Exception:
+                pass
+        else:
+            stale = dict(job)
+            stale['status'] = 'failed'
+            stale['progress'] = 100
+            stale['message'] = 'Crashed: no heartbeat'
+            stale['error'] = msg
+            try:
+                all_jobs[jid] = stale
+                s3_client.put_object(
+                    Bucket=S3_BUCKET, Key=JOBS_STATUS_S3_KEY,
+                    Body=json.dumps(all_jobs), ContentType='application/json'
+                )
+            except Exception as e:
+                print(f"[Stale Sweep] S3 write failed for {jid}: {e}")
+        swept += 1
+
+    if swept:
+        print(f"[Stale Sweep] marked {swept} stuck job(s) as failed")
+    return swept
+
+
+def _stale_sweep_loop():
+    """Run sweep on startup and then every BG_STALE_SWEEP_INTERVAL_SECONDS."""
+    # Initial delay so we don't fight other startup tasks (S3 cache prime etc.).
+    time.sleep(15)
+    while True:
+        try:
+            _sweep_stale_running_jobs()
+        except Exception as e:
+            print(f"[Stale Sweep] error: {e}")
+        time.sleep(BG_STALE_SWEEP_INTERVAL_SECONDS)
+
+
+# Spin up heartbeat + sweep daemons on import.
+try:
+    _hb_thread = threading.Thread(target=_profile_heartbeat_pulser, daemon=True, name='profile-heartbeat')
+    _hb_thread.start()
+    _sweep_thread = threading.Thread(target=_stale_sweep_loop, daemon=True, name='profile-stale-sweep')
+    _sweep_thread.start()
+except Exception as _e:
+    print(f"[Heartbeat] startup error: {_e}")
 
 
 # Timing-based step weights derived from observed Nike profile run (~66 min total).

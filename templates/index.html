@@ -23735,7 +23735,7 @@
         function _pollRoasIQ(jobId, projectName) {
             if (_roasIQPollingId) clearInterval(_roasIQPollingId);
             var attempts = 0;
-            var maxAttempts = 600;
+            var maxAttempts = 86400;  // 48h at 2s/poll — server-side stale sweep marks crashed jobs failed
             _roasIQPollingId = setInterval(() => {
                 attempts++;
                 fetch('/api/job-status/' + jobId, { credentials: 'same-origin' }).then(r => {
@@ -23770,7 +23770,7 @@
                     } else if (attempts >= maxAttempts) {
                         clearInterval(_roasIQPollingId);
                         document.getElementById('roasIQSubmitBtn').disabled = false;
-                        showAnalysisStatusModalError('Polling stopped after 20 minutes. The job may still be running.');
+                        showAnalysisStatusModalError('Polling stopped after 48 hours. Check the Results Library — the run is either complete or was auto-failed by the crash detector.');
                     }
                 }).catch(e => { if (e !== 'auth') console.error('ROAS IQ poll error:', e); });
             }, 2000);
@@ -27992,7 +27992,7 @@
         
         // Polling functions for custom forms
         async function pollCustomTalentSearchJobStatus(jobId) {
-            const maxAttempts = 120;
+            const maxAttempts = 86400;  // 48h at 2s/poll — server-side stale sweep marks crashed jobs failed
             let attempts = 0;
             const pollInterval = setInterval(async () => {
                 attempts++;
@@ -28030,7 +28030,7 @@
         }
         
         async function pollCustomTalentTheaterJobStatus(jobId) {
-            const maxAttempts = 120;
+            const maxAttempts = 86400;  // 48h at 2s/poll — server-side stale sweep marks crashed jobs failed
             let attempts = 0;
             const pollInterval = setInterval(async () => {
                 attempts++;
@@ -28061,7 +28061,7 @@
                         showAnalysisStatusModalError(data.error || data.message || 'Analysis failed');
                     } else if (attempts >= maxAttempts) {
                         clearInterval(pollInterval);
-                        showAnalysisStatusModalError('Analysis timed out.');
+                        showAnalysisStatusModalError('Polling stopped after 48 hours. Check the Results Library — the run is either complete or was auto-failed by the crash detector.');
                     }
                 } catch (error) {
                     console.error('Error polling job status:', error);
@@ -28074,7 +28074,7 @@
         }
         
         async function pollCustomSVODAcquisitionJobStatus(jobId, projectName) {
-            const maxAttempts = 600;
+            const maxAttempts = 86400;  // 48h at 2s/poll — server-side stale sweep marks crashed jobs failed
             let attempts = 0;
             const pollInterval = setInterval(async () => {
                 attempts++;
@@ -28116,7 +28116,7 @@
                         if (typeof loadMyResults === 'function') loadMyResults();
                     } else if (attempts >= maxAttempts) {
                         clearInterval(pollInterval);
-                        showAnalysisStatusModalError('Polling stopped after 20 minutes. The job may still be running—check the Results Library for status and refresh.');
+                        showAnalysisStatusModalError('Polling stopped after 48 hours. Check the Results Library — the run is either complete or was auto-failed by the crash detector.');
                     }
                 } catch (error) {
                     console.error('Error polling job status:', error);
@@ -28129,7 +28129,7 @@
         }
         
         async function pollCustomCampaignROIJobStatus(jobId) {
-            const maxAttempts = 120;
+            const maxAttempts = 86400;  // 48h at 2s/poll — server-side stale sweep marks crashed jobs failed
             let attempts = 0;
             const pollInterval = setInterval(async () => {
                 attempts++;
@@ -28167,7 +28167,7 @@
         }
         
         async function pollCustomCrossShowJobStatus(jobId) {
-            const maxAttempts = 120;
+            const maxAttempts = 86400;  // 48h at 2s/poll — server-side stale sweep marks crashed jobs failed
             let attempts = 0;
             const pollInterval = setInterval(async () => {
                 attempts++;
@@ -28205,7 +28205,7 @@
         }
         
         async function pollCustomWatchTimeJobStatus(jobId) {
-            const maxAttempts = 120;
+            const maxAttempts = 86400;  // 48h at 2s/poll — server-side stale sweep marks crashed jobs failed
             let attempts = 0;
             const pollInterval = setInterval(async () => {
                 attempts++;
@@ -28243,7 +28243,7 @@
         }
         
         async function pollCustomTicketSalesTrackerJobStatus(jobId) {
-            const maxAttempts = 120;
+            const maxAttempts = 86400;  // 48h at 2s/poll — server-side stale sweep marks crashed jobs failed
             let attempts = 0;
             const pollInterval = setInterval(async () => {
                 attempts++;
@@ -28340,7 +28340,7 @@
         }
         
         async function pollSFLFConversionJobStatus(jobId) {
-            const maxAttempts = 900; // 30 minutes for complex queries with 1500+ URLs
+            const maxAttempts = 86400;  // 48h at 2s/poll — server-side stale sweep marks crashed jobs failed
             let attempts = 0;
             const pollInterval = setInterval(async () => {
                 attempts++;
@@ -37588,7 +37588,7 @@
         }
 
         async function pollIncidenceCheckStatus(jobId, resultsDiv) {
-            const maxAttempts = 120;
+            const maxAttempts = 86400;  // 48h at 2s/poll — server-side stale sweep marks crashed jobs failed
             for (let i = 0; i < maxAttempts; i++) {
                 await new Promise(r => setTimeout(r, 3000));
                 try {
