@@ -21036,7 +21036,15 @@ Return ONLY a JSON array, one entry per item, in the same order:
                 continue
             old_bp = value_to_old.get(val, 0.0)
             jitter = random.uniform(-0.01, 0.01)
-            new_bp = round(max(0.01, min(95.0, new_bp + jitter)), 4)
+            new_bp_candidate = min(95.0, new_bp + jitter)
+            # When the judge's revision lands at-or-below the legacy 0.01
+            # floor, route through _organic_floor_bp so we don't visually
+            # stamp every very-low item at exactly 0.0100. Above the floor
+            # the judge's value passes through unchanged.
+            if new_bp_candidate <= 0.01:
+                new_bp = _organic_floor_bp(cat_u, str(d.get('value', '')), center=0.01)
+            else:
+                new_bp = round(new_bp_candidate, 4)
             df.at[idx, bp_col] = new_bp
             if 'Category Share' in df.columns:
                 df.at[idx, 'Category Share'] = new_bp
@@ -21263,7 +21271,11 @@ def _apply_canonical_baseline_cap(df: pd.DataFrame,
             continue
         ratio_before = new_bp / max(canon, 0.0001)
         jitter = random.uniform(-0.05, 0.05)
-        capped_bp = round(max(0.01, cap + jitter), 4)
+        capped_candidate = cap + jitter
+        if capped_candidate <= 0.01:
+            capped_bp = _organic_floor_bp(cat_u, str(row['Value']), center=0.01)
+        else:
+            capped_bp = round(capped_candidate, 4)
         biggest.append((cat_u, str(row['Value']), canon, new_bp, capped_bp, ratio_before))
         df.at[idx, bp_col] = capped_bp
         if 'Category Share' in df.columns:
@@ -21417,7 +21429,11 @@ def _apply_canonical_baseline_floor(df: pd.DataFrame,
             continue
         ratio_before = new_bp / max(canon, 0.0001)
         jitter = random.uniform(-0.05, 0.05)
-        floored_bp = round(max(0.01, floor + jitter), 4)
+        floored_candidate = floor + jitter
+        if floored_candidate <= 0.01:
+            floored_bp = _organic_floor_bp(cat_u, str(row['Value']), center=0.01)
+        else:
+            floored_bp = round(floored_candidate, 4)
         biggest.append((cat_u, str(row['Value']), canon, new_bp, floored_bp, ratio_before))
         df.at[idx, bp_col] = floored_bp
         if 'Category Share' in df.columns:
@@ -21655,7 +21671,11 @@ Return ONLY a JSON array, one entry per item, in the same order:
                 revises_floor += 1
             new_bp = max(min(new_bp, hi), lo)
             jitter = random.uniform(-0.05, 0.05)
-            new_bp = round(max(0.01, min(99.0, new_bp + jitter)), 4)
+            judged_candidate = min(99.0, new_bp + jitter)
+            if judged_candidate <= 0.01:
+                new_bp = _organic_floor_bp(cat_u, str(action['value']), center=0.01)
+            else:
+                new_bp = round(judged_candidate, 4)
             idx = action['idx']
             df.at[idx, bp_col] = new_bp
             if 'Category Share' in df.columns:
@@ -21772,6 +21792,17 @@ def _apply_post_score_agents(df: pd.DataFrame,
     # If an outlier slips through in the future, fix the affinity scoring,
     # not the post-processing.
 
+    # --- D-FINAL) Floor de-dup (every run, not just reruns) ----------------
+    # Previously, dozens of low-relevance behavioral items could pile up at
+    # exactly 0.0100% because every downstream clamp used `max(0.01, ...)`.
+    # That made the output look stamped/artificial. This pass scans behavioral
+    # rows landing at-or-below 0.0125 and rewrites each with a deterministic,
+    # unique-per-(category, value) value in (0.004%, 0.016%) — so floored
+    # items still read as "very low" but don't visually pile at one number.
+    # Demographics, LOCATION, and structural rows have their own jitter and
+    # are skipped here.
+    df = _de_duplicate_floor_pile_up(df, bp_col)
+
     return df
 
 
@@ -21868,6 +21899,86 @@ def _organic_4dp(val: float) -> float:
     d4 = random.randint(1, 9)
     v = integer_part + d1 * 0.1 + d2 * 0.01 + d3 * 0.001 + d4 * 0.0001
     return max(0.1111, min(99.8999, round(v, 4)))
+
+
+def _organic_floor_bp(category: str, value: str, center: float = 0.01) -> float:
+    """Deterministic low BP value used in place of stamping items at
+    exactly `center` (typically 0.01).
+
+    Hashes on `value` only (not category) so that the SAME item appearing
+    in multiple categories — e.g. a niche brand listed in both MOST
+    PURCHASED BRANDS and APPAREL/FOOTWEAR — gets the SAME floor BP in
+    every category, preserving the score-once-propagate guarantee for
+    byte-identical cross-category values.
+
+    Within a single category, different items produce different `value`
+    strings → different floor BPs, so the visual pile-up at exactly 0.01
+    is broken.
+
+    Output range is roughly (center * 0.4, center * 1.6) with 4-dp
+    organic decimals — for center=0.01 that yields values like
+    0.0042, 0.0089, 0.0107, 0.0153 etc. The `category` argument is kept
+    in the signature for future flexibility but is not currently used.
+    """
+    import hashlib
+    key = (value or '').strip().upper()
+    h = hashlib.md5(key.encode('utf-8')).hexdigest()
+    s = int(h[:8], 16) / 0xFFFFFFFF        # [0, 1)
+    f = int(h[8:16], 16) / 0xFFFFFFFF      # [0, 1)
+    shift_pct = (s - 0.5) * 1.2            # [-0.6, +0.6]
+    base = center * (1.0 + shift_pct)      # [0.4*center, 1.6*center]
+    fine = (f - 0.5) * center * 0.2        # [-0.1*center, +0.1*center]
+    out = max(0.0001, base + fine)
+    return round(out, 4)
+
+
+def _de_duplicate_floor_pile_up(df: pd.DataFrame, bp_col: str,
+                                 floor_threshold: float = 0.0125) -> pd.DataFrame:
+    """Post-pipeline floor de-stamper.
+
+    Every BEHAVIORAL row whose final BP landed at-or-below `floor_threshold`
+    (default 0.0125, just above the 0.01 floor) gets replaced with a
+    deterministic, unique-per-(category, value) value from
+    `_organic_floor_bp()`. This eliminates the visual pile-up where
+    dozens of low-relevance items all show as exactly 0.0100% in the
+    output CSV.
+
+    Demographics, LOCATION, and structural rows (BRAND INPUT,
+    SAMPLE SIZE, INPUT_METADATA, BRAND CATEGORY) are NOT touched — they
+    have their own dedicated jitter passes.
+
+    Idempotent: running twice yields the same output (hash-based).
+    """
+    if bp_col not in df.columns:
+        return df
+
+    cat_series = df['Column'].astype(str).str.strip().str.upper()
+    val_series = df['Value'].astype(str).str.strip()
+    behav_mask = ~cat_series.isin(_DEMO_SET | _BEHAVIORAL_SKIP)
+
+    nudged = 0
+    for idx in df[behav_mask].index:
+        try:
+            bp_raw = df.at[idx, bp_col]
+            if isinstance(bp_raw, str):
+                bp_raw = bp_raw.replace('%', '').replace(',', '').strip()
+            bp = float(bp_raw)
+        except (TypeError, ValueError):
+            continue
+        if bp > floor_threshold:
+            continue
+        cat_u = str(cat_series.at[idx])
+        val_s = str(val_series.at[idx])
+        new_bp = _organic_floor_bp(cat_u, val_s, center=0.01)
+        df.at[idx, bp_col] = new_bp
+        if 'Category Share' in df.columns:
+            df.at[idx, 'Category Share'] = new_bp
+        nudged += 1
+
+    if nudged:
+        print(f"   🎲 Floor de-dup: {nudged} behavioral rows at-floor → "
+              f"unique values in (0.004%, 0.016%) so they don't pile at exactly 0.01%")
+    return df
 
 
 def _has_bad_decimals(val: float) -> bool:
