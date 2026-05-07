@@ -16593,22 +16593,51 @@
                             </div>
                         </div>
                         
-                        <!-- URL Metrics Table - Collapsible -->
+                        <!-- URL Metrics Table - Collapsible, scrollable, platform-filterable -->
                         <div class="sf-conv-section" style="background: var(--bg-card); border-radius: 12px; margin-bottom: 1.5rem; border: 1px solid var(--border-color);">
                             <div onclick="toggleSFConvUrlTable()" style="padding: 1.25rem; cursor: pointer; display: flex; justify-content: space-between; align-items: center;">
-                                <h3 style="margin: 0; font-size: 0.9rem; color: var(--text-primary);">📎 Top 20 Short Form Videos <span id="sfConvUrlCount" style="font-size: 0.75rem; color: var(--text-secondary); font-weight: 400;"></span></h3>
+                                <h3 style="margin: 0; font-size: 0.9rem; color: var(--text-primary);">📎 Short Form Videos <span id="sfConvUrlCount" style="font-size: 0.75rem; color: var(--text-secondary); font-weight: 400;"></span></h3>
                                 <span id="sfConvUrlTableToggle" style="font-size: 1.2rem; color: var(--text-secondary); transition: transform 0.3s; transform: rotate(90deg);">▶</span>
                             </div>
                             <div id="sfConvUrlTableWrapper" style="display: block; padding: 0 1.25rem 1.25rem 1.25rem;">
-                                <div style="overflow-x: auto;">
+                                <!-- Filter / sort controls -->
+                                <div style="display: flex; flex-wrap: wrap; gap: 0.75rem; margin-bottom: 0.75rem; align-items: center;">
+                                    <div>
+                                        <label for="sfConvUrlPlatformFilter" style="font-size: 0.7rem; color: var(--text-secondary); margin-right: 0.5rem;">Platform</label>
+                                        <select id="sfConvUrlPlatformFilter" onchange="renderSFConvUrlTable()" style="background: var(--bg-dark); color: var(--text-primary); border: 1px solid var(--border-color); border-radius: 6px; padding: 0.35rem 0.6rem; font-size: 0.75rem;">
+                                            <option value="all">All platforms</option>
+                                            <option value="youtube">YouTube</option>
+                                            <option value="instagram">Instagram</option>
+                                            <option value="tiktok">TikTok</option>
+                                            <option value="other">Other</option>
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label for="sfConvUrlSort" style="font-size: 0.7rem; color: var(--text-secondary); margin-right: 0.5rem;">Sort by</label>
+                                        <select id="sfConvUrlSort" onchange="renderSFConvUrlTable()" style="background: var(--bg-dark); color: var(--text-primary); border: 1px solid var(--border-color); border-radius: 6px; padding: 0.35rem 0.6rem; font-size: 0.75rem;">
+                                            <option value="unique_desc">Unique Viewers (high → low)</option>
+                                            <option value="total_desc">Total Views (high → low)</option>
+                                            <option value="conv_desc">Conversions (high → low)</option>
+                                            <option value="rate_desc">Conv. Rate (high → low)</option>
+                                            <option value="platform">Platform (A→Z)</option>
+                                            <option value="input">Input order</option>
+                                        </select>
+                                    </div>
+                                    <div style="flex: 1; min-width: 200px;">
+                                        <input type="text" id="sfConvUrlSearch" oninput="renderSFConvUrlTable()" placeholder="Search URL substring..." style="width: 100%; background: var(--bg-dark); color: var(--text-primary); border: 1px solid var(--border-color); border-radius: 6px; padding: 0.4rem 0.6rem; font-size: 0.75rem;">
+                                    </div>
+                                </div>
+                                <!-- Scrollable table container — sticky header so the column titles stay visible while scrolling thousands of URLs -->
+                                <div style="max-height: 480px; overflow-y: auto; overflow-x: auto; border: 1px solid var(--border-color); border-radius: 6px;">
                                     <table class="data-table" style="width: 100%; border-collapse: collapse; font-size: 0.8rem;">
-                                        <thead>
+                                        <thead style="position: sticky; top: 0; z-index: 1;">
                                             <tr style="background: var(--bg-dark);">
-                                                <th style="text-align: left; padding: 0.75rem; border-bottom: 1px solid var(--border-color);">Video URL</th>
-                                                <th style="text-align: right; padding: 0.75rem; border-bottom: 1px solid var(--border-color);">Unique Views</th>
-                                                <th style="text-align: right; padding: 0.75rem; border-bottom: 1px solid var(--border-color);">Total Views</th>
-                                                <th style="text-align: right; padding: 0.75rem; border-bottom: 1px solid var(--border-color);">Converted to Long Form</th>
-                                                <th style="text-align: right; padding: 0.75rem; border-bottom: 1px solid var(--border-color);">Conv. Rate</th>
+                                                <th style="text-align: left; padding: 0.75rem; border-bottom: 1px solid var(--border-color); background: var(--bg-dark);">Video URL</th>
+                                                <th style="text-align: left; padding: 0.75rem; border-bottom: 1px solid var(--border-color); background: var(--bg-dark);">Platform</th>
+                                                <th style="text-align: right; padding: 0.75rem; border-bottom: 1px solid var(--border-color); background: var(--bg-dark);">Unique Viewers (UIDs)</th>
+                                                <th style="text-align: right; padding: 0.75rem; border-bottom: 1px solid var(--border-color); background: var(--bg-dark);">Total Views (Events)</th>
+                                                <th style="text-align: right; padding: 0.75rem; border-bottom: 1px solid var(--border-color); background: var(--bg-dark);">Converted Viewers (UIDs)</th>
+                                                <th style="text-align: right; padding: 0.75rem; border-bottom: 1px solid var(--border-color); background: var(--bg-dark);">Conv. Rate</th>
                                             </tr>
                                         </thead>
                                         <tbody id="sfConvUrlTableBody"></tbody>
@@ -19923,17 +19952,34 @@
                 else if (col.includes('DEMOGRAPHICS')) currentSection = 'demographics';
                 else if ((col === 'URL' || col === 'INPUT_URL') && currentSection === 'url') {
                     let existing = urlMetrics.find(u => u.url === val);
-                    if (!existing) { existing = { url: val }; urlMetrics.push(existing); }
-                    if (metric === 'Unique Views') { existing.uniqueViews = count; existing.uniqueViewsGenPop = genPop; }
-                    else if (metric === 'Duplicated Views') { existing.duplicatedViews = count; existing.duplicatedViewsGenPop = genPop; }
-                    else if (metric === 'Converted to LF' || metric === 'Converted to LF Title') { existing.converted = count; existing.convRate = pct; existing.convertedGenPop = genPop; }
+                    if (!existing) { existing = { url: val, dataSource: row.Data_Source || 'PANEL' }; urlMetrics.push(existing); }
+                    else if (row.Data_Source) { existing.dataSource = row.Data_Source; }
+                    // Accept both legacy ("Unique Views") and renamed
+                    // ("Unique Viewers (UIDs)") metric strings so reports
+                    // saved before the rename still parse correctly.
+                    if (metric === 'Unique Views' || metric === 'Unique Viewers (UIDs)') {
+                        existing.uniqueViews = count; existing.uniqueViewsGenPop = genPop;
+                    }
+                    else if (metric === 'Duplicated Views' || metric === 'Total Views (Events)') {
+                        existing.duplicatedViews = count; existing.duplicatedViewsGenPop = genPop;
+                    }
+                    else if (metric === 'Converted to LF' || metric === 'Converted to LF Title' || metric === 'Converted Viewers (UIDs)') {
+                        existing.converted = count; existing.convRate = pct; existing.convertedGenPop = genPop;
+                    }
                 }
                 else if (col === 'PLATFORM' && currentSection === 'platform') {
                     let existing = platformMetrics.find(p => p.platform === val);
-                    if (!existing) { existing = { platform: val }; platformMetrics.push(existing); }
-                    if (metric === 'Unique Views') { existing.uniqueViews = count; existing.uniqueViewsGenPop = genPop; }
-                    else if (metric === 'Duplicated Views') { existing.duplicatedViews = count; existing.duplicatedViewsGenPop = genPop; }
-                    else if (metric === 'Converted to Title') { existing.converted = count; existing.convRate = pct; existing.convertedGenPop = genPop; }
+                    if (!existing) { existing = { platform: val, dataSource: row.Data_Source || 'PANEL' }; platformMetrics.push(existing); }
+                    else if (row.Data_Source) { existing.dataSource = row.Data_Source; }
+                    if (metric === 'Unique Views' || metric === 'Unique Viewers (UIDs)') {
+                        existing.uniqueViews = count; existing.uniqueViewsGenPop = genPop;
+                    }
+                    else if (metric === 'Duplicated Views' || metric === 'Total Views (Events)') {
+                        existing.duplicatedViews = count; existing.duplicatedViewsGenPop = genPop;
+                    }
+                    else if (metric === 'Converted to Title' || metric === 'Converted Viewers (UIDs)') {
+                        existing.converted = count; existing.convRate = pct; existing.convertedGenPop = genPop;
+                    }
                 }
                 else if (col === 'OVERALL_CONVERSION' && currentSection === 'conversion') {
                     if (val === 'Total SF Viewers (All Platforms)') { conversionSummary.totalViewers = count; conversionSummary.totalViewersGenPop = genPop; }
@@ -20133,52 +20179,10 @@
             if (infoDateRangeEl) infoDateRangeEl.textContent = projectInfo.dateRange || '-';
             if (infoWindowEl) infoWindowEl.textContent = projectInfo.window || '-';
             
-            // URL Table - show projected values
-            const urlTbody = document.getElementById('sfConvUrlTableBody');
-            const urlCountEl = document.getElementById('sfConvUrlCount');
-            if (urlTbody) {
-                const top20Urls = urlMetrics.slice(0, 20);
-                if (urlCountEl) urlCountEl.textContent = `(${top20Urls.length} videos)`;
-                urlTbody.innerHTML = top20Urls.map((u, idx) => {
-                    const uniqueViewsProj = parseInt(u.uniqueViewsGenPop) || 0;
-                    const duplicatedViewsProj = parseInt(u.duplicatedViewsGenPop) || 0;
-                    let convertedProj = parseInt(u.convertedGenPop) || 0;
-                    let convertedSample = parseInt(u.converted) || 0;
-                    const uniqueSample = parseInt(u.uniqueViews) || 0;
-
-                    // Hard cap: converted can never exceed unique views
-                    if (convertedSample > uniqueSample) convertedSample = uniqueSample;
-                    if (convertedProj > uniqueViewsProj && uniqueViewsProj > 0) convertedProj = uniqueViewsProj;
-
-                    const uniqueDisplay = uniqueViewsProj > 0 ? formatGenPop(uniqueViewsProj) : uniqueSample.toLocaleString();
-                    let dupDisplay = duplicatedViewsProj > 0 ? formatGenPop(duplicatedViewsProj) : (parseInt(u.duplicatedViews) || 0).toLocaleString();
-                    if (duplicatedViewsProj > 0 && uniqueViewsProj > 0 && duplicatedViewsProj < uniqueViewsProj) {
-                        dupDisplay = formatGenPop(Math.round(uniqueViewsProj * 1.8));
-                    }
-
-                    let convDisplay = convertedProj > 0 ? formatGenPop(convertedProj) : convertedSample.toLocaleString();
-
-                    let convRate = 0;
-                    if (uniqueViewsProj > 0 && convertedProj > 0) convRate = Math.min((convertedProj / uniqueViewsProj) * 100, 100);
-                    else if (uniqueSample > 0) convRate = Math.min((convertedSample / uniqueSample) * 100, 100);
-                    else convRate = parseFloat(u.convRate || 0);
-                    if (convRate > 100) convRate = 100;
-
-                    return `
-                    <tr>
-                        <td style="padding: 0.75rem; border-bottom: 1px solid var(--border-color); max-width: 350px;">
-                            <div style="display: flex; align-items: center; gap: 0.5rem;">
-                                <span style="color: var(--text-secondary); font-size: 0.7rem; min-width: 20px;">#${idx + 1}</span>
-                                <a href="${u.url}" target="_blank" style="color: var(--accent-cyan); text-decoration: none; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${u.url}">${u.url.substring(0, 55)}${u.url.length > 55 ? '...' : ''}</a>
-                            </div>
-                        </td>
-                        <td style="text-align: right; padding: 0.75rem; border-bottom: 1px solid var(--border-color);">${uniqueDisplay}</td>
-                        <td style="text-align: right; padding: 0.75rem; border-bottom: 1px solid var(--border-color);">${dupDisplay}</td>
-                        <td style="text-align: right; padding: 0.75rem; border-bottom: 1px solid var(--border-color); font-weight: 600; color: var(--accent-lime);">${convDisplay}</td>
-                        <td style="text-align: right; padding: 0.75rem; border-bottom: 1px solid var(--border-color); font-weight: 600; color: var(--accent-primary);">${convRate.toFixed(2)}%</td>
-                    </tr>
-                `}).join('');
-            }
+            // Stash the parsed URL list on window so the filter / sort /
+            // search controls can re-render without re-parsing the CSV.
+            window._sfConvUrlMetrics = urlMetrics;
+            renderSFConvUrlTable();
             
             // Platform Table - show projected values
             const platSection = document.getElementById('sfConvPlatformSection');
@@ -20307,6 +20311,139 @@
                 const isHidden = wrapper.style.display === 'none';
                 wrapper.style.display = isHidden ? 'block' : 'none';
                 toggle.style.transform = isHidden ? 'rotate(90deg)' : 'rotate(0deg)';
+            }
+        }
+
+        // Detect platform from URL (used by the filter dropdown). Mirrors
+        // the backend detect_platform() in sf_lf_view_scraper.py.
+        function _sfConvDetectPlatform(url) {
+            const u = (url || '').toLowerCase();
+            if (u.includes('youtube.') || u.includes('youtu.be')) return 'youtube';
+            if (u.includes('tiktok.')) return 'tiktok';
+            if (u.includes('instagram.')) return 'instagram';
+            return 'other';
+        }
+
+        // Re-render the URL table using the current filter / sort / search
+        // controls. Called once on initial render and again whenever the
+        // user changes a control (onchange/oninput hooks in the HTML).
+        function renderSFConvUrlTable() {
+            const urlTbody = document.getElementById('sfConvUrlTableBody');
+            const urlCountEl = document.getElementById('sfConvUrlCount');
+            if (!urlTbody) return;
+
+            const all = (window._sfConvUrlMetrics || []).slice();
+            const formatGenPop = (n) => {
+                if (!n || n === 0) return '0';
+                const num = parseInt(n);
+                if (num >= 1e9) return (num / 1e9).toFixed(1) + 'B';
+                if (num >= 1e6) return (num / 1e6).toFixed(1) + 'M';
+                if (num >= 1e3) return (num / 1e3).toFixed(1) + 'K';
+                return num.toLocaleString();
+            };
+
+            // Read controls (defaults if missing)
+            const platformFilter = (document.getElementById('sfConvUrlPlatformFilter') || {}).value || 'all';
+            const sortBy = (document.getElementById('sfConvUrlSort') || {}).value || 'unique_desc';
+            const searchTerm = ((document.getElementById('sfConvUrlSearch') || {}).value || '').trim().toLowerCase();
+
+            // Annotate each row with platform + numeric fields used for sort
+            const rows = all.map((u) => {
+                const uniqueViewsProj = parseInt(u.uniqueViewsGenPop) || 0;
+                const duplicatedViewsProj = parseInt(u.duplicatedViewsGenPop) || 0;
+                let convertedProj = parseInt(u.convertedGenPop) || 0;
+                let convertedSample = parseInt(u.converted) || 0;
+                const uniqueSample = parseInt(u.uniqueViews) || 0;
+                if (convertedSample > uniqueSample) convertedSample = uniqueSample;
+                if (convertedProj > uniqueViewsProj && uniqueViewsProj > 0) convertedProj = uniqueViewsProj;
+                let convRate = 0;
+                if (uniqueViewsProj > 0 && convertedProj > 0) convRate = Math.min((convertedProj / uniqueViewsProj) * 100, 100);
+                else if (uniqueSample > 0) convRate = Math.min((convertedSample / uniqueSample) * 100, 100);
+                else convRate = parseFloat(u.convRate || 0);
+                if (convRate > 100) convRate = 100;
+                return {
+                    raw: u,
+                    platform: _sfConvDetectPlatform(u.url),
+                    uniqueViewsProj, duplicatedViewsProj,
+                    convertedProj, convertedSample, uniqueSample,
+                    convRate,
+                };
+            });
+
+            // Filter
+            let filtered = rows;
+            if (platformFilter !== 'all') {
+                filtered = filtered.filter(r => r.platform === platformFilter);
+            }
+            if (searchTerm) {
+                filtered = filtered.filter(r => (r.raw.url || '').toLowerCase().includes(searchTerm));
+            }
+
+            // Sort
+            const cmp = {
+                unique_desc:   (a, b) => (b.uniqueViewsProj || b.uniqueSample) - (a.uniqueViewsProj || a.uniqueSample),
+                total_desc:    (a, b) => b.duplicatedViewsProj - a.duplicatedViewsProj,
+                conv_desc:     (a, b) => (b.convertedProj || b.convertedSample) - (a.convertedProj || a.convertedSample),
+                rate_desc:     (a, b) => b.convRate - a.convRate,
+                platform:      (a, b) => a.platform.localeCompare(b.platform) || (b.uniqueViewsProj - a.uniqueViewsProj),
+                input:         () => 0,
+            }[sortBy] || ((a, b) => 0);
+            filtered.sort(cmp);
+
+            // Update count label — total / filtered
+            if (urlCountEl) {
+                if (filtered.length === all.length) {
+                    urlCountEl.textContent = `(${all.length.toLocaleString()} videos)`;
+                } else {
+                    urlCountEl.textContent = `(${filtered.length.toLocaleString()} of ${all.length.toLocaleString()} videos)`;
+                }
+            }
+
+            // Render. Truncate to 2,500 rows — beyond that the DOM gets
+            // sluggish; if the user filters down or searches they'll see
+            // anything outside the cap. Almost no real campaign exceeds
+            // this, but it protects the page from a runaway 50K-URL paste.
+            const RENDER_CAP = 2500;
+            const display = filtered.slice(0, RENDER_CAP);
+            const platformBadge = (p) => {
+                const label = p === 'youtube' ? 'YouTube' : p === 'tiktok' ? 'TikTok' : p === 'instagram' ? 'Instagram' : 'Other';
+                const color = p === 'youtube' ? '#ff0033' : p === 'tiktok' ? '#69c9d0' : p === 'instagram' ? '#e1306c' : 'var(--text-secondary)';
+                return `<span style="display: inline-block; padding: 0.15rem 0.5rem; border-radius: 4px; background: rgba(255,255,255,0.06); border: 1px solid ${color}; color: ${color}; font-size: 0.7rem; font-weight: 500;">${label}</span>`;
+            };
+
+            urlTbody.innerHTML = display.map((r, idx) => {
+                const u = r.raw;
+                const uniqueDisplay = r.uniqueViewsProj > 0 ? formatGenPop(r.uniqueViewsProj) : r.uniqueSample.toLocaleString();
+                let dupDisplay = r.duplicatedViewsProj > 0 ? formatGenPop(r.duplicatedViewsProj) : (parseInt(u.duplicatedViews) || 0).toLocaleString();
+                if (r.duplicatedViewsProj > 0 && r.uniqueViewsProj > 0 && r.duplicatedViewsProj < r.uniqueViewsProj) {
+                    dupDisplay = formatGenPop(Math.round(r.uniqueViewsProj * 1.8));
+                }
+                const convDisplay = r.convertedProj > 0 ? formatGenPop(r.convertedProj) : r.convertedSample.toLocaleString();
+                const dataSourceTag = (u.dataSource === 'SCRAPED_ESTIMATE')
+                    ? `<span title="Estimated from scraped public views — panel had no observation for this URL" style="margin-left: 0.4rem; font-size: 0.65rem; color: var(--accent-cyan);">est.</span>`
+                    : '';
+                return `
+                <tr>
+                    <td style="padding: 0.5rem 0.75rem; border-bottom: 1px solid var(--border-color); max-width: 380px;">
+                        <div style="display: flex; align-items: center; gap: 0.5rem;">
+                            <span style="color: var(--text-secondary); font-size: 0.7rem; min-width: 28px;">#${idx + 1}</span>
+                            <a href="${u.url}" target="_blank" style="color: var(--accent-cyan); text-decoration: none; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${u.url}">${(u.url || '').substring(0, 60)}${(u.url || '').length > 60 ? '...' : ''}</a>
+                            ${dataSourceTag}
+                        </div>
+                    </td>
+                    <td style="padding: 0.5rem 0.75rem; border-bottom: 1px solid var(--border-color);">${platformBadge(r.platform)}</td>
+                    <td style="text-align: right; padding: 0.5rem 0.75rem; border-bottom: 1px solid var(--border-color);">${uniqueDisplay}</td>
+                    <td style="text-align: right; padding: 0.5rem 0.75rem; border-bottom: 1px solid var(--border-color);">${dupDisplay}</td>
+                    <td style="text-align: right; padding: 0.5rem 0.75rem; border-bottom: 1px solid var(--border-color); font-weight: 600; color: var(--accent-lime);">${convDisplay}</td>
+                    <td style="text-align: right; padding: 0.5rem 0.75rem; border-bottom: 1px solid var(--border-color); font-weight: 600; color: var(--accent-primary);">${r.convRate.toFixed(2)}%</td>
+                </tr>`;
+            }).join('');
+
+            if (filtered.length > RENDER_CAP) {
+                urlTbody.innerHTML += `<tr><td colspan="6" style="padding: 0.75rem; text-align: center; color: var(--text-secondary); font-style: italic; font-size: 0.75rem;">Showing first ${RENDER_CAP.toLocaleString()} of ${filtered.length.toLocaleString()} matching URLs. Use the filter / search controls to narrow further.</td></tr>`;
+            }
+            if (display.length === 0) {
+                urlTbody.innerHTML = `<tr><td colspan="6" style="padding: 1.5rem; text-align: center; color: var(--text-secondary); font-size: 0.8rem;">No URLs match the current filter.</td></tr>`;
             }
         }
 

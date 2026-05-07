@@ -22841,8 +22841,18 @@ def run_sf_lf_conversion(job_id):
         # Single scan computes unique+total for ALL URLs via conditional aggregation.
         # A second scan (one user-state CTE) computes per-URL conversions to LF title.
         results['individual_url_metrics'] = []
-        urls_to_query_raw = sf_urls[:20] if len(sf_urls) > 20 else sf_urls
-        urls_to_query = [u.strip() for u in urls_to_query_raw if u and u.strip()]
+        # Per-URL detailed query upper bound. Each URL adds ~2-3 conditional
+        # aggregates to the SELECT list; ClickHouse handles up to ~1000 of
+        # these comfortably, but at very high N the per-URL conv CTE plan
+        # gets expensive. 100 is a comfortable default that covers a typical
+        # campaign in full and bounds query cost for large ones. Submitted
+        # URLs beyond this cap still appear in the dashboard / CSV — they're
+        # appended as zero-data rows below the detailed block, so the user
+        # can see every URL they entered.
+        SF_LF_PER_URL_DETAIL_CAP = 100
+        urls_all = [u.strip() for u in (sf_urls or []) if u and u.strip()]
+        urls_to_query = urls_all[:SF_LF_PER_URL_DETAIL_CAP]
+        urls_remaining = urls_all[SF_LF_PER_URL_DETAIL_CAP:]
 
         if urls_to_query:
             update_job_status(job_id, progress=30, message=f'Querying {len(urls_to_query)} URLs (batched)...')
@@ -22985,6 +22995,30 @@ def run_sf_lf_conversion(job_id):
                       f"({url_reach_rate:.6f}% reach), raw conv: {url_converted}")
 
             print(f"[SF-LF] BATCH per-URL queries complete")
+
+        # Append zero-data rows for every submitted URL beyond the detail
+        # cap so the dashboard / CSV can still show the full list. These
+        # rows carry no panel observation — they exist purely so the user
+        # can see "yes, my URL #2,847 was received and processed" instead
+        # of having it silently dropped past the top-N detail cutoff.
+        for _u_extra in urls_remaining:
+            _disp_extra = (_u_extra[:77] + '...') if len(_u_extra) > 80 else _u_extra
+            results['individual_url_metrics'].append({
+                'url': _u_extra,
+                'url_display': _disp_extra,
+                'unique_views': 0,
+                'duplicated_views': 0,
+                'reach_rate': 0,
+                'raw_converted': 0,
+                'converted_to_lf': 0,
+                'conversion_rate': 0,
+                'beyond_detail_cap': True,
+            })
+        if urls_remaining:
+            print(f"[SF-LF] Appended {len(urls_remaining):,} URL(s) beyond "
+                  f"the per-URL detail cap ({SF_LF_PER_URL_DETAIL_CAP}) as "
+                  f"zero-data rows so the dashboard can list every "
+                  f"submitted URL.")
         
         update_job_status(job_id, progress=40, message='Calculating conversions to long-form content...')
         print(f"[SF-LF] Step 2: Check conversion to {lf_title} on {lf_platform or 'any platform'}")
@@ -23528,11 +23562,12 @@ def run_sf_lf_conversion(job_id):
                 else:
                     _pm['data_source'] = 'PANEL'
 
-            # Replace the existing per-URL list with the synthetic smattering.
-            # Rows for URLs not in the chosen sample are dropped from the
-            # per-URL detail section (they remain submitted in
-            # SHORT_FORM_URLS in the header), to keep the report focused on
-            # the URLs that actually have any signal at all.
+            # Rebuild per-URL list as: chosen URLs with synthetic data first
+            # (highest scraped views), followed by every other submitted URL
+            # as zero-data rows so the dashboard / CSV can still list them.
+            # Each submitted URL appears exactly once. Order: synthesized
+            # rows (top scraped views first), then the rest in the order the
+            # user submitted them.
             _new_url_metrics = []
             for _u, _data in synth_by_url.items():
                 _disp = (_u[:77] + '...') if len(_u) > 80 else _u
@@ -23547,6 +23582,24 @@ def run_sf_lf_conversion(job_id):
                     'conversion_rate': 0,
                     'data_source': 'SCRAPED_ESTIMATE',
                     'scraped_views': _data['scraped_views'],
+                })
+            _synth_urls = set(synth_by_url.keys())
+            for _u_other in (sf_urls or []):
+                _u_other_clean = (_u_other or '').strip()
+                if not _u_other_clean or _u_other_clean in _synth_urls:
+                    continue
+                _disp_other = (_u_other_clean[:77] + '...') if len(_u_other_clean) > 80 else _u_other_clean
+                _new_url_metrics.append({
+                    'url': _u_other_clean,
+                    'url_display': _disp_other,
+                    'unique_views': 0,
+                    'duplicated_views': 0,
+                    'reach_rate': 0,
+                    'raw_converted': 0,
+                    'converted_to_lf': 0,
+                    'conversion_rate': 0,
+                    'data_source': 'PANEL',
+                    'beyond_detail_cap': True,
                 })
             results['individual_url_metrics'] = _new_url_metrics
 
