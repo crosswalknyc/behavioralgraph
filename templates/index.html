@@ -12733,7 +12733,7 @@
                                 <div class="form-row">
                                     <div class="form-group">
                                         <label>Sexual Orientation</label>
-                                        <select id="sexual_orientation"><option value="">All</option><option>Straight / Heterosexual</option><option>Gay or Lesbian</option><option>Another Sexual Orientation</option><option>Prefer Not to Say</option></select>
+                                        <select id="sexual_orientation"><option value="">All</option><option value="Straight / Heterosexual">Straight / Heterosexual</option><option value="Gay or Lesbian">LGBTQ+</option><option value="Another Sexual Orientation">Other</option><option value="Prefer Not to Say">Prefer Not to Say</option></select>
                                     </div>
                                     <div class="form-group">
                                         <label>Parental Status</label>
@@ -13218,7 +13218,7 @@
                                         <div class="form-row">
                                             <div class="form-group">
                                                 <label>Sexual Orientation</label>
-                                                <select id="sexual_orientation"><option value="">All</option><option>Straight / Heterosexual</option><option>Gay or Lesbian</option><option>Another Sexual Orientation</option><option>Prefer Not to Say</option></select>
+                                                <select id="sexual_orientation"><option value="">All</option><option value="Straight / Heterosexual">Straight / Heterosexual</option><option value="Gay or Lesbian">LGBTQ+</option><option value="Another Sexual Orientation">Other</option><option value="Prefer Not to Say">Prefer Not to Say</option></select>
                                             </div>
                                             <div class="form-group">
                                                 <label>Parental Status</label>
@@ -30156,7 +30156,7 @@
             // Sexual Orientation Chart
             if (demographics.sexual_orientation && Object.keys(demographics.sexual_orientation).length > 0) {
                 const soLabels = Object.keys(demographics.sexual_orientation);
-                const soDisplayLabel = (raw) => { const u = (raw || '').trim(); if (!u) return u; const upper = u.toUpperCase(); if (upper === 'NO') return 'STRAIGHT / HETEROSEXUAL'; if (upper === 'YES') return 'GAY OR LESBIAN'; if (upper === 'OTHER') return 'ANOTHER SEXUAL ORIENTATION'; if (upper === 'PREFER NOT TO SAY') return 'PREFER NOT TO SAY'; return upper; };
+                const soDisplayLabel = (raw) => { const u = (raw || '').trim(); if (!u) return u; const upper = u.toUpperCase(); if (upper === 'NO' || upper === 'STRAIGHT / HETEROSEXUAL') return 'STRAIGHT / HETEROSEXUAL'; if (upper === 'YES' || upper === 'GAY OR LESBIAN' || upper === 'LGBTQ+') return 'LGBTQ+'; if (upper === 'OTHER' || upper === 'ANOTHER SEXUAL ORIENTATION') return 'OTHER'; if (upper === 'PREFER NOT TO SAY') return 'PREFER NOT TO SAY'; return upper; };
                 const soDisplayLabels = soLabels.map(soDisplayLabel);
                 const soData = Object.values(demographics.sexual_orientation);
                 const ctx = document.getElementById('tickerSexualOrientationChart');
@@ -42098,7 +42098,7 @@
                 const soSorted = getSortedSexualOrientationData(demographics.sexual_orientation, demographicsIndex.sexual_orientation);
                 const soLabels = soSorted.labels;
                 const soOrigKeys = soSorted.originalKeys;
-                const soDisplayLabel = (raw) => { const u = (raw || '').trim(); if (!u) return u; const upper = u.toUpperCase(); if (upper === 'NO') return 'STRAIGHT / HETEROSEXUAL'; if (upper === 'YES') return 'GAY OR LESBIAN'; if (upper === 'OTHER') return 'ANOTHER SEXUAL ORIENTATION'; if (upper === 'PREFER NOT TO SAY') return 'PREFER NOT TO SAY'; return upper; };
+                const soDisplayLabel = (raw) => { const u = (raw || '').trim(); if (!u) return u; const upper = u.toUpperCase(); if (upper === 'NO' || upper === 'STRAIGHT / HETEROSEXUAL') return 'STRAIGHT / HETEROSEXUAL'; if (upper === 'YES' || upper === 'GAY OR LESBIAN' || upper === 'LGBTQ+') return 'LGBTQ+'; if (upper === 'OTHER' || upper === 'ANOTHER SEXUAL ORIENTATION') return 'OTHER'; if (upper === 'PREFER NOT TO SAY') return 'PREFER NOT TO SAY'; return upper; };
                 const soDisplayLabels = soLabels.map(soDisplayLabel);
                 const soGenPop = soOrigKeys.map(k => demographicsGenPop.sexual_orientation?.[k] || 0);
                 const soPcts = soSorted.values;
@@ -49458,7 +49458,7 @@
                 const index = currentDashboardData.demographicsIndex[catKey] || {};
                 const genPop = currentDashboardData.demographicsGenPop[catKey] || {};
                 // Sexual Orientation: use same display labels as dashboard (YES->LGBTQ+, NO->HETEROSEXUAL, other->uppercase)
-                const displayLabel = (catKey === 'sexual_orientation') ? (raw) => { const u = (raw || '').trim(); if (!u) return u; const upper = u.toUpperCase(); if (upper === 'NO') return 'STRAIGHT / HETEROSEXUAL'; if (upper === 'YES') return 'GAY OR LESBIAN'; if (upper === 'OTHER') return 'ANOTHER SEXUAL ORIENTATION'; if (upper === 'PREFER NOT TO SAY') return 'PREFER NOT TO SAY'; return upper; } : (l) => l;
+                const displayLabel = (catKey === 'sexual_orientation') ? (raw) => { const u = (raw || '').trim(); if (!u) return u; const upper = u.toUpperCase(); if (upper === 'NO' || upper === 'STRAIGHT / HETEROSEXUAL') return 'STRAIGHT / HETEROSEXUAL'; if (upper === 'YES' || upper === 'GAY OR LESBIAN' || upper === 'LGBTQ+') return 'LGBTQ+'; if (upper === 'OTHER' || upper === 'ANOTHER SEXUAL ORIENTATION') return 'OTHER'; if (upper === 'PREFER NOT TO SAY') return 'PREFER NOT TO SAY'; return upper; } : (l) => l;
                 csvContent = `${profileName} - ${category}\n`;
                 csvContent += `Label,Profile %,Gen Pop %,Index\n`;
                 Object.keys(data).forEach(label => {
@@ -56880,7 +56880,7 @@
                 // Export all demographics data; map display names to internal keys (sexual orientation -> sexual_orientation, etc.)
                 csvContent = `${profileName} - Demographics\n\n`;
                 const demoCategoryList = [{ key: 'age', title: 'Age' }, { key: 'gender', title: 'Gender' }, { key: 'ethnicity', title: 'Ethnicity' }, { key: 'income', title: 'Income' }, { key: 'education', title: 'Education' }, { key: 'relationship', title: 'Relationship Status' }, { key: 'sexual_orientation', title: 'Sexual Orientation' }, { key: 'parental_status', title: 'Parental Status' }, { key: 'occupation', title: 'Occupation' }];
-                const soDisplayLabel = (raw) => { const u = (raw || '').trim(); if (!u) return u; const upper = u.toUpperCase(); if (upper === 'NO') return 'STRAIGHT / HETEROSEXUAL'; if (upper === 'YES') return 'GAY OR LESBIAN'; if (upper === 'OTHER') return 'ANOTHER SEXUAL ORIENTATION'; if (upper === 'PREFER NOT TO SAY') return 'PREFER NOT TO SAY'; return upper; };
+                const soDisplayLabel = (raw) => { const u = (raw || '').trim(); if (!u) return u; const upper = u.toUpperCase(); if (upper === 'NO' || upper === 'STRAIGHT / HETEROSEXUAL') return 'STRAIGHT / HETEROSEXUAL'; if (upper === 'YES' || upper === 'GAY OR LESBIAN' || upper === 'LGBTQ+') return 'LGBTQ+'; if (upper === 'OTHER' || upper === 'ANOTHER SEXUAL ORIENTATION') return 'OTHER'; if (upper === 'PREFER NOT TO SAY') return 'PREFER NOT TO SAY'; return upper; };
                 demoCategoryList.forEach(({ key: catKey, title: catTitle }) => {
                     const data = currentDashboardData.demographics[catKey] || {};
                     const index = currentDashboardData.demographicsIndex[catKey] || {};
