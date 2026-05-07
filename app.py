@@ -15744,16 +15744,27 @@ def submit_analysis():
         _brand_lower = [b.strip().lower() for b in brands]
         is_genpop = data.get('is_genpop', any(b in ('gen pop', 'gen_pop', 'genpop') for b in _brand_lower))
         purchasers_only = data.get('purchasers_only', False)
+        # Track whether the user explicitly set these so we know if it's safe to
+        # inherit from an auto-detected reference profile (= what the old YES /
+        # "rerun with different dates" path used to do explicitly).
+        _user_set_category = 'brand_category' in data and (data.get('brand_category') or '').strip() not in ('', 'GENERAL')
+        _user_set_listener = 'is_listener_watcher' in data
+        _user_set_platform = 'platform_name' in data and (data.get('platform_name') or '').strip() != ''
         brand_category = data.get('brand_category', 'GENERAL')
         include_frequency = data.get('include_frequency', False)
         is_listener_watcher = data.get('is_listener_watcher', False)
         platform_name = data.get('platform_name', None) if is_listener_watcher else None
         previous_file = data.get('previous_file', None) if data.get('is_update', False) else None
         
-        # Automatically search for similar files for demographic consistency
+        # Automatically search for similar files for demographic consistency.
+        # This block is the unified replacement for the old YES / "rerun with
+        # different dates" UI: we look up any matching prior profile for this
+        # same brand/input and inherit its persona, demographics, sample size,
+        # category and listener/watcher settings as a consistency baseline.
         reference_demographics = None
         reference_sample_size = None
         reference_file_key = None
+        reference_metadata = None
         
         # Search S3 for existing runs with same brand (skip for geo profiles)
         try:
@@ -15772,11 +15783,31 @@ def submit_analysis():
                 reference_file_key = reference_file['key']
                 reference_demographics = reference_file['demographics']
                 reference_sample_size = reference_file['sample_size']
+                reference_metadata = reference_file.get('metadata') or {}
                 print(f"📋 Found reference file: {reference_file_key}")
                 print(f"   Reference sample size: {reference_sample_size}")
                 print(f"   Will enforce ±2% consistency for demographics and sample size")
+
+                # Inherit run-shape settings from the reference when the user
+                # didn't explicitly override them. Mirrors what the old YES
+                # path's /api/submit-rerun did.
+                if not _user_set_category:
+                    ref_cat = (reference_metadata.get('BRAND_CATEGORY') or '').strip()
+                    if ref_cat:
+                        brand_category = ref_cat
+                        print(f"   ↳ Inherited brand_category='{brand_category}' from reference")
+                if not _user_set_listener:
+                    ref_lw = str(reference_metadata.get('LISTENER_WATCHER') or '').strip().lower() == 'true'
+                    if ref_lw:
+                        is_listener_watcher = True
+                        print(f"   ↳ Inherited is_listener_watcher=True from reference")
+                if is_listener_watcher and not _user_set_platform:
+                    ref_plat = (reference_metadata.get('PLATFORM_NAME') or '').strip()
+                    if ref_plat:
+                        platform_name = ref_plat
+                        print(f"   ↳ Inherited platform_name='{platform_name}' from reference")
             else:
-                print(f"📋 No previous runs found for '{brands[0]}' - will create baseline")
+                print(f"📋 No previous runs found for '{brands[0] if brands else brand_label}' - will create baseline")
         except Exception as e:
             print(f"⚠️ Error checking for reference files: {e}")
         
@@ -15799,11 +15830,19 @@ def submit_analysis():
                     'strength': data.get('skew_strength', 'medium')
                 }
         
+        # Surface the auto-anchor in the queued message so the user can see
+        # the unified pipeline picked up a prior profile as a baseline.
+        if reference_file_key:
+            ref_basename = os.path.basename(reference_file_key)
+            queued_message = f"Queued — auto-anchored to {ref_basename} for consistency"
+        else:
+            queued_message = 'Queued'
+
         # Initialize job with simpler status tracking
         jobs[job_id] = {
             'status': 'queued',
             'progress': 0,
-            'message': 'Queued',
+            'message': queued_message,
             'created_at': datetime.now().isoformat(),
             'project_name': project_name,
             'brands': brand_label,
@@ -15812,6 +15851,7 @@ def submit_analysis():
             'logs': [],
             'reference_demographics': reference_demographics,
             'reference_sample_size': reference_sample_size,
+            'reference_file_key': reference_file_key,
             'created_by': username,
             's3_key': None,
         }

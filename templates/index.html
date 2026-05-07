@@ -12914,53 +12914,15 @@
                 <!-- Profile IQ Tab Content (bg.py form) - Integrated two-column layout -->
                 <div id="customAnalysisTabContentProfileIQ" class="custom-analysis-tab-content active">
                     <div class="main-grid">
-                        <!-- Run current profile with different dates (first step) -->
+                        <!-- Profile Analysis: always-on new-analysis flow.
+                             The pipeline auto-detects prior runs of the same
+                             brand/input via check_s3_for_existing() and reuses
+                             persona / demographics / category / listener-watcher
+                             settings as a consistency baseline — no separate
+                             "rerun with different dates" path needed. -->
                         <div class="card" id="profileRerunChoiceCard">
+                            <div id="profileNewAnalysisFlow">
                             <h2>🎯 Profile Analysis</h2>
-                            <p style="margin: 0 0 1rem 0; font-size: 0.85rem; color: var(--text-secondary);">Are you looking to run a current profile with different dates?</p>
-                            <div style="display: flex; gap: 0.75rem; margin-bottom: 1rem;">
-                                <button type="button" class="btn btn-primary" id="profileRerunYesBtn">Yes</button>
-                                <button type="button" class="btn" style="background: var(--bg-dark); color: var(--text-primary);" id="profileRerunNoBtn">No, create new</button>
-                            </div>
-                            <div id="profileRerunFlow" style="display: none;">
-                                <div class="form-group" style="margin-bottom: 1rem;">
-                                    <label>Select profile</label>
-                                    <div style="position: relative;">
-                                        <input type="search" id="profileRerunSearch" placeholder="Type to search profiles..." onfocus="this.removeAttribute('readonly')" readonly autocomplete="nope" data-1p-ignore="true" data-lpignore="true" data-form-type="other" role="combobox" style="width: 100%; padding: 0.5rem; padding-right: 2rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-primary);">
-                                        <select id="profileRerunSelect" size="8" style="width: 100%; margin-top: 0.25rem; padding: 0.25rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-primary); display: none;"></select>
-                                        <div id="profileRerunDropdown" style="max-height: 220px; overflow-y: auto; border: 1px solid var(--border-color); border-radius: 6px; background: var(--bg-card); margin-top: 0.25rem; display: none;"></div>
-                                    </div>
-                                    <small style="color: var(--text-secondary); font-size: 0.75rem;">Pick the profile whose search criteria and demographics to reuse.</small>
-                                </div>
-                                <div id="profileRerunDatesSection" style="display: none;">
-                                    <div class="form-group" style="margin-bottom: 0.75rem;">
-                                        <label style="font-size: 0.8rem; color: var(--text-secondary);">Category (from original)</label>
-                                        <div id="profileRerunCategoryDisplay" style="font-weight: 500; color: var(--text-primary);"></div>
-                                    </div>
-                                    <div class="form-row">
-                                        <div class="form-group">
-                                            <label>Sample Start Date</label>
-                                            <input type="date" id="profileRerunStart" style="width: 100%; padding: 0.5rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-primary);">
-                                        </div>
-                                        <div class="form-group">
-                                            <label>Sample End Date</label>
-                                            <input type="date" id="profileRerunEnd" style="width: 100%; padding: 0.5rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-primary);">
-                                        </div>
-                                    </div>
-                                    <div class="form-row" style="margin-bottom: 0.75rem;">
-                                        <label class="checkbox-group"><input type="checkbox" id="profileRerunListenerWatcher"><span>Is this a listener/watcher/player profile?</span></label>
-                                    </div>
-                                    <div id="profileRerunPlatformWrap" style="display: none; margin-left: 1rem; margin-bottom: 0.75rem;">
-                                        <div class="form-group">
-                                            <label>Platform name (as it appears in hostmap)</label>
-                                            <input type="text" id="profileRerunPlatform" placeholder="e.g., spotify, netflix, hulu" style="width: 100%; padding: 0.5rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-primary);">
-                                        </div>
-                                    </div>
-                                    <button type="button" class="btn btn-primary" id="profileRerunSubmitBtn">🚀 Run with these dates</button>
-                                </div>
-                            </div>
-                            <div id="profileNewAnalysisFlow" style="display: none;">
-                            <h2>📊 Analysis Parameters</h2>
                             <div style="margin: 0 0 0.75rem 0; font-size: 0.85rem; font-weight: 500; color: var(--text-secondary); font-style: italic;">5 Credits Per Analysis</div>
                             <p style="margin: 0 0 1rem 0; font-size: 0.85rem; color: var(--text-secondary); line-height: 1.45;">Custom pull your own profile on any talent, brand, property or thing you can think of. This pulls a profile of all panelists who are actively engaged with your profile's subject. It uses our signature 5 touch point accuracy method of capturing panelists who don't just know of your profile's subject but go out of their way to engage with them. This means they have interacted with your subject via social media, retail, owned and operated web sites, read/watched/listened to media about them or search. This is capturing digital behavior only.</p>
                             <form id="analysisForm">
@@ -18831,7 +18793,7 @@
 
             // Clear any Chrome-autofilled values from profile search inputs
             setTimeout(function() {
-                ['dashProfileSearchInput', 'subscriberProfileSearchInput', 'profileRerunSearch'].forEach(function(id) {
+                ['dashProfileSearchInput', 'subscriberProfileSearchInput'].forEach(function(id) {
                     var el = document.getElementById(id);
                     if (el && el.value) { el.value = ''; }
                 });
@@ -37728,172 +37690,11 @@
             }
         }
 
-        // Run current profile with different dates (Analysis IQ Profile Analysis)
-        (function initProfileRerunFlow() {
-            const choiceCard = document.getElementById('profileRerunChoiceCard');
-            const rerunFlow = document.getElementById('profileRerunFlow');
-            const newAnalysisFlow = document.getElementById('profileNewAnalysisFlow');
-            const yesBtn = document.getElementById('profileRerunYesBtn');
-            const noBtn = document.getElementById('profileRerunNoBtn');
-            const searchInput = document.getElementById('profileRerunSearch');
-            const dropdown = document.getElementById('profileRerunDropdown');
-            const datesSection = document.getElementById('profileRerunDatesSection');
-            const categoryDisplay = document.getElementById('profileRerunCategoryDisplay');
-            const startInput = document.getElementById('profileRerunStart');
-            const endInput = document.getElementById('profileRerunEnd');
-            const listenerWatcherCb = document.getElementById('profileRerunListenerWatcher');
-            const platformWrap = document.getElementById('profileRerunPlatformWrap');
-            const platformInput = document.getElementById('profileRerunPlatform');
-            const submitRerunBtn = document.getElementById('profileRerunSubmitBtn');
-            if (!choiceCard || !yesBtn || !noBtn) return;
-            let profileRerunList = [];
-            let selectedRerunS3Key = null;
-            let selectedRerunMeta = null;
-
-            function showRerunFlow(show) {
-                if (rerunFlow) rerunFlow.style.display = show ? 'block' : 'none';
-                if (newAnalysisFlow) newAnalysisFlow.style.display = show ? 'none' : 'block';
-            }
-            yesBtn.addEventListener('click', function() {
-                showRerunFlow(true);
-                loadProfileRerunList();
-            });
-            noBtn.addEventListener('click', function() {
-                showRerunFlow(false);
-                if (dropdown) dropdown.style.display = 'none';
-                if (datesSection) datesSection.style.display = 'none';
-                selectedRerunS3Key = null;
-                selectedRerunMeta = null;
-            });
-
-            async function loadProfileRerunList() {
-                try {
-                    const res = await fetch(`/api/jobs?refresh=1&_t=${Date.now()}`, { credentials: 'same-origin', cache: 'no-store' });
-                    const data = await res.json().catch(() => ({}));
-                    profileRerunList = (data.jobs || []).filter(j => (j.s3_key || j.job_id) && (j.status === 'cached' || j.status === 'completed'));
-                    renderProfileRerunDropdown(profileRerunList);
-                } catch (e) {
-                    console.error('Failed to load profiles for rerun:', e);
-                }
-            }
-            function renderProfileRerunDropdown(list) {
-                if (!dropdown) return;
-                const q = (searchInput && searchInput.value) ? searchInput.value.trim().toLowerCase() : '';
-                const filtered = q ? list.filter(p => {
-                    const name = ((p.display_name || p.project_name || p.job_id || '') + ' ' + (p.category || '')).toLowerCase();
-                    return name.includes(q);
-                }) : list;
-                dropdown.innerHTML = '';
-                dropdown.style.display = (filtered.length > 0) ? 'block' : 'none';
-                filtered.forEach(p => {
-                    const s3Key = p.s3_key || p.job_id;
-                    const name = (p.display_name && p.display_name.trim()) ? p.display_name.trim() : (p.project_name || '').replace(/_/g, ' ').trim() || 'Unknown';
-                    const cat = (p.category || 'Uncategorized').trim();
-                    const item = document.createElement('div');
-                    item.setAttribute('data-s3-key', s3Key);
-                    item.style.cssText = 'padding: 0.5rem 0.75rem; cursor: pointer; border-bottom: 1px solid var(--border-color);';
-                    item.textContent = name + ' (' + cat + ')';
-                    item.addEventListener('click', function() {
-                        selectedRerunS3Key = s3Key;
-                        if (searchInput) searchInput.value = name + ' (' + cat + ')';
-                        dropdown.style.display = 'none';
-                        fetchRerunMetadata(s3Key);
-                    });
-                    dropdown.appendChild(item);
-                });
-            }
-            if (searchInput) {
-                searchInput.addEventListener('focus', function() {
-                    renderProfileRerunDropdown(profileRerunList);
-                });
-                searchInput.addEventListener('input', function() {
-                    renderProfileRerunDropdown(profileRerunList);
-                });
-            }
-            document.addEventListener('click', function(e) {
-                if (dropdown && searchInput && !dropdown.contains(e.target) && e.target !== searchInput) {
-                    dropdown.style.display = 'none';
-                }
-            });
-
-            if (listenerWatcherCb) {
-                listenerWatcherCb.addEventListener('change', function() {
-                    if (platformWrap) platformWrap.style.display = listenerWatcherCb.checked ? 'block' : 'none';
-                });
-            }
-            async function fetchRerunMetadata(s3Key) {
-                if (!datesSection || !startInput || !endInput) return;
-                try {
-                    const res = await fetch('/api/profile-run-metadata/' + encodeURIComponent(s3Key), { credentials: 'same-origin' });
-                    const meta = await res.json();
-                    if (!meta.success) {
-                        alert(meta.error || 'Could not load profile metadata');
-                        return;
-                    }
-                    selectedRerunMeta = meta;
-                    startInput.value = meta.sample_start || '';
-                    endInput.value = meta.sample_end || '';
-                    if (categoryDisplay) categoryDisplay.textContent = meta.brand_category || 'General';
-                    if (listenerWatcherCb) listenerWatcherCb.checked = !!meta.is_listener_watcher;
-                    if (platformInput) platformInput.value = meta.platform_name || '';
-                    if (platformWrap) platformWrap.style.display = (meta.is_listener_watcher && meta.platform_name) ? 'block' : (listenerWatcherCb && listenerWatcherCb.checked ? 'block' : 'none');
-                    datesSection.style.display = 'block';
-                } catch (e) {
-                    console.error('Failed to load profile metadata:', e);
-                    alert('Failed to load profile metadata');
-                }
-            }
-
-            if (submitRerunBtn) {
-                submitRerunBtn.addEventListener('click', async function() {
-                    if (!selectedRerunS3Key) {
-                        alert('Please select a profile first.');
-                        return;
-                    }
-                    const start = startInput ? startInput.value : '';
-                    const end = endInput ? endInput.value : '';
-                    if (!start || !end) {
-                        alert('Please select start and end dates.');
-                        return;
-                    }
-                    submitRerunBtn.disabled = true;
-                    submitRerunBtn.textContent = 'Submitting...';
-                    try {
-                        const res = await fetch('/api/submit-rerun', {
-                            method: 'POST',
-                            credentials: 'same-origin',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({
-                                s3_key: selectedRerunS3Key,
-                                sample_start: start,
-                                sample_end: end,
-                                brand_category: (selectedRerunMeta && selectedRerunMeta.brand_category) || 'GENERAL',
-                                is_listener_watcher: !!(listenerWatcherCb && listenerWatcherCb.checked),
-                                platform_name: (listenerWatcherCb && listenerWatcherCb.checked && platformInput) ? (platformInput.value || '').trim() : ''
-                            })
-                        });
-                        const data = await res.json().catch(() => ({}));
-                        if (res.ok) {
-                            currentJobId = data.job_id;
-                            if (data.credits_left !== undefined) updateCreditsDisplay(data.credits_left);
-                            showAnalysisStatusModal();
-                            startPolling();
-                            loadJobs();
-                            if (datesSection) datesSection.style.display = 'none';
-                            selectedRerunS3Key = null;
-                            selectedRerunMeta = null;
-                            if (searchInput) searchInput.value = '';
-                        } else {
-                            alert(data.error || 'Failed to submit rerun');
-                        }
-                    } catch (e) {
-                        alert('Network error: ' + e.message);
-                    }
-                    submitRerunBtn.disabled = false;
-                    submitRerunBtn.textContent = '🚀 Run with these dates';
-                });
-            }
-        })();
+        // The previous "rerun with different dates" YES/NO chooser was removed.
+        // The unified create-new pipeline (/api/submit) auto-detects matching
+        // prior profiles via check_s3_for_existing() and reuses their persona,
+        // demographics, brand_category and listener/watcher settings as a
+        // consistency baseline. No separate rerun UI is needed.
 
         function showCurrentJob() {
             // Update status in both formView and Custom Analysis Profile IQ tab
