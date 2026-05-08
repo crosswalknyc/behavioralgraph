@@ -654,6 +654,56 @@ def cap_for_platform(platform: Optional[str]) -> int:
     return PLATFORM_US_USER_CAP.get(platform.lower(), US_POPULATION)
 
 
+# Typical re-watch ratio = total_views / unique_viewers, by platform.
+# Sourced from public research on short-form re-watch behavior:
+#   Instagram Reels:   most viewers see a reel once in the feed; a small fraction
+#                      loop or scroll back. ~1.20× is the audited industry baseline.
+#   TikTok:            higher loop rate (auto-replay ON), but with ~1.30× still
+#                      below YouTube because the For-You feed surfaces new content fast.
+#   YouTube:           longer-watch sessions, return visits, autoplay queueing —
+#                      ~1.70× is normal for non-shorts. Shorts trend lower (~1.4)
+#                      but we use the conservative whole-platform mean.
+#   Facebook:          mostly feed-driven, similar to IG; ~1.20×.
+#   X / Twitter:       view counter inflated by impressions+autoplay; ~1.20× for
+#                      genuine re-watches.
+#
+# Used as a *plausibility floor* on Unique: when scraped Total Views is much
+# larger than the panel-projected Unique × ratio, panel under-sampled and we
+# should report Total / ratio as the unique floor (capped at platform MAU).
+SF_LF_TYPICAL_TU_RATIO = {
+    "youtube":   1.70,
+    "tiktok":    1.30,
+    "instagram": 1.20,
+    "facebook":  1.20,
+    "x":         1.20,
+    "twitter":   1.20,
+    "snapchat":  1.25,
+    "other":     1.30,
+}
+
+
+def typical_tu_ratio(platform: Optional[str]) -> float:
+    """Total-views-to-unique-viewers ratio for the platform; default 1.30."""
+    if not platform:
+        return 1.30
+    return SF_LF_TYPICAL_TU_RATIO.get(platform.lower(), 1.30)
+
+
+def plausible_unique_from_total(total_views_genpop: int, platform: Optional[str]) -> int:
+    """Given a Total Views (Gen Pop projected) value and a platform, return the
+    plausible Unique Viewers count under that platform's typical re-watch ratio.
+
+    Capped at the platform's US user-base. Returns 0 if input is non-positive.
+    """
+    if not total_views_genpop or total_views_genpop <= 0:
+        return 0
+    ratio = typical_tu_ratio(platform)
+    if ratio <= 0:
+        return 0
+    plausible = int(round(total_views_genpop / ratio))
+    return min(plausible, cap_for_platform(platform))
+
+
 def compute_platform_anchors(
     scrape_result: dict,
     panel_totals_by_platform: dict[str, int],
