@@ -20157,7 +20157,16 @@
                     let totalViewsProj = parseInt(p.totalViewsGenPop) || 0;
                     let totalViewsRaw = parseInt(p.totalViews) || 0;
                     if (!totalViewsRaw && Array.isArray(platformMetrics)) {
-                        const _pm = platformMetrics.find(x => (x.platform || '').toLowerCase().includes((p.platform || '').toLowerCase()));
+                        // Use case-insensitive EXACT match and explicitly skip
+                        // the OVERALL row, otherwise 'overall (youtube,
+                        // instagram, tiktok)'.includes('youtube') matches and
+                        // every per-platform card pulls the OVERALL total.
+                        const _target = (p.platform || '').toLowerCase();
+                        const _pm = platformMetrics.find(x => {
+                            const _xp = (x.platform || '').toLowerCase();
+                            if (!_xp || _xp.startsWith('overall')) return false;
+                            return _xp === _target;
+                        });
                         if (_pm) {
                             totalViewsRaw = parseInt(_pm.duplicatedViews) || 0;
                             totalViewsProj = parseInt(_pm.duplicatedViewsGenPop) || 0;
