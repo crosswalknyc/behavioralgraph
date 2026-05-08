@@ -23983,6 +23983,24 @@ def run_sf_lf_conversion(job_id):
             for _u in results.get('individual_url_metrics', []) or []:
                 _u.setdefault('data_source', 'PANEL')
 
+        # ===== Per-URL creator merge =====
+        # Pull the scraped creator/handle from `_scrape['per_url']` onto
+        # every individual_url_metric. The scraper already runs above for
+        # view-count anchoring; we just borrow the creator field it now
+        # also returns. Output reads e.g. "Luke Ross | https://..." in
+        # the dashboard URL table when a creator is known.
+        _creator_by_url = {}
+        for _u_key, _data in (_scrape.get('per_url') or {}).items():
+            _c = (_data or {}).get('creator') if isinstance(_data, dict) else None
+            if _c:
+                _creator_by_url[_u_key] = str(_c).strip()
+        if _creator_by_url:
+            for _u in results.get('individual_url_metrics', []) or []:
+                _u_url = _u.get('url') or ''
+                _c = _creator_by_url.get(_u_url)
+                if _c:
+                    _u['creator'] = _c
+
         def _scale_for(platform):
             if not platform:
                 return _overall_scale
@@ -24152,7 +24170,10 @@ def run_sf_lf_conversion(job_id):
                 if u_conv_genpop > u_unique_genpop:
                     u_conv_genpop = u_unique_genpop
                 _url_src = url_m.get('data_source') or 'PANEL'
-                csv_rows.append({'Column': 'INPUT_URL', 'Value': url_val, 'Metric': 'Unique Viewers (UIDs)', 'Count': u_unique, 'Percentage': f"{u_reach:.8f}% of total SF viewers", 'Gen_Pop_Projection': u_unique_genpop, 'Data_Source': _url_src})
+                # Creator (scraped from the URL's content). When present
+                # the dashboard renders it next to the URL: "Luke Ross | url".
+                _url_creator = (url_m.get('creator') or '').strip()
+                csv_rows.append({'Column': 'INPUT_URL', 'Value': url_val, 'Metric': 'Unique Viewers (UIDs)', 'Count': u_unique, 'Percentage': f"{u_reach:.8f}% of total SF viewers", 'Gen_Pop_Projection': u_unique_genpop, 'Data_Source': _url_src, 'Creator': _url_creator})
                 # Per-URL Duplicated: prefer scraped views × discount when we
                 # have it for THIS URL; else scale by panel ratio (no cap on
                 # total/duplicated views — they can legitimately exceed pop).
@@ -24164,10 +24185,10 @@ def run_sf_lf_conversion(job_id):
                     u_dup_genpop = int(round(_url_scraped * _get_disc()))
                 else:
                     u_dup_genpop = int(round(u_unique_genpop * (u_dup / max(u_unique, 1))))
-                csv_rows.append({'Column': 'INPUT_URL', 'Value': url_val, 'Metric': 'Total Views (Events)', 'Count': u_dup, 'Percentage': '', 'Gen_Pop_Projection': u_dup_genpop, 'Data_Source': _url_src})
+                csv_rows.append({'Column': 'INPUT_URL', 'Value': url_val, 'Metric': 'Total Views (Events)', 'Count': u_dup, 'Percentage': '', 'Gen_Pop_Projection': u_dup_genpop, 'Data_Source': _url_src, 'Creator': _url_creator})
                 # Conversions never synthesized; always tagged PANEL (will be 0
                 # for SCRAPED_ESTIMATE rows).
-                csv_rows.append({'Column': 'INPUT_URL', 'Value': url_val, 'Metric': 'Converted Viewers (UIDs)', 'Count': u_conv, 'Percentage': f"{u_conv_rate:.8f}% of URL viewers", 'Gen_Pop_Projection': u_conv_genpop, 'Data_Source': 'PANEL'})
+                csv_rows.append({'Column': 'INPUT_URL', 'Value': url_val, 'Metric': 'Converted Viewers (UIDs)', 'Count': u_conv, 'Percentage': f"{u_conv_rate:.8f}% of URL viewers", 'Gen_Pop_Projection': u_conv_genpop, 'Data_Source': 'PANEL', 'Creator': _url_creator})
         
         # Conversion Summary Section - OVERALL
         # Use pre-calculated values directly (noise already applied) - DO NOT add noise again!
