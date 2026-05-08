@@ -23547,6 +23547,12 @@ def run_sf_lf_conversion(job_id):
         if lf_platform:
             platform_converted = add_noise_if_zero(_lf_plat_conv_raw, min_noise=100000, max_noise=500000)
             _lf_plat_data_source = 'PANEL'
+            _lf_plat_synth_rate = None  # set when synthesized; preserves the
+                                        # synthetic 1.0-2.5% rate so the CSV
+                                        # write stage can use it for both the
+                                        # Percentage and the Gen Pop visit
+                                        # count (organic ladder with floored
+                                        # OVERALL unique).
 
             # ── Synthetic LF Platform Visit buffer ──────────────────────────
             # When the panel observed zero LF-platform visitors but the SF
@@ -23569,6 +23575,7 @@ def run_sf_lf_conversion(job_id):
                     _rate = 0.010 + _h01 * 0.015
                     platform_converted = max(1, int(round(sf_total_unique * _rate)))
                     _lf_plat_data_source = 'SCRAPED_ESTIMATE'
+                    _lf_plat_synth_rate = _rate
                     print(
                         f"[SF-LF] LF platform visit raw=0; synthesized "
                         f"{platform_converted:,} ({_rate*100:.2f}% of "
@@ -23578,11 +23585,25 @@ def run_sf_lf_conversion(job_id):
                     print(f"[SF-LF] LF platform visit synth fallback: {_e_synth}")
 
             print(f"[SF-LF] Platform conversion: {platform_converted:,} users visited {lf_platform} ({_lf_plat_data_source})")
+            # Conversion rate displayed:
+            #   - panel mode:       (count / panel_total) × 100 (honest)
+            #   - synthetic mode:   the 1.0-2.5% synth rate itself, NOT
+            #                       (count / panel_total) which would be
+            #                       12.5% for an 8-UID panel and read as too
+            #                       high. The intent is the synth rate; count
+            #                       is just the rounded panel-equivalent.
+            if _lf_plat_synth_rate is not None:
+                _conv_rate_for_summary = round(_lf_plat_synth_rate * 100, 8)
+            elif sf_total_unique > 0:
+                _conv_rate_for_summary = round((platform_converted / sf_total_unique * 100), 8)
+            else:
+                _conv_rate_for_summary = 0.00000001
             results['conversions']['sf_to_lf_platform'] = {
                 'total_sf_viewers': sf_total_unique,
                 'converted_users': platform_converted,
-                'conversion_rate': round((platform_converted / sf_total_unique * 100), 8) if sf_total_unique > 0 else 0.00000001,
+                'conversion_rate': _conv_rate_for_summary,
                 'data_source': _lf_plat_data_source,
+                'synth_rate': _lf_plat_synth_rate,  # None when not synthesized
             }
         
         update_job_status(job_id, progress=60, message='Processing complete, generating report...')
@@ -24420,8 +24441,31 @@ def run_sf_lf_conversion(job_id):
             if plat_conv_rate == 0:
                 plat_conv_rate = 0.00000001
             _lf_plat_src = sf_plat_conv.get('data_source') or 'PANEL'
+            _lf_synth_rate = sf_plat_conv.get('synth_rate')  # 0.010-0.025 or None
+            # Gen Pop LF visit count:
+            #   - panel mode:     project_to_gen_pop(plat_conv_users) — honest
+            #                     panel × NO_BOOST_MULTIPLIER scale.
+            #   - synthetic mode: floored_OVERALL_unique × synth_rate so the
+            #                     funnel ratio (lfVisitorsGenPop / totalGenPop)
+            #                     equals the KPI tile rate. Without this the
+            #                     funnel reads 0.005% while the tile reads
+            #                     1.5% — same data, two numbers, looks broken.
+            if _lf_synth_rate is not None:
+                # _total_viewers_genpop is set above when CONVERSION_SUMMARY is
+                # written; fall back to the panel-projection if we somehow
+                # didn't capture it.
+                _floored_total_for_lf = 0
+                try:
+                    _floored_total_for_lf = int(_total_viewers_genpop or 0)
+                except (NameError, TypeError, ValueError):
+                    _floored_total_for_lf = 0
+                if _floored_total_for_lf <= 0:
+                    _floored_total_for_lf = project_to_gen_pop(sf_plat_conv.get('total_sf_viewers', 0))
+                _lf_visit_genpop = int(round(_floored_total_for_lf * _lf_synth_rate))
+            else:
+                _lf_visit_genpop = project_to_gen_pop(plat_conv_users)
             csv_rows.append({'Column': '', 'Value': '', 'Metric': '', 'Count': '', 'Percentage': '', 'Gen_Pop_Projection': ''})
-            csv_rows.append({'Column': 'SF_TO_LF_PLATFORM', 'Value': f'Users who visited {lf_platform}', 'Metric': '', 'Count': plat_conv_users, 'Percentage': f"{plat_conv_rate:.8f}%", 'Gen_Pop_Projection': project_to_gen_pop(plat_conv_users), 'Data_Source': _lf_plat_src})
+            csv_rows.append({'Column': 'SF_TO_LF_PLATFORM', 'Value': f'Users who visited {lf_platform}', 'Metric': '', 'Count': plat_conv_users, 'Percentage': f"{plat_conv_rate:.8f}%", 'Gen_Pop_Projection': _lf_visit_genpop, 'Data_Source': _lf_plat_src})
         
         # Demographics Section
         csv_rows.append({'Column': '', 'Value': '', 'Metric': '', 'Count': '', 'Percentage': '', 'Gen_Pop_Projection': ''})
