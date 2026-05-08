@@ -26457,9 +26457,53 @@ def _run_roas_iq(job_id):
         scope_label = 'brand-specific' if scope == 'brand_specific' else 'overall ecosystem'
         update_job_status(job_id, progress=35, message=f'Found {projected_uid_count:,} projected US consumers. Pulling {scope_label} attributed URLs...')
 
-        # ── Phase 2 ── Single-scan pull of all UTM/click-id URLs.
-        # Returns (URL, UID, dow, hr) so the day/hour heatmap is computed
-        # in Python — saves a second full clickstream scan.
+        # ── Phase 2+3 (combined via UNION ALL) ──
+        # Pull UTM/click-id URLs and order-confirmation URLs in ONE round-trip.
+        # ClickHouse runs the two SELECTs as parallel pipelines, so wall time
+        # is roughly max(ad_pull, slug_pull) instead of sum.
+        #
+        # The slug check is the cost driver. ``multiSearchAny`` uses Volnitsky's
+        # SIMD algorithm for ≤64 needles (extremely fast) and falls back to
+        # Aho-Corasick for >64 (much slower per character). 197 production
+        # slugs put us deep in the slow path (~150 s on a 4-day window).
+        #
+        # Trick: derive a small set of broad 4-char prefixes from the slugs
+        # (typically ~13 unique since most slugs start with one of
+        # {chec, orde, conf, paym, purc, than, …}). Add those as a cheap
+        # AND-conjunct BEFORE the precise 197-needle check. CH short-circuits
+        # AND per block, so the slow check only runs on the small fraction of
+        # rows that already passed the broad filter. The filter is lossless
+        # by construction: every slug ``s`` starts with ``s[:4]``, so any URL
+        # containing ``s`` also contains ``s[:4]``.
+        #
+        # Why UNION ALL instead of one OR-combined SELECT: ClickHouse does
+        # short-circuit AND but evaluates BOTH sides of OR (it builds bitmaps
+        # for each disjunct and ORs them). Inside an OR, the slow slug check
+        # runs on every block that survived earlier ANDs, defeating the
+        # prefix optimization. Splitting into two SELECTs joined by UNION
+        # ALL keeps each branch's slug check inside a pure AND-chain.
+        # Confirmed against production data: combined-OR variant 91 s,
+        # UNION ALL variant 19 s on the same window.
+        #
+        # A URL matching BOTH an ad needle and a conversion slug emits two
+        # rows (one ad-tagged, one conv-tagged). Python deduplicates by flag,
+        # mirroring the original two-phase Snowflake semantics exactly.
+        update_job_status(job_id, progress=40, message='Loading purchase confirmation patterns...')
+        try:
+            cur.execute("""
+                SELECT DISTINCT lower(SLUGS) AS slug
+                FROM reference.order_confirms
+                WHERE SLUGS != ''
+            """)
+            slugs_list = [r[0] for r in cur.fetchall() if r[0]]
+        except Exception as e:
+            print(f"⚠️ order_confirms slugs query failed: {e}")
+            slugs_list = []
+
+        ad_needles = ['utm_', 'gclid', 'fbclid', 'ttclid',
+                      'msclkid', 'dclid', 'wbraid', 'gbraid']
+        ad_needles_lit = ', '.join(f"'{n}'" for n in ad_needles)
+
         brand_filter_sql = ''
         if scope == 'brand_specific':
             brand_terms = ', '.join(f"'{t}'" for t in term_clauses)
@@ -26468,75 +26512,86 @@ def _run_roas_iq(job_id):
                 f"OR  multiSearchAny(lower(URL),         [{brand_terms}]))"
             )
 
+        # Build the conversion-slug branch only if we have slugs.
+        if slugs_list:
+            slug_needles_lit = ', '.join(
+                "'" + s.replace("'", "''") + "'" for s in slugs_list
+            )
+            slug_prefixes = sorted({s[:4] if len(s) >= 4 else s for s in slugs_list})
+            slug_prefix_lit = ', '.join(
+                "'" + p.replace("'", "''") + "'" for p in slug_prefixes
+            )
+            slug_branch_sql = f"""
+                UNION ALL
+                SELECT URL, UID,
+                       toDayOfWeek(VISIT_TS) AS dow,
+                       toHour(VISIT_TS)      AS hr,
+                       toUInt8(0)            AS is_ad,
+                       toUInt8(1)            AS is_conv
+                FROM clickstream.clickstream_final
+                WHERE UID IN (SELECT UID FROM roas_audience_uids)
+                  AND DELIVERED BETWEEN toDate('{start_date}') AND toDate('{end_date}')
+                  AND length(URL) > 10
+                  AND multiSearchAny(lower(URL), [{slug_prefix_lit}])
+                  AND multiSearchAny(lower(URL), [{slug_needles_lit}])
+                  {brand_filter_sql}
+                LIMIT {ROAS_MAX_URL_ROWS}
+            """
+        else:
+            slug_branch_sql = ''
+
+        scope_label = 'brand-specific' if scope == 'brand_specific' else 'overall ecosystem'
+        update_job_status(job_id, progress=45,
+                          message=f'Pulling {scope_label} attributed URLs ({len(slugs_list)} conversion patterns)...')
+
         cur.execute(f"""
             SELECT URL, UID,
                    toDayOfWeek(VISIT_TS) AS dow,
-                   toHour(VISIT_TS)      AS hr
+                   toHour(VISIT_TS)      AS hr,
+                   toUInt8(1)            AS is_ad,
+                   toUInt8(0)            AS is_conv
             FROM clickstream.clickstream_final
             WHERE UID IN (SELECT UID FROM roas_audience_uids)
               AND DELIVERED BETWEEN toDate('{start_date}') AND toDate('{end_date}')
               AND length(URL) > 10
-              AND multiSearchAny(lower(URL),
-                                 ['utm_', 'gclid', 'fbclid', 'ttclid',
-                                  'msclkid', 'dclid', 'wbraid', 'gbraid'])
+              AND multiSearchAny(lower(URL), [{ad_needles_lit}])
               {brand_filter_sql}
             LIMIT {ROAS_MAX_URL_ROWS}
+            {slug_branch_sql}
         """)
-        rows = cur.fetchall()
-        print(f"✅ ROAS IQ UTM query returned {len(rows):,} rows (limit {ROAS_MAX_URL_ROWS:,})")
+        combined_rows = cur.fetchall()
+        print(f"✅ ROAS IQ UNION ALL scan returned {len(combined_rows):,} rows")
 
-        # Day/hour heatmap from the rows we just pulled — no extra DB round-trip.
-        update_job_status(job_id, progress=50, message='Aggregating engagement patterns...')
+        # Partition rows + build day/hour heatmap in one Python pass.
+        rows = []                  # (URL, UID) for the ad-attribution classifier
+        conv_rows = []             # (UID, URL) for the conversion-page parser
         _dh_counts: dict[tuple[int, int], int] = {}
-        for _u, _uid, dow, hr in rows:
-            _dh_counts[(dow, hr)] = _dh_counts.get((dow, hr), 0) + 1
+        for url, uid, dow, hr, is_ad, is_conv in combined_rows:
+            if is_ad:
+                rows.append((url, uid))
+                _dh_counts[(dow, hr)] = _dh_counts.get((dow, hr), 0) + 1
+            if is_conv:
+                conv_rows.append((uid, url))
         day_hour_data = [
             {'dow': d, 'hour': h, 'touches': c}
             for (d, h), c in sorted(_dh_counts.items())
         ]
+        print(f"   → {len(rows):,} ad-attributed, {len(conv_rows):,} conversion-page rows")
 
-        # ── Phase 3 ── Conversion-page slugs (e.g. /thank-you, /order-confirmation).
-        update_job_status(job_id, progress=55, message='Loading purchase confirmation patterns...')
+        update_job_status(job_id, progress=55, message=f'Parsing {len(conv_rows):,} confirmation pages...')
         uid_conv_domains: dict[str, set] = {}
         conversion_details = []
-        try:
-            cur.execute("""
-                SELECT DISTINCT lower(SLUGS) AS slug
-                FROM reference.order_confirms
-                WHERE SLUGS != ''
-            """)
-            slugs_list = [r[0] for r in cur.fetchall() if r[0]]
-            if slugs_list:
-                slugs_lit = ', '.join(
-                    "'" + s.replace("'", "''") + "'" for s in slugs_list
-                )
-                update_job_status(job_id, progress=60,
-                                  message=f'Scanning {len(slugs_list)} retailer confirmation patterns...')
-                cur.execute(f"""
-                    SELECT UID, URL
-                    FROM clickstream.clickstream_final
-                    WHERE UID IN (SELECT UID FROM roas_audience_uids)
-                      AND DELIVERED BETWEEN toDate('{start_date}') AND toDate('{end_date}')
-                      AND length(URL) > 10
-                      AND multiSearchAny(lower(URL), [{slugs_lit}])
-                    LIMIT {ROAS_MAX_URL_ROWS}
-                """)
-                conv_rows = cur.fetchall()
-                for uid, url in conv_rows:
-                    try:
-                        _p = urlparse(url if '://' in url else 'https://' + url)
-                        domain = _p.netloc.lower().replace('www.', '')
-                        if domain:
-                            uid_conv_domains.setdefault(uid, set()).add(domain)
-                            conversion_details.append({'uid': uid, 'domain': domain})
-                    except Exception:
-                        pass
-                _uniq_dom = len({d for ds in uid_conv_domains.values() for d in ds})
-                print(f"✅ Found {len(uid_conv_domains)} UIDs with verified purchase confirmations on {_uniq_dom} domains")
-            else:
-                print("⚠️ No order_confirms slugs found")
-        except Exception as e:
-            print(f"⚠️ order_confirms conversion query failed: {e}")
+        for uid, url in conv_rows:
+            try:
+                _p = urlparse(url if '://' in url else 'https://' + url)
+                domain = _p.netloc.lower().replace('www.', '')
+                if domain:
+                    uid_conv_domains.setdefault(uid, set()).add(domain)
+                    conversion_details.append({'uid': uid, 'domain': domain})
+            except Exception:
+                pass
+        _uniq_dom = len({d for ds in uid_conv_domains.values() for d in ds})
+        print(f"✅ Found {len(uid_conv_domains)} UIDs with verified purchase confirmations on {_uniq_dom} domains")
 
         # ── Phase 4 ── Demographics for the audience.
         # 4× tiny user_data_sanitized scans, each filtered by the 50 K-row
