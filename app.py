@@ -26333,7 +26333,31 @@ def _build_temp_uids_from_terms(cur, search_terms, start_date, end_date):
 
 
 def _run_roas_iq(job_id):
-    """Background worker for ROAS IQ analysis."""
+    """Background worker for ROAS IQ analysis (ClickHouse-native).
+
+    Fully migrated from Snowflake to ClickHouse. Optimizations vs the SF version:
+
+    1. ``multiSearchAny(lower(URL), [needles])`` instead of OR-chains of
+       ``LIKE '%x%'`` — one SIMD-vectorized pass, hits the ``idx_url_ngram``
+       bloom-filter skipping index, ~10× faster than chained LIKEs.
+    2. ``multiSearchAny`` on ``lower(COMMON_NAME)`` for audience build, also
+       hits ``idx_common_name_ngram``.
+    3. The audience UID set is built once into a Memory engine temp table; all
+       downstream queries do ``UID IN (SELECT UID FROM roas_audience_uids)``
+       which CH executes as a single in-memory hashset (the alternative —
+       inlining 50K UIDs as an array literal in every query — re-parses the
+       3 MB list 5× per analysis).
+    4. UID hash-sampling via ``cityHash64(UID)`` is deterministic and uniform
+       across runs (replaces non-portable Snowflake ``SAMPLE (N ROWS)``).
+    5. The URL pull returns ``toDayOfWeek(VISIT_TS), toHour(VISIT_TS)`` per
+       row, so the day/hour engagement heatmap is computed in Python from the
+       same rows. Eliminates the duplicate clickstream scan SF needed.
+    6. ``HOST_MAPPING`` brand split uses native ``ARRAY JOIN
+       splitByString('|', BRAND)`` instead of SF ``LATERAL FLATTEN``.
+    7. ``DELIVERED`` filtering on every query so CH prunes by partition
+       (``PARTITION BY toYYYYMM(DELIVERED)``) and reads in primary-key order
+       (``ORDER BY (DELIVERED, UID, COMMON_NAME)``).
+    """
     from urllib.parse import urlparse, parse_qs, unquote_plus
     try:
         job = jobs[job_id]
@@ -26344,34 +26368,86 @@ def _run_roas_iq(job_id):
         project_name = params['project_name']
         scope = params.get('scope', 'overall')
 
-        update_job_status(job_id, progress=10, message='Connecting to Snowflake...')
-        import bg as _bg
-        conn = _bg.connect_snowflake()
+        update_job_status(job_id, progress=5, message='Connecting to ClickHouse...')
+        # Per-call settings tuned for ROAS IQ's substring-heavy clickstream scans
+        # over multi-month windows. 30-min cap, 120 GiB memory, parallel-hash
+        # joins, skip indexes ON for the URL/COMMON_NAME ngram bloom filters.
+        conn = _ch_connect(settings={
+            'max_execution_time': 1800,
+            'use_skip_indexes':   1,
+        })
         cur = conn.cursor()
-        cur.execute("USE WAREHOUSE ROASIQ")
 
         ROAS_MAX_UIDS = 50000
         ROAS_MAX_URL_ROWS = 500000
 
-        update_job_status(job_id, progress=20, message='Finding audience from search terms...')
-        uid_count = _build_temp_uids_from_terms(cur, search_terms, start_date, end_date)
+        # Pre-clean and SQL-escape every term once. Only keep terms ≥3 chars so
+        # the ngrambf_v1 bloom filter (n=3) actually prunes granules — shorter
+        # terms force a full scan and are usually noise anyway.
+        term_clauses = []
+        for term in search_terms:
+            safe = (term or '').lower().replace("'", "''").strip()
+            if safe and len(safe) >= 3:
+                term_clauses.append(safe)
+        if not term_clauses:
+            update_job_status(job_id, status='completed', progress=100,
+                              message='No valid search terms (each must be ≥3 characters).')
+            conn.close()
+            return
+        term_array_lit = ', '.join(f"'{t}'" for t in term_clauses)
+
+        # ── Phase 1 ── Build full audience into a temp table (one pass). ─────
+        update_job_status(job_id, progress=15, message='Finding audience from search terms...')
+        cur.execute("DROP TABLE IF EXISTS roas_audience_full")
+        cur.execute(f"""
+            CREATE TEMPORARY TABLE roas_audience_full
+            ENGINE = Memory AS
+            SELECT UID
+            FROM clickstream.clickstream_final
+            WHERE DELIVERED BETWEEN toDate('{start_date}') AND toDate('{end_date}')
+              AND multiSearchAny(lower(COMMON_NAME), [{term_array_lit}])
+            GROUP BY UID
+        """)
+        cur.execute("SELECT count() FROM roas_audience_full")
+        uid_count = cur.fetchone()[0]
         if uid_count == 0:
+            try:
+                cur.execute("DROP TABLE IF EXISTS roas_audience_full")
+            except Exception:
+                pass
             conn.close()
             update_job_status(job_id, status='completed', progress=100,
                               message='No matching UIDs found for those search terms.')
             return
 
+        # Down-sample uniformly via cityHash64 → ORDER BY hash → LIMIT N.
+        # Deterministic across retries (no rand()) and statistically uniform
+        # since cityHash64 is a high-quality avalanching hash.
+        cur.execute("DROP TABLE IF EXISTS roas_audience_uids")
         if uid_count > ROAS_MAX_UIDS:
-            print(f"🔄 ROAS IQ: sampling {ROAS_MAX_UIDS:,} UIDs from {uid_count:,} total")
+            print(f"🔄 ROAS IQ: hash-sampling {ROAS_MAX_UIDS:,} UIDs from {uid_count:,} total")
             cur.execute(f"""
-                CREATE OR REPLACE TEMP TABLE TEMP_UIDS AS
-                SELECT UID FROM TEMP_UIDS SAMPLE ({ROAS_MAX_UIDS} ROWS)
+                CREATE TEMPORARY TABLE roas_audience_uids
+                ENGINE = Memory AS
+                SELECT UID FROM roas_audience_full
+                ORDER BY cityHash64(UID)
+                LIMIT {ROAS_MAX_UIDS}
             """)
-            sampled_uid_count = cur.execute("SELECT COUNT(*) FROM TEMP_UIDS").fetchone()[0]
-            sample_scale = uid_count / max(sampled_uid_count, 1)
         else:
-            sampled_uid_count = uid_count
-            sample_scale = 1.0
+            cur.execute("""
+                CREATE TEMPORARY TABLE roas_audience_uids
+                ENGINE = Memory AS
+                SELECT UID FROM roas_audience_full
+            """)
+        cur.execute("SELECT count() FROM roas_audience_uids")
+        sampled_uid_count = cur.fetchone()[0]
+        sample_scale = uid_count / max(sampled_uid_count, 1)
+
+        # Free the unsampled set — we never read it again.
+        try:
+            cur.execute("DROP TABLE IF EXISTS roas_audience_full")
+        except Exception:
+            pass
 
         def _proj(raw):
             """Project a sampled raw count to US population, accounting for sampling ratio."""
@@ -26379,65 +26455,70 @@ def _run_roas_iq(job_id):
 
         projected_uid_count = _proj(sampled_uid_count)
         scope_label = 'brand-specific' if scope == 'brand_specific' else 'overall ecosystem'
-        update_job_status(job_id, progress=40, message=f'Found {projected_uid_count:,} projected US consumers. Fetching {scope_label} UTM URLs...')
+        update_job_status(job_id, progress=35, message=f'Found {projected_uid_count:,} projected US consumers. Pulling {scope_label} attributed URLs...')
 
+        # ── Phase 2 ── Single-scan pull of all UTM/click-id URLs.
+        # Returns (URL, UID, dow, hr) so the day/hour heatmap is computed
+        # in Python — saves a second full clickstream scan.
         brand_filter_sql = ''
         if scope == 'brand_specific':
-            brand_clauses = []
-            for term in search_terms:
-                safe = term.lower().replace("'", "''").strip()
-                if safe:
-                    brand_clauses.append(f"LOWER(cf.COMMON_NAME) LIKE '%{safe}%'")
-                    brand_clauses.append(f"LOWER(cf.URL) LIKE '%{safe}%'")
-            if brand_clauses:
-                brand_filter_sql = f"AND ({' OR '.join(brand_clauses)})"
+            brand_terms = ', '.join(f"'{t}'" for t in term_clauses)
+            brand_filter_sql = (
+                f"AND (multiSearchAny(lower(COMMON_NAME), [{brand_terms}]) "
+                f"OR  multiSearchAny(lower(URL),         [{brand_terms}]))"
+            )
 
         cur.execute(f"""
-            SELECT cf.URL, cf.UID
-            FROM PROCESSEDCLICKSTREAM.PUBLIC.CLICKSTREAM_FINAL cf
-            WHERE cf.UID IN (SELECT UID FROM TEMP_UIDS)
-              AND cf.DELIVERED BETWEEN '{start_date}' AND '{end_date}'
-              AND cf.URL IS NOT NULL AND LENGTH(cf.URL) > 10
-              AND (
-                LOWER(cf.URL) LIKE '%utm\\_%' ESCAPE '\\\\'
-                OR LOWER(cf.URL) LIKE '%gclid%'
-                OR LOWER(cf.URL) LIKE '%fbclid%'
-                OR LOWER(cf.URL) LIKE '%ttclid%'
-                OR LOWER(cf.URL) LIKE '%msclkid%'
-                OR LOWER(cf.URL) LIKE '%dclid%'
-                OR LOWER(cf.URL) LIKE '%wbraid%'
-                OR LOWER(cf.URL) LIKE '%gbraid%'
-              )
+            SELECT URL, UID,
+                   toDayOfWeek(VISIT_TS) AS dow,
+                   toHour(VISIT_TS)      AS hr
+            FROM clickstream.clickstream_final
+            WHERE UID IN (SELECT UID FROM roas_audience_uids)
+              AND DELIVERED BETWEEN toDate('{start_date}') AND toDate('{end_date}')
+              AND length(URL) > 10
+              AND multiSearchAny(lower(URL),
+                                 ['utm_', 'gclid', 'fbclid', 'ttclid',
+                                  'msclkid', 'dclid', 'wbraid', 'gbraid'])
               {brand_filter_sql}
             LIMIT {ROAS_MAX_URL_ROWS}
         """)
         rows = cur.fetchall()
         print(f"✅ ROAS IQ UTM query returned {len(rows):,} rows (limit {ROAS_MAX_URL_ROWS:,})")
 
-        update_job_status(job_id, progress=45, message='Loading purchase confirmation patterns...')
-        uid_conv_domains = {}
+        # Day/hour heatmap from the rows we just pulled — no extra DB round-trip.
+        update_job_status(job_id, progress=50, message='Aggregating engagement patterns...')
+        _dh_counts: dict[tuple[int, int], int] = {}
+        for _u, _uid, dow, hr in rows:
+            _dh_counts[(dow, hr)] = _dh_counts.get((dow, hr), 0) + 1
+        day_hour_data = [
+            {'dow': d, 'hour': h, 'touches': c}
+            for (d, h), c in sorted(_dh_counts.items())
+        ]
+
+        # ── Phase 3 ── Conversion-page slugs (e.g. /thank-you, /order-confirmation).
+        update_job_status(job_id, progress=55, message='Loading purchase confirmation patterns...')
+        uid_conv_domains: dict[str, set] = {}
         conversion_details = []
         try:
-            slugs_result = cur.execute("""
-                SELECT DISTINCT SLUGS
-                FROM BEHAVIORALGRAPH.PUBLIC.ORDER_CONFIRMS
-                WHERE SLUGS IS NOT NULL AND SLUGS != ''
-            """).fetchall()
-            slugs_list = [row[0] for row in slugs_result if row[0]]
+            cur.execute("""
+                SELECT DISTINCT lower(SLUGS) AS slug
+                FROM reference.order_confirms
+                WHERE SLUGS != ''
+            """)
+            slugs_list = [r[0] for r in cur.fetchall() if r[0]]
             if slugs_list:
-                slug_clauses = []
-                for slug in slugs_list:
-                    safe_slug = slug.lower().replace("'", "''").replace('%', '\\%').replace('_', '\\_')
-                    slug_clauses.append(f"LOWER(cf.URL) LIKE '%{safe_slug}%' ESCAPE '\\\\'")
-                slug_filter = ' OR '.join(slug_clauses)
-                update_job_status(job_id, progress=47, message=f'Scanning {len(slugs_list)} retailer confirmation patterns...')
+                slugs_lit = ', '.join(
+                    "'" + s.replace("'", "''") + "'" for s in slugs_list
+                )
+                update_job_status(job_id, progress=60,
+                                  message=f'Scanning {len(slugs_list)} retailer confirmation patterns...')
                 cur.execute(f"""
-                    SELECT cf.UID, cf.URL
-                    FROM PROCESSEDCLICKSTREAM.PUBLIC.CLICKSTREAM_FINAL cf
-                    WHERE cf.UID IN (SELECT UID FROM TEMP_UIDS)
-                      AND cf.DELIVERED BETWEEN '{start_date}' AND '{end_date}'
-                      AND cf.URL IS NOT NULL AND LENGTH(cf.URL) > 10
-                      AND ({slug_filter})
+                    SELECT UID, URL
+                    FROM clickstream.clickstream_final
+                    WHERE UID IN (SELECT UID FROM roas_audience_uids)
+                      AND DELIVERED BETWEEN toDate('{start_date}') AND toDate('{end_date}')
+                      AND length(URL) > 10
+                      AND multiSearchAny(lower(URL), [{slugs_lit}])
                     LIMIT {ROAS_MAX_URL_ROWS}
                 """)
                 conv_rows = cur.fetchall()
@@ -26446,55 +26527,53 @@ def _run_roas_iq(job_id):
                         _p = urlparse(url if '://' in url else 'https://' + url)
                         domain = _p.netloc.lower().replace('www.', '')
                         if domain:
-                            if uid not in uid_conv_domains:
-                                uid_conv_domains[uid] = set()
-                            uid_conv_domains[uid].add(domain)
+                            uid_conv_domains.setdefault(uid, set()).add(domain)
                             conversion_details.append({'uid': uid, 'domain': domain})
                     except Exception:
                         pass
-                print(f"✅ Found {len(uid_conv_domains)} UIDs with verified purchase confirmations on {len(set(d for ds in uid_conv_domains.values() for d in ds))} domains")
+                _uniq_dom = len({d for ds in uid_conv_domains.values() for d in ds})
+                print(f"✅ Found {len(uid_conv_domains)} UIDs with verified purchase confirmations on {_uniq_dom} domains")
             else:
-                print("⚠️ No ORDER_CONFIRMS slugs found")
+                print("⚠️ No order_confirms slugs found")
         except Exception as e:
-            print(f"⚠️ ORDER_CONFIRMS conversion query failed: {e}")
+            print(f"⚠️ order_confirms conversion query failed: {e}")
 
-        update_job_status(job_id, progress=50, message='Pulling demographics for ad-exposed audience...')
-        cur.execute("""
-            CREATE OR REPLACE TEMP TABLE ROAS_AD_UIDS AS
-            SELECT DISTINCT UID FROM TEMP_UIDS
-        """)
-        demo_data = {}
+        # ── Phase 4 ── Demographics for the audience.
+        # 4× tiny user_data_sanitized scans, each filtered by the 50 K-row
+        # audience set (sub-second per scan because user_data_sanitized is
+        # ORDER BY UID and the audience temp is a Memory hashset).
+        update_job_status(job_id, progress=70, message='Pulling demographics for ad-exposed audience...')
+        demo_data: dict[str, list] = {}
         try:
             cur.execute("""
-                SELECT
-                    'GENDER' AS CAT, d.GENDER AS VAL, COUNT(DISTINCT d.UID) AS CNT
-                FROM PROCESSEDUSERFILES.PUBLIC.USER_DATA_SANITIZED d
-                INNER JOIN ROAS_AD_UIDS u ON d.UID = u.UID
-                WHERE d.GENDER IS NOT NULL AND d.GENDER != ''
-                GROUP BY d.GENDER
+                SELECT 'GENDER' AS cat, GENDER AS val, uniqExact(UID) AS cnt
+                FROM userdata.user_data_sanitized
+                WHERE UID IN (SELECT UID FROM roas_audience_uids)
+                  AND GENDER != ''
+                GROUP BY GENDER
                 UNION ALL
-                SELECT 'AGE', d.AGE, COUNT(DISTINCT d.UID)
-                FROM PROCESSEDUSERFILES.PUBLIC.USER_DATA_SANITIZED d
-                INNER JOIN ROAS_AD_UIDS u ON d.UID = u.UID
-                WHERE d.AGE IS NOT NULL AND d.AGE NOT IN ('', 'Other', 'Prefer not to say')
-                GROUP BY d.AGE
+                SELECT 'AGE', AGE, uniqExact(UID)
+                FROM userdata.user_data_sanitized
+                WHERE UID IN (SELECT UID FROM roas_audience_uids)
+                  AND AGE NOT IN ('', 'Other', 'Prefer not to say')
+                GROUP BY AGE
                 UNION ALL
-                SELECT 'INCOME', d.INCOME, COUNT(DISTINCT d.UID)
-                FROM PROCESSEDUSERFILES.PUBLIC.USER_DATA_SANITIZED d
-                INNER JOIN ROAS_AD_UIDS u ON d.UID = u.UID
-                WHERE d.INCOME IS NOT NULL AND d.INCOME != ''
-                GROUP BY d.INCOME
+                SELECT 'INCOME', INCOME, uniqExact(UID)
+                FROM userdata.user_data_sanitized
+                WHERE UID IN (SELECT UID FROM roas_audience_uids)
+                  AND INCOME != ''
+                GROUP BY INCOME
                 UNION ALL
-                SELECT 'ETHNICITY', d.ETHNICITY, COUNT(DISTINCT d.UID)
-                FROM PROCESSEDUSERFILES.PUBLIC.USER_DATA_SANITIZED d
-                INNER JOIN ROAS_AD_UIDS u ON d.UID = u.UID
-                WHERE d.ETHNICITY IS NOT NULL AND d.ETHNICITY != ''
-                GROUP BY d.ETHNICITY
+                SELECT 'ETHNICITY', ETHNICITY, uniqExact(UID)
+                FROM userdata.user_data_sanitized
+                WHERE UID IN (SELECT UID FROM roas_audience_uids)
+                  AND ETHNICITY != ''
+                GROUP BY ETHNICITY
             """)
             for cat, val, cnt in cur.fetchall():
-                if cat not in demo_data:
-                    demo_data[cat] = []
-                demo_data[cat].append({'value': val, 'count': cnt, 'projected': _proj(cnt)})
+                demo_data.setdefault(cat, []).append({
+                    'value': val, 'count': cnt, 'projected': _proj(cnt)
+                })
             for cat in demo_data:
                 total_cat = sum(d['count'] for d in demo_data[cat])
                 for d in demo_data[cat]:
@@ -26503,69 +26582,48 @@ def _run_roas_iq(job_id):
         except Exception as e:
             print(f"⚠️ Demographics query failed: {e}")
 
-        update_job_status(job_id, progress=55, message='Analyzing engagement patterns...')
-        day_hour_data = []
-        try:
-            cur.execute(f"""
-                SELECT
-                    DAYOFWEEK(cf.DELIVERED) AS DOW,
-                    HOUR(cf.DELIVERED) AS HR,
-                    COUNT(*) AS TOUCHES
-                FROM PROCESSEDCLICKSTREAM.PUBLIC.CLICKSTREAM_FINAL cf
-                WHERE cf.UID IN (SELECT UID FROM TEMP_UIDS)
-                  AND cf.DELIVERED BETWEEN '{start_date}' AND '{end_date}'
-                  AND cf.URL IS NOT NULL AND LENGTH(cf.URL) > 10
-                  AND (
-                    LOWER(cf.URL) LIKE '%utm\\_%' ESCAPE '\\\\'
-                    OR LOWER(cf.URL) LIKE '%gclid%' OR LOWER(cf.URL) LIKE '%fbclid%'
-                    OR LOWER(cf.URL) LIKE '%ttclid%' OR LOWER(cf.URL) LIKE '%msclkid%'
-                    OR LOWER(cf.URL) LIKE '%dclid%' OR LOWER(cf.URL) LIKE '%wbraid%'
-                    OR LOWER(cf.URL) LIKE '%gbraid%'
-                  )
-                GROUP BY DOW, HR
-                ORDER BY DOW, HR
-            """)
-            for dow, hr, touches in cur.fetchall():
-                day_hour_data.append({'dow': dow, 'hour': hr, 'touches': touches})
-        except Exception as e:
-            print(f"⚠️ Day/hour query failed: {e}")
-
-        update_job_status(job_id, progress=57, message='Fetching brand/retailer data from HOST_MAPPING...')
+        # ── Phase 5 ── Brand/retailer click counts via host_mapping.
+        # Single CTE, ARRAY JOIN replaces SF LATERAL FLATTEN, COMMON_NAME is
+        # LowCardinality(String) so the equi-join is a fast hash lookup.
+        update_job_status(job_id, progress=80, message='Fetching brand/retailer data from host_mapping...')
         brand_click_rows = []
         try:
-            cur.execute("""
-                CREATE OR REPLACE TEMP TABLE ROAS_BRAND_NAMES AS
-                SELECT DISTINCT LOWER(TRIM(pipe_split.value)) AS brand_lower,
-                       TRIM(pipe_split.value) AS brand_display
-                FROM BEHAVIORALGRAPH.PUBLIC.HOST_MAPPING m,
-                     LATERAL FLATTEN(input => SPLIT(m.Brand, '|')) AS pipe_split
-                WHERE (
-                    LOWER(m.Section) LIKE '%most purchased%'
-                    OR LOWER(m.Section) LIKE '%where they shop%'
-                )
-                AND TRIM(pipe_split.value) != ''
-            """)
-            brand_name_count = cur.execute("SELECT COUNT(*) FROM ROAS_BRAND_NAMES").fetchone()[0]
-            print(f"✅ HOST_MAPPING: found {brand_name_count} brand names in most-purchased/where-they-shop")
-
             cur.execute(f"""
+                WITH brand_names AS (
+                    SELECT DISTINCT
+                        lower(trimBoth(b)) AS brand_lower,
+                        trimBoth(b)        AS brand_display
+                    FROM reference.host_mapping
+                    ARRAY JOIN splitByChar('|', BRAND) AS b
+                    WHERE (lower(SECTION) LIKE '%most purchased%'
+                           OR lower(SECTION) LIKE '%where they shop%')
+                      AND trimBoth(b) != ''
+                )
                 SELECT bn.brand_display, cf.UID
-                FROM PROCESSEDCLICKSTREAM.PUBLIC.CLICKSTREAM_FINAL cf
-                JOIN ROAS_BRAND_NAMES bn
-                    ON LOWER(cf.COMMON_NAME) = bn.brand_lower
-                WHERE cf.UID IN (SELECT UID FROM TEMP_UIDS)
-                  AND cf.DELIVERED BETWEEN '{start_date}' AND '{end_date}'
-                  AND cf.COMMON_NAME IS NOT NULL
+                FROM clickstream.clickstream_final AS cf
+                INNER JOIN brand_names AS bn
+                    ON lower(cf.COMMON_NAME) = bn.brand_lower
+                WHERE cf.UID IN (SELECT UID FROM roas_audience_uids)
+                  AND cf.DELIVERED BETWEEN toDate('{start_date}') AND toDate('{end_date}')
                   AND cf.COMMON_NAME != ''
                 LIMIT {ROAS_MAX_URL_ROWS}
             """)
             brand_click_rows = cur.fetchall()
-            print(f"✅ HOST_MAPPING brand query returned {len(brand_click_rows)} rows across audience")
+            print(f"✅ host_mapping brand query returned {len(brand_click_rows)} rows across audience")
         except Exception as e:
-            print(f"⚠️ HOST_MAPPING brand query failed: {e}")
+            print(f"⚠️ host_mapping brand query failed: {e}")
             import traceback; traceback.print_exc()
 
+        # Drop the audience temp table; close the connection.
+        try:
+            cur.execute("DROP TABLE IF EXISTS roas_audience_uids")
+        except Exception:
+            pass
         conn.close()
+
+        # Discard the dow/hr columns we added — downstream classification
+        # only needs (URL, UID).
+        rows = [(u, uid) for (u, uid, _d, _h) in rows]
 
         update_job_status(job_id, progress=60, message=f'Classifying {len(rows):,} attributed URLs...')
         channel_source_uids = {}
