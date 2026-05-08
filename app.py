@@ -1602,6 +1602,22 @@ def _heavy_status_snapshot():
         }
 
 
+def _safe_ch_throttle_stats():
+    """Best-effort snapshot of the cross-tool ClickHouse query semaphore.
+    Defined in `migration/clickhouse_connector.py`; the import is wrapped
+    so the queue-status endpoint never crashes if the connector module
+    isn't importable in some constrained environment (tests, etc.)."""
+    try:
+        from clickhouse_connector import get_clickhouse_throttle_stats
+        return get_clickhouse_throttle_stats()
+    except Exception:
+        try:
+            from migration.clickhouse_connector import get_clickhouse_throttle_stats
+            return get_clickhouse_throttle_stats()
+        except Exception as e:
+            return {'error': f'unavailable: {e}'}
+
+
 def _heavy_ahead_count(self_job_id=None):
     """How many heavy slots are spoken for ahead of `self_job_id`."""
     with _heavy_state_lock:
@@ -18382,6 +18398,7 @@ def get_queue_status():
                 'waiting_by_tool': _by_tool(snap['waiting']),
                 'free_slots': max(0, BG_HEAVY_ANALYSIS_CONCURRENCY - len(snap['inflight'])),
             },
+            'clickhouse_throttle': _safe_ch_throttle_stats(),
             # Back-compat: keep the old top-level fields so existing UI code
             # (anything pointing at workers/inflight/queued at the root) keeps
             # working. New consumers should use the structured fields above.

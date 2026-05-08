@@ -82,6 +82,17 @@ services:
       # pre-check). Bump cautiously — ClickHouse is the bottleneck, not CPU.
       - key: BG_HEAVY_ANALYSIS_CONCURRENCY
         value: "2"
+      # Cross-tool ClickHouse query throttle (defined in
+      # migration/clickhouse_connector.py). Caps the number of HEAVY
+      # SELECT/WITH/SHOW queries that hit ClickHouse simultaneously across
+      # ALL workloads (Profile Analysis, Subscriber IQ, SF→LF, etc). The
+      # current Hetzner AX162-S box (128 GiB / 16 cores) starts wobbling
+      # around 10-15 concurrent heavy aggregations on `clickstream_final`,
+      # so 10 is a safe production default. Profiles wait cheaply at this
+      # in-process semaphore instead of piling on CH and starving each
+      # other. Bump this up after migrating to a bigger CH box.
+      - key: BG_CLICKHOUSE_CONCURRENCY
+        value: "10"
       # Crash detection: a job whose heartbeat is older than this many seconds
       # while still 'running' gets auto-marked failed. 1800 = 30 min.
       - key: BG_JOB_STALE_AFTER_SECONDS

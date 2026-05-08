@@ -85,6 +85,9 @@ services:
       # pre-check). Bump cautiously — ClickHouse is the bottleneck, not CPU.
       - key: BG_HEAVY_ANALYSIS_CONCURRENCY
         value: "2"
+      # Cross-tool ClickHouse query throttle (see comment in render.yaml).
+      - key: BG_CLICKHOUSE_CONCURRENCY
+        value: "10"
       # Crash detection: a job whose heartbeat is older than this many seconds
       # while still 'running' gets auto-marked failed. 1800 = 30 min.
       - key: BG_JOB_STALE_AFTER_SECONDS

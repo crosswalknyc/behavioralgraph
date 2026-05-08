@@ -20,13 +20,88 @@ Usage in any script — change ONE import:
 
 import os
 import re
+import time
+import threading
 import logging
+from contextlib import contextmanager
 from typing import Any, Optional
 
 import clickhouse_connect
 import pandas as pd
 
 logger = logging.getLogger(__name__)
+
+
+# ── Cross-tool ClickHouse query throttle ──────────────────────────────────────
+# Caps the number of HEAVY (SELECT/WITH/SHOW) queries that hit CH simultaneously
+# across every workload that imports this connector — Profile Analysis (BG),
+# Subscriber IQ, SF→LF Conversion, etc. The current ClickHouse box (Hetzner
+# AX162-S, 128 GiB RAM, 16 cores) starts to wobble somewhere around 10-15
+# concurrent heavy aggregations on `clickstream_final`. With the gate, the
+# *Nth+1* caller waits cheaply at this semaphore (in-process, microseconds)
+# instead of piling on CH, where it would burn server RAM, queue at the network
+# thread pool, and slow down EVERY other in-flight query.
+#
+# Tune via env var `BG_CLICKHOUSE_CONCURRENCY` (default 10). Set to 0 to
+# disable the gate entirely (not recommended in prod).
+#
+# DDL (CREATE/DROP/ALTER), INSERTs, and small `command()` calls are NOT gated —
+# they're fast and don't compete for CH working memory.
+_CH_QUERY_CONCURRENCY = max(0, int(os.environ.get('BG_CLICKHOUSE_CONCURRENCY', '10')))
+_CH_QUERY_SEMAPHORE: Optional[threading.BoundedSemaphore] = (
+    threading.BoundedSemaphore(_CH_QUERY_CONCURRENCY) if _CH_QUERY_CONCURRENCY > 0 else None
+)
+_CH_QUERY_WAIT_LOG_THRESHOLD_S = 1.0  # log a warning when wait > this many seconds
+_CH_QUERY_STATS = {
+    'inflight':   0,
+    'total_run':  0,
+    'total_wait': 0,
+    'lock':       threading.Lock(),
+}
+
+
+@contextmanager
+def _ch_query_slot(sql_preview: str):
+    """Acquire a heavy-query slot on the cross-tool CH semaphore.
+
+    Logs a warning if the caller had to wait more than
+    `_CH_QUERY_WAIT_LOG_THRESHOLD_S` seconds — that's the signal that you're
+    bottlenecked on CH capacity and should either raise the limit or scale CH.
+    """
+    if _CH_QUERY_SEMAPHORE is None:
+        yield
+        return
+    t_wait_start = time.monotonic()
+    _CH_QUERY_SEMAPHORE.acquire()
+    waited = time.monotonic() - t_wait_start
+    with _CH_QUERY_STATS['lock']:
+        _CH_QUERY_STATS['inflight']   += 1
+        _CH_QUERY_STATS['total_run']  += 1
+        _CH_QUERY_STATS['total_wait'] += waited
+        inflight_now = _CH_QUERY_STATS['inflight']
+    try:
+        if waited > _CH_QUERY_WAIT_LOG_THRESHOLD_S:
+            logger.warning(
+                "ClickHouse throttle: waited %.1fs for slot (now %d/%d in-flight) — "
+                "consider raising BG_CLICKHOUSE_CONCURRENCY or scaling CH. SQL: %s",
+                waited, inflight_now, _CH_QUERY_CONCURRENCY, sql_preview[:140],
+            )
+        yield
+    finally:
+        with _CH_QUERY_STATS['lock']:
+            _CH_QUERY_STATS['inflight'] -= 1
+        _CH_QUERY_SEMAPHORE.release()
+
+
+def get_clickhouse_throttle_stats() -> dict:
+    """Return current CH-throttle stats. Useful for /api/queue/status endpoints."""
+    with _CH_QUERY_STATS['lock']:
+        return {
+            'capacity':        _CH_QUERY_CONCURRENCY,
+            'inflight':        _CH_QUERY_STATS['inflight'],
+            'total_run':       _CH_QUERY_STATS['total_run'],
+            'total_wait_secs': round(_CH_QUERY_STATS['total_wait'], 2),
+        }
 
 CH_HOST       = os.environ.get('CH_HOST',       '37.27.140.111')
 CH_PORT       = int(os.environ.get('CH_PORT',   '8123'))
@@ -806,17 +881,29 @@ class ClickHouseCursor:
         if ';\n' in translated:
             statements = [s.strip() for s in translated.split(';\n') if s.strip()]
             for stmt in statements[:-1]:
-                self._client.command(stmt, settings=merged_settings or None)
+                # CTAS (`CREATE TEMPORARY TABLE x AS SELECT ...`) and any
+                # statement that contains a heavy SELECT in a compound block
+                # also takes a slot — the SELECT half is what hammers CH.
+                stmt_u = stmt.lstrip().upper()
+                is_heavy = any(stmt_u.startswith(p) for p in ('SELECT', 'WITH'))           \
+                    or 'AS SELECT' in stmt_u or 'AS WITH' in stmt_u                        \
+                    or stmt_u.startswith('INSERT') and ' SELECT ' in stmt_u
+                if is_heavy:
+                    with _ch_query_slot(stmt):
+                        self._client.command(stmt, settings=merged_settings or None)
+                else:
+                    self._client.command(stmt, settings=merged_settings or None)
             translated = statements[-1]
 
         upper = translated.strip().upper()
         if upper.startswith('SELECT') or upper.startswith('WITH') or upper.startswith('SHOW'):
             try:
-                result = self._client.query(
-                    translated,
-                    parameters=params or {},
-                    settings=merged_settings or None,
-                )
+                with _ch_query_slot(translated):
+                    result = self._client.query(
+                        translated,
+                        parameters=params or {},
+                        settings=merged_settings or None,
+                    )
                 self._rows = [tuple(row) for row in result.result_rows]
                 self._column_names = result.column_names if hasattr(result, 'column_names') else []
                 self._description = [
@@ -827,6 +914,8 @@ class ClickHouseCursor:
                 logger.warning("ClickHouse query error: %s\nSQL: %s", e, translated[:500])
                 raise
         else:
+            # DDL / DML — Memory-engine temp table CREATE / DROP, INSERT, etc.
+            # NOT gated: these are fast and don't contend for CH working memory.
             self._client.command(translated, settings=merged_settings or None)
             self._rows = []
             self._column_names = []
