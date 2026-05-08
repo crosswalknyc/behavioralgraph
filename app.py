@@ -22757,10 +22757,20 @@ def run_sf_lf_conversion(job_id):
         # filter this query was returning the entire platform's user/event
         # count for the date range (which produced the 143M IG / 150M TT
         # cap-saturated values customers saw on the dashboard).
+        # UID guard applied to every SF→LF query: only count events that have
+        # a real attributed user. ClickHouse's uniqExactIf(UID, ...) silently
+        # drops NULL UIDs while countIf(...) counts every row — without this
+        # filter, anonymous-event-heavy platforms (commonly Instagram) showed
+        # "0 unique users / 111K views", which is impossible by definition for
+        # a panel-exposure metric. Filtering at the WHERE clause keeps unique
+        # and total perfectly consistent.
+        SF_LF_UID_GUARD = "UID IS NOT NULL AND UID != ''"
+
         batch_plat_sql = f"""
             SELECT {', '.join(plat_select_parts)}
             FROM clickstream.clickstream_final
             WHERE DELIVERED BETWEEN '{start_date}' AND '{end_date}'
+              AND {SF_LF_UID_GUARD}
               AND LOWER(COMMON_NAME) IN ({plat_list_sql})
               AND {sf_url_match_expr}
         """
@@ -22816,6 +22826,7 @@ def run_sf_lf_conversion(job_id):
                 SELECT DISTINCT UID
                 FROM PROCESSEDCLICKSTREAM.PUBLIC.CLICKSTREAM_FINAL
                 WHERE {platform_where}
+                  AND {SF_LF_UID_GUARD}
                   AND {sf_url_match_expr}
                   AND DELIVERED BETWEEN '{start_date}' AND '{end_date}'
             """)
@@ -22922,6 +22933,7 @@ def run_sf_lf_conversion(job_id):
                 SELECT {', '.join(sel_parts)}
                 FROM clickstream.clickstream_final
                 WHERE DELIVERED BETWEEN '{start_date}' AND '{end_date}'
+                  AND {SF_LF_UID_GUARD}
                   AND {_per_url_prefilter}
                   AND {per_url_needle_match}
             """
@@ -22977,6 +22989,7 @@ def run_sf_lf_conversion(job_id):
                     SELECT UID, {', '.join(inner_parts)}
                     FROM clickstream.clickstream_final
                     WHERE DELIVERED BETWEEN '{start_date}' AND '{end_date}'
+                      AND {SF_LF_UID_GUARD}
                       AND (({_per_url_prefilter}
                             AND {per_url_needle_match})
                            OR {_lf_prefilter_clause})
@@ -23129,6 +23142,7 @@ def run_sf_lf_conversion(job_id):
                 SELECT UID, {', '.join(conv_inner_parts)}
                 FROM clickstream.clickstream_final
                 WHERE DELIVERED BETWEEN '{start_date}' AND '{end_date}'
+                  AND {SF_LF_UID_GUARD}
                   AND {conv_prefilter}
                 GROUP BY UID
             )
@@ -23341,6 +23355,7 @@ def run_sf_lf_conversion(job_id):
                 INNER JOIN {sf_temp_table} sf ON c.UID = sf.UID
                 WHERE {lf_url_keyword_match.replace('URL', 'c.URL')}
                   {lf_platform_clause}
+                  AND c.UID IS NOT NULL AND c.UID != ''
                   AND c.DELIVERED BETWEEN '{start_date}' AND '{end_date}'
             )
             SELECT 
@@ -23892,10 +23907,28 @@ def run_sf_lf_conversion(job_id):
             plat_viewers = pc['viewers']
             plat_conv = pc['converted']
             _plat_key = (plat_name or '').lower()
+            # Pull Total Views (events) for this platform from the
+            # platform_metrics list — the per-platform card needs both
+            # unique and total to display honestly. Falls back to 0 if the
+            # platform row is missing for any reason.
+            _plat_total_events = 0
+            for _pm_row in (results.get('platform_metrics') or []):
+                if (_pm_row.get('platform') or '').lower() == _plat_key and not _pm_row.get('is_overall'):
+                    _plat_total_events = int(_pm_row.get('duplicated_views') or 0)
+                    break
+            _plat_anchor = _anchors.get(_plat_key) if _plat_key else None
+            if _plat_anchor and _plat_anchor.get('mode') == 'anchored':
+                _plat_total_genpop = int(_plat_anchor['projected_total'])
+            else:
+                _plat_total_genpop = project_to_gen_pop(_plat_total_events, platform=_plat_key, is_total_views=True)
             plat_conv_genpop = project_to_gen_pop(plat_conv, platform=_plat_key)
             plat_rate = pc['rate'] if pc['rate'] > 0 else 0.00000001
             print(f"[SF-LF] WRITING CSV: {plat_name.upper()}_CONVERSION Converted to LF -> Count={plat_conv}, Gen_Pop_Projection={plat_conv_genpop}")
             csv_rows.append({'Column': f'{plat_name.upper()}_CONVERSION', 'Value': 'SF Viewers', 'Metric': '', 'Count': plat_viewers, 'Percentage': '', 'Gen_Pop_Projection': project_to_gen_pop(plat_viewers, platform=_plat_key)})
+            # Total Views (events) — separate row so the per-platform card
+            # can show both unique and total instead of mislabeling unique
+            # as "Duplicated Views" (the prior bug).
+            csv_rows.append({'Column': f'{plat_name.upper()}_CONVERSION', 'Value': 'Total Views', 'Metric': '', 'Count': _plat_total_events, 'Percentage': '', 'Gen_Pop_Projection': _plat_total_genpop})
             csv_rows.append({'Column': f'{plat_name.upper()}_CONVERSION', 'Value': 'Converted to LF', 'Metric': '', 'Count': plat_conv, 'Percentage': f"{plat_rate:.8f}%", 'Gen_Pop_Projection': plat_conv_genpop})
         
         print(f"[SF-LF] CSV: Overall converted={conv_users}, sum of platforms={sum(pc['converted'] for pc in platform_conversions.values())}")

@@ -20004,6 +20004,7 @@
                     let existing = perPlatformConversion.find(p => p.platform === platform);
                     if (!existing) { existing = { platform: platform }; perPlatformConversion.push(existing); }
                     if (val === 'SF Viewers') { existing.viewers = count; existing.viewersGenPop = genPop; }
+                    else if (val === 'Total Views') { existing.totalViews = count; existing.totalViewsGenPop = genPop; }
                     else if (val === 'Converted to LF') { existing.converted = count; existing.convRate = pct; existing.convertedGenPop = genPop; }
                 }
                 else if (currentSection === 'demographics') {
@@ -20150,9 +20151,22 @@
                     let convertedProj = parseInt(p.convertedGenPop) || 0;
                     const viewersRaw = parseInt(p.viewers) || 0;
                     let convertedRaw = parseInt(p.converted) || 0;
+                    // Total Views (events) — fall back to existing
+                    // platform_metrics row when PER_PLATFORM_CONVERSION CSV
+                    // doesn't include it (older S3 reports).
+                    let totalViewsProj = parseInt(p.totalViewsGenPop) || 0;
+                    let totalViewsRaw = parseInt(p.totalViews) || 0;
+                    if (!totalViewsRaw && Array.isArray(platformMetrics)) {
+                        const _pm = platformMetrics.find(x => (x.platform || '').toLowerCase().includes((p.platform || '').toLowerCase()));
+                        if (_pm) {
+                            totalViewsRaw = parseInt(_pm.duplicatedViews) || 0;
+                            totalViewsProj = parseInt(_pm.duplicatedViewsGenPop) || 0;
+                        }
+                    }
                     if (convertedRaw > viewersRaw) convertedRaw = viewersRaw;
                     if (convertedProj > viewersProj && viewersProj > 0) convertedProj = viewersProj;
                     const viewersDisplay = viewersProj > 0 ? formatGenPop(viewersProj) : viewersRaw.toLocaleString();
+                    const totalViewsDisplay = totalViewsProj > 0 ? formatGenPop(totalViewsProj) : totalViewsRaw.toLocaleString();
                     let convDisplay = convertedProj > 0 ? formatGenPop(convertedProj) : convertedRaw.toLocaleString();
                     let platRate = 0;
                     if (viewersProj > 0 && convertedProj > 0) platRate = Math.min((convertedProj / viewersProj) * 100, 100);
@@ -20163,9 +20177,10 @@
                     <div style="background: var(--bg-card); border-radius: 10px; padding: 1rem; border: 1px solid var(--border-color); border-left: 4px solid ${platformColors[p.platform] || 'var(--accent-primary)'};">
                         <div style="font-size: 0.85rem; font-weight: 600; margin-bottom: 0.5rem;">${platformIcons[p.platform] || '📱'} ${p.platform}</div>
                         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; font-size: 0.75rem;">
-                            <div><span style="color: var(--text-secondary);">Duplicated Views:</span> <span style="font-weight: 600;">${viewersDisplay}</span></div>
+                            <div><span style="color: var(--text-secondary);">Unique Viewers:</span> <span style="font-weight: 600;">${viewersDisplay}</span></div>
+                            <div><span style="color: var(--text-secondary);">Total Views:</span> <span style="font-weight: 600;">${totalViewsDisplay}</span></div>
                             <div><span style="color: var(--text-secondary);">Converted:</span> <span style="font-weight: 600; color: var(--accent-lime);">${convDisplay}</span></div>
-                            <div style="grid-column: span 2;"><span style="color: var(--text-secondary);">Conv. Rate:</span> <span style="font-weight: 600; color: var(--accent-primary);">${platRate.toFixed(5)}%</span></div>
+                            <div><span style="color: var(--text-secondary);">Conv. Rate:</span> <span style="font-weight: 600; color: var(--accent-primary);">${platRate.toFixed(5)}%</span></div>
                         </div>
                     </div>
                 `}).join('');
