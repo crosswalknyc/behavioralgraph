@@ -163,6 +163,9 @@ CH_DEFAULT_SETTINGS = {
     # ~262 KB with `Max query size exceeded`. 16 MiB is plenty headroom
     # and well under the server-side hard limit.
     "max_query_size": 16 * 1024 * 1024,
+    # 2-hour cap; full-year profile scans with 29 brand LIKE conditions
+    # regularly exceed 30 min on the 48B-row clickstream table.
+    "max_execution_time": 7200,
 }
 
 
