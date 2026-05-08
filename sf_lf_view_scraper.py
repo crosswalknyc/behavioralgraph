@@ -77,7 +77,7 @@ _MAX_WORKERS = int(os.environ.get("SF_LF_SCRAPE_WORKERS", "5"))
 
 # ── platform detection ────────────────────────────────────────────────────
 def detect_platform(url: str) -> str:
-    """Return one of 'youtube', 'tiktok', 'instagram', 'facebook', or 'other'."""
+    """Return one of 'youtube', 'tiktok', 'instagram', 'facebook', 'x', or 'other'."""
     if not url:
         return "other"
     host = (urlparse(url).hostname or "").lower()
@@ -98,6 +98,16 @@ def detect_platform(url: str) -> str:
         or "fb.watch" in host
     ):
         return "facebook"
+    # X / Twitter: x.com is the canonical domain post-rebrand, twitter.com
+    # still resolves and is widely used; t.co is the link-shortener that
+    # redirects into status URLs.
+    if (
+        host == "x.com"
+        or host.endswith(".x.com")
+        or "twitter." in host
+        or host == "t.co"
+    ):
+        return "x"
     return "other"
 
 
@@ -383,6 +393,87 @@ def _scrape_facebook_html(url: str) -> tuple[Optional[int], Optional[str]]:
     return views, creator
 
 
+# ── X / Twitter HTML scrape ──────────────────────────────────────────────
+# X aggressively gates anonymous traffic; HTML scraping returns useful
+# data only on a fraction of public tweets, but it's a worthwhile fallback
+# when yt_dlp can't see the tweet (deleted/private/protected accounts).
+_X_VIEW_PATTERNS = [
+    re.compile(r'"view_count_total"\s*:\s*"?(\d+)"?'),
+    re.compile(r'"view_count"\s*:\s*\{\s*"count"\s*:\s*"?(\d+)"?'),
+    re.compile(r'"viewCount"\s*:\s*"?(\d+)"?'),
+    re.compile(r'"play_count"\s*:\s*"?(\d+)"?'),
+]
+# og:title on X tweets is typically:
+#   "<Display Name> (@handle) on X"        (logged-out share card)
+#   "<Display Name> on X: '<tweet>'"       (older form)
+_X_OG_TITLE = re.compile(
+    r'<meta[^>]+property="og:title"[^>]+content="([^"]+)"', re.I
+)
+_X_TITLE_DISPLAY = re.compile(
+    r"^(.+?)\s*\(@[^)]+\)\s*on\s*(?:X|Twitter)", re.I
+)
+_X_TITLE_DISPLAY_ALT = re.compile(r"^(.+?)\s+on\s+(?:X|Twitter)", re.I)
+_X_USER_PATTERNS = [
+    re.compile(r'"user"\s*:\s*\{[^}]*?"name"\s*:\s*"([^"]+)"'),
+    re.compile(r'"core"\s*:\s*\{[^}]*?"user_results"[^}]*?"name"\s*:\s*"([^"]+)"'),
+    re.compile(r'"screen_name"\s*:\s*"([^"]+)"'),
+]
+# Pretty-URL handle fallback: x.com/<handle>/status/... (twitter.com same).
+# Skips reserved paths that aren't user handles ('i', 'home', 'search', etc).
+_X_URL_HANDLE = re.compile(
+    r"(?:x\.com|twitter\.com)/([A-Za-z0-9_]+)/status/",
+    re.I,
+)
+_X_URL_HANDLE_RESERVED = {
+    "i", "home", "explore", "search", "notifications", "messages",
+    "settings", "compose", "intent", "share", "hashtag",
+}
+
+
+def _scrape_x_html(url: str) -> tuple[Optional[int], Optional[str]]:
+    """Best-effort views + creator from an X / Twitter status page.
+    X heavily gates anonymous requests; failures are common and silent."""
+    html = _http_get(url)
+    views: Optional[int] = None
+    creator: Optional[str] = None
+    if html:
+        for pat in _X_VIEW_PATTERNS:
+            m = pat.search(html)
+            if m:
+                try:
+                    views = int(m.group(1))
+                    break
+                except ValueError:
+                    continue
+        # Creator: prefer the og:title display name. og:title shape is
+        # "<Display Name> (@handle) on X" — extract just the display name.
+        title_m = _X_OG_TITLE.search(html)
+        if title_m:
+            t = title_m.group(1)
+            for pat in (_X_TITLE_DISPLAY, _X_TITLE_DISPLAY_ALT):
+                tu = pat.search(t)
+                if tu and tu.group(1).strip() and tu.group(1).strip().lower() not in ('x', 'twitter'):
+                    creator = tu.group(1).strip()
+                    break
+        if not creator:
+            for pat in _X_USER_PATTERNS[:2]:
+                m = pat.search(html)
+                if m and m.group(1).strip():
+                    creator = m.group(1).strip()
+                    break
+        if not creator:
+            m = _X_USER_PATTERNS[2].search(html)
+            if m and m.group(1).strip():
+                creator = '@' + m.group(1).strip()
+    # URL-path handle fallback when HTML scrape couldn't reach the page.
+    # Works for all "pretty" tweet URLs except /i/status/<id> (no handle).
+    if not creator:
+        m = _X_URL_HANDLE.search(url)
+        if m and m.group(1).lower() not in _X_URL_HANDLE_RESERVED:
+            creator = '@' + m.group(1).strip()
+    return views, creator
+
+
 # ── unified per-URL scrape ────────────────────────────────────────────────
 def scrape_one(url: str) -> tuple[str, str, Optional[int], Optional[str]]:
     """(url, platform, view_count_or_None, creator_or_None) — never raises."""
@@ -393,8 +484,8 @@ def scrape_one(url: str) -> tuple[str, str, Optional[int], Optional[str]]:
     views: Optional[int] = None
     creator: Optional[str] = None
 
-    # yt_dlp handles YouTube, TikTok, and Facebook well; IG needs auth so skip.
-    if platform in ("youtube", "tiktok", "facebook"):
+    # yt_dlp handles YouTube, TikTok, Facebook, and X well; IG needs auth so skip.
+    if platform in ("youtube", "tiktok", "facebook", "x"):
         v, c = _scrape_with_ytdlp(url)
         if v is not None and v > 0:
             views = v
@@ -416,6 +507,12 @@ def scrape_one(url: str) -> tuple[str, str, Optional[int], Optional[str]]:
             creator = c
     elif platform == "facebook" and (views is None or creator is None):
         v, c = _scrape_facebook_html(url)
+        if views is None and v is not None and v > 0:
+            views = v
+        if creator is None and c:
+            creator = c
+    elif platform == "x" and (views is None or creator is None):
+        v, c = _scrape_x_html(url)
         if views is None and v is not None and v > 0:
             views = v
         if creator is None and c:
