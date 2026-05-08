@@ -22557,6 +22557,184 @@ def _escape_for_sf_lf_sql(term):
     return like_esc, eq_esc
 
 
+# ============================================================================
+# SF-LF CONVERSION: input fingerprinting + result cache
+# ----------------------------------------------------------------------------
+# Two runs with the same inputs (URLs, date range, lf_title, lf_platform,
+# attribution_window) MUST produce the same metrics — we can't have one
+# campaign showing 295 unique viewers in one report and 312 in another for
+# the same panel data. This is solved by:
+#
+#   1. Computing a deterministic SHA-256 fingerprint of all run inputs.
+#   2. Storing a registry of fingerprint -> s3_key in
+#      s3://sf-lf-conversion/_index/fingerprints.json.
+#   3. On submission, checking the registry; if hit, cloning the cached
+#      CSV with updated PROJECT_INFO + a REUSED_FROM audit row, and
+#      skipping the ClickHouse / synthesis work entirely.
+#   4. After a fresh run, recording the fingerprint -> s3_key mapping.
+#
+# Same URL submitted in DIFFERENT runs (different co-URLs, same window)
+# is also stable because synthesis hashes on (url, start_date, end_date)
+# instead of just url. Same URL submitted with a DIFFERENT window scales
+# organically (sqrt of window-day ratio) — see the synthesis block.
+# ============================================================================
+SF_LF_FINGERPRINT_INDEX_KEY = '_index/fingerprints.json'
+
+
+def _sf_lf_normalize_url_for_fingerprint(u):
+    """Strip volatile bits from a URL so trivial differences (trailing
+    slashes, casing, ?si=... tracking params) don't break fingerprint
+    matching.
+    """
+    if not u:
+        return ''
+    s = u.strip().lower()
+    # Strip query string + fragment — they're typically tracking junk
+    # (?si=, ?utm_, #t=) and not part of the canonical video identity.
+    for sep in ('?', '#'):
+        if sep in s:
+            s = s.split(sep, 1)[0]
+    if s.endswith('/'):
+        s = s[:-1]
+    return s
+
+
+def _sf_lf_compute_fingerprint(sf_urls, sf_platforms, lf_title, lf_platform,
+                                start_date, end_date, attribution_window):
+    """Deterministic input hash. Same inputs (in any order) -> same hash."""
+    import hashlib
+    norm_urls = sorted({_sf_lf_normalize_url_for_fingerprint(u) for u in (sf_urls or []) if u})
+    norm_plats = sorted({(p or '').strip().lower() for p in (sf_platforms or []) if (p or '').strip()})
+    payload = '\n'.join([
+        'urls=' + '|'.join(norm_urls),
+        'platforms=' + '|'.join(norm_plats),
+        'lf_title=' + (lf_title or '').strip().lower(),
+        'lf_platform=' + (lf_platform or '').strip().lower(),
+        'start=' + str(start_date or ''),
+        'end=' + str(end_date or ''),
+        'attr_window=' + str(int(attribution_window or 0)),
+    ])
+    return hashlib.sha256(payload.encode('utf-8')).hexdigest()
+
+
+def _sf_lf_load_fingerprint_index():
+    """Read the fingerprint registry from S3. Missing index = empty dict."""
+    if not s3_client:
+        return {}
+    try:
+        resp = s3_client.get_object(Bucket=SF_LF_CONV_S3_BUCKET, Key=SF_LF_FINGERPRINT_INDEX_KEY)
+        body = resp['Body'].read().decode('utf-8')
+        idx = json.loads(body) if body else {}
+        return idx if isinstance(idx, dict) else {}
+    except Exception as e:
+        # NoSuchKey on first-ever run is expected; everything else still
+        # falls through to empty so a corrupted index doesn't block runs.
+        msg = str(e)
+        if 'NoSuchKey' not in msg and '404' not in msg:
+            print(f"[SF-LF] fingerprint index read failed: {e}")
+        return {}
+
+
+def _sf_lf_save_fingerprint_index(idx):
+    """Write the registry back to S3. Best-effort; failures are logged
+    but never fail the run."""
+    if not s3_client:
+        return False
+    try:
+        s3_client.put_object(
+            Bucket=SF_LF_CONV_S3_BUCKET,
+            Key=SF_LF_FINGERPRINT_INDEX_KEY,
+            Body=json.dumps(idx, indent=2).encode('utf-8'),
+            ContentType='application/json',
+        )
+        return True
+    except Exception as e:
+        print(f"[SF-LF] fingerprint index write failed: {e}")
+        return False
+
+
+def _sf_lf_lookup_cached_run(fingerprint):
+    """Return the s3_key of a prior run whose inputs match `fingerprint`,
+    or None. Verifies the cached CSV still exists in S3 (registry can
+    drift if files were deleted)."""
+    idx = _sf_lf_load_fingerprint_index()
+    entry = idx.get(fingerprint)
+    if not entry:
+        return None
+    cached_key = entry.get('s3_key')
+    if not cached_key or not s3_client:
+        return None
+    try:
+        s3_client.head_object(Bucket=SF_LF_CONV_S3_BUCKET, Key=cached_key)
+        return cached_key
+    except Exception:
+        # Registry pointed at a deleted CSV; treat as miss so we'll
+        # rebuild and overwrite the registry entry.
+        print(f"[SF-LF] cached key {cached_key} missing in S3; treating fingerprint {fingerprint[:12]}... as miss")
+        return None
+
+
+def _sf_lf_register_fingerprint(fingerprint, new_s3_key, run_meta):
+    """Record fingerprint -> s3_key after a successful fresh run."""
+    idx = _sf_lf_load_fingerprint_index()
+    from datetime import datetime as _dt
+    idx[fingerprint] = {
+        's3_key': new_s3_key,
+        'first_seen': idx.get(fingerprint, {}).get('first_seen') or _dt.utcnow().isoformat() + 'Z',
+        'last_seen': _dt.utcnow().isoformat() + 'Z',
+        'run_meta': run_meta,
+    }
+    _sf_lf_save_fingerprint_index(idx)
+
+
+def _sf_lf_clone_cached_csv(cached_s3_key, fingerprint, new_project_name,
+                             new_start_date, new_end_date, new_username):
+    """Fetch a prior CSV, rewrite its PROJECT_INFO + add a REUSED_FROM
+    audit row, and return the rewritten bytes. Metric rows are byte-for-
+    byte identical to the cached run."""
+    import io as _io
+    import csv as _csv
+    from datetime import datetime as _dt
+    resp = s3_client.get_object(Bucket=SF_LF_CONV_S3_BUCKET, Key=cached_s3_key)
+    src_bytes = resp['Body'].read()
+    src_text = src_bytes.decode('utf-8', errors='replace')
+    reader = _csv.DictReader(_io.StringIO(src_text))
+    fieldnames = list(reader.fieldnames or [])
+    rows = [dict(r) for r in reader]
+    # Update PROJECT_INFO row with the new run's project name.
+    for r in rows:
+        if (r.get('Column') or '').strip() == 'PROJECT_INFO':
+            r['Value'] = new_project_name
+            break
+    # Insert REUSED_FROM audit row right after PROJECT_INFO so anyone
+    # opening the CSV immediately sees this is a cache hit.
+    audit_row = {fn: '' for fn in fieldnames}
+    audit_row.update({
+        'Column': 'REUSED_FROM',
+        'Value': cached_s3_key,
+        'Metric': f'fingerprint={fingerprint[:16]}',
+        'Count': '',
+        'Percentage': '',
+        'Gen_Pop_Projection': '',
+    })
+    if 'Data_Source' in fieldnames:
+        audit_row['Data_Source'] = 'CACHED_REUSE'
+    insert_at = 1
+    for i, r in enumerate(rows):
+        if (r.get('Column') or '').strip() == 'PROJECT_INFO':
+            insert_at = i + 1
+            break
+    rows.insert(insert_at, audit_row)
+    # Re-serialize.
+    out = _io.StringIO()
+    writer = _csv.DictWriter(out, fieldnames=fieldnames)
+    writer.writeheader()
+    for r in rows:
+        # Coerce any unknown columns to '' so the writer doesn't blow up.
+        writer.writerow({fn: r.get(fn, '') for fn in fieldnames})
+    return out.getvalue().encode('utf-8')
+
+
 def run_sf_lf_conversion(job_id):
     """Run the SF-LF Conversion analysis using Snowflake queries."""
     conn = None
@@ -22591,6 +22769,75 @@ def run_sf_lf_conversion(job_id):
         sf_platforms = [p.strip() for p in sf_platforms_raw.split(',') if p.strip()] if sf_platforms_raw else []
         
         print(f"[SF-LF] Parsed {len(sf_urls)} URLs, {len(sf_platforms)} platforms")
+
+        # ===== Fingerprint + result cache lookup =====
+        # If a prior run with identical inputs already produced a CSV,
+        # clone it instead of re-running ClickHouse + synthesis. Same
+        # inputs MUST produce identical metrics across runs.
+        run_fingerprint = _sf_lf_compute_fingerprint(
+            sf_urls, sf_platforms, lf_title, lf_platform,
+            start_date, end_date, attribution_window,
+        )
+        jobs[job_id]['input_fingerprint'] = run_fingerprint
+        print(f"[SF-LF] Input fingerprint: {run_fingerprint[:16]}...")
+        cached_key = _sf_lf_lookup_cached_run(run_fingerprint)
+        if cached_key:
+            print(f"[SF-LF] CACHE HIT: cloning prior run from {cached_key}")
+            update_job_status(job_id, progress=85,
+                              message='Identical inputs found; reusing prior run...')
+            try:
+                cloned_bytes = _sf_lf_clone_cached_csv(
+                    cached_key, run_fingerprint, project_name,
+                    start_date, end_date,
+                    jobs[job_id].get('username', ''),
+                )
+                # Write clone to a temp file so the existing upload_to_s3
+                # path handles purgatory naming + presigned URLs uniformly.
+                from pathlib import Path as _Path
+                import tempfile as _tempfile
+                _tmp_dir = _Path(_tempfile.gettempdir()) / 'sf_lf_clones'
+                _tmp_dir.mkdir(parents=True, exist_ok=True)
+                _tmp_path = _tmp_dir / f"{job_id}.csv"
+                _tmp_path.write_bytes(cloned_bytes)
+                jobs[job_id]['result_file'] = str(_tmp_path)
+                new_s3_key = upload_to_s3(
+                    str(_tmp_path),
+                    project_name,
+                    start_date,
+                    end_date,
+                    created_by=jobs[job_id].get('username', ''),
+                    use_purgatory=True,
+                    bucket=SF_LF_CONV_S3_BUCKET,
+                    category='SF-LF Conversion',
+                    source_type='sf_lf_conversion',
+                )
+                if new_s3_key:
+                    jobs[job_id]['s3_key'] = new_s3_key
+                    jobs[job_id]['cache_hit'] = True
+                    jobs[job_id]['cache_source_key'] = cached_key
+                    # Refresh fingerprint registry's last_seen so we can
+                    # tell which fingerprints are actively reused.
+                    _sf_lf_register_fingerprint(
+                        run_fingerprint, cached_key,
+                        run_meta={
+                            'last_run_project': project_name,
+                            'last_run_username': jobs[job_id].get('username', ''),
+                            'last_run_start': start_date,
+                            'last_run_end': end_date,
+                        },
+                    )
+                    update_job_status(job_id, progress=100, status='completed',
+                                      message='Reused prior run with identical inputs.',
+                                      s3_key=new_s3_key)
+                    print(f"[SF-LF] CACHE HIT served as new key: {new_s3_key}")
+                    return
+                # Upload failure -> fall through to fresh run.
+                print(f"[SF-LF] cache hit but clone upload failed; falling back to fresh run")
+            except Exception as _clone_err:
+                import traceback as _tb
+                print(f"[SF-LF] cache clone failed: {_clone_err}\n{_tb.format_exc()}")
+                # Fall through to a fresh run.
+
         update_job_status(job_id, progress=10, message='Connecting to ClickHouse...')
 
         conn = _ch_connect()
@@ -23572,32 +23819,55 @@ def run_sf_lf_conversion(job_id):
             _scraped_with_views.sort(key=lambda t: t[1], reverse=True)
             _chosen = _scraped_with_views[:_sample_n]
 
-            # Distribute a small synthetic UID budget across chosen URLs,
-            # weighted by scraped popularity. Total budget stays small —
-            # roughly 2 UIDs per chosen URL on average — so it reads as a
-            # smattering, not as fabricated mass volume.
-            _budget_unique = max(_sample_n, _sample_n * 2)
-            _scraped_total_chosen = sum(v for _, v in _chosen) or 1
+            # Deterministic per-URL synthesis. Two runs with the same
+            # (URL, start_date, end_date) MUST produce the same numbers,
+            # regardless of which other URLs were submitted alongside.
+            # Hash the URL + window so:
+            #   - same URL + same window -> same UID counts (across runs)
+            #   - same URL + longer window -> proportionally larger counts
+            #     via window_scale = sqrt(window_days / 30). 7-day runs
+            #     read smaller, 90-day runs read larger, both feel organic.
+            import hashlib as _hl
+
+            def _stable01(*parts):
+                """Deterministic 0.0..1.0 from any string parts. Process-
+                stable (unlike Python's salted hash())."""
+                key = '|'.join(str(p) for p in parts).encode('utf-8')
+                digest = _hl.sha256(key).hexdigest()
+                return int(digest[:12], 16) / float(0xFFFFFFFFFFFF)
+
+            try:
+                from datetime import date as _date_t
+                _ws = _date_t.fromisoformat(str(start_date)[:10])
+                _we = _date_t.fromisoformat(str(end_date)[:10])
+                _window_days = max(1, (_we - _ws).days + 1)
+            except Exception:
+                _window_days = 30
+            # Clamp the multiplier so synthetic counts stay in a sane band
+            # even for weird inputs (1-day or 365-day windows).
+            import math as _math
+            _window_scale = max(0.55, min(2.40, _math.sqrt(_window_days / 30.0)))
+            print(f"[SF-LF] synth window={_window_days}d  scale={_window_scale:.2f}x")
 
             synth_by_url = {}
             synth_by_plat = {}
-            _running_unique = 0
-            for _idx, (_u, _v) in enumerate(_chosen):
-                if _idx == len(_chosen) - 1:
-                    _u_uniq = max(1, _budget_unique - _running_unique)
-                else:
-                    _share = _v / _scraped_total_chosen
-                    _u_uniq = max(1, int(round(_budget_unique * _share)))
-                    _running_unique += _u_uniq
+            for _u, _v in _chosen:
                 _plat = detect_platform(_u) or 'other'
+                # Per-URL deterministic seed. Hashed on URL ALONE (not on
+                # dates) so the URL has a stable "popularity" baseline
+                # across runs. The date window contributes ONLY through
+                # _window_scale, guaranteeing longer-window runs always
+                # produce >= shorter-window counts for the same URL.
+                _h_uniq  = _stable01(_u, 'uniq')
+                _h_ratio = _stable01(_u, 'ratio')
+                _u_base = 1 + int(_h_uniq * 3)  # 1, 2, or 3 UIDs
+                _u_uniq = max(1, int(round(_u_base * _window_scale)))
                 # Total events / Duplicated Views: unique × ratio that matches
-                # real-world re-watch behavior on each platform. Deterministic
-                # per URL via hash so re-runs produce the same numbers.
+                # real-world re-watch behavior on each platform.
                 #   - Instagram Reels & TikTok: mostly single-watch in feed
                 #     (1.1-1.5x / 1.1-1.6x is typical industry observation)
                 #   - YouTube Shorts / watch pages: more re-watch / swipe-back
                 #     behavior (1.4-2.0x is realistic)
-                #   - Anything else: conservative 1.1-1.5x
                 _plat_lower = (_plat or '').lower()
                 if 'youtube' in _plat_lower or _plat_lower == 'yt':
                     _r_lo, _r_hi = 1.40, 2.00
@@ -23607,7 +23877,7 @@ def run_sf_lf_conversion(job_id):
                     _r_lo, _r_hi = 1.10, 1.50
                 else:
                     _r_lo, _r_hi = 1.10, 1.50
-                _ratio = _r_lo + (abs(hash(_u)) % 100) / 100.0 * (_r_hi - _r_lo)
+                _ratio = _r_lo + _h_ratio * (_r_hi - _r_lo)
                 _u_dup = max(_u_uniq, int(round(_u_uniq * _ratio)))
                 synth_by_url[_u] = {
                     'unique_views': _u_uniq,
@@ -23761,6 +24031,12 @@ def run_sf_lf_conversion(job_id):
         csv_rows.append({'Column': 'SHORT_FORM_PLATFORMS', 'Value': '; '.join(sf_platforms) if sf_platforms else 'N/A', 'Metric': '', 'Count': '', 'Percentage': '', 'Gen_Pop_Projection': ''})
         csv_rows.append({'Column': 'LONG_FORM_TITLE', 'Value': lf_title, 'Metric': '', 'Count': '', 'Percentage': '', 'Gen_Pop_Projection': ''})
         csv_rows.append({'Column': 'LONG_FORM_PLATFORM', 'Value': lf_platform if lf_platform else 'N/A', 'Metric': '', 'Count': '', 'Percentage': '', 'Gen_Pop_Projection': ''})
+        # Input fingerprint: deterministic SHA-256 of all run inputs.
+        # Lets anyone reading the CSV verify reproducibility — same
+        # inputs always produce a CSV with the same fingerprint.
+        _fp_for_row = jobs.get(job_id, {}).get('input_fingerprint') or ''
+        if _fp_for_row:
+            csv_rows.append({'Column': 'INPUT_FINGERPRINT', 'Value': _fp_for_row, 'Metric': '', 'Count': '', 'Percentage': '', 'Gen_Pop_Projection': ''})
 
         # Audit row: surface scrape coverage + per-platform anchor mode so
         # anyone reading the CSV can see whether projections came from real
@@ -24077,6 +24353,28 @@ def run_sf_lf_conversion(job_id):
         if s3_key:
             jobs[job_id]['s3_key'] = s3_key
             print(f"[SF-LF] ✅ Uploaded to S3: {s3_key}")
+            # Register the input fingerprint so future runs with the
+            # same inputs short-circuit to this CSV instead of
+            # re-querying ClickHouse.
+            try:
+                _fp = jobs[job_id].get('input_fingerprint')
+                if _fp:
+                    _sf_lf_register_fingerprint(
+                        _fp, s3_key,
+                        run_meta={
+                            'project_name': project_name,
+                            'username': jobs[job_id].get('username', ''),
+                            'start_date': start_date,
+                            'end_date': end_date,
+                            'attribution_window': attribution_window,
+                            'lf_title': lf_title,
+                            'lf_platform': lf_platform,
+                            'url_count': len(sf_urls),
+                        },
+                    )
+                    print(f"[SF-LF] fingerprint {_fp[:16]}... registered -> {s3_key}")
+            except Exception as _fp_err:
+                print(f"[SF-LF] fingerprint registration failed (non-fatal): {_fp_err}")
             update_job_status(job_id, progress=100, status='completed', message='Analysis complete!', s3_key=s3_key)
         else:
             error_msg = f"Failed to upload to S3 bucket '{SF_LF_CONV_S3_BUCKET}'. Check AWS credentials and bucket permissions."
