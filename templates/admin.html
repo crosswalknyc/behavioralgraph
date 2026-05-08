@@ -2815,6 +2815,10 @@
                                         <input type="checkbox" id="moduleFlywheelConversion" class="analysis-module-checkbox" onchange="updateAllAnalysisModulesCheckbox()">
                                         <span>🔄 Flywheel Conversion</span>
                                     </label>
+                                    <label class="checkbox-group">
+                                        <input type="checkbox" id="moduleBrandPartnership" class="analysis-module-checkbox" onchange="updateAllAnalysisModulesCheckbox()">
+                                        <span>🤝 Brand Partnership Valuation</span>
+                                    </label>
                                 </div>
                                 <small style="color: var(--text-secondary); font-size: 0.65rem; display: block; margin-top: 0.5rem;">Credits can be used on any selected module</small>
                             </div>
@@ -4923,7 +4927,8 @@
             'talent_fit_find': { label: 'Find Me Talent', icon: '🔍' },
             'sf_lf_conversion': { label: 'Short-Form to Long-Form', icon: '🎬' },
             'ecommerce_iq': { label: 'Ecommerce IQ', icon: '🛒' },
-            'flywheel_conversion': { label: 'Flywheel Conversion', icon: '🔄' }
+            'flywheel_conversion': { label: 'Flywheel Conversion', icon: '🔄' },
+            'brand_partnership_iq': { label: 'Brand Partnership Valuation', icon: '🤝' }
         };
         
         async function loadAnalysisPricingUI() {
@@ -8273,6 +8278,7 @@
             if (document.getElementById('moduleTicketSalesTracker')?.checked || document.getElementById('hasTicketSalesTrackerRun')?.checked) modules.push('ticket_sales_tracker');
             if (document.getElementById('moduleSFLFConversion')?.checked) modules.push('sf_lf_conversion');
             if (document.getElementById('moduleFlywheelConversion')?.checked) modules.push('flywheel_conversion');
+            if (document.getElementById('moduleBrandPartnership')?.checked) modules.push('brand_partnership_iq');
             return modules;
         }
 
@@ -8317,6 +8323,10 @@
                     case 'flywheel_conversion':
                         const fw = document.getElementById('moduleFlywheelConversion');
                         if (fw) fw.checked = true;
+                        break;
+                    case 'brand_partnership_iq':
+                        const bp = document.getElementById('moduleBrandPartnership');
+                        if (bp) bp.checked = true;
                         break;
                 }
             });
