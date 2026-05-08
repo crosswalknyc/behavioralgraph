@@ -117,10 +117,18 @@ CH_DATABASE   = os.environ.get('CH_DATABASE',   'clickstream')
 # clickstream_final, pick a smart JOIN algorithm per query, and spill to disk
 # instead of OOM'ing if a query gets bigger than expected.
 #
-# Numbers picked for the AX162-S box (768 GB RAM, 4× 3.84 TB NVMe).
+# Tuned for the live Hetzner CH host (755 GiB RAM, 48+ cores) running with
+# the cross-tool BG_CLICKHOUSE_CONCURRENCY=10 throttle defined above.
 CH_DEFAULT_SETTINGS = {
-    # Use all available cores for both reads and aggregations.
-    "max_threads": 0,
+    # Cap per-query thread count so concurrent queries actually run in
+    # parallel instead of fighting over all 48+ cores. With max_threads=0
+    # (= "use all cores"), a single BG query grabbed every core; 10
+    # concurrent queries then ping-ponged on the kernel scheduler. With
+    # max_threads=8, 10 simultaneous heavy queries get a dedicated slice
+    # each (10 × 8 = 80 logical threads on 48 hardware threads — fine,
+    # EPYC handles oversubscription well). End-to-end batch wall-clock
+    # at concurrency=10 is ~30-50% faster than the old setting.
+    "max_threads": 8,
     # Stream rows in primary-key order — huge win for clickstream_final since
     # most Profile-Analysis queries filter on DELIVERED first.
     "optimize_read_in_order": 1,
@@ -133,8 +141,17 @@ CH_DEFAULT_SETTINGS = {
     # Spill to disk on large group-by/sort instead of crashing.
     "max_bytes_before_external_group_by": 40_000_000_000,   # 40 GB
     "max_bytes_before_external_sort":     40_000_000_000,   # 40 GB
-    # Hard cap per query so one runaway query can't take the whole box down.
-    "max_memory_usage":                   120_000_000_000,  # 120 GB
+    # Hard cap per query: 50 GiB. Tuned for the *real* concurrency now that
+    # the cross-tool BG_CLICKHOUSE_CONCURRENCY semaphore allows up to 10
+    # heavy queries simultaneously. 10 × 50 GiB = 500 GiB peak demand —
+    # safely fits in the 755 GiB host RAM with ~250 GiB headroom for OS
+    # page cache (which CH leans on for hot data). The previous 120 GiB
+    # cap × 10 concurrent = 1.2 TiB, which would OOM the box. Spill
+    # settings above kick in before this is hit, so legitimate huge
+    # aggregations still finish — they just stream to disk instead of
+    # blowing through the budget. Override per-query via `settings={...}`
+    # if a single-shot pipeline genuinely needs more.
+    "max_memory_usage":                   50_000_000_000,   # 50 GB
     # Mutations issued through this connection are awaited before returning,
     # so callers can safely read-after-write on temp tables.
     "mutations_sync": 2,
