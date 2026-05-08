@@ -27880,6 +27880,153 @@ def _bpiq_filter_clause(terms, columns=('URL', 'COMMON_NAME')):
     return '(' + ' OR '.join(parts) + ')' if parts else '1=0'
 
 
+def _bpiq_get_demographics(cur, uid_table_name):
+    """ClickHouse-native demographics for a UID temp table.
+
+    Returns {'gender': [...], 'ethnicity': [...], 'income': [...], 'age': [...]}
+    where each list is ``[{value, count, percentage}, ...]`` rebased to 100%
+    on rows that have a non-empty value for that field."""
+    out = {'gender': [], 'ethnicity': [], 'income': [], 'age': []}
+    try:
+        # Single round-trip: pre-compute totals via window-style aggregates so
+        # each category rebases to 100% even if some fields are sparse.
+        cur.execute(f"""
+            WITH demo_data AS (
+                SELECT d.GENDER, d.ETHNICITY, d.INCOME, d.AGE
+                FROM userdata.user_data_sanitized d
+                INNER JOIN {uid_table_name} u ON d.UID = u.UID
+            )
+            SELECT 'GENDER', GENDER, count(),
+                   round(100.0 * count() / nullIf((SELECT count() FROM demo_data WHERE GENDER != ''), 0), 1)
+            FROM demo_data WHERE GENDER != '' GROUP BY GENDER
+            UNION ALL
+            SELECT 'ETHNICITY', ETHNICITY, count(),
+                   round(100.0 * count() / nullIf((SELECT count() FROM demo_data WHERE ETHNICITY != ''), 0), 1)
+            FROM demo_data WHERE ETHNICITY != '' GROUP BY ETHNICITY
+            UNION ALL
+            SELECT 'INCOME', INCOME, count(),
+                   round(100.0 * count() / nullIf((SELECT count() FROM demo_data WHERE INCOME != ''), 0), 1)
+            FROM demo_data WHERE INCOME != '' GROUP BY INCOME
+            UNION ALL
+            SELECT 'AGE', AGE, count(),
+                   round(100.0 * count() / nullIf((SELECT count() FROM demo_data WHERE AGE != ''), 0), 1)
+            FROM demo_data WHERE AGE != '' GROUP BY AGE
+        """)
+        for category, value, count, pct in cur.fetchall():
+            key = (category or '').lower()
+            if key in out and value:
+                out[key].append({
+                    'value': value,
+                    'count': int(count or 0),
+                    'percentage': float(pct or 0),
+                })
+        # Sort each list by descending percentage for nicer rendering.
+        for k in out:
+            out[k].sort(key=lambda x: -x['percentage'])
+    except Exception as e:
+        print(f"⚠️ BPIQ demographics failed for {uid_table_name}: {e}")
+    return out
+
+
+# Heuristic sentiment buckets — used as a fast first-pass and as a fallback
+# whenever the OpenAI key is missing. Tokens are matched against the URL +
+# COMMON_NAME (lowercased), so generic English words must be picked carefully
+# to avoid false positives. Order matters: negative wins ties (because a URL
+# like "/best-doordash-complaint" should classify as negative).
+_BPIQ_SENTIMENT_NEG = (
+    'complaint', 'complaints', 'lawsuit', 'sue ', 'sued', 'scam', 'fraud',
+    'rip-off', 'ripoff', 'rip_off', 'worst', 'terrible', 'awful', 'hate',
+    'sucks', 'broken', 'issue', 'issues', 'problem', 'problems', 'fail',
+    'failure', 'down', 'outage', 'refund', 'cancel', 'unsubscribe',
+    'class-action', 'class_action', 'fees-rant', 'rant',
+    'avoid', 'beware', 'fired', 'controversy',
+)
+_BPIQ_SENTIMENT_POS = (
+    'best', 'love', 'loving', 'amazing', 'awesome', 'great', 'review',
+    'win', 'winner', 'winning', 'celebrate', 'celebrates', 'celebrating',
+    'launch', 'partnership', 'collab', 'collaboration', 'official',
+    'premiere', 'announce', 'announces', 'new-deal', 'unveil',
+    'recommended', 'guide', 'tips', 'how-to', 'how_to',
+)
+
+
+def _bpiq_heuristic_sentiment(url, common_name):
+    """Quick keyword-based sentiment label. Used as fallback / fast path."""
+    text = ((url or '') + ' ' + (common_name or '')).lower()
+    if any(tok in text for tok in _BPIQ_SENTIMENT_NEG):
+        return 'negative'
+    if any(tok in text for tok in _BPIQ_SENTIMENT_POS):
+        return 'positive'
+    return 'neutral'
+
+
+def _bpiq_llm_sentiment(brand_partner, items, batch_size=40, model='gpt-4o-mini'):
+    """Refine sentiment labels for top brand-tagged URLs using an LLM.
+
+    `items` is a list of dicts with 'url' and 'common_name'. Returns the same
+    list with each item's 'sentiment' set to 'positive'/'negative'/'neutral'.
+    Falls back to heuristic when the OpenAI client isn't available or the
+    response is malformed."""
+    # Apply heuristic to every item first — that gives us a non-null label
+    # even if the LLM call fails.
+    for it in items:
+        it['sentiment'] = _bpiq_heuristic_sentiment(it.get('url'), it.get('common_name'))
+
+    client = get_openai_client()
+    if not client or not items:
+        return items
+
+    try:
+        for start in range(0, len(items), batch_size):
+            chunk = items[start:start + batch_size]
+            url_list_lines = []
+            for i, it in enumerate(chunk):
+                url = (it.get('url') or '')[:300]
+                cn  = (it.get('common_name') or '')[:80]
+                url_list_lines.append(f"{i + 1}. {cn} | {url}")
+            prompt = (
+                f"You are classifying URLs that mention or relate to the brand "
+                f"\"{brand_partner}\". For each URL below, infer the most likely "
+                "sentiment of the page contents toward the brand based on the "
+                "URL slug, host, and accompanying common-name token. Reply with "
+                "STRICT JSON of the form:\n"
+                '{"results":[{"i":1,"sent":"positive"},{"i":2,"sent":"neutral"},'
+                '{"i":3,"sent":"negative"}, ...]}\n'
+                "Use exactly one of: positive, negative, neutral. If you can't "
+                "tell, choose neutral. Output ONLY the JSON, no preamble.\n\n"
+                + '\n'.join(url_list_lines)
+            )
+            try:
+                resp = client.chat.completions.create(
+                    model=model,
+                    messages=[
+                        {'role': 'system',
+                         'content': 'You are a precise URL-sentiment classifier. Output JSON only.'},
+                        {'role': 'user', 'content': prompt},
+                    ],
+                    temperature=0,
+                    response_format={'type': 'json_object'},
+                    max_tokens=2000,
+                )
+                content = resp.choices[0].message.content or '{}'
+                parsed = json.loads(content)
+                results = parsed.get('results') or []
+                for r in results:
+                    try:
+                        idx = int(r.get('i')) - 1
+                    except Exception:
+                        continue
+                    sent = (r.get('sent') or '').strip().lower()
+                    if sent in ('positive', 'negative', 'neutral') and 0 <= idx < len(chunk):
+                        chunk[idx]['sentiment'] = sent
+                        chunk[idx]['sentiment_source'] = 'llm'
+            except Exception as ce:
+                print(f"⚠️ BPIQ sentiment chunk failed (using heuristic): {ce}")
+    except Exception as e:
+        print(f"⚠️ BPIQ sentiment refinement failed: {e}")
+    return items
+
+
 def _run_brand_partnership_iq(job_id):
     """Background worker for Brand Partnership IQ analysis (ClickHouse)."""
     from datetime import datetime as _dt, timedelta as _td
@@ -27968,6 +28115,39 @@ def _run_brand_partnership_iq(job_id):
         cur.execute("SELECT count() FROM bpiq_audience_uids")
         audience_size = int(cur.fetchone()[0] or 0)
 
+        # ── Phase 1.5: build CONTROL audience for incremental-lift DiD ─────
+        # Control = panel users who were active in clickstream during the
+        # campaign window but did NOT engage with the qualifying property.
+        # Hash-sampled to the same size as the treatment audience (deterministic
+        # via cityHash64) so the two cohorts are size-matched and don't overlap.
+        # The DELIVERED filter mirrors the treatment window, and `UID NOT IN
+        # bpiq_audience_uids` is a CH hashset lookup against an in-memory table,
+        # so the cost is one extra audience-window scan with minimal join overhead.
+        control_size = 0
+        if audience_size > 0:
+            update_job_status(job_id, progress=22,
+                              message=f'{audience_size:,} qualifying users; '
+                                      'building size-matched control group...')
+            try:
+                cur.execute("DROP TABLE IF EXISTS bpiq_control_uids")
+                cur.execute(f"""
+                    CREATE TEMPORARY TABLE bpiq_control_uids
+                    ENGINE = Memory AS
+                    SELECT UID FROM (
+                        SELECT DISTINCT UID
+                        FROM clickstream.clickstream_final
+                        WHERE DELIVERED BETWEEN toDate('{sd}') AND toDate('{ed}')
+                          AND UID NOT IN (SELECT UID FROM bpiq_audience_uids)
+                    )
+                    ORDER BY cityHash64(UID)
+                    LIMIT {audience_size}
+                """)
+                cur.execute("SELECT count() FROM bpiq_control_uids")
+                control_size = int(cur.fetchone()[0] or 0)
+            except Exception as _e:
+                print(f"⚠️ BPIQ: control group build failed (DiD will be omitted): {_e}")
+                control_size = 0
+
         if audience_size == 0:
             try:
                 cur.execute("DROP TABLE IF EXISTS bpiq_audience_uids")
@@ -28000,7 +28180,16 @@ def _run_brand_partnership_iq(job_id):
                 'conversions': {'pre_hits': 0, 'post_hits': 0,
                                 'pre_users': 0, 'post_users': 0,
                                 'lift_pct_users': 0.0,
-                                'lift_pct_hits': 0.0},
+                                'lift_pct_hits': 0.0,
+                                'enabled': False},
+                'control_group': {'enabled': False, 'control_size': 0},
+                'demographics': {
+                    'pre':  {'gender': [], 'ethnicity': [], 'income': [], 'age': []},
+                    'post': {'gender': [], 'ethnicity': [], 'income': [], 'age': []},
+                },
+                'sentiment': {'enabled': False, 'sample_size': 0,
+                              'pre':  {'positive': 0, 'neutral': 0, 'negative': 0},
+                              'post': {'positive': 0, 'neutral': 0, 'negative': 0}},
                 'top_brand_properties': [],
                 'created_at': datetime.now().isoformat(),
                 'created_by': job.get('username', ''),
@@ -28065,7 +28254,7 @@ def _run_brand_partnership_iq(job_id):
             conv_match_sql = "0"
 
         update_job_status(job_id, progress=45,
-                          message='Scanning brand touchpoints...')
+                          message='Scanning brand touchpoints (treatment audience)...')
         cur.execute(f"""
             SELECT
                 CASE
@@ -28084,8 +28273,8 @@ def _run_brand_partnership_iq(job_id):
               AND {brand_filter}
         """)
         rows = cur.fetchall()
-        update_job_status(job_id, progress=70,
-                          message=f'Aggregating {len(rows):,} brand touchpoints...')
+        update_job_status(job_id, progress=58,
+                          message=f'Aggregating {len(rows):,} treatment touchpoints...')
 
         # Aggregate in Python (rows are small — already filtered to brand hits)
         pre_hits = post_hits = 0
@@ -28160,6 +28349,143 @@ def _run_brand_partnership_iq(job_id):
             'post_hits_per_day': round(_per_day(d_other['post_hits'], post_span_days), 2),
         })
 
+        # ── Phase 2.5: control-group brand engagement (incremental DiD) ────
+        # Mirror the treatment scan but UID IN bpiq_control_uids. Same date
+        # buckets, same brand filter — so any difference in lift is the part
+        # of the post-event jump that ISN'T just background drift in brand
+        # traffic.
+        ctrl_pre_users = set(); ctrl_post_users = set()
+        ctrl_pre_hits = ctrl_post_hits = 0
+        if control_size > 0:
+            update_job_status(job_id, progress=62,
+                              message=f'Scanning control group ({control_size:,} users) for incremental-lift DiD...')
+            try:
+                cur.execute(f"""
+                    SELECT
+                        CASE WHEN DELIVERED < toDate('{sd}') THEN 'pre' ELSE 'post' END AS bucket,
+                        UID
+                    FROM clickstream.clickstream_final
+                    WHERE UID IN (SELECT UID FROM bpiq_control_uids)
+                      AND (
+                            (DELIVERED BETWEEN toDate('{pre_start}') AND toDate('{pre_end}'))
+                         OR (DELIVERED BETWEEN toDate('{sd}')        AND toDate('{post_end}'))
+                      )
+                      AND {brand_filter}
+                """)
+                for bucket, uid in cur.fetchall():
+                    if bucket == 'pre':
+                        ctrl_pre_hits += 1
+                        ctrl_pre_users.add(uid)
+                    else:
+                        ctrl_post_hits += 1
+                        ctrl_post_users.add(uid)
+            except Exception as _e:
+                print(f"⚠️ BPIQ: control-group scan failed: {_e}")
+
+        # Difference-in-differences: the part of the treatment jump that
+        # exceeds what the control group experienced over the same windows.
+        # We compute it on the audience-penetration percentage so the two
+        # cohorts are normalized by their (size-matched) base.
+        treat_pre_pen  = (len(pre_users)  / max(audience_size, 1)) * 100.0
+        treat_post_pen = (len(post_users) / max(audience_size, 1)) * 100.0
+        ctrl_pre_pen  = (len(ctrl_pre_users)  / max(control_size, 1)) * 100.0 if control_size else 0.0
+        ctrl_post_pen = (len(ctrl_post_users) / max(control_size, 1)) * 100.0 if control_size else 0.0
+        treat_delta_pp = treat_post_pen - treat_pre_pen
+        ctrl_delta_pp  = ctrl_post_pen  - ctrl_pre_pen
+        incremental_lift_pp = round(treat_delta_pp - ctrl_delta_pp, 3)
+        # Relative incremental lift: how much bigger the treatment delta is
+        # vs the control delta (capped to ±9999 so JSON stays clean).
+        if abs(ctrl_delta_pp) > 1e-9:
+            rel = ((treat_delta_pp - ctrl_delta_pp) / abs(ctrl_delta_pp)) * 100.0
+            incremental_lift_rel_pct = round(max(min(rel, 9999.0), -9999.0), 2)
+        else:
+            incremental_lift_rel_pct = None
+
+        control_block = {
+            'enabled': control_size > 0,
+            'control_size': control_size,
+            'projected_control_size': _project_to_us_pop(control_size) if control_size else 0,
+            'control_pre_users':  len(ctrl_pre_users),
+            'control_post_users': len(ctrl_post_users),
+            'control_pre_hits':  ctrl_pre_hits,
+            'control_post_hits': ctrl_post_hits,
+            'treat_pre_pen_pct':  round(treat_pre_pen,  3),
+            'treat_post_pen_pct': round(treat_post_pen, 3),
+            'control_pre_pen_pct':  round(ctrl_pre_pen,  3),
+            'control_post_pen_pct': round(ctrl_post_pen, 3),
+            'treat_delta_pp':   round(treat_delta_pp, 3),
+            'control_delta_pp': round(ctrl_delta_pp,  3),
+            'incremental_lift_pp':      incremental_lift_pp,
+            'incremental_lift_rel_pct': incremental_lift_rel_pct,
+            'control_lift_pct_users': _lift(len(ctrl_post_users), len(ctrl_pre_users)),
+        }
+
+        # ── Phase 3: demographics for pre vs post brand engagers ───────────
+        # Build temp tables of the actual UIDs that touched the brand pre vs
+        # post, then run a single demographic aggregation per cohort. Joining
+        # to userdata.user_data_sanitized is the canonical demo path
+        # (matches Talent Fit IQ's pattern).
+        update_job_status(job_id, progress=72,
+                          message='Computing pre vs post engager demographics...')
+        try:
+            cur.execute("DROP TABLE IF EXISTS bpiq_pre_brand_uids")
+            cur.execute(f"""
+                CREATE TEMPORARY TABLE bpiq_pre_brand_uids ENGINE = Memory AS
+                SELECT DISTINCT UID
+                FROM clickstream.clickstream_final
+                WHERE UID IN (SELECT UID FROM bpiq_audience_uids)
+                  AND DELIVERED BETWEEN toDate('{pre_start}') AND toDate('{pre_end}')
+                  AND {brand_filter}
+            """)
+            cur.execute("DROP TABLE IF EXISTS bpiq_post_brand_uids")
+            cur.execute(f"""
+                CREATE TEMPORARY TABLE bpiq_post_brand_uids ENGINE = Memory AS
+                SELECT DISTINCT UID
+                FROM clickstream.clickstream_final
+                WHERE UID IN (SELECT UID FROM bpiq_audience_uids)
+                  AND DELIVERED BETWEEN toDate('{sd}') AND toDate('{post_end}')
+                  AND {brand_filter}
+            """)
+            pre_demos  = _bpiq_get_demographics(cur, 'bpiq_pre_brand_uids')
+            post_demos = _bpiq_get_demographics(cur, 'bpiq_post_brand_uids')
+        except Exception as _e:
+            print(f"⚠️ BPIQ: demographics step failed: {_e}")
+            pre_demos = {'gender': [], 'ethnicity': [], 'income': [], 'age': []}
+            post_demos = {'gender': [], 'ethnicity': [], 'income': [], 'age': []}
+
+        # ── Phase 4: top brand-tagged URLs with pre/post split + sentiment ─
+        # Pull top URLs (not just COMMON_NAMEs) so sentiment classification has
+        # a slug to read. Window-aware countIf gives us pre/post in one scan.
+        update_job_status(job_id, progress=80,
+                          message='Pulling top brand URLs for sentiment...')
+        top_urls = []
+        try:
+            cur.execute(f"""
+                SELECT COMMON_NAME, URL,
+                       countIf(DELIVERED < toDate('{sd}')) AS pre_hits,
+                       countIf(DELIVERED >= toDate('{sd}')) AS post_hits
+                FROM clickstream.clickstream_final
+                WHERE UID IN (SELECT UID FROM bpiq_audience_uids)
+                  AND (
+                        (DELIVERED BETWEEN toDate('{pre_start}') AND toDate('{pre_end}'))
+                     OR (DELIVERED BETWEEN toDate('{sd}')        AND toDate('{post_end}'))
+                  )
+                  AND {brand_filter}
+                  AND length(URL) > 5
+                GROUP BY COMMON_NAME, URL
+                ORDER BY (pre_hits + post_hits) DESC
+                LIMIT 200
+            """)
+            for cn, url, pre_h, post_h in cur.fetchall():
+                top_urls.append({
+                    'common_name': cn or '',
+                    'url':  (url or '')[:500],
+                    'pre_hits':  int(pre_h or 0),
+                    'post_hits': int(post_h or 0),
+                })
+        except Exception as _e:
+            print(f"⚠️ BPIQ: top URLs query failed: {_e}")
+
         # Top brand-tagged properties hit (which COMMON_NAMEs in the audience
         # are picking up the brand). One small extra query.
         update_job_status(job_id, progress=85,
@@ -28182,12 +28508,59 @@ def _run_brand_partnership_iq(job_id):
             print(f"⚠️ BPIQ: top properties query failed: {_e}")
             top_props = []
 
+        # Sentiment classification on top URLs (heuristic + LLM refine).
+        update_job_status(job_id, progress=88,
+                          message=f'Classifying sentiment of {len(top_urls)} top brand URLs...')
+        if top_urls:
+            top_urls = _bpiq_llm_sentiment(brand_partner, top_urls)
+
+        # Aggregate sentiment counts into pre/post buckets, weighted by hits.
+        sent_pre = {'positive': 0, 'neutral': 0, 'negative': 0}
+        sent_post = {'positive': 0, 'neutral': 0, 'negative': 0}
+        for u in top_urls:
+            s = u.get('sentiment') or 'neutral'
+            if s not in sent_pre:
+                s = 'neutral'
+            sent_pre[s]  += int(u.get('pre_hits') or 0)
+            sent_post[s] += int(u.get('post_hits') or 0)
+
+        def _net_sent(d):
+            tot = sum(d.values()) or 1
+            return round(((d['positive'] - d['negative']) / tot) * 100.0, 2)
+
+        sentiment_block = {
+            'enabled':     bool(top_urls),
+            'sample_size': len(top_urls),
+            'used_llm':    any(u.get('sentiment_source') == 'llm' for u in top_urls),
+            'pre':  sent_pre,
+            'post': sent_post,
+            'pre_net_score':  _net_sent(sent_pre),
+            'post_net_score': _net_sent(sent_post),
+            'net_shift':      round(_net_sent(sent_post) - _net_sent(sent_pre), 2),
+            # Top contributing URLs per bucket (truncated for payload size).
+            'top_positive': sorted(
+                [u for u in top_urls if u.get('sentiment') == 'positive'],
+                key=lambda x: -(x['pre_hits'] + x['post_hits']))[:15],
+            'top_negative': sorted(
+                [u for u in top_urls if u.get('sentiment') == 'negative'],
+                key=lambda x: -(x['pre_hits'] + x['post_hits']))[:15],
+        }
+
         # Cleanup
-        try:
-            cur.execute("DROP TABLE IF EXISTS bpiq_audience_uids")
-        except Exception:
-            pass
+        for _t in ('bpiq_audience_uids', 'bpiq_control_uids',
+                   'bpiq_pre_brand_uids', 'bpiq_post_brand_uids'):
+            try:
+                cur.execute(f"DROP TABLE IF EXISTS {_t}")
+            except Exception:
+                pass
         conn.close()
+
+        # Gen-pop projections — apply _project_to_us_pop to user counts so the
+        # dashboard can show "X million projected US users" alongside the
+        # raw panel counts. Lift % is dimensionless so it doesn't change.
+        for p in platform_out:
+            p['pre_users_projected']  = _project_to_us_pop(p.get('pre_users')  or 0)
+            p['post_users_projected'] = _project_to_us_pop(p.get('post_users') or 0)
 
         result_data = {
             'project_name': project_name,
@@ -28213,6 +28586,8 @@ def _run_brand_partnership_iq(job_id):
                 'post_hits': post_hits,
                 'pre_users':  len(pre_users),
                 'post_users': len(post_users),
+                'pre_users_projected':  _project_to_us_pop(len(pre_users)),
+                'post_users_projected': _project_to_us_pop(len(post_users)),
                 'lift_pct_hits':  _lift(post_hits, pre_hits),
                 'lift_pct_users': _lift(len(post_users), len(pre_users)),
                 'pre_hits_per_day':  round(_per_day(pre_hits,  pre_span), 2),
@@ -28228,11 +28603,19 @@ def _run_brand_partnership_iq(job_id):
                 'post_hits': conv_post_hits,
                 'pre_users':  len(conv_pre_users),
                 'post_users': len(conv_post_users),
+                'pre_users_projected':  _project_to_us_pop(len(conv_pre_users)),
+                'post_users_projected': _project_to_us_pop(len(conv_post_users)),
                 'lift_pct_hits':  _lift(conv_post_hits, conv_pre_hits),
                 'lift_pct_users': _lift(len(conv_post_users),
                                         len(conv_pre_users)),
                 'enabled': bool(conv_slugs),
             },
+            'control_group': control_block,
+            'demographics': {
+                'pre':  pre_demos,
+                'post': post_demos,
+            },
+            'sentiment': sentiment_block,
             'top_brand_properties': top_props,
             'created_at': datetime.now().isoformat(),
             'created_by': job.get('username', ''),
