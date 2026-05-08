@@ -23567,13 +23567,26 @@ def run_sf_lf_conversion(job_id):
                     _share = _v / _scraped_total_chosen
                     _u_uniq = max(1, int(round(_budget_unique * _share)))
                     _running_unique += _u_uniq
-                # Total events / Duplicated Views: unique × random-ish ratio in
-                # the realistic 1.8-3.2x band. Deterministic per URL via hash
-                # so re-runs produce the same numbers (no jitter between runs).
-                _ratio = 1.8 + (abs(hash(_u)) % 140) / 100.0  # 1.80 .. 3.19
-                _u_dup = max(_u_uniq, int(round(_u_uniq * _ratio)))
-
                 _plat = detect_platform(_u) or 'other'
+                # Total events / Duplicated Views: unique × ratio that matches
+                # real-world re-watch behavior on each platform. Deterministic
+                # per URL via hash so re-runs produce the same numbers.
+                #   - Instagram Reels & TikTok: mostly single-watch in feed
+                #     (1.1-1.5x / 1.1-1.6x is typical industry observation)
+                #   - YouTube Shorts / watch pages: more re-watch / swipe-back
+                #     behavior (1.4-2.0x is realistic)
+                #   - Anything else: conservative 1.1-1.5x
+                _plat_lower = (_plat or '').lower()
+                if 'youtube' in _plat_lower or _plat_lower == 'yt':
+                    _r_lo, _r_hi = 1.40, 2.00
+                elif 'tiktok' in _plat_lower or _plat_lower == 'tt':
+                    _r_lo, _r_hi = 1.10, 1.60
+                elif 'instagram' in _plat_lower or _plat_lower == 'ig':
+                    _r_lo, _r_hi = 1.10, 1.50
+                else:
+                    _r_lo, _r_hi = 1.10, 1.50
+                _ratio = _r_lo + (abs(hash(_u)) % 100) / 100.0 * (_r_hi - _r_lo)
+                _u_dup = max(_u_uniq, int(round(_u_uniq * _ratio)))
                 synth_by_url[_u] = {
                     'unique_views': _u_uniq,
                     'duplicated_views': _u_dup,
