@@ -19283,7 +19283,12 @@ def _sweep_stale_running_jobs():
 
     for jid, job in list(all_jobs.items()):
         st = (job.get('status') or '').lower()
-        if st not in ('running', 'queued', 'in_progress', 'processing'):
+        # Only sweep jobs that are CURRENTLY supposed to be doing work.
+        # `queued` jobs sit in the queue without their heartbeat being
+        # refreshed (the pulser only ticks for in-flight jobs), so the old
+        # logic was falsely killing healthy queued backlog after 30 min —
+        # which made the smart-queue useless when capacity < submissions.
+        if st not in ('running', 'in_progress', 'processing'):
             continue
         if jid in inflight_ids:
             continue
