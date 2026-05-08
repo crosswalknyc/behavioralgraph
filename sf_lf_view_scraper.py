@@ -93,10 +93,11 @@ def detect_platform(url: str) -> str:
 
 
 # ── yt_dlp path ───────────────────────────────────────────────────────────
-def _scrape_with_ytdlp(url: str) -> Optional[int]:
-    """Use yt_dlp to extract view_count without downloading the media."""
+def _scrape_with_ytdlp(url: str) -> tuple[Optional[int], Optional[str]]:
+    """Use yt_dlp to extract (view_count, creator/uploader) without
+    downloading the media. Either field can be None if missing."""
     if not _HAS_YT_DLP:
-        return None
+        return None, None
     opts = {
         "quiet": True,
         "no_warnings": True,
@@ -110,17 +111,32 @@ def _scrape_with_ytdlp(url: str) -> Optional[int]:
         with yt_dlp.YoutubeDL(opts) as ydl:
             info = ydl.extract_info(url, download=False)
         if not info:
-            return None
-        # Single video: dict with view_count. Playlist: entries[0].view_count.
+            return None, None
+        if isinstance(info.get("entries"), list) and info["entries"]:
+            info = info["entries"][0] or info
         vc = info.get("view_count")
-        if vc is None and isinstance(info.get("entries"), list) and info["entries"]:
-            vc = info["entries"][0].get("view_count")
-        if vc is None:
-            return None
-        return int(vc)
+        # Creator: prefer the human-readable display name. yt_dlp populates
+        # different fields per platform (YouTube: 'uploader' / 'channel';
+        # TikTok: 'uploader' / 'creator'). Fall back through them in order
+        # so we don't end up with raw channel IDs when a display name exists.
+        creator = (
+            info.get("uploader")
+            or info.get("channel")
+            or info.get("creator")
+            or info.get("uploader_id")
+        )
+        if isinstance(creator, str):
+            creator = creator.strip() or None
+        else:
+            creator = None
+        try:
+            vc = int(vc) if vc is not None else None
+        except (TypeError, ValueError):
+            vc = None
+        return vc, creator
     except Exception as e:
         log.debug("yt_dlp failed for %s: %s", url, e)
-        return None
+        return None, None
 
 
 # ── HTML scrape fallbacks ────────────────────────────────────────────────
@@ -163,20 +179,41 @@ _TIKTOK_PLAY_PATTERNS = [
     re.compile(r'"play_count"\s*:\s*(\d+)'),
     re.compile(r'"stats"\s*:\s*\{[^}]*?"playCount"\s*:\s*(\d+)'),
 ]
+# Creator extraction. Prefer the display/nickname name when present
+# ("Luke Ross") over the @handle ("lukerossfilm"). The URL also embeds
+# the @handle as a fallback (.../@username/video/...).
+_TIKTOK_CREATOR_PATTERNS = [
+    re.compile(r'"author"\s*:\s*\{[^}]*?"nickname"\s*:\s*"([^"]+)"'),
+    re.compile(r'"authorMeta"\s*:\s*\{[^}]*?"nickName"\s*:\s*"([^"]+)"'),
+    re.compile(r'"nickname"\s*:\s*"([^"]+)"'),
+    re.compile(r'"uniqueId"\s*:\s*"([^"]+)"'),
+]
+_TIKTOK_URL_HANDLE = re.compile(r"tiktok\.com/@([^/?#]+)", re.I)
 
 
-def _scrape_tiktok_html(url: str) -> Optional[int]:
+def _scrape_tiktok_html(url: str) -> tuple[Optional[int], Optional[str]]:
     html = _http_get(url)
-    if not html:
-        return None
-    for pat in _TIKTOK_PLAY_PATTERNS:
-        m = pat.search(html)
+    views: Optional[int] = None
+    creator: Optional[str] = None
+    if html:
+        for pat in _TIKTOK_PLAY_PATTERNS:
+            m = pat.search(html)
+            if m:
+                try:
+                    views = int(m.group(1))
+                    break
+                except ValueError:
+                    continue
+        for pat in _TIKTOK_CREATOR_PATTERNS:
+            m = pat.search(html)
+            if m and m.group(1).strip():
+                creator = m.group(1).strip()
+                break
+    if not creator:
+        m = _TIKTOK_URL_HANDLE.search(url)
         if m:
-            try:
-                return int(m.group(1))
-            except ValueError:
-                continue
-    return None
+            creator = '@' + m.group(1).strip()
+    return views, creator
 
 
 _IG_VIEW_PATTERNS = [
@@ -188,57 +225,100 @@ _IG_OG_DESC = re.compile(
     r'<meta[^>]+property="og:description"[^>]+content="([^"]+)"', re.I
 )
 _IG_OG_VIEWS = re.compile(r"([\d.,]+\s*[KkMmBb]?)\s*(?:views|plays|likes)", re.I)
+# IG creator: og:title is typically "Luke Ross on Instagram: ..." for Reels.
+# og:description often starts with "X likes, Y comments - username on..." too.
+_IG_OG_TITLE = re.compile(
+    r'<meta[^>]+property="og:title"[^>]+content="([^"]+)"', re.I
+)
+_IG_TITLE_USER = re.compile(r"^(.+?)\s+on Instagram", re.I)
+_IG_DESC_USER = re.compile(r"-\s+([^@\s][^-:]+?)\s+on (?:Instagram|November|December|January|February|March|April|May|June|July|August|September|October)", re.I)
+_IG_OWNER_PATTERNS = [
+    re.compile(r'"owner"\s*:\s*\{[^}]*?"username"\s*:\s*"([^"]+)"'),
+    re.compile(r'"owner"\s*:\s*\{[^}]*?"full_name"\s*:\s*"([^"]+)"'),
+    re.compile(r'"username"\s*:\s*"([^"]+)"'),
+]
 
 
-def _scrape_instagram_html(url: str) -> Optional[int]:
+def _scrape_instagram_html(url: str) -> tuple[Optional[int], Optional[str]]:
     html = _http_get(url)
-    if not html:
-        return None
-    for pat in _IG_VIEW_PATTERNS:
-        m = pat.search(html)
-        if m:
-            try:
-                return int(m.group(1))
-            except ValueError:
-                continue
-    # Last resort: og:description sometimes carries "12.3K likes, 45 comments".
-    # We treat likes as a *very* rough lower bound on views (typically ~10× more).
-    desc = _IG_OG_DESC.search(html)
-    if desc:
-        v = _IG_OG_VIEWS.search(desc.group(1))
-        if v:
-            n = _parse_count_word(v.group(1))
-            if n:
-                # likes → views proxy. Conservative: assume 10× views per like
-                # as IG Reels engagement is typically in this band.
-                return int(n * 10)
-    return None
+    views: Optional[int] = None
+    creator: Optional[str] = None
+    if html:
+        for pat in _IG_VIEW_PATTERNS:
+            m = pat.search(html)
+            if m:
+                try:
+                    views = int(m.group(1))
+                    break
+                except ValueError:
+                    continue
+        # Last resort for views: og:description sometimes carries
+        # "12.3K likes, 45 comments". Treat likes × 10 as a rough views
+        # proxy (IG Reels engagement is typically in that band).
+        if views is None:
+            desc_m = _IG_OG_DESC.search(html)
+            if desc_m:
+                v = _IG_OG_VIEWS.search(desc_m.group(1))
+                if v:
+                    n = _parse_count_word(v.group(1))
+                    if n:
+                        views = int(n * 10)
+        # Creator: prefer the og:title "Luke Ross on Instagram" form
+        # (gives display name); fall back to JSON `owner.username` for
+        # the @handle when no display name is in the meta.
+        title_m = _IG_OG_TITLE.search(html)
+        if title_m:
+            tu = _IG_TITLE_USER.search(title_m.group(1))
+            if tu and tu.group(1).strip():
+                creator = tu.group(1).strip()
+        if not creator:
+            desc_m = _IG_OG_DESC.search(html)
+            if desc_m:
+                du = _IG_DESC_USER.search(desc_m.group(1))
+                if du and du.group(1).strip():
+                    creator = du.group(1).strip()
+        if not creator:
+            for pat in _IG_OWNER_PATTERNS:
+                m = pat.search(html)
+                if m and m.group(1).strip():
+                    creator = '@' + m.group(1).strip()
+                    break
+    return views, creator
 
 
 # ── unified per-URL scrape ────────────────────────────────────────────────
-def scrape_one(url: str) -> tuple[str, str, Optional[int]]:
-    """(url, platform, view_count_or_None) — never raises."""
+def scrape_one(url: str) -> tuple[str, str, Optional[int], Optional[str]]:
+    """(url, platform, view_count_or_None, creator_or_None) — never raises."""
     platform = detect_platform(url)
     if platform == "other":
-        return url, platform, None
+        return url, platform, None, None
+
+    views: Optional[int] = None
+    creator: Optional[str] = None
 
     # yt_dlp handles YouTube + TikTok well; IG needs auth so skip.
     if platform in ("youtube", "tiktok"):
-        v = _scrape_with_ytdlp(url)
+        v, c = _scrape_with_ytdlp(url)
         if v is not None and v > 0:
-            return url, platform, v
+            views = v
+        if c:
+            creator = c
 
-    # HTML fallbacks
-    if platform == "tiktok":
-        v = _scrape_tiktok_html(url)
-        if v is not None and v > 0:
-            return url, platform, v
-    elif platform == "instagram":
-        v = _scrape_instagram_html(url)
-        if v is not None and v > 0:
-            return url, platform, v
+    # HTML fallbacks for views / creator if either still missing.
+    if platform == "tiktok" and (views is None or creator is None):
+        v, c = _scrape_tiktok_html(url)
+        if views is None and v is not None and v > 0:
+            views = v
+        if creator is None and c:
+            creator = c
+    elif platform == "instagram" and (views is None or creator is None):
+        v, c = _scrape_instagram_html(url)
+        if views is None and v is not None and v > 0:
+            views = v
+        if creator is None and c:
+            creator = c
 
-    return url, platform, None
+    return url, platform, views, creator
 
 
 # ── batch entry-point ────────────────────────────────────────────────────
@@ -248,7 +328,9 @@ def scrape_views_for_urls(
     """
     Returns:
         {
-            'per_url':       { url: {'platform': str, 'views': int|None} },
+            'per_url':       { url: {'platform': str,
+                                     'views': int|None,
+                                     'creator': str|None} },
             'per_platform':  { 'youtube': {'scraped_total': int,
                                           'scraped_count': int,   # # urls scraped successfully
                                           'attempted_count': int}, ... },
@@ -284,8 +366,12 @@ def scrape_views_for_urls(
         futures = {pool.submit(scrape_one, u): u for u in cleaned}
         done = 0
         for fut in as_completed(futures):
-            url, plat, views = fut.result()
-            out["per_url"][url] = {"platform": plat, "views": views}
+            url, plat, views, creator = fut.result()
+            out["per_url"][url] = {
+                "platform": plat,
+                "views": views,
+                "creator": creator,
+            }
             if views and views > 0:
                 bucket = out["per_platform"].setdefault(
                     plat,
