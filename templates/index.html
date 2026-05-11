@@ -21969,6 +21969,12 @@
             html += '</div>';
             el.innerHTML = html;
 
+            // Use US-projected counts for the chart so all dashboard
+            // numbers are reported in gen-pop units. Falls back to raw
+            // panel hits if projection isn't present.
+            var preProj  = s.pre_projected  || pre;
+            var postProj = s.post_projected || post;
+
             var canvas = document.getElementById('bpiqSentChart');
             if (canvas && typeof Chart !== 'undefined') {
                 if (_bpiqSentChartInst) _bpiqSentChartInst.destroy();
@@ -21977,17 +21983,20 @@
                     data: {
                         labels: ['Positive', 'Neutral', 'Negative'],
                         datasets: [
-                            { label: 'Pre',  data: [pre.positive || 0,  pre.neutral || 0,  pre.negative || 0],  backgroundColor: '#6366f1', borderWidth: 0, borderRadius: 6 },
-                            { label: 'Post', data: [post.positive || 0, post.neutral || 0, post.negative || 0], backgroundColor: '#10b981', borderWidth: 0, borderRadius: 6 }
+                            { label: 'Pre',  data: [preProj.positive  || 0, preProj.neutral  || 0, preProj.negative  || 0], backgroundColor: '#6366f1', borderWidth: 0, borderRadius: 6 },
+                            { label: 'Post', data: [postProj.positive || 0, postProj.neutral || 0, postProj.negative || 0], backgroundColor: '#10b981', borderWidth: 0, borderRadius: 6 }
                         ]
                     },
                     options: {
                         responsive: true, maintainAspectRatio: false,
                         scales: {
-                            y: { beginAtZero: true, grid: { color: 'rgba(255,255,255,0.06)' }, ticks: { color: '#aaa', font: { size: 11 } } },
+                            y: { beginAtZero: true, grid: { color: 'rgba(255,255,255,0.06)' }, ticks: { color: '#aaa', font: { size: 11 }, callback: function(v) { return Number(v).toLocaleString(); } } },
                             x: { grid: { display: false }, ticks: { color: '#e8e8e8', font: { size: 11 } } }
                         },
-                        plugins: { legend: { position: 'bottom', labels: { color: '#e8e8e8', font: { size: 11 } } } }
+                        plugins: {
+                            legend:  { position: 'bottom', labels: { color: '#e8e8e8', font: { size: 11 } } },
+                            tooltip: { callbacks: { label: function(ctx) { return ctx.dataset.label + ': ' + Number(ctx.parsed.y).toLocaleString() + ' US users'; } } }
+                        }
                     }
                 });
             }
