@@ -21743,7 +21743,8 @@
             // anywhere in the same window).
             var per = (data.per_platform || []);
             var hasAny = per.some(function(p) {
-                return (p.pre_users_on_platform || 0) + (p.post_users_on_platform || 0) > 0;
+                return (p.pre_users_on_platform || 0) + (p.post_users_on_platform || 0)
+                     + (p.pre_users || 0) + (p.post_users || 0) > 0;
             });
             var pTbl = '<div style="font-size:11px;color:var(--text-secondary);margin-bottom:0.5rem;">'
                 + 'A user is counted on a platform when they were active on that platform\'s domain AND had a brand touchpoint anywhere in the same window. % is the share of the platform\'s audience-cohort that engaged with the brand.'
@@ -21759,13 +21760,15 @@
                 + '</tr></thead><tbody>'
                 + per.map(function(p) {
                     var rowDim = ((p.pre_users_on_platform || 0) + (p.post_users_on_platform || 0)) === 0 ? 'opacity:0.45;' : '';
+                    var prePen  = (p.pre_pen_pct  == null) ? '—' : p.pre_pen_pct.toFixed(1)  + '%';
+                    var postPen = (p.post_pen_pct == null) ? '—' : p.post_pen_pct.toFixed(1) + '%';
                     return '<tr style="border-bottom:1px solid rgba(255,255,255,0.04);' + rowDim + '">'
                         + '<td style="padding:8px 10px;font-weight:600;">' + p.platform + '</td>'
                         + '<td style="padding:8px 10px;text-align:right;">' + _bpiqFmtNum(p.pre_users_projected || 0)  + '</td>'
                         + '<td style="padding:8px 10px;text-align:right;">' + _bpiqFmtNum(p.post_users_projected || 0) + '</td>'
                         + '<td style="padding:8px 10px;text-align:right;">' + _bpiqFmtLift(p.lift_pct_users) + '</td>'
-                        + '<td style="padding:8px 10px;text-align:right;color:var(--text-secondary);">' + (p.pre_pen_pct || 0).toFixed(1) + '%</td>'
-                        + '<td style="padding:8px 10px;text-align:right;color:var(--text-secondary);">' + (p.post_pen_pct || 0).toFixed(1) + '%</td>'
+                        + '<td style="padding:8px 10px;text-align:right;color:var(--text-secondary);">' + prePen + '</td>'
+                        + '<td style="padding:8px 10px;text-align:right;color:var(--text-secondary);">' + postPen + '</td>'
                         + '</tr>';
                 }).join('')
                 + '</tbody></table>';
@@ -21951,21 +21954,22 @@
 
             html += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;align-items:start;">';
             html += '<div style="position:relative;height:260px;"><canvas id="bpiqSentChart"></canvas></div>';
+            var _renderSentList = function(items) {
+                if (!items || !items.length) {
+                    return '<div style="color:var(--text-secondary);font-size:12px;margin-top:0.4rem;">None detected</div>';
+                }
+                return '<ul style="margin:0.4rem 0 0;padding-left:1.1rem;font-size:12px;">'
+                    + items.slice(0,8).map(function(u) {
+                        return '<li><span style="color:var(--text-secondary);">[' + (u.common_name || '') + ']</span> ' + (u.url || '') + ' <span style="color:var(--text-secondary);">(' + _bpiqFmtNum((u.pre_hits||0)+(u.post_hits||0)) + ')</span></li>';
+                      }).join('') + '</ul>';
+            };
             html += '<div>'
                   + '<div style="margin-bottom:0.75rem;"><strong style="color:#10b981;">Top Positive URLs</strong>'
-                  + (s.top_positive && s.top_positive.length
-                      ? '<ul style="margin:0.4rem 0 0;padding-left:1.1rem;font-size:12px;">'
-                        + s.top_positive.slice(0,8).map(function(u) {
-                            return '<li><span style="color:var(--text-secondary);">[' + (u.common_name || '') + ']</span> ' + (u.url || '') + ' <span style="color:var(--text-secondary);">(' + _bpiqFmtNum((u.pre_hits||0)+(u.post_hits||0)) + ')</span></li>';
-                          }).join('') + '</ul>'
-                      : '<div style="color:var(--text-secondary);font-size:12px;margin-top:0.4rem;">None detected</div>') + '</div>'
+                  + _renderSentList(s.top_positive) + '</div>'
+                  + '<div style="margin-bottom:0.75rem;"><strong style="color:#94a3b8;">Top Neutral URLs</strong>'
+                  + _renderSentList(s.top_neutral) + '</div>'
                   + '<div><strong style="color:#ef4444;">Top Negative URLs</strong>'
-                  + (s.top_negative && s.top_negative.length
-                      ? '<ul style="margin:0.4rem 0 0;padding-left:1.1rem;font-size:12px;">'
-                        + s.top_negative.slice(0,8).map(function(u) {
-                            return '<li><span style="color:var(--text-secondary);">[' + (u.common_name || '') + ']</span> ' + (u.url || '') + ' <span style="color:var(--text-secondary);">(' + _bpiqFmtNum((u.pre_hits||0)+(u.post_hits||0)) + ')</span></li>';
-                          }).join('') + '</ul>'
-                      : '<div style="color:var(--text-secondary);font-size:12px;margin-top:0.4rem;">None detected</div>') + '</div>'
+                  + _renderSentList(s.top_negative) + '</div>'
                   + '</div>';
             html += '</div>';
             el.innerHTML = html;
