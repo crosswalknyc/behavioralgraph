@@ -21682,18 +21682,6 @@
             meta += ' · Attribution: ' + (data.attribution_window_days || 0) + 'd';
             meta += ' · Pre-window: ' + (preP.start || '') + ' → ' + (preP.end || '') + ' (' + (preP.days || 0) + 'd)';
             meta += ' · Post-window: ' + (evP.start || '') + ' → ' + (poP.end || '') + ' (' + ((evP.days || 0) + (poP.days || 0)) + 'd)';
-            var diag = data.diagnostics || {};
-            if (diag.audience_filter_used) {
-                var filterLabel = ({
-                    'qualifier_only': 'qualifier-only',
-                    'qualifier_plus_context': 'qualifier + context filter',
-                    'qualifier_only_fallback': 'qualifier-only (auto-broadened — context too narrow)'
-                })[diag.audience_filter_used] || diag.audience_filter_used;
-                var brandVars = (diag.brand_search_variants || []).join(', ');
-                meta += '<br><span style="color:var(--text-secondary);font-size:11px;">Audience filter: ' + filterLabel
-                      + (brandVars ? ' · Brand variants searched: <code>' + brandVars + '</code>' : '')
-                      + '</span>';
-            }
             document.getElementById('bpiqDashMeta').innerHTML = meta;
 
             document.getElementById('bpiqKpiAudience').textContent = _bpiqFmtNum(data.projected_audience_size);
