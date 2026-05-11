@@ -27823,21 +27823,57 @@ def list_ecommerce_iq():
 
 BRAND_PARTNERSHIP_IQ_S3_PREFIX = 'brand-partnership-iq/'
 
-# Movie ticketing platforms (mirrors Ticket_Sales_Attribution.py)
-_BPIQ_MOVIE_TICKET_PLATFORMS = [
-    'fandango', 'amc', 'regal', 'alamo', 'cinemark',
-    'atom tickets', 'movietickets', 'showcase'
+# "Movie context" needles. Audience qualifies when the movie name appears
+# alongside ANY of these in the same row — covers ticket buyers, trailer
+# watchers, review readers, IMDb/RT/Letterboxd lookups, studio pages,
+# entertainment-news coverage, and Wikipedia. Originally just ticket sites
+# (fandango/amc/regal/alamo/cinemark) but those alone surface a tiny
+# audience because most movie engagement happens off-ticket.
+_BPIQ_MOVIE_CONTEXT = [
+    # Ticket sellers (kept first for backward-compat / weighting)
+    'fandango', 'amc theatres', 'amctheatres', 'regal', 'alamo', 'cinemark',
+    'atom tickets', 'movietickets', 'showcase cinemas',
+    # Aggregators / databases
+    'imdb', 'rottentomatoes', 'rotten tomatoes', 'metacritic',
+    'letterboxd', 'boxofficemojo', 'themoviedb', 'tmdb',
+    # Studios / distributors
+    'sonypictures', 'sony pictures', 'paramount.com', 'paramountmovies',
+    'warnerbros', 'warner bros', 'universalpictures', 'universal pictures',
+    'disneystudios', 'disney movies', 'lionsgate', 'mgm', 'a24films',
+    'a24.com', 'focusfeatures', 'searchlightpictures', 'neon.com',
+    # Entertainment news / trades
+    'deadline.com', 'variety.com', 'hollywoodreporter', 'screendaily',
+    'collider.com', 'indiewire', 'thewrap.com',
+    # Encyclopedia / generic context
+    'wikipedia', 'fandom.com',
+    # Generic movie keywords (catch trailer searches, articles, etc.)
+    '/movie/', 'movies/', 'film/', '/films/', 'trailer', 'box office',
+    'box-office',
 ]
+# Backward-compat alias kept for any external imports.
+_BPIQ_MOVIE_TICKET_PLATFORMS = _BPIQ_MOVIE_CONTEXT
 
-# TV / streaming surfaces used as qualifying-event filter when type=tv
+# TV / streaming surfaces used as qualifying-event filter when type=tv.
+# Same broadening rationale as movie context.
 _BPIQ_TV_PLATFORMS = [
-    'netflix', 'hulu', 'hbo', 'max', 'disney+', 'disney plus',
-    'paramount+', 'paramount plus', 'peacock', 'prime video',
-    'amazon prime video', 'apple tv+', 'apple tv plus', 'youtube tv',
+    'netflix', 'hulu', 'hbo', 'max.com', 'hbomax', 'disney+', 'disney plus',
+    'disneyplus', 'paramount+', 'paramount plus', 'paramountplus', 'peacock',
+    'prime video', 'primevideo', 'amazon prime video', 'apple tv+',
+    'apple tv plus', 'appletv', 'youtube tv', 'youtubetv',
     'sling', 'fubo', 'tubi', 'pluto', 'roku', 'starz', 'showtime',
     'crunchyroll', 'discovery+', 'espn+', 'mlb.tv', 'nbc.com',
     'cbs.com', 'abc.com', 'fox.com', 'amc.com', 'fxnetworks',
-    'usa network', 'history.com', 'bravo', 'syfy', 'tnt', 'tbs'
+    'usa network', 'history.com', 'bravo', 'syfy', 'tnt', 'tbs',
+    # Aggregators / databases
+    'imdb', 'rottentomatoes', 'rotten tomatoes', 'metacritic',
+    'tvmaze', 'tvinsider', 'whattowatch',
+    # News / coverage
+    'deadline.com', 'variety.com', 'hollywoodreporter', 'collider.com',
+    'tvline.com', 'screenrant',
+    # Encyclopedia / generic
+    'wikipedia', 'fandom.com',
+    # Generic TV slugs
+    '/tv/', '/tv-shows/', '/episode/', '/episodes/', 'season ',
 ]
 
 # Canonical social platforms we surface in the per-platform breakdown.
@@ -27863,21 +27899,68 @@ def _bpiq_term_lit(term):
     return (term or '').lower().replace("'", "''").strip()
 
 
-def _bpiq_filter_clause(terms, columns=('URL', 'COMMON_NAME')):
-    """Build an OR-of-LIKE clause across the given columns for any term.
+def _bpiq_term_variants(term):
+    """Generate spelling variants of a term so users typing "Door Dash" still
+    match `doordash.com` / `COMMON_NAME='DoorDash'`. Also handles the inverse
+    (typing "DoorDash" matches "door dash" articles).
+
+    Returns a deduped list of lowercased, whitespace-normalized variants —
+    each at least 2 chars long so we don't match every row in the warehouse.
+    """
+    base = (term or '').lower().strip()
+    if not base:
+        return []
+    out = {base}
+    # Collapse runs of internal whitespace to single space, then derive:
+    collapsed = ' '.join(base.split())
+    if collapsed:
+        out.add(collapsed)
+        # No spaces (handles "Door Dash" -> "doordash")
+        out.add(collapsed.replace(' ', ''))
+        # Hyphenated (handles slugs: "the goat" -> "the-goat")
+        out.add(collapsed.replace(' ', '-'))
+        # Underscored (rare but cheap)
+        out.add(collapsed.replace(' ', '_'))
+    # If user typed without spaces and term is a common multi-word brand
+    # (e.g. "doordash"), there's no automatic re-splitting — that requires a
+    # dictionary we don't have. The no-space variant alone catches both the
+    # spaced + unspaced forms when at least one input has spaces.
+    return [v for v in out if len(v) >= 2]
+
+
+def _bpiq_filter_clause(terms, columns=('URL', 'COMMON_NAME'), expand_variants=True):
+    """Build an OR-of-position clause across the given columns for any term.
 
     Mirrors the brand-search semantics used in bg.py's profile analysis:
-    a row matches if any column contains any term (case-insensitive)."""
+    a row matches if any column contains any term (case-insensitive). When
+    `expand_variants` is True (default) each term is also expanded to its
+    whitespace-normalized variants so "Door Dash" still matches `doordash`.
+    """
     if not terms:
         return '1=0'
-    parts = []
+    expanded = []
     for t in terms:
-        safe = _bpiq_term_lit(t)
-        if not safe:
-            continue
+        if expand_variants:
+            expanded.extend(_bpiq_term_variants(t))
+        else:
+            v = _bpiq_term_lit(t)
+            if v:
+                expanded.append(v)
+    if not expanded:
+        return '1=0'
+    # Dedupe while preserving order so the SQL is stable.
+    seen = set()
+    deduped = []
+    for v in expanded:
+        if v not in seen:
+            seen.add(v)
+            deduped.append(v)
+    parts = []
+    for v in deduped:
+        safe = v.replace("'", "''")
         for col in columns:
             parts.append(f"position(lower({col}), '{safe}') > 0")
-    return '(' + ' OR '.join(parts) + ')' if parts else '1=0'
+    return '(' + ' OR '.join(parts) + ')'
 
 
 def _bpiq_get_demographics(cur, uid_table_name):
@@ -28085,23 +28168,23 @@ def _run_brand_partnership_iq(job_id):
 
         qualifier_filter = _bpiq_filter_clause(qualifier_terms, ('URL', 'COMMON_NAME'))
 
-        extra_filter = ''
+        # "Context" filter narrows the audience to rows that look like the
+        # right kind of engagement (movie/TV pages, ticket sites, etc).
+        # We try this narrow filter FIRST and, if it produces a tiny audience
+        # (< 100 users), we fall back to the qualifier-only filter so the
+        # analysis is actually meaningful. This was added after a real run
+        # against "The Goat" + ticket sites returned audience_size=1.
+        context_filter = ''
         if qualifier_type == 'movie':
-            extra_filter = ' AND ' + _bpiq_filter_clause(
-                _BPIQ_MOVIE_TICKET_PLATFORMS, ('URL', 'COMMON_NAME'))
+            context_filter = ' AND ' + _bpiq_filter_clause(
+                _BPIQ_MOVIE_CONTEXT, ('URL', 'COMMON_NAME'))
         elif qualifier_type == 'tv':
-            # Either the show name appears alongside a streaming surface, OR
-            # the URL itself sits on a TV-network/streaming domain. We OR
-            # the platform check on top of the qualifier match (already in
-            # qualifier_filter) so any TV-context hit qualifies.
-            extra_filter = ' AND ' + _bpiq_filter_clause(
+            context_filter = ' AND ' + _bpiq_filter_clause(
                 _BPIQ_TV_PLATFORMS, ('URL', 'COMMON_NAME'))
-        elif qualifier_type == 'social_post':
-            # qualifier_terms ARE the social URLs; we already match them
-            # against URL via the standard filter. No extra constraint.
-            extra_filter = ''
-        # 'sport' and 'other' use the qualifier filter as-is.
+        # social_post / sport / other use the qualifier filter as-is.
 
+        AUDIENCE_FALLBACK_THRESHOLD = 100
+        audience_filter_used = ('qualifier_only' if not context_filter else 'qualifier_plus_context')
         cur.execute("DROP TABLE IF EXISTS bpiq_audience_uids")
         cur.execute(f"""
             CREATE TEMPORARY TABLE bpiq_audience_uids
@@ -28110,10 +28193,35 @@ def _run_brand_partnership_iq(job_id):
             FROM clickstream.clickstream_final
             WHERE DELIVERED BETWEEN toDate('{sd}') AND toDate('{ed}')
               AND {qualifier_filter}
-              {extra_filter}
+              {context_filter}
         """)
         cur.execute("SELECT count() FROM bpiq_audience_uids")
         audience_size = int(cur.fetchone()[0] or 0)
+
+        # Fallback path: if the context-filtered audience is too small to
+        # produce a meaningful lift number, rebuild without the context AND.
+        if audience_size < AUDIENCE_FALLBACK_THRESHOLD and context_filter:
+            print(f"⚠️ BPIQ: context-filtered audience={audience_size} (<{AUDIENCE_FALLBACK_THRESHOLD}); "
+                  f"falling back to qualifier-only audience build.")
+            update_job_status(job_id, progress=18,
+                              message=(f'Strict {qualifier_type} context only matched '
+                                       f'{audience_size:,} users — broadening to any mention '
+                                       'of the qualifier in clickstream...'))
+            try:
+                cur.execute("DROP TABLE IF EXISTS bpiq_audience_uids")
+                cur.execute(f"""
+                    CREATE TEMPORARY TABLE bpiq_audience_uids
+                    ENGINE = Memory AS
+                    SELECT DISTINCT UID
+                    FROM clickstream.clickstream_final
+                    WHERE DELIVERED BETWEEN toDate('{sd}') AND toDate('{ed}')
+                      AND {qualifier_filter}
+                """)
+                cur.execute("SELECT count() FROM bpiq_audience_uids")
+                audience_size = int(cur.fetchone()[0] or 0)
+                audience_filter_used = 'qualifier_only_fallback'
+            except Exception as _e:
+                print(f"⚠️ BPIQ: fallback audience build failed: {_e}")
 
         # ── Phase 1.5: build CONTROL audience for incremental-lift DiD ─────
         # Control = panel users who were active in clickstream during the
@@ -28212,10 +28320,13 @@ def _run_brand_partnership_iq(job_id):
             return
 
         projected_audience = _project_to_us_pop(audience_size)
+        brand_variants = _bpiq_term_variants(brand_partner)
         update_job_status(job_id, progress=30,
-                          message=f'{audience_size:,} qualifying users '
-                                  f'(~{projected_audience:,} projected). '
-                                  'Measuring brand engagement pre vs post...')
+                          message=(f'{audience_size:,} qualifying users '
+                                   f'(~{projected_audience:,} projected, '
+                                   f'filter={audience_filter_used}). '
+                                   f"Searching brand variants: {', '.join(brand_variants[:6])}"
+                                   f"{'...' if len(brand_variants) > 6 else ''}"))
 
         # ── Phase 2: pre + post brand engagement (single scan, UNION ALL)
         brand_filter = _bpiq_filter_clause([brand_partner], ('URL', 'COMMON_NAME'))
@@ -28617,6 +28728,11 @@ def _run_brand_partnership_iq(job_id):
             },
             'sentiment': sentiment_block,
             'top_brand_properties': top_props,
+            'diagnostics': {
+                'audience_filter_used': audience_filter_used,
+                'brand_search_variants': brand_variants,
+                'qualifier_search_variants': sorted({v for t in qualifier_terms for v in _bpiq_term_variants(t)}),
+            },
             'created_at': datetime.now().isoformat(),
             'created_by': job.get('username', ''),
         }
