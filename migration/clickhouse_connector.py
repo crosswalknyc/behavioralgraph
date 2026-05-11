@@ -186,7 +186,7 @@ def connect_clickhouse(settings: Optional[dict] = None):
         password=CH_PASSWORD,
         database=CH_DATABASE,
         connect_timeout=30,
-        send_receive_timeout=3600,
+        send_receive_timeout=10800,
         settings=merged_settings,
     )
     return ClickHouseConnection(client, query_settings=merged_settings)
@@ -556,46 +556,73 @@ def translate_sql(sql: str) -> str:
     result = re.sub(r'\bSAMPLE\s*\(\s*(\d+)\s+ROWS?\s*\)',
                     replace_sample_rows, result, flags=re.IGNORECASE)
     # Percentage-based: FROM table SAMPLE (N) / SAMPLE (N.N)
-    # ClickHouse only supports native SAMPLE on tables built with a
-    # `SAMPLE BY` key, which none of our production tables have. Previously
-    # we just stripped the clause, but that meant a query asking for 15% of
-    # clickstream_final actually scanned 100% — exactly the behavior the
-    # caller was trying to avoid.
+    # Convert to a deterministic hash-bucket filter on UID.
     #
-    # Replacement strategy: convert into deterministic hash-bucket sampling
-    # on UID by wrapping the table in a subquery:
-    #
-    #   FROM clickstream_final SAMPLE (15) c
-    #     →  FROM (SELECT * FROM clickstream_final
-    #              WHERE cityHash64(UID) % 10000 < 1500) c
-    #
-    # Properties:
-    #   • Reproducible: same UIDs picked across runs, so PASS 1 / PASS 2
-    #     temp tables stay consistent.
-    #   • All tables Profile Analysis SAMPLEs from have a UID column, so this
-    #     is safe for our use cases.
-    #   • cityHash64 is column-pruning friendly; CH skips reading any column
-    #     other than UID until the predicate passes.
-    #   • Date filtering on the outer query still does partition pruning
-    #     because the wrapper preserves all columns.
+    # IMPORTANT: we do NOT wrap in a subquery — that prevents ClickHouse
+    # from using partition pruning on DELIVERED when the date filter is in
+    # the outer WHERE.  Instead we strip the SAMPLE clause and inject the
+    # hash condition directly into the query's WHERE clause so all
+    # predicates live at the same level and the optimizer can prune
+    # partitions + use primary-key ordering.
+    _SQL_KW = frozenset({
+        'WHERE', 'INNER', 'LEFT', 'RIGHT', 'OUTER', 'CROSS', 'JOIN',
+        'ON', 'GROUP', 'ORDER', 'HAVING', 'LIMIT', 'QUALIFY', 'AND',
+        'OR', 'UNION', 'EXCEPT', 'INTERSECT', 'SET', 'INTO', 'CREATE',
+        'AS', 'WITH', 'FULL', 'NATURAL', 'USING', 'BETWEEN', 'SELECT',
+        'FROM', 'TABLE', 'INSERT', 'UPDATE', 'DELETE', 'DROP', 'REPLACE',
+        'TEMP', 'TEMPORARY', 'NOT', 'NULL', 'IS', 'CASE', 'WHEN', 'THEN',
+        'ELSE', 'END', 'IN', 'EXISTS', 'LIKE', 'ILIKE', 'PREWHERE',
+    })
+    _pending_hash_filters = []
+
     def _sample_to_hash(m):
         table = m.group(1)
-        pct   = float(m.group(2))
-        # Cap at 100, allow fractional percents down to 0.01.
+        pct = float(m.group(2))
         bucket = max(1, min(10000, int(round(pct * 100))))
-        return (
-            f'FROM (SELECT * FROM {table} '
-            f'WHERE cityHash64(UID) % 10000 < {bucket})'
-        )
+
+        after = m.string[m.end():]
+
+        # Inside a BG.py subquery like FROM (SELECT * FROM t SAMPLE(N)):
+        # can't inject into outer WHERE, so keep inline with PREWHERE.
+        if re.match(r'\s*\)', after):
+            return (
+                f'FROM {table}\n'
+                f'    PREWHERE cityHash64(UID) % 10000 < {bucket}'
+            )
+
+        # Normal case: flatten. Detect optional table alias.
+        alias_m = re.match(r'\s+(\w+)', after)
+        alias = None
+        if alias_m and alias_m.group(1).upper() not in _SQL_KW:
+            alias = alias_m.group(1)
+
+        uid_ref = f'{alias}.UID' if alias else 'UID'
+        _pending_hash_filters.append(
+            f'cityHash64({uid_ref}) % 10000 < {bucket}')
+        return f'FROM {table}'
 
     result = re.sub(
         r'\bFROM\s+([\w.]+)\s+SAMPLE\s*\(\s*(\d+(?:\.\d+)?)\s*\)',
         _sample_to_hash, result, flags=re.IGNORECASE,
     )
 
-    # Anything that didn't match the FROM-table pattern (rare; usually a
-    # SAMPLE clause attached to a subquery alias) gets stripped as before so
-    # the query at least parses.
+    # Inject hash filters into the query's WHERE clause.
+    for hf in _pending_hash_filters:
+        where_m = re.search(r'\bWHERE\b', result, re.IGNORECASE)
+        if where_m:
+            pos = where_m.end()
+            result = result[:pos] + f' {hf} AND' + result[pos:]
+        else:
+            for kw in ('GROUP BY', 'ORDER BY', 'HAVING', 'LIMIT'):
+                kw_m = re.search(rf'\b{kw}\b', result, re.IGNORECASE)
+                if kw_m:
+                    pos = kw_m.start()
+                    result = result[:pos] + f'WHERE {hf}\n' + result[pos:]
+                    break
+            else:
+                result += f'\nWHERE {hf}'
+
+    # Anything remaining (rare) gets stripped so the query parses.
     result = re.sub(r'\s+SAMPLE\s*\(\s*\d+(?:\.\d+)?\s*\)',
                     '', result, flags=re.IGNORECASE)
 
