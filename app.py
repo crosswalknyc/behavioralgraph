@@ -27893,6 +27893,13 @@ _BPIQ_SOCIAL_PLATFORMS = [
     ('Twitch',    ['twitch']),
 ]
 
+# Hosts/keywords that should NEVER count as brand engagement, even when
+# the URL or COMMON_NAME contains the brand string. These are typically
+# dev / docs / code-repository sites where a brand mention has nothing
+# to do with consumer engagement (e.g. a developer searching GitHub for
+# "doordash" repos).
+_BPIQ_BRAND_HOST_BLACKLIST = ['github', 'gitlab', 'bitbucket', 'stackoverflow']
+
 
 def _bpiq_term_lit(term):
     """Lowercase + escape a single term for safe inline use in a CH literal."""
@@ -28372,6 +28379,15 @@ def _run_brand_partnership_iq(job_id):
 
         # ── Phase 2: pre + post brand engagement (single scan, UNION ALL)
         brand_filter = _bpiq_filter_clause([brand_partner], ('URL', 'COMMON_NAME'))
+        # Exclude noisy hosts (GitHub, GitLab, etc.) where a brand mention
+        # is just a dev / repo reference, not a consumer engagement.
+        if _BPIQ_BRAND_HOST_BLACKLIST:
+            blk_clauses = []
+            for host in _BPIQ_BRAND_HOST_BLACKLIST:
+                lit = _bpiq_term_lit(host)
+                blk_clauses.append(f"position(lower(URL), '{lit}') = 0")
+                blk_clauses.append(f"position(lower(COMMON_NAME), '{lit}') = 0")
+            brand_filter = '(' + brand_filter + ') AND (' + ' AND '.join(blk_clauses) + ')'
 
         # Build platform-tagging multiIf so we can split brand hits by
         # social platform in a single pass. ClickHouse multiIf takes
@@ -28802,6 +28818,11 @@ def _run_brand_partnership_iq(job_id):
             sent_pre[s]  += int(u.get('pre_hits') or 0)
             sent_post[s] += int(u.get('post_hits') or 0)
 
+        # Gen-pop projection: scale the panel hit counts to the US population.
+        # Net sentiment scores are dimensionless (ratios), so they're unchanged.
+        sent_pre_proj  = {k: _project_to_us_pop(v) for k, v in sent_pre.items()}
+        sent_post_proj = {k: _project_to_us_pop(v) for k, v in sent_post.items()}
+
         def _net_sent(d):
             tot = sum(d.values()) or 1
             return round(((d['positive'] - d['negative']) / tot) * 100.0, 2)
@@ -28812,6 +28833,8 @@ def _run_brand_partnership_iq(job_id):
             'used_llm':    any(u.get('sentiment_source') == 'llm' for u in top_urls),
             'pre':  sent_pre,
             'post': sent_post,
+            'pre_projected':  sent_pre_proj,
+            'post_projected': sent_post_proj,
             'pre_net_score':  _net_sent(sent_pre),
             'post_net_score': _net_sent(sent_post),
             'net_shift':      round(_net_sent(sent_post) - _net_sent(sent_pre), 2),
