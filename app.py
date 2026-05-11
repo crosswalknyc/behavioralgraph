@@ -28387,34 +28387,29 @@ def _run_brand_partnership_iq(job_id):
         update_job_status(job_id, progress=58,
                           message=f'Aggregating {len(rows):,} treatment touchpoints...')
 
-        # Aggregate in Python (rows are small — already filtered to brand hits)
+        # Aggregate in Python (rows are small — already filtered to brand hits).
+        # NOTE: per-platform numbers here would be wrong because most social
+        # platforms encode posts by ID (`tiktok.com/@user/video/123`,
+        # `instagram.com/p/ABC`), so the brand string almost never appears in
+        # the same URL row alongside the platform host. We now compute
+        # per-platform reach via a separate "cross-platform" query below
+        # (audience users active on platform X AND with a brand touchpoint
+        # in the same window). Platform-classification of the brand-tagged
+        # rows themselves is dropped.
         pre_hits = post_hits = 0
         pre_users = set(); post_users = set()
-        per_platform = {}  # label -> {'pre_hits','post_hits','pre_users','post_users'}
-        for label, nds in _BPIQ_SOCIAL_PLATFORMS:
-            per_platform[label] = {'pre_hits': 0, 'post_hits': 0,
-                                   'pre_users': set(), 'post_users': set()}
-        per_platform['Other'] = {'pre_hits': 0, 'post_hits': 0,
-                                 'pre_users': set(), 'post_users': set()}
         conv_pre_hits = conv_post_hits = 0
         conv_pre_users = set(); conv_post_users = set()
-
-        for bucket, platform_label, is_conv, uid in rows:
+        for bucket, _platform_label_unused, is_conv, uid in rows:
             if bucket == 'pre':
                 pre_hits += 1
                 pre_users.add(uid)
-                p = per_platform.get(platform_label) or per_platform['Other']
-                p['pre_hits'] += 1
-                p['pre_users'].add(uid)
                 if is_conv:
                     conv_pre_hits += 1
                     conv_pre_users.add(uid)
             else:
                 post_hits += 1
                 post_users.add(uid)
-                p = per_platform.get(platform_label) or per_platform['Other']
-                p['post_hits'] += 1
-                p['post_users'].add(uid)
                 if is_conv:
                     conv_post_hits += 1
                     conv_post_users.add(uid)
@@ -28430,35 +28425,113 @@ def _run_brand_partnership_iq(job_id):
         def _per_day(n, days):
             return (n / days) if days else 0.0
 
+        # ── Phase 2a: cross-platform brand reach ──────────────────────────
+        # For each social platform, count audience users who were active on
+        # that platform's domain AND had a brand touchpoint anywhere in the
+        # same window. This captures social-media exposure that the strict
+        # "brand string + platform host in same URL row" measure misses.
+        update_job_status(job_id, progress=64,
+                          message='Computing per-platform brand reach (cross-platform users)...')
+
+        # Build pre/post brand-UID temp tables now so the platform query can
+        # reference them (and they're reused for demographics later).
+        try:
+            cur.execute("DROP TABLE IF EXISTS bpiq_pre_brand_uids")
+            cur.execute(f"""
+                CREATE TEMPORARY TABLE bpiq_pre_brand_uids ENGINE = Memory AS
+                SELECT DISTINCT UID
+                FROM clickstream.clickstream_final
+                WHERE UID IN (SELECT UID FROM bpiq_audience_uids)
+                  AND DELIVERED BETWEEN toDate('{pre_start}') AND toDate('{pre_end}')
+                  AND {brand_filter}
+            """)
+            cur.execute("DROP TABLE IF EXISTS bpiq_post_brand_uids")
+            cur.execute(f"""
+                CREATE TEMPORARY TABLE bpiq_post_brand_uids ENGINE = Memory AS
+                SELECT DISTINCT UID
+                FROM clickstream.clickstream_final
+                WHERE UID IN (SELECT UID FROM bpiq_audience_uids)
+                  AND DELIVERED BETWEEN toDate('{sd}') AND toDate('{post_end}')
+                  AND {brand_filter}
+            """)
+            _BPIQ_BRAND_UIDS_BUILT = True
+        except Exception as _e:
+            print(f"⚠️ BPIQ: brand-UID temp tables build failed: {_e}")
+            _BPIQ_BRAND_UIDS_BUILT = False
+
+        # platform_case is the same multiIf we already built; classifies a
+        # row by which platform's domain it sits on. We only count rows
+        # where SOME platform matches (so we don't scan the entire panel).
+        any_platform_or = ' OR '.join(
+            f"position(lower(URL), '{_bpiq_term_lit(s)}') > 0 "
+            f"OR position(lower(COMMON_NAME), '{_bpiq_term_lit(s)}') > 0"
+            for _, needles in _BPIQ_SOCIAL_PLATFORMS for s in needles)
+
         platform_out = []
-        for label, _ in _BPIQ_SOCIAL_PLATFORMS:
-            d = per_platform[label]
-            platform_out.append({
-                'platform': label,
-                'pre_hits':  d['pre_hits'],
-                'post_hits': d['post_hits'],
-                'pre_users':  len(d['pre_users']),
-                'post_users': len(d['post_users']),
-                'lift_pct_hits':  _lift(d['post_hits'], d['pre_hits']),
-                'lift_pct_users': _lift(len(d['post_users']),
-                                        len(d['pre_users'])),
-                'pre_hits_per_day':  round(_per_day(d['pre_hits'],  pre_span), 2),
-                'post_hits_per_day': round(_per_day(d['post_hits'], post_span_days), 2),
-            })
-        # Always include "Other" bucket last (catch-all for non-social brand hits)
-        d_other = per_platform['Other']
-        platform_out.append({
-            'platform': 'Other / Direct',
-            'pre_hits':  d_other['pre_hits'],
-            'post_hits': d_other['post_hits'],
-            'pre_users':  len(d_other['pre_users']),
-            'post_users': len(d_other['post_users']),
-            'lift_pct_hits':  _lift(d_other['post_hits'], d_other['pre_hits']),
-            'lift_pct_users': _lift(len(d_other['post_users']),
-                                    len(d_other['pre_users'])),
-            'pre_hits_per_day':  round(_per_day(d_other['pre_hits'],  pre_span), 2),
-            'post_hits_per_day': round(_per_day(d_other['post_hits'], post_span_days), 2),
-        })
+        if _BPIQ_BRAND_UIDS_BUILT:
+            try:
+                cur.execute(f"""
+                    SELECT
+                        platform_label,
+                        uniqExactIf(UID, bucket = 'pre') AS pre_users_on_platform,
+                        uniqExactIf(UID, bucket = 'post') AS post_users_on_platform,
+                        uniqExactIf(UID, bucket = 'pre'  AND UID IN (SELECT UID FROM bpiq_pre_brand_uids))  AS pre_users_with_brand,
+                        uniqExactIf(UID, bucket = 'post' AND UID IN (SELECT UID FROM bpiq_post_brand_uids)) AS post_users_with_brand
+                    FROM (
+                        SELECT
+                            CASE WHEN DELIVERED < toDate('{sd}') THEN 'pre' ELSE 'post' END AS bucket,
+                            {platform_case} AS platform_label,
+                            UID
+                        FROM clickstream.clickstream_final
+                        WHERE UID IN (SELECT UID FROM bpiq_audience_uids)
+                          AND (
+                                (DELIVERED BETWEEN toDate('{pre_start}') AND toDate('{pre_end}'))
+                             OR (DELIVERED BETWEEN toDate('{sd}')        AND toDate('{post_end}'))
+                          )
+                          AND ({any_platform_or})
+                    )
+                    GROUP BY platform_label
+                """)
+                rows_pp = cur.fetchall()
+            except Exception as _e:
+                print(f"⚠️ BPIQ: cross-platform reach query failed: {_e}")
+                rows_pp = []
+
+            # Index by platform name so we can preserve our canonical order.
+            by_label = {row[0]: row for row in rows_pp}
+            for label, _needles in _BPIQ_SOCIAL_PLATFORMS:
+                row = by_label.get(label)
+                if row:
+                    _, pre_on, post_on, pre_brand, post_brand = row
+                    pre_on   = int(pre_on or 0);   post_on   = int(post_on or 0)
+                    pre_brand = int(pre_brand or 0); post_brand = int(post_brand or 0)
+                else:
+                    pre_on = post_on = pre_brand = post_brand = 0
+                platform_out.append({
+                    'platform': label,
+                    'pre_users_on_platform':  pre_on,
+                    'post_users_on_platform': post_on,
+                    'pre_users':  pre_brand,
+                    'post_users': post_brand,
+                    'lift_pct_users': _lift(post_brand, pre_brand),
+                    'pre_users_projected':  _project_to_us_pop(pre_brand),
+                    'post_users_projected': _project_to_us_pop(post_brand),
+                    # Penetration = % of platform users in audience who also
+                    # had a brand touchpoint (a "share-of-attention" proxy).
+                    'pre_pen_pct':  round(100.0 * pre_brand  / pre_on,  2) if pre_on  else 0.0,
+                    'post_pen_pct': round(100.0 * post_brand / post_on, 2) if post_on else 0.0,
+                })
+        else:
+            # Fallback: keep an empty platform_out so the dashboard renders.
+            for label, _ in _BPIQ_SOCIAL_PLATFORMS:
+                platform_out.append({
+                    'platform': label,
+                    'pre_users_on_platform': 0, 'post_users_on_platform': 0,
+                    'pre_users': 0, 'post_users': 0,
+                    'lift_pct_users': None,
+                    'pre_users_projected': 0, 'post_users_projected': 0,
+                    'pre_pen_pct': 0.0, 'post_pen_pct': 0.0,
+                })
 
         # ── Phase 2.5: control-group brand engagement (incremental DiD) ────
         # Mirror the treatment scan but UID IN bpiq_control_uids. Same date
@@ -28532,33 +28605,18 @@ def _run_brand_partnership_iq(job_id):
         }
 
         # ── Phase 3: demographics for pre vs post brand engagers ───────────
-        # Build temp tables of the actual UIDs that touched the brand pre vs
-        # post, then run a single demographic aggregation per cohort. Joining
-        # to userdata.user_data_sanitized is the canonical demo path
-        # (matches Talent Fit IQ's pattern).
+        # Brand-UID temp tables (bpiq_pre_brand_uids, bpiq_post_brand_uids)
+        # were already built in Phase 2a for the cross-platform reach query;
+        # here we just hand them to the demographics aggregator.
         update_job_status(job_id, progress=72,
                           message='Computing pre vs post engager demographics...')
         try:
-            cur.execute("DROP TABLE IF EXISTS bpiq_pre_brand_uids")
-            cur.execute(f"""
-                CREATE TEMPORARY TABLE bpiq_pre_brand_uids ENGINE = Memory AS
-                SELECT DISTINCT UID
-                FROM clickstream.clickstream_final
-                WHERE UID IN (SELECT UID FROM bpiq_audience_uids)
-                  AND DELIVERED BETWEEN toDate('{pre_start}') AND toDate('{pre_end}')
-                  AND {brand_filter}
-            """)
-            cur.execute("DROP TABLE IF EXISTS bpiq_post_brand_uids")
-            cur.execute(f"""
-                CREATE TEMPORARY TABLE bpiq_post_brand_uids ENGINE = Memory AS
-                SELECT DISTINCT UID
-                FROM clickstream.clickstream_final
-                WHERE UID IN (SELECT UID FROM bpiq_audience_uids)
-                  AND DELIVERED BETWEEN toDate('{sd}') AND toDate('{post_end}')
-                  AND {brand_filter}
-            """)
-            pre_demos  = _bpiq_get_demographics(cur, 'bpiq_pre_brand_uids')
-            post_demos = _bpiq_get_demographics(cur, 'bpiq_post_brand_uids')
+            if _BPIQ_BRAND_UIDS_BUILT:
+                pre_demos  = _bpiq_get_demographics(cur, 'bpiq_pre_brand_uids')
+                post_demos = _bpiq_get_demographics(cur, 'bpiq_post_brand_uids')
+            else:
+                pre_demos = {'gender': [], 'ethnicity': [], 'income': [], 'age': []}
+                post_demos = {'gender': [], 'ethnicity': [], 'income': [], 'age': []}
         except Exception as _e:
             print(f"⚠️ BPIQ: demographics step failed: {_e}")
             pre_demos = {'gender': [], 'ethnicity': [], 'income': [], 'age': []}
@@ -28666,12 +28724,8 @@ def _run_brand_partnership_iq(job_id):
                 pass
         conn.close()
 
-        # Gen-pop projections — apply _project_to_us_pop to user counts so the
-        # dashboard can show "X million projected US users" alongside the
-        # raw panel counts. Lift % is dimensionless so it doesn't change.
-        for p in platform_out:
-            p['pre_users_projected']  = _project_to_us_pop(p.get('pre_users')  or 0)
-            p['post_users_projected'] = _project_to_us_pop(p.get('post_users') or 0)
+        # Per-platform projections were already attached in Phase 2a where
+        # we ran the cross-platform reach query; nothing to project here.
 
         result_data = {
             'project_name': project_name,

@@ -16407,17 +16407,17 @@
                         </div>
                         <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 1rem; margin-bottom: 1.5rem;">
                             <div class="tab-section" style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 1.25rem; text-align: center;">
-                                <div style="font-size: 0.7rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em;">Projected Qualifying Audience</div>
+                                <div style="font-size: 0.7rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em;">Qualifying Audience</div>
                                 <div id="bpiqKpiAudience" style="font-size: 1.5rem; font-weight: 700; color: var(--accent-lime);"></div>
                                 <div id="bpiqKpiAudienceProj" style="font-size: 0.7rem; color: var(--text-secondary);"></div>
                             </div>
                             <div class="tab-section" style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 1.25rem; text-align: center;">
-                                <div style="font-size: 0.7rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em;">Projected Pre-Event Brand Users</div>
+                                <div style="font-size: 0.7rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em;">Pre-Event Brand Users</div>
                                 <div id="bpiqKpiPreUsers" style="font-size: 1.5rem; font-weight: 700; color: var(--accent-cyan);"></div>
                                 <div id="bpiqKpiPreUsersPct" style="font-size: 0.7rem; color: var(--text-secondary);"></div>
                             </div>
                             <div class="tab-section" style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 1.25rem; text-align: center;">
-                                <div style="font-size: 0.7rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em;">Projected Post-Event Brand Users</div>
+                                <div style="font-size: 0.7rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em;">Post-Event Brand Users</div>
                                 <div id="bpiqKpiPostUsers" style="font-size: 1.5rem; font-weight: 700; color: var(--accent-orange);"></div>
                                 <div id="bpiqKpiPostUsersPct" style="font-size: 0.7rem; color: var(--text-secondary);"></div>
                             </div>
@@ -21696,12 +21696,12 @@
             }
             document.getElementById('bpiqDashMeta').innerHTML = meta;
 
-            document.getElementById('bpiqKpiAudience').textContent = '~' + _bpiqFmtNum(data.projected_audience_size);
-            document.getElementById('bpiqKpiAudienceProj').textContent = 'projected US users';
+            document.getElementById('bpiqKpiAudience').textContent = _bpiqFmtNum(data.projected_audience_size);
+            document.getElementById('bpiqKpiAudienceProj').textContent = 'US users';
             var postProj = totals.post_users_projected || 0;
             var preProj  = totals.pre_users_projected  || 0;
-            document.getElementById('bpiqKpiPreUsers').textContent  = '~' + _bpiqFmtNum(preProj);
-            document.getElementById('bpiqKpiPostUsers').textContent = '~' + _bpiqFmtNum(postProj);
+            document.getElementById('bpiqKpiPreUsers').textContent  = _bpiqFmtNum(preProj);
+            document.getElementById('bpiqKpiPostUsers').textContent = _bpiqFmtNum(postProj);
             document.getElementById('bpiqKpiPostUsersPct').innerHTML =
                 (totals.audience_pen_post_pct || 0).toFixed(2) + '% of audience';
             document.getElementById('bpiqKpiPreUsersPct').innerHTML =
@@ -21709,16 +21709,16 @@
             document.getElementById('bpiqKpiLift').innerHTML = _bpiqFmtLift(totals.lift_pct_users);
             document.getElementById('bpiqKpiLiftHits').innerHTML = 'Hits lift: ' + _bpiqFmtLift(totals.lift_pct_hits);
 
-            // Overall pre/post bar chart — projected US users only
+            // Overall pre/post bar chart
             var note = document.getElementById('bpiqOverallNote');
-            if (note) note.textContent = 'Pre vs post brand-engaged users, projected to the US population.';
+            if (note) note.textContent = 'Pre vs post brand-engaged users across the qualifying audience.';
             var canvas = document.getElementById('bpiqOverallChart');
             if (canvas && typeof Chart !== 'undefined') {
                 if (_bpiqOverallChartInst) _bpiqOverallChartInst.destroy();
                 _bpiqOverallChartInst = new Chart(canvas.getContext('2d'), {
                     type: 'bar',
                     data: {
-                        labels: ['Projected US Brand Users'],
+                        labels: ['Brand Users'],
                         datasets: [
                             { label: 'Pre-Event',  data: [preProj],  backgroundColor: '#6366f1', borderWidth: 0, borderRadius: 6 },
                             { label: 'Post-Event', data: [postProj], backgroundColor: '#10b981', borderWidth: 0, borderRadius: 6 }
@@ -21732,29 +21732,40 @@
                         },
                         plugins: {
                             legend:  { position: 'bottom', labels: { color: '#e8e8e8', font: { size: 11 } } },
-                            tooltip: { callbacks: { label: function(ctx) { return ctx.dataset.label + ': ~' + Number(ctx.parsed.y).toLocaleString() + ' US users'; } } }
+                            tooltip: { callbacks: { label: function(ctx) { return ctx.dataset.label + ': ' + Number(ctx.parsed.y).toLocaleString() + ' users'; } } }
                         }
                     }
                 });
             }
 
-            // Per-platform table
+            // Per-platform table (cross-platform brand reach: audience users
+            // who were active on the platform AND had a brand touchpoint
+            // anywhere in the same window).
             var per = (data.per_platform || []);
-            var hasAny = per.some(function(p) { return (p.pre_hits || 0) + (p.post_hits || 0) > 0; });
-            var pTbl = '<table style="width:100%;border-collapse:collapse;font-size:13px;">'
+            var hasAny = per.some(function(p) {
+                return (p.pre_users_on_platform || 0) + (p.post_users_on_platform || 0) > 0;
+            });
+            var pTbl = '<div style="font-size:11px;color:var(--text-secondary);margin-bottom:0.5rem;">'
+                + 'A user is counted on a platform when they were active on that platform\'s domain AND had a brand touchpoint anywhere in the same window. % is the share of the platform\'s audience-cohort that engaged with the brand.'
+                + '</div>'
+                + '<table style="width:100%;border-collapse:collapse;font-size:13px;">'
                 + '<thead><tr style="border-bottom:2px solid var(--border-color);">'
                 + '<th style="padding:8px 10px;text-align:left;">Platform</th>'
-                + '<th style="padding:8px 10px;text-align:right;">Proj. US Pre Users</th>'
-                + '<th style="padding:8px 10px;text-align:right;">Proj. US Post Users</th>'
+                + '<th style="padding:8px 10px;text-align:right;">Pre · Brand Users</th>'
+                + '<th style="padding:8px 10px;text-align:right;">Post · Brand Users</th>'
                 + '<th style="padding:8px 10px;text-align:right;">User Lift</th>'
+                + '<th style="padding:8px 10px;text-align:right;">Pre %</th>'
+                + '<th style="padding:8px 10px;text-align:right;">Post %</th>'
                 + '</tr></thead><tbody>'
                 + per.map(function(p) {
-                    var rowDim = ((p.pre_users || 0) + (p.post_users || 0)) === 0 ? 'opacity:0.55;' : '';
+                    var rowDim = ((p.pre_users_on_platform || 0) + (p.post_users_on_platform || 0)) === 0 ? 'opacity:0.45;' : '';
                     return '<tr style="border-bottom:1px solid rgba(255,255,255,0.04);' + rowDim + '">'
                         + '<td style="padding:8px 10px;font-weight:600;">' + p.platform + '</td>'
-                        + '<td style="padding:8px 10px;text-align:right;">~' + _bpiqFmtNum(p.pre_users_projected || 0)  + '</td>'
-                        + '<td style="padding:8px 10px;text-align:right;">~' + _bpiqFmtNum(p.post_users_projected || 0) + '</td>'
+                        + '<td style="padding:8px 10px;text-align:right;">' + _bpiqFmtNum(p.pre_users_projected || 0)  + '</td>'
+                        + '<td style="padding:8px 10px;text-align:right;">' + _bpiqFmtNum(p.post_users_projected || 0) + '</td>'
                         + '<td style="padding:8px 10px;text-align:right;">' + _bpiqFmtLift(p.lift_pct_users) + '</td>'
+                        + '<td style="padding:8px 10px;text-align:right;color:var(--text-secondary);">' + (p.pre_pen_pct || 0).toFixed(1) + '%</td>'
+                        + '<td style="padding:8px 10px;text-align:right;color:var(--text-secondary);">' + (p.post_pen_pct || 0).toFixed(1) + '%</td>'
                         + '</tr>';
                 }).join('')
                 + '</tbody></table>';
@@ -21772,13 +21783,13 @@
                 convEl.innerHTML = '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:1rem;">'
                     + '<div style="padding:1rem;border:1px solid var(--border-color);border-radius:8px;text-align:center;">'
                     +   '<div style="font-size:0.7rem;color:var(--text-secondary);text-transform:uppercase;">Pre Conversions</div>'
-                    +   '<div style="font-size:1.5rem;font-weight:700;">~' + _bpiqFmtNum(convPreProj) + '</div>'
-                    +   '<div style="font-size:0.7rem;color:var(--text-secondary);">projected US users</div>'
+                    +   '<div style="font-size:1.5rem;font-weight:700;">' + _bpiqFmtNum(convPreProj) + '</div>'
+                    +   '<div style="font-size:0.7rem;color:var(--text-secondary);">US users</div>'
                     + '</div>'
                     + '<div style="padding:1rem;border:1px solid var(--border-color);border-radius:8px;text-align:center;">'
                     +   '<div style="font-size:0.7rem;color:var(--text-secondary);text-transform:uppercase;">Post Conversions</div>'
-                    +   '<div style="font-size:1.5rem;font-weight:700;">~' + _bpiqFmtNum(convPostProj) + '</div>'
-                    +   '<div style="font-size:0.7rem;color:var(--text-secondary);">projected US users</div>'
+                    +   '<div style="font-size:1.5rem;font-weight:700;">' + _bpiqFmtNum(convPostProj) + '</div>'
+                    +   '<div style="font-size:0.7rem;color:var(--text-secondary);">US users</div>'
                     + '</div>'
                     + '<div style="padding:1rem;border:1px solid var(--border-color);border-radius:8px;text-align:center;">'
                     +   '<div style="font-size:0.7rem;color:var(--text-secondary);text-transform:uppercase;">User Lift</div>'
@@ -21852,8 +21863,8 @@
                 + '</div>'
                 + '<div style="padding:1rem;border:1px solid var(--border-color);border-radius:8px;">'
                 +   '<div style="font-size:0.7rem;color:var(--text-secondary);text-transform:uppercase;">Control Cohort Size</div>'
-                +   '<div style="font-size:1.4rem;font-weight:700;">~' + _bpiqFmtNum(c.projected_control_size) + '</div>'
-                +   '<div style="font-size:11px;color:var(--text-secondary);">projected US users</div>'
+                +   '<div style="font-size:1.4rem;font-weight:700;">' + _bpiqFmtNum(c.projected_control_size) + '</div>'
+                +   '<div style="font-size:11px;color:var(--text-secondary);">US users</div>'
                 + '</div>'
                 + '</div>';
         }
