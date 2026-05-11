@@ -27898,7 +27898,15 @@ _BPIQ_SOCIAL_PLATFORMS = [
 # dev / docs / code-repository sites where a brand mention has nothing
 # to do with consumer engagement (e.g. a developer searching GitHub for
 # "doordash" repos).
-_BPIQ_BRAND_HOST_BLACKLIST = ['github', 'gitlab', 'bitbucket', 'stackoverflow']
+_BPIQ_BRAND_HOST_BLACKLIST = [
+    # Dev / repo / Q&A sites — brand mentions here are not consumer engagement.
+    'github', 'gitlab', 'bitbucket', 'stackoverflow',
+    # Job boards — careers-site visits are not brand engagement.
+    'greenhouse.io', 'lever.co', 'workday.com', 'myworkdayjobs.com',
+    # Consent / privacy-prefs platforms — these route to confirmation-shaped
+    # URLs that aren't purchases (Cassie / OneTrust / TrustArc / etc.).
+    'cassiecloud', 'cassie.com', 'onetrust', 'trustarc',
+]
 
 
 def _bpiq_term_lit(term):
@@ -28906,6 +28914,12 @@ def _run_brand_partnership_iq(job_id):
                 'post_users': len(conv_post_users),
                 'pre_users_projected':  _project_to_us_pop(len(conv_pre_users)),
                 'post_users_projected': _project_to_us_pop(len(conv_post_users)),
+                # Lift % is statistically meaningless when either side has
+                # < 3 panel users. We surface a 'low_signal' flag the
+                # dashboard uses to render '—' instead of a misleading
+                # number like -100% (e.g. when post=0 from a sample of 2).
+                'low_signal': (len(conv_pre_users)  < 3
+                            or len(conv_post_users) < 3),
                 'lift_pct_hits':  _lift(conv_post_hits, conv_pre_hits),
                 'lift_pct_users': _lift(len(conv_post_users),
                                         len(conv_pre_users)),
