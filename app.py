@@ -28113,6 +28113,13 @@ def _bpiq_llm_sentiment(brand_partner, items, batch_size=40, model='gpt-4o-mini'
 def _run_brand_partnership_iq(job_id):
     """Background worker for Brand Partnership IQ analysis (ClickHouse)."""
     from datetime import datetime as _dt, timedelta as _td
+
+    # While the job is in flight we suppress all the verbose per-step
+    # messages (e.g. "Scanning brand touchpoints (treatment audience)...")
+    # and just show "Working..." to the user. The progress bar still moves.
+    def _w(progress):
+        update_job_status(job_id, progress=progress, message='Working...')
+
     try:
         job = jobs[job_id]
         params = job['params']
@@ -28152,8 +28159,7 @@ def _run_brand_partnership_iq(job_id):
         pre_start = sd - _td(days=pre_span)
         pre_end   = sd - _td(days=1)
 
-        update_job_status(job_id, progress=5,
-                          message='Connecting to ClickHouse...')
+        _w(5)
         conn = _ch_connect(settings={'max_execution_time': 1800,
                                      'use_skip_indexes': 1})
         cur = conn.cursor()
@@ -28163,8 +28169,7 @@ def _run_brand_partnership_iq(job_id):
         # additionally require the row to come from a known ticketing site
         # (matches user's spec: "look for the movie name in any movie
         # ticket sites like fandango, amc, regal, alamo draft house").
-        update_job_status(job_id, progress=15,
-                          message=f'Building qualifying audience for {qualifier_type}...')
+        _w(15)
 
         qualifier_filter = _bpiq_filter_clause(qualifier_terms, ('URL', 'COMMON_NAME'))
 
@@ -28203,10 +28208,7 @@ def _run_brand_partnership_iq(job_id):
         if audience_size < AUDIENCE_FALLBACK_THRESHOLD and context_filter:
             print(f"⚠️ BPIQ: context-filtered audience={audience_size} (<{AUDIENCE_FALLBACK_THRESHOLD}); "
                   f"falling back to qualifier-only audience build.")
-            update_job_status(job_id, progress=18,
-                              message=(f'Strict {qualifier_type} context only matched '
-                                       f'{audience_size:,} users — broadening to any mention '
-                                       'of the qualifier in clickstream...'))
+            _w(18)
             try:
                 cur.execute("DROP TABLE IF EXISTS bpiq_audience_uids")
                 cur.execute(f"""
@@ -28233,9 +28235,7 @@ def _run_brand_partnership_iq(job_id):
         # so the cost is one extra audience-window scan with minimal join overhead.
         control_size = 0
         if audience_size > 0:
-            update_job_status(job_id, progress=22,
-                              message=f'{audience_size:,} qualifying users; '
-                                      'building size-matched control group...')
+            _w(22)
             try:
                 cur.execute("DROP TABLE IF EXISTS bpiq_control_uids")
                 cur.execute(f"""
@@ -28321,12 +28321,7 @@ def _run_brand_partnership_iq(job_id):
 
         projected_audience = _project_to_us_pop(audience_size)
         brand_variants = _bpiq_term_variants(brand_partner)
-        update_job_status(job_id, progress=30,
-                          message=(f'{audience_size:,} qualifying users '
-                                   f'(~{projected_audience:,} projected, '
-                                   f'filter={audience_filter_used}). '
-                                   f"Searching brand variants: {', '.join(brand_variants[:6])}"
-                                   f"{'...' if len(brand_variants) > 6 else ''}"))
+        _w(30)
 
         # ── Phase 2: pre + post brand engagement (single scan, UNION ALL)
         brand_filter = _bpiq_filter_clause([brand_partner], ('URL', 'COMMON_NAME'))
@@ -28345,27 +28340,40 @@ def _run_brand_partnership_iq(job_id):
         multi_if_args.append("'Other'")
         platform_case = "multiIf(" + ', '.join(multi_if_args) + ")"
 
-        # Order-confirmation slugs (already used by ROAS IQ) — for conversions.
+        # Order-confirmation slugs (used by ROAS IQ) — for conversions.
+        # We require the slug to appear at a URL path boundary (prefixed with
+        # '/'), and drop bare common-English-word slugs that match anywhere
+        # ('done', 'thanks', 'success', 'complete', 'received', 'invoice',
+        # 'receipt', 'thankyou', 'thank-you', 'order-id'). Without these
+        # guards the match was producing wildly inflated counts (e.g. 495
+        # pre / 0 post for DoorDash, because doordash.com URLs happen to
+        # contain words like "complete" or "done" inside path tokens).
+        _BPIQ_BARE_WORD_SLUGS = {'done', 'thanks', 'success', 'complete',
+                                 'received', 'invoice', 'receipt',
+                                 'thankyou', 'thank-you', 'order-id'}
         try:
             cur.execute("""
                 SELECT DISTINCT lower(SLUGS) AS slug
                 FROM reference.order_confirms
                 WHERE SLUGS != ''
             """)
-            conv_slugs = [r[0] for r in cur.fetchall() if r[0]]
+            conv_slugs = [r[0] for r in cur.fetchall()
+                          if r[0] and r[0] not in _BPIQ_BARE_WORD_SLUGS]
         except Exception as _e:
             print(f"⚠️ BPIQ: order_confirms unavailable, conversions disabled: {_e}")
             conv_slugs = []
 
         if conv_slugs:
+            # Prefix each slug with '/' so multiSearchAny only matches
+            # when the slug is preceded by a path delimiter — this avoids
+            # matching slugs that are random substrings of unrelated tokens.
             conv_needles_lit = ', '.join(
-                "'" + s.replace("'", "''") + "'" for s in conv_slugs)
+                "'/" + s.replace("'", "''") + "'" for s in conv_slugs)
             conv_match_sql = f"multiSearchAny(lower(URL), [{conv_needles_lit}])"
         else:
             conv_match_sql = "0"
 
-        update_job_status(job_id, progress=45,
-                          message='Scanning brand touchpoints (treatment audience)...')
+        _w(45)
         cur.execute(f"""
             SELECT
                 CASE
@@ -28384,8 +28392,7 @@ def _run_brand_partnership_iq(job_id):
               AND {brand_filter}
         """)
         rows = cur.fetchall()
-        update_job_status(job_id, progress=58,
-                          message=f'Aggregating {len(rows):,} treatment touchpoints...')
+        _w(58)
 
         # Aggregate in Python (rows are small — already filtered to brand hits).
         # NOTE: per-platform numbers here would be wrong because most social
@@ -28430,8 +28437,7 @@ def _run_brand_partnership_iq(job_id):
         # that platform's domain AND had a brand touchpoint anywhere in the
         # same window. This captures social-media exposure that the strict
         # "brand string + platform host in same URL row" measure misses.
-        update_job_status(job_id, progress=64,
-                          message='Computing per-platform brand reach (cross-platform users)...')
+        _w(64)
 
         # Build pre/post brand-UID temp tables now so the platform query can
         # reference them (and they're reused for demographics later).
@@ -28533,6 +28539,48 @@ def _run_brand_partnership_iq(job_id):
                     'pre_pen_pct': 0.0, 'post_pen_pct': 0.0,
                 })
 
+        # Direct (Brand Site): audience users with a brand touchpoint where
+        # the row is NOT on any social platform — i.e. direct visits to the
+        # brand's own site/app/email links. Most non-social engagement
+        # (e.g. doordash.com) lands here. Without this row the per-platform
+        # table looks empty for brands whose social presence isn't directly
+        # encoded in panel URLs.
+        try:
+            cur.execute(f"""
+                SELECT
+                    uniqExactIf(UID, DELIVERED < toDate('{sd}'))  AS pre_users,
+                    uniqExactIf(UID, DELIVERED >= toDate('{sd}')) AS post_users
+                FROM clickstream.clickstream_final
+                WHERE UID IN (SELECT UID FROM bpiq_audience_uids)
+                  AND (
+                        (DELIVERED BETWEEN toDate('{pre_start}') AND toDate('{pre_end}'))
+                     OR (DELIVERED BETWEEN toDate('{sd}')        AND toDate('{post_end}'))
+                  )
+                  AND {brand_filter}
+                  AND NOT ({any_platform_or})
+            """)
+            r = cur.fetchone() or (0, 0)
+            pre_direct  = int(r[0] or 0)
+            post_direct = int(r[1] or 0)
+        except Exception as _e:
+            print(f"⚠️ BPIQ: direct-site reach query failed: {_e}")
+            pre_direct = post_direct = 0
+        platform_out.append({
+            'platform': 'Direct (Brand Site)',
+            'pre_users_on_platform':  pre_direct,
+            'post_users_on_platform': post_direct,
+            'pre_users':  pre_direct,
+            'post_users': post_direct,
+            'lift_pct_users': _lift(post_direct, pre_direct),
+            'pre_users_projected':  _project_to_us_pop(pre_direct),
+            'post_users_projected': _project_to_us_pop(post_direct),
+            # By definition every user in this row had a brand touchpoint,
+            # so penetration of "platform-active users in this row" is 100%.
+            # Sending null tells the dashboard to render '—' instead.
+            'pre_pen_pct':  None,
+            'post_pen_pct': None,
+        })
+
         # ── Phase 2.5: control-group brand engagement (incremental DiD) ────
         # Mirror the treatment scan but UID IN bpiq_control_uids. Same date
         # buckets, same brand filter — so any difference in lift is the part
@@ -28541,8 +28589,7 @@ def _run_brand_partnership_iq(job_id):
         ctrl_pre_users = set(); ctrl_post_users = set()
         ctrl_pre_hits = ctrl_post_hits = 0
         if control_size > 0:
-            update_job_status(job_id, progress=62,
-                              message=f'Scanning control group ({control_size:,} users) for incremental-lift DiD...')
+            _w(62)
             try:
                 cur.execute(f"""
                     SELECT
@@ -28608,8 +28655,7 @@ def _run_brand_partnership_iq(job_id):
         # Brand-UID temp tables (bpiq_pre_brand_uids, bpiq_post_brand_uids)
         # were already built in Phase 2a for the cross-platform reach query;
         # here we just hand them to the demographics aggregator.
-        update_job_status(job_id, progress=72,
-                          message='Computing pre vs post engager demographics...')
+        _w(72)
         try:
             if _BPIQ_BRAND_UIDS_BUILT:
                 pre_demos  = _bpiq_get_demographics(cur, 'bpiq_pre_brand_uids')
@@ -28625,8 +28671,7 @@ def _run_brand_partnership_iq(job_id):
         # ── Phase 4: top brand-tagged URLs with pre/post split + sentiment ─
         # Pull top URLs (not just COMMON_NAMEs) so sentiment classification has
         # a slug to read. Window-aware countIf gives us pre/post in one scan.
-        update_job_status(job_id, progress=80,
-                          message='Pulling top brand URLs for sentiment...')
+        _w(80)
         top_urls = []
         try:
             cur.execute(f"""
@@ -28657,8 +28702,7 @@ def _run_brand_partnership_iq(job_id):
 
         # Top brand-tagged properties hit (which COMMON_NAMEs in the audience
         # are picking up the brand). One small extra query.
-        update_job_status(job_id, progress=85,
-                          message='Pulling top brand properties...')
+        _w(85)
         try:
             cur.execute(f"""
                 SELECT COMMON_NAME, count() AS hits
@@ -28678,8 +28722,7 @@ def _run_brand_partnership_iq(job_id):
             top_props = []
 
         # Sentiment classification on top URLs (heuristic + LLM refine).
-        update_job_status(job_id, progress=88,
-                          message=f'Classifying sentiment of {len(top_urls)} top brand URLs...')
+        _w(88)
         if top_urls:
             top_urls = _bpiq_llm_sentiment(brand_partner, top_urls)
 
@@ -28712,6 +28755,10 @@ def _run_brand_partnership_iq(job_id):
                 key=lambda x: -(x['pre_hits'] + x['post_hits']))[:15],
             'top_negative': sorted(
                 [u for u in top_urls if u.get('sentiment') == 'negative'],
+                key=lambda x: -(x['pre_hits'] + x['post_hits']))[:15],
+            'top_neutral': sorted(
+                [u for u in top_urls
+                 if (u.get('sentiment') or 'neutral') == 'neutral'],
                 key=lambda x: -(x['pre_hits'] + x['post_hits']))[:15],
         }
 
@@ -28797,7 +28844,7 @@ def _run_brand_partnership_iq(job_id):
         base_key = f"{BRAND_PARTNERSHIP_IQ_S3_PREFIX}{safe_name}_{ts}.json"
         s3_key = S3_PURGATORY_PREFIX + base_key
 
-        update_job_status(job_id, progress=92, message='Uploading to purgatory...')
+        _w(92)
         s3_client.put_object(Bucket=S3_BUCKET, Key=s3_key,
                              Body=json.dumps(result_data).encode('utf-8'),
                              ContentType='application/json')
