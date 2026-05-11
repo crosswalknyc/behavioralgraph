@@ -12469,6 +12469,7 @@
                             <option value="hedgeFundIQ" {% if not has_hedge_fund_iq_access %}disabled{% endif %} {% if default_view_hedge_fund_iq %}selected{% endif %}>📈 Fin IQ</option>
                             <option value="roasIQ" {% if not has_roas_iq_access %}disabled{% endif %}>💰 ROAS IQ</option>
                             <option value="ecommerceIQ" {% if not has_ecommerce_iq_access %}disabled{% endif %}>🛒 E-Commerce IQ</option>
+                            <option value="brandPartnershipIQ" {% if not has_ecommerce_iq_access and 'brand_partnership_iq' not in analysis_iq_modules and role != 'super_admin' and role != 'admin' %}disabled{% endif %}>🤝 Brand Partnership</option>
                             <option value="flywheelConversion" {% if not has_flywheel_conversion_access and 'flywheel_conversion' not in analysis_iq_modules and role != 'super_admin' %}disabled{% endif %}>🔄 Flywheel Conversion</option>
                             <option value="workspace" {% if not has_workspace_access %}disabled{% endif %}>🗂️ Workspace</option>
                             {% if role == 'super_admin' or role == 'admin' or has_analysis_iq_access %}
@@ -18997,7 +18998,7 @@
                 // Explicitly apply the selected product view (Profile IQ = dashboard) so the correct view is visible on load
                 var viewDropdownEl = document.getElementById('viewNavDropdown');
                 var initialVal = (viewDropdownEl && viewDropdownEl.value) ? viewDropdownEl.value : 'profileIQ';
-                var initialHandlers = { profileIQ: showProfileIQ, subscriberIQ: showSubscriberIQ, sfConversion: showSFConversion, llmoIQ: showLLMOIQ, rankerIQ: showRankerIQ, ticketSalesIQ: showTicketSalesIQ, ticketSalesTracker: showTicketSalesTracker, hedgeFundIQ: showHedgeFundIQ, roasIQ: showRoasIQ, ecommerceIQ: showEcommerceIQ, shareOfTimeIQ: showShareOfTimeIQ, customAnalysis: showCustomAnalysis, talentFitIQ: showTalentFitIQ, flywheelConversion: showFlywheelConversionDashboard, workspace: function() { if (typeof showProfileIQ === 'function') showProfileIQ(); if (typeof showTab === 'function') setTimeout(function() { showTab('collaboration'); }, 50); } };
+                var initialHandlers = { profileIQ: showProfileIQ, subscriberIQ: showSubscriberIQ, sfConversion: showSFConversion, llmoIQ: showLLMOIQ, rankerIQ: showRankerIQ, ticketSalesIQ: showTicketSalesIQ, ticketSalesTracker: showTicketSalesTracker, hedgeFundIQ: showHedgeFundIQ, roasIQ: showRoasIQ, ecommerceIQ: showEcommerceIQ, brandPartnershipIQ: function() { showEcommerceIQ(); setTimeout(function() { if (typeof setEcomIQMode === 'function') setEcomIQMode('brand_partnership'); if (typeof setViewNavDropdown === 'function') setViewNavDropdown('brandPartnershipIQ'); }, 200); }, shareOfTimeIQ: showShareOfTimeIQ, customAnalysis: showCustomAnalysis, talentFitIQ: showTalentFitIQ, flywheelConversion: showFlywheelConversionDashboard, workspace: function() { if (typeof showProfileIQ === 'function') showProfileIQ(); if (typeof showTab === 'function') setTimeout(function() { showTab('collaboration'); }, 50); } };
                 if (typeof initialHandlers[initialVal] === 'function') initialHandlers[initialVal]();
                 // Ensure dashboard view is visible when Profile IQ is selected (guard against layout/override issues)
                 if (initialVal === 'profileIQ') {
@@ -19034,6 +19035,13 @@
                 hedgeFundIQ: showHedgeFundIQ,
                 roasIQ: showRoasIQ,
                 ecommerceIQ: showEcommerceIQ,
+                brandPartnershipIQ: function() {
+                    showEcommerceIQ();
+                    setTimeout(function() {
+                        if (typeof setEcomIQMode === 'function') setEcomIQMode('brand_partnership');
+                        if (typeof setViewNavDropdown === 'function') setViewNavDropdown('brandPartnershipIQ');
+                    }, 200);
+                },
                 shareOfTimeIQ: showShareOfTimeIQ,
                 flywheelConversion: showFlywheelConversionDashboard,
                 dashboard: showDashboardView,
@@ -19067,7 +19075,7 @@
                         console.error('View switch error:', e);
                     }
                     // Ensure selected view is visible (guard against handler not running or layout issues)
-                    var viewIds = { profileIQ: 'dashboardView', subscriberIQ: 'subscriberIQView', llmoIQ: 'llmoIQView', rankerIQ: 'rankerIQView', ticketSalesIQ: 'ticketSalesIQView', ticketSalesTracker: 'ticketSalesTrackerView', hedgeFundIQ: 'hedgeFundIQView', roasIQ: 'roasIQView', ecommerceIQ: 'ecommerceIQView', shareOfTimeIQ: 'shareOfTimeIQView', sfConversion: 'sfConversionView', flywheelConversion: 'flywheelConversionView', customAnalysis: 'customAnalysisView', talentSearchIQ: 'talentSearchIQView', talentTheaterIQ: 'talentTheaterIQView', talentFitIQ: 'talentFitIQView' };
+                    var viewIds = { profileIQ: 'dashboardView', subscriberIQ: 'subscriberIQView', llmoIQ: 'llmoIQView', rankerIQ: 'rankerIQView', ticketSalesIQ: 'ticketSalesIQView', ticketSalesTracker: 'ticketSalesTrackerView', hedgeFundIQ: 'hedgeFundIQView', roasIQ: 'roasIQView', ecommerceIQ: 'ecommerceIQView', brandPartnershipIQ: 'ecommerceIQView', shareOfTimeIQ: 'shareOfTimeIQView', sfConversion: 'sfConversionView', flywheelConversion: 'flywheelConversionView', customAnalysis: 'customAnalysisView', talentSearchIQ: 'talentSearchIQView', talentTheaterIQ: 'talentTheaterIQView', talentFitIQ: 'talentFitIQView' };
                     var activeId = viewIds[val];
                     if (activeId) {
                         var activeEl = document.getElementById(activeId);
@@ -40163,7 +40171,11 @@
                     return;
                 case 'brand_partnership_iq':
                     if (typeof showEcommerceIQ === 'function') showEcommerceIQ();
-                    setTimeout(function() { if (typeof setEcomIQMode === 'function') setEcomIQMode('brand_partnership'); if (typeof selectBpiqResult === 'function' && n.s3_key) selectBpiqResult(n.s3_key); }, 300);
+                    setTimeout(function() {
+                        if (typeof setEcomIQMode === 'function') setEcomIQMode('brand_partnership');
+                        if (typeof setViewNavDropdown === 'function') setViewNavDropdown('brandPartnershipIQ');
+                        if (typeof selectBpiqResult === 'function' && n.s3_key) selectBpiqResult(n.s3_key);
+                    }, 300);
                     return;
                 case 'profile_analysis':
                 default:
