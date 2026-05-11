@@ -21735,7 +21735,7 @@
                      + (p.pre_users || 0) + (p.post_users || 0) > 0;
             });
             var pTbl = '<div style="font-size:11px;color:var(--text-secondary);margin-bottom:0.5rem;">'
-                + 'A user is counted on a platform when they were active on that platform\'s domain AND had a brand touchpoint anywhere in the same window. % is the share of the platform\'s audience-cohort that engaged with the brand.'
+                + 'A user is counted on a platform when they had at least 3 visits to that platform\'s domain in the window AND had a brand touchpoint anywhere in the same window. % is the share of the platform\'s audience-cohort that engaged with the brand. The "Direct (Brand Site)" row counts brand touchpoints that did not occur on a social platform (e.g. direct visits to the brand\'s own site).'
                 + '</div>'
                 + '<table style="width:100%;border-collapse:collapse;font-size:13px;">'
                 + '<thead><tr style="border-bottom:2px solid var(--border-color);">'
