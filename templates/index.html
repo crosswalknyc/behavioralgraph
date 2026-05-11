@@ -21941,11 +21941,6 @@
                     +   '<div style="font-size:0.7rem;color:var(--text-secondary);text-transform:uppercase;">Sentiment Shift</div>'
                     +   '<div style="font-size:1.4rem;font-weight:700;color:' + shiftColor + ';">' + shiftSign + (s.net_shift || 0).toFixed(1) + '</div>'
                     + '</div>';
-            html +=   '<div style="padding:0.85rem;border:1px solid var(--border-color);border-radius:8px;text-align:center;">'
-                    +   '<div style="font-size:0.7rem;color:var(--text-secondary);text-transform:uppercase;">URLs Classified</div>'
-                    +   '<div style="font-size:1.4rem;font-weight:700;">' + _bpiqFmtNum(s.sample_size) + '</div>'
-                    +   '<div style="font-size:11px;color:var(--text-secondary);">' + (s.used_llm ? 'LLM-refined' : 'heuristic') + '</div>'
-                    + '</div>';
             html += '</div>';
 
             html += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;align-items:start;">';

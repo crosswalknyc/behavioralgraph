@@ -28058,33 +28058,51 @@ def _bpiq_heuristic_sentiment(url, common_name):
     return 'neutral'
 
 
-def _bpiq_heuristic_summary(url, common_name):
-    """Best-effort one-liner describing what the user was doing at the URL.
+def _bpiq_heuristic_summary(url, common_name, brand_partner=''):
+    """Best-effort sentence describing what the user encountered on the page.
 
-    Used when the LLM is unavailable. Recognizes a few common patterns
-    (storefronts, checkout/cart, search, reddit threads, home/landing).
+    Used when the LLM is unavailable. Tries to produce a takeaway-style
+    sentence rather than a bare label.
     """
     u  = (url or '').lower()
     cn = (common_name or '').strip()
+    bp = (brand_partner or '').strip() or 'brand'
+
+    # Try to extract the partner / item name from the COMMON_NAME tag,
+    # which is typically formatted "<brand> | <partner>" or "<partner> | <brand>".
+    partner = ''
+    if '|' in cn:
+        parts = [p.strip() for p in cn.split('|') if p.strip()]
+        for p in parts:
+            if bp.lower() not in p.lower():
+                partner = p
+                break
+
     if 'reddit.com/r/' in u:
         try:
             slug = u.split('reddit.com/r/', 1)[1].split('/')[0]
         except Exception:
             slug = ''
-        return f"Reddit thread in r/{slug}" if slug else "Reddit thread"
-    if '/checkout' in u or '/cart' in u or '/order' in u:
-        return f"{cn} checkout / order page"
-    if '/search' in u or '?q=' in u or '?query=' in u:
-        return f"Search on {cn}"
+        return f"Reddit r/{slug} thread discussing {bp}" if slug else f"Reddit thread discussing {bp}"
+    if '/checkout' in u or '/cart' in u:
+        return f"User on {bp} checkout — possible purchase intent"
+    if '/orders' in u or '/order/' in u:
+        return f"User reviewing their {bp} order history"
+    if '/store/' in u and partner:
+        return f"Browsing {partner} for delivery via {bp}"
     if '/store/' in u:
-        return f"{cn} storefront page"
+        return f"Browsing a restaurant storefront on {bp}"
+    if '/search' in u or '?q=' in u or '?query=' in u:
+        return f"Searching for restaurants on {bp}"
     if u.endswith('/home') or u.endswith('/home/') or u.endswith('.com') or u.endswith('.com/'):
-        return f"{cn} home / landing page"
+        return f"Visiting the {bp} home page"
     if 'youtube.com/watch' in u or 'youtu.be/' in u:
-        return "YouTube video"
+        return f"Watching a YouTube video about {bp}"
     if 'tiktok.com/@' in u:
-        return "TikTok profile / video"
-    return f"{cn} page" if cn else "Brand page"
+        return f"Watching {bp}-related content on TikTok"
+    if partner:
+        return f"{bp} page featuring {partner}"
+    return f"{bp} page"
 
 
 def _bpiq_llm_sentiment(brand_partner, items, batch_size=30, model='gpt-4o-mini'):
@@ -28104,7 +28122,8 @@ def _bpiq_llm_sentiment(brand_partner, items, batch_size=30, model='gpt-4o-mini'
     # label and summary even if the LLM call fails partway through.
     for it in items:
         it['sentiment'] = _bpiq_heuristic_sentiment(it.get('url'), it.get('common_name'))
-        it['summary']   = _bpiq_heuristic_summary(it.get('url'), it.get('common_name'))
+        it['summary']   = _bpiq_heuristic_summary(it.get('url'), it.get('common_name'),
+                                                  brand_partner=brand_partner)
 
     client = get_openai_client()
     if not client or not items:
@@ -28123,12 +28142,26 @@ def _bpiq_llm_sentiment(brand_partner, items, batch_size=30, model='gpt-4o-mini'
                 f"\"{brand_partner}\". For each URL below, do TWO things:\n"
                 "  1. Classify sentiment toward the brand as positive, "
                 "     negative, or neutral. Use neutral when unclear.\n"
-                "  2. Write a short (≤12 words) human-readable summary "
-                "     describing what the user was likely doing on that page. "
-                "     Examples: \"Browsing DoorDash storefront for McDonald's\", "
-                "     \"Reddit thread expressing privacy concerns\", "
-                "     \"DoorDash checkout / order confirmation\", "
-                "     \"DoorDash home page\". Do NOT echo the raw URL.\n\n"
+                "  2. Write a short (≤16 words) takeaway-style sentence "
+                "     that captures what someone visiting that page would "
+                f"     likely encounter or say about {brand_partner}. The "
+                "     sentence should match the sentiment label and should "
+                "     read like a tweet-length descriptive take, NOT a label.\n"
+                "     Good examples:\n"
+                f"       positive: \"McDonald's delivery via {brand_partner} "
+                "                 is a tasty, convenient option.\"\n"
+                "       positive: \"Burger King storefront on "
+                f"                 {brand_partner} — quick fast-food delivery.\"\n"
+                "       negative: \"Reddit thread: a customer is scared "
+                f"                 a {brand_partner} driver may have their "
+                "                 home address.\"\n"
+                "       neutral:  \"User browsing the "
+                f"                 {brand_partner} homepage.\"\n"
+                "     BAD examples (do NOT do this): \"doordash | mcdonalds\", "
+                "     \"DoorDash page\", \"Brand page\". Always write a real "
+                "     sentence with content, not just a label.\n"
+                "     Do NOT echo the raw URL. Use the COMMON_NAME tag and "
+                "     URL slug to infer what's on the page.\n\n"
                 "Reply with STRICT JSON of the form:\n"
                 '{"results":[{"i":1,"sent":"positive","sum":"..."},'
                 '{"i":2,"sent":"neutral","sum":"..."}, ...]}\n'
