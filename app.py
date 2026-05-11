@@ -28473,6 +28473,16 @@ def _run_brand_partnership_iq(job_id):
             f"OR position(lower(COMMON_NAME), '{_bpiq_term_lit(s)}') > 0"
             for _, needles in _BPIQ_SOCIAL_PLATFORMS for s in needles)
 
+        # Heavy-use threshold: a user is "active on platform X in window W"
+        # if they have ≥ MIN_PLATFORM_VISITS visits to that platform's
+        # domain in the window. Without this threshold, ~95-100% of the
+        # audience qualifies for every major platform (Facebook, YouTube,
+        # Reddit, etc.) just from a single incidental visit, and the
+        # per-platform table collapses into nearly identical rows. Three
+        # visits in the window roughly isolates "uses this platform" vs.
+        # "happened to load it once".
+        MIN_PLATFORM_VISITS = 3
+
         platform_out = []
         if _BPIQ_BRAND_UIDS_BUILT:
             try:
@@ -28485,16 +28495,25 @@ def _run_brand_partnership_iq(job_id):
                         uniqExactIf(UID, bucket = 'post' AND UID IN (SELECT UID FROM bpiq_post_brand_uids)) AS post_users_with_brand
                     FROM (
                         SELECT
-                            CASE WHEN DELIVERED < toDate('{sd}') THEN 'pre' ELSE 'post' END AS bucket,
-                            {platform_case} AS platform_label,
-                            UID
-                        FROM clickstream.clickstream_final
-                        WHERE UID IN (SELECT UID FROM bpiq_audience_uids)
-                          AND (
-                                (DELIVERED BETWEEN toDate('{pre_start}') AND toDate('{pre_end}'))
-                             OR (DELIVERED BETWEEN toDate('{sd}')        AND toDate('{post_end}'))
-                          )
-                          AND ({any_platform_or})
+                            UID,
+                            bucket,
+                            platform_label,
+                            count() AS visits
+                        FROM (
+                            SELECT
+                                CASE WHEN DELIVERED < toDate('{sd}') THEN 'pre' ELSE 'post' END AS bucket,
+                                {platform_case} AS platform_label,
+                                UID
+                            FROM clickstream.clickstream_final
+                            WHERE UID IN (SELECT UID FROM bpiq_audience_uids)
+                              AND (
+                                    (DELIVERED BETWEEN toDate('{pre_start}') AND toDate('{pre_end}'))
+                                 OR (DELIVERED BETWEEN toDate('{sd}')        AND toDate('{post_end}'))
+                              )
+                              AND ({any_platform_or})
+                        )
+                        GROUP BY UID, bucket, platform_label
+                        HAVING visits >= {MIN_PLATFORM_VISITS}
                     )
                     GROUP BY platform_label
                 """)
