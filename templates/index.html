@@ -21697,17 +21697,29 @@
                 return (p.pre_users_on_platform || 0) + (p.post_users_on_platform || 0)
                      + (p.pre_users || 0) + (p.post_users || 0) > 0;
             });
+            // Brand Lift = percentage-point delta in the platform cohort's
+            // brand-engagement penetration (post_pen% − pre_pen%). This is
+            // the apples-to-apples lift the partnership drove on that
+            // platform's audience, independent of how the cohort size
+            // changed pre→post. Format: "+X.Xpp" / "-X.Xpp".
+            var _fmtBrandLift = function(prePct, postPct) {
+                if (prePct == null || postPct == null) return '<span style="color:var(--text-secondary);">—</span>';
+                var d = postPct - prePct;
+                var color = d > 0 ? '#10b981' : (d < 0 ? '#ef4444' : 'var(--text-secondary)');
+                var sign  = d > 0 ? '+' : '';
+                return '<span style="color:' + color + ';font-weight:600;">' + sign + d.toFixed(1) + 'pp</span>';
+            };
             var pTbl = '<div style="font-size:11px;color:var(--text-secondary);margin-bottom:0.5rem;">'
-                + 'A user is counted on a platform when they had at least 3 visits to that platform\'s domain in the window AND had a brand touchpoint anywhere in the same window. % is the share of the platform\'s audience-cohort that engaged with the brand. The "Direct (Brand Site)" row counts brand touchpoints that did not occur on a social platform (e.g. direct visits to the brand\'s own site).'
+                + 'A user is counted on a platform when they had at least 3 visits to that platform\'s domain in the window. <strong>Pre %</strong> / <strong>Post %</strong> = share of that platform-cohort that ALSO had a brand touchpoint anywhere on the web in the same window. <strong>Brand Lift</strong> = percentage-point change between Post % and Pre % — the actual lift in brand engagement among that platform\'s audience. The "Direct (Brand Site)" row counts brand touchpoints that did not occur on a social platform (e.g. direct visits to the brand\'s own site).'
                 + '</div>'
                 + '<table style="width:100%;border-collapse:collapse;font-size:13px;">'
                 + '<thead><tr style="border-bottom:2px solid var(--border-color);">'
                 + '<th style="padding:8px 10px;text-align:left;">Platform</th>'
                 + '<th style="padding:8px 10px;text-align:right;">Pre · Brand Users</th>'
                 + '<th style="padding:8px 10px;text-align:right;">Post · Brand Users</th>'
-                + '<th style="padding:8px 10px;text-align:right;">User Lift</th>'
                 + '<th style="padding:8px 10px;text-align:right;">Pre %</th>'
                 + '<th style="padding:8px 10px;text-align:right;">Post %</th>'
+                + '<th style="padding:8px 10px;text-align:right;">Brand Lift</th>'
                 + '</tr></thead><tbody>'
                 + per.map(function(p) {
                     var rowDim = ((p.pre_users_on_platform || 0) + (p.post_users_on_platform || 0)) === 0 ? 'opacity:0.45;' : '';
@@ -21717,9 +21729,9 @@
                         + '<td style="padding:8px 10px;font-weight:600;">' + p.platform + '</td>'
                         + '<td style="padding:8px 10px;text-align:right;">' + _bpiqFmtNum(p.pre_users_projected || 0)  + '</td>'
                         + '<td style="padding:8px 10px;text-align:right;">' + _bpiqFmtNum(p.post_users_projected || 0) + '</td>'
-                        + '<td style="padding:8px 10px;text-align:right;">' + _bpiqFmtLift(p.lift_pct_users) + '</td>'
                         + '<td style="padding:8px 10px;text-align:right;color:var(--text-secondary);">' + prePen + '</td>'
                         + '<td style="padding:8px 10px;text-align:right;color:var(--text-secondary);">' + postPen + '</td>'
+                        + '<td style="padding:8px 10px;text-align:right;">' + _fmtBrandLift(p.pre_pen_pct, p.post_pen_pct) + '</td>'
                         + '</tr>';
                 }).join('')
                 + '</tbody></table>';
