@@ -29697,7 +29697,7 @@ def calculate_frequency_metrics(conn, brands, behavior_start, behavior_end, purc
     # First, get all events for the behavior period
     cur.execute(f"""
         CREATE OR REPLACE TEMP TABLE FREQ_EVENTS AS
-        SELECT *
+        SELECT UID, COMMON_NAME, DELIVERED
         FROM PROCESSEDCLICKSTREAM.PUBLIC.CLICKSTREAM_FINAL
         WHERE UID IN (SELECT UID FROM TEMP_UIDS)
         AND DELIVERED BETWEEN '{behavior_start}' AND '{behavior_end}'
