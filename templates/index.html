@@ -21771,7 +21771,15 @@
             } else {
                 var convPreProj  = conv.pre_users_projected  || 0;
                 var convPostProj = conv.post_users_projected || 0;
-                convEl.innerHTML = '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:1rem;">'
+                var liftCell = conv.low_signal
+                    ? '<span style="color:var(--text-secondary);">—</span>'
+                    : _bpiqFmtLift(conv.lift_pct_users);
+                var note = '<div style="font-size:11px;color:var(--text-secondary);margin-bottom:0.5rem;">'
+                    + 'A conversion is an audience-user visit to a URL that contains BOTH the brand name AND a known order/signup-confirmation slug at a path boundary (e.g. <code>/order-confirmation</code>, <code>/checkout/success</code>, <code>/thank-you</code>). This works well for brands whose post-purchase pages are visible to web panel data (Amazon-style retailers). For app-driven brands (DoorDash, Uber, Instacart, etc.) the actual order-confirmation happens inside the mobile app and is not captured — those brands will under-count here.'
+                    + (conv.low_signal ? ' <strong style="color:#f59e0b;">⚠ Low signal:</strong> fewer than 3 panel users matched this pattern in either window — treat the lift as inconclusive.' : '')
+                    + '</div>';
+                convEl.innerHTML = note
+                    + '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:1rem;">'
                     + '<div style="padding:1rem;border:1px solid var(--border-color);border-radius:8px;text-align:center;">'
                     +   '<div style="font-size:0.7rem;color:var(--text-secondary);text-transform:uppercase;">Pre Conversions</div>'
                     +   '<div style="font-size:1.5rem;font-weight:700;">' + _bpiqFmtNum(convPreProj) + '</div>'
@@ -21784,7 +21792,7 @@
                     + '</div>'
                     + '<div style="padding:1rem;border:1px solid var(--border-color);border-radius:8px;text-align:center;">'
                     +   '<div style="font-size:0.7rem;color:var(--text-secondary);text-transform:uppercase;">User Lift</div>'
-                    +   '<div style="font-size:1.5rem;font-weight:700;">' + _bpiqFmtLift(conv.lift_pct_users) + '</div>'
+                    +   '<div style="font-size:1.5rem;font-weight:700;">' + liftCell + '</div>'
                     + '</div>'
                     + '</div>';
             }
