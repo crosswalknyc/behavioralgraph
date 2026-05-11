@@ -28043,17 +28043,53 @@ def _bpiq_heuristic_sentiment(url, common_name):
     return 'neutral'
 
 
-def _bpiq_llm_sentiment(brand_partner, items, batch_size=40, model='gpt-4o-mini'):
-    """Refine sentiment labels for top brand-tagged URLs using an LLM.
+def _bpiq_heuristic_summary(url, common_name):
+    """Best-effort one-liner describing what the user was doing at the URL.
 
-    `items` is a list of dicts with 'url' and 'common_name'. Returns the same
-    list with each item's 'sentiment' set to 'positive'/'negative'/'neutral'.
-    Falls back to heuristic when the OpenAI client isn't available or the
-    response is malformed."""
-    # Apply heuristic to every item first — that gives us a non-null label
-    # even if the LLM call fails.
+    Used when the LLM is unavailable. Recognizes a few common patterns
+    (storefronts, checkout/cart, search, reddit threads, home/landing).
+    """
+    u  = (url or '').lower()
+    cn = (common_name or '').strip()
+    if 'reddit.com/r/' in u:
+        try:
+            slug = u.split('reddit.com/r/', 1)[1].split('/')[0]
+        except Exception:
+            slug = ''
+        return f"Reddit thread in r/{slug}" if slug else "Reddit thread"
+    if '/checkout' in u or '/cart' in u or '/order' in u:
+        return f"{cn} checkout / order page"
+    if '/search' in u or '?q=' in u or '?query=' in u:
+        return f"Search on {cn}"
+    if '/store/' in u:
+        return f"{cn} storefront page"
+    if u.endswith('/home') or u.endswith('/home/') or u.endswith('.com') or u.endswith('.com/'):
+        return f"{cn} home / landing page"
+    if 'youtube.com/watch' in u or 'youtu.be/' in u:
+        return "YouTube video"
+    if 'tiktok.com/@' in u:
+        return "TikTok profile / video"
+    return f"{cn} page" if cn else "Brand page"
+
+
+def _bpiq_llm_sentiment(brand_partner, items, batch_size=30, model='gpt-4o-mini'):
+    """Refine sentiment labels AND produce a short summary for top
+    brand-tagged URLs using an LLM.
+
+    `items` is a list of dicts with 'url' and 'common_name'. Each item is
+    decorated with:
+        sentiment: 'positive' | 'negative' | 'neutral'
+        summary:   short human-readable description of what the user was
+                   doing at that URL (e.g. "Browsing DoorDash storefront for
+                   McDonald's", "Reddit thread expressing privacy concerns")
+    Falls back to heuristics when the OpenAI client isn't available or the
+    response is malformed.
+    """
+    # Apply heuristics to every item first so we always have a non-null
+    # label and summary even if the LLM call fails partway through.
     for it in items:
         it['sentiment'] = _bpiq_heuristic_sentiment(it.get('url'), it.get('common_name'))
+        it['summary']   = _bpiq_heuristic_summary(it.get('url'), it.get('common_name'))
 
     client = get_openai_client()
     if not client or not items:
@@ -28068,15 +28104,20 @@ def _bpiq_llm_sentiment(brand_partner, items, batch_size=40, model='gpt-4o-mini'
                 cn  = (it.get('common_name') or '')[:80]
                 url_list_lines.append(f"{i + 1}. {cn} | {url}")
             prompt = (
-                f"You are classifying URLs that mention or relate to the brand "
-                f"\"{brand_partner}\". For each URL below, infer the most likely "
-                "sentiment of the page contents toward the brand based on the "
-                "URL slug, host, and accompanying common-name token. Reply with "
-                "STRICT JSON of the form:\n"
-                '{"results":[{"i":1,"sent":"positive"},{"i":2,"sent":"neutral"},'
-                '{"i":3,"sent":"negative"}, ...]}\n'
-                "Use exactly one of: positive, negative, neutral. If you can't "
-                "tell, choose neutral. Output ONLY the JSON, no preamble.\n\n"
+                f"You are analyzing URLs that mention or relate to the brand "
+                f"\"{brand_partner}\". For each URL below, do TWO things:\n"
+                "  1. Classify sentiment toward the brand as positive, "
+                "     negative, or neutral. Use neutral when unclear.\n"
+                "  2. Write a short (≤12 words) human-readable summary "
+                "     describing what the user was likely doing on that page. "
+                "     Examples: \"Browsing DoorDash storefront for McDonald's\", "
+                "     \"Reddit thread expressing privacy concerns\", "
+                "     \"DoorDash checkout / order confirmation\", "
+                "     \"DoorDash home page\". Do NOT echo the raw URL.\n\n"
+                "Reply with STRICT JSON of the form:\n"
+                '{"results":[{"i":1,"sent":"positive","sum":"..."},'
+                '{"i":2,"sent":"neutral","sum":"..."}, ...]}\n'
+                "Output ONLY the JSON, no preamble.\n\n"
                 + '\n'.join(url_list_lines)
             )
             try:
@@ -28084,12 +28125,12 @@ def _bpiq_llm_sentiment(brand_partner, items, batch_size=40, model='gpt-4o-mini'
                     model=model,
                     messages=[
                         {'role': 'system',
-                         'content': 'You are a precise URL-sentiment classifier. Output JSON only.'},
+                         'content': 'You are a precise URL classifier and summarizer. Output JSON only.'},
                         {'role': 'user', 'content': prompt},
                     ],
                     temperature=0,
                     response_format={'type': 'json_object'},
-                    max_tokens=2000,
+                    max_tokens=3500,
                 )
                 content = resp.choices[0].message.content or '{}'
                 parsed = json.loads(content)
@@ -28099,10 +28140,16 @@ def _bpiq_llm_sentiment(brand_partner, items, batch_size=40, model='gpt-4o-mini'
                         idx = int(r.get('i')) - 1
                     except Exception:
                         continue
+                    if not (0 <= idx < len(chunk)):
+                        continue
                     sent = (r.get('sent') or '').strip().lower()
-                    if sent in ('positive', 'negative', 'neutral') and 0 <= idx < len(chunk):
+                    if sent in ('positive', 'negative', 'neutral'):
                         chunk[idx]['sentiment'] = sent
                         chunk[idx]['sentiment_source'] = 'llm'
+                    summ = (r.get('sum') or '').strip()
+                    if summ:
+                        chunk[idx]['summary'] = summ[:200]
+                        chunk[idx]['summary_source'] = 'llm'
             except Exception as ce:
                 print(f"⚠️ BPIQ sentiment chunk failed (using heuristic): {ce}")
     except Exception as e:

@@ -21946,9 +21946,16 @@
                 if (!items || !items.length) {
                     return '<div style="color:var(--text-secondary);font-size:12px;margin-top:0.4rem;">None detected</div>';
                 }
+                var _esc = function(s) {
+                    return String(s == null ? '' : s)
+                        .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+                };
                 return '<ul style="margin:0.4rem 0 0;padding-left:1.1rem;font-size:12px;">'
                     + items.slice(0,8).map(function(u) {
-                        return '<li><span style="color:var(--text-secondary);">[' + (u.common_name || '') + ']</span> ' + (u.url || '') + ' <span style="color:var(--text-secondary);">(' + _bpiqFmtNum((u.pre_hits||0)+(u.post_hits||0)) + ')</span></li>';
+                        var summary = _esc(u.summary || u.common_name || 'Brand page');
+                        var hits = _bpiqFmtNum((u.pre_hits||0)+(u.post_hits||0));
+                        return '<li>' + summary
+                             + ' <span style="color:var(--text-secondary);">(' + hits + ')</span></li>';
                       }).join('') + '</ul>';
             };
             html += '<div>'
