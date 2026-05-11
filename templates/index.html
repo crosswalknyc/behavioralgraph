@@ -16443,7 +16443,7 @@
                             <h3 style="margin: 0 0 0.75rem;">📱 Per-Platform Brand Engagement & Lift</h3>
                             <div id="bpiqPlatformTable" style="overflow-x: auto;"></div>
                         </div>
-                        <div class="tab-section" style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 1.5rem; margin-bottom: 1.5rem;">
+                        <div id="bpiqConversionsSection" class="tab-section" style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 1.5rem; margin-bottom: 1.5rem;">
                             <h3 style="margin: 0 0 0.75rem;">💳 Conversions (Order / Signup Confirmations)</h3>
                             <div id="bpiqConversions"></div>
                         </div>
@@ -21763,23 +21763,23 @@
             if (!hasAny) pTbl = '<div style="padding:1rem;color:var(--text-secondary);font-size:13px;">No per-platform brand engagement detected. Try a broader brand search term.</div>';
             document.getElementById('bpiqPlatformTable').innerHTML = pTbl;
 
-            // Conversions
+            // Conversions — only render the section when we have a real
+            // signal. Hide entirely when disabled, low_signal, or both
+            // pre and post projected user counts are zero (otherwise the
+            // card shows misleading numbers like "990 / 0 / -100%" for
+            // app-driven brands whose order confirmations don't appear
+            // in web panel data).
             var conv = data.conversions || {};
-            var convEl = document.getElementById('bpiqConversions');
-            if (!conv.enabled) {
-                convEl.innerHTML = '<div style="padding:0.75rem;color:var(--text-secondary);font-size:13px;">Conversion-pattern dictionary unavailable; this section was skipped.</div>';
-            } else {
-                var convPreProj  = conv.pre_users_projected  || 0;
-                var convPostProj = conv.post_users_projected || 0;
-                var liftCell = conv.low_signal
-                    ? '<span style="color:var(--text-secondary);">—</span>'
-                    : _bpiqFmtLift(conv.lift_pct_users);
-                var note = '<div style="font-size:11px;color:var(--text-secondary);margin-bottom:0.5rem;">'
-                    + 'A conversion is an audience-user visit to a URL that contains BOTH the brand name AND a known order/signup-confirmation slug at a path boundary (e.g. <code>/order-confirmation</code>, <code>/checkout/success</code>, <code>/thank-you</code>). This works well for brands whose post-purchase pages are visible to web panel data (Amazon-style retailers). For app-driven brands (DoorDash, Uber, Instacart, etc.) the actual order-confirmation happens inside the mobile app and is not captured — those brands will under-count here.'
-                    + (conv.low_signal ? ' <strong style="color:#f59e0b;">⚠ Low signal:</strong> fewer than 3 panel users matched this pattern in either window — treat the lift as inconclusive.' : '')
-                    + '</div>';
-                convEl.innerHTML = note
-                    + '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:1rem;">'
+            var convEl       = document.getElementById('bpiqConversions');
+            var convSection  = document.getElementById('bpiqConversionsSection');
+            var convPreProj  = conv.pre_users_projected  || 0;
+            var convPostProj = conv.post_users_projected || 0;
+            var hideConv = !conv.enabled
+                        || conv.low_signal
+                        || (convPreProj === 0 && convPostProj === 0);
+            if (convSection) convSection.style.display = hideConv ? 'none' : '';
+            if (!hideConv && convEl) {
+                convEl.innerHTML = '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:1rem;">'
                     + '<div style="padding:1rem;border:1px solid var(--border-color);border-radius:8px;text-align:center;">'
                     +   '<div style="font-size:0.7rem;color:var(--text-secondary);text-transform:uppercase;">Pre Conversions</div>'
                     +   '<div style="font-size:1.5rem;font-weight:700;">' + _bpiqFmtNum(convPreProj) + '</div>'
@@ -21792,7 +21792,7 @@
                     + '</div>'
                     + '<div style="padding:1rem;border:1px solid var(--border-color);border-radius:8px;text-align:center;">'
                     +   '<div style="font-size:0.7rem;color:var(--text-secondary);text-transform:uppercase;">User Lift</div>'
-                    +   '<div style="font-size:1.5rem;font-weight:700;">' + liftCell + '</div>'
+                    +   '<div style="font-size:1.5rem;font-weight:700;">' + _bpiqFmtLift(conv.lift_pct_users) + '</div>'
                     + '</div>'
                     + '</div>';
             }
