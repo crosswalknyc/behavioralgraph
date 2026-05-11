@@ -120,15 +120,7 @@ CH_DATABASE   = os.environ.get('CH_DATABASE',   'clickstream')
 # Tuned for the live Hetzner CH host (755 GiB RAM, 48+ cores) running with
 # the cross-tool BG_CLICKHOUSE_CONCURRENCY=10 throttle defined above.
 CH_DEFAULT_SETTINGS = {
-    # Cap per-query thread count so concurrent queries actually run in
-    # parallel instead of fighting over all 48+ cores. With max_threads=0
-    # (= "use all cores"), a single BG query grabbed every core; 10
-    # concurrent queries then ping-ponged on the kernel scheduler. With
-    # max_threads=8, 10 simultaneous heavy queries get a dedicated slice
-    # each (10 × 8 = 80 logical threads on 48 hardware threads — fine,
-    # EPYC handles oversubscription well). End-to-end batch wall-clock
-    # at concurrency=10 is ~30-50% faster than the old setting.
-    "max_threads": 8,
+    "max_threads": 24,
     # Stream rows in primary-key order — huge win for clickstream_final since
     # most Profile-Analysis queries filter on DELIVERED first.
     "optimize_read_in_order": 1,
@@ -606,7 +598,13 @@ def translate_sql(sql: str) -> str:
         _sample_to_hash, result, flags=re.IGNORECASE,
     )
 
-    # Inject hash filters into the query's WHERE clause.
+    # Inject hash filters into WHERE. ClickHouse's auto-PREWHERE
+    # (optimize_move_to_prewhere=1) will move the DELIVERED date
+    # conditions to PREWHERE automatically since DELIVERED is the
+    # first column in the primary key. Execution order becomes:
+    #   1. Partition prune by DELIVERED (skip non-matching months)
+    #   2. PREWHERE on DELIVERED within partitions (granule skip)
+    #   3. Read remaining columns, apply hash + brand filters
     for hf in _pending_hash_filters:
         where_m = re.search(r'\bWHERE\b', result, re.IGNORECASE)
         if where_m:
