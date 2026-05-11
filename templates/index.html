@@ -21781,7 +21781,10 @@
             // Sentiment
             _bpiqRenderSentiment(data.sentiment || {});
 
-            // Top brand properties
+            // Top brand properties — display gen-pop projected hits.
+            // Fallback to raw hits × ROAS multiplier (~494.85) for old
+            // S3 runs that pre-date the hits_projected field.
+            var BPIQ_PROJ_MULT = 494.85;
             var top = data.top_brand_properties || [];
             var tpEl = document.getElementById('bpiqTopProps');
             if (!top.length) {
@@ -21794,10 +21797,13 @@
                     + '<th style="padding:8px 10px;text-align:right;">Hits (Event + Post)</th>'
                     + '</tr></thead><tbody>'
                     + top.map(function(t, i) {
+                        var projHits = (t.hits_projected != null)
+                            ? t.hits_projected
+                            : Math.round((t.hits || 0) * BPIQ_PROJ_MULT);
                         return '<tr style="border-bottom:1px solid rgba(255,255,255,0.04);">'
                             + '<td style="padding:6px 10px;color:var(--text-secondary);">' + (i + 1) + '</td>'
                             + '<td style="padding:6px 10px;font-weight:500;">' + (t.common_name || '') + '</td>'
-                            + '<td style="padding:6px 10px;text-align:right;">' + _bpiqFmtNum(t.hits) + '</td>'
+                            + '<td style="padding:6px 10px;text-align:right;">' + _bpiqFmtNum(projHits) + '</td>'
                             + '</tr>';
                     }).join('')
                     + '</tbody></table>';

@@ -28838,8 +28838,11 @@ def _run_brand_partnership_iq(job_id):
                 ORDER BY hits DESC
                 LIMIT 25
             """)
-            top_props = [{'common_name': r[0], 'hits': int(r[1] or 0)}
-                         for r in cur.fetchall()]
+            top_props = [{
+                'common_name': r[0],
+                'hits': int(r[1] or 0),
+                'hits_projected': _project_to_us_pop(int(r[1] or 0)),
+            } for r in cur.fetchall()]
         except Exception as _e:
             print(f"⚠️ BPIQ: top properties query failed: {_e}")
             top_props = []
