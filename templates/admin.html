@@ -2159,6 +2159,9 @@
                                     <label style="display: flex; align-items: center; gap: 0.3rem; font-size: 0.8rem; cursor: pointer;">
                                         <input type="checkbox" id="cdTalentFit"> Talent Fit Assessment
                                     </label>
+                                    <label style="display: flex; align-items: center; gap: 0.3rem; font-size: 0.8rem; cursor: pointer;">
+                                        <input type="checkbox" id="cdBrandPartnership"> Brand Partnership Valuation
+                                    </label>
                                 </div>
                             </div>
                             <!-- Access to New Releases -->
@@ -2662,6 +2665,16 @@
                             <label class="checkbox-group">
                                 <input type="checkbox" id="hasFlywheelConversionAccess">
                                 <span style="font-weight: 600;">🔄 FLYWHEEL IQ</span>
+                            </label>
+                        </div>
+                    </div>
+
+                    <!-- Brand Partnership IQ Access -->
+                    <div class="dashboard-access-item">
+                        <div class="dashboard-access-header">
+                            <label class="checkbox-group">
+                                <input type="checkbox" id="hasBrandPartnershipIQAccess">
+                                <span style="font-weight: 600;">🤝 BRAND PARTNERSHIP IQ</span>
                             </label>
                         </div>
                     </div>
@@ -3919,6 +3932,8 @@
                     document.getElementById('cdLLMOIQ').checked = !!d.has_llmo_iq_access;
                     document.getElementById('cdTalentFit').checked = !!d.has_talent_fit_access;
                     document.getElementById('cdTicketTracker').checked = !!d.has_ticket_sales_tracker_access;
+                    var cdBp = document.getElementById('cdBrandPartnership');
+                    if (cdBp) cdBp.checked = !!d.has_brand_partnership_iq_access;
                     syncCompanyDefaultsShareOfTime();
                     document.getElementById('cdDefaultCredits').value = d.credits ?? 5;
                     // Access to New Releases
@@ -3976,6 +3991,7 @@
                 has_llmo_iq_access: document.getElementById('cdLLMOIQ').checked,
                 has_talent_fit_access: document.getElementById('cdTalentFit').checked,
                 has_ticket_sales_tracker_access: document.getElementById('cdTicketTracker').checked,
+                has_brand_partnership_iq_access: !!(document.getElementById('cdBrandPartnership') && document.getElementById('cdBrandPartnership').checked),
                 credits: parseInt(document.getElementById('cdDefaultCredits').value) || 5,
                 auto_access_new: {
                     profile_iq: document.getElementById('cdAanProfileIQ').checked,
@@ -6820,6 +6836,8 @@
             document.getElementById('hasWorkspaceAccess').checked = true;
             document.getElementById('hasSFConversionAccess').checked = false;
             document.getElementById('hasFlywheelConversionAccess').checked = false;
+            var bpAccessReset = document.getElementById('hasBrandPartnershipIQAccess');
+            if (bpAccessReset) bpAccessReset.checked = false;
             document.getElementById('hasTicketSalesIQAccess').checked = true;
             document.getElementById('hasHedgeFundIQAccess').checked = false;
             document.getElementById('getsHedgeFundIQEmails').checked = false;
@@ -6948,6 +6966,8 @@
             document.getElementById('hasWorkspaceAccess').checked = user.has_workspace_access !== false; // Default true
             document.getElementById('hasSFConversionAccess').checked = user.has_sf_conversion_access === true; // Default false
             document.getElementById('hasFlywheelConversionAccess').checked = user.has_flywheel_conversion_access === true; // Default false
+            var bpAccess = document.getElementById('hasBrandPartnershipIQAccess');
+            if (bpAccess) bpAccess.checked = user.has_brand_partnership_iq_access === true; // Default false
             document.getElementById('hasTicketSalesIQAccess').checked = user.has_ticket_sales_iq_access !== false; // Default true
             document.getElementById('hasHedgeFundIQAccess').checked = user.has_hedge_fund_iq_access === true; // Default false
             document.getElementById('getsHedgeFundIQEmails').checked = user.gets_hedge_fund_iq_emails === true; // Default false
@@ -8878,6 +8898,7 @@
                 has_workspace_access: document.getElementById('hasWorkspaceAccess').checked,
                 has_sf_conversion_access: document.getElementById('hasSFConversionAccess').checked,
                 has_flywheel_conversion_access: document.getElementById('hasFlywheelConversionAccess').checked,
+                has_brand_partnership_iq_access: !!(document.getElementById('hasBrandPartnershipIQAccess') && document.getElementById('hasBrandPartnershipIQAccess').checked),
                 has_ticket_sales_iq_access: document.getElementById('hasTicketSalesIQAccess').checked,
                 has_hedge_fund_iq_access: document.getElementById('hasHedgeFundIQAccess').checked,
                 gets_hedge_fund_iq_emails: document.getElementById('getsHedgeFundIQEmails').checked,
