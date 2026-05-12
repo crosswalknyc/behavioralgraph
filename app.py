@@ -3118,6 +3118,7 @@ def create_user():
             'has_talent_fit_access': req_data.get('has_talent_fit_access', cd.get('has_talent_fit_access', False) if cd else False),
             'has_sf_conversion_access': req_data.get('has_sf_conversion_access', cd.get('has_sf_conversion_access', False) if cd else False),
             'has_flywheel_conversion_access': req_data.get('has_flywheel_conversion_access', cd.get('has_flywheel_conversion_access', False) if cd else False),
+            'has_brand_partnership_iq_access': req_data.get('has_brand_partnership_iq_access', cd.get('has_brand_partnership_iq_access', False) if cd else False),
             'has_workspace_access': req_data.get('has_workspace_access', cd.get('has_workspace_access', True) if cd else True),
             'has_share_of_time_access': req_data.get('has_share_of_time_access', cd.get('has_share_of_time_access', True) if cd else True),
             'has_share_of_time_run_access': req_data.get('has_share_of_time_run_access', cd.get('has_share_of_time_run_access', True) if cd else True),
@@ -3250,6 +3251,8 @@ def update_user(username):
             user['has_sf_conversion_access'] = bool(req_data['has_sf_conversion_access'])
         if 'has_flywheel_conversion_access' in req_data:
             user['has_flywheel_conversion_access'] = bool(req_data['has_flywheel_conversion_access'])
+        if 'has_brand_partnership_iq_access' in req_data:
+            user['has_brand_partnership_iq_access'] = bool(req_data['has_brand_partnership_iq_access'])
         if 'has_workspace_access' in req_data:
             user['has_workspace_access'] = bool(req_data['has_workspace_access'])
         if 'has_share_of_time_access' in req_data:
@@ -4044,6 +4047,9 @@ def api_set_company_defaults(company_name):
             'has_rankers_iq_access': req.get('has_rankers_iq_access', False),
             'has_ticket_sales_tracker_access': req.get('has_ticket_sales_tracker_access', False),
             'has_llmo_iq_access': req.get('has_llmo_iq_access', False),
+            'has_talent_fit_access': req.get('has_talent_fit_access', False),
+            'has_flywheel_conversion_access': req.get('has_flywheel_conversion_access', False),
+            'has_brand_partnership_iq_access': req.get('has_brand_partnership_iq_access', False),
             'has_workspace_access': req.get('has_workspace_access', True),
             'has_share_of_time_access': req.get('has_share_of_time_access', True),
             'has_share_of_time_run_access': req.get('has_share_of_time_run_access', True),
@@ -4101,6 +4107,9 @@ def api_reset_company_users(company_name):
                 user['has_rankers_iq_access'] = cd.get('has_rankers_iq_access', False)
                 user['has_ticket_sales_tracker_access'] = cd.get('has_ticket_sales_tracker_access', False)
                 user['has_llmo_iq_access'] = cd.get('has_llmo_iq_access', False)
+                user['has_talent_fit_access'] = cd.get('has_talent_fit_access', False)
+                user['has_flywheel_conversion_access'] = cd.get('has_flywheel_conversion_access', False)
+                user['has_brand_partnership_iq_access'] = cd.get('has_brand_partnership_iq_access', False)
                 user['has_workspace_access'] = cd.get('has_workspace_access', True)
                 user['has_share_of_time_access'] = cd.get('has_share_of_time_access', True)
                 user['has_share_of_time_run_access'] = cd.get('has_share_of_time_run_access', True)
@@ -4121,6 +4130,9 @@ def api_reset_company_users(company_name):
                 user['has_rankers_iq_access'] = False
                 user['has_ticket_sales_tracker_access'] = False
                 user['has_llmo_iq_access'] = False
+                user['has_talent_fit_access'] = False
+                user['has_flywheel_conversion_access'] = False
+                user['has_brand_partnership_iq_access'] = False
                 user['has_workspace_access'] = True
                 user['has_share_of_time_access'] = True
                 user['has_share_of_time_run_access'] = True
@@ -6058,6 +6070,7 @@ def compute_product_access_flags(user, role):
             'has_llmo_iq_access': True,
             'has_talent_fit_access': True,
             'has_flywheel_conversion_access': True,
+            'has_brand_partnership_iq_access': True,
             'has_workspace_access': True,
             'has_share_of_time_access': True,
             'has_share_of_time_run_access': True,
@@ -6086,6 +6099,7 @@ def compute_product_access_flags(user, role):
         'has_llmo_iq_access': bool(u.get('has_llmo_iq_access', False)),
         'has_talent_fit_access': bool(u.get('has_talent_fit_access', False)),
         'has_flywheel_conversion_access': bool(u.get('has_flywheel_conversion_access', False)),
+        'has_brand_partnership_iq_access': bool(u.get('has_brand_partnership_iq_access', False)),
         'has_workspace_access': bool(u.get('has_workspace_access', True)),
         'has_share_of_time_access': has_sot_view,
         'has_share_of_time_run_access': has_sot_run,
@@ -6176,6 +6190,7 @@ def index():
     has_llmo_iq = _acc['has_llmo_iq_access']
     has_talent_fit = _acc.get('has_talent_fit_access', False)
     has_flywheel_conversion = _acc.get('has_flywheel_conversion_access', False)
+    has_brand_partnership_iq = _acc.get('has_brand_partnership_iq_access', False)
     has_workspace = _acc.get('has_workspace_access', True)
     has_share_of_time = _acc.get('has_share_of_time_access', True)
     has_share_of_time_run = _acc.get('has_share_of_time_run_access', True)
@@ -6229,6 +6244,7 @@ def index():
                            has_llmo_iq_access=has_llmo_iq,
                            has_talent_fit_access=has_talent_fit,
                            has_flywheel_conversion_access=has_flywheel_conversion,
+                           has_brand_partnership_iq_access=has_brand_partnership_iq,
                            has_workspace_access=has_workspace,
                            has_share_of_time_access=has_share_of_time,
                            has_share_of_time_run_access=has_share_of_time_run,
@@ -21419,7 +21435,20 @@ def user_can_run_analysis_module(user, module_key):
     role = user.get('role', 'user')
     if role in ('admin', 'super_admin'):
         return True
-    # New: Analysis IQ access + module list (saved by admin checkboxes)
+    # Top-level standalone-feature flags grant their corresponding
+    # Analysis IQ submodule even if the user doesn't have the umbrella
+    # `has_analysis_iq_access` toggle on. This mirrors how Flywheel
+    # Conversion is gated and lets admins grant individual modules
+    # one-by-one (e.g. just Brand Partnership Valuation) without
+    # turning on the entire Analysis IQ surface.
+    _MODULE_TOP_LEVEL_FLAG = {
+        'flywheel_conversion':  'has_flywheel_conversion_access',
+        'brand_partnership_iq': 'has_brand_partnership_iq_access',
+    }
+    top_flag = _MODULE_TOP_LEVEL_FLAG.get(module_key)
+    if top_flag and user.get(top_flag):
+        return True
+    # Standard: Analysis IQ access + module list (saved by admin checkboxes)
     if user.get('has_analysis_iq_access'):
         modules = user.get('analysis_iq_modules') or []
         if module_key in modules:
