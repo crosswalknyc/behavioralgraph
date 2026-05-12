@@ -397,7 +397,7 @@ def _soft_clamp_index(raw_index, lo, hi):
         return center - half_lo * math.tanh(abs(deviation) / scale)
 
 
-def soft_bp_ceiling(raw_bp, ceiling=40.0):
+def soft_bp_ceiling(raw_bp, ceiling=85.0):
     """Smooth ceiling that compresses values approaching the cap.
 
     Uses a hyperbolic curve (t / (1+t)) that has slope exactly 1.0 at the
@@ -16379,7 +16379,7 @@ Anchor each category note to `subject_archetype` — e.g. MUSICIAN → prioritiz
 For each category, your guidance MUST be grounded in reality:
 - What TYPES of items should score ABOVE their baseline (not "high" in absolute terms — above their gen-pop baseline)
 - What TYPES of items should score BELOW their baseline
-- CRITICAL: For categories with near-universal items (STREAMING/PLATFORM, WHERE THEY SHOP, TECHNOLOGY/DEVICE), remind the agent that major services (Netflix, Hulu, Amazon Prime, Walmart, Target) should stay near their baselines. Only persona-specific niche items should deviate significantly — **EXCEPT** under `celebrity_or_creator` you still encode **research-backed endorsement visibility + network-aligned SVOD** per STEP 5c while honoring the **Netflix #1 / Hulu top-cluster** ceiling.
+- CRITICAL: For categories with near-universal items (WHERE THEY SHOP, TECHNOLOGY/DEVICE), mass retailers (Walmart, Target, Amazon) should stay near baselines. BUT for STREAMING/PLATFORM, different audiences have genuinely different streaming habits — guide the agent to score based on THIS audience's age, gender, ethnicity, and interests. A young Black audience will over-index on Tubi/BET+/Peacock. A 50+ white female audience will over-index on Hallmark/Paramount+. Don't tell the agent to keep all streaming near baseline — that produces identical profiles.
 - For AUTOMOBILE: specify what cars this demographic ACTUALLY drives based on age and income, not aspirational vehicles
 - For TECHNOLOGY/DEVICE: specify the likely device ecosystem (Android vs iOS) based on demographics
 - For GAMES: **Three-way gate — (1) Is gaming a real spine interest for THIS cohort?** If persona/`INTEREST`/`subsegments` do **not** support habitual play, keep **almost all SKUs moderately low**: only **light casual / crossword / puzzle / Wordle-class** touches may exceed trace levels; AAA and kid live-services stay **near baseline−**. **(2) Age + genre coherence when gaming IS justified:** teens/kids-heavy ⇒ Roblox/Fortnite/Minecraft-class can rise **only if** demographics + narrative support minors; mature adults ⇒ Wordle/NYT Games/casual puzzles may lead; young men + urban + sports/competitive ⇒ sports sims (FIFA/Madden/NBA 2K) or mature AAA **GTA/CoD**-class plausible **per persona** — do not transpose one template onto another archetype. **(3) Parents without kid-gaming proof:** **`PARENT` share must cap kid-first BP** — no Roblox/child-MMO tiers above plausible household-kid mediated traffic absent explicit shared-device / “my kids play” research; inflated child rows commonly mean **panel bleed from handoffs**.
@@ -16403,7 +16403,7 @@ EXAMPLE category_signals (hypothetical `consumer_brand` athletic-equipment cohor
   "TECHNOLOGY/DEVICE": "This audience skews young and urban. Both Apple (iPhone, iPad) and Samsung (Galaxy) are mass-market — score Apple at 0.8-1.0x baseline, Samsung at 1.0-1.2x if audience skews Android. Don't crush either brand. Smart home devices and wearables near baseline.",
   "GAMES": "Only use this archetype mapping when persona proves **gaming is a backbone behavior** — otherwise nearly all rows modest with **casual/word/puzzle tops**. When gaming IS justified: **Young sports fans** ⇒ sports sims (NBA 2K, Madden, EA FC) lead; mature action skew ⇒ GTA/COD-class only with matching demo; **older/low-intensity gamers** ⇒ Wordle/NYT Games/spelling bee/crosswords higher than Fortnite; **teens/gen-Z** ⇒ Roblox/Fortnite/Minecraft plausible only if CHILD–teen share + persona say so — if parents dominate without kid-gaming narrative, **Roblox must stay LOW** vs adult titles. Never let child-first live services outrank demographics + explicit family-gaming evidence.",
   "WHERE THEY SHOP": "Category sellers tied to subject (Foot Locker, Dick's, Finish Line for athletic) lift when personas actually browse there digitally. Nationals (Amazon, Walmart, Target, Costco) stay wide-but-realistic. When MPB/life-stage implies **grocery carts through Instacart, DoorDash/Uber grocery, or Walmart/Target pickup apps**, also elevate **the regional supermarket banners** those merchants default to for persona LOCATION (SoCal skew ⇒ Ralphs/Vons/Pavilions-class; Southeast/Florida ⇒ Publix-class; Texas/Gulf ⇒ H‑E‑B-class; Northeast ⇒ Wegmans/Stop&Giant-class as research fits; dispersed US ⇒ Kroger-banner + Albertsons-banner mosaic). **Drugstore OTC skew** ⇒ CVS + Walgreens credible. Spike regionals ONLY when DMA map matches footprint.",
-  "STREAMING/PLATFORM": "Major streaming (Netflix, Hulu, Amazon Prime Video, Disney+, YouTube) are near-universal — score 0.85-1.15x baseline. Don't crush them. Sports-specific streaming (ESPN+, FuboTV) may score above baseline if audience is sports-oriented. Niche/foreign platforms score very low.",
+  "STREAMING/PLATFORM": "Score each platform based on THIS audience's actual streaming habits. Netflix is dominant but varies by demo — younger audiences may prefer YouTube/Hulu, older audiences lean Amazon Prime. Black audiences over-index on Tubi, BET+, Peacock. Hispanic audiences on Telemundo streaming. High-income audiences on Apple TV+, Max. Sports fans on ESPN+, FuboTV. Range: 0.5-1.8x baseline per platform. The RANK ORDER should reflect this audience specifically, not a generic template.",
   "ATHLETE": "The subject's own sponsored athletes should score 2-4x their baseline — not 10x. Only the single most iconic athlete (like LeBron for Nike) gets 5x+. Other athletes score 1.0-1.5x baseline. Don't inflate obscure athletes to 50%+ just because they have a brand deal.",
   "INTEREST": "The panel uses a fixed global list of interest labels (see `interest_top_25` / `interest_bottom_25` in your JSON when the inventory block is present). Your subject's CORE themes MUST dominate the top of that ranking vs generic ubiquitous rows. Generic-functional rows (JOB SEARCH, SOCIAL MEDIA-as-interest, HOME IMPROVEMENT, COOKING) sit mid/low unless persona research proves otherwise — never crowd out spine hobbies.",
   "HEALTH & WELLNESS": "Prefer national digital-health surfaces consumers actually browse or open in-app. Metro hospital SYSTEM brands imply tiny national digital footprints unless the persona is explicitly health-staff heavy or geographically concentrated patients — never pretend ~half the cohort annually engages several different NYC-named hospital stacks online.",
@@ -21082,7 +21082,7 @@ Return ONLY a JSON array, one entry per item, in the same order:
 
 _TIGHT_CAP_CATEGORIES = {
     'VIRTUAL MVPD FAST',     # YouTube TV, FuboTV, Pluto, Sling — subscription / FAST
-    'STREAMING/PLATFORM',    # Netflix, Disney+, Max — paid streaming subs
+    # 'STREAMING/PLATFORM' removed — streaming varies meaningfully by audience demographics
     'STREAMING/MUSIC',       # Spotify, Apple Music — primary music sub
     'TELECOM',               # Verizon, AT&T, T-Mobile — primary carrier (exclusive)
     'INSURANCE',             # auto/health/life insurance — primary policy
@@ -21816,6 +21816,9 @@ _DEMO_SUM_CATEGORIES = {'AGE', 'GENDER', 'ETHNICITY', 'INCOME', 'EDUCATION',
 
 _UNIVERSAL_HIGH_BP = {
     'GOOGLE', 'YOUTUBE', 'AMAZON', 'GMAIL', 'FACEBOOK', 'NETFLIX', 'INSTAGRAM',
+    'HULU', 'AMAZON PRIME VIDEO', 'DISNEY+', 'MAX', 'HBO MAX', 'PEACOCK',
+    'APPLE TV+', 'PARAMOUNT+', 'ESPN+', 'SPOTIFY', 'APPLE MUSIC',
+    'WALMART', 'TARGET', 'TIKTOK', 'SNAPCHAT',
 }
 
 _CLAMP_EXEMPT_CATS = {'BRAND INPUT', 'SAMPLE SIZE', 'INPUT_METADATA', 'BRAND CATEGORY'}
@@ -30953,8 +30956,10 @@ def add_previous_run_column(df_final, previous_demo_lookup, previous_behavioral_
     # Positioning rules only - no renormalization
     df_behavior = enforce_qsr_top3_final(df_behavior)
     
-    # --- FINAL STREAMING/PLATFORM ENFORCEMENT: Top 24 platforms in top 9 ---
-    df_behavior = enforce_streaming_platform_top(df_behavior)
+    # --- FINAL STREAMING/PLATFORM ENFORCEMENT: DISABLED ---
+    # Removed: forced top-9 ordering was making all profiles' streaming look identical.
+    # Let audience-driven AI scoring determine natural rank order.
+    # df_behavior = enforce_streaming_platform_top(df_behavior)
 
     # --- FINAL INSTAGRAM ENFORCEMENT: Always 50-62% ---
     def enforce_instagram_caps(df):
