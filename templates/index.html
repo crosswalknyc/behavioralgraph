@@ -21878,12 +21878,15 @@
                 + '</div>'
                 + '<div style="padding:1rem;border:1px solid ' + liftColor + ';border-radius:8px;">'
                 +   '<div style="font-size:0.7rem;color:var(--text-secondary);text-transform:uppercase;">Incremental Lift</div>'
-                +   '<div style="font-size:1.4rem;font-weight:700;color:' + liftColor + ';">' + sign + _bpiqFmtNum(incPeople) + '</div>'
+                +   '<div style="font-size:1.4rem;font-weight:700;color:' + liftColor + ';">'
+                +     (c.incremental_lift_rel_pct === null || c.incremental_lift_rel_pct === undefined
+                          ? '—'
+                          : ((c.incremental_lift_rel_pct >= 0 ? '+' : '') + c.incremental_lift_rel_pct.toFixed(2) + '%'))
+                +   '</div>'
                 +   '<div style="font-size:11px;color:var(--text-secondary);">'
-                +     'US users · '
                 +     (c.incremental_lift_rel_pct === null || c.incremental_lift_rel_pct === undefined
                           ? 'control had no movement'
-                          : ((c.incremental_lift_rel_pct >= 0 ? '+' : '') + c.incremental_lift_rel_pct.toFixed(1) + '% vs control'))
+                          : (sign + _bpiqFmtNum(incPeople) + ' US users vs control'))
                 +   '</div>'
                 + '</div>'
                 + '</div>';
