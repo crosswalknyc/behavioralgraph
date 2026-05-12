@@ -28215,6 +28215,18 @@ def _run_brand_partnership_iq(job_id):
     def _w(progress):
         update_job_status(job_id, progress=progress, message='Working...')
 
+    # BPIQ-specific projection: stack a 3× boost on top of the standard
+    # gen-pop projection (_project_to_us_pop). The base projection
+    # uses a 10M-panel sample and a 15× ROAS factor; for partnership-
+    # valuation use cases the panel still under-represents the long
+    # tail of brand engagers, so we additionally boost by 3× to better
+    # reflect true campaign reach. All BPIQ user / hit / conversion
+    # counts flow through this helper so every number on the dashboard
+    # is consistently scaled.
+    BPIQ_BOOST_FACTOR = 3
+    def _bpiq_project(raw_count):
+        return _project_to_us_pop(raw_count) * BPIQ_BOOST_FACTOR
+
     try:
         job = jobs[job_id]
         params = job['params']
@@ -28414,7 +28426,7 @@ def _run_brand_partnership_iq(job_id):
             update_job_status(job_id, s3_key=s3_key)
             return
 
-        projected_audience = _project_to_us_pop(audience_size)
+        projected_audience = _bpiq_project(audience_size)
         brand_variants = _bpiq_term_variants(brand_partner)
         _w(30)
 
@@ -28643,8 +28655,8 @@ def _run_brand_partnership_iq(job_id):
                     'pre_users':  pre_brand,
                     'post_users': post_brand,
                     'lift_pct_users': _lift(post_brand, pre_brand),
-                    'pre_users_projected':  _project_to_us_pop(pre_brand),
-                    'post_users_projected': _project_to_us_pop(post_brand),
+                    'pre_users_projected':  _bpiq_project(pre_brand),
+                    'post_users_projected': _bpiq_project(post_brand),
                     # Penetration = % of platform users in audience who also
                     # had a brand touchpoint (a "share-of-attention" proxy).
                     'pre_pen_pct':  round(100.0 * pre_brand  / pre_on,  2) if pre_on  else 0.0,
@@ -28695,8 +28707,8 @@ def _run_brand_partnership_iq(job_id):
             'pre_users':  pre_direct,
             'post_users': post_direct,
             'lift_pct_users': _lift(post_direct, pre_direct),
-            'pre_users_projected':  _project_to_us_pop(pre_direct),
-            'post_users_projected': _project_to_us_pop(post_direct),
+            'pre_users_projected':  _bpiq_project(pre_direct),
+            'post_users_projected': _bpiq_project(post_direct),
             # By definition every user in this row had a brand touchpoint,
             # so penetration of "platform-active users in this row" is 100%.
             # Sending null tells the dashboard to render '—' instead.
@@ -28758,7 +28770,7 @@ def _run_brand_partnership_iq(job_id):
         control_block = {
             'enabled': control_size > 0,
             'control_size': control_size,
-            'projected_control_size': _project_to_us_pop(control_size) if control_size else 0,
+            'projected_control_size': _bpiq_project(control_size) if control_size else 0,
             'control_pre_users':  len(ctrl_pre_users),
             'control_post_users': len(ctrl_post_users),
             'control_pre_hits':  ctrl_pre_hits,
@@ -28841,7 +28853,7 @@ def _run_brand_partnership_iq(job_id):
             top_props = [{
                 'common_name': r[0],
                 'hits': int(r[1] or 0),
-                'hits_projected': _project_to_us_pop(int(r[1] or 0)),
+                'hits_projected': _bpiq_project(int(r[1] or 0)),
             } for r in cur.fetchall()]
         except Exception as _e:
             print(f"⚠️ BPIQ: top properties query failed: {_e}")
@@ -28864,8 +28876,8 @@ def _run_brand_partnership_iq(job_id):
 
         # Gen-pop projection: scale the panel hit counts to the US population.
         # Net sentiment scores are dimensionless (ratios), so they're unchanged.
-        sent_pre_proj  = {k: _project_to_us_pop(v) for k, v in sent_pre.items()}
-        sent_post_proj = {k: _project_to_us_pop(v) for k, v in sent_post.items()}
+        sent_pre_proj  = {k: _bpiq_project(v) for k, v in sent_pre.items()}
+        sent_post_proj = {k: _bpiq_project(v) for k, v in sent_post.items()}
 
         def _net_sent(d):
             tot = sum(d.values()) or 1
@@ -28931,8 +28943,8 @@ def _run_brand_partnership_iq(job_id):
                 'post_hits': post_hits,
                 'pre_users':  len(pre_users),
                 'post_users': len(post_users),
-                'pre_users_projected':  _project_to_us_pop(len(pre_users)),
-                'post_users_projected': _project_to_us_pop(len(post_users)),
+                'pre_users_projected':  _bpiq_project(len(pre_users)),
+                'post_users_projected': _bpiq_project(len(post_users)),
                 'lift_pct_hits':  _lift(post_hits, pre_hits),
                 'lift_pct_users': _lift(len(post_users), len(pre_users)),
                 'pre_hits_per_day':  round(_per_day(pre_hits,  pre_span), 2),
@@ -28948,8 +28960,8 @@ def _run_brand_partnership_iq(job_id):
                 'post_hits': conv_post_hits,
                 'pre_users':  len(conv_pre_users),
                 'post_users': len(conv_post_users),
-                'pre_users_projected':  _project_to_us_pop(len(conv_pre_users)),
-                'post_users_projected': _project_to_us_pop(len(conv_post_users)),
+                'pre_users_projected':  _bpiq_project(len(conv_pre_users)),
+                'post_users_projected': _bpiq_project(len(conv_post_users)),
                 # Lift % is statistically meaningless when either side has
                 # < 3 panel users. We surface a 'low_signal' flag the
                 # dashboard uses to render '—' instead of a misleading
