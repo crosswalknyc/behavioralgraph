@@ -28256,6 +28256,43 @@ def _run_brand_partnership_iq(job_id):
     def _bpiq_project(raw_count):
         return _project_to_us_pop(raw_count) * BPIQ_BOOST_FACTOR
 
+    # ── Valuation rates ────────────────────────────────────────────────
+    # All defaults are tunable. They drive the 💰 Brand Partnership
+    # Valuation breakdown shown on the dashboard. Sources:
+    #   - Per-platform EMV rates: 2026 industry CPM benchmarks
+    #     (TikTok $5, IG $7.50, YT $10, FB $8, X $6.50, LI $12,
+    #     Snap $9, Reddit $5.50, Pinterest $5) tuned down to a
+    #     per-engaged-user organic value (vs. per-1000 paid impr.)
+    #     using the 2026 EMV-per-engagement industry guide.
+    #   - BEV ($2.50/engaged user): conservative midpoint between low
+    #     consumer engagement value and F&B CAC ($30-60).
+    #   - BLV ($5.00/incremental user): higher than BEV because these
+    #     are NET-NEW brand engagers driven by the partnership
+    #     (still well under full F&B CAC).
+    #   - Conversion value ($30): F&B AOV proxy.
+    BPIQ_VAL = {
+        'bev_per_user':           2.50,   # $ per engaged user (any platform)
+        'blv_per_incr_user':      5.00,   # $ per incremental brand engager (DiD)
+        'conv_value_per_user':   30.00,   # $ per confirmed conversion
+        # Per-platform EMV rates ($/engaged user). Keys here MUST match
+        # the platform labels emitted by the per-platform analyzer so
+        # we can join on `platform` cleanly. "Direct (Brand Site)" is
+        # treated as the highest-intent touch (own-domain visit).
+        'emv_per_user': {
+            'TikTok':     3.00,
+            'Instagram':  4.50,
+            'YouTube':    7.50,
+            'Facebook':   2.50,
+            'X':          2.00,
+            'Twitter':    2.00,   # alias
+            'Reddit':     4.00,
+            'Pinterest':  3.00,
+            'Snapchat':   2.50,
+            'LinkedIn':   8.00,
+            'Direct (Brand Site)': 5.00,
+        },
+    }
+
     try:
         job = jobs[job_id]
         params = job['params']
@@ -28948,6 +28985,118 @@ def _run_brand_partnership_iq(job_id):
         # Per-platform projections were already attached in Phase 2a where
         # we ran the cross-platform reach query; nothing to project here.
 
+        # ── Phase 3: 💰 Valuation block ────────────────────────────────
+        # Compute the four valuation components + total brand value the
+        # dashboard surfaces. All inputs flow off already-projected
+        # gen-pop counts so the dollar figures are consistent with the
+        # rest of the BPIQ display.
+        post_users_proj = _bpiq_project(len(post_users))
+        pre_users_proj  = _bpiq_project(len(pre_users))
+
+        # 1. Brand Engagement Value: every projected post-event brand
+        #    engager * BEV $/user. This is the broadest "people who
+        #    engaged with the brand thanks to this audience exposure"
+        #    bucket and is intentionally conservative.
+        bev_total = round(post_users_proj * BPIQ_VAL['bev_per_user'], 2)
+
+        # Resolve a per-platform EMV $/user rate, with aliases so the
+        # platform labels emitted by the cross-platform reach query
+        # ("X (Twitter)", "Threads", "Twitch", etc.) line up cleanly
+        # with the rate table.
+        def _resolve_emv_rate(label):
+            tbl = BPIQ_VAL['emv_per_user']
+            if label in tbl:
+                return tbl[label]
+            low = (label or '').lower()
+            if 'x (twitter)' in low or low == 'x' or 'twitter' in low:
+                return tbl.get('X', BPIQ_VAL['bev_per_user'])
+            if 'threads' in low:
+                return 3.00
+            if 'twitch'  in low:
+                return 5.00
+            return BPIQ_VAL['bev_per_user']
+
+        # 2. Earned Media Value: per-platform INCREMENTAL projected
+        #    brand engagers (post − pre, floored at zero) × platform
+        #    EMV-per-user rate. Using INCREMENTAL not absolute users
+        #    avoids double-counting people who appear on many
+        #    platforms — only the lift in brand engagement
+        #    attributable to each platform contributes to EMV. This
+        #    matches the standard "earned" definition: value the
+        #    audience the partnership actually moved on that platform.
+        emv_breakdown = []
+        emv_total = 0.0
+        for p in platform_out:
+            label    = p.get('platform') or ''
+            post_u   = p.get('post_users_projected') or 0
+            pre_u    = p.get('pre_users_projected')  or 0
+            incr     = max(0, post_u - pre_u)
+            rate     = _resolve_emv_rate(label)
+            value    = round(incr * rate, 2)
+            emv_total += value
+            emv_breakdown.append({
+                'platform':                  label,
+                'post_users_projected':      post_u,
+                'pre_users_projected':       pre_u,
+                'incremental_users_projected': incr,
+                'emv_per_user_rate':         rate,
+                'emv_value':                 value,
+            })
+        emv_total = round(emv_total, 2)
+
+        # 3. Brand Lift Value: incremental users (DiD-adjusted when
+        #    available, otherwise fall back to simple post − pre delta)
+        #    valued at BLV $/user. DiD strips natural pre→post drift in
+        #    the control cohort, so this is a closer approximation of
+        #    "incremental brand engagers caused by the partnership".
+        if control_block.get('enabled') and projected_audience:
+            treat_delta = (control_block.get('treat_delta_pp')   or 0) / 100.0
+            ctrl_delta  = (control_block.get('control_delta_pp') or 0) / 100.0
+            ctrl_size   = control_block.get('projected_control_size') or projected_audience
+            incr_users  = max(0, round(projected_audience * treat_delta
+                                       - ctrl_size * ctrl_delta))
+        else:
+            incr_users = max(0, post_users_proj - pre_users_proj)
+        blv_total = round(incr_users * BPIQ_VAL['blv_per_incr_user'], 2)
+
+        # 4. Conversion Value: only when the conversion section is
+        #    enabled AND not flagged low_signal. We don't want to
+        #    inflate Total Brand Value with a $30 × tiny-sample number
+        #    that the conversions section itself hides on the UI.
+        conv_enabled    = bool(conv_slugs)
+        conv_low_signal = (len(conv_pre_users) < 3 or len(conv_post_users) < 3)
+        conv_post_proj  = _bpiq_project(len(conv_post_users))
+        if conv_enabled and not conv_low_signal:
+            conv_value_total = round(conv_post_proj * BPIQ_VAL['conv_value_per_user'], 2)
+        else:
+            conv_value_total = 0.0
+
+        total_brand_value = round(bev_total + emv_total + blv_total + conv_value_total, 2)
+
+        valuation_block = {
+            'total_brand_value':       total_brand_value,
+            'brand_engagement_value':  bev_total,
+            'earned_media_value':      emv_total,
+            'brand_lift_value':        blv_total,
+            'conversion_value':        conv_value_total,
+            'incremental_users':       incr_users,
+            'rates': {
+                'bev_per_user':         BPIQ_VAL['bev_per_user'],
+                'blv_per_incr_user':    BPIQ_VAL['blv_per_incr_user'],
+                'conv_value_per_user':  BPIQ_VAL['conv_value_per_user'],
+                'emv_per_user':         dict(BPIQ_VAL['emv_per_user']),
+            },
+            'emv_breakdown': emv_breakdown,
+            'methodology': (
+                "Total Brand Value = Brand Engagement Value (post-event US "
+                "users × $/user) + Earned Media Value (per-platform users "
+                "× platform EMV $/engaged user, benchmarked against 2026 "
+                "industry CPM rates) + Brand Lift Value (DiD-adjusted "
+                "incremental brand engagers × $/incremental user) + "
+                "Conversion Value (when statistically significant)."
+            ),
+        }
+
         result_data = {
             'project_name': project_name,
             'qualifier_type': qualifier_type,
@@ -29009,6 +29158,7 @@ def _run_brand_partnership_iq(job_id):
             },
             'sentiment': sentiment_block,
             'top_brand_properties': top_props,
+            'valuation': valuation_block,
             'diagnostics': {
                 'audience_filter_used': audience_filter_used,
                 'brand_search_variants': brand_variants,
