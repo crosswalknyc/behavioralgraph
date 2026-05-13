@@ -3085,7 +3085,7 @@ def ai_actor_demographic_review(df, brand_category, project_name, brands):
 
 \u26a0\ufe0f CRITICAL RULES:
 - EVERY demographic category MUST sum to exactly 100%.
-- SEXUAL ORIENTATION: The US LGBTQ+ population is ~7%. Start there as a baseline and only adjust based on evidence from the research data below. AI models consistently over-inflate this — resist that tendency.
+- SEXUAL ORIENTATION: The US LGBTQ+ population is ~7% nationally (Gallup 2023), but it varies WIDELY by audience. Reason from the persona's actual fanbase, not a default 7%. Examples that should swing the LGBTQ+ share meaningfully UP: queer-identified or queer-coded talent (RuPaul, Lil Nas X, Hayley Kiyoko, Phoebe Bridgers, A24-style indie film fans → 18-30%); creators with strong LGBTQ+ followings (Bowen Yang, Kim Petras, Renee Rapp, Chappell Roan → 22-35%); platforms/brands tied to queer culture (Tumblr, Bravo, Logo TV, Ariana Grande's bottom-percentile of straight following → 12-22%); Gen Z fanbases generally skew 12-18% LGBTQ+. Examples that should swing the share DOWN to 3-5%: country/Christian/conservative audiences, older male sports/action audiences, traditionalist talent. Use 7% only when the persona is genuinely demographically average. AI models BOTH over-inflate this for Gen Z creators AND under-differentiate it for queer-coded talent — fix both directions based on evidence.
 - "Prefer Not to Say" MUST NEVER exceed 5% in ANY demographic category. Keep it at 3-5% maximum. Redistribute the rest to actual demographic values.
 - Your job is to reflect REALITY based on available research, not to guess or apply stereotypes.
 
@@ -3280,7 +3280,7 @@ def ai_creator_demographic_review(df, brand_category, project_name, brands):
 
 \u26a0\ufe0f CRITICAL RULES:
 - EVERY demographic category MUST sum to exactly 100%.
-- SEXUAL ORIENTATION: The US LGBTQ+ population is ~7%. Start there as a baseline and only adjust based on evidence from the research data below. AI models consistently over-inflate this — resist that tendency.
+- SEXUAL ORIENTATION: The US LGBTQ+ population is ~7% nationally (Gallup 2023), but it varies WIDELY by audience. Reason from the persona's actual fanbase, not a default 7%. Examples that should swing the LGBTQ+ share meaningfully UP: queer-identified or queer-coded talent (RuPaul, Lil Nas X, Hayley Kiyoko, Phoebe Bridgers, A24-style indie film fans → 18-30%); creators with strong LGBTQ+ followings (Bowen Yang, Kim Petras, Renee Rapp, Chappell Roan → 22-35%); platforms/brands tied to queer culture (Tumblr, Bravo, Logo TV, Ariana Grande's bottom-percentile of straight following → 12-22%); Gen Z fanbases generally skew 12-18% LGBTQ+. Examples that should swing the share DOWN to 3-5%: country/Christian/conservative audiences, older male sports/action audiences, traditionalist talent. Use 7% only when the persona is genuinely demographically average. AI models BOTH over-inflate this for Gen Z creators AND under-differentiate it for queer-coded talent — fix both directions based on evidence.
 - "Prefer Not to Say" MUST NEVER exceed 5% in ANY demographic category. Keep it at 3-5% maximum. Redistribute the rest to actual demographic values.
 - Your job is to reflect REALITY based on available research, not to guess or apply stereotypes.
 
@@ -3475,7 +3475,7 @@ def ai_athlete_demographic_review(df, brand_category, project_name, brands):
 
 \u26a0\ufe0f CRITICAL RULES:
 - EVERY demographic category MUST sum to exactly 100%.
-- SEXUAL ORIENTATION: The US LGBTQ+ population is ~7%. Start there as a baseline and only adjust based on evidence from the research data below. AI models consistently over-inflate this — resist that tendency.
+- SEXUAL ORIENTATION: The US LGBTQ+ population is ~7% nationally (Gallup 2023), but it varies WIDELY by audience. Reason from the persona's actual fanbase, not a default 7%. Examples that should swing the LGBTQ+ share meaningfully UP: queer-identified or queer-coded talent (RuPaul, Lil Nas X, Hayley Kiyoko, Phoebe Bridgers, A24-style indie film fans → 18-30%); creators with strong LGBTQ+ followings (Bowen Yang, Kim Petras, Renee Rapp, Chappell Roan → 22-35%); platforms/brands tied to queer culture (Tumblr, Bravo, Logo TV, Ariana Grande's bottom-percentile of straight following → 12-22%); Gen Z fanbases generally skew 12-18% LGBTQ+. Examples that should swing the share DOWN to 3-5%: country/Christian/conservative audiences, older male sports/action audiences, traditionalist talent. Use 7% only when the persona is genuinely demographically average. AI models BOTH over-inflate this for Gen Z creators AND under-differentiate it for queer-coded talent — fix both directions based on evidence.
 - "Prefer Not to Say" MUST NEVER exceed 5% in ANY demographic category. Keep it at 3-5% maximum. Redistribute the rest to actual demographic values.
 - Your job is to reflect REALITY based on available research, not to guess or apply stereotypes.
 
@@ -3670,7 +3670,7 @@ def ai_host_demographic_review(df, brand_category, project_name, brands):
 
 \u26a0\ufe0f CRITICAL RULES:
 - EVERY demographic category MUST sum to exactly 100%.
-- SEXUAL ORIENTATION: The US LGBTQ+ population is ~7%. Start there as a baseline and only adjust based on evidence from the research data below. AI models consistently over-inflate this — resist that tendency.
+- SEXUAL ORIENTATION: The US LGBTQ+ population is ~7% nationally (Gallup 2023), but it varies WIDELY by audience. Reason from the persona's actual fanbase, not a default 7%. Examples that should swing the LGBTQ+ share meaningfully UP: queer-identified or queer-coded talent (RuPaul, Lil Nas X, Hayley Kiyoko, Phoebe Bridgers, A24-style indie film fans → 18-30%); creators with strong LGBTQ+ followings (Bowen Yang, Kim Petras, Renee Rapp, Chappell Roan → 22-35%); platforms/brands tied to queer culture (Tumblr, Bravo, Logo TV, Ariana Grande's bottom-percentile of straight following → 12-22%); Gen Z fanbases generally skew 12-18% LGBTQ+. Examples that should swing the share DOWN to 3-5%: country/Christian/conservative audiences, older male sports/action audiences, traditionalist talent. Use 7% only when the persona is genuinely demographically average. AI models BOTH over-inflate this for Gen Z creators AND under-differentiate it for queer-coded talent — fix both directions based on evidence.
 - "Prefer Not to Say" MUST NEVER exceed 5% in ANY demographic category. Keep it at 3-5% maximum. Redistribute the rest to actual demographic values.
 - Your job is to reflect REALITY based on available research, not to guess or apply stereotypes.
 
@@ -3865,7 +3865,7 @@ def ai_musician_demographic_review(df, brand_category, project_name, brands):
 
 \u26a0\ufe0f CRITICAL RULES:
 - EVERY demographic category MUST sum to exactly 100%.
-- SEXUAL ORIENTATION: The US LGBTQ+ population is ~7%. Start there as a baseline and only adjust based on evidence from the research data below. AI models consistently over-inflate this — resist that tendency.
+- SEXUAL ORIENTATION: The US LGBTQ+ population is ~7% nationally (Gallup 2023), but it varies WIDELY by audience. Reason from the persona's actual fanbase, not a default 7%. Examples that should swing the LGBTQ+ share meaningfully UP: queer-identified or queer-coded talent (RuPaul, Lil Nas X, Hayley Kiyoko, Phoebe Bridgers, A24-style indie film fans → 18-30%); creators with strong LGBTQ+ followings (Bowen Yang, Kim Petras, Renee Rapp, Chappell Roan → 22-35%); platforms/brands tied to queer culture (Tumblr, Bravo, Logo TV, Ariana Grande's bottom-percentile of straight following → 12-22%); Gen Z fanbases generally skew 12-18% LGBTQ+. Examples that should swing the share DOWN to 3-5%: country/Christian/conservative audiences, older male sports/action audiences, traditionalist talent. Use 7% only when the persona is genuinely demographically average. AI models BOTH over-inflate this for Gen Z creators AND under-differentiate it for queer-coded talent — fix both directions based on evidence.
 - "Prefer Not to Say" MUST NEVER exceed 5% in ANY demographic category. Keep it at 3-5% maximum. Redistribute the rest to actual demographic values.
 - Your job is to reflect REALITY based on available research, not to guess or apply stereotypes.
 
@@ -4060,7 +4060,7 @@ def ai_politics_demographic_review(df, brand_category, project_name, brands):
 
 \u26a0\ufe0f CRITICAL RULES:
 - EVERY demographic category MUST sum to exactly 100%.
-- SEXUAL ORIENTATION: The US LGBTQ+ population is ~7%. Start there as a baseline and only adjust based on evidence from the research data below. AI models consistently over-inflate this — resist that tendency.
+- SEXUAL ORIENTATION: The US LGBTQ+ population is ~7% nationally (Gallup 2023), but it varies WIDELY by audience. Reason from the persona's actual fanbase, not a default 7%. Examples that should swing the LGBTQ+ share meaningfully UP: queer-identified or queer-coded talent (RuPaul, Lil Nas X, Hayley Kiyoko, Phoebe Bridgers, A24-style indie film fans → 18-30%); creators with strong LGBTQ+ followings (Bowen Yang, Kim Petras, Renee Rapp, Chappell Roan → 22-35%); platforms/brands tied to queer culture (Tumblr, Bravo, Logo TV, Ariana Grande's bottom-percentile of straight following → 12-22%); Gen Z fanbases generally skew 12-18% LGBTQ+. Examples that should swing the share DOWN to 3-5%: country/Christian/conservative audiences, older male sports/action audiences, traditionalist talent. Use 7% only when the persona is genuinely demographically average. AI models BOTH over-inflate this for Gen Z creators AND under-differentiate it for queer-coded talent — fix both directions based on evidence.
 - "Prefer Not to Say" MUST NEVER exceed 5% in ANY demographic category. Keep it at 3-5% maximum. Redistribute the rest to actual demographic values.
 - Your job is to reflect REALITY based on available research, not to guess or apply stereotypes.
 
@@ -4254,7 +4254,7 @@ def ai_creative_demographic_review(df, brand_category, project_name, brands):
 
 \u26a0\ufe0f CRITICAL RULES:
 - EVERY demographic category MUST sum to exactly 100%.
-- SEXUAL ORIENTATION: The US LGBTQ+ population is ~7%. Start there as a baseline and only adjust based on evidence from the research data below. AI models consistently over-inflate this — resist that tendency.
+- SEXUAL ORIENTATION: The US LGBTQ+ population is ~7% nationally (Gallup 2023), but it varies WIDELY by audience. Reason from the persona's actual fanbase, not a default 7%. Examples that should swing the LGBTQ+ share meaningfully UP: queer-identified or queer-coded talent (RuPaul, Lil Nas X, Hayley Kiyoko, Phoebe Bridgers, A24-style indie film fans → 18-30%); creators with strong LGBTQ+ followings (Bowen Yang, Kim Petras, Renee Rapp, Chappell Roan → 22-35%); platforms/brands tied to queer culture (Tumblr, Bravo, Logo TV, Ariana Grande's bottom-percentile of straight following → 12-22%); Gen Z fanbases generally skew 12-18% LGBTQ+. Examples that should swing the share DOWN to 3-5%: country/Christian/conservative audiences, older male sports/action audiences, traditionalist talent. Use 7% only when the persona is genuinely demographically average. AI models BOTH over-inflate this for Gen Z creators AND under-differentiate it for queer-coded talent — fix both directions based on evidence.
 - "Prefer Not to Say" MUST NEVER exceed 5% in ANY demographic category. Keep it at 3-5% maximum. Redistribute the rest to actual demographic values.
 - Your job is to reflect REALITY based on available research, not to guess or apply stereotypes.
 
@@ -4449,7 +4449,7 @@ def ai_series_demographic_review(df, brand_category, project_name, brands):
 
 \u26a0\ufe0f CRITICAL RULES:
 - EVERY demographic category MUST sum to exactly 100%.
-- SEXUAL ORIENTATION: The US LGBTQ+ population is ~7%. Start there as a baseline and only adjust based on evidence from the research data below. AI models consistently over-inflate this — resist that tendency.
+- SEXUAL ORIENTATION: The US LGBTQ+ population is ~7% nationally (Gallup 2023), but it varies WIDELY by audience. Reason from the persona's actual fanbase, not a default 7%. Examples that should swing the LGBTQ+ share meaningfully UP: queer-identified or queer-coded talent (RuPaul, Lil Nas X, Hayley Kiyoko, Phoebe Bridgers, A24-style indie film fans → 18-30%); creators with strong LGBTQ+ followings (Bowen Yang, Kim Petras, Renee Rapp, Chappell Roan → 22-35%); platforms/brands tied to queer culture (Tumblr, Bravo, Logo TV, Ariana Grande's bottom-percentile of straight following → 12-22%); Gen Z fanbases generally skew 12-18% LGBTQ+. Examples that should swing the share DOWN to 3-5%: country/Christian/conservative audiences, older male sports/action audiences, traditionalist talent. Use 7% only when the persona is genuinely demographically average. AI models BOTH over-inflate this for Gen Z creators AND under-differentiate it for queer-coded talent — fix both directions based on evidence.
 - "Prefer Not to Say" MUST NEVER exceed 5% in ANY demographic category. Keep it at 3-5% maximum. Redistribute the rest to actual demographic values.
 - Your job is to reflect REALITY based on available research, not to guess or apply stereotypes.
 
@@ -4644,7 +4644,7 @@ def ai_podcast_demographic_review(df, brand_category, project_name, brands):
 
 \u26a0\ufe0f CRITICAL RULES:
 - EVERY demographic category MUST sum to exactly 100%.
-- SEXUAL ORIENTATION: The US LGBTQ+ population is ~7%. Start there as a baseline and only adjust based on evidence from the research data below. AI models consistently over-inflate this — resist that tendency.
+- SEXUAL ORIENTATION: The US LGBTQ+ population is ~7% nationally (Gallup 2023), but it varies WIDELY by audience. Reason from the persona's actual fanbase, not a default 7%. Examples that should swing the LGBTQ+ share meaningfully UP: queer-identified or queer-coded talent (RuPaul, Lil Nas X, Hayley Kiyoko, Phoebe Bridgers, A24-style indie film fans → 18-30%); creators with strong LGBTQ+ followings (Bowen Yang, Kim Petras, Renee Rapp, Chappell Roan → 22-35%); platforms/brands tied to queer culture (Tumblr, Bravo, Logo TV, Ariana Grande's bottom-percentile of straight following → 12-22%); Gen Z fanbases generally skew 12-18% LGBTQ+. Examples that should swing the share DOWN to 3-5%: country/Christian/conservative audiences, older male sports/action audiences, traditionalist talent. Use 7% only when the persona is genuinely demographically average. AI models BOTH over-inflate this for Gen Z creators AND under-differentiate it for queer-coded talent — fix both directions based on evidence.
 - "Prefer Not to Say" MUST NEVER exceed 5% in ANY demographic category. Keep it at 3-5% maximum. Redistribute the rest to actual demographic values.
 - Your job is to reflect REALITY based on available research, not to guess or apply stereotypes.
 
@@ -4840,7 +4840,7 @@ def ai_app_platform_demographic_review(df, brand_category, project_name, brands)
 
 ⚠️ CRITICAL RULES:
 - EVERY demographic category MUST sum to exactly 100%.
-- SEXUAL ORIENTATION: The US LGBTQ+ population is ~7%. Start there as a baseline and only adjust based on evidence from the research data below. AI models consistently over-inflate this — resist that tendency.
+- SEXUAL ORIENTATION: The US LGBTQ+ population is ~7% nationally (Gallup 2023), but it varies WIDELY by audience. Reason from the persona's actual fanbase, not a default 7%. Examples that should swing the LGBTQ+ share meaningfully UP: queer-identified or queer-coded talent (RuPaul, Lil Nas X, Hayley Kiyoko, Phoebe Bridgers, A24-style indie film fans → 18-30%); creators with strong LGBTQ+ followings (Bowen Yang, Kim Petras, Renee Rapp, Chappell Roan → 22-35%); platforms/brands tied to queer culture (Tumblr, Bravo, Logo TV, Ariana Grande's bottom-percentile of straight following → 12-22%); Gen Z fanbases generally skew 12-18% LGBTQ+. Examples that should swing the share DOWN to 3-5%: country/Christian/conservative audiences, older male sports/action audiences, traditionalist talent. Use 7% only when the persona is genuinely demographically average. AI models BOTH over-inflate this for Gen Z creators AND under-differentiate it for queer-coded talent — fix both directions based on evidence.
 - "Prefer Not to Say" MUST NEVER exceed 5% in ANY demographic category. Keep it at 3-5% maximum. Redistribute the rest to actual demographic values.
 - Your job is to reflect REALITY based on available research, not to guess or apply stereotypes.
 
@@ -5044,7 +5044,7 @@ def ai_broadcast_cable_demographic_review(df, brand_category, project_name, bran
 
 ⚠️ CRITICAL RULES:
 - EVERY demographic category MUST sum to exactly 100%.
-- SEXUAL ORIENTATION: The US LGBTQ+ population is ~7%. Start there as a baseline and only adjust based on evidence from the research data below. AI models consistently over-inflate this — resist that tendency.
+- SEXUAL ORIENTATION: The US LGBTQ+ population is ~7% nationally (Gallup 2023), but it varies WIDELY by audience. Reason from the persona's actual fanbase, not a default 7%. Examples that should swing the LGBTQ+ share meaningfully UP: queer-identified or queer-coded talent (RuPaul, Lil Nas X, Hayley Kiyoko, Phoebe Bridgers, A24-style indie film fans → 18-30%); creators with strong LGBTQ+ followings (Bowen Yang, Kim Petras, Renee Rapp, Chappell Roan → 22-35%); platforms/brands tied to queer culture (Tumblr, Bravo, Logo TV, Ariana Grande's bottom-percentile of straight following → 12-22%); Gen Z fanbases generally skew 12-18% LGBTQ+. Examples that should swing the share DOWN to 3-5%: country/Christian/conservative audiences, older male sports/action audiences, traditionalist talent. Use 7% only when the persona is genuinely demographically average. AI models BOTH over-inflate this for Gen Z creators AND under-differentiate it for queer-coded talent — fix both directions based on evidence.
 - "Prefer Not to Say" MUST NEVER exceed 5% in ANY demographic category. Keep it at 3-5% maximum. Redistribute the rest to actual demographic values.
 - Your job is to reflect REALITY based on available research, not to guess or apply stereotypes.
 
@@ -5609,7 +5609,7 @@ def ai_media_demographic_review(df, brand_category, project_name, brands):
 
 ⚠️ CRITICAL RULES:
 - EVERY demographic category MUST sum to exactly 100%.
-- SEXUAL ORIENTATION: The US LGBTQ+ population is ~7%. Start there as a baseline and only adjust based on evidence from the research data below. AI models consistently over-inflate this — resist that tendency.
+- SEXUAL ORIENTATION: The US LGBTQ+ population is ~7% nationally (Gallup 2023), but it varies WIDELY by audience. Reason from the persona's actual fanbase, not a default 7%. Examples that should swing the LGBTQ+ share meaningfully UP: queer-identified or queer-coded talent (RuPaul, Lil Nas X, Hayley Kiyoko, Phoebe Bridgers, A24-style indie film fans → 18-30%); creators with strong LGBTQ+ followings (Bowen Yang, Kim Petras, Renee Rapp, Chappell Roan → 22-35%); platforms/brands tied to queer culture (Tumblr, Bravo, Logo TV, Ariana Grande's bottom-percentile of straight following → 12-22%); Gen Z fanbases generally skew 12-18% LGBTQ+. Examples that should swing the share DOWN to 3-5%: country/Christian/conservative audiences, older male sports/action audiences, traditionalist talent. Use 7% only when the persona is genuinely demographically average. AI models BOTH over-inflate this for Gen Z creators AND under-differentiate it for queer-coded talent — fix both directions based on evidence.
 - "Prefer Not to Say" MUST NEVER exceed 5% in ANY demographic category. Keep it at 3-5% maximum. Redistribute the rest to actual demographic values.
 - Your job is to reflect REALITY based on available research, not to guess or apply stereotypes.
 - KEY CONTEXT: This is a US digital media panel measuring who DIGITALLY ENGAGES with publications (reads articles, uses apps, clicks links). This skews younger and more educated than print audiences.
@@ -5832,7 +5832,7 @@ def ai_movie_theater_demographic_review(df, brand_category, project_name, brands
 
 ⚠️ CRITICAL RULES:
 - EVERY demographic category MUST sum to exactly 100%.
-- SEXUAL ORIENTATION: The US LGBTQ+ population is ~7%. Start there as a baseline and only adjust based on evidence from the research data below. AI models consistently over-inflate this — resist that tendency.
+- SEXUAL ORIENTATION: The US LGBTQ+ population is ~7% nationally (Gallup 2023), but it varies WIDELY by audience. Reason from the persona's actual fanbase, not a default 7%. Examples that should swing the LGBTQ+ share meaningfully UP: queer-identified or queer-coded talent (RuPaul, Lil Nas X, Hayley Kiyoko, Phoebe Bridgers, A24-style indie film fans → 18-30%); creators with strong LGBTQ+ followings (Bowen Yang, Kim Petras, Renee Rapp, Chappell Roan → 22-35%); platforms/brands tied to queer culture (Tumblr, Bravo, Logo TV, Ariana Grande's bottom-percentile of straight following → 12-22%); Gen Z fanbases generally skew 12-18% LGBTQ+. Examples that should swing the share DOWN to 3-5%: country/Christian/conservative audiences, older male sports/action audiences, traditionalist talent. Use 7% only when the persona is genuinely demographically average. AI models BOTH over-inflate this for Gen Z creators AND under-differentiate it for queer-coded talent — fix both directions based on evidence.
 - "Prefer Not to Say" MUST NEVER exceed 5% in ANY demographic category. Keep it at 3-5% maximum. Redistribute the rest to actual demographic values.
 - Your job is to reflect REALITY based on available research, not to guess or apply stereotypes.
 - KEY CONTEXT: This is a US digital panel measuring who DIGITALLY ENGAGES with movie theater brands (buys tickets online, uses apps, visits websites). This skews slightly younger and more digitally savvy than walk-up audiences.
@@ -6049,7 +6049,7 @@ def ai_search_engine_ai_demographic_review(df, brand_category, project_name, bra
 
 ⚠️ CRITICAL RULES:
 - EVERY demographic category MUST sum to exactly 100%.
-- SEXUAL ORIENTATION: The US LGBTQ+ population is ~7%. Start there as a baseline and only adjust based on evidence from the research data below. AI models consistently over-inflate this — resist that tendency.
+- SEXUAL ORIENTATION: The US LGBTQ+ population is ~7% nationally (Gallup 2023), but it varies WIDELY by audience. Reason from the persona's actual fanbase, not a default 7%. Examples that should swing the LGBTQ+ share meaningfully UP: queer-identified or queer-coded talent (RuPaul, Lil Nas X, Hayley Kiyoko, Phoebe Bridgers, A24-style indie film fans → 18-30%); creators with strong LGBTQ+ followings (Bowen Yang, Kim Petras, Renee Rapp, Chappell Roan → 22-35%); platforms/brands tied to queer culture (Tumblr, Bravo, Logo TV, Ariana Grande's bottom-percentile of straight following → 12-22%); Gen Z fanbases generally skew 12-18% LGBTQ+. Examples that should swing the share DOWN to 3-5%: country/Christian/conservative audiences, older male sports/action audiences, traditionalist talent. Use 7% only when the persona is genuinely demographically average. AI models BOTH over-inflate this for Gen Z creators AND under-differentiate it for queer-coded talent — fix both directions based on evidence.
 - "Prefer Not to Say" MUST NEVER exceed 5% in ANY demographic category. Keep it at 3-5% maximum. Redistribute the rest to actual demographic values.
 - Your job is to reflect REALITY based on available research, not to guess or apply stereotypes.
 - KEY CONTEXT: This is a US digital panel measuring who DIGITALLY ENGAGES with search engines and AI tools. These are among the most universal digital products — Google alone has 90%+ US market share.
@@ -6987,7 +6987,7 @@ def ai_social_media_demographic_review(df, brand_category, project_name, brands)
 
 ⚠️ CRITICAL RULES — READ CAREFULLY:
 - EVERY demographic category MUST sum to exactly 100%.
-- SEXUAL ORIENTATION: The US LGBTQ+ population is ~7%. Start at 7% and ONLY adjust with hard evidence. Tumblr is an exception (~12-15% due to strong LGBTQ+ community). For all others, stay at or below 10%.
+- SEXUAL ORIENTATION: The US LGBTQ+ population is ~7% nationally, but varies WIDELY by audience. Queer-coded brands/platforms (Tumblr, Bravo, Logo, A24 indie film, RuPaul/Lil Nas X/Chappell Roan-style creators) should land 15-30%. Gen Z creators broadly skew 12-18%. Country / Christian / older male sports brands skew 3-5%. Use 7% only when the persona is genuinely demographically average. Reason from the actual audience, not a default.
 - ETHNICITY: Start from US census (White ~58%, Hispanic/Latinx ~19%, Black ~13%, Asian ~6%, Other ~4%) and adjust based on platform-specific data.
 - AGE: Identify the MEDIAN AGE of this platform's user base from research. Construct the age distribution so the 50th percentile lands at that median. This is non-negotiable.
 - Your job is to reflect REALITY based on authoritative research (Pew Research, Statista, eMarketer, Comscore, DataReportal, SimilarWeb), not to guess or apply stereotypes.
@@ -7211,7 +7211,7 @@ def ai_universal_demographic_review(df, brand_category, project_name, brands):
 
 ⚠️ CRITICAL RULES — READ CAREFULLY:
 - EVERY demographic category MUST sum to exactly 100%.
-- SEXUAL ORIENTATION: The US LGBTQ+ population is ~7%. Start at 7% and ONLY adjust with hard evidence. AI models consistently inflate this to 20-50% — you MUST NOT do this. If unsure, use 7%.
+- SEXUAL ORIENTATION: The US LGBTQ+ population is ~7% nationally, but varies WIDELY by audience. Queer-coded brands/platforms (Tumblr, Bravo, Logo, A24 indie film, queer creators like RuPaul / Lil Nas X / Chappell Roan / Renee Rapp / Bowen Yang) should land 15-30%. Gen Z brands skew 12-18%. Country / Christian / older male sports brands skew 3-5%. Use 7% only when the persona is genuinely demographically average. Don't blindly inflate to 20-50% — but DO swing meaningfully when the audience evidence supports it.
 - ETHNICITY: Start from US census (White ~58%, Hispanic/Latinx ~19%, Black ~13%, Asian ~6%, Other ~4%) and adjust based on who this brand specifically serves. "Other" should almost never exceed 10%.
 - AGE: Identify the MEDIAN AGE of this brand's audience from research. Then construct your age distribution so the 50th percentile actually lands at that median. Calculate cumulative percentages to verify.
 - GENDER: Use research data. Most US consumer brands are 45-55% in either direction unless there's a strong gender skew (beauty = female, sports = male, etc.).
@@ -19831,7 +19831,7 @@ def parallel_category_agents(df: pd.DataFrame, persona_doc: dict,
 
     # Combine duplicate rows within each demographic category (sum their BP)
     _combine_count = 0
-    for _cc in list(_DEMO_RENAME_MAP.keys()) | set(_EXPECTED_DEMO_BUCKETS.keys()):
+    for _cc in set(_DEMO_RENAME_MAP.keys()) | set(_EXPECTED_DEMO_BUCKETS.keys()):
         _cat_m = df['Column'].astype(str).str.strip().str.upper() == _cc
         _cat_idxs = list(df[_cat_m].index)
         if not _cat_idxs:
@@ -21388,18 +21388,28 @@ def _apply_canonical_baseline_cap(df: pd.DataFrame,
         is_high = _is_high(cat_u, val_u)
         is_tight = cat_u in tight_cap_categories
         if is_tight:
-            mult = tight_high_mult if is_high else tight_default_mult
-            floor = tight_high_floor if is_high else tight_default_floor
-            cap = max(canon * mult, floor)
-            cap = min(cap, tight_abs_ceiling)
+            # Two-stage cap so the dominant signal is demographic variation,
+            # not the cap value itself. Trip threshold = trip_mult × baseline;
+            # if exceeded, snap to a *randomized* point in [low_mult, high_mult]
+            # × baseline so different profiles land at different penetrations
+            # rather than all clustering at one identical capped number.
+            trip_mult = tight_high_mult * 1.6 if is_high else tight_default_mult * 1.8
+            low_mult = tight_default_mult * 0.85 if not is_high else tight_high_mult * 0.85
+            high_mult_band = tight_high_mult * 1.35 if is_high else tight_default_mult * 1.35
+            trip_threshold = max(canon * trip_mult, (tight_high_floor if is_high else tight_default_floor) * 1.5)
+            cap_low = max(canon * low_mult, tight_high_floor if is_high else tight_default_floor)
+            cap_high = min(canon * high_mult_band, tight_abs_ceiling)
+            if new_bp <= trip_threshold:
+                continue
+            cap = random.uniform(cap_low, max(cap_low + 0.5, cap_high))
         else:
             mult = high_mult if is_high else default_mult
             floor = high_min_floor if is_high else default_min_floor
             cap = max(canon * mult, floor)
             if canon < small_baseline_threshold:
                 cap = min(cap, small_baseline_abs_cap)
-        if new_bp <= cap:
-            continue
+            if new_bp <= cap:
+                continue
         ratio_before = new_bp / max(canon, 0.0001)
         jitter = random.uniform(-0.05, 0.05)
         capped_candidate = cap + jitter
@@ -25906,6 +25916,12 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
         except Exception as _deterr:
             print(f"   ⚠️ apply_deterministic_us_panel_realism skipped: {_deterr}")
 
+    import pandas as _pd_cast
+    for _nc in ['Brand Penetration (Row)', 'Category Share', 'Original Raw Numbers',
+                'US Gen Pop Projection']:
+        if _nc in df_final.columns:
+            df_final[_nc] = _pd_cast.to_numeric(df_final[_nc], errors='coerce').fillna(0.0)
+
     # ── Cross-category BP alignment ──────────────────────────────────────
     # Different AI agents score the same brand independently per category.
     # This pass enforces a single canonical BP for each brand across all
@@ -26017,7 +26033,13 @@ def _align_cross_category_bp(df):
     different BP values because they score independently. This pass picks the
     value from the highest-priority category and propagates it everywhere,
     then recalculates Category Share / Raw Numbers / Gen Pop Projection."""
+    import pandas as _pd
     from collections import defaultdict
+
+    for _col in ['Brand Penetration (Row)', 'Category Share', 'Original Raw Numbers',
+                 'US Gen Pop Projection']:
+        if _col in df.columns:
+            df[_col] = _pd.to_numeric(df[_col], errors='coerce').fillna(0.0)
 
     _SKIP = {'INPUT_METADATA', 'BRAND INPUT', 'SAMPLE SIZE', 'BRAND CATEGORY',
              'AVID FAN', 'CASUAL FAN'}
@@ -26043,18 +26065,15 @@ def _align_cross_category_bp(df):
         cat = str(row.get('Column', '')).strip().upper()
         if cat in _SKIP or val in _SKIP_VAL:
             continue
-        brand_map[val].append((idx, cat, row['Brand Penetration (Row)']))
+        brand_map[val].append((idx, cat, float(row['Brand Penetration (Row)'])))
 
     fixed = 0
-    cats_dirty = set()
+    cats_touched = set()
     for brand, appearances in brand_map.items():
         if len(appearances) < 2:
             continue
         app_cats = set(a[1] for a in appearances)
         if app_cats.issubset(_INTEREST):
-            continue
-        bps = [a[2] for a in appearances]
-        if max(bps) - min(bps) < 0.5:
             continue
         canonical = None
         for pcat in _PRIORITY:
@@ -26065,16 +26084,19 @@ def _align_cross_category_bp(df):
             if canonical is not None:
                 break
         if canonical is None:
-            canonical = appearances[0][2]
+            canonical = max(a[2] for a in appearances)
+        # Always propagate canonical, even when drift is tiny — sub-0.01pp
+        # differences still produced visible mismatches in raw counts and
+        # projection values.
         for idx, cat, bp in appearances:
             if cat in _INTEREST:
                 continue
-            if abs(bp - canonical) > 0.01:
+            cats_touched.add(cat)
+            if bp != canonical:
                 df.at[idx, 'Brand Penetration (Row)'] = canonical
-                cats_dirty.add(cat)
                 fixed += 1
 
-    for cat in cats_dirty:
+    for cat in cats_touched:
         mask = df['Column'].str.upper() == cat
         bp_total = df.loc[mask, 'Brand Penetration (Row)'].sum()
         if bp_total > 0:
