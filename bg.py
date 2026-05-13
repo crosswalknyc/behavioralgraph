@@ -16368,6 +16368,8 @@ The `digital_identity` field is a rich text block (2-4 paragraphs) that will be 
    - What device ecosystem? (young urban with income <$80K skews Android/Samsung; higher income skews Apple)
    - What insurance do they have? (major digital insurers: GEICO, Progressive, State Farm have high digital engagement for everyone)
    - Are they parents? If not, children's brands (Roblox, YouTube Kids, Pampers, Barbie) should score LOW.
+   - PRICE POINT vs PERSONA FIT: Don't default premium brands high just because they're popular. Ask: "Would THIS specific persona actually buy this brand?" Consider the FULL persona — age, gender, income, lifestyle, subculture. A yoga instructor might buy Lululemon despite lower income (it's core to her identity). The Rock's male sports audience buys Under Armour, not Athleta. A Chime audience buys Fashion Nova, not Patagonia. A Nordstrom profile WOULD buy Lululemon and Alo Yoga. Reason about WHO this person is and WHAT they actually buy. If two brands compete for the same persona (Lululemon vs Alo Yoga), consider which is trending with this demographic NOW.
+   - ATHLETE ENGAGEMENT for NON-SPORTS BRANDS: Ask "Does this persona have a specific reason to follow this athlete?" A banking audience doesn't have 23% engagement with any single athlete — they're banking customers, not sports fans. But a Nike Women's audience might legitimately have 15% Griner engagement. Score athletes based on the PERSONA's actual sports interests, not demographics alone. Default for individual athletes in non-sports contexts: 1-5% BP.
      If they ARE parents **but** persona does **not** describe kids actually playing games on shared accounts / tablets (no “device handoff”, no kid subsegment, no family-gaming cues), treat **kid-first titles (Roblox, many LEGO/world-builder kids’ rows)** like **ambient noise** — they must **not** lead the GAMES sheet or exceed plausible **kid-mediated** share; default them **low/trace** versus adult casual titles.
    - THIS IS A U.S. PANEL: foreign-only platforms and retailers have negligible engagement.
 
@@ -20264,14 +20266,31 @@ def parallel_category_agents(df: pd.DataFrame, persona_doc: dict,
                              unique_items_by_cat[cat], persona_doc, subject): cat
                 for cat in _guid_cats
             }
-            for fut in _futures.as_completed(_guid_futures, timeout=120):
-                cat = _guid_futures[fut]
-                try:
-                    result = fut.result()
-                    if result:
-                        _guidance_map[cat] = result
-                except Exception as e:
-                    print(f"   ⚠️ Category-rule agent [{cat}] failed: {e}")
+            _done_guid = set()
+            try:
+                for fut in _futures.as_completed(_guid_futures, timeout=300):
+                    cat = _guid_futures[fut]
+                    _done_guid.add(cat)
+                    try:
+                        result = fut.result()
+                        if result:
+                            _guidance_map[cat] = result
+                    except Exception as e:
+                        print(f"   ⚠️ Category-rule agent [{cat}] failed: {e}")
+            except TimeoutError:
+                timed_out_cats = [c for c in _guid_cats if c not in _done_guid]
+                print(f"   🔄 Guidance timeout: {len(timed_out_cats)} categories timed out, retrying sequentially…")
+                for cat in timed_out_cats:
+                    for _attempt in range(1, 3):
+                        try:
+                            result = _run_item_guidance_agent(cat, unique_items_by_cat[cat], persona_doc, subject)
+                            if result:
+                                _guidance_map[cat] = result
+                            break
+                        except Exception as e:
+                            print(f"   ⚠️ Guidance retry [{cat}] attempt {_attempt} failed: {e}")
+                            if _attempt == 2:
+                                print(f"   ⚠️ Skipping guidance for [{cat}] — will use persona signals only")
         _guidance_elapsed = _time.perf_counter() - _guidance_t0
         _n_with_rules = sum(1 for g in _guidance_map.values() if g.get('tier_rules'))
         _n_with_high = sum(1 for g in _guidance_map.values() if g.get('expected_high'))
@@ -25775,6 +25794,13 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
         except Exception as _deterr:
             print(f"   ⚠️ apply_deterministic_us_panel_realism skipped: {_deterr}")
 
+    # ── Cross-category BP alignment ──────────────────────────────────────
+    # Different AI agents score the same brand independently per category.
+    # This pass enforces a single canonical BP for each brand across all
+    # non-INTEREST categories, using the highest-priority category as source.
+    if not is_genpop:
+        df_final = _align_cross_category_bp(df_final)
+
     # Save to CSV
     try:
         df_final.to_csv(final_file, index=False)
@@ -25870,6 +25896,87 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
     print(f"⏱️  Wall-clock cost basis: {total_time_seconds/3600.0:.2f}h on Hetzner AX162-S")
     
     return final_file
+
+
+def _align_cross_category_bp(df):
+    """Enforce a single canonical Brand Penetration for each brand across all
+    categories. When the same brand (e.g. LULULEMON) appears in both
+    MOST PURCHASED BRANDS and APPAREL/FOOTWEAR, the AI agents may assign
+    different BP values because they score independently. This pass picks the
+    value from the highest-priority category and propagates it everywhere,
+    then recalculates Category Share / Raw Numbers / Gen Pop Projection."""
+    from collections import defaultdict
+
+    _SKIP = {'INPUT_METADATA', 'BRAND INPUT', 'SAMPLE SIZE', 'BRAND CATEGORY',
+             'AVID FAN', 'CASUAL FAN'}
+    _SKIP_VAL = {'PREFER NOT TO SAY', 'OTHER', 'NONE', 'N/A'}
+    _INTEREST = {'INTEREST', 'MOST PURCHASED CATEGORIES'}
+    _PRIORITY = [
+        'MOST PURCHASED BRANDS', 'APPAREL/FOOTWEAR', 'BEAUTY/WELLNESS',
+        'TECHNOLOGY BRAND', 'HOME/OUTDOOR', 'CPG', 'STREAMING/PLATFORM',
+        'SOCIAL MEDIA', 'TALENT', 'ATHLETE',
+    ]
+
+    sample_row = df[df['Column'].str.upper() == 'BRAND INPUT']
+    if sample_row.empty:
+        return df
+    try:
+        sample_size = float(str(sample_row['Original Raw Numbers'].values[0]).replace(',', ''))
+    except Exception:
+        return df
+
+    brand_map = defaultdict(list)
+    for idx, row in df.iterrows():
+        val = str(row.get('Value', '')).strip().upper()
+        cat = str(row.get('Column', '')).strip().upper()
+        if cat in _SKIP or val in _SKIP_VAL:
+            continue
+        brand_map[val].append((idx, cat, row['Brand Penetration (Row)']))
+
+    fixed = 0
+    cats_dirty = set()
+    for brand, appearances in brand_map.items():
+        if len(appearances) < 2:
+            continue
+        app_cats = set(a[1] for a in appearances)
+        if app_cats.issubset(_INTEREST):
+            continue
+        bps = [a[2] for a in appearances]
+        if max(bps) - min(bps) < 0.5:
+            continue
+        canonical = None
+        for pcat in _PRIORITY:
+            for idx, cat, bp in appearances:
+                if cat == pcat:
+                    canonical = bp
+                    break
+            if canonical is not None:
+                break
+        if canonical is None:
+            canonical = appearances[0][2]
+        for idx, cat, bp in appearances:
+            if cat in _INTEREST:
+                continue
+            if abs(bp - canonical) > 0.01:
+                df.at[idx, 'Brand Penetration (Row)'] = canonical
+                cats_dirty.add(cat)
+                fixed += 1
+
+    for cat in cats_dirty:
+        mask = df['Column'].str.upper() == cat
+        bp_total = df.loc[mask, 'Brand Penetration (Row)'].sum()
+        if bp_total > 0:
+            df.loc[mask, 'Category Share'] = (
+                df.loc[mask, 'Brand Penetration (Row)'] / bp_total * 100
+            ).round(4)
+        bp_frac = df.loc[mask, 'Brand Penetration (Row)'].astype(float) / 100.0
+        df.loc[mask, 'Original Raw Numbers'] = (bp_frac * sample_size).round(0).astype(int)
+        df.loc[mask, 'US Gen Pop Projection'] = (bp_frac * 329_900_000).round(0).astype(int)
+
+    if fixed:
+        print(f"🔗 Cross-category alignment: set {fixed} values to canonical BP (0 mismatches)")
+    return df
+
 
 def set_brand_input_to_csv(df):
     """
