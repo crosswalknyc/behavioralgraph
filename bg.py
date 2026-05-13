@@ -19782,6 +19782,81 @@ def parallel_category_agents(df: pd.DataFrame, persona_doc: dict,
                 df = pd.concat([df, pd.DataFrame([new_row])], ignore_index=True)
                 print(f"   📌 Injected missing {cat_name} value: {expected_val}")
 
+    # ── Consolidate overlapping demographic buckets ────────────────────
+    # ClickHouse user_data contains non-canonical bucket names that overlap
+    # with the canonical set (e.g. "HIGH SCHOOL OR LESS" overlaps with
+    # "LESS THAN HIGH SCHOOL" + "HIGH SCHOOL GRADUATE").  Merge them BEFORE
+    # persona values are written so we end up with exactly the canonical set.
+    _DEMO_MERGE_MAP = {
+        'EDUCATION': {
+            'HIGH SCHOOL OR LESS': ['LESS THAN HIGH SCHOOL', 'HIGH SCHOOL GRADUATE'],
+            'GRADUATE OR PROFESSIONAL DEGREE': ['GRADUATE DEGREE'],
+        },
+        'RELATIONSHIP': {
+            'DIVORCED OR SEPARATED': ['DIVORCED'],
+        },
+    }
+    for _merge_cat, _merge_rules in _DEMO_MERGE_MAP.items():
+        for _nc_label, _target_labels in _merge_rules.items():
+            _nc_norm = _norm_bracket(_nc_label)
+            _cat_m = df['Column'].astype(str).str.strip().str.upper() == _merge_cat
+            _nc_idxs = [i for i in df[_cat_m].index
+                        if _norm_bracket(str(df.at[i, 'Value'])) == _nc_norm]
+            if not _nc_idxs:
+                continue
+            _nc_bp = sum(float(df.at[i, bp_col] or 0) for i in _nc_idxs)
+            _tgt_idxs = {}
+            for _tl in _target_labels:
+                _tl_norm = _norm_bracket(_tl)
+                for i in df[_cat_m].index:
+                    if _norm_bracket(str(df.at[i, 'Value'])) == _tl_norm:
+                        _tgt_idxs[_tl] = i
+                        break
+            if _nc_bp > 0 and _tgt_idxs:
+                _tgt_total = sum(float(df.at[i, bp_col] or 0) for i in _tgt_idxs.values())
+                if len(_tgt_idxs) == 1:
+                    _ti = list(_tgt_idxs.values())[0]
+                    df.at[_ti, bp_col] = float(df.at[_ti, bp_col] or 0) + _nc_bp
+                    if pct_col and pct_col in df.columns:
+                        df.at[_ti, pct_col] = df.at[_ti, bp_col]
+                elif _tgt_total > 0:
+                    for _tl, _ti in _tgt_idxs.items():
+                        _share = float(df.at[_ti, bp_col] or 0) / _tgt_total
+                        df.at[_ti, bp_col] = float(df.at[_ti, bp_col] or 0) + _nc_bp * _share
+                        if pct_col and pct_col in df.columns:
+                            df.at[_ti, pct_col] = df.at[_ti, bp_col]
+                else:
+                    _equal = _nc_bp / len(_tgt_idxs)
+                    for _ti in _tgt_idxs.values():
+                        df.at[_ti, bp_col] = float(df.at[_ti, bp_col] or 0) + _equal
+                        if pct_col and pct_col in df.columns:
+                            df.at[_ti, pct_col] = df.at[_ti, bp_col]
+            df = df.drop(_nc_idxs).reset_index(drop=True)
+            print(f"   🔄 Merged '{_nc_label}' into {_target_labels} in {_merge_cat}")
+
+    # After merging, enforce that ONLY canonical buckets remain in each
+    # demographic category.  Any row whose Value doesn't match an expected
+    # bucket is dropped and its share redistributed proportionally.
+    for _ec_cat, _ec_vals in _EXPECTED_DEMO_BUCKETS.items():
+        _ec_norms = {_norm_bracket(v) for v in _ec_vals}
+        _ec_mask = df['Column'].astype(str).str.strip().str.upper() == _ec_cat
+        _extra_idxs = [i for i in df[_ec_mask].index
+                       if _norm_bracket(str(df.at[i, 'Value'])) not in _ec_norms]
+        if not _extra_idxs:
+            continue
+        _extra_bp = sum(float(df.at[i, bp_col] or 0) for i in _extra_idxs)
+        _keep_idxs = [i for i in df[_ec_mask].index if i not in _extra_idxs]
+        _keep_total = sum(float(df.at[i, bp_col] or 0) for i in _keep_idxs)
+        if _extra_bp > 0 and _keep_total > 0:
+            for _ki in _keep_idxs:
+                _frac = float(df.at[_ki, bp_col] or 0) / _keep_total
+                df.at[_ki, bp_col] = float(df.at[_ki, bp_col] or 0) + _extra_bp * _frac
+                if pct_col and pct_col in df.columns:
+                    df.at[_ki, pct_col] = df.at[_ki, bp_col]
+        if _extra_idxs:
+            df = df.drop(_extra_idxs).reset_index(drop=True)
+            print(f"   🗑️ Dropped {len(_extra_idxs)} non-canonical rows from {_ec_cat}, redistributed {_extra_bp:.2f}%")
+
     # Normalize INCOME Value text to expected format (strip spaces around hyphens)
     income_mask = df['Column'].astype(str).str.strip().str.upper() == 'INCOME'
     for idx in df[income_mask].index:
@@ -34165,6 +34240,45 @@ def enforce_exact_210_dmas(df):
     vals[vals < 0.01] = 0.01
     vals = vals / float(vals.sum()) * 100.0
     vals = vals.round(4)
+
+    # ── Population-aware hard clamp ──────────────────────────────────────
+    # Regardless of what upstream agents produced, no DMA's final share can
+    # deviate from its Gen Pop baseline by more than a sane multiplier.
+    # This catches label-value mismatches, LLM hallucinations, and name-
+    # matching bugs that bypass earlier guardrails.
+    _gp_baseline_map = {}
+    try:
+        for _gn, _gp in GENPOP_DMA_PERCENTAGES:
+            _gp_baseline_map[normalize_dma_for_display(str(_gn))] = float(_gp)
+    except Exception:
+        pass
+    if _gp_baseline_map:
+        _clamp_fixes = 0
+        for dma_name in vals.index:
+            baseline = _gp_baseline_map.get(dma_name)
+            if baseline is None or baseline <= 0:
+                continue
+            current = float(vals[dma_name])
+            implied_mult = current / baseline
+            demo = DMA_DEMOGRAPHICS.get(dma_name.upper(), {})
+            rank = demo.get("pop_rank", 999)
+            if rank <= 30:
+                clamped = max(0.3, min(5.0, implied_mult))
+            elif rank <= 100:
+                clamped = max(0.15, min(3.5, implied_mult))
+            elif rank <= 150:
+                clamped = max(0.1, min(2.5, implied_mult))
+            else:
+                clamped = max(0.1, min(2.0, implied_mult))
+            if abs(clamped - implied_mult) > 0.01:
+                vals[dma_name] = round(baseline * clamped, 4)
+                _clamp_fixes += 1
+        if _clamp_fixes:
+            vals = vals / float(vals.sum()) * 100.0
+            vals = vals.round(4)
+            print(f"   🔒 Population-aware DMA clamp: corrected {_clamp_fixes} DMAs "
+                  f"(top-30 floor=0.3x/ceil=5x, small-DMA ceil=2x)")
+
     drift = round(100.0 - float(vals.sum()), 4)
     if abs(drift) > 0:
         mx = vals.idxmax()
