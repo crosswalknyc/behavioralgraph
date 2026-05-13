@@ -17287,10 +17287,28 @@ def _build_unique_value_index(df: pd.DataFrame,
     primary_for: dict[str, str] = {}
     unique_items_by_cat: dict[str, list[str]] = {c: [] for c in cat_size}
 
-    # For each value, pick the largest category as primary (alphabetical tiebreak)
+    # Priority primaries — when a value appears in any of these, that
+    # category wins regardless of size. MOST PURCHASED BRANDS is the
+    # canonical brand scorer per the pipeline contract: brand BPs are
+    # decided in MPB and inherited everywhere else (APPAREL/FOOTWEAR,
+    # BEAUTY/WELLNESS, WHERE THEY SHOP, etc.). TALENT and SPORTS TEAM
+    # are similarly canonical for talent/team values.
+    _PRIORITY_PRIMARY = ['MOST PURCHASED BRANDS', 'TALENT', 'SPORTS TEAM']
+
     for v_u, cats in value_cats.items():
-        cats_sorted = sorted(cats, key=lambda c: (-cat_size.get(c, 0), c))
-        primary = cats_sorted[0]
+        priority_pick = None
+        for pcat in _PRIORITY_PRIMARY:
+            for c in cats:
+                if c.upper() == pcat and pcat in cat_size:
+                    priority_pick = c
+                    break
+            if priority_pick is not None:
+                break
+        if priority_pick is not None:
+            primary = priority_pick
+        else:
+            cats_sorted = sorted(cats, key=lambda c: (-cat_size.get(c, 0), c))
+            primary = cats_sorted[0]
         primary_for[v_u] = primary
         unique_items_by_cat.setdefault(primary, []).append(value_original[v_u])
 
