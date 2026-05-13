@@ -2128,17 +2128,6 @@
             margin-left: 1rem;
         }
 
-        #subscriberIQView #subscriberDropDate {
-            grid-column: 1;
-            grid-row: 3;
-            align-self: start;
-            color: var(--accent-lime);
-            font-size: 0.8rem;
-            font-weight: 700;
-            padding: 0.15rem 0.75rem 0;
-            white-space: normal;
-        }
-
         .dash-brand-box {
             background: linear-gradient(135deg, #c8e600, #a0d911);
             color: #1a1a1a;
@@ -16091,7 +16080,6 @@
                                     <div class="dash-meta-box" id="subscriberAttributionWindow" style="display: none;"></div>
                                     <div class="dash-meta-box" id="subscriberExclusionWindow" style="display: none;"></div>
                                     <div class="dash-meta-box" id="subscriberContentCadence" style="display: none;"></div>
-                                    <div id="subscriberDropDate" style="display: none;"></div>
                                 </div>
                             </div>
                         </div>
@@ -35833,7 +35821,6 @@
             const dateRangeHeader = document.getElementById('subscriberDateRangeHeader');
             const platformHeader = document.getElementById('subscriberPlatformHeader');
             const exclusionWindow = document.getElementById('subscriberExclusionWindow');
-            const dropDateEl = document.getElementById('subscriberDropDate');
             const attributionWindow = document.getElementById('subscriberAttributionWindow');
             const profileInfo = document.getElementById('subscriberProfileInfo');
             const emptyState = document.getElementById('subscriberEmptyState');
@@ -35907,10 +35894,6 @@
                 var months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
                 return months[m] + ' ' + day + ', ' + y;
             }
-            function formatDateLong(d) {
-                if (!d || !(d instanceof Date) || isNaN(d.getTime())) return '';
-                return d.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
-            }
             var parsed = parseAnalysisDateRange(finalDateRange);
             var exclusionDays = parseInt(exclusion, 10);
             var attributionDays = parseInt(attribution, 10);
@@ -35929,17 +35912,6 @@
             if (exclusionWindow) {
                 exclusionWindow.textContent = exclusion ? 'Exclusion Window: ' + exclusion + ' days' + exclusionRangeStr : '';
                 exclusionWindow.style.display = exclusion ? 'block' : 'none';
-            }
-
-            if (dropDateEl) {
-                var dropLabel = formatDateLong(parsed.start);
-                if (dropLabel) {
-                    dropDateEl.textContent = 'Drop Date: ' + dropLabel;
-                    dropDateEl.style.display = 'block';
-                } else {
-                    dropDateEl.textContent = '';
-                    dropDateEl.style.display = 'none';
-                }
             }
             
             if (attributionWindow) {

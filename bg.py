@@ -16345,9 +16345,41 @@ SPECIFIC WRITING RULES
     to decide rank ordering within a category.
 
 DIGITAL IDENTITY — THIS IS ALSO CRITICAL:
-The `digital_identity` field is a rich text block (2-4 paragraphs) that will be passed VERBATIM to per-category scoring agents. Make it specific, opinionated, and grounded in real audience data. It MUST address all five areas below:
+The `digital_identity` field is a rich text block (2-4 paragraphs) that will be passed VERBATIM to per-category scoring agents. Make it specific, opinionated, and grounded in real audience data. It MUST address all five areas below.
 
-1. SUBCULTURE: What digital subcultures does this audience belong to? Be specific — not just "sports fans" but the exact communities (e.g. sneakerheads, fantasy football, K-beauty, car modding, etc.).
+CRITICAL — IDENTIFY THE AUDIENCE ARCHETYPE FIRST:
+Before describing this audience generically, you MUST commit to a specific ARCHETYPE label and explain how it differs from neighboring archetypes. Two celebrities can both be "young female actresses" but their audiences buy completely different brands. Examples (not exhaustive — adapt to the actual subject):
+
+  • A24 / INDIE / ARTHOUSE young female (e.g. Florence Pugh, Anya Taylor-Joy, Alexa Demie, Ayo Edebiri, Lily-Rose Depp, Maika Monroe, indie film fans)
+    → Top APPAREL: Reformation, Free People, Madewell, Aritzia, Anthropologie, Ganni, COS, AGOLDE, STAUD, Sezane, Toteme; mid: Levi, Uniqlo, Acne Studios, Ba&sh; LOW: FashionNova, SHEIN, Forever 21, Lululemon, Nike, Adidas (these are NOT this audience).
+    → Top BEAUTY: Glossier, Rare Beauty, Merit Beauty, Tower 28, Saie, Le Labo, Aesop, Byredo; mid: Dior, Chanel, Charlotte Tilbury; LOW: Maybelline, NYX, mass drugstore.
+    → Streaming skew: A24, Mubi, Criterion, HBO Max, Apple TV+ over-index; Netflix near baseline; Disney+ under-index.
+
+  • MASS-BLOCKBUSTER / MARVEL young female (e.g. Scarlett Johansson, Jennifer Lawrence, Brie Larson, Zendaya — broader Marvel/franchise fans)
+    → Top APPAREL: Lululemon, Athleta, Nike, Adidas, Madewell, Anthropologie, Free People, Aritzia, Zara; mid: H&M, Old Navy, Express, Calvin Klein.
+    → Top BEAUTY: Sephora favorites mix — Charlotte Tilbury, Fenty, Rare Beauty, Drunk Elephant, CeraVe, Glossier.
+    → Streaming: Netflix dominant, Disney+ over-index (Marvel), Hulu, HBO Max balanced.
+
+  • REALITY-TV / KARDASHIAN-AESTHETIC young female (e.g. Kim Kardashian, Bella Hadid, Megan Fox, Megan Thee Stallion fans, Bachelor/Vanderpump audience)
+    → Top APPAREL: FashionNova, SHEIN, PrettyLittleThing, Revolve, House of CB, Pretty Little Thing, Boohoo; LOW: Reformation, Free People, COS, Aritzia, indie/sustainable brands.
+    → Top BEAUTY: Anastasia Beverly Hills, Huda Beauty, Tarte, Morphe, Rare Beauty, Kylie Cosmetics, Fenty, Charlotte Tilbury; mass drugstore mid.
+    → Streaming: Hulu (reality), Peacock (Bravo), Netflix (Selling Sunset / Love is Blind) over-index; A24 / Mubi / Criterion under-index.
+
+  • PREPPY / SOUTHERN / HALLMARK young female (e.g. Reese Witherspoon, Lauren Bushnell, Country audience)
+    → Top APPAREL: Lilly Pulitzer, Tuckernuck, J.Crew, Madewell, Vineyard Vines, Tory Burch, Polo Ralph Lauren; LOW: alt/streetwear brands.
+
+  • Y2K / ALT-FASHION / BIMBOCORE Gen Z (e.g. Charli XCX fans, Sabrina Carpenter, Olivia Rodrigo, alt-pop audience)
+    → Top APPAREL: Brandy Melville, Urban Outfitters, Princess Polly, Edikted, Dolls Kill, Selkie, House of Sunny.
+
+  • Mass-male blockbuster (Ryan Reynolds, Dwayne Johnson, John Cena, action-fan male)
+    → Top APPAREL: Nike, Under Armour, Lululemon (Project Rock), Adidas, Champion, Carhartt; LOW: women-skewing fashion brands.
+
+  • Older affluent prestige (George Clooney, Meryl Streep, Cate Blanchett, theater-goer)
+    → Top APPAREL: Nordstrom, Saks, Bloomingdale's brands (Eileen Fisher, Tory Burch, Theory, Vince, Loro Piana), Brooks Brothers, J.Crew; LOW: SHEIN, FashionNova, fast fashion.
+
+You MUST identify which archetype best fits THIS subject, name it explicitly in the digital_identity, and use it to drive specific brand-level expectations in the category_signals. If the subject straddles two archetypes (e.g. Zendaya = blockbuster Marvel + Euphoria alt-fashion), name both and weight them. Do NOT default to a generic "young female / fashion-forward / urban" template — that produces identical brand mixes for very different celebrities and is the single biggest failure mode of this pipeline.
+
+1. SUBCULTURE: What digital subcultures does this audience belong to? Be specific — not just "sports fans" but the exact communities (e.g. sneakerheads, fantasy football, K-beauty, car modding, A24 stan Twitter, BookTok, etc.).
 
 2. WHERE THEY SHOP ONLINE / SPEND WALLET SHARE: Name 8-12 specific retailers/e-commerce sites OR MARKETPLACE PATTERNS this audience touches. Tune to archetype — physical brands → category retailers + marketplaces; digital-native IP → merch DTC yes, but also ticketing, subs, DLC stores, Patreon/support patterns; SaaS/mobile → app stores/subscription portals BEFORE defaulting to Foot Locker/Target unless persona evidence supports them.
 
@@ -16368,6 +16400,16 @@ The `digital_identity` field is a rich text block (2-4 paragraphs) that will be 
    - What insurance do they have? (major digital insurers: GEICO, Progressive, State Farm have high digital engagement for everyone)
    - Are they parents? If not, children's brands (Roblox, YouTube Kids, Pampers, Barbie) should score LOW.
    - PRICE POINT vs PERSONA FIT: Don't default premium brands high just because they're popular. Ask: "Would THIS specific persona actually buy this brand?" Consider the FULL persona — age, gender, income, lifestyle, subculture. A yoga instructor might buy Lululemon despite lower income (it's core to her identity). The Rock's male sports audience buys Under Armour, not Athleta. A Chime audience buys Fashion Nova, not Patagonia. A Nordstrom profile WOULD buy Lululemon and Alo Yoga. Reason about WHO this person is and WHAT they actually buy. If two brands compete for the same persona (Lululemon vs Alo Yoga), consider which is trending with this demographic NOW.
+
+   - AUDIENCE ARCHETYPE — DO NOT USE A GENERIC YOUNG-FEMALE TEMPLATE: The persona's `digital_identity` field names a specific ARCHETYPE for this audience. You MUST honor it. Two "young female actress" audiences can have completely different brand mixes — it is wrong (and a frequent failure of this pipeline) to give every young-female persona the same NIKE > ZARA > LULULEMON > FASHIONNOVA > H&M top-5. The right top-5 depends on the archetype. Quick reference (apply whichever archetype the persona names; use mixes when the persona straddles two):
+     • A24/INDIE/ARTHOUSE young female (Florence Pugh, Anya Taylor-Joy, Ayo Edebiri, Lily-Rose Depp, Maika Monroe-style audiences): TOP apparel = Reformation, Free People, Madewell, Aritzia, Anthropologie, Ganni, COS, AGOLDE, STAUD, Sezane, Toteme (3-5x baseline). MID = Levi, Uniqlo, Acne Studios, Everlane, Calvin Klein. LOW = FashionNova, SHEIN, Forever 21, Nike, Adidas, Lululemon, PrettyLittleThing (0.3-0.7x). Beauty TOP = Glossier, Rare Beauty, Merit, Tower 28, Saie, Le Labo, Aesop, Byredo. Beauty LOW = Maybelline, NYX, drugstore mass.
+     • MASS-BLOCKBUSTER / MARVEL young female (Scarlett Johansson, Brie Larson, Marvel young-female fans): TOP = Lululemon, Athleta, Nike, Adidas, Madewell, Anthropologie, Free People, Aritzia, Zara (2-3x).
+     • REALITY-TV / KARDASHIAN-AESTHETIC (Kim Kardashian, Bella Hadid, Megan Fox, Bachelor/Vanderpump): TOP = FashionNova, SHEIN, PrettyLittleThing, Revolve, House of CB, Boohoo, Skims (3-5x). LOW = Reformation, Free People, COS, Aritzia, Glossier (0.3-0.6x). Beauty TOP = Anastasia Beverly Hills, Huda Beauty, Tarte, Morphe, Kylie Cosmetics, Fenty, Charlotte Tilbury.
+     • PREPPY / SOUTHERN / HALLMARK (Reese Witherspoon, country/Hallmark): TOP = Lilly Pulitzer, Tuckernuck, J.Crew, Madewell, Vineyard Vines, Tory Burch, Polo Ralph Lauren (2-4x). LOW = alt/streetwear, FashionNova (0.4-0.7x).
+     • Y2K / ALT-FASHION / BIMBOCORE Gen Z (Charli XCX, Sabrina Carpenter, Olivia Rodrigo): TOP = Brandy Melville, Urban Outfitters, Princess Polly, Edikted, Dolls Kill, Selkie, House of Sunny (3-5x).
+     • Mass-male blockbuster (Ryan Reynolds, Dwayne Johnson, John Cena, action-fan male): TOP = Nike, Under Armour, Lululemon (Project Rock), Adidas, Champion, Carhartt, Vans (2-4x). LOW = women-skewing fashion brands (0.3-0.7x).
+     • Older affluent prestige (George Clooney, Meryl Streep, Cate Blanchett, theater-goer): TOP = Nordstrom-house brands, Eileen Fisher, Tory Burch, Theory, Vince, Loro Piana, Brooks Brothers, J.Crew (2-3x). LOW = SHEIN, FashionNova, fast fashion, Gen Z bimbocore (0.2-0.5x).
+     If the persona's digital_identity does not explicitly name an archetype, INFER it from the subject's career and audience signals before scoring. Never produce identical apparel/beauty top-5s across audiences whose archetypes are different.
    - ATHLETE ENGAGEMENT for NON-SPORTS BRANDS: Ask "Does this persona have a specific reason to follow this athlete?" A banking audience doesn't have 23% engagement with any single athlete — they're banking customers, not sports fans. But a Nike Women's audience might legitimately have 15% Griner engagement. Score athletes based on the PERSONA's actual sports interests, not demographics alone. Default for individual athletes in non-sports contexts: 1-5% BP.
      If they ARE parents **but** persona does **not** describe kids actually playing games on shared accounts / tablets (no “device handoff”, no kid subsegment, no family-gaming cues), treat **kid-first titles (Roblox, many LEGO/world-builder kids’ rows)** like **ambient noise** — they must **not** lead the GAMES sheet or exceed plausible **kid-mediated** share; default them **low/trace** versus adult casual titles.
    - THIS IS A U.S. PANEL: foreign-only platforms and retailers have negligible engagement.
