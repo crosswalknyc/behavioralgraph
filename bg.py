@@ -697,20 +697,20 @@ Return ONLY valid JSON (no markdown):
         "BLACK OR AFRICAN AMERICAN": <percent>,
         "HISPANIC OR LATINO": <percent>,
         "ASIAN": <percent>,
-        "OTHER": <percent>
+        "ANOTHER RACE/ETHNICITY": <percent>
     }},
     "INCOME": {{
-        "UNDER $25,000": <percent>,
-        "$25,000-$49,999": <percent>,
-        "$50,000-$74,999": <percent>,
-        "$75,000-$99,999": <percent>,
-        "$100,000-$149,999": <percent>,
-        "$150,000 OR MORE": <percent>
+        "LESS THAN $25,000": <percent>,
+        "$25,000 - $49,999": <percent>,
+        "$50,000 - $74,999": <percent>,
+        "$75,000 - $99,999": <percent>,
+        "$100,000 - $149,999": <percent>,
+        "$150,000 - $249,999": <percent>,
+        "$250,000 OR MORE": <percent>
     }},
     "EDUCATION": {{
         "HIGH SCHOOL OR LESS": <percent>,
-        "SOME COLLEGE": <percent>,
-        "ASSOCIATE DEGREE": <percent>,
+        "SOME COLLEGE / ASSOCIATE DEGREE": <percent>,
         "BACHELOR'S DEGREE": <percent>,
         "GRADUATE OR PROFESSIONAL DEGREE": <percent>
     }},
@@ -726,11 +726,10 @@ Return ONLY valid JSON (no markdown):
     }},
     "RELATIONSHIP": {{
         "SINGLE": <percent>,
-        "MARRIED": <percent>,
         "IN A RELATIONSHIP": <percent>,
+        "MARRIED": <percent>,
         "DIVORCED OR SEPARATED": <percent>,
-        "WIDOWED": <percent>,
-        "PREFER NOT TO SAY": <percent>
+        "WIDOWED": <percent>
     }}
 }}'''
 
@@ -6301,13 +6300,13 @@ def _detect_and_fix_catastrophic_demographics(df, subject_clean, brand_category)
         total_bp = sum(bp for _, bp, _ in eth_items)
         if total_bp > 0:
             shares = {v: bp / total_bp * 100 for v, bp, _ in eth_items}
-            native_pct = shares.get('OTHER', shares.get('NATIVE AMERICAN / ALASKA NATIVE', shares.get('NATIVE AMERICAN', 0)))
+            native_pct = shares.get('ANOTHER RACE/ETHNICITY', shares.get('OTHER', shares.get('NATIVE AMERICAN / ALASKA NATIVE', shares.get('NATIVE AMERICAN', 0))))
             if native_pct > 15:
-                print(f"   🚨 CATASTROPHIC ETHNICITY FAILURE: Other = {native_pct:.1f}%")
+                print(f"   🚨 CATASTROPHIC ETHNICITY FAILURE: Another Race/Ethnicity = {native_pct:.1f}%")
                 print(f"   🔧 Applying GenPop fallback for ETHNICITY distribution")
                 genpop_eth = {
                     'WHITE': 57.8, 'BLACK OR AFRICAN AMERICAN': 11.9, 'HISPANIC OR LATINO': 18.0,
-                    'ASIAN': 6.2, 'OTHER': 6.2
+                    'ASIAN': 6.2, 'ANOTHER RACE/ETHNICITY': 6.2
                 }
                 for val, bp, idx in eth_items:
                     val_upper = val.upper()
@@ -6676,7 +6675,7 @@ def _enforce_all_demographics(df, subject_clean, brand_category):
         if total_bp > 0:
             shares = {v: bp / total_bp * 100 for v, bp, _ in eth_items}
             white_pct = shares.get('WHITE', 0)
-            other_pct = shares.get('OTHER', 0)
+            other_pct = shares.get('ANOTHER RACE/ETHNICITY', shares.get('OTHER', 0))
 
             needs_fix = False
             if other_pct > 20:
@@ -16069,45 +16068,47 @@ Return ONLY a single valid JSON object — no markdown, no commentary.
       "BLACK OR AFRICAN AMERICAN": <percent>,
       "HISPANIC OR LATINO": <percent>,
       "ASIAN": <percent>,
-      "OTHER": <percent>
+      "ANOTHER RACE/ETHNICITY": <percent>
     }},
     "INCOME": {{
-      "UNDER $25,000": <percent>,
-      "$25,000-$49,999": <percent>,
-      "$50,000-$74,999": <percent>,
-      "$75,000-$99,999": <percent>,
-      "$100,000-$149,999": <percent>,
-      "$150,000-$249,999": <percent>,
+      "LESS THAN $25,000": <percent>,
+      "$25,000 - $49,999": <percent>,
+      "$50,000 - $74,999": <percent>,
+      "$75,000 - $99,999": <percent>,
+      "$100,000 - $149,999": <percent>,
+      "$150,000 - $249,999": <percent>,
       "$250,000 OR MORE": <percent>
     }},
     "EDUCATION": {{
       "HIGH SCHOOL OR LESS": <percent>,
-      "SOME COLLEGE": <percent>,
-      "ASSOCIATE DEGREE": <percent>,
+      "SOME COLLEGE / ASSOCIATE DEGREE": <percent>,
       "BACHELOR'S DEGREE": <percent>,
       "GRADUATE OR PROFESSIONAL DEGREE": <percent>
     }},
     "RELATIONSHIP": {{
       "SINGLE": <percent>,
-      "MARRIED": <percent>,
       "IN A RELATIONSHIP": <percent>,
+      "MARRIED": <percent>,
       "DIVORCED OR SEPARATED": <percent>,
-      "WIDOWED": <percent>,
-      "PREFER NOT TO SAY": <percent>
+      "WIDOWED": <percent>
     }},
     "SEXUAL_ORIENTATION": {{
       "STRAIGHT / HETEROSEXUAL": <percent>,
-      "GAY OR LESBIAN": <percent>,
-      "ANOTHER SEXUAL ORIENTATION": <percent>,
+      "LGBTQ+": <percent>,
       "PREFER NOT TO SAY": <percent>
     }},
     "PARENTAL_STATUS": {{
-      "YES": <percent>,
-      "NO": <percent>
+      "NO CHILDREN": <percent>,
+      "HAS CHILDREN": <percent>,
+      "PREFER NOT TO SAY": <percent>
     }},
     "OCCUPATION": {{
-      "OTHER": <percent>,
-      "PREFER NOT TO SAY": <percent>
+      "MANAGEMENT, BUSINESS & PROFESSIONAL": <percent>,
+      "HEALTHCARE PRACTITIONERS OR SUPPORT": <percent>,
+      "SALES & RETAIL": <percent>,
+      "EDUCATION OR LIBRARY SERVICES": <percent>,
+      "SERVICE & HOSPITALITY": <percent>,
+      "OTHER": <percent>
     }}
   }},
   "location": [
@@ -19720,16 +19721,22 @@ def parallel_category_agents(df: pd.DataFrame, persona_doc: dict,
         'AGE': ['17 AND UNDER', '18-24', '25-34', '35-44', '45-54', '55-64', '65 OR OLDER'],
         'GENDER': ['FEMALE', 'MALE', 'NON-BINARY', 'TRANS FEMALE', 'TRANS MALE'],
         'ETHNICITY': ['WHITE', 'BLACK OR AFRICAN AMERICAN', 'HISPANIC OR LATINO', 'ASIAN',
-                       'OTHER'],
-        'INCOME': ['UNDER $25,000', '$25,000-$49,999', '$50,000-$74,999', '$75,000-$99,999',
-                   '$100,000-$149,999', '$150,000-$249,999', '$250,000 OR MORE'],
-        'EDUCATION': ['HIGH SCHOOL OR LESS', 'SOME COLLEGE',
-                     'ASSOCIATE DEGREE', "BACHELOR'S DEGREE", 'GRADUATE OR PROFESSIONAL DEGREE'],
-        'RELATIONSHIP': ['SINGLE', 'MARRIED', 'IN A RELATIONSHIP', 'DIVORCED OR SEPARATED', 'WIDOWED', 'PREFER NOT TO SAY'],
-        'SEXUAL_ORIENTATION': ['STRAIGHT / HETEROSEXUAL', 'GAY OR LESBIAN',
-                               'ANOTHER SEXUAL ORIENTATION', 'PREFER NOT TO SAY'],
+                       'ANOTHER RACE/ETHNICITY'],
+        'INCOME': ['LESS THAN $25,000', '$25,000 - $49,999', '$50,000 - $74,999',
+                   '$75,000 - $99,999', '$100,000 - $149,999', '$150,000 - $249,999',
+                   '$250,000 OR MORE'],
+        'EDUCATION': ['HIGH SCHOOL OR LESS', 'SOME COLLEGE / ASSOCIATE DEGREE',
+                      "BACHELOR'S DEGREE", 'GRADUATE OR PROFESSIONAL DEGREE'],
+        'RELATIONSHIP': ['SINGLE', 'IN A RELATIONSHIP', 'MARRIED',
+                         'DIVORCED OR SEPARATED', 'WIDOWED'],
+        'SEXUAL_ORIENTATION': ['STRAIGHT / HETEROSEXUAL', 'LGBTQ+', 'PREFER NOT TO SAY'],
         'PARENTAL_STATUS': ['NO CHILDREN', 'HAS CHILDREN', 'PREFER NOT TO SAY'],
-        'OCCUPATION': ['OTHER', 'PREFER NOT TO SAY'],
+        'OCCUPATION': ['MANAGEMENT, BUSINESS & PROFESSIONAL', 'HEALTHCARE PRACTITIONERS OR SUPPORT',
+                       'SALES & RETAIL', 'EDUCATION OR LIBRARY SERVICES',
+                       'SERVICE & HOSPITALITY', 'SCIENCE, TECHNOLOGY & TECHNICAL PROFESSIONS',
+                       'SKILLED TRADES/CONSTRUCTION OR MAINTENANCE', 'AGRICULTURE & OUTDOOR',
+                       'TRANSPORTATION & LOGISTICS', 'MANUFACTURING & PRODUCTION',
+                       'PUBLIC SAFETY & PROTECTIVE SERVICES', 'LEGAL', 'OTHER'],
     }
 
     def _norm_bracket(s: str) -> str:
@@ -19787,20 +19794,24 @@ def parallel_category_agents(df: pd.DataFrame, persona_doc: dict,
     # persona values are written so we end up with exactly the canonical set.
     _DEMO_RENAME_MAP = {
         'EDUCATION': {
-            'HIGH SCHOOL OR LESS': 'LESS THAN HIGH SCHOOL',
+            'LESS THAN HIGH SCHOOL': 'HIGH SCHOOL OR LESS',
+            'HIGH SCHOOL GRADUATE': 'HIGH SCHOOL OR LESS',
             'GRADUATE DEGREE': 'GRADUATE OR PROFESSIONAL DEGREE',
             'SOME COLLEGE': 'SOME COLLEGE / ASSOCIATE DEGREE',
             'ASSOCIATE DEGREE': 'SOME COLLEGE / ASSOCIATE DEGREE',
         },
         'RELATIONSHIP': {
-            'DIVORCED OR SEPARATED': 'DIVORCED',
-            'IN A RELATIONSHIP': 'DOMESTIC PARTNERSHIP',
+            'DOMESTIC PARTNERSHIP': 'IN A RELATIONSHIP',
+            'DIVORCED': 'DIVORCED OR SEPARATED',
         },
         'ETHNICITY': {
-            'NATIVE AMERICAN / ALASKA NATIVE': 'OTHER',
-            'NATIVE AMERICAN': 'OTHER',
-            'ALASKA NATIVE': 'OTHER',
-            'ANOTHER RACE/ETHNICITY': 'OTHER',
+            'NATIVE AMERICAN / ALASKA NATIVE': 'ANOTHER RACE/ETHNICITY',
+            'NATIVE AMERICAN': 'ANOTHER RACE/ETHNICITY',
+            'ALASKA NATIVE': 'ANOTHER RACE/ETHNICITY',
+            'OTHER': 'ANOTHER RACE/ETHNICITY',
+        },
+        'INCOME': {
+            'UNDER $25,000': 'LESS THAN $25,000',
         },
     }
 
@@ -19877,21 +19888,19 @@ def parallel_category_agents(df: pd.DataFrame, persona_doc: dict,
                 df.at[idx, 'Value'] = expected
                 break
 
-    # Remove "Prefer Not to Say" and other non-canonical rows from ALL demo categories.
-    # OTHER is a canonical ETHNICITY bucket, so skip it for ETHNICITY.
+    # Remove non-canonical rows from ALL demo categories.
+    # Use _EXPECTED_DEMO_BUCKETS as the source of truth for what's canonical.
     _DROP_CATS = set(_EXPECTED_DEMO_BUCKETS.keys())
-    _DROP_VALUES = {'PREFER NOT TO SAY', 'ANOTHER RACE/ETHNICITY', 'NONE'}
     drop_indices = []
     for cat in _DROP_CATS:
+        _ec_norms = {_norm_bracket(v) for v in _EXPECTED_DEMO_BUCKETS.get(cat, [])}
         cat_mask = df['Column'].astype(str).str.strip().str.upper() == cat
         for idx in df[cat_mask].index:
-            val_u = str(df.at[idx, 'Value']).strip().upper()
-            if val_u in _DROP_VALUES:
-                drop_indices.append(idx)
-            elif val_u == 'OTHER' and cat != 'ETHNICITY':
+            val_norm = _norm_bracket(str(df.at[idx, 'Value']))
+            if val_norm not in _ec_norms:
                 drop_indices.append(idx)
     if drop_indices:
-        print(f"   🗑️ Removing {len(drop_indices)} 'Prefer Not to Say'/non-canonical rows from demographics")
+        print(f"   🗑️ Removing {len(drop_indices)} non-canonical rows from demographics")
         df = df.drop(drop_indices).reset_index(drop=True)
 
     # Renormalize each demographic category to sum to exactly 100%
@@ -26671,7 +26680,7 @@ def get_hardcoded_genpop_demographics():
             ('HISPANIC OR LATINO', 18.0, 1800000),
             ('BLACK OR AFRICAN AMERICAN', 13.0, 1300000),
             ('ASIAN', 6.0, 600000),
-            ('OTHER', 4.0, 400000)
+            ('ANOTHER RACE/ETHNICITY', 4.0, 400000)
         ],
         'GENDER': [
             ('MALE', 49.17, 4917000),
@@ -40247,17 +40256,24 @@ def normalize_output_text_values(df):
                 'NATIVE AMERICAN / ALASKA NATIVE',
                 'NATIVE AMERICAN',
                 'ALASKA NATIVE',
-                'ANOTHER RACE/ETHNICITY',
+                'OTHER',
             }:
-                return 'OTHER'
+                return 'ANOTHER RACE/ETHNICITY'
         elif c == 'EDUCATION':
             if vu in {'GRADUATE DEGREE'}:
                 return 'GRADUATE OR PROFESSIONAL DEGREE'
             if vu in {'LESS THAN HIGH SCHOOL', 'HIGH SCHOOL GRADUATE'}:
                 return 'HIGH SCHOOL OR LESS'
+            if vu in {'SOME COLLEGE', 'ASSOCIATE DEGREE'}:
+                return 'SOME COLLEGE / ASSOCIATE DEGREE'
         elif c == 'RELATIONSHIP':
             if vu in {'DIVORCED', 'SEPARATED'}:
                 return 'DIVORCED OR SEPARATED'
+            if vu in {'DOMESTIC PARTNERSHIP'}:
+                return 'IN A RELATIONSHIP'
+        elif c == 'INCOME':
+            if vu in {'UNDER $25,000'}:
+                return 'LESS THAN $25,000'
         elif c == 'OCCUPATION':
             if vu in {'SELF-EMPLOYED', 'RETIRED', 'STUDENT', 'HOMEMAKER', 'UNEMPLOYED'}:
                 return 'OTHER'
