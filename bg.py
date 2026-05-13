@@ -19785,56 +19785,64 @@ def parallel_category_agents(df: pd.DataFrame, persona_doc: dict,
     # with the canonical set (e.g. "HIGH SCHOOL OR LESS" overlaps with
     # "LESS THAN HIGH SCHOOL" + "HIGH SCHOOL GRADUATE").  Merge them BEFORE
     # persona values are written so we end up with exactly the canonical set.
-    _DEMO_MERGE_MAP = {
+    _DEMO_RENAME_MAP = {
         'EDUCATION': {
-            'HIGH SCHOOL OR LESS': ['LESS THAN HIGH SCHOOL', 'HIGH SCHOOL GRADUATE'],
-            'GRADUATE OR PROFESSIONAL DEGREE': ['GRADUATE DEGREE'],
+            'HIGH SCHOOL OR LESS': 'LESS THAN HIGH SCHOOL',
+            'GRADUATE DEGREE': 'GRADUATE OR PROFESSIONAL DEGREE',
+            'SOME COLLEGE': 'SOME COLLEGE / ASSOCIATE DEGREE',
+            'ASSOCIATE DEGREE': 'SOME COLLEGE / ASSOCIATE DEGREE',
         },
         'RELATIONSHIP': {
-            'DIVORCED OR SEPARATED': ['DIVORCED'],
+            'DIVORCED OR SEPARATED': 'DIVORCED',
+            'IN A RELATIONSHIP': 'DOMESTIC PARTNERSHIP',
         },
         'ETHNICITY': {
-            'NATIVE AMERICAN / ALASKA NATIVE': ['OTHER'],
-            'ANOTHER RACE/ETHNICITY': ['OTHER'],
+            'NATIVE AMERICAN / ALASKA NATIVE': 'OTHER',
+            'NATIVE AMERICAN': 'OTHER',
+            'ALASKA NATIVE': 'OTHER',
+            'ANOTHER RACE/ETHNICITY': 'OTHER',
         },
     }
-    for _merge_cat, _merge_rules in _DEMO_MERGE_MAP.items():
-        for _nc_label, _target_labels in _merge_rules.items():
-            _nc_norm = _norm_bracket(_nc_label)
-            _cat_m = df['Column'].astype(str).str.strip().str.upper() == _merge_cat
-            _nc_idxs = [i for i in df[_cat_m].index
-                        if _norm_bracket(str(df.at[i, 'Value'])) == _nc_norm]
-            if not _nc_idxs:
-                continue
-            _nc_bp = sum(float(df.at[i, bp_col] or 0) for i in _nc_idxs)
-            _tgt_idxs = {}
-            for _tl in _target_labels:
-                _tl_norm = _norm_bracket(_tl)
-                for i in df[_cat_m].index:
-                    if _norm_bracket(str(df.at[i, 'Value'])) == _tl_norm:
-                        _tgt_idxs[_tl] = i
-                        break
-            if _nc_bp > 0 and _tgt_idxs:
-                _tgt_total = sum(float(df.at[i, bp_col] or 0) for i in _tgt_idxs.values())
-                if len(_tgt_idxs) == 1:
-                    _ti = list(_tgt_idxs.values())[0]
-                    df.at[_ti, bp_col] = float(df.at[_ti, bp_col] or 0) + _nc_bp
-                    if pct_col and pct_col in df.columns:
-                        df.at[_ti, pct_col] = df.at[_ti, bp_col]
-                elif _tgt_total > 0:
-                    for _tl, _ti in _tgt_idxs.items():
-                        _share = float(df.at[_ti, bp_col] or 0) / _tgt_total
-                        df.at[_ti, bp_col] = float(df.at[_ti, bp_col] or 0) + _nc_bp * _share
-                        if pct_col and pct_col in df.columns:
-                            df.at[_ti, pct_col] = df.at[_ti, bp_col]
-                else:
-                    _equal = _nc_bp / len(_tgt_idxs)
-                    for _ti in _tgt_idxs.values():
-                        df.at[_ti, bp_col] = float(df.at[_ti, bp_col] or 0) + _equal
-                        if pct_col and pct_col in df.columns:
-                            df.at[_ti, pct_col] = df.at[_ti, bp_col]
-            df = df.drop(_nc_idxs).reset_index(drop=True)
-            print(f"   🔄 Merged '{_nc_label}' into {_target_labels} in {_merge_cat}")
+
+    _rename_count = 0
+    for _ren_cat, _ren_rules in _DEMO_RENAME_MAP.items():
+        _cat_m = df['Column'].astype(str).str.strip().str.upper() == _ren_cat
+        for idx in df[_cat_m].index:
+            _val = str(df.at[idx, 'Value']).strip()
+            _val_norm = _norm_bracket(_val)
+            for _old, _new in _ren_rules.items():
+                if _val_norm == _norm_bracket(_old):
+                    df.at[idx, 'Value'] = _new
+                    _rename_count += 1
+                    break
+    if _rename_count:
+        print(f"   🔄 Renamed {_rename_count} non-canonical demographic labels")
+
+    # Combine duplicate rows within each demographic category (sum their BP)
+    _combine_count = 0
+    for _cc in list(_DEMO_RENAME_MAP.keys()) | set(_EXPECTED_DEMO_BUCKETS.keys()):
+        _cat_m = df['Column'].astype(str).str.strip().str.upper() == _cc
+        _cat_idxs = list(df[_cat_m].index)
+        if not _cat_idxs:
+            continue
+        _seen = {}
+        _dups_to_drop = []
+        for idx in _cat_idxs:
+            _vn = _norm_bracket(str(df.at[idx, 'Value']))
+            if _vn in _seen:
+                _keep_idx = _seen[_vn]
+                _dup_bp = float(df.at[idx, bp_col] or 0)
+                df.at[_keep_idx, bp_col] = float(df.at[_keep_idx, bp_col] or 0) + _dup_bp
+                if pct_col and pct_col in df.columns:
+                    df.at[_keep_idx, pct_col] = df.at[_keep_idx, bp_col]
+                _dups_to_drop.append(idx)
+                _combine_count += 1
+            else:
+                _seen[_vn] = idx
+        if _dups_to_drop:
+            df = df.drop(_dups_to_drop).reset_index(drop=True)
+    if _combine_count:
+        print(f"   🔗 Combined {_combine_count} duplicate demographic rows after rename")
 
     # After merging, enforce that ONLY canonical buckets remain in each
     # demographic category.  Any row whose Value doesn't match an expected
@@ -19869,20 +19877,38 @@ def parallel_category_agents(df: pd.DataFrame, persona_doc: dict,
                 df.at[idx, 'Value'] = expected
                 break
 
-    # Remove "Prefer Not to Say" / "Other" rows from non-ethnicity demographics.
-    # ETHNICITY keeps OTHER as a valid output bucket.
-    _NO_PNTS_CATS = {'AGE', 'GENDER', 'INCOME'}
-    _DROP_VALUES = {'PREFER NOT TO SAY', 'OTHER'}
+    # Remove "Prefer Not to Say" and other non-canonical rows from ALL demo categories.
+    # OTHER is a canonical ETHNICITY bucket, so skip it for ETHNICITY.
+    _DROP_CATS = set(_EXPECTED_DEMO_BUCKETS.keys())
+    _DROP_VALUES = {'PREFER NOT TO SAY', 'ANOTHER RACE/ETHNICITY', 'NONE'}
     drop_indices = []
-    for cat in _NO_PNTS_CATS:
+    for cat in _DROP_CATS:
         cat_mask = df['Column'].astype(str).str.strip().str.upper() == cat
         for idx in df[cat_mask].index:
             val_u = str(df.at[idx, 'Value']).strip().upper()
             if val_u in _DROP_VALUES:
                 drop_indices.append(idx)
+            elif val_u == 'OTHER' and cat != 'ETHNICITY':
+                drop_indices.append(idx)
     if drop_indices:
-        print(f"   🗑️ Removing {len(drop_indices)} 'Prefer Not to Say'/'Other' rows from AGE/GENDER/INCOME")
+        print(f"   🗑️ Removing {len(drop_indices)} 'Prefer Not to Say'/non-canonical rows from demographics")
         df = df.drop(drop_indices).reset_index(drop=True)
+
+    # Renormalize each demographic category to sum to exactly 100%
+    for _rn_cat in _EXPECTED_DEMO_BUCKETS:
+        _rn_mask = df['Column'].astype(str).str.strip().str.upper() == _rn_cat
+        _rn_idxs = list(df[_rn_mask].index)
+        if not _rn_idxs:
+            continue
+        _rn_total = sum(float(df.at[i, bp_col] or 0) for i in _rn_idxs)
+        if _rn_total > 0 and abs(_rn_total - 100.0) > 0.5:
+            for i in _rn_idxs:
+                _old = float(df.at[i, bp_col] or 0)
+                _new = round(_old / _rn_total * 100.0, 4)
+                df.at[i, bp_col] = _new
+                if pct_col and pct_col in df.columns:
+                    df.at[i, pct_col] = _new
+            print(f"   📐 Renormalized {_rn_cat}: {_rn_total:.2f}% → 100.00%")
 
     # Write persona_doc values to DataFrame.
     # When lock_demographics=True (rerun), write the EXACT prior values rounded
