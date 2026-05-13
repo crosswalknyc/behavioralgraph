@@ -6301,13 +6301,13 @@ def _detect_and_fix_catastrophic_demographics(df, subject_clean, brand_category)
         total_bp = sum(bp for _, bp, _ in eth_items)
         if total_bp > 0:
             shares = {v: bp / total_bp * 100 for v, bp, _ in eth_items}
-            native_pct = shares.get('NATIVE AMERICAN / ALASKA NATIVE', shares.get('NATIVE AMERICAN', 0))
+            native_pct = shares.get('OTHER', shares.get('NATIVE AMERICAN / ALASKA NATIVE', shares.get('NATIVE AMERICAN', 0)))
             if native_pct > 15:
-                print(f"   🚨 CATASTROPHIC ETHNICITY FAILURE: Native American = {native_pct:.1f}%")
+                print(f"   🚨 CATASTROPHIC ETHNICITY FAILURE: Other = {native_pct:.1f}%")
                 print(f"   🔧 Applying GenPop fallback for ETHNICITY distribution")
                 genpop_eth = {
                     'WHITE': 57.8, 'BLACK OR AFRICAN AMERICAN': 11.9, 'HISPANIC OR LATINO': 18.0,
-                    'ASIAN': 6.2, 'NATIVE AMERICAN / ALASKA NATIVE': 1.0, 'ANOTHER RACE/ETHNICITY': 5.2
+                    'ASIAN': 6.2, 'OTHER': 6.2
                 }
                 for val, bp, idx in eth_items:
                     val_upper = val.upper()
@@ -8313,10 +8313,8 @@ JSON only.
                         return 19.0
                     if 'ASIAN' in _lu:
                         return 7.0
-                    if 'NATIVE AMERICAN' in _lu or 'ALASKA NATIVE' in _lu:
-                        return 1.0
-                    if 'ANOTHER RACE' in _lu or 'OTHER' in _lu:
-                        return 3.0
+                    if 'OTHER' in _lu or 'NATIVE AMERICAN' in _lu or 'ALASKA NATIVE' in _lu or 'ANOTHER RACE' in _lu:
+                        return 6.0
                 if _cat == 'GENDER':
                     if _lu == 'MALE':
                         return 49.0
@@ -19795,6 +19793,10 @@ def parallel_category_agents(df: pd.DataFrame, persona_doc: dict,
         'RELATIONSHIP': {
             'DIVORCED OR SEPARATED': ['DIVORCED'],
         },
+        'ETHNICITY': {
+            'NATIVE AMERICAN / ALASKA NATIVE': ['OTHER'],
+            'ANOTHER RACE/ETHNICITY': ['OTHER'],
+        },
     }
     for _merge_cat, _merge_rules in _DEMO_MERGE_MAP.items():
         for _nc_label, _target_labels in _merge_rules.items():
@@ -26643,7 +26645,7 @@ def get_hardcoded_genpop_demographics():
             ('HISPANIC OR LATINO', 18.0, 1800000),
             ('BLACK OR AFRICAN AMERICAN', 13.0, 1300000),
             ('ASIAN', 6.0, 600000),
-            ('ANOTHER RACE/ETHNICITY', 4.0, 400000)
+            ('OTHER', 4.0, 400000)
         ],
         'GENDER': [
             ('MALE', 49.17, 4917000),
