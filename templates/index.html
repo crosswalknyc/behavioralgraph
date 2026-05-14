@@ -749,7 +749,7 @@
             right: 0;
             min-width: 100%;
             width: max-content;
-            max-width: min(440px, calc(100vw - 1rem));
+            max-width: min(380px, calc(100vw - 1rem));
             margin-top: 6px;
             box-sizing: border-box;
             background: #352A5C;
@@ -759,16 +759,21 @@
             z-index: 1000;
             max-height: 480px;
             overflow-y: auto;
+            overflow-x: hidden;
+            flex-direction: column;
+            align-items: stretch;
         }
-        .view-nav-panel.open { display: block; }
+        /* inline-flex: width stays max(label lengths) while rows stretch full panel width for hover */
+        .view-nav-panel.open { display: inline-flex; }
         .view-nav-option {
-            padding: 0.5rem 1rem;
+            padding: 0.45rem 0.75rem;
             cursor: pointer;
             color: #fff;
-            font-size: 0.9rem;
+            font-size: 0.88rem;
             border: none;
             background: none;
             display: block;
+            width: 100%;
             box-sizing: border-box;
             text-align: left;
             white-space: nowrap;
