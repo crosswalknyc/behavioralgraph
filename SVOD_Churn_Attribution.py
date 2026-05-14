@@ -3144,11 +3144,6 @@ def write_output(df_summary, df_comp, df_demo, df_timing, df_episode_attribution
     if ai_real_world:
         GPP_DIVISOR = US_POPULATION / SAMPLE_REPRESENTS  # ~32.99
         for idx in df_out.index:
-            cat = str(df_out.loc[idx, "Category"] or "")
-            # Skip user-entered config rows (Exclusion/Attribution Window days) — these are not counts
-            # and must preserve the exact value the user entered.
-            if "Exclusion Window" in cat or "Attribution Window" in cat:
-                continue
             c = df_out.loc[idx, "Count"]
             if c != "" and c is not None and not pd.isna(c):
                 try:

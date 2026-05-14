@@ -98,16 +98,37 @@
             color: white;
         }
 
+        /* App shell: flex column + dynamic viewport so content tracks browser resize */
+        html {
+            height: 100%;
+            overflow: hidden;
+        }
         body {
             font-family: 'Poppins', 'DM Sans', -apple-system, BlinkMacSystemFont, sans-serif;
             background: var(--bg-dark);
             color: var(--text-primary);
-            min-height: 100vh;
             line-height: 1.6;
             overflow: hidden;
+            height: 100%;
+            min-height: 100dvh;
+            width: 100%;
+            max-width: 100%;
+            display: flex;
+            flex-direction: column;
+            box-sizing: border-box;
         }
 
-        .container { max-width: 100%; margin: 0 auto; padding: 1rem 1rem 0.33rem 1rem; overflow: hidden; height: 100vh; display: flex; flex-direction: column; }
+        .container {
+            max-width: 100%;
+            width: 100%;
+            margin: 0 auto;
+            padding: clamp(0.35rem, 1.5vw, 1rem) clamp(0.5rem, 2vw, 1rem) 0.33rem clamp(0.5rem, 2vw, 1rem);
+            overflow: hidden;
+            flex: 1 1 0%;
+            min-height: 0;
+            display: flex;
+            flex-direction: column;
+        }
 
         header {
             display: flex;
@@ -116,6 +137,8 @@
             margin-bottom: 0.5rem;
             padding-bottom: 0.5rem;
             border-bottom: 1px solid var(--border-color);
+            flex-wrap: wrap;
+            min-width: 0;
         }
 
         .logo { width: 50px; height: auto; }
@@ -148,7 +171,10 @@
         .user-info-bar {
             display: flex;
             align-items: center;
-            gap: 1.5rem;
+            gap: clamp(0.5rem, 2vw, 1.5rem);
+            flex-wrap: wrap;
+            justify-content: flex-end;
+            min-width: 0;
         }
 
         .credits-display {
@@ -367,10 +393,11 @@
         /* Profile Picture Upload Modal */
         .profile-settings-modal {
             position: fixed;
-            top: 0;
-            left: 0;
-            width: 100vw;
-            height: 100vh;
+            inset: 0;
+            width: auto;
+            height: auto;
+            max-width: 100%;
+            max-height: 100%;
             background: rgba(0, 0, 0, 0.7);
             display: none;
             justify-content: center;
@@ -386,7 +413,7 @@
             padding: 2rem;
             max-width: 480px;
             width: 92%;
-            max-height: 85vh;
+            max-height: min(85vh, 85dvh);
             overflow-y: auto;
         }
         .profile-settings-content h3 {
@@ -653,8 +680,10 @@
             align-items: flex-end;
             gap: 0.5rem;
             margin-left: auto;
+            min-width: 0;
+            max-width: 100%;
         }
-        .view-toggle { display: flex; align-items: center; gap: 0.75rem; }
+        .view-toggle { display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap; justify-content: flex-end; min-width: 0; max-width: 100%; }
         .view-nav-label {
             color: #C8B4D4;
             font-size: 0.85rem;
@@ -688,9 +717,9 @@
             position: relative;
             display: flex;
             align-items: center;
-            min-width: 220px;
-            flex: 1;
-            max-width: 280px;
+            min-width: min(220px, 100%);
+            flex: 1 1 auto;
+            max-width: min(320px, 100%);
         }
         .view-nav-trigger {
             padding: 0.5rem 2.25rem 0.5rem 0.75rem;
@@ -713,9 +742,13 @@
             display: none;
             position: absolute;
             top: 100%;
-            left: 0;
+            left: auto;
             right: 0;
+            min-width: 100%;
+            width: max-content;
+            max-width: min(440px, calc(100vw - 1rem));
             margin-top: 6px;
+            box-sizing: border-box;
             background: #352A5C;
             border: 1px solid #BC91F9;
             border-radius: 12px;
@@ -732,12 +765,13 @@
             font-size: 0.9rem;
             border: none;
             background: none;
-            width: 100%;
+            display: block;
+            box-sizing: border-box;
             text-align: left;
+            white-space: nowrap;
         }
         .view-nav-option:hover { background: rgba(188, 145, 249, 0.25); }
         .view-nav-option:disabled, .view-nav-option.disabled { opacity: 0.6; cursor: not-allowed; }
-        .user-info-bar { display: flex; align-items: center; gap: 1rem; }
         .view-btn {
             padding: 0.5rem 1rem;
             background: var(--bg-input);
@@ -780,7 +814,7 @@
             background: rgba(74, 138, 201, 0.2);
         }
 
-        #formView { display: none; flex: 1; overflow-y: auto; }
+        #formView { display: none; flex: 1 1 0%; min-height: 0; overflow-y: auto; }
         #customAnalysisView { display: none; flex-direction: column; flex: 1; overflow: hidden; }
         #customAnalysisView.active { display: flex; }
         #dashboardView { display: flex; flex-direction: column; flex: 1 1 0%; min-height: 0; overflow: hidden; }
@@ -2068,6 +2102,8 @@
             flex-direction: row;
             align-items: flex-start;
             gap: 1rem;
+            flex: 1 1 auto;
+            min-width: 0;
         }
         
         .dash-profile-image {
@@ -2125,36 +2161,19 @@
             grid-template-rows: auto auto;
             gap: 0.5rem;
             flex: 1;
+            min-width: 0;
             margin-left: 1rem;
         }
 
-        /* Subscriber IQ: explicit grid areas for meta + Drop Date row */
-        #subscriberIQView .dash-meta-grid.subscriber-dash-meta-grid {
-            grid-template-rows: auto auto auto;
-            justify-items: stretch;
-            grid-template-areas:
-                "subdaterange subattr"
-                "subexcl      subcad"
-                "subdrop      .";
-        }
-        #subscriberIQView .dash-meta-grid.subscriber-dash-meta-grid #subscriberDateRangeHeader {
-            grid-area: subdaterange;
-        }
-        #subscriberIQView .dash-meta-grid.subscriber-dash-meta-grid #subscriberAttributionWindow {
-            grid-area: subattr;
-        }
-        #subscriberIQView .dash-meta-grid.subscriber-dash-meta-grid #subscriberExclusionWindow {
-            grid-area: subexcl;
-        }
-        #subscriberIQView .dash-meta-grid.subscriber-dash-meta-grid #subscriberContentCadence {
-            grid-area: subcad;
-        }
-        #subscriberIQView .dash-meta-grid.subscriber-dash-meta-grid #subscriberDropDate.subscriber-drop-meta {
-            grid-area: subdrop;
+        #subscriberIQView #subscriberDropDate {
+            grid-column: 1;
+            grid-row: 3;
+            align-self: start;
             color: var(--accent-lime);
+            font-size: 0.8rem;
             font-weight: 700;
+            padding: 0.15rem 0 0 0;
             white-space: normal;
-            text-align: left;
         }
 
         .dash-brand-box {
@@ -3149,26 +3168,27 @@
         .dashboard-layout {
             display: flex;
             flex-direction: row;
-            gap: 1rem;
-            flex: 1;
+            gap: clamp(0.5rem, 1.5vw, 1rem);
+            flex: 1 1 0%;
+            min-height: 0;
             overflow: hidden;
-            height: calc(100vh - 120px); /* Reduced from 180px to minimize bottom space */
         }
         
         .persistent-sidebar {
-            width: 280px;
-            min-width: 280px;
+            flex: 0 1 280px;
+            width: min(280px, 42vw);
+            min-width: min(200px, 32vw);
             max-width: 280px;
             background: var(--bg-card);
             border-radius: 8px;
-            padding: 1rem;
+            padding: clamp(0.5rem, 2vw, 1rem);
             overflow-y: auto; /* Enable vertical scrolling */
             overflow-x: hidden;
-            flex-shrink: 0;
             text-align: left;
             display: flex;
             flex-direction: column;
-            height: 100%; /* Take full height of parent */
+            min-height: 0;
+            align-self: stretch;
         }
         
         .sidebar-tab-info {
@@ -3201,8 +3221,8 @@
         /* Action row: first column = sidebar width (280px), gap = 1rem, header never starts before this mark; tight top margin to match padding above profile */
         .action-buttons-row {
             display: grid;
-            grid-template-columns: minmax(280px, 280px) 1fr;
-            gap: 1rem;
+            grid-template-columns: minmax(0, min(280px, 42vw)) 1fr;
+            gap: clamp(0.5rem, 1.5vw, 1rem);
             align-items: center;
             margin-top: 0.1rem;
             margin-bottom: 0.35rem;
@@ -3213,6 +3233,21 @@
             min-width: 0;
             margin-left: 0;
             padding-left: 0;
+        }
+        @media (max-width: 720px) {
+            .dashboard-layout {
+                flex-direction: column;
+            }
+            .persistent-sidebar {
+                width: 100%;
+                max-width: none;
+                min-width: 0;
+                flex: 0 0 auto;
+                max-height: min(42vh, 320px);
+            }
+            .action-buttons-row {
+                grid-template-columns: 1fr;
+            }
         }
         /* Content action buttons - first column only; never encroach into header space */
         .content-action-buttons {
@@ -16104,12 +16139,12 @@
                                     <div class="dash-brand-box" id="subscriberShowNameHeader"></div>
                                     <div class="dash-meta-box" id="subscriberPlatformHeader" style="display: none;"></div>
                                 </div>
-                                <div class="dash-meta-grid subscriber-dash-meta-grid">
+                                <div class="dash-meta-grid">
                                     <div class="dash-meta-box" id="subscriberDateRangeHeader" style="display: none;"></div>
                                     <div class="dash-meta-box" id="subscriberAttributionWindow" style="display: none;"></div>
                                     <div class="dash-meta-box" id="subscriberExclusionWindow" style="display: none;"></div>
                                     <div class="dash-meta-box" id="subscriberContentCadence" style="display: none;"></div>
-                                    <div class="dash-meta-box subscriber-drop-meta" id="subscriberDropDate" style="display: none;"></div>
+                                    <div id="subscriberDropDate" style="display: none;"></div>
                                 </div>
                             </div>
                         </div>
