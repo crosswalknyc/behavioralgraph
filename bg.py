@@ -282,7 +282,7 @@ import math
 import hashlib
 import glob
 from datetime import datetime
-from genpop_calibration import calibrate_to_genpop
+from genpop_calibration import calibrate_to_genpop, enforce_genpop_ceiling
 import json as _json_mod
 import time as _time
 
@@ -25989,6 +25989,11 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
         df_final = reconcile_final_output_from_bp_and_sample_size(df_final)
         df_final = add_us_gen_pop_projection(df_final)
     df_final = perturb_brand_penetration_avoid_dot_0000(df_final)
+    # ── Runtime ground-truth ceiling (non-genpop only) ────────────────────
+    # Cap each brand at GENPOP_CEILING_RATIO × canonical_truth_pct. Skips
+    # demographic categories — they remain hard-locked.
+    if not is_genpop:
+        df_final = enforce_genpop_ceiling(df_final)
     df_final = reconcile_final_output_from_bp_and_sample_size(df_final)
     df_final = add_us_gen_pop_projection(df_final)
 

@@ -1500,6 +1500,132 @@ CORRECTION_FACTORS = _build_correction_factors()
 
 # ── Public API ────────────────────────────────────────────────────────────────
 
+# Maximum ratio a per-profile BP may exceed its canonical (ground-truth) value.
+# Personas can legitimately over-index — Pedro Pascal genuinely uses HBO Max
+# (TLOU) more than gen pop. But blanket "agent ignored the anchor" overshoots
+# (Pedro v3 Apple TV+ at 28.8 vs canonical 9.8 = 2.94x) need a cap.
+# 1.8x allows generous persona uplift while blocking gross overshoots.
+GENPOP_CEILING_RATIO = 1.8
+
+# Load SEC-anchored ground truth from migration/validate_genpop.py.
+# Restricting the ceiling enforcer to ONLY these ~140 explicitly-SEC-validated
+# brands avoids over-capping for the long tail of curated entries in
+# GENPOP_CORRECTIONS where the "corrected" value is hand-tuned rather than
+# SEC-anchored. Older curated entries can still legitimately be exceeded by
+# a persona-driven over-index.
+def _load_ceiling_targets() -> dict:
+    """Return {(category, value): canonical_truth_pct} for SEC-anchored brands.
+    Falls back to {} if the validator module isn't importable (e.g. when
+    genpop_calibration is loaded outside the repo)."""
+    try:
+        import os, sys as _sys
+        _here = os.path.dirname(os.path.abspath(__file__))
+        for _p in [
+            os.path.join(_here, '..', 'migration'),
+            os.path.join(_here, 'migration'),
+        ]:
+            if os.path.isdir(_p) and _p not in _sys.path:
+                _sys.path.insert(0, _p)
+        from validate_genpop import GROUND_TRUTH, implied_truth_pct  # type: ignore
+        targets: dict = {}
+        for key, gt in GROUND_TRUTH.items():
+            t = implied_truth_pct(gt)
+            if t is not None and t > 0:
+                targets[key] = float(t)
+        return targets
+    except Exception as _e:
+        if not SILENCE_VERBOSE_OUTPUT:
+            print(f"⚠️ enforce_genpop_ceiling: could not load GROUND_TRUTH ({_e}); ceiling disabled")
+        return {}
+
+
+CANONICAL_TRUTH = _load_ceiling_targets()
+
+# Aliases — when the per-profile output uses a short form but the canonical
+# uses a long form (or vice versa), map the per-profile key to the truth key.
+# Keep in sync with migration/recalibrate_canonical_genpop.py ALIAS_MAP.
+_CEILING_ALIASES = {
+    ('SPORTS ORGANIZATIONS', 'NFL'): ('SPORTS ORGANIZATIONS', 'NATIONAL FOOTBALL LEAGUE'),
+    ('SPORTS ORGANIZATIONS', 'NBA'): ('SPORTS ORGANIZATIONS', 'NATIONAL BASKETBALL ASSOCIATION'),
+    ('SPORTS ORGANIZATIONS', 'MLB'): ('SPORTS ORGANIZATIONS', 'MAJOR LEAGUE BASEBALL'),
+    ('SPORTS ORGANIZATIONS', 'NHL'): ('SPORTS ORGANIZATIONS', 'NATIONAL HOCKEY LEAGUE'),
+    ('SPORTS ORGANIZATIONS', 'NCAA'): ('SPORTS ORGANIZATIONS', 'NATIONAL COLLEGIATE ATHLETIC ASSOCIATION'),
+    ('SPORTS ORGANIZATIONS', 'WWE'): ('SPORTS ORGANIZATIONS', 'WORLD WRESTLING ENTERTAINMENT'),
+    ('STREAMING/PLATFORM', 'MAX'): ('STREAMING/PLATFORM', 'HBO MAX'),
+}
+
+
+def enforce_genpop_ceiling(df: pd.DataFrame, ceiling_ratio: float = GENPOP_CEILING_RATIO) -> pd.DataFrame:
+    """Runtime safety net — cap each brand's Brand Penetration (Row) at
+    ceiling_ratio × canonical_truth_pct.
+
+    Acts ONLY on rows where (Column, Value) is in CANONICAL_TRUTH. Rows
+    without ground truth pass through unchanged. Demographic rows
+    (AGE/GENDER/INCOME/EDUCATION/ETHNICITY/LOCATION/etc.) are NEVER
+    touched — same skip set as calibrate_to_genpop.
+
+    When a cap fires, recomputes Original Raw Numbers and US Gen Pop
+    Projection from the new BP so downstream math stays consistent.
+    """
+    if df is None or df.empty or not CANONICAL_TRUTH:
+        return df
+
+    df = df.copy()
+
+    skip_categories = {
+        'INPUT_METADATA', 'BRAND INPUT', 'SAMPLE SIZE', 'AVID FAN', 'CASUAL FAN',
+        'AGE', 'EDUCATION', 'ETHNICITY', 'GENDER', 'INCOME',
+        'RELATIONSHIP', 'SEXUAL_ORIENTATION', 'PARENTAL_STATUS',
+        'OCCUPATION', 'LOCATION',
+    }
+
+    sample_size = _get_sample_size(df)
+    capped_count = 0
+    capped_examples = []
+
+    for idx, row in df.iterrows():
+        category = str(row.get('Column', '')).upper().strip()
+        if category in skip_categories:
+            continue
+        value = str(row.get('Value', '')).upper().strip()
+        # Try direct lookup first, then alias resolution
+        truth = CANONICAL_TRUTH.get((category, value))
+        if truth is None:
+            alias_key = _CEILING_ALIASES.get((category, value))
+            if alias_key is not None:
+                truth = CANONICAL_TRUTH.get(alias_key)
+        if truth is None:
+            continue
+
+        current_pct = _safe_float(row.get('Brand Penetration (Row)', 0))
+        if current_pct <= 0:
+            continue
+
+        max_allowed = truth * ceiling_ratio
+        if current_pct <= max_allowed:
+            continue
+
+        new_pct = round(max_allowed, 4)
+        new_raw = int(round((new_pct / 100.0) * sample_size))
+        new_genpop = int(round((new_raw / SAMPLE_CAP) * US_POPULATION))
+
+        df.at[idx, 'Brand Penetration (Row)'] = new_pct
+        df.at[idx, 'Original Raw Numbers'] = new_raw
+        df.at[idx, 'US Gen Pop Projection'] = new_genpop
+        capped_count += 1
+        if len(capped_examples) < 8:
+            capped_examples.append(f"{category}/{value}: {current_pct:.1f} → {new_pct:.1f} (cap={max_allowed:.1f})")
+
+    if capped_count and not SILENCE_VERBOSE_OUTPUT:
+        print(f"🧢 Gen-pop ceiling enforced: {capped_count} brands capped at {ceiling_ratio}x canonical")
+        for ex in capped_examples:
+            print(f"     · {ex}")
+        if capped_count > len(capped_examples):
+            print(f"     · …+{capped_count - len(capped_examples)} more")
+
+    return df
+
+
 def calibrate_to_genpop(df: pd.DataFrame) -> pd.DataFrame:
     """Apply gen-pop correction factors to a profile's post-pipeline DataFrame.
 
