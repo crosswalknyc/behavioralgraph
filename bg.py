@@ -697,20 +697,20 @@ Return ONLY valid JSON (no markdown):
         "BLACK OR AFRICAN AMERICAN": <percent>,
         "HISPANIC OR LATINO": <percent>,
         "ASIAN": <percent>,
-        "OTHER": <percent>
+        "ANOTHER RACE/ETHNICITY": <percent>
     }},
     "INCOME": {{
-        "UNDER $25,000": <percent>,
-        "$25,000-$49,999": <percent>,
-        "$50,000-$74,999": <percent>,
-        "$75,000-$99,999": <percent>,
-        "$100,000-$149,999": <percent>,
-        "$150,000 OR MORE": <percent>
+        "LESS THAN $25,000": <percent>,
+        "$25,000 - $49,999": <percent>,
+        "$50,000 - $74,999": <percent>,
+        "$75,000 - $99,999": <percent>,
+        "$100,000 - $149,999": <percent>,
+        "$150,000 - $249,999": <percent>,
+        "$250,000 OR MORE": <percent>
     }},
     "EDUCATION": {{
         "HIGH SCHOOL OR LESS": <percent>,
-        "SOME COLLEGE": <percent>,
-        "ASSOCIATE DEGREE": <percent>,
+        "SOME COLLEGE / ASSOCIATE DEGREE": <percent>,
         "BACHELOR'S DEGREE": <percent>,
         "GRADUATE OR PROFESSIONAL DEGREE": <percent>
     }},
@@ -726,11 +726,10 @@ Return ONLY valid JSON (no markdown):
     }},
     "RELATIONSHIP": {{
         "SINGLE": <percent>,
-        "MARRIED": <percent>,
         "IN A RELATIONSHIP": <percent>,
+        "MARRIED": <percent>,
         "DIVORCED OR SEPARATED": <percent>,
-        "WIDOWED": <percent>,
-        "PREFER NOT TO SAY": <percent>
+        "WIDOWED": <percent>
     }}
 }}'''
 
@@ -3086,7 +3085,7 @@ def ai_actor_demographic_review(df, brand_category, project_name, brands):
 
 \u26a0\ufe0f CRITICAL RULES:
 - EVERY demographic category MUST sum to exactly 100%.
-- SEXUAL ORIENTATION: The US LGBTQ+ population is ~7%. Start there as a baseline and only adjust based on evidence from the research data below. AI models consistently over-inflate this — resist that tendency.
+- SEXUAL ORIENTATION: The US LGBTQ+ population is ~7% nationally (Gallup 2023), but it varies WIDELY by audience. Reason from the persona's actual fanbase, not a default 7%. Examples that should swing the LGBTQ+ share meaningfully UP: queer-identified or queer-coded talent (RuPaul, Lil Nas X, Hayley Kiyoko, Phoebe Bridgers, A24-style indie film fans → 18-30%); creators with strong LGBTQ+ followings (Bowen Yang, Kim Petras, Renee Rapp, Chappell Roan → 22-35%); platforms/brands tied to queer culture (Tumblr, Bravo, Logo TV, Ariana Grande's bottom-percentile of straight following → 12-22%); Gen Z fanbases generally skew 12-18% LGBTQ+. Examples that should swing the share DOWN to 3-5%: country/Christian/conservative audiences, older male sports/action audiences, traditionalist talent. Use 7% only when the persona is genuinely demographically average. AI models BOTH over-inflate this for Gen Z creators AND under-differentiate it for queer-coded talent — fix both directions based on evidence.
 - "Prefer Not to Say" MUST NEVER exceed 5% in ANY demographic category. Keep it at 3-5% maximum. Redistribute the rest to actual demographic values.
 - Your job is to reflect REALITY based on available research, not to guess or apply stereotypes.
 
@@ -3281,7 +3280,7 @@ def ai_creator_demographic_review(df, brand_category, project_name, brands):
 
 \u26a0\ufe0f CRITICAL RULES:
 - EVERY demographic category MUST sum to exactly 100%.
-- SEXUAL ORIENTATION: The US LGBTQ+ population is ~7%. Start there as a baseline and only adjust based on evidence from the research data below. AI models consistently over-inflate this — resist that tendency.
+- SEXUAL ORIENTATION: The US LGBTQ+ population is ~7% nationally (Gallup 2023), but it varies WIDELY by audience. Reason from the persona's actual fanbase, not a default 7%. Examples that should swing the LGBTQ+ share meaningfully UP: queer-identified or queer-coded talent (RuPaul, Lil Nas X, Hayley Kiyoko, Phoebe Bridgers, A24-style indie film fans → 18-30%); creators with strong LGBTQ+ followings (Bowen Yang, Kim Petras, Renee Rapp, Chappell Roan → 22-35%); platforms/brands tied to queer culture (Tumblr, Bravo, Logo TV, Ariana Grande's bottom-percentile of straight following → 12-22%); Gen Z fanbases generally skew 12-18% LGBTQ+. Examples that should swing the share DOWN to 3-5%: country/Christian/conservative audiences, older male sports/action audiences, traditionalist talent. Use 7% only when the persona is genuinely demographically average. AI models BOTH over-inflate this for Gen Z creators AND under-differentiate it for queer-coded talent — fix both directions based on evidence.
 - "Prefer Not to Say" MUST NEVER exceed 5% in ANY demographic category. Keep it at 3-5% maximum. Redistribute the rest to actual demographic values.
 - Your job is to reflect REALITY based on available research, not to guess or apply stereotypes.
 
@@ -3476,7 +3475,7 @@ def ai_athlete_demographic_review(df, brand_category, project_name, brands):
 
 \u26a0\ufe0f CRITICAL RULES:
 - EVERY demographic category MUST sum to exactly 100%.
-- SEXUAL ORIENTATION: The US LGBTQ+ population is ~7%. Start there as a baseline and only adjust based on evidence from the research data below. AI models consistently over-inflate this — resist that tendency.
+- SEXUAL ORIENTATION: The US LGBTQ+ population is ~7% nationally (Gallup 2023), but it varies WIDELY by audience. Reason from the persona's actual fanbase, not a default 7%. Examples that should swing the LGBTQ+ share meaningfully UP: queer-identified or queer-coded talent (RuPaul, Lil Nas X, Hayley Kiyoko, Phoebe Bridgers, A24-style indie film fans → 18-30%); creators with strong LGBTQ+ followings (Bowen Yang, Kim Petras, Renee Rapp, Chappell Roan → 22-35%); platforms/brands tied to queer culture (Tumblr, Bravo, Logo TV, Ariana Grande's bottom-percentile of straight following → 12-22%); Gen Z fanbases generally skew 12-18% LGBTQ+. Examples that should swing the share DOWN to 3-5%: country/Christian/conservative audiences, older male sports/action audiences, traditionalist talent. Use 7% only when the persona is genuinely demographically average. AI models BOTH over-inflate this for Gen Z creators AND under-differentiate it for queer-coded talent — fix both directions based on evidence.
 - "Prefer Not to Say" MUST NEVER exceed 5% in ANY demographic category. Keep it at 3-5% maximum. Redistribute the rest to actual demographic values.
 - Your job is to reflect REALITY based on available research, not to guess or apply stereotypes.
 
@@ -3671,7 +3670,7 @@ def ai_host_demographic_review(df, brand_category, project_name, brands):
 
 \u26a0\ufe0f CRITICAL RULES:
 - EVERY demographic category MUST sum to exactly 100%.
-- SEXUAL ORIENTATION: The US LGBTQ+ population is ~7%. Start there as a baseline and only adjust based on evidence from the research data below. AI models consistently over-inflate this — resist that tendency.
+- SEXUAL ORIENTATION: The US LGBTQ+ population is ~7% nationally (Gallup 2023), but it varies WIDELY by audience. Reason from the persona's actual fanbase, not a default 7%. Examples that should swing the LGBTQ+ share meaningfully UP: queer-identified or queer-coded talent (RuPaul, Lil Nas X, Hayley Kiyoko, Phoebe Bridgers, A24-style indie film fans → 18-30%); creators with strong LGBTQ+ followings (Bowen Yang, Kim Petras, Renee Rapp, Chappell Roan → 22-35%); platforms/brands tied to queer culture (Tumblr, Bravo, Logo TV, Ariana Grande's bottom-percentile of straight following → 12-22%); Gen Z fanbases generally skew 12-18% LGBTQ+. Examples that should swing the share DOWN to 3-5%: country/Christian/conservative audiences, older male sports/action audiences, traditionalist talent. Use 7% only when the persona is genuinely demographically average. AI models BOTH over-inflate this for Gen Z creators AND under-differentiate it for queer-coded talent — fix both directions based on evidence.
 - "Prefer Not to Say" MUST NEVER exceed 5% in ANY demographic category. Keep it at 3-5% maximum. Redistribute the rest to actual demographic values.
 - Your job is to reflect REALITY based on available research, not to guess or apply stereotypes.
 
@@ -3866,7 +3865,7 @@ def ai_musician_demographic_review(df, brand_category, project_name, brands):
 
 \u26a0\ufe0f CRITICAL RULES:
 - EVERY demographic category MUST sum to exactly 100%.
-- SEXUAL ORIENTATION: The US LGBTQ+ population is ~7%. Start there as a baseline and only adjust based on evidence from the research data below. AI models consistently over-inflate this — resist that tendency.
+- SEXUAL ORIENTATION: The US LGBTQ+ population is ~7% nationally (Gallup 2023), but it varies WIDELY by audience. Reason from the persona's actual fanbase, not a default 7%. Examples that should swing the LGBTQ+ share meaningfully UP: queer-identified or queer-coded talent (RuPaul, Lil Nas X, Hayley Kiyoko, Phoebe Bridgers, A24-style indie film fans → 18-30%); creators with strong LGBTQ+ followings (Bowen Yang, Kim Petras, Renee Rapp, Chappell Roan → 22-35%); platforms/brands tied to queer culture (Tumblr, Bravo, Logo TV, Ariana Grande's bottom-percentile of straight following → 12-22%); Gen Z fanbases generally skew 12-18% LGBTQ+. Examples that should swing the share DOWN to 3-5%: country/Christian/conservative audiences, older male sports/action audiences, traditionalist talent. Use 7% only when the persona is genuinely demographically average. AI models BOTH over-inflate this for Gen Z creators AND under-differentiate it for queer-coded talent — fix both directions based on evidence.
 - "Prefer Not to Say" MUST NEVER exceed 5% in ANY demographic category. Keep it at 3-5% maximum. Redistribute the rest to actual demographic values.
 - Your job is to reflect REALITY based on available research, not to guess or apply stereotypes.
 
@@ -4061,7 +4060,7 @@ def ai_politics_demographic_review(df, brand_category, project_name, brands):
 
 \u26a0\ufe0f CRITICAL RULES:
 - EVERY demographic category MUST sum to exactly 100%.
-- SEXUAL ORIENTATION: The US LGBTQ+ population is ~7%. Start there as a baseline and only adjust based on evidence from the research data below. AI models consistently over-inflate this — resist that tendency.
+- SEXUAL ORIENTATION: The US LGBTQ+ population is ~7% nationally (Gallup 2023), but it varies WIDELY by audience. Reason from the persona's actual fanbase, not a default 7%. Examples that should swing the LGBTQ+ share meaningfully UP: queer-identified or queer-coded talent (RuPaul, Lil Nas X, Hayley Kiyoko, Phoebe Bridgers, A24-style indie film fans → 18-30%); creators with strong LGBTQ+ followings (Bowen Yang, Kim Petras, Renee Rapp, Chappell Roan → 22-35%); platforms/brands tied to queer culture (Tumblr, Bravo, Logo TV, Ariana Grande's bottom-percentile of straight following → 12-22%); Gen Z fanbases generally skew 12-18% LGBTQ+. Examples that should swing the share DOWN to 3-5%: country/Christian/conservative audiences, older male sports/action audiences, traditionalist talent. Use 7% only when the persona is genuinely demographically average. AI models BOTH over-inflate this for Gen Z creators AND under-differentiate it for queer-coded talent — fix both directions based on evidence.
 - "Prefer Not to Say" MUST NEVER exceed 5% in ANY demographic category. Keep it at 3-5% maximum. Redistribute the rest to actual demographic values.
 - Your job is to reflect REALITY based on available research, not to guess or apply stereotypes.
 
@@ -4255,7 +4254,7 @@ def ai_creative_demographic_review(df, brand_category, project_name, brands):
 
 \u26a0\ufe0f CRITICAL RULES:
 - EVERY demographic category MUST sum to exactly 100%.
-- SEXUAL ORIENTATION: The US LGBTQ+ population is ~7%. Start there as a baseline and only adjust based on evidence from the research data below. AI models consistently over-inflate this — resist that tendency.
+- SEXUAL ORIENTATION: The US LGBTQ+ population is ~7% nationally (Gallup 2023), but it varies WIDELY by audience. Reason from the persona's actual fanbase, not a default 7%. Examples that should swing the LGBTQ+ share meaningfully UP: queer-identified or queer-coded talent (RuPaul, Lil Nas X, Hayley Kiyoko, Phoebe Bridgers, A24-style indie film fans → 18-30%); creators with strong LGBTQ+ followings (Bowen Yang, Kim Petras, Renee Rapp, Chappell Roan → 22-35%); platforms/brands tied to queer culture (Tumblr, Bravo, Logo TV, Ariana Grande's bottom-percentile of straight following → 12-22%); Gen Z fanbases generally skew 12-18% LGBTQ+. Examples that should swing the share DOWN to 3-5%: country/Christian/conservative audiences, older male sports/action audiences, traditionalist talent. Use 7% only when the persona is genuinely demographically average. AI models BOTH over-inflate this for Gen Z creators AND under-differentiate it for queer-coded talent — fix both directions based on evidence.
 - "Prefer Not to Say" MUST NEVER exceed 5% in ANY demographic category. Keep it at 3-5% maximum. Redistribute the rest to actual demographic values.
 - Your job is to reflect REALITY based on available research, not to guess or apply stereotypes.
 
@@ -4450,7 +4449,7 @@ def ai_series_demographic_review(df, brand_category, project_name, brands):
 
 \u26a0\ufe0f CRITICAL RULES:
 - EVERY demographic category MUST sum to exactly 100%.
-- SEXUAL ORIENTATION: The US LGBTQ+ population is ~7%. Start there as a baseline and only adjust based on evidence from the research data below. AI models consistently over-inflate this — resist that tendency.
+- SEXUAL ORIENTATION: The US LGBTQ+ population is ~7% nationally (Gallup 2023), but it varies WIDELY by audience. Reason from the persona's actual fanbase, not a default 7%. Examples that should swing the LGBTQ+ share meaningfully UP: queer-identified or queer-coded talent (RuPaul, Lil Nas X, Hayley Kiyoko, Phoebe Bridgers, A24-style indie film fans → 18-30%); creators with strong LGBTQ+ followings (Bowen Yang, Kim Petras, Renee Rapp, Chappell Roan → 22-35%); platforms/brands tied to queer culture (Tumblr, Bravo, Logo TV, Ariana Grande's bottom-percentile of straight following → 12-22%); Gen Z fanbases generally skew 12-18% LGBTQ+. Examples that should swing the share DOWN to 3-5%: country/Christian/conservative audiences, older male sports/action audiences, traditionalist talent. Use 7% only when the persona is genuinely demographically average. AI models BOTH over-inflate this for Gen Z creators AND under-differentiate it for queer-coded talent — fix both directions based on evidence.
 - "Prefer Not to Say" MUST NEVER exceed 5% in ANY demographic category. Keep it at 3-5% maximum. Redistribute the rest to actual demographic values.
 - Your job is to reflect REALITY based on available research, not to guess or apply stereotypes.
 
@@ -4645,7 +4644,7 @@ def ai_podcast_demographic_review(df, brand_category, project_name, brands):
 
 \u26a0\ufe0f CRITICAL RULES:
 - EVERY demographic category MUST sum to exactly 100%.
-- SEXUAL ORIENTATION: The US LGBTQ+ population is ~7%. Start there as a baseline and only adjust based on evidence from the research data below. AI models consistently over-inflate this — resist that tendency.
+- SEXUAL ORIENTATION: The US LGBTQ+ population is ~7% nationally (Gallup 2023), but it varies WIDELY by audience. Reason from the persona's actual fanbase, not a default 7%. Examples that should swing the LGBTQ+ share meaningfully UP: queer-identified or queer-coded talent (RuPaul, Lil Nas X, Hayley Kiyoko, Phoebe Bridgers, A24-style indie film fans → 18-30%); creators with strong LGBTQ+ followings (Bowen Yang, Kim Petras, Renee Rapp, Chappell Roan → 22-35%); platforms/brands tied to queer culture (Tumblr, Bravo, Logo TV, Ariana Grande's bottom-percentile of straight following → 12-22%); Gen Z fanbases generally skew 12-18% LGBTQ+. Examples that should swing the share DOWN to 3-5%: country/Christian/conservative audiences, older male sports/action audiences, traditionalist talent. Use 7% only when the persona is genuinely demographically average. AI models BOTH over-inflate this for Gen Z creators AND under-differentiate it for queer-coded talent — fix both directions based on evidence.
 - "Prefer Not to Say" MUST NEVER exceed 5% in ANY demographic category. Keep it at 3-5% maximum. Redistribute the rest to actual demographic values.
 - Your job is to reflect REALITY based on available research, not to guess or apply stereotypes.
 
@@ -4841,7 +4840,7 @@ def ai_app_platform_demographic_review(df, brand_category, project_name, brands)
 
 ⚠️ CRITICAL RULES:
 - EVERY demographic category MUST sum to exactly 100%.
-- SEXUAL ORIENTATION: The US LGBTQ+ population is ~7%. Start there as a baseline and only adjust based on evidence from the research data below. AI models consistently over-inflate this — resist that tendency.
+- SEXUAL ORIENTATION: The US LGBTQ+ population is ~7% nationally (Gallup 2023), but it varies WIDELY by audience. Reason from the persona's actual fanbase, not a default 7%. Examples that should swing the LGBTQ+ share meaningfully UP: queer-identified or queer-coded talent (RuPaul, Lil Nas X, Hayley Kiyoko, Phoebe Bridgers, A24-style indie film fans → 18-30%); creators with strong LGBTQ+ followings (Bowen Yang, Kim Petras, Renee Rapp, Chappell Roan → 22-35%); platforms/brands tied to queer culture (Tumblr, Bravo, Logo TV, Ariana Grande's bottom-percentile of straight following → 12-22%); Gen Z fanbases generally skew 12-18% LGBTQ+. Examples that should swing the share DOWN to 3-5%: country/Christian/conservative audiences, older male sports/action audiences, traditionalist talent. Use 7% only when the persona is genuinely demographically average. AI models BOTH over-inflate this for Gen Z creators AND under-differentiate it for queer-coded talent — fix both directions based on evidence.
 - "Prefer Not to Say" MUST NEVER exceed 5% in ANY demographic category. Keep it at 3-5% maximum. Redistribute the rest to actual demographic values.
 - Your job is to reflect REALITY based on available research, not to guess or apply stereotypes.
 
@@ -5045,7 +5044,7 @@ def ai_broadcast_cable_demographic_review(df, brand_category, project_name, bran
 
 ⚠️ CRITICAL RULES:
 - EVERY demographic category MUST sum to exactly 100%.
-- SEXUAL ORIENTATION: The US LGBTQ+ population is ~7%. Start there as a baseline and only adjust based on evidence from the research data below. AI models consistently over-inflate this — resist that tendency.
+- SEXUAL ORIENTATION: The US LGBTQ+ population is ~7% nationally (Gallup 2023), but it varies WIDELY by audience. Reason from the persona's actual fanbase, not a default 7%. Examples that should swing the LGBTQ+ share meaningfully UP: queer-identified or queer-coded talent (RuPaul, Lil Nas X, Hayley Kiyoko, Phoebe Bridgers, A24-style indie film fans → 18-30%); creators with strong LGBTQ+ followings (Bowen Yang, Kim Petras, Renee Rapp, Chappell Roan → 22-35%); platforms/brands tied to queer culture (Tumblr, Bravo, Logo TV, Ariana Grande's bottom-percentile of straight following → 12-22%); Gen Z fanbases generally skew 12-18% LGBTQ+. Examples that should swing the share DOWN to 3-5%: country/Christian/conservative audiences, older male sports/action audiences, traditionalist talent. Use 7% only when the persona is genuinely demographically average. AI models BOTH over-inflate this for Gen Z creators AND under-differentiate it for queer-coded talent — fix both directions based on evidence.
 - "Prefer Not to Say" MUST NEVER exceed 5% in ANY demographic category. Keep it at 3-5% maximum. Redistribute the rest to actual demographic values.
 - Your job is to reflect REALITY based on available research, not to guess or apply stereotypes.
 
@@ -5610,7 +5609,7 @@ def ai_media_demographic_review(df, brand_category, project_name, brands):
 
 ⚠️ CRITICAL RULES:
 - EVERY demographic category MUST sum to exactly 100%.
-- SEXUAL ORIENTATION: The US LGBTQ+ population is ~7%. Start there as a baseline and only adjust based on evidence from the research data below. AI models consistently over-inflate this — resist that tendency.
+- SEXUAL ORIENTATION: The US LGBTQ+ population is ~7% nationally (Gallup 2023), but it varies WIDELY by audience. Reason from the persona's actual fanbase, not a default 7%. Examples that should swing the LGBTQ+ share meaningfully UP: queer-identified or queer-coded talent (RuPaul, Lil Nas X, Hayley Kiyoko, Phoebe Bridgers, A24-style indie film fans → 18-30%); creators with strong LGBTQ+ followings (Bowen Yang, Kim Petras, Renee Rapp, Chappell Roan → 22-35%); platforms/brands tied to queer culture (Tumblr, Bravo, Logo TV, Ariana Grande's bottom-percentile of straight following → 12-22%); Gen Z fanbases generally skew 12-18% LGBTQ+. Examples that should swing the share DOWN to 3-5%: country/Christian/conservative audiences, older male sports/action audiences, traditionalist talent. Use 7% only when the persona is genuinely demographically average. AI models BOTH over-inflate this for Gen Z creators AND under-differentiate it for queer-coded talent — fix both directions based on evidence.
 - "Prefer Not to Say" MUST NEVER exceed 5% in ANY demographic category. Keep it at 3-5% maximum. Redistribute the rest to actual demographic values.
 - Your job is to reflect REALITY based on available research, not to guess or apply stereotypes.
 - KEY CONTEXT: This is a US digital media panel measuring who DIGITALLY ENGAGES with publications (reads articles, uses apps, clicks links). This skews younger and more educated than print audiences.
@@ -5833,7 +5832,7 @@ def ai_movie_theater_demographic_review(df, brand_category, project_name, brands
 
 ⚠️ CRITICAL RULES:
 - EVERY demographic category MUST sum to exactly 100%.
-- SEXUAL ORIENTATION: The US LGBTQ+ population is ~7%. Start there as a baseline and only adjust based on evidence from the research data below. AI models consistently over-inflate this — resist that tendency.
+- SEXUAL ORIENTATION: The US LGBTQ+ population is ~7% nationally (Gallup 2023), but it varies WIDELY by audience. Reason from the persona's actual fanbase, not a default 7%. Examples that should swing the LGBTQ+ share meaningfully UP: queer-identified or queer-coded talent (RuPaul, Lil Nas X, Hayley Kiyoko, Phoebe Bridgers, A24-style indie film fans → 18-30%); creators with strong LGBTQ+ followings (Bowen Yang, Kim Petras, Renee Rapp, Chappell Roan → 22-35%); platforms/brands tied to queer culture (Tumblr, Bravo, Logo TV, Ariana Grande's bottom-percentile of straight following → 12-22%); Gen Z fanbases generally skew 12-18% LGBTQ+. Examples that should swing the share DOWN to 3-5%: country/Christian/conservative audiences, older male sports/action audiences, traditionalist talent. Use 7% only when the persona is genuinely demographically average. AI models BOTH over-inflate this for Gen Z creators AND under-differentiate it for queer-coded talent — fix both directions based on evidence.
 - "Prefer Not to Say" MUST NEVER exceed 5% in ANY demographic category. Keep it at 3-5% maximum. Redistribute the rest to actual demographic values.
 - Your job is to reflect REALITY based on available research, not to guess or apply stereotypes.
 - KEY CONTEXT: This is a US digital panel measuring who DIGITALLY ENGAGES with movie theater brands (buys tickets online, uses apps, visits websites). This skews slightly younger and more digitally savvy than walk-up audiences.
@@ -6050,7 +6049,7 @@ def ai_search_engine_ai_demographic_review(df, brand_category, project_name, bra
 
 ⚠️ CRITICAL RULES:
 - EVERY demographic category MUST sum to exactly 100%.
-- SEXUAL ORIENTATION: The US LGBTQ+ population is ~7%. Start there as a baseline and only adjust based on evidence from the research data below. AI models consistently over-inflate this — resist that tendency.
+- SEXUAL ORIENTATION: The US LGBTQ+ population is ~7% nationally (Gallup 2023), but it varies WIDELY by audience. Reason from the persona's actual fanbase, not a default 7%. Examples that should swing the LGBTQ+ share meaningfully UP: queer-identified or queer-coded talent (RuPaul, Lil Nas X, Hayley Kiyoko, Phoebe Bridgers, A24-style indie film fans → 18-30%); creators with strong LGBTQ+ followings (Bowen Yang, Kim Petras, Renee Rapp, Chappell Roan → 22-35%); platforms/brands tied to queer culture (Tumblr, Bravo, Logo TV, Ariana Grande's bottom-percentile of straight following → 12-22%); Gen Z fanbases generally skew 12-18% LGBTQ+. Examples that should swing the share DOWN to 3-5%: country/Christian/conservative audiences, older male sports/action audiences, traditionalist talent. Use 7% only when the persona is genuinely demographically average. AI models BOTH over-inflate this for Gen Z creators AND under-differentiate it for queer-coded talent — fix both directions based on evidence.
 - "Prefer Not to Say" MUST NEVER exceed 5% in ANY demographic category. Keep it at 3-5% maximum. Redistribute the rest to actual demographic values.
 - Your job is to reflect REALITY based on available research, not to guess or apply stereotypes.
 - KEY CONTEXT: This is a US digital panel measuring who DIGITALLY ENGAGES with search engines and AI tools. These are among the most universal digital products — Google alone has 90%+ US market share.
@@ -6301,13 +6300,13 @@ def _detect_and_fix_catastrophic_demographics(df, subject_clean, brand_category)
         total_bp = sum(bp for _, bp, _ in eth_items)
         if total_bp > 0:
             shares = {v: bp / total_bp * 100 for v, bp, _ in eth_items}
-            native_pct = shares.get('NATIVE AMERICAN / ALASKA NATIVE', shares.get('NATIVE AMERICAN', 0))
+            native_pct = shares.get('ANOTHER RACE/ETHNICITY', shares.get('OTHER', shares.get('NATIVE AMERICAN / ALASKA NATIVE', shares.get('NATIVE AMERICAN', 0))))
             if native_pct > 15:
-                print(f"   🚨 CATASTROPHIC ETHNICITY FAILURE: Native American = {native_pct:.1f}%")
+                print(f"   🚨 CATASTROPHIC ETHNICITY FAILURE: Another Race/Ethnicity = {native_pct:.1f}%")
                 print(f"   🔧 Applying GenPop fallback for ETHNICITY distribution")
                 genpop_eth = {
                     'WHITE': 57.8, 'BLACK OR AFRICAN AMERICAN': 11.9, 'HISPANIC OR LATINO': 18.0,
-                    'ASIAN': 6.2, 'NATIVE AMERICAN / ALASKA NATIVE': 1.0, 'ANOTHER RACE/ETHNICITY': 5.2
+                    'ASIAN': 6.2, 'ANOTHER RACE/ETHNICITY': 6.2
                 }
                 for val, bp, idx in eth_items:
                     val_upper = val.upper()
@@ -6676,7 +6675,7 @@ def _enforce_all_demographics(df, subject_clean, brand_category):
         if total_bp > 0:
             shares = {v: bp / total_bp * 100 for v, bp, _ in eth_items}
             white_pct = shares.get('WHITE', 0)
-            other_pct = shares.get('OTHER', 0)
+            other_pct = shares.get('ANOTHER RACE/ETHNICITY', shares.get('OTHER', 0))
 
             needs_fix = False
             if other_pct > 20:
@@ -6988,7 +6987,7 @@ def ai_social_media_demographic_review(df, brand_category, project_name, brands)
 
 ⚠️ CRITICAL RULES — READ CAREFULLY:
 - EVERY demographic category MUST sum to exactly 100%.
-- SEXUAL ORIENTATION: The US LGBTQ+ population is ~7%. Start at 7% and ONLY adjust with hard evidence. Tumblr is an exception (~12-15% due to strong LGBTQ+ community). For all others, stay at or below 10%.
+- SEXUAL ORIENTATION: The US LGBTQ+ population is ~7% nationally, but varies WIDELY by audience. Queer-coded brands/platforms (Tumblr, Bravo, Logo, A24 indie film, RuPaul/Lil Nas X/Chappell Roan-style creators) should land 15-30%. Gen Z creators broadly skew 12-18%. Country / Christian / older male sports brands skew 3-5%. Use 7% only when the persona is genuinely demographically average. Reason from the actual audience, not a default.
 - ETHNICITY: Start from US census (White ~58%, Hispanic/Latinx ~19%, Black ~13%, Asian ~6%, Other ~4%) and adjust based on platform-specific data.
 - AGE: Identify the MEDIAN AGE of this platform's user base from research. Construct the age distribution so the 50th percentile lands at that median. This is non-negotiable.
 - Your job is to reflect REALITY based on authoritative research (Pew Research, Statista, eMarketer, Comscore, DataReportal, SimilarWeb), not to guess or apply stereotypes.
@@ -7212,7 +7211,7 @@ def ai_universal_demographic_review(df, brand_category, project_name, brands):
 
 ⚠️ CRITICAL RULES — READ CAREFULLY:
 - EVERY demographic category MUST sum to exactly 100%.
-- SEXUAL ORIENTATION: The US LGBTQ+ population is ~7%. Start at 7% and ONLY adjust with hard evidence. AI models consistently inflate this to 20-50% — you MUST NOT do this. If unsure, use 7%.
+- SEXUAL ORIENTATION: The US LGBTQ+ population is ~7% nationally, but varies WIDELY by audience. Queer-coded brands/platforms (Tumblr, Bravo, Logo, A24 indie film, queer creators like RuPaul / Lil Nas X / Chappell Roan / Renee Rapp / Bowen Yang) should land 15-30%. Gen Z brands skew 12-18%. Country / Christian / older male sports brands skew 3-5%. Use 7% only when the persona is genuinely demographically average. Don't blindly inflate to 20-50% — but DO swing meaningfully when the audience evidence supports it.
 - ETHNICITY: Start from US census (White ~58%, Hispanic/Latinx ~19%, Black ~13%, Asian ~6%, Other ~4%) and adjust based on who this brand specifically serves. "Other" should almost never exceed 10%.
 - AGE: Identify the MEDIAN AGE of this brand's audience from research. Then construct your age distribution so the 50th percentile actually lands at that median. Calculate cumulative percentages to verify.
 - GENDER: Use research data. Most US consumer brands are 45-55% in either direction unless there's a strong gender skew (beauty = female, sports = male, etc.).
@@ -8313,10 +8312,8 @@ JSON only.
                         return 19.0
                     if 'ASIAN' in _lu:
                         return 7.0
-                    if 'NATIVE AMERICAN' in _lu or 'ALASKA NATIVE' in _lu:
-                        return 1.0
-                    if 'ANOTHER RACE' in _lu or 'OTHER' in _lu:
-                        return 3.0
+                    if 'OTHER' in _lu or 'NATIVE AMERICAN' in _lu or 'ALASKA NATIVE' in _lu or 'ANOTHER RACE' in _lu:
+                        return 6.0
                 if _cat == 'GENDER':
                     if _lu == 'MALE':
                         return 49.0
@@ -16071,45 +16068,47 @@ Return ONLY a single valid JSON object — no markdown, no commentary.
       "BLACK OR AFRICAN AMERICAN": <percent>,
       "HISPANIC OR LATINO": <percent>,
       "ASIAN": <percent>,
-      "OTHER": <percent>
+      "ANOTHER RACE/ETHNICITY": <percent>
     }},
     "INCOME": {{
-      "UNDER $25,000": <percent>,
-      "$25,000-$49,999": <percent>,
-      "$50,000-$74,999": <percent>,
-      "$75,000-$99,999": <percent>,
-      "$100,000-$149,999": <percent>,
-      "$150,000-$249,999": <percent>,
+      "LESS THAN $25,000": <percent>,
+      "$25,000 - $49,999": <percent>,
+      "$50,000 - $74,999": <percent>,
+      "$75,000 - $99,999": <percent>,
+      "$100,000 - $149,999": <percent>,
+      "$150,000 - $249,999": <percent>,
       "$250,000 OR MORE": <percent>
     }},
     "EDUCATION": {{
       "HIGH SCHOOL OR LESS": <percent>,
-      "SOME COLLEGE": <percent>,
-      "ASSOCIATE DEGREE": <percent>,
+      "SOME COLLEGE / ASSOCIATE DEGREE": <percent>,
       "BACHELOR'S DEGREE": <percent>,
       "GRADUATE OR PROFESSIONAL DEGREE": <percent>
     }},
     "RELATIONSHIP": {{
       "SINGLE": <percent>,
-      "MARRIED": <percent>,
       "IN A RELATIONSHIP": <percent>,
+      "MARRIED": <percent>,
       "DIVORCED OR SEPARATED": <percent>,
-      "WIDOWED": <percent>,
-      "PREFER NOT TO SAY": <percent>
+      "WIDOWED": <percent>
     }},
     "SEXUAL_ORIENTATION": {{
       "STRAIGHT / HETEROSEXUAL": <percent>,
-      "GAY OR LESBIAN": <percent>,
-      "ANOTHER SEXUAL ORIENTATION": <percent>,
+      "LGBTQ+": <percent>,
       "PREFER NOT TO SAY": <percent>
     }},
     "PARENTAL_STATUS": {{
-      "YES": <percent>,
-      "NO": <percent>
+      "NO CHILDREN": <percent>,
+      "HAS CHILDREN": <percent>,
+      "PREFER NOT TO SAY": <percent>
     }},
     "OCCUPATION": {{
-      "OTHER": <percent>,
-      "PREFER NOT TO SAY": <percent>
+      "MANAGEMENT, BUSINESS & PROFESSIONAL": <percent>,
+      "HEALTHCARE PRACTITIONERS OR SUPPORT": <percent>,
+      "SALES & RETAIL": <percent>,
+      "EDUCATION OR LIBRARY SERVICES": <percent>,
+      "SERVICE & HOSPITALITY": <percent>,
+      "OTHER": <percent>
     }}
   }},
   "location": [
@@ -16346,9 +16345,26 @@ SPECIFIC WRITING RULES
     to decide rank ordering within a category.
 
 DIGITAL IDENTITY — THIS IS ALSO CRITICAL:
-The `digital_identity` field is a rich text block (2-4 paragraphs) that will be passed VERBATIM to per-category scoring agents. Make it specific, opinionated, and grounded in real audience data. It MUST address all five areas below:
+The `digital_identity` field is a rich text block (2-4 paragraphs) that will be passed VERBATIM to per-category scoring agents. Make it specific, opinionated, and grounded in real audience data. It MUST address all five areas below.
 
-1. SUBCULTURE: What digital subcultures does this audience belong to? Be specific — not just "sports fans" but the exact communities (e.g. sneakerheads, fantasy football, K-beauty, car modding, etc.).
+CRITICAL — DO YOUR OWN ARCHETYPE RESEARCH (NO TEMPLATES):
+Before describing this audience generically, RESEARCH the subject's actual fan base and commit to a specific archetype label IN YOUR OWN WORDS based on what you find. Do NOT pattern-match to a generic "young female actress" or "young male athlete" template — that produces identical brand mixes for very different celebrities and is the single biggest failure mode of this pipeline.
+
+What to do:
+  1. SEARCH for "{subject} fans demographics", "{subject} audience aesthetic", "what brands does {subject} wear / endorse", "{subject} fashion style". Read multiple sources — fashion press, Reddit threads, TikTok comment sections, fan accounts, brand collaboration history. Two "young female actresses" can have completely different audiences depending on the kind of work they do, the platforms they live on, and the brands they actually associate with.
+  2. NAME the archetype IN YOUR OWN WORDS in the `digital_identity` block. Use a label that captures what's specific about this audience (e.g. "A24 / arthouse / Reformation girl", "Marvel-girlboss / Sephora-mainline", "reality-TV / FashionNova-aesthetic", "country/Hallmark/Lilly Pulitzer", "Y2K / Brandy-Melville Gen Z", "Boomer prestige / Eileen Fisher", "mass-male action-fan", etc.). The label is for reasoning — there is no fixed list to choose from. If the subject straddles two archetypes (e.g. Zendaya = Marvel + Euphoria-alt), name both and explain the mix.
+  3. CONTRAST with the closest neighboring archetype. In 2-3 sentences, explain how THIS audience's apparel/beauty/streaming preferences differ from the most similar adjacent archetype you can think of, and why. (E.g. "Florence Pugh's audience overlaps with Anya Taylor-Joy on indie/Reformation but skews younger and more BookTok; it differs sharply from Margot Robbie's audience, which is mass-blockbuster and over-indexes on Lululemon and Sephora-mainline.")
+  4. GROUND your category_signals in that contrast. For each scored category — APPAREL/FOOTWEAR, BEAUTY/WELLNESS, MOST PURCHASED BRANDS, WHERE THEY SHOP, STREAMING/PLATFORM, etc. — your guidance must reference the archetype reasoning. Tell the downstream scorer in DIRECTIONAL terms (over-indexes, under-indexes, near baseline, much higher than for [neighboring archetype], much lower than for [neighboring archetype]) which brands belong where, and WHY. Do NOT give numerical multipliers or BP ranges — let the downstream scorer set the magnitude based on its own reasoning. Your job is to make sure the scorer cannot give the same answer for two structurally different audiences.
+
+Common failure modes to avoid:
+  • Defaulting every "young female 18-34" audience to a Nike → Zara → Lululemon → FashionNova top-5. That's the template; identify what makes THIS audience different from it.
+  • Treating an indie/A24 actress's audience as if they shop the same as a mass-blockbuster Marvel audience. They don't — research the actual brand affinities (collaborations, street-style press, fan account aesthetics) before writing category_signals.
+  • Treating an older-prestige actor's audience as if they shop fast-fashion. Older affluent audiences live in department-store / specialty-prestige / classic-American world, not Gen-Z apparel.
+  • Treating a reality-TV / Kardashian-aesthetic audience as if they engage with sustainable/indie brands. They don't; their world is FashionNova / SHEIN / Revolve / Skims / Anastasia Beverly Hills / Huda Beauty.
+  • Treating a mass-male action-fan audience the same as a young-female audience. Apparel/beauty mixes are completely different.
+  • STREAMING: stacking every paid SVOD high. US households carry ~3 paid SVODs on average; the persona must call out which 2-3 streamers THIS audience actually pays for (and why), and which they skip. Netflix is the closest to universal but still tops out in the low-to-mid 70s in real US digital reach.
+
+1. SUBCULTURE: What digital subcultures does this audience belong to? Be specific — not just "sports fans" but the exact communities (e.g. sneakerheads, fantasy football, K-beauty, car modding, A24 stan Twitter, BookTok, etc.).
 
 2. WHERE THEY SHOP ONLINE / SPEND WALLET SHARE: Name 8-12 specific retailers/e-commerce sites OR MARKETPLACE PATTERNS this audience touches. Tune to archetype — physical brands → category retailers + marketplaces; digital-native IP → merch DTC yes, but also ticketing, subs, DLC stores, Patreon/support patterns; SaaS/mobile → app stores/subscription portals BEFORE defaulting to Foot Locker/Target unless persona evidence supports them.
 
@@ -16368,6 +16384,18 @@ The `digital_identity` field is a rich text block (2-4 paragraphs) that will be 
    - What device ecosystem? (young urban with income <$80K skews Android/Samsung; higher income skews Apple)
    - What insurance do they have? (major digital insurers: GEICO, Progressive, State Farm have high digital engagement for everyone)
    - Are they parents? If not, children's brands (Roblox, YouTube Kids, Pampers, Barbie) should score LOW.
+   - PRICE POINT vs PERSONA FIT: Don't default premium brands high just because they're popular. Ask: "Would THIS specific persona actually buy this brand?" Consider the FULL persona — age, gender, income, lifestyle, subculture. A yoga instructor might buy Lululemon despite lower income (it's core to her identity). The Rock's male sports audience buys Under Armour, not Athleta. A Chime audience buys Fashion Nova, not Patagonia. A Nordstrom profile WOULD buy Lululemon and Alo Yoga. Reason about WHO this person is and WHAT they actually buy. If two brands compete for the same persona (Lululemon vs Alo Yoga), consider which is trending with this demographic NOW.
+
+   - AUDIENCE ARCHETYPE — REASON FROM THE PERSONA, DON'T MATCH TEMPLATES:
+     The persona's `digital_identity` block names this audience's ARCHETYPE in the persona researcher's own words and contrasts it with the closest neighboring archetype. READ IT carefully before scoring any brand.
+     Hard rules (these are how every profile ends up looking the same — avoid them):
+       1. NO TEMPLATES. Two profiles with overlapping demographics can have completely different brand mixes. If your top-5 in APPAREL/MOST PURCHASED BRANDS looks like a generic "Nike > Zara > Lululemon > FashionNova > H&M", you are pattern-matching to "young female" instead of reasoning from the persona.
+       2. NO HARDCODED MULTIPLIERS. There is no fixed "indie audience → 4x baseline on Reformation" or "blockbuster audience → 0.5x on indie brands" rule. The DIRECTION (over-indexes / under-indexes / near baseline) is what matters; you set the magnitude based on the strength of the persona signal and the gen-pop baseline.
+       3. NO LONG-TAIL DEFAULTS. If you have no opinion on a brand, do NOT pin it to baseline by reflex — that's how every profile ends up identical on long-tail items. Either reason from a specific persona signal, OR mark it as an "I don't have evidence" near-baseline call (and let the scoring system add persona-deterministic noise).
+     Reasoning order for EVERY brand you score: (a) what the brand stands for and who shops it; (b) does THIS audience's archetype overlap with that customer; cite the specific persona signal; (c) how a neighboring archetype's BP would differ on this same brand; (d) set the BP based on direction + gen-pop baseline + magnitude of the persona signal.
+     If the persona's digital_identity is vague, flag it in your reason but still try to differentiate based on the subject's name and what you know about their actual fan base from research.
+   - STREAMING / PLATFORM: US households carry ~3 paid SVODs on average — do NOT stack every paid streamer high. Reason platform-by-platform: Netflix is the closest to universal but tops out in the low-to-mid 70s in real US digital reach (NEVER 90%+); Hulu and HBO Max sit far below Netflix; Disney+ over-indexes for parents and Marvel/Disney IP fans; Apple TV+ has narrow real reach (Apple-ecosystem affluent prestige); Peacock is Bravo/reality and NBC-IP skewed; Paramount+ is CBS/Nickelodeon/older-mass; YouTube TV is sports + cord-cutters; Tubi/Pluto/Freevee are free AVOD and skew lower-income; A24/Mubi/Criterion/BritBox are niche cinephile/British and should ONLY meaningfully over-index for audiences with explicit indie/arthouse/British-drama affinity. If more than 3 SVODs in your output sit above 30% BP, you have over-stacked subscriptions — move some lower. Different archetypes should produce different streaming top-5 orderings.
+   - ATHLETE ENGAGEMENT for NON-SPORTS BRANDS: Ask "Does this persona have a specific reason to follow this athlete?" A banking audience doesn't have 23% engagement with any single athlete — they're banking customers, not sports fans. But a Nike Women's audience might legitimately have 15% Griner engagement. Score athletes based on the PERSONA's actual sports interests, not demographics alone. Default for individual athletes in non-sports contexts: 1-5% BP.
      If they ARE parents **but** persona does **not** describe kids actually playing games on shared accounts / tablets (no “device handoff”, no kid subsegment, no family-gaming cues), treat **kid-first titles (Roblox, many LEGO/world-builder kids’ rows)** like **ambient noise** — they must **not** lead the GAMES sheet or exceed plausible **kid-mediated** share; default them **low/trace** versus adult casual titles.
    - THIS IS A U.S. PANEL: foreign-only platforms and retailers have negligible engagement.
 
@@ -16375,6 +16403,12 @@ CATEGORY SIGNALS — PER-CATEGORY GUIDANCE:
 The `category_signals` field is a JSON object where each key is a category name (from the CATEGORIES TO BE SCORED list above) and each value is 1-2 sentences telling the downstream scoring agent what this audience does and doesn't engage with IN THAT SPECIFIC CATEGORY.
 
 Anchor each category note to `subject_archetype` — e.g. MUSICIAN → prioritize ARTIST / STREAMING / PODCAST / TICKETING patterns; AAA GAME → prioritize GAMES / platforms / adjacent hardware; TV SERIES → MEDIA + streaming behavior of that demo; consumer_brand FMCG → retailer + CPG aisles. Do NOT reuse an athletic-footwear template for unrelated archetypes.
+
+ANTI-CLUSTERING GUARDRAIL — read this carefully:
+The single biggest failure mode of this pipeline is bimodal clustering: the scorer assigns one of two anchor values (e.g. ~58% or ~77% for Spotify) across all profiles instead of producing a continuous spread. Your category_signals must explicitly push the scorer to land DIFFERENT brands AND DIFFERENT profiles on a CONTINUOUS distribution, not on 2-3 discrete "buckets". For categories where this clustering happens most (SPOTIFY, APPLE PAY, STARBUCKS/MCDONALDS, NBA, MINECRAFT, POKEMON, AIRBNB, FASHION/SOCIAL MEDIA/TRAVEL/STREAMING/HEALTH&WELLNESS as INTEREST values, CASH APP / PAYPAL / FANDANGO / STUBHUB / EVENTBRITE, TACO BELL, APPLE / APPLE MUSIC / YOUTUBE MUSIC, GOOGLE, AMC THEATRES, NCAA / MLB), give the scorer EXPLICIT directional anchoring per persona archetype so the scorer doesn't fall back to two buckets. Tell the scorer to put each value at a UNIQUE, persona-specific point on the distribution.
+
+DIGITAL BANKING / APPLE PAY GUARANTEE:
+Every profile must include APPLE PAY in DIGITAL BANKING — it is near-universal among US smartphone users (~50%+ reach). Do NOT omit it. Reason about its BP from this persona's age + Apple ecosystem affinity (younger affluent urbanites = high; older lower-income = lower). Same for PayPal, Venmo, Zelle, Cash App — these should always appear with persona-driven values, never absent.
 
 For each category, your guidance MUST be grounded in reality:
 - What TYPES of items should score ABOVE their baseline (not "high" in absolute terms — above their gen-pop baseline)
@@ -17244,10 +17278,28 @@ def _build_unique_value_index(df: pd.DataFrame,
     primary_for: dict[str, str] = {}
     unique_items_by_cat: dict[str, list[str]] = {c: [] for c in cat_size}
 
-    # For each value, pick the largest category as primary (alphabetical tiebreak)
+    # Priority primaries — when a value appears in any of these, that
+    # category wins regardless of size. MOST PURCHASED BRANDS is the
+    # canonical brand scorer per the pipeline contract: brand BPs are
+    # decided in MPB and inherited everywhere else (APPAREL/FOOTWEAR,
+    # BEAUTY/WELLNESS, WHERE THEY SHOP, etc.). TALENT and SPORTS TEAM
+    # are similarly canonical for talent/team values.
+    _PRIORITY_PRIMARY = ['MOST PURCHASED BRANDS', 'TALENT', 'SPORTS TEAM']
+
     for v_u, cats in value_cats.items():
-        cats_sorted = sorted(cats, key=lambda c: (-cat_size.get(c, 0), c))
-        primary = cats_sorted[0]
+        priority_pick = None
+        for pcat in _PRIORITY_PRIMARY:
+            for c in cats:
+                if c.upper() == pcat and pcat in cat_size:
+                    priority_pick = c
+                    break
+            if priority_pick is not None:
+                break
+        if priority_pick is not None:
+            primary = priority_pick
+        else:
+            cats_sorted = sorted(cats, key=lambda c: (-cat_size.get(c, 0), c))
+            primary = cats_sorted[0]
         primary_for[v_u] = primary
         unique_items_by_cat.setdefault(primary, []).append(value_original[v_u])
 
@@ -19720,16 +19772,22 @@ def parallel_category_agents(df: pd.DataFrame, persona_doc: dict,
         'AGE': ['17 AND UNDER', '18-24', '25-34', '35-44', '45-54', '55-64', '65 OR OLDER'],
         'GENDER': ['FEMALE', 'MALE', 'NON-BINARY', 'TRANS FEMALE', 'TRANS MALE'],
         'ETHNICITY': ['WHITE', 'BLACK OR AFRICAN AMERICAN', 'HISPANIC OR LATINO', 'ASIAN',
-                       'OTHER'],
-        'INCOME': ['UNDER $25,000', '$25,000-$49,999', '$50,000-$74,999', '$75,000-$99,999',
-                   '$100,000-$149,999', '$150,000-$249,999', '$250,000 OR MORE'],
-        'EDUCATION': ['HIGH SCHOOL OR LESS', 'SOME COLLEGE',
-                     'ASSOCIATE DEGREE', "BACHELOR'S DEGREE", 'GRADUATE OR PROFESSIONAL DEGREE'],
-        'RELATIONSHIP': ['SINGLE', 'MARRIED', 'IN A RELATIONSHIP', 'DIVORCED OR SEPARATED', 'WIDOWED', 'PREFER NOT TO SAY'],
-        'SEXUAL_ORIENTATION': ['STRAIGHT / HETEROSEXUAL', 'GAY OR LESBIAN',
-                               'ANOTHER SEXUAL ORIENTATION', 'PREFER NOT TO SAY'],
+                       'ANOTHER RACE/ETHNICITY'],
+        'INCOME': ['LESS THAN $25,000', '$25,000 - $49,999', '$50,000 - $74,999',
+                   '$75,000 - $99,999', '$100,000 - $149,999', '$150,000 - $249,999',
+                   '$250,000 OR MORE'],
+        'EDUCATION': ['HIGH SCHOOL OR LESS', 'SOME COLLEGE / ASSOCIATE DEGREE',
+                      "BACHELOR'S DEGREE", 'GRADUATE OR PROFESSIONAL DEGREE'],
+        'RELATIONSHIP': ['SINGLE', 'IN A RELATIONSHIP', 'MARRIED',
+                         'DIVORCED OR SEPARATED', 'WIDOWED'],
+        'SEXUAL_ORIENTATION': ['STRAIGHT / HETEROSEXUAL', 'LGBTQ+', 'PREFER NOT TO SAY'],
         'PARENTAL_STATUS': ['NO CHILDREN', 'HAS CHILDREN', 'PREFER NOT TO SAY'],
-        'OCCUPATION': ['OTHER', 'PREFER NOT TO SAY'],
+        'OCCUPATION': ['MANAGEMENT, BUSINESS & PROFESSIONAL', 'HEALTHCARE PRACTITIONERS OR SUPPORT',
+                       'SALES & RETAIL', 'EDUCATION OR LIBRARY SERVICES',
+                       'SERVICE & HOSPITALITY', 'SCIENCE, TECHNOLOGY & TECHNICAL PROFESSIONS',
+                       'SKILLED TRADES/CONSTRUCTION OR MAINTENANCE', 'AGRICULTURE & OUTDOOR',
+                       'TRANSPORTATION & LOGISTICS', 'MANUFACTURING & PRODUCTION',
+                       'PUBLIC SAFETY & PROTECTIVE SERVICES', 'LEGAL', 'OTHER'],
     }
 
     def _norm_bracket(s: str) -> str:
@@ -19780,6 +19838,97 @@ def parallel_category_agents(df: pd.DataFrame, persona_doc: dict,
                 df = pd.concat([df, pd.DataFrame([new_row])], ignore_index=True)
                 print(f"   📌 Injected missing {cat_name} value: {expected_val}")
 
+    # ── Consolidate overlapping demographic buckets ────────────────────
+    # ClickHouse user_data contains non-canonical bucket names that overlap
+    # with the canonical set (e.g. "HIGH SCHOOL OR LESS" overlaps with
+    # "LESS THAN HIGH SCHOOL" + "HIGH SCHOOL GRADUATE").  Merge them BEFORE
+    # persona values are written so we end up with exactly the canonical set.
+    _DEMO_RENAME_MAP = {
+        'EDUCATION': {
+            'LESS THAN HIGH SCHOOL': 'HIGH SCHOOL OR LESS',
+            'HIGH SCHOOL GRADUATE': 'HIGH SCHOOL OR LESS',
+            'GRADUATE DEGREE': 'GRADUATE OR PROFESSIONAL DEGREE',
+            'SOME COLLEGE': 'SOME COLLEGE / ASSOCIATE DEGREE',
+            'ASSOCIATE DEGREE': 'SOME COLLEGE / ASSOCIATE DEGREE',
+        },
+        'RELATIONSHIP': {
+            'DOMESTIC PARTNERSHIP': 'IN A RELATIONSHIP',
+            'DIVORCED': 'DIVORCED OR SEPARATED',
+        },
+        'ETHNICITY': {
+            'NATIVE AMERICAN / ALASKA NATIVE': 'ANOTHER RACE/ETHNICITY',
+            'NATIVE AMERICAN': 'ANOTHER RACE/ETHNICITY',
+            'ALASKA NATIVE': 'ANOTHER RACE/ETHNICITY',
+            'OTHER': 'ANOTHER RACE/ETHNICITY',
+        },
+        'INCOME': {
+            'UNDER $25,000': 'LESS THAN $25,000',
+        },
+    }
+
+    _rename_count = 0
+    for _ren_cat, _ren_rules in _DEMO_RENAME_MAP.items():
+        _cat_m = df['Column'].astype(str).str.strip().str.upper() == _ren_cat
+        for idx in df[_cat_m].index:
+            _val = str(df.at[idx, 'Value']).strip()
+            _val_norm = _norm_bracket(_val)
+            for _old, _new in _ren_rules.items():
+                if _val_norm == _norm_bracket(_old):
+                    df.at[idx, 'Value'] = _new
+                    _rename_count += 1
+                    break
+    if _rename_count:
+        print(f"   🔄 Renamed {_rename_count} non-canonical demographic labels")
+
+    # Combine duplicate rows within each demographic category (sum their BP)
+    _combine_count = 0
+    for _cc in set(_DEMO_RENAME_MAP.keys()) | set(_EXPECTED_DEMO_BUCKETS.keys()):
+        _cat_m = df['Column'].astype(str).str.strip().str.upper() == _cc
+        _cat_idxs = list(df[_cat_m].index)
+        if not _cat_idxs:
+            continue
+        _seen = {}
+        _dups_to_drop = []
+        for idx in _cat_idxs:
+            _vn = _norm_bracket(str(df.at[idx, 'Value']))
+            if _vn in _seen:
+                _keep_idx = _seen[_vn]
+                _dup_bp = float(df.at[idx, bp_col] or 0)
+                df.at[_keep_idx, bp_col] = float(df.at[_keep_idx, bp_col] or 0) + _dup_bp
+                if pct_col and pct_col in df.columns:
+                    df.at[_keep_idx, pct_col] = df.at[_keep_idx, bp_col]
+                _dups_to_drop.append(idx)
+                _combine_count += 1
+            else:
+                _seen[_vn] = idx
+        if _dups_to_drop:
+            df = df.drop(_dups_to_drop).reset_index(drop=True)
+    if _combine_count:
+        print(f"   🔗 Combined {_combine_count} duplicate demographic rows after rename")
+
+    # After merging, enforce that ONLY canonical buckets remain in each
+    # demographic category.  Any row whose Value doesn't match an expected
+    # bucket is dropped and its share redistributed proportionally.
+    for _ec_cat, _ec_vals in _EXPECTED_DEMO_BUCKETS.items():
+        _ec_norms = {_norm_bracket(v) for v in _ec_vals}
+        _ec_mask = df['Column'].astype(str).str.strip().str.upper() == _ec_cat
+        _extra_idxs = [i for i in df[_ec_mask].index
+                       if _norm_bracket(str(df.at[i, 'Value'])) not in _ec_norms]
+        if not _extra_idxs:
+            continue
+        _extra_bp = sum(float(df.at[i, bp_col] or 0) for i in _extra_idxs)
+        _keep_idxs = [i for i in df[_ec_mask].index if i not in _extra_idxs]
+        _keep_total = sum(float(df.at[i, bp_col] or 0) for i in _keep_idxs)
+        if _extra_bp > 0 and _keep_total > 0:
+            for _ki in _keep_idxs:
+                _frac = float(df.at[_ki, bp_col] or 0) / _keep_total
+                df.at[_ki, bp_col] = float(df.at[_ki, bp_col] or 0) + _extra_bp * _frac
+                if pct_col and pct_col in df.columns:
+                    df.at[_ki, pct_col] = df.at[_ki, bp_col]
+        if _extra_idxs:
+            df = df.drop(_extra_idxs).reset_index(drop=True)
+            print(f"   🗑️ Dropped {len(_extra_idxs)} non-canonical rows from {_ec_cat}, redistributed {_extra_bp:.2f}%")
+
     # Normalize INCOME Value text to expected format (strip spaces around hyphens)
     income_mask = df['Column'].astype(str).str.strip().str.upper() == 'INCOME'
     for idx in df[income_mask].index:
@@ -19790,20 +19939,36 @@ def parallel_category_agents(df: pd.DataFrame, persona_doc: dict,
                 df.at[idx, 'Value'] = expected
                 break
 
-    # Remove "Prefer Not to Say" / "Other" rows from non-ethnicity demographics.
-    # ETHNICITY keeps OTHER as a valid output bucket.
-    _NO_PNTS_CATS = {'AGE', 'GENDER', 'INCOME'}
-    _DROP_VALUES = {'PREFER NOT TO SAY', 'OTHER'}
+    # Remove non-canonical rows from ALL demo categories.
+    # Use _EXPECTED_DEMO_BUCKETS as the source of truth for what's canonical.
+    _DROP_CATS = set(_EXPECTED_DEMO_BUCKETS.keys())
     drop_indices = []
-    for cat in _NO_PNTS_CATS:
+    for cat in _DROP_CATS:
+        _ec_norms = {_norm_bracket(v) for v in _EXPECTED_DEMO_BUCKETS.get(cat, [])}
         cat_mask = df['Column'].astype(str).str.strip().str.upper() == cat
         for idx in df[cat_mask].index:
-            val_u = str(df.at[idx, 'Value']).strip().upper()
-            if val_u in _DROP_VALUES:
+            val_norm = _norm_bracket(str(df.at[idx, 'Value']))
+            if val_norm not in _ec_norms:
                 drop_indices.append(idx)
     if drop_indices:
-        print(f"   🗑️ Removing {len(drop_indices)} 'Prefer Not to Say'/'Other' rows from AGE/GENDER/INCOME")
+        print(f"   🗑️ Removing {len(drop_indices)} non-canonical rows from demographics")
         df = df.drop(drop_indices).reset_index(drop=True)
+
+    # Renormalize each demographic category to sum to exactly 100%
+    for _rn_cat in _EXPECTED_DEMO_BUCKETS:
+        _rn_mask = df['Column'].astype(str).str.strip().str.upper() == _rn_cat
+        _rn_idxs = list(df[_rn_mask].index)
+        if not _rn_idxs:
+            continue
+        _rn_total = sum(float(df.at[i, bp_col] or 0) for i in _rn_idxs)
+        if _rn_total > 0 and abs(_rn_total - 100.0) > 0.5:
+            for i in _rn_idxs:
+                _old = float(df.at[i, bp_col] or 0)
+                _new = round(_old / _rn_total * 100.0, 4)
+                df.at[i, bp_col] = _new
+                if pct_col and pct_col in df.columns:
+                    df.at[i, pct_col] = _new
+            print(f"   📐 Renormalized {_rn_cat}: {_rn_total:.2f}% → 100.00%")
 
     # Write persona_doc values to DataFrame.
     # When lock_demographics=True (rerun), write the EXACT prior values rounded
@@ -20264,14 +20429,31 @@ def parallel_category_agents(df: pd.DataFrame, persona_doc: dict,
                              unique_items_by_cat[cat], persona_doc, subject): cat
                 for cat in _guid_cats
             }
-            for fut in _futures.as_completed(_guid_futures, timeout=120):
-                cat = _guid_futures[fut]
-                try:
-                    result = fut.result()
-                    if result:
-                        _guidance_map[cat] = result
-                except Exception as e:
-                    print(f"   ⚠️ Category-rule agent [{cat}] failed: {e}")
+            _done_guid = set()
+            try:
+                for fut in _futures.as_completed(_guid_futures, timeout=300):
+                    cat = _guid_futures[fut]
+                    _done_guid.add(cat)
+                    try:
+                        result = fut.result()
+                        if result:
+                            _guidance_map[cat] = result
+                    except Exception as e:
+                        print(f"   ⚠️ Category-rule agent [{cat}] failed: {e}")
+            except TimeoutError:
+                timed_out_cats = [c for c in _guid_cats if c not in _done_guid]
+                print(f"   🔄 Guidance timeout: {len(timed_out_cats)} categories timed out, retrying sequentially…")
+                for cat in timed_out_cats:
+                    for _attempt in range(1, 3):
+                        try:
+                            result = _run_item_guidance_agent(cat, unique_items_by_cat[cat], persona_doc, subject)
+                            if result:
+                                _guidance_map[cat] = result
+                            break
+                        except Exception as e:
+                            print(f"   ⚠️ Guidance retry [{cat}] attempt {_attempt} failed: {e}")
+                            if _attempt == 2:
+                                print(f"   ⚠️ Skipping guidance for [{cat}] — will use persona signals only")
         _guidance_elapsed = _time.perf_counter() - _guidance_t0
         _n_with_rules = sum(1 for g in _guidance_map.values() if g.get('tier_rules'))
         _n_with_high = sum(1 for g in _guidance_map.values() if g.get('expected_high'))
@@ -21257,18 +21439,28 @@ def _apply_canonical_baseline_cap(df: pd.DataFrame,
         is_high = _is_high(cat_u, val_u)
         is_tight = cat_u in tight_cap_categories
         if is_tight:
-            mult = tight_high_mult if is_high else tight_default_mult
-            floor = tight_high_floor if is_high else tight_default_floor
-            cap = max(canon * mult, floor)
-            cap = min(cap, tight_abs_ceiling)
+            # Two-stage cap so the dominant signal is demographic variation,
+            # not the cap value itself. Trip threshold = trip_mult × baseline;
+            # if exceeded, snap to a *randomized* point in [low_mult, high_mult]
+            # × baseline so different profiles land at different penetrations
+            # rather than all clustering at one identical capped number.
+            trip_mult = tight_high_mult * 1.6 if is_high else tight_default_mult * 1.8
+            low_mult = tight_default_mult * 0.85 if not is_high else tight_high_mult * 0.85
+            high_mult_band = tight_high_mult * 1.35 if is_high else tight_default_mult * 1.35
+            trip_threshold = max(canon * trip_mult, (tight_high_floor if is_high else tight_default_floor) * 1.5)
+            cap_low = max(canon * low_mult, tight_high_floor if is_high else tight_default_floor)
+            cap_high = min(canon * high_mult_band, tight_abs_ceiling)
+            if new_bp <= trip_threshold:
+                continue
+            cap = random.uniform(cap_low, max(cap_low + 0.5, cap_high))
         else:
             mult = high_mult if is_high else default_mult
             floor = high_min_floor if is_high else default_min_floor
             cap = max(canon * mult, floor)
             if canon < small_baseline_threshold:
                 cap = min(cap, small_baseline_abs_cap)
-        if new_bp <= cap:
-            continue
+            if new_bp <= cap:
+                continue
         ratio_before = new_bp / max(canon, 0.0001)
         jitter = random.uniform(-0.05, 0.05)
         capped_candidate = cap + jitter
@@ -25775,6 +25967,21 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
         except Exception as _deterr:
             print(f"   ⚠️ apply_deterministic_us_panel_realism skipped: {_deterr}")
 
+    import pandas as _pd_cast
+    for _nc in ['Brand Penetration (Row)', 'Category Share', 'Original Raw Numbers',
+                'US Gen Pop Projection']:
+        if _nc in df_final.columns:
+            df_final[_nc] = _pd_cast.to_numeric(df_final[_nc], errors='coerce').fillna(0.0)
+
+    # ── Cross-category BP alignment ──────────────────────────────────────
+    # Different AI agents score the same brand independently per category.
+    # This pass enforces a single canonical BP for each brand across all
+    # non-INTEREST categories, using the highest-priority category as source.
+    if not is_genpop:
+        df_final = _align_cross_category_bp(df_final)
+        df_final = _ensure_apple_pay_present(df_final, persona_doc=locals().get('_persona_doc') or locals().get('persona_doc'))
+        df_final = _break_intra_category_pinning(df_final, project_name=project_name)
+
     # Save to CSV
     try:
         df_final.to_csv(final_file, index=False)
@@ -25870,6 +26077,249 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
     print(f"⏱️  Wall-clock cost basis: {total_time_seconds/3600.0:.2f}h on Hetzner AX162-S")
     
     return final_file
+
+
+def _ensure_apple_pay_present(df, persona_doc=None):
+    """Apple Pay is near-universal among US smartphone users — it must appear in
+    every profile's DIGITAL BANKING category. If the agents omitted it, append
+    a persona-aware row with a BP that reflects this audience's age/affluence
+    rather than a hardcoded constant."""
+    import pandas as _pd
+    try:
+        df['_n'] = df['Value'].astype(str).str.strip().str.upper()
+        present = ((df['Column'].str.upper() == 'DIGITAL BANKING') & (df['_n'] == 'APPLE PAY')).any()
+        if present:
+            df = df.drop(columns=['_n'])
+            return df
+        bp_default = 38.4
+        try:
+            di = ''
+            ps = ''
+            if isinstance(persona_doc, dict):
+                di = (persona_doc.get('digital_identity') or '').lower()
+                ps = (persona_doc.get('persona_summary') or '').lower()
+            text = di + ' ' + ps
+            young_signal = any(t in text for t in ('gen z', 'gen-z', '18-24', '18-34', 'tiktok', 'college', 'student', 'young adult'))
+            affluent_signal = any(t in text for t in ('affluent', 'high income', 'upper-middle', '$100k', '$150k', 'wealthy', 'luxury', 'prestige'))
+            older_signal = any(t in text for t in ('55+', '65+', 'baby boomer', 'boomer', 'retiree', 'senior'))
+            apple_signal = any(t in text for t in ('apple', 'iphone', 'ios', 'macbook'))
+            if older_signal and not apple_signal:
+                bp_default = 22.4
+            elif older_signal:
+                bp_default = 28.4
+            elif young_signal and affluent_signal:
+                bp_default = 56.4
+            elif young_signal:
+                bp_default = 47.4
+            elif affluent_signal:
+                bp_default = 44.4
+        except Exception:
+            pass
+        sib = df[df['Column'].str.upper() == 'DIGITAL BANKING'].head(1)
+        if sib.empty:
+            df = df.drop(columns=['_n'])
+            return df
+        nr = sib.iloc[0].copy()
+        nr['Value'] = 'Apple Pay'
+        try:
+            sib_vals = df.loc[df['Column'].str.upper() == 'DIGITAL BANKING', 'Value'].astype(str).tolist()
+            if sib_vals and all(v.isupper() for v in sib_vals[:5] if v):
+                nr['Value'] = 'APPLE PAY'
+            elif sib_vals and all(v.istitle() for v in sib_vals[:5] if v and len(v) > 1):
+                nr['Value'] = 'Apple Pay'
+        except Exception:
+            pass
+        if 'Brand Penetration (Row)' in nr.index:
+            nr['Brand Penetration (Row)'] = bp_default
+        for derived in ('Category Share', 'Original Raw Numbers', 'US Gen Pop Projection'):
+            if derived in nr.index:
+                nr[derived] = 0
+        nr['_n'] = 'APPLE PAY'
+        df = _pd.concat([df, _pd.DataFrame([nr])], ignore_index=True)
+        df = df.drop(columns=['_n'])
+        try:
+            mask = df['Column'].astype(str).str.upper() == 'DIGITAL BANKING'
+            bp_col = 'Brand Penetration (Row)'
+            if bp_col in df.columns and 'Category Share' in df.columns:
+                bp_vals = _pd.to_numeric(df.loc[mask, bp_col], errors='coerce').fillna(0.0)
+                tot = bp_vals.sum()
+                if tot > 0:
+                    df.loc[mask, 'Category Share'] = (bp_vals / tot * 100).round(4)
+            ss_row = df[df['Column'].astype(str).str.upper().str.strip() == 'SAMPLE SIZE']
+            if not ss_row.empty and 'Original Raw Numbers' in df.columns:
+                try:
+                    sample_size = int(float(str(ss_row.iloc[0]['Original Raw Numbers']).replace(',', '')))
+                except Exception:
+                    sample_size = 1
+                bp_full = _pd.to_numeric(df[bp_col], errors='coerce').fillna(0.0)
+                new_idx = df.index[-1]
+                raw = int(round(bp_full.iloc[-1] / 100.0 * sample_size))
+                df.at[new_idx, 'Original Raw Numbers'] = raw
+                if 'US Gen Pop Projection' in df.columns:
+                    df.at[new_idx, 'US Gen Pop Projection'] = int(round(raw * (329_900_000 / 10_000_000)))
+        except Exception:
+            pass
+        print(f"   ✅ APPLE PAY auto-inserted into DIGITAL BANKING at {bp_default}% (persona-aware)")
+        return df
+    except Exception as _e:
+        print(f"   ⚠️ _ensure_apple_pay_present failed: {_e}")
+        try:
+            df = df.drop(columns=['_n'])
+        except Exception:
+            pass
+        return df
+
+
+def _break_intra_category_pinning(df, project_name: str = ''):
+    """Break exact value pinning WITHIN any one category. If two values in the
+    same category share the same BP (rounded to 2dp) above 5%, nudge the second
+    by a tiny deterministic offset so the output never has identical bucket
+    anchors. This is a runtime safety net — the upstream prompts also tell the
+    scoring agent to produce continuous distributions, but this guarantees no
+    bimodal pinning makes it to S3."""
+    import hashlib
+    import pandas as _pd
+    try:
+        bp = 'Brand Penetration (Row)'
+        if bp not in df.columns:
+            return df
+        df[bp] = _pd.to_numeric(df[bp], errors='coerce').fillna(0.0)
+        EXCLUDE = {'SAMPLE SIZE','AGE','GENDER','ETHNICITY','INCOME','EDUCATION',
+                   'RELATIONSHIP','SEXUAL_ORIENTATION','PARENTAL_STATUS','OCCUPATION',
+                   'INPUT_METADATA','BRAND INPUT','BRAND CATEGORY'}
+        cats_touched = set()
+        nudges = 0
+        for cat, sub in df.groupby(df['Column'].astype(str).str.upper()):
+            if cat in EXCLUDE or cat.startswith('TICKER'):
+                continue
+            seen = {}
+            for idx, r in sub.iterrows():
+                v = float(r[bp]) if _pd.notnull(r[bp]) else 0.0
+                if v < 5:
+                    continue
+                k = round(v, 2)
+                if k in seen:
+                    val_label = str(r.get('Value', '')).strip().upper()
+                    h = int(hashlib.blake2b(
+                        f"{project_name}|{cat}|{val_label}|{seen[k]}".encode(),
+                        digest_size=8).hexdigest(), 16)
+                    delta = ((h % 1801) - 900) / 1000.0
+                    new_v = max(0.5, v + delta)
+                    df.at[idx, bp] = round(new_v, 2)
+                    nudges += 1
+                    cats_touched.add(cat)
+                else:
+                    seen[k] = idx
+        sample_size = 1
+        try:
+            ss_row = df[df['Column'].astype(str).str.upper().str.strip() == 'SAMPLE SIZE']
+            if not ss_row.empty and 'Original Raw Numbers' in df.columns:
+                sample_size = max(1, int(float(str(ss_row.iloc[0]['Original Raw Numbers']).replace(',', ''))))
+        except Exception:
+            pass
+        for cat in cats_touched:
+            mask = df['Column'].astype(str).str.upper() == cat
+            bp_vals = _pd.to_numeric(df.loc[mask, bp], errors='coerce').fillna(0.0)
+            tot = bp_vals.sum()
+            if tot > 0 and 'Category Share' in df.columns:
+                df.loc[mask, 'Category Share'] = (bp_vals / tot * 100).round(4)
+            if 'Original Raw Numbers' in df.columns:
+                df.loc[mask, 'Original Raw Numbers'] = (bp_vals / 100.0 * sample_size).round().astype('Int64')
+            if 'US Gen Pop Projection' in df.columns:
+                df.loc[mask, 'US Gen Pop Projection'] = (bp_vals / 100.0 * sample_size * (329_900_000 / 10_000_000)).round().astype('Int64')
+        if nudges:
+            print(f"   ✅ broke {nudges} intra-category pin collisions across {len(cats_touched)} categories")
+        return df
+    except Exception as _e:
+        print(f"   ⚠️ _break_intra_category_pinning failed: {_e}")
+        return df
+
+
+def _align_cross_category_bp(df):
+    """Enforce a single canonical Brand Penetration for each brand across all
+    categories. When the same brand (e.g. LULULEMON) appears in both
+    MOST PURCHASED BRANDS and APPAREL/FOOTWEAR, the AI agents may assign
+    different BP values because they score independently. This pass picks the
+    value from the highest-priority category and propagates it everywhere,
+    then recalculates Category Share / Raw Numbers / Gen Pop Projection."""
+    import pandas as _pd
+    from collections import defaultdict
+
+    for _col in ['Brand Penetration (Row)', 'Category Share', 'Original Raw Numbers',
+                 'US Gen Pop Projection']:
+        if _col in df.columns:
+            df[_col] = _pd.to_numeric(df[_col], errors='coerce').fillna(0.0)
+
+    _SKIP = {'INPUT_METADATA', 'BRAND INPUT', 'SAMPLE SIZE', 'BRAND CATEGORY',
+             'AVID FAN', 'CASUAL FAN'}
+    _SKIP_VAL = {'PREFER NOT TO SAY', 'OTHER', 'NONE', 'N/A'}
+    _INTEREST = {'INTEREST', 'MOST PURCHASED CATEGORIES'}
+    _PRIORITY = [
+        'MOST PURCHASED BRANDS', 'APPAREL/FOOTWEAR', 'BEAUTY/WELLNESS',
+        'TECHNOLOGY BRAND', 'HOME/OUTDOOR', 'CPG', 'STREAMING/PLATFORM',
+        'SOCIAL MEDIA', 'TALENT', 'ATHLETE',
+    ]
+
+    sample_row = df[df['Column'].str.upper() == 'BRAND INPUT']
+    if sample_row.empty:
+        return df
+    try:
+        sample_size = float(str(sample_row['Original Raw Numbers'].values[0]).replace(',', ''))
+    except Exception:
+        return df
+
+    brand_map = defaultdict(list)
+    for idx, row in df.iterrows():
+        val = str(row.get('Value', '')).strip().upper()
+        cat = str(row.get('Column', '')).strip().upper()
+        if cat in _SKIP or val in _SKIP_VAL:
+            continue
+        brand_map[val].append((idx, cat, float(row['Brand Penetration (Row)'])))
+
+    fixed = 0
+    cats_touched = set()
+    for brand, appearances in brand_map.items():
+        if len(appearances) < 2:
+            continue
+        app_cats = set(a[1] for a in appearances)
+        if app_cats.issubset(_INTEREST):
+            continue
+        canonical = None
+        for pcat in _PRIORITY:
+            for idx, cat, bp in appearances:
+                if cat == pcat:
+                    canonical = bp
+                    break
+            if canonical is not None:
+                break
+        if canonical is None:
+            canonical = max(a[2] for a in appearances)
+        # Always propagate canonical, even when drift is tiny — sub-0.01pp
+        # differences still produced visible mismatches in raw counts and
+        # projection values.
+        for idx, cat, bp in appearances:
+            if cat in _INTEREST:
+                continue
+            cats_touched.add(cat)
+            if bp != canonical:
+                df.at[idx, 'Brand Penetration (Row)'] = canonical
+                fixed += 1
+
+    for cat in cats_touched:
+        mask = df['Column'].str.upper() == cat
+        bp_total = df.loc[mask, 'Brand Penetration (Row)'].sum()
+        if bp_total > 0:
+            df.loc[mask, 'Category Share'] = (
+                df.loc[mask, 'Brand Penetration (Row)'] / bp_total * 100
+            ).round(4)
+        bp_frac = df.loc[mask, 'Brand Penetration (Row)'].astype(float) / 100.0
+        df.loc[mask, 'Original Raw Numbers'] = (bp_frac * sample_size).round(0).astype(int)
+        df.loc[mask, 'US Gen Pop Projection'] = (bp_frac * 329_900_000).round(0).astype(int)
+
+    if fixed:
+        print(f"🔗 Cross-category alignment: set {fixed} values to canonical BP (0 mismatches)")
+    return df
+
 
 def set_brand_input_to_csv(df):
     """
@@ -34058,6 +34508,45 @@ def enforce_exact_210_dmas(df):
     vals[vals < 0.01] = 0.01
     vals = vals / float(vals.sum()) * 100.0
     vals = vals.round(4)
+
+    # ── Population-aware hard clamp ──────────────────────────────────────
+    # Regardless of what upstream agents produced, no DMA's final share can
+    # deviate from its Gen Pop baseline by more than a sane multiplier.
+    # This catches label-value mismatches, LLM hallucinations, and name-
+    # matching bugs that bypass earlier guardrails.
+    _gp_baseline_map = {}
+    try:
+        for _gn, _gp in GENPOP_DMA_PERCENTAGES:
+            _gp_baseline_map[normalize_dma_for_display(str(_gn))] = float(_gp)
+    except Exception:
+        pass
+    if _gp_baseline_map:
+        _clamp_fixes = 0
+        for dma_name in vals.index:
+            baseline = _gp_baseline_map.get(dma_name)
+            if baseline is None or baseline <= 0:
+                continue
+            current = float(vals[dma_name])
+            implied_mult = current / baseline
+            demo = DMA_DEMOGRAPHICS.get(dma_name.upper(), {})
+            rank = demo.get("pop_rank", 999)
+            if rank <= 30:
+                clamped = max(0.3, min(5.0, implied_mult))
+            elif rank <= 100:
+                clamped = max(0.15, min(3.5, implied_mult))
+            elif rank <= 150:
+                clamped = max(0.1, min(2.5, implied_mult))
+            else:
+                clamped = max(0.1, min(2.0, implied_mult))
+            if abs(clamped - implied_mult) > 0.01:
+                vals[dma_name] = round(baseline * clamped, 4)
+                _clamp_fixes += 1
+        if _clamp_fixes:
+            vals = vals / float(vals.sum()) * 100.0
+            vals = vals.round(4)
+            print(f"   🔒 Population-aware DMA clamp: corrected {_clamp_fixes} DMAs "
+                  f"(top-30 floor=0.3x/ceil=5x, small-DMA ceil=2x)")
+
     drift = round(100.0 - float(vals.sum()), 4)
     if abs(drift) > 0:
         mx = vals.idxmax()
@@ -39998,17 +40487,24 @@ def normalize_output_text_values(df):
                 'NATIVE AMERICAN / ALASKA NATIVE',
                 'NATIVE AMERICAN',
                 'ALASKA NATIVE',
-                'ANOTHER RACE/ETHNICITY',
+                'OTHER',
             }:
-                return 'OTHER'
+                return 'ANOTHER RACE/ETHNICITY'
         elif c == 'EDUCATION':
             if vu in {'GRADUATE DEGREE'}:
                 return 'GRADUATE OR PROFESSIONAL DEGREE'
             if vu in {'LESS THAN HIGH SCHOOL', 'HIGH SCHOOL GRADUATE'}:
                 return 'HIGH SCHOOL OR LESS'
+            if vu in {'SOME COLLEGE', 'ASSOCIATE DEGREE'}:
+                return 'SOME COLLEGE / ASSOCIATE DEGREE'
         elif c == 'RELATIONSHIP':
             if vu in {'DIVORCED', 'SEPARATED'}:
                 return 'DIVORCED OR SEPARATED'
+            if vu in {'DOMESTIC PARTNERSHIP'}:
+                return 'IN A RELATIONSHIP'
+        elif c == 'INCOME':
+            if vu in {'UNDER $25,000'}:
+                return 'LESS THAN $25,000'
         elif c == 'OCCUPATION':
             if vu in {'SELF-EMPLOYED', 'RETIRED', 'STUDENT', 'HOMEMAKER', 'UNEMPLOYED'}:
                 return 'OTHER'
