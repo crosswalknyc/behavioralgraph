@@ -1208,7 +1208,7 @@ def persona_research_agent_cached(subject: str,
 # GEN POP PENETRATION LOOKUP FOR SAMPLE SIZE CALIBRATION
 # ============================================================================
 
-GEN_POP_CANONICAL_KEY = 'Gen_Pop_2026_03_04_2026_04_29.csv'
+GEN_POP_CANONICAL_KEY = 'Gen_Pop_2026_05_14_groundtruth_anchored.csv'
 _genpop_df_cache = None
 
 def _load_genpop_csv():
