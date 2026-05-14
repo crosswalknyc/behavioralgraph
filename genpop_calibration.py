@@ -80,22 +80,22 @@ GENPOP_CORRECTIONS: dict[tuple[str, str], tuple[float, float]] = {
 
     # ── SOCIAL MEDIA ──────────────────────────────────────────────────────
     ('SOCIAL MEDIA', 'TWITCH'):       (8.5,   50.9977),
-    ('SOCIAL MEDIA', 'DISCORD'):      (16.5,  41.8806),
-    ('SOCIAL MEDIA', 'X'):            (27.5,  36.0697),
+    ('SOCIAL MEDIA', 'DISCORD'): (16.0, 41.8806),
+    ('SOCIAL MEDIA', 'X'): (22.0, 36.0697),
     ('SOCIAL MEDIA', 'PATREON'):      (4.0,   19.4275),
     ('SOCIAL MEDIA', 'TUMBLR'):       (4.0,   15.522),
     ('SOCIAL MEDIA', 'ONLYFANS'):     (2.5,   12.6628),
-    ('SOCIAL MEDIA', 'SNAPCHAT'):     (37.5,  10.9857),
+    ('SOCIAL MEDIA', 'SNAPCHAT'): (27.0, 10.9857),
     ('SOCIAL MEDIA', 'LETTERBOXD'):   (1.5,   7.3208),
     ('SOCIAL MEDIA', 'BLUESKY'):      (1.5,   6.4427),
 
     # ── STREAMING / MUSIC ────────────────────────────────────────────────
-    ('STREAMING/MUSIC', 'SPOTIFY'):          (33.0,  91.9063),
-    ('STREAMING/MUSIC', 'APPLE MUSIC'):      (17.0,  87.3336),
+    ('STREAMING/MUSIC', 'SPOTIFY'): (45.0, 91.9063),
+    ('STREAMING/MUSIC', 'APPLE MUSIC'): (15.0, 87.3336),
     ('STREAMING/MUSIC', 'YOUTUBE MUSIC'):    (9.0,   76.1088),
-    ('STREAMING/MUSIC', 'SIRIUSXM'):         (13.0,  62.1221),
-    ('STREAMING/MUSIC', 'PANDORA MUSIC'):    (17.5,  53.994),
-    ('STREAMING/MUSIC', 'AMAZON MUSIC'):     (16.0,  45.1202),
+    ('STREAMING/MUSIC', 'SIRIUSXM'): (16.0, 62.1221),
+    ('STREAMING/MUSIC', 'PANDORA MUSIC'): (13.9, 53.994),
+    ('STREAMING/MUSIC', 'AMAZON MUSIC'): (9.7, 45.1202),
     ('STREAMING/MUSIC', 'LAST FM'):          (2.5,   40.0746),
     ('STREAMING/MUSIC', 'DEEZER'):           (1.5,   32.6124),
     ('STREAMING/MUSIC', 'SOUNDCLOUD'):       (6.0,   27.6805),
@@ -116,14 +116,14 @@ GENPOP_CORRECTIONS: dict[tuple[str, str], tuple[float, float]] = {
 
     # ── STREAMING / PLATFORM ─────────────────────────────────────────────
     ('STREAMING/PLATFORM', 'ESPN'):               (27.0,  88.448),
-    ('STREAMING/PLATFORM', 'NETFLIX'):            (67.0,  90.5289),
-    ('STREAMING/PLATFORM', 'HULU'):               (17.0,  89.5212),
-    ('STREAMING/PLATFORM', 'DISNEY+'):            (28.0,  51.6918),
-    ('STREAMING/PLATFORM', 'HBO MAX'):            (22.0,  49.8856),
-    ('STREAMING/PLATFORM', 'APPLE TV+'):          (13.0,  43.755),
-    ('STREAMING/PLATFORM', 'PARAMOUNT+'):         (11.0,  38.7105),
-    ('STREAMING/PLATFORM', 'PEACOCK'):             (9.0,  34.0767),
-    ('STREAMING/PLATFORM', 'AMAZON PRIME VIDEO'): (43.0,  33.3701),
+    ('STREAMING/PLATFORM', 'NETFLIX'): (62.5, 90.5289),
+    ('STREAMING/PLATFORM', 'HULU'): (34.4, 89.5212),
+    ('STREAMING/PLATFORM', 'DISNEY+'): (44.5, 51.6918),
+    ('STREAMING/PLATFORM', 'HBO MAX'): (37.3, 49.8856),
+    ('STREAMING/PLATFORM', 'APPLE TV+'): (9.8, 43.755),
+    ('STREAMING/PLATFORM', 'PARAMOUNT+'): (19.1, 38.7105),
+    ('STREAMING/PLATFORM', 'PEACOCK'): (21.8, 34.0767),
+    ('STREAMING/PLATFORM', 'AMAZON PRIME VIDEO'): (58.0, 33.3701),
     ('STREAMING/PLATFORM', 'KICK'):                (2.5,  32.4718),
     ('STREAMING/PLATFORM', 'UFC FIGHT PASS'):      (2.5,  31.2161),
     ('STREAMING/PLATFORM', 'TELEMUNDO'):           (6.0,  28.8383),
@@ -260,15 +260,15 @@ GENPOP_CORRECTIONS: dict[tuple[str, str], tuple[float, float]] = {
     ('APP/PLATFORM USAGE', 'PAYPAL HONEY'): (5.0,   16.0),
 
     # ── DIGITAL BANKING ──────────────────────────────────────────────────
-    ('DIGITAL BANKING', 'PAYPAL'):    (47.0,  77.5729),
-    ('DIGITAL BANKING', 'COINBASE'):  (10.0,  58.6475),
+    ('DIGITAL BANKING', 'PAYPAL'): (43.0, 77.5729),
+    ('DIGITAL BANKING', 'COINBASE'): (2.4, 58.6475),
     ('DIGITAL BANKING', 'BILT'):      (1.5,   19.8593),
 
     # ── BANKING ──────────────────────────────────────────────────────────
-    ('BANKING', 'CHASE'):                (22.0,  56.4858),
-    ('BANKING', 'BANK OF AMERICA'):      (14.0,  44.6929),
-    ('BANKING', 'WELLS FARGO'):          (11.0,  39.9569),
-    ('BANKING', 'CITIBANK'):              (6.0,  35.4207),
+    ('BANKING', 'CHASE'): (29.3, 56.4858),
+    ('BANKING', 'BANK OF AMERICA'): (24.1, 44.6929),
+    ('BANKING', 'WELLS FARGO'): (24.4, 39.9569),
+    ('BANKING', 'CITIBANK'): (7.7, 35.4207),
     ('BANKING', 'TD BANK'):               (4.5,  30.6499),
     ('BANKING', 'US BANK'):               (5.0,  25.1706),
     ('BANKING', 'SOFI BANK'):             (1.5,  23.5161),
@@ -312,12 +312,12 @@ GENPOP_CORRECTIONS: dict[tuple[str, str], tuple[float, float]] = {
     ('INSURANCE', 'LIBERTY MUTUAL'):      (7.0,   9.0071),
 
     # ── TELECOM ──────────────────────────────────────────────────────────
-    ('TELECOM', 'XFINITY'):          (25.0,   9.4175),
-    ('TELECOM', 'VERIZON'):          (30.0,   8.7529),
-    ('TELECOM', 'T-MOBILE'):         (28.0,   7.8892),
-    ('TELECOM', 'AT&T'):             (25.0,   6.7239),
+    ('TELECOM', 'XFINITY'): (24.4, 9.4175),
+    ('TELECOM', 'VERIZON'): (44.0, 8.7529),
+    ('TELECOM', 'T-MOBILE'): (39.1, 7.8892),
+    ('TELECOM', 'AT&T'): (36.1, 6.7239),
     ('TELECOM', 'STARLINK'):          (1.5,   6.0623),
-    ('TELECOM', 'SPECTRUM'):         (11.0,   5.3753),
+    ('TELECOM', 'SPECTRUM'): (23.6, 5.3753),
     ('TELECOM', 'GOOGLE FIBER'):      (0.5,   3.4864),
     ('TELECOM', 'CENTURY LINK'):      (2.0,   3.8632),
     ('TELECOM', 'VISIBLE'):           (1.0,   2.9655),
@@ -549,9 +549,9 @@ GENPOP_CORRECTIONS: dict[tuple[str, str], tuple[float, float]] = {
     # ── QSR ──────────────────────────────────────────────────────────────
     ('QSR', 'STARBUCKS'):                (40.0,  44.6626),
     ('QSR', 'MCDONALDS'):               (37.0,  43.7229),
-    ('QSR', 'DOMINOS'):                  (27.0,  43.6124),
+    ('QSR', 'DOMINOS'): (28.0, 43.6124),
     ('QSR', 'PIZZA HUT'):               (22.0,  41.7843),
-    ('QSR', 'TACO BELL'):               (32.0,  38.7056),
+    ('QSR', 'TACO BELL'): (38.0, 38.7056),
     ('QSR', 'BURGER KING'):             (22.0,  37.8374),
     ('QSR', 'JERSEY MIKES SUBS'):        (8.0,  36.2696),
     ('QSR', 'PAPA JOHNS'):              (12.0,  35.7982),
@@ -560,7 +560,7 @@ GENPOP_CORRECTIONS: dict[tuple[str, str], tuple[float, float]] = {
     ('QSR', 'SWEETGREEN'):               (2.5,  31.6758),
     ('QSR', 'EL POLLO LOCO'):            (3.0,  31.0576),
     ('QSR', 'MOES SOUTHWEST GRILL'):     (3.0,  28.7077),
-    ('QSR', 'CHIPOTLE MEXICAN GRILL'):  (20.0,  27.3746),
+    ('QSR', 'CHIPOTLE MEXICAN GRILL'): (22.0, 27.3746),
     ('QSR', 'BONCHON'):                   (1.5,  27.2016),
     ('QSR', 'KFC'):                      (18.0,  27.0227),
     ('QSR', 'SPRINKLES CUPCAKES'):        (0.5,  24.6615),
@@ -575,7 +575,7 @@ GENPOP_CORRECTIONS: dict[tuple[str, str], tuple[float, float]] = {
     ('QSR', 'PANERA BREAD'):            (14.0,  18.1162),
     ('QSR', 'BOJANGLES'):                 (3.0,  17.077),
     ('QSR', 'PEI WEI ASIAN KITCHEN'):    (1.0,  17.0166),
-    ('QSR', 'DUNKIN'):                   (23.0,  16.9972),
+    ('QSR', 'DUNKIN'): (22.0, 16.9972),
     ('QSR', 'WINGSTOP'):                  (8.0,  15.6374),
     ('QSR', 'FIVE GUYS'):               (10.0,  14.6),
     ('QSR', 'SUBWAY'):                   (22.0,  13.6),
@@ -606,16 +606,16 @@ GENPOP_CORRECTIONS: dict[tuple[str, str], tuple[float, float]] = {
     ('QSR', 'MRBEAST BURGER'):             (1.0,   7.0),
 
     # ── WHERE THEY SHOP ──────────────────────────────────────────────────
-    ('WHERE THEY SHOP', 'TARGET'):                        (48.0,  79.46),
-    ('WHERE THEY SHOP', 'WALMART'):                       (85.0,  79.24),
+    ('WHERE THEY SHOP', 'TARGET'): (47.5, 79.46),
+    ('WHERE THEY SHOP', 'WALMART'): (88.0, 79.24),
     ('WHERE THEY SHOP', 'ALBERTSONS'):                     (8.0,  39.9839),
     ('WHERE THEY SHOP', 'COSTCO'):                        (28.0,  38.7695),
-    ('WHERE THEY SHOP', 'CVS'):                           (30.0,  38.4184),
+    ('WHERE THEY SHOP', 'CVS'): (33.3, 38.4184),
     ('WHERE THEY SHOP', 'PUBLIX'):                        (12.0,  38.3802),
     ('WHERE THEY SHOP', 'EBAY'):                          (12.0,  37.2452),
     ('WHERE THEY SHOP', 'SEPHORA'):                       (12.0,  36.7636),
-    ('WHERE THEY SHOP', 'LOWES'):                         (20.0,  36.3597),
-    ('WHERE THEY SHOP', 'HOME DEPOT'):                    (25.0,  36.2341),
+    ('WHERE THEY SHOP', 'LOWES'): (28.0, 36.3597),
+    ('WHERE THEY SHOP', 'HOME DEPOT'): (36.0, 36.2341),
     ('WHERE THEY SHOP', 'WAYFAIR'):                        (8.0,  36.0789),
     ('WHERE THEY SHOP', 'MACYS'):                         (15.0,  36.0311),
     ('WHERE THEY SHOP', 'SHEIN'):                         (12.0,  35.8332),
@@ -634,11 +634,11 @@ GENPOP_CORRECTIONS: dict[tuple[str, str], tuple[float, float]] = {
     ('WHERE THEY SHOP', 'MERCADO LIBRE'):                  (0.5,  30.0418),
     ('WHERE THEY SHOP', 'PAVILIONS'):                      (1.5,  29.9116),
     ('WHERE THEY SHOP', 'SWAROVSKI'):                      (2.0,  29.8853),
-    ('WHERE THEY SHOP', 'TRADER JOES'):                   (12.0,  29.3668),
+    ('WHERE THEY SHOP', 'TRADER JOES'): (16.0, 29.3668),
     ('WHERE THEY SHOP', 'YOOX'):                           (0.3,  29.3519),
     ('WHERE THEY SHOP', 'BEST BUY'):                      (20.0,  29.2811),
     ('WHERE THEY SHOP', 'ACADEMY SPORTS + OUTDOORS'):      (4.0,  28.5627),
-    ('WHERE THEY SHOP', 'WHOLE FOODS MARKET'):             (8.0,  28.421),
+    ('WHERE THEY SHOP', 'WHOLE FOODS MARKET'): (12.0, 28.421),
     ('WHERE THEY SHOP', 'BALENCIAGA'):                     (0.3,  28.3079),
     ('WHERE THEY SHOP', 'WILLIAMS-SONOMA'):                (3.0,  27.7981),
     ('WHERE THEY SHOP', 'ADVANCE AUTO PARTS'):             (3.0,  27.1312),
@@ -669,7 +669,7 @@ GENPOP_CORRECTIONS: dict[tuple[str, str], tuple[float, float]] = {
     ('WHERE THEY SHOP', 'DIOR'):                            (0.5,  13.3),
     ('WHERE THEY SHOP', 'MAISON MARGIELA'):                 (0.2,  20.0),
     ('WHERE THEY SHOP', 'HARRODS'):                         (0.2,  17.0),
-    ('WHERE THEY SHOP', 'WALGREENS'):                      (25.0,  30.0),
+    ('WHERE THEY SHOP', 'WALGREENS'): (30.3, 30.0),
     ('WHERE THEY SHOP', 'HOME GOODS'):                     (10.0,  26.0),
     ('WHERE THEY SHOP', 'KOHLS'):                          (12.0,  27.0),
     ('WHERE THEY SHOP', 'CHEWY'):                           (8.0,  25.0),
@@ -739,14 +739,14 @@ GENPOP_CORRECTIONS: dict[tuple[str, str], tuple[float, float]] = {
     ('MOST PURCHASED BRANDS', 'ASHER GOLF'): (0.1, 2.6),
     ('MOST PURCHASED BRANDS', 'ASICS'): (4.0, 13.2),
     ('MOST PURCHASED BRANDS', 'ASPINAL OF LONDON'): (0.1, 2.6),
-    ('MOST PURCHASED BRANDS', 'ATHLETA'): (4.0, 13.2),
+    ('MOST PURCHASED BRANDS', 'ATHLETA'): (3.0, 13.2),
     ('MOST PURCHASED BRANDS', 'AUDEMARS PIGUET'): (0.05, 2.3),
     ('MOST PURCHASED BRANDS', 'AUGUST HOME'): (0.5, 5.0),
     ('MOST PURCHASED BRANDS', 'AVEENO'): (8.0, 17.1),
     ('MOST PURCHASED BRANDS', 'AVOLT'): (0.2, 3.2),
     ('MOST PURCHASED BRANDS', 'AVON'): (3.0, 11.5),
     ('MOST PURCHASED BRANDS', 'BA&SH'): (0.3, 3.8),
-    ('MOST PURCHASED BRANDS', 'BANANA REPUBLIC'): (6.0, 15.7),
+    ('MOST PURCHASED BRANDS', 'BANANA REPUBLIC'): (4.0, 15.7),
     ('MOST PURCHASED BRANDS', 'BAND AID'): (10.0, 18.5),
     ('MOST PURCHASED BRANDS', 'BAND-AID'): (10.0, 18.5),
     ('MOST PURCHASED BRANDS', 'BANTER'): (0.3, 3.8),
@@ -767,7 +767,7 @@ GENPOP_CORRECTIONS: dict[tuple[str, str], tuple[float, float]] = {
     ('MOST PURCHASED BRANDS', 'BOOHOO'): (2.0, 9.8),
     ('MOST PURCHASED BRANDS', 'BOUGUESSA'): (0.1, 2.6),
     ('MOST PURCHASED BRANDS', 'BOUNTY'): (10.0, 18.5),
-    ('MOST PURCHASED BRANDS', 'BRANDY MELVILLE'): (2.0, 9.8),
+    ('MOST PURCHASED BRANDS', 'BRANDY MELVILLE'): (1.5, 9.8),
     ('MOST PURCHASED BRANDS', 'BRITA'): (5.0, 15.0),
     ('MOST PURCHASED BRANDS', 'BROOKS BROTHERS'): (2.0, 9.8),
     ('MOST PURCHASED BRANDS', 'BROOKS SHOES'): (5.0, 15.0),
@@ -779,7 +779,7 @@ GENPOP_CORRECTIONS: dict[tuple[str, str], tuple[float, float]] = {
     ('MOST PURCHASED BRANDS', 'CALVIN KLEIN'): (12.0, 19.9),
     ('MOST PURCHASED BRANDS', 'CAMPBELLS'): (10.0, 18.5),
     ('MOST PURCHASED BRANDS', 'CANADA DRY'): (5.0, 15.0),
-    ('MOST PURCHASED BRANDS', 'CARHARTT'): (5.0, 15.0),
+    ('MOST PURCHASED BRANDS', 'CARHARTT'): (9.0, 15.0),
     ('MOST PURCHASED BRANDS', 'CARTERS'): (5.0, 15.0),
     ('MOST PURCHASED BRANDS', 'CASE MATE'): (0.5, 5.0),
     ('MOST PURCHASED BRANDS', 'CASETIFY'): (1.0, 8.0),
@@ -789,7 +789,7 @@ GENPOP_CORRECTIONS: dict[tuple[str, str], tuple[float, float]] = {
     ('MOST PURCHASED BRANDS', 'CERAVE'): (5.0, 15.0),
     ('MOST PURCHASED BRANDS', 'CETAPHIL'): (5.0, 15.0),
     ('MOST PURCHASED BRANDS', 'CHAMPION'): (10.0, 18.5),
-    ('MOST PURCHASED BRANDS', 'CHARMIN'): (12.0, 19.9),
+    ('MOST PURCHASED BRANDS', 'CHARMIN'): (13.5, 19.9),
     ('MOST PURCHASED BRANDS', 'CHEERIOS'): (12.0, 19.9),
     ('MOST PURCHASED BRANDS', 'CHEEZ-IT'): (8.0, 17.1),
     ('MOST PURCHASED BRANDS', 'CHOBANI'): (5.0, 15.0),
@@ -802,7 +802,7 @@ GENPOP_CORRECTIONS: dict[tuple[str, str], tuple[float, float]] = {
     ('MOST PURCHASED BRANDS', 'CLUB MONACO'): (1.0, 8.0),
     ('MOST PURCHASED BRANDS', 'COACH'): (6.0, 15.7),
     ('MOST PURCHASED BRANDS', 'COBIAN'): (0.3, 3.8),
-    ('MOST PURCHASED BRANDS', 'COCA COLA'): (20.0, 22.5),
+    ('MOST PURCHASED BRANDS', 'COCA COLA'): (28.0, 22.5),
     ('MOST PURCHASED BRANDS', 'COLE HAAN'): (2.0, 9.8),
     ('MOST PURCHASED BRANDS', 'COLUMBIA'): (8.0, 17.1),
     ('MOST PURCHASED BRANDS', 'COMME DES GARCONS'): (0.1, 2.6),
@@ -817,7 +817,7 @@ GENPOP_CORRECTIONS: dict[tuple[str, str], tuple[float, float]] = {
     ('MOST PURCHASED BRANDS', 'COVERGIRL'): (8.0, 17.1),
     ('MOST PURCHASED BRANDS', 'CREST'): (15.0, 22.0),
     ('MOST PURCHASED BRANDS', 'CRICUT'): (2.0, 9.8),
-    ('MOST PURCHASED BRANDS', 'CROCS'): (12.0, 19.9),
+    ('MOST PURCHASED BRANDS', 'CROCS'): (16.0, 19.9),
     ('MOST PURCHASED BRANDS', 'CUTTER & BUCK'): (0.5, 5.0),
     ('MOST PURCHASED BRANDS', 'CYNTHIA ROWLEY'): (0.3, 3.8),
     ('MOST PURCHASED BRANDS', 'DANNON'): (5.0, 15.0),
@@ -862,11 +862,11 @@ GENPOP_CORRECTIONS: dict[tuple[str, str], tuple[float, float]] = {
     ('MOST PURCHASED BRANDS', 'FRUIT OF THE LOOM'): (18.0, 22.3),
     ('MOST PURCHASED BRANDS', 'GAIN'): (8.0, 17.1),
     ('MOST PURCHASED BRANDS', 'GANT'): (0.5, 5.0),
-    ('MOST PURCHASED BRANDS', 'GAP'): (15.0, 22.0),
+    ('MOST PURCHASED BRANDS', 'GAP'): (8.0, 22.0),
     ('MOST PURCHASED BRANDS', 'GARNIER'): (12.0, 19.9),
     ('MOST PURCHASED BRANDS', 'GATORADE'): (15.0, 22.0),
     ('MOST PURCHASED BRANDS', 'GHOSTBED'): (0.3, 3.8),
-    ('MOST PURCHASED BRANDS', 'GILLETTE'): (15.0, 22.0),
+    ('MOST PURCHASED BRANDS', 'GILLETTE'): (21.0, 22.0),
     ('MOST PURCHASED BRANDS', 'GLAD'): (8.0, 17.1),
     ('MOST PURCHASED BRANDS', 'GLOSSIER'): (3.0, 11.5),
     ('MOST PURCHASED BRANDS', 'GODINGER'): (0.1, 2.6),
@@ -874,10 +874,10 @@ GENPOP_CORRECTIONS: dict[tuple[str, str], tuple[float, float]] = {
     ('MOST PURCHASED BRANDS', 'GOOD AMERICAN'): (1.0, 8.0),
     ('MOST PURCHASED BRANDS', 'GOOSE ISLAND BEER'): (1.0, 8.0),
     ('MOST PURCHASED BRANDS', 'GUESS'): (3.0, 11.5),
-    ('MOST PURCHASED BRANDS', 'H&M'): (15.0, 22.0),
+    ('MOST PURCHASED BRANDS', 'H&M'): (12.0, 22.0),
     ('MOST PURCHASED BRANDS', 'HAAGEN-DAZS'): (5.0, 15.0),
     ('MOST PURCHASED BRANDS', 'HALLMARK'): (5.0, 15.0),
-    ('MOST PURCHASED BRANDS', 'HANES'): (28.0, 23.3),
+    ('MOST PURCHASED BRANDS', 'HANES'): (12.0, 23.3),
     ('MOST PURCHASED BRANDS', 'HARIBO'): (5.0, 15.0),
     ('MOST PURCHASED BRANDS', 'HARMLESS HARVEST'): (0.5, 5.0),
     ('MOST PURCHASED BRANDS', 'HAWX PEST CONTROL'): (0.5, 5.0),
@@ -952,7 +952,7 @@ GENPOP_CORRECTIONS: dict[tuple[str, str], tuple[float, float]] = {
     ('MOST PURCHASED BRANDS', 'LUCKY CHARMS'): (5.0, 15.0),
     ('MOST PURCHASED BRANDS', 'LUGGAGE ONLINE'): (0.3, 3.8),
     ('MOST PURCHASED BRANDS', 'LUISA CERANO'): (0.1, 2.6),
-    ('MOST PURCHASED BRANDS', 'LULULEMON'): (4.0, 13.2),
+    ('MOST PURCHASED BRANDS', 'LULULEMON'): (8.0, 13.2),
     ('MOST PURCHASED BRANDS', 'LULULUN'): (0.3, 3.8),
     ('MOST PURCHASED BRANDS', 'LUMEN'): (0.3, 3.8),
     ('MOST PURCHASED BRANDS', 'LUMIN'): (0.3, 3.8),
@@ -996,9 +996,9 @@ GENPOP_CORRECTIONS: dict[tuple[str, str], tuple[float, float]] = {
     ('MOST PURCHASED BRANDS', 'NESTLE AERO'): (0.5, 5.0),
     ('MOST PURCHASED BRANDS', 'NEUTROGENA'): (20.0, 22.5),
     ('MOST PURCHASED BRANDS', 'NEW & LINGWOOD'): (0.1, 2.6),
-    ('MOST PURCHASED BRANDS', 'NEW BALANCE'): (12.0, 19.9),
+    ('MOST PURCHASED BRANDS', 'NEW BALANCE'): (11.0, 19.9),
     ('MOST PURCHASED BRANDS', 'NEW ERA CAP'): (3.0, 11.5),
-    ('MOST PURCHASED BRANDS', 'NIKE'): (36.0, 24.1),
+    ('MOST PURCHASED BRANDS', 'NIKE'): (28.0, 24.1),
     ('MOST PURCHASED BRANDS', 'NOAH'): (0.3, 3.8),
     ('MOST PURCHASED BRANDS', 'NORMA KAMALI'): (0.3, 3.8),
     ('MOST PURCHASED BRANDS', 'NOXZEMA'): (2.0, 9.8),
@@ -1006,7 +1006,7 @@ GENPOP_CORRECTIONS: dict[tuple[str, str], tuple[float, float]] = {
     ('MOST PURCHASED BRANDS', 'OAK + FORT'): (0.5, 5.0),
     ('MOST PURCHASED BRANDS', 'OGX'): (4.0, 13.2),
     ('MOST PURCHASED BRANDS', 'OLAY'): (15.0, 22.0),
-    ('MOST PURCHASED BRANDS', 'OLD NAVY'): (22.0, 22.7),
+    ('MOST PURCHASED BRANDS', 'OLD NAVY'): (18.0, 22.7),
     ('MOST PURCHASED BRANDS', 'OLD SPICE'): (20.0, 22.5),
     ('MOST PURCHASED BRANDS', 'OLLY'): (2.0, 9.8),
     ('MOST PURCHASED BRANDS', 'ORAL B'): (12.0, 19.9),
@@ -1023,11 +1023,11 @@ GENPOP_CORRECTIONS: dict[tuple[str, str], tuple[float, float]] = {
     ('MOST PURCHASED BRANDS', 'PANOXYL'): (1.0, 8.0),
     ('MOST PURCHASED BRANDS', 'PANTENE'): (12.0, 19.9),
     ('MOST PURCHASED BRANDS', 'PARADE UNDERWEAR'): (0.5, 5.0),
-    ('MOST PURCHASED BRANDS', 'PATAGONIA'): (5.0, 15.0),
+    ('MOST PURCHASED BRANDS', 'PATAGONIA'): (4.0, 15.0),
     ('MOST PURCHASED BRANDS', 'PELOTON APPAREL'): (1.0, 8.0),
     ('MOST PURCHASED BRANDS', 'PENDLETON'): (1.0, 8.0),
     ('MOST PURCHASED BRANDS', 'PEPPERIDGE FARM GOLDFISH'): (8.0, 17.1),
-    ('MOST PURCHASED BRANDS', 'PEPSI'): (15.0, 22.0),
+    ('MOST PURCHASED BRANDS', 'PEPSI'): (22.0, 22.0),
     ('MOST PURCHASED BRANDS', 'PEPTO BISMOL'): (5.0, 15.0),
     ('MOST PURCHASED BRANDS', 'PERRICONE MD'): (0.3, 3.8),
     ('MOST PURCHASED BRANDS', 'PILLSBURY'): (10.0, 18.5),
@@ -1047,7 +1047,7 @@ GENPOP_CORRECTIONS: dict[tuple[str, str], tuple[float, float]] = {
     ('MOST PURCHASED BRANDS', 'R13'): (0.2, 3.2),
     ('MOST PURCHASED BRANDS', 'RAG & BONE'): (1.0, 8.0),
     ('MOST PURCHASED BRANDS', 'RAGU'): (3.0, 11.5),
-    ('MOST PURCHASED BRANDS', 'RALPH LAUREN'): (8.0, 17.1),
+    ('MOST PURCHASED BRANDS', 'RALPH LAUREN'): (7.0, 17.1),
     ('MOST PURCHASED BRANDS', 'RAWLINGS'): (1.0, 8.0),
     ('MOST PURCHASED BRANDS', 'RAY-BAN'): (5.0, 15.0),
     ('MOST PURCHASED BRANDS', 'RED BULL'): (10.0, 18.5),
@@ -1102,12 +1102,12 @@ GENPOP_CORRECTIONS: dict[tuple[str, str], tuple[float, float]] = {
     ('MOST PURCHASED BRANDS', 'TERMINIX'): (2.0, 9.8),
     ('MOST PURCHASED BRANDS', 'THE HONEST COMPANY'): (2.0, 9.8),
     ('MOST PURCHASED BRANDS', 'THE JESSICA SIMPSON COLLECTION'): (1.0, 8.0),
-    ('MOST PURCHASED BRANDS', 'THE NORTH FACE'): (10.0, 18.5),
+    ('MOST PURCHASED BRANDS', 'THE NORTH FACE'): (8.0, 18.5),
     ('MOST PURCHASED BRANDS', 'THEORY'): (1.0, 8.0),
     ('MOST PURCHASED BRANDS', 'THERABODY'): (1.0, 8.0),
     ('MOST PURCHASED BRANDS', 'THRIVE CAUSEMETICS'): (0.5, 5.0),
     ('MOST PURCHASED BRANDS', 'THULE'): (1.0, 8.0),
-    ('MOST PURCHASED BRANDS', 'TIDE'): (18.0, 22.3),
+    ('MOST PURCHASED BRANDS', 'TIDE'): (19.0, 22.3),
     ('MOST PURCHASED BRANDS', 'TOMMY BAHAMA'): (2.0, 9.8),
     ('MOST PURCHASED BRANDS', 'TOMMY HILFIGER'): (7.0, 16.4),
     ('MOST PURCHASED BRANDS', 'TOMMY JOHN'): (1.0, 8.0),
@@ -1124,7 +1124,7 @@ GENPOP_CORRECTIONS: dict[tuple[str, str], tuple[float, float]] = {
     ('MOST PURCHASED BRANDS', 'TYLENOL'): (12.0, 19.9),
     ('MOST PURCHASED BRANDS', 'UGG'): (5.0, 15.0),
     ('MOST PURCHASED BRANDS', 'UNDER ARMOUR'): (10.0, 18.5),
-    ('MOST PURCHASED BRANDS', 'UNIQLO'): (5.0, 15.0),
+    ('MOST PURCHASED BRANDS', 'UNIQLO'): (4.0, 15.0),
     ('MOST PURCHASED BRANDS', 'URBAN PLANET'): (0.3, 3.8),
     ('MOST PURCHASED BRANDS', 'US POLO ASSN'): (1.0, 8.0),
     ('MOST PURCHASED BRANDS', 'VALENTINO'): (0.3, 3.8),
@@ -1133,7 +1133,7 @@ GENPOP_CORRECTIONS: dict[tuple[str, str], tuple[float, float]] = {
     ('MOST PURCHASED BRANDS', 'VEJA SNEAKERS'): (0.5, 5.0),
     ('MOST PURCHASED BRANDS', 'VELVEETA'): (3.0, 11.5),
     ('MOST PURCHASED BRANDS', 'VICKS'): (5.0, 15.0),
-    ('MOST PURCHASED BRANDS', 'VICTORIAS SECRET'): (15.0, 22.0),
+    ('MOST PURCHASED BRANDS', 'VICTORIAS SECRET'): (12.0, 22.0),
     ('MOST PURCHASED BRANDS', 'VOLUSPA'): (0.3, 3.8),
     ('MOST PURCHASED BRANDS', 'WEEKDAY'): (0.5, 5.0),
     ('MOST PURCHASED BRANDS', 'WEST ELM'): (2.0, 9.8),
@@ -1399,15 +1399,87 @@ GENPOP_CORRECTIONS: dict[tuple[str, str], tuple[float, float]] = {
     # ══════════════════════════════════════════════════════════════════════
     # SPORTS ORGANIZATIONS
     # ══════════════════════════════════════════════════════════════════════
-    ('SPORTS ORGANIZATIONS', 'F1'): (8.0, 24.0),
-    ('SPORTS ORGANIZATIONS', 'MAJOR LEAGUE BASEBALL'): (15.0, 35.0),
-    ('SPORTS ORGANIZATIONS', 'NASCAR'): (8.0, 24.0),
-    ('SPORTS ORGANIZATIONS', 'NATIONAL BASKETBALL ASSOCIATION'): (15.0, 35.0),
-    ('SPORTS ORGANIZATIONS', 'NATIONAL COLLEGIATE ATHLETIC ASSOCIATION'): (12.0, 32.0),
-    ('SPORTS ORGANIZATIONS', 'NATIONAL FOOTBALL LEAGUE'): (25.0, 45.0),
-    ('SPORTS ORGANIZATIONS', 'NATIONAL HOCKEY LEAGUE'): (6.0, 18.0),
+    ('SPORTS ORGANIZATIONS', 'F1'): (6.0, 24.0),
+    ('SPORTS ORGANIZATIONS', 'MAJOR LEAGUE BASEBALL'): (20.0, 35.0),
+    ('SPORTS ORGANIZATIONS', 'NASCAR'): (10.0, 24.0),
+    ('SPORTS ORGANIZATIONS', 'NATIONAL BASKETBALL ASSOCIATION'): (25.0, 35.0),
+    ('SPORTS ORGANIZATIONS', 'NATIONAL COLLEGIATE ATHLETIC ASSOCIATION'): (18.0, 32.0),
+    ('SPORTS ORGANIZATIONS', 'NATIONAL FOOTBALL LEAGUE'): (41.0, 45.0),
+    ('SPORTS ORGANIZATIONS', 'NATIONAL HOCKEY LEAGUE'): (12.0, 18.0),
     ('SPORTS ORGANIZATIONS', 'ULTIMATE FIGHTING CHAMPION'): (5.0, 15.0),
     ('SPORTS ORGANIZATIONS', 'WORLD WRESTLING ENTERTAINMENT WWE'): (5.0, 15.0),
+
+    # ── PHASE-2 ground-truth additions (auto-added by apply_genpop_fixes.py) ──
+    ('STREAMING/PLATFORM', 'MAX'): (37.3, 55.95),  # WBD FY2024 10-K (rebranded HBO Max)
+    ('SOCIAL MEDIA', 'YOUTUBE'): (84.0, 84.0),  # Pew 2024
+    ('SOCIAL MEDIA', 'FACEBOOK'): (68.0, 68.0),  # Pew 2024 / META 196M N.A. DAP
+    ('SOCIAL MEDIA', 'INSTAGRAM'): (50.0, 50.0),  # META 169M US MAU
+    ('SOCIAL MEDIA', 'TIKTOK'): (47.0, 47.0),  # ByteDance 170M US MAU
+    ('SOCIAL MEDIA', 'TWITTER'): (22.0, 33.0),  # eMarketer 2024
+    ('SOCIAL MEDIA', 'REDDIT'): (22.0, 33.0),  # Reddit Q3 2024 10-Q
+    ('SOCIAL MEDIA', 'PINTEREST'): (35.0, 52.5),  # Pinterest Q4 2024 10-K
+    ('SOCIAL MEDIA', 'LINKEDIN'): (28.0, 42.0),  # Pew 2024
+    ('DIGITAL BANKING', 'VENMO'): (27.3, 40.95),  # PayPal FY2024 10-K
+    ('DIGITAL BANKING', 'CASH APP'): (17.3, 25.95),  # Block FY2024 10-K monthly transacting actives
+    ('DIGITAL BANKING', 'ZELLE'): (45.8, 45.8),  # Early Warning Services 2024
+    ('DIGITAL BANKING', 'APPLE PAY'): (41.5, 41.5),  # Apple/IDC: 60% of 227M US iPhones = 137M
+    ('BANKING', 'CAPITAL ONE'): (30.3, 45.45),  # COF FY2024 10-K customer accounts
+    ('WHERE THEY SHOP', 'AMAZON'): (88.0, 88.0),  # AMZN: ~88% of US digital adults shop monthly per MRI
+    ('TECHNOLOGY/DEVICE', 'APPLE'): (60.0, 60.0),  # Counterpoint 2024
+    ('TECHNOLOGY/DEVICE', 'SAMSUNG'): (24.0, 36.0),  # Counterpoint 2024
+    ('TECHNOLOGY/DEVICE', 'GOOGLE'): (5.0, 15.0),  # Pixel ~5% US share
+    ('TECHNOLOGY/DEVICE', 'MICROSOFT'): (14.0, 42.0),  # Surface + Xbox installed base
+    ('SPORTS ORGANIZATIONS', 'NFL'): (41.0, 41.0),  # Gallup 2024
+    ('SPORTS ORGANIZATIONS', 'NBA'): (25.0, 37.5),  # Gallup 2024
+    ('SPORTS ORGANIZATIONS', 'MLB'): (20.0, 30.0),  # Gallup 2024
+    ('SPORTS ORGANIZATIONS', 'NHL'): (12.0, 36.0),  # Gallup 2024
+    ('MOST PURCHASED BRANDS', 'FASHION NOVA'): (4.0, 20.0),  # Fashion Nova private; F-skewed; ~4% US 30-day reach
+    ('MOST PURCHASED BRANDS', 'SHEIN'): (14.0, 42.0),  # Shein private; ~$30B global; US ~14% 30-day reach (Gen Z + budget)
+    ('SPORTS ORGANIZATIONS', 'NCAA'): (18.0, 27.0),  # same
+    ('SPORTS ORGANIZATIONS', 'WORLD WRESTLING ENTERTAINMENT'): (9.0, 27.0),  # TKO Group: ~30M US WWE viewers/yr
+    ('SPORTS ORGANIZATIONS', 'WWE'): (9.0, 27.0),  # same
+    ('APPAREL/FOOTWEAR', 'NIKE'): (28.0, 42.0),  # NKE Membership 70M US; 30-day 28%
+    ('APPAREL/FOOTWEAR', 'ADIDAS'): (18.0, 27.0),  # Adidas FY2024
+    ('APPAREL/FOOTWEAR', 'LULULEMON'): (8.0, 24.0),  # LULU FY2024
+    ('APPAREL/FOOTWEAR', 'HANES'): (12.0, 36.0),  # HBI FY2024 (mostly in-store)
+    ('APPAREL/FOOTWEAR', 'OLD NAVY'): (18.0, 27.0),  # GAP FY2024
+    ('APPAREL/FOOTWEAR', 'GAP'): (8.0, 24.0),  # GAP FY2024
+    ('APPAREL/FOOTWEAR', 'BANANA REPUBLIC'): (4.0, 20.0),  # GAP FY2024
+    ('APPAREL/FOOTWEAR', 'H&M'): (12.0, 36.0),  # H&M FY2024
+    ('APPAREL/FOOTWEAR', 'ZARA'): (8.0, 24.0),  # Inditex FY2024
+    ('APPAREL/FOOTWEAR', 'UNIQLO'): (4.0, 20.0),  # Fast Retailing FY2024
+    ('APPAREL/FOOTWEAR', 'CROCS'): (16.0, 24.0),  # CROX FY2024
+    ('APPAREL/FOOTWEAR', 'NEW BALANCE'): (11.0, 33.0),  # NB private estimate
+    ('APPAREL/FOOTWEAR', 'CARHARTT'): (9.0, 27.0),  # Carhartt private estimate
+    ('APPAREL/FOOTWEAR', 'PATAGONIA'): (4.0, 20.0),  # Patagonia private estimate
+    ('APPAREL/FOOTWEAR', 'THE NORTH FACE'): (8.0, 24.0),  # VFC FY2024
+    ('APPAREL/FOOTWEAR', 'RALPH LAUREN'): (7.0, 21.0),  # RL FY2024
+    ('APPAREL/FOOTWEAR', 'FREE PEOPLE'): (3.0, 15.0),  # URBN FY2024 F-only
+    ('APPAREL/FOOTWEAR', 'ATHLETA'): (3.0, 15.0),  # GAP FY2024 F-only
+    ('APPAREL/FOOTWEAR', 'BRANDY MELVILLE'): (1.5, 7.5),  # private; teen-F
+    ('APPAREL/FOOTWEAR', 'REFORMATION'): (1.5, 7.5),  # Permira; F-only DTC
+    ('APPAREL/FOOTWEAR', 'VICTORIAS SECRET'): (12.0, 36.0),  # VSCO FY2024 F-only
+    ('APPAREL/FOOTWEAR', 'FASHION NOVA'): (4.0, 20.0),  # private F-skewed
+    ('APPAREL/FOOTWEAR', 'SHEIN'): (14.0, 42.0),  # private; Gen Z budget
+    ('APPAREL/FOOTWEAR', 'LEVI'): (14.0, 42.0),  # LEVI FY2024 ~$2.5B Americas DTC
+    ("APPAREL/FOOTWEAR", "LEVI'S"): (14.0, 42.0),  # same
+    ('APPAREL/FOOTWEAR', 'AMERICAN EAGLE'): (9.0, 27.0),  # AEO FY2024
+    ('APPAREL/FOOTWEAR', 'HOLLISTER CO'): (5.0, 15.0),  # ANF FY2024
+    ('APPAREL/FOOTWEAR', 'ABERCROMBIE & FITCH'): (5.0, 15.0),  # ANF FY2024
+    ('APPAREL/FOOTWEAR', 'MADEWELL'): (3.0, 15.0),  # JCG/Madewell FY2024
+    ('APPAREL/FOOTWEAR', 'J.CREW'): (4.0, 20.0),  # JCG FY2024
+    ('APPAREL/FOOTWEAR', 'COACH'): (6.0, 18.0),  # Tapestry FY2024 ~$4B Coach NA
+    ('APPAREL/FOOTWEAR', 'KATE SPADE'): (3.0, 15.0),  # Tapestry FY2024
+    ('APPAREL/FOOTWEAR', 'MICHAEL KORS'): (5.0, 15.0),  # Capri FY2024
+    ('APPAREL/FOOTWEAR', 'CALVIN KLEIN'): (8.0, 24.0),  # PVH FY2024
+    ('APPAREL/FOOTWEAR', 'TOMMY HILFIGER'): (6.0, 18.0),  # PVH FY2024
+    ('APPAREL/FOOTWEAR', 'UGG'): (6.0, 18.0),  # Deckers FY2024 ~$2B UGG NA
+    ('APPAREL/FOOTWEAR', 'HOKA'): (5.0, 15.0),  # Deckers FY2024 fast-growing
+    ('APPAREL/FOOTWEAR', 'CONVERSE'): (12.0, 36.0),  # Nike FY2024 Converse $1.7B
+    ('APPAREL/FOOTWEAR', 'VANS'): (8.0, 24.0),  # VFC FY2024
+    ('APPAREL/FOOTWEAR', 'PUMA'): (7.0, 21.0),  # PUMA FY2024
+    ('APPAREL/FOOTWEAR', 'UNDER ARMOUR'): (9.0, 27.0),  # UAA FY2024
+    ('APPAREL/FOOTWEAR', 'COLUMBIA'): (6.0, 18.0),  # COLM FY2024
 }
 
 
@@ -1427,6 +1499,132 @@ CORRECTION_FACTORS = _build_correction_factors()
 
 
 # ── Public API ────────────────────────────────────────────────────────────────
+
+# Maximum ratio a per-profile BP may exceed its canonical (ground-truth) value.
+# Personas can legitimately over-index — Pedro Pascal genuinely uses HBO Max
+# (TLOU) more than gen pop. But blanket "agent ignored the anchor" overshoots
+# (Pedro v3 Apple TV+ at 28.8 vs canonical 9.8 = 2.94x) need a cap.
+# 1.8x allows generous persona uplift while blocking gross overshoots.
+GENPOP_CEILING_RATIO = 1.8
+
+# Load SEC-anchored ground truth from migration/validate_genpop.py.
+# Restricting the ceiling enforcer to ONLY these ~140 explicitly-SEC-validated
+# brands avoids over-capping for the long tail of curated entries in
+# GENPOP_CORRECTIONS where the "corrected" value is hand-tuned rather than
+# SEC-anchored. Older curated entries can still legitimately be exceeded by
+# a persona-driven over-index.
+def _load_ceiling_targets() -> dict:
+    """Return {(category, value): canonical_truth_pct} for SEC-anchored brands.
+    Falls back to {} if the validator module isn't importable (e.g. when
+    genpop_calibration is loaded outside the repo)."""
+    try:
+        import os, sys as _sys
+        _here = os.path.dirname(os.path.abspath(__file__))
+        for _p in [
+            os.path.join(_here, '..', 'migration'),
+            os.path.join(_here, 'migration'),
+        ]:
+            if os.path.isdir(_p) and _p not in _sys.path:
+                _sys.path.insert(0, _p)
+        from validate_genpop import GROUND_TRUTH, implied_truth_pct  # type: ignore
+        targets: dict = {}
+        for key, gt in GROUND_TRUTH.items():
+            t = implied_truth_pct(gt)
+            if t is not None and t > 0:
+                targets[key] = float(t)
+        return targets
+    except Exception as _e:
+        if not SILENCE_VERBOSE_OUTPUT:
+            print(f"⚠️ enforce_genpop_ceiling: could not load GROUND_TRUTH ({_e}); ceiling disabled")
+        return {}
+
+
+CANONICAL_TRUTH = _load_ceiling_targets()
+
+# Aliases — when the per-profile output uses a short form but the canonical
+# uses a long form (or vice versa), map the per-profile key to the truth key.
+# Keep in sync with migration/recalibrate_canonical_genpop.py ALIAS_MAP.
+_CEILING_ALIASES = {
+    ('SPORTS ORGANIZATIONS', 'NFL'): ('SPORTS ORGANIZATIONS', 'NATIONAL FOOTBALL LEAGUE'),
+    ('SPORTS ORGANIZATIONS', 'NBA'): ('SPORTS ORGANIZATIONS', 'NATIONAL BASKETBALL ASSOCIATION'),
+    ('SPORTS ORGANIZATIONS', 'MLB'): ('SPORTS ORGANIZATIONS', 'MAJOR LEAGUE BASEBALL'),
+    ('SPORTS ORGANIZATIONS', 'NHL'): ('SPORTS ORGANIZATIONS', 'NATIONAL HOCKEY LEAGUE'),
+    ('SPORTS ORGANIZATIONS', 'NCAA'): ('SPORTS ORGANIZATIONS', 'NATIONAL COLLEGIATE ATHLETIC ASSOCIATION'),
+    ('SPORTS ORGANIZATIONS', 'WWE'): ('SPORTS ORGANIZATIONS', 'WORLD WRESTLING ENTERTAINMENT'),
+    ('STREAMING/PLATFORM', 'MAX'): ('STREAMING/PLATFORM', 'HBO MAX'),
+}
+
+
+def enforce_genpop_ceiling(df: pd.DataFrame, ceiling_ratio: float = GENPOP_CEILING_RATIO) -> pd.DataFrame:
+    """Runtime safety net — cap each brand's Brand Penetration (Row) at
+    ceiling_ratio × canonical_truth_pct.
+
+    Acts ONLY on rows where (Column, Value) is in CANONICAL_TRUTH. Rows
+    without ground truth pass through unchanged. Demographic rows
+    (AGE/GENDER/INCOME/EDUCATION/ETHNICITY/LOCATION/etc.) are NEVER
+    touched — same skip set as calibrate_to_genpop.
+
+    When a cap fires, recomputes Original Raw Numbers and US Gen Pop
+    Projection from the new BP so downstream math stays consistent.
+    """
+    if df is None or df.empty or not CANONICAL_TRUTH:
+        return df
+
+    df = df.copy()
+
+    skip_categories = {
+        'INPUT_METADATA', 'BRAND INPUT', 'SAMPLE SIZE', 'AVID FAN', 'CASUAL FAN',
+        'AGE', 'EDUCATION', 'ETHNICITY', 'GENDER', 'INCOME',
+        'RELATIONSHIP', 'SEXUAL_ORIENTATION', 'PARENTAL_STATUS',
+        'OCCUPATION', 'LOCATION',
+    }
+
+    sample_size = _get_sample_size(df)
+    capped_count = 0
+    capped_examples = []
+
+    for idx, row in df.iterrows():
+        category = str(row.get('Column', '')).upper().strip()
+        if category in skip_categories:
+            continue
+        value = str(row.get('Value', '')).upper().strip()
+        # Try direct lookup first, then alias resolution
+        truth = CANONICAL_TRUTH.get((category, value))
+        if truth is None:
+            alias_key = _CEILING_ALIASES.get((category, value))
+            if alias_key is not None:
+                truth = CANONICAL_TRUTH.get(alias_key)
+        if truth is None:
+            continue
+
+        current_pct = _safe_float(row.get('Brand Penetration (Row)', 0))
+        if current_pct <= 0:
+            continue
+
+        max_allowed = truth * ceiling_ratio
+        if current_pct <= max_allowed:
+            continue
+
+        new_pct = round(max_allowed, 4)
+        new_raw = int(round((new_pct / 100.0) * sample_size))
+        new_genpop = int(round((new_raw / SAMPLE_CAP) * US_POPULATION))
+
+        df.at[idx, 'Brand Penetration (Row)'] = new_pct
+        df.at[idx, 'Original Raw Numbers'] = new_raw
+        df.at[idx, 'US Gen Pop Projection'] = new_genpop
+        capped_count += 1
+        if len(capped_examples) < 8:
+            capped_examples.append(f"{category}/{value}: {current_pct:.1f} → {new_pct:.1f} (cap={max_allowed:.1f})")
+
+    if capped_count and not SILENCE_VERBOSE_OUTPUT:
+        print(f"🧢 Gen-pop ceiling enforced: {capped_count} brands capped at {ceiling_ratio}x canonical")
+        for ex in capped_examples:
+            print(f"     · {ex}")
+        if capped_count > len(capped_examples):
+            print(f"     · …+{capped_count - len(capped_examples)} more")
+
+    return df
+
 
 def calibrate_to_genpop(df: pd.DataFrame) -> pd.DataFrame:
     """Apply gen-pop correction factors to a profile's post-pipeline DataFrame.

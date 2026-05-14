@@ -2128,15 +2128,33 @@
             margin-left: 1rem;
         }
 
-        #subscriberIQView #subscriberDropDate {
-            grid-column: 1;
-            grid-row: 3;
-            align-self: start;
+        /* Subscriber IQ: explicit grid areas for meta + Drop Date row */
+        #subscriberIQView .dash-meta-grid.subscriber-dash-meta-grid {
+            grid-template-rows: auto auto auto;
+            justify-items: stretch;
+            grid-template-areas:
+                "subdaterange subattr"
+                "subexcl      subcad"
+                "subdrop      .";
+        }
+        #subscriberIQView .dash-meta-grid.subscriber-dash-meta-grid #subscriberDateRangeHeader {
+            grid-area: subdaterange;
+        }
+        #subscriberIQView .dash-meta-grid.subscriber-dash-meta-grid #subscriberAttributionWindow {
+            grid-area: subattr;
+        }
+        #subscriberIQView .dash-meta-grid.subscriber-dash-meta-grid #subscriberExclusionWindow {
+            grid-area: subexcl;
+        }
+        #subscriberIQView .dash-meta-grid.subscriber-dash-meta-grid #subscriberContentCadence {
+            grid-area: subcad;
+        }
+        #subscriberIQView .dash-meta-grid.subscriber-dash-meta-grid #subscriberDropDate.subscriber-drop-meta {
+            grid-area: subdrop;
             color: var(--accent-lime);
-            font-size: 0.8rem;
             font-weight: 700;
-            padding: 0.15rem 0.75rem 0;
             white-space: normal;
+            text-align: left;
         }
 
         .dash-brand-box {
@@ -16086,12 +16104,12 @@
                                     <div class="dash-brand-box" id="subscriberShowNameHeader"></div>
                                     <div class="dash-meta-box" id="subscriberPlatformHeader" style="display: none;"></div>
                                 </div>
-                                <div class="dash-meta-grid">
+                                <div class="dash-meta-grid subscriber-dash-meta-grid">
                                     <div class="dash-meta-box" id="subscriberDateRangeHeader" style="display: none;"></div>
                                     <div class="dash-meta-box" id="subscriberAttributionWindow" style="display: none;"></div>
                                     <div class="dash-meta-box" id="subscriberExclusionWindow" style="display: none;"></div>
                                     <div class="dash-meta-box" id="subscriberContentCadence" style="display: none;"></div>
-                                    <div id="subscriberDropDate" style="display: none;"></div>
+                                    <div class="dash-meta-box subscriber-drop-meta" id="subscriberDropDate" style="display: none;"></div>
                                 </div>
                             </div>
                         </div>

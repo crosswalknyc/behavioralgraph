@@ -282,7 +282,7 @@ import math
 import hashlib
 import glob
 from datetime import datetime
-from genpop_calibration import calibrate_to_genpop
+from genpop_calibration import calibrate_to_genpop, enforce_genpop_ceiling
 import json as _json_mod
 import time as _time
 
@@ -1208,7 +1208,7 @@ def persona_research_agent_cached(subject: str,
 # GEN POP PENETRATION LOOKUP FOR SAMPLE SIZE CALIBRATION
 # ============================================================================
 
-GEN_POP_CANONICAL_KEY = 'Gen_Pop_2026_03_04_2026_04_29.csv'
+GEN_POP_CANONICAL_KEY = 'Gen_Pop_2026_05_14_groundtruth_anchored.csv'
 _genpop_df_cache = None
 
 def _load_genpop_csv():
@@ -1230,6 +1230,138 @@ def _load_genpop_csv():
     except Exception as e:
         print(f"⚠️ Could not load Gen Pop CSV from S3: {e}")
         return None
+
+# ─────────────────────────────────────────────────────────────────────────────
+# BRAND INTELLIGENCE — signals-only doc loaded once per process, injected into
+# the per-category scoring agent prompt for MOST PURCHASED BRANDS.
+# Mirrors the loader in BG.py; see that file for full design notes.
+# ─────────────────────────────────────────────────────────────────────────────
+_BRAND_INTELLIGENCE_KEY = 'reference/brand_intelligence/v1/all_brands.json'
+_brand_intelligence_cache = None
+
+def _load_brand_intelligence() -> dict:
+    """Load and cache the brand intelligence doc from S3. Returns {} on miss."""
+    global _brand_intelligence_cache
+    if _brand_intelligence_cache is not None:
+        return _brand_intelligence_cache
+    if not S3_AVAILABLE:
+        _brand_intelligence_cache = {}
+        return _brand_intelligence_cache
+    try:
+        import json as _json
+        s3 = get_s3_client()
+        if s3 is None:
+            _brand_intelligence_cache = {}
+            return _brand_intelligence_cache
+        obj = s3.get_object(Bucket=S3_BUCKET, Key=_BRAND_INTELLIGENCE_KEY)
+        raw = _json.loads(obj['Body'].read())
+        brands = raw.get('brands', {}) if isinstance(raw, dict) else {}
+        _brand_intelligence_cache = {str(k).strip().upper(): v for k, v in brands.items() if isinstance(v, dict)}
+        if not SILENCE_VERBOSE_OUTPUT:
+            print(f"📚 Loaded brand intelligence: {len(_brand_intelligence_cache)} brands "
+                  f"(version {raw.get('version', '?')}, refreshed {raw.get('refreshed_at', '?')})")
+        return _brand_intelligence_cache
+    except Exception as e:
+        if 'NoSuchKey' not in str(e):
+            print(f"⚠️ Could not load brand intelligence: {e}")
+        _brand_intelligence_cache = {}
+        return _brand_intelligence_cache
+
+
+def _format_brand_intelligence_block(brand_names: list, max_brands: int = 200) -> str:
+    """Build a compact prompt block of brand intelligence for the brands
+    actually appearing in this category's inventory list."""
+    intel = _load_brand_intelligence()
+    if not intel or not brand_names:
+        return ''
+    lines = []
+    matched = 0
+    for raw_name in brand_names:
+        if matched >= max_brands:
+            break
+        key = str(raw_name).strip().upper()
+        entry = intel.get(key)
+        if not entry:
+            continue
+        cool = (entry.get('cool_factor_signal') or '').strip()
+        tier = (entry.get('price_tier') or '').strip()
+        core = (entry.get('core_customer_today') or '').strip()
+        sigs = entry.get('archetype_signals') or {}
+        over = sigs.get('over_indexes_for') or []
+        under = sigs.get('under_indexes_for') or []
+        cross = entry.get('cross_shop_network') or []
+        dig = (entry.get('digital_behavior_note') or '').strip()
+        gen = (entry.get('generational_lean_signal') or '').strip()
+        recent = entry.get('recent_signals') or []
+        recent_str = ' | '.join(str(r) for r in recent[:2])
+        line = f"  • {raw_name}: {tier}; {cool}"
+        if core:
+            line += f" Core: {core}."
+        if over:
+            line += f" Over-indexes for: {', '.join(over[:5])}."
+        if under:
+            line += f" Under-indexes for: {', '.join(under[:5])}."
+        if cross:
+            line += f" Cross-shop: {', '.join(cross[:5])}."
+        if dig:
+            line += f" {dig}"
+        if gen:
+            line += f" Gen lean: {gen}."
+        if recent_str:
+            line += f" Recent: {recent_str}."
+        lines.append(line)
+        matched += 1
+    if not lines:
+        return ''
+    header = (
+        "═══════════════════════════════════════════════════════════════════\n"
+        "BRAND INTELLIGENCE — signals only, NOT rules or defaults\n"
+        "═══════════════════════════════════════════════════════════════════\n"
+        "Each entry below is RESEARCH CONTEXT to inform your audience-fraction\n"
+        "reasoning. None of it is a multiplier, default value, or formula. THIS\n"
+        "PROFILE'S persona — its audience composition, age skew, archetype,\n"
+        "income, cultural anchors — still determines where THIS specific persona\n"
+        "lands. Two profiles whose archetype both appears in over_indexes_for\n"
+        "should NOT get the same BP — each persona's specific sub-segment mix\n"
+        "produces a different audience-fraction calculation. Use the brand's\n"
+        "cool factor, recent SEC/news signals, and cross-shop network to inform\n"
+        "the per-segment engagement rate you assign in your audience-fraction\n"
+        "math.\n\n"
+        "HOW TO USE THESE SIGNALS — read carefully:\n"
+        "  1. cool_factor (RISING/DECLINING) applies ONLY to the archetypes in\n"
+        "     over_indexes_for. A brand RISING for TikTok Gen Z does NOT rise for\n"
+        "     a Boomer prestige persona — the rising trend is happening WITHIN\n"
+        "     that specific subculture. Do not apply RISING/DECLINING globally.\n"
+        "  2. over_indexes_for / under_indexes_for: only score this brand HIGH\n"
+        "     if THIS persona's actual archetype matches one of the over_index\n"
+        "     entries (or an obvious adjacent — e.g. 'preppy mom' in the list and\n"
+        "     persona is preppy adult M = adjacent fit, score moderate not high).\n"
+        "     If no over_index matches, the brand is at-baseline or below for this\n"
+        "     persona. If an under_index entry matches THIS persona, score LOW.\n"
+        "     Brands that are inherently single-gender (Brandy Melville, Free\n"
+        "     People, Athleta, Victoria's Secret, Reformation = F-product;\n"
+        "     Stussy, Carhartt WIP, Bonobos, Untuckit = M-product) DO NOT have\n"
+        "     a cross-gender adjacent — score the off-gender persona LOW.\n"
+        "  3. digital_behavior_note is a HARD CONSTRAINT, not a signal. Brands\n"
+        "     where the note contains 'IN-STORE/BUNDLED' or 'in-store' or 'low\n"
+        "     digital' MUST score low DIGITAL BP regardless of how cool/popular\n"
+        "     they are or who the persona is — people don't visit hanes.com or\n"
+        "     tide.com. Cap these brands' BP at roughly the gen-pop digital\n"
+        "     baseline (typically 5-15%) even if every other signal is positive.\n"
+        "     Do NOT inflate IN-STORE brands above 18% even for over-indexing\n"
+        "     archetypes; the in-store constraint dominates.\n"
+        "  4. cross_shop_network: if THIS persona's audience composition includes\n"
+        "     segments that already over-index on the cross-shop brands, that\n"
+        "     adds modest evidence of fit. If the cross-shop network is alien to\n"
+        "     this persona, that's evidence the brand is also alien.\n"
+        "  5. Mainstays (Nike, Adidas, Amazon, Apple, Netflix, Walmart): the\n"
+        "     intelligence doc still gives signals but you must respect the\n"
+        "     US digital-panel anchor ceilings above. Do NOT push Nike above\n"
+        "     ~50% just because intel says cool factor RISING — Nike's true US\n"
+        "     digital ceiling is mid-50s for the heaviest sneakerhead persona.\n\n"
+    )
+    return header + '\n'.join(lines) + '\n'
+
 
 def _normalize_brand_for_lookup(name):
     """Normalize a brand name for Gen Pop lookup: strip separators, URL encoding, uppercase."""
@@ -16115,6 +16247,7 @@ Return ONLY a single valid JSON object — no markdown, no commentary.
     {{"dma": "<DMA name, e.g. NEW YORK>", "percentage": <percent>}},
     ...top 15-20 DMAs with highest affinity; remainder auto-distributed
   ],
+  "audience_composition": "<2-3 paragraph decomposition of THIS subject's digital audience into sub-segments with rough fractions and which segments drive which brand affinities — see AUDIENCE COMPOSITION instructions below>",
   "digital_identity": "<2-4 paragraph DEEP analysis of this audience's digital footprint — see instructions below>",
   "subsegments": [
     {{
@@ -16343,6 +16476,29 @@ SPECIFIC WRITING RULES
   • cross_shop_network: Real brands the audience actively uses alongside the
     subject (apparel + retail + negative_overlap). Used by the scoring agent
     to decide rank ordering within a category.
+
+AUDIENCE COMPOSITION — CRITICAL FRAMEWORK FOR REASONING (read this before writing anything else):
+The single most damaging mistake this pipeline makes is treating an audience as MONOLITHIC — collapsing all of {subject}'s fans into one "representative user" who looks like the median fan, then scoring brands as if everyone in the audience is that same user. This produces saturation: "Margot Robbie's audience is mainstream → Netflix is mainstream → score Netflix at 90%+." That reasoning is wrong, because no audience is monolithic.
+
+NO AUDIENCE IS MONOLITHIC — not even Taylor Swift's, not even The Rock's, not even Tom Hanks's. Every digital audience is a HETEROGENEOUS MIX of sub-segments with very different engagement patterns:
+  • CASUALS — know the name, occasionally engage with content, no commercial pull-through. Usually the LARGEST segment for any well-known subject.
+  • ACTIVE FANS — regularly engage (watch films, stream music, follow socials). Medium-sized segment.
+  • SUPER-FANS — deep commercial engagement (buy merch, attend events, stream every release). Smallest segment, biggest brand effect.
+  • LAPSED — used to follow, drifted away. Real and meaningful for any subject with a long career.
+  • OUTLIERS WHO STILL COUNT — kids whose parents control subscriptions, seniors with linear-only TV, low-income with no streaming budget, account-sharers, anti-fans who know the name but actively avoid associated brands.
+
+Even Taylor Swift's audience contains MILLIONS of people who do not have Spotify (Apple Music or YouTube only), do not have Netflix (Hulu/Max/free streaming), do not pay for Amazon Prime, never visit Starbucks. The casual segment is huge and dilutes every brand's BP downward from the "true superfan rate."
+
+In the `audience_composition` field, write 2-3 concrete paragraphs that:
+  1. NAME the major sub-segments of THIS subject's digital audience using the subject's actual fan ecosystem. Examples (do NOT copy — derive your own):
+     - For Florence Pugh: "BookTok arthouse 25%, A24 cinephile 20%, Marvel-crossover casual 30%, lapsed-Black-Widow 15%, Reformation-girl aspirational 10%"
+     - For Margot Robbie: "Barbie-mass-pop 40%, Wolf-of-WS-edgy-cinephile 15%, Suicide-Squad-comic-fan 15%, lapsed casual 20%, kids-via-Barbie 10%"
+     - For LeBron James: "NBA-die-hards 30%, casual sports fans 35%, sneakerhead/streetwear 15%, social-issue followers 10%, lapsed 10%"
+     - For Taylor Swift: "Eras-tour superfans 20%, casual streaming fans 35%, lapsed-country 15%, anti-Swifties who still know the songs 10%, Gen-Z TikTok casual 20%"
+  2. ESTIMATE the rough fraction of the total digital audience each segment represents. Fractions should sum to ~100%. Be honest: casuals are usually the biggest segment, super-fans are usually <15%.
+  3. NAME which segments DRIVE which brand affinities, AND which segments DILUTE common brands. E.g. "the BookTok arthouse segment drives Spotify and indie-fashion engagement; the kids-via-Barbie segment drags Apple Pay and Venmo down because they're under 18; the lapsed casual segment depresses Netflix engagement because they're not actively streaming new content."
+
+This decomposition is the SINGLE MOST IMPORTANT reasoning input the per-category scorer will receive. Without it, the scorer collapses to "is this brand famous? yes → score high" which is the saturation failure we keep hitting on Netflix, Amazon, Starbucks, NFL, etc.
 
 DIGITAL IDENTITY — THIS IS ALSO CRITICAL:
 The `digital_identity` field is a rich text block (2-4 paragraphs) that will be passed VERBATIM to per-category scoring agents. Make it specific, opinionated, and grounded in real audience data. It MUST address all five areas below.
@@ -17743,12 +17899,60 @@ Honor the **SUBJECT ARCHETYPE** section in the persona block: do not score a K-p
 Turn that calibrated judgment into **`estimated_bp_pct`** (share of persona cohort showing that credible digital touching pattern), using CATEGORY RULE + item evidence (`panel`/genpop/classification)— never pure fame.
 
 ═══════════════════════════════════════════════════════════════════
+SCORE FROM AUDIENCE FRACTION, NOT FROM BRAND FAME
+═══════════════════════════════════════════════════════════════════
+THE SINGLE MOST DAMAGING MISTAKE you can make: treating "{subject}'s audience" as a monolithic group of identical users. NO AUDIENCE IS MONOLITHIC. Even Taylor Swift's audience contains millions of people who do not have Spotify, do not have Netflix, do not use Instagram, do not pay for Amazon Prime, do not visit Starbucks. Even The Rock's audience contains people who don't watch wrestling, don't lift, don't drink protein shakes.
+
+For EVERY item you score, the question is NEVER "is this brand famous / ubiquitous?" — it is ALWAYS:
+   "What FRACTION of {subject}'s actual digital audience composition genuinely engages with this item?"
+
+The persona's SUB-SEGMENTS block (in the persona block above) decomposes this audience into sub-segments with rough fractions. Use those fractions to back into the BP for every item:
+
+  bp(item) ≈ Σ over segments [ segment_fraction × segment_engagement_rate(item) ]
+
+WORKED EXAMPLE — Netflix on a hypothetical mass-blockbuster F audience:
+  • casuals 55% × Netflix engagement 70% = 38.5pp
+  • active fans 30% × Netflix engagement 85% = 25.5pp
+  • super-fans 10% × Netflix engagement 90% = 9.0pp
+  • outliers (kids/seniors/no-budget) 5% × Netflix engagement 30% = 1.5pp
+  → Total ≈ 74.5%, NOT 90%. The casual + outlier segments DRAG THE AVERAGE DOWN.
+
+WORKED EXAMPLE — Spotify on an indie-arthouse F audience (Florence Pugh archetype):
+  • BookTok arthouse 25% × Spotify 80% = 20.0pp
+  • A24 cinephile 20% × Spotify 75% = 15.0pp
+  • Marvel-crossover casual 30% × Spotify 55% = 16.5pp
+  • lapsed-Black-Widow 15% × Spotify 45% = 6.8pp
+  • Reformation-girl aspirational 10% × Spotify 70% = 7.0pp
+  → Total ≈ 65.3%, NOT 78% — but HIGHER than for Margot's mass audience because the indie segments are music-heavy.
+
+Same brand, two different personas, two different BPs — both derived from the SAME math, just with different audience compositions. THIS is how you produce realistic, persona-differentiated outputs.
+
+═══════════════════════════════════════════════════════════════════
+US DIGITAL-PANEL ANCHOR DATA — physical reach ceilings
+═══════════════════════════════════════════════════════════════════
+These are not opinions or arbitrary caps — they are derived from US population × actual penetration rate × digital-panel observation rate. Going above them is a math error, not a creative choice. If your audience-fraction reasoning produces a number above these ceilings, RE-DECOMPOSE the audience and find which segments are dragging the average down.
+
+STREAMING (paid SVOD): Netflix 78% max (65% baseline), Hulu 60% (33%), Disney+ 50% (35%), HBO Max 38% (22%), Apple TV+ 32% (9%), Peacock 28% (16%), Paramount+ 25% (12%), Tubi 38% (22%), YouTube TV 28% (15%).
+STREAMING/MUSIC: Spotify 78% max (47% baseline), Apple Music 50% (18%), YouTube Music 45% (12%), Amazon Music 32% (8%), Pandora 22% (8%).
+SHOPPING: Amazon 88% max, Walmart 55% (50%), Target 55% (45%), Costco 38% (25%).
+QSR (monthly): Starbucks 55% max (33% baseline), McDonald's 48% (36%), Dunkin 35% (18%), Chick-fil-A 40% (22%), Taco Bell 35% (22%), Chipotle 32% (18%).
+SOCIAL: YouTube 85% max (84% baseline), Facebook 80% (67%), Instagram 72% (50%, +12pp for fashion), TikTok 75% (47%, +12pp for young-male-niche), Snapchat 50% (27%), Pinterest 50% (35%), X/Twitter 38% (22%), Reddit 45% (22%).
+DIGITAL BANKING: PayPal 75% max (50% baseline), Apple Pay 60% (53%), Venmo 55% (30%), Cash App 45% (24%), Zelle 40% (24%).
+TECHNOLOGY/DEVICE: Apple 75% (55%), Samsung 42% (32%), Google 32% (18%), Microsoft 32% (22%).
+SPORTS: NFL 55% mass-cap (41%, football-superfan persona ~80%), NBA 40% (25%, superfan ~60%), MLB 32% (20%, superfan ~52%), NCAA 28% (18%, superfan ~50%), NHL 22% (12%), NASCAR 18% (10%).
+APPAREL DIGITAL: Nike 50% max (sneakerhead persona; mainstream 28%; non-athletic M 15%), Adidas 38% (sneaker persona; mainstream 22%; non-athletic 12%), Lululemon 45% (athleisure-F; off-archetype M ~12%), Hanes 18% HARD CAP (in-store/bundled — TikTok RISING signal does NOT push this above 22%; adult M ceiling ~15%), Levi 28%, H&M/Zara/Uniqlo each 30% (fast-fashion young-urban; off-archetype M ~12%), Old Navy/Gap/Banana Republic each 22% (preppy-mom/mainstream; off-archetype ~10%), Crocs 32% (Gen-Z/family; off-archetype ~10%), New Balance 28%, Carhartt 22% (workwear/Americana M; off-archetype ~8%), North Face/Patagonia each 22%, Ralph Lauren 22% (preppy/quiet-luxury M or F; off-archetype ~8%). F-PRODUCT brands (Brandy Melville, Free People, Athleta, Reformation, Victoria's Secret) — for ANY M persona ceiling is ~6%; off-archetype F ~10%. Fashion Nova/Shein 24% (value-urban-F; M persona ~6%).
+CPG/IN-STORE: Tide/Bounty/Charmin/Crest/Tropicana/Coca-Cola/Pepsi/Hershey ceiling ~18% for ANY persona on the digital panel — bought in-store, not on the brand's website.
+
+Use these ceilings as the OUTER BOUND of your audience-fraction reasoning. If your math produces a higher number, re-check the segment decomposition — you almost certainly forgot a casual/outlier segment that should be dragging the average down.
+
+═══════════════════════════════════════════════════════════════════
 CATEGORY CONTEXT
 ═══════════════════════════════════════════════════════════════════
 Items in category **{category}** — behavioral panel profile **{subject}**.
 {date_context_block}
 {persona_block}
 
+{_format_brand_intelligence_block([str(v) for v in values]) if category.strip().upper() == 'MOST PURCHASED BRANDS' else ''}
 {category_rule_block}
 
 {anchor_rules}
@@ -25785,6 +25989,11 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
         df_final = reconcile_final_output_from_bp_and_sample_size(df_final)
         df_final = add_us_gen_pop_projection(df_final)
     df_final = perturb_brand_penetration_avoid_dot_0000(df_final)
+    # ── Runtime ground-truth ceiling (non-genpop only) ────────────────────
+    # Cap each brand at GENPOP_CEILING_RATIO × canonical_truth_pct. Skips
+    # demographic categories — they remain hard-locked.
+    if not is_genpop:
+        df_final = enforce_genpop_ceiling(df_final)
     df_final = reconcile_final_output_from_bp_and_sample_size(df_final)
     df_final = add_us_gen_pop_projection(df_final)
 
@@ -25980,6 +26189,7 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
     if not is_genpop:
         df_final = _align_cross_category_bp(df_final)
         df_final = _ensure_apple_pay_present(df_final, persona_doc=locals().get('_persona_doc') or locals().get('persona_doc'))
+        df_final = _enforce_realistic_ceilings(df_final, project_name=project_name, persona_doc=locals().get('_persona_doc') or locals().get('persona_doc'))
         df_final = _break_intra_category_pinning(df_final, project_name=project_name)
 
     # Save to CSV
@@ -26167,6 +26377,233 @@ def _ensure_apple_pay_present(df, persona_doc=None):
             df = df.drop(columns=['_n'])
         except Exception:
             pass
+        return df
+
+
+def _enforce_realistic_ceilings(df, project_name: str = '', persona_doc=None):
+    """Runtime safety net for mass-saturation brands. The agent prompts ask for
+    realistic ceilings, but the agent will still occasionally overshoot on the
+    handful of universally-known brands (Netflix, Amazon, Starbucks, NFL, etc.).
+    This pass clamps any BP that exceeds the documented persona-aware ceiling
+    for those specific (CATEGORY, BRAND) pairs and applies a small deterministic
+    offset so different profiles do not all pin to the same ceiling value."""
+    import hashlib
+    import pandas as _pd
+    try:
+        bp = 'Brand Penetration (Row)'
+        if bp not in df.columns:
+            return df
+        df[bp] = _pd.to_numeric(df[bp], errors='coerce').fillna(0.0)
+
+        psum = ''
+        try:
+            psum = (str(persona_doc.get('persona_summary', '') if isinstance(persona_doc, dict) else '') or '').lower()
+        except Exception:
+            psum = ''
+        is_athlete = any(t in psum for t in ['athlete', 'football', 'basketball', 'sports', 'nfl', 'nba'])
+        is_young_male = ('male' in psum or ' man' in psum or ' men ' in psum) and any(t in psum for t in ['gen z','young','25-34','18-24','college'])
+
+        CEILINGS = {
+            ('STREAMING/PLATFORM','NETFLIX'): 78.0,
+            ('STREAMING/PLATFORM','HULU'): 60.0,
+            ('STREAMING/PLATFORM','AMAZON PRIME VIDEO'): 58.0,
+            ('STREAMING/PLATFORM','APPLE TV+'): 32.0,
+            ('STREAMING/PLATFORM','HBO MAX'): 38.0,
+            ('STREAMING/PLATFORM','MAX'): 38.0,
+            ('STREAMING/PLATFORM','DISNEY+'): 45.0,
+            ('STREAMING/PLATFORM','PEACOCK'): 28.0,
+            ('STREAMING/PLATFORM','PARAMOUNT+'): 25.0,
+            ('STREAMING/MUSIC','SPOTIFY'): 78.0,
+            ('STREAMING/MUSIC','APPLE MUSIC'): 50.0,
+            ('STREAMING/MUSIC','YOUTUBE MUSIC'): 45.0,
+            ('STREAMING/MUSIC','AMAZON MUSIC'): 32.0,
+            ('WHERE THEY SHOP','AMAZON'): 88.0,
+            ('WHERE THEY SHOP','WALMART'): 55.0,
+            ('WHERE THEY SHOP','TARGET'): 55.0,
+            ('WHERE THEY SHOP','COSTCO'): 38.0,
+            ('QSR','STARBUCKS'): 55.0,
+            ('QSR','MCDONALDS'): 48.0,
+            ("QSR","MCDONALD'S"): 48.0,
+            ('QSR','DUNKIN'): 35.0,
+            ('QSR','CHICK-FIL-A'): 40.0,
+            ('QSR','TACO BELL'): 35.0,
+            ('QSR','CHIPOTLE MEXICAN GRILL'): 32.0,
+            ('QSR','CHIPOTLE'): 32.0,
+            ('SOCIAL MEDIA','YOUTUBE'): 85.0,
+            ('SOCIAL MEDIA','TIKTOK'): 75.0,
+            ('SOCIAL MEDIA','INSTAGRAM'): 72.0,
+            ('SOCIAL MEDIA','FACEBOOK'): 60.0,
+            ('SOCIAL MEDIA','SNAPCHAT'): 50.0,
+            ('SOCIAL MEDIA','X'): 35.0,
+            ('SOCIAL MEDIA','TWITTER'): 35.0,
+            ('SOCIAL MEDIA','REDDIT'): 35.0,
+            ('SOCIAL MEDIA','PINTEREST'): 38.0,
+            ('TECHNOLOGY/DEVICE','APPLE'): 75.0,
+            ('TECHNOLOGY/DEVICE','SAMSUNG'): 38.0,
+            ('TECHNOLOGY/DEVICE','GOOGLE'): 32.0,
+            ('TECHNOLOGY/DEVICE','MICROSOFT'): 32.0,
+            ('SPORTS ORGANIZATIONS','NATIONAL FOOTBALL LEAGUE'): 55.0,
+            ('SPORTS ORGANIZATIONS','NFL'): 55.0,
+            ('SPORTS ORGANIZATIONS','NATIONAL BASKETBALL ASSOCIATION'): 40.0,
+            ('SPORTS ORGANIZATIONS','NBA'): 40.0,
+            ('SPORTS ORGANIZATIONS','MAJOR LEAGUE BASEBALL'): 32.0,
+            ('SPORTS ORGANIZATIONS','MLB'): 32.0,
+            ('SPORTS ORGANIZATIONS','NATIONAL HOCKEY LEAGUE'): 22.0,
+            ('SPORTS ORGANIZATIONS','NHL'): 22.0,
+            ('SPORTS ORGANIZATIONS','NATIONAL COLLEGIATE ATHLETIC ASSOCIATION'): 28.0,
+            ('SPORTS ORGANIZATIONS','NCAA'): 28.0,
+            ('SPORTS ORGANIZATIONS','NASCAR'): 18.0,
+            ('SPORTS ORGANIZATIONS','WORLD WRESTLING ENTERTAINMENT'): 20.0,
+            ('SPORTS ORGANIZATIONS','WWE'): 20.0,
+            ('DIGITAL BANKING','PAYPAL'): 75.0,
+            ('DIGITAL BANKING','APPLE PAY'): 60.0,
+            ('DIGITAL BANKING','VENMO'): 55.0,
+            ('DIGITAL BANKING','CASH APP'): 45.0,
+            ('DIGITAL BANKING','ZELLE'): 40.0,
+            ('BANKING','CHASE'): 38.0,
+            ('BANKING','BANK OF AMERICA'): 32.0,
+            ('BANKING','WELLS FARGO'): 28.0,
+            ('BANKING','CAPITAL ONE'): 28.0,
+            ('TELECOM','VERIZON'): 45.0,
+            ('TELECOM','AT&T'): 38.0,
+            ('TELECOM','T-MOBILE'): 38.0,
+            ('APPAREL/FOOTWEAR','NIKE'): 50.0,
+            ('APPAREL/FOOTWEAR','ADIDAS'): 38.0,
+            ('APPAREL/FOOTWEAR','LULULEMON'): 45.0,
+            ('APPAREL/FOOTWEAR','HANES'): 18.0,
+            ('APPAREL/FOOTWEAR','LEVI'): 28.0,
+            ("APPAREL/FOOTWEAR","LEVI'S"): 28.0,
+            ('APPAREL/FOOTWEAR','H&M'): 30.0,
+            ('APPAREL/FOOTWEAR','ZARA'): 30.0,
+            ('APPAREL/FOOTWEAR','UNIQLO'): 30.0,
+            ('APPAREL/FOOTWEAR','OLD NAVY'): 22.0,
+            ('APPAREL/FOOTWEAR','GAP'): 22.0,
+            ('APPAREL/FOOTWEAR','BANANA REPUBLIC'): 22.0,
+            ('APPAREL/FOOTWEAR','CROCS'): 32.0,
+            ('APPAREL/FOOTWEAR','NEW BALANCE'): 28.0,
+            ('APPAREL/FOOTWEAR','CARHARTT'): 22.0,
+            ('APPAREL/FOOTWEAR','PATAGONIA'): 22.0,
+            ('APPAREL/FOOTWEAR','THE NORTH FACE'): 22.0,
+            ('APPAREL/FOOTWEAR','NORTH FACE'): 22.0,
+            ('APPAREL/FOOTWEAR','RALPH LAUREN'): 22.0,
+            ('APPAREL/FOOTWEAR','BRANDY MELVILLE'): 14.0,
+            ('APPAREL/FOOTWEAR','FREE PEOPLE'): 14.0,
+            ('APPAREL/FOOTWEAR','ATHLETA'): 14.0,
+            ('APPAREL/FOOTWEAR','REFORMATION'): 14.0,
+            ("APPAREL/FOOTWEAR","VICTORIAS SECRET"): 14.0,
+            ("APPAREL/FOOTWEAR","VICTORIA'S SECRET"): 14.0,
+            ('APPAREL/FOOTWEAR','FASHION NOVA'): 24.0,
+            ('APPAREL/FOOTWEAR','FASHIONNOVA'): 24.0,
+            ('APPAREL/FOOTWEAR','SHEIN'): 24.0,
+            ('MOST PURCHASED BRANDS','NIKE'): 50.0,
+            ('MOST PURCHASED BRANDS','ADIDAS'): 38.0,
+            ('MOST PURCHASED BRANDS','LULULEMON'): 45.0,
+            ('MOST PURCHASED BRANDS','HANES'): 18.0,
+            ('MOST PURCHASED BRANDS','LEVI'): 28.0,
+            ("MOST PURCHASED BRANDS","LEVI'S"): 28.0,
+            ('MOST PURCHASED BRANDS','H&M'): 30.0,
+            ('MOST PURCHASED BRANDS','ZARA'): 30.0,
+            ('MOST PURCHASED BRANDS','UNIQLO'): 30.0,
+            ('MOST PURCHASED BRANDS','OLD NAVY'): 22.0,
+            ('MOST PURCHASED BRANDS','GAP'): 22.0,
+            ('MOST PURCHASED BRANDS','BANANA REPUBLIC'): 22.0,
+            ('MOST PURCHASED BRANDS','CROCS'): 32.0,
+            ('MOST PURCHASED BRANDS','NEW BALANCE'): 28.0,
+            ('MOST PURCHASED BRANDS','CARHARTT'): 22.0,
+            ('MOST PURCHASED BRANDS','PATAGONIA'): 22.0,
+            ('MOST PURCHASED BRANDS','THE NORTH FACE'): 22.0,
+            ('MOST PURCHASED BRANDS','NORTH FACE'): 22.0,
+            ('MOST PURCHASED BRANDS','RALPH LAUREN'): 22.0,
+            ('MOST PURCHASED BRANDS','BRANDY MELVILLE'): 14.0,
+            ('MOST PURCHASED BRANDS','FREE PEOPLE'): 14.0,
+            ('MOST PURCHASED BRANDS','ATHLETA'): 14.0,
+            ('MOST PURCHASED BRANDS','REFORMATION'): 14.0,
+            ('MOST PURCHASED BRANDS','VICTORIAS SECRET'): 14.0,
+            ("MOST PURCHASED BRANDS","VICTORIA'S SECRET"): 14.0,
+            ('MOST PURCHASED BRANDS','FASHION NOVA'): 24.0,
+            ('MOST PURCHASED BRANDS','FASHIONNOVA'): 24.0,
+            ('MOST PURCHASED BRANDS','SHEIN'): 24.0,
+        }
+
+        ATHLETE_RELAX = {
+            'NATIONAL FOOTBALL LEAGUE': 25.0, 'NFL': 25.0,
+            'NATIONAL BASKETBALL ASSOCIATION': 20.0, 'NBA': 20.0,
+            'MAJOR LEAGUE BASEBALL': 20.0, 'MLB': 20.0,
+            'NATIONAL COLLEGIATE ATHLETIC ASSOCIATION': 22.0, 'NCAA': 22.0,
+        }
+        YOUNG_MALE_RELAX = {
+            'TIKTOK': 12.0, 'INSTAGRAM': 12.0,
+        }
+        F_PRODUCT_BRANDS = {
+            'BRANDY MELVILLE','FREE PEOPLE','ATHLETA','REFORMATION',
+            'VICTORIAS SECRET',"VICTORIA'S SECRET",
+        }
+        is_male_persona = False
+        try:
+            txt = psum
+            if any(t in txt for t in [' male ', ' man ', ' men ', "he/him", "father", "dad", "boyfriend", "husband"]):
+                is_male_persona = True
+            if any(t in txt for t in [' female ', ' woman ', ' women ', 'she/her', 'mother', 'mom', 'girlfriend', 'wife', 'pregnant']):
+                is_male_persona = False
+        except Exception:
+            pass
+
+        clamps = 0
+        clamp_log = []
+        cats_touched = set()
+        for idx, r in df.iterrows():
+            cat = str(r.get('Column','')).strip().upper()
+            val = str(r.get('Value','')).strip().upper()
+            key = (cat, val)
+            if key not in CEILINGS:
+                continue
+            v = float(r[bp]) if _pd.notnull(r[bp]) else 0.0
+            cap = CEILINGS[key]
+            if is_athlete and val in ATHLETE_RELAX:
+                cap += ATHLETE_RELAX[val]
+            if is_young_male and val in YOUNG_MALE_RELAX:
+                cap += YOUNG_MALE_RELAX[val]
+            if is_male_persona and val in F_PRODUCT_BRANDS:
+                cap = min(cap, 6.0)
+            if v <= cap:
+                continue
+            h = int(hashlib.blake2b(
+                f"{project_name}|{cat}|{val}".encode(),
+                digest_size=8).hexdigest(), 16)
+            offset = -0.5 - ((h % 3001) / 1000.0)  # -3.5..-0.5
+            new_v = round(cap + offset, 2)
+            df.at[idx, bp] = new_v
+            clamps += 1
+            cats_touched.add(cat)
+            clamp_log.append(f"{cat}/{val} {v:.2f}→{new_v:.2f} (cap {cap:.1f})")
+
+        sample_size = 1
+        try:
+            ss_row = df[df['Column'].astype(str).str.upper().str.strip() == 'SAMPLE SIZE']
+            if not ss_row.empty and 'Original Raw Numbers' in df.columns:
+                sample_size = max(1, int(float(str(ss_row.iloc[0]['Original Raw Numbers']).replace(',', ''))))
+        except Exception:
+            pass
+        for cat in cats_touched:
+            mask = df['Column'].astype(str).str.upper() == cat
+            bp_vals = _pd.to_numeric(df.loc[mask, bp], errors='coerce').fillna(0.0)
+            tot = bp_vals.sum()
+            if tot > 0 and 'Category Share' in df.columns:
+                df.loc[mask, 'Category Share'] = (bp_vals / tot * 100).round(4)
+            if 'Original Raw Numbers' in df.columns:
+                df.loc[mask, 'Original Raw Numbers'] = (bp_vals / 100.0 * sample_size).round().astype('Int64')
+            if 'US Gen Pop Projection' in df.columns:
+                df.loc[mask, 'US Gen Pop Projection'] = (bp_vals / 100.0 * sample_size * (329_900_000 / 10_000_000)).round().astype('Int64')
+
+        if clamps:
+            print(f"   ⚠️  CEILING-CLAMP fired on {clamps} values across {len(cats_touched)} categories — agent overshot persona-driven reasoning. If this fires often, the prompts need more anchor data:")
+            for line in clamp_log[:25]:
+                print(f"        {line}")
+            if len(clamp_log) > 25:
+                print(f"        … + {len(clamp_log)-25} more")
+        return df
+    except Exception as _e:
+        print(f"   ⚠️ _enforce_realistic_ceilings failed: {_e}")
         return df
 
 
