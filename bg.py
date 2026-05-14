@@ -16115,6 +16115,7 @@ Return ONLY a single valid JSON object — no markdown, no commentary.
     {{"dma": "<DMA name, e.g. NEW YORK>", "percentage": <percent>}},
     ...top 15-20 DMAs with highest affinity; remainder auto-distributed
   ],
+  "audience_composition": "<2-3 paragraph decomposition of THIS subject's digital audience into sub-segments with rough fractions and which segments drive which brand affinities — see AUDIENCE COMPOSITION instructions below>",
   "digital_identity": "<2-4 paragraph DEEP analysis of this audience's digital footprint — see instructions below>",
   "subsegments": [
     {{
@@ -16343,6 +16344,29 @@ SPECIFIC WRITING RULES
   • cross_shop_network: Real brands the audience actively uses alongside the
     subject (apparel + retail + negative_overlap). Used by the scoring agent
     to decide rank ordering within a category.
+
+AUDIENCE COMPOSITION — CRITICAL FRAMEWORK FOR REASONING (read this before writing anything else):
+The single most damaging mistake this pipeline makes is treating an audience as MONOLITHIC — collapsing all of {subject}'s fans into one "representative user" who looks like the median fan, then scoring brands as if everyone in the audience is that same user. This produces saturation: "Margot Robbie's audience is mainstream → Netflix is mainstream → score Netflix at 90%+." That reasoning is wrong, because no audience is monolithic.
+
+NO AUDIENCE IS MONOLITHIC — not even Taylor Swift's, not even The Rock's, not even Tom Hanks's. Every digital audience is a HETEROGENEOUS MIX of sub-segments with very different engagement patterns:
+  • CASUALS — know the name, occasionally engage with content, no commercial pull-through. Usually the LARGEST segment for any well-known subject.
+  • ACTIVE FANS — regularly engage (watch films, stream music, follow socials). Medium-sized segment.
+  • SUPER-FANS — deep commercial engagement (buy merch, attend events, stream every release). Smallest segment, biggest brand effect.
+  • LAPSED — used to follow, drifted away. Real and meaningful for any subject with a long career.
+  • OUTLIERS WHO STILL COUNT — kids whose parents control subscriptions, seniors with linear-only TV, low-income with no streaming budget, account-sharers, anti-fans who know the name but actively avoid associated brands.
+
+Even Taylor Swift's audience contains MILLIONS of people who do not have Spotify (Apple Music or YouTube only), do not have Netflix (Hulu/Max/free streaming), do not pay for Amazon Prime, never visit Starbucks. The casual segment is huge and dilutes every brand's BP downward from the "true superfan rate."
+
+In the `audience_composition` field, write 2-3 concrete paragraphs that:
+  1. NAME the major sub-segments of THIS subject's digital audience using the subject's actual fan ecosystem. Examples (do NOT copy — derive your own):
+     - For Florence Pugh: "BookTok arthouse 25%, A24 cinephile 20%, Marvel-crossover casual 30%, lapsed-Black-Widow 15%, Reformation-girl aspirational 10%"
+     - For Margot Robbie: "Barbie-mass-pop 40%, Wolf-of-WS-edgy-cinephile 15%, Suicide-Squad-comic-fan 15%, lapsed casual 20%, kids-via-Barbie 10%"
+     - For LeBron James: "NBA-die-hards 30%, casual sports fans 35%, sneakerhead/streetwear 15%, social-issue followers 10%, lapsed 10%"
+     - For Taylor Swift: "Eras-tour superfans 20%, casual streaming fans 35%, lapsed-country 15%, anti-Swifties who still know the songs 10%, Gen-Z TikTok casual 20%"
+  2. ESTIMATE the rough fraction of the total digital audience each segment represents. Fractions should sum to ~100%. Be honest: casuals are usually the biggest segment, super-fans are usually <15%.
+  3. NAME which segments DRIVE which brand affinities, AND which segments DILUTE common brands. E.g. "the BookTok arthouse segment drives Spotify and indie-fashion engagement; the kids-via-Barbie segment drags Apple Pay and Venmo down because they're under 18; the lapsed casual segment depresses Netflix engagement because they're not actively streaming new content."
+
+This decomposition is the SINGLE MOST IMPORTANT reasoning input the per-category scorer will receive. Without it, the scorer collapses to "is this brand famous? yes → score high" which is the saturation failure we keep hitting on Netflix, Amazon, Starbucks, NFL, etc.
 
 DIGITAL IDENTITY — THIS IS ALSO CRITICAL:
 The `digital_identity` field is a rich text block (2-4 paragraphs) that will be passed VERBATIM to per-category scoring agents. Make it specific, opinionated, and grounded in real audience data. It MUST address all five areas below.
@@ -17741,6 +17765,51 @@ EXPECTED LOW-FIT ITEMS (famous but persona doesn't engage):
 PRODUCT CORE: Up-stream research distilled **WHO** is in the sample (**panelists conditioned on measurable engagement with "{subject}"**, described by PERSONA below). YOUR job — **every single row:** ask "**Would plausible members of THIS persona—with their income/life stage/anchors/explicit anti-fits—produce meaningful DIGITAL footprints** (opening apps, ordering/barcode check-ins/streaming/music/betting/sports/account flows/search & maps/authenticated journeys on branded properties — **not offline-only familiarity or accidental one-click noise**) tied to THIS exact item name in **{category}** during the study window?"
 Honor the **SUBJECT ARCHETYPE** section in the persona block: do not score a K-pop act's fans as if they were generic sneaker-CPG panelists unless research + item evidence justify that overlap.
 Turn that calibrated judgment into **`estimated_bp_pct`** (share of persona cohort showing that credible digital touching pattern), using CATEGORY RULE + item evidence (`panel`/genpop/classification)— never pure fame.
+
+═══════════════════════════════════════════════════════════════════
+SCORE FROM AUDIENCE FRACTION, NOT FROM BRAND FAME
+═══════════════════════════════════════════════════════════════════
+THE SINGLE MOST DAMAGING MISTAKE you can make: treating "{subject}'s audience" as a monolithic group of identical users. NO AUDIENCE IS MONOLITHIC. Even Taylor Swift's audience contains millions of people who do not have Spotify, do not have Netflix, do not use Instagram, do not pay for Amazon Prime, do not visit Starbucks. Even The Rock's audience contains people who don't watch wrestling, don't lift, don't drink protein shakes.
+
+For EVERY item you score, the question is NEVER "is this brand famous / ubiquitous?" — it is ALWAYS:
+   "What FRACTION of {subject}'s actual digital audience composition genuinely engages with this item?"
+
+The persona's SUB-SEGMENTS block (in the persona block above) decomposes this audience into sub-segments with rough fractions. Use those fractions to back into the BP for every item:
+
+  bp(item) ≈ Σ over segments [ segment_fraction × segment_engagement_rate(item) ]
+
+WORKED EXAMPLE — Netflix on a hypothetical mass-blockbuster F audience:
+  • casuals 55% × Netflix engagement 70% = 38.5pp
+  • active fans 30% × Netflix engagement 85% = 25.5pp
+  • super-fans 10% × Netflix engagement 90% = 9.0pp
+  • outliers (kids/seniors/no-budget) 5% × Netflix engagement 30% = 1.5pp
+  → Total ≈ 74.5%, NOT 90%. The casual + outlier segments DRAG THE AVERAGE DOWN.
+
+WORKED EXAMPLE — Spotify on an indie-arthouse F audience (Florence Pugh archetype):
+  • BookTok arthouse 25% × Spotify 80% = 20.0pp
+  • A24 cinephile 20% × Spotify 75% = 15.0pp
+  • Marvel-crossover casual 30% × Spotify 55% = 16.5pp
+  • lapsed-Black-Widow 15% × Spotify 45% = 6.8pp
+  • Reformation-girl aspirational 10% × Spotify 70% = 7.0pp
+  → Total ≈ 65.3%, NOT 78% — but HIGHER than for Margot's mass audience because the indie segments are music-heavy.
+
+Same brand, two different personas, two different BPs — both derived from the SAME math, just with different audience compositions. THIS is how you produce realistic, persona-differentiated outputs.
+
+═══════════════════════════════════════════════════════════════════
+US DIGITAL-PANEL ANCHOR DATA — physical reach ceilings
+═══════════════════════════════════════════════════════════════════
+These are not opinions or arbitrary caps — they are derived from US population × actual penetration rate × digital-panel observation rate. Going above them is a math error, not a creative choice. If your audience-fraction reasoning produces a number above these ceilings, RE-DECOMPOSE the audience and find which segments are dragging the average down.
+
+STREAMING (paid SVOD): Netflix 78% max (65% baseline), Hulu 60% (33%), Disney+ 50% (35%), HBO Max 38% (22%), Apple TV+ 32% (9%), Peacock 28% (16%), Paramount+ 25% (12%), Tubi 38% (22%), YouTube TV 28% (15%).
+STREAMING/MUSIC: Spotify 78% max (47% baseline), Apple Music 50% (18%), YouTube Music 45% (12%), Amazon Music 32% (8%), Pandora 22% (8%).
+SHOPPING: Amazon 88% max, Walmart 55% (50%), Target 55% (45%), Costco 38% (25%).
+QSR (monthly): Starbucks 55% max (33% baseline), McDonald's 48% (36%), Dunkin 35% (18%), Chick-fil-A 40% (22%), Taco Bell 35% (22%), Chipotle 32% (18%).
+SOCIAL: YouTube 85% max (84% baseline), Facebook 80% (67%), Instagram 72% (50%, +12pp for fashion), TikTok 75% (47%, +12pp for young-male-niche), Snapchat 50% (27%), Pinterest 50% (35%), X/Twitter 38% (22%), Reddit 45% (22%).
+DIGITAL BANKING: PayPal 75% max (50% baseline), Apple Pay 60% (53%), Venmo 55% (30%), Cash App 45% (24%), Zelle 40% (24%).
+TECHNOLOGY/DEVICE: Apple 75% (55%), Samsung 42% (32%), Google 32% (18%), Microsoft 32% (22%).
+SPORTS: NFL 55% mass-cap (41%, football-superfan persona ~80%), NBA 40% (25%, superfan ~60%), MLB 32% (20%, superfan ~52%), NCAA 28% (18%, superfan ~50%), NHL 22% (12%), NASCAR 18% (10%).
+
+Use these ceilings as the OUTER BOUND of your audience-fraction reasoning. If your math produces a higher number, re-check the segment decomposition — you almost certainly forgot a casual/outlier segment that should be dragging the average down.
 
 ═══════════════════════════════════════════════════════════════════
 CATEGORY CONTEXT
@@ -26271,6 +26340,7 @@ def _enforce_realistic_ceilings(df, project_name: str = '', persona_doc=None):
         }
 
         clamps = 0
+        clamp_log = []
         cats_touched = set()
         for idx, r in df.iterrows():
             cat = str(r.get('Column','')).strip().upper()
@@ -26289,11 +26359,12 @@ def _enforce_realistic_ceilings(df, project_name: str = '', persona_doc=None):
             h = int(hashlib.blake2b(
                 f"{project_name}|{cat}|{val}".encode(),
                 digest_size=8).hexdigest(), 16)
-            offset = -((h % 1401) / 1000.0)
+            offset = -0.5 - ((h % 3001) / 1000.0)  # -3.5..-0.5
             new_v = round(cap + offset, 2)
             df.at[idx, bp] = new_v
             clamps += 1
             cats_touched.add(cat)
+            clamp_log.append(f"{cat}/{val} {v:.2f}→{new_v:.2f} (cap {cap:.1f})")
 
         sample_size = 1
         try:
@@ -26314,7 +26385,11 @@ def _enforce_realistic_ceilings(df, project_name: str = '', persona_doc=None):
                 df.loc[mask, 'US Gen Pop Projection'] = (bp_vals / 100.0 * sample_size * (329_900_000 / 10_000_000)).round().astype('Int64')
 
         if clamps:
-            print(f"   ✅ enforced realistic ceilings on {clamps} mass-saturation values across {len(cats_touched)} categories")
+            print(f"   ⚠️  CEILING-CLAMP fired on {clamps} values across {len(cats_touched)} categories — agent overshot persona-driven reasoning. If this fires often, the prompts need more anchor data:")
+            for line in clamp_log[:25]:
+                print(f"        {line}")
+            if len(clamp_log) > 25:
+                print(f"        … + {len(clamp_log)-25} more")
         return df
     except Exception as _e:
         print(f"   ⚠️ _enforce_realistic_ceilings failed: {_e}")
