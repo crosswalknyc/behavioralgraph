@@ -2128,9 +2128,8 @@
             margin-left: 1rem;
         }
 
-        /* Subscriber IQ: explicit areas so row-3 Drop Date lines up with column 1 meta boxes */
+        /* Subscriber IQ: explicit grid areas for meta + Drop Date row */
         #subscriberIQView .dash-meta-grid.subscriber-dash-meta-grid {
-            --subscriber-drop-left-nudge: calc(2 * (1px + 0.75rem + 0.625rem));
             grid-template-rows: auto auto auto;
             justify-items: stretch;
             grid-template-areas:
@@ -2150,22 +2149,12 @@
         #subscriberIQView .dash-meta-grid.subscriber-dash-meta-grid #subscriberContentCadence {
             grid-area: subcad;
         }
-        #subscriberIQView .dash-meta-grid.subscriber-dash-meta-grid #subscriberDropDate {
+        #subscriberIQView .dash-meta-grid.subscriber-dash-meta-grid #subscriberDropDate.subscriber-drop-meta {
             grid-area: subdrop;
-            align-self: start;
-            justify-self: stretch;
-            width: 100%;
-            min-width: 0;
-            box-sizing: border-box;
             color: var(--accent-lime);
-            font-size: 0.8rem;
             font-weight: 700;
-            padding: 0.15rem 0 0 0;
-            padding-inline-start: 0 !important;
-            text-align: left;
-            direction: ltr;
             white-space: normal;
-            transform: translateX(calc(-1 * var(--subscriber-drop-left-nudge)));
+            text-align: left;
         }
 
         .dash-brand-box {
@@ -16120,7 +16109,7 @@
                                     <div class="dash-meta-box" id="subscriberAttributionWindow" style="display: none;"></div>
                                     <div class="dash-meta-box" id="subscriberExclusionWindow" style="display: none;"></div>
                                     <div class="dash-meta-box" id="subscriberContentCadence" style="display: none;"></div>
-                                    <div id="subscriberDropDate" style="display: none;"></div>
+                                    <div class="dash-meta-box subscriber-drop-meta" id="subscriberDropDate" style="display: none;"></div>
                                 </div>
                             </div>
                         </div>
