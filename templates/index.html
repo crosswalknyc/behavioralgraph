@@ -2837,6 +2837,7 @@
             min-height: 200px;
             width: 100%;
             max-width: 100%;
+            min-width: 0;
             box-sizing: border-box;
         }
         .tab-content.active { 
@@ -4550,34 +4551,30 @@
             opacity: 1;
         }
 
-        /* Behavioral Tab: 3 cols on wide, 2 on small/narrow (e.g. Safari) to avoid cut-off */
+        /* Behavioral Tab: fluid columns — drop from 3→2→1 by card min-width (Windows / zoom friendly) */
         .behavioral-grid {
             display: grid;
-            grid-template-columns: repeat(3, 1fr);
+            grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr));
             gap: 1rem;
             width: 100%;
+            min-width: 0;
         }
         
-        @media (max-width: 1400px) {
+        @media (max-width: 520px) {
             .behavioral-grid {
-                grid-template-columns: repeat(2, 1fr);
-            }
-        }
-        
-        @media (max-width: 800px) {
-            .behavioral-grid {
-                grid-template-columns: 1fr;
+                grid-template-columns: minmax(0, 1fr);
             }
         }
         
         .behavioral-data-blocks {
             display: grid;
-            grid-template-columns: 1fr 1fr;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
             gap: 1rem;
             min-height: 0;
+            min-width: 0;
         }
         @media (max-width: 900px) {
-            .behavioral-data-blocks { grid-template-columns: 1fr; }
+            .behavioral-data-blocks { grid-template-columns: minmax(0, 1fr); }
         }
         .behavioral-data-block {
             display: flex;
@@ -4613,6 +4610,7 @@
             display: flex;
             flex-direction: column;
             height: auto;
+            min-width: 0;
         }
         .behavioral-insight-card.highlight {
             border-color: var(--accent-lime);
@@ -5484,17 +5482,18 @@
             min-height: 0;
         }
 
-        /* Behavioral table: single grid with subgrid so header and data columns share exact same widths.
-           Name column uses minmax(100px, 1fr) so long names (e.g. team names) always have room to wrap. */
+        /* Behavioral table: name column min in rem so long brands stay on one line when space allows */
         .behavioral-table {
             display: grid;
-            grid-template-columns: 28px minmax(100px, 1fr) 78px 78px 64px;
+            grid-template-columns: 28px minmax(10.5rem, 1fr) 76px 76px 60px;
             gap: 0.4rem;
             align-items: start;
             padding: 0 0.15rem 0 0;
             overflow-y: auto;
+            overflow-x: auto;
             max-height: 500px;
             scrollbar-gutter: stable;
+            min-width: 0;
         }
         .behavioral-table .behavioral-header-row {
             grid-column: 1 / -1;
@@ -5537,7 +5536,7 @@
         }
         /* Hide GP column when in projection mode */
         .behavioral-card.hide-gp .behavioral-table {
-            grid-template-columns: 28px minmax(100px, 1fr) 78px 64px;
+            grid-template-columns: 28px minmax(10.5rem, 1fr) 76px 60px;
         }
         .behavioral-card.hide-gp .genpop-col {
             display: none !important;
@@ -5616,7 +5615,7 @@
         .behavioral-name {
             font-size: 0.85rem;
             white-space: normal;
-            word-break: break-word;
+            word-break: normal;
             overflow-wrap: break-word;
             overflow: visible;
             min-width: 0;
@@ -6280,16 +6279,20 @@
             font-size: clamp(1rem, 2.5vw, 1.75rem);
             font-weight: 700;
             color: var(--accent-lime);
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
+            white-space: normal;
+            overflow: visible;
+            word-break: normal;
+            overflow-wrap: break-word;
+            line-height: 1.2;
         }
         .metric-card .metric-label {
             font-size: clamp(0.55rem, 1vw, 0.75rem);
             color: var(--text-secondary);
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
+            white-space: normal;
+            overflow: visible;
+            word-break: normal;
+            overflow-wrap: break-word;
+            line-height: 1.25;
         }
         .metric-card.has-tooltip:hover {
             border-color: var(--accent);
