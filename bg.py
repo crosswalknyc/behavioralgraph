@@ -25980,6 +25980,7 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
     if not is_genpop:
         df_final = _align_cross_category_bp(df_final)
         df_final = _ensure_apple_pay_present(df_final, persona_doc=locals().get('_persona_doc') or locals().get('persona_doc'))
+        df_final = _enforce_realistic_ceilings(df_final, project_name=project_name, persona_doc=locals().get('_persona_doc') or locals().get('persona_doc'))
         df_final = _break_intra_category_pinning(df_final, project_name=project_name)
 
     # Save to CSV
@@ -26167,6 +26168,156 @@ def _ensure_apple_pay_present(df, persona_doc=None):
             df = df.drop(columns=['_n'])
         except Exception:
             pass
+        return df
+
+
+def _enforce_realistic_ceilings(df, project_name: str = '', persona_doc=None):
+    """Runtime safety net for mass-saturation brands. The agent prompts ask for
+    realistic ceilings, but the agent will still occasionally overshoot on the
+    handful of universally-known brands (Netflix, Amazon, Starbucks, NFL, etc.).
+    This pass clamps any BP that exceeds the documented persona-aware ceiling
+    for those specific (CATEGORY, BRAND) pairs and applies a small deterministic
+    offset so different profiles do not all pin to the same ceiling value."""
+    import hashlib
+    import pandas as _pd
+    try:
+        bp = 'Brand Penetration (Row)'
+        if bp not in df.columns:
+            return df
+        df[bp] = _pd.to_numeric(df[bp], errors='coerce').fillna(0.0)
+
+        psum = ''
+        try:
+            psum = (str(persona_doc.get('persona_summary', '') if isinstance(persona_doc, dict) else '') or '').lower()
+        except Exception:
+            psum = ''
+        is_athlete = any(t in psum for t in ['athlete', 'football', 'basketball', 'sports', 'nfl', 'nba'])
+        is_young_male = ('male' in psum or ' man' in psum or ' men ' in psum) and any(t in psum for t in ['gen z','young','25-34','18-24','college'])
+
+        CEILINGS = {
+            ('STREAMING/PLATFORM','NETFLIX'): 78.0,
+            ('STREAMING/PLATFORM','HULU'): 60.0,
+            ('STREAMING/PLATFORM','AMAZON PRIME VIDEO'): 58.0,
+            ('STREAMING/PLATFORM','APPLE TV+'): 32.0,
+            ('STREAMING/PLATFORM','HBO MAX'): 38.0,
+            ('STREAMING/PLATFORM','MAX'): 38.0,
+            ('STREAMING/PLATFORM','DISNEY+'): 45.0,
+            ('STREAMING/PLATFORM','PEACOCK'): 28.0,
+            ('STREAMING/PLATFORM','PARAMOUNT+'): 25.0,
+            ('STREAMING/MUSIC','SPOTIFY'): 78.0,
+            ('STREAMING/MUSIC','APPLE MUSIC'): 50.0,
+            ('STREAMING/MUSIC','YOUTUBE MUSIC'): 45.0,
+            ('STREAMING/MUSIC','AMAZON MUSIC'): 32.0,
+            ('WHERE THEY SHOP','AMAZON'): 88.0,
+            ('WHERE THEY SHOP','WALMART'): 55.0,
+            ('WHERE THEY SHOP','TARGET'): 55.0,
+            ('WHERE THEY SHOP','COSTCO'): 38.0,
+            ('QSR','STARBUCKS'): 55.0,
+            ('QSR','MCDONALDS'): 48.0,
+            ("QSR","MCDONALD'S"): 48.0,
+            ('QSR','DUNKIN'): 35.0,
+            ('QSR','CHICK-FIL-A'): 40.0,
+            ('QSR','TACO BELL'): 35.0,
+            ('QSR','CHIPOTLE MEXICAN GRILL'): 32.0,
+            ('QSR','CHIPOTLE'): 32.0,
+            ('SOCIAL MEDIA','YOUTUBE'): 85.0,
+            ('SOCIAL MEDIA','TIKTOK'): 75.0,
+            ('SOCIAL MEDIA','INSTAGRAM'): 72.0,
+            ('SOCIAL MEDIA','FACEBOOK'): 60.0,
+            ('SOCIAL MEDIA','SNAPCHAT'): 50.0,
+            ('SOCIAL MEDIA','X'): 35.0,
+            ('SOCIAL MEDIA','TWITTER'): 35.0,
+            ('SOCIAL MEDIA','REDDIT'): 35.0,
+            ('SOCIAL MEDIA','PINTEREST'): 38.0,
+            ('TECHNOLOGY/DEVICE','APPLE'): 75.0,
+            ('TECHNOLOGY/DEVICE','SAMSUNG'): 38.0,
+            ('TECHNOLOGY/DEVICE','GOOGLE'): 32.0,
+            ('TECHNOLOGY/DEVICE','MICROSOFT'): 32.0,
+            ('SPORTS ORGANIZATIONS','NATIONAL FOOTBALL LEAGUE'): 55.0,
+            ('SPORTS ORGANIZATIONS','NFL'): 55.0,
+            ('SPORTS ORGANIZATIONS','NATIONAL BASKETBALL ASSOCIATION'): 40.0,
+            ('SPORTS ORGANIZATIONS','NBA'): 40.0,
+            ('SPORTS ORGANIZATIONS','MAJOR LEAGUE BASEBALL'): 32.0,
+            ('SPORTS ORGANIZATIONS','MLB'): 32.0,
+            ('SPORTS ORGANIZATIONS','NATIONAL HOCKEY LEAGUE'): 22.0,
+            ('SPORTS ORGANIZATIONS','NHL'): 22.0,
+            ('SPORTS ORGANIZATIONS','NATIONAL COLLEGIATE ATHLETIC ASSOCIATION'): 28.0,
+            ('SPORTS ORGANIZATIONS','NCAA'): 28.0,
+            ('SPORTS ORGANIZATIONS','NASCAR'): 18.0,
+            ('SPORTS ORGANIZATIONS','WORLD WRESTLING ENTERTAINMENT'): 20.0,
+            ('SPORTS ORGANIZATIONS','WWE'): 20.0,
+            ('DIGITAL BANKING','PAYPAL'): 75.0,
+            ('DIGITAL BANKING','APPLE PAY'): 60.0,
+            ('DIGITAL BANKING','VENMO'): 55.0,
+            ('DIGITAL BANKING','CASH APP'): 45.0,
+            ('DIGITAL BANKING','ZELLE'): 40.0,
+            ('BANKING','CHASE'): 38.0,
+            ('BANKING','BANK OF AMERICA'): 32.0,
+            ('BANKING','WELLS FARGO'): 28.0,
+            ('BANKING','CAPITAL ONE'): 28.0,
+            ('TELECOM','VERIZON'): 45.0,
+            ('TELECOM','AT&T'): 38.0,
+            ('TELECOM','T-MOBILE'): 38.0,
+        }
+
+        ATHLETE_RELAX = {
+            'NATIONAL FOOTBALL LEAGUE': 25.0, 'NFL': 25.0,
+            'NATIONAL BASKETBALL ASSOCIATION': 20.0, 'NBA': 20.0,
+            'MAJOR LEAGUE BASEBALL': 20.0, 'MLB': 20.0,
+            'NATIONAL COLLEGIATE ATHLETIC ASSOCIATION': 22.0, 'NCAA': 22.0,
+        }
+        YOUNG_MALE_RELAX = {
+            'TIKTOK': 12.0, 'INSTAGRAM': 12.0,
+        }
+
+        clamps = 0
+        cats_touched = set()
+        for idx, r in df.iterrows():
+            cat = str(r.get('Column','')).strip().upper()
+            val = str(r.get('Value','')).strip().upper()
+            key = (cat, val)
+            if key not in CEILINGS:
+                continue
+            v = float(r[bp]) if _pd.notnull(r[bp]) else 0.0
+            cap = CEILINGS[key]
+            if is_athlete and val in ATHLETE_RELAX:
+                cap += ATHLETE_RELAX[val]
+            if is_young_male and val in YOUNG_MALE_RELAX:
+                cap += YOUNG_MALE_RELAX[val]
+            if v <= cap:
+                continue
+            h = int(hashlib.blake2b(
+                f"{project_name}|{cat}|{val}".encode(),
+                digest_size=8).hexdigest(), 16)
+            offset = -((h % 1401) / 1000.0)
+            new_v = round(cap + offset, 2)
+            df.at[idx, bp] = new_v
+            clamps += 1
+            cats_touched.add(cat)
+
+        sample_size = 1
+        try:
+            ss_row = df[df['Column'].astype(str).str.upper().str.strip() == 'SAMPLE SIZE']
+            if not ss_row.empty and 'Original Raw Numbers' in df.columns:
+                sample_size = max(1, int(float(str(ss_row.iloc[0]['Original Raw Numbers']).replace(',', ''))))
+        except Exception:
+            pass
+        for cat in cats_touched:
+            mask = df['Column'].astype(str).str.upper() == cat
+            bp_vals = _pd.to_numeric(df.loc[mask, bp], errors='coerce').fillna(0.0)
+            tot = bp_vals.sum()
+            if tot > 0 and 'Category Share' in df.columns:
+                df.loc[mask, 'Category Share'] = (bp_vals / tot * 100).round(4)
+            if 'Original Raw Numbers' in df.columns:
+                df.loc[mask, 'Original Raw Numbers'] = (bp_vals / 100.0 * sample_size).round().astype('Int64')
+            if 'US Gen Pop Projection' in df.columns:
+                df.loc[mask, 'US Gen Pop Projection'] = (bp_vals / 100.0 * sample_size * (329_900_000 / 10_000_000)).round().astype('Int64')
+
+        if clamps:
+            print(f"   ✅ enforced realistic ceilings on {clamps} mass-saturation values across {len(cats_touched)} categories")
+        return df
+    except Exception as _e:
+        print(f"   ⚠️ _enforce_realistic_ceilings failed: {_e}")
         return df
 
 
