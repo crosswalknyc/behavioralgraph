@@ -26121,11 +26121,44 @@ def _ensure_apple_pay_present(df, persona_doc=None):
             return df
         nr = sib.iloc[0].copy()
         nr['Value'] = 'Apple Pay'
+        try:
+            sib_vals = df.loc[df['Column'].str.upper() == 'DIGITAL BANKING', 'Value'].astype(str).tolist()
+            if sib_vals and all(v.isupper() for v in sib_vals[:5] if v):
+                nr['Value'] = 'APPLE PAY'
+            elif sib_vals and all(v.istitle() for v in sib_vals[:5] if v and len(v) > 1):
+                nr['Value'] = 'Apple Pay'
+        except Exception:
+            pass
         if 'Brand Penetration (Row)' in nr.index:
             nr['Brand Penetration (Row)'] = bp_default
+        for derived in ('Category Share', 'Original Raw Numbers', 'US Gen Pop Projection'):
+            if derived in nr.index:
+                nr[derived] = 0
         nr['_n'] = 'APPLE PAY'
         df = _pd.concat([df, _pd.DataFrame([nr])], ignore_index=True)
         df = df.drop(columns=['_n'])
+        try:
+            mask = df['Column'].astype(str).str.upper() == 'DIGITAL BANKING'
+            bp_col = 'Brand Penetration (Row)'
+            if bp_col in df.columns and 'Category Share' in df.columns:
+                bp_vals = _pd.to_numeric(df.loc[mask, bp_col], errors='coerce').fillna(0.0)
+                tot = bp_vals.sum()
+                if tot > 0:
+                    df.loc[mask, 'Category Share'] = (bp_vals / tot * 100).round(4)
+            ss_row = df[df['Column'].astype(str).str.upper().str.strip() == 'SAMPLE SIZE']
+            if not ss_row.empty and 'Original Raw Numbers' in df.columns:
+                try:
+                    sample_size = int(float(str(ss_row.iloc[0]['Original Raw Numbers']).replace(',', '')))
+                except Exception:
+                    sample_size = 1
+                bp_full = _pd.to_numeric(df[bp_col], errors='coerce').fillna(0.0)
+                new_idx = df.index[-1]
+                raw = int(round(bp_full.iloc[-1] / 100.0 * sample_size))
+                df.at[new_idx, 'Original Raw Numbers'] = raw
+                if 'US Gen Pop Projection' in df.columns:
+                    df.at[new_idx, 'US Gen Pop Projection'] = int(round(raw * (329_900_000 / 10_000_000)))
+        except Exception:
+            pass
         print(f"   ✅ APPLE PAY auto-inserted into DIGITAL BANKING at {bp_default}% (persona-aware)")
         return df
     except Exception as _e:
@@ -26177,11 +26210,23 @@ def _break_intra_category_pinning(df, project_name: str = ''):
                     cats_touched.add(cat)
                 else:
                     seen[k] = idx
+        sample_size = 1
+        try:
+            ss_row = df[df['Column'].astype(str).str.upper().str.strip() == 'SAMPLE SIZE']
+            if not ss_row.empty and 'Original Raw Numbers' in df.columns:
+                sample_size = max(1, int(float(str(ss_row.iloc[0]['Original Raw Numbers']).replace(',', ''))))
+        except Exception:
+            pass
         for cat in cats_touched:
             mask = df['Column'].astype(str).str.upper() == cat
-            tot = df.loc[mask, bp].sum()
+            bp_vals = _pd.to_numeric(df.loc[mask, bp], errors='coerce').fillna(0.0)
+            tot = bp_vals.sum()
             if tot > 0 and 'Category Share' in df.columns:
-                df.loc[mask, 'Category Share'] = (df.loc[mask, bp] / tot * 100).round(4)
+                df.loc[mask, 'Category Share'] = (bp_vals / tot * 100).round(4)
+            if 'Original Raw Numbers' in df.columns:
+                df.loc[mask, 'Original Raw Numbers'] = (bp_vals / 100.0 * sample_size).round().astype('Int64')
+            if 'US Gen Pop Projection' in df.columns:
+                df.loc[mask, 'US Gen Pop Projection'] = (bp_vals / 100.0 * sample_size * (329_900_000 / 10_000_000)).round().astype('Int64')
         if nudges:
             print(f"   ✅ broke {nudges} intra-category pin collisions across {len(cats_touched)} categories")
         return df
