@@ -2164,6 +2164,8 @@
             text-align: left;
             direction: ltr;
             white-space: normal;
+            /* Outer edge of .dash-meta-box = border (1px) + horizontal padding (0.75rem); glyphs start inset — nudge back to match card edge */
+            transform: translateX(calc(-1px - 0.75rem));
         }
 
         .dash-brand-box {
