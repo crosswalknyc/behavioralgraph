@@ -101,15 +101,18 @@
         /* App shell: flex column + dynamic viewport so content tracks browser resize */
         html {
             height: 100%;
+            min-height: 100vh;
+            min-height: 100dvh;
             overflow: hidden;
         }
         body {
-            font-family: 'Poppins', 'DM Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+            font-family: 'Poppins', 'DM Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
             background: var(--bg-dark);
             color: var(--text-primary);
             line-height: 1.6;
             overflow: hidden;
             height: 100%;
+            min-height: 100vh; /* fallback for browsers without dvh (some Windows / older Edge) */
             min-height: 100dvh;
             width: 100%;
             max-width: 100%;
@@ -814,10 +817,12 @@
             background: rgba(74, 138, 201, 0.2);
         }
 
-        #formView { display: none; flex: 1 1 0%; min-height: 0; overflow-y: auto; }
+        #formView { display: none; flex: 1 1 0%; min-height: 0; min-width: 0; overflow-y: auto; }
         #customAnalysisView { display: none; flex-direction: column; flex: 1; overflow: hidden; }
         #customAnalysisView.active { display: flex; }
-        #dashboardView { display: flex; flex-direction: column; flex: 1 1 0%; min-height: 0; overflow: hidden; }
+        #dashboardView { display: flex; flex-direction: column; flex: 1 1 0%; min-height: 0; min-width: 0; overflow: hidden; }
+        /* Let main column shrink below intrinsic content (Grid default min-width:auto clips on Windows) */
+        #dashboardContent { min-width: 0; max-width: 100%; }
         
         /* App Footer - Data Source (above modals so always visible) */
         .app-footer {
@@ -3169,6 +3174,7 @@
             gap: clamp(0.5rem, 1.5vw, 1rem);
             flex: 1 1 0%;
             min-height: 0;
+            min-width: 0;
             overflow: hidden;
         }
         
@@ -3231,6 +3237,11 @@
             min-width: 0;
             margin-left: 0;
             padding-left: 0;
+            flex-wrap: wrap;
+        }
+        #inlineTabHeader p {
+            min-width: 0;
+            flex: 1 1 14rem;
         }
         @media (max-width: 720px) {
             .dashboard-layout {
@@ -5941,6 +5952,7 @@
         .insights-container {
             padding: 0;
             text-align: left;
+            min-width: 0;
         }
         .insights-header {
             margin-bottom: 1.5rem;
@@ -6057,16 +6069,18 @@
         }
         .insights-summary-grid, .insights-grid-v2 {
             display: grid;
-            grid-template-columns: repeat(2, 1fr);
+            grid-template-columns: repeat(2, minmax(0, 1fr));
             gap: 1rem;
             padding-left: 0;
             margin-left: 0;
+            min-width: 0;
         }
         .insight-card-v2 {
             background: var(--bg-card);
             border: 1px solid var(--border-color);
             border-radius: 12px;
             padding: 1.25rem;
+            min-width: 0;
         }
         /* Tighter spacing for date range selectors */
         .insight-card-v2:has(#dateRangeCollapsed),
@@ -6131,8 +6145,9 @@
         /* Audience Snapshot */
         .audience-snapshot {
             display: grid;
-            grid-template-columns: repeat(4, 1fr);
+            grid-template-columns: repeat(4, minmax(0, 1fr));
             gap: 1rem;
+            min-width: 0;
         }
         .snapshot-item {
             text-align: left;
@@ -6208,7 +6223,7 @@
             color: var(--accent-lime);
             margin-top: 0.25rem;
             word-wrap: break-word;
-            overflow-wrap: break-word;
+            overflow-wrap: anywhere;
         }
         .snapshot-subtext {
             font-size: 0.75rem;
@@ -6224,6 +6239,7 @@
             gap: 0.75rem;
             grid-column: 1 / -1;
             width: 100%;
+            min-width: 0;
             margin-left: 0;
             padding-left: 0;
         }
@@ -6821,10 +6837,11 @@
         /* Champions Grid */
         .champions-grid {
             display: grid;
-            grid-template-columns: repeat(4, 1fr);
+            grid-template-columns: repeat(4, minmax(0, 1fr));
             gap: 0.75rem;
             max-height: 400px;
             overflow-y: auto;
+            min-width: 0;
         }
         .champion-item {
             background: rgba(255,255,255,0.03);
@@ -6832,6 +6849,7 @@
             padding: 0.75rem;
             text-align: center;
             border: 1px solid transparent;
+            min-width: 0;
         }
         .champion-item:hover {
             border-color: var(--accent-lime);
@@ -6902,8 +6920,9 @@
         /* Media Summary Grid */
         .media-summary-grid {
             display: grid;
-            grid-template-columns: repeat(5, 1fr);
+            grid-template-columns: repeat(5, minmax(0, 1fr));
             gap: 1rem;
+            min-width: 0;
         }
         .media-summary-item {
             background: rgba(255,255,255,0.03);
@@ -6966,8 +6985,9 @@
         /* Geo Opportunities Grid */
         .geo-opportunities-grid {
             display: grid;
-            grid-template-columns: repeat(5, 1fr);
+            grid-template-columns: repeat(5, minmax(0, 1fr));
             gap: 0.75rem;
+            min-width: 0;
         }
         .geo-opportunity {
             background: rgba(255,255,255,0.03);
@@ -7006,14 +7026,16 @@
         }
         .activation-grid {
             display: grid;
-            grid-template-columns: repeat(2, 1fr);
+            grid-template-columns: repeat(2, minmax(0, 1fr));
             gap: 1rem;
+            min-width: 0;
         }
         .activation-card {
             background: var(--bg-card);
             border: 1px solid var(--border-color);
             border-radius: 12px;
             padding: 1.25rem;
+            min-width: 0;
         }
         .activation-card.primary {
             border-color: var(--accent-lime);
@@ -7094,26 +7116,26 @@
 
         @media (max-width: 1200px) {
             .insights-summary-grid, .insights-grid-v2 {
-                grid-template-columns: 1fr;
+                grid-template-columns: minmax(0, 1fr);
             }
             .insight-card-v2.full-width, .activation-card.full-width {
                 grid-column: span 1;
             }
             /* metrics-row stays as flex nowrap - handled by its own media queries */
             .audience-snapshot {
-                grid-template-columns: repeat(2, 1fr);
+                grid-template-columns: repeat(2, minmax(0, 1fr));
             }
             .champions-grid {
-                grid-template-columns: repeat(2, 1fr);
+                grid-template-columns: repeat(2, minmax(0, 1fr));
             }
             .key-stats-grid {
-                grid-template-columns: repeat(3, 1fr);
+                grid-template-columns: repeat(3, minmax(0, 1fr));
             }
             .geo-opportunities-grid, .media-summary-grid {
-                grid-template-columns: repeat(3, 1fr);
+                grid-template-columns: repeat(3, minmax(0, 1fr));
             }
             .targeting-checklist, .avoid-list, .activation-grid {
-                grid-template-columns: 1fr;
+                grid-template-columns: minmax(0, 1fr);
             }
         }
         
@@ -7136,9 +7158,10 @@
         /* Affinity Insights Row */
         .affinity-insights-row, .sponsor-summary-row {
             display: grid;
-            grid-template-columns: repeat(3, 1fr);
+            grid-template-columns: repeat(3, minmax(0, 1fr));
             gap: 1rem;
             margin-bottom: 1.5rem;
+            min-width: 0;
         }
         .affinity-insight-card, .sponsor-summary-card {
             background: var(--bg-card);
