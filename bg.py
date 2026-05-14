@@ -1231,6 +1231,106 @@ def _load_genpop_csv():
         print(f"⚠️ Could not load Gen Pop CSV from S3: {e}")
         return None
 
+# ─────────────────────────────────────────────────────────────────────────────
+# BRAND INTELLIGENCE — signals-only doc loaded once per process, injected into
+# the per-category scoring agent prompt for MOST PURCHASED BRANDS.
+# Mirrors the loader in BG.py; see that file for full design notes.
+# ─────────────────────────────────────────────────────────────────────────────
+_BRAND_INTELLIGENCE_KEY = 'reference/brand_intelligence/v1/all_brands.json'
+_brand_intelligence_cache = None
+
+def _load_brand_intelligence() -> dict:
+    """Load and cache the brand intelligence doc from S3. Returns {} on miss."""
+    global _brand_intelligence_cache
+    if _brand_intelligence_cache is not None:
+        return _brand_intelligence_cache
+    if not S3_AVAILABLE:
+        _brand_intelligence_cache = {}
+        return _brand_intelligence_cache
+    try:
+        import json as _json
+        s3 = get_s3_client()
+        if s3 is None:
+            _brand_intelligence_cache = {}
+            return _brand_intelligence_cache
+        obj = s3.get_object(Bucket=S3_BUCKET, Key=_BRAND_INTELLIGENCE_KEY)
+        raw = _json.loads(obj['Body'].read())
+        brands = raw.get('brands', {}) if isinstance(raw, dict) else {}
+        _brand_intelligence_cache = {str(k).strip().upper(): v for k, v in brands.items() if isinstance(v, dict)}
+        if not SILENCE_VERBOSE_OUTPUT:
+            print(f"📚 Loaded brand intelligence: {len(_brand_intelligence_cache)} brands "
+                  f"(version {raw.get('version', '?')}, refreshed {raw.get('refreshed_at', '?')})")
+        return _brand_intelligence_cache
+    except Exception as e:
+        if 'NoSuchKey' not in str(e):
+            print(f"⚠️ Could not load brand intelligence: {e}")
+        _brand_intelligence_cache = {}
+        return _brand_intelligence_cache
+
+
+def _format_brand_intelligence_block(brand_names: list, max_brands: int = 200) -> str:
+    """Build a compact prompt block of brand intelligence for the brands
+    actually appearing in this category's inventory list."""
+    intel = _load_brand_intelligence()
+    if not intel or not brand_names:
+        return ''
+    lines = []
+    matched = 0
+    for raw_name in brand_names:
+        if matched >= max_brands:
+            break
+        key = str(raw_name).strip().upper()
+        entry = intel.get(key)
+        if not entry:
+            continue
+        cool = (entry.get('cool_factor_signal') or '').strip()
+        tier = (entry.get('price_tier') or '').strip()
+        core = (entry.get('core_customer_today') or '').strip()
+        sigs = entry.get('archetype_signals') or {}
+        over = sigs.get('over_indexes_for') or []
+        under = sigs.get('under_indexes_for') or []
+        cross = entry.get('cross_shop_network') or []
+        dig = (entry.get('digital_behavior_note') or '').strip()
+        gen = (entry.get('generational_lean_signal') or '').strip()
+        recent = entry.get('recent_signals') or []
+        recent_str = ' | '.join(str(r) for r in recent[:2])
+        line = f"  • {raw_name}: {tier}; {cool}"
+        if core:
+            line += f" Core: {core}."
+        if over:
+            line += f" Over-indexes for: {', '.join(over[:5])}."
+        if under:
+            line += f" Under-indexes for: {', '.join(under[:5])}."
+        if cross:
+            line += f" Cross-shop: {', '.join(cross[:5])}."
+        if dig:
+            line += f" {dig}"
+        if gen:
+            line += f" Gen lean: {gen}."
+        if recent_str:
+            line += f" Recent: {recent_str}."
+        lines.append(line)
+        matched += 1
+    if not lines:
+        return ''
+    header = (
+        "═══════════════════════════════════════════════════════════════════\n"
+        "BRAND INTELLIGENCE — signals only, NOT rules or defaults\n"
+        "═══════════════════════════════════════════════════════════════════\n"
+        "Each entry below is RESEARCH CONTEXT to inform your audience-fraction\n"
+        "reasoning. None of it is a multiplier, default value, or formula. THIS\n"
+        "PROFILE'S persona — its audience composition, age skew, archetype,\n"
+        "income, cultural anchors — still determines where THIS specific persona\n"
+        "lands. Two profiles whose archetype both appears in over_indexes_for\n"
+        "should NOT get the same BP — each persona's specific sub-segment mix\n"
+        "produces a different audience-fraction calculation. Use the brand's\n"
+        "cool factor, recent SEC/news signals, and cross-shop network to inform\n"
+        "the per-segment engagement rate you assign in your audience-fraction\n"
+        "math.\n\n"
+    )
+    return header + '\n'.join(lines) + '\n'
+
+
 def _normalize_brand_for_lookup(name):
     """Normalize a brand name for Gen Pop lookup: strip separators, URL encoding, uppercase."""
     import re, urllib.parse
@@ -17818,6 +17918,7 @@ Items in category **{category}** — behavioral panel profile **{subject}**.
 {date_context_block}
 {persona_block}
 
+{_format_brand_intelligence_block([str(v) for v in values]) if category.strip().upper() == 'MOST PURCHASED BRANDS' else ''}
 {category_rule_block}
 
 {anchor_rules}
