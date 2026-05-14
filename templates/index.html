@@ -26,6 +26,11 @@
             --text-primary: #e6f1ff;
             --text-secondary: #bec8e4;
             --border-color: #1e3a5f;
+            /* Optional: use for one-off tweaks where px would not scale */
+            --fluid-xs: clamp(0.65rem, 0.58rem + 0.35vw, 0.8rem);
+            --fluid-sm: clamp(0.75rem, 0.68rem + 0.4vw, 0.9rem);
+            --fluid-md: clamp(0.85rem, 0.78rem + 0.45vw, 1rem);
+            --fluid-lg: clamp(1rem, 0.88rem + 0.55vw, 1.15rem);
         }
 
         * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -99,14 +104,17 @@
         }
 
         /* App shell: flex column + dynamic viewport so content tracks browser resize */
+        /* Fluid root: all rem-based typography and spacing scales slightly with viewport width */
         html {
             height: 100%;
             min-height: 100vh;
             min-height: 100dvh;
             overflow: hidden;
+            font-size: clamp(12px, 0.85vw + 7px, 16px);
         }
         body {
             font-family: 'Poppins', 'DM Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            font-size: 1rem;
             background: var(--bg-dark);
             color: var(--text-primary);
             line-height: 1.6;
