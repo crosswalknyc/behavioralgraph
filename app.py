@@ -150,7 +150,7 @@ def redirect_if_must_reset_password():
 
 S3_BUCKET = 'dashboard-inputs'
 # Canonical Gen Pop 2026 file - profile selector and get-csv-data always use this key so dashboard matches S3 link
-GEN_POP_CANONICAL_KEY = 'Gen_Pop_2026_03_04_2026_04_29.csv'
+GEN_POP_CANONICAL_KEY = 'Gen_Pop_2026.csv'
 SUBSCRIBER_S3_BUCKET = 'svod-acquisition'  # Bucket for Subscriber IQ data
 S3_PURGATORY_PREFIX = 'purgatory/'  # Files go here first; admin releases to main bucket
 JOBS_STATUS_S3_KEY = 'system/jobs_status.json'  # Cross-worker job status persistence (Render)
@@ -9898,7 +9898,7 @@ def view_shared(share_id):
 
 
 def _preferred_gen_pop_key(s3_key):
-    """For any Gen Pop key, prefer the Gen_Pop_YYYY_... form (e.g. Gen_Pop_2026_03_04_2026_04_29.csv)
+    """For any Gen Pop key, prefer the Gen_Pop_YYYY_... form (e.g. Gen_Pop_2026_05_14_groundtruth_anchored.csv)
     so the dashboard always loads the canonical file matching the S3 link users expect."""
     if not s3_key or '.csv' not in s3_key or 'gen_pop' not in s3_key.lower():
         return None
@@ -9969,7 +9969,7 @@ def get_csv_data(s3_key):
                 row['Value'] = 'Hispanic or Latino'
         return csv_content, df, brand_name, date_range, data
     
-    # Gen Pop: always fetch the canonical S3 file so dashboard matches https://dashboard-inputs.s3.../Gen_Pop_2026_03_04_2026_04_29.csv
+    # Gen Pop: always fetch the canonical S3 file (GEN_POP_CANONICAL_KEY) so dashboard matches pipeline / S3
     effective_key = s3_key
     if s3_key and 'gen_pop' in s3_key.lower():
         try:
@@ -18574,7 +18574,9 @@ def list_jobs():
         # Filter out OTHER and UNCATEGORIZED categories - these should never appear in profile selector
         job_list = [e for e in job_list if (e.get('category') or '').upper() not in ('OTHER', 'UNCATEGORIZED', '')]
         
-        # Gen Pop: always show the canonical S3 key so profile selector only ever loads that file (no CMS/stale mapping)
+        # Gen Pop: always show the canonical S3 key + clean display name so
+        # profile selector only ever loads the canonical file and shows "Gen Pop 2026"
+        # (not the date-stamped filename of legacy entries).
         seen_gen_pop = False
         new_job_list = []
         for e in job_list:
@@ -18586,8 +18588,11 @@ def list_jobs():
                 e = dict(e)
                 e['s3_key'] = GEN_POP_CANONICAL_KEY
                 e['job_id'] = GEN_POP_CANONICAL_KEY
-                e['project_name'] = e.get('project_name') or 'Gen Pop 2026'
-                e['display_name'] = e.get('display_name') or 'Gen Pop 2026'
+                # Force the clean name regardless of what's in the cache.
+                e['project_name'] = 'Gen Pop 2026'
+                e['display_name'] = 'Gen Pop 2026'
+                e['name'] = 'Gen Pop 2026'
+                e['title'] = 'Gen Pop 2026'
             new_job_list.append(e)
         job_list = new_job_list
         
