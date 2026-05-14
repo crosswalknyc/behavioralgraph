@@ -6293,6 +6293,12 @@
             overflow-wrap: break-word;
             line-height: 1.2;
         }
+        /* ISO date spans: smaller than other KPI numbers so one line fits in metric cards */
+        .metric-card .metric-value#insightsDateRange {
+            font-size: clamp(0.68rem, 1.1vw + 0.42rem, 0.92rem);
+            line-height: 1.25;
+            letter-spacing: -0.02em;
+        }
         .metric-card .metric-label {
             font-size: clamp(0.55rem, 1vw, 0.75rem);
             color: var(--text-secondary);
@@ -15720,7 +15726,7 @@
                                 <div class="metric-card has-tooltip" data-tooltip="Date Range: The time period during which this audience data was collected and analyzed.">
                                     <div class="metric-icon">📅</div>
                                     <div class="metric-content">
-                                        <span class="metric-value" id="insightsDateRange" style="font-size: 1rem;">--</span>
+                                        <span class="metric-value" id="insightsDateRange">--</span>
                                         <span class="metric-label">Date Range</span>
                                     </div>
                                 </div>
@@ -53391,9 +53397,12 @@
             // Collect all items with indexes
             const allItems = [];
             
+            // Total behavioral rows (for KPI) — count every item; allItems below still filters by index for rankings
+            let totalBehavioralRowCount = 0;
             // Add behavioral items
             Object.entries(data.behavioral).forEach(([category, items]) => {
                 if (Array.isArray(items)) {
+                    totalBehavioralRowCount += items.length;
                     items.forEach(item => {
                         if (item.index && item.index > 0) {
                             allItems.push({
@@ -53505,7 +53514,7 @@
             document.getElementById('insightsSampleSize').textContent = formatNumber(data.sampleSize || 0);
             document.getElementById('insightsProjectedUS').textContent = formatNumber(data.projectedUS || 0);
             document.getElementById('insightsDateRange').textContent = currentProfileData?.dateRange || data.dateRange || 'Not specified';
-            document.getElementById('totalDataPoints').textContent = allItems.length.toLocaleString();
+            document.getElementById('totalDataPoints').textContent = totalBehavioralRowCount.toLocaleString();
             
             // Demographic highlights - top over/under indexing demographics
             const demoHighlightsData = [];
