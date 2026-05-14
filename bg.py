@@ -1334,23 +1334,31 @@ def _format_brand_intelligence_block(brand_names: list, max_brands: int = 200) -
         "     that specific subculture. Do not apply RISING/DECLINING globally.\n"
         "  2. over_indexes_for / under_indexes_for: only score this brand HIGH\n"
         "     if THIS persona's actual archetype matches one of the over_index\n"
-        "     entries. If none match, the brand is at-baseline or below for this\n"
-        "     persona. If an under_index entry matches THIS persona, score LOW\n"
-        "     even if the brand is currently 'cool' — the cool wave isn't this\n"
-        "     persona's wave.\n"
+        "     entries (or an obvious adjacent — e.g. 'preppy mom' in the list and\n"
+        "     persona is preppy adult M = adjacent fit, score moderate not high).\n"
+        "     If no over_index matches, the brand is at-baseline or below for this\n"
+        "     persona. If an under_index entry matches THIS persona, score LOW.\n"
+        "     Brands that are inherently single-gender (Brandy Melville, Free\n"
+        "     People, Athleta, Victoria's Secret, Reformation = F-product;\n"
+        "     Stussy, Carhartt WIP, Bonobos, Untuckit = M-product) DO NOT have\n"
+        "     a cross-gender adjacent — score the off-gender persona LOW.\n"
         "  3. digital_behavior_note is a HARD CONSTRAINT, not a signal. Brands\n"
-        "     marked IN-STORE/BUNDLED (Hanes, Tide, Charmin, Tropicana) MUST\n"
-        "     score low DIGITAL BP regardless of how cool/popular they are or\n"
-        "     who the persona is — people don't visit hanes.com or tide.com.\n"
-        "     Cap these brands' BP near the gen-pop digital baseline (typically\n"
-        "     5-15%) even if every other signal is positive.\n"
-        "  4. Gender-coded archetype labels: when an entry says 'preppy mom',\n"
-        "     'mass-aspirational F', etc., these specifically mean the female\n"
-        "     version of that customer. The MALE adjacent (preppy dad, country-\n"
-        "     club M, RL classic M) over-indexes too on M-coded brands but only\n"
-        "     for explicitly male personas. For an adult M persona reading 'preppy\n"
-        "     mom' in over_indexes_for, infer the M-equivalent and apply it; for\n"
-        "     a F persona reading a M-coded label, do the inverse.\n\n"
+        "     where the note contains 'IN-STORE/BUNDLED' or 'in-store' or 'low\n"
+        "     digital' MUST score low DIGITAL BP regardless of how cool/popular\n"
+        "     they are or who the persona is — people don't visit hanes.com or\n"
+        "     tide.com. Cap these brands' BP at roughly the gen-pop digital\n"
+        "     baseline (typically 5-15%) even if every other signal is positive.\n"
+        "     Do NOT inflate IN-STORE brands above 18% even for over-indexing\n"
+        "     archetypes; the in-store constraint dominates.\n"
+        "  4. cross_shop_network: if THIS persona's audience composition includes\n"
+        "     segments that already over-index on the cross-shop brands, that\n"
+        "     adds modest evidence of fit. If the cross-shop network is alien to\n"
+        "     this persona, that's evidence the brand is also alien.\n"
+        "  5. Mainstays (Nike, Adidas, Amazon, Apple, Netflix, Walmart): the\n"
+        "     intelligence doc still gives signals but you must respect the\n"
+        "     US digital-panel anchor ceilings above. Do NOT push Nike above\n"
+        "     ~50% just because intel says cool factor RISING — Nike's true US\n"
+        "     digital ceiling is mid-50s for the heaviest sneakerhead persona.\n\n"
     )
     return header + '\n'.join(lines) + '\n'
 
@@ -17932,6 +17940,8 @@ SOCIAL: YouTube 85% max (84% baseline), Facebook 80% (67%), Instagram 72% (50%, 
 DIGITAL BANKING: PayPal 75% max (50% baseline), Apple Pay 60% (53%), Venmo 55% (30%), Cash App 45% (24%), Zelle 40% (24%).
 TECHNOLOGY/DEVICE: Apple 75% (55%), Samsung 42% (32%), Google 32% (18%), Microsoft 32% (22%).
 SPORTS: NFL 55% mass-cap (41%, football-superfan persona ~80%), NBA 40% (25%, superfan ~60%), MLB 32% (20%, superfan ~52%), NCAA 28% (18%, superfan ~50%), NHL 22% (12%), NASCAR 18% (10%).
+APPAREL DIGITAL: Nike 50% max (sneakerhead persona; mainstream 28%; non-athletic M 15%), Adidas 38% (sneaker persona; mainstream 22%; non-athletic 12%), Lululemon 45% (athleisure-F; off-archetype M ~12%), Hanes 18% HARD CAP (in-store/bundled — TikTok RISING signal does NOT push this above 22%; adult M ceiling ~15%), Levi 28%, H&M/Zara/Uniqlo each 30% (fast-fashion young-urban; off-archetype M ~12%), Old Navy/Gap/Banana Republic each 22% (preppy-mom/mainstream; off-archetype ~10%), Crocs 32% (Gen-Z/family; off-archetype ~10%), New Balance 28%, Carhartt 22% (workwear/Americana M; off-archetype ~8%), North Face/Patagonia each 22%, Ralph Lauren 22% (preppy/quiet-luxury M or F; off-archetype ~8%). F-PRODUCT brands (Brandy Melville, Free People, Athleta, Reformation, Victoria's Secret) — for ANY M persona ceiling is ~6%; off-archetype F ~10%. Fashion Nova/Shein 24% (value-urban-F; M persona ~6%).
+CPG/IN-STORE: Tide/Bounty/Charmin/Crest/Tropicana/Coca-Cola/Pepsi/Hershey ceiling ~18% for ANY persona on the digital panel — bought in-store, not on the brand's website.
 
 Use these ceilings as the OUTER BOUND of your audience-fraction reasoning. If your math produces a higher number, re-check the segment decomposition — you almost certainly forgot a casual/outlier segment that should be dragging the average down.
 
@@ -26452,6 +26462,62 @@ def _enforce_realistic_ceilings(df, project_name: str = '', persona_doc=None):
             ('TELECOM','VERIZON'): 45.0,
             ('TELECOM','AT&T'): 38.0,
             ('TELECOM','T-MOBILE'): 38.0,
+            ('APPAREL/FOOTWEAR','NIKE'): 50.0,
+            ('APPAREL/FOOTWEAR','ADIDAS'): 38.0,
+            ('APPAREL/FOOTWEAR','LULULEMON'): 45.0,
+            ('APPAREL/FOOTWEAR','HANES'): 18.0,
+            ('APPAREL/FOOTWEAR','LEVI'): 28.0,
+            ("APPAREL/FOOTWEAR","LEVI'S"): 28.0,
+            ('APPAREL/FOOTWEAR','H&M'): 30.0,
+            ('APPAREL/FOOTWEAR','ZARA'): 30.0,
+            ('APPAREL/FOOTWEAR','UNIQLO'): 30.0,
+            ('APPAREL/FOOTWEAR','OLD NAVY'): 22.0,
+            ('APPAREL/FOOTWEAR','GAP'): 22.0,
+            ('APPAREL/FOOTWEAR','BANANA REPUBLIC'): 22.0,
+            ('APPAREL/FOOTWEAR','CROCS'): 32.0,
+            ('APPAREL/FOOTWEAR','NEW BALANCE'): 28.0,
+            ('APPAREL/FOOTWEAR','CARHARTT'): 22.0,
+            ('APPAREL/FOOTWEAR','PATAGONIA'): 22.0,
+            ('APPAREL/FOOTWEAR','THE NORTH FACE'): 22.0,
+            ('APPAREL/FOOTWEAR','NORTH FACE'): 22.0,
+            ('APPAREL/FOOTWEAR','RALPH LAUREN'): 22.0,
+            ('APPAREL/FOOTWEAR','BRANDY MELVILLE'): 14.0,
+            ('APPAREL/FOOTWEAR','FREE PEOPLE'): 14.0,
+            ('APPAREL/FOOTWEAR','ATHLETA'): 14.0,
+            ('APPAREL/FOOTWEAR','REFORMATION'): 14.0,
+            ("APPAREL/FOOTWEAR","VICTORIAS SECRET"): 14.0,
+            ("APPAREL/FOOTWEAR","VICTORIA'S SECRET"): 14.0,
+            ('APPAREL/FOOTWEAR','FASHION NOVA'): 24.0,
+            ('APPAREL/FOOTWEAR','FASHIONNOVA'): 24.0,
+            ('APPAREL/FOOTWEAR','SHEIN'): 24.0,
+            ('MOST PURCHASED BRANDS','NIKE'): 50.0,
+            ('MOST PURCHASED BRANDS','ADIDAS'): 38.0,
+            ('MOST PURCHASED BRANDS','LULULEMON'): 45.0,
+            ('MOST PURCHASED BRANDS','HANES'): 18.0,
+            ('MOST PURCHASED BRANDS','LEVI'): 28.0,
+            ("MOST PURCHASED BRANDS","LEVI'S"): 28.0,
+            ('MOST PURCHASED BRANDS','H&M'): 30.0,
+            ('MOST PURCHASED BRANDS','ZARA'): 30.0,
+            ('MOST PURCHASED BRANDS','UNIQLO'): 30.0,
+            ('MOST PURCHASED BRANDS','OLD NAVY'): 22.0,
+            ('MOST PURCHASED BRANDS','GAP'): 22.0,
+            ('MOST PURCHASED BRANDS','BANANA REPUBLIC'): 22.0,
+            ('MOST PURCHASED BRANDS','CROCS'): 32.0,
+            ('MOST PURCHASED BRANDS','NEW BALANCE'): 28.0,
+            ('MOST PURCHASED BRANDS','CARHARTT'): 22.0,
+            ('MOST PURCHASED BRANDS','PATAGONIA'): 22.0,
+            ('MOST PURCHASED BRANDS','THE NORTH FACE'): 22.0,
+            ('MOST PURCHASED BRANDS','NORTH FACE'): 22.0,
+            ('MOST PURCHASED BRANDS','RALPH LAUREN'): 22.0,
+            ('MOST PURCHASED BRANDS','BRANDY MELVILLE'): 14.0,
+            ('MOST PURCHASED BRANDS','FREE PEOPLE'): 14.0,
+            ('MOST PURCHASED BRANDS','ATHLETA'): 14.0,
+            ('MOST PURCHASED BRANDS','REFORMATION'): 14.0,
+            ('MOST PURCHASED BRANDS','VICTORIAS SECRET'): 14.0,
+            ("MOST PURCHASED BRANDS","VICTORIA'S SECRET"): 14.0,
+            ('MOST PURCHASED BRANDS','FASHION NOVA'): 24.0,
+            ('MOST PURCHASED BRANDS','FASHIONNOVA'): 24.0,
+            ('MOST PURCHASED BRANDS','SHEIN'): 24.0,
         }
 
         ATHLETE_RELAX = {
@@ -26463,6 +26529,19 @@ def _enforce_realistic_ceilings(df, project_name: str = '', persona_doc=None):
         YOUNG_MALE_RELAX = {
             'TIKTOK': 12.0, 'INSTAGRAM': 12.0,
         }
+        F_PRODUCT_BRANDS = {
+            'BRANDY MELVILLE','FREE PEOPLE','ATHLETA','REFORMATION',
+            'VICTORIAS SECRET',"VICTORIA'S SECRET",
+        }
+        is_male_persona = False
+        try:
+            txt = psum
+            if any(t in txt for t in [' male ', ' man ', ' men ', "he/him", "father", "dad", "boyfriend", "husband"]):
+                is_male_persona = True
+            if any(t in txt for t in [' female ', ' woman ', ' women ', 'she/her', 'mother', 'mom', 'girlfriend', 'wife', 'pregnant']):
+                is_male_persona = False
+        except Exception:
+            pass
 
         clamps = 0
         clamp_log = []
@@ -26479,6 +26558,8 @@ def _enforce_realistic_ceilings(df, project_name: str = '', persona_doc=None):
                 cap += ATHLETE_RELAX[val]
             if is_young_male and val in YOUNG_MALE_RELAX:
                 cap += YOUNG_MALE_RELAX[val]
+            if is_male_persona and val in F_PRODUCT_BRANDS:
+                cap = min(cap, 6.0)
             if v <= cap:
                 continue
             h = int(hashlib.blake2b(
