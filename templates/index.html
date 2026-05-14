@@ -16450,6 +16450,29 @@
                                 <div id="bpiqKpiLiftHits" style="font-size: 0.7rem; color: var(--text-secondary);"></div>
                             </div>
                         </div>
+                        <!-- Gen Pop / control-cohort mirror row -->
+                        <div id="bpiqGenPopKpiRow" style="display: none; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 1rem; margin-bottom: 1.5rem;">
+                            <div class="tab-section" style="background: var(--bg-card); border: 1px dashed var(--border-color); border-radius: 12px; padding: 1.25rem; text-align: center;">
+                                <div style="font-size: 0.7rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em;">Gen Pop Cohort</div>
+                                <div id="bpiqKpiGenPopAudience" style="font-size: 1.5rem; font-weight: 700; color: var(--accent-lime); opacity: 0.85;"></div>
+                                <div id="bpiqKpiGenPopAudienceProj" style="font-size: 0.7rem; color: var(--text-secondary);"></div>
+                            </div>
+                            <div class="tab-section" style="background: var(--bg-card); border: 1px dashed var(--border-color); border-radius: 12px; padding: 1.25rem; text-align: center;">
+                                <div style="font-size: 0.7rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em;">Pre-Event Brand Users (Gen Pop)</div>
+                                <div id="bpiqKpiGenPopPreUsers" style="font-size: 1.5rem; font-weight: 700; color: var(--accent-cyan); opacity: 0.85;"></div>
+                                <div id="bpiqKpiGenPopPreUsersPct" style="font-size: 0.7rem; color: var(--text-secondary);"></div>
+                            </div>
+                            <div class="tab-section" style="background: var(--bg-card); border: 1px dashed var(--border-color); border-radius: 12px; padding: 1.25rem; text-align: center;">
+                                <div style="font-size: 0.7rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em;">Post-Event Brand Users (Gen Pop)</div>
+                                <div id="bpiqKpiGenPopPostUsers" style="font-size: 1.5rem; font-weight: 700; color: var(--accent-orange); opacity: 0.85;"></div>
+                                <div id="bpiqKpiGenPopPostUsersPct" style="font-size: 0.7rem; color: var(--text-secondary);"></div>
+                            </div>
+                            <div class="tab-section" style="background: var(--bg-card); border: 1px dashed var(--border-color); border-radius: 12px; padding: 1.25rem; text-align: center;">
+                                <div style="font-size: 0.7rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em;">Brand Lift (Gen Pop)</div>
+                                <div id="bpiqKpiGenPopLift" style="font-size: 1.5rem; font-weight: 700;"></div>
+                                <div id="bpiqKpiGenPopLiftPp" style="font-size: 0.7rem; color: var(--text-secondary);"></div>
+                            </div>
+                        </div>
                         <div class="tab-section" style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 1.5rem; margin-bottom: 1.5rem;">
                             <h3 style="margin: 0 0 0.5rem;">🎯 Incremental Reach (Difference-in-Differences)</h3>
                             <div style="font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 0.75rem;">A size-matched Gen Pop cohort of panelists active in clickstream during the same campaign window who did NOT engage with the qualifying property. Their natural pre→post shift in brand traffic is subtracted from the Event Brand Users shift to isolate the incremental lift caused by the partnership.</div>
@@ -21725,6 +21748,30 @@
                 (totals.audience_pen_pre_pct || 0).toFixed(2) + '% of audience';
             document.getElementById('bpiqKpiLift').innerHTML = _bpiqFmtLift(totals.lift_pct_users);
             document.getElementById('bpiqKpiLiftHits').innerHTML = 'Hits lift: ' + _bpiqFmtLift(totals.lift_pct_hits);
+
+            // Gen Pop mirror row — same four KPIs computed off the
+            // size-matched control cohort. Hides cleanly when the
+            // cohort is unavailable for this run.
+            var cg = data.control_group || {};
+            var gpRow = document.getElementById('bpiqGenPopKpiRow');
+            if (gpRow) gpRow.style.display = cg.enabled ? 'grid' : 'none';
+            if (cg.enabled) {
+                var gpSize    = cg.projected_control_size || 0;
+                var gpPrePct  = cg.control_pre_pen_pct  || 0;
+                var gpPostPct = cg.control_post_pen_pct || 0;
+                var gpPre     = Math.round(gpSize * gpPrePct  / 100);
+                var gpPost    = Math.round(gpSize * gpPostPct / 100);
+                document.getElementById('bpiqKpiGenPopAudience').textContent = _bpiqFmtNum(gpSize);
+                document.getElementById('bpiqKpiGenPopAudienceProj').textContent = 'US users (size-matched)';
+                document.getElementById('bpiqKpiGenPopPreUsers').textContent  = _bpiqFmtNum(gpPre);
+                document.getElementById('bpiqKpiGenPopPostUsers').textContent = _bpiqFmtNum(gpPost);
+                document.getElementById('bpiqKpiGenPopPreUsersPct').innerHTML  = gpPrePct.toFixed(2)  + '% of cohort';
+                document.getElementById('bpiqKpiGenPopPostUsersPct').innerHTML = gpPostPct.toFixed(2) + '% of cohort';
+                document.getElementById('bpiqKpiGenPopLift').innerHTML = _bpiqFmtLift(cg.control_lift_pct_users);
+                var gpDelta = cg.control_delta_pp;
+                document.getElementById('bpiqKpiGenPopLiftPp').textContent =
+                    (gpDelta == null ? '' : ((gpDelta >= 0 ? '+' : '') + gpDelta.toFixed(2) + 'pp natural drift'));
+            }
 
             // Per-platform table (cross-platform brand reach: audience users
             // who were active on the platform AND had a brand touchpoint
