@@ -17806,22 +17806,43 @@ def _run_single_category_agent(category: str, values: list[str],
             _aff_lines.append(f"  - {_v}  [{_t}] — {_e}")
         affiliation_block = (
             "\n═══════════════════════════════════════════════════════════════════\n"
-            f"PERSONA-AFFILIATED BRANDS in {category} — REQUIRED INCLUSIONS\n"
+            f"PERSONA-AFFILIATED BRANDS in {category} — REASON BEFORE ELEVATING\n"
             "═══════════════════════════════════════════════════════════════════\n"
             f"This persona has VERIFIED affiliations with the following brand(s) in this category. "
-            f"You MUST score each of these and they MUST land at a meaningfully ELEVATED BP "
-            f"versus gen-pop baseline (typical range 2-5x baseline depending on how central the "
-            f"brand is to the persona's public identity). Score guidance:\n"
-            "  • brand_owner_founder + still active spokesperson  → 4-7x baseline\n"
-            "  • brand_owner_founder, sold but still associated   → 2.5-4x baseline\n"
-            "  • athlete_competitor (active)                       → 3-5x baseline\n"
-            "  • platform_flagship                                 → 2-3.5x baseline\n"
-            "  • brand_collaboration / brand_ambassador (current)  → 2-3.5x baseline\n"
-            "  • exclusive_content_partner                         → 2.5-4x baseline\n\n"
+            f"They SHOULD score above gen-pop baseline — but how MUCH above depends on how the "
+            f"persona's audience actually engages with the brand IN THE PANEL DATA.\n\n"
+            "CRITICAL — NO AUDIENCE IS MONOLITHIC. Even a 'flagship' persona's audience comes from\n"
+            "MANY sources, not just the affiliated platform/brand:\n"
+            "  • Selena Gomez fans engage via Spotify (music), Disney (Wizards-of-Waverly-Place\n"
+            "    legacy), Instagram (#2 most-followed), Latin pop community, AND Hulu (Only Murders).\n"
+            "    Even though Hulu is her flagship, only a SUBSET of her audience pays for Hulu.\n"
+            "  • LeBron James fans engage via NBA (live games), TNT/ESPN, social media,\n"
+            "    sneaker culture, AND Lakers brand. Not all of them subscribe to NBA League Pass.\n"
+            "  • Pedro Pascal fans engage via Disney+ (Mandalorian), HBO Max (Last of Us), AND\n"
+            "    movie theaters. Even his most engaged fans don't ALL subscribe to BOTH HBO + Disney+.\n\n"
+            "RECOMMENDED BP RANGES (think of these as ceilings, not floors — reason within the band):\n"
+            "  • brand_owner_founder + still active spokesperson  → 1.8-3.0x baseline\n"
+            "  • brand_owner_founder, sold but still associated   → 1.5-2.2x baseline\n"
+            "  • athlete_competitor (active in the league)         → 1.6-2.4x baseline\n"
+            "  • platform_flagship                                 → 1.4-2.0x baseline\n"
+            "  • brand_collaboration / brand_ambassador (current)  → 1.3-1.8x baseline\n"
+            "  • exclusive_content_partner                         → 1.5-2.0x baseline\n\n"
+            "ABSOLUTE CEILING — even with a flagship affiliation, no brand should exceed:\n"
+            "  • Streaming SVOD: 65-72% (real US household reach < 80%, not even Netflix breaks 78%)\n"
+            "  • Single social platform: 80% (only YouTube approaches universal usage)\n"
+            "  • Digital banking / payment: 75% (PayPal ceiling)\n"
+            "  • Mass retail / Amazon: 88% (only Amazon approaches digital saturation)\n"
+            "  • Spirits / niche owned brands: 8-12% (digital purchase rates are tiny even for owners)\n"
+            "  • Sports leagues: 70% for NFL with athlete persona, 50% for NBA/MLB\n\n"
+            "REASONING REQUIREMENT — for any affiliated brand, your `reason` field MUST explicitly\n"
+            "address: (a) what fraction of this persona's audience actually engages with the brand,\n"
+            "(b) why that fraction isn't 100% (what other paths the audience uses to engage with\n"
+            "the persona). E.g. 'Selena's Hulu audience is sub-segment that watches Only Murders;\n"
+            "her music-only and IG-only fans don't subscribe to Hulu — so 60-65% not 85%.'\n\n"
             "BRANDS:\n"
             + '\n'.join(_aff_lines)
             + "\n\nIMPORTANT — if a brand listed above is not already in the ITEMS TO SCORE list, "
-            "ADD IT to your output with the elevated BP. Do not skip it just because it wasn't pre-listed.\n"
+            "ADD IT to your output with the elevated BP. Do not skip it.\n"
         )
     else:
         affiliation_block = ""
@@ -26928,8 +26949,14 @@ def _enforce_realistic_ceilings(df, project_name: str = '', persona_doc=None):
         if flagship_set:
             print(f"   🛡️  realistic-ceilings: exempting {len(flagship_set)} flagship pair(s) → {sorted(flagship_set)}")
 
+        # Flagship RELAX (not exemption): even when the persona genuinely
+        # defines a brand, no audience is monolithic. Flagship brands get a
+        # 1.3x ceiling boost + hard absolute ceiling of 90, NOT full exemption.
+        FLAGSHIP_CEILING_MULT = 1.3
+        FLAGSHIP_HARD_CEILING = 90.0
+
         clamps = 0
-        flagship_skips = 0
+        flagship_relaxed = 0
         clamp_log = []
         cats_touched = set()
         for idx, r in df.iterrows():
@@ -26938,17 +26965,18 @@ def _enforce_realistic_ceilings(df, project_name: str = '', persona_doc=None):
             key = (cat, val)
             if key not in CEILINGS:
                 continue
-            if key in flagship_set:
-                flagship_skips += 1
-                continue
             v = float(r[bp]) if _pd.notnull(r[bp]) else 0.0
             cap = CEILINGS[key]
+            is_flagship = (key in flagship_set)
             if is_athlete and val in ATHLETE_RELAX:
                 cap += ATHLETE_RELAX[val]
             if is_young_male and val in YOUNG_MALE_RELAX:
                 cap += YOUNG_MALE_RELAX[val]
             if is_male_persona and val in F_PRODUCT_BRANDS:
                 cap = min(cap, 6.0)
+            if is_flagship:
+                cap = min(FLAGSHIP_HARD_CEILING, cap * FLAGSHIP_CEILING_MULT)
+                flagship_relaxed += 1
             if v <= cap:
                 continue
             h = int(hashlib.blake2b(
@@ -26985,8 +27013,9 @@ def _enforce_realistic_ceilings(df, project_name: str = '', persona_doc=None):
                 print(f"        {line}")
             if len(clamp_log) > 25:
                 print(f"        … + {len(clamp_log)-25} more")
-        if flagship_skips:
-            print(f"   🛡️  realistic-ceilings exempted {flagship_skips} flagship pair(s) (only 1.8x truth cap applies)")
+        if flagship_relaxed:
+            print(f"   🛡️  realistic-ceilings RELAXED for {flagship_relaxed} flagship pair(s) "
+                  f"(cap × {FLAGSHIP_CEILING_MULT}, hard-capped at {FLAGSHIP_HARD_CEILING}%)")
         return df
     except Exception as _e:
         print(f"   ⚠️ _enforce_realistic_ceilings failed: {_e}")

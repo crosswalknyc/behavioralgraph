@@ -1576,6 +1576,9 @@ KNOWN_PERSONA_FLAGSHIPS: dict[str, list[tuple[str, str]]] = {
     'RYAN REYNOLDS':  [('STREAMING/PLATFORM', 'DISNEY+'),    # Deadpool/Marvel
                        ('STREAMING/PLATFORM', 'HULU')],      # Welcome to Wrexham (FX)
     'DWAYNE JOHNSON': [('SPORTS ORGANIZATIONS', 'WORLD WRESTLING ENTERTAINMENT')],
+    'SELENA GOMEZ':   [('STREAMING/PLATFORM', 'HULU'),       # Only Murders in the Building (flagship)
+                       ('STREAMING/MUSIC', 'SPOTIFY'),       # Top streamed Latin pop artist
+                       ('SOCIAL MEDIA', 'INSTAGRAM')],       # 2nd-most-followed on Instagram
     'LEBRON JAMES':   [('SPORTS ORGANIZATIONS', 'NATIONAL BASKETBALL ASSOCIATION')],
 }
 
@@ -1689,14 +1692,18 @@ def enforce_genpop_ceiling(
         if current_pct <= 0:
             continue
 
-        # Skip cap entirely for persona-flagship pairings
-        if (category, value) in flagship_brands or truth_key in flagship_brands:
-            flagship_skipped += 1
-            continue
+        # Flagship RELAX (not exemption): even when the persona genuinely
+        # defines a brand, no audience is monolithic. Selena Gomez's audience
+        # comes from music + Disney + IG + Latin pop, not just Hulu — so
+        # flagship brands get a higher cap (2.4x truth instead of 1.8x) but
+        # not unbounded exemption.
+        is_flagship = ((category, value) in flagship_brands
+                        or truth_key in flagship_brands)
+        eff_ratio = (ceiling_ratio * 1.33) if is_flagship else ceiling_ratio  # 1.8 → 2.4
 
         # Persona-deterministic noise on the cap so two personas that both
         # want to clamp here don't land at IDENTICAL post-cap values.
-        cap_with_noise = truth * ceiling_ratio * _persona_cap_noise(project_name, category, value)
+        cap_with_noise = truth * eff_ratio * _persona_cap_noise(project_name, category, value)
 
         if current_pct <= cap_with_noise:
             continue
@@ -1709,19 +1716,22 @@ def enforce_genpop_ceiling(
         df.at[idx, 'Original Raw Numbers'] = new_raw
         df.at[idx, 'US Gen Pop Projection'] = new_genpop
         capped_count += 1
+        if is_flagship:
+            flagship_skipped += 1  # tracking flagship-relaxed-and-still-capped
         if len(capped_examples) < 8:
+            tag = " ⭐flagship-relaxed" if is_flagship else ""
             capped_examples.append(
-                f"{category}/{value}: {current_pct:.1f} → {new_pct:.1f} (cap≈{cap_with_noise:.1f})"
+                f"{category}/{value}: {current_pct:.1f} → {new_pct:.1f} (cap≈{cap_with_noise:.1f}){tag}"
             )
 
     if capped_count and not SILENCE_VERBOSE_OUTPUT:
-        print(f"🧢 Gen-pop ceiling enforced: {capped_count} brands capped at ~{ceiling_ratio}x canonical (±2% persona noise)")
+        print(f"🧢 Gen-pop ceiling enforced: {capped_count} brands capped (~{ceiling_ratio}x canonical, flagship at ~{ceiling_ratio*1.33:.2f}x, ±2% persona noise)")
         for ex in capped_examples:
             print(f"     · {ex}")
         if capped_count > len(capped_examples):
             print(f"     · …+{capped_count - len(capped_examples)} more")
     if flagship_skipped and not SILENCE_VERBOSE_OUTPUT:
-        print(f"⭐ Flagship exemption: {flagship_skipped} persona-flagship pairings bypassed cap")
+        print(f"⭐ Flagship relax applied to {flagship_skipped} persona-flagship pairing(s) (still capped at relaxed ratio)")
 
     return df
 
