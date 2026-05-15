@@ -1466,6 +1466,11 @@ def run_query(conn, p):
         validated_clean = _current_clean
         ai_meta = {'skipped': True, 'reason': f'exception: {e}'}
 
+    # Capture any flag the viewer-research safety net produced so it can be surfaced
+    # in the CSV's AI VALIDATION section.
+    if ai_meta.get('flag'):
+        p.setdefault('_ai_flags', []).append(ai_meta['flag'])
+
     if validated_total != _current_total and _current_total > 0:
         # validated_total is now a REAL-WORLD viewer count from the AI web search.
         # Derive ALL downstream numbers from raw-data proportions applied to this real total.
@@ -1481,12 +1486,15 @@ def run_query(conn, p):
         df_summary.loc[0, 'PRE_EXISTING_USERS'] = validated_pre
         df_summary.loc[0, 'CLEAN_SAMPLE_SIZE'] = validated_clean
 
-        # Use the Conversion Reasoning Agent to determine a realistic conversion rate
+        # Conversion rate: trust the panel's measured rate by default; agent only
+        # flags + corrects when the rate is clearly implausible.  This preserves
+        # show-specific signal (e.g. low conversion when most viewers already had
+        # the platform for other reasons) instead of pinning to a tier benchmark.
         _raw_conv_rate = _raw_signups / _raw_clean if _raw_clean > 0 else 0.0
         _raw_total_conv = _raw_signups / _raw_total if _raw_total > 0 else 0.0
         _plat_info = _get_platform_info(p.get('platform_name', ''))
 
-        _agent_rate = _reason_conversion_rate(
+        _agent_rate, _conv_flag = _reason_conversion_rate(
             show_name=show_name_for_ai,
             platform_name=p.get('platform_name', ''),
             genre=p.get('genre', ''),
@@ -1497,10 +1505,12 @@ def run_query(conn, p):
             ai_total_viewers=validated_total,
             platform_info=_plat_info,
         )
+        if _conv_flag:
+            p.setdefault('_ai_flags', []).append(_conv_flag)
 
         validated_signups = int(round(validated_total * _agent_rate))
-        print(f"   🧠 Conversion agent rate: {_agent_rate*100:.2f}% → {validated_signups:,} signups "
-              f"(raw panel total conv was {_raw_total_conv*100:.1f}%)")
+        print(f"   🧠 Conversion rate used: {_agent_rate*100:.2f}% → {validated_signups:,} signups "
+              f"(raw panel total conv was {_raw_total_conv*100:.2f}%)")
         df_summary.loc[0, 'NEW_SIGNUPS'] = validated_signups
 
         # Recalculate conversion rates
@@ -1648,36 +1658,53 @@ def _research_show_viewership(client, show_name):
 def _reason_conversion_rate(show_name, platform_name, genre, content_cadence,
                             episode_count, date_range, raw_panel_conv_rate,
                             ai_total_viewers, platform_info):
-    """Use GPT-4o to determine a realistic Total Show Conversion Rate.
+    """Return a realistic Total Show Conversion Rate, preserving the panel signal.
 
-    Weighs raw panel signal (directional truth), show quality/buzz, platform
-    economics, and real-world benchmarks.  Returns a float between 0 and 1.
-    Falls back to a static tier-based cap on any failure.
+    The panel-observed rate (signups whose first watch on the platform was this show /
+    total show watchers) IS the measurement of interest — it captures how much the
+    show actually drove first-time subscriptions vs. people watching it because they
+    already had the platform.  This function trusts that signal by default; the AI
+    agent is only consulted when the rate is clearly implausible.
+
+    Returns (rate, flag_or_None).  `flag_or_None` is a human-readable message describing
+    any adjustment made; None when the panel rate was used unchanged.
     """
-    # Hard ceilings — safety net regardless of what the model says
-    _hard_ceiling = {
-        'dominant': 0.06, 'major': 0.10, 'mid': 0.12,
-        'emerging': 0.15, 'niche': 0.18, 'unknown': 0.10,
-    }
-    tier = platform_info.get('tier', 'unknown')
-    ceiling = _hard_ceiling.get(tier, 0.10)
+    # Plausibility band.  A measurement in this range is treated as a real signal.
+    # Below the floor, the panel is too sparse to be meaningful (or signups data is
+    # missing); above the ceiling, the number is almost certainly an artifact.
+    SANE_MIN = 0.003   # 0.3 %
+    SANE_MAX = 0.30    # 30 %
 
-    # Static fallback with deterministic jitter (used if API call fails)
-    import hashlib
-    _jitter_seed = hashlib.md5(f"{platform_name}-{ai_total_viewers}".encode()).hexdigest()
-    _jitter = (int(_jitter_seed[:8], 16) % 1000) / 10000.0 - 0.05
-    fallback_rate = ceiling * (1 + _jitter)
+    if SANE_MIN <= raw_panel_conv_rate <= SANE_MAX:
+        print(f"   ✅ Using panel-measured conversion rate: {raw_panel_conv_rate*100:.2f}% "
+              f"(within plausible band {SANE_MIN*100:.1f}–{SANE_MAX*100:.0f}%)")
+        return raw_panel_conv_rate, None
+
+    # Out of plausible band — ask the agent to propose a corrected rate, with explicit
+    # instructions to stay close to the panel direction (not snap to a tier benchmark).
+    tier = platform_info.get('tier', 'unknown')
 
     try:
         from openai import OpenAI
         api_key = os.environ.get('OPENAI_API_KEY')
         if not api_key:
-            print("   ⚠️  No OPENAI_API_KEY; using static conversion cap")
-            return fallback_rate
+            clamped = max(SANE_MIN, min(SANE_MAX, raw_panel_conv_rate))
+            flag = (
+                f"Panel conversion rate {raw_panel_conv_rate*100:.2f}% is outside the "
+                f"plausible range ({SANE_MIN*100:.1f}–{SANE_MAX*100:.0f}%) and no OpenAI key "
+                f"was available to validate; clamped to {clamped*100:.2f}%."
+            )
+            print(f"   ⚠️  {flag}")
+            return clamped, flag
         client = OpenAI(api_key=api_key)
     except Exception as e:
-        print(f"   ⚠️  OpenAI not available for conversion reasoning: {e}")
-        return fallback_rate
+        clamped = max(SANE_MIN, min(SANE_MAX, raw_panel_conv_rate))
+        flag = (
+            f"Panel conversion rate {raw_panel_conv_rate*100:.2f}% is outside the plausible "
+            f"range; OpenAI unavailable ({e}). Clamped to {clamped*100:.2f}%."
+        )
+        print(f"   ⚠️  {flag}")
+        return clamped, flag
 
     raw_terms = [t.strip() for t in show_name.replace('_', ' ').replace('-', ' ').split(',') if t.strip()]
     season_terms = [t for t in raw_terms if 'season' in t.lower()]
@@ -1688,61 +1715,40 @@ def _reason_conversion_rate(show_name, platform_name, genre, content_cadence,
     else:
         clean_name = show_name.replace('_', ' ').strip().title()
 
-    prompt = f"""You are a senior streaming media analyst. Your job is to determine what percentage
-of people who watched a TV show would realistically sign up for the streaming platform
-FOR THE FIRST TIME as a result of that show.
+    direction = "above the plausible ceiling" if raw_panel_conv_rate > SANE_MAX else "below the plausible floor"
+    prompt = f"""You are validating a measured streaming conversion rate that looks implausible.
+
+DEFINITION: "Total Show Conversion Rate" = (people whose FIRST watch on the platform was this
+show) / (total show watchers).  It captures genuine first-time subscriptions driven by this
+show, NOT total signups during the period.  For shows on platforms many viewers already
+subscribe to (e.g. Paramount+ for NFL), this rate is typically LOW — most viewers are
+watching because they're already subscribed, not signing up specifically for this show.
 
 SHOW: {clean_name}
-PLATFORM: {platform_name}
+PLATFORM: {platform_name} (tier: {tier}, ~{platform_info.get('pct', 15)}% US penetration)
 GENRE: {genre or 'Unknown'}
 CONTENT CADENCE: {content_cadence or 'Unknown'}
 EPISODES: {episode_count or 'N/A'}
 DATE RANGE: {date_range or 'Unknown'}
+REAL US VIEWERSHIP: {ai_total_viewers:,} viewers
 
-PLATFORM ECONOMICS:
-- US Household Penetration: ~{platform_info.get('pct', 15)}%
-- US Subscribers: ~{platform_info.get('subs_millions', 20)}M
-- Platform Tier: {tier}
+MEASURED PANEL RATE: {raw_panel_conv_rate*100:.2f}%  (this is {direction} of {SANE_MIN*100:.1f}%–{SANE_MAX*100:.0f}%)
 
-REAL US VIEWERSHIP (from external data): {ai_total_viewers:,} viewers
-
-RAW PANEL SIGNAL: Our behavioral panel observed a {raw_panel_conv_rate*100:.1f}% total show
-conversion rate (signups / total watchers). This is DIRECTIONALLY meaningful:
-- If the panel shows LOW conversion (under 5%), the show likely is NOT driving many new signups.
-  Trust this signal and keep the rate low.
-- If the panel shows HIGH conversion (over 15%), it is likely inflated by panel-scale effects
-  and should be adjusted downward to a realistic level.
-- If the panel shows MODERATE conversion (5-15%), the show is driving some real signups;
-  use your judgment to calibrate.
-
-BENCHMARK REFERENCE (Total Show Conversion = new signups / total watchers):
-- DOMINANT platforms (Netflix ~68%, Amazon ~65%): 1-4%. Everyone already has it. Only a
-  cultural phenomenon (Squid Game, Stranger Things finale) reaches 3-5%.
-- MAJOR platforms (Hulu ~30%, Disney+ ~28%): 3-7%. A hit show can drive noticeable signups.
-  A massive hit might reach 7-8%.
-- MID-TIER platforms (Max ~22%): 4-9%. Prestige exclusives drive meaningful acquisition.
-- EMERGING platforms (Paramount+ ~15%, Peacock ~13%): 5-12%. Big exclusives can drive
-  significant new subscribers because many viewers don't have the platform.
-- NICHE platforms (Apple TV+ ~10%, Starz ~5%): 6-15%. Very low penetration means a hit
-  show can drive high percentage acquisition.
-
-INSTRUCTIONS:
-1. Consider the show's cultural impact and buzz relative to its platform.
-2. Consider whether this is a new show vs returning season (returning seasons convert lower
-   since fans already subscribed for Season 1).
-3. Use the raw panel signal directionally — if it's low, your answer should be low.
-4. Be precise — give a specific rate like 5.8%, not a range.
-5. The rate must be between 0.5% and {ceiling*100:.0f}% (hard ceiling for this platform tier).
+Your job is to FLAG and CORRECT, not to pin to a tier benchmark.  Pick a rate that:
+1. Stays as close to the measured panel rate as defensibly possible.
+2. Is bounded by the plausible band {SANE_MIN*100:.1f}%–{SANE_MAX*100:.0f}%.
+3. Reflects the show-specific reality (returning seasons of established shows typically
+   convert lower than buzzy new launches, since most fans already subscribed earlier).
 
 Respond in JSON ONLY (no markdown fencing):
 {{
-  "recommended_rate": <decimal like 0.058 for 5.8%>,
-  "reasoning": "<2-3 sentences explaining your logic>",
+  "recommended_rate": <decimal between {SANE_MIN} and {SANE_MAX}>,
+  "reasoning": "<1-2 sentences: why the panel rate is off, why your number is more realistic>",
   "confidence": "high" | "medium" | "low"
 }}"""
 
     try:
-        print(f"   🧠 Asking GPT-4o to reason about conversion rate (raw panel: {raw_panel_conv_rate*100:.1f}%)...")
+        print(f"   🧠 Panel rate {raw_panel_conv_rate*100:.2f}% is out of band; asking GPT-4o to validate...")
         resp = client.chat.completions.create(
             model='gpt-4o',
             messages=[{'role': 'user', 'content': prompt}],
@@ -1755,8 +1761,13 @@ Respond in JSON ONLY (no markdown fencing):
 
         start = raw.find('{')
         if start < 0:
-            print(f"   ⚠️  Conversion agent returned no JSON — using fallback")
-            return fallback_rate
+            clamped = max(SANE_MIN, min(SANE_MAX, raw_panel_conv_rate))
+            flag = (
+                f"Panel conversion rate {raw_panel_conv_rate*100:.2f}% out of band; "
+                f"agent returned no JSON. Clamped to {clamped*100:.2f}%."
+            )
+            print(f"   ⚠️  {flag}")
+            return clamped, flag
 
         depth = 0
         end = start
@@ -1771,27 +1782,38 @@ Respond in JSON ONLY (no markdown fencing):
         result = json.loads(raw[start:end])
 
         rate = float(result.get('recommended_rate', 0))
-        reasoning = result.get('reasoning', '')
+        reasoning = (result.get('reasoning') or '').strip()
         confidence = result.get('confidence', 'low')
 
+        # Hard-enforce the plausible band regardless of what the model said.
         if rate <= 0 or rate > 1:
-            print(f"   ⚠️  Conversion agent returned invalid rate {rate} — using fallback")
-            return fallback_rate
+            clamped = max(SANE_MIN, min(SANE_MAX, raw_panel_conv_rate))
+            flag = (
+                f"Panel conversion rate {raw_panel_conv_rate*100:.2f}% out of band; "
+                f"agent returned invalid rate {rate}. Clamped to {clamped*100:.2f}%."
+            )
+            print(f"   ⚠️  {flag}")
+            return clamped, flag
 
-        # Clamp to hard ceiling
-        if rate > ceiling:
-            print(f"   ⚠️  Agent rate {rate*100:.1f}% exceeds {tier} ceiling {ceiling*100:.0f}% — clamping")
-            rate = ceiling * (1 + _jitter)
-
-        print(f"   🧠 Conversion agent: {rate*100:.2f}% (confidence={confidence})")
-        print(f"   🧠 Reasoning: {reasoning}")
-        return rate
+        rate = max(SANE_MIN, min(SANE_MAX, rate))
+        flag = (
+            f"Panel conversion rate {raw_panel_conv_rate*100:.2f}% was {direction}; "
+            f"corrected to {rate*100:.2f}% (confidence={confidence}). {reasoning}"
+        )
+        print(f"   🧠 Conversion agent corrected {raw_panel_conv_rate*100:.2f}% → {rate*100:.2f}% "
+              f"(confidence={confidence})")
+        if reasoning:
+            print(f"   🧠 Reasoning: {reasoning}")
+        return rate, flag
 
     except Exception as e:
-        print(f"   ⚠️  Conversion reasoning agent failed: {e}")
-        import traceback
-        traceback.print_exc()
-        return fallback_rate
+        clamped = max(SANE_MIN, min(SANE_MAX, raw_panel_conv_rate))
+        flag = (
+            f"Panel conversion rate {raw_panel_conv_rate*100:.2f}% out of band; "
+            f"agent failed ({e}). Clamped to {clamped*100:.2f}%."
+        )
+        print(f"   ⚠️  {flag}")
+        return clamped, flag
 
 
 def _reason_reactivation_rate(show_name, platform_name, genre, content_cadence,
@@ -2070,20 +2092,43 @@ def _validate_total_watchers_with_ai(show_name, platform_name, inflated_total, i
 
     print(f"   🔍 AI viewership lookup: confidence={confidence}, estimated_us={estimated_us}, source={result.get('source','')}")
 
-    # Use the real US viewers number directly (no panel conversion)
+    # Panel's own projection of real US viewers, used as a sanity baseline below.
+    # Display-scale count = inflated_total / 10; Gen Pop = count * 32.99.
+    panel_projection_us = int((inflated_total / 10.0) * (US_POPULATION / SAMPLE_REPRESENTS))
+    metadata['panel_projection_us'] = panel_projection_us
+
     recommended = None
     if estimated_us is not None:
         try:
             us_num = float(estimated_us)
             if us_num > 0:
                 recommended = int(us_num)
-                print(f"   📐 Using real US viewers directly: {us_num:,.0f} → {recommended:,}")
+                print(f"   📐 AI estimated US viewers: {us_num:,.0f} (panel projects ~{panel_projection_us:,})")
         except (ValueError, TypeError):
             pass
 
     if recommended is None or recommended <= 0:
-        print(f"   ℹ️  AI returned no usable viewer estimate (confidence={confidence}) — keeping original")
-        metadata['action'] = 'kept_original'
+        print(f"   ℹ️  AI returned no usable viewer estimate (confidence={confidence}) — keeping panel projection")
+        metadata['action'] = 'kept_panel_no_ai_estimate'
+        return inflated_total, inflated_pre, inflated_clean, metadata
+
+    # Safety net: a low/medium-confidence AI answer that's much smaller than the panel's
+    # own projection is almost certainly a research miss (e.g. a less-publicized season
+    # for which Nielsen/press coverage is sparse).  Trust the panel projection rather than
+    # silently undercounting.  Tighter threshold for "low" than "medium".
+    # Threshold for falling back to panel: stricter for "low" confidence than "medium".
+    # If AI estimate is below threshold × panel projection, treat as a research miss.
+    undercount_threshold = {'low': 0.7, 'medium': 0.6}.get(confidence)
+    if undercount_threshold and panel_projection_us > 0 and recommended < panel_projection_us * undercount_threshold:
+        flag_msg = (
+            f"Viewer research returned {recommended:,} ({confidence} confidence) but panel "
+            f"projects ~{panel_projection_us:,} for this show. Likely a research miss "
+            f"(e.g. less-publicized season); using panel projection instead."
+        )
+        print(f"   ⚠️  {flag_msg}")
+        metadata['action'] = 'kept_panel_low_confidence_undercount'
+        metadata['ai_estimate_rejected'] = recommended
+        metadata['flag'] = flag_msg
         return inflated_total, inflated_pre, inflated_clean, metadata
 
     # Apply 8% conservative discount then add deterministic noise so totals
@@ -3095,6 +3140,16 @@ def write_output(df_summary, df_comp, df_demo, df_timing, df_episode_attribution
         for i, flag in enumerate(validation['flags']):
             df_out = pd.concat([df_out, pd.DataFrame([
                 (f"Flag {i+1}", "", flag, "", "", "", "", "", "", ""),
+            ], columns=df_out.columns)], ignore_index=True)
+
+    # Surface flags raised earlier in the pipeline (viewer-research safety net,
+    # conversion-rate sanity check) so downstream consumers can see when the
+    # AI overrode or corrected something.
+    pipeline_flags = p.get('_ai_flags', []) or []
+    if pipeline_flags:
+        for i, flag in enumerate(pipeline_flags):
+            df_out = pd.concat([df_out, pd.DataFrame([
+                (f"AI Override Flag {i+1}", "", flag, "", "", "", "", "", "", ""),
             ], columns=df_out.columns)], ignore_index=True)
 
     # Write to output_dir from params (e.g. server output dir on Render) or default Desktop/attribution
