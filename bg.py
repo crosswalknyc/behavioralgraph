@@ -20077,6 +20077,71 @@ def _run_unified_scoring_pass(
     return results_map
 
 
+def _send_missing_hostmap_email(subject_name: str, missing: list[dict]) -> None:
+    """Email jenna@ (cc jessie@, anastasia@) with affiliation brands that
+    aren't in `reference.host_mapping`."""
+    if not missing:
+        return
+    try:
+        import boto3 as _boto3
+        ses = _boto3.client('ses', region_name='us-east-2')
+        rows_html = ''.join(
+            f'<tr>'
+            f'<td style="padding:6px 12px;border:1px solid #ddd;">{m["category"]}</td>'
+            f'<td style="padding:6px 12px;border:1px solid #ddd;font-weight:600;">{m["value"]}</td>'
+            f'<td style="padding:6px 12px;border:1px solid #ddd;">{m["type"]}</td>'
+            f'<td style="padding:6px 12px;border:1px solid #ddd;color:#555;">{m["evidence"]}</td>'
+            f'</tr>'
+            for m in missing
+        )
+        rows_text = '\n'.join(
+            f'  • [{m["category"]}] {m["value"]} ({m["type"]}) — {m["evidence"]}'
+            for m in missing
+        )
+        html = f"""<html><body style="font-family:-apple-system,Helvetica,Arial,sans-serif;color:#333;">
+<h2 style="color:#cc7000;">📨 Missing Hostmap Brands — Profile: {subject_name}</h2>
+<p>The persona research agent surfaced <b>{len(missing)}</b> brand-affiliation(s) for
+<b>{subject_name}</b> that are <b>NOT in <code>reference.host_mapping</code></b>.
+These can't be added to the profile because there's no host mapping → no panel data.</p>
+<p><b>Please add these brands to hostmap so they're picked up on the next run:</b></p>
+<table style="border-collapse:collapse;border:1px solid #ddd;font-size:14px;">
+<tr style="background:#f4f4f4;">
+<th style="padding:8px 12px;border:1px solid #ddd;text-align:left;">Category</th>
+<th style="padding:8px 12px;border:1px solid #ddd;text-align:left;">Brand</th>
+<th style="padding:8px 12px;border:1px solid #ddd;text-align:left;">Affiliation Type</th>
+<th style="padding:8px 12px;border:1px solid #ddd;text-align:left;">Evidence</th>
+</tr>
+{rows_html}
+</table>
+<p style="color:#999;font-size:12px;margin-top:24px;">
+Behavioral Graph by Crosswalk NYC — automated affiliation auditor</p>
+</body></html>"""
+        text = (f"Missing Hostmap Brands — Profile: {subject_name}\n\n"
+                f"The persona research agent surfaced {len(missing)} affiliation(s) "
+                f"for {subject_name} that are NOT in reference.host_mapping.\n"
+                f"Please add these to hostmap so they're picked up on the next run:\n\n"
+                f"{rows_text}\n")
+        ses.send_email(
+            Source='no_reply@crosswalknyc.com',
+            Destination={
+                'ToAddresses': ['jenna@crosswalknyc.com'],
+                'CcAddresses': ['jessie@crosswalknyc.com', 'anastasia@crosswalknyc.com'],
+            },
+            Message={
+                'Subject': {'Data': f'📨 Hostmap brands needed for {subject_name} ({len(missing)})',
+                            'Charset': 'UTF-8'},
+                'Body': {
+                    'Html': {'Data': html, 'Charset': 'UTF-8'},
+                    'Text': {'Data': text, 'Charset': 'UTF-8'},
+                },
+            },
+        )
+        print(f"   📧 Sent missing-hostmap email to jenna@ (cc jessie@, anastasia@) "
+              f"for {len(missing)} brand(s)")
+    except Exception as _e:
+        print(f"   ⚠️ SES email failed: {_e}")
+
+
 def parallel_category_agents(df: pd.DataFrame, persona_doc: dict,
                               subject: str, brands: list[str] | None = None,
                               previous_behavioral_lookup: dict | None = None,
@@ -20579,6 +20644,119 @@ def parallel_category_agents(df: pd.DataFrame, persona_doc: dict,
     # If previous_behavioral_lookup is empty, every item is "new" (fresh-pull
     # behaviour preserved unchanged).
     prev_bhv = previous_behavioral_lookup or {}
+
+    # ── Pre-insert PERSONA-AFFILIATED brand rows, GATED by hostmap ────────
+    # Brands that don't exist in `reference.host_mapping` cannot be added to a
+    # profile (no hosts → no panel data → orphan row). Missing brands get
+    # emailed to the data team so they can be added for the next run.
+    _aff_added_per_cat: dict[str, list[str]] = {}
+    _aff_missing_from_hostmap: list[dict] = []
+    try:
+        _aff_list = (persona_doc or {}).get('active_affiliations') or []
+        if isinstance(_aff_list, list) and _aff_list:
+            _hostmap_present: set[str] = set()
+            try:
+                import clickhouse_connect as _ch
+                _ch_client = _ch.get_client(
+                    host='37.27.140.111', port=8123, username='bgapp',
+                    password='4qPllwDG+S3PptBWTRAJPTkpCzkRZ6tZ',
+                    settings={'max_execution_time': 10},
+                )
+                _wanted = sorted({str(a.get('value', '')).strip().upper()
+                                  for a in _aff_list
+                                  if isinstance(a, dict) and a.get('value')})
+                if _wanted:
+                    _qlist = ','.join(f"'{w.replace(chr(39), chr(39)*2)}'" for w in _wanted)
+                    _rows = _ch_client.query(
+                        f"SELECT DISTINCT upper(BRAND) FROM reference.host_mapping "
+                        f"WHERE upper(BRAND) IN ({_qlist})"
+                    ).result_rows
+                    _hostmap_present = {r[0] for r in _rows}
+                    _exact_missing = [w for w in _wanted if w not in _hostmap_present]
+                    for _w in _exact_missing:
+                        _w_safe = _w.replace("'", "''")
+                        _r = _ch_client.query(
+                            f"SELECT 1 FROM reference.host_mapping "
+                            f"WHERE upper(BRAND) LIKE '%{_w_safe}%' LIMIT 1"
+                        ).result_rows
+                        if _r:
+                            _hostmap_present.add(_w)
+            except Exception as _e:
+                print(f"   ⚠️ hostmap lookup failed for affiliation gating: {_e}")
+                _hostmap_present = set()
+
+            _existing_keys = set()
+            for _idx, _r in df.iterrows():
+                try:
+                    _c = str(_r['Column']).strip().upper()
+                    _v = str(_r['Value']).strip().upper()
+                    if _c and _v and _v != 'NAN':
+                        _existing_keys.add((_c, _v))
+                except Exception:
+                    continue
+            _template_by_cat: dict[str, dict] = {}
+            for _idx, _r in df.iterrows():
+                _c = str(_r['Column']).strip().upper()
+                if _c and _c not in _template_by_cat:
+                    _template_by_cat[_c] = _r.to_dict()
+
+            _new_aff_rows: list[dict] = []
+            for _aff in _aff_list:
+                if not isinstance(_aff, dict):
+                    continue
+                _ac = str(_aff.get('category', '')).strip().upper()
+                _av = str(_aff.get('value', '')).strip().upper()
+                if not _ac or not _av:
+                    continue
+                if (_ac, _av) in _existing_keys:
+                    continue
+                if _av not in _hostmap_present:
+                    _aff_missing_from_hostmap.append({
+                        'category': _ac, 'value': _av,
+                        'type': str(_aff.get('type', '')).strip(),
+                        'evidence': str(_aff.get('evidence', '')).strip(),
+                    })
+                    continue
+                _tmpl = _template_by_cat.get(_ac)
+                if _tmpl is None:
+                    print(f"   ⚠️  Affiliation [{_ac}/{_av}] in hostmap but category {_ac} not in df — skipped")
+                    continue
+                _new_row = dict(_tmpl)
+                _new_row['Column'] = _aff.get('category', _ac)
+                _new_row['Value'] = _aff.get('value', _av)
+                for _zc in ('Brand Penetration (Row)', 'Category Share',
+                            'Original Raw Numbers', 'Original Raw Numbers (Database)',
+                            'US Gen Pop Projection', 'Avg_Visit_Frequency',
+                            'Brand_Loyalty_Score', 'High_Engagement_Users_Pct',
+                            'Avg_Days_Active', 'Total_Users', 'Median_Visits'):
+                    if _zc in _new_row:
+                        _new_row[_zc] = 0 if not isinstance(_new_row.get(_zc), str) else ''
+                _new_aff_rows.append(_new_row)
+                _existing_keys.add((_ac, _av))
+                _aff_added_per_cat.setdefault(_ac, []).append(_av)
+
+            if _new_aff_rows:
+                _aff_df = pd.DataFrame(_new_aff_rows)
+                for _col in df.columns:
+                    if _col not in _aff_df.columns:
+                        _aff_df[_col] = '' if df[_col].dtype == object else 0
+                _aff_df = _aff_df[df.columns]
+                df = pd.concat([df, _aff_df], ignore_index=True)
+                print(f"   📌 Pre-inserted {len(_new_aff_rows)} hostmap-validated affiliation row(s):")
+                for _c, _vs in _aff_added_per_cat.items():
+                    print(f"        [{_c}] {_vs}")
+
+            if _aff_missing_from_hostmap:
+                print(f"\n   📨 {len(_aff_missing_from_hostmap)} affiliation brand(s) NOT IN HOSTMAP "
+                      f"— emailing data team:")
+                for _m in _aff_missing_from_hostmap:
+                    print(f"        ❌ [{_m['category']}] {_m['value']} ({_m['type']})")
+                try:
+                    _send_missing_hostmap_email(subject, _aff_missing_from_hostmap)
+                except Exception as _e:
+                    print(f"   ⚠️ missing-hostmap email failed: {_e}")
+    except Exception as _e:
+        print(f"   ⚠️ Affiliation row pre-insert failed (non-fatal): {_e}")
 
     category_values: dict[str, tuple[list[str], list[int]]] = {}        # all items (kept for output write-back)
     category_new_items: dict[str, list[str]] = {}                       # items needing LLM
