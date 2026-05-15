@@ -26564,6 +26564,7 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
     # This pass enforces a single canonical BP for each brand across all
     # non-INTEREST categories, using the highest-priority category as source.
     if not is_genpop:
+        df_final = _apply_persona_uniqueness_noise(df_final, project_name=project_name)
         df_final = _align_cross_category_bp(df_final)
         df_final = _ensure_apple_pay_present(df_final, persona_doc=locals().get('_persona_doc') or locals().get('persona_doc'))
         df_final = _enforce_realistic_ceilings(df_final, project_name=project_name, persona_doc=locals().get('_persona_doc') or locals().get('persona_doc'))
@@ -26979,11 +26980,14 @@ def _enforce_realistic_ceilings(df, project_name: str = '', persona_doc=None):
                 flagship_relaxed += 1
             if v <= cap:
                 continue
+            # Wider cap noise to break cap-induced clusters. May 2026 audit
+            # showed AMAZON 17 profiles in 83-86, STAR WARS 11 in 59-61 —
+            # widening to -8..-0.5 spreads cap=60 across [52, 59.5] = 7.5pt.
             h = int(hashlib.blake2b(
                 f"{project_name}|{cat}|{val}".encode(),
                 digest_size=8).hexdigest(), 16)
-            offset = -0.5 - ((h % 3001) / 1000.0)  # -3.5..-0.5
-            new_v = round(cap + offset, 2)
+            offset = -0.5 - ((h % 7501) / 1000.0)  # -8.0..-0.5 (7.5pt range)
+            new_v = round(cap + offset, 4)
             df.at[idx, bp] = new_v
             clamps += 1
             cats_touched.add(cat)
@@ -27019,6 +27023,80 @@ def _enforce_realistic_ceilings(df, project_name: str = '', persona_doc=None):
         return df
     except Exception as _e:
         print(f"   ⚠️ _enforce_realistic_ceilings failed: {_e}")
+        return df
+
+
+def _apply_persona_uniqueness_noise(df, project_name: str = ''):
+    """Break CROSS-PROFILE pinning. The per-category scoring agent runs at
+    temperature=0 with a uniform 'moderate fit → 2x baseline' rule, so for any
+    item where a persona is a 'moderate fit' (e.g. Boston Red Sox for any
+    celebrity persona), every profile gets the EXACT same number (gen_pop ×
+    2 ≈ 25.68). Audit confirms 8+ profiles tied at 25.68 for BOSTON RED SOX,
+    8+ at 5.00 for MANCHESTER UNITED, etc.
+
+    This pass applies persona-deterministic relative noise to every BP value
+    above 1%. Noise is hashed off (project_name, value) — NOT (cat,val) — so
+    the same brand in multiple categories (NIKE in MPB + APPAREL/FOOTWEAR,
+    BOSTON RED SOX in MLB + AL + AL EAST + SPORTS TEAM) gets the same nudge,
+    keeping cross-category alignment intact while making cross-profile values
+    distinct.
+
+    Magnitudes (relative):
+      • BP >= 30  → ±4% (25.68 → 24.65-26.71; 75.0 → 72.0-78.0)
+      • BP 10-30 → ±6% (15.0 → 14.1-15.9)
+      • BP 1-10  → ±9% (5.0 → 4.55-5.45)
+      • BP < 1   → unchanged (already noisy at 4dp)
+    Demographics + metadata categories are excluded.
+    """
+    import hashlib
+    import pandas as _pd
+    try:
+        bp = 'Brand Penetration (Row)'
+        if bp not in df.columns or not project_name:
+            return df
+        df[bp] = _pd.to_numeric(df[bp], errors='coerce').fillna(0.0)
+
+        EXCLUDE = {'SAMPLE SIZE', 'AGE', 'GENDER', 'ETHNICITY', 'INCOME',
+                   'EDUCATION', 'RELATIONSHIP', 'SEXUAL_ORIENTATION',
+                   'PARENTAL_STATUS', 'OCCUPATION', 'LOCATION',
+                   'INPUT_METADATA', 'BRAND INPUT', 'BRAND CATEGORY',
+                   'AVID FAN', 'CASUAL FAN', 'DMA', 'TIME OF DAY',
+                   'DAY OF WEEK'}
+
+        nudges = 0
+        cats_touched = set()
+        for idx, r in df.iterrows():
+            cat = str(r.get('Column', '')).strip().upper()
+            if cat in EXCLUDE or cat.startswith('TICKER'):
+                continue
+            v = float(r[bp]) if _pd.notnull(r[bp]) else 0.0
+            if v < 1.0:
+                continue
+            val_label = str(r.get('Value', '')).strip().upper()
+            if not val_label:
+                continue
+            h = int(hashlib.blake2b(
+                f"{project_name}|{val_label}".encode(),
+                digest_size=8).hexdigest(), 16)
+            u = (((h % 2001) - 1000) / 1000.0)
+            if v >= 30:
+                pct = 0.04
+            elif v >= 10:
+                pct = 0.06
+            else:
+                pct = 0.09
+            new_v = v * (1.0 + u * pct)
+            new_v = max(0.5, min(99.5, new_v))
+            df.at[idx, bp] = round(new_v, 4)
+            nudges += 1
+            cats_touched.add(cat)
+
+        if nudges and not SILENCE_VERBOSE_OUTPUT:
+            print(f"   🎲 persona-uniqueness noise: {nudges} BPs nudged across {len(cats_touched)} categories "
+                  f"(±4-9% relative, hashed off project+value)")
+        return df
+    except Exception as _e:
+        print(f"   ⚠️ _apply_persona_uniqueness_noise failed: {_e}")
         return df
 
 

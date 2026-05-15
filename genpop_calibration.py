@@ -1611,18 +1611,21 @@ def _resolve_flagships(persona_doc, project_name: str = '') -> set:
 
 
 def _persona_cap_noise(project_name: str, category: str, value: str) -> float:
-    """Persona-deterministic ±2% noise applied to the cap value, so two
-    different personas that both want to clamp at the canonical ceiling
-    end up at slightly different post-cap values rather than identical ones.
-    Returns a multiplier in roughly [0.98, 1.02].
+    """Persona-deterministic ±6% noise on the cap value. May 2026 cross-profile
+    pinning audit showed ±2% was too tight — multiple profiles bunched within
+    1pt of cap (AMAZON 84-86 across 17 profiles, STAR WARS 59-61 across 11).
+    Widening to ±6% gives each persona a meaningfully different post-cap value.
+    Skewed slightly negative so we never land ABOVE the canonical truth-anchor.
+    Returns multiplier in roughly [0.92, 1.04].
     """
     import hashlib
     if not project_name:
         return 1.0
     seed = f"{project_name}|{category}|{value}".encode('utf-8')
     h = int(hashlib.blake2b(seed, digest_size=4).hexdigest(), 16)
-    # map [0..2^32) → roughly [-0.02, +0.02]
-    return 1.0 + (((h % 4001) - 2000) / 100000.0)
+    # map [0..2^32) → roughly [-0.08, +0.04] (skewed negative)
+    raw = ((h % 12001) - 8000) / 100000.0  # -0.08 .. +0.04
+    return 1.0 + raw
 
 
 def enforce_genpop_ceiling(
