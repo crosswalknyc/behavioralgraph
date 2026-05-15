@@ -1664,25 +1664,102 @@ def _reason_conversion_rate(show_name, platform_name, genre, content_cadence,
     total show watchers) IS the measurement of interest — it captures how much the
     show actually drove first-time subscriptions vs. people watching it because they
     already had the platform.  This function trusts that signal by default; the AI
-    agent is only consulted when the rate is clearly implausible.
+    agent is only consulted when the rate is clearly implausible OR sits in the high
+    "review zone" where pinning to a tier benchmark previously inflated numbers.
 
     Returns (rate, flag_or_None).  `flag_or_None` is a human-readable message describing
     any adjustment made; None when the panel rate was used unchanged.
-    """
-    # Plausibility band.  A measurement in this range is treated as a real signal.
-    # Below the floor, the panel is too sparse to be meaningful (or signups data is
-    # missing); above the ceiling, the number is almost certainly an artifact.
-    SANE_MIN = 0.003   # 0.3 %
-    SANE_MAX = 0.30    # 30 %
 
-    if SANE_MIN <= raw_panel_conv_rate <= SANE_MAX:
+    History note (2026-05-15): Earlier versions trusted any panel rate inside a wide
+    0.3%–30% band, which let inflated 8-9% rates pass through unchallenged for
+    broadcast simulcasts like Tracker on Paramount+ (most viewers watch free on CBS,
+    not signing up specifically for the show).  We now (a) tighten the absolute
+    ceiling, (b) force a review for rates ≥ 5%, and (c) give the agent explicit
+    show-type and distribution-model context so it doesn't pin to platform tiers.
+    """
+    # ABSOLUTE plausibility band.  Below the floor, the panel is too sparse; above the
+    # ceiling, the number is almost certainly an artifact (no first-watch show converts
+    # >15% of its total US viewership — that would imply most viewers signed up FOR it).
+    SANE_MIN = 0.002   # 0.2 %
+    SANE_MAX = 0.15    # 15 %
+
+    # Above this rate, even though within the band, the rate gets a mandatory AI
+    # sanity-check.  Real first-watch conversion above 5% is rare and concentrated
+    # in low-penetration platforms with buzzy streaming-exclusive premieres
+    # (e.g. Severance S1 on Apple TV+).  Broadcast simulcasts almost never exceed this.
+    HIGH_REVIEW_THRESHOLD = 0.05  # 5 %
+
+    needs_review = (
+        raw_panel_conv_rate < SANE_MIN
+        or raw_panel_conv_rate > SANE_MAX
+        or raw_panel_conv_rate >= HIGH_REVIEW_THRESHOLD
+    )
+    if not needs_review:
         print(f"   ✅ Using panel-measured conversion rate: {raw_panel_conv_rate*100:.2f}% "
-              f"(within plausible band {SANE_MIN*100:.1f}–{SANE_MAX*100:.0f}%)")
+              f"(within plausible band {SANE_MIN*100:.1f}–{SANE_MAX*100:.0f}% "
+              f"and below {HIGH_REVIEW_THRESHOLD*100:.0f}% review threshold)")
         return raw_panel_conv_rate, None
 
-    # Out of plausible band — ask the agent to propose a corrected rate, with explicit
-    # instructions to stay close to the panel direction (not snap to a tier benchmark).
+    # Needs review — ask the agent to validate or correct.  Build show-aware context.
     tier = platform_info.get('tier', 'unknown')
+    penetration_pct = platform_info.get('pct', 15)
+
+    # --- Distribution-model hint (broadcast simulcast vs streaming exclusive) ---
+    # The single biggest driver of conversion rate is whether the show airs FREE
+    # on linear TV first.  Hardcoded heuristics for the cases we see in practice;
+    # the agent gets this as context, not as a hard override.
+    broadcast_anchors = {
+        'paramount': ('CBS', 'broadcast simulcast'),
+        'peacock':   ('NBC', 'broadcast simulcast'),
+        'hulu':      ('ABC/FOX', 'broadcast simulcast'),
+    }
+    platform_lc = (platform_name or '').lower()
+    distribution_hint = "streaming-exclusive (assumed)"
+    primary_network = None
+    for key, (net, label) in broadcast_anchors.items():
+        if key in platform_lc:
+            primary_network = net
+            distribution_hint = f"likely broadcast simulcast of a {net} show OR streaming-exclusive — unclear from name alone"
+            break
+
+    # --- Season-number inference ---
+    # Returning seasons typically convert 30-50% lower than premieres because
+    # most interested viewers already subscribed (or chose not to) earlier.
+    season_match = re.search(r'season[\s_-]*(\d+)', (show_name or '').lower())
+    season_num = int(season_match.group(1)) if season_match else None
+    if season_num is None:
+        season_context = "Season unknown — assume premiere unless show is clearly long-running."
+    elif season_num == 1:
+        season_context = f"SEASON 1 — premiere effect possible (novelty draws new subs)."
+    else:
+        season_context = (
+            f"SEASON {season_num} — RETURNING SEASON. Expect conversion ~30-50% lower than S1 "
+            f"because most interested viewers already chose to subscribe (or not) earlier."
+        )
+
+    # --- Expected band by distribution & platform tier ---
+    # These are guidance ranges shown to the agent, NOT enforced.
+    if primary_network:
+        expected_band_hint = (
+            f"For broadcast simulcasts (e.g. {primary_network} shows on {platform_name}), "
+            f"realistic Total Show Conversion is typically 0.5%–3% — most viewers watch free OTA "
+            f"or already have the streamer for other content (NFL, tentpoles, library)."
+        )
+    elif penetration_pct >= 25:
+        expected_band_hint = (
+            f"For high-penetration anchor platforms (~{penetration_pct}% US households like {platform_name}), "
+            f"streaming-exclusive shows typically convert 2%–8%. Mega-hits can briefly reach 8-12%."
+        )
+    elif penetration_pct >= 10:
+        expected_band_hint = (
+            f"For mid-tier platforms (~{penetration_pct}% US, like {platform_name}), "
+            f"streaming-exclusives typically convert 3%–10%."
+        )
+    else:
+        expected_band_hint = (
+            f"For niche platforms (~{penetration_pct}% US, like {platform_name}), conversion can be "
+            f"higher (5%–20%) because viewers are more likely to be new subscribers."
+        )
 
     try:
         from openai import OpenAI
@@ -1715,40 +1792,67 @@ def _reason_conversion_rate(show_name, platform_name, genre, content_cadence,
     else:
         clean_name = show_name.replace('_', ' ').strip().title()
 
-    direction = "above the plausible ceiling" if raw_panel_conv_rate > SANE_MAX else "below the plausible floor"
-    prompt = f"""You are validating a measured streaming conversion rate that looks implausible.
+    if raw_panel_conv_rate < SANE_MIN:
+        direction = "below the plausible floor"
+    elif raw_panel_conv_rate > SANE_MAX:
+        direction = "above the plausible ceiling"
+    else:
+        direction = f"inside the band but above the {HIGH_REVIEW_THRESHOLD*100:.0f}% high-review threshold"
 
-DEFINITION: "Total Show Conversion Rate" = (people whose FIRST watch on the platform was this
-show) / (total show watchers).  It captures genuine first-time subscriptions driven by this
-show, NOT total signups during the period.  For shows on platforms many viewers already
-subscribe to (e.g. Paramount+ for NFL), this rate is typically LOW — most viewers are
-watching because they're already subscribed, not signing up specifically for this show.
+    prompt = f"""You are validating a measured streaming conversion rate.  Your job is to
+FLAG and CORRECT — NOT to pin the number to a platform-tier benchmark, and NOT to assume
+the panel is wrong just because the number is unusual.
+
+DEFINITION: "Total Show Conversion Rate" = (people whose FIRST watch on the platform was
+THIS show) / (total US viewers of this show).  It captures genuine first-time subscriptions
+driven by this show, NOT total signups during the period.  Crucially:
+- For shows on platforms many viewers ALREADY subscribe to (e.g. Paramount+ for NFL, Disney+
+  for kids, Netflix for default-on), conversion is typically LOW because most viewers are
+  watching because they're already subscribed.
+- For broadcast simulcasts (CBS/NBC/ABC/FOX shows airing same week on Paramount+/Peacock/Hulu),
+  conversion is even lower — most viewers watch FREE on linear TV.
 
 SHOW: {clean_name}
-PLATFORM: {platform_name} (tier: {tier}, ~{platform_info.get('pct', 15)}% US penetration)
+PLATFORM: {platform_name} (tier: {tier}, ~{penetration_pct}% US penetration)
+DISTRIBUTION HINT: {distribution_hint}
+{('PRIMARY BROADCAST NETWORK: ' + primary_network) if primary_network else 'NO BROADCAST SIMULCAST DETECTED'}
+SEASON CONTEXT: {season_context}
 GENRE: {genre or 'Unknown'}
 CONTENT CADENCE: {content_cadence or 'Unknown'}
 EPISODES: {episode_count or 'N/A'}
 DATE RANGE: {date_range or 'Unknown'}
 REAL US VIEWERSHIP: {ai_total_viewers:,} viewers
 
-MEASURED PANEL RATE: {raw_panel_conv_rate*100:.2f}%  (this is {direction} of {SANE_MIN*100:.1f}%–{SANE_MAX*100:.0f}%)
+MEASURED PANEL RATE: {raw_panel_conv_rate*100:.2f}%
+This is {direction} (absolute band {SANE_MIN*100:.1f}%–{SANE_MAX*100:.0f}%, review at {HIGH_REVIEW_THRESHOLD*100:.0f}%+).
 
-Your job is to FLAG and CORRECT, not to pin to a tier benchmark.  Pick a rate that:
-1. Stays as close to the measured panel rate as defensibly possible.
-2. Is bounded by the plausible band {SANE_MIN*100:.1f}%–{SANE_MAX*100:.0f}%.
-3. Reflects the show-specific reality (returning seasons of established shows typically
-   convert lower than buzzy new launches, since most fans already subscribed earlier).
+EXPECTED BAND FOR THIS SHOW TYPE:
+{expected_band_hint}
 
-Respond in JSON ONLY (no markdown fencing):
+REASONING STEPS (please follow):
+1. Is this show a broadcast simulcast (airs first/same day on free linear TV)?  If yes,
+   genuine first-watch conversion is almost always 0.5%–3% — even if the panel says higher.
+2. Is this a returning season?  If yes, expect 30-50% lower than a S1 premiere.
+3. Does the platform have very high US penetration (>30% households)?  If yes, most viewers
+   already had it for OTHER reasons (sports, kids, library), so conversion stays low.
+4. Compare the panel rate to the expected band above.  If they roughly agree, KEEP the panel
+   rate.  If the panel is materially higher than the show-type expectation, recommend a
+   number INSIDE the expected band — but stay as close to the panel signal as the
+   show-type evidence allows.  Do NOT default to the middle of the tier benchmark.
+5. If the panel is below the floor, the data is too sparse — recommend the bottom of the
+   expected band for this show type.
+
+OUTPUT: JSON ONLY, no markdown fencing.
 {{
   "recommended_rate": <decimal between {SANE_MIN} and {SANE_MAX}>,
-  "reasoning": "<1-2 sentences: why the panel rate is off, why your number is more realistic>",
+  "reasoning": "<2-3 sentences citing the specific show-type signals (broadcast/streaming, season number, platform penetration) that justify your number>",
   "confidence": "high" | "medium" | "low"
 }}"""
 
     try:
-        print(f"   🧠 Panel rate {raw_panel_conv_rate*100:.2f}% is out of band; asking GPT-4o to validate...")
+        print(f"   🧠 Panel rate {raw_panel_conv_rate*100:.2f}% needs review ({direction}); "
+              f"asking GPT-4o to validate with show-type context "
+              f"(distribution={distribution_hint}, season={season_num or 'unknown'})...")
         resp = client.chat.completions.create(
             model='gpt-4o',
             messages=[{'role': 'user', 'content': prompt}],
