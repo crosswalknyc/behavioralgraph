@@ -26569,6 +26569,18 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
         df_final = _ensure_apple_pay_present(df_final, persona_doc=locals().get('_persona_doc') or locals().get('persona_doc'))
         df_final = _enforce_realistic_ceilings(df_final, project_name=project_name, persona_doc=locals().get('_persona_doc') or locals().get('persona_doc'))
         df_final = _break_intra_category_pinning(df_final, project_name=project_name)
+        # Post-write QC: cross-profile pinning check (vs existing S3 profiles)
+        try:
+            import sys as _sys, os as _os
+            _migration_dir = _os.path.join(
+                _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__))),
+                'migration')
+            if _migration_dir not in _sys.path:
+                _sys.path.insert(0, _migration_dir)
+            from audit_cross_profile_pinning import check_new_profile as _check_pinning
+            _check_pinning(df_final, project_name=project_name, send_email=True)
+        except Exception as _e:
+            print(f"   ⚠️ post-write pinning check skipped: {_e}")
         # Final pass: re-align cross-category BP. Pin-breaking adds tiny
         # noise that can re-introduce drift between e.g. NIKE in MPB vs
         # NIKE in APPAREL/FOOTWEAR. Running alignment LAST guarantees that
