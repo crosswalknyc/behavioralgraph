@@ -27491,10 +27491,12 @@ def _break_global_long_tail_pinning(df, project_name: str = '',
             cat_u = str(row.get('Column', '')).strip().upper()
             val_u = str(row.get('Value', '')).strip().upper()
             seed = f"{project_name}|{cat_u}|{val_u}|tail-jitter".encode('utf-8')
-            h = hashlib.blake2b(seed, digest_size=4).digest()
-            u = int.from_bytes(h, 'big') / 0xFFFFFFFF
+            h = hashlib.blake2b(seed, digest_size=8).digest()
+            u = int.from_bytes(h[:4], 'big') / 0xFFFFFFFF
             jitter = (u * 2 - 1) * max_jitter_pp
-            new_bp = max(0.05, bp + jitter)
+            u2 = int.from_bytes(h[4:], 'big') / 0xFFFFFFFF
+            tie_break = (u2 * 2 - 1) * 0.005
+            new_bp = max(0.0011, bp + jitter + tie_break)
             scale = new_bp / bp if bp > 0 else 1.0
             df.at[idx, bp_col] = round(new_bp, 4)
             if raw_col and _pd.notna(row.get(raw_col)):
