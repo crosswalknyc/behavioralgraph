@@ -20867,39 +20867,47 @@ def parallel_category_agents(df: pd.DataFrame, persona_doc: dict,
     # emailed to the data team so they can be added for the next run.
     _aff_added_per_cat: dict[str, list[str]] = {}
     _aff_missing_from_hostmap: list[dict] = []
+
+    # Normalize both sides to alphanumeric-uppercase before comparing so
+    # punctuation/spacing differences don't generate false missing-brand
+    # emails (e.g. agent says `MLB.TV` / `Buc-ee's`, hostmap has `MLB TV` /
+    # `Bucees`). Per-Jessie/Jenna 2026-05-15.
+    import re as _re
+    def _norm_brand(s: str) -> str:
+        return _re.sub(r'[^A-Z0-9]', '', str(s or '').upper())
     try:
         _aff_list = (persona_doc or {}).get('active_affiliations') or []
         if isinstance(_aff_list, list) and _aff_list:
-            _hostmap_present: set[str] = set()
+            # Pull FULL hostmap brand list once and build a {normalized →
+            # canonical} dict so that affiliations matching after stripping
+            # punctuation/case can be canonicalized to the hostmap spelling
+            # before being written into the profile.
+            _hostmap_canon: dict[str, str] = {}
             try:
                 import clickhouse_connect as _ch
                 _ch_client = _ch.get_client(
                     host='37.27.140.111', port=8123, username='bgapp',
                     password='4qPllwDG+S3PptBWTRAJPTkpCzkRZ6tZ',
-                    settings={'max_execution_time': 10},
+                    settings={'max_execution_time': 30},
                 )
-                _wanted = sorted({str(a.get('value', '')).strip().upper()
-                                  for a in _aff_list
-                                  if isinstance(a, dict) and a.get('value')})
-                if _wanted:
-                    _qlist = ','.join(f"'{w.replace(chr(39), chr(39)*2)}'" for w in _wanted)
-                    _rows = _ch_client.query(
-                        f"SELECT DISTINCT upper(BRAND) FROM reference.host_mapping "
-                        f"WHERE upper(BRAND) IN ({_qlist})"
-                    ).result_rows
-                    _hostmap_present = {r[0] for r in _rows}
-                    _exact_missing = [w for w in _wanted if w not in _hostmap_present]
-                    for _w in _exact_missing:
-                        _w_safe = _w.replace("'", "''")
-                        _r = _ch_client.query(
-                            f"SELECT 1 FROM reference.host_mapping "
-                            f"WHERE upper(BRAND) LIKE '%{_w_safe}%' LIMIT 1"
-                        ).result_rows
-                        if _r:
-                            _hostmap_present.add(_w)
+                _hm_rows = _ch_client.query(
+                    "SELECT DISTINCT BRAND FROM reference.host_mapping "
+                    "WHERE BRAND IS NOT NULL AND BRAND != ''"
+                ).result_rows
+                for _r in _hm_rows:
+                    _b = _r[0]
+                    _n = _norm_brand(_b)
+                    if _n and _n not in _hostmap_canon:
+                        _hostmap_canon[_n] = _b
+                print(f"   🗺  hostmap loaded: {len(_hostmap_canon):,} normalized brand keys")
             except Exception as _e:
                 print(f"   ⚠️ hostmap lookup failed for affiliation gating: {_e}")
-                _hostmap_present = set()
+                _hostmap_canon = {}
+            def _resolve_hostmap_canon(val: str) -> str:
+                _n = _norm_brand(val)
+                if not _n:
+                    return ''
+                return _hostmap_canon.get(_n, '')
 
             _existing_keys = set()
             for _idx, _r in df.iterrows():
@@ -20921,17 +20929,24 @@ def parallel_category_agents(df: pd.DataFrame, persona_doc: dict,
                 if not isinstance(_aff, dict):
                     continue
                 _ac = str(_aff.get('category', '')).strip().upper()
-                _av = str(_aff.get('value', '')).strip().upper()
+                _av_raw = str(_aff.get('value', '')).strip()
+                _av = _av_raw.upper()
                 if not _ac or not _av:
                     continue
-                if (_ac, _av) in _existing_keys:
-                    continue
-                if _av not in _hostmap_present:
+                # Hostmap gate — normalize-match (case + punctuation insensitive)
+                # so the agent's `MLB.TV` / `Buc-ee's` resolves to hostmap's
+                # canonical `MLB TV` / `Bucees`. We then write the canonical
+                # spelling into the profile so panel data joins cleanly.
+                _canon = _resolve_hostmap_canon(_av_raw)
+                if not _canon:
                     _aff_missing_from_hostmap.append({
-                        'category': _ac, 'value': _av,
+                        'category': _ac, 'value': _av_raw,
                         'type': str(_aff.get('type', '')).strip(),
                         'evidence': str(_aff.get('evidence', '')).strip(),
                     })
+                    continue
+                _av = str(_canon).strip().upper()
+                if (_ac, _av) in _existing_keys:
                     continue
                 _tmpl = _template_by_cat.get(_ac)
                 if _tmpl is None:
@@ -20939,7 +20954,7 @@ def parallel_category_agents(df: pd.DataFrame, persona_doc: dict,
                     continue
                 _new_row = dict(_tmpl)
                 _new_row['Column'] = _aff.get('category', _ac)
-                _new_row['Value'] = _aff.get('value', _av)
+                _new_row['Value'] = _av
                 for _zc in ('Brand Penetration (Row)', 'Category Share',
                             'Original Raw Numbers', 'Original Raw Numbers (Database)',
                             'US Gen Pop Projection', 'Avg_Visit_Frequency',
