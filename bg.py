@@ -16548,11 +16548,21 @@ When the subject is a sports team (NBA / NFL / MLB / NHL / MLS / college program
       ✅ Any MLB team → MLB.TV (STREAMING/PLATFORM)
       ✅ Any NFL team → NFL+ (STREAMING/PLATFORM); Sunday Ticket → YOUTUBE TV (STREAMING/PLATFORM)
       ✅ Any NHL team → ESPN+ (STREAMING/PLATFORM, exclusive U.S. rights)
-  • signature_athlete — surface the team's TOP 5-7 active-roster players as TALENT/ATHLETE entries (use the player's name, not the position). These should be the players a casual fan would actually name.
+  • signature_athlete — surface the team's TOP 5-7 active-roster players. CRITICAL — every signature athlete MUST be emitted as MULTIPLE active_affiliations entries, ONE PER CATEGORY where the dashboard scores them. For an NBA team, that's THREE entries per player: category="TALENT", category="ATHLETE", and category="NBA ATHLETE". For an MLB team: TALENT + ATHLETE + "MLB ATHLETE". For NFL: TALENT + ATHLETE + "NFL ATHLETE". Otherwise the per-category scorer for NBA ATHLETE / MLB ATHLETE never sees the affiliation and falls back to gen-pop player rankings (LeBron / Curry / etc.) instead of elevating the team's own roster. This is THE most damaging bug for sports-team profiles — a Memphis Grizzlies profile showing LeBron James as #1 NBA athlete instead of Ja Morant means signature_athlete entries weren't multi-category-tagged.
+      Example correct output for Memphis Grizzlies — Ja Morant gets THREE entries:
+        {"category":"TALENT","value":"JA MORANT","type":"signature_athlete","evidence":"Grizzlies franchise PG, ROY 2020"},
+        {"category":"ATHLETE","value":"JA MORANT","type":"signature_athlete","evidence":"Grizzlies franchise PG"},
+        {"category":"NBA ATHLETE","value":"JA MORANT","type":"signature_athlete","evidence":"Grizzlies franchise PG"}
       ✅ Atlanta Hawks (2024-25 roster): TRAE YOUNG, JALEN JOHNSON, DYSON DANIELS, ONYEKA OKONGWU, DE'ANDRE HUNTER, ZACCHARIE RISACHER
       ✅ Texas Rangers (2024 roster): COREY SEAGER, MARCUS SEMIEN, ADOLIS GARCIA, NATHAN EOVALDI, JACOB DEGROM, EVAN CARTER, JOSH JUNG
       ✅ Dallas Mavericks: LUKA DONCIC, KYRIE IRVING, ANTHONY DAVIS, KLAY THOMPSON, P.J. WASHINGTON
       ✅ San Antonio Spurs: VICTOR WEMBANYAMA, DEVIN VASSELL, KELDON JOHNSON, JEREMY SOCHAN, CHRIS PAUL, STEPHON CASTLE
+      ✅ Memphis Grizzlies: JA MORANT, JAREN JACKSON JR., DESMOND BANE, MARCUS SMART, STEVEN ADAMS
+  • home_metro — for ANY sports-team persona, surface the team's home media market as a LOCATION affiliation. The team's home metro should land at #1 in the LOCATION category at 15-25% (vs gen-pop's <2% for any single metro). Without this, a Memphis Grizzlies profile shows Memphis TN at 2.13% — which is gen-pop and obviously wrong for a Memphis team's audience.
+      ✅ Memphis Grizzlies → {"category":"LOCATION","value":"Memphis TN","type":"home_metro","evidence":"team home market"}
+      ✅ San Antonio Spurs → {"category":"LOCATION","value":"San Antonio TX","type":"home_metro","evidence":"team home market"}
+      ✅ Dallas Mavericks → {"category":"LOCATION","value":"Dallas Ft Worth TX","type":"home_metro","evidence":"team home market"}
+      ✅ Atlanta Hawks → {"category":"LOCATION","value":"Atlanta GA","type":"home_metro","evidence":"team home market"}
   • league_apparel — the official league apparel/equipment partner.
       ✅ NBA: NIKE (jerseys/apparel) + WILSON SPORTING GOODS (basketball)
       ✅ MLB: NIKE (jerseys/apparel since 2020) + RAWLINGS (gloves) + LOUISVILLE SLUGGER (bats) + WILSON SPORTING GOODS (catcher gear)
@@ -17944,7 +17954,30 @@ def _run_single_category_agent(category: str, values: list[str],
             "  • athlete_competitor (active in the league)         → 1.6-2.4x baseline\n"
             "  • platform_flagship                                 → 1.4-2.0x baseline\n"
             "  • brand_collaboration / brand_ambassador (current)  → 1.3-1.8x baseline\n"
-            "  • exclusive_content_partner                         → 1.5-2.0x baseline\n\n"
+            "  • exclusive_content_partner                         → 1.5-2.0x baseline\n"
+            "\n"
+            "SPORTS-TEAM-SPECIFIC AFFILIATION SCALING (when the persona IS a team and the\n"
+            "affiliated brand IS the team's own franchise asset — these are NOT 1.5-2x lifts,\n"
+            "they're absolute BP targets because the team's audience is BY DEFINITION engaged\n"
+            "with these specific assets, not lifted from a small baseline):\n"
+            "  • signature_athlete (player on the team's active roster) → 50-75% absolute BP\n"
+            "      The team's franchise face (Wembanyama for Spurs, Ja Morant for Grizzlies,\n"
+            "      Trae Young for Hawks, Luka/Kyrie for Mavs) must be the #1 entry in NBA\n"
+            "      ATHLETE / MLB ATHLETE / NFL ATHLETE for that team's profile, ranked above\n"
+            "      generic league superstars like LeBron / Curry / Mahomes / Trout. Other\n"
+            "      starters land at 25-45%. Don't compute as 1.6-2.4x baseline (1-2%) — that\n"
+            "      gives 4-5% which is wrong.\n"
+            "  • home_venue / venue_naming_rights (when persona = team) → 30-50% absolute BP\n"
+            "      The team's own arena/stadium must appear at the TOP of VENUE for that team's\n"
+            "      profile (FedExForum for Grizzlies, Frost Bank Center for Spurs, AAC for Mavs,\n"
+            "      State Farm Arena for Hawks, Globe Life Field for Rangers).\n"
+            "  • home_metro (when persona = team) → 15-25% absolute BP on LOCATION\n"
+            "      The team's home market must be the #1 LOCATION (Memphis TN for Grizzlies,\n"
+            "      San Antonio TX for Spurs). NOT the multiplier — the absolute BP. A\n"
+            "      gen-pop LOCATION entry is <2%; a team's home metro lands at 15-25%.\n"
+            "  • cross_market_sports (other pro teams in same metro) → 20-50% absolute BP\n"
+            "      A Mavericks profile should show Cowboys at 50%+, Stars at 8-15%, etc. —\n"
+            "      shared media market = shared fan overlap.\n\n"
             "ABSOLUTE CEILING — even with a flagship affiliation, no brand should exceed:\n"
             "  • Streaming SVOD: 65-72% (real US household reach < 80%, not even Netflix breaks 78%)\n"
             "  • Single social platform: 80% (only YouTube approaches universal usage)\n"
