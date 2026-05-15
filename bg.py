@@ -26645,7 +26645,14 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
                 if _hybrid_fixes:
                     df_final, _n = _hybrid_apply(df_final, _hybrid_fixes)
                     print(f"   🧠 hybrid sanity check applied {_n} fixes "
-                          f"(out of {len(_hybrid_fixes)} suggested)")
+                          f"(out of {len(_hybrid_fixes)} suggested):")
+                    for _fx in _hybrid_fixes:
+                        _r = (_fx.get('reason') or '').strip()
+                        if len(_r) > 140:
+                            _r = _r[:137] + '...'
+                        print(f"      🧠 [{_fx.get('category')}] {_fx.get('value')}: "
+                              f"{_fx.get('current_bp'):.2f} → {_fx.get('suggested_bp'):.2f}")
+                        print(f"          reason: {_r}")
                 else:
                     print("   🧠 hybrid sanity check: profile passed cleanly (0 fixes)")
         except Exception as _e:
@@ -30550,6 +30557,16 @@ def enforce_value_consistency_across_categories(df: pd.DataFrame,
 
     # Group non-excluded rows by normalized Value key.
     work = df.copy()
+    # Cast numeric output columns to object dtype before we start mutating them.
+    # Pandas 2.x raises TypeError when you assign a string ("7.5999") to a
+    # float64 column, but the rest of this function intentionally writes
+    # 4-decimal-formatted strings + integer strings to those columns so the
+    # CSV reads cleanly. Casting to object here preserves the historical
+    # write behavior without breaking on the new pandas dtype enforcement.
+    for _col in ('Brand Penetration (Row)', 'Percentage',
+                 'Original Raw Numbers', 'US Gen Pop Projection'):
+        if _col in work.columns and work[_col].dtype != object:
+            work[_col] = work[_col].astype(object)
     work['_consistency_key'] = work['Value'].astype(str).str.strip().str.upper()
     work['_consistency_col'] = work['Column'].astype(str).str.strip().str.upper()
     eligible = work[

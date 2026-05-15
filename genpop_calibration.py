@@ -1659,6 +1659,17 @@ def enforce_genpop_ceiling(
         return df
 
     df = df.copy()
+    # Cast the columns we're about to mutate to object dtype. Pandas 2.x
+    # raises TypeError when you assign a float into a StringArray-typed
+    # column (which can happen if upstream code coerced these to dtype 'str')
+    # or assign a string into a float64 column. Object dtype accepts both.
+    # The downstream "force exactly 4 decimals" formatter at the end of
+    # run_full_pipeline rebuilds the display strings before the CSV is
+    # written, so this dtype change has no visible effect on the output.
+    for _col in ('Brand Penetration (Row)', 'Original Raw Numbers',
+                 'US Gen Pop Projection', 'Percentage', 'Category Share'):
+        if _col in df.columns and df[_col].dtype != object:
+            df[_col] = df[_col].astype(object)
 
     skip_categories = {
         'INPUT_METADATA', 'BRAND INPUT', 'SAMPLE SIZE', 'AVID FAN', 'CASUAL FAN',
