@@ -26,11 +26,6 @@
             --text-primary: #e6f1ff;
             --text-secondary: #bec8e4;
             --border-color: #1e3a5f;
-            /* Optional: use for one-off tweaks where px would not scale */
-            --fluid-xs: clamp(0.65rem, 0.58rem + 0.35vw, 0.8rem);
-            --fluid-sm: clamp(0.75rem, 0.68rem + 0.4vw, 0.9rem);
-            --fluid-md: clamp(0.85rem, 0.78rem + 0.45vw, 1rem);
-            --fluid-lg: clamp(1rem, 0.88rem + 0.55vw, 1.15rem);
         }
 
         * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -103,60 +98,16 @@
             color: white;
         }
 
-        /* App shell: flex column + dynamic viewport so content tracks browser resize */
-        /*
-         * Fluid root: rem/em typography scales with viewport.
-         * Tab buttons also use @media steps — match those here so the rest of the dashboard
-         * resizes in sync (not only the toolbar). Pure vw clamp is subtle; stepped html
-         * mirrors the tab UX the team already noticed working.
-         */
-        html {
-            height: 100%;
-            min-height: 100vh;
-            min-height: 100dvh;
-            overflow: hidden;
-            font-size: clamp(12px, 0.95vw + 6.5px, 16px);
-        }
-        @media (max-width: 1400px) {
-            html { font-size: clamp(11.5px, 0.88vw + 6.25px, 15.5px); }
-        }
-        @media (max-width: 1200px) {
-            html { font-size: clamp(11px, 0.82vw + 6px, 15px); }
-        }
-        @media (max-width: 1000px) {
-            html { font-size: clamp(10.5px, 0.76vw + 5.5px, 14.5px); }
-        }
-        @media (max-width: 720px) {
-            html { font-size: clamp(10px, 0.7vw + 5px, 14px); }
-        }
         body {
-            font-family: 'Poppins', 'DM Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            font-size: 1rem;
+            font-family: 'Poppins', 'DM Sans', -apple-system, BlinkMacSystemFont, sans-serif;
             background: var(--bg-dark);
             color: var(--text-primary);
+            min-height: 100vh;
             line-height: 1.6;
             overflow: hidden;
-            height: 100%;
-            min-height: 100vh; /* fallback for browsers without dvh (some Windows / older Edge) */
-            min-height: 100dvh;
-            width: 100%;
-            max-width: 100%;
-            display: flex;
-            flex-direction: column;
-            box-sizing: border-box;
         }
 
-        .container {
-            max-width: 100%;
-            width: 100%;
-            margin: 0 auto;
-            padding: clamp(0.35rem, 1.5vw, 1rem) clamp(0.5rem, 2vw, 1rem) 0.33rem clamp(0.5rem, 2vw, 1rem);
-            overflow: hidden;
-            flex: 1 1 0%;
-            min-height: 0;
-            display: flex;
-            flex-direction: column;
-        }
+        .container { max-width: 100%; margin: 0 auto; padding: 1rem 1rem 0.33rem 1rem; overflow: hidden; height: 100vh; display: flex; flex-direction: column; }
 
         header {
             display: flex;
@@ -165,8 +116,6 @@
             margin-bottom: 0.5rem;
             padding-bottom: 0.5rem;
             border-bottom: 1px solid var(--border-color);
-            flex-wrap: wrap;
-            min-width: 0;
         }
 
         .logo { width: 50px; height: auto; }
@@ -199,10 +148,7 @@
         .user-info-bar {
             display: flex;
             align-items: center;
-            gap: clamp(0.5rem, 2vw, 1.5rem);
-            flex-wrap: wrap;
-            justify-content: flex-end;
-            min-width: 0;
+            gap: 1.5rem;
         }
 
         .credits-display {
@@ -421,11 +367,10 @@
         /* Profile Picture Upload Modal */
         .profile-settings-modal {
             position: fixed;
-            inset: 0;
-            width: auto;
-            height: auto;
-            max-width: 100%;
-            max-height: 100%;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
             background: rgba(0, 0, 0, 0.7);
             display: none;
             justify-content: center;
@@ -441,7 +386,7 @@
             padding: 2rem;
             max-width: 480px;
             width: 92%;
-            max-height: min(85vh, 85dvh);
+            max-height: 85vh;
             overflow-y: auto;
         }
         .profile-settings-content h3 {
@@ -708,10 +653,8 @@
             align-items: flex-end;
             gap: 0.5rem;
             margin-left: auto;
-            min-width: 0;
-            max-width: 100%;
         }
-        .view-toggle { display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap; justify-content: flex-end; min-width: 0; max-width: 100%; }
+        .view-toggle { display: flex; align-items: center; gap: 0.75rem; }
         .view-nav-label {
             color: #C8B4D4;
             font-size: 0.85rem;
@@ -745,9 +688,9 @@
             position: relative;
             display: flex;
             align-items: center;
-            min-width: min(220px, 100%);
-            flex: 1 1 auto;
-            max-width: min(320px, 100%);
+            min-width: 220px;
+            flex: 1;
+            max-width: 280px;
         }
         .view-nav-trigger {
             padding: 0.5rem 2.25rem 0.5rem 0.75rem;
@@ -770,13 +713,9 @@
             display: none;
             position: absolute;
             top: 100%;
-            left: auto;
+            left: 0;
             right: 0;
-            min-width: 100%;
-            width: max-content;
-            max-width: min(380px, calc(100vw - 1rem));
             margin-top: 6px;
-            box-sizing: border-box;
             background: #352A5C;
             border: 1px solid #BC91F9;
             border-radius: 12px;
@@ -784,27 +723,21 @@
             z-index: 1000;
             max-height: 480px;
             overflow-y: auto;
-            overflow-x: hidden;
-            flex-direction: column;
-            align-items: stretch;
         }
-        /* inline-flex: width stays max(label lengths) while rows stretch full panel width for hover */
-        .view-nav-panel.open { display: inline-flex; }
+        .view-nav-panel.open { display: block; }
         .view-nav-option {
-            padding: 0.45rem 0.75rem;
+            padding: 0.5rem 1rem;
             cursor: pointer;
             color: #fff;
-            font-size: 0.88rem;
+            font-size: 0.9rem;
             border: none;
             background: none;
-            display: block;
             width: 100%;
-            box-sizing: border-box;
             text-align: left;
-            white-space: nowrap;
         }
         .view-nav-option:hover { background: rgba(188, 145, 249, 0.25); }
         .view-nav-option:disabled, .view-nav-option.disabled { opacity: 0.6; cursor: not-allowed; }
+        .user-info-bar { display: flex; align-items: center; gap: 1rem; }
         .view-btn {
             padding: 0.5rem 1rem;
             background: var(--bg-input);
@@ -847,12 +780,10 @@
             background: rgba(74, 138, 201, 0.2);
         }
 
-        #formView { display: none; flex: 1 1 0%; min-height: 0; min-width: 0; overflow-y: auto; }
+        #formView { display: none; flex: 1; overflow-y: auto; }
         #customAnalysisView { display: none; flex-direction: column; flex: 1; overflow: hidden; }
         #customAnalysisView.active { display: flex; }
-        #dashboardView { display: flex; flex-direction: column; flex: 1 1 0%; min-height: 0; min-width: 0; overflow: hidden; }
-        /* Let main column shrink below intrinsic content (Grid default min-width:auto clips on Windows) */
-        #dashboardContent { min-width: 0; max-width: 100%; }
+        #dashboardView { display: flex; flex-direction: column; flex: 1 1 0%; min-height: 0; overflow: hidden; }
         
         /* App Footer - Data Source (above modals so always visible) */
         .app-footer {
@@ -2137,8 +2068,6 @@
             flex-direction: row;
             align-items: flex-start;
             gap: 1rem;
-            flex: 1 1 auto;
-            min-width: 0;
         }
         
         .dash-profile-image {
@@ -2196,17 +2125,36 @@
             grid-template-rows: auto auto;
             gap: 0.5rem;
             flex: 1;
-            min-width: 0;
             margin-left: 1rem;
         }
 
-        #subscriberIQView #subscriberDropDate.dash-meta-box {
-            grid-column: 1;
-            grid-row: 3;
-            align-self: start;
+        /* Subscriber IQ: explicit grid areas for meta + Drop Date row */
+        #subscriberIQView .dash-meta-grid.subscriber-dash-meta-grid {
+            grid-template-rows: auto auto auto;
+            justify-items: stretch;
+            grid-template-areas:
+                "subdaterange subattr"
+                "subexcl      subcad"
+                "subdrop      .";
+        }
+        #subscriberIQView .dash-meta-grid.subscriber-dash-meta-grid #subscriberDateRangeHeader {
+            grid-area: subdaterange;
+        }
+        #subscriberIQView .dash-meta-grid.subscriber-dash-meta-grid #subscriberAttributionWindow {
+            grid-area: subattr;
+        }
+        #subscriberIQView .dash-meta-grid.subscriber-dash-meta-grid #subscriberExclusionWindow {
+            grid-area: subexcl;
+        }
+        #subscriberIQView .dash-meta-grid.subscriber-dash-meta-grid #subscriberContentCadence {
+            grid-area: subcad;
+        }
+        #subscriberIQView .dash-meta-grid.subscriber-dash-meta-grid #subscriberDropDate.subscriber-drop-meta {
+            grid-area: subdrop;
             color: var(--accent-lime);
             font-weight: 700;
-            white-space: nowrap;
+            white-space: normal;
+            text-align: left;
         }
 
         .dash-brand-box {
@@ -2862,7 +2810,6 @@
             min-height: 200px;
             width: 100%;
             max-width: 100%;
-            min-width: 0;
             box-sizing: border-box;
         }
         .tab-content.active { 
@@ -3202,28 +3149,26 @@
         .dashboard-layout {
             display: flex;
             flex-direction: row;
-            gap: clamp(0.5rem, 1.5vw, 1rem);
-            flex: 1 1 0%;
-            min-height: 0;
-            min-width: 0;
+            gap: 1rem;
+            flex: 1;
             overflow: hidden;
+            height: calc(100vh - 120px); /* Reduced from 180px to minimize bottom space */
         }
         
         .persistent-sidebar {
-            flex: 0 1 280px;
-            width: min(280px, 42vw);
-            min-width: min(200px, 32vw);
+            width: 280px;
+            min-width: 280px;
             max-width: 280px;
             background: var(--bg-card);
             border-radius: 8px;
-            padding: clamp(0.5rem, 2vw, 1rem);
+            padding: 1rem;
             overflow-y: auto; /* Enable vertical scrolling */
             overflow-x: hidden;
+            flex-shrink: 0;
             text-align: left;
             display: flex;
             flex-direction: column;
-            min-height: 0;
-            align-self: stretch;
+            height: 100%; /* Take full height of parent */
         }
         
         .sidebar-tab-info {
@@ -3256,8 +3201,8 @@
         /* Action row: first column = sidebar width (280px), gap = 1rem, header never starts before this mark; tight top margin to match padding above profile */
         .action-buttons-row {
             display: grid;
-            grid-template-columns: minmax(0, min(280px, 42vw)) 1fr;
-            gap: clamp(0.5rem, 1.5vw, 1rem);
+            grid-template-columns: minmax(280px, 280px) 1fr;
+            gap: 1rem;
             align-items: center;
             margin-top: 0.1rem;
             margin-bottom: 0.35rem;
@@ -3268,26 +3213,6 @@
             min-width: 0;
             margin-left: 0;
             padding-left: 0;
-            flex-wrap: wrap;
-        }
-        #inlineTabHeader p {
-            min-width: 0;
-            flex: 1 1 14rem;
-        }
-        @media (max-width: 720px) {
-            .dashboard-layout {
-                flex-direction: column;
-            }
-            .persistent-sidebar {
-                width: 100%;
-                max-width: none;
-                min-width: 0;
-                flex: 0 0 auto;
-                max-height: min(42vh, 320px);
-            }
-            .action-buttons-row {
-                grid-template-columns: 1fr;
-            }
         }
         /* Content action buttons - first column only; never encroach into header space */
         .content-action-buttons {
@@ -4576,30 +4501,34 @@
             opacity: 1;
         }
 
-        /* Behavioral Tab: fluid columns — drop from 3→2→1 by card min-width (Windows / zoom friendly) */
+        /* Behavioral Tab: 3 cols on wide, 2 on small/narrow (e.g. Safari) to avoid cut-off */
         .behavioral-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr));
+            grid-template-columns: repeat(3, 1fr);
             gap: 1rem;
             width: 100%;
-            min-width: 0;
         }
         
-        @media (max-width: 520px) {
+        @media (max-width: 1400px) {
             .behavioral-grid {
-                grid-template-columns: minmax(0, 1fr);
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+        
+        @media (max-width: 800px) {
+            .behavioral-grid {
+                grid-template-columns: 1fr;
             }
         }
         
         .behavioral-data-blocks {
             display: grid;
-            grid-template-columns: repeat(2, minmax(0, 1fr));
+            grid-template-columns: 1fr 1fr;
             gap: 1rem;
             min-height: 0;
-            min-width: 0;
         }
         @media (max-width: 900px) {
-            .behavioral-data-blocks { grid-template-columns: minmax(0, 1fr); }
+            .behavioral-data-blocks { grid-template-columns: 1fr; }
         }
         .behavioral-data-block {
             display: flex;
@@ -4635,7 +4564,6 @@
             display: flex;
             flex-direction: column;
             height: auto;
-            min-width: 0;
         }
         .behavioral-insight-card.highlight {
             border-color: var(--accent-lime);
@@ -5507,18 +5435,17 @@
             min-height: 0;
         }
 
-        /* Behavioral table: name column min in rem so long brands stay on one line when space allows */
+        /* Behavioral table: single grid with subgrid so header and data columns share exact same widths.
+           Name column uses minmax(100px, 1fr) so long names (e.g. team names) always have room to wrap. */
         .behavioral-table {
             display: grid;
-            grid-template-columns: 28px minmax(10.5rem, 1fr) 76px 76px 60px;
+            grid-template-columns: 28px minmax(100px, 1fr) 78px 78px 64px;
             gap: 0.4rem;
             align-items: start;
             padding: 0 0.15rem 0 0;
             overflow-y: auto;
-            overflow-x: auto;
             max-height: 500px;
             scrollbar-gutter: stable;
-            min-width: 0;
         }
         .behavioral-table .behavioral-header-row {
             grid-column: 1 / -1;
@@ -5561,7 +5488,7 @@
         }
         /* Hide GP column when in projection mode */
         .behavioral-card.hide-gp .behavioral-table {
-            grid-template-columns: 28px minmax(10.5rem, 1fr) 76px 60px;
+            grid-template-columns: 28px minmax(100px, 1fr) 78px 64px;
         }
         .behavioral-card.hide-gp .genpop-col {
             display: none !important;
@@ -5640,7 +5567,7 @@
         .behavioral-name {
             font-size: 0.85rem;
             white-space: normal;
-            word-break: normal;
+            word-break: break-word;
             overflow-wrap: break-word;
             overflow: visible;
             min-width: 0;
@@ -5981,7 +5908,6 @@
         .insights-container {
             padding: 0;
             text-align: left;
-            min-width: 0;
         }
         .insights-header {
             margin-bottom: 1.5rem;
@@ -6098,18 +6024,16 @@
         }
         .insights-summary-grid, .insights-grid-v2 {
             display: grid;
-            grid-template-columns: repeat(2, minmax(0, 1fr));
+            grid-template-columns: repeat(2, 1fr);
             gap: 1rem;
             padding-left: 0;
             margin-left: 0;
-            min-width: 0;
         }
         .insight-card-v2 {
             background: var(--bg-card);
             border: 1px solid var(--border-color);
             border-radius: 12px;
             padding: 1.25rem;
-            min-width: 0;
         }
         /* Tighter spacing for date range selectors */
         .insight-card-v2:has(#dateRangeCollapsed),
@@ -6174,9 +6098,8 @@
         /* Audience Snapshot */
         .audience-snapshot {
             display: grid;
-            grid-template-columns: repeat(4, minmax(0, 1fr));
+            grid-template-columns: repeat(4, 1fr);
             gap: 1rem;
-            min-width: 0;
         }
         .snapshot-item {
             text-align: left;
@@ -6252,7 +6175,7 @@
             color: var(--accent-lime);
             margin-top: 0.25rem;
             word-wrap: break-word;
-            overflow-wrap: anywhere;
+            overflow-wrap: break-word;
         }
         .snapshot-subtext {
             font-size: 0.75rem;
@@ -6268,7 +6191,6 @@
             gap: 0.75rem;
             grid-column: 1 / -1;
             width: 100%;
-            min-width: 0;
             margin-left: 0;
             padding-left: 0;
         }
@@ -6304,26 +6226,16 @@
             font-size: clamp(1rem, 2.5vw, 1.75rem);
             font-weight: 700;
             color: var(--accent-lime);
-            white-space: normal;
-            overflow: visible;
-            word-break: normal;
-            overflow-wrap: break-word;
-            line-height: 1.2;
-        }
-        /* ISO date spans: smaller than other KPI numbers so one line fits in metric cards */
-        .metric-card .metric-value#insightsDateRange {
-            font-size: clamp(0.68rem, 1.1vw + 0.42rem, 0.92rem);
-            line-height: 1.25;
-            letter-spacing: -0.02em;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
         }
         .metric-card .metric-label {
             font-size: clamp(0.55rem, 1vw, 0.75rem);
             color: var(--text-secondary);
-            white-space: normal;
-            overflow: visible;
-            word-break: normal;
-            overflow-wrap: break-word;
-            line-height: 1.25;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
         }
         .metric-card.has-tooltip:hover {
             border-color: var(--accent);
@@ -6876,11 +6788,10 @@
         /* Champions Grid */
         .champions-grid {
             display: grid;
-            grid-template-columns: repeat(4, minmax(0, 1fr));
+            grid-template-columns: repeat(4, 1fr);
             gap: 0.75rem;
             max-height: 400px;
             overflow-y: auto;
-            min-width: 0;
         }
         .champion-item {
             background: rgba(255,255,255,0.03);
@@ -6888,7 +6799,6 @@
             padding: 0.75rem;
             text-align: center;
             border: 1px solid transparent;
-            min-width: 0;
         }
         .champion-item:hover {
             border-color: var(--accent-lime);
@@ -6959,9 +6869,8 @@
         /* Media Summary Grid */
         .media-summary-grid {
             display: grid;
-            grid-template-columns: repeat(5, minmax(0, 1fr));
+            grid-template-columns: repeat(5, 1fr);
             gap: 1rem;
-            min-width: 0;
         }
         .media-summary-item {
             background: rgba(255,255,255,0.03);
@@ -7024,9 +6933,8 @@
         /* Geo Opportunities Grid */
         .geo-opportunities-grid {
             display: grid;
-            grid-template-columns: repeat(5, minmax(0, 1fr));
+            grid-template-columns: repeat(5, 1fr);
             gap: 0.75rem;
-            min-width: 0;
         }
         .geo-opportunity {
             background: rgba(255,255,255,0.03);
@@ -7065,16 +6973,14 @@
         }
         .activation-grid {
             display: grid;
-            grid-template-columns: repeat(2, minmax(0, 1fr));
+            grid-template-columns: repeat(2, 1fr);
             gap: 1rem;
-            min-width: 0;
         }
         .activation-card {
             background: var(--bg-card);
             border: 1px solid var(--border-color);
             border-radius: 12px;
             padding: 1.25rem;
-            min-width: 0;
         }
         .activation-card.primary {
             border-color: var(--accent-lime);
@@ -7155,26 +7061,26 @@
 
         @media (max-width: 1200px) {
             .insights-summary-grid, .insights-grid-v2 {
-                grid-template-columns: minmax(0, 1fr);
+                grid-template-columns: 1fr;
             }
             .insight-card-v2.full-width, .activation-card.full-width {
                 grid-column: span 1;
             }
             /* metrics-row stays as flex nowrap - handled by its own media queries */
             .audience-snapshot {
-                grid-template-columns: repeat(2, minmax(0, 1fr));
+                grid-template-columns: repeat(2, 1fr);
             }
             .champions-grid {
-                grid-template-columns: repeat(2, minmax(0, 1fr));
+                grid-template-columns: repeat(2, 1fr);
             }
             .key-stats-grid {
-                grid-template-columns: repeat(3, minmax(0, 1fr));
+                grid-template-columns: repeat(3, 1fr);
             }
             .geo-opportunities-grid, .media-summary-grid {
-                grid-template-columns: repeat(3, minmax(0, 1fr));
+                grid-template-columns: repeat(3, 1fr);
             }
             .targeting-checklist, .avoid-list, .activation-grid {
-                grid-template-columns: minmax(0, 1fr);
+                grid-template-columns: 1fr;
             }
         }
         
@@ -7197,10 +7103,9 @@
         /* Affinity Insights Row */
         .affinity-insights-row, .sponsor-summary-row {
             display: grid;
-            grid-template-columns: repeat(3, minmax(0, 1fr));
+            grid-template-columns: repeat(3, 1fr);
             gap: 1rem;
             margin-bottom: 1.5rem;
-            min-width: 0;
         }
         .affinity-insight-card, .sponsor-summary-card {
             background: var(--bg-card);
@@ -15743,7 +15648,7 @@
                                 <div class="metric-card has-tooltip" data-tooltip="Date Range: The time period during which this audience data was collected and analyzed.">
                                     <div class="metric-icon">📅</div>
                                     <div class="metric-content">
-                                        <span class="metric-value" id="insightsDateRange">--</span>
+                                        <span class="metric-value" id="insightsDateRange" style="font-size: 1rem;">--</span>
                                         <span class="metric-label">Date Range</span>
                                     </div>
                                 </div>
@@ -16199,12 +16104,12 @@
                                     <div class="dash-brand-box" id="subscriberShowNameHeader"></div>
                                     <div class="dash-meta-box" id="subscriberPlatformHeader" style="display: none;"></div>
                                 </div>
-                                <div class="dash-meta-grid">
+                                <div class="dash-meta-grid subscriber-dash-meta-grid">
                                     <div class="dash-meta-box" id="subscriberDateRangeHeader" style="display: none;"></div>
                                     <div class="dash-meta-box" id="subscriberAttributionWindow" style="display: none;"></div>
                                     <div class="dash-meta-box" id="subscriberExclusionWindow" style="display: none;"></div>
                                     <div class="dash-meta-box" id="subscriberContentCadence" style="display: none;"></div>
-                                    <div class="dash-meta-box" id="subscriberDropDate" style="display: none;"></div>
+                                    <div class="dash-meta-box subscriber-drop-meta" id="subscriberDropDate" style="display: none;"></div>
                                 </div>
                             </div>
                         </div>
@@ -53414,12 +53319,9 @@
             // Collect all items with indexes
             const allItems = [];
             
-            // Total behavioral rows (for KPI) — count every item; allItems below still filters by index for rankings
-            let totalBehavioralRowCount = 0;
             // Add behavioral items
             Object.entries(data.behavioral).forEach(([category, items]) => {
                 if (Array.isArray(items)) {
-                    totalBehavioralRowCount += items.length;
                     items.forEach(item => {
                         if (item.index && item.index > 0) {
                             allItems.push({
@@ -53531,7 +53433,7 @@
             document.getElementById('insightsSampleSize').textContent = formatNumber(data.sampleSize || 0);
             document.getElementById('insightsProjectedUS').textContent = formatNumber(data.projectedUS || 0);
             document.getElementById('insightsDateRange').textContent = currentProfileData?.dateRange || data.dateRange || 'Not specified';
-            document.getElementById('totalDataPoints').textContent = totalBehavioralRowCount.toLocaleString();
+            document.getElementById('totalDataPoints').textContent = allItems.length.toLocaleString();
             
             // Demographic highlights - top over/under indexing demographics
             const demoHighlightsData = [];

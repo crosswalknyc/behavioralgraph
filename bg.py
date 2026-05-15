@@ -16260,6 +16260,14 @@ Return ONLY a single valid JSON object — no markdown, no commentary.
   ],
   "audience_composition": "<2-3 paragraph decomposition of THIS subject's digital audience into sub-segments with rough fractions and which segments drive which brand affinities — see AUDIENCE COMPOSITION instructions below>",
   "digital_identity": "<2-4 paragraph DEEP analysis of this audience's digital footprint — see instructions below>",
+  "active_affiliations": [
+    {{"category": "<CATEGORY NAME, e.g. SPORTS ORGANIZATIONS>", "value": "<BRAND/PLATFORM, e.g. WORLD WRESTLING ENTERTAINMENT>", "type": "<one of: athlete_competitor | platform_flagship | brand_collaboration | brand_owner_founder | brand_ambassador | exclusive_content_partner>", "evidence": "<one sentence on the verifiable affiliation, e.g. 'Royal Rumble 2024 entrant + Backlash 2023 PR match-winner'>"}},
+    ...one entry per known active affiliation — see ACTIVE AFFILIATIONS instructions below
+  ],
+  "flagship_brands": [
+    {{"category": "<CATEGORY NAME>", "value": "<BRAND>", "reason": "<one sentence why this brand should bypass the gen-pop ceiling for this persona>"}},
+    ...subset of active_affiliations where the persona IS the explicit talent/face for the brand
+  ],
   "subsegments": [
     {{
       "name": "<short descriptive name, e.g. 'Sneakerhead / hypebeast'>",
@@ -16487,6 +16495,22 @@ SPECIFIC WRITING RULES
   • cross_shop_network: Real brands the audience actively uses alongside the
     subject (apparel + retail + negative_overlap). Used by the scoring agent
     to decide rank ordering within a category.
+
+ACTIVE AFFILIATIONS — RESEARCH THIS BEFORE WRITING ANYTHING ELSE:
+Before reasoning about audience or brand fit, build a concrete list of THIS subject's active brand/platform affiliations. The pipeline keeps missing these because the AI defaults to scoring "generic actor / generic musician" without knowing the subject is, e.g., an active WWE wrestler or owns the QSR they keep eating at. Common categories to research:
+
+  • athlete_competitor — actually competes/performs for a sports league, even part-time. Bad Bunny is a WWE wrestler (Royal Rumble entrant, WrestleMania match-winner). Drake competed in WSOP. Travis Scott is a Houston Rockets fixture. Capture the league as `value`.
+  • platform_flagship — is the explicit face / #1 talent / multi-year top-streamed for a streaming or media platform. Pedro Pascal → HBO Max (Last of Us is HBO's flagship show), Mandalorian → Disney+. Bad Bunny → Spotify (#1 most-streamed artist 3 years running). Taylor Swift → Spotify + Apple Music. Selena Gomez → Hulu (Only Murders).
+  • brand_collaboration — has a CURRENT signature collab/capsule with a brand. Bad Bunny x Adidas, Bad Bunny x Crocs, Bad Bunny x Cheetos. Travis Scott x Nike. Pharrell x Louis Vuitton. Rihanna x Puma (Fenty x Puma).
+  • brand_owner_founder — owns/founded a brand. Reynolds → Aviation Gin / Mint Mobile / Wrexham AFC. Rihanna → Fenty Beauty / Savage X Fenty. Kim Kardashian → SKIMS. George Clooney → Casamigos. Dwayne Johnson → ZOA / Teremana / Project Rock. Selena Gomez → Rare Beauty.
+  • brand_ambassador — long-running global ambassador (not one-off). Margot Robbie → Chanel No. 5. Zendaya → Valentino + Lancôme + Bulgari. Pedro Pascal → Loewe (recently).
+  • exclusive_content_partner — has exclusive content deal with a platform that defines audience. Joe Rogan → Spotify (multi-year exclusive). Howard Stern → SiriusXM. Trevor Noah → Spotify (talk).
+
+What goes in `flagship_brands` (the subset that bypasses the gen-pop ceiling): only `platform_flagship` and `exclusive_content_partner` items where the audience is genuinely platform-defined. NOT every collab — Bad Bunny has a Crocs collab but his audience isn't Crocs-defined; Crocs is normal scoring.
+
+What goes in `active_affiliations` (the broader list, used by per-category scorers as a research signal): everything above. The category-scoring agent will use these to elevate the affiliated brand BP in its own reasoning, even when the brand wouldn't normally be top-of-mind for this archetype.
+
+Failure mode this fixes: agents defaulting to generic-archetype brand mixes (e.g. "Latin music star → reggaeton brands") and missing that the persona is in WWE matches, owns Casamigos, or has a Chanel ambassador deal. RESEARCH THE SUBJECT, not the archetype.
 
 AUDIENCE COMPOSITION — CRITICAL FRAMEWORK FOR REASONING (read this before writing anything else):
 The single most damaging mistake this pipeline makes is treating an audience as MONOLITHIC — collapsing all of {subject}'s fans into one "representative user" who looks like the median fan, then scoring brands as if everyone in the audience is that same user. This produces saturation: "Margot Robbie's audience is mainstream → Netflix is mainstream → score Netflix at 90%+." That reasoning is wrong, because no audience is monolithic.
