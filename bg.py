@@ -16266,7 +16266,7 @@ Return ONLY a single valid JSON object — no markdown, no commentary.
   "audience_composition": "<2-3 paragraph decomposition of THIS subject's digital audience into sub-segments with rough fractions and which segments drive which brand affinities — see AUDIENCE COMPOSITION instructions below>",
   "digital_identity": "<2-4 paragraph DEEP analysis of this audience's digital footprint — see instructions below>",
   "active_affiliations": [
-    {{"category": "<MUST BE one of the SCORING CATEGORIES listed above (e.g. SPORTS ORGANIZATIONS, TELECOM, BEVERAGES, STREAMING/PLATFORM, BEAUTY/WELLNESS, APPAREL/FOOTWEAR). NOT 'BRAND OWNER/FOUNDER' or 'FRANCHISE' or 'COMPANY' — those are TYPE labels, not categories>", "value": "<BRAND/PLATFORM in ALL CAPS, e.g. WORLD WRESTLING ENTERTAINMENT, AVIATION GIN, MINT MOBILE, WREXHAM AFC>", "type": "<one of: athlete_competitor | platform_flagship | brand_collaboration | brand_owner_founder | brand_ambassador | exclusive_content_partner>", "evidence": "<one sentence on the verifiable affiliation>"}},
+    {{"category": "<MUST BE one of the SCORING CATEGORIES listed above (e.g. SPORTS ORGANIZATIONS, TELECOM, BEVERAGES, STREAMING/PLATFORM, BEAUTY/WELLNESS, APPAREL/FOOTWEAR, VENUE, INSURANCE, BANKING, MEDIA, TALENT, ATHLETE). NOT 'BRAND OWNER/FOUNDER' or 'FRANCHISE' or 'COMPANY' — those are TYPE labels, not categories>", "value": "<BRAND/PLATFORM in ALL CAPS, e.g. WORLD WRESTLING ENTERTAINMENT, AVIATION GIN, MINT MOBILE, WREXHAM AFC, GLOBE LIFE FIELD, STATE FARM ARENA, TRAE YOUNG>", "type": "<one of: athlete_competitor | platform_flagship | brand_collaboration | brand_owner_founder | brand_ambassador | exclusive_content_partner | venue_naming_rights | jersey_patch_sponsor | broadcast_partner | league_streaming_product | signature_athlete | league_apparel | cross_market_sports | sportsbook_market>", "evidence": "<one sentence on the verifiable affiliation>"}},
     ...one entry per known active affiliation — see ACTIVE AFFILIATIONS instructions below
   ],
   "flagship_brands": [
@@ -16526,7 +16526,83 @@ Before reasoning about audience or brand fit, build a concrete list of THIS subj
   • brand_ambassador — long-running global ambassador (not one-off). Margot Robbie → Chanel No. 5. Zendaya → Valentino + Lancôme + Bulgari. Pedro Pascal → Loewe (recently).
   • exclusive_content_partner — has exclusive content deal with a platform that defines audience. Joe Rogan → Spotify (multi-year exclusive). Howard Stern → SiriusXM. Trevor Noah → Spotify (talk).
 
-What goes in `flagship_brands` (the subset that bypasses the gen-pop ceiling): only `platform_flagship` and `exclusive_content_partner` items where the audience is genuinely platform-defined. NOT every collab — Bad Bunny has a Crocs collab but his audience isn't Crocs-defined; Crocs is normal scoring.
+SPORTS TEAMS — SPECIAL CASE (ALWAYS surface the following when the subject is a professional sports franchise):
+
+When the subject is a sports team (NBA / NFL / MLB / NHL / MLS / college program / international club), MOST of the brand affinity comes through INSTITUTIONAL AFFILIATIONS, not endorsement deals. You MUST surface ALL of the following in `active_affiliations`, with the EXACT brand name as it appears on hostmap (use the official corporate name, not a colloquialism):
+
+  • venue_naming_rights — the company that paid for the arena/stadium name. Use category VENUE for the venue itself AND category INSURANCE/TELECOM/BANKING/etc. for the corporate parent (their brand gets a halo from being on the building 41-82 nights a year).
+      ✅ Atlanta Hawks → STATE FARM ARENA (VENUE) + STATE FARM (INSURANCE)
+      ✅ Texas Rangers → GLOBE LIFE FIELD (VENUE) + GLOBE LIFE (INSURANCE)
+      ✅ Dallas Mavericks → AMERICAN AIRLINES CENTER (VENUE) + AMERICAN AIRLINES (TRAVEL)
+      ✅ San Antonio Spurs → FROST BANK CENTER (VENUE) + FROST BANK (BANKING)
+      ❌ NEVER use the wrong stadium — STATE FARM STADIUM is the Arizona Cardinals' NFL stadium, NOT the Hawks' arena. AT&T STADIUM is the Cowboys' NFL stadium, NOT the Rangers' or Mavericks' venue. Globe Life Field is the Rangers' home — do NOT confuse it with the Arlington-area NFL venues.
+  • jersey_patch_sponsor — the company on the front of the jersey (NBA only currently). Use the brand's own scoring category.
+      ✅ Atlanta Hawks → SHARECARE (HEALTH & WELLNESS) — jersey patch 2021-present
+      ✅ Dallas Mavericks → CHIME (DIGITAL BANKING) — jersey patch
+      ✅ San Antonio Spurs → SELF FINANCIAL (DIGITAL BANKING) — jersey patch
+  • broadcast_partner — the regional sports network or national rights-holder that carries the games. Use STREAMING/PLATFORM or MEDIA depending on delivery.
+      ✅ Atlanta Hawks → GRAY MEDIA (MEDIA, replacing Bally Sports SE) + ESPN/TNT/NBA TV (STREAMING/PLATFORM, MEDIA)
+      ✅ Texas Rangers → MAIN STREET SPORTS (formerly Bally Sports SW) + APPLE TV+ (Friday Night Baseball) + ESPN/FOX SPORTS/MLB NETWORK
+  • league_streaming_product — the league's own subscription streaming service.
+      ✅ Any NBA team → NBA LEAGUE PASS (STREAMING/PLATFORM)
+      ✅ Any MLB team → MLB.TV (STREAMING/PLATFORM)
+      ✅ Any NFL team → NFL+ (STREAMING/PLATFORM); Sunday Ticket → YOUTUBE TV (STREAMING/PLATFORM)
+      ✅ Any NHL team → ESPN+ (STREAMING/PLATFORM, exclusive U.S. rights)
+  • signature_athlete — surface the team's TOP 5-7 active-roster players as TALENT/ATHLETE entries (use the player's name, not the position). These should be the players a casual fan would actually name.
+      ✅ Atlanta Hawks (2024-25 roster): TRAE YOUNG, JALEN JOHNSON, DYSON DANIELS, ONYEKA OKONGWU, DE'ANDRE HUNTER, ZACCHARIE RISACHER
+      ✅ Texas Rangers (2024 roster): COREY SEAGER, MARCUS SEMIEN, ADOLIS GARCIA, NATHAN EOVALDI, JACOB DEGROM, EVAN CARTER, JOSH JUNG
+      ✅ Dallas Mavericks: LUKA DONCIC, KYRIE IRVING, ANTHONY DAVIS, KLAY THOMPSON, P.J. WASHINGTON
+      ✅ San Antonio Spurs: VICTOR WEMBANYAMA, DEVIN VASSELL, KELDON JOHNSON, JEREMY SOCHAN, CHRIS PAUL, STEPHON CASTLE
+  • league_apparel — the official league apparel/equipment partner.
+      ✅ NBA: NIKE (jerseys/apparel) + WILSON SPORTING GOODS (basketball)
+      ✅ MLB: NIKE (jerseys/apparel since 2020) + RAWLINGS (gloves) + LOUISVILLE SLUGGER (bats) + WILSON SPORTING GOODS (catcher gear)
+      ✅ NFL: NIKE (jerseys/apparel) + WILSON SPORTING GOODS (footballs)
+  • cross_market_sports — for any major-metro sports franchise, surface the OTHER pro teams sharing the same media market. They share audience.
+      ✅ ATL: ATLANTA FALCONS, ATLANTA BRAVES, ATLANTA UNITED
+      ✅ DFW: DALLAS COWBOYS, DALLAS MAVERICKS / TEXAS RANGERS / DALLAS STARS / FC DALLAS (whichever isn't the subject)
+      ✅ SAN ANTONIO: shares Texas market — surface DALLAS COWBOYS, HOUSTON ASTROS, HOUSTON ROCKETS as cross-market interest
+  • sportsbook_market — surface the dominant sportsbooks active in the team's home state (legal status varies by state).
+      ✅ TX: only daily fantasy is legal (DRAFTKINGS DFS, FANDUEL DFS, PRIZEPICKS); full sportsbook is NOT legal in TX as of 2025 — do NOT inflate sportsbook BPs for a TX team's audience the way you would for a NY/PA/NJ team.
+  • regional_iconic_brand — surface the home-region's iconic QSR / grocery / travel-stop / radio brands that the team's local fanbase actually uses every week. These are non-obvious to a national agent but a local fan would name them immediately. Use the brand's own scoring category.
+      ✅ Texas (Rangers / Spurs / Mavericks / Astros / Cowboys / Texans): WHATABURGER (QSR — TX-founded, ~75% TX visit rate), BUCEES (TRAVEL + WHERE THEY SHOP — TX travel-stop icon along IH-35/IH-10), H-E-B (WHERE THEY SHOP — TX grocery, dominant in SA/Austin/Houston, smaller in DFW where Kroger/Tom Thumb are stronger), TORCHYS TACOS (WHERE THEY DINE — TX-founded), TACO CABANA (QSR — SA-founded TexMex), CENTRAL MARKET (WHERE THEY SHOP — TX upscale grocery), iHEART (STREAMING/MUSIC — TX is a country-radio market, indexes higher than US gen-pop)
+      ✅ Atlanta (Hawks / Falcons / Braves / United): CHICK-FIL-A (QSR — GA-founded, headquartered Atlanta), PUBLIX (WHERE THEY SHOP — GA grocery presence), WAFFLE HOUSE (WHERE THEY DINE — GA-founded), HOME DEPOT (WHERE THEY SHOP — GA-headquartered)
+      ✅ Pacific NW (Seahawks / Mariners / Kraken): COSTCO (WHERE THEY SHOP — WA-headquartered, indexes very high), STARBUCKS (WHERE THEY DINE/QSR — WA-founded, ubiquitous), DUTCH BROS (QSR — Pac NW founded)
+      ✅ Chicago (Bears / Bulls / Cubs / Sox / Blackhawks): PORTILLOS (WHERE THEY DINE — IL-founded), JEWEL-OSCO (WHERE THEY SHOP — IL grocery), GIORDANOS (WHERE THEY DINE — Chicago pizza)
+      ✅ NY/NJ (Giants / Jets / Yankees / Mets / Knicks / Rangers / Nets): WAWA (QSR — but only PA/NJ, not NY proper), DUNKIN (QSR — over-indexes Northeast), SHOPRITE (WHERE THEY SHOP — NJ grocery), STEW LEONARDS (WHERE THEY SHOP — NY/CT)
+      ✅ Florida (Heat / Magic / Bucs / Jaguars / Dolphins / Marlins / Lightning): PUBLIX (WHERE THEY SHOP — FL grocery), CULVERS (QSR — FL presence)
+      ✅ Southern California (Lakers / Clippers / Dodgers / Angels / Rams / Chargers): IN-N-OUT BURGER (QSR — CA icon), TRADER JOES (WHERE THEY SHOP — CA-founded), RALPHS (WHERE THEY SHOP — CA grocery)
+      ✅ Northern California / Bay Area (Warriors / Giants / 49ers / A's / Sharks): IN-N-OUT BURGER, TRADER JOES, SAFEWAY, LUCKY (WHERE THEY SHOP)
+      Coverage rule: surface AT LEAST 4 regional iconic brands for any sports-team profile, drawn from the team's home metro/state. National brands like NIKE/STARBUCKS still get scored normally; the regional ones go in active_affiliations so the per-category scorer KNOWS to elevate them past gen-pop.
+
+STRUCTURAL REASONING ABOUT BIG-AUDIENCE BRANDS (read this BEFORE scoring STREAMING / DIGITAL BANKING / QSR / WHERE THEY SHOP / SEARCH ENGINE / TECHNOLOGY for any sports-team or other mass-audience persona):
+
+The single most damaging defect for a major-audience persona (sports team, A-list celebrity, top-streamed musician, billion-dollar franchise) is treating the audience as "regional / niche / cult" and scoring commodity brands BELOW US gen-pop. Major-audience personas are FUNDAMENTALLY MASS-MARKET — their casual halo is mostly drawn from the gen-pop adult population. Casual fans (typically ~70% of any famous-person audience) are indistinguishable from gen-pop on commodity-brand consumption. Only the super-fan tail has unusual affinity patterns.
+
+CALIBRATION CHECK BEFORE SCORING ANY BIG-AUDIENCE PERSONA:
+  • Look at the gen-pop BP for each commodity brand (Netflix, Amazon, Walmart, McDonald's, Target, Apple Pay, Google, etc.) before deciding this persona's BP.
+  • Ask: is there an actual reason this persona's audience would consume LESS of this brand than gen-pop? The answer is almost always NO for commodity brands.
+  • If the persona has a structural REASON to over-index (sports fans + streaming because of cord-cutting and league partnerships; young persona + Target because young households over-index Target; Black audience + Samsung because of disproportionate Samsung phone share; Atlanta persona + Home Depot because HD is Atlanta-HQ'd), let the BP go ABOVE gen-pop, not below.
+
+WHY SPORTS-TEAM FANBASES OVER-INDEX ON STREAMING (do not score below gen-pop without specific reason):
+  • Cord-cutting tilt — sports fans are disproportionately cord-cutters who layer multiple streaming subs to keep accessing live games (YouTube TV for RSNs, NFL Sunday Ticket on YouTube TV, ESPN+ for out-of-market, Peacock for NBC games, Apple TV+ for MLB Friday Night Baseball, Prime for Thursday Night Football, Max for B/R Sports).
+  • League/national broadcast partnerships pull fans onto specific platforms regardless of personal taste (every MLB fan has a reason to have Apple TV+; every NBA fan has reason to have Prime / Peacock / ESPN+/Disney+/Hulu bundle; every NFL fan has reason to have YouTube TV / Prime / Peacock).
+  • Household co-viewing — streaming subs in a sports-fan household serve the WHOLE household, including spouses/kids who drive Netflix/Disney+/Hulu adoption.
+  Common defect to avoid: scoring Netflix in the 40s for a sports-team audience because the agent reasoned "this team's fans aren't a streaming-heavy demo." Wrong — they're MORE streaming-heavy than gen-pop, not less.
+
+WHY SPORTS-FAN HOUSEHOLDS OVER-INDEX ON DIGITAL PAYMENTS (do not score below gen-pop without specific reason):
+  • Sports-team fanbases skew adult-with-disposable-income, which means HIGHER digital-payment penetration than gen-pop. Apple Pay / Venmo / Zelle are how they split season-ticket costs, pay for tailgates, settle group watches.
+  Common defect: scoring Apple Pay in the 20s-30s for an adult-skewed sports audience — that's a young-adult or low-income gen-pop number, not a sports-fan number.
+
+WHY MAJOR-AUDIENCE PERSONAS LOOK LIKE GEN POP ON COMMODITY BRANDS:
+  • McDonald's, Target, Walmart, Best Buy, Home Depot, Google, YouTube — these are commodity brands with 30-90% gen-pop penetration. A persona's audience must be INTENTIONALLY niche to score below gen-pop on these. Don't penalize the audience for the persona's specialty.
+  • Home-market brand uplift: brands HQ'd or particularly strong in the persona's local market should index ABOVE gen-pop in that persona's profile (Home Depot for Atlanta, H-E-B for Texas, Costco for Pacific NW, Publix for Southeast US, Chick-fil-A for Atlanta/Texas, Trader Joes for coastal metros).
+  Common defect: scoring McDonald's at 14% / Target at 14% / Home Depot at 24% / Google at 60% for an NBA team's audience. Those are 50-70% of gen-pop. The agent reasoned "audience is niche → mass-market brands don't apply" — wrong; the audience IS gen-pop, plus a fan halo.
+
+The pipeline runs a holistic Claude sanity check at the END that compares this profile to Gen Pop and 2-3 peer profiles in the same archetype to catch these gaps. So you don't have to memorize any numeric ranges — just REASON honestly about whether this persona's audience would realistically consume MORE or LESS of each commodity brand than the average US adult, and let the sanity check correct your blind spots if any.
+
+Coverage rule: every sports-team profile MUST list at LEAST 8 active_affiliations across these types. If you can't find 8, you haven't researched enough — go find the venue, jersey patch, broadcast partner, league streaming, league apparel, top 4 players, cross-market team. Sports teams are FIRMLY institutional — the affiliations exist whether or not the agent surfaces them.
+
+What goes in `flagship_brands` (the subset that bypasses the gen-pop ceiling): only `platform_flagship` and `exclusive_content_partner` items where the audience is genuinely platform-defined. NOT every collab — Bad Bunny has a Crocs collab but his audience isn't Crocs-defined; Crocs is normal scoring. For sports teams, NBA League Pass / MLB.tv / NFL+ are NOT flagship — even hardcore Hawks fans only need a single League Pass sub.
 
 What goes in `active_affiliations` (the broader list, used by per-category scorers as a research signal): everything above. The category-scoring agent will use these to elevate the affiliated brand BP in its own reasoning, even when the brand wouldn't normally be top-of-mind for this archetype.
 
@@ -20131,25 +20207,102 @@ def _run_unified_scoring_pass(
     return results_map
 
 
+def _suggest_brand_domain(brand: str, category: str = '', aff_type: str = '') -> str:
+    """Best-effort guess at the canonical owned domain for a missing brand.
+    Used to seed the Domain column in the missing-hostmap email so the data
+    team has a starting point for the host_mapping entry.
+
+    The mapping is intentionally explicit (not a regex/heuristic) — the data
+    team should review and replace as needed. For athletes/people the
+    convention is to use their league's player-page URL (mlb.com, nba.com).
+    """
+    b = (brand or '').strip().upper()
+    EXPLICIT = {
+        'STATE FARM ARENA':         'statefarmarena.com',
+        'STATE FARM':               'statefarm.com',
+        'SHARECARE':                'sharecare.com',
+        'NBA LEAGUE PASS':          'watch.nba.com',
+        'GRAY MEDIA':               'gray.tv',
+        'NBA TV':                   'watch.nba.com',
+        'TNT':                      'tntdrama.com',
+        'NBA':                      'nba.com',
+        'GLOBE LIFE FIELD':         'mlb.com/rangers/ballpark',
+        'GLOBE LIFE':               'globelifeinsurance.com',
+        'MLB.TV':                   'mlb.tv',
+        'MAIN STREET SPORTS':       'mainstreetsports.tv',
+        'MLB NETWORK':              'mlbnetwork.mlb.com',
+        'LOUISVILLE SLUGGER':       'slugger.com',
+        'RAWLINGS':                 'rawlings.com',
+        'WILSON SPORTING GOODS':    'wilson.com',
+        'ATLANTA FALCONS':          'atlantafalcons.com',
+        'ATLANTA BRAVES':           'mlb.com/braves',
+        'ATLANTA UNITED':           'atlutd.com',
+        'DALLAS COWBOYS':           'dallascowboys.com',
+        'DALLAS MAVERICKS':         'mavs.com',
+        'DALLAS STARS':             'nhl.com/stars',
+        'FC DALLAS':                'fcdallas.com',
+        'HOUSTON ASTROS':           'mlb.com/astros',
+        'HOUSTON ROCKETS':          'nba.com/rockets',
+        'APPLE TV+':                'tv.apple.com',
+        'ESPN':                     'espn.com',
+        'FOX SPORTS':               'foxsports.com',
+        'NIKE':                     'nike.com',
+    }
+    if b in EXPLICIT:
+        return EXPLICIT[b]
+
+    cat = (category or '').strip().upper()
+    typ = (aff_type or '').strip().lower()
+    if typ == 'signature_athlete' or cat in ('NBA ATHLETE', 'MLB ATHLETE',
+                                             'NFL ATHLETE', 'NHL ATHLETE',
+                                             'ATHLETE'):
+        slug = b.lower().replace("'", '').replace('.', '').replace(' ', '-')
+        if cat == 'NBA ATHLETE':
+            return f'nba.com/player/{slug}'
+        if cat == 'MLB ATHLETE':
+            return f'mlb.com/player/{slug}'
+        if cat == 'NFL ATHLETE':
+            return f'nfl.com/players/{slug}'
+        if cat == 'NHL ATHLETE':
+            return f'nhl.com/player/{slug}'
+        return f'espn.com/_/search?q={slug}'
+
+    slug = ''.join(c for c in b.lower() if c.isalnum())
+    return f'{slug}.com' if slug else '(none)'
+
+
 def _send_missing_hostmap_email(subject_name: str, missing: list[dict]) -> None:
-    """Email jenna@ (cc jessie@, anastasia@) with affiliation brands that
-    aren't in `reference.host_mapping`."""
+    """Email jenna@ (cc jessie@, anastasia@, liz@) with affiliation brands
+    that aren't in `reference.host_mapping`. Each row includes a suggested
+    Domain column the data team can review and replace as needed."""
     if not missing:
         return
     try:
         import boto3 as _boto3
         ses = _boto3.client('ses', region_name='us-east-2')
+
+        for _m in missing:
+            if not (_m.get('domain') or '').strip():
+                _m['domain'] = _suggest_brand_domain(
+                    _m.get('value', ''),
+                    _m.get('category', ''),
+                    _m.get('type', ''),
+                )
+
         rows_html = ''.join(
             f'<tr>'
             f'<td style="padding:6px 12px;border:1px solid #ddd;">{m["category"]}</td>'
             f'<td style="padding:6px 12px;border:1px solid #ddd;font-weight:600;">{m["value"]}</td>'
+            f'<td style="padding:6px 12px;border:1px solid #ddd;font-family:Menlo,monospace;color:#0a58ca;">{m["domain"]}</td>'
             f'<td style="padding:6px 12px;border:1px solid #ddd;">{m["type"]}</td>'
             f'<td style="padding:6px 12px;border:1px solid #ddd;color:#555;">{m["evidence"]}</td>'
             f'</tr>'
             for m in missing
         )
         rows_text = '\n'.join(
-            f'  • [{m["category"]}] {m["value"]} ({m["type"]}) — {m["evidence"]}'
+            f'  • [{m["category"]}] {m["value"]} ({m["type"]})\n'
+            f'      domain:   {m["domain"]}\n'
+            f'      evidence: {m["evidence"]}'
             for m in missing
         )
         html = f"""<html><body style="font-family:-apple-system,Helvetica,Arial,sans-serif;color:#333;">
@@ -20157,11 +20310,14 @@ def _send_missing_hostmap_email(subject_name: str, missing: list[dict]) -> None:
 <p>The persona research agent surfaced <b>{len(missing)}</b> brand-affiliation(s) for
 <b>{subject_name}</b> that are <b>NOT in <code>reference.host_mapping</code></b>.
 These can't be added to the profile because there's no host mapping → no panel data.</p>
-<p><b>Please add these brands to hostmap so they're picked up on the next run:</b></p>
+<p><b>Please add these brands to hostmap so they're picked up on the next run.</b>
+The Domain column shows the suggested primary owned domain — please review and replace
+with the actual hostname pattern(s) you want the brand to match on.</p>
 <table style="border-collapse:collapse;border:1px solid #ddd;font-size:14px;">
 <tr style="background:#f4f4f4;">
 <th style="padding:8px 12px;border:1px solid #ddd;text-align:left;">Category</th>
 <th style="padding:8px 12px;border:1px solid #ddd;text-align:left;">Brand</th>
+<th style="padding:8px 12px;border:1px solid #ddd;text-align:left;">Domain (suggested)</th>
 <th style="padding:8px 12px;border:1px solid #ddd;text-align:left;">Affiliation Type</th>
 <th style="padding:8px 12px;border:1px solid #ddd;text-align:left;">Evidence</th>
 </tr>
@@ -20173,13 +20329,19 @@ Behavioral Graph by Crosswalk NYC — automated affiliation auditor</p>
         text = (f"Missing Hostmap Brands — Profile: {subject_name}\n\n"
                 f"The persona research agent surfaced {len(missing)} affiliation(s) "
                 f"for {subject_name} that are NOT in reference.host_mapping.\n"
-                f"Please add these to hostmap so they're picked up on the next run:\n\n"
+                f"Please add these to hostmap so they're picked up on the next run.\n"
+                f"(Domain shown is a suggested primary owned domain — review and "
+                f"replace with the actual hostname pattern.)\n\n"
                 f"{rows_text}\n")
         ses.send_email(
             Source='no_reply@crosswalknyc.com',
             Destination={
                 'ToAddresses': ['jenna@crosswalknyc.com'],
-                'CcAddresses': ['jessie@crosswalknyc.com', 'anastasia@crosswalknyc.com'],
+                'CcAddresses': [
+                    'jessie@crosswalknyc.com',
+                    'anastasia@crosswalknyc.com',
+                    'liz@crosswalknyc.com',
+                ],
             },
             Message={
                 'Subject': {'Data': f'📨 Hostmap brands needed for {subject_name} ({len(missing)})',
@@ -20190,7 +20352,7 @@ Behavioral Graph by Crosswalk NYC — automated affiliation auditor</p>
                 },
             },
         )
-        print(f"   📧 Sent missing-hostmap email to jenna@ (cc jessie@, anastasia@) "
+        print(f"   📧 Sent missing-hostmap email to jenna@ (cc jessie@, anastasia@, liz@) "
               f"for {len(missing)} brand(s)")
     except Exception as _e:
         print(f"   ⚠️ SES email failed: {_e}")
@@ -26641,7 +26803,16 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
             from claude_client import is_hybrid_enabled as _hybrid_on
             if _hybrid_on():
                 _persona_doc_local = locals().get('_persona_doc') or locals().get('persona_doc') or {}
-                _hybrid_fixes = _hybrid_audit(df_final, _persona_doc_local)
+                _subject_arg = (locals().get('project_name')
+                                or locals().get('_subject_name')
+                                or (_persona_doc_local.get('subject') if isinstance(_persona_doc_local, dict) else '')
+                                or '')
+                _brand_cat_arg = (locals().get('brand_category') or '')
+                _hybrid_fixes = _hybrid_audit(
+                    df_final, _persona_doc_local,
+                    subject=_subject_arg,
+                    brand_category=_brand_cat_arg,
+                )
                 if _hybrid_fixes:
                     df_final, _n = _hybrid_apply(df_final, _hybrid_fixes)
                     print(f"   🧠 hybrid sanity check applied {_n} fixes "
