@@ -26619,10 +26619,42 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
         except Exception as _e:
             print(f"   ⚠️ pre-save pinning fix skipped: {_e}")
 
+        # ── HYBRID REASONING: holistic sanity check (Claude) ────────────────
+        # Optional final whole-profile audit using Claude Sonnet. Runs only
+        # when env USE_HYBRID_REASONING=true. Conservative by design — most
+        # profiles return zero fixes. When fixes ARE returned they're
+        # persona-specific reasoning ("Hulu at 84.5% is too high for Selena
+        # Gomez because her audience reaches her on TikTok/Spotify too, not
+        # just through her Hulu show"). Never raises — pipeline continues
+        # uninterrupted on any error.
+        try:
+            import sys as _sys, os as _os
+            _migration_dir = _os.path.join(
+                _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__))),
+                'migration')
+            if _migration_dir not in _sys.path:
+                _sys.path.insert(0, _migration_dir)
+            from hybrid_reasoning import (
+                holistic_sanity_check as _hybrid_audit,
+                apply_sanity_fixes as _hybrid_apply,
+            )
+            from claude_client import is_hybrid_enabled as _hybrid_on
+            if _hybrid_on():
+                _persona_doc_local = locals().get('_persona_doc') or locals().get('persona_doc') or {}
+                _hybrid_fixes = _hybrid_audit(df_final, _persona_doc_local)
+                if _hybrid_fixes:
+                    df_final, _n = _hybrid_apply(df_final, _hybrid_fixes)
+                    print(f"   🧠 hybrid sanity check applied {_n} fixes "
+                          f"(out of {len(_hybrid_fixes)} suggested)")
+                else:
+                    print("   🧠 hybrid sanity check: profile passed cleanly (0 fixes)")
+        except Exception as _e:
+            print(f"   ⚠️ hybrid sanity check skipped: {_e}")
+
         # Final pass: re-align cross-category BP. Pin-breaking + corpus push
-        # add noise that can re-introduce drift between e.g. NIKE in MPB vs
-        # NIKE in APPAREL/FOOTWEAR. Running alignment LAST guarantees that
-        # the same brand always reads the same BP across every category.
+        # + hybrid sanity fixes can re-introduce drift between e.g. NIKE in
+        # MPB vs NIKE in APPAREL/FOOTWEAR. Running alignment LAST guarantees
+        # that the same brand always reads the same BP across every category.
         df_final = _align_cross_category_bp(df_final)
 
     # Save to CSV
