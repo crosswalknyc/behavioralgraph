@@ -282,7 +282,7 @@ import math
 import hashlib
 import glob
 from datetime import datetime
-from genpop_calibration import calibrate_to_genpop
+from genpop_calibration import calibrate_to_genpop, enforce_genpop_ceiling
 import json as _json_mod
 import time as _time
 
@@ -1208,7 +1208,7 @@ def persona_research_agent_cached(subject: str,
 # GEN POP PENETRATION LOOKUP FOR SAMPLE SIZE CALIBRATION
 # ============================================================================
 
-GEN_POP_CANONICAL_KEY = 'Gen_Pop_2026_03_04_2026_04_29.csv'
+GEN_POP_CANONICAL_KEY = 'Gen_Pop_2026.csv'
 _genpop_df_cache = None
 
 def _load_genpop_csv():
@@ -1327,6 +1327,17 @@ def _format_brand_intelligence_block(brand_names: list, max_brands: int = 200) -
         "cool factor, recent SEC/news signals, and cross-shop network to inform\n"
         "the per-segment engagement rate you assign in your audience-fraction\n"
         "math.\n\n"
+        "AUDIENCE-vs-TALENT — THIS IS THE MOST COMMON MISTAKE; READ FIRST:\n"
+        "  You are scoring the AUDIENCE that engages with this persona's\n"
+        "  content, NOT the persona's own personal usage. A celebrity may\n"
+        "  personally be huge on TikTok / be a Spotify all-time top streamer /\n"
+        "  star in HBO's flagship show, but their AUDIENCE engagement with\n"
+        "  that platform is driven by the AUDIENCE's demographic profile,\n"
+        "  not the persona's personal presence. Pedro Pascal personally has\n"
+        "  millions of TikTok followers, but his older male audience uses\n"
+        "  TikTok at MUCH lower rates than his personal follower count\n"
+        "  suggests. Do NOT inflate a platform's BP just because the persona\n"
+        "  themselves is big on it. Score the audience, not the talent.\n\n"
         "HOW TO USE THESE SIGNALS — read carefully:\n"
         "  1. cool_factor (RISING/DECLINING) applies ONLY to the archetypes in\n"
         "     over_indexes_for. A brand RISING for TikTok Gen Z does NOT rise for\n"
@@ -16249,6 +16260,14 @@ Return ONLY a single valid JSON object — no markdown, no commentary.
   ],
   "audience_composition": "<2-3 paragraph decomposition of THIS subject's digital audience into sub-segments with rough fractions and which segments drive which brand affinities — see AUDIENCE COMPOSITION instructions below>",
   "digital_identity": "<2-4 paragraph DEEP analysis of this audience's digital footprint — see instructions below>",
+  "active_affiliations": [
+    {{"category": "<MUST BE one of the SCORING CATEGORIES listed above (e.g. SPORTS ORGANIZATIONS, TELECOM, BEVERAGES, STREAMING/PLATFORM, BEAUTY/WELLNESS, APPAREL/FOOTWEAR). NOT 'BRAND OWNER/FOUNDER' or 'FRANCHISE' or 'COMPANY' — those are TYPE labels, not categories>", "value": "<BRAND/PLATFORM in ALL CAPS, e.g. WORLD WRESTLING ENTERTAINMENT, AVIATION GIN, MINT MOBILE, WREXHAM AFC>", "type": "<one of: athlete_competitor | platform_flagship | brand_collaboration | brand_owner_founder | brand_ambassador | exclusive_content_partner>", "evidence": "<one sentence on the verifiable affiliation>"}},
+    ...one entry per known active affiliation — see ACTIVE AFFILIATIONS instructions below
+  ],
+  "flagship_brands": [
+    {{"category": "<scoring category, same rule as above>", "value": "<BRAND>", "reason": "<one sentence why this brand should bypass the gen-pop ceiling for this persona>"}},
+    ...DO NOT WORRY ABOUT POPULATING THIS — the pipeline will auto-derive it from active_affiliations entries whose type is platform_flagship or exclusive_content_partner. Leave it as [] if uncertain.
+  ],
   "subsegments": [
     {{
       "name": "<short descriptive name, e.g. 'Sneakerhead / hypebeast'>",
@@ -16476,6 +16495,37 @@ SPECIFIC WRITING RULES
   • cross_shop_network: Real brands the audience actively uses alongside the
     subject (apparel + retail + negative_overlap). Used by the scoring agent
     to decide rank ordering within a category.
+
+ACTIVE AFFILIATIONS — RESEARCH THIS BEFORE WRITING ANYTHING ELSE:
+
+CRITICAL — `category` FIELD RULE: The `category` field for each affiliation MUST be one of the SCORING CATEGORIES listed at the top of this prompt (e.g. SPORTS ORGANIZATIONS, TELECOM, BEVERAGES, STREAMING/PLATFORM, BEAUTY/WELLNESS, APPAREL/FOOTWEAR, QSR, etc.). The `type` field tells us WHAT KIND of affiliation it is. DO NOT put 'BRAND OWNER/FOUNDER', 'FRANCHISE', 'COMPANY', or 'PRODUCTION COMPANY' in `category` — those are type labels, not scoring buckets.
+
+Correct examples:
+  ✅ {{"category": "MOST PURCHASED BRANDS", "value": "AVIATION GIN", "type": "brand_owner_founder", "evidence": "Reynolds owns it"}}  ← spirits have no scoring category, use MOST PURCHASED BRANDS
+  ✅ {{"category": "TELECOM", "value": "MINT MOBILE", "type": "brand_owner_founder", "evidence": "Reynolds was face of brand until T-Mobile acquisition"}}
+  ✅ {{"category": "SPORTS ORGANIZATIONS", "value": "WREXHAM AFC", "type": "brand_owner_founder", "evidence": "Reynolds + McElhenney co-own"}}
+  ✅ {{"category": "STREAMING/PLATFORM", "value": "DISNEY+", "type": "platform_flagship", "evidence": "Deadpool 3 / Marvel — drives Disney+ subs"}}
+  ✅ {{"category": "MOST PURCHASED BRANDS", "value": "CASAMIGOS", "type": "brand_owner_founder", "evidence": "Clooney founded; sold to Diageo 2017"}}  ← spirits → MPB
+
+WRONG examples (do NOT do this):
+  ❌ {{"category": "BRAND OWNER/FOUNDER", "value": "AVIATION GIN", ...}}     ← BEVERAGES, not BRAND OWNER/FOUNDER
+  ❌ {{"category": "FRANCHISE", "value": "WREXHAM AFC", ...}}                ← SPORTS ORGANIZATIONS, not FRANCHISE
+  ❌ {{"category": "COMPANY", "value": "MINT MOBILE", ...}}                  ← TELECOM, not COMPANY
+
+Before reasoning about audience or brand fit, build a concrete list of THIS subject's active brand/platform affiliations. The pipeline keeps missing these because the AI defaults to scoring "generic actor / generic musician" without knowing the subject is, e.g., an active WWE wrestler or owns the QSR they keep eating at. Common categories to research:
+
+  • athlete_competitor — actually competes/performs for a sports league, even part-time. Bad Bunny is a WWE wrestler (Royal Rumble entrant, WrestleMania match-winner). Drake competed in WSOP. Travis Scott is a Houston Rockets fixture. Capture the league as `value`.
+  • platform_flagship — is the explicit face / #1 talent / multi-year top-streamed for a streaming or media platform. Pedro Pascal → HBO Max (Last of Us is HBO's flagship show), Mandalorian → Disney+. Bad Bunny → Spotify (#1 most-streamed artist 3 years running). Taylor Swift → Spotify + Apple Music. Selena Gomez → Hulu (Only Murders).
+  • brand_collaboration — has a CURRENT signature collab/capsule with a brand. Bad Bunny x Adidas, Bad Bunny x Crocs, Bad Bunny x Cheetos. Travis Scott x Nike. Pharrell x Louis Vuitton. Rihanna x Puma (Fenty x Puma).
+  • brand_owner_founder — owns/founded a brand. Reynolds → Aviation Gin / Mint Mobile / Wrexham AFC. Rihanna → Fenty Beauty / Savage X Fenty. Kim Kardashian → SKIMS. George Clooney → Casamigos. Dwayne Johnson → ZOA / Teremana / Project Rock. Selena Gomez → Rare Beauty.
+  • brand_ambassador — long-running global ambassador (not one-off). Margot Robbie → Chanel No. 5. Zendaya → Valentino + Lancôme + Bulgari. Pedro Pascal → Loewe (recently).
+  • exclusive_content_partner — has exclusive content deal with a platform that defines audience. Joe Rogan → Spotify (multi-year exclusive). Howard Stern → SiriusXM. Trevor Noah → Spotify (talk).
+
+What goes in `flagship_brands` (the subset that bypasses the gen-pop ceiling): only `platform_flagship` and `exclusive_content_partner` items where the audience is genuinely platform-defined. NOT every collab — Bad Bunny has a Crocs collab but his audience isn't Crocs-defined; Crocs is normal scoring.
+
+What goes in `active_affiliations` (the broader list, used by per-category scorers as a research signal): everything above. The category-scoring agent will use these to elevate the affiliated brand BP in its own reasoning, even when the brand wouldn't normally be top-of-mind for this archetype.
+
+Failure mode this fixes: agents defaulting to generic-archetype brand mixes (e.g. "Latin music star → reggaeton brands") and missing that the persona is in WWE matches, owns Casamigos, or has a Chanel ambassador deal. RESEARCH THE SUBJECT, not the archetype.
 
 AUDIENCE COMPOSITION — CRITICAL FRAMEWORK FOR REASONING (read this before writing anything else):
 The single most damaging mistake this pipeline makes is treating an audience as MONOLITHIC — collapsing all of {subject}'s fans into one "representative user" who looks like the median fan, then scoring brands as if everyone in the audience is that same user. This produces saturation: "Margot Robbie's audience is mainstream → Netflix is mainstream → score Netflix at 90%+." That reasoning is wrong, because no audience is monolithic.
@@ -16776,9 +16826,88 @@ EXAMPLE category_signals (hypothetical `consumer_brand` athletic-equipment cohor
               f"{str(_cva_dump)[:380]}{'…' if len(str(_cva_dump)) > 380 else ''}")
     else:
         print("COMMERCIAL VIABILITY AUDIT: (MISSING)")
+
+    # ── Normalize active_affiliations / flagship_brands ───────────────────
+    _persona_doc_normalize_affiliations(persona_doc)
+
     print(f"{'─'*60}\n")
 
     return persona_doc
+
+
+_AFFILIATION_CATEGORY_REMAP = {
+    'BRAND OWNER/FOUNDER': None, 'BRAND OWNER': None, 'OWNER/FOUNDER': None,
+    'FOUNDER': None, 'OWNED BUSINESS': None, 'COMPANY': None, 'BUSINESS': None,
+    'FRANCHISE': 'SPORTS ORGANIZATIONS', 'SPORTS FRANCHISE': 'SPORTS ORGANIZATIONS',
+    'SPORTS TEAM': 'SPORTS ORGANIZATIONS', 'TEAM': 'SPORTS ORGANIZATIONS',
+    'LEAGUE': 'SPORTS ORGANIZATIONS', 'SPORTS LEAGUE': 'SPORTS ORGANIZATIONS',
+    'STREAMING': 'STREAMING/PLATFORM', 'STREAMING SERVICE': 'STREAMING/PLATFORM',
+    'PLATFORM': 'STREAMING/PLATFORM', 'MUSIC PLATFORM': 'STREAMING/MUSIC',
+    'MUSIC': 'STREAMING/MUSIC', 'MUSIC SERVICE': 'STREAMING/MUSIC',
+    'TELECOM': 'TELECOM', 'TELECOMMUNICATIONS': 'TELECOM',
+    'CARRIER': 'TELECOM', 'WIRELESS': 'TELECOM',
+    'BEVERAGE': 'MOST PURCHASED BRANDS', 'BEVERAGES': 'MOST PURCHASED BRANDS',
+    'ALCOHOL': 'MOST PURCHASED BRANDS', 'SPIRITS': 'MOST PURCHASED BRANDS',
+    'GIN': 'MOST PURCHASED BRANDS', 'TEQUILA': 'MOST PURCHASED BRANDS',
+    'WHISKEY': 'MOST PURCHASED BRANDS', 'WINE': 'MOST PURCHASED BRANDS',
+    'BEER': 'MOST PURCHASED BRANDS',
+    'BEAUTY': 'BEAUTY/WELLNESS', 'COSMETICS': 'BEAUTY/WELLNESS', 'SKINCARE': 'BEAUTY/WELLNESS',
+    'APPAREL': 'APPAREL/FOOTWEAR', 'FOOTWEAR': 'APPAREL/FOOTWEAR',
+    'FASHION': 'APPAREL/FOOTWEAR', 'CLOTHING': 'APPAREL/FOOTWEAR',
+    'PRODUCTION COMPANY': None, 'STUDIO': None, 'MEDIA': None, 'PRODUCT': None,
+}
+
+_VALUE_TO_CATEGORY_HINTS = {
+    'AVIATION GIN': 'MOST PURCHASED BRANDS', 'AVIATION AMERICAN GIN': 'MOST PURCHASED BRANDS',
+    'CASAMIGOS': 'MOST PURCHASED BRANDS', 'TEREMANA': 'MOST PURCHASED BRANDS',
+    'ZOA': 'MOST PURCHASED BRANDS',
+    'MINT MOBILE': 'TELECOM',
+    'WREXHAM': 'SPORTS ORGANIZATIONS', 'WREXHAM AFC': 'SPORTS ORGANIZATIONS',
+    'FENTY': 'BEAUTY/WELLNESS', 'FENTY BEAUTY': 'BEAUTY/WELLNESS',
+    'RARE BEAUTY': 'BEAUTY/WELLNESS',
+    'SAVAGE X FENTY': 'APPAREL/FOOTWEAR', 'SKIMS': 'APPAREL/FOOTWEAR',
+    'PROJECT ROCK': 'APPAREL/FOOTWEAR',
+}
+
+
+def _persona_doc_normalize_affiliations(persona_doc: dict) -> None:
+    aa = persona_doc.get('active_affiliations') or []
+    if not isinstance(aa, list):
+        persona_doc['active_affiliations'] = []
+        persona_doc['flagship_brands'] = []
+        return
+    cleaned: list[dict] = []
+    for item in aa:
+        if not isinstance(item, dict):
+            continue
+        cat = str(item.get('category', '')).upper().strip()
+        val = str(item.get('value', '')).upper().strip()
+        typ = str(item.get('type', '')).lower().strip()
+        ev = str(item.get('evidence', '')).strip()
+        if not val:
+            continue
+        if cat in _AFFILIATION_CATEGORY_REMAP:
+            mapped = _AFFILIATION_CATEGORY_REMAP[cat]
+            cat = mapped if mapped else _VALUE_TO_CATEGORY_HINTS.get(val, '')
+        if not cat:
+            cat = _VALUE_TO_CATEGORY_HINTS.get(val, '') or str(item.get('category', '')).upper().strip()
+        cleaned.append({'category': cat, 'value': val, 'type': typ, 'evidence': ev})
+    persona_doc['active_affiliations'] = cleaned
+    _FLAGSHIP_TYPES = {'platform_flagship', 'exclusive_content_partner'}
+    derived: list[dict] = []
+    seen: set[tuple[str, str]] = set()
+    for item in cleaned:
+        if item['type'] in _FLAGSHIP_TYPES and item['category'] and item['value']:
+            k = (item['category'], item['value'])
+            if k not in seen:
+                seen.add(k)
+                derived.append({'category': item['category'], 'value': item['value'],
+                                'reason': item['evidence'] or f'{item["type"]} affiliation'})
+    persona_doc['flagship_brands'] = derived
+    print(f"\nAFFILIATIONS NORMALIZED: {len(cleaned)} active, {len(derived)} flagship")
+    for it in cleaned:
+        marker = '⭐' if (it['category'], it['value']) in seen else '  '
+        print(f"  {marker} [{it['category']:25s}] {it['value']:30s} ({it['type']})")
 
 
 def _validate_persona_quality(persona_doc: dict, subject: str) -> tuple[bool, list[str]]:
@@ -17653,6 +17782,71 @@ def _run_single_category_agent(category: str, values: list[str],
         if expected_low else '  (none specified)'
     )
 
+    # ── PERSONA-AFFILIATED BRANDS for this category (REQUIRED INCLUSIONS) ──
+    _aff_for_cat: list[dict] = []
+    _cat_u_aff = category.strip().upper()
+    for _aff in (persona_doc.get('active_affiliations') or []):
+        if not isinstance(_aff, dict):
+            continue
+        if str(_aff.get('category', '')).strip().upper() == _cat_u_aff:
+            _aff_for_cat.append(_aff)
+
+    if _aff_for_cat:
+        _values_upper = {str(v).strip().upper() for v in values}
+        for _aff in _aff_for_cat:
+            _av = str(_aff.get('value', '')).strip()
+            if _av and _av.upper() not in _values_upper:
+                values = list(values) + [_av]
+                _values_upper.add(_av.upper())
+        _aff_lines = []
+        for _aff in _aff_for_cat:
+            _v = str(_aff.get('value', '')).strip()
+            _t = str(_aff.get('type', '')).strip()
+            _e = str(_aff.get('evidence', '')).strip()
+            _aff_lines.append(f"  - {_v}  [{_t}] — {_e}")
+        affiliation_block = (
+            "\n═══════════════════════════════════════════════════════════════════\n"
+            f"PERSONA-AFFILIATED BRANDS in {category} — REASON BEFORE ELEVATING\n"
+            "═══════════════════════════════════════════════════════════════════\n"
+            f"This persona has VERIFIED affiliations with the following brand(s) in this category. "
+            f"They SHOULD score above gen-pop baseline — but how MUCH above depends on how the "
+            f"persona's audience actually engages with the brand IN THE PANEL DATA.\n\n"
+            "CRITICAL — NO AUDIENCE IS MONOLITHIC. Even a 'flagship' persona's audience comes from\n"
+            "MANY sources, not just the affiliated platform/brand:\n"
+            "  • Selena Gomez fans engage via Spotify (music), Disney (Wizards-of-Waverly-Place\n"
+            "    legacy), Instagram (#2 most-followed), Latin pop community, AND Hulu (Only Murders).\n"
+            "    Even though Hulu is her flagship, only a SUBSET of her audience pays for Hulu.\n"
+            "  • LeBron James fans engage via NBA (live games), TNT/ESPN, social media,\n"
+            "    sneaker culture, AND Lakers brand. Not all of them subscribe to NBA League Pass.\n"
+            "  • Pedro Pascal fans engage via Disney+ (Mandalorian), HBO Max (Last of Us), AND\n"
+            "    movie theaters. Even his most engaged fans don't ALL subscribe to BOTH HBO + Disney+.\n\n"
+            "RECOMMENDED BP RANGES (think of these as ceilings, not floors — reason within the band):\n"
+            "  • brand_owner_founder + still active spokesperson  → 1.8-3.0x baseline\n"
+            "  • brand_owner_founder, sold but still associated   → 1.5-2.2x baseline\n"
+            "  • athlete_competitor (active in the league)         → 1.6-2.4x baseline\n"
+            "  • platform_flagship                                 → 1.4-2.0x baseline\n"
+            "  • brand_collaboration / brand_ambassador (current)  → 1.3-1.8x baseline\n"
+            "  • exclusive_content_partner                         → 1.5-2.0x baseline\n\n"
+            "ABSOLUTE CEILING — even with a flagship affiliation, no brand should exceed:\n"
+            "  • Streaming SVOD: 65-72% (real US household reach < 80%, not even Netflix breaks 78%)\n"
+            "  • Single social platform: 80% (only YouTube approaches universal usage)\n"
+            "  • Digital banking / payment: 75% (PayPal ceiling)\n"
+            "  • Mass retail / Amazon: 88% (only Amazon approaches digital saturation)\n"
+            "  • Spirits / niche owned brands: 8-12% (digital purchase rates are tiny even for owners)\n"
+            "  • Sports leagues: 70% for NFL with athlete persona, 50% for NBA/MLB\n\n"
+            "REASONING REQUIREMENT — for any affiliated brand, your `reason` field MUST explicitly\n"
+            "address: (a) what fraction of this persona's audience actually engages with the brand,\n"
+            "(b) why that fraction isn't 100% (what other paths the audience uses to engage with\n"
+            "the persona). E.g. 'Selena's Hulu audience is sub-segment that watches Only Murders;\n"
+            "her music-only and IG-only fans don't subscribe to Hulu — so 60-65% not 85%.'\n\n"
+            "BRANDS:\n"
+            + '\n'.join(_aff_lines)
+            + "\n\nIMPORTANT — if a brand listed above is not already in the ITEMS TO SCORE list, "
+            "ADD IT to your output with the elevated BP. Do not skip it.\n"
+        )
+    else:
+        affiliation_block = ""
+
     # ── Format the category rule (Pass 1 output) for inclusion in the prompt ──
     def _fmt_tier_rules() -> str:
         if not tier_rules:
@@ -17890,6 +18084,7 @@ EXPECTED HIGH-FIT ITEMS for this category (persona research):
 
 EXPECTED LOW-FIT ITEMS (famous but persona doesn't engage):
 {expected_low_block}
+{affiliation_block}
 """
 
     prompt = f"""You are a senior consumer-research analyst.
@@ -19903,6 +20098,71 @@ def _run_unified_scoring_pass(
     return results_map
 
 
+def _send_missing_hostmap_email(subject_name: str, missing: list[dict]) -> None:
+    """Email jenna@ (cc jessie@, anastasia@) with affiliation brands that
+    aren't in `reference.host_mapping`."""
+    if not missing:
+        return
+    try:
+        import boto3 as _boto3
+        ses = _boto3.client('ses', region_name='us-east-2')
+        rows_html = ''.join(
+            f'<tr>'
+            f'<td style="padding:6px 12px;border:1px solid #ddd;">{m["category"]}</td>'
+            f'<td style="padding:6px 12px;border:1px solid #ddd;font-weight:600;">{m["value"]}</td>'
+            f'<td style="padding:6px 12px;border:1px solid #ddd;">{m["type"]}</td>'
+            f'<td style="padding:6px 12px;border:1px solid #ddd;color:#555;">{m["evidence"]}</td>'
+            f'</tr>'
+            for m in missing
+        )
+        rows_text = '\n'.join(
+            f'  • [{m["category"]}] {m["value"]} ({m["type"]}) — {m["evidence"]}'
+            for m in missing
+        )
+        html = f"""<html><body style="font-family:-apple-system,Helvetica,Arial,sans-serif;color:#333;">
+<h2 style="color:#cc7000;">📨 Missing Hostmap Brands — Profile: {subject_name}</h2>
+<p>The persona research agent surfaced <b>{len(missing)}</b> brand-affiliation(s) for
+<b>{subject_name}</b> that are <b>NOT in <code>reference.host_mapping</code></b>.
+These can't be added to the profile because there's no host mapping → no panel data.</p>
+<p><b>Please add these brands to hostmap so they're picked up on the next run:</b></p>
+<table style="border-collapse:collapse;border:1px solid #ddd;font-size:14px;">
+<tr style="background:#f4f4f4;">
+<th style="padding:8px 12px;border:1px solid #ddd;text-align:left;">Category</th>
+<th style="padding:8px 12px;border:1px solid #ddd;text-align:left;">Brand</th>
+<th style="padding:8px 12px;border:1px solid #ddd;text-align:left;">Affiliation Type</th>
+<th style="padding:8px 12px;border:1px solid #ddd;text-align:left;">Evidence</th>
+</tr>
+{rows_html}
+</table>
+<p style="color:#999;font-size:12px;margin-top:24px;">
+Behavioral Graph by Crosswalk NYC — automated affiliation auditor</p>
+</body></html>"""
+        text = (f"Missing Hostmap Brands — Profile: {subject_name}\n\n"
+                f"The persona research agent surfaced {len(missing)} affiliation(s) "
+                f"for {subject_name} that are NOT in reference.host_mapping.\n"
+                f"Please add these to hostmap so they're picked up on the next run:\n\n"
+                f"{rows_text}\n")
+        ses.send_email(
+            Source='no_reply@crosswalknyc.com',
+            Destination={
+                'ToAddresses': ['jenna@crosswalknyc.com'],
+                'CcAddresses': ['jessie@crosswalknyc.com', 'anastasia@crosswalknyc.com'],
+            },
+            Message={
+                'Subject': {'Data': f'📨 Hostmap brands needed for {subject_name} ({len(missing)})',
+                            'Charset': 'UTF-8'},
+                'Body': {
+                    'Html': {'Data': html, 'Charset': 'UTF-8'},
+                    'Text': {'Data': text, 'Charset': 'UTF-8'},
+                },
+            },
+        )
+        print(f"   📧 Sent missing-hostmap email to jenna@ (cc jessie@, anastasia@) "
+              f"for {len(missing)} brand(s)")
+    except Exception as _e:
+        print(f"   ⚠️ SES email failed: {_e}")
+
+
 def parallel_category_agents(df: pd.DataFrame, persona_doc: dict,
                               subject: str, brands: list[str] | None = None,
                               previous_behavioral_lookup: dict | None = None,
@@ -20405,6 +20665,119 @@ def parallel_category_agents(df: pd.DataFrame, persona_doc: dict,
     # If previous_behavioral_lookup is empty, every item is "new" (fresh-pull
     # behaviour preserved unchanged).
     prev_bhv = previous_behavioral_lookup or {}
+
+    # ── Pre-insert PERSONA-AFFILIATED brand rows, GATED by hostmap ────────
+    # Brands that don't exist in `reference.host_mapping` cannot be added to a
+    # profile (no hosts → no panel data → orphan row). Missing brands get
+    # emailed to the data team so they can be added for the next run.
+    _aff_added_per_cat: dict[str, list[str]] = {}
+    _aff_missing_from_hostmap: list[dict] = []
+    try:
+        _aff_list = (persona_doc or {}).get('active_affiliations') or []
+        if isinstance(_aff_list, list) and _aff_list:
+            _hostmap_present: set[str] = set()
+            try:
+                import clickhouse_connect as _ch
+                _ch_client = _ch.get_client(
+                    host='37.27.140.111', port=8123, username='bgapp',
+                    password='4qPllwDG+S3PptBWTRAJPTkpCzkRZ6tZ',
+                    settings={'max_execution_time': 10},
+                )
+                _wanted = sorted({str(a.get('value', '')).strip().upper()
+                                  for a in _aff_list
+                                  if isinstance(a, dict) and a.get('value')})
+                if _wanted:
+                    _qlist = ','.join(f"'{w.replace(chr(39), chr(39)*2)}'" for w in _wanted)
+                    _rows = _ch_client.query(
+                        f"SELECT DISTINCT upper(BRAND) FROM reference.host_mapping "
+                        f"WHERE upper(BRAND) IN ({_qlist})"
+                    ).result_rows
+                    _hostmap_present = {r[0] for r in _rows}
+                    _exact_missing = [w for w in _wanted if w not in _hostmap_present]
+                    for _w in _exact_missing:
+                        _w_safe = _w.replace("'", "''")
+                        _r = _ch_client.query(
+                            f"SELECT 1 FROM reference.host_mapping "
+                            f"WHERE upper(BRAND) LIKE '%{_w_safe}%' LIMIT 1"
+                        ).result_rows
+                        if _r:
+                            _hostmap_present.add(_w)
+            except Exception as _e:
+                print(f"   ⚠️ hostmap lookup failed for affiliation gating: {_e}")
+                _hostmap_present = set()
+
+            _existing_keys = set()
+            for _idx, _r in df.iterrows():
+                try:
+                    _c = str(_r['Column']).strip().upper()
+                    _v = str(_r['Value']).strip().upper()
+                    if _c and _v and _v != 'NAN':
+                        _existing_keys.add((_c, _v))
+                except Exception:
+                    continue
+            _template_by_cat: dict[str, dict] = {}
+            for _idx, _r in df.iterrows():
+                _c = str(_r['Column']).strip().upper()
+                if _c and _c not in _template_by_cat:
+                    _template_by_cat[_c] = _r.to_dict()
+
+            _new_aff_rows: list[dict] = []
+            for _aff in _aff_list:
+                if not isinstance(_aff, dict):
+                    continue
+                _ac = str(_aff.get('category', '')).strip().upper()
+                _av = str(_aff.get('value', '')).strip().upper()
+                if not _ac or not _av:
+                    continue
+                if (_ac, _av) in _existing_keys:
+                    continue
+                if _av not in _hostmap_present:
+                    _aff_missing_from_hostmap.append({
+                        'category': _ac, 'value': _av,
+                        'type': str(_aff.get('type', '')).strip(),
+                        'evidence': str(_aff.get('evidence', '')).strip(),
+                    })
+                    continue
+                _tmpl = _template_by_cat.get(_ac)
+                if _tmpl is None:
+                    print(f"   ⚠️  Affiliation [{_ac}/{_av}] in hostmap but category {_ac} not in df — skipped")
+                    continue
+                _new_row = dict(_tmpl)
+                _new_row['Column'] = _aff.get('category', _ac)
+                _new_row['Value'] = _aff.get('value', _av)
+                for _zc in ('Brand Penetration (Row)', 'Category Share',
+                            'Original Raw Numbers', 'Original Raw Numbers (Database)',
+                            'US Gen Pop Projection', 'Avg_Visit_Frequency',
+                            'Brand_Loyalty_Score', 'High_Engagement_Users_Pct',
+                            'Avg_Days_Active', 'Total_Users', 'Median_Visits'):
+                    if _zc in _new_row:
+                        _new_row[_zc] = 0 if not isinstance(_new_row.get(_zc), str) else ''
+                _new_aff_rows.append(_new_row)
+                _existing_keys.add((_ac, _av))
+                _aff_added_per_cat.setdefault(_ac, []).append(_av)
+
+            if _new_aff_rows:
+                _aff_df = pd.DataFrame(_new_aff_rows)
+                for _col in df.columns:
+                    if _col not in _aff_df.columns:
+                        _aff_df[_col] = '' if df[_col].dtype == object else 0
+                _aff_df = _aff_df[df.columns]
+                df = pd.concat([df, _aff_df], ignore_index=True)
+                print(f"   📌 Pre-inserted {len(_new_aff_rows)} hostmap-validated affiliation row(s):")
+                for _c, _vs in _aff_added_per_cat.items():
+                    print(f"        [{_c}] {_vs}")
+
+            if _aff_missing_from_hostmap:
+                print(f"\n   📨 {len(_aff_missing_from_hostmap)} affiliation brand(s) NOT IN HOSTMAP "
+                      f"— emailing data team:")
+                for _m in _aff_missing_from_hostmap:
+                    print(f"        ❌ [{_m['category']}] {_m['value']} ({_m['type']})")
+                try:
+                    _send_missing_hostmap_email(subject, _aff_missing_from_hostmap)
+                except Exception as _e:
+                    print(f"   ⚠️ missing-hostmap email failed: {_e}")
+    except Exception as _e:
+        print(f"   ⚠️ Affiliation row pre-insert failed (non-fatal): {_e}")
 
     category_values: dict[str, tuple[list[str], list[int]]] = {}        # all items (kept for output write-back)
     category_new_items: dict[str, list[str]] = {}                       # items needing LLM
@@ -25989,6 +26362,15 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
         df_final = reconcile_final_output_from_bp_and_sample_size(df_final)
         df_final = add_us_gen_pop_projection(df_final)
     df_final = perturb_brand_penetration_avoid_dot_0000(df_final)
+    # ── Runtime ground-truth ceiling (non-genpop only) ────────────────────
+    # Cap each brand at GENPOP_CEILING_RATIO × canonical_truth_pct. Skips
+    # demographic categories — they remain hard-locked.
+    if not is_genpop:
+        df_final = enforce_genpop_ceiling(
+            df_final,
+            project_name=project_name,
+            persona_doc=locals().get('_persona_doc') or locals().get('persona_doc'),
+        )
     df_final = reconcile_final_output_from_bp_and_sample_size(df_final)
     df_final = add_us_gen_pop_projection(df_final)
 
@@ -26182,10 +26564,28 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
     # This pass enforces a single canonical BP for each brand across all
     # non-INTEREST categories, using the highest-priority category as source.
     if not is_genpop:
+        df_final = _apply_persona_uniqueness_noise(df_final, project_name=project_name)
         df_final = _align_cross_category_bp(df_final)
         df_final = _ensure_apple_pay_present(df_final, persona_doc=locals().get('_persona_doc') or locals().get('persona_doc'))
         df_final = _enforce_realistic_ceilings(df_final, project_name=project_name, persona_doc=locals().get('_persona_doc') or locals().get('persona_doc'))
         df_final = _break_intra_category_pinning(df_final, project_name=project_name)
+        # Post-write QC: cross-profile pinning check (vs existing S3 profiles)
+        try:
+            import sys as _sys, os as _os
+            _migration_dir = _os.path.join(
+                _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__))),
+                'migration')
+            if _migration_dir not in _sys.path:
+                _sys.path.insert(0, _migration_dir)
+            from audit_cross_profile_pinning import check_new_profile as _check_pinning
+            _check_pinning(df_final, project_name=project_name, send_email=True)
+        except Exception as _e:
+            print(f"   ⚠️ post-write pinning check skipped: {_e}")
+        # Final pass: re-align cross-category BP. Pin-breaking adds tiny
+        # noise that can re-introduce drift between e.g. NIKE in MPB vs
+        # NIKE in APPAREL/FOOTWEAR. Running alignment LAST guarantees that
+        # the same brand always reads the same BP across every category.
+        df_final = _align_cross_category_bp(df_final)
 
     # Save to CSV
     try:
@@ -26543,7 +26943,33 @@ def _enforce_realistic_ceilings(df, project_name: str = '', persona_doc=None):
         except Exception:
             pass
 
+        # Flagship exemption — pull from persona_doc['flagship_brands'] +
+        # KNOWN_PERSONA_FLAGSHIPS. Brands the persona genuinely defines are
+        # exempt from these realistic ceilings (the upstream
+        # enforce_genpop_ceiling at 1.8x truth still caps them, just much
+        # more loosely).
+        flagship_set: set = set()
+        try:
+            import sys as _sys
+            for _p in ('/Users/jennamenking/Desktop/finished_codes/bg-webapp',
+                       '/Users/jennamenking/Desktop/finished_codes'):
+                if _p not in _sys.path:
+                    _sys.path.insert(0, _p)
+            from genpop_calibration import _resolve_flagships as _rf
+            flagship_set = _rf(persona_doc, project_name)
+        except Exception as _e:
+            print(f"   ⚠️ flagship resolver unavailable in realistic-ceilings: {_e}")
+        if flagship_set:
+            print(f"   🛡️  realistic-ceilings: exempting {len(flagship_set)} flagship pair(s) → {sorted(flagship_set)}")
+
+        # Flagship RELAX (not exemption): even when the persona genuinely
+        # defines a brand, no audience is monolithic. Flagship brands get a
+        # 1.3x ceiling boost + hard absolute ceiling of 90, NOT full exemption.
+        FLAGSHIP_CEILING_MULT = 1.3
+        FLAGSHIP_HARD_CEILING = 90.0
+
         clamps = 0
+        flagship_relaxed = 0
         clamp_log = []
         cats_touched = set()
         for idx, r in df.iterrows():
@@ -26554,19 +26980,26 @@ def _enforce_realistic_ceilings(df, project_name: str = '', persona_doc=None):
                 continue
             v = float(r[bp]) if _pd.notnull(r[bp]) else 0.0
             cap = CEILINGS[key]
+            is_flagship = (key in flagship_set)
             if is_athlete and val in ATHLETE_RELAX:
                 cap += ATHLETE_RELAX[val]
             if is_young_male and val in YOUNG_MALE_RELAX:
                 cap += YOUNG_MALE_RELAX[val]
             if is_male_persona and val in F_PRODUCT_BRANDS:
                 cap = min(cap, 6.0)
+            if is_flagship:
+                cap = min(FLAGSHIP_HARD_CEILING, cap * FLAGSHIP_CEILING_MULT)
+                flagship_relaxed += 1
             if v <= cap:
                 continue
+            # Wider cap noise to break cap-induced clusters. May 2026 audit
+            # showed AMAZON 17 profiles in 83-86, STAR WARS 11 in 59-61 —
+            # widening to -8..-0.5 spreads cap=60 across [52, 59.5] = 7.5pt.
             h = int(hashlib.blake2b(
                 f"{project_name}|{cat}|{val}".encode(),
                 digest_size=8).hexdigest(), 16)
-            offset = -0.5 - ((h % 3001) / 1000.0)  # -3.5..-0.5
-            new_v = round(cap + offset, 2)
+            offset = -0.5 - ((h % 7501) / 1000.0)  # -8.0..-0.5 (7.5pt range)
+            new_v = round(cap + offset, 4)
             df.at[idx, bp] = new_v
             clamps += 1
             cats_touched.add(cat)
@@ -26596,9 +27029,86 @@ def _enforce_realistic_ceilings(df, project_name: str = '', persona_doc=None):
                 print(f"        {line}")
             if len(clamp_log) > 25:
                 print(f"        … + {len(clamp_log)-25} more")
+        if flagship_relaxed:
+            print(f"   🛡️  realistic-ceilings RELAXED for {flagship_relaxed} flagship pair(s) "
+                  f"(cap × {FLAGSHIP_CEILING_MULT}, hard-capped at {FLAGSHIP_HARD_CEILING}%)")
         return df
     except Exception as _e:
         print(f"   ⚠️ _enforce_realistic_ceilings failed: {_e}")
+        return df
+
+
+def _apply_persona_uniqueness_noise(df, project_name: str = ''):
+    """Break CROSS-PROFILE pinning. The per-category scoring agent runs at
+    temperature=0 with a uniform 'moderate fit → 2x baseline' rule, so for any
+    item where a persona is a 'moderate fit' (e.g. Boston Red Sox for any
+    celebrity persona), every profile gets the EXACT same number (gen_pop ×
+    2 ≈ 25.68). Audit confirms 8+ profiles tied at 25.68 for BOSTON RED SOX,
+    8+ at 5.00 for MANCHESTER UNITED, etc.
+
+    This pass applies persona-deterministic relative noise to every BP value
+    above 1%. Noise is hashed off (project_name, value) — NOT (cat,val) — so
+    the same brand in multiple categories (NIKE in MPB + APPAREL/FOOTWEAR,
+    BOSTON RED SOX in MLB + AL + AL EAST + SPORTS TEAM) gets the same nudge,
+    keeping cross-category alignment intact while making cross-profile values
+    distinct.
+
+    Magnitudes (relative):
+      • BP >= 30  → ±4% (25.68 → 24.65-26.71; 75.0 → 72.0-78.0)
+      • BP 10-30 → ±6% (15.0 → 14.1-15.9)
+      • BP 1-10  → ±9% (5.0 → 4.55-5.45)
+      • BP < 1   → unchanged (already noisy at 4dp)
+    Demographics + metadata categories are excluded.
+    """
+    import hashlib
+    import pandas as _pd
+    try:
+        bp = 'Brand Penetration (Row)'
+        if bp not in df.columns or not project_name:
+            return df
+        df[bp] = _pd.to_numeric(df[bp], errors='coerce').fillna(0.0)
+
+        EXCLUDE = {'SAMPLE SIZE', 'AGE', 'GENDER', 'ETHNICITY', 'INCOME',
+                   'EDUCATION', 'RELATIONSHIP', 'SEXUAL_ORIENTATION',
+                   'PARENTAL_STATUS', 'OCCUPATION', 'LOCATION',
+                   'INPUT_METADATA', 'BRAND INPUT', 'BRAND CATEGORY',
+                   'AVID FAN', 'CASUAL FAN', 'DMA', 'TIME OF DAY',
+                   'DAY OF WEEK'}
+
+        nudges = 0
+        cats_touched = set()
+        for idx, r in df.iterrows():
+            cat = str(r.get('Column', '')).strip().upper()
+            if cat in EXCLUDE or cat.startswith('TICKER'):
+                continue
+            v = float(r[bp]) if _pd.notnull(r[bp]) else 0.0
+            if v < 1.0:
+                continue
+            val_label = str(r.get('Value', '')).strip().upper()
+            if not val_label:
+                continue
+            h = int(hashlib.blake2b(
+                f"{project_name}|{val_label}".encode(),
+                digest_size=8).hexdigest(), 16)
+            u = (((h % 2001) - 1000) / 1000.0)
+            if v >= 30:
+                pct = 0.04
+            elif v >= 10:
+                pct = 0.06
+            else:
+                pct = 0.09
+            new_v = v * (1.0 + u * pct)
+            new_v = max(0.5, min(99.5, new_v))
+            df.at[idx, bp] = round(new_v, 4)
+            nudges += 1
+            cats_touched.add(cat)
+
+        if nudges and not SILENCE_VERBOSE_OUTPUT:
+            print(f"   🎲 persona-uniqueness noise: {nudges} BPs nudged across {len(cats_touched)} categories "
+                  f"(±4-9% relative, hashed off project+value)")
+        return df
+    except Exception as _e:
+        print(f"   ⚠️ _apply_persona_uniqueness_noise failed: {_e}")
         return df
 
 
