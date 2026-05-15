@@ -19341,6 +19341,8 @@
                     var showName = parts[0].trim();
                     var platform = parts.slice(1).join(' - ').trim(); // Handle cases with multiple dashes
                     tooltip = 'This profile is of all panelists who are active viewers of ' + showName + ' on ' + platform + '.';
+                } else if (category === 'SOCIAL MEDIA' || category === 'STREAMING/PLATFORM' || category === 'STREAMING/MUSIC' || category === 'VIRTUAL MVPD FAST') {
+                    tooltip = 'This profile is of all panelists who are actively engaged with ' + profileName + '. Panelists have visited the platform within the date range below.';
                 } else {
                     // Default tooltip for non-SERIES profiles
                     tooltip = 'This profile is of all panelists who are actively engaged with ' + profileName + '. It uses our signature 5 touch point accuracy method of capturing panelists who do not just know of ' + profileName + ' but go out of their way to engage with them. This means they have interacted with ' + profileName + ' via social media, retail, owned and operated web sites, read/watched/listened to media about them or searched for them. This is capturing digital behavior only.';
