@@ -1573,7 +1573,8 @@ KNOWN_PERSONA_FLAGSHIPS: dict[str, list[tuple[str, str]]] = {
                        ('STREAMING/MUSIC', 'APPLE MUSIC')],
     'TAYLOR SWIFT':   [('STREAMING/MUSIC', 'SPOTIFY'),
                        ('STREAMING/MUSIC', 'APPLE MUSIC')],
-    'RYAN REYNOLDS':  [('STREAMING/PLATFORM', 'DISNEY+')],  # Deadpool/Marvel
+    'RYAN REYNOLDS':  [('STREAMING/PLATFORM', 'DISNEY+'),    # Deadpool/Marvel
+                       ('STREAMING/PLATFORM', 'HULU')],      # Welcome to Wrexham (FX)
     'DWAYNE JOHNSON': [('SPORTS ORGANIZATIONS', 'WORLD WRESTLING ENTERTAINMENT')],
     'LEBRON JAMES':   [('SPORTS ORGANIZATIONS', 'NATIONAL BASKETBALL ASSOCIATION')],
 }
@@ -1595,9 +1596,12 @@ def _resolve_flagships(persona_doc, project_name: str = '') -> set:
             except Exception:
                 pass
     if project_name:
-        pn = str(project_name).upper()
+        # Normalize: strip non-alnum so 'Ryan_Reynolds_v1' matches 'RYAN REYNOLDS'
+        import re as _re
+        pn_norm = _re.sub(r'[^A-Z0-9]+', ' ', str(project_name).upper())
         for persona, brands in KNOWN_PERSONA_FLAGSHIPS.items():
-            if persona in pn:
+            persona_norm = _re.sub(r'[^A-Z0-9]+', ' ', persona.upper())
+            if persona_norm in pn_norm:
                 for cat, val in brands:
                     flagships.add((cat.upper(), val.upper()))
     return flagships

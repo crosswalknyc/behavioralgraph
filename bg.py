@@ -16261,12 +16261,12 @@ Return ONLY a single valid JSON object — no markdown, no commentary.
   "audience_composition": "<2-3 paragraph decomposition of THIS subject's digital audience into sub-segments with rough fractions and which segments drive which brand affinities — see AUDIENCE COMPOSITION instructions below>",
   "digital_identity": "<2-4 paragraph DEEP analysis of this audience's digital footprint — see instructions below>",
   "active_affiliations": [
-    {{"category": "<CATEGORY NAME, e.g. SPORTS ORGANIZATIONS>", "value": "<BRAND/PLATFORM, e.g. WORLD WRESTLING ENTERTAINMENT>", "type": "<one of: athlete_competitor | platform_flagship | brand_collaboration | brand_owner_founder | brand_ambassador | exclusive_content_partner>", "evidence": "<one sentence on the verifiable affiliation, e.g. 'Royal Rumble 2024 entrant + Backlash 2023 PR match-winner'>"}},
+    {{"category": "<MUST BE one of the SCORING CATEGORIES listed above (e.g. SPORTS ORGANIZATIONS, TELECOM, BEVERAGES, STREAMING/PLATFORM, BEAUTY/WELLNESS, APPAREL/FOOTWEAR). NOT 'BRAND OWNER/FOUNDER' or 'FRANCHISE' or 'COMPANY' — those are TYPE labels, not categories>", "value": "<BRAND/PLATFORM in ALL CAPS, e.g. WORLD WRESTLING ENTERTAINMENT, AVIATION GIN, MINT MOBILE, WREXHAM AFC>", "type": "<one of: athlete_competitor | platform_flagship | brand_collaboration | brand_owner_founder | brand_ambassador | exclusive_content_partner>", "evidence": "<one sentence on the verifiable affiliation>"}},
     ...one entry per known active affiliation — see ACTIVE AFFILIATIONS instructions below
   ],
   "flagship_brands": [
-    {{"category": "<CATEGORY NAME>", "value": "<BRAND>", "reason": "<one sentence why this brand should bypass the gen-pop ceiling for this persona>"}},
-    ...subset of active_affiliations where the persona IS the explicit talent/face for the brand
+    {{"category": "<scoring category, same rule as above>", "value": "<BRAND>", "reason": "<one sentence why this brand should bypass the gen-pop ceiling for this persona>"}},
+    ...DO NOT WORRY ABOUT POPULATING THIS — the pipeline will auto-derive it from active_affiliations entries whose type is platform_flagship or exclusive_content_partner. Leave it as [] if uncertain.
   ],
   "subsegments": [
     {{
@@ -16497,6 +16497,21 @@ SPECIFIC WRITING RULES
     to decide rank ordering within a category.
 
 ACTIVE AFFILIATIONS — RESEARCH THIS BEFORE WRITING ANYTHING ELSE:
+
+CRITICAL — `category` FIELD RULE: The `category` field for each affiliation MUST be one of the SCORING CATEGORIES listed at the top of this prompt (e.g. SPORTS ORGANIZATIONS, TELECOM, BEVERAGES, STREAMING/PLATFORM, BEAUTY/WELLNESS, APPAREL/FOOTWEAR, QSR, etc.). The `type` field tells us WHAT KIND of affiliation it is. DO NOT put 'BRAND OWNER/FOUNDER', 'FRANCHISE', 'COMPANY', or 'PRODUCTION COMPANY' in `category` — those are type labels, not scoring buckets.
+
+Correct examples:
+  ✅ {{"category": "MOST PURCHASED BRANDS", "value": "AVIATION GIN", "type": "brand_owner_founder", "evidence": "Reynolds owns it"}}  ← spirits have no scoring category, use MOST PURCHASED BRANDS
+  ✅ {{"category": "TELECOM", "value": "MINT MOBILE", "type": "brand_owner_founder", "evidence": "Reynolds was face of brand until T-Mobile acquisition"}}
+  ✅ {{"category": "SPORTS ORGANIZATIONS", "value": "WREXHAM AFC", "type": "brand_owner_founder", "evidence": "Reynolds + McElhenney co-own"}}
+  ✅ {{"category": "STREAMING/PLATFORM", "value": "DISNEY+", "type": "platform_flagship", "evidence": "Deadpool 3 / Marvel — drives Disney+ subs"}}
+  ✅ {{"category": "MOST PURCHASED BRANDS", "value": "CASAMIGOS", "type": "brand_owner_founder", "evidence": "Clooney founded; sold to Diageo 2017"}}  ← spirits → MPB
+
+WRONG examples (do NOT do this):
+  ❌ {{"category": "BRAND OWNER/FOUNDER", "value": "AVIATION GIN", ...}}     ← BEVERAGES, not BRAND OWNER/FOUNDER
+  ❌ {{"category": "FRANCHISE", "value": "WREXHAM AFC", ...}}                ← SPORTS ORGANIZATIONS, not FRANCHISE
+  ❌ {{"category": "COMPANY", "value": "MINT MOBILE", ...}}                  ← TELECOM, not COMPANY
+
 Before reasoning about audience or brand fit, build a concrete list of THIS subject's active brand/platform affiliations. The pipeline keeps missing these because the AI defaults to scoring "generic actor / generic musician" without knowing the subject is, e.g., an active WWE wrestler or owns the QSR they keep eating at. Common categories to research:
 
   • athlete_competitor — actually competes/performs for a sports league, even part-time. Bad Bunny is a WWE wrestler (Royal Rumble entrant, WrestleMania match-winner). Drake competed in WSOP. Travis Scott is a Houston Rockets fixture. Capture the league as `value`.
@@ -16811,9 +16826,88 @@ EXAMPLE category_signals (hypothetical `consumer_brand` athletic-equipment cohor
               f"{str(_cva_dump)[:380]}{'…' if len(str(_cva_dump)) > 380 else ''}")
     else:
         print("COMMERCIAL VIABILITY AUDIT: (MISSING)")
+
+    # ── Normalize active_affiliations / flagship_brands ───────────────────
+    _persona_doc_normalize_affiliations(persona_doc)
+
     print(f"{'─'*60}\n")
 
     return persona_doc
+
+
+_AFFILIATION_CATEGORY_REMAP = {
+    'BRAND OWNER/FOUNDER': None, 'BRAND OWNER': None, 'OWNER/FOUNDER': None,
+    'FOUNDER': None, 'OWNED BUSINESS': None, 'COMPANY': None, 'BUSINESS': None,
+    'FRANCHISE': 'SPORTS ORGANIZATIONS', 'SPORTS FRANCHISE': 'SPORTS ORGANIZATIONS',
+    'SPORTS TEAM': 'SPORTS ORGANIZATIONS', 'TEAM': 'SPORTS ORGANIZATIONS',
+    'LEAGUE': 'SPORTS ORGANIZATIONS', 'SPORTS LEAGUE': 'SPORTS ORGANIZATIONS',
+    'STREAMING': 'STREAMING/PLATFORM', 'STREAMING SERVICE': 'STREAMING/PLATFORM',
+    'PLATFORM': 'STREAMING/PLATFORM', 'MUSIC PLATFORM': 'STREAMING/MUSIC',
+    'MUSIC': 'STREAMING/MUSIC', 'MUSIC SERVICE': 'STREAMING/MUSIC',
+    'TELECOM': 'TELECOM', 'TELECOMMUNICATIONS': 'TELECOM',
+    'CARRIER': 'TELECOM', 'WIRELESS': 'TELECOM',
+    'BEVERAGE': 'MOST PURCHASED BRANDS', 'BEVERAGES': 'MOST PURCHASED BRANDS',
+    'ALCOHOL': 'MOST PURCHASED BRANDS', 'SPIRITS': 'MOST PURCHASED BRANDS',
+    'GIN': 'MOST PURCHASED BRANDS', 'TEQUILA': 'MOST PURCHASED BRANDS',
+    'WHISKEY': 'MOST PURCHASED BRANDS', 'WINE': 'MOST PURCHASED BRANDS',
+    'BEER': 'MOST PURCHASED BRANDS',
+    'BEAUTY': 'BEAUTY/WELLNESS', 'COSMETICS': 'BEAUTY/WELLNESS', 'SKINCARE': 'BEAUTY/WELLNESS',
+    'APPAREL': 'APPAREL/FOOTWEAR', 'FOOTWEAR': 'APPAREL/FOOTWEAR',
+    'FASHION': 'APPAREL/FOOTWEAR', 'CLOTHING': 'APPAREL/FOOTWEAR',
+    'PRODUCTION COMPANY': None, 'STUDIO': None, 'MEDIA': None, 'PRODUCT': None,
+}
+
+_VALUE_TO_CATEGORY_HINTS = {
+    'AVIATION GIN': 'MOST PURCHASED BRANDS', 'AVIATION AMERICAN GIN': 'MOST PURCHASED BRANDS',
+    'CASAMIGOS': 'MOST PURCHASED BRANDS', 'TEREMANA': 'MOST PURCHASED BRANDS',
+    'ZOA': 'MOST PURCHASED BRANDS',
+    'MINT MOBILE': 'TELECOM',
+    'WREXHAM': 'SPORTS ORGANIZATIONS', 'WREXHAM AFC': 'SPORTS ORGANIZATIONS',
+    'FENTY': 'BEAUTY/WELLNESS', 'FENTY BEAUTY': 'BEAUTY/WELLNESS',
+    'RARE BEAUTY': 'BEAUTY/WELLNESS',
+    'SAVAGE X FENTY': 'APPAREL/FOOTWEAR', 'SKIMS': 'APPAREL/FOOTWEAR',
+    'PROJECT ROCK': 'APPAREL/FOOTWEAR',
+}
+
+
+def _persona_doc_normalize_affiliations(persona_doc: dict) -> None:
+    aa = persona_doc.get('active_affiliations') or []
+    if not isinstance(aa, list):
+        persona_doc['active_affiliations'] = []
+        persona_doc['flagship_brands'] = []
+        return
+    cleaned: list[dict] = []
+    for item in aa:
+        if not isinstance(item, dict):
+            continue
+        cat = str(item.get('category', '')).upper().strip()
+        val = str(item.get('value', '')).upper().strip()
+        typ = str(item.get('type', '')).lower().strip()
+        ev = str(item.get('evidence', '')).strip()
+        if not val:
+            continue
+        if cat in _AFFILIATION_CATEGORY_REMAP:
+            mapped = _AFFILIATION_CATEGORY_REMAP[cat]
+            cat = mapped if mapped else _VALUE_TO_CATEGORY_HINTS.get(val, '')
+        if not cat:
+            cat = _VALUE_TO_CATEGORY_HINTS.get(val, '') or str(item.get('category', '')).upper().strip()
+        cleaned.append({'category': cat, 'value': val, 'type': typ, 'evidence': ev})
+    persona_doc['active_affiliations'] = cleaned
+    _FLAGSHIP_TYPES = {'platform_flagship', 'exclusive_content_partner'}
+    derived: list[dict] = []
+    seen: set[tuple[str, str]] = set()
+    for item in cleaned:
+        if item['type'] in _FLAGSHIP_TYPES and item['category'] and item['value']:
+            k = (item['category'], item['value'])
+            if k not in seen:
+                seen.add(k)
+                derived.append({'category': item['category'], 'value': item['value'],
+                                'reason': item['evidence'] or f'{item["type"]} affiliation'})
+    persona_doc['flagship_brands'] = derived
+    print(f"\nAFFILIATIONS NORMALIZED: {len(cleaned)} active, {len(derived)} flagship")
+    for it in cleaned:
+        marker = '⭐' if (it['category'], it['value']) in seen else '  '
+        print(f"  {marker} [{it['category']:25s}] {it['value']:30s} ({it['type']})")
 
 
 def _validate_persona_quality(persona_doc: dict, subject: str) -> tuple[bool, list[str]]:
@@ -17688,6 +17782,50 @@ def _run_single_category_agent(category: str, values: list[str],
         if expected_low else '  (none specified)'
     )
 
+    # ── PERSONA-AFFILIATED BRANDS for this category (REQUIRED INCLUSIONS) ──
+    _aff_for_cat: list[dict] = []
+    _cat_u_aff = category.strip().upper()
+    for _aff in (persona_doc.get('active_affiliations') or []):
+        if not isinstance(_aff, dict):
+            continue
+        if str(_aff.get('category', '')).strip().upper() == _cat_u_aff:
+            _aff_for_cat.append(_aff)
+
+    if _aff_for_cat:
+        _values_upper = {str(v).strip().upper() for v in values}
+        for _aff in _aff_for_cat:
+            _av = str(_aff.get('value', '')).strip()
+            if _av and _av.upper() not in _values_upper:
+                values = list(values) + [_av]
+                _values_upper.add(_av.upper())
+        _aff_lines = []
+        for _aff in _aff_for_cat:
+            _v = str(_aff.get('value', '')).strip()
+            _t = str(_aff.get('type', '')).strip()
+            _e = str(_aff.get('evidence', '')).strip()
+            _aff_lines.append(f"  - {_v}  [{_t}] — {_e}")
+        affiliation_block = (
+            "\n═══════════════════════════════════════════════════════════════════\n"
+            f"PERSONA-AFFILIATED BRANDS in {category} — REQUIRED INCLUSIONS\n"
+            "═══════════════════════════════════════════════════════════════════\n"
+            f"This persona has VERIFIED affiliations with the following brand(s) in this category. "
+            f"You MUST score each of these and they MUST land at a meaningfully ELEVATED BP "
+            f"versus gen-pop baseline (typical range 2-5x baseline depending on how central the "
+            f"brand is to the persona's public identity). Score guidance:\n"
+            "  • brand_owner_founder + still active spokesperson  → 4-7x baseline\n"
+            "  • brand_owner_founder, sold but still associated   → 2.5-4x baseline\n"
+            "  • athlete_competitor (active)                       → 3-5x baseline\n"
+            "  • platform_flagship                                 → 2-3.5x baseline\n"
+            "  • brand_collaboration / brand_ambassador (current)  → 2-3.5x baseline\n"
+            "  • exclusive_content_partner                         → 2.5-4x baseline\n\n"
+            "BRANDS:\n"
+            + '\n'.join(_aff_lines)
+            + "\n\nIMPORTANT — if a brand listed above is not already in the ITEMS TO SCORE list, "
+            "ADD IT to your output with the elevated BP. Do not skip it just because it wasn't pre-listed.\n"
+        )
+    else:
+        affiliation_block = ""
+
     # ── Format the category rule (Pass 1 output) for inclusion in the prompt ──
     def _fmt_tier_rules() -> str:
         if not tier_rules:
@@ -17925,6 +18063,7 @@ EXPECTED HIGH-FIT ITEMS for this category (persona research):
 
 EXPECTED LOW-FIT ITEMS (famous but persona doesn't engage):
 {expected_low_block}
+{affiliation_block}
 """
 
     prompt = f"""You are a senior consumer-research analyst.
@@ -26592,7 +26731,27 @@ def _enforce_realistic_ceilings(df, project_name: str = '', persona_doc=None):
         except Exception:
             pass
 
+        # Flagship exemption — pull from persona_doc['flagship_brands'] +
+        # KNOWN_PERSONA_FLAGSHIPS. Brands the persona genuinely defines are
+        # exempt from these realistic ceilings (the upstream
+        # enforce_genpop_ceiling at 1.8x truth still caps them, just much
+        # more loosely).
+        flagship_set: set = set()
+        try:
+            import sys as _sys
+            for _p in ('/Users/jennamenking/Desktop/finished_codes/bg-webapp',
+                       '/Users/jennamenking/Desktop/finished_codes'):
+                if _p not in _sys.path:
+                    _sys.path.insert(0, _p)
+            from genpop_calibration import _resolve_flagships as _rf
+            flagship_set = _rf(persona_doc, project_name)
+        except Exception as _e:
+            print(f"   ⚠️ flagship resolver unavailable in realistic-ceilings: {_e}")
+        if flagship_set:
+            print(f"   🛡️  realistic-ceilings: exempting {len(flagship_set)} flagship pair(s) → {sorted(flagship_set)}")
+
         clamps = 0
+        flagship_skips = 0
         clamp_log = []
         cats_touched = set()
         for idx, r in df.iterrows():
@@ -26600,6 +26759,9 @@ def _enforce_realistic_ceilings(df, project_name: str = '', persona_doc=None):
             val = str(r.get('Value','')).strip().upper()
             key = (cat, val)
             if key not in CEILINGS:
+                continue
+            if key in flagship_set:
+                flagship_skips += 1
                 continue
             v = float(r[bp]) if _pd.notnull(r[bp]) else 0.0
             cap = CEILINGS[key]
@@ -26645,6 +26807,8 @@ def _enforce_realistic_ceilings(df, project_name: str = '', persona_doc=None):
                 print(f"        {line}")
             if len(clamp_log) > 25:
                 print(f"        … + {len(clamp_log)-25} more")
+        if flagship_skips:
+            print(f"   🛡️  realistic-ceilings exempted {flagship_skips} flagship pair(s) (only 1.8x truth cap applies)")
         return df
     except Exception as _e:
         print(f"   ⚠️ _enforce_realistic_ceilings failed: {_e}")
