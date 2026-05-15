@@ -12293,6 +12293,50 @@ def _load_latest_hf_alpha_cache(ticker_slug, max_lookback_days=7):
     return None, None
 
 
+# ---------------------------------------------------------------------------
+# Per-day "sent log" — guarantees each recipient email receives at most one
+# Fin IQ Alpha Ideas digest per day, even if the cron fires multiple times
+# (e.g. multiple Render cron entries, external schedulers, manual triggers).
+# Stored in S3 so it survives restarts and is shared across web workers.
+# ---------------------------------------------------------------------------
+def _hf_alpha_sent_log_key(day_str):
+    return f"{HF_ALPHA_IDEAS_PREFIX}sent_log/{day_str}.json"
+
+
+def _load_hf_alpha_sent_log(day_str):
+    """Return a set of lowercased emails already sent on `day_str`."""
+    try:
+        key = _hf_alpha_sent_log_key(day_str)
+        resp = s3_client.get_object(Bucket=METADATA_BUCKET, Key=key)
+        payload = json.loads(resp['Body'].read().decode('utf-8'))
+        return {str(e).lower() for e in (payload.get('emails') or [])}
+    except s3_client.exceptions.NoSuchKey:
+        return set()
+    except Exception as e:
+        print(f"⚠️ HF Alpha sent-log read error for {day_str}: {e}")
+        return set()
+
+
+def _append_hf_alpha_sent_log(day_str, email):
+    """Record that `email` was sent the digest for `day_str` (idempotent)."""
+    try:
+        emails = _load_hf_alpha_sent_log(day_str)
+        emails.add(str(email).strip().lower())
+        key = _hf_alpha_sent_log_key(day_str)
+        s3_client.put_object(
+            Bucket=METADATA_BUCKET,
+            Key=key,
+            Body=json.dumps({
+                'day': day_str,
+                'emails': sorted(emails),
+                'updated_at': datetime.now(HF_ALPHA_TZ).isoformat(),
+            }, indent=2),
+            ContentType='application/json',
+        )
+    except Exception as e:
+        print(f"⚠️ HF Alpha sent-log write error for {day_str}: {e}")
+
+
 def _load_hf_novelty_memory(ticker_slug, weeks_back=4, current_day_str=None):
     """Load past N weeks of Alpha Ideas for a ticker to enable novelty constraints.
 
@@ -13128,9 +13172,17 @@ def _build_hf_alpha_email_html(username, alpha_packets, as_of_date, app_base_url
 
 
 def _get_hf_digest_recipients():
+    """Build the Fin IQ Alpha Ideas digest recipient list.
+
+    Deduplicates by lowercased email so users who exist under multiple
+    usernames with the same email (or are listed multiple times) only
+    appear once. Ticker entitlements from all matching user records are
+    merged so the recipient still sees every ticker they are entitled to.
+    """
     users_data = load_users().get('users', {})
     all_tickers = _list_hf_ticker_rows()
-    recipients = []
+    by_email = {}
+    order = []
     for username, user in users_data.items():
         role = _normalize_role(user.get('role', 'user'))
         access = apply_cloak_product_access_overrides(compute_product_access_flags(user, role))
@@ -13145,12 +13197,24 @@ def _get_hf_digest_recipients():
         ticker_rows = [row for row in all_tickers if _user_can_access_hf_ticker(row, allow_set)]
         if not ticker_rows:
             continue
-        recipients.append({
-            'username': username,
-            'email': email,
-            'tickers': ticker_rows
-        })
-    return recipients
+        email_key = email.lower()
+        if email_key in by_email:
+            existing = by_email[email_key]
+            seen_keys = {(r.get('s3_key') or r.get('ticker')) for r in existing['tickers']}
+            for row in ticker_rows:
+                k = row.get('s3_key') or row.get('ticker')
+                if k and k not in seen_keys:
+                    existing['tickers'].append(row)
+                    seen_keys.add(k)
+        else:
+            rec = {
+                'username': username,
+                'email': email,
+                'tickers': ticker_rows,
+            }
+            by_email[email_key] = rec
+            order.append(email_key)
+    return [by_email[k] for k in order]
 
 
 def send_hf_alpha_ideas_digest(
@@ -13161,6 +13225,7 @@ def send_hf_alpha_ideas_digest(
     test_ticker_or_s3_key=None,
     limit_tickers_per_recipient=None,
     force_regenerate=False,
+    bypass_sent_log=False,
 ):
     run_day = requested_date or _hf_alpha_today_str()
     recipients = _get_hf_digest_recipients()
@@ -13170,6 +13235,11 @@ def send_hf_alpha_ideas_digest(
     skipped = []
     if only_username:
         recipients = [r for r in recipients if r['username'] == only_username]
+    # Idempotency: skip any email already sent the digest for this run_day,
+    # unless we're in a QA mode (test_email / dry_run) or the caller explicitly
+    # opted in to a resend via bypass_sent_log.
+    suppress_idempotency = bool(dry_run or test_email or bypass_sent_log)
+    already_sent_emails = set() if suppress_idempotency else _load_hf_alpha_sent_log(run_day)
     if test_email:
         # Single-recipient QA mode: route all sends to one email and cap payload size.
         if recipients:
@@ -13206,6 +13276,14 @@ def send_hf_alpha_ideas_digest(
     app_url = (os.environ.get('APP_BASE_URL') or os.environ.get('PUBLIC_APP_URL') or '').strip() or request.host_url.rstrip('/')
 
     for rec in recipients:
+        rec_email_key = (rec.get('email') or '').strip().lower()
+        if rec_email_key and rec_email_key in already_sent_emails:
+            skipped.append({
+                'username': rec.get('username'),
+                'email': rec.get('email'),
+                'reason': f'Already sent on {run_day} (idempotent skip)',
+            })
+            continue
         packets = []
         ticker_rows = list(rec['tickers'] or [])
         if isinstance(limit_tickers_per_recipient, int) and limit_tickers_per_recipient > 0:
@@ -13250,6 +13328,12 @@ def send_hf_alpha_ideas_digest(
         ok, msg = send_email_via_gmail(rec['email'], subject, html_content, text)
         if ok:
             sent.append({'username': rec['username'], 'email': rec['email'], 'ticker_count': len(packets)})
+            # Persist to sent log so subsequent cron firings today are no-ops
+            # (skip in QA modes — test_email rewrites the addressee and
+            # dry_run never actually sent).
+            if not suppress_idempotency and rec_email_key:
+                _append_hf_alpha_sent_log(run_day, rec['email'])
+                already_sent_emails.add(rec_email_key)
         else:
             skipped.append({'username': rec['username'], 'email': rec['email'], 'reason': msg})
 
@@ -13852,6 +13936,7 @@ def admin_run_hf_alpha_ideas():
         test_ticker_or_s3_key = (body.get('test_ticker_or_s3_key') or '').strip() or None
         limit_tickers = body.get('limit_tickers_per_recipient')
         force_regenerate = bool(body.get('force_regenerate', False))
+        bypass_sent_log = bool(body.get('bypass_sent_log', False))
         try:
             limit_tickers = int(limit_tickers) if limit_tickers is not None else None
         except Exception:
@@ -13864,6 +13949,7 @@ def admin_run_hf_alpha_ideas():
             test_ticker_or_s3_key=test_ticker_or_s3_key,
             limit_tickers_per_recipient=limit_tickers,
             force_regenerate=force_regenerate,
+            bypass_sent_log=bypass_sent_log,
         )
         return jsonify(result)
     except Exception as e:
@@ -13873,7 +13959,13 @@ def admin_run_hf_alpha_ideas():
 
 @app.route('/api/cron/hf-alpha-ideas', methods=['GET', 'POST'])
 def cron_hf_alpha_ideas():
-    """Weekday cron endpoint for Fin IQ alpha generation + digest send."""
+    """Monday-only cron endpoint for Fin IQ alpha generation + digest send.
+
+    Runs once per week on Monday (ET). Use ?force=1 to bypass the day-of-week
+    gate. The digest itself is idempotent per email per day (see sent log in
+    `send_hf_alpha_ideas_digest`), so duplicate cron firings on the same day
+    will not produce duplicate emails.
+    """
     secret = request.headers.get('X-Cron-Secret') or request.args.get('secret') or ''
     expected = os.environ.get('CRON_SECRET', '')
     if not expected or secret != expected:
@@ -13885,19 +13977,26 @@ def cron_hf_alpha_ideas():
         test_ticker_or_s3_key = (request.args.get('test_ticker_or_s3_key') or '').strip() or None
         limit_tickers_raw = request.args.get('limit_tickers', '').strip()
         force_regenerate = request.args.get('force_regenerate', '').strip().lower() in ('1', 'true', 'yes')
+        bypass_sent_log = request.args.get('bypass_sent_log', '').strip().lower() in ('1', 'true', 'yes')
         try:
             limit_tickers = int(limit_tickers_raw) if limit_tickers_raw else None
         except Exception:
             limit_tickers = None
         now_et = datetime.now(HF_ALPHA_TZ)
-        if now_et.weekday() >= 5 and not force:
-            return jsonify({'success': True, 'skipped': True, 'reason': 'Weekend (ET)', 'timestamp_et': now_et.isoformat()})
+        if now_et.weekday() != 0 and not force:
+            return jsonify({
+                'success': True,
+                'skipped': True,
+                'reason': f'Not Monday (ET) — weekday={now_et.weekday()} (0=Mon, 6=Sun)',
+                'timestamp_et': now_et.isoformat(),
+            })
         result = send_hf_alpha_ideas_digest(
             dry_run=dry_run,
             test_email=test_email,
             test_ticker_or_s3_key=test_ticker_or_s3_key,
             limit_tickers_per_recipient=limit_tickers,
             force_regenerate=force_regenerate,
+            bypass_sent_log=bypass_sent_log,
         )
         result['timestamp_et'] = now_et.isoformat()
         return jsonify(result)
