@@ -1327,6 +1327,17 @@ def _format_brand_intelligence_block(brand_names: list, max_brands: int = 200) -
         "cool factor, recent SEC/news signals, and cross-shop network to inform\n"
         "the per-segment engagement rate you assign in your audience-fraction\n"
         "math.\n\n"
+        "AUDIENCE-vs-TALENT — THIS IS THE MOST COMMON MISTAKE; READ FIRST:\n"
+        "  You are scoring the AUDIENCE that engages with this persona's\n"
+        "  content, NOT the persona's own personal usage. A celebrity may\n"
+        "  personally be huge on TikTok / be a Spotify all-time top streamer /\n"
+        "  star in HBO's flagship show, but their AUDIENCE engagement with\n"
+        "  that platform is driven by the AUDIENCE's demographic profile,\n"
+        "  not the persona's personal presence. Pedro Pascal personally has\n"
+        "  millions of TikTok followers, but his older male audience uses\n"
+        "  TikTok at MUCH lower rates than his personal follower count\n"
+        "  suggests. Do NOT inflate a platform's BP just because the persona\n"
+        "  themselves is big on it. Score the audience, not the talent.\n\n"
         "HOW TO USE THESE SIGNALS — read carefully:\n"
         "  1. cool_factor (RISING/DECLINING) applies ONLY to the archetypes in\n"
         "     over_indexes_for. A brand RISING for TikTok Gen Z does NOT rise for\n"
@@ -25993,7 +26004,11 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
     # Cap each brand at GENPOP_CEILING_RATIO × canonical_truth_pct. Skips
     # demographic categories — they remain hard-locked.
     if not is_genpop:
-        df_final = enforce_genpop_ceiling(df_final)
+        df_final = enforce_genpop_ceiling(
+            df_final,
+            project_name=project_name,
+            persona_doc=locals().get('_persona_doc') or locals().get('persona_doc'),
+        )
     df_final = reconcile_final_output_from_bp_and_sample_size(df_final)
     df_final = add_us_gen_pop_projection(df_final)
 
@@ -26191,6 +26206,11 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
         df_final = _ensure_apple_pay_present(df_final, persona_doc=locals().get('_persona_doc') or locals().get('persona_doc'))
         df_final = _enforce_realistic_ceilings(df_final, project_name=project_name, persona_doc=locals().get('_persona_doc') or locals().get('persona_doc'))
         df_final = _break_intra_category_pinning(df_final, project_name=project_name)
+        # Final pass: re-align cross-category BP. Pin-breaking adds tiny
+        # noise that can re-introduce drift between e.g. NIKE in MPB vs
+        # NIKE in APPAREL/FOOTWEAR. Running alignment LAST guarantees that
+        # the same brand always reads the same BP across every category.
+        df_final = _align_cross_category_bp(df_final)
 
     # Save to CSV
     try:
