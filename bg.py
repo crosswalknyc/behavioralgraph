@@ -26779,6 +26779,7 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
         df_final = _ensure_apple_pay_present(df_final, persona_doc=locals().get('_persona_doc') or locals().get('persona_doc'))
         df_final = _enforce_realistic_ceilings(df_final, project_name=project_name, persona_doc=locals().get('_persona_doc') or locals().get('persona_doc'))
         df_final = _break_intra_category_pinning(df_final, project_name=project_name)
+        df_final = _break_global_long_tail_pinning(df_final, project_name=project_name)
 
         # PRE-SAVE corpus check: compare this profile against every existing
         # S3 profile and PUSH any high-BP brand out of corpus clusters BEFORE
@@ -27437,6 +27438,93 @@ def _break_intra_category_pinning(df, project_name: str = ''):
         return df
     except Exception as _e:
         print(f"   ⚠️ _break_intra_category_pinning failed: {_e}")
+        return df
+
+
+def _break_global_long_tail_pinning(df, project_name: str = '',
+                                    min_pin_count: int = 4,
+                                    bp_ceiling: float = 5.0,
+                                    max_jitter_pp: float = 0.45):
+    """Break GLOBAL long-tail pinning. Catches what `_break_intra_category_pinning`
+    misses: many brands across DIFFERENT categories all landing on the exact
+    same low BP (e.g. Mavs had 7 brands at 1.00% spread across TALENT /
+    MUSICIAN/BAND / MOST PURCHASED BRANDS / EVENTS / APPAREL). That's a
+    floor/rounding artifact, not a real distribution.
+
+    For any BP value ≤ `bp_ceiling`% that appears ≥ `min_pin_count` times
+    anywhere in the profile, apply a deterministic ±`max_jitter_pp` pp
+    jitter (hashed off project + category + value so it's reproducible
+    across reruns and same-celeb requeries).
+
+    Original Raw Numbers and US Gen Pop Projection scale in proportion.
+    Category Share is renormalized for any touched category.
+    """
+    import hashlib
+    import pandas as _pd
+    from collections import Counter
+    try:
+        bp_col = 'Brand Penetration (Row)'
+        if bp_col not in df.columns:
+            return df
+        df[bp_col] = _pd.to_numeric(df[bp_col], errors='coerce').fillna(0.0)
+
+        rounded = df[bp_col].round(4)
+        counts = Counter(rounded)
+        pinned_vals = {bp for bp, n in counts.items()
+                       if n >= min_pin_count and 0 < bp <= bp_ceiling}
+        if not pinned_vals:
+            return df
+
+        raw_col = 'Original Raw Numbers' if 'Original Raw Numbers' in df.columns else None
+        prj_col = 'US Gen Pop Projection' if 'US Gen Pop Projection' in df.columns else None
+        cats_touched: set[str] = set()
+        n_jit = 0
+
+        for idx, row in df.iterrows():
+            try:
+                bp = float(row[bp_col])
+            except (TypeError, ValueError):
+                continue
+            bp_r = round(bp, 4)
+            if bp_r not in pinned_vals:
+                continue
+            cat_u = str(row.get('Column', '')).strip().upper()
+            val_u = str(row.get('Value', '')).strip().upper()
+            seed = f"{project_name}|{cat_u}|{val_u}|tail-jitter".encode('utf-8')
+            h = hashlib.blake2b(seed, digest_size=4).digest()
+            u = int.from_bytes(h, 'big') / 0xFFFFFFFF
+            jitter = (u * 2 - 1) * max_jitter_pp
+            new_bp = max(0.05, bp + jitter)
+            scale = new_bp / bp if bp > 0 else 1.0
+            df.at[idx, bp_col] = round(new_bp, 4)
+            if raw_col and _pd.notna(row.get(raw_col)):
+                try:
+                    df.at[idx, raw_col] = round(float(row[raw_col]) * scale)
+                except (TypeError, ValueError):
+                    pass
+            if prj_col and _pd.notna(row.get(prj_col)):
+                try:
+                    df.at[idx, prj_col] = round(float(row[prj_col]) * scale)
+                except (TypeError, ValueError):
+                    pass
+            n_jit += 1
+            if cat_u:
+                cats_touched.add(cat_u)
+
+        if 'Category Share' in df.columns:
+            for cat in cats_touched:
+                m = df['Column'].astype(str).str.upper() == cat
+                bps = _pd.to_numeric(df.loc[m, bp_col], errors='coerce').fillna(0.0)
+                tot = float(bps.sum())
+                if tot > 0:
+                    df.loc[m, 'Category Share'] = (bps / tot * 100).round(4)
+
+        if n_jit:
+            print(f"   ✅ broke {n_jit} global long-tail pin rows "
+                  f"(across {len(cats_touched)} categories, {len(pinned_vals)} pin clusters)")
+        return df
+    except Exception as _e:
+        print(f"   ⚠️ _break_global_long_tail_pinning failed: {_e}")
         return df
 
 
