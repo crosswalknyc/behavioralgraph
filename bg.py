@@ -18017,6 +18017,34 @@ If you can't articulate a reason, your default is genpop × 1.0 (or 1.5%
 if no genpop). Do NOT rubber-stamp panel readings. Do NOT default to a
 generic 27%-style middle.
 
+═══════════════════════════════════════════════════════════════════
+GROUND-TRUTH CONVERGENCE IS FINE — MECHANICAL DEFAULTS ARE NOT
+═══════════════════════════════════════════════════════════════════
+It is PERFECTLY ACCEPTABLE for two profiles to land at similar BPs for a
+truly ubiquitous brand. If Netflix has ~68% US reach and your persona is
+mass-market with no anti-fit, landing at 65-72% is CORRECT — even if 10
+other profiles also landed in that band. The corpus naturally converges
+on reality for ubiquitous brands.
+
+The ANTI-PATTERN we are trying to avoid is the OPPOSITE — emitting a
+GENERIC DEFAULT VALUE (e.g. always 25-26% for every regional team across
+every persona, always ~5% for every long-tail apparel brand) because you
+didn't bother to reason per-persona. That's mechanical pinning and it's
+wrong.
+
+The test for any value you emit:
+  ❌ "I gave it ~5% because that felt like a reasonable middle for an
+      unknown brand" — STOP. Reason per-persona instead.
+  ✅ "I gave it 5.8% because casuals (50%) × 4% engagement + actives
+      (30%) × 12% engagement = 5.6, rounded toward 6" — KEEP.
+  ✅ "I gave it 68% because Netflix is genuinely near-universal and this
+      mass-market persona has no anti-fit, so I matched gen-pop" — KEEP.
+
+Honest persona-driven reasoning may produce values close to gen-pop for
+ubiquitous brands and values far from gen-pop for niche-fit brands.
+Both outcomes are correct as long as your `reason` shows the per-persona
+math.
+
 Never drop/zero a row solely because gen-pop is missing. Missing baseline
 means "reason from persona + item reality"; only unknown/unsupported rows
 should be kept in the conservative sub-1% band.
