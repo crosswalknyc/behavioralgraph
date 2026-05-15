@@ -2010,8 +2010,12 @@ def check_s3_for_existing(brand_search, start_date, end_date):
                 if not key.endswith('.csv'):
                     continue
                 
-                # Skip system files
-                if key.startswith('system/'):
+                # Skip system, historic, backup, and purgatory files
+                if (key.startswith('system/')
+                        or key.startswith('historic/')
+                        or key.startswith('backups/')
+                        or key.startswith('_backups/')
+                        or key.startswith(S3_PURGATORY_PREFIX)):
                     continue
                 
                 # Extract the "name part" of the filename (before the date suffix).
@@ -5303,8 +5307,12 @@ def get_admin_content():
         for page in paginator.paginate(Bucket=bucket_name, Prefix=''):
             for obj in page.get('Contents', []):
                 key = obj['Key']
-                # Skip historic folder, system folder, and non-CSV files
-                if key.startswith('historic/') or key.startswith('system/') or not key.endswith('.csv'):
+                # Skip historic, system, backup folders, and non-CSV files
+                if (key.startswith('historic/')
+                        or key.startswith('system/')
+                        or key.startswith('backups/')
+                        or key.startswith('_backups/')
+                        or not key.endswith('.csv')):
                     continue
                 
                 # Parse file info
@@ -18993,7 +19001,12 @@ def smart_cache_update():
         for page in paginator.paginate(Bucket=S3_BUCKET):
             for obj in page.get('Contents', []):
                 key = obj['Key']
-                if not key.endswith('.csv') or key.startswith('system/') or key.startswith('historic/') or key.startswith(S3_PURGATORY_PREFIX):
+                if (not key.endswith('.csv')
+                        or key.startswith('system/')
+                        or key.startswith('historic/')
+                        or key.startswith('backups/')
+                        or key.startswith('_backups/')
+                        or key.startswith(S3_PURGATORY_PREFIX)):
                     continue
                 
                 current_s3_keys.add(key)
@@ -19096,7 +19109,12 @@ def refresh_s3_cache(incremental=True):
         for page in paginator.paginate(Bucket=S3_BUCKET):
             for obj in page.get('Contents', []):
                 key = obj['Key']
-                if not key.endswith('.csv') or key.startswith('system/') or key.startswith(S3_PURGATORY_PREFIX):
+                if (not key.endswith('.csv')
+                        or key.startswith('system/')
+                        or key.startswith('historic/')
+                        or key.startswith('backups/')
+                        or key.startswith('_backups/')
+                        or key.startswith(S3_PURGATORY_PREFIX)):
                     continue
                 
                 job_data = process_s3_file_metadata(key, obj)

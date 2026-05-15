@@ -11983,6 +11983,11 @@ def check_s3_for_existing_results(brand, start_date, end_date):
                 key = obj['Key']
                 if not key.endswith('.csv'):
                     continue
+                # Skip backups, system, historic, purgatory — never duplicate-match against them
+                if (key.startswith('backups/') or key.startswith('_backups/')
+                        or key.startswith('system/') or key.startswith('historic/')
+                        or key.startswith('purgatory/')):
+                    continue
                 
                 filename_lower = key.lower()
                 if normalized_brand not in filename_lower and brand.lower() not in filename_lower:
