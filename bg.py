@@ -16600,6 +16600,21 @@ WHY MAJOR-AUDIENCE PERSONAS LOOK LIKE GEN POP ON COMMODITY BRANDS:
 
 The pipeline runs a holistic Claude sanity check at the END that compares this profile to Gen Pop and 2-3 peer profiles in the same archetype to catch these gaps. So you don't have to memorize any numeric ranges — just REASON honestly about whether this persona's audience would realistically consume MORE or LESS of each commodity brand than the average US adult, and let the sanity check correct your blind spots if any.
 
+COMMODITY-BRAND REASONING (read this BEFORE scoring WALMART / AMAZON / GOOGLE / VISA / MASTERCARD / AMEX / etc.):
+
+These brands are *infrastructure*. Their gen-pop reach is so broad that under-scoring them is almost always wrong. Reason about them this way:
+
+1. Walmart, Amazon, Google, YouTube, McDonald's, Visa — these are not "mass-market lifestyle choices." They're effectively utilities. >85% of US adults shop Walmart at least once a year. >85% search on Google. >50% have a Visa card. The right question is NEVER "does this audience like Walmart?" — it's "what fraction of THIS specific audience would have used Walmart in the past year?" For almost every persona that answer is "most of them, modulated up or down by income / geography / urbanity." The reflex of "celebrity audience is niche so commodity brands shouldn't apply" is the #1 defect we see — DO NOT do that. The audience IS gen-pop with a fan halo, not a separate species.
+
+2. When deciding whether to score a commodity brand BELOW gen-pop, you need an active reason — not the absence of a reason. Default to gen-pop, then adjust:
+   • UP for: mass / blue-collar / suburban / Latino / Texas / Southeast personas, value-conscious audiences, working families.
+   • DOWN for: high-income coastal / Manhattan-Brooklyn arthouse / SF tech / luxury-skew personas (and even then, "down" means maybe 10-20pp below gen-pop, not 40pp below).
+   • Walmart is the canonical case where the agent reflexively under-scores. Anti-Walmart sentiment exists in a narrow coastal-affluent slice; it is NOT the default.
+
+3. Visa / Mastercard / Amex — these are NOT mutually exclusive. Most US adults have BOTH a Visa and a Mastercard (different banks issue different networks). So Visa near gen-pop AND Mastercard near gen-pop AND Amex modulated by income is the realistic shape. Do not zero-sum these against each other. Amex over-indexes for high-income personas and under-indexes for low-income; Visa and Mastercard are both broad infrastructure.
+
+4. Reason about each commodity brand individually based on the persona's actual income, geography, urbanity, and lifestyle — not based on a generic "celebrity audience" reflex. The downstream Claude sanity check compares your numbers against Gen Pop and peer profiles to catch any commodity brand that landed implausibly low or high; you don't need to memorize anchor numbers, just reason honestly.
+
 OWNED-BRAND REALISM (read this BEFORE elevating any brand the persona OWNS / FOUNDED / INVESTS IN):
 
 There is a HARD distinction between (a) audience awareness of an owned brand and (b) audience actual purchase / usage. For brands the persona owns, founded, or actively promotes:
@@ -26800,7 +26815,6 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
         df_final = _align_cross_category_bp(df_final)
         df_final = _ensure_apple_pay_present(df_final, persona_doc=locals().get('_persona_doc') or locals().get('persona_doc'))
         df_final = _enforce_realistic_ceilings(df_final, project_name=project_name, persona_doc=locals().get('_persona_doc') or locals().get('persona_doc'))
-        df_final = _enforce_commodity_floors(df_final, project_name=project_name, persona_doc=locals().get('_persona_doc') or locals().get('persona_doc'))
         df_final = _break_intra_category_pinning(df_final, project_name=project_name)
         df_final = _break_global_long_tail_pinning(df_final, project_name=project_name)
 
@@ -27099,13 +27113,13 @@ def _enforce_realistic_ceilings(df, project_name: str = '', persona_doc=None):
             ('STREAMING/MUSIC','APPLE MUSIC'): 50.0,
             ('STREAMING/MUSIC','YOUTUBE MUSIC'): 45.0,
             ('STREAMING/MUSIC','AMAZON MUSIC'): 32.0,
-            ('WHERE THEY SHOP','AMAZON'): 92.0,
-            ('WHERE THEY SHOP','WALMART'): 88.0,   # gen-pop 88; was wrongly capped at 55 (Liz audit 2026-05-15)
-            ('WHERE THEY SHOP','TARGET'): 60.0,
-            ('WHERE THEY SHOP','COSTCO'): 42.0,
-            ('CREDIT PROVIDER','VISA'): 68.0,         # gen-pop 52; agent over-scores
-            ('CREDIT PROVIDER','MASTERCARD'): 55.0,   # gen-pop 42
-            ('CREDIT PROVIDER','AMERICAN EXPRESS'): 25.0,  # gen-pop 12; premium-skew variance OK
+            ('WHERE THEY SHOP','AMAZON'): 88.0,
+            # NOTE: WALMART intentionally NOT capped — it's gen-pop ubiquitous (88%);
+            # Visa / Mastercard / Amex also intentionally NOT capped — agent must
+            # reason them per-persona, holistic Claude check catches outliers
+            # against gen-pop + peer profiles.
+            ('WHERE THEY SHOP','TARGET'): 55.0,
+            ('WHERE THEY SHOP','COSTCO'): 38.0,
             ('QSR','STARBUCKS'): 55.0,
             ('QSR','MCDONALDS'): 48.0,
             ("QSR","MCDONALD'S"): 48.0,
@@ -27464,96 +27478,6 @@ def _break_intra_category_pinning(df, project_name: str = ''):
         return df
     except Exception as _e:
         print(f"   ⚠️ _break_intra_category_pinning failed: {_e}")
-        return df
-
-
-def _enforce_commodity_floors(df, project_name: str = '', persona_doc=None):
-    """Runtime floor enforcement for commodity brands the agent reflexively
-    under-scores (Walmart 88% gen-pop being the canonical case — agent kept
-    producing 48-55%). Persona-aware: niche/coastal at lower band, mass /
-    blue-collar / Texas / Latino at upper band.
-    """
-    import hashlib
-    import pandas as _pd
-    try:
-        bp_col = 'Brand Penetration (Row)'
-        if bp_col not in df.columns:
-            return df
-        df[bp_col] = _pd.to_numeric(df[bp_col], errors='coerce').fillna(0.0)
-
-        psum = ''
-        try:
-            psum = (str(persona_doc.get('persona_summary', '') if isinstance(persona_doc, dict) else '') or '').lower()
-        except Exception:
-            psum = ''
-        is_mass_blue_collar = any(t in psum for t in ['mass', 'blue-collar', 'wrestling', 'wrestler',
-                                                      'country music', 'nascar', 'truck'])
-        is_texas = any(t in psum for t in ['texas', 'dallas', 'houston', 'austin', 'san antonio', 'dfw', 'cowboys'])
-        is_latino = any(t in psum for t in ['latino', 'latina', 'hispanic', 'reggaeton', 'bilingual', 'puerto rico'])
-        is_coastal_premium = any(t in psum for t in ['coastal', 'urban', 'manhattan', 'sf', 'la-based',
-                                                     'arthouse', 'indie film', 'oscars'])
-
-        FLOORS = {
-            ('WHERE THEY SHOP', 'AMAZON'):   (82.0, 90.0),
-            ('WHERE THEY SHOP', 'WALMART'):  (68.0, 82.0),
-            ('SEARCH ENGINE/AI', 'GOOGLE'):  (80.0, 88.0),
-            ('CREDIT PROVIDER',  'VISA'):    (50.0, 60.0),
-            ('CREDIT PROVIDER',  'MASTERCARD'): (38.0, 48.0),
-            ('CREDIT PROVIDER',  'AMERICAN EXPRESS'): (10.0, 18.0),
-        }
-
-        bumps = 0
-        cats_touched = set()
-        for (cat, brand), (lo, hi) in FLOORS.items():
-            mask = (df['Column'].astype(str).str.upper() == cat) & \
-                   (df['Value'].astype(str).str.upper() == brand)
-            if not mask.any():
-                continue
-            if brand == 'WALMART':
-                if is_mass_blue_collar or is_texas or is_latino:
-                    floor = hi
-                elif is_coastal_premium:
-                    floor = lo
-                else:
-                    floor = (lo + hi) / 2
-            elif brand == 'AMAZON':
-                floor = lo
-            else:
-                floor = lo
-            for idx in df.loc[mask].index:
-                cur = float(df.at[idx, bp_col])
-                if cur >= floor:
-                    continue
-                seed = f"{project_name}|{cat}|{brand}|floor".encode()
-                h = hashlib.blake2b(seed, digest_size=4).digest()
-                u = int.from_bytes(h, 'big') / 0xFFFFFFFF
-                jitter = (u * 2 - 1) * 1.5
-                new = round(min(hi, max(floor, floor + jitter)), 4)
-                scale = new / cur if cur > 0 else 1.0
-                df.at[idx, bp_col] = new
-                for col in ('Original Raw Numbers', 'US Gen Pop Projection'):
-                    if col in df.columns and _pd.notna(df.at[idx, col]):
-                        try:
-                            df.at[idx, col] = round(float(df.at[idx, col]) * scale)
-                        except (TypeError, ValueError):
-                            pass
-                bumps += 1
-                cats_touched.add(cat)
-                print(f"   📈 commodity-floor: [{cat}] {brand}  {cur:.1f}% → {new:.1f}%")
-
-        if 'Category Share' in df.columns:
-            for cat in cats_touched:
-                m = df['Column'].astype(str).str.upper() == cat
-                bps = _pd.to_numeric(df.loc[m, bp_col], errors='coerce').fillna(0.0)
-                tot = float(bps.sum())
-                if tot > 0:
-                    df.loc[m, 'Category Share'] = (bps / tot * 100).round(4)
-
-        if bumps:
-            print(f"   ✅ enforced commodity floors on {bumps} brand row(s)")
-        return df
-    except Exception as e:
-        print(f"   ⚠️ _enforce_commodity_floors failed: {e}")
         return df
 
 
