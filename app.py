@@ -2010,8 +2010,12 @@ def check_s3_for_existing(brand_search, start_date, end_date):
                 if not key.endswith('.csv'):
                     continue
                 
-                # Skip system files
-                if key.startswith('system/'):
+                # Skip system, historic, backup, and purgatory files
+                if (key.startswith('system/')
+                        or key.startswith('historic/')
+                        or key.startswith('backups/')
+                        or key.startswith('_backups/')
+                        or key.startswith(S3_PURGATORY_PREFIX)):
                     continue
                 
                 # Extract the "name part" of the filename (before the date suffix).
@@ -5303,8 +5307,12 @@ def get_admin_content():
         for page in paginator.paginate(Bucket=bucket_name, Prefix=''):
             for obj in page.get('Contents', []):
                 key = obj['Key']
-                # Skip historic folder, system folder, and non-CSV files
-                if key.startswith('historic/') or key.startswith('system/') or not key.endswith('.csv'):
+                # Skip historic, system, backup folders, and non-CSV files
+                if (key.startswith('historic/')
+                        or key.startswith('system/')
+                        or key.startswith('backups/')
+                        or key.startswith('_backups/')
+                        or not key.endswith('.csv')):
                     continue
                 
                 # Parse file info
@@ -18584,7 +18592,12 @@ def list_jobs():
                 pass  # Don't block on activity tracking
         
         # Add local jobs (always fresh); for purgatory s3_keys merge display name and category from purgatory metadata
+        # Track s3_keys we've already added so we never emit the same profile twice
+        # (e.g. a recently-finished local job whose s3_key is also in the persisted
+        # S3 cache — without this dedup, the dashboard would render it as
+        # "(2 date ranges)" with two identical entries underneath).
         purgatory_meta = load_purgatory_metadata() if s3_client else {}
+        seen_s3_keys = set()
         for job_id, job in jobs.items():
             s3_key = job.get('s3_key') or ''
             entry = {
@@ -18613,6 +18626,9 @@ def list_jobs():
             else:
                 categories.add('LOCAL')
             job_list.append(entry)
+            final_sk = entry.get('s3_key') or ''
+            if final_sk:
+                seen_s3_keys.add(final_sk)
         
         # Use persisted cache only - no S3 scanning on page load for speed
         # If cache is empty, try to load persisted cache
@@ -18621,10 +18637,14 @@ def list_jobs():
             load_persisted_cache()
             cache_jobs = s3_cache.get('jobs') or []
         
-        # Add cached S3 jobs (ensure each has created_at for sorting)
+        # Add cached S3 jobs (ensure each has created_at for sorting).
+        # Skip any whose s3_key was already emitted as a local job above so the
+        # same CSV never appears twice in the profile selector.
         for j in cache_jobs:
             if isinstance(j, dict):
                 sk = j.get('s3_key') or ''
+                if sk and sk in seen_s3_keys:
+                    continue
                 entry = {
                     'job_id': j.get('job_id') or sk or '',
                     'project_name': j.get('project_name') or j.get('name', 'Unknown'),
@@ -18643,6 +18663,8 @@ def list_jobs():
                 if 'is_svod' in j:
                     entry['is_svod'] = j['is_svod']
                 job_list.append(entry)
+                if sk:
+                    seen_s3_keys.add(sk)
                 cat = j.get('category')
                 if cat:
                     categories.add(cat)
@@ -18734,6 +18756,35 @@ def list_jobs():
         
         categories = {e.get('category') for e in job_list if e.get('category')}
         
+        # Final safety-net dedup: if the same s3_key somehow ended up in
+        # job_list more than once (edge cases like merged cache + local job +
+        # purgatory-released item all pointing at the same file), keep the
+        # entry with the most-complete metadata (prefers local/in-flight over
+        # cached, then prefers entries with a non-empty project_name).
+        def _dedup_priority(e):
+            src_priority = 0 if e.get('source') == 'local' else 1
+            has_name = 0 if (e.get('project_name') or '').strip() else 1
+            return (src_priority, has_name)
+        deduped = {}
+        order_counter = 0
+        order_map = {}
+        for e in job_list:
+            sk = e.get('s3_key') or ''
+            if not sk:
+                # No s3_key -> can't dedup; keep as-is with a unique synthetic key
+                synth = f"__nokey__{order_counter}"
+                order_counter += 1
+                deduped[synth] = e
+                order_map[synth] = order_counter
+                continue
+            existing = deduped.get(sk)
+            if existing is None or _dedup_priority(e) < _dedup_priority(existing):
+                deduped[sk] = e
+            if sk not in order_map:
+                order_counter += 1
+                order_map[sk] = order_counter
+        job_list = list(deduped.values())
+
         # Sort by created_at descending (safe key for missing/None values)
         sorted_jobs = sorted(job_list, key=lambda x: x.get('created_at') or '', reverse=True)
         
@@ -18993,7 +19044,12 @@ def smart_cache_update():
         for page in paginator.paginate(Bucket=S3_BUCKET):
             for obj in page.get('Contents', []):
                 key = obj['Key']
-                if not key.endswith('.csv') or key.startswith('system/') or key.startswith('historic/') or key.startswith(S3_PURGATORY_PREFIX):
+                if (not key.endswith('.csv')
+                        or key.startswith('system/')
+                        or key.startswith('historic/')
+                        or key.startswith('backups/')
+                        or key.startswith('_backups/')
+                        or key.startswith(S3_PURGATORY_PREFIX)):
                     continue
                 
                 current_s3_keys.add(key)
@@ -19096,7 +19152,12 @@ def refresh_s3_cache(incremental=True):
         for page in paginator.paginate(Bucket=S3_BUCKET):
             for obj in page.get('Contents', []):
                 key = obj['Key']
-                if not key.endswith('.csv') or key.startswith('system/') or key.startswith(S3_PURGATORY_PREFIX):
+                if (not key.endswith('.csv')
+                        or key.startswith('system/')
+                        or key.startswith('historic/')
+                        or key.startswith('backups/')
+                        or key.startswith('_backups/')
+                        or key.startswith(S3_PURGATORY_PREFIX)):
                     continue
                 
                 job_data = process_s3_file_metadata(key, obj)

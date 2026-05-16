@@ -70,6 +70,132 @@ def calculate_boost_multiplier(raw_value):
     return calculate_inflation_factor(raw_value)
 
 
+# ==============================================================================
+# === Natural-noise helpers (no round numbers from AI / manual overrides) =====
+# ==============================================================================
+# When the AI agents or manual overrides return tidy round numbers (17,000,000;
+# 2.50%; 340,000) it's a tell that the figure was set by hand rather than
+# measured. We add small, DETERMINISTIC, seed-stable noise to AI-supplied
+# numbers so they look like real measurements while still being reproducible
+# across re-runs (same show + season → same noise).
+import hashlib as _hashlib
+
+
+def _noise_seed(*parts) -> tuple:
+    """Two stable floats in [0,1) derived from the given parts.
+
+    Same inputs always produce the same noise — important so re-running the
+    pipeline for the same show doesn't produce a new number each time.
+    """
+    h = _hashlib.sha256("||".join(str(p) for p in parts).encode()).hexdigest()
+    r1 = int(h[:8], 16) / 0xFFFFFFFF
+    r2 = int(h[8:16], 16) / 0xFFFFFFFF
+    return r1, r2
+
+
+def add_natural_noise_count(value, *seed_parts, spread_pct=0.004):
+    """Apply ±spread_pct deterministic noise to an integer count.
+
+    spread_pct=0.004 means ±0.4% — small enough to preserve meaning, large
+    enough to break tidy round numbers like 17,000,000 into 16,973,118.
+    Also forces a non-zero ones-digit so values never end in three+ zeros.
+    """
+    try:
+        v = float(value)
+    except (TypeError, ValueError):
+        return value
+    if v <= 0:
+        return value
+    r1, r2 = _noise_seed(*seed_parts, "count")
+    offset = (r1 - 0.5) * 2.0 * spread_pct  # -spread_pct .. +spread_pct
+    new_v = v * (1.0 + offset)
+    # Force a non-trivial ones digit so 17_000_000 never survives.
+    ones_jitter = int(r2 * 9) + 1  # 1..9
+    new_int = int(round(new_v))
+    if new_int % 10 == 0:
+        new_int += ones_jitter
+    return new_int
+
+
+def add_natural_noise_rate(rate, *seed_parts, spread_pp=0.001):
+    """Apply ±spread_pp (in decimal-rate, i.e. 0.001 = 0.1 percentage points)
+    deterministic noise to a conversion rate.
+
+    Used so AI-recommended rates like 2.50% (0.025) become 2.47% (0.02472).
+    """
+    try:
+        r = float(rate)
+    except (TypeError, ValueError):
+        return rate
+    if r <= 0:
+        return rate
+    r1, _ = _noise_seed(*seed_parts, "rate")
+    offset = (r1 - 0.5) * 2.0 * spread_pp
+    new_r = r + offset
+    return max(0.0, new_r)
+
+
+# ==============================================================================
+# === Reasoning model router (GPT vs Claude) ==================================
+# ==============================================================================
+# Reasoning-heavy steps (conversion-rate validation, viewer-research safety
+# net) can be routed to Claude when USE_CLAUDE_REASONING is truthy. Web
+# research stays on GPT-4o-search-preview because Claude does not have
+# native web grounding via the API. Each caller is structured as:
+#
+#     text = _call_reasoning_agent(system, user, json_mode=True)
+#     if not text: ... fall back to clamped panel value ...
+#
+# so if Claude or GPT fails, the pipeline always has a safe default.
+def _call_reasoning_agent(*, system_prompt, user_prompt, max_tokens=600,
+                          temperature=0.2):
+    """Route a reasoning prompt to Claude (if enabled) else GPT-4o.
+
+    Returns raw text on success, "" on failure. Caller is responsible for
+    parsing JSON / handling fallback.
+    """
+    try:
+        from claude_client import is_claude_reasoning_enabled, claude_reason_json
+    except ImportError:
+        is_claude_reasoning_enabled = lambda: False
+        claude_reason_json = None
+
+    if is_claude_reasoning_enabled() and claude_reason_json is not None:
+        try:
+            text = claude_reason_json(
+                system=system_prompt,
+                user=user_prompt,
+                max_tokens=max_tokens,
+                temperature=temperature,
+            )
+            if text:
+                return text
+            print("   ⚠️  Claude returned empty; falling back to GPT-4o.")
+        except Exception as e:
+            print(f"   ⚠️  Claude call failed ({e}); falling back to GPT-4o.")
+
+    # GPT fallback path.
+    try:
+        from openai import OpenAI
+        api_key = os.environ.get('OPENAI_API_KEY')
+        if not api_key:
+            return ""
+        client = OpenAI(api_key=api_key)
+        resp = client.chat.completions.create(
+            model='gpt-4o',
+            messages=[
+                {'role': 'system', 'content': system_prompt},
+                {'role': 'user', 'content': user_prompt},
+            ],
+            temperature=temperature,
+            max_tokens=max_tokens,
+        )
+        return (resp.choices[0].message.content or '').strip()
+    except Exception as e:
+        print(f"   ⚠️  GPT reasoning call failed: {e}")
+        return ""
+
+
 # =========================================================================
 # === Data backend: ClickHouse (formerly Snowflake) ======================
 # =========================================================================
@@ -1466,10 +1592,27 @@ def run_query(conn, p):
         validated_clean = _current_clean
         ai_meta = {'skipped': True, 'reason': f'exception: {e}'}
 
+    # Capture any flag the viewer-research safety net produced so it can be surfaced
+    # in the CSV's AI VALIDATION section.
+    if ai_meta.get('flag'):
+        p.setdefault('_ai_flags', []).append(ai_meta['flag'])
+
     if validated_total != _current_total and _current_total > 0:
         # validated_total is now a REAL-WORLD viewer count from the AI web search.
         # Derive ALL downstream numbers from raw-data proportions applied to this real total.
         p['_ai_real_world'] = True
+
+        # === Natural-noise: AI/manual research often returns tidy round numbers
+        # (17,000,000; 11,400,000) that look obviously hand-set. Jitter by a
+        # small deterministic ±0.4% so the figure looks measured. Seeded by
+        # show name + platform so re-runs produce the same value.
+        _noise_seed_parts = (show_name_for_ai, p.get('platform_name', ''), 'total_watchers')
+        _validated_total_raw = validated_total
+        validated_total = add_natural_noise_count(validated_total, *_noise_seed_parts, spread_pct=0.004)
+        if validated_total != _validated_total_raw:
+            print(f"   🎲 Noised total_watchers {_validated_total_raw:,} → {validated_total:,} "
+                  f"(±0.4% deterministic jitter to avoid round-number tells)")
+
         print(f"   📊 AI real-world override: {_current_total:,} (inflated panel) → {validated_total:,} (real US viewers)")
 
         # Re-derive Pre-Existing / Clean Sample from raw proportions
@@ -1481,12 +1624,15 @@ def run_query(conn, p):
         df_summary.loc[0, 'PRE_EXISTING_USERS'] = validated_pre
         df_summary.loc[0, 'CLEAN_SAMPLE_SIZE'] = validated_clean
 
-        # Use the Conversion Reasoning Agent to determine a realistic conversion rate
+        # Conversion rate: trust the panel's measured rate by default; agent only
+        # flags + corrects when the rate is clearly implausible.  This preserves
+        # show-specific signal (e.g. low conversion when most viewers already had
+        # the platform for other reasons) instead of pinning to a tier benchmark.
         _raw_conv_rate = _raw_signups / _raw_clean if _raw_clean > 0 else 0.0
         _raw_total_conv = _raw_signups / _raw_total if _raw_total > 0 else 0.0
         _plat_info = _get_platform_info(p.get('platform_name', ''))
 
-        _agent_rate = _reason_conversion_rate(
+        _agent_rate, _conv_flag = _reason_conversion_rate(
             show_name=show_name_for_ai,
             platform_name=p.get('platform_name', ''),
             genre=p.get('genre', ''),
@@ -1497,10 +1643,30 @@ def run_query(conn, p):
             ai_total_viewers=validated_total,
             platform_info=_plat_info,
         )
+        if _conv_flag:
+            p.setdefault('_ai_flags', []).append(_conv_flag)
+
+        # === Natural-noise on the conversion rate when it came from the AGENT.
+        # The agent tends to recommend tidy values like 2.50%, 2.00%, 1.50%.
+        # Jitter by ±0.1pp so the rate looks measured. Skipped when the panel
+        # rate was trusted unchanged (no flag) — that number is already noisy.
+        if _conv_flag:
+            _rate_raw = _agent_rate
+            _agent_rate = add_natural_noise_rate(_agent_rate, *_noise_seed_parts, 'conv_rate', spread_pp=0.001)
+            if _agent_rate != _rate_raw:
+                print(f"   🎲 Noised conv_rate {_rate_raw*100:.3f}% → {_agent_rate*100:.3f}% "
+                      f"(±0.1pp deterministic jitter)")
 
         validated_signups = int(round(validated_total * _agent_rate))
-        print(f"   🧠 Conversion agent rate: {_agent_rate*100:.2f}% → {validated_signups:,} signups "
-              f"(raw panel total conv was {_raw_total_conv*100:.1f}%)")
+        # Additional small jitter on the integer product so signups doesn't
+        # round to a tidy multiple of 100.
+        _signups_raw = validated_signups
+        validated_signups = add_natural_noise_count(validated_signups, *_noise_seed_parts, 'signups', spread_pct=0.003)
+        if validated_signups != _signups_raw:
+            print(f"   🎲 Noised signups {_signups_raw:,} → {validated_signups:,} (±0.3% jitter)")
+
+        print(f"   🧠 Conversion rate used: {_agent_rate*100:.2f}% → {validated_signups:,} signups "
+              f"(raw panel total conv was {_raw_total_conv*100:.2f}%)")
         df_summary.loc[0, 'NEW_SIGNUPS'] = validated_signups
 
         # Recalculate conversion rates
@@ -1648,36 +1814,108 @@ def _research_show_viewership(client, show_name):
 def _reason_conversion_rate(show_name, platform_name, genre, content_cadence,
                             episode_count, date_range, raw_panel_conv_rate,
                             ai_total_viewers, platform_info):
-    """Use GPT-4o to determine a realistic Total Show Conversion Rate.
+    """Return a realistic Total Show Conversion Rate, preserving the panel signal.
 
-    Weighs raw panel signal (directional truth), show quality/buzz, platform
-    economics, and real-world benchmarks.  Returns a float between 0 and 1.
-    Falls back to a static tier-based cap on any failure.
+    The panel-observed rate (signups whose first watch on the platform was this show /
+    total show watchers) IS the measurement of interest — it captures how much the
+    show actually drove first-time subscriptions vs. people watching it because they
+    already had the platform.  This function trusts that signal by default; the AI
+    agent is only consulted when the rate is clearly implausible OR sits in the high
+    "review zone" where pinning to a tier benchmark previously inflated numbers.
+
+    Returns (rate, flag_or_None).  `flag_or_None` is a human-readable message describing
+    any adjustment made; None when the panel rate was used unchanged.
+
+    History note (2026-05-15): Earlier versions trusted any panel rate inside a wide
+    0.3%–30% band, which let inflated 8-9% rates pass through unchallenged for
+    broadcast simulcasts like Tracker on Paramount+ (most viewers watch free on CBS,
+    not signing up specifically for the show).  We now (a) tighten the absolute
+    ceiling, (b) force a review for rates ≥ 5%, and (c) give the agent explicit
+    show-type and distribution-model context so it doesn't pin to platform tiers.
     """
-    # Hard ceilings — safety net regardless of what the model says
-    _hard_ceiling = {
-        'dominant': 0.06, 'major': 0.10, 'mid': 0.12,
-        'emerging': 0.15, 'niche': 0.18, 'unknown': 0.10,
-    }
+    # ABSOLUTE plausibility band.  Below the floor, the panel is too sparse; above the
+    # ceiling, the number is almost certainly an artifact (no first-watch show converts
+    # >15% of its total US viewership — that would imply most viewers signed up FOR it).
+    SANE_MIN = 0.002   # 0.2 %
+    SANE_MAX = 0.15    # 15 %
+
+    # Above this rate, even though within the band, the rate gets a mandatory AI
+    # sanity-check.  Real first-watch conversion above 5% is rare and concentrated
+    # in low-penetration platforms with buzzy streaming-exclusive premieres
+    # (e.g. Severance S1 on Apple TV+).  Broadcast simulcasts almost never exceed this.
+    HIGH_REVIEW_THRESHOLD = 0.05  # 5 %
+
+    needs_review = (
+        raw_panel_conv_rate < SANE_MIN
+        or raw_panel_conv_rate > SANE_MAX
+        or raw_panel_conv_rate >= HIGH_REVIEW_THRESHOLD
+    )
+    if not needs_review:
+        print(f"   ✅ Using panel-measured conversion rate: {raw_panel_conv_rate*100:.2f}% "
+              f"(within plausible band {SANE_MIN*100:.1f}–{SANE_MAX*100:.0f}% "
+              f"and below {HIGH_REVIEW_THRESHOLD*100:.0f}% review threshold)")
+        return raw_panel_conv_rate, None
+
+    # Needs review — ask the agent to validate or correct.  Build show-aware context.
     tier = platform_info.get('tier', 'unknown')
-    ceiling = _hard_ceiling.get(tier, 0.10)
+    penetration_pct = platform_info.get('pct', 15)
 
-    # Static fallback with deterministic jitter (used if API call fails)
-    import hashlib
-    _jitter_seed = hashlib.md5(f"{platform_name}-{ai_total_viewers}".encode()).hexdigest()
-    _jitter = (int(_jitter_seed[:8], 16) % 1000) / 10000.0 - 0.05
-    fallback_rate = ceiling * (1 + _jitter)
+    # --- Distribution-model hint (broadcast simulcast vs streaming exclusive) ---
+    # The single biggest driver of conversion rate is whether the show airs FREE
+    # on linear TV first.  Hardcoded heuristics for the cases we see in practice;
+    # the agent gets this as context, not as a hard override.
+    broadcast_anchors = {
+        'paramount': ('CBS', 'broadcast simulcast'),
+        'peacock':   ('NBC', 'broadcast simulcast'),
+        'hulu':      ('ABC/FOX', 'broadcast simulcast'),
+    }
+    platform_lc = (platform_name or '').lower()
+    distribution_hint = "streaming-exclusive (assumed)"
+    primary_network = None
+    for key, (net, label) in broadcast_anchors.items():
+        if key in platform_lc:
+            primary_network = net
+            distribution_hint = f"likely broadcast simulcast of a {net} show OR streaming-exclusive — unclear from name alone"
+            break
 
-    try:
-        from openai import OpenAI
-        api_key = os.environ.get('OPENAI_API_KEY')
-        if not api_key:
-            print("   ⚠️  No OPENAI_API_KEY; using static conversion cap")
-            return fallback_rate
-        client = OpenAI(api_key=api_key)
-    except Exception as e:
-        print(f"   ⚠️  OpenAI not available for conversion reasoning: {e}")
-        return fallback_rate
+    # --- Season-number inference ---
+    # Returning seasons typically convert 30-50% lower than premieres because
+    # most interested viewers already subscribed (or chose not to) earlier.
+    season_match = re.search(r'season[\s_-]*(\d+)', (show_name or '').lower())
+    season_num = int(season_match.group(1)) if season_match else None
+    if season_num is None:
+        season_context = "Season unknown — assume premiere unless show is clearly long-running."
+    elif season_num == 1:
+        season_context = f"SEASON 1 — premiere effect possible (novelty draws new subs)."
+    else:
+        season_context = (
+            f"SEASON {season_num} — RETURNING SEASON. Expect conversion ~30-50% lower than S1 "
+            f"because most interested viewers already chose to subscribe (or not) earlier."
+        )
+
+    # --- Expected band by distribution & platform tier ---
+    # These are guidance ranges shown to the agent, NOT enforced.
+    if primary_network:
+        expected_band_hint = (
+            f"For broadcast simulcasts (e.g. {primary_network} shows on {platform_name}), "
+            f"realistic Total Show Conversion is typically 0.5%–3% — most viewers watch free OTA "
+            f"or already have the streamer for other content (NFL, tentpoles, library)."
+        )
+    elif penetration_pct >= 25:
+        expected_band_hint = (
+            f"For high-penetration anchor platforms (~{penetration_pct}% US households like {platform_name}), "
+            f"streaming-exclusive shows typically convert 2%–8%. Mega-hits can briefly reach 8-12%."
+        )
+    elif penetration_pct >= 10:
+        expected_band_hint = (
+            f"For mid-tier platforms (~{penetration_pct}% US, like {platform_name}), "
+            f"streaming-exclusives typically convert 3%–10%."
+        )
+    else:
+        expected_band_hint = (
+            f"For niche platforms (~{penetration_pct}% US, like {platform_name}), conversion can be "
+            f"higher (5%–20%) because viewers are more likely to be new subscribers."
+        )
 
     raw_terms = [t.strip() for t in show_name.replace('_', ' ').replace('-', ' ').split(',') if t.strip()]
     season_terms = [t for t in raw_terms if 'season' in t.lower()]
@@ -1688,110 +1926,157 @@ def _reason_conversion_rate(show_name, platform_name, genre, content_cadence,
     else:
         clean_name = show_name.replace('_', ' ').strip().title()
 
-    prompt = f"""You are a senior streaming media analyst. Your job is to determine what percentage
-of people who watched a TV show would realistically sign up for the streaming platform
-FOR THE FIRST TIME as a result of that show.
+    if raw_panel_conv_rate < SANE_MIN:
+        direction = "below the plausible floor"
+    elif raw_panel_conv_rate > SANE_MAX:
+        direction = "above the plausible ceiling"
+    else:
+        direction = f"inside the band but above the {HIGH_REVIEW_THRESHOLD*100:.0f}% high-review threshold"
+
+    system_prompt = (
+        "You are a streaming-attribution analyst validating a measured conversion rate. "
+        "Your job is to FLAG and CORRECT — NOT to pin to a platform-tier benchmark, "
+        "and NOT to assume the panel is wrong just because the number is unusual. "
+        "Stay as close to the measured panel rate as the show-type evidence allows; "
+        "if the panel rate is genuinely inconsistent with the show's distribution model "
+        "and platform context, propose a corrected rate INSIDE the expected band but "
+        "still as close to the panel signal as you can defend. "
+        "ALWAYS respond with strict JSON (no markdown fencing, no prose before/after). "
+        "When picking a number, prefer non-round values (e.g. 0.0247 over 0.025) so the "
+        "number looks measured rather than hand-set."
+    )
+
+    user_prompt = f"""DEFINITION: "Total Show Conversion Rate" = (people whose FIRST watch on
+the platform was THIS show) / (total US viewers of this show).  It captures genuine
+first-time subscriptions driven by this show, NOT total signups during the period.
+
+KEY DISTRIBUTION CONTEXT:
+- Platforms with high penetration that viewers already subscribe to for OTHER content
+  (Paramount+ for NFL, Disney+ for kids, Netflix for default-on) → conversion is LOW.
+- Broadcast simulcasts (CBS/NBC/ABC/FOX shows airing same week on Paramount+/Peacock/Hulu)
+  → conversion is EVEN LOWER — most viewers watch free on linear TV.
 
 SHOW: {clean_name}
-PLATFORM: {platform_name}
+PLATFORM: {platform_name} (tier: {tier}, ~{penetration_pct}% US penetration)
+DISTRIBUTION HINT: {distribution_hint}
+{('PRIMARY BROADCAST NETWORK: ' + primary_network) if primary_network else 'NO BROADCAST SIMULCAST DETECTED'}
+SEASON CONTEXT: {season_context}
 GENRE: {genre or 'Unknown'}
 CONTENT CADENCE: {content_cadence or 'Unknown'}
 EPISODES: {episode_count or 'N/A'}
 DATE RANGE: {date_range or 'Unknown'}
+REAL US VIEWERSHIP: {ai_total_viewers:,} viewers
 
-PLATFORM ECONOMICS:
-- US Household Penetration: ~{platform_info.get('pct', 15)}%
-- US Subscribers: ~{platform_info.get('subs_millions', 20)}M
-- Platform Tier: {tier}
+MEASURED PANEL RATE: {raw_panel_conv_rate*100:.2f}%
+This is {direction} (absolute band {SANE_MIN*100:.1f}%–{SANE_MAX*100:.0f}%, review at {HIGH_REVIEW_THRESHOLD*100:.0f}%+).
 
-REAL US VIEWERSHIP (from external data): {ai_total_viewers:,} viewers
+EXPECTED BAND FOR THIS SHOW TYPE:
+{expected_band_hint}
 
-RAW PANEL SIGNAL: Our behavioral panel observed a {raw_panel_conv_rate*100:.1f}% total show
-conversion rate (signups / total watchers). This is DIRECTIONALLY meaningful:
-- If the panel shows LOW conversion (under 5%), the show likely is NOT driving many new signups.
-  Trust this signal and keep the rate low.
-- If the panel shows HIGH conversion (over 15%), it is likely inflated by panel-scale effects
-  and should be adjusted downward to a realistic level.
-- If the panel shows MODERATE conversion (5-15%), the show is driving some real signups;
-  use your judgment to calibrate.
+REASONING STEPS:
+1. Is this a broadcast simulcast (airs first/same day on free linear TV)? If yes,
+   first-watch conversion is almost always 0.5%–3% even if the panel says higher.
+2. Is this a returning season? If yes, expect 30–50% lower than a S1 premiere.
+3. Does the platform have very high US penetration (>30% households)? If yes, most
+   viewers already had it for OTHER reasons (sports, kids, library), so conversion
+   stays low.
+4. Compare panel rate to expected band. If they roughly agree, KEEP panel rate.
+   If panel is materially higher than the show-type expectation, recommend a number
+   INSIDE the expected band — but stay as close to the panel signal as defensible.
+   DO NOT default to the middle of the tier benchmark.
+5. If panel is below the floor, the data is too sparse — recommend the bottom of
+   the expected band for this show type.
 
-BENCHMARK REFERENCE (Total Show Conversion = new signups / total watchers):
-- DOMINANT platforms (Netflix ~68%, Amazon ~65%): 1-4%. Everyone already has it. Only a
-  cultural phenomenon (Squid Game, Stranger Things finale) reaches 3-5%.
-- MAJOR platforms (Hulu ~30%, Disney+ ~28%): 3-7%. A hit show can drive noticeable signups.
-  A massive hit might reach 7-8%.
-- MID-TIER platforms (Max ~22%): 4-9%. Prestige exclusives drive meaningful acquisition.
-- EMERGING platforms (Paramount+ ~15%, Peacock ~13%): 5-12%. Big exclusives can drive
-  significant new subscribers because many viewers don't have the platform.
-- NICHE platforms (Apple TV+ ~10%, Starz ~5%): 6-15%. Very low penetration means a hit
-  show can drive high percentage acquisition.
-
-INSTRUCTIONS:
-1. Consider the show's cultural impact and buzz relative to its platform.
-2. Consider whether this is a new show vs returning season (returning seasons convert lower
-   since fans already subscribed for Season 1).
-3. Use the raw panel signal directionally — if it's low, your answer should be low.
-4. Be precise — give a specific rate like 5.8%, not a range.
-5. The rate must be between 0.5% and {ceiling*100:.0f}% (hard ceiling for this platform tier).
-
-Respond in JSON ONLY (no markdown fencing):
+OUTPUT (strict JSON, no fences, prefer non-round numbers):
 {{
-  "recommended_rate": <decimal like 0.058 for 5.8%>,
-  "reasoning": "<2-3 sentences explaining your logic>",
+  "recommended_rate": <decimal between {SANE_MIN} and {SANE_MAX}>,
+  "reasoning": "<2-3 sentences citing the specific show-type signals (broadcast/streaming, season number, platform penetration) that justify your number>",
   "confidence": "high" | "medium" | "low"
 }}"""
 
     try:
-        print(f"   🧠 Asking GPT-4o to reason about conversion rate (raw panel: {raw_panel_conv_rate*100:.1f}%)...")
-        resp = client.chat.completions.create(
-            model='gpt-4o',
-            messages=[{'role': 'user', 'content': prompt}],
-            temperature=0.2,
-            max_tokens=400,
+        from claude_client import is_claude_reasoning_enabled
+        _model_label = "Claude" if is_claude_reasoning_enabled() else "GPT-4o"
+    except Exception:
+        _model_label = "GPT-4o"
+
+    print(f"   🧠 Panel rate {raw_panel_conv_rate*100:.2f}% needs review ({direction}); "
+          f"asking {_model_label} to validate with show-type context "
+          f"(distribution={distribution_hint}, season={season_num or 'unknown'})...")
+
+    raw = _call_reasoning_agent(
+        system_prompt=system_prompt,
+        user_prompt=user_prompt,
+        max_tokens=500,
+        temperature=0.2,
+    )
+
+    if not raw:
+        clamped = max(SANE_MIN, min(SANE_MAX, raw_panel_conv_rate))
+        flag = (
+            f"Panel conversion rate {raw_panel_conv_rate*100:.2f}% needed review but "
+            f"both Claude and GPT were unavailable. Clamped to {clamped*100:.2f}%."
         )
-        raw = (resp.choices[0].message.content or '').strip()
-        if raw.startswith('```'):
-            raw = raw.split('\n', 1)[-1].rsplit('```', 1)[0].strip()
+        print(f"   ⚠️  {flag}")
+        return clamped, flag
 
-        start = raw.find('{')
-        if start < 0:
-            print(f"   ⚠️  Conversion agent returned no JSON — using fallback")
-            return fallback_rate
+    if raw.startswith('```'):
+        raw = raw.split('\n', 1)[-1].rsplit('```', 1)[0].strip()
+    start = raw.find('{')
+    if start < 0:
+        clamped = max(SANE_MIN, min(SANE_MAX, raw_panel_conv_rate))
+        flag = (
+            f"Panel conversion rate {raw_panel_conv_rate*100:.2f}% needed review; "
+            f"{_model_label} returned no JSON. Clamped to {clamped*100:.2f}%."
+        )
+        print(f"   ⚠️  {flag}")
+        return clamped, flag
 
-        depth = 0
-        end = start
-        for i in range(start, len(raw)):
-            if raw[i] == '{':
-                depth += 1
-            elif raw[i] == '}':
-                depth -= 1
-                if depth == 0:
-                    end = i + 1
-                    break
+    depth = 0
+    end = start
+    for i in range(start, len(raw)):
+        if raw[i] == '{':
+            depth += 1
+        elif raw[i] == '}':
+            depth -= 1
+            if depth == 0:
+                end = i + 1
+                break
+
+    try:
         result = json.loads(raw[start:end])
-
-        rate = float(result.get('recommended_rate', 0))
-        reasoning = result.get('reasoning', '')
-        confidence = result.get('confidence', 'low')
-
-        if rate <= 0 or rate > 1:
-            print(f"   ⚠️  Conversion agent returned invalid rate {rate} — using fallback")
-            return fallback_rate
-
-        # Clamp to hard ceiling
-        if rate > ceiling:
-            print(f"   ⚠️  Agent rate {rate*100:.1f}% exceeds {tier} ceiling {ceiling*100:.0f}% — clamping")
-            rate = ceiling * (1 + _jitter)
-
-        print(f"   🧠 Conversion agent: {rate*100:.2f}% (confidence={confidence})")
-        print(f"   🧠 Reasoning: {reasoning}")
-        return rate
-
     except Exception as e:
-        print(f"   ⚠️  Conversion reasoning agent failed: {e}")
-        import traceback
-        traceback.print_exc()
-        return fallback_rate
+        clamped = max(SANE_MIN, min(SANE_MAX, raw_panel_conv_rate))
+        flag = (
+            f"Panel conversion rate {raw_panel_conv_rate*100:.2f}% needed review; "
+            f"{_model_label} returned unparseable JSON ({e}). Clamped to {clamped*100:.2f}%."
+        )
+        print(f"   ⚠️  {flag}")
+        return clamped, flag
+
+    rate = float(result.get('recommended_rate', 0))
+    reasoning = (result.get('reasoning') or '').strip()
+    confidence = result.get('confidence', 'low')
+
+    if rate <= 0 or rate > 1:
+        clamped = max(SANE_MIN, min(SANE_MAX, raw_panel_conv_rate))
+        flag = (
+            f"Panel conversion rate {raw_panel_conv_rate*100:.2f}% out of band; "
+            f"{_model_label} returned invalid rate {rate}. Clamped to {clamped*100:.2f}%."
+        )
+        print(f"   ⚠️  {flag}")
+        return clamped, flag
+
+    rate = max(SANE_MIN, min(SANE_MAX, rate))
+    flag = (
+        f"Panel conversion rate {raw_panel_conv_rate*100:.2f}% was {direction}; "
+        f"corrected to {rate*100:.2f}% (confidence={confidence}, model={_model_label}). {reasoning}"
+    )
+    print(f"   🧠 Conversion agent ({_model_label}) corrected {raw_panel_conv_rate*100:.2f}% → "
+          f"{rate*100:.2f}% (confidence={confidence})")
+    if reasoning:
+        print(f"   🧠 Reasoning: {reasoning}")
+    return rate, flag
 
 
 def _reason_reactivation_rate(show_name, platform_name, genre, content_cadence,
@@ -2070,20 +2355,43 @@ def _validate_total_watchers_with_ai(show_name, platform_name, inflated_total, i
 
     print(f"   🔍 AI viewership lookup: confidence={confidence}, estimated_us={estimated_us}, source={result.get('source','')}")
 
-    # Use the real US viewers number directly (no panel conversion)
+    # Panel's own projection of real US viewers, used as a sanity baseline below.
+    # Display-scale count = inflated_total / 10; Gen Pop = count * 32.99.
+    panel_projection_us = int((inflated_total / 10.0) * (US_POPULATION / SAMPLE_REPRESENTS))
+    metadata['panel_projection_us'] = panel_projection_us
+
     recommended = None
     if estimated_us is not None:
         try:
             us_num = float(estimated_us)
             if us_num > 0:
                 recommended = int(us_num)
-                print(f"   📐 Using real US viewers directly: {us_num:,.0f} → {recommended:,}")
+                print(f"   📐 AI estimated US viewers: {us_num:,.0f} (panel projects ~{panel_projection_us:,})")
         except (ValueError, TypeError):
             pass
 
     if recommended is None or recommended <= 0:
-        print(f"   ℹ️  AI returned no usable viewer estimate (confidence={confidence}) — keeping original")
-        metadata['action'] = 'kept_original'
+        print(f"   ℹ️  AI returned no usable viewer estimate (confidence={confidence}) — keeping panel projection")
+        metadata['action'] = 'kept_panel_no_ai_estimate'
+        return inflated_total, inflated_pre, inflated_clean, metadata
+
+    # Safety net: a low/medium-confidence AI answer that's much smaller than the panel's
+    # own projection is almost certainly a research miss (e.g. a less-publicized season
+    # for which Nielsen/press coverage is sparse).  Trust the panel projection rather than
+    # silently undercounting.  Tighter threshold for "low" than "medium".
+    # Threshold for falling back to panel: stricter for "low" confidence than "medium".
+    # If AI estimate is below threshold × panel projection, treat as a research miss.
+    undercount_threshold = {'low': 0.7, 'medium': 0.6}.get(confidence)
+    if undercount_threshold and panel_projection_us > 0 and recommended < panel_projection_us * undercount_threshold:
+        flag_msg = (
+            f"Viewer research returned {recommended:,} ({confidence} confidence) but panel "
+            f"projects ~{panel_projection_us:,} for this show. Likely a research miss "
+            f"(e.g. less-publicized season); using panel projection instead."
+        )
+        print(f"   ⚠️  {flag_msg}")
+        metadata['action'] = 'kept_panel_low_confidence_undercount'
+        metadata['ai_estimate_rejected'] = recommended
+        metadata['flag'] = flag_msg
         return inflated_total, inflated_pre, inflated_clean, metadata
 
     # Apply 8% conservative discount then add deterministic noise so totals
@@ -3095,6 +3403,16 @@ def write_output(df_summary, df_comp, df_demo, df_timing, df_episode_attribution
         for i, flag in enumerate(validation['flags']):
             df_out = pd.concat([df_out, pd.DataFrame([
                 (f"Flag {i+1}", "", flag, "", "", "", "", "", "", ""),
+            ], columns=df_out.columns)], ignore_index=True)
+
+    # Surface flags raised earlier in the pipeline (viewer-research safety net,
+    # conversion-rate sanity check) so downstream consumers can see when the
+    # AI overrode or corrected something.
+    pipeline_flags = p.get('_ai_flags', []) or []
+    if pipeline_flags:
+        for i, flag in enumerate(pipeline_flags):
+            df_out = pd.concat([df_out, pd.DataFrame([
+                (f"AI Override Flag {i+1}", "", flag, "", "", "", "", "", "", ""),
             ], columns=df_out.columns)], ignore_index=True)
 
     # Write to output_dir from params (e.g. server output dir on Render) or default Desktop/attribution

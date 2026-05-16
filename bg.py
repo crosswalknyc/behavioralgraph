@@ -11983,6 +11983,11 @@ def check_s3_for_existing_results(brand, start_date, end_date):
                 key = obj['Key']
                 if not key.endswith('.csv'):
                     continue
+                # Skip backups, system, historic, purgatory — never duplicate-match against them
+                if (key.startswith('backups/') or key.startswith('_backups/')
+                        or key.startswith('system/') or key.startswith('historic/')
+                        or key.startswith('purgatory/')):
+                    continue
                 
                 filename_lower = key.lower()
                 if normalized_brand not in filename_lower and brand.lower() not in filename_lower:
@@ -16261,7 +16266,7 @@ Return ONLY a single valid JSON object — no markdown, no commentary.
   "audience_composition": "<2-3 paragraph decomposition of THIS subject's digital audience into sub-segments with rough fractions and which segments drive which brand affinities — see AUDIENCE COMPOSITION instructions below>",
   "digital_identity": "<2-4 paragraph DEEP analysis of this audience's digital footprint — see instructions below>",
   "active_affiliations": [
-    {{"category": "<MUST BE one of the SCORING CATEGORIES listed above (e.g. SPORTS ORGANIZATIONS, TELECOM, BEVERAGES, STREAMING/PLATFORM, BEAUTY/WELLNESS, APPAREL/FOOTWEAR). NOT 'BRAND OWNER/FOUNDER' or 'FRANCHISE' or 'COMPANY' — those are TYPE labels, not categories>", "value": "<BRAND/PLATFORM in ALL CAPS, e.g. WORLD WRESTLING ENTERTAINMENT, AVIATION GIN, MINT MOBILE, WREXHAM AFC>", "type": "<one of: athlete_competitor | platform_flagship | brand_collaboration | brand_owner_founder | brand_ambassador | exclusive_content_partner>", "evidence": "<one sentence on the verifiable affiliation>"}},
+    {{"category": "<MUST BE one of the SCORING CATEGORIES listed above (e.g. SPORTS ORGANIZATIONS, TELECOM, BEVERAGES, STREAMING/PLATFORM, BEAUTY/WELLNESS, APPAREL/FOOTWEAR, VENUE, INSURANCE, BANKING, MEDIA, TALENT, ATHLETE). NOT 'BRAND OWNER/FOUNDER' or 'FRANCHISE' or 'COMPANY' — those are TYPE labels, not categories>", "value": "<BRAND/PLATFORM in ALL CAPS, e.g. WORLD WRESTLING ENTERTAINMENT, AVIATION GIN, MINT MOBILE, WREXHAM AFC, GLOBE LIFE FIELD, STATE FARM ARENA, TRAE YOUNG>", "type": "<one of: athlete_competitor | platform_flagship | brand_collaboration | brand_owner_founder | brand_ambassador | exclusive_content_partner | venue_naming_rights | jersey_patch_sponsor | broadcast_partner | league_streaming_product | signature_athlete | league_apparel | cross_market_sports | sportsbook_market>", "evidence": "<one sentence on the verifiable affiliation>"}},
     ...one entry per known active affiliation — see ACTIVE AFFILIATIONS instructions below
   ],
   "flagship_brands": [
@@ -16521,7 +16526,130 @@ Before reasoning about audience or brand fit, build a concrete list of THIS subj
   • brand_ambassador — long-running global ambassador (not one-off). Margot Robbie → Chanel No. 5. Zendaya → Valentino + Lancôme + Bulgari. Pedro Pascal → Loewe (recently).
   • exclusive_content_partner — has exclusive content deal with a platform that defines audience. Joe Rogan → Spotify (multi-year exclusive). Howard Stern → SiriusXM. Trevor Noah → Spotify (talk).
 
-What goes in `flagship_brands` (the subset that bypasses the gen-pop ceiling): only `platform_flagship` and `exclusive_content_partner` items where the audience is genuinely platform-defined. NOT every collab — Bad Bunny has a Crocs collab but his audience isn't Crocs-defined; Crocs is normal scoring.
+SPORTS TEAMS — SPECIAL CASE (ALWAYS surface the following when the subject is a professional sports franchise):
+
+When the subject is a sports team (NBA / NFL / MLB / NHL / MLS / college program / international club), MOST of the brand affinity comes through INSTITUTIONAL AFFILIATIONS, not endorsement deals. You MUST surface ALL of the following in `active_affiliations`, with the EXACT brand name as it appears on hostmap (use the official corporate name, not a colloquialism):
+
+  • venue_naming_rights — the company that paid for the arena/stadium name. Use category VENUE for the venue itself AND category INSURANCE/TELECOM/BANKING/etc. for the corporate parent (their brand gets a halo from being on the building 41-82 nights a year).
+      ✅ Atlanta Hawks → STATE FARM ARENA (VENUE) + STATE FARM (INSURANCE)
+      ✅ Texas Rangers → GLOBE LIFE FIELD (VENUE) + GLOBE LIFE (INSURANCE)
+      ✅ Dallas Mavericks → AMERICAN AIRLINES CENTER (VENUE) + AMERICAN AIRLINES (TRAVEL)
+      ✅ San Antonio Spurs → FROST BANK CENTER (VENUE) + FROST BANK (BANKING)
+      ❌ NEVER use the wrong stadium — STATE FARM STADIUM is the Arizona Cardinals' NFL stadium, NOT the Hawks' arena. AT&T STADIUM is the Cowboys' NFL stadium, NOT the Rangers' or Mavericks' venue. Globe Life Field is the Rangers' home — do NOT confuse it with the Arlington-area NFL venues.
+  • jersey_patch_sponsor — the company on the front of the jersey (NBA only currently). Use the brand's own scoring category.
+      ✅ Atlanta Hawks → SHARECARE (HEALTH & WELLNESS) — jersey patch 2021-present
+      ✅ Dallas Mavericks → CHIME (DIGITAL BANKING) — jersey patch
+      ✅ San Antonio Spurs → SELF FINANCIAL (DIGITAL BANKING) — jersey patch
+  • broadcast_partner — the regional sports network or national rights-holder that carries the games. Use STREAMING/PLATFORM or MEDIA depending on delivery.
+      ✅ Atlanta Hawks → GRAY MEDIA (MEDIA, replacing Bally Sports SE) + ESPN/TNT/NBA TV (STREAMING/PLATFORM, MEDIA)
+      ✅ Texas Rangers → MAIN STREET SPORTS (formerly Bally Sports SW) + APPLE TV+ (Friday Night Baseball) + ESPN/FOX SPORTS/MLB NETWORK
+  • league_streaming_product — the league's own subscription streaming service.
+      ✅ Any NBA team → NBA LEAGUE PASS (STREAMING/PLATFORM)
+      ✅ Any MLB team → MLB.TV (STREAMING/PLATFORM)
+      ✅ Any NFL team → NFL+ (STREAMING/PLATFORM); Sunday Ticket → YOUTUBE TV (STREAMING/PLATFORM)
+      ✅ Any NHL team → ESPN+ (STREAMING/PLATFORM, exclusive U.S. rights)
+  • signature_athlete — surface the team's TOP 5-7 active-roster players. CRITICAL — every signature athlete MUST be emitted as MULTIPLE active_affiliations entries, ONE PER CATEGORY where the dashboard scores them. For an NBA team, that's THREE entries per player: category="TALENT", category="ATHLETE", and category="NBA ATHLETE". For an MLB team: TALENT + ATHLETE + "MLB ATHLETE". For NFL: TALENT + ATHLETE + "NFL ATHLETE". Otherwise the per-category scorer for NBA ATHLETE / MLB ATHLETE never sees the affiliation and falls back to gen-pop player rankings (LeBron / Curry / etc.) instead of elevating the team's own roster. This is THE most damaging bug for sports-team profiles — a Memphis Grizzlies profile showing LeBron James as #1 NBA athlete instead of Ja Morant means signature_athlete entries weren't multi-category-tagged.
+      Example correct output for Memphis Grizzlies — Ja Morant gets THREE entries:
+        {{"category":"TALENT","value":"JA MORANT","type":"signature_athlete","evidence":"Grizzlies franchise PG, ROY 2020"}},
+        {{"category":"ATHLETE","value":"JA MORANT","type":"signature_athlete","evidence":"Grizzlies franchise PG"}},
+        {{"category":"NBA ATHLETE","value":"JA MORANT","type":"signature_athlete","evidence":"Grizzlies franchise PG"}}
+      ✅ Atlanta Hawks (2024-25 roster): TRAE YOUNG, JALEN JOHNSON, DYSON DANIELS, ONYEKA OKONGWU, DE'ANDRE HUNTER, ZACCHARIE RISACHER
+      ✅ Texas Rangers (2024 roster): COREY SEAGER, MARCUS SEMIEN, ADOLIS GARCIA, NATHAN EOVALDI, JACOB DEGROM, EVAN CARTER, JOSH JUNG
+      ✅ Dallas Mavericks: LUKA DONCIC, KYRIE IRVING, ANTHONY DAVIS, KLAY THOMPSON, P.J. WASHINGTON
+      ✅ San Antonio Spurs: VICTOR WEMBANYAMA, DEVIN VASSELL, KELDON JOHNSON, JEREMY SOCHAN, CHRIS PAUL, STEPHON CASTLE
+      ✅ Memphis Grizzlies: JA MORANT, JAREN JACKSON JR., DESMOND BANE, MARCUS SMART, STEVEN ADAMS
+  • home_metro — for ANY sports-team persona, surface the team's home media market as a LOCATION affiliation. The team's home metro should land at #1 in the LOCATION category at 15-25% (vs gen-pop's <2% for any single metro). Without this, a Memphis Grizzlies profile shows Memphis TN at 2.13% — which is gen-pop and obviously wrong for a Memphis team's audience.
+      ✅ Memphis Grizzlies → {{"category":"LOCATION","value":"Memphis TN","type":"home_metro","evidence":"team home market"}}
+      ✅ San Antonio Spurs → {{"category":"LOCATION","value":"San Antonio TX","type":"home_metro","evidence":"team home market"}}
+      ✅ Dallas Mavericks → {{"category":"LOCATION","value":"Dallas Ft Worth TX","type":"home_metro","evidence":"team home market"}}
+      ✅ Atlanta Hawks → {{"category":"LOCATION","value":"Atlanta GA","type":"home_metro","evidence":"team home market"}}
+  • league_apparel — the official league apparel/equipment partner.
+      ✅ NBA: NIKE (jerseys/apparel) + WILSON SPORTING GOODS (basketball)
+      ✅ MLB: NIKE (jerseys/apparel since 2020) + RAWLINGS (gloves) + LOUISVILLE SLUGGER (bats) + WILSON SPORTING GOODS (catcher gear)
+      ✅ NFL: NIKE (jerseys/apparel) + WILSON SPORTING GOODS (footballs)
+  • cross_market_sports — for any major-metro sports franchise, surface the OTHER pro teams sharing the same media market. They share audience.
+      ✅ ATL: ATLANTA FALCONS, ATLANTA BRAVES, ATLANTA UNITED
+      ✅ DFW: DALLAS COWBOYS, DALLAS MAVERICKS / TEXAS RANGERS / DALLAS STARS / FC DALLAS (whichever isn't the subject)
+      ✅ SAN ANTONIO: shares Texas market — surface DALLAS COWBOYS, HOUSTON ASTROS, HOUSTON ROCKETS as cross-market interest
+  • sportsbook_market — surface the dominant sportsbooks active in the team's home state (legal status varies by state).
+      ✅ TX: only daily fantasy is legal (DRAFTKINGS DFS, FANDUEL DFS, PRIZEPICKS); full sportsbook is NOT legal in TX as of 2025 — do NOT inflate sportsbook BPs for a TX team's audience the way you would for a NY/PA/NJ team.
+  • regional_iconic_brand — surface the home-region's iconic QSR / grocery / travel-stop / radio brands that the team's local fanbase actually uses every week. These are non-obvious to a national agent but a local fan would name them immediately. Use the brand's own scoring category.
+      ✅ Texas (Rangers / Spurs / Mavericks / Astros / Cowboys / Texans): WHATABURGER (QSR — TX-founded, ~75% TX visit rate), BUCEES (TRAVEL + WHERE THEY SHOP — TX travel-stop icon along IH-35/IH-10), H-E-B (WHERE THEY SHOP — TX grocery, dominant in SA/Austin/Houston, smaller in DFW where Kroger/Tom Thumb are stronger), TORCHYS TACOS (WHERE THEY DINE — TX-founded), TACO CABANA (QSR — SA-founded TexMex), CENTRAL MARKET (WHERE THEY SHOP — TX upscale grocery), iHEART (STREAMING/MUSIC — TX is a country-radio market, indexes higher than US gen-pop)
+      ✅ Atlanta (Hawks / Falcons / Braves / United): CHICK-FIL-A (QSR — GA-founded, headquartered Atlanta), PUBLIX (WHERE THEY SHOP — GA grocery presence), WAFFLE HOUSE (WHERE THEY DINE — GA-founded), HOME DEPOT (WHERE THEY SHOP — GA-headquartered)
+      ✅ Pacific NW (Seahawks / Mariners / Kraken): COSTCO (WHERE THEY SHOP — WA-headquartered, indexes very high), STARBUCKS (WHERE THEY DINE/QSR — WA-founded, ubiquitous), DUTCH BROS (QSR — Pac NW founded)
+      ✅ Chicago (Bears / Bulls / Cubs / Sox / Blackhawks): PORTILLOS (WHERE THEY DINE — IL-founded), JEWEL-OSCO (WHERE THEY SHOP — IL grocery), GIORDANOS (WHERE THEY DINE — Chicago pizza)
+      ✅ NY/NJ (Giants / Jets / Yankees / Mets / Knicks / Rangers / Nets): WAWA (QSR — but only PA/NJ, not NY proper), DUNKIN (QSR — over-indexes Northeast), SHOPRITE (WHERE THEY SHOP — NJ grocery), STEW LEONARDS (WHERE THEY SHOP — NY/CT)
+      ✅ Florida (Heat / Magic / Bucs / Jaguars / Dolphins / Marlins / Lightning): PUBLIX (WHERE THEY SHOP — FL grocery), CULVERS (QSR — FL presence)
+      ✅ Southern California (Lakers / Clippers / Dodgers / Angels / Rams / Chargers): IN-N-OUT BURGER (QSR — CA icon), TRADER JOES (WHERE THEY SHOP — CA-founded), RALPHS (WHERE THEY SHOP — CA grocery)
+      ✅ Northern California / Bay Area (Warriors / Giants / 49ers / A's / Sharks): IN-N-OUT BURGER, TRADER JOES, SAFEWAY, LUCKY (WHERE THEY SHOP)
+      Coverage rule: surface AT LEAST 4 regional iconic brands for any sports-team profile, drawn from the team's home metro/state. National brands like NIKE/STARBUCKS still get scored normally; the regional ones go in active_affiliations so the per-category scorer KNOWS to elevate them past gen-pop.
+
+STRUCTURAL REASONING ABOUT BIG-AUDIENCE BRANDS (read this BEFORE scoring STREAMING / DIGITAL BANKING / QSR / WHERE THEY SHOP / SEARCH ENGINE / TECHNOLOGY for any sports-team or other mass-audience persona):
+
+The single most damaging defect for a major-audience persona (sports team, A-list celebrity, top-streamed musician, billion-dollar franchise) is treating the audience as "regional / niche / cult" and scoring commodity brands BELOW US gen-pop. Major-audience personas are FUNDAMENTALLY MASS-MARKET — their casual halo is mostly drawn from the gen-pop adult population. Casual fans (typically ~70% of any famous-person audience) are indistinguishable from gen-pop on commodity-brand consumption. Only the super-fan tail has unusual affinity patterns.
+
+CALIBRATION CHECK BEFORE SCORING ANY BIG-AUDIENCE PERSONA:
+  • Look at the gen-pop BP for each commodity brand (Netflix, Amazon, Walmart, McDonald's, Target, Apple Pay, Google, etc.) before deciding this persona's BP.
+  • Ask: is there an actual reason this persona's audience would consume LESS of this brand than gen-pop? The answer is almost always NO for commodity brands.
+  • If the persona has a structural REASON to over-index (sports fans + streaming because of cord-cutting and league partnerships; young persona + Target because young households over-index Target; Black audience + Samsung because of disproportionate Samsung phone share; Atlanta persona + Home Depot because HD is Atlanta-HQ'd), let the BP go ABOVE gen-pop, not below.
+
+WHY SPORTS-TEAM FANBASES OVER-INDEX ON STREAMING (do not score below gen-pop without specific reason):
+  • Cord-cutting tilt — sports fans are disproportionately cord-cutters who layer multiple streaming subs to keep accessing live games (YouTube TV for RSNs, NFL Sunday Ticket on YouTube TV, ESPN+ for out-of-market, Peacock for NBC games, Apple TV+ for MLB Friday Night Baseball, Prime for Thursday Night Football, Max for B/R Sports).
+  • League/national broadcast partnerships pull fans onto specific platforms regardless of personal taste (every MLB fan has a reason to have Apple TV+; every NBA fan has reason to have Prime / Peacock / ESPN+/Disney+/Hulu bundle; every NFL fan has reason to have YouTube TV / Prime / Peacock).
+  • Household co-viewing — streaming subs in a sports-fan household serve the WHOLE household, including spouses/kids who drive Netflix/Disney+/Hulu adoption.
+  Common defect to avoid: scoring Netflix in the 40s for a sports-team audience because the agent reasoned "this team's fans aren't a streaming-heavy demo." Wrong — they're MORE streaming-heavy than gen-pop, not less.
+
+WHY SPORTS-FAN HOUSEHOLDS OVER-INDEX ON DIGITAL PAYMENTS (do not score below gen-pop without specific reason):
+  • Sports-team fanbases skew adult-with-disposable-income, which means HIGHER digital-payment penetration than gen-pop. Apple Pay / Venmo / Zelle are how they split season-ticket costs, pay for tailgates, settle group watches.
+  Common defect: scoring Apple Pay in the 20s-30s for an adult-skewed sports audience — that's a young-adult or low-income gen-pop number, not a sports-fan number.
+
+WHY MAJOR-AUDIENCE PERSONAS LOOK LIKE GEN POP ON COMMODITY BRANDS:
+  • McDonald's, Target, Walmart, Best Buy, Home Depot, Google, YouTube — these are commodity brands with 30-90% gen-pop penetration. A persona's audience must be INTENTIONALLY niche to score below gen-pop on these. Don't penalize the audience for the persona's specialty.
+  • Home-market brand uplift: brands HQ'd or particularly strong in the persona's local market should index ABOVE gen-pop in that persona's profile (Home Depot for Atlanta, H-E-B for Texas, Costco for Pacific NW, Publix for Southeast US, Chick-fil-A for Atlanta/Texas, Trader Joes for coastal metros).
+  Common defect: scoring McDonald's at 14% / Target at 14% / Home Depot at 24% / Google at 60% for an NBA team's audience. Those are 50-70% of gen-pop. The agent reasoned "audience is niche → mass-market brands don't apply" — wrong; the audience IS gen-pop, plus a fan halo.
+
+The pipeline runs a holistic Claude sanity check at the END that compares this profile to Gen Pop and 2-3 peer profiles in the same archetype to catch these gaps. So you don't have to memorize any numeric ranges — just REASON honestly about whether this persona's audience would realistically consume MORE or LESS of each commodity brand than the average US adult, and let the sanity check correct your blind spots if any.
+
+COMMODITY-BRAND REASONING (read this BEFORE scoring WALMART / AMAZON / GOOGLE / VISA / MASTERCARD / AMEX / etc.):
+
+These brands are *infrastructure*. Their gen-pop reach is so broad that under-scoring them is almost always wrong. Reason about them this way:
+
+1. Walmart, Amazon, Google, YouTube, McDonald's, Visa — these are not "mass-market lifestyle choices." They're effectively utilities. >85% of US adults shop Walmart at least once a year. >85% search on Google. >50% have a Visa card. The right question is NEVER "does this audience like Walmart?" — it's "what fraction of THIS specific audience would have used Walmart in the past year?" For almost every persona that answer is "most of them, modulated up or down by income / geography / urbanity." The reflex of "celebrity audience is niche so commodity brands shouldn't apply" is the #1 defect we see — DO NOT do that. The audience IS gen-pop with a fan halo, not a separate species.
+
+2. When deciding whether to score a commodity brand BELOW gen-pop, you need an active reason — not the absence of a reason. Default to gen-pop, then adjust:
+   • UP for: mass / blue-collar / suburban / Latino / Texas / Southeast personas, value-conscious audiences, working families.
+   • DOWN for: high-income coastal / Manhattan-Brooklyn arthouse / SF tech / luxury-skew personas (and even then, "down" means maybe 10-20pp below gen-pop, not 40pp below).
+   • Walmart is the canonical case where the agent reflexively under-scores. Anti-Walmart sentiment exists in a narrow coastal-affluent slice; it is NOT the default.
+
+3. Visa / Mastercard / Amex — these are NOT mutually exclusive. Most US adults have BOTH a Visa and a Mastercard (different banks issue different networks). So Visa near gen-pop AND Mastercard near gen-pop AND Amex modulated by income is the realistic shape. Do not zero-sum these against each other. Amex over-indexes for high-income personas and under-indexes for low-income; Visa and Mastercard are both broad infrastructure.
+
+4. Reason about each commodity brand individually based on the persona's actual income, geography, urbanity, and lifestyle — not based on a generic "celebrity audience" reflex. The downstream Claude sanity check compares your numbers against Gen Pop and peer profiles to catch any commodity brand that landed implausibly low or high; you don't need to memorize anchor numbers, just reason honestly.
+
+OWNED-BRAND REALISM (read this BEFORE elevating any brand the persona OWNS / FOUNDED / INVESTS IN):
+
+There is a HARD distinction between (a) audience awareness of an owned brand and (b) audience actual purchase / usage. For brands the persona owns, founded, or actively promotes:
+  • Awareness uplift over gen-pop: typically +20 to +50 pp (most fans KNOW about it).
+  • Purchase / usage uplift over gen-pop: typically +3 to +10 pp ONLY (knowing about Mint Mobile doesn't make you switch carriers; knowing about Aviation Gin doesn't make you buy a $40 bottle of gin; knowing about Lobos 1707 doesn't make you abandon Patrón for an obscure tequila).
+  • The number we're scoring is PURCHASE / USAGE, not awareness. So owned-brand BPs should land at gen-pop + small persona lift, NOT 5-10x gen-pop.
+
+Concrete examples of correct owned-brand scoring:
+  • Mint Mobile (gen-pop ~5% — small carrier): Ryan Reynolds audience ~8-12%. NOT 25%+.
+  • Aviation Gin (gen-pop ~3% — niche premium gin): Reynolds audience ~6-10%. NOT 20%.
+  • Lobos 1707 (gen-pop <1% — niche tequila): LeBron audience ~2-5%. NOT 28%.
+  • Blaze Pizza (gen-pop ~5% — ~150 stores nationally): LeBron audience ~7-12%.
+  • Uninterrupted (gen-pop <2% — niche athlete media co): LeBron audience ~3-7%.
+  • SKIMS (gen-pop ~8% — DTC apparel): Kim K audience ~15-25% (closer customer overlap than gin/carrier).
+  • Beats by Dre (gen-pop ~25% — mainstream consumer brand): LeBron audience ~30-38% (modest lift on already-mainstream).
+  • Telfar (gen-pop <2% — niche luxury bag): A$AP Rocky audience ~4-8%.
+  • Casamigos (gen-pop ~6% — premium tequila): Clooney audience ~10-14%.
+
+The pattern: lift over gen-pop scales with how realistic actual adoption is, NOT with how much marketing/awareness exists. A celebrity having 100M followers does not make 25M of them switch to a small carrier or buy a bottle of premium liquor every quarter. Score audience PURCHASE behavior, not audience awareness.
+
+Common defect to avoid: scoring Mint Mobile at 25% on Ryan Reynolds because "he owns it and his fans love him." That's wrong — fans love HIM, not necessarily HIS brands enough to actually buy them. Score the realistic adoption lift.
+
+Coverage rule: every sports-team profile MUST list at LEAST 8 active_affiliations across these types. If you can't find 8, you haven't researched enough — go find the venue, jersey patch, broadcast partner, league streaming, league apparel, top 4 players, cross-market team. Sports teams are FIRMLY institutional — the affiliations exist whether or not the agent surfaces them.
+
+What goes in `flagship_brands` (the subset that bypasses the gen-pop ceiling): only `platform_flagship` and `exclusive_content_partner` items where the audience is genuinely platform-defined. NOT every collab — Bad Bunny has a Crocs collab but his audience isn't Crocs-defined; Crocs is normal scoring. For sports teams, NBA League Pass / MLB.tv / NFL+ are NOT flagship — even hardcore Hawks fans only need a single League Pass sub.
 
 What goes in `active_affiliations` (the broader list, used by per-category scorers as a research signal): everything above. The category-scoring agent will use these to elevate the affiliated brand BP in its own reasoning, even when the brand wouldn't normally be top-of-mind for this archetype.
 
@@ -16656,24 +16784,101 @@ EXAMPLE category_signals (hypothetical `consumer_brand` athletic-equipment cohor
     persona_doc = None
     last_err = ''
 
+    # Attempt 0 (PRIMARY when Anthropic is available): Claude Opus 4.7 with
+    # native web_search. This is the smartest research call we can make. Opus
+    # actually researches — current platform homes, current roster, current
+    # endorsements, sub-cultural alignments — instead of pattern-matching to
+    # a generic archetype. Override model via CLAUDE_PERSONA_MODEL env var.
+    # Disable entirely with USE_CLAUDE_PERSONA=false if you want pure GPT.
+    _use_claude_persona = (os.environ.get('USE_CLAUDE_PERSONA') or 'true').strip().lower() not in ('0', 'false', 'no', 'off')
+    if _use_claude_persona:
+        try:
+            import sys as _sys, os as _os
+            _migration_dir = _os.path.join(
+                _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__))),
+                'migration')
+            if _migration_dir not in _sys.path:
+                _sys.path.insert(0, _migration_dir)
+            from claude_client import claude_messages as _claude_messages, get_claude_client as _get_claude
+            if _get_claude() is not None:
+                claude_model = os.environ.get('CLAUDE_PERSONA_MODEL') or 'claude-opus-4-7'
+                _ws_tool_new = {"type": "web_search_20260209", "name": "web_search", "max_uses": 12}
+                _ws_tool_old = {"type": "web_search_20250305", "name": "web_search", "max_uses": 12}
+                _claude_system = (
+                    "You are a senior audience-research analyst. You research a public figure / "
+                    "brand / org using LIVE web search and return ONE single valid JSON object "
+                    "matching the user's schema. Do live searches for: current platform homes, "
+                    "current roster / venue / broadcast partners (sports), current endorsements / "
+                    "ownership stakes, sub-cultural alignments, recent shows or releases (last "
+                    "12 months). Don't pattern-match to a generic archetype — research what's "
+                    "actually true about THIS specific persona right now. Return ONLY the JSON "
+                    "object, no markdown fences, no commentary before or after."
+                )
+                print(f"   🧠 PRIMARY persona research: Claude {claude_model} + web_search")
+                import time as _time
+                t_claude_start = _time.time()
+                try:
+                    raw = _claude_messages(
+                        system=_claude_system, user=prompt, model=claude_model,
+                        max_tokens=16000, temperature=0.3, tools=[_ws_tool_new],
+                    )
+                except Exception as _e:
+                    print(f"   ⚠️ Claude persona primary call raised: {_e}")
+                    raw = ''
+                if not raw:
+                    print(f"   🔁 retrying with legacy web_search tool + Sonnet 4.6")
+                    try:
+                        raw = _claude_messages(
+                            system=_claude_system, user=prompt, model='claude-sonnet-4-6',
+                            max_tokens=16000, temperature=0.3, tools=[_ws_tool_old],
+                        )
+                    except Exception as _e:
+                        print(f"   ⚠️ Claude persona fallback call raised: {_e}")
+                        raw = ''
+                _elapsed_claude = _time.time() - t_claude_start
+                if raw:
+                    text = raw.strip()
+                    if not text.startswith('{'):
+                        first = text.find('{'); last = text.rfind('}')
+                        if first != -1 and last > first:
+                            text = text[first:last + 1]
+                    if text.startswith('```'):
+                        text = text.strip('`')
+                        if text.lstrip().lower().startswith('json'):
+                            text = text.split('\n', 1)[1] if '\n' in text else text
+                    print(f"   📡 Claude returned {len(text)} chars in {_elapsed_claude:.1f}s")
+                    persona_doc, last_err = _parse_persona_json(text)
+                    if persona_doc is None:
+                        print(f"   ⚠️ Claude persona JSON unparseable → {last_err[:160]}")
+                    else:
+                        _aff_n = len(persona_doc.get('active_affiliations') or [])
+                        _flag_n = len(persona_doc.get('flagship_brands') or [])
+                        print(f"   ✅ Claude persona doc: {_aff_n} affiliations, {_flag_n} flagships, "
+                              f"{len(persona_doc.get('persona_summary') or '')} char summary")
+            else:
+                print(f"   ⏭  Claude unavailable — falling through to GPT path")
+        except Exception as e:
+            print(f"   ⚠️ Claude persona path errored ({e}) — falling through to GPT")
+
     # Attempt 1: gpt-4o-search-preview (has web search)
-    try:
-        resp = _timed_completion(
-            client,
-            label="persona/search-preview",
-            model=MODEL_RESEARCH,
-            web_search_options={"search_context_size": "high"},
-            messages=[{'role': 'user', 'content': prompt}],
-            max_tokens=16384,
-        )
-        text = (resp.choices[0].message.content or '').strip()
-        if text:
-            print(f"   📡 search-preview returned {len(text)} chars")
-            persona_doc, last_err = _parse_persona_json(text)
-            if persona_doc is None:
-                print(f"   ⚠️ search-preview JSON unparseable → {last_err[:160]}")
-    except Exception as e:
-        print(f"   ⚠️ gpt-4o-search-preview failed ({e})")
+    if persona_doc is None:
+        try:
+            resp = _timed_completion(
+                client,
+                label="persona/search-preview",
+                model=MODEL_RESEARCH,
+                web_search_options={"search_context_size": "high"},
+                messages=[{'role': 'user', 'content': prompt}],
+                max_tokens=16384,
+            )
+            text = (resp.choices[0].message.content or '').strip()
+            if text:
+                print(f"   📡 search-preview returned {len(text)} chars")
+                persona_doc, last_err = _parse_persona_json(text)
+                if persona_doc is None:
+                    print(f"   ⚠️ search-preview JSON unparseable → {last_err[:160]}")
+        except Exception as e:
+            print(f"   ⚠️ gpt-4o-search-preview failed ({e})")
 
     # Attempt 2: gpt-4o (no web search) with strict JSON mode
     if persona_doc is None:
@@ -17826,7 +18031,30 @@ def _run_single_category_agent(category: str, values: list[str],
             "  • athlete_competitor (active in the league)         → 1.6-2.4x baseline\n"
             "  • platform_flagship                                 → 1.4-2.0x baseline\n"
             "  • brand_collaboration / brand_ambassador (current)  → 1.3-1.8x baseline\n"
-            "  • exclusive_content_partner                         → 1.5-2.0x baseline\n\n"
+            "  • exclusive_content_partner                         → 1.5-2.0x baseline\n"
+            "\n"
+            "SPORTS-TEAM-SPECIFIC AFFILIATION SCALING (when the persona IS a team and the\n"
+            "affiliated brand IS the team's own franchise asset — these are NOT 1.5-2x lifts,\n"
+            "they're absolute BP targets because the team's audience is BY DEFINITION engaged\n"
+            "with these specific assets, not lifted from a small baseline):\n"
+            "  • signature_athlete (player on the team's active roster) → 50-75% absolute BP\n"
+            "      The team's franchise face (Wembanyama for Spurs, Ja Morant for Grizzlies,\n"
+            "      Trae Young for Hawks, Luka/Kyrie for Mavs) must be the #1 entry in NBA\n"
+            "      ATHLETE / MLB ATHLETE / NFL ATHLETE for that team's profile, ranked above\n"
+            "      generic league superstars like LeBron / Curry / Mahomes / Trout. Other\n"
+            "      starters land at 25-45%. Don't compute as 1.6-2.4x baseline (1-2%) — that\n"
+            "      gives 4-5% which is wrong.\n"
+            "  • home_venue / venue_naming_rights (when persona = team) → 30-50% absolute BP\n"
+            "      The team's own arena/stadium must appear at the TOP of VENUE for that team's\n"
+            "      profile (FedExForum for Grizzlies, Frost Bank Center for Spurs, AAC for Mavs,\n"
+            "      State Farm Arena for Hawks, Globe Life Field for Rangers).\n"
+            "  • home_metro (when persona = team) → 15-25% absolute BP on LOCATION\n"
+            "      The team's home market must be the #1 LOCATION (Memphis TN for Grizzlies,\n"
+            "      San Antonio TX for Spurs). NOT the multiplier — the absolute BP. A\n"
+            "      gen-pop LOCATION entry is <2%; a team's home metro lands at 15-25%.\n"
+            "  • cross_market_sports (other pro teams in same metro) → 20-50% absolute BP\n"
+            "      A Mavericks profile should show Cowboys at 50%+, Stars at 8-15%, etc. —\n"
+            "      shared media market = shared fan overlap.\n\n"
             "ABSOLUTE CEILING — even with a flagship affiliation, no brand should exceed:\n"
             "  • Streaming SVOD: 65-72% (real US household reach < 80%, not even Netflix breaks 78%)\n"
             "  • Single social platform: 80% (only YouTube approaches universal usage)\n"
@@ -18011,6 +18239,34 @@ Every item's `reason` MUST cite at least one of:
 If you can't articulate a reason, your default is genpop × 1.0 (or 1.5%
 if no genpop). Do NOT rubber-stamp panel readings. Do NOT default to a
 generic 27%-style middle.
+
+═══════════════════════════════════════════════════════════════════
+GROUND-TRUTH CONVERGENCE IS FINE — MECHANICAL DEFAULTS ARE NOT
+═══════════════════════════════════════════════════════════════════
+It is PERFECTLY ACCEPTABLE for two profiles to land at similar BPs for a
+truly ubiquitous brand. If Netflix has ~68% US reach and your persona is
+mass-market with no anti-fit, landing at 65-72% is CORRECT — even if 10
+other profiles also landed in that band. The corpus naturally converges
+on reality for ubiquitous brands.
+
+The ANTI-PATTERN we are trying to avoid is the OPPOSITE — emitting a
+GENERIC DEFAULT VALUE (e.g. always 25-26% for every regional team across
+every persona, always ~5% for every long-tail apparel brand) because you
+didn't bother to reason per-persona. That's mechanical pinning and it's
+wrong.
+
+The test for any value you emit:
+  ❌ "I gave it ~5% because that felt like a reasonable middle for an
+      unknown brand" — STOP. Reason per-persona instead.
+  ✅ "I gave it 5.8% because casuals (50%) × 4% engagement + actives
+      (30%) × 12% engagement = 5.6, rounded toward 6" — KEEP.
+  ✅ "I gave it 68% because Netflix is genuinely near-universal and this
+      mass-market persona has no anti-fit, so I matched gen-pop" — KEEP.
+
+Honest persona-driven reasoning may produce values close to gen-pop for
+ubiquitous brands and values far from gen-pop for niche-fit brands.
+Both outcomes are correct as long as your `reason` shows the per-persona
+math.
 
 Never drop/zero a row solely because gen-pop is missing. Missing baseline
 means "reason from persona + item reality"; only unknown/unsupported rows
@@ -20098,25 +20354,102 @@ def _run_unified_scoring_pass(
     return results_map
 
 
+def _suggest_brand_domain(brand: str, category: str = '', aff_type: str = '') -> str:
+    """Best-effort guess at the canonical owned domain for a missing brand.
+    Used to seed the Domain column in the missing-hostmap email so the data
+    team has a starting point for the host_mapping entry.
+
+    The mapping is intentionally explicit (not a regex/heuristic) — the data
+    team should review and replace as needed. For athletes/people the
+    convention is to use their league's player-page URL (mlb.com, nba.com).
+    """
+    b = (brand or '').strip().upper()
+    EXPLICIT = {
+        'STATE FARM ARENA':         'statefarmarena.com',
+        'STATE FARM':               'statefarm.com',
+        'SHARECARE':                'sharecare.com',
+        'NBA LEAGUE PASS':          'watch.nba.com',
+        'GRAY MEDIA':               'gray.tv',
+        'NBA TV':                   'watch.nba.com',
+        'TNT':                      'tntdrama.com',
+        'NBA':                      'nba.com',
+        'GLOBE LIFE FIELD':         'mlb.com/rangers/ballpark',
+        'GLOBE LIFE':               'globelifeinsurance.com',
+        'MLB.TV':                   'mlb.tv',
+        'MAIN STREET SPORTS':       'mainstreetsports.tv',
+        'MLB NETWORK':              'mlbnetwork.mlb.com',
+        'LOUISVILLE SLUGGER':       'slugger.com',
+        'RAWLINGS':                 'rawlings.com',
+        'WILSON SPORTING GOODS':    'wilson.com',
+        'ATLANTA FALCONS':          'atlantafalcons.com',
+        'ATLANTA BRAVES':           'mlb.com/braves',
+        'ATLANTA UNITED':           'atlutd.com',
+        'DALLAS COWBOYS':           'dallascowboys.com',
+        'DALLAS MAVERICKS':         'mavs.com',
+        'DALLAS STARS':             'nhl.com/stars',
+        'FC DALLAS':                'fcdallas.com',
+        'HOUSTON ASTROS':           'mlb.com/astros',
+        'HOUSTON ROCKETS':          'nba.com/rockets',
+        'APPLE TV+':                'tv.apple.com',
+        'ESPN':                     'espn.com',
+        'FOX SPORTS':               'foxsports.com',
+        'NIKE':                     'nike.com',
+    }
+    if b in EXPLICIT:
+        return EXPLICIT[b]
+
+    cat = (category or '').strip().upper()
+    typ = (aff_type or '').strip().lower()
+    if typ == 'signature_athlete' or cat in ('NBA ATHLETE', 'MLB ATHLETE',
+                                             'NFL ATHLETE', 'NHL ATHLETE',
+                                             'ATHLETE'):
+        slug = b.lower().replace("'", '').replace('.', '').replace(' ', '-')
+        if cat == 'NBA ATHLETE':
+            return f'nba.com/player/{slug}'
+        if cat == 'MLB ATHLETE':
+            return f'mlb.com/player/{slug}'
+        if cat == 'NFL ATHLETE':
+            return f'nfl.com/players/{slug}'
+        if cat == 'NHL ATHLETE':
+            return f'nhl.com/player/{slug}'
+        return f'espn.com/_/search?q={slug}'
+
+    slug = ''.join(c for c in b.lower() if c.isalnum())
+    return f'{slug}.com' if slug else '(none)'
+
+
 def _send_missing_hostmap_email(subject_name: str, missing: list[dict]) -> None:
-    """Email jenna@ (cc jessie@, anastasia@) with affiliation brands that
-    aren't in `reference.host_mapping`."""
+    """Email jenna@ (cc jessie@, anastasia@, liz@) with affiliation brands
+    that aren't in `reference.host_mapping`. Each row includes a suggested
+    Domain column the data team can review and replace as needed."""
     if not missing:
         return
     try:
         import boto3 as _boto3
         ses = _boto3.client('ses', region_name='us-east-2')
+
+        for _m in missing:
+            if not (_m.get('domain') or '').strip():
+                _m['domain'] = _suggest_brand_domain(
+                    _m.get('value', ''),
+                    _m.get('category', ''),
+                    _m.get('type', ''),
+                )
+
         rows_html = ''.join(
             f'<tr>'
             f'<td style="padding:6px 12px;border:1px solid #ddd;">{m["category"]}</td>'
             f'<td style="padding:6px 12px;border:1px solid #ddd;font-weight:600;">{m["value"]}</td>'
+            f'<td style="padding:6px 12px;border:1px solid #ddd;font-family:Menlo,monospace;color:#0a58ca;">{m["domain"]}</td>'
             f'<td style="padding:6px 12px;border:1px solid #ddd;">{m["type"]}</td>'
             f'<td style="padding:6px 12px;border:1px solid #ddd;color:#555;">{m["evidence"]}</td>'
             f'</tr>'
             for m in missing
         )
         rows_text = '\n'.join(
-            f'  • [{m["category"]}] {m["value"]} ({m["type"]}) — {m["evidence"]}'
+            f'  • [{m["category"]}] {m["value"]} ({m["type"]})\n'
+            f'      domain:   {m["domain"]}\n'
+            f'      evidence: {m["evidence"]}'
             for m in missing
         )
         html = f"""<html><body style="font-family:-apple-system,Helvetica,Arial,sans-serif;color:#333;">
@@ -20124,11 +20457,14 @@ def _send_missing_hostmap_email(subject_name: str, missing: list[dict]) -> None:
 <p>The persona research agent surfaced <b>{len(missing)}</b> brand-affiliation(s) for
 <b>{subject_name}</b> that are <b>NOT in <code>reference.host_mapping</code></b>.
 These can't be added to the profile because there's no host mapping → no panel data.</p>
-<p><b>Please add these brands to hostmap so they're picked up on the next run:</b></p>
+<p><b>Please add these brands to hostmap so they're picked up on the next run.</b>
+The Domain column shows the suggested primary owned domain — please review and replace
+with the actual hostname pattern(s) you want the brand to match on.</p>
 <table style="border-collapse:collapse;border:1px solid #ddd;font-size:14px;">
 <tr style="background:#f4f4f4;">
 <th style="padding:8px 12px;border:1px solid #ddd;text-align:left;">Category</th>
 <th style="padding:8px 12px;border:1px solid #ddd;text-align:left;">Brand</th>
+<th style="padding:8px 12px;border:1px solid #ddd;text-align:left;">Domain (suggested)</th>
 <th style="padding:8px 12px;border:1px solid #ddd;text-align:left;">Affiliation Type</th>
 <th style="padding:8px 12px;border:1px solid #ddd;text-align:left;">Evidence</th>
 </tr>
@@ -20140,13 +20476,19 @@ Behavioral Graph by Crosswalk NYC — automated affiliation auditor</p>
         text = (f"Missing Hostmap Brands — Profile: {subject_name}\n\n"
                 f"The persona research agent surfaced {len(missing)} affiliation(s) "
                 f"for {subject_name} that are NOT in reference.host_mapping.\n"
-                f"Please add these to hostmap so they're picked up on the next run:\n\n"
+                f"Please add these to hostmap so they're picked up on the next run.\n"
+                f"(Domain shown is a suggested primary owned domain — review and "
+                f"replace with the actual hostname pattern.)\n\n"
                 f"{rows_text}\n")
         ses.send_email(
             Source='no_reply@crosswalknyc.com',
             Destination={
                 'ToAddresses': ['jenna@crosswalknyc.com'],
-                'CcAddresses': ['jessie@crosswalknyc.com', 'anastasia@crosswalknyc.com'],
+                'CcAddresses': [
+                    'jessie@crosswalknyc.com',
+                    'anastasia@crosswalknyc.com',
+                    'liz@crosswalknyc.com',
+                ],
             },
             Message={
                 'Subject': {'Data': f'📨 Hostmap brands needed for {subject_name} ({len(missing)})',
@@ -20157,7 +20499,7 @@ Behavioral Graph by Crosswalk NYC — automated affiliation auditor</p>
                 },
             },
         )
-        print(f"   📧 Sent missing-hostmap email to jenna@ (cc jessie@, anastasia@) "
+        print(f"   📧 Sent missing-hostmap email to jenna@ (cc jessie@, anastasia@, liz@) "
               f"for {len(missing)} brand(s)")
     except Exception as _e:
         print(f"   ⚠️ SES email failed: {_e}")
@@ -20672,39 +21014,96 @@ def parallel_category_agents(df: pd.DataFrame, persona_doc: dict,
     # emailed to the data team so they can be added for the next run.
     _aff_added_per_cat: dict[str, list[str]] = {}
     _aff_missing_from_hostmap: list[dict] = []
+
+    # Normalize both sides to alphanumeric-uppercase before comparing so
+    # punctuation/spacing differences don't generate false missing-brand
+    # emails (e.g. agent says `MLB.TV` / `Buc-ee's`, hostmap has `MLB TV` /
+    # `Bucees`). Per-Jessie/Jenna 2026-05-15.
+    import re as _re
+    def _norm_brand(s: str) -> str:
+        return _re.sub(r'[^A-Z0-9]', '', str(s or '').upper())
+
+    # Affiliation values that aren't really tracked panel brands —
+    # production studios, scene/genre labels, conferences, etc.
+    # Silently dropped from affiliation pre-insertion; no email.
+    _AFFILIATION_NOISE_SKIP = {
+        'BROADWAY', 'OFFBROADWAY', 'OFFOFFBROADWAY', 'WESTEND',
+        'RYANMURPHY', 'RYANMURPHYPRODUCTIONS', 'RYANMURPHYTV',
+        'BADROBOT', 'BADROBOTPRODUCTIONS',
+        'PLANBENTERTAINMENT', 'PLANB',
+        'PHOENIXPICTURES', 'GHOULARDIFILMCOMPANY',
+        'CHERNINENTERTAINMENT',
+    }
+    # Agent-name → canonical hostmap brand name (alphanumeric-uppercase
+    # keys). When the agent surfaces an LHS that has no direct hostmap
+    # entry but the audience signal is real, we re-route to the RHS so
+    # the brand still lands in the profile under the canonical spelling.
+    _AFFILIATION_ALIAS_MAP = {
+        # FX content lives on FX Now (Movies/TV streaming, Media section)
+        'FX': 'FX Now',
+        'FXNETWORK': 'FX Now',
+        'FXX': 'FX Now',
+        # HBO rebranded → Max → HBO Max; canonical is HBO Max
+        'HBO': 'HBO Max',
+        'HBOGO': 'HBO Max',
+        'HBONOW': 'HBO Max',
+        'MAX': 'HBO Max',
+        # Showtime merged into Paramount+ (paramountpluswithshowtime.com)
+        'SHOWTIME': 'Paramount+',
+        'SHOWTIMETV': 'Paramount+',
+        'SHOWTIMENETWORK': 'Paramount+',
+        'SHOWTIMEAPP': 'Paramount+',
+        'SHOWTIMEANYTIME': 'Paramount+',
+        'CBSALLACCESS': 'Paramount+',
+        # DirecTV Now → AT&T TV → DirecTV Stream
+        'DIRECTVNOW': 'DIRECTV STREAM',
+        'ATTTV': 'DIRECTV STREAM',
+    }
     try:
         _aff_list = (persona_doc or {}).get('active_affiliations') or []
         if isinstance(_aff_list, list) and _aff_list:
-            _hostmap_present: set[str] = set()
+            # Pull FULL hostmap brand list once and build a {normalized →
+            # canonical} dict so that affiliations matching after stripping
+            # punctuation/case can be canonicalized to the hostmap spelling
+            # before being written into the profile.
+            _hostmap_canon: dict[str, str] = {}
             try:
                 import clickhouse_connect as _ch
                 _ch_client = _ch.get_client(
                     host='37.27.140.111', port=8123, username='bgapp',
                     password='4qPllwDG+S3PptBWTRAJPTkpCzkRZ6tZ',
-                    settings={'max_execution_time': 10},
+                    settings={'max_execution_time': 30},
                 )
-                _wanted = sorted({str(a.get('value', '')).strip().upper()
-                                  for a in _aff_list
-                                  if isinstance(a, dict) and a.get('value')})
-                if _wanted:
-                    _qlist = ','.join(f"'{w.replace(chr(39), chr(39)*2)}'" for w in _wanted)
-                    _rows = _ch_client.query(
-                        f"SELECT DISTINCT upper(BRAND) FROM reference.host_mapping "
-                        f"WHERE upper(BRAND) IN ({_qlist})"
-                    ).result_rows
-                    _hostmap_present = {r[0] for r in _rows}
-                    _exact_missing = [w for w in _wanted if w not in _hostmap_present]
-                    for _w in _exact_missing:
-                        _w_safe = _w.replace("'", "''")
-                        _r = _ch_client.query(
-                            f"SELECT 1 FROM reference.host_mapping "
-                            f"WHERE upper(BRAND) LIKE '%{_w_safe}%' LIMIT 1"
-                        ).result_rows
-                        if _r:
-                            _hostmap_present.add(_w)
+                _hm_rows = _ch_client.query(
+                    "SELECT DISTINCT BRAND FROM reference.host_mapping "
+                    "WHERE BRAND IS NOT NULL AND BRAND != ''"
+                ).result_rows
+                for _r in _hm_rows:
+                    _b = _r[0]
+                    _n = _norm_brand(_b)
+                    if _n and _n not in _hostmap_canon:
+                        _hostmap_canon[_n] = _b
+                print(f"   🗺  hostmap loaded: {len(_hostmap_canon):,} normalized brand keys")
             except Exception as _e:
                 print(f"   ⚠️ hostmap lookup failed for affiliation gating: {_e}")
-                _hostmap_present = set()
+                _hostmap_canon = {}
+            # Returns:
+            #   ''         → genuinely missing (email the data team)
+            #   '__SKIP__' → known non-brand noise (silently drop, no email)
+            #   <name>     → canonical hostmap spelling to insert under
+            def _resolve_hostmap_canon(val: str) -> str:
+                _n = _norm_brand(val)
+                if not _n:
+                    return ''
+                if _n in _AFFILIATION_NOISE_SKIP:
+                    return '__SKIP__'
+                hit = _hostmap_canon.get(_n, '')
+                if hit:
+                    return hit
+                aliased = _AFFILIATION_ALIAS_MAP.get(_n)
+                if aliased:
+                    return _hostmap_canon.get(_norm_brand(aliased), aliased)
+                return ''
 
             _existing_keys = set()
             for _idx, _r in df.iterrows():
@@ -20726,17 +21125,27 @@ def parallel_category_agents(df: pd.DataFrame, persona_doc: dict,
                 if not isinstance(_aff, dict):
                     continue
                 _ac = str(_aff.get('category', '')).strip().upper()
-                _av = str(_aff.get('value', '')).strip().upper()
+                _av_raw = str(_aff.get('value', '')).strip()
+                _av = _av_raw.upper()
                 if not _ac or not _av:
                     continue
-                if (_ac, _av) in _existing_keys:
+                # Hostmap gate — normalize-match (case + punctuation insensitive)
+                # so the agent's `MLB.TV` / `Buc-ee's` resolves to hostmap's
+                # canonical `MLB TV` / `Bucees`. We then write the canonical
+                # spelling into the profile so panel data joins cleanly.
+                _canon = _resolve_hostmap_canon(_av_raw)
+                if _canon == '__SKIP__':
+                    print(f"        🤫 [{_ac}] {_av_raw} — non-brand noise, silently dropped (no email)")
                     continue
-                if _av not in _hostmap_present:
+                if not _canon:
                     _aff_missing_from_hostmap.append({
-                        'category': _ac, 'value': _av,
+                        'category': _ac, 'value': _av_raw,
                         'type': str(_aff.get('type', '')).strip(),
                         'evidence': str(_aff.get('evidence', '')).strip(),
                     })
+                    continue
+                _av = str(_canon).strip().upper()
+                if (_ac, _av) in _existing_keys:
                     continue
                 _tmpl = _template_by_cat.get(_ac)
                 if _tmpl is None:
@@ -20744,7 +21153,7 @@ def parallel_category_agents(df: pd.DataFrame, persona_doc: dict,
                     continue
                 _new_row = dict(_tmpl)
                 _new_row['Column'] = _aff.get('category', _ac)
-                _new_row['Value'] = _aff.get('value', _av)
+                _new_row['Value'] = _av
                 for _zc in ('Brand Penetration (Row)', 'Category Share',
                             'Original Raw Numbers', 'Original Raw Numbers (Database)',
                             'US Gen Pop Projection', 'Avg_Visit_Frequency',
@@ -26569,7 +26978,12 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
         df_final = _ensure_apple_pay_present(df_final, persona_doc=locals().get('_persona_doc') or locals().get('persona_doc'))
         df_final = _enforce_realistic_ceilings(df_final, project_name=project_name, persona_doc=locals().get('_persona_doc') or locals().get('persona_doc'))
         df_final = _break_intra_category_pinning(df_final, project_name=project_name)
-        # Post-write QC: cross-profile pinning check (vs existing S3 profiles)
+        df_final = _break_global_long_tail_pinning(df_final, project_name=project_name)
+
+        # PRE-SAVE corpus check: compare this profile against every existing
+        # S3 profile and PUSH any high-BP brand out of corpus clusters BEFORE
+        # we write the CSV. Mutates df_final in place + recomputes derived
+        # metrics so the saved CSV is internally consistent.
         try:
             import sys as _sys, os as _os
             _migration_dir = _os.path.join(
@@ -26577,15 +26991,98 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
                 'migration')
             if _migration_dir not in _sys.path:
                 _sys.path.insert(0, _migration_dir)
-            from audit_cross_profile_pinning import check_new_profile as _check_pinning
-            _check_pinning(df_final, project_name=project_name, send_email=True)
+            from audit_cross_profile_pinning import fix_cross_profile_collisions as _fix_pinning
+            df_final, _fixes = _fix_pinning(df_final, project_name=project_name)
         except Exception as _e:
-            print(f"   ⚠️ post-write pinning check skipped: {_e}")
-        # Final pass: re-align cross-category BP. Pin-breaking adds tiny
-        # noise that can re-introduce drift between e.g. NIKE in MPB vs
-        # NIKE in APPAREL/FOOTWEAR. Running alignment LAST guarantees that
-        # the same brand always reads the same BP across every category.
+            print(f"   ⚠️ pre-save pinning fix skipped: {_e}")
+
+        # ── HYBRID REASONING: holistic sanity check (Claude) ────────────────
+        # Optional final whole-profile audit using Claude Sonnet. Runs only
+        # when env USE_HYBRID_REASONING=true. Conservative by design — most
+        # profiles return zero fixes. When fixes ARE returned they're
+        # persona-specific reasoning ("Hulu at 84.5% is too high for Selena
+        # Gomez because her audience reaches her on TikTok/Spotify too, not
+        # just through her Hulu show"). Never raises — pipeline continues
+        # uninterrupted on any error.
+        try:
+            import sys as _sys, os as _os
+            _migration_dir = _os.path.join(
+                _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__))),
+                'migration')
+            if _migration_dir not in _sys.path:
+                _sys.path.insert(0, _migration_dir)
+            from hybrid_reasoning import (
+                holistic_sanity_check as _hybrid_audit,
+                apply_sanity_fixes as _hybrid_apply,
+            )
+            from claude_client import is_hybrid_enabled as _hybrid_on
+            if _hybrid_on():
+                _persona_doc_local = locals().get('_persona_doc') or locals().get('persona_doc') or {}
+                _subject_arg = (locals().get('project_name')
+                                or locals().get('_subject_name')
+                                or (_persona_doc_local.get('subject') if isinstance(_persona_doc_local, dict) else '')
+                                or '')
+                _brand_cat_arg = (locals().get('brand_category') or '')
+                _hybrid_fixes = _hybrid_audit(
+                    df_final, _persona_doc_local,
+                    subject=_subject_arg,
+                    brand_category=_brand_cat_arg,
+                )
+                if _hybrid_fixes:
+                    df_final, _n = _hybrid_apply(df_final, _hybrid_fixes)
+                    print(f"   🧠 hybrid sanity check applied {_n} fixes "
+                          f"(out of {len(_hybrid_fixes)} suggested):")
+                    for _fx in _hybrid_fixes:
+                        _r = (_fx.get('reason') or '').strip()
+                        if len(_r) > 140:
+                            _r = _r[:137] + '...'
+                        print(f"      🧠 [{_fx.get('category')}] {_fx.get('value')}: "
+                              f"{_fx.get('current_bp'):.2f} → {_fx.get('suggested_bp'):.2f}")
+                        print(f"          reason: {_r}")
+                else:
+                    print("   🧠 hybrid sanity check: profile passed cleanly (0 fixes)")
+
+        except Exception as _e:
+            print(f"   ⚠️ hybrid sanity check skipped: {_e}")
+
+        # Final pass: re-align cross-category BP. Pin-breaking + corpus push
+        # + hybrid sanity fixes can re-introduce drift between e.g. NIKE in
+        # MPB vs NIKE in APPAREL/FOOTWEAR. Running alignment guarantees
+        # that the same brand always reads the same BP across every category.
         df_final = _align_cross_category_bp(df_final)
+
+        # Deterministic safety net: parse each category's PERSONA SIGNAL for
+        # exclusionary phrasing and soft-cap any row above the implied
+        # ceiling. Runs AFTER cross-category alignment so the cap holds
+        # against alignment's MAX-fallback rule.
+        try:
+            import sys as _sys2, os as _os2
+            _migration_dir2 = _os2.path.join(
+                _os2.path.dirname(_os2.path.dirname(_os2.path.abspath(__file__))),
+                'migration')
+            if _migration_dir2 not in _sys2.path:
+                _sys2.path.insert(0, _migration_dir2)
+            from hybrid_reasoning import enforce_persona_negative_space as _hybrid_neg_space2
+            _persona_doc_for_cap = locals().get('_persona_doc') or locals().get('persona_doc') or {}
+            df_final, _n_capped = _hybrid_neg_space2(
+                df_final, _persona_doc_for_cap, verbose=True,
+            )
+        except Exception as _e:
+            print(f"   ⚠️ persona-negative-space cap skipped: {_e}")
+
+        # Hostmap category gate (per Jenna 2026-05-15): NEVER let agents
+        # invent brands not in reference.host_mapping, and NEVER let them
+        # put a real brand in a category other than what hostmap says.
+        try:
+            df_final, _gate_drops = _enforce_hostmap_category_gating(
+                df_final,
+                project_name=(locals().get('project_name')
+                              or locals().get('_subject_name')
+                              or ''),
+                send_email=True,
+            )
+        except Exception as _e:
+            print(f"   ⚠️ hostmap gate skipped: {_e}")
 
     # Save to CSV
     try:
@@ -26813,7 +27310,10 @@ def _enforce_realistic_ceilings(df, project_name: str = '', persona_doc=None):
             ('STREAMING/MUSIC','YOUTUBE MUSIC'): 45.0,
             ('STREAMING/MUSIC','AMAZON MUSIC'): 32.0,
             ('WHERE THEY SHOP','AMAZON'): 88.0,
-            ('WHERE THEY SHOP','WALMART'): 55.0,
+            # NOTE: WALMART intentionally NOT capped — it's gen-pop ubiquitous (88%);
+            # Visa / Mastercard / Amex also intentionally NOT capped — agent must
+            # reason them per-persona, holistic Claude check catches outliers
+            # against gen-pop + peer profiles.
             ('WHERE THEY SHOP','TARGET'): 55.0,
             ('WHERE THEY SHOP','COSTCO'): 38.0,
             ('QSR','STARBUCKS'): 55.0,
@@ -27175,6 +27675,349 @@ def _break_intra_category_pinning(df, project_name: str = ''):
     except Exception as _e:
         print(f"   ⚠️ _break_intra_category_pinning failed: {_e}")
         return df
+
+
+def _break_global_long_tail_pinning(df, project_name: str = '',
+                                    min_pin_count: int = 4,
+                                    bp_ceiling: float = 5.0,
+                                    max_jitter_pp: float = 0.45):
+    """Break GLOBAL long-tail pinning. Catches what `_break_intra_category_pinning`
+    misses: many brands across DIFFERENT categories all landing on the exact
+    same low BP (e.g. Mavs had 7 brands at 1.00% spread across TALENT /
+    MUSICIAN/BAND / MOST PURCHASED BRANDS / EVENTS / APPAREL). That's a
+    floor/rounding artifact, not a real distribution.
+
+    For any BP value ≤ `bp_ceiling`% that appears ≥ `min_pin_count` times
+    anywhere in the profile, apply a deterministic ±`max_jitter_pp` pp
+    jitter (hashed off project + category + value so it's reproducible
+    across reruns and same-celeb requeries).
+
+    Original Raw Numbers and US Gen Pop Projection scale in proportion.
+    Category Share is renormalized for any touched category.
+    """
+    import hashlib
+    import pandas as _pd
+    from collections import Counter
+    try:
+        bp_col = 'Brand Penetration (Row)'
+        if bp_col not in df.columns:
+            return df
+        df[bp_col] = _pd.to_numeric(df[bp_col], errors='coerce').fillna(0.0)
+
+        rounded = df[bp_col].round(4)
+        counts = Counter(rounded)
+        pinned_vals = {bp for bp, n in counts.items()
+                       if n >= min_pin_count and 0 < bp <= bp_ceiling}
+        if not pinned_vals:
+            return df
+
+        raw_col = 'Original Raw Numbers' if 'Original Raw Numbers' in df.columns else None
+        prj_col = 'US Gen Pop Projection' if 'US Gen Pop Projection' in df.columns else None
+        cats_touched: set[str] = set()
+        n_jit = 0
+
+        for idx, row in df.iterrows():
+            try:
+                bp = float(row[bp_col])
+            except (TypeError, ValueError):
+                continue
+            bp_r = round(bp, 4)
+            if bp_r not in pinned_vals:
+                continue
+            cat_u = str(row.get('Column', '')).strip().upper()
+            val_u = str(row.get('Value', '')).strip().upper()
+            seed = f"{project_name}|{cat_u}|{val_u}|tail-jitter".encode('utf-8')
+            h = hashlib.blake2b(seed, digest_size=8).digest()
+            u = int.from_bytes(h[:4], 'big') / 0xFFFFFFFF
+            jitter = (u * 2 - 1) * max_jitter_pp
+            u2 = int.from_bytes(h[4:], 'big') / 0xFFFFFFFF
+            tie_break = (u2 * 2 - 1) * 0.005
+            new_bp = max(0.0011, bp + jitter + tie_break)
+            scale = new_bp / bp if bp > 0 else 1.0
+            df.at[idx, bp_col] = round(new_bp, 4)
+            if raw_col and _pd.notna(row.get(raw_col)):
+                try:
+                    df.at[idx, raw_col] = round(float(row[raw_col]) * scale)
+                except (TypeError, ValueError):
+                    pass
+            if prj_col and _pd.notna(row.get(prj_col)):
+                try:
+                    df.at[idx, prj_col] = round(float(row[prj_col]) * scale)
+                except (TypeError, ValueError):
+                    pass
+            n_jit += 1
+            if cat_u:
+                cats_touched.add(cat_u)
+
+        if 'Category Share' in df.columns:
+            for cat in cats_touched:
+                m = df['Column'].astype(str).str.upper() == cat
+                bps = _pd.to_numeric(df.loc[m, bp_col], errors='coerce').fillna(0.0)
+                tot = float(bps.sum())
+                if tot > 0:
+                    df.loc[m, 'Category Share'] = (bps / tot * 100).round(4)
+
+        if n_jit:
+            print(f"   ✅ broke {n_jit} global long-tail pin rows "
+                  f"(across {len(cats_touched)} categories, {len(pinned_vals)} pin clusters)")
+        return df
+    except Exception as _e:
+        print(f"   ⚠️ _break_global_long_tail_pinning failed: {_e}")
+        return df
+
+
+# ──────────────────────────────────────────────────────────────────────────
+# Hostmap-driven category gate (mirrored from BG.py).
+#
+# RULE (per Jenna 2026-05-15):
+#   1. Don't let agents add brands that aren't in reference.host_mapping.
+#      If they do, drop the row and email the data team.
+#   2. If a brand IS in host_mapping, force it to the categories listed in
+#      its host_mapping SECTION. If an agent put it elsewhere, drop the
+#      stray row.
+# ──────────────────────────────────────────────────────────────────────────
+
+_HOSTMAP_GATE_CACHE: dict = {}
+
+def _load_hostmap_category_gate() -> dict:
+    global _HOSTMAP_GATE_CACHE
+    if _HOSTMAP_GATE_CACHE:
+        return _HOSTMAP_GATE_CACHE
+    import re as _re
+    def _norm(s: str) -> str:
+        return _re.sub(r'[^A-Z0-9]', '', str(s or '').upper())
+    norm_to_canon: dict[str, str] = {}
+    norm_to_cats: dict[str, set[str]] = {}
+    gated_categories: set[str] = set()
+    try:
+        import clickhouse_connect as _ch
+        client = _ch.get_client(
+            host='37.27.140.111', port=8123, username='bgapp',
+            password='4qPllwDG+S3PptBWTRAJPTkpCzkRZ6tZ',
+            settings={'max_execution_time': 60},
+        )
+        rows = client.query(
+            "SELECT BRAND, SECTION FROM reference.host_mapping "
+            "WHERE BRAND IS NOT NULL AND BRAND != ''"
+        ).result_rows
+        for brand, section in rows:
+            n = _norm(brand)
+            if not n:
+                continue
+            if n not in norm_to_canon:
+                norm_to_canon[n] = brand
+            cats = norm_to_cats.setdefault(n, set())
+            sec = (section or '').strip()
+            for part in sec.split(','):
+                p = part.strip().upper()
+                if not p or p in {'HIDDEN', 'CATEGORY', ''}:
+                    continue
+                cats.add(p)
+                gated_categories.add(p)
+        print(f"   🗺  hostmap gate built: {len(norm_to_canon):,} brands, "
+              f"{len(gated_categories)} gated categories")
+    except Exception as e:
+        print(f"   ⚠️ hostmap gate build failed: {e} — gate disabled this run")
+        return {'norm_to_canon': {}, 'norm_to_cats': {}, 'gated_categories': set()}
+    _HOSTMAP_GATE_CACHE = {
+        'norm_to_canon': norm_to_canon,
+        'norm_to_cats': norm_to_cats,
+        'gated_categories': gated_categories,
+    }
+    return _HOSTMAP_GATE_CACHE
+
+
+def _enforce_hostmap_category_gating(df, *, project_name: str = '',
+                                     send_email: bool = True) -> tuple:
+    if df is None or getattr(df, 'empty', True):
+        return df, []
+    bp_col = "Brand Penetration (Row)" if "Brand Penetration (Row)" in df.columns else "Brand Penetration"
+    cat_col = "Column" if "Column" in df.columns else (
+        "Category" if "Category" in df.columns else None
+    )
+    if cat_col is None or "Value" not in df.columns:
+        return df, []
+
+    gate = _load_hostmap_category_gate()
+    norm_to_canon = gate['norm_to_canon']
+    norm_to_cats = gate['norm_to_cats']
+    gated_categories = gate['gated_categories']
+    if not norm_to_canon or not gated_categories:
+        return df, []
+
+    import re as _re
+    def _norm(s: str) -> str:
+        return _re.sub(r'[^A-Z0-9]', '', str(s or '').upper())
+
+    NEVER_GATE = {
+        'INPUT_METADATA', 'INPUT METADATA', 'BRAND INPUT', 'SAMPLE SIZE',
+        'BRAND CATEGORY', 'AVID FAN', 'CASUAL FAN',
+        'INTEREST', 'MOST PURCHASED CATEGORIES', 'LOCATION',
+        'AGE', 'GENDER', 'ETHNICITY', 'INCOME', 'EDUCATION',
+        'RELATIONSHIP', 'SEXUAL_ORIENTATION', 'PARENTAL_STATUS',
+        'OCCUPATION', 'PERSONA SUMMARY', 'AUDIENCE COMPOSITION',
+        'ACTIVE AFFILIATIONS', 'FLAGSHIP BRANDS',
+    }
+
+    # Brands that agents commonly hallucinate but that are KNOWN to be
+    # merged/superseded/deprecated and should NOT be added to host_mapping.
+    # These are silently dropped — no email to the data team.
+    # Normalized (alphanumeric uppercase) for matching.
+    SUPPRESS_FROM_EMAIL = {
+        # Showtime was rolled into Paramount+ in 2024; the hostmap treats
+        # Paramount+ as canonical. Don't ask the team to re-add Showtime.
+        'SHOWTIME', 'SHOWTIMETV', 'SHOWTIMEAPP', 'SHOWTIMENETWORK',
+        'SHOWTIMEANYTIME',
+        # HBO renamed to Max (2023) then back to HBO Max (2025). Hostmap
+        # uses HBO MAX as canonical.
+        'HBO', 'HBOGO', 'HBONOW',
+        # CBS All Access renamed to Paramount+ in 2021.
+        'CBSALLACCESS',
+        # DirecTV Now renamed to AT&T TV then to DirecTV Stream.
+        'DIRECTVNOW', 'ATTTV',
+    }
+
+    drop_idx: list = []
+    drop_log: list[dict] = []
+    silent_drops: list[dict] = []
+    move_log: list[dict] = []  # wrong-category rows we relabeled instead of dropping
+
+    # Pre-compute (category_upper, normalized_value) pairs already present
+    # in the df. Used to avoid moving a brand into a category where it
+    # already lives (which would create a duplicate row).
+    existing_pairs: set[tuple[str, str]] = set()
+    for _, _r in df.iterrows():
+        _c = str(_r.get(cat_col, '')).strip().upper()
+        _v = str(_r.get('Value', '')).strip()
+        if _c and _v:
+            existing_pairs.add((_c, _norm(_v)))
+
+    for idx, row in df.iterrows():
+        cat = str(row.get(cat_col, '')).strip().upper()
+        val = str(row.get('Value', '')).strip()
+        if not cat or not val:
+            continue
+        if cat in NEVER_GATE:
+            continue
+        if cat not in gated_categories:
+            continue
+        n = _norm(val)
+        if not n:
+            continue
+        if n not in norm_to_canon:
+            drop_idx.append(idx)
+            try:
+                bp_val = float(row.get(bp_col, 0)) if bp_col in df.columns else 0.0
+            except Exception:
+                bp_val = 0.0
+            entry = {
+                'category': str(row.get(cat_col, '')),
+                'value': val,
+                'bp': bp_val,
+                'reason': 'not_in_hostmap',
+                'hostmap_categories': [],
+            }
+            if n in SUPPRESS_FROM_EMAIL:
+                silent_drops.append(entry)
+            else:
+                drop_log.append(entry)
+            continue
+        allowed = norm_to_cats.get(n, set())
+        if cat not in allowed:
+            # Violation B: brand in hostmap but in wrong category.
+            # First try to MOVE the row into one of its canonical categories
+            # (e.g. FX bp=60 inserted into STREAMING/PLATFORM but hostmap
+            # says MEDIA → relabel to MEDIA instead of dropping). Fall back
+            # to dropping only if the brand already exists in every
+            # canonical category (would create a duplicate row).
+            canonical_val = norm_to_canon[n]
+            try:
+                bp_val = float(row.get(bp_col, 0)) if bp_col in df.columns else 0.0
+            except Exception:
+                bp_val = 0.0
+            target_cat = None
+            for cand in sorted(allowed):
+                cand_up = cand.upper()
+                if (cand_up, _norm(canonical_val)) not in existing_pairs:
+                    target_cat = cand
+                    break
+            if target_cat is not None:
+                df.at[idx, cat_col] = target_cat
+                df.at[idx, 'Value'] = canonical_val
+                existing_pairs.add((target_cat.upper(), _norm(canonical_val)))
+                move_log.append({
+                    'from_category': str(row.get(cat_col, '')) or cat,
+                    'to_category': target_cat,
+                    'value': canonical_val,
+                    'bp': bp_val,
+                })
+                continue
+            drop_idx.append(idx)
+            drop_log.append({
+                'category': str(row.get(cat_col, '')),
+                'value': canonical_val,
+                'bp': bp_val,
+                'reason': 'wrong_category_dup',
+                'hostmap_categories': sorted(allowed),
+            })
+
+    if not drop_idx and not move_log:
+        print(f"   🛡  hostmap gate: 0 drops, 0 moves")
+        return df, []
+
+    df_kept = df.drop(index=drop_idx).reset_index(drop=True) if drop_idx else df.reset_index(drop=True)
+
+    n_a = sum(1 for d in drop_log if d['reason'] == 'not_in_hostmap')
+    n_b = sum(1 for d in drop_log if d['reason'] == 'wrong_category_dup')
+    n_silent = len(silent_drops)
+    n_moved = len(move_log)
+    silent_label = f", {n_silent} silent (merged/deprecated)" if n_silent else ""
+    print(f"   🛡  hostmap gate: dropped {len(drop_idx)} rows "
+          f"({n_a} not-in-hostmap, {n_b} wrong-category dups{silent_label}), "
+          f"moved {n_moved} wrong-category rows to canonical category")
+    if silent_drops:
+        for d in silent_drops[:5]:
+            print(f"      🤫 [{d['category']}] {d['value']} bp={d['bp']:.2f} — silently dropped (merged into a canonical brand; no email)")
+    if move_log:
+        for m in sorted(move_log, key=lambda d: -float(d.get('bp') or 0))[:10]:
+            print(f"      🔀 [{m['from_category']} → {m['to_category']}] {m['value']} bp={m['bp']:.2f} — relabeled to canonical category")
+
+    loud = sorted(drop_log, key=lambda d: -float(d.get('bp') or 0))[:10]
+    for d in loud:
+        if d['reason'] == 'not_in_hostmap':
+            print(f"      ❌ [{d['category']}] {d['value']} bp={d['bp']:.2f} — not in hostmap")
+        else:
+            cats_str = ' | '.join(d['hostmap_categories'][:3])
+            print(f"      ⛔ [{d['category']}] {d['value']} bp={d['bp']:.2f} — "
+                  f"wrong category AND already in: {cats_str}")
+
+    if send_email:
+        try:
+            email_payload: list[dict] = []
+            for d in drop_log:
+                if d['reason'] == 'not_in_hostmap':
+                    email_payload.append({
+                        'category': d['category'],
+                        'value': d['value'],
+                        'type': 'agent_inserted_unmapped_brand',
+                        'evidence': f'agent placed in {d["category"]} at BP {d["bp"]:.2f}; '
+                                    f'not in reference.host_mapping',
+                    })
+                else:
+                    email_payload.append({
+                        'category': d['category'],
+                        'value': d['value'],
+                        'type': 'agent_wrong_category_unresolvable',
+                        'evidence': f'agent placed in {d["category"]} at BP {d["bp"]:.2f}; '
+                                    f'hostmap canonical category(s) ({", ".join(d["hostmap_categories"])}) '
+                                    f'already contain this brand — please review categorization',
+                    })
+            if email_payload:
+                _send_missing_hostmap_email(project_name or 'unknown', email_payload)
+        except Exception as _e:
+            print(f"   ⚠️ hostmap-gate email failed: {_e}")
+
+    return df_kept, drop_log
 
 
 def _align_cross_category_bp(df):
@@ -30480,6 +31323,16 @@ def enforce_value_consistency_across_categories(df: pd.DataFrame,
 
     # Group non-excluded rows by normalized Value key.
     work = df.copy()
+    # Cast numeric output columns to object dtype before we start mutating them.
+    # Pandas 2.x raises TypeError when you assign a string ("7.5999") to a
+    # float64 column, but the rest of this function intentionally writes
+    # 4-decimal-formatted strings + integer strings to those columns so the
+    # CSV reads cleanly. Casting to object here preserves the historical
+    # write behavior without breaking on the new pandas dtype enforcement.
+    for _col in ('Brand Penetration (Row)', 'Percentage',
+                 'Original Raw Numbers', 'US Gen Pop Projection'):
+        if _col in work.columns and work[_col].dtype != object:
+            work[_col] = work[_col].astype(object)
     work['_consistency_key'] = work['Value'].astype(str).str.strip().str.upper()
     work['_consistency_col'] = work['Column'].astype(str).str.strip().str.upper()
     eligible = work[
