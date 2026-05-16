@@ -21022,6 +21022,43 @@ def parallel_category_agents(df: pd.DataFrame, persona_doc: dict,
     import re as _re
     def _norm_brand(s: str) -> str:
         return _re.sub(r'[^A-Z0-9]', '', str(s or '').upper())
+
+    # Affiliation values that aren't really tracked panel brands —
+    # production studios, scene/genre labels, conferences, etc.
+    # Silently dropped from affiliation pre-insertion; no email.
+    _AFFILIATION_NOISE_SKIP = {
+        'BROADWAY', 'OFFBROADWAY', 'OFFOFFBROADWAY', 'WESTEND',
+        'RYANMURPHY', 'RYANMURPHYPRODUCTIONS', 'RYANMURPHYTV',
+        'BADROBOT', 'BADROBOTPRODUCTIONS',
+        'PLANBENTERTAINMENT', 'PLANB',
+        'PHOENIXPICTURES', 'GHOULARDIFILMCOMPANY',
+        'CHERNINENTERTAINMENT',
+    }
+    # Agent-name → canonical hostmap brand name (alphanumeric-uppercase
+    # keys). When the agent surfaces an LHS that has no direct hostmap
+    # entry but the audience signal is real, we re-route to the RHS so
+    # the brand still lands in the profile under the canonical spelling.
+    _AFFILIATION_ALIAS_MAP = {
+        # FX content lives on FX Now (Movies/TV streaming, Media section)
+        'FX': 'FX Now',
+        'FXNETWORK': 'FX Now',
+        'FXX': 'FX Now',
+        # HBO rebranded → Max → HBO Max; canonical is HBO Max
+        'HBO': 'HBO Max',
+        'HBOGO': 'HBO Max',
+        'HBONOW': 'HBO Max',
+        'MAX': 'HBO Max',
+        # Showtime merged into Paramount+ (paramountpluswithshowtime.com)
+        'SHOWTIME': 'Paramount+',
+        'SHOWTIMETV': 'Paramount+',
+        'SHOWTIMENETWORK': 'Paramount+',
+        'SHOWTIMEAPP': 'Paramount+',
+        'SHOWTIMEANYTIME': 'Paramount+',
+        'CBSALLACCESS': 'Paramount+',
+        # DirecTV Now → AT&T TV → DirecTV Stream
+        'DIRECTVNOW': 'DIRECTV STREAM',
+        'ATTTV': 'DIRECTV STREAM',
+    }
     try:
         _aff_list = (persona_doc or {}).get('active_affiliations') or []
         if isinstance(_aff_list, list) and _aff_list:
@@ -21050,11 +21087,23 @@ def parallel_category_agents(df: pd.DataFrame, persona_doc: dict,
             except Exception as _e:
                 print(f"   ⚠️ hostmap lookup failed for affiliation gating: {_e}")
                 _hostmap_canon = {}
+            # Returns:
+            #   ''         → genuinely missing (email the data team)
+            #   '__SKIP__' → known non-brand noise (silently drop, no email)
+            #   <name>     → canonical hostmap spelling to insert under
             def _resolve_hostmap_canon(val: str) -> str:
                 _n = _norm_brand(val)
                 if not _n:
                     return ''
-                return _hostmap_canon.get(_n, '')
+                if _n in _AFFILIATION_NOISE_SKIP:
+                    return '__SKIP__'
+                hit = _hostmap_canon.get(_n, '')
+                if hit:
+                    return hit
+                aliased = _AFFILIATION_ALIAS_MAP.get(_n)
+                if aliased:
+                    return _hostmap_canon.get(_norm_brand(aliased), aliased)
+                return ''
 
             _existing_keys = set()
             for _idx, _r in df.iterrows():
@@ -21085,6 +21134,9 @@ def parallel_category_agents(df: pd.DataFrame, persona_doc: dict,
                 # canonical `MLB TV` / `Bucees`. We then write the canonical
                 # spelling into the profile so panel data joins cleanly.
                 _canon = _resolve_hostmap_canon(_av_raw)
+                if _canon == '__SKIP__':
+                    print(f"        🤫 [{_ac}] {_av_raw} — non-brand noise, silently dropped (no email)")
+                    continue
                 if not _canon:
                     _aff_missing_from_hostmap.append({
                         'category': _ac, 'value': _av_raw,
@@ -27787,8 +27839,27 @@ def _enforce_hostmap_category_gating(df, *, project_name: str = '',
         'ACTIVE AFFILIATIONS', 'FLAGSHIP BRANDS',
     }
 
+    # Brands that agents commonly hallucinate but that are KNOWN to be
+    # merged/superseded/deprecated and should NOT be added to host_mapping.
+    # These are silently dropped — no email to the data team.
+    # Normalized (alphanumeric uppercase) for matching.
+    SUPPRESS_FROM_EMAIL = {
+        # Showtime was rolled into Paramount+ in 2024; the hostmap treats
+        # Paramount+ as canonical. Don't ask the team to re-add Showtime.
+        'SHOWTIME', 'SHOWTIMETV', 'SHOWTIMEAPP', 'SHOWTIMENETWORK',
+        'SHOWTIMEANYTIME',
+        # HBO renamed to Max (2023) then back to HBO Max (2025). Hostmap
+        # uses HBO MAX as canonical.
+        'HBO', 'HBOGO', 'HBONOW',
+        # CBS All Access renamed to Paramount+ in 2021.
+        'CBSALLACCESS',
+        # DirecTV Now renamed to AT&T TV then to DirecTV Stream.
+        'DIRECTVNOW', 'ATTTV',
+    }
+
     drop_idx: list = []
     drop_log: list[dict] = []
+    silent_drops: list[dict] = []
 
     for idx, row in df.iterrows():
         cat = str(row.get(cat_col, '')).strip().upper()
@@ -27808,13 +27879,17 @@ def _enforce_hostmap_category_gating(df, *, project_name: str = '',
                 bp_val = float(row.get(bp_col, 0)) if bp_col in df.columns else 0.0
             except Exception:
                 bp_val = 0.0
-            drop_log.append({
+            entry = {
                 'category': str(row.get(cat_col, '')),
                 'value': val,
                 'bp': bp_val,
                 'reason': 'not_in_hostmap',
                 'hostmap_categories': [],
-            })
+            }
+            if n in SUPPRESS_FROM_EMAIL:
+                silent_drops.append(entry)
+            else:
+                drop_log.append(entry)
             continue
         allowed = norm_to_cats.get(n, set())
         if cat not in allowed:
@@ -27839,8 +27914,13 @@ def _enforce_hostmap_category_gating(df, *, project_name: str = '',
 
     n_a = sum(1 for d in drop_log if d['reason'] == 'not_in_hostmap')
     n_b = sum(1 for d in drop_log if d['reason'] == 'wrong_category')
+    n_silent = len(silent_drops)
+    silent_label = f", {n_silent} silent (merged/deprecated)" if n_silent else ""
     print(f"   🛡  hostmap gate: dropped {len(drop_idx)} rows "
-          f"({n_a} not-in-hostmap, {n_b} wrong-category)")
+          f"({n_a} not-in-hostmap, {n_b} wrong-category{silent_label})")
+    if silent_drops:
+        for d in silent_drops[:5]:
+            print(f"      🤫 [{d['category']}] {d['value']} bp={d['bp']:.2f} — silently dropped (merged into a canonical brand; no email)")
 
     loud = sorted(drop_log, key=lambda d: -float(d.get('bp') or 0))[:10]
     for d in loud:
