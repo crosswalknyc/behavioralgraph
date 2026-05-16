@@ -16750,7 +16750,35 @@ For each category, your guidance MUST be grounded in reality:
 - CRITICAL: For ALL categories, use the persona's age, gender, ethnicity, income, and interests to produce DIFFERENTIATED scores. Different audiences genuinely have different shopping habits, streaming preferences, social media usage, technology choices, dining preferences, and insurance needs. If two very different audiences produce similar scores across a category, the guidance isn't specific enough. Don't default to "near baseline" for any category — use the persona to explain WHY each item should be higher or lower for THIS audience.
 - For AUTOMOBILE: specify what cars this demographic ACTUALLY drives based on age and income, not aspirational vehicles
 - For TECHNOLOGY/DEVICE: specify the likely device ecosystem (Android vs iOS) based on demographics
-- For GAMES: **Four-way gate — (1) Is gaming a real spine interest for THIS cohort?** If persona/`INTEREST`/`subsegments` do **not** support habitual play, keep **almost all SKUs moderately low**: only **light casual / crossword / puzzle / Wordle-class** (NYT Wordle, NYT Crossword, NYT Connections, NYT Spelling Bee, Words With Friends, Solitaire, Candy Crush, Animal Crossing, Stardew Valley) may exceed trace levels and should lead the category at 1.8-3x baseline for 35+ educated professional audiences; AAA and kid live-services stay **near baseline−** (0.3-0.6x). **(2) Age + genre coherence when gaming IS justified:** teens/kids-heavy ⇒ Roblox/Fortnite/Minecraft-class can rise **only if** demographics + narrative support minors; mature adults ⇒ Wordle/NYT Games/casual puzzles may lead; young men + urban + sports/competitive ⇒ sports sims (FIFA/Madden/NBA 2K) or mature AAA **GTA/CoD**-class plausible **per persona** — do not transpose one template onto another archetype. **(3) Parents without kid-gaming proof:** **`PARENT` share must cap kid-first BP** — no Roblox/child-MMO tiers above plausible household-kid mediated traffic absent explicit shared-device / “my kids play” research; inflated child rows commonly mean **panel bleed from handoffs**. **(4) FRANCHISE OVERRIDE — when subject IS in the franchise:** if the subject has DIRECT IP involvement (acted in the film/series, voiced a character, produced/wrote, signature collaboration), name that ONE specific franchise (e.g. STAR WARS for Jennifer Beals via Boba Fett; THE LAST OF US for Pedro Pascal; SUPER MARIO for Jack Black via the Mario movie; THE WITCHER for Henry Cavill) and tell the scorer to score THAT specific franchise at 2-4x baseline EVEN IF the broader audience is non-gamer. The override does NOT generalize to other franchises — only the named one(s) lift. State the override franchise(s) by name in `category_signals.GAMES` so the per-category agent and the Pass-3 validator both know to allow it.ld rows commonly mean **panel bleed from handoffs**.
+- For GAMES: think it through, don't apply blanket multipliers. ASK FOUR QUESTIONS in order:
+  (1) **WHAT KIND of player is in this audience?** Casual word/puzzle (NYT Wordle, NYT Crossword,
+      NYT Connections, NYT Spelling Bee, Words With Friends, Solitaire, Candy Crush, Animal
+      Crossing, Stardew Valley)? Console/AAA (GTA, COD, Elden Ring, Assassin's Creed)? Kid/family
+      (Roblox, Minecraft, LEGO, Disney Dreamlight, Pokemon)? Sports sims (NBA 2K, Madden, EA FC)?
+      Most 35+ educated professional audiences are CASUAL/WORD/PUZZLE — the NYT Games suite
+      replaces "GAMES" for them. Most kids' games REQUIRE a child in the household. Most AAA
+      requires a young male / hardcore-gamer segment.
+  (2) **DO THE SEGMENT MATH** — for each specific game/franchise on the list, decompose:
+      "what fraction of {subject}'s total audience is IN the segment that engages this game,
+      AND what's that segment's actual engagement rate?" Use the persona's audience_composition
+      block. See the WORKED EXAMPLES section below for the franchise-overlap pattern. Do NOT
+      apply a flat multiplier to baseline — compute the segment math row-by-row.
+  (3) **PARENT discipline:** material PARENT share + no "kids play on my account" research →
+      Roblox / kid-first live services stay LOW vs adult titles. Don't let panel handoff bleed
+      inflate kid-game rows.
+  (4) **FRANCHISE OVERRIDE — when subject IS in the franchise (Beals → Star Wars via Boba Fett;
+      Pedro Pascal → Star Wars via Mandalorian; Jack Black → Super Mario via Mario movie):**
+      do NOT just "lift the franchise to 2-4x baseline" — that's the multiplier mistake. INSTEAD
+      compute the segment-overlap math HONESTLY: how big is the franchise-crossover segment as
+      a fraction of {subject}'s TOTAL audience, and how engaged is THAT segment with the
+      franchise itself? A 2-episode guest role (Beals in Boba Fett) creates a TINY franchise-
+      crossover segment (~5% of her audience), so even with high within-segment engagement (~70%)
+      the franchise BP lands ~14-19%, NOT 60%. A multi-season lead (Pedro Pascal in Mandalorian)
+      creates a LARGE franchise-crossover segment (~40% of his audience), so the BP legitimately
+      lands ~40-54%. Same override mechanic, completely different numbers — because the audience
+      math is different. State your segment-overlap reasoning in `category_signals.GAMES` so the
+      per-category agent + Pass-3 validator can verify the math instead of just trusting a
+      multiplier.ld rows commonly mean **panel bleed from handoffs**.
 - For INSURANCE: major insurers (GEICO, State Farm, Progressive) have high digital engagement — score near baseline
 - For BETTING (legal US sports-wagering digital touch cohorts): DraftKings + FanDuel are the endemic mass‑tier omnichannel leaders; BetMGM / Caesars / ESPN Bet plausible mass seconds from national marketing. Overseas‑anchored brands (**Bet365** class and similar offshore-first books) belong **meaningfully BELOW DK/FD** in predicted tiers unless persona + research proves explicit UK/Ireland/Europe wagering geography — panel spikes ≠ override.
 - For AMUSEMENT PARKS: major theme parks (Disney, Universal, Six Flags) are visited by most Americans — keep near baseline
@@ -16769,7 +16797,7 @@ EXAMPLE category_signals (hypothetical `consumer_brand` athletic-equipment cohor
   "SOCIAL MEDIA": "Score based on THIS audience's actual social media habits. Young audiences (18-34) over-index on TikTok and Instagram (1.3-2.0x). Older audiences (45+) over-index on Facebook (1.3-1.8x) and under-index on TikTok (0.4-0.7x). Male audiences over-index on Reddit and Discord. Black and Hispanic audiences over-index on Instagram and TikTok. The rank order of platforms should differ across profiles.",
   "AMUSEMENT PARKS": "Theme park engagement varies by age, income, family status, and region. Families with children over-index on Disney and Universal (1.3-1.8x). Young adult audiences without kids under-index on family parks (0.5-0.8x). Regional parks depend on DMA location. Use the persona to differentiate.",
   "TECHNOLOGY/DEVICE": "Tech ecosystem varies meaningfully by income, age, and ethnicity. Higher-income younger audiences over-index on Apple (1.2-1.6x). Lower-income and older audiences over-index on Samsung/Android (1.2-1.5x). Smart home adoption varies by income. Use the persona's demographics.",
-  "GAMES": "Only use this archetype mapping when persona proves **gaming is a backbone behavior** — otherwise nearly all rows modest with **casual/word/puzzle tops** (NYT Wordle, NYT Crossword, NYT Connections, NYT Spelling Bee, Words With Friends, Solitaire, Candy Crush, Animal Crossing, Stardew Valley should lead at 1.8-3x baseline for educated 35+ professional audiences). When gaming IS justified: **Young sports fans** ⇒ sports sims (NBA 2K, Madden, EA FC) lead; mature action skew ⇒ GTA/COD-class only with matching demo; **older/low-intensity gamers** ⇒ Wordle/NYT Games/spelling bee/crosswords higher than Fortnite; **teens/gen-Z** ⇒ Roblox/Fortnite/Minecraft plausible only if CHILD–teen share + persona say so — if parents dominate without kid-gaming narrative, **Roblox must stay LOW** vs adult titles. Never let child-first live services outrank demographics + explicit family-gaming evidence. **FRANCHISE OVERRIDE (REQUIRED when applicable):** if {subject} has direct IP involvement in a specific game franchise (acted in / voiced / produced — e.g. Jennifer Beals in Boba Fett ⇒ STAR WARS; Pedro Pascal in The Last of Us ⇒ THE LAST OF US; Jack Black in Mario movie ⇒ SUPER MARIO; Henry Cavill ⇒ THE WITCHER), NAME that franchise here and instruct the scorer to lift that ONE franchise to 2-4x baseline EVEN IF the broader audience is non-gamer. Override does NOT generalize — only the named franchise(s) lift; the rest of GAMES stays at the audience-appropriate (typically low) tier.",
+  "GAMES": "REASON, don't multiply. (1) State which game-type segment this audience actually plays — casual/word-puzzle (NYT Games suite), AAA console, sports sims, kid/family, or sports-bar casual. Most 35+ educated professional audiences are NYT Games / casual-puzzle players, not console-AAA gamers. (2) For each row on the list, compute the segment-overlap math: 'what fraction of this audience is IN the segment that engages this specific game, and how engaged is that segment?' — see the FRANCHISE OVERRIDE WORKED EXAMPLE below for the pattern. NYT Wordle / Crossword / Connections / Spelling Bee will lead for educated-professional audiences because basically ALL of the audience uses NYT and ~60-80% of NYT users open Games. Console franchises (Star Wars, COD, GTA, Fortnite, Harry Potter) without a career connection should land near gen-pop because no segment of this audience over-indexes there. (3) FRANCHISE OVERRIDE — when {subject} HAS a career connection to a specific franchise: name the franchise + state the segment-overlap math explicitly. Format: 'STAR WARS — Beals played Madam Garsa Fwip in 2 episodes of Boba Fett (2022). That creates a ~5% Star-Wars-crossover segment within her audience. Within that segment, franchise engagement is ~70-80%. The other segments (L Word loyalists 45%, Flashdance Gen-X 25%, prestige TV 20%) engage with Star Wars at ~10-15%. Total BP ≈ 14-19%, NOT 60%.' Always do the math out loud; never just say '2-3x'. Override applies ONLY to the named franchise — every other franchise in the inventory still gets the gen-pop-math treatment.",
   "WHERE THEY SHOP": "Category sellers tied to subject (Foot Locker, Dick's, Finish Line for athletic) lift when personas actually browse there digitally. Nationals (Amazon, Walmart, Target, Costco) stay wide-but-realistic. When MPB/life-stage implies **grocery carts through Instacart, DoorDash/Uber grocery, or Walmart/Target pickup apps**, also elevate **the regional supermarket banners** those merchants default to for persona LOCATION (SoCal skew ⇒ Ralphs/Vons/Pavilions-class; Southeast/Florida ⇒ Publix-class; Texas/Gulf ⇒ H‑E‑B-class; Northeast ⇒ Wegmans/Stop&Giant-class as research fits; dispersed US ⇒ Kroger-banner + Albertsons-banner mosaic). **Drugstore OTC skew** ⇒ CVS + Walgreens credible. Spike regionals ONLY when DMA map matches footprint.",
   "STREAMING/PLATFORM": "Score each platform based on THIS audience's actual streaming habits. Netflix is dominant but varies by demo — younger audiences may prefer YouTube/Hulu, older audiences lean Amazon Prime. Black audiences over-index on Tubi, BET+, Peacock. Hispanic audiences on Telemundo streaming. High-income audiences on Apple TV+, Max. Sports fans on ESPN+, FuboTV. Range: 0.5-1.8x baseline per platform. The RANK ORDER should reflect this audience specifically, not a generic template.",
   "ATHLETE": "The subject's own sponsored athletes should score 2-4x their baseline — not 10x. Only the single most iconic athlete (like LeBron for Nike) gets 5x+. Other athletes score 1.0-1.5x baseline. Don't inflate obscure athletes to 50%+ just because they have a brand deal.",
@@ -18376,6 +18404,46 @@ WORKED EXAMPLE — Spotify on an indie-arthouse F audience (Florence Pugh archet
   • Reformation-girl aspirational 10% × Spotify 70% = 7.0pp
   → Total ≈ 65.3%, NOT 78% — but HIGHER than for Margot's mass audience because the indie segments are music-heavy.
 
+WORKED EXAMPLE — FRANCHISE OVERRIDE (Jennifer Beals → Star Wars via Boba Fett):
+  Beals's career body of work: The L Word + L Word Generation Q (2004-2023, 19 years of being THE
+  lesbian icon) >>> Flashdance (1983, defining 80s pop moment) >>> Devil in a Blue Dress / Roswell /
+  Proof / Lather >>> The Book of Boba Fett (2 episodes, 2022 — Madam Garsa Fwip). Her audience
+  decomposes roughly:
+    • L Word / sapphic loyalists 45% × Star-Wars-franchise engagement ~10-15% = 5-7pp
+    • Flashdance Gen-X nostalgia 25% × Star-Wars engagement ~10-15% = 2.5-3.75pp
+    • Prestige TV / indie film 20% × Star-Wars engagement ~15-20% = 3-4pp
+    • Yale alumni / literary 5% × Star-Wars engagement ~10% = 0.5pp
+    • Boba Fett Star Wars crossover 5% × Star-Wars engagement ~70-80% = 3.5-4pp
+  → Total Star Wars franchise BP ≈ 14-19%, NOT 60%. The Boba Fett crossover is a tiny segment of
+  her total audience — it lifts Star Wars ABOVE the L-Word-only baseline (which would put it near
+  gen-pop ~13%) but does NOT pull the whole audience into Star Wars fandom. Most of her audience
+  watched ONE Boba Fett episode for her, max — that's not Star Wars-franchise-fan behavior.
+
+  RULE: "FRANCHISE OVERRIDE" never means "score the franchise at 60%". It means "compute the
+  segment-overlap math HONESTLY: how much of {subject}'s total audience is actually IN the segment
+  that cares about this franchise, and how engaged is that segment with the franchise itself?"
+  The override prevents the franchise from getting CRUSHED below gen-pop (which would be wrong
+  for someone in the IP) — but it does NOT lift the franchise to console-fan levels unless the
+  audience-segment math actually supports it.
+
+  Compare to a TRUE Star Wars franchise lead like Pedro Pascal (Mandalorian — 3+ seasons of being
+  THE face of Star Wars TV, plus The Last of Us, plus universal-male-action appeal):
+    • Star Wars / Mandalorian core fandom 35-45% × Star-Wars engagement ~75% = 26-34pp
+    • Last of Us / gamer crossover 15-20% × Star-Wars engagement ~50% = 7-10pp
+    • Prestige TV / Pedro himbo fandom 25-30% × Star-Wars engagement ~25% = 6-7.5pp
+    • Mass crossover 10-15% × Star-Wars engagement ~15% = 1.5-2pp
+  → Pedro Pascal Star Wars BP ≈ 40-54%. Different career profile = legitimately different BP.
+
+WORKED EXAMPLE — NON-OVERRIDE FRANCHISES (Beals on Harry Potter / Minecraft / Roblox):
+  None of Beals's audience segments have SPECIAL affinity for these franchises — there's no
+  career connection. The HP / Minecraft / Roblox BP for her audience should be GEN-POP-like, not
+  amplified. If you compute: each segment × gen-pop engagement rate for that franchise:
+    • HP for her audience ≈ all-segments × ~8-12% gen-pop engagement = ~5-8%
+    • Minecraft ≈ ~3-6% (skews young + parent; her audience is 47+ no-kids)
+    • Roblox ≈ ~2-4% (kids' game; her audience under-indexes hard)
+  → Don't default these to baseline-AND-inflated just because "she's famous" — most of her audience
+  doesn't engage with them at all. The MATH says low.
+
 Same brand, two different personas, two different BPs — both derived from the SAME math, just with different audience compositions. THIS is how you produce realistic, persona-differentiated outputs.
 
 ═══════════════════════════════════════════════════════════════════
@@ -18598,6 +18666,7 @@ def _run_category_validator_agent(category: str,
 
     persona_summary = persona_doc.get('persona_summary', '')
     digital_identity = persona_doc.get('digital_identity', '')
+    audience_composition = str(persona_doc.get('audience_composition', '') or '').strip()
     cat_u_val = category.strip().upper()
     _demo_keys = ('AGE', 'GENDER', 'ETHNICITY', 'INCOME', 'PARENTAL_STATUS') if cat_u_val == 'GAMES' else (
         'AGE', 'GENDER', 'ETHNICITY', 'INCOME')
@@ -18640,7 +18709,7 @@ def _run_category_validator_agent(category: str,
 
   10) GAMES — **When gaming IS on-brief:** Genre must match demo (e.g. **GTA/CoD** for young adult male competitive only with supporting text; **sports sims** for sports-heavy young adults; **casual/puzzle** dominant for 55+ defaults). Fix inversions where a misfit genre outranks the archetype implied by persona.
 
-  11) GAMES — **FRANCHISE OVERRIDE — DO NOT KNOCK DOWN:** If `category_signals.GAMES` explicitly names a franchise as an override because the subject has direct IP involvement (e.g. "STAR WARS — subject plays Fennec Shand in Boba Fett, lift 2-3x"), THAT one specific franchise is allowed to score 2-4x baseline EVEN if the broader audience is non-gamer. DO NOT propose lowering the named override franchise as a non-gamer knockdown. The override is bounded — it lifts only the named franchise, NOT the rest of GAMES. Check the persona signal text for explicit franchise names (look for "OVERRIDE", "directly in", "plays a character", "voiced", "produced", or the franchise name in proximity to a multiplier) before proposing any knockdown of a high-BP franchise row.
+  11) GAMES — **FRANCHISE OVERRIDE — verify the SEGMENT MATH, not the multiplier:** If `category_signals.GAMES` names a franchise as an override (subject has career involvement), the override is BOUNDED by segment-overlap reality, not by a flat multiplier. Do the math yourself: (a) how big is the franchise-crossover segment as a fraction of the subject's TOTAL audience? — a 2-episode guest role (e.g. Beals in Boba Fett, 2022) creates a ~5% crossover segment; a multi-season lead (e.g. Pedro Pascal in Mandalorian) creates a ~40% crossover segment. (b) within that segment, what's the franchise-engagement rate? (typically 60-80% for committed franchise fans). (c) the rest of the audience engages at gen-pop rates (~10-15% for Star Wars). Sum it. If the row's current BP is much higher than that summed math, propose a DOWNWARD fix to the math-justified number — even though the override is "valid", the multiplier was too aggressive. Conversely, if the row sits at or below gen-pop, the override was correctly applied and you LEAVE IT ALONE. EXAMPLE: Beals STAR WARS at 60% is too high (math says ~14-19%); Pedro Pascal STAR WARS at 50% is correct (math says ~40-54%). Same override mechanic, different segment math, different verdicts. Knock down only when the math demands it; never knock down to gen-pop on a true career-connection franchise.
 """
 
     prompt = f"""You are the Pass 3 Category Validator for **{category}** in the **{subject}** profile.
@@ -18656,6 +18725,9 @@ PERSONA SNIPPET — digital lens
 
 SUMMARY:
 {persona_summary[:2000]}
+
+AUDIENCE COMPOSITION (segment decomposition — use this for the segment-overlap math in CHECK 0):
+{audience_composition[:3500] if audience_composition else '(missing — reason from digital_identity + summary instead)'}
 
 KEY DEMOGRAPHICS:
 {_json.dumps(demo_snapshot, indent=2)}
@@ -18686,6 +18758,39 @@ ACTUAL TOP {top_n} (from Pass 2 chunked scoring)
 ═══════════════════════════════════════════════════════════════════
 WHAT TO CHECK
 ═══════════════════════════════════════════════════════════════════
+  0) **SEGMENT-OVERLAP MATH** (this is the PRIMARY lens — apply it before checks 1-7).
+     For each top-ranked row, ask honestly:
+       "What FRACTION of {subject}'s total audience is IN the segment(s) that genuinely
+       engage with this brand/item, and what's that segment's actual engagement rate?"
+     Use AUDIENCE COMPOSITION above to decompose the audience into segments with rough
+     fractions. The expected BP is:
+
+         bp(item) ≈ Σ over segments [ segment_fraction × segment_engagement_rate ]
+
+     If the row's current BP is materially higher than what this math supports,
+     propose a DOWNWARD correction to the math-justified number. This is the central
+     reasoning task — every multiplier or tier rule below is a shortcut for cases
+     where you can't do the segment math; when you CAN do the math, the math wins.
+
+     WORKED EXAMPLE — Jennifer Beals → STAR WARS in FRANCHISE/GAMES:
+       Beals's audience ≈ L Word loyalists 45% + Flashdance Gen-X 25% + prestige TV 20%
+       + Yale alumni 5% + Boba Fett crossover 5%. Star-Wars engagement rate:
+       Boba-Fett crossover ≈ 70%, all other segments ≈ gen-pop ~13%.
+         0.05 × 0.70 + 0.95 × 0.13 ≈ 3.5 + 12.4 = ~16%.
+       If STAR WARS scored 60% in this category, propose new_bp ≈ 16, reason cites
+       segment math: "Boba Fett guest role = ~5% crossover segment; other 95% engage
+       at gen-pop ~13% — segment math = 16%, not 60%."
+
+     WORKED EXAMPLE — non-career-connection franchise (Beals → HARRY POTTER):
+       No segment of her audience over-indexes on HP. All segments × gen-pop HP
+       engagement ~7% → BP ~7%. If HARRY POTTER is at 19%, propose ~7 with reason
+       "no career connection; all segments engage at gen-pop rate ~7%".
+
+     ABSTAIN from correcting when the segment math SUPPORTS the current BP — even
+     if it looks high. A genuine career-driven franchise lead (Pedro Pascal in
+     Mandalorian → ~40% crossover segment × ~75% engagement = ~40% BP) is correct
+     and should NOT be knocked down.
+
   1) ANTI-FIT VIOLATIONS: any item in anti_fit_in_category above 5%? Override.
   2) PREDICTED-TOP-5 DRIFT: did the actual top-5 differ from predicted_top_5
      in a way that doesn't make sense for this persona? If a regional/niche
@@ -18720,6 +18825,11 @@ Return ONLY a JSON object — no markdown, no commentary:
 }}
 
 If no corrections are needed, return {{"corrections": []}}. Be SPARING — only override when there's a clear violation. Do NOT over-correct minor drift; the goal is to catch actual mistakes, not micromanage.
+
+When you propose a correction triggered by CHECK 0 (segment-overlap math), the `reason`
+field MUST briefly cite the math — e.g. "segment math: 5% crossover × 70% + 95% × 13% ≈ 16%"
+or "no career connection, gen-pop math ≈ 7%". This forces honest reasoning and lets
+downstream auditors verify the correction was math-driven, not multiplier-driven.
 """
 
     try:
