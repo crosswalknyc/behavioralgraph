@@ -27880,6 +27880,17 @@ def _enforce_hostmap_category_gating(df, *, project_name: str = '',
     drop_idx: list = []
     drop_log: list[dict] = []
     silent_drops: list[dict] = []
+    move_log: list[dict] = []  # wrong-category rows we relabeled instead of dropping
+
+    # Pre-compute (category_upper, normalized_value) pairs already present
+    # in the df. Used to avoid moving a brand into a category where it
+    # already lives (which would create a duplicate row).
+    existing_pairs: set[tuple[str, str]] = set()
+    for _, _r in df.iterrows():
+        _c = str(_r.get(cat_col, '')).strip().upper()
+        _v = str(_r.get('Value', '')).strip()
+        if _c and _v:
+            existing_pairs.add((_c, _norm(_v)))
 
     for idx, row in df.iterrows():
         cat = str(row.get(cat_col, '')).strip().upper()
@@ -27913,34 +27924,63 @@ def _enforce_hostmap_category_gating(df, *, project_name: str = '',
             continue
         allowed = norm_to_cats.get(n, set())
         if cat not in allowed:
-            drop_idx.append(idx)
+            # Violation B: brand in hostmap but in wrong category.
+            # First try to MOVE the row into one of its canonical categories
+            # (e.g. FX bp=60 inserted into STREAMING/PLATFORM but hostmap
+            # says MEDIA → relabel to MEDIA instead of dropping). Fall back
+            # to dropping only if the brand already exists in every
+            # canonical category (would create a duplicate row).
+            canonical_val = norm_to_canon[n]
             try:
                 bp_val = float(row.get(bp_col, 0)) if bp_col in df.columns else 0.0
             except Exception:
                 bp_val = 0.0
+            target_cat = None
+            for cand in sorted(allowed):
+                cand_up = cand.upper()
+                if (cand_up, _norm(canonical_val)) not in existing_pairs:
+                    target_cat = cand
+                    break
+            if target_cat is not None:
+                df.at[idx, cat_col] = target_cat
+                df.at[idx, 'Value'] = canonical_val
+                existing_pairs.add((target_cat.upper(), _norm(canonical_val)))
+                move_log.append({
+                    'from_category': str(row.get(cat_col, '')) or cat,
+                    'to_category': target_cat,
+                    'value': canonical_val,
+                    'bp': bp_val,
+                })
+                continue
+            drop_idx.append(idx)
             drop_log.append({
                 'category': str(row.get(cat_col, '')),
-                'value': norm_to_canon[n],
+                'value': canonical_val,
                 'bp': bp_val,
-                'reason': 'wrong_category',
+                'reason': 'wrong_category_dup',
                 'hostmap_categories': sorted(allowed),
             })
 
-    if not drop_idx:
-        print(f"   🛡  hostmap gate: 0 drops")
+    if not drop_idx and not move_log:
+        print(f"   🛡  hostmap gate: 0 drops, 0 moves")
         return df, []
 
-    df_kept = df.drop(index=drop_idx).reset_index(drop=True)
+    df_kept = df.drop(index=drop_idx).reset_index(drop=True) if drop_idx else df.reset_index(drop=True)
 
     n_a = sum(1 for d in drop_log if d['reason'] == 'not_in_hostmap')
-    n_b = sum(1 for d in drop_log if d['reason'] == 'wrong_category')
+    n_b = sum(1 for d in drop_log if d['reason'] == 'wrong_category_dup')
     n_silent = len(silent_drops)
+    n_moved = len(move_log)
     silent_label = f", {n_silent} silent (merged/deprecated)" if n_silent else ""
     print(f"   🛡  hostmap gate: dropped {len(drop_idx)} rows "
-          f"({n_a} not-in-hostmap, {n_b} wrong-category{silent_label})")
+          f"({n_a} not-in-hostmap, {n_b} wrong-category dups{silent_label}), "
+          f"moved {n_moved} wrong-category rows to canonical category")
     if silent_drops:
         for d in silent_drops[:5]:
             print(f"      🤫 [{d['category']}] {d['value']} bp={d['bp']:.2f} — silently dropped (merged into a canonical brand; no email)")
+    if move_log:
+        for m in sorted(move_log, key=lambda d: -float(d.get('bp') or 0))[:10]:
+            print(f"      🔀 [{m['from_category']} → {m['to_category']}] {m['value']} bp={m['bp']:.2f} — relabeled to canonical category")
 
     loud = sorted(drop_log, key=lambda d: -float(d.get('bp') or 0))[:10]
     for d in loud:
@@ -27948,8 +27988,8 @@ def _enforce_hostmap_category_gating(df, *, project_name: str = '',
             print(f"      ❌ [{d['category']}] {d['value']} bp={d['bp']:.2f} — not in hostmap")
         else:
             cats_str = ' | '.join(d['hostmap_categories'][:3])
-            print(f"      ↪️  [{d['category']}] {d['value']} bp={d['bp']:.2f} — "
-                  f"hostmap says: {cats_str}")
+            print(f"      ⛔ [{d['category']}] {d['value']} bp={d['bp']:.2f} — "
+                  f"wrong category AND already in: {cats_str}")
 
     if send_email:
         try:
@@ -27967,9 +28007,10 @@ def _enforce_hostmap_category_gating(df, *, project_name: str = '',
                     email_payload.append({
                         'category': d['category'],
                         'value': d['value'],
-                        'type': 'agent_wrong_category',
+                        'type': 'agent_wrong_category_unresolvable',
                         'evidence': f'agent placed in {d["category"]} at BP {d["bp"]:.2f}; '
-                                    f'hostmap canonical category(s): {", ".join(d["hostmap_categories"])}',
+                                    f'hostmap canonical category(s) ({", ".join(d["hostmap_categories"])}) '
+                                    f'already contain this brand — please review categorization',
                     })
             if email_payload:
                 _send_missing_hostmap_email(project_name or 'unknown', email_payload)
