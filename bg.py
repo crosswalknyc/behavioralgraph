@@ -27084,6 +27084,20 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
         except Exception as _e:
             print(f"   ⚠️ hostmap gate skipped: {_e}")
 
+        # FINAL invariant guard: the input brand (e.g. SARAH PAULSON) must
+        # be 100% in every category it appears in (ACTOR, TALENT, etc.) —
+        # EXCEPT MOST PURCHASED BRANDS, which measures confirmed purchases
+        # and gets to keep its real fraction (unless purchasers_only=True).
+        # Persona-uniqueness noise, audit fixes, cap, and align passes
+        # can all nudge the input brand below 100, so this is the
+        # belt-and-suspenders final pin right before save.
+        try:
+            df_final = enforce_input_brand_100(
+                df_final, brands, purchasers_only=purchasers_only,
+            )
+        except Exception as _e:
+            print(f"   ⚠️ final input-brand-100 pin skipped: {_e}")
+
     # Save to CSV
     try:
         df_final.to_csv(final_file, index=False)
