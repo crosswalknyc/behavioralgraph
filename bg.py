@@ -20443,6 +20443,15 @@ def _hostmap_norm_key(s: str) -> str:
 _PENDING_HOSTMAP_EMAILS: dict[str, list[dict]] = {}
 
 
+def _canon_subject_key(s: str) -> str:
+    """Canonicalize subject identifier so 'Jennifer Beals', 'Jennifer_Beals',
+    'jennifer-beals' all bucket together. Used by both queue and flush so
+    the affiliation step ({subject}) and the gate step ({project_name})
+    don't end up in separate buffers and lose each other."""
+    import re as _re
+    return _re.sub(r'[^a-z0-9]', '', str(s or 'unknown').lower())
+
+
 def _queue_missing_hostmap_email(subject_name: str,
                                   missing: list[dict],
                                   source: str = '') -> None:
@@ -20453,7 +20462,14 @@ def _queue_missing_hostmap_email(subject_name: str,
     so the data team isn't asked to re-add merged/canonical brands."""
     if not missing:
         return
-    bucket = _PENDING_HOSTMAP_EMAILS.setdefault(subject_name or 'unknown', [])
+    key = _canon_subject_key(subject_name)
+    bucket = _PENDING_HOSTMAP_EMAILS.setdefault(key, [])
+    display = subject_name or 'unknown'
+    _display_holder = _PENDING_HOSTMAP_EMAILS.setdefault(f'__display__::{key}', [{'name': display}])
+    if isinstance(_display_holder, list) and _display_holder:
+        cur = _display_holder[0].get('name', '')
+        if len(display) > len(cur):
+            _display_holder[0]['name'] = display
     seen = {(_hostmap_norm_key(e.get('value', '')), str(e.get('category', '')).upper())
             for e in bucket}
     silent = 0
@@ -20479,12 +20495,31 @@ def _queue_missing_hostmap_email(subject_name: str,
 
 def _flush_hostmap_email_buffer(subject_name: str) -> None:
     """Send ONE consolidated missing-hostmap email for `subject_name` and
-    clear the buffer. Safe to call even if nothing was queued."""
-    items = _PENDING_HOSTMAP_EMAILS.pop(subject_name or 'unknown', [])
+    clear the buffer. Safe to call even if nothing was queued.
+
+    Bucketing is canonicalized (alphanumeric-lowercase) so the affiliation
+    step ('Jennifer Beals') and the gate step ('Jennifer_Beals') land in
+    the same bucket. As a belt-and-suspenders safety, we also fall back
+    to flushing ALL remaining buckets if no exact match — guarantees no
+    queued items get stranded between runs."""
+    key = _canon_subject_key(subject_name)
+    items = _PENDING_HOSTMAP_EMAILS.pop(key, [])
+    display_holder = _PENDING_HOSTMAP_EMAILS.pop(f'__display__::{key}', None)
+    display_name = subject_name or 'unknown'
+    if isinstance(display_holder, list) and display_holder:
+        display_name = display_holder[0].get('name', display_name) or display_name
+    orphan_keys = [k for k in list(_PENDING_HOSTMAP_EMAILS.keys())
+                   if not k.startswith('__display__::')]
+    for ok in orphan_keys:
+        orphan_items = _PENDING_HOSTMAP_EMAILS.pop(ok, [])
+        orphan_display = _PENDING_HOSTMAP_EMAILS.pop(f'__display__::{ok}', None)
+        items.extend(orphan_items)
+        if isinstance(orphan_display, list) and orphan_display and not display_name:
+            display_name = orphan_display[0].get('name', display_name)
     if not items:
         return
     try:
-        _send_missing_hostmap_email(subject_name, items)
+        _send_missing_hostmap_email(display_name, items)
     except Exception as _e:
         print(f"   ⚠️ consolidated missing-hostmap flush failed: {_e}")
 
