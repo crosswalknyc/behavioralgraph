@@ -20418,10 +20418,83 @@ def _suggest_brand_domain(brand: str, category: str = '', aff_type: str = '') ->
     return f'{slug}.com' if slug else '(none)'
 
 
+# Brands that agents commonly hallucinate but that are KNOWN to be
+# merged/superseded/deprecated and should NOT be added to host_mapping.
+# Lifted to module scope so BOTH the affiliation-preinsert path and the
+# downstream hostmap gate apply the same suppression list.
+_HOSTMAP_EMAIL_SUPPRESS = {
+    'SHOWTIME', 'SHOWTIMETV', 'SHOWTIMEAPP', 'SHOWTIMENETWORK',
+    'SHOWTIMEANYTIME', 'SHOWTIMENETWORKS',
+    'PARAMOUNTSHOWTIME', 'PARAMOUNTPLUSSHOWTIME', 'SHOWTIMEPARAMOUNT',
+    'PARAMOUNTANDSHOWTIME',
+    'HBO', 'HBOGO', 'HBONOW',
+    'CBSALLACCESS',
+    'DIRECTVNOW', 'ATTTV',
+}
+
+
+def _hostmap_norm_key(s: str) -> str:
+    import re as _re
+    return _re.sub(r'[^A-Z0-9]', '', str(s or '').upper())
+
+
+_PENDING_HOSTMAP_EMAILS: dict[str, list[dict]] = {}
+
+
+def _queue_missing_hostmap_email(subject_name: str,
+                                  missing: list[dict],
+                                  source: str = '') -> None:
+    """Append missing-hostmap rows to the per-run buffer instead of sending
+    immediately. One consolidated email is sent at end of run via
+    `_flush_hostmap_email_buffer(subject)`. Silently drops entries whose
+    normalized value matches `_HOSTMAP_EMAIL_SUPPRESS` (SHOWTIME, HBO, etc.)
+    so the data team isn't asked to re-add merged/canonical brands."""
+    if not missing:
+        return
+    bucket = _PENDING_HOSTMAP_EMAILS.setdefault(subject_name or 'unknown', [])
+    seen = {(_hostmap_norm_key(e.get('value', '')), str(e.get('category', '')).upper())
+            for e in bucket}
+    silent = 0
+    for entry in missing:
+        nk = _hostmap_norm_key(entry.get('value', ''))
+        if not nk:
+            continue
+        if nk in _HOSTMAP_EMAIL_SUPPRESS:
+            silent += 1
+            continue
+        key = (nk, str(entry.get('category', '')).upper())
+        if key in seen:
+            continue
+        seen.add(key)
+        entry = dict(entry)
+        if source and not entry.get('source'):
+            entry['source'] = source
+        bucket.append(entry)
+    if silent:
+        print(f"   🤫 {silent} merged/deprecated brand(s) silently suppressed from hostmap email "
+              f"(e.g. SHOWTIME → already canonical as PARAMOUNT+)")
+
+
+def _flush_hostmap_email_buffer(subject_name: str) -> None:
+    """Send ONE consolidated missing-hostmap email for `subject_name` and
+    clear the buffer. Safe to call even if nothing was queued."""
+    items = _PENDING_HOSTMAP_EMAILS.pop(subject_name or 'unknown', [])
+    if not items:
+        return
+    try:
+        _send_missing_hostmap_email(subject_name, items)
+    except Exception as _e:
+        print(f"   ⚠️ consolidated missing-hostmap flush failed: {_e}")
+
+
 def _send_missing_hostmap_email(subject_name: str, missing: list[dict]) -> None:
     """Email jenna@ (cc jessie@, anastasia@, liz@) with affiliation brands
     that aren't in `reference.host_mapping`. Each row includes a suggested
-    Domain column the data team can review and replace as needed."""
+    Domain column the data team can review and replace as needed.
+
+    Prefer `_queue_missing_hostmap_email` + `_flush_hostmap_email_buffer`
+    over calling directly so multiple sources consolidate into one email
+    per run."""
     if not missing:
         return
     try:
@@ -20436,49 +20509,73 @@ def _send_missing_hostmap_email(subject_name: str, missing: list[dict]) -> None:
                     _m.get('type', ''),
                 )
 
-        rows_html = ''.join(
-            f'<tr>'
-            f'<td style="padding:6px 12px;border:1px solid #ddd;">{m["category"]}</td>'
-            f'<td style="padding:6px 12px;border:1px solid #ddd;font-weight:600;">{m["value"]}</td>'
-            f'<td style="padding:6px 12px;border:1px solid #ddd;font-family:Menlo,monospace;color:#0a58ca;">{m["domain"]}</td>'
-            f'<td style="padding:6px 12px;border:1px solid #ddd;">{m["type"]}</td>'
-            f'<td style="padding:6px 12px;border:1px solid #ddd;color:#555;">{m["evidence"]}</td>'
+        _SRC_LABELS = {
+            'affiliations': '🎬 Persona-affiliation brands',
+            'gate_not_in_hostmap': '🛡 Hostmap-gate drops (brand not in hostmap)',
+            'gate_wrong_category_dup': '🛡 Hostmap-gate drops (wrong category, canonical already filled)',
+            '': '📋 Other',
+        }
+        from collections import defaultdict as _dd
+        by_src: dict[str, list[dict]] = _dd(list)
+        for m in missing:
+            by_src[m.get('source', '') or ''].append(m)
+        sections_html: list[str] = []
+        sections_text: list[str] = []
+        for src in ('affiliations', 'gate_not_in_hostmap', 'gate_wrong_category_dup', ''):
+            rows = by_src.get(src, [])
+            if not rows:
+                continue
+            label = _SRC_LABELS.get(src, src or 'Other')
+            rows_html = ''.join(
+                f'<tr>'
+                f'<td style="padding:6px 12px;border:1px solid #ddd;">{m["category"]}</td>'
+                f'<td style="padding:6px 12px;border:1px solid #ddd;font-weight:600;">{m["value"]}</td>'
+                f'<td style="padding:6px 12px;border:1px solid #ddd;font-family:Menlo,monospace;color:#0a58ca;">{m["domain"]}</td>'
+                f'<td style="padding:6px 12px;border:1px solid #ddd;">{m.get("type","")}</td>'
+                f'<td style="padding:6px 12px;border:1px solid #ddd;color:#555;">{m.get("evidence","")}</td>'
             f'</tr>'
-            for m in missing
-        )
-        rows_text = '\n'.join(
-            f'  • [{m["category"]}] {m["value"]} ({m["type"]})\n'
-            f'      domain:   {m["domain"]}\n'
-            f'      evidence: {m["evidence"]}'
-            for m in missing
-        )
+                for m in rows
+            )
+            sections_html.append(
+                f'<h3 style="margin-top:24px;color:#444;">{label} ({len(rows)})</h3>'
+                f'<table style="border-collapse:collapse;border:1px solid #ddd;font-size:14px;">'
+                f'<tr style="background:#f4f4f4;">'
+                f'<th style="padding:8px 12px;border:1px solid #ddd;text-align:left;">Category</th>'
+                f'<th style="padding:8px 12px;border:1px solid #ddd;text-align:left;">Brand</th>'
+                f'<th style="padding:8px 12px;border:1px solid #ddd;text-align:left;">Domain (suggested)</th>'
+                f'<th style="padding:8px 12px;border:1px solid #ddd;text-align:left;">Type</th>'
+                f'<th style="padding:8px 12px;border:1px solid #ddd;text-align:left;">Evidence</th>'
+                f'</tr>{rows_html}</table>'
+            )
+            text_rows = '\n'.join(
+                f'  • [{m["category"]}] {m["value"]} ({m.get("type","")})\n'
+                f'      domain:   {m["domain"]}\n'
+                f'      evidence: {m.get("evidence","")}'
+                for m in rows
+            )
+            sections_text.append(f'\n{label} ({len(rows)}):\n{text_rows}')
+        rows_html = ''.join(sections_html)
+        rows_text = '\n'.join(sections_text)
         html = f"""<html><body style="font-family:-apple-system,Helvetica,Arial,sans-serif;color:#333;">
 <h2 style="color:#cc7000;">📨 Missing Hostmap Brands — Profile: {subject_name}</h2>
-<p>The persona research agent surfaced <b>{len(missing)}</b> brand-affiliation(s) for
-<b>{subject_name}</b> that are <b>NOT in <code>reference.host_mapping</code></b>.
-These can't be added to the profile because there's no host mapping → no panel data.</p>
+<p>This is a <b>single consolidated report</b> covering all hostmap issues surfaced
+during this run of <b>{subject_name}</b> — <b>{len(missing)}</b> brand(s) total across
+the persona-affiliation step and the downstream hostmap gate.
+None of these have a row in <code>reference.host_mapping</code>, so they can't be
+attached to panel data on future runs unless added.</p>
 <p><b>Please add these brands to hostmap so they're picked up on the next run.</b>
 The Domain column shows the suggested primary owned domain — please review and replace
 with the actual hostname pattern(s) you want the brand to match on.</p>
-<table style="border-collapse:collapse;border:1px solid #ddd;font-size:14px;">
-<tr style="background:#f4f4f4;">
-<th style="padding:8px 12px;border:1px solid #ddd;text-align:left;">Category</th>
-<th style="padding:8px 12px;border:1px solid #ddd;text-align:left;">Brand</th>
-<th style="padding:8px 12px;border:1px solid #ddd;text-align:left;">Domain (suggested)</th>
-<th style="padding:8px 12px;border:1px solid #ddd;text-align:left;">Affiliation Type</th>
-<th style="padding:8px 12px;border:1px solid #ddd;text-align:left;">Evidence</th>
-</tr>
 {rows_html}
-</table>
 <p style="color:#999;font-size:12px;margin-top:24px;">
 Behavioral Graph by Crosswalk NYC — automated affiliation auditor</p>
 </body></html>"""
         text = (f"Missing Hostmap Brands — Profile: {subject_name}\n\n"
-                f"The persona research agent surfaced {len(missing)} affiliation(s) "
-                f"for {subject_name} that are NOT in reference.host_mapping.\n"
+                f"Single consolidated report — {len(missing)} brand(s) total across "
+                f"the persona-affiliation step and the downstream hostmap gate.\n"
                 f"Please add these to hostmap so they're picked up on the next run.\n"
                 f"(Domain shown is a suggested primary owned domain — review and "
-                f"replace with the actual hostname pattern.)\n\n"
+                f"replace with the actual hostname pattern.)\n"
                 f"{rows_text}\n")
         ses.send_email(
             Source='no_reply@crosswalknyc.com',
@@ -20491,7 +20588,7 @@ Behavioral Graph by Crosswalk NYC — automated affiliation auditor</p>
                 ],
             },
             Message={
-                'Subject': {'Data': f'📨 Hostmap brands needed for {subject_name} ({len(missing)})',
+                'Subject': {'Data': f'📨 Hostmap brands needed for {subject_name} ({len(missing)}) — consolidated',
                             'Charset': 'UTF-8'},
                 'Body': {
                     'Html': {'Data': html, 'Charset': 'UTF-8'},
@@ -21138,6 +21235,12 @@ def parallel_category_agents(df: pd.DataFrame, persona_doc: dict,
                     print(f"        🤫 [{_ac}] {_av_raw} — non-brand noise, silently dropped (no email)")
                     continue
                 if not _canon:
+                    # Silently drop merged/deprecated brand variants
+                    # (SHOWTIME, "PARAMOUNT+ SHOWTIME", HBO, etc.) before
+                    # they even hit the missing-hostmap buffer.
+                    if _hostmap_norm_key(_av_raw) in _HOSTMAP_EMAIL_SUPPRESS:
+                        print(f"        🤫 [{_ac}] {_av_raw} — merged/deprecated brand, silently dropped (no email)")
+                        continue
                     _aff_missing_from_hostmap.append({
                         'category': _ac, 'value': _av_raw,
                         'type': str(_aff.get('type', '')).strip(),
@@ -21178,11 +21281,13 @@ def parallel_category_agents(df: pd.DataFrame, persona_doc: dict,
 
             if _aff_missing_from_hostmap:
                 print(f"\n   📨 {len(_aff_missing_from_hostmap)} affiliation brand(s) NOT IN HOSTMAP "
-                      f"— emailing data team:")
+                      f"— queued for end-of-run consolidated email:")
                 for _m in _aff_missing_from_hostmap:
                     print(f"        ❌ [{_m['category']}] {_m['value']} ({_m['type']})")
                 try:
-                    _send_missing_hostmap_email(subject, _aff_missing_from_hostmap)
+                    _queue_missing_hostmap_email(
+                        subject, _aff_missing_from_hostmap, source='affiliations',
+                    )
                 except Exception as _e:
                     print(f"   ⚠️ missing-hostmap email failed: {_e}")
     except Exception as _e:
@@ -27098,6 +27203,18 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
         except Exception as _e:
             print(f"   ⚠️ final input-brand-100 pin skipped: {_e}")
 
+        # FLUSH the per-run missing-hostmap email buffer as ONE consolidated
+        # email (affiliations + gate drops combined, deduped, grouped by
+        # source). Replaces the prior 2-3 separate emails per run.
+        try:
+            _flush_hostmap_email_buffer(
+                locals().get('project_name')
+                or locals().get('_subject_name')
+                or 'unknown',
+            )
+        except Exception as _e:
+            print(f"   ⚠️ hostmap-email flush failed: {_e}")
+
     # Save to CSV
     try:
         df_final.to_csv(final_file, index=False)
@@ -27873,23 +27990,9 @@ def _enforce_hostmap_category_gating(df, *, project_name: str = '',
         'ACTIVE AFFILIATIONS', 'FLAGSHIP BRANDS',
     }
 
-    # Brands that agents commonly hallucinate but that are KNOWN to be
-    # merged/superseded/deprecated and should NOT be added to host_mapping.
-    # These are silently dropped — no email to the data team.
-    # Normalized (alphanumeric uppercase) for matching.
-    SUPPRESS_FROM_EMAIL = {
-        # Showtime was rolled into Paramount+ in 2024; the hostmap treats
-        # Paramount+ as canonical. Don't ask the team to re-add Showtime.
-        'SHOWTIME', 'SHOWTIMETV', 'SHOWTIMEAPP', 'SHOWTIMENETWORK',
-        'SHOWTIMEANYTIME',
-        # HBO renamed to Max (2023) then back to HBO Max (2025). Hostmap
-        # uses HBO MAX as canonical.
-        'HBO', 'HBOGO', 'HBONOW',
-        # CBS All Access renamed to Paramount+ in 2021.
-        'CBSALLACCESS',
-        # DirecTV Now renamed to AT&T TV then to DirecTV Stream.
-        'DIRECTVNOW', 'ATTTV',
-    }
+    # Suppress-from-email list is module-level (`_HOSTMAP_EMAIL_SUPPRESS`)
+    # so the affiliation-preinsert step and the gate apply the same rules.
+    SUPPRESS_FROM_EMAIL = _HOSTMAP_EMAIL_SUPPRESS
 
     drop_idx: list = []
     drop_log: list[dict] = []
@@ -28016,6 +28119,7 @@ def _enforce_hostmap_category_gating(df, *, project_name: str = '',
                         'type': 'agent_inserted_unmapped_brand',
                         'evidence': f'agent placed in {d["category"]} at BP {d["bp"]:.2f}; '
                                     f'not in reference.host_mapping',
+                        'source': 'gate_not_in_hostmap',
                     })
                 else:
                     email_payload.append({
@@ -28025,11 +28129,14 @@ def _enforce_hostmap_category_gating(df, *, project_name: str = '',
                         'evidence': f'agent placed in {d["category"]} at BP {d["bp"]:.2f}; '
                                     f'hostmap canonical category(s) ({", ".join(d["hostmap_categories"])}) '
                                     f'already contain this brand — please review categorization',
+                        'source': 'gate_wrong_category_dup',
                     })
             if email_payload:
-                _send_missing_hostmap_email(project_name or 'unknown', email_payload)
+                _queue_missing_hostmap_email(
+                    project_name or 'unknown', email_payload, source='',
+                )
         except Exception as _e:
-            print(f"   ⚠️ hostmap-gate email failed: {_e}")
+            print(f"   ⚠️ hostmap-gate queue failed: {_e}")
 
     return df_kept, drop_log
 
