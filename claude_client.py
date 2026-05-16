@@ -137,9 +137,97 @@ def claude_reason_json(
     return ""
 
 
+def claude_messages(
+    *,
+    system: str,
+    user: str,
+    model: Optional[str] = None,
+    max_tokens: int = 4096,
+    temperature: float = 0.4,
+    max_retries: int = 3,
+    tools: Optional[list] = None,
+) -> str:
+    """Single-shot Claude call returning text. Mirrors migration/claude_client.
+
+    Used by:
+      - BG.py persona_research_agent (Opus 4.7 + web_search primary path)
+      - migration/hybrid_reasoning.holistic_sanity_check
+      - any future Claude-driven reasoning step
+
+    Supports `tools=` for native web_search. Returns "" on any failure so
+    callers can fall back to GPT.
+
+    Note: Opus 4.7+ and other extended-thinking models reject the temperature
+    parameter (it's fixed for those models). We strip it for those families.
+    """
+    client = get_claude_client()
+    if client is None:
+        return ""
+
+    model_id = (
+        model
+        or os.environ.get("CLAUDE_REASONING_MODEL")
+        or "claude-sonnet-4-5"
+    )
+
+    _model_lc = (model_id or "").lower()
+    _omit_temperature = (
+        "opus-4-7" in _model_lc
+        or "opus-4-6" in _model_lc
+        or "thinking" in _model_lc
+        or "mythos" in _model_lc
+    )
+
+    last_err: Optional[Exception] = None
+    for attempt in range(max_retries):
+        try:
+            kwargs = dict(
+                model=model_id,
+                max_tokens=max_tokens,
+                system=system,
+                messages=[{"role": "user", "content": user}],
+            )
+            if not _omit_temperature:
+                kwargs["temperature"] = temperature
+            if tools:
+                kwargs["tools"] = tools
+            resp = client.messages.create(**kwargs)
+            # Concatenate all text blocks (web_search responses interleave
+            # tool_use, server_tool_use, web_search_tool_result and text).
+            blocks = resp.content or []
+            text_parts: list[str] = []
+            for b in blocks:
+                txt = getattr(b, "text", None)
+                if txt:
+                    text_parts.append(txt)
+            return "\n".join(text_parts) if text_parts else ""
+        except Exception as e:
+            last_err = e
+            try:
+                import anthropic
+                transient = (
+                    anthropic.RateLimitError,
+                    anthropic.APIConnectionError,
+                    anthropic.APITimeoutError,
+                    anthropic.InternalServerError,
+                )
+                if not isinstance(e, transient):
+                    print(f"⚠️  Claude permanent error ({type(e).__name__}): {e}")
+                    return ""
+            except Exception:
+                pass
+            wait = 2 ** attempt
+            print(f"⚠️  Claude transient error (attempt {attempt+1}/{max_retries}, retry in {wait}s): {e}")
+            time.sleep(wait)
+
+    print(f"⚠️  Claude exhausted retries: {last_err}")
+    return ""
+
+
 __all__ = [
     "is_claude_reasoning_enabled",
     "is_hybrid_enabled",
     "get_claude_client",
     "claude_reason_json",
+    "claude_messages",
 ]

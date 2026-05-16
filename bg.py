@@ -16815,7 +16815,8 @@ EXAMPLE category_signals (hypothetical `consumer_brand` athletic-equipment cohor
                     "object, no markdown fences, no commentary before or after."
                 )
                 print(f"   🧠 PRIMARY persona research: Claude {claude_model} + web_search")
-                t_claude_start = time.time()
+                import time as _time
+                t_claude_start = _time.time()
                 try:
                     raw = _claude_messages(
                         system=_claude_system, user=prompt, model=claude_model,
@@ -16834,7 +16835,7 @@ EXAMPLE category_signals (hypothetical `consumer_brand` athletic-equipment cohor
                     except Exception as _e:
                         print(f"   ⚠️ Claude persona fallback call raised: {_e}")
                         raw = ''
-                _elapsed_claude = time.time() - t_claude_start
+                _elapsed_claude = _time.time() - t_claude_start
                 if raw:
                     text = raw.strip()
                     if not text.startswith('{'):
