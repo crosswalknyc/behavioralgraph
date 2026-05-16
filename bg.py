@@ -26997,6 +26997,20 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
         # that the same brand always reads the same BP across every category.
         df_final = _align_cross_category_bp(df_final)
 
+        # Hostmap category gate (per Jenna 2026-05-15): NEVER let agents
+        # invent brands not in reference.host_mapping, and NEVER let them
+        # put a real brand in a category other than what hostmap says.
+        try:
+            df_final, _gate_drops = _enforce_hostmap_category_gating(
+                df_final,
+                project_name=(locals().get('project_name')
+                              or locals().get('_subject_name')
+                              or ''),
+                send_email=True,
+            )
+        except Exception as _e:
+            print(f"   ⚠️ hostmap gate skipped: {_e}")
+
     # Save to CSV
     try:
         df_final.to_csv(final_file, index=False)
@@ -27677,6 +27691,191 @@ def _break_global_long_tail_pinning(df, project_name: str = '',
     except Exception as _e:
         print(f"   ⚠️ _break_global_long_tail_pinning failed: {_e}")
         return df
+
+
+# ──────────────────────────────────────────────────────────────────────────
+# Hostmap-driven category gate (mirrored from BG.py).
+#
+# RULE (per Jenna 2026-05-15):
+#   1. Don't let agents add brands that aren't in reference.host_mapping.
+#      If they do, drop the row and email the data team.
+#   2. If a brand IS in host_mapping, force it to the categories listed in
+#      its host_mapping SECTION. If an agent put it elsewhere, drop the
+#      stray row.
+# ──────────────────────────────────────────────────────────────────────────
+
+_HOSTMAP_GATE_CACHE: dict = {}
+
+def _load_hostmap_category_gate() -> dict:
+    global _HOSTMAP_GATE_CACHE
+    if _HOSTMAP_GATE_CACHE:
+        return _HOSTMAP_GATE_CACHE
+    import re as _re
+    def _norm(s: str) -> str:
+        return _re.sub(r'[^A-Z0-9]', '', str(s or '').upper())
+    norm_to_canon: dict[str, str] = {}
+    norm_to_cats: dict[str, set[str]] = {}
+    gated_categories: set[str] = set()
+    try:
+        import clickhouse_connect as _ch
+        client = _ch.get_client(
+            host='37.27.140.111', port=8123, username='bgapp',
+            password='4qPllwDG+S3PptBWTRAJPTkpCzkRZ6tZ',
+            settings={'max_execution_time': 60},
+        )
+        rows = client.query(
+            "SELECT BRAND, SECTION FROM reference.host_mapping "
+            "WHERE BRAND IS NOT NULL AND BRAND != ''"
+        ).result_rows
+        for brand, section in rows:
+            n = _norm(brand)
+            if not n:
+                continue
+            if n not in norm_to_canon:
+                norm_to_canon[n] = brand
+            cats = norm_to_cats.setdefault(n, set())
+            sec = (section or '').strip()
+            for part in sec.split(','):
+                p = part.strip().upper()
+                if not p or p in {'HIDDEN', 'CATEGORY', ''}:
+                    continue
+                cats.add(p)
+                gated_categories.add(p)
+        print(f"   🗺  hostmap gate built: {len(norm_to_canon):,} brands, "
+              f"{len(gated_categories)} gated categories")
+    except Exception as e:
+        print(f"   ⚠️ hostmap gate build failed: {e} — gate disabled this run")
+        return {'norm_to_canon': {}, 'norm_to_cats': {}, 'gated_categories': set()}
+    _HOSTMAP_GATE_CACHE = {
+        'norm_to_canon': norm_to_canon,
+        'norm_to_cats': norm_to_cats,
+        'gated_categories': gated_categories,
+    }
+    return _HOSTMAP_GATE_CACHE
+
+
+def _enforce_hostmap_category_gating(df, *, project_name: str = '',
+                                     send_email: bool = True) -> tuple:
+    if df is None or getattr(df, 'empty', True):
+        return df, []
+    bp_col = "Brand Penetration (Row)" if "Brand Penetration (Row)" in df.columns else "Brand Penetration"
+    cat_col = "Column" if "Column" in df.columns else (
+        "Category" if "Category" in df.columns else None
+    )
+    if cat_col is None or "Value" not in df.columns:
+        return df, []
+
+    gate = _load_hostmap_category_gate()
+    norm_to_canon = gate['norm_to_canon']
+    norm_to_cats = gate['norm_to_cats']
+    gated_categories = gate['gated_categories']
+    if not norm_to_canon or not gated_categories:
+        return df, []
+
+    import re as _re
+    def _norm(s: str) -> str:
+        return _re.sub(r'[^A-Z0-9]', '', str(s or '').upper())
+
+    NEVER_GATE = {
+        'INPUT_METADATA', 'INPUT METADATA', 'BRAND INPUT', 'SAMPLE SIZE',
+        'BRAND CATEGORY', 'AVID FAN', 'CASUAL FAN',
+        'INTEREST', 'MOST PURCHASED CATEGORIES', 'LOCATION',
+        'AGE', 'GENDER', 'ETHNICITY', 'INCOME', 'EDUCATION',
+        'RELATIONSHIP', 'SEXUAL_ORIENTATION', 'PARENTAL_STATUS',
+        'OCCUPATION', 'PERSONA SUMMARY', 'AUDIENCE COMPOSITION',
+        'ACTIVE AFFILIATIONS', 'FLAGSHIP BRANDS',
+    }
+
+    drop_idx: list = []
+    drop_log: list[dict] = []
+
+    for idx, row in df.iterrows():
+        cat = str(row.get(cat_col, '')).strip().upper()
+        val = str(row.get('Value', '')).strip()
+        if not cat or not val:
+            continue
+        if cat in NEVER_GATE:
+            continue
+        if cat not in gated_categories:
+            continue
+        n = _norm(val)
+        if not n:
+            continue
+        if n not in norm_to_canon:
+            drop_idx.append(idx)
+            try:
+                bp_val = float(row.get(bp_col, 0)) if bp_col in df.columns else 0.0
+            except Exception:
+                bp_val = 0.0
+            drop_log.append({
+                'category': str(row.get(cat_col, '')),
+                'value': val,
+                'bp': bp_val,
+                'reason': 'not_in_hostmap',
+                'hostmap_categories': [],
+            })
+            continue
+        allowed = norm_to_cats.get(n, set())
+        if cat not in allowed:
+            drop_idx.append(idx)
+            try:
+                bp_val = float(row.get(bp_col, 0)) if bp_col in df.columns else 0.0
+            except Exception:
+                bp_val = 0.0
+            drop_log.append({
+                'category': str(row.get(cat_col, '')),
+                'value': norm_to_canon[n],
+                'bp': bp_val,
+                'reason': 'wrong_category',
+                'hostmap_categories': sorted(allowed),
+            })
+
+    if not drop_idx:
+        print(f"   🛡  hostmap gate: 0 drops")
+        return df, []
+
+    df_kept = df.drop(index=drop_idx).reset_index(drop=True)
+
+    n_a = sum(1 for d in drop_log if d['reason'] == 'not_in_hostmap')
+    n_b = sum(1 for d in drop_log if d['reason'] == 'wrong_category')
+    print(f"   🛡  hostmap gate: dropped {len(drop_idx)} rows "
+          f"({n_a} not-in-hostmap, {n_b} wrong-category)")
+
+    loud = sorted(drop_log, key=lambda d: -float(d.get('bp') or 0))[:10]
+    for d in loud:
+        if d['reason'] == 'not_in_hostmap':
+            print(f"      ❌ [{d['category']}] {d['value']} bp={d['bp']:.2f} — not in hostmap")
+        else:
+            cats_str = ' | '.join(d['hostmap_categories'][:3])
+            print(f"      ↪️  [{d['category']}] {d['value']} bp={d['bp']:.2f} — "
+                  f"hostmap says: {cats_str}")
+
+    if send_email:
+        try:
+            email_payload: list[dict] = []
+            for d in drop_log:
+                if d['reason'] == 'not_in_hostmap':
+                    email_payload.append({
+                        'category': d['category'],
+                        'value': d['value'],
+                        'type': 'agent_inserted_unmapped_brand',
+                        'evidence': f'agent placed in {d["category"]} at BP {d["bp"]:.2f}; '
+                                    f'not in reference.host_mapping',
+                    })
+                else:
+                    email_payload.append({
+                        'category': d['category'],
+                        'value': d['value'],
+                        'type': 'agent_wrong_category',
+                        'evidence': f'agent placed in {d["category"]} at BP {d["bp"]:.2f}; '
+                                    f'hostmap canonical category(s): {", ".join(d["hostmap_categories"])}',
+                    })
+            if email_payload:
+                _send_missing_hostmap_email(project_name or 'unknown', email_payload)
+        except Exception as _e:
+            print(f"   ⚠️ hostmap-gate email failed: {_e}")
+
+    return df_kept, drop_log
 
 
 def _align_cross_category_bp(df):
