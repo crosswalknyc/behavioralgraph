@@ -16550,19 +16550,19 @@ When the subject is a sports team (NBA / NFL / MLB / NHL / MLS / college program
       ✅ Any NHL team → ESPN+ (STREAMING/PLATFORM, exclusive U.S. rights)
   • signature_athlete — surface the team's TOP 5-7 active-roster players. CRITICAL — every signature athlete MUST be emitted as MULTIPLE active_affiliations entries, ONE PER CATEGORY where the dashboard scores them. For an NBA team, that's THREE entries per player: category="TALENT", category="ATHLETE", and category="NBA ATHLETE". For an MLB team: TALENT + ATHLETE + "MLB ATHLETE". For NFL: TALENT + ATHLETE + "NFL ATHLETE". Otherwise the per-category scorer for NBA ATHLETE / MLB ATHLETE never sees the affiliation and falls back to gen-pop player rankings (LeBron / Curry / etc.) instead of elevating the team's own roster. This is THE most damaging bug for sports-team profiles — a Memphis Grizzlies profile showing LeBron James as #1 NBA athlete instead of Ja Morant means signature_athlete entries weren't multi-category-tagged.
       Example correct output for Memphis Grizzlies — Ja Morant gets THREE entries:
-        {"category":"TALENT","value":"JA MORANT","type":"signature_athlete","evidence":"Grizzlies franchise PG, ROY 2020"},
-        {"category":"ATHLETE","value":"JA MORANT","type":"signature_athlete","evidence":"Grizzlies franchise PG"},
-        {"category":"NBA ATHLETE","value":"JA MORANT","type":"signature_athlete","evidence":"Grizzlies franchise PG"}
+        {{"category":"TALENT","value":"JA MORANT","type":"signature_athlete","evidence":"Grizzlies franchise PG, ROY 2020"}},
+        {{"category":"ATHLETE","value":"JA MORANT","type":"signature_athlete","evidence":"Grizzlies franchise PG"}},
+        {{"category":"NBA ATHLETE","value":"JA MORANT","type":"signature_athlete","evidence":"Grizzlies franchise PG"}}
       ✅ Atlanta Hawks (2024-25 roster): TRAE YOUNG, JALEN JOHNSON, DYSON DANIELS, ONYEKA OKONGWU, DE'ANDRE HUNTER, ZACCHARIE RISACHER
       ✅ Texas Rangers (2024 roster): COREY SEAGER, MARCUS SEMIEN, ADOLIS GARCIA, NATHAN EOVALDI, JACOB DEGROM, EVAN CARTER, JOSH JUNG
       ✅ Dallas Mavericks: LUKA DONCIC, KYRIE IRVING, ANTHONY DAVIS, KLAY THOMPSON, P.J. WASHINGTON
       ✅ San Antonio Spurs: VICTOR WEMBANYAMA, DEVIN VASSELL, KELDON JOHNSON, JEREMY SOCHAN, CHRIS PAUL, STEPHON CASTLE
       ✅ Memphis Grizzlies: JA MORANT, JAREN JACKSON JR., DESMOND BANE, MARCUS SMART, STEVEN ADAMS
   • home_metro — for ANY sports-team persona, surface the team's home media market as a LOCATION affiliation. The team's home metro should land at #1 in the LOCATION category at 15-25% (vs gen-pop's <2% for any single metro). Without this, a Memphis Grizzlies profile shows Memphis TN at 2.13% — which is gen-pop and obviously wrong for a Memphis team's audience.
-      ✅ Memphis Grizzlies → {"category":"LOCATION","value":"Memphis TN","type":"home_metro","evidence":"team home market"}
-      ✅ San Antonio Spurs → {"category":"LOCATION","value":"San Antonio TX","type":"home_metro","evidence":"team home market"}
-      ✅ Dallas Mavericks → {"category":"LOCATION","value":"Dallas Ft Worth TX","type":"home_metro","evidence":"team home market"}
-      ✅ Atlanta Hawks → {"category":"LOCATION","value":"Atlanta GA","type":"home_metro","evidence":"team home market"}
+      ✅ Memphis Grizzlies → {{"category":"LOCATION","value":"Memphis TN","type":"home_metro","evidence":"team home market"}}
+      ✅ San Antonio Spurs → {{"category":"LOCATION","value":"San Antonio TX","type":"home_metro","evidence":"team home market"}}
+      ✅ Dallas Mavericks → {{"category":"LOCATION","value":"Dallas Ft Worth TX","type":"home_metro","evidence":"team home market"}}
+      ✅ Atlanta Hawks → {{"category":"LOCATION","value":"Atlanta GA","type":"home_metro","evidence":"team home market"}}
   • league_apparel — the official league apparel/equipment partner.
       ✅ NBA: NIKE (jerseys/apparel) + WILSON SPORTING GOODS (basketball)
       ✅ MLB: NIKE (jerseys/apparel since 2020) + RAWLINGS (gloves) + LOUISVILLE SLUGGER (bats) + WILSON SPORTING GOODS (catcher gear)
@@ -16784,24 +16784,100 @@ EXAMPLE category_signals (hypothetical `consumer_brand` athletic-equipment cohor
     persona_doc = None
     last_err = ''
 
+    # Attempt 0 (PRIMARY when Anthropic is available): Claude Opus 4.7 with
+    # native web_search. This is the smartest research call we can make. Opus
+    # actually researches — current platform homes, current roster, current
+    # endorsements, sub-cultural alignments — instead of pattern-matching to
+    # a generic archetype. Override model via CLAUDE_PERSONA_MODEL env var.
+    # Disable entirely with USE_CLAUDE_PERSONA=false if you want pure GPT.
+    _use_claude_persona = (os.environ.get('USE_CLAUDE_PERSONA') or 'true').strip().lower() not in ('0', 'false', 'no', 'off')
+    if _use_claude_persona:
+        try:
+            import sys as _sys, os as _os
+            _migration_dir = _os.path.join(
+                _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__))),
+                'migration')
+            if _migration_dir not in _sys.path:
+                _sys.path.insert(0, _migration_dir)
+            from claude_client import claude_messages as _claude_messages, get_claude_client as _get_claude
+            if _get_claude() is not None:
+                claude_model = os.environ.get('CLAUDE_PERSONA_MODEL') or 'claude-opus-4-7'
+                _ws_tool_new = {"type": "web_search_20260209", "name": "web_search", "max_uses": 12}
+                _ws_tool_old = {"type": "web_search_20250305", "name": "web_search", "max_uses": 12}
+                _claude_system = (
+                    "You are a senior audience-research analyst. You research a public figure / "
+                    "brand / org using LIVE web search and return ONE single valid JSON object "
+                    "matching the user's schema. Do live searches for: current platform homes, "
+                    "current roster / venue / broadcast partners (sports), current endorsements / "
+                    "ownership stakes, sub-cultural alignments, recent shows or releases (last "
+                    "12 months). Don't pattern-match to a generic archetype — research what's "
+                    "actually true about THIS specific persona right now. Return ONLY the JSON "
+                    "object, no markdown fences, no commentary before or after."
+                )
+                print(f"   🧠 PRIMARY persona research: Claude {claude_model} + web_search")
+                t_claude_start = time.time()
+                try:
+                    raw = _claude_messages(
+                        system=_claude_system, user=prompt, model=claude_model,
+                        max_tokens=16000, temperature=0.3, tools=[_ws_tool_new],
+                    )
+                except Exception as _e:
+                    print(f"   ⚠️ Claude persona primary call raised: {_e}")
+                    raw = ''
+                if not raw:
+                    print(f"   🔁 retrying with legacy web_search tool + Sonnet 4.6")
+                    try:
+                        raw = _claude_messages(
+                            system=_claude_system, user=prompt, model='claude-sonnet-4-6',
+                            max_tokens=16000, temperature=0.3, tools=[_ws_tool_old],
+                        )
+                    except Exception as _e:
+                        print(f"   ⚠️ Claude persona fallback call raised: {_e}")
+                        raw = ''
+                _elapsed_claude = time.time() - t_claude_start
+                if raw:
+                    text = raw.strip()
+                    if not text.startswith('{'):
+                        first = text.find('{'); last = text.rfind('}')
+                        if first != -1 and last > first:
+                            text = text[first:last + 1]
+                    if text.startswith('```'):
+                        text = text.strip('`')
+                        if text.lstrip().lower().startswith('json'):
+                            text = text.split('\n', 1)[1] if '\n' in text else text
+                    print(f"   📡 Claude returned {len(text)} chars in {_elapsed_claude:.1f}s")
+                    persona_doc, last_err = _parse_persona_json(text)
+                    if persona_doc is None:
+                        print(f"   ⚠️ Claude persona JSON unparseable → {last_err[:160]}")
+                    else:
+                        _aff_n = len(persona_doc.get('active_affiliations') or [])
+                        _flag_n = len(persona_doc.get('flagship_brands') or [])
+                        print(f"   ✅ Claude persona doc: {_aff_n} affiliations, {_flag_n} flagships, "
+                              f"{len(persona_doc.get('persona_summary') or '')} char summary")
+            else:
+                print(f"   ⏭  Claude unavailable — falling through to GPT path")
+        except Exception as e:
+            print(f"   ⚠️ Claude persona path errored ({e}) — falling through to GPT")
+
     # Attempt 1: gpt-4o-search-preview (has web search)
-    try:
-        resp = _timed_completion(
-            client,
-            label="persona/search-preview",
-            model=MODEL_RESEARCH,
-            web_search_options={"search_context_size": "high"},
-            messages=[{'role': 'user', 'content': prompt}],
-            max_tokens=16384,
-        )
-        text = (resp.choices[0].message.content or '').strip()
-        if text:
-            print(f"   📡 search-preview returned {len(text)} chars")
-            persona_doc, last_err = _parse_persona_json(text)
-            if persona_doc is None:
-                print(f"   ⚠️ search-preview JSON unparseable → {last_err[:160]}")
-    except Exception as e:
-        print(f"   ⚠️ gpt-4o-search-preview failed ({e})")
+    if persona_doc is None:
+        try:
+            resp = _timed_completion(
+                client,
+                label="persona/search-preview",
+                model=MODEL_RESEARCH,
+                web_search_options={"search_context_size": "high"},
+                messages=[{'role': 'user', 'content': prompt}],
+                max_tokens=16384,
+            )
+            text = (resp.choices[0].message.content or '').strip()
+            if text:
+                print(f"   📡 search-preview returned {len(text)} chars")
+                persona_doc, last_err = _parse_persona_json(text)
+                if persona_doc is None:
+                    print(f"   ⚠️ search-preview JSON unparseable → {last_err[:160]}")
+        except Exception as e:
+            print(f"   ⚠️ gpt-4o-search-preview failed ({e})")
 
     # Attempt 2: gpt-4o (no web search) with strict JSON mode
     if persona_doc is None:
