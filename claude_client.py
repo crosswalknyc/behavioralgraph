@@ -65,7 +65,9 @@ def get_claude_client():
 
     try:
         import anthropic
-        _claude_client = anthropic.Anthropic(api_key=api_key, timeout=180.0)
+        # 600s (10 min) accommodates Opus 4.7 + native web_search calls
+        # that may execute 8-12 searches before composing the response.
+        _claude_client = anthropic.Anthropic(api_key=api_key, timeout=600.0)
         return _claude_client
     except Exception as e:
         print(f"⚠️  Claude client init failed: {e}")
