@@ -27041,14 +27041,34 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
                         print(f"          reason: {_r}")
                 else:
                     print("   🧠 hybrid sanity check: profile passed cleanly (0 fixes)")
+
         except Exception as _e:
             print(f"   ⚠️ hybrid sanity check skipped: {_e}")
 
         # Final pass: re-align cross-category BP. Pin-breaking + corpus push
         # + hybrid sanity fixes can re-introduce drift between e.g. NIKE in
-        # MPB vs NIKE in APPAREL/FOOTWEAR. Running alignment LAST guarantees
+        # MPB vs NIKE in APPAREL/FOOTWEAR. Running alignment guarantees
         # that the same brand always reads the same BP across every category.
         df_final = _align_cross_category_bp(df_final)
+
+        # Deterministic safety net: parse each category's PERSONA SIGNAL for
+        # exclusionary phrasing and soft-cap any row above the implied
+        # ceiling. Runs AFTER cross-category alignment so the cap holds
+        # against alignment's MAX-fallback rule.
+        try:
+            import sys as _sys2, os as _os2
+            _migration_dir2 = _os2.path.join(
+                _os2.path.dirname(_os2.path.dirname(_os2.path.abspath(__file__))),
+                'migration')
+            if _migration_dir2 not in _sys2.path:
+                _sys2.path.insert(0, _migration_dir2)
+            from hybrid_reasoning import enforce_persona_negative_space as _hybrid_neg_space2
+            _persona_doc_for_cap = locals().get('_persona_doc') or locals().get('persona_doc') or {}
+            df_final, _n_capped = _hybrid_neg_space2(
+                df_final, _persona_doc_for_cap, verbose=True,
+            )
+        except Exception as _e:
+            print(f"   ⚠️ persona-negative-space cap skipped: {_e}")
 
         # Hostmap category gate (per Jenna 2026-05-15): NEVER let agents
         # invent brands not in reference.host_mapping, and NEVER let them
