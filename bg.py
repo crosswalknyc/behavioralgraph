@@ -13479,7 +13479,7 @@ def perform_full_universe_scan(conn, brands, start_date, end_date, purchasers_on
     
     with conn.cursor() as cur:
         # Scale up warehouse for full scan
-        print("🚀 Running on ClickHouse (37.27.140.111) for full universe scan")
+        print("🚀 Running on ClickHouse (168.119.215.48) for full universe scan")
         
         try:
             # Add purchasers filter if requested
@@ -21397,7 +21397,7 @@ def parallel_category_agents(df: pd.DataFrame, persona_doc: dict,
             try:
                 import clickhouse_connect as _ch
                 _ch_client = _ch.get_client(
-                    host='37.27.140.111', port=8123, username='bgapp',
+                    host='168.119.215.48', port=8123, username='bgapp',
                     password='4qPllwDG+S3PptBWTRAJPTkpCzkRZ6tZ',
                     settings={'max_execution_time': 30},
                 )
@@ -28153,7 +28153,7 @@ def _load_hostmap_category_gate() -> dict:
     try:
         import clickhouse_connect as _ch
         client = _ch.get_client(
-            host='37.27.140.111', port=8123, username='bgapp',
+            host='168.119.215.48', port=8123, username='bgapp',
             password='4qPllwDG+S3PptBWTRAJPTkpCzkRZ6tZ',
             settings={'max_execution_time': 60},
         )
@@ -32082,7 +32082,7 @@ def main():
     
     # Always perform full universe scan to get actual total users
     print("🔍 Performing full universe scan...")
-    print("🚀 Running on ClickHouse (37.27.140.111) throughout entire process")
+    print("🚀 Running on ClickHouse (168.119.215.48) throughout entire process")
     universe_results = perform_full_universe_scan(conn, brands, s1, e1, purchasers_only)
     if universe_results:
         print(f"🌍 Universe scan complete. True universe size: {universe_results['total_universe']:,} users")

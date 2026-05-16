@@ -8,7 +8,7 @@ import os
 # read by migration/clickhouse_connector.py. This dict is here for
 # discoverability only; nothing in the live pipeline imports it directly.
 CLICKHOUSE_CONFIG = {
-    'host':     os.environ.get('CH_HOST',     '37.27.140.111'),
+    'host':     os.environ.get('CH_HOST',     '168.119.215.48'),
     'port':     int(os.environ.get('CH_PORT', '8123')),
     'user':     os.environ.get('CH_USER',     'bgapp'),
     'password': os.environ.get('CH_PASSWORD', ''),
