@@ -20743,6 +20743,7 @@ def _send_missing_hostmap_email(subject_name: str, missing: list[dict]) -> None:
             'affiliations': '🎬 Persona-affiliation brands',
             'gate_not_in_hostmap': '🛡 Hostmap-gate drops (brand not in hostmap)',
             'gate_wrong_category_dup': '🛡 Hostmap-gate drops (wrong category, canonical already filled)',
+            'audit_taxonomy_gap': '🗂 Auditor-flagged taxonomy gaps (brand never appeared — please add to hostmap)',
             '': '📋 Other',
         }
         from collections import defaultdict as _dd
@@ -20751,7 +20752,7 @@ def _send_missing_hostmap_email(subject_name: str, missing: list[dict]) -> None:
             by_src[m.get('source', '') or ''].append(m)
         sections_html: list[str] = []
         sections_text: list[str] = []
-        for src in ('affiliations', 'gate_not_in_hostmap', 'gate_wrong_category_dup', ''):
+        for src in ('affiliations', 'gate_not_in_hostmap', 'gate_wrong_category_dup', 'audit_taxonomy_gap', ''):
             rows = by_src.get(src, [])
             if not rows:
                 continue
@@ -27349,6 +27350,7 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
             from hybrid_reasoning import (
                 holistic_sanity_check as _hybrid_audit,
                 apply_sanity_fixes as _hybrid_apply,
+                pop_taxonomy_gaps as _hybrid_pop_gaps,
             )
             from claude_client import is_hybrid_enabled as _hybrid_on
             if _hybrid_on():
@@ -27376,6 +27378,31 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
                         print(f"          reason: {_r}")
                 else:
                     print("   🧠 hybrid sanity check: profile passed cleanly (0 fixes)")
+
+                # STEP 6 of the audit: drain proactive taxonomy gaps the
+                # auditor surfaced (brands the data team should add to
+                # hostmap so future runs can score them). Queue each gap
+                # into the consolidated missing-hostmap email buffer so
+                # the data team sees them alongside the affiliation /
+                # gate-drop sources.
+                try:
+                    _gaps = _hybrid_pop_gaps(_subject_arg)
+                    if _gaps:
+                        _gap_entries = [{
+                            'value': (_gp.get('value') or '').strip(),
+                            'category': (_gp.get('category') or '').strip(),
+                            'type': (_gp.get('type') or '').strip(),
+                            'evidence': (_gp.get('evidence') or '').strip(),
+                        } for _gp in _gaps if (_gp.get('value') or '').strip()]
+                        if _gap_entries:
+                            _queue_missing_hostmap_email(
+                                _subject_arg,
+                                _gap_entries,
+                                source='audit_taxonomy_gap',
+                            )
+                            print(f"   🗂 queued {len(_gap_entries)} auditor-flagged taxonomy gap(s) for the consolidated hostmap email")
+                except Exception as _e:
+                    print(f"   ⚠️ taxonomy-gap queue failed: {_e}")
 
         except Exception as _e:
             print(f"   ⚠️ hybrid sanity check skipped: {_e}")
