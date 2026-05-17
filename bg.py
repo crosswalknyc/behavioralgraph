@@ -16766,6 +16766,25 @@ The `category_signals` field is a JSON object where each key is a category name 
 
 Anchor each category note to `subject_archetype` — e.g. MUSICIAN → prioritize ARTIST / STREAMING / PODCAST / TICKETING patterns; AAA GAME → prioritize GAMES / platforms / adjacent hardware; TV SERIES → MEDIA + streaming behavior of that demo; consumer_brand FMCG → retailer + CPG aisles. Do NOT reuse an athletic-footwear template for unrelated archetypes.
 
+UNIVERSAL AUDIENCE-NUANCE DIRECTIVE — read this carefully (this is the single most important change for profile quality):
+
+For every audience-driven category — MUSICIAN/BAND, EVENTS, HOST/PERSONALITY, NON PROFIT/CHARITY, MEDIA, FRANCHISE, AUTOMOBILE, APPAREL/FOOTWEAR, BEAUTY/WELLNESS, QSR, INTEREST, MOST PURCHASED BRANDS, VENUE, AMUSEMENT PARKS, COLLEGE/UNIVERSITY, WHERE THEY DINE, WHERE THEY SHOP, TRAVEL, FOOD, BEVERAGES — your `category_signals` value MUST include:
+  (a) 3-5 SPECIFIC brands BY NAME that over-index for THIS audience (not generic types — actual brand names: "Morgan Wallen, Zach Bryan, Luke Combs, Jelly Roll, Bailey Zimmerman" not "country acts").
+  (b) 2-3 SPECIFIC brands BY NAME that under-index for THIS audience (e.g. "Billie Eilish, Olivia Rodrigo under-index — wrong demo skew").
+  (c) ONE-LINE segment-overlap reasoning per cluster: which audience segment elevates them, and roughly what fraction × engagement gives the lift ("country segment ≈ 35% × engagement ≈ 60% → ~21% BP for the top country acts").
+
+This is NOT optional. The downstream per-category scoring agent only sees the brands you NAME — if you don't name Morgan Wallen in MUSICIAN/BAND for an NFL Midwestern audience, the scorer has no signal to elevate him above mainstream pop baseline, and the audit can only band-aid so much.
+
+WORKED EXAMPLES of audience-driven brand callouts (adapt to YOUR subject — do not copy verbatim):
+  • NFL Midwestern team → MUSICIAN/BAND: "country segment ≈ 35% × engagement ≈ 60% → top country acts land 18-28%. NAMED OVER-INDEX: Morgan Wallen, Zach Bryan, Luke Combs, Jelly Roll, Bailey Zimmerman, Post Malone (genre-blender), Kane Brown. NAMED UNDER-INDEX: Billie Eilish, Olivia Rodrigo, Phoebe Bridgers, boygenius (wrong demo + indie skew). Mainstream pop (Taylor Swift, Beyonce, Rihanna) tracks gen-pop with Taylor Swift +5-10pp halo lift from Travis Kelce."
+  • Queer-femme actress (Beals) → HOST/PERSONALITY: "queer-friendly podcast/TV segment ≈ 40% × engagement ≈ 30% → 8-15% lift on inclusive hosts. NAMED OVER-INDEX: Hannah Gadsby, Lea DeLaria, Cameron Esposito, Nicole Byer, Hannah Einbinder podcast. NAMED UNDER-INDEX: Joe Rogan, Tucker Carlson, Ben Shapiro, Elon Musk, Jake Paul (politically misaligned with audience — should sit below gen-pop, NOT top-5)."
+  • Drag-adjacent pop persona (Chappell) → EVENTS: "drag/Pride segment ≈ 45% × engagement ≈ 35% → 12-20% lift on drag/Pride-coded events. NAMED OVER-INDEX: RuPaul's DragCon, NYC Pride, LA Pride, Outfest, GLAAD Awards, Coachella (queer-pop core), Lollapalooza. NAMED UNDER-INDEX: Super Bowl, NASCAR races, country festivals (Stagecoach, CMA Fest)."
+  • Sports team → NON PROFIT/CHARITY: "NFL-partner + veteran segment ≈ 60% × engagement ≈ 25% → 5-15% lift. NAMED OVER-INDEX: St. Jude (NFL partner), Wounded Warrior Project, Tunnel to Towers, USO, NFL Foundation, Folds of Honor. NAMED UNDER-INDEX: GLAAD, Trevor Project, Planned Parenthood (politically polarizing for mainstream NFL audience)."
+  • Sports team → AUTOMOBILE: "pickup-truck Midwestern segment ≈ 50% × engagement ≈ 40% → 20-35%. NAMED OVER-INDEX: Ford (F-150 dominant), Chevy (Silverado), Ram, GMC, Jeep. NAMED UNDER-INDEX: Tesla, Porsche, Audi (wrong income/region skew for mainstream NFL fans)."
+  • Sports team → VENUE: "home stadium = audience IS in the building → 25-40% BP. NAMED OVER-INDEX: home stadium specifically (Arrowhead/GEHA Field for Chiefs, SoFi for Rams, Lambeau for Packers) at the top. NAMED UNDER-INDEX: rival home stadiums (the team's audience doesn't go to away games at 2-3% baseline)."
+
+The point is the SPECIFIC BRAND NAMES. Generic "country acts over-index" is useless to the per-category scorer because it doesn't know WHICH country acts. Name them. The scoring agent will then either find them in the candidate list (and elevate them) or surface them as new affiliations / taxonomy gaps so the audit can flag them for the data team.
+
 ANTI-CLUSTERING GUARDRAIL — read this carefully:
 The single biggest failure mode of this pipeline is bimodal clustering: the scorer assigns one of two anchor values (e.g. ~58% or ~77% for Spotify) across all profiles instead of producing a continuous spread. Your category_signals must explicitly push the scorer to land DIFFERENT brands AND DIFFERENT profiles on a CONTINUOUS distribution, not on 2-3 discrete "buckets". For categories where this clustering happens most (SPOTIFY, APPLE PAY, STARBUCKS/MCDONALDS, NBA, MINECRAFT, POKEMON, AIRBNB, FASHION/SOCIAL MEDIA/TRAVEL/STREAMING/HEALTH&WELLNESS as INTEREST values, CASH APP / PAYPAL / FANDANGO / STUBHUB / EVENTBRITE, TACO BELL, APPLE / APPLE MUSIC / YOUTUBE MUSIC, GOOGLE, AMC THEATRES, NCAA / MLB), give the scorer EXPLICIT directional anchoring per persona archetype so the scorer doesn't fall back to two buckets. Tell the scorer to put each value at a UNIQUE, persona-specific point on the distribution.
 
@@ -18500,6 +18519,27 @@ WORKED EXAMPLE — NON-OVERRIDE FRANCHISES (Beals on Harry Potter / Minecraft / 
   doesn't engage with them at all. The MATH says low.
 
 Same brand, two different personas, two different BPs — both derived from the SAME math, just with different audience compositions. THIS is how you produce realistic, persona-differentiated outputs.
+
+═══════════════════════════════════════════════════════════════════
+NAMED CALLOUTS FROM PERSONA RESEARCH — DO NOT IGNORE
+═══════════════════════════════════════════════════════════════════
+The persona's `category_signals[CATEGORY]` block (in the persona block above) names SPECIFIC brands that over-index AND under-index for THIS audience. Read it carefully BEFORE you start scoring.
+
+If the signal NAMES brands as over-indexers (e.g. "country segment ≈ 35% × engagement ≈ 60% → Morgan Wallen, Zach Bryan, Luke Combs, Jelly Roll, Bailey Zimmerman over-index 18-28%"):
+  • If those brands ARE in your items-to-score list → surface them with the math-supported BP.
+  • If those brands are NOT in your items-to-score list → ADD THEM as new rows with your computed BP. Do not skip them just because they're outside the canonical baseline. The audit catches what you miss but the goal is to NOT miss them in the first place.
+
+If the signal NAMES brands as under-indexers (e.g. "Billie Eilish, Olivia Rodrigo under-index — wrong demo skew"):
+  • Cap those brands BELOW gen-pop baseline (typically 0.3-0.7x), citing the segment reasoning.
+  • Do NOT default them to baseline just because they're mainstream — the persona signal is explicit.
+
+WORKED EXAMPLE — NFL Chiefs audience → MUSICIAN/BAND:
+  Persona signal says "country segment ≈ 35% × engagement ≈ 60% → Morgan Wallen, Zach Bryan, Luke Combs, Jelly Roll, Bailey Zimmerman over-index 18-28%; Taylor Swift +5-10pp Travis halo; Billie Eilish, Olivia Rodrigo under-index."
+    • Morgan Wallen: country core 35% × ~70% + suburban 25% × ~40% + Gen-Z 15% × ~25% + Swift halo 10% × ~15% + casual 15% × ~30% ≈ 44% → add row at 44%, even if Morgan Wallen isn't in the baseline list.
+    • Billie Eilish: country core 35% × ~5% + Gen-Z 15% × ~60% + others × ~15% ≈ 13% → cap at 13%, NOT baseline 24%.
+  This is the audience-driven differentiation the product is built on. Without it, every musician profile looks the same.
+
+If the persona's `category_signals` block does NOT name specific brands for this category (some categories don't get named callouts), fall back to the segment-overlap math above using your own brand knowledge.
 
 ═══════════════════════════════════════════════════════════════════
 US DIGITAL-PANEL ANCHOR DATA — physical reach ceilings
