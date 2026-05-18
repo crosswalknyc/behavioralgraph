@@ -965,13 +965,13 @@ def pull_demographics(
 
 
 def _default_date_window(cfg: dict) -> tuple[str, str]:
-    """Resolve effective (start, end). If user supplied none, default to
-    yesterday only (used by the daily cron). Backfills are detected by the
-    presence of start_date / end_date in the config."""
-    today = date.today()
-    yesterday = today - timedelta(days=1)
-    start = cfg.get("start_date") or yesterday.isoformat()
-    end = cfg.get("end_date") or today.isoformat()
+    """Resolve effective (start, end). Panel data for today hasn't landed
+    yet during the daily cron window, so we cap end_date at yesterday.
+    Backfills are detected by the presence of start_date / end_date in
+    the config."""
+    yesterday = (date.today() - timedelta(days=1)).isoformat()
+    start = cfg.get("start_date") or yesterday
+    end = cfg.get("end_date") or yesterday
     return start, end
 
 

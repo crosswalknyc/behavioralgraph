@@ -29911,8 +29911,20 @@ def submit_sentiment_iq():
             competitor_terms = [str(t).strip() for t in competitor_terms_raw if str(t).strip()]
         else:
             competitor_terms = [t.strip() for t in re.split(r'[,\n]', str(competitor_terms_raw)) if t.strip()]
+
+        # Normalise the date window. A start date with no end date is the
+        # natural "backfill from start through today, then keep going"
+        # request, so we auto-fill the end with yesterday (today's panel
+        # data hasn't landed yet). An end date without a start date is
+        # ambiguous so we reject it.
+        if end_date and not start_date:
+            return jsonify({'error': 'Please provide a Start Date when using an End Date.'}), 400
+        if start_date and not end_date:
+            end_date = (datetime.utcnow().date() - timedelta(days=1)).isoformat()
+        if start_date and end_date and start_date > end_date:
+            return jsonify({'error': 'Start Date must be on or before End Date.'}), 400
         if not ongoing and not (start_date and end_date):
-            return jsonify({'error': 'Either an Ongoing tracker or a start_date+end_date range (or both) is required'}), 400
+            return jsonify({'error': 'Either an Ongoing tracker or a Start Date (or both) is required.'}), 400
 
         # Credit gate - only consume credits when we actually kick off a backfill.
         will_backfill = bool(start_date and end_date)
@@ -29971,10 +29983,17 @@ def submit_sentiment_iq():
                                  args=(job_id, tracker_id),
                                  kwargs={'mode': 'full'},
                                  tool='sentiment_iq', job_id=job_id, username=username)
+            initial_action = 'backfill'
         else:
-            # No backfill - just register the tracker; the cron will pick it up.
-            update_job_status(job_id, status='completed', progress=100,
-                              message='Tracker registered. First refresh runs at the next daily cron.')
+            # Ongoing-only — kick off an initial daily refresh so the
+            # dashboard isn't empty until tomorrow's cron tick. This is
+            # free (same scope as the cron job) and processes yesterday's
+            # panel data.
+            spawn_heavy_analysis(_run_sentiment_iq_job,
+                                 args=(job_id, tracker_id),
+                                 kwargs={'mode': 'daily'},
+                                 tool='sentiment_iq', job_id=job_id, username=username)
+            initial_action = 'initial_daily'
 
         return jsonify({
             'success': True,
@@ -29983,7 +30002,12 @@ def submit_sentiment_iq():
             'will_backfill': will_backfill,
             'ongoing': ongoing,
             'credits_used': CREDITS_SENTIMENT_IQ if will_backfill else 0,
-            'message': 'Sentiment IQ tracker created.',
+            'initial_action': initial_action,
+            'message': (
+                'Sentiment IQ tracker created — backfill in progress.'
+                if will_backfill
+                else 'Sentiment IQ tracker created — running initial refresh now; daily updates will continue.'
+            ),
         })
     except Exception as e:
         import traceback; traceback.print_exc()

@@ -14429,10 +14429,15 @@
                                         <input type="date" id="sentimentIQEndDate" style="width: 100%; padding: 8px 12px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--bg-primary); color: var(--text-primary); font-size: 14px;">
                                     </div>
                                 </div>
+                                <div style="margin-bottom: 0.5rem; font-size: 12px; color: var(--text-secondary); line-height: 1.5;">
+                                    Leave both dates blank for an Ongoing-only tracker (starts fresh tomorrow, free).
+                                    Fill in a <strong>Start Date</strong> only to backfill from that date through yesterday.
+                                    Fill in both for a fixed range. Each backfill costs 10 credits.
+                                </div>
                                 <div style="margin-bottom: 1rem; padding: 12px 14px; background: var(--bg-secondary); border-radius: 8px; border: 1px solid var(--border-color);">
                                     <label style="display: flex; align-items: flex-start; gap: 10px; cursor: pointer;">
                                         <input type="checkbox" id="sentimentIQOngoing" checked style="margin-top: 3px; accent-color: var(--accent-primary);">
-                                        <span style="font-size: 13px;"><strong>Ongoing</strong> &mdash; refresh this tracker every morning via daily cron. Combine with a Start/End Date range to backfill history first, then continue ongoing from today.</span>
+                                        <span style="font-size: 13px;"><strong>Ongoing</strong> &mdash; refresh this tracker every morning via daily cron. Combine with a Start Date to backfill history first, then continue ongoing from there.</span>
                                     </label>
                                 </div>
                                 <div style="margin-bottom: 1.5rem; padding: 12px 14px; background: var(--bg-secondary); border-radius: 8px; border: 1px solid var(--border-color);">
@@ -22261,7 +22266,9 @@
                     if (btn) btn.disabled = false;
                     return;
                 }
-                var msg = resp.will_backfill ? 'Backfilling history... open Sentiment IQ to watch.' : 'Tracker registered. First refresh runs at the next daily cron.';
+                var msg = resp.message || (resp.will_backfill
+                    ? 'Backfilling history... open Sentiment IQ to watch.'
+                    : 'Tracker registered — initial refresh running now.');
                 statusTxt.textContent = msg;
                 bar.style.width = '100%';
                 if (btn) { btn.disabled = false; btn.textContent = 'Create Sentiment IQ Tracker'; }
