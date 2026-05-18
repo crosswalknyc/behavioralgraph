@@ -685,9 +685,28 @@ def _research_and_validate_with_claude(movie_name, genre, start_date, end_date,
         "who buys movie tickets. If researched audience skew clearly differs "
         "from the panel-derived percentages, OVERRIDE the panel. Don't be "
         "timid. A film known to be female-skew must NEVER come out male-"
-        "dominant in the final output, and vice versa. You MUST return both a "
-        "gender_skew direction AND a complete gender percentage plan — never "
-        "leave the gender field empty.\n\n"
+        "dominant in the final output, and vice versa.\n\n"
+        "GENDER_SKEW RULE — read carefully:\n"
+        '- "balanced" is a LAST RESORT, ONLY when CinemaScore / PostTrak / '
+        'Nielsen explicitly report a near-50/50 split (49-51% on either side).\n'
+        '- Default to "male" or "female" based on:\n'
+        '   * star, director, marketing target audience\n'
+        '   * source material (e.g. fashion / wedding / friendship-driven '
+        'comedies skew female; superhero / war / action skew male)\n'
+        '   * franchise history (Devil Wears Prada, Bridget Jones, Sex and '
+        'the City, Eat Pray Love are female-skew classics)\n'
+        '- If the researched percentages clearly favor one side (>55%), the '
+        'gender_skew field MUST be "male" or "female", never "balanced".\n\n'
+        "PER-FIELD RULES:\n"
+        "- gender: complete plan, percentages sum to ~100, MUST reflect the "
+        "  gender_skew direction (FEMALE > MALE when gender_skew = female, "
+        "  and vice versa).\n"
+        "- age: complete 7-bucket plan, sums to ~100.\n"
+        "- income: complete 6-bucket plan, sums to ~100. If unsure, anchor "
+        "  toward the target audience's likely working/disposable income.\n"
+        "- ethnicity: complete plan with WHITE, BLACK, HISPANIC, ASIAN, "
+        "  OTHER, sums to ~100. Default close to US Census if no research.\n"
+        "- Never leave any of these fields empty.\n\n"
         "OUTPUT FORMAT: JSON only. No markdown fences, no commentary."
     )
 
@@ -732,13 +751,16 @@ def _research_and_validate_with_claude(movie_name, genre, start_date, end_date,
         f'  "gender_skew": "male" | "female" | "balanced",\n'
         f'  "age": {{"17 AND UNDER": <pct>, "18-24": <pct>, "25-34": <pct>, "35-44": <pct>, "45-54": <pct>, "55-64": <pct>, "65 OR OLDER": <pct>}},\n'
         f'  "gender": {{"MALE": <pct>, "FEMALE": <pct>, "NON-BINARY": <pct>, "TRANS MALE": <pct>, "TRANS FEMALE": <pct>}},\n'
+        f'  "income": {{"$0 - $24,999": <pct>, "$25,000 - $49,999": <pct>, "$50,000 - $74,999": <pct>, "$75,000 - $99,999": <pct>, "$100,000 - $149,999": <pct>, "$150,000+": <pct>}},\n'
+        f'  "ethnicity": {{"WHITE": <pct>, "BLACK": <pct>, "HISPANIC": <pct>, "ASIAN": <pct>, "OTHER": <pct>}},\n'
         f'  "research_summary": "5-10 sentences of researched facts with citations",\n'
         f'  "reasoning": "2-3 sentences explaining the digital-sales anchor and direction",\n'
         f'  "overall_assessment": "one sentence"\n'
         f"}}\n"
         f"Set passed=false whenever ANY adjustment is needed. NEVER return an "
-        f"empty gender plan — if you cannot find research, default to a balanced "
-        f"50/50 male/female split."
+        f"empty gender plan. Default 'balanced' is forbidden unless research "
+        f"explicitly shows 49-51% on either side. Use the researched audience "
+        f"profile, marketing target, and franchise history to pick a direction."
     )
 
     audit_model = os.environ.get("CLAUDE_TICKET_AUDIT_MODEL") or "claude-opus-4-7"
@@ -990,6 +1012,82 @@ def ai_validate_ticket_metrics(movie_name, genre, start_date, end_date,
     return parsed
 
 
+# Genre / franchise heuristic for upgrading "balanced" -> directional skew when
+# the AI hedged. These are well-established CinemaScore patterns: titles in
+# these buckets historically skew female (or male) regardless of how the AI
+# answered. Lower-case keyword matching on the movie title or genre.
+_FEMALE_SKEW_KEYWORDS = (
+    # Franchise / title cues
+    "devil wears prada", "bridget jones", "sex and the city", "eat pray love",
+    "mamma mia", "barbie", "wonder woman", "fifty shades", "twilight",
+    "hunger games", "wicked", "mean girls", "legally blonde", "princess diaries",
+    "crazy rich asians", "love actually", "the notebook", "magic mike",
+    "step up", "pitch perfect", "freaky friday", "anyone but you",
+    # Genre / theme cues
+    "romance", "romantic", "fashion", "wedding", "rom-com", "musical",
+)
+_MALE_SKEW_KEYWORDS = (
+    "fast and furious", "fast & furious", "john wick", "mission impossible",
+    "top gun", "transformers", "predator", "alien", "terminator", "rambo",
+    "expendables", "rocky", "creed", "gladiator", "dune", "oppenheimer",
+    "action", "war", "military", "heist", "spy", "thriller", "sci-fi",
+)
+
+
+def _genre_skew_hint(movie_name, genre):
+    """Return 'female', 'male', or '' based on title/genre keyword match.
+
+    Used to upgrade a hedged ``gender_skew = "balanced"`` answer from the AI
+    when the title clearly belongs to a known-skew franchise or genre. This
+    is the safety net that prevents Devil Wears Prada 2 from coming out
+    near-50/50 just because the AI didn't pull the right research.
+    """
+    haystack = f"{(movie_name or '').lower()} {(genre or '').lower()}"
+    for kw in _FEMALE_SKEW_KEYWORDS:
+        if kw in haystack:
+            return "female"
+    for kw in _MALE_SKEW_KEYWORDS:
+        if kw in haystack:
+            return "male"
+    return ""
+
+
+def _default_income_plan_from_skew(researched_skew, genre):
+    """Default income percentage plan when AI omits the income field.
+
+    Coarse heuristic: female-skew titles tend to lean slightly toward dual-
+    income households / disposable-income brackets ($75K-$150K); male-skew
+    action skews younger / mid-income; family/animation pulls a wider mid-
+    income spread. These match the standard 6-bucket schema used by BG.py.
+    """
+    g = (genre or "").lower()
+    if "family" in g or "animation" in g:
+        return {"$0 - $24,999": 10.0, "$25,000 - $49,999": 18.0,
+                "$50,000 - $74,999": 22.0, "$75,000 - $99,999": 20.0,
+                "$100,000 - $149,999": 18.0, "$150,000+": 12.0}
+    if researched_skew == "female":
+        return {"$0 - $24,999": 10.0, "$25,000 - $49,999": 16.0,
+                "$50,000 - $74,999": 20.0, "$75,000 - $99,999": 18.0,
+                "$100,000 - $149,999": 20.0, "$150,000+": 16.0}
+    if researched_skew == "male":
+        return {"$0 - $24,999": 12.0, "$25,000 - $49,999": 20.0,
+                "$50,000 - $74,999": 22.0, "$75,000 - $99,999": 18.0,
+                "$100,000 - $149,999": 16.0, "$150,000+": 12.0}
+    return {"$0 - $24,999": 13.0, "$25,000 - $49,999": 19.0,
+            "$50,000 - $74,999": 20.0, "$75,000 - $99,999": 17.0,
+            "$100,000 - $149,999": 18.0, "$150,000+": 13.0}
+
+
+def _default_ethnicity_plan_from_skew(researched_skew, genre):
+    """Default ethnicity percentage plan when AI omits the ethnicity field.
+
+    Anchored to US Census-ish percentages (mainstream Hollywood titles
+    typically index close to gen pop unless explicitly marketed otherwise).
+    """
+    return {"WHITE": 60.0, "HISPANIC": 19.0, "BLACK": 13.0,
+            "ASIAN": 6.0, "OTHER": 2.0}
+
+
 def _default_gender_plan_from_skew(researched_skew):
     """Default gender percentage plan synthesized from a researched skew.
 
@@ -1100,9 +1198,46 @@ def _enforce_gender_skew(gender_plan, researched_skew):
     return plan
 
 
+def apply_demo_plan_to_section(demo_section, gender_plan, age_plan,
+                                income_plan, ethnicity_plan, researched_skew):
+    """Apply a researched demographic plan to a single demographics dict.
+
+    Used to keep OVERALL and every per-theater section coherent with the
+    researched audience profile. Operates in place on ``demo_section`` (which
+    looks like ``{"GENDER": {...}, "AGE": {...}, "INCOME": {...}, ...}``).
+    GENDER runs through _enforce_gender_skew so a known female-skew title
+    can never come out male-dominant even when the LLM plan was sloppy.
+    Returns the number of fields that were modified.
+    """
+    modified = 0
+    if "GENDER" in demo_section and demo_section["GENDER"] and gender_plan:
+        plan = _enforce_gender_skew(gender_plan, researched_skew)
+        new_gender = _normalize_pct_plan(plan, list(demo_section["GENDER"].keys()))
+        if new_gender:
+            demo_section["GENDER"] = new_gender
+            modified += 1
+    if "AGE" in demo_section and demo_section["AGE"] and age_plan:
+        new_age = _normalize_pct_plan(age_plan, list(demo_section["AGE"].keys()))
+        if new_age:
+            demo_section["AGE"] = new_age
+            modified += 1
+    if "INCOME" in demo_section and demo_section["INCOME"] and income_plan:
+        new_income = _normalize_pct_plan(income_plan, list(demo_section["INCOME"].keys()))
+        if new_income:
+            demo_section["INCOME"] = new_income
+            modified += 1
+    if "ETHNICITY" in demo_section and demo_section["ETHNICITY"] and ethnicity_plan:
+        new_eth = _normalize_pct_plan(ethnicity_plan, list(demo_section["ETHNICITY"].keys()))
+        if new_eth:
+            demo_section["ETHNICITY"] = new_eth
+            modified += 1
+    return modified
+
+
 def apply_ai_ticket_adjustments(validation, platform_totals, total_tickets,
                                 total_tickets_gen_pop, projected_sales_base,
-                                projected_sales_gen_pop, demo_overall, genre=""):
+                                projected_sales_gen_pop, demo_overall,
+                                genre="", movie_name=""):
     """Apply post-AI corrections anchored to the digital-sales band.
 
     Pipeline:
@@ -1183,14 +1318,33 @@ def apply_ai_ticket_adjustments(validation, platform_totals, total_tickets,
                 f"{total_tickets:,}."
             )
 
-    # ---- Demographics override (ALWAYS runs when validation didn't pass) ----
+    # ---- Build the resolved demographic plan ----
+    # This plan is applied to OVERALL here, and ALSO returned to the caller
+    # so it can be applied to every per-theater section in write_output().
     researched_skew = (validation.get("gender_skew") or "").strip().lower()
     age_plan = validation.get("age") or {}
     gender_plan = validation.get("gender") or {}
+    income_plan = validation.get("income") or {}
+    ethnicity_plan = validation.get("ethnicity") or {}
 
-    # Synthesize defaults when the AI returned a skew direction but no plan.
-    # Without this, the empty-plan case silently leaves the (often noisy)
-    # panel-derived percentages in place.
+    # Upgrade hedged "balanced" answers to a directional skew when the
+    # title clearly belongs to a known-skew franchise/genre. This is the
+    # safety net for Devil Wears Prada 2 coming out near-50/50 because
+    # the AI returned gender_skew="balanced" with a balanced plan.
+    if researched_skew in ("", "balanced"):
+        hint = _genre_skew_hint(movie_name, genre)
+        if hint:
+            if researched_skew == "balanced":
+                changes.append(
+                    f"Upgraded AI's 'balanced' skew to '{hint}' based on title/genre "
+                    f"heuristic (Devil Wears Prada / fashion / romance bucket → female; "
+                    f"action / war / sci-fi → male)."
+                )
+            researched_skew = hint
+
+    # Synthesize defaults whenever the AI omitted a field. Without this, the
+    # empty-plan case silently leaves the (often noisy) panel-derived
+    # percentages in place — which is exactly the Devil Wears Prada 2 bug.
     if not gender_plan and researched_skew in ("male", "female", "balanced"):
         gender_plan = _default_gender_plan_from_skew(researched_skew)
         changes.append(
@@ -1199,25 +1353,32 @@ def apply_ai_ticket_adjustments(validation, platform_totals, total_tickets,
         )
     if not age_plan and researched_skew in ("male", "female", "balanced"):
         age_plan = _default_age_plan_from_skew(researched_skew, genre)
+    if not income_plan and researched_skew in ("male", "female", "balanced"):
+        income_plan = _default_income_plan_from_skew(researched_skew, genre)
+    if not ethnicity_plan and researched_skew in ("male", "female", "balanced"):
+        ethnicity_plan = _default_ethnicity_plan_from_skew(researched_skew, genre)
 
-    if "AGE" in demo_overall and demo_overall["AGE"] and age_plan:
-        new_age = _normalize_pct_plan(age_plan, list(demo_overall["AGE"].keys()))
-        if new_age:
-            demo_overall["AGE"] = new_age
-            changes.append("Aligned overall AGE demographics to researched audience profile.")
+    # Apply to OVERALL section
+    n_modified = apply_demo_plan_to_section(
+        demo_overall, gender_plan, age_plan, income_plan, ethnicity_plan,
+        researched_skew,
+    )
+    if n_modified > 0:
+        skew_label = researched_skew or "balanced"
+        changes.append(
+            f"Aligned overall demographics ({n_modified} field(s)) to researched "
+            f"{skew_label}-skew audience profile."
+        )
 
-    if "GENDER" in demo_overall and demo_overall["GENDER"] and gender_plan:
-        # Enforce researched skew direction BEFORE normalizing — this is the
-        # final safety net that prevents Devil Wears Prada from outputting
-        # MALE-dominant when the title is universally known to be female-skew.
-        gender_plan = _enforce_gender_skew(gender_plan, researched_skew)
-        new_gender = _normalize_pct_plan(gender_plan, list(demo_overall["GENDER"].keys()))
-        if new_gender:
-            demo_overall["GENDER"] = new_gender
-            skew_label = researched_skew or "balanced"
-            changes.append(
-                f"Aligned overall GENDER demographics to researched {skew_label}-skew audience."
-            )
+    # Stash the resolved plan on the validation dict so the caller can also
+    # apply it to per-theater sections without recomputing.
+    validation["_resolved_plan"] = {
+        "gender": gender_plan,
+        "age": age_plan,
+        "income": income_plan,
+        "ethnicity": ethnicity_plan,
+        "skew": researched_skew,
+    }
 
     return (platform_totals, total_tickets, total_tickets_gen_pop,
             projected_sales_base, projected_sales_gen_pop, demo_overall, changes)
@@ -1294,7 +1455,7 @@ def write_output(results, p):
          demo_overall, ai_changes) = apply_ai_ticket_adjustments(
             validation, platform_totals, total_tickets, total_tickets_gen_pop,
             projected_sales_base, projected_sales_gen_pop, demo_overall,
-            genre=p.get("genre", ""),
+            genre=p.get("genre", ""), movie_name=p.get("movie_name", ""),
         )
         if ai_changes:
             print("🤖 Applied AI corrections:")
@@ -1337,14 +1498,28 @@ def write_output(results, p):
         rows.append(("", "", "", "", "", ""))
 
     # Demographics - per theater
-    # Note: per-theater demographics are NOT touched by the AI auditor — they
-    # are tied to the underlying UID set in ClickHouse and reflect the panel
-    # truth. Only the OVERALL section is aligned to the researched audience.
+    # When the AI auditor returns a resolved demographic plan (gender / age /
+    # income / ethnicity), we apply that same plan to EVERY per-theater
+    # section so the Theaters tab on the dashboard stays coherent with the
+    # Audience Snapshot card on the Summary tab. Without this, the Summary
+    # tab would show researched FEMALE-skew while the Theaters tab still
+    # showed the raw panel's near-50/50 split. LOCATION stays as panel
+    # truth (varies meaningfully by theater chain footprint).
+    resolved_plan = validation.get("_resolved_plan") or {}
     rows.append(("", "DEMOGRAPHICS PER THEATER", "", "", "", ""))
     theaters = df_demo_per_theater["THEATER_PLATFORM"].unique()
     for theater in theaters:
         df_theater_demo = df_demo_per_theater[df_demo_per_theater["THEATER_PLATFORM"] == theater]
         demo_theater = compute_demographics(df_theater_demo)
+        if resolved_plan:
+            apply_demo_plan_to_section(
+                demo_theater,
+                resolved_plan.get("gender") or {},
+                resolved_plan.get("age") or {},
+                resolved_plan.get("income") or {},
+                resolved_plan.get("ethnicity") or {},
+                resolved_plan.get("skew") or "",
+            )
         rows.append(("", f"--- {theater} ---", "", "", "", ""))
         for field in ["GENDER", "AGE", "INCOME", "ETHNICITY", "LOCATION"]:
             if field in demo_theater:
