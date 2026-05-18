@@ -103,10 +103,10 @@ def get_clickhouse_throttle_stats() -> dict:
             'total_wait_secs': round(_CH_QUERY_STATS['total_wait'], 2),
         }
 
-CH_HOST       = os.environ.get('CH_HOST',       '37.27.140.111')
+CH_HOST       = os.environ.get('CH_HOST',       '168.119.215.48')
 CH_PORT       = int(os.environ.get('CH_PORT',   '8123'))
-CH_USER       = os.environ.get('CH_USER',       'bgapp')
-CH_PASSWORD   = os.environ.get('CH_PASSWORD',   '4qPllwDG+S3PptBWTRAJPTkpCzkRZ6tZ')
+CH_USER       = os.environ.get('CH_USER',       'jessie')
+CH_PASSWORD   = os.environ.get('CH_PASSWORD',   '5Icl8SvwmzWMiZUNMZfv')
 CH_DATABASE   = os.environ.get('CH_DATABASE',   'clickstream')
 
 
