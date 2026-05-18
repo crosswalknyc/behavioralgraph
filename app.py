@@ -11963,7 +11963,12 @@ def parse_ticket_sales_tracker_csv(csv_content):
         'demographics_per_theater': {},
         'ai_validation': {
             'status': None,           # 'PASS' | 'FLAGGED' | None
+            'auditor_model': '',      # e.g. 'claude-opus-4-7' | 'gpt-4o'
             'assessment': '',
+            'reasoning': '',
+            'scale_direction': '',    # 'UP' | 'DOWN' | ''
+            'scale_factor': None,     # float | None
+            'researched_gender_skew': '',  # 'MALE' | 'FEMALE' | 'BALANCED'
             'researched_domestic_gross_usd': None,
             'researched_gross_source': '',
             'flags': [],
@@ -12061,8 +12066,29 @@ def parse_ticket_sales_tracker_csv(csv_content):
             av = parsed['ai_validation']
             if cat == 'Validation Status':
                 av['status'] = (proj or val or '').strip().upper() or None
+            elif cat == 'Auditor Model':
+                av['auditor_model'] = (proj or val).strip()
             elif cat == 'Assessment':
                 av['assessment'] = proj or val
+            elif cat == 'Reasoning':
+                av['reasoning'] = proj or val
+            elif cat == 'Scale Direction':
+                # Stored format: "UP (factor 5.123)" or "DOWN (factor 0.260)"
+                txt = (proj or val).strip()
+                if txt:
+                    upper = txt.upper()
+                    if upper.startswith('UP'):
+                        av['scale_direction'] = 'UP'
+                    elif upper.startswith('DOWN'):
+                        av['scale_direction'] = 'DOWN'
+                    m_factor = re.search(r'factor\s+([\d.]+)', txt, re.IGNORECASE)
+                    if m_factor:
+                        try:
+                            av['scale_factor'] = float(m_factor.group(1))
+                        except ValueError:
+                            pass
+            elif cat == 'Researched Gender Skew':
+                av['researched_gender_skew'] = (proj or val).strip().upper()
             elif cat == 'Researched US Domestic Gross':
                 av['researched_gross_source'] = note
                 gross_num = _parse_num(proj or val)

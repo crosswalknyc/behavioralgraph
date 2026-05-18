@@ -541,19 +541,196 @@ def _default_ticket_demo_plan(genre):
 
 
 # ===========================================================================
-# === AI Validation Pipeline (Box-Office anchored, SVOD-IQ style)         ===
+# === AI Validation Pipeline (Box-Office anchored, Claude-first)         ===
 # ===========================================================================
-# This pipeline mirrors SVOD_Churn_Attribution.py:ai_validate_metrics /
-# apply_ai_adjustments. The goal is an AUDITED Ticket Sales Tracker output:
-# real US domestic box office is fetched from the web (Box Office Mojo / The
-# Numbers / Variety / Deadline / THR) and used as ground truth. Our projected
-# ticket sales are then anchored to the researched gross — downward-only;
-# we never inflate. Demographics are aligned to the researched audience
-# skew. A structured "AI VALIDATION" block (PASS/FLAGGED + flags + research
-# summary) is appended to the CSV so the analyst delivering the report can
-# see exactly what the agent checked and what it changed.
+# Two-tier auditor:
+#   1) PRIMARY — Claude (Opus 4.7 with native web_search, Sonnet 4.6 fallback)
+#      researches the real US domestic box office from Box Office Mojo / The
+#      Numbers / Variety / Deadline / THR, audits our projected ticket sales
+#      against that gross, and returns a structured JSON plan including a
+#      BIDIRECTIONAL scale factor (we may scale UP if under-projecting OR
+#      DOWN if over-projecting), an audience-skew override, and a research
+#      summary with citations. This mirrors the same Claude-audit pattern
+#      used by BG.py's hybrid reasoning path.
+#   2) FALLBACK — when ANTHROPIC_API_KEY is missing or the Claude call fails,
+#      fall back to the GPT-4o web-search + audit pair below.
+#
+# A structured "AI VALIDATION" block (PASS/FLAGGED + flags + research
+# summary + applied adjustments + model used) is appended to the CSV so
+# the analyst can see exactly what was checked and what changed.
 
 _box_office_cache = {}
+
+# Anthropic web-search tool descriptors. Mirror BG hybrid_reasoning.py:
+# prefer the 2026-02-09 tool (Opus 4.6+ / Sonnet 4.6+); fall back to the
+# 2025-03-05 tool for accounts that don't yet have the newer descriptor.
+_ANTHROPIC_WEB_SEARCH = {
+    "type": "web_search_20260209",
+    "name": "web_search",
+    "max_uses": 8,
+}
+_ANTHROPIC_WEB_SEARCH_LEGACY = {
+    "type": "web_search_20250305",
+    "name": "web_search",
+    "max_uses": 8,
+}
+
+
+def _load_claude_helpers():
+    """Import the Claude wrapper used elsewhere in the repo (BG.py).
+
+    Returns (claude_messages, get_claude_client) or (None, None) on failure.
+    The repo's migration/ folder is on sys.path via the top-of-file shim, so
+    both `claude_client` and `migration.claude_client` resolve.
+    """
+    try:
+        from claude_client import claude_messages, get_claude_client  # type: ignore
+        return claude_messages, get_claude_client
+    except Exception:
+        pass
+    try:
+        from migration.claude_client import claude_messages, get_claude_client  # type: ignore
+        return claude_messages, get_claude_client
+    except Exception:
+        return None, None
+
+
+def _research_and_validate_with_claude(movie_name, genre, start_date, end_date,
+                                        platform_totals, total_tickets,
+                                        total_tickets_gen_pop, projected_sales_base,
+                                        projected_sales_gen_pop, demo_overall):
+    """One-shot Claude call: web-search + audit + structured JSON.
+
+    Uses native Anthropic web_search so the model researches Box Office Mojo /
+    The Numbers / Variety / Deadline / THR inline rather than relying on a
+    separate research step. Allows BIDIRECTIONAL anchoring (scale up if
+    under-projecting, down if over-projecting). Returns the parsed JSON dict
+    plus a ``_model_used`` key, or None on failure.
+    """
+    claude_messages, get_claude_client = _load_claude_helpers()
+    if claude_messages is None or get_claude_client is None:
+        return None
+    if get_claude_client() is None:
+        return None
+
+    platform_breakdown = "\n".join(
+        f"  - {plat}: {hits:,} hits" for plat, hits in platform_totals.items()
+    )
+
+    system = (
+        "You are a senior box-office research analyst auditing a US-only ticket sales "
+        "projection produced by a 10M-person behavioral panel. Your job has THREE "
+        "stages, executed in order:\n\n"
+        "(1) RESEARCH. Use web_search to find REAL US domestic box office for the "
+        "film. Prioritize Box Office Mojo and The Numbers for the dollar figures. "
+        "For very recent releases (still in theaters), Variety, Deadline, and THR "
+        "weekend recaps are acceptable. Always cite the source for each figure.\n\n"
+        "(2) AUDIENCE RESEARCH. Use web_search to find primary audience age and "
+        "gender skew. Look at Variety audience reports, Nielsen, Samba TV, "
+        "EntTelligence, ComScore PostTrak, CinemaScore exit polls, and major trade "
+        "press. State whether the title is male-skew, female-skew, or balanced and "
+        "the approximate percentages.\n\n"
+        "(3) AUDIT. Compare our panel projection to the researched gross.\n\n"
+        "ADJUSTMENT RULES — read carefully:\n"
+        "- Scaling is BIDIRECTIONAL. If our projected sales are MUCH LOWER than "
+        "  the researched US gross, you MUST scale UP. If MUCH HIGHER, you MUST "
+        "  scale DOWN. The panel is just a sample — under-projection is just as "
+        "  much of a credibility failure as over-projection.\n"
+        "- Target: projected_sales_gen_pop should land at approximately 1.0x the "
+        "  researched US domestic gross (acceptable range 0.85x-1.10x).\n"
+        "- For demographics: the panel reflects who has time to browse on a "
+        "  research panel, NOT who buys movie tickets. If researched audience "
+        "  skew clearly differs from the panel-derived percentages, OVERRIDE the "
+        "  panel. Don't be timid. A film known to be female-skew must NEVER come "
+        "  out male-dominant in the final output, and vice versa.\n\n"
+        "OUTPUT FORMAT: JSON only. No markdown fences, no commentary."
+    )
+
+    user = (
+        f"MOVIE: {movie_name}\n"
+        f"GENRE: {genre}\n"
+        f"DATE RANGE: {start_date} to {end_date}\n\n"
+        f"PER-PLATFORM HITS (already boosted, sum to Total Tickets):\n{platform_breakdown}\n\n"
+        f"OUR PROJECTIONS (panel-derived, projected from {SAMPLE_REPRESENTS:,} to US pop):\n"
+        f"- Total Tickets (panel, boosted): {total_tickets:,}\n"
+        f"- Total Tickets (US Gen Pop): {total_tickets_gen_pop:,.0f}\n"
+        f"- Projected Sales (US Gen Pop): ${projected_sales_gen_pop:,.0f}\n\n"
+        f"CURRENT OVERALL DEMOGRAPHICS (from panel):\n{demo_overall}\n\n"
+        f"INSTRUCTIONS:\n"
+        f"1. Run web_search queries to find the REAL US domestic gross for this title "
+        f"   (gross to date, opening weekend, wide release date, is-still-in-theaters).\n"
+        f"2. Run web_search queries to find primary audience age + gender skew.\n"
+        f"3. Audit our projection. Compute: real_gross / our_projected_sales = scale factor.\n"
+        f"4. Return the JSON shown below — every field is required.\n\n"
+        f"Return JSON ONLY in this shape:\n"
+        f"{{\n"
+        f'  "passed": false,\n'
+        f'  "tickets_plausible": <bool>,\n'
+        f'  "sales_plausible": <bool>,\n'
+        f'  "demographics_plausible": <bool>,\n'
+        f'  "researched_domestic_gross_usd": <number>,\n'
+        f'  "research_sources": ["Box Office Mojo", "Variety", "..."],\n'
+        f'  "flags": ["each concern as a complete sentence"],\n'
+        f'  "scale_direction": "up" | "down" | "none",\n'
+        f'  "scale_factor_midpoint": <decimal; e.g. 5.0 means our number is 5x too low, '
+        f'0.25 means we are 4x too high>,\n'
+        f'  "suggested_projected_sales_range_genpop": [<low_usd>, <high_usd>],\n'
+        f'  "suggested_total_tickets_range_genpop": [<low>, <high>],\n'
+        f'  "gender_skew": "male" | "female" | "balanced",\n'
+        f'  "age": {{"17 AND UNDER": <pct>, "18-24": <pct>, "25-34": <pct>, "35-44": <pct>, "45-54": <pct>, "55-64": <pct>, "65 OR OLDER": <pct>}},\n'
+        f'  "gender": {{"MALE": <pct>, "FEMALE": <pct>, "NON-BINARY": <pct>, "TRANS MALE": <pct>, "TRANS FEMALE": <pct>}},\n'
+        f'  "research_summary": "5-10 sentences of researched facts with citations",\n'
+        f'  "reasoning": "2-3 sentences explaining the adjustment",\n'
+        f'  "overall_assessment": "one sentence"\n'
+        f"}}\n"
+        f"Set passed=false whenever ANY adjustment is needed. The whole point of this "
+        f"audit is to anchor the dashboard to reality — don't be timid about flagging."
+    )
+
+    audit_model = os.environ.get("CLAUDE_TICKET_AUDIT_MODEL") or "claude-opus-4-7"
+
+    print(f"   🧠 Asking Claude ({audit_model}) to research + audit ticket sales...")
+    raw = claude_messages(
+        system=system,
+        user=user,
+        model=audit_model,
+        max_tokens=6000,
+        temperature=0.2,
+        tools=[_ANTHROPIC_WEB_SEARCH],
+    )
+    used_model = audit_model
+    if not raw:
+        fallback_model = "claude-sonnet-4-6"
+        print(f"   🔁 Retrying Claude audit with {fallback_model} + legacy web_search")
+        raw = claude_messages(
+            system=system,
+            user=user,
+            model=fallback_model,
+            max_tokens=6000,
+            temperature=0.2,
+            tools=[_ANTHROPIC_WEB_SEARCH_LEGACY],
+        )
+        used_model = fallback_model
+    if not raw:
+        return None
+
+    parsed = _extract_json_object(raw)
+    if not parsed:
+        # Some Claude responses include commentary plus an embedded fenced JSON
+        # block. Strip fences and retry once.
+        cleaned = raw.strip()
+        if cleaned.startswith("```"):
+            cleaned = cleaned.strip("`")
+            if cleaned.lstrip().lower().startswith("json"):
+                cleaned = cleaned.split("\n", 1)[1] if "\n" in cleaned else cleaned
+        parsed = _extract_json_object(cleaned)
+    if not parsed:
+        print("   ⚠️  Claude audit returned no parseable JSON")
+        return None
+
+    parsed["_model_used"] = used_model
+    parsed["research"] = (parsed.get("research_summary") or "").strip()
+    return parsed
 
 
 def _research_box_office(client, movie_name):
@@ -607,12 +784,31 @@ def ai_validate_ticket_metrics(movie_name, genre, start_date, end_date,
                                 demo_overall):
     """Validate Ticket Sales Tracker output against web-researched box-office truth.
 
-    Mirrors SVOD_Churn_Attribution.py:ai_validate_metrics. Returns a structured
-    dict with: passed, tickets_plausible, sales_plausible, demographics_plausible,
-    flags, suggested ranges (downward-only), researched_domestic_gross_usd, an
-    age/gender plan, and a one-sentence overall_assessment. Only ever suggests
-    DOWNWARD adjustments; the apply step anchors to the real US domestic gross.
+    PRIMARY path: Claude (Opus 4.7 → Sonnet 4.6) with native web_search does
+    research + audit in a single call. Returns structured JSON with a
+    BIDIRECTIONAL scale factor, audience-skew override, and citations.
+
+    FALLBACK path: GPT-4o-search-preview (research) + GPT-4o (audit). Same
+    JSON schema. Triggered only when ANTHROPIC_API_KEY is missing or the
+    Claude call fails. The fallback also supports bidirectional scaling.
     """
+    # Try Claude first — this is the higher-reasoning path.
+    claude_result = _research_and_validate_with_claude(
+        movie_name=movie_name,
+        genre=genre,
+        start_date=start_date,
+        end_date=end_date,
+        platform_totals=platform_totals,
+        total_tickets=total_tickets,
+        total_tickets_gen_pop=total_tickets_gen_pop,
+        projected_sales_base=projected_sales_base,
+        projected_sales_gen_pop=projected_sales_gen_pop,
+        demo_overall=demo_overall,
+    )
+    if claude_result:
+        return claude_result
+
+    # ----------------- GPT-4o fallback path -----------------
     try:
         from openai import OpenAI
         api_key = os.environ.get("OPENAI_API_KEY")
@@ -620,9 +816,10 @@ def ai_validate_ticket_metrics(movie_name, genre, start_date, end_date,
             return {
                 "passed": True,
                 "flags": [],
-                "note": "No OpenAI key; skipping validation",
+                "note": "No OpenAI/Anthropic key; skipping validation",
                 "research": "",
-                "overall_assessment": "Validation skipped — no OPENAI_API_KEY configured.",
+                "overall_assessment": "Validation skipped — no API keys configured.",
+                "_model_used": "none",
             }
         client = OpenAI(api_key=api_key)
     except Exception as e:
@@ -632,6 +829,7 @@ def ai_validate_ticket_metrics(movie_name, genre, start_date, end_date,
             "note": f"OpenAI not available: {e}",
             "research": "",
             "overall_assessment": "Validation skipped — OpenAI client unavailable.",
+            "_model_used": "none",
         }
 
     research = _research_box_office(client, movie_name)
@@ -659,20 +857,21 @@ def ai_validate_ticket_metrics(movie_name, genre, start_date, end_date,
         f"- Projected Ticket Sales (US Gen Pop): ${projected_sales_gen_pop:,.0f}\n\n"
         f"CURRENT OVERALL DEMOGRAPHICS: {demo_overall}\n"
         f"{research_block}\n"
-        f"=== PHASE A: VALIDATE TICKETS & SALES ===\n"
+        f"=== PHASE A: VALIDATE TICKETS & SALES (BIDIRECTIONAL) ===\n"
         f"Compare our 'US Gen Pop projected' sales to the REAL US domestic gross above.\n"
-        f"- ANCHOR rule: projected_sales_gen_pop should NOT exceed the researched US domestic gross.\n"
-        f"  If the film is still in theatrical release, a small headroom is acceptable but never\n"
-        f"  more than ~1.1x the most recent gross.\n"
-        f"- If the panel projection is clearly inflated (e.g. panel says $1.2B, BOM says $310M),\n"
-        f"  flag it and suggest a DOWNWARD-only range.\n"
-        f"- Tickets implied by gross = gross / $11 (avg US ticket price). Cross-check.\n"
-        f"- NEVER suggest an upward adjustment.\n\n"
+        f"- TARGET: projected_sales_gen_pop should land at ~1.0x the researched US gross\n"
+        f"  (acceptable range 0.85x-1.10x).\n"
+        f"- If our number is MUCH HIGHER than the gross, suggest a DOWN-scale.\n"
+        f"- If our number is MUCH LOWER than the gross, suggest an UP-scale. Under-\n"
+        f"  projection is just as much of a credibility failure as over-projection.\n"
+        f"- Tickets implied by gross = gross / $11 (avg US ticket price). Cross-check.\n\n"
         f"=== PHASE B: VALIDATE DEMOGRAPHICS ===\n"
         f"Compare our AGE/GENDER skew to the researched primary audience.\n"
-        f"- If research says male-skew but our panel shows female-skew (or vice versa), align\n"
-        f"  the final percentages to the researched skew.\n"
-        f"- Do NOT invert known audience skew.\n\n"
+        f"- The panel reflects who has time to browse online, NOT who buys tickets.\n"
+        f"- If research says male-skew but our panel shows female-skew (or vice versa),\n"
+        f"  OVERRIDE the panel with the researched percentages. Do NOT be timid.\n"
+        f"- A known female-skew title must NEVER come out male-dominant in the final\n"
+        f"  output, and vice versa.\n\n"
         f"=== PHASE C: EDGE CASES ===\n"
         f"- Short windows (1-2 weekends) naturally produce smaller numbers — don't flag low.\n"
         f"- Indie / limited / arthouse releases have modest numbers — that is expected.\n"
@@ -687,6 +886,8 @@ def ai_validate_ticket_metrics(movie_name, genre, start_date, end_date,
         f'  "demographics_plausible": true/false,\n'
         f'  "demographics_note": "brief explanation",\n'
         f'  "flags": ["specific concerns if any"],\n'
+        f'  "scale_direction": "up" | "down" | "none",\n'
+        f'  "scale_factor_midpoint": <decimal; e.g. 5.0 means our number is 5x too low>,\n'
         f'  "suggested_total_tickets_range_genpop": [low, high],\n'
         f'  "suggested_projected_sales_range_genpop": [low, high],\n'
         f'  "researched_domestic_gross_usd": <number or null>,\n'
@@ -694,6 +895,7 @@ def ai_validate_ticket_metrics(movie_name, genre, start_date, end_date,
         f'  "gender_skew": "male|female|balanced",\n'
         f'  "age": {{"17 AND UNDER": <pct>, "18-24": <pct>, "25-34": <pct>, "35-44": <pct>, "45-54": <pct>, "55-64": <pct>, "65 OR OLDER": <pct>}},\n'
         f'  "gender": {{"MALE": <pct>, "FEMALE": <pct>, "NON-BINARY": <pct>, "TRANS MALE": <pct>, "TRANS FEMALE": <pct>}},\n'
+        f'  "reasoning": "2-3 sentences",\n'
         f'  "overall_assessment": "one-sentence summary"\n'
         f"}}"
     )
@@ -713,6 +915,7 @@ def ai_validate_ticket_metrics(movie_name, genre, start_date, end_date,
             "note": f"AI validation error: {e}",
             "research": research,
             "overall_assessment": "Validation skipped — OpenAI call failed.",
+            "_model_used": "gpt-4o",
         }
 
     if not parsed:
@@ -722,29 +925,69 @@ def ai_validate_ticket_metrics(movie_name, genre, start_date, end_date,
             "note": "AI returned no JSON; skipping",
             "research": research,
             "overall_assessment": "Validation skipped — no parseable JSON returned.",
+            "_model_used": "gpt-4o",
         }
 
     parsed["research"] = research
+    parsed["_model_used"] = "gpt-4o"
     return parsed
+
+
+def _enforce_gender_skew(gender_plan, researched_skew):
+    """Ensure the gender plan reflects the researched skew direction.
+
+    If researched skew is "female" but the plan has MALE >= FEMALE, swap the
+    two percentages. Same for "male" with FEMALE >= MALE. This is a hard
+    safety net for cases where the LLM returns demographically wrong
+    percentages despite explicit instructions (e.g. Devil Wears Prada
+    coming out male-dominant). Non-binary / trans buckets are preserved
+    untouched. Returns the (possibly swapped) plan dict.
+    """
+    if not gender_plan or researched_skew not in ("male", "female"):
+        return gender_plan
+    plan = dict(gender_plan)
+
+    def _pct(key):
+        try:
+            return float(plan.get(key, 0))
+        except (ValueError, TypeError):
+            return 0.0
+
+    male_pct = _pct("MALE")
+    female_pct = _pct("FEMALE")
+    if researched_skew == "female" and male_pct > female_pct:
+        plan["MALE"], plan["FEMALE"] = female_pct, male_pct
+    elif researched_skew == "male" and female_pct > male_pct:
+        plan["MALE"], plan["FEMALE"] = female_pct, male_pct
+    return plan
 
 
 def apply_ai_ticket_adjustments(validation, platform_totals, total_tickets,
                                 total_tickets_gen_pop, projected_sales_base,
                                 projected_sales_gen_pop, demo_overall):
-    """Apply DOWNWARD-only corrections from ai_validate_ticket_metrics.
+    """Apply BIDIRECTIONAL corrections from ai_validate_ticket_metrics.
 
-    Anchors projected sales to the researched US domestic gross: if the AI's
-    suggested midpoint is below our projected sales, we scale every downstream
-    quantity (per-platform hits, total tickets, both gen-pop projections, and
-    both dollar figures) by the same factor so the rows still add up. Then
-    aligns overall AGE/GENDER demographics to the researched audience skew
-    (per-theater demographics are tied to underlying UIDs and left untouched).
+    Anchors projected sales to the researched US domestic gross in EITHER
+    direction:
+      * panel over-projects (e.g. $1.2B vs BOM $310M) → scale DOWN
+      * panel under-projects (e.g. $34M vs BOM $170M)  → scale UP
+    Per-platform hits, total tickets, both gen-pop projections, and both
+    dollar figures all scale by the same factor so the rows still add up.
+
+    Demographics override is now MANDATORY (no longer gated on the model's
+    own ``demographics_plausible`` self-assessment). When the AI returns an
+    age/gender plan, we apply it. We then run _enforce_gender_skew so a
+    known female-skew title can never come out male-dominant — even if the
+    LLM regressed and returned percentages that contradicted its own
+    ``gender_skew`` field. Per-theater demographics stay untouched since
+    they're tied to actual ClickHouse UID joins.
     """
     changes = []
     if validation.get("passed", True):
         return (platform_totals, total_tickets, total_tickets_gen_pop,
                 projected_sales_base, projected_sales_gen_pop, demo_overall, changes)
 
+    # ---- Bidirectional sales/tickets anchoring ----
     suggested_sales = validation.get("suggested_projected_sales_range_genpop") or []
     target_sales = None
     if isinstance(suggested_sales, list) and len(suggested_sales) == 2:
@@ -756,43 +999,66 @@ def apply_ai_ticket_adjustments(validation, platform_totals, total_tickets,
         except (ValueError, TypeError):
             target_sales = None
 
-    if (target_sales is not None
-            and projected_sales_gen_pop > 0
-            and target_sales < projected_sales_gen_pop):
-        factor = max(0.05, target_sales / projected_sales_gen_pop)
-        old_sales = projected_sales_gen_pop
-        old_total_tickets = total_tickets
-        projected_sales_gen_pop *= factor
-        projected_sales_base *= factor
-        total_tickets_gen_pop *= factor
-        total_tickets = max(0, int(round(total_tickets * factor)))
-        platform_totals = {
-            plat: max(0, int(round(hits * factor)))
-            for plat, hits in platform_totals.items()
-        }
+    # Secondary fallback: if no explicit suggested range, use the researched
+    # gross directly as the anchor (assume 1.0x of real US domestic gross).
+    if target_sales is None or target_sales <= 0:
         researched_gross = validation.get("researched_domestic_gross_usd")
-        gross_note = ""
         if isinstance(researched_gross, (int, float)) and researched_gross > 0:
-            gross_note = f" (anchored to researched US domestic gross ~${researched_gross:,.0f})"
-        changes.append(
-            f"Scaled per-platform hits, total tickets, and projected sales by {factor:.3f}"
-            f"{gross_note}: projected sales ${old_sales:,.0f} -> ${projected_sales_gen_pop:,.0f}; "
-            f"total tickets {old_total_tickets:,} -> {total_tickets:,}."
-        )
+            target_sales = float(researched_gross)
 
-    if not validation.get("demographics_plausible", True):
-        if "AGE" in demo_overall and demo_overall["AGE"]:
-            age_plan = validation.get("age") or {}
-            new_age = _normalize_pct_plan(age_plan, list(demo_overall["AGE"].keys()))
-            if new_age:
-                demo_overall["AGE"] = new_age
-                changes.append("Aligned overall AGE demographics to researched audience profile.")
-        if "GENDER" in demo_overall and demo_overall["GENDER"]:
-            gender_plan = validation.get("gender") or {}
-            new_gender = _normalize_pct_plan(gender_plan, list(demo_overall["GENDER"].keys()))
-            if new_gender:
-                demo_overall["GENDER"] = new_gender
-                changes.append("Aligned overall GENDER demographics to researched audience profile.")
+    if target_sales is not None and projected_sales_gen_pop > 0 and target_sales > 0:
+        raw_factor = target_sales / projected_sales_gen_pop
+        # Bounds: 0.05x down to 25x up. The upward ceiling is generous because
+        # panel under-projection by 5-10x is plausible for mainstream titles
+        # whose audience under-indexes on online research panels.
+        factor = max(0.05, min(25.0, raw_factor))
+        # Only adjust if meaningfully different (more than ±5% off target).
+        if abs(factor - 1.0) > 0.05:
+            old_sales = projected_sales_gen_pop
+            old_total_tickets = total_tickets
+            projected_sales_gen_pop *= factor
+            projected_sales_base *= factor
+            total_tickets_gen_pop *= factor
+            total_tickets = max(0, int(round(total_tickets * factor)))
+            platform_totals = {
+                plat: max(0, int(round(hits * factor)))
+                for plat, hits in platform_totals.items()
+            }
+            arrow = "↑" if factor > 1.0 else "↓"
+            researched_gross = validation.get("researched_domestic_gross_usd")
+            gross_note = ""
+            if isinstance(researched_gross, (int, float)) and researched_gross > 0:
+                gross_note = f" (anchored to researched US domestic gross ~${researched_gross:,.0f})"
+            changes.append(
+                f"{arrow} Scaled per-platform hits, total tickets, and projected sales by "
+                f"{factor:.3f}{gross_note}: projected sales ${old_sales:,.0f} -> "
+                f"${projected_sales_gen_pop:,.0f}; total tickets {old_total_tickets:,} -> "
+                f"{total_tickets:,}."
+            )
+
+    # ---- Demographics override (now MANDATORY when AI returns a plan) ----
+    age_plan = validation.get("age") or {}
+    gender_plan = validation.get("gender") or {}
+    researched_skew = (validation.get("gender_skew") or "").strip().lower()
+
+    if "AGE" in demo_overall and demo_overall["AGE"] and age_plan:
+        new_age = _normalize_pct_plan(age_plan, list(demo_overall["AGE"].keys()))
+        if new_age:
+            demo_overall["AGE"] = new_age
+            changes.append("Aligned overall AGE demographics to researched audience profile.")
+
+    if "GENDER" in demo_overall and demo_overall["GENDER"] and gender_plan:
+        # Enforce researched skew direction BEFORE normalizing — this is the
+        # safety net that prevents Devil Wears Prada from outputting MALE
+        # dominant when the title is universally known to be female-skew.
+        gender_plan = _enforce_gender_skew(gender_plan, researched_skew)
+        new_gender = _normalize_pct_plan(gender_plan, list(demo_overall["GENDER"].keys()))
+        if new_gender:
+            demo_overall["GENDER"] = new_gender
+            skew_label = researched_skew or "balanced"
+            changes.append(
+                f"Aligned overall GENDER demographics to researched {skew_label}-skew audience."
+            )
 
     return (platform_totals, total_tickets, total_tickets_gen_pop,
             projected_sales_base, projected_sales_gen_pop, demo_overall, changes)
@@ -838,10 +1104,11 @@ def write_output(results, p):
     # AFTER rows were built so its number changes never reached the file).
     demo_overall = compute_demographics(df_demo_overall)
 
-    # AI plausibility validation against real US box office (Box Office Mojo /
-    # The Numbers / Variety / Deadline / THR). Mirrors Subscriber IQ:
-    # downward-only adjustments, anchored to the researched US domestic gross.
-    print("🤖 Running AI plausibility check (Box Office anchored)...")
+    # AI plausibility validation against real US box office. Claude (Opus 4.7
+    # → Sonnet 4.6) is the primary auditor with native web_search; GPT-4o is
+    # the fallback. Scaling is BIDIRECTIONAL — anchored to the researched US
+    # domestic gross whether our panel is over- or under-projecting.
+    print("🤖 Running AI plausibility check (Box Office anchored, bidirectional)...")
     validation = ai_validate_ticket_metrics(
         movie_name=p["movie_name"],
         genre=p.get("genre", ""),
@@ -854,6 +1121,8 @@ def write_output(results, p):
         projected_sales_gen_pop=projected_sales_gen_pop,
         demo_overall=demo_overall,
     )
+    model_used = validation.get("_model_used", "unknown")
+    print(f"   🧠 Auditor: {model_used}")
 
     ai_changes = []
     if not validation.get("passed", True):
@@ -935,9 +1204,25 @@ def write_output(results, p):
         "PASS" if validation.get("passed", True) else "FLAGGED",
         "", "", ""
     ))
+    if model_used and model_used != "unknown":
+        rows.append(("Auditor Model", "", model_used, "", "", ""))
     assessment = validation.get("overall_assessment") or validation.get("note") or ""
     if assessment:
         rows.append(("Assessment", "", assessment, "", "", ""))
+    reasoning = (validation.get("reasoning") or "").strip()
+    if reasoning:
+        rows.append(("Reasoning", "", reasoning, "", "", ""))
+    scale_dir = (validation.get("scale_direction") or "").strip().lower()
+    scale_factor = validation.get("scale_factor_midpoint")
+    if scale_dir in ("up", "down") and isinstance(scale_factor, (int, float)):
+        rows.append((
+            "Scale Direction", "",
+            f"{scale_dir.upper()} (factor {float(scale_factor):.3f})",
+            "", "", ""
+        ))
+    gender_skew = (validation.get("gender_skew") or "").strip().lower()
+    if gender_skew in ("male", "female", "balanced"):
+        rows.append(("Researched Gender Skew", "", gender_skew.upper(), "", "", ""))
 
     researched_gross = validation.get("researched_domestic_gross_usd")
     if isinstance(researched_gross, (int, float)) and researched_gross > 0:
