@@ -431,7 +431,9 @@ def _get_openai_client():
         return None
     try:
         from openai import OpenAI
-        _bg_openai_client = OpenAI(api_key=api_key, timeout=120.0)
+        # 2026-05-18: tighter timeout + retry cap so a stalled web-search
+        # call can't hang the pipeline for 30+ min on obscure subjects.
+        _bg_openai_client = OpenAI(api_key=api_key, timeout=90.0, max_retries=2)
         return _bg_openai_client
     except Exception as e:
         print(f"⚠️ OpenAI client init failed in bg.py: {e}")
@@ -13638,11 +13640,60 @@ def send_low_universe_user_email(user_email, username, project_name, err,
         return False
 
 
+# ──────────────────────────────────────────────────────────────────────────
+# Precomputed-universe cache (2026-05-18)
+# ──────────────────────────────────────────────────────────────────────────
+# A sidecar batched scanner can compute the universe for N celebs in a SINGLE
+# ClickHouse table scan (vs. N separate scans). It writes results to
+# /tmp/parallel_runs/universe_cache/{hash}.json or to a path supplied via the
+# BG_UNIVERSE_CACHE_DIR env var. We check that directory before doing the
+# expensive scan and short-circuit on hit. Cache keys are the
+# (brands, start_date, end_date, purchasers_only) tuple normalized to a hash.
+def _universe_cache_lookup(brands, start_date, end_date, purchasers_only):
+    """Return cached universe dict or None. Never raises."""
+    try:
+        import hashlib as _hl
+        cache_dir = os.environ.get('BG_UNIVERSE_CACHE_DIR') or '/tmp/parallel_runs/universe_cache'
+        if not os.path.isdir(cache_dir):
+            return None
+        sd = str(start_date)
+        ed = str(end_date)
+        po = '1' if purchasers_only else '0'
+        canonical = '|'.join(sorted([(b or '').strip().lower() for b in (brands or [])]))
+        key_src = f"{sd}|{ed}|{po}|{canonical}"
+        khash = _hl.md5(key_src.encode('utf-8')).hexdigest()[:16]
+        cache_file = os.path.join(cache_dir, f"{khash}.json")
+        if not os.path.exists(cache_file):
+            return None
+        import json as _j
+        with open(cache_file) as _f:
+            cached = _j.load(_f)
+        if not isinstance(cached, dict) or 'total_universe' not in cached:
+            return None
+        print(f"💨 UNIVERSE CACHE HIT — skipping full scan (cache key {khash})")
+        print(f"   📊 Cached total_universe: {cached.get('total_universe'):,}")
+        print(f"   📊 Cached total_visits:   {cached.get('total_visits', 0):,}")
+        return {
+            'total_universe':       cached['total_universe'],
+            'total_visits':         cached.get('total_visits', 0),
+            'avg_visits_per_user':  cached.get('avg_visits_per_user',
+                                              (cached.get('total_visits', 0) /
+                                               max(cached['total_universe'], 1))),
+        }
+    except Exception as _ce:
+        print(f"⚠️ Universe cache lookup failed (non-fatal): {_ce}")
+        return None
+
+
 def perform_full_universe_scan(conn, brands, start_date, end_date, purchasers_only=False):
     """
     Perform a full universe scan to get the actual total number of users
     without sampling. This gives us the true universe size.
     """
+    _hit = _universe_cache_lookup(brands, start_date, end_date, purchasers_only)
+    if _hit is not None:
+        return _hit
+
     print("🔍 Performing FULL UNIVERSE SCAN (no sampling)...")
     
     # Build brand filter from all variants (partial URL, exact COMMON_NAME) with SQL escaping
@@ -13883,59 +13934,28 @@ def reset_cost_tracking():
     total_credits_used = 0.0
 
 def generate_brand_variations(brand_name):
-    """
-    Generate common URL variations of a brand name for clickstream matching.
+    """Generate the URL variations of a brand name we actually see in the wild.
+
+    Trimmed 2026-05-18 from ~30 variants → 6 real ones. The old list included
+    URL-encoded forms (`%2B`, `%26`, `%5F`, ...) plus garbage delimiters
+    (`|`, `~`, `@`, `#`, `$`, `*`) that essentially never appear in real URLs,
+    but every extra variant adds work to `multiSearchAnyCaseInsensitive` on
+    every row of the 47B-row clickstream_final table. With 30 variants ×
+    concurrent runs, the universe scan was taking 25-30 min per profile.
+    The 6 variants below cover every real URL form. ~5x faster universe scans.
     """
     variations = set()
-    
-    # Clean the original input
     original = brand_name.strip().lower()
     variations.add(original)
-    
-    # Split into words for processing
+
     words = original.split()
-    
     if len(words) > 1:
-        # Common URL patterns
-        joined = "".join(words)
-        variations.add(joined)  # jonbatiste
-        variations.add("-".join(words))  # jon-batiste
-        variations.add("+".join(words))  # jon+batiste
-        variations.add("_".join(words))  # jon_batiste
-        variations.add(".".join(words))  # jon.batiste
-        variations.add("&".join(words))  # jon&batiste
-        variations.add("%20".join(words))  # jon%20batiste (URL encoded space)
-        variations.add("|".join(words))  # jon|batiste (pipe)
-        variations.add("~".join(words))  # jon~batiste (tilde)
-        variations.add("@".join(words))  # jon@batiste (at symbol)
-        variations.add("#".join(words))  # jon#batiste (hash)
-        variations.add("$".join(words))  # jon$batiste (dollar)
-        variations.add("*".join(words))  # jon*batiste (asterisk)
-        variations.add("=".join(words))  # jon=batiste (equals - URL parameters)
-        variations.add("/".join(words))  # jon/batiste (forward slash - path segments)
-        
-        # Case variations
-        camel_case = words[0] + "".join(word.capitalize() for word in words[1:])
-        variations.add(camel_case)  # jonBatiste
-        
-        pascal_case = "".join(word.capitalize() for word in words)
-        variations.add(pascal_case)  # JonBatiste
-        
-        # URL encoded variations
-        variations.add("%2B".join(words))  # jon%2Bbatiste (URL encoded +)
-        variations.add("%26".join(words))  # jon%26batiste (URL encoded &)
-        variations.add("%2E".join(words))  # jon%2Ebatiste (URL encoded .)
-        variations.add("%5F".join(words))  # jon%5Fbatiste (URL encoded _)
-        variations.add("%2D".join(words))  # jon%2Dbatiste (URL encoded -)
-        variations.add("%7C".join(words))  # jon%7Cbatiste (URL encoded |)
-        variations.add("%3D".join(words))  # jon%3Dbatiste (URL encoded =)
-        variations.add("%2F".join(words))  # jon%2Fbatiste (URL encoded /)
-        
-        # Mixed case with separators
-        variations.add("-".join(word.capitalize() for word in words))  # Jon-Batiste
-        variations.add("_".join(word.capitalize() for word in words))  # Jon_Batiste
-        variations.add(".".join(word.capitalize() for word in words))  # Jon.Batiste
-        
+        variations.add("".join(words))       # jonbatiste
+        variations.add("-".join(words))      # jon-batiste  (canonical SEO slug)
+        variations.add("_".join(words))      # jon_batiste  (some CMSes)
+        variations.add(".".join(words))      # jon.batiste  (some social handles)
+        variations.add("+".join(words))      # jon+batiste  (query-string space encoding)
+
     return sorted(list(variations))
 
 def get_user_inputs():
@@ -14521,6 +14541,151 @@ def capitalize_words(text):
                 result += word
                 
     return result
+
+# ──────────────────────────────────────────────────────────────────────────
+# Foreign brokerage / bank blocklist (2026-05-18)
+# ──────────────────────────────────────────────────────────────────────────
+# Code-side safety net that runs AFTER the hostmap gate. Even if a foreign
+# entity sneaks back into reference.host_mapping or an agent invents one,
+# this strip-pass drops it from INVESTMENTS / BANKING / DIGITAL BANKING /
+# CREDIT PROVIDER. Update when new foreign entities surface in audits.
+_FOREIGN_FINANCE_BLOCKLIST = {
+    # India
+    'ZERODHA', 'GROWW', 'UPSTOX', 'ANGEL ONE', 'ICICI BANK', 'ICICI DIRECT',
+    'HDFC BANK', 'AXIS BANK', 'KOTAK MAHINDRA', 'PAYTM',
+    # Canada
+    'BANK OF MONTREAL/BMO', 'BMO', 'BMO HARRIS', 'TD CANADA TRUST',
+    'ROYAL BANK OF CANADA', 'RBC', 'CIBC', 'SCOTIABANK', 'NATIONAL BANK OF CANADA',
+    # Crypto / foreign exchanges
+    'XT EXCHANGE', 'INANOMO', 'BYBIT', 'OKX', 'KUCOIN', 'BITGET', 'MEXC',
+    # UK / EU
+    'BARCLAYS', 'HSBC UK', 'LLOYDS BANK', 'NATWEST', 'SANTANDER UK',
+    'REVOLUT', 'MONZO', 'STARLING BANK', 'N26', 'DEUTSCHE BANK',
+}
+
+def _strip_foreign_finance_entities(df_behavior, verbose: bool = True):
+    """Drop foreign banks/brokerages/exchanges from US finance categories.
+
+    Only operates on INVESTMENTS, BANKING, DIGITAL BANKING, CREDIT PROVIDER.
+    Returns (modified_df, dropped_count). Never raises.
+    """
+    finance_cats = {'INVESTMENTS', 'BANKING', 'DIGITAL BANKING', 'CREDIT PROVIDER'}
+    if df_behavior is None or len(df_behavior) == 0:
+        return df_behavior, 0
+    try:
+        drop_mask = (
+            df_behavior['Column'].astype(str).str.strip().str.upper().isin(finance_cats)
+            & df_behavior['Value'].astype(str).str.strip().str.upper().isin(_FOREIGN_FINANCE_BLOCKLIST)
+        )
+        n_drop = int(drop_mask.sum())
+        if n_drop > 0:
+            if verbose:
+                for _, r in df_behavior[drop_mask].iterrows():
+                    print(f"   🚫 dropped foreign finance entity: {r['Column']:<20} {r['Value']}")
+            df_behavior = df_behavior[~drop_mask].reset_index(drop=True)
+        return df_behavior, n_drop
+    except Exception as _e:
+        if verbose:
+            print(f"   ⚠️ foreign-finance strip skipped: {_e}")
+        return df_behavior, 0
+
+
+# ──────────────────────────────────────────────────────────────────────────
+# Self-pin seeding for non-actor inputs (2026-05-18)
+# ──────────────────────────────────────────────────────────────────────────
+# Per-category agents only score brands they FIND in the candidate set.
+# For an ACTOR input the actor's own URLs usually surface in ACTOR/TALENT
+# scoring. For a HOST/PERSONALITY (Anderson Cooper), POLITICS/ACTIVIST,
+# WRITER/DIRECTOR/AUTHOR/ARTIST, etc., the agent often misses the subject
+# in the corresponding "their own" category — leaving the subject with
+# NO self-pin even though enforce_input_brand_100 *would* pin them if a
+# row existed. This helper seeds a 100% row in every target category
+# from BRAND_CATEGORY_TO_GENPOP_CATS so the downstream pin lands.
+def _seed_input_brand_into_target_cats(df_behavior, input_brands, brand_category,
+                                       verbose: bool = True):
+    """Insert a 100% row for each input brand × target category where
+    the brand is missing. Returns (modified_df, seeded_count).
+    Never raises. Idempotent.
+    """
+    if df_behavior is None or len(df_behavior) == 0 or not input_brands:
+        return df_behavior, 0
+    target_cats = BRAND_CATEGORY_TO_GENPOP_CATS.get(
+        (brand_category or '').upper().strip(), []
+    )
+    if not target_cats:
+        return df_behavior, 0
+
+    sample_size = 100_000
+    try:
+        ss_mask = df_behavior['Column'].astype(str).str.upper().str.strip() == 'SAMPLE SIZE'
+        if ss_mask.any():
+            for _col in ('Original Raw Numbers', 'Category Share', 'Percentage'):
+                if _col in df_behavior.columns:
+                    _v = df_behavior.loc[ss_mask, _col].iloc[0]
+                    try:
+                        sample_size = max(1, int(float(str(_v).replace(',', '').replace('%', ''))))
+                        break
+                    except Exception:
+                        continue
+    except Exception:
+        pass
+    us_projection = float((sample_size / 10_000_000.0) * 329_900_000.0)
+
+    seeded = 0
+    new_rows = []
+    for brand in input_brands:
+        brand_str = str(brand or '').strip()
+        if not brand_str:
+            continue
+        try:
+            variations = set(v.strip().lower() for v in generate_brand_variations(brand_str) if v)
+        except Exception:
+            variations = {brand_str.lower()}
+        variations.add(brand_str.lower())
+        variations.add(brand_str.lower().replace(' ', ''))
+        variations.add(brand_str.lower().replace(' ', '-'))
+
+        for cat in target_cats:
+            cat_upper = cat.upper()
+            mask = df_behavior['Column'].astype(str).str.upper().str.strip() == cat_upper
+            already = False
+            if mask.any():
+                for _v in df_behavior.loc[mask, 'Value'].astype(str):
+                    vl = _v.strip().lower()
+                    if vl in variations or vl.replace(' ', '') in variations:
+                        already = True
+                        break
+            if already:
+                continue
+            row = {col: '' for col in df_behavior.columns}
+            row['Column'] = cat
+            row['Value']  = brand_str.upper()
+            if 'Brand Penetration (Row)' in df_behavior.columns:
+                row['Brand Penetration (Row)'] = 100.0
+            if 'Category Share' in df_behavior.columns:
+                row['Category Share'] = 100.0
+            if 'Percentage' in df_behavior.columns:
+                row['Percentage'] = 100.0
+            if 'Original Raw Numbers' in df_behavior.columns:
+                row['Original Raw Numbers'] = float(sample_size)
+            if 'Original Raw Numbers (Database)' in df_behavior.columns:
+                row['Original Raw Numbers (Database)'] = float(sample_size)
+            if 'US Gen Pop Projection' in df_behavior.columns:
+                row['US Gen Pop Projection'] = us_projection
+            new_rows.append(row)
+            seeded += 1
+            if verbose:
+                print(f"   🌱 SEEDED input brand '{brand_str}' into {cat} "
+                      f"(was missing — self-pinned at 100%)")
+    if new_rows:
+        try:
+            df_behavior = pd.concat([df_behavior, pd.DataFrame(new_rows)],
+                                    ignore_index=True)
+        except Exception as _e:
+            if verbose:
+                print(f"   ⚠️ self-pin seed concat failed: {_e}")
+    return df_behavior, seeded
+
 
 def enforce_input_brand_100(df_behavior, input_brands, purchasers_only: bool = False):
     """
@@ -27693,6 +27858,33 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
             )
         except Exception as _e:
             print(f"   ⚠️ hostmap gate skipped: {_e}")
+
+        # Foreign-finance strip (2026-05-18): drop foreign banks/brokerages
+        # that slipped through the hostmap gate (BMO, Zerodha, XT Exchange,
+        # Inanomo, etc.). See _FOREIGN_FINANCE_BLOCKLIST. Belt-and-suspenders
+        # alongside the hostmap fix — agents occasionally surface these names
+        # even when hostmap doesn't list them.
+        try:
+            df_final, _n_foreign = _strip_foreign_finance_entities(df_final, verbose=True)
+            if _n_foreign:
+                print(f"   🚫 dropped {_n_foreign} foreign finance entit(y/ies)")
+        except Exception as _e:
+            print(f"   ⚠️ foreign-finance strip failed: {_e}")
+
+        # Self-pin seeding (2026-05-18): non-actor inputs (Anderson Cooper
+        # in HOST/PERSONALITY, etc.) often get NO self-pin because the
+        # per-category agent didn't surface them. Seed a 100% row in each
+        # target category from BRAND_CATEGORY_TO_GENPOP_CATS so the next
+        # enforce_input_brand_100 call lands. ACTOR inputs already self-pin
+        # naturally because they reliably appear in ACTOR scoring.
+        try:
+            df_final, _n_seeded = _seed_input_brand_into_target_cats(
+                df_final, brands, brand_category, verbose=True,
+            )
+            if _n_seeded:
+                print(f"   🌱 seeded {_n_seeded} self-pin row(s) for non-actor input")
+        except Exception as _e:
+            print(f"   ⚠️ self-pin seed failed: {_e}")
 
         # FINAL invariant guard: the input brand (e.g. SARAH PAULSON) must
         # be 100% in every category it appears in (ACTOR, TALENT, etc.) —
