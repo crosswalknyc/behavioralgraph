@@ -13463,7 +13463,7 @@ def perform_full_universe_scan(conn, brands, start_date, end_date, purchasers_on
     
     with conn.cursor() as cur:
         # Scale up warehouse for full scan
-        print("🚀 Running on ClickHouse (37.27.140.111) for full universe scan")
+        print("🚀 Running on ClickHouse (168.119.215.48) for full universe scan")
         
         try:
             # Add purchasers filter if requested
@@ -30368,7 +30368,7 @@ def main():
     
     # Always perform full universe scan to get actual total users
     print("🔍 Performing full universe scan...")
-    print("🚀 Running on ClickHouse (37.27.140.111) throughout entire process")
+    print("🚀 Running on ClickHouse (168.119.215.48) throughout entire process")
     universe_results = perform_full_universe_scan(conn, brands, s1, e1, purchasers_only)
     if universe_results:
         print(f"🌍 Universe scan complete. True universe size: {universe_results['total_universe']:,} users")
