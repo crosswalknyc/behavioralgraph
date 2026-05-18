@@ -22858,42 +22858,37 @@
                 document.getElementById('bpiqKpiGenPopPreUsersPct').innerHTML  = gpPrePct.toFixed(2)  + '% of cohort';
                 document.getElementById('bpiqKpiGenPopPostUsersPct').innerHTML = gpPostPct.toFixed(2) + '% of cohort';
                 document.getElementById('bpiqKpiGenPopLift').innerHTML = _bpiqFmtLift(cg.control_lift_pct_users);
-                var gpDelta = cg.control_delta_pp;
-                document.getElementById('bpiqKpiGenPopLiftPp').textContent =
-                    (gpDelta == null ? 'natural drift'
-                                     : ((gpDelta >= 0 ? '+' : '') + gpDelta.toFixed(2) + 'pp natural drift'));
+                document.getElementById('bpiqKpiGenPopLiftPp').textContent = '';
             }
 
-            // Total Lift Over Gen Pop — the partnership's incremental
-            // lift in pp (Brand pre→post Δ minus Gen Pop pre→post Δ).
-            // This is the DiD number surfaced as a top-level KPI so
-            // the "what did the partnership actually drive above
-            // natural drift?" answer isn't buried in the Incremental
-            // Reach section below.
+            // Total Lift Over Gen Pop — simple net difference between
+            // Brand Lift % and Gen Pop Lift %. This is the most
+            // intuitive framing for the dashboard ("the partnership
+            // drove +9.66% user lift while Gen Pop naturally drifted
+            // +8.74%, so net partnership-driven lift is +0.92%").
             var loRow = document.getElementById('bpiqLiftOverGenPopRow');
             if (loRow) {
-                if (cg.enabled && cg.incremental_lift_pp != null) {
+                var brandLift = totals.lift_pct_users;
+                var gpLift    = cg.control_lift_pct_users;
+                if (cg.enabled && brandLift != null && gpLift != null
+                              && isFinite(brandLift) && isFinite(gpLift)) {
                     loRow.style.display = 'grid';
-                    var inc = cg.incremental_lift_pp;
-                    var rel = cg.incremental_lift_rel_pct;
-                    var color = inc > 0 ? '#10b981'
-                              : inc < 0 ? '#ef4444' : 'var(--text-secondary)';
-                    var sign  = inc > 0 ? '+' : '';
+                    var net   = brandLift - gpLift;
+                    var color = net > 0 ? '#10b981'
+                              : net < 0 ? '#ef4444' : 'var(--text-secondary)';
+                    var sign  = net > 0 ? '+' : '';
                     var bigEl = document.getElementById('bpiqKpiLiftOverGenPop');
                     var subEl = document.getElementById('bpiqKpiLiftOverGenPopSub');
                     if (bigEl) {
                         bigEl.style.color = color;
-                        bigEl.textContent = sign + inc.toFixed(2) + 'pp';
+                        bigEl.textContent = sign + net.toFixed(2) + '%';
                     }
                     if (subEl) {
-                        var treatPp = (cg.treat_delta_pp   == null ? 0 : cg.treat_delta_pp);
-                        var ctrlPp  = (cg.control_delta_pp == null ? 0 : cg.control_delta_pp);
-                        var relStr  = (rel == null) ? ''
-                                    : ' · ' + (rel >= 0 ? '+' : '') + rel.toFixed(2) + '% over natural drift';
+                        var bSign  = brandLift >= 0 ? '+' : '';
+                        var gpSign = gpLift    >= 0 ? '+' : '';
                         subEl.textContent =
-                            'Brand +' + treatPp.toFixed(2) + 'pp − Gen Pop ' +
-                            (ctrlPp >= 0 ? '+' : '') + ctrlPp.toFixed(2) + 'pp = incremental ' +
-                            sign + inc.toFixed(2) + 'pp' + relStr;
+                            'Brand ' + bSign + brandLift.toFixed(2) + '% − Gen Pop '
+                            + gpSign + gpLift.toFixed(2) + '% = ' + sign + net.toFixed(2) + '% net';
                     }
                 } else {
                     loRow.style.display = 'none';
@@ -23187,13 +23182,25 @@
             // Hero card
             if (hero)    hero.style.display = '';
             if (heroTot) heroTot.textContent = _bpiqFmtMoney(v.total_brand_value || 0);
-            if (heroSub) heroSub.textContent = 'Brand Engagement + Earned Media + Brand Lift + Conversions';
+            // Conversion bucket is dropped from BOTH the hero chip row
+            // AND the breakdown component row when its value is 0 (the
+            // 💳 Conversions section already hides itself for low/zero
+            // signal — this keeps the rest of the dashboard consistent
+            // so we don't show empty $0 boxes anywhere). Same logic
+            // also strips the conversion-rate sentence from the
+            // methodology subtitle.
+            var hasConv = (v.conversion_value || 0) > 0;
+            if (heroSub) heroSub.textContent = hasConv
+                ? 'Brand Engagement + Earned Media + Brand Lift + Conversions'
+                : 'Brand Engagement + Earned Media + Brand Lift';
             var heroParts = [
                 {label: 'Brand Engagement', value: v.brand_engagement_value || 0, color: '#6366f1'},
                 {label: 'Earned Media',     value: v.earned_media_value      || 0, color: '#10b981'},
-                {label: 'Brand Lift',       value: v.brand_lift_value        || 0, color: '#f59e0b'},
-                {label: 'Conversions',      value: v.conversion_value        || 0, color: '#ef4444'}
+                {label: 'Brand Lift',       value: v.brand_lift_value        || 0, color: '#f59e0b'}
             ];
+            if (hasConv) {
+                heroParts.push({label: 'Conversions', value: v.conversion_value, color: '#ef4444'});
+            }
             if (heroBrk) {
                 heroBrk.innerHTML = heroParts.map(function(p) {
                     return '<div style="padding:0.6rem 0.75rem;background:rgba(255,255,255,0.03);border:1px solid var(--border-color);border-radius:8px;">'
@@ -23205,15 +23212,16 @@
             // Detailed breakdown section
             if (section) section.style.display = '';
             if (note) {
-                note.innerHTML = (v.methodology || '')
-                    + ' Rates are tunable: BEV $' + (v.rates && v.rates.bev_per_user || 0).toFixed(2) + '/user, '
-                    + 'BLV $' + (v.rates && v.rates.blv_per_incr_user || 0).toFixed(2) + '/incremental user, '
-                    + 'Conversion $' + (v.rates && v.rates.conv_value_per_user || 0).toFixed(2) + '/order. '
-                    + 'Per-platform EMV rates are 2026 industry-benchmarked.';
+                var rateBits = 'Rates are tunable: BEV $' + (v.rates && v.rates.bev_per_user || 0).toFixed(2) + '/user, '
+                             + 'BLV $' + (v.rates && v.rates.blv_per_incr_user || 0).toFixed(2) + '/incremental user';
+                if (hasConv) {
+                    rateBits += ', Conversion $' + (v.rates && v.rates.conv_value_per_user || 0).toFixed(2) + '/order';
+                }
+                note.innerHTML = (v.methodology || '') + ' ' + rateBits + '. Per-platform EMV rates are 2026 industry-benchmarked.';
             }
             if (!body) return;
-            // Top: 4 component cards mirroring the hero, plus an
-            // incremental-users readout under Brand Lift.
+            // Top: component cards mirroring the hero (drops the
+            // Conversion Value card entirely when conversion_value = 0).
             var html = '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:0.75rem;margin-bottom:1rem;">'
                 + '<div style="padding:0.85rem;border:1px solid var(--border-color);border-radius:8px;">'
                 +   '<div style="font-size:0.65rem;color:var(--text-secondary);text-transform:uppercase;">Brand Engagement Value</div>'
@@ -23230,11 +23238,13 @@
                 +   '<div style="font-size:1.3rem;font-weight:700;color:#f59e0b;">' + _bpiqFmtMoney(v.brand_lift_value || 0) + '</div>'
                 +   '<div style="font-size:11px;color:var(--text-secondary);">' + _bpiqFmtNum(v.incremental_users || 0) + ' incremental users × $' + (v.rates && v.rates.blv_per_incr_user || 0).toFixed(2) + '</div>'
                 + '</div>'
-                + '<div style="padding:0.85rem;border:1px solid var(--border-color);border-radius:8px;">'
-                +   '<div style="font-size:0.65rem;color:var(--text-secondary);text-transform:uppercase;">Conversion Value</div>'
-                +   '<div style="font-size:1.3rem;font-weight:700;color:#ef4444;">' + _bpiqFmtMoney(v.conversion_value || 0) + '</div>'
-                +   '<div style="font-size:11px;color:var(--text-secondary);">post conversions × $' + (v.rates && v.rates.conv_value_per_user || 0).toFixed(2) + '</div>'
-                + '</div>'
+                + (hasConv
+                    ? ('<div style="padding:0.85rem;border:1px solid var(--border-color);border-radius:8px;">'
+                        +   '<div style="font-size:0.65rem;color:var(--text-secondary);text-transform:uppercase;">Conversion Value</div>'
+                        +   '<div style="font-size:1.3rem;font-weight:700;color:#ef4444;">' + _bpiqFmtMoney(v.conversion_value || 0) + '</div>'
+                        +   '<div style="font-size:11px;color:var(--text-secondary);">post conversions × $' + (v.rates && v.rates.conv_value_per_user || 0).toFixed(2) + '</div>'
+                        + '</div>')
+                    : '')
                 + '</div>';
             // Per-platform EMV table (only platforms that actually
             // contributed positive earned-media reach).
