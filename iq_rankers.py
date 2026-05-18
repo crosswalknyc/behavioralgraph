@@ -761,8 +761,15 @@ def aggregate_leaderboard(
         where_search = (f"AND (positionCaseInsensitive(project_name, '{s_clean}') > 0 "
                         f"OR positionCaseInsensitive(profile_subject, '{s_clean}') > 0)")
 
-    # Note: we alias aggregates to *_lbl to avoid name collision with the
-    # source columns referenced in WHERE (ClickHouse complains otherwise).
+    # CW IQ Score across a multi-day window: mention-weighted average so
+    # days with very low / partial clickstream data (e.g. yesterday before
+    # the nightly pipeline finishes loading) contribute proportionally
+    # little. Falls back to a plain average if total mentions is zero so a
+    # quiet entity still gets a reasonable composite score.
+    #
+    # We alias aggregates to *_lbl / *_sum / *_calc to avoid name collision
+    # with the source columns referenced in WHERE (ClickHouse complains
+    # otherwise: "Aggregate function ... AS X is found in WHERE").
     sql = f"""
     WITH curr AS (
         SELECT profile_subject,
@@ -777,7 +784,12 @@ def aggregate_leaderboard(
                sum(neg)                           AS neg_sum,
                round(100.0 * (sum(pos) - sum(neg)) / greatest(sum(pos)+sum(neu)+sum(neg), 1), 2)
                                                   AS net_sentiment_calc,
-               argMax(cw_iq_score, snapshot_date) AS cw_iq_score_latest
+               -- Mention-weighted CW IQ over the window. If the window has
+               -- zero mentions for this profile, fall back to plain avg
+               -- (still a valid score from the daily-z-score component).
+               if(sum(mentions) > 0,
+                  round(sumOrNull(cw_iq_score * mentions) / sum(mentions), 2),
+                  round(avg(cw_iq_score), 2))      AS cw_iq_score_calc
         FROM reference.v_iq_daily_metrics
         WHERE snapshot_date BETWEEN toDate('{s}') AND toDate('{e}')
           AND {where_master}
@@ -788,7 +800,9 @@ def aggregate_leaderboard(
     prev AS (
         SELECT profile_subject,
                sum(mentions)                      AS prev_mentions_sum,
-               argMax(cw_iq_score, snapshot_date) AS prev_cw_iq_score_latest
+               if(sum(mentions) > 0,
+                  round(sumOrNull(cw_iq_score * mentions) / sum(mentions), 2),
+                  round(avg(cw_iq_score), 2))      AS prev_cw_iq_score_calc
         FROM reference.v_iq_daily_metrics
         WHERE snapshot_date BETWEEN toDate('{ps}') AND toDate('{pe}')
           AND {where_master}
@@ -806,11 +820,11 @@ def aggregate_leaderboard(
            c.neu_sum                                  AS neu,
            c.neg_sum                                  AS neg,
            c.net_sentiment_calc                       AS net_sentiment,
-           c.cw_iq_score_latest                       AS cw_iq_score,
+           c.cw_iq_score_calc                         AS cw_iq_score,
            coalesce(p.prev_mentions_sum, 0)           AS prev_mentions,
-           coalesce(p.prev_cw_iq_score_latest, 0)     AS prev_cw_iq_score,
+           coalesce(p.prev_cw_iq_score_calc, 0)       AS prev_cw_iq_score,
            c.mentions_sum - coalesce(p.prev_mentions_sum, 0)         AS delta_mentions,
-           c.cw_iq_score_latest - coalesce(p.prev_cw_iq_score_latest, 0) AS delta_cw_iq
+           c.cw_iq_score_calc - coalesce(p.prev_cw_iq_score_calc, 0) AS delta_cw_iq
     FROM curr c
     LEFT JOIN prev p ON p.profile_subject = c.profile_subject
     ORDER BY {sort_col} {direction}, mentions DESC
