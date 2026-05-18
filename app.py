@@ -150,7 +150,7 @@ def redirect_if_must_reset_password():
 
 S3_BUCKET = 'dashboard-inputs'
 # Canonical Gen Pop 2026 file - profile selector and get-csv-data always use this key so dashboard matches S3 link
-GEN_POP_CANONICAL_KEY = 'Gen_Pop_2026_03_04_2026_04_29.csv'
+GEN_POP_CANONICAL_KEY = 'Gen_Pop_2026.csv'
 SUBSCRIBER_S3_BUCKET = 'svod-acquisition'  # Bucket for Subscriber IQ data
 S3_PURGATORY_PREFIX = 'purgatory/'  # Files go here first; admin releases to main bucket
 JOBS_STATUS_S3_KEY = 'system/jobs_status.json'  # Cross-worker job status persistence (Render)
@@ -2010,8 +2010,12 @@ def check_s3_for_existing(brand_search, start_date, end_date):
                 if not key.endswith('.csv'):
                     continue
                 
-                # Skip system files
-                if key.startswith('system/'):
+                # Skip system, historic, backup, and purgatory files
+                if (key.startswith('system/')
+                        or key.startswith('historic/')
+                        or key.startswith('backups/')
+                        or key.startswith('_backups/')
+                        or key.startswith(S3_PURGATORY_PREFIX)):
                     continue
                 
                 # Extract the "name part" of the filename (before the date suffix).
@@ -5303,8 +5307,12 @@ def get_admin_content():
         for page in paginator.paginate(Bucket=bucket_name, Prefix=''):
             for obj in page.get('Contents', []):
                 key = obj['Key']
-                # Skip historic folder, system folder, and non-CSV files
-                if key.startswith('historic/') or key.startswith('system/') or not key.endswith('.csv'):
+                # Skip historic, system, backup folders, and non-CSV files
+                if (key.startswith('historic/')
+                        or key.startswith('system/')
+                        or key.startswith('backups/')
+                        or key.startswith('_backups/')
+                        or not key.endswith('.csv')):
                     continue
                 
                 # Parse file info
@@ -9898,7 +9906,7 @@ def view_shared(share_id):
 
 
 def _preferred_gen_pop_key(s3_key):
-    """For any Gen Pop key, prefer the Gen_Pop_YYYY_... form (e.g. Gen_Pop_2026_03_04_2026_04_29.csv)
+    """For any Gen Pop key, prefer the Gen_Pop_YYYY_... form (e.g. Gen_Pop_2026_05_14_groundtruth_anchored.csv)
     so the dashboard always loads the canonical file matching the S3 link users expect."""
     if not s3_key or '.csv' not in s3_key or 'gen_pop' not in s3_key.lower():
         return None
@@ -9969,7 +9977,7 @@ def get_csv_data(s3_key):
                 row['Value'] = 'Hispanic or Latino'
         return csv_content, df, brand_name, date_range, data
     
-    # Gen Pop: always fetch the canonical S3 file so dashboard matches https://dashboard-inputs.s3.../Gen_Pop_2026_03_04_2026_04_29.csv
+    # Gen Pop: always fetch the canonical S3 file (GEN_POP_CANONICAL_KEY) so dashboard matches pipeline / S3
     effective_key = s3_key
     if s3_key and 'gen_pop' in s3_key.lower():
         try:
@@ -12293,6 +12301,50 @@ def _load_latest_hf_alpha_cache(ticker_slug, max_lookback_days=7):
     return None, None
 
 
+# ---------------------------------------------------------------------------
+# Per-day "sent log" — guarantees each recipient email receives at most one
+# Fin IQ Alpha Ideas digest per day, even if the cron fires multiple times
+# (e.g. multiple Render cron entries, external schedulers, manual triggers).
+# Stored in S3 so it survives restarts and is shared across web workers.
+# ---------------------------------------------------------------------------
+def _hf_alpha_sent_log_key(day_str):
+    return f"{HF_ALPHA_IDEAS_PREFIX}sent_log/{day_str}.json"
+
+
+def _load_hf_alpha_sent_log(day_str):
+    """Return a set of lowercased emails already sent on `day_str`."""
+    try:
+        key = _hf_alpha_sent_log_key(day_str)
+        resp = s3_client.get_object(Bucket=METADATA_BUCKET, Key=key)
+        payload = json.loads(resp['Body'].read().decode('utf-8'))
+        return {str(e).lower() for e in (payload.get('emails') or [])}
+    except s3_client.exceptions.NoSuchKey:
+        return set()
+    except Exception as e:
+        print(f"⚠️ HF Alpha sent-log read error for {day_str}: {e}")
+        return set()
+
+
+def _append_hf_alpha_sent_log(day_str, email):
+    """Record that `email` was sent the digest for `day_str` (idempotent)."""
+    try:
+        emails = _load_hf_alpha_sent_log(day_str)
+        emails.add(str(email).strip().lower())
+        key = _hf_alpha_sent_log_key(day_str)
+        s3_client.put_object(
+            Bucket=METADATA_BUCKET,
+            Key=key,
+            Body=json.dumps({
+                'day': day_str,
+                'emails': sorted(emails),
+                'updated_at': datetime.now(HF_ALPHA_TZ).isoformat(),
+            }, indent=2),
+            ContentType='application/json',
+        )
+    except Exception as e:
+        print(f"⚠️ HF Alpha sent-log write error for {day_str}: {e}")
+
+
 def _load_hf_novelty_memory(ticker_slug, weeks_back=4, current_day_str=None):
     """Load past N weeks of Alpha Ideas for a ticker to enable novelty constraints.
 
@@ -13128,9 +13180,17 @@ def _build_hf_alpha_email_html(username, alpha_packets, as_of_date, app_base_url
 
 
 def _get_hf_digest_recipients():
+    """Build the Fin IQ Alpha Ideas digest recipient list.
+
+    Deduplicates by lowercased email so users who exist under multiple
+    usernames with the same email (or are listed multiple times) only
+    appear once. Ticker entitlements from all matching user records are
+    merged so the recipient still sees every ticker they are entitled to.
+    """
     users_data = load_users().get('users', {})
     all_tickers = _list_hf_ticker_rows()
-    recipients = []
+    by_email = {}
+    order = []
     for username, user in users_data.items():
         role = _normalize_role(user.get('role', 'user'))
         access = apply_cloak_product_access_overrides(compute_product_access_flags(user, role))
@@ -13145,12 +13205,24 @@ def _get_hf_digest_recipients():
         ticker_rows = [row for row in all_tickers if _user_can_access_hf_ticker(row, allow_set)]
         if not ticker_rows:
             continue
-        recipients.append({
-            'username': username,
-            'email': email,
-            'tickers': ticker_rows
-        })
-    return recipients
+        email_key = email.lower()
+        if email_key in by_email:
+            existing = by_email[email_key]
+            seen_keys = {(r.get('s3_key') or r.get('ticker')) for r in existing['tickers']}
+            for row in ticker_rows:
+                k = row.get('s3_key') or row.get('ticker')
+                if k and k not in seen_keys:
+                    existing['tickers'].append(row)
+                    seen_keys.add(k)
+        else:
+            rec = {
+                'username': username,
+                'email': email,
+                'tickers': ticker_rows,
+            }
+            by_email[email_key] = rec
+            order.append(email_key)
+    return [by_email[k] for k in order]
 
 
 def send_hf_alpha_ideas_digest(
@@ -13161,6 +13233,7 @@ def send_hf_alpha_ideas_digest(
     test_ticker_or_s3_key=None,
     limit_tickers_per_recipient=None,
     force_regenerate=False,
+    bypass_sent_log=False,
 ):
     run_day = requested_date or _hf_alpha_today_str()
     recipients = _get_hf_digest_recipients()
@@ -13170,6 +13243,11 @@ def send_hf_alpha_ideas_digest(
     skipped = []
     if only_username:
         recipients = [r for r in recipients if r['username'] == only_username]
+    # Idempotency: skip any email already sent the digest for this run_day,
+    # unless we're in a QA mode (test_email / dry_run) or the caller explicitly
+    # opted in to a resend via bypass_sent_log.
+    suppress_idempotency = bool(dry_run or test_email or bypass_sent_log)
+    already_sent_emails = set() if suppress_idempotency else _load_hf_alpha_sent_log(run_day)
     if test_email:
         # Single-recipient QA mode: route all sends to one email and cap payload size.
         if recipients:
@@ -13206,6 +13284,14 @@ def send_hf_alpha_ideas_digest(
     app_url = (os.environ.get('APP_BASE_URL') or os.environ.get('PUBLIC_APP_URL') or '').strip() or request.host_url.rstrip('/')
 
     for rec in recipients:
+        rec_email_key = (rec.get('email') or '').strip().lower()
+        if rec_email_key and rec_email_key in already_sent_emails:
+            skipped.append({
+                'username': rec.get('username'),
+                'email': rec.get('email'),
+                'reason': f'Already sent on {run_day} (idempotent skip)',
+            })
+            continue
         packets = []
         ticker_rows = list(rec['tickers'] or [])
         if isinstance(limit_tickers_per_recipient, int) and limit_tickers_per_recipient > 0:
@@ -13250,6 +13336,12 @@ def send_hf_alpha_ideas_digest(
         ok, msg = send_email_via_gmail(rec['email'], subject, html_content, text)
         if ok:
             sent.append({'username': rec['username'], 'email': rec['email'], 'ticker_count': len(packets)})
+            # Persist to sent log so subsequent cron firings today are no-ops
+            # (skip in QA modes — test_email rewrites the addressee and
+            # dry_run never actually sent).
+            if not suppress_idempotency and rec_email_key:
+                _append_hf_alpha_sent_log(run_day, rec['email'])
+                already_sent_emails.add(rec_email_key)
         else:
             skipped.append({'username': rec['username'], 'email': rec['email'], 'reason': msg})
 
@@ -13852,6 +13944,7 @@ def admin_run_hf_alpha_ideas():
         test_ticker_or_s3_key = (body.get('test_ticker_or_s3_key') or '').strip() or None
         limit_tickers = body.get('limit_tickers_per_recipient')
         force_regenerate = bool(body.get('force_regenerate', False))
+        bypass_sent_log = bool(body.get('bypass_sent_log', False))
         try:
             limit_tickers = int(limit_tickers) if limit_tickers is not None else None
         except Exception:
@@ -13864,6 +13957,7 @@ def admin_run_hf_alpha_ideas():
             test_ticker_or_s3_key=test_ticker_or_s3_key,
             limit_tickers_per_recipient=limit_tickers,
             force_regenerate=force_regenerate,
+            bypass_sent_log=bypass_sent_log,
         )
         return jsonify(result)
     except Exception as e:
@@ -13873,7 +13967,13 @@ def admin_run_hf_alpha_ideas():
 
 @app.route('/api/cron/hf-alpha-ideas', methods=['GET', 'POST'])
 def cron_hf_alpha_ideas():
-    """Weekday cron endpoint for Fin IQ alpha generation + digest send."""
+    """Monday-only cron endpoint for Fin IQ alpha generation + digest send.
+
+    Runs once per week on Monday (ET). Use ?force=1 to bypass the day-of-week
+    gate. The digest itself is idempotent per email per day (see sent log in
+    `send_hf_alpha_ideas_digest`), so duplicate cron firings on the same day
+    will not produce duplicate emails.
+    """
     secret = request.headers.get('X-Cron-Secret') or request.args.get('secret') or ''
     expected = os.environ.get('CRON_SECRET', '')
     if not expected or secret != expected:
@@ -13885,19 +13985,26 @@ def cron_hf_alpha_ideas():
         test_ticker_or_s3_key = (request.args.get('test_ticker_or_s3_key') or '').strip() or None
         limit_tickers_raw = request.args.get('limit_tickers', '').strip()
         force_regenerate = request.args.get('force_regenerate', '').strip().lower() in ('1', 'true', 'yes')
+        bypass_sent_log = request.args.get('bypass_sent_log', '').strip().lower() in ('1', 'true', 'yes')
         try:
             limit_tickers = int(limit_tickers_raw) if limit_tickers_raw else None
         except Exception:
             limit_tickers = None
         now_et = datetime.now(HF_ALPHA_TZ)
-        if now_et.weekday() >= 5 and not force:
-            return jsonify({'success': True, 'skipped': True, 'reason': 'Weekend (ET)', 'timestamp_et': now_et.isoformat()})
+        if now_et.weekday() != 0 and not force:
+            return jsonify({
+                'success': True,
+                'skipped': True,
+                'reason': f'Not Monday (ET) — weekday={now_et.weekday()} (0=Mon, 6=Sun)',
+                'timestamp_et': now_et.isoformat(),
+            })
         result = send_hf_alpha_ideas_digest(
             dry_run=dry_run,
             test_email=test_email,
             test_ticker_or_s3_key=test_ticker_or_s3_key,
             limit_tickers_per_recipient=limit_tickers,
             force_regenerate=force_regenerate,
+            bypass_sent_log=bypass_sent_log,
         )
         result['timestamp_et'] = now_et.isoformat()
         return jsonify(result)
@@ -18485,7 +18592,12 @@ def list_jobs():
                 pass  # Don't block on activity tracking
         
         # Add local jobs (always fresh); for purgatory s3_keys merge display name and category from purgatory metadata
+        # Track s3_keys we've already added so we never emit the same profile twice
+        # (e.g. a recently-finished local job whose s3_key is also in the persisted
+        # S3 cache — without this dedup, the dashboard would render it as
+        # "(2 date ranges)" with two identical entries underneath).
         purgatory_meta = load_purgatory_metadata() if s3_client else {}
+        seen_s3_keys = set()
         for job_id, job in jobs.items():
             s3_key = job.get('s3_key') or ''
             entry = {
@@ -18514,6 +18626,9 @@ def list_jobs():
             else:
                 categories.add('LOCAL')
             job_list.append(entry)
+            final_sk = entry.get('s3_key') or ''
+            if final_sk:
+                seen_s3_keys.add(final_sk)
         
         # Use persisted cache only - no S3 scanning on page load for speed
         # If cache is empty, try to load persisted cache
@@ -18522,10 +18637,14 @@ def list_jobs():
             load_persisted_cache()
             cache_jobs = s3_cache.get('jobs') or []
         
-        # Add cached S3 jobs (ensure each has created_at for sorting)
+        # Add cached S3 jobs (ensure each has created_at for sorting).
+        # Skip any whose s3_key was already emitted as a local job above so the
+        # same CSV never appears twice in the profile selector.
         for j in cache_jobs:
             if isinstance(j, dict):
                 sk = j.get('s3_key') or ''
+                if sk and sk in seen_s3_keys:
+                    continue
                 entry = {
                     'job_id': j.get('job_id') or sk or '',
                     'project_name': j.get('project_name') or j.get('name', 'Unknown'),
@@ -18544,6 +18663,8 @@ def list_jobs():
                 if 'is_svod' in j:
                     entry['is_svod'] = j['is_svod']
                 job_list.append(entry)
+                if sk:
+                    seen_s3_keys.add(sk)
                 cat = j.get('category')
                 if cat:
                     categories.add(cat)
@@ -18574,7 +18695,9 @@ def list_jobs():
         # Filter out OTHER and UNCATEGORIZED categories - these should never appear in profile selector
         job_list = [e for e in job_list if (e.get('category') or '').upper() not in ('OTHER', 'UNCATEGORIZED', '')]
         
-        # Gen Pop: always show the canonical S3 key so profile selector only ever loads that file (no CMS/stale mapping)
+        # Gen Pop: always show the canonical S3 key + clean display name so
+        # profile selector only ever loads the canonical file and shows "Gen Pop 2026"
+        # (not the date-stamped filename of legacy entries).
         seen_gen_pop = False
         new_job_list = []
         for e in job_list:
@@ -18586,8 +18709,11 @@ def list_jobs():
                 e = dict(e)
                 e['s3_key'] = GEN_POP_CANONICAL_KEY
                 e['job_id'] = GEN_POP_CANONICAL_KEY
-                e['project_name'] = e.get('project_name') or 'Gen Pop 2026'
-                e['display_name'] = e.get('display_name') or 'Gen Pop 2026'
+                # Force the clean name regardless of what's in the cache.
+                e['project_name'] = 'Gen Pop 2026'
+                e['display_name'] = 'Gen Pop 2026'
+                e['name'] = 'Gen Pop 2026'
+                e['title'] = 'Gen Pop 2026'
             new_job_list.append(e)
         job_list = new_job_list
         
@@ -18630,6 +18756,35 @@ def list_jobs():
         
         categories = {e.get('category') for e in job_list if e.get('category')}
         
+        # Final safety-net dedup: if the same s3_key somehow ended up in
+        # job_list more than once (edge cases like merged cache + local job +
+        # purgatory-released item all pointing at the same file), keep the
+        # entry with the most-complete metadata (prefers local/in-flight over
+        # cached, then prefers entries with a non-empty project_name).
+        def _dedup_priority(e):
+            src_priority = 0 if e.get('source') == 'local' else 1
+            has_name = 0 if (e.get('project_name') or '').strip() else 1
+            return (src_priority, has_name)
+        deduped = {}
+        order_counter = 0
+        order_map = {}
+        for e in job_list:
+            sk = e.get('s3_key') or ''
+            if not sk:
+                # No s3_key -> can't dedup; keep as-is with a unique synthetic key
+                synth = f"__nokey__{order_counter}"
+                order_counter += 1
+                deduped[synth] = e
+                order_map[synth] = order_counter
+                continue
+            existing = deduped.get(sk)
+            if existing is None or _dedup_priority(e) < _dedup_priority(existing):
+                deduped[sk] = e
+            if sk not in order_map:
+                order_counter += 1
+                order_map[sk] = order_counter
+        job_list = list(deduped.values())
+
         # Sort by created_at descending (safe key for missing/None values)
         sorted_jobs = sorted(job_list, key=lambda x: x.get('created_at') or '', reverse=True)
         
@@ -18889,7 +19044,12 @@ def smart_cache_update():
         for page in paginator.paginate(Bucket=S3_BUCKET):
             for obj in page.get('Contents', []):
                 key = obj['Key']
-                if not key.endswith('.csv') or key.startswith('system/') or key.startswith('historic/') or key.startswith(S3_PURGATORY_PREFIX):
+                if (not key.endswith('.csv')
+                        or key.startswith('system/')
+                        or key.startswith('historic/')
+                        or key.startswith('backups/')
+                        or key.startswith('_backups/')
+                        or key.startswith(S3_PURGATORY_PREFIX)):
                     continue
                 
                 current_s3_keys.add(key)
@@ -18992,7 +19152,12 @@ def refresh_s3_cache(incremental=True):
         for page in paginator.paginate(Bucket=S3_BUCKET):
             for obj in page.get('Contents', []):
                 key = obj['Key']
-                if not key.endswith('.csv') or key.startswith('system/') or key.startswith(S3_PURGATORY_PREFIX):
+                if (not key.endswith('.csv')
+                        or key.startswith('system/')
+                        or key.startswith('historic/')
+                        or key.startswith('backups/')
+                        or key.startswith('_backups/')
+                        or key.startswith(S3_PURGATORY_PREFIX)):
                     continue
                 
                 job_data = process_s3_file_metadata(key, obj)
