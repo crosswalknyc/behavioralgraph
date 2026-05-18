@@ -28422,9 +28422,19 @@ def _load_hostmap_category_gate() -> dict:
     import re as _re
     def _norm(s: str) -> str:
         return _re.sub(r'[^A-Z0-9]', '', str(s or '').upper())
+    # Category-name normalizer for MATCHING ONLY. Strips all non-alphanumeric
+    # so `APPAREL/FOOTWEAR` (dashboard) matches `Apparel & Footwear` (hostmap),
+    # `Sports Organization` matches `SPORTS ORGANIZATION`, etc. Per Jenna's
+    # eng team 2026-05-18 — `.upper()` alone misses punctuation differences
+    # and was wrongly flagging real hostmap matches as "wrong category".
+    def _cat_key(s: str) -> str:
+        return _re.sub(r'[^A-Z0-9]', '', str(s or '').upper())
     norm_to_canon: dict[str, str] = {}
-    norm_to_cats: dict[str, set[str]] = {}
+    norm_to_cats: dict[str, set[str]] = {}      # display set (kept for emails)
+    norm_to_cat_keys: dict[str, set[str]] = {}  # MATCHING set (alphanumeric keys)
     gated_categories: set[str] = set()
+    gated_cat_keys: set[str] = set()            # MATCHING set
+    cat_key_to_display: dict[str, str] = {}     # first-seen display per key
     try:
         import clickhouse_connect as _ch
         client = _ch.get_client(
@@ -28443,22 +28453,34 @@ def _load_hostmap_category_gate() -> dict:
             if n not in norm_to_canon:
                 norm_to_canon[n] = brand
             cats = norm_to_cats.setdefault(n, set())
+            keys = norm_to_cat_keys.setdefault(n, set())
             sec = (section or '').strip()
             for part in sec.split(','):
                 p = part.strip().upper()
                 if not p or p in {'HIDDEN', 'CATEGORY', ''}:
                     continue
+                k = _cat_key(p)
+                if not k:
+                    continue
                 cats.add(p)
+                keys.add(k)
                 gated_categories.add(p)
+                gated_cat_keys.add(k)
+                cat_key_to_display.setdefault(k, p)
         print(f"   🗺  hostmap gate built: {len(norm_to_canon):,} brands, "
               f"{len(gated_categories)} gated categories")
     except Exception as e:
         print(f"   ⚠️ hostmap gate build failed: {e} — gate disabled this run")
-        return {'norm_to_canon': {}, 'norm_to_cats': {}, 'gated_categories': set()}
+        return {'norm_to_canon': {}, 'norm_to_cats': {}, 'gated_categories': set(),
+                'norm_to_cat_keys': {}, 'gated_cat_keys': set(),
+                'cat_key_to_display': {}}
     _HOSTMAP_GATE_CACHE = {
         'norm_to_canon': norm_to_canon,
         'norm_to_cats': norm_to_cats,
         'gated_categories': gated_categories,
+        'norm_to_cat_keys': norm_to_cat_keys,
+        'gated_cat_keys': gated_cat_keys,
+        'cat_key_to_display': cat_key_to_display,
     }
     return _HOSTMAP_GATE_CACHE
 
@@ -28478,11 +28500,19 @@ def _enforce_hostmap_category_gating(df, *, project_name: str = '',
     norm_to_canon = gate['norm_to_canon']
     norm_to_cats = gate['norm_to_cats']
     gated_categories = gate['gated_categories']
+    norm_to_cat_keys = gate.get('norm_to_cat_keys', {})
+    gated_cat_keys = gate.get('gated_cat_keys', set())
+    cat_key_to_display = gate.get('cat_key_to_display', {})
     if not norm_to_canon or not gated_categories:
         return df, []
 
     import re as _re
     def _norm(s: str) -> str:
+        return _re.sub(r'[^A-Z0-9]', '', str(s or '').upper())
+    # Same alphanumeric-uppercase normalizer used by the loader. Compare
+    # dashboard category names to hostmap SECTION components on this key
+    # so `APPAREL/FOOTWEAR` matches `Apparel & Footwear`, etc.
+    def _cat_key(s: str) -> str:
         return _re.sub(r'[^A-Z0-9]', '', str(s or '').upper())
 
     NEVER_GATE = {
@@ -28521,7 +28551,8 @@ def _enforce_hostmap_category_gating(df, *, project_name: str = '',
             continue
         if cat in NEVER_GATE:
             continue
-        if cat not in gated_categories:
+        cat_k = _cat_key(cat)
+        if cat_k not in gated_cat_keys:
             continue
         n = _norm(val)
         if not n:
@@ -28545,7 +28576,8 @@ def _enforce_hostmap_category_gating(df, *, project_name: str = '',
                 drop_log.append(entry)
             continue
         allowed = norm_to_cats.get(n, set())
-        if cat not in allowed:
+        allowed_keys = norm_to_cat_keys.get(n, set())
+        if cat_k not in allowed_keys:
             # Violation B: brand in hostmap but in wrong category.
             # First try to MOVE the row into one of its canonical categories
             # (e.g. FX bp=60 inserted into STREAMING/PLATFORM but hostmap
