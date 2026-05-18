@@ -113,3 +113,21 @@ services:
         value: "https://behavioral-graph.onrender.com"
       - key: CRON_SECRET
         value: "FLrVHDerM_oMlPikk-Gr6544GyGMCoY19ScpMySuwWA"
+
+  # Cron: nightly Talent / Brands ranker refresh (runs Layer-1 sentiment for
+  # every Profile IQ profile against yesterday's clickstream and writes one
+  # row per (profile, day) into reference.profile_iq_daily_metrics so the
+  # Ranker IQ leaderboards are ready for the morning). 09:00 UTC = 04:00 ET,
+  # safely after the nightly clickstream pipeline has landed yesterday's data.
+  - type: cron
+    name: iq-rankers-daily-cron
+    runtime: python
+    schedule: "0 9 * * *"
+    buildCommand: "true"
+    startCommand: |
+      python -c "import urllib.request,os; r=urllib.request.Request(os.environ['APP_URL'].rstrip('/')+'/api/cron/iq-rankers-daily?secret='+os.environ['CRON_SECRET'], method='POST'); print(urllib.request.urlopen(r, timeout=14400).read().decode())"
+    envVars:
+      - key: APP_URL
+        value: "https://behavioral-graph.onrender.com"
+      - key: CRON_SECRET
+        value: "FLrVHDerM_oMlPikk-Gr6544GyGMCoY19ScpMySuwWA"

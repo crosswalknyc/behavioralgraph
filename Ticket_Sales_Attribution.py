@@ -20,6 +20,34 @@ import os
 US_POPULATION = 329_900_000
 SAMPLE_REPRESENTS = 10_000_000
 
+# Crosswalk Ticket Sales Tracker measures DIGITAL ticket sales only — visits
+# to Fandango, AMC.com, Cinemark.com, Regal.com, and Alamo Drafthouse. In
+# the US, digital pre-purchase historically captures ~55-70% of total
+# theatrical ticket sales (the rest are box-office walk-ups, third-party
+# resellers, Atom, mobile carrier offers, theater chain apps not in our
+# panel, group sales). The AI auditor anchors our projected_sales_gen_pop
+# inside this band relative to the researched US domestic gross.
+#
+# Tune via env vars on Render if real-world calibration shifts:
+#   TICKET_DIGITAL_SALES_FACTOR_LOW   (default 0.55)
+#   TICKET_DIGITAL_SALES_FACTOR_HIGH  (default 0.70)
+def _digital_sales_band():
+    try:
+        lo = float(os.environ.get("TICKET_DIGITAL_SALES_FACTOR_LOW", "0.55"))
+    except (ValueError, TypeError):
+        lo = 0.55
+    try:
+        hi = float(os.environ.get("TICKET_DIGITAL_SALES_FACTOR_HIGH", "0.70"))
+    except (ValueError, TypeError):
+        hi = 0.70
+    lo = max(0.10, min(0.95, lo))
+    hi = max(lo, min(0.95, hi))
+    return lo, hi
+
+
+DIGITAL_SALES_FACTOR_LOW, DIGITAL_SALES_FACTOR_HIGH = _digital_sales_band()
+DIGITAL_SALES_FACTOR_MID = (DIGITAL_SALES_FACTOR_LOW + DIGITAL_SALES_FACTOR_HIGH) / 2.0
+
 
 def gen_pop_projection(raw_number):
     """Project raw number to US general population: (raw / 10,000,000) * 329,900,000"""
@@ -618,31 +646,48 @@ def _research_and_validate_with_claude(movie_name, genre, start_date, end_date,
     )
 
     system = (
-        "You are a senior box-office research analyst auditing a US-only ticket sales "
-        "projection produced by a 10M-person behavioral panel. Your job has THREE "
-        "stages, executed in order:\n\n"
-        "(1) RESEARCH. Use web_search to find REAL US domestic box office for the "
-        "film. Prioritize Box Office Mojo and The Numbers for the dollar figures. "
-        "For very recent releases (still in theaters), Variety, Deadline, and THR "
-        "weekend recaps are acceptable. Always cite the source for each figure.\n\n"
+        "You are a senior box-office research analyst auditing a US-only DIGITAL "
+        "ticket sales projection produced by a 10M-person behavioral panel. Read "
+        "the calibration rule below carefully — your output must respect it.\n\n"
+        "=== CRITICAL CALIBRATION RULE ===\n"
+        "The Crosswalk panel measures DIGITAL ticket sales only — visits to "
+        "Fandango, AMC.com, Cinemark.com, Regal.com, and Alamo Drafthouse. "
+        f"Digital pre-purchase historically captures {DIGITAL_SALES_FACTOR_LOW*100:.0f}-"
+        f"{DIGITAL_SALES_FACTOR_HIGH*100:.0f}% of total US theatrical "
+        "ticket sales (the rest is walk-up box office, third-party resellers "
+        "like Atom, group/corporate sales, and theater apps not in our panel).\n"
+        "Therefore our projected_sales_gen_pop MUST land in the band:\n"
+        f"  researched_US_gross * {DIGITAL_SALES_FACTOR_LOW:.2f}  to  "
+        f"researched_US_gross * {DIGITAL_SALES_FACTOR_HIGH:.2f}\n"
+        f"(midpoint ~{DIGITAL_SALES_FACTOR_MID:.2f}x). This is NOT optional. "
+        "Anchoring to 1.0x the researched gross would over-project by ~40%, "
+        "which destroys dashboard credibility.\n\n"
+        "=== YOUR THREE STAGES ===\n"
+        "(1) RESEARCH. Use web_search to find REAL US DOMESTIC box office for "
+        "the film (NOT worldwide, NOT international — domestic only). Prioritize "
+        "Box Office Mojo and The Numbers for the dollar figures. For very recent "
+        "releases still in theaters, Variety, Deadline, and THR weekend recaps "
+        "are acceptable. Always cite the source for each figure. Be careful: "
+        "Wikipedia AI Overviews often quote WORLDWIDE gross — you need DOMESTIC.\n\n"
         "(2) AUDIENCE RESEARCH. Use web_search to find primary audience age and "
         "gender skew. Look at Variety audience reports, Nielsen, Samba TV, "
-        "EntTelligence, ComScore PostTrak, CinemaScore exit polls, and major trade "
-        "press. State whether the title is male-skew, female-skew, or balanced and "
-        "the approximate percentages.\n\n"
-        "(3) AUDIT. Compare our panel projection to the researched gross.\n\n"
-        "ADJUSTMENT RULES — read carefully:\n"
-        "- Scaling is BIDIRECTIONAL. If our projected sales are MUCH LOWER than "
-        "  the researched US gross, you MUST scale UP. If MUCH HIGHER, you MUST "
-        "  scale DOWN. The panel is just a sample — under-projection is just as "
-        "  much of a credibility failure as over-projection.\n"
-        "- Target: projected_sales_gen_pop should land at approximately 1.0x the "
-        "  researched US domestic gross (acceptable range 0.85x-1.10x).\n"
-        "- For demographics: the panel reflects who has time to browse on a "
-        "  research panel, NOT who buys movie tickets. If researched audience "
-        "  skew clearly differs from the panel-derived percentages, OVERRIDE the "
-        "  panel. Don't be timid. A film known to be female-skew must NEVER come "
-        "  out male-dominant in the final output, and vice versa.\n\n"
+        "EntTelligence, ComScore PostTrak, CinemaScore exit polls, and major "
+        "trade press. State whether the title is male-skew, female-skew, or "
+        "balanced and the approximate percentages.\n\n"
+        "(3) AUDIT. Compute target = researched_domestic_gross * "
+        f"{DIGITAL_SALES_FACTOR_MID:.3f}. Compute scale_factor = target / "
+        "our_current_projected_sales_gen_pop. Round to 3 decimals. State the "
+        "scale direction. Suggest a sales range tight on the digital band: "
+        f"[researched_gross * {DIGITAL_SALES_FACTOR_LOW:.2f}, "
+        f"researched_gross * {DIGITAL_SALES_FACTOR_HIGH:.2f}].\n\n"
+        "=== DEMOGRAPHICS ===\n"
+        "The panel reflects who has time to browse on a research panel, NOT "
+        "who buys movie tickets. If researched audience skew clearly differs "
+        "from the panel-derived percentages, OVERRIDE the panel. Don't be "
+        "timid. A film known to be female-skew must NEVER come out male-"
+        "dominant in the final output, and vice versa. You MUST return both a "
+        "gender_skew direction AND a complete gender percentage plan — never "
+        "leave the gender field empty.\n\n"
         "OUTPUT FORMAT: JSON only. No markdown fences, no commentary."
     )
 
@@ -654,14 +699,23 @@ def _research_and_validate_with_claude(movie_name, genre, start_date, end_date,
         f"OUR PROJECTIONS (panel-derived, projected from {SAMPLE_REPRESENTS:,} to US pop):\n"
         f"- Total Tickets (panel, boosted): {total_tickets:,}\n"
         f"- Total Tickets (US Gen Pop): {total_tickets_gen_pop:,.0f}\n"
-        f"- Projected Sales (US Gen Pop): ${projected_sales_gen_pop:,.0f}\n\n"
+        f"- Projected Sales (US Gen Pop, before audit): ${projected_sales_gen_pop:,.0f}\n\n"
         f"CURRENT OVERALL DEMOGRAPHICS (from panel):\n{demo_overall}\n\n"
-        f"INSTRUCTIONS:\n"
-        f"1. Run web_search queries to find the REAL US domestic gross for this title "
-        f"   (gross to date, opening weekend, wide release date, is-still-in-theaters).\n"
-        f"2. Run web_search queries to find primary audience age + gender skew.\n"
-        f"3. Audit our projection. Compute: real_gross / our_projected_sales = scale factor.\n"
-        f"4. Return the JSON shown below — every field is required.\n\n"
+        f"INSTRUCTIONS — execute in this exact order:\n"
+        f"1. web_search the REAL US DOMESTIC gross (NOT worldwide). State the dollar "
+        f"   figure, the source, and whether the film is still in theatrical release.\n"
+        f"2. web_search the primary audience age + gender skew.\n"
+        f"3. Compute target_sales = researched_domestic_gross * "
+        f"{DIGITAL_SALES_FACTOR_MID:.3f}. This is the digital-sales midpoint anchor.\n"
+        f"4. Compute scale_factor_midpoint = target_sales / "
+        f"${projected_sales_gen_pop:,.0f}. Round to 3 decimals.\n"
+        f"5. Set suggested_projected_sales_range_genpop = "
+        f"   [researched_gross * {DIGITAL_SALES_FACTOR_LOW:.2f}, "
+        f"researched_gross * {DIGITAL_SALES_FACTOR_HIGH:.2f}].\n"
+        f"6. Set scale_direction to 'up' if scale_factor_midpoint > 1.05, 'down' "
+        f"   if < 0.95, else 'none'.\n"
+        f"7. Return the JSON below — EVERY field required, including a non-empty "
+        f"   gender plan.\n\n"
         f"Return JSON ONLY in this shape:\n"
         f"{{\n"
         f'  "passed": false,\n'
@@ -672,19 +726,19 @@ def _research_and_validate_with_claude(movie_name, genre, start_date, end_date,
         f'  "research_sources": ["Box Office Mojo", "Variety", "..."],\n'
         f'  "flags": ["each concern as a complete sentence"],\n'
         f'  "scale_direction": "up" | "down" | "none",\n'
-        f'  "scale_factor_midpoint": <decimal; e.g. 5.0 means our number is 5x too low, '
-        f'0.25 means we are 4x too high>,\n'
+        f'  "scale_factor_midpoint": <decimal>,\n'
         f'  "suggested_projected_sales_range_genpop": [<low_usd>, <high_usd>],\n'
         f'  "suggested_total_tickets_range_genpop": [<low>, <high>],\n'
         f'  "gender_skew": "male" | "female" | "balanced",\n'
         f'  "age": {{"17 AND UNDER": <pct>, "18-24": <pct>, "25-34": <pct>, "35-44": <pct>, "45-54": <pct>, "55-64": <pct>, "65 OR OLDER": <pct>}},\n'
         f'  "gender": {{"MALE": <pct>, "FEMALE": <pct>, "NON-BINARY": <pct>, "TRANS MALE": <pct>, "TRANS FEMALE": <pct>}},\n'
         f'  "research_summary": "5-10 sentences of researched facts with citations",\n'
-        f'  "reasoning": "2-3 sentences explaining the adjustment",\n'
+        f'  "reasoning": "2-3 sentences explaining the digital-sales anchor and direction",\n'
         f'  "overall_assessment": "one sentence"\n'
         f"}}\n"
-        f"Set passed=false whenever ANY adjustment is needed. The whole point of this "
-        f"audit is to anchor the dashboard to reality — don't be timid about flagging."
+        f"Set passed=false whenever ANY adjustment is needed. NEVER return an "
+        f"empty gender plan — if you cannot find research, default to a balanced "
+        f"50/50 male/female split."
     )
 
     audit_model = os.environ.get("CLAUDE_TICKET_AUDIT_MODEL") or "claude-opus-4-7"
@@ -857,13 +911,16 @@ def ai_validate_ticket_metrics(movie_name, genre, start_date, end_date,
         f"- Projected Ticket Sales (US Gen Pop): ${projected_sales_gen_pop:,.0f}\n\n"
         f"CURRENT OVERALL DEMOGRAPHICS: {demo_overall}\n"
         f"{research_block}\n"
-        f"=== PHASE A: VALIDATE TICKETS & SALES (BIDIRECTIONAL) ===\n"
-        f"Compare our 'US Gen Pop projected' sales to the REAL US domestic gross above.\n"
-        f"- TARGET: projected_sales_gen_pop should land at ~1.0x the researched US gross\n"
-        f"  (acceptable range 0.85x-1.10x).\n"
-        f"- If our number is MUCH HIGHER than the gross, suggest a DOWN-scale.\n"
-        f"- If our number is MUCH LOWER than the gross, suggest an UP-scale. Under-\n"
-        f"  projection is just as much of a credibility failure as over-projection.\n"
+        f"=== PHASE A: VALIDATE TICKETS & SALES (DIGITAL-ONLY ANCHOR) ===\n"
+        f"The panel measures DIGITAL ticket sales only (Fandango / AMC.com /\n"
+        f"Cinemark.com / Regal.com / Alamo). Digital captures ~"
+        f"{DIGITAL_SALES_FACTOR_LOW*100:.0f}-{DIGITAL_SALES_FACTOR_HIGH*100:.0f}% of total US ticket sales.\n"
+        f"- TARGET: projected_sales_gen_pop = researched_US_domestic_gross *\n"
+        f"  {DIGITAL_SALES_FACTOR_MID:.3f} (acceptable band {DIGITAL_SALES_FACTOR_LOW:.2f}-"
+        f"{DIGITAL_SALES_FACTOR_HIGH:.2f} of gross).\n"
+        f"- If our number is OUTSIDE that band (above OR below), suggest a scale\n"
+        f"  back inside the band. Under-projection is just as much of a credibility\n"
+        f"  failure as over-projection.\n"
         f"- Tickets implied by gross = gross / $11 (avg US ticket price). Cross-check.\n\n"
         f"=== PHASE B: VALIDATE DEMOGRAPHICS ===\n"
         f"Compare our AGE/GENDER skew to the researched primary audience.\n"
@@ -933,6 +990,87 @@ def ai_validate_ticket_metrics(movie_name, genre, start_date, end_date,
     return parsed
 
 
+def _default_gender_plan_from_skew(researched_skew):
+    """Default gender percentage plan synthesized from a researched skew.
+
+    Used as a fallback when the AI confidently reports a gender_skew direction
+    but returns an empty or missing ``gender`` field. Without this, an empty
+    plan would silently leave the panel-derived percentages in place, which
+    is exactly the failure mode that produced MALE 49.79% on Devil Wears
+    Prada 2 (a famously female-skew title).
+    """
+    skew = (researched_skew or "").strip().lower()
+    if skew == "female":
+        return {"MALE": 28.0, "FEMALE": 70.0, "NON-BINARY": 1.0,
+                "TRANS MALE": 0.5, "TRANS FEMALE": 0.5}
+    if skew == "male":
+        return {"MALE": 70.0, "FEMALE": 28.0, "NON-BINARY": 1.0,
+                "TRANS MALE": 0.5, "TRANS FEMALE": 0.5}
+    return {"MALE": 49.0, "FEMALE": 49.0, "NON-BINARY": 1.0,
+            "TRANS MALE": 0.5, "TRANS FEMALE": 0.5}
+
+
+def _default_age_plan_from_skew(researched_skew, genre):
+    """Default age percentage plan when the AI returns a skew but no age field.
+
+    Coarse heuristic: lean toward the known skew of the genre. Better than
+    leaving the panel-derived (often noisy) percentages untouched.
+    """
+    g = (genre or "").lower()
+    if "family" in g or "animation" in g:
+        return {"17 AND UNDER": 28.0, "18-24": 14.0, "25-34": 22.0,
+                "35-44": 18.0, "45-54": 10.0, "55-64": 5.0, "65 OR OLDER": 3.0}
+    if "horror" in g or "thriller" in g:
+        return {"17 AND UNDER": 6.0, "18-24": 30.0, "25-34": 30.0,
+                "35-44": 18.0, "45-54": 10.0, "55-64": 4.0, "65 OR OLDER": 2.0}
+    if "action" in g or "adventure" in g or "sci-fi" in g:
+        return {"17 AND UNDER": 8.0, "18-24": 22.0, "25-34": 28.0,
+                "35-44": 22.0, "45-54": 12.0, "55-64": 5.0, "65 OR OLDER": 3.0}
+    # Comedy / drama / general
+    return {"17 AND UNDER": 5.0, "18-24": 22.0, "25-34": 26.0,
+            "35-44": 22.0, "45-54": 14.0, "55-64": 7.0, "65 OR OLDER": 4.0}
+
+
+def _clamp_target_sales_to_digital_band(researched_gross_usd, projected_sales_gen_pop,
+                                         suggested_range):
+    """Compute the post-AI target projected_sales_gen_pop.
+
+    Hard rule: if we have a researched US domestic gross, the target sales
+    figure MUST land inside [gross * DIGITAL_SALES_FACTOR_LOW,
+    gross * DIGITAL_SALES_FACTOR_HIGH]. We honor the AI's suggested midpoint
+    if it falls inside that band, otherwise we override with the band
+    midpoint. This is the safety net that prevents the auditor from
+    producing $681M on a $175M film.
+
+    Returns the target projected_sales_gen_pop (float) or None if we can't
+    compute one (no researched gross available).
+    """
+    try:
+        gross = float(researched_gross_usd)
+    except (ValueError, TypeError):
+        return None
+    if gross <= 0:
+        return None
+
+    band_lo = gross * DIGITAL_SALES_FACTOR_LOW
+    band_hi = gross * DIGITAL_SALES_FACTOR_HIGH
+    band_mid = gross * DIGITAL_SALES_FACTOR_MID
+
+    ai_mid = None
+    if isinstance(suggested_range, list) and len(suggested_range) == 2:
+        try:
+            lo_ai = float(suggested_range[0])
+            hi_ai = float(suggested_range[1])
+            if lo_ai >= 0 and hi_ai >= lo_ai:
+                ai_mid = (lo_ai + hi_ai) / 2.0
+        except (ValueError, TypeError):
+            ai_mid = None
+
+    if ai_mid is not None and band_lo <= ai_mid <= band_hi:
+        return ai_mid
+    return band_mid
+
+
 def _enforce_gender_skew(gender_plan, researched_skew):
     """Ensure the gender plan reflects the researched skew direction.
 
@@ -964,56 +1102,60 @@ def _enforce_gender_skew(gender_plan, researched_skew):
 
 def apply_ai_ticket_adjustments(validation, platform_totals, total_tickets,
                                 total_tickets_gen_pop, projected_sales_base,
-                                projected_sales_gen_pop, demo_overall):
-    """Apply BIDIRECTIONAL corrections from ai_validate_ticket_metrics.
+                                projected_sales_gen_pop, demo_overall, genre=""):
+    """Apply post-AI corrections anchored to the digital-sales band.
 
-    Anchors projected sales to the researched US domestic gross in EITHER
-    direction:
-      * panel over-projects (e.g. $1.2B vs BOM $310M) → scale DOWN
-      * panel under-projects (e.g. $34M vs BOM $170M)  → scale UP
-    Per-platform hits, total tickets, both gen-pop projections, and both
-    dollar figures all scale by the same factor so the rows still add up.
+    Pipeline:
+      1. Compute the target projected_sales_gen_pop via
+         _clamp_target_sales_to_digital_band — this is the SAFETY NET that
+         forces our final number to land inside
+         [gross * DIGITAL_SALES_FACTOR_LOW, gross * DIGITAL_SALES_FACTOR_HIGH]
+         regardless of what the AI suggested. This is what prevents the
+         Devil-Wears-Prada-2 failure mode ($175M gross → $681M dashboard).
+      2. Apply the resulting scale factor uniformly to per-platform hits,
+         total tickets, both gen-pop projections, and both dollar figures so
+         every row still reconciles.
+      3. ALWAYS apply demographics (no longer gated on demographics_plausible).
+         When the AI returns an empty gender/age plan but a confident skew,
+         synthesize a default plan from the skew direction so the safety
+         net catches even silent regressions.
+      4. Run _enforce_gender_skew so a known female-skew title can never
+         come out male-dominant.
 
-    Demographics override is now MANDATORY (no longer gated on the model's
-    own ``demographics_plausible`` self-assessment). When the AI returns an
-    age/gender plan, we apply it. We then run _enforce_gender_skew so a
-    known female-skew title can never come out male-dominant — even if the
-    LLM regressed and returned percentages that contradicted its own
-    ``gender_skew`` field. Per-theater demographics stay untouched since
-    they're tied to actual ClickHouse UID joins.
+    Per-theater demographics stay untouched (they're tied to actual
+    ClickHouse UID joins, that's panel truth).
     """
     changes = []
     if validation.get("passed", True):
         return (platform_totals, total_tickets, total_tickets_gen_pop,
                 projected_sales_base, projected_sales_gen_pop, demo_overall, changes)
 
-    # ---- Bidirectional sales/tickets anchoring ----
+    # ---- Anchor to digital-sales band ----
+    researched_gross = validation.get("researched_domestic_gross_usd")
     suggested_sales = validation.get("suggested_projected_sales_range_genpop") or []
-    target_sales = None
-    if isinstance(suggested_sales, list) and len(suggested_sales) == 2:
-        try:
-            lo = float(suggested_sales[0]) if suggested_sales[0] is not None else None
-            hi = float(suggested_sales[1]) if suggested_sales[1] is not None else None
-            if lo is not None and hi is not None and lo >= 0 and hi >= lo:
-                target_sales = (lo + hi) / 2.0
-        except (ValueError, TypeError):
-            target_sales = None
-
-    # Secondary fallback: if no explicit suggested range, use the researched
-    # gross directly as the anchor (assume 1.0x of real US domestic gross).
-    if target_sales is None or target_sales <= 0:
-        researched_gross = validation.get("researched_domestic_gross_usd")
-        if isinstance(researched_gross, (int, float)) and researched_gross > 0:
-            target_sales = float(researched_gross)
+    target_sales = _clamp_target_sales_to_digital_band(
+        researched_gross, projected_sales_gen_pop, suggested_sales,
+    )
+    if target_sales is None:
+        # Fallback path when no researched gross is available: honor the
+        # AI's suggested midpoint exactly as before. Better than nothing.
+        if isinstance(suggested_sales, list) and len(suggested_sales) == 2:
+            try:
+                lo = float(suggested_sales[0])
+                hi = float(suggested_sales[1])
+                if lo >= 0 and hi >= lo:
+                    target_sales = (lo + hi) / 2.0
+            except (ValueError, TypeError):
+                target_sales = None
 
     if target_sales is not None and projected_sales_gen_pop > 0 and target_sales > 0:
         raw_factor = target_sales / projected_sales_gen_pop
-        # Bounds: 0.05x down to 25x up. The upward ceiling is generous because
-        # panel under-projection by 5-10x is plausible for mainstream titles
-        # whose audience under-indexes on online research panels.
-        factor = max(0.05, min(25.0, raw_factor))
-        # Only adjust if meaningfully different (more than ±5% off target).
-        if abs(factor - 1.0) > 0.05:
+        # Tightened bounds: 0.05x to 10x. The previous 25x ceiling let
+        # the auditor scale Devil Wears Prada 2 by 20x ($34M -> $681M).
+        # 10x is plenty for legitimate under-projection (a major release
+        # whose audience under-indexes on the panel).
+        factor = max(0.05, min(10.0, raw_factor))
+        if abs(factor - 1.0) > 0.05:  # only act outside the ±5% no-op band
             old_sales = projected_sales_gen_pop
             old_total_tickets = total_tickets
             projected_sales_gen_pop *= factor
@@ -1025,10 +1167,15 @@ def apply_ai_ticket_adjustments(validation, platform_totals, total_tickets,
                 for plat, hits in platform_totals.items()
             }
             arrow = "↑" if factor > 1.0 else "↓"
-            researched_gross = validation.get("researched_domestic_gross_usd")
             gross_note = ""
             if isinstance(researched_gross, (int, float)) and researched_gross > 0:
-                gross_note = f" (anchored to researched US domestic gross ~${researched_gross:,.0f})"
+                pct_of_gross = (projected_sales_gen_pop / float(researched_gross)) * 100.0
+                gross_note = (
+                    f" (anchored to {pct_of_gross:.1f}% of researched US gross "
+                    f"~${float(researched_gross):,.0f}; digital band "
+                    f"{DIGITAL_SALES_FACTOR_LOW*100:.0f}-"
+                    f"{DIGITAL_SALES_FACTOR_HIGH*100:.0f}%)"
+                )
             changes.append(
                 f"{arrow} Scaled per-platform hits, total tickets, and projected sales by "
                 f"{factor:.3f}{gross_note}: projected sales ${old_sales:,.0f} -> "
@@ -1036,10 +1183,22 @@ def apply_ai_ticket_adjustments(validation, platform_totals, total_tickets,
                 f"{total_tickets:,}."
             )
 
-    # ---- Demographics override (now MANDATORY when AI returns a plan) ----
+    # ---- Demographics override (ALWAYS runs when validation didn't pass) ----
+    researched_skew = (validation.get("gender_skew") or "").strip().lower()
     age_plan = validation.get("age") or {}
     gender_plan = validation.get("gender") or {}
-    researched_skew = (validation.get("gender_skew") or "").strip().lower()
+
+    # Synthesize defaults when the AI returned a skew direction but no plan.
+    # Without this, the empty-plan case silently leaves the (often noisy)
+    # panel-derived percentages in place.
+    if not gender_plan and researched_skew in ("male", "female", "balanced"):
+        gender_plan = _default_gender_plan_from_skew(researched_skew)
+        changes.append(
+            f"Synthesized default GENDER plan from researched {researched_skew}-skew "
+            f"(AI returned no explicit plan)."
+        )
+    if not age_plan and researched_skew in ("male", "female", "balanced"):
+        age_plan = _default_age_plan_from_skew(researched_skew, genre)
 
     if "AGE" in demo_overall and demo_overall["AGE"] and age_plan:
         new_age = _normalize_pct_plan(age_plan, list(demo_overall["AGE"].keys()))
@@ -1049,8 +1208,8 @@ def apply_ai_ticket_adjustments(validation, platform_totals, total_tickets,
 
     if "GENDER" in demo_overall and demo_overall["GENDER"] and gender_plan:
         # Enforce researched skew direction BEFORE normalizing — this is the
-        # safety net that prevents Devil Wears Prada from outputting MALE
-        # dominant when the title is universally known to be female-skew.
+        # final safety net that prevents Devil Wears Prada from outputting
+        # MALE-dominant when the title is universally known to be female-skew.
         gender_plan = _enforce_gender_skew(gender_plan, researched_skew)
         new_gender = _normalize_pct_plan(gender_plan, list(demo_overall["GENDER"].keys()))
         if new_gender:
@@ -1135,6 +1294,7 @@ def write_output(results, p):
          demo_overall, ai_changes) = apply_ai_ticket_adjustments(
             validation, platform_totals, total_tickets, total_tickets_gen_pop,
             projected_sales_base, projected_sales_gen_pop, demo_overall,
+            genre=p.get("genre", ""),
         )
         if ai_changes:
             print("🤖 Applied AI corrections:")
@@ -1232,6 +1392,25 @@ def write_output(results, p):
             "Researched US Domestic Gross", "",
             f"${researched_gross:,.0f}", src_note, "", ""
         ))
+        band_lo = float(researched_gross) * DIGITAL_SALES_FACTOR_LOW
+        band_hi = float(researched_gross) * DIGITAL_SALES_FACTOR_HIGH
+        rows.append((
+            "Digital Sales Band", "",
+            f"${band_lo:,.0f} - ${band_hi:,.0f}",
+            f"({DIGITAL_SALES_FACTOR_LOW*100:.0f}-"
+            f"{DIGITAL_SALES_FACTOR_HIGH*100:.0f}% of US gross; "
+            f"panel measures digital only)",
+            "", ""
+        ))
+        if projected_sales_gen_pop > 0:
+            final_pct = (projected_sales_gen_pop / float(researched_gross)) * 100.0
+            in_band = band_lo <= projected_sales_gen_pop <= band_hi
+            rows.append((
+                "Final Sales vs Gross", "",
+                f"{final_pct:.1f}% of researched US gross",
+                "(in band)" if in_band else "(outside band — check)",
+                "", ""
+            ))
 
     for i, flag in enumerate(validation.get("flags", []) or [], start=1):
         rows.append((f"Flag {i}", "", flag, "", "", ""))

@@ -17256,6 +17256,29 @@ def _add_user_profile(s3_key, created_by):
     # This is now handled by the purgatory metadata system
     # Keeping as stub for backward compatibility
     print(f"📝 Profile created: {s3_key} by {created_by}")
+    # Best-effort: auto-provision an IQ Rankers tracker so the new profile
+    # starts feeding the Talent / Brands leaderboards on the next nightly
+    # run. Never raises — daily cron will pick it up either way.
+    try:
+        global _iq_rankers, _sentiment_iq
+        if _iq_rankers is not None and _sentiment_iq is not None and s3_client and s3_key:
+            subject = get_profile_subject_from_s3_key(s3_key)
+            if subject:
+                terms = _iq_rankers.read_brand_input_from_csv(s3_client, S3_BUCKET, s3_key)
+                project_name = subject.replace('_', ' ').strip()
+                if not terms and project_name:
+                    terms = [project_name]
+                if terms:
+                    _iq_rankers.ensure_tracker_for_profile(
+                        s3_client=s3_client,
+                        sentiment_iq=_sentiment_iq,
+                        profile_subject=subject,
+                        project_name=project_name,
+                        s3_key=s3_key,
+                        brand_terms=terms,
+                    )
+    except Exception as _iqr_err:
+        print(f"   ⚠️ iq_rankers auto-provision skipped: {_iqr_err}")
 
 
 # ============================================================================
@@ -30378,6 +30401,260 @@ def cron_sentiment_iq():
         return jsonify({'success': True, 'summary': summary})
     except Exception as e:
         return jsonify({'success': False, 'error': str(e), 'summary': summary}), 500
+
+
+# =====================================================================
+#  IQ RANKERS  -  Talent / Brands daily leaderboard
+# =====================================================================
+#
+# For every Profile IQ profile we auto-provision a Sentiment IQ tracker
+# (using the BRAND INPUT row from the profile's CSV), run Layer-1 scoring
+# nightly against ClickHouse, and persist one row per (profile, day) into
+# `reference.profile_iq_daily_metrics`. The Talent / Brands tabs inside
+# Ranker IQ aggregate this table over a user-selected window (1d / 7d /
+# 28d / MTD / QTD / YTD / custom) and show a CW IQ Score + delta vs the
+# previous equivalent period.
+#
+# ClickHouse only — never Snowflake.
+# =====================================================================
+
+try:
+    import iq_rankers as _iq_rankers
+except Exception as _e_iqr:
+    print(f"⚠️ iq_rankers module unavailable: {_e_iqr}")
+    _iq_rankers = None
+
+
+def _iq_rankers_get_jobs():
+    """Return the current `s3_cache['jobs']` list, refreshing across workers."""
+    try:
+        load_persisted_cache()
+    except Exception:
+        pass
+    return list(s3_cache.get('jobs') or [])
+
+
+@app.route('/api/iq-rankers/leaderboard', methods=['GET'])
+@requires_auth
+def iq_rankers_leaderboard():
+    """Aggregated Talent / Brands leaderboard for the requested window.
+
+    Query params:
+        master         TALENT | BRAND (required)
+        subcategory    one of MASTER_CATEGORIES[master], or 'ALL' / '' for all subs
+        window         1d | 7d | 28d | MTD | QTD | YTD | custom
+        start, end     YYYY-MM-DD (only used when window=custom)
+        search         substring filter on project_name
+        sort           rank | name | mentions | delta_mentions | pos | neu |
+                       neg | net_sentiment | cw_iq_score | delta_cw_iq
+        sort_dir       asc | desc (default desc)
+        limit          1..2000 (default 500)
+    """
+    if _iq_rankers is None:
+        return jsonify({'success': False, 'error': 'IQ Rankers unavailable'}), 500
+    try:
+        master      = (request.args.get('master') or '').strip().upper()
+        subcategory = (request.args.get('subcategory') or '').strip().upper()
+        window      = (request.args.get('window') or '7d').strip()
+        start       = (request.args.get('start') or '').strip() or None
+        end         = (request.args.get('end') or '').strip() or None
+        search      = (request.args.get('search') or '').strip() or None
+        sort        = (request.args.get('sort') or 'cw_iq_score').strip()
+        sort_dir    = (request.args.get('sort_dir') or 'desc').strip()
+        try:
+            limit = max(1, min(int(request.args.get('limit') or 500), 2000))
+        except Exception:
+            limit = 500
+        if master not in ('TALENT', 'BRAND'):
+            return jsonify({'success': False,
+                            'error': 'master must be TALENT or BRAND'}), 400
+        result = _iq_rankers.aggregate_leaderboard(
+            ch_connect=_ch_connect,
+            master=master,
+            subcategory=subcategory if subcategory and subcategory != 'ALL' else None,
+            window=window,
+            start=start,
+            end=end,
+            search=search,
+            sort=sort,
+            sort_dir=sort_dir,
+            limit=limit,
+        )
+        return jsonify({'success': True, **result})
+    except Exception as e:
+        import traceback; traceback.print_exc()
+        return jsonify({'success': False, 'error': str(e)[:300]}), 500
+
+
+@app.route('/api/iq-rankers/categories', methods=['GET'])
+@requires_auth
+def iq_rankers_categories():
+    """Return the static master → subcategory map used to render the sub-tabs."""
+    if _iq_rankers is None:
+        return jsonify({'success': False, 'error': 'IQ Rankers unavailable'}), 500
+    return jsonify({
+        'success': True,
+        'categories': {
+            'TALENT': _iq_rankers.MASTER_CATEGORIES['TALENT'],
+            'BRAND':  _iq_rankers.MASTER_CATEGORIES['BRAND'],
+        },
+    })
+
+
+@app.route('/api/iq-rankers/profile/<path:profile_subject>/timeseries', methods=['GET'])
+@requires_auth
+def iq_rankers_profile_timeseries(profile_subject):
+    """Daily series for one profile (sparkline / drilldown chart)."""
+    if _iq_rankers is None:
+        return jsonify({'success': False, 'error': 'IQ Rankers unavailable'}), 500
+    try:
+        metric = (request.args.get('metric') or 'cw_iq_score').strip()
+        start  = (request.args.get('start')  or '').strip() or None
+        end    = (request.args.get('end')    or '').strip() or None
+        series = _iq_rankers.fetch_profile_timeseries(
+            ch_connect=_ch_connect,
+            profile_subject=profile_subject,
+            metric=metric,
+            start=start,
+            end=end,
+        )
+        return jsonify({'success': True, 'profile_subject': profile_subject,
+                        'metric': metric, 'series': series})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)[:300]}), 500
+
+
+@app.route('/api/iq-rankers/backfill-trackers', methods=['POST'])
+@requires_admin
+def iq_rankers_backfill_trackers():
+    """One-shot: ensure every Profile IQ profile has a Sentiment IQ tracker.
+
+    Walks `s3_cache['jobs']`, reads the BRAND INPUT row out of each profile
+    CSV, and creates an ongoing tracker (idempotent — existing trackers are
+    just refreshed with current brand_terms / s3_key)."""
+    if _iq_rankers is None or _sentiment_iq is None:
+        return jsonify({'success': False, 'error': 'IQ Rankers unavailable'}), 500
+    created = 0; updated = 0; skipped = 0; failed = 0
+    details = []
+    try:
+        for j in _iq_rankers._iter_profile_jobs(_iq_rankers_get_jobs()):
+            subject      = j.get('profile_subject') or ''
+            s3_key       = j.get('s3_key') or j.get('job_id') or ''
+            project_name = j.get('display_name') or j.get('project_name') or subject
+            try:
+                terms = _iq_rankers.read_brand_input_from_csv(s3_client, S3_BUCKET, s3_key)
+                if not terms and project_name:
+                    terms = [project_name]
+                if not terms:
+                    skipped += 1; continue
+                tid = _iq_rankers._tracker_id_for_profile(subject)
+                pre = _sentiment_iq.s3_get_json(s3_client, _sentiment_iq.tracker_key(tid))
+                _iq_rankers.ensure_tracker_for_profile(
+                    s3_client=s3_client,
+                    sentiment_iq=_sentiment_iq,
+                    profile_subject=subject,
+                    project_name=project_name,
+                    s3_key=s3_key,
+                    brand_terms=terms,
+                )
+                if pre is None:
+                    created += 1
+                else:
+                    updated += 1
+            except Exception as e:
+                failed += 1
+                details.append({'subject': subject, 'reason': str(e)[:200]})
+        return jsonify({'success': True,
+                        'created': created, 'updated': updated,
+                        'skipped': skipped, 'failed': failed,
+                        'details': details[:100]})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)[:300]}), 500
+
+
+def _run_iq_rankers_daily(snapshot_date=None, only_subject=None, days=None):
+    """Background runner used by both the cron route and the admin backfill.
+
+    If `days` is set, runs the backfill for the last N days (oldest first
+    so CW IQ baselines build correctly). Otherwise runs a single day
+    (defaults to yesterday).
+    """
+    if _iq_rankers is None:
+        return {'success': False, 'error': 'iq_rankers unavailable'}
+    jobs_list = _iq_rankers_get_jobs()
+    if days and int(days) > 1:
+        return _iq_rankers.backfill_recent_days(
+            ch_connect=_ch_connect,
+            s3_client=s3_client,
+            sentiment_iq=_sentiment_iq,
+            s3_cache_jobs=jobs_list,
+            s3_bucket=S3_BUCKET,
+            days=int(days),
+            only_profile_subject=only_subject,
+        )
+    return _iq_rankers.run_daily_for_all_profiles(
+        ch_connect=_ch_connect,
+        s3_client=s3_client,
+        sentiment_iq=_sentiment_iq,
+        s3_cache_jobs=jobs_list,
+        s3_bucket=S3_BUCKET,
+        snapshot_date=snapshot_date,
+        only_profile_subject=only_subject,
+    )
+
+
+@app.route('/api/cron/iq-rankers-daily', methods=['GET', 'POST'])
+def cron_iq_rankers_daily():
+    """Daily cron entry point. Auth via X-Cron-Secret header or ?secret=.
+
+    Optional query params:
+        date=YYYY-MM-DD      run for a specific date instead of yesterday
+        only=<subject>       only run for one profile_subject
+        days=N               run a backfill of the last N days (oldest first)
+    """
+    if _iq_rankers is None:
+        return jsonify({'success': False, 'error': 'iq_rankers unavailable'}), 500
+    secret = request.headers.get('X-Cron-Secret') or request.args.get('secret') or ''
+    expected = os.environ.get('CRON_SECRET', '')
+    if not expected or secret != expected:
+        return jsonify({'success': False, 'error': 'Unauthorized'}), 403
+    snapshot_date = (request.args.get('date') or '').strip() or None
+    only_subject  = (request.args.get('only') or '').strip() or None
+    days_raw      = (request.args.get('days') or '').strip()
+    try:
+        days = int(days_raw) if days_raw else None
+    except Exception:
+        days = None
+    try:
+        result = _run_iq_rankers_daily(snapshot_date=snapshot_date,
+                                       only_subject=only_subject,
+                                       days=days)
+        return jsonify({'success': True, 'result': result})
+    except Exception as e:
+        import traceback; traceback.print_exc()
+        return jsonify({'success': False, 'error': str(e)[:300]}), 500
+
+
+@app.route('/api/iq-rankers/backfill-30d', methods=['POST'])
+@requires_admin
+def iq_rankers_backfill_30d():
+    """Admin one-shot: backfill the last 30 days of daily metrics from
+    ClickHouse. Heavy — runs synchronously inside this request, so plan
+    for a long timeout."""
+    if _iq_rankers is None:
+        return jsonify({'success': False, 'error': 'iq_rankers unavailable'}), 500
+    try:
+        days = int((request.args.get('days') or request.json or {}).get('days', 30)) \
+            if isinstance(request.json, dict) else int(request.args.get('days') or 30)
+    except Exception:
+        days = 30
+    days = max(1, min(days, 365))
+    try:
+        result = _run_iq_rankers_daily(days=days)
+        return jsonify({'success': True, 'days': days, 'result': result})
+    except Exception as e:
+        import traceback; traceback.print_exc()
+        return jsonify({'success': False, 'error': str(e)[:300]}), 500
 
 
 def run_cross_show(job_id):

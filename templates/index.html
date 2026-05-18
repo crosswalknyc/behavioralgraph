@@ -17187,6 +17187,8 @@
                     <button class="tab-btn" onclick="showRankerIQPlatform('goodshort')" id="rankerIQPlatformGoodshort"><span class="tab-icon">📱</span> GoodShort</button>
                     <button class="tab-btn" onclick="showRankerIQPlatform('shorttv')" id="rankerIQPlatformShorttv"><span class="tab-icon">📱</span> ShortTV</button>
                     <button class="tab-btn" onclick="showRankerIQPlatform('reelshort')" id="rankerIQPlatformReelshort"><span class="tab-icon">📱</span> ReelShort</button>
+                    <button class="tab-btn" onclick="showRankerIQPlatform('talent')" id="rankerIQPlatformTalent"><span class="tab-icon">⭐</span> Talent</button>
+                    <button class="tab-btn" onclick="showRankerIQPlatform('brands')" id="rankerIQPlatformBrands"><span class="tab-icon">📦</span> Brands</button>
                 </div>
                 <div id="rankerIQPlatformContent" class="ranker-platform-content">
                     <!-- Netflix sub-view - reuses the existing ranker tab content -->
@@ -17321,6 +17323,110 @@
                         <div id="rankerIQReelshortInsightsCards" class="rankers-insights-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 1rem;"></div>
                         <div id="rankerIQReelshortLoading" style="padding: 2rem; text-align: center; color: var(--text-secondary); display: none;">Loading ReelShort data...</div>
                         <div id="rankerIQReelshortError" style="padding: 1rem; color: var(--accent-red); display: none;"></div>
+                    </div>
+
+                    <!-- ===== TALENT RANKER ===== -->
+                    <div id="rankeriq-talent" class="ranker-platform-panel">
+                        <div style="display: flex; justify-content: space-between; align-items: flex-end; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.5rem;">
+                            <div>
+                                <h3 style="margin: 0;">⭐ Talent Ranker</h3>
+                                <p style="margin: 0.15rem 0 0 0; font-size: 0.78rem; color: var(--text-secondary);">Daily mentions, sentiment and CW IQ Score across every Talent profile in Profile IQ. Click a row to open the profile.</p>
+                            </div>
+                            <button class="btn btn-secondary" onclick="loadIQRankerLeaderboard('TALENT', true)" style="padding: 0.35rem 0.75rem; font-size: 0.8rem;">🔄 Refresh</button>
+                        </div>
+                        <div id="iqRankerSubTabs-TALENT" class="netflix-subtabs" style="display: flex; gap: 0.35rem; margin: 0.5rem 0 0.75rem 0; flex-wrap: wrap;"></div>
+                        <div class="iq-ranker-controls" style="display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center; margin-bottom: 0.75rem;">
+                            <label style="font-size: 0.75rem; color: var(--text-secondary);">Window:
+                                <select id="iqRankerWindow-TALENT" onchange="onIQRankerWindowChange('TALENT')" style="padding: 0.3rem 0.5rem; font-size: 0.8rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary); margin-left: 0.35rem;">
+                                    <option value="1d">Yesterday</option>
+                                    <option value="7d" selected>Last 7 days</option>
+                                    <option value="28d">Last 28 days</option>
+                                    <option value="MTD">Month to date</option>
+                                    <option value="QTD">Quarter to date</option>
+                                    <option value="YTD">Year to date</option>
+                                    <option value="custom">Custom…</option>
+                                </select>
+                            </label>
+                            <span id="iqRankerCustomDates-TALENT" style="display: none; align-items: center; gap: 0.35rem;">
+                                <input type="date" id="iqRankerStart-TALENT" style="padding: 0.3rem 0.4rem; font-size: 0.8rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary);" onchange="loadIQRankerLeaderboard('TALENT')">
+                                <span style="color: var(--text-secondary); font-size: 0.75rem;">to</span>
+                                <input type="date" id="iqRankerEnd-TALENT" style="padding: 0.3rem 0.4rem; font-size: 0.8rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary);" onchange="loadIQRankerLeaderboard('TALENT')">
+                            </span>
+                            <input type="search" id="iqRankerSearch-TALENT" placeholder="Search profiles..." oninput="onIQRankerSearchInput('TALENT')" style="flex: 1; min-width: 180px; padding: 0.3rem 0.5rem; font-size: 0.8rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary);">
+                            <span id="iqRankerWindowLabel-TALENT" style="font-size: 0.7rem; color: var(--text-secondary);"></span>
+                        </div>
+                        <div id="iqRankerLoading-TALENT" style="padding: 1.5rem; text-align: center; color: var(--text-secondary); display: none;"><span class="spinner"></span> Loading leaderboard…</div>
+                        <div id="iqRankerError-TALENT" style="padding: 1rem; color: var(--accent-red); display: none;"></div>
+                        <div id="iqRankerTableWrap-TALENT" style="overflow-x: auto;">
+                            <table class="rankers-table" id="iqRankerTable-TALENT" style="width: 100%; border-collapse: collapse;">
+                                <thead><tr>
+                                    <th data-iq-sort="rank" data-iq-master="TALENT" style="cursor: pointer;">#</th>
+                                    <th data-iq-sort="name" data-iq-master="TALENT" style="cursor: pointer;">Profile</th>
+                                    <th data-iq-sort="mentions" data-iq-master="TALENT" style="cursor: pointer; text-align: right;">Mentions</th>
+                                    <th data-iq-sort="delta_mentions" data-iq-master="TALENT" style="cursor: pointer; text-align: right;">Δ Mentions</th>
+                                    <th data-iq-sort="pos" data-iq-master="TALENT" style="cursor: pointer; text-align: right;">Pos</th>
+                                    <th data-iq-sort="neu" data-iq-master="TALENT" style="cursor: pointer; text-align: right;">Neu</th>
+                                    <th data-iq-sort="neg" data-iq-master="TALENT" style="cursor: pointer; text-align: right;">Neg</th>
+                                    <th data-iq-sort="net_sentiment" data-iq-master="TALENT" style="cursor: pointer; text-align: right;">Net Sent.</th>
+                                    <th data-iq-sort="cw_iq_score" data-iq-master="TALENT" style="cursor: pointer; text-align: right;">CW IQ</th>
+                                    <th data-iq-sort="delta_cw_iq" data-iq-master="TALENT" style="cursor: pointer; text-align: right;">Δ CW IQ</th>
+                                </tr></thead>
+                                <tbody id="iqRankerBody-TALENT"></tbody>
+                            </table>
+                        </div>
+                        <div id="iqRankerEmpty-TALENT" style="display: none; padding: 2rem; text-align: center; color: var(--text-secondary);">No data yet. The nightly ranker job populates this table after midnight ET — or run the 30-day backfill from Admin.</div>
+                    </div>
+
+                    <!-- ===== BRANDS RANKER ===== -->
+                    <div id="rankeriq-brands" class="ranker-platform-panel">
+                        <div style="display: flex; justify-content: space-between; align-items: flex-end; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.5rem;">
+                            <div>
+                                <h3 style="margin: 0;">📦 Brands Ranker</h3>
+                                <p style="margin: 0.15rem 0 0 0; font-size: 0.78rem; color: var(--text-secondary);">Daily mentions, sentiment and CW IQ Score across every Brand profile in Profile IQ. Click a row to open the profile.</p>
+                            </div>
+                            <button class="btn btn-secondary" onclick="loadIQRankerLeaderboard('BRAND', true)" style="padding: 0.35rem 0.75rem; font-size: 0.8rem;">🔄 Refresh</button>
+                        </div>
+                        <div id="iqRankerSubTabs-BRAND" class="netflix-subtabs" style="display: flex; gap: 0.35rem; margin: 0.5rem 0 0.75rem 0; flex-wrap: wrap;"></div>
+                        <div class="iq-ranker-controls" style="display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center; margin-bottom: 0.75rem;">
+                            <label style="font-size: 0.75rem; color: var(--text-secondary);">Window:
+                                <select id="iqRankerWindow-BRAND" onchange="onIQRankerWindowChange('BRAND')" style="padding: 0.3rem 0.5rem; font-size: 0.8rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary); margin-left: 0.35rem;">
+                                    <option value="1d">Yesterday</option>
+                                    <option value="7d" selected>Last 7 days</option>
+                                    <option value="28d">Last 28 days</option>
+                                    <option value="MTD">Month to date</option>
+                                    <option value="QTD">Quarter to date</option>
+                                    <option value="YTD">Year to date</option>
+                                    <option value="custom">Custom…</option>
+                                </select>
+                            </label>
+                            <span id="iqRankerCustomDates-BRAND" style="display: none; align-items: center; gap: 0.35rem;">
+                                <input type="date" id="iqRankerStart-BRAND" style="padding: 0.3rem 0.4rem; font-size: 0.8rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary);" onchange="loadIQRankerLeaderboard('BRAND')">
+                                <span style="color: var(--text-secondary); font-size: 0.75rem;">to</span>
+                                <input type="date" id="iqRankerEnd-BRAND" style="padding: 0.3rem 0.4rem; font-size: 0.8rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary);" onchange="loadIQRankerLeaderboard('BRAND')">
+                            </span>
+                            <input type="search" id="iqRankerSearch-BRAND" placeholder="Search profiles..." oninput="onIQRankerSearchInput('BRAND')" style="flex: 1; min-width: 180px; padding: 0.3rem 0.5rem; font-size: 0.8rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary);">
+                            <span id="iqRankerWindowLabel-BRAND" style="font-size: 0.7rem; color: var(--text-secondary);"></span>
+                        </div>
+                        <div id="iqRankerLoading-BRAND" style="padding: 1.5rem; text-align: center; color: var(--text-secondary); display: none;"><span class="spinner"></span> Loading leaderboard…</div>
+                        <div id="iqRankerError-BRAND" style="padding: 1rem; color: var(--accent-red); display: none;"></div>
+                        <div id="iqRankerTableWrap-BRAND" style="overflow-x: auto;">
+                            <table class="rankers-table" id="iqRankerTable-BRAND" style="width: 100%; border-collapse: collapse;">
+                                <thead><tr>
+                                    <th data-iq-sort="rank" data-iq-master="BRAND" style="cursor: pointer;">#</th>
+                                    <th data-iq-sort="name" data-iq-master="BRAND" style="cursor: pointer;">Profile</th>
+                                    <th data-iq-sort="mentions" data-iq-master="BRAND" style="cursor: pointer; text-align: right;">Mentions</th>
+                                    <th data-iq-sort="delta_mentions" data-iq-master="BRAND" style="cursor: pointer; text-align: right;">Δ Mentions</th>
+                                    <th data-iq-sort="pos" data-iq-master="BRAND" style="cursor: pointer; text-align: right;">Pos</th>
+                                    <th data-iq-sort="neu" data-iq-master="BRAND" style="cursor: pointer; text-align: right;">Neu</th>
+                                    <th data-iq-sort="neg" data-iq-master="BRAND" style="cursor: pointer; text-align: right;">Neg</th>
+                                    <th data-iq-sort="net_sentiment" data-iq-master="BRAND" style="cursor: pointer; text-align: right;">Net Sent.</th>
+                                    <th data-iq-sort="cw_iq_score" data-iq-master="BRAND" style="cursor: pointer; text-align: right;">CW IQ</th>
+                                    <th data-iq-sort="delta_cw_iq" data-iq-master="BRAND" style="cursor: pointer; text-align: right;">Δ CW IQ</th>
+                                </tr></thead>
+                                <tbody id="iqRankerBody-BRAND"></tbody>
+                            </table>
+                        </div>
+                        <div id="iqRankerEmpty-BRAND" style="display: none; padding: 2rem; text-align: center; color: var(--text-secondary);">No data yet. The nightly ranker job populates this table after midnight ET — or run the 30-day backfill from Admin.</div>
                     </div>
                 </div>
                 <div id="rankerIQLoadBlock" style="padding: 2rem; text-align: center; background: var(--bg-card); border-radius: 8px; margin-top: 1rem;">
@@ -75906,7 +76012,275 @@
             else if (id === 'goodshort') loadGoodshortRankerData();
             else if (id === 'shorttv') loadShortstvRankerData();
             else if (id === 'reelshort') loadReelShortRankerData();
+            else if (id === 'talent') initIQRanker('TALENT');
+            else if (id === 'brands') initIQRanker('BRAND');
         }
+
+        // ============================================================
+        // IQ Rankers (Talent / Brands) — daily leaderboard UI
+        // ============================================================
+        const IQ_RANKER_STATE = {
+            TALENT: { sub: 'ALL', sort: 'cw_iq_score', sortDir: 'desc',
+                      window: '7d', start: '', end: '', search: '',
+                      categories: null, lastRows: [], inflight: null,
+                      loaded: false, searchTimer: null },
+            BRAND:  { sub: 'ALL', sort: 'cw_iq_score', sortDir: 'desc',
+                      window: '7d', start: '', end: '', search: '',
+                      categories: null, lastRows: [], inflight: null,
+                      loaded: false, searchTimer: null }
+        };
+
+        async function fetchIQRankerCategories() {
+            try {
+                const r = await fetch('/api/iq-rankers/categories', { credentials: 'same-origin' });
+                if (!r.ok) return null;
+                const d = await r.json();
+                if (!d || !d.success) return null;
+                return d.categories || null;
+            } catch (_) { return null; }
+        }
+
+        async function initIQRanker(master) {
+            const state = IQ_RANKER_STATE[master];
+            if (!state) return;
+            if (!state.categories) {
+                const cats = await fetchIQRankerCategories();
+                state.categories = (cats && cats[master]) || [];
+                renderIQRankerSubTabs(master);
+            }
+            // First-time render — load data unless we already have it for current sub.
+            if (!state.loaded) {
+                await loadIQRankerLeaderboard(master);
+            }
+        }
+
+        function renderIQRankerSubTabs(master) {
+            const wrap = document.getElementById('iqRankerSubTabs-' + master);
+            if (!wrap) return;
+            const state = IQ_RANKER_STATE[master];
+            const subs = ['ALL'].concat(state.categories || []);
+            const html = subs.map(sub => {
+                const label = sub === 'ALL' ? (master === 'TALENT' ? 'All Talent' : 'All Brands')
+                                            : sub.replace(/_/g, ' ');
+                const active = sub === state.sub ? ' active' : '';
+                const safeSub = sub.replace(/'/g, "\\'");
+                return `<button class="tab-btn${active}" onclick="onIQRankerSubTabClick('${master}', '${safeSub}')">${_iqEsc(label)}</button>`;
+            }).join('');
+            wrap.innerHTML = html;
+        }
+
+        function onIQRankerSubTabClick(master, sub) {
+            const state = IQ_RANKER_STATE[master];
+            if (!state) return;
+            state.sub = sub;
+            renderIQRankerSubTabs(master);
+            loadIQRankerLeaderboard(master);
+        }
+
+        function onIQRankerWindowChange(master) {
+            const state = IQ_RANKER_STATE[master];
+            const sel = document.getElementById('iqRankerWindow-' + master);
+            if (!sel || !state) return;
+            state.window = sel.value || '7d';
+            const customWrap = document.getElementById('iqRankerCustomDates-' + master);
+            if (customWrap) customWrap.style.display = (state.window === 'custom') ? 'inline-flex' : 'none';
+            if (state.window !== 'custom') {
+                loadIQRankerLeaderboard(master);
+            } else {
+                // Default custom window to last 7 days when first opened
+                const startEl = document.getElementById('iqRankerStart-' + master);
+                const endEl   = document.getElementById('iqRankerEnd-' + master);
+                if (startEl && !startEl.value) {
+                    const d = new Date(); d.setDate(d.getDate() - 7);
+                    startEl.value = d.toISOString().slice(0,10);
+                }
+                if (endEl && !endEl.value) {
+                    const d = new Date(); d.setDate(d.getDate() - 1);
+                    endEl.value = d.toISOString().slice(0,10);
+                }
+                loadIQRankerLeaderboard(master);
+            }
+        }
+
+        function onIQRankerSearchInput(master) {
+            const state = IQ_RANKER_STATE[master];
+            if (!state) return;
+            const input = document.getElementById('iqRankerSearch-' + master);
+            state.search = (input && input.value || '').trim();
+            // Debounce so we don't spam the API on every keystroke
+            if (state.searchTimer) clearTimeout(state.searchTimer);
+            state.searchTimer = setTimeout(() => loadIQRankerLeaderboard(master), 300);
+        }
+
+        async function loadIQRankerLeaderboard(master, force) {
+            const state = IQ_RANKER_STATE[master];
+            if (!state) return;
+            if (state.inflight) {
+                try { state.inflight.abort(); } catch(_) {}
+            }
+            const ctrl = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+            state.inflight = ctrl;
+
+            const loading = document.getElementById('iqRankerLoading-' + master);
+            const errEl   = document.getElementById('iqRankerError-' + master);
+            const empty   = document.getElementById('iqRankerEmpty-' + master);
+            const tableWrap = document.getElementById('iqRankerTableWrap-' + master);
+            if (loading) loading.style.display = 'block';
+            if (errEl)   { errEl.style.display = 'none'; errEl.textContent = ''; }
+            if (empty)   empty.style.display = 'none';
+            if (tableWrap) tableWrap.style.opacity = '0.55';
+
+            const params = new URLSearchParams();
+            params.set('master', master);
+            params.set('subcategory', state.sub || 'ALL');
+            params.set('window', state.window || '7d');
+            if (state.window === 'custom') {
+                const startEl = document.getElementById('iqRankerStart-' + master);
+                const endEl   = document.getElementById('iqRankerEnd-' + master);
+                if (startEl && startEl.value) params.set('start', startEl.value);
+                if (endEl   && endEl.value)   params.set('end',   endEl.value);
+            }
+            if (state.search) params.set('search', state.search);
+            params.set('sort', state.sort || 'cw_iq_score');
+            params.set('sort_dir', state.sortDir || 'desc');
+            params.set('limit', '500');
+            if (force) params.set('_', String(Date.now()));
+
+            try {
+                const r = await fetch('/api/iq-rankers/leaderboard?' + params.toString(), {
+                    credentials: 'same-origin',
+                    signal: ctrl ? ctrl.signal : undefined
+                });
+                if (!r.ok) {
+                    let msg = 'HTTP ' + r.status;
+                    try { const e = await r.json(); if (e && e.error) msg = e.error; } catch(_) {}
+                    throw new Error(msg);
+                }
+                const d = await r.json();
+                if (!d || !d.success) throw new Error((d && d.error) || 'Failed to load');
+                state.lastRows = d.rows || [];
+                state.loaded = true;
+                renderIQRankerWindowLabel(master, d.window);
+                renderIQRankerTable(master);
+                if (empty) empty.style.display = state.lastRows.length ? 'none' : 'block';
+            } catch (err) {
+                if (err && err.name === 'AbortError') return;
+                if (errEl) {
+                    errEl.style.display = 'block';
+                    errEl.textContent = 'Error loading leaderboard: ' + (err && err.message || err);
+                }
+            } finally {
+                if (loading) loading.style.display = 'none';
+                if (tableWrap) tableWrap.style.opacity = '1';
+                if (state.inflight === ctrl) state.inflight = null;
+            }
+        }
+
+        function renderIQRankerWindowLabel(master, win) {
+            const el = document.getElementById('iqRankerWindowLabel-' + master);
+            if (!el || !win) return;
+            el.textContent = (win.start === win.end)
+                ? `${win.start}  •  vs ${win.prev_start}`
+                : `${win.start} → ${win.end}  •  vs ${win.prev_start} → ${win.prev_end}`;
+        }
+
+        function renderIQRankerTable(master) {
+            const state = IQ_RANKER_STATE[master];
+            const tbody = document.getElementById('iqRankerBody-' + master);
+            if (!tbody || !state) return;
+            const rows = state.lastRows || [];
+            if (!rows.length) {
+                tbody.innerHTML = '';
+                return;
+            }
+            const fmtNum = (n) => (n == null ? '' : Number(n).toLocaleString());
+            const fmtDelta = (n, decimals) => {
+                if (n == null || isNaN(n)) return '<span style="color: var(--text-secondary);">—</span>';
+                const sign = n > 0 ? '+' : '';
+                const colour = n > 0 ? 'var(--accent-cyan)' : (n < 0 ? 'var(--accent-red)' : 'var(--text-secondary)');
+                const v = decimals ? Number(n).toFixed(decimals) : Number(n).toLocaleString();
+                return `<span style="color: ${colour};">${sign}${v}</span>`;
+            };
+            const fmtNet = (n) => {
+                if (n == null) return '';
+                const colour = n > 5 ? 'var(--accent-cyan)' : (n < -5 ? 'var(--accent-red)' : 'var(--text-secondary)');
+                return `<span style="color: ${colour};">${Number(n).toFixed(1)}</span>`;
+            };
+            const fmtScore = (n) => {
+                if (n == null) return '';
+                const v = Number(n);
+                const colour = v >= 70 ? 'var(--accent-cyan)' : (v <= 30 ? 'var(--accent-red)' : 'var(--text-primary)');
+                return `<strong style="color: ${colour};">${v.toFixed(1)}</strong>`;
+            };
+            const html = rows.map((r, i) => {
+                const subj = encodeURIComponent(r.profile_subject || '');
+                const click = `onclick="openProfileFromIQRanker('${subj}', '${(r.s3_key || '').replace(/'/g, "\\'")}')"`;
+                return `<tr style="cursor: pointer;" ${click}>
+                    <td>${i + 1}</td>
+                    <td><strong>${_iqEsc(r.project_name || r.profile_subject || '')}</strong>
+                        <div style="font-size: 0.7rem; color: var(--text-secondary);">${_iqEsc(r.subcategory || '')}</div></td>
+                    <td style="text-align: right;">${fmtNum(r.mentions)}</td>
+                    <td style="text-align: right;">${fmtDelta(r.delta_mentions, 0)}</td>
+                    <td style="text-align: right; color: var(--accent-cyan);">${fmtNum(r.pos)}</td>
+                    <td style="text-align: right;">${fmtNum(r.neu)}</td>
+                    <td style="text-align: right; color: var(--accent-red);">${fmtNum(r.neg)}</td>
+                    <td style="text-align: right;">${fmtNet(r.net_sentiment)}</td>
+                    <td style="text-align: right;">${fmtScore(r.cw_iq_score)}</td>
+                    <td style="text-align: right;">${fmtDelta(r.delta_cw_iq, 1)}</td>
+                </tr>`;
+            }).join('');
+            tbody.innerHTML = html;
+        }
+
+        // Local HTML-escape helper. Some other module already defines a
+        // global `escapeHtml`; this one stays scoped under a different name
+        // so we don't clash with it.
+        function _iqEsc(s) {
+            if (s == null) return '';
+            return String(s)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;');
+        }
+
+        // Header click → sort. Single delegated listener so we don't have to
+        // re-bind every render.
+        document.addEventListener('click', function(ev) {
+            const th = ev.target && ev.target.closest && ev.target.closest('th[data-iq-sort]');
+            if (!th) return;
+            const master = th.getAttribute('data-iq-master');
+            const sortKey = th.getAttribute('data-iq-sort');
+            if (!master || !sortKey) return;
+            const state = IQ_RANKER_STATE[master];
+            if (!state) return;
+            if (state.sort === sortKey) {
+                state.sortDir = (state.sortDir === 'desc') ? 'asc' : 'desc';
+            } else {
+                state.sort = sortKey;
+                // Default text columns to ASC, numeric to DESC
+                state.sortDir = (sortKey === 'name' || sortKey === 'rank') ? 'asc' : 'desc';
+            }
+            loadIQRankerLeaderboard(master);
+        });
+
+        function openProfileFromIQRanker(subjectEnc, s3Key) {
+            // Open the profile in Profile IQ via the canonical sidebar handler.
+            try {
+                if (typeof showProfileIQ === 'function') showProfileIQ();
+                if (s3Key && typeof selectDashboardProfile === 'function') {
+                    setTimeout(() => selectDashboardProfile(s3Key), 60);
+                    return;
+                }
+            } catch(_) {}
+            try {
+                const sub = decodeURIComponent(subjectEnc || '');
+                const search = document.getElementById('dashProfileSearchInput');
+                if (search && sub) { search.value = sub.replace(/_/g, ' '); search.dispatchEvent(new Event('keyup')); }
+            } catch(_) {}
+        }
+        // ============================================================
         
         function renderRankerIQNetflixTrends() {
             // Trends chart - simplified for now
