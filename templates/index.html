@@ -16611,7 +16611,6 @@
                             <div class="tab-section" style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 1.25rem; text-align: center;">
                                 <div style="font-size: 0.7rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em;">Brand Lift (Users)</div>
                                 <div id="bpiqKpiLift" style="font-size: 1.5rem; font-weight: 700;"></div>
-                                <div id="bpiqKpiLiftHits" style="font-size: 0.7rem; color: var(--text-secondary);"></div>
                             </div>
                         </div>
                         <!-- Gen Pop / control-cohort mirror row -->
@@ -22839,7 +22838,6 @@
             document.getElementById('bpiqKpiPreUsersPct').innerHTML =
                 (totals.audience_pen_pre_pct || 0).toFixed(2) + '% of audience';
             document.getElementById('bpiqKpiLift').innerHTML = _bpiqFmtLift(totals.lift_pct_users);
-            document.getElementById('bpiqKpiLiftHits').innerHTML = 'Hits lift: ' + _bpiqFmtLift(totals.lift_pct_hits);
 
             // Gen Pop mirror row — same four KPIs computed off the
             // size-matched control cohort. Hides cleanly when the
