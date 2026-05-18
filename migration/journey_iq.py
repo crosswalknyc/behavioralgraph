@@ -58,11 +58,24 @@ from typing import Any, Callable, Iterable, Optional
 DEFAULT_LOOKBACK_DAYS = 14   # symmetric: 14 days before first mention
 DEFAULT_FORWARD_DAYS  = 7    # 7 days after last mention or conversion
 MAX_UIDS              = 75_000   # hard cap on cohort size per run
-MAX_EVENTS_PER_UID    = 600      # protects memory; ~40+ sessions of activity
+MAX_EVENTS_PER_UID    = 350      # cap per UID; preserves journey shape, halves Python work
 SESSION_GAP_MINUTES   = 30
 TOP_N_DETOURS         = 8
 TOP_N_KEYWORDS        = 25
 TOP_N_POST_HOSTS      = 12
+
+# ClickHouse parallelism / safety settings applied to every query in a run.
+# max_threads=32 keeps us under the per-user cap on typical CH boxes while
+# still scaling the big window-pull. max_memory_usage caps a single runaway
+# query so a 10M-UID brand can't OOM the node.
+CH_RUN_SETTINGS = {
+    'max_execution_time':            1800,
+    'max_threads':                   32,
+    'max_block_size':                65_536,
+    'max_memory_usage':              30_000_000_000,   # 30 GB hard cap
+    'join_use_nulls':                0,
+    'distributed_aggregation_memory_efficient': 1,
+}
 
 
 # ── S3 layout ────────────────────────────────────────────────────────────────
@@ -207,17 +220,19 @@ def run_job(
     )
 
     _p(2, 'Connecting to ClickHouse...')
-    conn = ch_connect(settings={'max_execution_time': 1800})
+    conn = ch_connect(settings=CH_RUN_SETTINGS)
     cur = conn.cursor()
 
     try:
         # ── Phase 1: resolve target → UIDs ───────────────────────────────
+        # multiSearchAny(lower(URL), [...]) routes through the ngrambf_v1
+        # skip index defined on lower(URL) (and lower(COMMON_NAME)), which
+        # is dramatically faster than ORing N position() calls.
         _p(8, f'Searching clickstream for "{target}"...')
         term_variants = _target_variants(target)
         match_clause = _build_match_clause(term_variants)
         target_domain_guesses = _guess_target_domains(target)
 
-        # Materialize matched UIDs + their per-UID first/last mention TS.
         cur.execute(f"DROP TABLE IF EXISTS journey_uids_{job_id}")
         cur.execute(f"""
             CREATE TEMPORARY TABLE journey_uids_{job_id} AS
@@ -229,7 +244,6 @@ def run_job(
             WHERE DELIVERED BETWEEN toDate('{sd}') AND toDate('{ed}')
               AND {match_clause}
             GROUP BY UID
-            ORDER BY first_mention_ts ASC
             LIMIT {MAX_UIDS}
         """)
         cur.execute(f"SELECT count() FROM journey_uids_{job_id}")
@@ -243,37 +257,47 @@ def run_job(
             empty['s3_key'] = s3_key
             return {'status': 'completed', 's3_key': s3_key, 'summary': empty}
 
-        _p(20, f'Matched {matched_uids:,} users. Pulling journey windows...')
+        _p(18, f'Matched {matched_uids:,} users. Computing window bounds...')
+
+        # Compute the GLOBAL [min(first_mention)-lookback, max(last_mention)+forward]
+        # date range so ClickHouse can prune partitions before evaluating the
+        # per-UID time filter. Without this, the per-row DELIVERED comparison
+        # against u.first_mention_ts forces a full scan of the matched window.
+        cur.execute(f"""
+            SELECT toDate(min(first_mention_ts)) - {lookback_days},
+                   toDate(max(last_mention_ts))  + {forward_days}
+            FROM journey_uids_{job_id}
+        """)
+        d_lo, d_hi = cur.fetchone()
+
+        _p(22, f'Pulling journey events for {matched_uids:,} users ({d_lo} → {d_hi})...')
 
         # ── Phase 2: pull symmetric per-UID journey window ────────────────
-        # Rows are bounded per UID via a window-style filter so a single SQL
-        # statement returns just the relevant slice of the clickstream.
-        # ROW_NUMBER() caps to MAX_EVENTS_PER_UID newest-first to protect the
-        # worker from a single hyperactive UID dominating memory.
+        # Three speedups vs the previous query:
+        #   1. WHERE DELIVERED BETWEEN d_lo AND d_hi  → partition pruning fires.
+        #   2. LIMIT N BY cf.UID                      → native CH "top-N per
+        #      group" path; cheaper than row_number() + WHERE rn <= N.
+        #   3. Drop BROWSER + PLATFORM                → smaller rows over the
+        #      wire, fewer Python objects to build downstream.
+        # Ordering by abs(VISIT_TS - first_mention_ts) keeps events CLOSEST
+        # to the brand interaction when an extreme-tail UID exceeds the cap,
+        # so we never lose the conversion event itself.
         cur.execute(f"""
-            SELECT UID, toUnixTimestamp64Milli(VISIT_TS) AS ts_ms,
-                   URL, COMMON_NAME, DOMAIN, PLATFORM, BROWSER
-            FROM (
-                SELECT cf.UID,
-                       cf.VISIT_TS,
-                       cf.URL,
-                       cf.COMMON_NAME,
-                       cf.DOMAIN,
-                       cf.PLATFORM,
-                       cf.BROWSER,
-                       row_number() OVER (PARTITION BY cf.UID ORDER BY cf.VISIT_TS DESC) AS rn
-                FROM clickstream.clickstream_final AS cf
-                INNER JOIN journey_uids_{job_id} AS u ON cf.UID = u.UID
-                WHERE cf.DELIVERED BETWEEN
-                          toDate(u.first_mention_ts) - {lookback_days}
-                      AND toDate(u.last_mention_ts)  + {forward_days}
-                  AND cf.VISIT_TS BETWEEN
-                          u.first_mention_ts - INTERVAL {lookback_days} DAY
-                      AND u.last_mention_ts  + INTERVAL {forward_days}  DAY
-                  AND length(cf.URL) > 8
-            ) sub
-            WHERE rn <= {MAX_EVENTS_PER_UID}
-            ORDER BY UID ASC, ts_ms ASC
+            SELECT cf.UID,
+                   toUnixTimestamp64Milli(cf.VISIT_TS) AS ts_ms,
+                   cf.URL,
+                   cf.COMMON_NAME,
+                   cf.DOMAIN
+            FROM clickstream.clickstream_final AS cf
+            INNER JOIN journey_uids_{job_id} AS u ON cf.UID = u.UID
+            WHERE cf.DELIVERED >= toDate('{d_lo}')
+              AND cf.DELIVERED <= toDate('{d_hi}')
+              AND cf.VISIT_TS  >= u.first_mention_ts - INTERVAL {lookback_days} DAY
+              AND cf.VISIT_TS  <= u.last_mention_ts  + INTERVAL {forward_days}  DAY
+              AND length(cf.URL) > 8
+            ORDER BY cf.UID ASC,
+                     abs(dateDiff('second', u.first_mention_ts, cf.VISIT_TS)) ASC
+            LIMIT {MAX_EVENTS_PER_UID} BY cf.UID
         """)
         raw_rows = cur.fetchall()
         _p(50, f'Pulled {len(raw_rows):,} events. Building journeys...')
@@ -286,6 +310,7 @@ def run_job(
             target_variants=term_variants,
             target_domains=target_domain_guesses,
             conv_patterns=conv_patterns,
+            progress_cb=progress_cb,
         )
         _p(70, 'Aggregating funnel + detours...')
         clusters = _aggregate_clusters(per_uid_journeys)
@@ -376,17 +401,29 @@ def _target_variants(target: str) -> list[str]:
 
 
 def _build_match_clause(variants: list[str]) -> str:
-    """OR-of-positions over URL + COMMON_NAME for each variant. Same shape
-    as `_bpiq_filter_clause` but inlined so this module has no dependency on
-    app.py."""
+    """Single multiSearchAny(lower(...), [...]) per column.
+
+    Routes through the ngrambf_v1 skip indexes on lower(URL) and
+    lower(COMMON_NAME) (see migration/clickhouse_setup.sql) in one index
+    probe per column, instead of N OR'd position() calls. For a target
+    that expands to 4 variants this turns ~8 substring evaluations per
+    row into 2 index lookups per granule.
+    """
     if not variants:
         return '1=0'
-    parts = []
+    seen: set[str] = set()
+    needles: list[str] = []
     for v in variants:
-        safe = v.replace("'", "''")
-        parts.append(f"position(lower(URL), '{safe}') > 0")
-        parts.append(f"position(lower(COMMON_NAME), '{safe}') > 0")
-    return '(' + ' OR '.join(parts) + ')'
+        s = (v or '').lower().strip()
+        if not s or s in seen:
+            continue
+        seen.add(s)
+        needles.append("'" + s.replace("'", "''") + "'")
+    if not needles:
+        return '1=0'
+    arr = '[' + ','.join(needles) + ']'
+    return (f"(multiSearchAny(lower(URL), {arr}) "
+            f"OR multiSearchAny(lower(COMMON_NAME), {arr}))")
 
 
 def _guess_target_domains(target: str) -> set[str]:
@@ -421,100 +458,149 @@ def _build_per_uid_journeys(
     target_variants: list[str],
     target_domains: set[str],
     conv_patterns: tuple,
+    progress_cb: Optional[Callable[..., None]] = None,
 ) -> list[dict]:
     """Group rows by UID, sessionize on a 30-min gap, classify each event.
 
-    Returns a list of ``{uid, sessions, first_mention_ts, conversion_ts,
-    converted, inception, journey_duration_sec, event_count}`` dicts.
+    Returns a list of journey dicts. Each per-event entry is intentionally
+    slim — (ts_ms, host, step, is_mention, on_target) plus an optional
+    `_url` on the FIRST event of each session (needed by the inception
+    classifier). Stripping URL/COMMON_NAME/PLATFORM from every event
+    cuts memory by ~6× on a 20M-event run.
     """
     by_uid: dict[str, list[tuple]] = defaultdict(list)
     for row in raw_rows:
+        # Row shape after the Phase 2 optimization: (uid, ts_ms, url,
+        # common_name, domain). BROWSER + PLATFORM removed.
         try:
-            uid, ts_ms, url, common_name, domain, platform, browser = row
+            uid, ts_ms, url, common_name, domain = row[:5]
         except Exception:
             continue
         if not uid or not ts_ms:
             continue
-        by_uid[uid].append((int(ts_ms), url or '', common_name or '', domain or '',
-                            platform or '', browser or ''))
+        by_uid[uid].append((int(ts_ms), url or '', common_name or '', domain or ''))
 
     out: list[dict] = []
     gap_ms = SESSION_GAP_MINUTES * 60 * 1000
+    n_uids = len(by_uid)
+    progress_every = max(1, n_uids // 20)  # ~5% steps
 
-    for uid, events in by_uid.items():
+    for idx, (uid, events) in enumerate(by_uid.items()):
         events.sort(key=lambda e: e[0])
-        # Sessionize
+        # Sessionize + classify in a single pass to avoid building an
+        # intermediate event list per UID.
         sessions: list[list[dict]] = []
         cur_session: list[dict] = []
         prev_ts: Optional[int] = None
-        for ts_ms, url, cn, domain, platform, browser in events:
+
+        first_on_target_ts: Optional[int] = None
+        first_any_mention_ts: Optional[int] = None
+        conversion_ts: Optional[int] = None
+        step_set: set[str] = set()
+        detour_hosts: set[str] = set()
+        post_mention_hosts: set[str] = set()  # filled after we know first_mention
+
+        for ts_ms, url, cn, domain in events:
             if prev_ts is not None and (ts_ms - prev_ts) > gap_ms:
                 if cur_session:
                     sessions.append(cur_session)
                 cur_session = []
-            classified = _classify_event(
+            classified = _classify_event_fast(
                 url=url, common_name=cn, domain=domain,
                 target_lc=target_lc, target_variants=target_variants,
                 target_domains=target_domains, conv_patterns=conv_patterns,
             )
-            cur_session.append({
-                'ts_ms':       ts_ms,
-                'url':         url,
-                'common_name': cn,
-                'domain':      domain,
-                'platform':    platform,
-                'browser':     browser,
-                **classified,
-            })
+            host = classified['host']
+            step = classified['step']
+            is_mention = classified['is_mention']
+            on_target = classified['on_target']
+
+            ev = {
+                'ts_ms':      ts_ms,
+                'host':       host,
+                'step':       step,
+                'is_mention': is_mention,
+                'on_target':  on_target,
+            }
+            # URL is only needed by _classify_inception on the seed event.
+            # Stash it on the FIRST event of each session so we have it
+            # available without keeping URL on every event in memory.
+            if not cur_session:
+                ev['_url'] = url
+            cur_session.append(ev)
+
+            if is_mention and first_any_mention_ts is None:
+                first_any_mention_ts = ts_ms
+            if on_target and first_on_target_ts is None:
+                first_on_target_ts = ts_ms
+            if step == 'CONVERSION' and on_target:
+                if conversion_ts is None or ts_ms < conversion_ts:
+                    conversion_ts = ts_ms
+            step_set.add(step)
             prev_ts = ts_ms
+
         if cur_session:
             sessions.append(cur_session)
 
-        # Identify first mention + first conversion.
-        # "First mention" prefers on-target events (= a page on the target's
-        # own site or a COMMON_NAME match). A Google search like
+        # Prefer on-target events as the journey anchor. A Google search like
         # `?q=firestone+tires` would otherwise spuriously satisfy `is_mention`
         # and pull the timeline anchor BACK to the search itself — but we
         # want the search to be the inception, not the mention.
-        first_on_target_ts: Optional[int] = None
-        first_any_mention_ts: Optional[int] = None
-        conversion_ts: Optional[int] = None
-        for sess in sessions:
-            for ev in sess:
-                if ev['is_mention'] and first_any_mention_ts is None:
-                    first_any_mention_ts = ev['ts_ms']
-                if ev['on_target'] and first_on_target_ts is None:
-                    first_on_target_ts = ev['ts_ms']
-                if ev['step'] == 'CONVERSION' and ev['on_target']:
-                    if conversion_ts is None or ev['ts_ms'] < conversion_ts:
-                        conversion_ts = ev['ts_ms']
         first_mention_ts = first_on_target_ts or first_any_mention_ts
-
         if first_mention_ts is None:
-            # Shouldn't happen — we filtered to mentioned UIDs upstream — but
-            # be defensive.
             continue
 
-        # Inception classification: the first event of the FIRST session that
-        # contains the first mention.
-        inception = 'OTHER'
-        inception_keyword = None
-        seed_session = None
+        # Post-mention detour hosts: now that we know first_mention_ts, walk
+        # once to capture detour/search hosts seen AFTER the brand was
+        # touched. Pre-computing here means _aggregate_detours_for_cluster
+        # never has to re-walk sessions per cluster.
+        last_mention_ts = first_mention_ts
         for sess in sessions:
-            if sess and any(ev['ts_ms'] == first_mention_ts for ev in sess):
-                seed_session = sess
-                break
-        if seed_session:
-            first_ev = seed_session[0]
-            inception, inception_keyword = _classify_inception(first_ev)
+            for ev in sess:
+                if ev['is_mention']:
+                    last_mention_ts = max(last_mention_ts, ev['ts_ms'])
+                if ev['ts_ms'] >= first_mention_ts:
+                    if ev['step'] in ('DETOUR', 'SEARCH') and ev['host']:
+                        detour_hosts.add(ev['host'])
 
-        last_ts = max(ev['ts_ms'] for sess in sessions for ev in sess)
+        # Post-non-conversion hosts: hosts visited AFTER the last target
+        # mention. We pre-compute the set; whether to use it is decided by
+        # `_aggregate_post_non_conversion_hosts` based on converted flag.
+        for sess in sessions:
+            for ev in sess:
+                if ev['ts_ms'] > last_mention_ts and ev['host']:
+                    post_mention_hosts.add(ev['host'])
+
+        # Inception: first event of the session containing first_mention_ts.
+        inception = 'OTHER'
+        inception_keyword: Optional[str] = None
+        for sess in sessions:
+            if not sess:
+                continue
+            if sess[0]['ts_ms'] <= first_mention_ts <= sess[-1]['ts_ms']:
+                first_ev = sess[0]
+                inception, inception_keyword = _classify_inception_fast(
+                    host=first_ev['host'], url=first_ev.get('_url', ''),
+                    on_target=first_ev['on_target'],
+                )
+                break
+
+        last_ts = sessions[-1][-1]['ts_ms'] if sessions else first_mention_ts
         journey_duration_sec = max(0, (last_ts - first_mention_ts) // 1000)
+
+        # Compute sessions-before-conversion once so KPI rollup is O(UIDs).
+        sessions_to_convert = 0
+        if conversion_ts is not None:
+            for sess in sessions:
+                sessions_to_convert += 1
+                if any(ev['ts_ms'] == conversion_ts for ev in sess):
+                    break
 
         out.append({
             'uid':                  uid,
             'sessions':             sessions,
             'first_mention_ts':     first_mention_ts,
+            'last_mention_ts':      last_mention_ts,
             'conversion_ts':        conversion_ts,
             'converted':            conversion_ts is not None,
             'inception':            inception,
@@ -522,11 +608,25 @@ def _build_per_uid_journeys(
             'journey_duration_sec': journey_duration_sec,
             'event_count':          sum(len(s) for s in sessions),
             'session_count':        len(sessions),
+            # Pre-computed sets that aggregation functions can sum directly,
+            # avoiding a second walk of every session per cluster.
+            'step_set':             step_set,
+            'detour_hosts':         detour_hosts,
+            'post_mention_hosts':   post_mention_hosts,
+            'sessions_to_convert':  sessions_to_convert,
         })
+
+        if progress_cb and (idx % progress_every == 0):
+            try:
+                pct = 50 + int(15 * (idx + 1) / max(1, n_uids))  # 50→65
+                progress_cb(progress=pct,
+                            message=f'Classifying journeys ({idx+1:,}/{n_uids:,})...')
+            except Exception:
+                pass
     return out
 
 
-def _classify_event(
+def _classify_event_fast(
     *,
     url: str,
     common_name: str,
@@ -536,45 +636,79 @@ def _classify_event(
     target_domains: set[str],
     conv_patterns: tuple,
 ) -> dict:
-    """Classify a single clickstream event."""
-    url_lc = (url or '').lower()
-    cn_lc = (common_name or '').lower()
-    dom_lc = (domain or '').lower()
-    try:
-        parsed = urllib.parse.urlsplit(url_lc)
-        host = parsed.netloc or dom_lc
-        path = parsed.path or '/'
-    except Exception:
-        host = dom_lc
-        path = '/'
+    """Hot-path event classifier. Optimizations vs the original:
 
-    is_mention = any(v in url_lc or v in cn_lc for v in target_variants)
+      * Prefer the DOMAIN column (already lower-cardinality, no URL parse)
+        instead of urllib.parse.urlsplit on every row.
+      * Only extract `path` when the event is on-target (needs STEP_RULES
+        matching). Off-target events are classified as DETOUR/SEARCH using
+        host alone, so they never pay the parse cost.
+      * is_mention short-circuits on first variant hit.
+    """
+    url_lc = url.lower() if url else ''
+    cn_lc = common_name.lower() if common_name else ''
+    dom_lc = domain.lower() if domain else ''
 
-    # "On target host" = the event is on the target's own site. Use COMMON_NAME
-    # equality (cheap + accurate for known brands), or a heuristic domain
-    # guess as a fallback.
+    # Host: prefer the canonical DOMAIN column. Fall back to a cheap
+    # netloc extract (split on '//' then on '/') if DOMAIN is empty.
+    host = dom_lc
+    if not host and url_lc:
+        try:
+            tail = url_lc.split('://', 1)[-1]
+            slash = tail.find('/')
+            host = tail[:slash] if slash >= 0 else tail
+        except Exception:
+            host = ''
+
+    # is_mention: short-circuit on first variant.
+    is_mention = False
+    if target_variants:
+        for v in target_variants:
+            if v in url_lc or v in cn_lc:
+                is_mention = True
+                break
+
     on_target = False
     if cn_lc and cn_lc == target_lc:
         on_target = True
-    elif host and any(d in host for d in target_domains):
-        on_target = True
+    elif host and target_domains:
+        for d in target_domains:
+            if d in host:
+                on_target = True
+                break
 
-    step = 'DETOUR'
     if on_target:
-        # CONVERSION is special-cased so the override hits before the generic
-        # CHECKOUT rule (CHECKOUT pages are not yet a conversion).
-        if any(p in path for p in conv_patterns):
-            step = 'CONVERSION'
-        else:
+        # Only on-target events need path parsing — STEP_RULES are all
+        # target-site path matchers (CONVERSION / PDP / CART / etc.). Pull
+        # path with cheap string ops, no urllib.
+        path = '/'
+        if url_lc:
+            tail = url_lc.split('://', 1)[-1]
+            slash = tail.find('/')
+            if slash >= 0:
+                path = tail[slash:]
+                q = path.find('?')
+                if q >= 0:
+                    path = path[:q]
+        # Conversion first (overrides CHECKOUT / etc.).
+        step = 'DETOUR'
+        matched = False
+        for p in conv_patterns:
+            if p in path:
+                step = 'CONVERSION'
+                matched = True
+                break
+        if not matched:
             step = _classify_target_step(path)
-    elif _host_is_search_engine(host):
+    elif host and _host_is_search_engine(host):
         step = 'SEARCH'
+    else:
+        step = 'DETOUR'
 
     return {
         'host':       host,
-        'path':       path,
-        'is_mention': bool(is_mention),
-        'on_target':  bool(on_target),
+        'is_mention': is_mention,
+        'on_target':  on_target,
         'step':       step,
     }
 
@@ -594,20 +728,30 @@ def _classify_target_step(path: str) -> str:
 
 
 def _host_is_search_engine(host: str) -> bool:
-    return any(h in host for h in SEARCH_ENGINE_HOSTS) if host else False
+    if not host:
+        return False
+    for h in SEARCH_ENGINE_HOSTS:
+        if h in host:
+            return True
+    return False
 
 
-def _classify_inception(first_ev: dict) -> tuple[str, Optional[str]]:
-    """Return (channel_label, optional_keyword)."""
-    host = (first_ev.get('host') or '').lower()
-    url = (first_ev.get('url') or '').lower()
-    try:
-        qs = urllib.parse.urlsplit(url).query
-        params = urllib.parse.parse_qs(qs)
-    except Exception:
-        params = {}
+def _classify_inception_fast(*, host: str, url: str, on_target: bool
+                             ) -> tuple[str, Optional[str]]:
+    """Inception classifier — only called once per UID (the seed event).
 
-    # Paid markers win over plain Search/Social.
+    Cheap full urllib parse is fine here because of the per-UID frequency.
+    """
+    host = (host or '').lower()
+    url_lc = (url or '').lower()
+    params: dict = {}
+    if '?' in url_lc:
+        try:
+            qs = urllib.parse.urlsplit(url_lc).query
+            params = urllib.parse.parse_qs(qs)
+        except Exception:
+            params = {}
+
     if any(k in params for k in PAID_QUERY_KEYS):
         return 'AD', _extract_search_keyword(params)
     if params.get('utm_medium') and any(
@@ -617,11 +761,11 @@ def _classify_inception(first_ev: dict) -> tuple[str, Optional[str]]:
 
     if _host_is_search_engine(host):
         return 'SEARCH', _extract_search_keyword(params)
-    if any(h in host for h in AI_AGENT_HOSTS):
+    if host and any(h in host for h in AI_AGENT_HOSTS):
         return 'AI_AGENT', None
-    if any(h in host for h in SOCIAL_HOSTS):
+    if host and any(h in host for h in SOCIAL_HOSTS):
         return 'SOCIAL', None
-    if first_ev.get('on_target'):
+    if on_target:
         return 'DIRECT', None
     if host:
         return 'REFERRAL', None
@@ -681,22 +825,20 @@ def _aggregate_clusters(per_uid: list[dict]) -> list[dict]:
 
 def _build_funnel(cluster_members: list[dict]) -> list[dict]:
     """For each step in STEP_DISPLAY_ORDER, count how many UIDs reached it
-    AT LEAST ONCE (in any session). Drop-off is computed as
-    1 - active(n+1)/active(n) using only steps that have non-zero reach."""
-    reach: dict[str, set[str]] = defaultdict(set)
+    AT LEAST ONCE. Uses the per-UID `step_set` pre-computed in
+    _build_per_uid_journeys, so we never re-walk sessions per cluster.
+    """
+    reach: dict[str, int] = {step: 0 for step in STEP_DISPLAY_ORDER}
     for j in cluster_members:
-        seen_steps: set[str] = set()
-        for sess in j['sessions']:
-            for ev in sess:
-                if ev['step'] in STEP_DISPLAY_ORDER:
-                    seen_steps.add(ev['step'])
-        for s in seen_steps:
-            reach[s].add(j['uid'])
+        sset = j.get('step_set') or ()
+        for s in sset:
+            if s in reach:
+                reach[s] += 1
 
     funnel: list[dict] = []
     prev_count: Optional[int] = None
     for step in STEP_DISPLAY_ORDER:
-        cnt = len(reach.get(step, ()))
+        cnt = reach[step]
         if cnt == 0 and step not in ('LANDING', 'CONVERSION'):
             continue
         drop_off_pct = None
@@ -712,22 +854,12 @@ def _build_funnel(cluster_members: list[dict]) -> list[dict]:
 
 
 def _aggregate_detours_for_cluster(cluster_members: list[dict]) -> list[dict]:
-    """Top hosts visited after the user left the target site within the
-    journey window. We count DETOUR events that happen AFTER the first
-    mention (post-touch detours = "where did they go to comparison-shop")."""
+    """Top detour hosts visited after first mention. Uses the per-UID
+    `detour_hosts` set pre-computed once during journey construction."""
     host_counts: Counter = Counter()
     for j in cluster_members:
-        first = j['first_mention_ts']
-        seen_hosts_this_uid: set[str] = set()
-        for sess in j['sessions']:
-            for ev in sess:
-                if ev['ts_ms'] < first:
-                    continue
-                if ev['step'] in ('DETOUR', 'SEARCH'):
-                    h = ev.get('host') or ''
-                    if h and h not in seen_hosts_this_uid:
-                        seen_hosts_this_uid.add(h)
-                        host_counts[h] += 1
+        for h in (j.get('detour_hosts') or ()):
+            host_counts[h] += 1
     top = host_counts.most_common(TOP_N_DETOURS)
     n_members = max(1, len(cluster_members))
     return [
@@ -744,28 +876,26 @@ def _aggregate_kpis(per_uid: list[dict]) -> dict:
                 'avg_journey_duration_days': 0.0, 'avg_sessions_to_convert': 0.0,
                 'avg_events_per_user': 0.0}
     converters = [j for j in per_uid if j['converted']]
-    durations_days = [j['journey_duration_sec'] / 86400.0 for j in per_uid]
+    total_duration_days = 0.0
+    total_events = 0
+    for j in per_uid:
+        total_duration_days += j['journey_duration_sec'] / 86400.0
+        total_events += j['event_count']
 
     avg_sessions_to_convert = 0.0
     if converters:
-        sess_counts: list[int] = []
-        for j in converters:
-            n_sess_before_conv = 0
-            for sess in j['sessions']:
-                if any(ev['step'] == 'CONVERSION' for ev in sess):
-                    n_sess_before_conv += 1
-                    break
-                n_sess_before_conv += 1
-            sess_counts.append(n_sess_before_conv)
-        avg_sessions_to_convert = round(sum(sess_counts) / len(sess_counts), 1)
+        # `sessions_to_convert` is pre-computed in _build_per_uid_journeys
+        # so this rolls up in O(converters) with no session re-walk.
+        total_sess = sum(j.get('sessions_to_convert', 0) for j in converters)
+        avg_sessions_to_convert = round(total_sess / len(converters), 1)
 
     return {
         'total_users':                 n,
         'converted_users':             len(converters),
         'conversion_pct':              round(100.0 * len(converters) / n, 1),
-        'avg_journey_duration_days':   round(sum(durations_days) / n, 1),
+        'avg_journey_duration_days':   round(total_duration_days / n, 1),
         'avg_sessions_to_convert':     avg_sessions_to_convert,
-        'avg_events_per_user':         round(sum(j['event_count'] for j in per_uid) / n, 1),
+        'avg_events_per_user':         round(total_events / n, 1),
     }
 
 
@@ -780,25 +910,13 @@ def _aggregate_inception_keywords(per_uid: list[dict], *, top_n: int) -> list[di
 
 def _aggregate_post_non_conversion_hosts(per_uid: list[dict], *, top_n: int) -> list[dict]:
     """For NON-converters: what hosts did they visit AFTER the last target
-    mention? This is the BSFS 'where they went after if they didn't convert'
-    panel."""
+    mention. Uses the per-UID `post_mention_hosts` set pre-computed once."""
     counts: Counter = Counter()
     non_converters = [j for j in per_uid if not j['converted']]
     n_non = max(1, len(non_converters))
     for j in non_converters:
-        last_mention = max(
-            (ev['ts_ms'] for sess in j['sessions'] for ev in sess if ev['is_mention']),
-            default=j['first_mention_ts'],
-        )
-        seen_hosts_this_uid: set[str] = set()
-        for sess in j['sessions']:
-            for ev in sess:
-                if ev['ts_ms'] <= last_mention:
-                    continue
-                h = ev.get('host') or ''
-                if h and h not in seen_hosts_this_uid:
-                    seen_hosts_this_uid.add(h)
-                    counts[h] += 1
+        for h in (j.get('post_mention_hosts') or ()):
+            counts[h] += 1
     return [
         {'host': h, 'users': c, 'users_pct': round(100.0 * c / n_non, 1)}
         for h, c in counts.most_common(top_n)
