@@ -16604,15 +16604,15 @@
                                         </div>
                                         <div class="tab-section" style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 1.25rem; text-align: center;">
                                             <div style="font-size: 0.7rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em;">Pre-Event Brand Users</div>
-                                            <div id="bpiqKpiPreUsers" style="font-size: 1.5rem; font-weight: 700; color: var(--accent-cyan);"></div>
+                                            <div id="bpiqKpiPreUsers" style="font-size: 1.1rem; font-weight: 700; color: var(--accent-cyan); white-space: nowrap;"></div>
                                         </div>
                                         <div class="tab-section" style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 1.25rem; text-align: center;">
                                             <div style="font-size: 0.7rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em;">Post-Event Brand Users</div>
-                                            <div id="bpiqKpiPostUsers" style="font-size: 1.5rem; font-weight: 700; color: var(--accent-orange);"></div>
+                                            <div id="bpiqKpiPostUsers" style="font-size: 1.1rem; font-weight: 700; color: var(--accent-orange); white-space: nowrap;"></div>
                                         </div>
                                         <div class="tab-section" style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 1.25rem; text-align: center;">
                                             <div style="font-size: 0.7rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em;">Brand Lift (Users)</div>
-                                            <div id="bpiqKpiLift" style="font-size: 1.5rem; font-weight: 700;"></div>
+                                            <div id="bpiqKpiLift" style="font-size: 1.1rem; font-weight: 700; white-space: nowrap;"></div>
                                         </div>
                                     </div>
                                 </div>
@@ -16627,15 +16627,15 @@
                                         </div>
                                         <div class="tab-section" style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 1.25rem; text-align: center;">
                                             <div style="font-size: 0.7rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em;">Pre-Event Brand Users (Gen Pop)</div>
-                                            <div id="bpiqKpiGenPopPreUsers" style="font-size: 1.5rem; font-weight: 700; color: var(--accent-cyan); opacity: 0.85;"></div>
+                                            <div id="bpiqKpiGenPopPreUsers" style="font-size: 1.1rem; font-weight: 700; color: var(--accent-cyan); opacity: 0.85; white-space: nowrap;"></div>
                                         </div>
                                         <div class="tab-section" style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 1.25rem; text-align: center;">
                                             <div style="font-size: 0.7rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em;">Post-Event Brand Users (Gen Pop)</div>
-                                            <div id="bpiqKpiGenPopPostUsers" style="font-size: 1.5rem; font-weight: 700; color: var(--accent-orange); opacity: 0.85;"></div>
+                                            <div id="bpiqKpiGenPopPostUsers" style="font-size: 1.1rem; font-weight: 700; color: var(--accent-orange); opacity: 0.85; white-space: nowrap;"></div>
                                         </div>
                                         <div class="tab-section" style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 1.25rem; text-align: center;">
                                             <div style="font-size: 0.7rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em;">Brand Lift (Gen Pop)</div>
-                                            <div id="bpiqKpiGenPopLift" style="font-size: 1.5rem; font-weight: 700;"></div>
+                                            <div id="bpiqKpiGenPopLift" style="font-size: 1.1rem; font-weight: 700; white-space: nowrap;"></div>
                                         </div>
                                     </div>
                                 </div>
@@ -22939,7 +22939,7 @@
             var liftUsers = postProj - preProj;
             document.getElementById('bpiqKpiPreUsers').innerHTML  = _bpiqFmtNum(preProj) + pipe + prePct.toFixed(2) + '%';
             document.getElementById('bpiqKpiPostUsers').innerHTML = _bpiqFmtNum(postProj) + pipe + postPct.toFixed(2) + '%';
-            document.getElementById('bpiqKpiLift').innerHTML = _bpiqFmtNum(liftUsers) + pipe + _bpiqFmtLift(totals.lift_pct_users);
+            document.getElementById('bpiqKpiLift').innerHTML = '<span style="color:#c8e600">' + _bpiqFmtNum(liftUsers) + '</span>' + pipe + _bpiqFmtLift(totals.lift_pct_users);
 
             // Gen Pop mirror row
             var cg = data.control_group || {};
@@ -22957,7 +22957,7 @@
                 document.getElementById('bpiqKpiGenPopAudienceProj').textContent = 'US users (size-matched)';
                 document.getElementById('bpiqKpiGenPopPreUsers').innerHTML  = _bpiqFmtNum(gpPre) + pipe + gpPrePct.toFixed(2) + '%';
                 document.getElementById('bpiqKpiGenPopPostUsers').innerHTML = _bpiqFmtNum(gpPost) + pipe + gpPostPct.toFixed(2) + '%';
-                document.getElementById('bpiqKpiGenPopLift').innerHTML = _bpiqFmtNum(gpLiftUsers) + pipe + _bpiqFmtLift(cg.control_lift_pct_users);
+                document.getElementById('bpiqKpiGenPopLift').innerHTML = '<span style="color:#c8e600">' + _bpiqFmtNum(gpLiftUsers) + '</span>' + pipe + _bpiqFmtLift(cg.control_lift_pct_users);
                 // Net Brand Lift card
                 var brandLift = totals.lift_pct_users;
                 var gpLift    = cg.control_lift_pct_users;
@@ -22967,7 +22967,7 @@
                     netLiftCard.style.display = 'flex';
                     netLiftCard.style.flexDirection = 'column';
                     netLiftCard.style.justifyContent = 'center';
-                    document.getElementById('bpiqNetLiftValue').textContent = sign + netLift.toFixed(2) + '%';
+                    document.getElementById('bpiqNetLiftValue').textContent = sign + netLift.toFixed(2);
                 }
             } else {
                 if (netLiftCard) netLiftCard.style.display = 'none';
