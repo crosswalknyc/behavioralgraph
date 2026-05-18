@@ -19582,6 +19582,68 @@ def _profile_step_progress(completed_steps):
     return min(sum(_PROFILE_STEP_WEIGHTS[s] for s in _PROFILE_STEP_ORDER if s in completed_steps), 99)
 
 
+def _handle_low_universe_skip(job_id, project_name, err):
+    """Mark a profile job as skipped (low audience) and email the requesting user.
+
+    Triggered by `bg.LowUniverseError` raised from `bg.check_universe_viability()`
+    right after the full universe scan. The user pulled a profile whose eligible
+    audience is too small (even after maximum sample inflation) to produce an
+    accurate result, so we abort the run before any pipeline cost is incurred
+    and tell them why via email.
+
+    Best-effort: a missing username, missing email, or SES failure is logged
+    but never raises — the job-status update is always written so the UI knows.
+    """
+    raw      = getattr(err, 'raw_universe',      0)
+    inflated = getattr(err, 'inflated_estimate', 0)
+    thresh   = getattr(err, 'threshold',         5000)
+    max_inflation = getattr(err, 'threshold', 0) and getattr(__import__('bg'), 'MAX_INFLATION_FACTOR', 35)
+
+    ui_msg = (
+        f"Sample size too low for an accurate profile "
+        f"({raw:,} eligible users → ~{inflated:,} after inflation; need ≥ {thresh:,}). "
+        f"Try a broader date range or a more popular brand. No credits were consumed."
+    )
+    try:
+        update_job_status(job_id, status='failed', error=ui_msg, message=ui_msg, progress=100)
+    except Exception as _se:
+        print(f"[low-universe] update_job_status failed for {job_id}: {_se}")
+
+    # Resolve requesting user → email
+    username = None
+    user_email = None
+    try:
+        job_meta = (jobs or {}).get(job_id, {}) if 'jobs' in globals() else {}
+        username = job_meta.get('created_by') or job_meta.get('username')
+        if username:
+            try:
+                udata = load_users() or {}
+                user_obj = (udata.get('users') or {}).get(username) or {}
+                user_email = (user_obj.get('email') or '').strip() or None
+            except Exception as _ue:
+                print(f"[low-universe] couldn't look up user {username}: {_ue}")
+    except Exception as _je:
+        print(f"[low-universe] couldn't read job metadata for {job_id}: {_je}")
+
+    print(
+        f"⏭  SKIP {project_name}: low universe "
+        f"({raw:,} → ~{inflated:,}, need ≥ {thresh:,}). "
+        f"User={username or '<unknown>'} email={user_email or '<none on file>'}"
+    )
+
+    if user_email:
+        try:
+            import bg as _bg
+            _bg.send_low_universe_user_email(
+                user_email=user_email,
+                username=username,
+                project_name=project_name,
+                err=err,
+            )
+        except Exception as _ee:
+            print(f"[low-universe] email send failed: {_ee}")
+
+
 def run_analysis(job_id, project_name, brands, sample_start, sample_end, 
                  behavior_start, behavior_end, filters, skew_settings, 
                  is_genpop, purchasers_only, brand_category,
@@ -19671,6 +19733,16 @@ def run_analysis(job_id, project_name, brands, sample_start, sample_end,
                     universe_results = bg.perform_full_universe_scan(conn, brands, sample_start, sample_end, purchasers_only)
                     if universe_results:
                         print(f"🌍 Universe scan complete. True universe size: {universe_results['total_universe']:,} users")
+                        # ── LOW-UNIVERSE GATE ─────────────────────────────────────────
+                        # Skip the run + email the requesting user if the eligible
+                        # audience is too small for an accurate profile (even after
+                        # maximum sample inflation). No credits are consumed.
+                        if hasattr(bg, 'check_universe_viability'):
+                            try:
+                                bg.check_universe_viability(universe_results['total_universe'], project_name)
+                            except getattr(bg, 'LowUniverseError', Exception) as _lue:
+                                _handle_low_universe_skip(job_id, project_name, _lue)
+                                return
                         bg.run_full_pipeline.universe_size = universe_results['total_universe']
                     else:
                         print("⚠️ Universe scan returned no results, using default")
@@ -19678,6 +19750,12 @@ def run_analysis(job_id, project_name, brands, sample_start, sample_end,
                 else:
                     print("⚠️ perform_full_universe_scan not available in bg module")
                     bg.run_full_pipeline.universe_size = 1000000
+            except getattr(bg, 'LowUniverseError', tuple()) as _lue:
+                # Defensive catch in case the inner block re-raises rather than
+                # routing through _handle_low_universe_skip (e.g. future
+                # refactor). Same handling.
+                _handle_low_universe_skip(job_id, project_name, _lue)
+                return
             except Exception as e:
                 print(f"⚠️ Universe scan error: {e}, proceeding with default size")
                 bg.run_full_pipeline.universe_size = 1000000

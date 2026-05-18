@@ -13460,6 +13460,125 @@ def scale_warehouse_down(cur, base_warehouse_size, base_acceleration_factor):
         if not SILENCE_VERBOSE_OUTPUT:
             print(f"⚠️ Could not scale warehouse down: {e}")
 
+# ─────────────────────────────────────────────────────────────────────────────
+# LOW-UNIVERSE GATE  (mirrored from BG.py — keep in sync)
+#
+# After the full universe scan we know the real eligible-user count for the
+# input brands. If even our maximum sample inflation (35x) can't get the
+# effective sample to a viable size, the resulting profile will be statistical
+# noise — better to skip the run than to publish a number-shaped artifact.
+#
+# The exception is caught in app.run_analysis() which marks the job 'failed'
+# AND emails the requesting user.
+# ─────────────────────────────────────────────────────────────────────────────
+MIN_VIABLE_INFLATED_SAMPLE = int(os.environ.get('BG_MIN_VIABLE_INFLATED_SAMPLE', '5000'))
+MAX_INFLATION_FACTOR       = int(os.environ.get('BG_MAX_INFLATION_FACTOR',       '35'))
+
+
+class LowUniverseError(Exception):
+    """Raised when eligible-user universe is too small to produce a viable profile."""
+
+    def __init__(self, project_name, raw_universe, inflated_estimate, threshold):
+        self.project_name      = project_name
+        self.raw_universe      = int(raw_universe or 0)
+        self.inflated_estimate = int(inflated_estimate or 0)
+        self.threshold         = int(threshold)
+        super().__init__(
+            f"Universe too small for {project_name!r}: "
+            f"{self.raw_universe:,} raw eligible users → "
+            f"~{self.inflated_estimate:,} after max {MAX_INFLATION_FACTOR}x inflation "
+            f"(threshold {self.threshold:,}). Skipping profile."
+        )
+
+
+def check_universe_viability(total_universe, project_name):
+    """Raise `LowUniverseError` if `total_universe` cannot yield a viable sample."""
+    if total_universe is None:
+        return
+    try:
+        raw = int(total_universe)
+    except (TypeError, ValueError):
+        return
+    if raw < 0:
+        return
+    inflated = raw * MAX_INFLATION_FACTOR
+    if inflated < MIN_VIABLE_INFLATED_SAMPLE:
+        raise LowUniverseError(project_name, raw, inflated, MIN_VIABLE_INFLATED_SAMPLE)
+
+
+def send_low_universe_user_email(user_email, username, project_name, err,
+                                 *, cc=None):
+    """Notify the requesting user their profile was skipped (best-effort SES)."""
+    if not (user_email or '').strip():
+        return False
+    try:
+        import boto3 as _boto3
+        ses = _boto3.client('ses', region_name='us-east-2')
+
+        subject = f"Profile skipped: sample size too low for {project_name!r}"
+        display_username = username or 'there'
+        body_html = (
+            f"<p>Hi {display_username},</p>"
+            f"<p>Your profile run for <b>{project_name}</b> was skipped because the "
+            f"eligible audience is too small to produce an accurate behavioral profile.</p>"
+            f"<table style='border-collapse:collapse;border:1px solid #ddd;font-size:14px;margin:12px 0;'>"
+            f"  <tr style='background:#f4f4f4;'>"
+            f"    <th style='padding:6px 12px;border:1px solid #ddd;text-align:left;'>What</th>"
+            f"    <th style='padding:6px 12px;border:1px solid #ddd;text-align:left;'>Value</th></tr>"
+            f"  <tr><td style='padding:6px 12px;border:1px solid #ddd;'>Eligible users in window</td>"
+            f"      <td style='padding:6px 12px;border:1px solid #ddd;'>{err.raw_universe:,}</td></tr>"
+            f"  <tr><td style='padding:6px 12px;border:1px solid #ddd;'>Best-case sample (×{MAX_INFLATION_FACTOR} inflation)</td>"
+            f"      <td style='padding:6px 12px;border:1px solid #ddd;'>~{err.inflated_estimate:,}</td></tr>"
+            f"  <tr><td style='padding:6px 12px;border:1px solid #ddd;'>Minimum for accurate profile</td>"
+            f"      <td style='padding:6px 12px;border:1px solid #ddd;'>{err.threshold:,}</td></tr>"
+            f"</table>"
+            f"<p><b>Why this happens:</b> the brand/subject you entered has fewer than "
+            f"<b>{(err.threshold // MAX_INFLATION_FACTOR) + 1}</b> users in our panel for the date range "
+            f"you selected. Even after maximum sample inflation, the resulting profile would "
+            f"be statistical noise rather than a real behavioral signal.</p>"
+            f"<p><b>What to try:</b></p>"
+            f"<ul>"
+            f"  <li>Use a <b>broader date range</b> (e.g. 12 months instead of 30 days)</li>"
+            f"  <li>Verify the brand name matches how it appears in our hostmap "
+            f"      (some brands need an alternate spelling or a domain)</li>"
+            f"  <li>For <b>talent profiles</b>, try the talent's primary show/affiliation "
+            f"      brand instead — those have larger panel footprints</li>"
+            f"  <li>If this is a brand we should be tracking, reply to this email and the "
+            f"      data team will look at adding it to the hostmap</li>"
+            f"</ul>"
+            f"<p>No credits were consumed for this run.</p>"
+            f"<p style='color:#888;font-size:12px;'>— BehavioralGraph</p>"
+        )
+        body_text = (
+            f"Profile skipped: {project_name}\n\n"
+            f"Eligible users: {err.raw_universe:,}\n"
+            f"Best-case sample (x{MAX_INFLATION_FACTOR}): ~{err.inflated_estimate:,}\n"
+            f"Minimum for accurate profile: {err.threshold:,}\n\n"
+            f"Try a broader date range or a more popular brand. No credits consumed.\n"
+        )
+
+        destination = {'ToAddresses': [user_email]}
+        if cc:
+            destination['CcAddresses'] = list(cc)
+
+        ses.send_email(
+            Source='BehavioralGraph <jenna@crosswalknyc.com>',
+            Destination=destination,
+            Message={
+                'Subject': {'Data': subject},
+                'Body': {
+                    'Html': {'Data': body_html},
+                    'Text': {'Data': body_text},
+                },
+            },
+        )
+        print(f"📧 Sent low-universe skip notification to {user_email}")
+        return True
+    except Exception as _e:
+        print(f"⚠️ Could not send low-universe email to {user_email}: {_e}")
+        return False
+
+
 def perform_full_universe_scan(conn, brands, start_date, end_date, purchasers_only=False):
     """
     Perform a full universe scan to get the actual total number of users
