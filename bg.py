@@ -13506,6 +13506,65 @@ def check_universe_viability(total_universe, project_name):
         raise LowUniverseError(project_name, raw, inflated, MIN_VIABLE_INFLATED_SAMPLE)
 
 
+def send_profile_complete_email(project_name, s3_bucket, s3_key, elapsed_min,
+                                *, brand_category=None, recipients=None):
+    """Notify a fixed list of internal stakeholders each time a profile run
+    completes successfully (file uploaded to S3).
+
+    Recipients come from `BG_PROFILE_NOTIFY_EMAILS` env var (comma-separated)
+    if not passed explicitly. Empty env var → emails disabled (default for
+    local dev so we don't spam ourselves). Set the env on the host that
+    runs the batch (e.g. Hetzner's .env) to opt in.
+    """
+    if recipients is None:
+        env = os.environ.get('BG_PROFILE_NOTIFY_EMAILS', '').strip()
+        recipients = [r.strip() for r in env.split(',') if r.strip()]
+    if not recipients:
+        return False
+    try:
+        import boto3 as _boto3
+        ses = _boto3.client('ses', region_name='us-east-2')
+
+        subject = f"✅ Profile complete: {project_name}"
+        cat_line = (f"<tr><td style='padding:6px 12px;border:1px solid #ddd;'>Category</td>"
+                    f"<td style='padding:6px 12px;border:1px solid #ddd;'>{brand_category}</td></tr>"
+                    if brand_category else "")
+        body_html = (
+            f"<p>A new profile finished and was uploaded to S3.</p>"
+            f"<table style='border-collapse:collapse;border:1px solid #ddd;font-size:14px;margin:12px 0;'>"
+            f"  <tr><td style='padding:6px 12px;border:1px solid #ddd;'>Profile</td>"
+            f"      <td style='padding:6px 12px;border:1px solid #ddd;font-weight:600;'>{project_name}</td></tr>"
+            f"  {cat_line}"
+            f"  <tr><td style='padding:6px 12px;border:1px solid #ddd;'>S3 key</td>"
+            f"      <td style='padding:6px 12px;border:1px solid #ddd;font-family:Menlo,monospace;'>"
+            f"          s3://{s3_bucket}/{s3_key}</td></tr>"
+            f"  <tr><td style='padding:6px 12px;border:1px solid #ddd;'>Wall time</td>"
+            f"      <td style='padding:6px 12px;border:1px solid #ddd;'>{elapsed_min:.1f} min</td></tr>"
+            f"</table>"
+            f"<p>It will appear in the dashboard automatically (if your profile category subscription includes it).</p>"
+            f"<p style='color:#888;font-size:12px;'>— BehavioralGraph batch runner</p>"
+        )
+        body_text = (
+            f"Profile complete: {project_name}\n"
+            + (f"Category: {brand_category}\n" if brand_category else "")
+            + f"S3:       s3://{s3_bucket}/{s3_key}\n"
+            f"Wall time: {elapsed_min:.1f} min\n"
+        )
+        ses.send_email(
+            Source='BehavioralGraph <jenna@crosswalknyc.com>',
+            Destination={'ToAddresses': recipients},
+            Message={
+                'Subject': {'Data': subject},
+                'Body': {'Html': {'Data': body_html}, 'Text': {'Data': body_text}},
+            },
+        )
+        print(f"📧 Sent profile-complete notification to {', '.join(recipients)}")
+        return True
+    except Exception as _e:
+        print(f"⚠️ Could not send profile-complete email: {_e}")
+        return False
+
+
 def send_low_universe_user_email(user_email, username, project_name, err,
                                  *, cc=None):
     """Notify the requesting user their profile was skipped (best-effort SES)."""
