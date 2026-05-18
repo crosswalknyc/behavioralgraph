@@ -101,4 +101,21 @@ services:
       - key: SECRET_KEY
         sync: false
 
-  # No cron job for dev - we don't want dev sending automated emails
+  # No email cron job for dev - we don't want dev sending automated emails
+
+  # Cron: nightly Talent / Brands ranker refresh — ClickHouse only, no emails.
+  # Runs Layer-1 scoring for every Profile IQ profile against yesterday's
+  # clickstream, populating reference.profile_iq_daily_metrics for the
+  # Ranker IQ leaderboards. 09:00 UTC = 04:00 ET, after the nightly pipeline.
+  - type: cron
+    name: iq-rankers-daily-cron-dev
+    runtime: python
+    schedule: "0 9 * * *"
+    buildCommand: "true"
+    startCommand: |
+      python -c "import urllib.request,os; r=urllib.request.Request(os.environ['APP_URL'].rstrip('/')+'/api/cron/iq-rankers-daily?secret='+os.environ['CRON_SECRET'], method='POST'); print(urllib.request.urlopen(r, timeout=14400).read().decode())"
+    envVars:
+      - key: APP_URL
+        value: "https://behavioralgraph.onrender.com"
+      - key: CRON_SECRET
+        sync: false
