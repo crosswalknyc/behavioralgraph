@@ -16645,23 +16645,21 @@
                         </div>
                         <!-- Delta: Ticket Purchasers vs Gen Pop Control -->
                         <div id="bpiqDeltaRow" style="display: none; background: linear-gradient(135deg, rgba(200,230,0,0.04), rgba(16,185,129,0.06)); border: 1px solid var(--border-color); border-radius: 14px; padding: 1.5rem 1.5rem 0.75rem; margin-bottom: 1.5rem;">
-                            <div style="font-size: 0.8rem; font-weight: 800; color: #c8e600; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 1rem;">DELTA: TICKET PURCHASERS VS. GEN POP CONTROL</div>
-                            <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem;">
-                                <div></div>
+                            <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; align-items: center;">
+                                <div style="padding: 0.5rem;">
+                                    <div style="font-size: 1.1rem; font-weight: 800; color: #10b981; text-transform: uppercase; letter-spacing: 0.06em; line-height: 1.5;">DELTA:<br>TICKET PURCHASERS<br>VS.<br>GEN POP CONTROL</div>
+                                </div>
                                 <div class="tab-section" style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 1.25rem; text-align: center;">
                                     <div style="font-size: 0.7rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em;">Brand Users</div>
                                     <div id="bpiqDeltaPreUsers" style="font-size: 1.5rem; font-weight: 700; color: var(--accent-cyan);"></div>
-                                    <div id="bpiqDeltaPreUsersPct" style="font-size: 0.7rem; color: var(--text-secondary);"></div>
                                 </div>
                                 <div class="tab-section" style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 1.25rem; text-align: center;">
                                     <div style="font-size: 0.7rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em;">Brand Users</div>
                                     <div id="bpiqDeltaPostUsers" style="font-size: 1.5rem; font-weight: 700; color: var(--accent-orange);"></div>
-                                    <div id="bpiqDeltaPostUsersPct" style="font-size: 0.7rem; color: var(--text-secondary);"></div>
                                 </div>
                                 <div class="tab-section" style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 1.25rem; text-align: center;">
                                     <div style="font-size: 0.7rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em;">Brand Lift</div>
                                     <div id="bpiqDeltaLift" style="font-size: 1.5rem; font-weight: 700;"></div>
-                                    <div id="bpiqDeltaLiftSub" style="font-size: 0.7rem; color: var(--text-secondary);"></div>
                                 </div>
                             </div>
                         </div>
@@ -22997,19 +22995,15 @@
                     var deltaPostUsers = postProj - gpPost;
                     var deltaPrePct    = (totals.audience_pen_pre_pct || 0) - gpPrePct;
                     var deltaPostPct   = (totals.audience_pen_post_pct || 0) - gpPostPct;
-                    document.getElementById('bpiqDeltaPreUsers').textContent = _bpiqFmtNum(deltaPreUsers);
-                    document.getElementById('bpiqDeltaPreUsersPct').textContent = deltaPrePct.toFixed(2) + '%';
-                    document.getElementById('bpiqDeltaPostUsers').textContent = _bpiqFmtNum(deltaPostUsers);
-                    document.getElementById('bpiqDeltaPostUsersPct').textContent = deltaPostPct.toFixed(2) + '%';
+                    document.getElementById('bpiqDeltaPreUsers').innerHTML = _bpiqFmtNum(deltaPreUsers) + ' <span style="color:var(--text-secondary);font-size:0.85rem;">|</span> ' + deltaPrePct.toFixed(2) + '%';
+                    document.getElementById('bpiqDeltaPostUsers').innerHTML = _bpiqFmtNum(deltaPostUsers) + ' <span style="color:var(--text-secondary);font-size:0.85rem;">|</span> ' + deltaPostPct.toFixed(2) + '%';
                     var brandLift = totals.lift_pct_users;
                     var gpLift    = cg.control_lift_pct_users;
                     if (brandLift != null && gpLift != null && isFinite(brandLift) && isFinite(gpLift)) {
                         var netLift = brandLift - gpLift;
                         document.getElementById('bpiqDeltaLift').innerHTML = _bpiqFmtLift(netLift);
-                        document.getElementById('bpiqDeltaLiftSub').textContent = 'net lift';
                     } else {
                         document.getElementById('bpiqDeltaLift').textContent = '—';
-                        document.getElementById('bpiqDeltaLiftSub').textContent = '';
                     }
                 } else {
                     deltaRow.style.display = 'none';
