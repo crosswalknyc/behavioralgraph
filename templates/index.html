@@ -16451,7 +16451,7 @@
                             <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 1rem;">
                                 <div class="tab-section" style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 1.25rem; text-align: center;">
                                     <div style="font-size: 0.7rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em;">Users</div>
-                                    <div id="bpiqKpiAudience" style="font-size: 1.5rem; font-weight: 700; color: var(--accent-lime);"></div>
+                                    <div id="bpiqKpiAudience" style="font-size: 1.5rem; font-weight: 700; color: #10b981;"></div>
                                     <div id="bpiqKpiAudienceProj" style="font-size: 0.7rem; color: var(--text-secondary);"></div>
                                 </div>
                                 <div class="tab-section" style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 1.25rem; text-align: center;">
@@ -16477,7 +16477,7 @@
                             <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 1rem;">
                                 <div class="tab-section" style="background: var(--bg-card); border: 1px dashed var(--border-color); border-radius: 12px; padding: 1.25rem; text-align: center;">
                                     <div style="font-size: 0.7rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em;">Users</div>
-                                    <div id="bpiqKpiGenPopAudience" style="font-size: 1.5rem; font-weight: 700; color: var(--accent-lime); opacity: 0.85;"></div>
+                                    <div id="bpiqKpiGenPopAudience" style="font-size: 1.5rem; font-weight: 700; color: #10b981;"></div>
                                     <div id="bpiqKpiGenPopAudienceProj" style="font-size: 0.7rem; color: var(--text-secondary);"></div>
                                 </div>
                                 <div class="tab-section" style="background: var(--bg-card); border: 1px dashed var(--border-color); border-radius: 12px; padding: 1.25rem; text-align: center;">
@@ -16496,11 +16496,6 @@
                                     <div id="bpiqKpiGenPopLiftPp" style="font-size: 0.7rem; color: var(--text-secondary);"></div>
                                 </div>
                             </div>
-                        </div>
-                        <div class="tab-section" style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 1.5rem; margin-bottom: 1.5rem;">
-                            <h3 style="margin: 0 0 0.5rem;">🎯 Incremental Reach (Difference-in-Differences)</h3>
-                            <div style="font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 0.75rem;">A size-matched Gen Pop cohort of panelists active in clickstream during the same campaign window who did NOT engage with the qualifying property. Their natural pre→post shift in brand traffic is subtracted from the Event Brand Users shift to isolate the incremental lift caused by the partnership.</div>
-                            <div id="bpiqControlCards"></div>
                         </div>
                         <div class="tab-section" style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 1.5rem; margin-bottom: 1.5rem;">
                             <h3 style="margin: 0 0 0.75rem;">📱 Per-Platform Brand Engagement & Lift</h3>
@@ -21720,7 +21715,7 @@
             var num = Number(v);
             if (!isFinite(num)) return '∞';
             var sign = num >= 0 ? '+' : '';
-            var color = num > 0 ? '#10b981' : (num < 0 ? '#ef4444' : 'var(--text-secondary)');
+            var color = num > 0 ? '#c8e600' : (num < 0 ? '#ef4444' : 'var(--text-secondary)');
             return '<span style="color:' + color + ';font-weight:600;">' + sign + num.toFixed(2) + '%</span>';
         }
 
