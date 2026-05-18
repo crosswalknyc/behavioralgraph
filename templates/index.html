@@ -19516,12 +19516,12 @@
                         console.error('View switch error:', e);
                     }
                     // Ensure selected view is visible (guard against handler not running or layout issues)
-                    var viewIds = { profileIQ: 'dashboardView', subscriberIQ: 'subscriberIQView', llmoIQ: 'llmoIQView', rankerIQ: 'rankerIQView', ticketSalesIQ: 'ticketSalesIQView', ticketSalesTracker: 'ticketSalesTrackerView', hedgeFundIQ: 'hedgeFundIQView', sentimentIQ: 'sentimentIQView', roasIQ: 'roasIQView', ecommerceIQ: 'ecommerceIQView', brandPartnershipIQ: 'ecommerceIQView', shareOfTimeIQ: 'shareOfTimeIQView', sfConversion: 'sfConversionView', flywheelConversion: 'flywheelConversionView', customAnalysis: 'customAnalysisView', talentSearchIQ: 'talentSearchIQView', talentTheaterIQ: 'talentTheaterIQView', talentFitIQ: 'talentFitIQView' };
+                    var viewIds = { profileIQ: 'dashboardView', subscriberIQ: 'subscriberIQView', llmoIQ: 'llmoIQView', rankerIQ: 'rankerIQView', ticketSalesIQ: 'ticketSalesIQView', ticketSalesTracker: 'ticketSalesTrackerView', hedgeFundIQ: 'hedgeFundIQView', sentimentIQ: 'sentimentIQView', roasIQ: 'roasIQView', ecommerceIQ: 'ecommerceIQView', brandPartnershipIQ: 'ecommerceIQView', journeyIQ: 'journeyIQView', shareOfTimeIQ: 'shareOfTimeIQView', sfConversion: 'sfConversionView', flywheelConversion: 'flywheelConversionView', customAnalysis: 'customAnalysisView', talentSearchIQ: 'talentSearchIQView', talentTheaterIQ: 'talentTheaterIQView', talentFitIQ: 'talentFitIQView' };
                     var activeId = viewIds[val];
                     if (activeId) {
                         var activeEl = document.getElementById(activeId);
                         if (activeEl) { activeEl.style.display = 'flex'; activeEl.style.visibility = 'visible'; }
-                        ['formView', 'dashboardView', 'subscriberIQView', 'llmoIQView', 'rankerIQView', 'ticketSalesIQView', 'ticketSalesTrackerView', 'hedgeFundIQView', 'sentimentIQView', 'roasIQView', 'ecommerceIQView', 'shareOfTimeIQView', 'sfConversionView', 'flywheelConversionView', 'customAnalysisView', 'talentSearchIQView', 'talentTheaterIQView', 'talentFitIQView'].forEach(function(id) {
+                        ['formView', 'dashboardView', 'subscriberIQView', 'llmoIQView', 'rankerIQView', 'ticketSalesIQView', 'ticketSalesTrackerView', 'hedgeFundIQView', 'sentimentIQView', 'roasIQView', 'ecommerceIQView', 'shareOfTimeIQView', 'sfConversionView', 'flywheelConversionView', 'customAnalysisView', 'talentSearchIQView', 'talentTheaterIQView', 'talentFitIQView', 'journeyIQView'].forEach(function(id) {
                             if (id === activeId) return;
                             var el = document.getElementById(id);
                             if (el) el.style.display = 'none';
@@ -20266,6 +20266,8 @@
             if (ecomIQViewEl) ecomIQViewEl.style.display = 'none';
             const talentFitIQView = document.getElementById('talentFitIQView');
             if (talentFitIQView) talentFitIQView.style.display = 'none';
+            const journeyIQViewEl = document.getElementById('journeyIQView');
+            if (journeyIQViewEl) journeyIQViewEl.style.display = 'none';
             hideLLMOIQView();
             
             // Load profiles
@@ -21678,7 +21680,7 @@
             var opt = dd && dd.querySelector('option[value="sentimentIQ"]');
             if (opt && opt.disabled) return;
             if (typeof setViewNavDropdown === 'function') setViewNavDropdown('sentimentIQ');
-            ['dashboardView','subscriberIQView','rankerIQView','ticketSalesIQView','ticketSalesTrackerView','hedgeFundIQView','roasIQView','ecommerceIQView','formView','customAnalysisView','talentSearchIQView','talentTheaterIQView','flywheelConversionView','shareOfTimeIQView','sfConversionView','talentFitIQView'].forEach(function(id) {
+            ['dashboardView','subscriberIQView','rankerIQView','ticketSalesIQView','ticketSalesTrackerView','hedgeFundIQView','roasIQView','ecommerceIQView','formView','customAnalysisView','talentSearchIQView','talentTheaterIQView','flywheelConversionView','shareOfTimeIQView','sfConversionView','talentFitIQView','journeyIQView'].forEach(function(id) {
                 var el = document.getElementById(id); if (el) el.style.display = 'none';
             });
             if (typeof hideLLMOIQView === 'function') hideLLMOIQView();
@@ -24942,6 +24944,8 @@
             if (ecomIQViewEl) ecomIQViewEl.style.display = 'none';
             const talentFitIQView = document.getElementById('talentFitIQView');
             if (talentFitIQView) talentFitIQView.style.display = 'none';
+            const journeyIQViewEl = document.getElementById('journeyIQView');
+            if (journeyIQViewEl) journeyIQViewEl.style.display = 'none';
             hideLLMOIQView();
             const customAnalysisView = document.getElementById('customAnalysisView');
             if (customAnalysisView) {
@@ -26241,6 +26245,283 @@
                     }
                 }).catch(function() {});
             }, 2500);
+        }
+
+        // ---------- Dashboard view (SELECT PRODUCT → Digital Journey IQ) ----------
+
+        var _jiqCurrentRun = null;
+        var _jiqCurrentClusterIdx = 0;
+        var _jiqViewIds = ['dashboardView','subscriberIQView','sfConversionView','rankerIQView','ticketSalesIQView','ticketSalesTrackerView','hedgeFundIQView','roasIQView','ecommerceIQView','formView','customAnalysisView','talentSearchIQView','talentTheaterIQView','talentFitIQView','llmoIQView','sentimentIQView','shareOfTimeIQView','flywheelConversionView'];
+
+        window.showJourneyIQ = function(s3Key) {
+            var dd = document.getElementById('viewNavDropdown');
+            var opt = dd ? dd.querySelector('option[value="journeyIQ"]') : null;
+            if (opt && opt.disabled) {
+                alert('You do not have access to Digital Journey IQ.');
+                return;
+            }
+            if (typeof setViewNavDropdown === 'function') setViewNavDropdown('journeyIQ');
+            _jiqViewIds.forEach(function(id) {
+                var el = document.getElementById(id); if (el) el.style.display = 'none';
+            });
+            if (typeof hideLLMOIQView === 'function') hideLLMOIQView();
+            var v = document.getElementById('journeyIQView');
+            if (v) v.style.display = 'flex';
+            loadJourneyIqRunList(s3Key || _jiqLastKey);
+        };
+
+        function loadJourneyIqRunList(preferredKey) {
+            var picker = document.getElementById('jiqRunPicker');
+            if (!picker) return;
+            fetch('/api/journey-iq/list', { credentials: 'same-origin' })
+                .then(function(r) { return r.json(); })
+                .then(function(data) {
+                    var runs = (data && data.runs) || [];
+                    var opts = ['<option value="">— pick a past run —</option>'];
+                    runs.forEach(function(r) {
+                        var label = (r.project_name || r.target || 'Journey')
+                                  + ' — ' + (r.start_date || '') + '→' + (r.end_date || '');
+                        var safe = (r.key || '').replace(/"/g, '&quot;');
+                        opts.push('<option value="' + safe + '">' + label + '</option>');
+                    });
+                    picker.innerHTML = opts.join('');
+                    var keyToLoad = preferredKey || (runs[0] && runs[0].key);
+                    if (keyToLoad) {
+                        picker.value = keyToLoad;
+                        onJourneyIqRunPicked(keyToLoad);
+                    } else {
+                        _jiqCurrentRun = null;
+                        var empty = document.getElementById('jiqDashEmpty');
+                        var content = document.getElementById('jiqDashContent');
+                        var loading = document.getElementById('jiqDashLoading');
+                        if (empty) empty.style.display = '';
+                        if (content) content.style.display = 'none';
+                        if (loading) loading.style.display = 'none';
+                    }
+                }).catch(function() {});
+        }
+
+        function onJourneyIqRunPicked(key) {
+            if (!key) return;
+            var empty = document.getElementById('jiqDashEmpty');
+            var content = document.getElementById('jiqDashContent');
+            var loading = document.getElementById('jiqDashLoading');
+            if (empty) empty.style.display = 'none';
+            if (content) content.style.display = 'none';
+            if (loading) loading.style.display = '';
+            var loadingMsg = document.getElementById('jiqDashLoadingMsg');
+            if (loadingMsg) loadingMsg.textContent = 'Fetching ' + key;
+            fetch('/api/journey-iq/results/' + encodeURIComponent(key), { credentials: 'same-origin' })
+                .then(function(r) { return r.json(); })
+                .then(function(payload) {
+                    if (!payload || !payload.success || !payload.data) {
+                        if (loadingMsg) loadingMsg.textContent = 'Failed to load: ' + ((payload || {}).error || 'unknown error');
+                        return;
+                    }
+                    _jiqCurrentRun = payload.data;
+                    _jiqCurrentClusterIdx = 0;
+                    if (loading) loading.style.display = 'none';
+                    if (content) content.style.display = '';
+                    renderJourneyIqDashboard();
+                }).catch(function(e) {
+                    if (loadingMsg) loadingMsg.textContent = 'Failed: ' + (e && e.message ? e.message : e);
+                });
+        }
+
+        function _jiqEsc(s) {
+            return String(s == null ? '' : s)
+                .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+        }
+
+        function _jiqFmt(n) {
+            if (n == null) return '—';
+            try { return Number(n).toLocaleString(); } catch (e) { return String(n); }
+        }
+
+        function renderJourneyIqDashboard() {
+            var d = _jiqCurrentRun || {};
+            var meta = d.meta || {};
+            var kpis = d.kpis || {};
+            var clusters = d.clusters || [];
+            var keywords = d.keywords || [];
+            var postHosts = d.post_hosts || [];
+            var facts = d.facts || [];
+
+            var title = document.getElementById('jiqDashTitle');
+            var sub = document.getElementById('jiqDashSubtitle');
+            if (title) title.textContent = (meta.project_name || meta.target || 'Digital Journey');
+            if (sub) {
+                sub.textContent = 'Target: ' + (meta.target || '—')
+                    + '  ·  ' + (meta.start_date || '') + ' → ' + (meta.end_date || '')
+                    + '  ·  lookback ' + (meta.lookback_days != null ? meta.lookback_days : '?') + 'd'
+                    + ' / forward ' + (meta.forward_days != null ? meta.forward_days : '?') + 'd'
+                    + (meta.matched_uids != null ? ('  ·  ' + _jiqFmt(meta.matched_uids) + ' matched users') : '');
+            }
+
+            // KPI strip
+            var kpiStrip = document.getElementById('jiqKpiStrip');
+            if (kpiStrip) {
+                var k = [
+                    ['Total Users',            _jiqFmt(kpis.total_users)],
+                    ['Converted',              _jiqFmt(kpis.converted_users)],
+                    ['Conversion Rate',        (kpis.conversion_pct != null ? kpis.conversion_pct + '%' : '—')],
+                    ['Avg Journey (days)',     (kpis.avg_journey_duration_days != null ? kpis.avg_journey_duration_days : '—')],
+                    ['Avg Sessions to Convert',(kpis.avg_sessions_to_convert != null ? kpis.avg_sessions_to_convert : '—')],
+                    ['Avg Events / User',      (kpis.avg_events_per_user != null ? kpis.avg_events_per_user : '—')],
+                ];
+                kpiStrip.innerHTML = k.map(function(pair) {
+                    return '<div style="background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 8px; padding: 0.6rem 0.8rem;">'
+                         +   '<div style="font-size: 0.65rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-secondary); font-weight: 600;">' + _jiqEsc(pair[0]) + '</div>'
+                         +   '<div style="font-size: 1.25rem; font-weight: 700; margin-top: 2px;">' + _jiqEsc(pair[1]) + '</div>'
+                         + '</div>';
+                }).join('');
+            }
+
+            // Cluster tabs
+            var tabs = document.getElementById('jiqClusterTabs');
+            if (tabs) {
+                if (!clusters.length) {
+                    tabs.innerHTML = '<div style="font-size:0.8rem;color:var(--text-secondary);">No clusters in this run.</div>';
+                } else {
+                    tabs.innerHTML = clusters.map(function(c, i) {
+                        var active = (i === _jiqCurrentClusterIdx);
+                        var bg = active ? 'var(--accent-primary)' : 'var(--bg-secondary)';
+                        var color = active ? '#fff' : 'var(--text-primary)';
+                        var label = _jiqEsc((c.inception || 'OTHER'))
+                                  + ' · ' + _jiqFmt(c.users)
+                                  + ' (' + (c.conversion_pct != null ? c.conversion_pct + '%' : '—') + ')';
+                        return '<button type="button" onclick="setJourneyIqCluster(' + i + ')" '
+                             + 'style="padding: 5px 10px; border-radius: 6px; border: 1px solid var(--border-color); '
+                             + 'background: ' + bg + '; color: ' + color + '; font-size: 12px; cursor: pointer;">'
+                             + label + '</button>';
+                    }).join('');
+                }
+            }
+
+            renderJourneyIqClusterDetail(clusters[_jiqCurrentClusterIdx]);
+
+            // Keywords
+            var kwEl = document.getElementById('jiqKeywords');
+            if (kwEl) {
+                if (!keywords.length) {
+                    kwEl.innerHTML = '<div style="font-size:0.8rem;color:var(--text-secondary);">No inception keywords captured (likely no Search / Ad referrers).</div>';
+                } else {
+                    kwEl.innerHTML = '<div style="display: flex; flex-wrap: wrap; gap: 0.35rem;">'
+                        + keywords.slice(0, 30).map(function(kw) {
+                            return '<span style="background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 99px; padding: 3px 10px; font-size: 12px;">'
+                                 + _jiqEsc(kw.keyword) + ' <span style="color: var(--text-secondary); font-size: 11px;">×' + _jiqFmt(kw.users) + '</span>'
+                                 + '</span>';
+                        }).join('') + '</div>';
+                }
+            }
+
+            // Post-non-conversion hosts
+            var phEl = document.getElementById('jiqPostHosts');
+            if (phEl) {
+                if (!postHosts.length) {
+                    phEl.innerHTML = '<div style="font-size:0.8rem;color:var(--text-secondary);">All matched users either converted or had no post-mention activity.</div>';
+                } else {
+                    phEl.innerHTML = '<table style="width:100%; border-collapse: collapse; font-size: 13px;">'
+                        + '<thead><tr style="text-align:left;border-bottom:1px solid var(--border-color);"><th style="padding:6px 4px;">Host</th><th style="padding:6px 4px;text-align:right;">Users</th><th style="padding:6px 4px;text-align:right;">% of Non-Conv</th></tr></thead><tbody>'
+                        + postHosts.map(function(h) {
+                            return '<tr style="border-bottom:1px solid var(--border-color);">'
+                                 + '<td style="padding:6px 4px;">' + _jiqEsc(h.host) + '</td>'
+                                 + '<td style="padding:6px 4px;text-align:right;">' + _jiqFmt(h.users) + '</td>'
+                                 + '<td style="padding:6px 4px;text-align:right;">' + (h.users_pct != null ? h.users_pct + '%' : '—') + '</td>'
+                                 + '</tr>';
+                        }).join('') + '</tbody></table>';
+                }
+            }
+
+            // Facts
+            var factsCard = document.getElementById('jiqFactsCard');
+            var factsEl = document.getElementById('jiqFacts');
+            if (factsCard && factsEl) {
+                if (!facts.length) {
+                    factsCard.style.display = 'none';
+                } else {
+                    factsCard.style.display = '';
+                    factsEl.innerHTML = '<ul style="margin: 0; padding-left: 1.25rem; font-size: 13px; line-height: 1.55;">'
+                        + facts.map(function(f) { return '<li style="margin-bottom: 4px;">' + _jiqEsc(f) + '</li>'; }).join('')
+                        + '</ul>';
+                }
+            }
+        }
+
+        function setJourneyIqCluster(i) {
+            _jiqCurrentClusterIdx = i;
+            renderJourneyIqDashboard();
+        }
+
+        function renderJourneyIqClusterDetail(cluster) {
+            var fMeta = document.getElementById('jiqFunnelMeta');
+            var fEl = document.getElementById('jiqFunnel');
+            var dEl = document.getElementById('jiqDetours');
+            if (!cluster) {
+                if (fMeta) fMeta.textContent = '';
+                if (fEl) fEl.innerHTML = '<div style="font-size:0.8rem;color:var(--text-secondary);">No data for this cluster.</div>';
+                if (dEl) dEl.innerHTML = '';
+                return;
+            }
+            if (fMeta) {
+                fMeta.textContent = 'Inception: ' + (cluster.inception || '—')
+                    + '  ·  ' + _jiqFmt(cluster.users) + ' users'
+                    + (cluster.users_pct != null ? (' (' + cluster.users_pct + '% of cohort)') : '')
+                    + '  ·  ' + _jiqFmt(cluster.converted) + ' converted'
+                    + (cluster.conversion_pct != null ? (' (' + cluster.conversion_pct + '%)') : '');
+            }
+
+            var funnel = cluster.funnel || [];
+            if (fEl) {
+                if (!funnel.length) {
+                    fEl.innerHTML = '<div style="font-size:0.8rem;color:var(--text-secondary);">No funnel steps reached.</div>';
+                } else {
+                    var maxActive = Math.max.apply(null, funnel.map(function(s) { return s.active_users || 0; }).concat([1]));
+                    var rows = [];
+                    funnel.forEach(function(step, idx) {
+                        var widthPct = Math.max(8, Math.round(100 * (step.active_users || 0) / maxActive));
+                        rows.push(
+                            '<div style="margin-bottom: 6px;">'
+                          +   '<div style="display: flex; justify-content: space-between; align-items: baseline;">'
+                          +     '<div style="font-weight: 600; font-size: 13px;">' + _jiqEsc(step.step) + '</div>'
+                          +     '<div style="font-size: 12px; color: var(--text-secondary);">' + _jiqFmt(step.active_users) + ' users</div>'
+                          +   '</div>'
+                          +   '<div style="background: var(--bg-secondary); border-radius: 6px; height: 18px; overflow: hidden; margin-top: 2px;">'
+                          +     '<div style="background: var(--accent-primary); height: 100%; width: ' + widthPct + '%; transition: width 0.3s;"></div>'
+                          +   '</div>'
+                          + '</div>'
+                        );
+                        if (idx < funnel.length - 1 && step.drop_off_pct != null) {
+                            var nextStep = funnel[idx + 1];
+                            var dropColor = step.drop_off_pct >= 40 ? '#ef4444' : (step.drop_off_pct >= 20 ? '#f59e0b' : 'var(--text-secondary)');
+                            rows.push(
+                                '<div style="display: flex; justify-content: center; align-items: center; gap: 0.5rem; margin: 2px 0 6px; font-size: 11px;">'
+                              +   '<span style="color: ' + dropColor + '; font-weight: 600;">↓ ' + (nextStep.drop_off_pct != null ? nextStep.drop_off_pct + '%' : '—') + ' drop-off</span>'
+                              + '</div>'
+                            );
+                        }
+                    });
+                    fEl.innerHTML = rows.join('');
+                }
+            }
+
+            var detours = cluster.detours || [];
+            if (dEl) {
+                if (!detours.length) {
+                    dEl.innerHTML = '<div style="font-size:0.8rem;color:var(--text-secondary);">No detour hosts captured (users stayed on target or had no post-mention activity).</div>';
+                } else {
+                    dEl.innerHTML = '<table style="width:100%; border-collapse: collapse; font-size: 13px;">'
+                        + '<thead><tr style="text-align:left;border-bottom:1px solid var(--border-color);"><th style="padding:6px 4px;">Host</th><th style="padding:6px 4px;text-align:right;">Users</th><th style="padding:6px 4px;text-align:right;">% of cluster</th></tr></thead><tbody>'
+                        + detours.map(function(h) {
+                            return '<tr style="border-bottom:1px solid var(--border-color);">'
+                                 + '<td style="padding:6px 4px;">' + _jiqEsc(h.host) + '</td>'
+                                 + '<td style="padding:6px 4px;text-align:right;">' + _jiqFmt(h.users) + '</td>'
+                                 + '<td style="padding:6px 4px;text-align:right;">' + (h.users_pct != null ? h.users_pct + '%' : '—') + '</td>'
+                                 + '</tr>';
+                        }).join('') + '</tbody></table>';
+                }
+            }
         }
 
         // ===================== SHARE OF TIME IQ =====================
