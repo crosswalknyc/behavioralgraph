@@ -16643,12 +16643,26 @@
                                 </div>
                             </div>
                         </div>
-                        <!-- Lift Over Gen Pop — partnership's incremental lift after stripping natural drift -->
-                        <div id="bpiqLiftOverGenPopRow" style="display: none; grid-template-columns: 1fr; gap: 1rem; margin-bottom: 1.5rem;">
-                            <div class="tab-section" style="background: var(--bg-card); border: 1.5px solid #10b981; border-radius: 12px; padding: 1.25rem; text-align: center;">
-                                <div style="font-size: 0.7rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em;">Total Lift Over Gen Pop</div>
-                                <div id="bpiqKpiLiftOverGenPop" style="font-size: 1.75rem; font-weight: 800;"></div>
-                                <div id="bpiqKpiLiftOverGenPopSub" style="font-size: 0.75rem; color: var(--text-secondary); margin-top: 2px;"></div>
+                        <!-- Delta: Ticket Purchasers vs Gen Pop Control -->
+                        <div id="bpiqDeltaRow" style="display: none; background: linear-gradient(135deg, rgba(200,230,0,0.04), rgba(16,185,129,0.06)); border: 1px solid var(--border-color); border-radius: 14px; padding: 1.5rem 1.5rem 0.75rem; margin-bottom: 1.5rem;">
+                            <div style="font-size: 0.8rem; font-weight: 800; color: #c8e600; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 1rem;">DELTA: TICKET PURCHASERS VS. GEN POP CONTROL</div>
+                            <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem;">
+                                <div></div>
+                                <div class="tab-section" style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 1.25rem; text-align: center;">
+                                    <div style="font-size: 0.7rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em;">Brand Users</div>
+                                    <div id="bpiqDeltaPreUsers" style="font-size: 1.5rem; font-weight: 700; color: var(--accent-cyan);"></div>
+                                    <div id="bpiqDeltaPreUsersPct" style="font-size: 0.7rem; color: var(--text-secondary);"></div>
+                                </div>
+                                <div class="tab-section" style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 1.25rem; text-align: center;">
+                                    <div style="font-size: 0.7rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em;">Brand Users</div>
+                                    <div id="bpiqDeltaPostUsers" style="font-size: 1.5rem; font-weight: 700; color: var(--accent-orange);"></div>
+                                    <div id="bpiqDeltaPostUsersPct" style="font-size: 0.7rem; color: var(--text-secondary);"></div>
+                                </div>
+                                <div class="tab-section" style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 1.25rem; text-align: center;">
+                                    <div style="font-size: 0.7rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em;">Brand Lift</div>
+                                    <div id="bpiqDeltaLift" style="font-size: 1.5rem; font-weight: 700;"></div>
+                                    <div id="bpiqDeltaLiftSub" style="font-size: 0.7rem; color: var(--text-secondary);"></div>
+                                </div>
                             </div>
                         </div>
                         <div class="tab-section" style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 1.5rem; margin-bottom: 1.5rem;">
@@ -22863,37 +22877,36 @@
                 document.getElementById('bpiqKpiGenPopLiftPp').textContent = '';
             }
 
-            // Total Lift Over Gen Pop — simple net difference between
-            // Brand Lift % and Gen Pop Lift %. This is the most
-            // intuitive framing for the dashboard ("the partnership
-            // drove +9.66% user lift while Gen Pop naturally drifted
-            // +8.74%, so net partnership-driven lift is +0.92%").
-            var loRow = document.getElementById('bpiqLiftOverGenPopRow');
-            if (loRow) {
-                var brandLift = totals.lift_pct_users;
-                var gpLift    = cg.control_lift_pct_users;
-                if (cg.enabled && brandLift != null && gpLift != null
-                              && isFinite(brandLift) && isFinite(gpLift)) {
-                    loRow.style.display = 'grid';
-                    var net   = brandLift - gpLift;
-                    var color = net > 0 ? '#10b981'
-                              : net < 0 ? '#ef4444' : 'var(--text-secondary)';
-                    var sign  = net > 0 ? '+' : '';
-                    var bigEl = document.getElementById('bpiqKpiLiftOverGenPop');
-                    var subEl = document.getElementById('bpiqKpiLiftOverGenPopSub');
-                    if (bigEl) {
-                        bigEl.style.color = color;
-                        bigEl.textContent = sign + net.toFixed(2) + '%';
-                    }
-                    if (subEl) {
-                        var bSign  = brandLift >= 0 ? '+' : '';
-                        var gpSign = gpLift    >= 0 ? '+' : '';
-                        subEl.textContent =
-                            'Brand ' + bSign + brandLift.toFixed(2) + '% − Gen Pop '
-                            + gpSign + gpLift.toFixed(2) + '% = ' + sign + net.toFixed(2) + '% net';
+            // Delta row: Ticket Purchasers vs Gen Pop Control
+            var deltaRow = document.getElementById('bpiqDeltaRow');
+            if (deltaRow) {
+                if (cg.enabled) {
+                    deltaRow.style.display = 'block';
+                    var gpSize    = cg.projected_control_size || 0;
+                    var gpPrePct  = cg.control_pre_pen_pct  || 0;
+                    var gpPostPct = cg.control_post_pen_pct || 0;
+                    var gpPre     = Math.round(gpSize * gpPrePct  / 100);
+                    var gpPost    = Math.round(gpSize * gpPostPct / 100);
+                    var deltaPreUsers  = preProj - gpPre;
+                    var deltaPostUsers = postProj - gpPost;
+                    var deltaPrePct    = (totals.audience_pen_pre_pct || 0) - gpPrePct;
+                    var deltaPostPct   = (totals.audience_pen_post_pct || 0) - gpPostPct;
+                    document.getElementById('bpiqDeltaPreUsers').textContent = _bpiqFmtNum(deltaPreUsers);
+                    document.getElementById('bpiqDeltaPreUsersPct').textContent = deltaPrePct.toFixed(2) + '%';
+                    document.getElementById('bpiqDeltaPostUsers').textContent = _bpiqFmtNum(deltaPostUsers);
+                    document.getElementById('bpiqDeltaPostUsersPct').textContent = deltaPostPct.toFixed(2) + '%';
+                    var brandLift = totals.lift_pct_users;
+                    var gpLift    = cg.control_lift_pct_users;
+                    if (brandLift != null && gpLift != null && isFinite(brandLift) && isFinite(gpLift)) {
+                        var netLift = brandLift - gpLift;
+                        document.getElementById('bpiqDeltaLift').innerHTML = _bpiqFmtLift(netLift);
+                        document.getElementById('bpiqDeltaLiftSub').textContent = 'net lift';
+                    } else {
+                        document.getElementById('bpiqDeltaLift').textContent = '—';
+                        document.getElementById('bpiqDeltaLiftSub').textContent = '';
                     }
                 } else {
-                    loRow.style.display = 'none';
+                    deltaRow.style.display = 'none';
                 }
             }
 
