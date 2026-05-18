@@ -27612,9 +27612,8 @@ def _run_roas_iq(job_id):
             pass
         conn.close()
 
-        # Discard the dow/hr columns we added — downstream classification
-        # only needs (URL, UID).
-        rows = [(u, uid) for (u, uid, _d, _h) in rows]
+        # rows is already (url, uid) — dow/hr are partitioned directly into
+        # _dh_counts during the combined_rows loop above, so no strip needed.
 
         update_job_status(job_id, progress=60, message=f'Classifying {len(rows):,} attributed URLs...')
         channel_source_uids = {}
