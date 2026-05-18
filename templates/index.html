@@ -16592,75 +16592,57 @@
                                 <div id="bpiqHeroBreak" style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1rem; flex: 0 1 auto; width: 75%;"></div>
                             </div>
                         </div>
-                        <div style="background: linear-gradient(135deg, rgba(200,230,0,0.06), rgba(6,182,212,0.06)); border: 1px solid var(--border-color); border-radius: 14px; padding: 1.5rem 1.5rem 0.75rem; margin-bottom: 1.5rem;">
-                            <div style="font-size: 0.95rem; font-weight: 800; color: #c8e600; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 1rem;">TICKET PURCHASERS</div>
-                            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 1rem;">
-                                <div class="tab-section" style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 1.25rem; text-align: center;">
-                                    <div style="font-size: 0.7rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em;">Users</div>
-                                    <div id="bpiqKpiAudience" style="font-size: 1.5rem; font-weight: 700; color: #10b981;"></div>
-                                    <div id="bpiqKpiAudienceProj" style="font-size: 0.7rem; color: var(--text-secondary);"></div>
+                        <div id="bpiqKpiAndLiftWrap" style="display: flex; gap: 1.5rem; margin-bottom: 1.5rem; align-items: stretch;">
+                            <div style="flex: 0 0 75%; display: flex; flex-direction: column; gap: 1.5rem;">
+                                <div style="background: linear-gradient(135deg, rgba(200,230,0,0.06), rgba(6,182,212,0.06)); border: 1px solid var(--border-color); border-radius: 14px; padding: 1.5rem 1.5rem 0.75rem;">
+                                    <div style="font-size: 0.95rem; font-weight: 800; color: #c8e600; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 1rem;">TICKET PURCHASERS</div>
+                                    <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem;">
+                                        <div class="tab-section" style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 1.25rem; text-align: center;">
+                                            <div style="font-size: 0.7rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em;">Users</div>
+                                            <div id="bpiqKpiAudience" style="font-size: 1.5rem; font-weight: 700; color: #10b981;"></div>
+                                            <div id="bpiqKpiAudienceProj" style="font-size: 0.7rem; color: var(--text-secondary);"></div>
+                                        </div>
+                                        <div class="tab-section" style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 1.25rem; text-align: center;">
+                                            <div style="font-size: 0.7rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em;">Pre-Event Brand Users</div>
+                                            <div id="bpiqKpiPreUsers" style="font-size: 1.5rem; font-weight: 700; color: var(--accent-cyan);"></div>
+                                        </div>
+                                        <div class="tab-section" style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 1.25rem; text-align: center;">
+                                            <div style="font-size: 0.7rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em;">Post-Event Brand Users</div>
+                                            <div id="bpiqKpiPostUsers" style="font-size: 1.5rem; font-weight: 700; color: var(--accent-orange);"></div>
+                                        </div>
+                                        <div class="tab-section" style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 1.25rem; text-align: center;">
+                                            <div style="font-size: 0.7rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em;">Brand Lift (Users)</div>
+                                            <div id="bpiqKpiLift" style="font-size: 1.5rem; font-weight: 700;"></div>
+                                        </div>
+                                    </div>
                                 </div>
-                                <div class="tab-section" style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 1.25rem; text-align: center;">
-                                    <div style="font-size: 0.7rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em;">Pre-Event Brand Users</div>
-                                    <div id="bpiqKpiPreUsers" style="font-size: 1.5rem; font-weight: 700; color: var(--accent-cyan);"></div>
-                                    <div id="bpiqKpiPreUsersPct" style="font-size: 0.7rem; color: var(--text-secondary);"></div>
-                                </div>
-                                <div class="tab-section" style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 1.25rem; text-align: center;">
-                                    <div style="font-size: 0.7rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em;">Post-Event Brand Users</div>
-                                    <div id="bpiqKpiPostUsers" style="font-size: 1.5rem; font-weight: 700; color: var(--accent-orange);"></div>
-                                    <div id="bpiqKpiPostUsersPct" style="font-size: 0.7rem; color: var(--text-secondary);"></div>
-                                </div>
-                                <div class="tab-section" style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 1.25rem; text-align: center;">
-                                    <div style="font-size: 0.7rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em;">Brand Lift (Users)</div>
-                                    <div id="bpiqKpiLift" style="font-size: 1.5rem; font-weight: 700;"></div>
-                                    <div id="bpiqKpiLiftHits" style="font-size: 0.7rem; color: var(--text-secondary);"></div>
-                                </div>
-                            </div>
-                        </div>
-                        <!-- Gen Pop / control-cohort mirror row -->
-                        <div id="bpiqGenPopKpiRow" style="display: none; background: linear-gradient(135deg, rgba(200,230,0,0.04), rgba(168,85,247,0.06)); border: 1px solid var(--border-color); border-radius: 14px; padding: 1.5rem 1.5rem 0.75rem; margin-bottom: 1.5rem;">
-                            <div style="font-size: 0.95rem; font-weight: 800; color: #c8e600; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 1rem;">GEN POP CONTROL</div>
-                            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 1rem;">
-                                <div class="tab-section" style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 1.25rem; text-align: center;">
-                                    <div style="font-size: 0.7rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em;">Users</div>
-                                    <div id="bpiqKpiGenPopAudience" style="font-size: 1.5rem; font-weight: 700; color: #10b981;"></div>
-                                    <div id="bpiqKpiGenPopAudienceProj" style="font-size: 0.7rem; color: var(--text-secondary);"></div>
-                                </div>
-                                <div class="tab-section" style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 1.25rem; text-align: center;">
-                                    <div style="font-size: 0.7rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em;">Pre-Event Brand Users (Gen Pop)</div>
-                                    <div id="bpiqKpiGenPopPreUsers" style="font-size: 1.5rem; font-weight: 700; color: var(--accent-cyan); opacity: 0.85;"></div>
-                                    <div id="bpiqKpiGenPopPreUsersPct" style="font-size: 0.7rem; color: var(--text-secondary);"></div>
-                                </div>
-                                <div class="tab-section" style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 1.25rem; text-align: center;">
-                                    <div style="font-size: 0.7rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em;">Post-Event Brand Users (Gen Pop)</div>
-                                    <div id="bpiqKpiGenPopPostUsers" style="font-size: 1.5rem; font-weight: 700; color: var(--accent-orange); opacity: 0.85;"></div>
-                                    <div id="bpiqKpiGenPopPostUsersPct" style="font-size: 0.7rem; color: var(--text-secondary);"></div>
-                                </div>
-                                <div class="tab-section" style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 1.25rem; text-align: center;">
-                                    <div style="font-size: 0.7rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em;">Brand Lift (Gen Pop)</div>
-                                    <div id="bpiqKpiGenPopLift" style="font-size: 1.5rem; font-weight: 700;"></div>
-                                    <div id="bpiqKpiGenPopLiftPp" style="font-size: 0.7rem; color: var(--text-secondary);">natural drift</div>
+                                <!-- Gen Pop / control-cohort mirror row -->
+                                <div id="bpiqGenPopKpiRow" style="display: none; background: linear-gradient(135deg, rgba(200,230,0,0.04), rgba(168,85,247,0.06)); border: 1px solid var(--border-color); border-radius: 14px; padding: 1.5rem 1.5rem 0.75rem;">
+                                    <div style="font-size: 0.95rem; font-weight: 800; color: #c8e600; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 1rem;">GEN POP CONTROL</div>
+                                    <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem;">
+                                        <div class="tab-section" style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 1.25rem; text-align: center;">
+                                            <div style="font-size: 0.7rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em;">Users</div>
+                                            <div id="bpiqKpiGenPopAudience" style="font-size: 1.5rem; font-weight: 700; color: #10b981;"></div>
+                                            <div id="bpiqKpiGenPopAudienceProj" style="font-size: 0.7rem; color: var(--text-secondary);"></div>
+                                        </div>
+                                        <div class="tab-section" style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 1.25rem; text-align: center;">
+                                            <div style="font-size: 0.7rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em;">Pre-Event Brand Users (Gen Pop)</div>
+                                            <div id="bpiqKpiGenPopPreUsers" style="font-size: 1.5rem; font-weight: 700; color: var(--accent-cyan); opacity: 0.85;"></div>
+                                        </div>
+                                        <div class="tab-section" style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 1.25rem; text-align: center;">
+                                            <div style="font-size: 0.7rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em;">Post-Event Brand Users (Gen Pop)</div>
+                                            <div id="bpiqKpiGenPopPostUsers" style="font-size: 1.5rem; font-weight: 700; color: var(--accent-orange); opacity: 0.85;"></div>
+                                        </div>
+                                        <div class="tab-section" style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 1.25rem; text-align: center;">
+                                            <div style="font-size: 0.7rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em;">Brand Lift (Gen Pop)</div>
+                                            <div id="bpiqKpiGenPopLift" style="font-size: 1.5rem; font-weight: 700;"></div>
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
-                        </div>
-                        <!-- Delta: Ticket Purchasers vs Gen Pop Control -->
-                        <div id="bpiqDeltaRow" style="display: none; background: linear-gradient(135deg, rgba(200,230,0,0.04), rgba(16,185,129,0.06)); border: 1px solid var(--border-color); border-radius: 14px; padding: 0.75rem 1.5rem; margin-bottom: 1.5rem; align-items: center;">
-                            <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; align-items: center; width: 100%;">
-                                <div style="display: flex; align-items: center; justify-content: center; padding: 0.5rem; text-align: center;">
-                                    <div style="font-size: 1.1rem; font-weight: 800; color: #10b981; text-transform: uppercase; letter-spacing: 0.06em; line-height: 1.6;">TICKET PURCHASERS<br><span style="font-size: 0.85rem; opacity: 0.7;">VS.</span><br>GEN POP CONTROL</div>
-                                </div>
-                                <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 1.25rem; text-align: center; display: flex; flex-direction: column; justify-content: center;">
-                                    <div style="font-size: 0.7rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em;">Pre-Event Brand Users</div>
-                                    <div id="bpiqDeltaPreUsers" style="font-size: 1.5rem; font-weight: 700; color: var(--accent-cyan);"></div>
-                                </div>
-                                <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 1.25rem; text-align: center; display: flex; flex-direction: column; justify-content: center;">
-                                    <div style="font-size: 0.7rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em;">Post-Event Brand Users</div>
-                                    <div id="bpiqDeltaPostUsers" style="font-size: 1.5rem; font-weight: 700; color: var(--accent-orange);"></div>
-                                </div>
-                                <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 1.25rem; text-align: center; display: flex; flex-direction: column; justify-content: center;">
-                                    <div style="font-size: 0.7rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em;">Brand Lift</div>
-                                    <div id="bpiqDeltaLift" style="font-size: 1.5rem; font-weight: 700;"></div>
-                                </div>
+                            <div id="bpiqNetLiftCard" style="display: none; flex: 1; background: var(--bg-card); border: 1.5px solid #c8e600; border-radius: 14px; padding: 2rem 1.25rem; text-align: center; align-self: center;">
+                                <div style="font-size: 0.8rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.5rem;">Brand Lift</div>
+                                <div id="bpiqNetLiftValue" style="font-size: 2.5rem; font-weight: 800; color: #c8e600;"></div>
                             </div>
                         </div>
                         <div class="tab-section" style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 1.5rem; margin-bottom: 1.5rem;">
@@ -22947,70 +22929,48 @@
             meta += ' · Post-window: ' + (evP.start || '') + ' → ' + (poP.end || '') + ' (' + ((evP.days || 0) + (poP.days || 0)) + 'd)';
             document.getElementById('bpiqDashMeta').innerHTML = meta;
 
+            var pipe = ' <span style="display:inline-block;width:1px;height:1.3em;background:var(--text-secondary);vertical-align:middle;margin:0 0.6rem;opacity:0.6;"></span> ';
             document.getElementById('bpiqKpiAudience').textContent = _bpiqFmtNum(data.projected_audience_size);
             document.getElementById('bpiqKpiAudienceProj').textContent = 'US users';
             var postProj = totals.post_users_projected || 0;
             var preProj  = totals.pre_users_projected  || 0;
-            document.getElementById('bpiqKpiPreUsers').textContent  = _bpiqFmtNum(preProj);
-            document.getElementById('bpiqKpiPostUsers').textContent = _bpiqFmtNum(postProj);
-            document.getElementById('bpiqKpiPostUsersPct').innerHTML =
-                (totals.audience_pen_post_pct || 0).toFixed(2) + '% of audience';
-            document.getElementById('bpiqKpiPreUsersPct').innerHTML =
-                (totals.audience_pen_pre_pct || 0).toFixed(2) + '% of audience';
-            document.getElementById('bpiqKpiLift').innerHTML = _bpiqFmtLift(totals.lift_pct_users);
+            var prePct   = (totals.audience_pen_pre_pct || 0);
+            var postPct  = (totals.audience_pen_post_pct || 0);
+            var liftUsers = postProj - preProj;
+            document.getElementById('bpiqKpiPreUsers').innerHTML  = _bpiqFmtNum(preProj) + pipe + prePct.toFixed(2) + '%';
+            document.getElementById('bpiqKpiPostUsers').innerHTML = _bpiqFmtNum(postProj) + pipe + postPct.toFixed(2) + '%';
+            document.getElementById('bpiqKpiLift').innerHTML = _bpiqFmtNum(liftUsers) + pipe + _bpiqFmtLift(totals.lift_pct_users);
 
-            // Gen Pop mirror row — same four KPIs computed off the
-            // size-matched control cohort. Hides cleanly when the
-            // cohort is unavailable for this run.
+            // Gen Pop mirror row
             var cg = data.control_group || {};
             var gpRow = document.getElementById('bpiqGenPopKpiRow');
             if (gpRow) gpRow.style.display = cg.enabled ? 'block' : 'none';
+            var netLiftCard = document.getElementById('bpiqNetLiftCard');
             if (cg.enabled) {
                 var gpSize    = cg.projected_control_size || 0;
                 var gpPrePct  = cg.control_pre_pen_pct  || 0;
                 var gpPostPct = cg.control_post_pen_pct || 0;
                 var gpPre     = Math.round(gpSize * gpPrePct  / 100);
                 var gpPost    = Math.round(gpSize * gpPostPct / 100);
+                var gpLiftUsers = gpPost - gpPre;
                 document.getElementById('bpiqKpiGenPopAudience').textContent = _bpiqFmtNum(gpSize);
                 document.getElementById('bpiqKpiGenPopAudienceProj').textContent = 'US users (size-matched)';
-                document.getElementById('bpiqKpiGenPopPreUsers').textContent  = _bpiqFmtNum(gpPre);
-                document.getElementById('bpiqKpiGenPopPostUsers').textContent = _bpiqFmtNum(gpPost);
-                document.getElementById('bpiqKpiGenPopPreUsersPct').innerHTML  = gpPrePct.toFixed(2)  + '% of cohort';
-                document.getElementById('bpiqKpiGenPopPostUsersPct').innerHTML = gpPostPct.toFixed(2) + '% of cohort';
-                document.getElementById('bpiqKpiGenPopLift').innerHTML = _bpiqFmtLift(cg.control_lift_pct_users);
-                document.getElementById('bpiqKpiGenPopLiftPp').textContent = '';
-            }
-
-            // Delta row: Ticket Purchasers vs Gen Pop Control
-            var deltaRow = document.getElementById('bpiqDeltaRow');
-            if (deltaRow) {
-                if (cg.enabled) {
-                    deltaRow.style.display = 'flex';
-                    var gpSize    = cg.projected_control_size || 0;
-                    var gpPrePct  = cg.control_pre_pen_pct  || 0;
-                    var gpPostPct = cg.control_post_pen_pct || 0;
-                    var gpPre     = Math.round(gpSize * gpPrePct  / 100);
-                    var gpPost    = Math.round(gpSize * gpPostPct / 100);
-                    var deltaPreUsers  = preProj - gpPre;
-                    var deltaPostUsers = postProj - gpPost;
-                    var deltaPrePct    = (totals.audience_pen_pre_pct || 0) - gpPrePct;
-                    var deltaPostPct   = (totals.audience_pen_post_pct || 0) - gpPostPct;
-                    var pipe = ' <span style="display:inline-block;width:1px;height:1.3em;background:var(--text-secondary);vertical-align:middle;margin:0 0.6rem;opacity:0.6;"></span> ';
-                    var preSign = deltaPreUsers >= 0 ? '+' : '';
-                    var postSign = deltaPostUsers >= 0 ? '+' : '';
-                    document.getElementById('bpiqDeltaPreUsers').innerHTML = preSign + _bpiqFmtNum(deltaPreUsers) + pipe + (deltaPrePct >= 0 ? '+' : '') + deltaPrePct.toFixed(2) + '%';
-                    document.getElementById('bpiqDeltaPostUsers').innerHTML = postSign + _bpiqFmtNum(deltaPostUsers) + pipe + (deltaPostPct >= 0 ? '+' : '') + deltaPostPct.toFixed(2) + '%';
-                    var brandLift = totals.lift_pct_users;
-                    var gpLift    = cg.control_lift_pct_users;
-                    if (brandLift != null && gpLift != null && isFinite(brandLift) && isFinite(gpLift)) {
-                        var netLift = brandLift - gpLift;
-                        document.getElementById('bpiqDeltaLift').innerHTML = _bpiqFmtLift(netLift);
-                    } else {
-                        document.getElementById('bpiqDeltaLift').textContent = '—';
-                    }
-                } else {
-                    deltaRow.style.display = 'none';
+                document.getElementById('bpiqKpiGenPopPreUsers').innerHTML  = _bpiqFmtNum(gpPre) + pipe + gpPrePct.toFixed(2) + '%';
+                document.getElementById('bpiqKpiGenPopPostUsers').innerHTML = _bpiqFmtNum(gpPost) + pipe + gpPostPct.toFixed(2) + '%';
+                document.getElementById('bpiqKpiGenPopLift').innerHTML = _bpiqFmtNum(gpLiftUsers) + pipe + _bpiqFmtLift(cg.control_lift_pct_users);
+                // Net Brand Lift card
+                var brandLift = totals.lift_pct_users;
+                var gpLift    = cg.control_lift_pct_users;
+                if (netLiftCard && brandLift != null && gpLift != null && isFinite(brandLift) && isFinite(gpLift)) {
+                    var netLift = brandLift - gpLift;
+                    var sign = netLift >= 0 ? '+' : '';
+                    netLiftCard.style.display = 'flex';
+                    netLiftCard.style.flexDirection = 'column';
+                    netLiftCard.style.justifyContent = 'center';
+                    document.getElementById('bpiqNetLiftValue').textContent = sign + netLift.toFixed(2) + '%';
                 }
+            } else {
+                if (netLiftCard) netLiftCard.style.display = 'none';
             }
 
             // Per-platform table (cross-platform brand reach: audience users
