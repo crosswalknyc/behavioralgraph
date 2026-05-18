@@ -16634,7 +16634,15 @@
                             <div class="tab-section" style="background: var(--bg-card); border: 1px dashed var(--border-color); border-radius: 12px; padding: 1.25rem; text-align: center;">
                                 <div style="font-size: 0.7rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em;">Brand Lift (Gen Pop)</div>
                                 <div id="bpiqKpiGenPopLift" style="font-size: 1.5rem; font-weight: 700;"></div>
-                                <div id="bpiqKpiGenPopLiftPp" style="font-size: 0.7rem; color: var(--text-secondary);"></div>
+                                <div id="bpiqKpiGenPopLiftPp" style="font-size: 0.7rem; color: var(--text-secondary);">natural drift</div>
+                            </div>
+                        </div>
+                        <!-- Lift Over Gen Pop — partnership's incremental lift after stripping natural drift -->
+                        <div id="bpiqLiftOverGenPopRow" style="display: none; grid-template-columns: 1fr; gap: 1rem; margin-bottom: 1.5rem;">
+                            <div class="tab-section" style="background: var(--bg-card); border: 1.5px solid #10b981; border-radius: 12px; padding: 1.25rem; text-align: center;">
+                                <div style="font-size: 0.7rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em;">Total Lift Over Gen Pop</div>
+                                <div id="bpiqKpiLiftOverGenPop" style="font-size: 1.75rem; font-weight: 800;"></div>
+                                <div id="bpiqKpiLiftOverGenPopSub" style="font-size: 0.75rem; color: var(--text-secondary); margin-top: 2px;"></div>
                             </div>
                         </div>
                         <div class="tab-section" style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 1.5rem; margin-bottom: 1.5rem;">
@@ -22854,7 +22862,44 @@
                 document.getElementById('bpiqKpiGenPopLift').innerHTML = _bpiqFmtLift(cg.control_lift_pct_users);
                 var gpDelta = cg.control_delta_pp;
                 document.getElementById('bpiqKpiGenPopLiftPp').textContent =
-                    (gpDelta == null ? '' : ((gpDelta >= 0 ? '+' : '') + gpDelta.toFixed(2) + 'pp natural drift'));
+                    (gpDelta == null ? 'natural drift'
+                                     : ((gpDelta >= 0 ? '+' : '') + gpDelta.toFixed(2) + 'pp natural drift'));
+            }
+
+            // Total Lift Over Gen Pop — the partnership's incremental
+            // lift in pp (Brand pre→post Δ minus Gen Pop pre→post Δ).
+            // This is the DiD number surfaced as a top-level KPI so
+            // the "what did the partnership actually drive above
+            // natural drift?" answer isn't buried in the Incremental
+            // Reach section below.
+            var loRow = document.getElementById('bpiqLiftOverGenPopRow');
+            if (loRow) {
+                if (cg.enabled && cg.incremental_lift_pp != null) {
+                    loRow.style.display = 'grid';
+                    var inc = cg.incremental_lift_pp;
+                    var rel = cg.incremental_lift_rel_pct;
+                    var color = inc > 0 ? '#10b981'
+                              : inc < 0 ? '#ef4444' : 'var(--text-secondary)';
+                    var sign  = inc > 0 ? '+' : '';
+                    var bigEl = document.getElementById('bpiqKpiLiftOverGenPop');
+                    var subEl = document.getElementById('bpiqKpiLiftOverGenPopSub');
+                    if (bigEl) {
+                        bigEl.style.color = color;
+                        bigEl.textContent = sign + inc.toFixed(2) + 'pp';
+                    }
+                    if (subEl) {
+                        var treatPp = (cg.treat_delta_pp   == null ? 0 : cg.treat_delta_pp);
+                        var ctrlPp  = (cg.control_delta_pp == null ? 0 : cg.control_delta_pp);
+                        var relStr  = (rel == null) ? ''
+                                    : ' · ' + (rel >= 0 ? '+' : '') + rel.toFixed(2) + '% over natural drift';
+                        subEl.textContent =
+                            'Brand +' + treatPp.toFixed(2) + 'pp − Gen Pop ' +
+                            (ctrlPp >= 0 ? '+' : '') + ctrlPp.toFixed(2) + 'pp = incremental ' +
+                            sign + inc.toFixed(2) + 'pp' + relStr;
+                    }
+                } else {
+                    loRow.style.display = 'none';
+                }
             }
 
             // Per-platform table (cross-platform brand reach: audience users
