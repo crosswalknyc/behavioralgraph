@@ -27346,20 +27346,66 @@ def _run_roas_iq(job_id):
         # Pre-clean and SQL-escape every term once. Only keep terms ≥3 chars so
         # the ngrambf_v1 bloom filter (n=3) actually prunes granules — shorter
         # terms force a full scan and are usually noise anyway.
-        term_clauses = []
+        #
+        # Audience matching searches BOTH COMMON_NAME and URL (mirrors bg.py):
+        #   - COMMON_NAME matches the lowercased original term ("nike",
+        #     "apple music"). This is the brand tag from host_mapping and
+        #     covers ~all single-word retail brands.
+        #   - URL matches every URL-friendly variation of the term
+        #     (`devil wears prada 2` → `devilwearsprada2`, `devil-wears-prada-2`,
+        #     `devil_wears_prada_2`, `devil.wears.prada.2`, `devil+wears+prada+2`)
+        #     via bg.generate_brand_variations(). This catches multi-word
+        #     titles (movies, shows, products) that don't have a COMMON_NAME
+        #     tag but do appear as URL slugs (peacocktv.com, imdb.com, etc.).
+        try:
+            import bg as _bg_for_variations
+        except Exception:
+            _bg_for_variations = None
+
+        cn_needles: list[str] = []   # COMMON_NAME match — original terms
+        url_needles: list[str] = []  # URL match — original + slug variations
         for term in search_terms:
             safe = (term or '').lower().replace("'", "''").strip()
-            if safe and len(safe) >= 3:
-                term_clauses.append(safe)
-        if not term_clauses:
+            if not safe or len(safe) < 3:
+                continue
+            cn_needles.append(safe)
+            url_needles.append(safe)
+            if _bg_for_variations is not None:
+                try:
+                    for v in _bg_for_variations.generate_brand_variations(safe):
+                        v_esc = (v or '').lower().replace("'", "''").strip()
+                        if v_esc and len(v_esc) >= 3:
+                            url_needles.append(v_esc)
+                except Exception as e:
+                    print(f"⚠️ generate_brand_variations failed for {safe!r}: {e}")
+
+        cn_needles = sorted(set(cn_needles))
+        url_needles = sorted(set(url_needles))
+        if not cn_needles and not url_needles:
             update_job_status(job_id, status='completed', progress=100,
                               message='No valid search terms (each must be ≥3 characters).')
             conn.close()
             return
-        term_array_lit = ', '.join(f"'{t}'" for t in term_clauses)
+
+        # term_clauses kept as the COMMON_NAME-shaped needle list for the
+        # brand-specific scope filter below.
+        term_clauses = cn_needles
+        cn_lit  = ', '.join(f"'{t}'" for t in cn_needles)
+        url_lit = ', '.join(f"'{t}'" for t in url_needles)
+        term_array_lit = cn_lit  # back-compat alias for any other reference
+
+        # Combined needle filter: a row qualifies if the brand tag matches
+        # OR the URL contains any spelling variant of the term.
+        needle_filter_parts = []
+        if cn_needles:
+            needle_filter_parts.append(f"multiSearchAny(lower(COMMON_NAME), [{cn_lit}])")
+        if url_needles:
+            needle_filter_parts.append(f"multiSearchAny(lower(URL), [{url_lit}])")
+        needle_filter = '(' + ' OR '.join(needle_filter_parts) + ')'
 
         # ── Phase 1 ── Build full audience into a temp table (one pass). ─────
-        update_job_status(job_id, progress=15, message='Finding audience from search terms...')
+        update_job_status(job_id, progress=15,
+                          message=f'Finding audience from search terms (COMMON_NAME + {len(url_needles)} URL variants)...')
         cur.execute("DROP TABLE IF EXISTS roas_audience_full")
         cur.execute(f"""
             CREATE TEMPORARY TABLE roas_audience_full
@@ -27367,7 +27413,7 @@ def _run_roas_iq(job_id):
             SELECT UID
             FROM clickstream.clickstream_final
             WHERE DELIVERED BETWEEN toDate('{start_date}') AND toDate('{end_date}')
-              AND multiSearchAny(lower(COMMON_NAME), [{term_array_lit}])
+              AND {needle_filter}
             GROUP BY UID
         """)
         cur.execute("SELECT count() FROM roas_audience_full")
@@ -27468,10 +27514,13 @@ def _run_roas_iq(job_id):
 
         brand_filter_sql = ''
         if scope == 'brand_specific':
-            brand_terms = ', '.join(f"'{t}'" for t in term_clauses)
+            # Use the same expanded needle sets as Phase 1 so a brand-scoped
+            # ad/conversion URL pull matches the same way the audience build
+            # did (COMMON_NAME = original lowercased term; URL = original +
+            # slug variations from bg.generate_brand_variations()).
             brand_filter_sql = (
-                f"AND (multiSearchAny(lower(COMMON_NAME), [{brand_terms}]) "
-                f"OR  multiSearchAny(lower(URL),         [{brand_terms}]))"
+                f"AND (multiSearchAny(lower(COMMON_NAME), [{cn_lit}]) "
+                f"OR  multiSearchAny(lower(URL),         [{url_lit}]))"
             )
 
         # Build the conversion-slug branch only if we have slugs.
