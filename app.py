@@ -27458,10 +27458,33 @@ def _run_roas_iq(job_id):
             pass
 
         def _proj(raw):
-            """Project a sampled raw count to US population, accounting for sampling ratio."""
+            """Project a sampled raw EVENT count to US population.
+
+            Used for click/event totals where one person can legitimately
+            contribute many rows. Uncapped on purpose.
+            """
             return _project_to_us_pop(round(raw * sample_scale))
 
-        projected_uid_count = _proj(sampled_uid_count)
+        # Person-count projections must never exceed the US adult population,
+        # and within a run they must never exceed the projected audience
+        # (channel reach ⊆ audience, demo bucket ⊆ audience, converters ⊆
+        # channel reach). The base _proj() helper is uncapped because BPIQ
+        # stacks an extra 3× boost on top of it (see _bpiq_project), so we
+        # cap locally instead of changing the global helper.
+        projected_uid_count = min(_proj(sampled_uid_count), US_POPULATION)
+
+        def _proj_unique(raw, parent_cap=None):
+            """Project a sampled raw PERSON count, capped at audience / US pop.
+
+            ``parent_cap`` lets callers enforce subset bounds — e.g. channel
+            reach is bounded by the total projected audience, converters by
+            the projected channel reach.
+            """
+            p = _proj(raw)
+            if parent_cap is not None:
+                p = min(p, parent_cap)
+            return min(p, projected_uid_count)
+
         scope_label = 'brand-specific' if scope == 'brand_specific' else 'overall ecosystem'
         update_job_status(job_id, progress=35, message=f'Found {projected_uid_count:,} projected US consumers. Pulling {scope_label} attributed URLs...')
 
@@ -27638,7 +27661,7 @@ def _run_roas_iq(job_id):
             """)
             for cat, val, cnt in cur.fetchall():
                 demo_data.setdefault(cat, []).append({
-                    'value': val, 'count': cnt, 'projected': _proj(cnt)
+                    'value': val, 'count': cnt, 'projected': _proj_unique(cnt)
                 })
             for cat in demo_data:
                 total_cat = sum(d['count'] for d in demo_data[cat])
@@ -27777,7 +27800,8 @@ def _run_roas_iq(job_id):
             total_ad_uids |= uid_set
             click_count = channel_source_clicks.get((channel, source), cnt)
             projected_clicks = _proj(click_count)
-            projected_converters = _proj(unique_converters)
+            projected_reach = _proj_unique(cnt)
+            projected_converters = _proj_unique(unique_converters, parent_cap=projected_reach)
             pct = round(100.0 * cnt / max(sampled_uid_count, 1), 4)
             conv_rate = round(100.0 * projected_converters / max(projected_clicks, 1), 2)
             family = _get_source_family(source.lower().replace(' ', '_')) or source
@@ -27790,7 +27814,7 @@ def _run_roas_iq(job_id):
                 'pct': pct, 'raw': cnt,
                 'click_count': click_count,
                 'projected_click_count': projected_clicks,
-                'projected': _proj(cnt),
+                'projected': projected_reach,
                 'conversions': unique_converters,
                 'projected_conversions': projected_converters,
                 'conv_rate': conv_rate,
@@ -27800,7 +27824,7 @@ def _run_roas_iq(job_id):
         overall_ad_uid_count = len(total_ad_uids)
         total_classified_clicks = sum(channel_source_clicks.values())
         total_unique_converters = sum(1 for uid in total_ad_uids if uid in uid_confirmed_on_ad_domain)
-        overall_conv_rate = round(100.0 * _proj(total_unique_converters) / max(_proj(total_classified_clicks), 1), 2)
+        overall_conv_rate = round(100.0 * _proj_unique(total_unique_converters) / max(_proj(total_classified_clicks), 1), 2)
 
         top_domains = {}
         for ch, doms in channel_domains.items():
@@ -27858,7 +27882,7 @@ def _run_roas_iq(job_id):
             click_count = ad_domain_clicks[domain]
             proj_clicks = _proj(click_count)
             verified_cnt = sum(1 for uid in uids if uid in uid_conv_domains)
-            proj_verified = _proj(verified_cnt)
+            proj_verified = _proj_unique(verified_cnt)
             display_name = brand_display_names.get(domain.replace('.com', '').replace('.net', '').replace('.org', ''), domain)
             if display_name == domain:
                 # Try matching the domain root against HOST_MAPPING brand names
@@ -27883,12 +27907,12 @@ def _run_roas_iq(job_id):
             'end_date': end_date,
             'scope': scope,
             'uid_count': sampled_uid_count,
-            'projected_uid_count': _proj(sampled_uid_count),
+            'projected_uid_count': projected_uid_count,
             'url_rows': len(rows),
             'total_classified_clicks': total_classified_clicks,
             'projected_classified_clicks': _proj(total_classified_clicks),
             'total_converted': total_unique_converters,
-            'projected_converted': _proj(total_unique_converters),
+            'projected_converted': _proj_unique(total_unique_converters),
             'overall_conv_rate': overall_conv_rate,
             'results': results,
             'demographics': demo_data,
@@ -27898,7 +27922,7 @@ def _run_roas_iq(job_id):
             'avg_touches_per_user': avg_touches,
             'multi_touch_pct': multi_touch_pct,
             'total_ad_users': overall_ad_uid_count,
-            'projected_ad_users': _proj(overall_ad_uid_count),
+            'projected_ad_users': _proj_unique(overall_ad_uid_count),
             'created_at': datetime.now().isoformat(),
             'created_by': job.get('username', ''),
         }
