@@ -11942,6 +11942,14 @@ def parse_ticket_sales_tracker_csv(csv_content):
     """Parse Ticket Sales Tracker CSV into structured data.
     Schema: Category, Value, Projection/Percent, Note, Col5, Col6
     Returns US (gen pop) numbers only - used as primary display values.
+
+    Also captures the trailing "AI VALIDATION" block emitted by
+    Ticket_Sales_Attribution.py:write_output(). That block mirrors the
+    Subscriber IQ format: PASS/FLAGGED status, one-sentence assessment,
+    researched US domestic gross, individual flags, applied adjustments,
+    per-section notes (tickets/sales/demographics), and a research summary.
+    The block lives at the END of the CSV and is purely additive — older
+    Ticket Sales Tracker files without it still parse correctly.
     """
     import csv as csv_module
     parsed = {
@@ -11952,7 +11960,17 @@ def parse_ticket_sales_tracker_csv(csv_content):
         'genre': '',
         'is_family_animation': False,  # for tooltip on Projected Ticket Sales
         'demographics_overall': {},
-        'demographics_per_theater': {}
+        'demographics_per_theater': {},
+        'ai_validation': {
+            'status': None,           # 'PASS' | 'FLAGGED' | None
+            'assessment': '',
+            'researched_domestic_gross_usd': None,
+            'researched_gross_source': '',
+            'flags': [],
+            'adjustments': [],
+            'notes': {},              # {'Tickets Check': '[OK] ...', ...}
+            'research_summary': ''
+        }
     }
     def _fmt(s):
         return str(s).strip() if s else ''
@@ -12027,6 +12045,51 @@ def parse_ticket_sales_tracker_csv(csv_content):
                 if current_theater not in parsed['demographics_per_theater']:
                     parsed['demographics_per_theater'][current_theater] = {}
                 demo_field = None
+            continue
+        # AI VALIDATION section detection (emitted at the end of the CSV by
+        # Ticket_Sales_Attribution.py:write_output, mirrors Subscriber IQ).
+        # The header row looks like ("", "AI VALIDATION", "", ...).
+        if val.strip().upper() == 'AI VALIDATION' and not cat:
+            current_section = 'ai_validation'
+            demo_field = None
+            continue
+        # Research summary subsection: ("", "AI VALIDATION — RESEARCH SUMMARY", "")
+        if 'AI VALIDATION' in val.upper() and 'RESEARCH SUMMARY' in val.upper() and not cat:
+            current_section = 'ai_validation_research'
+            continue
+        if current_section == 'ai_validation':
+            av = parsed['ai_validation']
+            if cat == 'Validation Status':
+                av['status'] = (proj or val or '').strip().upper() or None
+            elif cat == 'Assessment':
+                av['assessment'] = proj or val
+            elif cat == 'Researched US Domestic Gross':
+                av['researched_gross_source'] = note
+                gross_num = _parse_num(proj or val)
+                if gross_num is not None:
+                    av['researched_domestic_gross_usd'] = gross_num
+            elif cat.startswith('Flag '):
+                flag_text = (proj or val).strip()
+                if flag_text:
+                    av['flags'].append(flag_text)
+            elif cat.startswith('Adjustment '):
+                adj_text = (proj or val).strip()
+                if adj_text:
+                    av['adjustments'].append(adj_text)
+            elif cat in ('Tickets Check', 'Sales Check', 'Demographics Check'):
+                check_text = (proj or val).strip()
+                if check_text:
+                    av['notes'][cat] = check_text
+            continue
+        if current_section == 'ai_validation_research':
+            # Research lines come in as ("", "", "<text>", ...) — append the
+            # value in the third column to a single multi-line string.
+            line = (proj or val).strip()
+            if line:
+                if parsed['ai_validation']['research_summary']:
+                    parsed['ai_validation']['research_summary'] += '\n' + line
+                else:
+                    parsed['ai_validation']['research_summary'] = line
             continue
         if current_section == 'demo_overall':
             if cat in ['GENDER', 'AGE', 'INCOME', 'ETHNICITY', 'LOCATION']:
