@@ -540,162 +540,55 @@ def _default_ticket_demo_plan(genre):
     }
 
 
-# ===========================================================================
-# === AI Validation Pipeline (Box-Office anchored, SVOD-IQ style)         ===
-# ===========================================================================
-# This pipeline mirrors SVOD_Churn_Attribution.py:ai_validate_metrics /
-# apply_ai_adjustments. The goal is an AUDITED Ticket Sales Tracker output:
-# real US domestic box office is fetched from the web (Box Office Mojo / The
-# Numbers / Variety / Deadline / THR) and used as ground truth. Our projected
-# ticket sales are then anchored to the researched gross — downward-only;
-# we never inflate. Demographics are aligned to the researched audience
-# skew. A structured "AI VALIDATION" block (PASS/FLAGGED + flags + research
-# summary) is appended to the CSV so the analyst delivering the report can
-# see exactly what the agent checked and what it changed.
-
-_box_office_cache = {}
-
-
-def _research_box_office(client, movie_name):
-    """Web-search for real US domestic box office data for the given film.
-
-    Uses gpt-4o-search-preview and prefers canonical sources (Box Office Mojo,
-    The Numbers) with trade-press fallback (Variety, Deadline, THR) for
-    very recent releases. Returns a text summary or "" on failure. Results are
-    cached in-memory per process.
-    """
-    if not client or not movie_name:
-        return ""
-    cache_key = movie_name.strip().lower()
-    if cache_key in _box_office_cache:
-        return _box_office_cache[cache_key]
-
-    prompt = (
-        f'Search for the most recent real US domestic box office data for the film "{movie_name}". '
-        f'Report:\n'
-        f'- US domestic gross to date (and whether the film is still in theatrical release)\n'
-        f'- Opening weekend gross (US)\n'
-        f'- Estimated total US tickets sold (gross / ~$11 average ticket price)\n'
-        f'- Wide release date\n'
-        f'- Primary audience age and gender skew\n\n'
-        f'PREFER Box Office Mojo and The Numbers for the dollar figures (these are the canonical '
-        f'sources). For very recent releases (still in theaters), Variety, Deadline, and THR '
-        f'weekend recaps are acceptable. Cite the source for each number. Be concise — just '
-        f'the key figures. If no data is available, say so explicitly.'
-    )
-
-    try:
-        resp = client.chat.completions.create(
-            model="gpt-4o-search-preview",
-            messages=[{"role": "user", "content": prompt}],
-            web_search_options={"search_context_size": "medium"},
-        )
-        text = (resp.choices[0].message.content or "").strip() if resp.choices else ""
-        _box_office_cache[cache_key] = text
-        if text:
-            print(f"   🔍 Box office research for '{movie_name}': {len(text)} chars retrieved")
-        return text
-    except Exception as e:
-        print(f"   ⚠️  Box office research failed for '{movie_name}': {e}")
-        _box_office_cache[cache_key] = ""
-        return ""
-
-
-def ai_validate_ticket_metrics(movie_name, genre, start_date, end_date,
-                                platform_totals, total_tickets, total_tickets_gen_pop,
-                                projected_sales_base, projected_sales_gen_pop,
-                                demo_overall):
-    """Validate Ticket Sales Tracker output against web-researched box-office truth.
-
-    Mirrors SVOD_Churn_Attribution.py:ai_validate_metrics. Returns a structured
-    dict with: passed, tickets_plausible, sales_plausible, demographics_plausible,
-    flags, suggested ranges (downward-only), researched_domestic_gross_usd, an
-    age/gender plan, and a one-sentence overall_assessment. Only ever suggests
-    DOWNWARD adjustments; the apply step anchors to the real US domestic gross.
-    """
+def ai_align_ticket_sales_totals_and_demographics(movie_name, genre, total_tickets, total_tickets_gen_pop, projected_sales_base, projected_sales_gen_pop, demo_overall):
+    api_key = os.environ.get("OPENAI_API_KEY")
+    if not api_key:
+        return total_tickets, total_tickets_gen_pop, projected_sales_base, projected_sales_gen_pop, demo_overall, []
     try:
         from openai import OpenAI
-        api_key = os.environ.get("OPENAI_API_KEY")
-        if not api_key:
-            return {
-                "passed": True,
-                "flags": [],
-                "note": "No OpenAI key; skipping validation",
-                "research": "",
-                "overall_assessment": "Validation skipped — no OPENAI_API_KEY configured.",
-            }
         client = OpenAI(api_key=api_key)
-    except Exception as e:
-        return {
-            "passed": True,
-            "flags": [],
-            "note": f"OpenAI not available: {e}",
-            "research": "",
-            "overall_assessment": "Validation skipped — OpenAI client unavailable.",
-        }
+    except Exception:
+        return total_tickets, total_tickets_gen_pop, projected_sales_base, projected_sales_gen_pop, demo_overall, []
 
-    research = _research_box_office(client, movie_name)
-    research_block = ""
-    if research:
-        research_block = (
-            "\n=== REAL-WORLD US BOX OFFICE DATA (from web search) ===\n"
-            "This is your PRIMARY reference. Anchor projected US ticket sales to this gross.\n\n"
-            f"{research}\n"
+    research = ""
+    try:
+        research_prompt = (
+            f'Research US-only ticket sales and audience demographics for the film "{movie_name}". '
+            f'Provide domestic US box office range and likely AGE/GENDER audience skew from credible sources.'
         )
+        rr = client.chat.completions.create(
+            model="gpt-4o-search-preview",
+            messages=[{"role": "user", "content": research_prompt}],
+            web_search_options={"search_context_size": "medium"},
+        )
+        research = (rr.choices[0].message.content or "").strip() if rr.choices else ""
+    except Exception:
+        research = ""
 
-    platform_breakdown = "\n".join(
-        f"  - {plat}: {hits:,} hits" for plat, hits in platform_totals.items()
-    )
+    default_plan = _default_ticket_demo_plan(genre)
+    if not research:
+        age_labels = list((demo_overall.get("AGE") or {}).keys())
+        gender_labels = list((demo_overall.get("GENDER") or {}).keys())
+        if age_labels:
+            demo_overall["AGE"] = _normalize_pct_plan(default_plan.get("age", {}), age_labels)
+        if gender_labels:
+            demo_overall["GENDER"] = _normalize_pct_plan(default_plan.get("gender", {}), gender_labels)
+        return total_tickets, total_tickets_gen_pop, projected_sales_base, projected_sales_gen_pop, demo_overall, ["Applied fallback demographic plan (no web research)."]
 
     prompt = (
-        f"You are validating Ticket Sales Tracker output for a US-only theatrical release.\n\n"
-        f"MOVIE: {movie_name}\n"
-        f"GENRE: {genre}\n"
-        f"DATE RANGE: {start_date} to {end_date}\n\n"
-        f"PER-PLATFORM HITS (already boosted; sum to Total Tickets):\n{platform_breakdown}\n\n"
-        f"OUR PROJECTED METRICS (from {SAMPLE_REPRESENTS:,}-person panel, projected to US pop):\n"
-        f"- Total Tickets Sold (panel, boosted): {total_tickets:,}\n"
-        f"- Total Tickets Sold (US Gen Pop projected): {total_tickets_gen_pop:,.0f}\n"
-        f"- Projected Ticket Sales (US Gen Pop): ${projected_sales_gen_pop:,.0f}\n\n"
-        f"CURRENT OVERALL DEMOGRAPHICS: {demo_overall}\n"
-        f"{research_block}\n"
-        f"=== PHASE A: VALIDATE TICKETS & SALES ===\n"
-        f"Compare our 'US Gen Pop projected' sales to the REAL US domestic gross above.\n"
-        f"- ANCHOR rule: projected_sales_gen_pop should NOT exceed the researched US domestic gross.\n"
-        f"  If the film is still in theatrical release, a small headroom is acceptable but never\n"
-        f"  more than ~1.1x the most recent gross.\n"
-        f"- If the panel projection is clearly inflated (e.g. panel says $1.2B, BOM says $310M),\n"
-        f"  flag it and suggest a DOWNWARD-only range.\n"
-        f"- Tickets implied by gross = gross / $11 (avg US ticket price). Cross-check.\n"
-        f"- NEVER suggest an upward adjustment.\n\n"
-        f"=== PHASE B: VALIDATE DEMOGRAPHICS ===\n"
-        f"Compare our AGE/GENDER skew to the researched primary audience.\n"
-        f"- If research says male-skew but our panel shows female-skew (or vice versa), align\n"
-        f"  the final percentages to the researched skew.\n"
-        f"- Do NOT invert known audience skew.\n\n"
-        f"=== PHASE C: EDGE CASES ===\n"
-        f"- Short windows (1-2 weekends) naturally produce smaller numbers — don't flag low.\n"
-        f"- Indie / limited / arthouse releases have modest numbers — that is expected.\n"
-        f"- The genre 2x factor for Family/Animation is already applied. Do not double-count.\n\n"
-        f"Respond in JSON ONLY (no markdown fencing):\n"
-        f"{{\n"
-        f'  "passed": true/false,\n'
-        f'  "tickets_plausible": true/false,\n'
-        f'  "tickets_note": "brief explanation referencing real data if available",\n'
-        f'  "sales_plausible": true/false,\n'
-        f'  "sales_note": "brief explanation",\n'
-        f'  "demographics_plausible": true/false,\n'
-        f'  "demographics_note": "brief explanation",\n'
-        f'  "flags": ["specific concerns if any"],\n'
-        f'  "suggested_total_tickets_range_genpop": [low, high],\n'
-        f'  "suggested_projected_sales_range_genpop": [low, high],\n'
-        f'  "researched_domestic_gross_usd": <number or null>,\n'
-        f'  "research_sources": ["Box Office Mojo", "Variety", ...],\n'
-        f'  "gender_skew": "male|female|balanced",\n'
-        f'  "age": {{"17 AND UNDER": <pct>, "18-24": <pct>, "25-34": <pct>, "35-44": <pct>, "45-54": <pct>, "55-64": <pct>, "65 OR OLDER": <pct>}},\n'
+        f'You are validating Ticket Sales Tracker output for US only.\n\n'
+        f'MOVIE: {movie_name}\nGENRE: {genre}\n'
+        f'OUR TOTAL TICKETS (US projected): {float(total_tickets_gen_pop):.2f}\n'
+        f'OUR PROJECTED TICKET SALES (US projected): {float(projected_sales_gen_pop):.2f}\n'
+        f'CURRENT OVERALL DEMOGRAPHICS: {demo_overall}\n\n'
+        f'RESEARCH:\n{research}\n\n'
+        f'Return ONLY JSON:\n'
+        f'{{\n'
+        f'  "sales_adjustment_factor": <0.05-1.0, use <1 only if inflated; never >1>,\n'
         f'  "gender": {{"MALE": <pct>, "FEMALE": <pct>, "NON-BINARY": <pct>, "TRANS MALE": <pct>, "TRANS FEMALE": <pct>}},\n'
-        f'  "overall_assessment": "one-sentence summary"\n'
-        f"}}"
+        f'  "age": {{"17 AND UNDER": <pct>, "18-24": <pct>, "25-34": <pct>, "35-44": <pct>, "45-54": <pct>, "55-64": <pct>, "65 OR OLDER": <pct>}},\n'
+        f'  "reasoning": "brief"\n'
+        f'}}'
     )
 
     try:
@@ -703,99 +596,40 @@ def ai_validate_ticket_metrics(movie_name, genre, start_date, end_date,
             model="gpt-4o",
             messages=[{"role": "user", "content": prompt}],
             temperature=0.1,
-            max_tokens=1200,
         )
         parsed = _extract_json_object(resp.choices[0].message.content if resp.choices else "")
-    except Exception as e:
-        return {
-            "passed": True,
-            "flags": [],
-            "note": f"AI validation error: {e}",
-            "research": research,
-            "overall_assessment": "Validation skipped — OpenAI call failed.",
-        }
+    except Exception:
+        parsed = None
 
-    if not parsed:
-        return {
-            "passed": True,
-            "flags": [],
-            "note": "AI returned no JSON; skipping",
-            "research": research,
-            "overall_assessment": "Validation skipped — no parseable JSON returned.",
-        }
-
-    parsed["research"] = research
-    return parsed
-
-
-def apply_ai_ticket_adjustments(validation, platform_totals, total_tickets,
-                                total_tickets_gen_pop, projected_sales_base,
-                                projected_sales_gen_pop, demo_overall):
-    """Apply DOWNWARD-only corrections from ai_validate_ticket_metrics.
-
-    Anchors projected sales to the researched US domestic gross: if the AI's
-    suggested midpoint is below our projected sales, we scale every downstream
-    quantity (per-platform hits, total tickets, both gen-pop projections, and
-    both dollar figures) by the same factor so the rows still add up. Then
-    aligns overall AGE/GENDER demographics to the researched audience skew
-    (per-theater demographics are tied to underlying UIDs and left untouched).
-    """
     changes = []
-    if validation.get("passed", True):
-        return (platform_totals, total_tickets, total_tickets_gen_pop,
-                projected_sales_base, projected_sales_gen_pop, demo_overall, changes)
+    if not parsed:
+        return total_tickets, total_tickets_gen_pop, projected_sales_base, projected_sales_gen_pop, demo_overall, changes
 
-    suggested_sales = validation.get("suggested_projected_sales_range_genpop") or []
-    target_sales = None
-    if isinstance(suggested_sales, list) and len(suggested_sales) == 2:
-        try:
-            lo = float(suggested_sales[0]) if suggested_sales[0] is not None else None
-            hi = float(suggested_sales[1]) if suggested_sales[1] is not None else None
-            if lo is not None and hi is not None and lo >= 0 and hi >= lo:
-                target_sales = (lo + hi) / 2.0
-        except (ValueError, TypeError):
-            target_sales = None
-
-    if (target_sales is not None
-            and projected_sales_gen_pop > 0
-            and target_sales < projected_sales_gen_pop):
-        factor = max(0.05, target_sales / projected_sales_gen_pop)
+    factor = 1.0
+    try:
+        factor = float(parsed.get("sales_adjustment_factor", 1.0))
+    except (ValueError, TypeError):
+        factor = 1.0
+    factor = max(0.05, min(1.0, factor))
+    if factor < 0.999:
         old_sales = projected_sales_gen_pop
-        old_total_tickets = total_tickets
-        projected_sales_gen_pop *= factor
-        projected_sales_base *= factor
-        total_tickets_gen_pop *= factor
         total_tickets = max(0, int(round(total_tickets * factor)))
-        platform_totals = {
-            plat: max(0, int(round(hits * factor)))
-            for plat, hits in platform_totals.items()
-        }
-        researched_gross = validation.get("researched_domestic_gross_usd")
-        gross_note = ""
-        if isinstance(researched_gross, (int, float)) and researched_gross > 0:
-            gross_note = f" (anchored to researched US domestic gross ~${researched_gross:,.0f})"
-        changes.append(
-            f"Scaled per-platform hits, total tickets, and projected sales by {factor:.3f}"
-            f"{gross_note}: projected sales ${old_sales:,.0f} -> ${projected_sales_gen_pop:,.0f}; "
-            f"total tickets {old_total_tickets:,} -> {total_tickets:,}."
-        )
+        total_tickets_gen_pop = max(0.0, total_tickets_gen_pop * factor)
+        projected_sales_base = max(0.0, projected_sales_base * factor)
+        projected_sales_gen_pop = max(0.0, projected_sales_gen_pop * factor)
+        changes.append(f"Reduced projected US ticket sales by factor {factor:.3f} ({old_sales:,.2f} -> {projected_sales_gen_pop:,.2f}).")
 
-    if not validation.get("demographics_plausible", True):
-        if "AGE" in demo_overall and demo_overall["AGE"]:
-            age_plan = validation.get("age") or {}
-            new_age = _normalize_pct_plan(age_plan, list(demo_overall["AGE"].keys()))
-            if new_age:
-                demo_overall["AGE"] = new_age
-                changes.append("Aligned overall AGE demographics to researched audience profile.")
-        if "GENDER" in demo_overall and demo_overall["GENDER"]:
-            gender_plan = validation.get("gender") or {}
-            new_gender = _normalize_pct_plan(gender_plan, list(demo_overall["GENDER"].keys()))
-            if new_gender:
-                demo_overall["GENDER"] = new_gender
-                changes.append("Aligned overall GENDER demographics to researched audience profile.")
+    if "AGE" in demo_overall and demo_overall["AGE"]:
+        demo_overall["AGE"] = _normalize_pct_plan(parsed.get("age", default_plan.get("age", {})), list(demo_overall["AGE"].keys()))
+        changes.append("Aligned AGE demographics to title audience profile.")
+    if "GENDER" in demo_overall and demo_overall["GENDER"]:
+        demo_overall["GENDER"] = _normalize_pct_plan(parsed.get("gender", default_plan.get("gender", {})), list(demo_overall["GENDER"].keys()))
+        changes.append("Aligned GENDER demographics to title audience profile.")
 
-    return (platform_totals, total_tickets, total_tickets_gen_pop,
-            projected_sales_base, projected_sales_gen_pop, demo_overall, changes)
+    reason = str(parsed.get("reasoning") or "").strip()
+    if reason:
+        changes.append(f"AI rationale: {reason}")
+    return total_tickets, total_tickets_gen_pop, projected_sales_base, projected_sales_gen_pop, demo_overall, changes
 
 
 # =======================
@@ -810,8 +644,8 @@ def write_output(results, p):
     df_demo_per_theater = results["df_demo_per_theater"]
 
     # Use ONLY exact-match rows for the 5 canonical platforms (exclude "fandango at home", "fandango | google", etc.)
-    canonical_upper = {plat.upper().strip(): plat for plat in THEATER_PLATFORMS}
-    platform_totals = {plat: 0 for plat in THEATER_PLATFORMS}
+    canonical_upper = {p.upper().strip(): p for p in THEATER_PLATFORMS}
+    platform_totals = {p: 0 for p in THEATER_PLATFORMS}
     for _, row in df_theater.iterrows():
         comm = (row["THEATER_PLATFORM"] or "").upper().strip()
         if comm in canonical_upper:
@@ -832,50 +666,6 @@ def write_output(results, p):
     projected_sales_base = total_tickets * 15.0 * ticket_multiplier
     projected_sales_gen_pop = total_tickets_gen_pop * 15.0 * ticket_multiplier
 
-    # Demographics - overall (computed BEFORE building rows so the AI auditor
-    # can compare against researched audience skew and the adjustments below
-    # actually flow through to the CSV — the old single-pass alignment ran
-    # AFTER rows were built so its number changes never reached the file).
-    demo_overall = compute_demographics(df_demo_overall)
-
-    # AI plausibility validation against real US box office (Box Office Mojo /
-    # The Numbers / Variety / Deadline / THR). Mirrors Subscriber IQ:
-    # downward-only adjustments, anchored to the researched US domestic gross.
-    print("🤖 Running AI plausibility check (Box Office anchored)...")
-    validation = ai_validate_ticket_metrics(
-        movie_name=p["movie_name"],
-        genre=p.get("genre", ""),
-        start_date=p["start_date"].date(),
-        end_date=p["end_date"].date(),
-        platform_totals=platform_totals,
-        total_tickets=total_tickets,
-        total_tickets_gen_pop=total_tickets_gen_pop,
-        projected_sales_base=projected_sales_base,
-        projected_sales_gen_pop=projected_sales_gen_pop,
-        demo_overall=demo_overall,
-    )
-
-    ai_changes = []
-    if not validation.get("passed", True):
-        print("⚠️  AI flagged potential issues:")
-        for flag in validation.get("flags", []) or []:
-            print(f"   • {flag}")
-        print(f"   Assessment: {validation.get('overall_assessment', 'N/A')}")
-        (platform_totals, total_tickets, total_tickets_gen_pop,
-         projected_sales_base, projected_sales_gen_pop,
-         demo_overall, ai_changes) = apply_ai_ticket_adjustments(
-            validation, platform_totals, total_tickets, total_tickets_gen_pop,
-            projected_sales_base, projected_sales_gen_pop, demo_overall,
-        )
-        if ai_changes:
-            print("🤖 Applied AI corrections:")
-            for c in ai_changes:
-                print(f"   → {c}")
-    else:
-        note = validation.get("overall_assessment") or validation.get("note") or "Metrics look plausible"
-        print(f"✅ AI validation passed: {note}")
-
-    # ---- Build CSV rows using POST-ADJUSTMENT numbers ----
     rows = [
         ("", "TICKET SALES ATTRIBUTION RESULTS", "", "", "", ""),
         ("", "", "", "", "", ""),
@@ -899,6 +689,21 @@ def write_output(results, p):
         ("", "", "", "", "", ""),
     ])
 
+    # Demographics - overall
+    demo_overall = compute_demographics(df_demo_overall)
+    total_tickets, total_tickets_gen_pop, projected_sales_base, projected_sales_gen_pop, demo_overall, ai_changes = ai_align_ticket_sales_totals_and_demographics(
+        p["movie_name"],
+        p.get("genre", ""),
+        total_tickets,
+        total_tickets_gen_pop,
+        projected_sales_base,
+        projected_sales_gen_pop,
+        demo_overall
+    )
+    if ai_changes:
+        print("🤖 Applied AI ticket-sales alignment:")
+        for c in ai_changes:
+            print(f"   • {c}")
     rows.append(("", "DEMOGRAPHICS (Overall - all theater UIDs)", "", "", "", ""))
     for field in ["GENDER", "AGE", "INCOME", "ETHNICITY", "LOCATION"]:
         if field in demo_overall:
@@ -908,9 +713,6 @@ def write_output(results, p):
         rows.append(("", "", "", "", "", ""))
 
     # Demographics - per theater
-    # Note: per-theater demographics are NOT touched by the AI auditor — they
-    # are tied to the underlying UID set in ClickHouse and reflect the panel
-    # truth. Only the OVERALL section is aligned to the researched audience.
     rows.append(("", "DEMOGRAPHICS PER THEATER", "", "", "", ""))
     theaters = df_demo_per_theater["THEATER_PLATFORM"].unique()
     for theater in theaters:
@@ -923,54 +725,6 @@ def write_output(results, p):
                 for value, pct in sorted(demo_theater[field].items(), key=lambda x: -x[1]):
                     rows.append(("", value, f"{pct}%", "", "", ""))
         rows.append(("", "", "", "", "", ""))
-
-    # ---- AI VALIDATION block (mirrors SVOD Subscriber IQ output) ----
-    # The dashboard's parse_ticket_sales_tracker_csv reads these rows; any rows
-    # it doesn't explicitly recognize are silently ignored, so this section is
-    # backward-compatible. A targeted parser pass surfaces it in the UI.
-    rows.append(("", "", "", "", "", ""))
-    rows.append(("", "AI VALIDATION", "", "", "", ""))
-    rows.append((
-        "Validation Status", "",
-        "PASS" if validation.get("passed", True) else "FLAGGED",
-        "", "", ""
-    ))
-    assessment = validation.get("overall_assessment") or validation.get("note") or ""
-    if assessment:
-        rows.append(("Assessment", "", assessment, "", "", ""))
-
-    researched_gross = validation.get("researched_domestic_gross_usd")
-    if isinstance(researched_gross, (int, float)) and researched_gross > 0:
-        sources = validation.get("research_sources") or []
-        src_note = f"(sources: {', '.join(sources)})" if sources else "(Box Office Mojo / The Numbers / trade press)"
-        rows.append((
-            "Researched US Domestic Gross", "",
-            f"${researched_gross:,.0f}", src_note, "", ""
-        ))
-
-    for i, flag in enumerate(validation.get("flags", []) or [], start=1):
-        rows.append((f"Flag {i}", "", flag, "", "", ""))
-
-    for i, change in enumerate(ai_changes, start=1):
-        rows.append((f"Adjustment {i}", "", change, "", "", ""))
-
-    for field, key in (("tickets_note", "Tickets Check"),
-                       ("sales_note", "Sales Check"),
-                       ("demographics_note", "Demographics Check")):
-        note_val = validation.get(field)
-        if note_val:
-            plausible_key = field.replace("_note", "_plausible")
-            tag = "OK" if validation.get(plausible_key, True) else "FLAG"
-            rows.append((key, "", f"[{tag}] {note_val}", "", "", ""))
-
-    research_text = (validation.get("research") or "").strip()
-    if research_text:
-        rows.append(("", "", "", "", "", ""))
-        rows.append(("", "AI VALIDATION — RESEARCH SUMMARY", "", "", "", ""))
-        for line in research_text.splitlines():
-            line = line.strip()
-            if line:
-                rows.append(("", "", line, "", "", ""))
 
     df_out = pd.DataFrame(rows, columns=["Category", "Value", "Projection/Percent", "Note", "Col5", "Col6"])
 

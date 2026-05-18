@@ -64,10 +64,10 @@ logger = logging.getLogger('llmo_daily')
 
 # ── Config ───────────────────────────────────────────────────────────────────
 
-CH_HOST       = os.environ.get('CH_HOST',     '168.119.215.48')
+CH_HOST       = os.environ.get('CH_HOST',     '37.27.140.111')
 CH_PORT       = int(os.environ.get('CH_PORT', '8123'))
-CH_USER       = os.environ.get('CH_USER',     'jessie')
-CH_PASSWORD   = os.environ.get('CH_PASSWORD', '5Icl8SvwmzWMiZUNMZfv')
+CH_USER       = os.environ.get('CH_USER',     'bgapp')
+CH_PASSWORD   = os.environ.get('CH_PASSWORD', '')
 CH_DATABASE   = os.environ.get('CH_DATABASE', 'clickstream')
 
 OPENAI_KEY    = os.environ.get('OPENAI_API_KEY', '')

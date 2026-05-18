@@ -1239,7 +1239,6 @@ CREDITS_SF_LF_CONVERSION = 10
 CREDITS_ECOMMERCE_IQ = 5
 CREDITS_FLYWHEEL_CONVERSION = 25
 CREDITS_BRAND_PARTNERSHIP_IQ = 15
-CREDITS_JOURNEY_IQ = 10
 
 # Pricing settings S3 key
 PRICING_SETTINGS_KEY = 'system/pricing_settings.json'
@@ -1258,8 +1257,7 @@ DEFAULT_PRICING = {
     'sf_lf_conversion': 10,
     'ecommerce_iq': 5,
     'flywheel_conversion': 25,
-    'brand_partnership_iq': 15,
-    'journey_iq': 10
+    'brand_partnership_iq': 15
 }
 
 _pricing_cache = {'data': None, 'loaded_at': 0}
@@ -3125,8 +3123,6 @@ def create_user():
             'has_sf_conversion_access': req_data.get('has_sf_conversion_access', cd.get('has_sf_conversion_access', False) if cd else False),
             'has_flywheel_conversion_access': req_data.get('has_flywheel_conversion_access', cd.get('has_flywheel_conversion_access', False) if cd else False),
             'has_brand_partnership_iq_access': req_data.get('has_brand_partnership_iq_access', cd.get('has_brand_partnership_iq_access', False) if cd else False),
-            'has_sentiment_iq_access': req_data.get('has_sentiment_iq_access', cd.get('has_sentiment_iq_access', False) if cd else False),
-            'has_journey_iq_access': req_data.get('has_journey_iq_access', cd.get('has_journey_iq_access', False) if cd else False),
             'has_workspace_access': req_data.get('has_workspace_access', cd.get('has_workspace_access', True) if cd else True),
             'has_share_of_time_access': req_data.get('has_share_of_time_access', cd.get('has_share_of_time_access', True) if cd else True),
             'has_share_of_time_run_access': req_data.get('has_share_of_time_run_access', cd.get('has_share_of_time_run_access', True) if cd else True),
@@ -3261,10 +3257,6 @@ def update_user(username):
             user['has_flywheel_conversion_access'] = bool(req_data['has_flywheel_conversion_access'])
         if 'has_brand_partnership_iq_access' in req_data:
             user['has_brand_partnership_iq_access'] = bool(req_data['has_brand_partnership_iq_access'])
-        if 'has_sentiment_iq_access' in req_data:
-            user['has_sentiment_iq_access'] = bool(req_data['has_sentiment_iq_access'])
-        if 'has_journey_iq_access' in req_data:
-            user['has_journey_iq_access'] = bool(req_data['has_journey_iq_access'])
         if 'has_workspace_access' in req_data:
             user['has_workspace_access'] = bool(req_data['has_workspace_access'])
         if 'has_share_of_time_access' in req_data:
@@ -4062,8 +4054,6 @@ def api_set_company_defaults(company_name):
             'has_talent_fit_access': req.get('has_talent_fit_access', False),
             'has_flywheel_conversion_access': req.get('has_flywheel_conversion_access', False),
             'has_brand_partnership_iq_access': req.get('has_brand_partnership_iq_access', False),
-            'has_sentiment_iq_access': req.get('has_sentiment_iq_access', False),
-            'has_journey_iq_access': req.get('has_journey_iq_access', False),
             'has_workspace_access': req.get('has_workspace_access', True),
             'has_share_of_time_access': req.get('has_share_of_time_access', True),
             'has_share_of_time_run_access': req.get('has_share_of_time_run_access', True),
@@ -4124,8 +4114,6 @@ def api_reset_company_users(company_name):
                 user['has_talent_fit_access'] = cd.get('has_talent_fit_access', False)
                 user['has_flywheel_conversion_access'] = cd.get('has_flywheel_conversion_access', False)
                 user['has_brand_partnership_iq_access'] = cd.get('has_brand_partnership_iq_access', False)
-                user['has_sentiment_iq_access'] = cd.get('has_sentiment_iq_access', False)
-                user['has_journey_iq_access'] = cd.get('has_journey_iq_access', False)
                 user['has_workspace_access'] = cd.get('has_workspace_access', True)
                 user['has_share_of_time_access'] = cd.get('has_share_of_time_access', True)
                 user['has_share_of_time_run_access'] = cd.get('has_share_of_time_run_access', True)
@@ -4149,8 +4137,6 @@ def api_reset_company_users(company_name):
                 user['has_talent_fit_access'] = False
                 user['has_flywheel_conversion_access'] = False
                 user['has_brand_partnership_iq_access'] = False
-                user['has_sentiment_iq_access'] = False
-                user['has_journey_iq_access'] = False
                 user['has_workspace_access'] = True
                 user['has_share_of_time_access'] = True
                 user['has_share_of_time_run_access'] = True
@@ -6065,7 +6051,7 @@ def set_chat_status():
 _ANALYSIS_IQ_MODULES_FULL = [
     'profile_analysis', 'talent_search', 'talent_theater', 'svod', 'campaign',
     'cross_show', 'watch_time', 'ticket_sales_tracker', 'sf_lf_conversion', 'talent_fit',
-    'flywheel_conversion', 'brand_partnership_iq', 'journey_iq',
+    'flywheel_conversion', 'brand_partnership_iq',
 ]
 
 
@@ -6093,8 +6079,6 @@ def compute_product_access_flags(user, role):
             'has_talent_fit_access': True,
             'has_flywheel_conversion_access': True,
             'has_brand_partnership_iq_access': True,
-            'has_sentiment_iq_access': True,
-            'has_journey_iq_access': True,
             'has_workspace_access': True,
             'has_share_of_time_access': True,
             'has_share_of_time_run_access': True,
@@ -6124,8 +6108,6 @@ def compute_product_access_flags(user, role):
         'has_talent_fit_access': bool(u.get('has_talent_fit_access', False)),
         'has_flywheel_conversion_access': bool(u.get('has_flywheel_conversion_access', False)),
         'has_brand_partnership_iq_access': bool(u.get('has_brand_partnership_iq_access', False)),
-        'has_sentiment_iq_access': bool(u.get('has_sentiment_iq_access', False)),
-        'has_journey_iq_access': bool(u.get('has_journey_iq_access', False)),
         'has_workspace_access': bool(u.get('has_workspace_access', True)),
         'has_share_of_time_access': has_sot_view,
         'has_share_of_time_run_access': has_sot_run,
@@ -6217,7 +6199,6 @@ def index():
     has_talent_fit = _acc.get('has_talent_fit_access', False)
     has_flywheel_conversion = _acc.get('has_flywheel_conversion_access', False)
     has_brand_partnership_iq = _acc.get('has_brand_partnership_iq_access', False)
-    has_sentiment_iq = _acc.get('has_sentiment_iq_access', False)
     has_workspace = _acc.get('has_workspace_access', True)
     has_share_of_time = _acc.get('has_share_of_time_access', True)
     has_share_of_time_run = _acc.get('has_share_of_time_run_access', True)
@@ -6272,7 +6253,6 @@ def index():
                            has_talent_fit_access=has_talent_fit,
                            has_flywheel_conversion_access=has_flywheel_conversion,
                            has_brand_partnership_iq_access=has_brand_partnership_iq,
-                           has_sentiment_iq_access=has_sentiment_iq,
                            has_workspace_access=has_workspace,
                            has_share_of_time_access=has_share_of_time,
                            has_share_of_time_run_access=has_share_of_time_run,
@@ -11942,14 +11922,6 @@ def parse_ticket_sales_tracker_csv(csv_content):
     """Parse Ticket Sales Tracker CSV into structured data.
     Schema: Category, Value, Projection/Percent, Note, Col5, Col6
     Returns US (gen pop) numbers only - used as primary display values.
-
-    Also captures the trailing "AI VALIDATION" block emitted by
-    Ticket_Sales_Attribution.py:write_output(). That block mirrors the
-    Subscriber IQ format: PASS/FLAGGED status, one-sentence assessment,
-    researched US domestic gross, individual flags, applied adjustments,
-    per-section notes (tickets/sales/demographics), and a research summary.
-    The block lives at the END of the CSV and is purely additive — older
-    Ticket Sales Tracker files without it still parse correctly.
     """
     import csv as csv_module
     parsed = {
@@ -11960,17 +11932,7 @@ def parse_ticket_sales_tracker_csv(csv_content):
         'genre': '',
         'is_family_animation': False,  # for tooltip on Projected Ticket Sales
         'demographics_overall': {},
-        'demographics_per_theater': {},
-        'ai_validation': {
-            'status': None,           # 'PASS' | 'FLAGGED' | None
-            'assessment': '',
-            'researched_domestic_gross_usd': None,
-            'researched_gross_source': '',
-            'flags': [],
-            'adjustments': [],
-            'notes': {},              # {'Tickets Check': '[OK] ...', ...}
-            'research_summary': ''
-        }
+        'demographics_per_theater': {}
     }
     def _fmt(s):
         return str(s).strip() if s else ''
@@ -12045,51 +12007,6 @@ def parse_ticket_sales_tracker_csv(csv_content):
                 if current_theater not in parsed['demographics_per_theater']:
                     parsed['demographics_per_theater'][current_theater] = {}
                 demo_field = None
-            continue
-        # AI VALIDATION section detection (emitted at the end of the CSV by
-        # Ticket_Sales_Attribution.py:write_output, mirrors Subscriber IQ).
-        # The header row looks like ("", "AI VALIDATION", "", ...).
-        if val.strip().upper() == 'AI VALIDATION' and not cat:
-            current_section = 'ai_validation'
-            demo_field = None
-            continue
-        # Research summary subsection: ("", "AI VALIDATION — RESEARCH SUMMARY", "")
-        if 'AI VALIDATION' in val.upper() and 'RESEARCH SUMMARY' in val.upper() and not cat:
-            current_section = 'ai_validation_research'
-            continue
-        if current_section == 'ai_validation':
-            av = parsed['ai_validation']
-            if cat == 'Validation Status':
-                av['status'] = (proj or val or '').strip().upper() or None
-            elif cat == 'Assessment':
-                av['assessment'] = proj or val
-            elif cat == 'Researched US Domestic Gross':
-                av['researched_gross_source'] = note
-                gross_num = _parse_num(proj or val)
-                if gross_num is not None:
-                    av['researched_domestic_gross_usd'] = gross_num
-            elif cat.startswith('Flag '):
-                flag_text = (proj or val).strip()
-                if flag_text:
-                    av['flags'].append(flag_text)
-            elif cat.startswith('Adjustment '):
-                adj_text = (proj or val).strip()
-                if adj_text:
-                    av['adjustments'].append(adj_text)
-            elif cat in ('Tickets Check', 'Sales Check', 'Demographics Check'):
-                check_text = (proj or val).strip()
-                if check_text:
-                    av['notes'][cat] = check_text
-            continue
-        if current_section == 'ai_validation_research':
-            # Research lines come in as ("", "", "<text>", ...) — append the
-            # value in the third column to a single multi-line string.
-            line = (proj or val).strip()
-            if line:
-                if parsed['ai_validation']['research_summary']:
-                    parsed['ai_validation']['research_summary'] += '\n' + line
-                else:
-                    parsed['ai_validation']['research_summary'] = line
             continue
         if current_section == 'demo_overall':
             if cat in ['GENDER', 'AGE', 'INCOME', 'ETHNICITY', 'LOCATION']:
@@ -19665,68 +19582,6 @@ def _profile_step_progress(completed_steps):
     return min(sum(_PROFILE_STEP_WEIGHTS[s] for s in _PROFILE_STEP_ORDER if s in completed_steps), 99)
 
 
-def _handle_low_universe_skip(job_id, project_name, err):
-    """Mark a profile job as skipped (low audience) and email the requesting user.
-
-    Triggered by `bg.LowUniverseError` raised from `bg.check_universe_viability()`
-    right after the full universe scan. The user pulled a profile whose eligible
-    audience is too small (even after maximum sample inflation) to produce an
-    accurate result, so we abort the run before any pipeline cost is incurred
-    and tell them why via email.
-
-    Best-effort: a missing username, missing email, or SES failure is logged
-    but never raises — the job-status update is always written so the UI knows.
-    """
-    raw      = getattr(err, 'raw_universe',      0)
-    inflated = getattr(err, 'inflated_estimate', 0)
-    thresh   = getattr(err, 'threshold',         5000)
-    max_inflation = getattr(err, 'threshold', 0) and getattr(__import__('bg'), 'MAX_INFLATION_FACTOR', 35)
-
-    ui_msg = (
-        f"Sample size too low for an accurate profile "
-        f"({raw:,} eligible users → ~{inflated:,} after inflation; need ≥ {thresh:,}). "
-        f"Try a broader date range or a more popular brand. No credits were consumed."
-    )
-    try:
-        update_job_status(job_id, status='failed', error=ui_msg, message=ui_msg, progress=100)
-    except Exception as _se:
-        print(f"[low-universe] update_job_status failed for {job_id}: {_se}")
-
-    # Resolve requesting user → email
-    username = None
-    user_email = None
-    try:
-        job_meta = (jobs or {}).get(job_id, {}) if 'jobs' in globals() else {}
-        username = job_meta.get('created_by') or job_meta.get('username')
-        if username:
-            try:
-                udata = load_users() or {}
-                user_obj = (udata.get('users') or {}).get(username) or {}
-                user_email = (user_obj.get('email') or '').strip() or None
-            except Exception as _ue:
-                print(f"[low-universe] couldn't look up user {username}: {_ue}")
-    except Exception as _je:
-        print(f"[low-universe] couldn't read job metadata for {job_id}: {_je}")
-
-    print(
-        f"⏭  SKIP {project_name}: low universe "
-        f"({raw:,} → ~{inflated:,}, need ≥ {thresh:,}). "
-        f"User={username or '<unknown>'} email={user_email or '<none on file>'}"
-    )
-
-    if user_email:
-        try:
-            import bg as _bg
-            _bg.send_low_universe_user_email(
-                user_email=user_email,
-                username=username,
-                project_name=project_name,
-                err=err,
-            )
-        except Exception as _ee:
-            print(f"[low-universe] email send failed: {_ee}")
-
-
 def run_analysis(job_id, project_name, brands, sample_start, sample_end, 
                  behavior_start, behavior_end, filters, skew_settings, 
                  is_genpop, purchasers_only, brand_category,
@@ -19816,16 +19671,6 @@ def run_analysis(job_id, project_name, brands, sample_start, sample_end,
                     universe_results = bg.perform_full_universe_scan(conn, brands, sample_start, sample_end, purchasers_only)
                     if universe_results:
                         print(f"🌍 Universe scan complete. True universe size: {universe_results['total_universe']:,} users")
-                        # ── LOW-UNIVERSE GATE ─────────────────────────────────────────
-                        # Skip the run + email the requesting user if the eligible
-                        # audience is too small for an accurate profile (even after
-                        # maximum sample inflation). No credits are consumed.
-                        if hasattr(bg, 'check_universe_viability'):
-                            try:
-                                bg.check_universe_viability(universe_results['total_universe'], project_name)
-                            except getattr(bg, 'LowUniverseError', Exception) as _lue:
-                                _handle_low_universe_skip(job_id, project_name, _lue)
-                                return
                         bg.run_full_pipeline.universe_size = universe_results['total_universe']
                     else:
                         print("⚠️ Universe scan returned no results, using default")
@@ -19833,12 +19678,6 @@ def run_analysis(job_id, project_name, brands, sample_start, sample_end,
                 else:
                     print("⚠️ perform_full_universe_scan not available in bg module")
                     bg.run_full_pipeline.universe_size = 1000000
-            except getattr(bg, 'LowUniverseError', tuple()) as _lue:
-                # Defensive catch in case the inner block re-raises rather than
-                # routing through _handle_low_universe_skip (e.g. future
-                # refactor). Same handling.
-                _handle_low_universe_skip(job_id, project_name, _lue)
-                return
             except Exception as e:
                 print(f"⚠️ Universe scan error: {e}, proceeding with default size")
                 bg.run_full_pipeline.universe_size = 1000000
@@ -21770,7 +21609,6 @@ def user_can_run_analysis_module(user, module_key):
     _MODULE_TOP_LEVEL_FLAG = {
         'flywheel_conversion':  'has_flywheel_conversion_access',
         'brand_partnership_iq': 'has_brand_partnership_iq_access',
-        'journey_iq':           'has_journey_iq_access',
     }
     top_flag = _MODULE_TOP_LEVEL_FLAG.get(module_key)
     if top_flag and user.get(top_flag):
@@ -29658,628 +29496,6 @@ def list_brand_partnership_iq():
         return jsonify({'success': True, 'files': files})
     except Exception:
         return jsonify({'success': True, 'files': []})
-
-
-# =====================================================================
-#  DIGITAL JOURNEY IQ  -  BSFS-style journey reconstruction
-# =====================================================================
-#
-# Input form lives in Analysis IQ → "Digital Journey IQ" tab. Output
-# dashboard is the standalone `journeyIQ` entry in the SELECT PRODUCT
-# dropdown. Heavy lifting happens in migration/journey_iq.py.
-
-def _run_journey_iq(job_id):
-    """Background worker — thin adapter around migration.journey_iq.run_job
-    that forwards progress to update_job_status."""
-    try:
-        from migration import journey_iq as _jiq
-    except Exception as e:
-        update_job_status(job_id, status='failed',
-                          error=f'journey_iq import failed: {e}')
-        return
-    try:
-        job = jobs.get(job_id) or {}
-        params = job.get('params') or {}
-        username = job.get('username') or job.get('created_by') or 'anon'
-
-        def _cb(progress=None, message=None, **_ignored):
-            update_job_status(job_id, progress=progress, message=message)
-
-        update_job_status(job_id, status='running', progress=1,
-                          message='Starting Digital Journey IQ...')
-        result = _jiq.run_job(
-            job_id=job_id,
-            target=params.get('target', ''),
-            start_date=params.get('start_date', ''),
-            end_date=params.get('end_date', ''),
-            project_name=params.get('project_name', 'Journey IQ'),
-            username=username,
-            lookback_days=int(params.get('lookback_days') or _jiq.DEFAULT_LOOKBACK_DAYS),
-            forward_days=int(params.get('forward_days') or _jiq.DEFAULT_FORWARD_DAYS),
-            extra_conversion_patterns=params.get('extra_conversion_patterns') or [],
-            progress_cb=_cb,
-            s3_client=s3_client,
-        )
-        if result.get('status') == 'completed':
-            update_job_status(job_id, status='completed', progress=100,
-                              message='Done', s3_key=result.get('s3_key'))
-        else:
-            update_job_status(job_id, status='failed', progress=100,
-                              message=result.get('error') or 'Run failed',
-                              error=result.get('error') or 'Run failed')
-    except Exception as e:
-        import traceback; traceback.print_exc()
-        update_job_status(job_id, status='failed', error=str(e),
-                          message=f'Error: {e}', progress=100)
-
-
-@app.route('/api/journey-iq/submit', methods=['POST'])
-@requires_auth
-def submit_journey_iq():
-    """Kick off a Digital Journey IQ analysis."""
-    try:
-        username = session.get('username')
-        user = get_current_user()
-        if not user:
-            return jsonify({'error': 'User not authenticated'}), 401
-        if not user_can_run_analysis_module(user, 'journey_iq'):
-            return jsonify({'error': 'Analysis IQ access with Digital Journey IQ '
-                            'module required'}), 403
-
-        data = request.get_json() or {}
-        project_name = (data.get('project_name') or '').strip()
-        target       = (data.get('target') or '').strip()
-        start_date   = (data.get('start_date') or '').strip()
-        end_date     = (data.get('end_date') or '').strip()
-        try:
-            lookback_days = int(data.get('lookback_days') or 14)
-        except Exception:
-            lookback_days = 14
-        try:
-            forward_days = int(data.get('forward_days') or 7)
-        except Exception:
-            forward_days = 7
-        extra_patterns_raw = data.get('extra_conversion_patterns') or ''
-        if isinstance(extra_patterns_raw, str):
-            extra_patterns = [p.strip() for p in extra_patterns_raw.replace('\n', ',').split(',') if p.strip()]
-        else:
-            extra_patterns = [str(p).strip() for p in extra_patterns_raw if str(p).strip()]
-
-        if not project_name:
-            return jsonify({'error': 'project_name required'}), 400
-        if not target:
-            return jsonify({'error': 'target required'}), 400
-        if not start_date or not end_date:
-            return jsonify({'error': 'start_date and end_date required'}), 400
-        if lookback_days < 0 or lookback_days > 60:
-            return jsonify({'error': 'lookback_days must be 0-60'}), 400
-        if forward_days < 0 or forward_days > 60:
-            return jsonify({'error': 'forward_days must be 0-60'}), 400
-
-        if not has_credits_for(username, CREDITS_JOURNEY_IQ):
-            _, credits_left = check_user_credits(username)
-            return jsonify({
-                'error': (f'Digital Journey IQ requires {CREDITS_JOURNEY_IQ} credits. '
-                          f'You have {"no" if credits_left == 0 else credits_left} remaining.'),
-                'credits_left': 0 if credits_left != -1 else -1,
-            }), 403
-
-        job_id = str(uuid.uuid4())[:8]
-        jobs[job_id] = {
-            'status': 'queued', 'progress': 0, 'message': 'Queued',
-            'created_at': datetime.now().isoformat(),
-            'project_name': project_name, 'error': None, 'result_file': None,
-            'logs': [], 's3_key': None, 'username': username,
-            'created_by': username,
-            'type': 'journey_iq',
-            'params': {
-                'project_name':              project_name,
-                'target':                    target,
-                'start_date':                start_date,
-                'end_date':                  end_date,
-                'lookback_days':             lookback_days,
-                'forward_days':              forward_days,
-                'extra_conversion_patterns': extra_patterns,
-            },
-        }
-        if s3_client:
-            _save_job_status_to_s3(job_id, jobs[job_id])
-
-        desc = f"{project_name} (Journey IQ: {target} · {start_date}–{end_date})"
-        if not consume_credit(username, description=desc, job_id=job_id,
-                              pull_type='Digital Journey IQ',
-                              credits_used=CREDITS_JOURNEY_IQ):
-            return jsonify({'error': 'Insufficient credits.'}), 403
-
-        spawn_heavy_analysis(_run_journey_iq, args=(job_id,),
-                             tool='journey_iq',
-                             job_id=job_id, username=username)
-
-        return jsonify({'job_id': job_id,
-                        'message': 'Digital Journey IQ job submitted',
-                        'status': 'queued',
-                        'credits_used': CREDITS_JOURNEY_IQ})
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
-
-
-@app.route('/api/journey-iq/list', methods=['GET'])
-@requires_auth
-def list_journey_iq():
-    """Return past Journey IQ runs (newest first). Super-admins see all
-    runs; everyone else sees only their own."""
-    try:
-        from migration import journey_iq as _jiq
-    except Exception:
-        return jsonify({'success': True, 'runs': []})
-    try:
-        user = get_current_user()
-        role = _normalize_role((user or {}).get('role', 'user'))
-        username = session.get('username')
-        all_runs = _jiq.list_runs(s3_client, limit=500)
-        if role != 'super_admin':
-            all_runs = [r for r in all_runs if r.get('created_by') == username]
-        return jsonify({'success': True, 'runs': all_runs[:200]})
-    except Exception as e:
-        return jsonify({'success': True, 'runs': [], 'error': str(e)})
-
-
-@app.route('/api/journey-iq/results/<path:s3_key>', methods=['GET'])
-@requires_auth
-def get_journey_iq_result(s3_key):
-    """Return a previously-persisted Journey IQ run by S3 key."""
-    try:
-        from migration import journey_iq as _jiq
-    except Exception as e:
-        return jsonify({'success': False, 'error': f'journey_iq import failed: {e}'}), 500
-    try:
-        # Allow callers to pass either the bare key suffix or the full key.
-        full_key = s3_key if s3_key.startswith(_jiq.S3_PREFIX) else _jiq.S3_PREFIX + s3_key
-        data = _jiq.load_run_from_s3(s3_client, full_key)
-        if data is None:
-            return jsonify({'success': False, 'error': 'Run not found'}), 404
-        # Access guard: non-admins only get their own runs.
-        user = get_current_user()
-        role = _normalize_role((user or {}).get('role', 'user'))
-        username = session.get('username')
-        if role != 'super_admin':
-            created_by = (data.get('meta') or {}).get('created_by')
-            if created_by and created_by != username:
-                return jsonify({'success': False, 'error': 'Forbidden'}), 403
-        return jsonify({'success': True, 'data': data, 's3_key': full_key})
-    except Exception as e:
-        return jsonify({'success': False, 'error': str(e)}), 500
-
-
-# =====================================================================
-#  SENTIMENT IQ  -  Multi-layer brand sentiment tracker
-# =====================================================================
-#
-# Three layers stacked together:
-#   1) Behavioral signals from clickstream (URLs / queries / domains / paths)
-#   2) Page-content sentiment for top URLs (cached forever per URL)
-#   3) Live LLM web-search rollups (positive / negative / neutral themes)
-#
-# A user creates a "tracker" with brand terms + an optional historical date
-# range + an optional "ongoing" toggle. The cron route /api/cron/sentiment-iq
-# runs every active ongoing tracker against yesterday and appends to the
-# rolling time series. Optional email alerts fire on material sentiment
-# shifts.
-#
-# Storage layout on s3://dashboard-inputs:
-#   sentiment-iq/trackers/<tracker_id>.json     - tracker config
-#   sentiment-iq/results/<tracker_id>/latest.json
-#   sentiment-iq/results/<tracker_id>/daily/<YYYY-MM-DD>.json
-#   sentiment-iq/rollups/<tracker_id>/<YYYY-MM-DD>.json
-#   sentiment-iq/pages/<sha256(url)>.json
-# =====================================================================
-
-try:
-    import sentiment_iq as _sentiment_iq
-except Exception as _e_siq:
-    print(f"⚠️ sentiment_iq module unavailable: {_e_siq}")
-    _sentiment_iq = None
-
-CREDITS_SENTIMENT_IQ = int(os.environ.get('CREDITS_SENTIMENT_IQ', '10'))
-SENTIMENT_IQ_ALERT_DROP_PCT = float(os.environ.get('SENTIMENT_IQ_ALERT_DROP_PCT', '15'))
-SENTIMENT_IQ_ALERT_SPIKE_PCT = float(os.environ.get('SENTIMENT_IQ_ALERT_SPIKE_PCT', '25'))
-
-
-def _sentiment_iq_status_cb(job_id):
-    """Bridge sentiment_iq.run_sentiment_tracker progress into update_job_status."""
-    def _cb(status, progress, message):
-        try:
-            update_job_status(
-                job_id,
-                status=status if status in ('queued', 'running', 'completed', 'failed') else None,
-                progress=progress,
-                message=message,
-            )
-        except Exception:
-            pass
-    return _cb
-
-
-def _run_sentiment_iq_job(job_id, tracker_id, mode='full'):
-    """Background worker - runs the three-layer pipeline for one tracker."""
-    if _sentiment_iq is None:
-        update_job_status(job_id, status='failed', error='sentiment_iq module not available')
-        return
-    try:
-        cfg = _sentiment_iq.s3_get_json(s3_client, _sentiment_iq.tracker_key(tracker_id))
-        if not cfg:
-            update_job_status(job_id, status='failed', error='Tracker config not found')
-            return
-        cfg['status'] = 'running'
-        cfg['updated_at'] = datetime.utcnow().isoformat() + 'Z'
-        _sentiment_iq.s3_put_json(s3_client, _sentiment_iq.tracker_key(tracker_id), cfg)
-
-        _sentiment_iq.run_sentiment_tracker(
-            cfg,
-            ch_connect=_ch_connect,
-            s3_client=s3_client,
-            openai_client=get_openai_client(),
-            status_cb=_sentiment_iq_status_cb(job_id),
-            mode=mode,
-        )
-        # Refresh and persist updated tracker status.
-        cfg['status'] = 'idle'
-        cfg['last_run_at'] = datetime.utcnow().isoformat() + 'Z'
-        cfg['last_run_date'] = date.today().isoformat()
-        cfg['updated_at'] = cfg['last_run_at']
-        _sentiment_iq.s3_put_json(s3_client, _sentiment_iq.tracker_key(tracker_id), cfg)
-    except Exception as e:
-        import traceback; traceback.print_exc()
-        update_job_status(job_id, status='failed', error=str(e))
-        try:
-            cfg = _sentiment_iq.s3_get_json(s3_client, _sentiment_iq.tracker_key(tracker_id)) or {}
-            cfg['status'] = 'failed'
-            cfg['updated_at'] = datetime.utcnow().isoformat() + 'Z'
-            _sentiment_iq.s3_put_json(s3_client, _sentiment_iq.tracker_key(tracker_id), cfg)
-        except Exception:
-            pass
-
-
-@app.route('/api/sentiment-iq/submit', methods=['POST'])
-@requires_auth
-def submit_sentiment_iq():
-    """Create a new Sentiment IQ tracker (and kick off backfill if a date
-    range was supplied). The 'ongoing' flag is what makes the daily cron
-    pick this tracker up tomorrow morning."""
-    if _sentiment_iq is None:
-        return jsonify({'error': 'Sentiment IQ module unavailable'}), 500
-    try:
-        username = session.get('username')
-        user = get_current_user()
-        if not user:
-            return jsonify({'error': 'User not authenticated'}), 401
-        data = request.get_json() or {}
-        project_name = (data.get('project_name') or '').strip()
-        brand_terms_raw = data.get('brand_terms') or ''
-        competitor_terms_raw = data.get('competitor_terms') or ''
-        start_date = (data.get('start_date') or '').strip() or None
-        end_date = (data.get('end_date') or '').strip() or None
-        ongoing = bool(data.get('ongoing', False))
-        alert_email = bool(data.get('alert_email', False))
-
-        if not project_name:
-            return jsonify({'error': 'project_name required'}), 400
-        if isinstance(brand_terms_raw, list):
-            brand_terms = [str(t).strip() for t in brand_terms_raw if str(t).strip()]
-        else:
-            brand_terms = [t.strip() for t in re.split(r'[,\n]', str(brand_terms_raw)) if t.strip()]
-        if not brand_terms:
-            return jsonify({'error': 'brand_terms required (comma- or newline-separated)'}), 400
-        if isinstance(competitor_terms_raw, list):
-            competitor_terms = [str(t).strip() for t in competitor_terms_raw if str(t).strip()]
-        else:
-            competitor_terms = [t.strip() for t in re.split(r'[,\n]', str(competitor_terms_raw)) if t.strip()]
-
-        # Normalise the date window. A start date with no end date is the
-        # natural "backfill from start through today, then keep going"
-        # request, so we auto-fill the end with yesterday (today's panel
-        # data hasn't landed yet). An end date without a start date is
-        # ambiguous so we reject it.
-        if end_date and not start_date:
-            return jsonify({'error': 'Please provide a Start Date when using an End Date.'}), 400
-        if start_date and not end_date:
-            end_date = (datetime.utcnow().date() - timedelta(days=1)).isoformat()
-        if start_date and end_date and start_date > end_date:
-            return jsonify({'error': 'Start Date must be on or before End Date.'}), 400
-        if not ongoing and not (start_date and end_date):
-            return jsonify({'error': 'Either an Ongoing tracker or a Start Date (or both) is required.'}), 400
-
-        # Credit gate - only consume credits when we actually kick off a backfill.
-        will_backfill = bool(start_date and end_date)
-        if will_backfill:
-            if not has_credits_for(username, CREDITS_SENTIMENT_IQ):
-                _, credits_left = check_user_credits(username)
-                return jsonify({
-                    'error': f'Sentiment IQ requires {CREDITS_SENTIMENT_IQ} credits to start a tracker. '
-                             f'You have {"no" if credits_left == 0 else credits_left} remaining.',
-                    'credits_left': 0 if credits_left != -1 else -1,
-                }), 403
-
-        tracker_id = str(uuid.uuid4())[:8]
-        cfg = _sentiment_iq.make_tracker_config(
-            tracker_id=tracker_id,
-            owner=username,
-            project_name=project_name,
-            brand_terms=brand_terms,
-            competitor_terms=competitor_terms,
-            start_date=start_date,
-            end_date=end_date,
-            ongoing=ongoing,
-            alert_email=alert_email,
-        )
-        if not _sentiment_iq.s3_put_json(s3_client, _sentiment_iq.tracker_key(tracker_id), cfg):
-            return jsonify({'error': 'Failed to persist tracker config to S3'}), 500
-
-        job_id = str(uuid.uuid4())[:8]
-        jobs[job_id] = {
-            'status': 'queued', 'progress': 0, 'message': 'Queued',
-            'created_at': datetime.now().isoformat(),
-            'project_name': project_name, 'error': None, 'result_file': None,
-            'logs': [], 's3_key': None, 'username': username,
-            'type': 'sentiment_iq',
-            'tracker_id': tracker_id,
-            'params': {
-                'project_name': project_name,
-                'brand_terms': brand_terms,
-                'competitor_terms': competitor_terms,
-                'start_date': start_date,
-                'end_date': end_date,
-                'ongoing': ongoing,
-                'alert_email': alert_email,
-            },
-        }
-        if s3_client:
-            _save_job_status_to_s3(job_id, jobs[job_id])
-
-        if will_backfill:
-            desc = f"Sentiment IQ: {project_name} ({start_date}–{end_date}{', ongoing' if ongoing else ''})"
-            if not consume_credit(username, description=desc, job_id=job_id,
-                                  pull_type='Sentiment IQ',
-                                  credits_used=CREDITS_SENTIMENT_IQ):
-                return jsonify({'error': 'Insufficient credits.'}), 403
-            spawn_heavy_analysis(_run_sentiment_iq_job,
-                                 args=(job_id, tracker_id),
-                                 kwargs={'mode': 'full'},
-                                 tool='sentiment_iq', job_id=job_id, username=username)
-            initial_action = 'backfill'
-        else:
-            # Ongoing-only — kick off an initial daily refresh so the
-            # dashboard isn't empty until tomorrow's cron tick. This is
-            # free (same scope as the cron job) and processes yesterday's
-            # panel data.
-            spawn_heavy_analysis(_run_sentiment_iq_job,
-                                 args=(job_id, tracker_id),
-                                 kwargs={'mode': 'daily'},
-                                 tool='sentiment_iq', job_id=job_id, username=username)
-            initial_action = 'initial_daily'
-
-        return jsonify({
-            'success': True,
-            'tracker_id': tracker_id,
-            'job_id': job_id,
-            'will_backfill': will_backfill,
-            'ongoing': ongoing,
-            'credits_used': CREDITS_SENTIMENT_IQ if will_backfill else 0,
-            'initial_action': initial_action,
-            'message': (
-                'Sentiment IQ tracker created — backfill in progress.'
-                if will_backfill
-                else 'Sentiment IQ tracker created — running initial refresh now; daily updates will continue.'
-            ),
-        })
-    except Exception as e:
-        import traceback; traceback.print_exc()
-        return jsonify({'error': str(e)}), 500
-
-
-@app.route('/api/sentiment-iq/list')
-@requires_auth
-def list_sentiment_iq():
-    """List Sentiment IQ trackers visible to the caller (own + admin sees all)."""
-    if _sentiment_iq is None:
-        return jsonify({'success': True, 'trackers': []})
-    try:
-        user = get_current_user() or {}
-        role = _normalize_role(user.get('role', 'user'))
-        if role in ('admin', 'super_admin'):
-            trackers = _sentiment_iq.list_trackers(s3_client, owner=None)
-        else:
-            trackers = _sentiment_iq.list_trackers(s3_client, owner=session.get('username'))
-        return jsonify({'success': True, 'trackers': trackers})
-    except Exception as e:
-        return jsonify({'success': True, 'trackers': [], 'error': str(e)})
-
-
-@app.route('/api/sentiment-iq/results/<tracker_id>')
-@requires_auth
-def get_sentiment_iq_results(tracker_id):
-    """Return the latest rolled-up dashboard payload for a tracker."""
-    if _sentiment_iq is None:
-        return jsonify({'success': False, 'error': 'Sentiment IQ unavailable'}), 500
-    try:
-        cfg = _sentiment_iq.s3_get_json(s3_client, _sentiment_iq.tracker_key(tracker_id))
-        if not cfg:
-            return jsonify({'success': False, 'error': 'Tracker not found'}), 404
-        user = get_current_user() or {}
-        role = _normalize_role(user.get('role', 'user'))
-        if role not in ('admin', 'super_admin') and cfg.get('owner') != session.get('username'):
-            return jsonify({'success': False, 'error': 'Not authorized for this tracker'}), 403
-        data = _sentiment_iq.s3_get_json(s3_client, _sentiment_iq.latest_result_key(tracker_id))
-        if not data:
-            return jsonify({'success': True, 'config': cfg, 'data': None, 'message': 'No results yet — first refresh pending.'})
-        return jsonify({'success': True, 'config': cfg, 'data': data})
-    except Exception as e:
-        return jsonify({'success': False, 'error': str(e)}), 500
-
-
-@app.route('/api/sentiment-iq/delete/<tracker_id>', methods=['POST'])
-@requires_auth
-def delete_sentiment_iq(tracker_id):
-    """Soft-delete a tracker by setting ongoing=false and status='deleted'."""
-    if _sentiment_iq is None:
-        return jsonify({'success': False, 'error': 'Sentiment IQ unavailable'}), 500
-    try:
-        cfg = _sentiment_iq.s3_get_json(s3_client, _sentiment_iq.tracker_key(tracker_id))
-        if not cfg:
-            return jsonify({'success': False, 'error': 'Tracker not found'}), 404
-        user = get_current_user() or {}
-        role = _normalize_role(user.get('role', 'user'))
-        if role not in ('admin', 'super_admin') and cfg.get('owner') != session.get('username'):
-            return jsonify({'success': False, 'error': 'Not authorized for this tracker'}), 403
-        cfg['ongoing'] = False
-        cfg['status'] = 'deleted'
-        cfg['updated_at'] = datetime.utcnow().isoformat() + 'Z'
-        _sentiment_iq.s3_put_json(s3_client, _sentiment_iq.tracker_key(tracker_id), cfg)
-        return jsonify({'success': True})
-    except Exception as e:
-        return jsonify({'success': False, 'error': str(e)}), 500
-
-
-@app.route('/api/sentiment-iq/refresh/<tracker_id>', methods=['POST'])
-@requires_auth
-def refresh_sentiment_iq(tracker_id):
-    """Manual re-run for a tracker (admin / owner). Re-runs the configured
-    date window (or yesterday for an Ongoing-only tracker)."""
-    if _sentiment_iq is None:
-        return jsonify({'success': False, 'error': 'Sentiment IQ unavailable'}), 500
-    try:
-        cfg = _sentiment_iq.s3_get_json(s3_client, _sentiment_iq.tracker_key(tracker_id))
-        if not cfg:
-            return jsonify({'success': False, 'error': 'Tracker not found'}), 404
-        username = session.get('username')
-        user = get_current_user() or {}
-        role = _normalize_role(user.get('role', 'user'))
-        if role not in ('admin', 'super_admin') and cfg.get('owner') != username:
-            return jsonify({'success': False, 'error': 'Not authorized'}), 403
-        mode = 'daily' if not (cfg.get('start_date') and cfg.get('end_date')) else 'full'
-        job_id = str(uuid.uuid4())[:8]
-        jobs[job_id] = {
-            'status': 'queued', 'progress': 0, 'message': 'Queued',
-            'created_at': datetime.now().isoformat(),
-            'project_name': cfg.get('project_name', ''),
-            'error': None, 'result_file': None,
-            'logs': [], 's3_key': None, 'username': username,
-            'type': 'sentiment_iq', 'tracker_id': tracker_id,
-            'params': {**cfg},
-        }
-        if s3_client:
-            _save_job_status_to_s3(job_id, jobs[job_id])
-        spawn_heavy_analysis(_run_sentiment_iq_job,
-                             args=(job_id, tracker_id),
-                             kwargs={'mode': mode},
-                             tool='sentiment_iq', job_id=job_id, username=username)
-        return jsonify({'success': True, 'job_id': job_id, 'mode': mode})
-    except Exception as e:
-        return jsonify({'success': False, 'error': str(e)}), 500
-
-
-def _send_sentiment_iq_alert_email(tracker_cfg, alert):
-    """Fire the dashboard-styled alert email to the tracker's owner."""
-    try:
-        owner = tracker_cfg.get('owner') or ''
-        if not owner:
-            return False, 'no owner'
-        users = load_users()
-        u = (users or {}).get(owner) or {}
-        to_email = u.get('email') or ''
-        if not to_email:
-            return False, 'owner has no email'
-        dashboard_url = (os.environ.get('PUBLIC_APP_URL', '') or '').rstrip('/')
-        if dashboard_url:
-            dashboard_url = f"{dashboard_url}/?view=sentimentIQ&tracker={tracker_cfg.get('tracker_id','')}"
-        body = _sentiment_iq.render_alert_email_html(alert, dashboard_url=dashboard_url)
-        html_content = _wrap_email_html(body, title='Sentiment IQ - shift detected')
-        subj = f"Sentiment IQ alert: {tracker_cfg.get('project_name','tracker')}"
-        return send_email_via_gmail(to_email, subj, html_content, text_content=None)
-    except Exception as e:
-        return False, str(e)
-
-
-@app.route('/api/cron/sentiment-iq', methods=['GET', 'POST'])
-def cron_sentiment_iq():
-    """Daily cron entry point. Iterates every Ongoing Sentiment IQ tracker,
-    pulls yesterday's events, appends to its rolling time series, and fires
-    alert emails on material shifts.
-
-    Auth: X-Cron-Secret header or ?secret= must match CRON_SECRET env var.
-    Optional ?dry_run=1 to plan without writing/emailing, ?only=<tracker_id>
-    to target one tracker, ?force=1 to bypass the ongoing flag.
-    """
-    if _sentiment_iq is None:
-        return jsonify({'success': False, 'error': 'Sentiment IQ unavailable'}), 500
-    secret = request.headers.get('X-Cron-Secret') or request.args.get('secret') or ''
-    expected = os.environ.get('CRON_SECRET', '')
-    if not expected or secret != expected:
-        return jsonify({'success': False, 'error': 'Unauthorized'}), 403
-    dry_run = request.args.get('dry_run', '').strip().lower() in ('1', 'true', 'yes')
-    only_id = (request.args.get('only') or '').strip() or None
-    force = request.args.get('force', '').strip().lower() in ('1', 'true', 'yes')
-
-    summary = {'ran': [], 'skipped': [], 'failed': [], 'alerts_sent': []}
-    try:
-        all_trackers = _sentiment_iq.list_trackers(s3_client, owner=None)
-        if only_id:
-            all_trackers = [t for t in all_trackers if t.get('tracker_id') == only_id]
-        for t in all_trackers:
-            tid = t.get('tracker_id')
-            if not tid:
-                continue
-            if t.get('status') == 'deleted':
-                summary['skipped'].append({'tracker_id': tid, 'reason': 'deleted'})
-                continue
-            if not t.get('ongoing') and not force:
-                summary['skipped'].append({'tracker_id': tid, 'reason': 'not_ongoing'})
-                continue
-            cfg = _sentiment_iq.s3_get_json(s3_client, _sentiment_iq.tracker_key(tid))
-            if not cfg:
-                summary['failed'].append({'tracker_id': tid, 'reason': 'config missing'})
-                continue
-            if dry_run:
-                summary['ran'].append({'tracker_id': tid, 'dry_run': True})
-                continue
-            try:
-                prev_latest = _sentiment_iq.s3_get_json(s3_client, _sentiment_iq.latest_result_key(tid))
-                new_day = _sentiment_iq.run_sentiment_tracker(
-                    cfg,
-                    ch_connect=_ch_connect,
-                    s3_client=s3_client,
-                    openai_client=get_openai_client(),
-                    status_cb=None,
-                    mode='daily',
-                )
-                merged = _sentiment_iq.append_daily_to_latest(
-                    tracker_id=tid,
-                    new_day_result=new_day,
-                    s3_client=s3_client,
-                )
-                cfg['last_run_at'] = datetime.utcnow().isoformat() + 'Z'
-                cfg['last_run_date'] = date.today().isoformat()
-                cfg['updated_at'] = cfg['last_run_at']
-                _sentiment_iq.s3_put_json(s3_client, _sentiment_iq.tracker_key(tid), cfg)
-                summary['ran'].append({'tracker_id': tid,
-                                       'net_sentiment': (merged.get('kpis') or {}).get('net_sentiment')})
-
-                # Alert detection (compare yesterday's per-day snapshot to today's)
-                if cfg.get('alert_email'):
-                    alert = _sentiment_iq.compute_alert_signal(
-                        prev_latest, merged,
-                        drop_pct=SENTIMENT_IQ_ALERT_DROP_PCT,
-                        spike_pct=SENTIMENT_IQ_ALERT_SPIKE_PCT,
-                    )
-                    if alert:
-                        ok, msg = _send_sentiment_iq_alert_email(cfg, alert)
-                        summary['alerts_sent'].append({'tracker_id': tid, 'ok': bool(ok), 'msg': str(msg)})
-            except Exception as e:
-                import traceback; traceback.print_exc()
-                summary['failed'].append({'tracker_id': tid, 'reason': str(e)})
-        return jsonify({'success': True, 'summary': summary})
-    except Exception as e:
-        return jsonify({'success': False, 'error': str(e), 'summary': summary}), 500
 
 
 def run_cross_show(job_id):
