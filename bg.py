@@ -14633,7 +14633,40 @@ def _seed_input_brand_into_target_cats(df_behavior, input_brands, brand_category
 
     seeded = 0
     new_rows = []
+
+    # DEDUPE input_brands by canonical alphanumeric form. The caller usually
+    # passes the full URL-encoded variation list (BEN-STILLER, BEN.STILLER,
+    # BEN_STILLER, BEN STILLER, BEN~STILLER, BEN|STILLER, ...) — all of those
+    # are the same person, so we should only seed ONE row per category, using
+    # the most human-readable variant (space-separated, letters+digits only).
+    def _alpha_only(s):
+        return ''.join(c for c in str(s).upper() if c.isalnum())
+    def _is_clean(s):
+        s = str(s).strip()
+        return bool(s) and all(c.isalnum() or c == ' ' for c in s)
+
+    canonical_by_alpha = {}
     for brand in input_brands:
+        b = str(brand or '').strip()
+        if not b: continue
+        key = _alpha_only(b)
+        if not key: continue
+        prev = canonical_by_alpha.get(key)
+        if prev is None:
+            canonical_by_alpha[key] = b
+        else:
+            prev_clean = _is_clean(prev)
+            cur_clean = _is_clean(b)
+            if cur_clean and not prev_clean:
+                canonical_by_alpha[key] = b
+            elif cur_clean and prev_clean and ' ' in b and ' ' not in prev:
+                canonical_by_alpha[key] = b
+    deduped_brands = list(canonical_by_alpha.values())
+    if verbose and len(deduped_brands) < len(input_brands):
+        print(f"   🔧 _seed_input_brand_into_target_cats: deduped "
+              f"{len(input_brands)} variations → {len(deduped_brands)} canonical brand(s)")
+
+    for brand in deduped_brands:
         brand_str = str(brand or '').strip()
         if not brand_str:
             continue
