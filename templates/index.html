@@ -8730,12 +8730,38 @@
         .rankers-table th .iqr-sort-arrow { opacity: 0.45; margin-left: 0.2rem; font-size: 0.65rem; }
         .rankers-table th[data-iq-active-sort] .iqr-sort-arrow { opacity: 1; color: var(--accent-blue); }
 
-        /* Profile-name link inside the leaderboard row → opens chart modal */
-        .iqr-name-link {
-            color: var(--text-primary); font-weight: 700; text-decoration: none;
-            border-bottom: 1px dashed transparent; transition: color 0.12s ease, border-color 0.12s ease;
+        /* Profile-name cell + inline action chips (Δ chart, Profile drill-in) */
+        .iqr-name-row {
+            display: flex; align-items: center; gap: 0.4rem;
+            flex-wrap: wrap;
         }
-        .iqr-name-link:hover { color: var(--accent-cyan); border-bottom-color: var(--accent-cyan); }
+        .iqr-name-text { font-weight: 700; color: var(--text-primary); }
+        .iqr-name-sub  { font-size: 0.7rem; color: var(--text-secondary); margin-top: 0.1rem; }
+        .iqr-row-chip {
+            display: inline-flex; align-items: center; justify-content: center;
+            gap: 0.25rem;
+            font-family: 'Space Mono', monospace;
+            font-size: 0.68rem; font-weight: 700;
+            line-height: 1;
+            padding: 0.22rem 0.5rem;
+            min-height: 1.45rem;
+            background: var(--bg-secondary);
+            color: var(--text-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: 999px;
+            cursor: pointer;
+            white-space: nowrap;
+            transition: background 0.12s ease, color 0.12s ease, border-color 0.12s ease, transform 0.12s ease;
+        }
+        .iqr-row-chip:hover { transform: translateY(-1px); }
+        .iqr-row-chip-chart { color: var(--accent-cyan); border-color: rgba(102,217,239,0.35); }
+        .iqr-row-chip-chart:hover { background: rgba(102,217,239,0.14); border-color: var(--accent-cyan); color: var(--accent-cyan); }
+        .iqr-row-chip-chart .iqr-row-chip-glyph { font-size: 0.85rem; line-height: 1; }
+        .iqr-row-chip-profile { color: #c8f7d4; border-color: rgba(132,225,168,0.35); }
+        .iqr-row-chip-profile:hover { background: rgba(132,225,168,0.14); border-color: var(--accent-lime); color: #c8f7d4; }
+        .rankers-table tbody tr:hover .iqr-row-chip { border-color: var(--border-color); }
+        .rankers-table tbody tr:hover .iqr-row-chip-chart { border-color: rgba(102,217,239,0.5); }
+        .rankers-table tbody tr:hover .iqr-row-chip-profile { border-color: rgba(132,225,168,0.5); }
 
         /* ── Drill-down chart modal ───────────────────────────────────────── */
         .iqr-modal-backdrop {
@@ -77018,16 +77044,21 @@
                 const subjAttr  = _iqEsc(r.profile_subject || '');
                 const nameAttr  = _iqEsc(r.project_name || r.profile_subject || '');
                 const s3Key     = (r.s3_key || '').replace(/'/g, "\\'");
-                const rowClick  = `onclick="openProfileFromIQRanker('${subj}', '${s3Key}')"`;
-                // Profile-name cell uses event.stopPropagation so clicking the
-                // name opens the day-over-day chart modal instead of also
-                // drilling into the profile dashboard.
-                const nameClick = `onclick="event.stopPropagation(); openIQRankerChart('${master}', '${subjAttr}', '${nameAttr}')"`;
-                return `<tr style="cursor: pointer;" ${rowClick}>
+                // The row itself is no longer clickable — the user now picks
+                // explicit actions (Δ chart or Profile drill-down) via the
+                // chips next to the name. This removes the "what does
+                // clicking a row do?" ambiguity.
+                const chartClick   = `event.stopPropagation(); openIQRankerChart('${master}', '${subjAttr}', '${nameAttr}')`;
+                const profileClick = `event.stopPropagation(); openProfileFromIQRanker('${subj}', '${s3Key}')`;
+                return `<tr>
                     <td>${i + 1}</td>
                     <td>
-                        <a href="javascript:void(0)" class="iqr-name-link" ${nameClick} title="View day-over-day chart">${_iqEsc(r.project_name || r.profile_subject || '')}</a>
-                        <div style="font-size: 0.7rem; color: var(--text-secondary);">${_iqEsc(r.subcategory || '')}</div>
+                        <div class="iqr-name-row">
+                            <span class="iqr-name-text">${_iqEsc(r.project_name || r.profile_subject || '')}</span>
+                            <button type="button" class="iqr-row-chip iqr-row-chip-chart" title="Open day-over-day chart" aria-label="Open day-over-day chart" onclick="${chartClick}"><span class="iqr-row-chip-glyph">Δ</span></button>
+                            <button type="button" class="iqr-row-chip iqr-row-chip-profile" title="Open this profile's dashboard" onclick="${profileClick}">Profile</button>
+                        </div>
+                        <div class="iqr-name-sub">${_iqEsc(r.subcategory || '')}</div>
                     </td>
                     <td style="text-align: right;">${fmtNum(r.mentions)}</td>
                     <td style="text-align: right;">${fmtDelta(r.delta_mentions, 0)}</td>
