@@ -12603,15 +12603,27 @@
         #bpiqDashboardPanels {
             container-type: inline-size;
         }
-        #bpiqHeroTotal {
-            font-size: clamp(2rem, 5cqi, 4rem) !important;
-        }
         #bpiqHeroBreak {
             grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)) !important;
         }
-        #bpiqKpiAndLiftWrap > div:first-child .tab-section,
-        #bpiqGenPopKpiRow .tab-section {
+        #bpiqHeroBreak > div > div:last-child {
+            font-size: clamp(1rem, 3cqi, 1.6rem) !important;
+        }
+        .bpiq-kpi-grid .tab-section {
             min-width: 0;
+            overflow: hidden;
+        }
+        .bpiq-kpi-grid .tab-section div[id^="bpiqKpi"] {
+            font-size: clamp(0.75rem, 2.2cqi, 1.1rem) !important;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        #bpiqKpiAudience {
+            font-size: clamp(1rem, 3cqi, 1.5rem) !important;
+        }
+        #bpiqKpiGenPopAudience {
+            font-size: clamp(1rem, 3cqi, 1.5rem) !important;
         }
         @container (max-width: 900px) {
             #bpiqKpiAndLiftWrap {
@@ -12620,9 +12632,9 @@
             }
             #bpiqNetLiftCard {
                 flex: none !important;
-                width: 100% !important;
+                width: auto !important;
                 margin: 0 !important;
-                align-self: stretch !important;
+                align-self: center !important;
             }
         }
         @container (max-width: 700px) {
@@ -12631,14 +12643,6 @@
             }
             #bpiqHeroBreak {
                 width: 100% !important;
-            }
-        }
-        @container (max-width: 550px) {
-            #bpiqKpiAndLiftWrap > div:first-child > div > div[style*="grid-template-columns"] {
-                grid-template-columns: repeat(2, 1fr) !important;
-            }
-            #bpiqGenPopKpiRow > div[style*="grid-template-columns"] {
-                grid-template-columns: repeat(2, 1fr) !important;
             }
         }
     </style>
