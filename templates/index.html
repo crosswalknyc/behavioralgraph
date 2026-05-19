@@ -36079,21 +36079,31 @@
             const fieldUpper = (field || '').toUpperCase();
             const isIndex = /^\d+$/.test(v);
             const idx = isIndex ? parseInt(v, 10) : -1;
+            // Demographic field labels render in ALL CAPS on the TST dashboard
+            // to match the audience-snapshot styling (single source of truth
+            // — every chart axis, table cell, snapshot card, and compare-all
+            // row flows through this function). LOCATION is intentionally
+            // exempt because DMA names ("New York, NY") read awkwardly when
+            // shouted; LOCATION is also hidden from the demographics section
+            // by default, so this exemption is moot in practice.
+            const _shoutDemo = (s) => (fieldUpper === 'LOCATION' ? s : String(s || '').toUpperCase());
             if (fieldUpper === 'AGE') {
                 const lab = isIndex ? ((idx >= 0 && idx < TST_AGE_ORDER.length) ? TST_AGE_ORDER[idx] : (idx >= 0 && idx < TST_AGE_ORDER_EXTRA.length ? TST_AGE_ORDER_EXTRA[idx] : v)) : v;
-                return (typeof getAgeDisplayLabel === 'function' ? getAgeDisplayLabel(lab) : lab);
+                return _shoutDemo(typeof getAgeDisplayLabel === 'function' ? getAgeDisplayLabel(lab) : lab);
             }
-            if (fieldUpper === 'GENDER' && isIndex && idx >= 0 && idx < TST_GENDER_ORDER.length) return TST_GENDER_ORDER[idx];
+            if (fieldUpper === 'GENDER' && isIndex && idx >= 0 && idx < TST_GENDER_ORDER.length) return _shoutDemo(TST_GENDER_ORDER[idx]);
+            if (fieldUpper === 'GENDER') return _shoutDemo(v);
             if (fieldUpper === 'ETHNICITY') {
                 const raw = isIndex && idx >= 0 && idx < TST_ETHNICITY_ORDER.length ? TST_ETHNICITY_ORDER[idx] : v;
-                return (typeof displayDemographicLabel === 'function' ? displayDemographicLabel(raw) : (raw.trim().toLowerCase() === 'latinx' || raw.trim().toLowerCase() === 'latino' ? 'Hispanic or Latino' : raw));
+                const mapped = (typeof displayDemographicLabel === 'function' ? displayDemographicLabel(raw) : (raw.trim().toLowerCase() === 'latinx' || raw.trim().toLowerCase() === 'latino' ? 'Hispanic or Latino' : raw));
+                return _shoutDemo(mapped);
             }
             if (fieldUpper === 'INCOME') {
                 const lab = isIndex && idx >= 0 && idx < TST_INCOME_ORDER.length ? TST_INCOME_ORDER[idx] : v;
-                return (typeof getIncomeDisplayLabel === 'function' ? getIncomeDisplayLabel(lab) : lab);
+                return _shoutDemo(typeof getIncomeDisplayLabel === 'function' ? getIncomeDisplayLabel(lab) : lab);
             }
             if (fieldUpper === 'LOCATION') return v;
-            return v;
+            return _shoutDemo(v);
         }
         let tstDemoSort = { AGE:'value_desc', INCOME:'value_desc', LOCATION:'value_desc' };
         function _tstDemoArrToObj(arr) { const o={}; (arr||[]).forEach(r=>{ const v=(r.value||'').trim(); if(v) o[v]=_tstParsePct(r.percent); }); return o; }
