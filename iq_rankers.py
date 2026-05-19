@@ -1038,6 +1038,114 @@ def fetch_profile_timeseries(
     return [{"date": str(r[0]), "value": float(r[1] or 0)} for r in rows]
 
 
+def fetch_profile_full_timeseries(
+    *,
+    ch_connect: Callable,
+    profile_subject: str,
+    start: str | None = None,
+    end: str | None = None,
+) -> dict[str, Any]:
+    """All metrics for one profile in a single round-trip — used by the
+    leaderboard drill-down chart.
+
+    Returns a dict shaped for direct JSON consumption:
+        {
+            "profile_subject": str,
+            "project_name": str | None,
+            "category": str | None,
+            "subcategory": str | None,
+            "us_population": int,
+            "rows": [{
+                "date": "YYYY-MM-DD",
+                "mentions_raw":     int,    # panel-only count
+                "mentions":         int,    # projected to gen pop
+                "pos":              int,    # projected
+                "neu":              int,    # projected
+                "neg":              int,    # projected
+                "net_sentiment":    float,  # -100..+100 (projection-invariant)
+                "cw_iq_score":      float,  # 0..100
+                "unique_uids":      int,    # panel-only
+                "panel_size":       int,
+            }, ...] (chronologically ordered)
+        }
+
+    Mentions / pos / neu / neg are projected day-by-day (per-row
+    multiplier = US_POPULATION / panel_size). Days where panel_size = 0
+    fall back to raw counts so legacy rows still render.
+    """
+    if not end:
+        end = (date.today() - timedelta(days=1)).isoformat()
+    if not start:
+        start = (date.fromisoformat(end) - timedelta(days=89)).isoformat()
+    safe = (profile_subject or "").replace("'", "''")
+    us_pop = int(US_POPULATION)
+    conn = ch_connect()
+    try:
+        cur = conn.cursor()
+        # v_iq_daily_metrics is already (snapshot_date, profile_subject)-
+        # deduplicated by the view's argMax aggregation, so we don't need
+        # an outer GROUP BY here. Per-row projection (panel_size = 0 falls
+        # back to raw counts so legacy rows still surface).
+        cur.execute(f"""
+            SELECT
+                toString(snapshot_date),
+                mentions,
+                if(panel_size > 0, toUInt64(round(mentions * {us_pop} / panel_size)), mentions),
+                if(panel_size > 0, toUInt64(round(pos      * {us_pop} / panel_size)), pos),
+                if(panel_size > 0, toUInt64(round(neu      * {us_pop} / panel_size)), neu),
+                if(panel_size > 0, toUInt64(round(neg      * {us_pop} / panel_size)), neg),
+                net_sentiment,
+                cw_iq_score,
+                unique_uids,
+                panel_size,
+                project_name,
+                category,
+                subcategory
+            FROM reference.v_iq_daily_metrics
+            WHERE profile_subject = '{safe}'
+              AND snapshot_date BETWEEN toDate('{start}') AND toDate('{end}')
+            ORDER BY snapshot_date ASC
+        """)
+        rows = cur.fetchall()
+    finally:
+        try:
+            conn.close()
+        except Exception:
+            pass
+
+    out_rows: list[dict[str, Any]] = []
+    project_name = category = subcategory = None
+    for r in rows:
+        out_rows.append({
+            "date":          str(r[0]),
+            "mentions_raw":  int(r[1] or 0),
+            "mentions":      int(r[2] or 0),
+            "pos":           int(r[3] or 0),
+            "neu":           int(r[4] or 0),
+            "neg":           int(r[5] or 0),
+            "net_sentiment": float(r[6] or 0),
+            "cw_iq_score":   float(r[7] or 0),
+            "unique_uids":   int(r[8] or 0),
+            "panel_size":    int(r[9] or 0),
+        })
+        # First-seen labels (every row in this view has them already
+        # resolved via argMax, so the first one is fine).
+        if project_name is None: project_name = r[10] or None
+        if category    is None: category     = r[11] or None
+        if subcategory is None: subcategory  = r[12] or None
+
+    return {
+        "profile_subject": profile_subject,
+        "project_name":    project_name,
+        "category":        category,
+        "subcategory":     subcategory,
+        "us_population":   us_pop,
+        "start":           start,
+        "end":             end,
+        "rows":            out_rows,
+    }
+
+
 # ============================================================================
 # 30-day backfill (one-shot)
 # ============================================================================

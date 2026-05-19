@@ -8729,6 +8729,108 @@
         .rankers-table th { user-select: none; }
         .rankers-table th .iqr-sort-arrow { opacity: 0.45; margin-left: 0.2rem; font-size: 0.65rem; }
         .rankers-table th[data-iq-active-sort] .iqr-sort-arrow { opacity: 1; color: var(--accent-blue); }
+
+        /* Profile-name link inside the leaderboard row → opens chart modal */
+        .iqr-name-link {
+            color: var(--text-primary); font-weight: 700; text-decoration: none;
+            border-bottom: 1px dashed transparent; transition: color 0.12s ease, border-color 0.12s ease;
+        }
+        .iqr-name-link:hover { color: var(--accent-cyan); border-bottom-color: var(--accent-cyan); }
+
+        /* ── Drill-down chart modal ───────────────────────────────────────── */
+        .iqr-modal-backdrop {
+            position: fixed; inset: 0;
+            background: rgba(5, 12, 22, 0.78);
+            backdrop-filter: blur(3px);
+            display: none; align-items: center; justify-content: center;
+            z-index: 2147483600;
+            padding: 1.5rem;
+        }
+        .iqr-modal-backdrop.open { display: flex; }
+        .iqr-modal {
+            width: min(1080px, 100%); max-height: calc(100vh - 3rem);
+            background: var(--bg-card); border: 1px solid var(--border-color);
+            border-radius: 12px; overflow: hidden;
+            box-shadow: 0 24px 80px rgba(0,0,0,0.6);
+            display: flex; flex-direction: column;
+        }
+        .iqr-modal-head {
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 0.85rem 1.1rem;
+            border-bottom: 1px solid var(--border-color);
+            background: linear-gradient(180deg, rgba(102,217,239,0.06), rgba(102,217,239,0));
+        }
+        .iqr-modal-head .ttl { display: flex; flex-direction: column; gap: 0.15rem; }
+        .iqr-modal-head .ttl strong { font-size: 1rem; color: var(--text-primary); }
+        .iqr-modal-head .ttl small { font-size: 0.72rem; color: var(--text-secondary); }
+        .iqr-modal-close {
+            background: transparent; border: 1px solid var(--border-color);
+            color: var(--text-secondary); border-radius: 6px;
+            padding: 0.3rem 0.6rem; cursor: pointer; font-size: 0.85rem;
+        }
+        .iqr-modal-close:hover { color: var(--text-primary); border-color: var(--accent-blue); }
+        .iqr-modal-body {
+            padding: 0.85rem 1.1rem 1rem;
+            overflow-y: auto;
+        }
+        .iqr-modal-toolbar {
+            display: flex; flex-wrap: wrap; gap: 0.4rem; align-items: center;
+            margin-bottom: 0.75rem;
+        }
+        .iqr-modal-toolbar .group { display: inline-flex; gap: 0.25rem; padding: 0.2rem; background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 8px; }
+        .iqr-modal-toolbar .group button {
+            padding: 0.3rem 0.6rem;
+            font-size: 0.72rem; font-weight: 600;
+            background: transparent; color: var(--text-secondary);
+            border: 1px solid transparent; border-radius: 5px;
+            cursor: pointer;
+        }
+        .iqr-modal-toolbar .group button:hover { color: var(--text-primary); }
+        .iqr-modal-toolbar .group button.active {
+            background: var(--accent-blue); border-color: var(--accent-blue);
+            color: #fff;
+        }
+        .iqr-series-toggles {
+            display: flex; flex-wrap: wrap; gap: 0.35rem;
+            margin-left: auto;
+        }
+        .iqr-series-toggle {
+            display: inline-flex; align-items: center; gap: 0.3rem;
+            padding: 0.25rem 0.55rem;
+            font-size: 0.7rem; font-weight: 500;
+            background: var(--bg-secondary);
+            color: var(--text-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: 999px; cursor: pointer;
+            user-select: none;
+        }
+        .iqr-series-toggle .swatch {
+            width: 0.65rem; height: 0.65rem; border-radius: 50%;
+            background: currentColor; opacity: 0.4;
+            transition: opacity 0.12s ease;
+        }
+        .iqr-series-toggle.active .swatch { opacity: 1; }
+        .iqr-series-toggle.active { color: var(--text-primary); border-color: rgba(102,217,239,0.4); }
+        .iqr-chart-wrap { position: relative; height: 360px; }
+        .iqr-chart-summary {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+            gap: 0.5rem;
+            margin-top: 0.85rem;
+            padding-top: 0.75rem;
+            border-top: 1px solid var(--border-color);
+        }
+        .iqr-chart-summary .stat {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 0.55rem 0.7rem;
+        }
+        .iqr-chart-summary .stat .lbl { display: block; font-size: 0.66rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.04em; }
+        .iqr-chart-summary .stat .val { display: block; font-size: 1rem; font-weight: 600; color: var(--text-primary); margin-top: 0.15rem; font-variant-numeric: tabular-nums; }
+        .iqr-chart-summary .stat .delta { font-size: 0.72rem; }
+        .iqr-modal-empty { padding: 2.5rem; text-align: center; color: var(--text-secondary); }
+        .iqr-modal-loading { padding: 2.5rem; text-align: center; color: var(--text-secondary); }
         .rankers-insights-grid .insight-card { background: var(--bg-card); border-radius: 8px; padding: 1rem; border: 1px solid var(--border-color); }
         .rankers-insights-grid .insight-label { font-size: 0.7rem; text-transform: uppercase; color: var(--text-secondary); margin-bottom: 0.25rem; }
         .rankers-insights-grid .insight-value { font-size: 1.1rem; font-weight: 700; color: var(--accent-cyan); }
@@ -17529,6 +17631,36 @@
                      plus "Error: No Netflix ranker data available" bleeding under
                      the Talent / Brands tabs. Talent/Brands populate themselves
                      on tab activation via initIQRanker(). -->
+            </div>
+
+            <!-- Drill-down day-over-day chart modal (single instance reused
+                 by every master / profile click in the leaderboard). -->
+            <div id="iqRankerChartModal" class="iqr-modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="iqRankerChartTitle">
+                <div class="iqr-modal">
+                    <div class="iqr-modal-head">
+                        <div class="ttl">
+                            <strong id="iqRankerChartTitle">Profile</strong>
+                            <small id="iqRankerChartSubtitle"></small>
+                        </div>
+                        <button type="button" class="iqr-modal-close" onclick="closeIQRankerChart()" aria-label="Close">✕ Close</button>
+                    </div>
+                    <div class="iqr-modal-body">
+                        <div class="iqr-modal-toolbar">
+                            <div class="group" role="tablist" aria-label="Chart mode">
+                                <button type="button" data-iq-chart-mode="value"   class="active" onclick="setIQRankerChartMode('value')">Daily values</button>
+                                <button type="button" data-iq-chart-mode="delta"   onclick="setIQRankerChartMode('delta')">Δ Day-over-day</button>
+                                <button type="button" data-iq-chart-mode="pct"     onclick="setIQRankerChartMode('pct')">% Δ Day-over-day</button>
+                            </div>
+                            <div class="iqr-series-toggles" id="iqRankerChartSeriesToggles"></div>
+                        </div>
+                        <div id="iqRankerChartLoading" class="iqr-modal-loading"><span class="spinner"></span> Loading day-over-day series…</div>
+                        <div id="iqRankerChartEmpty"   class="iqr-modal-empty" style="display: none;">No daily data in this window. Try widening the window or run the backfill.</div>
+                        <div id="iqRankerChartWrap" class="iqr-chart-wrap" style="display: none;">
+                            <canvas id="iqRankerChartCanvas"></canvas>
+                        </div>
+                        <div id="iqRankerChartSummary" class="iqr-chart-summary" style="display: none;"></div>
+                    </div>
+                </div>
             </div>
         </div><!-- End rankerIQView -->
 
@@ -76390,6 +76522,281 @@
             el.classList.toggle('open');
         }
 
+        // ────────────────────────────────────────────────────────────────
+        // IQ Rankers — drill-down day-over-day chart (Chart.js)
+        // ────────────────────────────────────────────────────────────────
+        // Single Chart.js instance, reused across every profile click. We
+        // tear down the old instance before drawing a new one to avoid the
+        // "Canvas is already in use" warning Chart.js throws.
+        const IQR_CHART_STATE = {
+            chart: null,
+            mode: 'value',                  // 'value' | 'delta' | 'pct'
+            data: null,                      // raw API payload
+            visible: {                       // which series are toggled on
+                mentions: true, pos: true, neu: false, neg: true,
+                net_sentiment: false, cw_iq_score: true,
+            },
+            master: null,
+            profile: null,
+        };
+        const IQR_CHART_SERIES = [
+            { key: 'mentions',      label: 'Mentions',      color: '#66d9ef', axis: 'y', projected: true },
+            { key: 'pos',           label: 'Positive',      color: '#84e1a8', axis: 'y', projected: true },
+            { key: 'neu',           label: 'Neutral',       color: '#c8b8ff', axis: 'y', projected: true },
+            { key: 'neg',           label: 'Negative',      color: '#ff7a7a', axis: 'y', projected: true },
+            { key: 'net_sentiment', label: 'Net Sentiment', color: '#ffd166', axis: 'y2', projected: false },
+            { key: 'cw_iq_score',   label: 'CW IQ',         color: '#ffd166', axis: 'y2', projected: false },
+        ];
+
+        function openIQRankerChart(master, profileSubject, projectName) {
+            const state = IQ_RANKER_STATE[master];
+            if (!state) return;
+            IQR_CHART_STATE.master = master;
+            IQR_CHART_STATE.profile = profileSubject;
+
+            // Title + subtitle
+            document.getElementById('iqRankerChartTitle').textContent = projectName || profileSubject;
+            const sub = document.getElementById('iqRankerChartSubtitle');
+            sub.textContent = `Day-over-day across ${state.start || '...'} → ${state.end || '...'}` +
+                              (master ? `  •  ${master}` : '');
+
+            // Show modal
+            document.getElementById('iqRankerChartModal').classList.add('open');
+            document.body.style.overflow = 'hidden';
+
+            // Series toggles
+            renderIQRankerChartToggles();
+
+            // Reset mode buttons to current
+            setIQRankerChartMode(IQR_CHART_STATE.mode, /*skipRender=*/true);
+
+            // Load data
+            fetchIQRankerChartData(master, profileSubject, state);
+        }
+
+        function closeIQRankerChart() {
+            const modal = document.getElementById('iqRankerChartModal');
+            if (modal) modal.classList.remove('open');
+            document.body.style.overflow = '';
+            if (IQR_CHART_STATE.chart) {
+                try { IQR_CHART_STATE.chart.destroy(); } catch (_) {}
+                IQR_CHART_STATE.chart = null;
+            }
+        }
+        // Click outside the modal panel → close
+        document.addEventListener('click', function(ev) {
+            const backdrop = document.getElementById('iqRankerChartModal');
+            if (!backdrop || !backdrop.classList.contains('open')) return;
+            if (ev.target === backdrop) closeIQRankerChart();
+        });
+        // Esc → close
+        document.addEventListener('keydown', function(ev) {
+            if (ev.key !== 'Escape') return;
+            const backdrop = document.getElementById('iqRankerChartModal');
+            if (backdrop && backdrop.classList.contains('open')) closeIQRankerChart();
+        });
+
+        function renderIQRankerChartToggles() {
+            const wrap = document.getElementById('iqRankerChartSeriesToggles');
+            if (!wrap) return;
+            wrap.innerHTML = IQR_CHART_SERIES.map(s => {
+                const on = !!IQR_CHART_STATE.visible[s.key];
+                return `<button type="button" class="iqr-series-toggle${on ? ' active' : ''}" style="color: ${s.color};" onclick="toggleIQRankerChartSeries('${s.key}')">
+                    <span class="swatch"></span><span style="color: var(--text-primary);">${s.label}</span>
+                </button>`;
+            }).join('');
+        }
+
+        function toggleIQRankerChartSeries(key) {
+            IQR_CHART_STATE.visible[key] = !IQR_CHART_STATE.visible[key];
+            renderIQRankerChartToggles();
+            renderIQRankerChartChart();
+        }
+
+        function setIQRankerChartMode(mode, skipRender) {
+            if (!['value', 'delta', 'pct'].includes(mode)) mode = 'value';
+            IQR_CHART_STATE.mode = mode;
+            document.querySelectorAll('#iqRankerChartModal [data-iq-chart-mode]').forEach(b => {
+                b.classList.toggle('active', b.getAttribute('data-iq-chart-mode') === mode);
+            });
+            if (!skipRender) renderIQRankerChartChart();
+        }
+
+        async function fetchIQRankerChartData(master, profileSubject, state) {
+            const loading = document.getElementById('iqRankerChartLoading');
+            const empty   = document.getElementById('iqRankerChartEmpty');
+            const wrap    = document.getElementById('iqRankerChartWrap');
+            const summary = document.getElementById('iqRankerChartSummary');
+            loading.style.display = 'block';
+            empty.style.display = 'none';
+            wrap.style.display = 'none';
+            summary.style.display = 'none';
+
+            // Pull the same window as the leaderboard (so the deltas line
+            // up with what the user is looking at in the table). The /full=1
+            // endpoint also pads earlier days for delta calculation IF a
+            // prev_start is available — we just send (start, end).
+            const params = new URLSearchParams({ full: '1' });
+            if (state.start) params.set('start', state.start);
+            if (state.end)   params.set('end',   state.end);
+
+            try {
+                const r = await fetch(`/api/iq-rankers/profile/${encodeURIComponent(profileSubject)}/timeseries?${params.toString()}`,
+                                      { credentials: 'same-origin' });
+                if (!r.ok) throw new Error(`HTTP ${r.status}`);
+                const d = await r.json();
+                if (!d || !d.success) throw new Error(d && d.error ? d.error : 'request failed');
+                IQR_CHART_STATE.data = d;
+                if (!d.rows || d.rows.length === 0) {
+                    loading.style.display = 'none';
+                    empty.style.display = 'block';
+                    return;
+                }
+                loading.style.display = 'none';
+                wrap.style.display = 'block';
+                summary.style.display = 'grid';
+                renderIQRankerChartChart();
+                renderIQRankerChartSummary();
+            } catch (e) {
+                loading.style.display = 'none';
+                empty.style.display = 'block';
+                empty.textContent = 'Failed to load chart: ' + (e && e.message ? e.message : e);
+            }
+        }
+
+        function _iqrComputeSeries(rows, key, mode) {
+            // Returns an array of { x, y } points. For delta/pct modes the
+            // first point is null (no prior day to diff against) so Chart.js
+            // draws a gap rather than a misleading 0-baseline.
+            const out = [];
+            for (let i = 0; i < rows.length; i++) {
+                const cur  = Number(rows[i][key] || 0);
+                const prev = i > 0 ? Number(rows[i - 1][key] || 0) : null;
+                let y;
+                if (mode === 'delta') {
+                    y = (prev == null) ? null : (cur - prev);
+                } else if (mode === 'pct') {
+                    y = (prev == null || prev === 0) ? null : ((cur - prev) / Math.abs(prev)) * 100;
+                } else {
+                    y = cur;
+                }
+                out.push({ x: rows[i].date, y });
+            }
+            return out;
+        }
+
+        function renderIQRankerChartChart() {
+            const data = IQR_CHART_STATE.data;
+            if (!data || !data.rows || !data.rows.length) return;
+            const canvas = document.getElementById('iqRankerChartCanvas');
+            if (!canvas) return;
+            if (IQR_CHART_STATE.chart) {
+                try { IQR_CHART_STATE.chart.destroy(); } catch (_) {}
+                IQR_CHART_STATE.chart = null;
+            }
+
+            const mode = IQR_CHART_STATE.mode;
+            const labels = data.rows.map(r => r.date);
+
+            const datasets = IQR_CHART_SERIES
+                .filter(s => IQR_CHART_STATE.visible[s.key])
+                .map(s => ({
+                    label: s.label + (s.projected && mode === 'value' ? ' (projected)' : ''),
+                    data: _iqrComputeSeries(data.rows, s.key, mode),
+                    borderColor: s.color,
+                    backgroundColor: s.color + '22',
+                    tension: 0.25,
+                    pointRadius: 2.5,
+                    pointHoverRadius: 5,
+                    borderWidth: 2,
+                    yAxisID: s.axis,
+                    spanGaps: false,
+                    fill: false,
+                }));
+
+            const yLabel = (mode === 'pct') ? '% change vs prior day'
+                         : (mode === 'delta') ? 'Δ vs prior day'
+                         : 'Daily value';
+
+            const ctx = canvas.getContext('2d');
+            IQR_CHART_STATE.chart = new Chart(ctx, {
+                type: 'line',
+                data: { labels, datasets },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    interaction: { mode: 'index', intersect: false },
+                    plugins: {
+                        legend: { display: false },  // we have our own toggle pills
+                        datalabels: { display: false },
+                        tooltip: {
+                            backgroundColor: 'rgba(13,26,42,0.95)',
+                            borderColor: '#66d9ef', borderWidth: 1,
+                            padding: 10,
+                            callbacks: {
+                                label: function(ctx) {
+                                    const v = ctx.parsed.y;
+                                    if (v == null) return ctx.dataset.label + ': —';
+                                    if (mode === 'pct') return ctx.dataset.label + ': ' + (v >= 0 ? '+' : '') + v.toFixed(1) + '%';
+                                    if (mode === 'delta') return ctx.dataset.label + ': ' + (v >= 0 ? '+' : '') + Math.round(v).toLocaleString();
+                                    return ctx.dataset.label + ': ' + Math.round(v).toLocaleString();
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            ticks: { color: '#8892b0', maxRotation: 0, autoSkip: true, maxTicksLimit: 12 },
+                            grid:  { color: 'rgba(102,217,239,0.05)' },
+                        },
+                        y: {
+                            position: 'left',
+                            title: { display: true, text: yLabel + ' (counts)', color: '#8892b0', font: { size: 11 } },
+                            ticks: { color: '#8892b0', callback: function(v) { return Number(v).toLocaleString(); } },
+                            grid:  { color: 'rgba(102,217,239,0.06)' },
+                        },
+                        y2: {
+                            position: 'right',
+                            title: { display: true, text: 'Score / Net Sent.', color: '#8892b0', font: { size: 11 } },
+                            ticks: { color: '#ffd166' },
+                            grid: { drawOnChartArea: false },
+                        }
+                    }
+                }
+            });
+        }
+
+        function renderIQRankerChartSummary() {
+            const data = IQR_CHART_STATE.data;
+            const wrap = document.getElementById('iqRankerChartSummary');
+            if (!data || !wrap || !data.rows || data.rows.length === 0) return;
+            const rows = data.rows;
+            const first = rows[0], last = rows[rows.length - 1];
+            const mkStat = (lbl, valNow, valFirst, isFloat) => {
+                const formatter = (n) => {
+                    if (n == null) return '—';
+                    return isFloat ? Number(n).toFixed(1) : Math.round(n).toLocaleString();
+                };
+                const delta = (valNow != null && valFirst != null) ? (valNow - valFirst) : null;
+                const sign  = delta == null ? '' : (delta > 0 ? '+' : '');
+                const colour = delta == null ? 'var(--text-secondary)'
+                              : (delta > 0 ? 'var(--accent-cyan)' : (delta < 0 ? 'var(--accent-red)' : 'var(--text-secondary)'));
+                return `<div class="stat">
+                    <span class="lbl">${lbl}</span>
+                    <span class="val">${formatter(valNow)}</span>
+                    <span class="delta" style="color: ${colour};">${sign}${formatter(delta)} vs first day</span>
+                </div>`;
+            };
+            wrap.innerHTML = [
+                mkStat('Mentions (last day, projected)', last.mentions, first.mentions, false),
+                mkStat('Positive',      last.pos, first.pos, false),
+                mkStat('Negative',      last.neg, first.neg, false),
+                mkStat('Net Sentiment', last.net_sentiment, first.net_sentiment, true),
+                mkStat('CW IQ',         last.cw_iq_score,   first.cw_iq_score,   true),
+                mkStat('Panel size (last day)', last.panel_size, first.panel_size, false),
+            ].join('');
+        }
+
         function onIQRankerSubTabClick(master, sub) {
             const state = IQ_RANKER_STATE[master];
             if (!state) return;
@@ -76607,12 +77014,21 @@
                 return `<strong style="color: ${colour};">${v.toFixed(1)}</strong>`;
             };
             const html = rows.map((r, i) => {
-                const subj = encodeURIComponent(r.profile_subject || '');
-                const click = `onclick="openProfileFromIQRanker('${subj}', '${(r.s3_key || '').replace(/'/g, "\\'")}')"`;
-                return `<tr style="cursor: pointer;" ${click}>
+                const subj      = encodeURIComponent(r.profile_subject || '');
+                const subjAttr  = _iqEsc(r.profile_subject || '');
+                const nameAttr  = _iqEsc(r.project_name || r.profile_subject || '');
+                const s3Key     = (r.s3_key || '').replace(/'/g, "\\'");
+                const rowClick  = `onclick="openProfileFromIQRanker('${subj}', '${s3Key}')"`;
+                // Profile-name cell uses event.stopPropagation so clicking the
+                // name opens the day-over-day chart modal instead of also
+                // drilling into the profile dashboard.
+                const nameClick = `onclick="event.stopPropagation(); openIQRankerChart('${master}', '${subjAttr}', '${nameAttr}')"`;
+                return `<tr style="cursor: pointer;" ${rowClick}>
                     <td>${i + 1}</td>
-                    <td><strong>${_iqEsc(r.project_name || r.profile_subject || '')}</strong>
-                        <div style="font-size: 0.7rem; color: var(--text-secondary);">${_iqEsc(r.subcategory || '')}</div></td>
+                    <td>
+                        <a href="javascript:void(0)" class="iqr-name-link" ${nameClick} title="View day-over-day chart">${_iqEsc(r.project_name || r.profile_subject || '')}</a>
+                        <div style="font-size: 0.7rem; color: var(--text-secondary);">${_iqEsc(r.subcategory || '')}</div>
+                    </td>
                     <td style="text-align: right;">${fmtNum(r.mentions)}</td>
                     <td style="text-align: right;">${fmtDelta(r.delta_mentions, 0)}</td>
                     <td style="text-align: right; color: var(--accent-cyan);">${fmtNum(r.pos)}</td>
