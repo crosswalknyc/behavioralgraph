@@ -16669,8 +16669,8 @@
                             <div id="bpiqSentiment"></div>
                         </div>
                         <div class="tab-section" style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 1.5rem;">
-                            <h3 style="margin: 0 0 0.75rem;">🔗 Top Brand Properties Hit</h3>
-                            <div id="bpiqTopProps" style="overflow-x: auto;"></div>
+                            <h3 style="margin: 0 0 0.75rem;">🔗 Top 10 Brand Properties</h3>
+                            <div id="bpiqTopProps"></div>
                         </div>
                     </div>
                 </div>
@@ -23151,38 +23151,22 @@
                 if (parts.length < 2) return false;
                 return parts.some(function(p) { return BPIQ_SEARCH_HOSTS.indexOf(p) !== -1; });
             };
-            var top = (data.top_brand_properties || []).filter(function(t) {
-                return !_isSearchEngineProp(t.common_name);
-            });
-            // De-duplicate displayed hit values by adding deterministic
-            // single-digit offsets to repeats. Order is preserved.
-            var _seen = {};
-            top.forEach(function(t) {
-                var v = (t.hits_projected != null)
-                    ? t.hits_projected
-                    : Math.round((t.hits || 0) * BPIQ_PROJ_MULT);
-                while (_seen[v]) v += 1;  // bump until unique
-                _seen[v] = true;
-                t.__display_hits = v;
-            });
+            // Filter out search-engine co-occurrences and cap to the
+            // top 10 ranked brand properties by hits. Hit counts are
+            // intentionally NOT displayed — this is a qualitative
+            // "where the brand showed up most" list, not a metric.
+            var top = (data.top_brand_properties || [])
+                .filter(function(t) { return !_isSearchEngineProp(t.common_name); })
+                .slice(0, 10);
             var tpEl = document.getElementById('bpiqTopProps');
             if (!top.length) {
                 tpEl.innerHTML = '<div style="padding:0.75rem;color:var(--text-secondary);font-size:13px;">No brand properties matched in the qualifying audience.</div>';
             } else {
-                tpEl.innerHTML = '<table style="width:100%;border-collapse:collapse;font-size:13px;">'
-                    + '<thead><tr style="border-bottom:2px solid var(--border-color);">'
-                    + '<th style="padding:8px 10px;width:30px;">#</th>'
-                    + '<th style="padding:8px 10px;text-align:left;">Property</th>'
-                    + '<th style="padding:8px 10px;text-align:right;">Hits (Event + Post)</th>'
-                    + '</tr></thead><tbody>'
-                    + top.map(function(t, i) {
-                        return '<tr style="border-bottom:1px solid rgba(255,255,255,0.04);">'
-                            + '<td style="padding:6px 10px;color:var(--text-secondary);">' + (i + 1) + '</td>'
-                            + '<td style="padding:6px 10px;font-weight:500;">' + (t.common_name || '') + '</td>'
-                            + '<td style="padding:6px 10px;text-align:right;">' + _bpiqFmtNum(t.__display_hits) + '</td>'
-                            + '</tr>';
+                tpEl.innerHTML = '<ol style="margin:0;padding:0 0 0 1.25rem;font-size:13px;line-height:1.7;">'
+                    + top.map(function(t) {
+                        return '<li style="padding:2px 0;font-weight:500;">' + (t.common_name || '') + '</li>';
                     }).join('')
-                    + '</tbody></table>';
+                    + '</ol>';
             }
         }
 
