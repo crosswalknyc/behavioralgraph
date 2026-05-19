@@ -1,0 +1,133 @@
+# Render Blueprint for Behavioral Graph Web App
+# Native Python runtime - FASTER builds than Docker
+# This avoids Docker build overhead and deployment timeouts
+#
+# Scaling (Dashboard or below):
+#   - Starter (512MB) often OOMs: use GUNICORN_WORKERS=1, GUNICORN_THREADS=1 (defaults below).
+#   - RECOMMENDED: Upgrade to Standard (2GB) in Dashboard > Service > Settings > Instance Type to avoid OOM.
+#   - Autoscaling (min/max instances by CPU/memory): Dashboard > Service > Scaling; requires Professional workspace.
+
+services:
+  - type: web
+    name: behavioral-graph
+    runtime: python
+    plan: starter
+    # Instance count (manual scaling). For CPU/memory-based autoscaling use Dashboard > Scaling (Pro workspace).
+    numInstances: 1
+    buildCommand: chmod +x build.sh && ./build.sh
+    startCommand: ./start.sh
+    healthCheckPath: /healthz
+    envVars:
+      - key: APP_USERNAME
+        value: admin
+      - key: APP_PASSWORD
+        value: midgenow!2
+      - key: FLASK_DEBUG
+        value: "false"
+      # Snowflake credentials - set these in Render dashboard
+      - key: SNOWFLAKE_USER
+        sync: false
+      - key: SNOWFLAKE_PASSWORD
+        sync: false
+      - key: SNOWFLAKE_ACCOUNT
+        sync: false
+      - key: SNOWFLAKE_TOKEN
+        sync: false
+      - key: SNOWFLAKE_WAREHOUSE
+        value: "BEHAVIORGRAPH6X"
+      - key: SNOWFLAKE_DATABASE
+        value: "BEHAVIORALGRAPH"
+      - key: SNOWFLAKE_SCHEMA
+        value: "PUBLIC"
+      - key: SNOWFLAKE_ROLE
+        value: "ACCOUNTADMIN"
+      # SMTP Email Configuration (fallback)
+      - key: SMTP_SERVER
+        value: "smtp.gmail.com"
+      - key: SMTP_PORT
+        value: "587"
+      - key: SMTP_USER
+        value: "no_reply@crosswalknyc.com"
+      - key: SMTP_PASSWORD
+        value: "Token7778"
+      - key: FROM_EMAIL
+        value: "no_reply@crosswalknyc.com"
+      # Google OAuth for Gmail API (set in Render dashboard)
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: GOOGLE_CLIENT_SECRET
+        sync: false
+      - key: APP_URL
+        value: "https://behavioral-graph.onrender.com"
+      # Gunicorn: 1 worker + 1 thread to stay under 512MB; upgrade plan if OOM persists
+      - key: GUNICORN_WORKERS
+        value: "1"
+      - key: GUNICORN_THREADS
+        value: "1"
+      - key: GUNICORN_TIMEOUT
+        value: "1800"
+      # Profile-analysis queue (smart concurrent processing).
+      # 1 = strict serial (legacy). 2 = recommended; ClickHouse handles two
+      # concurrent universe scans without thrashing and the LLM phase
+      # parallelizes freely. >3 may saturate CH or hit OpenAI rate limits.
+      - key: BG_PROFILE_QUEUE_WORKERS
+        value: "2"
+      # Cross-tool throttle. Caps total concurrent HEAVY analysis runs across
+      # Profile Analysis + Subscriber IQ (SVOD Acquisition) + ROAS IQ +
+      # Talent Theater + Talent Search + Watch Time + Cross Show + Campaign
+      # ROI + Ticket Sales Tracker + SF/LF + Flywheel Conversion + Ecommerce
+      # IQ. Keep at the same value as BG_PROFILE_QUEUE_WORKERS so that two
+      # heavy runs of any mix can co-exist but a third blocks until a slot
+      # frees. Incidence Check is intentionally NOT throttled (it's a fast
+      # pre-check). Bump cautiously — ClickHouse is the bottleneck, not CPU.
+      - key: BG_HEAVY_ANALYSIS_CONCURRENCY
+        value: "2"
+      # Cross-tool ClickHouse query throttle (defined in
+      # migration/clickhouse_connector.py). Caps the number of HEAVY
+      # SELECT/WITH/SHOW queries that hit ClickHouse simultaneously across
+      # ALL workloads (Profile Analysis, Subscriber IQ, SF→LF, etc). The
+      # current Hetzner AX162-S box (128 GiB / 16 cores) starts wobbling
+      # around 10-15 concurrent heavy aggregations on `clickstream_final`,
+      # so 10 is a safe production default. Profiles wait cheaply at this
+      # in-process semaphore instead of piling on CH and starving each
+      # other. Bump this up after migrating to a bigger CH box.
+      - key: BG_CLICKHOUSE_CONCURRENCY
+        value: "10"
+      # Crash detection: a job whose heartbeat is older than this many seconds
+      # while still 'running' gets auto-marked failed. 1800 = 30 min.
+      - key: BG_JOB_STALE_AFTER_SECONDS
+        value: "1800"
+      # Cron secret for /api/cron/* endpoints (shared between web + cron services)
+      - key: CRON_SECRET
+        value: "FLrVHDerM_oMlPikk-Gr6544GyGMCoY19ScpMySuwWA"
+
+  # Cron: run scheduled activity CSV exports daily at 6:00 UTC
+  - type: cron
+    name: activity-export-cron
+    runtime: python
+    schedule: "0 6 * * *"
+    buildCommand: "true"
+    startCommand: python run_activity_export_cron.py
+    envVars:
+      - key: APP_URL
+        value: "https://behavioral-graph.onrender.com"
+      - key: CRON_SECRET
+        value: "FLrVHDerM_oMlPikk-Gr6544GyGMCoY19ScpMySuwWA"
+
+  # Cron: nightly Talent / Brands ranker refresh (runs Layer-1 sentiment for
+  # every Profile IQ profile against yesterday's clickstream and writes one
+  # row per (profile, day) into reference.profile_iq_daily_metrics so the
+  # Ranker IQ leaderboards are ready for the morning). 09:00 UTC = 04:00 ET,
+  # safely after the nightly clickstream pipeline has landed yesterday's data.
+  - type: cron
+    name: iq-rankers-daily-cron
+    runtime: python
+    schedule: "0 9 * * *"
+    buildCommand: "true"
+    startCommand: |
+      python -c "import urllib.request,os; r=urllib.request.Request(os.environ['APP_URL'].rstrip('/')+'/api/cron/iq-rankers-daily?secret='+os.environ['CRON_SECRET'], method='POST'); print(urllib.request.urlopen(r, timeout=14400).read().decode())"
+    envVars:
+      - key: APP_URL
+        value: "https://behavioral-graph.onrender.com"
+      - key: CRON_SECRET
+        value: "FLrVHDerM_oMlPikk-Gr6544GyGMCoY19ScpMySuwWA"
