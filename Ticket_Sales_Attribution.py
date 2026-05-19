@@ -1824,7 +1824,11 @@ def write_output(results, p):
     ])
 
     rows.append(("", "DEMOGRAPHICS (Overall - all theater UIDs)", "", "", "", ""))
-    for field in ["GENDER", "AGE", "INCOME", "ETHNICITY", "LOCATION"]:
+    # LOCATION intentionally omitted from the demographics block — geographic
+    # detail belongs in the dedicated Location/DMA tab, not in the audience
+    # snapshot. Keeping it out also avoids confusing the AI VALIDATION block,
+    # where we don't research per-DMA shares.
+    for field in ["GENDER", "AGE", "INCOME", "ETHNICITY"]:
         if field in demo_overall:
             rows.append((field, "", "", "", "", ""))
             for value, pct in sorted(demo_overall[field].items(), key=lambda x: -x[1]):
@@ -1883,7 +1887,7 @@ def write_output(results, p):
                 jitter_amt=0.015,
             )
         rows.append(("", f"--- {theater} ---", "", "", "", ""))
-        for field in ["GENDER", "AGE", "INCOME", "ETHNICITY", "LOCATION"]:
+        for field in ["GENDER", "AGE", "INCOME", "ETHNICITY"]:
             if field in demo_theater:
                 rows.append((field, "", "", "", "", ""))
                 for value, pct in sorted(demo_theater[field].items(), key=lambda x: -x[1]):

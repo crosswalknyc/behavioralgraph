@@ -36181,7 +36181,7 @@
                 rows = [['Metric','Value'], ['Total Purchasers (US)', String(d.total_purchasers_us ?? '')], ['Total Tickets (US)', String(d.total_tickets_us ?? '')], ['Projected Ticket Sales (US)', String(d.projected_ticket_sales_us ?? '')]];
             } else if (sourceId === 'tst-snapshot') {
                 rows = [['Category','Value','Percent']];
-                ['GENDER','AGE','ETHNICITY','INCOME','LOCATION'].forEach(field => {
+                ['GENDER','AGE','ETHNICITY','INCOME'].forEach(field => {
                     const arr = (d.demographics_overall && d.demographics_overall[field]) || [];
                     arr.slice(0, 10).forEach(r => rows.push([field, String(r.value ?? ''), String(r.percent ?? '')]));
                 });
@@ -36236,7 +36236,7 @@
             const demo = d.demographics_overall || {};
             const container = document.getElementById('tstDemographicsOverall');
             if (!container) return;
-            const keys = ['GENDER','AGE','INCOME','ETHNICITY','LOCATION'];
+            const keys = ['GENDER','AGE','INCOME','ETHNICITY'];
             const gp = genPopBaselineData?.demographics || {};
             let html = '';
             keys.forEach(field => {
@@ -36374,7 +36374,7 @@
             const genPopMedianAge = typeof calculateMedianAgeFromDistribution === 'function' ? calculateMedianAgeFromDistribution(gp.age || {}) : 0;
             const genPopMedIncome = typeof calculateDemographicMedian === 'function' ? calculateDemographicMedian(gp.income || {}, gp.income || {}, 'income') : { genPop: null };
             const genPopMedianIncome = genPopMedIncome.genPop && genPopMedIncome.genPop.value != null ? genPopMedIncome.genPop.value : null;
-            const keys = ['GENDER','AGE','INCOME','ETHNICITY','LOCATION'];
+            const keys = ['GENDER','AGE','INCOME','ETHNICITY'];
             const fmtPct = (n) => (n == null || n === '' ? '—' : (typeof n === 'number' ? n : _tstParsePct(n)).toFixed(1) + '%');
             let html = '<div style="grid-column: 1 / -1;"><p style="color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 1rem;">Side-by-side comparison across all theaters. Gen Pop column for reference.</p></div>';
             keys.forEach(field => {
@@ -36483,7 +36483,7 @@
                 sel.value = first;
                 return renderTSTPerTheaterCharts();
             }
-            const keys = ['GENDER','AGE','INCOME','ETHNICITY','LOCATION'];
+            const keys = ['GENDER','AGE','INCOME','ETHNICITY'];
             const gp = genPopBaselineData?.demographics || {};
             const safeTheater = (theater || '').replace(/[^a-zA-Z0-9]/g,'_');
             let html = '';
@@ -36608,7 +36608,7 @@
             const demo = theater && perTheater[theater] ? perTheater[theater] : (d.demographics_overall || {});
             const prefix = theater ? `Demographics by Theater - ${(theater||'').replace(/"/g,'""')}` : 'Overall Demographics';
             const rows = [['Category','Value','Percent']];
-            ['GENDER','AGE','INCOME','ETHNICITY','LOCATION'].forEach(field => {
+            ['GENDER','AGE','INCOME','ETHNICITY'].forEach(field => {
                 (demo[field] || []).forEach(r => {
                     const v = (r.value||'').toString().replace(/"/g,'""');
                     const p = parseFloat(r.percent) || 0;
