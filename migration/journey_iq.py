@@ -533,9 +533,62 @@ def run_job(
             msg = ('No users hit any conversion URL in the date range.'
                    if cohort_mode == 'conversion'
                    else 'No users mentioned the target in the date range.')
+            # Compute implied audience NOW so the empty-summary banner can
+            # show it and (in movie mode) drive the modeled-view sizing.
+            empty_implied = 0
+            if is_movie and box_office_millions > 0:
+                try:
+                    from migration.journey_iq_synthesize import compute_implied_audience as _cia
+                    empty_implied = _cia(
+                        box_office_millions=box_office_millions,
+                        ticket_price=avg_ticket_price,
+                    )
+                except Exception:
+                    empty_implied = 0
+            empty = _empty_summary(
+                target, project_name, start_date, end_date,
+                lookback_days, forward_days,
+                cohort_mode=cohort_mode, is_movie=is_movie,
+                box_office_millions=box_office_millions,
+                avg_ticket_price=avg_ticket_price,
+                implied_audience=empty_implied,
+            )
+
+            # Movie mode: even with zero panel data, surface Claude's
+            # modeled journey so the dashboard renders something useful.
+            # The view toggle will default to "Blended" which (with 0 real
+            # converters) shows the modeled view.
+            if is_movie and box_office_millions > 0:
+                try:
+                    _p(90, 'No panel converters found — synthesizing modeled journey from Claude...')
+                    from migration.journey_iq_synthesize import (
+                        synthesize_movie_journey, synth_to_dashboard_payload,
+                    )
+                    synth = synthesize_movie_journey(
+                        target=target,
+                        project_name=project_name,
+                        start_date=start_date,
+                        end_date=end_date,
+                        box_office_millions=box_office_millions,
+                        ticket_price=avg_ticket_price,
+                        extra_touchpoint_keywords=extra_kw_map,
+                        panel_converters=0,
+                        panel_observed_touchpoints=[],
+                        panel_top_paths=[],
+                        steps=steps_before,
+                    ) or {}
+                    if synth:
+                        modeled = synth_to_dashboard_payload(
+                            synth, target_audience=max(empty_implied, 1),
+                        )
+                        modeled['source'] = synth.get('source', 'fallback')
+                        modeled['notes']  = synth.get('notes', '')
+                        empty['modeled_view'] = modeled
+                        empty['meta']['has_modeled_view'] = True
+                except Exception as e:
+                    print(f"[Journey IQ] empty-cohort synth failed (non-fatal): {e}")
+
             _p(100, msg)
-            empty = _empty_summary(target, project_name, start_date, end_date,
-                                   lookback_days, forward_days)
             s3_key = _persist(s3_client, empty, project_name, username, job_id)
             empty['s3_key'] = s3_key
             return {'status': 'completed', 's3_key': s3_key, 'summary': empty}
@@ -2226,7 +2279,11 @@ def list_runs(s3_client, *, username: Optional[str] = None,
 
 
 def _empty_summary(target, project_name, start_date, end_date,
-                   lookback_days, forward_days) -> dict:
+                   lookback_days, forward_days,
+                   *,
+                   cohort_mode='mention', is_movie=False,
+                   box_office_millions=0.0, avg_ticket_price=15.0,
+                   implied_audience=0) -> dict:
     return {
         'meta': {
             'project_name':   project_name,
@@ -2242,6 +2299,13 @@ def _empty_summary(target, project_name, start_date, end_date,
             'created_at':     datetime.utcnow().isoformat() + 'Z',
             'matched_uids':   0,
             'events_pulled':  0,
+            'cohort_mode':    cohort_mode,
+            'is_movie':       bool(is_movie),
+            'box_office_millions': float(box_office_millions or 0.0),
+            'avg_ticket_price':    float(avg_ticket_price or 15.0),
+            'implied_audience':    int(implied_audience or 0),
+            'scaling_factor':      1.0,
+            'cohort_was_empty':    True,
         },
         'kpis': {
             'total_users': 0, 'converted_users': 0, 'conversion_pct': 0.0,
