@@ -27484,13 +27484,28 @@ def _run_roas_iq(job_id):
         except Exception:
             pass
 
+        # ROAS IQ overrides the global 15× boost factor with 1×.
+        # The global helper (ROAS_BOOST_FACTOR=15) is calibrated for niche
+        # searches where the panel under-represents the behavior, and BPIQ
+        # additionally stacks a 3× factor on top of it. Inside ROAS IQ the
+        # search terms tend to be mass-market brands / titles where the
+        # panel is already reasonably representative, and the 15× boost
+        # inflated projections to ~50% of US adult population for any
+        # major cultural search (e.g. a hit movie). Using boost=1 here
+        # leaves the projection as just the panel-to-population scale
+        # (10M panelists → 329.9M US adults ≈ 33×), which lines up with
+        # real reach estimates. The global helper stays at 15× so BPIQ
+        # is unaffected.
+        ROAS_LOCAL_BOOST = 1
+
         def _proj(raw):
             """Project a sampled raw EVENT count to US population.
 
             Used for click/event totals where one person can legitimately
-            contribute many rows. Uncapped on purpose.
+            contribute many rows. Uncapped on purpose. Applies the local
+            ROAS_LOCAL_BOOST instead of the global ROAS_BOOST_FACTOR.
             """
-            return _project_to_us_pop(round(raw * sample_scale))
+            return round(raw * sample_scale * ROAS_LOCAL_BOOST / ROAS_SAMPLE_SIZE * US_POPULATION)
 
         # Person-count projections must never exceed the US adult population,
         # and within a run they must never exceed the projected audience
