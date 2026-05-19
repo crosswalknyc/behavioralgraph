@@ -1,5 +1,0 @@
-#!/bin/sh
-# Auto-push to GitHub after every commit
-# Install: cp scripts/post-commit.sample .git/hooks/post-commit && chmod +x .git/hooks/post-commit
-
-git push origin main 2>/dev/null || echo "⚠️ Auto-push skipped (run 'git push origin main' manually)"
