@@ -29916,6 +29916,7 @@ def _run_journey_iq(job_id):
             lookback_days=int(params.get('lookback_days') or _jiq.DEFAULT_LOOKBACK_DAYS),
             forward_days=int(params.get('forward_days') or _jiq.DEFAULT_FORWARD_DAYS),
             extra_conversion_patterns=params.get('extra_conversion_patterns') or [],
+            extra_touchpoint_keywords=params.get('extra_touchpoint_keywords') or '',
             progress_cb=_cb,
             s3_client=s3_client,
         )
@@ -29964,6 +29965,14 @@ def submit_journey_iq():
         else:
             extra_patterns = [str(p).strip() for p in extra_patterns_raw if str(p).strip()]
 
+        # Touchpoint keyword block — free-text from the form. Stored RAW so
+        # journey_iq.parse_extra_touchpoint_keywords() can parse it server-side.
+        extra_tp_keywords = data.get('extra_touchpoint_keywords') or ''
+        if not isinstance(extra_tp_keywords, str):
+            extra_tp_keywords = '\n'.join(str(x) for x in (extra_tp_keywords or []))
+        if len(extra_tp_keywords) > 4000:
+            extra_tp_keywords = extra_tp_keywords[:4000]
+
         if not project_name:
             return jsonify({'error': 'project_name required'}), 400
         if not target:
@@ -29999,6 +30008,7 @@ def submit_journey_iq():
                 'lookback_days':             lookback_days,
                 'forward_days':              forward_days,
                 'extra_conversion_patterns': extra_patterns,
+                'extra_touchpoint_keywords': extra_tp_keywords,
             },
         }
         if s3_client:
