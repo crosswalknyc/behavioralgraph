@@ -17162,8 +17162,19 @@
             <h2 style="margin: 0 0 1rem 0; font-size: 1.5rem;">📊 Ranker</h2>
             <div class="rankers-container">
                 <div class="rankers-platform-tabs" style="display: flex; gap: 0.5rem; margin-bottom: 1rem; flex-wrap: wrap;">
-                    <button class="tab-btn active" onclick="showRankerIQPlatform('talent')" id="rankerIQPlatformTalent"><span class="tab-icon">⭐</span> Talent</button>
-                    <button class="tab-btn" onclick="showRankerIQPlatform('brands')" id="rankerIQPlatformBrands"><span class="tab-icon">📦</span> Brands</button>
+                    {%- set IQ_RANKER_MASTERS = [
+                        {'key': 'TALENT',    'slug': 'talent',    'icon': '⭐', 'label': 'Talent',     'desc': 'Daily mentions, sentiment and CW IQ Score across every Talent profile in Profile IQ. Click a row to open the profile.'},
+                        {'key': 'BRAND',     'slug': 'brands',    'icon': '📦', 'label': 'Brands',     'desc': 'Daily mentions, sentiment and CW IQ Score across every Brand profile in Profile IQ.'},
+                        {'key': 'CONTENT',   'slug': 'content',   'icon': '🎬', 'label': 'Content',    'desc': 'Movies, series, podcasts and games tracked across the panel.'},
+                        {'key': 'PLATFORMS', 'slug': 'platforms', 'icon': '🛰️', 'label': 'Platforms',  'desc': 'Streaming, social, search, broadcast and other platforms tracked across the panel.'},
+                        {'key': 'SPORT',     'slug': 'sport',     'icon': '🏟️', 'label': 'Sport',      'desc': 'Leagues, teams and sports organizations tracked across the panel.'},
+                        {'key': 'TRENDS',    'slug': 'trends',    'icon': '📈', 'label': 'Trends',     'desc': 'Cultural trends tracked across the panel.'},
+                        {'key': 'GEN POP',   'slug': 'genpop',    'icon': '🇺🇸', 'label': 'Gen Pop',    'desc': 'General-population baseline reference profile(s).'},
+                        {'key': 'OTHER',     'slug': 'other',     'icon': '🗂️', 'label': 'Other',      'desc': 'Profiles whose category does not fall into the buckets above.'},
+                    ] -%}
+                    {%- for m in IQ_RANKER_MASTERS -%}
+                    <button class="tab-btn{% if loop.first %} active{% endif %}" onclick="showRankerIQPlatform('{{ m.slug }}')" id="rankerIQPlatform{{ m.slug|capitalize }}"><span class="tab-icon">{{ m.icon }}</span> {{ m.label }}</button>
+                    {%- endfor -%}
                 </div>
                 <div id="rankerIQPlatformContent" class="ranker-platform-content">
                     <!-- Netflix sub-view kept in DOM but hidden — Talent / Brands are the
@@ -17304,25 +17315,26 @@
                         <div id="rankerIQReelshortError" style="padding: 1rem; color: var(--accent-red); display: none;"></div>
                     </div>
 
-                    <!-- ===== TALENT RANKER ===== -->
-                    <div id="rankeriq-talent" class="ranker-platform-panel active">
+                    {%- for m in IQ_RANKER_MASTERS %}
+                    <!-- ===== {{ m.label|upper }} RANKER ===== -->
+                    <div id="rankeriq-{{ m.slug }}" class="ranker-platform-panel{% if loop.first %} active{% endif %}">
                         <div style="display: flex; justify-content: space-between; align-items: flex-end; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.5rem;">
                             <div>
-                                <h3 style="margin: 0;">⭐ Talent Ranker</h3>
-                                <p style="margin: 0.15rem 0 0 0; font-size: 0.78rem; color: var(--text-secondary);">Daily mentions, sentiment and CW IQ Score across every Talent profile in Profile IQ. Click a row to open the profile.</p>
+                                <h3 style="margin: 0;">{{ m.icon }} {{ m.label }} Ranker</h3>
+                                <p style="margin: 0.15rem 0 0 0; font-size: 0.78rem; color: var(--text-secondary);">{{ m.desc }} <span style="color: var(--text-muted); font-size: 0.72rem;">Mentions / Pos / Neu / Neg are projected to US gen pop (329.9M); CW IQ Score is panel-relative.</span></p>
                             </div>
                             <div style="display: flex; gap: 0.4rem; align-items: center; flex-wrap: wrap;">
-                                {% if role == 'super_admin' or role == 'admin' %}
-                                <button class="btn btn-secondary has-tooltip" data-tooltip="Run the daily ranker pipeline NOW for every Profile IQ profile" onclick="iqRankersLoadDay(this)" id="iqRankersLoadDayBtn-TALENT" style="padding: 0.35rem 0.75rem; font-size: 0.8rem;">⚡ Load 1 day for all profiles</button>
+                                {% if loop.first and (role == 'super_admin' or role == 'admin') %}
+                                <button class="btn btn-secondary has-tooltip" data-tooltip="Run the daily ranker pipeline NOW for every Profile IQ profile" onclick="iqRankersLoadDay(this)" id="iqRankersLoadDayBtn-{{ m.key }}" style="padding: 0.35rem 0.75rem; font-size: 0.8rem;">⚡ Load 1 day for all profiles</button>
                                 {% endif %}
-                                <button class="btn btn-secondary" onclick="loadIQRankerLeaderboard('TALENT', true)" style="padding: 0.35rem 0.75rem; font-size: 0.8rem;">🔄 Refresh</button>
+                                <button class="btn btn-secondary" onclick="loadIQRankerLeaderboard('{{ m.key }}', true)" style="padding: 0.35rem 0.75rem; font-size: 0.8rem;">🔄 Refresh</button>
                             </div>
                         </div>
-                        <div id="iqRankersLoadDayStatus" style="display: none; padding: 0.5rem 0.75rem; margin-bottom: 0.75rem; background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 6px; font-size: 0.78rem; color: var(--text-secondary);"></div>
-                        <div id="iqRankerSubTabs-TALENT" class="netflix-subtabs" style="display: flex; gap: 0.35rem; margin: 0.5rem 0 0.75rem 0; flex-wrap: wrap;"></div>
+                        {% if loop.first %}<div id="iqRankersLoadDayStatus" style="display: none; padding: 0.5rem 0.75rem; margin-bottom: 0.75rem; background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 6px; font-size: 0.78rem; color: var(--text-secondary);"></div>{% endif %}
+                        <div id="iqRankerSubTabs-{{ m.key }}" class="netflix-subtabs" style="display: flex; gap: 0.35rem; margin: 0.5rem 0 0.75rem 0; flex-wrap: wrap;"></div>
                         <div class="iq-ranker-controls" style="display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center; margin-bottom: 0.75rem;">
                             <label style="font-size: 0.75rem; color: var(--text-secondary);">Window:
-                                <select id="iqRankerWindow-TALENT" onchange="onIQRankerWindowChange('TALENT')" style="padding: 0.3rem 0.5rem; font-size: 0.8rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary); margin-left: 0.35rem;">
+                                <select id="iqRankerWindow-{{ m.key }}" onchange="onIQRankerWindowChange('{{ m.key }}')" style="padding: 0.3rem 0.5rem; font-size: 0.8rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary); margin-left: 0.35rem;">
                                     <option value="1d">Yesterday</option>
                                     <option value="7d" selected>Last 7 days</option>
                                     <option value="28d">Last 28 days</option>
@@ -17332,87 +17344,36 @@
                                     <option value="custom">Custom…</option>
                                 </select>
                             </label>
-                            <span id="iqRankerCustomDates-TALENT" style="display: none; align-items: center; gap: 0.35rem;">
-                                <input type="date" id="iqRankerStart-TALENT" style="padding: 0.3rem 0.4rem; font-size: 0.8rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary);" onchange="loadIQRankerLeaderboard('TALENT')">
+                            <span id="iqRankerCustomDates-{{ m.key }}" style="display: none; align-items: center; gap: 0.35rem;">
+                                <input type="date" id="iqRankerStart-{{ m.key }}" style="padding: 0.3rem 0.4rem; font-size: 0.8rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary);" onchange="loadIQRankerLeaderboard('{{ m.key }}')">
                                 <span style="color: var(--text-secondary); font-size: 0.75rem;">to</span>
-                                <input type="date" id="iqRankerEnd-TALENT" style="padding: 0.3rem 0.4rem; font-size: 0.8rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary);" onchange="loadIQRankerLeaderboard('TALENT')">
+                                <input type="date" id="iqRankerEnd-{{ m.key }}" style="padding: 0.3rem 0.4rem; font-size: 0.8rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary);" onchange="loadIQRankerLeaderboard('{{ m.key }}')">
                             </span>
-                            <input type="search" id="iqRankerSearch-TALENT" placeholder="Search profiles..." oninput="onIQRankerSearchInput('TALENT')" style="flex: 1; min-width: 180px; padding: 0.3rem 0.5rem; font-size: 0.8rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary);">
-                            <span id="iqRankerWindowLabel-TALENT" style="font-size: 0.7rem; color: var(--text-secondary);"></span>
+                            <input type="search" id="iqRankerSearch-{{ m.key }}" placeholder="Search profiles..." oninput="onIQRankerSearchInput('{{ m.key }}')" style="flex: 1; min-width: 180px; padding: 0.3rem 0.5rem; font-size: 0.8rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary);">
+                            <span id="iqRankerWindowLabel-{{ m.key }}" style="font-size: 0.7rem; color: var(--text-secondary);"></span>
                         </div>
-                        <div id="iqRankerLoading-TALENT" style="padding: 1.5rem; text-align: center; color: var(--text-secondary); display: none;"><span class="spinner"></span> Loading leaderboard…</div>
-                        <div id="iqRankerError-TALENT" style="padding: 1rem; color: var(--accent-red); display: none;"></div>
-                        <div id="iqRankerTableWrap-TALENT" style="overflow-x: auto;">
-                            <table class="rankers-table" id="iqRankerTable-TALENT" style="width: 100%; border-collapse: collapse;">
+                        <div id="iqRankerLoading-{{ m.key }}" style="padding: 1.5rem; text-align: center; color: var(--text-secondary); display: none;"><span class="spinner"></span> Loading leaderboard…</div>
+                        <div id="iqRankerError-{{ m.key }}" style="padding: 1rem; color: var(--accent-red); display: none;"></div>
+                        <div id="iqRankerTableWrap-{{ m.key }}" style="overflow-x: auto;">
+                            <table class="rankers-table" id="iqRankerTable-{{ m.key }}" style="width: 100%; border-collapse: collapse;">
                                 <thead><tr>
-                                    <th data-iq-sort="rank" data-iq-master="TALENT" style="cursor: pointer;">#</th>
-                                    <th data-iq-sort="name" data-iq-master="TALENT" style="cursor: pointer;">Profile</th>
-                                    <th data-iq-sort="mentions" data-iq-master="TALENT" style="cursor: pointer; text-align: right;">Mentions</th>
-                                    <th data-iq-sort="delta_mentions" data-iq-master="TALENT" style="cursor: pointer; text-align: right;">Δ Mentions</th>
-                                    <th data-iq-sort="pos" data-iq-master="TALENT" style="cursor: pointer; text-align: right;">Pos</th>
-                                    <th data-iq-sort="neu" data-iq-master="TALENT" style="cursor: pointer; text-align: right;">Neu</th>
-                                    <th data-iq-sort="neg" data-iq-master="TALENT" style="cursor: pointer; text-align: right;">Neg</th>
-                                    <th data-iq-sort="net_sentiment" data-iq-master="TALENT" style="cursor: pointer; text-align: right;">Net Sent.</th>
-                                    <th data-iq-sort="cw_iq_score" data-iq-master="TALENT" style="cursor: pointer; text-align: right;">CW IQ</th>
-                                    <th data-iq-sort="delta_cw_iq" data-iq-master="TALENT" style="cursor: pointer; text-align: right;">Δ CW IQ</th>
+                                    <th data-iq-sort="rank"           data-iq-master="{{ m.key }}" class="has-tooltip" data-tooltip="Position in this leaderboard for the selected window. Sortable." style="cursor: pointer;">#</th>
+                                    <th data-iq-sort="name"           data-iq-master="{{ m.key }}" class="has-tooltip" data-tooltip="Profile name (Profile IQ subject). Click a row to drill down." style="cursor: pointer;">Profile</th>
+                                    <th data-iq-sort="mentions"       data-iq-master="{{ m.key }}" class="has-tooltip" data-tooltip="Total mentions PROJECTED to US gen pop (329.9M). Each panel mention is multiplied by 329.9M / unique panelists active that day, summed across the window." style="cursor: pointer; text-align: right;">Mentions</th>
+                                    <th data-iq-sort="delta_mentions" data-iq-master="{{ m.key }}" class="has-tooltip" data-tooltip="Mentions change vs the equal-length window immediately before this one." style="cursor: pointer; text-align: right;">Δ Mentions</th>
+                                    <th data-iq-sort="pos"            data-iq-master="{{ m.key }}" class="has-tooltip" data-tooltip="Projected positive sentiment events (Layer-1 behavioral scoring on URL / domain / path / query). Same gen-pop projection as Mentions." style="cursor: pointer; text-align: right;">Pos</th>
+                                    <th data-iq-sort="neu"            data-iq-master="{{ m.key }}" class="has-tooltip" data-tooltip="Projected neutral sentiment events. Same gen-pop projection." style="cursor: pointer; text-align: right;">Neu</th>
+                                    <th data-iq-sort="neg"            data-iq-master="{{ m.key }}" class="has-tooltip" data-tooltip="Projected negative sentiment events. Same gen-pop projection." style="cursor: pointer; text-align: right;">Neg</th>
+                                    <th data-iq-sort="net_sentiment"  data-iq-master="{{ m.key }}" class="has-tooltip" data-tooltip="Net Sentiment = (Pos − Neg) / (Pos + Neu + Neg) × 100. Range −100 … +100. Projection-invariant (same on raw or projected counts)." style="cursor: pointer; text-align: right;">Net Sent.</th>
+                                    <th data-iq-sort="cw_iq_score"    data-iq-master="{{ m.key }}" class="has-tooltip" data-tooltip="CW IQ Score (0–100): a per-day &quot;zeitgeist&quot; composite. 100 × sigmoid(0.45·z_volume + 0.20·z_reach + 0.20·sentiment + 0.10·momentum + 0.05·recency), where z_volume / z_reach are z-scores of log(mentions) / log(unique panelists) vs that profile's trailing 28-day baseline. Cold-start damping ramps in z-scores linearly over the first 3 days. Across multi-day windows, displayed as raw-mention-weighted average." style="cursor: pointer; text-align: right;">CW IQ <span style="opacity: 0.7;">ⓘ</span></th>
+                                    <th data-iq-sort="delta_cw_iq"    data-iq-master="{{ m.key }}" class="has-tooltip" data-tooltip="CW IQ Score change vs the equal-length window immediately before this one." style="cursor: pointer; text-align: right;">Δ CW IQ</th>
                                 </tr></thead>
-                                <tbody id="iqRankerBody-TALENT"></tbody>
+                                <tbody id="iqRankerBody-{{ m.key }}"></tbody>
                             </table>
                         </div>
-                        <div id="iqRankerEmpty-TALENT" style="display: none; padding: 2rem; text-align: center; color: var(--text-secondary);">No data yet. The nightly ranker job populates this table after midnight ET — or run the 30-day backfill from Admin.</div>
+                        <div id="iqRankerEmpty-{{ m.key }}" style="display: none; padding: 2rem; text-align: center; color: var(--text-secondary);">No data yet. The nightly ranker job populates this table after midnight ET — or run the 30-day backfill from Admin.</div>
                     </div>
-
-                    <!-- ===== BRANDS RANKER ===== -->
-                    <div id="rankeriq-brands" class="ranker-platform-panel">
-                        <div style="display: flex; justify-content: space-between; align-items: flex-end; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.5rem;">
-                            <div>
-                                <h3 style="margin: 0;">📦 Brands Ranker</h3>
-                                <p style="margin: 0.15rem 0 0 0; font-size: 0.78rem; color: var(--text-secondary);">Daily mentions, sentiment and CW IQ Score across every Brand profile in Profile IQ. Click a row to open the profile.</p>
-                            </div>
-                            <button class="btn btn-secondary" onclick="loadIQRankerLeaderboard('BRAND', true)" style="padding: 0.35rem 0.75rem; font-size: 0.8rem;">🔄 Refresh</button>
-                        </div>
-                        <div id="iqRankerSubTabs-BRAND" class="netflix-subtabs" style="display: flex; gap: 0.35rem; margin: 0.5rem 0 0.75rem 0; flex-wrap: wrap;"></div>
-                        <div class="iq-ranker-controls" style="display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center; margin-bottom: 0.75rem;">
-                            <label style="font-size: 0.75rem; color: var(--text-secondary);">Window:
-                                <select id="iqRankerWindow-BRAND" onchange="onIQRankerWindowChange('BRAND')" style="padding: 0.3rem 0.5rem; font-size: 0.8rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary); margin-left: 0.35rem;">
-                                    <option value="1d">Yesterday</option>
-                                    <option value="7d" selected>Last 7 days</option>
-                                    <option value="28d">Last 28 days</option>
-                                    <option value="MTD">Month to date</option>
-                                    <option value="QTD">Quarter to date</option>
-                                    <option value="YTD">Year to date</option>
-                                    <option value="custom">Custom…</option>
-                                </select>
-                            </label>
-                            <span id="iqRankerCustomDates-BRAND" style="display: none; align-items: center; gap: 0.35rem;">
-                                <input type="date" id="iqRankerStart-BRAND" style="padding: 0.3rem 0.4rem; font-size: 0.8rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary);" onchange="loadIQRankerLeaderboard('BRAND')">
-                                <span style="color: var(--text-secondary); font-size: 0.75rem;">to</span>
-                                <input type="date" id="iqRankerEnd-BRAND" style="padding: 0.3rem 0.4rem; font-size: 0.8rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary);" onchange="loadIQRankerLeaderboard('BRAND')">
-                            </span>
-                            <input type="search" id="iqRankerSearch-BRAND" placeholder="Search profiles..." oninput="onIQRankerSearchInput('BRAND')" style="flex: 1; min-width: 180px; padding: 0.3rem 0.5rem; font-size: 0.8rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary);">
-                            <span id="iqRankerWindowLabel-BRAND" style="font-size: 0.7rem; color: var(--text-secondary);"></span>
-                        </div>
-                        <div id="iqRankerLoading-BRAND" style="padding: 1.5rem; text-align: center; color: var(--text-secondary); display: none;"><span class="spinner"></span> Loading leaderboard…</div>
-                        <div id="iqRankerError-BRAND" style="padding: 1rem; color: var(--accent-red); display: none;"></div>
-                        <div id="iqRankerTableWrap-BRAND" style="overflow-x: auto;">
-                            <table class="rankers-table" id="iqRankerTable-BRAND" style="width: 100%; border-collapse: collapse;">
-                                <thead><tr>
-                                    <th data-iq-sort="rank" data-iq-master="BRAND" style="cursor: pointer;">#</th>
-                                    <th data-iq-sort="name" data-iq-master="BRAND" style="cursor: pointer;">Profile</th>
-                                    <th data-iq-sort="mentions" data-iq-master="BRAND" style="cursor: pointer; text-align: right;">Mentions</th>
-                                    <th data-iq-sort="delta_mentions" data-iq-master="BRAND" style="cursor: pointer; text-align: right;">Δ Mentions</th>
-                                    <th data-iq-sort="pos" data-iq-master="BRAND" style="cursor: pointer; text-align: right;">Pos</th>
-                                    <th data-iq-sort="neu" data-iq-master="BRAND" style="cursor: pointer; text-align: right;">Neu</th>
-                                    <th data-iq-sort="neg" data-iq-master="BRAND" style="cursor: pointer; text-align: right;">Neg</th>
-                                    <th data-iq-sort="net_sentiment" data-iq-master="BRAND" style="cursor: pointer; text-align: right;">Net Sent.</th>
-                                    <th data-iq-sort="cw_iq_score" data-iq-master="BRAND" style="cursor: pointer; text-align: right;">CW IQ</th>
-                                    <th data-iq-sort="delta_cw_iq" data-iq-master="BRAND" style="cursor: pointer; text-align: right;">Δ CW IQ</th>
-                                </tr></thead>
-                                <tbody id="iqRankerBody-BRAND"></tbody>
-                            </table>
-                        </div>
-                        <div id="iqRankerEmpty-BRAND" style="display: none; padding: 2rem; text-align: center; color: var(--text-secondary);">No data yet. The nightly ranker job populates this table after midnight ET — or run the 30-day backfill from Admin.</div>
-                    </div>
+                    {%- endfor %}
                 </div>
                 <!-- Legacy #rankerIQLoadBlock removed: it auto-fired the Netflix
                      /api/rankers/netflix/data fetch which 503's, leaving a spinner
@@ -76183,11 +76144,38 @@
             }
         }
         
+        // ============================================================
+        // IQ Rankers — daily leaderboard UI
+        // Supports every Profile IQ master category (Talent, Brand,
+        // Content, Platforms, Sport, Trends, Gen Pop, Other).
+        // ============================================================
+        // slug ↔ master-key map. Slugs are URL-safe lowercase ids used in
+        // panel DOM ids (rankeriq-{slug}); master keys are the exact
+        // strings stored in reference.profile_iq_daily_metrics.category.
+        const IQ_RANKER_SLUG_TO_MASTER = {
+            talent:    'TALENT',
+            brands:    'BRAND',
+            content:   'CONTENT',
+            platforms: 'PLATFORMS',
+            sport:     'SPORT',
+            trends:    'TRENDS',
+            genpop:    'GEN POP',
+            other:     'OTHER',
+        };
+        const IQ_RANKER_STATE = {};
+        Object.values(IQ_RANKER_SLUG_TO_MASTER).forEach(master => {
+            IQ_RANKER_STATE[master] = {
+                sub: 'ALL', sort: 'cw_iq_score', sortDir: 'desc',
+                window: '7d', start: '', end: '', search: '',
+                categories: null, lastRows: [], inflight: null,
+                loaded: false, searchTimer: null,
+            };
+        });
+
         function showRankerIQPlatform(id) {
-            // Only Talent and Brands are exposed now. Anything else falls
-            // through to Talent so legacy bookmarks / button onclicks don't
-            // land on a hidden panel.
-            if (id !== 'talent' && id !== 'brands') id = 'talent';
+            // Default to Talent for any unknown id (legacy bookmarks /
+            // stray onclicks).
+            if (!IQ_RANKER_SLUG_TO_MASTER[id]) id = 'talent';
             document.querySelectorAll('#rankerIQPlatformContent .ranker-platform-panel').forEach(p => p.classList.remove('active'));
             document.querySelectorAll('.rankers-container .rankers-platform-tabs .tab-btn').forEach(b => b.classList.remove('active'));
             const panel = document.getElementById('rankeriq-' + id);
@@ -76195,23 +76183,8 @@
             const btn = document.getElementById(btnId);
             if (panel) panel.classList.add('active');
             if (btn) btn.classList.add('active');
-            if (id === 'talent') initIQRanker('TALENT');
-            else if (id === 'brands') initIQRanker('BRAND');
+            initIQRanker(IQ_RANKER_SLUG_TO_MASTER[id]);
         }
-
-        // ============================================================
-        // IQ Rankers (Talent / Brands) — daily leaderboard UI
-        // ============================================================
-        const IQ_RANKER_STATE = {
-            TALENT: { sub: 'ALL', sort: 'cw_iq_score', sortDir: 'desc',
-                      window: '7d', start: '', end: '', search: '',
-                      categories: null, lastRows: [], inflight: null,
-                      loaded: false, searchTimer: null },
-            BRAND:  { sub: 'ALL', sort: 'cw_iq_score', sortDir: 'desc',
-                      window: '7d', start: '', end: '', search: '',
-                      categories: null, lastRows: [], inflight: null,
-                      loaded: false, searchTimer: null }
-        };
 
         async function fetchIQRankerCategories() {
             try {

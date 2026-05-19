@@ -30500,9 +30500,14 @@ def iq_rankers_leaderboard():
             limit = max(1, min(int(request.args.get('limit') or 500), 2000))
         except Exception:
             limit = 500
-        if master not in ('TALENT', 'BRAND'):
+        # Allow any master key the iq_rankers module knows about (TALENT,
+        # BRAND, CONTENT, PLATFORMS, SPORT, TRENDS, GEN POP) plus the
+        # catch-all OTHER bucket for profiles whose subcategory doesn't
+        # land in any of the curated optgroups.
+        valid_masters = set(_iq_rankers.MASTER_CATEGORIES.keys()) | {'OTHER'}
+        if master not in valid_masters:
             return jsonify({'success': False,
-                            'error': 'master must be TALENT or BRAND'}), 400
+                            'error': f'master must be one of {sorted(valid_masters)}'}), 400
         result = _iq_rankers.aggregate_leaderboard(
             ch_connect=_ch_connect,
             master=master,

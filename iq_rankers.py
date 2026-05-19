@@ -102,6 +102,19 @@ CW_IQ_WEIGHT_RECENCY   = float(os.environ.get("CW_IQ_WEIGHT_RECENCY",   "0.05"))
 # How many days of history we use as the per-entity baseline for the z-score.
 CW_IQ_BASELINE_DAYS    = int(os.environ.get("CW_IQ_BASELINE_DAYS", "28"))
 
+# ── Gen-pop projection ──────────────────────────────────────────────────────
+# Mentions / pos / neu / neg are panel-only counts. The Ranker UI projects
+# each day's row up to the US adult population (default 329.9M) using a
+# per-day dynamic multiplier:
+#
+#     projected_metric = round(raw_metric * US_POPULATION / panel_size)
+#
+# panel_size is the number of distinct UIDs that fired ANY event in
+# clickstream_final on snapshot_date (captured at ingest time and stored
+# alongside the row so reads don't have to re-count). Days with panel_size=0
+# (pre-migration rows or fully-empty days) skip projection and show raw.
+US_POPULATION          = int(os.environ.get("IQ_RANKER_US_POPULATION", "329900000"))
+
 
 # ============================================================================
 # Profile → brand-terms extraction
@@ -245,6 +258,7 @@ def compute_layer1_metrics_for_day(
         "mentions": 0, "unique_uids": 0,
         "pos": 0, "neu": 0, "neg": 0,
         "net_sentiment": 0.0,
+        "panel_size": 0,
     }
     term_lit = _term_array_literal(brand_terms)
     if not term_lit:
@@ -461,6 +475,34 @@ def _ch_array_literal_str(items: list[str]) -> str:
     return f"[{parts}]"
 
 
+def get_panel_size_for_day(*, ch_connect: Callable, day: str) -> int:
+    """Return the count of distinct UIDs that fired any clickstream event on
+    `day`. Used as the per-day denominator for gen-pop projection (each
+    panel mention represents US_POPULATION / panel_size US adults).
+
+    We capture this at ingest time so leaderboard reads don't have to scan
+    1B+ rows; the value is stored in profile_iq_daily_metrics.panel_size.
+    Returns 0 on error so the projection layer can fall back to raw counts.
+    """
+    conn = ch_connect(settings={"max_execution_time": 120, "use_skip_indexes": 1})
+    try:
+        cur = conn.cursor()
+        cur.execute(
+            f"SELECT uniqExact(UID) FROM clickstream.clickstream_final "
+            f"WHERE DELIVERED = toDate('{day}')"
+        )
+        row = cur.fetchone()
+        return int((row or [0])[0] or 0)
+    except Exception as e:
+        print(f"[iq_rankers] panel-size query failed for {day}: {e}")
+        return 0
+    finally:
+        try:
+            conn.close()
+        except Exception:
+            pass
+
+
 def insert_daily_row(
     *,
     ch_connect: Callable,
@@ -476,11 +518,16 @@ def insert_daily_row(
     cw_iq_score: float,
     prev_mentions: int,
     prev_cw_iq_score: float,
+    panel_size: int = 0,
 ) -> bool:
     """Single-row insert using formatted VALUES so the bg-webapp's cursor-
     style ClickHouse wrapper handles it without driver-level parameter
     interpolation. ReplacingMergeTree de-dupes on (date, category, sub,
     profile_subject) so idempotent re-runs replace the previous row.
+
+    panel_size is the count of distinct UIDs active in clickstream on
+    snapshot_date — stored alongside each row so the leaderboard can
+    project metrics up to gen pop without re-scanning the clickstream.
     """
     conn = ch_connect()
     try:
@@ -490,7 +537,7 @@ def insert_daily_row(
             (snapshot_date, profile_subject, project_name, category, subcategory,
              s3_key, tracker_id, brand_terms, mentions, unique_uids,
              pos, neu, neg, net_sentiment, cw_iq_score,
-             prev_mentions, prev_cw_iq_score, generated_at)
+             prev_mentions, prev_cw_iq_score, panel_size, generated_at)
         VALUES (
             toDate('{snapshot_date}'),
             '{_esc_str(profile_subject)}',
@@ -509,6 +556,7 @@ def insert_daily_row(
             {float(cw_iq_score or 0)},
             {int(prev_mentions or 0)},
             {float(prev_cw_iq_score or 0)},
+            {int(panel_size or 0)},
             now()
         )
         """
@@ -583,6 +631,11 @@ def run_daily_for_all_profiles(
                "failed": 0, "details": []}
     started_at = time.time()
 
+    # Compute the day's panel size ONCE up-front and reuse for every profile.
+    # Per-day denominator for the gen-pop projection (~10M panelists today).
+    panel_size = get_panel_size_for_day(ch_connect=ch_connect, day=snapshot_date)
+    summary["panel_size"] = panel_size
+
     for j in _iter_profile_jobs(s3_cache_jobs or []):
         subject = j.get("profile_subject") or ""
         if only_profile_subject and subject != only_profile_subject:
@@ -646,6 +699,7 @@ def run_daily_for_all_profiles(
                 cw_iq_score=cw_iq,
                 prev_mentions=prev_mentions,
                 prev_cw_iq_score=prev_cw,
+                panel_size=panel_size,
             )
             if ok:
                 summary["ran"] += 1
@@ -770,6 +824,26 @@ def aggregate_leaderboard(
     # We alias aggregates to *_lbl / *_sum / *_calc to avoid name collision
     # with the source columns referenced in WHERE (ClickHouse complains
     # otherwise: "Aggregate function ... AS X is found in WHERE").
+    # Mentions / pos / neu / neg are projected up to gen pop with a per-day
+    # multiplier  ({US_POP} / panel_size). We sum the projected counts so
+    # multi-day windows aggregate apples-to-apples even when daily panel
+    # sizes drift. Days with panel_size = 0 (pre-migration rows or fully
+    # empty days) skip projection (treat multiplier as 1) so old data is
+    # still readable instead of dropping out.
+    us_pop = int(US_POPULATION)
+    proj_mentions = (f"toUInt64(round(mentions * {us_pop} / panel_size))")
+    proj_pos      = (f"toUInt64(round(pos      * {us_pop} / panel_size))")
+    proj_neu      = (f"toUInt64(round(neu      * {us_pop} / panel_size))")
+    proj_neg      = (f"toUInt64(round(neg      * {us_pop} / panel_size))")
+    # Wrap each projection in if(panel_size > 0, projected, raw) so legacy
+    # rows that don't have a panel_size still surface their raw counts.
+    def _wrap(raw_col: str, projected: str) -> str:
+        return f"if(panel_size > 0, {projected}, {raw_col})"
+    p_mentions = _wrap("mentions", proj_mentions)
+    p_pos      = _wrap("pos",      proj_pos)
+    p_neu      = _wrap("neu",      proj_neu)
+    p_neg      = _wrap("neg",      proj_neg)
+
     sql = f"""
     WITH curr AS (
         SELECT profile_subject,
@@ -777,19 +851,23 @@ def aggregate_leaderboard(
                anyHeavy(category)                 AS category_lbl,
                anyHeavy(subcategory)              AS subcategory_lbl,
                anyHeavy(s3_key)                   AS s3_key_lbl,
-               sum(mentions)                      AS mentions_sum,
+               sum({p_mentions})                  AS mentions_sum,
                sum(unique_uids)                   AS unique_uids_sum,
-               sum(pos)                           AS pos_sum,
-               sum(neu)                           AS neu_sum,
-               sum(neg)                           AS neg_sum,
-               round(100.0 * (sum(pos) - sum(neg)) / greatest(sum(pos)+sum(neu)+sum(neg), 1), 2)
+               sum({p_pos})                       AS pos_sum,
+               sum({p_neu})                       AS neu_sum,
+               sum({p_neg})                       AS neg_sum,
+               sum(mentions)                      AS raw_mentions_sum,
+               max(panel_size)                    AS max_panel_size,
+               round(100.0 * (sum({p_pos}) - sum({p_neg}))
+                     / greatest(sum({p_pos}) + sum({p_neu}) + sum({p_neg}), 1), 2)
                                                   AS net_sentiment_calc,
-               -- Mention-weighted CW IQ over the window. If the window has
-               -- zero mentions for this profile, fall back to plain avg
-               -- (still a valid score from the daily-z-score component).
+               -- Mention-weighted CW IQ over the window (weight by RAW
+               -- mentions so a partial-ingest day with low panel size
+               -- contributes proportionally less). If the window has zero
+               -- mentions for this profile, fall back to a plain average.
                if(sum(mentions) > 0,
                   round(sumOrNull(cw_iq_score * mentions) / sum(mentions), 2),
-                  round(avg(cw_iq_score), 2))      AS cw_iq_score_calc
+                  round(avg(cw_iq_score), 2))     AS cw_iq_score_calc
         FROM reference.v_iq_daily_metrics
         WHERE snapshot_date BETWEEN toDate('{s}') AND toDate('{e}')
           AND {where_master}
@@ -799,10 +877,10 @@ def aggregate_leaderboard(
     ),
     prev AS (
         SELECT profile_subject,
-               sum(mentions)                      AS prev_mentions_sum,
+               sum({p_mentions})                  AS prev_mentions_sum,
                if(sum(mentions) > 0,
                   round(sumOrNull(cw_iq_score * mentions) / sum(mentions), 2),
-                  round(avg(cw_iq_score), 2))      AS prev_cw_iq_score_calc
+                  round(avg(cw_iq_score), 2))     AS prev_cw_iq_score_calc
         FROM reference.v_iq_daily_metrics
         WHERE snapshot_date BETWEEN toDate('{ps}') AND toDate('{pe}')
           AND {where_master}
@@ -823,8 +901,12 @@ def aggregate_leaderboard(
            c.cw_iq_score_calc                         AS cw_iq_score,
            coalesce(p.prev_mentions_sum, 0)           AS prev_mentions,
            coalesce(p.prev_cw_iq_score_calc, 0)       AS prev_cw_iq_score,
-           c.mentions_sum - coalesce(p.prev_mentions_sum, 0)         AS delta_mentions,
-           c.cw_iq_score_calc - coalesce(p.prev_cw_iq_score_calc, 0) AS delta_cw_iq
+           toInt64(c.mentions_sum) - toInt64(coalesce(p.prev_mentions_sum, 0))
+                                                      AS delta_mentions,
+           c.cw_iq_score_calc - coalesce(p.prev_cw_iq_score_calc, 0)
+                                                      AS delta_cw_iq,
+           c.raw_mentions_sum                         AS raw_mentions,
+           c.max_panel_size                           AS panel_size
     FROM curr c
     LEFT JOIN prev p ON p.profile_subject = c.profile_subject
     ORDER BY {sort_col} {direction}, mentions DESC
@@ -855,6 +937,10 @@ def aggregate_leaderboard(
             "category":         r[2],
             "subcategory":      r[3],
             "s3_key":           r[4],
+            # Mentions / pos / neu / neg are PROJECTED to gen pop (US_POPULATION
+            # / panel_size per day). raw_mentions + panel_size are also returned
+            # so the UI can show "X panel mentions / N panel ≈ Y projected" if
+            # ever needed.
             "mentions":         int(r[5] or 0),
             "unique_uids":      int(r[6] or 0),
             "pos":              int(r[7] or 0),
@@ -866,6 +952,8 @@ def aggregate_leaderboard(
             "prev_cw_iq_score": float(r[13] or 0),
             "delta_mentions":   int(r[14] or 0),
             "delta_cw_iq":      round(float(r[15] or 0), 2),
+            "raw_mentions":     int(r[16] or 0) if len(r) > 16 else 0,
+            "panel_size":       int(r[17] or 0) if len(r) > 17 else 0,
         })
     return {
         "rows": out_rows,
@@ -880,6 +968,37 @@ def aggregate_leaderboard(
             "search": search or "",
         },
         "sort": {"by": sort, "direction": direction},
+        "projection": {
+            "us_population": US_POPULATION,
+            "note": "mentions/pos/neu/neg are projected to gen pop using "
+                    "US_POPULATION / per-day panel_size; cw_iq_score and "
+                    "net_sentiment are panel-relative measures.",
+        },
+        "cw_iq_formula": {
+            "weights": {
+                "volume":    CW_IQ_WEIGHT_VOLUME,
+                "reach":     CW_IQ_WEIGHT_REACH,
+                "sentiment": CW_IQ_WEIGHT_SENTIMENT,
+                "momentum":  CW_IQ_WEIGHT_MOMENTUM,
+                "recency":   CW_IQ_WEIGHT_RECENCY,
+            },
+            "baseline_days": CW_IQ_BASELINE_DAYS,
+            "description": (
+                "0..100 sigmoid of a weighted z-score blend, computed per "
+                "(profile, day):\n"
+                "  z_volume    = z-score of log1p(mentions) vs that profile's "
+                "trailing 28-day baseline\n"
+                "  z_reach     = z-score of log1p(unique_uids) vs same baseline\n"
+                "  sentiment   = (pos - neg) / total, clamped to [-1, +1]\n"
+                "  momentum    = day-over-day mention % change, clamped to [-2, +2]\n"
+                "  recency     = 1 if mentioned today, 0.5 if mentioned yesterday, else 0\n"
+                "Cold-start damping: z_volume and z_reach are scaled by "
+                "min(1, days_of_history / 3) so brand-new profiles don't "
+                "outrank established ones on first-day novelty noise.\n"
+                "Final = 100 * sigmoid(0.45·z_volume + 0.20·z_reach + "
+                "0.20·sentiment + 0.10·momentum + 0.05·recency)"
+            ),
+        },
     }
 
 
