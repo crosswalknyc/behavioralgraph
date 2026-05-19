@@ -8822,10 +8822,13 @@
         .iqr-row-chip-chart { color: var(--accent-cyan); border-color: rgba(102,217,239,0.35); }
         .iqr-row-chip-chart:hover { background: rgba(102,217,239,0.14); border-color: var(--accent-cyan); color: var(--accent-cyan); }
         .iqr-row-chip-chart .iqr-row-chip-glyph { font-size: 0.85rem; line-height: 1; }
+        .iqr-row-chip-sentiment { color: #e2d6ff; border-color: rgba(177,156,255,0.35); }
+        .iqr-row-chip-sentiment:hover { background: rgba(177,156,255,0.14); border-color: rgba(177,156,255,0.85); color: #efe7ff; }
         .iqr-row-chip-profile { color: #c8f7d4; border-color: rgba(132,225,168,0.35); }
         .iqr-row-chip-profile:hover { background: rgba(132,225,168,0.14); border-color: var(--accent-lime); color: #c8f7d4; }
         .rankers-table tbody tr:hover .iqr-row-chip { border-color: var(--border-color); }
         .rankers-table tbody tr:hover .iqr-row-chip-chart { border-color: rgba(102,217,239,0.5); }
+        .rankers-table tbody tr:hover .iqr-row-chip-sentiment { border-color: rgba(177,156,255,0.55); }
         .rankers-table tbody tr:hover .iqr-row-chip-profile { border-color: rgba(132,225,168,0.5); }
 
         /* ── Drill-down chart modal ───────────────────────────────────────── */
@@ -77669,17 +77672,21 @@
                 const nameAttr  = _iqEsc(r.project_name || r.profile_subject || '');
                 const s3Key     = (r.s3_key || '').replace(/'/g, "\\'");
                 // The row itself is no longer clickable — the user now picks
-                // explicit actions (Δ chart or Profile drill-down) via the
-                // chips next to the name. This removes the "what does
-                // clicking a row do?" ambiguity.
-                const chartClick   = `event.stopPropagation(); openIQRankerChart('${master}', '${subjAttr}', '${nameAttr}')`;
-                const profileClick = `event.stopPropagation(); openProfileFromIQRanker('${subj}', '${s3Key}')`;
+                // explicit actions (Δ chart, Sentiment dashboard, or Profile
+                // drill-down) via the chips next to the name. This removes
+                // the "what does clicking a row do?" ambiguity.
+                const trackerId      = _iqrTrackerIdFor(r.profile_subject || '');
+                const trackerIdAttr  = _iqJsAttr(trackerId);
+                const chartClick     = `event.stopPropagation(); openIQRankerChart('${master}', '${subjAttr}', '${nameAttr}')`;
+                const sentimentClick = `event.stopPropagation(); openSentimentIQFromIQRanker('${trackerIdAttr}')`;
+                const profileClick   = `event.stopPropagation(); openProfileFromIQRanker('${subj}', '${s3Key}')`;
                 return `<tr>
                     <td>${i + 1}</td>
                     <td>
                         <div class="iqr-name-row">
                             <span class="iqr-name-text">${_iqEsc(r.project_name || r.profile_subject || '')}</span>
                             <button type="button" class="iqr-row-chip iqr-row-chip-chart" title="Open day-over-day chart" aria-label="Open day-over-day chart" onclick="${chartClick}"><span class="iqr-row-chip-glyph">Δ</span></button>
+                            <button type="button" class="iqr-row-chip iqr-row-chip-sentiment" title="Open this profile in the Sentiment IQ dashboard" onclick="${sentimentClick}">Sentiment</button>
                             <button type="button" class="iqr-row-chip iqr-row-chip-profile" title="Open this profile's dashboard" onclick="${profileClick}">Profile</button>
                         </div>
                         <div class="iqr-name-sub">${_iqEsc(r.subcategory || '')}</div>
@@ -77744,6 +77751,37 @@
                 const search = document.getElementById('dashProfileSearchInput');
                 if (search && sub) { search.value = sub.replace(/_/g, ' '); search.dispatchEvent(new Event('keyup')); }
             } catch(_) {}
+        }
+
+        // Mirrors iq_rankers._tracker_id_for_profile() in Python so we can
+        // jump straight to the auto-provisioned Sentiment IQ tracker for a
+        // ranker row without an extra round-trip.
+        function _iqrTrackerIdFor(profileSubject) {
+            const safe = String(profileSubject || '').replace(/[^a-zA-Z0-9_-]/g, '').toLowerCase().slice(0, 48);
+            return safe ? ('iqr_' + safe) : 'iqr_unknown';
+        }
+
+        function openSentimentIQFromIQRanker(trackerIdEnc) {
+            let trackerId = '';
+            try { trackerId = decodeURIComponent(trackerIdEnc || ''); } catch(_) { trackerId = String(trackerIdEnc || ''); }
+            if (!trackerId) return;
+            try {
+                if (typeof showSentimentIQ === 'function') {
+                    showSentimentIQ();
+                } else {
+                    const v = document.getElementById('sentimentIQView');
+                    if (v) v.style.display = 'flex';
+                }
+            } catch(_) {}
+            // showSentimentIQ kicks off an async sidebar load; selectSentimentIQTracker
+            // does its own results fetch and sets the active state, so calling them
+            // back-to-back is safe — once the sidebar resolves it'll highlight the
+            // pre-set currentTrackerId.
+            try {
+                if (typeof selectSentimentIQTracker === 'function') {
+                    setTimeout(() => selectSentimentIQTracker(trackerId), 30);
+                }
+            } catch(e) { console.error('openSentimentIQFromIQRanker failed', e); }
         }
         // ============================================================
         
