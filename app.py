@@ -11955,6 +11955,7 @@ def parse_ticket_sales_tracker_csv(csv_content):
     parsed = {
         'metadata': {},
         'platforms': [],  # {platform, us_value} - US Gen Pop only
+        'total_purchasers_us': None,  # tickets / 2.5 (unique attendees)
         'total_tickets_us': None,
         'projected_ticket_sales_us': None,
         'genre': '',
@@ -12025,6 +12026,9 @@ def parse_ticket_sales_tracker_csv(csv_content):
         elif current_section == 'platforms' and cat and cat in THEATER_PLATFORMS:
             us_val = proj if proj else val
             parsed['platforms'].append({'platform': cat, 'us_value': us_val, 'us_number': _parse_num(us_val)})
+        elif 'Total Purchasers' in cat:
+            parsed['total_purchasers_us'] = proj or val
+            current_section = None
         elif 'Total Tickets Sold' in cat:
             parsed['total_tickets_us'] = proj or val
             current_section = None

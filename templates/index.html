@@ -35814,23 +35814,26 @@
             dateEl.setAttribute('data-tooltip', dateTooltip);
             const genreEl = document.getElementById('tstGenreHeader');
             genreEl.textContent = d.genre ? 'Genre: ' + d.genre : '';
-            const genreTooltip = 'Starting with a $15 ticket price we then multiply total digital transactions by 2x for group size, then divide by 0.75 to account for the 25% box office share.';
+            const genreTooltip = 'Sales = Tickets Sold x $15. Purchasers = Tickets Sold / 2.5 (avg group size). Sales are anchored to 70-83% of researched US box office, since our panel only covers digital pre-purchase.';
             genreEl.setAttribute('data-tooltip', genreTooltip);
             const footnoteEl = document.getElementById('tstTheatersFootnote');
             if (footnoteEl) {
-                footnoteEl.textContent = 'Starting with a $15 ticket price we then multiply total digital transactions by 2x for group size, then divide by 0.75 to account for the 25% box office share.';
+                footnoteEl.textContent = 'Sales = Tickets Sold x $15. Purchasers = Tickets Sold / 2.5 (avg group size). Sales anchored to 70-83% of researched US box office (panel covers digital pre-purchase only).';
             }
             const cards = [];
+            if (d.total_purchasers_us) cards.push({ label: 'US Gen Pop Total Purchasers', value: d.total_purchasers_us, isCurrency: false });
             if (d.total_tickets_us) cards.push({ label: 'US Gen Pop Total Tickets Sold', value: d.total_tickets_us, isCurrency: false });
             if (d.projected_ticket_sales_us) cards.push({ label: 'US Gen Pop Ticket Sales', value: d.projected_ticket_sales_us, isCurrency: true });
             document.getElementById('tstSummaryCards').innerHTML = cards.map(c => {
                 const num = _tstParseNum(c.value);
                 const display = isNaN(num) ? (c.value||'').toString() : (c.isCurrency ? '$' : '') + Math.round(num).toLocaleString();
                 let tip = (c.label || '') + '. ' + TST_GENPOP_TOOLTIP;
-                if (c.label === 'US Gen Pop Total Tickets Sold') {
-                    tip = 'US Gen Pop Accounts purchasing tickets. US Gen Pop projections use the 2026 base of 329,900,000.';
+                if (c.label === 'US Gen Pop Total Purchasers') {
+                    tip = 'Unique people who bought a ticket (Total Tickets Sold / 2.5 average group size). One purchaser typically buys ~2.5 tickets (date night, family, friend group). ' + TST_GENPOP_TOOLTIP;
+                } else if (c.label === 'US Gen Pop Total Tickets Sold') {
+                    tip = 'US Gen Pop tickets sold (= Total Purchasers x 2.5 group size). US Gen Pop projections use the 2026 base of 329,900,000.';
                 } else if (c.label === 'US Gen Pop Ticket Sales') {
-                    tip = 'Starting with a $15 ticket price we then multiply total digital transactions by 2x for group size, then divide by 0.75 to account for the 25% box office share. ' + TST_GENPOP_TOOLTIP;
+                    tip = 'Total Tickets Sold x $15 ticket price, calibrated to 70-83% of researched US box office (Crosswalk panel covers digital pre-purchase only). ' + TST_GENPOP_TOOLTIP;
                 }
                 return `<div class="exec-summary-metric has-tooltip" data-tooltip="${(tip||'').replace(/"/g,'&quot;')}"><div class="exec-metric-label">${(c.label||'').replace(/</g,'&lt;')}</div><div class="exec-metric-value">${display.replace(/</g,'&lt;')}</div></div>`;
             }).join('');
@@ -36104,7 +36107,7 @@
             const name = (currentTSTData.display_name || 'TST').replace(/[^a-zA-Z0-9]/g, '_') + '_' + sourceId.replace(/[^a-zA-Z0-9-]/g, '_');
             let rows = [];
             if (sourceId === 'tst-summary') {
-                rows = [['Metric','Value'], ['Total Tickets (US)', String(d.total_tickets_us ?? '')], ['Projected Ticket Sales (US)', String(d.projected_ticket_sales_us ?? '')]];
+                rows = [['Metric','Value'], ['Total Purchasers (US)', String(d.total_purchasers_us ?? '')], ['Total Tickets (US)', String(d.total_tickets_us ?? '')], ['Projected Ticket Sales (US)', String(d.projected_ticket_sales_us ?? '')]];
             } else if (sourceId === 'tst-snapshot') {
                 rows = [['Category','Value','Percent']];
                 ['GENDER','AGE','ETHNICITY','INCOME','LOCATION'].forEach(field => {

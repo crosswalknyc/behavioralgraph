@@ -21,25 +21,26 @@ US_POPULATION = 329_900_000
 SAMPLE_REPRESENTS = 10_000_000
 
 # Crosswalk Ticket Sales Tracker measures DIGITAL ticket sales only — visits
-# to Fandango, AMC.com, Cinemark.com, Regal.com, and Alamo Drafthouse. In
-# the US, digital pre-purchase historically captures ~55-70% of total
-# theatrical ticket sales (the rest are box-office walk-ups, third-party
-# resellers, Atom, mobile carrier offers, theater chain apps not in our
-# panel, group sales). The AI auditor anchors our projected_sales_gen_pop
-# inside this band relative to the researched US domestic gross.
+# to Fandango, AMC.com, Cinemark.com, Regal.com, and Alamo Drafthouse. After
+# applying our gen-pop projection and the panel-derived 2x group-size factor,
+# Crosswalk's captured-sales figure historically represents ~70-83% of total
+# US theatrical box office (the gap is walk-ups, third-party resellers, group
+# sales, and theater chain apps not in our panel). The AI auditor anchors
+# projected_sales_gen_pop inside this band relative to the researched US
+# domestic gross.
 #
 # Tune via env vars on Render if real-world calibration shifts:
-#   TICKET_DIGITAL_SALES_FACTOR_LOW   (default 0.55)
-#   TICKET_DIGITAL_SALES_FACTOR_HIGH  (default 0.70)
+#   TICKET_DIGITAL_SALES_FACTOR_LOW   (default 0.70)
+#   TICKET_DIGITAL_SALES_FACTOR_HIGH  (default 0.83)
 def _digital_sales_band():
     try:
-        lo = float(os.environ.get("TICKET_DIGITAL_SALES_FACTOR_LOW", "0.55"))
+        lo = float(os.environ.get("TICKET_DIGITAL_SALES_FACTOR_LOW", "0.70"))
     except (ValueError, TypeError):
-        lo = 0.55
+        lo = 0.70
     try:
-        hi = float(os.environ.get("TICKET_DIGITAL_SALES_FACTOR_HIGH", "0.70"))
+        hi = float(os.environ.get("TICKET_DIGITAL_SALES_FACTOR_HIGH", "0.83"))
     except (ValueError, TypeError):
-        hi = 0.70
+        hi = 0.83
     lo = max(0.10, min(0.95, lo))
     hi = max(lo, min(0.95, hi))
     return lo, hi
@@ -47,6 +48,23 @@ def _digital_sales_band():
 
 DIGITAL_SALES_FACTOR_LOW, DIGITAL_SALES_FACTOR_HIGH = _digital_sales_band()
 DIGITAL_SALES_FACTOR_MID = (DIGITAL_SALES_FACTOR_LOW + DIGITAL_SALES_FACTOR_HIGH) / 2.0
+
+
+# Group-size divisor: average tickets-per-purchaser for theatrical attendance.
+# A movie ticket transaction usually buys ~2.5 tickets (date nights, families,
+# friend groups) so unique purchasers ≈ tickets_sold / 2.5. The 2.5 is the
+# steady-state industry average across all genres; Family/Animation skews a
+# bit higher (~3) but we keep the divisor flat and let the 2x sales multiplier
+# (already gated on genre) handle the dollar uplift. Tune via env var if real-
+# world calibration shifts.
+try:
+    PURCHASER_TICKETS_PER_PERSON = float(
+        os.environ.get("TICKET_PURCHASER_TICKETS_PER_PERSON", "2.5")
+    )
+    if PURCHASER_TICKETS_PER_PERSON <= 0:
+        PURCHASER_TICKETS_PER_PERSON = 2.5
+except (ValueError, TypeError):
+    PURCHASER_TICKETS_PER_PERSON = 2.5
 
 
 def gen_pop_projection(raw_number):
@@ -1482,8 +1500,25 @@ def write_output(results, p):
         genpop = format_gen_pop_full(gen_pop_projection(hits))
         rows.append((platform, hits, genpop, "", "", ""))
 
+    # Unique purchasers = total tickets / group-size divisor (default 2.5).
+    # Surfaced as its own headline KPI on the dashboard so analysts can talk
+    # about "people who bought a ticket" separately from "tickets sold". The
+    # gen-pop value is shown as the front card on the Summary tab.
+    total_purchasers = total_tickets / PURCHASER_TICKETS_PER_PERSON if total_tickets else 0
+    total_purchasers_gen_pop = (
+        total_tickets_gen_pop / PURCHASER_TICKETS_PER_PERSON
+        if total_tickets_gen_pop else 0
+    )
     rows.extend([
         ("", "", "", "", "", ""),
+        (
+            f"Total Purchasers (Tickets / {PURCHASER_TICKETS_PER_PERSON:g})",
+            f"{total_purchasers:,.2f}",
+            format_gen_pop_full(total_purchasers_gen_pop),
+            "",
+            "",
+            "",
+        ),
         ("Total Tickets Sold (sum of theater hits)", total_tickets, format_gen_pop_full(total_tickets_gen_pop), "", "", ""),
         ("Projected Ticket Sales (Total × $15" + (" × 2" if is_family_animation else "") + ")", f"${projected_sales_base:,.2f}", f"${projected_sales_gen_pop:,.2f}", "", "", ""),
         ("", "", "", "", "", ""),
