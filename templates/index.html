@@ -36022,9 +36022,54 @@
                 }
             });
         }
-        const TST_AGE_ORDER = ['<16','16-18','18-20','21-25','26-30','31-40','41-59','60+'];
-        const TST_AGE_ORDER_EXTRA = ['<16','under 16','16-18','18-20','21-25','26-30','31-40','41-59','60+','65+','over 65'];
-        const TST_INCOME_ORDER = ['under $25,000','under $25000','$25,000-$49,999','$25,000 - $49,999','$40k-$60k','$40k - $60k','$50,000-$74,999','$50,000 - $74,999','$60k-$75k','$60k - $75k','$75,000-$99,999','$75,000 - $99,999','$75k-$100k','$75k - $100k','$100,000-$149,999','$100,000 - $149,999','$100k-$150k','$100k - $150k','$150,000-$249,999','$150,000 - $249,999','$150k-$250k','$150k - $250k','$250,000 or more','$250,000+','$250k+','$250k +'];
+        // Canonical TST 7-bucket age schema (matches the AI prompt schema and
+        // the panel's compute_demographics output). Keep these strings in the
+        // exact same case the CSV emits them so case-sensitive UI rendering
+        // stays consistent; the index lookup is case-insensitive.
+        const TST_AGE_ORDER = ['17 AND UNDER','18-24','25-34','35-44','45-54','55-64','65 OR OLDER'];
+        // Legacy bucket schemas + synonyms mapped to the canonical 7-bucket
+        // index above. Lets older CSV snapshots / panel variants still sort
+        // correctly when a user picks "Youngest to Oldest".
+        const TST_AGE_ALIAS = {
+            // Youngest bucket synonyms
+            'UNDER 17': 0, 'UNDER 18': 0, '<17': 0, '<18': 0, '<16': 0,
+            'UNDER 16': 0, '16-17': 0, '13-17': 0, 'TEEN': 0, 'TEENS': 0,
+            // 18-24 synonyms
+            '18-20': 1, '18-21': 1, '21-24': 1, '21-25': 1, '19-24': 1,
+            // 25-34 synonyms
+            '25-29': 2, '26-30': 2, '26-34': 2, '30-34': 2, '31-34': 2,
+            // 35-44 synonyms
+            '31-40': 3, '35-39': 3, '36-40': 3, '36-44': 3, '40-44': 3, '41-44': 3,
+            // 45-54 synonyms
+            '41-49': 4, '41-54': 4, '41-59': 4, '45-49': 4, '50-54': 4,
+            // 55-64 synonyms
+            '55-59': 5, '56-64': 5, '60-64': 5, '60+': 5,
+            // 65+ synonyms
+            '65+': 6, 'OVER 65': 6, '65 AND OVER': 6, '65 AND OLDER': 6,
+            '65+ OR OLDER': 6, '65-PLUS': 6, '66+': 6, 'SENIOR': 6, 'SENIORS': 6,
+        };
+        // Canonical TST 6-bucket income schema (matches the AI prompt schema).
+        const TST_INCOME_ORDER = ['$0 - $24,999','$25,000 - $49,999','$50,000 - $74,999','$75,000 - $99,999','$100,000 - $149,999','$150,000+'];
+        // Legacy bucket / synonym map for income, normalized (lowercase,
+        // whitespace-stripped) so $50,000-$74,999 and $50,000 - $74,999 both
+        // resolve to index 2.
+        const TST_INCOME_ALIAS = {
+            // Lowest bucket synonyms
+            'under$25,000': 0, 'under$25000': 0, '<$25,000': 0, '$0-$24,999': 0,
+            '$0-$24999': 0, 'lessthan$25,000': 0,
+            // 25-49
+            '$25,000-$49,999': 1, '$25k-$50k': 1, '$25-$50k': 1,
+            // 50-74 (includes legacy 40-60, 60-75 buckets)
+            '$50,000-$74,999': 2, '$40k-$60k': 2, '$50k-$75k': 2, '$60k-$75k': 2,
+            // 75-99 (includes legacy 75-100 bucket)
+            '$75,000-$99,999': 3, '$75k-$100k': 3,
+            // 100-149 (includes legacy 100-150 bucket)
+            '$100,000-$149,999': 4, '$100k-$150k': 4,
+            // Top bucket synonyms (any 150k+ bucket maps here)
+            '$150,000+': 5, '$150k+': 5, '$150,000ormore': 5,
+            '$150,000-$249,999': 5, '$150k-$250k': 5,
+            '$250,000ormore': 5, '$250,000+': 5, '$250k+': 5,
+        };
         const TST_ETHNICITY_ORDER = ['White','Black or African American','Hispanic or Latino','Asian','Another Race/Ethnicity'];
         const TST_GENDER_ORDER = ['Female','Male','Trans Male','Trans Female','Non-Binary'];
         // Display label for demographics: actual category names + overrides; match Profile IQ (income $40,000 - $59,999; age 17-18, 19-20, etc.)
@@ -36099,20 +36144,52 @@
         function _tstAgeOrderIndex(val) {
             if (val == null) return 999;
             if (typeof val === 'number' || /^\d+$/.test(String(val))) return Math.min(parseInt(val, 10), TST_AGE_ORDER.length - 1);
-            const v = String(val).trim();
-            let i = TST_AGE_ORDER.indexOf(v);
-            if (i >= 0) return i;
-            i = TST_AGE_ORDER_EXTRA.indexOf(v);
-            return i >= 0 ? i : 999;
+            // Normalize: uppercase + collapse interior whitespace.
+            const v = String(val).trim().replace(/\s+/g, ' ').toUpperCase();
+            // Canonical 7-bucket TST schema, case-insensitive.
+            for (let i = 0; i < TST_AGE_ORDER.length; i++) {
+                if (TST_AGE_ORDER[i].toUpperCase() === v) return i;
+            }
+            // Legacy / synonym lookup.
+            if (Object.prototype.hasOwnProperty.call(TST_AGE_ALIAS, v)) return TST_AGE_ALIAS[v];
+            // Numeric range fallback: parse "X-Y" or "X+" and map to the
+            // canonical bucket whose midpoint is closest. This catches any
+            // future bucket label we haven't explicitly aliased.
+            const lowerNum = parseInt(v.match(/\d+/), 10);
+            if (!isNaN(lowerNum)) {
+                if (lowerNum < 18) return 0;
+                if (lowerNum < 25) return 1;
+                if (lowerNum < 35) return 2;
+                if (lowerNum < 45) return 3;
+                if (lowerNum < 55) return 4;
+                if (lowerNum < 65) return 5;
+                return 6;
+            }
+            return 999;
         }
         function _tstIncomeOrderIndex(val) {
             if (val == null) return 999;
-            const v = String(val).trim().toLowerCase();
-            if (v.startsWith('under')) return -1;
-            const vs = v.replace(/\s/g, '');
+            const v = String(val).trim().toLowerCase().replace(/\s+/g, '');
+            // Canonical 6-bucket TST schema, whitespace-insensitive.
             for (let i = 0; i < TST_INCOME_ORDER.length; i++) {
-                if (String(TST_INCOME_ORDER[i]).toLowerCase().replace(/\s/g, '') === vs) return i;
+                if (TST_INCOME_ORDER[i].toLowerCase().replace(/\s+/g, '') === v) return i;
             }
+            // Legacy / synonym lookup.
+            if (Object.prototype.hasOwnProperty.call(TST_INCOME_ALIAS, v)) return TST_INCOME_ALIAS[v];
+            // Numeric fallback: parse the FIRST dollar amount in the string
+            // and map it to the canonical bucket. Catches future variants like
+            // "$30,000 - $44,999" without explicit aliasing.
+            const firstNum = parseInt((v.match(/\$?(\d[\d,]*)/) || [])[1]?.replace(/,/g, ''), 10);
+            if (!isNaN(firstNum)) {
+                if (firstNum < 25000) return 0;
+                if (firstNum < 50000) return 1;
+                if (firstNum < 75000) return 2;
+                if (firstNum < 100000) return 3;
+                if (firstNum < 150000) return 4;
+                return 5;
+            }
+            // Special-case textual "under $X" labels with no parseable number.
+            if (v.startsWith('under') || v.startsWith('lessthan')) return 0;
             return 999;
         }
         function _tstSortDemoArr(field, arr) {
