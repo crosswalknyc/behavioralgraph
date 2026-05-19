@@ -29917,6 +29917,7 @@ def _run_journey_iq(job_id):
             forward_days=int(params.get('forward_days') or _jiq.DEFAULT_FORWARD_DAYS),
             extra_conversion_patterns=params.get('extra_conversion_patterns') or [],
             extra_touchpoint_keywords=params.get('extra_touchpoint_keywords') or '',
+            narrow_url_patterns=params.get('narrow_url_patterns') or [],
             progress_cb=_cb,
             s3_client=s3_client,
         )
@@ -29973,6 +29974,17 @@ def submit_journey_iq():
         if len(extra_tp_keywords) > 4000:
             extra_tp_keywords = extra_tp_keywords[:4000]
 
+        # URL narrowing — when the target keyword alone is too broad (think
+        # "the goat"), the user can paste substrings the URL must ALSO
+        # contain (e.g. "sonypictures.com", "/the-goat/", "fandango.com/the-goat").
+        # Both newline- and comma-separated input accepted; normalized server-side.
+        narrow_url_raw = data.get('narrow_url_patterns') or ''
+        if isinstance(narrow_url_raw, str):
+            narrow_url_list = [p.strip() for p in re.split(r'[\n,]+', narrow_url_raw) if p.strip()]
+        else:
+            narrow_url_list = [str(p).strip() for p in (narrow_url_raw or []) if str(p).strip()]
+        narrow_url_list = narrow_url_list[:50]
+
         if not project_name:
             return jsonify({'error': 'project_name required'}), 400
         if not target:
@@ -30009,6 +30021,7 @@ def submit_journey_iq():
                 'forward_days':              forward_days,
                 'extra_conversion_patterns': extra_patterns,
                 'extra_touchpoint_keywords': extra_tp_keywords,
+                'narrow_url_patterns':       narrow_url_list,
             },
         }
         if s3_client:

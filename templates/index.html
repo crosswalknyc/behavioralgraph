@@ -14836,6 +14836,11 @@
                                         <small style="color: var(--text-secondary); font-size: 0.7rem;">Auto-detect already covers /checkout, /thank-you, /confirmation, /order-complete, /booking-confirmed, /success, /receipt — add target-specific URLs here.</small>
                                     </div>
                                     <div style="margin-top: 0.75rem;">
+                                        <label style="display: block; font-weight: 600; margin-bottom: 4px; font-size: 13px;">Narrow by URL Substrings <span style="font-weight: 400; color: var(--text-secondary);">(comma- or newline-separated, optional but recommended for common words)</span></label>
+                                        <textarea id="jiqNarrowUrlPatterns" rows="3" placeholder="sonypictures.com&#10;/the-goat/&#10;fandango.com/the-goat&#10;imdb.com/title/tt12345678" style="width: 100%; padding: 8px 12px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--bg-primary); color: var(--text-primary); font-size: 13px; font-family: monospace; resize: vertical;"></textarea>
+                                        <small style="color: var(--text-secondary); font-size: 0.7rem;">When supplied, the URL must contain ANY of these in addition to the target keyword. Use this for short / common targets like <code>the goat</code> or <code>nike</code> &mdash; otherwise Phase&nbsp;1 may scan billions of rows and time out. Each pattern is matched case-insensitively as a substring of the full URL.</small>
+                                    </div>
+                                    <div style="margin-top: 0.75rem;">
                                         <label style="display: block; font-weight: 600; margin-bottom: 4px; font-size: 13px;">Extra Touchpoint Keywords <span style="font-weight: 400; color: var(--text-secondary);">(one rule per line)</span></label>
                                         <textarea id="jiqExtraTouchpointKeywords" rows="4" placeholder="TALENT=steph curry, michael jordan&#10;BRAND_PARTNERSHIP=mercedes&#10;SOUNDTRACK=the goat soundtrack&#10;CREATOR_INFLUENCER=mrbeast, sneako" style="width: 100%; padding: 8px 12px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--bg-primary); color: var(--text-primary); font-size: 13px; font-family: monospace; resize: vertical;"></textarea>
                                         <small style="color: var(--text-secondary); font-size: 0.7rem;">Tag attribution surfaces that aren't a host on their own. Format: <code>CATEGORY=kw1, kw2, ...</code> &mdash; one rule per line. Built-ins (TRAILER, SOCIAL_*, PRESS, REVIEW, TICKETING, SHOWTIME_LOOKUP, GOOGLE_REVIEW, STREAMING, PAID_AD, ORGANIC_SEARCH, AI_AGENT) fire automatically; this adds: TALENT, CREATOR_INFLUENCER (alias INFLUENCER / CREATOR), BRAND_PARTNERSHIP (alias PARTNERSHIP), SOUNDTRACK (alias MUSIC), or any custom label.</small>
@@ -27090,6 +27095,7 @@
             var fw = parseInt((document.getElementById('jiqForwardDays') || {}).value || '7', 10);
             var ex = (document.getElementById('jiqExtraConvPatterns') || {}).value || '';
             var tpk = (document.getElementById('jiqExtraTouchpointKeywords') || {}).value || '';
+            var nrw = (document.getElementById('jiqNarrowUrlPatterns') || {}).value || '';
             pn = pn.trim(); tg = tg.trim();
             if (!pn || !tg || !sd || !ed) {
                 alert('Project, target, and date range are required.');
@@ -27115,7 +27121,8 @@
                     lookback_days: lb,
                     forward_days: fw,
                     extra_conversion_patterns: ex,
-                    extra_touchpoint_keywords: tpk
+                    extra_touchpoint_keywords: tpk,
+                    narrow_url_patterns: nrw
                 })
             }).then(function(r) { return r.json(); }).then(function(data) {
                 if (data.error) {

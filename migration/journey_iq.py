@@ -335,6 +335,7 @@ def run_job(
     forward_days: int = DEFAULT_FORWARD_DAYS,
     extra_conversion_patterns: Optional[list[str]] = None,
     extra_touchpoint_keywords: Optional[str] = None,
+    narrow_url_patterns: Optional[Any] = None,
     progress_cb: Optional[Callable[..., None]] = None,
     s3_client: Any = None,
     ch_connect: Optional[Callable[..., Any]] = None,
@@ -379,6 +380,7 @@ def run_job(
         p.strip().lower() for p in (extra_conversion_patterns or []) if p and p.strip()
     )
     extra_kw_map = parse_extra_touchpoint_keywords(extra_touchpoint_keywords or '')
+    narrow_patterns = _normalize_narrow_patterns(narrow_url_patterns)
 
     _p(2, 'Connecting to ClickHouse...')
     conn = ch_connect(settings=CH_RUN_SETTINGS)
@@ -389,11 +391,29 @@ def run_job(
         # multiSearchAny(lower(URL), [...]) routes through the ngrambf_v1
         # skip index defined on lower(URL) (and lower(COMMON_NAME)), which
         # is dramatically faster than ORing N position() calls.
-        _p(8, f'Searching clickstream for "{target}"...')
+        #
+        # When the caller supplies narrow_url_patterns, we AND a second
+        # URL-only ngram probe on top — this is critical for broad/common
+        # target strings ("the goat") where the keyword alone would scan
+        # billions of rows; the narrow filter (e.g. "sonypictures.com",
+        # "/the-goat/") collapses the candidate set to thousands.
+        if narrow_patterns:
+            _p(8, f'Searching clickstream for "{target}" narrowed by {len(narrow_patterns)} URL pattern(s)...')
+        else:
+            _p(8, f'Searching clickstream for "{target}"...')
         term_variants = _target_variants(target)
         match_clause = _build_match_clause(term_variants)
+        narrow_clause = _build_narrow_url_clause(narrow_patterns)
         target_domain_guesses = _guess_target_domains(target)
+        # Seed narrowing patterns as implicit target domains too, so the
+        # journey classifier treats those surfaces as LANDING/BROWSE for
+        # the brand instead of generic DETOUR events.
+        for p in narrow_patterns:
+            d = p.split('/', 1)[0].strip()
+            if d and '.' in d:
+                target_domain_guesses.add(d)
 
+        narrow_sql = f"\n              AND {narrow_clause}" if narrow_clause else ""
         cur.execute(f"DROP TABLE IF EXISTS journey_uids_{job_id}")
         cur.execute(f"""
             CREATE TEMPORARY TABLE journey_uids_{job_id} AS
@@ -403,7 +423,7 @@ def run_job(
                 max(VISIT_TS) AS last_mention_ts
             FROM clickstream.clickstream_final
             WHERE DELIVERED BETWEEN toDate('{sd}') AND toDate('{ed}')
-              AND {match_clause}
+              AND {match_clause}{narrow_sql}
             GROUP BY UID
             LIMIT {MAX_UIDS}
         """)
@@ -582,6 +602,7 @@ def run_job(
                 'forward_days':   forward_days,
                 'conversion_patterns': list(conv_patterns),
                 'extra_touchpoint_keywords': extra_kw_map,
+                'narrow_url_patterns': list(narrow_patterns),
                 'cut_options':    [{'key': k, 'label': lbl} for k, lbl in CUT_DISPLAY_ORDER],
                 'created_by':     username,
                 'created_at':     datetime.utcnow().isoformat() + 'Z',
@@ -661,6 +682,51 @@ def _build_match_clause(variants: list[str]) -> str:
     arr = '[' + ','.join(needles) + ']'
     return (f"(multiSearchAny(lower(URL), {arr}) "
             f"OR multiSearchAny(lower(COMMON_NAME), {arr}))")
+
+
+def _normalize_narrow_patterns(raw: Optional[Any]) -> list[str]:
+    """Accept either a list/tuple or a free-text blob (newline/comma split).
+    Returns a deduped lowercase list of URL substrings, each >= 3 chars.
+    """
+    if not raw:
+        return []
+    if isinstance(raw, str):
+        # Split on newlines AND commas — clients paste either way.
+        parts = re.split(r'[\n,]+', raw)
+    else:
+        try:
+            parts = list(raw)
+        except Exception:
+            return []
+    seen: set[str] = set()
+    out: list[str] = []
+    for p in parts:
+        if not isinstance(p, str):
+            continue
+        s = p.strip().lower()
+        # Strip surrounding quotes and protocol noise to be friendly.
+        s = s.strip('"\'')
+        s = re.sub(r'^https?://', '', s)
+        if len(s) < 3 or s in seen:
+            continue
+        seen.add(s)
+        out.append(s)
+    return out
+
+
+def _build_narrow_url_clause(patterns: list[str]) -> str:
+    """ANDed URL-only filter. Same ngrambf index path as _build_match_clause,
+    but URL-only (the caller said the target's mention may not live in
+    COMMON_NAME but always somewhere in the URL).
+
+    Returns an SQL fragment like ``multiSearchAny(lower(URL), [...])`` or
+    empty string when no patterns supplied (caller must skip the AND).
+    """
+    if not patterns:
+        return ''
+    needles = ["'" + p.replace("'", "''") + "'" for p in patterns]
+    arr = '[' + ','.join(needles) + ']'
+    return f"multiSearchAny(lower(URL), {arr})"
 
 
 def _guess_target_domains(target: str) -> set[str]:
