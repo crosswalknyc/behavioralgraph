@@ -34,6 +34,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import re
 import time
 import traceback
@@ -67,6 +68,25 @@ MAX_PAGE_CLASSIFY_PER_RUN = 60
 # Max distinct event rows we pull from ClickHouse per tracker run. This is a
 # hard ceiling on the in-memory dataframe we build behavioral scores from.
 MAX_EVENTS_PER_RUN = 250_000
+
+# ── Gen-pop projection ───────────────────────────────────────────────────────
+#
+# Every count we surface on the dashboard (mentions, voices, demographic
+# slice sizes, time-series volumes, etc.) is a *panel* count. To make those
+# values comparable to brand-side or media-buying numbers we project them
+# to the US gen pop using the same formula CW IQ Ranker uses:
+#
+#     projected = round(raw * US_POPULATION / panel_size_for_window)
+#
+# `panel_size_for_window` is the number of distinct UIDs that fired any
+# clickstream event during the tracker's date window. We capture it once
+# per run (one ClickHouse round-trip) and store it in result["meta"] so
+# downstream consumers can reconstruct or sanity-check the projection.
+#
+# US_POPULATION is shared with iq_rankers via the same env var so both
+# projections stay in lockstep — flipping IQ_RANKER_US_POPULATION updates
+# Sentiment IQ too.
+US_POPULATION = int(os.environ.get("IQ_RANKER_US_POPULATION", "329900000"))
 
 
 # ── Query-modifier lexicon ───────────────────────────────────────────────────
@@ -358,12 +378,19 @@ def list_trackers(
 ) -> list[dict]:
     """List Sentiment IQ trackers, optionally filtered by owner.
 
-    `include_system=False` (the default) hides trackers owned by internal
-    system accounts (e.g. the per-profile auto-trackers created by
-    iq_rankers.py). Those rows share Sentiment IQ's S3 layout for
-    storage but aren't user-facing Sentiment IQ trackers — they have no
-    rolled-up dashboard JSON, so showing them in the sidebar produces
-    empty cards.
+    `include_system=False` is the historic default and hides trackers
+    owned by internal system accounts (e.g. iq_rankers' auto-trackers).
+    That's still right for the daily cron path (`cron_sentiment_iq`),
+    which doesn't want to run the full Layer-1+2+3 pipeline on the
+    128+ system trackers every night — those have their own Layer-1
+    cron in `iq_rankers.run_daily_for_all_profiles`.
+
+    `include_system=True` is what the user-facing sidebar wants now:
+    every IQ Rankers-tracked profile shows up so users can deep-link
+    over to Profile IQ or the CW IQ Ranker via the dashboard header
+    buttons. When the include_system path is on, system trackers
+    bypass the `owner` filter too (they're visible to every user, not
+    just whoever happens to be logged in as `iq_rankers`).
     """
     out: list[dict] = []
     try:
@@ -374,17 +401,19 @@ def list_trackers(
                 if not key.endswith(".json"):
                     continue
                 # Fast path: skip iq_rankers' auto-trackers without GETting
-                # the body. They're identifiable by the "iqr_" filename
-                # prefix and we never want them in the user-facing list.
+                # the body when system trackers are excluded.
                 if not include_system and _is_system_tracker_key(key):
                     continue
                 cfg = s3_get_json(s3_client, key)
                 if not cfg:
                     continue
                 cfg_owner = cfg.get("owner")
-                if not include_system and cfg_owner in SYSTEM_TRACKER_OWNERS:
+                is_system = cfg_owner in SYSTEM_TRACKER_OWNERS
+                if not include_system and is_system:
                     continue
-                if owner and cfg_owner != owner:
+                # System trackers are visible to every user when included;
+                # non-system trackers still respect the owner filter.
+                if owner and cfg_owner != owner and not is_system:
                     continue
                 out.append({
                     "tracker_id": cfg.get("tracker_id"),
@@ -399,6 +428,12 @@ def list_trackers(
                     "end_date": cfg.get("end_date"),
                     "owner": cfg.get("owner"),
                     "created_at": cfg.get("created_at"),
+                    # Surface the Profile IQ linkage so the sidebar can
+                    # distinguish auto-provisioned profile trackers from
+                    # user-created brand trackers without a second S3 GET.
+                    "profile_subject": cfg.get("profile_subject"),
+                    "s3_key": cfg.get("s3_key"),
+                    "is_system": is_system,
                 })
         out.sort(key=lambda r: r.get("created_at") or "", reverse=True)
     except Exception as e:
@@ -965,10 +1000,20 @@ def pull_demographics(
     """
     out: dict[str, dict[str, list[dict]]] = {b: {} for b in uids_by_bucket}
     bucket_payload: dict[str, list[str]] = {}
+    # bucket -> scale factor to expand sampled counts up to full-bucket estimates.
+    # When the bucket fits under the 30k cap this is 1.0; for larger buckets
+    # the count we observe in the sample is multiplied by (full / sample)
+    # before any gen-pop projection. Pcts use the unscaled sample counts
+    # because within-bucket shares are sampling-invariant.
+    bucket_scale: dict[str, float] = {}
     for bucket, uids in uids_by_bucket.items():
         if not uids:
             continue
-        bucket_payload[bucket] = list(uids)[:DEMOGRAPHICS_UID_CAP_PER_BUCKET]
+        full_size = len(uids)
+        sample = list(uids)[:DEMOGRAPHICS_UID_CAP_PER_BUCKET]
+        bucket_payload[bucket] = sample
+        sample_size = len(sample)
+        bucket_scale[bucket] = (full_size / sample_size) if sample_size > 0 else 1.0
     if not bucket_payload:
         return out
 
@@ -1023,11 +1068,19 @@ def pull_demographics(
             by_cat: dict[str, list[dict]] = {}
             for category, value, cnt in rows:
                 by_cat.setdefault(category, []).append({"value": value, "count": int(cnt or 0)})
+            scale = bucket_scale.get(bucket, 1.0)
             for category, items in by_cat.items():
                 items.sort(key=lambda x: x["count"], reverse=True)
                 total = sum(it["count"] for it in items) or 1
                 out.setdefault(bucket, {})[category] = [
-                    {"value": it["value"], "count": it["count"],
+                    {"value": it["value"],
+                     # Scale up to full-bucket estimate so the downstream
+                     # gen-pop projection applies the same multiplier to
+                     # every bucket regardless of sampling.
+                     "count": int(round(it["count"] * scale)),
+                     # Pct uses raw sample counts because within-bucket
+                     # shares are sampling-invariant — scaling both
+                     # numerator and denominator by `scale` is a no-op.
                      "pct": round(100.0 * it["count"] / total, 2)}
                     for it in items[:100]
                 ]
@@ -1042,6 +1095,145 @@ def pull_demographics(
 # ============================================================================
 # ORCHESTRATION
 # ============================================================================
+
+
+def get_panel_size_for_window(
+    *,
+    ch_connect: Callable,
+    start_date: str,
+    end_date: str,
+) -> int:
+    """Distinct UIDs that fired any clickstream event in [start, end].
+
+    This is the denominator we use for projecting Sentiment IQ panel
+    counts to the US gen pop — mirrors `iq_rankers.get_panel_size_for_day`
+    but spans the tracker's full date window (which may be one day for
+    daily-cron runs or many months for backfills).
+
+    Returns 0 on error so the projection layer falls back to raw counts
+    rather than crashing the run.
+    """
+    conn = ch_connect(settings={
+        "max_execution_time": 300,
+        "use_skip_indexes": 1,
+    })
+    try:
+        cur = conn.cursor()
+        cur.execute(
+            f"SELECT uniqExact(UID) FROM clickstream.clickstream_final "
+            f"WHERE DELIVERED BETWEEN toDate('{start_date}') AND toDate('{end_date}')"
+        )
+        row = cur.fetchone()
+        return int((row or [0])[0] or 0)
+    except Exception as e:
+        print(f"[SentimentIQ] panel-size query failed for {start_date}..{end_date}: {e}")
+        return 0
+    finally:
+        try:
+            conn.close()
+        except Exception:
+            pass
+
+
+def _project_result_in_place(
+    result: dict,
+    *,
+    panel_size: int,
+    us_population: int = US_POPULATION,
+) -> None:
+    """Mutate `result` so every panel-count field reflects the US gen pop.
+
+    Mirrors the projection IQ Rankers applies at SQL read time
+    (`round(raw * US_POPULATION / panel_size)`) but walks the in-memory
+    payload because Sentiment IQ persists results to S3 as JSON and we
+    want the stored numbers to already be gen-pop scaled (no double-work
+    at read time, no drift if the panel grows between write and read).
+
+    Fields touched:
+      * audience_uid_count, total_events
+      * kpis.{positive,negative,neutral}_events
+      * kpis.unique_{positive,negative,neutral}_uids
+      * time_series[].{positive, negative, neutral, total}
+      * channels[].{total, positive, negative, neutral}
+      * top_domains[].{total, positive, negative}
+      * top_subreddits[].{total, positive, negative}
+      * top_urls[].panel_visits
+      * demographics[bucket][category][].count
+
+    Fields explicitly NOT projected (already normalized or not panel sizes):
+      * any *_share / pct / net field (already a ratio)
+      * layer2_counts.* (count of URLs scored — not a population)
+      * rollups (qualitative text)
+
+    When panel_size is 0 (query failed) we leave counts raw and record
+    projection_applied=False in result["meta"] so the UI can flag it.
+    """
+    meta = result.setdefault("meta", {})
+    meta["panel_size"] = int(panel_size or 0)
+    meta["us_population"] = int(us_population)
+
+    if not panel_size or panel_size <= 0:
+        meta["projection_applied"] = False
+        meta["projection_multiplier"] = 0.0
+        return
+
+    multiplier = float(us_population) / float(panel_size)
+    meta["projection_applied"] = True
+    meta["projection_multiplier"] = round(multiplier, 4)
+
+    def proj(n):
+        try:
+            return int(round(float(n or 0) * multiplier))
+        except Exception:
+            return n
+
+    if "audience_uid_count" in result:
+        result["audience_uid_count"] = proj(result.get("audience_uid_count"))
+    if "total_events" in result:
+        result["total_events"] = proj(result.get("total_events"))
+
+    kpis = result.get("kpis")
+    if isinstance(kpis, dict):
+        for k in (
+            "positive_events", "negative_events", "neutral_events",
+            "unique_positive_uids", "unique_negative_uids", "unique_neutral_uids",
+        ):
+            if k in kpis:
+                kpis[k] = proj(kpis[k])
+
+    for row in (result.get("time_series") or []):
+        for k in ("positive", "negative", "neutral", "total"):
+            if k in row:
+                row[k] = proj(row[k])
+
+    for row in (result.get("channels") or []):
+        for k in ("total", "positive", "negative", "neutral"):
+            if k in row:
+                row[k] = proj(row[k])
+
+    for row in (result.get("top_domains") or []):
+        for k in ("total", "positive", "negative"):
+            if k in row:
+                row[k] = proj(row[k])
+
+    for row in (result.get("top_subreddits") or []):
+        for k in ("total", "positive", "negative"):
+            if k in row:
+                row[k] = proj(row[k])
+
+    for row in (result.get("top_urls") or []):
+        if "panel_visits" in row:
+            row["panel_visits"] = proj(row["panel_visits"])
+
+    demo = result.get("demographics") or {}
+    if isinstance(demo, dict):
+        for bucket, cats in demo.items():
+            if not isinstance(cats, dict):
+                continue
+            for category, rows in cats.items():
+                for row in rows or []:
+                    if "count" in row:
+                        row["count"] = proj(row["count"])
 
 
 def _default_date_window(cfg: dict) -> tuple[str, str]:
@@ -1104,8 +1296,25 @@ def run_sentiment_tracker(
     )
     _say(f"{len(rows):,} events from {audience_uid_count:,} audience UIDs", 22)
 
+    # Gen-pop projection denominator. We capture this once per run so the
+    # entire result (KPIs, time-series, channels, demos, geos) is scaled
+    # by the SAME multiplier — keeps internal ratios stable and matches
+    # how iq_rankers does it. If the query fails we fall back to raw
+    # counts and mark projection_applied=False in result["meta"].
+    panel_size = get_panel_size_for_window(
+        ch_connect=ch_connect,
+        start_date=start_date,
+        end_date=end_date,
+    )
+    if panel_size > 0:
+        _say(f"Panel size for window: {panel_size:,} UIDs → "
+             f"gen-pop multiplier {US_POPULATION / panel_size:.2f}x", 25)
+    else:
+        _say("Panel-size query returned 0 — counts will not be projected.", 25)
+
     if not rows:
         result = _empty_result_payload(cfg, start_date, end_date, audience_uid_count)
+        _project_result_in_place(result, panel_size=panel_size)
         _persist_result(s3_client, tracker_id, result, start_date, end_date)
         _say("no rows — wrote empty result", 100, "completed")
         return result
@@ -1318,8 +1527,11 @@ def run_sentiment_tracker(
         "rollups": rollups,
     }
 
+    _project_result_in_place(result, panel_size=panel_size)
+
     _persist_result(s3_client, tracker_id, result, start_date, end_date)
-    _say(f"Done. Net Sentiment {net_sentiment:+.1f} across {total_events:,} events.",
+    _say(f"Done. Net Sentiment {net_sentiment:+.1f} across {total_events:,} events "
+         f"(projected to US gen pop, panel_size={panel_size:,}).",
          100, "completed")
     return result
 
@@ -1370,7 +1582,16 @@ def append_daily_to_latest(
     s3_client,
 ) -> dict:
     """Merge yesterday's freshly computed result into latest.json so the
-    dashboard's time series grows continuously across cron runs."""
+    dashboard's time series grows continuously across cron runs.
+
+    Projection note: `new_day_result` is already gen-pop projected by
+    run_sentiment_tracker. If `latest` predates the projection change
+    (no meta.projection_applied) the historical time_series rows are
+    raw panel counts, while the newly-appended rows are projected — the
+    units don't match until the next full refresh rewrites everything.
+    We flag this in result["meta"]["projection_inconsistent_history"]
+    so the dashboard can surface a one-time banner.
+    """
     latest = s3_get_json(s3_client, latest_result_key(tracker_id)) or {}
     if not latest or latest.get("empty"):
         s3_put_json(s3_client, latest_result_key(tracker_id), new_day_result)
@@ -1415,6 +1636,17 @@ def append_daily_to_latest(
     latest["total_events"] = tot
     latest["generated_at"] = datetime.utcnow().isoformat() + "Z"
     latest["end_date"] = new_day_result.get("end_date") or latest.get("end_date")
+
+    # Carry the projection meta from the freshly-projected new day so the
+    # dashboard knows the units of the merged payload. Flag a transitional
+    # state when historical rows pre-date the projection.
+    new_meta = (new_day_result.get("meta") or {})
+    latest_meta = latest.setdefault("meta", {})
+    if new_meta:
+        had_projection = bool(latest_meta.get("projection_applied"))
+        latest_meta.update(new_meta)
+        if not had_projection and new_meta.get("projection_applied"):
+            latest_meta["projection_inconsistent_history"] = True
 
     s3_put_json(s3_client, latest_result_key(tracker_id), latest)
     return latest

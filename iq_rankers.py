@@ -224,6 +224,13 @@ def ensure_tracker_for_profile(
         if existing.get("s3_key") != s3_key and s3_key:
             existing["s3_key"] = s3_key
             changed = True
+        # Backfill profile_subject for trackers created before this field
+        # existed — the frontend's "View in Profile IQ" / "View in CW IQ
+        # Ranker" buttons key off this exact string when calling the
+        # ranker locate API + spotlight handlers.
+        if existing.get("profile_subject") != profile_subject and profile_subject:
+            existing["profile_subject"] = profile_subject
+            changed = True
         if changed:
             existing["updated_at"] = datetime.utcnow().isoformat() + "Z"
             sentiment_iq.s3_put_json(s3_client, key, existing)
@@ -241,6 +248,7 @@ def ensure_tracker_for_profile(
         alert_email=False,
     )
     cfg["s3_key"] = s3_key
+    cfg["profile_subject"] = profile_subject
     sentiment_iq.s3_put_json(s3_client, key, cfg)
     return cfg
 
