@@ -19120,15 +19120,9 @@
                         </div>
                         <!-- Geographic tab -->
                         <div id="sentimentIQTabGeographic" class="sentiment-iq-tab-content" style="display:none;">
-                            <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.75rem;">
-                                <div style="background:var(--bg-card);border:1px solid var(--border-color);border-radius:12px;padding:1rem;">
-                                    <h3 style="margin:0 0 0.5rem;font-size:0.95rem;">By State</h3>
-                                    <div id="sentimentIQStateTable" style="overflow-x:auto;max-height:520px;overflow-y:auto;"></div>
-                                </div>
-                                <div style="background:var(--bg-card);border:1px solid var(--border-color);border-radius:12px;padding:1rem;">
-                                    <h3 style="margin:0 0 0.5rem;font-size:0.95rem;">By DMA</h3>
-                                    <div id="sentimentIQDmaTable" style="overflow-x:auto;max-height:520px;overflow-y:auto;"></div>
-                                </div>
+                            <div style="background:var(--bg-card);border:1px solid var(--border-color);border-radius:12px;padding:1rem;">
+                                <h3 style="margin:0 0 0.5rem;font-size:0.95rem;">By DMA</h3>
+                                <div id="sentimentIQDmaTable" style="overflow-x:auto;max-height:520px;overflow-y:auto;"></div>
                             </div>
                         </div>
                         <!-- AI Rollups tab -->
@@ -22577,7 +22571,6 @@
         }
 
         function renderSentimentIQGeographic(data) {
-            var stEl = document.getElementById('sentimentIQStateTable');
             var dmaEl = document.getElementById('sentimentIQDmaTable');
             var demo = (data.demographics || {});
             function _renderGeoTable(cat) {
@@ -22594,7 +22587,6 @@
                             + '<td style="padding:5px 8px;border-bottom:1px solid var(--border-color);text-align:right;">' + r.pct.toFixed(1) + '%</td></tr>';
                     }).join('') + '</tbody></table>';
             }
-            if (stEl) stEl.innerHTML = _renderGeoTable('STATE');
             if (dmaEl) dmaEl.innerHTML = _renderGeoTable('DMA');
         }
 
