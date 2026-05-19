@@ -35832,10 +35832,19 @@
             if (footnoteEl) {
                 footnoteEl.textContent = 'Sales = Tickets Sold x $15. Purchasers = Tickets Sold / 2.5 (avg group size). Sales anchored to 70-83% of researched US box office (panel covers digital pre-purchase only).';
             }
+            // Compute the avg-tickets-per-order multiplier from data so the
+            // sublabel under "US Gen Pop Total Tickets Sold" reflects the
+            // actual divisor used (default 2.5; could shift if we re-tune).
+            const _tixNum = _tstParseNum(d.total_tickets_us);
+            const _purNum = _tstParseNum(d.total_purchasers_us);
+            const _avgPerOrder = (_tixNum > 0 && _purNum > 0)
+                ? (_tixNum / _purNum)
+                : 2.5;
+            const _avgPerOrderStr = (Math.round(_avgPerOrder * 10) / 10).toString();
             const cards = [];
-            if (d.total_purchasers_us) cards.push({ label: 'US Gen Pop Total Purchasers', value: d.total_purchasers_us, isCurrency: false });
-            if (d.total_tickets_us) cards.push({ label: 'US Gen Pop Total Tickets Sold', value: d.total_tickets_us, isCurrency: false });
-            if (d.projected_ticket_sales_us) cards.push({ label: 'US Gen Pop Ticket Sales', value: d.projected_ticket_sales_us, isCurrency: true });
+            if (d.total_purchasers_us) cards.push({ label: 'US Gen Pop Total Purchasers', value: d.total_purchasers_us, isCurrency: false, sub: '' });
+            if (d.total_tickets_us) cards.push({ label: 'US Gen Pop Total Tickets Sold', value: d.total_tickets_us, isCurrency: false, sub: `(Avg. ${_avgPerOrderStr} Tickets Per Order)` });
+            if (d.projected_ticket_sales_us) cards.push({ label: 'US Gen Pop Ticket Sales', value: d.projected_ticket_sales_us, isCurrency: true, sub: '($15 x Ticket)' });
             document.getElementById('tstSummaryCards').innerHTML = cards.map(c => {
                 const num = _tstParseNum(c.value);
                 const display = isNaN(num) ? (c.value||'').toString() : (c.isCurrency ? '$' : '') + Math.round(num).toLocaleString();
@@ -35843,11 +35852,12 @@
                 if (c.label === 'US Gen Pop Total Purchasers') {
                     tip = 'Unique people who bought a ticket (Total Tickets Sold / 2.5 average group size). One purchaser typically buys ~2.5 tickets (date night, family, friend group). ' + TST_GENPOP_TOOLTIP;
                 } else if (c.label === 'US Gen Pop Total Tickets Sold') {
-                    tip = 'US Gen Pop tickets sold (= Total Purchasers x 2.5 group size). US Gen Pop projections use the 2026 base of 329,900,000.';
+                    tip = `US Gen Pop tickets sold (= Total Purchasers x ${_avgPerOrderStr} group size). US Gen Pop projections use the 2026 base of 329,900,000.`;
                 } else if (c.label === 'US Gen Pop Ticket Sales') {
                     tip = 'Total Tickets Sold x $15 ticket price, calibrated to 70-83% of researched US box office (Crosswalk panel covers digital pre-purchase only). ' + TST_GENPOP_TOOLTIP;
                 }
-                return `<div class="exec-summary-metric has-tooltip" data-tooltip="${(tip||'').replace(/"/g,'&quot;')}"><div class="exec-metric-label">${(c.label||'').replace(/</g,'&lt;')}</div><div class="exec-metric-value">${display.replace(/</g,'&lt;')}</div></div>`;
+                const subHtml = c.sub ? `<div class="exec-metric-sublabel" style="font-size: 0.7rem; color: var(--text-secondary); opacity: 0.85; margin-top: 0.15rem; font-style: italic;">${c.sub.replace(/</g,'&lt;')}</div>` : '';
+                return `<div class="exec-summary-metric has-tooltip" data-tooltip="${(tip||'').replace(/"/g,'&quot;')}"><div class="exec-metric-label">${(c.label||'').replace(/</g,'&lt;')}</div><div class="exec-metric-value">${display.replace(/</g,'&lt;')}</div>${subHtml}</div>`;
             }).join('');
             renderTSTAudienceSnapshot(d);
             renderTSTTheatersTab(d);
