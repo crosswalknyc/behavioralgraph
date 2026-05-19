@@ -36220,6 +36220,72 @@
             }
             return sorted;
         }
+        // Defensively ensure the Gen Pop income distribution exposed to TST
+        // median calculations contains all 7 canonical income buckets. The
+        // upstream Gen Pop CSV sometimes ships without the "Under $25,000"
+        // bucket (panel composition gap), which silently skews the Gen Pop
+        // median income high (~$117K) because the interpolated-median formula
+        // shifts the 50%-cumulative point into a higher bracket. After this
+        // helper runs, missing buckets are filled from TST_GENPOP_DEMOGRAPHICS
+        // and the result is renormalized to 100%.
+        function _tstEnsureCompleteGenPopIncome(gpIncomeRaw) {
+            const CANONICAL = ['Under $25,000','$25,000 - $49,999','$50,000 - $74,999','$75,000 - $99,999','$100,000 - $149,999','$150,000 - $249,999','$250,000 or More'];
+            const BASELINE = (typeof TST_GENPOP_DEMOGRAPHICS !== 'undefined' && TST_GENPOP_DEMOGRAPHICS.INCOME) || {};
+            // Standardize any incoming key to one of the 7 canonical labels.
+            // Handles K-abbreviated variants ("$40K-$60K") and the legacy
+            // 40-59 / 60-74 buckets by mapping them to their straddling
+            // canonical bracket.
+            function _stdKey(key) {
+                const s = String(key || '').toLowerCase().replace(/,/g, '').replace(/\s+/g, '');
+                const expanded = s.replace(/\$(\d+)k/gi, (m, n) => '$' + n + '000');
+                if (expanded.includes('under') || expanded.includes('lessthan') || (expanded.includes('<') && expanded.includes('25000'))) return 'Under $25,000';
+                const nums = (expanded.match(/\d+/g) || []).map(Number);
+                const has = (n) => nums.includes(n);
+                if (has(250000) && !has(150000) && !has(249999)) return '$250,000 or More';
+                if (has(150000) && (has(249999) || has(250000))) return '$150,000 - $249,999';
+                if (has(100000) && (has(149999) || has(150000))) return '$100,000 - $149,999';
+                if (has(75000) && (has(99999) || has(100000))) return '$75,000 - $99,999';
+                if (has(50000) && (has(74999) || has(75000))) return '$50,000 - $74,999';
+                if (has(40000) && has(59999)) return '$50,000 - $74,999';
+                if (has(60000) && has(74999)) return '$50,000 - $74,999';
+                if (has(25000) && (has(49999) || has(50000))) return '$25,000 - $49,999';
+                return null;
+            }
+            const out = {};
+            for (const [k, v] of Object.entries(gpIncomeRaw || {})) {
+                const std = _stdKey(k);
+                const numV = Number(v);
+                if (std && !isNaN(numV) && numV > 0) {
+                    out[std] = (out[std] || 0) + numV;
+                }
+            }
+            // Fill any missing canonical bucket from the TST baseline so the
+            // median calculation sees a complete distribution.
+            CANONICAL.forEach(b => {
+                if (out[b] == null || out[b] === 0) {
+                    const baseV = Number(BASELINE[b]);
+                    if (!isNaN(baseV) && baseV > 0) out[b] = baseV;
+                }
+            });
+            // Renormalize to 100% so the interpolated-median formula
+            // (which expects pct to be a real share, not just an arbitrary
+            // weight) treats the cumulative correctly.
+            const total = Object.values(out).reduce((s, v) => s + (Number(v) || 0), 0);
+            if (total > 0) {
+                for (const k of Object.keys(out)) out[k] = out[k] * 100 / total;
+            }
+            return out;
+        }
+        // Take a Gen Pop demographics dict and return a copy with income
+        // patched via _tstEnsureCompleteGenPopIncome. Used at every TST site
+        // that feeds gp.income into calculateDemographicMedian so the
+        // Gen Pop median stays consistent (and correct) across views.
+        function _tstNormalizeGenPopDemographics(gpDemo) {
+            const src = gpDemo || {};
+            const incomeKey = src.income ? 'income' : (src.INCOME ? 'INCOME' : 'income');
+            const fixed = _tstEnsureCompleteGenPopIncome(src[incomeKey] || {});
+            return { ...src, income: fixed, INCOME: fixed };
+        }
         function sortTSTDemoChart(field, mode) { tstDemoSort[field]=mode; if(currentTSTData?.data) renderTSTDemographicsOverall(currentTSTData.data); }
         function sortTSTPerTheaterDemoChart(field, mode) { tstDemoSort[field]=mode; renderTSTPerTheaterCharts(); }
         
@@ -36314,7 +36380,7 @@
             const container = document.getElementById('tstDemographicsOverall');
             if (!container) return;
             const keys = ['GENDER','AGE','INCOME','ETHNICITY'];
-            const gp = genPopBaselineData?.demographics || {};
+            const gp = _tstNormalizeGenPopDemographics(genPopBaselineData?.demographics || {});
             let html = '';
             keys.forEach(field => {
                 let arr = demo[field] || [];
@@ -36434,11 +36500,12 @@
                 }
                 return fmt ? (t || '') + ' - ' + fmt : (t || '');
             };
-            const gp = { ...(genPopBaselineData?.demographics || {}) };
+            const gpRaw = { ...(genPopBaselineData?.demographics || {}) };
             ['AGE','GENDER','ETHNICITY','INCOME'].forEach(k => {
                 const keyLower = k.toLowerCase();
-                if (TST_GENPOP_DEMOGRAPHICS[k] && (!gp[keyLower] || Object.keys(gp[keyLower]).length === 0)) gp[keyLower] = TST_GENPOP_DEMOGRAPHICS[k];
+                if (TST_GENPOP_DEMOGRAPHICS[k] && (!gpRaw[keyLower] || Object.keys(gpRaw[keyLower]).length === 0)) gpRaw[keyLower] = TST_GENPOP_DEMOGRAPHICS[k];
             });
+            const gp = _tstNormalizeGenPopDemographics(gpRaw);
             const medianAgeByTheater = {};
             const medianIncomeByTheater = {};
             theaterNames.forEach(t => {
@@ -36561,7 +36628,7 @@
                 return renderTSTPerTheaterCharts();
             }
             const keys = ['GENDER','AGE','INCOME','ETHNICITY'];
-            const gp = genPopBaselineData?.demographics || {};
+            const gp = _tstNormalizeGenPopDemographics(genPopBaselineData?.demographics || {});
             const safeTheater = (theater || '').replace(/[^a-zA-Z0-9]/g,'_');
             let html = '';
             keys.forEach(field => {
