@@ -17162,16 +17162,16 @@
             <h2 style="margin: 0 0 1rem 0; font-size: 1.5rem;">📊 Ranker</h2>
             <div class="rankers-container">
                 <div class="rankers-platform-tabs" style="display: flex; gap: 0.5rem; margin-bottom: 1rem; flex-wrap: wrap;">
-                    <button class="tab-btn active" onclick="showRankerIQPlatform('netflix')" id="rankerIQPlatformNetflix"><span class="tab-icon">📺</span> Netflix</button>
-                    <button class="tab-btn" onclick="showRankerIQPlatform('goodshort')" id="rankerIQPlatformGoodshort"><span class="tab-icon">📱</span> GoodShort</button>
-                    <button class="tab-btn" onclick="showRankerIQPlatform('shorttv')" id="rankerIQPlatformShorttv"><span class="tab-icon">📱</span> ShortTV</button>
-                    <button class="tab-btn" onclick="showRankerIQPlatform('reelshort')" id="rankerIQPlatformReelshort"><span class="tab-icon">📱</span> ReelShort</button>
-                    <button class="tab-btn" onclick="showRankerIQPlatform('talent')" id="rankerIQPlatformTalent"><span class="tab-icon">⭐</span> Talent</button>
+                    <button class="tab-btn active" onclick="showRankerIQPlatform('talent')" id="rankerIQPlatformTalent"><span class="tab-icon">⭐</span> Talent</button>
                     <button class="tab-btn" onclick="showRankerIQPlatform('brands')" id="rankerIQPlatformBrands"><span class="tab-icon">📦</span> Brands</button>
                 </div>
                 <div id="rankerIQPlatformContent" class="ranker-platform-content">
-                    <!-- Netflix sub-view - reuses the existing ranker tab content -->
-                    <div id="rankeriq-netflix" class="ranker-platform-panel active">
+                    <!-- Netflix sub-view kept in DOM but hidden — Talent / Brands are the
+                         only platforms exposed to users now. Tab buttons for Netflix /
+                         GoodShort / ShortTV / ReelShort were removed; the panels stay so
+                         showRankerIQPlatform() doesn't break if something deep-links to
+                         them. -->
+                    <div id="rankeriq-netflix" class="ranker-platform-panel" style="display: none;">
                         <div class="netflix-subtabs" style="display: flex; gap: 0.35rem; margin-bottom: 1rem; flex-wrap: wrap;">
                             <button class="tab-btn" onclick="showRankerIQNetflixSubTab('all')" id="rankerIQNetflixSubTabAll">📺 All Netflix</button>
                             <button class="tab-btn active" onclick="showRankerIQNetflixSubTab('daily')" id="rankerIQNetflixSubTabDaily">📅 Daily Ranker by Series</button>
@@ -17305,7 +17305,7 @@
                     </div>
 
                     <!-- ===== TALENT RANKER ===== -->
-                    <div id="rankeriq-talent" class="ranker-platform-panel">
+                    <div id="rankeriq-talent" class="ranker-platform-panel active">
                         <div style="display: flex; justify-content: space-between; align-items: flex-end; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.5rem;">
                             <div>
                                 <h3 style="margin: 0;">⭐ Talent Ranker</h3>
@@ -17408,21 +17408,11 @@
                         <div id="iqRankerEmpty-BRAND" style="display: none; padding: 2rem; text-align: center; color: var(--text-secondary);">No data yet. The nightly ranker job populates this table after midnight ET — or run the 30-day backfill from Admin.</div>
                     </div>
                 </div>
-                <div id="rankerIQLoadBlock" style="padding: 2rem; text-align: center; background: var(--bg-card); border-radius: 8px; margin-top: 1rem;">
-                    <div id="rankerIQLoadProgress" style="display: flex; flex-direction: column; align-items: center; gap: 0.75rem;">
-                        <span class="spinner rankers-spinner" style="margin-bottom: 0;"></span>
-                        <span id="rankerIQLoadStatus" style="font-size: 0.9rem; color: var(--text-secondary);">Loading ranker data...</span>
-                    </div>
-                    <div id="rankerIQLoadDone" style="display: none;">
-                        <p style="color: var(--text-secondary); margin-bottom: 0.75rem;">Ranker data loaded.</p>
-                        <div style="display: flex; gap: 1rem; flex-wrap: wrap; justify-content: center;">
-                            <button class="btn btn-primary" onclick="loadRankerIQNetflixData(true)">📺 Refresh Netflix</button>
-                            <button class="btn btn-primary" onclick="loadReelShortRankerData()">📱 Refresh ReelShort</button>
-                            <button class="btn btn-primary" onclick="loadShortstvRankerData()">📱 Refresh ShortTV</button>
-                            <button class="btn btn-primary" onclick="loadGoodshortRankerData()">📱 Refresh GoodShort</button>
-                        </div>
-                    </div>
-                </div>
+                <!-- Legacy #rankerIQLoadBlock removed: it auto-fired the Netflix
+                     /api/rankers/netflix/data fetch which 503's, leaving a spinner
+                     plus "Error: No Netflix ranker data available" bleeding under
+                     the Talent / Brands tabs. Talent/Brands populate themselves
+                     on tab activation via initIQRanker(). -->
             </div>
         </div><!-- End rankerIQView -->
 
@@ -21599,28 +21589,9 @@
             const formView = document.getElementById('formView');
             if (formView) formView.style.display = 'none';
             
-            // Apply ranker access control - hide Netflix sub-tabs and platform tabs user doesn't have access to
-            if (!isSuperAdmin && !hasAllRankerOptions) {
-                const rankerTabMap = {
-                    'all_netflix': 'netflixSubTabAll',
-                    'daily_series': 'netflixSubTabDaily',
-                    'daily_seasons': 'netflixSubTabSeasons',
-                    'daily_episodes': 'netflixSubTabEpisodes',
-                    'trends': 'netflixSubTabTrends',
-                    'genre': 'netflixSubTabGenre',
-                    'top_shows': 'netflixSubTabTopShows',
-                    'insights': 'netflixSubTabInsights'
-                };
-                Object.entries(rankerTabMap).forEach(([option, tabId]) => {
-                    const tab = document.getElementById(tabId);
-                    if (tab) tab.style.display = rankersIQOptions.includes(option) ? '' : 'none';
-                });
-                // Shorts platform tabs (GoodShort, ShortTV, ReelShort)
-                ['goodshort', 'shorttv', 'reelshort'].forEach(platform => {
-                    const tab = document.getElementById('rankerIQPlatform' + platform.charAt(0).toUpperCase() + platform.slice(1));
-                    if (tab) tab.style.display = rankersIQOptions.includes(platform) ? '' : 'none';
-                });
-            }
+            // Ranker IQ now exposes only Talent + Brands. The legacy Netflix /
+            // GoodShort / ShortTV / ReelShort tabs (and their access-control
+            // gating) were removed.
             const customAnalysisView = document.getElementById('customAnalysisView');
             if (customAnalysisView) customAnalysisView.style.display = 'none';
             const roasIQViewEl = document.getElementById('roasIQView');
@@ -21628,9 +21599,10 @@
             const ecomIQViewEl = document.getElementById('ecommerceIQView');
             if (ecomIQViewEl) ecomIQViewEl.style.display = 'none';
             hideLLMOIQView();
-            
-            // Load ranker data
-            loadRankerIQNetflixData();
+
+            // Open Talent by default — initIQRanker populates from
+            // /api/iq-rankers/leaderboard.
+            if (typeof showRankerIQPlatform === 'function') showRankerIQPlatform('talent');
         }
         
         window.showTicketSalesIQ = function() {
@@ -76206,6 +76178,10 @@
         }
         
         function showRankerIQPlatform(id) {
+            // Only Talent and Brands are exposed now. Anything else falls
+            // through to Talent so legacy bookmarks / button onclicks don't
+            // land on a hidden panel.
+            if (id !== 'talent' && id !== 'brands') id = 'talent';
             document.querySelectorAll('#rankerIQPlatformContent .ranker-platform-panel').forEach(p => p.classList.remove('active'));
             document.querySelectorAll('.rankers-container .rankers-platform-tabs .tab-btn').forEach(b => b.classList.remove('active'));
             const panel = document.getElementById('rankeriq-' + id);
@@ -76213,17 +76189,7 @@
             const btn = document.getElementById(btnId);
             if (panel) panel.classList.add('active');
             if (btn) btn.classList.add('active');
-            // The legacy #rankerIQLoadBlock is the Netflix-fetch status panel.
-            // Hide it for every non-Netflix tab so the spinner / "Error: No
-            // Netflix ranker data..." message doesn't bleed through the
-            // Talent and Brands leaderboards.
-            const loadBlock = document.getElementById('rankerIQLoadBlock');
-            if (loadBlock) loadBlock.style.display = (id === 'netflix') ? '' : 'none';
-            if (id === 'netflix') showRankerIQNetflixSubTab('daily');
-            else if (id === 'goodshort') loadGoodshortRankerData();
-            else if (id === 'shorttv') loadShortstvRankerData();
-            else if (id === 'reelshort') loadReelShortRankerData();
-            else if (id === 'talent') initIQRanker('TALENT');
+            if (id === 'talent') initIQRanker('TALENT');
             else if (id === 'brands') initIQRanker('BRAND');
         }
 
