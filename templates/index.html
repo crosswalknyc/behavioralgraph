@@ -22351,6 +22351,14 @@
             if (cfg.brand_terms && cfg.brand_terms.length) meta.push((cfg.brand_terms || []).join(' · '));
             if (cfg.start_date && cfg.end_date) meta.push(cfg.start_date + ' → ' + cfg.end_date);
             else if (cfg.last_run_date) meta.push('updated ' + cfg.last_run_date);
+            var _siqProj = (data && data.meta) || {};
+            if (_siqProj.projection_applied) {
+                var mult = _siqProj.projection_multiplier || 0;
+                meta.push('Projected to US gen pop · ~' + mult.toFixed(1) + 'x'
+                    + (_siqProj.projection_inconsistent_history ? ' (history not yet rescaled — run Refresh to backfill)' : ''));
+            } else if (data && _siqProj && _siqProj.projection_applied === false) {
+                meta.push('Raw panel counts (gen-pop projection unavailable)');
+            }
             document.getElementById('sentimentIQDashMeta').textContent = meta.join(' • ');
             var ongoingBadge = document.getElementById('sentimentIQDashOngoing');
             if (ongoingBadge) ongoingBadge.style.display = cfg.ongoing ? '' : 'none';
