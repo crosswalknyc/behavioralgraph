@@ -8703,11 +8703,23 @@
         .iqr-explain.open { display: block; }
         .iqr-explain h5 { margin: 0 0 0.4rem; font-size: 0.85rem; color: var(--text-primary); display: flex; align-items: center; gap: 0.4rem; }
         .iqr-explain code { background: rgba(132,225,168,0.10); padding: 0.05rem 0.3rem; border-radius: 3px; font-size: 0.74rem; color: #c8f7d4; }
-        .iqr-explain .iqr-weight-bar { display: flex; align-items: center; gap: 0.5rem; margin: 0.2rem 0; }
-        .iqr-explain .iqr-weight-bar .lbl { width: 7.5rem; font-size: 0.72rem; color: var(--text-secondary); }
-        .iqr-explain .iqr-weight-bar .bar { flex: 1; height: 6px; background: rgba(102,217,239,0.08); border-radius: 999px; overflow: hidden; }
+        .iqr-explain .iqr-weight-bar {
+            display: grid;
+            grid-template-columns: 7.5rem 1fr 3rem;
+            grid-template-areas: "lbl bar pct" "def def def";
+            column-gap: 0.5rem; row-gap: 0.2rem;
+            align-items: center;
+            margin: 0.45rem 0;
+            padding-bottom: 0.35rem;
+            border-bottom: 1px dashed rgba(102,217,239,0.08);
+        }
+        .iqr-explain .iqr-weight-bar:last-of-type { border-bottom: none; }
+        .iqr-explain .iqr-weight-bar .lbl { grid-area: lbl; font-size: 0.78rem; font-weight: 600; color: var(--text-primary); }
+        .iqr-explain .iqr-weight-bar .bar { grid-area: bar; height: 6px; background: rgba(102,217,239,0.08); border-radius: 999px; overflow: hidden; }
         .iqr-explain .iqr-weight-bar .bar > span { display: block; height: 100%; background: linear-gradient(90deg, var(--accent-lime), var(--accent-blue)); border-radius: 999px; }
-        .iqr-explain .iqr-weight-bar .pct { width: 3rem; text-align: right; font-size: 0.7rem; color: var(--text-muted); font-variant-numeric: tabular-nums; }
+        .iqr-explain .iqr-weight-bar .pct { grid-area: pct; text-align: right; font-size: 0.72rem; color: var(--text-muted); font-variant-numeric: tabular-nums; }
+        .iqr-explain .iqr-weight-bar .def { grid-area: def; font-size: 0.72rem; line-height: 1.45; color: var(--text-secondary); padding-left: 0.1rem; }
+        .iqr-explain .iqr-weight-bar .def b { color: var(--text-primary); font-weight: 600; }
         .iqr-explain-close {
             position: absolute; top: 0.4rem; right: 0.5rem;
             background: transparent; border: none; color: var(--text-muted);
@@ -17583,19 +17595,39 @@
                             <h5>📐 CW IQ Score — how it's computed</h5>
                             <div style="margin-bottom: 0.55rem;">A per-day &ldquo;zeitgeist&rdquo; composite scored 0–100. Each day we compute a weighted z-score blend per profile, then squash with a sigmoid:</div>
                             <div style="margin-bottom: 0.6rem;"><code>CW IQ = 100 × σ(0.45·z<sub>volume</sub> + 0.20·z<sub>reach</sub> + 0.20·sentiment + 0.10·momentum + 0.05·recency)</code></div>
-                            <div class="iqr-weight-bar"><span class="lbl">Volume</span><span class="bar"><span style="width: 45%;"></span></span><span class="pct">0.45</span></div>
-                            <div class="iqr-weight-bar"><span class="lbl">Reach</span><span class="bar"><span style="width: 20%;"></span></span><span class="pct">0.20</span></div>
-                            <div class="iqr-weight-bar"><span class="lbl">Sentiment</span><span class="bar"><span style="width: 20%;"></span></span><span class="pct">0.20</span></div>
-                            <div class="iqr-weight-bar"><span class="lbl">Momentum</span><span class="bar"><span style="width: 10%;"></span></span><span class="pct">0.10</span></div>
-                            <div class="iqr-weight-bar"><span class="lbl">Recency</span><span class="bar"><span style="width: 5%;"></span></span><span class="pct">0.05</span></div>
-                            <ul style="margin: 0.6rem 0 0; padding-left: 1.1rem; font-size: 0.74rem;">
-                                <li><b>z<sub>volume</sub></b> = z-score of <code>log1p(mentions)</code> vs that profile's trailing 28-day baseline.</li>
-                                <li><b>z<sub>reach</sub></b> = z-score of <code>log1p(unique panelists)</code> vs same baseline.</li>
-                                <li><b>sentiment</b> = (Pos − Neg) / (Pos + Neu + Neg), clamped to [−1, +1].</li>
-                                <li><b>momentum</b> = day-over-day mention % change, clamped to [−2, +2].</li>
-                                <li><b>recency</b> = 1 if mentioned today, 0.5 if mentioned yesterday, else 0.</li>
-                                <li><b>Cold-start damping:</b> z<sub>volume</sub> and z<sub>reach</sub> scale by <code>min(1, days_of_history / 3)</code> so brand-new profiles don't outrank established ones on first-day novelty noise.</li>
-                                <li><b>Multi-day windows:</b> CW IQ is shown as a raw-mention-weighted average so partial-ingest days contribute proportionally less.</li>
+                            <div class="iqr-weight-bar">
+                                <span class="lbl">Volume</span>
+                                <span class="bar"><span style="width: 45%;"></span></span>
+                                <span class="pct">0.45</span>
+                                <span class="def"><b>How loud is today?</b> z-score of <code>log1p(mentions)</code> vs the profile's own trailing 28-day baseline. Higher = today's panel mention count is unusually big for this profile.</span>
+                            </div>
+                            <div class="iqr-weight-bar">
+                                <span class="lbl">Reach</span>
+                                <span class="bar"><span style="width: 20%;"></span></span>
+                                <span class="pct">0.20</span>
+                                <span class="def"><b>How wide is today?</b> z-score of <code>log1p(unique panelists)</code> vs the same 28-day baseline. Separates &ldquo;a few people clicked a lot&rdquo; from &ldquo;lots of distinct people engaged.&rdquo;</span>
+                            </div>
+                            <div class="iqr-weight-bar">
+                                <span class="lbl">Sentiment</span>
+                                <span class="bar"><span style="width: 20%;"></span></span>
+                                <span class="pct">0.20</span>
+                                <span class="def"><b>What was the tone?</b> <code>(Pos − Neg) / (Pos + Neu + Neg)</code>, clamped to [−1, +1]. +1 = entirely positive engagement, −1 = entirely negative, 0 = neutral or balanced.</span>
+                            </div>
+                            <div class="iqr-weight-bar">
+                                <span class="lbl">Momentum</span>
+                                <span class="bar"><span style="width: 10%;"></span></span>
+                                <span class="pct">0.10</span>
+                                <span class="def"><b>Are they trending?</b> Day-over-day % change in mentions, clamped to [−2, +2]. Positive = growing vs yesterday, negative = cooling off.</span>
+                            </div>
+                            <div class="iqr-weight-bar">
+                                <span class="lbl">Recency</span>
+                                <span class="bar"><span style="width: 5%;"></span></span>
+                                <span class="pct">0.05</span>
+                                <span class="def"><b>Are they still alive?</b> 1.0 if mentioned today, 0.5 if mentioned yesterday, 0 otherwise. Stops dormant profiles from coasting on old momentum.</span>
+                            </div>
+                            <ul style="margin: 0.85rem 0 0; padding-left: 1.1rem; font-size: 0.74rem;">
+                                <li><b>Cold-start damping:</b> Volume and Reach z-scores scale by <code>min(1, days_of_history / 3)</code> so brand-new profiles don't outrank established ones on first-day novelty noise.</li>
+                                <li><b>Multi-day windows:</b> CW IQ across a window is the raw-mention-weighted average of daily scores, so partial-ingest days contribute proportionally less.</li>
                             </ul>
                             <div style="margin-top: 0.6rem; padding-top: 0.55rem; border-top: 1px dashed rgba(132,225,168,0.25); font-size: 0.74rem;">
                                 <b style="color: #c8f7d4;">Mentions / Pos / Neu / Neg</b> are projected to US gen pop using a per-day multiplier:
