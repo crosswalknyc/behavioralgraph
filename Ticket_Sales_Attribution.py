@@ -52,11 +52,16 @@ DIGITAL_SALES_FACTOR_MID = (DIGITAL_SALES_FACTOR_LOW + DIGITAL_SALES_FACTOR_HIGH
 
 # Group-size divisor: average tickets-per-purchaser for theatrical attendance.
 # A movie ticket transaction usually buys ~2.5 tickets (date nights, families,
-# friend groups) so unique purchasers ≈ tickets_sold / 2.5. The 2.5 is the
-# steady-state industry average across all genres; Family/Animation skews a
-# bit higher (~3) but we keep the divisor flat and let the 2x sales multiplier
-# (already gated on genre) handle the dollar uplift. Tune via env var if real-
-# world calibration shifts.
+# friend groups) so unique purchasers ≈ tickets_sold / N. N is the steady-
+# state industry average for how many tickets a single purchaser walks out
+# with. We use 2.5 for most titles and 4 for Family/Animation (parents +
+# kids pile into one transaction). This is the SAME N that appears as the
+# Avg. Tickets Per Order sublabel on the dashboard, and the dashboard's
+# "$15 x Ticket" / "(Avg. N Tickets Per Order)" labels are now arithmetically
+# truthful: Purchasers x N = Tickets, Tickets x $15 = Sales. Previously
+# Family/Animation hid an extra 2x multiplier inside the per-ticket price
+# (so "$15 x Ticket" really meant $30/ticket); that bad math has been
+# replaced by raising N to 4 on the purchasers side.
 try:
     PURCHASER_TICKETS_PER_PERSON = float(
         os.environ.get("TICKET_PURCHASER_TICKETS_PER_PERSON", "2.5")
@@ -65,6 +70,27 @@ try:
         PURCHASER_TICKETS_PER_PERSON = 2.5
 except (ValueError, TypeError):
     PURCHASER_TICKETS_PER_PERSON = 2.5
+
+try:
+    PURCHASER_TICKETS_PER_PERSON_FAMILY = float(
+        os.environ.get("TICKET_PURCHASER_TICKETS_PER_PERSON_FAMILY", "4")
+    )
+    if PURCHASER_TICKETS_PER_PERSON_FAMILY <= 0:
+        PURCHASER_TICKETS_PER_PERSON_FAMILY = 4.0
+except (ValueError, TypeError):
+    PURCHASER_TICKETS_PER_PERSON_FAMILY = 4.0
+
+
+def _tickets_per_purchaser(genre):
+    """Return the avg-tickets-per-order divisor for a given genre.
+
+    Family / Animation -> 4 (parents + kids in one transaction).
+    Everything else    -> 2.5 (date night, friend group baseline).
+    """
+    g = (genre or "").lower()
+    if "family" in g or "animation" in g:
+        return PURCHASER_TICKETS_PER_PERSON_FAMILY
+    return PURCHASER_TICKETS_PER_PERSON
 
 
 def gen_pop_projection(raw_number):
@@ -1283,7 +1309,9 @@ def ai_validate_ticket_metrics(movie_name, genre, start_date, end_date,
         f"=== PHASE C: EDGE CASES ===\n"
         f"- Short windows (1-2 weekends) naturally produce smaller numbers — don't flag low.\n"
         f"- Indie / limited / arthouse releases have modest numbers — that is expected.\n"
-        f"- The genre 2x factor for Family/Animation is already applied. Do not double-count.\n\n"
+        f"- For Family/Animation: tickets-per-purchaser is 4 (parents + kids in one\n"
+        f"  transaction), not 2.5. Per-ticket price stays $15. Do not add an\n"
+        f"  extra multiplier on top of this.\n\n"
         f"Respond in JSON ONLY (no markdown fencing):\n"
         f"{{\n"
         f'  "passed": true/false,\n'
@@ -2088,14 +2116,20 @@ def write_output(results, p):
     total_tickets = sum(platform_totals.values())
     total_tickets_gen_pop = gen_pop_projection(total_tickets)
 
-    # Genre check for 2x factor (family or animation)
+    # Genre check — family/animation gets a higher tickets-per-purchaser
+    # divisor (4 instead of 2.5) because parents + kids consolidate into a
+    # single transaction. The OLD model hid this uplift inside the ticket
+    # price (Tickets * $15 * 2) which made the "$15 x Ticket" dashboard
+    # label arithmetically false; the NEW model bakes it into the
+    # purchasers side so Sales = Tickets * $15 cleanly.
     genre_lower = (p.get("genre") or "").lower()
     is_family_animation = "family" in genre_lower or "animation" in genre_lower
-    ticket_multiplier = 2.0 if is_family_animation else 1.0
+    tickets_per_purchaser = _tickets_per_purchaser(p.get("genre", ""))
 
-    # Projected ticket sales: total * $15, then * multiplier if family/animation
-    projected_sales_base = total_tickets * 15.0 * ticket_multiplier
-    projected_sales_gen_pop = total_tickets_gen_pop * 15.0 * ticket_multiplier
+    # Projected ticket sales: total * $15 (no extra multipliers — the
+    # family uplift lives on the purchasers side, not the price side).
+    projected_sales_base = total_tickets * 15.0
+    projected_sales_gen_pop = total_tickets_gen_pop * 15.0
 
     # Demographics - overall (computed BEFORE building rows so the AI auditor
     # can compare against researched audience skew and the adjustments below
@@ -2149,7 +2183,7 @@ def write_output(results, p):
         ("", "TICKET SALES ATTRIBUTION RESULTS", "", "", "", ""),
         ("", "", "", "", "", ""),
         ("Movie", "", p["movie_name"], "", "", ""),
-        ("Genre", "", p.get("genre", ""), f"(2x factor: {'Yes' if is_family_animation else 'No'})", "", ""),
+        ("Genre", "", p.get("genre", ""), f"({tickets_per_purchaser:g}x tickets/order: {'Yes' if is_family_animation else 'No'})", "", ""),
         ("Date Range", "", f"{p['start_date'].date()} to {p['end_date'].date()}", "", "", ""),
         ("", "", "", "", "", ""),
         ("", "TOTAL HITS (MOVIE VIEWERS) → THEATER BY PLATFORM", "", "", "", ""),
@@ -2161,19 +2195,22 @@ def write_output(results, p):
         genpop = format_gen_pop_full(gen_pop_projection(hits))
         rows.append((platform, hits, genpop, "", "", ""))
 
-    # Unique purchasers = total tickets / group-size divisor (default 2.5).
-    # Surfaced as its own headline KPI on the dashboard so analysts can talk
-    # about "people who bought a ticket" separately from "tickets sold". The
-    # gen-pop value is shown as the front card on the Summary tab.
-    total_purchasers = total_tickets / PURCHASER_TICKETS_PER_PERSON if total_tickets else 0
+    # Unique purchasers = total tickets / tickets-per-purchaser divisor
+    # (2.5 default; 4 for family/animation). Surfaced as its own headline
+    # KPI on the dashboard so analysts can talk about "people who bought
+    # a ticket" separately from "tickets sold". The gen-pop value is the
+    # front card on the Summary tab and the dashboard's
+    # "(Avg. N Tickets Per Order)" sublabel is derived from the ratio of
+    # these two numbers, so they must stay arithmetically consistent.
+    total_purchasers = total_tickets / tickets_per_purchaser if total_tickets else 0
     total_purchasers_gen_pop = (
-        total_tickets_gen_pop / PURCHASER_TICKETS_PER_PERSON
+        total_tickets_gen_pop / tickets_per_purchaser
         if total_tickets_gen_pop else 0
     )
     rows.extend([
         ("", "", "", "", "", ""),
         (
-            f"Total Purchasers (Tickets / {PURCHASER_TICKETS_PER_PERSON:g})",
+            f"Total Purchasers (Tickets / {tickets_per_purchaser:g})",
             f"{total_purchasers:,.2f}",
             format_gen_pop_full(total_purchasers_gen_pop),
             "",
@@ -2181,7 +2218,7 @@ def write_output(results, p):
             "",
         ),
         ("Total Tickets Sold (sum of theater hits)", total_tickets, format_gen_pop_full(total_tickets_gen_pop), "", "", ""),
-        ("Projected Ticket Sales (Total × $15" + (" × 2" if is_family_animation else "") + ")", f"${projected_sales_base:,.2f}", f"${projected_sales_gen_pop:,.2f}", "", "", ""),
+        ("Projected Ticket Sales (Total × $15)", f"${projected_sales_base:,.2f}", f"${projected_sales_gen_pop:,.2f}", "", "", ""),
         ("", "", "", "", "", ""),
     ])
 
