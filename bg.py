@@ -14603,17 +14603,49 @@ def _strip_foreign_finance_entities(df_behavior, verbose: bool = True):
 # Donnie Yen → STAR WARS, Emma Watson → HARRY POTTER, Harrison Ford →
 # STAR WARS / INDIANA JONES).
 _KIDS_FRANCHISE_IPS = {
-    'POKEMON', 'POKEMON GO',
-    'MINECRAFT', 'ROBLOX',
+    # Kids/YA. Franchise-tie escape: any row >= 35% exempts ALL rows of that IP.
+    'POKEMON', 'POKEMON GO', 'POKEMON UNITE', 'POKEMON TCG POCKET',
+    'MINECRAFT', 'ROBLOX', 'FORTNITE',
     'SUPER MARIO',
     'HELLO KITTY', 'HELLO KITTY AND FRIENDS',
     'SQUISHMALLOWS',
     'DISNEY-PRINCESS', 'DISNEY PRINCESS',
     'BARBIE',
     'NERF',
-    'FISHER-PRICE',
+    'FISHER-PRICE', 'BUILD-A-BEAR',
     'HUNGER GAMES', 'THE HUNGER GAMES',
+    'WICKED',
+    # Cross-franchise media IPs (escape hatch protects in-franchise celebs)
     'SPIDER-MAN',
+    'TRANSFORMERS',
+    'STAR WARS',
+    'INDIANA JONES',
+    'HARRY POTTER',
+    'MARVEL',
+    'GAME OF THRONES',
+    'GHOSTBUSTERS',
+    'JURASSIC WORLD', 'JURASSIC PARK',
+    'LEGO',
+    'MICKEY MOUSE AND FRIENDS',
+    'BLUEY',
+    'SPONGEBOB SQUAREPANTS',
+    'POWER RANGERS',
+    'TEENAGE MUTANT NINJA TURTLES',
+    'SCOOBY DOO',
+    'GI JOE',
+    'KUNG FU PANDA',
+    'ANGRY BIRDS',
+    'MORTAL KOMBAT',
+    'RESIDENT EVIL',
+    'ASSASSINS CREED', "ASSASSIN'S CREED",
+    'GRAND THEFT AUTO', 'GTA',
+    'HALO',
+    'FALLOUT',
+    'FINAL FANTASY',
+    'MONSTER HUNTER',
+    'THE LAST OF US',
+    'STAR TREK',
+    'DUNE',
 }
 
 def _enforce_kids_franchise_caps(df_behavior, subject: str = '',
@@ -14635,7 +14667,9 @@ def _enforce_kids_franchise_caps(df_behavior, subject: str = '',
     subj_key = (subject or '').strip().upper() or 'UNKNOWN_SUBJECT'
     try:
         def _audience_cap_for_ip(ip_upper, max_existing_bp):
-            if max_existing_bp >= 35.0:
+            # 25% threshold — catches borderline ties (Donnie Yen → STAR WARS
+            # via Rogue One landed at 33.6; we want to preserve that).
+            if max_existing_bp >= 25.0:
                 return None
             if ip_upper == 'SPIDER-MAN':
                 return 9.0
@@ -21393,9 +21427,10 @@ Behavioral Graph by Crosswalk NYC — automated affiliation auditor</p>
                 f"(Domain shown is a suggested primary owned domain — review and "
                 f"replace with the actual hostname pattern.)\n"
                 f"{rows_text}\n")
-        ses.send_email(
-            Source='no_reply@crosswalknyc.com',
-            Destination={
+        _ses_subject = f'📨 Hostmap brands needed for {subject_name} ({len(missing)}) — consolidated'
+        _ses_payload = {
+            'Source': 'no_reply@crosswalknyc.com',
+            'Destination': {
                 'ToAddresses': ['jenna@crosswalknyc.com'],
                 'CcAddresses': [
                     'jessie@crosswalknyc.com',
@@ -21403,19 +21438,39 @@ Behavioral Graph by Crosswalk NYC — automated affiliation auditor</p>
                     'liz@crosswalknyc.com',
                 ],
             },
-            Message={
-                'Subject': {'Data': f'📨 Hostmap brands needed for {subject_name} ({len(missing)}) — consolidated',
-                            'Charset': 'UTF-8'},
+            'Message': {
+                'Subject': {'Data': _ses_subject, 'Charset': 'UTF-8'},
                 'Body': {
                     'Html': {'Data': html, 'Charset': 'UTF-8'},
                     'Text': {'Data': text, 'Charset': 'UTF-8'},
                 },
             },
-        )
-        print(f"   📧 Sent missing-hostmap email to jenna@ (cc jessie@, anastasia@, liz@) "
-              f"for {len(missing)} brand(s)")
+        }
+        try:
+            ses.send_email(**_ses_payload)
+            print(f"   📧 Sent missing-hostmap email to jenna@ (cc jessie@, anastasia@, liz@) "
+                  f"for {len(missing)} brand(s)")
+        except Exception as _se:
+            _msg = str(_se)
+            if 'Throttling' in _msg or 'quota' in _msg.lower() or 'Daily message' in _msg:
+                import json as _json
+                _q = '/tmp/bg_hostmap_email_retry.jsonl'
+                try:
+                    with open(_q, 'a') as _qf:
+                        _qf.write(_json.dumps({
+                            'subject_name': subject_name,
+                            'missing': missing,
+                            'ses_subject': _ses_subject,
+                            'html': html,
+                            'text': text,
+                        }) + '\n')
+                    print(f"   📥 SES throttled — queued hostmap email for retry ({_q})")
+                except Exception as _qe:
+                    print(f"   ⚠️ SES throttled AND queue write failed: {_qe}")
+            else:
+                print(f"   ⚠️ SES email failed: {_se}")
     except Exception as _e:
-        print(f"   ⚠️ SES email failed: {_e}")
+        print(f"   ⚠️ SES email build failed: {_e}")
 
 
 def parallel_category_agents(df: pd.DataFrame, persona_doc: dict,
