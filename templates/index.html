@@ -8922,6 +8922,106 @@
         .iqr-chart-summary .stat .delta { font-size: 0.72rem; }
         .iqr-modal-empty { padding: 2.5rem; text-align: center; color: var(--text-secondary); }
         .iqr-modal-loading { padding: 2.5rem; text-align: center; color: var(--text-secondary); }
+
+        /* ── Compare modal: 2-column layout (picker | chart) ─────────────── */
+        .iqr-compare-grid {
+            display: grid;
+            grid-template-columns: minmax(240px, 280px) 1fr;
+            gap: 1rem;
+            min-height: 480px;
+        }
+        @media (max-width: 880px) {
+            .iqr-compare-grid { grid-template-columns: 1fr; }
+        }
+        .iqr-compare-picker {
+            display: flex; flex-direction: column;
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: 10px;
+            overflow: hidden;
+        }
+        .iqr-compare-picker-head {
+            display: flex; flex-direction: column; gap: 0.4rem;
+            padding: 0.65rem 0.75rem;
+            border-bottom: 1px solid var(--border-color);
+        }
+        .iqr-compare-picker-head input[type="search"] {
+            padding: 0.4rem 0.6rem;
+            font-size: 0.78rem;
+            background: var(--bg-input);
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            color: var(--text-primary);
+            outline: none;
+        }
+        .iqr-compare-picker-head input[type="search"]:focus { border-color: var(--accent-blue); }
+        .iqr-compare-list {
+            flex: 1;
+            overflow-y: auto;
+            max-height: 460px;
+            padding: 0.25rem;
+        }
+        .iqr-compare-list-row {
+            display: flex; align-items: center; gap: 0.5rem;
+            padding: 0.4rem 0.55rem;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: background 0.1s ease;
+        }
+        .iqr-compare-list-row:hover { background: rgba(102,217,239,0.06); }
+        .iqr-compare-list-row.selected {
+            background: rgba(102,217,239,0.12);
+            outline: 1px solid rgba(102,217,239,0.35);
+        }
+        .iqr-compare-list-row .swatch {
+            width: 0.65rem; height: 0.65rem; border-radius: 50%;
+            border: 1px solid rgba(255,255,255,0.15);
+            flex-shrink: 0;
+        }
+        .iqr-compare-list-row.selected .swatch { border-color: rgba(255,255,255,0.5); }
+        .iqr-compare-list-row .lbl {
+            flex: 1; min-width: 0;
+            display: flex; flex-direction: column;
+            font-size: 0.76rem; color: var(--text-primary);
+            overflow: hidden;
+        }
+        .iqr-compare-list-row .lbl .name { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .iqr-compare-list-row .lbl .sub { font-size: 0.65rem; color: var(--text-secondary); }
+        .iqr-compare-list-row .check {
+            width: 1rem; height: 1rem;
+            border: 1.5px solid var(--border-color);
+            border-radius: 4px;
+            display: inline-flex; align-items: center; justify-content: center;
+            font-size: 0.7rem; line-height: 1;
+            background: transparent;
+            color: transparent;
+            transition: background 0.1s ease, border-color 0.1s ease, color 0.1s ease;
+        }
+        .iqr-compare-list-row.selected .check {
+            background: var(--accent-blue);
+            border-color: var(--accent-blue);
+            color: #fff;
+        }
+        .iqr-compare-chart-pane { display: flex; flex-direction: column; gap: 0.6rem; min-width: 0; }
+        .iqr-compare-chips {
+            display: flex; flex-wrap: wrap; gap: 0.3rem;
+            min-height: 1.6rem;
+        }
+        .iqr-compare-chip {
+            display: inline-flex; align-items: center; gap: 0.35rem;
+            padding: 0.22rem 0.55rem;
+            font-size: 0.7rem; font-weight: 500;
+            background: rgba(102,217,239,0.08);
+            color: var(--text-primary);
+            border: 1px solid var(--border-color);
+            border-radius: 999px;
+        }
+        .iqr-compare-chip .swatch { width: 0.55rem; height: 0.55rem; border-radius: 50%; }
+        .iqr-compare-chip .x {
+            background: transparent; border: none; color: var(--text-secondary);
+            cursor: pointer; padding: 0; font-size: 0.85rem; line-height: 1;
+        }
+        .iqr-compare-chip .x:hover { color: var(--accent-red); }
         .rankers-insights-grid .insight-card { background: var(--bg-card); border-radius: 8px; padding: 1rem; border: 1px solid var(--border-color); }
         .rankers-insights-grid .insight-label { font-size: 0.7rem; text-transform: uppercase; color: var(--text-secondary); margin-bottom: 0.25rem; }
         .rankers-insights-grid .insight-value { font-size: 1.1rem; font-weight: 700; color: var(--accent-cyan); }
@@ -17633,6 +17733,7 @@
                                 </div>
                                 <div class="iqr-actions">
                                     <button class="iqr-info-chip" type="button" onclick="toggleIQRankerExplainer('{{ m.key }}')" title="Show methodology" aria-controls="iqRankerExplainer-{{ m.key }}">ⓘ How is CW IQ scored?</button>
+                                    <button class="iqr-btn" type="button" onclick="openIQRankerCompare('{{ m.key }}')" title="Overlay multiple profiles on one chart">⚖️ Compare</button>
                                     {% if loop.first and (role == 'super_admin' or role == 'admin') %}
                                     <button class="iqr-btn iqr-btn-primary" type="button" onclick="iqRankersLoadDay(this)" id="iqRankersLoadDayBtn-{{ m.key }}">⚡ Load 1 day</button>
                                     {% endif %}
@@ -17740,6 +17841,60 @@
                      plus "Error: No Netflix ranker data available" bleeding under
                      the Talent / Brands tabs. Talent/Brands populate themselves
                      on tab activation via initIQRanker(). -->
+            </div>
+
+            <!-- Multi-profile compare modal — overlays the same metric for
+                 N profiles on one chart, day-over-day across the selected
+                 leaderboard window. -->
+            <div id="iqRankerCompareModal" class="iqr-modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="iqRankerCompareTitle">
+                <div class="iqr-modal" style="width: min(1180px, 100%);">
+                    <div class="iqr-modal-head">
+                        <div class="ttl">
+                            <strong id="iqRankerCompareTitle">Compare profiles</strong>
+                            <small id="iqRankerCompareSubtitle"></small>
+                        </div>
+                        <button type="button" class="iqr-modal-close" onclick="closeIQRankerCompare()" aria-label="Close">✕ Close</button>
+                    </div>
+                    <div class="iqr-modal-body">
+                        <div class="iqr-compare-grid">
+                            <!-- Left rail: profile picker -->
+                            <div class="iqr-compare-picker">
+                                <div class="iqr-compare-picker-head">
+                                    <input type="search" id="iqRankerCompareSearch" placeholder="Search profiles…" oninput="renderIQRankerCompareList()">
+                                    <div style="display: flex; gap: 0.3rem; flex-wrap: wrap;">
+                                        <button type="button" class="iqr-btn" onclick="iqRankerCompareSeedTopN(5)">Top 5</button>
+                                        <button type="button" class="iqr-btn" onclick="iqRankerCompareSeedTopN(10)">Top 10</button>
+                                        <button type="button" class="iqr-btn" onclick="iqRankerCompareClear()">Clear</button>
+                                    </div>
+                                </div>
+                                <div class="iqr-compare-list" id="iqRankerCompareList"></div>
+                            </div>
+                            <!-- Right pane: chart + controls -->
+                            <div class="iqr-compare-chart-pane">
+                                <div class="iqr-modal-toolbar">
+                                    <div class="group" role="tablist" aria-label="Metric">
+                                        <button type="button" data-iq-cmp-metric="mentions"      class="active" onclick="setIQRankerCompareMetric('mentions')">Mentions</button>
+                                        <button type="button" data-iq-cmp-metric="pos"           onclick="setIQRankerCompareMetric('pos')">Positive</button>
+                                        <button type="button" data-iq-cmp-metric="neg"           onclick="setIQRankerCompareMetric('neg')">Negative</button>
+                                        <button type="button" data-iq-cmp-metric="net_sentiment" onclick="setIQRankerCompareMetric('net_sentiment')">Net Sent.</button>
+                                        <button type="button" data-iq-cmp-metric="cw_iq_score"   onclick="setIQRankerCompareMetric('cw_iq_score')">CW IQ</button>
+                                    </div>
+                                    <div class="group" role="tablist" aria-label="Mode">
+                                        <button type="button" data-iq-cmp-mode="value" class="active" onclick="setIQRankerCompareMode('value')">Daily values</button>
+                                        <button type="button" data-iq-cmp-mode="delta"             onclick="setIQRankerCompareMode('delta')">Δ DoD</button>
+                                        <button type="button" data-iq-cmp-mode="pct"               onclick="setIQRankerCompareMode('pct')">% Δ DoD</button>
+                                    </div>
+                                </div>
+                                <div id="iqRankerCompareSelectedChips" class="iqr-compare-chips"></div>
+                                <div id="iqRankerCompareEmpty" class="iqr-modal-empty">Pick 2 or more profiles from the left to plot their day-over-day deltas on one chart.</div>
+                                <div id="iqRankerCompareLoading" class="iqr-modal-loading" style="display: none;"><span class="spinner"></span> Loading series…</div>
+                                <div id="iqRankerCompareChartWrap" class="iqr-chart-wrap" style="display: none; height: 420px;">
+                                    <canvas id="iqRankerCompareChartCanvas"></canvas>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </div>
 
             <!-- Drill-down day-over-day chart modal (single instance reused
@@ -76904,6 +77059,381 @@
                 mkStat('CW IQ',         last.cw_iq_score,   first.cw_iq_score,   true),
                 mkStat('Panel size (last day)', last.panel_size, first.panel_size, false),
             ].join('');
+        }
+
+        // ────────────────────────────────────────────────────────────────
+        // IQ Rankers — multi-profile compare modal
+        // ────────────────────────────────────────────────────────────────
+        // Pick N profiles from the leaderboard, fetch each one's full
+        // timeseries in parallel, and overlay them on a single Chart.js
+        // line chart for any chosen metric (Mentions / Pos / Neg / Net
+        // Sent / CW IQ) in any of three modes (Daily values / Δ DoD / %ΔDoD).
+        const IQR_COMPARE_STATE = {
+            master: null,                     // master key the modal opened from
+            metric: 'mentions',               // chart metric
+            mode:   'value',                  // 'value' | 'delta' | 'pct'
+            available: [],                    // [{ profile_subject, project_name, subcategory }]
+            search: '',
+            selected: new Map(),              // subject → { name, subcategory, color, data: rows[] | null }
+            chart: null,
+            paletteIdx: 0,
+        };
+        // Distinct, dark-bg-friendly palette. Cycles when exhausted (we cap
+        // at 12 selections to keep the chart readable).
+        const IQR_COMPARE_PALETTE = [
+            '#66d9ef', '#84e1a8', '#ffd166', '#ff7a7a', '#c8b8ff', '#f5a3ff',
+            '#76e2c8', '#ffa769', '#9be564', '#7c9bff', '#ff9ec7', '#cdd6f4',
+        ];
+        const IQR_COMPARE_MAX = 12;
+
+        const IQR_COMPARE_METRIC_META = {
+            mentions:      { label: 'Mentions',      axis: 'count', projected: true  },
+            pos:           { label: 'Positive',      axis: 'count', projected: true  },
+            neg:           { label: 'Negative',      axis: 'count', projected: true  },
+            net_sentiment: { label: 'Net Sentiment', axis: 'score', projected: false },
+            cw_iq_score:   { label: 'CW IQ',         axis: 'score', projected: false },
+        };
+
+        function openIQRankerCompare(master) {
+            const state = IQ_RANKER_STATE[master];
+            if (!state) return;
+            IQR_COMPARE_STATE.master = master;
+            IQR_COMPARE_STATE.selected = new Map();
+            IQR_COMPARE_STATE.paletteIdx = 0;
+            IQR_COMPARE_STATE.search = '';
+
+            // Title + subtitle reflect the active leaderboard window so the
+            // user sees this is comparing the same date range they're
+            // looking at in the table.
+            document.getElementById('iqRankerCompareTitle').textContent =
+                `Compare ${master.charAt(0) + master.slice(1).toLowerCase()} profiles`;
+            const sub = document.getElementById('iqRankerCompareSubtitle');
+            sub.textContent = `Day-over-day across ${state.start || '...'} → ${state.end || '...'}`;
+
+            // Build the picker dataset from the leaderboard rows currently
+            // loaded in the table — that way the picker reflects the
+            // active subcategory + search filter automatically.
+            const rows = state.lastRows || [];
+            IQR_COMPARE_STATE.available = rows.map(r => ({
+                profile_subject: r.profile_subject,
+                project_name:    r.project_name || r.profile_subject,
+                subcategory:     r.subcategory || '',
+            }));
+
+            // Reset search + clear chips/empty state
+            const searchEl = document.getElementById('iqRankerCompareSearch');
+            if (searchEl) searchEl.value = '';
+            renderIQRankerCompareList();
+            renderIQRankerCompareChips();
+            document.getElementById('iqRankerCompareEmpty').style.display = 'block';
+            document.getElementById('iqRankerCompareChartWrap').style.display = 'none';
+
+            // Show modal
+            document.getElementById('iqRankerCompareModal').classList.add('open');
+            document.body.style.overflow = 'hidden';
+        }
+
+        function closeIQRankerCompare() {
+            const modal = document.getElementById('iqRankerCompareModal');
+            if (modal) modal.classList.remove('open');
+            document.body.style.overflow = '';
+            if (IQR_COMPARE_STATE.chart) {
+                try { IQR_COMPARE_STATE.chart.destroy(); } catch (_) {}
+                IQR_COMPARE_STATE.chart = null;
+            }
+        }
+        // Click backdrop / Esc → close
+        document.addEventListener('click', function(ev) {
+            const backdrop = document.getElementById('iqRankerCompareModal');
+            if (!backdrop || !backdrop.classList.contains('open')) return;
+            if (ev.target === backdrop) closeIQRankerCompare();
+        });
+        document.addEventListener('keydown', function(ev) {
+            if (ev.key !== 'Escape') return;
+            const backdrop = document.getElementById('iqRankerCompareModal');
+            if (backdrop && backdrop.classList.contains('open')) closeIQRankerCompare();
+        });
+
+        function renderIQRankerCompareList() {
+            const wrap = document.getElementById('iqRankerCompareList');
+            if (!wrap) return;
+            const search = (document.getElementById('iqRankerCompareSearch')?.value || '').trim().toLowerCase();
+            IQR_COMPARE_STATE.search = search;
+            const filtered = !search
+                ? IQR_COMPARE_STATE.available
+                : IQR_COMPARE_STATE.available.filter(p =>
+                    (p.project_name || '').toLowerCase().includes(search) ||
+                    (p.profile_subject || '').toLowerCase().includes(search) ||
+                    (p.subcategory || '').toLowerCase().includes(search)
+                  );
+            if (!filtered.length) {
+                wrap.innerHTML = `<div style="padding: 1rem; text-align: center; color: var(--text-secondary); font-size: 0.78rem;">No profiles match "${_iqEsc(search)}".</div>`;
+                return;
+            }
+            wrap.innerHTML = filtered.map(p => {
+                const sel = IQR_COMPARE_STATE.selected.get(p.profile_subject);
+                const swatch = sel ? `style="background: ${sel.color};"` : `style="background: rgba(255,255,255,0.08);"`;
+                return `<div class="iqr-compare-list-row${sel ? ' selected' : ''}" onclick="toggleIQRankerCompareProfile('${_iqJsAttr(p.profile_subject)}')">
+                    <div class="check">${sel ? '✓' : ''}</div>
+                    <div class="swatch" ${swatch}></div>
+                    <div class="lbl">
+                        <span class="name">${_iqEsc(p.project_name)}</span>
+                        <span class="sub">${_iqEsc(p.subcategory)}</span>
+                    </div>
+                </div>`;
+            }).join('');
+        }
+
+        function _iqJsAttr(s) {
+            // Escape a string so it's safe to drop inside a single-quoted
+            // onclick attribute literal.
+            return String(s || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+        }
+
+        function toggleIQRankerCompareProfile(profileSubject) {
+            const cur = IQR_COMPARE_STATE.selected;
+            if (cur.has(profileSubject)) {
+                cur.delete(profileSubject);
+            } else {
+                if (cur.size >= IQR_COMPARE_MAX) {
+                    alert(`Maximum ${IQR_COMPARE_MAX} profiles. Remove one before adding another.`);
+                    return;
+                }
+                const meta = IQR_COMPARE_STATE.available.find(p => p.profile_subject === profileSubject);
+                if (!meta) return;
+                const color = IQR_COMPARE_PALETTE[IQR_COMPARE_STATE.paletteIdx % IQR_COMPARE_PALETTE.length];
+                IQR_COMPARE_STATE.paletteIdx += 1;
+                cur.set(profileSubject, {
+                    name: meta.project_name,
+                    subcategory: meta.subcategory,
+                    color: color,
+                    data: null,    // filled in by fetch
+                });
+                fetchIQRankerCompareSeries(profileSubject);
+            }
+            renderIQRankerCompareList();
+            renderIQRankerCompareChips();
+            renderIQRankerCompareChart();
+        }
+
+        function iqRankerCompareSeedTopN(n) {
+            const master = IQR_COMPARE_STATE.master;
+            const state = IQ_RANKER_STATE[master];
+            if (!state || !state.lastRows) return;
+            // Clear current selection then add the top-N from the active
+            // sort order (the leaderboard is already sorted, so just pick
+            // the first N rows).
+            iqRankerCompareClear();
+            const top = state.lastRows.slice(0, n);
+            top.forEach(r => toggleIQRankerCompareProfile(r.profile_subject));
+        }
+
+        function iqRankerCompareClear() {
+            IQR_COMPARE_STATE.selected.clear();
+            IQR_COMPARE_STATE.paletteIdx = 0;
+            renderIQRankerCompareList();
+            renderIQRankerCompareChips();
+            renderIQRankerCompareChart();
+        }
+
+        function renderIQRankerCompareChips() {
+            const wrap = document.getElementById('iqRankerCompareSelectedChips');
+            if (!wrap) return;
+            const sel = IQR_COMPARE_STATE.selected;
+            if (sel.size === 0) {
+                wrap.innerHTML = '<span style="color: var(--text-muted); font-size: 0.72rem;">No profiles selected yet.</span>';
+                return;
+            }
+            const html = [];
+            sel.forEach((meta, subj) => {
+                html.push(`<span class="iqr-compare-chip">
+                    <span class="swatch" style="background: ${meta.color};"></span>
+                    <span>${_iqEsc(meta.name)}</span>
+                    <button type="button" class="x" title="Remove" onclick="toggleIQRankerCompareProfile('${_iqJsAttr(subj)}')">✕</button>
+                </span>`);
+            });
+            wrap.innerHTML = html.join('');
+        }
+
+        async function fetchIQRankerCompareSeries(profileSubject) {
+            const master = IQR_COMPARE_STATE.master;
+            const state = IQ_RANKER_STATE[master];
+            const params = new URLSearchParams({ full: '1' });
+            if (state.start) params.set('start', state.start);
+            if (state.end)   params.set('end',   state.end);
+            try {
+                const r = await fetch(`/api/iq-rankers/profile/${encodeURIComponent(profileSubject)}/timeseries?${params.toString()}`,
+                                      { credentials: 'same-origin' });
+                if (!r.ok) throw new Error(`HTTP ${r.status}`);
+                const d = await r.json();
+                if (!d || !d.success) throw new Error(d && d.error ? d.error : 'request failed');
+                const meta = IQR_COMPARE_STATE.selected.get(profileSubject);
+                if (!meta) return; // user removed before fetch returned
+                meta.data = d.rows || [];
+                renderIQRankerCompareChart();
+            } catch (e) {
+                const meta = IQR_COMPARE_STATE.selected.get(profileSubject);
+                if (meta) meta.data = [];
+                renderIQRankerCompareChart();
+                console.warn('Compare fetch failed for', profileSubject, e);
+            }
+        }
+
+        function setIQRankerCompareMetric(metric) {
+            if (!IQR_COMPARE_METRIC_META[metric]) return;
+            IQR_COMPARE_STATE.metric = metric;
+            document.querySelectorAll('#iqRankerCompareModal [data-iq-cmp-metric]').forEach(b => {
+                b.classList.toggle('active', b.getAttribute('data-iq-cmp-metric') === metric);
+            });
+            renderIQRankerCompareChart();
+        }
+
+        function setIQRankerCompareMode(mode) {
+            if (!['value', 'delta', 'pct'].includes(mode)) mode = 'value';
+            IQR_COMPARE_STATE.mode = mode;
+            document.querySelectorAll('#iqRankerCompareModal [data-iq-cmp-mode]').forEach(b => {
+                b.classList.toggle('active', b.getAttribute('data-iq-cmp-mode') === mode);
+            });
+            renderIQRankerCompareChart();
+        }
+
+        function _iqrUnionDates(selectedMap) {
+            const dates = new Set();
+            selectedMap.forEach(m => (m.data || []).forEach(r => dates.add(r.date)));
+            return Array.from(dates).sort();
+        }
+
+        function renderIQRankerCompareChart() {
+            const wrap    = document.getElementById('iqRankerCompareChartWrap');
+            const empty   = document.getElementById('iqRankerCompareEmpty');
+            const loading = document.getElementById('iqRankerCompareLoading');
+            const sel = IQR_COMPARE_STATE.selected;
+            // No selection → empty state
+            if (sel.size < 1) {
+                if (IQR_COMPARE_STATE.chart) { try { IQR_COMPARE_STATE.chart.destroy(); } catch (_) {} IQR_COMPARE_STATE.chart = null; }
+                wrap.style.display = 'none';
+                loading.style.display = 'none';
+                empty.style.display = 'block';
+                empty.textContent = 'Pick 2 or more profiles from the left to plot their day-over-day deltas on one chart.';
+                return;
+            }
+            // Some selected but their data hasn't loaded yet
+            const allLoaded = Array.from(sel.values()).every(m => m.data !== null);
+            if (!allLoaded) {
+                wrap.style.display = 'none';
+                empty.style.display = 'none';
+                loading.style.display = 'block';
+                return;
+            }
+            loading.style.display = 'none';
+            empty.style.display = 'none';
+            wrap.style.display = 'block';
+
+            // Build common date axis = union of every profile's dates.
+            const allDates = _iqrUnionDates(sel);
+            const metric = IQR_COMPARE_STATE.metric;
+            const mode   = IQR_COMPARE_STATE.mode;
+            const meta   = IQR_COMPARE_METRIC_META[metric];
+
+            const datasets = [];
+            sel.forEach((m, subj) => {
+                // Index this profile's rows by date for O(1) lookup against the
+                // unified axis.
+                const byDate = new Map();
+                (m.data || []).forEach(r => byDate.set(r.date, r));
+                // Compute deltas using consecutive present days for THIS profile
+                // (don't diff against missing days — would lie about momentum).
+                const ordered = (m.data || []).slice().sort((a, b) => a.date < b.date ? -1 : 1);
+                const deltaByDate = new Map();
+                for (let i = 0; i < ordered.length; i++) {
+                    const cur = Number(ordered[i][metric] || 0);
+                    if (i === 0) {
+                        deltaByDate.set(ordered[i].date, { cur, delta: null, pct: null });
+                    } else {
+                        const prev = Number(ordered[i - 1][metric] || 0);
+                        const delta = cur - prev;
+                        const pct = (prev === 0) ? null : ((cur - prev) / Math.abs(prev)) * 100;
+                        deltaByDate.set(ordered[i].date, { cur, delta, pct });
+                    }
+                }
+                const points = allDates.map(d => {
+                    const computed = deltaByDate.get(d);
+                    if (!computed) return { x: d, y: null };
+                    let y;
+                    if (mode === 'delta') y = computed.delta;
+                    else if (mode === 'pct') y = computed.pct;
+                    else y = computed.cur;
+                    return { x: d, y: (y === undefined ? null : y) };
+                });
+                datasets.push({
+                    label: m.name + (meta.projected && mode === 'value' ? ' (projected)' : ''),
+                    data: points,
+                    borderColor: m.color,
+                    backgroundColor: m.color + '22',
+                    tension: 0.25,
+                    pointRadius: 2.5,
+                    pointHoverRadius: 5,
+                    borderWidth: 2,
+                    spanGaps: false,
+                });
+            });
+
+            const yLabel = (mode === 'pct')   ? '% change vs prior day'
+                         : (mode === 'delta') ? 'Δ vs prior day'
+                                              : 'Daily value';
+
+            const canvas = document.getElementById('iqRankerCompareChartCanvas');
+            if (!canvas) return;
+            if (IQR_COMPARE_STATE.chart) { try { IQR_COMPARE_STATE.chart.destroy(); } catch (_) {} IQR_COMPARE_STATE.chart = null; }
+            const ctx = canvas.getContext('2d');
+            IQR_COMPARE_STATE.chart = new Chart(ctx, {
+                type: 'line',
+                data: { labels: allDates, datasets },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    interaction: { mode: 'index', intersect: false },
+                    plugins: {
+                        legend: { display: false },
+                        datalabels: { display: false },
+                        tooltip: {
+                            backgroundColor: 'rgba(13,26,42,0.95)',
+                            borderColor: '#66d9ef', borderWidth: 1, padding: 10,
+                            callbacks: {
+                                label: function(ctx) {
+                                    const v = ctx.parsed.y;
+                                    if (v == null) return ctx.dataset.label + ': —';
+                                    if (mode === 'pct')   return ctx.dataset.label + ': ' + (v >= 0 ? '+' : '') + v.toFixed(1) + '%';
+                                    if (mode === 'delta') return ctx.dataset.label + ': ' + (v >= 0 ? '+' : '') + Math.round(v).toLocaleString();
+                                    if (meta.axis === 'score') return ctx.dataset.label + ': ' + Number(v).toFixed(1);
+                                    return ctx.dataset.label + ': ' + Math.round(v).toLocaleString();
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            ticks: { color: '#8892b0', maxRotation: 0, autoSkip: true, maxTicksLimit: 14 },
+                            grid:  { color: 'rgba(102,217,239,0.05)' },
+                        },
+                        y: {
+                            title: {
+                                display: true,
+                                text: `${meta.label} — ${yLabel}`,
+                                color: '#8892b0', font: { size: 11 }
+                            },
+                            ticks: {
+                                color: '#8892b0',
+                                callback: function(v) {
+                                    if (meta.axis === 'score') return Number(v).toFixed(1);
+                                    return Number(v).toLocaleString();
+                                }
+                            },
+                            grid: { color: 'rgba(102,217,239,0.06)' },
+                        }
+                    }
+                }
+            });
         }
 
         function onIQRankerSubTabClick(master, sub) {
