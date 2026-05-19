@@ -19039,7 +19039,9 @@
                             <h2 id="sentimentIQDashTitle" style="margin: 0; font-size: 1.35rem;">Sentiment IQ</h2>
                             <span id="sentimentIQDashMeta" style="color: var(--text-secondary); font-size: 0.85rem;"></span>
                             <span id="sentimentIQDashOngoing" style="display:none;padding:2px 8px;border-radius:10px;background:rgba(16,185,129,0.15);color:#10b981;font-size:11px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;">● Ongoing</span>
-                            <div style="margin-left:auto; display:flex; gap:0.4rem;">
+                            <div style="margin-left:auto; display:flex; gap:0.4rem; flex-wrap:wrap;">
+                                <button type="button" class="btn btn-small" id="sentimentIQProfileIQBtn" onclick="openProfileIQFromSentimentIQ()" style="padding:0.35rem 0.65rem; display:none;" title="Open this profile in Profile IQ">👤 Profile IQ</button>
+                                <button type="button" class="btn btn-small" id="sentimentIQRankerBtn" onclick="openIQRankerSpotlightFromCurrent()" style="padding:0.35rem 0.65rem; display:none;" title="Open the CW IQ Ranker and spotlight this profile">📊 Ranker</button>
                                 <button type="button" class="btn btn-small" id="sentimentIQRefreshBtn" onclick="manualRefreshSentimentIQ()" style="padding:0.35rem 0.65rem;">Refresh Now</button>
                             </div>
                         </div>
@@ -22363,6 +22365,18 @@
             var ongoingBadge = document.getElementById('sentimentIQDashOngoing');
             if (ongoingBadge) ongoingBadge.style.display = cfg.ongoing ? '' : 'none';
 
+            // Show "Profile IQ" + "Ranker" buttons only for trackers tied
+            // to a Profile IQ profile (iqr_* auto-provisioned, or any
+            // manual tracker that stores profile_subject/s3_key). User-
+            // created brand trackers without a backing profile leave both
+            // buttons hidden.
+            var _siqProfileSubject = _siqTrackerProfileSubject(cfg);
+            var _siqHasProfile = !!(_siqProfileSubject || cfg.s3_key);
+            var piqBtn = document.getElementById('sentimentIQProfileIQBtn');
+            if (piqBtn) piqBtn.style.display = _siqHasProfile ? '' : 'none';
+            var rkrBtn = document.getElementById('sentimentIQRankerBtn');
+            if (rkrBtn) rkrBtn.style.display = _siqHasProfile ? '' : 'none';
+
             if (!data) {
                 document.getElementById('sentimentIQKpiNet').textContent = '—';
                 document.getElementById('sentimentIQKpiMentions').textContent = '—';
@@ -22400,6 +22414,135 @@
             renderSentimentIQRollups(data);
             renderSentimentIQUrls(data);
             renderSentimentIQAlerts(data);
+        }
+
+        // ────────────────────────────────────────────────────────────────
+        // Sentiment IQ → Profile IQ / CW IQ Ranker deep-links
+        // ────────────────────────────────────────────────────────────────
+        // Both buttons in the dashboard header need a stable profile_subject
+        // to hand off. Auto-provisioned iqr_* trackers store it explicitly
+        // (added by iq_rankers.ensure_tracker_for_profile); for legacy
+        // configs that pre-date that field we fall back to stripping the
+        // 'iqr_' prefix off the tracker_id, which is a lossy match (lower-
+        // cased + alnum-only) but good enough for the locate endpoint's
+        // case-insensitive lookup.
+        function _siqTrackerProfileSubject(cfg) {
+            if (!cfg) return '';
+            if (cfg.profile_subject) return String(cfg.profile_subject);
+            var tid = cfg.tracker_id || '';
+            if (typeof tid === 'string' && tid.indexOf('iqr_') === 0) {
+                return tid.slice(4);
+            }
+            return '';
+        }
+
+        function openProfileIQFromSentimentIQ() {
+            var cfg = (_sentimentIQState && _sentimentIQState.currentConfig) || {};
+            var subj = _siqTrackerProfileSubject(cfg);
+            var s3Key = cfg.s3_key || '';
+            if (!subj && !s3Key) {
+                alert('This tracker is not linked to a Profile IQ profile.');
+                return;
+            }
+            try {
+                if (typeof showProfileIQ === 'function') showProfileIQ();
+            } catch (_) {}
+            // Prefer the s3_key path (canonical handler) when available;
+            // it works regardless of how the user's profile search box is
+            // currently filtered. Fall back to typing the subject into the
+            // search input — mirrors openProfileFromIQRanker.
+            try {
+                if (s3Key && typeof selectDashboardProfile === 'function') {
+                    setTimeout(function() { selectDashboardProfile(s3Key); }, 60);
+                    return;
+                }
+            } catch (_) {}
+            try {
+                var search = document.getElementById('dashProfileSearchInput');
+                if (search && subj) {
+                    search.value = subj.replace(/_/g, ' ');
+                    search.dispatchEvent(new Event('keyup'));
+                }
+            } catch (_) {}
+        }
+
+        async function openIQRankerSpotlightFromCurrent() {
+            var cfg = (_sentimentIQState && _sentimentIQState.currentConfig) || {};
+            var subj = _siqTrackerProfileSubject(cfg);
+            var displayName = cfg.project_name || subj || '';
+            if (!subj && !displayName) {
+                alert('This tracker is not linked to a Profile IQ profile.');
+                return;
+            }
+            return openIQRankerSpotlight(subj || displayName, displayName);
+        }
+
+        // Open the CW IQ Ranker view and filter the leaderboard down to a
+        // single profile so the user lands directly on the row they want.
+        // Steps:
+        //   1. Hit /api/iq-rankers/locate to find which master (BRAND,
+        //      TALENT, etc.) the profile lives under.
+        //   2. Switch to the Ranker IQ view (showRankerIQ) and the right
+        //      master tab (showRankerIQPlatform).
+        //   3. Stuff the project name into that master's search input and
+        //      trigger the existing onIQRankerSearchInput handler, which
+        //      debounce-reloads the leaderboard server-side with the
+        //      search filter applied.
+        // No row-pulsing/scrolling — the filter narrows the table to one
+        // row (or near-misses), which is a more reliable spotlight than
+        // chasing async render timing.
+        async function openIQRankerSpotlight(profileSubject, projectName) {
+            if (!profileSubject && !projectName) return;
+            var rkrBtn = document.getElementById('sentimentIQRankerBtn');
+            var origLabel = rkrBtn ? rkrBtn.textContent : '';
+            if (rkrBtn) { rkrBtn.disabled = true; rkrBtn.textContent = 'Opening Ranker…'; }
+            var master = '';
+            try {
+                var r = await fetch('/api/iq-rankers/locate?subject='
+                    + encodeURIComponent(profileSubject || projectName || ''),
+                    { credentials: 'same-origin' });
+                if (r.ok) {
+                    var d = await r.json();
+                    if (d && d.success && d.master) {
+                        master = d.master;
+                        if (d.project_name && !projectName) projectName = d.project_name;
+                    }
+                }
+            } catch (_) { /* fall through to default master */ }
+            if (!master) master = 'BRAND';
+            // master → slug (inverse of IQ_RANKER_SLUG_TO_MASTER)
+            var slug = null;
+            try {
+                for (var s in IQ_RANKER_SLUG_TO_MASTER) {
+                    if (Object.prototype.hasOwnProperty.call(IQ_RANKER_SLUG_TO_MASTER, s)
+                        && IQ_RANKER_SLUG_TO_MASTER[s] === master) { slug = s; break; }
+                }
+            } catch (_) {}
+            if (!slug) slug = 'brands';
+            try {
+                if (typeof showRankerIQ === 'function') showRankerIQ();
+            } catch (_) {}
+            setTimeout(function() {
+                try {
+                    if (typeof showRankerIQPlatform === 'function') showRankerIQPlatform(slug);
+                } catch (_) {}
+                setTimeout(function() {
+                    try {
+                        var input = document.getElementById('iqRankerSearch-' + master);
+                        var needle = projectName || profileSubject || '';
+                        if (input) {
+                            input.value = needle;
+                            if (typeof onIQRankerSearchInput === 'function') {
+                                onIQRankerSearchInput(master);
+                            } else {
+                                input.dispatchEvent(new Event('input', { bubbles: true }));
+                            }
+                            input.focus();
+                        }
+                    } catch (e) { console.error('IQ Ranker spotlight search failed', e); }
+                    if (rkrBtn) { rkrBtn.disabled = false; rkrBtn.textContent = origLabel || '📊 Ranker'; }
+                }, 250);
+            }, 80);
         }
 
         function renderSentimentIQOverviewCharts(data) {

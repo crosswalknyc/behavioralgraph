@@ -30605,6 +30605,81 @@ def iq_rankers_categories():
     return jsonify({'success': True, 'categories': cats})
 
 
+@app.route('/api/iq-rankers/locate', methods=['GET'])
+@requires_auth
+def iq_rankers_locate():
+    """Locate which master/subcategory a profile lives under in IQ Rankers.
+
+    Used by the Sentiment IQ dashboard's "View in CW IQ Ranker" button:
+    given a profile_subject we don't know which master tab (BRAND, TALENT,
+    CONTENT, ...) to switch to, so we look up the most recent
+    profile_iq_daily_metrics row and tell the frontend.
+
+    Query params:
+      subject   (required) the profile_subject as stored in the daily
+                metrics table. Matched case-insensitively to be forgiving
+                about how the caller normalizes the string (sentiment-iq
+                tracker_ids are lowercased; the canonical profile_subject
+                preserves casing).
+
+    Returns:
+      { success, master, subcategory, profile_subject, project_name }
+      on hit; { success: false, error } if the profile has no daily
+      metrics rows yet (e.g. created today, nightly cron hasn't run).
+    """
+    if _iq_rankers is None:
+        return jsonify({'success': False, 'error': 'IQ Rankers unavailable'}), 500
+    subject = (request.args.get('subject') or '').strip()
+    if not subject:
+        return jsonify({'success': False, 'error': 'subject is required'}), 400
+    try:
+        safe = subject.replace("'", "''")
+        conn = _ch_connect(settings={"max_execution_time": 30})
+        try:
+            cur = conn.cursor()
+            cur.execute(
+                f"SELECT category, subcategory, profile_subject, project_name "
+                f"FROM reference.profile_iq_daily_metrics "
+                f"WHERE lower(profile_subject) = lower('{safe}') "
+                f"ORDER BY snapshot_date DESC "
+                f"LIMIT 1"
+            )
+            row = cur.fetchone()
+            if not row:
+                # Fall back to a project_name match, in case the caller
+                # passed the display name (e.g. "Old Navy") rather than
+                # the raw profile_subject ("Old_Navy").
+                cur.execute(
+                    f"SELECT category, subcategory, profile_subject, project_name "
+                    f"FROM reference.profile_iq_daily_metrics "
+                    f"WHERE lower(project_name) = lower('{safe}') "
+                    f"ORDER BY snapshot_date DESC "
+                    f"LIMIT 1"
+                )
+                row = cur.fetchone()
+            if not row:
+                return jsonify({
+                    'success': False,
+                    'error': f'No daily metrics found for "{subject}". '
+                             f'The nightly IQ Rankers cron may not have run yet.'
+                }), 404
+            category, subcategory, profile_subject, project_name = row
+            return jsonify({
+                'success': True,
+                'master': category or 'OTHER',
+                'subcategory': subcategory or '',
+                'profile_subject': profile_subject or subject,
+                'project_name': project_name or profile_subject or subject,
+            })
+        finally:
+            try:
+                conn.close()
+            except Exception:
+                pass
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)[:300]}), 500
+
+
 @app.route('/api/iq-rankers/profile/<path:profile_subject>/timeseries', methods=['GET'])
 @requires_auth
 def iq_rankers_profile_timeseries(profile_subject):
