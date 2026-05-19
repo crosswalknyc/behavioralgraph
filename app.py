@@ -30598,13 +30598,29 @@ def iq_rankers_categories():
 @app.route('/api/iq-rankers/profile/<path:profile_subject>/timeseries', methods=['GET'])
 @requires_auth
 def iq_rankers_profile_timeseries(profile_subject):
-    """Daily series for one profile (sparkline / drilldown chart)."""
+    """Daily series for one profile.
+
+    Two modes:
+      • ?full=1  → returns every metric per day in one round-trip
+                   (used by the leaderboard drill-down chart).
+      • default  → single metric (`metric=cw_iq_score|mentions|...`).
+                   Kept for backwards-compatibility with sparkline callers.
+    """
     if _iq_rankers is None:
         return jsonify({'success': False, 'error': 'IQ Rankers unavailable'}), 500
     try:
+        full   = (request.args.get('full') or '').strip().lower() in ('1', 'true', 'yes')
+        start  = (request.args.get('start') or '').strip() or None
+        end    = (request.args.get('end')   or '').strip() or None
+        if full:
+            data = _iq_rankers.fetch_profile_full_timeseries(
+                ch_connect=_ch_connect,
+                profile_subject=profile_subject,
+                start=start,
+                end=end,
+            )
+            return jsonify({'success': True, **data})
         metric = (request.args.get('metric') or 'cw_iq_score').strip()
-        start  = (request.args.get('start')  or '').strip() or None
-        end    = (request.args.get('end')    or '').strip() or None
         series = _iq_rankers.fetch_profile_timeseries(
             ch_connect=_ch_connect,
             profile_subject=profile_subject,
