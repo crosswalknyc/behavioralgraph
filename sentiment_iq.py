@@ -336,8 +336,35 @@ def s3_get_json(s3_client, key: str, bucket: str = S3_BUCKET) -> dict | None:
         return None
 
 
-def list_trackers(s3_client, owner: str | None = None) -> list[dict]:
-    """List Sentiment IQ trackers, optionally filtered by owner."""
+SYSTEM_TRACKER_OWNERS = {"iq_rankers"}
+# iq_rankers writes tracker_id values prefixed with "iqr_" (see
+# iq_rankers._tracker_id_for_profile). We use that filename signature to
+# skip the body GET entirely during list_trackers, which turns a few
+# hundred S3 GetObjects (one per profile) into a single ListObjectsV2 plus
+# only the user-facing GETs.
+SYSTEM_TRACKER_KEY_PREFIXES = ("iqr_",)
+
+
+def _is_system_tracker_key(key: str) -> bool:
+    name = key.rsplit("/", 1)[-1]
+    return any(name.startswith(p) for p in SYSTEM_TRACKER_KEY_PREFIXES)
+
+
+def list_trackers(
+    s3_client,
+    owner: str | None = None,
+    *,
+    include_system: bool = False,
+) -> list[dict]:
+    """List Sentiment IQ trackers, optionally filtered by owner.
+
+    `include_system=False` (the default) hides trackers owned by internal
+    system accounts (e.g. the per-profile auto-trackers created by
+    iq_rankers.py). Those rows share Sentiment IQ's S3 layout for
+    storage but aren't user-facing Sentiment IQ trackers — they have no
+    rolled-up dashboard JSON, so showing them in the sidebar produces
+    empty cards.
+    """
     out: list[dict] = []
     try:
         paginator = s3_client.get_paginator("list_objects_v2")
@@ -346,10 +373,18 @@ def list_trackers(s3_client, owner: str | None = None) -> list[dict]:
                 key = obj["Key"]
                 if not key.endswith(".json"):
                     continue
+                # Fast path: skip iq_rankers' auto-trackers without GETting
+                # the body. They're identifiable by the "iqr_" filename
+                # prefix and we never want them in the user-facing list.
+                if not include_system and _is_system_tracker_key(key):
+                    continue
                 cfg = s3_get_json(s3_client, key)
                 if not cfg:
                     continue
-                if owner and cfg.get("owner") != owner:
+                cfg_owner = cfg.get("owner")
+                if not include_system and cfg_owner in SYSTEM_TRACKER_OWNERS:
+                    continue
+                if owner and cfg_owner != owner:
                     continue
                 out.append({
                     "tracker_id": cfg.get("tracker_id"),
@@ -852,49 +887,58 @@ def pull_events(
     Matches the term against both COMMON_NAME and URL (multiSearchAny) so we
     catch both "talked about the brand on Google" (search-engine query) and
     "visited a page about the brand" (content). Returns (rows, audience_uid_count).
+
+    Performance notes:
+      * Single-pass over clickstream_final (was two: a Memory-table
+        audience build + an IN-subquery rescan). The DELIVERED partition
+        is monthly so the date range is partition-pruned, and the
+        ngrambf_v1 indexes on lower(URL) and lower(COMMON_NAME)
+        skip granules that can't match.
+      * PREWHERE is applied to the cheapest, most-selective predicates
+        (date partition + ngram-indexed substring checks on
+        LowCardinality COMMON_NAME) so URL gets compared on far fewer
+        rows.
+      * audience_uid_count is derived from the returned rows in Python,
+        which saves a second `count(DISTINCT UID)` round-trip.
     """
     term_lit = _term_array_literal(brand_terms)
     if not term_lit:
         return [], 0
-    conn = ch_connect(settings={"max_execution_time": 1200, "use_skip_indexes": 1})
+    conn = ch_connect(settings={
+        "max_execution_time": 1200,
+        "use_skip_indexes": 1,
+        # Be defensive about memory on huge multi-month backfills.
+        "max_memory_usage": 8_000_000_000,
+        "max_threads": 16,
+    })
     try:
         cur = conn.cursor()
-        # Build audience UID set on COMMON_NAME (deterministic, uses the
-        # common_name ngram bloom filter for speed).
-        cur.execute(f"""
-            CREATE TEMPORARY TABLE sentiment_audience
-            ENGINE = Memory AS
-            SELECT UID FROM clickstream.clickstream_final
-            WHERE DELIVERED BETWEEN toDate('{start_date}') AND toDate('{end_date}')
-              AND multiSearchAny(lower(COMMON_NAME), [{term_lit}])
-            GROUP BY UID
-        """)
-        cur.execute("SELECT count() FROM sentiment_audience")
-        audience_uid_count = int(cur.fetchone()[0] or 0)
-        if audience_uid_count == 0:
-            return [], 0
-
-        # Pull events: every row from the audience whose URL or COMMON_NAME
-        # matches the brand terms. This captures both Google searches (where
-        # brand sits in the URL query string) and visits to brand-mentioning
-        # content pages.
         cur.execute(f"""
             SELECT URL, UID, COMMON_NAME, DELIVERED, DOMAIN
             FROM clickstream.clickstream_final
-            WHERE DELIVERED BETWEEN toDate('{start_date}') AND toDate('{end_date}')
-              AND UID IN (SELECT UID FROM sentiment_audience)
-              AND length(URL) > 5
-              AND (multiSearchAny(lower(URL), [{term_lit}])
-                   OR multiSearchAny(lower(COMMON_NAME), [{term_lit}]))
+            PREWHERE DELIVERED BETWEEN toDate('{start_date}') AND toDate('{end_date}')
+                 AND (multiSearchAny(lower(COMMON_NAME), [{term_lit}])
+                      OR multiSearchAny(lower(URL), [{term_lit}]))
+            WHERE length(URL) > 5
             LIMIT {int(limit)}
         """)
         rows = cur.fetchall()
+        if not rows:
+            return [], 0
+        audience_uid_count = len({r[1] for r in rows if r[1]})
         return rows, audience_uid_count
     finally:
         try:
             conn.close()
         except Exception:
             pass
+
+
+DEMOGRAPHIC_CATEGORIES = (
+    "GENDER", "AGE", "INCOME", "ETHNICITY", "EDUCATION",
+    "MARITAL_STATUS", "CHILDREN", "HOME_OWNER", "STATE", "DMA",
+)
+DEMOGRAPHICS_UID_CAP_PER_BUCKET = 30_000
 
 
 def pull_demographics(
@@ -906,50 +950,86 @@ def pull_demographics(
     from userdata.user_data_sanitized.
 
     Returns: {bucket: {category: [{value, count, pct}, ...]}}.
+
+    Performance notes:
+      * One ClickHouse query per bucket (was 10 per bucket - one per
+        category). We arrayJoin all 10 demographic LowCardinality columns
+        on a single user_data_sanitized scan so each bucket's join is
+        evaluated exactly once. With three buckets that's 3 queries
+        instead of 30 - a 10x reduction in round-trips and 10x fewer
+        slots taken on the cross-tool ClickHouse semaphore.
+      * user_data_sanitized is ORDER BY UID so `UID IN (uids)` uses the
+        primary key directly.
+      * Per-bucket UIDs are capped at DEMOGRAPHICS_UID_CAP_PER_BUCKET to
+        keep each query body well under the 16 MiB max_query_size.
     """
     out: dict[str, dict[str, list[dict]]] = {b: {} for b in uids_by_bucket}
-    all_uids: set[str] = set()
-    for s in uids_by_bucket.values():
-        all_uids |= s
-    if not all_uids:
+    bucket_payload: dict[str, list[str]] = {}
+    for bucket, uids in uids_by_bucket.items():
+        if not uids:
+            continue
+        bucket_payload[bucket] = list(uids)[:DEMOGRAPHICS_UID_CAP_PER_BUCKET]
+    if not bucket_payload:
         return out
 
-    # We push the bucket label into ClickHouse via a CSV-style IN-list per
-    # bucket. For modest cardinalities (a few thousand UIDs per bucket) this
-    # is cheaper than building per-bucket Memory tables.
-    conn = ch_connect(settings={"max_execution_time": 600, "use_skip_indexes": 1})
+    def _esc(u: str) -> str:
+        return u.replace("'", "''")
+
+    pairs_sql = ",\n                ".join(
+        f"('{cat}', u.{cat})" for cat in DEMOGRAPHIC_CATEGORIES
+    )
+
+    conn = ch_connect(settings={
+        "max_execution_time": 600,
+        "use_skip_indexes": 1,
+        "max_threads": 16,
+    })
     try:
         cur = conn.cursor()
-        cats = ["GENDER", "AGE", "INCOME", "ETHNICITY", "EDUCATION",
-                "MARITAL_STATUS", "CHILDREN", "HOME_OWNER", "STATE", "DMA"]
-        for bucket, uids in uids_by_bucket.items():
-            if not uids:
-                continue
-            # Hard cap to keep the IN list bounded.
-            uid_list = list(uids)[:30000]
-            uid_lit = ", ".join(
-                "'" + u.replace("'", "''") + "'" for u in uid_list
-            )
-            for cat in cats:
-                try:
-                    cur.execute(f"""
-                        SELECT {cat} AS val, uniqExact(UID) AS cnt
-                        FROM userdata.user_data_sanitized
-                        WHERE UID IN ({uid_lit})
-                          AND {cat} != ''
-                        GROUP BY {cat}
-                        ORDER BY cnt DESC
-                        LIMIT 100
-                    """)
-                    rows = cur.fetchall()
-                except Exception as e:
-                    print(f"[SentimentIQ] demo {bucket}/{cat} failed: {e}")
-                    rows = []
-                total = sum(int(r[1] or 0) for r in rows) or 1
-                out[bucket][cat] = [
-                    {"value": r[0], "count": int(r[1] or 0),
-                     "pct": round(100.0 * int(r[1] or 0) / total, 2)}
-                    for r in rows
+        for bucket, uid_list in bucket_payload.items():
+            uid_lit = ", ".join("'" + _esc(u) + "'" for u in uid_list)
+            try:
+                cur.execute(f"""
+                    SELECT
+                        kv.1 AS category,
+                        kv.2 AS value,
+                        uniqExact(u.UID) AS cnt
+                    FROM userdata.user_data_sanitized AS u
+                    ARRAY JOIN [
+                        {pairs_sql}
+                    ] AS kv
+                    WHERE u.UID IN ({uid_lit})
+                      AND kv.2 != ''
+                    GROUP BY category, value
+                    ORDER BY category, cnt DESC
+                """)
+                rows = cur.fetchall()
+            except Exception as e:
+                print(f"[SentimentIQ] demographics arrayJoin path failed for bucket={bucket} ({e}); falling back to per-category scan.")
+                rows = []
+                for cat in DEMOGRAPHIC_CATEGORIES:
+                    try:
+                        cur.execute(f"""
+                            SELECT '{cat}' AS category, {cat} AS value, uniqExact(UID) AS cnt
+                            FROM userdata.user_data_sanitized
+                            WHERE UID IN ({uid_lit}) AND {cat} != ''
+                            GROUP BY {cat}
+                            ORDER BY cnt DESC
+                            LIMIT 100
+                        """)
+                        rows.extend(cur.fetchall())
+                    except Exception as e2:
+                        print(f"[SentimentIQ] demo fallback {bucket}/{cat} failed: {e2}")
+            by_cat: dict[str, list[dict]] = {}
+            for category, value, cnt in rows:
+                by_cat.setdefault(category, []).append({"value": value, "count": int(cnt or 0)})
+            for category, items in by_cat.items():
+                items.sort(key=lambda x: x["count"], reverse=True)
+                total = sum(it["count"] for it in items) or 1
+                out.setdefault(bucket, {})[category] = [
+                    {"value": it["value"], "count": it["count"],
+                     "pct": round(100.0 * it["count"] / total, 2)}
+                    for it in items[:100]
                 ]
     finally:
         try:
