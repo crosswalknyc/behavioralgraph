@@ -27861,6 +27861,21 @@ def _run_roas_iq(job_id):
         avg_touches = round(sum(touch_vals) / max(len(touch_vals), 1), 1) if touch_vals else 0
         multi_touch_pct = round(100.0 * sum(1 for v in touch_vals if v > 1) / max(len(touch_vals), 1), 1) if touch_vals else 0
 
+        # Non-Duplicated Audience: the projected number of *unique people*
+        # behind the gross ad-attributed click pool. Derived as
+        # `Duplicated Clicks ÷ Avg Touches per User` — a standard reach
+        # calculation. Algebraically this equals _proj(overall_ad_uid_count)
+        # (because avg_touches = total_clicks_raw / unique_ad_uids_raw, so the
+        # ratio collapses to unique_ad_uids_raw × scale). Capped at the
+        # total projected audience and the US adult population so the value
+        # stays grounded in the available population.
+        projected_classified_clicks = _proj(total_classified_clicks)
+        if avg_touches and avg_touches > 0:
+            non_duplicated_audience = round(projected_classified_clicks / avg_touches)
+        else:
+            non_duplicated_audience = 0
+        non_duplicated_audience = min(non_duplicated_audience, projected_uid_count, US_POPULATION)
+
         verified_retailer_uids = {}
         for cd in conversion_details:
             dom = cd['domain']
@@ -27935,9 +27950,10 @@ def _run_roas_iq(job_id):
             'scope': scope,
             'uid_count': sampled_uid_count,
             'projected_uid_count': projected_uid_count,
+            'non_duplicated_audience': non_duplicated_audience,
             'url_rows': len(rows),
             'total_classified_clicks': total_classified_clicks,
-            'projected_classified_clicks': _proj(total_classified_clicks),
+            'projected_classified_clicks': projected_classified_clicks,
             'total_converted': total_unique_converters,
             'projected_converted': _proj_unique(total_unique_converters),
             'overall_conv_rate': overall_conv_rate,

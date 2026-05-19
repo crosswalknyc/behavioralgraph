@@ -16415,7 +16415,7 @@
                         <!-- KPI Cards - row 1 -->
                         <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.75rem; margin-bottom: 0.75rem;">
                             <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 1.1rem 1rem; text-align: center;">
-                                <div style="font-size: 0.75rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em;">Duplicated Audience</div>
+                                <div style="font-size: 0.75rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em;">Non-Duplicated Audience</div>
                                 <div id="roasIQKpiUids" style="font-size: 1.6rem; font-weight: 700; color: var(--accent-lime); margin-top: 4px;"></div>
                             </div>
                             <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 1.1rem 1rem; text-align: center;">
@@ -22507,9 +22507,15 @@
             });
             var channels = Object.entries(channelMap).sort(function(a,b) { return b[1].totalPct - a[1].totalPct; });
 
-            // KPIs
-            document.getElementById('roasIQKpiUids').textContent = projUids.toLocaleString();
+            // KPIs — "Non-Duplicated Audience" = Duplicated Clicks / Avg Touches per User.
+            // Backend ships it as `non_duplicated_audience`; fall back to the
+            // client-side ratio for older result files that predate the field.
             var duplicatedClicks = data.projected_classified_clicks || _roasProject(data.total_classified_clicks || data.url_rows || 0);
+            var avgTouchesForKpi = (typeof data.avg_touches_per_user === 'number' && data.avg_touches_per_user > 0) ? data.avg_touches_per_user : 1;
+            var nonDupAudience = (typeof data.non_duplicated_audience === 'number')
+                ? data.non_duplicated_audience
+                : Math.min(Math.round(duplicatedClicks / avgTouchesForKpi), projUids);
+            document.getElementById('roasIQKpiUids').textContent = nonDupAudience.toLocaleString();
             document.getElementById('roasIQKpiAttributed').textContent = duplicatedClicks.toLocaleString();
             document.getElementById('roasIQKpiConvRate').textContent = (data.overall_conv_rate != null ? data.overall_conv_rate : 0) + '%';
             document.getElementById('roasIQKpiChannels').textContent = channels.length;
@@ -26046,10 +26052,14 @@
             const channels = Object.entries(channelMap).sort((a,b) => b[1].totalPct - a[1].totalPct);
             const icons = {'Email':'📧','Social Media':'📱','Digital Ads':'💰','Affiliate':'🤝','Sms':'💬','Influencer':'⭐','Push Notification':'🔔','Other':'📋'};
             const duplicatedClicks2 = data.projected_classified_clicks || _roasProject(data.total_classified_clicks || data.url_rows || 0);
+            const _avgTouches2 = (typeof data.avg_touches_per_user === 'number' && data.avg_touches_per_user > 0) ? data.avg_touches_per_user : 1;
+            const nonDupAudience2 = (typeof data.non_duplicated_audience === 'number')
+                ? data.non_duplicated_audience
+                : Math.min(Math.round(duplicatedClicks2 / _avgTouches2), projUids);
             const statsEl = document.getElementById('roasIQStats');
             if (statsEl) {
                 const convRate = data.overall_conv_rate != null ? data.overall_conv_rate : 0;
-                statsEl.innerHTML = '<div class="card" style="text-align:center;padding:1.25rem;"><div style="font-size:0.75rem;color:var(--text-secondary);text-transform:uppercase;">Duplicated Audience</div><div style="font-size:1.75rem;font-weight:700;margin-top:4px;">'+projUids.toLocaleString()+'</div></div><div class="card" style="text-align:center;padding:1.25rem;"><div style="font-size:0.75rem;color:var(--text-secondary);text-transform:uppercase;">Duplicated Clicks</div><div style="font-size:1.75rem;font-weight:700;margin-top:4px;">'+duplicatedClicks2.toLocaleString()+'</div></div><div class="card" style="text-align:center;padding:1.25rem;"><div style="font-size:0.75rem;color:var(--text-secondary);text-transform:uppercase;">Conversion Rate</div><div style="font-size:1.75rem;font-weight:700;margin-top:4px;">'+convRate+'%</div></div><div class="card" style="text-align:center;padding:1.25rem;"><div style="font-size:0.75rem;color:var(--text-secondary);text-transform:uppercase;">Channels</div><div style="font-size:1.75rem;font-weight:700;margin-top:4px;">'+channels.length+'</div></div>';
+                statsEl.innerHTML = '<div class="card" style="text-align:center;padding:1.25rem;"><div style="font-size:0.75rem;color:var(--text-secondary);text-transform:uppercase;">Non-Duplicated Audience</div><div style="font-size:1.75rem;font-weight:700;margin-top:4px;">'+nonDupAudience2.toLocaleString()+'</div></div><div class="card" style="text-align:center;padding:1.25rem;"><div style="font-size:0.75rem;color:var(--text-secondary);text-transform:uppercase;">Duplicated Clicks</div><div style="font-size:1.75rem;font-weight:700;margin-top:4px;">'+duplicatedClicks2.toLocaleString()+'</div></div><div class="card" style="text-align:center;padding:1.25rem;"><div style="font-size:0.75rem;color:var(--text-secondary);text-transform:uppercase;">Conversion Rate</div><div style="font-size:1.75rem;font-weight:700;margin-top:4px;">'+convRate+'%</div></div><div class="card" style="text-align:center;padding:1.25rem;"><div style="font-size:0.75rem;color:var(--text-secondary);text-transform:uppercase;">Channels</div><div style="font-size:1.75rem;font-weight:700;margin-top:4px;">'+channels.length+'</div></div>';
             }
             const canvas = document.getElementById('roasIQChart');
             if (canvas && typeof Chart !== 'undefined') {
