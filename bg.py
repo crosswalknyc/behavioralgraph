@@ -14667,7 +14667,9 @@ def _enforce_kids_franchise_caps(df_behavior, subject: str = '',
     subj_key = (subject or '').strip().upper() or 'UNKNOWN_SUBJECT'
     try:
         def _audience_cap_for_ip(ip_upper, max_existing_bp):
-            if max_existing_bp >= 35.0:
+            # 25% threshold — catches borderline ties (Donnie Yen → STAR WARS
+            # via Rogue One landed at 33.6; we want to preserve that).
+            if max_existing_bp >= 25.0:
                 return None
             if ip_upper == 'SPIDER-MAN':
                 return 9.0
