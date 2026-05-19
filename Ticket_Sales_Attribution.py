@@ -4,7 +4,7 @@ Input: date range, movie title, genre. Output: TOTAL HITS (MOVIE VIEWERS) → TH
 ticket sales projections, and demographics per theater and overall.
 """
 import pandas as pd
-import os, sys as _sys; _sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'migration')); _sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'migration'))
+import os, sys as _sys; _sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'migration'))
 from clickhouse_connector import connect_clickhouse
 from datetime import datetime
 from pathlib import Path
@@ -376,7 +376,8 @@ def run_query(conn, p):
         ) t
         ORDER BY t.HITS DESC
     """
-    df_theater = pd.read_sql(theater_by_platform_query, conn)
+    cur.execute(theater_by_platform_query)
+    df_theater = pd.DataFrame(cur.fetchall(), columns=["THEATER_PLATFORM", "HITS"])
 
     # Apply same boosting as Talent_Theater_Attribution (15x default, etc.)
     if not df_theater.empty and "HITS" in df_theater.columns:
@@ -418,6 +419,13 @@ def run_query(conn, p):
     # Get demographics as dataframe (overall and per theater) - same structure as bg.py.
     # DMA_PROVINCE is non-Nullable String in CH, so the IS NOT NULL guard collapses
     # to the empty-string check via trim().
+    #
+    # IMPORTANT: we read via `cur.execute(...).fetchall()` rather than
+    # `pd.read_sql(query, conn)` so the read happens on the same cursor that
+    # created TEMP_DEMOS / TEMP_DEMOS_WITH_THEATER. ClickHouse session
+    # bookkeeping on heavy CTAS workloads can otherwise lose visibility of
+    # those temp tables on a fresh sub-cursor (the failure mode the Michael
+    # run hit: "Unknown table expression identifier TEMP_DEMOS_WITH_THEATER").
     demo_query_overall = """
         SELECT UID, GENDER, AGE, ETHNICITY, INCOME,
                if(trim(DMA_PROVINCE) != '', concat(DMA, ' ', DMA_PROVINCE), DMA) AS LOCATION
@@ -428,8 +436,16 @@ def run_query(conn, p):
                if(trim(DMA_PROVINCE) != '', concat(DMA, ' ', DMA_PROVINCE), DMA) AS LOCATION
         FROM TEMP_DEMOS_WITH_THEATER
     """
-    df_demo_overall = pd.read_sql(demo_query_overall, conn)
-    df_demo_per_theater = pd.read_sql(demo_query_per_theater, conn)
+    cur.execute(demo_query_overall)
+    df_demo_overall = pd.DataFrame(
+        cur.fetchall(),
+        columns=["UID", "GENDER", "AGE", "ETHNICITY", "INCOME", "LOCATION"],
+    )
+    cur.execute(demo_query_per_theater)
+    df_demo_per_theater = pd.DataFrame(
+        cur.fetchall(),
+        columns=["UID", "THEATER_PLATFORM", "GENDER", "AGE", "ETHNICITY", "INCOME", "LOCATION"],
+    )
     print(f"   ✅ Demographics retrieved (overall: {len(df_demo_overall):,} UIDs, per-theater: {len(df_demo_per_theater):,} rows)\n")
 
     print("=" * 60)
@@ -702,6 +718,136 @@ def _normalize_pct_plan(raw_map, labels, decimals=4):
     return norm
 
 
+# ---------------------------------------------------------------------------
+# Canonical TST demographic bucket schema + aliases.
+#
+# The PANEL may legitimately observe only a subset of buckets (e.g. a noisy
+# Michaels-craft-store-dominated panel may surface only WHITE + ASIAN). The
+# AI auditor often returns a fuller plan ("Black 40%, Hispanic 26%, White
+# 26%, ...") and we MUST surface those buckets in the final CSV even though
+# the panel never saw a UID in them. Without this, _normalize_pct_plan
+# would filter the AI plan down to only the panel's observed labels and
+# zero out the correct mass — the failure mode the Michael run hit.
+# ---------------------------------------------------------------------------
+TST_CANONICAL_BUCKETS = {
+    "AGE":       ["17 AND UNDER", "18-24", "25-34", "35-44", "45-54",
+                  "55-64", "65 OR OLDER"],
+    "INCOME":    ["$0 - $24,999", "$25,000 - $49,999", "$50,000 - $74,999",
+                  "$75,000 - $99,999", "$100,000 - $149,999",
+                  "$150,000 - $249,999", "$250,000 OR MORE"],
+    "GENDER":    ["FEMALE", "MALE", "NON-BINARY", "TRANS FEMALE", "TRANS MALE"],
+    "ETHNICITY": ["WHITE", "BLACK OR AFRICAN AMERICAN",
+                  "HISPANIC OR LATINO", "ASIAN", "ANOTHER RACE/ETHNICITY"],
+}
+
+TST_BUCKET_ALIASES = {
+    "AGE": {
+        "<17": "17 AND UNDER", "<18": "17 AND UNDER",
+        "UNDER 17": "17 AND UNDER", "UNDER 18": "17 AND UNDER",
+        "UNDER 16": "17 AND UNDER", "<16": "17 AND UNDER",
+        "16-17": "17 AND UNDER", "13-17": "17 AND UNDER",
+        "TEEN": "17 AND UNDER", "TEENS": "17 AND UNDER",
+        "65+": "65 OR OLDER", "65 AND OVER": "65 OR OLDER",
+        "65 OR MORE": "65 OR OLDER", "65 OR ABOVE": "65 OR OLDER",
+        "60+": "65 OR OLDER",
+    },
+    "INCOME": {
+        "UNDER $25,000": "$0 - $24,999", "<$25,000": "$0 - $24,999",
+        "UNDER 25K": "$0 - $24,999", "$0-$24,999": "$0 - $24,999",
+        "$25,000-$49,999": "$25,000 - $49,999",
+        "$50,000-$74,999": "$50,000 - $74,999",
+        "$75,000-$99,999": "$75,000 - $99,999",
+        "$100,000-$149,999": "$100,000 - $149,999",
+        "$150,000+": "$150,000 - $249,999",
+        "$150K+": "$150,000 - $249,999",
+        "$150,000-$249,999": "$150,000 - $249,999",
+        "$250,000+": "$250,000 OR MORE",
+        "$250K+": "$250,000 OR MORE",
+        "$250,000 AND UP": "$250,000 OR MORE",
+        "$250,000+ ": "$250,000 OR MORE",
+    },
+    "ETHNICITY": {
+        "HISPANIC": "HISPANIC OR LATINO",
+        "LATINO": "HISPANIC OR LATINO",
+        "HISPANIC/LATINO": "HISPANIC OR LATINO",
+        "HISPANIC-LATINO": "HISPANIC OR LATINO",
+        "BLACK": "BLACK OR AFRICAN AMERICAN",
+        "AFRICAN AMERICAN": "BLACK OR AFRICAN AMERICAN",
+        "AFRICAN-AMERICAN": "BLACK OR AFRICAN AMERICAN",
+        "OTHER": "ANOTHER RACE/ETHNICITY",
+        "MULTIRACIAL": "ANOTHER RACE/ETHNICITY",
+        "MIXED": "ANOTHER RACE/ETHNICITY",
+        "NATIVE AMERICAN": "ANOTHER RACE/ETHNICITY",
+        "AMERICAN INDIAN": "ANOTHER RACE/ETHNICITY",
+        "PACIFIC ISLANDER": "ANOTHER RACE/ETHNICITY",
+        "NATIVE HAWAIIAN": "ANOTHER RACE/ETHNICITY",
+        "TWO OR MORE": "ANOTHER RACE/ETHNICITY",
+    },
+    "GENDER": {
+        "M": "MALE", "F": "FEMALE",
+        "NB": "NON-BINARY", "NONBINARY": "NON-BINARY",
+        "NON BINARY": "NON-BINARY", "ENBY": "NON-BINARY",
+        "TRANS": "NON-BINARY",
+    },
+}
+
+
+def _alias_bucket_label(dim, label):
+    """Map a possibly-non-canonical bucket label to its canonical form."""
+    if label is None:
+        return ""
+    s = str(label).strip().upper()
+    s = s.replace("\u2014", "-").replace("\u2013", "-")
+    s = re.sub(r"\s+", " ", s)
+    return TST_BUCKET_ALIASES.get(dim, {}).get(s, s)
+
+
+def _canonicalize_plan(plan, dim):
+    """Apply bucket aliasing to a plan dict and sum overlapping values.
+
+    Returns a new dict with canonical (or at least upper/normalized) keys.
+    """
+    if not plan:
+        return {}
+    out = {}
+    for k, v in plan.items():
+        try:
+            f = float(v)
+        except (ValueError, TypeError):
+            continue
+        canon = _alias_bucket_label(dim, k)
+        if not canon:
+            continue
+        out[canon] = out.get(canon, 0.0) + max(0.0, f)
+    return out
+
+
+def _merge_labels_for_section(demo_section, dim, plan):
+    """Return the ordered label list to use when applying a plan.
+
+    Strategy: canonical TST buckets first (in canonical order), then any
+    extra labels that appear in the panel or plan but not the canonical
+    set, preserving their first-seen order. This guarantees AI-only
+    buckets (e.g. BLACK OR AFRICAN AMERICAN when the panel has only
+    WHITE + ASIAN) make it into the final output instead of being
+    silently dropped.
+    """
+    panel = demo_section.get(dim) or {}
+    panel_keys = [_alias_bucket_label(dim, k) for k in panel.keys()]
+    plan_keys = [_alias_bucket_label(dim, k) for k in (plan or {}).keys()]
+    canonical = TST_CANONICAL_BUCKETS.get(dim, [])
+    seen = set()
+    ordered = []
+    for k in canonical:
+        if k in panel_keys or k in plan_keys:
+            if k not in seen:
+                ordered.append(k); seen.add(k)
+    for k in panel_keys + plan_keys:
+        if k and k not in seen:
+            ordered.append(k); seen.add(k)
+    return ordered
+
+
 def _default_ticket_demo_plan(genre):
     g = (genre or "").lower()
     if "family" in g or "animation" in g:
@@ -972,7 +1118,14 @@ def _research_and_validate_with_claude(movie_name, genre, start_date, end_date,
         parsed = _extract_json_object(cleaned)
     if not parsed:
         print("   ⚠️  Claude audit returned no parseable JSON")
-        return None
+        # Surface the raw text so the outer caller can try a rescue
+        # extraction of the gross from Claude's citations-rich response,
+        # even though we couldn't get valid JSON. Without this, the only
+        # thing the rescue path can lean on is GPT-4o's separate research
+        # call, and we lose Claude's deeper reasoning entirely on parse
+        # failure.
+        return {"_parse_failed": True, "_raw_text": raw or "",
+                "_model_used": used_model}
 
     parsed["_model_used"] = used_model
     parsed["research"] = (parsed.get("research_summary") or "").strip()
@@ -1051,6 +1204,12 @@ def ai_validate_ticket_metrics(movie_name, genre, start_date, end_date,
         projected_sales_gen_pop=projected_sales_gen_pop,
         demo_overall=demo_overall,
     )
+    # Stash Claude's raw text in case both auditors fail JSON parse — the
+    # rescue path can still pull the gross from Claude's response.
+    claude_raw_text = ""
+    if claude_result and claude_result.get("_parse_failed"):
+        claude_raw_text = claude_result.get("_raw_text") or ""
+        claude_result = None
     if claude_result:
         return claude_result
 
@@ -1175,10 +1334,29 @@ def ai_validate_ticket_metrics(movie_name, genre, start_date, end_date,
         }
 
     if not parsed:
+        # Rescue path: both auditors failed JSON parse. Try to extract the
+        # researched US gross from whichever research text we have (GPT-4o's
+        # gpt-4o-search-preview output and/or Claude's raw citations-rich
+        # response) and force the digital-sales band clamp. Without this,
+        # we'd write the raw $3B+ panel projection (the Goat / Michael
+        # failure mode).
+        rescue_text = "\n\n".join(t for t in (research, claude_raw_text) if t)
+        rescue = _build_rescue_validation(
+            movie_name, genre, rescue_text,
+            model_used="gpt-4o",
+            note_prefix="Two-tier auditor JSON parse failed.",
+        )
+        if rescue:
+            gross = rescue.get("researched_domestic_gross_usd")
+            print(
+                f"   🛟 Rescue path: extracted US gross "
+                f"${gross:,.0f} from research text — forcing digital-band clamp"
+            )
+            return rescue
         return {
             "passed": True,
             "flags": [],
-            "note": "AI returned no JSON; skipping",
+            "note": "AI returned no JSON and no gross extractable; skipping",
             "research": research,
             "overall_assessment": "Validation skipped — no parseable JSON returned.",
             "_model_used": "gpt-4o",
@@ -1318,6 +1496,177 @@ def _default_age_plan_from_skew(researched_skew, genre):
     # Comedy / drama / general
     return {"17 AND UNDER": 5.0, "18-24": 22.0, "25-34": 26.0,
             "35-44": 22.0, "45-54": 14.0, "55-64": 7.0, "65 OR OLDER": 4.0}
+
+
+_NON_DOMESTIC_PHRASES = (
+    "global", "globally", "worldwide", "international", "overseas",
+    "foreign", "non-us", "non us", "non-domestic", "non domestic",
+    "ex-us", "ex us", "abroad",
+)
+_DOMESTIC_PHRASES = (
+    "domestic", "us gross", "u.s. gross", "north american", "us box office",
+    "u.s. box office", "domestic total", "us cumulative", "us total",
+    "us domestic", "u.s. domestic",
+)
+
+
+def _extract_gross_from_research_text(text):
+    """Best-effort regex extraction of a US domestic box-office gross from
+    research text when the AI auditor failed to return valid JSON.
+
+    Recognizes patterns like ``$282.8 million``, ``$282,800,000``, ``$1.5
+    billion``, ``$282M``, ``$1.5B``. Each candidate is scored against
+    nearby words: figures within ~80 chars of "global / worldwide /
+    international" are demoted, figures near "domestic / US gross / North
+    American" are promoted. Returns the highest-scoring plausible figure
+    (typical box-office grosses live in $5M - $5B). Returns ``None`` if
+    nothing plausible found.
+    """
+    if not text:
+        return None
+    lower = text.lower()
+    candidates = []  # list of (pos, value)
+    for m in re.finditer(
+        r'\$\s*([\d,]+(?:\.\d+)?)\s*(million|billion|m\b|b\b)\b',
+        text, re.IGNORECASE,
+    ):
+        try:
+            num = float(m.group(1).replace(',', ''))
+        except ValueError:
+            continue
+        unit = m.group(2).lower()
+        mult = 1e9 if unit in ('billion', 'b') else 1e6
+        candidates.append((m.start(), num * mult))
+    for m in re.finditer(r'\$\s*(\d{1,3}(?:,\d{3}){2,})\b', text):
+        try:
+            num = float(m.group(1).replace(',', ''))
+        except ValueError:
+            continue
+        candidates.append((m.start(), num))
+    plausible = [(p, v) for p, v in candidates if 5e6 <= v <= 5e9]
+    if not plausible:
+        return None
+
+    # Split the text into clauses for context scoring. Sentence-ending
+    # periods, semicolons, and newlines are boundaries — but a period
+    # that is part of a decimal number (e.g. "$97.2M") is NOT. So we
+    # match periods only when followed by whitespace or end-of-string,
+    # along with `;` and `\n` anywhere.
+    def _is_boundary(ch_prev, ch):
+        if ch in (';', '\n'):
+            return True
+        # `.` is a boundary only if followed by whitespace; that filters out
+        # decimal points (`$97.2`) but keeps real sentence endings.
+        return ch == '.' and ch_prev == ' '  # sentinel — see below
+
+    # Easier to pre-compute boundary positions in one pass.
+    boundary_positions = set()
+    for i, ch in enumerate(lower):
+        if ch in (';', '\n'):
+            boundary_positions.add(i)
+        elif ch == '.':
+            next_ch = lower[i + 1] if i + 1 < len(lower) else ''
+            if next_ch == '' or next_ch.isspace():
+                boundary_positions.add(i)
+
+    def _clause(pos):
+        start = pos
+        while start > 0 and (start - 1) not in boundary_positions:
+            start -= 1
+        end = pos
+        while end < len(lower) and end not in boundary_positions:
+            end += 1
+        return lower[start:end]
+
+    def _score(pos, val):
+        clause = _clause(pos)
+        score = val  # base score is the magnitude
+        for phrase in _NON_DOMESTIC_PHRASES:
+            if phrase in clause:
+                score *= 0.02  # heavy demotion: global figures aren't our anchor
+                break
+        for phrase in _DOMESTIC_PHRASES:
+            if phrase in clause:
+                score *= 2.0
+                break
+        return score
+
+    plausible.sort(key=lambda pv: _score(pv[0], pv[1]), reverse=True)
+    return plausible[0][1]
+
+
+def _build_rescue_validation(movie_name, genre, research_text, model_used,
+                              note_prefix):
+    """Construct a forced-clamp validation dict when AI JSON parse fails.
+
+    Pulls a researched gross out of the research summary text and returns
+    a minimal dict with ``passed: False`` so the downstream
+    ``apply_ai_ticket_adjustments`` pipeline still fires the digital-sales
+    band clamp. Without this, every JSON parse failure leaves the raw
+    panel projection in the CSV (the Goat / Michael failure mode).
+
+    Returns ``None`` if no gross could be extracted — the caller should
+    then fall back to the previous "skip validation" behavior.
+    """
+    gross = _extract_gross_from_research_text(research_text)
+    if not gross:
+        return None
+    # Prefer a researched skew from the keyword heuristic; fall back to
+    # "balanced" so the downstream synthesis path (which gates on
+    # ``skew in ("male", "female", "balanced")``) still fires and the
+    # panel-derived demographics get replaced by genre-appropriate
+    # defaults instead of left as noise.
+    skew = _genre_skew_hint(movie_name, genre) or "balanced"
+    target_mid = gross * DIGITAL_SALES_FACTOR_MID
+    target_low = gross * DIGITAL_SALES_FACTOR_LOW
+    target_high = gross * DIGITAL_SALES_FACTOR_HIGH
+    return {
+        "passed": False,
+        "tickets_plausible": False,
+        "tickets_note": (
+            "AI JSON parse failed; rescue path extracted "
+            f"US domestic gross of ${gross:,.0f} from research text and "
+            "forced the digital-sales band clamp."
+        ),
+        "sales_plausible": False,
+        "sales_note": "Forced clamp to digital band (AI parse failed).",
+        "demographics_plausible": False,
+        "demographics_note": (
+            f"AI parse failed; demographics defaulted from genre/skew "
+            f"({skew or 'neutral'}, {genre})."
+        ),
+        "flags": [
+            "AI JSON parse failed — rescue path activated.",
+            f"Researched US gross ${gross:,.0f} extracted from research text; "
+            f"applied {DIGITAL_SALES_FACTOR_LOW:.2f}-{DIGITAL_SALES_FACTOR_HIGH:.2f} digital band.",
+        ],
+        "scale_direction": "auto",
+        "suggested_projected_sales_range_genpop": [target_low, target_high],
+        "researched_domestic_gross_usd": gross,
+        "research_sources": [],
+        "gender_skew": skew or "",
+        "age": {},
+        "gender": {},
+        "income": {},
+        "ethnicity": {},
+        "platform_distribution": {},
+        "reasoning": (
+            f"AI JSON parse failed. Extracted US gross ${gross:,.0f} from "
+            f"research text and anchored projection to "
+            f"{DIGITAL_SALES_FACTOR_MID*100:.0f}% mid of "
+            f"{DIGITAL_SALES_FACTOR_LOW*100:.0f}-{DIGITAL_SALES_FACTOR_HIGH*100:.0f}% "
+            f"digital band. Demographics will be filled from the "
+            f"{skew or 'neutral'}-skew default plan."
+        ),
+        "overall_assessment": (
+            f"{note_prefix} AI JSON parse failed; rescue clamp anchored to "
+            f"${gross:,.0f} researched gross (band midpoint "
+            f"${target_mid:,.0f}). Demographics defaulted from skew/genre."
+        ),
+        "research": research_text,
+        "_model_used": model_used + "+rescue",
+        "_rescue_path": True,
+    }
 
 
 def _clamp_target_sales_to_digital_band(researched_gross_usd, projected_sales_gen_pop,
@@ -1485,31 +1834,44 @@ def apply_demo_plan_to_section(demo_section, gender_plan, age_plan,
             )
         return plan
 
+    def _apply(dim, plan):
+        """Apply one dimension's plan using the UNION of panel + plan keys.
+
+        Aliases non-canonical labels (e.g. "$250,000+" -> "$250,000 OR MORE",
+        "BLACK" -> "BLACK OR AFRICAN AMERICAN") so the AI's plan lands in
+        the panel's bucket and AI-only buckets still surface in the output.
+        """
+        if not plan:
+            return False
+        canon_plan = _canonicalize_plan(plan, dim)
+        if not canon_plan:
+            return False
+        labels = _merge_labels_for_section(demo_section, dim, canon_plan)
+        if not labels:
+            return False
+        new_section = _normalize_pct_plan(canon_plan, labels)
+        if new_section:
+            demo_section[dim] = new_section
+            return True
+        return False
+
     modified = 0
     if "GENDER" in demo_section and demo_section["GENDER"] and gender_plan:
         plan = _enforce_gender_skew(gender_plan, researched_skew)
         plan = _maybe_jitter(plan, "GENDER")
-        new_gender = _normalize_pct_plan(plan, list(demo_section["GENDER"].keys()))
-        if new_gender:
-            demo_section["GENDER"] = new_gender
+        if _apply("GENDER", plan):
             modified += 1
     if "AGE" in demo_section and demo_section["AGE"] and age_plan:
         plan = _maybe_jitter(age_plan, "AGE")
-        new_age = _normalize_pct_plan(plan, list(demo_section["AGE"].keys()))
-        if new_age:
-            demo_section["AGE"] = new_age
+        if _apply("AGE", plan):
             modified += 1
     if "INCOME" in demo_section and demo_section["INCOME"] and income_plan:
         plan = _maybe_jitter(income_plan, "INCOME")
-        new_income = _normalize_pct_plan(plan, list(demo_section["INCOME"].keys()))
-        if new_income:
-            demo_section["INCOME"] = new_income
+        if _apply("INCOME", plan):
             modified += 1
     if "ETHNICITY" in demo_section and demo_section["ETHNICITY"] and ethnicity_plan:
         plan = _maybe_jitter(ethnicity_plan, "ETHNICITY")
-        new_eth = _normalize_pct_plan(plan, list(demo_section["ETHNICITY"].keys()))
-        if new_eth:
-            demo_section["ETHNICITY"] = new_eth
+        if _apply("ETHNICITY", plan):
             modified += 1
     return modified
 
