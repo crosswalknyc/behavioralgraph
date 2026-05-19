@@ -16427,6 +16427,21 @@
                                 <div id="roasIQKpiConvRate" style="font-size: 1.6rem; font-weight: 700; color: var(--accent-orange); margin-top: 4px;"></div>
                             </div>
                         </div>
+                        <!-- KPI Cards - row 2: engagement + conversions (Channels card removed) -->
+                        <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.75rem; margin-bottom: 1.25rem;">
+                            <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 1.1rem 1rem; text-align: center;">
+                                <div style="font-size: 0.75rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em;">Avg Touches / User</div>
+                                <div id="roasIQKpiAvgTouch" style="font-size: 1.6rem; font-weight: 700; color: #14b8a6; margin-top: 4px;"></div>
+                            </div>
+                            <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 1.1rem 1rem; text-align: center;">
+                                <div style="font-size: 0.75rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em;">Multi-Touch Users</div>
+                                <div id="roasIQKpiMultiTouch" style="font-size: 1.6rem; font-weight: 700; color: #f97316; margin-top: 4px;"></div>
+                            </div>
+                            <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 1.1rem 1rem; text-align: center;">
+                                <div style="font-size: 0.75rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em;">Proj. Conversions</div>
+                                <div id="roasIQKpiProjConv" style="font-size: 1.6rem; font-weight: 700; color: #10b981; margin-top: 4px;"></div>
+                            </div>
+                        </div>
                         <!-- Charts Row: Horizontal Bar + Doughnut side by side -->
                         <div style="display: grid; grid-template-columns: 1.6fr 1fr; gap: 0.75rem; margin-bottom: 1.25rem;">
                             <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 1.25rem;">
@@ -16436,28 +16451,6 @@
                             <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 1.25rem;">
                                 <h3 style="margin: 0 0 0.75rem; font-size: 0.95rem;">Channel Mix</h3>
                                 <canvas id="roasIQChannelChart" height="220"></canvas>
-                            </div>
-                        </div>
-                        <!-- KPI Cards - row 2 -->
-                        <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.75rem; margin-bottom: 1.25rem;">
-                            <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 1.1rem 1rem; text-align: center;">
-                                <div style="font-size: 0.75rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em;">Channels</div>
-                                <div id="roasIQKpiChannels" style="font-size: 1.6rem; font-weight: 700; color: #8b5cf6; margin-top: 4px;"></div>
-                            </div>
-                            <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 1.1rem 1rem; text-align: center;">
-                                <div style="font-size: 0.75rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em;">Avg Touches / User</div>
-                                <div id="roasIQKpiAvgTouch" style="font-size: 1.6rem; font-weight: 700; color: #14b8a6; margin-top: 4px;"></div>
-                            </div>
-                            <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 1.1rem 1rem; text-align: center;">
-                                <div style="font-size: 0.75rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em;">Multi-Touch Users</div>
-                                <div id="roasIQKpiMultiTouch" style="font-size: 1.6rem; font-weight: 700; color: #f97316; margin-top: 4px;"></div>
-                            </div>
-                        </div>
-                        <!-- KPI Cards - row 3 -->
-                        <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.75rem; margin-bottom: 1.25rem;">
-                            <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 1.1rem 1rem; text-align: center;">
-                                <div style="font-size: 0.75rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em;">Proj. Conversions</div>
-                                <div id="roasIQKpiProjConv" style="font-size: 1.6rem; font-weight: 700; color: #10b981; margin-top: 4px;"></div>
                             </div>
                         </div>
                         <!-- Conversion Pie + Day of Week + Engagement row - 3 across -->
@@ -22525,7 +22518,10 @@
             document.getElementById('roasIQKpiUids').textContent = nonDupAudience.toLocaleString();
             document.getElementById('roasIQKpiAttributed').textContent = duplicatedClicks.toLocaleString();
             document.getElementById('roasIQKpiConvRate').textContent = (data.overall_conv_rate != null ? data.overall_conv_rate : 0) + '%';
-            document.getElementById('roasIQKpiChannels').textContent = channels.length;
+            // Channels KPI tile was removed from the layout — guard in case any
+            // older view still has the element so this never throws.
+            var _kpiCh = document.getElementById('roasIQKpiChannels');
+            if (_kpiCh) _kpiCh.textContent = channels.length;
 
             var colors = ['#6366f1','#f59e0b','#10b981','#ef4444','#8b5cf6','#ec4899','#14b8a6','#f97316','#06b6d4','#a3e635'];
             var chLabels = channels.map(function(c){return c[0];});
@@ -26066,7 +26062,7 @@
             const statsEl = document.getElementById('roasIQStats');
             if (statsEl) {
                 const convRate = data.overall_conv_rate != null ? data.overall_conv_rate : 0;
-                statsEl.innerHTML = '<div class="card" style="text-align:center;padding:1.25rem;"><div style="font-size:0.75rem;color:var(--text-secondary);text-transform:uppercase;">Non-Duplicated Audience</div><div style="font-size:1.75rem;font-weight:700;margin-top:4px;">'+nonDupAudience2.toLocaleString()+'</div></div><div class="card" style="text-align:center;padding:1.25rem;"><div style="font-size:0.75rem;color:var(--text-secondary);text-transform:uppercase;">Duplicated Clicks</div><div style="font-size:1.75rem;font-weight:700;margin-top:4px;">'+duplicatedClicks2.toLocaleString()+'</div></div><div class="card" style="text-align:center;padding:1.25rem;"><div style="font-size:0.75rem;color:var(--text-secondary);text-transform:uppercase;">Conversion Rate</div><div style="font-size:1.75rem;font-weight:700;margin-top:4px;">'+convRate+'%</div></div><div class="card" style="text-align:center;padding:1.25rem;"><div style="font-size:0.75rem;color:var(--text-secondary);text-transform:uppercase;">Channels</div><div style="font-size:1.75rem;font-weight:700;margin-top:4px;">'+channels.length+'</div></div>';
+                statsEl.innerHTML = '<div class="card" style="text-align:center;padding:1.25rem;"><div style="font-size:0.75rem;color:var(--text-secondary);text-transform:uppercase;">Non-Duplicated Audience</div><div style="font-size:1.75rem;font-weight:700;margin-top:4px;">'+nonDupAudience2.toLocaleString()+'</div></div><div class="card" style="text-align:center;padding:1.25rem;"><div style="font-size:0.75rem;color:var(--text-secondary);text-transform:uppercase;">Duplicated Clicks</div><div style="font-size:1.75rem;font-weight:700;margin-top:4px;">'+duplicatedClicks2.toLocaleString()+'</div></div><div class="card" style="text-align:center;padding:1.25rem;"><div style="font-size:0.75rem;color:var(--text-secondary);text-transform:uppercase;">Conversion Rate</div><div style="font-size:1.75rem;font-weight:700;margin-top:4px;">'+convRate+'%</div></div>';
             }
             const canvas = document.getElementById('roasIQChart');
             if (canvas && typeof Chart !== 'undefined') {
