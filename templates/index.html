@@ -36449,7 +36449,11 @@
                         const gpMed = typeof calculateMedianAgeFromDistribution==='function' ? calculateMedianAgeFromDistribution(gpObj) : 0;
                         medianSpan.innerHTML = profMed>0 ? `<span style="color:#f0ff00;">Audience Median: ${profMed.toFixed(2)} yrs</span>${gpMed>0 ? ` | <span class="has-tooltip" data-tooltip="${(medianTip||'').replace(/"/g,'&quot;')}" style="color:var(--text-secondary);">Gen Pop Median: ${gpMed.toFixed(2)} yrs</span>` : ''}` : '';
                     } else {
-                        const med = typeof calculateDemographicMedian==='function' ? calculateDemographicMedian(obj, gpObj, 'income') : {profile:null,genPop:null};
+                        // Defensively backfill missing "Under $25,000" bucket on gen-pop side
+                        const gpObjForMed = typeof _tstEnsureCompleteGenPopIncome === 'function'
+                            ? _tstEnsureCompleteGenPopIncome(gpObj)
+                            : gpObj;
+                        const med = typeof calculateDemographicMedian==='function' ? calculateDemographicMedian(obj, gpObjForMed, 'income') : {profile:null,genPop:null};
                         medianSpan.innerHTML = med.profile ? `<span style="color:#f0ff00;">Audience Median: $${med.profile.value}</span>${med.genPop ? ` | <span class="has-tooltip" data-tooltip="${(medianTip||'').replace(/"/g,'&quot;')}" style="color:var(--text-secondary);">Gen Pop Median: $${med.genPop.value}</span>` : ''}` : '';
                     }
                 }
@@ -36694,7 +36698,10 @@
                         const gpMed = typeof calculateMedianAgeFromDistribution==='function' ? calculateMedianAgeFromDistribution(gpObj) : 0;
                         medianSpan.innerHTML = profMed>0 ? `<span style="color:#f0ff00;">Audience Median: ${profMed.toFixed(2)} yrs</span>${gpMed>0 ? ` | <span style="color:var(--text-secondary);">Gen Pop Median: ${gpMed.toFixed(2)} yrs</span>` : ''}` : '';
                     } else {
-                        const med = typeof calculateDemographicMedian==='function' ? calculateDemographicMedian(obj, gpObj, 'income') : {profile:null,genPop:null};
+                        const gpObjForMed = typeof _tstEnsureCompleteGenPopIncome === 'function'
+                            ? _tstEnsureCompleteGenPopIncome(gpObj)
+                            : gpObj;
+                        const med = typeof calculateDemographicMedian==='function' ? calculateDemographicMedian(obj, gpObjForMed, 'income') : {profile:null,genPop:null};
                         medianSpan.innerHTML = med.profile ? `<span style="color:#f0ff00;">Audience Median: $${med.profile.value}</span>${med.genPop ? ` | <span style="color:var(--text-secondary);">Gen Pop Median: $${med.genPop.value}</span>` : ''}` : '';
                     }
                 }
@@ -44151,7 +44158,7 @@
                         if (lower.includes('k') && n < 1000) return n * 1000;
                         return n;
                     };
-                    if (lower.includes('<') || lower.includes('under')) {
+                    if (lower.includes('<') || lower.includes('under') || lower.includes('less than') || lower.includes('lessthan') || lower.includes('below')) {
                         const m = lower.match(/(\d[\d,]*)/);
                         const end = m ? toNum(m[1]) : 25000;
                         return { start: 0, width: end };
@@ -44645,8 +44652,15 @@
             const incomeChartType = chartTypePrefs.income || 'bar';
             const incomeIsCircular = ['doughnut', 'pie', 'polarArea'].includes(incomeChartType);
             
-            // Calculate median for income — use global Gen Pop baseline for consistent Gen Pop median
-            const _gpIncomeForMedian = (genPopBaselineData?.demographics?.income) || demographicsGenPop.income || {};
+            // Calculate median for income — use global Gen Pop baseline for consistent Gen Pop median.
+            // Defensively run the gen-pop side through _tstEnsureCompleteGenPopIncome so a missing
+            // "Under $25,000" bucket (panel composition gap) doesn't push the interpolated-median
+            // formula into a higher bracket. Profile data is passed as-is so we don't synthesize
+            // bottom-income panelists for an audience that genuinely has none.
+            const _gpIncomeRaw = (genPopBaselineData?.demographics?.income) || demographicsGenPop.income || {};
+            const _gpIncomeForMedian = typeof _tstEnsureCompleteGenPopIncome === 'function'
+                ? _tstEnsureCompleteGenPopIncome(_gpIncomeRaw)
+                : _gpIncomeRaw;
             const incomeMedian = calculateDemographicMedian(demographics.income, _gpIncomeForMedian, 'income');
             
             // Update median display in chart header (no Gen Pop comparison when Gen Pop selected)
