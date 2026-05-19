@@ -30692,6 +30692,90 @@ def iq_rankers_backfill_30d():
         return jsonify({'success': False, 'error': str(e)[:300]}), 500
 
 
+def _run_iq_rankers_load_day_job(job_id, snapshot_date):
+    """Background runner — load IQ Rankers daily metrics for one date
+    across every Profile IQ profile. Wraps run_daily_for_all_profiles
+    with update_job_status calls so the UI can poll progress."""
+    if _iq_rankers is None:
+        update_job_status(job_id, status='failed', error='iq_rankers unavailable')
+        return
+    try:
+        update_job_status(
+            job_id, status='running', progress=5,
+            message=f'Loading {snapshot_date} for all profiles...',
+        )
+        jobs_list = _iq_rankers_get_jobs()
+        total_profiles = sum(1 for _ in _iq_rankers._iter_profile_jobs(jobs_list))
+        update_job_status(
+            job_id, status='running', progress=10,
+            message=f'Scanning {total_profiles} profile(s) for {snapshot_date}...',
+        )
+        result = _iq_rankers.run_daily_for_all_profiles(
+            ch_connect=_ch_connect,
+            s3_client=s3_client,
+            sentiment_iq=_sentiment_iq,
+            s3_cache_jobs=jobs_list,
+            s3_bucket=S3_BUCKET,
+            snapshot_date=snapshot_date,
+        )
+        ran = int(result.get('ran') or 0)
+        skipped = int(result.get('skipped') or 0)
+        failed = int(result.get('failed') or 0)
+        elapsed = float(result.get('elapsed_sec') or 0)
+        update_job_status(
+            job_id, status='completed', progress=100,
+            message=(f"Done — {ran} loaded, {skipped} skipped, {failed} failed "
+                     f"in {elapsed:.1f}s. Refresh the Talent / Brands leaderboards."),
+        )
+    except Exception as e:
+        import traceback; traceback.print_exc()
+        update_job_status(job_id, status='failed', error=str(e)[:300])
+
+
+@app.route('/api/iq-rankers/load-day', methods=['POST'])
+@requires_admin
+def iq_rankers_load_day():
+    """Admin-only: queue a background job that loads IQ Rankers daily
+    metrics for ONE date across every Profile IQ profile. Returns a
+    job_id the UI can poll via /api/job-status/<id>. Defaults to
+    yesterday; pass ?date=YYYY-MM-DD or JSON {date: ...} to override."""
+    if _iq_rankers is None:
+        return jsonify({'success': False, 'error': 'iq_rankers unavailable'}), 500
+    snapshot_date = (request.args.get('date') or '').strip()
+    if not snapshot_date and isinstance(request.json, dict):
+        snapshot_date = str(request.json.get('date') or '').strip()
+    if snapshot_date:
+        try:
+            datetime.strptime(snapshot_date, '%Y-%m-%d')
+        except Exception:
+            return jsonify({'success': False, 'error': 'Invalid date — use YYYY-MM-DD.'}), 400
+    else:
+        snapshot_date = (date.today() - timedelta(days=1)).isoformat()
+    username = session.get('username')
+    job_id = str(uuid.uuid4())[:8]
+    jobs[job_id] = {
+        'status': 'queued', 'progress': 0, 'message': 'Queued',
+        'created_at': datetime.now().isoformat(),
+        'project_name': f'IQ Rankers daily — {snapshot_date}',
+        'error': None, 'result_file': None,
+        'logs': [], 's3_key': None,
+        'username': username,
+        'type': 'iq_rankers_load_day',
+        'snapshot_date': snapshot_date,
+    }
+    if s3_client:
+        try:
+            _save_job_status_to_s3(job_id, jobs[job_id])
+        except Exception:
+            pass
+    spawn_heavy_analysis(
+        _run_iq_rankers_load_day_job,
+        args=(job_id, snapshot_date),
+        tool='iq_rankers', job_id=job_id, username=username,
+    )
+    return jsonify({'success': True, 'job_id': job_id, 'snapshot_date': snapshot_date})
+
+
 def run_cross_show(job_id):
     """Run the show_platform_tracker.py script."""
     try:

@@ -17311,8 +17311,14 @@
                                 <h3 style="margin: 0;">⭐ Talent Ranker</h3>
                                 <p style="margin: 0.15rem 0 0 0; font-size: 0.78rem; color: var(--text-secondary);">Daily mentions, sentiment and CW IQ Score across every Talent profile in Profile IQ. Click a row to open the profile.</p>
                             </div>
-                            <button class="btn btn-secondary" onclick="loadIQRankerLeaderboard('TALENT', true)" style="padding: 0.35rem 0.75rem; font-size: 0.8rem;">🔄 Refresh</button>
+                            <div style="display: flex; gap: 0.4rem; align-items: center; flex-wrap: wrap;">
+                                {% if role == 'super_admin' or role == 'admin' %}
+                                <button class="btn btn-secondary has-tooltip" data-tooltip="Run the daily ranker pipeline NOW for every Profile IQ profile" onclick="iqRankersLoadDay(this)" id="iqRankersLoadDayBtn-TALENT" style="padding: 0.35rem 0.75rem; font-size: 0.8rem;">⚡ Load 1 day for all profiles</button>
+                                {% endif %}
+                                <button class="btn btn-secondary" onclick="loadIQRankerLeaderboard('TALENT', true)" style="padding: 0.35rem 0.75rem; font-size: 0.8rem;">🔄 Refresh</button>
+                            </div>
                         </div>
+                        <div id="iqRankersLoadDayStatus" style="display: none; padding: 0.5rem 0.75rem; margin-bottom: 0.75rem; background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 6px; font-size: 0.78rem; color: var(--text-secondary);"></div>
                         <div id="iqRankerSubTabs-TALENT" class="netflix-subtabs" style="display: flex; gap: 0.35rem; margin: 0.5rem 0 0.75rem 0; flex-wrap: wrap;"></div>
                         <div class="iq-ranker-controls" style="display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center; margin-bottom: 0.75rem;">
                             <label style="font-size: 0.75rem; color: var(--text-secondary);">Window:
@@ -76287,6 +76293,79 @@
             // Debounce so we don't spam the API on every keystroke
             if (state.searchTimer) clearTimeout(state.searchTimer);
             state.searchTimer = setTimeout(() => loadIQRankerLeaderboard(master), 300);
+        }
+
+        // Admin-only: kick off the "load 1 day for every profile" pipeline.
+        // The endpoint is admin-gated server-side; this button just queues
+        // the background job and polls its status until done, then refreshes
+        // both leaderboards.
+        function iqRankersLoadDay(btn) {
+            const today = new Date();
+            const y = new Date(today.getTime() - 24 * 3600 * 1000);
+            const def = y.toISOString().slice(0, 10);
+            const date = window.prompt(
+                'Which date should we load IQ Rankers data for?\n\n'
+                + 'Loads ONE day of mentions / sentiment / CW IQ Score for every Profile IQ profile.\n'
+                + 'Use YYYY-MM-DD. Defaults to yesterday (today\'s panel data hasn\'t landed yet).',
+                def,
+            );
+            if (date === null) return;
+            const clean = (date || '').trim();
+            const useDate = clean || def;
+            if (!/^\d{4}-\d{2}-\d{2}$/.test(useDate)) {
+                alert('Date must be in YYYY-MM-DD format.');
+                return;
+            }
+            const status = document.getElementById('iqRankersLoadDayStatus');
+            const setStatus = (txt, color) => {
+                if (!status) return;
+                status.style.display = 'block';
+                status.style.color = color || 'var(--text-secondary)';
+                status.textContent = txt;
+            };
+            if (btn) { btn.disabled = true; btn.dataset._origText = btn.textContent; btn.textContent = '⏳ Queuing...'; }
+            setStatus('Queuing IQ Rankers load for ' + useDate + '...');
+            fetch('/api/iq-rankers/load-day?date=' + encodeURIComponent(useDate),
+                  { method: 'POST', credentials: 'same-origin' })
+                .then(r => r.json())
+                .then(resp => {
+                    if (!resp || !resp.success || !resp.job_id) {
+                        const msg = (resp && resp.error) || 'Failed to queue job';
+                        setStatus('Error: ' + msg, 'var(--accent-red)');
+                        if (btn) { btn.disabled = false; btn.textContent = btn.dataset._origText || '⚡ Load 1 day for all profiles'; }
+                        return;
+                    }
+                    setStatus('Running... (job ' + resp.job_id + ')');
+                    const poll = setInterval(() => {
+                        fetch('/api/job-status/' + encodeURIComponent(resp.job_id),
+                              { credentials: 'same-origin' })
+                            .then(rr => rr.json())
+                            .then(js => {
+                                const st = (js && js.status) || 'unknown';
+                                const prog = (js && (js.progress != null ? js.progress : '')) || '';
+                                const msg = (js && (js.message || js.error)) || st;
+                                setStatus('[' + st + (prog !== '' ? ' ' + prog + '%' : '') + '] ' + msg);
+                                if (st === 'completed') {
+                                    clearInterval(poll);
+                                    setStatus('✓ ' + msg, 'var(--accent-lime)');
+                                    if (btn) { btn.disabled = false; btn.textContent = btn.dataset._origText || '⚡ Load 1 day for all profiles'; }
+                                    if (typeof loadIQRankerLeaderboard === 'function') {
+                                        loadIQRankerLeaderboard('TALENT', true);
+                                        loadIQRankerLeaderboard('BRAND', true);
+                                    }
+                                } else if (st === 'failed') {
+                                    clearInterval(poll);
+                                    setStatus('✗ ' + msg, 'var(--accent-red)');
+                                    if (btn) { btn.disabled = false; btn.textContent = btn.dataset._origText || '⚡ Load 1 day for all profiles'; }
+                                }
+                            })
+                            .catch(() => { /* keep polling; transient network errors are OK */ });
+                    }, 4000);
+                })
+                .catch(e => {
+                    setStatus('Network error: ' + e, 'var(--accent-red)');
+                    if (btn) { btn.disabled = false; btn.textContent = btn.dataset._origText || '⚡ Load 1 day for all profiles'; }
+                });
         }
 
         async function loadIQRankerLeaderboard(master, force) {
