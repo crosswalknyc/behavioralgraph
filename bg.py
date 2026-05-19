@@ -14616,17 +14616,26 @@ _KIDS_FRANCHISE_IPS = {
     'SPIDER-MAN',
 }
 
-def _enforce_kids_franchise_caps(df_behavior, persona_doc=None, verbose: bool = True):
-    """Cap kids-franchise IPs in FRANCHISE and TOYS categories.
-    Skip if pre-cap BP >= 30% (treats as franchise-connected).
+def _enforce_kids_franchise_caps(df_behavior, subject: str = '',
+                                  persona_doc=None, verbose: bool = True):
+    """Cap kids-franchise IPs in FRANCHISE, TOYS, GAMES.
+
+    - Franchise-connected escape: skip IP if ANY row >= 35%.
+    - Anti-pinning: per-(subject, IP) jitter so two profiles get DIFFERENT
+      capped values; within a profile same IP gets same value (cross-cat
+      consistency, survives the later max-propagation pass).
+    - Recomputes Raw + Projection proportionally per row.
+    - Forces 4-dp non-round values.
+    - Self-pin protection: skip 100% rows whose value matches the subject.
     """
     import hashlib as _hl
     if df_behavior is None or len(df_behavior) == 0:
         return df_behavior, 0
-    target_cats = {'FRANCHISE', 'TOYS'}
+    target_cats = {'FRANCHISE', 'TOYS', 'GAMES'}
+    subj_key = (subject or '').strip().upper() or 'UNKNOWN_SUBJECT'
     try:
         def _audience_cap_for_ip(ip_upper, max_existing_bp):
-            if max_existing_bp >= 30.0:
+            if max_existing_bp >= 35.0:
                 return None
             if ip_upper == 'SPIDER-MAN':
                 return 9.0
@@ -14646,32 +14655,70 @@ def _enforce_kids_franchise_caps(df_behavior, persona_doc=None, verbose: bool = 
             .groupby('_val_u')['_bp_f'].max().to_dict()
         )
 
+        cols_lower = {c.lower(): c for c in df_behavior.columns}
+        bp_col = cols_lower.get('brand penetration (row)') or 'Brand Penetration (Row)'
+        raw_col = next(
+            (cols_lower[k] for k in cols_lower if k.startswith('original raw')),
+            None,
+        )
+        proj_col = next(
+            (cols_lower[k] for k in cols_lower if 'projection' in k),
+            None,
+        )
+
+        ip_target_bp = {}
+        for ip_u in _KIDS_FRANCHISE_IPS:
+            if ip_u not in ip_max:
+                continue
+            cap = _audience_cap_for_ip(ip_u, ip_max[ip_u])
+            if cap is None:
+                continue
+            h = int(_hl.blake2b(
+                f"{subj_key}|{ip_u}|kids_cap".encode(),
+                digest_size=8,
+            ).hexdigest(), 16)
+            u = ((h % 1801) - 900) / 1000.0
+            target = max(0.5, cap + u * (cap * 0.06))
+            target = round(target, 4)
+            if abs(target * 100 - round(target * 100)) < 1e-4:
+                target = round(target + 0.0017, 4)
+            ip_target_bp[ip_u] = target
+
         capped = 0
         for idx, r in df_up.iterrows():
             cat = r['_cat_u']
             val = r['_val_u']
             if cat not in target_cats:
                 continue
-            if val not in _KIDS_FRANCHISE_IPS:
+            if val not in ip_target_bp:
                 continue
             old_bp = float(r['_bp_f'])
             if old_bp <= 0:
                 continue
-            cap = _audience_cap_for_ip(val, ip_max.get(val, old_bp))
-            if cap is None or old_bp <= cap + 0.001:
+            if old_bp >= 99.999 and val == subj_key:
                 continue
-            h = int(_hl.blake2b(f"{val}|kids_cap".encode(), digest_size=8).hexdigest(), 16)
-            u = ((h % 1801) - 900) / 1000.0
-            new_v = max(0.5, cap + u * (cap * 0.03))
-            if abs(new_v * 100 - round(new_v * 100)) < 1e-6:
-                new_v += 0.0017
-            new_v = round(new_v, 4)
-            df_behavior.at[idx, 'Brand Penetration (Row)'] = f"{new_v:.4f}"
-            if verbose and capped < 20:
-                print(f"   🧒 kids-franchise cap: [{cat:<10}] {val:<24} {old_bp:>6.2f} → {new_v:>6.2f}")
+            new_v = ip_target_bp[val]
+            if old_bp <= new_v + 0.001:
+                continue
+            df_behavior.at[idx, bp_col] = f"{new_v:.4f}"
+            if raw_col is not None and proj_col is not None:
+                try:
+                    old_raw = float(str(df_behavior.at[idx, raw_col] or 0).replace(',', ''))
+                    if old_bp > 0 and old_raw > 0:
+                        scale = old_raw / (old_bp / 100.0)
+                        new_raw = int(round(scale * (new_v / 100.0)))
+                        old_proj = float(str(df_behavior.at[idx, proj_col] or 0).replace(',', ''))
+                        pscale = old_proj / old_raw if old_raw > 0 else 0
+                        new_proj = int(round(new_raw * pscale))
+                        df_behavior.at[idx, raw_col] = str(new_raw)
+                        df_behavior.at[idx, proj_col] = str(new_proj)
+                except Exception:
+                    pass
+            if verbose and capped < 25:
+                print(f"   🧒 kids-franchise cap: [{cat:<10}] {val:<24} {old_bp:>6.2f} → {new_v:>6.4f}")
             capped += 1
         if verbose and capped > 0:
-            print(f"   ✂️  kids-franchise caps applied: {capped} BPs across FRANCHISE/TOYS")
+            print(f"   ✂️  kids-franchise caps applied: {capped} BPs across FRANCHISE/TOYS/GAMES (subject={subj_key})")
         return df_behavior, capped
     except Exception as _e:
         if verbose:
@@ -27999,10 +28046,19 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
         # Kids-franchise / kids-toy cap (2026-05-19): code-side cap for
         # POKEMON/MINECRAFT/ROBLOX/SUPER MARIO/HELLO KITTY/SQUISHMALLOWS/
         # DISNEY-PRINCESS/BARBIE/SPIDER-MAN/NERF/FISHER-PRICE/HUNGER GAMES
-        # in FRANCHISE and TOYS categories. Skips brands above 30% (treats
-        # as franchise-connected, e.g. Donnie Yen → STAR WARS).
+        # in FRANCHISE / TOYS / GAMES. Skip IPs already >= 35% (franchise-
+        # connected). Per-(subject, IP) jitter prevents cross-profile pinning.
+        # Recomputes Raw + Projection.
         try:
-            df_final, _n_kids = _enforce_kids_franchise_caps(df_final, verbose=True)
+            _subj_for_cap = (
+                locals().get('project_name')
+                or locals().get('_subject_name')
+                or (brands[0] if brands else '')
+                or ''
+            )
+            df_final, _n_kids = _enforce_kids_franchise_caps(
+                df_final, subject=_subj_for_cap, verbose=True,
+            )
         except Exception as _e:
             print(f"   ⚠️ kids-franchise cap failed: {_e}")
 
