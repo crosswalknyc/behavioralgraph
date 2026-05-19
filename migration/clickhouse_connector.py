@@ -204,7 +204,16 @@ def connect_clickhouse(settings: Optional[dict] = None):
     # expression identifier TEMP_XXX". A per-connection uuid keeps
     # parallel connections isolated while making every cursor on this
     # connection share the same session.
+    #
+    # session_timeout MUST be raised well above ClickHouse's 60s default.
+    # The Ticket Sales Tracker's TEMP_DEMOS_WITH_THEATER CTAS routinely
+    # runs >60s on real movie panels (large INNER JOIN over
+    # userdata.user_data_sanitized) and any subsequent SELECT on that
+    # temp table arrives AFTER the session has expired, returning a
+    # "Unknown table expression identifier" error. 3600s is the server's
+    # current max_session_timeout cap.
     session_id = f"bg-{uuid.uuid4().hex}"
+    merged_settings.setdefault('session_timeout', 3600)
     client = clickhouse_connect.get_client(
         host=CH_HOST,
         port=CH_PORT,

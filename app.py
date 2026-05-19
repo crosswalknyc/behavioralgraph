@@ -936,6 +936,15 @@ def hash_password(password, salt=None):
     pwd_hash = hashlib.pbkdf2_hmac('sha256', password.encode(), salt.encode(), 600000)
     return f"pbkdf2:sha256:600000${salt}${pwd_hash.hex()}"
 
+def _env_admin_password() -> str:
+    """Admin password sourced from env (ADMIN_PASSWORD). Falls back to the
+    legacy default only if the env var is unset, so the secret never has to
+    live in source control or render.yaml. Set ADMIN_PASSWORD in the Render
+    dashboard for each web service; rotating it there + redeploying (or
+    hitting /api/cron/sync-admin-password-from-env) updates the live S3
+    users.json admin entry."""
+    return os.environ.get('ADMIN_PASSWORD') or 'midgenow!2'
+
 def verify_password(stored_hash, password):
     """Verify a password against its hash."""
     try:
@@ -980,7 +989,7 @@ def load_users():
     return {
         "users": {
             "admin": {
-                "password_hash": hash_password("midgenow!2"),
+                "password_hash": hash_password(_env_admin_password()),
                 "role": "super_admin",
                 "credits": -1,
                 "credits_used": 0,
@@ -1038,7 +1047,7 @@ def init_users():
     # Check for admin user
     if 'admin' not in data['users']:
         data['users']['admin'] = {
-            "password_hash": hash_password("midgenow!2"),
+            "password_hash": hash_password(_env_admin_password()),
             "role": "super_admin",
             "credits": -1,
             "credits_used": 0,
@@ -1049,8 +1058,19 @@ def init_users():
         }
         changed = True
     elif not is_valid_hash(data['users']['admin'].get('password_hash', '')):
-        data['users']['admin']['password_hash'] = hash_password("midgenow!2")
+        data['users']['admin']['password_hash'] = hash_password(_env_admin_password())
         changed = True
+    else:
+        # Env-driven sync: if ADMIN_PASSWORD is explicitly set in the environment
+        # and the current stored hash does NOT verify against it, rehash. This is
+        # how a rotated ADMIN_PASSWORD in the Render dashboard propagates to the
+        # live S3 users.json on the next startup (or when /api/cron/sync-admin-
+        # password-from-env is hit). When ADMIN_PASSWORD is unset, we never touch
+        # the existing hash, so a manually-set password is preserved.
+        env_pw = os.environ.get('ADMIN_PASSWORD')
+        if env_pw and not verify_password(data['users']['admin']['password_hash'], env_pw):
+            data['users']['admin']['password_hash'] = hash_password(env_pw)
+            changed = True
     
     # Check for liz user
     if 'liz' not in data['users']:
@@ -5180,6 +5200,40 @@ def cron_repair_admin_role():
         return jsonify({'success': True, 'message': "Admin user role set to super_admin. Log out and log back in."})
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/cron/sync-admin-password-from-env', methods=['POST'])
+def cron_sync_admin_password_from_env():
+    """Apply the ADMIN_PASSWORD env var to the live S3 users.json admin entry.
+
+    Idempotent: if the current stored hash already verifies against the env
+    password, returns success with action='no_op'. Otherwise rehashes and
+    persists to S3, returning action='updated'. Requires CRON_SECRET.
+
+    Use this to make a rotated ADMIN_PASSWORD take effect immediately,
+    without waiting for the next app restart (which would otherwise sync
+    via init_users)."""
+    secret = request.headers.get('X-Cron-Secret') or request.args.get('secret') or ''
+    if not secret or secret != os.environ.get('CRON_SECRET', ''):
+        return jsonify({'success': False, 'error': 'Unauthorized'}), 403
+    env_pw = os.environ.get('ADMIN_PASSWORD')
+    if not env_pw:
+        return jsonify({'success': False, 'error': 'ADMIN_PASSWORD env var is not set on this service'}), 400
+    try:
+        data = load_users()
+        if 'admin' not in data.get('users', {}):
+            return jsonify({'success': False, 'error': 'Admin user not found'}), 404
+        current_hash = data['users']['admin'].get('password_hash', '') or ''
+        if current_hash and verify_password(current_hash, env_pw):
+            return jsonify({'success': True, 'action': 'no_op',
+                            'message': "Admin password already matches ADMIN_PASSWORD env var."})
+        data['users']['admin']['password_hash'] = hash_password(env_pw)
+        save_users(data)
+        return jsonify({'success': True, 'action': 'updated',
+                        'message': "Admin password_hash rehashed from ADMIN_PASSWORD env var and saved to S3."})
+    except Exception as e:
+        import traceback; traceback.print_exc()
+        return jsonify({'success': False, 'error': str(e)[:300]}), 500
 
 
 @app.route('/api/cron/run-activity-export-jobs', methods=['POST', 'GET'])
