@@ -54,14 +54,14 @@ DIGITAL_SALES_FACTOR_MID = (DIGITAL_SALES_FACTOR_LOW + DIGITAL_SALES_FACTOR_HIGH
 # A movie ticket transaction usually buys ~2.5 tickets (date nights, families,
 # friend groups) so unique purchasers ≈ tickets_sold / N. N is the steady-
 # state industry average for how many tickets a single purchaser walks out
-# with. We use 2.5 for most titles and 4 for Family/Animation (parents +
+# with. We use 2.5 for most titles and 3.5 for Family/Animation (parents +
 # kids pile into one transaction). This is the SAME N that appears as the
 # Avg. Tickets Per Order sublabel on the dashboard, and the dashboard's
 # "$15 x Ticket" / "(Avg. N Tickets Per Order)" labels are now arithmetically
 # truthful: Purchasers x N = Tickets, Tickets x $15 = Sales. Previously
 # Family/Animation hid an extra 2x multiplier inside the per-ticket price
 # (so "$15 x Ticket" really meant $30/ticket); that bad math has been
-# replaced by raising N to 4 on the purchasers side.
+# replaced by raising N to 3.5 on the purchasers side.
 try:
     PURCHASER_TICKETS_PER_PERSON = float(
         os.environ.get("TICKET_PURCHASER_TICKETS_PER_PERSON", "2.5")
@@ -73,18 +73,18 @@ except (ValueError, TypeError):
 
 try:
     PURCHASER_TICKETS_PER_PERSON_FAMILY = float(
-        os.environ.get("TICKET_PURCHASER_TICKETS_PER_PERSON_FAMILY", "4")
+        os.environ.get("TICKET_PURCHASER_TICKETS_PER_PERSON_FAMILY", "3.5")
     )
     if PURCHASER_TICKETS_PER_PERSON_FAMILY <= 0:
-        PURCHASER_TICKETS_PER_PERSON_FAMILY = 4.0
+        PURCHASER_TICKETS_PER_PERSON_FAMILY = 3.5
 except (ValueError, TypeError):
-    PURCHASER_TICKETS_PER_PERSON_FAMILY = 4.0
+    PURCHASER_TICKETS_PER_PERSON_FAMILY = 3.5
 
 
 def _tickets_per_purchaser(genre):
     """Return the avg-tickets-per-order divisor for a given genre.
 
-    Family / Animation -> 4 (parents + kids in one transaction).
+    Family / Animation -> 3.5 (parents + kids in one transaction).
     Everything else    -> 2.5 (date night, friend group baseline).
     """
     g = (genre or "").lower()
@@ -1309,7 +1309,7 @@ def ai_validate_ticket_metrics(movie_name, genre, start_date, end_date,
         f"=== PHASE C: EDGE CASES ===\n"
         f"- Short windows (1-2 weekends) naturally produce smaller numbers — don't flag low.\n"
         f"- Indie / limited / arthouse releases have modest numbers — that is expected.\n"
-        f"- For Family/Animation: tickets-per-purchaser is 4 (parents + kids in one\n"
+        f"- For Family/Animation: tickets-per-purchaser is 3.5 (parents + kids in one\n"
         f"  transaction), not 2.5. Per-ticket price stays $15. Do not add an\n"
         f"  extra multiplier on top of this.\n\n"
         f"Respond in JSON ONLY (no markdown fencing):\n"
