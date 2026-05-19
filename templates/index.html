@@ -8673,7 +8673,29 @@
         .iqr-toolbar input[type="date"]:focus,
         .iqr-toolbar select:focus { border-color: var(--accent-blue); }
         .iqr-toolbar .iqr-search { flex: 1; min-width: 200px; }
-        .iqr-toolbar .iqr-window-label { margin-left: auto; font-size: 0.7rem; color: var(--text-muted); }
+        /* Window-comparison badge: shows the active period + the equal-length
+           prior period that deltas are computed against. Two visually distinct
+           sub-pills so the user can tell "what they're looking at" from
+           "what it's compared to" at a glance. */
+        .iqr-toolbar .iqr-window-label {
+            margin-left: auto;
+            display: inline-flex; align-items: center; gap: 0.4rem;
+            padding: 0.25rem 0.55rem;
+            font-family: 'Space Mono', monospace;
+            font-size: 0.7rem; line-height: 1;
+            background: rgba(102,217,239,0.06);
+            border: 1px solid var(--border-color);
+            border-radius: 999px;
+            color: var(--text-secondary);
+            white-space: nowrap;
+        }
+        .iqr-toolbar .iqr-window-label .iqr-wlbl-cap { color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.06em; font-size: 0.62rem; }
+        .iqr-toolbar .iqr-window-label .iqr-wlbl-cur { color: var(--text-primary); font-weight: 600; }
+        .iqr-toolbar .iqr-window-label .iqr-wlbl-sep { color: var(--text-muted); margin: 0 0.05rem; }
+        .iqr-toolbar .iqr-window-label .iqr-wlbl-prev { color: var(--text-muted); }
+        @media (max-width: 720px) {
+            .iqr-toolbar .iqr-window-label { white-space: normal; flex-wrap: wrap; }
+        }
         .iqr-subtabs {
             display: flex; flex-wrap: wrap; gap: 0.3rem;
             margin: 0 0 0.75rem 0;
@@ -8741,6 +8763,37 @@
         .rankers-table th { user-select: none; }
         .rankers-table th .iqr-sort-arrow { opacity: 0.45; margin-left: 0.2rem; font-size: 0.65rem; }
         .rankers-table th[data-iq-active-sort] .iqr-sort-arrow { opacity: 1; color: var(--accent-blue); }
+
+        /* CW IQ column header: text + a tiny clickable info bubble that
+           opens the methodology explainer. Built as a real <button> so it
+           is keyboard-focusable and screen-readers don't read the chip
+           contents inline with the column label. */
+        .iqr-th-with-info {
+            display: inline-flex; align-items: center; justify-content: flex-end;
+            gap: 0.35rem; line-height: 1;
+        }
+        .iqr-th-info {
+            display: inline-flex; align-items: center; justify-content: center;
+            width: 1.05rem; height: 1.05rem;
+            padding: 0; margin: 0;
+            font-family: 'Space Mono', monospace;
+            font-size: 0.62rem; font-weight: 700; font-style: italic;
+            line-height: 1;
+            background: rgba(132,225,168,0.10);
+            color: var(--accent-lime);
+            border: 1px solid rgba(132,225,168,0.45);
+            border-radius: 999px;
+            cursor: pointer;
+            transition: background 0.12s ease, border-color 0.12s ease, transform 0.12s ease;
+        }
+        .iqr-th-info:hover {
+            background: rgba(132,225,168,0.22);
+            border-color: var(--accent-lime);
+            transform: scale(1.08);
+        }
+        .iqr-th-info:focus-visible {
+            outline: 2px solid var(--accent-lime); outline-offset: 1px;
+        }
 
         /* Profile-name cell + inline action chips (Δ chart, Profile drill-in) */
         .iqr-name-row {
@@ -17671,9 +17724,7 @@
                                     <th data-iq-sort="neg"            data-iq-master="{{ m.key }}" class="has-tooltip" data-tooltip="Projected negative-sentiment events." style="cursor: pointer; text-align: right;">Neg</th>
                                     <th data-iq-sort="net_sentiment"  data-iq-master="{{ m.key }}" class="has-tooltip" data-tooltip="(Pos − Neg) / (Pos + Neu + Neg) × 100. Range −100..+100." style="cursor: pointer; text-align: right;">Net Sent.</th>
                                     <th data-iq-sort="cw_iq_score"    data-iq-master="{{ m.key }}" style="cursor: pointer; text-align: right;">
-                                        <span style="display: inline-flex; align-items: center; gap: 0.25rem;">CW IQ
-                                            <span class="iqr-info-chip" style="padding: 0; background: transparent; border: none; color: var(--accent-lime); font-size: 0.85rem; line-height: 1;" onclick="event.stopPropagation(); toggleIQRankerExplainer('{{ m.key }}')" title="Show methodology" role="button">ⓘ</span>
-                                        </span>
+                                        <span class="iqr-th-with-info">CW IQ<button type="button" class="iqr-th-info" title="Show CW IQ methodology" aria-label="Show CW IQ methodology" onclick="event.stopPropagation(); toggleIQRankerExplainer('{{ m.key }}')">i</button></span>
                                     </th>
                                     <th data-iq-sort="delta_cw_iq"    data-iq-master="{{ m.key }}" class="has-tooltip" data-tooltip="CW IQ change vs the equal-length window immediately before this one." style="cursor: pointer; text-align: right;">Δ CW IQ</th>
                                 </tr></thead>
@@ -77038,9 +77089,20 @@
         function renderIQRankerWindowLabel(master, win) {
             const el = document.getElementById('iqRankerWindowLabel-' + master);
             if (!el || !win) return;
-            el.textContent = (win.start === win.end)
-                ? `${win.start}  •  vs ${win.prev_start}`
-                : `${win.start} → ${win.end}  •  vs ${win.prev_start} → ${win.prev_end}`;
+            const cur = (win.start === win.end)
+                ? `${win.start}`
+                : `${win.start} → ${win.end}`;
+            const prev = (win.prev_start === win.prev_end)
+                ? `${win.prev_start}`
+                : `${win.prev_start} → ${win.prev_end}`;
+            // Pre-formatted sub-spans → CSS handles colors/sizing.
+            el.innerHTML = `
+                <span class="iqr-wlbl-cap">Window</span>
+                <span class="iqr-wlbl-cur">${cur}</span>
+                <span class="iqr-wlbl-sep">vs</span>
+                <span class="iqr-wlbl-prev">${prev}</span>
+            `;
+            el.title = `Showing ${cur} compared against the equal-length prior period ${prev}.`;
         }
 
         function renderIQRankerTable(master) {
