@@ -52,20 +52,36 @@ You will be given a JSON blob with:
   - inception clusters (Search / Direct / Social / Ad / Referral / AI agent
     / Other / ALL) each with funnel-step active-user counts and drop-off %,
     plus detour destinations
+  - cuts: per-cohort clusters by INTEREST (Sports / Entertainment / Family
+    / News / Finance / ...), GENDER, AGE bracket, ETHNICITY, INCOME,
+    EDUCATION, MARITAL status, and CHILDREN (family vs non-family).
+    Each cut bucket has its own conversion rate + top touchpoints.
+  - touchpoints: per-channel reach %, conversion-rate-when-reached,
+    conversion-rate-when-not-reached, lift %, avg days from first touch
+    to conversion (cadence), avg touches per reached user, plus a
+    co-occurrence list (overlap) of the top touchpoint pairs and a
+    touch-count distribution (how many touches purchasers received).
   - top inception search keywords (with user counts)
   - top hosts visited by non-converters AFTER the last target mention
 
 Your job:
   - Return EXACTLY a JSON object: {"facts": ["...", "...", ...]}
-  - 6-10 facts. Each fact 1-2 sentences. No preamble, no markdown, no
+  - 8-12 facts. Each fact 1-2 sentences. No preamble, no markdown, no
     bullets — plain prose strings.
   - Every fact MUST cite a number that appears in the input JSON. No
     invented percentages, no projections beyond what is provided.
-  - Prefer facts that compare two cohorts (e.g. "Search converters spend
-    X days vs Direct's Y") over single-stat restatements.
+  - Prefer facts that compare two cohorts (Sports fans vs Movie fans,
+    family vs non-family, Trailer-seers vs non-seers) over single-stat
+    restatements.
   - Surface drop-off cliffs (a single step where >40% of users abandon),
-    dominant detour destinations (>20% of cohort visits one host), and
-    standout inception keywords.
+    dominant detour destinations (>20% of cohort visits one host),
+    standout inception keywords, the touchpoints with the highest
+    conversion lift, the cadence sweet-spot ("converters who saw a
+    trailer averaged X days to purchase"), and the strongest overlap
+    pairs ("trailer + creator-influencer drove the highest lift").
+  - At least 2 facts should be demographic / interest cuts.
+  - At least 2 facts should be touchpoint-level (reach, lift, cadence,
+    or overlap).
   - If a number is exactly 0 or N/A, do not invent context to fill it in.
   - Do not name brands the data does not name.
   - Refer to the target by its actual name (as given in the JSON), not
@@ -84,7 +100,9 @@ def generate_interesting_facts(
     clusters: list[dict],
     keywords: list[dict],
     post_hosts: list[dict],
-    max_tokens: int = 1500,
+    cuts: Optional[dict] = None,
+    touchpoints: Optional[dict] = None,
+    max_tokens: int = 1800,
     temperature: float = 0.4,
 ) -> list[str]:
     """Return 6-10 prose facts, or [] if Claude is unavailable / fails."""
@@ -126,6 +144,49 @@ def generate_interesting_facts(
             ],
         })
 
+    # Trim cuts: pass only the top 4 buckets per axis (plus ALL) so the
+    # prompt stays well under the context budget. We keep label, users,
+    # conversion %, and the top-3 touchpoints per bucket — the comparison
+    # bait Claude needs.
+    trimmed_cuts: dict[str, list[dict]] = {}
+    for axis, buckets in (cuts or {}).items():
+        trimmed_cuts[axis] = [
+            {
+                'label':            b.get('label') or b.get('inception'),
+                'users':            b.get('users'),
+                'users_pct':        b.get('users_pct'),
+                'conversion_pct':   b.get('conversion_pct'),
+                'top_touchpoints': [
+                    {'label': t.get('label'),
+                     'reach_pct': t.get('reach_pct')}
+                    for t in (b.get('top_touchpoints') or [])[:3]
+                ],
+            }
+            for b in (buckets or [])[:5]
+        ]
+
+    # Trim touchpoints: drop low-signal rows (no lift data, sub-1% reach).
+    tp_rows = [
+        {
+            'label':                  r.get('label'),
+            'reach_pct':              r.get('reach_pct'),
+            'share_of_converters':    r.get('share_of_converters'),
+            'conv_rate_when_reached': r.get('conv_rate_when_reached'),
+            'conv_rate_when_not':     r.get('conv_rate_when_not'),
+            'lift_pct':               r.get('lift_pct'),
+            'avg_days_to_conversion': r.get('avg_days_to_conversion'),
+            'avg_touches_per_user':   r.get('avg_touches_per_user'),
+        }
+        for r in ((touchpoints or {}).get('rows') or [])
+        if (r.get('reach_pct') or 0) >= 1.0
+    ][:20]
+    tp_overlap = [
+        {'a': p.get('a'), 'b': p.get('b'),
+         'users_pct': p.get('users_pct'), 'conv_rate': p.get('conv_rate')}
+        for p in ((touchpoints or {}).get('overlap') or [])
+    ][:12]
+    tp_distribution = (touchpoints or {}).get('touch_distribution') or []
+
     payload = {
         'target':         target,
         'project_name':   project_name,
@@ -133,6 +194,13 @@ def generate_interesting_facts(
         'end_date':       end_date,
         'kpis':           kpis or {},
         'clusters':       trimmed_clusters,
+        'cuts':           trimmed_cuts,
+        'touchpoints': {
+            'baseline_conv_rate': (touchpoints or {}).get('baseline_conv_rate'),
+            'rows':               tp_rows,
+            'overlap':            tp_overlap,
+            'touch_distribution': tp_distribution,
+        },
         'top_inception_keywords': keywords or [],
         'top_post_non_conversion_hosts': post_hosts or [],
     }

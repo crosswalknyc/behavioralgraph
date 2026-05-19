@@ -12598,6 +12598,49 @@
             background: #a0d911;
             border-radius: 50%;
         }
+
+        /* ── Brand Partnership IQ responsive sizing ────────────────── */
+        #bpiqDashboardPanels {
+            container-type: inline-size;
+        }
+        #bpiqHeroTotal {
+            font-size: clamp(2rem, 5cqi, 4rem) !important;
+        }
+        #bpiqHeroBreak {
+            grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)) !important;
+        }
+        #bpiqKpiAndLiftWrap > div:first-child .tab-section,
+        #bpiqGenPopKpiRow .tab-section {
+            min-width: 0;
+        }
+        @container (max-width: 900px) {
+            #bpiqKpiAndLiftWrap {
+                flex-direction: column !important;
+                align-items: stretch !important;
+            }
+            #bpiqNetLiftCard {
+                flex: none !important;
+                width: 100% !important;
+                margin: 0 !important;
+                align-self: stretch !important;
+            }
+        }
+        @container (max-width: 700px) {
+            #bpiqHeroValue > div:first-child {
+                flex-direction: column;
+            }
+            #bpiqHeroBreak {
+                width: 100% !important;
+            }
+        }
+        @container (max-width: 550px) {
+            #bpiqKpiAndLiftWrap > div:first-child > div > div[style*="grid-template-columns"] {
+                grid-template-columns: repeat(2, 1fr) !important;
+            }
+            #bpiqGenPopKpiRow > div[style*="grid-template-columns"] {
+                grid-template-columns: repeat(2, 1fr) !important;
+            }
+        }
     </style>
 </head>
 <body>
@@ -14787,6 +14830,11 @@
                                         <label style="display: block; font-weight: 600; margin-bottom: 4px; font-size: 13px;">Extra Conversion URL Patterns <span style="font-weight: 400; color: var(--text-secondary);">(comma-separated, optional)</span></label>
                                         <input type="text" id="jiqExtraConvPatterns" placeholder="/appointment-booked, /tire-installed" style="width: 100%; padding: 8px 12px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--bg-primary); color: var(--text-primary); font-size: 14px;">
                                         <small style="color: var(--text-secondary); font-size: 0.7rem;">Auto-detect already covers /checkout, /thank-you, /confirmation, /order-complete, /booking-confirmed, /success, /receipt — add target-specific URLs here.</small>
+                                    </div>
+                                    <div style="margin-top: 0.75rem;">
+                                        <label style="display: block; font-weight: 600; margin-bottom: 4px; font-size: 13px;">Extra Touchpoint Keywords <span style="font-weight: 400; color: var(--text-secondary);">(one rule per line)</span></label>
+                                        <textarea id="jiqExtraTouchpointKeywords" rows="4" placeholder="TALENT=steph curry, michael jordan&#10;BRAND_PARTNERSHIP=mercedes&#10;SOUNDTRACK=the goat soundtrack&#10;CREATOR_INFLUENCER=mrbeast, sneako" style="width: 100%; padding: 8px 12px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--bg-primary); color: var(--text-primary); font-size: 13px; font-family: monospace; resize: vertical;"></textarea>
+                                        <small style="color: var(--text-secondary); font-size: 0.7rem;">Tag attribution surfaces that aren't a host on their own. Format: <code>CATEGORY=kw1, kw2, ...</code> &mdash; one rule per line. Built-ins (TRAILER, SOCIAL_*, PRESS, REVIEW, TICKETING, SHOWTIME_LOOKUP, GOOGLE_REVIEW, STREAMING, PAID_AD, ORGANIC_SEARCH, AI_AGENT) fire automatically; this adds: TALENT, CREATOR_INFLUENCER (alias INFLUENCER / CREATOR), BRAND_PARTNERSHIP (alias PARTNERSHIP), SOUNDTRACK (alias MUSIC), or any custom label.</small>
                                     </div>
                                 </details>
                                 <button type="submit" id="jiqSubmitBtn" class="btn btn-primary" style="width: 100%;">Run Digital Journey IQ</button>
@@ -16989,7 +17037,7 @@
                             <div style="display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 1rem;">
                                 <div>
                                     <div style="font-size: 0.85rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.06em;">💰 Total Brand Value Delivered</div>
-                                    <div id="bpiqHeroTotal" style="font-size: 4rem; font-weight: 800; color: #c8e600; line-height: 1.05;">—</div>
+                                    <div id="bpiqHeroTotal" style="font-size: clamp(2rem, 5vw, 4rem); font-weight: 800; color: #c8e600; line-height: 1.05;">—</div>
                                     <div id="bpiqHeroSub" style="font-size: 0.65rem; color: var(--text-secondary); margin-top: 0.2rem;"></div>
                                 </div>
                                 <div id="bpiqHeroBreak" style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1rem; flex: 0 1 auto; width: 75%;"></div>
@@ -16999,7 +17047,7 @@
                             <div style="flex: 1; display: flex; flex-direction: column; gap: 1.5rem;">
                                 <div style="background: linear-gradient(135deg, rgba(200,230,0,0.06), rgba(6,182,212,0.06)); border: 1px solid var(--border-color); border-radius: 14px; padding: 1.5rem 1.5rem 0.75rem;">
                                     <div style="font-size: 0.95rem; font-weight: 800; color: #c8e600; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 1rem;">TICKET PURCHASERS</div>
-                                    <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem;">
+                                    <div class="bpiq-kpi-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 1rem;">
                                         <div class="tab-section" style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 1.25rem; text-align: center;">
                                             <div style="font-size: 0.7rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em;">Users</div>
                                             <div id="bpiqKpiAudience" style="font-size: 1.5rem; font-weight: 700; color: #10b981;"></div>
@@ -17021,7 +17069,7 @@
                                 <!-- Gen Pop / control-cohort mirror row -->
                                 <div id="bpiqGenPopKpiRow" style="display: none; background: linear-gradient(135deg, rgba(200,230,0,0.04), rgba(168,85,247,0.06)); border: 1px solid var(--border-color); border-radius: 14px; padding: 1.5rem 1.5rem 0.75rem;">
                                     <div style="font-size: 0.95rem; font-weight: 800; color: #c8e600; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 1rem;">GEN POP CONTROL</div>
-                                    <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem;">
+                                    <div class="bpiq-kpi-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 1rem;">
                                         <div class="tab-section" style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 1.25rem; text-align: center;">
                                             <div style="font-size: 0.7rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em;">Users</div>
                                             <div id="bpiqKpiGenPopAudience" style="font-size: 1.5rem; font-weight: 700; color: #10b981;"></div>
@@ -18968,9 +19016,13 @@
                 <!-- KPI strip -->
                 <div id="jiqKpiStrip" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 0.75rem; margin-bottom: 1rem;"></div>
 
-                <!-- Inception cluster switcher -->
-                <div style="display: flex; gap: 0.4rem; flex-wrap: wrap; margin-bottom: 1rem; padding-bottom: 0.6rem; border-bottom: 1px solid var(--border-color);">
-                    <div style="font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-secondary); font-weight: 600; align-self: center; margin-right: 0.25rem;">Cluster:</div>
+                <!-- Cut-by dropdown + cluster switcher -->
+                <div style="display: flex; gap: 0.6rem; flex-wrap: wrap; margin-bottom: 1rem; padding-bottom: 0.6rem; border-bottom: 1px solid var(--border-color); align-items: center;">
+                    <div style="font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-secondary); font-weight: 600;">Cut by:</div>
+                    <select id="jiqCutPicker" onchange="setJourneyIqCut(this.value)" style="padding: 5px 10px; border-radius: 6px; border: 1px solid var(--border-color); background: var(--bg-primary); color: var(--text-primary); font-size: 13px; min-width: 200px;">
+                        <option value="inception">Inception channel</option>
+                    </select>
+                    <div style="font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-secondary); font-weight: 600; margin-left: 0.5rem;">Bucket:</div>
                     <div id="jiqClusterTabs" style="display: flex; gap: 0.25rem; flex-wrap: wrap;"></div>
                 </div>
 
@@ -18998,6 +19050,29 @@
                         <h3 style="margin: 0 0 0.5rem;">Top Inception Keywords</h3>
                         <div style="font-size: 0.72rem; color: var(--text-secondary); margin-bottom: 0.5rem;">Search queries that brought users in via Search / Ad clusters.</div>
                         <div id="jiqKeywords"></div>
+                    </div>
+                </div>
+
+                <!-- Touchpoints table -->
+                <div class="card" style="padding: 1rem; margin-top: 1rem;" id="jiqTouchpointsCard">
+                    <div style="display: flex; justify-content: space-between; align-items: baseline; flex-wrap: wrap; gap: 0.5rem;">
+                        <h3 style="margin: 0 0 0.5rem;">📍 Touchpoints — what drove conversation vs conversion</h3>
+                        <div id="jiqTpBaselineMeta" style="font-size: 0.72rem; color: var(--text-secondary);"></div>
+                    </div>
+                    <div style="font-size: 0.72rem; color: var(--text-secondary); margin-bottom: 0.5rem;">Each row is a marketing surface (trailer, social platform, talent mention, brand partnership, press, ticketing, etc.) the cohort touched. <strong>Lift</strong> = conv-rate-when-reached vs conv-rate-when-not. <strong>Avg days</strong> = cadence from first touch to ticket buy.</div>
+                    <div id="jiqTouchpointsTable" style="overflow-x: auto;"></div>
+                </div>
+
+                <div style="display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 1rem; margin-top: 1rem;">
+                    <div class="card" style="padding: 1rem;" id="jiqOverlapCard">
+                        <h3 style="margin: 0 0 0.5rem;">🔗 Touchpoint Overlap</h3>
+                        <div style="font-size: 0.72rem; color: var(--text-secondary); margin-bottom: 0.5rem;">Top co-occurring pairs (users who touched BOTH surfaces) and the conv-rate within that overlap.</div>
+                        <div id="jiqOverlap"></div>
+                    </div>
+                    <div class="card" style="padding: 1rem;" id="jiqTouchDistCard">
+                        <h3 style="margin: 0 0 0.5rem;">📊 Touches Before Purchase</h3>
+                        <div style="font-size: 0.72rem; color: var(--text-secondary); margin-bottom: 0.5rem;">How many touches did each cohort receive? Converters vs non-converters by touch count.</div>
+                        <div id="jiqTouchDist"></div>
                     </div>
                 </div>
 
@@ -23933,9 +24008,9 @@
                 ? 'Earned Media + Brand Engagement + Brand Lift + Conversions'
                 : 'Earned Media + Brand Engagement + Brand Lift';
             var heroParts = [
-                {label: 'Earned Media',     value: v.earned_media_value      || 0, color: '#10b981'},
+                {label: 'Earned Media',     value: v.earned_media_value      || 0, color: '#6366f1'},
                 {label: 'Brand Engagement', value: v.brand_engagement_value || 0, color: '#6366f1'},
-                {label: 'Brand Lift',       value: v.brand_lift_value        || 0, color: '#f59e0b'}
+                {label: 'Brand Lift',       value: v.brand_lift_value        || 0, color: '#6366f1'}
             ];
             if (hasConv) {
                 heroParts.push({label: 'Conversions', value: v.conversion_value, color: '#ef4444'});
@@ -27010,6 +27085,7 @@
             var lb = parseInt((document.getElementById('jiqLookbackDays') || {}).value || '14', 10);
             var fw = parseInt((document.getElementById('jiqForwardDays') || {}).value || '7', 10);
             var ex = (document.getElementById('jiqExtraConvPatterns') || {}).value || '';
+            var tpk = (document.getElementById('jiqExtraTouchpointKeywords') || {}).value || '';
             pn = pn.trim(); tg = tg.trim();
             if (!pn || !tg || !sd || !ed) {
                 alert('Project, target, and date range are required.');
@@ -27034,7 +27110,8 @@
                     end_date: ed,
                     lookback_days: lb,
                     forward_days: fw,
-                    extra_conversion_patterns: ex
+                    extra_conversion_patterns: ex,
+                    extra_touchpoint_keywords: tpk
                 })
             }).then(function(r) { return r.json(); }).then(function(data) {
                 if (data.error) {
@@ -27077,6 +27154,7 @@
 
         var _jiqCurrentRun = null;
         var _jiqCurrentClusterIdx = 0;
+        var _jiqCurrentCut = 'inception';
         var _jiqViewIds = ['dashboardView','subscriberIQView','sfConversionView','rankerIQView','ticketSalesIQView','ticketSalesTrackerView','hedgeFundIQView','roasIQView','ecommerceIQView','formView','customAnalysisView','talentSearchIQView','talentTheaterIQView','talentFitIQView','llmoIQView','sentimentIQView','shareOfTimeIQView','flywheelConversionView'];
 
         window.showJourneyIQ = function(s3Key) {
@@ -27146,6 +27224,7 @@
                     }
                     _jiqCurrentRun = payload.data;
                     _jiqCurrentClusterIdx = 0;
+                    _jiqCurrentCut = 'inception';
                     if (loading) loading.style.display = 'none';
                     if (content) content.style.display = '';
                     renderJourneyIqDashboard();
@@ -27169,10 +27248,19 @@
             var d = _jiqCurrentRun || {};
             var meta = d.meta || {};
             var kpis = d.kpis || {};
-            var clusters = d.clusters || [];
+            var cuts = d.cuts || {};
+            var touchpoints = d.touchpoints || {};
             var keywords = d.keywords || [];
             var postHosts = d.post_hosts || [];
             var facts = d.facts || [];
+
+            // Determine active cut + cluster list. Fall back to the legacy
+            // top-level `clusters` (inception) when the run pre-dates cuts.
+            var activeCut = _jiqCurrentCut || 'inception';
+            var clusters = (cuts[activeCut] && cuts[activeCut].length)
+                           ? cuts[activeCut]
+                           : (d.clusters || []);
+            if (_jiqCurrentClusterIdx >= clusters.length) _jiqCurrentClusterIdx = 0;
 
             var title = document.getElementById('jiqDashTitle');
             var sub = document.getElementById('jiqDashSubtitle');
@@ -27183,6 +27271,24 @@
                     + '  ·  lookback ' + (meta.lookback_days != null ? meta.lookback_days : '?') + 'd'
                     + ' / forward ' + (meta.forward_days != null ? meta.forward_days : '?') + 'd'
                     + (meta.matched_uids != null ? ('  ·  ' + _jiqFmt(meta.matched_uids) + ' matched users') : '');
+            }
+
+            // Populate cut-by dropdown from meta.cut_options (or fall back to
+            // whatever axes the cuts dict actually has — older runs).
+            var cutPicker = document.getElementById('jiqCutPicker');
+            if (cutPicker) {
+                var opts = (meta.cut_options && meta.cut_options.length)
+                           ? meta.cut_options.slice()
+                           : Object.keys(cuts).map(function(k) { return { key: k, label: k }; });
+                if (!opts.length) opts = [{ key: 'inception', label: 'Inception channel' }];
+                // Only keep cuts that actually have buckets in the data.
+                opts = opts.filter(function(o) {
+                    return o.key === 'inception' || (cuts[o.key] && cuts[o.key].length > 1);
+                });
+                cutPicker.innerHTML = opts.map(function(o) {
+                    var sel = (o.key === activeCut) ? ' selected' : '';
+                    return '<option value="' + _jiqEsc(o.key) + '"' + sel + '>' + _jiqEsc(o.label || o.key) + '</option>';
+                }).join('');
             }
 
             // KPI strip
@@ -27204,17 +27310,18 @@
                 }).join('');
             }
 
-            // Cluster tabs
+            // Cluster tabs (driven by active cut axis)
             var tabs = document.getElementById('jiqClusterTabs');
             if (tabs) {
                 if (!clusters.length) {
-                    tabs.innerHTML = '<div style="font-size:0.8rem;color:var(--text-secondary);">No clusters in this run.</div>';
+                    tabs.innerHTML = '<div style="font-size:0.8rem;color:var(--text-secondary);">No buckets in this cut.</div>';
                 } else {
                     tabs.innerHTML = clusters.map(function(c, i) {
                         var active = (i === _jiqCurrentClusterIdx);
                         var bg = active ? 'var(--accent-primary)' : 'var(--bg-secondary)';
                         var color = active ? '#fff' : 'var(--text-primary)';
-                        var label = _jiqEsc((c.inception || 'OTHER'))
+                        var lbl = c.label || c.inception || 'OTHER';
+                        var label = _jiqEsc(lbl)
                                   + ' · ' + _jiqFmt(c.users)
                                   + ' (' + (c.conversion_pct != null ? c.conversion_pct + '%' : '—') + ')';
                         return '<button type="button" onclick="setJourneyIqCluster(' + i + ')" '
@@ -27260,6 +27367,9 @@
                 }
             }
 
+            // ---- Touchpoints panel ----
+            renderJourneyIqTouchpoints(touchpoints);
+
             // Facts
             var factsCard = document.getElementById('jiqFactsCard');
             var factsEl = document.getElementById('jiqFacts');
@@ -27278,6 +27388,111 @@
         function setJourneyIqCluster(i) {
             _jiqCurrentClusterIdx = i;
             renderJourneyIqDashboard();
+        }
+
+        // Cut-by dropdown handler — swaps the cluster source axis and
+        // resets the bucket index so the renderer doesn't try to access a
+        // stale index on a shorter bucket list.
+        window.setJourneyIqCut = function(axis) {
+            _jiqCurrentCut = axis || 'inception';
+            _jiqCurrentClusterIdx = 0;
+            renderJourneyIqDashboard();
+        };
+
+        // ---- Touchpoints renderer (table + overlap + touch distribution) ----
+        function renderJourneyIqTouchpoints(tp) {
+            var card = document.getElementById('jiqTouchpointsCard');
+            var ovCard = document.getElementById('jiqOverlapCard');
+            var tdCard = document.getElementById('jiqTouchDistCard');
+            var tableEl = document.getElementById('jiqTouchpointsTable');
+            var ovEl = document.getElementById('jiqOverlap');
+            var tdEl = document.getElementById('jiqTouchDist');
+            var metaEl = document.getElementById('jiqTpBaselineMeta');
+            var hasRows = tp && tp.rows && tp.rows.length;
+            if (card)    card.style.display    = hasRows ? '' : 'none';
+            if (ovCard)  ovCard.style.display  = (tp && tp.overlap && tp.overlap.length) ? '' : 'none';
+            if (tdCard)  tdCard.style.display  = (tp && tp.touch_distribution && tp.touch_distribution.length) ? '' : 'none';
+            if (!hasRows) return;
+
+            if (metaEl) {
+                metaEl.textContent = 'Cohort: ' + _jiqFmt(tp.cohort_size)
+                                   + ' · Converters: ' + _jiqFmt(tp.converters)
+                                   + ' · Baseline conv: ' + (tp.baseline_conv_rate != null ? tp.baseline_conv_rate + '%' : '—');
+            }
+
+            // Touchpoints table
+            if (tableEl) {
+                var head = '<table style="width:100%; border-collapse: collapse; font-size: 12.5px; min-width: 720px;">'
+                    + '<thead><tr style="text-align:left;border-bottom:1px solid var(--border-color);">'
+                    + '<th style="padding:6px 6px;">Touchpoint</th>'
+                    + '<th style="padding:6px 6px;text-align:right;">Reach</th>'
+                    + '<th style="padding:6px 6px;text-align:right;">Reach %</th>'
+                    + '<th style="padding:6px 6px;text-align:right;">% of Conv</th>'
+                    + '<th style="padding:6px 6px;text-align:right;">Conv-when-Seen</th>'
+                    + '<th style="padding:6px 6px;text-align:right;">Conv-when-Not</th>'
+                    + '<th style="padding:6px 6px;text-align:right;">Lift</th>'
+                    + '<th style="padding:6px 6px;text-align:right;">Avg Days to Conv</th>'
+                    + '<th style="padding:6px 6px;text-align:right;">Touches / User</th>'
+                    + '</tr></thead><tbody>';
+                var body = tp.rows.map(function(r) {
+                    var liftColor = 'var(--text-primary)';
+                    var liftStr = '—';
+                    if (r.lift_pct != null) {
+                        liftColor = r.lift_pct > 25 ? '#1f9d55' : (r.lift_pct < -25 ? '#c81e1e' : 'var(--text-primary)');
+                        liftStr = (r.lift_pct > 0 ? '+' : '') + r.lift_pct + '%';
+                    }
+                    return '<tr style="border-bottom:1px solid var(--border-color);">'
+                         + '<td style="padding:6px 6px;font-weight:600;">' + _jiqEsc(r.label) + '</td>'
+                         + '<td style="padding:6px 6px;text-align:right;">' + _jiqFmt(r.reach) + '</td>'
+                         + '<td style="padding:6px 6px;text-align:right;">' + (r.reach_pct != null ? r.reach_pct + '%' : '—') + '</td>'
+                         + '<td style="padding:6px 6px;text-align:right;">' + (r.share_of_converters != null ? r.share_of_converters + '%' : '—') + '</td>'
+                         + '<td style="padding:6px 6px;text-align:right;">' + (r.conv_rate_when_reached != null ? r.conv_rate_when_reached + '%' : '—') + '</td>'
+                         + '<td style="padding:6px 6px;text-align:right;color:var(--text-secondary);">' + (r.conv_rate_when_not != null ? r.conv_rate_when_not + '%' : '—') + '</td>'
+                         + '<td style="padding:6px 6px;text-align:right;font-weight:600;color:' + liftColor + ';">' + liftStr + '</td>'
+                         + '<td style="padding:6px 6px;text-align:right;">' + (r.avg_days_to_conversion != null ? r.avg_days_to_conversion : '—') + '</td>'
+                         + '<td style="padding:6px 6px;text-align:right;color:var(--text-secondary);">' + (r.avg_touches_per_user != null ? r.avg_touches_per_user : '—') + '</td>'
+                         + '</tr>';
+                }).join('');
+                tableEl.innerHTML = head + body + '</tbody></table>';
+            }
+
+            // Overlap pairs
+            if (ovEl) {
+                ovEl.innerHTML = '<table style="width:100%; border-collapse: collapse; font-size: 12.5px;">'
+                    + '<thead><tr style="text-align:left;border-bottom:1px solid var(--border-color);">'
+                    + '<th style="padding:5px 4px;">Pair</th>'
+                    + '<th style="padding:5px 4px;text-align:right;">Users</th>'
+                    + '<th style="padding:5px 4px;text-align:right;">% Cohort</th>'
+                    + '<th style="padding:5px 4px;text-align:right;">Conv Rate</th>'
+                    + '</tr></thead><tbody>'
+                    + (tp.overlap || []).map(function(p) {
+                        return '<tr style="border-bottom:1px solid var(--border-color);">'
+                             + '<td style="padding:5px 4px;">' + _jiqEsc(p.a) + ' <span style="color:var(--text-secondary);">×</span> ' + _jiqEsc(p.b) + '</td>'
+                             + '<td style="padding:5px 4px;text-align:right;">' + _jiqFmt(p.users) + '</td>'
+                             + '<td style="padding:5px 4px;text-align:right;">' + (p.users_pct != null ? p.users_pct + '%' : '—') + '</td>'
+                             + '<td style="padding:5px 4px;text-align:right;font-weight:600;">' + (p.conv_rate != null ? p.conv_rate + '%' : '—') + '</td>'
+                             + '</tr>';
+                    }).join('') + '</tbody></table>';
+            }
+
+            // Touch-count distribution
+            if (tdEl) {
+                tdEl.innerHTML = '<table style="width:100%; border-collapse: collapse; font-size: 12.5px;">'
+                    + '<thead><tr style="text-align:left;border-bottom:1px solid var(--border-color);">'
+                    + '<th style="padding:5px 4px;">Touches</th>'
+                    + '<th style="padding:5px 4px;text-align:right;">Converters</th>'
+                    + '<th style="padding:5px 4px;text-align:right;">Non-Conv</th>'
+                    + '<th style="padding:5px 4px;text-align:right;">Conv %</th>'
+                    + '</tr></thead><tbody>'
+                    + (tp.touch_distribution || []).map(function(b) {
+                        return '<tr style="border-bottom:1px solid var(--border-color);">'
+                             + '<td style="padding:5px 4px;font-weight:600;">' + _jiqEsc(b.bucket) + '</td>'
+                             + '<td style="padding:5px 4px;text-align:right;">' + _jiqFmt(b.converters) + '</td>'
+                             + '<td style="padding:5px 4px;text-align:right;color:var(--text-secondary);">' + _jiqFmt(b.non_converters) + '</td>'
+                             + '<td style="padding:5px 4px;text-align:right;font-weight:600;">' + (b.conv_pct != null ? b.conv_pct + '%' : '—') + '</td>'
+                             + '</tr>';
+                    }).join('') + '</tbody></table>';
+            }
         }
 
         function renderJourneyIqClusterDetail(cluster) {

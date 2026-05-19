@@ -147,6 +147,152 @@ PAID_UTM_MEDIUM = ('cpc', 'paid', 'paidsearch', 'paid-search', 'paidsocial', 'pa
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# Touchpoint classification (the "marketing surface area" layer).
+#
+# Each rule is (label, needles). A needle starting with '/' is a path/URL
+# substring; otherwise it's a host substring. Channel touchpoints
+# (TRAILER, SOCIAL_*, PRESS, REVIEW, …) only count an event when the event
+# is_mention=True or matches an extra-keyword (else half the open web would
+# look like a "TikTok touch"). Extra-keyword touchpoints (TALENT_MENTION,
+# BRAND_PARTNERSHIP, SOUNDTRACK, …) fire purely on the user-supplied
+# keyword list — perfect for "Steph Curry / Mercedes / Goat soundtrack"
+# style attribution surfaces that aren't a host or path on their own.
+# ─────────────────────────────────────────────────────────────────────────────
+
+TOUCHPOINT_RULES: list[tuple[str, tuple[str, ...]]] = [
+    # Highest-signal channel surfaces first — first match still scoped to
+    # the brand because of the is_mention gate in the classifier.
+    ('TRAILER',           ('/trailer', 'trailers.apple.', '/watch?v=', 'youtu.be/')),
+    ('REVIEW',            ('rottentomatoes.', 'metacritic.', 'letterboxd.',
+                           'imdb.com/title', '/reviews', '/review/')),
+    ('PRESS',             ('deadline.com', 'variety.com', 'hollywoodreporter.',
+                           'thewrap.', 'indiewire.', 'collider.', 'slashfilm.',
+                           'screenrant.', 'gamespot.', 'ign.', 'entertainmentweekly.',
+                           'ew.com', 'people.com', 'usmagazine.', 'tmz.')),
+    ('TICKETING',         ('fandango.', 'amctheatres.', 'regmovies.',
+                           'cinemark.', 'alamo', 'atomtickets.', 'movietickets.',
+                           'marcustheatres.', 'harkins.', 'showcasecinemas.')),
+    ('SHOWTIME_LOOKUP',   ('/showtimes', '/showtime', '/cinema', '/movies/showtimes',
+                           '/find-a-theater', '/locations/movies')),
+    ('GOOGLE_REVIEW',     ('google.com/maps', 'google.com/search?', '/reviews?',
+                           'maps.google.', 'google.com/local')),
+    ('STREAMING',         ('netflix.', 'hulu.', 'max.com', 'disneyplus.',
+                           'peacocktv.', 'paramountplus.', 'primevideo.',
+                           'appletv.', 'youtube.com/movies')),
+    ('DATABASE',          ('imdb.', 'themoviedb.', 'tmdb.', 'boxofficemojo.',
+                           'wikipedia.', 'wikidata.')),
+
+    # Social platforms
+    ('SOCIAL_TIKTOK',     ('tiktok.',)),
+    ('SOCIAL_INSTAGRAM',  ('instagram.',)),
+    ('SOCIAL_X',          ('twitter.', 'x.com', 't.co')),
+    ('SOCIAL_FACEBOOK',   ('facebook.', 'fb.com')),
+    ('SOCIAL_YOUTUBE',    ('youtube.', 'youtu.be')),
+    ('SOCIAL_REDDIT',     ('reddit.',)),
+    ('SOCIAL_THREADS',    ('threads.net',)),
+    ('SOCIAL_PINTEREST',  ('pinterest.',)),
+    ('SOCIAL_SNAPCHAT',   ('snapchat.',)),
+
+    # Acquisition surfaces (gated separately on URL query keys; see _classify_touchpoints_for_event)
+    ('PAID_AD',           ()),   # populated dynamically when PAID_QUERY_KEYS / utm_medium hits
+    ('ORGANIC_SEARCH',    ()),   # populated dynamically when host is a search engine and no paid markers
+    ('AI_AGENT',          ('chat.openai', 'chatgpt.', 'claude.ai',
+                           'perplexity.', 'gemini.google', 'copilot.microsoft', 'you.com')),
+
+    # Extra-keyword categories — populated by user-supplied keywords below.
+    ('TALENT_MENTION',     ()),
+    ('CREATOR_INFLUENCER', ()),
+    ('BRAND_PARTNERSHIP',  ()),
+    ('SOUNDTRACK',         ()),
+    ('CUSTOM',             ()),
+]
+
+# Touchpoint display order — used by the dashboard.
+TOUCHPOINT_DISPLAY_ORDER = [
+    'TRAILER', 'SOCIAL_TIKTOK', 'SOCIAL_INSTAGRAM', 'SOCIAL_YOUTUBE',
+    'SOCIAL_X', 'SOCIAL_FACEBOOK', 'SOCIAL_REDDIT', 'SOCIAL_THREADS',
+    'SOCIAL_PINTEREST', 'SOCIAL_SNAPCHAT',
+    'CREATOR_INFLUENCER', 'TALENT_MENTION', 'BRAND_PARTNERSHIP', 'SOUNDTRACK',
+    'PRESS', 'REVIEW', 'GOOGLE_REVIEW', 'DATABASE',
+    'TICKETING', 'SHOWTIME_LOOKUP', 'STREAMING',
+    'PAID_AD', 'ORGANIC_SEARCH', 'AI_AGENT',
+    'CUSTOM',
+]
+
+# Channel-touchpoint host index — used to skip the rule scan when host is
+# nowhere near any rule's needles (saves ~95% of work for off-rule hosts).
+_TP_HOST_NEEDLES_FLAT: tuple[str, ...] = tuple(
+    n for _, needles in TOUCHPOINT_RULES for n in needles
+)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Demographic bucketing (applied after the JOIN to userdata.user_data_sanitized).
+# Plain-language bucket labels keep the dashboard human-readable.
+# ─────────────────────────────────────────────────────────────────────────────
+
+def _bucket_age(age) -> str:
+    if age is None:
+        return 'Unknown'
+    # The CH column is LowCardinality(String) and is normally PRE-BUCKETED
+    # (e.g. "25-34"). Pass through as-is when it doesn't look numeric.
+    s = str(age).strip()
+    if not s or s.lower() in ('unknown', 'null', 'na'):
+        return 'Unknown'
+    try:
+        a = int(float(s))
+    except Exception:
+        return s
+    if a < 18:    return '<18'
+    if a < 25:    return '18-24'
+    if a < 35:    return '25-34'
+    if a < 45:    return '35-44'
+    if a < 55:    return '45-54'
+    if a < 65:    return '55-64'
+    return '65+'
+
+
+def _bucket_income(income) -> str:
+    # ClickHouse INCOME column is LowCardinality(String) — already bucketed.
+    # If it's numeric, coerce.
+    if income is None:
+        return 'Unknown'
+    s = str(income).strip()
+    if not s:
+        return 'Unknown'
+    try:
+        n = int(float(s.replace('$', '').replace(',', '')))
+        if n < 50_000:   return '<$50K'
+        if n < 100_000:  return '$50K-$100K'
+        if n < 150_000:  return '$100K-$150K'
+        if n < 200_000:  return '$150K-$200K'
+        return '$200K+'
+    except Exception:
+        return s   # pass through pre-bucketed strings
+
+
+def _bucket_children(children) -> str:
+    """CHILDREN field → Family vs Non-family (the cut the client asked for)."""
+    if children is None:
+        return 'Unknown'
+    s = str(children).strip().lower()
+    if not s or s in ('unknown', 'null', 'na'):
+        return 'Unknown'
+    if s in ('y', 'yes', 'true', '1') or s.startswith('y'):
+        return 'Family (has children)'
+    if s in ('n', 'no', 'false', '0') or s.startswith('n'):
+        return 'Non-family (no children)'
+    return s.title()
+
+
+def _bucket_str(v) -> str:
+    if v is None:
+        return 'Unknown'
+    s = str(v).strip()
+    return s if s else 'Unknown'
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Step labels rendered in the dashboard (in display order). The dashboard
 # walks this list left-to-right; any step not present in the data is simply
 # omitted from the funnel for that cluster.
@@ -158,6 +304,19 @@ STEP_DISPLAY_ORDER = [
 ]
 
 INCEPTION_DISPLAY_ORDER = ['SEARCH', 'DIRECT', 'AD', 'SOCIAL', 'REFERRAL', 'AI_AGENT', 'OTHER']
+
+# Multi-axis cluster display order — drives the "Cut by:" dropdown.
+CUT_DISPLAY_ORDER = [
+    ('inception', 'Inception channel'),
+    ('interest',  'Interest (Sports / Movies / Family / …)'),
+    ('children',  'Family vs Non-family'),
+    ('gender',    'Gender'),
+    ('age',       'Age bracket'),
+    ('ethnicity', 'Ethnicity'),
+    ('income',    'Income'),
+    ('education', 'Education'),
+    ('marital',   'Marital status'),
+]
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -175,6 +334,7 @@ def run_job(
     lookback_days: int = DEFAULT_LOOKBACK_DAYS,
     forward_days: int = DEFAULT_FORWARD_DAYS,
     extra_conversion_patterns: Optional[list[str]] = None,
+    extra_touchpoint_keywords: Optional[str] = None,
     progress_cb: Optional[Callable[..., None]] = None,
     s3_client: Any = None,
     ch_connect: Optional[Callable[..., Any]] = None,
@@ -218,6 +378,7 @@ def run_job(
     conv_patterns = tuple(CONVERSION_PATTERNS) + tuple(
         p.strip().lower() for p in (extra_conversion_patterns or []) if p and p.strip()
     )
+    extra_kw_map = parse_extra_touchpoint_keywords(extra_touchpoint_keywords or '')
 
     _p(2, 'Connecting to ClickHouse...')
     conn = ch_connect(settings=CH_RUN_SETTINGS)
@@ -300,7 +461,72 @@ def run_job(
             LIMIT {MAX_EVENTS_PER_UID} BY cf.UID
         """)
         raw_rows = cur.fetchall()
-        _p(50, f'Pulled {len(raw_rows):,} events. Building journeys...')
+        _p(46, f'Pulled {len(raw_rows):,} events. Pulling interest tags...')
+
+        # ── Phase 2.5: Interest tags — join matched UIDs against host_mapping ─
+        # Same join shape BG.py uses (LOWER(COMMON_NAME) = LOWER(BRAND));
+        # we count CATEGORY hits per UID across the journey-window date range,
+        # then assign each UID a primary interest = top category + a list of
+        # secondary tags (any category >= 15% of their hits). This is what
+        # powers the Sports-fan / Family / Entertainment cuts in the dashboard.
+        uid_interests: dict[str, dict] = {}
+        try:
+            cur.execute(f"""
+                SELECT cf.UID,
+                       hm.CATEGORY    AS cat,
+                       count()        AS hits
+                FROM clickstream.clickstream_final AS cf
+                INNER JOIN journey_uids_{job_id} AS u  ON cf.UID = u.UID
+                INNER JOIN reference.host_mapping AS hm
+                       ON lower(cf.COMMON_NAME) = lower(hm.BRAND)
+                WHERE cf.DELIVERED >= toDate('{d_lo}')
+                  AND cf.DELIVERED <= toDate('{d_hi}')
+                  AND hm.CATEGORY != ''
+                GROUP BY cf.UID, hm.CATEGORY
+            """)
+            interest_rows = cur.fetchall() or []
+            tmp: dict[str, Counter] = defaultdict(Counter)
+            for uid, cat, hits in interest_rows:
+                if uid and cat:
+                    tmp[uid][cat] += int(hits or 0)
+            for uid, counter in tmp.items():
+                total_hits = sum(counter.values()) or 1
+                top = counter.most_common()
+                primary = top[0][0] if top else 'Unknown'
+                secondary = [c for c, h in top if (h / total_hits) >= 0.15 and c != primary]
+                uid_interests[uid] = {'primary': primary, 'secondary': secondary[:5]}
+            _p(54, f'Got interest tags for {len(uid_interests):,} users.')
+        except Exception as e:
+            print(f"[Journey IQ] interest tags failed (non-fatal): {e}")
+
+        # ── Phase 2.6: Demographics — join against user_data_sanitized ────
+        uid_demo: dict[str, dict] = {}
+        try:
+            cur.execute(f"""
+                SELECT u.UID,
+                       d.GENDER, d.AGE, d.ETHNICITY, d.INCOME,
+                       d.CHILDREN, d.MARITAL_STATUS, d.EDUCATION
+                FROM journey_uids_{job_id} AS u
+                LEFT JOIN userdata.user_data_sanitized AS d ON u.UID = d.UID
+            """)
+            for row in cur.fetchall() or []:
+                uid, gender, age, eth, inc, children, marital, edu = row
+                if not uid:
+                    continue
+                uid_demo[uid] = {
+                    'gender':    _bucket_str(gender),
+                    'age':       _bucket_age(age),
+                    'ethnicity': _bucket_str(eth),
+                    'income':    _bucket_income(inc),
+                    'children':  _bucket_children(children),
+                    'marital':   _bucket_str(marital),
+                    'education': _bucket_str(edu),
+                }
+            _p(58, f'Got demographics for {len(uid_demo):,} users.')
+        except Exception as e:
+            print(f"[Journey IQ] demographics failed (non-fatal): {e}")
+
+        _p(60, 'Building journeys + tagging touchpoints...')
 
         # ── Phase 3-5: sessionize, classify, aggregate (pure Python) ──────
         target_lc = target.lower()
@@ -310,13 +536,18 @@ def run_job(
             target_variants=term_variants,
             target_domains=target_domain_guesses,
             conv_patterns=conv_patterns,
+            extra_kw_map=extra_kw_map,
+            uid_interests=uid_interests,
+            uid_demo=uid_demo,
             progress_cb=progress_cb,
         )
-        _p(70, 'Aggregating funnel + detours...')
+        _p(72, 'Aggregating funnel + detours + touchpoints...')
         clusters = _aggregate_clusters(per_uid_journeys)
         kpis = _aggregate_kpis(per_uid_journeys)
         keywords = _aggregate_inception_keywords(per_uid_journeys, top_n=TOP_N_KEYWORDS)
         post_hosts = _aggregate_post_non_conversion_hosts(per_uid_journeys, top_n=TOP_N_POST_HOSTS)
+        cuts = _aggregate_cuts(per_uid_journeys)
+        touchpoints = _aggregate_touchpoints(per_uid_journeys)
 
         # ── Phase 6: Claude prose pass (best-effort, no-op when disabled) ─
         _p(85, 'Mining interesting facts...')
@@ -332,6 +563,8 @@ def run_job(
                 clusters=clusters,
                 keywords=keywords,
                 post_hosts=post_hosts,
+                cuts=cuts,
+                touchpoints=touchpoints,
             ) or []
         except Exception as e:
             print(f"[Journey IQ] insights pass failed (non-fatal): {e}")
@@ -348,6 +581,8 @@ def run_job(
                 'lookback_days':  lookback_days,
                 'forward_days':   forward_days,
                 'conversion_patterns': list(conv_patterns),
+                'extra_touchpoint_keywords': extra_kw_map,
+                'cut_options':    [{'key': k, 'label': lbl} for k, lbl in CUT_DISPLAY_ORDER],
                 'created_by':     username,
                 'created_at':     datetime.utcnow().isoformat() + 'Z',
                 'duration_sec':   round(time.time() - started, 1),
@@ -355,11 +590,13 @@ def run_job(
                 'events_pulled':  len(raw_rows),
                 'job_id':         job_id,
             },
-            'kpis':       kpis,
-            'clusters':   clusters,
-            'keywords':   keywords,
-            'post_hosts': post_hosts,
-            'facts':      facts,
+            'kpis':        kpis,
+            'clusters':    clusters,
+            'cuts':        cuts,
+            'touchpoints': touchpoints,
+            'keywords':    keywords,
+            'post_hosts':  post_hosts,
+            'facts':       facts,
         }
         s3_key = _persist(s3_client, summary, project_name, username, job_id)
         summary['s3_key'] = s3_key
@@ -458,6 +695,9 @@ def _build_per_uid_journeys(
     target_variants: list[str],
     target_domains: set[str],
     conv_patterns: tuple,
+    extra_kw_map: Optional[dict[str, list[str]]] = None,
+    uid_interests: Optional[dict[str, dict]] = None,
+    uid_demo: Optional[dict[str, dict]] = None,
     progress_cb: Optional[Callable[..., None]] = None,
 ) -> list[dict]:
     """Group rows by UID, sessionize on a 30-min gap, classify each event.
@@ -467,7 +707,14 @@ def _build_per_uid_journeys(
     `_url` on the FIRST event of each session (needed by the inception
     classifier). Stripping URL/COMMON_NAME/PLATFORM from every event
     cuts memory by ~6× on a 20M-event run.
+
+    Touchpoint set + first-seen timestamps are accumulated per UID so the
+    aggregator can compute reach %, cadence, lift, and co-occurrence in a
+    single linear pass — no second walk per touchpoint.
     """
+    extra_kw_map = extra_kw_map or {}
+    uid_interests = uid_interests or {}
+    uid_demo = uid_demo or {}
     by_uid: dict[str, list[tuple]] = defaultdict(list)
     for row in raw_rows:
         # Row shape after the Phase 2 optimization: (uid, ts_ms, url,
@@ -499,6 +746,11 @@ def _build_per_uid_journeys(
         step_set: set[str] = set()
         detour_hosts: set[str] = set()
         post_mention_hosts: set[str] = set()  # filled after we know first_mention
+        # Touchpoint bookkeeping: which categories did this UID hit, when
+        # FIRST, and how many TOTAL touches.
+        touchpoint_set: set[str] = set()
+        touchpoint_first_ts: dict[str, int] = {}
+        touchpoint_counts: dict[str, int] = defaultdict(int)
 
         for ts_ms, url, cn, domain in events:
             if prev_ts is not None and (ts_ms - prev_ts) > gap_ms:
@@ -537,6 +789,24 @@ def _build_per_uid_journeys(
                 if conversion_ts is None or ts_ms < conversion_ts:
                     conversion_ts = ts_ms
             step_set.add(step)
+
+            # Touchpoint tagging: cheap when neither is_mention nor any
+            # extra-keyword is present, since _classify_touchpoints_for_event
+            # short-circuits immediately.
+            tps = _classify_touchpoints_for_event(
+                url_lc=url.lower() if url else '',
+                cn_lc=cn.lower() if cn else '',
+                host=host,
+                is_mention=is_mention,
+                extra_kw_map=extra_kw_map,
+            )
+            if tps:
+                for tp in tps:
+                    touchpoint_counts[tp] += 1
+                    if tp not in touchpoint_first_ts:
+                        touchpoint_first_ts[tp] = ts_ms
+                touchpoint_set |= tps
+
             prev_ts = ts_ms
 
         if cur_session:
@@ -596,6 +866,8 @@ def _build_per_uid_journeys(
                 if any(ev['ts_ms'] == conversion_ts for ev in sess):
                     break
 
+        interest = uid_interests.get(uid) or {}
+        demo = uid_demo.get(uid) or {}
         out.append({
             'uid':                  uid,
             'sessions':             sessions,
@@ -614,6 +886,13 @@ def _build_per_uid_journeys(
             'detour_hosts':         detour_hosts,
             'post_mention_hosts':   post_mention_hosts,
             'sessions_to_convert':  sessions_to_convert,
+            # Touchpoint + cohort tags for the new cuts and touchpoint panel.
+            'touchpoint_set':       touchpoint_set,
+            'touchpoint_first_ts':  dict(touchpoint_first_ts),
+            'touchpoint_counts':    dict(touchpoint_counts),
+            'interest_primary':     interest.get('primary', 'Unknown'),
+            'interest_secondary':   interest.get('secondary', []),
+            'demo':                 demo,
         })
 
         if progress_cb and (idx % progress_every == 0):
@@ -784,6 +1063,147 @@ def _extract_search_keyword(params: dict) -> Optional[str]:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# Touchpoint classification — runs per event, returns a set of labels.
+# Cheap: short-circuits when no candidate needle is anywhere in URL/host.
+# ─────────────────────────────────────────────────────────────────────────────
+
+def parse_extra_touchpoint_keywords(text: str) -> dict[str, list[str]]:
+    """Parse the form's free-text into ``{CATEGORY: [kw1, kw2, ...]}``.
+
+    Input format (one rule per line) is intentionally forgiving::
+
+        TALENT=steph curry, michael jordan
+        BRAND_PARTNERSHIP=mercedes
+        SOUNDTRACK=the goat soundtrack
+        CREATOR_INFLUENCER=mrbeast, sneako
+
+    Bare lines without ``CATEGORY=`` are filed under ``CUSTOM``. Categories
+    are upper-cased and clamped to the touchpoint label set so a typo
+    can't create a phantom column in the dashboard.
+    """
+    out: dict[str, list[str]] = defaultdict(list)
+    allowed = {label for label, _ in TOUCHPOINT_RULES}
+    # Permissive aliases — user-friendly → canonical label.
+    alias = {
+        'TALENT':           'TALENT_MENTION',
+        'INFLUENCER':       'CREATOR_INFLUENCER',
+        'CREATOR':          'CREATOR_INFLUENCER',
+        'PARTNERSHIP':      'BRAND_PARTNERSHIP',
+        'PARTNER':          'BRAND_PARTNERSHIP',
+        'MUSIC':            'SOUNDTRACK',
+    }
+    for raw in (text or '').splitlines():
+        line = raw.strip()
+        if not line or line.startswith('#'):
+            continue
+        if '=' in line:
+            cat, _, kws = line.partition('=')
+            cat = cat.strip().upper()
+            cat = alias.get(cat, cat)
+            if cat not in allowed:
+                cat = 'CUSTOM'
+        else:
+            cat, kws = 'CUSTOM', line
+        for kw in kws.split(','):
+            k = kw.strip().lower()
+            if not k or len(k) < 2:
+                continue
+            # Expand into the variants a URL is likely to use: space → hyphen
+            # / underscore / collapsed. Without this, "steph curry" misses
+            # "/steph-curry-the-goat" — and that's exactly the attribution
+            # surface the analyst is trying to tag.
+            variants = {k}
+            if ' ' in k:
+                collapsed = ' '.join(k.split())
+                variants.update({
+                    collapsed,
+                    collapsed.replace(' ', '-'),
+                    collapsed.replace(' ', '_'),
+                    collapsed.replace(' ', ''),
+                })
+            for v in variants:
+                if v and v not in out[cat]:
+                    out[cat].append(v)
+    return dict(out)
+
+
+def _classify_touchpoints_for_event(
+    *,
+    url_lc: str,
+    cn_lc: str,
+    host: str,
+    is_mention: bool,
+    extra_kw_map: dict[str, list[str]],
+    params: Optional[dict] = None,
+) -> set[str]:
+    """Return the set of touchpoint labels this event hits.
+
+    Channel touchpoints (TRAILER, SOCIAL_*, PRESS, …) only count when the
+    event already references the target (``is_mention``) OR matches one of
+    the user-supplied extra keywords — otherwise an unrelated TikTok visit
+    in the journey window would falsely inflate "social touches".
+    Extra-keyword touchpoints (TALENT_MENTION, BRAND_PARTNERSHIP, …) fire
+    on the keyword alone, since those are explicitly named by the analyst.
+    """
+    tps: set[str] = set()
+
+    # ── 1. Extra-keyword categories — fire on keyword alone ──────────────
+    extra_kw_hit = False
+    if extra_kw_map:
+        text = url_lc + ' ' + cn_lc
+        for cat, kws in extra_kw_map.items():
+            for kw in kws:
+                if kw in text:
+                    tps.add(cat)
+                    extra_kw_hit = True
+                    break
+
+    # Channel touchpoints require the event to be ABOUT the target.
+    relevant = is_mention or extra_kw_hit
+    if not relevant:
+        return tps
+
+    # ── 2. Channel touchpoints — host / path needle scan ─────────────────
+    # Cheap pre-filter: any rule needle present anywhere?
+    # (skip the rule loop for the bulk of off-target hosts).
+    if not any(n in url_lc or (n and n in host) for n in _TP_HOST_NEEDLES_FLAT):
+        # Still allow paid/organic acquisition tagging below.
+        pass
+    else:
+        for label, needles in TOUCHPOINT_RULES:
+            if not needles:
+                continue
+            for n in needles:
+                if n.startswith('/'):
+                    if n in url_lc:
+                        tps.add(label)
+                        break
+                else:
+                    if n and (n in host or n in url_lc):
+                        tps.add(label)
+                        break
+
+    # ── 3. PAID_AD / ORGANIC_SEARCH dynamic tagging ──────────────────────
+    if params is None and '?' in url_lc:
+        try:
+            qs = urllib.parse.urlsplit(url_lc).query
+            params = urllib.parse.parse_qs(qs)
+        except Exception:
+            params = {}
+    paid_hit = bool(params) and (
+        any(k in params for k in PAID_QUERY_KEYS) or
+        (params.get('utm_medium') and any(
+            m in (params['utm_medium'][0] or '').lower() for m in PAID_UTM_MEDIUM))
+    )
+    if paid_hit:
+        tps.add('PAID_AD')
+    elif host and _host_is_search_engine(host):
+        tps.add('ORGANIC_SEARCH')
+
+    return tps
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Aggregation: clusters, funnel edges, drop-off, detours
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -924,6 +1344,267 @@ def _aggregate_post_non_conversion_hosts(per_uid: list[dict], *, top_n: int) -> 
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# Multi-axis cuts (interest / demographics) — produces one cluster collection
+# per axis so the dashboard's "Cut by:" dropdown can swap without re-querying.
+# ─────────────────────────────────────────────────────────────────────────────
+
+# Minimum group size we render — sub-100-user buckets are too thin to draw
+# conclusions from and clutter the dashboard.
+MIN_BUCKET_USERS    = 100
+MAX_BUCKETS_PER_AXIS = 10
+
+
+def _bucket_for_axis(j: dict, axis: str) -> Optional[str]:
+    """Return the bucket label for a single UID on a given cut axis."""
+    if axis == 'inception':
+        return j.get('inception') or 'OTHER'
+    if axis == 'interest':
+        return j.get('interest_primary') or 'Unknown'
+    demo = j.get('demo') or {}
+    if axis in ('gender', 'age', 'ethnicity', 'income', 'education', 'marital', 'children'):
+        return demo.get(axis) or 'Unknown'
+    return None
+
+
+def _build_axis_clusters(per_uid: list[dict], axis: str) -> list[dict]:
+    """For a single cut axis, partition UIDs into buckets and run the same
+    funnel + detour + touchpoint roll-ups we already compute per inception.
+    """
+    by_bucket: dict[str, list[dict]] = defaultdict(list)
+    for j in per_uid:
+        label = _bucket_for_axis(j, axis)
+        if label:
+            by_bucket[label].append(j)
+    # Drop tiny buckets — they're noise. ALWAYS keep an ALL bucket.
+    items = [(lbl, members) for lbl, members in by_bucket.items()
+             if len(members) >= MIN_BUCKET_USERS]
+    items.sort(key=lambda kv: len(kv[1]), reverse=True)
+    items = items[:MAX_BUCKETS_PER_AXIS]
+
+    total = max(1, len(per_uid))
+    out: list[dict] = []
+    # Prepend ALL so the dashboard always has a baseline.
+    all_members = per_uid
+    out.append(_summarize_bucket('ALL', all_members, total, with_touchpoints=True))
+    for lbl, members in items:
+        out.append(_summarize_bucket(lbl, members, total, with_touchpoints=True))
+    return out
+
+
+def _summarize_bucket(label: str, members: list[dict], cohort_total: int,
+                      *, with_touchpoints: bool = False) -> dict:
+    """Build the per-cluster summary used by both inception-clusters and
+    cut-axis clusters (interest / demographic). Shape matches existing
+    `_aggregate_clusters` output so the dashboard renderer is reusable.
+    """
+    converted = sum(1 for j in members if j['converted'])
+    n = max(1, len(members))
+    summary = {
+        'label':          label,
+        'inception':      label,                 # backward-compat key for renderer
+        'users':          len(members),
+        'users_pct':      round(100.0 * len(members) / max(1, cohort_total), 1),
+        'converted':      converted,
+        'conversion_pct': round(100.0 * converted / n, 1),
+        'funnel':         _build_funnel(members),
+        'detours':        _aggregate_detours_for_cluster(members),
+    }
+    if with_touchpoints:
+        # A condensed top-5 touchpoint list per bucket so the cluster card
+        # can show "what's driving this slice" without re-rendering the full
+        # touchpoint table.
+        tp_reach: Counter = Counter()
+        for j in members:
+            for tp in (j.get('touchpoint_set') or ()):
+                tp_reach[tp] += 1
+        summary['top_touchpoints'] = [
+            {'label': tp, 'reach': c, 'reach_pct': round(100.0 * c / n, 1)}
+            for tp, c in tp_reach.most_common(5)
+        ]
+    return summary
+
+
+def _aggregate_cuts(per_uid: list[dict]) -> dict[str, list[dict]]:
+    """Produce one cluster collection per cut axis. The dashboard's
+    "Cut by:" dropdown chooses which one to render.
+
+    Note: the existing `_aggregate_clusters` (by inception channel) is
+    re-computed here under axis="inception" so the cuts dict is
+    self-contained and the renderer doesn't need a special case.
+    """
+    return {
+        axis: _build_axis_clusters(per_uid, axis)
+        for axis, _label in CUT_DISPLAY_ORDER
+    }
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Touchpoint aggregation — reach %, conversion lift, cadence, co-occurrence.
+# This is the bulk of what the client asked for in the Goat brief:
+# "how many touches did purchasers get", "what drives conversion vs
+# conversation", "cadence between asset engagement and sales", "overlap
+# between trailer + influencer".
+# ─────────────────────────────────────────────────────────────────────────────
+
+# Cap the co-occurrence matrix to the top N most-reached touchpoints so the
+# UI renders cleanly; full Cartesian explodes too fast.
+TOP_N_TOUCHPOINTS_FOR_OVERLAP = 12
+TOP_N_OVERLAP_PAIRS           = 25
+
+
+def _aggregate_touchpoints(per_uid: list[dict]) -> dict:
+    """For each touchpoint label compute:
+
+        reach            — # users who hit at least once
+        reach_pct        — % of cohort
+        converters_reached      — # converters who hit
+        conv_rate_when_reached  — conv % among reached
+        conv_rate_when_not      — conv % among un-reached
+        lift_pct                — (rate_when_reached - rate_when_not) / rate_when_not
+        avg_days_to_conversion  — for converters: days from first-touch → conversion
+        avg_touches_per_user    — among reached
+        share_of_converters     — % of converters who saw this touchpoint
+    Plus a co-occurrence list of the top pairs.
+    """
+    n = max(1, len(per_uid))
+    converted_uids = [j for j in per_uid if j['converted']]
+    n_conv = max(1, len(converted_uids))
+    base_conv_rate = 100.0 * len(converted_uids) / n
+
+    # Pre-collect per-label cohorts.
+    reach_users: dict[str, list[dict]] = defaultdict(list)
+    touch_counts_per_user: dict[str, list[int]] = defaultdict(list)
+    days_to_conv: dict[str, list[float]] = defaultdict(list)
+    for j in per_uid:
+        tset = j.get('touchpoint_set') or ()
+        tcounts = j.get('touchpoint_counts') or {}
+        tfirst = j.get('touchpoint_first_ts') or {}
+        conv_ts = j.get('conversion_ts')
+        for tp in tset:
+            reach_users[tp].append(j)
+            touch_counts_per_user[tp].append(tcounts.get(tp, 1))
+            if conv_ts is not None and tp in tfirst:
+                delta_ms = max(0, conv_ts - tfirst[tp])
+                days_to_conv[tp].append(delta_ms / 86_400_000.0)
+
+    rows: list[dict] = []
+    seen_labels: set[str] = set()
+    # Display-order first, then any unknown labels we happened to tag.
+    label_order = list(TOUCHPOINT_DISPLAY_ORDER) + sorted(
+        set(reach_users.keys()) - set(TOUCHPOINT_DISPLAY_ORDER)
+    )
+    for tp in label_order:
+        if tp in seen_labels:
+            continue
+        seen_labels.add(tp)
+        users = reach_users.get(tp) or []
+        if not users:
+            continue
+        reach = len(users)
+        converters_reached = sum(1 for j in users if j['converted'])
+        not_reached = n - reach
+        non_converters_reached = reach - converters_reached
+        conv_rate_when_reached = 100.0 * converters_reached / max(1, reach)
+        # n_conv = converters_reached + converters_not_reached
+        converters_not_reached = len(converted_uids) - converters_reached
+        conv_rate_when_not = (
+            100.0 * converters_not_reached / max(1, not_reached) if not_reached else 0.0
+        )
+        if conv_rate_when_not > 0:
+            lift_pct = round(
+                100.0 * (conv_rate_when_reached - conv_rate_when_not) / conv_rate_when_not, 1
+            )
+        else:
+            lift_pct = None
+        touches = touch_counts_per_user.get(tp) or []
+        avg_touches = round(sum(touches) / max(1, len(touches)), 2)
+        d2c = days_to_conv.get(tp) or []
+        avg_d2c = round(sum(d2c) / max(1, len(d2c)), 1) if d2c else None
+        rows.append({
+            'label':                  tp,
+            'reach':                  reach,
+            'reach_pct':              round(100.0 * reach / n, 1),
+            'converters_reached':     converters_reached,
+            'share_of_converters':    round(100.0 * converters_reached / n_conv, 1),
+            'conv_rate_when_reached': round(conv_rate_when_reached, 2),
+            'conv_rate_when_not':     round(conv_rate_when_not, 2),
+            'baseline_conv_rate':     round(base_conv_rate, 2),
+            'lift_pct':               lift_pct,
+            'avg_days_to_conversion': avg_d2c,
+            'avg_touches_per_user':   avg_touches,
+        })
+
+    # ── Co-occurrence matrix on top-N touchpoints ────────────────────────
+    top_labels = [r['label'] for r in rows[:TOP_N_TOUCHPOINTS_FOR_OVERLAP]]
+    top_set = set(top_labels)
+    pair_users: Counter = Counter()
+    pair_converters: Counter = Counter()
+    for j in per_uid:
+        tset = (j.get('touchpoint_set') or set()) & top_set
+        if len(tset) < 2:
+            continue
+        tlist = sorted(tset)
+        for i in range(len(tlist)):
+            for k in range(i + 1, len(tlist)):
+                pair = (tlist[i], tlist[k])
+                pair_users[pair] += 1
+                if j['converted']:
+                    pair_converters[pair] += 1
+
+    overlap = []
+    for pair, users in pair_users.most_common(TOP_N_OVERLAP_PAIRS):
+        convs = pair_converters[pair]
+        overlap.append({
+            'a':                pair[0],
+            'b':                pair[1],
+            'users':            users,
+            'users_pct':        round(100.0 * users / n, 1),
+            'converters':       convs,
+            'conv_rate':        round(100.0 * convs / max(1, users), 2),
+        })
+
+    # ── Touch-count distribution ─────────────────────────────────────────
+    # Buckets: 0, 1, 2-3, 4-6, 7-10, 11+. For converters and non-converters
+    # separately — this answers "how many touches did purchasers receive".
+    def _touch_bucket(n_touches: int) -> str:
+        if n_touches == 0:  return '0'
+        if n_touches == 1:  return '1'
+        if n_touches <= 3:  return '2-3'
+        if n_touches <= 6:  return '4-6'
+        if n_touches <= 10: return '7-10'
+        return '11+'
+
+    bucket_order = ['0', '1', '2-3', '4-6', '7-10', '11+']
+    conv_buckets: Counter = Counter()
+    nonconv_buckets: Counter = Counter()
+    for j in per_uid:
+        total_touches = sum((j.get('touchpoint_counts') or {}).values())
+        b = _touch_bucket(total_touches)
+        if j['converted']:
+            conv_buckets[b] += 1
+        else:
+            nonconv_buckets[b] += 1
+    touch_distribution = [{
+        'bucket':         b,
+        'converters':     conv_buckets.get(b, 0),
+        'non_converters': nonconv_buckets.get(b, 0),
+        'total':          conv_buckets.get(b, 0) + nonconv_buckets.get(b, 0),
+        'conv_pct':       round(
+            100.0 * conv_buckets.get(b, 0) /
+            max(1, conv_buckets.get(b, 0) + nonconv_buckets.get(b, 0)), 2),
+    } for b in bucket_order]
+
+    return {
+        'baseline_conv_rate': round(base_conv_rate, 2),
+        'cohort_size':        n,
+        'converters':         len(converted_uids),
+        'rows':               rows,
+        'overlap':            overlap,
+        'touch_distribution': touch_distribution,
+    }
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Persistence
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -1034,6 +1715,8 @@ def _empty_summary(target, project_name, start_date, end_date,
             'lookback_days':  lookback_days,
             'forward_days':   forward_days,
             'conversion_patterns': list(CONVERSION_PATTERNS),
+            'extra_touchpoint_keywords': {},
+            'cut_options':    [{'key': k, 'label': lbl} for k, lbl in CUT_DISPLAY_ORDER],
             'created_at':     datetime.utcnow().isoformat() + 'Z',
             'matched_uids':   0,
             'events_pulled':  0,
@@ -1043,10 +1726,14 @@ def _empty_summary(target, project_name, start_date, end_date,
             'avg_journey_duration_days': 0.0, 'avg_sessions_to_convert': 0.0,
             'avg_events_per_user': 0.0,
         },
-        'clusters': [],
-        'keywords': [],
-        'post_hosts': [],
-        'facts': [],
+        'clusters':    [],
+        'cuts':        {axis: [] for axis, _ in CUT_DISPLAY_ORDER},
+        'touchpoints': {'baseline_conv_rate': 0.0, 'cohort_size': 0,
+                        'converters': 0, 'rows': [], 'overlap': [],
+                        'touch_distribution': []},
+        'keywords':    [],
+        'post_hosts':  [],
+        'facts':       [],
     }
 
 
@@ -1054,9 +1741,12 @@ __all__ = [
     'run_job',
     'list_runs',
     'load_run_from_s3',
+    'parse_extra_touchpoint_keywords',
     'CONVERSION_PATTERNS',
     'STEP_DISPLAY_ORDER',
     'INCEPTION_DISPLAY_ORDER',
+    'TOUCHPOINT_DISPLAY_ORDER',
+    'CUT_DISPLAY_ORDER',
     'DEFAULT_LOOKBACK_DAYS',
     'DEFAULT_FORWARD_DAYS',
     'S3_BUCKET',
