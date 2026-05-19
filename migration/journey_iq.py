@@ -439,6 +439,14 @@ def run_job(
                 target_domain_guesses.add(d)
 
         cur.execute(f"DROP TABLE IF EXISTS journey_uids_{job_id}")
+        # CRITICAL: filter out epoch-zero VISIT_TS rows. clickstream_final
+        # has a small fraction of rows whose VISIT_TS came in as NULL and
+        # got coerced to 1970-01-01. min(VISIT_TS) on the cohort would
+        # then return 1970-01-01, and `toDate(1970-01-01) - lookback_days`
+        # unsigned-underflows to year 2149, making Phase 2's date filter
+        # impossible and returning 0 events. Dropping epoch rows here costs
+        # nothing (it's an AND on a column we're already touching) and
+        # protects every downstream window computation.
         if cohort_mode == 'conversion':
             _p(8, f'Resolving conversion cohort across {len(conv_url_patterns)} URL pattern(s)...')
             # purchase_ts = first time the UID hit any conversion URL.
@@ -451,6 +459,7 @@ def run_job(
                     max(VISIT_TS) AS last_mention_ts
                 FROM clickstream.clickstream_final
                 WHERE DELIVERED BETWEEN toDate('{sd}') AND toDate('{ed}')
+                  AND VISIT_TS > toDateTime('2020-01-01 00:00:00')
                   AND {conv_clause}
                 GROUP BY UID
                 LIMIT {MAX_UIDS}
@@ -470,6 +479,7 @@ def run_job(
                     max(VISIT_TS)        AS last_mention_ts
                 FROM clickstream.clickstream_final
                 WHERE DELIVERED BETWEEN toDate('{sd}') AND toDate('{ed}')
+                  AND VISIT_TS > toDateTime('2020-01-01 00:00:00')
                   AND {match_clause}{narrow_sql}
                 GROUP BY UID
                 LIMIT {MAX_UIDS}
@@ -495,6 +505,7 @@ def run_job(
                     max(VISIT_TS) AS last_mention_ts
                 FROM clickstream.clickstream_final
                 WHERE DELIVERED BETWEEN toDate('{sd}') AND toDate('{ed}')
+                  AND VISIT_TS > toDateTime('2020-01-01 00:00:00')
                   AND {wide_clause}
                 GROUP BY UID
                 LIMIT {MAX_UIDS}
