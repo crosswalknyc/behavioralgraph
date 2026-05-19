@@ -8615,6 +8615,120 @@
         .rankers-table th, .rankers-table td { padding: 0.5rem 0.75rem; text-align: left; border-bottom: 1px solid var(--border-color); }
         .rankers-table th { background: rgba(102, 217, 239, 0.08); color: var(--text-secondary); font-weight: 600; }
         .rankers-table tbody tr:hover { background: rgba(102, 217, 239, 0.05); }
+
+        /* ── IQ Ranker (Talent / Brands / etc.) panel polish ──────────────── */
+        .iqr-card {
+            background: linear-gradient(180deg, rgba(102,217,239,0.04) 0%, rgba(102,217,239,0) 80%);
+            border: 1px solid var(--border-color);
+            border-radius: 10px;
+            padding: 1rem 1.1rem 0.85rem;
+            margin-bottom: 0.85rem;
+        }
+        .iqr-header {
+            display: flex; flex-wrap: wrap; gap: 0.75rem;
+            align-items: flex-start; justify-content: space-between;
+            margin-bottom: 0.6rem;
+        }
+        .iqr-title { display: flex; align-items: center; gap: 0.55rem; font-size: 1.05rem; font-weight: 600; color: var(--text-primary); margin: 0; }
+        .iqr-title-icon { font-size: 1.25rem; }
+        .iqr-subtitle { margin: 0.2rem 0 0 0; font-size: 0.75rem; color: var(--text-secondary); line-height: 1.4; max-width: 64ch; }
+        .iqr-actions { display: inline-flex; gap: 0.4rem; flex-wrap: wrap; align-items: center; }
+        .iqr-btn {
+            display: inline-flex; align-items: center; gap: 0.35rem;
+            padding: 0.4rem 0.75rem;
+            font-family: 'Space Mono', monospace;
+            font-size: 0.72rem; font-weight: 600;
+            letter-spacing: 0.02em;
+            background: var(--bg-secondary);
+            color: var(--text-primary);
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            cursor: pointer;
+            white-space: nowrap;
+            transition: background 0.12s ease, border-color 0.12s ease, color 0.12s ease;
+        }
+        .iqr-btn:hover { background: rgba(102,217,239,0.10); border-color: var(--accent-blue); color: var(--text-primary); }
+        .iqr-btn-primary { background: var(--accent-lime); border-color: var(--accent-lime); color: #0d1a2a; }
+        .iqr-btn-primary:hover { filter: brightness(1.08); background: var(--accent-lime); border-color: var(--accent-lime); color: #0d1a2a; }
+        .iqr-toolbar {
+            display: flex; flex-wrap: wrap; gap: 0.6rem; align-items: center;
+            padding: 0.55rem 0.7rem;
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            margin-bottom: 0.75rem;
+        }
+        .iqr-toolbar label { display: inline-flex; align-items: center; gap: 0.35rem; font-size: 0.72rem; color: var(--text-secondary); margin: 0; }
+        .iqr-toolbar select,
+        .iqr-toolbar input[type="search"],
+        .iqr-toolbar input[type="date"] {
+            padding: 0.32rem 0.55rem; font-size: 0.78rem;
+            background: var(--bg-input);
+            border: 1px solid var(--border-color);
+            border-radius: 5px;
+            color: var(--text-primary);
+            outline: none;
+        }
+        .iqr-toolbar input[type="search"]:focus,
+        .iqr-toolbar input[type="date"]:focus,
+        .iqr-toolbar select:focus { border-color: var(--accent-blue); }
+        .iqr-toolbar .iqr-search { flex: 1; min-width: 200px; }
+        .iqr-toolbar .iqr-window-label { margin-left: auto; font-size: 0.7rem; color: var(--text-muted); }
+        .iqr-subtabs {
+            display: flex; flex-wrap: wrap; gap: 0.3rem;
+            margin: 0 0 0.75rem 0;
+        }
+        .iqr-subtab {
+            padding: 0.3rem 0.7rem;
+            font-size: 0.72rem; font-weight: 500;
+            background: var(--bg-secondary);
+            color: var(--text-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: 999px;
+            cursor: pointer;
+            transition: background 0.12s ease, color 0.12s ease, border-color 0.12s ease;
+        }
+        .iqr-subtab:hover { color: var(--text-primary); border-color: var(--accent-blue); }
+        .iqr-subtab.active { background: var(--accent-blue); border-color: var(--accent-blue); color: #fff; }
+        .iqr-explain {
+            display: none;
+            position: relative;
+            background: linear-gradient(135deg, rgba(132,225,168,0.07), rgba(102,217,239,0.04));
+            border: 1px solid rgba(132,225,168,0.35);
+            border-radius: 8px;
+            padding: 0.85rem 1rem;
+            margin-bottom: 0.75rem;
+            font-size: 0.78rem; color: var(--text-secondary); line-height: 1.5;
+        }
+        .iqr-explain.open { display: block; }
+        .iqr-explain h5 { margin: 0 0 0.4rem; font-size: 0.85rem; color: var(--text-primary); display: flex; align-items: center; gap: 0.4rem; }
+        .iqr-explain code { background: rgba(132,225,168,0.10); padding: 0.05rem 0.3rem; border-radius: 3px; font-size: 0.74rem; color: #c8f7d4; }
+        .iqr-explain .iqr-weight-bar { display: flex; align-items: center; gap: 0.5rem; margin: 0.2rem 0; }
+        .iqr-explain .iqr-weight-bar .lbl { width: 7.5rem; font-size: 0.72rem; color: var(--text-secondary); }
+        .iqr-explain .iqr-weight-bar .bar { flex: 1; height: 6px; background: rgba(102,217,239,0.08); border-radius: 999px; overflow: hidden; }
+        .iqr-explain .iqr-weight-bar .bar > span { display: block; height: 100%; background: linear-gradient(90deg, var(--accent-lime), var(--accent-blue)); border-radius: 999px; }
+        .iqr-explain .iqr-weight-bar .pct { width: 3rem; text-align: right; font-size: 0.7rem; color: var(--text-muted); font-variant-numeric: tabular-nums; }
+        .iqr-explain-close {
+            position: absolute; top: 0.4rem; right: 0.5rem;
+            background: transparent; border: none; color: var(--text-muted);
+            font-size: 0.95rem; line-height: 1; cursor: pointer; padding: 0.15rem 0.35rem; border-radius: 4px;
+        }
+        .iqr-explain-close:hover { color: var(--text-primary); background: rgba(255,255,255,0.05); }
+        .iqr-info-chip {
+            display: inline-flex; align-items: center; gap: 0.3rem;
+            padding: 0.25rem 0.55rem;
+            font-size: 0.7rem; font-weight: 600;
+            background: rgba(132,225,168,0.10);
+            color: #c8f7d4;
+            border: 1px solid rgba(132,225,168,0.35);
+            border-radius: 999px;
+            cursor: pointer;
+            transition: background 0.12s ease;
+        }
+        .iqr-info-chip:hover { background: rgba(132,225,168,0.18); }
+        .rankers-table th { user-select: none; }
+        .rankers-table th .iqr-sort-arrow { opacity: 0.45; margin-left: 0.2rem; font-size: 0.65rem; }
+        .rankers-table th[data-iq-active-sort] .iqr-sort-arrow { opacity: 1; color: var(--accent-blue); }
         .rankers-insights-grid .insight-card { background: var(--bg-card); border-radius: 8px; padding: 1rem; border: 1px solid var(--border-color); }
         .rankers-insights-grid .insight-label { font-size: 0.7rem; text-transform: uppercase; color: var(--text-secondary); margin-bottom: 0.25rem; }
         .rankers-insights-grid .insight-value { font-size: 1.1rem; font-weight: 700; color: var(--accent-cyan); }
@@ -17318,23 +17432,54 @@
                     {%- for m in IQ_RANKER_MASTERS %}
                     <!-- ===== {{ m.label|upper }} RANKER ===== -->
                     <div id="rankeriq-{{ m.slug }}" class="ranker-platform-panel{% if loop.first %} active{% endif %}">
-                        <div style="display: flex; justify-content: space-between; align-items: flex-end; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.5rem;">
-                            <div>
-                                <h3 style="margin: 0;">{{ m.icon }} {{ m.label }} Ranker</h3>
-                                <p style="margin: 0.15rem 0 0 0; font-size: 0.78rem; color: var(--text-secondary);">{{ m.desc }} <span style="color: var(--text-muted); font-size: 0.72rem;">Mentions / Pos / Neu / Neg are projected to US gen pop (329.9M); CW IQ Score is panel-relative.</span></p>
-                            </div>
-                            <div style="display: flex; gap: 0.4rem; align-items: center; flex-wrap: wrap;">
-                                {% if loop.first and (role == 'super_admin' or role == 'admin') %}
-                                <button class="btn btn-secondary has-tooltip" data-tooltip="Run the daily ranker pipeline NOW for every Profile IQ profile" onclick="iqRankersLoadDay(this)" id="iqRankersLoadDayBtn-{{ m.key }}" style="padding: 0.35rem 0.75rem; font-size: 0.8rem;">⚡ Load 1 day for all profiles</button>
-                                {% endif %}
-                                <button class="btn btn-secondary" onclick="loadIQRankerLeaderboard('{{ m.key }}', true)" style="padding: 0.35rem 0.75rem; font-size: 0.8rem;">🔄 Refresh</button>
+                        <div class="iqr-card">
+                            <div class="iqr-header">
+                                <div>
+                                    <h3 class="iqr-title"><span class="iqr-title-icon">{{ m.icon }}</span> {{ m.label }} Ranker</h3>
+                                    <p class="iqr-subtitle">{{ m.desc }}</p>
+                                </div>
+                                <div class="iqr-actions">
+                                    <button class="iqr-info-chip" type="button" onclick="toggleIQRankerExplainer('{{ m.key }}')" title="Show methodology" aria-controls="iqRankerExplainer-{{ m.key }}">ⓘ How is CW IQ scored?</button>
+                                    {% if loop.first and (role == 'super_admin' or role == 'admin') %}
+                                    <button class="iqr-btn iqr-btn-primary" type="button" onclick="iqRankersLoadDay(this)" id="iqRankersLoadDayBtn-{{ m.key }}">⚡ Load 1 day</button>
+                                    {% endif %}
+                                    <button class="iqr-btn" type="button" onclick="loadIQRankerLeaderboard('{{ m.key }}', true)">🔄 Refresh</button>
+                                </div>
                             </div>
                         </div>
-                        {% if loop.first %}<div id="iqRankersLoadDayStatus" style="display: none; padding: 0.5rem 0.75rem; margin-bottom: 0.75rem; background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 6px; font-size: 0.78rem; color: var(--text-secondary);"></div>{% endif %}
-                        <div id="iqRankerSubTabs-{{ m.key }}" class="netflix-subtabs" style="display: flex; gap: 0.35rem; margin: 0.5rem 0 0.75rem 0; flex-wrap: wrap;"></div>
-                        <div class="iq-ranker-controls" style="display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center; margin-bottom: 0.75rem;">
-                            <label style="font-size: 0.75rem; color: var(--text-secondary);">Window:
-                                <select id="iqRankerWindow-{{ m.key }}" onchange="onIQRankerWindowChange('{{ m.key }}')" style="padding: 0.3rem 0.5rem; font-size: 0.8rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary); margin-left: 0.35rem;">
+                        {% if loop.first %}<div id="iqRankersLoadDayStatus" style="display: none; padding: 0.55rem 0.85rem; margin-bottom: 0.75rem; background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 8px; font-size: 0.78rem; color: var(--text-secondary);"></div>{% endif %}
+
+                        <!-- CW IQ formula explainer (toggle via the ⓘ chip) -->
+                        <div id="iqRankerExplainer-{{ m.key }}" class="iqr-explain" role="region" aria-label="CW IQ scoring methodology">
+                            <button type="button" class="iqr-explain-close" aria-label="Close" onclick="toggleIQRankerExplainer('{{ m.key }}')">✕</button>
+                            <h5>📐 CW IQ Score — how it's computed</h5>
+                            <div style="margin-bottom: 0.55rem;">A per-day &ldquo;zeitgeist&rdquo; composite scored 0–100. Each day we compute a weighted z-score blend per profile, then squash with a sigmoid:</div>
+                            <div style="margin-bottom: 0.6rem;"><code>CW IQ = 100 × σ(0.45·z<sub>volume</sub> + 0.20·z<sub>reach</sub> + 0.20·sentiment + 0.10·momentum + 0.05·recency)</code></div>
+                            <div class="iqr-weight-bar"><span class="lbl">Volume</span><span class="bar"><span style="width: 45%;"></span></span><span class="pct">0.45</span></div>
+                            <div class="iqr-weight-bar"><span class="lbl">Reach</span><span class="bar"><span style="width: 20%;"></span></span><span class="pct">0.20</span></div>
+                            <div class="iqr-weight-bar"><span class="lbl">Sentiment</span><span class="bar"><span style="width: 20%;"></span></span><span class="pct">0.20</span></div>
+                            <div class="iqr-weight-bar"><span class="lbl">Momentum</span><span class="bar"><span style="width: 10%;"></span></span><span class="pct">0.10</span></div>
+                            <div class="iqr-weight-bar"><span class="lbl">Recency</span><span class="bar"><span style="width: 5%;"></span></span><span class="pct">0.05</span></div>
+                            <ul style="margin: 0.6rem 0 0; padding-left: 1.1rem; font-size: 0.74rem;">
+                                <li><b>z<sub>volume</sub></b> = z-score of <code>log1p(mentions)</code> vs that profile's trailing 28-day baseline.</li>
+                                <li><b>z<sub>reach</sub></b> = z-score of <code>log1p(unique panelists)</code> vs same baseline.</li>
+                                <li><b>sentiment</b> = (Pos − Neg) / (Pos + Neu + Neg), clamped to [−1, +1].</li>
+                                <li><b>momentum</b> = day-over-day mention % change, clamped to [−2, +2].</li>
+                                <li><b>recency</b> = 1 if mentioned today, 0.5 if mentioned yesterday, else 0.</li>
+                                <li><b>Cold-start damping:</b> z<sub>volume</sub> and z<sub>reach</sub> scale by <code>min(1, days_of_history / 3)</code> so brand-new profiles don't outrank established ones on first-day novelty noise.</li>
+                                <li><b>Multi-day windows:</b> CW IQ is shown as a raw-mention-weighted average so partial-ingest days contribute proportionally less.</li>
+                            </ul>
+                            <div style="margin-top: 0.6rem; padding-top: 0.55rem; border-top: 1px dashed rgba(132,225,168,0.25); font-size: 0.74rem;">
+                                <b style="color: #c8f7d4;">Mentions / Pos / Neu / Neg</b> are projected to US gen pop using a per-day multiplier:
+                                <code>projected = raw × 329,900,000 / panelists_active_that_day</code>.
+                                Net Sentiment and CW IQ are projection-invariant (panel-relative).
+                            </div>
+                        </div>
+
+                        <div id="iqRankerSubTabs-{{ m.key }}" class="iqr-subtabs"></div>
+                        <div class="iqr-toolbar">
+                            <label>Window
+                                <select id="iqRankerWindow-{{ m.key }}" onchange="onIQRankerWindowChange('{{ m.key }}')">
                                     <option value="1d">Yesterday</option>
                                     <option value="7d" selected>Last 7 days</option>
                                     <option value="28d">Last 28 days</option>
@@ -17345,28 +17490,32 @@
                                 </select>
                             </label>
                             <span id="iqRankerCustomDates-{{ m.key }}" style="display: none; align-items: center; gap: 0.35rem;">
-                                <input type="date" id="iqRankerStart-{{ m.key }}" style="padding: 0.3rem 0.4rem; font-size: 0.8rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary);" onchange="loadIQRankerLeaderboard('{{ m.key }}')">
-                                <span style="color: var(--text-secondary); font-size: 0.75rem;">to</span>
-                                <input type="date" id="iqRankerEnd-{{ m.key }}" style="padding: 0.3rem 0.4rem; font-size: 0.8rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary);" onchange="loadIQRankerLeaderboard('{{ m.key }}')">
+                                <input type="date" id="iqRankerStart-{{ m.key }}" onchange="loadIQRankerLeaderboard('{{ m.key }}')">
+                                <span style="color: var(--text-secondary); font-size: 0.72rem;">to</span>
+                                <input type="date" id="iqRankerEnd-{{ m.key }}" onchange="loadIQRankerLeaderboard('{{ m.key }}')">
                             </span>
-                            <input type="search" id="iqRankerSearch-{{ m.key }}" placeholder="Search profiles..." oninput="onIQRankerSearchInput('{{ m.key }}')" style="flex: 1; min-width: 180px; padding: 0.3rem 0.5rem; font-size: 0.8rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary);">
-                            <span id="iqRankerWindowLabel-{{ m.key }}" style="font-size: 0.7rem; color: var(--text-secondary);"></span>
+                            <input type="search" class="iqr-search" id="iqRankerSearch-{{ m.key }}" placeholder="Search profiles..." oninput="onIQRankerSearchInput('{{ m.key }}')">
+                            <span class="iqr-window-label" id="iqRankerWindowLabel-{{ m.key }}"></span>
                         </div>
                         <div id="iqRankerLoading-{{ m.key }}" style="padding: 1.5rem; text-align: center; color: var(--text-secondary); display: none;"><span class="spinner"></span> Loading leaderboard…</div>
                         <div id="iqRankerError-{{ m.key }}" style="padding: 1rem; color: var(--accent-red); display: none;"></div>
-                        <div id="iqRankerTableWrap-{{ m.key }}" style="overflow-x: auto;">
+                        <div id="iqRankerTableWrap-{{ m.key }}" style="overflow-x: auto; border: 1px solid var(--border-color); border-radius: 8px;">
                             <table class="rankers-table" id="iqRankerTable-{{ m.key }}" style="width: 100%; border-collapse: collapse;">
                                 <thead><tr>
-                                    <th data-iq-sort="rank"           data-iq-master="{{ m.key }}" class="has-tooltip" data-tooltip="Position in this leaderboard for the selected window. Sortable." style="cursor: pointer;">#</th>
-                                    <th data-iq-sort="name"           data-iq-master="{{ m.key }}" class="has-tooltip" data-tooltip="Profile name (Profile IQ subject). Click a row to drill down." style="cursor: pointer;">Profile</th>
-                                    <th data-iq-sort="mentions"       data-iq-master="{{ m.key }}" class="has-tooltip" data-tooltip="Total mentions PROJECTED to US gen pop (329.9M). Each panel mention is multiplied by 329.9M / unique panelists active that day, summed across the window." style="cursor: pointer; text-align: right;">Mentions</th>
+                                    <th data-iq-sort="rank"           data-iq-master="{{ m.key }}" class="has-tooltip" data-tooltip="Rank within the selected window." style="cursor: pointer; width: 2.5rem;">#</th>
+                                    <th data-iq-sort="name"           data-iq-master="{{ m.key }}" class="has-tooltip" data-tooltip="Profile name (click a row to drill down to the profile dashboard)." style="cursor: pointer;">Profile</th>
+                                    <th data-iq-sort="mentions"       data-iq-master="{{ m.key }}" class="has-tooltip" data-tooltip="Total mentions projected to US gen pop (raw × 329.9M / panel size that day, summed across the window)." style="cursor: pointer; text-align: right;">Mentions</th>
                                     <th data-iq-sort="delta_mentions" data-iq-master="{{ m.key }}" class="has-tooltip" data-tooltip="Mentions change vs the equal-length window immediately before this one." style="cursor: pointer; text-align: right;">Δ Mentions</th>
-                                    <th data-iq-sort="pos"            data-iq-master="{{ m.key }}" class="has-tooltip" data-tooltip="Projected positive sentiment events (Layer-1 behavioral scoring on URL / domain / path / query). Same gen-pop projection as Mentions." style="cursor: pointer; text-align: right;">Pos</th>
-                                    <th data-iq-sort="neu"            data-iq-master="{{ m.key }}" class="has-tooltip" data-tooltip="Projected neutral sentiment events. Same gen-pop projection." style="cursor: pointer; text-align: right;">Neu</th>
-                                    <th data-iq-sort="neg"            data-iq-master="{{ m.key }}" class="has-tooltip" data-tooltip="Projected negative sentiment events. Same gen-pop projection." style="cursor: pointer; text-align: right;">Neg</th>
-                                    <th data-iq-sort="net_sentiment"  data-iq-master="{{ m.key }}" class="has-tooltip" data-tooltip="Net Sentiment = (Pos − Neg) / (Pos + Neu + Neg) × 100. Range −100 … +100. Projection-invariant (same on raw or projected counts)." style="cursor: pointer; text-align: right;">Net Sent.</th>
-                                    <th data-iq-sort="cw_iq_score"    data-iq-master="{{ m.key }}" class="has-tooltip" data-tooltip="CW IQ Score (0–100): a per-day &quot;zeitgeist&quot; composite. 100 × sigmoid(0.45·z_volume + 0.20·z_reach + 0.20·sentiment + 0.10·momentum + 0.05·recency), where z_volume / z_reach are z-scores of log(mentions) / log(unique panelists) vs that profile's trailing 28-day baseline. Cold-start damping ramps in z-scores linearly over the first 3 days. Across multi-day windows, displayed as raw-mention-weighted average." style="cursor: pointer; text-align: right;">CW IQ <span style="opacity: 0.7;">ⓘ</span></th>
-                                    <th data-iq-sort="delta_cw_iq"    data-iq-master="{{ m.key }}" class="has-tooltip" data-tooltip="CW IQ Score change vs the equal-length window immediately before this one." style="cursor: pointer; text-align: right;">Δ CW IQ</th>
+                                    <th data-iq-sort="pos"            data-iq-master="{{ m.key }}" class="has-tooltip" data-tooltip="Projected positive-sentiment events (Layer-1 behavioral scoring)." style="cursor: pointer; text-align: right;">Pos</th>
+                                    <th data-iq-sort="neu"            data-iq-master="{{ m.key }}" class="has-tooltip" data-tooltip="Projected neutral-sentiment events." style="cursor: pointer; text-align: right;">Neu</th>
+                                    <th data-iq-sort="neg"            data-iq-master="{{ m.key }}" class="has-tooltip" data-tooltip="Projected negative-sentiment events." style="cursor: pointer; text-align: right;">Neg</th>
+                                    <th data-iq-sort="net_sentiment"  data-iq-master="{{ m.key }}" class="has-tooltip" data-tooltip="(Pos − Neg) / (Pos + Neu + Neg) × 100. Range −100..+100." style="cursor: pointer; text-align: right;">Net Sent.</th>
+                                    <th data-iq-sort="cw_iq_score"    data-iq-master="{{ m.key }}" style="cursor: pointer; text-align: right;">
+                                        <span style="display: inline-flex; align-items: center; gap: 0.25rem;">CW IQ
+                                            <span class="iqr-info-chip" style="padding: 0; background: transparent; border: none; color: var(--accent-lime); font-size: 0.85rem; line-height: 1;" onclick="event.stopPropagation(); toggleIQRankerExplainer('{{ m.key }}')" title="Show methodology" role="button">ⓘ</span>
+                                        </span>
+                                    </th>
+                                    <th data-iq-sort="delta_cw_iq"    data-iq-master="{{ m.key }}" class="has-tooltip" data-tooltip="CW IQ change vs the equal-length window immediately before this one." style="cursor: pointer; text-align: right;">Δ CW IQ</th>
                                 </tr></thead>
                                 <tbody id="iqRankerBody-{{ m.key }}"></tbody>
                             </table>
@@ -76212,19 +76361,33 @@
             }
         }
 
+        // Friendly "All …" label per master (covers all 8 categories now).
+        const IQ_RANKER_ALL_LABEL = {
+            TALENT: 'All Talent', BRAND: 'All Brands', CONTENT: 'All Content',
+            PLATFORMS: 'All Platforms', SPORT: 'All Sport', TRENDS: 'All Trends',
+            'GEN POP': 'All Gen Pop', OTHER: 'All Other',
+        };
         function renderIQRankerSubTabs(master) {
             const wrap = document.getElementById('iqRankerSubTabs-' + master);
             if (!wrap) return;
             const state = IQ_RANKER_STATE[master];
             const subs = ['ALL'].concat(state.categories || []);
             const html = subs.map(sub => {
-                const label = sub === 'ALL' ? (master === 'TALENT' ? 'All Talent' : 'All Brands')
-                                            : sub.replace(/_/g, ' ');
-                const active = sub === state.sub ? ' active' : '';
+                const label = (sub === 'ALL')
+                    ? (IQ_RANKER_ALL_LABEL[master] || 'All')
+                    : sub.replace(/_/g, ' ');
+                const isActive = (sub === state.sub);
                 const safeSub = sub.replace(/'/g, "\\'");
-                return `<button class="tab-btn${active}" onclick="onIQRankerSubTabClick('${master}', '${safeSub}')">${_iqEsc(label)}</button>`;
+                return `<button class="iqr-subtab${isActive ? ' active' : ''}" type="button" onclick="onIQRankerSubTabClick('${master}', '${safeSub}')">${_iqEsc(label)}</button>`;
             }).join('');
             wrap.innerHTML = html;
+        }
+
+        // Toggle the inline CW IQ formula explainer card.
+        function toggleIQRankerExplainer(master) {
+            const el = document.getElementById('iqRankerExplainer-' + master);
+            if (!el) return;
+            el.classList.toggle('open');
         }
 
         function onIQRankerSubTabClick(master, sub) {
