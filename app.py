@@ -30299,25 +30299,52 @@ def submit_sentiment_iq():
 @app.route('/api/sentiment-iq/list')
 @requires_auth
 def list_sentiment_iq():
-    """List Sentiment IQ trackers visible to the caller (own + admin sees all)."""
+    """List Sentiment IQ trackers visible to the caller.
+
+    Every user sees the IQ Rankers auto-provisioned trackers (one per
+    Profile IQ profile) plus their own manual brand trackers; admins
+    additionally see other users' manual trackers. The system trackers
+    are how the Sentiment IQ dashboard hands off to Profile IQ /
+    CW IQ Ranker via the header deep-link buttons.
+    """
     if _sentiment_iq is None:
         return jsonify({'success': True, 'trackers': []})
     try:
         user = get_current_user() or {}
         role = _normalize_role(user.get('role', 'user'))
         if role in ('admin', 'super_admin'):
-            trackers = _sentiment_iq.list_trackers(s3_client, owner=None)
+            trackers = _sentiment_iq.list_trackers(s3_client, owner=None, include_system=True)
         else:
-            trackers = _sentiment_iq.list_trackers(s3_client, owner=session.get('username'))
+            trackers = _sentiment_iq.list_trackers(s3_client,
+                                                   owner=session.get('username'),
+                                                   include_system=True)
         return jsonify({'success': True, 'trackers': trackers})
     except Exception as e:
         return jsonify({'success': True, 'trackers': [], 'error': str(e)})
 
 
+def _sentiment_iq_is_system_tracker(cfg: dict) -> bool:
+    """Whether `cfg` belongs to an internal system owner (iq_rankers).
+
+    System trackers are shared across all users (every user sees them in
+    their sidebar and can read/refresh them) because they represent
+    Profile IQ profiles, not personal brand trackers. Only admins can
+    soft-delete them so a stray click can't break IQ Rankers state.
+    """
+    if not cfg:
+        return False
+    owners = getattr(_sentiment_iq, 'SYSTEM_TRACKER_OWNERS', {'iq_rankers'})
+    return cfg.get('owner') in owners
+
+
 @app.route('/api/sentiment-iq/results/<tracker_id>')
 @requires_auth
 def get_sentiment_iq_results(tracker_id):
-    """Return the latest rolled-up dashboard payload for a tracker."""
+    """Return the latest rolled-up dashboard payload for a tracker.
+
+    Auth: admin / super_admin see anything; everyone else sees their own
+    trackers plus the iq_rankers system trackers (which are shared).
+    """
     if _sentiment_iq is None:
         return jsonify({'success': False, 'error': 'Sentiment IQ unavailable'}), 500
     try:
@@ -30326,7 +30353,10 @@ def get_sentiment_iq_results(tracker_id):
             return jsonify({'success': False, 'error': 'Tracker not found'}), 404
         user = get_current_user() or {}
         role = _normalize_role(user.get('role', 'user'))
-        if role not in ('admin', 'super_admin') and cfg.get('owner') != session.get('username'):
+        is_system = _sentiment_iq_is_system_tracker(cfg)
+        if (role not in ('admin', 'super_admin')
+                and not is_system
+                and cfg.get('owner') != session.get('username')):
             return jsonify({'success': False, 'error': 'Not authorized for this tracker'}), 403
         data = _sentiment_iq.s3_get_json(s3_client, _sentiment_iq.latest_result_key(tracker_id))
         if not data:
@@ -30339,7 +30369,12 @@ def get_sentiment_iq_results(tracker_id):
 @app.route('/api/sentiment-iq/delete/<tracker_id>', methods=['POST'])
 @requires_auth
 def delete_sentiment_iq(tracker_id):
-    """Soft-delete a tracker by setting ongoing=false and status='deleted'."""
+    """Soft-delete a tracker by setting ongoing=false and status='deleted'.
+
+    System trackers (iq_rankers) can ONLY be deleted by admins; regular
+    users see them in their sidebar but can't take them out of the
+    Profile IQ ↔ Sentiment IQ ↔ CW IQ Ranker triangle.
+    """
     if _sentiment_iq is None:
         return jsonify({'success': False, 'error': 'Sentiment IQ unavailable'}), 500
     try:
@@ -30348,7 +30383,14 @@ def delete_sentiment_iq(tracker_id):
             return jsonify({'success': False, 'error': 'Tracker not found'}), 404
         user = get_current_user() or {}
         role = _normalize_role(user.get('role', 'user'))
-        if role not in ('admin', 'super_admin') and cfg.get('owner') != session.get('username'):
+        is_admin = role in ('admin', 'super_admin')
+        is_system = _sentiment_iq_is_system_tracker(cfg)
+        if is_system and not is_admin:
+            return jsonify({'success': False,
+                            'error': 'Auto-provisioned profile trackers can only be removed by an admin.'}), 403
+        if (not is_admin
+                and not is_system
+                and cfg.get('owner') != session.get('username')):
             return jsonify({'success': False, 'error': 'Not authorized for this tracker'}), 403
         cfg['ongoing'] = False
         cfg['status'] = 'deleted'
@@ -30362,8 +30404,10 @@ def delete_sentiment_iq(tracker_id):
 @app.route('/api/sentiment-iq/refresh/<tracker_id>', methods=['POST'])
 @requires_auth
 def refresh_sentiment_iq(tracker_id):
-    """Manual re-run for a tracker (admin / owner). Re-runs the configured
-    date window (or yesterday for an Ongoing-only tracker)."""
+    """Manual re-run for a tracker. Anyone authenticated can refresh a
+    shared system tracker (they're the Profile IQ profiles) on top of
+    their own manual trackers. Re-runs the configured date window or
+    yesterday for an Ongoing-only tracker."""
     if _sentiment_iq is None:
         return jsonify({'success': False, 'error': 'Sentiment IQ unavailable'}), 500
     try:
@@ -30373,7 +30417,10 @@ def refresh_sentiment_iq(tracker_id):
         username = session.get('username')
         user = get_current_user() or {}
         role = _normalize_role(user.get('role', 'user'))
-        if role not in ('admin', 'super_admin') and cfg.get('owner') != username:
+        is_system = _sentiment_iq_is_system_tracker(cfg)
+        if (role not in ('admin', 'super_admin')
+                and not is_system
+                and cfg.get('owner') != username):
             return jsonify({'success': False, 'error': 'Not authorized'}), 403
         mode = 'daily' if not (cfg.get('start_date') and cfg.get('end_date')) else 'full'
         job_id = str(uuid.uuid4())[:8]

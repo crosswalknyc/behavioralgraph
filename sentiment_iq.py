@@ -378,12 +378,19 @@ def list_trackers(
 ) -> list[dict]:
     """List Sentiment IQ trackers, optionally filtered by owner.
 
-    `include_system=False` (the default) hides trackers owned by internal
-    system accounts (e.g. the per-profile auto-trackers created by
-    iq_rankers.py). Those rows share Sentiment IQ's S3 layout for
-    storage but aren't user-facing Sentiment IQ trackers — they have no
-    rolled-up dashboard JSON, so showing them in the sidebar produces
-    empty cards.
+    `include_system=False` is the historic default and hides trackers
+    owned by internal system accounts (e.g. iq_rankers' auto-trackers).
+    That's still right for the daily cron path (`cron_sentiment_iq`),
+    which doesn't want to run the full Layer-1+2+3 pipeline on the
+    128+ system trackers every night — those have their own Layer-1
+    cron in `iq_rankers.run_daily_for_all_profiles`.
+
+    `include_system=True` is what the user-facing sidebar wants now:
+    every IQ Rankers-tracked profile shows up so users can deep-link
+    over to Profile IQ or the CW IQ Ranker via the dashboard header
+    buttons. When the include_system path is on, system trackers
+    bypass the `owner` filter too (they're visible to every user, not
+    just whoever happens to be logged in as `iq_rankers`).
     """
     out: list[dict] = []
     try:
@@ -394,17 +401,19 @@ def list_trackers(
                 if not key.endswith(".json"):
                     continue
                 # Fast path: skip iq_rankers' auto-trackers without GETting
-                # the body. They're identifiable by the "iqr_" filename
-                # prefix and we never want them in the user-facing list.
+                # the body when system trackers are excluded.
                 if not include_system and _is_system_tracker_key(key):
                     continue
                 cfg = s3_get_json(s3_client, key)
                 if not cfg:
                     continue
                 cfg_owner = cfg.get("owner")
-                if not include_system and cfg_owner in SYSTEM_TRACKER_OWNERS:
+                is_system = cfg_owner in SYSTEM_TRACKER_OWNERS
+                if not include_system and is_system:
                     continue
-                if owner and cfg_owner != owner:
+                # System trackers are visible to every user when included;
+                # non-system trackers still respect the owner filter.
+                if owner and cfg_owner != owner and not is_system:
                     continue
                 out.append({
                     "tracker_id": cfg.get("tracker_id"),
@@ -419,6 +428,12 @@ def list_trackers(
                     "end_date": cfg.get("end_date"),
                     "owner": cfg.get("owner"),
                     "created_at": cfg.get("created_at"),
+                    # Surface the Profile IQ linkage so the sidebar can
+                    # distinguish auto-provisioned profile trackers from
+                    # user-created brand trackers without a second S3 GET.
+                    "profile_subject": cfg.get("profile_subject"),
+                    "s3_key": cfg.get("s3_key"),
+                    "is_system": is_system,
                 })
         out.sort(key=lambda r: r.get("created_at") or "", reverse=True)
     except Exception as e:
