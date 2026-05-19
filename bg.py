@@ -14642,8 +14642,11 @@ def _seed_input_brand_into_target_cats(df_behavior, input_brands, brand_category
     def _alpha_only(s):
         return ''.join(c for c in str(s).upper() if c.isalnum())
     def _is_clean(s):
+        # Letters, digits, spaces, AND hyphens — hyphens are part of many
+        # canonical proper names (e.g. 'Daniel Day-Lewis'). Other separators
+        # (_ . ~ | % etc.) are URL-encoding artifacts and are rejected.
         s = str(s).strip()
-        return bool(s) and all(c.isalnum() or c == ' ' for c in s)
+        return bool(s) and all(c.isalnum() or c in (' ', '-') for c in s)
 
     canonical_by_alpha = {}
     for brand in input_brands:
