@@ -14802,9 +14802,44 @@
                                     <input type="text" id="jiqProjectName" placeholder="e.g. Firestone Q1 Tire Journey" required style="width: 100%; padding: 8px 12px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--bg-primary); color: var(--text-primary); font-size: 14px;">
                                 </div>
                                 <div style="margin-bottom: 1rem;">
-                                    <label style="display: block; font-weight: 600; margin-bottom: 4px; font-size: 13px;">Target</label>
+                                    <label style="display: block; font-weight: 600; margin-bottom: 4px; font-size: 13px;">Cohort Mode</label>
+                                    <div style="display: flex; gap: 1rem; padding: 8px 10px; border: 1px solid var(--border-color); border-radius: 8px; background: var(--bg-primary);">
+                                        <label style="display: flex; align-items: center; gap: 6px; font-size: 13px; cursor: pointer;">
+                                            <input type="radio" name="jiqCohortMode" id="jiqCohortModeMention" value="mention" checked onchange="onJiqCohortModeChange()">
+                                            <span><strong>Mention-based</strong> &mdash; anyone whose URL/COMMON_NAME contains the target keyword (default)</span>
+                                        </label>
+                                    </div>
+                                    <div style="display: flex; gap: 1rem; padding: 8px 10px; border: 1px solid var(--border-color); border-radius: 8px; background: var(--bg-primary); margin-top: 0.5rem;">
+                                        <label style="display: flex; align-items: center; gap: 6px; font-size: 13px; cursor: pointer;">
+                                            <input type="radio" name="jiqCohortMode" id="jiqCohortModeConv" value="conversion" onchange="onJiqCohortModeChange()">
+                                            <span><strong>Conversion-anchored</strong> &mdash; anyone who hit a ticketing / checkout URL; walk backwards from purchase</span>
+                                        </label>
+                                    </div>
+                                </div>
+                                <div style="margin-bottom: 1rem;">
+                                    <label style="display: block; font-weight: 600; margin-bottom: 4px; font-size: 13px;">Target <span id="jiqTargetReqLabel" style="font-weight: 400; color: var(--text-secondary);">(required)</span></label>
                                     <input type="text" id="jiqTarget" placeholder="e.g. Firestone, The Bear, Tesla Model 3" required style="width: 100%; padding: 8px 12px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--bg-primary); color: var(--text-primary); font-size: 14px;">
-                                    <small style="color: var(--text-secondary); font-size: 0.75rem;">Single brand / movie / show / property name. Matched against URL + COMMON_NAME (same predicate as Profile IQ).</small>
+                                    <small style="color: var(--text-secondary); font-size: 0.75rem;">Single brand / movie / show / property name. In mention mode this is the cohort definition. In conversion mode it&apos;s optional &mdash; used only to tag events as &quot;about the brand.&quot;</small>
+                                </div>
+                                <div id="jiqConvModeBlock" style="display: none; margin-bottom: 1rem; padding: 0.75rem 1rem; border: 1px solid var(--accent-primary); border-radius: 8px; background: rgba(99,102,241,0.05);">
+                                    <div style="margin-bottom: 0.75rem;">
+                                        <label style="display: block; font-weight: 600; margin-bottom: 4px; font-size: 13px;">Conversion URL Patterns <span style="color: #ef4444;">*</span></label>
+                                        <textarea id="jiqConvUrlPatterns" rows="4" placeholder="fandango.com/the-goat&#10;atomtickets.com/the-goat&#10;amctheatres.com/the-goat&#10;regmovies.com/the-goat&#10;sonypictures.com/the-goat/checkout" style="width: 100%; padding: 8px 12px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--bg-primary); color: var(--text-primary); font-size: 13px; font-family: monospace; resize: vertical;"></textarea>
+                                        <small style="color: var(--text-secondary); font-size: 0.7rem;">Anyone hitting ANY of these URLs becomes a converter. We compute their purchase timestamp = first hit, then walk backwards to build the path. One pattern per line; substring match on full URL (case-insensitive).</small>
+                                    </div>
+                                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+                                        <div>
+                                            <label style="display: block; font-weight: 600; margin-bottom: 4px; font-size: 13px;">Days before purchase</label>
+                                            <input type="number" id="jiqDaysBeforeConv" min="1" max="365" value="90" style="width: 100%; padding: 8px 12px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--bg-primary); color: var(--text-primary); font-size: 14px;">
+                                            <small style="color: var(--text-secondary); font-size: 0.7rem;">Window pulled per converter, anchored on purchase.</small>
+                                        </div>
+                                        <div>
+                                            <label style="display: block; font-weight: 600; margin-bottom: 4px; font-size: 13px;">Steps before purchase</label>
+                                            <input type="number" id="jiqStepsBeforeConv" min="1" max="50" value="10" style="width: 100%; padding: 8px 12px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--bg-primary); color: var(--text-primary); font-size: 14px;">
+                                            <small style="color: var(--text-secondary); font-size: 0.7rem;">Last K events shown in the visual journey.</small>
+                                        </div>
+                                    </div>
+                                    <small style="display: block; margin-top: 0.5rem; color: var(--text-secondary); font-size: 0.7rem;"><strong>Auto-fallback:</strong> if &lt; 50 converters are found, we widen the cohort to anyone who hit the narrow URL patterns (above) so you still get a usable visual.</small>
                                 </div>
                                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1rem;">
                                     <div>
@@ -19022,8 +19057,26 @@
             </div>
 
             <div id="jiqDashContent" style="display: none; flex: 1; overflow-y: auto; padding: 1rem 1.25rem;">
+                <!-- Cohort-mode banner (conversion-anchored / mention / fallback) -->
+                <div id="jiqCohortBanner" style="display: none; padding: 0.6rem 0.9rem; border-radius: 8px; margin-bottom: 1rem; font-size: 0.82rem; font-weight: 500;"></div>
+
                 <!-- KPI strip -->
                 <div id="jiqKpiStrip" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 0.75rem; margin-bottom: 1rem;"></div>
+
+                <!-- Path to Purchase (BSFS-style visual journey) -->
+                <div class="card" id="jiqPathCard" style="padding: 1rem; margin-bottom: 1rem; display: none;">
+                    <div style="display: flex; justify-content: space-between; align-items: baseline; flex-wrap: wrap; gap: 0.5rem;">
+                        <h3 style="margin: 0 0 0.5rem;">🛒 Path to Purchase</h3>
+                        <div id="jiqPathMeta" style="font-size: 0.72rem; color: var(--text-secondary);"></div>
+                    </div>
+                    <div style="font-size: 0.72rem; color: var(--text-secondary); margin-bottom: 0.75rem;">Right-aligned ribbon: each converter's last few events before purchase, collapsed into channel categories. Column height ∝ unique users at that step. Hover for the top hosts.</div>
+                    <div id="jiqPathRibbon" style="overflow-x: auto;"></div>
+                    <div style="margin-top: 1rem; padding-top: 0.75rem; border-top: 1px solid var(--border-color);">
+                        <div style="font-size: 0.85rem; font-weight: 600; margin-bottom: 0.4rem;">Top observed paths</div>
+                        <div style="font-size: 0.72rem; color: var(--text-secondary); margin-bottom: 0.5rem;">Most common ordered sequences (adjacent dups collapsed). The bigger the user count, the more reliably we can attribute the purchase to that sequence.</div>
+                        <div id="jiqPathTopPaths" style="overflow-x: auto;"></div>
+                    </div>
+                </div>
 
                 <!-- Cut-by dropdown + cluster switcher -->
                 <div style="display: flex; gap: 0.6rem; flex-wrap: wrap; margin-bottom: 1rem; padding-bottom: 0.6rem; border-bottom: 1px solid var(--border-color); align-items: center;">
@@ -27086,6 +27139,16 @@
                 }).catch(function() {});
         }
 
+        function onJiqCohortModeChange() {
+            var mode = (document.querySelector('input[name="jiqCohortMode"]:checked') || {}).value || 'mention';
+            var convBlock = document.getElementById('jiqConvModeBlock');
+            var tgt = document.getElementById('jiqTarget');
+            var tgtLbl = document.getElementById('jiqTargetReqLabel');
+            if (convBlock) convBlock.style.display = (mode === 'conversion') ? '' : 'none';
+            if (tgt) tgt.required = (mode !== 'conversion');
+            if (tgtLbl) tgtLbl.textContent = (mode === 'conversion') ? '(optional)' : '(required)';
+        }
+
         function submitJourneyIq() {
             var pn = (document.getElementById('jiqProjectName') || {}).value || '';
             var tg = (document.getElementById('jiqTarget') || {}).value || '';
@@ -27096,9 +27159,22 @@
             var ex = (document.getElementById('jiqExtraConvPatterns') || {}).value || '';
             var tpk = (document.getElementById('jiqExtraTouchpointKeywords') || {}).value || '';
             var nrw = (document.getElementById('jiqNarrowUrlPatterns') || {}).value || '';
+            var cohortMode = (document.querySelector('input[name="jiqCohortMode"]:checked') || {}).value || 'mention';
+            var convUrls = (document.getElementById('jiqConvUrlPatterns') || {}).value || '';
+            var daysBefore = parseInt((document.getElementById('jiqDaysBeforeConv') || {}).value || '90', 10);
+            var stepsBefore = parseInt((document.getElementById('jiqStepsBeforeConv') || {}).value || '10', 10);
             pn = pn.trim(); tg = tg.trim();
-            if (!pn || !tg || !sd || !ed) {
-                alert('Project, target, and date range are required.');
+            if (!pn || !sd || !ed) {
+                alert('Project name and date range are required.');
+                return;
+            }
+            if (cohortMode === 'conversion') {
+                if (!convUrls.trim()) {
+                    alert('Conversion-anchored mode requires at least one Conversion URL pattern.');
+                    return;
+                }
+            } else if (!tg) {
+                alert('Target is required in mention-based mode.');
                 return;
             }
             var btn = document.getElementById('jiqSubmitBtn');
@@ -27122,7 +27198,11 @@
                     forward_days: fw,
                     extra_conversion_patterns: ex,
                     extra_touchpoint_keywords: tpk,
-                    narrow_url_patterns: nrw
+                    narrow_url_patterns: nrw,
+                    cohort_mode: cohortMode,
+                    conversion_url_patterns: convUrls,
+                    days_before_conversion: daysBefore,
+                    steps_before_conversion: stepsBefore
                 })
             }).then(function(r) { return r.json(); }).then(function(data) {
                 if (data.error) {
@@ -27276,12 +27356,45 @@
             var title = document.getElementById('jiqDashTitle');
             var sub = document.getElementById('jiqDashSubtitle');
             if (title) title.textContent = (meta.project_name || meta.target || 'Digital Journey');
+            var cohortModeLbl = meta.cohort_mode || 'mention';
             if (sub) {
+                var windowStr;
+                if (cohortModeLbl === 'conversion') {
+                    windowStr = (meta.days_before_conversion || 90) + 'd before purchase / last '
+                              + (meta.steps_before_conversion || 10) + ' steps';
+                } else {
+                    windowStr = 'lookback ' + (meta.lookback_days != null ? meta.lookback_days : '?') + 'd'
+                              + ' / forward ' + (meta.forward_days != null ? meta.forward_days : '?') + 'd';
+                }
                 sub.textContent = 'Target: ' + (meta.target || '—')
                     + '  ·  ' + (meta.start_date || '') + ' → ' + (meta.end_date || '')
-                    + '  ·  lookback ' + (meta.lookback_days != null ? meta.lookback_days : '?') + 'd'
-                    + ' / forward ' + (meta.forward_days != null ? meta.forward_days : '?') + 'd'
+                    + '  ·  ' + windowStr
                     + (meta.matched_uids != null ? ('  ·  ' + _jiqFmt(meta.matched_uids) + ' matched users') : '');
+            }
+
+            // Cohort-mode banner: explains how the cohort was built and whether
+            // we had to fall back to a wider cohort to render the visual.
+            var banner = document.getElementById('jiqCohortBanner');
+            if (banner) {
+                if (meta.cohort_fallback_used) {
+                    banner.style.display = '';
+                    banner.style.background = 'rgba(245, 158, 11, 0.12)';
+                    banner.style.border = '1px solid rgba(245, 158, 11, 0.45)';
+                    banner.style.color = '#92400e';
+                    banner.innerHTML = '<strong>Auto-fallback:</strong> too few converters were found on the conversion URLs you supplied — we widened the cohort to anyone hitting your narrow URL patterns so the visual journey still renders. Touchpoint metrics now reflect this wider engagement cohort, not purchase-only.';
+                } else if (cohortModeLbl === 'conversion') {
+                    banner.style.display = '';
+                    banner.style.background = 'rgba(99, 102, 241, 0.10)';
+                    banner.style.border = '1px solid rgba(99, 102, 241, 0.35)';
+                    banner.style.color = 'var(--text-primary)';
+                    var convPatterns = (meta.conversion_url_patterns || []).slice(0, 5).join(', ');
+                    banner.innerHTML = '<strong>Conversion-anchored cohort:</strong> cohort = anyone who hit <code>'
+                        + _jiqEsc(convPatterns) + (meta.conversion_url_patterns && meta.conversion_url_patterns.length > 5 ? ', …' : '')
+                        + '</code>. Window = ' + (meta.days_before_conversion || 90)
+                        + ' days before each user\u2019s purchase. All conversion metrics are authoritative (purchase = the URL hit), not inferred.';
+                } else {
+                    banner.style.display = 'none';
+                }
             }
 
             // Populate cut-by dropdown from meta.cut_options (or fall back to
@@ -27378,6 +27491,9 @@
                 }
             }
 
+            // ---- Path to Purchase panel (BSFS-style ribbon) ----
+            renderJourneyIqPathToPurchase(d.path_to_purchase);
+
             // ---- Touchpoints panel ----
             renderJourneyIqTouchpoints(touchpoints);
 
@@ -27409,6 +27525,138 @@
             _jiqCurrentClusterIdx = 0;
             renderJourneyIqDashboard();
         };
+
+        // ---- Path to Purchase renderer (BSFS-style ribbon) ----
+        // Renders the multi-column right-aligned ribbon (Step -K ... Step -1 -> CONVERSION)
+        // plus the top observed paths (ordered K-grams).
+        function renderJourneyIqPathToPurchase(ptp) {
+            var card = document.getElementById('jiqPathCard');
+            var ribbonEl = document.getElementById('jiqPathRibbon');
+            var topPathsEl = document.getElementById('jiqPathTopPaths');
+            var metaEl = document.getElementById('jiqPathMeta');
+            if (!card || !ribbonEl) return;
+            var hasData = ptp && ptp.columns && ptp.columns.some(function(c) { return c.users > 0; });
+            if (!hasData) {
+                card.style.display = 'none';
+                return;
+            }
+            card.style.display = '';
+            if (metaEl) {
+                metaEl.textContent = (ptp.mode === 'converters'
+                    ? 'Cohort: ' + _jiqFmt(ptp.cohort_size) + ' converters'
+                    : 'Cohort: ' + _jiqFmt(ptp.cohort_size) + ' users (fallback — too few converters)')
+                    + '  ·  ' + (ptp.steps || 0) + '-step lookback';
+            }
+
+            // Color palette by touchpoint family — keeps the ribbon legible.
+            var palette = {
+                CONVERSION: '#10b981',
+                TICKETING: '#6366f1',
+                SHOWTIME_LOOKUP: '#8b5cf6',
+                GOOGLE_REVIEW: '#a855f7',
+                LANDING: '#0ea5e9',
+                BROWSE: '#0284c7',
+                PDP: '#0369a1',
+                CART: '#0c4a6e',
+                TRAILER: '#f59e0b',
+                SOCIAL_YOUTUBE: '#ef4444',
+                SOCIAL_TIKTOK: '#ec4899',
+                SOCIAL_INSTAGRAM: '#d946ef',
+                SOCIAL_X: '#1d4ed8',
+                SOCIAL_FACEBOOK: '#2563eb',
+                SOCIAL_REDDIT: '#f97316',
+                CREATOR_INFLUENCER: '#fb7185',
+                TALENT_MENTION: '#fbbf24',
+                BRAND_PARTNERSHIP: '#84cc16',
+                PRESS: '#64748b',
+                REVIEW: '#94a3b8',
+                STREAMING: '#7c3aed',
+                PAID_AD: '#dc2626',
+                ORGANIC_SEARCH: '#3b82f6',
+                AI_AGENT: '#14b8a6',
+                SOUNDTRACK: '#a3e635',
+                SEARCH: '#3b82f6',
+                DETOUR: '#cbd5e1'
+            };
+            function colorFor(label) {
+                if (palette[label]) return palette[label];
+                // Fallback: stable hash → HSL.
+                var h = 0;
+                for (var i = 0; i < label.length; i++) h = (h * 31 + label.charCodeAt(i)) % 360;
+                return 'hsl(' + h + ', 55%, 55%)';
+            }
+
+            var cohortN = Math.max(1, ptp.cohort_size || 1);
+            // Max users in any column drives the column-height scale so the
+            // tallest column fills ~180px and others shrink proportionally.
+            var maxUsers = 0;
+            ptp.columns.forEach(function(c) { if (c.users > maxUsers) maxUsers = c.users; });
+            maxUsers = Math.max(1, maxUsers);
+
+            ribbonEl.innerHTML =
+                '<div style="display: flex; gap: 6px; align-items: flex-end; min-height: 220px; padding: 0.5rem 0;">'
+                + ptp.columns.map(function(col) {
+                    var heightPx = Math.round(180 * (col.users / maxUsers));
+                    if (heightPx < 4 && col.users > 0) heightPx = 4;
+                    var labels = (col.top_labels || []).slice(0, 4);
+                    var stacks = labels.map(function(l) {
+                        var pct = Math.max(2, l.pct || 0);
+                        var color = colorFor(l.label);
+                        var tooltipHosts = (col.top_hosts || []).slice(0, 3)
+                            .map(function(h) { return h.host + ' (' + h.users + ')'; })
+                            .join(', ');
+                        return '<div title="' + _jiqEsc(l.label) + ': ' + l.users + ' users (' + l.pct + '%)\nTop hosts: ' + _jiqEsc(tooltipHosts) + '" '
+                             + 'style="background: ' + color + '; height: ' + pct + '%; min-height: 6px; '
+                             + 'display: flex; align-items: center; justify-content: center; '
+                             + 'color: #fff; font-size: 10px; font-weight: 600; '
+                             + 'border-bottom: 1px solid rgba(255,255,255,0.3); overflow: hidden;">'
+                             + (pct >= 15 ? _jiqEsc(l.label.substring(0, 12)) : '')
+                             + '</div>';
+                    }).join('');
+                    var headerStyle = (col.index === 0)
+                        ? 'background: var(--accent-primary); color: #fff;'
+                        : 'background: var(--bg-secondary); color: var(--text-primary);';
+                    return '<div style="flex: 1; min-width: 100px; max-width: 180px; display: flex; flex-direction: column; align-items: stretch;">'
+                         +   '<div style="height: ' + heightPx + 'px; display: flex; flex-direction: column; '
+                         +      'border: 1px solid var(--border-color); border-radius: 6px 6px 0 0; overflow: hidden;">'
+                         +     stacks
+                         +   '</div>'
+                         +   '<div style="padding: 6px 4px; ' + headerStyle + ' border: 1px solid var(--border-color); border-top: 0; '
+                         +      'border-radius: 0 0 6px 6px; text-align: center;">'
+                         +     '<div style="font-size: 11px; font-weight: 700;">' + _jiqEsc(col.label) + '</div>'
+                         +     '<div style="font-size: 10px; opacity: 0.8;">' + _jiqFmt(col.users) + ' users · ' + (col.users_pct || 0) + '%</div>'
+                         +   '</div>'
+                         + '</div>';
+                }).join('')
+                + '</div>';
+
+            // Top paths table
+            if (topPathsEl) {
+                if (!ptp.top_paths || !ptp.top_paths.length) {
+                    topPathsEl.innerHTML = '<div style="font-size:0.8rem;color:var(--text-secondary);">No high-confidence paths emerged (cohort too small or paths too varied). Lower the &quot;Steps before purchase&quot; on the next run or widen the cohort.</div>';
+                } else {
+                    topPathsEl.innerHTML = '<table style="width:100%; border-collapse: collapse; font-size: 12.5px;">'
+                        + '<thead><tr style="text-align:left;border-bottom:1px solid var(--border-color);">'
+                        +   '<th style="padding:6px 4px;width:60px;text-align:right;">Users</th>'
+                        +   '<th style="padding:6px 4px;width:60px;text-align:right;">% Cohort</th>'
+                        +   '<th style="padding:6px 4px;">Path</th>'
+                        + '</tr></thead><tbody>'
+                        + ptp.top_paths.map(function(p) {
+                            var pathHtml = p.path.map(function(step, i) {
+                                var color = colorFor(step);
+                                var arrow = (i < p.path.length - 1) ? ' <span style="color: var(--text-secondary); margin: 0 4px;">→</span> ' : '';
+                                return '<span style="display: inline-block; padding: 2px 8px; border-radius: 99px; background: ' + color + '; color: #fff; font-size: 11px; font-weight: 600;">'
+                                     + _jiqEsc(step) + '</span>' + arrow;
+                            }).join('');
+                            return '<tr style="border-bottom:1px solid var(--border-color);">'
+                                 + '<td style="padding:6px 4px;text-align:right;font-weight:600;">' + _jiqFmt(p.users) + '</td>'
+                                 + '<td style="padding:6px 4px;text-align:right;color:var(--text-secondary);">' + (p.users_pct || 0) + '%</td>'
+                                 + '<td style="padding:6px 4px;">' + pathHtml + '</td>'
+                                 + '</tr>';
+                        }).join('') + '</tbody></table>';
+                }
+            }
+        }
 
         // ---- Touchpoints renderer (table + overlap + touch distribution) ----
         function renderJourneyIqTouchpoints(tp) {

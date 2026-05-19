@@ -29918,6 +29918,10 @@ def _run_journey_iq(job_id):
             extra_conversion_patterns=params.get('extra_conversion_patterns') or [],
             extra_touchpoint_keywords=params.get('extra_touchpoint_keywords') or '',
             narrow_url_patterns=params.get('narrow_url_patterns') or [],
+            cohort_mode=params.get('cohort_mode') or 'mention',
+            conversion_url_patterns=params.get('conversion_url_patterns') or [],
+            days_before_conversion=int(params.get('days_before_conversion') or 90),
+            steps_before_conversion=int(params.get('steps_before_conversion') or 10),
             progress_cb=_cb,
             s3_client=s3_client,
         )
@@ -29985,10 +29989,37 @@ def submit_journey_iq():
             narrow_url_list = [str(p).strip() for p in (narrow_url_raw or []) if str(p).strip()]
         narrow_url_list = narrow_url_list[:50]
 
+        # Conversion-anchored cohort mode. When 'conversion', the conversion
+        # URL patterns ARE the cohort definition (we walk back from each user's
+        # purchase_ts); the target keyword is optional.
+        cohort_mode = (data.get('cohort_mode') or 'mention').strip().lower()
+        if cohort_mode not in ('mention', 'conversion'):
+            cohort_mode = 'mention'
+        conv_url_raw = data.get('conversion_url_patterns') or ''
+        if isinstance(conv_url_raw, str):
+            conv_url_list = [p.strip() for p in re.split(r'[\n,]+', conv_url_raw) if p.strip()]
+        else:
+            conv_url_list = [str(p).strip() for p in (conv_url_raw or []) if str(p).strip()]
+        conv_url_list = conv_url_list[:50]
+        try:
+            days_before_conv = int(data.get('days_before_conversion') or 90)
+        except Exception:
+            days_before_conv = 90
+        try:
+            steps_before_conv = int(data.get('steps_before_conversion') or 10)
+        except Exception:
+            steps_before_conv = 10
+        days_before_conv = max(1, min(days_before_conv, 365))
+        steps_before_conv = max(1, min(steps_before_conv, 50))
+
         if not project_name:
             return jsonify({'error': 'project_name required'}), 400
-        if not target:
-            return jsonify({'error': 'target required'}), 400
+        if not target and not (cohort_mode == 'conversion' and conv_url_list):
+            return jsonify({'error': 'target required (or supply conversion_url_patterns '
+                            'in conversion-anchored mode)'}), 400
+        if cohort_mode == 'conversion' and not conv_url_list:
+            return jsonify({'error': 'conversion_url_patterns required for '
+                            'conversion-anchored mode'}), 400
         if not start_date or not end_date:
             return jsonify({'error': 'start_date and end_date required'}), 400
         if lookback_days < 0 or lookback_days > 60:
@@ -30022,6 +30053,10 @@ def submit_journey_iq():
                 'extra_conversion_patterns': extra_patterns,
                 'extra_touchpoint_keywords': extra_tp_keywords,
                 'narrow_url_patterns':       narrow_url_list,
+                'cohort_mode':               cohort_mode,
+                'conversion_url_patterns':   conv_url_list,
+                'days_before_conversion':    days_before_conv,
+                'steps_before_conversion':   steps_before_conv,
             },
         }
         if s3_client:
