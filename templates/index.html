@@ -14821,6 +14821,27 @@
                                     <input type="text" id="jiqTarget" placeholder="e.g. Firestone, The Bear, Tesla Model 3" required style="width: 100%; padding: 8px 12px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--bg-primary); color: var(--text-primary); font-size: 14px;">
                                     <small style="color: var(--text-secondary); font-size: 0.75rem;">Single brand / movie / show / property name. In mention mode this is the cohort definition. In conversion mode it&apos;s optional &mdash; used only to tag events as &quot;about the brand.&quot;</small>
                                 </div>
+                                <div style="margin-bottom: 1rem; padding: 0.6rem 0.8rem; border: 1px solid var(--border-color); border-radius: 8px; background: var(--bg-primary);">
+                                    <label style="display: flex; align-items: center; gap: 8px; font-size: 13px; cursor: pointer; font-weight: 600;">
+                                        <input type="checkbox" id="jiqIsMovie" onchange="onJiqIsMovieChange()">
+                                        <span>🎬 Target is a movie (enable box-office scaling + LLM synthesis)</span>
+                                    </label>
+                                    <div id="jiqMovieBlock" style="display: none; margin-top: 0.75rem;">
+                                        <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 0.75rem;">
+                                            <div>
+                                                <label style="display: block; font-weight: 600; margin-bottom: 4px; font-size: 13px;">US box office (USD millions) <span style="font-weight: 400; color: var(--text-secondary);">(required)</span></label>
+                                                <input type="number" id="jiqBoxOfficeMillions" min="0" step="0.1" placeholder="e.g. 185.0" style="width: 100%; padding: 8px 12px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--bg-primary); color: var(--text-primary); font-size: 14px;">
+                                                <small style="color: var(--text-secondary); font-size: 0.7rem;">Domestic gross to date. Used to compute implied audience = (box_office / ticket_price) &times; 77.5%.</small>
+                                            </div>
+                                            <div>
+                                                <label style="display: block; font-weight: 600; margin-bottom: 4px; font-size: 13px;">Avg ticket price</label>
+                                                <input type="number" id="jiqAvgTicketPrice" min="1" step="0.25" value="15.00" style="width: 100%; padding: 8px 12px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--bg-primary); color: var(--text-primary); font-size: 14px;">
+                                                <small style="color: var(--text-secondary); font-size: 0.7rem;">$15 default.</small>
+                                            </div>
+                                        </div>
+                                        <small style="display: block; margin-top: 0.5rem; color: var(--text-secondary); font-size: 0.7rem;"><strong>What this turns on:</strong> the dashboard will show a Panel / Modeled / Scaled / Blended toggle. <em>Panel</em> = raw counts our panel saw. <em>Scaled</em> = panel × (implied audience / panel converters) so reach matches box-office reality. <em>Modeled</em> = Claude-estimated journey for a movie of this scale + talent profile (used when the panel is too sparse). <em>Blended</em> (default) shows real metrics where the panel cohort is &ge;25 converters and modeled where it&apos;s sparser.</small>
+                                    </div>
+                                </div>
                                 <div id="jiqConvModeBlock" style="display: none; margin-bottom: 1rem; padding: 0.75rem 1rem; border: 1px solid var(--accent-primary); border-radius: 8px; background: rgba(99,102,241,0.05);">
                                     <div style="margin-bottom: 0.75rem;">
                                         <label style="display: block; font-weight: 600; margin-bottom: 4px; font-size: 13px;">Conversion URL Patterns <span style="color: #ef4444;">*</span></label>
@@ -19059,6 +19080,13 @@
             <div id="jiqDashContent" style="display: none; flex: 1; overflow-y: auto; padding: 1rem 1.25rem;">
                 <!-- Cohort-mode banner (conversion-anchored / mention / fallback) -->
                 <div id="jiqCohortBanner" style="display: none; padding: 0.6rem 0.9rem; border-radius: 8px; margin-bottom: 1rem; font-size: 0.82rem; font-weight: 500;"></div>
+
+                <!-- Movie mode view-toggle: Panel / Scaled / Modeled / Blended -->
+                <div id="jiqMovieViewToggle" style="display: none; padding: 0.6rem 0.9rem; border-radius: 8px; margin-bottom: 1rem; background: rgba(99,102,241,0.06); border: 1px solid rgba(99,102,241,0.25); align-items: center; gap: 0.6rem; flex-wrap: wrap;">
+                    <span style="font-size: 0.78rem; font-weight: 700;">🎬 Movie mode view:</span>
+                    <div id="jiqMovieViewBtns" style="display: flex; gap: 4px;"></div>
+                    <span id="jiqMovieViewMeta" style="font-size: 0.72rem; color: var(--text-secondary); margin-left: auto;"></span>
+                </div>
 
                 <!-- KPI strip -->
                 <div id="jiqKpiStrip" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 0.75rem; margin-bottom: 1rem;"></div>
@@ -27149,6 +27177,14 @@
             if (tgtLbl) tgtLbl.textContent = (mode === 'conversion') ? '(optional)' : '(required)';
         }
 
+        function onJiqIsMovieChange() {
+            var on = !!(document.getElementById('jiqIsMovie') || {}).checked;
+            var block = document.getElementById('jiqMovieBlock');
+            if (block) block.style.display = on ? '' : 'none';
+            var bo = document.getElementById('jiqBoxOfficeMillions');
+            if (bo) bo.required = on;
+        }
+
         function submitJourneyIq() {
             var pn = (document.getElementById('jiqProjectName') || {}).value || '';
             var tg = (document.getElementById('jiqTarget') || {}).value || '';
@@ -27163,6 +27199,9 @@
             var convUrls = (document.getElementById('jiqConvUrlPatterns') || {}).value || '';
             var daysBefore = parseInt((document.getElementById('jiqDaysBeforeConv') || {}).value || '90', 10);
             var stepsBefore = parseInt((document.getElementById('jiqStepsBeforeConv') || {}).value || '10', 10);
+            var isMovie = !!(document.getElementById('jiqIsMovie') || {}).checked;
+            var boxOfficeM = parseFloat((document.getElementById('jiqBoxOfficeMillions') || {}).value || '0');
+            var ticketPrice = parseFloat((document.getElementById('jiqAvgTicketPrice') || {}).value || '15');
             pn = pn.trim(); tg = tg.trim();
             if (!pn || !sd || !ed) {
                 alert('Project name and date range are required.');
@@ -27175,6 +27214,10 @@
                 }
             } else if (!tg) {
                 alert('Target is required in mention-based mode.');
+                return;
+            }
+            if (isMovie && (!boxOfficeM || boxOfficeM <= 0)) {
+                alert('Movie mode requires US box office in millions (e.g. 185 for $185M).');
                 return;
             }
             var btn = document.getElementById('jiqSubmitBtn');
@@ -27202,7 +27245,10 @@
                     cohort_mode: cohortMode,
                     conversion_url_patterns: convUrls,
                     days_before_conversion: daysBefore,
-                    steps_before_conversion: stepsBefore
+                    steps_before_conversion: stepsBefore,
+                    is_movie: isMovie,
+                    box_office_millions: boxOfficeM,
+                    avg_ticket_price: ticketPrice
                 })
             }).then(function(r) { return r.json(); }).then(function(data) {
                 if (data.error) {
@@ -27316,6 +27362,7 @@
                     _jiqCurrentRun = payload.data;
                     _jiqCurrentClusterIdx = 0;
                     _jiqCurrentCut = 'inception';
+                    window._jiqCurrentView = 'blended';
                     if (loading) loading.style.display = 'none';
                     if (content) content.style.display = '';
                     renderJourneyIqDashboard();
@@ -27335,8 +27382,77 @@
             try { return Number(n).toLocaleString(); } catch (e) { return String(n); }
         }
 
-        function renderJourneyIqDashboard() {
+        // Movie-mode view selector: which slice of the summary to render.
+        // 'panel'   = raw panel observation (always real)
+        // 'scaled'  = panel counts × (implied_audience / panel_converters)
+        // 'modeled' = Claude-estimated journey at implied audience scale
+        // 'blended' (default) = real when N >= 25 converters; otherwise modeled
+        if (typeof window._jiqCurrentView === 'undefined') window._jiqCurrentView = 'blended';
+
+        function _jiqViewSlice() {
             var d = _jiqCurrentRun || {};
+            var meta = d.meta || {};
+            var hasModeled = !!d.modeled_view;
+            var hasScaled  = !!d.scaled_view;
+            // No movie-mode data -> just return raw d.
+            if (!hasModeled && !hasScaled) {
+                return { data: d, label: 'panel', source: 'panel' };
+            }
+            var v = _jiqCurrentView;
+            // Blended logic: real when panel converters >= threshold (25),
+            // otherwise modeled. We use real summary directly when blending
+            // to real; modeled view when blending to modeled.
+            if (v === 'blended') {
+                var realConv = (d.kpis && d.kpis.converted_users) || 0;
+                v = (realConv >= 25 || !hasModeled) ? 'panel' : 'modeled';
+            }
+            if (v === 'modeled' && hasModeled) {
+                var m = d.modeled_view;
+                return {
+                    data: {
+                        meta: meta,
+                        kpis: m.kpis || {},
+                        clusters: d.clusters || [],   // synth doesn't produce cluster cuts
+                        cuts: d.cuts || {},
+                        touchpoints: m.touchpoints || {},
+                        path_to_purchase: m.path_to_purchase || {},
+                        keywords: d.keywords || [],
+                        post_hosts: d.post_hosts || [],
+                        facts: d.facts || []
+                    },
+                    label: 'modeled', source: m.source || 'fallback'
+                };
+            }
+            if (v === 'scaled' && hasScaled) {
+                var s = d.scaled_view;
+                return {
+                    data: {
+                        meta: meta,
+                        kpis: s.kpis || d.kpis || {},
+                        clusters: s.clusters || d.clusters || [],
+                        cuts: s.cuts || d.cuts || {},
+                        touchpoints: s.touchpoints || d.touchpoints || {},
+                        path_to_purchase: s.path_to_purchase || d.path_to_purchase || {},
+                        keywords: s.keywords || d.keywords || [],
+                        post_hosts: s.post_hosts || d.post_hosts || [],
+                        facts: d.facts || []
+                    },
+                    label: 'scaled', source: 'panel × ' + (s.scaling_factor || 1) + 'x'
+                };
+            }
+            // Default: panel
+            return { data: d, label: 'panel', source: 'panel' };
+        }
+
+        function setJourneyIqView(v) {
+            window._jiqCurrentView = v || 'blended';
+            renderJourneyIqDashboard();
+        }
+
+        function renderJourneyIqDashboard() {
+            var fullRun = _jiqCurrentRun || {};
+            var slice = _jiqViewSlice();
+            var d = slice.data;
             var meta = d.meta || {};
             var kpis = d.kpis || {};
             var cuts = d.cuts || {};
@@ -27344,6 +27460,39 @@
             var keywords = d.keywords || [];
             var postHosts = d.post_hosts || [];
             var facts = d.facts || [];
+
+            // Render movie-mode view toggle when modeled/scaled views exist
+            var toggleEl = document.getElementById('jiqMovieViewToggle');
+            var btnsEl = document.getElementById('jiqMovieViewBtns');
+            var toggleMetaEl = document.getElementById('jiqMovieViewMeta');
+            var hasMovieViews = !!(fullRun.modeled_view || fullRun.scaled_view);
+            if (toggleEl) toggleEl.style.display = hasMovieViews ? 'flex' : 'none';
+            if (btnsEl && hasMovieViews) {
+                var views = [
+                    { id: 'blended',  label: 'Blended', help: 'Real where N≥25, modeled where sparse (default)' },
+                    { id: 'panel',    label: 'Panel',   help: 'Raw panel observation' },
+                ];
+                if (fullRun.scaled_view)  views.push({ id: 'scaled',  label: 'Scaled to BO', help: 'Panel × (implied audience / panel converters)' });
+                if (fullRun.modeled_view) views.push({ id: 'modeled', label: 'Modeled',     help: 'Claude estimate sized to implied audience' });
+                btnsEl.innerHTML = views.map(function(v) {
+                    var active = (v.id === window._jiqCurrentView);
+                    var bg = active ? 'var(--accent-primary)' : 'var(--bg-secondary)';
+                    var color = active ? '#fff' : 'var(--text-primary)';
+                    return '<button type="button" title="' + _jiqEsc(v.help) + '" onclick="setJourneyIqView(\'' + v.id + '\')" '
+                         + 'style="padding: 4px 10px; border-radius: 6px; border: 1px solid var(--border-color); '
+                         + 'background: ' + bg + '; color: ' + color + '; font-size: 12px; cursor: pointer; font-weight: 600;">'
+                         + _jiqEsc(v.label) + '</button>';
+                }).join('');
+            }
+            if (toggleMetaEl) {
+                var ia = meta.implied_audience || 0;
+                var sf = meta.scaling_factor || 0;
+                toggleMetaEl.textContent = 'Box office: $' + (meta.box_office_millions || 0) + 'M'
+                    + (ia ? '  ·  implied audience: ' + _jiqFmt(ia) : '')
+                    + (sf > 1 ? '  ·  scaling: ' + sf.toFixed(1) + 'x' : '')
+                    + '  ·  currently viewing: ' + slice.label.toUpperCase()
+                    + (slice.source && slice.source !== slice.label ? ' (' + slice.source + ')' : '');
+            }
 
             // Determine active cut + cluster list. Fall back to the legacy
             // top-level `clusters` (inception) when the run pre-dates cuts.

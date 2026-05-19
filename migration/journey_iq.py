@@ -340,6 +340,9 @@ def run_job(
     conversion_url_patterns: Optional[Any] = None,
     days_before_conversion: int = 90,
     steps_before_conversion: int = 10,
+    is_movie: bool = False,
+    box_office_millions: float = 0.0,
+    avg_ticket_price: float = 15.0,
     progress_cb: Optional[Callable[..., None]] = None,
     s3_client: Any = None,
     ch_connect: Optional[Callable[..., Any]] = None,
@@ -403,6 +406,15 @@ def run_job(
     forward_days  = max(0, min(int(forward_days  or DEFAULT_FORWARD_DAYS), 60))
     days_before   = max(1, min(int(days_before_conversion or 90), 365))
     steps_before  = max(1, min(int(steps_before_conversion or 10), 50))
+    is_movie      = bool(is_movie)
+    try:
+        box_office_millions = max(0.0, float(box_office_millions or 0.0))
+    except Exception:
+        box_office_millions = 0.0
+    try:
+        avg_ticket_price = max(1.0, float(avg_ticket_price or 15.0))
+    except Exception:
+        avg_ticket_price = 15.0
     conv_patterns = tuple(CONVERSION_PATTERNS) + tuple(
         p.strip().lower() for p in (extra_conversion_patterns or []) if p and p.strip()
     )
@@ -731,6 +743,62 @@ def run_job(
         except Exception as e:
             print(f"[Journey IQ] insights pass failed (non-fatal): {e}")
 
+        # ── Phase 6.5: Movie scaling + Claude synthesis (movie mode only) ─
+        # When is_movie=True AND box_office_millions > 0, compute the
+        # implied audience and stash both:
+        #   * `panel`    — the raw panel observation (always real)
+        #   * `modeled`  — Claude's estimate sized to the implied audience
+        #   * `scaled`   — panel scaled up to match implied audience
+        # The dashboard's view-mode toggle (Panel / Modeled / Scaled / Blended)
+        # picks which one to render; `path_to_purchase` etc. at the top
+        # level always reflect the "blended" default per
+        # `blend_real_and_modeled`.
+        modeled_block: Optional[dict] = None
+        scaled_block:  Optional[dict] = None
+        implied_audience = 0
+        scaling_factor = 1.0
+        if is_movie and box_office_millions > 0:
+            try:
+                from migration.journey_iq_synthesize import (
+                    compute_implied_audience, compute_scaling_factor,
+                    synthesize_movie_journey, synth_to_dashboard_payload,
+                    scale_summary_counts,
+                )
+                _p(88, 'Movie mode: scaling to box office + synthesizing canonical journey...')
+                real_converters = int(kpis.get('converted_users') or 0)
+                implied_audience = compute_implied_audience(
+                    box_office_millions=box_office_millions,
+                    ticket_price=avg_ticket_price,
+                )
+                scaling_factor = compute_scaling_factor(
+                    implied_audience=implied_audience,
+                    panel_converters=real_converters,
+                )
+
+                # Claude synthesis — always generated in movie mode so the
+                # dashboard can show "Modeled" side-by-side with "Panel".
+                synth = synthesize_movie_journey(
+                    target=target,
+                    project_name=project_name,
+                    start_date=start_date,
+                    end_date=end_date,
+                    box_office_millions=box_office_millions,
+                    ticket_price=avg_ticket_price,
+                    extra_touchpoint_keywords=extra_kw_map,
+                    panel_converters=real_converters,
+                    panel_observed_touchpoints=(touchpoints.get('rows') or [])[:15],
+                    panel_top_paths=(path_to_purchase.get('top_paths') or [])[:5],
+                    steps=steps_before,
+                ) or {}
+                if synth:
+                    modeled_block = synth_to_dashboard_payload(
+                        synth, target_audience=max(implied_audience, 1),
+                    )
+                    modeled_block['source'] = synth.get('source', 'fallback')
+                    modeled_block['notes']  = synth.get('notes', '')
+            except Exception as e:
+                print(f"[Journey IQ] movie synthesis failed (non-fatal): {e}")
+
         # ── Phase 7: write to S3 ──────────────────────────────────────────
         _p(95, 'Writing results to S3...')
         summary = {
@@ -750,6 +818,11 @@ def run_job(
                 'conversion_url_patterns': list(conv_url_patterns),
                 'days_before_conversion': days_before,
                 'steps_before_conversion': steps_before,
+                'is_movie':       is_movie,
+                'box_office_millions': box_office_millions,
+                'avg_ticket_price': avg_ticket_price,
+                'implied_audience': implied_audience,
+                'scaling_factor':   scaling_factor,
                 'cut_options':    [{'key': k, 'label': lbl} for k, lbl in CUT_DISPLAY_ORDER],
                 'created_by':     username,
                 'created_at':     datetime.utcnow().isoformat() + 'Z',
@@ -767,6 +840,29 @@ def run_job(
             'path_to_purchase': path_to_purchase,
             'facts':       facts,
         }
+        # Attach the modeled + scaled views when movie mode is active. The
+        # dashboard reads these from `summary.modeled_view` /
+        # `summary.scaled_view`; the legacy top-level keys above always
+        # hold the raw panel observation so older dashboards still render.
+        if modeled_block is not None:
+            summary['modeled_view'] = modeled_block
+        if is_movie and box_office_millions > 0 and scaling_factor > 1.0:
+            try:
+                from migration.journey_iq_synthesize import scale_summary_counts
+                scaled_block = scale_summary_counts(summary, scaling_factor)
+                summary['scaled_view'] = {
+                    'kpis':             scaled_block.get('kpis'),
+                    'touchpoints':      scaled_block.get('touchpoints'),
+                    'path_to_purchase': scaled_block.get('path_to_purchase'),
+                    'cuts':             scaled_block.get('cuts'),
+                    'clusters':         scaled_block.get('clusters'),
+                    'keywords':         scaled_block.get('keywords'),
+                    'post_hosts':       scaled_block.get('post_hosts'),
+                    'scaling_factor':   scaling_factor,
+                    'implied_audience': implied_audience,
+                }
+            except Exception as e:
+                print(f"[Journey IQ] scaling failed (non-fatal): {e}")
         s3_key = _persist(s3_client, summary, project_name, username, job_id)
         summary['s3_key'] = s3_key
         _p(100, 'Digital Journey IQ complete.')

@@ -29922,6 +29922,9 @@ def _run_journey_iq(job_id):
             conversion_url_patterns=params.get('conversion_url_patterns') or [],
             days_before_conversion=int(params.get('days_before_conversion') or 90),
             steps_before_conversion=int(params.get('steps_before_conversion') or 10),
+            is_movie=bool(params.get('is_movie') or False),
+            box_office_millions=float(params.get('box_office_millions') or 0.0),
+            avg_ticket_price=float(params.get('avg_ticket_price') or 15.0),
             progress_cb=_cb,
             s3_client=s3_client,
         )
@@ -30012,6 +30015,18 @@ def submit_journey_iq():
         days_before_conv = max(1, min(days_before_conv, 365))
         steps_before_conv = max(1, min(steps_before_conv, 50))
 
+        # Movie mode — enables box-office scaling + Claude-driven synthesis
+        # of a plausible journey when the panel cohort is sparse.
+        is_movie = bool(data.get('is_movie'))
+        try:
+            box_office_m = max(0.0, float(data.get('box_office_millions') or 0.0))
+        except Exception:
+            box_office_m = 0.0
+        try:
+            ticket_price = max(1.0, float(data.get('avg_ticket_price') or 15.0))
+        except Exception:
+            ticket_price = 15.0
+
         if not project_name:
             return jsonify({'error': 'project_name required'}), 400
         if not target and not (cohort_mode == 'conversion' and conv_url_list):
@@ -30057,6 +30072,9 @@ def submit_journey_iq():
                 'conversion_url_patterns':   conv_url_list,
                 'days_before_conversion':    days_before_conv,
                 'steps_before_conversion':   steps_before_conv,
+                'is_movie':                  is_movie,
+                'box_office_millions':       box_office_m,
+                'avg_ticket_price':          ticket_price,
             },
         }
         if s3_client:
