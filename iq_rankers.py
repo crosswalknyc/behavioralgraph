@@ -831,17 +831,15 @@ def aggregate_leaderboard(
     LIMIT {int(limit)}
     """
 
+    # Let ClickHouse exceptions bubble up to the Flask route so the API
+    # returns a real 5xx instead of a 200 with empty rows that the UI
+    # silently shows as "No data yet". The route's outer try/except logs
+    # and serializes the error for the client.
     conn = ch_connect()
     try:
         cur = conn.cursor()
         cur.execute(sql)
         rows = cur.fetchall()
-    except Exception as ex:
-        print(f"[iq_rankers] leaderboard query failed: {ex}")
-        traceback.print_exc()
-        return {"rows": [], "error": str(ex)[:300],
-                "window": {"start": s, "end": e,
-                           "prev_start": ps, "prev_end": pe}}
     finally:
         try:
             conn.close()

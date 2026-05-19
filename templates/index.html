@@ -76008,7 +76008,14 @@
                 })
                 .catch(err => {
                     console.error('[RankerIQ] Netflix load error', err);
+                    // Hide the spinner and the whole load block on error so
+                    // it doesn't bleed through under the Talent / Brands
+                    // tabs (which don't depend on the Netflix fetch).
+                    if (loadProgress) loadProgress.style.display = 'none';
+                    if (loadDone) loadDone.style.display = 'none';
                     if (loadStatus) loadStatus.textContent = 'Error: ' + (err.message || err);
+                    const block = document.getElementById('rankerIQLoadBlock');
+                    if (block) block.style.display = 'none';
                 });
         }
         
@@ -76192,6 +76199,12 @@
             const btn = document.getElementById(btnId);
             if (panel) panel.classList.add('active');
             if (btn) btn.classList.add('active');
+            // The legacy #rankerIQLoadBlock is the Netflix-fetch status panel.
+            // Hide it for every non-Netflix tab so the spinner / "Error: No
+            // Netflix ranker data..." message doesn't bleed through the
+            // Talent and Brands leaderboards.
+            const loadBlock = document.getElementById('rankerIQLoadBlock');
+            if (loadBlock) loadBlock.style.display = (id === 'netflix') ? '' : 'none';
             if (id === 'netflix') showRankerIQNetflixSubTab('daily');
             else if (id === 'goodshort') loadGoodshortRankerData();
             else if (id === 'shorttv') loadShortstvRankerData();
