@@ -5337,21 +5337,30 @@ def get_admin_content():
     # Always load persisted cache from S3 so category/display name updates are visible
     load_persisted_cache()
     
-    # Check AWS credentials
+    # Prefer the already-initialized global s3_client (which falls back to
+    # boto3's default credential chain — env vars, ~/.aws/credentials, IAM role).
+    # Only construct a fresh client if the global one failed to init AND env vars are present.
     aws_key = os.environ.get('AWS_ACCESS_KEY_ID')
     aws_secret = os.environ.get('AWS_SECRET_ACCESS_KEY')
-    
-    if not aws_key or not aws_secret:
-        print("❌ AWS credentials not configured")
-        return jsonify({'success': False, 'error': 'AWS credentials not configured'})
-    
+
     try:
-        s3_endpoint = f'https://s3.{S3_REGION}.amazonaws.com'
-        s3 = boto3.client('s3',
-                          aws_access_key_id=aws_key,
-                          aws_secret_access_key=aws_secret,
-                          region_name=S3_REGION,
-                          endpoint_url=s3_endpoint)
+        if s3_client is not None:
+            s3 = s3_client
+        else:
+            s3_endpoint = f'https://s3.{S3_REGION}.amazonaws.com'
+            s3 = boto3.client(
+                's3',
+                aws_access_key_id=aws_key,  # None is OK — boto3 falls back to default chain
+                aws_secret_access_key=aws_secret,
+                region_name=S3_REGION,
+                endpoint_url=s3_endpoint,
+            )
+
+        try:
+            s3.list_buckets()
+        except NoCredentialsError:
+            print("❌ AWS credentials not configured (no env vars, no ~/.aws/credentials, no IAM role)")
+            return jsonify({'success': False, 'error': 'AWS credentials not configured'})
         
         bucket_name = 'dashboard-inputs'
         print(f"📂 Scanning S3 bucket: {bucket_name}")
@@ -30583,16 +30592,17 @@ def iq_rankers_leaderboard():
 @app.route('/api/iq-rankers/categories', methods=['GET'])
 @requires_auth
 def iq_rankers_categories():
-    """Return the static master → subcategory map used to render the sub-tabs."""
+    """Return the static master → subcategory map used to render the sub-tabs.
+
+    Includes every registered master (TALENT, BRAND, CONTENT, PLATFORMS,
+    SPORT, TRENDS, GEN POP) plus a synthetic 'OTHER' bucket the UI uses
+    for profiles whose subcategory doesn't fall into any curated optgroup.
+    """
     if _iq_rankers is None:
         return jsonify({'success': False, 'error': 'IQ Rankers unavailable'}), 500
-    return jsonify({
-        'success': True,
-        'categories': {
-            'TALENT': _iq_rankers.MASTER_CATEGORIES['TALENT'],
-            'BRAND':  _iq_rankers.MASTER_CATEGORIES['BRAND'],
-        },
-    })
+    cats = {k: list(v) for k, v in _iq_rankers.MASTER_CATEGORIES.items()}
+    cats.setdefault('OTHER', [])
+    return jsonify({'success': True, 'categories': cats})
 
 
 @app.route('/api/iq-rankers/profile/<path:profile_subject>/timeseries', methods=['GET'])

@@ -53,7 +53,7 @@ MASTER_CATEGORIES: dict[str, list[str]] = {
         "TELECOM", "TICKETING", "TOY", "TRAVEL", "VENUE", "WORKOUT FACILITY",
     ],
     "TALENT": [
-        "ACTOR", "ATHLETE", "CREATOR/INFLUENCER", "INFLUENCER/CREATOR",
+        "ACTOR", "ATHLETE", "INFLUENCER/CREATOR",
         "EMERGING TALENT", "HOST/PERSONALITY", "MUSICIAN/BAND", "PODCASTER",
         "POLITICS/ACTIVIST", "WRITER/DIRECTOR/AUTHOR/ARTIST",
     ],
@@ -73,6 +73,27 @@ MASTER_CATEGORIES: dict[str, list[str]] = {
 }
 
 
+# Aliases that fold into a canonical subcategory at ingest time. Keys are
+# case-normalized (UPPER, stripped). Add new aliases here as profile data
+# drifts — keeps the leaderboard tabs and the persisted rows consistent.
+SUBCATEGORY_ALIASES: dict[str, str] = {
+    "CREATOR/INFLUENCER": "INFLUENCER/CREATOR",
+}
+
+
+def normalize_subcategory(subcategory: str) -> str:
+    """Canonicalize a raw subcategory string.
+
+    Upper-cases, strips, and applies SUBCATEGORY_ALIASES so equivalent
+    spellings collapse into one bucket (e.g. CREATOR/INFLUENCER →
+    INFLUENCER/CREATOR). Empty / None becomes 'UNCATEGORIZED'.
+    """
+    if not subcategory:
+        return "UNCATEGORIZED"
+    sub = str(subcategory).upper().strip()
+    return SUBCATEGORY_ALIASES.get(sub, sub)
+
+
 def get_master_category(subcategory: str) -> str:
     """Return the master bucket for a raw BRAND CATEGORY value.
 
@@ -81,7 +102,7 @@ def get_master_category(subcategory: str) -> str:
     """
     if not subcategory:
         return "OTHER"
-    sub = subcategory.upper().strip()
+    sub = normalize_subcategory(subcategory)
     if sub == "SVOD ACQUISITION":
         return "SVOD ACQUISITION"
     for master, subs in MASTER_CATEGORIES.items():
@@ -642,7 +663,7 @@ def run_daily_for_all_profiles(
             continue
         s3_key       = j.get("s3_key") or j.get("job_id") or ""
         project_name = j.get("display_name") or j.get("project_name") or subject
-        subcategory  = (j.get("category") or "UNCATEGORIZED").upper().strip()
+        subcategory  = normalize_subcategory(j.get("category"))
         master       = get_master_category(subcategory)
         try:
             terms = read_brand_input_from_csv(s3_client, s3_bucket, s3_key)
