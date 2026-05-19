@@ -23,6 +23,7 @@ import re
 import time
 import threading
 import logging
+import uuid
 from contextlib import contextmanager
 from typing import Any, Optional
 
@@ -105,78 +106,112 @@ def get_clickhouse_throttle_stats() -> dict:
 
 CH_HOST       = os.environ.get('CH_HOST',       '168.119.215.48')
 CH_PORT       = int(os.environ.get('CH_PORT',   '8123'))
-CH_USER       = os.environ.get('CH_USER',       'jessie')
-CH_PASSWORD   = os.environ.get('CH_PASSWORD',   '5Icl8SvwmzWMiZUNMZfv')
+CH_USER       = os.environ.get('CH_USER',       'bgapp')
+CH_PASSWORD   = os.environ.get('CH_PASSWORD',   '4qPllwDG+S3PptBWTRAJPTkpCzkRZ6tZ')
 CH_DATABASE   = os.environ.get('CH_DATABASE',   'clickstream')
 
 
-# ── Default per-query settings ────────────────────────────────────────────────
-# These are sent on every query for this client. They roughly reproduce the
-# behavior we used to lean on Snowflake's 6XL warehouse for: fully utilize
-# every core, exploit the (DELIVERED, UID, COMMON_NAME) sort order on
-# clickstream_final, pick a smart JOIN algorithm per query, and spill to disk
-# instead of OOM'ing if a query gets bigger than expected.
-#
-# Tuned for the live Hetzner CH host (755 GiB RAM, 48+ cores) running with
-# the cross-tool BG_CLICKHOUSE_CONCURRENCY=10 throttle defined above.
-CH_DEFAULT_SETTINGS = {
-    "max_threads": 24,
-    # Stream rows in primary-key order — huge win for clickstream_final since
-    # most Profile-Analysis queries filter on DELIVERED first.
-    "optimize_read_in_order": 1,
-    "optimize_aggregation_in_order": 1,
+# Default per-query settings applied to every connection. These match the
+# heavy-aggregation profile used by Subscriber IQ and SF→LF Conversion
+# (long full-table scans of clickstream_final). Override per-call by passing
+# `settings={...}` to `connect_clickhouse(...)` or per-query via
+# `cur.execute(sql, settings={...})`.
+DEFAULT_QUERY_SETTINGS: dict[str, Any] = {
+    # 2-hour cap; full-year profile scans with 29 brand LIKE conditions
+    # regularly exceed 30 min on the 48B-row clickstream table.
+    'max_execution_time':           7200,
+    # Hard cap per query: 80 GiB (was 50 GiB).
+    #
+    # Host inventory as of 2026-05-18:
+    #   - 168.119.215.48 — 1,133 GiB total RAM (NOT 755 as the prior
+    #     comment claimed; the connector had been tuned for an older,
+    #     smaller box).
+    #   - ClickHouse server-side `max_server_memory_usage` = 963 GiB
+    #     (85% of host RAM).
+    #   - Server-side `max_memory_usage` for the bgapp user = 466 GiB
+    #     (effectively no per-user cap — the connector's cap is the
+    #     active constraint).
+    #
+    # Sizing math:
+    #   - Reserve ~150 GiB for OS page cache (CH leans on this heavily
+    #     for hot-data table scans).
+    #   - Usable budget for query memory ≈ 983 GiB.
+    #   - Heaviest observed single query (Costco PRE_SAMPLED_CLICKSTREAM
+    #     CTAS, 47B-row scan + window-function sort): 94 GiB peak.
+    #   - At 80 GiB cap × 10 in-process concurrent slots = 800 GiB peak.
+    #     Fits with ~180 GiB headroom.
+    #   - For parallel profile runs (launched as separate processes,
+    #     each with its own 10-slot semaphore), the practical ceiling
+    #     is ~10 simultaneous profile pipelines before the 800 GiB
+    #     ceiling becomes uncomfortable. See `/tmp/run_parallel.py`
+    #     for the staged launcher.
+    #
+    # The spill settings below keep the in-memory portion bounded —
+    # large group-by/sort spills to disk before hitting this cap, so
+    # legitimate huge aggregations still finish (just slower).
+    #
+    # Override per-query via `settings={...}` when a single-shot job
+    # (admin reconciliation, full-clickstream backfill) needs more
+    # headroom. Override globally via `BG_CH_QUERY_MEMORY_GIB` env var.
+    'max_memory_usage':             int(os.environ.get(
+        'BG_CH_QUERY_MEMORY_GIB', '80')) * 1024 * 1024 * 1024,
+    # Spill to disk on large group-by/sort instead of crashing.
+    'max_bytes_before_external_group_by': 100 * 1024 * 1024 * 1024,
+    'max_bytes_before_external_sort':     100 * 1024 * 1024 * 1024,
+    'max_threads':                  48,
+    # Stream rows in primary-key order — clickstream_final is sorted by
+    # (DELIVERED, UID, COMMON_NAME), so date-bounded queries skip the
+    # full-merge step.
+    'optimize_read_in_order':        1,
+    # If the data is sorted by the GROUP BY columns, skip the hash table.
+    # Big win on time-series rollups (per-month, per-day).
+    'optimize_aggregation_in_order': 1,
     # Let the planner choose between parallel_hash / hash / partial_merge /
     # grace_hash on a per-query basis. parallel_hash is by far the fastest
-    # for the small-build-side joins Profile Analysis does (TEMP_SAMPLED_UIDS,
-    # ELIGIBLE_UIDS, HOST_MAPPING).
-    "join_algorithm": "parallel_hash,hash,partial_merge,grace_hash",
-    # Spill to disk on large group-by/sort instead of crashing.
-    "max_bytes_before_external_group_by": 40_000_000_000,   # 40 GB
-    "max_bytes_before_external_sort":     40_000_000_000,   # 40 GB
-    # Hard cap per query: 50 GiB. Tuned for the *real* concurrency now that
-    # the cross-tool BG_CLICKHOUSE_CONCURRENCY semaphore allows up to 10
-    # heavy queries simultaneously. 10 × 50 GiB = 500 GiB peak demand —
-    # safely fits in the 755 GiB host RAM with ~250 GiB headroom for OS
-    # page cache (which CH leans on for hot data). The previous 120 GiB
-    # cap × 10 concurrent = 1.2 TiB, which would OOM the box. Spill
-    # settings above kick in before this is hit, so legitimate huge
-    # aggregations still finish — they just stream to disk instead of
-    # blowing through the budget. Override per-query via `settings={...}`
-    # if a single-shot pipeline genuinely needs more.
-    "max_memory_usage":                   50_000_000_000,   # 50 GB
-    # Mutations issued through this connection are awaited before returning,
-    # so callers can safely read-after-write on temp tables.
-    "mutations_sync": 2,
-    # Deduplicate identical INSERTs within a 60-second window — protects against
-    # accidental double-runs from the dashboard.
-    "insert_deduplicate": 1,
+    # for the small-build-side joins we usually do; grace_hash is the
+    # graceful fallback when the build side is enormous.
+    'join_algorithm':               'parallel_hash,hash,partial_merge,grace_hash',
+    # Larger batches over HTTP — fewer round-trips for big result sets.
+    'max_block_size':               65536,
     # Profile Analysis builds long inline IN-lists of hostnames (one per
     # quick-select). The default 256 KiB query parser limit blows up at
     # ~262 KB with `Max query size exceeded`. 16 MiB is plenty headroom
     # and well under the server-side hard limit.
-    "max_query_size": 16 * 1024 * 1024,
-    # 2-hour cap; full-year profile scans with 29 brand LIKE conditions
-    # regularly exceed 30 min on the 48B-row clickstream table.
-    "max_execution_time": 7200,
+    'max_query_size':               16 * 1024 * 1024,
+    # Apply ALTER mutations synchronously so callers can read-after-write
+    # safely. Profile Analysis doesn't issue mutations but other migration
+    # scripts on this connector do.
+    'mutations_sync':               2,
 }
 
 
 def connect_clickhouse(settings: Optional[dict] = None):
     """Connect to ClickHouse. Returns a Snowflake-compatible wrapper.
 
-    `settings` (optional) overrides/augments CH_DEFAULT_SETTINGS for every
-    query made on this connection. Per-call overrides on a specific
-    statement still take precedence (pass `settings=` to `cur.execute`).
+    `settings` (optional) overrides/augments DEFAULT_QUERY_SETTINGS for
+    every query made on this connection. Use this when one workload (e.g.
+    Subscriber IQ) needs a longer timeout or a different memory ceiling
+    than the defaults.
     """
-    merged_settings = dict(CH_DEFAULT_SETTINGS)
+    merged_settings = dict(DEFAULT_QUERY_SETTINGS)
     if settings:
         merged_settings.update(settings)
+    # Pin an explicit session_id per connection so CREATE TEMPORARY TABLE
+    # survives across separate HTTP requests on the same Client. Without
+    # this, pandas read_sql (which opens its own cursor for each query)
+    # silently lands on a fresh anonymous session and any temp table
+    # built by an earlier cur.execute() is gone -> "Unknown table
+    # expression identifier TEMP_XXX". A per-connection uuid keeps
+    # parallel connections isolated while making every cursor on this
+    # connection share the same session.
+    session_id = f"bg-{uuid.uuid4().hex}"
     client = clickhouse_connect.get_client(
         host=CH_HOST,
         port=CH_PORT,
         username=CH_USER,
         password=CH_PASSWORD,
         database=CH_DATABASE,
+        session_id=session_id,
         connect_timeout=30,
         send_receive_timeout=10800,
         settings=merged_settings,
@@ -210,17 +245,15 @@ FUNC_REPLACEMENTS = [
     (r'\bNVL\s*\(([^,]+),\s*([^)]+)\)',  r'ifNull(\1, \2)'),
     # IFF → if
     (r'\bIFF\s*\(',                      r'if('),
-    # DATEADD: handled by _rewrite_dateadd (balanced-paren walker) before
-    # FUNC_REPLACEMENTS runs. Regex form left behind for reference only.
-    # DATEDIFF — all common units (day, minute, second, hour, week, month, year)
-    (r"DATEDIFF\s*\(\s*'?(day|minute|second|hour|week|month|year)s?'?\s*,\s*([^,]+),\s*([^)]+)\)",
-     lambda m: f"dateDiff('{m.group(1).lower()}', {m.group(2)}, {m.group(3)})"),
     # CONVERT_TIMEZONE
     (r"CONVERT_TIMEZONE\s*\([^,]+,\s*'([^']+)'\s*,\s*([^)]+)\)",
      r"toTimeZone(\2, '\1')"),
-    # TO_DATE handled by _rewrite_to_date before FUNC_REPLACEMENTS runs.
     # TO_TIMESTAMP
     (r'\bTO_TIMESTAMP\s*\(([^)]+)\)',   r'toDateTime(\1)'),
+    # NOTE: DATEADD, DATEDIFF, TO_DATE, TO_CHAR are handled separately below
+    # via balanced-paren scanners (`_rewrite_dateadd_datediff_todate`,
+    # `_rewrite_to_char`) because their arguments can contain nested function
+    # calls with commas/parens that a regex `[^)]+` can't capture safely.
     # CURRENT_DATE → today()
     (r'\bCURRENT_DATE\(\)',             r'today()'),
     (r'\bCURRENT_DATE\b',              r'today()'),
@@ -295,188 +328,6 @@ CAST_TYPE_MAP = {
 }
 
 
-# ── Balanced-paren helpers for Snowflake→ClickHouse rewrites ─────────────────
-# These walkers correctly handle nested calls and quoted strings, which the
-# simple [^)]+ regexes in FUNC_REPLACEMENTS cannot.
-
-_SF_FMT_TOKENS = [
-    ('YYYY', '%Y'), ('YY', '%y'),
-    ('MONTH', '%B'), ('MON', '%b'), ('MM', '%m'),
-    ('DAY', '%A'), ('DY', '%a'), ('DD', '%d'),
-    ('HH24', '%H'), ('HH12', '%I'), ('HH', '%H'),
-    ('MI', '%M'), ('SS', '%S'),
-]
-_SF_FMT_TOKENS.sort(key=lambda p: -len(p[0]))
-
-
-def _sf_format_to_ch(fmt: str) -> str:
-    out = []
-    i = 0
-    while i < len(fmt):
-        matched = False
-        for tok, repl in _SF_FMT_TOKENS:
-            if fmt[i:i + len(tok)].upper() == tok:
-                out.append(repl)
-                i += len(tok)
-                matched = True
-                break
-        if not matched:
-            out.append(fmt[i])
-            i += 1
-    return ''.join(out)
-
-
-def _find_matching_paren(text: str, open_idx: int) -> int:
-    """Given the index of an opening '(' in text, return the index of its
-    matching ')'. Respects single-quoted strings (with '' escape). Returns -1
-    if no match."""
-    depth = 1
-    j = open_idx + 1
-    n = len(text)
-    while j < n and depth > 0:
-        c = text[j]
-        if c == '(':
-            depth += 1
-        elif c == ')':
-            depth -= 1
-            if depth == 0:
-                return j
-        elif c == "'":
-            j += 1
-            while j < n:
-                if text[j] == "'" and j + 1 < n and text[j + 1] == "'":
-                    j += 2
-                    continue
-                if text[j] == "'":
-                    break
-                j += 1
-        j += 1
-    return -1
-
-
-def _split_top_level_args(inner: str) -> list[str]:
-    """Split a comma-separated argument list at the top paren/quote level."""
-    args = []
-    depth = 0
-    buf = []
-    i = 0
-    n = len(inner)
-    while i < n:
-        c = inner[i]
-        if c == '(':
-            depth += 1
-            buf.append(c)
-        elif c == ')':
-            depth -= 1
-            buf.append(c)
-        elif c == "'":
-            buf.append(c)
-            i += 1
-            while i < n:
-                if inner[i] == "'" and i + 1 < n and inner[i + 1] == "'":
-                    buf.append("''")
-                    i += 2
-                    continue
-                buf.append(inner[i])
-                if inner[i] == "'":
-                    break
-                i += 1
-        elif c == ',' and depth == 0:
-            args.append(''.join(buf).strip())
-            buf = []
-        else:
-            buf.append(c)
-        i += 1
-    tail = ''.join(buf).strip()
-    if tail or args:
-        args.append(tail)
-    return args
-
-
-def _rewrite_call(text: str, name: str, handler) -> str:
-    """Find every case-insensitive call `name(...)` in text, pass its
-    balanced arg list to `handler(args) -> str`, and substitute."""
-    out = []
-    i = 0
-    n = len(text)
-    pat = re.compile(r'\b' + re.escape(name) + r'\s*\(', re.IGNORECASE)
-    while i < n:
-        m = pat.search(text, i)
-        if not m:
-            out.append(text[i:])
-            break
-        out.append(text[i:m.start()])
-        open_paren = m.end() - 1
-        close = _find_matching_paren(text, open_paren)
-        if close == -1:
-            out.append(text[m.start():])
-            break
-        inner = text[open_paren + 1:close]
-        args = _split_top_level_args(inner)
-        replacement = handler(args)
-        if replacement is None:
-            out.append(text[m.start():close + 1])
-        else:
-            out.append(replacement)
-        i = close + 1
-    return ''.join(out)
-
-
-def _rewrite_to_char(text: str) -> str:
-    def h(args):
-        if len(args) != 2:
-            return None
-        expr = args[0]
-        fmt_arg = args[1].strip()
-        if len(fmt_arg) >= 2 and fmt_arg[0] == "'" and fmt_arg[-1] == "'":
-            fmt = fmt_arg[1:-1]
-            return f"formatDateTime({expr}, '{_sf_format_to_ch(fmt)}')"
-        return None
-    return _rewrite_call(text, 'TO_CHAR', h)
-
-
-def _rewrite_to_date(text: str) -> str:
-    def h(args):
-        if len(args) == 1:
-            return f'toDate({args[0]})'
-        if len(args) == 2:
-            expr = args[0]
-            fmt_arg = args[1].strip()
-            if len(fmt_arg) >= 2 and fmt_arg[0] == "'" and fmt_arg[-1] == "'":
-                fmt = fmt_arg[1:-1].upper()
-                if fmt in ('YYYY-MM-DD', 'YYYY/MM/DD'):
-                    return f'toDate({expr})'
-                return f"toDate(parseDateTimeOrNull({expr}, '{_sf_format_to_ch(fmt)}'))"
-        return None
-    return _rewrite_call(text, 'TO_DATE', h)
-
-
-_DATEADD_UNIT_MAP = {
-    'DAY': 'addDays', 'DAYS': 'addDays',
-    'WEEK': 'addWeeks', 'WEEKS': 'addWeeks',
-    'MONTH': 'addMonths', 'MONTHS': 'addMonths',
-    'QUARTER': 'addQuarters', 'QUARTERS': 'addQuarters',
-    'YEAR': 'addYears', 'YEARS': 'addYears',
-    'HOUR': 'addHours', 'HOURS': 'addHours',
-    'MINUTE': 'addMinutes', 'MINUTES': 'addMinutes',
-    'SECOND': 'addSeconds', 'SECONDS': 'addSeconds',
-}
-
-
-def _rewrite_dateadd(text: str) -> str:
-    def h(args):
-        if len(args) != 3:
-            return None
-        unit = args[0].strip().strip("'").upper()
-        fn = _DATEADD_UNIT_MAP.get(unit)
-        if not fn:
-            return None
-        n_arg = args[1].strip()
-        expr = args[2].strip()
-        return f'{fn}({expr}, {n_arg})'
-    return _rewrite_call(text, 'DATEADD', h)
-
-
 def translate_sql(sql: str) -> str:
     """Translate Snowflake SQL to ClickHouse SQL."""
     result = sql
@@ -485,12 +336,11 @@ def translate_sql(sql: str) -> str:
     for pattern, replacement in TABLE_MAP.items():
         result = re.sub(pattern, replacement, result, flags=re.IGNORECASE)
 
-    # ── Balanced-paren rewrites (must run before FUNC_REPLACEMENTS) ───────
-    # Handle nested calls like DATEADD(MONTH, 1, TO_DATE(x || '-01', 'YYYY-MM-DD'))
-    # that the FUNC_REPLACEMENTS regexes (which use [^)]+) would mangle.
-    result = _rewrite_to_char(result)
-    result = _rewrite_to_date(result)
-    result = _rewrite_dateadd(result)
+    # Balanced-paren rewrites for date functions whose args can themselves
+    # contain nested function calls (e.g. DATEADD(MONTH, 1, TO_DATE(x || y, 'fmt'))).
+    # These run BEFORE the regex-based FUNC_REPLACEMENTS to avoid a regex
+    # like `[^)]+` greedily eating an inner ')'.
+    result = _rewrite_balanced_funcs(result)
 
     # Function replacements
     for pattern, replacement in FUNC_REPLACEMENTS:
@@ -527,12 +377,10 @@ def translate_sql(sql: str) -> str:
     result = _rewrite_qualify(result)
 
     # ── LIKE ... ESCAPE 'x'  → strip ESCAPE clause ────────────────────────
-    # ClickHouse's LIKE uses '\' as the default escape character, which is
-    # exactly what Snowflake's  `ESCAPE '\\'`  requests.  ClickHouse rejects
-    # the explicit ESCAPE clause with a SYNTAX_ERROR, so we drop it.
-    # Only safe when the callers escape with '\' (bg.py's `_escape_brand_for_sql`
-    # does).  If a caller ever used a different escape char this would quietly
-    # change semantics, but we have none in this repo.
+    # ClickHouse's LIKE uses '\' as the default escape character, matching
+    # Snowflake's `ESCAPE '\\'`. ClickHouse rejects the explicit ESCAPE
+    # clause with a SYNTAX_ERROR, so we drop it. Safe as long as callers
+    # use '\' for escapes (bg.py's `_escape_brand_for_sql` does).
     result = re.sub(
         r"\s+ESCAPE\s+'(?:\\\\|\\|[^'])'",
         '',
@@ -643,25 +491,24 @@ def translate_sql(sql: str) -> str:
         result = re.sub(rf'\b{alias}\.value\b', f'{alias}_value', result)
 
     # ── CREATE OR REPLACE TEMP TABLE → CH temporary table ─────────────────
-    # Snowflake "OR REPLACE" semantic = drop-then-create; we must emit an
-    # explicit DROP so stale rows from an earlier statement/session can't
-    # persist (CREATE TEMP TABLE IF NOT EXISTS would silently skip the
-    # SELECT if the table already exists in the session).
-    #
+    # Snowflake "CREATE OR REPLACE" semantics = drop-then-create. ClickHouse
+    # has no native equivalent for temporary tables, so we emit a paired
+    # DROP + CREATE (the cursor's compound-statement path handles the `;\n`).
+    # The OLD `CREATE TEMPORARY TABLE IF NOT EXISTS` translation was buggy:
+    # if the same connection reused a temp table name (retry, multi-stage
+    # job), the second CREATE was a silent no-op and downstream reads would
+    # see stale data from the first run.
     # Self-referential case (CREATE OR REPLACE TEMP TABLE X AS ... FROM X):
-    # if we just emitted DROP X then CREATE X AS SELECT FROM X, the SELECT
-    # would fail because X is gone. Snapshot via a swap temp table first so
-    # the rebuild is safe. This pattern is common in bg.py whenever an
-    # iterative pipeline applies a cap/sample/transform onto its own
-    # working table (PRE_SAMPLED_CLICKSTREAM, BEHAVIOR_EVENTS, BEHAVIOR_FINAL).
-    def _replace_create_or_replace_temp(m):
+    # the naive DROP X then CREATE X AS SELECT FROM X breaks because X is gone
+    # before the SELECT runs. Snapshot via a swap temp table first so the
+    # rebuild is safe. This pattern is common in iterative pipelines that
+    # apply a cap/sample/transform onto their own working table.
+    _swap_targets: list[tuple[str, str]] = []  # [(swap_name, real_name), ...]
+
+    def _ctas_self_aware(m):
         name = m.group(1)
-        # Look at the rest of the SQL after "AS" for any FROM <name> or
-        # JOIN <name> reference. We strip string literals first so a brand
-        # name like "Burger King X" doesn't false-positive.
         after = result[m.end():]
         after_sanitized = re.sub(r"'[^']*'", "''", after)
-        # Stop scanning at the first statement terminator outside strings.
         stop = re.search(r';\s*$', after_sanitized, re.MULTILINE)
         scope = after_sanitized[:stop.start()] if stop else after_sanitized
         is_self_ref = bool(re.search(
@@ -670,33 +517,20 @@ def translate_sql(sql: str) -> str:
         ))
         if is_self_ref:
             swap = f'_ch_swap_{name}'
+            _swap_targets.append((swap, name))
             return (
                 f'DROP TABLE IF EXISTS {swap};\n'
                 f'CREATE TEMPORARY TABLE {swap} ENGINE = Memory AS'
-            ), swap, name
+            )
         return (
             f'DROP TABLE IF EXISTS {name};\n'
             f'CREATE TEMPORARY TABLE {name} ENGINE = Memory AS'
-        ), None, name
-
-    # We need post-processing for self-ref: after the SELECT body, append
-    # the swap → rename sequence. Easiest is two passes.
-    _swap_targets: list[tuple[str, str]] = []  # [(swap_name, real_name), ...]
-
-    def _ctas_pass1(m):
-        replacement, swap, name = _replace_create_or_replace_temp(m)
-        if swap:
-            _swap_targets.append((swap, name))
-        return replacement
+        )
 
     result = re.sub(
         r'CREATE\s+OR\s+REPLACE\s+TEMP(?:ORARY)?\s+TABLE\s+(\w+)\s+AS\b',
-        _ctas_pass1, result, flags=re.IGNORECASE,
+        _ctas_self_aware, result, flags=re.IGNORECASE,
     )
-
-    # Append the swap sequence at the very end of the translated SQL for
-    # any self-referential rebuilds we detected. Order matters: each pair
-    # was emitted in source order, so we tail-append in the same order.
     for swap, name in _swap_targets:
         result = result.rstrip().rstrip(';') + (
             f';\nDROP TABLE IF EXISTS {name};\n'
@@ -709,8 +543,7 @@ def translate_sql(sql: str) -> str:
         name = m.group(1)
         col_defs = m.group(2)
         translated_cols = _translate_column_defs(col_defs)
-        return (f'DROP TABLE IF EXISTS {name};\n'
-                f'CREATE TEMPORARY TABLE {name} ({translated_cols}) ENGINE = Memory')
+        return f'CREATE TEMPORARY TABLE IF NOT EXISTS {name} ({translated_cols}) ENGINE = Memory'
     result = re.sub(
         r'CREATE\s+OR\s+REPLACE\s+TEMP(?:ORARY)?\s+TABLE\s+(\w+)\s*\(([^)]+)\)',
         replace_temp_ddl, result, flags=re.IGNORECASE
@@ -738,6 +571,35 @@ def translate_sql(sql: str) -> str:
         replace_from_values, result, flags=re.IGNORECASE
     )
 
+    # Snowflake (also seen in Subscriber IQ): "SELECT col FROM VALUES (1),(2),(3) AS t(col)"
+    # → ClickHouse: "SELECT arrayJoin([1, 2, 3]) AS col"
+    def replace_from_values_aliased(m):
+        select_col = m.group(1).strip()
+        values_str = m.group(2)
+        alias_col = m.group(3).strip()
+        # Pull every (literal) item — strings or numbers
+        items = re.findall(r"\(\s*('[^']*'|[^),\s]+)\s*\)", values_str)
+        if not items or select_col != alias_col:
+            return m.group(0)
+        arr = ', '.join(items)
+        return f"SELECT arrayJoin([{arr}]) AS {alias_col}"
+    result = re.sub(
+        r"SELECT\s+(\w+)\s+FROM\s+VALUES\s+(\([^)]+\)(?:\s*,\s*\([^)]+\))*)\s+AS\s+\w+\s*\(\s*(\w+)\s*\)",
+        replace_from_values_aliased, result, flags=re.IGNORECASE
+    )
+
+    # ── TO_CHAR(date_expr, 'format') → formatDateTime ─────────────────────
+    # Run AFTER DATE_TRUNC translation so nested DATE_TRUNC has been
+    # rewritten to toStartOfMonth(...) etc. before we wrap it.
+    result = _rewrite_to_char(result)
+
+    # ── Snowflake `||` string concat → ClickHouse concat() ────────────────
+    # In Snowflake, `||` is ALWAYS string concatenation (Snowflake uses OR
+    # for boolean OR). ClickHouse's `||` is logical OR — using it on strings
+    # silently produces wrong results. We translate every `a || b` occurrence
+    # (repeatedly, to handle chains like `a || b || c`) into `concat(a, b)`.
+    result = _rewrite_pipe_concat(result)
+
     # ── REGEXP operator → match() ─────────────────────────────────────────
     # Snowflake: WHERE col REGEXP 'pattern'
     # ClickHouse: WHERE match(col, 'pattern')
@@ -764,21 +626,255 @@ def translate_sql(sql: str) -> str:
     return result
 
 
-_CTAS_PREFIX_RE = re.compile(
-    r'^(\s*CREATE\s+(?:OR\s+REPLACE\s+)?(?:TEMP(?:ORARY)?\s+)?TABLE\s+\w+\s+AS\s+)',
-    re.IGNORECASE,
-)
+_DATEADD_UNIT_TO_FN = {
+    'day':    'addDays',
+    'days':   'addDays',
+    'week':   'addWeeks',
+    'weeks':  'addWeeks',
+    'month':  'addMonths',
+    'months': 'addMonths',
+    'year':   'addYears',
+    'years':  'addYears',
+    'hour':   'addHours',
+    'hours':  'addHours',
+    'minute': 'addMinutes',
+    'minutes':'addMinutes',
+    'second': 'addSeconds',
+    'seconds':'addSeconds',
+}
 
 
-def _split_ctas_prefix(inner_sql: str) -> tuple[str, str]:
-    """If `inner_sql` starts with `CREATE [OR REPLACE] [TEMP] TABLE <name> AS`,
-    split off that prefix so QUALIFY wrapping happens *only* on the SELECT.
-    Returns (ctas_prefix, rest). When no CTAS prefix, ctas_prefix == ''.
+def _split_top_level_args(s: str) -> list[str]:
+    """Split a comma-separated arg list at top level (depth 0), respecting
+    parens and string literals."""
+    out: list[str] = []
+    depth = 0
+    in_str = False
+    start = 0
+    for i, c in enumerate(s):
+        if c == "'" and (i == 0 or s[i - 1] != "\\"):
+            in_str = not in_str
+            continue
+        if in_str:
+            continue
+        if c == '(':
+            depth += 1
+        elif c == ')':
+            depth -= 1
+        elif c == ',' and depth == 0:
+            out.append(s[start:i].strip())
+            start = i + 1
+    tail = s[start:].strip()
+    if tail:
+        out.append(tail)
+    return out
+
+
+def _find_matching_paren(sql: str, open_pos: int) -> int:
+    """Given the index of an '(' in sql, return index of its matching ')',
+    or -1 if unbalanced. Respects string literals."""
+    depth = 1
+    in_str = False
+    j = open_pos + 1
+    while j < len(sql):
+        c = sql[j]
+        if c == "'" and (j == 0 or sql[j - 1] != "\\"):
+            in_str = not in_str
+        elif not in_str:
+            if c == '(':
+                depth += 1
+            elif c == ')':
+                depth -= 1
+                if depth == 0:
+                    return j
+        j += 1
+    return -1
+
+
+def _rewrite_balanced_funcs(sql: str) -> str:
+    """Rewrite DATEADD, DATEDIFF, and TO_DATE using a proper balanced-paren
+    scanner. Repeats until no further rewrites happen so nested calls
+    (e.g. DATEADD(month, 1, TO_DATE(...))) get the inner one converted first.
+
+    NOTE: case-SENSITIVE match on the function names. Snowflake SQL
+    consistently uses uppercase `DATEADD`/`DATEDIFF`/`TO_DATE`, while our
+    ClickHouse replacements are camelCase (`addMonths`, `dateDiff`, `toDate`).
+    A case-insensitive match here would re-find already-translated lowercase
+    forms, burn iterations, and leave the real Snowflake calls untouched.
     """
-    m = _CTAS_PREFIX_RE.match(inner_sql)
-    if not m:
-        return '', inner_sql
-    return inner_sql[:m.end()], inner_sql[m.end():]
+    func_pat = re.compile(r"\b(DATEADD|DATEDIFF|TO_DATE)\s*\(")
+    for _ in range(20):  # bound iterations — depth of date-func nesting we'd ever see
+        m = func_pat.search(sql)
+        if not m:
+            break
+        # Find the right "innermost" call: scan for any match whose args
+        # contain no further DATEADD/DATEDIFF/TO_DATE call. By rewriting
+        # innermost-first we avoid the broken-paren issue.
+        target: tuple[int, int, str, str] | None = None  # (start, end, fname, args)
+        for mm in func_pat.finditer(sql):
+            open_paren = mm.end() - 1
+            close_paren = _find_matching_paren(sql, open_paren)
+            if close_paren == -1:
+                continue
+            inner = sql[open_paren + 1:close_paren]
+            if not func_pat.search(inner):
+                target = (mm.start(), close_paren + 1, mm.group(1).upper(), inner)
+                break
+        if not target:
+            break
+        start, end, fname, inner = target
+        args = _split_top_level_args(inner)
+        replacement = _convert_date_func(fname, args)
+        if replacement is None:
+            # Couldn't translate — bail to avoid infinite loop. Use a
+            # placeholder marker and retry next pass without rematching.
+            break
+        sql = sql[:start] + replacement + sql[end:]
+    return sql
+
+
+def _convert_date_func(fname: str, args: list[str]) -> Optional[str]:
+    """Convert a single DATEADD/DATEDIFF/TO_DATE call (after splitting args
+    at top level) to its ClickHouse equivalent."""
+    if fname == 'TO_DATE':
+        # TO_DATE(expr) or TO_DATE(expr, 'fmt') → toDate(expr).
+        # ClickHouse parses ISO format YYYY-MM-DD natively; the format hint
+        # is dropped (matches Snowflake semantics for our use cases).
+        return f"toDate({args[0]})" if args else None
+    if fname == 'DATEADD':
+        if len(args) != 3:
+            return None
+        unit_raw = args[0].strip().strip("'\"").lower()
+        ch_fn = _DATEADD_UNIT_TO_FN.get(unit_raw)
+        if not ch_fn:
+            return None
+        # Snowflake: DATEADD(unit, n, date)  →  ClickHouse: addXxx(date, n)
+        return f"{ch_fn}({args[2]}, {args[1]})"
+    if fname == 'DATEDIFF':
+        if len(args) != 3:
+            return None
+        unit_raw = args[0].strip().strip("'\"").lower()
+        # Map common Snowflake aliases to canonical CH unit
+        unit_canonical = {
+            'day': 'day', 'days': 'day',
+            'week': 'week', 'weeks': 'week',
+            'month': 'month', 'months': 'month',
+            'year': 'year', 'years': 'year',
+            'hour': 'hour', 'hours': 'hour',
+            'minute': 'minute', 'minutes': 'minute',
+            'second': 'second', 'seconds': 'second',
+        }.get(unit_raw)
+        if not unit_canonical:
+            return None
+        return f"dateDiff('{unit_canonical}', {args[1]}, {args[2]})"
+    return None
+
+
+_TO_CHAR_FORMAT_MAP = {
+    'YYYY-MM-DD': '%Y-%m-%d',
+    'YYYY-MM':    '%Y-%m',
+    'YYYY':       '%Y',
+    'MM-DD-YYYY': '%m-%d-%Y',
+    'MM/DD/YYYY': '%m/%d/%Y',
+    'YYYYMMDD':   '%Y%m%d',
+    'YYYY-MM-DD HH24:MI:SS': '%Y-%m-%d %H:%M:%S',
+}
+
+
+def _rewrite_to_char(sql: str) -> str:
+    """Rewrite TO_CHAR(date_expr, 'format') → formatDateTime(date_expr, '<ch fmt>').
+
+    Uses a balanced-paren scanner to find the matching ')' so the date_expr
+    can contain nested function calls (DATE_TRUNC, MIN, etc.) which a
+    simple regex would mishandle.
+    """
+    out_parts: list[str] = []
+    i = 0
+    pat = re.compile(r"\bTO_CHAR\s*\(", re.IGNORECASE)
+    while i < len(sql):
+        m = pat.search(sql, i)
+        if not m:
+            out_parts.append(sql[i:])
+            break
+        out_parts.append(sql[i:m.start()])
+        # Walk forward from inside the open paren, tracking depth, to find
+        # the matching close paren.
+        j = m.end()
+        depth = 1
+        in_str = False
+        while j < len(sql) and depth > 0:
+            c = sql[j]
+            if c == "'" and (j == 0 or sql[j - 1] != "\\"):
+                in_str = not in_str
+            elif not in_str:
+                if c == '(':
+                    depth += 1
+                elif c == ')':
+                    depth -= 1
+            j += 1
+        if depth != 0:
+            out_parts.append(sql[m.start():])  # malformed — give up gracefully
+            break
+        inner = sql[m.end():j - 1]  # everything inside TO_CHAR(...)
+        # Split inner on the LAST top-level comma so the format literal is the
+        # right operand (date_expr can contain commas inside subcalls).
+        depth = 0
+        in_str = False
+        last_comma = -1
+        for k, c in enumerate(inner):
+            if c == "'" and (k == 0 or inner[k - 1] != "\\"):
+                in_str = not in_str
+            elif not in_str:
+                if c == '(':
+                    depth += 1
+                elif c == ')':
+                    depth -= 1
+                elif c == ',' and depth == 0:
+                    last_comma = k
+        if last_comma == -1:
+            # No format arg — leave untouched
+            out_parts.append(sql[m.start():j])
+        else:
+            date_expr = inner[:last_comma].strip()
+            fmt_lit = inner[last_comma + 1:].strip()
+            sf_fmt_match = re.fullmatch(r"'([^']+)'", fmt_lit)
+            if not sf_fmt_match:
+                out_parts.append(sql[m.start():j])
+            else:
+                sf_fmt = sf_fmt_match.group(1)
+                ch_fmt = _TO_CHAR_FORMAT_MAP.get(sf_fmt, sf_fmt)
+                out_parts.append(f"formatDateTime({date_expr}, '{ch_fmt}')")
+        i = j
+    return ''.join(out_parts)
+
+
+def _rewrite_pipe_concat(sql: str) -> str:
+    """Rewrite Snowflake `expr || expr` (string concat) into ClickHouse
+    `concat(expr, expr)`. Repeatedly fold the leftmost binary `||` until
+    none remain so chains (a || b || c) collapse into nested concats.
+
+    The operand regex matches a single "atom":
+        - quoted string literal ('...')
+        - column / qualified column (foo, foo.bar)
+        - balanced function call: name(...)  (no nested parens)
+        - parenthesized subexpression (no nested parens)
+    """
+    atom = (
+        r"(?:"
+        r"'(?:[^']|'')*'"          # 'literal' (handles '' escapes)
+        r"|\w+\s*\([^()]*\)"      # func(args)  — no nested parens
+        r"|\([^()]*\)"            # (subexpr)   — no nested parens
+        r"|\w+(?:\.\w+)*"         # ident or qualified.ident
+        r")"
+    )
+    pattern = re.compile(rf"({atom})\s*\|\|\s*({atom})")
+    prev = None
+    for _ in range(50):  # bound iterations defensively
+        if sql == prev:
+            break
+        prev = sql
+        sql = pattern.sub(r"concat(\1, \2)", sql)
+    return sql
 
 
 def _rewrite_qualify(sql: str) -> str:
@@ -787,11 +883,6 @@ def _rewrite_qualify(sql: str) -> str:
     Handles patterns like:
       QUALIFY ROW_NUMBER() OVER (PARTITION BY x ORDER BY y) = 1
       QUALIFY rn <= N
-
-    When the enclosing statement is  ``CREATE [OR REPLACE] [TEMP] TABLE x AS
-    SELECT ... QUALIFY ...``  the wrapper must apply only to the SELECT, not
-    to the whole DDL, otherwise we emit  ``SELECT * FROM (CREATE TABLE ...)``
-    which ClickHouse (rightly) rejects.
     """
     # Pattern 0 (fast path): QUALIFY ROW_NUMBER() OVER (PARTITION BY p ORDER BY o) <= N
     # → ORDER BY o LIMIT N BY p
@@ -799,9 +890,8 @@ def _rewrite_qualify(sql: str) -> str:
     # ClickHouse executes `LIMIT N BY` as a streaming top-N per group and never
     # materializes the full window function — typically 5-15× faster than the
     # subquery rewrite below for the wide PARTITION BY UID / ORDER BY DELIVERED
-    # patterns Profile Analysis uses. We only take this path when the outer
-    # SELECT has no other ORDER BY or LIMIT (otherwise we'd silently change
-    # query semantics) and the comparator is `<=` or `=` against a positive int.
+    # patterns Profile Analysis uses. Only safe when the outer SELECT has no
+    # other ORDER BY or LIMIT (otherwise we'd silently change query semantics).
     fast_match = re.search(
         r'\bQUALIFY\s+ROW_NUMBER\s*\(\s*\)\s*OVER\s*\(\s*'
         r'PARTITION\s+BY\s+(?P<part>[^()]+?)\s+'
@@ -811,17 +901,16 @@ def _rewrite_qualify(sql: str) -> str:
     )
     if fast_match:
         head = sql[:fast_match.start()].rstrip()
-        # Bail out if the SELECT already has its own LIMIT or ORDER BY at the
-        # top level — merging them is too risky to do via regex.
         head_no_strings = re.sub(r"'[^']*'", "''", head)
         if not re.search(r'\bORDER\s+BY\b', head_no_strings, re.IGNORECASE) \
                 and not re.search(r'\bLIMIT\b', head_no_strings, re.IGNORECASE):
-            part  = fast_match.group('part').strip()
+            part = fast_match.group('part').strip()
             order = fast_match.group('order').strip()
-            n     = fast_match.group('n')
+            n = fast_match.group('n')
             return f"{head}\nORDER BY {order} LIMIT {n} BY {part}"
 
     # Pattern 1: QUALIFY ROW_NUMBER() OVER (...) = 1
+    # → wrap in subquery with ROW_NUMBER as _rn, filter WHERE _rn = 1
     qualify_match = re.search(
         r'\bQUALIFY\s+ROW_NUMBER\s*\(\s*\)\s*OVER\s*\(([^)]+)\)\s*=\s*(\d+)',
         sql, re.IGNORECASE
@@ -829,18 +918,23 @@ def _rewrite_qualify(sql: str) -> str:
     if qualify_match:
         partition_clause = qualify_match.group(1)
         target_val = qualify_match.group(2)
-        head = sql[:qualify_match.start()].rstrip()
-        after = sql[qualify_match.end():]
-        ctas, inner_select = _split_ctas_prefix(head)
-        inner_select_with_rn = re.sub(
+        qualify_text = qualify_match.group(0)
+        inner_sql = sql[:qualify_match.start()].rstrip()
+        after_sql = sql[qualify_match.end():]
+        ctas_m = re.match(
+            r'(\s*CREATE\s+(?:OR\s+REPLACE\s+)?TEMP(?:ORARY)?\s+TABLE\s+\w+\s+AS\s)',
+            inner_sql, re.IGNORECASE,
+        )
+        prefix = ''
+        if ctas_m:
+            prefix = ctas_m.group(1)
+            inner_sql = inner_sql[ctas_m.end():]
+        inner_sql_with_rn = re.sub(
             r'\bFROM\b',
             f', ROW_NUMBER() OVER ({partition_clause}) AS _qual_rn FROM',
-            inner_select, count=1, flags=re.IGNORECASE
+            inner_sql, count=1, flags=re.IGNORECASE
         )
-        return (
-            f"{ctas}SELECT * FROM ({inner_select_with_rn}) _q "
-            f"WHERE _q._qual_rn = {target_val}{after}"
-        )
+        return f"{prefix}SELECT * FROM ({inner_sql_with_rn}) _q WHERE _q._qual_rn = {target_val}{after_sql}"
 
     # Pattern 2: QUALIFY alias <= N or QUALIFY alias = N
     qualify_match2 = re.search(
@@ -851,13 +945,19 @@ def _rewrite_qualify(sql: str) -> str:
         alias = qualify_match2.group(1)
         op = qualify_match2.group(2)
         val = qualify_match2.group(3)
-        head = sql[:qualify_match2.start()].rstrip()
-        after = sql[qualify_match2.end():]
-        ctas, inner_select = _split_ctas_prefix(head)
-        return (
-            f"{ctas}SELECT * FROM ({inner_select}) _q "
-            f"WHERE _q.{alias} {op} {val}{after}"
+        inner_sql = sql[:qualify_match2.start()].rstrip()
+        after_sql = sql[qualify_match2.end():]
+        # If the statement starts with CREATE ... TABLE ... AS, strip the DDL
+        # prefix so we only wrap the SELECT portion in the subquery.
+        ctas_m = re.match(
+            r'(\s*CREATE\s+(?:OR\s+REPLACE\s+)?TEMP(?:ORARY)?\s+TABLE\s+\w+\s+AS\s)',
+            inner_sql, re.IGNORECASE,
         )
+        prefix = ''
+        if ctas_m:
+            prefix = ctas_m.group(1)
+            inner_sql = inner_sql[ctas_m.end():]
+        return f"{prefix}SELECT * FROM ({inner_sql}) _q WHERE _q.{alias} {op} {val}{after_sql}"
 
     return sql
 
@@ -910,19 +1010,22 @@ class ClickHouseCursor:
 
         translated = translate_sql(sql)
 
-        # Per-query settings = cursor defaults overlaid with caller overrides.
-        # Plumbed through to BOTH client.query() (SELECT path) and
-        # client.command() (DDL/DML path) so per-statement budgets like
-        # `max_memory_usage` actually take effect on CTAS and INSERT, not
-        # just on plain SELECT. Profile Analysis's PRE_SAMPLED_CLICKSTREAM
-        # CTAS hit the connection-default 100-120 GiB cap on full-year
-        # ranges before this; the call site can now bump it to 300 GiB
-        # for that one statement and leave the default everywhere else.
+        # Per-query settings = connection defaults overlaid with caller overrides.
         merged_settings = dict(self._default_settings)
         if settings:
             merged_settings.update(settings)
 
-        # Handle compound statements (DROP + CREATE from CREATE OR REPLACE TABLE)
+        # Handle compound statements (DROP + CREATE from CREATE OR REPLACE TABLE).
+        # Pass merged_settings through to command() so DDL/DML benefit from
+        # per-query overrides too — specifically `max_memory_usage` and the
+        # `max_bytes_before_external_*` spill thresholds, which DO matter for
+        # CREATE TEMPORARY TABLE X AS SELECT (the SELECT half allocates the
+        # full intermediate result and ClickHouse-Profile caps win out unless
+        # we override per-statement). Profile Analysis's PRE_SAMPLED_CLICKSTREAM
+        # CTAS hit the 100 GiB user-profile cap on full-year ranges before
+        # this was wired up; the override raises the budget to ~300 GiB only
+        # for that one statement, the connection default still applies
+        # everywhere else.
         if ';\n' in translated:
             statements = [s.strip() for s in translated.split(';\n') if s.strip()]
             for stmt in statements[:-1]:
@@ -953,8 +1056,8 @@ class ClickHouseCursor:
                 self._column_names = result.column_names if hasattr(result, 'column_names') else []
                 self._description = [
                     (name, None, None, None, None, None, True)
-                    for name in (self._column_names or [])
-                ]
+                    for name in self._column_names
+                ] if self._column_names else None
             except Exception as e:
                 logger.warning("ClickHouse query error: %s\nSQL: %s", e, translated[:500])
                 raise
@@ -964,7 +1067,7 @@ class ClickHouseCursor:
             self._client.command(translated, settings=merged_settings or None)
             self._rows = []
             self._column_names = []
-            self._description = []
+            self._description = None
 
         self._pos = 0
         self.rowcount = len(self._rows)
