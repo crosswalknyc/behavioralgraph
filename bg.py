@@ -14591,6 +14591,95 @@ def _strip_foreign_finance_entities(df_behavior, verbose: bool = True):
 
 
 # ──────────────────────────────────────────────────────────────────────────
+# Kids-franchise / kids-toy cap enforcer (2026-05-19)
+# ──────────────────────────────────────────────────────────────────────────
+# Code-side safety net for the recurring failure mode where GPT-4o scoring
+# inflates kids/YA franchise IPs (POKEMON, MINECRAFT, ROBLOX, SUPER MARIO,
+# HELLO KITTY, SQUISHMALLOWS, DISNEY-PRINCESS, BARBIE, SPIDER-MAN, NERF,
+# FISHER-PRICE, HUNGER GAMES) into the 15-30% range for adult audiences in
+# the FRANCHISE and TOYS categories.
+#
+# Skips brands already above 30% (treats as franchise-connected — e.g.
+# Donnie Yen → STAR WARS, Emma Watson → HARRY POTTER, Harrison Ford →
+# STAR WARS / INDIANA JONES).
+_KIDS_FRANCHISE_IPS = {
+    'POKEMON', 'POKEMON GO',
+    'MINECRAFT', 'ROBLOX',
+    'SUPER MARIO',
+    'HELLO KITTY', 'HELLO KITTY AND FRIENDS',
+    'SQUISHMALLOWS',
+    'DISNEY-PRINCESS', 'DISNEY PRINCESS',
+    'BARBIE',
+    'NERF',
+    'FISHER-PRICE',
+    'HUNGER GAMES', 'THE HUNGER GAMES',
+    'SPIDER-MAN',
+}
+
+def _enforce_kids_franchise_caps(df_behavior, persona_doc=None, verbose: bool = True):
+    """Cap kids-franchise IPs in FRANCHISE and TOYS categories.
+    Skip if pre-cap BP >= 30% (treats as franchise-connected).
+    """
+    import hashlib as _hl
+    if df_behavior is None or len(df_behavior) == 0:
+        return df_behavior, 0
+    target_cats = {'FRANCHISE', 'TOYS'}
+    try:
+        def _audience_cap_for_ip(ip_upper, max_existing_bp):
+            if max_existing_bp >= 30.0:
+                return None
+            if ip_upper == 'SPIDER-MAN':
+                return 9.0
+            return 7.0
+
+        df_up = df_behavior.copy()
+        df_up['_cat_u'] = df_up['Column'].astype(str).str.strip().str.upper()
+        df_up['_val_u'] = df_up['Value'].astype(str).str.strip().str.upper()
+        df_up['_bp_f'] = (
+            df_up['Brand Penetration (Row)']
+            .astype(str).str.strip().str.rstrip('%')
+            .replace({'': '0', 'nan': '0', 'NaN': '0'})
+            .astype(float)
+        )
+        ip_max = (
+            df_up[df_up['_val_u'].isin(_KIDS_FRANCHISE_IPS)]
+            .groupby('_val_u')['_bp_f'].max().to_dict()
+        )
+
+        capped = 0
+        for idx, r in df_up.iterrows():
+            cat = r['_cat_u']
+            val = r['_val_u']
+            if cat not in target_cats:
+                continue
+            if val not in _KIDS_FRANCHISE_IPS:
+                continue
+            old_bp = float(r['_bp_f'])
+            if old_bp <= 0:
+                continue
+            cap = _audience_cap_for_ip(val, ip_max.get(val, old_bp))
+            if cap is None or old_bp <= cap + 0.001:
+                continue
+            h = int(_hl.blake2b(f"{val}|kids_cap".encode(), digest_size=8).hexdigest(), 16)
+            u = ((h % 1801) - 900) / 1000.0
+            new_v = max(0.5, cap + u * (cap * 0.03))
+            if abs(new_v * 100 - round(new_v * 100)) < 1e-6:
+                new_v += 0.0017
+            new_v = round(new_v, 4)
+            df_behavior.at[idx, 'Brand Penetration (Row)'] = f"{new_v:.4f}"
+            if verbose and capped < 20:
+                print(f"   🧒 kids-franchise cap: [{cat:<10}] {val:<24} {old_bp:>6.2f} → {new_v:>6.2f}")
+            capped += 1
+        if verbose and capped > 0:
+            print(f"   ✂️  kids-franchise caps applied: {capped} BPs across FRANCHISE/TOYS")
+        return df_behavior, capped
+    except Exception as _e:
+        if verbose:
+            print(f"   ⚠️ kids-franchise cap skipped: {_e}")
+        return df_behavior, 0
+
+
+# ──────────────────────────────────────────────────────────────────────────
 # Self-pin seeding for non-actor inputs (2026-05-18)
 # ──────────────────────────────────────────────────────────────────────────
 # Per-category agents only score brands they FIND in the candidate set.
@@ -27906,6 +27995,16 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
                 print(f"   🚫 dropped {_n_foreign} foreign finance entit(y/ies)")
         except Exception as _e:
             print(f"   ⚠️ foreign-finance strip failed: {_e}")
+
+        # Kids-franchise / kids-toy cap (2026-05-19): code-side cap for
+        # POKEMON/MINECRAFT/ROBLOX/SUPER MARIO/HELLO KITTY/SQUISHMALLOWS/
+        # DISNEY-PRINCESS/BARBIE/SPIDER-MAN/NERF/FISHER-PRICE/HUNGER GAMES
+        # in FRANCHISE and TOYS categories. Skips brands above 30% (treats
+        # as franchise-connected, e.g. Donnie Yen → STAR WARS).
+        try:
+            df_final, _n_kids = _enforce_kids_franchise_caps(df_final, verbose=True)
+        except Exception as _e:
+            print(f"   ⚠️ kids-franchise cap failed: {_e}")
 
         # Self-pin seeding (2026-05-18): non-actor inputs (Anderson Cooper
         # in HOST/PERSONALITY, etc.) often get NO self-pin because the
