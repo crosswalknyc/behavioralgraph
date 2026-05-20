@@ -27803,13 +27803,14 @@
         if (typeof window._jiqFootprintView === 'undefined') window._jiqFootprintView = 'bubbles';
 
         function setJiqFootprintView(v) {
+            if (v === 'events') v = 'bubbles';
             window._jiqFootprintView = v || 'bubbles';
             var b = document.getElementById('jiqBubbleGrid');
             var s = document.getElementById('jiqSpiderWrap');
             var e = document.getElementById('jiqEventsList');
             if (b) b.style.display = (v === 'bubbles') ? 'grid' : 'none';
             if (s) s.style.display = (v === 'spider')  ? '' : 'none';
-            if (e) e.style.display = (v === 'events')  ? '' : 'none';
+            if (e) e.style.display = 'none';
             var btns = document.getElementById('jiqFootprintViewBtns');
             if (btns) {
                 btns.querySelectorAll('button').forEach(function(btn) {
@@ -27829,8 +27830,8 @@
             // View toggle
             var btns = document.getElementById('jiqFootprintViewBtns');
             if (btns) {
-                btns.innerHTML = ['bubbles','spider','events'].map(function(v) {
-                    var lbl = v === 'bubbles' ? '🫧 Bubbles' : v === 'spider' ? '🕸️ Spider' : '📋 Events';
+                btns.innerHTML = ['bubbles','spider'].map(function(v) {
+                    var lbl = v === 'bubbles' ? '🫧 Bubbles' : '🕸️ Spider';
                     return '<button type="button" data-view="' + v + '" onclick="setJiqFootprintView(\'' + v + '\')" '
                          + 'style="padding: 4px 10px; border-radius: 6px; border: 1px solid var(--border-color); '
                          + 'background: var(--bg-secondary); color: var(--text-primary); font-size: 12px; cursor: pointer; font-weight: 600;">'
