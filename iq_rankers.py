@@ -29,9 +29,11 @@ import io
 import math
 import os
 import re
+import threading
 import time
 import traceback
 from collections import Counter, defaultdict
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import date, datetime, timedelta
 from typing import Any, Callable, Iterable
 
@@ -667,10 +669,31 @@ def run_daily_for_all_profiles(
     panel_size = get_panel_size_for_day(ch_connect=ch_connect, day=snapshot_date)
     summary["panel_size"] = panel_size
 
+    # Materialize the profile list so we can size the thread pool accurately
+    # and so the executor doesn't share an iterator across threads.
+    profiles: list[dict] = []
     for j in _iter_profile_jobs(s3_cache_jobs or []):
         subject = j.get("profile_subject") or ""
         if only_profile_subject and subject != only_profile_subject:
             continue
+        profiles.append(j)
+
+    # Each profile does 3+ ClickHouse round-trips serially (compute, history,
+    # insert). With hundreds of profiles that adds up to multiple hours when
+    # run sequentially — long enough that the daily cron's urlopen timeout
+    # used to fire at 14400s. Parallelize across a small pool to amortize
+    # the per-query latency. 4 workers matches what the standalone backfill
+    # script uses and is well within ClickHouse HTTP throughput.
+    try:
+        max_workers = int(os.environ.get("IQ_RANKER_DAILY_WORKERS", "4"))
+    except Exception:
+        max_workers = 4
+    max_workers = max(1, min(max_workers, 16, len(profiles) or 1))
+
+    state_lock = threading.Lock()
+
+    def _process_one(j: dict) -> None:
+        subject = j.get("profile_subject") or ""
         s3_key       = j.get("s3_key") or j.get("job_id") or ""
         project_name = j.get("display_name") or j.get("project_name") or subject
         subcategory  = normalize_subcategory(j.get("category"))
@@ -684,10 +707,11 @@ def run_daily_for_all_profiles(
                 if project_name:
                     terms = [project_name]
             if not terms:
-                summary["skipped"] += 1
-                summary["details"].append({"subject": subject,
-                                           "reason": "no brand_terms"})
-                continue
+                with state_lock:
+                    summary["skipped"] += 1
+                    summary["details"].append({"subject": subject,
+                                               "reason": "no brand_terms"})
+                return
 
             cfg = ensure_tracker_for_profile(
                 s3_client=s3_client,
@@ -732,23 +756,38 @@ def run_daily_for_all_profiles(
                 prev_cw_iq_score=prev_cw,
                 panel_size=panel_size,
             )
-            if ok:
-                summary["ran"] += 1
-                summary["details"].append({
-                    "subject": subject,
-                    "category": master,
-                    "subcategory": subcategory,
-                    "mentions": metrics["mentions"],
-                    "cw_iq": cw_iq,
-                })
-            else:
-                summary["failed"] += 1
-                summary["details"].append({"subject": subject,
-                                           "reason": "insert failed"})
+            with state_lock:
+                if ok:
+                    summary["ran"] += 1
+                    summary["details"].append({
+                        "subject": subject,
+                        "category": master,
+                        "subcategory": subcategory,
+                        "mentions": metrics["mentions"],
+                        "cw_iq": cw_iq,
+                    })
+                else:
+                    summary["failed"] += 1
+                    summary["details"].append({"subject": subject,
+                                               "reason": "insert failed"})
         except Exception as e:
             traceback.print_exc()
-            summary["failed"] += 1
-            summary["details"].append({"subject": subject, "reason": str(e)[:200]})
+            with state_lock:
+                summary["failed"] += 1
+                summary["details"].append({"subject": subject, "reason": str(e)[:200]})
+
+    _log(f"processing {len(profiles)} profile(s) for {snapshot_date} "
+         f"with {max_workers} worker(s)")
+
+    if max_workers <= 1 or len(profiles) <= 1:
+        for j in profiles:
+            _process_one(j)
+    else:
+        with ThreadPoolExecutor(max_workers=max_workers,
+                                thread_name_prefix="iqr-daily") as ex:
+            futs = [ex.submit(_process_one, j) for j in profiles]
+            for _ in as_completed(futs):
+                pass
 
     summary["elapsed_sec"] = round(time.time() - started_at, 1)
     _log(f"daily run done: ran={summary['ran']} skipped={summary['skipped']} "
