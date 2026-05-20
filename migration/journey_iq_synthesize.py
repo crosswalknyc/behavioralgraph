@@ -1579,32 +1579,17 @@ brand) DURING A SPECIFIC DATE WINDOW. You have web search. Your job:
          - Google Ads Transparency Center: adstransparency.google.com
            (lists every active Google/YouTube ad by advertiser)
          - TikTok Creative Center / Top Ads: ads.tiktok.com/business/creativecenter
-         - iSpot.tv: ispot.tv/brands/<advertiser>  (national TV ad
-            spend + impressions across broadcast networks, cable,
-            vMVPD live channels, and ad-supported streaming)
+         - iSpot.tv: ispot.tv/brands/<advertiser>  (linear TV spend & GRPs)
          - Trade press spend reports: variety.com, adage.com, mediapost.com
            — search "<TARGET> ad spend" / "marketing budget" / "campaign"
        Then for EACH of these paid platforms produce ONE event in the
-       paid_advertising bucket. Use the MODERN TV taxonomy — NEVER
-       the term "linear TV". Instead break TV ad spend out into:
-         - vMVPD ads — live-TV streaming inventory on YouTube TV,
-           Hulu + Live TV, Sling TV, fuboTV, DirecTV Stream
-         - FAST ads — free ad-supported streaming TV on Pluto TV
-           (Paramount), Tubi (Fox), Amazon Freevee, The Roku Channel,
-           Samsung TV Plus, Xumo, LG Channels
-         - AVOD ads — ad-tiers of subscription services: Hulu (ad
-           tier), Disney+ Basic with Ads, Max with Ads, Peacock
-           Premium, Netflix Ads, Paramount+ Essential
-         - SVOD home-tile / content placement — paid promotional
-           tiles on Netflix homepage, Disney+ promo carousel,
-           Max Today's Tops, Prime Video featured banners (even
-           ad-free SVOD has paid theatrical promo placement)
-       Other paid platforms to enumerate: Google Ads, Meta Ads,
-       TikTok Ads, Amazon DSP, The Trade Desk programmatic,
-       Snapchat Ads, Spotify Audio, OOH (out-of-home), Yahoo /
-       Microsoft Ads, Reddit Ads. Skip a platform ONLY if you're
-       confident the target did NOT run there. Aim for 8-12
-       paid_advertising events, not 0-3.
+       paid_advertising bucket: Google Ads, Meta Ads, TikTok Ads, Amazon
+       DSP, Hulu/Disney CTV, Linear TV, The Trade Desk programmatic,
+       Snapchat Ads, Spotify Audio, OOH (out-of-home), Yahoo/Microsoft
+       Ads, Reddit Ads. Skip a platform ONLY if you're confident the
+       target did NOT run there (e.g. niche indie film, no Super Bowl
+       spot → skip Linear TV). Aim for 5-10 paid_advertising events,
+       not 0-3.
 
   2. For EACH discovered event, estimate what fraction of US gen-pop
      (US adults 16+ ~= 260M) it likely REACHED, using the actor's
@@ -1679,10 +1664,8 @@ Output JSON EXACTLY in this shape (no code fences, no markdown):
         {"platform": "Meta Ads",         "network": "Facebook + Instagram",         "campaign": "Reels + Feed video + Stories",              "creative_type": "video + carousel",  "placement": "Reels / Feed / Stories",            "url": "https://www.facebook.com/ads/library/?q=<TARGET>", "spend_usd_estimate": 3200000, "estimated_reach_us": 21000000, "reach_pct_of_genpop": 8.1,  "date": "2026-01-12", "confidence": "high",   "notes": "Cite Meta Ad Library — REQUIRED to search this for the target"},
         {"platform": "TikTok Ads",       "network": "TikTok",                       "campaign": "Spark Ads + TopView",                       "creative_type": "short-form video",  "placement": "For You feed + TopView",            "url": "https://library.tiktok.com/ads?...", "spend_usd_estimate": 2100000, "estimated_reach_us": 14000000, "reach_pct_of_genpop": 5.4,  "date": "2026-01-15", "confidence": "medium", "notes": "Cite TikTok Creative Center / Top Ads"},
         {"platform": "Amazon DSP",       "network": "Amazon + IMDb + Twitch",       "campaign": "programmatic OLV + display",                "creative_type": "video + display",   "placement": "Fire TV + IMDb + Twitch + Amazon",  "url": "",                                   "spend_usd_estimate": 1800000, "estimated_reach_us": 12000000, "reach_pct_of_genpop": 4.6,  "date": "2026-01-08", "confidence": "medium", "notes": "Estimate from Amazon ad-network reach reports"},
-        {"platform": "vMVPD ads",        "network": "YouTube TV + Hulu + Live TV + Sling + fuboTV + DirecTV Stream", "campaign": "live-TV streaming 15s + 30s spots", "creative_type": "video", "placement": "live-channel ad pods (sports + news + entertainment)", "url": "", "spend_usd_estimate": 1800000, "estimated_reach_us": 14000000, "reach_pct_of_genpop": 5.4,  "date": "2026-01-18", "confidence": "medium", "notes": "Cite iSpot.tv for vMVPD GRPs / impressions"},
-        {"platform": "FAST ads",         "network": "Pluto TV + Tubi + Freevee + Roku Channel + Samsung TV Plus + Xumo", "campaign": "free-streaming spots + branded channel",     "creative_type": "video",             "placement": "pre-roll + mid-roll on free streaming channels", "url": "", "spend_usd_estimate":  900000, "estimated_reach_us":  9500000, "reach_pct_of_genpop": 3.7,  "date": "2026-01-19", "confidence": "medium", "notes": "FAST has explosive reach 2025-26; cite Roku/Tubi/Freevee ad data"},
-        {"platform": "AVOD ads",         "network": "Hulu ad-tier + Disney+ Basic + Max Ads + Peacock Premium + Netflix Ads + Paramount+ Essential", "campaign": "ad-tier 15s + 30s + binge-ad", "creative_type": "video", "placement": "pre-roll + mid-roll on ad-supported SVOD tiers", "url": "", "spend_usd_estimate": 3200000, "estimated_reach_us": 24000000, "reach_pct_of_genpop": 9.2, "date": "2026-01-20", "confidence": "high",   "notes": "AVOD tiers grew massively 2024-26; cite Disney/Netflix ads reach reports"},
-        {"platform": "SVOD content tile","network": "Netflix + Disney+ + Max + Prime Video homepage / promo carousels", "campaign": "paid theatrical promo home-tile placement", "creative_type": "static + video tile", "placement": "homepage carousel + Today's Tops + Featured banners", "url": "", "spend_usd_estimate": 1100000, "estimated_reach_us": 22000000, "reach_pct_of_genpop": 8.5, "date": "2026-01-17", "confidence": "medium", "notes": "Even pure-SVOD ad-free tiers carry paid theatrical promo tiles (studio-negotiated)"},
+        {"platform": "Hulu / Disney CTV","network": "Disney Ad Sales (Hulu + ESPN + Disney+)", "campaign": "15s + 30s CTV spots",       "creative_type": "video",             "placement": "Hulu pre-roll + ESPN linear",       "url": "",                                   "spend_usd_estimate": 2400000, "estimated_reach_us": 18000000, "reach_pct_of_genpop": 6.9,  "date": "2026-01-05", "confidence": "medium", "notes": "Cite trade press CTV spend report if visible"},
+        {"platform": "Linear TV",        "network": "broadcast + cable",            "campaign": "Super Bowl spot / primetime takeover",      "creative_type": "30s + 60s TV spot", "placement": "broadcast networks + ESPN/TNT",     "url": "",                                   "spend_usd_estimate": 6500000, "estimated_reach_us": 35000000, "reach_pct_of_genpop": 13.5, "date": "2026-01-20", "confidence": "high",   "notes": "Cite Nielsen / iSpot.tv if reported"},
         {"platform": "The Trade Desk",   "network": "programmatic display + CTV",   "campaign": "open-web display + CTV remarketing",        "creative_type": "display + video",   "placement": "long-tail web + CTV apps",          "url": "",                                   "spend_usd_estimate":  900000, "estimated_reach_us":  6000000, "reach_pct_of_genpop": 2.3,  "date": "2026-01-14", "confidence": "low",    "notes": "Standard programmatic add-on for major movie launches"},
         {"platform": "Snapchat Ads",     "network": "Snapchat",                     "campaign": "AR Lens + Snap Ads",                        "creative_type": "AR + video",        "placement": "Discover + AR camera",              "url": "",                                   "spend_usd_estimate":  650000, "estimated_reach_us":  4500000, "reach_pct_of_genpop": 1.7,  "date": "2026-01-18", "confidence": "low",    "notes": "Common for movies targeting under-25 audience"},
         {"platform": "Spotify Audio",    "network": "Spotify",                      "campaign": "audio + podcast pre-roll",                  "creative_type": "audio",             "placement": "free-tier audio + podcasts",        "url": "",                                   "spend_usd_estimate":  400000, "estimated_reach_us":  3500000, "reach_pct_of_genpop": 1.3,  "date": "2026-01-11", "confidence": "low",    "notes": "Audio reach estimate"},
@@ -1799,12 +1782,9 @@ Hard rules:
     weak signals).
   * paid_advertising events MUST use these field names so the dashboard
     can render them: "platform" (REQUIRED — human-readable name like
-    "Google Ads", "Meta Ads", "TikTok Ads", "Amazon DSP", "vMVPD ads",
-    "FAST ads", "AVOD ads", "SVOD content tile", "The Trade Desk",
-    "Snapchat Ads", "Spotify Audio", "OOH (out-of-home)",
-    "Yahoo / Microsoft Ads", "Reddit Ads"). NEVER use the term
-    "Linear TV" or "linear TV" — break TV ad spend into vMVPD /
-    FAST / AVOD / SVOD instead,
+    "Google Ads", "Meta Ads", "TikTok Ads", "Amazon DSP", "Hulu / Disney
+    CTV", "Linear TV", "The Trade Desk", "Snapchat Ads", "Spotify Audio",
+    "OOH (out-of-home)", "Yahoo / Microsoft Ads", "Reddit Ads"),
     "network" (sub-property — e.g. "Search + YouTube TrueView"),
     "campaign" (creative concept), "creative_type", "placement",
     "spend_usd_estimate" (a real number you can defend), and the
@@ -2035,23 +2015,6 @@ def research_marketing_footprint(
     parsed.setdefault('marketing_footprint', {})
     for ch in _FOOTPRINT_CHANNELS:
         parsed['marketing_footprint'].setdefault(ch, {'reach_pct_of_genpop': 0.0, 'events': []})
-
-    # Safety net: rewrite any "Linear TV" leak in paid_advertising
-    # platform/network labels into the modern vMVPD/FAST/AVOD/SVOD
-    # taxonomy. Claude is instructed to never use "linear TV" but
-    # this defends against prompt-drift on older models.
-    paid_evs = (parsed['marketing_footprint'].get('paid_advertising') or {}).get('events') or []
-    for ev in paid_evs:
-        plat_raw = str(ev.get('platform') or '')
-        net_raw  = str(ev.get('network')  or '')
-        if 'linear tv' in plat_raw.lower() or plat_raw.lower() == 'tv':
-            ev['platform'] = 'AVOD ads'
-            if not net_raw or 'broadcast' in net_raw.lower() or 'cable' in net_raw.lower():
-                ev['network'] = 'Hulu ad-tier + Disney+ Basic + Max Ads + Peacock Premium + Netflix Ads + Paramount+ Essential'
-            if 'linear-tv-rewrite' not in (ev.get('notes') or ''):
-                ev['notes'] = (ev.get('notes') or '') + ' [agent said "linear TV" — auto-rewritten to AVOD ads; linear-tv-rewrite]'
-        if 'linear tv' in net_raw.lower():
-            ev['network'] = net_raw.replace('linear TV', 'vMVPD live channels').replace('Linear TV', 'vMVPD live channels').replace('linear tv', 'vMVPD live channels')
     parsed.setdefault('us_genpop_baseline', US_GENPOP_BASELINE)
     parsed.setdefault('confidence', 'medium')
     parsed.setdefault('sources_consulted', [])
