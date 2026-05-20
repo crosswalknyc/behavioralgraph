@@ -28158,6 +28158,24 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
         except Exception as _e:
             print(f"   ⚠️ hostmap-email flush failed: {_e}")
 
+        # 2026-05-20 — drop URL-encoded ACTOR/TALENT duplicate rows. Live URLs
+        # in clickstream_final still contain percent-encoded delimiters
+        # (NICOLE%20KIDMAN, NICOLE%26KIDMAN, %2B/%2D/%2E/%2F/%3D/%5F/%7C),
+        # and the per-brand matcher counts each encoded form as a separate
+        # ACTOR row at 100% BP. They are duplicates of the canonical
+        # "NICOLE KIDMAN" row and add ~18 garbage rows per profile.
+        try:
+            import re as _re_pct
+            _pct = df_final['Value'].astype(str).str.contains(
+                r'%[0-9A-Fa-f]{2}', regex=True, na=False
+            )
+            if int(_pct.sum()) > 0:
+                _n = int(_pct.sum())
+                df_final = df_final[~_pct].reset_index(drop=True)
+                print(f"   🧹 dropped {_n} URL-encoded duplicate rows pre-save")
+        except Exception as _e:
+            print(f"   ⚠️ URL-encoded duplicate cleanup skipped: {_e}")
+
     # Save to CSV
     try:
         df_final.to_csv(final_file, index=False)
