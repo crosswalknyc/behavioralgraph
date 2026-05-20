@@ -1399,8 +1399,24 @@ brand) DURING A SPECIFIC DATE WINDOW. You have web search. Your job:
          site:reddit.com <TARGET>     site:facebook.com <TARGET>
        Pull the top 5 results per platform inside the date window.
 
-     * Trade press: variety.com, deadline.com, hollywoodreporter.com,
-       indiewire.com, screenrant.com — top 5 articles in window.
+     * Trade press + general press: pull SPECIFIC ARTICLES (not the
+       publication homepage). Run dated site:-queries inside the
+       window for each major outlet and link to the actual article
+       URL. Outlets to cover:
+         Trade:   variety.com, deadline.com, hollywoodreporter.com,
+                  indiewire.com, screenrant.com, collider.com,
+                  the-numbers.com, boxofficepro.com
+         General: nytimes.com, latimes.com, washingtonpost.com,
+                  rollingstone.com, vulture.com, ew.com,
+                  thewrap.com, ign.com, polygon.com
+         Reviews: rogerebert.com, slashfilm.com, theplaylist.net,
+                  avclub.com, rotten-tomatoes-aggregated critic blurbs
+       For EACH outlet that ran something about the target during
+       the window, return ONE event with the article URL, headline,
+       byline (author) if visible, and the publication's monthly US
+       uniques. Aim for 8-12 press events and 5-8 press_reviews
+       events. Never link to just the publication's homepage — every
+       url MUST point to the specific article.
 
      * Ticketing surfaces: fandango.com, atomtickets.com, amctheatres.com,
        regmovies.com, cinemark.com — note any Fandango "top sellers" or
@@ -1509,7 +1525,16 @@ Output JSON EXACTLY in this shape (no code fences, no markdown):
          "confidence": "medium", "notes": "Story slide with movie poster, ~24h visibility"}
       ]
     },
-    "press":              {"reach_pct_of_genpop": ..., "events": [{"publication": "Variety", "url": "...", "estimated_reach_us": ..., "reach_pct_of_genpop": ..., "confidence": "...", "notes": "..."}]},
+    "press":              {"reach_pct_of_genpop": ..., "events": [
+        {"publication": "Variety",            "headline": "<actual article headline you found>",  "byline": "<author name>",  "url": "https://variety.com/2026/film/news/<actual-slug>-1235998765/",          "publication_monthly_us_uniques": 17000000, "estimated_reach_us":  650000, "reach_pct_of_genpop": 0.25, "date": "2026-01-12", "confidence": "high",   "notes": "Cite the article URL"},
+        {"publication": "Deadline",           "headline": "<actual article headline>",            "byline": "<author>",       "url": "https://deadline.com/2026/01/<actual-slug>/",                            "publication_monthly_us_uniques": 12000000, "estimated_reach_us":  480000, "reach_pct_of_genpop": 0.18, "date": "2026-01-13", "confidence": "high",   "notes": "..."},
+        {"publication": "The Hollywood Reporter", "headline": "<headline>",                        "byline": "<author>",       "url": "https://www.hollywoodreporter.com/movies/movie-news/<actual-slug>/",     "publication_monthly_us_uniques": 11000000, "estimated_reach_us":  420000, "reach_pct_of_genpop": 0.16, "date": "2026-01-14", "confidence": "high",   "notes": "..."},
+        {"publication": "IndieWire",          "headline": "<headline>",                            "byline": "<author>",       "url": "https://www.indiewire.com/news/<actual-slug>/",                           "publication_monthly_us_uniques":  6500000, "estimated_reach_us":  220000, "reach_pct_of_genpop": 0.08, "date": "2026-01-15", "confidence": "medium", "notes": "..."},
+        {"publication": "Collider",           "headline": "<headline>",                            "byline": "<author>",       "url": "https://collider.com/<actual-slug>/",                                     "publication_monthly_us_uniques":  8500000, "estimated_reach_us":  280000, "reach_pct_of_genpop": 0.11, "date": "2026-01-16", "confidence": "medium", "notes": "..."},
+        {"publication": "ScreenRant",         "headline": "<headline>",                            "byline": "<author>",       "url": "https://screenrant.com/<actual-slug>/",                                   "publication_monthly_us_uniques": 18000000, "estimated_reach_us":  680000, "reach_pct_of_genpop": 0.26, "date": "2026-01-17", "confidence": "medium", "notes": "..."},
+        {"publication": "Entertainment Weekly", "headline": "<headline>",                          "byline": "<author>",       "url": "https://ew.com/movies/<actual-slug>/",                                    "publication_monthly_us_uniques":  9000000, "estimated_reach_us":  320000, "reach_pct_of_genpop": 0.12, "date": "2026-01-18", "confidence": "medium", "notes": "..."},
+        {"publication": "Vulture / New York Magazine", "headline": "<headline>",                   "byline": "<author>",       "url": "https://www.vulture.com/article/<actual-slug>.html",                     "publication_monthly_us_uniques":  7500000, "estimated_reach_us":  260000, "reach_pct_of_genpop": 0.10, "date": "2026-01-19", "confidence": "low",    "notes": "..."}
+    ]},
     "talent_mentions":    {"reach_pct_of_genpop": ..., "events": [{"talent": "Steph Curry", "platform": "podcast",   "estimated_reach_us": ..., ...}]},
     "creator_influencers":{"reach_pct_of_genpop": ..., "events": [{"creator": "MrBeast",    "platform": "youtube",   "estimated_reach_us": ..., ...}]},
     "brand_partnerships": {"reach_pct_of_genpop": ..., "events": [{"partner": "Mercedes",   "campaign": "Super Bowl spot", "estimated_reach_us": ..., ...}]},
@@ -1541,7 +1566,14 @@ Output JSON EXACTLY in this shape (no code fences, no markdown):
         {"engine": "Google",          "query": "<TARGET> runtime",              "intent": "pre-purchase / planning",       "estimated_searches_us_in_window":  150000, "estimated_reach_us":  120000, "reach_pct_of_genpop": 0.05, "trend_peak_date": "2026-01-17", "date": "2026-01-16", "url": "", "confidence": "medium", "notes": "Length lookup before booking"},
         {"engine": "Bing",            "query": "<TARGET> showtimes",            "intent": "pre-purchase / ticket lookup", "estimated_searches_us_in_window":  180000, "estimated_reach_us":  140000, "reach_pct_of_genpop": 0.05, "trend_peak_date": "2026-01-17", "date": "2026-01-15", "url": "", "confidence": "low",    "notes": "Bing default on Windows + Edge"}
     ]},
-    "press_reviews":      {"reach_pct_of_genpop": ..., "events": [{"publication": "NYT",   "url": "...", "estimated_reach_us": ..., ...}]},
+    "press_reviews":      {"reach_pct_of_genpop": ..., "events": [
+        {"publication": "The New York Times", "headline": "<actual review headline>",                "byline": "<critic name>",  "score_or_grade": "B+ / 3.5-star / 80",      "url": "https://www.nytimes.com/2026/01/15/movies/<actual-slug>-review.html",       "publication_monthly_us_uniques": 95000000, "estimated_reach_us": 1200000, "reach_pct_of_genpop": 0.46, "date": "2026-01-15", "confidence": "high",   "notes": "Cite the review URL"},
+        {"publication": "Roger Ebert.com",    "headline": "<review headline>",                       "byline": "<critic>",       "score_or_grade": "3/4 stars",                "url": "https://www.rogerebert.com/reviews/<actual-slug>-2026",                     "publication_monthly_us_uniques":  3500000, "estimated_reach_us":  140000, "reach_pct_of_genpop": 0.05, "date": "2026-01-15", "confidence": "high",   "notes": "..."},
+        {"publication": "Variety (review)",   "headline": "<review headline>",                       "byline": "<critic>",       "score_or_grade": "positive",                 "url": "https://variety.com/2026/film/reviews/<actual-slug>-1235998765/",            "publication_monthly_us_uniques": 17000000, "estimated_reach_us":  640000, "reach_pct_of_genpop": 0.25, "date": "2026-01-14", "confidence": "high",   "notes": "..."},
+        {"publication": "/Film (Slashfilm)",  "headline": "<review headline>",                       "byline": "<critic>",       "score_or_grade": "8/10",                     "url": "https://www.slashfilm.com/<actual-slug>-review/",                            "publication_monthly_us_uniques":  4200000, "estimated_reach_us":  150000, "reach_pct_of_genpop": 0.06, "date": "2026-01-16", "confidence": "medium", "notes": "..."},
+        {"publication": "The A.V. Club",      "headline": "<review headline>",                       "byline": "<critic>",       "score_or_grade": "B",                        "url": "https://www.avclub.com/<actual-slug>-review-1234567890",                     "publication_monthly_us_uniques":  3800000, "estimated_reach_us":  130000, "reach_pct_of_genpop": 0.05, "date": "2026-01-15", "confidence": "medium", "notes": "..."},
+        {"publication": "IGN",                "headline": "<review headline>",                       "byline": "<critic>",       "score_or_grade": "8.5",                      "url": "https://www.ign.com/articles/<actual-slug>-review",                          "publication_monthly_us_uniques": 24000000, "estimated_reach_us":  820000, "reach_pct_of_genpop": 0.32, "date": "2026-01-16", "confidence": "medium", "notes": "..."}
+    ]},
     "forum_discussion":   {"reach_pct_of_genpop": ..., "events": [{"forum": "r/movies",   "url": "...", "upvotes": 4200, "comments": 580, "estimated_reach_us": ..., ...}]}
   },
   "endpoint_breakdown": [
@@ -1555,8 +1587,16 @@ Output JSON EXACTLY in this shape (no code fences, no markdown):
 }
 
 Hard rules:
-  * Every discovered event MUST cite the URL where you found it (in the
-    event's "url" field, even if just the search-results page).
+  * Every discovered event MUST cite the URL where you found it (in
+    the event's "url" field). For press / press_reviews events, the
+    "url" MUST be the SPECIFIC ARTICLE URL — never just the
+    publication homepage. A url like "https://variety.com" or
+    "variety.com" is INVALID for a press event; it must look like
+    "https://variety.com/2026/film/news/<slug>-1235998765/" with a
+    path beyond the bare domain. If you genuinely cannot find the
+    article URL via web_search, drop the event rather than fall
+    back to the homepage. Same rule for press_reviews — link the
+    specific review, not the critic's bio page.
   * Every event must have a "date" or "date_estimate" field IN ISO format
     that falls inside the date window provided in the user message.
   * Include up to 10 events per channel; if a channel has no real
@@ -1585,6 +1625,19 @@ Hard rules:
     standard "estimated_reach_us" / "reach_pct_of_genpop" / "date" /
     "url" / "confidence" / "notes". Do NOT just put "channel": "TV" —
     the dashboard renders rows as "<platform> — <campaign>".
+  * press and press_reviews events MUST use these field names so the
+    dashboard can render them: "publication" (REQUIRED — e.g.
+    "Variety", "The Hollywood Reporter", "The New York Times"),
+    "headline" (REQUIRED — the actual article/review headline you
+    found, not a paraphrase), "byline" (author name if visible),
+    "url" (REQUIRED — specific article URL with a path beyond the
+    bare domain), "publication_monthly_us_uniques" (best estimate),
+    and the standard estimated_reach_us / reach_pct_of_genpop /
+    date / confidence / notes. For press_reviews also include
+    "score_or_grade" (e.g. "B+", "3.5/4 stars", "80/100", or
+    "positive"/"mixed"/"negative" if no numeric score). Aim for
+    8-12 press events and 5-8 press_reviews events. The dashboard
+    renders rows as 'Publication - "<headline>"'.
   * organic_search events MUST use these field names so the dashboard
     can render them: "engine" (REQUIRED — "Google", "Google Maps",
     "YouTube", "Bing", "DuckDuckGo", "Yahoo", "Apple Spotlight / Siri",
