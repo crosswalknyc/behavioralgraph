@@ -27960,16 +27960,11 @@
                 epStrip.style.display = 'none';
             }
 
-            // SOURCES CONSULTED footer
+            // SOURCES CONSULTED footer (removed per request — always hidden)
             var srcEl = document.getElementById('jiqSourcesConsulted');
-            var srcs = (footprint && footprint.sources_consulted) || [];
             if (srcEl) {
-                if (srcs.length) {
-                    srcEl.style.display = '';
-                    srcEl.innerHTML = '<strong>Sources consulted by agent:</strong> ' + srcs.map(function(s) { return _jiqEsc(s); }).join(' · ');
-                } else {
-                    srcEl.style.display = 'none';
-                }
+                srcEl.style.display = 'none';
+                srcEl.innerHTML = '';
             }
 
             // Apply the current view (default 'bubbles')
