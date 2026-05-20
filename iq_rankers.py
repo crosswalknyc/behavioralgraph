@@ -862,18 +862,20 @@ def aggregate_leaderboard(
     # empty days) skip projection (treat multiplier as 1) so old data is
     # still readable instead of dropping out.
     us_pop = int(US_POPULATION)
-    proj_mentions = (f"toUInt64(round(mentions * {us_pop} / panel_size))")
-    proj_pos      = (f"toUInt64(round(pos      * {us_pop} / panel_size))")
-    proj_neu      = (f"toUInt64(round(neu      * {us_pop} / panel_size))")
-    proj_neg      = (f"toUInt64(round(neg      * {us_pop} / panel_size))")
+    proj_mentions = (f"toUInt64(round(mentions    * {us_pop} / panel_size))")
+    proj_pos      = (f"toUInt64(round(pos         * {us_pop} / panel_size))")
+    proj_neu      = (f"toUInt64(round(neu         * {us_pop} / panel_size))")
+    proj_neg      = (f"toUInt64(round(neg         * {us_pop} / panel_size))")
+    proj_uids     = (f"toUInt64(round(unique_uids * {us_pop} / panel_size))")
     # Wrap each projection in if(panel_size > 0, projected, raw) so legacy
     # rows that don't have a panel_size still surface their raw counts.
     def _wrap(raw_col: str, projected: str) -> str:
         return f"if(panel_size > 0, {projected}, {raw_col})"
-    p_mentions = _wrap("mentions", proj_mentions)
-    p_pos      = _wrap("pos",      proj_pos)
-    p_neu      = _wrap("neu",      proj_neu)
-    p_neg      = _wrap("neg",      proj_neg)
+    p_mentions = _wrap("mentions",    proj_mentions)
+    p_pos      = _wrap("pos",         proj_pos)
+    p_neu      = _wrap("neu",         proj_neu)
+    p_neg      = _wrap("neg",         proj_neg)
+    p_uids     = _wrap("unique_uids", proj_uids)
 
     sql = f"""
     WITH curr AS (
@@ -883,7 +885,8 @@ def aggregate_leaderboard(
                anyHeavy(subcategory)              AS subcategory_lbl,
                anyHeavy(s3_key)                   AS s3_key_lbl,
                sum({p_mentions})                  AS mentions_sum,
-               sum(unique_uids)                   AS unique_uids_sum,
+               sum({p_uids})                      AS unique_uids_sum,
+               sum(unique_uids)                   AS raw_unique_uids_sum,
                sum({p_pos})                       AS pos_sum,
                sum({p_neu})                       AS neu_sum,
                sum({p_neg})                       AS neg_sum,
@@ -937,6 +940,7 @@ def aggregate_leaderboard(
            c.cw_iq_score_calc - coalesce(p.prev_cw_iq_score_calc, 0)
                                                       AS delta_cw_iq,
            c.raw_mentions_sum                         AS raw_mentions,
+           c.raw_unique_uids_sum                      AS raw_unique_uids,
            c.max_panel_size                           AS panel_size
     FROM curr c
     LEFT JOIN prev p ON p.profile_subject = c.profile_subject
@@ -968,10 +972,10 @@ def aggregate_leaderboard(
             "category":         r[2],
             "subcategory":      r[3],
             "s3_key":           r[4],
-            # Mentions / pos / neu / neg are PROJECTED to gen pop (US_POPULATION
-            # / panel_size per day). raw_mentions + panel_size are also returned
-            # so the UI can show "X panel mentions / N panel ≈ Y projected" if
-            # ever needed.
+            # Mentions / unique_uids / pos / neu / neg are PROJECTED to gen
+            # pop (US_POPULATION / panel_size per day). raw_mentions,
+            # raw_unique_uids + panel_size are also returned so the UI can
+            # show "X panel mentions / N panel ≈ Y projected" if ever needed.
             "mentions":         int(r[5] or 0),
             "unique_uids":      int(r[6] or 0),
             "pos":              int(r[7] or 0),
@@ -984,7 +988,8 @@ def aggregate_leaderboard(
             "delta_mentions":   int(r[14] or 0),
             "delta_cw_iq":      round(float(r[15] or 0), 2),
             "raw_mentions":     int(r[16] or 0) if len(r) > 16 else 0,
-            "panel_size":       int(r[17] or 0) if len(r) > 17 else 0,
+            "raw_unique_uids":  int(r[17] or 0) if len(r) > 17 else 0,
+            "panel_size":       int(r[18] or 0) if len(r) > 18 else 0,
         })
     return {
         "rows": out_rows,
@@ -1001,9 +1006,12 @@ def aggregate_leaderboard(
         "sort": {"by": sort, "direction": direction},
         "projection": {
             "us_population": US_POPULATION,
-            "note": "mentions/pos/neu/neg are projected to gen pop using "
-                    "US_POPULATION / per-day panel_size; cw_iq_score and "
-                    "net_sentiment are panel-relative measures.",
+            "note": "mentions/unique_uids/pos/neu/neg are projected to gen "
+                    "pop using US_POPULATION / per-day panel_size; "
+                    "cw_iq_score and net_sentiment are panel-relative "
+                    "measures so they're unchanged. raw_mentions and "
+                    "raw_unique_uids are also returned for any caller that "
+                    "needs the underlying panel counts.",
         },
         "cw_iq_formula": {
             "weights": {
@@ -1041,7 +1049,15 @@ def fetch_profile_timeseries(
     start: str | None = None,
     end: str | None = None,
 ) -> list[dict[str, Any]]:
-    """Daily series for one profile (for sparklines / drilldown)."""
+    """Daily series for one profile (for sparklines / drilldown).
+
+    Count-bearing metrics (mentions, unique_uids, pos, neu, neg) are
+    gen-pop projected per-day (US_POPULATION / panel_size) so the
+    series matches the leaderboard + drill-down chart units. Days
+    where panel_size = 0 fall back to the raw count so legacy rows
+    still render. net_sentiment and cw_iq_score are panel-relative
+    composites and are returned unchanged.
+    """
     valid = {"cw_iq_score", "mentions", "unique_uids", "pos", "neu", "neg",
              "net_sentiment"}
     metric = metric if metric in valid else "cw_iq_score"
@@ -1050,11 +1066,20 @@ def fetch_profile_timeseries(
     if not start:
         start = (date.fromisoformat(end) - timedelta(days=89)).isoformat()
     safe = (profile_subject or "").replace("'", "''")
+    projectable = {"mentions", "unique_uids", "pos", "neu", "neg"}
+    if metric in projectable:
+        us_pop = int(US_POPULATION)
+        metric_expr = (
+            f"if(panel_size > 0, "
+            f"toUInt64(round({metric} * {us_pop} / panel_size)), {metric})"
+        )
+    else:
+        metric_expr = metric
     conn = ch_connect()
     try:
         cur = conn.cursor()
         cur.execute(f"""
-            SELECT snapshot_date, {metric}
+            SELECT snapshot_date, {metric_expr}
             FROM reference.v_iq_daily_metrics
             WHERE profile_subject = '{safe}'
               AND snapshot_date BETWEEN toDate('{start}') AND toDate('{end}')
@@ -1094,15 +1119,16 @@ def fetch_profile_full_timeseries(
                 "neu":              int,    # projected
                 "neg":              int,    # projected
                 "net_sentiment":    float,  # -100..+100 (projection-invariant)
-                "cw_iq_score":      float,  # 0..100
-                "unique_uids":      int,    # panel-only
+                "cw_iq_score":      float,  # 0..100 (projection-invariant)
+                "unique_uids_raw":  int,    # panel-only reach
+                "unique_uids":      int,    # projected to gen-pop reach
                 "panel_size":       int,
             }, ...] (chronologically ordered)
         }
 
-    Mentions / pos / neu / neg are projected day-by-day (per-row
-    multiplier = US_POPULATION / panel_size). Days where panel_size = 0
-    fall back to raw counts so legacy rows still render.
+    Mentions / pos / neu / neg / unique_uids are projected day-by-day
+    (per-row multiplier = US_POPULATION / panel_size). Days where
+    panel_size = 0 fall back to raw counts so legacy rows still render.
     """
     if not end:
         end = (date.today() - timedelta(days=1)).isoformat()
@@ -1121,13 +1147,14 @@ def fetch_profile_full_timeseries(
             SELECT
                 toString(snapshot_date),
                 mentions,
-                if(panel_size > 0, toUInt64(round(mentions * {us_pop} / panel_size)), mentions),
-                if(panel_size > 0, toUInt64(round(pos      * {us_pop} / panel_size)), pos),
-                if(panel_size > 0, toUInt64(round(neu      * {us_pop} / panel_size)), neu),
-                if(panel_size > 0, toUInt64(round(neg      * {us_pop} / panel_size)), neg),
+                if(panel_size > 0, toUInt64(round(mentions    * {us_pop} / panel_size)), mentions),
+                if(panel_size > 0, toUInt64(round(pos         * {us_pop} / panel_size)), pos),
+                if(panel_size > 0, toUInt64(round(neu         * {us_pop} / panel_size)), neu),
+                if(panel_size > 0, toUInt64(round(neg         * {us_pop} / panel_size)), neg),
                 net_sentiment,
                 cw_iq_score,
                 unique_uids,
+                if(panel_size > 0, toUInt64(round(unique_uids * {us_pop} / panel_size)), unique_uids),
                 panel_size,
                 project_name,
                 category,
@@ -1148,22 +1175,25 @@ def fetch_profile_full_timeseries(
     project_name = category = subcategory = None
     for r in rows:
         out_rows.append({
-            "date":          str(r[0]),
-            "mentions_raw":  int(r[1] or 0),
-            "mentions":      int(r[2] or 0),
-            "pos":           int(r[3] or 0),
-            "neu":           int(r[4] or 0),
-            "neg":           int(r[5] or 0),
-            "net_sentiment": float(r[6] or 0),
-            "cw_iq_score":   float(r[7] or 0),
-            "unique_uids":   int(r[8] or 0),
-            "panel_size":    int(r[9] or 0),
+            "date":             str(r[0]),
+            "mentions_raw":     int(r[1] or 0),
+            "mentions":         int(r[2] or 0),
+            "pos":              int(r[3] or 0),
+            "neu":              int(r[4] or 0),
+            "neg":              int(r[5] or 0),
+            "net_sentiment":    float(r[6] or 0),
+            "cw_iq_score":      float(r[7] or 0),
+            "unique_uids_raw":  int(r[8] or 0),
+            # unique_uids is gen-pop projected to match mentions / pos / neu /
+            # neg; the raw panel count is still available as unique_uids_raw.
+            "unique_uids":      int(r[9] or 0),
+            "panel_size":       int(r[10] or 0),
         })
         # First-seen labels (every row in this view has them already
         # resolved via argMax, so the first one is fine).
-        if project_name is None: project_name = r[10] or None
-        if category    is None: category     = r[11] or None
-        if subcategory is None: subcategory  = r[12] or None
+        if project_name is None: project_name = r[11] or None
+        if category    is None: category     = r[12] or None
+        if subcategory is None: subcategory  = r[13] or None
 
     return {
         "profile_subject": profile_subject,
