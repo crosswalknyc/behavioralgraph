@@ -335,7 +335,10 @@ def run_research_anchored_job(
               f"in {synth_sec}s")
 
         modeled_block = synth_to_dashboard_payload(
-            synth, target_audience=max(implied_audience, 1),
+            synth,
+            target_audience=max(implied_audience, 1),
+            target_type=target_type,
+            site_funnel=site_funnel or None,
         )
         modeled_block['source']      = synth.get('source', 'fallback')
         modeled_block['notes']       = synth.get('notes', '')

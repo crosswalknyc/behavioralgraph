@@ -959,12 +959,21 @@ def synth_to_dashboard_payload(
     synth: dict,
     *,
     target_audience: int,
+    target_type: str = 'movie',
+    site_funnel: Optional[dict] = None,
 ) -> dict:
     """Convert Claude's structured estimate into the JSON shape the
     dashboard already knows how to render. Returns:
         {'touchpoints': {...}, 'path_to_purchase': {...},
          'kpis': {...}, 'cohort_size': N}
-    Everything is sized to `target_audience` (the implied # of buyers).
+
+    For movie / tv_show targets: `target_audience` is the implied # of
+    BUYERS (everyone in the cohort converted by definition), so the
+    KPI strip shows total_users == converted_users with 100% CR.
+
+    For website targets: `target_audience` is the implied # of
+    VISITORS, and the on-site conversion rate is derived from
+    site_funnel.funnel_split.converted_on_site_pct (if available).
     """
     n = max(1, int(target_audience or 0))
     # ── Baseline conversion rate (genpop frame) ───────────────────────
@@ -1093,14 +1102,52 @@ def synth_to_dashboard_payload(
 
     avg_days = float(synth.get('avg_days_to_purchase') or 14.0)
     avg_touches = float(synth.get('avg_touches_before_purchase') or 5.0)
-    kpis = {
-        'total_users':                n,
-        'converted_users':            n,
-        'conversion_pct':             100.0,
-        'avg_journey_duration_days':  round(avg_days, 1),
-        'avg_sessions_to_convert':    round(max(1.0, avg_touches / 2.0), 1),
-        'avg_events_per_user':        round(avg_touches + 1, 1),
-    }
+
+    if (target_type or '').lower() == 'website':
+        # For a website target, n = implied VISITORS (not buyers). Pull
+        # the on-site/switched/abandoned split from site_funnel; fall
+        # back to industry-defensible defaults for high-intent
+        # transactional sites (15-30% on-site CR) if site_funnel is
+        # missing or malformed.
+        fs = (site_funnel or {}).get('funnel_split') or {}
+        on_site_pct  = float(fs.get('converted_on_site_pct')   or 20.0)
+        switched_pct = float(fs.get('switched_and_bought_pct') or 25.0)
+        never_pct    = float(fs.get('never_transacted_pct')    or
+                             max(0.0, 100.0 - on_site_pct - switched_pct))
+        # Renormalize defensively in case the agent's three values don't
+        # quite sum to 100.
+        total = on_site_pct + switched_pct + never_pct
+        if total > 0 and abs(total - 100.0) > 1:
+            on_site_pct  = round(on_site_pct  * 100.0 / total, 1)
+            switched_pct = round(switched_pct * 100.0 / total, 1)
+            never_pct    = round(never_pct    * 100.0 / total, 1)
+
+        converted    = int(round(n * on_site_pct  / 100.0))
+        switched     = int(round(n * switched_pct / 100.0))
+        never_trans  = int(round(n * never_pct    / 100.0))
+        kpis = {
+            'total_users':                  n,                # = visitors
+            'converted_users':              converted,        # bought on this site
+            'conversion_pct':               round(on_site_pct, 1),
+            'switched_users':               switched,
+            'switched_pct':                 round(switched_pct, 1),
+            'captured_pct':                 round(on_site_pct + switched_pct, 1),
+            'never_transacted_users':       never_trans,
+            'never_transacted_pct':         round(never_pct, 1),
+            'avg_journey_duration_days':    round(avg_days, 1),
+            'avg_sessions_to_convert':      round(max(1.0, avg_touches / 2.0), 1),
+            'avg_events_per_user':          round(avg_touches + 1, 1),
+        }
+    else:
+        # Movie / TV / general — cohort IS the buyers by construction.
+        kpis = {
+            'total_users':                n,
+            'converted_users':            n,
+            'conversion_pct':             100.0,
+            'avg_journey_duration_days':  round(avg_days, 1),
+            'avg_sessions_to_convert':    round(max(1.0, avg_touches / 2.0), 1),
+            'avg_events_per_user':        round(avg_touches + 1, 1),
+        }
 
     return {
         'touchpoints':      touchpoints,
@@ -2444,6 +2491,19 @@ Output JSON EXACTLY in this shape (no code fences, no markdown):
 }
 
 Hard rules:
+  * CONVERSION RATE CALIBRATION. converted_on_site_pct is a
+    PER-VISITOR-IN-THE-WINDOW figure (unique people who visited the
+    site at least once during the date window and ALSO bought through
+    that site at least once during the window). For high-intent
+    TRANSACTIONAL sites (ticketing, travel, food delivery, e-commerce
+    with stated purchase intent), this number should land in the
+    15-35% range for a multi-month window — NOT single digits.
+    Ticketing-specific benchmark: Fandango is ~22% (50M monthly
+    uniques vs ~7-10M tickets/month per public revenue disclosures);
+    Atom is similar. If your initial estimate is under 10% for a
+    transactional site, double-check — you are likely confusing
+    session-level CR with visitor-level CR. Cite the per-visit vs
+    per-visitor distinction in the funnel_split notes when relevant.
   * DIGITAL ONLY. Every switched_destination, intermediate_journey
     step, inception_referrer, and companion_behavior MUST be observable
     in CLICKSTREAM data — i.e. it must correspond to a real website,
