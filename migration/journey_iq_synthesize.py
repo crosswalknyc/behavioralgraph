@@ -1225,30 +1225,47 @@ def research_audience_size(
         _ws_old = {'type': 'web_search_20250305', 'name': 'web_search', 'max_uses': 6}
         _audience_system = (
             'You are a senior consumer-research analyst. Use the web_search '
-            'tool to look up real-world audience numbers, then return ONE '
-            'valid JSON object matching the schema in the user message. '
-            'Return ONLY the JSON object — no markdown fences, no commentary.'
+            'tool aggressively to look up real-world audience numbers. '
+            '\n\n'
+            'CRITICAL OUTPUT RULES — your response MUST be parseable JSON:\n'
+            '  1. After you finish researching, your FINAL text output must '
+            'be EXACTLY one JSON object matching the schema in the user '
+            'message.\n'
+            '  2. The first character of your final output MUST be `{` and '
+            'the last character MUST be `}`.\n'
+            '  3. Do NOT include any prose, narration, summary of your '
+            'research, "I found that...", "Based on my searches...", or '
+            'thinking text in the final response. JSON ONLY.\n'
+            '  4. Do NOT wrap the JSON in markdown fences (no ```json, no '
+            '```). Just the raw object.'
         )
+        # Primary: try new tool ID + default model. If parse fails OR no JSON
+        # braces appear in the response, fall through to the Sonnet fallback.
+        def _has_json(t: str) -> bool:
+            return ('{' in t and '}' in t and t.find('{') < t.rfind('}'))
+
         raw = ''
         try:
             raw = _claude_messages(
                 system=_audience_system, user=prompt, model=claude_model,
-                max_tokens=2000, temperature=0.2, tools=[_ws_new],
+                max_tokens=4000, temperature=0.2, tools=[_ws_new],
             ) or ''
         except Exception as e:
             print(f'[Journey IQ audience] primary Claude+web_search failed: {e}')
             raw = ''
-        if not raw:
+        if not _has_json(raw):
+            if raw:
+                print(f'[Journey IQ audience] primary returned no JSON — falling back to Sonnet. snippet: {raw[:200]!r}')
             try:
                 raw = _claude_messages(
                     system=_audience_system, user=prompt,
                     model='claude-sonnet-4-6',
-                    max_tokens=2000, temperature=0.2, tools=[_ws_old],
+                    max_tokens=4000, temperature=0.2, tools=[_ws_old],
                 ) or ''
             except Exception as e:
                 return {'_error': f'Claude+web_search fallback also failed: {e}'}
-        if not raw:
-            return {'_error': 'Claude returned empty response'}
+        if not _has_json(raw):
+            return {'_error': 'Claude returned no JSON', '_raw': raw[:500]}
 
         # Strip code fences if Claude wraps the JSON
         if raw.startswith('```'):
@@ -1434,7 +1451,16 @@ Hard rules:
   * Be honest about confidence ('low' if you had to extrapolate from
     weak signals).
 
-Output JSON ONLY."""
+CRITICAL OUTPUT RULES — your response MUST be parseable JSON:
+  1. After you finish web_searching, your FINAL text output must be
+     EXACTLY one JSON object matching the schema above.
+  2. The first character of your final output MUST be `{` and the last
+     character MUST be `}`.
+  3. Do NOT include any prose, narration, summary of your research,
+     "I found that...", "Based on my searches...", or thinking text in
+     the final response. JSON ONLY.
+  4. Do NOT wrap the JSON in markdown fences (no ```json, no ```).
+     Just the raw object."""
 
 
 def research_marketing_footprint(
@@ -1517,6 +1543,9 @@ def research_marketing_footprint(
     )
     _ws_new = {'type': 'web_search_20260209', 'name': 'web_search', 'max_uses': 12}
     _ws_old = {'type': 'web_search_20250305', 'name': 'web_search', 'max_uses': 12}
+    def _has_json(t: str) -> bool:
+        return ('{' in t and '}' in t and t.find('{') < t.rfind('}'))
+
     raw = ''
     try:
         raw = _claude_messages(
@@ -1526,7 +1555,9 @@ def research_marketing_footprint(
     except Exception as e:
         print(f'[Journey IQ footprint] primary Claude+web_search failed: {e}')
         raw = ''
-    if not raw:
+    if not _has_json(raw):
+        if raw:
+            print(f'[Journey IQ footprint] primary returned no JSON — falling back to Sonnet. snippet: {raw[:200]!r}')
         # Retry with legacy web_search tool ID + Sonnet (same pattern bg.py uses)
         try:
             raw = _claude_messages(
@@ -1536,8 +1567,8 @@ def research_marketing_footprint(
             ) or ''
         except Exception as e:
             return {'_error': f'Claude+web_search fallback also failed: {e}'}
-    if not raw:
-        return {'_error': 'Claude returned empty response'}
+    if not _has_json(raw):
+        return {'_error': 'Claude returned no JSON', '_raw': raw[:500]}
 
     if raw.startswith('```'):
         raw = raw.split('\n', 1)[-1].rsplit('```', 1)[0].strip()
