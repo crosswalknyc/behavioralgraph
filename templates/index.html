@@ -19117,7 +19117,7 @@
                     <div style="display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap;">
                         <div style="flex: 1; min-width: 240px;">
                             <h3 style="margin: 0 0 0.25rem;">🕸️ Marketing Footprint</h3>
-                            <p id="jiqBubbleSubtitle" style="margin: 0 0 0.5rem; color: var(--text-secondary); font-size: 0.8rem;">AI agent did a Google search-vertical sweep (short videos · news · forums) plus per-platform <code>site:</code> searches inside your date window, then estimated US-genpop reach per discovered marketing event. Switch between Bubbles (per-channel summary), Spider (network from target → channels → events → ticketing → conversion), or Events (flat ranked list).</p>
+                            <p id="jiqBubbleSubtitle" style="margin: 0 0 0.5rem; color: var(--text-secondary); font-size: 0.8rem; display: none;"></p>
                         </div>
                         <div id="jiqFootprintViewBtns" style="display: flex; gap: 4px;"></div>
                     </div>
@@ -27868,14 +27868,11 @@
                 }).join('');
             }
 
-            // Meta line: confidence + total events
+            // Meta line: total events + channels (confidence + baseline removed per request)
             var totalEvents = (bubbles || []).reduce(function(s, b) { return s + (b.event_count || 0); }, 0);
-            var conf = (footprint && footprint.confidence) || 'medium';
             var metaEl = document.getElementById('jiqBubbleMeta');
             if (metaEl) {
-                metaEl.innerHTML = 'Discovered <strong>' + totalEvents + '</strong> marketing events across <strong>' + (bubbles || []).length + '</strong> channels'
-                    + '  ·  agent confidence: <strong>' + conf + '</strong>'
-                    + '  ·  US-genpop baseline: <strong>260M</strong> adults 16+';
+                metaEl.innerHTML = 'Discovered <strong>' + totalEvents + '</strong> marketing events across <strong>' + (bubbles || []).length + '</strong> channels';
             }
 
             // BUBBLES VIEW
