@@ -12953,7 +12953,6 @@
                             <option value="shareOfTimeIQ" {% if not has_share_of_time_access %}disabled{% endif %}>⏱️ Share of Time</option>
                             <option value="ticketSalesTracker" {% if not has_ticket_sales_tracker_access %}disabled{% endif %}>🎟️ Ticket Sales Tracker</option>
                             <option value="hedgeFundIQ" {% if not has_hedge_fund_iq_access %}disabled{% endif %} {% if default_view_hedge_fund_iq %}selected{% endif %}>📈 Fin IQ</option>
-                            <option value="sentimentIQ" {% if not has_sentiment_iq_access %}disabled{% endif %}>💬 Sentiment IQ</option>
                             <option value="roasIQ" {% if not has_roas_iq_access %}disabled{% endif %}>💰 ROAS IQ</option>
                             <option value="ecommerceIQ" {% if not has_ecommerce_iq_access %}disabled{% endif %}>🛒 E-Commerce IQ</option>
                             <option value="brandPartnershipIQ" {% if not has_ecommerce_iq_access and 'brand_partnership_iq' not in analysis_iq_modules and role != 'super_admin' and role != 'admin' %}disabled{% endif %}>🤝 Brand Partnership</option>
