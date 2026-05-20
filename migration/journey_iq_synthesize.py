@@ -1579,17 +1579,32 @@ brand) DURING A SPECIFIC DATE WINDOW. You have web search. Your job:
          - Google Ads Transparency Center: adstransparency.google.com
            (lists every active Google/YouTube ad by advertiser)
          - TikTok Creative Center / Top Ads: ads.tiktok.com/business/creativecenter
-         - iSpot.tv: ispot.tv/brands/<advertiser>  (linear TV spend & GRPs)
+         - iSpot.tv: ispot.tv/brands/<advertiser>  (national TV ad
+            spend + impressions across broadcast networks, cable,
+            vMVPD live channels, and ad-supported streaming)
          - Trade press spend reports: variety.com, adage.com, mediapost.com
            — search "<TARGET> ad spend" / "marketing budget" / "campaign"
        Then for EACH of these paid platforms produce ONE event in the
-       paid_advertising bucket: Google Ads, Meta Ads, TikTok Ads, Amazon
-       DSP, Hulu/Disney CTV, Linear TV, The Trade Desk programmatic,
-       Snapchat Ads, Spotify Audio, OOH (out-of-home), Yahoo/Microsoft
-       Ads, Reddit Ads. Skip a platform ONLY if you're confident the
-       target did NOT run there (e.g. niche indie film, no Super Bowl
-       spot → skip Linear TV). Aim for 5-10 paid_advertising events,
-       not 0-3.
+       paid_advertising bucket. Use the MODERN TV taxonomy — NEVER
+       the term "linear TV". Instead break TV ad spend out into:
+         - vMVPD ads — live-TV streaming inventory on YouTube TV,
+           Hulu + Live TV, Sling TV, fuboTV, DirecTV Stream
+         - FAST ads — free ad-supported streaming TV on Pluto TV
+           (Paramount), Tubi (Fox), Amazon Freevee, The Roku Channel,
+           Samsung TV Plus, Xumo, LG Channels
+         - AVOD ads — ad-tiers of subscription services: Hulu (ad
+           tier), Disney+ Basic with Ads, Max with Ads, Peacock
+           Premium, Netflix Ads, Paramount+ Essential
+         - SVOD home-tile / content placement — paid promotional
+           tiles on Netflix homepage, Disney+ promo carousel,
+           Max Today's Tops, Prime Video featured banners (even
+           ad-free SVOD has paid theatrical promo placement)
+       Other paid platforms to enumerate: Google Ads, Meta Ads,
+       TikTok Ads, Amazon DSP, The Trade Desk programmatic,
+       Snapchat Ads, Spotify Audio, OOH (out-of-home), Yahoo /
+       Microsoft Ads, Reddit Ads. Skip a platform ONLY if you're
+       confident the target did NOT run there. Aim for 8-12
+       paid_advertising events, not 0-3.
 
   2. For EACH discovered event, estimate what fraction of US gen-pop
      (US adults 16+ ~= 260M) it likely REACHED, using the actor's
@@ -1664,8 +1679,10 @@ Output JSON EXACTLY in this shape (no code fences, no markdown):
         {"platform": "Meta Ads",         "network": "Facebook + Instagram",         "campaign": "Reels + Feed video + Stories",              "creative_type": "video + carousel",  "placement": "Reels / Feed / Stories",            "url": "https://www.facebook.com/ads/library/?q=<TARGET>", "spend_usd_estimate": 3200000, "estimated_reach_us": 21000000, "reach_pct_of_genpop": 8.1,  "date": "2026-01-12", "confidence": "high",   "notes": "Cite Meta Ad Library — REQUIRED to search this for the target"},
         {"platform": "TikTok Ads",       "network": "TikTok",                       "campaign": "Spark Ads + TopView",                       "creative_type": "short-form video",  "placement": "For You feed + TopView",            "url": "https://library.tiktok.com/ads?...", "spend_usd_estimate": 2100000, "estimated_reach_us": 14000000, "reach_pct_of_genpop": 5.4,  "date": "2026-01-15", "confidence": "medium", "notes": "Cite TikTok Creative Center / Top Ads"},
         {"platform": "Amazon DSP",       "network": "Amazon + IMDb + Twitch",       "campaign": "programmatic OLV + display",                "creative_type": "video + display",   "placement": "Fire TV + IMDb + Twitch + Amazon",  "url": "",                                   "spend_usd_estimate": 1800000, "estimated_reach_us": 12000000, "reach_pct_of_genpop": 4.6,  "date": "2026-01-08", "confidence": "medium", "notes": "Estimate from Amazon ad-network reach reports"},
-        {"platform": "Hulu / Disney CTV","network": "Disney Ad Sales (Hulu + ESPN + Disney+)", "campaign": "15s + 30s CTV spots",       "creative_type": "video",             "placement": "Hulu pre-roll + ESPN linear",       "url": "",                                   "spend_usd_estimate": 2400000, "estimated_reach_us": 18000000, "reach_pct_of_genpop": 6.9,  "date": "2026-01-05", "confidence": "medium", "notes": "Cite trade press CTV spend report if visible"},
-        {"platform": "Linear TV",        "network": "broadcast + cable",            "campaign": "Super Bowl spot / primetime takeover",      "creative_type": "30s + 60s TV spot", "placement": "broadcast networks + ESPN/TNT",     "url": "",                                   "spend_usd_estimate": 6500000, "estimated_reach_us": 35000000, "reach_pct_of_genpop": 13.5, "date": "2026-01-20", "confidence": "high",   "notes": "Cite Nielsen / iSpot.tv if reported"},
+        {"platform": "vMVPD ads",        "network": "YouTube TV + Hulu + Live TV + Sling + fuboTV + DirecTV Stream", "campaign": "live-TV streaming 15s + 30s spots", "creative_type": "video", "placement": "live-channel ad pods (sports + news + entertainment)", "url": "", "spend_usd_estimate": 1800000, "estimated_reach_us": 14000000, "reach_pct_of_genpop": 5.4,  "date": "2026-01-18", "confidence": "medium", "notes": "Cite iSpot.tv for vMVPD GRPs / impressions"},
+        {"platform": "FAST ads",         "network": "Pluto TV + Tubi + Freevee + Roku Channel + Samsung TV Plus + Xumo", "campaign": "free-streaming spots + branded channel",     "creative_type": "video",             "placement": "pre-roll + mid-roll on free streaming channels", "url": "", "spend_usd_estimate":  900000, "estimated_reach_us":  9500000, "reach_pct_of_genpop": 3.7,  "date": "2026-01-19", "confidence": "medium", "notes": "FAST has explosive reach 2025-26; cite Roku/Tubi/Freevee ad data"},
+        {"platform": "AVOD ads",         "network": "Hulu ad-tier + Disney+ Basic + Max Ads + Peacock Premium + Netflix Ads + Paramount+ Essential", "campaign": "ad-tier 15s + 30s + binge-ad", "creative_type": "video", "placement": "pre-roll + mid-roll on ad-supported SVOD tiers", "url": "", "spend_usd_estimate": 3200000, "estimated_reach_us": 24000000, "reach_pct_of_genpop": 9.2, "date": "2026-01-20", "confidence": "high",   "notes": "AVOD tiers grew massively 2024-26; cite Disney/Netflix ads reach reports"},
+        {"platform": "SVOD content tile","network": "Netflix + Disney+ + Max + Prime Video homepage / promo carousels", "campaign": "paid theatrical promo home-tile placement", "creative_type": "static + video tile", "placement": "homepage carousel + Today's Tops + Featured banners", "url": "", "spend_usd_estimate": 1100000, "estimated_reach_us": 22000000, "reach_pct_of_genpop": 8.5, "date": "2026-01-17", "confidence": "medium", "notes": "Even pure-SVOD ad-free tiers carry paid theatrical promo tiles (studio-negotiated)"},
         {"platform": "The Trade Desk",   "network": "programmatic display + CTV",   "campaign": "open-web display + CTV remarketing",        "creative_type": "display + video",   "placement": "long-tail web + CTV apps",          "url": "",                                   "spend_usd_estimate":  900000, "estimated_reach_us":  6000000, "reach_pct_of_genpop": 2.3,  "date": "2026-01-14", "confidence": "low",    "notes": "Standard programmatic add-on for major movie launches"},
         {"platform": "Snapchat Ads",     "network": "Snapchat",                     "campaign": "AR Lens + Snap Ads",                        "creative_type": "AR + video",        "placement": "Discover + AR camera",              "url": "",                                   "spend_usd_estimate":  650000, "estimated_reach_us":  4500000, "reach_pct_of_genpop": 1.7,  "date": "2026-01-18", "confidence": "low",    "notes": "Common for movies targeting under-25 audience"},
         {"platform": "Spotify Audio",    "network": "Spotify",                      "campaign": "audio + podcast pre-roll",                  "creative_type": "audio",             "placement": "free-tier audio + podcasts",        "url": "",                                   "spend_usd_estimate":  400000, "estimated_reach_us":  3500000, "reach_pct_of_genpop": 1.3,  "date": "2026-01-11", "confidence": "low",    "notes": "Audio reach estimate"},
@@ -1782,9 +1799,12 @@ Hard rules:
     weak signals).
   * paid_advertising events MUST use these field names so the dashboard
     can render them: "platform" (REQUIRED — human-readable name like
-    "Google Ads", "Meta Ads", "TikTok Ads", "Amazon DSP", "Hulu / Disney
-    CTV", "Linear TV", "The Trade Desk", "Snapchat Ads", "Spotify Audio",
-    "OOH (out-of-home)", "Yahoo / Microsoft Ads", "Reddit Ads"),
+    "Google Ads", "Meta Ads", "TikTok Ads", "Amazon DSP", "vMVPD ads",
+    "FAST ads", "AVOD ads", "SVOD content tile", "The Trade Desk",
+    "Snapchat Ads", "Spotify Audio", "OOH (out-of-home)",
+    "Yahoo / Microsoft Ads", "Reddit Ads"). NEVER use the term
+    "Linear TV" or "linear TV" — break TV ad spend into vMVPD /
+    FAST / AVOD / SVOD instead,
     "network" (sub-property — e.g. "Search + YouTube TrueView"),
     "campaign" (creative concept), "creative_type", "placement",
     "spend_usd_estimate" (a real number you can defend), and the
@@ -2015,6 +2035,23 @@ def research_marketing_footprint(
     parsed.setdefault('marketing_footprint', {})
     for ch in _FOOTPRINT_CHANNELS:
         parsed['marketing_footprint'].setdefault(ch, {'reach_pct_of_genpop': 0.0, 'events': []})
+
+    # Safety net: rewrite any "Linear TV" leak in paid_advertising
+    # platform/network labels into the modern vMVPD/FAST/AVOD/SVOD
+    # taxonomy. Claude is instructed to never use "linear TV" but
+    # this defends against prompt-drift on older models.
+    paid_evs = (parsed['marketing_footprint'].get('paid_advertising') or {}).get('events') or []
+    for ev in paid_evs:
+        plat_raw = str(ev.get('platform') or '')
+        net_raw  = str(ev.get('network')  or '')
+        if 'linear tv' in plat_raw.lower() or plat_raw.lower() == 'tv':
+            ev['platform'] = 'AVOD ads'
+            if not net_raw or 'broadcast' in net_raw.lower() or 'cable' in net_raw.lower():
+                ev['network'] = 'Hulu ad-tier + Disney+ Basic + Max Ads + Peacock Premium + Netflix Ads + Paramount+ Essential'
+            if 'linear-tv-rewrite' not in (ev.get('notes') or ''):
+                ev['notes'] = (ev.get('notes') or '') + ' [agent said "linear TV" — auto-rewritten to AVOD ads; linear-tv-rewrite]'
+        if 'linear tv' in net_raw.lower():
+            ev['network'] = net_raw.replace('linear TV', 'vMVPD live channels').replace('Linear TV', 'vMVPD live channels').replace('linear tv', 'vMVPD live channels')
     parsed.setdefault('us_genpop_baseline', US_GENPOP_BASELINE)
     parsed.setdefault('confidence', 'medium')
     parsed.setdefault('sources_consulted', [])
@@ -2211,4 +2248,243 @@ __all__ = [
     'research_marketing_footprint',
     'footprint_to_bubbles',
     'footprint_to_spider',
+    'research_site_funnel',
 ]
+
+
+# ── Public: site-funnel research agent ──────────────────────────────────
+# Used when target_type='website' and we want to model what happens to
+# people who LAND on the site but don't convert there. Produces a
+# `site_funnel` block describing:
+#   - visitor split: converted-on-site / switched-and-bought-elsewhere /
+#                    never-transacted
+#   - switched_destinations: where the price-shoppers ended up buying
+#   - inception_referrers:   how visitors arrived at the site
+#   - companion_behaviors:   adjacent verticals the visitor planned for
+#                            (dinner reservations, parking, hotels, etc.)
+#
+# Drives a new "Visitor Funnel" set of dashboard cards. Wired into
+# run_research_anchored_job() so any website-typed run gets the funnel
+# block populated alongside the marketing-footprint block.
+
+_FUNNEL_CACHE: dict[str, dict] = {}
+
+
+_SYSTEM_SITE_FUNNEL = """\
+You are a senior consumer-behavior analyst specializing in PURCHASE
+FUNNEL ANALYSIS for transactional websites. You have web_search. Your
+job is to MODEL what really happens to a representative cohort of US
+visitors who land on a target site during a date window — how many
+convert on the site, how many shop around and ultimately buy
+elsewhere, how many abandon entirely, where the switchers end up, what
+adjacent verticals they plan for around the purchase (e.g. dinner
+before the movie), and how they're arriving at the site in the first
+place. You reason like an attribution analyst at the studio / brand
+side — concrete, grounded in real industry data.
+
+CRITICAL — reason hard before answering. Don't give 2-3 generic
+buckets. Enumerate the long tail.
+
+Output JSON EXACTLY in this shape (no code fences, no markdown):
+
+{
+  "target":                "<site name, e.g. Fandango>",
+  "url_pattern":           "<root domain, e.g. fandango.com>",
+  "us_genpop_baseline":    260000000,
+  "visitors_us_in_window": <int — US monthly uniques * (window_days/30)>,
+  "vertical":              "<the vertical, e.g. movie ticketing, food delivery, hotel booking, e-commerce>",
+  "confidence":            "high" | "medium" | "low",
+  "sources_consulted":     ["SimilarWeb fandango.com Jan 2026", "Comscore movie-ticketing share Q4 2025", "Nielsen dining + movie crossover 2024", ...],
+  "notes":                 "1-3 sentence summary of the funnel shape and what surprised you",
+
+  "funnel_split": {
+    "converted_on_site_pct":      <0-100 — what % bought a ticket on the target site itself>,
+    "switched_and_bought_pct":    <0-100 — what % left WITHOUT converting but DID transact elsewhere later>,
+    "never_transacted_pct":       <0-100 — what % abandoned entirely (no ticket purchase anywhere)>,
+    "notes": "Sum must equal ~100. Cite Comscore / SimilarWeb conversion-rate benchmarks for the vertical."
+  },
+
+  "switched_destinations": [
+    {"destination": "AMC Theatres",  "share_pct_of_switchers": 28.0, "url_pattern": "amctheatres.com", "notes": "Largest US chain; loyalty members often skip Fandango fees"},
+    {"destination": "Cinemark",      "share_pct_of_switchers": 14.0, "url_pattern": "cinemark.com",    "notes": "..."},
+    {"destination": "Regal",         "share_pct_of_switchers": 12.0, "url_pattern": "regmovies.com",   "notes": "..."},
+    {"destination": "Atom Tickets",  "share_pct_of_switchers":  9.0, "url_pattern": "atomtickets.com", "notes": "Lower fees than Fandango on some chains"},
+    {"destination": "Theater box office (walk-up)", "share_pct_of_switchers": 22.0, "url_pattern": "n/a (offline)", "notes": "Older demo / impulse buyers"},
+    {"destination": "Regional chain direct", "share_pct_of_switchers": 8.0, "url_pattern": "marcustheatres.com | drafthouse.com | harkinstheatres.com", "notes": "Marcus, Alamo Drafthouse, Harkins, B&B, Landmark"}
+    // aim for 6-10 distinct destinations covering the whole switch surface
+  ],
+
+  "intermediate_journey": [
+    {"step": "Google search for reviews",      "share_pct_of_switchers": 62.0, "url_pattern": "google.com/search", "typical_queries": ["<TARGET MOVIE> reviews", "is <MOVIE> good", "<MOVIE> rotten tomatoes"], "notes": "Validation search is the #1 cause of cart abandonment on ticketing sites"},
+    {"step": "Rotten Tomatoes / Metacritic",   "share_pct_of_switchers": 38.0, "url_pattern": "rottentomatoes.com | metacritic.com", "typical_queries": [],  "notes": "Score check"},
+    {"step": "Reddit r/movies thread",         "share_pct_of_switchers": 18.0, "url_pattern": "reddit.com/r/movies",                  "typical_queries": ["<MOVIE> review reddit"], "notes": "Social proof"},
+    {"step": "Google Maps theater search",     "share_pct_of_switchers": 31.0, "url_pattern": "google.com/maps",                      "typical_queries": ["movie theater near me"],  "notes": "Switching to a different theater chain to save fees / find better seats"},
+    {"step": "Price comparison across chains", "share_pct_of_switchers": 24.0, "url_pattern": "amctheatres.com | cinemark.com | regmovies.com", "typical_queries": [], "notes": "Direct fee comparison"}
+    // aim for 5-8 typical intermediate steps the switcher takes
+  ],
+
+  "inception_referrers": [
+    {"source": "Google organic search",                     "share_pct_of_inbound": 38.0, "url_pattern": "google.com/search",         "notes": "Direct showtime / movie-name queries"},
+    {"source": "Google 'Showtimes near me' Knowledge Panel","share_pct_of_inbound": 22.0, "url_pattern": "google.com/search?...udm=",  "notes": "The showtime widget links directly to Fandango listings"},
+    {"source": "Direct / bookmarked",                       "share_pct_of_inbound": 14.0, "url_pattern": "(direct)",                   "notes": "Loyal users typing fandango.com"},
+    {"source": "Email / SMS marketing (Fandango VIP+)",     "share_pct_of_inbound":  8.0, "url_pattern": "(email)",                    "notes": "VIP+ rewards push"},
+    {"source": "Studio / movie official site link",         "share_pct_of_inbound":  6.0, "url_pattern": "sonypictures.com | warnerbros.com | disney.com", "notes": "'Get Tickets' button on studio sites"},
+    {"source": "Social (Instagram / TikTok / X)",           "share_pct_of_inbound":  5.0, "url_pattern": "instagram.com | tiktok.com | x.com", "notes": "Trailer post 'Tickets in bio'"},
+    {"source": "Paid Google Ads (Fandango brand bidding)",  "share_pct_of_inbound":  4.0, "url_pattern": "googleadservices.com",       "notes": "Brand-protection paid search"},
+    {"source": "Display / programmatic retargeting",        "share_pct_of_inbound":  2.0, "url_pattern": "doubleclick.net | adnxs.com",  "notes": "..."},
+    {"source": "App push notification (Fandango app)",      "share_pct_of_inbound":  1.0, "url_pattern": "(app push)",                 "notes": "..."}
+    // aim for 8-12 inbound sources covering the full referral mix
+  ],
+
+  "companion_behaviors": [
+    {"vertical": "Dinner reservation",          "share_pct_of_visitors": 38.0, "top_sites": ["opentable.com", "resy.com", "yelp.com", "google.com/maps"], "typical_window": "1-3 hours before showtime", "notes": "'Dinner and a movie' is the dominant adjacent vertical — ~38% of theater visits include a sit-down dinner; ~22% include a casual quick-serve meal"},
+    {"vertical": "Ride / parking",              "share_pct_of_visitors": 24.0, "top_sites": ["uber.com", "lyft.com", "spothero.com", "parkmobile.com"], "typical_window": "30-60 min before showtime", "notes": "Urban moviegoers (NYC/SF/CHI) heavily use Uber + SpotHero"},
+    {"vertical": "Pre/post drinks (bar)",       "share_pct_of_visitors": 18.0, "top_sites": ["yelp.com", "google.com/maps", "untappd.com"], "typical_window": "+/- 90 min around showtime", "notes": "Theater-adjacent bars; Drafthouse chains have in-theater bar"},
+    {"vertical": "Babysitter / childcare (family demo)", "share_pct_of_visitors": 7.0, "top_sites": ["care.com", "urbansitter.com"], "typical_window": "1-3 days before", "notes": "Date-night planning"},
+    {"vertical": "Hotel (out-of-town premiere)","share_pct_of_visitors":  3.0, "top_sites": ["booking.com", "expedia.com", "hotels.com"], "typical_window": "1-7 days before", "notes": "Premiere-week tourists; mostly NYC / LA"},
+    {"vertical": "Concession / food delivery to theater", "share_pct_of_visitors": 5.0, "top_sites": ["doordash.com", "ubereats.com"], "typical_window": "30 min before showtime", "notes": "Mostly Alamo Drafthouse + Studio Movie Grill"},
+    {"vertical": "Merchandise / fan gear",      "share_pct_of_visitors":  4.0, "top_sites": ["amazon.com", "boxlunch.com", "shopdisney.com"], "typical_window": "1-7 days before / after", "notes": "Marvel / Star Wars / animated-tentpole tie-ins"},
+    {"vertical": "Date-prep (hair / nails / outfit)", "share_pct_of_visitors": 6.0, "top_sites": ["amazon.com", "shein.com", "stylepit-style"], "typical_window": "1-2 days before", "notes": "Premiere / opening-weekend date crowd"}
+    // aim for 6-10 distinct companion verticals
+  ]
+}
+
+Hard rules:
+  * funnel_split percentages MUST sum to ~100 (±2 for rounding).
+  * switched_destinations share_pct_of_switchers MUST sum to ~100.
+  * inception_referrers share_pct_of_inbound MUST sum to ~100.
+  * Every percent must be a defensible estimate. Cite the source class
+    in the event's notes (SimilarWeb, Comscore, Nielsen, industry
+    benchmark, etc.). When you genuinely don't know, set
+    confidence: "low" and explain the assumption.
+  * For companion_behaviors, share_pct_of_visitors is OVERLAP with the
+    cohort that visited the target site — these are NOT mutually
+    exclusive (a single user can have a dinner reservation AND an
+    Uber ride). Each row's share_pct can be evaluated independently;
+    they do NOT need to sum to 100.
+  * Use web_search to ground the numbers — pull SimilarWeb / Comscore /
+    Nielsen / Statista figures where they exist. For the dinner-and-a-
+    movie figure specifically, cite Nielsen Scarborough or
+    Restaurant Business Online's theatergoer studies.
+  * Aim for top ~10 entries per list (switched_destinations,
+    intermediate_journey, inception_referrers, companion_behaviors).
+    A list returning 2-3 entries is a RED FLAG that you didn't
+    enumerate the long tail.
+
+CRITICAL OUTPUT RULES — your response MUST be parseable JSON:
+  1. After you finish web_searching, your FINAL text output must be
+     EXACTLY one JSON object matching the schema above.
+  2. The first character of your final output MUST be `{` and the last
+     character MUST be `}`.
+  3. Do NOT include any prose, narration, summary of your research,
+     "I found that...", "Based on my searches...", or thinking text in
+     the final response. JSON ONLY.
+  4. Do NOT wrap the JSON in markdown fences (no ```json, no ```)."""
+
+
+def research_site_funnel(
+    *,
+    target: str,
+    url_pattern: str = '',
+    vertical_hint: str = '',
+    start_date: str = '',
+    end_date: str = '',
+    max_tokens: int = 12000,
+) -> dict:
+    """Run the site-funnel research agent against the target site.
+
+    Same dual-import + Claude+web_search pattern as
+    research_marketing_footprint. Returns the parsed JSON or
+    {'_error': '...'} on failure. Cached in-memory by target.
+    """
+    cache_key = f'sitefunnel::{(target or "").strip().lower()}'
+    if cache_key in _FUNNEL_CACHE:
+        return _FUNNEL_CACHE[cache_key]
+
+    _claude_messages = None
+    _get_claude_client = None
+    try:
+        from migration.claude_client import claude_messages as _cm, get_claude_client as _gc
+        _claude_messages = _cm; _get_claude_client = _gc
+    except ImportError:
+        try:
+            from claude_client import claude_messages as _cm, get_claude_client as _gc  # type: ignore
+            _claude_messages = _cm; _get_claude_client = _gc
+        except ImportError:
+            return {'_error': 'claude_client not importable'}
+    try:
+        if _get_claude_client() is None:
+            return {'_error': 'ANTHROPIC_API_KEY not configured'}
+    except Exception as e:
+        return {'_error': f'Claude client check failed: {e}'}
+
+    window = ''
+    if start_date and end_date:
+        window = f' running between {start_date} and {end_date}'
+    vert = f' (vertical hint: {vertical_hint})' if vertical_hint else ''
+    user_msg = (
+        f'Model the visitor purchase funnel for the website "{target}"'
+        f'{vert}{window}. Use web_search to ground the numbers in real '
+        f'industry data (SimilarWeb, Comscore, Nielsen, Statista, '
+        f'trade-press benchmarks). Enumerate the top ~10 entries per '
+        f'list (switched_destinations, intermediate_journey, '
+        f'inception_referrers, companion_behaviors). Return JSON ONLY '
+        f'matching the schema in the system prompt.'
+    )
+
+    import os
+    claude_model = (
+        os.environ.get('JOURNEY_IQ_RESEARCH_MODEL')
+        or os.environ.get('CLAUDE_PERSONA_MODEL')
+        or 'claude-opus-4-7'
+    )
+    _ws_new = {'type': 'web_search_20260209', 'name': 'web_search', 'max_uses': 10}
+    _ws_old = {'type': 'web_search_20250305', 'name': 'web_search', 'max_uses': 10}
+    def _has_json(t: str) -> bool:
+        return ('{' in t and '}' in t and t.find('{') < t.rfind('}'))
+
+    raw = ''
+    try:
+        raw = _claude_messages(
+            system=_SYSTEM_SITE_FUNNEL, user=user_msg, model=claude_model,
+            max_tokens=max_tokens, temperature=0.3, tools=[_ws_new],
+        ) or ''
+    except Exception as e:
+        print(f'[site funnel] primary Claude+web_search failed: {e}')
+        raw = ''
+    if not _has_json(raw):
+        if raw:
+            print(f'[site funnel] primary returned no JSON — falling back to Sonnet. snippet: {raw[:200]!r}')
+        try:
+            raw = _claude_messages(
+                system=_SYSTEM_SITE_FUNNEL, user=user_msg,
+                model='claude-sonnet-4-6',
+                max_tokens=max_tokens, temperature=0.3, tools=[_ws_old],
+            ) or ''
+        except Exception as e:
+            return {'_error': f'Claude+web_search fallback also failed: {e}'}
+    if not _has_json(raw):
+        return {'_error': 'Claude returned no JSON', '_raw': raw[:500]}
+
+    if raw.startswith('```'):
+        raw = raw.split('\n', 1)[-1].rsplit('```', 1)[0].strip()
+    start = raw.find('{'); end = raw.rfind('}')
+    if start < 0 or end < 0:
+        return {'_error': 'AI response had no JSON object', '_raw': raw[:500]}
+    try:
+        parsed = json.loads(raw[start: end + 1])
+    except Exception as e:
+        return {'_error': f'JSON parse failed: {e}', '_raw': raw[:500]}
+
+    parsed.setdefault('us_genpop_baseline', US_GENPOP_BASELINE)
+    parsed.setdefault('confidence', 'medium')
+    parsed.setdefault('sources_consulted', [])
+    parsed.setdefault('notes', '')
+    parsed.setdefault('funnel_split', {})
+    parsed.setdefault('switched_destinations', [])
+    parsed.setdefault('intermediate_journey', [])
+    parsed.setdefault('inception_referrers', [])
+    parsed.setdefault('companion_behaviors', [])
+
+    _FUNNEL_CACHE[cache_key] = parsed
+    return parsed
