@@ -1984,18 +1984,31 @@ def research_marketing_footprint(
         f'prompt.{gdate}'
     )
 
-    import os
+    import os, time
+    # Default to Sonnet (claude-sonnet-4-6) — Opus + web_search reliably
+    # hangs the SDK on socket recv for 5-10+ min with zero CPU progress
+    # on rich, multi-channel prompts (see site-funnel agent fix). Sonnet
+    # completes the same prompt in 60-180s with comparable output
+    # quality and uses far fewer web_search tool calls. Override via
+    # JOURNEY_IQ_RESEARCH_MODEL env var.
     claude_model = (
         os.environ.get('JOURNEY_IQ_RESEARCH_MODEL')
         or os.environ.get('CLAUDE_PERSONA_MODEL')
-        or 'claude-opus-4-7'
+        or 'claude-sonnet-4-6'
     )
-    _ws_new = {'type': 'web_search_20260209', 'name': 'web_search', 'max_uses': 12}
-    _ws_old = {'type': 'web_search_20250305', 'name': 'web_search', 'max_uses': 12}
+    # Cap web_search budget at 6 (was 12) to stay well under any per-
+    # request tool-call limit that triggers SDK hangs on Opus and is
+    # plenty for ~10 events per channel — Sonnet aggregates more per
+    # query than Opus does.
+    _ws_new = {'type': 'web_search_20260209', 'name': 'web_search', 'max_uses': 6}
+    _ws_old = {'type': 'web_search_20250305', 'name': 'web_search', 'max_uses': 6}
     def _has_json(t: str) -> bool:
         return ('{' in t and '}' in t and t.find('{') < t.rfind('}'))
 
     raw = ''
+    print(f'[Journey IQ footprint] calling {claude_model} '
+          f'(web_search max_uses=6)...')
+    t0 = time.time()
     try:
         raw = _claude_messages(
             system=_SYSTEM_FOOTPRINT, user=user_msg, model=claude_model,
@@ -2004,10 +2017,13 @@ def research_marketing_footprint(
     except Exception as e:
         print(f'[Journey IQ footprint] primary Claude+web_search failed: {e}')
         raw = ''
+    print(f'[Journey IQ footprint] primary returned in {round(time.time()-t0,1)}s '
+          f'({len(raw)} chars)')
     if not _has_json(raw):
         if raw:
-            print(f'[Journey IQ footprint] primary returned no JSON — falling back to Sonnet. snippet: {raw[:200]!r}')
-        # Retry with legacy web_search tool ID + Sonnet (same pattern bg.py uses)
+            print(f'[Journey IQ footprint] primary returned no JSON — retry with legacy web_search tool. snippet: {raw[:200]!r}')
+        else:
+            print(f'[Journey IQ footprint] primary returned empty — retry with legacy web_search tool')
         try:
             raw = _claude_messages(
                 system=_SYSTEM_FOOTPRINT, user=user_msg,
