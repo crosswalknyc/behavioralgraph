@@ -27715,17 +27715,34 @@
                 }).join('');
             }
 
-            // KPI strip
+            // KPI strip — labels and tiles depend on target_type. For a
+            // WEBSITE target (Fandango etc.), "Total Users / Converted /
+            // Conversion Rate" is misleading: the cohort = visitors, not
+            // ticket-buyers, and the on-site CR comes from site_funnel,
+            // not from synth. Show visitor-funnel KPIs instead.
             var kpiStrip = document.getElementById('jiqKpiStrip');
             if (kpiStrip) {
-                var k = [
-                    ['Total Users',            _jiqFmt(kpis.total_users)],
-                    ['Converted',              _jiqFmt(kpis.converted_users)],
-                    ['Conversion Rate',        (kpis.conversion_pct != null ? kpis.conversion_pct + '%' : '—')],
-                    ['Avg Journey (days)',     (kpis.avg_journey_duration_days != null ? kpis.avg_journey_duration_days : '—')],
-                    ['Avg Sessions to Convert',(kpis.avg_sessions_to_convert != null ? kpis.avg_sessions_to_convert : '—')],
-                    ['Avg Events / User',      (kpis.avg_events_per_user != null ? kpis.avg_events_per_user : '—')],
-                ];
+                var targetType = (meta.target_type || '').toLowerCase();
+                var k;
+                if (targetType === 'website') {
+                    k = [
+                        ['Visitors (US, in window)', _jiqFmt(kpis.total_users)],
+                        ['Transacted On Site',       _jiqFmt(kpis.converted_users)],
+                        ['On-Site CR',               (kpis.conversion_pct != null ? kpis.conversion_pct + '%' : '—')],
+                        ['Switched & Bought',        _jiqFmt(kpis.switched_users)],
+                        ['Total Captured (any seller)', (kpis.captured_pct != null ? kpis.captured_pct + '%' : '—')],
+                        ['Never Transacted',         (kpis.never_transacted_pct != null ? kpis.never_transacted_pct + '%' : '—')],
+                    ];
+                } else {
+                    k = [
+                        ['Total Users',            _jiqFmt(kpis.total_users)],
+                        ['Converted',              _jiqFmt(kpis.converted_users)],
+                        ['Conversion Rate',        (kpis.conversion_pct != null ? kpis.conversion_pct + '%' : '—')],
+                        ['Avg Journey (days)',     (kpis.avg_journey_duration_days != null ? kpis.avg_journey_duration_days : '—')],
+                        ['Avg Sessions to Convert',(kpis.avg_sessions_to_convert != null ? kpis.avg_sessions_to_convert : '—')],
+                        ['Avg Events / User',      (kpis.avg_events_per_user != null ? kpis.avg_events_per_user : '—')],
+                    ];
+                }
                 kpiStrip.innerHTML = k.map(function(pair) {
                     return '<div style="background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 8px; padding: 0.6rem 0.8rem;">'
                          +   '<div style="font-size: 0.65rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-secondary); font-weight: 600;">' + _jiqEsc(pair[0]) + '</div>'
