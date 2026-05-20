@@ -1409,6 +1409,41 @@ brand) DURING A SPECIFIC DATE WINDOW. You have web search. Your job:
      * Showtime / EPG-lookup spikes: any reported search-volume spikes on
        Fandango / Google "showtimes near me" trends during the window.
 
+     * Organic search — REASON about what real people search for when
+       they're in the funnel for this target during this date window,
+       across MULTIPLE engines (not just Google). For each likely search
+       intent, name the engine the query would skew to and estimate US
+       monthly search volume during the window. Use Google Trends
+       (trends.google.com), Google Keyword Planner reasoning,
+       "people-also-ask" boxes, Reddit/Quora question titles, and
+       AnswerThePublic-style intent fan-outs.
+
+       For movies STILL IN THE THEATRICAL WINDOW (target_type='movie'
+       and the date window overlaps theatrical release), the top
+       PRE-PURCHASE intents are typically:
+         - "<TARGET> showtimes" / "<TARGET> tickets" / "<TARGET> near me"
+         - "<TARGET> reviews" / "is <TARGET> good" / "<TARGET> rotten tomatoes"
+         - "<TARGET> trailer" / "<TARGET> cast" / "<TARGET> runtime"
+         - "<TARGET> age rating" / "<TARGET> parents guide"
+         - "<TARGET> end credits scene" / "<TARGET> spoilers"
+         - "<TARGET> AMC / Regal / Cinemark <city>"
+       Do NOT include POST-THEATRICAL queries while the movie is still
+       in theaters: drop "<TARGET> streaming", "<TARGET> netflix",
+       "<TARGET> hulu", "<TARGET> blu-ray / dvd", "watch <TARGET>
+       online free", "<TARGET> torrent". Only add those if the date
+       window starts AFTER the theatrical-to-streaming gap (~45-90d
+       post-release).
+
+       Engines to enumerate (skew each query to its most-likely engine):
+         - Google (general web)            - Google Maps (showtimes / near me)
+         - YouTube search (trailer / clips) - Bing (older / Windows users)
+         - DuckDuckGo (privacy-leaning)     - Yahoo (older)
+         - Apple Spotlight / Siri          - Reddit search (reviews / spoilers)
+         - TikTok search (Gen Z reviews)   - Amazon search (only post-theatrical)
+
+       Aim for 8-12 distinct organic_search events covering the most
+       likely query intents; mix engines so it's not 10 Google rows.
+
      * Paid-advertising platforms — ENUMERATE the actual major US ad
        platforms the target almost certainly ran on, and look each up
        in its public ad library / transparency tool:
@@ -1494,7 +1529,18 @@ Output JSON EXACTLY in this shape (no code fences, no markdown):
     "showtime_searches":  {"reach_pct_of_genpop": ..., "events": [{"site": "Fandango",     "search_spike_pct": ..., "estimated_reach_us": ..., ...}]},
     "ticketing_sites":    {"reach_pct_of_genpop": ..., "events": [{"site": "AMC Theatres", "visit_share_pct": ..., "estimated_reach_us": ..., ...}]},
     "soundtrack_music":   {"reach_pct_of_genpop": ..., "events": [{"track": "...",         "platform": "spotify",   "streams_us": ..., ...}]},
-    "organic_search":     {"reach_pct_of_genpop": ..., "events": [{"engine": "google",     "search_volume_us": ..., "trend_peak_date": "...", ...}]},
+    "organic_search":     {"reach_pct_of_genpop": ..., "events": [
+        {"engine": "Google",          "query": "<TARGET> showtimes",            "intent": "pre-purchase / ticket lookup", "estimated_searches_us_in_window": 1200000, "estimated_reach_us":  950000, "reach_pct_of_genpop": 0.37, "trend_peak_date": "2026-01-17", "date": "2026-01-15", "url": "https://trends.google.com/trends/explore?q=<TARGET>+showtimes", "confidence": "high",   "notes": "Cite Google Trends spike"},
+        {"engine": "Google Maps",     "query": "<TARGET> near me",              "intent": "pre-purchase / theater lookup", "estimated_searches_us_in_window":  800000, "estimated_reach_us":  650000, "reach_pct_of_genpop": 0.25, "trend_peak_date": "2026-01-17", "date": "2026-01-15", "url": "", "confidence": "medium", "notes": "Maps gets opening-weekend showtime traffic"},
+        {"engine": "YouTube",         "query": "<TARGET> trailer",              "intent": "pre-purchase / interest",       "estimated_searches_us_in_window": 2400000, "estimated_reach_us": 1900000, "reach_pct_of_genpop": 0.73, "trend_peak_date": "2026-01-08", "date": "2026-01-05", "url": "https://www.youtube.com/results?search_query=<TARGET>+trailer", "confidence": "high",   "notes": "Trailer search peaks 1-2 weeks pre-release"},
+        {"engine": "Google",          "query": "is <TARGET> good",              "intent": "pre-purchase / validation",     "estimated_searches_us_in_window":  450000, "estimated_reach_us":  380000, "reach_pct_of_genpop": 0.15, "trend_peak_date": "2026-01-18", "date": "2026-01-16", "url": "", "confidence": "high",   "notes": "Validation query — strong purchase intent"},
+        {"engine": "Google",          "query": "<TARGET> rotten tomatoes",      "intent": "pre-purchase / reviews",        "estimated_searches_us_in_window":  600000, "estimated_reach_us":  500000, "reach_pct_of_genpop": 0.19, "trend_peak_date": "2026-01-17", "date": "2026-01-16", "url": "", "confidence": "high",   "notes": "RT score lookup classic pre-purchase signal"},
+        {"engine": "Reddit",          "query": "<TARGET> review",               "intent": "pre-purchase / social proof",   "estimated_searches_us_in_window":  220000, "estimated_reach_us":  180000, "reach_pct_of_genpop": 0.07, "trend_peak_date": "2026-01-19", "date": "2026-01-17", "url": "https://www.reddit.com/search/?q=<TARGET>", "confidence": "medium", "notes": "Reddit search + r/movies threads"},
+        {"engine": "TikTok",          "query": "<TARGET> movie",                "intent": "pre-purchase / vibe-check",     "estimated_searches_us_in_window":  900000, "estimated_reach_us":  700000, "reach_pct_of_genpop": 0.27, "trend_peak_date": "2026-01-17", "date": "2026-01-15", "url": "https://www.tiktok.com/search?q=<TARGET>", "confidence": "medium", "notes": "Gen-Z discovery channel"},
+        {"engine": "Google",          "query": "<TARGET> cast",                 "intent": "pre-purchase / curiosity",      "estimated_searches_us_in_window":  280000, "estimated_reach_us":  230000, "reach_pct_of_genpop": 0.09, "trend_peak_date": "2026-01-15", "date": "2026-01-14", "url": "", "confidence": "high",   "notes": "Cast lookups peak release week"},
+        {"engine": "Google",          "query": "<TARGET> runtime",              "intent": "pre-purchase / planning",       "estimated_searches_us_in_window":  150000, "estimated_reach_us":  120000, "reach_pct_of_genpop": 0.05, "trend_peak_date": "2026-01-17", "date": "2026-01-16", "url": "", "confidence": "medium", "notes": "Length lookup before booking"},
+        {"engine": "Bing",            "query": "<TARGET> showtimes",            "intent": "pre-purchase / ticket lookup", "estimated_searches_us_in_window":  180000, "estimated_reach_us":  140000, "reach_pct_of_genpop": 0.05, "trend_peak_date": "2026-01-17", "date": "2026-01-15", "url": "", "confidence": "low",    "notes": "Bing default on Windows + Edge"}
+    ]},
     "press_reviews":      {"reach_pct_of_genpop": ..., "events": [{"publication": "NYT",   "url": "...", "estimated_reach_us": ..., ...}]},
     "forum_discussion":   {"reach_pct_of_genpop": ..., "events": [{"forum": "r/movies",   "url": "...", "upvotes": 4200, "comments": 580, "estimated_reach_us": ..., ...}]}
   },
@@ -1539,6 +1585,23 @@ Hard rules:
     standard "estimated_reach_us" / "reach_pct_of_genpop" / "date" /
     "url" / "confidence" / "notes". Do NOT just put "channel": "TV" —
     the dashboard renders rows as "<platform> — <campaign>".
+  * organic_search events MUST use these field names so the dashboard
+    can render them: "engine" (REQUIRED — "Google", "Google Maps",
+    "YouTube", "Bing", "DuckDuckGo", "Yahoo", "Apple Spotlight / Siri",
+    "Reddit", "TikTok", "Amazon"), "query" (REQUIRED — the actual
+    search string a real person would type, e.g. "the goat showtimes"
+    NOT just "showtimes"), "intent" (one of "pre-purchase / ticket
+    lookup", "pre-purchase / interest", "pre-purchase / validation",
+    "pre-purchase / reviews", "pre-purchase / social proof",
+    "pre-purchase / curiosity", "pre-purchase / planning",
+    "post-purchase / spoilers", "post-purchase / streaming"),
+    "estimated_searches_us_in_window" (your best estimate),
+    "trend_peak_date", and the standard estimated_reach_us /
+    reach_pct_of_genpop / date / url / confidence / notes. Aim for
+    8-12 distinct events spread across 4+ engines. For movies still
+    in theatrical window, ALL events must be pre-purchase intents —
+    drop streaming / blu-ray / "watch online" queries entirely. The
+    dashboard renders rows as '<engine> — "<query>"'.
 
 CRITICAL OUTPUT RULES — your response MUST be parseable JSON:
   1. After you finish web_searching, your FINAL text output must be

@@ -27993,6 +27993,9 @@
                               || e.channel || e.medium || '—';
                     var detail  = e.campaign || e.placement || e.creative_type
                               || e.event_type || '';
+                    // For organic_search: surface the actual user query as the
+                    // detail (e.g. "Google — \"the goat movie showtimes\"").
+                    if (!detail && e.query) detail = '"' + String(e.query).replace(/"/g, '') + '"';
                     // Avoid the "Google Ads — Google Ads" case if Claude duplicated.
                     if (detail && String(detail).toLowerCase() === String(primary).toLowerCase()) detail = '';
                     var actor = detail ? (primary + ' — ' + detail) : primary;
@@ -28072,7 +28075,7 @@
                     var actor = e.platform || e.network || e.advertiser || e.brand
                               || e.actor || e.publication || e.talent || e.creator
                               || e.partner || e.site || e.forum || e.track || e.engine
-                              || e.channel || e.medium || '?';
+                              || e.channel || e.medium || e.query || '?';
                     actor = String(actor); if (actor.length > 18) actor = actor.slice(0, 17) + '…';
                     parts.push('<g><circle cx="' + lx + '" cy="' + ly + '" r="5" fill="' + color + '"/>'
                         + '<text x="' + lx + '" y="' + (ly + 14) + '" text-anchor="middle" fill="var(--text-secondary)" font-size="9">' + _jiqEsc(actor) + '</text></g>');
