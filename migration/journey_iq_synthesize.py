@@ -981,15 +981,34 @@ def synth_to_dashboard_payload(
     }
 
     # ── Path to purchase ─────────────────────────────────────────────
+    # Survivorship curve: every converter is at CONVERSION (step 0) and
+    # step -1 (the touchpoint immediately before purchase), but as you
+    # walk further back through the funnel fewer converters actually
+    # had a recorded touch at that step. avg_touches_before_purchase
+    # from the synth controls the shape of the decay — beyond it the
+    # funnel drops off faster.
+    avg_touches = float(synth.get('avg_touches_before_purchase') or 5.0)
+
+    def _survivorship_pct(steps_back: int) -> float:
+        if steps_back <= 1:
+            return 100.0
+        if steps_back <= avg_touches:
+            pct = 100.0 - (steps_back - 1) * 4.0      # 4 pp per step inside avg_touches
+        else:
+            pct = 100.0 - (avg_touches - 1) * 4.0 - (steps_back - avg_touches) * 8.0  # then 8 pp
+        return max(25.0, pct)
+
     columns = []
     for c in (synth.get('path_columns') or []):
         idx = int(c.get('index', 0))
         mix = c.get('mix') or {}
-        # Column "users" = N (every converter contributes); we just allocate
-        # the per-label split.
+        users_pct = _survivorship_pct(abs(idx))
+        col_users = int(round(n * users_pct / 100.0))
+        # Per-label users now scale to THIS column's users, not the
+        # full cohort — fixes the "every label sums to >100%" issue too.
         top_labels = []
         for lbl, frac in sorted(mix.items(), key=lambda kv: -float(kv[1])):
-            users = int(round(n * float(frac)))
+            users = int(round(col_users * float(frac)))
             top_labels.append({
                 'label': lbl, 'users': users,
                 'pct':   round(100.0 * float(frac), 1),
@@ -997,12 +1016,12 @@ def synth_to_dashboard_payload(
         columns.append({
             'index':      idx,
             'label':      f'Step {idx}',
-            'users':      n,
-            'users_pct':  100.0,
+            'users':      col_users,
+            'users_pct':  round(users_pct, 1),
             'top_labels': top_labels[:6],
             'top_hosts':  [],  # synth doesn't know specific hosts
         })
-    # CONVERSION column at index 0
+    # CONVERSION column at index 0 — by definition 100% of converters.
     columns.append({
         'index': 0, 'label': 'CONVERSION',
         'users': n, 'users_pct': 100.0,
