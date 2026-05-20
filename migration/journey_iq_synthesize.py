@@ -45,6 +45,50 @@ except ImportError:
         get_claude_client = None     # type: ignore
 
 
+def _extract_best_json_object(raw: str,
+                              must_have_keys: tuple = (),
+                              ) -> Optional[dict]:
+    """Robustly extract the largest valid top-level JSON object from a
+    free-text Claude response.
+
+    Sonnet (and Opus to a lesser extent) sometimes returns a short
+    preamble JSON ahead of the real payload, or a "Here's the JSON:"
+    plain-text intro, or wraps the real payload in ```json fences with
+    additional commentary above and below. The naive
+    ``json.loads(raw[first_brace:last_brace+1])`` strategy fails in all
+    those cases.
+
+    Strategy: scan every '{' position, attempt ``json.JSONDecoder.raw_decode``
+    from that position, and keep the candidate whose serialised length is
+    largest (and, if ``must_have_keys`` is provided, contains at least one
+    of those keys at the top level). Returns ``None`` if nothing parses.
+    """
+    if not raw:
+        return None
+    decoder = json.JSONDecoder()
+    best: Optional[dict] = None
+    best_size = -1
+    n = len(raw)
+    for i in range(n):
+        if raw[i] != '{':
+            continue
+        try:
+            obj, _end = decoder.raw_decode(raw, i)
+        except Exception:
+            continue
+        if not isinstance(obj, dict):
+            continue
+        if must_have_keys and not any(k in obj for k in must_have_keys):
+            size = len(json.dumps(obj))
+            if best is None and size > best_size:
+                best, best_size = obj, size
+            continue
+        size = len(json.dumps(obj))
+        if size > best_size:
+            best, best_size = obj, size
+    return best
+
+
 # ── Constants ────────────────────────────────────────────────────────────────
 
 # Supported target types. 'general' means no scaling / no synth (legacy
@@ -1989,65 +2033,99 @@ def research_marketing_footprint(
     # hangs the SDK on socket recv for 5-10+ min with zero CPU progress
     # on rich, multi-channel prompts (see site-funnel agent fix). Sonnet
     # completes the same prompt in 60-180s with comparable output
-    # quality and uses far fewer web_search tool calls. Override via
-    # JOURNEY_IQ_RESEARCH_MODEL env var.
+    # quality. Override via JOURNEY_IQ_RESEARCH_MODEL env var.
     claude_model = (
         os.environ.get('JOURNEY_IQ_RESEARCH_MODEL')
         or os.environ.get('CLAUDE_PERSONA_MODEL')
         or 'claude-sonnet-4-6'
     )
-    # Cap web_search budget at 6 (was 12) to stay well under any per-
-    # request tool-call limit that triggers SDK hangs on Opus and is
-    # plenty for ~10 events per channel — Sonnet aggregates more per
-    # query than Opus does.
-    _ws_new = {'type': 'web_search_20260209', 'name': 'web_search', 'max_uses': 6}
-    _ws_old = {'type': 'web_search_20250305', 'name': 'web_search', 'max_uses': 6}
+    # By default we now call WITHOUT the web_search tool. The footprint
+    # prompt is large (~25k chars over 10 channels with rich schemas),
+    # and pairing it with web_search consistently wedges the SDK on
+    # socket recv for 5-10+ min with zero CPU progress on every model
+    # we've tried (Opus AND Sonnet). Brand-level marketing footprint is
+    # well-known industry knowledge the model can produce from training
+    # in 60-180s with comparable output quality. Re-enable live search
+    # via JOURNEY_IQ_RESEARCH_USE_WEB_SEARCH=1.
+    use_web_search = (
+        os.environ.get('JOURNEY_IQ_RESEARCH_USE_WEB_SEARCH', '').strip().lower()
+        in ('1', 'true', 'yes', 'on')
+    )
+    tools_arg = None
+    if use_web_search:
+        tools_arg = [{'type': 'web_search_20250305', 'name': 'web_search', 'max_uses': 4}]
+
+    # When NOT passing web_search, scrub the "You have web_search"
+    # promise from the system prompt — otherwise the model wastes its
+    # output budget hallucinating <tool_call>{} blocks in the text
+    # instead of producing JSON (we hit this on the site-funnel agent).
+    sys_prompt = _SYSTEM_FOOTPRINT
+    if not use_web_search:
+        sys_prompt = (sys_prompt
+            .replace('You have web_search.', 'You DO NOT have web_search; reason from training.')
+            .replace('You have web_search', 'You DO NOT have web_search; reason from training')
+            .replace('Use web_search', 'Reason from training (no web_search available)'))
+
     def _has_json(t: str) -> bool:
         return ('{' in t and '}' in t and t.find('{') < t.rfind('}'))
 
     raw = ''
     print(f'[Journey IQ footprint] calling {claude_model} '
-          f'(web_search max_uses=6)...')
+          f'(web_search={"on" if use_web_search else "off"})...')
     t0 = time.time()
     try:
         raw = _claude_messages(
-            system=_SYSTEM_FOOTPRINT, user=user_msg, model=claude_model,
-            max_tokens=max_tokens, temperature=0.3, tools=[_ws_new],
+            system=sys_prompt, user=user_msg, model=claude_model,
+            max_tokens=max_tokens, temperature=0.3, tools=tools_arg,
         ) or ''
     except Exception as e:
-        print(f'[Journey IQ footprint] primary Claude+web_search failed: {e}')
+        print(f'[Journey IQ footprint] primary call failed: {e}')
         raw = ''
     print(f'[Journey IQ footprint] primary returned in {round(time.time()-t0,1)}s '
           f'({len(raw)} chars)')
     if not _has_json(raw):
         if raw:
-            print(f'[Journey IQ footprint] primary returned no JSON — retry with legacy web_search tool. snippet: {raw[:200]!r}')
+            print(f'[Journey IQ footprint] primary returned no JSON — retry once. snippet: {raw[:200]!r}')
         else:
-            print(f'[Journey IQ footprint] primary returned empty — retry with legacy web_search tool')
+            print(f'[Journey IQ footprint] primary returned empty — retry once')
         try:
             raw = _claude_messages(
-                system=_SYSTEM_FOOTPRINT, user=user_msg,
-                model='claude-sonnet-4-6',
-                max_tokens=max_tokens, temperature=0.3, tools=[_ws_old],
+                system=sys_prompt, user=user_msg,
+                model=claude_model,
+                max_tokens=max_tokens, temperature=0.3, tools=None,
             ) or ''
         except Exception as e:
-            return {'_error': f'Claude+web_search fallback also failed: {e}'}
+            return {'_error': f'Claude footprint call failed twice: {e}'}
     if not _has_json(raw):
         return {'_error': 'Claude returned no JSON', '_raw': raw[:500]}
 
     if raw.startswith('```'):
         raw = raw.split('\n', 1)[-1].rsplit('```', 1)[0].strip()
-    start = raw.find('{'); end = raw.rfind('}')
-    if start < 0 or end < 0:
-        return {'_error': 'AI response had no JSON object', '_raw': raw[:500]}
-    try:
-        parsed = json.loads(raw[start: end + 1])
-    except Exception as e:
-        return {'_error': f'JSON parse failed: {e}', '_raw': raw[:500]}
+    # Strip ```json ... ``` fences anywhere in the body (Sonnet
+    # sometimes wraps the real payload in fences AFTER a plain-text
+    # preamble).
+    if '```json' in raw:
+        try:
+            after = raw.split('```json', 1)[1]
+            inner = after.split('```', 1)[0]
+            if inner.strip().startswith('{'):
+                raw = inner.strip()
+        except Exception:
+            pass
+    elif raw.count('```') >= 2:
+        try:
+            after = raw.split('```', 1)[1]
+            inner = after.split('```', 1)[0]
+            if inner.strip().startswith('{'):
+                raw = inner.strip()
+        except Exception:
+            pass
 
-    # Normalize: ensure every documented channel exists in the output
-    # (with empty events list if Claude didn't return one) so the
-    # dashboard's bubble loop doesn't need conditional rendering.
+    parsed = _extract_best_json_object(raw, must_have_keys=('marketing_footprint',))
+    if parsed is None:
+        return {'_error': 'JSON parse failed — no valid object found',
+                '_raw': raw[:500]}
+
     parsed.setdefault('marketing_footprint', {})
     for ch in _FOOTPRINT_CHANNELS:
         parsed['marketing_footprint'].setdefault(ch, {'reach_pct_of_genpop': 0.0, 'events': []})
@@ -2527,13 +2605,18 @@ def research_site_funnel(
 
     if raw.startswith('```'):
         raw = raw.split('\n', 1)[-1].rsplit('```', 1)[0].strip()
-    start = raw.find('{'); end = raw.rfind('}')
-    if start < 0 or end < 0:
-        return {'_error': 'AI response had no JSON object', '_raw': raw[:500]}
-    try:
-        parsed = json.loads(raw[start: end + 1])
-    except Exception as e:
-        return {'_error': f'JSON parse failed: {e}', '_raw': raw[:500]}
+    if '```json' in raw:
+        try:
+            after = raw.split('```json', 1)[1]
+            inner = after.split('```', 1)[0]
+            if inner.strip().startswith('{'):
+                raw = inner.strip()
+        except Exception:
+            pass
+    parsed = _extract_best_json_object(raw, must_have_keys=('funnel_split', 'switched_destinations'))
+    if parsed is None:
+        return {'_error': 'JSON parse failed — no valid object found',
+                '_raw': raw[:500]}
 
     parsed.setdefault('us_genpop_baseline', US_GENPOP_BASELINE)
     parsed.setdefault('confidence', 'medium')
