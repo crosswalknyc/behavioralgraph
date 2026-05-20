@@ -1490,6 +1490,41 @@ brand) DURING A SPECIFIC DATE WINDOW. You have web search. Your job:
        Aim for 8-12 distinct organic_search events covering the most
        likely query intents; mix engines so it's not 10 Google rows.
 
+     * Soundtrack / music — ENUMERATE the playable music
+       surfaces for the target during the window. Every event MUST
+       link to a place a user can actually LISTEN to the song or
+       album right now — not Wikipedia, not a Variety article about
+       the soundtrack, not the band's homepage. Valid URL patterns:
+         - Spotify track:   https://open.spotify.com/track/<id>
+         - Spotify album:   https://open.spotify.com/album/<id>
+         - Spotify playlist:https://open.spotify.com/playlist/<id>
+         - Apple Music song:https://music.apple.com/us/song/<slug>/<id>
+         - Apple Music album:https://music.apple.com/us/album/<slug>/<id>
+         - YouTube Music:   https://music.youtube.com/watch?v=<id>
+         - YouTube official audio/MV: https://www.youtube.com/watch?v=<id>
+         - Tidal:           https://tidal.com/browse/track/<id>
+         - Amazon Music:    https://music.amazon.com/albums/<id>
+         - SoundCloud:      https://soundcloud.com/<artist>/<track>
+         - Bandcamp:        https://<artist>.bandcamp.com/track/<slug>
+       For a major US release, expect:
+         - The official lead single on Spotify + Apple Music + YouTube
+           (3 separate events — same song, different streaming surface)
+         - 1-3 additional notable soundtrack tracks
+         - The full album / OST on Spotify + Apple Music
+         - 1-3 playlist appearances (Spotify "New Music Friday",
+           Apple Music "Hot Tracks", Spotify "Rap Caviar" / genre
+           playlists if applicable)
+         - Trending TikTok sound for the lead single
+       Aim for 8-12 listenable events covering 3+ streaming platforms.
+       Run dated web_searches:
+         "<TARGET> soundtrack Spotify"
+         "<TARGET> soundtrack Apple Music"
+         "<TARGET> official song"  / "<TARGET> theme song"
+         "<TARGET> end credits song"
+         site:open.spotify.com <TARGET>
+         site:music.apple.com <TARGET>
+         site:youtube.com <TARGET> official audio
+
      * Brand partnerships — DO EXPLICIT WEB SEARCHES to discover the
        full list of co-promotional deals around the target. Don't
        trust ambient memory; run dated queries inside the window:
@@ -1649,7 +1684,18 @@ Output JSON EXACTLY in this shape (no code fences, no markdown):
         {"site": "Bing",             "feature": "Showtimes near me (Edge / Windows default)", "query": "<TARGET> showtimes near me",        "search_spike_pct":  60, "estimated_reach_us":  1800000, "reach_pct_of_genpop":  0.7, "date": "2026-01-17", "url": "https://www.bing.com/search?q=<TARGET>+showtimes",    "confidence": "low",    "notes": "Default engine on Windows + Edge — meaningful older-demo reach"}
     ]},
     "ticketing_sites":    {"reach_pct_of_genpop": ..., "events": [{"site": "AMC Theatres", "visit_share_pct": ..., "estimated_reach_us": ..., ...}]},
-    "soundtrack_music":   {"reach_pct_of_genpop": ..., "events": [{"track": "...",         "platform": "spotify",   "streams_us": ..., ...}]},
+    "soundtrack_music":   {"reach_pct_of_genpop": ..., "events": [
+        {"platform": "Spotify",        "track": "<lead single title>",          "album": "<TARGET> (Original Motion Picture Soundtrack)", "artist": "<artist>",  "url": "https://open.spotify.com/track/<actual-id>",       "streams_us":  8500000, "estimated_reach_us":  8500000, "reach_pct_of_genpop": 3.3, "date": "2026-01-10", "confidence": "high",   "notes": "Cite Spotify track page"},
+        {"platform": "Apple Music",    "track": "<lead single title>",          "album": "<TARGET> (OST)",                                 "artist": "<artist>",  "url": "https://music.apple.com/us/song/<actual-slug>/<id>", "streams_us":  3200000, "estimated_reach_us":  3200000, "reach_pct_of_genpop": 1.2, "date": "2026-01-10", "confidence": "high",   "notes": "Cite Apple Music song page"},
+        {"platform": "YouTube",        "track": "<lead single> (Official Audio)", "album": "<TARGET> (OST)",                               "artist": "<artist>",  "url": "https://www.youtube.com/watch?v=<actual-id>",      "streams_us":  6500000, "estimated_reach_us":  6500000, "reach_pct_of_genpop": 2.5, "date": "2026-01-10", "confidence": "high",   "notes": "Cite YouTube official audio / MV page"},
+        {"platform": "Spotify",        "track": "Full OST album",               "album": "<TARGET> (Original Motion Picture Soundtrack)", "artist": "<composer / Various Artists>", "url": "https://open.spotify.com/album/<actual-id>", "streams_us":  4500000, "estimated_reach_us":  4500000, "reach_pct_of_genpop": 1.7, "date": "2026-01-12", "confidence": "high",   "notes": "Cite Spotify album page"},
+        {"platform": "Apple Music",    "track": "Full OST album",               "album": "<TARGET> (OST)",                                 "artist": "<composer>", "url": "https://music.apple.com/us/album/<actual-slug>/<id>", "streams_us": 1800000, "estimated_reach_us":  1800000, "reach_pct_of_genpop": 0.7, "date": "2026-01-12", "confidence": "high",   "notes": "Cite Apple Music album page"},
+        {"platform": "Spotify",        "track": "Featured on 'New Music Friday'", "album": "Spotify editorial playlist",                  "artist": "Spotify",   "url": "https://open.spotify.com/playlist/37i9dQZF1DX4JAvHpjipBk", "streams_us":  3000000, "estimated_reach_us":  3000000, "reach_pct_of_genpop": 1.2, "date": "2026-01-11", "confidence": "medium", "notes": "Cite the specific playlist URL"},
+        {"platform": "Spotify",        "track": "<additional notable track>",   "album": "<TARGET> (OST)",                                 "artist": "<artist>",  "url": "https://open.spotify.com/track/<actual-id>",       "streams_us":  1500000, "estimated_reach_us":  1500000, "reach_pct_of_genpop": 0.6, "date": "2026-01-12", "confidence": "medium", "notes": "Second notable track from OST"},
+        {"platform": "YouTube",        "track": "<lead single> (Official Music Video)", "album": "<TARGET> (OST)",                       "artist": "<artist>",  "url": "https://www.youtube.com/watch?v=<actual-id>",      "streams_us":  4200000, "estimated_reach_us":  4200000, "reach_pct_of_genpop": 1.6, "date": "2026-01-11", "confidence": "high",   "notes": "Cite YouTube official MV page"},
+        {"platform": "TikTok",         "track": "<lead single> — trending sound", "album": "<TARGET> (OST)",                              "artist": "<artist>",  "url": "https://www.tiktok.com/music/<actual-slug>-<id>",  "streams_us":  9500000, "estimated_reach_us":  9500000, "reach_pct_of_genpop": 3.7, "date": "2026-01-13", "confidence": "medium", "notes": "Cite TikTok sound page + creators-using count if visible"},
+        {"platform": "Amazon Music",   "track": "Full OST album",               "album": "<TARGET> (OST)",                                 "artist": "<composer>", "url": "https://music.amazon.com/albums/<actual-id>",     "streams_us":   900000, "estimated_reach_us":   900000, "reach_pct_of_genpop": 0.3, "date": "2026-01-12", "confidence": "medium", "notes": "Cite Amazon Music album page"}
+    ]},
     "organic_search":     {"reach_pct_of_genpop": ..., "events": [
         {"engine": "Google",          "query": "<TARGET> showtimes",            "intent": "pre-purchase / ticket lookup", "estimated_searches_us_in_window": 1200000, "estimated_reach_us":  950000, "reach_pct_of_genpop": 0.37, "trend_peak_date": "2026-01-17", "date": "2026-01-15", "url": "https://trends.google.com/trends/explore?q=<TARGET>+showtimes", "confidence": "high",   "notes": "Cite Google Trends spike"},
         {"engine": "Google Maps",     "query": "<TARGET> near me",              "intent": "pre-purchase / theater lookup", "estimated_searches_us_in_window":  800000, "estimated_reach_us":  650000, "reach_pct_of_genpop": 0.25, "trend_peak_date": "2026-01-17", "date": "2026-01-15", "url": "", "confidence": "medium", "notes": "Maps gets opening-weekend showtime traffic"},
@@ -1712,7 +1758,9 @@ Hard rules:
         showtime_searches:    10-12 surfaces (Google widget + every
                                major chain + long-tail Bing/IMDb)
         ticketing_sites:       6-10 (every major chain + studio direct)
-        soundtrack_music:      4-8 (Spotify/Apple/playlists + radio)
+        soundtrack_music:     8-12 PLAYABLE music links (Spotify +
+                               Apple Music + YouTube + TikTok sound +
+                               Amazon Music + playlist appearances)
         organic_search:        8-12 queries across 4+ engines
         press_reviews:         5-8 critic reviews
         forum_discussion:      6-10 threads (Reddit + Letterboxd + niche)
@@ -1743,6 +1791,28 @@ Hard rules:
     standard "estimated_reach_us" / "reach_pct_of_genpop" / "date" /
     "url" / "confidence" / "notes". Do NOT just put "channel": "TV" —
     the dashboard renders rows as "<platform> — <campaign>".
+  * soundtrack_music events MUST use these field names so the
+    dashboard can render them: "platform" (REQUIRED — "Spotify",
+    "Apple Music", "YouTube", "YouTube Music", "TikTok", "Tidal",
+    "Amazon Music", "SoundCloud", "Bandcamp" — NOT "wikipedia" or
+    "press"), "track" (REQUIRED — song title or "Full OST album"),
+    "album" (the soundtrack album name), "artist", "url" (REQUIRED —
+    a PLAYABLE streaming URL on that platform; NEVER Wikipedia,
+    never a press article, never the artist's homepage. Must match
+    one of: open.spotify.com/track|album|playlist/<id>,
+    music.apple.com/us/song|album/<slug>/<id>,
+    music.youtube.com/watch?v=<id>, www.youtube.com/watch?v=<id>,
+    tidal.com/browse/track/<id>, music.amazon.com/albums/<id>,
+    soundcloud.com/<artist>/<track>, www.tiktok.com/music/<slug>),
+    "streams_us" (best estimate of US plays in window), and the
+    standard estimated_reach_us / reach_pct_of_genpop / date /
+    confidence / notes. Aim for 8-12 events covering 3+ streaming
+    platforms — typically the lead single on Spotify+Apple+YouTube
+    (3 events, same song, different surface), the full OST album
+    on Spotify+Apple+Amazon (3 events), 1-2 additional notable
+    tracks, the TikTok trending sound, and 1-2 editorial playlist
+    appearances. If you cannot find a playable streaming URL, DROP
+    the event rather than fall back to a Wikipedia or news page.
   * brand_partnerships events MUST use these field names so the
     dashboard can render them: "partner" (REQUIRED — US brand name,
     e.g. "Mercedes-Benz USA", "DoorDash", "McDonald's USA"),

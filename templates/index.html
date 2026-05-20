@@ -28000,6 +28000,14 @@
                     // as the detail (e.g. 'Variety — "Goat is the year\'s
                     // biggest surprise"') instead of just the publication.
                     if (!detail && e.headline) detail = '"' + String(e.headline).replace(/"/g, '') + '"';
+                    // For soundtrack_music: surface the track/album name
+                    // (and optional artist) so rows read as
+                    // 'Spotify — "Goat Theme" (Hans Zimmer)'.
+                    if (!detail && (e.track || e.song || e.album)) {
+                        var _trk = e.track || e.song || e.album;
+                        detail = '"' + String(_trk).replace(/"/g, '') + '"';
+                        if (e.artist) detail += ' (' + String(e.artist).replace(/[()]/g, '') + ')';
+                    }
                     // Avoid the "Google Ads — Google Ads" case if Claude duplicated.
                     if (detail && String(detail).toLowerCase() === String(primary).toLowerCase()) detail = '';
                     var actor = detail ? (primary + ' — ' + detail) : primary;
