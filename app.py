@@ -29925,6 +29925,9 @@ def _run_journey_iq(job_id):
             is_movie=bool(params.get('is_movie') or False),
             box_office_millions=float(params.get('box_office_millions') or 0.0),
             avg_ticket_price=float(params.get('avg_ticket_price') or 15.0),
+            target_type=str(params.get('target_type') or 'general'),
+            monthly_visitors_millions=float(params.get('monthly_visitors_millions') or 0.0),
+            us_viewers_millions=float(params.get('us_viewers_millions') or 0.0),
             progress_cb=_cb,
             s3_client=s3_client,
         )
@@ -30015,9 +30018,20 @@ def submit_journey_iq():
         days_before_conv = max(1, min(days_before_conv, 365))
         steps_before_conv = max(1, min(steps_before_conv, 50))
 
-        # Movie mode — enables box-office scaling + Claude-driven synthesis
-        # of a plausible journey when the panel cohort is sparse.
-        is_movie = bool(data.get('is_movie'))
+        # Target-type-aware audience scaling + Claude synthesis. Values:
+        #   'general' (default — no scaling/synth)
+        #   'movie'   (box office × 1M / ticket × 77.5%)
+        #   'website' (monthly US visitors × months × 0.4)
+        #   'tv_show' (US viewers — AI-researched via SubscriberIQ's
+        #              gpt-4o-search-preview pattern)
+        target_type = str(data.get('target_type') or 'general').strip().lower()
+        if target_type not in ('general', 'movie', 'website', 'tv_show'):
+            target_type = 'general'
+        # Legacy is_movie checkbox -> upgrade to target_type='movie'
+        is_movie = bool(data.get('is_movie')) or (target_type == 'movie')
+        if is_movie and target_type == 'general':
+            target_type = 'movie'
+
         try:
             box_office_m = max(0.0, float(data.get('box_office_millions') or 0.0))
         except Exception:
@@ -30026,6 +30040,14 @@ def submit_journey_iq():
             ticket_price = max(1.0, float(data.get('avg_ticket_price') or 15.0))
         except Exception:
             ticket_price = 15.0
+        try:
+            monthly_visitors_m = max(0.0, float(data.get('monthly_visitors_millions') or 0.0))
+        except Exception:
+            monthly_visitors_m = 0.0
+        try:
+            us_viewers_m = max(0.0, float(data.get('us_viewers_millions') or 0.0))
+        except Exception:
+            us_viewers_m = 0.0
 
         if not project_name:
             return jsonify({'error': 'project_name required'}), 400
@@ -30075,6 +30097,9 @@ def submit_journey_iq():
                 'is_movie':                  is_movie,
                 'box_office_millions':       box_office_m,
                 'avg_ticket_price':          ticket_price,
+                'target_type':               target_type,
+                'monthly_visitors_millions': monthly_visitors_m,
+                'us_viewers_millions':       us_viewers_m,
             },
         }
         if s3_client:
@@ -30096,6 +30121,50 @@ def submit_journey_iq():
                         'credits_used': CREDITS_JOURNEY_IQ})
     except Exception as e:
         return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/journey-iq/estimate-audience', methods=['POST'])
+@requires_auth
+def estimate_journey_iq_audience():
+    """AI lookup of the implied-audience number for a target. Mirrors the
+    SubscriberIQ viewership-research pattern (gpt-4o-search-preview with
+    web search). Request body:
+        {"target_type": "movie"|"website"|"tv_show",
+         "target": "<name>",
+         "start_date": "...", "end_date": "..."}
+    Response: {"success": true, "estimate": {...}}  — the dict shape
+    matches the form fields the dashboard pre-fills (e.g.
+    {"box_office_millions": 185.0, "avg_ticket_price": 15.0,
+     "confidence": "high", "source": "...", "notes": "..."}).
+    """
+    try:
+        from migration.journey_iq_synthesize import research_audience_size
+    except Exception as e:
+        return jsonify({'success': False,
+                        'error': f'journey_iq_synthesize import failed: {e}'}), 500
+    try:
+        data = request.get_json() or {}
+        target_type = (data.get('target_type') or '').strip().lower()
+        target      = (data.get('target') or '').strip()
+        start_date  = data.get('start_date') or ''
+        end_date    = data.get('end_date') or ''
+        if target_type not in ('movie', 'website', 'tv_show'):
+            return jsonify({'success': False,
+                            'error': 'target_type must be movie / website / tv_show'}), 400
+        if not target:
+            return jsonify({'success': False,
+                            'error': 'target is required'}), 400
+        estimate = research_audience_size(
+            target_type=target_type, target=target,
+            start_date=start_date, end_date=end_date,
+        )
+        if estimate.get('_error'):
+            return jsonify({'success': False,
+                            'error':   estimate['_error'],
+                            'estimate': estimate}), 200
+        return jsonify({'success': True, 'estimate': estimate})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
 
 
 @app.route('/api/journey-iq/list', methods=['GET'])

@@ -13042,8 +13042,6 @@
                                             <option value="SERIES - AMAZON / MGM STUDIOS">Series - Amazon / MGM Studios</option>
                                             <option value="SERIES - APPLE">Series - Apple</option>
                                             <option value="SERIES - CBS STUDIOS">Series - CBS Studios</option>
-                                            <option value="SERIES - CBS STUDIOS">Series - CBS Studios</option>
-                                            <option value="SERIES - CBS STUDIOS">Series - CBS Studios</option>
                                             <option value="SERIES - 20TH TELEVISION">SERIES - 20TH TELEVISION</option>
                                             <option value="SERIES - FXP">Series - FXP</option>
                                             <option value="SERIES - HBO ENTERTAINMENT">Series - HBO Entertainment</option>
@@ -13055,6 +13053,7 @@
                                             <option value="SERIES - SONY">Series - Sony</option>
                                             <option value="SERIES - UNIVERSAL TV">Series - Universal TV</option>
                                             <option value="SERIES - WBD">Series - WBD</option>
+                                            <option value="WATCHER GROUPS">Watcher Groups</option>
                                         </optgroup>
                                         <optgroup label="📊 GEN POP">
                                             <option value="GEN POP">Gen Pop</option>
@@ -13514,6 +13513,7 @@
                                                     <option value="SERIES - SONY">Series - Sony</option>
                                                     <option value="SERIES - UNIVERSAL TV">Series - Universal TV</option>
                                                     <option value="SERIES - WBD">Series - WBD</option>
+                                                    <option value="WATCHER GROUPS">Watcher Groups</option>
                                                 </optgroup>
                                                 <optgroup label="📊 GEN POP">
                                                     <option value="GEN POP">Gen Pop</option>
@@ -14822,16 +14822,24 @@
                                     <small style="color: var(--text-secondary); font-size: 0.75rem;">Single brand / movie / show / property name. In mention mode this is the cohort definition. In conversion mode it&apos;s optional &mdash; used only to tag events as &quot;about the brand.&quot;</small>
                                 </div>
                                 <div style="margin-bottom: 1rem; padding: 0.6rem 0.8rem; border: 1px solid var(--border-color); border-radius: 8px; background: var(--bg-primary);">
-                                    <label style="display: flex; align-items: center; gap: 8px; font-size: 13px; cursor: pointer; font-weight: 600;">
-                                        <input type="checkbox" id="jiqIsMovie" onchange="onJiqIsMovieChange()">
-                                        <span>🎬 Target is a movie (enable box-office scaling + LLM synthesis)</span>
-                                    </label>
+                                    <label style="display: block; font-weight: 600; margin-bottom: 4px; font-size: 13px;">Target type <span style="font-weight: 400; color: var(--text-secondary);">— enables audience scaling + LLM synthesis when not General</span></label>
+                                    <select id="jiqTargetType" onchange="onJiqTargetTypeChange()" style="width: 100%; padding: 8px 12px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--bg-primary); color: var(--text-primary); font-size: 14px;">
+                                        <option value="general">General (no scaling — panel-as-is)</option>
+                                        <option value="movie">🎬 Movie — scale to US box office</option>
+                                        <option value="website">🌐 Website — scale to US monthly visitors</option>
+                                        <option value="tv_show">📺 TV show — scale to US viewers (AI lookup, SubscriberIQ-style)</option>
+                                    </select>
+                                    <div id="jiqEstimateRow" style="display: none; margin-top: 0.6rem; padding: 0.5rem 0.7rem; border-radius: 6px; background: rgba(99,102,241,0.08); border: 1px solid rgba(99,102,241,0.3); align-items: center; gap: 8px;">
+                                        <button type="button" id="jiqEstimateBtn" onclick="estimateJiqAudience()" style="padding: 4px 10px; border-radius: 6px; border: 1px solid var(--accent-primary); background: var(--accent-primary); color: #fff; font-size: 12px; cursor: pointer; font-weight: 600;">🔎 Auto-estimate via web search</button>
+                                        <span id="jiqEstimateStatus" style="font-size: 0.75rem; color: var(--text-secondary);"></span>
+                                    </div>
+
                                     <div id="jiqMovieBlock" style="display: none; margin-top: 0.75rem;">
                                         <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 0.75rem;">
                                             <div>
                                                 <label style="display: block; font-weight: 600; margin-bottom: 4px; font-size: 13px;">US box office (USD millions) <span style="font-weight: 400; color: var(--text-secondary);">(required)</span></label>
                                                 <input type="number" id="jiqBoxOfficeMillions" min="0" step="0.1" placeholder="e.g. 185.0" style="width: 100%; padding: 8px 12px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--bg-primary); color: var(--text-primary); font-size: 14px;">
-                                                <small style="color: var(--text-secondary); font-size: 0.7rem;">Domestic gross to date. Used to compute implied audience = (box_office / ticket_price) &times; 77.5%.</small>
+                                                <small style="color: var(--text-secondary); font-size: 0.7rem;">Domestic gross to date. Implied audience = (box_office / ticket_price) &times; 77.5%.</small>
                                             </div>
                                             <div>
                                                 <label style="display: block; font-weight: 600; margin-bottom: 4px; font-size: 13px;">Avg ticket price</label>
@@ -14839,8 +14847,21 @@
                                                 <small style="color: var(--text-secondary); font-size: 0.7rem;">$15 default.</small>
                                             </div>
                                         </div>
-                                        <small style="display: block; margin-top: 0.5rem; color: var(--text-secondary); font-size: 0.7rem;"><strong>What this turns on:</strong> the dashboard will show a Panel / Modeled / Scaled / Blended toggle. <em>Panel</em> = raw counts our panel saw. <em>Scaled</em> = panel × (implied audience / panel converters) so reach matches box-office reality. <em>Modeled</em> = Claude-estimated journey for a movie of this scale + talent profile (used when the panel is too sparse). <em>Blended</em> (default) shows real metrics where the panel cohort is &ge;25 converters and modeled where it&apos;s sparser.</small>
                                     </div>
+
+                                    <div id="jiqWebsiteBlock" style="display: none; margin-top: 0.75rem;">
+                                        <label style="display: block; font-weight: 600; margin-bottom: 4px; font-size: 13px;">Estimated US monthly visitors (millions) <span style="font-weight: 400; color: var(--text-secondary);">(required)</span></label>
+                                        <input type="number" id="jiqMonthlyVisitorsMillions" min="0" step="0.1" placeholder="e.g. 12.3" style="width: 100%; padding: 8px 12px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--bg-primary); color: var(--text-primary); font-size: 14px;">
+                                        <small style="color: var(--text-secondary); font-size: 0.7rem;">Similarweb-style number. Implied audience = monthly &times; (window_days / 30) &times; 0.4 dedup factor (so a 12.3M/mo site on a 90-day window = ~14.8M distinct visitors).</small>
+                                    </div>
+
+                                    <div id="jiqTvShowBlock" style="display: none; margin-top: 0.75rem;">
+                                        <label style="display: block; font-weight: 600; margin-bottom: 4px; font-size: 13px;">Estimated US viewers (millions) <span style="font-weight: 400; color: var(--text-secondary);">(required — click Auto-estimate to look up)</span></label>
+                                        <input type="number" id="jiqUsViewersMillions" min="0" step="0.1" placeholder="e.g. 4.2" style="width: 100%; padding: 8px 12px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--bg-primary); color: var(--text-primary); font-size: 14px;">
+                                        <small style="color: var(--text-secondary); font-size: 0.7rem;">Cumulative US viewers (Nielsen, Samba TV, Luminate, Parrot Analytics). Same lookup engine SubscriberIQ uses for show-viewership validation.</small>
+                                    </div>
+
+                                    <small id="jiqTypeHelp" style="display: none; margin-top: 0.6rem; color: var(--text-secondary); font-size: 0.7rem;"><strong>What this turns on:</strong> the dashboard will show a Panel / Modeled / Scaled / Blended toggle. <em>Panel</em> = raw counts our panel saw. <em>Scaled</em> = panel × (implied audience / panel converters) so reach matches reality. <em>Modeled</em> = AI-estimated journey for a target of this scale (used when the panel is too sparse). <em>Blended</em> (default) shows real metrics where the panel cohort is &ge;25 converters and modeled where it&apos;s sparser.</small>
                                 </div>
                                 <div id="jiqConvModeBlock" style="display: none; margin-bottom: 1rem; padding: 0.75rem 1rem; border: 1px solid var(--accent-primary); border-radius: 8px; background: rgba(99,102,241,0.05);">
                                     <div style="margin-bottom: 0.75rem;">
@@ -19090,6 +19111,41 @@
 
                 <!-- KPI strip -->
                 <div id="jiqKpiStrip" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 0.75rem; margin-bottom: 1rem;"></div>
+
+                <!-- Marketing Footprint: agent-discovered events per channel + spider + endpoint breakdown -->
+                <div class="card" id="jiqBubbleCard" style="padding: 1rem; margin-bottom: 1rem; display: none;">
+                    <div style="display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap;">
+                        <div style="flex: 1; min-width: 240px;">
+                            <h3 style="margin: 0 0 0.25rem;">🕸️ Marketing Footprint</h3>
+                            <p id="jiqBubbleSubtitle" style="margin: 0 0 0.5rem; color: var(--text-secondary); font-size: 0.8rem;">AI agent did a Google search-vertical sweep (short videos · news · forums) plus per-platform <code>site:</code> searches inside your date window, then estimated US-genpop reach per discovered marketing event. Switch between Bubbles (per-channel summary), Spider (network from target → channels → events → ticketing → conversion), or Events (flat ranked list).</p>
+                        </div>
+                        <div id="jiqFootprintViewBtns" style="display: flex; gap: 4px;"></div>
+                    </div>
+                    <div id="jiqBubbleMeta" style="margin: 0.5rem 0; font-size: 0.75rem; color: var(--text-secondary);"></div>
+
+                    <!-- View 1: Bubbles -->
+                    <div id="jiqBubbleGrid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 0.75rem;"></div>
+
+                    <!-- View 2: Spider/network SVG -->
+                    <div id="jiqSpiderWrap" style="display: none;">
+                        <svg id="jiqSpiderSvg" viewBox="0 0 1100 720" preserveAspectRatio="xMidYMid meet" style="width: 100%; height: auto; max-height: 720px;"></svg>
+                    </div>
+
+                    <!-- View 3: Events flat list -->
+                    <div id="jiqEventsList" style="display: none;"></div>
+
+                    <!-- Per-channel detail (shown after clicking a bubble) -->
+                    <div id="jiqBubbleDetail" style="display: none; margin-top: 1rem; padding: 0.75rem; border-top: 1px solid var(--border-color);"></div>
+
+                    <!-- Ticketing-endpoint breakdown strip (movie mode) -->
+                    <div id="jiqEndpointStrip" style="display: none; margin-top: 1rem; padding-top: 0.75rem; border-top: 1px solid var(--border-color);">
+                        <div style="font-size: 0.78rem; font-weight: 700; margin-bottom: 0.5rem;">🎟️ Where converters bought their tickets</div>
+                        <div id="jiqEndpointBars" style="display: flex; flex-direction: column; gap: 6px;"></div>
+                    </div>
+
+                    <!-- Sources consulted footer -->
+                    <div id="jiqSourcesConsulted" style="display: none; margin-top: 0.75rem; padding-top: 0.5rem; border-top: 1px solid var(--border-color); font-size: 0.7rem; color: var(--text-secondary);"></div>
+                </div>
 
                 <!-- Path to Purchase (BSFS-style visual journey) -->
                 <div class="card" id="jiqPathCard" style="padding: 1rem; margin-bottom: 1rem; display: none;">
@@ -27177,12 +27233,81 @@
             if (tgtLbl) tgtLbl.textContent = (mode === 'conversion') ? '(optional)' : '(required)';
         }
 
-        function onJiqIsMovieChange() {
-            var on = !!(document.getElementById('jiqIsMovie') || {}).checked;
-            var block = document.getElementById('jiqMovieBlock');
-            if (block) block.style.display = on ? '' : 'none';
+        function onJiqTargetTypeChange() {
+            var t = (document.getElementById('jiqTargetType') || {}).value || 'general';
+            var blocks = {
+                movie:   document.getElementById('jiqMovieBlock'),
+                website: document.getElementById('jiqWebsiteBlock'),
+                tv_show: document.getElementById('jiqTvShowBlock'),
+            };
+            for (var k in blocks) {
+                if (blocks[k]) blocks[k].style.display = (k === t) ? '' : 'none';
+            }
             var bo = document.getElementById('jiqBoxOfficeMillions');
-            if (bo) bo.required = on;
+            var mv = document.getElementById('jiqMonthlyVisitorsMillions');
+            var tv = document.getElementById('jiqUsViewersMillions');
+            if (bo) bo.required = (t === 'movie');
+            if (mv) mv.required = (t === 'website');
+            if (tv) tv.required = (t === 'tv_show');
+            var estRow = document.getElementById('jiqEstimateRow');
+            if (estRow) estRow.style.display = (t === 'general') ? 'none' : 'flex';
+            var helpEl = document.getElementById('jiqTypeHelp');
+            if (helpEl) helpEl.style.display = (t === 'general') ? 'none' : '';
+            // Auto-estimate when type changes (and a target is set) so the user
+            // sees the AI-looked-up number immediately. The button stays around
+            // for retries / different targets.
+            var tgtVal = ((document.getElementById('jiqTarget') || {}).value || '').trim();
+            if (t !== 'general' && tgtVal) {
+                estimateJiqAudience();
+            }
+        }
+
+        function estimateJiqAudience() {
+            var t  = (document.getElementById('jiqTargetType') || {}).value || 'general';
+            var tg = ((document.getElementById('jiqTarget') || {}).value || '').trim();
+            var sd = (document.getElementById('jiqStartDate') || {}).value || '';
+            var ed = (document.getElementById('jiqEndDate')   || {}).value || '';
+            if (t === 'general') return;
+            var statusEl = document.getElementById('jiqEstimateStatus');
+            var btn      = document.getElementById('jiqEstimateBtn');
+            if (!tg) {
+                if (statusEl) statusEl.textContent = 'Enter a Target above first, then click Auto-estimate.';
+                return;
+            }
+            if (btn) { btn.disabled = true; btn.textContent = '⏳ Looking up...'; }
+            if (statusEl) statusEl.textContent = 'Calling gpt-4o-search-preview...';
+            fetch('/api/journey-iq/estimate-audience', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({target_type: t, target: tg, start_date: sd, end_date: ed}),
+            }).then(function(r) { return r.json(); }).then(function(d) {
+                if (btn) { btn.disabled = false; btn.textContent = '🔎 Auto-estimate via web search'; }
+                if (!d.success && d.error) {
+                    if (statusEl) statusEl.textContent = '⚠️ ' + d.error;
+                    return;
+                }
+                var est = d.estimate || {};
+                if (t === 'movie' && est.box_office_millions != null) {
+                    var bo = document.getElementById('jiqBoxOfficeMillions'); if (bo) bo.value = est.box_office_millions;
+                    if (est.avg_ticket_price) {
+                        var tp = document.getElementById('jiqAvgTicketPrice'); if (tp) tp.value = est.avg_ticket_price;
+                    }
+                } else if (t === 'website' && est.monthly_visitors_millions != null) {
+                    var mv = document.getElementById('jiqMonthlyVisitorsMillions'); if (mv) mv.value = est.monthly_visitors_millions;
+                } else if (t === 'tv_show' && est.us_viewers_millions != null) {
+                    var tv = document.getElementById('jiqUsViewersMillions'); if (tv) tv.value = est.us_viewers_millions;
+                }
+                if (statusEl) {
+                    var conf = est.confidence || 'low';
+                    var src  = est.source || '';
+                    statusEl.innerHTML = '✓ confidence: <strong>' + conf + '</strong>'
+                                       + (src ? ' &middot; ' + src.replace(/[<>]/g, '') : '')
+                                       + (est.notes ? '<br><em style="color: var(--text-secondary);">' + est.notes.replace(/[<>]/g, '') + '</em>' : '');
+                }
+            }).catch(function(e) {
+                if (btn) { btn.disabled = false; btn.textContent = '🔎 Auto-estimate via web search'; }
+                if (statusEl) statusEl.textContent = '⚠️ ' + (e && e.message ? e.message : 'lookup failed');
+            });
         }
 
         function submitJourneyIq() {
@@ -27199,9 +27324,12 @@
             var convUrls = (document.getElementById('jiqConvUrlPatterns') || {}).value || '';
             var daysBefore = parseInt((document.getElementById('jiqDaysBeforeConv') || {}).value || '90', 10);
             var stepsBefore = parseInt((document.getElementById('jiqStepsBeforeConv') || {}).value || '10', 10);
-            var isMovie = !!(document.getElementById('jiqIsMovie') || {}).checked;
+            var targetType = (document.getElementById('jiqTargetType') || {}).value || 'general';
+            var isMovie = (targetType === 'movie');  // legacy alias for the backend
             var boxOfficeM = parseFloat((document.getElementById('jiqBoxOfficeMillions') || {}).value || '0');
             var ticketPrice = parseFloat((document.getElementById('jiqAvgTicketPrice') || {}).value || '15');
+            var monthlyVisitorsM = parseFloat((document.getElementById('jiqMonthlyVisitorsMillions') || {}).value || '0');
+            var usViewersM = parseFloat((document.getElementById('jiqUsViewersMillions') || {}).value || '0');
             pn = pn.trim(); tg = tg.trim();
             if (!pn || !sd || !ed) {
                 alert('Project name and date range are required.');
@@ -27216,8 +27344,16 @@
                 alert('Target is required in mention-based mode.');
                 return;
             }
-            if (isMovie && (!boxOfficeM || boxOfficeM <= 0)) {
-                alert('Movie mode requires US box office in millions (e.g. 185 for $185M).');
+            if (targetType === 'movie' && (!boxOfficeM || boxOfficeM <= 0)) {
+                alert('Movie mode requires US box office in millions (e.g. 185 for $185M). Click Auto-estimate to look it up.');
+                return;
+            }
+            if (targetType === 'website' && (!monthlyVisitorsM || monthlyVisitorsM <= 0)) {
+                alert('Website mode requires US monthly visitors in millions. Click Auto-estimate to look it up.');
+                return;
+            }
+            if (targetType === 'tv_show' && (!usViewersM || usViewersM <= 0)) {
+                alert('TV show mode requires US viewers in millions. Click Auto-estimate to look it up.');
                 return;
             }
             var btn = document.getElementById('jiqSubmitBtn');
@@ -27247,8 +27383,11 @@
                     days_before_conversion: daysBefore,
                     steps_before_conversion: stepsBefore,
                     is_movie: isMovie,
+                    target_type: targetType,
                     box_office_millions: boxOfficeM,
-                    avg_ticket_price: ticketPrice
+                    avg_ticket_price: ticketPrice,
+                    monthly_visitors_millions: monthlyVisitorsM,
+                    us_viewers_millions: usViewersM
                 })
             }).then(function(r) { return r.json(); }).then(function(data) {
                 if (data.error) {
@@ -27640,6 +27779,16 @@
                 }
             }
 
+            // ---- Marketing Footprint panel (bubbles + spider + endpoints) ----
+            // Use the AI-research data from the modeled_view block when
+            // present (Movie/Website/TV mode); the legacy panel.touchpoints
+            // doesn't have it. fullRun is the un-sliced summary.
+            renderJourneyIqFootprint(
+                ((fullRun || {}).modeled_view || {}).marketing_footprint,
+                ((fullRun || {}).modeled_view || {}).touchpoint_bubbles,
+                ((fullRun || {}).modeled_view || {}).touchpoint_spider
+            );
+
             // ---- Path to Purchase panel (BSFS-style ribbon) ----
             renderJourneyIqPathToPurchase(d.path_to_purchase);
 
@@ -27674,6 +27823,292 @@
             _jiqCurrentClusterIdx = 0;
             renderJourneyIqDashboard();
         };
+
+        // ---- Marketing Footprint renderer (bubbles / spider / events) ----
+        // Renders the agent-discovered marketing events into a 3-view card:
+        // BUBBLES (per-channel summary), SPIDER (target -> channels ->
+        // events -> ticketing -> conversion), EVENTS (flat ranked list).
+        // All three views are populated from the same backing data; the
+        // toggle just shows/hides each.
+        if (typeof window._jiqFootprintView === 'undefined') window._jiqFootprintView = 'bubbles';
+
+        function setJiqFootprintView(v) {
+            window._jiqFootprintView = v || 'bubbles';
+            var b = document.getElementById('jiqBubbleGrid');
+            var s = document.getElementById('jiqSpiderWrap');
+            var e = document.getElementById('jiqEventsList');
+            if (b) b.style.display = (v === 'bubbles') ? 'grid' : 'none';
+            if (s) s.style.display = (v === 'spider')  ? '' : 'none';
+            if (e) e.style.display = (v === 'events')  ? '' : 'none';
+            var btns = document.getElementById('jiqFootprintViewBtns');
+            if (btns) {
+                btns.querySelectorAll('button').forEach(function(btn) {
+                    var active = (btn.getAttribute('data-view') === v);
+                    btn.style.background = active ? 'var(--accent-primary)' : 'var(--bg-secondary)';
+                    btn.style.color      = active ? '#fff' : 'var(--text-primary)';
+                });
+            }
+        }
+
+        function renderJourneyIqFootprint(footprint, bubbles, spider) {
+            var card = document.getElementById('jiqBubbleCard');
+            var hasData = !!(footprint && footprint.marketing_footprint) || (bubbles && bubbles.length);
+            if (card) card.style.display = hasData ? '' : 'none';
+            if (!hasData) return;
+
+            // View toggle
+            var btns = document.getElementById('jiqFootprintViewBtns');
+            if (btns) {
+                btns.innerHTML = ['bubbles','spider','events'].map(function(v) {
+                    var lbl = v === 'bubbles' ? '🫧 Bubbles' : v === 'spider' ? '🕸️ Spider' : '📋 Events';
+                    return '<button type="button" data-view="' + v + '" onclick="setJiqFootprintView(\'' + v + '\')" '
+                         + 'style="padding: 4px 10px; border-radius: 6px; border: 1px solid var(--border-color); '
+                         + 'background: var(--bg-secondary); color: var(--text-primary); font-size: 12px; cursor: pointer; font-weight: 600;">'
+                         + lbl + '</button>';
+                }).join('');
+            }
+
+            // Meta line: confidence + total events
+            var totalEvents = (bubbles || []).reduce(function(s, b) { return s + (b.event_count || 0); }, 0);
+            var conf = (footprint && footprint.confidence) || 'medium';
+            var metaEl = document.getElementById('jiqBubbleMeta');
+            if (metaEl) {
+                metaEl.innerHTML = 'Discovered <strong>' + totalEvents + '</strong> marketing events across <strong>' + (bubbles || []).length + '</strong> channels'
+                    + '  ·  agent confidence: <strong>' + conf + '</strong>'
+                    + '  ·  US-genpop baseline: <strong>260M</strong> adults 16+';
+            }
+
+            // BUBBLES VIEW
+            var grid = document.getElementById('jiqBubbleGrid');
+            if (grid) {
+                grid.innerHTML = (bubbles || []).map(function(ch) {
+                    var size = Math.max(60, Math.min(180, 60 + ch.reach_pct_of_genpop * 4));  // px diameter, capped
+                    var bg   = _jiqChannelColor(ch.channel);
+                    var fg   = (ch.reach_pct_of_genpop >= 20) ? '#fff' : 'var(--text-primary)';
+                    var topEvent = (ch.events && ch.events[0])
+                        ? ((ch.events[0].actor || ch.events[0].publication || ch.events[0].talent
+                            || ch.events[0].creator || ch.events[0].partner || ch.events[0].site
+                            || ch.events[0].forum || ch.events[0].track || ch.events[0].engine
+                            || 'event'))
+                        : '';
+                    return ''
+                        + '<div onclick="showJiqChannelDetail(\'' + ch.channel + '\')" '
+                        + '     style="cursor: pointer; padding: 0.6rem; border: 1px solid var(--border-color); border-radius: 10px; background: var(--bg-primary); display: flex; flex-direction: column; align-items: center; gap: 6px;" '
+                        + '     onmouseover="this.style.transform=\'translateY(-2px)\';this.style.boxShadow=\'0 4px 12px rgba(0,0,0,0.08)\'" '
+                        + '     onmouseout="this.style.transform=\'\';this.style.boxShadow=\'\'">'
+                        + '  <div style="width: ' + size + 'px; height: ' + size + 'px; border-radius: 50%; background: ' + bg + '; color: ' + fg + '; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: ' + Math.max(14, size/6) + 'px;">'
+                        +    ch.reach_pct_of_genpop + '%'
+                        + '  </div>'
+                        + '  <div style="font-size: 0.82rem; font-weight: 600; text-align: center;">' + _jiqEsc(ch.label) + '</div>'
+                        + '  <div style="font-size: 0.7rem; color: var(--text-secondary); text-align: center;">' + ch.event_count + ' event' + (ch.event_count === 1 ? '' : 's')
+                        +    (topEvent ? '  ·  top: ' + _jiqEsc(String(topEvent)) : '')
+                        + '  </div>'
+                        + '</div>';
+                }).join('');
+            }
+
+            // SPIDER VIEW
+            var spiderWrap = document.getElementById('jiqSpiderWrap');
+            var svg = document.getElementById('jiqSpiderSvg');
+            if (svg && spider) {
+                svg.innerHTML = _jiqRenderSpiderSvg(spider);
+            }
+
+            // EVENTS VIEW (flat ranked list)
+            var evList = document.getElementById('jiqEventsList');
+            if (evList && spider && spider.events) {
+                var sorted = (spider.events || []).slice().sort(function(a, b) { return (b.reach_pct || 0) - (a.reach_pct || 0); });
+                evList.innerHTML = '<table style="width: 100%; border-collapse: collapse; font-size: 0.82rem;">'
+                    + '<thead><tr style="text-align: left; border-bottom: 1px solid var(--border-color);">'
+                    + '<th style="padding: 6px;">Reach %</th>'
+                    + '<th style="padding: 6px;">Reach (US)</th>'
+                    + '<th style="padding: 6px;">Channel</th>'
+                    + '<th style="padding: 6px;">Source</th>'
+                    + '<th style="padding: 6px;">Date</th>'
+                    + '<th style="padding: 6px;">Confidence</th>'
+                    + '<th style="padding: 6px;">Link</th>'
+                    + '</tr></thead><tbody>'
+                    + sorted.map(function(e) {
+                        var link = e.url ? '<a href="' + _jiqEsc(e.url) + '" target="_blank" rel="noopener" style="color: var(--accent-primary);">open ↗</a>' : '';
+                        return '<tr style="border-bottom: 1px solid var(--border-color);">'
+                            + '<td style="padding: 6px; font-weight: 600;">' + (e.reach_pct || 0) + '%</td>'
+                            + '<td style="padding: 6px;">' + _jiqFmt(e.reach_us || 0) + '</td>'
+                            + '<td style="padding: 6px;">' + _jiqEsc(e.channel_label || e.channel) + '</td>'
+                            + '<td style="padding: 6px;">' + _jiqEsc(e.label || '') + '</td>'
+                            + '<td style="padding: 6px; color: var(--text-secondary);">' + _jiqEsc(e.date || '') + '</td>'
+                            + '<td style="padding: 6px; color: var(--text-secondary);">' + _jiqEsc(e.confidence || '') + '</td>'
+                            + '<td style="padding: 6px;">' + link + '</td>'
+                            + '</tr>';
+                    }).join('') + '</tbody></table>';
+            }
+
+            // ENDPOINT BREAKDOWN (movies)
+            var epStrip = document.getElementById('jiqEndpointStrip');
+            var epBars  = document.getElementById('jiqEndpointBars');
+            var endpoints = (footprint && footprint.endpoint_breakdown) || [];
+            if (epStrip && epBars && endpoints.length) {
+                epStrip.style.display = '';
+                epBars.innerHTML = endpoints.map(function(ep) {
+                    var pct = ep.share_pct || 0;
+                    return '<div style="display: flex; align-items: center; gap: 8px; font-size: 0.78rem;">'
+                        + '  <div style="width: 160px; font-weight: 600;">' + _jiqEsc(ep.endpoint || '') + '</div>'
+                        + '  <div style="flex: 1; background: var(--bg-secondary); height: 14px; border-radius: 7px; overflow: hidden;">'
+                        + '    <div style="width: ' + pct + '%; height: 100%; background: var(--accent-primary);"></div>'
+                        + '  </div>'
+                        + '  <div style="width: 60px; text-align: right; font-weight: 600;">' + pct.toFixed(1) + '%</div>'
+                        + '  <div style="width: 160px; font-size: 0.7rem; color: var(--text-secondary);">' + _jiqEsc(ep.url_pattern || '') + '</div>'
+                        + '</div>';
+                }).join('');
+            } else if (epStrip) {
+                epStrip.style.display = 'none';
+            }
+
+            // SOURCES CONSULTED footer
+            var srcEl = document.getElementById('jiqSourcesConsulted');
+            var srcs = (footprint && footprint.sources_consulted) || [];
+            if (srcEl) {
+                if (srcs.length) {
+                    srcEl.style.display = '';
+                    srcEl.innerHTML = '<strong>Sources consulted by agent:</strong> ' + srcs.map(function(s) { return _jiqEsc(s); }).join(' · ');
+                } else {
+                    srcEl.style.display = 'none';
+                }
+            }
+
+            // Apply the current view (default 'bubbles')
+            setJiqFootprintView(window._jiqFootprintView || 'bubbles');
+
+            // Stash the bubbles for the channel-detail click handler
+            window._jiqFootprintBubbles = bubbles || [];
+        }
+
+        function showJiqChannelDetail(channelKey) {
+            var bubbles = window._jiqFootprintBubbles || [];
+            var ch = bubbles.find(function(b) { return b.channel === channelKey; });
+            var det = document.getElementById('jiqBubbleDetail');
+            if (!det) return;
+            if (!ch) { det.style.display = 'none'; return; }
+            det.style.display = '';
+            det.innerHTML = ''
+                + '<div style="font-weight: 700; margin-bottom: 0.5rem;">' + _jiqEsc(ch.label) + ' — ' + ch.reach_pct_of_genpop + '% US genpop reach (union)</div>'
+                + '<table style="width: 100%; border-collapse: collapse; font-size: 0.78rem;">'
+                + '<thead><tr style="text-align: left; border-bottom: 1px solid var(--border-color);">'
+                + '<th style="padding: 4px;">#</th><th style="padding: 4px;">Source</th><th style="padding: 4px;">Reach US</th><th style="padding: 4px;">Reach %</th><th style="padding: 4px;">Date</th><th style="padding: 4px;">Notes</th><th style="padding: 4px;">Link</th>'
+                + '</tr></thead><tbody>'
+                + (ch.events || []).map(function(e, i) {
+                    var actor = e.actor || e.publication || e.talent || e.creator || e.partner || e.site || e.forum || e.track || e.engine || '—';
+                    var link  = e.url ? '<a href="' + _jiqEsc(e.url) + '" target="_blank" rel="noopener" style="color: var(--accent-primary);">↗</a>' : '';
+                    return '<tr style="border-bottom: 1px solid var(--border-color);">'
+                        + '<td style="padding: 4px; color: var(--text-secondary);">' + (i+1) + '</td>'
+                        + '<td style="padding: 4px; font-weight: 600;">' + _jiqEsc(String(actor)) + '</td>'
+                        + '<td style="padding: 4px;">' + _jiqFmt(e.estimated_reach_us || 0) + '</td>'
+                        + '<td style="padding: 4px;">' + (e.reach_pct_of_genpop || 0) + '%</td>'
+                        + '<td style="padding: 4px; color: var(--text-secondary);">' + _jiqEsc(e.date || e.date_estimate || '') + '</td>'
+                        + '<td style="padding: 4px; font-size: 0.72rem; color: var(--text-secondary);">' + _jiqEsc(e.notes || '') + '</td>'
+                        + '<td style="padding: 4px;">' + link + '</td>'
+                        + '</tr>';
+                }).join('') + '</tbody></table>';
+        }
+
+        function _jiqChannelColor(channelKey) {
+            var palette = {
+                social_media:         '#ff3b6b',
+                press:                '#5b6cff',
+                talent_mentions:      '#ffb53b',
+                creator_influencers:  '#a14cff',
+                brand_partnerships:   '#00c2a8',
+                reviews_critics:      '#ff8a3b',
+                paid_advertising:     '#888',
+                showtime_searches:    '#3bd2ff',
+                ticketing_sites:      '#00a86b',
+                soundtrack_music:     '#e91e63',
+                organic_search:       '#4285f4',
+                press_reviews:        '#7a5cff',
+                forum_discussion:     '#ff5f00',
+            };
+            return palette[channelKey] || '#5b6cff';
+        }
+
+        function _jiqRenderSpiderSvg(spider) {
+            // Layout: TARGET center-top -> channels in upper arc ->
+            // events as leaves on outer arc -> COHORT center -> endpoints
+            // bottom arc -> CONVERSION center-bottom. Uses plain SVG so
+            // we don't need to pull in D3.
+            var chs = (spider.channels || []).slice(0, 8);  // cap visible channels
+            var endpoints = (spider.endpoints || []).slice(0, 6);
+            var W = 1100, H = 720;
+            var cx = W / 2;
+            var tgtY  = 40;
+            var chY   = 180;
+            var leafY = 340;
+            var cohortY = 460;
+            var epY    = 580;
+            var convY  = 700;
+
+            var parts = [];
+            // background
+            parts.push('<rect width="' + W + '" height="' + H + '" fill="transparent"/>');
+
+            // TARGET node
+            parts.push('<g><circle cx="' + cx + '" cy="' + tgtY + '" r="32" fill="#111" stroke="var(--accent-primary)" stroke-width="3"/>'
+                + '<text x="' + cx + '" y="' + (tgtY + 5) + '" text-anchor="middle" fill="#fff" font-weight="700" font-size="13">' + _jiqEsc((spider.target || 'Target').slice(0, 14)) + '</text></g>');
+
+            // Channels along a horizontal line
+            var nCh = chs.length || 1;
+            var chSpacing = (W - 120) / Math.max(1, nCh);
+            chs.forEach(function(ch, i) {
+                var x = 60 + chSpacing * (i + 0.5);
+                var color = _jiqChannelColor(ch.channel);
+                // target -> channel edge
+                parts.push('<line x1="' + cx + '" y1="' + (tgtY + 32) + '" x2="' + x + '" y2="' + (chY - 22) + '" stroke="' + color + '" stroke-width="' + Math.max(1, Math.min(6, ch.reach_pct_of_genpop / 4)) + '" opacity="0.5"/>');
+                var r = Math.max(18, Math.min(36, 18 + ch.reach_pct_of_genpop * 0.8));
+                parts.push('<g><circle cx="' + x + '" cy="' + chY + '" r="' + r + '" fill="' + color + '" opacity="0.85"/>'
+                    + '<text x="' + x + '" y="' + (chY + 4) + '" text-anchor="middle" fill="#fff" font-weight="700" font-size="' + Math.max(10, r/2.4) + '">' + ch.reach_pct_of_genpop + '%</text>'
+                    + '<text x="' + x + '" y="' + (chY + r + 12) + '" text-anchor="middle" fill="var(--text-primary)" font-size="10">' + _jiqEsc(ch.label) + '</text></g>');
+                // Top 3 events as leaves under each channel
+                var evs = (ch.events || []).slice(0, 3);
+                var leafSpacing = Math.min(70, chSpacing - 10);
+                evs.forEach(function(e, j) {
+                    var lx = x + (j - (evs.length - 1) / 2) * (leafSpacing / Math.max(1, evs.length));
+                    var ly = leafY + (j % 2) * 18;
+                    parts.push('<line x1="' + x + '" y1="' + (chY + r) + '" x2="' + lx + '" y2="' + (ly - 6) + '" stroke="' + color + '" stroke-width="1" opacity="0.35"/>');
+                    var actor = e.actor || e.publication || e.talent || e.creator || e.partner || e.site || e.forum || e.track || e.engine || '?';
+                    actor = String(actor); if (actor.length > 18) actor = actor.slice(0, 17) + '…';
+                    parts.push('<g><circle cx="' + lx + '" cy="' + ly + '" r="5" fill="' + color + '"/>'
+                        + '<text x="' + lx + '" y="' + (ly + 14) + '" text-anchor="middle" fill="var(--text-secondary)" font-size="9">' + _jiqEsc(actor) + '</text></g>');
+                    // event -> cohort edge (faint)
+                    parts.push('<line x1="' + lx + '" y1="' + (ly + 5) + '" x2="' + cx + '" y2="' + (cohortY - 22) + '" stroke="' + color + '" stroke-width="0.5" opacity="0.25"/>');
+                });
+            });
+
+            // COHORT node (rectangle)
+            parts.push('<g><rect x="' + (cx - 90) + '" y="' + (cohortY - 22) + '" width="180" height="44" rx="22" fill="var(--accent-primary)"/>'
+                + '<text x="' + cx + '" y="' + (cohortY + 5) + '" text-anchor="middle" fill="#fff" font-weight="700" font-size="13">CONVERTER COHORT</text></g>');
+
+            // Endpoints (movies) — bottom arc
+            if (endpoints.length) {
+                var epSpacing = (W - 160) / Math.max(1, endpoints.length);
+                endpoints.forEach(function(ep, i) {
+                    var x = 80 + epSpacing * (i + 0.5);
+                    // cohort -> endpoint
+                    var w = Math.max(1, Math.min(10, (ep.share_pct || 0) / 5));
+                    parts.push('<line x1="' + cx + '" y1="' + (cohortY + 22) + '" x2="' + x + '" y2="' + (epY - 16) + '" stroke="#00a86b" stroke-width="' + w + '" opacity="0.55"/>');
+                    parts.push('<g><rect x="' + (x - 60) + '" y="' + (epY - 16) + '" width="120" height="32" rx="6" fill="#00a86b"/>'
+                        + '<text x="' + x + '" y="' + (epY + 4) + '" text-anchor="middle" fill="#fff" font-weight="700" font-size="11">' + _jiqEsc(ep.endpoint || '') + ' ' + (ep.share_pct || 0) + '%</text></g>');
+                    // endpoint -> conversion
+                    parts.push('<line x1="' + x + '" y1="' + (epY + 16) + '" x2="' + cx + '" y2="' + (convY - 16) + '" stroke="#00a86b" stroke-width="' + w + '" opacity="0.55"/>');
+                });
+            } else {
+                // No endpoint breakdown — direct cohort -> conversion edge
+                parts.push('<line x1="' + cx + '" y1="' + (cohortY + 22) + '" x2="' + cx + '" y2="' + (convY - 16) + '" stroke="var(--accent-primary)" stroke-width="6" opacity="0.6"/>');
+            }
+
+            // CONVERSION node
+            parts.push('<g><rect x="' + (cx - 70) + '" y="' + (convY - 16) + '" width="140" height="32" rx="6" fill="#111" stroke="var(--accent-primary)" stroke-width="2"/>'
+                + '<text x="' + cx + '" y="' + (convY + 4) + '" text-anchor="middle" fill="#fff" font-weight="700" font-size="13">CONVERSION</text></g>');
+
+            return parts.join('');
+        }
 
         // ---- Path to Purchase renderer (BSFS-style ribbon) ----
         // Renders the multi-column right-aligned ribbon (Step -K ... Step -1 -> CONVERSION)

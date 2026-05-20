@@ -343,6 +343,9 @@ def run_job(
     is_movie: bool = False,
     box_office_millions: float = 0.0,
     avg_ticket_price: float = 15.0,
+    target_type: str = 'general',
+    monthly_visitors_millions: float = 0.0,
+    us_viewers_millions: float = 0.0,
     progress_cb: Optional[Callable[..., None]] = None,
     s3_client: Any = None,
     ch_connect: Optional[Callable[..., Any]] = None,
@@ -406,7 +409,15 @@ def run_job(
     forward_days  = max(0, min(int(forward_days  or DEFAULT_FORWARD_DAYS), 60))
     days_before   = max(1, min(int(days_before_conversion or 90), 365))
     steps_before  = max(1, min(int(steps_before_conversion or 10), 50))
-    is_movie      = bool(is_movie)
+    # Backward-compat: legacy callers may still send is_movie=True
+    # without target_type. Promote it to 'movie' so the new dispatcher path
+    # picks it up correctly.
+    target_type = (target_type or 'general').strip().lower()
+    if target_type == 'general' and bool(is_movie):
+        target_type = 'movie'
+    if target_type not in ('general', 'movie', 'website', 'tv_show'):
+        target_type = 'general'
+    is_movie = (target_type == 'movie')
     try:
         box_office_millions = max(0.0, float(box_office_millions or 0.0))
     except Exception:
@@ -415,6 +426,14 @@ def run_job(
         avg_ticket_price = max(1.0, float(avg_ticket_price or 15.0))
     except Exception:
         avg_ticket_price = 15.0
+    try:
+        monthly_visitors_millions = max(0.0, float(monthly_visitors_millions or 0.0))
+    except Exception:
+        monthly_visitors_millions = 0.0
+    try:
+        us_viewers_millions = max(0.0, float(us_viewers_millions or 0.0))
+    except Exception:
+        us_viewers_millions = 0.0
     conv_patterns = tuple(CONVERSION_PATTERNS) + tuple(
         p.strip().lower() for p in (extra_conversion_patterns or []) if p and p.strip()
     )
@@ -534,14 +553,25 @@ def run_job(
                    if cohort_mode == 'conversion'
                    else 'No users mentioned the target in the date range.')
             # Compute implied audience NOW so the empty-summary banner can
-            # show it and (in movie mode) drive the modeled-view sizing.
+            # show it and (in any non-general target_type) drive the
+            # modeled-view sizing.
+            from datetime import date as _date
+            try:
+                _sd = _date.fromisoformat(start_date); _ed = _date.fromisoformat(end_date)
+                _date_range_days = max(1, (_ed - _sd).days + 1)
+            except Exception:
+                _date_range_days = 30
             empty_implied = 0
-            if is_movie and box_office_millions > 0:
+            if target_type in ('movie', 'website', 'tv_show'):
                 try:
-                    from migration.journey_iq_synthesize import compute_implied_audience as _cia
-                    empty_implied = _cia(
+                    from migration.journey_iq_synthesize import compute_implied_audience_for_type as _ciat
+                    empty_implied = _ciat(
+                        target_type=target_type,
                         box_office_millions=box_office_millions,
                         ticket_price=avg_ticket_price,
+                        monthly_visitors_millions=monthly_visitors_millions,
+                        date_range_days=_date_range_days,
+                        us_viewers_millions=us_viewers_millions,
                     )
                 except Exception:
                     empty_implied = 0
@@ -552,39 +582,67 @@ def run_job(
                 box_office_millions=box_office_millions,
                 avg_ticket_price=avg_ticket_price,
                 implied_audience=empty_implied,
+                target_type=target_type,
+                monthly_visitors_millions=monthly_visitors_millions,
+                us_viewers_millions=us_viewers_millions,
             )
 
-            # Movie mode: even with zero panel data, surface Claude's
-            # modeled journey so the dashboard renders something useful.
-            # The view toggle will default to "Blended" which (with 0 real
-            # converters) shows the modeled view.
-            if is_movie and box_office_millions > 0:
+            # Non-general target_type: even with zero panel data, surface
+            # the AI-modeled journey so the dashboard renders something
+            # useful. The view toggle defaults to "Blended" which (with 0
+            # real converters) shows the modeled view.
+            if target_type in ('movie', 'website', 'tv_show') and empty_implied > 0:
                 try:
-                    _p(90, 'No panel converters found — synthesizing modeled journey from Claude...')
+                    _p(90, f'No panel converters found — synthesizing modeled {target_type} journey...')
                     from migration.journey_iq_synthesize import (
-                        synthesize_movie_journey, synth_to_dashboard_payload,
+                        synthesize_journey, synth_to_dashboard_payload,
                     )
-                    synth = synthesize_movie_journey(
-                        target=target,
+                    synth = synthesize_journey(
+                        target_type=target_type, target=target,
                         project_name=project_name,
-                        start_date=start_date,
-                        end_date=end_date,
-                        box_office_millions=box_office_millions,
-                        ticket_price=avg_ticket_price,
+                        start_date=start_date, end_date=end_date,
                         extra_touchpoint_keywords=extra_kw_map,
                         panel_converters=0,
                         panel_observed_touchpoints=[],
                         panel_top_paths=[],
                         steps=steps_before,
+                        box_office_millions=box_office_millions,
+                        ticket_price=avg_ticket_price,
+                        monthly_visitors_millions=monthly_visitors_millions,
+                        date_range_days=_date_range_days,
+                        us_viewers_millions=us_viewers_millions,
                     ) or {}
                     if synth:
                         modeled = synth_to_dashboard_payload(
                             synth, target_audience=max(empty_implied, 1),
                         )
-                        modeled['source'] = synth.get('source', 'fallback')
-                        modeled['notes']  = synth.get('notes', '')
+                        modeled['source']      = synth.get('source', 'fallback')
+                        modeled['notes']       = synth.get('notes', '')
+                        modeled['target_type'] = target_type
                         empty['modeled_view'] = modeled
                         empty['meta']['has_modeled_view'] = True
+                    # Marketing-footprint agent (real-world bubbles)
+                    try:
+                        from migration.journey_iq_synthesize import (
+                            research_marketing_footprint, footprint_to_bubbles,
+                            footprint_to_spider,
+                        )
+                        fp = research_marketing_footprint(
+                            target_type=target_type, target=target,
+                            start_date=start_date, end_date=end_date,
+                        )
+                        if fp and not fp.get('_error'):
+                            bubbles = footprint_to_bubbles(fp)
+                            spider  = footprint_to_spider(fp, target=target)
+                            mv = empty.setdefault('modeled_view', {
+                                'target_type': target_type, 'source': 'agent',
+                            })
+                            mv['marketing_footprint'] = fp
+                            mv['touchpoint_bubbles']  = bubbles
+                            mv['touchpoint_spider']   = spider
+                            empty['meta']['has_modeled_view'] = True
+                    except Exception as e:
+                        print(f"[Journey IQ] empty-cohort footprint failed (non-fatal): {e}")
                 except Exception as e:
                     print(f"[Journey IQ] empty-cohort synth failed (non-fatal): {e}")
 
@@ -810,47 +868,85 @@ def run_job(
         scaled_block:  Optional[dict] = None
         implied_audience = 0
         scaling_factor = 1.0
-        if is_movie and box_office_millions > 0:
+        # Compute the run's date range in days so the website-scaling
+        # formula has a window to multiply against.
+        from datetime import date as _date
+        try:
+            _sd = _date.fromisoformat(start_date); _ed = _date.fromisoformat(end_date)
+            _date_range_days = max(1, (_ed - _sd).days + 1)
+        except Exception:
+            _date_range_days = 30
+        if target_type in ('movie', 'website', 'tv_show'):
             try:
                 from migration.journey_iq_synthesize import (
-                    compute_implied_audience, compute_scaling_factor,
-                    synthesize_movie_journey, synth_to_dashboard_payload,
-                    scale_summary_counts,
+                    compute_implied_audience_for_type, compute_scaling_factor,
+                    synthesize_journey, synth_to_dashboard_payload,
                 )
-                _p(88, 'Movie mode: scaling to box office + synthesizing canonical journey...')
+                _p(88, f'{target_type.replace("_"," ").title()} mode: scaling + synthesizing modeled journey...')
                 real_converters = int(kpis.get('converted_users') or 0)
-                implied_audience = compute_implied_audience(
+                implied_audience = compute_implied_audience_for_type(
+                    target_type=target_type,
                     box_office_millions=box_office_millions,
                     ticket_price=avg_ticket_price,
+                    monthly_visitors_millions=monthly_visitors_millions,
+                    date_range_days=_date_range_days,
+                    us_viewers_millions=us_viewers_millions,
                 )
                 scaling_factor = compute_scaling_factor(
                     implied_audience=implied_audience,
                     panel_converters=real_converters,
                 )
 
-                # Claude synthesis — always generated in movie mode so the
-                # dashboard can show "Modeled" side-by-side with "Panel".
-                synth = synthesize_movie_journey(
-                    target=target,
+                # Always generate the modeled view so the dashboard can show
+                # "Modeled" side-by-side with "Panel" regardless of cohort size.
+                synth = synthesize_journey(
+                    target_type=target_type, target=target,
                     project_name=project_name,
-                    start_date=start_date,
-                    end_date=end_date,
-                    box_office_millions=box_office_millions,
-                    ticket_price=avg_ticket_price,
+                    start_date=start_date, end_date=end_date,
                     extra_touchpoint_keywords=extra_kw_map,
                     panel_converters=real_converters,
                     panel_observed_touchpoints=(touchpoints.get('rows') or [])[:15],
                     panel_top_paths=(path_to_purchase.get('top_paths') or [])[:5],
                     steps=steps_before,
+                    box_office_millions=box_office_millions,
+                    ticket_price=avg_ticket_price,
+                    monthly_visitors_millions=monthly_visitors_millions,
+                    date_range_days=_date_range_days,
+                    us_viewers_millions=us_viewers_millions,
                 ) or {}
                 if synth:
                     modeled_block = synth_to_dashboard_payload(
                         synth, target_audience=max(implied_audience, 1),
                     )
-                    modeled_block['source'] = synth.get('source', 'fallback')
-                    modeled_block['notes']  = synth.get('notes', '')
+                    modeled_block['source']      = synth.get('source', 'fallback')
+                    modeled_block['notes']       = synth.get('notes', '')
+                    modeled_block['target_type'] = target_type
+
+                # Marketing-footprint agent: discover real-world events
+                # (celeb posts / press / partnerships) for the bubble viz.
+                # Best-effort — skipped silently when offline / OpenAI absent.
+                try:
+                    _p(92, 'Researching marketing footprint via web search agent (Google verticals + per-platform site:searches)...')
+                    from migration.journey_iq_synthesize import (
+                        research_marketing_footprint, footprint_to_bubbles,
+                        footprint_to_spider,
+                    )
+                    fp = research_marketing_footprint(
+                        target_type=target_type, target=target,
+                        start_date=start_date, end_date=end_date,
+                    )
+                    if fp and not fp.get('_error'):
+                        bubbles = footprint_to_bubbles(fp)
+                        spider  = footprint_to_spider(fp, target=target)
+                        if modeled_block is None:
+                            modeled_block = {'target_type': target_type, 'source': 'agent'}
+                        modeled_block['marketing_footprint'] = fp
+                        modeled_block['touchpoint_bubbles']  = bubbles
+                        modeled_block['touchpoint_spider']   = spider
+                except Exception as e:
+                    print(f"[Journey IQ] footprint research failed (non-fatal): {e}")
             except Exception as e:
-                print(f"[Journey IQ] movie synthesis failed (non-fatal): {e}")
+                print(f"[Journey IQ] {target_type} synthesis failed (non-fatal): {e}")
 
         # ── Phase 7: write to S3 ──────────────────────────────────────────
         _p(95, 'Writing results to S3...')
@@ -871,9 +967,12 @@ def run_job(
                 'conversion_url_patterns': list(conv_url_patterns),
                 'days_before_conversion': days_before,
                 'steps_before_conversion': steps_before,
-                'is_movie':       is_movie,
+                'target_type':    target_type,
+                'is_movie':       is_movie,  # legacy alias
                 'box_office_millions': box_office_millions,
                 'avg_ticket_price': avg_ticket_price,
+                'monthly_visitors_millions': monthly_visitors_millions,
+                'us_viewers_millions':       us_viewers_millions,
                 'implied_audience': implied_audience,
                 'scaling_factor':   scaling_factor,
                 'cut_options':    [{'key': k, 'label': lbl} for k, lbl in CUT_DISPLAY_ORDER],
@@ -2283,7 +2382,10 @@ def _empty_summary(target, project_name, start_date, end_date,
                    *,
                    cohort_mode='mention', is_movie=False,
                    box_office_millions=0.0, avg_ticket_price=15.0,
-                   implied_audience=0) -> dict:
+                   implied_audience=0,
+                   target_type='general',
+                   monthly_visitors_millions=0.0,
+                   us_viewers_millions=0.0) -> dict:
     return {
         'meta': {
             'project_name':   project_name,
@@ -2300,12 +2402,15 @@ def _empty_summary(target, project_name, start_date, end_date,
             'matched_uids':   0,
             'events_pulled':  0,
             'cohort_mode':    cohort_mode,
-            'is_movie':       bool(is_movie),
-            'box_office_millions': float(box_office_millions or 0.0),
-            'avg_ticket_price':    float(avg_ticket_price or 15.0),
-            'implied_audience':    int(implied_audience or 0),
-            'scaling_factor':      1.0,
-            'cohort_was_empty':    True,
+            'target_type':    target_type,
+            'is_movie':       bool(is_movie),  # legacy alias
+            'box_office_millions':       float(box_office_millions or 0.0),
+            'avg_ticket_price':          float(avg_ticket_price or 15.0),
+            'monthly_visitors_millions': float(monthly_visitors_millions or 0.0),
+            'us_viewers_millions':       float(us_viewers_millions or 0.0),
+            'implied_audience':          int(implied_audience or 0),
+            'scaling_factor':            1.0,
+            'cohort_was_empty':          True,
         },
         'kpis': {
             'total_users': 0, 'converted_users': 0, 'conversion_pct': 0.0,
