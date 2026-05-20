@@ -77,6 +77,7 @@ from migration.journey_iq_synthesize import (  # noqa: E402
     footprint_to_bubbles,
     footprint_to_spider,
     research_marketing_footprint,
+    research_site_funnel,
     synth_to_dashboard_payload,
     synthesize_journey,
 )
@@ -195,6 +196,11 @@ def run_research_anchored_job(
     steps: int = 10,
     s3_client: Any = None,
     job_id: Optional[str] = None,
+    # Phase toggles — let the caller opt out of the heavy footprint
+    # research (which can hang on broad targets) when only the
+    # site-funnel block is needed.
+    skip_footprint: bool = False,
+    skip_synth:     bool = False,
 ) -> dict:
     """Run a research-anchored Journey IQ job.
 
@@ -219,25 +225,62 @@ def run_research_anchored_job(
                     'error': f'no boto3 / AWS creds: {e}'}
 
     # ── Phase R: research the marketing footprint (the slow step) ────
-    print(f"[research-anchored] researching marketing footprint for "
-          f"{target!r} ({target_type}) {start_date} → {end_date}...")
-    t0 = time.time()
-    fp = research_marketing_footprint(
-        target_type=target_type, target=target,
-        start_date=start_date, end_date=end_date,
-    ) or {}
-    research_sec = round(time.time() - t0, 1)
-    if fp.get('_error'):
-        print(f"[research-anchored] research returned error: {fp['_error']} "
-              f"(after {research_sec}s) — continuing with empty footprint")
-        fp = {}
+    fp: dict = {}
+    research_sec = 0.0
+    if skip_footprint:
+        print(f"[research-anchored] skip_footprint=True — bypassing Phase R "
+              f"(marketing-footprint research)")
     else:
-        n_channels = len((fp.get('marketing_footprint') or {}))
-        n_events = sum(len((b or {}).get('events') or [])
-                       for b in (fp.get('marketing_footprint') or {}).values())
-        n_endpoints = len(fp.get('endpoint_breakdown') or [])
-        print(f"[research-anchored] research OK in {research_sec}s — "
-              f"{n_channels} channels, {n_events} events, {n_endpoints} endpoints")
+        print(f"[research-anchored] researching marketing footprint for "
+              f"{target!r} ({target_type}) {start_date} → {end_date}...")
+        t0 = time.time()
+        fp = research_marketing_footprint(
+            target_type=target_type, target=target,
+            start_date=start_date, end_date=end_date,
+        ) or {}
+        research_sec = round(time.time() - t0, 1)
+        if fp.get('_error'):
+            print(f"[research-anchored] research returned error: {fp['_error']} "
+                  f"(after {research_sec}s) — continuing with empty footprint")
+            fp = {}
+        else:
+            n_channels = len((fp.get('marketing_footprint') or {}))
+            n_events = sum(len((b or {}).get('events') or [])
+                           for b in (fp.get('marketing_footprint') or {}).values())
+            n_endpoints = len(fp.get('endpoint_breakdown') or [])
+            print(f"[research-anchored] research OK in {research_sec}s — "
+                  f"{n_channels} channels, {n_events} events, {n_endpoints} endpoints")
+
+    # ── Phase R.2: site-funnel research (website target_type only) ────
+    # Models what happens to visitors who LAND on the target site:
+    # converted-on-site / switched-to-competitor / never-transacted +
+    # inception referrers + companion behaviors (dinner / parking /
+    # etc.). Powers the new "Visitor Funnel" dashboard cards.
+    site_funnel: dict = {}
+    if target_type == 'website':
+        print(f"[research-anchored] researching site funnel for "
+              f"{target!r} (visitor outcomes + switchers + inception "
+              f"+ companion behaviors)...")
+        t1 = time.time()
+        site_funnel = research_site_funnel(
+            target=target,
+            url_pattern=_root_domain(target),
+            vertical_hint='movie ticketing' if 'fandango' in target.lower() or 'atom' in target.lower() else '',
+            start_date=start_date, end_date=end_date,
+        ) or {}
+        funnel_sec = round(time.time() - t1, 1)
+        if site_funnel.get('_error'):
+            print(f"[research-anchored] site_funnel error: "
+                  f"{site_funnel['_error']} (after {funnel_sec}s) — "
+                  f"continuing without funnel block")
+            site_funnel = {}
+        else:
+            n_dest = len(site_funnel.get('switched_destinations') or [])
+            n_ref  = len(site_funnel.get('inception_referrers') or [])
+            n_comp = len(site_funnel.get('companion_behaviors') or [])
+            print(f"[research-anchored] site_funnel OK in {funnel_sec}s — "
+                  f"{n_dest} switched destinations, {n_ref} inception "
+                  f"referrers, {n_comp} companion verticals")
 
     # ── Phase A: implied audience ────────────────────────────────────
     # Prefer the research-reported number (Claude can apply domain
@@ -256,36 +299,47 @@ def run_research_anchored_job(
 
     # ── Phase B: synthesize the journey grounded in the research ─────
     surfaces = _surfaces_from_footprint(fp)
-    print(f"[research-anchored] feeding {sum(len(v) for v in surfaces.values())} "
-          f"discovered surfaces across {len(surfaces)} channels into synth...")
-    t0 = time.time()
-    synth = synthesize_journey(
-        target_type=target_type,
-        target=target,
-        project_name=project_name,
-        start_date=start_date,
-        end_date=end_date,
-        extra_touchpoint_keywords=surfaces,
-        panel_converters=0,
-        panel_observed_touchpoints=None,
-        panel_top_paths=None,
-        steps=steps,
-        box_office_millions=box_office_millions,
-        ticket_price=avg_ticket_price,
-        monthly_visitors_millions=monthly_visitors_millions,
-        us_viewers_millions=us_viewers_millions,
-        date_range_days=_date_range_days(start_date, end_date),
-    ) or {}
-    synth_sec = round(time.time() - t0, 1)
-    print(f"[research-anchored] synth source={synth.get('source', 'fallback')} "
-          f"in {synth_sec}s")
+    synth: dict = {}
+    synth_sec = 0.0
+    if skip_synth:
+        print(f"[research-anchored] skip_synth=True — bypassing Phase B "
+              f"(journey synthesis)")
+        modeled_block = {
+            'kpis': {}, 'touchpoints': {'rows': []}, 'path_to_purchase': {},
+            'source': 'skipped', 'notes': 'synth skipped by caller',
+            'target_type': target_type,
+        }
+    else:
+        print(f"[research-anchored] feeding {sum(len(v) for v in surfaces.values())} "
+              f"discovered surfaces across {len(surfaces)} channels into synth...")
+        t0 = time.time()
+        synth = synthesize_journey(
+            target_type=target_type,
+            target=target,
+            project_name=project_name,
+            start_date=start_date,
+            end_date=end_date,
+            extra_touchpoint_keywords=surfaces,
+            panel_converters=0,
+            panel_observed_touchpoints=None,
+            panel_top_paths=None,
+            steps=steps,
+            box_office_millions=box_office_millions,
+            ticket_price=avg_ticket_price,
+            monthly_visitors_millions=monthly_visitors_millions,
+            us_viewers_millions=us_viewers_millions,
+            date_range_days=_date_range_days(start_date, end_date),
+        ) or {}
+        synth_sec = round(time.time() - t0, 1)
+        print(f"[research-anchored] synth source={synth.get('source', 'fallback')} "
+              f"in {synth_sec}s")
 
-    modeled_block = synth_to_dashboard_payload(
-        synth, target_audience=max(implied_audience, 1),
-    )
-    modeled_block['source']      = synth.get('source', 'fallback')
-    modeled_block['notes']       = synth.get('notes', '')
-    modeled_block['target_type'] = target_type
+        modeled_block = synth_to_dashboard_payload(
+            synth, target_audience=max(implied_audience, 1),
+        )
+        modeled_block['source']      = synth.get('source', 'fallback')
+        modeled_block['notes']       = synth.get('notes', '')
+        modeled_block['target_type'] = target_type
 
     # ── Phase C: attach the research footprint to modeled_view ───────
     if fp:
@@ -298,6 +352,10 @@ def run_research_anchored_job(
             modeled_block['touchpoint_spider'] = footprint_to_spider(fp, target=target)
         except Exception as e:
             print(f"[research-anchored] spider failed (non-fatal): {e}")
+
+    # ── Phase C.2: attach the site-funnel block ──────────────────────
+    if site_funnel:
+        modeled_block['site_funnel'] = site_funnel
 
     # ── Phase D: compose the summary envelope ────────────────────────
     summary = {
@@ -355,6 +413,8 @@ def run_research_anchored_job(
         'facts':      _facts_from_footprint(fp, target),
         'modeled_view': modeled_block,
     }
+    if site_funnel:
+        summary['site_funnel'] = site_funnel
 
     # ── Phase E: persist ─────────────────────────────────────────────
     try:
@@ -387,6 +447,15 @@ def _date_range_days(start_date: str, end_date: str) -> int:
         return 30
 
 
+def _root_domain(target: str) -> str:
+    """Best-effort guess at the root domain for a website target.
+    e.g. "Fandango" -> "fandango.com"; "fandango.com" stays as-is."""
+    t = (target or '').strip().lower()
+    if '.' in t:
+        return t.split('/')[0]
+    return f'{t.replace(" ", "")}.com'
+
+
 # ─────────────────────────────────────────────────────────────────────
 # CLI
 # ─────────────────────────────────────────────────────────────────────
@@ -412,6 +481,16 @@ def _parse_args(argv: list[str]) -> argparse.Namespace:
     # tv
     p.add_argument('--us-viewers', type=float, default=0.0,
                    help='US viewers in millions (tv_show)')
+    # Phase toggles — skip the heavy footprint/synth calls when you only
+    # need the site-funnel block (much faster, ~1 Claude call total).
+    p.add_argument('--skip-footprint', action='store_true',
+                   help='skip Phase R (marketing-footprint research). '
+                        'Use this when you only want the site-funnel '
+                        'block — fastest path for website targets.')
+    p.add_argument('--skip-synth', action='store_true',
+                   help='skip Phase B (journey synthesis). Combine with '
+                        '--skip-footprint to get just the site-funnel '
+                        'output in ~60-90s.')
     return p.parse_args(argv)
 
 
@@ -428,6 +507,8 @@ def main(argv: Optional[list[str]] = None) -> int:
         avg_ticket_price=args.ticket_price,
         monthly_visitors_millions=args.monthly_visitors,
         us_viewers_millions=args.us_viewers,
+        skip_footprint=args.skip_footprint,
+        skip_synth=args.skip_synth,
     )
     if result.get('status') == 'completed':
         print('')
