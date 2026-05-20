@@ -50323,8 +50323,8 @@
                 return 'N/A';
             }
             if (isPercentage && typeof value === 'number') {
-                // If value rounds to 0.0%, show N/A instead
-                if (value < 0.05) {
+                // Show N/A only when there is no meaningful panel signal (< 0.01% = < 1000 obs / 10M)
+                if (value < 0.01) {
                     return 'N/A';
                 }
                 return value.toFixed(2) + '%';
@@ -50334,7 +50334,7 @@
         
         // Helper function to format percentage, showing N/A for 0 or very small values
         function formatPct(value) {
-            if (value === 0 || value === null || value === undefined || value < 0.05) {
+            if (value === 0 || value === null || value === undefined || value < 0.01) {
                 return 'N/A';
             }
             return value.toFixed(2) + '%';
