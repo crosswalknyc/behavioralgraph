@@ -27983,7 +27983,19 @@
                 + '<th style="padding: 6px;">Date</th>'
                 + '</tr></thead><tbody>'
                 + events.map(function(e) {
-                    var actor = e.actor || e.publication || e.talent || e.creator || e.partner || e.site || e.forum || e.track || e.engine || '—';
+                    // Source label fallback chain — covers every channel's
+                    // schema. For paid_advertising, combine platform + campaign
+                    // (e.g. "Google Ads — YouTube TrueView pre-roll") so the
+                    // row is meaningful instead of just "—".
+                    var primary = e.platform || e.network || e.advertiser || e.brand
+                              || e.actor || e.publication || e.talent || e.creator
+                              || e.partner || e.site || e.forum || e.track || e.engine
+                              || e.channel || e.medium || '—';
+                    var detail  = e.campaign || e.placement || e.creative_type
+                              || e.event_type || '';
+                    // Avoid the "Google Ads — Google Ads" case if Claude duplicated.
+                    if (detail && String(detail).toLowerCase() === String(primary).toLowerCase()) detail = '';
+                    var actor = detail ? (primary + ' — ' + detail) : primary;
                     var label = e.url
                         ? '<a href="' + _jiqEsc(e.url) + '" target="_blank" rel="noopener" style="color: var(--text-primary); font-weight: 600; text-decoration: none; border-bottom: 1px dotted var(--text-secondary);">' + _jiqEsc(String(actor)) + '</a>'
                         : '<span style="font-weight: 600;">' + _jiqEsc(String(actor)) + '</span>';
@@ -28057,7 +28069,10 @@
                     var lx = x + (j - (evs.length - 1) / 2) * (leafSpacing / Math.max(1, evs.length));
                     var ly = leafY + (j % 2) * 18;
                     parts.push('<line x1="' + x + '" y1="' + (chY + r) + '" x2="' + lx + '" y2="' + (ly - 6) + '" stroke="' + color + '" stroke-width="1" opacity="0.35"/>');
-                    var actor = e.actor || e.publication || e.talent || e.creator || e.partner || e.site || e.forum || e.track || e.engine || '?';
+                    var actor = e.platform || e.network || e.advertiser || e.brand
+                              || e.actor || e.publication || e.talent || e.creator
+                              || e.partner || e.site || e.forum || e.track || e.engine
+                              || e.channel || e.medium || '?';
                     actor = String(actor); if (actor.length > 18) actor = actor.slice(0, 17) + '…';
                     parts.push('<g><circle cx="' + lx + '" cy="' + ly + '" r="5" fill="' + color + '"/>'
                         + '<text x="' + lx + '" y="' + (ly + 14) + '" text-anchor="middle" fill="var(--text-secondary)" font-size="9">' + _jiqEsc(actor) + '</text></g>');

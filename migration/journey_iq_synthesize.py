@@ -1409,6 +1409,28 @@ brand) DURING A SPECIFIC DATE WINDOW. You have web search. Your job:
      * Showtime / EPG-lookup spikes: any reported search-volume spikes on
        Fandango / Google "showtimes near me" trends during the window.
 
+     * Paid-advertising platforms — ENUMERATE the actual major US ad
+       platforms the target almost certainly ran on, and look each up
+       in its public ad library / transparency tool:
+         - Meta Ad Library:  facebook.com/ads/library/?q=<TARGET>
+           (returns every active FB+IG ad — search this for the target
+            and report what's running, who the advertiser of record is,
+            and rough impression bands if shown)
+         - Google Ads Transparency Center: adstransparency.google.com
+           (lists every active Google/YouTube ad by advertiser)
+         - TikTok Creative Center / Top Ads: ads.tiktok.com/business/creativecenter
+         - iSpot.tv: ispot.tv/brands/<advertiser>  (linear TV spend & GRPs)
+         - Trade press spend reports: variety.com, adage.com, mediapost.com
+           — search "<TARGET> ad spend" / "marketing budget" / "campaign"
+       Then for EACH of these paid platforms produce ONE event in the
+       paid_advertising bucket: Google Ads, Meta Ads, TikTok Ads, Amazon
+       DSP, Hulu/Disney CTV, Linear TV, The Trade Desk programmatic,
+       Snapchat Ads, Spotify Audio, OOH (out-of-home), Yahoo/Microsoft
+       Ads, Reddit Ads. Skip a platform ONLY if you're confident the
+       target did NOT run there (e.g. niche indie film, no Super Bowl
+       spot → skip Linear TV). Aim for 5-10 paid_advertising events,
+       not 0-3.
+
   2. For EACH discovered event, estimate what fraction of US gen-pop
      (US adults 16+ ~= 260M) it likely REACHED, using the actor's
      follower count × US share × engagement rate, or publication's
@@ -1457,7 +1479,18 @@ Output JSON EXACTLY in this shape (no code fences, no markdown):
     "creator_influencers":{"reach_pct_of_genpop": ..., "events": [{"creator": "MrBeast",    "platform": "youtube",   "estimated_reach_us": ..., ...}]},
     "brand_partnerships": {"reach_pct_of_genpop": ..., "events": [{"partner": "Mercedes",   "campaign": "Super Bowl spot", "estimated_reach_us": ..., ...}]},
     "reviews_critics":    {"reach_pct_of_genpop": ..., "events": [{"site": "Rotten Tomatoes","score": 87, "estimated_reach_us": ..., ...}]},
-    "paid_advertising":   {"reach_pct_of_genpop": ..., "events": [{"channel": "linear TV",  "spend_usd": ..., "estimated_reach_us": ..., ...}]},
+    "paid_advertising":   {"reach_pct_of_genpop": ..., "events": [
+        {"platform": "Google Ads",       "network": "Search + YouTube TrueView",   "campaign": "pre-roll skippable + display remarketing",  "creative_type": "video + display",   "placement": "YouTube + Display Network",        "url": "https://ads.google.com/...", "spend_usd_estimate": 4500000,  "estimated_reach_us": 28000000, "reach_pct_of_genpop": 10.8, "date": "2026-01-10", "confidence": "high",   "notes": "Cite Google Ads Transparency Center, ad-library listing, or trade press estimate"},
+        {"platform": "Meta Ads",         "network": "Facebook + Instagram",         "campaign": "Reels + Feed video + Stories",              "creative_type": "video + carousel",  "placement": "Reels / Feed / Stories",            "url": "https://www.facebook.com/ads/library/?q=<TARGET>", "spend_usd_estimate": 3200000, "estimated_reach_us": 21000000, "reach_pct_of_genpop": 8.1,  "date": "2026-01-12", "confidence": "high",   "notes": "Cite Meta Ad Library — REQUIRED to search this for the target"},
+        {"platform": "TikTok Ads",       "network": "TikTok",                       "campaign": "Spark Ads + TopView",                       "creative_type": "short-form video",  "placement": "For You feed + TopView",            "url": "https://library.tiktok.com/ads?...", "spend_usd_estimate": 2100000, "estimated_reach_us": 14000000, "reach_pct_of_genpop": 5.4,  "date": "2026-01-15", "confidence": "medium", "notes": "Cite TikTok Creative Center / Top Ads"},
+        {"platform": "Amazon DSP",       "network": "Amazon + IMDb + Twitch",       "campaign": "programmatic OLV + display",                "creative_type": "video + display",   "placement": "Fire TV + IMDb + Twitch + Amazon",  "url": "",                                   "spend_usd_estimate": 1800000, "estimated_reach_us": 12000000, "reach_pct_of_genpop": 4.6,  "date": "2026-01-08", "confidence": "medium", "notes": "Estimate from Amazon ad-network reach reports"},
+        {"platform": "Hulu / Disney CTV","network": "Disney Ad Sales (Hulu + ESPN + Disney+)", "campaign": "15s + 30s CTV spots",       "creative_type": "video",             "placement": "Hulu pre-roll + ESPN linear",       "url": "",                                   "spend_usd_estimate": 2400000, "estimated_reach_us": 18000000, "reach_pct_of_genpop": 6.9,  "date": "2026-01-05", "confidence": "medium", "notes": "Cite trade press CTV spend report if visible"},
+        {"platform": "Linear TV",        "network": "broadcast + cable",            "campaign": "Super Bowl spot / primetime takeover",      "creative_type": "30s + 60s TV spot", "placement": "broadcast networks + ESPN/TNT",     "url": "",                                   "spend_usd_estimate": 6500000, "estimated_reach_us": 35000000, "reach_pct_of_genpop": 13.5, "date": "2026-01-20", "confidence": "high",   "notes": "Cite Nielsen / iSpot.tv if reported"},
+        {"platform": "The Trade Desk",   "network": "programmatic display + CTV",   "campaign": "open-web display + CTV remarketing",        "creative_type": "display + video",   "placement": "long-tail web + CTV apps",          "url": "",                                   "spend_usd_estimate":  900000, "estimated_reach_us":  6000000, "reach_pct_of_genpop": 2.3,  "date": "2026-01-14", "confidence": "low",    "notes": "Standard programmatic add-on for major movie launches"},
+        {"platform": "Snapchat Ads",     "network": "Snapchat",                     "campaign": "AR Lens + Snap Ads",                        "creative_type": "AR + video",        "placement": "Discover + AR camera",              "url": "",                                   "spend_usd_estimate":  650000, "estimated_reach_us":  4500000, "reach_pct_of_genpop": 1.7,  "date": "2026-01-18", "confidence": "low",    "notes": "Common for movies targeting under-25 audience"},
+        {"platform": "Spotify Audio",    "network": "Spotify",                      "campaign": "audio + podcast pre-roll",                  "creative_type": "audio",             "placement": "free-tier audio + podcasts",        "url": "",                                   "spend_usd_estimate":  400000, "estimated_reach_us":  3500000, "reach_pct_of_genpop": 1.3,  "date": "2026-01-11", "confidence": "low",    "notes": "Audio reach estimate"},
+        {"platform": "OOH (out-of-home)","network": "Lamar / Clear Channel / Intersection", "campaign": "billboards + transit + theater lobby", "creative_type": "static + digital OOH", "placement": "LA + NYC + top 25 DMAs",  "url": "",                                   "spend_usd_estimate": 1200000, "estimated_reach_us":  9000000, "reach_pct_of_genpop": 3.5,  "date": "2026-01-22", "confidence": "medium", "notes": "Geopath impression estimate for major-market OOH buy"}
+    ]},
     "showtime_searches":  {"reach_pct_of_genpop": ..., "events": [{"site": "Fandango",     "search_spike_pct": ..., "estimated_reach_us": ..., ...}]},
     "ticketing_sites":    {"reach_pct_of_genpop": ..., "events": [{"site": "AMC Theatres", "visit_share_pct": ..., "estimated_reach_us": ..., ...}]},
     "soundtrack_music":   {"reach_pct_of_genpop": ..., "events": [{"track": "...",         "platform": "spotify",   "streams_us": ..., ...}]},
@@ -1495,6 +1528,17 @@ Hard rules:
     brand: omit endpoint_breakdown (or return []).
   * Be honest about confidence ('low' if you had to extrapolate from
     weak signals).
+  * paid_advertising events MUST use these field names so the dashboard
+    can render them: "platform" (REQUIRED — human-readable name like
+    "Google Ads", "Meta Ads", "TikTok Ads", "Amazon DSP", "Hulu / Disney
+    CTV", "Linear TV", "The Trade Desk", "Snapchat Ads", "Spotify Audio",
+    "OOH (out-of-home)", "Yahoo / Microsoft Ads", "Reddit Ads"),
+    "network" (sub-property — e.g. "Search + YouTube TrueView"),
+    "campaign" (creative concept), "creative_type", "placement",
+    "spend_usd_estimate" (a real number you can defend), and the
+    standard "estimated_reach_us" / "reach_pct_of_genpop" / "date" /
+    "url" / "confidence" / "notes". Do NOT just put "channel": "TV" —
+    the dashboard renders rows as "<platform> — <campaign>".
 
 CRITICAL OUTPUT RULES — your response MUST be parseable JSON:
   1. After you finish web_searching, your FINAL text output must be
