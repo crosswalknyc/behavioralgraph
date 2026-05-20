@@ -28051,7 +28051,7 @@
                     + tile('Never transacted',      ab, '#ef4444', 'abandoned entirely');
             }
             var notesEl = document.getElementById('jiqFunnelNotes');
-            if (notesEl) notesEl.textContent = sp.notes || '';
+            if (notesEl) notesEl.style.display = 'none';
 
             // Helper to render a percent table
             function _pctTable(rows, cols) {
@@ -28096,8 +28096,7 @@
             if (destEl) {
                 destEl.innerHTML = _pctTable(dests, [
                     { label: 'Destination', get: function(r) { return _linkOrText(r.destination, r.url_pattern); }, bold: true },
-                    { label: 'Share of switchers', right: true, get: function(r) { return _fmtPct(r.share_pct_of_switchers); } },
-                    { label: 'Notes', muted: true, get: function(r) { return r.notes ? _jiqEsc(r.notes) : ''; } }
+                    { label: 'Share of switchers', right: true, get: function(r) { return _fmtPct(r.share_pct_of_switchers); } }
                 ]);
             }
             if (destCard) destCard.style.display = dests.length ? '' : 'none';
@@ -28112,11 +28111,9 @@
                 interEl.innerHTML = _pctTable(inters, [
                     { label: 'Step', get: function(r) { return _linkOrText(r.step, r.url_pattern); }, bold: true },
                     { label: 'Share of switchers', right: true, get: function(r) { return _fmtPct(r.share_pct_of_switchers); } },
-                    { label: 'Notes', muted: true, get: function(r) {
-                        var q = (r.typical_queries && r.typical_queries.length) ? '"' + r.typical_queries.slice(0, 3).join('", "') + '"' : '';
-                        var n = r.notes || '';
-                        if (q && n) return _jiqEsc(q + ' — ' + n);
-                        return _jiqEsc(q || n);
+                    { label: 'Typical queries', muted: true, get: function(r) {
+                        if (!r.typical_queries || !r.typical_queries.length) return '';
+                        return _jiqEsc('"' + r.typical_queries.slice(0, 3).join('", "') + '"');
                     } }
                 ]);
             }
@@ -28133,8 +28130,7 @@
             if (incEl) {
                 incEl.innerHTML = _pctTable(incs, [
                     { label: 'Source', get: function(r) { return _linkOrText(r.source, r.url_pattern); }, bold: true },
-                    { label: 'Share of inbound', right: true, get: function(r) { return _fmtPct(r.share_pct_of_inbound); } },
-                    { label: 'Notes', muted: true, get: function(r) { return r.notes ? _jiqEsc(r.notes) : ''; } }
+                    { label: 'Share of inbound', right: true, get: function(r) { return _fmtPct(r.share_pct_of_inbound); } }
                 ]);
             }
             if (incCard) incCard.style.display = incs.length ? '' : 'none';

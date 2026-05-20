@@ -2399,13 +2399,13 @@ Output JSON EXACTLY in this shape (no code fences, no markdown):
   },
 
   "switched_destinations": [
-    {"destination": "AMC Theatres",  "share_pct_of_switchers": 28.0, "url_pattern": "amctheatres.com", "notes": "Largest US chain; loyalty members often skip Fandango fees"},
-    {"destination": "Cinemark",      "share_pct_of_switchers": 14.0, "url_pattern": "cinemark.com",    "notes": "..."},
-    {"destination": "Regal",         "share_pct_of_switchers": 12.0, "url_pattern": "regmovies.com",   "notes": "..."},
-    {"destination": "Atom Tickets",  "share_pct_of_switchers":  9.0, "url_pattern": "atomtickets.com", "notes": "Lower fees than Fandango on some chains"},
-    {"destination": "Theater box office (walk-up)", "share_pct_of_switchers": 22.0, "url_pattern": "n/a (offline)", "notes": "Older demo / impulse buyers"},
-    {"destination": "Regional chain direct", "share_pct_of_switchers": 8.0, "url_pattern": "marcustheatres.com | drafthouse.com | harkinstheatres.com", "notes": "Marcus, Alamo Drafthouse, Harkins, B&B, Landmark"}
+    {"destination": "AMC Theatres",  "share_pct_of_switchers": 32.0, "url_pattern": "amctheatres.com", "notes": "Largest US chain; loyalty members often skip Fandango fees"},
+    {"destination": "Cinemark",      "share_pct_of_switchers": 18.0, "url_pattern": "cinemark.com",    "notes": "..."},
+    {"destination": "Regal",         "share_pct_of_switchers": 15.0, "url_pattern": "regmovies.com",   "notes": "..."},
+    {"destination": "Atom Tickets",  "share_pct_of_switchers": 11.0, "url_pattern": "atomtickets.com", "notes": "Lower fees than Fandango on some chains"},
+    {"destination": "Regional chain direct", "share_pct_of_switchers": 10.0, "url_pattern": "marcustheatres.com | drafthouse.com | harkinstheatres.com", "notes": "Marcus, Alamo Drafthouse, Harkins, B&B, Landmark"}
     // aim for 6-10 distinct destinations covering the whole switch surface
+    // (DIGITAL destinations only — see HARD RULE below about offline)
   ],
 
   "intermediate_journey": [
@@ -2444,6 +2444,24 @@ Output JSON EXACTLY in this shape (no code fences, no markdown):
 }
 
 Hard rules:
+  * DIGITAL ONLY. Every switched_destination, intermediate_journey
+    step, inception_referrer, and companion_behavior MUST be observable
+    in CLICKSTREAM data — i.e. it must correspond to a real website,
+    app, search engine, social platform, email, or push notification.
+    DO NOT include any of these OFFLINE / REAL-WORLD touchpoints, even
+    if they are realistic in the analog world:
+      - "Theater box office (walk-up / in-person)"
+      - "Will-call pickup", "drive-in box office"
+      - "Point-of-sale terminal", "POS kiosk"
+      - "Street team / flyer / handbill"
+      - "Billboard / out-of-home / transit ad / bus shelter / subway"
+      - "Word of mouth in conversation" (the digital equivalent — a
+        Reddit thread, a TikTok reaction — IS allowed)
+      - "Theater concession stand", "in-theater poster"
+    If a row's natural url_pattern would be "n/a (offline)", "in-person",
+    "physical", "(walk-up)", or similar, OMIT THE ROW ENTIRELY.
+    Redistribute that row's share across the remaining digital
+    destinations so the percentages still sum to ~100.
   * funnel_split percentages MUST sum to ~100 (±2 for rounding).
   * switched_destinations share_pct_of_switchers MUST sum to ~100.
   * inception_referrers share_pct_of_inbound MUST sum to ~100.
@@ -2627,6 +2645,65 @@ def research_site_funnel(
     parsed.setdefault('intermediate_journey', [])
     parsed.setdefault('inception_referrers', [])
     parsed.setdefault('companion_behaviors', [])
+
+    # Server-side safety net: drop any "offline / real-world" rows that
+    # leaked through despite the hard rule in the prompt. Walk-up box
+    # office, will-call, billboards, etc. aren't observable in
+    # clickstream so they don't belong in a digital funnel.
+    _OFFLINE_RE = re.compile(
+        r'\b(walk[- ]?up|in[- ]?person|box[- ]?office|n/a\s*\(?offline\)?|'
+        r'physical\s+(?:store|location)|kiosk|will[- ]?call|drive[- ]?in|'
+        r'point[- ]?of[- ]?sale|pos\s+terminal|street[- ]?team|flyer|'
+        r'billboard|out[- ]?of[- ]?home|\bOOH\b|transit\s+ad|subway\s+ad|'
+        r'bus[- ]?shelter|in[- ]?theater\s+poster|concession\s+stand)\b',
+        re.IGNORECASE,
+    )
+
+    def _is_offline(row: dict, label_keys: tuple) -> bool:
+        """Check label + url_pattern fields only (NOT the notes field —
+        the notes blurb routinely uses 'in-person social proof' to
+        describe digital sources, which would false-positive)."""
+        for k in label_keys + ('url_pattern',):
+            v = row.get(k) or ''
+            if isinstance(v, str) and _OFFLINE_RE.search(v):
+                return True
+        return False
+
+    def _scrub_offline(lst: list, share_key: str, label_keys: tuple,
+                       *, sums_to_100: bool) -> int:
+        """Drop offline rows. For lists whose shares should sum to
+        100% (e.g. switched_destinations), redistribute the dropped
+        share proportionally across the survivors. For independent-
+        marginal lists (intermediate / companion), DO NOT rescale —
+        just drop."""
+        if not isinstance(lst, list):
+            return 0
+        keep = [r for r in lst if isinstance(r, dict) and not _is_offline(r, label_keys)]
+        n_dropped = len(lst) - len(keep)
+        if n_dropped and sums_to_100:
+            kept_total = sum(float(r.get(share_key, 0) or 0) for r in keep)
+            if kept_total > 0:
+                scale = 100.0 / kept_total
+                for r in keep:
+                    r[share_key] = round(float(r.get(share_key, 0) or 0) * scale, 1)
+        lst[:] = keep
+        return n_dropped
+
+    n = 0
+    n += _scrub_offline(parsed.get('switched_destinations'),
+                        'share_pct_of_switchers', ('destination',),
+                        sums_to_100=True)
+    n += _scrub_offline(parsed.get('intermediate_journey'),
+                        'share_pct_of_switchers', ('step',),
+                        sums_to_100=False)
+    n += _scrub_offline(parsed.get('inception_referrers'),
+                        'share_pct_of_inbound', ('source',),
+                        sums_to_100=True)
+    n += _scrub_offline(parsed.get('companion_behaviors'),
+                        'share_pct_of_visitors', ('vertical',),
+                        sums_to_100=False)
+    if n:
+        print(f'[site funnel] safety-net scrub dropped {n} offline rows')
 
     _FUNNEL_CACHE[cache_key] = parsed
     return parsed
