@@ -27999,7 +27999,6 @@
                 + '<thead><tr style="text-align: left; border-bottom: 1px solid var(--border-color);">'
                 + '<th style="padding: 6px;">Source</th>'
                 + '<th style="padding: 6px; text-align: right;">Reach (US)</th>'
-                + '<th style="padding: 6px; text-align: right;">Reach %</th>'
                 + '<th style="padding: 6px;">Date</th>'
                 + '</tr></thead><tbody>'
                 + events.map(function(e) {
@@ -28010,7 +28009,6 @@
                     return '<tr style="border-bottom: 1px solid var(--border-color);">'
                         + '<td style="padding: 6px;">' + label + '</td>'
                         + '<td style="padding: 6px; text-align: right;">' + _jiqFmt(e.estimated_reach_us || 0) + '</td>'
-                        + '<td style="padding: 6px; text-align: right;">' + (e.reach_pct_of_genpop || 0) + '%</td>'
                         + '<td style="padding: 6px; color: var(--text-secondary);">' + _jiqEsc(e.date || e.date_estimate || '—') + '</td>'
                         + '</tr>';
                 }).join('') + '</tbody></table>';
