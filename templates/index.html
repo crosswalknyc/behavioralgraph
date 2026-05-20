@@ -19172,32 +19172,8 @@
                     <div id="jiqClusterTabs" style="display: flex; gap: 0.25rem; flex-wrap: wrap;"></div>
                 </div>
 
-                <!-- Two-column main area -->
-                <div style="display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr); gap: 1rem;">
-                    <div class="card" style="padding: 1rem;">
-                        <h3 style="margin: 0 0 0.5rem;">Funnel</h3>
-                        <div id="jiqFunnelMeta" style="font-size: 0.75rem; color: var(--text-secondary); margin-bottom: 0.75rem;"></div>
-                        <div id="jiqFunnel"></div>
-                    </div>
-                    <div class="card" style="padding: 1rem;">
-                        <h3 style="margin: 0 0 0.5rem;">Detours (during journey)</h3>
-                        <div style="font-size: 0.72rem; color: var(--text-secondary); margin-bottom: 0.5rem;">Hosts users visited after the first target mention, while still inside the journey window.</div>
-                        <div id="jiqDetours"></div>
-                    </div>
-                </div>
-
-                <div style="display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 1rem; margin-top: 1rem;">
-                    <div class="card" style="padding: 1rem;">
-                        <h3 style="margin: 0 0 0.5rem;">Where Non-Converters Went</h3>
-                        <div style="font-size: 0.72rem; color: var(--text-secondary); margin-bottom: 0.5rem;">For users who never converted: top hosts visited AFTER the last target mention (+ forward window).</div>
-                        <div id="jiqPostHosts"></div>
-                    </div>
-                    <div class="card" style="padding: 1rem;">
-                        <h3 style="margin: 0 0 0.5rem;">Top Inception Keywords</h3>
-                        <div style="font-size: 0.72rem; color: var(--text-secondary); margin-bottom: 0.5rem;">Search queries that brought users in via Search / Ad clusters.</div>
-                        <div id="jiqKeywords"></div>
-                    </div>
-                </div>
+                <!-- Removed per request: Funnel · Detours · Where Non-Converters Went · Top Inception Keywords
+                     (the modeled view doesn't populate them; they were always empty/noise) -->
 
                 <!-- Touchpoints table -->
                 <div class="card" style="padding: 1rem; margin-top: 1rem;" id="jiqTouchpointsCard">
