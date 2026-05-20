@@ -28229,6 +28229,41 @@
             if (tdCard)  tdCard.style.display  = (tp && tp.touch_distribution && tp.touch_distribution.length) ? '' : 'none';
             if (!hasRows) return;
 
+            // ── Back-compat patch: legacy modeled runs hard-coded
+            // conv_rate_when_reached=100 / conv_rate_when_not=0 because
+            // the cohort = converters only. That's mathematically forced
+            // and useless. Reframe to genpop:
+            //   baseline = implied_audience / 260M × 100
+            //   conv_when_not  ≈ baseline
+            //   conv_when_seen ≈ baseline × (1 + lift/100), cap 100
+            // New runs ship correct values; this safety net fixes the
+            // display for any S3 file written before the synth fix.
+            var US_GENPOP_16PLUS = 260000000;
+            var meta = (window._jiqCurrentRun || {}).meta || {};
+            var impAud = +meta.implied_audience || +(tp && tp.cohort_size) || 0;
+            if (impAud > 0) {
+                var baselineFromGenpop = Math.min(100, (impAud / US_GENPOP_16PLUS) * 100);
+                if (baselineFromGenpop <= 0) baselineFromGenpop = 1.0;
+                // Detect the broken pattern at the row level — only
+                // rewrite rows that have the 100/0 fingerprint so we
+                // don't clobber real panel rows.
+                var brokenCount = 0;
+                tp.rows.forEach(function(r) {
+                    var isBroken = r.conv_rate_when_reached === 100 && r.conv_rate_when_not === 0;
+                    if (isBroken) {
+                        brokenCount++;
+                        var lift = (r.lift_pct != null && !isNaN(+r.lift_pct)) ? (+r.lift_pct) / 100 : 0;
+                        r.conv_rate_when_not     = Math.round(baselineFromGenpop * 100) / 100;
+                        r.conv_rate_when_reached = Math.round(Math.min(100, baselineFromGenpop * (1 + lift)) * 100) / 100;
+                        r.baseline_conv_rate     = Math.round(baselineFromGenpop * 100) / 100;
+                    }
+                });
+                if (brokenCount === tp.rows.length) {
+                    // Whole table was modeled; patch the meta baseline too.
+                    tp.baseline_conv_rate = Math.round(baselineFromGenpop * 100) / 100;
+                }
+            }
+
             if (metaEl) {
                 metaEl.textContent = 'Cohort: ' + _jiqFmt(tp.cohort_size)
                                    + ' · Converters: ' + _jiqFmt(tp.converters)

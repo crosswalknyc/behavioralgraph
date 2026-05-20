@@ -923,29 +923,55 @@ def synth_to_dashboard_payload(
     Everything is sized to `target_audience` (the implied # of buyers).
     """
     n = max(1, int(target_audience or 0))
-    # ── Touchpoints ────────────────────────────────────────────────────
+    # ── Baseline conversion rate (genpop frame) ───────────────────────
+    # The modeled cohort IS the implied audience (everyone converted),
+    # so a "conv-rate-when-seen vs not-seen within the cohort" framing
+    # collapses to 100% / 0% which is mathematically forced and useless.
+    #
+    # Reframe to the genpop denominator so the columns mean something
+    # decision-grade:
+    #     baseline_conv_pct = implied_audience / US_GENPOP × 100
+    #         (the chance a random US adult 16+ converted at all)
+    #     conv_when_not    ≈ baseline_conv_pct
+    #         (someone who never touched this surface still converts at
+    #          the genpop baseline)
+    #     conv_when_seen   ≈ baseline × (1 + lift/100), capped at 100
+    #         (lift is preserved exactly as Claude/fallback reported it)
+    # When lift is None or 0 we report both as baseline so the columns
+    # never display "100% vs 0%" again.
+    baseline_conv_pct = min(100.0, (float(n) / float(US_GENPOP_BASELINE)) * 100.0)
+    if baseline_conv_pct <= 0:
+        baseline_conv_pct = 1.0
+
     tp_rows = []
     for r in (synth.get('touchpoints') or []):
         reach_pct = float(r.get('reach_pct') or 0.0)
         reach = int(round(n * reach_pct / 100.0))
         sh_conv_pct = float(r.get('share_of_converters_pct') or reach_pct)
         converters_reached = int(round(n * sh_conv_pct / 100.0))
+        lift_raw = r.get('lift_pct')
+        try:
+            lift_frac = float(lift_raw) / 100.0 if lift_raw is not None else 0.0
+        except (TypeError, ValueError):
+            lift_frac = 0.0
+        conv_when_not    = baseline_conv_pct
+        conv_when_seen   = min(100.0, baseline_conv_pct * (1.0 + lift_frac))
         tp_rows.append({
             'label':                  r.get('label'),
             'reach':                  reach,
             'reach_pct':              round(reach_pct, 1),
             'converters_reached':     converters_reached,
             'share_of_converters':    round(sh_conv_pct, 1),
-            'conv_rate_when_reached': 100.0,  # we're synthesizing converters only
-            'conv_rate_when_not':     0.0,
-            'baseline_conv_rate':     100.0,
-            'lift_pct':               r.get('lift_pct'),
+            'conv_rate_when_reached': round(conv_when_seen, 2),
+            'conv_rate_when_not':     round(conv_when_not, 2),
+            'baseline_conv_rate':     round(baseline_conv_pct, 2),
+            'lift_pct':               lift_raw,
             'avg_days_to_conversion': r.get('avg_days_to_conversion'),
             'avg_touches_per_user':   r.get('avg_touches_per_user'),
         })
 
     touchpoints = {
-        'baseline_conv_rate': 100.0,
+        'baseline_conv_rate': round(baseline_conv_pct, 2),
         'cohort_size':        n,
         'converters':         n,
         'rows':               tp_rows,
