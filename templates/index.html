@@ -28115,6 +28115,55 @@
                 return;
             }
             card.style.display = '';
+
+            // ── Back-compat patch: legacy modeled runs hard-coded every
+            // step at 100% of the cohort. Real funnels narrow at the
+            // top — apply the same survivorship curve the synth now
+            // uses so existing S3 runs display correctly without a
+            // re-run. Only triggers when every non-CONVERSION column
+            // shows the exact 100% fingerprint, so real panel funnels
+            // are untouched.
+            var meta = (window._jiqCurrentRun || {}).meta || {};
+            var cohortN = +(ptp.cohort_size) || +meta.implied_audience || 0;
+            var nonConvCols = (ptp.columns || []).filter(function(c) { return +c.index !== 0; });
+            var allFlat = nonConvCols.length > 0 && nonConvCols.every(function(c) {
+                return c.users_pct === 100 && +c.users === cohortN;
+            });
+            if (allFlat && cohortN > 0) {
+                var avgTouches = 5.0;
+                var tp = (window._jiqCurrentRun || {}).modeled_view && (window._jiqCurrentRun.modeled_view.touchpoints || {});
+                if (tp && tp.touch_distribution && tp.touch_distribution.length) {
+                    // Approximate avg touches from the distribution if available
+                    var total = 0, weighted = 0;
+                    tp.touch_distribution.forEach(function(b) {
+                        var bucket = +b.bucket || +b.touches || 1;
+                        var users = +b.users || 0;
+                        total += users; weighted += bucket * users;
+                    });
+                    if (total > 0) avgTouches = weighted / total;
+                }
+                function _survivePct(stepsBack) {
+                    if (stepsBack <= 1) return 100.0;
+                    var pct;
+                    if (stepsBack <= avgTouches) pct = 100.0 - (stepsBack - 1) * 4.0;
+                    else pct = 100.0 - (avgTouches - 1) * 4.0 - (stepsBack - avgTouches) * 8.0;
+                    return Math.max(25.0, pct);
+                }
+                ptp.columns.forEach(function(c) {
+                    if (+c.index === 0) return;  // CONVERSION stays at 100%
+                    var pct = _survivePct(Math.abs(+c.index));
+                    c.users_pct = Math.round(pct * 10) / 10;
+                    c.users = Math.round(cohortN * pct / 100);
+                    // Rescale per-label users so they match the new column total
+                    if (c.top_labels && c.top_labels.length) {
+                        c.top_labels.forEach(function(lbl) {
+                            var f = +lbl.pct / 100;
+                            lbl.users = Math.round(c.users * f);
+                        });
+                    }
+                });
+            }
+
             if (metaEl) {
                 metaEl.textContent = (ptp.mode === 'converters'
                     ? 'Cohort: ' + _jiqFmt(ptp.cohort_size) + ' converters'
