@@ -2432,37 +2432,80 @@ def research_site_funnel(
         f'matching the schema in the system prompt.'
     )
 
-    import os
-    claude_model = (
-        os.environ.get('JOURNEY_IQ_RESEARCH_MODEL')
-        or os.environ.get('CLAUDE_PERSONA_MODEL')
-        or 'claude-opus-4-7'
+    import os, time
+    # Default to Sonnet (claude-sonnet-4-6) for the site-funnel agent.
+    # We deliberately call WITHOUT web_search by default — site-funnel
+    # modeling (visitor conversion splits, switcher destinations,
+    # inception referrers, companion behaviors) is well-known industry
+    # knowledge Sonnet can produce from training in 20-60s. Adding
+    # web_search has reliably hung the call indefinitely on the SDK's
+    # socket read (10+ min with zero CPU progress). Opt in to live
+    # search via JOURNEY_IQ_SITE_FUNNEL_USE_WEB_SEARCH=1.
+    primary_model = (
+        os.environ.get('JOURNEY_IQ_SITE_FUNNEL_MODEL')
+        or 'claude-sonnet-4-6'
     )
-    _ws_new = {'type': 'web_search_20260209', 'name': 'web_search', 'max_uses': 10}
-    _ws_old = {'type': 'web_search_20250305', 'name': 'web_search', 'max_uses': 10}
+    use_web_search = (
+        os.environ.get('JOURNEY_IQ_SITE_FUNNEL_USE_WEB_SEARCH', '').strip().lower()
+        in ('1', 'true', 'yes', 'on')
+    )
+    tools_arg = None
+    if use_web_search:
+        tools_arg = [{'type': 'web_search_20250305', 'name': 'web_search', 'max_uses': 4}]
     def _has_json(t: str) -> bool:
         return ('{' in t and '}' in t and t.find('{') < t.rfind('}'))
 
+    # When we're NOT passing web_search tools, scrub the "you have
+    # web_search" promise from the system prompt — otherwise Sonnet
+    # wastes its budget hallucinating <tool_call> blocks in the
+    # output text instead of producing JSON.
+    sys_prompt = _SYSTEM_SITE_FUNNEL
+    if not use_web_search:
+        sys_prompt = sys_prompt.replace(
+            'You have web_search. Your',
+            'You DO NOT have web_search; reason from training. Your',
+        ).replace(
+            'Use web_search to ground numbers (Comscore, SimilarWeb, '
+            'OpenTable State of the Industry, IBM Marketing Cloud, '
+            'EMARKETER, Forrester, Movio benchmarks, etc.) before '
+            'writing the JSON.',
+            'Reason from general training knowledge of the consumer '
+            'web (SimilarWeb-style traffic patterns, Movio benchmarks, '
+            'OpenTable / IBM Marketing Cloud / EMARKETER / Forrester '
+            'industry rules-of-thumb) when producing numbers. Be '
+            'directionally correct and clearly flag any field where '
+            'the estimate is low-confidence.',
+        )
+
     raw = ''
+    print(f'[site funnel] calling {primary_model} '
+          f'(web_search={"on" if use_web_search else "off"})...')
+    t0 = time.time()
     try:
         raw = _claude_messages(
-            system=_SYSTEM_SITE_FUNNEL, user=user_msg, model=claude_model,
-            max_tokens=max_tokens, temperature=0.3, tools=[_ws_new],
+            system=sys_prompt, user=user_msg, model=primary_model,
+            max_tokens=max_tokens, temperature=0.3,
+            tools=tools_arg,
         ) or ''
     except Exception as e:
-        print(f'[site funnel] primary Claude+web_search failed: {e}')
+        print(f'[site funnel] primary call failed: {e}')
         raw = ''
+    print(f'[site funnel] primary returned in {round(time.time()-t0,1)}s '
+          f'({len(raw)} chars)')
     if not _has_json(raw):
         if raw:
-            print(f'[site funnel] primary returned no JSON — falling back to Sonnet. snippet: {raw[:200]!r}')
+            print(f'[site funnel] no JSON — retry once. snippet: {raw[:200]!r}')
+        else:
+            print(f'[site funnel] empty — retry once')
         try:
             raw = _claude_messages(
-                system=_SYSTEM_SITE_FUNNEL, user=user_msg,
-                model='claude-sonnet-4-6',
-                max_tokens=max_tokens, temperature=0.3, tools=[_ws_old],
+                system=sys_prompt, user=user_msg,
+                model=primary_model,
+                max_tokens=max_tokens, temperature=0.3,
+                tools=None,
             ) or ''
         except Exception as e:
-            return {'_error': f'Claude+web_search fallback also failed: {e}'}
+            return {'_error': f'Claude site-funnel call failed twice: {e}'}
     if not _has_json(raw):
         return {'_error': 'Claude returned no JSON', '_raw': raw[:500]}
 
