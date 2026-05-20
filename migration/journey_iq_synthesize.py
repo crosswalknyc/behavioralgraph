@@ -1,0 +1,1754 @@
+"""
+journey_iq_synthesize.py — Claude-driven synthetic-data + box-office scaling
+for Digital Journey IQ runs on movies.
+
+Two responsibilities:
+
+1. **Box-office scaling.** Given the panel cohort size (real converters
+   observed in the clickstream) and the movie's US box-office gross, scale
+   COUNT fields (users, reach, converters, ...) up to the implied total
+   audience. Percentages are NEVER scaled — only counts. The scaling factor
+   is `implied_audience / panel_converters`.
+
+   implied_audience = (box_office_usd / avg_ticket_price) * audience_factor
+   where audience_factor defaults to 0.775 — the midpoint of the 70-85%
+   single-ticket-per-buyer band the user specified (matinee/family
+   double-counts vs solo).
+
+2. **LLM synthesis.** When the cohort is too small to draw conclusions,
+   ask Claude to estimate a plausible path-to-purchase + touchpoint mix
+   for a movie of this scale + talent profile. Returns the same JSON shape
+   as `_aggregate_path_to_purchase` / `_aggregate_touchpoints` so the
+   dashboard renders it without conditional logic.
+
+Dashboard mode toggle (real / modeled / blended) lives in the frontend —
+this module just produces the synthetic data and the scaling factors; the
+adapter at the bottom builds a "blended" view by combining real and
+modeled at field level (real where N >= 25, modeled where sparse).
+"""
+
+from __future__ import annotations
+
+import json
+import math
+import re
+from typing import Any, Optional
+
+try:
+    from migration.claude_client import claude_messages, is_hybrid_enabled, get_claude_client
+except ImportError:
+    try:
+        from claude_client import claude_messages, is_hybrid_enabled, get_claude_client  # type: ignore
+    except ImportError:
+        claude_messages = None       # type: ignore
+        is_hybrid_enabled = None     # type: ignore
+        get_claude_client = None     # type: ignore
+
+
+# ── Constants ────────────────────────────────────────────────────────────────
+
+# Supported target types. 'general' means no scaling / no synth (legacy
+# behaviour). The other three each have their own implied-audience formula
+# and their own Claude synthesis prompt + fallback fixture (different
+# journeys: movie = trailer/showtime/ticket; website = SEO/direct/conversion;
+# tv_show = trailer/review/streaming-platform/first-watch).
+TARGET_TYPES = ('general', 'movie', 'website', 'tv_show')
+
+DEFAULT_TICKET_PRICE      = 15.00
+DEFAULT_AUDIENCE_FRACTION = 0.775   # midpoint of 70-85% single-ticket-per-buyer
+
+# Website mode: monthly_uniques × months × WEBSITE_DEDUP_FACTOR
+# (0.40 because ~60% of a site's monthly uniques are repeat visitors who
+# would already have been counted in a previous month — this gives us the
+# distinct-visitor count over a multi-month window without double counting).
+WEBSITE_DEDUP_FACTOR      = 0.40
+
+SPARSE_COHORT_THRESHOLD   = 25      # < this many real converters → blend in modeled
+
+# Canonical movie touchpoint mix used as fallback when Claude is offline.
+# Numbers chosen to roughly match a tentpole release's path-to-purchase
+# (Marvel-tier movies have ~85% trailer reach, ~70% search, etc.).
+_FALLBACK_TOUCHPOINTS = [
+    {'label': 'TRAILER',           'reach_pct': 78.0, 'avg_days_to_conversion': 21.0,  'avg_touches_per_user': 2.4, 'lift_pct': 65.0},
+    {'label': 'ORGANIC_SEARCH',    'reach_pct': 72.0, 'avg_days_to_conversion': 7.0,   'avg_touches_per_user': 3.1, 'lift_pct': 120.0},
+    {'label': 'SOCIAL_YOUTUBE',    'reach_pct': 58.0, 'avg_days_to_conversion': 18.0,  'avg_touches_per_user': 2.0, 'lift_pct': 45.0},
+    {'label': 'SOCIAL_TIKTOK',     'reach_pct': 41.0, 'avg_days_to_conversion': 12.0,  'avg_touches_per_user': 3.8, 'lift_pct': 38.0},
+    {'label': 'SOCIAL_INSTAGRAM',  'reach_pct': 37.0, 'avg_days_to_conversion': 14.0,  'avg_touches_per_user': 2.2, 'lift_pct': 32.0},
+    {'label': 'PRESS',             'reach_pct': 28.0, 'avg_days_to_conversion': 22.0,  'avg_touches_per_user': 1.6, 'lift_pct': 18.0},
+    {'label': 'REVIEW',            'reach_pct': 24.0, 'avg_days_to_conversion': 4.0,   'avg_touches_per_user': 2.1, 'lift_pct': 96.0},
+    {'label': 'SHOWTIME_LOOKUP',   'reach_pct': 86.0, 'avg_days_to_conversion': 1.5,   'avg_touches_per_user': 1.8, 'lift_pct': 310.0},
+    {'label': 'GOOGLE_REVIEW',     'reach_pct': 18.0, 'avg_days_to_conversion': 3.0,   'avg_touches_per_user': 1.4, 'lift_pct': 72.0},
+    {'label': 'TICKETING',         'reach_pct': 92.0, 'avg_days_to_conversion': 0.5,   'avg_touches_per_user': 1.2, 'lift_pct': None},
+    {'label': 'PAID_AD',           'reach_pct': 33.0, 'avg_days_to_conversion': 15.0,  'avg_touches_per_user': 4.6, 'lift_pct': 26.0},
+    {'label': 'TALENT_MENTION',    'reach_pct': 22.0, 'avg_days_to_conversion': 19.0,  'avg_touches_per_user': 1.7, 'lift_pct': 41.0},
+    {'label': 'CREATOR_INFLUENCER','reach_pct': 19.0, 'avg_days_to_conversion': 11.0,  'avg_touches_per_user': 1.9, 'lift_pct': 58.0},
+    {'label': 'BRAND_PARTNERSHIP', 'reach_pct': 11.0, 'avg_days_to_conversion': 25.0,  'avg_touches_per_user': 1.4, 'lift_pct': 22.0},
+    {'label': 'SOUNDTRACK',        'reach_pct':  9.0, 'avg_days_to_conversion': 17.0,  'avg_touches_per_user': 1.5, 'lift_pct': 14.0},
+]
+
+_FALLBACK_PATH_COLUMN_MIX = [
+    # Step -10 ... Step -1: rough "what fraction of converters had which
+    # channel at each step before purchase" — calibrated against the
+    # Bridgestone/BSFS deck observation that 60-70% of converters enter via
+    # search, then funnel through trailer → review → ticket lookup → purchase.
+    {-10: {'ORGANIC_SEARCH': 0.55, 'TRAILER': 0.20, 'SOCIAL_YOUTUBE': 0.15, 'PRESS': 0.10}},
+    {-9:  {'ORGANIC_SEARCH': 0.45, 'TRAILER': 0.25, 'SOCIAL_YOUTUBE': 0.18, 'SOCIAL_TIKTOK': 0.12}},
+    {-8:  {'TRAILER': 0.35, 'ORGANIC_SEARCH': 0.30, 'SOCIAL_TIKTOK': 0.18, 'SOCIAL_INSTAGRAM': 0.17}},
+    {-7:  {'TRAILER': 0.30, 'SOCIAL_YOUTUBE': 0.25, 'SOCIAL_TIKTOK': 0.20, 'PRESS': 0.15, 'PAID_AD': 0.10}},
+    {-6:  {'TALENT_MENTION': 0.25, 'PRESS': 0.22, 'REVIEW': 0.20, 'TRAILER': 0.18, 'CREATOR_INFLUENCER': 0.15}},
+    {-5:  {'CREATOR_INFLUENCER': 0.28, 'TALENT_MENTION': 0.22, 'BRAND_PARTNERSHIP': 0.15, 'TRAILER': 0.20, 'REVIEW': 0.15}},
+    {-4:  {'REVIEW': 0.32, 'PRESS': 0.25, 'GOOGLE_REVIEW': 0.18, 'TRAILER': 0.13, 'SOCIAL_INSTAGRAM': 0.12}},
+    {-3:  {'GOOGLE_REVIEW': 0.30, 'REVIEW': 0.28, 'ORGANIC_SEARCH': 0.22, 'PRESS': 0.20}},
+    {-2:  {'SHOWTIME_LOOKUP': 0.55, 'GOOGLE_REVIEW': 0.20, 'ORGANIC_SEARCH': 0.15, 'REVIEW': 0.10}},
+    {-1:  {'TICKETING': 0.78, 'SHOWTIME_LOOKUP': 0.15, 'ORGANIC_SEARCH': 0.07}},
+]
+
+_FALLBACK_TOP_PATHS = [
+    {'path': ['ORGANIC_SEARCH', 'TRAILER', 'REVIEW', 'SHOWTIME_LOOKUP', 'TICKETING', 'CONVERSION'],         'pct': 18.0},
+    {'path': ['TRAILER', 'SOCIAL_TIKTOK', 'REVIEW', 'SHOWTIME_LOOKUP', 'TICKETING', 'CONVERSION'],          'pct': 13.0},
+    {'path': ['ORGANIC_SEARCH', 'TRAILER', 'CREATOR_INFLUENCER', 'SHOWTIME_LOOKUP', 'TICKETING', 'CONVERSION'], 'pct': 9.5},
+    {'path': ['ORGANIC_SEARCH', 'SHOWTIME_LOOKUP', 'TICKETING', 'CONVERSION'],                              'pct': 8.0},
+    {'path': ['SOCIAL_YOUTUBE', 'TRAILER', 'REVIEW', 'TICKETING', 'CONVERSION'],                            'pct': 7.0},
+    {'path': ['TALENT_MENTION', 'TRAILER', 'PRESS', 'SHOWTIME_LOOKUP', 'TICKETING', 'CONVERSION'],          'pct': 6.5},
+    {'path': ['PRESS', 'REVIEW', 'GOOGLE_REVIEW', 'SHOWTIME_LOOKUP', 'TICKETING', 'CONVERSION'],            'pct': 5.0},
+    {'path': ['SOCIAL_TIKTOK', 'TRAILER', 'TICKETING', 'CONVERSION'],                                       'pct': 4.5},
+    {'path': ['BRAND_PARTNERSHIP', 'TRAILER', 'SHOWTIME_LOOKUP', 'TICKETING', 'CONVERSION'],                'pct': 3.5},
+    {'path': ['CREATOR_INFLUENCER', 'SOCIAL_TIKTOK', 'TICKETING', 'CONVERSION'],                            'pct': 3.0},
+]
+
+
+# ── Public: scaling math ─────────────────────────────────────────────────────
+
+def compute_implied_audience(
+    *,
+    box_office_millions: float = 0.0,
+    ticket_price: float = DEFAULT_TICKET_PRICE,
+    audience_fraction: float = DEFAULT_AUDIENCE_FRACTION,
+) -> int:
+    """Movie: box office $ → implied # of distinct ticket-buyers.
+
+    box_office_usd / ticket_price gives total tickets sold; multiplying by
+    audience_fraction (≈0.77) discounts for repeat viewers / family-of-4
+    purchases-by-one-person. Returns an int. Returns 0 on bad input.
+    """
+    try:
+        bo = float(box_office_millions or 0) * 1_000_000.0
+        tp = max(float(ticket_price or DEFAULT_TICKET_PRICE), 1.0)
+        af = max(0.05, min(float(audience_fraction or DEFAULT_AUDIENCE_FRACTION), 1.0))
+        return int(round((bo / tp) * af))
+    except Exception:
+        return 0
+
+
+def compute_website_implied_audience(
+    *,
+    monthly_visitors_millions: float,
+    date_range_days: int,
+    dedup_factor: float = WEBSITE_DEDUP_FACTOR,
+) -> int:
+    """Website: distinct US visitors expected over the run's date window.
+
+    Formula: monthly_uniques × (window_days / 30) × dedup_factor
+    The dedup_factor (~0.40) discounts repeat visitors who would already
+    have been counted in earlier months — so a 12.3M monthly site running
+    a 90-day analysis gets 12.3M × 3 × 0.4 ≈ 14.8M distinct visitors,
+    not 36.9M (the linear, double-counted number).
+    """
+    try:
+        mv = float(monthly_visitors_millions or 0) * 1_000_000.0
+        days = max(1, int(date_range_days or 30))
+        months = days / 30.0
+        df = max(0.05, min(float(dedup_factor or WEBSITE_DEDUP_FACTOR), 1.0))
+        return int(round(mv * months * df))
+    except Exception:
+        return 0
+
+
+def compute_tv_show_implied_audience(
+    *,
+    us_viewers_millions: float,
+) -> int:
+    """TV show: pass-through of the AI-researched (or user-supplied)
+    US viewer count. SubscriberIQ's AI lookup already gives us the
+    cumulative distinct US viewer number, so no further scaling is
+    needed — we just convert millions → ints."""
+    try:
+        return int(round(float(us_viewers_millions or 0) * 1_000_000.0))
+    except Exception:
+        return 0
+
+
+def compute_implied_audience_for_type(
+    *,
+    target_type: str,
+    box_office_millions: float = 0.0,
+    ticket_price: float = DEFAULT_TICKET_PRICE,
+    monthly_visitors_millions: float = 0.0,
+    date_range_days: int = 30,
+    us_viewers_millions: float = 0.0,
+) -> int:
+    """Single entry point: dispatch to the right formula based on type.
+    Returns 0 for 'general' or unknown types (no scaling)."""
+    t = (target_type or 'general').strip().lower()
+    if t == 'movie':
+        return compute_implied_audience(
+            box_office_millions=box_office_millions,
+            ticket_price=ticket_price,
+        )
+    if t == 'website':
+        return compute_website_implied_audience(
+            monthly_visitors_millions=monthly_visitors_millions,
+            date_range_days=date_range_days,
+        )
+    if t == 'tv_show':
+        return compute_tv_show_implied_audience(
+            us_viewers_millions=us_viewers_millions,
+        )
+    return 0
+
+
+def compute_scaling_factor(
+    *,
+    implied_audience: int,
+    panel_converters: int,
+) -> float:
+    """How much we need to multiply panel counts by to match implied audience.
+
+    Returns 1.0 when there's nothing to scale (no panel converters or no
+    implied audience) so the caller can pass it through unconditionally.
+    """
+    if implied_audience <= 0 or panel_converters <= 0:
+        return 1.0
+    return float(implied_audience) / float(panel_converters)
+
+
+def scale_summary_counts(summary: dict, scaling_factor: float) -> dict:
+    """Return a deep-ish copy of the summary with count fields scaled up.
+
+    Percentages are LEFT ALONE — they're rates, not counts. We only multiply
+    fields that represent absolute user/event counts. The dashboard renders
+    this as the "Scaled to BO" view alongside the raw panel observation.
+    """
+    if scaling_factor is None or scaling_factor <= 1.0 + 1e-9:
+        return summary  # nothing to scale; pass-through
+
+    def _scale_int(v):
+        if isinstance(v, (int, float)) and v >= 0:
+            return int(round(v * scaling_factor))
+        return v
+
+    out = dict(summary)
+    out['meta'] = dict(summary.get('meta') or {})
+    out['meta']['scaled_to_box_office'] = True
+    out['meta']['scaling_factor'] = round(scaling_factor, 2)
+
+    # KPIs: scale the count-shaped ones, leave rate-shaped ones.
+    kpis = dict(summary.get('kpis') or {})
+    for k in ('total_users', 'converted_users'):
+        if k in kpis:
+            kpis[k] = _scale_int(kpis[k])
+    out['kpis'] = kpis
+
+    # Touchpoints: scale reach + converters_reached on each row, plus the
+    # cohort_size / converters summary fields and the touch_distribution
+    # bucket counts. reach_pct / lift_pct / cadence stay as-is.
+    tp = dict(summary.get('touchpoints') or {})
+    if 'cohort_size' in tp: tp['cohort_size'] = _scale_int(tp['cohort_size'])
+    if 'converters'  in tp: tp['converters']  = _scale_int(tp['converters'])
+    new_rows = []
+    for r in (tp.get('rows') or []):
+        rr = dict(r)
+        for k in ('reach', 'converters_reached'):
+            if k in rr: rr[k] = _scale_int(rr[k])
+        new_rows.append(rr)
+    tp['rows'] = new_rows
+    new_overlap = []
+    for p in (tp.get('overlap') or []):
+        pp = dict(p)
+        for k in ('users', 'converters'):
+            if k in pp: pp[k] = _scale_int(pp[k])
+        new_overlap.append(pp)
+    tp['overlap'] = new_overlap
+    new_dist = []
+    for b in (tp.get('touch_distribution') or []):
+        bb = dict(b)
+        for k in ('converters', 'non_converters', 'total'):
+            if k in bb: bb[k] = _scale_int(bb[k])
+        new_dist.append(bb)
+    tp['touch_distribution'] = new_dist
+    out['touchpoints'] = tp
+
+    # Path to purchase: scale column user counts.
+    ptp = dict(summary.get('path_to_purchase') or {})
+    if 'cohort_size' in ptp: ptp['cohort_size'] = _scale_int(ptp['cohort_size'])
+    new_cols = []
+    for col in (ptp.get('columns') or []):
+        cc = dict(col)
+        cc['users'] = _scale_int(cc.get('users', 0))
+        new_top_labels = []
+        for tl in (cc.get('top_labels') or []):
+            ttl = dict(tl)
+            ttl['users'] = _scale_int(ttl.get('users', 0))
+            new_top_labels.append(ttl)
+        cc['top_labels'] = new_top_labels
+        new_top_hosts = []
+        for th in (cc.get('top_hosts') or []):
+            tth = dict(th)
+            tth['users'] = _scale_int(tth.get('users', 0))
+            new_top_hosts.append(tth)
+        cc['top_hosts'] = new_top_hosts
+        new_cols.append(cc)
+    ptp['columns'] = new_cols
+    new_paths = []
+    for p in (ptp.get('top_paths') or []):
+        pp = dict(p)
+        pp['users'] = _scale_int(pp.get('users', 0))
+        new_paths.append(pp)
+    ptp['top_paths'] = new_paths
+    out['path_to_purchase'] = ptp
+
+    # Cuts: scale users + converted in each bucket.
+    new_cuts: dict[str, list] = {}
+    for axis, buckets in (summary.get('cuts') or {}).items():
+        new_buckets = []
+        for b in (buckets or []):
+            bb = dict(b)
+            for k in ('users', 'converted'):
+                if k in bb: bb[k] = _scale_int(bb[k])
+            new_buckets.append(bb)
+        new_cuts[axis] = new_buckets
+    out['cuts'] = new_cuts
+
+    # Clusters: same shape as cuts buckets.
+    new_clusters = []
+    for c in (summary.get('clusters') or []):
+        cc = dict(c)
+        for k in ('users', 'converted'):
+            if k in cc: cc[k] = _scale_int(cc[k])
+        new_clusters.append(cc)
+    out['clusters'] = new_clusters
+
+    # Keywords + post_hosts: scale users
+    out['keywords'] = [
+        dict(k, users=_scale_int(k.get('users', 0)))
+        for k in (summary.get('keywords') or [])
+    ]
+    out['post_hosts'] = [
+        dict(h, users=_scale_int(h.get('users', 0)))
+        for h in (summary.get('post_hosts') or [])
+    ]
+
+    return out
+
+
+# ── Per-type fallback fixtures (website, tv_show) ────────────────────────────
+# Movie fixture above. These two are sized to be realistic enough that the
+# dashboard renders sensible numbers when Claude is offline. They have
+# entirely different shapes — a website conversion path doesn't look like a
+# movie ticket purchase, and a TV-show first-watch doesn't either.
+
+_FALLBACK_TOUCHPOINTS_WEBSITE = [
+    {'label': 'ORGANIC_SEARCH',    'reach_pct': 62.0, 'avg_days_to_conversion': 4.0,   'avg_touches_per_user': 2.8, 'lift_pct': 85.0},
+    {'label': 'DIRECT',            'reach_pct': 48.0, 'avg_days_to_conversion': 2.0,   'avg_touches_per_user': 4.2, 'lift_pct': 140.0},
+    {'label': 'REFERRAL',          'reach_pct': 32.0, 'avg_days_to_conversion': 6.0,   'avg_touches_per_user': 1.8, 'lift_pct': 42.0},
+    {'label': 'SOCIAL_INSTAGRAM',  'reach_pct': 27.0, 'avg_days_to_conversion': 8.0,   'avg_touches_per_user': 2.1, 'lift_pct': 28.0},
+    {'label': 'SOCIAL_TIKTOK',     'reach_pct': 24.0, 'avg_days_to_conversion': 9.0,   'avg_touches_per_user': 2.6, 'lift_pct': 22.0},
+    {'label': 'SOCIAL_YOUTUBE',    'reach_pct': 21.0, 'avg_days_to_conversion': 11.0,  'avg_touches_per_user': 1.7, 'lift_pct': 18.0},
+    {'label': 'EMAIL',             'reach_pct': 35.0, 'avg_days_to_conversion': 3.0,   'avg_touches_per_user': 3.1, 'lift_pct': 110.0},
+    {'label': 'PAID_AD',           'reach_pct': 29.0, 'avg_days_to_conversion': 5.0,   'avg_touches_per_user': 3.4, 'lift_pct': 24.0},
+    {'label': 'PRESS',             'reach_pct': 14.0, 'avg_days_to_conversion': 12.0,  'avg_touches_per_user': 1.4, 'lift_pct': 16.0},
+    {'label': 'REVIEW',            'reach_pct': 19.0, 'avg_days_to_conversion': 7.0,   'avg_touches_per_user': 1.6, 'lift_pct': 38.0},
+    {'label': 'COMPARISON',        'reach_pct': 23.0, 'avg_days_to_conversion': 4.0,   'avg_touches_per_user': 2.2, 'lift_pct': 64.0},
+    {'label': 'PRICING_PAGE',      'reach_pct': 41.0, 'avg_days_to_conversion': 2.0,   'avg_touches_per_user': 1.9, 'lift_pct': 195.0},
+    {'label': 'SIGNUP',            'reach_pct': 96.0, 'avg_days_to_conversion': 0.3,   'avg_touches_per_user': 1.1, 'lift_pct': None},
+    {'label': 'CHATBOT',           'reach_pct': 8.0,  'avg_days_to_conversion': 1.5,   'avg_touches_per_user': 1.3, 'lift_pct': 12.0},
+    {'label': 'AFFILIATE',         'reach_pct': 11.0, 'avg_days_to_conversion': 5.0,   'avg_touches_per_user': 1.5, 'lift_pct': 31.0},
+]
+
+_FALLBACK_PATH_COLUMN_MIX_WEBSITE = [
+    {-10: {'ORGANIC_SEARCH': 0.50, 'SOCIAL_TIKTOK': 0.20, 'PAID_AD':   0.20, 'REFERRAL':       0.10}},
+    {-9:  {'ORGANIC_SEARCH': 0.40, 'SOCIAL_INSTAGRAM': 0.22, 'REFERRAL': 0.20, 'SOCIAL_YOUTUBE': 0.18}},
+    {-8:  {'ORGANIC_SEARCH': 0.35, 'REFERRAL': 0.25, 'PRESS': 0.20, 'REVIEW':                  0.20}},
+    {-7:  {'COMPARISON': 0.32, 'REVIEW': 0.28, 'ORGANIC_SEARCH': 0.22, 'AFFILIATE':            0.18}},
+    {-6:  {'DIRECT': 0.30, 'EMAIL': 0.25, 'COMPARISON': 0.25, 'ORGANIC_SEARCH':                0.20}},
+    {-5:  {'EMAIL': 0.32, 'DIRECT': 0.28, 'PRICING_PAGE': 0.22, 'COMPARISON':                  0.18}},
+    {-4:  {'PRICING_PAGE': 0.40, 'COMPARISON': 0.25, 'REVIEW': 0.20, 'CHATBOT':                0.15}},
+    {-3:  {'PRICING_PAGE': 0.50, 'DIRECT': 0.25, 'CHATBOT': 0.15, 'EMAIL':                     0.10}},
+    {-2:  {'DIRECT': 0.45, 'PRICING_PAGE': 0.30, 'EMAIL': 0.15, 'CHATBOT':                     0.10}},
+    {-1:  {'SIGNUP': 0.85, 'DIRECT': 0.10, 'PRICING_PAGE':                                     0.05}},
+]
+
+_FALLBACK_TOP_PATHS_WEBSITE = [
+    {'path': ['ORGANIC_SEARCH', 'COMPARISON', 'PRICING_PAGE', 'SIGNUP', 'CONVERSION'],                       'pct': 21.0},
+    {'path': ['DIRECT', 'PRICING_PAGE', 'SIGNUP', 'CONVERSION'],                                              'pct': 14.0},
+    {'path': ['ORGANIC_SEARCH', 'REVIEW', 'PRICING_PAGE', 'SIGNUP', 'CONVERSION'],                            'pct': 11.0},
+    {'path': ['SOCIAL_TIKTOK', 'ORGANIC_SEARCH', 'COMPARISON', 'PRICING_PAGE', 'SIGNUP', 'CONVERSION'],       'pct':  8.5},
+    {'path': ['EMAIL', 'PRICING_PAGE', 'SIGNUP', 'CONVERSION'],                                               'pct':  7.5},
+    {'path': ['REFERRAL', 'COMPARISON', 'PRICING_PAGE', 'SIGNUP', 'CONVERSION'],                              'pct':  6.0},
+    {'path': ['PAID_AD', 'PRICING_PAGE', 'SIGNUP', 'CONVERSION'],                                             'pct':  5.5},
+    {'path': ['ORGANIC_SEARCH', 'CHATBOT', 'PRICING_PAGE', 'SIGNUP', 'CONVERSION'],                           'pct':  4.5},
+    {'path': ['AFFILIATE', 'COMPARISON', 'PRICING_PAGE', 'SIGNUP', 'CONVERSION'],                             'pct':  3.5},
+    {'path': ['DIRECT', 'CHATBOT', 'SIGNUP', 'CONVERSION'],                                                   'pct':  3.0},
+]
+
+_FALLBACK_TOUCHPOINTS_TV_SHOW = [
+    {'label': 'TRAILER',           'reach_pct': 72.0, 'avg_days_to_conversion': 14.0, 'avg_touches_per_user': 2.6, 'lift_pct': 70.0},
+    {'label': 'SOCIAL_TIKTOK',     'reach_pct': 51.0, 'avg_days_to_conversion': 9.0,  'avg_touches_per_user': 3.4, 'lift_pct': 48.0},
+    {'label': 'SOCIAL_INSTAGRAM',  'reach_pct': 44.0, 'avg_days_to_conversion': 11.0, 'avg_touches_per_user': 2.3, 'lift_pct': 35.0},
+    {'label': 'SOCIAL_YOUTUBE',    'reach_pct': 38.0, 'avg_days_to_conversion': 13.0, 'avg_touches_per_user': 2.1, 'lift_pct': 30.0},
+    {'label': 'PRESS',             'reach_pct': 32.0, 'avg_days_to_conversion': 16.0, 'avg_touches_per_user': 1.7, 'lift_pct': 22.0},
+    {'label': 'REVIEW',            'reach_pct': 41.0, 'avg_days_to_conversion': 5.0,  'avg_touches_per_user': 2.4, 'lift_pct': 88.0},
+    {'label': 'CRITIC_AGGREGATOR', 'reach_pct': 27.0, 'avg_days_to_conversion': 4.0,  'avg_touches_per_user': 1.6, 'lift_pct': 105.0},
+    {'label': 'TALENT_MENTION',    'reach_pct': 35.0, 'avg_days_to_conversion': 18.0, 'avg_touches_per_user': 1.9, 'lift_pct': 40.0},
+    {'label': 'PLATFORM_PAGE',     'reach_pct': 81.0, 'avg_days_to_conversion': 1.5,  'avg_touches_per_user': 2.2, 'lift_pct': 280.0},
+    {'label': 'EPG_LOOKUP',        'reach_pct': 29.0, 'avg_days_to_conversion': 2.0,  'avg_touches_per_user': 1.5, 'lift_pct': 95.0},
+    {'label': 'PAID_AD',           'reach_pct': 26.0, 'avg_days_to_conversion': 12.0, 'avg_touches_per_user': 3.8, 'lift_pct': 18.0},
+    {'label': 'BINGE_RECOMMENDATION','reach_pct': 22.0, 'avg_days_to_conversion': 7.0,  'avg_touches_per_user': 1.4, 'lift_pct': 58.0},
+    {'label': 'CREATOR_INFLUENCER','reach_pct': 19.0, 'avg_days_to_conversion': 10.0, 'avg_touches_per_user': 1.8, 'lift_pct': 44.0},
+    {'label': 'FIRST_WATCH',       'reach_pct': 95.0, 'avg_days_to_conversion': 0.5,  'avg_touches_per_user': 1.1, 'lift_pct': None},
+    {'label': 'SOUNDTRACK',        'reach_pct': 12.0, 'avg_days_to_conversion': 19.0, 'avg_touches_per_user': 1.3, 'lift_pct': 14.0},
+]
+
+_FALLBACK_PATH_COLUMN_MIX_TV_SHOW = [
+    {-10: {'TRAILER': 0.40, 'SOCIAL_TIKTOK': 0.25, 'SOCIAL_INSTAGRAM': 0.18, 'PRESS': 0.17}},
+    {-9:  {'TRAILER': 0.35, 'SOCIAL_TIKTOK': 0.22, 'CREATOR_INFLUENCER': 0.18, 'TALENT_MENTION': 0.25}},
+    {-8:  {'PRESS': 0.30, 'TALENT_MENTION': 0.25, 'TRAILER': 0.25, 'SOCIAL_YOUTUBE': 0.20}},
+    {-7:  {'REVIEW': 0.34, 'CRITIC_AGGREGATOR': 0.28, 'PRESS': 0.20, 'TALENT_MENTION': 0.18}},
+    {-6:  {'REVIEW': 0.30, 'CRITIC_AGGREGATOR': 0.25, 'SOCIAL_INSTAGRAM': 0.25, 'BINGE_RECOMMENDATION': 0.20}},
+    {-5:  {'BINGE_RECOMMENDATION': 0.32, 'REVIEW': 0.28, 'PAID_AD': 0.22, 'SOCIAL_TIKTOK': 0.18}},
+    {-4:  {'PLATFORM_PAGE': 0.38, 'REVIEW': 0.22, 'EPG_LOOKUP': 0.20, 'BINGE_RECOMMENDATION': 0.20}},
+    {-3:  {'PLATFORM_PAGE': 0.45, 'EPG_LOOKUP': 0.25, 'REVIEW': 0.18, 'CRITIC_AGGREGATOR': 0.12}},
+    {-2:  {'PLATFORM_PAGE': 0.55, 'EPG_LOOKUP': 0.25, 'TRAILER': 0.12, 'CRITIC_AGGREGATOR': 0.08}},
+    {-1:  {'FIRST_WATCH': 0.85, 'PLATFORM_PAGE': 0.12, 'EPG_LOOKUP': 0.03}},
+]
+
+_FALLBACK_TOP_PATHS_TV_SHOW = [
+    {'path': ['TRAILER', 'REVIEW', 'PLATFORM_PAGE', 'FIRST_WATCH', 'CONVERSION'],                                'pct': 19.0},
+    {'path': ['SOCIAL_TIKTOK', 'TRAILER', 'PLATFORM_PAGE', 'FIRST_WATCH', 'CONVERSION'],                          'pct': 14.0},
+    {'path': ['TRAILER', 'CRITIC_AGGREGATOR', 'PLATFORM_PAGE', 'FIRST_WATCH', 'CONVERSION'],                      'pct': 10.0},
+    {'path': ['PRESS', 'REVIEW', 'PLATFORM_PAGE', 'FIRST_WATCH', 'CONVERSION'],                                   'pct':  8.5},
+    {'path': ['TALENT_MENTION', 'TRAILER', 'PLATFORM_PAGE', 'FIRST_WATCH', 'CONVERSION'],                         'pct':  7.5},
+    {'path': ['CREATOR_INFLUENCER', 'SOCIAL_TIKTOK', 'PLATFORM_PAGE', 'FIRST_WATCH', 'CONVERSION'],               'pct':  6.0},
+    {'path': ['SOCIAL_INSTAGRAM', 'TRAILER', 'REVIEW', 'PLATFORM_PAGE', 'FIRST_WATCH', 'CONVERSION'],             'pct':  5.5},
+    {'path': ['BINGE_RECOMMENDATION', 'PLATFORM_PAGE', 'FIRST_WATCH', 'CONVERSION'],                              'pct':  4.5},
+    {'path': ['PAID_AD', 'PLATFORM_PAGE', 'FIRST_WATCH', 'CONVERSION'],                                           'pct':  3.5},
+    {'path': ['EPG_LOOKUP', 'PLATFORM_PAGE', 'FIRST_WATCH', 'CONVERSION'],                                        'pct':  3.0},
+]
+
+
+# ── Public: Claude synthesis ─────────────────────────────────────────────────
+
+_SYSTEM_SYNTH_MOVIE = """\
+You are a senior box-office attribution analyst. You will be given:
+  * A movie title, US box office gross, ticket price, and release window.
+  * A list of marketing surfaces the campaign actually used (talent
+    mentions, brand partnerships, social channels) — parsed from the
+    user's "Extra Touchpoint Keywords" rules.
+  * What we ALREADY observed in the panel: # converters, # cohort,
+    touchpoint reach %, top paths. This may be very sparse or zero.
+
+Your job is to ESTIMATE a plausible attribution mix for a movie of this
+scale and talent profile, calibrated against:
+  * Tentpole movies (>$200M domestic): 75-90% trailer reach,
+    85-95% search reach in the 14 days pre-release.
+  * Mid-budget movies ($30-200M domestic): 50-70% trailer reach,
+    60-80% search reach.
+  * Limited release (<$30M domestic): 30-50% trailer reach, 40-60% search.
+
+Output JSON EXACTLY in this shape (no markdown, no code fences):
+{
+  "touchpoints": [
+    {"label": "TRAILER",         "reach_pct": 74.5, "share_of_converters_pct": 82.0,
+     "avg_days_to_conversion": 18.0, "avg_touches_per_user": 2.3, "lift_pct": 55.0},
+    {"label": "ORGANIC_SEARCH",  ...},
+    {"label": "SOCIAL_YOUTUBE",  ...},
+    {"label": "SOCIAL_TIKTOK",   ...},
+    {"label": "SOCIAL_INSTAGRAM",...},
+    {"label": "PRESS",           ...},
+    {"label": "REVIEW",          ...},
+    {"label": "SHOWTIME_LOOKUP", ...},
+    {"label": "GOOGLE_REVIEW",   ...},
+    {"label": "TICKETING",       "reach_pct": 90+, "lift_pct": null},
+    {"label": "PAID_AD",         ...},
+    {"label": "TALENT_MENTION",  ...},
+    {"label": "CREATOR_INFLUENCER",...},
+    {"label": "BRAND_PARTNERSHIP",...},
+    {"label": "SOUNDTRACK",      ...}
+  ],
+  "path_columns": [
+    {"index": -10, "mix": {"ORGANIC_SEARCH": 0.50, "TRAILER": 0.25, ...}},
+    {"index": -9,  "mix": {...}},
+    ...
+    {"index": -1,  "mix": {"TICKETING": 0.78, ...}}
+  ],
+  "top_paths": [
+    {"path": ["ORGANIC_SEARCH","TRAILER","REVIEW","SHOWTIME_LOOKUP","TICKETING","CONVERSION"], "pct": 17.5},
+    ...
+  ],
+  "avg_touches_before_purchase": 5.8,
+  "avg_days_to_purchase": 14.2,
+  "conversion_pct_of_cohort": 100.0,
+  "notes": "1-2 sentences on why this mix; cite a comparable movie."
+}
+
+Hard rules:
+  * Every column "mix" object's values must SUM to roughly 1.0 (i.e.
+    column percentages, not user counts).
+  * Provide at least 8 top_paths.
+  * TICKETING must dominate column -1 (the step right before purchase).
+  * CONVERSION must end every top_path.
+  * lift_pct may be null (e.g. for TICKETING which is the conversion itself).
+  * Numbers must reflect the box-office scale you were given. A $50M movie
+    should NOT have a $400M's trailer reach.
+  * If a marketing surface was named in the input but is irrelevant to
+    movies (e.g. /reviews keyword for a B2B brand), still include the
+    standard movie touchpoints — just down-weight the irrelevant ones.
+
+Output JSON ONLY."""
+
+
+_SYSTEM_SYNTH_WEBSITE = """\
+You are a senior web-attribution analyst. You will be given:
+  * A website (target name / domain), its estimated US monthly visitors,
+    and a date range.
+  * The marketing surfaces and conversion URL substrings the user defined.
+  * What we ALREADY observed in the panel (may be sparse or zero).
+
+Estimate a plausible path-to-conversion for a website of this scale,
+calibrated against typical funnel patterns:
+  * High-traffic SaaS / direct-response (>10M monthly US visitors):
+    60-75% organic-search reach, 30-50% direct reach, conversion
+    typically driven by pricing-page + signup.
+  * Mid-traffic content/affiliate (1-10M monthly US): 50-70% search,
+    20-40% referral, conversion via comparison + signup/CTA.
+  * Low-traffic niche (<1M monthly US): 40-60% direct, 30-50% organic,
+    conversion via long-form content + email + signup.
+
+Output JSON EXACTLY in this shape (no markdown, no code fences):
+{
+  "touchpoints": [
+    {"label": "ORGANIC_SEARCH", "reach_pct": ..., "share_of_converters_pct": ...,
+     "avg_days_to_conversion": ..., "avg_touches_per_user": ..., "lift_pct": ...},
+    {"label": "DIRECT",         ...},
+    {"label": "REFERRAL",       ...},
+    {"label": "SOCIAL_INSTAGRAM",...},
+    {"label": "SOCIAL_TIKTOK",  ...},
+    {"label": "SOCIAL_YOUTUBE", ...},
+    {"label": "EMAIL",          ...},
+    {"label": "PAID_AD",        ...},
+    {"label": "PRESS",          ...},
+    {"label": "REVIEW",         ...},
+    {"label": "COMPARISON",     ...},
+    {"label": "PRICING_PAGE",   ...},
+    {"label": "SIGNUP",         "reach_pct": 90+, "lift_pct": null},
+    {"label": "CHATBOT",        ...},
+    {"label": "AFFILIATE",      ...}
+  ],
+  "path_columns": [
+    {"index": -10, "mix": {"ORGANIC_SEARCH": 0.50, "PAID_AD": 0.20, ...}},
+    ...
+    {"index": -1,  "mix": {"SIGNUP": 0.85, ...}}
+  ],
+  "top_paths": [
+    {"path": ["ORGANIC_SEARCH","COMPARISON","PRICING_PAGE","SIGNUP","CONVERSION"], "pct": 20.0},
+    ...
+  ],
+  "avg_touches_before_purchase": 5.5,
+  "avg_days_to_purchase": 7.5,
+  "conversion_pct_of_cohort": 100.0,
+  "notes": "1-2 sentences on why this mix; cite a comparable site."
+}
+
+Hard rules:
+  * Column "mix" values sum to roughly 1.0 (per-column percentages).
+  * At least 8 top_paths. SIGNUP (or the chosen conversion event) MUST
+    dominate column -1. CONVERSION ends every top_path.
+  * Numbers reflect the monthly-visitor scale you were given.
+
+Output JSON ONLY."""
+
+
+_SYSTEM_SYNTH_TV_SHOW = """\
+You are a senior TV/streaming attribution analyst. You will be given:
+  * A show title, total US viewers, release/run window.
+  * Marketing surfaces the campaign actually used (talent, social,
+    soundtrack, press).
+  * What we ALREADY observed in the panel (may be sparse or zero).
+
+Estimate a plausible discovery-to-first-watch journey for a show of this
+scale, calibrated against:
+  * Tentpole series (>20M US viewers — Stranger Things, The Last of Us):
+    75-90% trailer reach, ~85% platform-page reach, 40-60% review reach.
+  * Mid-tier series (3-20M US viewers): 55-75% trailer reach,
+    65-80% platform-page, 25-45% review.
+  * Niche / limited release (<3M US viewers): 35-55% trailer reach,
+    50-70% platform-page, 15-30% review.
+
+Output JSON EXACTLY in this shape (no markdown, no code fences):
+{
+  "touchpoints": [
+    {"label": "TRAILER",            "reach_pct": ..., "share_of_converters_pct": ...,
+     "avg_days_to_conversion": ..., "avg_touches_per_user": ..., "lift_pct": ...},
+    {"label": "SOCIAL_TIKTOK",      ...},
+    {"label": "SOCIAL_INSTAGRAM",   ...},
+    {"label": "SOCIAL_YOUTUBE",     ...},
+    {"label": "PRESS",              ...},
+    {"label": "REVIEW",             ...},
+    {"label": "CRITIC_AGGREGATOR",  ...},
+    {"label": "TALENT_MENTION",     ...},
+    {"label": "PLATFORM_PAGE",      ...},
+    {"label": "EPG_LOOKUP",         ...},
+    {"label": "PAID_AD",            ...},
+    {"label": "BINGE_RECOMMENDATION",...},
+    {"label": "CREATOR_INFLUENCER", ...},
+    {"label": "FIRST_WATCH",        "reach_pct": 90+, "lift_pct": null},
+    {"label": "SOUNDTRACK",         ...}
+  ],
+  "path_columns": [
+    {"index": -10, "mix": {"TRAILER": 0.40, "SOCIAL_TIKTOK": 0.25, ...}},
+    ...
+    {"index": -1,  "mix": {"FIRST_WATCH": 0.85, ...}}
+  ],
+  "top_paths": [
+    {"path": ["TRAILER","REVIEW","PLATFORM_PAGE","FIRST_WATCH","CONVERSION"], "pct": 19.0},
+    ...
+  ],
+  "avg_touches_before_purchase": 5.0,
+  "avg_days_to_purchase": 10.0,
+  "conversion_pct_of_cohort": 100.0,
+  "notes": "1-2 sentences on why this mix; cite a comparable show."
+}
+
+Hard rules:
+  * Column "mix" values sum to roughly 1.0.
+  * At least 8 top_paths. FIRST_WATCH MUST dominate column -1.
+  * CONVERSION ends every top_path.
+  * Numbers reflect the US-viewer scale you were given.
+
+Output JSON ONLY."""
+
+
+def synthesize_movie_journey(
+    *,
+    target: str,
+    project_name: str,
+    start_date: str,
+    end_date: str,
+    box_office_millions: float,
+    ticket_price: float,
+    extra_touchpoint_keywords: dict,
+    panel_converters: int,
+    panel_observed_touchpoints: Optional[list[dict]] = None,
+    panel_top_paths: Optional[list[dict]] = None,
+    steps: int = 10,
+    max_tokens: int = 3000,
+    temperature: float = 0.3,
+) -> Optional[dict]:
+    """Ask Claude for a plausible movie journey; fall back to canonical
+    fixtures when Claude is offline. Returns a dict with keys:
+        touchpoints (list), path_columns (list), top_paths (list),
+        avg_touches_before_purchase, avg_days_to_purchase,
+        conversion_pct_of_cohort, notes, source ('claude'|'fallback').
+    """
+    # When Claude is offline, return the canonical fixture immediately so
+    # the dashboard always has SOMETHING to render. Scaled later by the
+    # caller via scale_modeled_to_audience().
+    if claude_messages is None or is_hybrid_enabled is None or get_claude_client is None:
+        return _fallback_synthesis(steps=steps)
+    try:
+        if not is_hybrid_enabled() or get_claude_client() is None:
+            return _fallback_synthesis(steps=steps)
+    except Exception:
+        return _fallback_synthesis(steps=steps)
+
+    # Build a focused prompt: keep the input data small so Claude
+    # spends its tokens reasoning about the estimate, not parsing inputs.
+    payload = {
+        'movie_title':                target,
+        'project_name':               project_name,
+        'release_window':             {'start': start_date, 'end': end_date},
+        'us_box_office_millions':     box_office_millions,
+        'avg_ticket_price_usd':       ticket_price,
+        'implied_audience':           compute_implied_audience(
+            box_office_millions=box_office_millions,
+            ticket_price=ticket_price,
+        ),
+        'campaign_surfaces':          extra_touchpoint_keywords or {},
+        'steps_to_synthesize':        steps,
+        'panel_observed': {
+            'converters':             panel_converters,
+            'touchpoints': [
+                {'label': r.get('label'), 'reach_pct': r.get('reach_pct')}
+                for r in (panel_observed_touchpoints or [])[:15]
+            ],
+            'top_paths':              (panel_top_paths or [])[:5],
+        },
+    }
+    user_msg = (
+        "Estimate the path-to-purchase + touchpoint mix for the movie "
+        "below. Output JSON only matching the schema in the system prompt.\n\n"
+        + json.dumps(payload, ensure_ascii=False, indent=2)
+    )
+
+    try:
+        raw = claude_messages(
+            system=_SYSTEM_SYNTH_MOVIE,
+            user=user_msg,
+            max_tokens=max_tokens,
+            temperature=temperature,
+        ) or ''
+    except Exception as e:
+        print(f"[Journey IQ synthesize] claude_messages failed: {e}")
+        return _fallback_synthesis(target_type='movie', steps=steps)
+
+    parsed = _parse_synth_json(raw)
+    if not parsed:
+        return _fallback_synthesis(target_type='movie', steps=steps)
+    parsed['source'] = 'claude'
+    return parsed
+
+
+def synthesize_journey(
+    *,
+    target_type: str,
+    target: str,
+    project_name: str,
+    start_date: str,
+    end_date: str,
+    extra_touchpoint_keywords: dict,
+    panel_converters: int,
+    panel_observed_touchpoints: Optional[list[dict]] = None,
+    panel_top_paths: Optional[list[dict]] = None,
+    steps: int = 10,
+    # Movie params
+    box_office_millions: float = 0.0,
+    ticket_price: float = DEFAULT_TICKET_PRICE,
+    # Website params
+    monthly_visitors_millions: float = 0.0,
+    date_range_days: int = 30,
+    # TV show params
+    us_viewers_millions: float = 0.0,
+    # Claude tuning
+    max_tokens: int = 3000,
+    temperature: float = 0.3,
+) -> Optional[dict]:
+    """Type-aware synthesis dispatcher. Routes to the right Claude prompt +
+    fallback fixture for movie / website / tv_show. Returns the standard
+    synth dict shape regardless of type, plus a 'target_type' field so
+    downstream code can render type-appropriate labels."""
+    t = (target_type or 'general').strip().lower()
+
+    # Movie: keep delegating to the existing function (which already exists
+    # and is wire-compatible). This preserves backward compatibility for
+    # callers that import synthesize_movie_journey directly.
+    if t == 'movie':
+        synth = synthesize_movie_journey(
+            target=target, project_name=project_name,
+            start_date=start_date, end_date=end_date,
+            box_office_millions=box_office_millions, ticket_price=ticket_price,
+            extra_touchpoint_keywords=extra_touchpoint_keywords,
+            panel_converters=panel_converters,
+            panel_observed_touchpoints=panel_observed_touchpoints,
+            panel_top_paths=panel_top_paths,
+            steps=steps, max_tokens=max_tokens, temperature=temperature,
+        )
+        if synth: synth['target_type'] = 'movie'
+        return synth
+
+    # Website / tv_show: same Claude wiring, different system prompt + fixture.
+    if t == 'website':
+        system = _SYSTEM_SYNTH_WEBSITE
+        scale_payload = {
+            'us_monthly_visitors_millions': monthly_visitors_millions,
+            'analysis_window_days':         date_range_days,
+            'implied_audience':             compute_website_implied_audience(
+                monthly_visitors_millions=monthly_visitors_millions,
+                date_range_days=date_range_days,
+            ),
+        }
+    elif t == 'tv_show':
+        system = _SYSTEM_SYNTH_TV_SHOW
+        scale_payload = {
+            'us_viewers_millions':  us_viewers_millions,
+            'release_window':       {'start': start_date, 'end': end_date},
+            'implied_audience':     compute_tv_show_implied_audience(
+                us_viewers_millions=us_viewers_millions,
+            ),
+        }
+    else:
+        return None  # 'general' or unknown — caller shouldn't have called us
+
+    # Offline path -> fallback fixture
+    if claude_messages is None or is_hybrid_enabled is None or get_claude_client is None:
+        out = _fallback_synthesis(target_type=t, steps=steps)
+        out['target_type'] = t
+        return out
+    try:
+        if not is_hybrid_enabled() or get_claude_client() is None:
+            out = _fallback_synthesis(target_type=t, steps=steps)
+            out['target_type'] = t
+            return out
+    except Exception:
+        out = _fallback_synthesis(target_type=t, steps=steps)
+        out['target_type'] = t
+        return out
+
+    payload = {
+        'target':                target,
+        'target_type':           t,
+        'project_name':          project_name,
+        'campaign_surfaces':     extra_touchpoint_keywords or {},
+        'steps_to_synthesize':   steps,
+        'panel_observed': {
+            'converters':        panel_converters,
+            'touchpoints': [
+                {'label': r.get('label'), 'reach_pct': r.get('reach_pct')}
+                for r in (panel_observed_touchpoints or [])[:15]
+            ],
+            'top_paths':         (panel_top_paths or [])[:5],
+        },
+        **scale_payload,
+    }
+    user_msg = (
+        f"Estimate the path-to-conversion + touchpoint mix for the "
+        f"{t.replace('_',' ')} below. Output JSON only matching the "
+        f"schema in the system prompt.\n\n"
+        + json.dumps(payload, ensure_ascii=False, indent=2)
+    )
+    try:
+        raw = claude_messages(
+            system=system, user=user_msg,
+            max_tokens=max_tokens, temperature=temperature,
+        ) or ''
+    except Exception as e:
+        print(f"[Journey IQ synthesize] {t} claude_messages failed: {e}")
+        out = _fallback_synthesis(target_type=t, steps=steps)
+        out['target_type'] = t
+        return out
+
+    parsed = _parse_synth_json(raw)
+    if not parsed:
+        out = _fallback_synthesis(target_type=t, steps=steps)
+        out['target_type'] = t
+        return out
+    parsed['source'] = 'claude'
+    parsed['target_type'] = t
+    return parsed
+
+
+# Per-type fixture lookup; keys must match TARGET_TYPES values.
+_FIXTURES_BY_TYPE = {
+    'movie':   {'touchpoints': _FALLBACK_TOUCHPOINTS,         'columns': _FALLBACK_PATH_COLUMN_MIX,         'top_paths': _FALLBACK_TOP_PATHS,         'avg_touches': 5.5, 'avg_days': 14.0,
+                'notes': 'Canonical movie attribution mix (Claude offline — used fallback fixture).'},
+    'website': {'touchpoints': _FALLBACK_TOUCHPOINTS_WEBSITE, 'columns': _FALLBACK_PATH_COLUMN_MIX_WEBSITE, 'top_paths': _FALLBACK_TOP_PATHS_WEBSITE, 'avg_touches': 5.5, 'avg_days': 7.5,
+                'notes': 'Canonical website conversion mix (Claude offline — used fallback fixture).'},
+    'tv_show': {'touchpoints': _FALLBACK_TOUCHPOINTS_TV_SHOW, 'columns': _FALLBACK_PATH_COLUMN_MIX_TV_SHOW, 'top_paths': _FALLBACK_TOP_PATHS_TV_SHOW, 'avg_touches': 5.0, 'avg_days': 10.0,
+                'notes': 'Canonical TV-show first-watch mix (Claude offline — used fallback fixture).'},
+}
+
+
+def _fallback_synthesis(*, target_type: str = 'movie', steps: int = 10) -> dict:
+    """Static canonical fixture for the requested type — used when Claude
+    is unavailable. Defaults to the movie fixture for backward compat."""
+    fx = _FIXTURES_BY_TYPE.get((target_type or 'movie').lower(), _FIXTURES_BY_TYPE['movie'])
+    return {
+        'touchpoints':                  [dict(r) for r in fx['touchpoints']],
+        'path_columns':                 _expand_fallback_path_columns(
+                                            columns_fixture=fx['columns'], steps=steps),
+        'top_paths':                    [dict(p) for p in fx['top_paths']],
+        'avg_touches_before_purchase':  fx['avg_touches'],
+        'avg_days_to_purchase':         fx['avg_days'],
+        'conversion_pct_of_cohort':     100.0,
+        'notes':                        fx['notes'],
+        'source':                       'fallback',
+    }
+
+
+def _expand_fallback_path_columns(*, columns_fixture: list = None, steps: int = 10) -> list[dict]:
+    """Return exactly `steps` columns of the requested fixture, right-aligned.
+
+    When steps <= len(fixture) we keep the LAST `steps` columns (those are
+    closest to conversion and most stable). When steps > len(fixture) we
+    pad with copies of the oldest column on the left. Indexes are always
+    renumbered cleanly so the rightmost is -1.
+
+    Backward compat: when columns_fixture is None we default to the movie
+    fixture (the original caller's behavior).
+    """
+    if columns_fixture is None:
+        columns_fixture = _FALLBACK_PATH_COLUMN_MIX
+    full = [list(d.items())[0] for d in columns_fixture]  # [(-10, {...}), ...]
+    if steps <= len(full):
+        slice_ = full[-steps:]
+    else:
+        pad = [full[0]] * (steps - len(full))
+        slice_ = pad + full
+    n = len(slice_)
+    return [{'index': -(n - i), 'mix': mix} for i, (_, mix) in enumerate(slice_)]
+
+
+def _parse_synth_json(raw: str) -> Optional[dict]:
+    """Tolerate code fences / preamble. Returns dict or None."""
+    if not raw:
+        return None
+    text = raw.strip()
+    if text.startswith('```'):
+        text = re.sub(r'^```(?:json)?', '', text, count=1).strip()
+        if text.endswith('```'):
+            text = text[:-3].strip()
+    try:
+        return json.loads(text)
+    except Exception:
+        pass
+    if '{' in text and '}' in text:
+        snippet = text[text.find('{'): text.rfind('}') + 1]
+        try:
+            return json.loads(snippet)
+        except Exception:
+            return None
+    return None
+
+
+# ── Public: adapter from synth → dashboard JSON ──────────────────────────────
+
+def synth_to_dashboard_payload(
+    synth: dict,
+    *,
+    target_audience: int,
+) -> dict:
+    """Convert Claude's structured estimate into the JSON shape the
+    dashboard already knows how to render. Returns:
+        {'touchpoints': {...}, 'path_to_purchase': {...},
+         'kpis': {...}, 'cohort_size': N}
+    Everything is sized to `target_audience` (the implied # of buyers).
+    """
+    n = max(1, int(target_audience or 0))
+    # ── Touchpoints ────────────────────────────────────────────────────
+    tp_rows = []
+    for r in (synth.get('touchpoints') or []):
+        reach_pct = float(r.get('reach_pct') or 0.0)
+        reach = int(round(n * reach_pct / 100.0))
+        sh_conv_pct = float(r.get('share_of_converters_pct') or reach_pct)
+        converters_reached = int(round(n * sh_conv_pct / 100.0))
+        tp_rows.append({
+            'label':                  r.get('label'),
+            'reach':                  reach,
+            'reach_pct':              round(reach_pct, 1),
+            'converters_reached':     converters_reached,
+            'share_of_converters':    round(sh_conv_pct, 1),
+            'conv_rate_when_reached': 100.0,  # we're synthesizing converters only
+            'conv_rate_when_not':     0.0,
+            'baseline_conv_rate':     100.0,
+            'lift_pct':               r.get('lift_pct'),
+            'avg_days_to_conversion': r.get('avg_days_to_conversion'),
+            'avg_touches_per_user':   r.get('avg_touches_per_user'),
+        })
+
+    touchpoints = {
+        'baseline_conv_rate': 100.0,
+        'cohort_size':        n,
+        'converters':         n,
+        'rows':               tp_rows,
+        'overlap':            _synth_overlap(tp_rows, n),
+        'touch_distribution': _synth_touch_distribution(
+            n, avg_touches=synth.get('avg_touches_before_purchase') or 5.0),
+    }
+
+    # ── Path to purchase ─────────────────────────────────────────────
+    columns = []
+    for c in (synth.get('path_columns') or []):
+        idx = int(c.get('index', 0))
+        mix = c.get('mix') or {}
+        # Column "users" = N (every converter contributes); we just allocate
+        # the per-label split.
+        top_labels = []
+        for lbl, frac in sorted(mix.items(), key=lambda kv: -float(kv[1])):
+            users = int(round(n * float(frac)))
+            top_labels.append({
+                'label': lbl, 'users': users,
+                'pct':   round(100.0 * float(frac), 1),
+            })
+        columns.append({
+            'index':      idx,
+            'label':      f'Step {idx}',
+            'users':      n,
+            'users_pct':  100.0,
+            'top_labels': top_labels[:6],
+            'top_hosts':  [],  # synth doesn't know specific hosts
+        })
+    # CONVERSION column at index 0
+    columns.append({
+        'index': 0, 'label': 'CONVERSION',
+        'users': n, 'users_pct': 100.0,
+        'top_labels': [{'label': 'CONVERSION', 'users': n, 'pct': 100.0}],
+        'top_hosts': [],
+    })
+
+    top_paths = []
+    for p in (synth.get('top_paths') or []):
+        pct = float(p.get('pct') or p.get('users_pct') or 0.0)
+        users = int(round(n * pct / 100.0))
+        top_paths.append({
+            'path': list(p.get('path') or []),
+            'users': users,
+            'users_pct': round(pct, 1),
+        })
+
+    path_to_purchase = {
+        'mode':         'modeled',
+        'cohort_size':  n,
+        'steps':        max(1, len(columns) - 1),
+        'columns':      columns,
+        'top_paths':    top_paths,
+    }
+
+    avg_days = float(synth.get('avg_days_to_purchase') or 14.0)
+    avg_touches = float(synth.get('avg_touches_before_purchase') or 5.0)
+    kpis = {
+        'total_users':                n,
+        'converted_users':            n,
+        'conversion_pct':             100.0,
+        'avg_journey_duration_days':  round(avg_days, 1),
+        'avg_sessions_to_convert':    round(max(1.0, avg_touches / 2.0), 1),
+        'avg_events_per_user':        round(avg_touches + 1, 1),
+    }
+
+    return {
+        'touchpoints':      touchpoints,
+        'path_to_purchase': path_to_purchase,
+        'kpis':             kpis,
+        'cohort_size':      n,
+    }
+
+
+def _synth_overlap(tp_rows: list[dict], n: int) -> list[dict]:
+    """Estimate top co-occurrence pairs from individual reach %s assuming
+    independence (lower bound — real overlap usually higher). Used purely
+    for the dashboard overlap card in synthetic runs."""
+    out = []
+    for i in range(len(tp_rows)):
+        for j in range(i + 1, len(tp_rows)):
+            a, b = tp_rows[i], tp_rows[j]
+            pa = (a.get('reach_pct') or 0) / 100.0
+            pb = (b.get('reach_pct') or 0) / 100.0
+            if pa <= 0 or pb <= 0:
+                continue
+            users = int(round(n * pa * pb))
+            out.append({
+                'a':           a['label'],
+                'b':           b['label'],
+                'users':       users,
+                'users_pct':   round(100.0 * pa * pb, 1),
+                'converters':  users,
+                'conv_rate':   100.0,
+            })
+    out.sort(key=lambda x: -x['users'])
+    return out[:12]
+
+
+def _synth_touch_distribution(n: int, *, avg_touches: float) -> list[dict]:
+    """Lognormal-shaped bucket distribution centred on avg_touches, with
+    a small tail of 0-touch and 11+ buckets for realism."""
+    # Hand-tuned weights that roughly track real-world touch distributions:
+    # most converters get 4-6 touches, a meaningful tail at 7-10 and 11+.
+    weights_by_avg = {
+        3.0:  [0.02, 0.10, 0.35, 0.30, 0.15, 0.08],
+        5.0:  [0.01, 0.05, 0.20, 0.35, 0.25, 0.14],
+        7.0:  [0.01, 0.03, 0.10, 0.27, 0.34, 0.25],
+        10.0: [0.00, 0.02, 0.05, 0.18, 0.30, 0.45],
+    }
+    # Pick the nearest preset
+    best = min(weights_by_avg.keys(), key=lambda k: abs(k - avg_touches))
+    weights = weights_by_avg[best]
+    buckets = ['0', '1', '2-3', '4-6', '7-10', '11+']
+    out = []
+    for b, w in zip(buckets, weights):
+        cnt = int(round(n * w))
+        out.append({
+            'bucket':         b,
+            'converters':     cnt,
+            'non_converters': 0,
+            'total':          cnt,
+            'conv_pct':       100.0,
+        })
+    return out
+
+
+# ── Blend real + modeled into the canonical dashboard payload ────────────────
+
+def blend_real_and_modeled(
+    *,
+    real_summary: dict,
+    modeled_summary: dict,
+    real_converters: int,
+    threshold: int = SPARSE_COHORT_THRESHOLD,
+) -> dict:
+    """Pick the modeled fields whenever the real cohort is sparse for that
+    field, otherwise keep real. The dashboard already supports a view-mode
+    toggle; this is the default "blended" payload it shows.
+
+    Currently: if real_converters < threshold, use modeled wholesale (still
+    keeping real meta so the user knows what the panel actually saw).
+    Otherwise use real wholesale. This avoids field-by-field stitching
+    that can produce inconsistent percentages.
+    """
+    if real_converters >= threshold:
+        return real_summary
+
+    out = dict(modeled_summary)
+    # Preserve the real meta for transparency.
+    out['meta'] = dict(real_summary.get('meta') or {})
+    out['meta']['blend_mode'] = 'modeled'
+    out['meta']['panel_real_converters'] = real_converters
+    out['meta']['blend_threshold'] = threshold
+    return out
+
+
+# ── Public: AI-driven audience lookup (mirrors SubscriberIQ pattern) ─────────
+
+US_GENPOP_BASELINE = 260_000_000   # US adults 16+; used as denominator for
+                                   # reach_pct_of_genpop calculations.
+
+_RESEARCH_CACHE: dict[str, dict] = {}
+_FOOTPRINT_CACHE: dict[str, dict] = {}
+
+
+def research_audience_size(
+    *,
+    target_type: str,
+    target: str,
+    start_date: str = '',
+    end_date: str = '',
+) -> dict:
+    """Use Claude + web_search (Anthropic's native web tool, same engine
+    BG.py's persona_research_agent uses) to look up a real-world audience
+    number for the target.
+
+    Returns a dict keyed by what the form needs to fill in:
+      * movie:   {'box_office_millions': float, 'avg_ticket_price': 15.0,
+                  'confidence': 'high'|'medium'|'low', 'source': str, 'notes': str}
+      * website: {'monthly_visitors_millions': float, 'confidence': ...,
+                  'source': str, 'notes': str}
+      * tv_show: {'us_viewers_millions': float, 'confidence': ...,
+                  'source': str, 'notes': str}
+      * general / unknown: {} (no lookup)
+
+    Results are cached in-memory by (type, target). Returns
+    {'_error': '...'} when OpenAI is unavailable so the caller can
+    surface a clean error to the user instead of falling silent.
+    """
+    t = (target_type or 'general').strip().lower()
+    if t not in ('movie', 'website', 'tv_show'):
+        return {}
+
+    cache_key = f'{t}::{(target or "").strip().lower()}'
+    if cache_key in _RESEARCH_CACHE:
+        return _RESEARCH_CACHE[cache_key]
+
+    try:
+        # Claude client (Anthropic) — same dual-import + web_search pattern
+        # used by research_marketing_footprint. ANTHROPIC_API_KEY required.
+        _claude_messages = None
+        _get_claude_client = None
+        try:
+            from migration.claude_client import claude_messages as _cm, get_claude_client as _gc
+            _claude_messages = _cm; _get_claude_client = _gc
+        except ImportError:
+            try:
+                from claude_client import claude_messages as _cm, get_claude_client as _gc  # type: ignore
+                _claude_messages = _cm; _get_claude_client = _gc
+            except ImportError:
+                return {'_error': 'claude_client not importable'}
+        try:
+            if _get_claude_client() is None:
+                return {'_error': 'ANTHROPIC_API_KEY not configured'}
+        except Exception as e:
+            return {'_error': f'Claude client check failed: {e}'}
+
+        # Type-specific prompt + JSON schema
+        if t == 'movie':
+            prompt = (
+                f'Look up the US domestic box-office gross for the movie '
+                f'"{target}". Use Box Office Mojo, The Numbers, Variety, '
+                f'Deadline, or studio releases. If the movie is currently '
+                f'in theaters, use the latest reported cumulative US gross. '
+                f'If not yet released, use opening-weekend projections.\n\n'
+                f'Return JSON ONLY in this shape (no code fences):\n'
+                f'{{\n'
+                f'  "box_office_millions": <number in millions USD or null>,\n'
+                f'  "confidence": "high" | "medium" | "low",\n'
+                f'  "source":     "<specific source — e.g. Box Office Mojo as of 5/15/2026>",\n'
+                f'  "notes":      "<1 sentence on why you picked this number>"\n'
+                f'}}'
+            )
+            number_key = 'box_office_millions'
+        elif t == 'website':
+            prompt = (
+                f'Estimate the monthly US visitors (uniques) for the website '
+                f'"{target}". Use Similarweb, SemRush, Ahrefs, or Comscore '
+                f'data if available; otherwise reason from analogous sites of '
+                f'similar traffic class.\n\n'
+                f'Return JSON ONLY (no code fences):\n'
+                f'{{\n'
+                f'  "monthly_visitors_millions": <number in millions or null>,\n'
+                f'  "confidence": "high" | "medium" | "low",\n'
+                f'  "source":     "<specific source — e.g. Similarweb April 2026>",\n'
+                f'  "notes":      "<1 sentence>"\n'
+                f'}}'
+            )
+            number_key = 'monthly_visitors_millions'
+        else:  # tv_show
+            window = f' (between {start_date} and {end_date})' if (start_date and end_date) else ''
+            prompt = (
+                f'Look up the cumulative US viewers for the TV show / '
+                f'streaming series "{target}"{window}. Use Nielsen weekly '
+                f'rankings, Samba TV, Luminate, Parrot Analytics, or '
+                f'streamer-reported numbers. For platform-original shows, '
+                f'use the most recent reported figure.\n\n'
+                f'Return JSON ONLY (no code fences):\n'
+                f'{{\n'
+                f'  "us_viewers_millions": <number in millions or null>,\n'
+                f'  "confidence": "high" | "medium" | "low",\n'
+                f'  "source":     "<specific source — e.g. Nielsen week of 3/3/2026>",\n'
+                f'  "notes":      "<1 sentence>"\n'
+                f'}}'
+            )
+            number_key = 'us_viewers_millions'
+
+        import os
+        claude_model = (
+            os.environ.get('JOURNEY_IQ_RESEARCH_MODEL')
+            or os.environ.get('CLAUDE_PERSONA_MODEL')
+            or 'claude-opus-4-7'
+        )
+        _ws_new = {'type': 'web_search_20260209', 'name': 'web_search', 'max_uses': 6}
+        _ws_old = {'type': 'web_search_20250305', 'name': 'web_search', 'max_uses': 6}
+        _audience_system = (
+            'You are a senior consumer-research analyst. Use the web_search '
+            'tool to look up real-world audience numbers, then return ONE '
+            'valid JSON object matching the schema in the user message. '
+            'Return ONLY the JSON object — no markdown fences, no commentary.'
+        )
+        raw = ''
+        try:
+            raw = _claude_messages(
+                system=_audience_system, user=prompt, model=claude_model,
+                max_tokens=2000, temperature=0.2, tools=[_ws_new],
+            ) or ''
+        except Exception as e:
+            print(f'[Journey IQ audience] primary Claude+web_search failed: {e}')
+            raw = ''
+        if not raw:
+            try:
+                raw = _claude_messages(
+                    system=_audience_system, user=prompt,
+                    model='claude-sonnet-4-6',
+                    max_tokens=2000, temperature=0.2, tools=[_ws_old],
+                ) or ''
+            except Exception as e:
+                return {'_error': f'Claude+web_search fallback also failed: {e}'}
+        if not raw:
+            return {'_error': 'Claude returned empty response'}
+
+        # Strip code fences if Claude wraps the JSON
+        if raw.startswith('```'):
+            raw = raw.split('\n', 1)[-1].rsplit('```', 1)[0].strip()
+        start = raw.find('{')
+        end = raw.rfind('}')
+        if start < 0 or end < 0:
+            return {'_error': 'AI response had no JSON object', '_raw': raw[:200]}
+        try:
+            parsed = json.loads(raw[start: end + 1])
+        except Exception as e:
+            return {'_error': f'AI response JSON parse failed: {e}', '_raw': raw[:200]}
+
+        # Normalize the response: always include the canonical number key
+        out = {
+            number_key:  float(parsed.get(number_key) or 0) or None,
+            'confidence': parsed.get('confidence') or 'low',
+            'source':     parsed.get('source') or '',
+            'notes':      parsed.get('notes') or '',
+        }
+        if t == 'movie':
+            out['avg_ticket_price'] = DEFAULT_TICKET_PRICE
+        _RESEARCH_CACHE[cache_key] = out
+        return out
+    except Exception as e:
+        return {'_error': f'research_audience_size failed: {e}'}
+
+
+# ── Public: marketing-footprint research agent ───────────────────────────────
+# Goes a level deeper than research_audience_size. Instead of returning just
+# one number, this asks Claude (with the native web_search tool) to
+# enumerate the actual marketing events the target generated INSIDE the
+# user-specified date window — celeb posts, press articles, brand
+# partnerships, TikTok virals, talent podcasts, ticketing-site share, etc.
+# — and estimate what % of US gen-pop EACH event likely reached. Renders as
+# result as nested bubbles: parent category (SOCIAL_MEDIA / PRESS / TALENT
+# / etc.) sized by total reach, with child sub-bubbles for each discovered
+# event (sized by that event's reach).
+
+_FOOTPRINT_CHANNELS = (
+    'social_media',         # TikTok / Instagram / YouTube / X / Reddit / Facebook
+    'press',                # Variety / Deadline / Hollywood Reporter / etc.
+    'talent_mentions',      # Steph Curry / specific stars in the movie
+    'creator_influencers',  # MrBeast / Kai Cenat / podcast hosts
+    'brand_partnerships',   # Mercedes / Gatorade / co-promo deals
+    'reviews_critics',      # Rotten Tomatoes / Metacritic / IMDb
+    'paid_advertising',     # TV spots, OOH, programmatic display
+    'showtime_searches',    # Fandango / Atom / theater lookup sites
+    'ticketing_sites',      # Fandango / AMC / Regal direct sales
+    'soundtrack_music',     # Spotify playlist appearances, official singles
+    'organic_search',       # Google search interest spikes
+    'press_reviews',        # NYT review, Roger Ebert, etc.
+    'forum_discussion',     # r/movies, Letterboxd, niche boards
+)
+
+
+_SYSTEM_FOOTPRINT = """\
+You are a senior consumer-attribution analyst running a real-time research
+sweep on the marketing footprint of a target (movie, TV show, website, or
+brand) DURING A SPECIFIC DATE WINDOW. You have web search. Your job:
+
+  1. Discover the BIGGEST real-world marketing events for this target
+     WITHIN THE DATE WINDOW (not just current/most-recent). Use Google
+     date-filtered queries and per-platform site: searches. Specifically:
+
+     * Google "short videos" tab — equivalent to:
+         google.com/search?q=<TARGET>&udm=39&tbs=cdr:1,cd_min:<start>,cd_max:<end>
+       Pull the top 10 short-form videos (TikTok / Shorts / Reels) Google
+       surfaces during the window. Note each video's platform, creator,
+       view count if visible, and URL.
+
+     * Google "news" tab — equivalent to:
+         google.com/search?q=<TARGET>&tbm=nws&tbs=cdr:1,cd_min:<start>,cd_max:<end>
+       Pull the top 10 news articles in the window. Note publication, URL,
+       headline, and (where available) monthly US uniques of the publication.
+
+     * Google "forums" tab — equivalent to:
+         google.com/search?q=<TARGET>&udm=18&tbs=cdr:1,cd_min:<start>,cd_max:<end>
+       Pull the top 10 forum discussions (mostly Reddit, plus
+       Stack-Exchange-style boards). Note subreddit/forum, URL, upvotes
+       or comment count if visible.
+
+     * Per-platform "site:" searches in the window:
+         site:tiktok.com <TARGET>     site:youtube.com <TARGET>
+         site:instagram.com <TARGET>  site:x.com <TARGET>
+         site:reddit.com <TARGET>     site:facebook.com <TARGET>
+       Pull the top 5 results per platform inside the date window.
+
+     * Trade press: variety.com, deadline.com, hollywoodreporter.com,
+       indiewire.com, screenrant.com — top 5 articles in window.
+
+     * Ticketing surfaces: fandango.com, atomtickets.com, amctheatres.com,
+       regmovies.com, cinemark.com — note any Fandango "top sellers" or
+       theater-chain pre-sale rankings inside the window.
+
+     * Showtime / EPG-lookup spikes: any reported search-volume spikes on
+       Fandango / Google "showtimes near me" trends during the window.
+
+  2. For EACH discovered event, estimate what fraction of US gen-pop
+     (US adults 16+ ~= 260M) it likely REACHED, using the actor's
+     follower count × US share × engagement rate, or publication's
+     monthly US uniques × article share. Be honest about confidence.
+
+  3. Roll the events up by parent channel. Each channel gets one total
+     reach_pct_of_genpop number that's the union (NOT the sum — overlap
+     matters; if 5 TikTok creators each reached 8% of genpop and have
+     ~40% audience overlap, combined union ≈ 22-28%).
+
+  4. For movies: ALSO produce an endpoint_breakdown — what fraction of
+     converters bought their ticket via each ticketing site (Fandango /
+     AMC / Atom / Regal / Cinemark / studio direct). Base on the
+     ticketing sites' US market share, any pre-sale ranking reporting,
+     and any window-specific signals (e.g. "Fandango reported Goat
+     accounted for 38% of pre-sales on opening Friday"). For
+     websites/TV shows, omit endpoint_breakdown.
+
+Output JSON EXACTLY in this shape (no code fences, no markdown):
+
+{
+  "target":                "<the target name>",
+  "target_type":           "movie|website|tv_show|brand",
+  "implied_audience":      <int — for movies: tickets × 0.775; for websites: monthly_uniques; for TV: total US viewers>,
+  "us_genpop_baseline":    260000000,
+  "confidence":            "high" | "medium" | "low",
+  "sources_consulted":     ["Box Office Mojo as of 5/15/2026", "TikTok web search", "Variety", ...],
+  "notes":                 "1-3 sentences on what surprised you, what the dominant driver was, etc.",
+  "marketing_footprint": {
+    "social_media": {
+      "reach_pct_of_genpop": 14.5,
+      "events": [
+        {"platform": "tiktok", "actor": "@charlidamelio", "actor_followers": 152000000,
+         "us_share_of_followers": 0.34, "event_type": "promo post",
+         "url": "https://tiktok.com/@charlidamelio/video/...",
+         "estimated_reach_us": 18000000, "reach_pct_of_genpop": 6.9,
+         "confidence": "high", "notes": "Single dance video tagging the soundtrack, May 8"},
+        {"platform": "instagram", "actor": "@kingjames", "actor_followers": 158000000,
+         "us_share_of_followers": 0.50, "event_type": "story",
+         "estimated_reach_us": 12000000, "reach_pct_of_genpop": 4.6,
+         "confidence": "medium", "notes": "Story slide with movie poster, ~24h visibility"}
+      ]
+    },
+    "press":              {"reach_pct_of_genpop": ..., "events": [{"publication": "Variety", "url": "...", "estimated_reach_us": ..., "reach_pct_of_genpop": ..., "confidence": "...", "notes": "..."}]},
+    "talent_mentions":    {"reach_pct_of_genpop": ..., "events": [{"talent": "Steph Curry", "platform": "podcast",   "estimated_reach_us": ..., ...}]},
+    "creator_influencers":{"reach_pct_of_genpop": ..., "events": [{"creator": "MrBeast",    "platform": "youtube",   "estimated_reach_us": ..., ...}]},
+    "brand_partnerships": {"reach_pct_of_genpop": ..., "events": [{"partner": "Mercedes",   "campaign": "Super Bowl spot", "estimated_reach_us": ..., ...}]},
+    "reviews_critics":    {"reach_pct_of_genpop": ..., "events": [{"site": "Rotten Tomatoes","score": 87, "estimated_reach_us": ..., ...}]},
+    "paid_advertising":   {"reach_pct_of_genpop": ..., "events": [{"channel": "linear TV",  "spend_usd": ..., "estimated_reach_us": ..., ...}]},
+    "showtime_searches":  {"reach_pct_of_genpop": ..., "events": [{"site": "Fandango",     "search_spike_pct": ..., "estimated_reach_us": ..., ...}]},
+    "ticketing_sites":    {"reach_pct_of_genpop": ..., "events": [{"site": "AMC Theatres", "visit_share_pct": ..., "estimated_reach_us": ..., ...}]},
+    "soundtrack_music":   {"reach_pct_of_genpop": ..., "events": [{"track": "...",         "platform": "spotify",   "streams_us": ..., ...}]},
+    "organic_search":     {"reach_pct_of_genpop": ..., "events": [{"engine": "google",     "search_volume_us": ..., "trend_peak_date": "...", ...}]},
+    "press_reviews":      {"reach_pct_of_genpop": ..., "events": [{"publication": "NYT",   "url": "...", "estimated_reach_us": ..., ...}]},
+    "forum_discussion":   {"reach_pct_of_genpop": ..., "events": [{"forum": "r/movies",   "url": "...", "upvotes": 4200, "comments": 580, "estimated_reach_us": ..., ...}]}
+  },
+  "endpoint_breakdown": [
+    {"endpoint": "Fandango",       "share_pct": 38.0, "url_pattern": "fandango.com",     "notes": "..."},
+    {"endpoint": "AMC Theatres",   "share_pct": 22.0, "url_pattern": "amctheatres.com",  "notes": "..."},
+    {"endpoint": "Atom Tickets",   "share_pct": 14.0, "url_pattern": "atomtickets.com",  "notes": "..."},
+    {"endpoint": "Regal",          "share_pct": 12.0, "url_pattern": "regmovies.com",    "notes": "..."},
+    {"endpoint": "Cinemark",       "share_pct":  8.0, "url_pattern": "cinemark.com",     "notes": "..."},
+    {"endpoint": "Studio direct",  "share_pct":  6.0, "url_pattern": "sonypictures.com", "notes": "..."}
+  ]
+}
+
+Hard rules:
+  * Every discovered event MUST cite the URL where you found it (in the
+    event's "url" field, even if just the search-results page).
+  * Every event must have a "date" or "date_estimate" field IN ISO format
+    that falls inside the date window provided in the user message.
+  * Include up to 10 events per channel; if a channel has no real
+    marketing activity inside the window, set events: [] and
+    reach_pct_of_genpop: 0.
+  * Every estimated_reach_us must be a REAL number you can defend from
+    the actor's audited follower count, the publication's monthly
+    uniques, the platform's reported reach for similar campaigns, etc.
+    Cite the source in the event's notes.
+  * Use the baseline 260,000,000 US adults to compute reach_pct_of_genpop.
+  * Roll-up reach_pct_of_genpop per channel = union, not sum
+    (assume 30-50% audience overlap between events within a channel).
+  * For target_type='movie': endpoint_breakdown is REQUIRED and share_pct
+    values across endpoints must sum to ~100. For website / TV show /
+    brand: omit endpoint_breakdown (or return []).
+  * Be honest about confidence ('low' if you had to extrapolate from
+    weak signals).
+
+Output JSON ONLY."""
+
+
+def research_marketing_footprint(
+    *,
+    target_type: str,
+    target: str,
+    start_date: str = '',
+    end_date: str = '',
+    max_tokens: int = 16000,
+) -> dict:
+    """Run the marketing-footprint research agent against the target.
+
+    Uses Claude (Anthropic) with the native `web_search` tool — same engine
+    BG.py's persona_research_agent uses for live audience research. Falls
+    back from new-vintage web_search_20260209 to legacy _20250305 if the
+    primary tool ID is rejected. Allows up to 12 web searches per call so
+    Claude can hit each Google vertical (videos/news/forums) + per-platform
+    site: queries inside the date window.
+
+    Returns the parsed JSON, or {'_error': '...'} when the lookup can't be
+    performed (no ANTHROPIC_API_KEY, Claude rejected, parse failure).
+    Results are cached in-memory by (target_type, target).
+    """
+    t = (target_type or 'general').strip().lower()
+    if t not in ('movie', 'website', 'tv_show', 'brand'):
+        return {}
+    cache_key = f'{t}::{(target or "").strip().lower()}'
+    if cache_key in _FOOTPRINT_CACHE:
+        return _FOOTPRINT_CACHE[cache_key]
+
+    # Try migration.claude_client first, fall back to bg-webapp/claude_client
+    # — same dual-import pattern used elsewhere in this module so the agent
+    # works whether we're invoked from the migration path or the web app.
+    _claude_messages = None
+    _get_claude_client = None
+    try:
+        from migration.claude_client import claude_messages as _cm, get_claude_client as _gc
+        _claude_messages = _cm; _get_claude_client = _gc
+    except ImportError:
+        try:
+            from claude_client import claude_messages as _cm, get_claude_client as _gc  # type: ignore
+            _claude_messages = _cm; _get_claude_client = _gc
+        except ImportError:
+            return {'_error': 'claude_client not importable'}
+    try:
+        if _get_claude_client() is None:
+            return {'_error': 'ANTHROPIC_API_KEY not configured'}
+    except Exception as e:
+        return {'_error': f'Claude client check failed: {e}'}
+
+    if start_date and end_date:
+        window = f' running between {start_date} and {end_date}'
+        gdate = (f'\n\nDate-window: only include events with dates BETWEEN '
+                 f'{start_date} AND {end_date} (inclusive). For each Google '
+                 f'vertical search, use the URL parameter '
+                 f'`tbs=cdr:1,cd_min:{start_date},cd_max:{end_date}` (or '
+                 f'translate to MM/DD/YYYY if the tool requires). Drop any '
+                 f'event without a verifiable date in the window.')
+    else:
+        window = ''
+        gdate = ''
+    user_msg = (
+        f'Research the marketing footprint for the {t.replace("_"," ")} '
+        f'"{target}"{window}. Use your web_search tool aggressively — hit '
+        f'each Google vertical (short videos, news, forums) AND per-platform '
+        f'site:tiktok.com / site:instagram.com / site:youtube.com / '
+        f'site:x.com / site:reddit.com searches. Discover the specific '
+        f'real-world marketing events (celeb posts, press articles, '
+        f'influencer videos, brand partnerships, showtime-search spikes, '
+        f'ticketing-site share) and estimate the US-genpop reach of each '
+        f'one. Return JSON ONLY matching the schema in the system '
+        f'prompt.{gdate}'
+    )
+
+    import os
+    claude_model = (
+        os.environ.get('JOURNEY_IQ_RESEARCH_MODEL')
+        or os.environ.get('CLAUDE_PERSONA_MODEL')
+        or 'claude-opus-4-7'
+    )
+    _ws_new = {'type': 'web_search_20260209', 'name': 'web_search', 'max_uses': 12}
+    _ws_old = {'type': 'web_search_20250305', 'name': 'web_search', 'max_uses': 12}
+    raw = ''
+    try:
+        raw = _claude_messages(
+            system=_SYSTEM_FOOTPRINT, user=user_msg, model=claude_model,
+            max_tokens=max_tokens, temperature=0.3, tools=[_ws_new],
+        ) or ''
+    except Exception as e:
+        print(f'[Journey IQ footprint] primary Claude+web_search failed: {e}')
+        raw = ''
+    if not raw:
+        # Retry with legacy web_search tool ID + Sonnet (same pattern bg.py uses)
+        try:
+            raw = _claude_messages(
+                system=_SYSTEM_FOOTPRINT, user=user_msg,
+                model='claude-sonnet-4-6',
+                max_tokens=max_tokens, temperature=0.3, tools=[_ws_old],
+            ) or ''
+        except Exception as e:
+            return {'_error': f'Claude+web_search fallback also failed: {e}'}
+    if not raw:
+        return {'_error': 'Claude returned empty response'}
+
+    if raw.startswith('```'):
+        raw = raw.split('\n', 1)[-1].rsplit('```', 1)[0].strip()
+    start = raw.find('{'); end = raw.rfind('}')
+    if start < 0 or end < 0:
+        return {'_error': 'AI response had no JSON object', '_raw': raw[:500]}
+    try:
+        parsed = json.loads(raw[start: end + 1])
+    except Exception as e:
+        return {'_error': f'JSON parse failed: {e}', '_raw': raw[:500]}
+
+    # Normalize: ensure every documented channel exists in the output
+    # (with empty events list if Claude didn't return one) so the
+    # dashboard's bubble loop doesn't need conditional rendering.
+    parsed.setdefault('marketing_footprint', {})
+    for ch in _FOOTPRINT_CHANNELS:
+        parsed['marketing_footprint'].setdefault(ch, {'reach_pct_of_genpop': 0.0, 'events': []})
+    parsed.setdefault('us_genpop_baseline', US_GENPOP_BASELINE)
+    parsed.setdefault('confidence', 'medium')
+    parsed.setdefault('sources_consulted', [])
+    parsed.setdefault('notes', '')
+    parsed.setdefault('endpoint_breakdown', [])  # only populated for movies
+
+    _FOOTPRINT_CACHE[cache_key] = parsed
+    return parsed
+
+
+def footprint_to_spider(footprint: dict, *, target: str = '') -> dict:
+    """Convert a research_marketing_footprint() result into a 3-layer
+    spider/Sankey-shaped graph the dashboard can render with plain SVG:
+
+        [TARGET]
+            |
+        [channel_1] [channel_2] [channel_3] ...
+            |           |           |
+        [event_a]   [event_d]   [event_g]    (top events per channel)
+        [event_b]   [event_e]
+        [event_c]
+              \\        |        /
+               \\       |       /
+                [CONVERTER COHORT]
+                  /  |  |  \\
+            [Fandango][AMC][Atom][Studio]   (endpoint_breakdown for movies)
+                  \\  |  |  /
+                  [CONVERSION]
+
+    Returns:
+      {'target': '<name>',
+       'channels': [{...}, ...],            (top channels by reach)
+       'events':   [{...}, ...],            (flat, every event with channel+rank)
+       'endpoints':[{...}, ...],            (ticketing sites; empty for non-movies)
+       'edges':    [{'from': '...', 'to': '...', 'weight': N}, ...]}
+    """
+    fp = (footprint or {}).get('marketing_footprint') or {}
+    endpoints = list((footprint or {}).get('endpoint_breakdown') or [])
+    target_name = target or footprint.get('target') or 'Target'
+
+    label_map = {
+        'social_media':         'Social Media',
+        'press':                'Press',
+        'talent_mentions':      'Talent Mentions',
+        'creator_influencers':  'Creator / Influencer',
+        'brand_partnerships':   'Brand Partnerships',
+        'reviews_critics':      'Reviews / Critics',
+        'paid_advertising':     'Paid Advertising',
+        'showtime_searches':    'Showtime Searches',
+        'ticketing_sites':      'Ticketing Sites',
+        'soundtrack_music':     'Soundtrack / Music',
+        'organic_search':       'Organic Search',
+        'press_reviews':        'Press Reviews',
+        'forum_discussion':     'Forums / Reddit',
+    }
+    channels: list[dict] = []
+    events_flat: list[dict] = []
+    edges: list[dict] = []
+
+    for ch_key, ch_data in fp.items():
+        reach = float((ch_data or {}).get('reach_pct_of_genpop') or 0.0)
+        evs   = list((ch_data or {}).get('events') or [])
+        if reach <= 0 and not evs:
+            continue
+        evs_sorted = sorted(evs, key=lambda e: -float(e.get('reach_pct_of_genpop') or 0))[:10]
+        channels.append({
+            'id':                  f'ch:{ch_key}',
+            'channel':             ch_key,
+            'label':               label_map.get(ch_key, ch_key.replace('_', ' ').title()),
+            'reach_pct_of_genpop': round(reach, 1),
+            'event_count':         len(evs_sorted),
+            'events':              evs_sorted,
+        })
+        # edge: TARGET -> channel
+        edges.append({'from': 'target', 'to': f'ch:{ch_key}',
+                      'weight': round(reach, 1)})
+        # flat event list with channel attribution
+        for i, e in enumerate(evs_sorted):
+            ev_id = f'ev:{ch_key}:{i}'
+            actor = (e.get('actor') or e.get('publication') or e.get('talent')
+                     or e.get('creator') or e.get('partner') or e.get('site')
+                     or e.get('forum') or e.get('track') or e.get('engine')
+                     or e.get('channel') or 'event')
+            events_flat.append({
+                'id':           ev_id,
+                'channel':      ch_key,
+                'channel_label':label_map.get(ch_key, ch_key),
+                'rank':         i + 1,
+                'label':        str(actor),
+                'url':          e.get('url') or '',
+                'reach_us':     int(e.get('estimated_reach_us') or 0),
+                'reach_pct':    round(float(e.get('reach_pct_of_genpop') or 0), 1),
+                'confidence':   e.get('confidence') or '',
+                'date':         e.get('date') or e.get('date_estimate') or '',
+                'notes':        e.get('notes') or '',
+                'raw':          e,
+            })
+            # edge: channel -> event
+            edges.append({'from': f'ch:{ch_key}', 'to': ev_id,
+                          'weight': round(float(e.get('reach_pct_of_genpop') or 0), 1)})
+
+    # Endpoint nodes (movies: ticketing sites). Edge from cohort -> each.
+    endpoint_nodes = []
+    for i, ep in enumerate(endpoints):
+        ep_id = f'ep:{i}'
+        endpoint_nodes.append({
+            'id':         ep_id,
+            'endpoint':   ep.get('endpoint') or f'Endpoint {i+1}',
+            'share_pct':  round(float(ep.get('share_pct') or 0), 1),
+            'url_pattern':ep.get('url_pattern') or '',
+            'notes':      ep.get('notes') or '',
+        })
+        edges.append({'from': 'cohort', 'to': ep_id,
+                      'weight': round(float(ep.get('share_pct') or 0), 1)})
+        edges.append({'from': ep_id, 'to': 'conversion',
+                      'weight': round(float(ep.get('share_pct') or 0), 1)})
+
+    # Always: every channel funnels into the cohort node.
+    for ch in channels:
+        edges.append({'from': ch['id'], 'to': 'cohort',
+                      'weight': ch['reach_pct_of_genpop']})
+
+    return {
+        'target':    target_name,
+        'channels':  sorted(channels, key=lambda c: -c['reach_pct_of_genpop']),
+        'events':    events_flat,
+        'endpoints': endpoint_nodes,
+        'edges':     edges,
+    }
+
+
+def footprint_to_bubbles(footprint: dict) -> list[dict]:
+    """Convert a research_marketing_footprint() result into the bubble
+    schema the dashboard renders. Output:
+      [
+        {'channel': 'social_media', 'label': 'Social Media',
+         'reach_pct_of_genpop': 14.5, 'events': [...]},
+        ...
+      ]
+    Channels are returned in descending-reach order with empty channels
+    filtered out (so the bubble chart only renders signal, not noise).
+    """
+    fp = (footprint or {}).get('marketing_footprint') or {}
+    label_map = {
+        'social_media':         'Social Media',
+        'press':                'Press',
+        'talent_mentions':      'Talent Mentions',
+        'creator_influencers':  'Creator / Influencer',
+        'brand_partnerships':   'Brand Partnerships',
+        'reviews_critics':      'Reviews / Critics',
+        'paid_advertising':     'Paid Advertising',
+        'showtime_searches':    'Showtime Searches',
+        'ticketing_sites':      'Ticketing Sites',
+        'soundtrack_music':     'Soundtrack / Music',
+        'organic_search':       'Organic Search',
+        'press_reviews':        'Press Reviews',
+        'forum_discussion':     'Forums / Reddit',
+    }
+    out = []
+    for ch_key, ch_data in fp.items():
+        reach = float((ch_data or {}).get('reach_pct_of_genpop') or 0.0)
+        events = list((ch_data or {}).get('events') or [])
+        if reach <= 0 and not events:
+            continue
+        out.append({
+            'channel':             ch_key,
+            'label':               label_map.get(ch_key, ch_key.replace('_', ' ').title()),
+            'reach_pct_of_genpop': round(reach, 1),
+            'events':              events,
+            'event_count':         len(events),
+        })
+    out.sort(key=lambda b: -b['reach_pct_of_genpop'])
+    return out
+
+
+__all__ = [
+    'TARGET_TYPES',
+    'US_GENPOP_BASELINE',
+    'DEFAULT_TICKET_PRICE',
+    'DEFAULT_AUDIENCE_FRACTION',
+    'WEBSITE_DEDUP_FACTOR',
+    'SPARSE_COHORT_THRESHOLD',
+    'compute_implied_audience',
+    'compute_website_implied_audience',
+    'compute_tv_show_implied_audience',
+    'compute_implied_audience_for_type',
+    'compute_scaling_factor',
+    'scale_summary_counts',
+    'synthesize_movie_journey',
+    'synthesize_journey',
+    'synth_to_dashboard_payload',
+    'blend_real_and_modeled',
+    'research_audience_size',
+    'research_marketing_footprint',
+    'footprint_to_bubbles',
+    'footprint_to_spider',
+]

@@ -335,6 +335,17 @@ def run_job(
     forward_days: int = DEFAULT_FORWARD_DAYS,
     extra_conversion_patterns: Optional[list[str]] = None,
     extra_touchpoint_keywords: Optional[str] = None,
+    narrow_url_patterns: Optional[Any] = None,
+    cohort_mode: str = 'mention',
+    conversion_url_patterns: Optional[Any] = None,
+    days_before_conversion: int = 90,
+    steps_before_conversion: int = 10,
+    is_movie: bool = False,
+    box_office_millions: float = 0.0,
+    avg_ticket_price: float = 15.0,
+    target_type: str = 'general',
+    monthly_visitors_millions: float = 0.0,
+    us_viewers_millions: float = 0.0,
     progress_cb: Optional[Callable[..., None]] = None,
     s3_client: Any = None,
     ch_connect: Optional[Callable[..., Any]] = None,
@@ -363,6 +374,27 @@ def run_job(
 
     # ── Phase 0: validate inputs ─────────────────────────────────────────
     target = (target or '').strip()
+    cohort_mode = (cohort_mode or 'mention').strip().lower()
+    if cohort_mode not in ('mention', 'conversion'):
+        cohort_mode = 'mention'
+    conv_url_patterns = _normalize_narrow_patterns(conversion_url_patterns)
+
+    if cohort_mode == 'conversion':
+        # In conversion-anchored mode the URL patterns ARE the cohort, so target
+        # is optional (used only for downstream "is_mention" tagging). If both
+        # are missing, fall back to mention-mode rules.
+        if not conv_url_patterns and not target:
+            return {'status': 'failed',
+                    'error': 'conversion_url_patterns or target is required'}
+        if not conv_url_patterns:
+            # User picked conversion mode but didn't supply patterns -> degrade
+            # to mention mode so we still produce a result.
+            cohort_mode = 'mention'
+        elif not target:
+            # Synthesize a display target from the first URL pattern so the
+            # downstream prose/dashboard has SOMETHING to call it.
+            seed = conv_url_patterns[0]
+            target = re.sub(r'[^a-z0-9]+', ' ', seed.lower()).strip() or 'cohort'
     if not target:
         return {'status': 'failed', 'error': 'target is required'}
     try:
@@ -375,91 +407,319 @@ def run_job(
 
     lookback_days = max(0, min(int(lookback_days or DEFAULT_LOOKBACK_DAYS), 60))
     forward_days  = max(0, min(int(forward_days  or DEFAULT_FORWARD_DAYS), 60))
+    days_before   = max(1, min(int(days_before_conversion or 90), 365))
+    steps_before  = max(1, min(int(steps_before_conversion or 10), 50))
+    # Backward-compat: legacy callers may still send is_movie=True
+    # without target_type. Promote it to 'movie' so the new dispatcher path
+    # picks it up correctly.
+    target_type = (target_type or 'general').strip().lower()
+    if target_type == 'general' and bool(is_movie):
+        target_type = 'movie'
+    if target_type not in ('general', 'movie', 'website', 'tv_show'):
+        target_type = 'general'
+    is_movie = (target_type == 'movie')
+    try:
+        box_office_millions = max(0.0, float(box_office_millions or 0.0))
+    except Exception:
+        box_office_millions = 0.0
+    try:
+        avg_ticket_price = max(1.0, float(avg_ticket_price or 15.0))
+    except Exception:
+        avg_ticket_price = 15.0
+    try:
+        monthly_visitors_millions = max(0.0, float(monthly_visitors_millions or 0.0))
+    except Exception:
+        monthly_visitors_millions = 0.0
+    try:
+        us_viewers_millions = max(0.0, float(us_viewers_millions or 0.0))
+    except Exception:
+        us_viewers_millions = 0.0
     conv_patterns = tuple(CONVERSION_PATTERNS) + tuple(
         p.strip().lower() for p in (extra_conversion_patterns or []) if p and p.strip()
     )
     extra_kw_map = parse_extra_touchpoint_keywords(extra_touchpoint_keywords or '')
+    narrow_patterns = _normalize_narrow_patterns(narrow_url_patterns)
 
     _p(2, 'Connecting to ClickHouse...')
     conn = ch_connect(settings=CH_RUN_SETTINGS)
     cur = conn.cursor()
 
     try:
-        # ── Phase 1: resolve target → UIDs ───────────────────────────────
+        # ── Phase 1: resolve cohort → UIDs ───────────────────────────────
+        # Two cohort modes:
+        #   * 'mention'    — UIDs whose URL/COMMON_NAME contain the target
+        #                    keyword (optionally narrowed by URL patterns).
+        #                    Anchor per UID = first/last mention timestamp.
+        #   * 'conversion' — UIDs who hit one of the conversion URL patterns
+        #                    (Fandango, AMC, Sony /checkout, etc.). Anchor
+        #                    per UID = first such hit = purchase_ts.
         # multiSearchAny(lower(URL), [...]) routes through the ngrambf_v1
         # skip index defined on lower(URL) (and lower(COMMON_NAME)), which
         # is dramatically faster than ORing N position() calls.
-        _p(8, f'Searching clickstream for "{target}"...')
         term_variants = _target_variants(target)
         match_clause = _build_match_clause(term_variants)
+        narrow_clause = _build_narrow_url_clause(narrow_patterns)
+        conv_clause = _build_narrow_url_clause(conv_url_patterns)
         target_domain_guesses = _guess_target_domains(target)
+        # Seed narrowing / conversion patterns as implicit target domains too,
+        # so the journey classifier treats those surfaces as LANDING/BROWSE
+        # for the brand instead of generic DETOUR events.
+        for p in (list(narrow_patterns) + list(conv_url_patterns)):
+            d = p.split('/', 1)[0].strip()
+            if d and '.' in d:
+                target_domain_guesses.add(d)
 
         cur.execute(f"DROP TABLE IF EXISTS journey_uids_{job_id}")
-        cur.execute(f"""
-            CREATE TEMPORARY TABLE journey_uids_{job_id} AS
-            SELECT
-                UID,
-                min(VISIT_TS) AS first_mention_ts,
-                max(VISIT_TS) AS last_mention_ts
-            FROM clickstream.clickstream_final
-            WHERE DELIVERED BETWEEN toDate('{sd}') AND toDate('{ed}')
-              AND {match_clause}
-            GROUP BY UID
-            LIMIT {MAX_UIDS}
-        """)
+        # CRITICAL: filter out epoch-zero VISIT_TS rows. clickstream_final
+        # has a small fraction of rows whose VISIT_TS came in as NULL and
+        # got coerced to 1970-01-01. min(VISIT_TS) on the cohort would
+        # then return 1970-01-01, and `toDate(1970-01-01) - lookback_days`
+        # unsigned-underflows to year 2149, making Phase 2's date filter
+        # impossible and returning 0 events. Dropping epoch rows here costs
+        # nothing (it's an AND on a column we're already touching) and
+        # protects every downstream window computation.
+        if cohort_mode == 'conversion':
+            _p(8, f'Resolving conversion cohort across {len(conv_url_patterns)} URL pattern(s)...')
+            # purchase_ts = first time the UID hit any conversion URL.
+            cur.execute(f"""
+                CREATE TEMPORARY TABLE journey_uids_{job_id} AS
+                SELECT
+                    UID,
+                    min(VISIT_TS) AS purchase_ts,
+                    min(VISIT_TS) AS first_mention_ts,
+                    max(VISIT_TS) AS last_mention_ts
+                FROM clickstream.clickstream_final
+                WHERE DELIVERED BETWEEN toDate('{sd}') AND toDate('{ed}')
+                  AND VISIT_TS > toDateTime('2020-01-01 00:00:00')
+                  AND {conv_clause}
+                GROUP BY UID
+                LIMIT {MAX_UIDS}
+            """)
+        else:
+            if narrow_patterns:
+                _p(8, f'Searching clickstream for "{target}" narrowed by {len(narrow_patterns)} URL pattern(s)...')
+            else:
+                _p(8, f'Searching clickstream for "{target}"...')
+            narrow_sql = f"\n                  AND {narrow_clause}" if narrow_clause else ""
+            cur.execute(f"""
+                CREATE TEMPORARY TABLE journey_uids_{job_id} AS
+                SELECT
+                    UID,
+                    toDateTime(0)        AS purchase_ts,
+                    min(VISIT_TS)        AS first_mention_ts,
+                    max(VISIT_TS)        AS last_mention_ts
+                FROM clickstream.clickstream_final
+                WHERE DELIVERED BETWEEN toDate('{sd}') AND toDate('{ed}')
+                  AND VISIT_TS > toDateTime('2020-01-01 00:00:00')
+                  AND {match_clause}{narrow_sql}
+                GROUP BY UID
+                LIMIT {MAX_UIDS}
+            """)
         cur.execute(f"SELECT count() FROM journey_uids_{job_id}")
         matched_uids = int((cur.fetchone() or [0])[0] or 0)
 
+        # ── Auto-fallback: conversion cohort too small → widen to anyone
+        # whose URL matched a narrow_url_pattern (or, if no narrow patterns
+        # were supplied, anyone whose URL/COMMON_NAME matched the target).
+        cohort_fallback_used = False
+        FALLBACK_THRESHOLD = 50
+        if cohort_mode == 'conversion' and 0 < matched_uids < FALLBACK_THRESHOLD:
+            _p(12, f'Only {matched_uids} converters — widening cohort for visual journey...')
+            cur.execute(f"DROP TABLE IF EXISTS journey_uids_{job_id}")
+            wide_clause = narrow_clause if narrow_clause else match_clause
+            cur.execute(f"""
+                CREATE TEMPORARY TABLE journey_uids_{job_id} AS
+                SELECT
+                    UID,
+                    toDateTime(0) AS purchase_ts,
+                    min(VISIT_TS) AS first_mention_ts,
+                    max(VISIT_TS) AS last_mention_ts
+                FROM clickstream.clickstream_final
+                WHERE DELIVERED BETWEEN toDate('{sd}') AND toDate('{ed}')
+                  AND VISIT_TS > toDateTime('2020-01-01 00:00:00')
+                  AND {wide_clause}
+                GROUP BY UID
+                LIMIT {MAX_UIDS}
+            """)
+            cur.execute(f"SELECT count() FROM journey_uids_{job_id}")
+            wide_uids = int((cur.fetchone() or [0])[0] or 0)
+            if wide_uids > matched_uids:
+                cohort_fallback_used = True
+                matched_uids = wide_uids
+                cohort_mode = 'mention'  # downstream window logic follows
+
         if matched_uids == 0:
-            _p(100, 'No users mentioned the target in the date range.')
-            empty = _empty_summary(target, project_name, start_date, end_date,
-                                   lookback_days, forward_days)
+            msg = ('No users hit any conversion URL in the date range.'
+                   if cohort_mode == 'conversion'
+                   else 'No users mentioned the target in the date range.')
+            # Compute implied audience NOW so the empty-summary banner can
+            # show it and (in any non-general target_type) drive the
+            # modeled-view sizing.
+            from datetime import date as _date
+            try:
+                _sd = _date.fromisoformat(start_date); _ed = _date.fromisoformat(end_date)
+                _date_range_days = max(1, (_ed - _sd).days + 1)
+            except Exception:
+                _date_range_days = 30
+            empty_implied = 0
+            if target_type in ('movie', 'website', 'tv_show'):
+                try:
+                    from migration.journey_iq_synthesize import compute_implied_audience_for_type as _ciat
+                    empty_implied = _ciat(
+                        target_type=target_type,
+                        box_office_millions=box_office_millions,
+                        ticket_price=avg_ticket_price,
+                        monthly_visitors_millions=monthly_visitors_millions,
+                        date_range_days=_date_range_days,
+                        us_viewers_millions=us_viewers_millions,
+                    )
+                except Exception:
+                    empty_implied = 0
+            empty = _empty_summary(
+                target, project_name, start_date, end_date,
+                lookback_days, forward_days,
+                cohort_mode=cohort_mode, is_movie=is_movie,
+                box_office_millions=box_office_millions,
+                avg_ticket_price=avg_ticket_price,
+                implied_audience=empty_implied,
+                target_type=target_type,
+                monthly_visitors_millions=monthly_visitors_millions,
+                us_viewers_millions=us_viewers_millions,
+            )
+
+            # Non-general target_type: even with zero panel data, surface
+            # the AI-modeled journey so the dashboard renders something
+            # useful. The view toggle defaults to "Blended" which (with 0
+            # real converters) shows the modeled view.
+            if target_type in ('movie', 'website', 'tv_show') and empty_implied > 0:
+                try:
+                    _p(90, f'No panel converters found — synthesizing modeled {target_type} journey...')
+                    from migration.journey_iq_synthesize import (
+                        synthesize_journey, synth_to_dashboard_payload,
+                    )
+                    synth = synthesize_journey(
+                        target_type=target_type, target=target,
+                        project_name=project_name,
+                        start_date=start_date, end_date=end_date,
+                        extra_touchpoint_keywords=extra_kw_map,
+                        panel_converters=0,
+                        panel_observed_touchpoints=[],
+                        panel_top_paths=[],
+                        steps=steps_before,
+                        box_office_millions=box_office_millions,
+                        ticket_price=avg_ticket_price,
+                        monthly_visitors_millions=monthly_visitors_millions,
+                        date_range_days=_date_range_days,
+                        us_viewers_millions=us_viewers_millions,
+                    ) or {}
+                    if synth:
+                        modeled = synth_to_dashboard_payload(
+                            synth, target_audience=max(empty_implied, 1),
+                        )
+                        modeled['source']      = synth.get('source', 'fallback')
+                        modeled['notes']       = synth.get('notes', '')
+                        modeled['target_type'] = target_type
+                        empty['modeled_view'] = modeled
+                        empty['meta']['has_modeled_view'] = True
+                    # Marketing-footprint agent (real-world bubbles)
+                    try:
+                        from migration.journey_iq_synthesize import (
+                            research_marketing_footprint, footprint_to_bubbles,
+                            footprint_to_spider,
+                        )
+                        fp = research_marketing_footprint(
+                            target_type=target_type, target=target,
+                            start_date=start_date, end_date=end_date,
+                        )
+                        if fp and not fp.get('_error'):
+                            bubbles = footprint_to_bubbles(fp)
+                            spider  = footprint_to_spider(fp, target=target)
+                            mv = empty.setdefault('modeled_view', {
+                                'target_type': target_type, 'source': 'agent',
+                            })
+                            mv['marketing_footprint'] = fp
+                            mv['touchpoint_bubbles']  = bubbles
+                            mv['touchpoint_spider']   = spider
+                            empty['meta']['has_modeled_view'] = True
+                    except Exception as e:
+                        print(f"[Journey IQ] empty-cohort footprint failed (non-fatal): {e}")
+                except Exception as e:
+                    print(f"[Journey IQ] empty-cohort synth failed (non-fatal): {e}")
+
+            _p(100, msg)
             s3_key = _persist(s3_client, empty, project_name, username, job_id)
             empty['s3_key'] = s3_key
             return {'status': 'completed', 's3_key': s3_key, 'summary': empty}
 
         _p(18, f'Matched {matched_uids:,} users. Computing window bounds...')
 
-        # Compute the GLOBAL [min(first_mention)-lookback, max(last_mention)+forward]
-        # date range so ClickHouse can prune partitions before evaluating the
-        # per-UID time filter. Without this, the per-row DELIVERED comparison
-        # against u.first_mention_ts forces a full scan of the matched window.
-        cur.execute(f"""
-            SELECT toDate(min(first_mention_ts)) - {lookback_days},
-                   toDate(max(last_mention_ts))  + {forward_days}
-            FROM journey_uids_{job_id}
-        """)
+        # Compute the GLOBAL date range so ClickHouse can prune partitions
+        # before evaluating the per-UID time filter. In conversion mode the
+        # window is purely backwards from purchase_ts (+ 1 day forward to
+        # capture immediate post-purchase events like the confirmation
+        # email click); in mention mode it's the original symmetric window.
+        if cohort_mode == 'conversion':
+            cur.execute(f"""
+                SELECT toDate(min(purchase_ts)) - {days_before},
+                       toDate(max(purchase_ts)) + 1
+                FROM journey_uids_{job_id}
+            """)
+        else:
+            cur.execute(f"""
+                SELECT toDate(min(first_mention_ts)) - {lookback_days},
+                       toDate(max(last_mention_ts))  + {forward_days}
+                FROM journey_uids_{job_id}
+            """)
         d_lo, d_hi = cur.fetchone()
 
         _p(22, f'Pulling journey events for {matched_uids:,} users ({d_lo} → {d_hi})...')
 
-        # ── Phase 2: pull symmetric per-UID journey window ────────────────
-        # Three speedups vs the previous query:
-        #   1. WHERE DELIVERED BETWEEN d_lo AND d_hi  → partition pruning fires.
-        #   2. LIMIT N BY cf.UID                      → native CH "top-N per
-        #      group" path; cheaper than row_number() + WHERE rn <= N.
-        #   3. Drop BROWSER + PLATFORM                → smaller rows over the
-        #      wire, fewer Python objects to build downstream.
-        # Ordering by abs(VISIT_TS - first_mention_ts) keeps events CLOSEST
-        # to the brand interaction when an extreme-tail UID exceeds the cap,
-        # so we never lose the conversion event itself.
-        cur.execute(f"""
-            SELECT cf.UID,
-                   toUnixTimestamp64Milli(cf.VISIT_TS) AS ts_ms,
-                   cf.URL,
-                   cf.COMMON_NAME,
-                   cf.DOMAIN
-            FROM clickstream.clickstream_final AS cf
-            INNER JOIN journey_uids_{job_id} AS u ON cf.UID = u.UID
-            WHERE cf.DELIVERED >= toDate('{d_lo}')
-              AND cf.DELIVERED <= toDate('{d_hi}')
-              AND cf.VISIT_TS  >= u.first_mention_ts - INTERVAL {lookback_days} DAY
-              AND cf.VISIT_TS  <= u.last_mention_ts  + INTERVAL {forward_days}  DAY
-              AND length(cf.URL) > 8
-            ORDER BY cf.UID ASC,
-                     abs(dateDiff('second', u.first_mention_ts, cf.VISIT_TS)) ASC
-            LIMIT {MAX_EVENTS_PER_UID} BY cf.UID
-        """)
+        # ── Phase 2: pull per-UID journey window ──────────────────────────
+        # In conversion mode we walk BACKWARDS from purchase_ts and take the
+        # last STEPS_BEFORE × 4 events per UID (4× buffer so sessionization
+        # has room to group multi-page visits). In mention mode we keep the
+        # original symmetric window centred on first/last mention.
+        if cohort_mode == 'conversion':
+            evt_cap = max(steps_before * 4, 40)
+            cur.execute(f"""
+                SELECT cf.UID,
+                       toUnixTimestamp64Milli(cf.VISIT_TS) AS ts_ms,
+                       cf.URL,
+                       cf.COMMON_NAME,
+                       cf.DOMAIN
+                FROM clickstream.clickstream_final AS cf
+                INNER JOIN journey_uids_{job_id} AS u ON cf.UID = u.UID
+                WHERE cf.DELIVERED >= toDate('{d_lo}')
+                  AND cf.DELIVERED <= toDate('{d_hi}')
+                  AND cf.VISIT_TS  >= u.purchase_ts - INTERVAL {days_before} DAY
+                  AND cf.VISIT_TS  <= u.purchase_ts + INTERVAL 1 DAY
+                  AND length(cf.URL) > 8
+                ORDER BY cf.UID ASC,
+                         cf.VISIT_TS DESC
+                LIMIT {evt_cap} BY cf.UID
+            """)
+        else:
+            # Three speedups vs naive:
+            #   1. WHERE DELIVERED BETWEEN d_lo AND d_hi → partition pruning fires.
+            #   2. LIMIT N BY cf.UID → native CH "top-N per group" path.
+            #   3. Drop BROWSER + PLATFORM → smaller rows over the wire.
+            cur.execute(f"""
+                SELECT cf.UID,
+                       toUnixTimestamp64Milli(cf.VISIT_TS) AS ts_ms,
+                       cf.URL,
+                       cf.COMMON_NAME,
+                       cf.DOMAIN
+                FROM clickstream.clickstream_final AS cf
+                INNER JOIN journey_uids_{job_id} AS u ON cf.UID = u.UID
+                WHERE cf.DELIVERED >= toDate('{d_lo}')
+                  AND cf.DELIVERED <= toDate('{d_hi}')
+                  AND cf.VISIT_TS  >= u.first_mention_ts - INTERVAL {lookback_days} DAY
+                  AND cf.VISIT_TS  <= u.last_mention_ts  + INTERVAL {forward_days}  DAY
+                  AND length(cf.URL) > 8
+                ORDER BY cf.UID ASC,
+                         abs(dateDiff('second', u.first_mention_ts, cf.VISIT_TS)) ASC
+                LIMIT {MAX_EVENTS_PER_UID} BY cf.UID
+            """)
         raw_rows = cur.fetchall()
         _p(46, f'Pulled {len(raw_rows):,} events. Pulling interest tags...')
 
@@ -498,6 +758,25 @@ def run_job(
             _p(54, f'Got interest tags for {len(uid_interests):,} users.')
         except Exception as e:
             print(f"[Journey IQ] interest tags failed (non-fatal): {e}")
+
+        # ── Phase 2.55: per-UID purchase_ts (conversion mode only) ────────
+        # Pulled separately (cheap — temp table) so the Python-side
+        # path-to-purchase aggregator can window the last K events
+        # before each user's purchase. In mention mode this map is empty
+        # and the aggregator will fall back to per-UID "last K events".
+        uid_purchase_ts: dict[str, int] = {}
+        if cohort_mode == 'conversion':
+            try:
+                cur.execute(f"""
+                    SELECT UID, toUnixTimestamp64Milli(purchase_ts) AS ts_ms
+                    FROM journey_uids_{job_id}
+                """)
+                for row in cur.fetchall() or []:
+                    uid, ts_ms = row
+                    if uid and ts_ms is not None:
+                        uid_purchase_ts[uid] = int(ts_ms)
+            except Exception as e:
+                print(f"[Journey IQ] purchase_ts fetch failed (non-fatal): {e}")
 
         # ── Phase 2.6: Demographics — join against user_data_sanitized ────
         uid_demo: dict[str, dict] = {}
@@ -539,6 +818,7 @@ def run_job(
             extra_kw_map=extra_kw_map,
             uid_interests=uid_interests,
             uid_demo=uid_demo,
+            uid_purchase_ts=uid_purchase_ts,
             progress_cb=progress_cb,
         )
         _p(72, 'Aggregating funnel + detours + touchpoints...')
@@ -548,6 +828,11 @@ def run_job(
         post_hosts = _aggregate_post_non_conversion_hosts(per_uid_journeys, top_n=TOP_N_POST_HOSTS)
         cuts = _aggregate_cuts(per_uid_journeys)
         touchpoints = _aggregate_touchpoints(per_uid_journeys)
+        path_to_purchase = _aggregate_path_to_purchase(
+            per_uid_journeys,
+            steps=steps_before,
+            cohort_mode=cohort_mode,
+        )
 
         # ── Phase 6: Claude prose pass (best-effort, no-op when disabled) ─
         _p(85, 'Mining interesting facts...')
@@ -569,6 +854,100 @@ def run_job(
         except Exception as e:
             print(f"[Journey IQ] insights pass failed (non-fatal): {e}")
 
+        # ── Phase 6.5: Movie scaling + Claude synthesis (movie mode only) ─
+        # When is_movie=True AND box_office_millions > 0, compute the
+        # implied audience and stash both:
+        #   * `panel`    — the raw panel observation (always real)
+        #   * `modeled`  — Claude's estimate sized to the implied audience
+        #   * `scaled`   — panel scaled up to match implied audience
+        # The dashboard's view-mode toggle (Panel / Modeled / Scaled / Blended)
+        # picks which one to render; `path_to_purchase` etc. at the top
+        # level always reflect the "blended" default per
+        # `blend_real_and_modeled`.
+        modeled_block: Optional[dict] = None
+        scaled_block:  Optional[dict] = None
+        implied_audience = 0
+        scaling_factor = 1.0
+        # Compute the run's date range in days so the website-scaling
+        # formula has a window to multiply against.
+        from datetime import date as _date
+        try:
+            _sd = _date.fromisoformat(start_date); _ed = _date.fromisoformat(end_date)
+            _date_range_days = max(1, (_ed - _sd).days + 1)
+        except Exception:
+            _date_range_days = 30
+        if target_type in ('movie', 'website', 'tv_show'):
+            try:
+                from migration.journey_iq_synthesize import (
+                    compute_implied_audience_for_type, compute_scaling_factor,
+                    synthesize_journey, synth_to_dashboard_payload,
+                )
+                _p(88, f'{target_type.replace("_"," ").title()} mode: scaling + synthesizing modeled journey...')
+                real_converters = int(kpis.get('converted_users') or 0)
+                implied_audience = compute_implied_audience_for_type(
+                    target_type=target_type,
+                    box_office_millions=box_office_millions,
+                    ticket_price=avg_ticket_price,
+                    monthly_visitors_millions=monthly_visitors_millions,
+                    date_range_days=_date_range_days,
+                    us_viewers_millions=us_viewers_millions,
+                )
+                scaling_factor = compute_scaling_factor(
+                    implied_audience=implied_audience,
+                    panel_converters=real_converters,
+                )
+
+                # Always generate the modeled view so the dashboard can show
+                # "Modeled" side-by-side with "Panel" regardless of cohort size.
+                synth = synthesize_journey(
+                    target_type=target_type, target=target,
+                    project_name=project_name,
+                    start_date=start_date, end_date=end_date,
+                    extra_touchpoint_keywords=extra_kw_map,
+                    panel_converters=real_converters,
+                    panel_observed_touchpoints=(touchpoints.get('rows') or [])[:15],
+                    panel_top_paths=(path_to_purchase.get('top_paths') or [])[:5],
+                    steps=steps_before,
+                    box_office_millions=box_office_millions,
+                    ticket_price=avg_ticket_price,
+                    monthly_visitors_millions=monthly_visitors_millions,
+                    date_range_days=_date_range_days,
+                    us_viewers_millions=us_viewers_millions,
+                ) or {}
+                if synth:
+                    modeled_block = synth_to_dashboard_payload(
+                        synth, target_audience=max(implied_audience, 1),
+                    )
+                    modeled_block['source']      = synth.get('source', 'fallback')
+                    modeled_block['notes']       = synth.get('notes', '')
+                    modeled_block['target_type'] = target_type
+
+                # Marketing-footprint agent: discover real-world events
+                # (celeb posts / press / partnerships) for the bubble viz.
+                # Best-effort — skipped silently when offline / OpenAI absent.
+                try:
+                    _p(92, 'Researching marketing footprint via web search agent (Google verticals + per-platform site:searches)...')
+                    from migration.journey_iq_synthesize import (
+                        research_marketing_footprint, footprint_to_bubbles,
+                        footprint_to_spider,
+                    )
+                    fp = research_marketing_footprint(
+                        target_type=target_type, target=target,
+                        start_date=start_date, end_date=end_date,
+                    )
+                    if fp and not fp.get('_error'):
+                        bubbles = footprint_to_bubbles(fp)
+                        spider  = footprint_to_spider(fp, target=target)
+                        if modeled_block is None:
+                            modeled_block = {'target_type': target_type, 'source': 'agent'}
+                        modeled_block['marketing_footprint'] = fp
+                        modeled_block['touchpoint_bubbles']  = bubbles
+                        modeled_block['touchpoint_spider']   = spider
+                except Exception as e:
+                    print(f"[Journey IQ] footprint research failed (non-fatal): {e}")
+            except Exception as e:
+                print(f"[Journey IQ] {target_type} synthesis failed (non-fatal): {e}")
+
         # ── Phase 7: write to S3 ──────────────────────────────────────────
         _p(95, 'Writing results to S3...')
         summary = {
@@ -582,6 +961,20 @@ def run_job(
                 'forward_days':   forward_days,
                 'conversion_patterns': list(conv_patterns),
                 'extra_touchpoint_keywords': extra_kw_map,
+                'narrow_url_patterns': list(narrow_patterns),
+                'cohort_mode':    cohort_mode,
+                'cohort_fallback_used': cohort_fallback_used,
+                'conversion_url_patterns': list(conv_url_patterns),
+                'days_before_conversion': days_before,
+                'steps_before_conversion': steps_before,
+                'target_type':    target_type,
+                'is_movie':       is_movie,  # legacy alias
+                'box_office_millions': box_office_millions,
+                'avg_ticket_price': avg_ticket_price,
+                'monthly_visitors_millions': monthly_visitors_millions,
+                'us_viewers_millions':       us_viewers_millions,
+                'implied_audience': implied_audience,
+                'scaling_factor':   scaling_factor,
                 'cut_options':    [{'key': k, 'label': lbl} for k, lbl in CUT_DISPLAY_ORDER],
                 'created_by':     username,
                 'created_at':     datetime.utcnow().isoformat() + 'Z',
@@ -596,8 +989,32 @@ def run_job(
             'touchpoints': touchpoints,
             'keywords':    keywords,
             'post_hosts':  post_hosts,
+            'path_to_purchase': path_to_purchase,
             'facts':       facts,
         }
+        # Attach the modeled + scaled views when movie mode is active. The
+        # dashboard reads these from `summary.modeled_view` /
+        # `summary.scaled_view`; the legacy top-level keys above always
+        # hold the raw panel observation so older dashboards still render.
+        if modeled_block is not None:
+            summary['modeled_view'] = modeled_block
+        if is_movie and box_office_millions > 0 and scaling_factor > 1.0:
+            try:
+                from migration.journey_iq_synthesize import scale_summary_counts
+                scaled_block = scale_summary_counts(summary, scaling_factor)
+                summary['scaled_view'] = {
+                    'kpis':             scaled_block.get('kpis'),
+                    'touchpoints':      scaled_block.get('touchpoints'),
+                    'path_to_purchase': scaled_block.get('path_to_purchase'),
+                    'cuts':             scaled_block.get('cuts'),
+                    'clusters':         scaled_block.get('clusters'),
+                    'keywords':         scaled_block.get('keywords'),
+                    'post_hosts':       scaled_block.get('post_hosts'),
+                    'scaling_factor':   scaling_factor,
+                    'implied_audience': implied_audience,
+                }
+            except Exception as e:
+                print(f"[Journey IQ] scaling failed (non-fatal): {e}")
         s3_key = _persist(s3_client, summary, project_name, username, job_id)
         summary['s3_key'] = s3_key
         _p(100, 'Digital Journey IQ complete.')
@@ -663,6 +1080,51 @@ def _build_match_clause(variants: list[str]) -> str:
             f"OR multiSearchAny(lower(COMMON_NAME), {arr}))")
 
 
+def _normalize_narrow_patterns(raw: Optional[Any]) -> list[str]:
+    """Accept either a list/tuple or a free-text blob (newline/comma split).
+    Returns a deduped lowercase list of URL substrings, each >= 3 chars.
+    """
+    if not raw:
+        return []
+    if isinstance(raw, str):
+        # Split on newlines AND commas — clients paste either way.
+        parts = re.split(r'[\n,]+', raw)
+    else:
+        try:
+            parts = list(raw)
+        except Exception:
+            return []
+    seen: set[str] = set()
+    out: list[str] = []
+    for p in parts:
+        if not isinstance(p, str):
+            continue
+        s = p.strip().lower()
+        # Strip surrounding quotes and protocol noise to be friendly.
+        s = s.strip('"\'')
+        s = re.sub(r'^https?://', '', s)
+        if len(s) < 3 or s in seen:
+            continue
+        seen.add(s)
+        out.append(s)
+    return out
+
+
+def _build_narrow_url_clause(patterns: list[str]) -> str:
+    """ANDed URL-only filter. Same ngrambf index path as _build_match_clause,
+    but URL-only (the caller said the target's mention may not live in
+    COMMON_NAME but always somewhere in the URL).
+
+    Returns an SQL fragment like ``multiSearchAny(lower(URL), [...])`` or
+    empty string when no patterns supplied (caller must skip the AND).
+    """
+    if not patterns:
+        return ''
+    needles = ["'" + p.replace("'", "''") + "'" for p in patterns]
+    arr = '[' + ','.join(needles) + ']'
+    return f"multiSearchAny(lower(URL), {arr})"
+
+
 def _guess_target_domains(target: str) -> set[str]:
     """Heuristic domain set for the target. Used to classify which events
     are on the target's own site (LANDING / BROWSE / PDP / etc.) vs DETOUR.
@@ -698,6 +1160,7 @@ def _build_per_uid_journeys(
     extra_kw_map: Optional[dict[str, list[str]]] = None,
     uid_interests: Optional[dict[str, dict]] = None,
     uid_demo: Optional[dict[str, dict]] = None,
+    uid_purchase_ts: Optional[dict[str, int]] = None,
     progress_cb: Optional[Callable[..., None]] = None,
 ) -> list[dict]:
     """Group rows by UID, sessionize on a 30-min gap, classify each event.
@@ -715,6 +1178,7 @@ def _build_per_uid_journeys(
     extra_kw_map = extra_kw_map or {}
     uid_interests = uid_interests or {}
     uid_demo = uid_demo or {}
+    uid_purchase_ts = uid_purchase_ts or {}
     by_uid: dict[str, list[tuple]] = defaultdict(list)
     for row in raw_rows:
         # Row shape after the Phase 2 optimization: (uid, ts_ms, url,
@@ -801,6 +1265,9 @@ def _build_per_uid_journeys(
                 extra_kw_map=extra_kw_map,
             )
             if tps:
+                # Sorted list (not set) keeps the JSON shape stable across
+                # runs and is small enough that memory cost is negligible.
+                ev['touchpoints'] = sorted(tps)
                 for tp in tps:
                     touchpoint_counts[tp] += 1
                     if tp not in touchpoint_first_ts:
@@ -817,8 +1284,16 @@ def _build_per_uid_journeys(
         # and pull the timeline anchor BACK to the search itself — but we
         # want the search to be the inception, not the mention.
         first_mention_ts = first_on_target_ts or first_any_mention_ts
+        # Conversion-mode fallback: if a UID was cohorted by ticketing-page
+        # visit but never independently "mentioned" the brand (the URL had
+        # the slug; COMMON_NAME / target keyword may not appear elsewhere),
+        # use the cohort purchase_ts as the anchor so we still keep them.
         if first_mention_ts is None:
-            continue
+            cp = uid_purchase_ts.get(uid)
+            if cp is not None:
+                first_mention_ts = cp
+            else:
+                continue
 
         # Post-mention detour hosts: now that we know first_mention_ts, walk
         # once to capture detour/search hosts seen AFTER the brand was
@@ -868,6 +1343,14 @@ def _build_per_uid_journeys(
 
         interest = uid_interests.get(uid) or {}
         demo = uid_demo.get(uid) or {}
+        # If the cohort was defined by a known conversion URL (conversion
+        # mode), promote that purchase_ts to be the canonical conversion
+        # anchor — overriding any heuristic /checkout match. This makes
+        # downstream "converted" / cadence / path-to-purchase metrics use
+        # the AUTHORITATIVE purchase moment instead of a guess.
+        cohort_purchase_ts = uid_purchase_ts.get(uid)
+        if cohort_purchase_ts is not None:
+            conversion_ts = cohort_purchase_ts
         out.append({
             'uid':                  uid,
             'sessions':             sessions,
@@ -875,6 +1358,7 @@ def _build_per_uid_journeys(
             'last_mention_ts':      last_mention_ts,
             'conversion_ts':        conversion_ts,
             'converted':            conversion_ts is not None,
+            'cohort_purchase_ts':   cohort_purchase_ts,
             'inception':            inception,
             'inception_keyword':    inception_keyword,
             'journey_duration_sec': journey_duration_sec,
@@ -1605,6 +2089,196 @@ def _aggregate_touchpoints(per_uid: list[dict]) -> dict:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# Path-to-purchase aggregation (BSFS-style visual journey)
+# ─────────────────────────────────────────────────────────────────────────────
+
+PATH_TOP_HOSTS_PER_STEP   = 8
+PATH_TOP_TOUCHPOINTS_PER_STEP = 6
+PATH_TOP_NGRAMS           = 25
+PATH_NGRAM_MIN_USERS      = 5
+
+
+def _step_label_for_event(ev: dict) -> str:
+    """Best human label for a single event in the path ribbon.
+    Prefer the most specific touchpoint we tagged; otherwise use STEP/host."""
+    tps = ev.get('touchpoints') or []
+    if tps:
+        # Stable preference order: known display order, then any extra.
+        for tp in TOUCHPOINT_DISPLAY_ORDER:
+            if tp in tps:
+                return tp
+        return sorted(tps)[0]
+    step = ev.get('step') or 'DETOUR'
+    host = ev.get('host') or ''
+    if step == 'SEARCH' or 'google.com' in host or 'bing.com' in host:
+        return 'ORGANIC_SEARCH'
+    if step == 'DETOUR':
+        return 'DETOUR'
+    return step
+
+
+def _aggregate_path_to_purchase(
+    per_uid: list[dict],
+    *,
+    steps: int = 10,
+    cohort_mode: str = 'mention',
+) -> dict:
+    """BSFS-style "path to purchase" ribbon.
+
+    For each converter (or each user in mention-mode fallback):
+      * Take the last `steps` events that occurred AT OR BEFORE conversion_ts.
+        These are right-aligned to the conversion column. Step −K is the
+        oldest of the K, step −1 is the most recent before purchase, then a
+        synthetic CONVERSION column at the right.
+      * Bucket each event into (column_index → label) using
+        `_step_label_for_event`.
+      * Aggregate: per-column histograms of top labels + top hosts, plus the
+        K-gram of labels (ordered sequence) so we can rank "the most common
+        path to purchase". Users with fewer than 2 events still contribute
+        to whatever columns they cover.
+
+    Returns:
+      {
+        'mode': 'converters'|'all',
+        'cohort_size': int,        'steps': int,        'columns': [
+          {'index': -K, 'label': 'Step -K',
+           'users': N, 'top_labels': [...], 'top_hosts': [...]}, ...
+          {'index': 0,  'label': 'CONVERSION', ...}
+        ],
+        'top_paths': [
+          {'path': ['ORGANIC_SEARCH', 'TRAILER', 'SHOWTIME_LOOKUP', 'TICKETING'],
+           'users': N, 'users_pct': X}
+        ],
+      }
+    """
+    # Pick the cohort to walk: converters in conversion mode; fall back to
+    # everyone in mention mode if there are too few converters (the user
+    # still wants a visual).
+    converters = [j for j in per_uid if j.get('converted')]
+    if cohort_mode == 'conversion' and converters:
+        cohort = converters
+        cohort_label = 'converters'
+    elif converters and len(converters) >= 25:
+        cohort = converters
+        cohort_label = 'converters'
+    else:
+        cohort = list(per_uid)
+        cohort_label = 'all'
+
+    n = max(1, len(cohort))
+
+    # Per-column accumulators (column index 0 = CONVERSION; negative steps
+    # are the lookback columns at -1, -2, ... -steps).
+    col_label_counts: dict[int, Counter] = defaultdict(Counter)
+    col_host_counts:  dict[int, Counter] = defaultdict(Counter)
+    col_user_sets:    dict[int, set]     = defaultdict(set)
+    ngram_counter: Counter = Counter()
+
+    for j in cohort:
+        uid = j.get('uid')
+        conv_ts = j.get('conversion_ts')
+        # Flatten sessions to a single event list.
+        all_events: list[dict] = []
+        for sess in (j.get('sessions') or []):
+            for ev in sess:
+                all_events.append(ev)
+        all_events.sort(key=lambda e: e.get('ts_ms', 0))
+
+        # Anchor: use conversion_ts when known; otherwise the LAST event
+        # the user produced in the window (so "path to the end of the
+        # observed journey" still renders meaningfully in mention mode).
+        anchor_ts = conv_ts if conv_ts is not None else (
+            all_events[-1].get('ts_ms') if all_events else None
+        )
+        if anchor_ts is None:
+            continue
+
+        # Slice: keep events strictly before anchor; anchor itself is
+        # column 0. Then keep only the last `steps` of those, in time order.
+        before = [ev for ev in all_events if ev.get('ts_ms', 0) < anchor_ts]
+        slice_evs = before[-steps:]
+
+        # Pre-classify with the existing touchpoint tagger so column histograms
+        # collapse hosts into channel categories (TRAILER/SOCIAL/REVIEW/…).
+        # We re-call _classify_touchpoints_for_event lazily by using the host /
+        # step / is_mention already on each `ev`.
+        ngram_parts: list[str] = []
+
+        # Right-align: slice_evs[-1] is closest to purchase → column -1.
+        # slice_evs[-K] is oldest → column -K.
+        k = len(slice_evs)
+        for idx, ev in enumerate(slice_evs):
+            col_idx = -(k - idx)  # -K, -K+1, ... -1
+            label = _step_label_for_event(ev)
+            host = ev.get('host') or ''
+            col_label_counts[col_idx][label] += 1
+            if host:
+                col_host_counts[col_idx][host] += 1
+            col_user_sets[col_idx].add(uid)
+            ngram_parts.append(label)
+
+        # CONVERSION column itself.
+        col_label_counts[0]['CONVERSION'] += 1
+        col_user_sets[0].add(uid)
+        ngram_parts.append('CONVERSION')
+
+        # Collapse adjacent dups in the ngram so e.g.
+        # [TRAILER, TRAILER, TICKETING, TICKETING, CONVERSION] becomes
+        # [TRAILER, TICKETING, CONVERSION] — same story, less noise.
+        collapsed = []
+        for tok in ngram_parts:
+            if not collapsed or collapsed[-1] != tok:
+                collapsed.append(tok)
+        if len(collapsed) >= 2:
+            ngram_counter[tuple(collapsed)] += 1
+
+    # Materialize columns in display order: -steps … -1, 0
+    columns: list[dict] = []
+    for col_idx in list(range(-steps, 0)) + [0]:
+        labels = col_label_counts.get(col_idx) or Counter()
+        hosts = col_host_counts.get(col_idx) or Counter()
+        users = len(col_user_sets.get(col_idx) or ())
+        if col_idx == 0:
+            col_lbl = 'CONVERSION'
+        else:
+            col_lbl = f'Step {col_idx}'
+        columns.append({
+            'index':      col_idx,
+            'label':      col_lbl,
+            'users':      users,
+            'users_pct':  round(100.0 * users / n, 1),
+            'top_labels': [
+                {'label': lab, 'users': cnt,
+                 'pct': round(100.0 * cnt / max(1, users), 1)}
+                for lab, cnt in labels.most_common(PATH_TOP_TOUCHPOINTS_PER_STEP)
+            ],
+            'top_hosts':  [
+                {'host': h, 'users': cnt,
+                 'pct': round(100.0 * cnt / max(1, users), 1)}
+                for h, cnt in hosts.most_common(PATH_TOP_HOSTS_PER_STEP)
+            ],
+        })
+
+    top_paths = []
+    for path, users in ngram_counter.most_common(PATH_TOP_NGRAMS):
+        if users < PATH_NGRAM_MIN_USERS:
+            continue
+        top_paths.append({
+            'path':      list(path),
+            'users':     users,
+            'users_pct': round(100.0 * users / n, 1),
+        })
+
+    return {
+        'mode':         cohort_label,
+        'cohort_size':  len(cohort),
+        'steps':        steps,
+        'columns':      columns,
+        'top_paths':    top_paths,
+    }
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Persistence
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -1704,7 +2378,14 @@ def list_runs(s3_client, *, username: Optional[str] = None,
 
 
 def _empty_summary(target, project_name, start_date, end_date,
-                   lookback_days, forward_days) -> dict:
+                   lookback_days, forward_days,
+                   *,
+                   cohort_mode='mention', is_movie=False,
+                   box_office_millions=0.0, avg_ticket_price=15.0,
+                   implied_audience=0,
+                   target_type='general',
+                   monthly_visitors_millions=0.0,
+                   us_viewers_millions=0.0) -> dict:
     return {
         'meta': {
             'project_name':   project_name,
@@ -1720,6 +2401,16 @@ def _empty_summary(target, project_name, start_date, end_date,
             'created_at':     datetime.utcnow().isoformat() + 'Z',
             'matched_uids':   0,
             'events_pulled':  0,
+            'cohort_mode':    cohort_mode,
+            'target_type':    target_type,
+            'is_movie':       bool(is_movie),  # legacy alias
+            'box_office_millions':       float(box_office_millions or 0.0),
+            'avg_ticket_price':          float(avg_ticket_price or 15.0),
+            'monthly_visitors_millions': float(monthly_visitors_millions or 0.0),
+            'us_viewers_millions':       float(us_viewers_millions or 0.0),
+            'implied_audience':          int(implied_audience or 0),
+            'scaling_factor':            1.0,
+            'cohort_was_empty':          True,
         },
         'kpis': {
             'total_users': 0, 'converted_users': 0, 'conversion_pct': 0.0,
@@ -1733,6 +2424,10 @@ def _empty_summary(target, project_name, start_date, end_date,
                         'touch_distribution': []},
         'keywords':    [],
         'post_hosts':  [],
+        'path_to_purchase': {
+            'mode': 'converters', 'cohort_size': 0, 'steps': 0,
+            'columns': [], 'top_paths': [],
+        },
         'facts':       [],
     }
 

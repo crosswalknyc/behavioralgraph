@@ -29917,6 +29917,17 @@ def _run_journey_iq(job_id):
             forward_days=int(params.get('forward_days') or _jiq.DEFAULT_FORWARD_DAYS),
             extra_conversion_patterns=params.get('extra_conversion_patterns') or [],
             extra_touchpoint_keywords=params.get('extra_touchpoint_keywords') or '',
+            narrow_url_patterns=params.get('narrow_url_patterns') or [],
+            cohort_mode=params.get('cohort_mode') or 'mention',
+            conversion_url_patterns=params.get('conversion_url_patterns') or [],
+            days_before_conversion=int(params.get('days_before_conversion') or 90),
+            steps_before_conversion=int(params.get('steps_before_conversion') or 10),
+            is_movie=bool(params.get('is_movie') or False),
+            box_office_millions=float(params.get('box_office_millions') or 0.0),
+            avg_ticket_price=float(params.get('avg_ticket_price') or 15.0),
+            target_type=str(params.get('target_type') or 'general'),
+            monthly_visitors_millions=float(params.get('monthly_visitors_millions') or 0.0),
+            us_viewers_millions=float(params.get('us_viewers_millions') or 0.0),
             progress_cb=_cb,
             s3_client=s3_client,
         )
@@ -29973,10 +29984,79 @@ def submit_journey_iq():
         if len(extra_tp_keywords) > 4000:
             extra_tp_keywords = extra_tp_keywords[:4000]
 
+        # URL narrowing — when the target keyword alone is too broad (think
+        # "the goat"), the user can paste substrings the URL must ALSO
+        # contain (e.g. "sonypictures.com", "/the-goat/", "fandango.com/the-goat").
+        # Both newline- and comma-separated input accepted; normalized server-side.
+        narrow_url_raw = data.get('narrow_url_patterns') or ''
+        if isinstance(narrow_url_raw, str):
+            narrow_url_list = [p.strip() for p in re.split(r'[\n,]+', narrow_url_raw) if p.strip()]
+        else:
+            narrow_url_list = [str(p).strip() for p in (narrow_url_raw or []) if str(p).strip()]
+        narrow_url_list = narrow_url_list[:50]
+
+        # Conversion-anchored cohort mode. When 'conversion', the conversion
+        # URL patterns ARE the cohort definition (we walk back from each user's
+        # purchase_ts); the target keyword is optional.
+        cohort_mode = (data.get('cohort_mode') or 'mention').strip().lower()
+        if cohort_mode not in ('mention', 'conversion'):
+            cohort_mode = 'mention'
+        conv_url_raw = data.get('conversion_url_patterns') or ''
+        if isinstance(conv_url_raw, str):
+            conv_url_list = [p.strip() for p in re.split(r'[\n,]+', conv_url_raw) if p.strip()]
+        else:
+            conv_url_list = [str(p).strip() for p in (conv_url_raw or []) if str(p).strip()]
+        conv_url_list = conv_url_list[:50]
+        try:
+            days_before_conv = int(data.get('days_before_conversion') or 90)
+        except Exception:
+            days_before_conv = 90
+        try:
+            steps_before_conv = int(data.get('steps_before_conversion') or 10)
+        except Exception:
+            steps_before_conv = 10
+        days_before_conv = max(1, min(days_before_conv, 365))
+        steps_before_conv = max(1, min(steps_before_conv, 50))
+
+        # Target-type-aware audience scaling + Claude synthesis. Values:
+        #   'general' (default — no scaling/synth)
+        #   'movie'   (box office × 1M / ticket × 77.5%)
+        #   'website' (monthly US visitors × months × 0.4)
+        #   'tv_show' (US viewers — AI-researched via SubscriberIQ's
+        #              gpt-4o-search-preview pattern)
+        target_type = str(data.get('target_type') or 'general').strip().lower()
+        if target_type not in ('general', 'movie', 'website', 'tv_show'):
+            target_type = 'general'
+        # Legacy is_movie checkbox -> upgrade to target_type='movie'
+        is_movie = bool(data.get('is_movie')) or (target_type == 'movie')
+        if is_movie and target_type == 'general':
+            target_type = 'movie'
+
+        try:
+            box_office_m = max(0.0, float(data.get('box_office_millions') or 0.0))
+        except Exception:
+            box_office_m = 0.0
+        try:
+            ticket_price = max(1.0, float(data.get('avg_ticket_price') or 15.0))
+        except Exception:
+            ticket_price = 15.0
+        try:
+            monthly_visitors_m = max(0.0, float(data.get('monthly_visitors_millions') or 0.0))
+        except Exception:
+            monthly_visitors_m = 0.0
+        try:
+            us_viewers_m = max(0.0, float(data.get('us_viewers_millions') or 0.0))
+        except Exception:
+            us_viewers_m = 0.0
+
         if not project_name:
             return jsonify({'error': 'project_name required'}), 400
-        if not target:
-            return jsonify({'error': 'target required'}), 400
+        if not target and not (cohort_mode == 'conversion' and conv_url_list):
+            return jsonify({'error': 'target required (or supply conversion_url_patterns '
+                            'in conversion-anchored mode)'}), 400
+        if cohort_mode == 'conversion' and not conv_url_list:
+            return jsonify({'error': 'conversion_url_patterns required for '
+                            'conversion-anchored mode'}), 400
         if not start_date or not end_date:
             return jsonify({'error': 'start_date and end_date required'}), 400
         if lookback_days < 0 or lookback_days > 60:
@@ -30009,6 +30089,17 @@ def submit_journey_iq():
                 'forward_days':              forward_days,
                 'extra_conversion_patterns': extra_patterns,
                 'extra_touchpoint_keywords': extra_tp_keywords,
+                'narrow_url_patterns':       narrow_url_list,
+                'cohort_mode':               cohort_mode,
+                'conversion_url_patterns':   conv_url_list,
+                'days_before_conversion':    days_before_conv,
+                'steps_before_conversion':   steps_before_conv,
+                'is_movie':                  is_movie,
+                'box_office_millions':       box_office_m,
+                'avg_ticket_price':          ticket_price,
+                'target_type':               target_type,
+                'monthly_visitors_millions': monthly_visitors_m,
+                'us_viewers_millions':       us_viewers_m,
             },
         }
         if s3_client:
@@ -30030,6 +30121,50 @@ def submit_journey_iq():
                         'credits_used': CREDITS_JOURNEY_IQ})
     except Exception as e:
         return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/journey-iq/estimate-audience', methods=['POST'])
+@requires_auth
+def estimate_journey_iq_audience():
+    """AI lookup of the implied-audience number for a target. Mirrors the
+    SubscriberIQ viewership-research pattern (gpt-4o-search-preview with
+    web search). Request body:
+        {"target_type": "movie"|"website"|"tv_show",
+         "target": "<name>",
+         "start_date": "...", "end_date": "..."}
+    Response: {"success": true, "estimate": {...}}  — the dict shape
+    matches the form fields the dashboard pre-fills (e.g.
+    {"box_office_millions": 185.0, "avg_ticket_price": 15.0,
+     "confidence": "high", "source": "...", "notes": "..."}).
+    """
+    try:
+        from migration.journey_iq_synthesize import research_audience_size
+    except Exception as e:
+        return jsonify({'success': False,
+                        'error': f'journey_iq_synthesize import failed: {e}'}), 500
+    try:
+        data = request.get_json() or {}
+        target_type = (data.get('target_type') or '').strip().lower()
+        target      = (data.get('target') or '').strip()
+        start_date  = data.get('start_date') or ''
+        end_date    = data.get('end_date') or ''
+        if target_type not in ('movie', 'website', 'tv_show'):
+            return jsonify({'success': False,
+                            'error': 'target_type must be movie / website / tv_show'}), 400
+        if not target:
+            return jsonify({'success': False,
+                            'error': 'target is required'}), 400
+        estimate = research_audience_size(
+            target_type=target_type, target=target,
+            start_date=start_date, end_date=end_date,
+        )
+        if estimate.get('_error'):
+            return jsonify({'success': False,
+                            'error':   estimate['_error'],
+                            'estimate': estimate}), 200
+        return jsonify({'success': True, 'estimate': estimate})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
 
 
 @app.route('/api/journey-iq/list', methods=['GET'])
