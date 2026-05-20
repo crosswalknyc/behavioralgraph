@@ -1120,9 +1120,9 @@ def research_audience_size(
     start_date: str = '',
     end_date: str = '',
 ) -> dict:
-    """Use gpt-4o-search-preview (same engine SubscriberIQ uses for show
-    viewership lookups) to research a real-world audience number for the
-    target.
+    """Use Claude + web_search (Anthropic's native web tool, same engine
+    BG.py's persona_research_agent uses) to look up a real-world audience
+    number for the target.
 
     Returns a dict keyed by what the form needs to fill in:
       * movie:   {'box_office_millions': float, 'avg_ticket_price': 15.0,
@@ -1146,18 +1146,24 @@ def research_audience_size(
         return _RESEARCH_CACHE[cache_key]
 
     try:
-        # OpenAI client (same import style SubscriberIQ uses).
+        # Claude client (Anthropic) — same dual-import + web_search pattern
+        # used by research_marketing_footprint. ANTHROPIC_API_KEY required.
+        _claude_messages = None
+        _get_claude_client = None
         try:
-            from openai import OpenAI
-            import os
-            api_key = os.environ.get('OPENAI_API_KEY')
-            if not api_key:
-                return {'_error': 'OPENAI_API_KEY not configured'}
-            client = OpenAI(api_key=api_key)
+            from migration.claude_client import claude_messages as _cm, get_claude_client as _gc
+            _claude_messages = _cm; _get_claude_client = _gc
         except ImportError:
-            return {'_error': 'openai package not installed'}
+            try:
+                from claude_client import claude_messages as _cm, get_claude_client as _gc  # type: ignore
+                _claude_messages = _cm; _get_claude_client = _gc
+            except ImportError:
+                return {'_error': 'claude_client not importable'}
+        try:
+            if _get_claude_client() is None:
+                return {'_error': 'ANTHROPIC_API_KEY not configured'}
         except Exception as e:
-            return {'_error': f'OpenAI client init failed: {e}'}
+            return {'_error': f'Claude client check failed: {e}'}
 
         # Type-specific prompt + JSON schema
         if t == 'movie':
@@ -1209,15 +1215,40 @@ def research_audience_size(
             )
             number_key = 'us_viewers_millions'
 
+        import os
+        claude_model = (
+            os.environ.get('JOURNEY_IQ_RESEARCH_MODEL')
+            or os.environ.get('CLAUDE_PERSONA_MODEL')
+            or 'claude-opus-4-7'
+        )
+        _ws_new = {'type': 'web_search_20260209', 'name': 'web_search', 'max_uses': 6}
+        _ws_old = {'type': 'web_search_20250305', 'name': 'web_search', 'max_uses': 6}
+        _audience_system = (
+            'You are a senior consumer-research analyst. Use the web_search '
+            'tool to look up real-world audience numbers, then return ONE '
+            'valid JSON object matching the schema in the user message. '
+            'Return ONLY the JSON object — no markdown fences, no commentary.'
+        )
+        raw = ''
         try:
-            resp = client.chat.completions.create(
-                model='gpt-4o-search-preview',
-                messages=[{'role': 'user', 'content': prompt}],
-                max_tokens=600,
-            )
-            raw = (resp.choices[0].message.content or '').strip()
+            raw = _claude_messages(
+                system=_audience_system, user=prompt, model=claude_model,
+                max_tokens=2000, temperature=0.2, tools=[_ws_new],
+            ) or ''
         except Exception as e:
-            return {'_error': f'gpt-4o-search-preview call failed: {e}'}
+            print(f'[Journey IQ audience] primary Claude+web_search failed: {e}')
+            raw = ''
+        if not raw:
+            try:
+                raw = _claude_messages(
+                    system=_audience_system, user=prompt,
+                    model='claude-sonnet-4-6',
+                    max_tokens=2000, temperature=0.2, tools=[_ws_old],
+                ) or ''
+            except Exception as e:
+                return {'_error': f'Claude+web_search fallback also failed: {e}'}
+        if not raw:
+            return {'_error': 'Claude returned empty response'}
 
         # Strip code fences if Claude wraps the JSON
         if raw.startswith('```'):
@@ -1248,10 +1279,11 @@ def research_audience_size(
 
 # ── Public: marketing-footprint research agent ───────────────────────────────
 # Goes a level deeper than research_audience_size. Instead of returning just
-# one number, this asks gpt-4o-search-preview to enumerate the actual
-# marketing events the target generated (celeb posts, press articles,
-# brand partnerships, TikTok virals, talent podcasts, etc.) and estimate
-# what % of US gen-pop EACH event likely reached. The dashboard renders the
+# one number, this asks Claude (with the native web_search tool) to
+# enumerate the actual marketing events the target generated INSIDE the
+# user-specified date window — celeb posts, press articles, brand
+# partnerships, TikTok virals, talent podcasts, ticketing-site share, etc.
+# — and estimate what % of US gen-pop EACH event likely reached. Renders as
 # result as nested bubbles: parent category (SOCIAL_MEDIA / PRESS / TALENT
 # / etc.) sized by total reach, with child sub-bubbles for each discovered
 # event (sized by that event's reach).
@@ -1411,14 +1443,20 @@ def research_marketing_footprint(
     target: str,
     start_date: str = '',
     end_date: str = '',
-    max_tokens: int = 4500,
+    max_tokens: int = 16000,
 ) -> dict:
     """Run the marketing-footprint research agent against the target.
 
-    Returns the parsed JSON from gpt-4o-search-preview, or
-    {'_error': '...'} when the lookup can't be performed (no API key,
-    OpenAI down, parse failure). Results are cached in-memory by
-    (target_type, target).
+    Uses Claude (Anthropic) with the native `web_search` tool — same engine
+    BG.py's persona_research_agent uses for live audience research. Falls
+    back from new-vintage web_search_20260209 to legacy _20250305 if the
+    primary tool ID is rejected. Allows up to 12 web searches per call so
+    Claude can hit each Google vertical (videos/news/forums) + per-platform
+    site: queries inside the date window.
+
+    Returns the parsed JSON, or {'_error': '...'} when the lookup can't be
+    performed (no ANTHROPIC_API_KEY, Claude rejected, parse failure).
+    Results are cached in-memory by (target_type, target).
     """
     t = (target_type or 'general').strip().lower()
     if t not in ('movie', 'website', 'tv_show', 'brand'):
@@ -1427,46 +1465,79 @@ def research_marketing_footprint(
     if cache_key in _FOOTPRINT_CACHE:
         return _FOOTPRINT_CACHE[cache_key]
 
+    # Try migration.claude_client first, fall back to bg-webapp/claude_client
+    # — same dual-import pattern used elsewhere in this module so the agent
+    # works whether we're invoked from the migration path or the web app.
+    _claude_messages = None
+    _get_claude_client = None
     try:
-        from openai import OpenAI
-        import os
-        api_key = os.environ.get('OPENAI_API_KEY')
-        if not api_key:
-            return {'_error': 'OPENAI_API_KEY not configured'}
-        client = OpenAI(api_key=api_key)
+        from migration.claude_client import claude_messages as _cm, get_claude_client as _gc
+        _claude_messages = _cm; _get_claude_client = _gc
     except ImportError:
-        return {'_error': 'openai package not installed'}
+        try:
+            from claude_client import claude_messages as _cm, get_claude_client as _gc  # type: ignore
+            _claude_messages = _cm; _get_claude_client = _gc
+        except ImportError:
+            return {'_error': 'claude_client not importable'}
+    try:
+        if _get_claude_client() is None:
+            return {'_error': 'ANTHROPIC_API_KEY not configured'}
     except Exception as e:
-        return {'_error': f'OpenAI client init failed: {e}'}
+        return {'_error': f'Claude client check failed: {e}'}
 
     if start_date and end_date:
         window = f' running between {start_date} and {end_date}'
-        gdate = (f'\n\nDate-window for ALL Google verticals: '
-                 f'tbs=cdr:1,cd_min:{start_date},cd_max:{end_date}\n'
-                 f'Translate that to MM/DD/YYYY for the cd_min/cd_max '
-                 f'parameters if needed. Every discovered event MUST have '
-                 f'a date inside this window or it should be dropped.')
+        gdate = (f'\n\nDate-window: only include events with dates BETWEEN '
+                 f'{start_date} AND {end_date} (inclusive). For each Google '
+                 f'vertical search, use the URL parameter '
+                 f'`tbs=cdr:1,cd_min:{start_date},cd_max:{end_date}` (or '
+                 f'translate to MM/DD/YYYY if the tool requires). Drop any '
+                 f'event without a verifiable date in the window.')
     else:
         window = ''
         gdate = ''
     user_msg = (
         f'Research the marketing footprint for the {t.replace("_"," ")} '
-        f'"{target}"{window}. Discover the specific real-world marketing '
-        f'events (celeb posts, press articles, influencer videos, brand '
-        f'partnerships, showtime-search spikes, etc.) and estimate the '
-        f'US-genpop reach of each one. Return JSON ONLY matching the '
-        f'schema in the system prompt.{gdate}'
+        f'"{target}"{window}. Use your web_search tool aggressively — hit '
+        f'each Google vertical (short videos, news, forums) AND per-platform '
+        f'site:tiktok.com / site:instagram.com / site:youtube.com / '
+        f'site:x.com / site:reddit.com searches. Discover the specific '
+        f'real-world marketing events (celeb posts, press articles, '
+        f'influencer videos, brand partnerships, showtime-search spikes, '
+        f'ticketing-site share) and estimate the US-genpop reach of each '
+        f'one. Return JSON ONLY matching the schema in the system '
+        f'prompt.{gdate}'
     )
+
+    import os
+    claude_model = (
+        os.environ.get('JOURNEY_IQ_RESEARCH_MODEL')
+        or os.environ.get('CLAUDE_PERSONA_MODEL')
+        or 'claude-opus-4-7'
+    )
+    _ws_new = {'type': 'web_search_20260209', 'name': 'web_search', 'max_uses': 12}
+    _ws_old = {'type': 'web_search_20250305', 'name': 'web_search', 'max_uses': 12}
+    raw = ''
     try:
-        resp = client.chat.completions.create(
-            model='gpt-4o-search-preview',
-            messages=[{'role': 'system', 'content': _SYSTEM_FOOTPRINT},
-                      {'role': 'user',   'content': user_msg}],
-            max_tokens=max_tokens,
-        )
-        raw = (resp.choices[0].message.content or '').strip()
+        raw = _claude_messages(
+            system=_SYSTEM_FOOTPRINT, user=user_msg, model=claude_model,
+            max_tokens=max_tokens, temperature=0.3, tools=[_ws_new],
+        ) or ''
     except Exception as e:
-        return {'_error': f'gpt-4o-search-preview call failed: {e}'}
+        print(f'[Journey IQ footprint] primary Claude+web_search failed: {e}')
+        raw = ''
+    if not raw:
+        # Retry with legacy web_search tool ID + Sonnet (same pattern bg.py uses)
+        try:
+            raw = _claude_messages(
+                system=_SYSTEM_FOOTPRINT, user=user_msg,
+                model='claude-sonnet-4-6',
+                max_tokens=max_tokens, temperature=0.3, tools=[_ws_old],
+            ) or ''
+        except Exception as e:
+            return {'_error': f'Claude+web_search fallback also failed: {e}'}
+    if not raw:
+        return {'_error': 'Claude returned empty response'}
 
     if raw.startswith('```'):
         raw = raw.split('\n', 1)[-1].rsplit('```', 1)[0].strip()
