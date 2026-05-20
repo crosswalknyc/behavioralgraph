@@ -49,6 +49,7 @@ import time
 import urllib.parse
 import uuid
 from collections import Counter, defaultdict
+from concurrent.futures import ThreadPoolExecutor, Future
 from datetime import datetime, timedelta
 from typing import Any, Callable, Iterable, Optional
 
@@ -58,6 +59,7 @@ from typing import Any, Callable, Iterable, Optional
 DEFAULT_LOOKBACK_DAYS = 14   # symmetric: 14 days before first mention
 DEFAULT_FORWARD_DAYS  = 7    # 7 days after last mention or conversion
 MAX_UIDS              = 75_000   # hard cap on cohort size per run
+ANALYSIS_UIDS_CAP     = 10_000   # downsample to this many UIDs for Phase 2 if cohort exceeds it (preserves statistics, slashes ClickHouse + Python cost)
 MAX_EVENTS_PER_UID    = 350      # cap per UID; preserves journey shape, halves Python work
 SESSION_GAP_MINUTES   = 30
 TOP_N_DETOURS         = 8
@@ -440,7 +442,37 @@ def run_job(
     extra_kw_map = parse_extra_touchpoint_keywords(extra_touchpoint_keywords or '')
     narrow_patterns = _normalize_narrow_patterns(narrow_url_patterns)
 
-    _p(2, 'Connecting to ClickHouse...')
+    # ── Concurrent kickoff: marketing-footprint research agent ───────────
+    # The agent only needs (target, start_date, end_date) — totally
+    # independent of the cohort SQL. Firing it off in a background thread
+    # now means by the time Phase 4 wants the result (~p=92), it's already
+    # done. Saves 60-120s of sequential wall-clock per Movie / Website /
+    # TV Show run. No-op for target_type='general'.
+    footprint_future: Optional[Future] = None
+    if target_type in ('movie', 'website', 'tv_show', 'brand'):
+        def _fp_worker():
+            try:
+                from migration.journey_iq_synthesize import (
+                    research_marketing_footprint, footprint_to_bubbles,
+                    footprint_to_spider,
+                )
+                fp = research_marketing_footprint(
+                    target_type=target_type, target=target,
+                    start_date=start_date, end_date=end_date,
+                )
+                if fp and not fp.get('_error'):
+                    return {
+                        'fp':      fp,
+                        'bubbles': footprint_to_bubbles(fp),
+                        'spider':  footprint_to_spider(fp, target=target),
+                    }
+                return {'_error': (fp or {}).get('_error', 'unknown')}
+            except Exception as e:
+                return {'_error': f'agent thread crashed: {e}'}
+        footprint_future = ThreadPoolExecutor(max_workers=1).submit(_fp_worker)
+        print(f"[Journey IQ] kicked off marketing-footprint agent in background for {target!r} ({target_type})")
+
+    _p(2, 'Connecting to ClickHouse... (research agent running in parallel)')
     conn = ch_connect(settings=CH_RUN_SETTINGS)
     cur = conn.cursor()
 
@@ -623,26 +655,22 @@ def run_job(
                         empty['meta']['has_modeled_view'] = True
                     # Marketing-footprint agent (real-world bubbles)
                     try:
-                        from migration.journey_iq_synthesize import (
-                            research_marketing_footprint, footprint_to_bubbles,
-                            footprint_to_spider,
-                        )
-                        fp = research_marketing_footprint(
-                            target_type=target_type, target=target,
-                            start_date=start_date, end_date=end_date,
-                        )
-                        if fp and not fp.get('_error'):
-                            bubbles = footprint_to_bubbles(fp)
-                            spider  = footprint_to_spider(fp, target=target)
+                        if footprint_future is not None:
+                            agent_out = footprint_future.result(timeout=300) or {}
+                        else:
+                            agent_out = {'_error': 'agent not kicked off'}
+                        if agent_out and not agent_out.get('_error'):
                             mv = empty.setdefault('modeled_view', {
                                 'target_type': target_type, 'source': 'agent',
                             })
-                            mv['marketing_footprint'] = fp
-                            mv['touchpoint_bubbles']  = bubbles
-                            mv['touchpoint_spider']   = spider
+                            mv['marketing_footprint'] = agent_out['fp']
+                            mv['touchpoint_bubbles']  = agent_out['bubbles']
+                            mv['touchpoint_spider']   = agent_out['spider']
                             empty['meta']['has_modeled_view'] = True
+                        elif agent_out.get('_error'):
+                            print(f"[Journey IQ] empty-cohort agent returned error (non-fatal): {agent_out['_error']}")
                     except Exception as e:
-                        print(f"[Journey IQ] empty-cohort footprint failed (non-fatal): {e}")
+                        print(f"[Journey IQ] empty-cohort footprint future failed (non-fatal): {e}")
                 except Exception as e:
                     print(f"[Journey IQ] empty-cohort synth failed (non-fatal): {e}")
 
@@ -651,7 +679,33 @@ def run_job(
             empty['s3_key'] = s3_key
             return {'status': 'completed', 's3_key': s3_key, 'summary': empty}
 
-        _p(18, f'Matched {matched_uids:,} users. Computing window bounds...')
+        # ── Phase 1.5: downsample huge cohorts ────────────────────────────
+        # Phase 2 reads ~MAX_EVENTS_PER_UID rows per UID and ships them all
+        # back to the Python worker for sessionization. A 50K-UID cohort × 350
+        # events = 17.5M rows over the wire. For any analysis that's about
+        # PROPORTIONS (touchpoint reach, cadence, demographics, path-to-
+        # purchase) a 10K random sample is statistically indistinguishable
+        # from the full cohort (margin-of-error ~1% at 95% confidence). We
+        # keep matched_uids_total in meta so the dashboard can show "10K of
+        # 47K cohort analyzed" rather than misleadingly reporting only 10K.
+        matched_uids_total = matched_uids
+        if matched_uids > ANALYSIS_UIDS_CAP:
+            _p(17, f'Cohort = {matched_uids:,}; downsampling to {ANALYSIS_UIDS_CAP:,} random UIDs (statistically representative; ~1% MOE)...')
+            cur.execute(f"""
+                CREATE TEMPORARY TABLE journey_uids_sample_{job_id} AS
+                SELECT * FROM journey_uids_{job_id}
+                ORDER BY rand() LIMIT {ANALYSIS_UIDS_CAP}
+            """)
+            cur.execute(f"DROP TABLE journey_uids_{job_id}")
+            cur.execute(f"""
+                CREATE TEMPORARY TABLE journey_uids_{job_id} AS
+                SELECT * FROM journey_uids_sample_{job_id}
+            """)
+            cur.execute(f"DROP TABLE journey_uids_sample_{job_id}")
+            cur.execute(f"SELECT count() FROM journey_uids_{job_id}")
+            matched_uids = int((cur.fetchone() or [0])[0] or 0)
+
+        _p(18, f'Matched {matched_uids_total:,} users' + (f' (analyzing {matched_uids:,} random sample)' if matched_uids != matched_uids_total else '') + '. Computing window bounds...')
 
         # Compute the GLOBAL date range so ClickHouse can prune partitions
         # before evaluating the per-UID time filter. In conversion mode the
@@ -926,25 +980,21 @@ def run_job(
                 # (celeb posts / press / partnerships) for the bubble viz.
                 # Best-effort — skipped silently when offline / OpenAI absent.
                 try:
-                    _p(92, 'Researching marketing footprint via web search agent (Google verticals + per-platform site:searches)...')
-                    from migration.journey_iq_synthesize import (
-                        research_marketing_footprint, footprint_to_bubbles,
-                        footprint_to_spider,
-                    )
-                    fp = research_marketing_footprint(
-                        target_type=target_type, target=target,
-                        start_date=start_date, end_date=end_date,
-                    )
-                    if fp and not fp.get('_error'):
-                        bubbles = footprint_to_bubbles(fp)
-                        spider  = footprint_to_spider(fp, target=target)
+                    if footprint_future is not None:
+                        _p(92, 'Waiting on background marketing-footprint agent (Google verticals + per-platform site:searches)...')
+                        agent_out = footprint_future.result(timeout=300) or {}
+                    else:
+                        agent_out = {'_error': 'agent not kicked off (target_type=general)'}
+                    if agent_out and not agent_out.get('_error'):
                         if modeled_block is None:
                             modeled_block = {'target_type': target_type, 'source': 'agent'}
-                        modeled_block['marketing_footprint'] = fp
-                        modeled_block['touchpoint_bubbles']  = bubbles
-                        modeled_block['touchpoint_spider']   = spider
+                        modeled_block['marketing_footprint'] = agent_out['fp']
+                        modeled_block['touchpoint_bubbles']  = agent_out['bubbles']
+                        modeled_block['touchpoint_spider']   = agent_out['spider']
+                    elif agent_out.get('_error'):
+                        print(f"[Journey IQ] footprint agent returned error (non-fatal): {agent_out['_error']}")
                 except Exception as e:
-                    print(f"[Journey IQ] footprint research failed (non-fatal): {e}")
+                    print(f"[Journey IQ] footprint future failed (non-fatal): {e}")
             except Exception as e:
                 print(f"[Journey IQ] {target_type} synthesis failed (non-fatal): {e}")
 
@@ -979,7 +1029,9 @@ def run_job(
                 'created_by':     username,
                 'created_at':     datetime.utcnow().isoformat() + 'Z',
                 'duration_sec':   round(time.time() - started, 1),
-                'matched_uids':   matched_uids,
+                'matched_uids':        matched_uids,
+                'matched_uids_total':  matched_uids_total,
+                'cohort_was_sampled':  (matched_uids != matched_uids_total),
                 'events_pulled':  len(raw_rows),
                 'job_id':         job_id,
             },
