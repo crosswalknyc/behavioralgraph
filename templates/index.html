@@ -27992,7 +27992,7 @@
                               || e.partner || e.site || e.forum || e.track || e.engine
                               || e.channel || e.medium || '—';
                     var detail  = e.campaign || e.placement || e.creative_type
-                              || e.event_type || '';
+                              || e.event_type || e.feature || '';
                     // For organic_search: surface the actual user query as the
                     // detail (e.g. "Google — \"the goat movie showtimes\"").
                     if (!detail && e.query) detail = '"' + String(e.query).replace(/"/g, '') + '"';

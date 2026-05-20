@@ -1422,8 +1422,38 @@ brand) DURING A SPECIFIC DATE WINDOW. You have web search. Your job:
        regmovies.com, cinemark.com — note any Fandango "top sellers" or
        theater-chain pre-sale rankings inside the window.
 
-     * Showtime / EPG-lookup spikes: any reported search-volume spikes on
-       Fandango / Google "showtimes near me" trends during the window.
+     * Showtime / EPG-lookup spikes — REASON about the top ~10
+       surfaces a real person hits when they want to find showtimes
+       for the target during the window. For each surface, name the
+       site/feature, describe how that surface picks up the target
+       (search-results page, native showtime widget, "Top Sellers"
+       carousel, theater-detail page, etc.), and estimate US-genpop
+       reach. The canonical pre-purchase showtime-lookup surfaces
+       for a US theatrical release are, in approximate descending
+       order of reach:
+         1. Google "Showtimes near me" Knowledge Panel widget
+            (biggest surface — most users never click off Google
+            because the widget surfaces all nearby theaters + times)
+         2. Fandango direct movie page + "Top Sellers" carousel
+            (~50M monthly US uniques)
+         3. Google Maps theater search ("movie theater near me" →
+            pick theater → see what's playing)
+         4. AMC Theatres app + amctheatres.com (largest US chain
+            by screens, ~12M app users)
+         5. Atom Tickets (atomtickets.com)
+         6. Regal Cinemas app + regmovies.com (#2 US chain)
+         7. Cinemark app + cinemark.com (#3 US chain)
+         8. Regional chains aggregated — Marcus, Alamo Drafthouse,
+            Harkins, B&B, Landmark, Cinépolis (long-tail but real
+            in non-coastal DMAs)
+         9. IMDb showtimes feature (imdb.com/showtimes/title/<tt-id>)
+        10. Bing "Showtimes near me" (Edge / Windows default engine)
+        11. Yelp + Apple Maps theater search (long-tail)
+        12. Moviefone (legacy but still indexed; older skew)
+       Aim for 10-12 showtime_searches events covering this whole
+       surface stack. Use Fandango's published top-sellers lists,
+       AMC/Regal/Cinemark pre-sale rankings, and SimilarWeb traffic
+       estimates as sources where available.
 
      * Organic search — REASON about what real people search for when
        they're in the funnel for this target during this date window,
@@ -1551,7 +1581,18 @@ Output JSON EXACTLY in this shape (no code fences, no markdown):
         {"platform": "Spotify Audio",    "network": "Spotify",                      "campaign": "audio + podcast pre-roll",                  "creative_type": "audio",             "placement": "free-tier audio + podcasts",        "url": "",                                   "spend_usd_estimate":  400000, "estimated_reach_us":  3500000, "reach_pct_of_genpop": 1.3,  "date": "2026-01-11", "confidence": "low",    "notes": "Audio reach estimate"},
         {"platform": "OOH (out-of-home)","network": "Lamar / Clear Channel / Intersection", "campaign": "billboards + transit + theater lobby", "creative_type": "static + digital OOH", "placement": "LA + NYC + top 25 DMAs",  "url": "",                                   "spend_usd_estimate": 1200000, "estimated_reach_us":  9000000, "reach_pct_of_genpop": 3.5,  "date": "2026-01-22", "confidence": "medium", "notes": "Geopath impression estimate for major-market OOH buy"}
     ]},
-    "showtime_searches":  {"reach_pct_of_genpop": ..., "events": [{"site": "Fandango",     "search_spike_pct": ..., "estimated_reach_us": ..., ...}]},
+    "showtime_searches":  {"reach_pct_of_genpop": ..., "events": [
+        {"site": "Google",           "feature": "Showtimes near me Knowledge Panel widget", "query": "<TARGET> showtimes near me",        "search_spike_pct": 850, "estimated_reach_us": 38000000, "reach_pct_of_genpop": 14.6, "date": "2026-01-17", "url": "https://www.google.com/search?q=<TARGET>+showtimes", "confidence": "high",   "notes": "Google's built-in showtime widget is the biggest surface — most users never click off Google for showtimes"},
+        {"site": "Fandango",         "feature": "movie detail page + Top Sellers carousel", "query": "<TARGET> fandango",                  "search_spike_pct": 620, "estimated_reach_us": 15000000, "reach_pct_of_genpop":  5.8, "date": "2026-01-17", "url": "https://www.fandango.com/the-goat-2026-tickets",     "confidence": "high",   "notes": "~50M monthly US uniques, mostly showtime intent. Cite Fandango Top Sellers if listed"},
+        {"site": "Google Maps",      "feature": "movie theater near me",                    "query": "movie theater near me",              "search_spike_pct": 180, "estimated_reach_us": 12000000, "reach_pct_of_genpop":  4.6, "date": "2026-01-17", "url": "https://www.google.com/maps/search/movie+theater", "confidence": "medium", "notes": "Maps-first behavior; users tap a theater to see what's playing"},
+        {"site": "AMC Theatres",     "feature": "app + amctheatres.com showtime listing",   "query": "AMC <TARGET> showtimes",             "search_spike_pct": 410, "estimated_reach_us":  9000000, "reach_pct_of_genpop":  3.5, "date": "2026-01-17", "url": "https://www.amctheatres.com/movies/the-goat",         "confidence": "high",   "notes": "Largest US chain by screens, ~12M app users + web"},
+        {"site": "Atom Tickets",     "feature": "movie detail + showtime listing",          "query": "<TARGET> atom tickets",              "search_spike_pct": 220, "estimated_reach_us":  3500000, "reach_pct_of_genpop":  1.3, "date": "2026-01-17", "url": "https://www.atomtickets.com/movies/the-goat",         "confidence": "medium", "notes": "Smaller than Fandango but loyal user base"},
+        {"site": "Regal Cinemas",    "feature": "app + regmovies.com showtime listing",     "query": "Regal <TARGET> showtimes",           "search_spike_pct": 310, "estimated_reach_us":  6500000, "reach_pct_of_genpop":  2.5, "date": "2026-01-17", "url": "https://www.regmovies.com/movies/the-goat",           "confidence": "high",   "notes": "#2 US chain"},
+        {"site": "Cinemark",         "feature": "app + cinemark.com showtime listing",      "query": "Cinemark <TARGET> showtimes",        "search_spike_pct": 240, "estimated_reach_us":  4800000, "reach_pct_of_genpop":  1.8, "date": "2026-01-17", "url": "https://www.cinemark.com/movies/the-goat",            "confidence": "high",   "notes": "#3 US chain"},
+        {"site": "Regional chains (Marcus / Alamo / Harkins / B&B / Landmark / Cinépolis)", "feature": "aggregated regional theater chain showtime lookups", "query": "<TARGET> showtimes <city>", "search_spike_pct": 150, "estimated_reach_us":  3500000, "reach_pct_of_genpop":  1.3, "date": "2026-01-17", "url": "", "confidence": "medium", "notes": "Long-tail aggregated reach across non-coastal DMAs"},
+        {"site": "IMDb",             "feature": "showtimes feature (imdb.com/showtimes/title/<tt-id>)", "query": "<TARGET> imdb showtimes", "search_spike_pct":  90, "estimated_reach_us":  1500000, "reach_pct_of_genpop":  0.6, "date": "2026-01-17", "url": "https://www.imdb.com/showtimes/title/tt27613895/",    "confidence": "medium", "notes": "Legacy but still indexed; pulls from local theater feeds"},
+        {"site": "Bing",             "feature": "Showtimes near me (Edge / Windows default)", "query": "<TARGET> showtimes near me",        "search_spike_pct":  60, "estimated_reach_us":  1800000, "reach_pct_of_genpop":  0.7, "date": "2026-01-17", "url": "https://www.bing.com/search?q=<TARGET>+showtimes",    "confidence": "low",    "notes": "Default engine on Windows + Edge — meaningful older-demo reach"}
+    ]},
     "ticketing_sites":    {"reach_pct_of_genpop": ..., "events": [{"site": "AMC Theatres", "visit_share_pct": ..., "estimated_reach_us": ..., ...}]},
     "soundtrack_music":   {"reach_pct_of_genpop": ..., "events": [{"track": "...",         "platform": "spotify",   "streams_us": ..., ...}]},
     "organic_search":     {"reach_pct_of_genpop": ..., "events": [
@@ -1599,9 +1640,28 @@ Hard rules:
     specific review, not the critic's bio page.
   * Every event must have a "date" or "date_estimate" field IN ISO format
     that falls inside the date window provided in the user message.
-  * Include up to 10 events per channel; if a channel has no real
-    marketing activity inside the window, set events: [] and
-    reach_pct_of_genpop: 0.
+  * For EVERY channel, AIM for the top ~10 events — reason about
+    the full surface stack within that channel and enumerate it,
+    don't stop at 2-3 obvious entries. Specifically:
+        social_media:          8-12 events (top creators per platform)
+        press:                 8-12 articles (across 8+ outlets)
+        talent_mentions:       6-10 events (cast + cameo posts)
+        creator_influencers:   8-12 events (across YT/TT/IG/podcasts)
+        brand_partnerships:    4-8 events (one per real partner)
+        reviews_critics:       4-8 aggregator entries (RT / Metacritic
+                               / Letterboxd / IMDb / CinemaScore)
+        paid_advertising:      5-10 platforms (Google/Meta/TT/Amazon/etc.)
+        showtime_searches:    10-12 surfaces (Google widget + every
+                               major chain + long-tail Bing/IMDb)
+        ticketing_sites:       6-10 (every major chain + studio direct)
+        soundtrack_music:      4-8 (Spotify/Apple/playlists + radio)
+        organic_search:        8-12 queries across 4+ engines
+        press_reviews:         5-8 critic reviews
+        forum_discussion:      6-10 threads (Reddit + Letterboxd + niche)
+    A channel returning 0-3 events is a RED FLAG that you didn't
+    reason hard enough — go back and enumerate more before
+    submitting. Only return events:[] when the target genuinely
+    has zero footprint on that channel.
   * Every estimated_reach_us must be a REAL number you can defend from
     the actor's audited follower count, the publication's monthly
     uniques, the platform's reported reach for similar campaigns, etc.
@@ -1625,6 +1685,23 @@ Hard rules:
     standard "estimated_reach_us" / "reach_pct_of_genpop" / "date" /
     "url" / "confidence" / "notes". Do NOT just put "channel": "TV" —
     the dashboard renders rows as "<platform> — <campaign>".
+  * showtime_searches events MUST use these field names so the
+    dashboard can render them: "site" (REQUIRED — "Google",
+    "Fandango", "Google Maps", "AMC Theatres", "Atom Tickets",
+    "Regal Cinemas", "Cinemark", regional-chain aggregate, "IMDb",
+    "Bing", "Yelp / Apple Maps", "Moviefone"), "feature" (REQUIRED
+    — the specific surface within the site, e.g. "Showtimes near me
+    Knowledge Panel widget", "Top Sellers carousel", "movie detail
+    page"), "query" (the actual user query that would land here),
+    "search_spike_pct" (search-volume lift vs baseline), "url"
+    (specific page URL — never just the bare domain when a movie
+    page exists, e.g. fandango.com/the-goat-2026-tickets not
+    fandango.com), and the standard estimated_reach_us /
+    reach_pct_of_genpop / date / confidence / notes. Aim for 10-12
+    events covering the full showtime-surface stack documented in
+    the system instructions. Even if individual reach is small,
+    enumerate the long-tail surfaces (Bing, IMDb, regional chains)
+    rather than returning only Fandango + Google.
   * press and press_reviews events MUST use these field names so the
     dashboard can render them: "publication" (REQUIRED — e.g.
     "Variety", "The Hollywood Reporter", "The New York Times"),
