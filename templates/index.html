@@ -27605,8 +27605,7 @@
                 toggleMetaEl.textContent = 'Box office: $' + (meta.box_office_millions || 0) + 'M'
                     + (ia ? '  ·  implied audience: ' + _jiqFmt(ia) : '')
                     + (sf > 1 ? '  ·  scaling: ' + sf.toFixed(1) + 'x' : '')
-                    + '  ·  currently viewing: ' + slice.label.toUpperCase()
-                    + (slice.source && slice.source !== slice.label ? ' (' + slice.source + ')' : '');
+                    + '  ·  currently viewing: ' + slice.label.toUpperCase();
             }
 
             // Determine active cut + cluster list. Fall back to the legacy
