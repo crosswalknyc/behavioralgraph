@@ -21336,6 +21336,67 @@ def _flush_hostmap_email_buffer(subject_name: str) -> None:
         print(f"   ⚠️ consolidated missing-hostmap flush failed: {_e}")
 
 
+def _filter_already_hostmapped_other_cat(
+    missing: list[dict],
+) -> tuple[list[dict], list[tuple[str, str, list[tuple[str, str]]]]]:
+    """Cross-category dedup pass for hostmap-gap emails (2026-05-20 per
+    Anastasia feedback). If a brand we're about to ask the data team to
+    add already exists in `reference.host_mapping` under a different
+    category (e.g. WHOLE FOODS already in WHERE THEY SHOP, agent wanted
+    to add to MOST PURCHASED BRANDS), silently drop the row — that's a
+    re-categorization issue, not a missing-entry issue.
+
+    Returns:
+        (kept, dropped) where dropped = [(value, requested_cat, [(BRAND, CAT)]), ...]
+    """
+    if not missing:
+        return missing, []
+
+    def _ncat(s: str) -> str:
+        import re as _re
+        return _re.sub(r'[^A-Z0-9]', '', str(s or '').upper())
+
+    norms = list({_hostmap_norm_key(e.get('value', '')) for e in missing
+                  if _hostmap_norm_key(e.get('value', ''))})
+    if not norms:
+        return missing, []
+
+    try:
+        import clickhouse_connect as _ch
+        client = _ch.get_client(
+            host='168.119.215.48', port=8123, username='bgapp',
+            password='4qPllwDG+S3PptBWTRAJPTkpCzkRZ6tZ',
+            settings={'max_execution_time': 20},
+        )
+        placeholders = ','.join(f"'{n}'" for n in norms)
+        q = (
+            "SELECT upper(replaceRegexpAll(BRAND, '[^A-Za-z0-9]', '')) AS nb, "
+            "BRAND, CATEGORY FROM reference.host_mapping "
+            f"WHERE upper(replaceRegexpAll(BRAND, '[^A-Za-z0-9]', '')) IN ({placeholders}) "
+            "GROUP BY nb, BRAND, CATEGORY"
+        )
+        rows = client.query(q).result_rows
+    except Exception as _e:
+        print(f"   ⚠️ cross-category hostmap dedup skipped (CH error: {_e}) — sending all")
+        return missing, []
+
+    existing: dict[str, list[tuple[str, str]]] = {}
+    for nb, brand, cat in rows:
+        existing.setdefault(str(nb), []).append((str(brand), str(cat or '')))
+
+    kept: list[dict] = []
+    dropped: list[tuple[str, str, list[tuple[str, str]]]] = []
+    for e in missing:
+        nb = _hostmap_norm_key(e.get('value', ''))
+        req_cat = str(e.get('category', '')).strip()
+        existing_pairs = existing.get(nb, [])
+        if existing_pairs:
+            dropped.append((e.get('value', ''), req_cat, existing_pairs))
+            continue
+        kept.append(e)
+    return kept, dropped
+
+
 def _send_missing_hostmap_email(subject_name: str, missing: list[dict]) -> None:
     """Email jenna@ (cc jessie@, anastasia@, liz@) with affiliation brands
     that aren't in `reference.host_mapping`. Each row includes a suggested
@@ -21344,6 +21405,19 @@ def _send_missing_hostmap_email(subject_name: str, missing: list[dict]) -> None:
     Prefer `_queue_missing_hostmap_email` + `_flush_hostmap_email_buffer`
     over calling directly so multiple sources consolidate into one email
     per run."""
+    if not missing:
+        return
+    # ── Cross-category dedup (2026-05-20 per Anastasia feedback) ──
+    # Don't ask the data team to add a brand that already lives in
+    # reference.host_mapping under a different category — that's a
+    # re-categorization issue, not a missing-entry one.
+    missing, recat_dropped = _filter_already_hostmapped_other_cat(missing)
+    if recat_dropped:
+        print(f"   🤝 {len(recat_dropped)} cross-category dup(s) dropped from email "
+              f"(brand already exists in hostmap under another category):")
+        for v, req_cat, existing in recat_dropped[:6]:
+            ex_str = ', '.join(f'{b}({c})' for b, c in existing[:3])
+            print(f"      • {v} (asked for {req_cat}) — already in {ex_str}")
     if not missing:
         return
     try:
