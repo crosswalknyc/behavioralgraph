@@ -27989,23 +27989,27 @@
             if (!det) return;
             if (!ch) { det.style.display = 'none'; return; }
             det.style.display = '';
+            // Sort events by reach (largest first) so the most impactful is on top.
+            var events = (ch.events || []).slice().sort(function(a, b) {
+                return (b.estimated_reach_us || 0) - (a.estimated_reach_us || 0);
+            });
             det.innerHTML = ''
                 + '<div style="font-weight: 700; margin-bottom: 0.5rem;">' + _jiqEsc(ch.label) + ' — ' + ch.reach_pct_of_genpop + '% US genpop reach (union)</div>'
-                + '<table style="width: 100%; border-collapse: collapse; font-size: 0.78rem;">'
+                + '<table style="width: 100%; border-collapse: collapse; font-size: 0.82rem;">'
                 + '<thead><tr style="text-align: left; border-bottom: 1px solid var(--border-color);">'
-                + '<th style="padding: 4px;">#</th><th style="padding: 4px;">Source</th><th style="padding: 4px;">Reach US</th><th style="padding: 4px;">Reach %</th><th style="padding: 4px;">Date</th><th style="padding: 4px;">Notes</th><th style="padding: 4px;">Link</th>'
+                + '<th style="padding: 6px;">Source</th>'
+                + '<th style="padding: 6px; text-align: right;">Reach (US)</th>'
+                + '<th style="padding: 6px;">Date</th>'
                 + '</tr></thead><tbody>'
-                + (ch.events || []).map(function(e, i) {
+                + events.map(function(e) {
                     var actor = e.actor || e.publication || e.talent || e.creator || e.partner || e.site || e.forum || e.track || e.engine || '—';
-                    var link  = e.url ? '<a href="' + _jiqEsc(e.url) + '" target="_blank" rel="noopener" style="color: var(--accent-primary);">↗</a>' : '';
+                    var label = e.url
+                        ? '<a href="' + _jiqEsc(e.url) + '" target="_blank" rel="noopener" style="color: var(--text-primary); font-weight: 600; text-decoration: none; border-bottom: 1px dotted var(--text-secondary);">' + _jiqEsc(String(actor)) + '</a>'
+                        : '<span style="font-weight: 600;">' + _jiqEsc(String(actor)) + '</span>';
                     return '<tr style="border-bottom: 1px solid var(--border-color);">'
-                        + '<td style="padding: 4px; color: var(--text-secondary);">' + (i+1) + '</td>'
-                        + '<td style="padding: 4px; font-weight: 600;">' + _jiqEsc(String(actor)) + '</td>'
-                        + '<td style="padding: 4px;">' + _jiqFmt(e.estimated_reach_us || 0) + '</td>'
-                        + '<td style="padding: 4px;">' + (e.reach_pct_of_genpop || 0) + '%</td>'
-                        + '<td style="padding: 4px; color: var(--text-secondary);">' + _jiqEsc(e.date || e.date_estimate || '') + '</td>'
-                        + '<td style="padding: 4px; font-size: 0.72rem; color: var(--text-secondary);">' + _jiqEsc(e.notes || '') + '</td>'
-                        + '<td style="padding: 4px;">' + link + '</td>'
+                        + '<td style="padding: 6px;">' + label + '</td>'
+                        + '<td style="padding: 6px; text-align: right;">' + _jiqFmt(e.estimated_reach_us || 0) + '</td>'
+                        + '<td style="padding: 6px; color: var(--text-secondary);">' + _jiqEsc(e.date || e.date_estimate || '—') + '</td>'
                         + '</tr>';
                 }).join('') + '</tbody></table>';
         }
