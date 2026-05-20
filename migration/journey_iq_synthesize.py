@@ -1490,6 +1490,50 @@ brand) DURING A SPECIFIC DATE WINDOW. You have web search. Your job:
        Aim for 8-12 distinct organic_search events covering the most
        likely query intents; mix engines so it's not 10 Google rows.
 
+     * Brand partnerships — DO EXPLICIT WEB SEARCHES to discover the
+       full list of co-promotional deals around the target. Don't
+       trust ambient memory; run dated queries inside the window:
+         - "<TARGET> brand partnership"   - "<TARGET> tie-in"
+         - "<TARGET> co-promotion"        - "<TARGET> exclusive"
+         - "<TARGET> sponsor"             - "<TARGET> collab"
+         - "<TARGET> McDonald's | Burger King | Wendy's | Taco Bell"
+         - "<TARGET> DoorDash | Uber Eats | Postmates | Grubhub"
+         - "<TARGET> Mercedes | Ford | Chevy | Jeep | Toyota | Tesla"
+         - "<TARGET> Coca-Cola | Pepsi | Gatorade | Mountain Dew"
+         - "<TARGET> Lay's | Doritos | Cheetos | M&M's | Reese's"
+         - "<TARGET> Nike | Adidas | Champion | Under Armour"
+         - "<TARGET> Chase | Amex | Visa | Mastercard"
+         - "<TARGET> AMC Stubs | Regal Crown Club"
+         - "<TARGET> Spotify | Apple Music exclusive"
+         - "<TARGET> Funko | Lego | Hot Toys merchandise"
+         - "<TARGET> Walmart | Target | Best Buy exclusive"
+       For a major US theatrical release, expect 8-12 real
+       partnerships across QSR, delivery, auto, beverage, snacks,
+       apparel, banking/credit-card, theater-loyalty, music, and
+       merchandise categories. Aim for the top 10.
+
+       US-ONLY hard restriction: include ONLY partnerships with
+       brands that operate in the United States as a primary market.
+       DROP anything that is purely a foreign-market tie-in (e.g.
+       Lidl, Carrefour, Tesco, McDonald's-Japan-only Happy Meal toy,
+       7-Eleven Korea exclusive, Sky Cinema UK, Mexico-only OXXO,
+       India-only Tata Cliq). If a global brand ran a campaign and
+       it was active in the US (e.g. Mercedes Super Bowl spot,
+       global McDonald's Happy Meal that shipped to US stores), keep
+       it. If the campaign was Europe/Asia/LATAM-only, drop it.
+
+       URL rule: every brand_partnerships event MUST link to the
+       SPECIFIC collab announcement / campaign page — never the
+       brand's homepage. Examples of valid URLs:
+         https://about.doordash.com/en-us/news/doordash-x-the-goat/
+         https://news.mercedes-benz.com/2026/01/the-goat-partnership.html
+         https://www.mcdonalds.com/us/en-us/promotions/the-goat-happy-meal.html
+       If you can't find the announcement page via web_search, look
+       for the campaign hashtag on Twitter / Instagram (e.g.
+       #DashPassGoat, #MercedesGoat) or a trade-press story
+       (variety.com, adweek.com, marketing-dive.com) and link to
+       that — but never just doordash.com or mercedes-benz.com.
+
      * Paid-advertising platforms — ENUMERATE the actual major US ad
        platforms the target almost certainly ran on, and look each up
        in its public ad library / transparency tool:
@@ -1567,7 +1611,18 @@ Output JSON EXACTLY in this shape (no code fences, no markdown):
     ]},
     "talent_mentions":    {"reach_pct_of_genpop": ..., "events": [{"talent": "Steph Curry", "platform": "podcast",   "estimated_reach_us": ..., ...}]},
     "creator_influencers":{"reach_pct_of_genpop": ..., "events": [{"creator": "MrBeast",    "platform": "youtube",   "estimated_reach_us": ..., ...}]},
-    "brand_partnerships": {"reach_pct_of_genpop": ..., "events": [{"partner": "Mercedes",   "campaign": "Super Bowl spot", "estimated_reach_us": ..., ...}]},
+    "brand_partnerships": {"reach_pct_of_genpop": ..., "events": [
+        {"partner": "Mercedes-Benz USA",  "category": "auto",              "campaign": "<actual campaign name — e.g. Super Bowl LX spot featuring Goat>",                            "us_only": true, "url": "https://news.mercedes-benz.com/<actual-slug>",            "estimated_reach_us": 18000000, "reach_pct_of_genpop": 6.9, "date": "2026-01-10", "confidence": "high",   "notes": "Cite Mercedes press release URL"},
+        {"partner": "DoorDash",           "category": "delivery",          "campaign": "<actual campaign — e.g. DashPass exclusive ticket bundle + in-app Goat-themed promo>",       "us_only": true, "url": "https://about.doordash.com/en-us/news/<actual-slug>",     "estimated_reach_us":  9500000, "reach_pct_of_genpop": 3.7, "date": "2026-01-12", "confidence": "high",   "notes": "Cite DoorDash newsroom URL"},
+        {"partner": "McDonald's USA",     "category": "QSR",               "campaign": "<actual campaign — e.g. Goat Happy Meal toys, US restaurants>",                              "us_only": true, "url": "https://www.mcdonalds.com/us/en-us/promotions/<actual-slug>", "estimated_reach_us": 22000000, "reach_pct_of_genpop": 8.5, "date": "2026-01-08", "confidence": "high",   "notes": "Cite McDonald's US promo page"},
+        {"partner": "Coca-Cola",          "category": "beverage",          "campaign": "<actual campaign — e.g. limited-edition Goat cans + theater concession promo>",              "us_only": true, "url": "https://www.coca-colacompany.com/media-center/<actual-slug>", "estimated_reach_us": 14000000, "reach_pct_of_genpop": 5.4, "date": "2026-01-14", "confidence": "high",   "notes": "Cite Coca-Cola press URL"},
+        {"partner": "Lay's / Frito-Lay",  "category": "snacks",            "campaign": "<actual campaign — e.g. limited-edition flavor + on-pack code>",                             "us_only": true, "url": "https://www.fritolay.com/news/<actual-slug>",             "estimated_reach_us":  8000000, "reach_pct_of_genpop": 3.1, "date": "2026-01-15", "confidence": "medium", "notes": "Cite Frito-Lay newsroom"},
+        {"partner": "AMC Stubs",          "category": "theater loyalty",   "campaign": "<actual campaign — e.g. AMC Stubs members get early-access Goat screenings + double points>", "us_only": true, "url": "https://www.amctheatres.com/amcstubs/<actual-slug>",     "estimated_reach_us":  6500000, "reach_pct_of_genpop": 2.5, "date": "2026-01-09", "confidence": "high",   "notes": "AMC Stubs page or AMC press release"},
+        {"partner": "Chase Sapphire",     "category": "credit card",       "campaign": "<actual campaign — e.g. Chase cardholders early-access to Goat tickets via Fandango>",       "us_only": true, "url": "https://creditcards.chase.com/news/<actual-slug>",       "estimated_reach_us":  4500000, "reach_pct_of_genpop": 1.7, "date": "2026-01-11", "confidence": "medium", "notes": "Chase movie-ticket presale is a recurring tie-in"},
+        {"partner": "Spotify",            "category": "music",             "campaign": "<actual campaign — e.g. official Goat soundtrack playlist + branded home tile>",             "us_only": true, "url": "https://newsroom.spotify.com/<actual-slug>",              "estimated_reach_us":  7500000, "reach_pct_of_genpop": 2.9, "date": "2026-01-13", "confidence": "medium", "notes": "Cite Spotify Newsroom"},
+        {"partner": "Funko",              "category": "merchandise",       "campaign": "<actual campaign — e.g. Goat Pop! Vinyl line, US retail exclusive at Walmart + Target>",     "us_only": true, "url": "https://funko.com/blog/<actual-slug>",                    "estimated_reach_us":  3500000, "reach_pct_of_genpop": 1.3, "date": "2026-01-16", "confidence": "medium", "notes": "Funko blog or press release"},
+        {"partner": "T-Mobile Tuesdays",  "category": "telco loyalty",     "campaign": "<actual campaign — e.g. T-Mobile Tuesdays Goat-ticket giveaway via Fandango app>",           "us_only": true, "url": "https://www.t-mobile.com/news/<actual-slug>",             "estimated_reach_us":  5000000, "reach_pct_of_genpop": 1.9, "date": "2026-01-14", "confidence": "medium", "notes": "T-Mobile Tuesdays is a recurring movie tie-in surface"}
+    ]},
     "reviews_critics":    {"reach_pct_of_genpop": ..., "events": [{"site": "Rotten Tomatoes","score": 87, "estimated_reach_us": ..., ...}]},
     "paid_advertising":   {"reach_pct_of_genpop": ..., "events": [
         {"platform": "Google Ads",       "network": "Search + YouTube TrueView",   "campaign": "pre-roll skippable + display remarketing",  "creative_type": "video + display",   "placement": "YouTube + Display Network",        "url": "https://ads.google.com/...", "spend_usd_estimate": 4500000,  "estimated_reach_us": 28000000, "reach_pct_of_genpop": 10.8, "date": "2026-01-10", "confidence": "high",   "notes": "Cite Google Ads Transparency Center, ad-library listing, or trade press estimate"},
@@ -1647,7 +1702,10 @@ Hard rules:
         press:                 8-12 articles (across 8+ outlets)
         talent_mentions:       6-10 events (cast + cameo posts)
         creator_influencers:   8-12 events (across YT/TT/IG/podcasts)
-        brand_partnerships:    4-8 events (one per real partner)
+        brand_partnerships:   8-12 US-only co-promo deals (QSR /
+                               delivery / auto / beverage / snacks /
+                               apparel / banking / theater loyalty /
+                               music / merchandise / telco)
         reviews_critics:       4-8 aggregator entries (RT / Metacritic
                                / Letterboxd / IMDb / CinemaScore)
         paid_advertising:      5-10 platforms (Google/Meta/TT/Amazon/etc.)
@@ -1685,6 +1743,25 @@ Hard rules:
     standard "estimated_reach_us" / "reach_pct_of_genpop" / "date" /
     "url" / "confidence" / "notes". Do NOT just put "channel": "TV" —
     the dashboard renders rows as "<platform> — <campaign>".
+  * brand_partnerships events MUST use these field names so the
+    dashboard can render them: "partner" (REQUIRED — US brand name,
+    e.g. "Mercedes-Benz USA", "DoorDash", "McDonald's USA"),
+    "category" (REQUIRED — "QSR", "delivery", "auto", "beverage",
+    "snacks", "apparel", "banking / credit card", "theater loyalty",
+    "music", "merchandise", "telco loyalty", "retail exclusive"),
+    "campaign" (REQUIRED — short human-readable description of the
+    actual collab, e.g. "DashPass exclusive ticket bundle"),
+    "us_only" (REQUIRED — must be `true`; drop the event entirely
+    if the campaign is foreign-market-only), "url" (REQUIRED —
+    SPECIFIC collab announcement / press release / campaign page,
+    NEVER the brand's homepage), and the standard
+    estimated_reach_us / reach_pct_of_genpop / date / confidence /
+    notes. Aim for 8-12 events covering distinct brand categories.
+    Run explicit "<TARGET> brand partnership" / tie-in / co-promo
+    web_searches before submitting; don't skip well-known categories
+    like delivery (DoorDash), auto (Mercedes/Ford), or QSR
+    (McDonald's). DROP every partnership that is not active in the
+    United States.
   * showtime_searches events MUST use these field names so the
     dashboard can render them: "site" (REQUIRED — "Google",
     "Fandango", "Google Maps", "AMC Theatres", "Atom Tickets",
