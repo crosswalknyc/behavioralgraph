@@ -77,7 +77,6 @@ from migration.journey_iq_synthesize import (  # noqa: E402
     footprint_to_bubbles,
     footprint_to_spider,
     research_marketing_footprint,
-    research_site_funnel,
     synth_to_dashboard_payload,
     synthesize_journey,
 )
@@ -240,37 +239,6 @@ def run_research_anchored_job(
         print(f"[research-anchored] research OK in {research_sec}s — "
               f"{n_channels} channels, {n_events} events, {n_endpoints} endpoints")
 
-    # ── Phase R.2: site-funnel research (website target_type only) ────
-    # Models what happens to visitors who LAND on the target site:
-    # converted-on-site / switched-to-competitor / never-transacted +
-    # inception referrers + companion behaviors (dinner / parking /
-    # etc.). Powers the new "Visitor Funnel" dashboard cards.
-    site_funnel: dict = {}
-    if target_type == 'website':
-        print(f"[research-anchored] researching site funnel for "
-              f"{target!r} (visitor outcomes + switchers + inception "
-              f"+ companion behaviors)...")
-        t1 = time.time()
-        site_funnel = research_site_funnel(
-            target=target,
-            url_pattern=_root_domain(target),
-            vertical_hint='movie ticketing' if 'fandango' in target.lower() or 'atom' in target.lower() else '',
-            start_date=start_date, end_date=end_date,
-        ) or {}
-        funnel_sec = round(time.time() - t1, 1)
-        if site_funnel.get('_error'):
-            print(f"[research-anchored] site_funnel error: "
-                  f"{site_funnel['_error']} (after {funnel_sec}s) — "
-                  f"continuing without funnel block")
-            site_funnel = {}
-        else:
-            n_dest = len(site_funnel.get('switched_destinations') or [])
-            n_ref  = len(site_funnel.get('inception_referrers') or [])
-            n_comp = len(site_funnel.get('companion_behaviors') or [])
-            print(f"[research-anchored] site_funnel OK in {funnel_sec}s — "
-                  f"{n_dest} switched destinations, {n_ref} inception "
-                  f"referrers, {n_comp} companion verticals")
-
     # ── Phase A: implied audience ────────────────────────────────────
     # Prefer the research-reported number (Claude can apply domain
     # nuance like opening-weekend rollups); fall back to formula.
@@ -331,10 +299,6 @@ def run_research_anchored_job(
         except Exception as e:
             print(f"[research-anchored] spider failed (non-fatal): {e}")
 
-    # ── Phase C.2: attach the site-funnel block ──────────────────────
-    if site_funnel:
-        modeled_block['site_funnel'] = site_funnel
-
     # ── Phase D: compose the summary envelope ────────────────────────
     summary = {
         'meta': {
@@ -391,8 +355,6 @@ def run_research_anchored_job(
         'facts':      _facts_from_footprint(fp, target),
         'modeled_view': modeled_block,
     }
-    if site_funnel:
-        summary['site_funnel'] = site_funnel
 
     # ── Phase E: persist ─────────────────────────────────────────────
     try:
@@ -423,15 +385,6 @@ def _date_range_days(start_date: str, end_date: str) -> int:
         return max(1, (e - s).days)
     except Exception:
         return 30
-
-
-def _root_domain(target: str) -> str:
-    """Best-effort guess at the root domain for a website target.
-    e.g. "Fandango" -> "fandango.com"; "fandango.com" stays as-is."""
-    t = (target or '').strip().lower()
-    if '.' in t:
-        return t.split('/')[0]
-    return f'{t.replace(" ", "")}.com'
 
 
 # ─────────────────────────────────────────────────────────────────────
