@@ -653,6 +653,7 @@ KNOWN_INTEREST: dict[str, float] = {
     'PHOTOGRAPHY': 35.0,
     'READING DIGITAL MEDIA': 50.0,
     'ONLINE COMMUNITY': 60.0,
+    'SHOPPING': 68.0,
     'MALL SHOPPING': 50.0,
     'FOOTWEAR': 65.0,
     'POLITICS': 50.0,

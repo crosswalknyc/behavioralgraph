@@ -1368,6 +1368,7 @@ GENPOP_CORRECTIONS: dict[tuple[str, str], tuple[float, float]] = {
     ('INTEREST', 'SCI-FI'): (15.0, 18.5),
     ('INTEREST', 'SCIENCE'): (25.0, 29.5),
     ('INTEREST', 'SECONDHAND CLOTHING'): (25.0, 29.5),
+    ('INTEREST', 'SHOPPING'): (65.0, 75.0),  # gen-pop 68.0; broad-but-not-universal leisure interest
     ('INTEREST', 'SKINCARE'): (35.0, 40.5),
     ('INTEREST', 'SNEAKERS'): (35.0, 40.5),
     ('INTEREST', 'SOCCER'): (15.0, 18.5),
