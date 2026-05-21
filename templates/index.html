@@ -19123,7 +19123,57 @@
                     <div id="jiqEcosystemTrinity" style="overflow-x: auto; margin-bottom: 0.75rem;"></div>
                     <div id="jiqEcosystemLifecycle" style="overflow-x: auto; margin-bottom: 0.75rem;"></div>
                     <div id="jiqEcosystemKpis" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 0.75rem; margin-top: 0.5rem;"></div>
-                    <div id="jiqEcosystemNotes" style="font-size: 0.68rem; color: var(--text-secondary); margin-top: 0.75rem; padding-top: 0.5rem; border-top: 1px solid var(--border-color);"></div>
+                    <div id="jiqEcosystemNotes" style="display: none;"></div>
+                </div>
+
+                <!-- ════════════════════════════════════════════════════════
+                     AUDIENCE HYPOTHESIS card — shown only when the run
+                     payload carries modeled_view.audience_hypotheses.
+                     Visualizes client-stated audience theses with proxy
+                     cohort sizing, intent index vs gen-pop baseline,
+                     top engagement surfaces, DMA concentration, plus
+                     pairwise overlaps and a triple-likely core callout.
+                ═══════════════════════════════════════════════════════ -->
+                <div class="card" id="jiqAudienceHypCard" style="padding: 1rem; margin-bottom: 1rem; display: none;">
+                    <div style="display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.25rem;">
+                        <h3 style="margin: 0;">🎯 Audience Hypothesis — proving / disproving the theses</h3>
+                        <div id="jiqAudienceHypMeta" style="font-size: 0.72rem; color: var(--text-secondary);"></div>
+                    </div>
+                    <div id="jiqAudienceHypSubtitle" style="font-size: 0.78rem; color: var(--text-secondary); margin-bottom: 0.75rem;"></div>
+                    <div id="jiqAudienceHypTiles" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(290px, 1fr)); gap: 0.85rem; margin-bottom: 0.75rem;"></div>
+                    <div id="jiqAudienceHypOverlap" style="margin-top: 0.5rem;"></div>
+                </div>
+
+                <!-- ════════════════════════════════════════════════════════
+                     EXHIBITOR CHANNEL MIX card — modeled_view.exhibitor_channel_mix
+                     Per-chain ticket share + audience-tilt heatmap (chain
+                     × hypothesis cohort) + promo participation flag.
+                ═══════════════════════════════════════════════════════ -->
+                <div class="card" id="jiqExhibitorCard" style="padding: 1rem; margin-bottom: 1rem; display: none;">
+                    <div style="display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.25rem;">
+                        <h3 style="margin: 0;">🎟️ Exhibitor Direct Channel Mix — where the tickets will flow</h3>
+                        <div id="jiqExhibitorMeta" style="font-size: 0.72rem; color: var(--text-secondary);"></div>
+                    </div>
+                    <div id="jiqExhibitorSubtitle" style="font-size: 0.78rem; color: var(--text-secondary); margin-bottom: 0.75rem;"></div>
+                    <div id="jiqExhibitorChart" style="margin-bottom: 0.85rem;"></div>
+                    <div id="jiqExhibitorHeatmap" style="margin-bottom: 0.75rem;"></div>
+                    <div id="jiqExhibitorVerdict" style="font-size: 0.78rem; color: var(--text-primary); background: var(--bg-secondary); border-left: 4px solid var(--accent-primary); padding: 0.7rem 0.9rem; border-radius: 6px;"></div>
+                </div>
+
+                <!-- ════════════════════════════════════════════════════════
+                     PROMO PROGRAM TRACKER card (e.g. "Nate Rate")
+                     modeled_view.promo_program_tracker
+                     Per-chain mechanic, channels, est. lift, coverage,
+                     eligibility — side-by-side comparison.
+                ═══════════════════════════════════════════════════════ -->
+                <div class="card" id="jiqPromoCard" style="padding: 1rem; margin-bottom: 1rem; display: none;">
+                    <div style="display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.25rem;">
+                        <h3 style="margin: 0;" id="jiqPromoTitle">🏷️ Promo Program Tracker</h3>
+                        <div id="jiqPromoMeta" style="font-size: 0.72rem; color: var(--text-secondary);"></div>
+                    </div>
+                    <div id="jiqPromoSubtitle" style="font-size: 0.78rem; color: var(--text-secondary); margin-bottom: 0.75rem;"></div>
+                    <div id="jiqPromoGrid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 0.75rem;"></div>
+                    <div id="jiqPromoVerdict" style="font-size: 0.78rem; color: var(--text-primary); background: var(--bg-secondary); border-left: 4px solid var(--accent-primary); padding: 0.7rem 0.9rem; border-radius: 6px; margin-top: 0.85rem;"></div>
                 </div>
 
                 <!-- Marketing Footprint: agent-discovered events per channel + spider + endpoint breakdown -->
@@ -27845,13 +27895,24 @@
             }
 
             // ---- Ecosystem Spotlight (owned-property family) ----
-            // Renders the trinity triangle + lifecycle ribbon + KPI
-            // strip when modeled_view.ecosystem_spotlight is present.
-            // Currently populated for the FANDANGO target run; the
-            // shape is generic so other media-family targets can drop
-            // an ecosystem_spotlight payload in and get the same viz.
             renderJourneyIqEcosystem(
                 ((fullRun || {}).modeled_view || {}).ecosystem_spotlight
+            );
+
+            // ---- Audience Hypothesis card ----
+            renderJourneyIqAudienceHypothesis(
+                ((fullRun || {}).modeled_view || {}).audience_hypotheses
+            );
+
+            // ---- Exhibitor Direct Channel Mix card ----
+            renderJourneyIqExhibitorMix(
+                ((fullRun || {}).modeled_view || {}).exhibitor_channel_mix,
+                ((fullRun || {}).modeled_view || {}).audience_hypotheses
+            );
+
+            // ---- Promo Program Tracker card ("Nate Rate" etc.) ----
+            renderJourneyIqPromoTracker(
+                ((fullRun || {}).modeled_view || {}).promo_program_tracker
             );
 
             // ---- Marketing Footprint panel (bubbles + spider + endpoints) ----
@@ -28187,6 +28248,310 @@
                  + '</svg>'
                  + '<div style="font-size:0.68rem;color:var(--text-secondary);margin-top:4px;text-align:center;">Curves show audience intensity (peak=100% per property) over a movie\'s release lifecycle</div>'
                  + '</div>';
+        }
+
+        // ───── Audience Hypothesis renderer ─────
+        // Renders one big card per hypothesis with:
+        //   - Icon + name + verdict pill (STRONGLY VALIDATED / VALIDATED / etc)
+        //   - Cohort size + % of US adults + intent index vs gen-pop
+        //   - Estimated opening-weekend buyers
+        //   - Proxy definition (italic gray)
+        //   - Top engagement surfaces (mini horizontal bars)
+        //   - DMA concentration heatstrip (top 8 DMAs by index)
+        //   - Verdict note (gray italic)
+        // Below the per-hypothesis tiles, renders pairwise overlaps as
+        // a "shared-audience" bar chart + the triple-likely core
+        // callout tile.
+        function renderJourneyIqAudienceHypothesis(ah) {
+            var card = document.getElementById('jiqAudienceHypCard');
+            if (!card) return;
+            if (!ah || !(ah.hypotheses || []).length) { card.style.display = 'none'; return; }
+            card.style.display = '';
+
+            var subEl  = document.getElementById('jiqAudienceHypSubtitle');
+            var metaEl = document.getElementById('jiqAudienceHypMeta');
+            if (subEl) subEl.innerHTML = 'Testing client-stated audience theses against a <strong>' + _jiqFmt(ah.baseline_size) + '</strong> ' + _jiqEsc(ah.baseline_label || 'baseline') + '. Each cohort\'s <strong>intent index</strong> is conversion lift vs. the ~' + (ah.baseline_conversion_pct || 0.5).toFixed(1) + '% gen-pop opening-weekend baseline.';
+            if (metaEl) metaEl.textContent = (ah.hypotheses.length + ' hypotheses · ~' + _jiqFmt(ah.baseline_opening_buyers || 0) + ' baseline opening-weekend buyers');
+
+            // Per-hypothesis tiles
+            var tilesEl = document.getElementById('jiqAudienceHypTiles');
+            if (tilesEl) {
+                tilesEl.innerHTML = ah.hypotheses.map(function(h) {
+                    var color = h.color || '#5b6cff';
+                    var verdictColor = (h.verdict || '').toLowerCase().indexOf('strongly') >= 0 ? '#10b981'
+                                     : (h.verdict || '').toLowerCase().indexOf('validated') >= 0 ? '#fbbf24'
+                                     : '#ef4444';
+                    // Engagement surfaces — mini horizontal bars
+                    var surfaces = (h.top_engagement_surfaces || []).slice(0, 5).map(function(s) {
+                        var pct = +s.reach_pct_of_cohort || 0;
+                        return '<div style="display:grid;grid-template-columns:1fr 36px;gap:8px;align-items:center;font-size:0.72rem;margin-bottom:3px;">'
+                             + '<div style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">'
+                             +   '<div style="background:var(--bg-secondary);border-radius:4px;height:14px;position:relative;overflow:hidden;margin-bottom:2px;">'
+                             +     '<div style="width:' + pct + '%;height:100%;background:' + color + ';opacity:0.8;border-radius:4px;"></div>'
+                             +     '<div style="position:absolute;top:0;left:6px;line-height:14px;color:var(--text-primary);font-size:0.7rem;font-weight:600;">' + _jiqEsc(s.surface) + '</div>'
+                             +   '</div>'
+                             + '</div>'
+                             + '<div style="font-weight:700;color:' + color + ';text-align:right;font-variant-numeric:tabular-nums;">' + pct + '%</div>'
+                             + '</div>';
+                    }).join('');
+                    // DMA heatstrip — top 8 by index
+                    var dmaMax = Math.max.apply(null, (h.dma_concentration || []).map(function(d) { return +d.index || 0; })) || 1;
+                    var dmas = (h.dma_concentration || []).slice(0, 8).map(function(d) {
+                        var idx = +d.index || 0;
+                        var w = Math.max(2, (idx / dmaMax) * 100);
+                        return '<div style="display:grid;grid-template-columns:minmax(110px,1fr) 1fr 42px;gap:8px;align-items:center;font-size:0.72rem;margin-bottom:3px;">'
+                             + '<div style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + _jiqEsc(d.dma) + '</div>'
+                             + '<div style="background:var(--bg-secondary);border-radius:4px;height:8px;overflow:hidden;">'
+                             +   '<div style="width:' + w + '%;height:100%;background:' + color + ';opacity:0.75;border-radius:4px;"></div>'
+                             + '</div>'
+                             + '<div style="font-weight:700;color:' + color + ';text-align:right;font-variant-numeric:tabular-nums;">' + idx.toFixed(1) + '×</div>'
+                             + '</div>';
+                    }).join('');
+                    return '<div style="background:var(--bg-card);border:1px solid var(--border-color);border-top:4px solid ' + color + ';border-radius:12px;padding:0.9rem;">'
+                         + '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:8px;">'
+                         +   '<div style="display:flex;align-items:center;gap:8px;min-width:0;">'
+                         +     '<div style="font-size:1.8rem;">' + _jiqEsc(h.icon || '◆') + '</div>'
+                         +     '<div style="min-width:0;">'
+                         +       '<div style="font-weight:700;font-size:0.95rem;line-height:1.2;">' + _jiqEsc(h.name) + '</div>'
+                         +       '<div style="font-size:0.7rem;color:var(--text-secondary);">' + _jiqFmt(h.cohort_size) + ' people · ' + (h.cohort_pct_of_genpop || 0).toFixed(1) + '% of US</div>'
+                         +     '</div>'
+                         +   '</div>'
+                         +   '<div style="background:' + verdictColor + ';color:#111;font-weight:700;font-size:0.62rem;padding:3px 8px;border-radius:10px;letter-spacing:0.05em;white-space:nowrap;">' + _jiqEsc(h.verdict || '') + '</div>'
+                         + '</div>'
+                         + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:8px;padding:6px 0;border-top:1px solid var(--border-color);border-bottom:1px solid var(--border-color);">'
+                         +   '<div style="text-align:center;">'
+                         +     '<div style="font-size:1.5rem;font-weight:800;color:' + color + ';line-height:1;">' + (h.intent_index || 0).toFixed(1) + '×</div>'
+                         +     '<div style="font-size:0.62rem;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.05em;margin-top:2px;">intent vs gen-pop</div>'
+                         +   '</div>'
+                         +   '<div style="text-align:center;">'
+                         +     '<div style="font-size:1.5rem;font-weight:800;color:var(--text-primary);line-height:1;">' + _jiqFmt(h.est_opening_buyers || 0) + '</div>'
+                         +     '<div style="font-size:0.62rem;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.05em;margin-top:2px;">est. opening buyers</div>'
+                         +   '</div>'
+                         + '</div>'
+                         + '<div style="font-size:0.7rem;color:var(--text-secondary);font-style:italic;line-height:1.4;margin-bottom:10px;">' + _jiqEsc(h.proxy_definition || '') + '</div>'
+                         + '<div style="font-weight:600;font-size:0.72rem;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.04em;margin-bottom:5px;">Top engagement surfaces</div>'
+                         + surfaces
+                         + '<div style="font-weight:600;font-size:0.72rem;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.04em;margin-top:10px;margin-bottom:5px;">DMA concentration (index vs nat\'l avg)</div>'
+                         + dmas
+                         + (h.verdict_note ? '<div style="font-size:0.72rem;color:var(--text-primary);background:var(--bg-secondary);padding:6px 8px;border-radius:6px;margin-top:10px;line-height:1.4;">' + _jiqEsc(h.verdict_note) + '</div>' : '')
+                         + '</div>';
+                }).join('');
+            }
+
+            // Overlaps + triple-likely core
+            var ovEl = document.getElementById('jiqAudienceHypOverlap');
+            if (ovEl) {
+                var hMap = {};
+                (ah.hypotheses || []).forEach(function(h) { hMap[h.key] = h; });
+                var ovs  = (ah.overlaps || []).slice().sort(function(a, b) { return (b.size || 0) - (a.size || 0); });
+                var maxOv = Math.max.apply(null, ovs.map(function(o) { return o.size || 0; })) || 1;
+                var triple = ah.triple_core || null;
+                var rows = ovs.map(function(o) {
+                    var pct = (o.size / maxOv) * 100;
+                    var names = (o.sets || []).map(function(k) { return (hMap[k] || {}).name || k; }).join(' ∩ ');
+                    var icons = (o.sets || []).map(function(k) { return (hMap[k] || {}).icon || ''; }).join(' ');
+                    return '<div style="display:grid;grid-template-columns:minmax(220px,1fr) 1fr 80px 70px;gap:10px;align-items:center;font-size:0.78rem;padding:5px 0;border-bottom:1px solid var(--border-color);">'
+                         + '<div style="font-weight:600;"><span style="margin-right:6px;">' + _jiqEsc(icons) + '</span>' + _jiqEsc(names) + '</div>'
+                         + '<div style="background:var(--bg-secondary);border-radius:6px;height:10px;overflow:hidden;">'
+                         +   '<div style="width:' + pct + '%;height:100%;background:var(--accent-primary);border-radius:6px;"></div>'
+                         + '</div>'
+                         + '<div style="text-align:right;font-weight:700;font-variant-numeric:tabular-nums;">' + _jiqFmt(o.size) + '</div>'
+                         + '<div style="text-align:right;color:var(--text-secondary);font-size:0.7rem;">' + (o.lift_vs_independent || 0).toFixed(1) + '× lift</div>'
+                         + '</div>';
+                }).join('');
+                ovEl.innerHTML = '<div style="background:var(--bg-card);border:1px solid var(--border-color);border-radius:12px;padding:0.9rem;">'
+                              + '<div style="display:grid;grid-template-columns:minmax(0,1.4fr) minmax(0,1fr);gap:1rem;">'
+                              +   '<div>'
+                              +     '<div style="font-weight:700;font-size:0.85rem;margin-bottom:6px;">Pairwise + triple overlaps</div>'
+                              +     '<div style="font-size:0.7rem;color:var(--text-secondary);margin-bottom:8px;">"Lift" = how much more concentrated the overlap is vs. what you\'d expect if the cohorts were independent (1.0× = no correlation, 2.0× = double).</div>'
+                              +     rows
+                              +   '</div>'
+                              + (triple ? '<div style="background:linear-gradient(135deg, rgba(16,185,129,0.12) 0%, rgba(16,185,129,0.02) 100%); border:2px solid #10b981; border-radius:12px; padding:0.9rem;">'
+                              +     '<div style="font-size:0.65rem;color:#10b981;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;margin-bottom:4px;">⭐ ' + _jiqEsc(triple.label || 'Triple-likely core') + '</div>'
+                              +     '<div style="font-size:2.2rem;font-weight:800;color:#10b981;line-height:1;margin:6px 0;">' + (triple.conversion_pct || 0).toFixed(0) + '%</div>'
+                              +     '<div style="font-size:0.72rem;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:8px;">opening-weekend conversion rate</div>'
+                              +     '<div style="display:flex;justify-content:space-between;gap:8px;font-size:0.78rem;border-top:1px solid var(--border-color);padding-top:8px;margin-bottom:8px;">'
+                              +       '<div><strong>' + _jiqFmt(triple.size) + '</strong><div style="font-size:0.65rem;color:var(--text-secondary);">people in core</div></div>'
+                              +       '<div style="text-align:right;"><strong>' + _jiqFmt(triple.est_opening_buyers) + '</strong><div style="font-size:0.65rem;color:var(--text-secondary);">est. buyers</div></div>'
+                              +     '</div>'
+                              +     '<div style="font-size:0.72rem;color:var(--text-primary);line-height:1.4;">' + _jiqEsc(triple.description || '') + '</div>'
+                              +   '</div>' : '')
+                              + '</div>'
+                              + '</div>';
+            }
+        }
+
+        // ───── Exhibitor Channel Mix renderer ─────
+        // Two stacked sub-panels:
+        //   1. Horizontal stacked bar showing each chain's share of
+        //      opening-weekend tickets (color-coded by chain brand).
+        //   2. Audience-tilt heatmap: rows = chains, cols = hypothesis
+        //      cohorts, cell color = tilt index (>1 over-index green,
+        //      <1 under-index red, ~1 neutral gray). Cell value = the
+        //      tilt number. Chains sorted by share desc.
+        // Plus a verdict block at the bottom.
+        function renderJourneyIqExhibitorMix(mix, ah) {
+            var card = document.getElementById('jiqExhibitorCard');
+            if (!card) return;
+            if (!mix || !(mix.channels || []).length) { card.style.display = 'none'; return; }
+            card.style.display = '';
+
+            var subEl  = document.getElementById('jiqExhibitorSubtitle');
+            var metaEl = document.getElementById('jiqExhibitorMeta');
+            if (subEl) subEl.innerHTML = 'Estimated breakdown of where the <strong>~' + _jiqFmt(mix.opening_weekend_tickets_estimate || 0) + '</strong> projected opening-weekend tickets will be purchased, with each chain\'s audience-fit (tilt) vs. its own typical mix.';
+            if (metaEl && mix.analysis_window) metaEl.textContent = mix.analysis_window.start + ' → ' + mix.analysis_window.end + (mix.analysis_window.release ? '  ·  release ' + mix.analysis_window.release : '');
+
+            var channels = (mix.channels || []).slice().sort(function(a, b) { return (b.share_pct || 0) - (a.share_pct || 0); });
+
+            // 1) Stacked horizontal share bar
+            var totalShare = channels.reduce(function(s, c) { return s + (c.share_pct || 0); }, 0) || 100;
+            var chartEl = document.getElementById('jiqExhibitorChart');
+            if (chartEl) {
+                var cum = 0;
+                var segments = channels.map(function(c) {
+                    var pct = (c.share_pct || 0);
+                    var w = (pct / totalShare) * 100;
+                    var seg = '<div style="width:' + w + '%;height:100%;background:' + (c.color || '#5b6cff') + ';position:relative;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:' + (w >= 5 ? '0.78rem' : '0.6rem') + ';" title="' + _jiqEsc(c.name) + ' — ' + pct.toFixed(1) + '%">'
+                             + (w >= 4 ? pct.toFixed(0) + '%' : '')
+                             + '</div>';
+                    cum += w;
+                    return seg;
+                }).join('');
+                var legend = channels.map(function(c) {
+                    return '<div style="display:flex;align-items:center;gap:6px;font-size:0.72rem;">'
+                         + '<span style="display:inline-block;width:12px;height:12px;border-radius:3px;background:' + (c.color || '#5b6cff') + ';"></span>'
+                         + '<span style="font-weight:600;">' + _jiqEsc(c.name) + '</span>'
+                         + '<span style="color:var(--text-secondary);">' + (c.share_pct || 0).toFixed(1) + '%</span>'
+                         + (c.promo && c.promo.has_nate_rate ? '<span style="background:rgba(16,185,129,0.18);color:#10b981;font-size:0.6rem;padding:1px 6px;border-radius:8px;font-weight:700;">PROMO</span>' : '')
+                         + '</div>';
+                }).join('');
+                chartEl.innerHTML = '<div style="display:flex;width:100%;height:36px;border-radius:8px;overflow:hidden;border:1px solid var(--border-color);">' + segments + '</div>'
+                                  + '<div style="display:flex;flex-wrap:wrap;gap:14px;margin-top:8px;">' + legend + '</div>';
+            }
+
+            // 2) Audience-tilt heatmap
+            var heatEl = document.getElementById('jiqExhibitorHeatmap');
+            if (heatEl) {
+                var hyps = ((ah || {}).hypotheses || []);
+                if (!hyps.length) {
+                    heatEl.innerHTML = '';
+                } else {
+                    function tiltColor(v) {
+                        // v >> 1 = strong over-index (green), v << 1 = under-index (red)
+                        if (v == null) return 'transparent';
+                        if (v >= 1.5)  return 'rgba(16,185,129,0.55)';
+                        if (v >= 1.2)  return 'rgba(16,185,129,0.35)';
+                        if (v >= 1.05) return 'rgba(16,185,129,0.18)';
+                        if (v <= 0.7)  return 'rgba(239,68,68,0.50)';
+                        if (v <= 0.85) return 'rgba(239,68,68,0.30)';
+                        if (v <= 0.95) return 'rgba(239,68,68,0.15)';
+                        return 'rgba(255,255,255,0.04)';
+                    }
+                    var rows = channels.map(function(c) {
+                        var tilt = c.audience_tilt || {};
+                        var cells = hyps.map(function(h) {
+                            var v = tilt[h.key];
+                            return '<td style="padding:8px 10px;background:' + tiltColor(v) + ';text-align:center;font-weight:700;font-variant-numeric:tabular-nums;border-right:1px solid var(--border-color);">'
+                                 + (v == null ? '—' : v.toFixed(2) + '×')
+                                 + '</td>';
+                        }).join('');
+                        return '<tr style="border-bottom:1px solid var(--border-color);">'
+                             + '<td style="padding:8px 10px;border-right:1px solid var(--border-color);">'
+                             +   '<span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:' + (c.color || '#5b6cff') + ';margin-right:6px;vertical-align:middle;"></span>'
+                             +   '<span style="font-weight:600;">' + _jiqEsc(c.name) + '</span>'
+                             +   '<span style="color:var(--text-secondary);font-size:0.7rem;margin-left:6px;">' + (c.share_pct || 0).toFixed(0) + '%</span>'
+                             + '</td>'
+                             + cells
+                             + '<td style="padding:8px 10px;font-size:0.72rem;color:var(--text-secondary);">' + _jiqEsc(c.profile_notes || '') + '</td>'
+                             + '</tr>';
+                    }).join('');
+                    var headerCells = hyps.map(function(h) {
+                        return '<th style="padding:8px 10px;background:var(--bg-secondary);text-align:center;font-size:0.72rem;font-weight:700;border-right:1px solid var(--border-color);white-space:nowrap;">'
+                             + _jiqEsc(h.icon || '') + ' ' + _jiqEsc(h.name)
+                             + '</th>';
+                    }).join('');
+                    heatEl.innerHTML = '<div style="font-weight:600;font-size:0.78rem;margin-bottom:6px;">Audience-fit heatmap — tilt vs. chain\'s overall mix</div>'
+                                     + '<div style="font-size:0.68rem;color:var(--text-secondary);margin-bottom:8px;">Green = over-index (chain attracts more of this cohort than average) · red = under-index · 1.00× = neutral.</div>'
+                                     + '<div style="overflow-x:auto;">'
+                                     + '<table style="width:100%;border-collapse:collapse;font-size:0.78rem;border:1px solid var(--border-color);border-radius:8px;overflow:hidden;">'
+                                     + '<thead><tr style="background:var(--bg-secondary);">'
+                                     +   '<th style="padding:8px 10px;text-align:left;border-right:1px solid var(--border-color);">Chain</th>'
+                                     +   headerCells
+                                     +   '<th style="padding:8px 10px;text-align:left;">Profile</th>'
+                                     + '</tr></thead><tbody>' + rows + '</tbody></table>'
+                                     + '</div>';
+                }
+            }
+
+            // Verdict
+            var vEl = document.getElementById('jiqExhibitorVerdict');
+            if (vEl) vEl.textContent = mix.verdict || '';
+        }
+
+        // ───── Promo Program Tracker renderer ─────
+        // Per-chain cards in a grid, each showing the chain's mechanic,
+        // promo channels, est. lift, coverage, eligibility, and
+        // ticket-share context. Non-participating chains shown grayed
+        // out at the bottom.
+        function renderJourneyIqPromoTracker(pt) {
+            var card = document.getElementById('jiqPromoCard');
+            if (!card) return;
+            if (!pt || !(pt.chains || []).length) { card.style.display = 'none'; return; }
+            card.style.display = '';
+
+            var titleEl = document.getElementById('jiqPromoTitle');
+            var subEl   = document.getElementById('jiqPromoSubtitle');
+            var metaEl  = document.getElementById('jiqPromoMeta');
+            if (titleEl) titleEl.innerHTML = '🏷️ ' + _jiqEsc(pt.program_name || 'Promo Program') + ' Tracker';
+            if (subEl)   subEl.textContent  = pt.program_description || '';
+            if (metaEl) {
+                var participating = (pt.chains || []).filter(function(c) { return c.has_nate_rate; }).length;
+                metaEl.textContent = participating + ' of ' + pt.chains.length + ' chains participating';
+            }
+
+            var chains = (pt.chains || []).slice().sort(function(a, b) {
+                // Participating first, then by est_lift_pct
+                if (a.has_nate_rate !== b.has_nate_rate) return a.has_nate_rate ? -1 : 1;
+                return (b.est_lift_pct || 0) - (a.est_lift_pct || 0);
+            });
+
+            var grid = document.getElementById('jiqPromoGrid');
+            if (grid) {
+                grid.innerHTML = chains.map(function(c) {
+                    var color = c.color || '#5b6cff';
+                    var active = !!c.has_nate_rate;
+                    var liftColor = (c.est_lift_pct >= 25) ? '#10b981'
+                                  : (c.est_lift_pct >= 12) ? '#fbbf24'
+                                  : (c.est_lift_pct > 0)   ? '#5b6cff'
+                                  : '#6b7280';
+                    var channels = (c.channels || []).map(function(ch) {
+                        return '<span style="display:inline-block;font-size:0.66rem;background:var(--bg-secondary);color:var(--text-primary);padding:2px 7px;border-radius:10px;border:1px solid var(--border-color);margin:2px 3px 2px 0;">' + _jiqEsc(ch) + '</span>';
+                    }).join('');
+                    var body = active
+                        ? '<div style="font-size:0.78rem;color:var(--text-primary);line-height:1.45;margin-bottom:8px;"><strong>Mechanic:</strong> ' + _jiqEsc(c.mechanic || '') + '</div>'
+                        + (channels ? '<div style="font-size:0.68rem;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:3px;font-weight:600;">Promo channels</div>'
+                            + '<div style="margin-bottom:8px;">' + channels + '</div>' : '')
+                        + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:8px;border-top:1px solid var(--border-color);padding-top:8px;">'
+                        +   '<div><div style="font-size:0.62rem;color:var(--text-secondary);text-transform:uppercase;">Est. lift</div><div style="font-weight:700;color:' + liftColor + ';font-size:1.05rem;">+' + (c.est_lift_pct || 0) + '%</div></div>'
+                        +   '<div><div style="font-size:0.62rem;color:var(--text-secondary);text-transform:uppercase;">Ticket share</div><div style="font-weight:700;color:var(--text-primary);font-size:1.05rem;">' + (c.share_pct || 0).toFixed(1) + '%</div></div>'
+                        + '</div>'
+                        + (c.coverage ? '<div style="font-size:0.7rem;color:var(--text-secondary);margin-top:6px;"><strong>Coverage:</strong> ' + _jiqEsc(c.coverage) + '</div>' : '')
+                        + (c.eligibility ? '<div style="font-size:0.7rem;color:var(--text-secondary);margin-top:4px;"><strong>Eligibility:</strong> ' + _jiqEsc(c.eligibility) + '</div>' : '')
+                        : '<div style="font-size:0.78rem;color:var(--text-secondary);font-style:italic;line-height:1.45;padding:8px 0;">' + _jiqEsc(c.mechanic || 'Not participating in this promo program.') + '</div>'
+                          + '<div style="font-size:0.7rem;color:var(--text-secondary);margin-top:6px;border-top:1px solid var(--border-color);padding-top:6px;"><strong>Ticket share:</strong> ' + (c.share_pct || 0).toFixed(1) + '%</div>';
+                    return '<div style="background:var(--bg-card);border:1px solid var(--border-color);border-top:4px solid ' + color + ';border-radius:12px;padding:0.85rem;opacity:' + (active ? '1' : '0.65') + ';">'
+                         + '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:8px;">'
+                         +   '<div style="font-weight:700;font-size:1rem;color:' + color + ';">' + _jiqEsc(c.name) + '</div>'
+                         +   '<div style="background:' + (active ? 'rgba(16,185,129,0.18)' : 'rgba(107,114,128,0.18)') + ';color:' + (active ? '#10b981' : '#9ca3af') + ';font-weight:700;font-size:0.62rem;padding:3px 8px;border-radius:10px;letter-spacing:0.05em;">' + (active ? 'PARTICIPATING' : 'NOT PARTICIPATING') + '</div>'
+                         + '</div>'
+                         + body
+                         + '</div>';
+                }).join('');
+            }
+
+            // Verdict
+            var vEl = document.getElementById('jiqPromoVerdict');
+            if (vEl) vEl.textContent = pt.verdict || '';
         }
 
         function renderJourneyIqFootprint(footprint, bubbles, spider) {
