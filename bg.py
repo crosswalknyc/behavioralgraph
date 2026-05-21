@@ -1102,7 +1102,7 @@ _PERSONA_CACHE_PREFIX = 'persona_cache/'
 _PERSONA_CACHE_TTL_DAYS = 30
 # Bumped whenever persona_research_agent's prompt changes meaningfully so old
 # entries get invalidated automatically.
-_PERSONA_CACHE_VERSION = 'v2'
+_PERSONA_CACHE_VERSION = 'v3'
 
 def _persona_cache_key(subject: str,
                        brand_category: str | None,
@@ -16113,27 +16113,33 @@ elevate; random chart noise deflates."""
     if cat_u == 'STREAMING/PLATFORM':
         if short:
             return """═══════════════════════════════════════════════════════════════════
-CELEBRITY PERSONA — STREAMING / NETWORK FIT
+CELEBRITY PERSONA — STREAMING / NETWORK FIT (persona-driven, no fixed rank)
 ═══════════════════════════════════════════════════════════════════
 Map the subject's **current linear / cable / flagship streamer home** (from persona research) onto the
 matching corporate SVOD row when present (e.g. NBC→Peacock ecosystem, Showtime/CBS→Paramount+, ABC/FX→Hulu/Disney+,
 HBO→Max, etc. — verify rights; do not invent exclusives).
 
-• **Network-synergy apps** may **jump ahead of WRONG-network SVOD peers** in the mid-pack.
-• **HARD CEILING:** **Netflix must still lead** `predicted_top_5` for mainstream US talent audiences
-and **Hulu must stay in the top 3–4** SVOD slots — never rank Peacock, Paramount+, Max, Disney+, or any
-other synergy app **above** Netflix or **above** Hulu regardless of perfect network match.
-• Other broad services (Prime Video, Disney+, Max, …) stay realistic gen-pop mass — synergy rows compete
-**under** the Netflix+Hulu anchor layer."""
+• **Network-synergy apps** may **jump ahead of WRONG-network SVOD peers** based on persona research.
+• **Realistic US reach ceilings to anchor reasoning (not caps):** Netflix ~78%, Hulu ~60%, Disney+ ~50%,
+  Prime Video ~75%, HBO Max ~38%, Apple TV+ ~32%, Peacock ~28%, Paramount+ ~25%, free AVODs each ~20-38%,
+  niche cinephile each ≤ 5%.
+• Netflix typically leads mainstream US personas because of near-universal reach — but DO NOT hard-pin
+  the rank. Let the segment math drive the order. For talent whose primary distribution is a specific
+  premium network (e.g. Showtime career → Paramount+; HBO career → Max; FX career → Hulu; NBC late-night
+  → Peacock), the network-matched SVOD can credibly land top-3 even when other synergy apps stay low.
+• Reason from: (1) where the subject's content actually lives (content-gravity), (2) the audience
+  composition overlays (income/age/parents/genre), (3) per-platform segment-overlap math. Cite the math
+  in your reasoning."""
 
         return (
-            "**Network / platform alignment:** If persona research ties the subject to a **specific broadcaster "
-            "or premium cabler**, elevate the **matching first-party SVOD** (Peacock for NBCUniversal linear "
-            "heavy; Paramount+ for Paramount/Showtime-era properties; Hulu/Disney+ for ABC/FX/Disney footprints; "
-            "Max for HBO-class IP, etc.) **relative to mismatched network apps**.\n"
-            "• **Universal floor — Netflix + Hulu:** Maintain **Netflix as #1** and **Hulu in the top SVOD cluster** "
-            "for typical fan cohorts. Peacock/Paramount+/etc. **never outrank** Netflix or Hulu — they only "
-            "reshuffle **below** that pair against each other and other mass streamers."
+            "**Network / platform alignment — persona-driven, not hard-pinned:** If persona research ties the "
+            "subject to a **specific broadcaster or premium cabler**, elevate the **matching first-party SVOD** "
+            "(Peacock for NBCUniversal linear heavy; Paramount+ for Paramount/Showtime-era properties; "
+            "Hulu/Disney+ for ABC/FX/Disney footprints; Max for HBO-class IP, etc.) based on real audience math.\n"
+            "• **Reach anchors (typical US, not caps):** Netflix ~78%, Hulu ~60%, Disney+ ~50%, Prime ~75%, "
+            "Max ~38%, Apple TV+ ~32%, Peacock ~28%, Paramount+ ~25%. Netflix usually leads mainstream US talent "
+            "audiences because of its near-universal reach — but if persona research shows the audience is "
+            "Showtime/HBO/FX-native, the matching SVOD can credibly top-3 the stack. Let the math drive the order."
         )
 
     if cat_u == 'MOST PURCHASED BRANDS':
@@ -16737,6 +16743,85 @@ STEP 5f — PUBLISHER / SVOD / STREAMING / MEDIA PLATFORM (`subject_archetype` M
 STEP 5 — WRITE THE PERSONA
   Now generate the full persona JSON with all fields. Every field must reflect your research, not generic assumptions.
 
+═══════════════════════════════════════════════════════════════════
+DEMOGRAPHIC REASONING — REQUIRED METHOD (read before emitting demographics{{}})
+═══════════════════════════════════════════════════════════════════
+Every demographic bucket MUST sum to ~100 (aim for ±0.5). Distributions
+must reflect the SUBJECT'S ENGAGED DIGITAL AUDIENCE — not Gen Pop. The
+US Gen Pop reference below is your anchor; deviate from it where the
+research justifies, never rubber-stamp it.
+
+US GEN POP REFERENCE (use as starting point — deviate based on persona):
+  AGE: 17 AND UNDER 22.1, 18-24 9.0, 25-34 13.5, 35-44 12.7,
+       45-54 12.2, 55-64 12.7, 65 OR OLDER 17.8
+  GENDER: MALE 49.2, FEMALE 50.5, TRANS MALE 0.1, TRANS FEMALE 0.1,
+          NON-BINARY 0.1
+  ETHNICITY: WHITE 60.0, BLACK 13.4, HISPANIC 19.0, ASIAN 6.1,
+             ANOTHER RACE/ETHNICITY 1.5
+  INCOME: LESS THAN $25,000 19.6, $25,000-$49,999 21.0, $50,000-$74,999 16.4,
+          $75,000-$99,999 12.7, $100,000-$149,999 16.3,
+          $150,000-$249,999 10.4, $250,000 OR MORE 3.6
+  EDUCATION: HIGH SCHOOL OR LESS 36.0, SOME COLLEGE/ASSOCIATE 28.3,
+             BACHELOR'S 22.8, GRAD/PROF 12.9
+  RELATIONSHIP: SINGLE 31.3, IN A RELATIONSHIP 6.5, MARRIED 48.3,
+                DIVORCED OR SEPARATED 8.4, WIDOWED 5.5
+  SEXUAL_ORIENTATION: STRAIGHT 88.5, LGBTQ+ 11.5
+  PARENTAL_STATUS: HAS CHILDREN 43.4, NO CHILDREN 56.6
+  OCCUPATION (US BLS-derived — 13 buckets must reflect REAL workforce):
+    MANAGEMENT, BUSINESS & PROFESSIONAL 28.7
+    HEALTHCARE PRACTITIONERS OR SUPPORT 11.0
+    EDUCATION OR LIBRARY SERVICES 5.8
+    SALES & RETAIL 8.7
+    SERVICE & HOSPITALITY 13.7
+    SCIENCE, TECHNOLOGY & TECHNICAL PROFESSIONS 6.0
+    AGRICULTURE & OUTDOOR 0.3
+    SKILLED TRADES/CONSTRUCTION OR MAINTENANCE 8.0
+    TRANSPORTATION & LOGISTICS 8.9
+    MANUFACTURING & PRODUCTION 5.7
+    PUBLIC SAFETY & PROTECTIVE SERVICES 2.4
+    LEGAL 0.8
+    OTHER 0.0
+
+CRITICAL — OCCUPATION distribution rules (this is the most common scoring failure):
+  • You MUST distribute across ALL 13 buckets above. The "OTHER" bucket
+    should be < 5% unless the persona is genuinely gig-economy /
+    uncategorizable. Do NOT dump retired / homemaker / student into
+    OCCUPATION — they're captured elsewhere (retirees in AGE 65+,
+    homemakers absorb into the working bucket of household, students
+    show up via AGE 17-24).
+  • Persona-driven OCCUPATION reasoning (illustrative — apply to YOUR subject):
+      • Prestige drama actor / arts cinephile audience (45-64 educated,
+        female lean) → MANAGEMENT/PROFESSIONAL ~38, EDUCATION ~9,
+        HEALTHCARE ~14, LEGAL ~2, SCIENCE/TECH ~6, SALES ~8,
+        SERVICE ~11, TRADES ~3, TRANSPORTATION ~4, MANUFACTURING ~2,
+        PUBLIC SAFETY ~1, AGRICULTURE ~0.5, OTHER ~1.5
+      • NFL QB / mass-male sports fan → MANAGEMENT ~25, SKILLED TRADES
+        ~11 (blue-collar over-index), TRANSPORTATION ~10, MANUFACTURING
+        ~7, SERVICE ~14, SALES ~9, HEALTHCARE ~10, EDUCATION ~5,
+        SCIENCE ~6, PUBLIC SAFETY ~3, AGRICULTURE ~0.4, LEGAL ~0.6,
+        OTHER ~1.0
+      • Young gaming creator (18-29 male-heavy, lower-income skew) →
+        SERVICE ~18 (gig + restaurant), SALES ~11, SCIENCE/TECH ~10,
+        SKILLED TRADES ~7, MANAGEMENT ~18 (entry-level white-collar),
+        HEALTHCARE ~7, TRANSPORTATION ~9, MANUFACTURING ~6,
+        EDUCATION ~5, PUBLIC SAFETY ~3, AGRICULTURE ~0.3, LEGAL ~0.7,
+        OTHER ~5 (gig over-index)
+      • Country music star / rural-skew (35-54) → SKILLED TRADES ~14,
+        TRANSPORTATION ~12, AGRICULTURE ~2 (7x baseline),
+        MANUFACTURING ~9, SERVICE ~15, MANAGEMENT ~18, HEALTHCARE ~10,
+        SALES ~9, EDUCATION ~5, SCIENCE ~3, PUBLIC SAFETY ~3,
+        LEGAL ~0.5, OTHER ~0.5
+      • Tech founder / SaaS audience (25-44 affluent) →
+        SCIENCE/TECH ~22 (4x baseline), MANAGEMENT ~36, LEGAL ~2,
+        EDUCATION ~6, HEALTHCARE ~9, SALES ~9, SERVICE ~6,
+        FINANCE-roll-up under MANAGEMENT, TRADES ~3, TRANSPORTATION ~3,
+        MANUFACTURING ~2, PUBLIC SAFETY ~1, AGRICULTURE ~0.2, OTHER ~0.8
+  • For every other demographic (AGE, INCOME, EDUCATION, RELATIONSHIP,
+    PARENTAL_STATUS, ETHNICITY, SEXUAL_ORIENTATION): think about WHICH
+    subsegments of the audience occupy each bucket and how big each
+    subsegment is. State that math silently before emitting the number.
+    Never default to the Gen Pop reference — that defeats the purpose.
+
 Return ONLY a single valid JSON object — no markdown, no commentary.
 
 {{
@@ -16802,9 +16887,16 @@ Return ONLY a single valid JSON object — no markdown, no commentary.
     "OCCUPATION": {{
       "MANAGEMENT, BUSINESS & PROFESSIONAL": <percent>,
       "HEALTHCARE PRACTITIONERS OR SUPPORT": <percent>,
-      "SALES & RETAIL": <percent>,
       "EDUCATION OR LIBRARY SERVICES": <percent>,
+      "SALES & RETAIL": <percent>,
       "SERVICE & HOSPITALITY": <percent>,
+      "SCIENCE, TECHNOLOGY & TECHNICAL PROFESSIONS": <percent>,
+      "AGRICULTURE & OUTDOOR": <percent>,
+      "SKILLED TRADES/CONSTRUCTION OR MAINTENANCE": <percent>,
+      "TRANSPORTATION & LOGISTICS": <percent>,
+      "MANUFACTURING & PRODUCTION": <percent>,
+      "PUBLIC SAFETY & PROTECTIVE SERVICES": <percent>,
+      "LEGAL": <percent>,
       "OTHER": <percent>
     }}
   }},
@@ -16878,7 +16970,7 @@ RULES:
 - ETHNICITY IS CRITICAL: Research the subject's OWN race/ethnicity/heritage. If the subject is a person of color (Asian, Black, Hispanic, etc.), their fan base will significantly over-index on that ethnicity vs. general US population. For example, a Chinese-American actor's audience should have ASIAN as one of the top ethnicities (30-50%+), not just 7% US average. A Black rapper's audience should have BLACK OR AFRICAN AMERICAN at 40-60%+. Never default to generic US census proportions — the subject's identity strongly shapes their audience demographics.
 - AGE IS CRITICAL: The subject's OWN age heavily influences their audience age distribution. Research the subject's actual age. A 58-year-old actress will have an audience peaking in the 45-54 and 55-64 brackets (30%+ and 20%+ respectively), with much lower percentages for 18-24 (5-8%) and 17 AND UNDER (2-5%). A 20-year-old pop star will peak at 18-24 (35-45%) and 17 AND UNDER (15-25%). The audience's peak age bracket should align with or be slightly younger than the subject's own age bracket. Never give equal weight to age brackets that are 20+ years apart from the subject's age.
 - Do NOT include "Prefer Not to Say" or "Other" in AGE, GENDER, ETHNICITY, or INCOME. Those categories must only contain the exact buckets listed above.
-- Do NOT include "EMPLOYED FULL-TIME", "EMPLOYED PART-TIME", "SELF-EMPLOYED", "RETIRED", "STUDENT", "HOMEMAKER", or "UNEMPLOYED" in OCCUPATION. Those values are forbidden in final output normalization. OCCUPATION must only use: OTHER, PREFER NOT TO SAY.
+- OCCUPATION must use the exact 13 BLS-derived buckets listed in the JSON schema above (MANAGEMENT/PROFESSIONAL, HEALTHCARE, EDUCATION/LIBRARY, SALES & RETAIL, SERVICE & HOSPITALITY, SCIENCE/TECH, AGRICULTURE, SKILLED TRADES, TRANSPORTATION, MANUFACTURING, PUBLIC SAFETY, LEGAL, OTHER). Do NOT emit "EMPLOYED FULL-TIME", "EMPLOYED PART-TIME", "SELF-EMPLOYED", "RETIRED", "STUDENT", "HOMEMAKER", "UNEMPLOYED", or "PREFER NOT TO SAY" — those collapse into the correct BLS bucket (e.g., self-employed entrepreneurs → MANAGEMENT/PROFESSIONAL; gig workers → SERVICE & HOSPITALITY or TRANSPORTATION; students/retirees/homemakers fold into the bucket of their household earner). OTHER should be < 5% unless the persona is genuinely uncategorizable. Distribute meaningfully across all 13 buckets — see DEMOGRAPHIC REASONING above.
 - LOCATION: Provide at least 15-20 top DMAs with realistic, varied percentages. The percentages should NOT be clustered — use a natural distribution where the #1 DMA might be 8-12%, #5 might be 4-6%, #10 might be 2-3%, #15 might be 1-2%, #20 might be 0.5-1%. The sum should be ≤ 100; remainder is auto-spread to the other 190+ DMAs with random variation.
 
 ═══════════════════════════════════════════════════════════════════
@@ -17491,6 +17583,75 @@ EXAMPLE category_signals (hypothetical `consumer_brand` athletic-equipment cohor
                     persona_doc, last_err = _parse_persona_json(text)
                     if persona_doc is None:
                         print(f"   ⚠️ Claude persona JSON unparseable → {last_err[:160]}")
+                        # Debug: save the broken Claude payload for forensics
+                        try:
+                            import time as _t_dbg, os as _os_dbg
+                            _dbg_dir = '/tmp/bg_debug_persona'
+                            _os_dbg.makedirs(_dbg_dir, exist_ok=True)
+                            _dbg_file = f"{_dbg_dir}/claude_unparseable_{subject.replace(' ', '_').replace('/', '_')}_{int(_t_dbg.time())}.json"
+                            with open(_dbg_file, 'w', encoding='utf-8') as _f_dbg:
+                                _f_dbg.write(text)
+                            print(f"   💾 Saved unparseable Claude payload → {_dbg_file}")
+                        except Exception:
+                            pass
+                        # RETRY Claude with explicit syntax-error feedback BEFORE falling
+                        # back to a weaker model. Claude is the smartest researcher we
+                        # have, so a JSON-format fix retry beats dropping to gpt-4o.
+                        try:
+                            print(f"   🔁 Retrying Claude with explicit JSON-error feedback (preserves rich research)")
+                            _retry_system = (
+                                _claude_system + "\n\n"
+                                "CRITICAL JSON-FORMAT RULES (your previous response failed to parse):\n"
+                                "• Every key MUST be wrapped in double quotes.\n"
+                                "• Every string value MUST be wrapped in double quotes.\n"
+                                "• Inside a string value, any literal \" MUST be escaped as \\\".\n"
+                                "• Inside a string value, any literal newline MUST be escaped as \\n.\n"
+                                "• Inside a string value, any literal backslash MUST be escaped as \\\\.\n"
+                                "• Do NOT use smart quotes (\u201c \u201d \u2018 \u2019), use straight quotes only.\n"
+                                "• Do NOT include trailing commas before } or ].\n"
+                                "• Do NOT wrap the JSON in markdown code fences.\n"
+                                "• Validate your JSON mentally before emitting — every { needs a }, every [ needs a ]."
+                            )
+                            _retry_user = (
+                                "Your previous response to the schema below could not be parsed as JSON.\n"
+                                f"The parser reported: {last_err[:300]}\n\n"
+                                "Please re-research and re-emit the SAME persona content as a single valid JSON object, "
+                                "with extreme care for quote-escaping and bracket-balancing. Use the same schema and "
+                                "same level of research depth as before — do not simplify the content, only fix the syntax.\n\n"
+                                "--- ORIGINAL SCHEMA / PROMPT ---\n"
+                                + prompt
+                            )
+                            _t_retry_start = _time.time()
+                            try:
+                                raw_retry = _claude_messages(
+                                    system=_retry_system, user=_retry_user, model=claude_model,
+                                    max_tokens=16000, temperature=0.2, tools=[_ws_tool_new],
+                                )
+                            except Exception as _e_retry:
+                                print(f"   ⚠️ Claude retry call raised: {_e_retry}")
+                                raw_retry = ''
+                            _elapsed_retry = _time.time() - _t_retry_start
+                            if raw_retry:
+                                text2 = raw_retry.strip()
+                                if not text2.startswith('{'):
+                                    first2 = text2.find('{'); last2 = text2.rfind('}')
+                                    if first2 != -1 and last2 > first2:
+                                        text2 = text2[first2:last2 + 1]
+                                if text2.startswith('```'):
+                                    text2 = text2.strip('`')
+                                    if text2.lstrip().lower().startswith('json'):
+                                        text2 = text2.split('\n', 1)[1] if '\n' in text2 else text2
+                                print(f"   📡 Claude retry returned {len(text2)} chars in {_elapsed_retry:.1f}s")
+                                persona_doc, last_err = _parse_persona_json(text2)
+                                if persona_doc is None:
+                                    print(f"   ⚠️ Claude retry JSON still unparseable → {last_err[:160]}")
+                                else:
+                                    _aff_n = len(persona_doc.get('active_affiliations') or [])
+                                    _flag_n = len(persona_doc.get('flagship_brands') or [])
+                                    print(f"   ✅ Claude RETRY persona doc: {_aff_n} affiliations, {_flag_n} flagships, "
+                                          f"{len(persona_doc.get('persona_summary') or '')} char summary")
+                        except Exception as _e_retry_outer:
+                            print(f"   ⚠️ Claude retry path errored: {_e_retry_outer}")
                     else:
                         _aff_n = len(persona_doc.get('active_affiliations') or [])
                         _flag_n = len(persona_doc.get('flagship_brands') or [])
@@ -18280,7 +18441,66 @@ RULES:
             timeout=60,
         )
         text = (resp.choices[0].message.content or '').strip()
-        doc = _json.loads(text)
+        # Robust parse: try strict first, then repair, then retry the agent with
+        # explicit syntax-error feedback. This is the fix for the cascade where
+        # TALENT (a long item list) routinely fails JSON parse and the whole
+        # category drops to "no guidance" → Pass 2 emits mid-pack defaults.
+        doc = None
+        parse_err = ''
+        try:
+            doc = _json.loads(text)
+        except Exception as _e_json:
+            parse_err = f"{type(_e_json).__name__}: {_e_json}"
+        if doc is None:
+            doc, _err2 = _parse_persona_json(text)
+            if doc is None:
+                parse_err = (parse_err + ' | ' + (_err2 or '')).strip(' |')
+        if doc is None:
+            # Save broken payload + retry once with explicit feedback
+            try:
+                import time as _t_dbg, os as _os_dbg
+                _dbg_dir = '/tmp/bg_debug_guidance'
+                _os_dbg.makedirs(_dbg_dir, exist_ok=True)
+                _safe_cat = category.replace('/', '_').replace(' ', '_')
+                _dbg_file = f"{_dbg_dir}/{_safe_cat}_{int(_t_dbg.time())}.json"
+                with open(_dbg_file, 'w', encoding='utf-8') as _f_dbg:
+                    _f_dbg.write(text)
+                print(f"   💾 Saved unparseable guidance payload [{category}] → {_dbg_file}")
+            except Exception:
+                pass
+            print(f"   🔁 Item-guidance [{category}] retry with explicit JSON-fix feedback ({parse_err[:80]})")
+            try:
+                resp_retry = _timed_completion(
+                    client,
+                    label=f"category-rule/{category.upper()}-retry",
+                    model=MODEL_QUALITY,
+                    messages=[
+                        {'role': 'system', 'content': (
+                            'Return ONLY a single valid JSON object — no markdown, no commentary.\n'
+                            'STRICT JSON RULES: double-quote every key and string value; escape '
+                            'every literal " inside a string as \\"; escape literal newlines as \\n; '
+                            'no trailing commas; no smart quotes; balance every { } and [ ].'
+                        )},
+                        {'role': 'user', 'content': (
+                            f"Your previous response could not be parsed as JSON ({parse_err[:200]}). "
+                            "Re-emit the SAME content with strict JSON formatting. Preserve every key/value, "
+                            "only fix the syntax.\n\n--- ORIGINAL TASK ---\n" + prompt
+                        )},
+                    ],
+                    temperature=0.0,
+                    max_tokens=4096,
+                    response_format={"type": "json_object"},
+                    timeout=60,
+                )
+                text_retry = (resp_retry.choices[0].message.content or '').strip()
+                try:
+                    doc = _json.loads(text_retry)
+                except Exception:
+                    doc, _ = _parse_persona_json(text_retry)
+                if isinstance(doc, dict):
+                    print(f"   ✅ Item-guidance [{category}] recovered on retry")
+            except Exception as _e_retry:
+                print(f"   ⚠️ Item-guidance [{category}] retry failed: {_e_retry}")
         if not isinstance(doc, dict):
             return {}
 
