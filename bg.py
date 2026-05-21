@@ -17583,6 +17583,75 @@ EXAMPLE category_signals (hypothetical `consumer_brand` athletic-equipment cohor
                     persona_doc, last_err = _parse_persona_json(text)
                     if persona_doc is None:
                         print(f"   ⚠️ Claude persona JSON unparseable → {last_err[:160]}")
+                        # Debug: save the broken Claude payload for forensics
+                        try:
+                            import time as _t_dbg, os as _os_dbg
+                            _dbg_dir = '/tmp/bg_debug_persona'
+                            _os_dbg.makedirs(_dbg_dir, exist_ok=True)
+                            _dbg_file = f"{_dbg_dir}/claude_unparseable_{subject.replace(' ', '_').replace('/', '_')}_{int(_t_dbg.time())}.json"
+                            with open(_dbg_file, 'w', encoding='utf-8') as _f_dbg:
+                                _f_dbg.write(text)
+                            print(f"   💾 Saved unparseable Claude payload → {_dbg_file}")
+                        except Exception:
+                            pass
+                        # RETRY Claude with explicit syntax-error feedback BEFORE falling
+                        # back to a weaker model. Claude is the smartest researcher we
+                        # have, so a JSON-format fix retry beats dropping to gpt-4o.
+                        try:
+                            print(f"   🔁 Retrying Claude with explicit JSON-error feedback (preserves rich research)")
+                            _retry_system = (
+                                _claude_system + "\n\n"
+                                "CRITICAL JSON-FORMAT RULES (your previous response failed to parse):\n"
+                                "• Every key MUST be wrapped in double quotes.\n"
+                                "• Every string value MUST be wrapped in double quotes.\n"
+                                "• Inside a string value, any literal \" MUST be escaped as \\\".\n"
+                                "• Inside a string value, any literal newline MUST be escaped as \\n.\n"
+                                "• Inside a string value, any literal backslash MUST be escaped as \\\\.\n"
+                                "• Do NOT use smart quotes (\u201c \u201d \u2018 \u2019), use straight quotes only.\n"
+                                "• Do NOT include trailing commas before } or ].\n"
+                                "• Do NOT wrap the JSON in markdown code fences.\n"
+                                "• Validate your JSON mentally before emitting — every { needs a }, every [ needs a ]."
+                            )
+                            _retry_user = (
+                                "Your previous response to the schema below could not be parsed as JSON.\n"
+                                f"The parser reported: {last_err[:300]}\n\n"
+                                "Please re-research and re-emit the SAME persona content as a single valid JSON object, "
+                                "with extreme care for quote-escaping and bracket-balancing. Use the same schema and "
+                                "same level of research depth as before — do not simplify the content, only fix the syntax.\n\n"
+                                "--- ORIGINAL SCHEMA / PROMPT ---\n"
+                                + prompt
+                            )
+                            _t_retry_start = _time.time()
+                            try:
+                                raw_retry = _claude_messages(
+                                    system=_retry_system, user=_retry_user, model=claude_model,
+                                    max_tokens=16000, temperature=0.2, tools=[_ws_tool_new],
+                                )
+                            except Exception as _e_retry:
+                                print(f"   ⚠️ Claude retry call raised: {_e_retry}")
+                                raw_retry = ''
+                            _elapsed_retry = _time.time() - _t_retry_start
+                            if raw_retry:
+                                text2 = raw_retry.strip()
+                                if not text2.startswith('{'):
+                                    first2 = text2.find('{'); last2 = text2.rfind('}')
+                                    if first2 != -1 and last2 > first2:
+                                        text2 = text2[first2:last2 + 1]
+                                if text2.startswith('```'):
+                                    text2 = text2.strip('`')
+                                    if text2.lstrip().lower().startswith('json'):
+                                        text2 = text2.split('\n', 1)[1] if '\n' in text2 else text2
+                                print(f"   📡 Claude retry returned {len(text2)} chars in {_elapsed_retry:.1f}s")
+                                persona_doc, last_err = _parse_persona_json(text2)
+                                if persona_doc is None:
+                                    print(f"   ⚠️ Claude retry JSON still unparseable → {last_err[:160]}")
+                                else:
+                                    _aff_n = len(persona_doc.get('active_affiliations') or [])
+                                    _flag_n = len(persona_doc.get('flagship_brands') or [])
+                                    print(f"   ✅ Claude RETRY persona doc: {_aff_n} affiliations, {_flag_n} flagships, "
+                                          f"{len(persona_doc.get('persona_summary') or '')} char summary")
+                        except Exception as _e_retry_outer:
+                            print(f"   ⚠️ Claude retry path errored: {_e_retry_outer}")
                     else:
                         _aff_n = len(persona_doc.get('active_affiliations') or [])
                         _flag_n = len(persona_doc.get('flagship_brands') or [])
@@ -18372,7 +18441,66 @@ RULES:
             timeout=60,
         )
         text = (resp.choices[0].message.content or '').strip()
-        doc = _json.loads(text)
+        # Robust parse: try strict first, then repair, then retry the agent with
+        # explicit syntax-error feedback. This is the fix for the cascade where
+        # TALENT (a long item list) routinely fails JSON parse and the whole
+        # category drops to "no guidance" → Pass 2 emits mid-pack defaults.
+        doc = None
+        parse_err = ''
+        try:
+            doc = _json.loads(text)
+        except Exception as _e_json:
+            parse_err = f"{type(_e_json).__name__}: {_e_json}"
+        if doc is None:
+            doc, _err2 = _parse_persona_json(text)
+            if doc is None:
+                parse_err = (parse_err + ' | ' + (_err2 or '')).strip(' |')
+        if doc is None:
+            # Save broken payload + retry once with explicit feedback
+            try:
+                import time as _t_dbg, os as _os_dbg
+                _dbg_dir = '/tmp/bg_debug_guidance'
+                _os_dbg.makedirs(_dbg_dir, exist_ok=True)
+                _safe_cat = category.replace('/', '_').replace(' ', '_')
+                _dbg_file = f"{_dbg_dir}/{_safe_cat}_{int(_t_dbg.time())}.json"
+                with open(_dbg_file, 'w', encoding='utf-8') as _f_dbg:
+                    _f_dbg.write(text)
+                print(f"   💾 Saved unparseable guidance payload [{category}] → {_dbg_file}")
+            except Exception:
+                pass
+            print(f"   🔁 Item-guidance [{category}] retry with explicit JSON-fix feedback ({parse_err[:80]})")
+            try:
+                resp_retry = _timed_completion(
+                    client,
+                    label=f"category-rule/{category.upper()}-retry",
+                    model=MODEL_QUALITY,
+                    messages=[
+                        {'role': 'system', 'content': (
+                            'Return ONLY a single valid JSON object — no markdown, no commentary.\n'
+                            'STRICT JSON RULES: double-quote every key and string value; escape '
+                            'every literal " inside a string as \\"; escape literal newlines as \\n; '
+                            'no trailing commas; no smart quotes; balance every { } and [ ].'
+                        )},
+                        {'role': 'user', 'content': (
+                            f"Your previous response could not be parsed as JSON ({parse_err[:200]}). "
+                            "Re-emit the SAME content with strict JSON formatting. Preserve every key/value, "
+                            "only fix the syntax.\n\n--- ORIGINAL TASK ---\n" + prompt
+                        )},
+                    ],
+                    temperature=0.0,
+                    max_tokens=4096,
+                    response_format={"type": "json_object"},
+                    timeout=60,
+                )
+                text_retry = (resp_retry.choices[0].message.content or '').strip()
+                try:
+                    doc = _json.loads(text_retry)
+                except Exception:
+                    doc, _ = _parse_persona_json(text_retry)
+                if isinstance(doc, dict):
+                    print(f"   ✅ Item-guidance [{category}] recovered on retry")
+            except Exception as _e_retry:
+                print(f"   ⚠️ Item-guidance [{category}] retry failed: {_e_retry}")
         if not isinstance(doc, dict):
             return {}
 
