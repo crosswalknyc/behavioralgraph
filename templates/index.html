@@ -27910,7 +27910,9 @@
             }
 
             // Meta line: total events + channels (confidence + baseline removed per request)
-            var totalEvents = (bubbles || []).reduce(function(s, b) { return s + (b.event_count || 0); }, 0);
+            var totalEvents = (bubbles || []).reduce(function(s, b) {
+                return s + (b.event_count || (b.events || []).length || 0);
+            }, 0);
             var metaEl = document.getElementById('jiqBubbleMeta');
             if (metaEl) {
                 metaEl.innerHTML = 'Discovered <strong>' + totalEvents + '</strong> marketing events across <strong>' + (bubbles || []).length + '</strong> channels';
@@ -27946,11 +27948,60 @@
             }
 
             // SPIDER VIEW
+            // Defensive fallback: if spider arrived from a stale run with
+            // empty channels but bubbles is populated, synthesize a
+            // minimal spider on the fly so the Spider view isn't blank.
             var spiderWrap = document.getElementById('jiqSpiderWrap');
             var svg = document.getElementById('jiqSpiderSvg');
-            if (svg && spider) {
-                svg.innerHTML = _jiqRenderSpiderSvg(spider);
+            var spiderForRender = spider || {};
+            var needsRebuild = (!spiderForRender.channels || !spiderForRender.channels.length)
+                            && bubbles && bubbles.length;
+            if (needsRebuild) {
+                var targetLbl = (spiderForRender.target)
+                    || ((window._jiqLastSummary && window._jiqLastSummary.meta && window._jiqLastSummary.meta.target) || 'Target');
+                var rebuiltChannels = (bubbles || []).map(function(b) {
+                    return {
+                        id: 'ch:' + (b.channel || b.label || ''),
+                        channel: b.channel || '',
+                        label: b.label || (b.channel || '').replace(/_/g, ' '),
+                        reach_pct_of_genpop: b.reach_pct_of_genpop || 0,
+                        event_count: (b.events || []).length,
+                        events: b.events || [],
+                    };
+                }).sort(function(a, b) { return (b.reach_pct_of_genpop || 0) - (a.reach_pct_of_genpop || 0); });
+                var rebuiltEvents = [];
+                rebuiltChannels.forEach(function(ch) {
+                    (ch.events || []).forEach(function(e, i) {
+                        rebuiltEvents.push({
+                            id: 'ev:' + ch.channel + ':' + i,
+                            channel: ch.channel,
+                            channel_label: ch.label,
+                            rank: rebuiltEvents.length + 1,
+                            label: (e.actor || e.platform || e.publication || e.advertiser
+                                    || e.partner || e.engine || e.track || e.event_type
+                                    || e.query || ch.label),
+                            url: e.url || '',
+                            reach_us: e.estimated_reach_us || e.reach_us || 0,
+                            reach_pct: e.reach_pct_of_genpop || e.reach_pct || 0,
+                            confidence: e.confidence || '',
+                            date: e.date_estimate || e.date || '',
+                            notes: e.notes || '',
+                            raw: e,
+                        });
+                    });
+                });
+                spiderForRender = {
+                    target: targetLbl,
+                    channels: rebuiltChannels,
+                    events: rebuiltEvents.sort(function(a, b) { return (b.reach_pct || 0) - (a.reach_pct || 0); }),
+                    endpoints: (spiderForRender.endpoints || []),
+                    edges: [],
+                };
             }
+            if (svg) {
+                svg.innerHTML = _jiqRenderSpiderSvg(spiderForRender);
+            }
+            spider = spiderForRender;
 
             // EVENTS VIEW (flat ranked list)
             var evList = document.getElementById('jiqEventsList');
