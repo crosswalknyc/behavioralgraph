@@ -19161,27 +19161,43 @@
 
                 <div id="jiqSiteFunnelDetails" style="display: none; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 1rem; margin-bottom: 1rem;">
                     <div class="card" id="jiqSwitchedCard" style="padding: 1rem; display: none;">
-                        <h3 style="margin: 0 0 0.25rem;">🎯 Where Switchers Ultimately Bought</h3>
+                        <div style="display:flex;justify-content:space-between;align-items:baseline;gap:0.5rem;">
+                            <h3 style="margin: 0 0 0.25rem;">🎯 Where Switchers Ultimately Bought</h3>
+                            <div id="jiqSwitchedViewBtns" data-card="switched" class="jiqViewToggle" style="display:flex;gap:4px;"></div>
+                        </div>
                         <div style="font-size: 0.72rem; color: var(--text-secondary); margin-bottom: 0.5rem;">Of visitors who left the site WITHOUT converting but DID transact later — where did they end up?</div>
-                        <div id="jiqSwitchedTable" style="overflow-x: auto;"></div>
+                        <div id="jiqSwitchedChart" style="overflow:hidden;"></div>
+                        <div id="jiqSwitchedTable" style="overflow-x: auto; display:none;"></div>
                     </div>
                     <div class="card" id="jiqInterstepCard" style="padding: 1rem; display: none;">
-                        <h3 style="margin: 0 0 0.25rem;">🔀 Steps Switchers Take In Between</h3>
+                        <div style="display:flex;justify-content:space-between;align-items:baseline;gap:0.5rem;">
+                            <h3 style="margin: 0 0 0.25rem;">🔀 Steps Switchers Take In Between</h3>
+                            <div id="jiqInterstepViewBtns" data-card="interstep" class="jiqViewToggle" style="display:flex;gap:4px;"></div>
+                        </div>
                         <div style="font-size: 0.72rem; color: var(--text-secondary); margin-bottom: 0.5rem;">Typical detours between leaving the site and converting elsewhere (Google reviews, Rotten Tomatoes, price-comparing chains, etc.).</div>
-                        <div id="jiqInterstepTable" style="overflow-x: auto;"></div>
+                        <div id="jiqInterstepChart" style="overflow:hidden;"></div>
+                        <div id="jiqInterstepTable" style="overflow-x: auto; display:none;"></div>
                     </div>
                 </div>
 
                 <div id="jiqSiteFunnelDetails2" style="display: none; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 1rem; margin-bottom: 1rem;">
                     <div class="card" id="jiqInceptionCard" style="padding: 1rem; display: none;">
-                        <h3 style="margin: 0 0 0.25rem;">🚪 Inception — how visitors arrived</h3>
+                        <div style="display:flex;justify-content:space-between;align-items:baseline;gap:0.5rem;">
+                            <h3 style="margin: 0 0 0.25rem;">🚪 Inception — how visitors arrived</h3>
+                            <div id="jiqInceptionViewBtns" data-card="inception" class="jiqViewToggle" style="display:flex;gap:4px;"></div>
+                        </div>
                         <div style="font-size: 0.72rem; color: var(--text-secondary); margin-bottom: 0.5rem;">Inbound referrer mix for visitors landing on the target site.</div>
-                        <div id="jiqInceptionTable" style="overflow-x: auto;"></div>
+                        <div id="jiqInceptionChart" style="overflow:hidden;"></div>
+                        <div id="jiqInceptionTable" style="overflow-x: auto; display:none;"></div>
                     </div>
                     <div class="card" id="jiqCompanionCard" style="padding: 1rem; display: none;">
-                        <h3 style="margin: 0 0 0.25rem;">🍽️ Companion Behaviors — adjacent verticals</h3>
-                        <div style="font-size: 0.72rem; color: var(--text-secondary); margin-bottom: 0.5rem;">Other verticals the visitor planned for around the visit (dinner, parking, hotel, etc.). Share is overlap with the visitor cohort — rows are NOT mutually exclusive.</div>
-                        <div id="jiqCompanionTable" style="overflow-x: auto;"></div>
+                        <div style="display:flex;justify-content:space-between;align-items:baseline;gap:0.5rem;">
+                            <h3 style="margin: 0 0 0.25rem;">🍽️ Companion Behaviors — adjacent verticals</h3>
+                            <div id="jiqCompanionViewBtns" data-card="companion" class="jiqViewToggle" style="display:flex;gap:4px;"></div>
+                        </div>
+                        <div style="font-size: 0.72rem; color: var(--text-secondary); margin-bottom: 0.5rem;">Other verticals the visitor planned for around the visit (dinner, parking, hotel, etc.). Bubble size = share of visitors; placement = typical time relative to showtime.</div>
+                        <div id="jiqCompanionChart" style="overflow:hidden;"></div>
+                        <div id="jiqCompanionTable" style="overflow-x: auto; display:none;"></div>
                     </div>
                 </div>
 
@@ -28157,10 +28173,12 @@
 
             // 2) Where Switchers Bought
             var destEl = document.getElementById('jiqSwitchedTable');
+            var destChartEl = document.getElementById('jiqSwitchedChart');
             var destCard = document.getElementById('jiqSwitchedCard');
             var dests = (funnel.switched_destinations || []).slice().sort(function(a, b) {
                 return (+b.share_pct_of_switchers || 0) - (+a.share_pct_of_switchers || 0);
             });
+            if (destChartEl) destChartEl.innerHTML = _jiqRenderSwitchedChart(dests);
             if (destEl) {
                 destEl.innerHTML = _pctTable(dests, [
                     { label: 'Destination', get: function(r) { return _linkOrText(r.destination, r.url_pattern); }, bold: true },
@@ -28171,10 +28189,12 @@
 
             // 3) Intermediate Journey
             var interEl = document.getElementById('jiqInterstepTable');
+            var interChartEl = document.getElementById('jiqInterstepChart');
             var interCard = document.getElementById('jiqInterstepCard');
             var inters = (funnel.intermediate_journey || []).slice().sort(function(a, b) {
                 return (+b.share_pct_of_switchers || 0) - (+a.share_pct_of_switchers || 0);
             });
+            if (interChartEl) interChartEl.innerHTML = _jiqRenderInterstepChart(inters);
             if (interEl) {
                 interEl.innerHTML = _pctTable(inters, [
                     { label: 'Step', get: function(r) { return _linkOrText(r.step, r.url_pattern); }, bold: true },
@@ -28191,10 +28211,12 @@
 
             // 4) Inception Referrers
             var incEl = document.getElementById('jiqInceptionTable');
+            var incChartEl = document.getElementById('jiqInceptionChart');
             var incCard = document.getElementById('jiqInceptionCard');
             var incs = (funnel.inception_referrers || []).slice().sort(function(a, b) {
                 return (+b.share_pct_of_inbound || 0) - (+a.share_pct_of_inbound || 0);
             });
+            if (incChartEl) incChartEl.innerHTML = _jiqRenderInceptionDonut(incs);
             if (incEl) {
                 incEl.innerHTML = _pctTable(incs, [
                     { label: 'Source', get: function(r) { return _linkOrText(r.source, r.url_pattern); }, bold: true },
@@ -28205,10 +28227,12 @@
 
             // 5) Companion Behaviors
             var compEl = document.getElementById('jiqCompanionTable');
+            var compChartEl = document.getElementById('jiqCompanionChart');
             var compCard = document.getElementById('jiqCompanionCard');
             var comps = (funnel.companion_behaviors || []).slice().sort(function(a, b) {
                 return (+b.share_pct_of_visitors || 0) - (+a.share_pct_of_visitors || 0);
             });
+            if (compChartEl) compChartEl.innerHTML = _jiqRenderCompanionTimeline(comps);
             if (compEl) {
                 compEl.innerHTML = _pctTable(comps, [
                     { label: 'Vertical', get: function(r) { return _jiqEsc(r.vertical || '—'); }, bold: true },
@@ -28227,6 +28251,290 @@
             if (compCard) compCard.style.display = comps.length ? '' : 'none';
 
             if (det2) det2.style.display = (incs.length || comps.length) ? 'grid' : 'none';
+
+            // Sync view toggle buttons + visibility for all 4 cards
+            ['switched', 'interstep', 'inception', 'companion'].forEach(_jiqSyncSiteFunnelView);
+        }
+
+        // ───── View toggle state for the 4 site-funnel cards ─────
+        // Default to 'chart' so the visualizations are what users see
+        // first; 'list' shows the original table for power-users.
+        if (typeof window._jiqSiteFunnelViews === 'undefined') {
+            window._jiqSiteFunnelViews = { switched: 'chart', interstep: 'chart', inception: 'chart', companion: 'chart' };
+        }
+        window.setJiqSiteFunnelView = function(cardKey, view) {
+            window._jiqSiteFunnelViews[cardKey] = (view === 'list') ? 'list' : 'chart';
+            _jiqSyncSiteFunnelView(cardKey);
+        };
+        function _jiqSyncSiteFunnelView(cardKey) {
+            var cap = cardKey.charAt(0).toUpperCase() + cardKey.slice(1);
+            var chartEl = document.getElementById('jiq' + cap + 'Chart');
+            var tableEl = document.getElementById('jiq' + cap + 'Table');
+            var btnsEl  = document.getElementById('jiq' + cap + 'ViewBtns');
+            var view = (window._jiqSiteFunnelViews || {})[cardKey] || 'chart';
+            if (chartEl) chartEl.style.display = (view === 'chart') ? '' : 'none';
+            if (tableEl) tableEl.style.display = (view === 'list')  ? '' : 'none';
+            if (btnsEl) {
+                btnsEl.innerHTML = ['chart','list'].map(function(v) {
+                    var lbl = v === 'chart' ? '📊 Chart' : '📋 List';
+                    var active = (v === view);
+                    return '<button type="button" onclick="setJiqSiteFunnelView(\'' + cardKey + '\',\'' + v + '\')" '
+                         + 'style="padding:3px 9px;border-radius:6px;border:1px solid var(--border-color);'
+                         + 'background:' + (active ? 'var(--accent-primary)' : 'var(--bg-secondary)') + ';'
+                         + 'color:' + (active ? '#fff' : 'var(--text-primary)') + ';'
+                         + 'font-size:11px;cursor:pointer;font-weight:600;">' + lbl + '</button>';
+                }).join('');
+            }
+        }
+
+        // ───── Where Switchers Bought — horizontal bar chart ─────
+        // Each destination as a row with brand color + share bar.
+        // Brand colors picked to match chain identity where recognizable.
+        function _jiqSwitcherBrandColor(name) {
+            var n = (name || '').toLowerCase();
+            if (n.indexOf('amc') >= 0)        return '#e31837';
+            if (n.indexOf('cinemark') >= 0)   return '#0046ad';
+            if (n.indexOf('regal') >= 0 || n.indexOf('cineworld') >= 0) return '#6a1b9a';
+            if (n.indexOf('atom') >= 0)       return '#ff5722';
+            if (n.indexOf('alamo') >= 0)      return '#b71c1c';
+            if (n.indexOf('marcus') >= 0)     return '#1565c0';
+            if (n.indexOf('harkins') >= 0)    return '#ff8f00';
+            if (n.indexOf('landmark') >= 0 || n.indexOf('angelika') >= 0) return '#7b1fa2';
+            if (n.indexOf('apple') >= 0 || n.indexOf('google') >= 0) return '#4285f4';
+            return '#5b6cff';
+        }
+        function _jiqRenderSwitchedChart(dests) {
+            if (!dests || !dests.length) return '<div style="font-size:0.8rem;color:var(--text-secondary);padding:0.5rem 0;">No data.</div>';
+            var max = Math.max.apply(null, dests.map(function(d) { return +d.share_pct_of_switchers || 0; }));
+            if (max <= 0) max = 1;
+            return '<div style="display:flex;flex-direction:column;gap:8px;padding:8px 0;">'
+                + dests.map(function(d) {
+                    var pct = +d.share_pct_of_switchers || 0;
+                    var w = Math.max(2, (pct / max) * 100);
+                    var color = _jiqSwitcherBrandColor(d.destination);
+                    var labelLink = d.url_pattern
+                        ? '<a href="https://' + _jiqEsc(d.url_pattern) + '" target="_blank" rel="noopener" style="color:var(--text-primary);text-decoration:none;border-bottom:1px dotted var(--text-secondary);">' + _jiqEsc(d.destination || '') + '</a>'
+                        : _jiqEsc(d.destination || '');
+                    return '<div style="display:grid;grid-template-columns:minmax(140px,auto) 1fr auto;align-items:center;gap:10px;font-size:0.82rem;">'
+                         + '<div style="font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">'
+                         + '<span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:' + color + ';margin-right:6px;vertical-align:middle;"></span>'
+                         + labelLink + '</div>'
+                         + '<div style="background:var(--bg-secondary);border-radius:6px;height:22px;position:relative;overflow:hidden;">'
+                         +   '<div style="width:' + w + '%;height:100%;background:linear-gradient(90deg,' + color + ' 0%,' + color + 'cc 100%);border-radius:6px;transition:width 0.4s ease;"></div>'
+                         + '</div>'
+                         + '<div style="font-weight:700;font-variant-numeric:tabular-nums;min-width:48px;text-align:right;color:' + color + ';">' + pct.toFixed(1) + '%</div>'
+                         + '</div>';
+                  }).join('')
+                + '</div>';
+        }
+
+        // ───── Intermediate Steps — numbered journey cards ─────
+        // Vertical stack of stages, each showing rank, step name, share
+        // bar, and the typical queries as searchable chips.
+        function _jiqRenderInterstepChart(steps) {
+            if (!steps || !steps.length) return '<div style="font-size:0.8rem;color:var(--text-secondary);padding:0.5rem 0;">No data.</div>';
+            var max = Math.max.apply(null, steps.map(function(s) { return +s.share_pct_of_switchers || 0; }));
+            if (max <= 0) max = 1;
+            return '<div style="display:flex;flex-direction:column;gap:10px;padding:6px 0;position:relative;">'
+                + steps.slice(0, 10).map(function(s, i) {
+                    var pct = +s.share_pct_of_switchers || 0;
+                    var w = Math.max(2, (pct / max) * 100);
+                    var color = '#5b6cff';
+                    var queries = (s.typical_queries || []).slice(0, 4);
+                    var stepLabel = s.url_pattern
+                        ? '<a href="https://' + _jiqEsc(s.url_pattern) + '" target="_blank" rel="noopener" style="color:var(--text-primary);text-decoration:none;border-bottom:1px dotted var(--text-secondary);">' + _jiqEsc(s.step || '') + '</a>'
+                        : _jiqEsc(s.step || '');
+                    return '<div style="display:grid;grid-template-columns:34px 1fr;gap:10px;align-items:start;">'
+                         + '<div style="background:' + color + ';color:#fff;border-radius:50%;width:28px;height:28px;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:0.78rem;margin-top:2px;">' + (i + 1) + '</div>'
+                         + '<div style="min-width:0;">'
+                         +   '<div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px;margin-bottom:4px;">'
+                         +     '<div style="font-weight:600;font-size:0.85rem;line-height:1.2;">' + stepLabel + '</div>'
+                         +     '<div style="font-weight:700;font-variant-numeric:tabular-nums;color:' + color + ';font-size:0.85rem;">' + pct.toFixed(1) + '%</div>'
+                         +   '</div>'
+                         +   '<div style="background:var(--bg-secondary);border-radius:6px;height:6px;overflow:hidden;margin-bottom:4px;">'
+                         +     '<div style="width:' + w + '%;height:100%;background:' + color + ';border-radius:6px;"></div>'
+                         +   '</div>'
+                         +   (queries.length ? '<div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:4px;">'
+                              + queries.map(function(q) {
+                                  return '<span style="font-size:0.68rem;color:var(--text-secondary);background:var(--bg-secondary);padding:2px 7px;border-radius:10px;border:1px solid var(--border-color);">'
+                                       + _jiqEsc('"' + q + '"') + '</span>';
+                                }).join('')
+                              + '</div>' : '')
+                         + '</div>'
+                         + '</div>';
+                  }).join('')
+                + '</div>';
+        }
+
+        // ───── Inception — donut chart ─────
+        // SVG donut. Slices in descending order, color from a curated
+        // palette. Center shows total + source count. Legend on right.
+        function _jiqRenderInceptionDonut(refs) {
+            if (!refs || !refs.length) return '<div style="font-size:0.8rem;color:var(--text-secondary);padding:0.5rem 0;">No data.</div>';
+            var palette = ['#5b6cff','#10b981','#f59e0b','#ef4444','#8b5cf6','#06b6d4','#ec4899','#84cc16','#f97316','#6366f1','#14b8a6','#a855f7'];
+            var rows = refs.slice(0, 12);
+            var total = rows.reduce(function(s, r) { return s + (+r.share_pct_of_inbound || 0); }, 0);
+            if (total <= 0) total = 100;
+            var size = 200, r1 = 90, r2 = 58, cx = size/2, cy = size/2;
+            var start = -Math.PI / 2;
+            function arc(a0, a1, ro, ri) {
+                var large = (a1 - a0) > Math.PI ? 1 : 0;
+                var x0 = cx + ro * Math.cos(a0), y0 = cy + ro * Math.sin(a0);
+                var x1 = cx + ro * Math.cos(a1), y1 = cy + ro * Math.sin(a1);
+                var x2 = cx + ri * Math.cos(a1), y2 = cy + ri * Math.sin(a1);
+                var x3 = cx + ri * Math.cos(a0), y3 = cy + ri * Math.sin(a0);
+                return 'M' + x0 + ',' + y0 + ' A' + ro + ',' + ro + ' 0 ' + large + ' 1 ' + x1 + ',' + y1
+                     + ' L' + x2 + ',' + y2 + ' A' + ri + ',' + ri + ' 0 ' + large + ' 0 ' + x3 + ',' + y3 + ' Z';
+            }
+            var slices = '';
+            var legend  = '';
+            rows.forEach(function(r, i) {
+                var pct = +r.share_pct_of_inbound || 0;
+                var frac = pct / total;
+                var end = start + frac * 2 * Math.PI;
+                var color = palette[i % palette.length];
+                if (frac > 0.0001) {
+                    slices += '<path d="' + arc(start, end, r1, r2) + '" fill="' + color + '">'
+                            + '<title>' + _jiqEsc(r.source || '') + ' — ' + pct.toFixed(1) + '%</title></path>';
+                }
+                start = end;
+                var sourceLabel = r.url_pattern
+                    ? '<a href="https://' + _jiqEsc(r.url_pattern) + '" target="_blank" rel="noopener" style="color:var(--text-primary);text-decoration:none;border-bottom:1px dotted var(--text-secondary);">' + _jiqEsc(r.source || '') + '</a>'
+                    : _jiqEsc(r.source || '');
+                legend += '<div style="display:grid;grid-template-columns:14px 1fr auto;gap:8px;align-items:center;font-size:0.78rem;padding:3px 0;">'
+                       + '<span style="display:inline-block;width:11px;height:11px;border-radius:3px;background:' + color + ';"></span>'
+                       + '<div style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + sourceLabel + '</div>'
+                       + '<div style="font-weight:700;font-variant-numeric:tabular-nums;color:var(--text-primary);">' + pct.toFixed(1) + '%</div>'
+                       + '</div>';
+            });
+            return '<div style="display:grid;grid-template-columns:auto 1fr;gap:18px;align-items:center;padding:8px 0;">'
+                 + '<div style="position:relative;">'
+                 +   '<svg width="' + size + '" height="' + size + '" viewBox="0 0 ' + size + ' ' + size + '">'
+                 +     slices
+                 +     '<text x="' + cx + '" y="' + (cy - 6) + '" text-anchor="middle" fill="var(--text-primary)" font-size="22" font-weight="700">' + Math.round(total) + '%</text>'
+                 +     '<text x="' + cx + '" y="' + (cy + 16) + '" text-anchor="middle" fill="var(--text-secondary)" font-size="11">' + rows.length + ' sources</text>'
+                 +   '</svg>'
+                 + '</div>'
+                 + '<div style="min-width:0;">' + legend + '</div>'
+                 + '</div>';
+        }
+
+        // ───── Companion Behaviors — timeline relative to showtime ─────
+        // X-axis: hours before/after showtime. Each vertical is a bubble
+        // sized by share, placed at the midpoint of its typical_window.
+        // Color-coded by vertical category.
+        function _jiqCompanionCategoryColor(name) {
+            var n = (name || '').toLowerCase();
+            if (n.indexOf('dinner') >= 0 || n.indexOf('restaurant') >= 0 || n.indexOf('meal') >= 0 || n.indexOf('food') >= 0) return '#f59e0b';
+            if (n.indexOf('bar') >= 0 || n.indexOf('drink') >= 0) return '#ef4444';
+            if (n.indexOf('rideshare') >= 0 || n.indexOf('transport') >= 0 || n.indexOf('uber') >= 0 || n.indexOf('lyft') >= 0) return '#10b981';
+            if (n.indexOf('park') >= 0) return '#06b6d4';
+            if (n.indexOf('hotel') >= 0 || n.indexOf('lodging') >= 0) return '#8b5cf6';
+            if (n.indexOf('dessert') >= 0 || n.indexOf('coffee') >= 0 || n.indexOf('ice cream') >= 0) return '#ec4899';
+            if (n.indexOf('shop') >= 0 || n.indexOf('retail') >= 0) return '#84cc16';
+            if (n.indexOf('child') >= 0 || n.indexOf('babysit') >= 0) return '#f97316';
+            return '#5b6cff';
+        }
+        // Parse "1-3 hours before showtime" / "30-90 min before" / "immediately after" / etc.
+        // Returns { center_hours: signed_float } where negative = before, positive = after, 0 = at.
+        function _jiqParseCompanionWindow(text) {
+            if (!text) return { center: -1, span: 1 };
+            var s = String(text).toLowerCase();
+            var hasBefore = s.indexOf('before') >= 0;
+            var hasAfter  = s.indexOf('after')  >= 0 && s.indexOf('before') < 0;
+            // Extract first numeric range (e.g. "1-3", "30-90", "60-90")
+            var m = s.match(/(\d+(?:\.\d+)?)\s*[-–]\s*(\d+(?:\.\d+)?)/);
+            var lo, hi;
+            if (m) { lo = +m[1]; hi = +m[2]; }
+            else {
+                var m2 = s.match(/(\d+(?:\.\d+)?)/);
+                if (m2) { lo = +m2[1]; hi = lo; }
+                else    { lo = 1; hi = 2; }
+            }
+            // Convert minutes -> hours when minute-units appear
+            var inMinutes = s.indexOf('min') >= 0;
+            if (inMinutes) { lo = lo / 60; hi = hi / 60; }
+            var center = (lo + hi) / 2;
+            var span = Math.max(0.25, hi - lo);
+            if (hasBefore) center = -center;
+            else if (hasAfter) center = +center;
+            else center = -center;  // default to "before" if ambiguous
+            return { center: center, span: span };
+        }
+        function _jiqRenderCompanionTimeline(comps) {
+            if (!comps || !comps.length) return '<div style="font-size:0.8rem;color:var(--text-secondary);padding:0.5rem 0;">No data.</div>';
+            var W = 720, H = 360;
+            var padL = 30, padR = 30, padT = 30, padB = 90;
+            var xMin = -4, xMax = 2.5;  // hours; -4h before .. 2.5h after
+            function xFor(h) {
+                var clamped = Math.max(xMin, Math.min(xMax, h));
+                return padL + ((clamped - xMin) / (xMax - xMin)) * (W - padL - padR);
+            }
+            var axisY = padT + (H - padT - padB) * 0.55;
+            var maxPct = Math.max.apply(null, comps.map(function(c) { return +c.share_pct_of_visitors || 0; }));
+            if (maxPct <= 0) maxPct = 1;
+            // Compute positions
+            var enriched = comps.slice(0, 10).map(function(c) {
+                var w = _jiqParseCompanionWindow(c.typical_window);
+                var pct = +c.share_pct_of_visitors || 0;
+                return {
+                    vertical: c.vertical || '—',
+                    pct: pct,
+                    center: w.center,
+                    span: w.span,
+                    x: xFor(w.center),
+                    r: Math.max(14, Math.min(46, 14 + (pct / maxPct) * 32)),
+                    color: _jiqCompanionCategoryColor(c.vertical),
+                    top_sites: (c.top_sites || []).slice(0, 4),
+                    typical_window: c.typical_window || '',
+                };
+            }).sort(function(a, b) { return a.x - b.x; });
+            // Stagger overlapping bubbles vertically
+            enriched.forEach(function(e, i) {
+                e.y = axisY;
+                for (var j = 0; j < i; j++) {
+                    var other = enriched[j];
+                    var dx = Math.abs(e.x - other.x);
+                    if (dx < (e.r + other.r + 4)) {
+                        e.y = other.y - (other.r + e.r + 6);
+                    }
+                }
+            });
+            // X-axis ticks
+            var ticks = [-3, -2, -1, 0, 1, 2];
+            var tickLabels = { '-3':'3h before', '-2':'2h before', '-1':'1h before', '0':'🎬 SHOWTIME', '1':'1h after', '2':'2h after' };
+            var parts = [];
+            parts.push('<rect width="' + W + '" height="' + H + '" fill="transparent"/>');
+            // Showtime vertical line
+            parts.push('<line x1="' + xFor(0) + '" y1="' + padT + '" x2="' + xFor(0) + '" y2="' + (H - padB + 10) + '" stroke="var(--accent-primary)" stroke-width="2" stroke-dasharray="4,3" opacity="0.6"/>');
+            // X axis line
+            parts.push('<line x1="' + padL + '" y1="' + (H - padB) + '" x2="' + (W - padR) + '" y2="' + (H - padB) + '" stroke="var(--border-color)" stroke-width="1"/>');
+            ticks.forEach(function(t) {
+                var x = xFor(t);
+                parts.push('<line x1="' + x + '" y1="' + (H - padB) + '" x2="' + x + '" y2="' + (H - padB + 6) + '" stroke="var(--border-color)" stroke-width="1"/>');
+                parts.push('<text x="' + x + '" y="' + (H - padB + 22) + '" text-anchor="middle" fill="var(--text-secondary)" font-size="11" ' + (t === 0 ? 'font-weight="700"' : '') + '>' + tickLabels[String(t)] + '</text>');
+            });
+            // Bubbles
+            enriched.forEach(function(e) {
+                // span line under bubble showing the range
+                if (e.span > 0) {
+                    var x0 = xFor(e.center - e.span / 2);
+                    var x1 = xFor(e.center + e.span / 2);
+                    parts.push('<line x1="' + x0 + '" y1="' + e.y + '" x2="' + x1 + '" y2="' + e.y + '" stroke="' + e.color + '" stroke-width="2" opacity="0.35"/>');
+                }
+                parts.push('<g>'
+                     + '<circle cx="' + e.x + '" cy="' + e.y + '" r="' + e.r + '" fill="' + e.color + '" opacity="0.85" stroke="' + e.color + '" stroke-width="2"/>'
+                     + '<text x="' + e.x + '" y="' + (e.y + 4) + '" text-anchor="middle" fill="#fff" font-weight="700" font-size="' + Math.max(10, e.r / 2.4) + '">' + e.pct.toFixed(0) + '%</text>'
+                     + '<text x="' + e.x + '" y="' + (e.y + e.r + 13) + '" text-anchor="middle" fill="var(--text-primary)" font-size="11" font-weight="600">' + _jiqEsc(e.vertical.split('(')[0].trim().slice(0, 24)) + '</text>'
+                     + '<title>' + _jiqEsc(e.vertical + ' — ' + e.pct.toFixed(1) + '% — ' + e.typical_window) + (e.top_sites.length ? ' — ' + _jiqEsc(e.top_sites.join(', ')) : '') + '</title>'
+                     + '</g>');
+            });
+            return '<div style="overflow-x:auto;padding:4px 0;">'
+                 + '<svg width="' + W + '" height="' + H + '" viewBox="0 0 ' + W + ' ' + H + '" style="display:block;max-width:100%;height:auto;">'
+                 + parts.join('')
+                 + '</svg>'
+                 + '<div style="font-size:0.68rem;color:var(--text-secondary);margin-top:4px;text-align:center;">Bubble size = share of visitors · placement = typical time relative to showtime · hover for sites</div>'
+                 + '</div>';
         }
 
         function showJiqChannelDetail(channelKey) {
