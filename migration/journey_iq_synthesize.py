@@ -2497,13 +2497,37 @@ Hard rules:
     that site at least once during the window). For high-intent
     TRANSACTIONAL sites (ticketing, travel, food delivery, e-commerce
     with stated purchase intent), this number should land in the
-    15-35% range for a multi-month window — NOT single digits.
-    Ticketing-specific benchmark: Fandango is ~22% (50M monthly
-    uniques vs ~7-10M tickets/month per public revenue disclosures);
-    Atom is similar. If your initial estimate is under 10% for a
-    transactional site, double-check — you are likely confusing
+    12-30% range for a multi-month window — NOT single digits, NOT
+    above 35%. Single digits usually means you're confusing
     session-level CR with visitor-level CR. Cite the per-visit vs
     per-visitor distinction in the funnel_split notes when relevant.
+
+    Specific public benchmarks to anchor to (DO NOT just pick neat
+    round numbers — derive from these and end up with NON-ROUND
+    percentages):
+      - Fandango.com: ~50M monthly US uniques (Expanded Ramblings 2026),
+        ~30.5M monthly visits with 91.95% US share (Semrush Apr 2026).
+        Fandango Trends Study 2024 (n=5,000) found 55% of US
+        moviegoers buy tickets online or in-app (Loyal 65% / Casual
+        49%). 2024 US theatrical: ~$8.7B at ~$11 = ~790M tickets
+        (the-numbers.com). ~55% online = ~435M online ticket
+        purchases industry-wide. Fandango captures ~38-45% of online
+        ticket sales (Comscore / BoxOfficePro / NRG) ≈ ~14.5M
+        tickets/month ≈ ~6M transactions/month at 2.3 tix/txn avg ≈
+        ~12% per-visitor monthly txn rate ≈ ~17% cumulative across a
+        125-day window. Expect ~16-19% on-site, ~26-30% switched
+        (chain.com/app), ~52-58% never transacted.
+      - AMC.com / AMC app: ~25-30% of online ticket sales (heavily
+        boosted by Stubs A-List loyalty driving direct booking).
+      - Cinemark direct: ~8-12%. Atom Tickets: ~5-8%. Regal direct:
+        ~5-7%. Other chains direct (Marcus, Harkins, Alamo, Landmark):
+        ~8-12% combined.
+
+    Make funnel_split percentages reflect the underlying data, NOT
+    convenient round numbers. A split like "20/30/50" or "25/25/50"
+    should be a RED FLAG that you're rounding to neat values instead
+    of computing from benchmarks. Defensible splits usually look like
+    "17.3 / 27.6 / 55.1" or "23.8 / 19.4 / 56.8".
   * DIGITAL ONLY. Every switched_destination, intermediate_journey
     step, inception_referrer, and companion_behavior MUST be observable
     in CLICKSTREAM data — i.e. it must correspond to a real website,
