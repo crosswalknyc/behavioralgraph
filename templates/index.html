@@ -28628,15 +28628,25 @@
                     }).join('');
             }
 
-            // ── Sanity check + modeled take callouts
+            // ── Sanity check + modeled take callouts (hide entirely when blank)
             var sanEl = document.getElementById('jiqAnchorsSanity');
-            if (sanEl) sanEl.innerHTML = an.sanity_check
-                ? '<strong style="color:var(--accent-cyan);">SANITY CHECK · </strong>' + _jiqEsc(an.sanity_check)
-                : '';
+            if (sanEl) {
+                if (an.sanity_check) {
+                    sanEl.innerHTML = '<strong style="color:var(--accent-cyan);">SANITY CHECK · </strong>' + _jiqEsc(an.sanity_check);
+                    sanEl.style.display = '';
+                } else {
+                    sanEl.style.display = 'none';
+                }
+            }
             var takeEl = document.getElementById('jiqAnchorsTake');
-            if (takeEl) takeEl.innerHTML = an.modeled_take
-                ? '<strong style="color:var(--accent-lime);">MODELED TAKE · </strong>' + _jiqEsc(an.modeled_take)
-                : '';
+            if (takeEl) {
+                if (an.modeled_take) {
+                    takeEl.innerHTML = '<strong style="color:var(--accent-lime);">MODELED TAKE · </strong>' + _jiqEsc(an.modeled_take);
+                    takeEl.style.display = '';
+                } else {
+                    takeEl.style.display = 'none';
+                }
+            }
         }
 
         // ───── Exhibitor Channel Mix renderer ─────
