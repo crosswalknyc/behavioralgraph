@@ -19145,6 +19145,31 @@
                 </div>
 
                 <!-- ════════════════════════════════════════════════════════
+                     AUDIENCE SIZING — PUBLIC ANCHORS card
+                     modeled_view.audience_sizing_anchors
+                     Public-data-grounded engager funnel with L1-L6 source
+                     layers, gross→deduplicated rollup, and conversion funnel
+                     to opening-weekend tickets. Cross-validated against
+                     studio tracking.
+                ═══════════════════════════════════════════════════════ -->
+                <div class="card" id="jiqAnchorsCard" style="padding: 1rem; margin-bottom: 1rem; display: none;">
+                    <div style="display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.25rem;">
+                        <h3 style="margin: 0;">📐 Audience Sizing — Public Anchors</h3>
+                        <div id="jiqAnchorsMeta" style="font-size: 0.72rem; color: var(--text-secondary);"></div>
+                    </div>
+                    <div id="jiqAnchorsSubtitle" style="font-size: 0.78rem; color: var(--text-secondary); margin-bottom: 0.75rem;"></div>
+                    <div id="jiqAnchorsLayers" style="margin-bottom: 1rem;"></div>
+                    <div id="jiqAnchorsRollup" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 0.75rem; margin-bottom: 1rem;"></div>
+                    <div style="font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-secondary); font-weight: 600; margin-bottom: 0.5rem;">Conversion Funnel to Opening Weekend</div>
+                    <div id="jiqAnchorsFunnel" style="margin-bottom: 1rem;"></div>
+                    <div style="font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-secondary); font-weight: 600; margin-bottom: 0.5rem;">Public Anchor Inputs</div>
+                    <div id="jiqAnchorsInputs" style="margin-bottom: 1rem; overflow-x: auto;"></div>
+                    <div id="jiqAnchorsLift" style="margin-bottom: 0.85rem;"></div>
+                    <div id="jiqAnchorsSanity" style="font-size: 0.78rem; color: var(--text-primary); background: var(--bg-secondary); border-left: 4px solid var(--accent-cyan); padding: 0.7rem 0.9rem; border-radius: 6px; margin-bottom: 0.5rem;"></div>
+                    <div id="jiqAnchorsTake" style="font-size: 0.78rem; color: var(--text-primary); background: var(--bg-secondary); border-left: 4px solid var(--accent-lime); padding: 0.7rem 0.9rem; border-radius: 6px;"></div>
+                </div>
+
+                <!-- ════════════════════════════════════════════════════════
                      EXHIBITOR CHANNEL MIX card — modeled_view.exhibitor_channel_mix
                      Per-chain ticket share + audience-tilt heatmap (chain
                      × hypothesis cohort) + promo participation flag.
@@ -27825,26 +27850,38 @@
                 } else if (hasConfirmedTicketing) {
                     // Movie with confirmed digital pre-sales + comp-anchored projection.
                     // Layout: Pre-Sales (3 tiles) → Opening Weekend (2 tiles) → Full Run (1 tile)
+                    // Each tile entry: [label, value, optionalSub, optionalAccent]
                     var src = kpis.confirmed_source || 'Digital';
                     var asOf = kpis.confirmed_as_of_date || '';
                     var confLbl = 'Confirmed Pre-Sales (' + src + (asOf ? ' · ' + asOf : '') + ')';
                     var fandangoSub = (kpis.confirmed_fandango_purchases != null)
-                        ? ' (of which Fandango: ' + _jiqFmt(kpis.confirmed_fandango_purchases) + ')'
+                        ? 'of which Fandango: ' + _jiqFmt(kpis.confirmed_fandango_purchases)
                         : '';
                     var fmtUsd = function(v) { return v != null ? '$' + _jiqFmt(v) : '—'; };
+                    var rangeSub = function(lo, hi, prefix) {
+                        prefix = prefix || '';
+                        if (lo == null || hi == null) return '';
+                        return 'range ' + prefix + _jiqFmt(lo) + '–' + prefix + _jiqFmt(hi);
+                    };
                     k = [
                         [confLbl,
-                            _jiqFmt(kpis.confirmed_digital_purchases) + fandangoSub],
+                            _jiqFmt(kpis.confirmed_digital_purchases),
+                            fandangoSub],
                         ['Confirmed Tickets (×' + (kpis.confirmed_avg_tickets_per_purchase || 2) + ')',
-                            _jiqFmt(kpis.confirmed_digital_tickets)],
+                            _jiqFmt(kpis.confirmed_digital_tickets), ''],
                         ['Confirmed Revenue (@$' + (kpis.confirmed_avg_ticket_price_usd || 15).toFixed(2) + ')',
-                            fmtUsd(kpis.confirmed_digital_revenue_usd)],
+                            fmtUsd(kpis.confirmed_digital_revenue_usd), ''],
                         ['Projected Opening Weekend Tickets',
-                            _jiqFmt(kpis.projected_opening_weekend_tickets || kpis.projected_total_tickets)],
+                            _jiqFmt(kpis.projected_opening_weekend_tickets || kpis.projected_total_tickets),
+                            rangeSub(kpis.projected_ow_range_low_tickets, kpis.projected_ow_range_high_tickets)],
                         ['Projected Opening Weekend Gross',
-                            fmtUsd(kpis.projected_opening_weekend_revenue_usd || kpis.projected_total_revenue_usd)],
+                            fmtUsd(kpis.projected_opening_weekend_revenue_usd || kpis.projected_total_revenue_usd),
+                            rangeSub(kpis.projected_ow_range_low_revenue_usd, kpis.projected_ow_range_high_revenue_usd, '$'),
+                            'lime'],
                         ['Projected Domestic Total (full run)',
-                            fmtUsd(kpis.projected_total_revenue_usd)],
+                            fmtUsd(kpis.projected_total_revenue_usd),
+                            rangeSub(kpis.projected_range_low_revenue_usd, kpis.projected_range_high_revenue_usd, '$'),
+                            'cyan'],
                     ];
                 } else {
                     k = [
@@ -27857,9 +27894,18 @@
                     ];
                 }
                 kpiStrip.innerHTML = k.map(function(pair) {
-                    return '<div style="background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 8px; padding: 0.6rem 0.8rem;">'
-                         +   '<div style="font-size: 0.65rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-secondary); font-weight: 600;">' + _jiqEsc(pair[0]) + '</div>'
-                         +   '<div style="font-size: 1.25rem; font-weight: 700; margin-top: 2px;">' + _jiqEsc(pair[1]) + '</div>'
+                    var label  = pair[0];
+                    var value  = pair[1];
+                    var sub    = pair[2] || '';
+                    var accent = pair[3] || '';
+                    var valueColor = (accent === 'lime') ? 'var(--accent-lime)'
+                                   : (accent === 'cyan') ? 'var(--accent-cyan)'
+                                   : 'var(--text-primary)';
+                    var border = accent ? '1px solid ' + valueColor : '1px solid var(--border-color)';
+                    return '<div style="background: var(--bg-secondary); border: ' + border + '; border-radius: 8px; padding: 0.6rem 0.8rem;">'
+                         +   '<div style="font-size: 0.65rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-secondary); font-weight: 600;">' + _jiqEsc(label) + '</div>'
+                         +   '<div style="font-size: 1.25rem; font-weight: 700; margin-top: 2px; color: ' + valueColor + ';">' + _jiqEsc(value) + '</div>'
+                         + (sub ? '<div style="font-size: 0.65rem; color: var(--text-secondary); margin-top: 2px;">' + _jiqEsc(sub) + '</div>' : '')
                          + '</div>';
                 }).join('');
 
@@ -27932,6 +27978,11 @@
             // ---- Audience Hypothesis card ----
             renderJourneyIqAudienceHypothesis(
                 ((fullRun || {}).modeled_view || {}).audience_hypotheses
+            );
+
+            // ---- Audience Sizing — Public Anchors card ----
+            renderJourneyIqAnchors(
+                ((fullRun || {}).modeled_view || {}).audience_sizing_anchors
             );
 
             // ---- Exhibitor Direct Channel Mix card ----
@@ -28409,6 +28460,163 @@
                               + '</div>'
                               + '</div>';
             }
+        }
+
+        // ───── Audience Sizing — Public Anchors renderer ─────
+        // Layer-bar view (L1-L6) + gross/dedup rollup tiles + 5-stage
+        // conversion funnel + public anchor input table + Crosswalk
+        // panel lift list + sanity-check + modeled-take callouts.
+        function renderJourneyIqAnchors(an) {
+            var card = document.getElementById('jiqAnchorsCard');
+            if (!card) return;
+            if (!an || (!an.layers || !an.layers.length) && !an.funnel) {
+                card.style.display = 'none'; return;
+            }
+            card.style.display = '';
+
+            var fmt = function(n) {
+                if (n == null) return '—';
+                if (n >= 1e6) return (n / 1e6).toFixed(n >= 1e7 ? 0 : 1) + 'M';
+                if (n >= 1e3) return (n / 1e3).toFixed(0) + 'K';
+                return String(n);
+            };
+            var rangeStr = function(lo, hi, unit) {
+                unit = unit || '';
+                if (lo == null || hi == null) return '—';
+                return fmt(lo) + '–' + fmt(hi) + (unit ? ' ' + unit : '');
+            };
+
+            // Subtitle = methodology
+            var sub = document.getElementById('jiqAnchorsSubtitle');
+            if (sub) sub.textContent = an.methodology || '';
+            var meta = document.getElementById('jiqAnchorsMeta');
+            if (meta) meta.textContent = 'Public-data-grounded · trailing 12 months · US digital engagers';
+
+            // ── L1-L6 layer bars (each layer = horizontal bar, length = high engager count)
+            var maxEng = Math.max.apply(null,
+                (an.layers || []).map(function(L) { return L.high_engagers || 0; })) || 1;
+            var layersEl = document.getElementById('jiqAnchorsLayers');
+            if (layersEl) {
+                layersEl.innerHTML = (an.layers || []).map(function(L) {
+                    var lo = L.low_engagers || 0;
+                    var hi = L.high_engagers || 0;
+                    var midPctOfMax = ((lo + hi) / 2 / maxEng) * 100;
+                    var loPctOfMax  = (lo / maxEng) * 100;
+                    var hiPctOfMax  = (hi / maxEng) * 100;
+                    var c = L.color || 'var(--accent-primary)';
+                    return '<div style="display:grid;grid-template-columns:48px 1fr 160px;gap:10px;align-items:center;padding:5px 0;border-bottom:1px solid var(--border-color);">'
+                         +   '<div style="font-size:0.78rem;font-weight:700;color:' + c + ';">' + _jiqEsc(L.id || '') + '</div>'
+                         +   '<div>'
+                         +     '<div style="font-size:0.78rem;color:var(--text-primary);">' + _jiqEsc(L.name || '') + (L.note ? ' <span style="color:var(--text-secondary);font-size:0.7rem;">· ' + _jiqEsc(L.note) + '</span>' : '') + '</div>'
+                         +     '<div style="position:relative;height:8px;background:var(--bg-secondary);border-radius:4px;margin-top:4px;">'
+                         +       '<div style="position:absolute;left:' + loPctOfMax + '%;width:' + Math.max(hiPctOfMax - loPctOfMax, 0.5) + '%;height:100%;background:' + c + ';border-radius:4px;opacity:0.85;"></div>'
+                         +     '</div>'
+                         +   '</div>'
+                         +   '<div style="font-size:0.82rem;font-weight:600;text-align:right;color:var(--text-primary);">' + rangeStr(lo, hi, 'engagers') + '</div>'
+                         + '</div>';
+                }).join('');
+            }
+
+            // ── Gross / Deduplicated rollup tiles
+            var rollEl = document.getElementById('jiqAnchorsRollup');
+            if (rollEl) {
+                var tiles = [];
+                if (an.gross_touchpoints) {
+                    tiles.push({
+                        label: 'Gross touchpoints',
+                        value: rangeStr(an.gross_touchpoints.low, an.gross_touchpoints.high),
+                        note:  '(before deduplication)',
+                        color: 'var(--text-primary)',
+                    });
+                }
+                if (an.deduplicated_engagers) {
+                    tiles.push({
+                        label: 'Deduplicated unique engagers',
+                        value: rangeStr(an.deduplicated_engagers.low, an.deduplicated_engagers.high),
+                        note:  an.deduplicated_engagers.note || '',
+                        color: 'var(--accent-lime)',
+                    });
+                }
+                rollEl.innerHTML = tiles.map(function(t) {
+                    return '<div style="background:var(--bg-secondary);border:1px solid ' + t.color + ';border-radius:8px;padding:0.7rem 0.9rem;">'
+                         +   '<div style="font-size:0.65rem;text-transform:uppercase;letter-spacing:0.05em;color:var(--text-secondary);font-weight:600;">' + _jiqEsc(t.label) + '</div>'
+                         +   '<div style="font-size:1.35rem;font-weight:700;color:' + t.color + ';margin-top:2px;">' + _jiqEsc(t.value) + '</div>'
+                         +   (t.note ? '<div style="font-size:0.7rem;color:var(--text-secondary);margin-top:2px;">' + _jiqEsc(t.note) + '</div>' : '')
+                         + '</div>';
+                }).join('');
+            }
+
+            // ── 5-stage funnel
+            var funnel = an.funnel || [];
+            var funnelEl = document.getElementById('jiqAnchorsFunnel');
+            if (funnelEl && funnel.length) {
+                var maxFunnel = Math.max.apply(null, funnel.map(function(s) { return s.high || 0; })) || 1;
+                var palette = ['#5b6cff', '#7b8cff', '#10b981', '#f4c542', '#ff7a59'];
+                funnelEl.innerHTML = funnel.map(function(s, i) {
+                    var lo = s.low || 0, hi = s.high || 0;
+                    var widthPct = ((lo + hi) / 2 / maxFunnel) * 100;
+                    var c = palette[i % palette.length];
+                    return '<div style="display:grid;grid-template-columns:1fr 200px;gap:10px;align-items:center;padding:6px 0;">'
+                         +   '<div>'
+                         +     '<div style="font-size:0.8rem;font-weight:600;color:var(--text-primary);">' + _jiqEsc(s.stage || '') + ' <span style="color:var(--text-secondary);font-weight:400;font-size:0.72rem;">· ' + _jiqEsc(s.rate || '') + '</span></div>'
+                         +     '<div style="height:14px;background:var(--bg-secondary);border-radius:4px;margin-top:4px;position:relative;overflow:hidden;">'
+                         +       '<div style="width:' + Math.max(widthPct, 1) + '%;height:100%;background:linear-gradient(90deg,' + c + ',' + c + 'cc);border-radius:4px;"></div>'
+                         +     '</div>'
+                         +   '</div>'
+                         +   '<div style="font-size:0.85rem;font-weight:700;text-align:right;color:' + c + ';">' + rangeStr(lo, hi, s.unit || '') + '</div>'
+                         + '</div>';
+                }).join('');
+            }
+
+            // ── Public anchor inputs table
+            var inputs = an.public_anchor_inputs || [];
+            var inputsEl = document.getElementById('jiqAnchorsInputs');
+            if (inputsEl && inputs.length) {
+                inputsEl.innerHTML =
+                    '<table style="width:100%;border-collapse:collapse;font-size:0.76rem;">'
+                  +   '<thead><tr style="border-bottom:1px solid var(--border-color);">'
+                  +     '<th style="text-align:left;padding:6px 8px;color:var(--text-secondary);font-weight:600;text-transform:uppercase;font-size:0.65rem;letter-spacing:0.05em;">Touchpoint</th>'
+                  +     '<th style="text-align:left;padding:6px 8px;color:var(--text-secondary);font-weight:600;text-transform:uppercase;font-size:0.65rem;letter-spacing:0.05em;">Volume</th>'
+                  +     '<th style="text-align:left;padding:6px 8px;color:var(--text-secondary);font-weight:600;text-transform:uppercase;font-size:0.65rem;letter-spacing:0.05em;">Source</th>'
+                  +     '<th style="text-align:left;padding:6px 8px;color:var(--text-secondary);font-weight:600;text-transform:uppercase;font-size:0.65rem;letter-spacing:0.05em;">Period</th>'
+                  +   '</tr></thead>'
+                  +   '<tbody>'
+                  +   inputs.map(function(r) {
+                        return '<tr style="border-bottom:1px solid var(--border-color);">'
+                             +   '<td style="padding:6px 8px;color:var(--text-primary);font-weight:600;">' + _jiqEsc(r.touchpoint || '') + '</td>'
+                             +   '<td style="padding:6px 8px;color:var(--text-primary);">' + _jiqEsc(r.volume || '') + '</td>'
+                             +   '<td style="padding:6px 8px;color:var(--text-secondary);">' + _jiqEsc(r.source || '') + '</td>'
+                             +   '<td style="padding:6px 8px;color:var(--text-secondary);white-space:nowrap;">' + _jiqEsc(r.period || '') + '</td>'
+                             + '</tr>';
+                    }).join('')
+                  +   '</tbody></table>';
+            }
+
+            // ── Crosswalk panel lift list (where the proprietary panel adds value)
+            var lift = an.crosswalk_panel_lift || [];
+            var liftEl = document.getElementById('jiqAnchorsLift');
+            if (liftEl && lift.length) {
+                liftEl.innerHTML =
+                    '<div style="font-size:0.75rem;text-transform:uppercase;letter-spacing:0.05em;color:var(--text-secondary);font-weight:600;margin-bottom:0.4rem;">Where the Crosswalk panel adds real lift</div>'
+                  + lift.map(function(item) {
+                        var name = Array.isArray(item) ? item[0] : (item.name || '');
+                        var desc = Array.isArray(item) ? item[1] : (item.description || '');
+                        return '<div style="display:grid;grid-template-columns:220px 1fr;gap:10px;padding:5px 0;border-bottom:1px solid var(--border-color);font-size:0.76rem;">'
+                             +   '<div style="font-weight:600;color:var(--text-primary);">' + _jiqEsc(name) + '</div>'
+                             +   '<div style="color:var(--text-secondary);">' + _jiqEsc(desc) + '</div>'
+                             + '</div>';
+                    }).join('');
+            }
+
+            // ── Sanity check + modeled take callouts
+            var sanEl = document.getElementById('jiqAnchorsSanity');
+            if (sanEl) sanEl.innerHTML = an.sanity_check
+                ? '<strong style="color:var(--accent-cyan);">SANITY CHECK · </strong>' + _jiqEsc(an.sanity_check)
+                : '';
+            var takeEl = document.getElementById('jiqAnchorsTake');
+            if (takeEl) takeEl.innerHTML = an.modeled_take
+                ? '<strong style="color:var(--accent-lime);">MODELED TAKE · </strong>' + _jiqEsc(an.modeled_take)
+                : '';
         }
 
         // ───── Exhibitor Channel Mix renderer ─────
