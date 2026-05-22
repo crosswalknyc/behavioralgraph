@@ -27851,34 +27851,37 @@
                     // Movie with confirmed digital pre-sales + comp-anchored projection.
                     // Layout: Pre-Sales (3 tiles) → Opening Weekend (2 tiles) → Full Run (1 tile)
                     // Each tile entry: [label, value, optionalSub, optionalAccent]
-                    var src = kpis.confirmed_source || 'Digital';
                     var asOf = kpis.confirmed_as_of_date || '';
-                    var confLbl = 'Confirmed Pre-Sales (' + src + (asOf ? ' · ' + asOf : '') + ')';
-                    var fandangoSub = (kpis.confirmed_fandango_purchases != null)
-                        ? 'of which Fandango: ' + _jiqFmt(kpis.confirmed_fandango_purchases)
-                        : '';
                     var fmtUsd = function(v) { return v != null ? '$' + _jiqFmt(v) : '—'; };
+                    var fandangoSub = (kpis.confirmed_fandango_purchases != null)
+                        ? 'Fandango ' + _jiqFmt(kpis.confirmed_fandango_purchases)
+                          + (asOf ? ' · ' + asOf : '')
+                        : (asOf ? 'as of ' + asOf : '');
+                    var avgPrice = (kpis.confirmed_avg_ticket_price_usd || 15);
+                    var tpp      = (kpis.confirmed_avg_tickets_per_purchase || 2);
                     var rangeSub = function(lo, hi, prefix) {
                         prefix = prefix || '';
                         if (lo == null || hi == null) return '';
                         return 'range ' + prefix + _jiqFmt(lo) + '–' + prefix + _jiqFmt(hi);
                     };
                     k = [
-                        [confLbl,
+                        ['Confirmed Pre-Sales',
                             _jiqFmt(kpis.confirmed_digital_purchases),
                             fandangoSub],
-                        ['Confirmed Tickets (×' + (kpis.confirmed_avg_tickets_per_purchase || 2) + ')',
-                            _jiqFmt(kpis.confirmed_digital_tickets), ''],
-                        ['Confirmed Revenue (@$' + (kpis.confirmed_avg_ticket_price_usd || 15).toFixed(2) + ')',
-                            fmtUsd(kpis.confirmed_digital_revenue_usd), ''],
-                        ['Projected Opening Weekend Tickets',
+                        ['Confirmed Tickets',
+                            _jiqFmt(kpis.confirmed_digital_tickets),
+                            tpp + ' tickets / purchase'],
+                        ['Confirmed Revenue',
+                            fmtUsd(kpis.confirmed_digital_revenue_usd),
+                            '@ $' + avgPrice.toFixed(2) + ' avg ticket'],
+                        ['Opening Weekend Tickets',
                             _jiqFmt(kpis.projected_opening_weekend_tickets || kpis.projected_total_tickets),
                             rangeSub(kpis.projected_ow_range_low_tickets, kpis.projected_ow_range_high_tickets)],
-                        ['Projected Opening Weekend Gross',
+                        ['Opening Weekend Gross',
                             fmtUsd(kpis.projected_opening_weekend_revenue_usd || kpis.projected_total_revenue_usd),
                             rangeSub(kpis.projected_ow_range_low_revenue_usd, kpis.projected_ow_range_high_revenue_usd, '$'),
                             'lime'],
-                        ['Projected Domestic Total (full run)',
+                        ['Domestic Total (full run)',
                             fmtUsd(kpis.projected_total_revenue_usd),
                             rangeSub(kpis.projected_range_low_revenue_usd, kpis.projected_range_high_revenue_usd, '$'),
                             'cyan'],
