@@ -27823,21 +27823,28 @@
                         ['Never Transacted',         (kpis.never_transacted_pct != null ? kpis.never_transacted_pct + '%' : '—')],
                     ];
                 } else if (hasConfirmedTicketing) {
-                    // Movie with confirmed digital pre-sales + comp-anchored projection
+                    // Movie with confirmed digital pre-sales + comp-anchored projection.
+                    // Layout: Pre-Sales (3 tiles) → Opening Weekend (2 tiles) → Full Run (1 tile)
                     var src = kpis.confirmed_source || 'Digital';
                     var asOf = kpis.confirmed_as_of_date || '';
-                    var confLbl = 'Confirmed Purchases (' + src + (asOf ? ' · ' + asOf : '') + ')';
+                    var confLbl = 'Confirmed Pre-Sales (' + src + (asOf ? ' · ' + asOf : '') + ')';
+                    var fandangoSub = (kpis.confirmed_fandango_purchases != null)
+                        ? ' (of which Fandango: ' + _jiqFmt(kpis.confirmed_fandango_purchases) + ')'
+                        : '';
+                    var fmtUsd = function(v) { return v != null ? '$' + _jiqFmt(v) : '—'; };
                     k = [
-                        [confLbl,                     _jiqFmt(kpis.confirmed_digital_purchases)],
+                        [confLbl,
+                            _jiqFmt(kpis.confirmed_digital_purchases) + fandangoSub],
                         ['Confirmed Tickets (×' + (kpis.confirmed_avg_tickets_per_purchase || 2) + ')',
-                                                      _jiqFmt(kpis.confirmed_digital_tickets)],
-                        ['Confirmed Revenue',         (kpis.confirmed_digital_revenue_usd != null
-                                                       ? '$' + _jiqFmt(kpis.confirmed_digital_revenue_usd)
-                                                       : '—')],
-                        ['Projected Total Tickets',   _jiqFmt(kpis.projected_total_tickets)],
-                        ['Projected Domestic Gross',  (kpis.projected_total_revenue_usd != null
-                                                       ? '$' + _jiqFmt(kpis.projected_total_revenue_usd)
-                                                       : '—')],
+                            _jiqFmt(kpis.confirmed_digital_tickets)],
+                        ['Confirmed Revenue (@$' + (kpis.confirmed_avg_ticket_price_usd || 15).toFixed(2) + ')',
+                            fmtUsd(kpis.confirmed_digital_revenue_usd)],
+                        ['Projected Opening Weekend Tickets',
+                            _jiqFmt(kpis.projected_opening_weekend_tickets || kpis.projected_total_tickets)],
+                        ['Projected Opening Weekend Gross',
+                            fmtUsd(kpis.projected_opening_weekend_revenue_usd || kpis.projected_total_revenue_usd)],
+                        ['Projected Domestic Total (full run)',
+                            fmtUsd(kpis.projected_total_revenue_usd)],
                     ];
                 } else {
                     k = [
