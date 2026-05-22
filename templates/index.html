@@ -27810,6 +27810,9 @@
             if (kpiStrip) {
                 var targetType = (meta.target_type || '').toLowerCase();
                 var k;
+                var hasConfirmedTicketing = (targetType === 'movie'
+                    && kpis.confirmed_digital_purchases != null
+                    && Number(kpis.confirmed_digital_purchases) > 0);
                 if (targetType === 'website') {
                     k = [
                         ['Visitors (US, in window)', _jiqFmt(kpis.total_users)],
@@ -27818,6 +27821,27 @@
                         ['Switched & Bought',        _jiqFmt(kpis.switched_users)],
                         ['Total Captured (any seller)', (kpis.captured_pct != null ? kpis.captured_pct + '%' : '—')],
                         ['Never Transacted',         (kpis.never_transacted_pct != null ? kpis.never_transacted_pct + '%' : '—')],
+                    ];
+                } else if (hasConfirmedTicketing) {
+                    // Movie with confirmed digital pre-sales + comp-anchored projection
+                    var src = kpis.confirmed_source || 'Digital';
+                    var asOf = kpis.confirmed_as_of_date || '';
+                    var confLbl = 'Confirmed Purchases (' + src + (asOf ? ' · ' + asOf : '') + ')';
+                    k = [
+                        [confLbl,                     _jiqFmt(kpis.confirmed_digital_purchases)],
+                        ['Confirmed Tickets (×' + (kpis.confirmed_avg_tickets_per_purchase || 2) + ')',
+                                                      _jiqFmt(kpis.confirmed_digital_tickets)],
+                        ['Confirmed Revenue',         (kpis.confirmed_digital_revenue_usd != null
+                                                       ? '$' + _jiqFmt(kpis.confirmed_digital_revenue_usd)
+                                                       : '—')],
+                        ['Projected Total Tickets',   _jiqFmt(kpis.projected_total_tickets)],
+                        ['Projected Domestic Gross',  (kpis.projected_total_revenue_usd != null
+                                                       ? '$' + _jiqFmt(kpis.projected_total_revenue_usd)
+                                                       : '—')],
+                        ['Comp',                      ((kpis.projection_comp && kpis.projection_comp.title)
+                                                       ? kpis.projection_comp.title.split(':')[0]
+                                                         + ' · $' + _jiqFmt(kpis.projection_comp.domestic_gross_usd)
+                                                       : '—')],
                     ];
                 } else {
                     k = [
@@ -27835,6 +27859,38 @@
                          +   '<div style="font-size: 1.25rem; font-weight: 700; margin-top: 2px;">' + _jiqEsc(pair[1]) + '</div>'
                          + '</div>';
                 }).join('');
+
+                // Methodology footnote (only for movie + confirmed-ticketing case)
+                var noteEl = document.getElementById('jiqKpiStripNote');
+                if (!noteEl) {
+                    noteEl = document.createElement('div');
+                    noteEl.id = 'jiqKpiStripNote';
+                    noteEl.style.cssText = 'font-size: 0.72rem; color: var(--text-secondary); margin: -0.25rem 0 1rem; line-height: 1.45;';
+                    kpiStrip.parentNode.insertBefore(noteEl, kpiStrip.nextSibling);
+                }
+                if (hasConfirmedTicketing && kpis.projection_comp) {
+                    var c = kpis.projection_comp;
+                    var lo = kpis.projected_range_low_revenue_usd;
+                    var hi = kpis.projected_range_high_revenue_usd;
+                    var loTix = kpis.projected_range_low_tickets;
+                    var hiTix = kpis.projected_range_high_tickets;
+                    var bandStr = (lo != null && hi != null)
+                        ? ' &nbsp;·&nbsp; Range $' + _jiqFmt(lo) + '–$' + _jiqFmt(hi)
+                          + ' (' + _jiqFmt(loTix) + '–' + _jiqFmt(hiTix) + ' tickets)'
+                        : '';
+                    noteEl.innerHTML =
+                        '<strong style="color: var(--text-primary);">Projection method:</strong> '
+                      + 'Confirmed digital purchases scaled with a comp-anchored model. '
+                      + 'Comp = <em>' + _jiqEsc(c.title) + '</em> (' + (c.year || '') + ', '
+                      + _jiqEsc(c.distributor || '') + ') — $' + _jiqFmt(c.domestic_gross_usd)
+                      + ' domestic. BREADWINNER projected at '
+                      + Math.round((c.scaling_factor || 0) * 100) + '% of comp gross, '
+                      + 'reflecting lighter online pre-sale velocity offset by Nate Bargatze tour-fan upside in target DMAs.'
+                      + bandStr + '.';
+                    noteEl.style.display = '';
+                } else {
+                    noteEl.style.display = 'none';
+                }
             }
 
             // Cluster tabs (driven by active cut axis)
