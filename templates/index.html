@@ -28586,24 +28586,26 @@
                 }).join('');
             }
 
-            // ── Public anchor inputs table
+            // ── Public anchor inputs table (SOURCE column suppressed if all blank)
             var inputs = an.public_anchor_inputs || [];
             var inputsEl = document.getElementById('jiqAnchorsInputs');
             if (inputsEl && inputs.length) {
+                var hasSource = inputs.some(function(r) { return r.source; });
+                var thStyle = 'text-align:left;padding:6px 8px;color:var(--text-secondary);font-weight:600;text-transform:uppercase;font-size:0.65rem;letter-spacing:0.05em;';
                 inputsEl.innerHTML =
                     '<table style="width:100%;border-collapse:collapse;font-size:0.76rem;">'
                   +   '<thead><tr style="border-bottom:1px solid var(--border-color);">'
-                  +     '<th style="text-align:left;padding:6px 8px;color:var(--text-secondary);font-weight:600;text-transform:uppercase;font-size:0.65rem;letter-spacing:0.05em;">Touchpoint</th>'
-                  +     '<th style="text-align:left;padding:6px 8px;color:var(--text-secondary);font-weight:600;text-transform:uppercase;font-size:0.65rem;letter-spacing:0.05em;">Volume</th>'
-                  +     '<th style="text-align:left;padding:6px 8px;color:var(--text-secondary);font-weight:600;text-transform:uppercase;font-size:0.65rem;letter-spacing:0.05em;">Source</th>'
-                  +     '<th style="text-align:left;padding:6px 8px;color:var(--text-secondary);font-weight:600;text-transform:uppercase;font-size:0.65rem;letter-spacing:0.05em;">Period</th>'
+                  +     '<th style="' + thStyle + '">Touchpoint</th>'
+                  +     '<th style="' + thStyle + '">Volume</th>'
+                  +     (hasSource ? '<th style="' + thStyle + '">Source</th>' : '')
+                  +     '<th style="' + thStyle + '">Period</th>'
                   +   '</tr></thead>'
                   +   '<tbody>'
                   +   inputs.map(function(r) {
                         return '<tr style="border-bottom:1px solid var(--border-color);">'
                              +   '<td style="padding:6px 8px;color:var(--text-primary);font-weight:600;">' + _jiqEsc(r.touchpoint || '') + '</td>'
                              +   '<td style="padding:6px 8px;color:var(--text-primary);">' + _jiqEsc(r.volume || '') + '</td>'
-                             +   '<td style="padding:6px 8px;color:var(--text-secondary);">' + _jiqEsc(r.source || '') + '</td>'
+                             +   (hasSource ? '<td style="padding:6px 8px;color:var(--text-secondary);">' + _jiqEsc(r.source || '') + '</td>' : '')
                              +   '<td style="padding:6px 8px;color:var(--text-secondary);white-space:nowrap;">' + _jiqEsc(r.period || '') + '</td>'
                              + '</tr>';
                     }).join('')
