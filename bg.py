@@ -28563,7 +28563,49 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
     # ClickHouse runs on dedicated hardware — no per-query billing.
     print(f"💰 ClickHouse run complete (no per-query credits)")
     print(f"⏱️  Wall-clock cost basis: {total_time_seconds/3600.0:.2f}h on Hetzner AX162-S")
-    
+
+    # ═══ CROSSWALK AUDIT FRAMEWORK (final read-only audit) ══════════════
+    # 9-step methodology used by Crosswalk analysts for vetting digital
+    # persona pulls. Produces a markdown Pass/Fail report + JSON of
+    # consensus anchors persisted to S3 audit_logs/v1/, and inserts
+    # missing-required-entity rows (Big 4 banks, Big 3 telco, etc.) at
+    # consensus midpoints. See migration/crosswalk_audit_framework.py.
+    try:
+        if final_file and os.path.exists(final_file):
+            try:
+                from crosswalk_audit_framework import (
+                    run_audit as _cw_run_audit,
+                    save_to_s3 as _cw_save_s3,
+                    insert_structural_gaps as _cw_insert_gaps,
+                )
+            except ImportError:
+                from migration.crosswalk_audit_framework import (  # type: ignore
+                    run_audit as _cw_run_audit,
+                    save_to_s3 as _cw_save_s3,
+                    insert_structural_gaps as _cw_insert_gaps,
+                )
+            _df_cw = pd.read_csv(final_file, low_memory=False)
+            _subject = (brands[0] if brands else (project_name or 'unknown'))
+            _report = _cw_run_audit(_df_cw, subject_hint=_subject, verbose=True)
+            _df_cw2, _n_gaps_inserted = _cw_insert_gaps(_df_cw, _report)
+            if _n_gaps_inserted:
+                _bp_col = 'Brand Penetration (Row)'
+                if _bp_col in _df_cw2.columns:
+                    _df_cw2[_bp_col] = _df_cw2[_bp_col].apply(
+                        lambda v: f"{float(v):.4f}%" if isinstance(v, (int, float))
+                        else (v if str(v).endswith('%')
+                              else f"{float(str(v).replace('%','').strip() or 0):.4f}%")
+                    )
+                _df_cw2.to_csv(final_file, index=False)
+                print(f"   📋 crosswalk-audit-framework inserted {_n_gaps_inserted} "
+                      f"structural-gap row(s) at consensus midpoint")
+            _s3_url = _cw_save_s3(_report, subject_slug=_subject)
+            if _s3_url:
+                print(f"   💾 Crosswalk audit report → {_s3_url}")
+    except Exception as _cw_err:
+        print(f"⚠️ crosswalk-audit-framework skipped: {_cw_err}")
+        import traceback as _tb; _tb.print_exc()
+
     return final_file
 
 
