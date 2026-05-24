@@ -552,7 +552,11 @@ def run_audit(df, subject_hint='', verbose=True) -> AuditReport:
         report.summary_counts['sampling_ceiling'] = sampling
 
     if verbose:
-        print(f"\n   📋 crosswalk-audit-framework: {sum(counts.get(k,0) for k in counts)} signals scored — "
+        # Only sum integer status-counts; the dict can hold a `sampling_ceiling`
+        # sub-dict which would blow up `sum()` (TypeError int + dict).
+        _status_keys = ('PASS', 'PASS (boundary)', 'FAIL (low)', 'FAIL (high)', 'MISSING')
+        _total = sum(int(counts.get(k, 0) or 0) for k in _status_keys)
+        print(f"\n   📋 crosswalk-audit-framework: {_total} signals scored — "
               f"PASS {counts['PASS']}, PASS_boundary {counts['PASS (boundary)']}, "
               f"FAIL_low {counts['FAIL (low)']}, FAIL_high {counts['FAIL (high)']}, "
               f"MISSING {counts['MISSING']}")
