@@ -28589,11 +28589,13 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
             _df_cw = pd.read_csv(final_file, low_memory=False)
             _subject = (brands[0] if brands else (project_name or 'unknown'))
             _report = _cw_run_audit(_df_cw, subject_hint=_subject, verbose=True)
-            # 1. Patch each FAIL back into its consensus band
+            # 1. Hallucination safety net: agent values outside published
+            #    consensus bands get replaced with band midpoint + subject jitter.
+            #    Agent values INSIDE band are kept (persona reasoning trusted).
             _df_cw, _patches = _cw_apply_patches(_df_cw, _report)
             if _patches:
-                print(f"   📋 crosswalk-audit-framework patched {len(_patches)} row(s) "
-                      f"(persona-positioned within published consensus bands):")
+                print(f"   📋 crosswalk-audit-framework patched {len(_patches)} hallucinated row(s) "
+                      f"(out-of-band values replaced with mid-band + subject jitter):")
                 for _p in _patches[:25]:
                     _old = f"{_p['old_bp']:.2f}%" if _p['old_bp'] is not None else "—"
                     _band = f"[{_p['band'][0]:.0f}–{_p['band'][1]:.0f}]" if _p['band'] else ''
