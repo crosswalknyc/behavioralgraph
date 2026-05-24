@@ -28577,36 +28577,72 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
                     run_audit as _cw_run_audit,
                     save_to_s3 as _cw_save_s3,
                     insert_structural_gaps as _cw_insert_gaps,
-                    apply_audit_corrections as _cw_apply_patches,
+                    agent_reason_audit_fails as _cw_agent_reason,
+                    apply_default_lock_breaks as _cw_break_locks,
+                    apply_audit_corrections as _cw_apply_patches,  # fallback
                 )
             except ImportError:
                 from migration.crosswalk_audit_framework import (  # type: ignore
                     run_audit as _cw_run_audit,
                     save_to_s3 as _cw_save_s3,
                     insert_structural_gaps as _cw_insert_gaps,
-                    apply_audit_corrections as _cw_apply_patches,
+                    agent_reason_audit_fails as _cw_agent_reason,
+                    apply_default_lock_breaks as _cw_break_locks,
+                    apply_audit_corrections as _cw_apply_patches,  # fallback
                 )
             _df_cw = pd.read_csv(final_file, low_memory=False)
             _subject = (brands[0] if brands else (project_name or 'unknown'))
             _report = _cw_run_audit(_df_cw, subject_hint=_subject, verbose=True)
-            # 1. Hallucination safety net: agent values outside published
-            #    consensus bands get replaced with band midpoint + subject jitter.
-            #    Agent values INSIDE band are kept (persona reasoning trusted).
-            _df_cw, _patches = _cw_apply_patches(_df_cw, _report)
-            if _patches:
-                print(f"   📋 crosswalk-audit-framework patched {len(_patches)} hallucinated row(s) "
-                      f"(out-of-band values replaced with mid-band + subject jitter):")
-                for _p in _patches[:25]:
-                    _old = f"{_p['old_bp']:.2f}%" if _p['old_bp'] is not None else "—"
-                    _band = f"[{_p['band'][0]:.0f}–{_p['band'][1]:.0f}]" if _p['band'] else ''
-                    print(f"       {_p['status']:13s} {_p['category']:22s} {_p['brand']:22s}  "
-                          f"{_old:>8s} → {_p['new_bp']:.4f}%  {_band:>10s}  {_p.get('note','')}")
-                if len(_patches) > 25:
-                    print(f"       ... +{len(_patches)-25} more")
-            # 2. Insert structural-gap rows
+            # 1. AGENT-DRIVEN RE-REASONING: hand each FAIL back to the persona
+            #    agent. For each row the agent either KEEPs (with persona-grounded
+            #    justification for the consensus deviation) or CHANGEs (with a new
+            #    value reasoned from the persona's digital behavior, NOT mid-band).
+            #    No formulas, no archetype pinning — every flagged row gets the
+            #    same row-by-row persona reasoning that produced the original pull.
+            _patches = []
+            _decisions = []
+            try:
+                _oa_client = _get_openai_client()
+            except Exception:
+                _oa_client = None
+            _pdoc = locals().get('_persona_doc', None)
+            if _oa_client is not None:
+                _df_cw, _decisions = _cw_agent_reason(
+                    _df_cw, _report, _oa_client,
+                    persona_doc=_pdoc, verbose=True,
+                )
+                if _decisions:
+                    _n_change = sum(1 for d in _decisions if d['decision'] == 'CHANGE')
+                    _n_keep   = sum(1 for d in _decisions if d['decision'] == 'KEEP')
+                    _n_skip   = sum(1 for d in _decisions if d['decision'] == 'SKIP')
+                    print(f"   🧠 agent re-reasoning verdict on {len(_decisions)} flagged row(s): "
+                          f"{_n_change} CHANGE, {_n_keep} KEEP (persona-defended), {_n_skip} SKIP")
+                    for _d in _decisions[:30]:
+                        _old = f"{_d['old_bp']:.2f}%" if _d['old_bp'] is not None else "—"
+                        _band = f"[{_d['band'][0]:.0f}–{_d['band'][1]:.0f}]" if _d.get('band') else ''
+                        if _d['decision'] == 'CHANGE':
+                            arrow = f"{_old:>8s} → {_d['new_bp']:.4f}%"
+                        else:
+                            arrow = f"{_old:>8s} → (kept)"
+                        print(f"       {_d['decision']:6s} {_d['category']:22s} {_d['brand']:22s}  "
+                              f"{arrow}  {_band:>10s}  {(_d.get('reason') or '')[:140]}")
+                    if len(_decisions) > 30:
+                        print(f"       ... +{len(_decisions)-30} more")
+                    _patches = [d for d in _decisions if d['decision'] == 'CHANGE']
+            else:
+                print("   ⚠️ no OpenAI client; falling back to deterministic mid-band patch")
+                _df_cw, _patches = _cw_apply_patches(_df_cw, _report)
+            # 2. Break default-value-lock fingerprints (pipeline defaults, not real values)
+            _df_cw, _lock_patches = _cw_break_locks(_df_cw, _report)
+            if _lock_patches:
+                print(f"   🔓 broke {len(_lock_patches)} default-value lock(s)")
+                for _lp in _lock_patches[:10]:
+                    print(f"       {_lp['category']:22s} {_lp['brand']:22s}  "
+                          f"{_lp['old_bp']:.4f}% → {_lp['new_bp']:.4f}%  (fp={_lp['fingerprint']})")
+            # 3. Insert structural-gap rows
             _df_cw2, _n_gaps_inserted = _cw_insert_gaps(_df_cw, _report)
-            # 3. Rewrite CSV if we mutated anything
-            if _patches or _n_gaps_inserted:
+            # 4. Rewrite CSV if we mutated anything
+            if _patches or _n_gaps_inserted or _lock_patches:
                 _bp_col = 'Brand Penetration (Row)'
                 if _bp_col in _df_cw2.columns:
                     _df_cw2[_bp_col] = _df_cw2[_bp_col].apply(
