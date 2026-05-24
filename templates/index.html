@@ -19105,6 +19105,22 @@
 
 
                 <!-- KPI strip -->
+                <div style="display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 0.5rem; margin: 0.5rem 0 0.4rem;">
+                    <h3 style="margin: 0; font-size: 1.0rem;">📊 Headline Funnel</h3>
+                </div>
+                <details style="margin: 0 0 0.6rem;">
+                    <summary style="cursor:pointer;color:var(--accent-cyan);font-size:0.72rem;font-weight:600;user-select:none;padding:3px 0;">ℹ️ How to read this chart</summary>
+                    <div style="margin-top:6px;padding:0.7rem 0.9rem;background:var(--bg-secondary);border-left:3px solid var(--accent-cyan);border-radius:6px;font-size:0.76rem;line-height:1.55;">
+                        <ul style="margin:0;padding-left:1.1rem;">
+                            <li><strong>Three-stage funnel</strong> reading left to right: <em>Confirmed Pre-Sales</em> (gray) → <em>Opening Weekend</em> (lime) → <em>Full Run</em> (cyan).</li>
+                            <li><strong>Confirmed Pre-Sales</strong> — actual transactions counted across all online ticket channels as of the "as of" date. Sub-text shows Fandango's share of online presales.</li>
+                            <li><strong>Confirmed Tickets</strong> = purchases × tickets/basket (typically 2 for family movies); <strong>Confirmed Revenue</strong> = tickets × metro avg ticket price (~$15 for online/Fandango-skewed buyers).</li>
+                            <li><strong>Opening Weekend</strong> tiles — projected 3-day (Fri–Sun) gross & tickets; the sub-text shows the modeled <em>low–high band</em>; the big number is the midpoint.</li>
+                            <li><strong>Full Run</strong> tile — entire theatrical run gross (= opening × <strong>3.0× sleeper-comedy multiplier</strong>, the inverse of the 34% front-loading rule).</li>
+                            <li><strong>What to look for:</strong> if confirmed is materially bigger than expected for T-6 days that's upside signal; smaller signals risk.</li>
+                        </ul>
+                    </div>
+                </details>
                 <div id="jiqKpiStrip" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 0.75rem; margin-bottom: 1rem;"></div>
 
                 <!-- ════════════════════════════════════════════════════════
@@ -19119,7 +19135,18 @@
                         <h3 style="margin: 0;">🌟 Ecosystem Spotlight — owned-audience flywheel</h3>
                         <div id="jiqEcosystemMeta" style="font-size: 0.72rem; color: var(--text-secondary);"></div>
                     </div>
-                    <div id="jiqEcosystemSubtitle" style="font-size: 0.78rem; color: var(--text-secondary); margin-bottom: 0.75rem;"></div>
+                    <div id="jiqEcosystemSubtitle" style="font-size: 0.78rem; color: var(--text-secondary); margin-bottom: 0.5rem;"></div>
+                    <details style="margin: 0 0 0.85rem;">
+                        <summary style="cursor:pointer;color:var(--accent-cyan);font-size:0.72rem;font-weight:600;user-select:none;padding:3px 0;">ℹ️ How to read this chart</summary>
+                        <div style="margin-top:6px;padding:0.7rem 0.9rem;background:var(--bg-secondary);border-left:3px solid var(--accent-cyan);border-radius:6px;font-size:0.76rem;line-height:1.55;">
+                            <ul style="margin:0;padding-left:1.1rem;">
+                                <li><strong>Trinity Triangle (top):</strong> three vertices = the three owned properties (e.g., Fandango ↔ Rotten Tomatoes ↔ Fandango at Home). The number on each edge = % co-visitation (people who use both properties). Bigger node = bigger monthly audience.</li>
+                                <li><strong>Lifecycle Ribbon (middle):</strong> the customer journey across the owned family — Discover (RT reviews) → Decide (RT score check) → Buy (Fandango ticket) → Re-engage (Fandango at Home rental). Width at each stage = audience capture.</li>
+                                <li><strong>Ecosystem KPI strip (bottom):</strong> key flywheel metrics — RT-Fresh lift on opening weekend, theatrical → home conversion %, cross-property MAU overlap.</li>
+                                <li><strong>What it answers:</strong> "Is the owned-audience flywheel actually working?" High co-visitation + high theatrical→home conversion = yes.</li>
+                            </ul>
+                        </div>
+                    </details>
                     <div id="jiqEcosystemTrinity" style="overflow-x: auto; margin-bottom: 0.75rem;"></div>
                     <div id="jiqEcosystemLifecycle" style="overflow-x: auto; margin-bottom: 0.75rem;"></div>
                     <div id="jiqEcosystemKpis" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 0.75rem; margin-top: 0.5rem;"></div>
@@ -19139,7 +19166,21 @@
                         <h3 style="margin: 0;">🎯 Audience Hypothesis — proving / disproving the theses</h3>
                         <div id="jiqAudienceHypMeta" style="font-size: 0.72rem; color: var(--text-secondary);"></div>
                     </div>
-                    <div id="jiqAudienceHypSubtitle" style="font-size: 0.78rem; color: var(--text-secondary); margin-bottom: 0.75rem;"></div>
+                    <div id="jiqAudienceHypSubtitle" style="font-size: 0.78rem; color: var(--text-secondary); margin-bottom: 0.5rem;"></div>
+                    <details style="margin: 0 0 0.85rem;">
+                        <summary style="cursor:pointer;color:var(--accent-cyan);font-size:0.72rem;font-weight:600;user-select:none;padding:3px 0;">ℹ️ How to read this chart</summary>
+                        <div style="margin-top:6px;padding:0.7rem 0.9rem;background:var(--bg-secondary);border-left:3px solid var(--accent-cyan);border-radius:6px;font-size:0.76rem;line-height:1.55;">
+                            <ul style="margin:0;padding-left:1.1rem;">
+                                <li><strong>Each card validates one client-stated audience theory.</strong> Same three-row layout on every card so they're directly comparable.</li>
+                                <li><strong>Verdict pill (top-right):</strong> 🟢 Strongly Validated (≥3× lift), 🟡 Validated (1.5×–3×), 🔴 Not Validated (&lt;1.5×).</li>
+                                <li><strong>Intent index (center, big number):</strong> e.g. <em>4.8×</em> = this cohort converts at 4.8 times the gen-pop baseline (~0.71% opening-weekend CR).</li>
+                                <li><strong>Opening Weekend (lime) / Total Run (cyan):</strong> est. buyers from this cohort. Total Run = opening × 3.0× sleeper-comedy multiplier.</li>
+                                <li><strong>Top engagement surfaces:</strong> % of cohort touching each platform/property. Mini horizontal bars.</li>
+                                <li><strong>DMA concentration:</strong> top markets where the cohort over-indexes vs national avg. "3.4×" in Nashville means Nate fans are 3.4× more concentrated there.</li>
+                                <li><strong>Triple-Likely Core (green box):</strong> the bullseye micro-cohort fitting <em>all three</em> hypotheses (intersection). Highest-converting segment per capita, smallest reach.</li>
+                            </ul>
+                        </div>
+                    </details>
                     <div id="jiqAudienceHypTiles" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(290px, 1fr)); gap: 0.85rem; margin-bottom: 0.75rem;"></div>
                     <div id="jiqAudienceHypOverlap" style="margin-top: 0.5rem;"></div>
                 </div>
@@ -19157,7 +19198,20 @@
                         <h3 style="margin: 0;">📐 Audience Sizing</h3>
                         <div id="jiqAnchorsMeta" style="font-size: 0.72rem; color: var(--text-secondary);"></div>
                     </div>
-                    <div id="jiqAnchorsSubtitle" style="font-size: 0.78rem; color: var(--text-secondary); margin-bottom: 0.75rem;"></div>
+                    <div id="jiqAnchorsSubtitle" style="font-size: 0.78rem; color: var(--text-secondary); margin-bottom: 0.5rem;"></div>
+                    <details style="margin: 0 0 0.85rem;">
+                        <summary style="cursor:pointer;color:var(--accent-cyan);font-size:0.72rem;font-weight:600;user-select:none;padding:3px 0;">ℹ️ How to read this chart</summary>
+                        <div style="margin-top:6px;padding:0.7rem 0.9rem;background:var(--bg-secondary);border-left:3px solid var(--accent-cyan);border-radius:6px;font-size:0.76rem;line-height:1.55;">
+                            <ul style="margin:0;padding-left:1.1rem;">
+                                <li><strong>L1–L6 layer bars:</strong> each layer = one digital touchpoint source (premier Netflix special, Amazon Prime tail, tour purchasers, SNL viral sketch, comp clips, co-lead actor halo). Bar = engager range (low–high).</li>
+                                <li><strong>Gross vs Deduplicated tiles:</strong> gross sums all layers (with overlap); dedup = true addressable audience after removing people who appear in multiple layers. The lime-bordered dedup tile is the answer.</li>
+                                <li><strong>Conversion Funnel (6 stages):</strong> narrows from 22–28M total engagers → high-intent multi-touchpoint → family ticket-buyer → opening-weekend tickets → group multiplier seats → total domestic run. Bar widths shrink so you can see drop-off magnitude.</li>
+                                <li><strong>Public Anchor Inputs table:</strong> source touchpoints + time period feeding the model.</li>
+                                <li><strong>Where the Crosswalk panel adds real lift:</strong> 5 cohort-level questions only the proprietary panel can answer (cross-platform stack, co-lead actor co-viewer, reality-TV business-show overlap, geographic concentration, faith/values).</li>
+                                <li><strong>MODELED TAKE (lime callout):</strong> single-sentence conclusion of the model.</li>
+                            </ul>
+                        </div>
+                    </details>
                     <div id="jiqAnchorsLayers" style="margin-bottom: 1rem;"></div>
                     <div id="jiqAnchorsRollup" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 0.75rem; margin-bottom: 1rem;"></div>
                     <div style="font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-secondary); font-weight: 600; margin-bottom: 0.5rem;">Conversion Funnel to Opening Weekend</div>
@@ -19179,7 +19233,18 @@
                         <h3 style="margin: 0;">🎟️ Exhibitor Direct Channel Mix — where the tickets will flow</h3>
                         <div id="jiqExhibitorMeta" style="font-size: 0.72rem; color: var(--text-secondary);"></div>
                     </div>
-                    <div id="jiqExhibitorSubtitle" style="font-size: 0.78rem; color: var(--text-secondary); margin-bottom: 0.75rem;"></div>
+                    <div id="jiqExhibitorSubtitle" style="font-size: 0.78rem; color: var(--text-secondary); margin-bottom: 0.5rem;"></div>
+                    <details style="margin: 0 0 0.85rem;">
+                        <summary style="cursor:pointer;color:var(--accent-cyan);font-size:0.72rem;font-weight:600;user-select:none;padding:3px 0;">ℹ️ How to read this chart</summary>
+                        <div style="margin-top:6px;padding:0.7rem 0.9rem;background:var(--bg-secondary);border-left:3px solid var(--accent-cyan);border-radius:6px;font-size:0.76rem;line-height:1.55;">
+                            <ul style="margin:0;padding-left:1.1rem;">
+                                <li><strong>Top horizontal stacked bar:</strong> each color block = one exhibitor (AMC red, Fandango orange, Cinemark blue, etc.); width = share of opening-weekend tickets that chain captures. Hover for est. ticket count.</li>
+                                <li><strong>Audience-tilt heatmap (bottom):</strong> rows = chains, columns = hypothesis cohorts. <strong style="color:#1f9d55;">Green</strong> = chain over-indexes that cohort (e.g., Marcus 1.8× Middle America); <strong style="color:#c81e1e;">red</strong> = under-indexes; gray = neutral. Cell value = the raw tilt index.</li>
+                                <li><strong>Verdict block (bottom, cyan border):</strong> one-sentence recommendation on which chain is the best fit and why.</li>
+                                <li><strong>Use it for:</strong> prints allocation + chain-specific media buys. If Marcus is 1.8× Middle America and Middle America is your biggest cohort, Marcus should get disproportionate prints relative to share.</li>
+                            </ul>
+                        </div>
+                    </details>
                     <div id="jiqExhibitorChart" style="margin-bottom: 0.85rem;"></div>
                     <div id="jiqExhibitorHeatmap" style="margin-bottom: 0.75rem;"></div>
                     <div id="jiqExhibitorVerdict" style="font-size: 0.78rem; color: var(--text-primary); background: var(--bg-secondary); border-left: 4px solid var(--accent-primary); padding: 0.7rem 0.9rem; border-radius: 6px;"></div>
@@ -19196,7 +19261,20 @@
                         <h3 style="margin: 0;" id="jiqPromoTitle">🏷️ Promo Program Tracker</h3>
                         <div id="jiqPromoMeta" style="font-size: 0.72rem; color: var(--text-secondary);"></div>
                     </div>
-                    <div id="jiqPromoSubtitle" style="font-size: 0.78rem; color: var(--text-secondary); margin-bottom: 0.75rem;"></div>
+                    <div id="jiqPromoSubtitle" style="font-size: 0.78rem; color: var(--text-secondary); margin-bottom: 0.5rem;"></div>
+                    <details style="margin: 0 0 0.85rem;">
+                        <summary style="cursor:pointer;color:var(--accent-cyan);font-size:0.72rem;font-weight:600;user-select:none;padding:3px 0;">ℹ️ How to read this chart</summary>
+                        <div style="margin-top:6px;padding:0.7rem 0.9rem;background:var(--bg-secondary);border-left:3px solid var(--accent-cyan);border-radius:6px;font-size:0.76rem;line-height:1.55;">
+                            <ul style="margin:0;padding-left:1.1rem;">
+                                <li><strong>One card per chain</strong> running the promo (e.g., "Nate Rate") — view side-by-side to compare execution quality.</li>
+                                <li><strong>Mechanic</strong> — the actual discount offered ($5 all shows opening week vs $8 weekdays only, etc.).</li>
+                                <li><strong>Channels</strong> — where the chain is advertising the promo (email, mobile app push, in-cinema lobby).</li>
+                                <li><strong>Est. Lift</strong> — projected % uplift in that chain's share vs baseline (Marcus +34%, AMC +9%, etc.).</li>
+                                <li><strong>Coverage</strong> — % of screens running the promo; <strong>Eligibility</strong> — who qualifies (loyalty members only? open to all?).</li>
+                                <li><strong>Compare cards:</strong> aggressive mechanic + best audience fit = highest-leverage execution.</li>
+                            </ul>
+                        </div>
+                    </details>
                     <div id="jiqPromoGrid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 0.75rem;"></div>
                     <div id="jiqPromoVerdict" style="font-size: 0.78rem; color: var(--text-primary); background: var(--bg-secondary); border-left: 4px solid var(--accent-primary); padding: 0.7rem 0.9rem; border-radius: 6px; margin-top: 0.85rem;"></div>
                 </div>
@@ -19210,7 +19288,19 @@
                         </div>
                         <div id="jiqFootprintViewBtns" style="display: flex; gap: 4px;"></div>
                     </div>
-                    <div id="jiqBubbleMeta" style="margin: 0.5rem 0; font-size: 0.75rem; color: var(--text-secondary);"></div>
+                    <div id="jiqBubbleMeta" style="margin: 0.5rem 0 0.25rem; font-size: 0.75rem; color: var(--text-secondary);"></div>
+                    <details style="margin: 0 0 0.85rem;">
+                        <summary style="cursor:pointer;color:var(--accent-cyan);font-size:0.72rem;font-weight:600;user-select:none;padding:3px 0;">ℹ️ How to read this chart</summary>
+                        <div style="margin-top:6px;padding:0.7rem 0.9rem;background:var(--bg-secondary);border-left:3px solid var(--accent-cyan);border-radius:6px;font-size:0.76rem;line-height:1.55;">
+                            <ul style="margin:0;padding-left:1.1rem;">
+                                <li><strong>Bubbles view (default):</strong> each circle = one marketing channel (Paid Ads, Press, Soundtrack, Brand Partnerships, etc.). <strong>Bubble size</strong> ∝ reach % of US adults. Sorted highest → lowest reach.</li>
+                                <li><strong>Click any bubble</strong> to expand: see the actual events the agent discovered in that channel (source/name, reach %, date).</li>
+                                <li><strong>Spider view:</strong> network diagram showing how every channel routes through to ticketing endpoints (Fandango, AMC, Atom) and into conversion.</li>
+                                <li><strong>Events view:</strong> flat ranked list of every discovered marketing event across all channels.</li>
+                                <li><strong>Where converters bought their tickets</strong> (bottom strip): split of opening-weekend converters by ticketing endpoint.</li>
+                            </ul>
+                        </div>
+                    </details>
 
                     <!-- View 1: Bubbles -->
                     <div id="jiqBubbleGrid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 0.75rem;"></div>
@@ -19301,7 +19391,19 @@
                         <h3 style="margin: 0 0 0.5rem;">🛒 Path to Purchase</h3>
                         <div id="jiqPathMeta" style="font-size: 0.72rem; color: var(--text-secondary);"></div>
                     </div>
-                    <div style="font-size: 0.72rem; color: var(--text-secondary); margin-bottom: 0.75rem;">Right-aligned ribbon: each converter's last few events before purchase, collapsed into channel categories. Column height ∝ unique users at that step. Hover for the top hosts.</div>
+                    <div style="font-size: 0.72rem; color: var(--text-secondary); margin-bottom: 0.4rem;">Right-aligned ribbon: each converter's last few events before purchase, collapsed into channel categories. Column height ∝ unique users at that step. Hover for the top hosts.</div>
+                    <details style="margin: 0 0 0.85rem;">
+                        <summary style="cursor:pointer;color:var(--accent-cyan);font-size:0.72rem;font-weight:600;user-select:none;padding:3px 0;">ℹ️ How to read this chart</summary>
+                        <div style="margin-top:6px;padding:0.7rem 0.9rem;background:var(--bg-secondary);border-left:3px solid var(--accent-cyan);border-radius:6px;font-size:0.76rem;line-height:1.55;">
+                            <ul style="margin:0;padding-left:1.1rem;">
+                                <li><strong>8-step ribbon, right-aligned:</strong> step labels run from <em>-7 (AWARENESS)</em> on the far left to <em>0 (CONVERSION)</em> on the far right. The ribbon is read like a sentence: "first they were made aware, then they watched a trailer, then social/creator hits, then a review, then a showtime lookup, then a fee compare, then checkout, then conversion."</li>
+                                <li><strong>Bar height</strong> = number of converters who hit that step (survivorship curve — every step has fewer people than the prior one).</li>
+                                <li><strong>% under each bar</strong> = same value as % of the full converter cohort (1.85M for BREADWINNER opening weekend).</li>
+                                <li><strong>Hover any column</strong> for the top hosts/platforms that appear at that step (e.g., YouTube + Instagram dominate the "Social/Creator" step).</li>
+                                <li><strong>Top Observed Paths</strong> (below): the 5 most common K-gram sequences (adjacent dupes collapsed). Big user counts = sequences we can attribute the purchase to with high confidence.</li>
+                            </ul>
+                        </div>
+                    </details>
                     <div id="jiqPathRibbon" style="overflow-x: auto;"></div>
                     <div style="margin-top: 1rem; padding-top: 0.75rem; border-top: 1px solid var(--border-color);">
                         <div style="font-size: 0.85rem; font-weight: 600; margin-bottom: 0.4rem;">Top observed paths</div>
@@ -19329,7 +19431,20 @@
                         <h3 style="margin: 0 0 0.5rem;">📍 Touchpoints — what drove conversation vs conversion</h3>
                         <div id="jiqTpBaselineMeta" style="font-size: 0.72rem; color: var(--text-secondary);"></div>
                     </div>
-                    <div style="font-size: 0.72rem; color: var(--text-secondary); margin-bottom: 0.5rem;">Each row is a marketing surface (trailer, social platform, talent mention, brand partnership, press, ticketing, etc.) the cohort touched. <strong>Lift</strong> = conv-rate-when-reached vs conv-rate-when-not. <strong>Avg days</strong> = cadence from first touch to ticket buy.</div>
+                    <div style="font-size: 0.72rem; color: var(--text-secondary); margin-bottom: 0.4rem;">Each row is a marketing surface (trailer, social platform, talent mention, brand partnership, press, ticketing, etc.) the cohort touched. <strong>Lift</strong> = conv-rate-when-reached vs conv-rate-when-not. <strong>Avg days</strong> = cadence from first touch to ticket buy.</div>
+                    <details style="margin: 0 0 0.85rem;">
+                        <summary style="cursor:pointer;color:var(--accent-cyan);font-size:0.72rem;font-weight:600;user-select:none;padding:3px 0;">ℹ️ How to read this chart</summary>
+                        <div style="margin-top:6px;padding:0.7rem 0.9rem;background:var(--bg-secondary);border-left:3px solid var(--accent-cyan);border-radius:6px;font-size:0.76rem;line-height:1.55;">
+                            <ul style="margin:0;padding-left:1.1rem;">
+                                <li><strong>Reach / Reach %</strong> — number (and share) of US adults reached by that channel during the window.</li>
+                                <li><strong>% of Conv</strong> — share of opening-weekend buyers who touched that channel at least once. The marketing surface buyers are most exposed to.</li>
+                                <li><strong>Conv-when-Seen / Conv-when-Not / Lift</strong> — the causal-attribution trio. Buyers' CR when reached vs not reached; lift = the % difference. <strong style="color:#1f9d55;">Green lift ≥ +25%</strong> = the channel moves the needle; gray = neutral; red = negative or noise.</li>
+                                <li><strong>Avg Days to Conv</strong> — cadence: <em>1–2 days</em> = late-funnel intent surface (search, showtime lookup); <em>14–18 days</em> = early-funnel awareness (trailer, press).</li>
+                                <li><strong>Touches / User</strong> — frequency. High values (e.g. 4.2 for TikTok) = repeat-visit channels; low values (1.1 for press) = one-and-done.</li>
+                                <li><strong>Sort by Lift</strong> to find the most causally important channels; sort by % of Conv to find the most-touched.</li>
+                            </ul>
+                        </div>
+                    </details>
                     <div id="jiqTouchpointsTable" style="overflow-x: auto;"></div>
                 </div>
 
