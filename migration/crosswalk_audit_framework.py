@@ -754,12 +754,16 @@ def apply_audit_corrections(df, report: AuditReport):
     bp_col = 'Brand Penetration (Row)'
     raw_col = 'Original Raw Numbers'
     proj_col = 'US Gen Pop Projection'
-    us_proj_per_pct = 329_900_000.0 / 100.0
 
     df = df.copy()
     col_norm = df['Column'].astype(str).str.strip().str.upper()
     val_norm = df['Value'].astype(str).str.strip().str.upper()
     sample_raw = report.sample_raw or 10_000
+    # pandas 2.x raises if you assign a string into a float64 column.
+    for _c in (bp_col, raw_col, proj_col):
+        if _c in df.columns and df[_c].dtype != object:
+            df[_c] = df[_c].astype(object)
+    raw_per_pct, proj_per_pct = _derive_scale_from_df(df)
 
     patches = []
     for f in report.findings:
@@ -794,9 +798,9 @@ def apply_audit_corrections(df, report: AuditReport):
 
         df.at[match_idx, bp_col] = f"{target_jit:.4f}%"
         if raw_col in df.columns:
-            df.at[match_idx, raw_col] = str(max(1, int(round(target_jit / 100.0 * sample_raw))))
+            df.at[match_idx, raw_col] = str(max(1, int(round(target_jit * raw_per_pct))))
         if proj_col in df.columns:
-            df.at[match_idx, proj_col] = str(int(round(target_jit * us_proj_per_pct)))
+            df.at[match_idx, proj_col] = str(int(round(target_jit * proj_per_pct)))
 
         patches.append({
             'category':  f.category,
@@ -827,9 +831,9 @@ def apply_audit_corrections(df, report: AuditReport):
                                           + _r.uniform(0.0005, 0.0095)), 4)
         df.at[idx, bp_col] = f"{new_bp:.4f}%"
         if raw_col in df.columns:
-            df.at[idx, raw_col] = str(max(1, int(round(new_bp / 100.0 * sample_raw))))
+            df.at[idx, raw_col] = str(max(1, int(round(new_bp * raw_per_pct))))
         if proj_col in df.columns:
-            df.at[idx, proj_col] = str(int(round(new_bp * us_proj_per_pct)))
+            df.at[idx, proj_col] = str(int(round(new_bp * proj_per_pct)))
         patches.append({
             'category':  lock['column'],
             'brand':     lock['value'],
@@ -848,36 +852,51 @@ def apply_audit_corrections(df, report: AuditReport):
 # OPTIONAL: STRUCTURAL-GAP INSERTION (deterministic — uses consensus mid)
 # ───────────────────────────────────────────────────────────────────────────
 
+def _derive_scale_from_df(df):
+    """Derive raw_per_pct + proj_per_pct from any clean existing row so we
+    don't hardcode US-pop sizing (it changes per pipeline / per pull)."""
+    raw_per_pct = None
+    proj_per_pct = None
+    for _, r in df.iterrows():
+        try:
+            bp = float(str(r.get('Brand Penetration (Row)','')).replace('%','').replace(',','').strip())
+            raw = float(str(r.get('Original Raw Numbers','')).replace(',','').strip())
+            proj = float(str(r.get('US Gen Pop Projection','')).replace(',','').strip())
+            if bp > 5 and raw > 0 and proj > 0:
+                raw_per_pct = raw / bp
+                proj_per_pct = proj / bp
+                break
+        except Exception:
+            continue
+    # Fallbacks if no clean row found
+    return raw_per_pct or 100.0, proj_per_pct or 3_299_000.0
+
+
 def insert_structural_gaps(df, report: AuditReport, sample_size_for_raw=10_000):
     """Insert a row for each structural-gap at the consensus midpoint.
 
-    This is the ONE place the audit mutates the file. It's defensible
-    because: (a) it's filling a missing entity that the dashboard REQUIRES
-    to render properly, (b) the value is sourced from published consensus
-    not a hardcoded cap, (c) the inserted value sits in the middle of the
-    pass band so it won't itself fail the audit.
+    Defensible because: (a) the entity is REQUIRED by the dashboard,
+    (b) the value comes from published consensus not a hardcoded cap,
+    (c) it sits in the middle of the pass band so it won't itself fail.
     """
     if not report.structural_gaps:
         return df, 0
+    raw_per_pct, proj_per_pct = _derive_scale_from_df(df)
     new_rows = []
-    us_proj_per_pct = 329_900_000.0 / 100.0
     for gap in report.structural_gaps:
         rng = CROSS_PULL_RANGES.get(gap['category'], {}).get(gap['brand'])
         if not rng:
             continue
         midpoint = (rng[0] + rng[1]) / 2
-        # Tiny jitter so the row doesn't look hand-placed
         import random as _r
         bp_val = round(midpoint + _r.uniform(-0.5, 0.5), 4)
-        raw_count = max(1, int(round(bp_val / 100.0 * sample_size_for_raw)))
-        proj = int(round(bp_val * us_proj_per_pct))
+        raw_count = max(1, int(round(bp_val * raw_per_pct)))
+        proj = int(round(bp_val * proj_per_pct))
         row = {c: '' for c in df.columns}
         row['Column'] = gap['category']
         row['Value']  = gap['brand']
         if 'Brand Penetration (Row)' in df.columns:
             row['Brand Penetration (Row)'] = f"{bp_val:.4f}%"
-        if 'Category Share' in df.columns:
-            row['Category Share'] = ''
         if 'Original Raw Numbers' in df.columns:
             row['Original Raw Numbers'] = str(raw_count)
         if 'US Gen Pop Projection' in df.columns:
@@ -1040,12 +1059,16 @@ def agent_reason_audit_fails(df,
     bp_col = 'Brand Penetration (Row)'
     raw_col = 'Original Raw Numbers'
     proj_col = 'US Gen Pop Projection'
-    us_proj_per_pct = 329_900_000.0 / 100.0
 
     df = df.copy()
     col_norm = df['Column'].astype(str).str.strip().str.upper()
     val_norm = df['Value'].astype(str).str.strip().str.upper()
     sample_raw = report.sample_raw or 10_000
+    # pandas 2.x raises if you assign a string into a float64 column.
+    for _c in (bp_col, raw_col, proj_col):
+        if _c in df.columns and df[_c].dtype != object:
+            df[_c] = df[_c].astype(object)
+    raw_per_pct, proj_per_pct = _derive_scale_from_df(df)
 
     def _find_row(cat, brand):
         cands = [brand] + BRAND_ALIASES.get(brand.upper().strip(), [])
@@ -1168,9 +1191,9 @@ def agent_reason_audit_fails(df,
                     continue
                 df.at[idx, bp_col] = f"{new_bp:.4f}%"
                 if raw_col in df.columns:
-                    df.at[idx, raw_col] = str(max(1, int(round(new_bp / 100.0 * sample_raw))))
+                    df.at[idx, raw_col] = str(max(1, int(round(new_bp * raw_per_pct))))
                 if proj_col in df.columns:
-                    df.at[idx, proj_col] = str(int(round(new_bp * us_proj_per_pct)))
+                    df.at[idx, proj_col] = str(int(round(new_bp * proj_per_pct)))
                 n_changed += 1
                 decisions.append({
                     'category': f.category, 'brand': f.brand,
@@ -1216,12 +1239,16 @@ def apply_default_lock_breaks(df, report: AuditReport):
     bp_col = 'Brand Penetration (Row)'
     raw_col = 'Original Raw Numbers'
     proj_col = 'US Gen Pop Projection'
-    us_proj_per_pct = 329_900_000.0 / 100.0
 
     df = df.copy()
     col_norm = df['Column'].astype(str).str.strip().str.upper()
     val_norm = df['Value'].astype(str).str.strip().str.upper()
     sample_raw = report.sample_raw or 10_000
+    # pandas 2.x raises if you assign a string into a float64 column.
+    for _c in (bp_col, raw_col, proj_col):
+        if _c in df.columns and df[_c].dtype != object:
+            df[_c] = df[_c].astype(object)
+    raw_per_pct, proj_per_pct = _derive_scale_from_df(df)
 
     patches = []
     for lock in report.default_locks or []:
@@ -1235,9 +1262,9 @@ def apply_default_lock_breaks(df, report: AuditReport):
                                           + _r.uniform(0.0005, 0.0095)), 4)
         df.at[idx, bp_col] = f"{new_bp:.4f}%"
         if raw_col in df.columns:
-            df.at[idx, raw_col] = str(max(1, int(round(new_bp / 100.0 * sample_raw))))
+            df.at[idx, raw_col] = str(max(1, int(round(new_bp * raw_per_pct))))
         if proj_col in df.columns:
-            df.at[idx, proj_col] = str(int(round(new_bp * us_proj_per_pct)))
+            df.at[idx, proj_col] = str(int(round(new_bp * proj_per_pct)))
         patches.append({
             'category': lock['column'], 'brand': lock['value'],
             'old_bp': old_bp, 'new_bp': new_bp,
