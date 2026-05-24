@@ -739,32 +739,68 @@ def _persona_income_kbucket(ac):
     return sum(ac.get(f'INCOME|{b}', 0) * mid for b, mid in bins) / total
 
 
-def _compute_persona_position(category, audience_composition):
-    """Returns position in [0.0, 1.0] for where THIS persona should fall
-    within the consensus band (0.0 = consensus_lo, 1.0 = consensus_hi).
+def _compute_persona_position(category, audience_composition, subject=None, brand=None):
+    """Returns position in [0.05, 0.95] for where THIS persona+SUBJECT should
+    fall within the consensus band (0.0 = consensus_lo, 1.0 = consensus_hi).
 
-    Default = 0.5 (band midpoint). Adjusted by demographic skew per the
-    CATEGORY_SKEW map. Bounded to [0.05, 0.95] so even extreme personas
-    land just inside the band rather than at the exact boundary.
+    Layered signals (each contributes ±~0.05–0.10 to position):
+      1. Age skew via CATEGORY_SKEW (older_higher / younger_higher / neutral)
+      2. Income skew (premium-brand tilt for CREDIT PROVIDER)
+      3. Regional skew (coastal vs heartland — affects what brands index where)
+      4. Ethnicity skew (Hispanic / Black / Asian indexing on relevant cats)
+      5. Subject-deterministic perturbation (md5 hash of subject|category|brand)
+         — this is what prevents ARCHETYPE PINNING. Two actors with identical
+         age+income+region+ethnicity demographics still get DIFFERENT positions
+         per category+brand pair because subject name uniqueness flows through.
     """
     age = _persona_age_midpoint(audience_composition)
     income = _persona_income_kbucket(audience_composition)
-    skew = CATEGORY_SKEW.get(category.upper(), 'neutral')
+    skew = CATEGORY_SKEW.get(str(category).upper(), 'neutral')
+    cat_u = str(category).upper()
+    ac = audience_composition or {}
 
+    # 1. Age-driven base position
     if skew == 'older_higher':
-        # 25yo → 0.3, 35yo → 0.5, 50yo → 0.75, 65yo → 0.95
-        pos = 0.3 + (age - 25) / 35.0 * 0.65
+        pos = 0.3 + (age - 25) / 35.0 * 0.65   # 25yo→0.30, 50yo→0.76
     elif skew == 'younger_higher':
-        # 25yo → 0.75, 35yo → 0.55, 50yo → 0.30, 65yo → 0.10
-        pos = 0.75 - (age - 25) / 35.0 * 0.65
+        pos = 0.75 - (age - 25) / 35.0 * 0.65  # 25yo→0.75, 50yo→0.29
     else:
         pos = 0.5
 
-    # Premium-brand income tilt for CREDIT PROVIDER (AMEX etc.)
-    if category.upper() == 'CREDIT PROVIDER' and income > 100:
-        pos = min(0.95, pos + 0.1)
-    elif category.upper() == 'CREDIT PROVIDER' and income < 60:
-        pos = max(0.05, pos - 0.1)
+    # 2. Income tilt (CREDIT/premium)
+    if cat_u == 'CREDIT PROVIDER':
+        if income > 100:    pos += 0.10
+        elif income < 60:   pos -= 0.10
+
+    # 3. Regional skew — coastal audiences over-index on premium, AI, music
+    coastal = ac.get('REGION|NORTHEAST', 0) + ac.get('REGION|WEST', 0)
+    heartland = ac.get('REGION|MIDWEST', 0) + ac.get('REGION|SOUTH', 0)
+    if abs(coastal - heartland) > 10:  # meaningful skew
+        coastal_brands = {'CREDIT PROVIDER', 'STREAMING/MUSIC', 'SEARCH ENGINE/AI',
+                          'DIGITAL BANKING', 'STREAMING/PLATFORM'}
+        heartland_brands = {'QSR', 'WHERE THEY SHOP', 'TELECOM'}
+        if cat_u in coastal_brands:
+            pos += 0.06 if coastal > heartland else -0.06
+        elif cat_u in heartland_brands:
+            pos += 0.04 if heartland > coastal else -0.04
+
+    # 4. Ethnicity micro-tilt — e.g., Cash App over-indexes on Black audiences
+    black_share = ac.get('RACE/ETHNICITY|BLACK OR AFRICAN AMERICAN', 0)
+    hispanic_share = ac.get('RACE/ETHNICITY|HISPANIC, LATINO OR SPANISH ORIGIN', 0)
+    if cat_u == 'DIGITAL BANKING':
+        # Cash App over-indexes on Black audiences; whole category lifts
+        if black_share > 18: pos += 0.05
+    if cat_u == 'WHERE THEY SHOP':
+        # Walmart over-indexes on Hispanic + lower-income audiences
+        if hispanic_share > 22: pos += 0.04
+
+    # 5. SUBJECT-DETERMINISTIC PERTURBATION (anti-archetype-pinning)
+    # Hash subject+category+brand → reproducible per-subject delta of ±0.10
+    if subject is not None:
+        import hashlib
+        key = f"{subject}|{cat_u}|{(brand or '').upper()}"
+        h = int(hashlib.md5(key.encode()).hexdigest()[:8], 16) / 0xFFFFFFFF
+        pos += (h - 0.5) * 0.20  # ±0.10 perturbation
 
     return max(0.05, min(0.95, pos))
 
@@ -807,11 +843,14 @@ def apply_audit_corrections(df, report: AuditReport):
             continue
         if f.consensus_lo is None or f.consensus_hi is None:
             continue
-        # PERSONA-POSITIONED target within the consensus band
-        pos = _compute_persona_position(f.category, ac)
+        # PERSONA-POSITIONED target within the consensus band, with subject
+        # perturbation to prevent archetype pinning (two subjects with similar
+        # demographics still get DIFFERENT positions per category+brand).
+        pos = _compute_persona_position(f.category, ac,
+                                         subject=report.subject, brand=f.brand)
         target = f.consensus_lo + pos * (f.consensus_hi - f.consensus_lo)
-        # Deterministic ±0.4pt jitter so values aren't round + rank-ties don't collide
-        target_jit = round(target + _r.uniform(-0.4, 0.4), 4)
+        # Small ±0.2pt extra jitter so adjacent rows don't tie in rank
+        target_jit = round(target + _r.uniform(-0.2, 0.2), 4)
         target_jit = max(0.05, target_jit)
 
         # Find the row(s) — try literal value, then aliases, then forgiving match
@@ -898,11 +937,18 @@ def apply_audit_corrections(df, report: AuditReport):
 def _patch_explainer(category, pos, ac):
     """One-sentence explanation of why this persona lands at this position."""
     age = _persona_age_midpoint(ac) if ac else 38
+    income = _persona_income_kbucket(ac) if ac else 75
     skew = CATEGORY_SKEW.get(str(category).upper(), 'neutral')
-    descr = {'older_higher':   f"older audience (~{age:.0f}yo) lands high in band",
-             'younger_higher': f"younger audience (~{age:.0f}yo) lands high in band",
-             'neutral':        f"persona-neutral category, midpoint of band"}.get(skew, '')
-    return f"pos={pos:.2f} — {descr}"
+    descr_parts = []
+    if skew == 'older_higher':
+        descr_parts.append(f"~{age:.0f}yo audience indexes higher with age in band")
+    elif skew == 'younger_higher':
+        descr_parts.append(f"~{age:.0f}yo audience indexes lower with age in band")
+    else:
+        descr_parts.append(f"persona-neutral category")
+    if str(category).upper() == 'CREDIT PROVIDER':
+        descr_parts.append(f"income ~${income:.0f}K")
+    return f"pos={pos:.2f} — {', '.join(descr_parts)} + subject-unique perturbation"
 
 
 # ───────────────────────────────────────────────────────────────────────────
