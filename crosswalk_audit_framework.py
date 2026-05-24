@@ -56,7 +56,9 @@ PEW_2025_SOCIAL = {
     'PINTEREST': {'M': 22, 'F': 50, '18-29': 45, '30-49': 41, '50-64': 33, '65+': 21},
     'LINKEDIN':  {'M': 35, 'F': 28, '18-29': 33, '30-49': 41, '50-64': 31, '65+': 14},
     'X':         {'M': 25, 'F': 17, '18-29': 35, '30-49': 22, '50-64': 16, '65+':  7},
-    'REDDIT':    {'M': 30, 'F': 14, '18-29': 44, '30-49': 30, '50-64': 13, '65+':  5},
+    # REDDIT intentionally not audited as SOCIAL MEDIA — this pipeline classifies
+    # Reddit under APP/PLATFORM USAGE, not SOCIAL MEDIA, so flagging it MISSING
+    # in the social-media audit is a false positive.
 }
 
 # Cross-pull triangulation: expected mass-American digital reach ranges.
