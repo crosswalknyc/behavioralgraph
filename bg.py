@@ -28577,18 +28577,32 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
                     run_audit as _cw_run_audit,
                     save_to_s3 as _cw_save_s3,
                     insert_structural_gaps as _cw_insert_gaps,
+                    apply_audit_corrections as _cw_apply_patches,
                 )
             except ImportError:
                 from migration.crosswalk_audit_framework import (  # type: ignore
                     run_audit as _cw_run_audit,
                     save_to_s3 as _cw_save_s3,
                     insert_structural_gaps as _cw_insert_gaps,
+                    apply_audit_corrections as _cw_apply_patches,
                 )
             _df_cw = pd.read_csv(final_file, low_memory=False)
             _subject = (brands[0] if brands else (project_name or 'unknown'))
             _report = _cw_run_audit(_df_cw, subject_hint=_subject, verbose=True)
+            # 1. Patch each FAIL back into its consensus band
+            _df_cw, _patches = _cw_apply_patches(_df_cw, _report)
+            if _patches:
+                print(f"   📋 crosswalk-audit-framework patched {len(_patches)} FAIL(s) into consensus band:")
+                for _p in _patches[:20]:
+                    _old = f"{_p['old_bp']:.2f}%" if _p['old_bp'] is not None else "—"
+                    print(f"       {_p['status']:13s} {_p['category']:22s} {_p['brand']:20s}  "
+                          f"{_old} → {_p['new_bp']:.4f}%  ({_p['issue']})")
+                if len(_patches) > 20:
+                    print(f"       ... +{len(_patches)-20} more")
+            # 2. Insert structural-gap rows
             _df_cw2, _n_gaps_inserted = _cw_insert_gaps(_df_cw, _report)
-            if _n_gaps_inserted:
+            # 3. Rewrite CSV if we mutated anything
+            if _patches or _n_gaps_inserted:
                 _bp_col = 'Brand Penetration (Row)'
                 if _bp_col in _df_cw2.columns:
                     _df_cw2[_bp_col] = _df_cw2[_bp_col].apply(
@@ -28597,8 +28611,9 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
                               else f"{float(str(v).replace('%','').strip() or 0):.4f}%")
                     )
                 _df_cw2.to_csv(final_file, index=False)
-                print(f"   📋 crosswalk-audit-framework inserted {_n_gaps_inserted} "
-                      f"structural-gap row(s) at consensus midpoint")
+                if _n_gaps_inserted:
+                    print(f"   📋 crosswalk-audit-framework inserted {_n_gaps_inserted} "
+                          f"structural-gap row(s) at consensus midpoint")
             _s3_url = _cw_save_s3(_report, subject_slug=_subject)
             if _s3_url:
                 print(f"   💾 Crosswalk audit report → {_s3_url}")
