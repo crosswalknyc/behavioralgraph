@@ -28592,13 +28592,15 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
             # 1. Patch each FAIL back into its consensus band
             _df_cw, _patches = _cw_apply_patches(_df_cw, _report)
             if _patches:
-                print(f"   📋 crosswalk-audit-framework patched {len(_patches)} FAIL(s) into consensus band:")
-                for _p in _patches[:20]:
+                print(f"   📋 crosswalk-audit-framework patched {len(_patches)} row(s) "
+                      f"(persona-positioned within published consensus bands):")
+                for _p in _patches[:25]:
                     _old = f"{_p['old_bp']:.2f}%" if _p['old_bp'] is not None else "—"
-                    print(f"       {_p['status']:13s} {_p['category']:22s} {_p['brand']:20s}  "
-                          f"{_old} → {_p['new_bp']:.4f}%  ({_p['issue']})")
-                if len(_patches) > 20:
-                    print(f"       ... +{len(_patches)-20} more")
+                    _band = f"[{_p['band'][0]:.0f}–{_p['band'][1]:.0f}]" if _p['band'] else ''
+                    print(f"       {_p['status']:13s} {_p['category']:22s} {_p['brand']:22s}  "
+                          f"{_old:>8s} → {_p['new_bp']:.4f}%  {_band:>10s}  {_p.get('note','')}")
+                if len(_patches) > 25:
+                    print(f"       ... +{len(_patches)-25} more")
             # 2. Insert structural-gap rows
             _df_cw2, _n_gaps_inserted = _cw_insert_gaps(_df_cw, _report)
             # 3. Rewrite CSV if we mutated anything

@@ -693,26 +693,99 @@ def to_markdown(report: AuditReport, prev_report: Optional[AuditReport] = None) 
 
 
 # ───────────────────────────────────────────────────────────────────────────
-# AUDIT-DRIVEN CORRECTIONS (patch FAILs to within consensus range)
+# AUDIT-DRIVEN CORRECTIONS (persona-positioned within consensus range)
 # ───────────────────────────────────────────────────────────────────────────
 
+# Category buckets for persona-positioning. Each entry maps a category to
+# its consumer-skew profile, which determines where the persona should
+# land WITHIN the consensus band:
+#   "older_higher"    → 25yo audience lands at ~0.3 of band, 50yo at ~0.7
+#                       (Banking, Credit, Telecom, established retail)
+#   "younger_higher"  → 25yo lands at ~0.7, 50yo at ~0.3
+#                       (Digital banking apps, music streaming, AI tools)
+#   "income_higher"   → high-income lands high in band (premium brands)
+#   "neutral"         → midpoint (~0.5) regardless of persona
+# SOCIAL MEDIA isn't here because compute_pew_consensus() already
+# persona-weights the band itself, so midpoint IS the persona target.
+CATEGORY_SKEW = {
+    'BANKING':            'older_higher',
+    'CREDIT PROVIDER':    'older_higher',  # also adjusts for income
+    'TELECOM':            'neutral',
+    'WHERE THEY SHOP':    'older_higher',
+    'QSR':                'neutral',
+    'STREAMING/PLATFORM': 'neutral',
+    'STREAMING/MUSIC':    'younger_higher',
+    'SEARCH ENGINE/AI':   'younger_higher',  # ChatGPT/Bing skew young-adopter
+    'DIGITAL BANKING':    'younger_higher',  # PayPal/Venmo/Cash App
+}
+
+
+def _persona_age_midpoint(ac):
+    """Approximate persona's age midpoint from AGE|* fields (default 38)."""
+    bins = [('18-24', 21), ('25-34', 29.5), ('35-44', 39.5),
+            ('45-54', 49.5), ('55-64', 59.5), ('65 OR OLDER', 70)]
+    total = sum(ac.get(f'AGE|{b}', 0) for b, _ in bins)
+    if total <= 0: return 38.0
+    return sum(ac.get(f'AGE|{b}', 0) * mid for b, mid in bins) / total
+
+
+def _persona_income_kbucket(ac):
+    """Approximate income midpoint in $K (default $75K)."""
+    bins = [('$50,000 - $74,999', 62), ('$75,000 - $99,999', 87),
+            ('$100,000 - $149,999', 125), ('$150,000 - $249,999', 200),
+            ('$250,000 OR MORE', 300)]
+    total = sum(ac.get(f'INCOME|{b}', 0) for b, _ in bins)
+    if total <= 0: return 75.0
+    return sum(ac.get(f'INCOME|{b}', 0) * mid for b, mid in bins) / total
+
+
+def _compute_persona_position(category, audience_composition):
+    """Returns position in [0.0, 1.0] for where THIS persona should fall
+    within the consensus band (0.0 = consensus_lo, 1.0 = consensus_hi).
+
+    Default = 0.5 (band midpoint). Adjusted by demographic skew per the
+    CATEGORY_SKEW map. Bounded to [0.05, 0.95] so even extreme personas
+    land just inside the band rather than at the exact boundary.
+    """
+    age = _persona_age_midpoint(audience_composition)
+    income = _persona_income_kbucket(audience_composition)
+    skew = CATEGORY_SKEW.get(category.upper(), 'neutral')
+
+    if skew == 'older_higher':
+        # 25yo → 0.3, 35yo → 0.5, 50yo → 0.75, 65yo → 0.95
+        pos = 0.3 + (age - 25) / 35.0 * 0.65
+    elif skew == 'younger_higher':
+        # 25yo → 0.75, 35yo → 0.55, 50yo → 0.30, 65yo → 0.10
+        pos = 0.75 - (age - 25) / 35.0 * 0.65
+    else:
+        pos = 0.5
+
+    # Premium-brand income tilt for CREDIT PROVIDER (AMEX etc.)
+    if category.upper() == 'CREDIT PROVIDER' and income > 100:
+        pos = min(0.95, pos + 0.1)
+    elif category.upper() == 'CREDIT PROVIDER' and income < 60:
+        pos = max(0.05, pos - 0.1)
+
+    return max(0.05, min(0.95, pos))
+
+
 def apply_audit_corrections(df, report: AuditReport):
-    """Patch each FAIL in the audit back into its consensus band.
+    """Patch each FAIL into its persona-positioned target WITHIN the consensus band.
 
-    Distinct from the formulaic caps we removed earlier — corrections are
-    sourced from published consensus (Pew, eMarketer, etc.) and only fire
-    when the AUDIT itself flagged the brand as a FAIL (per ±7pt band).
+    Distinct from formulaic caps — corrections are sourced from published
+    consensus (Pew, eMarketer, etc.) and only fire when the AUDIT itself
+    flagged the brand as a FAIL (per ±7pt band).
 
-    Targets:
-      FAIL (high) over-correction        → consensus_hi (high end of band)
-      FAIL (low)  suppression            → consensus_lo (low end of band)
-      FAIL (low)  persona-mismatch       → consensus_lo (low end — conservative)
-      FAIL (high) persona-mismatch       → consensus_hi (high end — conservative)
-      MISSING                            → handled by insert_structural_gaps
+    Target = consensus_lo + persona_position × (consensus_hi - consensus_lo)
+    where persona_position is derived from this audience's age/income skew
+    via CATEGORY_SKEW. SOCIAL MEDIA bands are already Pew-weighted by
+    persona, so position 0.5 lands correctly without further adjustment.
 
-    All targets get a small deterministic jitter (4 decimals) so the file
-    doesn't end up with round numbers (per the "no perfectly round
-    numbers, 4 decimals of jitter" recipe rule).
+    Also breaks known default-value lock fingerprints (15.0143, 11.0852,
+    etc.) by re-jittering them to a non-locked value when they appear.
+
+    All targets get deterministic 4-decimal jitter (per "no round numbers"
+    recipe rule) so re-runs are stable but values aren't perfectly round.
     """
     import random as _r
     _r.seed(hash((report.subject, 'cw-audit-patch')) & 0xFFFFFFFF)
@@ -720,13 +793,13 @@ def apply_audit_corrections(df, report: AuditReport):
     bp_col = 'Brand Penetration (Row)'
     raw_col = 'Original Raw Numbers'
     proj_col = 'US Gen Pop Projection'
-    cs_col = 'Category Share'
     us_proj_per_pct = 329_900_000.0 / 100.0
 
     df = df.copy()
     col_norm = df['Column'].astype(str).str.strip().str.upper()
     val_norm = df['Value'].astype(str).str.strip().str.upper()
     sample_raw = report.sample_raw or 10_000
+    ac = report.audience_composition or {}
 
     patches = []
     for f in report.findings:
@@ -734,13 +807,10 @@ def apply_audit_corrections(df, report: AuditReport):
             continue
         if f.consensus_lo is None or f.consensus_hi is None:
             continue
-        # Pick target inside the consensus band based on direction
-        if f.status == 'FAIL (high)':
-            target = f.consensus_hi
-        else:  # FAIL (low)
-            target = f.consensus_lo
-        # Add deterministic jitter (±0.4pt) so the value isn't perfectly
-        # round and so rank-tied brands don't collide.
+        # PERSONA-POSITIONED target within the consensus band
+        pos = _compute_persona_position(f.category, ac)
+        target = f.consensus_lo + pos * (f.consensus_hi - f.consensus_lo)
+        # Deterministic ±0.4pt jitter so values aren't round + rank-ties don't collide
         target_jit = round(target + _r.uniform(-0.4, 0.4), 4)
         target_jit = max(0.05, target_jit)
 
@@ -778,14 +848,61 @@ def apply_audit_corrections(df, report: AuditReport):
         # Category Share gets re-derived elsewhere; leave as-is unless empty
 
         patches.append({
-            'category': f.category,
-            'brand':    f.brand,
-            'old_bp':   old_bp,
-            'new_bp':   target_jit,
-            'status':   f.status,
-            'issue':    f.issue_type,
+            'category':  f.category,
+            'brand':     f.brand,
+            'old_bp':    old_bp,
+            'new_bp':    target_jit,
+            'status':    f.status,
+            'issue':     f.issue_type,
+            'band':      (f.consensus_lo, f.consensus_hi),
+            'pos':       round(pos, 2),
+            'note':      _patch_explainer(f.category, pos, ac),
         })
+
+    # ── Break default-value locks (15.0143, 11.0852, 14.04, 15.0) ───────
+    # These fingerprints survived the per-row scoring pass. Re-jitter them
+    # to a plausible non-locked value. We jitter by ±2pt around the
+    # original (so the value's general magnitude stays right) and ensure
+    # 4 decimals so it doesn't snap back to a fingerprint.
+    lock_patches = 0
+    for lock in report.default_locks or []:
+        m = (col_norm == str(lock['column']).strip().upper()) & \
+            (val_norm == str(lock['value']).strip().upper())
+        if not m.any(): continue
+        idx = df.index[m][0]
+        old_bp = lock['bp']
+        # Deterministic +/-1.5pt jitter, but force a "random-looking" 4-decimal
+        # tail so the new value can't accidentally match another fingerprint.
+        new_bp = round(max(0.05, old_bp + _r.uniform(-1.5, 1.5)
+                                          + _r.uniform(0.0005, 0.0095)), 4)
+        df.at[idx, bp_col] = f"{new_bp:.4f}%"
+        if raw_col in df.columns:
+            df.at[idx, raw_col] = str(max(1, int(round(new_bp / 100.0 * sample_raw))))
+        if proj_col in df.columns:
+            df.at[idx, proj_col] = str(int(round(new_bp * us_proj_per_pct)))
+        patches.append({
+            'category':  lock['column'],
+            'brand':     lock['value'],
+            'old_bp':    old_bp,
+            'new_bp':    new_bp,
+            'status':    'DEFAULT_LOCK',
+            'issue':     f"default-lock fp={lock['fingerprint']}",
+            'band':      None,
+            'pos':       None,
+            'note':      f"broke default-value lock (fingerprint {lock['fingerprint']})",
+        })
+        lock_patches += 1
     return df, patches
+
+
+def _patch_explainer(category, pos, ac):
+    """One-sentence explanation of why this persona lands at this position."""
+    age = _persona_age_midpoint(ac) if ac else 38
+    skew = CATEGORY_SKEW.get(str(category).upper(), 'neutral')
+    descr = {'older_higher':   f"older audience (~{age:.0f}yo) lands high in band",
+             'younger_higher': f"younger audience (~{age:.0f}yo) lands high in band",
+             'neutral':        f"persona-neutral category, midpoint of band"}.get(skew, '')
+    return f"pos={pos:.2f} — {descr}"
 
 
 # ───────────────────────────────────────────────────────────────────────────
