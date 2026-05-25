@@ -30172,8 +30172,9 @@ def estimate_journey_iq_audience():
 @app.route('/api/journey-iq/list', methods=['GET'])
 @requires_auth
 def list_journey_iq():
-    """Return past Journey IQ runs (newest first). Super-admins see all
-    runs; everyone else sees only their own."""
+    """Return past Journey IQ runs (newest first). Admins + super-admins see
+    all runs; everyone else sees only their own. A cloaked admin sees the
+    cloaked-into user's runs (full visibility through the cloak)."""
     try:
         from migration import journey_iq as _jiq
     except Exception:
@@ -30183,7 +30184,10 @@ def list_journey_iq():
         role = _normalize_role((user or {}).get('role', 'user'))
         username = session.get('username')
         all_runs = _jiq.list_runs(s3_client, limit=500)
-        if role != 'super_admin':
+        # Admins + super_admins see every run (matches user_can_run_analysis_module
+        # convention). A cloaked admin also sees everything (so QA on behalf of a
+        # client account is unblocked).
+        if role not in ('admin', 'super_admin') and not session.get('cloaked_from'):
             all_runs = [r for r in all_runs if r.get('created_by') == username]
         return jsonify({'success': True, 'runs': all_runs[:200]})
     except Exception as e:
@@ -30204,11 +30208,12 @@ def get_journey_iq_result(s3_key):
         data = _jiq.load_run_from_s3(s3_client, full_key)
         if data is None:
             return jsonify({'success': False, 'error': 'Run not found'}), 404
-        # Access guard: non-admins only get their own runs.
+        # Access guard: admins + super_admins (and cloaked admins) can load any
+        # run; everyone else is restricted to their own.
         user = get_current_user()
         role = _normalize_role((user or {}).get('role', 'user'))
         username = session.get('username')
-        if role != 'super_admin':
+        if role not in ('admin', 'super_admin') and not session.get('cloaked_from'):
             created_by = (data.get('meta') or {}).get('created_by')
             if created_by and created_by != username:
                 return jsonify({'success': False, 'error': 'Forbidden'}), 403
