@@ -6281,6 +6281,7 @@ def index():
     has_flywheel_conversion = _acc.get('has_flywheel_conversion_access', False)
     has_brand_partnership_iq = _acc.get('has_brand_partnership_iq_access', False)
     has_sentiment_iq = _acc.get('has_sentiment_iq_access', False)
+    has_journey_iq = _acc.get('has_journey_iq_access', False)
     has_workspace = _acc.get('has_workspace_access', True)
     has_share_of_time = _acc.get('has_share_of_time_access', True)
     has_share_of_time_run = _acc.get('has_share_of_time_run_access', True)
@@ -6336,6 +6337,7 @@ def index():
                            has_flywheel_conversion_access=has_flywheel_conversion,
                            has_brand_partnership_iq_access=has_brand_partnership_iq,
                            has_sentiment_iq_access=has_sentiment_iq,
+                           has_journey_iq_access=has_journey_iq,
                            has_workspace_access=has_workspace,
                            has_share_of_time_access=has_share_of_time,
                            has_share_of_time_run_access=has_share_of_time_run,
