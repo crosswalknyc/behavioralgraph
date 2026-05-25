@@ -6281,6 +6281,7 @@ def index():
     has_flywheel_conversion = _acc.get('has_flywheel_conversion_access', False)
     has_brand_partnership_iq = _acc.get('has_brand_partnership_iq_access', False)
     has_sentiment_iq = _acc.get('has_sentiment_iq_access', False)
+    has_journey_iq = _acc.get('has_journey_iq_access', False)
     has_workspace = _acc.get('has_workspace_access', True)
     has_share_of_time = _acc.get('has_share_of_time_access', True)
     has_share_of_time_run = _acc.get('has_share_of_time_run_access', True)
@@ -6336,6 +6337,7 @@ def index():
                            has_flywheel_conversion_access=has_flywheel_conversion,
                            has_brand_partnership_iq_access=has_brand_partnership_iq,
                            has_sentiment_iq_access=has_sentiment_iq,
+                           has_journey_iq_access=has_journey_iq,
                            has_workspace_access=has_workspace,
                            has_share_of_time_access=has_share_of_time,
                            has_share_of_time_run_access=has_share_of_time_run,
@@ -30170,19 +30172,22 @@ def estimate_journey_iq_audience():
 @app.route('/api/journey-iq/list', methods=['GET'])
 @requires_auth
 def list_journey_iq():
-    """Return past Journey IQ runs (newest first). Super-admins see all
-    runs; everyone else sees only their own."""
+    """Return all Journey IQ runs (newest first). Anyone with Digital Journey
+    IQ access — via role (admin/super_admin), the standalone
+    has_journey_iq_access flag, or the umbrella Analysis IQ +
+    'journey_iq' module entitlement — sees every run regardless of who
+    created it. Users without the feature are blocked at the door."""
     try:
         from migration import journey_iq as _jiq
     except Exception:
         return jsonify({'success': True, 'runs': []})
     try:
         user = get_current_user()
-        role = _normalize_role((user or {}).get('role', 'user'))
-        username = session.get('username')
+        if not user_can_run_analysis_module(user, 'journey_iq'):
+            return jsonify({'success': False,
+                            'error': 'Digital Journey IQ access required',
+                            'runs': []}), 403
         all_runs = _jiq.list_runs(s3_client, limit=500)
-        if role != 'super_admin':
-            all_runs = [r for r in all_runs if r.get('created_by') == username]
         return jsonify({'success': True, 'runs': all_runs[:200]})
     except Exception as e:
         return jsonify({'success': True, 'runs': [], 'error': str(e)})
@@ -30202,14 +30207,12 @@ def get_journey_iq_result(s3_key):
         data = _jiq.load_run_from_s3(s3_client, full_key)
         if data is None:
             return jsonify({'success': False, 'error': 'Run not found'}), 404
-        # Access guard: non-admins only get their own runs.
+        # Access guard: anyone with Digital Journey IQ access can load any run.
+        # Users without the feature are blocked at the door.
         user = get_current_user()
-        role = _normalize_role((user or {}).get('role', 'user'))
-        username = session.get('username')
-        if role != 'super_admin':
-            created_by = (data.get('meta') or {}).get('created_by')
-            if created_by and created_by != username:
-                return jsonify({'success': False, 'error': 'Forbidden'}), 403
+        if not user_can_run_analysis_module(user, 'journey_iq'):
+            return jsonify({'success': False,
+                            'error': 'Digital Journey IQ access required'}), 403
         return jsonify({'success': True, 'data': data, 's3_key': full_key})
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
