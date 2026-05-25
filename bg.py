@@ -28470,35 +28470,6 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
         except Exception as _e:
             print(f"   ⚠️ URL-encoded duplicate cleanup skipped: {_e}")
 
-        # LAST PASS (2026-05-25 — non-negotiable rule #1: no pinning, ever):
-        # Depin any brand BP that's perfectly round to 2 decimals (5.00,
-        # 12.50, 0.30) AND any value in the X.00xx band (24.0013, 22.0023,
-        # 30.0028 — within 0.01 of an integer). These slip past upstream
-        # jitter and read as pinned to a brand marketer. Skips demo cats
-        # (legit round buckets), 100% self-pins, true zeros, and sub-0.50
-        # values where X.00xx is structurally common.
-        try:
-            import sys as _sys3, os as _os3
-            _migration_dir3 = _os3.path.join(
-                _os3.path.dirname(_os3.path.dirname(_os3.path.abspath(__file__))),
-                'migration')
-            if _migration_dir3 not in _sys3.path:
-                _sys3.path.insert(0, _migration_dir3)
-            from post_generation_enforcers import (
-                depin_round_brand_bps as _depin_round_bp,
-            )
-            _subj_for_depin = (
-                locals().get('project_name')
-                or locals().get('_subject_name')
-                or (brands[0] if brands else '')
-                or ''
-            )
-            df_final, _n_depin = _depin_round_bp(
-                df_final, _subj_for_depin, verbose=True,
-            )
-        except Exception as _e:
-            print(f"   ⚠️ round-BP depinning skipped: {_e}")
-
     # Save to CSV
     try:
         df_final.to_csv(final_file, index=False)
