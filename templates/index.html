@@ -11672,7 +11672,24 @@
             background: rgba(239, 68, 68, 1);
             transform: scale(1.05);
         }
-        
+
+        .slide-image-placeholder .img-resize-handle {
+            position: absolute;
+            width: 12px;
+            height: 12px;
+            background: rgba(200, 230, 0, 0.8);
+            border: 1px solid rgba(255,255,255,0.5);
+            border-radius: 2px;
+            z-index: 15;
+            opacity: 0;
+            transition: opacity 0.15s;
+        }
+        .slide-image-placeholder:hover .img-resize-handle { opacity: 1; }
+        .slide-image-placeholder .img-resize-handle.nw { top: -6px; left: -6px; cursor: nw-resize; }
+        .slide-image-placeholder .img-resize-handle.ne { top: -6px; right: -6px; cursor: ne-resize; }
+        .slide-image-placeholder .img-resize-handle.sw { bottom: -6px; left: -6px; cursor: sw-resize; }
+        .slide-image-placeholder .img-resize-handle.se { bottom: -6px; right: -6px; cursor: se-resize; }
+
         /* Draggable slide sections */
         .slide-draggable-section {
             cursor: move;
@@ -58476,6 +58493,8 @@
             // Allow dragging from the drag handle
             const isDragHandle = event.target.closest('.drag-handle');
             
+            if (event.target.closest('.img-resize-handle')) return;
+
             // Don't drag if clicking on editable content, buttons, or inputs (unless clicking drag handle)
             if (!isDragHandle && (
                 event.target.closest('[contenteditable="true"]') || 
@@ -58565,6 +58584,58 @@
             document.removeEventListener('mouseup', stopDragSlideSection);
         }
         
+        let resizingPlaceholder = null;
+        let resizePlaceholderHandle = '';
+        let resizePlaceholderStartX = 0;
+        let resizePlaceholderStartY = 0;
+        let resizePlaceholderOrigLeft = 0;
+        let resizePlaceholderOrigTop = 0;
+        let resizePlaceholderOrigW = 0;
+        let resizePlaceholderOrigH = 0;
+
+        function startResizePlaceholder(event, handle) {
+            event.stopPropagation();
+            event.preventDefault();
+            const ph = event.target.closest('.slide-image-placeholder');
+            if (!ph) return;
+            resizingPlaceholder = ph;
+            resizePlaceholderHandle = handle;
+            resizePlaceholderStartX = event.clientX;
+            resizePlaceholderStartY = event.clientY;
+            resizePlaceholderOrigLeft = parseFloat(ph.style.left) || 0;
+            resizePlaceholderOrigTop = parseFloat(ph.style.top) || 0;
+            resizePlaceholderOrigW = parseFloat(ph.style.width) || 40;
+            resizePlaceholderOrigH = parseFloat(ph.style.height) || 40;
+            document.addEventListener('mousemove', doResizePlaceholder);
+            document.addEventListener('mouseup', stopResizePlaceholder);
+        }
+
+        function doResizePlaceholder(event) {
+            if (!resizingPlaceholder) return;
+            const canvas = document.getElementById('slideCanvas');
+            if (!canvas) return;
+            const r = canvas.getBoundingClientRect();
+            const dx = ((event.clientX - resizePlaceholderStartX) / r.width) * 100;
+            const dy = ((event.clientY - resizePlaceholderStartY) / r.height) * 100;
+            let l = resizePlaceholderOrigLeft, t = resizePlaceholderOrigTop;
+            let w = resizePlaceholderOrigW, h = resizePlaceholderOrigH;
+            if (resizePlaceholderHandle.includes('e')) w = Math.max(10, resizePlaceholderOrigW + dx);
+            if (resizePlaceholderHandle.includes('w')) { w = Math.max(10, resizePlaceholderOrigW - dx); l = resizePlaceholderOrigLeft + dx; }
+            if (resizePlaceholderHandle.includes('s')) h = Math.max(10, resizePlaceholderOrigH + dy);
+            if (resizePlaceholderHandle.includes('n')) { h = Math.max(10, resizePlaceholderOrigH - dy); t = resizePlaceholderOrigTop + dy; }
+            resizingPlaceholder.style.left = l + '%';
+            resizingPlaceholder.style.top = t + '%';
+            resizingPlaceholder.style.width = w + '%';
+            resizingPlaceholder.style.height = h + '%';
+            event.preventDefault();
+        }
+
+        function stopResizePlaceholder() {
+            resizingPlaceholder = null;
+            document.removeEventListener('mousemove', doResizePlaceholder);
+            document.removeEventListener('mouseup', stopResizePlaceholder);
+        }
+
         // Helper to get saved section position or default
         function getSectionPosition(slide, sectionType, defaults) {
             if (slide?.sectionPositions?.[sectionType]) {
@@ -74557,10 +74628,16 @@
                              title="Click to change image">
                             ${profileImageHtml}
                         </div>` : `
-                        <!-- Add Image placeholder -->
-                        <div class="slide-image-placeholder" style="position: absolute; left: 5%; top: ${imageTop}; width: ${imageSize}; height: ${imageSize};"
-                             onclick="uploadTitleImage()"
+                        <!-- Add Image placeholder - DRAGGABLE + RESIZABLE -->
+                        <div class="slide-draggable-section slide-image-placeholder" style="position: absolute; left: 5%; top: ${imageTop}; width: ${imageSize}; height: ${imageSize};"
+                             onmousedown="startDragSlideSection(event, 0, 'image')"
+                             onclick="if(!event.defaultPrevented) uploadTitleImage()"
                              title="Click to add image">
+                            <div class="drag-handle">⋮⋮ DRAG IMAGE</div>
+                            <div class="img-resize-handle nw" onmousedown="startResizePlaceholder(event,'nw')"></div>
+                            <div class="img-resize-handle ne" onmousedown="startResizePlaceholder(event,'ne')"></div>
+                            <div class="img-resize-handle sw" onmousedown="startResizePlaceholder(event,'sw')"></div>
+                            <div class="img-resize-handle se" onmousedown="startResizePlaceholder(event,'se')"></div>
                             <span class="placeholder-icon">🖼️</span>
                             <span>Add Image</span>
                             <button class="placeholder-delete-btn" onclick="event.stopPropagation(); this.parentElement.style.display='none';" title="No image on this slide">✕ No Image</button>
@@ -74658,6 +74735,22 @@
                                 <span style="flex: 1; line-height: 1.3;">${escapeHtml(item.title)}</span>
                             </div>
                         `).join('')}
+                    </div>
+
+                    <!-- Add Image placeholder - DRAGGABLE + RESIZABLE -->
+                    <div class="slide-draggable-section slide-image-placeholder"
+                         style="position: absolute; left: 5%; top: 55%; width: 40%; height: 38%; z-index: 1;"
+                         onmousedown="startDragSlideSection(event, 0, 'image')"
+                         onclick="if(!event.defaultPrevented) uploadTocRightImage()"
+                         title="Click to add image">
+                        <div class="drag-handle">⋮⋮ DRAG IMAGE</div>
+                        <div class="img-resize-handle nw" onmousedown="startResizePlaceholder(event,'nw')"></div>
+                        <div class="img-resize-handle ne" onmousedown="startResizePlaceholder(event,'ne')"></div>
+                        <div class="img-resize-handle sw" onmousedown="startResizePlaceholder(event,'sw')"></div>
+                        <div class="img-resize-handle se" onmousedown="startResizePlaceholder(event,'se')"></div>
+                        <span class="placeholder-icon">🖼️</span>
+                        <span>Add Image</span>
+                        <button class="placeholder-delete-btn" onclick="event.stopPropagation(); this.parentElement.style.display='none';" title="No image on this slide">✕ No Image</button>
                     </div>
                     
                     ${footerHtml}
@@ -74904,6 +74997,10 @@
                              title="Click to upload image or paste URL">
                             <button class="placeholder-delete-btn" onclick="hideSlideImagePlaceholder(${idx}, event)" title="No image on this slide">✕ No Image</button>
                             <div class="drag-handle">⋮⋮ DRAG IMAGE</div>
+                            <div class="img-resize-handle nw" onmousedown="startResizePlaceholder(event,'nw')"></div>
+                            <div class="img-resize-handle ne" onmousedown="startResizePlaceholder(event,'ne')"></div>
+                            <div class="img-resize-handle sw" onmousedown="startResizePlaceholder(event,'sw')"></div>
+                            <div class="img-resize-handle se" onmousedown="startResizePlaceholder(event,'se')"></div>
                             <span class="placeholder-icon">🖼️</span>
                             <span>Click to add image</span>
                             <span style="font-size: 0.65rem; margin-top: 0.25rem;">or paste URL</span>
@@ -74999,6 +75096,10 @@
                              title="Click to upload image or paste URL">
                             <button class="placeholder-delete-btn" onclick="hideSlideImagePlaceholder(${idx}, event)" title="No image on this slide">✕ No Image</button>
                             <div class="drag-handle">⋮⋮ DRAG IMAGE</div>
+                            <div class="img-resize-handle nw" onmousedown="startResizePlaceholder(event,'nw')"></div>
+                            <div class="img-resize-handle ne" onmousedown="startResizePlaceholder(event,'ne')"></div>
+                            <div class="img-resize-handle sw" onmousedown="startResizePlaceholder(event,'sw')"></div>
+                            <div class="img-resize-handle se" onmousedown="startResizePlaceholder(event,'se')"></div>
                             <span class="placeholder-icon">🖼️</span>
                             <span>Click to add image</span>
                             <span style="font-size: 0.65rem; margin-top: 0.25rem;">or paste URL</span>
@@ -75034,6 +75135,10 @@
                              title="Click to upload image or paste URL">
                             <button class="placeholder-delete-btn" onclick="hideSlideImagePlaceholder(${idx}, event)" title="No image on this slide">✕ No Image</button>
                             <div class="drag-handle">⋮⋮ DRAG IMAGE</div>
+                            <div class="img-resize-handle nw" onmousedown="startResizePlaceholder(event,'nw')"></div>
+                            <div class="img-resize-handle ne" onmousedown="startResizePlaceholder(event,'ne')"></div>
+                            <div class="img-resize-handle sw" onmousedown="startResizePlaceholder(event,'sw')"></div>
+                            <div class="img-resize-handle se" onmousedown="startResizePlaceholder(event,'se')"></div>
                             <span class="placeholder-icon">🖼️</span>
                             <span>Click to add image</span>
                             <span style="font-size: 0.65rem; margin-top: 0.25rem;">or paste URL</span>
@@ -75099,6 +75204,10 @@
                              title="Click to upload image or paste URL">
                             <button class="placeholder-delete-btn" onclick="hideSlideImagePlaceholder(${idx}, event)" title="No image on this slide">✕ No Image</button>
                             <div class="drag-handle">⋮⋮ DRAG IMAGE</div>
+                            <div class="img-resize-handle nw" onmousedown="startResizePlaceholder(event,'nw')"></div>
+                            <div class="img-resize-handle ne" onmousedown="startResizePlaceholder(event,'ne')"></div>
+                            <div class="img-resize-handle sw" onmousedown="startResizePlaceholder(event,'sw')"></div>
+                            <div class="img-resize-handle se" onmousedown="startResizePlaceholder(event,'se')"></div>
                             <span class="placeholder-icon">🖼️</span>
                             <span>Click to add image</span>
                             <span style="font-size: 0.65rem; margin-top: 0.25rem;">or paste URL</span>
@@ -75156,7 +75265,7 @@
                         </div>
                         
                         ${!hasImage ? `
-                        <!-- Small image placeholder - DRAGGABLE -->
+                        <!-- Small image placeholder - DRAGGABLE + RESIZABLE -->
                         <div class="slide-draggable-section slide-image-placeholder" 
                              style="position: absolute; left: ${imagePos.left}; top: ${imagePos.top}; width: 25%; height: 25%; z-index: 1;"
                              onmousedown="startDragSlideSection(event, ${idx}, 'image')"
@@ -75164,6 +75273,10 @@
                              title="Click to upload image or paste URL">
                             <button class="placeholder-delete-btn" onclick="hideSlideImagePlaceholder(${idx}, event)" title="No image on this slide">✕ No Image</button>
                             <div class="drag-handle">⋮⋮ DRAG IMAGE</div>
+                            <div class="img-resize-handle nw" onmousedown="startResizePlaceholder(event,'nw')"></div>
+                            <div class="img-resize-handle ne" onmousedown="startResizePlaceholder(event,'ne')"></div>
+                            <div class="img-resize-handle sw" onmousedown="startResizePlaceholder(event,'sw')"></div>
+                            <div class="img-resize-handle se" onmousedown="startResizePlaceholder(event,'se')"></div>
                             <span class="placeholder-icon">🖼️</span>
                             <span>Add image</span>
                         </div>
@@ -75220,7 +75333,7 @@
                         </div>
                         
                         ${!hasImage ? `
-                        <!-- Left image placeholder - DRAGGABLE -->
+                        <!-- Left image placeholder - DRAGGABLE + RESIZABLE -->
                         <div class="slide-draggable-section slide-image-placeholder" 
                              style="position: absolute; left: ${imagePos.left}; top: ${imagePos.top}; width: 22%; height: 70%; z-index: 1;"
                              onmousedown="startDragSlideSection(event, ${idx}, 'image')"
@@ -75228,6 +75341,10 @@
                              title="Click to upload image or paste URL">
                             <button class="placeholder-delete-btn" onclick="hideSlideImagePlaceholder(${idx}, event)" title="No image on this slide">✕ No Image</button>
                             <div class="drag-handle">⋮⋮ DRAG IMAGE</div>
+                            <div class="img-resize-handle nw" onmousedown="startResizePlaceholder(event,'nw')"></div>
+                            <div class="img-resize-handle ne" onmousedown="startResizePlaceholder(event,'ne')"></div>
+                            <div class="img-resize-handle sw" onmousedown="startResizePlaceholder(event,'sw')"></div>
+                            <div class="img-resize-handle se" onmousedown="startResizePlaceholder(event,'se')"></div>
                             <span class="placeholder-icon">🖼️</span>
                             <span>Add image</span>
                         </div>
@@ -75294,7 +75411,7 @@
                         </div>
                         
                         ${!hasImage ? `
-                        <!-- Image placeholder - DRAGGABLE -->
+                        <!-- Image placeholder - DRAGGABLE + RESIZABLE -->
                         <div class="slide-draggable-section slide-image-placeholder" 
                              style="position: absolute; left: ${imagePos.left}; top: ${imagePos.top}; width: 42%; height: 35%; z-index: 1;"
                              onmousedown="startDragSlideSection(event, ${idx}, 'image')"
@@ -75302,6 +75419,10 @@
                              title="Click to upload image or paste URL">
                             <button class="placeholder-delete-btn" onclick="hideSlideImagePlaceholder(${idx}, event)" title="No image on this slide">✕ No Image</button>
                             <div class="drag-handle">⋮⋮ DRAG IMAGE</div>
+                            <div class="img-resize-handle nw" onmousedown="startResizePlaceholder(event,'nw')"></div>
+                            <div class="img-resize-handle ne" onmousedown="startResizePlaceholder(event,'ne')"></div>
+                            <div class="img-resize-handle sw" onmousedown="startResizePlaceholder(event,'sw')"></div>
+                            <div class="img-resize-handle se" onmousedown="startResizePlaceholder(event,'se')"></div>
                             <span class="placeholder-icon">🖼️</span>
                             <span>Click to add image</span>
                         </div>
@@ -75348,13 +75469,18 @@
                         </div>
                         
                         ${!hasImage ? `
-                        <!-- Large image placeholder - DRAGGABLE -->
+                        <!-- Large image placeholder - DRAGGABLE + RESIZABLE -->
                         <div class="slide-draggable-section slide-image-placeholder" 
                              style="position: absolute; left: ${imagePos.left}; top: ${imagePos.top}; width: 55%; height: 79%; z-index: 1;"
                              onmousedown="startDragSlideSection(event, ${idx}, 'image')"
                              onclick="if(!event.defaultPrevented) uploadSlideImage(${idx})"
                              title="Click to upload image or paste URL">
+                            <button class="placeholder-delete-btn" onclick="hideSlideImagePlaceholder(${idx}, event)" title="No image on this slide">✕ No Image</button>
                             <div class="drag-handle">⋮⋮ DRAG IMAGE</div>
+                            <div class="img-resize-handle nw" onmousedown="startResizePlaceholder(event,'nw')"></div>
+                            <div class="img-resize-handle ne" onmousedown="startResizePlaceholder(event,'ne')"></div>
+                            <div class="img-resize-handle sw" onmousedown="startResizePlaceholder(event,'sw')"></div>
+                            <div class="img-resize-handle se" onmousedown="startResizePlaceholder(event,'se')"></div>
                             <span class="placeholder-icon">🖼️</span>
                             <span>Click to add image</span>
                             <span style="font-size: 0.65rem; margin-top: 0.25rem;">or paste URL</span>
