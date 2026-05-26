@@ -85,6 +85,8 @@ CH_RUN_SETTINGS = {
 S3_BUCKET            = os.environ.get('JOURNEY_IQ_S3_BUCKET', 'dashboard-inputs')
 S3_PREFIX            = 'journey-iq/'
 S3_INDEX_KEY         = 'journey-iq/_index.json'
+S3_ARCHIVE_PREFIX    = 'journey-iq/archive/'
+S3_ARCHIVE_INDEX_KEY = 'journey-iq/_archive_index.json'
 
 
 # ── Conversion patterns (locked decision: auto-detect) ───────────────────────
@@ -2427,6 +2429,43 @@ def list_runs(s3_client, *, username: Optional[str] = None,
     if username:
         runs = [r for r in runs if r.get('created_by') == username]
     return runs[:limit]
+
+
+def list_archived_runs(s3_client, *, limit: int = 200) -> list[dict]:
+    """Return the archived index entries, newest-archived first.
+
+    Archive entries live under s3://<bucket>/journey-iq/archive/ and are
+    tracked by a separate _archive_index.json so the live dashboard can
+    keep loading just the active set. Callers (e.g. the /api/journey-iq/list
+    endpoint) are responsible for gating this by admin role — this helper
+    intentionally does not enforce access control."""
+    if s3_client is None:
+        return []
+    try:
+        obj = s3_client.get_object(Bucket=S3_BUCKET, Key=S3_ARCHIVE_INDEX_KEY)
+        idx = json.loads(obj['Body'].read().decode('utf-8')) or {}
+        runs = idx.get('runs') or []
+    except Exception:
+        runs = []
+    # Stamp archived flag defensively so the UI can render the badge even
+    # if the index entry was written without one.
+    for r in runs:
+        r['archived'] = True
+        if not r.get('key', '').startswith(S3_ARCHIVE_PREFIX):
+            # Tolerate stale entries that still reference admin/ — caller
+            # should re-archive, but at least mark them so the UI badges.
+            pass
+    runs = sorted(runs,
+                  key=lambda r: r.get('archived_at') or r.get('created_at') or '',
+                  reverse=True)
+    return runs[:limit]
+
+
+def is_archive_key(key: str) -> bool:
+    """True if the given S3 key targets an archived Journey IQ payload."""
+    if not key:
+        return False
+    return key.startswith(S3_ARCHIVE_PREFIX) or key.startswith('/' + S3_ARCHIVE_PREFIX)
 
 
 def _empty_summary(target, project_name, start_date, end_date,

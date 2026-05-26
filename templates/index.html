@@ -19082,6 +19082,10 @@
                     <select id="jiqRunPicker" onchange="onJourneyIqRunPicked(this.value)" style="padding: 6px 10px; border-radius: 6px; border: 1px solid var(--border-color); background: var(--bg-primary); color: var(--text-primary); font-size: 13px; min-width: 240px;">
                         <option value="">— pick a past run —</option>
                     </select>
+                    <label id="jiqArchiveToggleWrap" style="display: none; align-items: center; gap: 0.35rem; font-size: 12px; color: var(--text-secondary); cursor: pointer; user-select: none;" title="Admin-only: include archived runs in the dropdown above">
+                        <input type="checkbox" id="jiqShowArchived" onchange="loadJourneyIqRunList()" style="margin: 0;">
+                        Show archived
+                    </label>
                     <button type="button" class="btn btn-small" onclick="loadJourneyIqRunList()" style="padding: 0.35rem 0.5rem; min-width: auto;">↻</button>
                 </div>
             </div>
@@ -27692,10 +27696,31 @@
         function loadJourneyIqRunList(preferredKey) {
             var picker = document.getElementById('jiqRunPicker');
             if (!picker) return;
-            fetch('/api/journey-iq/list', { credentials: 'same-origin' })
+
+            // Reveal the "Show archived" toggle for admins only. We mirror
+            // isAdmin (defined near the top of the page) so the control is
+            // never visible to regular users — and the backend re-checks
+            // role on every list/results call so client-side bypass is
+            // harmless.
+            var archWrap   = document.getElementById('jiqArchiveToggleWrap');
+            var archCheck  = document.getElementById('jiqShowArchived');
+            if (archWrap) archWrap.style.display = (typeof isAdmin !== 'undefined' && isAdmin) ? 'inline-flex' : 'none';
+            var includeArchive = !!(archCheck && archCheck.checked && (typeof isAdmin !== 'undefined' && isAdmin));
+
+            // Allow loadJourneyIqRunList(true/false) for explicit overrides
+            // (preserves existing call sites that pass an s3 key string).
+            if (preferredKey === true || preferredKey === false) {
+                includeArchive = preferredKey;
+                preferredKey = undefined;
+            }
+
+            var url = '/api/journey-iq/list' + (includeArchive ? '?include_archive=1' : '');
+            fetch(url, { credentials: 'same-origin' })
                 .then(function(r) { return r.json(); })
                 .then(function(data) {
-                    var runs = (data && data.runs) || [];
+                    var runs     = (data && data.runs) || [];
+                    var archived = (data && data.archived_runs) || [];
+
                     var opts = ['<option value="">— pick a past run —</option>'];
                     runs.forEach(function(r) {
                         var label = (r.project_name || r.target || 'Journey')
@@ -27703,8 +27728,20 @@
                         var safe = (r.key || '').replace(/"/g, '&quot;');
                         opts.push('<option value="' + safe + '">' + label + '</option>');
                     });
+                    if (archived.length) {
+                        opts.push('<optgroup label="🗄️ Archived (admin only)">');
+                        archived.forEach(function(r) {
+                            var label = '[ARCHIVED] ' + (r.project_name || r.target || 'Journey')
+                                      + ' — ' + (r.start_date || '') + '→' + (r.end_date || '');
+                            var safe = (r.key || '').replace(/"/g, '&quot;');
+                            opts.push('<option value="' + safe + '">' + label + '</option>');
+                        });
+                        opts.push('</optgroup>');
+                    }
                     picker.innerHTML = opts.join('');
-                    var keyToLoad = preferredKey || (runs[0] && runs[0].key);
+
+                    var combined = runs.concat(archived);
+                    var keyToLoad = preferredKey || (combined[0] && combined[0].key);
                     if (keyToLoad) {
                         picker.value = keyToLoad;
                         onJourneyIqRunPicked(keyToLoad);

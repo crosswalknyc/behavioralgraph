@@ -30187,8 +30187,13 @@ def list_journey_iq():
     """Return all Journey IQ runs (newest first). Anyone with Digital Journey
     IQ access — via role (admin/super_admin), the standalone
     has_journey_iq_access flag, or the umbrella Analysis IQ +
-    'journey_iq' module entitlement — sees every run regardless of who
-    created it. Users without the feature are blocked at the door."""
+    'journey_iq' module entitlement — sees every LIVE run regardless of who
+    created it. Users without the feature are blocked at the door.
+
+    Archived runs (under journey-iq/archive/) are hidden by default. Pass
+    ?include_archive=1 to request them — this is admin-only (role admin or
+    super_admin). Non-admins get the live list back even when they pass
+    the flag, so the UI degrades gracefully."""
     try:
         from migration import journey_iq as _jiq
     except Exception:
@@ -30200,15 +30205,34 @@ def list_journey_iq():
                             'error': 'Digital Journey IQ access required',
                             'runs': []}), 403
         all_runs = _jiq.list_runs(s3_client, limit=500)
-        return jsonify({'success': True, 'runs': all_runs[:200]})
+
+        # Optional admin-only archive include
+        include_archive = (request.args.get('include_archive') or '').lower() in ('1', 'true', 'yes')
+        role = (user or {}).get('role')
+        is_admin = role in ('admin', 'super_admin') or bool(session.get('cloaked_from'))
+        archived_runs = []
+        if include_archive and is_admin:
+            archived_runs = _jiq.list_archived_runs(s3_client, limit=200)
+
+        return jsonify({
+            'success':       True,
+            'runs':          all_runs[:200],
+            'archived_runs': archived_runs,
+            'archive_visible': bool(archived_runs) or (include_archive and is_admin),
+            'is_admin':      is_admin,
+        })
     except Exception as e:
-        return jsonify({'success': True, 'runs': [], 'error': str(e)})
+        return jsonify({'success': True, 'runs': [], 'archived_runs': [], 'error': str(e)})
 
 
 @app.route('/api/journey-iq/results/<path:s3_key>', methods=['GET'])
 @requires_auth
 def get_journey_iq_result(s3_key):
-    """Return a previously-persisted Journey IQ run by S3 key."""
+    """Return a previously-persisted Journey IQ run by S3 key.
+
+    Live runs (under journey-iq/admin/) are loadable by any user with
+    Digital Journey IQ access. Archived runs (under journey-iq/archive/)
+    are admin-only — non-admins requesting an archive key get a 403."""
     try:
         from migration import journey_iq as _jiq
     except Exception as e:
@@ -30216,16 +30240,27 @@ def get_journey_iq_result(s3_key):
     try:
         # Allow callers to pass either the bare key suffix or the full key.
         full_key = s3_key if s3_key.startswith(_jiq.S3_PREFIX) else _jiq.S3_PREFIX + s3_key
-        data = _jiq.load_run_from_s3(s3_client, full_key)
-        if data is None:
-            return jsonify({'success': False, 'error': 'Run not found'}), 404
-        # Access guard: anyone with Digital Journey IQ access can load any run.
-        # Users without the feature are blocked at the door.
+
         user = get_current_user()
+        # Access guard #1: anyone with Digital Journey IQ access can load any
+        # live run. Users without the feature are blocked at the door.
         if not user_can_run_analysis_module(user, 'journey_iq'):
             return jsonify({'success': False,
                             'error': 'Digital Journey IQ access required'}), 403
-        return jsonify({'success': True, 'data': data, 's3_key': full_key})
+
+        # Access guard #2: archive keys are admin-only.
+        if _jiq.is_archive_key(full_key):
+            role = (user or {}).get('role')
+            is_admin = role in ('admin', 'super_admin') or bool(session.get('cloaked_from'))
+            if not is_admin:
+                return jsonify({'success': False,
+                                'error': 'Archived runs are admin-only'}), 403
+
+        data = _jiq.load_run_from_s3(s3_client, full_key)
+        if data is None:
+            return jsonify({'success': False, 'error': 'Run not found'}), 404
+        return jsonify({'success': True, 'data': data, 's3_key': full_key,
+                        'archived': _jiq.is_archive_key(full_key)})
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
 
