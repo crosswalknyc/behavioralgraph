@@ -55354,19 +55354,11 @@
                 dateAdded: new Date().toISOString()
             };
             
-            // Create closing slide
-            const closingSlide = {
-                id: 'closing_' + Date.now(),
-                type: 'closing',
-                title: 'Thank You',
-                dateAdded: new Date().toISOString()
-            };
-            
             const newDeck = {
                 id: 'deck_' + Date.now(),
                 name: name,
                 workspaceId: wsId,
-                slides: [tocSlide, closingSlide], // Start with TOC and closing slides
+                slides: [tocSlide],
                 titleSlide: {
                     title: currentProfileData?.name || 'Audience Profile',
                     subtitle: 'Powered by Crosswalk IQ',
@@ -74653,7 +74645,7 @@
             
             // For Table of Contents slide
             if (slide.type === 'toc') {
-                const profileImage = getDeckTitleSlideProfileImage(currentEditingDeck?.titleSlide || {});
+                const profileImage = currentEditingDeck?.titleSlide?.image || null;
                 
                 // Get list of slide titles for TOC (exclude TOC and closing slides)
                 const slides = currentEditingDeck?.slides || [];
