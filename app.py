@@ -12535,6 +12535,88 @@ def _append_hf_alpha_sent_log(day_str, email):
         print(f"⚠️ HF Alpha sent-log write error for {day_str}: {e}")
 
 
+def _hf_alpha_recipient_claim_key(day_str, email):
+    """S3 key for a per-recipient, per-day idempotency claim file."""
+    safe = re.sub(r'[^a-z0-9._@+-]', '_', str(email).strip().lower())
+    return f"{HF_ALPHA_IDEAS_PREFIX}sent_log_claims/{day_str}/{safe}.json"
+
+
+def _claim_hf_alpha_recipient(day_str, email):
+    """Atomically claim the (day, email) slot.
+
+    Returns True iff this caller is the first to claim the slot for that
+    recipient on that day. Implemented via an S3 conditional PutObject
+    (`If-None-Match: *`) which only succeeds when the key does not yet
+    exist; concurrent callers receive `PreconditionFailed` and return
+    False. This closes the race window in the previous read-the-summary-
+    then-send pattern, where multiple cron firings could all read an
+    empty summary and all send.
+
+    Falls back to a non-atomic check if the bucket/region rejects
+    conditional writes (older S3 endpoints predating Nov-2024). In that
+    case we still consult the daily summary log as a best-effort gate.
+    """
+    if not s3_client:
+        return True  # nothing we can do; let caller send
+    email_key = str(email).strip().lower()
+    claim_key = _hf_alpha_recipient_claim_key(day_str, email_key)
+    body = json.dumps({
+        'email': email_key,
+        'day': day_str,
+        'claimed_at': datetime.now(HF_ALPHA_TZ).isoformat(),
+    }, indent=2).encode('utf-8')
+    try:
+        s3_client.put_object(
+            Bucket=METADATA_BUCKET,
+            Key=claim_key,
+            Body=body,
+            ContentType='application/json',
+            IfNoneMatch='*',  # only succeeds if the object does NOT exist
+        )
+        return True
+    except Exception as e:
+        err = getattr(e, 'response', {}).get('Error', {}) if hasattr(e, 'response') else {}
+        code = err.get('Code') or ''
+        status = err.get('HTTPStatusCode') or 0
+        if code in ('PreconditionFailed', 'ConditionalRequestConflict') or status == 412:
+            return False
+        # Fallback: conditional writes unsupported. Use a non-atomic check
+        # (HEAD object) — still better than nothing, though theoretically
+        # racy.
+        try:
+            s3_client.head_object(Bucket=METADATA_BUCKET, Key=claim_key)
+            return False  # already exists
+        except Exception:
+            pass
+        # Last resort: write unconditionally and treat as claim.
+        try:
+            s3_client.put_object(
+                Bucket=METADATA_BUCKET,
+                Key=claim_key,
+                Body=body,
+                ContentType='application/json',
+            )
+            return True
+        except Exception as inner:
+            print(f"⚠️ HF Alpha claim error for {email_key} on {day_str}: {inner}")
+            # Fail closed to avoid duplicate sends.
+            return False
+
+
+def _release_hf_alpha_recipient_claim(day_str, email):
+    """Best-effort delete of a claim file (used when the send fails so a
+    later retry can re-claim and try again)."""
+    if not s3_client:
+        return
+    try:
+        s3_client.delete_object(
+            Bucket=METADATA_BUCKET,
+            Key=_hf_alpha_recipient_claim_key(day_str, email),
+        )
+    except Exception:
+        pass
+
+
 def _load_hf_novelty_memory(ticker_slug, weeks_back=4, current_day_str=None):
     """Load past N weeks of Alpha Ideas for a ticker to enable novelty constraints.
 
@@ -13475,13 +13557,27 @@ def send_hf_alpha_ideas_digest(
 
     for rec in recipients:
         rec_email_key = (rec.get('email') or '').strip().lower()
-        if rec_email_key and rec_email_key in already_sent_emails:
-            skipped.append({
-                'username': rec.get('username'),
-                'email': rec.get('email'),
-                'reason': f'Already sent on {run_day} (idempotent skip)',
-            })
-            continue
+        # Atomic per-recipient claim. Closes the race window where multiple
+        # parallel cron firings each read an empty summary log and all
+        # decide to send. With this gate, only the firing whose S3
+        # conditional-put succeeds gets to send; siblings see 412 and skip.
+        if not suppress_idempotency and rec_email_key:
+            if rec_email_key in already_sent_emails:
+                skipped.append({
+                    'username': rec.get('username'),
+                    'email': rec.get('email'),
+                    'reason': f'Already sent on {run_day} (summary log)',
+                })
+                continue
+            if not _claim_hf_alpha_recipient(run_day, rec_email_key):
+                skipped.append({
+                    'username': rec.get('username'),
+                    'email': rec.get('email'),
+                    'reason': f'Already claimed on {run_day} by concurrent run',
+                })
+                already_sent_emails.add(rec_email_key)
+                continue
+            # We now own the claim for (run_day, rec_email_key).
         packets = []
         ticker_rows = list(rec['tickers'] or [])
         if isinstance(limit_tickers_per_recipient, int) and limit_tickers_per_recipient > 0:
@@ -13516,6 +13612,9 @@ def send_hf_alpha_ideas_digest(
 
         if not packets:
             skipped.append({'username': rec['username'], 'reason': 'No entitled ticker ideas'})
+            if not suppress_idempotency and rec_email_key:
+                # Release the claim so a future run can retry once data is ready.
+                _release_hf_alpha_recipient_claim(run_day, rec_email_key)
             continue
         html_content = _build_hf_alpha_email_html(rec['username'], packets, run_day, app_url)
         subject = f"Fin IQ — Alpha Ideas ({run_day})"
@@ -13526,14 +13625,17 @@ def send_hf_alpha_ideas_digest(
         ok, msg = send_email_via_gmail(rec['email'], subject, html_content, text)
         if ok:
             sent.append({'username': rec['username'], 'email': rec['email'], 'ticker_count': len(packets)})
-            # Persist to sent log so subsequent cron firings today are no-ops
-            # (skip in QA modes — test_email rewrites the addressee and
-            # dry_run never actually sent).
+            # Append to the human-readable daily summary log (the per-recipient
+            # claim file written before send is what actually enforces
+            # idempotency; this is just a convenience aggregate).
             if not suppress_idempotency and rec_email_key:
                 _append_hf_alpha_sent_log(run_day, rec['email'])
                 already_sent_emails.add(rec_email_key)
         else:
             skipped.append({'username': rec['username'], 'email': rec['email'], 'reason': msg})
+            # Release the claim so a follow-up run can retry this recipient.
+            if not suppress_idempotency and rec_email_key:
+                _release_hf_alpha_recipient_claim(run_day, rec_email_key)
 
     return {
         'success': True,
