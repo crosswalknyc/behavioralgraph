@@ -99,7 +99,10 @@ CONFIRMED_WATCH_HOURS       = int(CONFIRMED_UNIQUE_VIEWERS * AVG_MIN_PER_VIEWER 
 CONFIRMED_REPEAT_VIEWERS    = int(CONFIRMED_UNIQUE_VIEWERS * 0.42)     # ~2.7M (watched 5+ eps)
 CONFIRMED_AVG_EPS_PER_USER  = 3.2
 CONFIRMED_EPISODES_DROPPED  = EPISODES_TO_DATE
-CONFIRMED_GLOBAL_NETFLIX_RANK = 6           # estimated Netflix US Top 10 position
+# Netflix US Top 10 — modeled as a range, not a single rank, because
+# weekly rank fluctuates day-to-day on a daily-drop strip schedule.
+CONFIRMED_NETFLIX_TOP10_RANK_LOW  = 4
+CONFIRMED_NETFLIX_TOP10_RANK_HIGH = 8
 
 # Demographic skew of confirmed viewers (vs traditional Jeopardy's 55+ skew)
 CONFIRMED_DEMO_18_34 = 0.36
@@ -285,16 +288,19 @@ TRIPLE_CORE = {
         "unscripted-game watchers — the absolute bullseye for opening-week "
         "binge. ~1.8M people, convert at ~62% in the first 7 days "
         "(~14.7× the gen-pop streaming baseline). This cohort drove the "
-        "show's first-week Netflix US Top 10 entry, posts the highest "
-        "engagement on @netflix social, and has the highest retention "
-        "through episode 20 (~78%). The most predictable bingers."
+        "show's first-week Netflix US Top 10 entry and posts the highest "
+        "engagement on @netflix social. Projected retention through "
+        "episode 20 is in the 65-75% range — high for a strip-released "
+        "trivia format, though final retention is bounded by the daily-"
+        "drop cadence (viewers fall behind, never catch up)."
     ),
     'size': 1_800_000,
     'conversion_pct': 62.0,
     'est_first_view': int(1_800_000 * 0.62),
     'est_total_viewers': int(1_800_000 * 0.62),
     'intent_index': 14.7,
-    'retention_at_ep10_pct': 78,
+    'retention_at_ep10_pct_low':  65,
+    'retention_at_ep10_pct_high': 75,
 }
 
 AUDIENCE_HYPOTHESES = {
@@ -529,6 +535,9 @@ for ch in PLATFORM_CHANNELS:
         'est_tickets': int(TOTAL_VIEWERS_MID * ch['share_pct'] / 100),
     })
 
+# Stored under the legacy key 'exhibitor_channel_mix' because the
+# renderer reads that field by name; the TV-aware copy swap in
+# templates/index.html renames it to "Platform & Device Mix" in the UI.
 EXHIBITOR_CHANNEL_MIX = {
     'analysis_window': {'start': WINDOW_START, 'end': WINDOW_END, 'release': PREMIERE_DATE, 'finale': FINALE_DATE},
     'opening_weekend_tickets_estimate': PREMIERE_WEEK_VIEWERS_MID,
@@ -537,7 +546,7 @@ EXHIBITOR_CHANNEL_MIX = {
         "Netflix Smart-TV/CTV (38% share) + Mobile App (32%) capture 70% "
         "of watch hours — the core viewing pattern. Discovery split: "
         "YouTube clips (18% est. lift on next-day episode views) + TikTok "
-        "clips (16% lift) are the highest-leverage discovery channels and "
+        "clips (16% lift) are the highest-leverage discovery surfaces and "
         "the most ROI-positive marketing spend. Smart-TV over-indexes "
         "Jeopardy! loyalists 1.45× (the family-living-room pattern); "
         "Mobile + TikTok over-index SNL/Jost fans 1.20× / 1.55× (the Gen "
@@ -917,13 +926,13 @@ TOUCHPOINTS = {
 
 FACTS = [
     f"TV SHOW (Netflix) — not a theatrical release. Conversion = unique viewers, 'box office' analog = total watch hours. Pop Culture Jeopardy! S2 premiered {PREMIERE_DATE}, runs daily through {FINALE_DATE} (20 episodes).",
-    f"Currently mid-season (T+15 days, episode {EPISODES_TO_DATE} of {EPISODES_TOTAL}). Confirmed unique viewers to date: {CONFIRMED_UNIQUE_VIEWERS:,} ({CONFIRMED_WATCH_HOURS:,} watch hours). Estimated Netflix US Top 10 position: #{CONFIRMED_GLOBAL_NETFLIX_RANK}.",
+    f"Currently mid-season (T+15 days, episode {EPISODES_TO_DATE} of {EPISODES_TOTAL}). Confirmed unique viewers to date: {CONFIRMED_UNIQUE_VIEWERS:,} ({CONFIRMED_WATCH_HOURS:,} watch hours). Estimated Netflix US Top 10 range: #{CONFIRMED_NETFLIX_TOP10_RANK_LOW}-#{CONFIRMED_NETFLIX_TOP10_RANK_HIGH} (daily rank fluctuates on strip schedules).",
     f"Projected 30-day total viewership: {TOTAL_VIEWERS_LOW/1_000_000:.0f}M-{TOTAL_VIEWERS_HIGH/1_000_000:.0f}M unique viewers; midpoint {TOTAL_VIEWERS_MID/1_000_000:.0f}M. Total US watch hours: {TOTAL_WATCH_HOURS_LOW/1_000_000:.1f}M-{TOTAL_WATCH_HOURS_HI/1_000_000:.1f}M.",
     f"Projected full lifecycle viewers (30-day + 90-day Netflix tail): {LIFECYCLE_VIEWERS_LOW/1_000_000:.0f}M-{LIFECYCLE_VIEWERS_HIGH/1_000_000:.0f}M.",
     f"Jeopardy! franchise loyalists (~30M US adults) convert at ~4.5× baseline — largest cohort by size but lowest retention to episode 8+ (~38%) due to pop-culture-format fatigue.",
     f"Colin Jost / SNL Weekend Update fans (~25M US adults) convert at ~6.2× baseline — highest per-capita conversion + highest retention to episode 8+ (~58%). The single biggest differentiator vs. traditional Jeopardy!.",
     f"Netflix unscripted-game audience (~22M US adults) converts at ~5.4× baseline — broadest reach, moderate retention (~48%). Driven by Netflix's owned discovery (Top 10, Because You Watched).",
-    f"Triple-likely core (Jeopardy! × SNL/Jost × Netflix-game-show, ~1.8M people) converts at ~62% in first 7 days — the absolute bullseye for opening-week binge. ~78% retention through episode 20.",
+    f"Triple-likely core (Jeopardy! × SNL/Jost × Netflix-game-show, ~1.8M people) converts at ~62% in first 7 days — the absolute bullseye for opening-week binge. Projected episode-20 retention in the 65-75% range (high for a daily-drop strip format).",
     f"Demo shift vs. traditional Jeopardy!: Pop Culture Jeopardy! S2 viewers are 36% 18-34 + 41% 35-54 + 23% 55+ (vs. syndicated Jeopardy! ~62% in 55+). The Netflix migration successfully extended into younger demos.",
     f"Daily clip-drop strategy is the highest-leverage discovery activation: YouTube clips drive ~18% lift on next-day Netflix episode views; TikTok clips drive ~16% lift. The most ROI-positive marketing channels.",
     f"Smart TV / CTV (38%) + Mobile App (32%) capture 70% of watch hours. Smart-TV over-indexes Jeopardy! loyalists 1.45×; Mobile + TikTok-discovery over-index SNL/Jost fans 1.20× / 1.55×.",
@@ -934,36 +943,42 @@ FACTS = [
 # ─────────────────────────────────────────────────────────────────────────────
 
 KPIS = {
+    # NOTE: For TV-show payloads the dashboard renderer (templates/index.html)
+    # reads target_type=='tv_show' and switches to a viewers/watch-hours
+    # KPI strip. The legacy ticket/revenue fields below carry VIEWER and
+    # WATCH-HOUR counts (not dollars/tickets) for backward compat with
+    # downstream tooling — but the misleading $1.42/ticket and "3.2
+    # tickets/purchase" sub-text fields have been removed entirely so
+    # nothing on the dashboard ever surfaces them.
     'total_users': COHORT_SIZE,
     'converted_users': COHORT_SIZE,
-    'conversion_pct': 100.0,
+    'conversion_pct': None,             # not meaningful for a Netflix show — implicit
     'avg_journey_duration_days': 6.8,
     'avg_sessions_to_convert': 4.2,
     'avg_events_per_user': 11.4,
-    # "Confirmed digital purchases" = confirmed unique viewers to date
-    'confirmed_digital_purchases': CONFIRMED_UNIQUE_VIEWERS,
-    'confirmed_avg_tickets_per_purchase': CONFIRMED_AVG_EPS_PER_USER,
-    'confirmed_digital_tickets': int(CONFIRMED_UNIQUE_VIEWERS * CONFIRMED_AVG_EPS_PER_USER),  # total episode views
-    'confirmed_digital_revenue_usd': float(CONFIRMED_WATCH_HOURS),                            # watch hours, not $
-    'confirmed_avg_ticket_price_usd': AVG_MIN_PER_VIEWER / 60,                                # hours per viewer
-    'confirmed_source': f'Confirmed unique US viewers measured at mid-season (T+15, episode {EPISODES_TO_DATE} of {EPISODES_TOTAL}). Values reflect viewers + watch hours, NOT ticket purchases or dollars.',
-    'confirmed_as_of_date': WINDOW_END,
-    'confirmed_fandango_purchases': CONFIRMED_REPEAT_VIEWERS,    # = repeat viewers (5+ episodes)
-    # "Projected total tickets" = projected 30-day unique viewers
-    'projected_total_tickets': TOTAL_VIEWERS_MID,
-    'projected_total_revenue_usd': float(TOTAL_WATCH_HOURS_MID),                              # total watch hours
-    'projected_avg_ticket_price_usd': AVG_MIN_PER_VIEWER / 60,
-    'projected_range_low_tickets': TOTAL_VIEWERS_LOW,
-    'projected_range_high_tickets': TOTAL_VIEWERS_HIGH,
-    'projected_range_low_revenue_usd': float(TOTAL_WATCH_HOURS_LOW),
-    'projected_range_high_revenue_usd': float(TOTAL_WATCH_HOURS_HI),
-    'projected_opening_weekend_tickets': PREMIERE_WEEK_VIEWERS_MID,
-    'projected_opening_weekend_revenue_usd': float(PREMIERE_WEEK_VIEWERS_MID * AVG_MIN_PER_VIEWER / 60),
-    'projected_ow_range_low_tickets': PREMIERE_WEEK_VIEWERS_LOW,
-    'projected_ow_range_high_tickets': PREMIERE_WEEK_VIEWERS_HIGH,
-    'projected_ow_range_low_revenue_usd': float(PREMIERE_WEEK_VIEWERS_LOW * AVG_MIN_PER_VIEWER / 60),
-    'projected_ow_range_high_revenue_usd': float(PREMIERE_WEEK_VIEWERS_HIGH * AVG_MIN_PER_VIEWER / 60),
-    # TV-show-specific metrics
+
+    # CONFIRMED (to date) — viewers + watch hours, not money
+    'confirmed_digital_purchases':       CONFIRMED_UNIQUE_VIEWERS,
+    'confirmed_digital_revenue_usd':     float(CONFIRMED_WATCH_HOURS),    # watch hours
+    'confirmed_source':                  f'Confirmed unique US viewers measured at mid-season (T+15, episode {EPISODES_TO_DATE} of {EPISODES_TOTAL}). Values reflect viewers + watch hours, NOT ticket purchases or dollars.',
+    'confirmed_as_of_date':              WINDOW_END,
+    'confirmed_fandango_purchases':      CONFIRMED_REPEAT_VIEWERS,        # = repeat viewers (5+ episodes)
+
+    # PROJECTED 30-day + premiere-week (viewers + watch hours)
+    'projected_total_tickets':              TOTAL_VIEWERS_MID,
+    'projected_total_revenue_usd':          float(TOTAL_WATCH_HOURS_MID),
+    'projected_range_low_tickets':          TOTAL_VIEWERS_LOW,
+    'projected_range_high_tickets':         TOTAL_VIEWERS_HIGH,
+    'projected_range_low_revenue_usd':      float(TOTAL_WATCH_HOURS_LOW),
+    'projected_range_high_revenue_usd':     float(TOTAL_WATCH_HOURS_HI),
+    'projected_opening_weekend_tickets':    PREMIERE_WEEK_VIEWERS_MID,
+    'projected_opening_weekend_revenue_usd':float(PREMIERE_WEEK_VIEWERS_MID * AVG_MIN_PER_VIEWER / 60),
+    'projected_ow_range_low_tickets':       PREMIERE_WEEK_VIEWERS_LOW,
+    'projected_ow_range_high_tickets':      PREMIERE_WEEK_VIEWERS_HIGH,
+    'projected_ow_range_low_revenue_usd':   float(PREMIERE_WEEK_VIEWERS_LOW * AVG_MIN_PER_VIEWER / 60),
+    'projected_ow_range_high_revenue_usd':  float(PREMIERE_WEEK_VIEWERS_HIGH * AVG_MIN_PER_VIEWER / 60),
+
+    # TV-show-specific metrics (consumed directly by the TV-aware KPI strip)
     'tv_show_mode': True,
     'tv_show_metric_label': 'Unique US viewers',
     'tv_show_value_label': 'Watch hours',
@@ -975,7 +990,8 @@ KPIS = {
     'tv_show_avg_minutes_per_viewer': AVG_MIN_PER_VIEWER,
     'tv_show_avg_episodes_per_viewer': EPISODES_PER_VIEWER,
     'tv_show_repeat_viewer_rate_pct': round(CONFIRMED_REPEAT_VIEWERS / CONFIRMED_UNIQUE_VIEWERS * 100, 1),
-    'tv_show_netflix_top10_rank': CONFIRMED_GLOBAL_NETFLIX_RANK,
+    'tv_show_netflix_top10_rank_low':  CONFIRMED_NETFLIX_TOP10_RANK_LOW,
+    'tv_show_netflix_top10_rank_high': CONFIRMED_NETFLIX_TOP10_RANK_HIGH,
     'tv_show_demo_18_34_pct': round(CONFIRMED_DEMO_18_34 * 100, 1),
     'tv_show_demo_35_54_pct': round(CONFIRMED_DEMO_35_54 * 100, 1),
     'tv_show_demo_55_plus_pct': round(CONFIRMED_DEMO_55_PLUS * 100, 1),
@@ -993,11 +1009,9 @@ KPIS = {
         'title': 'Is It Cake',
         'year': 2022,
         'distributor': 'Netflix',
-        'domestic_gross_usd': 16_000_000,         # = projected viewers, not $
-        'opening_weekend_usd': 4_500_000,         # = premiere-week viewers
-        'opening_weekend_tickets': 4_500_000,
-        'avg_ticket_price_usd': 1.42,             # = hours per viewer
-        'total_tickets': 16_000_000,
+        'comp_total_viewers':        16_000_000,    # 30-day US unique viewers
+        'comp_premiere_week_viewers': 4_500_000,
+        'comp_avg_minutes_per_viewer': 78,
         'rationale': (
             "Closest Netflix unscripted-game comp: SNL alumni host (Mikey "
             "Day), Netflix-native release strategy, ~16M US viewers in "

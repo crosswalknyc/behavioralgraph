@@ -19110,11 +19110,11 @@
 
                 <!-- KPI strip -->
                 <div style="display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 0.5rem; margin: 0.5rem 0 0.4rem;">
-                    <h3 style="margin: 0; font-size: 1.0rem;">📊 Headline Funnel</h3>
+                    <h3 id="jiqKpiStripTitle" style="margin: 0; font-size: 1.0rem;">📊 Headline Funnel</h3>
                 </div>
-                <details style="margin: 0 0 0.6rem;">
+                <details id="jiqKpiStripHowto" style="margin: 0 0 0.6rem;">
                     <summary style="cursor:pointer;color:var(--accent-cyan);font-size:0.72rem;font-weight:600;user-select:none;padding:3px 0;">ℹ️ How to read this chart</summary>
-                    <div style="margin-top:6px;padding:0.7rem 0.9rem;background:var(--bg-secondary);border-left:3px solid var(--accent-cyan);border-radius:6px;font-size:0.76rem;line-height:1.55;">
+                    <div id="jiqKpiStripHowtoBody" style="margin-top:6px;padding:0.7rem 0.9rem;background:var(--bg-secondary);border-left:3px solid var(--accent-cyan);border-radius:6px;font-size:0.76rem;line-height:1.55;">
                         <ul style="margin:0;padding-left:1.1rem;">
                             <li><strong>Three-stage funnel</strong> reading left to right: <em>Confirmed Pre-Sales</em> (gray) → <em>Opening Weekend</em> (lime) → <em>Full Run</em> (cyan).</li>
                             <li><strong>Confirmed Pre-Sales</strong> — actual transactions counted across all online ticket channels as of the "as of" date. Sub-text shows Fandango's share of online presales.</li>
@@ -19234,13 +19234,13 @@
                 ═══════════════════════════════════════════════════════ -->
                 <div class="card" id="jiqExhibitorCard" style="padding: 1rem; margin-bottom: 1rem; display: none;">
                     <div style="display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.25rem;">
-                        <h3 style="margin: 0;">🎟️ Exhibitor Direct Channel Mix — where the tickets will flow</h3>
+                        <h3 id="jiqExhibitorTitle" style="margin: 0;">🎟️ Exhibitor Direct Channel Mix — where the tickets will flow</h3>
                         <div id="jiqExhibitorMeta" style="font-size: 0.72rem; color: var(--text-secondary);"></div>
                     </div>
                     <div id="jiqExhibitorSubtitle" style="font-size: 0.78rem; color: var(--text-secondary); margin-bottom: 0.5rem;"></div>
                     <details style="margin: 0 0 0.85rem;">
                         <summary style="cursor:pointer;color:var(--accent-cyan);font-size:0.72rem;font-weight:600;user-select:none;padding:3px 0;">ℹ️ How to read this chart</summary>
-                        <div style="margin-top:6px;padding:0.7rem 0.9rem;background:var(--bg-secondary);border-left:3px solid var(--accent-cyan);border-radius:6px;font-size:0.76rem;line-height:1.55;">
+                        <div id="jiqExhibitorHowtoBody" style="margin-top:6px;padding:0.7rem 0.9rem;background:var(--bg-secondary);border-left:3px solid var(--accent-cyan);border-radius:6px;font-size:0.76rem;line-height:1.55;">
                             <ul style="margin:0;padding-left:1.1rem;">
                                 <li><strong>Top horizontal stacked bar:</strong> each color block = one exhibitor (AMC red, Fandango orange, Cinemark blue, etc.); width = share of opening-weekend tickets that chain captures. Hover for est. ticket count.</li>
                                 <li><strong>Audience-tilt heatmap (bottom):</strong> rows = chains, columns = hypothesis cohorts. <strong style="color:#1f9d55;">Green</strong> = chain over-indexes that cohort (e.g., Marcus 1.8× Middle America); <strong style="color:#c81e1e;">red</strong> = under-indexes; gray = neutral. Cell value = the raw tilt index.</li>
@@ -27982,7 +27982,37 @@
             // WEBSITE target (Fandango etc.), "Total Users / Converted /
             // Conversion Rate" is misleading: the cohort = visitors, not
             // ticket-buyers, and the on-site CR comes from site_funnel,
-            // not from synth. Show visitor-funnel KPIs instead.
+            // not from synth. Show visitor-funnel KPIs instead. For a
+            // TV-SHOW target (Netflix/streaming), money/tickets don't
+            // apply — render viewers + watch hours + lifecycle anchors.
+
+            // Swap the section title + "How to read" disclosure copy
+            // based on target_type so neither says "Pre-Sales / Opening
+            // Weekend" for TV shows.
+            (function() {
+                var tt = (meta.target_type || '').toLowerCase();
+                var titleEl = document.getElementById('jiqKpiStripTitle');
+                var bodyEl  = document.getElementById('jiqKpiStripHowtoBody');
+                if (tt === 'tv_show' || kpis.tv_show_mode === true) {
+                    if (titleEl) titleEl.innerHTML = '📊 Headline Viewership';
+                    if (bodyEl) bodyEl.innerHTML =
+                        '<ul style="margin:0;padding-left:1.1rem;">'
+                      +   '<li><strong>Three-stage viewership funnel</strong> reading left to right: <em>Confirmed (to date)</em> (gray) → <em>Premiere Week</em> (lime) → <em>30-Day + Lifecycle</em> (cyan).</li>'
+                      +   '<li><strong>Confirmed Viewers</strong> — unique US viewers measured by the streamer / panel as of the "as of" date. Sub-text shows the episode the show is currently on.</li>'
+                      +   '<li><strong>Confirmed Watch Hours</strong> = viewers × avg minutes/viewer ÷ 60. The streaming-era revenue proxy.</li>'
+                      +   '<li><strong>Repeat Viewers</strong> — confirmed viewers who watched 5+ episodes (binge / loyal cohort).</li>'
+                      +   '<li><strong>Premiere-Week Viewers</strong> tile — projected unique viewers in the first 7 days of the show\'s run; sub-text shows the modeled <em>low–high band</em>.</li>'
+                      +   '<li><strong>30-Day Unique Viewers</strong> tile — projected total unique US viewers in the first 30 days post-premiere; the streaming analog of "Opening Weekend Box Office" for a TV show.</li>'
+                      +   '<li><strong>Total Watch Hours (30-day)</strong> — viewers × avg minutes ÷ 60 over the same 30-day window.</li>'
+                      +   '<li><strong>Full Lifecycle Viewers</strong> — 30-day + 90-day post-finale tail. Streaming shows accumulate viewers long after release.</li>'
+                      +   '<li><strong>What to look for:</strong> if confirmed-to-date is materially above pace for the episode count, that\'s upside signal for the 30-day projection; below pace signals weaker tail.</li>'
+                      + '</ul>';
+                } else {
+                    if (titleEl) titleEl.innerHTML = '📊 Headline Funnel';
+                    // Leave the body alone — it's already the movie copy.
+                }
+            })();
+
             var kpiStrip = document.getElementById('jiqKpiStrip');
             if (kpiStrip) {
                 var targetType = (meta.target_type || '').toLowerCase();
@@ -27999,6 +28029,69 @@
                         ['Total Captured (any seller)', (kpis.captured_pct != null ? kpis.captured_pct + '%' : '—')],
                         ['Never Transacted',         (kpis.never_transacted_pct != null ? kpis.never_transacted_pct + '%' : '—')],
                     ];
+                } else if (targetType === 'tv_show' || kpis.tv_show_mode === true) {
+                    // TV/streaming series — no money/tickets, just viewers
+                    // + watch hours + lifecycle bands. Pull tv_show_* fields
+                    // when present; fall back to the legacy ticket fields
+                    // (which the build script overloaded with viewer counts
+                    // for backward compat) when not.
+                    var fmtViewers = function(v) { return v != null ? _jiqFmt(v) : '—'; };
+                    var fmtHours   = function(v) { return v != null ? _jiqFmt(v) + ' hrs' : '—'; };
+                    var asOfTv = kpis.confirmed_as_of_date || '';
+                    var ep = '';
+                    if (kpis.tv_show_episodes_to_date && kpis.tv_show_episodes_total) {
+                        ep = 'ep ' + kpis.tv_show_episodes_to_date + ' of ' + kpis.tv_show_episodes_total;
+                    }
+                    var confSub = [ep, asOfTv ? 'as of ' + asOfTv : ''].filter(Boolean).join(' · ');
+                    var repeatPct = kpis.tv_show_repeat_viewer_rate_pct;
+                    var rangeSubTv = function(lo, hi, suffix) {
+                        if (lo == null || hi == null) return '';
+                        return 'range ' + _jiqFmt(lo) + '–' + _jiqFmt(hi) + (suffix || '');
+                    };
+                    var confirmedHrs = (kpis.confirmed_digital_revenue_usd != null)
+                        ? Math.round(Number(kpis.confirmed_digital_revenue_usd))
+                        : null;
+                    var lifecycleMid = kpis.tv_show_lifecycle_viewers_mid != null
+                        ? kpis.tv_show_lifecycle_viewers_mid
+                        : null;
+                    var totalHrs = (kpis.projected_total_revenue_usd != null)
+                        ? Math.round(Number(kpis.projected_total_revenue_usd))
+                        : null;
+                    var totalHrsLow = (kpis.projected_range_low_revenue_usd != null)
+                        ? Math.round(Number(kpis.projected_range_low_revenue_usd))
+                        : null;
+                    var totalHrsHigh = (kpis.projected_range_high_revenue_usd != null)
+                        ? Math.round(Number(kpis.projected_range_high_revenue_usd))
+                        : null;
+                    k = [
+                        ['Confirmed Viewers (to date)',
+                            fmtViewers(kpis.confirmed_digital_purchases),
+                            confSub],
+                        ['Confirmed Watch Hours',
+                            fmtViewers(confirmedHrs),
+                            (kpis.tv_show_avg_minutes_per_viewer ? '~' + kpis.tv_show_avg_minutes_per_viewer + ' min / viewer' : '')],
+                        ['Repeat Viewers (5+ eps)',
+                            fmtViewers(kpis.confirmed_fandango_purchases),
+                            (repeatPct != null ? repeatPct + '% of confirmed' : '')],
+                        ['Premiere-Week Viewers',
+                            fmtViewers(kpis.projected_opening_weekend_tickets || kpis.projected_total_tickets),
+                            rangeSubTv(kpis.projected_ow_range_low_tickets, kpis.projected_ow_range_high_tickets),
+                            'lime'],
+                        ['30-Day Unique Viewers (mid)',
+                            fmtViewers(kpis.projected_total_tickets),
+                            rangeSubTv(kpis.projected_range_low_tickets, kpis.projected_range_high_tickets),
+                            'cyan'],
+                        ['Total Watch Hours (30-day)',
+                            fmtViewers(totalHrs),
+                            rangeSubTv(totalHrsLow, totalHrsHigh, ' hrs')],
+                    ];
+                    // Optional: full-lifecycle tile if data present and
+                    // different from 30-day projection
+                    if (lifecycleMid != null && lifecycleMid > 0) {
+                        k.push(['Full Lifecycle Viewers',
+                                fmtViewers(lifecycleMid),
+                                rangeSubTv(kpis.tv_show_lifecycle_viewers_low, kpis.tv_show_lifecycle_viewers_high)]);
+                    }
                 } else if (hasConfirmedTicketing) {
                     // Movie with confirmed digital pre-sales + comp-anchored projection.
                     // Layout: Pre-Sales (3 tiles) → Opening Weekend (2 tiles) → Full Run (1 tile)
@@ -28816,9 +28909,43 @@
             if (!mix || !(mix.channels || []).length) { card.style.display = 'none'; return; }
             card.style.display = '';
 
+            // TV-show vs movie copy swap. For TV/streaming the card is
+            // "Platform & Device Mix" (Netflix CTV / Mobile / Web /
+            // Console / external clip-discovery) and the unit is
+            // viewers, not tickets.
+            var run    = (window._jiqCurrentRun || {});
+            var meta   = run.meta || {};
+            var kpisRun = run.kpis || {};
+            var isTv   = ((meta.target_type || '').toLowerCase() === 'tv_show')
+                      || (kpisRun.tv_show_mode === true);
+
+            var titleEl = document.getElementById('jiqExhibitorTitle');
+            if (titleEl) titleEl.innerHTML = isTv
+                ? '📺 Platform & Device Mix — where viewers will watch'
+                : '🎟️ Exhibitor Direct Channel Mix — where the tickets will flow';
+
+            var howtoEl = document.getElementById('jiqExhibitorHowtoBody');
+            if (howtoEl && isTv) howtoEl.innerHTML =
+                '<ul style="margin:0;padding-left:1.1rem;">'
+              +   '<li><strong>Top horizontal stacked bar:</strong> each color block = one streaming surface (Smart TV / CTV, Mobile App, Web, Tablet, Console, plus clip-discovery channels like YouTube + TikTok); width = share of total watch hours that surface captures.</li>'
+              +   '<li><strong>Audience-tilt heatmap (bottom):</strong> rows = surfaces, columns = audience archetypes. <strong style="color:#1f9d55;">Green</strong> = surface over-indexes that cohort (e.g., Smart-TV 1.45× franchise loyalists — the living-room pattern); <strong style="color:#c81e1e;">red</strong> = under-indexes; gray = neutral. Cell value = the raw tilt index.</li>'
+              +   '<li><strong>Verdict block (bottom, cyan border):</strong> one-sentence read on which surface drives the most watch hours and which archetype skews where.</li>'
+              +   '<li><strong>Use it for:</strong> push-notification + clip-drop strategy. The discovery surfaces (YouTube/TikTok clips) are typically the highest-ROI marketing spend — they convert at 15-20% next-day episode-view lift even though their watch-hour share is small.</li>'
+              + '</ul>';
+
             var subEl  = document.getElementById('jiqExhibitorSubtitle');
             var metaEl = document.getElementById('jiqExhibitorMeta');
-            if (subEl) subEl.innerHTML = 'Estimated breakdown of where the <strong>~' + _jiqFmt(mix.opening_weekend_tickets_estimate || 0) + '</strong> projected opening-weekend tickets will be purchased, with each chain\'s audience-fit (tilt) vs. its own typical mix.';
+            if (subEl) {
+                if (isTv) {
+                    subEl.innerHTML = 'Estimated breakdown of where the <strong>~'
+                        + _jiqFmt(mix.opening_weekend_tickets_estimate || 0)
+                        + '</strong> projected premiere-week viewers will watch, with each surface\'s audience-fit (tilt) vs. its own typical mix.';
+                } else {
+                    subEl.innerHTML = 'Estimated breakdown of where the <strong>~'
+                        + _jiqFmt(mix.opening_weekend_tickets_estimate || 0)
+                        + '</strong> projected opening-weekend tickets will be purchased, with each chain\'s audience-fit (tilt) vs. its own typical mix.';
+                }
+            }
             if (metaEl && mix.analysis_window) metaEl.textContent = mix.analysis_window.start + ' → ' + mix.analysis_window.end + (mix.analysis_window.release ? '  ·  release ' + mix.analysis_window.release : '');
 
             var channels = (mix.channels || []).slice().sort(function(a, b) { return (b.share_pct || 0) - (a.share_pct || 0); });
@@ -28890,12 +29017,19 @@
                              + _jiqEsc(h.icon || '') + ' ' + _jiqEsc(h.name)
                              + '</th>';
                     }).join('');
-                    heatEl.innerHTML = '<div style="font-weight:600;font-size:0.78rem;margin-bottom:6px;">Audience-fit heatmap — tilt vs. chain\'s overall mix</div>'
-                                     + '<div style="font-size:0.68rem;color:var(--text-secondary);margin-bottom:8px;">Green = over-index (chain attracts more of this cohort than average) · red = under-index · 1.00× = neutral.</div>'
+                    var heatTitle = isTv
+                        ? 'Audience-fit heatmap — tilt vs. surface\'s overall mix'
+                        : 'Audience-fit heatmap — tilt vs. chain\'s overall mix';
+                    var heatSub = isTv
+                        ? 'Green = over-index (surface attracts more of this cohort than average) · red = under-index · 1.00× = neutral.'
+                        : 'Green = over-index (chain attracts more of this cohort than average) · red = under-index · 1.00× = neutral.';
+                    var rowHeader = isTv ? 'Surface' : 'Chain';
+                    heatEl.innerHTML = '<div style="font-weight:600;font-size:0.78rem;margin-bottom:6px;">' + heatTitle + '</div>'
+                                     + '<div style="font-size:0.68rem;color:var(--text-secondary);margin-bottom:8px;">' + heatSub + '</div>'
                                      + '<div style="overflow-x:auto;">'
                                      + '<table style="width:100%;border-collapse:collapse;font-size:0.78rem;border:1px solid var(--border-color);border-radius:8px;overflow:hidden;">'
                                      + '<thead><tr style="background:var(--bg-secondary);">'
-                                     +   '<th style="padding:8px 10px;text-align:left;border-right:1px solid var(--border-color);">Chain</th>'
+                                     +   '<th style="padding:8px 10px;text-align:left;border-right:1px solid var(--border-color);">' + rowHeader + '</th>'
                                      +   headerCells
                                      +   '<th style="padding:8px 10px;text-align:left;">Profile</th>'
                                      + '</tr></thead><tbody>' + rows + '</tbody></table>'
