@@ -70244,19 +70244,11 @@
                 dateAdded: new Date().toISOString()
             };
             
-            // Create closing slide
-            const closingSlide = {
-                id: 'closing_' + Date.now(),
-                type: 'closing',
-                title: 'Thank You',
-                dateAdded: new Date().toISOString()
-            };
-            
             const newDeck = {
                 id: 'deck_' + Date.now(),
                 name: name,
                 workspaceId: wsId,
-                slides: [tocSlide, closingSlide],
+                slides: [tocSlide],
                 titleSlide: {
                     title: 'Audience Comparison',
                     subtitle: 'Powered by Crosswalk IQ',
@@ -74014,19 +74006,11 @@
                 dateAdded: new Date().toISOString()
             };
             
-            // Create closing slide
-            const closingSlide = {
-                id: 'closing_' + Date.now(),
-                type: 'closing',
-                title: 'Thank You',
-                dateAdded: new Date().toISOString()
-            };
-            
             const newDeck = {
                 id: 'deck_' + Date.now(),
                 name: name,
                 workspaceId: currentWorkspace,
-                slides: [tocSlide, closingSlide], // Start with TOC and closing slides
+                slides: [tocSlide],
                 titleSlide: {
                     title: currentProfileData?.name || 'Audience Profile',
                     subtitle: 'Powered by Crosswalk IQ',
@@ -74317,19 +74301,7 @@
             // Initialize slide elements
             initSlideElements();
             
-            // If title slide has no profile image but we have a profile, fetch it and update when loaded
-            if (currentEditingSlide === 0 && currentEditingDeck && currentProfileData?.name) {
-                const titleSlide = currentEditingDeck.titleSlide || {};
-                if (!titleSlide.image && !getDeckTitleSlideProfileImage({ ...titleSlide, image: null })) {
-                    fetchProfileImage(currentProfileData.name, 0, false, (imageUrl) => {
-                        if (currentEditingDeck && currentEditingSlide === 0 && imageUrl) {
-                            if (!currentEditingDeck.titleSlide) currentEditingDeck.titleSlide = {};
-                            currentEditingDeck.titleSlide.image = imageUrl;
-                            saveDeckChanges();
-                            renderSlideEditor();
-                        }
-                    });
-                }
+            if (false) {
             }
             
             // Focus the panel for keyboard navigation
