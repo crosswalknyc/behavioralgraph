@@ -147,21 +147,34 @@ BRAND_ALIASES = {
     "DUNKIN":           ["DUNKIN'", "DUNKIN DONUTS", "DUNKIN' DONUTS"],
     "DUNKIN'":          ["DUNKIN", "DUNKIN DONUTS", "DUNKIN' DONUTS"],
     "AMAZON PRIME VIDEO": ["PRIME VIDEO", "AMAZON PRIME"],
+    "PRIME VIDEO":      ["AMAZON PRIME VIDEO", "AMAZON PRIME"],
     "AT&T":             ["ATT", "AT AND T"],
     "T-MOBILE":         ["TMOBILE", "T MOBILE"],
+    # Canonical hostmap names — always recognise the hostmap form as the
+    # source of truth; never invent a synthetic row.
+    "CHAT GPT":            ["CHATGPT", "CHAT-GPT", "GPT", "OPENAI"],
+    "CHATGPT":             ["CHAT GPT", "CHAT-GPT"],
+    "DISCOVER CREDIT CARD":["DISCOVER", "DISCOVER CARD", "DISCOVER CREDIT CA"],
+    "DISCOVER":            ["DISCOVER CREDIT CARD", "DISCOVER CARD"],
+    "HBO MAX":             ["MAX", "HBOMAX"],
+    "MAX":                 ["HBO MAX", "HBOMAX"],
 }
 
 # Step 6: Structural-gap requirements — categories MUST contain these brands.
 # When missing, the audit flags a structural gap and (optionally) inserts
 # a row at the MIDPOINT of the cross-pull range (not as a cap — as
 # documentation that the entity must be represented).
+# Canonical hostmap spellings (see reference.host_mapping). The audit
+# framework checks these for presence and flags MISSING when absent — but
+# it NEVER inserts synthetic rows (insert_structural_gaps is a no-op).
+# Aliases in BRAND_ALIASES handle alternate spellings during the check.
 STRUCTURAL_REQUIREMENTS = {
     'BANKING':           ['CHASE', 'BANK OF AMERICA', 'WELLS FARGO', 'CITIBANK'],
     'TELECOM':           ['VERIZON', 'AT&T', 'T-MOBILE'],
     'STREAMING/PLATFORM':['NETFLIX', 'AMAZON PRIME VIDEO', 'HULU', 'DISNEY+', 'HBO MAX'],
-    'SEARCH ENGINE/AI':  ['GOOGLE', 'CHATGPT', 'BING'],
+    'SEARCH ENGINE/AI':  ['GOOGLE', 'CHAT GPT', 'BING'],
     'STREAMING/MUSIC':   ['SPOTIFY', 'APPLE MUSIC', 'YOUTUBE MUSIC', 'AMAZON MUSIC'],
-    'CREDIT PROVIDER':   ['VISA', 'MASTERCARD', 'CAPITAL ONE', 'DISCOVER', 'AMEX'],
+    'CREDIT PROVIDER':   ['VISA', 'MASTERCARD', 'CAPITAL ONE', 'DISCOVER CREDIT CARD', 'AMERICAN EXPRESS'],
     'DIGITAL BANKING':   ['PAYPAL', 'VENMO', 'CASH APP', 'ZELLE', 'APPLE PAY'],
 }
 
@@ -873,38 +886,16 @@ def _derive_scale_from_df(df):
 
 
 def insert_structural_gaps(df, report: AuditReport, sample_size_for_raw=10_000):
-    """Insert a row for each structural-gap at the consensus midpoint.
+    """No-op. Per operator decision (2026-05-25), the audit framework MUST
+    NOT insert synthetic rows. The hostmap is the canonical source of
+    brand truth; if a required entity is missing from the pipeline output
+    the correct response is to fix the upstream pipeline / hostmap, NOT to
+    fabricate a row at the consensus midpoint.
 
-    Defensible because: (a) the entity is REQUIRED by the dashboard,
-    (b) the value comes from published consensus not a hardcoded cap,
-    (c) it sits in the middle of the pass band so it won't itself fail.
+    Structural gaps are still detected and reported (so the operator can
+    investigate), but no DataFrame mutation occurs here.
     """
-    if not report.structural_gaps:
-        return df, 0
-    raw_per_pct, proj_per_pct = _derive_scale_from_df(df)
-    new_rows = []
-    for gap in report.structural_gaps:
-        rng = CROSS_PULL_RANGES.get(gap['category'], {}).get(gap['brand'])
-        if not rng:
-            continue
-        midpoint = (rng[0] + rng[1]) / 2
-        import random as _r
-        bp_val = round(midpoint + _r.uniform(-0.5, 0.5), 4)
-        raw_count = max(1, int(round(bp_val * raw_per_pct)))
-        proj = int(round(bp_val * proj_per_pct))
-        row = {c: '' for c in df.columns}
-        row['Column'] = gap['category']
-        row['Value']  = gap['brand']
-        if 'Brand Penetration (Row)' in df.columns:
-            row['Brand Penetration (Row)'] = f"{bp_val:.4f}%"
-        if 'Original Raw Numbers' in df.columns:
-            row['Original Raw Numbers'] = str(raw_count)
-        if 'US Gen Pop Projection' in df.columns:
-            row['US Gen Pop Projection'] = str(proj)
-        new_rows.append(row)
-    if new_rows:
-        df = pd.concat([df, pd.DataFrame(new_rows)], ignore_index=True)
-    return df, len(new_rows)
+    return df, 0
 
 
 # ───────────────────────────────────────────────────────────────────────────

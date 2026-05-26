@@ -10062,32 +10062,44 @@ def get_csv_data(s3_key):
                 row['Value'] = 'Hispanic or Latino'
         return csv_content, df, brand_name, date_range, data
     
+    # 2026-05-25: helper to wrap responses with no-store cache headers so
+    # downstream (browser, Render edge, Cloudflare) never serves a stale CSV
+    # after audit-side enforcers re-upload to the same S3 key. Profile CSVs
+    # change in-place when run_all_enforcers / apply_mpb_digital_share_lifts
+    # / apply_panel_reality_floors run, so any client-side cache produces
+    # the post-fix vs. pre-fix audit mismatch we saw across 7 profile audits.
+    def _no_cache(resp):
+        resp.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
+        resp.headers['Pragma'] = 'no-cache'
+        resp.headers['Expires'] = '0'
+        return resp
+
     # Gen Pop: always fetch the canonical S3 file (GEN_POP_CANONICAL_KEY) so dashboard matches pipeline / S3
     effective_key = s3_key
     if s3_key and 'gen_pop' in s3_key.lower():
         try:
             csv_content, df, brand_name, date_range, data = _fetch_and_return(GEN_POP_CANONICAL_KEY)
             print(f"📂 Served canonical Gen Pop file: {GEN_POP_CANONICAL_KEY}")
-            return jsonify({
+            return _no_cache(jsonify({
                 'success': True,
                 'data': data,
                 'brand': brand_name,
                 'date_range': date_range,
                 's3_key': GEN_POP_CANONICAL_KEY
-            })
+            }))
         except Exception:
             pass  # fall back to requested key
     try:
         print(f"📂 Fetching from S3: {S3_BUCKET}/{effective_key}")
         csv_content, df, brand_name, date_range, data = _fetch_and_return(effective_key)
         print(f"✅ Got CSV content: {len(csv_content)} bytes for brand: {brand_name}")
-        return jsonify({
+        return _no_cache(jsonify({
             'success': True,
             'data': data,
             'brand': brand_name,
             'date_range': date_range,
             's3_key': effective_key
-        })
+        }))
     except s3_client.exceptions.NoSuchKey:
         # File not in S3 (e.g. released from purgatory — key was purgatory/... and is now at root)
         if s3_key.startswith(S3_PURGATORY_PREFIX):
@@ -10095,13 +10107,13 @@ def get_csv_data(s3_key):
             try:
                 csv_content, df, brand_name, date_range, data = _fetch_and_return(released_key)
                 print(f"✅ Loaded from released location: {released_key}")
-                return jsonify({
+                return _no_cache(jsonify({
                     'success': True,
                     'data': data,
                     'brand': brand_name,
                     'date_range': date_range,
                     's3_key': released_key
-                })
+                }))
             except Exception:
                 pass
         print(f"❌ Profile not found: {s3_key}")

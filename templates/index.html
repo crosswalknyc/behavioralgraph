@@ -39485,6 +39485,11 @@
         function _tstParseNum(s) { const v = String(s||'').replace(/,/g,'').replace(/\$/g,''); const m = v.match(/[\d.]+/); return m ? parseFloat(m[0]) : 0; }
         function _tstFmtNum(n) { if (n >= 1e6) return (n/1e6).toFixed(1).replace(/\.0$/, '') + 'M'; if (n >= 1e3) return (n/1e3).toFixed(0) + 'K'; return n.toLocaleString(); }
         function _tstFmtDollar(n) { if (n >= 1e9) return '$' + (n/1e9).toFixed(1) + 'B'; if (n >= 1e6) return '$' + (n/1e6).toFixed(1) + 'M'; if (n >= 1e3) return '$' + (n/1e3).toFixed(0) + 'K'; return '$' + Math.round(n).toLocaleString(); }
+        // Theater names on the dashboard always render in ALL CAPS (single
+        // source of truth so cards, chart axes, dropdown, and compare-all
+        // headers stay consistent). Values used for lookups / data keys
+        // stay in their original case; only the rendered text is shouted.
+        function _tstShoutTheater(s) { return String(s == null ? '' : s).toUpperCase(); }
         function renderTSTAudienceSnapshot(d) {
             const demo = d.demographics_overall || {};
             const container = document.getElementById('tstAudienceSnapshotGrid');
@@ -39543,8 +39548,8 @@
             });
             const tableEl = document.getElementById('tstTheatersTable');
             if (tableEl) {
-                const theaterCardTip = (platform) => (platform || 'Theater') + ': projected sales and tickets sold. Starting with a $15 ticket price we then multiply total digital transactions by 2x for group size, then divide by 0.75 to account for the 25% box office share. ' + TST_GENPOP_TOOLTIP;
-                tableEl.innerHTML = blocksRows.length ? `<div class="exec-summary-grid" style="margin-bottom:0;">${blocksRows.map(r => `<div class="exec-summary-metric has-tooltip" data-tooltip="${(theaterCardTip(r.platform)||'').replace(/"/g,'&quot;')}"><div class="exec-metric-label">${(r.platform||'').replace(/</g,'&lt;')}</div><div class="exec-metric-value">${r.projFmt}</div><div class="exec-metric-desc">Projected Sales</div><div style="font-size:1.1rem;font-weight:700;color:var(--accent-cyan);margin-top:0.35rem;">${r.soldFmt}</div><div class="exec-metric-desc">Tickets Sold</div></div>`).join('')}</div>` : '<div style="padding:1rem;">No theater data</div>';
+                const theaterCardTip = (platform) => _tstShoutTheater(platform || 'Theater') + ': projected sales and tickets sold. Starting with a $15 ticket price we then multiply total digital transactions by 2x for group size, then divide by 0.75 to account for the 25% box office share. ' + TST_GENPOP_TOOLTIP;
+                tableEl.innerHTML = blocksRows.length ? `<div class="exec-summary-grid" style="margin-bottom:0;">${blocksRows.map(r => `<div class="exec-summary-metric has-tooltip" data-tooltip="${(theaterCardTip(r.platform)||'').replace(/"/g,'&quot;')}"><div class="exec-metric-label">${_tstShoutTheater(r.platform||'').replace(/</g,'&lt;')}</div><div class="exec-metric-value">${r.projFmt}</div><div class="exec-metric-desc">Projected Sales</div><div style="font-size:1.1rem;font-weight:700;color:var(--accent-cyan);margin-top:0.35rem;">${r.soldFmt}</div><div class="exec-metric-desc">Tickets Sold</div></div>`).join('')}</div>` : '<div style="padding:1rem;">No theater data</div>';
             }
             const sortRowEl = document.getElementById('tstTheatersSortRow');
             if (sortRowEl && rows.length) {
@@ -39554,7 +39559,7 @@
             } else if (sortRowEl) sortRowEl.innerHTML = '';
             const canvas = document.getElementById('tstTheatersChartCanvas');
             if (!canvas || !platforms.length || typeof Chart === 'undefined') return;
-            const labels = chartRows.map(r => r.platform || '');
+            const labels = chartRows.map(r => _tstShoutTheater(r.platform || ''));
             const showSold = tstTheatersChartMetric === 'sold';
             const data = showSold
                 ? chartRows.map(r => r.sold)
@@ -40044,7 +40049,7 @@
             const names = Object.keys(perTheater).sort();
             const sel = document.getElementById('tstTheaterSelect');
             if (!sel) return;
-            const opts = names.length ? '<option value="__compare_all__">Compare all</option>' + names.map(n => `<option value="${(n||'').replace(/"/g,'&quot;')}">${(n||'').replace(/</g,'&lt;')}</option>`).join('') : '';
+            const opts = names.length ? '<option value="__compare_all__">Compare all</option>' + names.map(n => `<option value="${(n||'').replace(/"/g,'&quot;')}">${_tstShoutTheater(n||'').replace(/</g,'&lt;')}</option>`).join('') : '';
             sel.innerHTML = opts || '<option value="">No theater data</option>';
         }
         function renderTSTCompareAllView(perTheater) {
@@ -40067,7 +40072,7 @@
                     const match = platforms.find(p => (p.platform || '').toLowerCase() === tLower);
                     if (match) fmt = _tstFmtNum(match.us_number != null ? match.us_number : _tstParseNum(String(match.us_value||'')));
                 }
-                return fmt ? (t || '') + ' - ' + fmt : (t || '');
+                return fmt ? _tstShoutTheater(t || '') + ' - ' + fmt : _tstShoutTheater(t || '');
             };
             const gpRaw = { ...(genPopBaselineData?.demographics || {}) };
             ['AGE','GENDER','ETHNICITY','INCOME'].forEach(k => {

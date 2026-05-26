@@ -713,7 +713,7 @@ Return ONLY valid JSON (no markdown):
     "EDUCATION": {{
         "HIGH SCHOOL OR LESS": <percent>,
         "SOME COLLEGE / ASSOCIATE DEGREE": <percent>,
-        "BACHELOR'S DEGREE": <percent>,
+        "BACHELORS DEGREE": <percent>,
         "GRADUATE OR PROFESSIONAL DEGREE": <percent>
     }},
     "SEXUAL_ORIENTATION": {{
@@ -16762,7 +16762,7 @@ US GEN POP REFERENCE (use as starting point — deviate based on persona):
           $75,000-$99,999 12.7, $100,000-$149,999 16.3,
           $150,000-$249,999 10.4, $250,000 OR MORE 3.6
   EDUCATION: HIGH SCHOOL OR LESS 36.0, SOME COLLEGE/ASSOCIATE 28.3,
-             BACHELOR'S 22.8, GRAD/PROF 12.9
+             BACHELORS 22.8, GRAD/PROF 12.9
   RELATIONSHIP: SINGLE 31.3, IN A RELATIONSHIP 6.5, MARRIED 48.3,
                 DIVORCED OR SEPARATED 8.4, WIDOWED 5.5
   SEXUAL_ORIENTATION: STRAIGHT 88.5, LGBTQ+ 11.5
@@ -16864,7 +16864,7 @@ Return ONLY a single valid JSON object — no markdown, no commentary.
     "EDUCATION": {{
       "HIGH SCHOOL OR LESS": <percent>,
       "SOME COLLEGE / ASSOCIATE DEGREE": <percent>,
-      "BACHELOR'S DEGREE": <percent>,
+      "BACHELORS DEGREE": <percent>,
       "GRADUATE OR PROFESSIONAL DEGREE": <percent>
     }},
     "RELATIONSHIP": {{
@@ -21845,7 +21845,7 @@ def parallel_category_agents(df: pd.DataFrame, persona_doc: dict,
                    '$75,000 - $99,999', '$100,000 - $149,999', '$150,000 - $249,999',
                    '$250,000 OR MORE'],
         'EDUCATION': ['HIGH SCHOOL OR LESS', 'SOME COLLEGE / ASSOCIATE DEGREE',
-                      "BACHELOR'S DEGREE", 'GRADUATE OR PROFESSIONAL DEGREE'],
+                      "BACHELORS DEGREE", 'GRADUATE OR PROFESSIONAL DEGREE'],
         'RELATIONSHIP': ['SINGLE', 'IN A RELATIONSHIP', 'MARRIED',
                          'DIVORCED OR SEPARATED', 'WIDOWED'],
         'SEXUAL_ORIENTATION': ['STRAIGHT / HETEROSEXUAL', 'LGBTQ+', 'PREFER NOT TO SAY'],
@@ -28469,6 +28469,35 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
                 print(f"   🧹 dropped {_n} URL-encoded duplicate rows pre-save")
         except Exception as _e:
             print(f"   ⚠️ URL-encoded duplicate cleanup skipped: {_e}")
+
+        # LAST PASS (2026-05-25 — non-negotiable rule #1: no pinning, ever):
+        # Depin any brand BP that's perfectly round to 2 decimals (5.00,
+        # 12.50, 0.30) AND any value in the X.00xx band (24.0013, 22.0023,
+        # 30.0028 — within 0.01 of an integer). These slip past upstream
+        # jitter and read as pinned to a brand marketer. Skips demo cats
+        # (legit round buckets), 100% self-pins, true zeros, and sub-0.50
+        # values where X.00xx is structurally common.
+        try:
+            import sys as _sys3, os as _os3
+            _migration_dir3 = _os3.path.join(
+                _os3.path.dirname(_os3.path.dirname(_os3.path.abspath(__file__))),
+                'migration')
+            if _migration_dir3 not in _sys3.path:
+                _sys3.path.insert(0, _migration_dir3)
+            from post_generation_enforcers import (
+                depin_round_brand_bps as _depin_round_bp,
+            )
+            _subj_for_depin = (
+                locals().get('project_name')
+                or locals().get('_subject_name')
+                or (brands[0] if brands else '')
+                or ''
+            )
+            df_final, _n_depin = _depin_round_bp(
+                df_final, _subj_for_depin, verbose=True,
+            )
+        except Exception as _e:
+            print(f"   ⚠️ round-BP depinning skipped: {_e}")
 
     # Save to CSV
     try:
@@ -35272,7 +35301,7 @@ VALID_DEMOGRAPHIC_OPTIONS = {
         'OTHER',
     },
     'EDUCATION': {
-        "BACHELOR'S DEGREE",
+        "BACHELORS DEGREE",
         'GRADUATE OR PROFESSIONAL DEGREE',
         'HIGH SCHOOL OR LESS',
         'PREFER NOT TO SAY',
