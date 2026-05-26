@@ -1,37 +1,60 @@
-"""Build + upload the POPCULTUREJEOPARDY Journey IQ payload to S3.
+"""Build + upload the POPCULTUREJEOPARDY Journey IQ payload to S3 (archive).
 
 POP CULTURE JEOPARDY! SEASON 2 (2026) — Sony Pictures Television / Michael
 Davies productions. Hosted by Colin Jost (SNL Weekend Update). Premiered
 2026-05-11 on Netflix (migrated from Amazon Prime Video where Season 1
 ran Dec 2024 - March 2025). 20 episodes, daily weekday drops at 3am ET
 through June 5, 2026. 25-min episodes. Tournament format, teams of 3,
-$300K grand prize. Categories from "Horror Made Wholesome" to "Bummer
-Movie Endings" to "Alternative Rock" to "Broadway."
+$300K grand prize.
 
-CRITICAL FRAMING — this is a TV SHOW, not a movie:
-  - Conversion = unique US viewers (not ticket buyers)
-  - "Box office" = total watch hours (the streaming-era revenue proxy)
-  - "Exhibitor mix" = streaming platform / device mix (Netflix smart-TV,
-    mobile, web, console, plus YouTube clip discovery)
-  - "Pre-sales" = pre-launch My List additions + premiere-week views
-  - "Path to purchase" = path to first episode view + subsequent retention
+V3 REFRAMING (2026-05-26) — addressed user feedback "since it is tv we
+should change it from path-to-purchase to path-to-view and we can get
+rid of all the archetype stuff unless we position it as people who did
+watch the show. and you should still externally research to see what
+the right number of views would be like Subscriber IQ. and since it is
+Jeopardy it'll be similar but not the same — this is a digital viewing
+audience not the same as a linear Jeopardy viewer."
+
+KEY V3 CHANGES vs. v2:
+  - Path-to-PURCHASE → Path-to-VIEW (renderer + step labels)
+  - Audience Hypotheses reframed as "MODELED viewer cohorts" with an
+    explicit "predicted, not measured" disclosure (the public-measurement
+    fallback Subscriber IQ uses when no Nielsen/Tudum/Samba number is
+    available — Claude+web_search verified no public US viewership
+    figures for PCJ S2 exist as of mid-season)
+  - Headline viewer counts CUT to comp-realistic levels:
+      - 30-day mid 5.5M unique US viewers (was 11M) — Beef S2 anchored
+        at 8.3M Nielsen hours week 1; daily-strip game shows undershoot
+        prestige drama
+      - Confirmed-to-date mid 3.2M (was 6.485M) — matches T+15 share of
+        a daily-strip 30-day curve
+      - Total watch hours mid 4M (was 15.6M)
+  - Added explicit "Streaming vs Linear Jeopardy!" demo-contrast note:
+      Syndicated Jeopardy!: ~62% 55+, ~12% 18-34 (skews older, CTV)
+      PCJ Netflix (modeled): ~36% 18-34, ~23% 55+ (younger, mobile/CTV)
+  - "Confirmed" is labeled as MODELED-MID-SEASON, not platform-reported
+  - Audience archetypes positioned as "the people projected to make up
+    the viewer base" with explicit modeled-not-measured callouts on
+    every verdict
 
 CURRENT STATUS (as of 2026-05-26): the show is 11 episodes into a 20-
-episode daily-drop run. We're mid-season — confirmed viewership to date
-is measured; total-season projection is forward-looking through June 5
-plus the 90-day post-finale Netflix tail.
+episode daily-drop run. We're mid-season. No public Nielsen / Tudum /
+Samba / Luminate / Parrot Analytics figure available for S2 — Claude+
+web_search returned null for "us_viewers_millions" (see
+research_audience_size in migration/journey_iq_synthesize.py:1252).
 
-Three audience archetypes:
-  1. Jeopardy! franchise loyalists (the core - traditional Jeopardy daily
-     watchers, ~9.2M-strong syndication base)
-  2. Colin Jost / SNL Weekend Update fans (the Netflix-bridge cohort)
-  3. Netflix unscripted-game-show audience (Is It Cake, Floor, Human vs
-     Hamster, Squid Game Challenge watchers + pop-culture trivia obsessives)
-
-Comp set: Is It Cake (Netflix, ~16M viewers first 30 days), The Floor S1
-(Fox/Netflix sim, ~5-8M Netflix launch-month), Squid Game Challenge
-(Netflix outlier, ~83M global), Cunk on Earth (Netflix, ~6M US first 30d),
-Jeopardy! syndicated (~9.2M weekly avg US, mostly 55+).
+Comp set (US, public-reported / triangulated):
+  - Is It Cake S1 (Netflix, binge release, 8 eps, March 2022) ≈ 9-12M
+    US unique viewers, ~30M US hours in 30 days
+  - Cunk on Earth (Netflix, binge, 5 eps, Jan 2023) ≈ ~6M US uniques
+  - The Floor (Fox/Netflix-sim, weekly strip) ≈ 5-8M US uniques first
+    launch window
+  - Beef S2 (Netflix, prestige drama anchor, May 2026) = 8.3M Nielsen
+    hours week 1, down from 16.0M for S1 — used as a ceiling reference
+    for what a higher-prestige Netflix release achieves
+  - Squid Game: The Challenge (Netflix outlier, 83M global views)
+  - Jeopardy! syndicated (~9.2M weekly avg US, mostly 55+) — the
+    streaming-vs-linear demo-comparison anchor, NOT a viewership comp
 """
 
 import gzip
@@ -45,13 +68,16 @@ import boto3
 # CONFIG
 # ─────────────────────────────────────────────────────────────────────────────
 
-S3_BUCKET    = 'dashboard-inputs'
-S3_INDEX_KEY = 'journey-iq/_index.json'
+S3_BUCKET            = 'dashboard-inputs'
+S3_INDEX_KEY         = 'journey-iq/_index.json'
+S3_ARCHIVE_INDEX_KEY = 'journey-iq/_archive_index.json'
 
+# V3 uploads STRAIGHT to the archive folder (per user request: this run
+# should be admin-only / archived, not in the live dashboard).
 PROJECT_NAME = 'POPCULTUREJEOPARDY'
 TARGET       = 'Pop Culture Jeopardy'
 TIMESTAMP    = datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')
-KEY          = f'journey-iq/admin/{PROJECT_NAME}_full_{TIMESTAMP}.json.gz'
+KEY          = f'journey-iq/archive/{PROJECT_NAME}_full_{TIMESTAMP}.json.gz'
 
 PREMIERE_DATE  = '2026-05-11'        # S2 Netflix premiere
 FINALE_DATE    = '2026-06-05'        # episode 20 drops
@@ -62,47 +88,72 @@ EPISODES_TOTAL    = 20
 EPISODES_TO_DATE  = 11               # 5/11 Mon → 5/26 Tue = 11 weekday eps
 
 # ── Viewership model (TV / streaming — not box office)
-# Comp anchors: Is It Cake (~16M US in 30d), Cunk on Earth (~6M), Floor S1
-# Netflix-sim (~5-8M), Squid Game Challenge (outlier at 83M global). Pop
-# Culture Jeopardy! sits between Cunk and Is It Cake — broader appeal than
-# Cunk, narrower than Is It Cake (which had a stronger Gen Z TikTok wave).
-# Mid-case 11M unique US viewers over the 30-day premiere window.
-TOTAL_VIEWERS_MID    = 11_000_000           # 30-day post-premiere
-TOTAL_VIEWERS_LOW    =  8_000_000
-TOTAL_VIEWERS_HIGH   = 14_000_000
+#
+# V3 calibration — anchored to public comps. Claude+web_search returned
+# no Nielsen/Tudum/Samba US-viewers figure for PCJ S2, so this is an
+# explicitly MODELED projection, the same fallback Subscriber IQ uses
+# when no platform-reported number is available.
+#
+# Anchors (all US, public-reported / triangulated):
+#   - Beef S2 (Netflix prestige drama, May 2026) — 8.3M Nielsen hours
+#     week 1 (down from S1's 16.0M hours). A daily-drop game show will
+#     undershoot prestige drama.
+#   - Is It Cake S1 (Netflix, binge release, 8 eps) ≈ 9-12M US uniques,
+#     ~30M US hours in 30 days — a CEILING anchor (binge format gets
+#     bigger 30-day numbers than daily-strip).
+#   - Cunk on Earth (Netflix, binge, 5 eps) ≈ ~6M US uniques.
+#   - The Floor (Fox/Netflix-sim, weekly strip) ≈ 5-8M US uniques.
+#
+# PCJ S2 sits BELOW Is It Cake (no binge effect, Jeopardy! franchise
+# brand is older-skewed, lost some S1 audience in platform migration)
+# and ABOVE Cunk (broader appeal, daily clip-drop strategy, Jost +
+# Jeopardy! brand premium). Mid-case ~5.5M unique US viewers over 30
+# days, with ~4M total US watch hours (~73 min/viewer, ~3 episodes).
+TOTAL_VIEWERS_MID    =  5_500_000           # 30-day post-premiere
+TOTAL_VIEWERS_LOW    =  4_000_000
+TOTAL_VIEWERS_HIGH   =  7_000_000
 
-# Full lifecycle including 90-day Netflix tail post-finale
-LIFECYCLE_VIEWERS_MID  = 15_000_000
-LIFECYCLE_VIEWERS_LOW  = 11_000_000
-LIFECYCLE_VIEWERS_HIGH = 19_500_000
+# Full lifecycle including 90-day Netflix tail post-finale (~1.35× the
+# 30-day mid for a daily-strip game show — lower tail multiplier than
+# a binge release because daily-strip shows accumulate viewers
+# during the release window, not after)
+LIFECYCLE_VIEWERS_MID  =  7_500_000
+LIFECYCLE_VIEWERS_LOW  =  5_500_000
+LIFECYCLE_VIEWERS_HIGH =  9_500_000
 
-# Watch behavior
-AVG_MIN_PER_VIEWER   = 85       # ~3.4 episodes at 25 min each
-EPISODES_PER_VIEWER  = 3.4
-TOTAL_WATCH_HOURS_MID = int(TOTAL_VIEWERS_MID * AVG_MIN_PER_VIEWER / 60)         # ~15.6M
-TOTAL_WATCH_HOURS_LOW = int(TOTAL_VIEWERS_LOW * AVG_MIN_PER_VIEWER / 60)         # ~11.3M
-TOTAL_WATCH_HOURS_HI  = int(TOTAL_VIEWERS_HIGH * AVG_MIN_PER_VIEWER / 60)        # ~19.8M
+# Watch behavior — lowered from ~85 min/viewer to ~73 min/viewer (~2.9
+# episodes at 25 min each). Daily-strip cadence means most viewers fall
+# behind and never catch up; avg episodes per viewer is lower than for
+# a binge-release game show like Is It Cake.
+AVG_MIN_PER_VIEWER   = 73
+EPISODES_PER_VIEWER  = 2.9
+TOTAL_WATCH_HOURS_MID = int(TOTAL_VIEWERS_MID * AVG_MIN_PER_VIEWER / 60)         # ~6.7M hrs
+TOTAL_WATCH_HOURS_LOW = int(TOTAL_VIEWERS_LOW * AVG_MIN_PER_VIEWER / 60)         # ~4.9M hrs
+TOTAL_WATCH_HOURS_HI  = int(TOTAL_VIEWERS_HIGH * AVG_MIN_PER_VIEWER / 60)        # ~8.5M hrs
 
-# Premiere week (first 7 days) — typical Netflix unscripted skew is ~30% of
-# 30-day viewership lands in the first 7 days for daily-drop strip shows
-# (vs ~55-70% for binge releases).
-PREMIERE_WEEK_VIEWERS_MID  = int(TOTAL_VIEWERS_MID  * 0.30)    # ~3.3M
-PREMIERE_WEEK_VIEWERS_LOW  = int(TOTAL_VIEWERS_LOW  * 0.30)    # ~2.4M
-PREMIERE_WEEK_VIEWERS_HIGH = int(TOTAL_VIEWERS_HIGH * 0.30)    # ~4.2M
+# Premiere week (first 7 days) — daily-drop strip shows split ~28-32%
+# of 30-day viewers into the first 7 days (vs 55-70% for binge releases
+# where almost everyone finishes by day 7).
+PREMIERE_WEEK_VIEWERS_MID  = int(TOTAL_VIEWERS_MID  * 0.30)    # ~1.65M
+PREMIERE_WEEK_VIEWERS_LOW  = int(TOTAL_VIEWERS_LOW  * 0.30)    # ~1.2M
+PREMIERE_WEEK_VIEWERS_HIGH = int(TOTAL_VIEWERS_HIGH * 0.30)    # ~2.1M
 
-# ── CONFIRMED VIEWERSHIP TO DATE (T+15 days into season)
-# Mid-season measurement — we're at episode 11 of 20, ~60% of release
-# window complete. With daily-drop strip pattern, ~60-65% of total 30-day
-# viewership has typically converted by this point.
-CONFIRMED_UNIQUE_VIEWERS    = 6_485_000      # measured to date
-CONFIRMED_WATCH_HOURS       = int(CONFIRMED_UNIQUE_VIEWERS * AVG_MIN_PER_VIEWER / 60)  # ~9.2M
-CONFIRMED_REPEAT_VIEWERS    = int(CONFIRMED_UNIQUE_VIEWERS * 0.42)     # ~2.7M (watched 5+ eps)
-CONFIRMED_AVG_EPS_PER_USER  = 3.2
+# ── "CONFIRMED" VIEWERSHIP TO DATE (T+15 days, ep 11 of 20)
+# These are MODELED, not platform-reported. No Nielsen/Tudum/Samba
+# figure available. Mid-case = ~58% of 30-day projection (typical
+# share of daily-strip 30-day curve realized by T+15 with ~55% of
+# episodes dropped).
+CONFIRMED_UNIQUE_VIEWERS    = 3_200_000      # MODELED mid-season estimate
+CONFIRMED_WATCH_HOURS       = int(CONFIRMED_UNIQUE_VIEWERS * AVG_MIN_PER_VIEWER / 60)  # ~3.9M
+CONFIRMED_REPEAT_VIEWERS    = int(CONFIRMED_UNIQUE_VIEWERS * 0.38)     # ~1.2M (watched 5+ eps)
+CONFIRMED_AVG_EPS_PER_USER  = 2.9
 CONFIRMED_EPISODES_DROPPED  = EPISODES_TO_DATE
-# Netflix US Top 10 — modeled as a range, not a single rank, because
-# weekly rank fluctuates day-to-day on a daily-drop strip schedule.
-CONFIRMED_NETFLIX_TOP10_RANK_LOW  = 4
-CONFIRMED_NETFLIX_TOP10_RANK_HIGH = 8
+# Netflix US Top 10 — Netflix's OWN Top 10 ranking (not Nielsen overall
+# top 10 — note that as of April 2026 no Netflix series cracks the
+# Nielsen overall top 10 weekly). Modeled as a range because daily-drop
+# strip schedules cause day-to-day rank fluctuation.
+CONFIRMED_NETFLIX_TOP10_RANK_LOW  = 6      # Netflix TV Top 10 (US)
+CONFIRMED_NETFLIX_TOP10_RANK_HIGH = 10
 
 # Demographic skew of confirmed viewers (vs traditional Jeopardy's 55+ skew)
 CONFIRMED_DEMO_18_34 = 0.36
@@ -113,13 +164,30 @@ BASELINE_GENPOP    = 260_000_000
 BASELINE_CR_PCT    = round(TOTAL_VIEWERS_MID / BASELINE_GENPOP * 100, 3)   # ≈4.23%
 
 # ─────────────────────────────────────────────────────────────────────────────
-# AUDIENCE HYPOTHESES — three archetypes for a Netflix daily-drop game show
+# MODELED VIEWER COHORTS — three predicted archetypes for a Netflix
+# daily-drop game show. POSITIONED AS PROJECTIONS, NOT MEASURED FACT.
+# Per user feedback: "we can get rid of all the archetype stuff unless
+# we position it as these are the people who did watch the show. and
+# since it is jeopardy it'll be similar but not the same — this is a
+# digital viewing audience not the same as a linear jeopardy viewer."
+#
+# No Nielsen / Tudum / Samba S2 viewership-by-demo breakdown exists
+# publicly, so these are MODELED cohorts (the same approach Subscriber
+# IQ falls back to when public measurement is unavailable). Verdict
+# pills below all use "PREDICTED" language, not "VALIDATED". When a
+# Crosswalk panel pull runs against the S2 window, these estimates
+# get replaced with measured viewer composition.
+#
+# Each cohort sizing reflects STREAMING-Jeopardy, not LINEAR-Jeopardy
+# expectations. Syndicated Jeopardy! skews ~62% age 55+ on CTV; this
+# Netflix viewer base is modeled at 36% 18-34 / 23% 55+ — younger and
+# more mobile-skewed than the syndicated audience.
 # ─────────────────────────────────────────────────────────────────────────────
 
 HYPOTHESES = [
     {
         'key': 'jeopardy_loyalists',
-        'name': 'Jeopardy! franchise loyalists (the core)',
+        'name': 'Jeopardy! franchise loyalists (modeled core)',
         'icon': '🧠',
         'color': '#0a2463',
         'proxy_definition': (
@@ -156,23 +224,29 @@ HYPOTHESES = [
             {'dma': 'Chicago',               'index': 1.20},
             {'dma': 'Atlanta',               'index': 1.10},
         ],
-        'verdict': 'STRONGLY VALIDATED',
+        'verdict': 'STRONGLY PREDICTED',
         'verdict_note': (
-            "Jeopardy! loyalists convert at ~4.5× the gen-pop streaming "
-            "baseline — the largest cohort by absolute size. Caveat: the "
-            "pop-culture format pivot under-indexes this cohort vs. "
-            "traditional Jeopardy! (they want general-knowledge rigor, not "
-            "Zendaya trivia). Net opening-week conversion is strong but "
-            "retention to episodes 8+ likely lower than the SNL/Jost "
-            "cohort. Northeast + DC + Minneapolis over-index 1.20-1.40× — "
-            "the historical Jeopardy! geo-affinity pattern."
+            "MODELED — not platform-measured. Jeopardy! loyalists are "
+            "projected to convert at ~4.5× the gen-pop streaming "
+            "baseline — the largest cohort by absolute size in the "
+            "modeled audience. Caveat: the pop-culture format pivot "
+            "under-indexes this cohort vs. traditional Jeopardy! (they "
+            "want general-knowledge rigor, not Zendaya trivia). Net "
+            "premiere-week conversion likely strong but retention to "
+            "episodes 8+ projected lower than the SNL/Jost cohort. "
+            "Streaming-vs-linear caveat: this is the OLDER, CTV-skewed "
+            "slice of the modeled audience — closer to the syndicated "
+            "Jeopardy! viewer than the typical Netflix unscripted "
+            "viewer. Northeast + DC + Minneapolis projected to over-"
+            "index 1.20-1.40× — the historical Jeopardy! geo-affinity "
+            "pattern. Crosswalk panel pull will validate."
         ),
         'est_total_viewers': int(30_000_000 * BASELINE_CR_PCT * 4.5 / 100),
         'retention_at_ep10_pct': 38,
     },
     {
         'key': 'jost_snl_fans',
-        'name': 'Colin Jost / SNL Weekend Update fans (the Netflix bridge)',
+        'name': 'Colin Jost / SNL Weekend Update fans (modeled Netflix bridge)',
         'icon': '🎤',
         'color': '#dc2626',
         'proxy_definition': (
@@ -209,24 +283,28 @@ HYPOTHESES = [
             {'dma': 'Seattle-Tacoma',        'index': 1.20},
             {'dma': 'Denver',                'index': 1.20},
         ],
-        'verdict': 'STRONGLY VALIDATED',
+        'verdict': 'STRONGLY PREDICTED',
         'verdict_note': (
-            "Colin Jost / SNL fans convert at ~6.2× baseline — highest "
-            "per-capita conversion of any cohort. The single biggest "
-            "differentiator vs. traditional Jeopardy!: this cohort brings "
-            "the 18-34 + 35-44 demos that drove Pop Culture Jeopardy! to "
-            "its current 36% 18-34 share (vs. syndicated Jeopardy! at "
-            "~12% 18-34). NY + LA + Boston over-index 1.40-1.65× — the "
-            "SNL viewership geo-pattern. Critically also the highest "
-            "retention to episodes 8+ (lower fall-off than Jeopardy! "
-            "loyalists who get pop-culture-format fatigue)."
+            "MODELED — not platform-measured. Colin Jost / SNL fans "
+            "projected to convert at ~6.2× baseline — highest per-capita "
+            "conversion of any cohort. The single biggest predicted "
+            "differentiator vs. traditional Jeopardy!: this cohort "
+            "brings the 18-34 + 35-44 demos behind the modeled 36% "
+            "18-34 share (syndicated Jeopardy! ~12% 18-34, ~62% 55+). "
+            "Streaming-vs-linear caveat: this is the cohort that makes "
+            "the Netflix viewer base structurally DIFFERENT from the "
+            "syndicated viewer base — younger, more mobile, less "
+            "appointment-viewing. NY + LA + Boston projected to over-"
+            "index 1.40-1.65× — the SNL viewership geo-pattern. "
+            "Projected highest retention to episodes 8+. Crosswalk "
+            "panel pull will validate."
         ),
         'est_total_viewers': int(25_000_000 * BASELINE_CR_PCT * 6.2 / 100),
         'retention_at_ep10_pct': 58,
     },
     {
         'key': 'netflix_gameshow',
-        'name': 'Netflix unscripted-game-show audience + pop-culture trivia',
+        'name': 'Netflix unscripted-game + pop-culture-trivia (modeled discovery layer)',
         'icon': '🎮',
         'color': '#7c3aed',
         'proxy_definition': (
@@ -264,17 +342,23 @@ HYPOTHESES = [
             {'dma': 'Philadelphia',          'index': 1.15},
             {'dma': 'Miami-Fort Lauderdale', 'index': 1.20},
         ],
-        'verdict': 'STRONGLY VALIDATED',
+        'verdict': 'STRONGLY PREDICTED',
         'verdict_note': (
-            "Netflix unscripted-game audience converts at ~5.4× baseline — "
-            "broadest reach among the three cohorts. Driven by Netflix's "
-            "owned discovery surfaces (New on Netflix, Top 10, Because You "
-            "Watched Is It Cake). Highest growth potential — the cohort "
-            "that scales the show from Cunk-tier ($6M) toward Is It Cake-"
-            "tier ($16M). Retention to episodes 8+ is moderate (~48%) — "
-            "this cohort skips around episodes rather than watching "
-            "sequentially. The daily-drop strip strategy is engineered for "
-            "exactly this cohort's behavior."
+            "MODELED — not platform-measured. Netflix unscripted-game "
+            "audience projected to convert at ~5.4× baseline — broadest "
+            "reach among the three cohorts. Driven by Netflix's owned "
+            "discovery surfaces (New on Netflix, Top 10, Because You "
+            "Watched Is It Cake). Highest projected growth potential — "
+            "the cohort that pushes the show from Cunk-tier (~6M) "
+            "toward Is It Cake-tier (~10M). Projected retention to "
+            "episodes 8+ moderate (~48%) — this cohort skips around "
+            "episodes rather than watching sequentially. The daily-"
+            "drop strip strategy is engineered for exactly this "
+            "cohort's behavior. Streaming-vs-linear caveat: this is "
+            "the cohort with effectively ZERO overlap with the "
+            "syndicated Jeopardy! audience — they discovered the "
+            "show through the Netflix recommender, not Jeopardy! "
+            "brand affinity. Crosswalk panel pull will validate."
         ),
         'est_total_viewers': int(22_000_000 * BASELINE_CR_PCT * 5.4 / 100),
         'retention_at_ep10_pct': 48,
@@ -282,22 +366,26 @@ HYPOTHESES = [
 ]
 
 TRIPLE_CORE = {
-    'label': 'Triple-likely core',
+    'label': 'Triple-likely core (modeled bullseye)',
     'description': (
-        "Jeopardy! loyalists who are ALSO SNL/Jost fans AND active Netflix "
-        "unscripted-game watchers — the absolute bullseye for opening-week "
-        "binge. ~1.8M people, convert at ~62% in the first 7 days "
-        "(~14.7× the gen-pop streaming baseline). This cohort drove the "
-        "show's first-week Netflix US Top 10 entry and posts the highest "
-        "engagement on @netflix social. Projected retention through "
-        "episode 20 is in the 65-75% range — high for a strip-released "
-        "trivia format, though final retention is bounded by the daily-"
-        "drop cadence (viewers fall behind, never catch up)."
+        "MODELED, not measured. Jeopardy! loyalists who are ALSO SNL/"
+        "Jost fans AND active Netflix unscripted-game watchers — the "
+        "predicted absolute bullseye for premiere-week binge. ~900K "
+        "people projected, with modeled premiere-week conversion ~62% "
+        "(~14.7× the gen-pop streaming baseline). Cohort sized for the "
+        "smaller modeled 5.5M total viewer base. This cohort is "
+        "projected to drive the show's first-week Netflix US Top 10 "
+        "entry and the highest engagement on @netflix social. Modeled "
+        "retention through episode 20: 65-75% range — high for a "
+        "strip-released trivia format, though final retention is "
+        "bounded by the daily-drop cadence (viewers fall behind, "
+        "never catch up). Crosswalk panel pull will validate the "
+        "intersection size."
     ),
-    'size': 1_800_000,
+    'size': 900_000,
     'conversion_pct': 62.0,
-    'est_first_view': int(1_800_000 * 0.62),
-    'est_total_viewers': int(1_800_000 * 0.62),
+    'est_first_view': int(900_000 * 0.62),
+    'est_total_viewers': int(900_000 * 0.62),
     'intent_index': 14.7,
     'retention_at_ep10_pct_low':  65,
     'retention_at_ep10_pct_high': 75,
@@ -318,11 +406,22 @@ AUDIENCE_HYPOTHESES = {
 
 AUDIENCE_SIZING_ANCHORS = {
     'methodology': (
-        "An engager = 1+ touchpoint across Watch (Jeopardy! syndicated or "
-        "Netflix game-show catalog), Search (branded queries for the show, "
-        "Colin Jost, or Jeopardy! franchise), Social O&O (SNL clips / "
-        "Netflix Tudum / TikTok trivia / Jeopardy! IG), or Engagement "
-        "(Connections / Wordle daily players, trivia podcast listeners)."
+        "Same engager-funnel pattern Subscriber IQ uses for streaming "
+        "viewership when no platform-reported number is available "
+        "(Claude+web_search returned no Nielsen / Tudum / Samba / "
+        "Luminate / Parrot Analytics US-viewers figure for PCJ S2). "
+        "An engager = 1+ touchpoint across Watch (Jeopardy! syndicated "
+        "or Netflix game-show catalog), Search (branded queries for "
+        "the show, Colin Jost, or Jeopardy! franchise), Social O&O "
+        "(SNL clips / Netflix Tudum / TikTok trivia / Jeopardy! IG), "
+        "or Engagement (Connections / Wordle daily players, trivia "
+        "podcast listeners). Gross sums all layers (with overlap); "
+        "dedup removes people in multiple layers. Conversion funnel "
+        "narrows engagers → Netflix-subscribing → game-show / trivia "
+        "ready → 30-day unique VIEWERS (streaming analog of opening-"
+        "weekend tickets) → watch hours. All numbers modeled — replace "
+        "with measured viewer composition when Crosswalk panel pull "
+        "runs against the S2 window."
     ),
     'public_anchor_inputs': [
         {'touchpoint': 'Syndicated Jeopardy! weekly viewers',
@@ -371,32 +470,39 @@ AUDIENCE_SIZING_ANCHORS = {
          'rate': '~34%', 'low': 17_680_000, 'high': 24_480_000, 'unit': 'people'},
         {'stage': 'Game-show / trivia ready (recent Netflix unscripted watch + intent)',
          'rate': '~32% of high-intent', 'low': 5_658_000, 'high': 7_834_000, 'unit': 'people'},
-        {'stage': '30-day viewer conversion (Netflix unscripted-strip benchmark)',
-         'rate': '~14-18% of ready',
-         'low': TOTAL_VIEWERS_LOW, 'high': TOTAL_VIEWERS_HIGH, 'unit': '30-day unique viewers'},
+        {'stage': '30-day viewer conversion (Netflix daily-strip game-show benchmark)',
+         'rate': '~7-12% of ready',
+         'low': TOTAL_VIEWERS_LOW, 'high': TOTAL_VIEWERS_HIGH, 'unit': '30-day unique viewers (MODELED)'},
         {'stage': 'Premiere-week viewer conversion (first 7 days)',
          'rate': '~30% of 30-day',
          'low': PREMIERE_WEEK_VIEWERS_LOW, 'high': PREMIERE_WEEK_VIEWERS_HIGH, 'unit': 'premiere-week viewers'},
         {'stage': 'Full lifecycle viewers (30-day + 90-day Netflix tail)',
-         'rate': '~1.4× of 30-day', 'low': LIFECYCLE_VIEWERS_LOW, 'high': LIFECYCLE_VIEWERS_HIGH, 'unit': 'lifetime viewers'},
+         'rate': '~1.35× of 30-day', 'low': LIFECYCLE_VIEWERS_LOW, 'high': LIFECYCLE_VIEWERS_HIGH, 'unit': 'lifetime viewers'},
         {'stage': 'Total US watch hours over 30 days',
          'rate': f'~{AVG_MIN_PER_VIEWER} min/viewer', 'low': TOTAL_WATCH_HOURS_LOW, 'high': TOTAL_WATCH_HOURS_HI, 'unit': 'watch hours'},
     ],
     'modeled_take': (
-        f"52M-72M US digital engagers convert at Netflix unscripted-strip "
-        f"benchmarks to {TOTAL_VIEWERS_LOW/1_000_000:.0f}M-"
-        f"{TOTAL_VIEWERS_HIGH/1_000_000:.0f}M 30-day unique viewers "
-        f"(mid-case {TOTAL_VIEWERS_MID/1_000_000:.0f}M) and "
+        f"MODELED projection (no Nielsen / Tudum / Samba S2 figure "
+        f"available). 52M-72M US digital engagers projected to convert "
+        f"at Netflix daily-strip game-show benchmarks to "
+        f"{TOTAL_VIEWERS_LOW/1_000_000:.1f}M-"
+        f"{TOTAL_VIEWERS_HIGH/1_000_000:.1f}M 30-day unique viewers "
+        f"(mid-case {TOTAL_VIEWERS_MID/1_000_000:.1f}M) and "
         f"{TOTAL_WATCH_HOURS_LOW/1_000_000:.1f}M-"
         f"{TOTAL_WATCH_HOURS_HI/1_000_000:.1f}M total US watch hours. "
-        f"Mid-case lands between Cunk on Earth (~6M, lower-engagement) and "
-        f"Is It Cake (~16M, upper bound). Full lifecycle including 90-day "
-        f"Netflix tail: {LIFECYCLE_VIEWERS_LOW/1_000_000:.0f}M-"
-        f"{LIFECYCLE_VIEWERS_HIGH/1_000_000:.0f}M lifetime viewers. The "
-        f"daily-drop strip strategy (vs. binge release) optimizes for the "
-        f"Netflix unscripted-game cohort that skips around episodes — "
-        f"which is exactly the cohort the format extension is targeting "
-        f"vs. traditional Jeopardy!'s 55+ syndication base."
+        f"Mid-case lands between Cunk on Earth (~6M, comparable scale) "
+        f"and Is It Cake (~10M ceiling — binge release helps Is It Cake; "
+        f"daily-strip caps PCJ). Full lifecycle including 90-day Netflix "
+        f"tail: {LIFECYCLE_VIEWERS_LOW/1_000_000:.1f}M-"
+        f"{LIFECYCLE_VIEWERS_HIGH/1_000_000:.1f}M lifetime viewers. "
+        f"Crucially, this is a DIGITAL VIEWING AUDIENCE — not the same "
+        f"composition as the syndicated Jeopardy! viewer (~62% 55+, "
+        f"appointment CTV). Modeled Netflix-PCJ audience is materially "
+        f"younger (~36% 18-34) and more mobile-skewed. The daily-drop "
+        f"strip strategy optimizes for the Netflix unscripted-game "
+        f"cohort that skips around episodes. Replace with measured "
+        f"viewer composition once Crosswalk panel pull runs against "
+        f"the S2 window."
     ),
     'crosswalk_panel_lift': [
         ['Jeopardy! × SNL/Jost double engagement',
@@ -770,7 +876,9 @@ TOUCHPOINT_SPIDER = {
 }
 
 # ─────────────────────────────────────────────────────────────────────────────
-# PATH TO PURCHASE (TV-show version → "Path to First View")
+# PATH TO VIEW (TV-show "path to first episode play" — renderer swaps the
+# card title to "🍿 Path to View" when target_type=='tv_show'; the step
+# label CONVERSION is the moment of first-episode play, not checkout)
 # ─────────────────────────────────────────────────────────────────────────────
 
 COHORT_SIZE = TOTAL_VIEWERS_MID
@@ -827,9 +935,9 @@ PATH_STEPS = [
          {'label': 'Netflix Tablet (6%)',                                     'pct': 6},
          {'label': 'Netflix Game Console (5%)',                               'pct': 5},
      ]},
-    {'step': 8, 'index': 0, 'label': 'CONVERSION (= viewer)',
+    {'step': 8, 'index': 0, 'label': 'FIRST VIEW (= viewer)',
      'users_pct': 100.0, 'top_labels': [
-         {'label': f'30-day unique viewers ({COHORT_SIZE/1_000_000:.0f}M mid-case)', 'pct': 100},
+         {'label': f'30-day unique viewers ({COHORT_SIZE/1_000_000:.1f}M mid-case, MODELED)', 'pct': 100},
      ]},
 ]
 
@@ -839,26 +947,26 @@ for st in PATH_STEPS:
         lbl['users'] = int(st['users'] * lbl['pct'] / 100)
 
 TOP_PATHS = [
-    {'path': ['AWARENESS', 'TRAILER / CLIP', 'NETFLIX HOME / TOP 10', 'FIRST EPISODE PLAY', 'CONVERSION (= viewer)'],
+    {'path': ['AWARENESS', 'TRAILER / CLIP', 'NETFLIX HOME / TOP 10', 'FIRST EPISODE PLAY', 'FIRST VIEW (= viewer)'],
      'users': int(COHORT_SIZE * 0.34), 'pct': 34.0,
-     'note': 'Netflix-native discovery — most common path; users browsed Top 10 / New on Netflix and clicked play directly'},
-    {'path': ['AWARENESS', 'SOCIAL / CREATOR', 'EPISODE LOOKUP / SEARCH', 'FIRST EPISODE PLAY', 'CONVERSION (= viewer)'],
+     'note': 'Netflix-native discovery — most common modeled path; viewers browsed Top 10 / New on Netflix and pressed play directly'},
+    {'path': ['AWARENESS', 'SOCIAL / CREATOR', 'EPISODE LOOKUP / SEARCH', 'FIRST EPISODE PLAY', 'FIRST VIEW (= viewer)'],
      'users': int(COHORT_SIZE * 0.26), 'pct': 26.0,
      'note': 'TikTok-driven path — trivia-creator clip wave drove search on Netflix in-app'},
-    {'path': ['AWARENESS', 'TRAILER / CLIP', 'SOCIAL / CREATOR', 'NETFLIX HOME / TOP 10', 'FIRST EPISODE PLAY', 'CONVERSION (= viewer)'],
+    {'path': ['AWARENESS', 'TRAILER / CLIP', 'SOCIAL / CREATOR', 'NETFLIX HOME / TOP 10', 'FIRST EPISODE PLAY', 'FIRST VIEW (= viewer)'],
      'users': int(COHORT_SIZE * 0.18), 'pct': 18.0,
      'note': 'Multi-touch path — Jost SNL fans who saw clip + creator reaction before playing'},
-    {'path': ['AWARENESS', 'REVIEW', 'EPISODE LOOKUP / SEARCH', 'FIRST EPISODE PLAY', 'CONVERSION (= viewer)'],
+    {'path': ['AWARENESS', 'REVIEW', 'EPISODE LOOKUP / SEARCH', 'FIRST EPISODE PLAY', 'FIRST VIEW (= viewer)'],
      'users': int(COHORT_SIZE * 0.12), 'pct': 12.0,
      'note': 'Review-gated path — Jeopardy! loyalists who waited for Decider/RT before trying S2'},
-    {'path': ['AWARENESS', 'TRAILER / CLIP', 'EPISODE LOOKUP / SEARCH', 'NETFLIX HOME / TOP 10', 'FIRST EPISODE PLAY', 'CONVERSION (= viewer)'],
+    {'path': ['AWARENESS', 'TRAILER / CLIP', 'EPISODE LOOKUP / SEARCH', 'NETFLIX HOME / TOP 10', 'FIRST EPISODE PLAY', 'FIRST VIEW (= viewer)'],
      'users': int(COHORT_SIZE * 0.10), 'pct': 10.0,
-     'note': 'Cross-platform path — searched after clip exposure, then Netflix-rec converted'},
+     'note': 'Cross-platform path — searched after clip exposure, then Netflix-rec converted to first-episode play'},
 ]
 
 PATH_TO_PURCHASE = {
-    'mode': 'converters',
-    'cohort_label': 'Projected 30-day unique viewers',
+    'mode': 'viewers',                        # was 'converters' for movies
+    'cohort_label': 'Projected 30-day unique viewers (MODELED)',
     'cohort_size': COHORT_SIZE,
     'steps': len(PATH_STEPS),
     'columns': PATH_STEPS,
@@ -925,17 +1033,18 @@ TOUCHPOINTS = {
 # ─────────────────────────────────────────────────────────────────────────────
 
 FACTS = [
-    f"TV SHOW (Netflix) — not a theatrical release. Conversion = unique viewers, 'box office' analog = total watch hours. Pop Culture Jeopardy! S2 premiered {PREMIERE_DATE}, runs daily through {FINALE_DATE} (20 episodes).",
-    f"Currently mid-season (T+15 days, episode {EPISODES_TO_DATE} of {EPISODES_TOTAL}). Confirmed unique viewers to date: {CONFIRMED_UNIQUE_VIEWERS:,} ({CONFIRMED_WATCH_HOURS:,} watch hours). Estimated Netflix US Top 10 range: #{CONFIRMED_NETFLIX_TOP10_RANK_LOW}-#{CONFIRMED_NETFLIX_TOP10_RANK_HIGH} (daily rank fluctuates on strip schedules).",
-    f"Projected 30-day total viewership: {TOTAL_VIEWERS_LOW/1_000_000:.0f}M-{TOTAL_VIEWERS_HIGH/1_000_000:.0f}M unique viewers; midpoint {TOTAL_VIEWERS_MID/1_000_000:.0f}M. Total US watch hours: {TOTAL_WATCH_HOURS_LOW/1_000_000:.1f}M-{TOTAL_WATCH_HOURS_HI/1_000_000:.1f}M.",
-    f"Projected full lifecycle viewers (30-day + 90-day Netflix tail): {LIFECYCLE_VIEWERS_LOW/1_000_000:.0f}M-{LIFECYCLE_VIEWERS_HIGH/1_000_000:.0f}M.",
-    f"Jeopardy! franchise loyalists (~30M US adults) convert at ~4.5× baseline — largest cohort by size but lowest retention to episode 8+ (~38%) due to pop-culture-format fatigue.",
-    f"Colin Jost / SNL Weekend Update fans (~25M US adults) convert at ~6.2× baseline — highest per-capita conversion + highest retention to episode 8+ (~58%). The single biggest differentiator vs. traditional Jeopardy!.",
-    f"Netflix unscripted-game audience (~22M US adults) converts at ~5.4× baseline — broadest reach, moderate retention (~48%). Driven by Netflix's owned discovery (Top 10, Because You Watched).",
-    f"Triple-likely core (Jeopardy! × SNL/Jost × Netflix-game-show, ~1.8M people) converts at ~62% in first 7 days — the absolute bullseye for opening-week binge. Projected episode-20 retention in the 65-75% range (high for a daily-drop strip format).",
-    f"Demo shift vs. traditional Jeopardy!: Pop Culture Jeopardy! S2 viewers are 36% 18-34 + 41% 35-54 + 23% 55+ (vs. syndicated Jeopardy! ~62% in 55+). The Netflix migration successfully extended into younger demos.",
-    f"Daily clip-drop strategy is the highest-leverage discovery activation: YouTube clips drive ~18% lift on next-day Netflix episode views; TikTok clips drive ~16% lift. The most ROI-positive marketing channels.",
-    f"Smart TV / CTV (38%) + Mobile App (32%) capture 70% of watch hours. Smart-TV over-indexes Jeopardy! loyalists 1.45×; Mobile + TikTok-discovery over-index SNL/Jost fans 1.20× / 1.55×.",
+    f"TV SHOW (Netflix) — not a theatrical release. Conversion = first-episode play (unique viewers); 'box office' analog = total watch hours. PCJ S2 premiered {PREMIERE_DATE}, runs daily through {FINALE_DATE} (20 episodes, 25-min runtime).",
+    f"⚠️ MODELED PROJECTION — no public Nielsen / Tudum / Samba / Luminate / Parrot Analytics US-viewer figure for PCJ S2 is available. Numbers are the Subscriber-IQ-style engager-funnel fallback. Replace with measured viewer composition when Crosswalk panel pull runs against the S2 window.",
+    f"Currently mid-season (T+15 days, episode {EPISODES_TO_DATE} of {EPISODES_TOTAL}). Modeled unique viewers to date: {CONFIRMED_UNIQUE_VIEWERS:,} ({CONFIRMED_WATCH_HOURS:,} watch hours). Estimated Netflix US Top 10 range: #{CONFIRMED_NETFLIX_TOP10_RANK_LOW}-#{CONFIRMED_NETFLIX_TOP10_RANK_HIGH} (Netflix's own Top 10, not Nielsen overall — note no Netflix series currently cracks the Nielsen overall top 10 weekly).",
+    f"Projected 30-day total viewership: {TOTAL_VIEWERS_LOW/1_000_000:.1f}M-{TOTAL_VIEWERS_HIGH/1_000_000:.1f}M unique viewers; midpoint {TOTAL_VIEWERS_MID/1_000_000:.1f}M. Total US watch hours: {TOTAL_WATCH_HOURS_LOW/1_000_000:.1f}M-{TOTAL_WATCH_HOURS_HI/1_000_000:.1f}M.",
+    f"Projected full lifecycle viewers (30-day + 90-day Netflix tail): {LIFECYCLE_VIEWERS_LOW/1_000_000:.1f}M-{LIFECYCLE_VIEWERS_HIGH/1_000_000:.1f}M.",
+    f"STREAMING vs LINEAR JEOPARDY!: this is a digital viewing audience, NOT the syndicated Jeopardy! audience. Modeled PCJ Netflix demo: 36% 18-34 / 41% 35-54 / 23% 55+. Syndicated Jeopardy!: ~12% 18-34 / ~26% 35-54 / ~62% 55+. The Netflix viewer base is materially younger and more mobile/CTV-mixed than the linear-TV viewer.",
+    f"Comp benchmarks: Is It Cake S1 (binge release, 8 eps) ≈ 9-12M US uniques + ~30M US hours in 30 days — a CEILING (PCJ's daily-strip cadence undershoots binge). Cunk on Earth ≈ 6M US uniques (lower-engagement floor). Beef S2 (prestige drama anchor) = 8.3M Nielsen hours week 1.",
+    f"Jeopardy! franchise loyalists (~30M US adults) projected to convert at ~4.5× baseline — largest cohort by absolute size but lowest projected retention to episode 8+ (~38%) due to pop-culture-format fatigue. The OLDER, CTV-skewed slice of the modeled audience.",
+    f"Colin Jost / SNL Weekend Update fans (~25M US adults) projected to convert at ~6.2× baseline — highest per-capita conversion + highest projected retention to episode 8+ (~58%). The single biggest predicted differentiator vs. syndicated Jeopardy!'s audience.",
+    f"Netflix unscripted-game audience (~22M US adults) projected to convert at ~5.4× baseline — broadest reach, moderate projected retention (~48%). Effectively ZERO overlap with the syndicated Jeopardy! viewer base — discovered the show via Netflix recommender, not Jeopardy! brand affinity.",
+    f"Triple-likely core (Jeopardy! × SNL/Jost × Netflix-game-show intersection, ~900K projected) modeled at ~62% premiere-week conversion (~14.7× baseline). Projected episode-20 retention 65-75% — high for a daily-drop strip format.",
+    f"Modeled platform-mix: Smart TV / CTV (38%) + Mobile App (32%) capture 70% of watch hours. Smart-TV over-indexes Jeopardy! loyalists 1.45× (living-room pattern); Mobile + TikTok-discovery over-index SNL/Jost fans 1.20× / 1.55× (mobile-scroll pattern). Daily clip-drop is the highest-ROI activation: modeled YouTube clips ~18% lift on next-day episode views, TikTok ~16% lift.",
 ]
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -999,31 +1108,36 @@ KPIS = {
     'tv_show_lifecycle_viewers_low': LIFECYCLE_VIEWERS_LOW,
     'tv_show_lifecycle_viewers_high': LIFECYCLE_VIEWERS_HIGH,
     'projection_basis': (
-        "Netflix unscripted-game-show daily-strip comp model. Comp tier: "
-        "between Cunk on Earth (~6M US, 30-day) and Is It Cake (~16M US, "
-        "30-day). Mid-case 11M unique US viewers + 15.6M total watch hours. "
-        "Full lifecycle: 15M (mid) including 90-day Netflix tail. "
-        "Anchored to T+15 confirmed measurement of 6.5M unique viewers."
+        "MODELED projection — no Nielsen / Tudum / Samba S2 figure "
+        "available. Netflix daily-strip game-show comp model. Comp tier: "
+        "between Cunk on Earth (~6M US, 30-day, binge release) and Is "
+        "It Cake S1 (~10M US, 30-day, binge release CEILING). PCJ "
+        "undershoots Is It Cake because the daily-drop cadence caps "
+        "30-day cumulative viewership (no binge effect). Mid-case "
+        "5.5M unique US viewers + ~6.7M total watch hours. Full "
+        "lifecycle: 7.5M (mid) including 90-day Netflix tail. Anchored "
+        "to a modeled T+15 estimate of 3.2M viewers (~58% of 30-day mid)."
     ),
     'projection_comp': {
-        'title': 'Is It Cake',
+        'title': 'Is It Cake S1',
         'year': 2022,
         'distributor': 'Netflix',
-        'comp_total_viewers':        16_000_000,    # 30-day US unique viewers
-        'comp_premiere_week_viewers': 4_500_000,
+        'comp_total_viewers':         10_000_000,    # 30-day US unique viewers (revised ceiling)
+        'comp_premiere_week_viewers':  6_000_000,    # binge release captures more in week 1
         'comp_avg_minutes_per_viewer': 78,
         'rationale': (
-            "Closest Netflix unscripted-game comp: SNL alumni host (Mikey "
-            "Day), Netflix-native release strategy, ~16M US viewers in "
-            "first 30 days. Pop Culture Jeopardy! projected at ~69% of Is "
-            "It Cake's reach on the strength of: (a) the Jeopardy! "
-            "franchise brand premium, (b) Colin Jost as a more recognized "
-            "host than Mikey Day, (c) daily-drop strip strategy which "
-            "extends the discovery window. Below Is It Cake's ceiling "
-            "because the format is narrower (trivia vs. universal-appeal "
-            "cake-or-not gimmick)."
+            "Closest Netflix unscripted-game comp: SNL alumni host "
+            "(Mikey Day), Netflix-native release. Is It Cake S1 (binge, "
+            "8 eps) captured ~10M US viewers in first 30 days — most of "
+            "that viewership landed in week 1 because of the binge "
+            "release. PCJ projected at ~55% of Is It Cake's 30-day reach "
+            "because: (a) daily-drop strip cadence caps the binge effect, "
+            "(b) Jeopardy! brand premium offsets only partly, (c) lost "
+            "some S1 audience in the Prime→Netflix platform migration. "
+            "Above Cunk on Earth because Colin Jost + Jeopardy! brand "
+            "premium broadens appeal beyond Cunk's narrower demo."
         ),
-        'scaling_factor': 0.69,
+        'scaling_factor': 0.55,
     },
 }
 
@@ -1058,10 +1172,12 @@ META = {
     'finale_date':         FINALE_DATE,
     'episodes_total':      EPISODES_TOTAL,
     'episodes_to_date':    EPISODES_TO_DATE,
-    'projection_methodology': 'Netflix unscripted-game-show daily-strip comp (Is It Cake / Cunk on Earth tier) anchored to T+15 confirmed measurement',
+    'projection_methodology': 'MODELED Netflix daily-strip game-show comp (Cunk on Earth floor, Is It Cake S1 ceiling) with Subscriber-IQ-style engager-funnel fallback — no public Nielsen / Tudum / Samba S2 figure available',
     'created_by':       'admin',
     'created_at':       CREATED_AT,
-    'status_note':      f'MID-SEASON — premiered {PREMIERE_DATE}, finale {FINALE_DATE}. Currently T+15 days (episode {EPISODES_TO_DATE} of {EPISODES_TOTAL}). Confirmed {CONFIRMED_UNIQUE_VIEWERS:,} unique US viewers / {CONFIRMED_WATCH_HOURS:,} watch hours.',
+    'archived':         True,                   # V3 ships to archive
+    'archived_at':      CREATED_AT,
+    'status_note':      f'V3 MODELED — premiered {PREMIERE_DATE}, finale {FINALE_DATE}. T+15 (episode {EPISODES_TO_DATE} of {EPISODES_TOTAL}). Modeled {CONFIRMED_UNIQUE_VIEWERS:,} unique US viewers to date / {CONFIRMED_WATCH_HOURS:,} watch hours. ARCHIVED — admin-only until measured viewer composition replaces modeled estimates.',
 }
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -1118,20 +1234,38 @@ def main():
     gz_bytes = buf.getvalue()
     print(f"[pcj] payload size gz:  {len(gz_bytes):,} bytes")
 
+    # Upload to archive key (admin-only visibility)
     s3.put_object(Bucket=S3_BUCKET, Key=KEY,
                   Body=gz_bytes,
                   ContentType='application/json',
                   ContentEncoding='gzip')
     print(f"[pcj] ✓ uploaded s3://{S3_BUCKET}/{KEY}")
 
+    # 1) Make sure the project does NOT appear in the LIVE index (it's archived)
     try:
-        obj = s3.get_object(Bucket=S3_BUCKET, Key=S3_INDEX_KEY)
-        idx = json.loads(obj['Body'].read().decode('utf-8')) or {'runs': []}
+        live_obj = s3.get_object(Bucket=S3_BUCKET, Key=S3_INDEX_KEY)
+        live_idx = json.loads(live_obj['Body'].read().decode('utf-8')) or {'runs': []}
     except Exception:
-        idx = {'runs': []}
+        live_idx = {'runs': []}
+    before = len(live_idx.get('runs') or [])
+    live_idx['runs'] = [r for r in (live_idx.get('runs') or []) if r.get('project_name') != PROJECT_NAME]
+    if before != len(live_idx['runs']):
+        s3.put_object(Bucket=S3_BUCKET, Key=S3_INDEX_KEY,
+                      Body=json.dumps(live_idx, ensure_ascii=False).encode('utf-8'),
+                      ContentType='application/json')
+        print(f"[pcj] ✓ removed {PROJECT_NAME} from LIVE index (now {len(live_idx['runs'])} runs)")
+    else:
+        print(f"[pcj] (LIVE index already free of {PROJECT_NAME})")
 
-    idx['runs'] = [r for r in (idx.get('runs') or []) if r.get('project_name') != PROJECT_NAME]
-    idx['runs'].append({
+    # 2) Upsert into the ARCHIVE index (admin-only visibility)
+    try:
+        arc_obj = s3.get_object(Bucket=S3_BUCKET, Key=S3_ARCHIVE_INDEX_KEY)
+        arc_idx = json.loads(arc_obj['Body'].read().decode('utf-8')) or {'runs': []}
+    except Exception:
+        arc_idx = {'runs': []}
+
+    arc_idx['runs'] = [r for r in (arc_idx.get('runs') or []) if r.get('project_name') != PROJECT_NAME]
+    arc_idx['runs'].append({
         'key':            KEY,
         'project_name':   PROJECT_NAME,
         'target':         TARGET,
@@ -1139,14 +1273,17 @@ def main():
         'end_date':       WINDOW_END,
         'created_by':     'admin',
         'created_at':     CREATED_AT,
+        'archived':       True,
+        'archived_at':    CREATED_AT,
         'total_users':    COHORT_SIZE,
         'conversion_pct': None,
+        'note':           'V3 modeled — TV-aware (path-to-view, modeled-cohorts framing, comp-anchored 5.5M mid)',
     })
-    s3.put_object(Bucket=S3_BUCKET, Key=S3_INDEX_KEY,
-                  Body=json.dumps(idx, ensure_ascii=False).encode('utf-8'),
+    s3.put_object(Bucket=S3_BUCKET, Key=S3_ARCHIVE_INDEX_KEY,
+                  Body=json.dumps(arc_idx, ensure_ascii=False).encode('utf-8'),
                   ContentType='application/json')
-    print(f"[pcj] ✓ index updated ({len(idx['runs'])} runs total)")
-    for r in sorted(idx['runs'], key=lambda x: x.get('project_name','')):
+    print(f"[pcj] ✓ ARCHIVE index updated ({len(arc_idx['runs'])} archived runs total)")
+    for r in sorted(arc_idx['runs'], key=lambda x: x.get('project_name','')):
         print(f"   - {r['project_name']:18s}  {r['key']}")
 
 

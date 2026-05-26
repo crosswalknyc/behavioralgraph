@@ -19167,13 +19167,13 @@
                 ═══════════════════════════════════════════════════════ -->
                 <div class="card" id="jiqAudienceHypCard" style="padding: 1rem; margin-bottom: 1rem; display: none;">
                     <div style="display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.25rem;">
-                        <h3 style="margin: 0;">🎯 Audience Hypothesis — proving / disproving the theses</h3>
+                        <h3 id="jiqAudienceHypTitle" style="margin: 0;">🎯 Audience Hypothesis — proving / disproving the theses</h3>
                         <div id="jiqAudienceHypMeta" style="font-size: 0.72rem; color: var(--text-secondary);"></div>
                     </div>
                     <div id="jiqAudienceHypSubtitle" style="font-size: 0.78rem; color: var(--text-secondary); margin-bottom: 0.5rem;"></div>
                     <details style="margin: 0 0 0.85rem;">
                         <summary style="cursor:pointer;color:var(--accent-cyan);font-size:0.72rem;font-weight:600;user-select:none;padding:3px 0;">ℹ️ How to read this chart</summary>
-                        <div style="margin-top:6px;padding:0.7rem 0.9rem;background:var(--bg-secondary);border-left:3px solid var(--accent-cyan);border-radius:6px;font-size:0.76rem;line-height:1.55;">
+                        <div id="jiqAudienceHypHowtoBody" style="margin-top:6px;padding:0.7rem 0.9rem;background:var(--bg-secondary);border-left:3px solid var(--accent-cyan);border-radius:6px;font-size:0.76rem;line-height:1.55;">
                             <ul style="margin:0;padding-left:1.1rem;">
                                 <li><strong>Each card validates one client-stated audience theory.</strong> Same three-row layout on every card so they're directly comparable.</li>
                                 <li><strong>Verdict pill (top-right):</strong> 🟢 Strongly Validated (≥3× lift), 🟡 Validated (1.5×–3×), 🔴 Not Validated (&lt;1.5×).</li>
@@ -19199,13 +19199,13 @@
                 ═══════════════════════════════════════════════════════ -->
                 <div class="card" id="jiqAnchorsCard" style="padding: 1rem; margin-bottom: 1rem; display: none;">
                     <div style="display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.25rem;">
-                        <h3 style="margin: 0;">📐 Audience Sizing</h3>
+                        <h3 id="jiqAnchorsTitle" style="margin: 0;">📐 Audience Sizing</h3>
                         <div id="jiqAnchorsMeta" style="font-size: 0.72rem; color: var(--text-secondary);"></div>
                     </div>
                     <div id="jiqAnchorsSubtitle" style="font-size: 0.78rem; color: var(--text-secondary); margin-bottom: 0.5rem;"></div>
                     <details style="margin: 0 0 0.85rem;">
                         <summary style="cursor:pointer;color:var(--accent-cyan);font-size:0.72rem;font-weight:600;user-select:none;padding:3px 0;">ℹ️ How to read this chart</summary>
-                        <div style="margin-top:6px;padding:0.7rem 0.9rem;background:var(--bg-secondary);border-left:3px solid var(--accent-cyan);border-radius:6px;font-size:0.76rem;line-height:1.55;">
+                        <div id="jiqAnchorsHowtoBody" style="margin-top:6px;padding:0.7rem 0.9rem;background:var(--bg-secondary);border-left:3px solid var(--accent-cyan);border-radius:6px;font-size:0.76rem;line-height:1.55;">
                             <ul style="margin:0;padding-left:1.1rem;">
                                 <li><strong>L1–L6 layer bars:</strong> each layer = one digital touchpoint source (premier Netflix special, Amazon Prime tail, tour purchasers, SNL viral sketch, comp clips, co-lead actor halo). Bar = engager range (low–high).</li>
                                 <li><strong>Gross vs Deduplicated tiles:</strong> gross sums all layers (with overlap); dedup = true addressable audience after removing people who appear in multiple layers. The lime-bordered dedup tile is the answer.</li>
@@ -19218,7 +19218,7 @@
                     </details>
                     <div id="jiqAnchorsLayers" style="margin-bottom: 1rem;"></div>
                     <div id="jiqAnchorsRollup" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 0.75rem; margin-bottom: 1rem;"></div>
-                    <div style="font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-secondary); font-weight: 600; margin-bottom: 0.5rem;">Conversion Funnel to Opening Weekend</div>
+                    <div id="jiqAnchorsFunnelHeading" style="font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-secondary); font-weight: 600; margin-bottom: 0.5rem;">Conversion Funnel to Opening Weekend</div>
                     <div id="jiqAnchorsFunnel" style="margin-bottom: 1rem;"></div>
                     <div style="font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-secondary); font-weight: 600; margin-bottom: 0.5rem;">Public Anchor Inputs</div>
                     <div id="jiqAnchorsInputs" style="margin-bottom: 1rem; overflow-x: auto;"></div>
@@ -19392,13 +19392,13 @@
                 <!-- Path to Purchase (BSFS-style visual journey) -->
                 <div class="card" id="jiqPathCard" style="padding: 1rem; margin-bottom: 1rem; display: none;">
                     <div style="display: flex; justify-content: space-between; align-items: baseline; flex-wrap: wrap; gap: 0.5rem;">
-                        <h3 style="margin: 0 0 0.5rem;">🛒 Path to Purchase</h3>
+                        <h3 id="jiqPathTitle" style="margin: 0 0 0.5rem;">🛒 Path to Purchase</h3>
                         <div id="jiqPathMeta" style="font-size: 0.72rem; color: var(--text-secondary);"></div>
                     </div>
-                    <div style="font-size: 0.72rem; color: var(--text-secondary); margin-bottom: 0.4rem;">Right-aligned ribbon: each converter's last few events before purchase, collapsed into channel categories. Column height ∝ unique users at that step. Hover for the top hosts.</div>
+                    <div id="jiqPathSubtitle" style="font-size: 0.72rem; color: var(--text-secondary); margin-bottom: 0.4rem;">Right-aligned ribbon: each converter's last few events before purchase, collapsed into channel categories. Column height ∝ unique users at that step. Hover for the top hosts.</div>
                     <details style="margin: 0 0 0.85rem;">
                         <summary style="cursor:pointer;color:var(--accent-cyan);font-size:0.72rem;font-weight:600;user-select:none;padding:3px 0;">ℹ️ How to read this chart</summary>
-                        <div style="margin-top:6px;padding:0.7rem 0.9rem;background:var(--bg-secondary);border-left:3px solid var(--accent-cyan);border-radius:6px;font-size:0.76rem;line-height:1.55;">
+                        <div id="jiqPathHowtoBody" style="margin-top:6px;padding:0.7rem 0.9rem;background:var(--bg-secondary);border-left:3px solid var(--accent-cyan);border-radius:6px;font-size:0.76rem;line-height:1.55;">
                             <ul style="margin:0;padding-left:1.1rem;">
                                 <li><strong>8-step ribbon, right-aligned:</strong> step labels run from <em>-7 (AWARENESS)</em> on the far left to <em>0 (CONVERSION)</em> on the far right. The ribbon is read like a sentence: "first they were made aware, then they watched a trailer, then social/creator hits, then a review, then a showtime lookup, then a fee compare, then checkout, then conversion."</li>
                                 <li><strong>Bar height</strong> = number of converters who hit that step (survivorship curve — every step has fewer people than the prior one).</li>
@@ -28597,10 +28597,39 @@
             if (!ah || !(ah.hypotheses || []).length) { card.style.display = 'none'; return; }
             card.style.display = '';
 
+            // TV-show vs movie copy swap. For a streaming series the
+            // theses are about likely VIEWERS (not ticket buyers), and
+            // the baseline rate is the projected 30-day viewer-conv
+            // rate against US adults — not opening-weekend ticket conv.
+            var runAh = (window._jiqCurrentRun || {});
+            var metaAh = runAh.meta || {};
+            var kpisAh = runAh.kpis || {};
+            var isTvAh = ((metaAh.target_type || '').toLowerCase() === 'tv_show')
+                      || (kpisAh.tv_show_mode === true);
+            var titleAh = document.getElementById('jiqAudienceHypTitle');
+            var howAh   = document.getElementById('jiqAudienceHypHowtoBody');
+            if (titleAh) titleAh.innerHTML = isTvAh
+                ? '🎯 Audience Hypothesis — modeled viewer cohorts'
+                : '🎯 Audience Hypothesis — proving / disproving the theses';
+            if (howAh && isTvAh) howAh.innerHTML =
+                '<ul style="margin:0;padding-left:1.1rem;">'
+              +   '<li><strong>Each card sizes one modeled viewer cohort.</strong> Same three-row layout on every card so they\'re directly comparable. <em>This is the predicted audience composition, not Nielsen-measured;</em> when public measurement becomes available or a Crosswalk panel pull is run, it replaces these estimates.</li>'
+              +   '<li><strong>Verdict pill (top-right):</strong> 🟢 Strongly Predicted (≥3× lift), 🟡 Predicted (1.5×–3×), 🔴 Not Predicted (&lt;1.5×) — based on streaming-comp benchmarks (Netflix daily-strip + unscripted-game).</li>'
+              +   '<li><strong>Intent index (center, big number):</strong> e.g. <em>4.5×</em> = this cohort is projected to convert to viewers at 4.5 times the gen-pop streaming baseline.</li>'
+              +   '<li><strong>First-View / Total Viewers</strong> (lime / cyan): est. unique viewers from this cohort over premiere-week and the full 30-day window.</li>'
+              +   '<li><strong>Top engagement surfaces:</strong> % of cohort touching each platform/property. Mini horizontal bars.</li>'
+              +   '<li><strong>DMA concentration:</strong> top markets where the cohort over-indexes vs national avg.</li>'
+              +   '<li><strong>Streaming vs linear note:</strong> for a Jeopardy! format extension on Netflix, the modeled streaming audience is materially younger and more mobile-skewed than the syndicated TV audience — these cohorts capture that delta explicitly.</li>'
+              + '</ul>';
+
             var subEl  = document.getElementById('jiqAudienceHypSubtitle');
             var metaEl = document.getElementById('jiqAudienceHypMeta');
-            if (subEl) subEl.innerHTML = 'Testing client-stated audience theses against a <strong>' + _jiqFmt(ah.baseline_size) + '</strong> ' + _jiqEsc(ah.baseline_label || 'baseline') + '. Each cohort\'s <strong>intent index</strong> is conversion lift vs. the ~' + (ah.baseline_conversion_pct || 0.5).toFixed(1) + '% gen-pop opening-weekend baseline.';
-            if (metaEl) metaEl.textContent = (ah.hypotheses.length + ' hypotheses · ~' + _jiqFmt(ah.baseline_opening_buyers || 0) + ' baseline opening-weekend buyers');
+            if (subEl) subEl.innerHTML = isTvAh
+                ? 'Modeled viewer cohorts against a <strong>' + _jiqFmt(ah.baseline_size) + '</strong> ' + _jiqEsc(ah.baseline_label || 'baseline') + '. Each cohort\'s <strong>intent index</strong> is projected viewer-conversion lift vs. the ~' + (ah.baseline_conversion_pct || 0.5).toFixed(2) + '% gen-pop 30-day streaming baseline. Predicted, not measured.'
+                : 'Testing client-stated audience theses against a <strong>' + _jiqFmt(ah.baseline_size) + '</strong> ' + _jiqEsc(ah.baseline_label || 'baseline') + '. Each cohort\'s <strong>intent index</strong> is conversion lift vs. the ~' + (ah.baseline_conversion_pct || 0.5).toFixed(1) + '% gen-pop opening-weekend baseline.';
+            if (metaEl) metaEl.textContent = isTvAh
+                ? (ah.hypotheses.length + ' cohorts · ~' + _jiqFmt(ah.baseline_opening_buyers || 0) + ' baseline 30-day viewers')
+                : (ah.hypotheses.length + ' hypotheses · ~' + _jiqFmt(ah.baseline_opening_buyers || 0) + ' baseline opening-weekend buyers');
 
             // Per-hypothesis tiles
             var tilesEl = document.getElementById('jiqAudienceHypTiles');
@@ -28737,6 +28766,32 @@
             }
             card.style.display = '';
 
+            // TV-show vs movie copy swap. For a streaming series this is
+            // a viewer-sizing model — engagers → 30-day unique viewers /
+            // watch hours — not a ticket-buyer funnel.
+            var runAn = (window._jiqCurrentRun || {});
+            var metaAn = runAn.meta || {};
+            var kpisAn = runAn.kpis || {};
+            var isTvAn = ((metaAn.target_type || '').toLowerCase() === 'tv_show')
+                      || (kpisAn.tv_show_mode === true);
+            var titleAn = document.getElementById('jiqAnchorsTitle');
+            var howAn   = document.getElementById('jiqAnchorsHowtoBody');
+            var funHead = document.getElementById('jiqAnchorsFunnelHeading');
+            if (titleAn) titleAn.innerHTML = isTvAn
+                ? '📐 Viewer Sizing — modeled US engagers → unique viewers'
+                : '📐 Audience Sizing';
+            if (funHead) funHead.textContent = isTvAn
+                ? 'Conversion Funnel to 30-Day Unique Viewers'
+                : 'Conversion Funnel to Opening Weekend';
+            if (howAn && isTvAn) howAn.innerHTML =
+                '<ul style="margin:0;padding-left:1.1rem;">'
+              +   '<li><strong>L1–L6 layer bars:</strong> each layer = one digital touchpoint source the modeled audience overlaps with (e.g., syndicated Jeopardy! viewers, SNL/Weekend-Update engagers, Netflix unscripted-game watchers, NYT Games daily players). Bar = engager range (low–high).</li>'
+              +   '<li><strong>Gross vs Deduplicated tiles:</strong> gross sums all layers (with overlap); dedup = true addressable engager base after removing people who appear in multiple layers. The lime-bordered dedup tile is the answer.</li>'
+              +   '<li><strong>Conversion Funnel (stages):</strong> narrows from total engagers → Netflix-subscribing high-intent → game-show / trivia ready → <em>30-day unique viewers</em> (the streaming analog of "opening-weekend tickets") → premiere-week viewers → full-lifecycle viewers (30-day + 90-day tail) → total watch hours.</li>'
+              +   '<li><strong>Methodology note:</strong> follows the same engager-funnel pattern Subscriber IQ uses for streaming viewership — public anchors only, then Crosswalk panel pull replaces with measured numbers.</li>'
+              +   '<li><strong>MODELED TAKE (lime callout):</strong> single-sentence conclusion. Mid-case viewers + watch hours, anchored to the closest streaming comp (e.g., Is It Cake, Cunk on Earth).</li>'
+              + '</ul>';
+
             var fmt = function(n) {
                 if (n == null) return '—';
                 if (n >= 1e6) return (n / 1e6).toFixed(n >= 1e7 ? 0 : 1) + 'M';
@@ -28753,7 +28808,9 @@
             var sub = document.getElementById('jiqAnchorsSubtitle');
             if (sub) sub.textContent = an.methodology || '';
             var meta = document.getElementById('jiqAnchorsMeta');
-            if (meta) meta.textContent = 'trailing 12 months · US digital engagers';
+            if (meta) meta.textContent = isTvAn
+                ? 'trailing 12 months · US digital engagers · modeled (no public Nielsen yet)'
+                : 'trailing 12 months · US digital engagers';
 
             // ── L1-L6 layer bars (each layer = horizontal bar, length = high engager count)
             var maxEng = Math.max.apply(null,
@@ -30080,6 +30137,33 @@
                 return;
             }
             card.style.display = '';
+
+            // TV-show vs movie copy swap. For a streaming series there is
+            // no "purchase" — the ribbon ends at first-episode-play, not
+            // ticket checkout. Swap title, subtitle and how-to to match.
+            (function() {
+                var runP = (window._jiqCurrentRun || {});
+                var metaP = runP.meta || {};
+                var kpisP = runP.kpis || {};
+                var isTvP = ((metaP.target_type || '').toLowerCase() === 'tv_show')
+                          || (kpisP.tv_show_mode === true);
+                var titleP = document.getElementById('jiqPathTitle');
+                var subP   = document.getElementById('jiqPathSubtitle');
+                var howP   = document.getElementById('jiqPathHowtoBody');
+                if (titleP) titleP.innerHTML = isTvP ? '🍿 Path to View' : '🛒 Path to Purchase';
+                if (subP) subP.innerHTML = isTvP
+                    ? 'Right-aligned ribbon: each viewer\'s last few events before first-episode play, collapsed into channel categories. Column height ∝ unique viewers at that step. Hover for the top hosts/platforms.'
+                    : 'Right-aligned ribbon: each converter\'s last few events before purchase, collapsed into channel categories. Column height ∝ unique users at that step. Hover for the top hosts.';
+                if (howP && isTvP) howP.innerHTML =
+                    '<ul style="margin:0;padding-left:1.1rem;">'
+                  +   '<li><strong>Multi-step ribbon, right-aligned:</strong> labels run from <em>-N (AWARENESS)</em> on the far left to <em>0 (FIRST EPISODE PLAY = viewer)</em> on the far right. The ribbon reads like a sentence — "first they saw a clip, then a creator reaction, then a search, then opened Netflix, then pressed play."</li>'
+                  +   '<li><strong>Bar height</strong> = number of viewers who hit that step (survivorship curve — every step has fewer people than the prior one).</li>'
+                  +   '<li><strong>% under each bar</strong> = same value as % of the full projected-viewer cohort.</li>'
+                  +   '<li><strong>Hover any column</strong> for the top hosts/platforms at that step (YouTube + TikTok clip drops, Netflix in-app search, etc.).</li>'
+                  +   '<li><strong>Top observed paths</strong> (below): the 5 most common K-gram sequences. Big viewer counts = sequences that drove the most first-episode plays.</li>'
+                  +   '<li><strong>Note for streaming:</strong> the final step is <em>first-episode play</em>, not a transaction. Subsequent retention (episodes 2+) is tracked in the Headline Viewership tile (avg episodes / viewer).</li>'
+                  + '</ul>';
+            })();
 
             // ── Back-compat patch: legacy modeled runs hard-coded every
             // step at 100% of the cohort. Real funnels narrow at the
