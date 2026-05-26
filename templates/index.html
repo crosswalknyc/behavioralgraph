@@ -73983,17 +73983,6 @@
             currentEditingSlide = 0;
             deckUndoStack = [];
             populateDeckSlidesWithProfileImage(deck);
-            // If profile image not in cache yet, fetch by deck's profile name and re-populate when loaded
-            const deckProfileName = deck?.titleSlide?.title || deck?.slides?.[0]?.customHeader?.profileName 
-                || deck?.slides?.find(s => s.customHeader?.profileName)?.customHeader?.profileName;
-            if (deckProfileName && !getProfileImageForDeck(deck)) {
-                fetchProfileImage(deckProfileName, 0, false, (imageUrl) => {
-                    if (currentEditingDeck && imageUrl) {
-                        populateDeckSlidesWithProfileImage(currentEditingDeck);
-                        renderSlideEditor();
-                    }
-                });
-            }
             
             renderWorkspaceDecks();
             renderSlideEditor();
@@ -74430,7 +74419,7 @@
                 const isComparisonTitle = titleSlide.isComparison && titleSlide.comparisonProfiles && titleSlide.comparisonProfiles.length >= 1;
                 const compProfiles = (titleSlide.comparisonProfiles || []).slice(0, 6);
                 
-                let profileImage = getDeckTitleSlideProfileImage(slide);
+                let profileImage = slide?.image || titleSlide?.image || null;
                 if (isComparisonTitle && compProfiles.length === 1 && compProfiles[0].image) profileImage = compProfiles[0].image;
                 
                 // Use custom values if saved, otherwise use defaults
