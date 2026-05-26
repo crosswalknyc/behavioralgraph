@@ -28607,6 +28607,7 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
                     save_to_s3 as _cw_save_s3,
                     insert_structural_gaps as _cw_insert_gaps,
                     agent_reason_audit_fails as _cw_agent_reason,
+                    agent_reason_floor_noise as _cw_floor_noise,
                     apply_default_lock_breaks as _cw_break_locks,
                     apply_audit_corrections as _cw_apply_patches,  # fallback
                 )
@@ -28616,6 +28617,7 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
                     save_to_s3 as _cw_save_s3,
                     insert_structural_gaps as _cw_insert_gaps,
                     agent_reason_audit_fails as _cw_agent_reason,
+                    agent_reason_floor_noise as _cw_floor_noise,
                     apply_default_lock_breaks as _cw_break_locks,
                     apply_audit_corrections as _cw_apply_patches,  # fallback
                 )
@@ -28661,6 +28663,41 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
             else:
                 print("   ⚠️ no OpenAI client; falling back to deterministic mid-band patch")
                 _df_cw, _patches = _cw_apply_patches(_df_cw, _report)
+            # 1b. FLOOR-NOISE RE-REASONING: any non-demographic brand row sitting
+            #     at the panel-floor (bp < 0.5%) is handed to the agent for a
+            #     KEEP / CHANGE / DROP decision. Operator policy: brands are
+            #     never allowed to sit at ~0.001% — they must be either
+            #     persona-defensibly real or removed entirely. LOCATION/DMA
+            #     and demographic enumerations are exempt.
+            _floor_decisions = []
+            if _oa_client is not None:
+                try:
+                    _df_cw, _floor_decisions = _cw_floor_noise(
+                        _df_cw, _report, _oa_client,
+                        persona_doc=_pdoc, verbose=True,
+                    )
+                    if _floor_decisions:
+                        _n_drop   = sum(1 for d in _floor_decisions if d['decision'] == 'DROP')
+                        _n_chg    = sum(1 for d in _floor_decisions if d['decision'] == 'CHANGE')
+                        _n_keep_f = sum(1 for d in _floor_decisions if d['decision'] == 'KEEP')
+                        _n_skp_f  = sum(1 for d in _floor_decisions if d['decision'] == 'SKIP')
+                        print(f"   🧹 floor-noise verdict on {len(_floor_decisions)} flagged row(s): "
+                              f"{_n_drop} DROP, {_n_chg} CHANGE, {_n_keep_f} KEEP, {_n_skp_f} SKIP")
+                        for _d in _floor_decisions[:30]:
+                            _old = f"{_d['old_bp']:.4f}%" if _d['old_bp'] is not None else "—"
+                            if _d['decision'] == 'CHANGE':
+                                arrow = f"{_old:>10s} → {_d['new_bp']:.4f}%"
+                            elif _d['decision'] == 'DROP':
+                                arrow = f"{_old:>10s} → (dropped)"
+                            else:
+                                arrow = f"{_old:>10s} → (kept)"
+                            print(f"       {_d['decision']:6s} {_d['category']:22s} {str(_d['value'])[:22]:22s}  "
+                                  f"{arrow}  {(_d.get('reason') or '')[:120]}")
+                        if len(_floor_decisions) > 30:
+                            print(f"       ... +{len(_floor_decisions)-30} more")
+                except Exception as _fn_err:
+                    print(f"   ⚠️ floor-noise pass skipped: {_fn_err}")
+                    import traceback as _tb; _tb.print_exc()
             # 2. Break default-value-lock fingerprints (pipeline defaults, not real values)
             _df_cw, _lock_patches = _cw_break_locks(_df_cw, _report)
             if _lock_patches:
@@ -28670,8 +28707,13 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
                           f"{_lp['old_bp']:.4f}% → {_lp['new_bp']:.4f}%  (fp={_lp['fingerprint']})")
             # 3. Insert structural-gap rows
             _df_cw2, _n_gaps_inserted = _cw_insert_gaps(_df_cw, _report)
-            # 4. Rewrite CSV if we mutated anything
-            if _patches or _n_gaps_inserted or _lock_patches:
+            # 4. Rewrite CSV if we mutated anything (FAIL patches, structural gaps,
+            #    default-lock breaks, or floor-noise changes/drops).
+            _floor_mutated = any(
+                d.get('decision') in ('CHANGE', 'DROP')
+                for d in (_floor_decisions or [])
+            )
+            if _patches or _n_gaps_inserted or _lock_patches or _floor_mutated:
                 _bp_col = 'Brand Penetration (Row)'
                 if _bp_col in _df_cw2.columns:
                     _df_cw2[_bp_col] = _df_cw2[_bp_col].apply(
