@@ -11333,9 +11333,9 @@
             width: 960px;
             height: 540px;
             position: relative;
-            background: linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 50%, #1a1a1a 100%);
+            background: #ffffff;
             border-radius: 8px;
-            box-shadow: 0 4px 24px rgba(0,0,0,0.4), 0 0 0 1px rgba(255,255,255,0.08);
+            box-shadow: 0 4px 24px rgba(0,0,0,0.15), 0 0 0 1px rgba(0,0,0,0.08);
             overflow: hidden;
             transform-origin: center center;
             transition: transform 0.2s ease, width 0.2s ease, height 0.2s ease;
@@ -11349,7 +11349,7 @@
             left: 24px;
             right: 24px;
             font-size: 0.55rem;
-            color: rgba(255,255,255,0.4);
+            color: rgba(0,0,0,0.35);
             text-align: left;
             z-index: 5;
         }
@@ -11620,57 +11620,57 @@
         
         /* Slide placeholder for images */
         .slide-image-placeholder {
-            background: linear-gradient(135deg, #3d3d3d 0%, #2a2a2a 100%);
-            border: 2px dashed rgba(255,255,255,0.2);
-            border-radius: 4px;
+            background: linear-gradient(135deg, #2f2f2f 0%, #232323 100%);
+            border: 2px dashed rgba(255,255,255,0.25);
+            border-radius: 8px;
             display: flex;
             flex-direction: column;
             align-items: center;
             justify-content: center;
             cursor: pointer;
             transition: all 0.2s;
-            color: rgba(255,255,255,0.5);
-            font-size: 0.75rem;
+            color: rgba(255,255,255,0.55);
+            font-size: 0.8rem;
+            font-weight: 600;
         }
         
         .slide-image-placeholder:hover {
-            border-color: rgba(200, 230, 0, 0.5);
-            background: linear-gradient(135deg, #4d4d4d 0%, #3a3a3a 100%);
+            border-color: rgba(200, 230, 0, 0.6);
+            background: linear-gradient(135deg, #3a3a3a 0%, #2e2e2e 100%);
+            color: rgba(255,255,255,0.75);
         }
         
         .slide-image-placeholder .placeholder-icon {
-            font-size: 2rem;
-            margin-bottom: 0.5rem;
-            opacity: 0.6;
+            font-size: 2.2rem;
+            margin-bottom: 0.4rem;
+            opacity: 0.7;
         }
         
         .slide-image-placeholder .placeholder-delete-btn {
             position: absolute;
-            top: 4px;
-            right: 4px;
-            width: 20px;
-            height: 20px;
-            border-radius: 50%;
-            background: rgba(239, 68, 68, 0.8);
+            bottom: 6px;
+            right: 6px;
+            padding: 4px 10px;
+            border-radius: 4px;
+            background: rgba(239, 68, 68, 0.85);
             border: none;
             color: #fff;
-            font-size: 12px;
+            font-size: 0.6rem;
+            font-weight: 700;
+            letter-spacing: 0.04em;
             cursor: pointer;
             display: flex;
             align-items: center;
-            justify-content: center;
-            opacity: 0;
-            transition: opacity 0.2s;
-            z-index: 10;
-        }
-        
-        .slide-image-placeholder:hover .placeholder-delete-btn {
+            gap: 4px;
             opacity: 1;
+            transition: background 0.2s, transform 0.15s;
+            z-index: 10;
+            text-transform: uppercase;
         }
         
         .slide-image-placeholder .placeholder-delete-btn:hover {
             background: rgba(239, 68, 68, 1);
-            transform: scale(1.1);
+            transform: scale(1.05);
         }
         
         /* Draggable slide sections */
@@ -74402,30 +74402,7 @@
         }
         
         function populateDeckSlidesWithProfileImage(deck) {
-            if (!deck?.slides) return;
-            const profileSrc = getProfileImageForDeck(deck);
-            if (!profileSrc) return;
-            const slides = deck.slides;
-            for (let i = 0; i < slides.length; i++) {
-                const slide = slides[i];
-                if (slide.type === 'toc' || slide.type === 'closing') continue;
-                if (slide.chartImage) continue; // chart slides have their own image
-                const hasImage = (slide.elements || []).some(el => el.type === 'image');
-                if (hasImage) continue;
-                const layoutIndex = (i % 8) + 1;
-                const cfg = getImageConfigForLayout(layoutIndex);
-                if (!slide.elements) slide.elements = [];
-                slide.elements.push({
-                    id: 'img_' + Date.now() + '_' + i,
-                    type: 'image',
-                    x: cfg.x,
-                    y: cfg.y,
-                    width: cfg.width,
-                    height: cfg.height,
-                    src: profileSrc,
-                    borderRadius: 8
-                });
-            }
+            return;
         }
         
         // Source footer text for all slides (base line; profile/sample/dates appended below)
@@ -74543,42 +74520,50 @@
                         <!-- Large profile name - EDITABLE with dynamic sizing -->
                         <div contenteditable="true" 
                              id="titleSlideProfileName"
-                             style="position: absolute; left: -1%; top: ${titleTop}; font-size: ${titleFontSize}; font-weight: 700; color: #ffffff; line-height: 1; letter-spacing: -0.03em; text-transform: uppercase; cursor: text; padding: 4px 8px; border-radius: 4px; max-width: 95%; word-wrap: break-word;"
-                             onfocus="this.style.background='rgba(255,255,255,0.1)'" 
+                             style="position: absolute; left: -1%; top: ${titleTop}; font-size: ${titleFontSize}; font-weight: 700; color: #1a1a2e; line-height: 1; letter-spacing: -0.03em; text-transform: uppercase; cursor: text; padding: 4px 8px; border-radius: 4px; max-width: 95%; word-wrap: break-word;"
+                             onfocus="this.style.background='rgba(0,0,0,0.05)'" 
                              onblur="this.style.background='transparent'; updateTitleSlideProfileName(this.textContent); renderSlideEditor();">
                             ${escapeHtml(profileName)}.
                         </div>
                         
-                        ${comparisonImagesHtml ? comparisonImagesHtml : `
+                        ${comparisonImagesHtml ? comparisonImagesHtml : (profileImage ? `
                         <!-- Profile image - CLICKABLE TO CHANGE with dynamic positioning -->
-                        <div style="position: absolute; left: 5%; top: ${imageTop}; width: ${imageSize}; height: ${imageSize}; border: 3px solid rgba(255,255,255,0.2); border-radius: 8px; overflow: hidden; box-shadow: 0 8px 24px rgba(0,0,0,0.4); cursor: pointer; transition: border-color 0.2s;"
+                        <div style="position: absolute; left: 5%; top: ${imageTop}; width: ${imageSize}; height: ${imageSize}; border: 3px solid rgba(200,200,200,0.3); border-radius: 8px; overflow: hidden; box-shadow: 0 8px 24px rgba(0,0,0,0.15); cursor: pointer; transition: border-color 0.2s;"
                              onclick="uploadTitleImage()"
-                             onmouseover="this.style.borderColor='var(--accent-lime)'"
-                             onmouseout="this.style.borderColor='rgba(255,255,255,0.2)'"
+                             onmouseover="this.style.borderColor='#c8e600'"
+                             onmouseout="this.style.borderColor='rgba(200,200,200,0.3)'"
                              title="Click to change image">
                             ${profileImageHtml}
-                        </div>`}
+                        </div>` : `
+                        <!-- Add Image placeholder -->
+                        <div class="slide-image-placeholder" style="position: absolute; left: 5%; top: ${imageTop}; width: ${imageSize}; height: ${imageSize};"
+                             onclick="uploadTitleImage()"
+                             title="Click to add image">
+                            <span class="placeholder-icon">🖼️</span>
+                            <span>Add Image</span>
+                            <button class="placeholder-delete-btn" onclick="event.stopPropagation(); this.parentElement.style.display='none';" title="No image on this slide">✕ No Image</button>
+                        </div>`)}
                         
                         <!-- Right side info - EDITABLE (date removed from top right per request) -->
-                        <div style="position: absolute; right: 5%; top: 45%; text-align: right; font-size: 0.7rem; color: rgba(255,255,255,0.7);">
+                        <div style="position: absolute; right: 5%; top: 45%; text-align: right; font-size: 0.7rem; color: #6366f1;">
                             <div contenteditable="true" 
                                  style="margin-top: 0.5rem; cursor: text; padding: 2px 4px; border-radius: 3px;"
-                                 onfocus="this.style.background='rgba(255,255,255,0.1)'" 
+                                 onfocus="this.style.background='rgba(0,0,0,0.05)'" 
                                  onblur="this.style.background='transparent'; updateTitleSlideBranding(this.textContent)">${escapeHtml(branding)}</div>
                             <div contenteditable="true" 
-                                 style="margin-top: 0.75rem; font-size: 0.8rem; color: rgba(255,255,255,0.9); font-weight: 500; cursor: text; padding: 2px 4px; border-radius: 3px;"
-                                 onfocus="this.style.background='rgba(255,255,255,0.1)'" 
+                                 style="margin-top: 0.75rem; font-size: 0.8rem; color: #1a1a2e; font-weight: 600; cursor: text; padding: 2px 4px; border-radius: 3px;"
+                                 onfocus="this.style.background='rgba(0,0,0,0.05)'" 
                                  onblur="this.style.background='transparent'; updateTitleSlidePresenterName(this.textContent)">${escapeHtml(presenterName)}</div>
                             <div contenteditable="true" 
-                                 style="margin-top: 0.15rem; font-size: 0.7rem; color: rgba(255,255,255,0.6); cursor: text; padding: 2px 4px; border-radius: 3px;"
-                                 onfocus="this.style.background='rgba(255,255,255,0.1)'" 
+                                 style="margin-top: 0.15rem; font-size: 0.7rem; color: #555; cursor: text; padding: 2px 4px; border-radius: 3px;"
+                                 onfocus="this.style.background='rgba(0,0,0,0.05)'" 
                                  onblur="this.style.background='transparent'; updateTitleSlidePresenterCompany(this.textContent)">${escapeHtml(presenterCompany)}</div>
                         </div>
                         
                         <!-- Bottom description - Date Range - EDITABLE -->
                         <div contenteditable="true" 
-                             style="position: absolute; left: 5%; bottom: 15%; width: 60%; font-size: 0.85rem; color: rgba(255,255,255,0.8); line-height: 1.6; font-weight: 500; cursor: text; padding: 4px 8px; border-radius: 4px;"
-                             onfocus="this.style.background='rgba(255,255,255,0.1)'" 
+                             style="position: absolute; left: 5%; bottom: 15%; width: 60%; font-size: 0.85rem; color: #444; line-height: 1.6; font-weight: 500; cursor: text; padding: 4px 8px; border-radius: 4px;"
+                             onfocus="this.style.background='rgba(0,0,0,0.05)'" 
                              onblur="this.style.background='transparent'; updateTitleSlideDateRange(this.textContent)">
                             ${escapeHtml(dateRangeDisplay)}
                         </div>
@@ -74613,22 +74598,22 @@
                 
                 return `
                     <!-- Header bar (no date in top right per request) -->
-                    <div style="position: absolute; left: 5%; top: 2%; width: 90%; display: flex; justify-content: space-between; align-items: center; font-size: 0.65rem; color: rgba(255,255,255,0.5);">
+                    <div style="position: absolute; left: 5%; top: 2%; width: 90%; display: flex; justify-content: space-between; align-items: center; font-size: 0.65rem; color: rgba(0,0,0,0.4);">
                         <span>Crosswalk Profile IQ</span>
                     </div>
                     
                     <!-- Section title - EDITABLE -->
                     <div contenteditable="true" 
-                         style="position: absolute; left: 5%; top: 8%; font-size: 2.2rem; font-weight: 700; color: #ffffff; text-transform: uppercase; cursor: text; padding: 4px 8px; border-radius: 4px;"
-                         onfocus="this.style.background='rgba(255,255,255,0.1)'" 
+                         style="position: absolute; left: 5%; top: 8%; font-size: 2.2rem; font-weight: 700; color: #1a1a2e; text-transform: uppercase; cursor: text; padding: 4px 8px; border-radius: 4px;"
+                         onfocus="this.style.background='rgba(0,0,0,0.05)'" 
                          onblur="this.style.background='transparent'; updateTocTitle(this.textContent)">
                         ${escapeHtml(slide.customTitle || slide.title || 'TABLE OF CONTENTS')}
                     </div>
                     
                     <!-- Description - EDITABLE -->
                     <div contenteditable="true" 
-                         style="position: absolute; left: 5%; top: 22%; width: 40%; font-size: 0.75rem; color: rgba(255,255,255,0.6); line-height: 1.6; cursor: text; padding: 4px 8px; border-radius: 4px;"
-                         onfocus="this.style.background='rgba(255,255,255,0.1)'" 
+                         style="position: absolute; left: 5%; top: 22%; width: 40%; font-size: 0.75rem; color: #555; line-height: 1.6; cursor: text; padding: 4px 8px; border-radius: 4px;"
+                         onfocus="this.style.background='rgba(0,0,0,0.05)'" 
                          onblur="this.style.background='transparent'; updateTocDescription(this.textContent)">
                         ${escapeHtml(slide.customDescription || `This presentation provides comprehensive audience insights including demographics, behavioral patterns, and strategic recommendations for ${currentProfileData?.name || 'your target audience'}.`)}
                     </div>
@@ -74636,7 +74621,7 @@
                     <!-- TOC Items - Column 1 -->
                     <div style="position: absolute; left: 52%; top: 22%; width: 20%;">
                         ${col1.map((item) => `
-                            <div style="padding: 0.4rem 0; border-bottom: 1px solid rgba(255,255,255,0.1); font-size: 0.75rem; color: #ffffff; font-weight: 500; display: flex; gap: 0.5rem; align-items: baseline;">
+                            <div style="padding: 0.4rem 0; border-bottom: 1px solid rgba(0,0,0,0.1); font-size: 0.75rem; color: #1a1a2e; font-weight: 500; display: flex; gap: 0.5rem; align-items: baseline;">
                                 <span style="color: var(--accent-lime); font-size: 0.7rem; flex-shrink: 0;">${item.num}</span>
                                 <span style="flex: 1; line-height: 1.3;">${escapeHtml(item.title)}</span>
                             </div>
@@ -74646,7 +74631,7 @@
                     <!-- TOC Items - Column 2 -->
                     <div style="position: absolute; left: 75%; top: 22%; width: 20%;">
                         ${col2.map((item) => `
-                            <div style="padding: 0.4rem 0; border-bottom: 1px solid rgba(255,255,255,0.1); font-size: 0.75rem; color: #ffffff; font-weight: 500; display: flex; gap: 0.5rem; align-items: baseline;">
+                            <div style="padding: 0.4rem 0; border-bottom: 1px solid rgba(0,0,0,0.1); font-size: 0.75rem; color: #1a1a2e; font-weight: 500; display: flex; gap: 0.5rem; align-items: baseline;">
                                 <span style="color: var(--accent-lime); font-size: 0.7rem; flex-shrink: 0;">${item.num}</span>
                                 <span style="flex: 1; line-height: 1.3;">${escapeHtml(item.title)}</span>
                             </div>
@@ -74904,8 +74889,8 @@
                         
                         return `
                         <!-- Header bar -->
-                        <div style="position: absolute; left: 5%; top: 2%; width: 90%; display: flex; justify-content: space-between; align-items: center; font-size: 0.65rem; color: rgba(255,255,255,0.5); z-index: 3;">
-                            <span contenteditable="true" style="cursor: text; padding: 2px 4px; border-radius: 3px; font-family: 'Poppins', sans-serif;" onfocus="this.style.background='rgba(255,255,255,0.1)'" onblur="this.style.background='transparent'; updateSlideHeaderText(${idx}, 'profileName', this.textContent)">${escapeHtml(headerProfileName)}</span>
+                        <div style="position: absolute; left: 5%; top: 2%; width: 90%; display: flex; justify-content: space-between; align-items: center; font-size: 0.65rem; color: rgba(0,0,0,0.4); z-index: 3;">
+                            <span contenteditable="true" style="cursor: text; padding: 2px 4px; border-radius: 3px; font-family: 'Poppins', sans-serif;" onfocus="this.style.background='rgba(0,0,0,0.05)'" onblur="this.style.background='transparent'; updateSlideHeaderText(${idx}, 'profileName', this.textContent)">${escapeHtml(headerProfileName)}</span>
                             <span>${dateStr}</span>
                         </div>
                         
@@ -74916,7 +74901,7 @@
                              onmousedown="startDragSlideSection(event, ${idx}, 'image')"
                              onclick="if(!event.defaultPrevented) uploadSlideImage(${idx})"
                              title="Click to upload image or paste URL">
-                            <button class="placeholder-delete-btn" onclick="hideSlideImagePlaceholder(${idx}, event)" title="Remove placeholder">✕</button>
+                            <button class="placeholder-delete-btn" onclick="hideSlideImagePlaceholder(${idx}, event)" title="No image on this slide">✕ No Image</button>
                             <div class="drag-handle">⋮⋮ DRAG IMAGE</div>
                             <span class="placeholder-icon">🖼️</span>
                             <span>Click to add image</span>
@@ -74929,7 +74914,7 @@
                              style="position: absolute; left: ${titlePos.left}; top: ${titlePos.top}; width: 48%; z-index: 5;"
                              onmousedown="startDragSlideSection(event, ${idx}, 'title')">
                             <div class="drag-handle">⋮⋮ DRAG TITLE</div>
-                            <div contenteditable="true" style="font-size: ${titleFontSize}; font-weight: 700; color: #ffffff; text-transform: uppercase; letter-spacing: -0.01em; cursor: text; padding: 4px 8px; border-radius: 4px; line-height: 1.1; word-wrap: break-word; overflow-wrap: break-word;" onfocus="this.style.background='rgba(255,255,255,0.1)'" onblur="this.style.background='transparent'; updateSlideTitle(${idx}, this.textContent.replace(/<br>/g, ' ')); renderSlideEditor();">
+                            <div contenteditable="true" style="font-size: ${titleFontSize}; font-weight: 700; color: #1a1a2e; text-transform: uppercase; letter-spacing: -0.01em; cursor: text; padding: 4px 8px; border-radius: 4px; line-height: 1.1; word-wrap: break-word; overflow-wrap: break-word;" onfocus="this.style.background='rgba(0,0,0,0.05)'" onblur="this.style.background='transparent'; updateSlideTitle(${idx}, this.textContent.replace(/<br>/g, ' ')); renderSlideEditor();">
                                 ${formatTitleWithBreaks(title)}
                             </div>
                         </div>
@@ -74939,7 +74924,7 @@
                              style="position: absolute; left: ${descPos.left}; top: ${descPos.top}; width: 48%; z-index: 4;"
                              onmousedown="startDragSlideSection(event, ${idx}, 'description')">
                             <div class="drag-handle">⋮⋮ DRAG TEXT</div>
-                            <div contenteditable="true" style="font-size: 0.7rem; color: rgba(255,255,255,0.6); line-height: 1.5; cursor: text; padding: 4px 8px; border-radius: 3px; font-family: 'Poppins', sans-serif;" onfocus="this.style.background='rgba(255,255,255,0.1)'" onblur="this.style.background='transparent'; updateSlideDescription(${idx}, this.textContent)">
+                            <div contenteditable="true" style="font-size: 0.7rem; color: #555; line-height: 1.5; cursor: text; padding: 4px 8px; border-radius: 3px; font-family: 'Poppins', sans-serif;" onfocus="this.style.background='rgba(0,0,0,0.05)'" onblur="this.style.background='transparent'; updateSlideDescription(${idx}, this.textContent)">
                                 ${escapeHtml(description)}
                             </div>
                         </div>
@@ -74969,8 +74954,8 @@
                         
                         return `
                         <!-- Header bar -->
-                        <div style="position: absolute; left: 5%; top: 2%; width: 90%; display: flex; justify-content: space-between; align-items: center; font-size: 0.65rem; color: rgba(255,255,255,0.5);">
-                            <span contenteditable="true" style="cursor: text; padding: 2px 4px; border-radius: 3px; font-family: 'Poppins', sans-serif;" onfocus="this.style.background='rgba(255,255,255,0.1)'" onblur="this.style.background='transparent'; updateSlideHeaderText(${idx}, 'profileName', this.textContent)">${escapeHtml(headerProfileName)}</span>
+                        <div style="position: absolute; left: 5%; top: 2%; width: 90%; display: flex; justify-content: space-between; align-items: center; font-size: 0.65rem; color: rgba(0,0,0,0.4);">
+                            <span contenteditable="true" style="cursor: text; padding: 2px 4px; border-radius: 3px; font-family: 'Poppins', sans-serif;" onfocus="this.style.background='rgba(0,0,0,0.05)'" onblur="this.style.background='transparent'; updateSlideHeaderText(${idx}, 'profileName', this.textContent)">${escapeHtml(headerProfileName)}</span>
                             <span>${dateStr}</span>
                         </div>
                         
@@ -74979,7 +74964,7 @@
                              style="position: absolute; left: ${titlePos.left}; top: ${titlePos.top}; width: 40%; z-index: 5;"
                              onmousedown="startDragSlideSection(event, ${idx}, 'title')">
                             <div class="drag-handle">⋮⋮ DRAG TITLE</div>
-                            <div contenteditable="true" style="font-size: 2.2rem; font-weight: 700; color: #ffffff; text-transform: uppercase; letter-spacing: -0.01em; cursor: text; padding: 4px 8px; border-radius: 4px; line-height: 1.1; word-wrap: break-word; overflow-wrap: break-word;" onfocus="this.style.background='rgba(255,255,255,0.1)'" onblur="this.style.background='transparent'; updateSlideTitle(${idx}, this.textContent.replace(/<br>/g, ' '))">
+                            <div contenteditable="true" style="font-size: 2.2rem; font-weight: 700; color: #1a1a2e; text-transform: uppercase; letter-spacing: -0.01em; cursor: text; padding: 4px 8px; border-radius: 4px; line-height: 1.1; word-wrap: break-word; overflow-wrap: break-word;" onfocus="this.style.background='rgba(0,0,0,0.05)'" onblur="this.style.background='transparent'; updateSlideTitle(${idx}, this.textContent.replace(/<br>/g, ' '))">
                                 ${formatTitleWithBreaks(title)}
                             </div>
                         </div>
@@ -74989,7 +74974,7 @@
                              style="position: absolute; left: ${descPos.left}; top: ${descPos.top}; width: 40%; z-index: 4;"
                              onmousedown="startDragSlideSection(event, ${idx}, 'description')">
                             <div class="drag-handle">⋮⋮ DRAG TEXT</div>
-                            <div contenteditable="true" style="font-size: 0.75rem; color: rgba(255,255,255,0.6); line-height: 1.6; cursor: text; padding: 4px 8px; border-radius: 3px; font-family: 'Poppins', sans-serif;" onfocus="this.style.background='rgba(255,255,255,0.1)'" onblur="this.style.background='transparent'; updateSlideDescription(${idx}, this.textContent)">
+                            <div contenteditable="true" style="font-size: 0.75rem; color: rgba(255,255,255,0.6); line-height: 1.6; cursor: text; padding: 4px 8px; border-radius: 3px; font-family: 'Poppins', sans-serif;" onfocus="this.style.background='rgba(0,0,0,0.05)'" onblur="this.style.background='transparent'; updateSlideDescription(${idx}, this.textContent)">
                                 ${escapeHtml(description)}
                             </div>
                         </div>
@@ -75011,7 +74996,7 @@
                              onmousedown="startDragSlideSection(event, ${idx}, 'image')"
                              onclick="if(!event.defaultPrevented) uploadSlideImage(${idx})"
                              title="Click to upload image or paste URL">
-                            <button class="placeholder-delete-btn" onclick="hideSlideImagePlaceholder(${idx}, event)" title="Remove placeholder">✕</button>
+                            <button class="placeholder-delete-btn" onclick="hideSlideImagePlaceholder(${idx}, event)" title="No image on this slide">✕ No Image</button>
                             <div class="drag-handle">⋮⋮ DRAG IMAGE</div>
                             <span class="placeholder-icon">🖼️</span>
                             <span>Click to add image</span>
@@ -75034,8 +75019,8 @@
                         
                         return `
                         <!-- Header bar -->
-                        <div style="position: absolute; left: 5%; top: 2%; width: 90%; display: flex; justify-content: space-between; align-items: center; font-size: 0.65rem; color: rgba(255,255,255,0.5);">
-                            <span contenteditable="true" style="cursor: text; padding: 2px 4px; border-radius: 3px; font-family: 'Poppins', sans-serif;" onfocus="this.style.background='rgba(255,255,255,0.1)'" onblur="this.style.background='transparent'; updateSlideHeaderText(${idx}, 'profileName', this.textContent)">${escapeHtml(headerProfileName)}</span>
+                        <div style="position: absolute; left: 5%; top: 2%; width: 90%; display: flex; justify-content: space-between; align-items: center; font-size: 0.65rem; color: rgba(0,0,0,0.4);">
+                            <span contenteditable="true" style="cursor: text; padding: 2px 4px; border-radius: 3px; font-family: 'Poppins', sans-serif;" onfocus="this.style.background='rgba(0,0,0,0.05)'" onblur="this.style.background='transparent'; updateSlideHeaderText(${idx}, 'profileName', this.textContent)">${escapeHtml(headerProfileName)}</span>
                             <span>${dateStr}</span>
                         </div>
                         
@@ -75046,7 +75031,7 @@
                              onmousedown="startDragSlideSection(event, ${idx}, 'image')"
                              onclick="if(!event.defaultPrevented) uploadSlideImage(${idx})"
                              title="Click to upload image or paste URL">
-                            <button class="placeholder-delete-btn" onclick="hideSlideImagePlaceholder(${idx}, event)" title="Remove placeholder">✕</button>
+                            <button class="placeholder-delete-btn" onclick="hideSlideImagePlaceholder(${idx}, event)" title="No image on this slide">✕ No Image</button>
                             <div class="drag-handle">⋮⋮ DRAG IMAGE</div>
                             <span class="placeholder-icon">🖼️</span>
                             <span>Click to add image</span>
@@ -75059,7 +75044,7 @@
                              style="position: absolute; left: ${titlePos.left}; top: ${titlePos.top}; width: 33%; z-index: 5;"
                              onmousedown="startDragSlideSection(event, ${idx}, 'title')">
                             <div class="drag-handle">⋮⋮ DRAG TITLE</div>
-                            <div contenteditable="true" style="font-size: 2rem; font-weight: 700; color: #ffffff; text-transform: uppercase; letter-spacing: -0.01em; cursor: text; padding: 4px 8px; border-radius: 4px; line-height: 1.1; word-wrap: break-word; overflow-wrap: break-word;" onfocus="this.style.background='rgba(255,255,255,0.1)'" onblur="this.style.background='transparent'; updateSlideTitle(${idx}, this.textContent.replace(/<br>/g, ' '))">
+                            <div contenteditable="true" style="font-size: 2rem; font-weight: 700; color: #1a1a2e; text-transform: uppercase; letter-spacing: -0.01em; cursor: text; padding: 4px 8px; border-radius: 4px; line-height: 1.1; word-wrap: break-word; overflow-wrap: break-word;" onfocus="this.style.background='rgba(0,0,0,0.05)'" onblur="this.style.background='transparent'; updateSlideTitle(${idx}, this.textContent.replace(/<br>/g, ' '))">
                                 ${formatTitleWithBreaks(title)}
                             </div>
                         </div>
@@ -75069,7 +75054,7 @@
                              style="position: absolute; left: ${descPos.left}; top: ${descPos.top}; width: 33%; z-index: 4;"
                              onmousedown="startDragSlideSection(event, ${idx}, 'description')">
                             <div class="drag-handle">⋮⋮ DRAG TEXT</div>
-                            <div contenteditable="true" style="font-size: 0.7rem; color: rgba(255,255,255,0.6); line-height: 1.5; cursor: text; padding: 4px 8px; border-radius: 3px; font-family: 'Poppins', sans-serif;" onfocus="this.style.background='rgba(255,255,255,0.1)'" onblur="this.style.background='transparent'; updateSlideDescription(${idx}, this.textContent)">
+                            <div contenteditable="true" style="font-size: 0.7rem; color: #555; line-height: 1.5; cursor: text; padding: 4px 8px; border-radius: 3px; font-family: 'Poppins', sans-serif;" onfocus="this.style.background='rgba(0,0,0,0.05)'" onblur="this.style.background='transparent'; updateSlideDescription(${idx}, this.textContent)">
                                 ${escapeHtml(description)}
                             </div>
                         </div>
@@ -75099,8 +75084,8 @@
                         
                         return `
                         <!-- Header bar -->
-                        <div style="position: absolute; left: 5%; top: 2%; width: 90%; display: flex; justify-content: space-between; align-items: center; font-size: 0.65rem; color: rgba(255,255,255,0.5);">
-                            <span contenteditable="true" style="cursor: text; padding: 2px 4px; border-radius: 3px; font-family: 'Poppins', sans-serif;" onfocus="this.style.background='rgba(255,255,255,0.1)'" onblur="this.style.background='transparent'; updateSlideHeaderText(${idx}, 'profileName', this.textContent)">${escapeHtml(headerProfileName)}</span>
+                        <div style="position: absolute; left: 5%; top: 2%; width: 90%; display: flex; justify-content: space-between; align-items: center; font-size: 0.65rem; color: rgba(0,0,0,0.4);">
+                            <span contenteditable="true" style="cursor: text; padding: 2px 4px; border-radius: 3px; font-family: 'Poppins', sans-serif;" onfocus="this.style.background='rgba(0,0,0,0.05)'" onblur="this.style.background='transparent'; updateSlideHeaderText(${idx}, 'profileName', this.textContent)">${escapeHtml(headerProfileName)}</span>
                             <span>${dateStr}</span>
                         </div>
                         
@@ -75111,7 +75096,7 @@
                              onmousedown="startDragSlideSection(event, ${idx}, 'image')"
                              onclick="if(!event.defaultPrevented) uploadSlideImage(${idx})"
                              title="Click to upload image or paste URL">
-                            <button class="placeholder-delete-btn" onclick="hideSlideImagePlaceholder(${idx}, event)" title="Remove placeholder">✕</button>
+                            <button class="placeholder-delete-btn" onclick="hideSlideImagePlaceholder(${idx}, event)" title="No image on this slide">✕ No Image</button>
                             <div class="drag-handle">⋮⋮ DRAG IMAGE</div>
                             <span class="placeholder-icon">🖼️</span>
                             <span>Click to add image</span>
@@ -75124,7 +75109,7 @@
                              style="position: absolute; left: ${titlePos.left}; top: ${titlePos.top}; width: 26%; z-index: 5;"
                              onmousedown="startDragSlideSection(event, ${idx}, 'title')">
                             <div class="drag-handle">⋮⋮ DRAG TITLE</div>
-                            <div contenteditable="true" style="font-size: 1.8rem; font-weight: 700; color: #ffffff; text-transform: uppercase; letter-spacing: -0.01em; cursor: text; padding: 4px 8px; border-radius: 4px; line-height: 1.1; word-wrap: break-word; overflow-wrap: break-word;" onfocus="this.style.background='rgba(255,255,255,0.1)'" onblur="this.style.background='transparent'; updateSlideTitle(${idx}, this.textContent.replace(/<br>/g, ' '))">
+                            <div contenteditable="true" style="font-size: 1.8rem; font-weight: 700; color: #1a1a2e; text-transform: uppercase; letter-spacing: -0.01em; cursor: text; padding: 4px 8px; border-radius: 4px; line-height: 1.1; word-wrap: break-word; overflow-wrap: break-word;" onfocus="this.style.background='rgba(0,0,0,0.05)'" onblur="this.style.background='transparent'; updateSlideTitle(${idx}, this.textContent.replace(/<br>/g, ' '))">
                                 ${formatTitleWithBreaks(title)}
                             </div>
                         </div>
@@ -75134,7 +75119,7 @@
                              style="position: absolute; left: ${descPos.left}; top: ${descPos.top}; width: 26%; z-index: 4;"
                              onmousedown="startDragSlideSection(event, ${idx}, 'description')">
                             <div class="drag-handle">⋮⋮ DRAG TEXT</div>
-                            <div contenteditable="true" style="font-size: 0.65rem; color: rgba(255,255,255,0.6); line-height: 1.4; cursor: text; padding: 4px 8px; border-radius: 3px; font-family: 'Poppins', sans-serif;" onfocus="this.style.background='rgba(255,255,255,0.1)'" onblur="this.style.background='transparent'; updateSlideDescription(${idx}, this.textContent)">
+                            <div contenteditable="true" style="font-size: 0.65rem; color: rgba(255,255,255,0.6); line-height: 1.4; cursor: text; padding: 4px 8px; border-radius: 3px; font-family: 'Poppins', sans-serif;" onfocus="this.style.background='rgba(0,0,0,0.05)'" onblur="this.style.background='transparent'; updateSlideDescription(${idx}, this.textContent)">
                                 ${escapeHtml(description)}
                             </div>
                         </div>
@@ -75164,8 +75149,8 @@
                         
                         return `
                         <!-- Header bar -->
-                        <div style="position: absolute; left: 5%; top: 2%; width: 90%; display: flex; justify-content: space-between; align-items: center; font-size: 0.65rem; color: rgba(255,255,255,0.5);">
-                            <span contenteditable="true" style="cursor: text; padding: 2px 4px; border-radius: 3px; font-family: 'Poppins', sans-serif;" onfocus="this.style.background='rgba(255,255,255,0.1)'" onblur="this.style.background='transparent'; updateSlideHeaderText(${idx}, 'profileName', this.textContent)">${escapeHtml(headerProfileName)}</span>
+                        <div style="position: absolute; left: 5%; top: 2%; width: 90%; display: flex; justify-content: space-between; align-items: center; font-size: 0.65rem; color: rgba(0,0,0,0.4);">
+                            <span contenteditable="true" style="cursor: text; padding: 2px 4px; border-radius: 3px; font-family: 'Poppins', sans-serif;" onfocus="this.style.background='rgba(0,0,0,0.05)'" onblur="this.style.background='transparent'; updateSlideHeaderText(${idx}, 'profileName', this.textContent)">${escapeHtml(headerProfileName)}</span>
                             <span>${dateStr}</span>
                         </div>
                         
@@ -75176,7 +75161,7 @@
                              onmousedown="startDragSlideSection(event, ${idx}, 'image')"
                              onclick="if(!event.defaultPrevented) uploadSlideImage(${idx})"
                              title="Click to upload image or paste URL">
-                            <button class="placeholder-delete-btn" onclick="hideSlideImagePlaceholder(${idx}, event)" title="Remove placeholder">✕</button>
+                            <button class="placeholder-delete-btn" onclick="hideSlideImagePlaceholder(${idx}, event)" title="No image on this slide">✕ No Image</button>
                             <div class="drag-handle">⋮⋮ DRAG IMAGE</div>
                             <span class="placeholder-icon">🖼️</span>
                             <span>Add image</span>
@@ -75188,7 +75173,7 @@
                              style="position: absolute; left: ${titlePos.left}; top: ${titlePos.top}; width: 60%; z-index: 5;"
                              onmousedown="startDragSlideSection(event, ${idx}, 'title')">
                             <div class="drag-handle">⋮⋮ DRAG TITLE</div>
-                            <div contenteditable="true" style="font-size: 2.5rem; font-weight: 700; color: #ffffff; text-transform: uppercase; letter-spacing: -0.02em; cursor: text; padding: 4px 8px; border-radius: 4px; line-height: 1.1; word-wrap: break-word; overflow-wrap: break-word;" onfocus="this.style.background='rgba(255,255,255,0.1)'" onblur="this.style.background='transparent'; updateSlideTitle(${idx}, this.textContent.replace(/<br>/g, ' '))">
+                            <div contenteditable="true" style="font-size: 2.5rem; font-weight: 700; color: #ffffff; text-transform: uppercase; letter-spacing: -0.02em; cursor: text; padding: 4px 8px; border-radius: 4px; line-height: 1.1; word-wrap: break-word; overflow-wrap: break-word;" onfocus="this.style.background='rgba(0,0,0,0.05)'" onblur="this.style.background='transparent'; updateSlideTitle(${idx}, this.textContent.replace(/<br>/g, ' '))">
                                 ${formatTitleWithBreaks(title)}
                             </div>
                         </div>
@@ -75198,7 +75183,7 @@
                              style="position: absolute; left: ${descPos.left}; top: ${descPos.top}; width: 60%; z-index: 4;"
                              onmousedown="startDragSlideSection(event, ${idx}, 'description')">
                             <div class="drag-handle">⋮⋮ DRAG TEXT</div>
-                            <div contenteditable="true" style="font-size: 0.7rem; color: rgba(255,255,255,0.6); line-height: 1.5; cursor: text; padding: 4px 8px; border-radius: 3px; font-family: 'Poppins', sans-serif;" onfocus="this.style.background='rgba(255,255,255,0.1)'" onblur="this.style.background='transparent'; updateSlideDescription(${idx}, this.textContent)">
+                            <div contenteditable="true" style="font-size: 0.7rem; color: #555; line-height: 1.5; cursor: text; padding: 4px 8px; border-radius: 3px; font-family: 'Poppins', sans-serif;" onfocus="this.style.background='rgba(0,0,0,0.05)'" onblur="this.style.background='transparent'; updateSlideDescription(${idx}, this.textContent)">
                                 ${escapeHtml(description)}
                             </div>
                         </div>
@@ -75228,8 +75213,8 @@
                         
                         return `
                         <!-- Header bar -->
-                        <div style="position: absolute; left: 5%; top: 2%; width: 90%; display: flex; justify-content: space-between; align-items: center; font-size: 0.65rem; color: rgba(255,255,255,0.5);">
-                            <span contenteditable="true" style="cursor: text; padding: 2px 4px; border-radius: 3px; font-family: 'Poppins', sans-serif;" onfocus="this.style.background='rgba(255,255,255,0.1)'" onblur="this.style.background='transparent'; updateSlideHeaderText(${idx}, 'profileName', this.textContent)">${escapeHtml(headerProfileName)}</span>
+                        <div style="position: absolute; left: 5%; top: 2%; width: 90%; display: flex; justify-content: space-between; align-items: center; font-size: 0.65rem; color: rgba(0,0,0,0.4);">
+                            <span contenteditable="true" style="cursor: text; padding: 2px 4px; border-radius: 3px; font-family: 'Poppins', sans-serif;" onfocus="this.style.background='rgba(0,0,0,0.05)'" onblur="this.style.background='transparent'; updateSlideHeaderText(${idx}, 'profileName', this.textContent)">${escapeHtml(headerProfileName)}</span>
                             <span>${dateStr}</span>
                         </div>
                         
@@ -75240,7 +75225,7 @@
                              onmousedown="startDragSlideSection(event, ${idx}, 'image')"
                              onclick="if(!event.defaultPrevented) uploadSlideImage(${idx})"
                              title="Click to upload image or paste URL">
-                            <button class="placeholder-delete-btn" onclick="hideSlideImagePlaceholder(${idx}, event)" title="Remove placeholder">✕</button>
+                            <button class="placeholder-delete-btn" onclick="hideSlideImagePlaceholder(${idx}, event)" title="No image on this slide">✕ No Image</button>
                             <div class="drag-handle">⋮⋮ DRAG IMAGE</div>
                             <span class="placeholder-icon">🖼️</span>
                             <span>Add image</span>
@@ -75252,7 +75237,7 @@
                              style="position: absolute; left: ${titlePos.left}; top: ${titlePos.top}; width: 40%; z-index: 5;"
                              onmousedown="startDragSlideSection(event, ${idx}, 'title')">
                             <div class="drag-handle">⋮⋮ DRAG TITLE</div>
-                            <div contenteditable="true" style="font-size: 2rem; font-weight: 700; color: #ffffff; text-transform: uppercase; letter-spacing: -0.01em; cursor: text; padding: 4px 8px; border-radius: 4px; line-height: 1.2; text-align: center; word-wrap: break-word; overflow-wrap: break-word;" onfocus="this.style.background='rgba(255,255,255,0.1)'" onblur="this.style.background='transparent'; updateSlideTitle(${idx}, this.textContent.replace(/<br>/g, ' '))">
+                            <div contenteditable="true" style="font-size: 2rem; font-weight: 700; color: #1a1a2e; text-transform: uppercase; letter-spacing: -0.01em; cursor: text; padding: 4px 8px; border-radius: 4px; line-height: 1.2; text-align: center; word-wrap: break-word; overflow-wrap: break-word;" onfocus="this.style.background='rgba(0,0,0,0.05)'" onblur="this.style.background='transparent'; updateSlideTitle(${idx}, this.textContent.replace(/<br>/g, ' '))">
                                 ${formatTitleWithBreaks(title)}
                             </div>
                         </div>
@@ -75262,7 +75247,7 @@
                              style="position: absolute; left: ${descPos.left}; top: ${descPos.top}; width: 40%; z-index: 4;"
                              onmousedown="startDragSlideSection(event, ${idx}, 'description')">
                             <div class="drag-handle">⋮⋮ DRAG TEXT</div>
-                            <div contenteditable="true" style="font-size: 0.65rem; color: rgba(255,255,255,0.6); line-height: 1.4; cursor: text; padding: 4px 8px; border-radius: 3px; font-family: 'Poppins', sans-serif; text-align: center;" onfocus="this.style.background='rgba(255,255,255,0.1)'" onblur="this.style.background='transparent'; updateSlideDescription(${idx}, this.textContent)">
+                            <div contenteditable="true" style="font-size: 0.65rem; color: rgba(255,255,255,0.6); line-height: 1.4; cursor: text; padding: 4px 8px; border-radius: 3px; font-family: 'Poppins', sans-serif; text-align: center;" onfocus="this.style.background='rgba(0,0,0,0.05)'" onblur="this.style.background='transparent'; updateSlideDescription(${idx}, this.textContent)">
                                 ${escapeHtml(description)}
                             </div>
                         </div>
@@ -75292,8 +75277,8 @@
                         
                         return `
                         <!-- Header bar -->
-                        <div style="position: absolute; left: 5%; top: 2%; width: 90%; display: flex; justify-content: space-between; align-items: center; font-size: 0.65rem; color: rgba(255,255,255,0.5);">
-                            <span contenteditable="true" style="cursor: text; padding: 2px 4px; border-radius: 3px; font-family: 'Poppins', sans-serif;" onfocus="this.style.background='rgba(255,255,255,0.1)'" onblur="this.style.background='transparent'; updateSlideHeaderText(${idx}, 'profileName', this.textContent)">${escapeHtml(headerProfileName)}</span>
+                        <div style="position: absolute; left: 5%; top: 2%; width: 90%; display: flex; justify-content: space-between; align-items: center; font-size: 0.65rem; color: rgba(0,0,0,0.4);">
+                            <span contenteditable="true" style="cursor: text; padding: 2px 4px; border-radius: 3px; font-family: 'Poppins', sans-serif;" onfocus="this.style.background='rgba(0,0,0,0.05)'" onblur="this.style.background='transparent'; updateSlideHeaderText(${idx}, 'profileName', this.textContent)">${escapeHtml(headerProfileName)}</span>
                             <span>${dateStr}</span>
                         </div>
                         
@@ -75302,7 +75287,7 @@
                              style="position: absolute; left: ${titlePos.left}; top: ${titlePos.top}; width: 45%; z-index: 5;"
                              onmousedown="startDragSlideSection(event, ${idx}, 'title')">
                             <div class="drag-handle">⋮⋮ DRAG TITLE</div>
-                            <div contenteditable="true" style="font-size: 2.2rem; font-weight: 700; color: #ffffff; text-transform: uppercase; letter-spacing: -0.02em; cursor: text; padding: 4px 8px; border-radius: 4px; line-height: 1.1; word-wrap: break-word; overflow-wrap: break-word;" onfocus="this.style.background='rgba(255,255,255,0.1)'" onblur="this.style.background='transparent'; updateSlideTitle(${idx}, this.textContent.replace(/<br>/g, ' '))">
+                            <div contenteditable="true" style="font-size: 2.2rem; font-weight: 700; color: #ffffff; text-transform: uppercase; letter-spacing: -0.02em; cursor: text; padding: 4px 8px; border-radius: 4px; line-height: 1.1; word-wrap: break-word; overflow-wrap: break-word;" onfocus="this.style.background='rgba(0,0,0,0.05)'" onblur="this.style.background='transparent'; updateSlideTitle(${idx}, this.textContent.replace(/<br>/g, ' '))">
                                 ${formatTitleWithBreaks(title)}
                             </div>
                         </div>
@@ -75314,7 +75299,7 @@
                              onmousedown="startDragSlideSection(event, ${idx}, 'image')"
                              onclick="if(!event.defaultPrevented) uploadSlideImage(${idx})"
                              title="Click to upload image or paste URL">
-                            <button class="placeholder-delete-btn" onclick="hideSlideImagePlaceholder(${idx}, event)" title="Remove placeholder">✕</button>
+                            <button class="placeholder-delete-btn" onclick="hideSlideImagePlaceholder(${idx}, event)" title="No image on this slide">✕ No Image</button>
                             <div class="drag-handle">⋮⋮ DRAG IMAGE</div>
                             <span class="placeholder-icon">🖼️</span>
                             <span>Click to add image</span>
@@ -75326,7 +75311,7 @@
                              style="position: absolute; left: ${descPos.left}; top: ${descPos.top}; width: 45%; z-index: 4;"
                              onmousedown="startDragSlideSection(event, ${idx}, 'description')">
                             <div class="drag-handle">⋮⋮ DRAG TEXT</div>
-                            <div contenteditable="true" style="font-size: 0.7rem; color: rgba(255,255,255,0.6); line-height: 1.5; cursor: text; padding: 4px 8px; border-radius: 3px; font-family: 'Poppins', sans-serif;" onfocus="this.style.background='rgba(255,255,255,0.1)'" onblur="this.style.background='transparent'; updateSlideDescription(${idx}, this.textContent)">
+                            <div contenteditable="true" style="font-size: 0.7rem; color: #555; line-height: 1.5; cursor: text; padding: 4px 8px; border-radius: 3px; font-family: 'Poppins', sans-serif;" onfocus="this.style.background='rgba(0,0,0,0.05)'" onblur="this.style.background='transparent'; updateSlideDescription(${idx}, this.textContent)">
                                 ${escapeHtml(description)}
                             </div>
                         </div>
@@ -75356,8 +75341,8 @@
                         
                         return `
                         <!-- Header bar -->
-                        <div style="position: absolute; left: 5%; top: 2%; width: 90%; display: flex; justify-content: space-between; align-items: center; font-size: 0.65rem; color: rgba(255,255,255,0.5);">
-                            <span contenteditable="true" style="cursor: text; padding: 2px 4px; border-radius: 3px; font-family: 'Poppins', sans-serif;" onfocus="this.style.background='rgba(255,255,255,0.1)'" onblur="this.style.background='transparent'; updateSlideHeaderText(${idx}, 'profileName', this.textContent)">${escapeHtml(headerProfileName)}</span>
+                        <div style="position: absolute; left: 5%; top: 2%; width: 90%; display: flex; justify-content: space-between; align-items: center; font-size: 0.65rem; color: rgba(0,0,0,0.4);">
+                            <span contenteditable="true" style="cursor: text; padding: 2px 4px; border-radius: 3px; font-family: 'Poppins', sans-serif;" onfocus="this.style.background='rgba(0,0,0,0.05)'" onblur="this.style.background='transparent'; updateSlideHeaderText(${idx}, 'profileName', this.textContent)">${escapeHtml(headerProfileName)}</span>
                             <span>${dateStr}</span>
                         </div>
                         
@@ -75380,7 +75365,7 @@
                              style="position: absolute; left: ${titlePos.left}; top: ${titlePos.top}; width: 48%; z-index: 5;"
                              onmousedown="startDragSlideSection(event, ${idx}, 'title')">
                             <div class="drag-handle">⋮⋮ DRAG TITLE</div>
-                            <div contenteditable="true" style="font-size: 2rem; font-weight: 700; color: #ffffff; text-transform: uppercase; letter-spacing: -0.01em; cursor: text; padding: 8px 12px; border-radius: 4px; line-height: 1.1; background: linear-gradient(90deg, transparent, rgba(0,0,0,0.7)); word-wrap: break-word; overflow-wrap: break-word;" onfocus="this.style.background='linear-gradient(90deg, transparent, rgba(0,0,0,0.8))'" onblur="this.style.background='linear-gradient(90deg, transparent, rgba(0,0,0,0.7))'; updateSlideTitle(${idx}, this.textContent.replace(/<br>/g, ' '))">
+                            <div contenteditable="true" style="font-size: 2rem; font-weight: 700; color: #1a1a2e; text-transform: uppercase; letter-spacing: -0.01em; cursor: text; padding: 8px 12px; border-radius: 4px; line-height: 1.1; background: linear-gradient(90deg, transparent, rgba(0,0,0,0.7)); word-wrap: break-word; overflow-wrap: break-word;" onfocus="this.style.background='linear-gradient(90deg, transparent, rgba(0,0,0,0.8))'" onblur="this.style.background='linear-gradient(90deg, transparent, rgba(0,0,0,0.7))'; updateSlideTitle(${idx}, this.textContent.replace(/<br>/g, ' '))">
                                 ${formatTitleWithBreaks(title)}
                             </div>
                         </div>
@@ -75390,7 +75375,7 @@
                              style="position: absolute; left: ${descPos.left}; top: ${descPos.top}; width: 32%; z-index: 4;"
                              onmousedown="startDragSlideSection(event, ${idx}, 'description')">
                             <div class="drag-handle">⋮⋮ DRAG TEXT</div>
-                            <div contenteditable="true" style="font-size: 0.65rem; color: rgba(255,255,255,0.6); line-height: 1.4; cursor: text; padding: 4px 8px; border-radius: 3px; font-family: 'Poppins', sans-serif;" onfocus="this.style.background='rgba(255,255,255,0.1)'" onblur="this.style.background='transparent'; updateSlideDescription(${idx}, this.textContent)">
+                            <div contenteditable="true" style="font-size: 0.65rem; color: rgba(255,255,255,0.6); line-height: 1.4; cursor: text; padding: 4px 8px; border-radius: 3px; font-family: 'Poppins', sans-serif;" onfocus="this.style.background='rgba(0,0,0,0.05)'" onblur="this.style.background='transparent'; updateSlideDescription(${idx}, this.textContent)">
                                 ${escapeHtml(description)}
                             </div>
                         </div>
@@ -75425,7 +75410,7 @@
                 const dateStr = today.toLocaleDateString('en-US', { timeZone: 'America/Los_Angeles', day: '2-digit', month: 'short', year: 'numeric' }) + ' PST';
                 return `
                     <!-- Header bar -->
-                    <div style="position: absolute; left: 5%; top: 2%; width: 90%; display: flex; justify-content: space-between; align-items: center; font-size: 0.65rem; color: rgba(255,255,255,0.5);">
+                    <div style="position: absolute; left: 5%; top: 2%; width: 90%; display: flex; justify-content: space-between; align-items: center; font-size: 0.65rem; color: rgba(0,0,0,0.4);">
                         <span>Crosswalk Profile IQ</span>
                         <span>${dateStr}</span>
                     </div>
@@ -76992,9 +76977,9 @@
                             const o = overrides[key] || {};
                             const label = o.label !== undefined ? o.label : key;
                             const value = o.value !== undefined ? o.value : parseFloat(val).toFixed(1) + '%';
-                            const bg = o.bgColor || '#1e1e1e';
-                            const valueColor = o.valueColor || 'var(--accent-lime)';
-                            const labelColor = o.labelColor || 'var(--text-secondary)';
+                            const bg = o.bgColor || '#f0f0f5';
+                            const valueColor = o.valueColor || '#6366f1';
+                            const labelColor = o.labelColor || '#444';
                             const boxStyle = o.width || o.height ? `min-width: ${o.width || 'auto'}; min-height: ${o.height || 'auto'};` : '';
                             return `
                             <div class="editable-demo-box" data-key="${escapeHtml(key)}" data-orig-val="${parseFloat(val).toFixed(1)}" data-label="${escapeHtml(label)}" data-value="${escapeHtml(String(value))}"
