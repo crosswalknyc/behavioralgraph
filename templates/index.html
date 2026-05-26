@@ -55362,7 +55362,7 @@
                 titleSlide: {
                     title: currentProfileData?.name || 'Audience Profile',
                     subtitle: 'Powered by Crosswalk IQ',
-                    image: currentProfileData?.image || null
+                    image: null
                 },
                 createdBy: currentUsername,
                 createdAt: new Date().toISOString(),
@@ -70252,7 +70252,7 @@
                 titleSlide: {
                     title: 'Audience Comparison',
                     subtitle: 'Powered by Crosswalk IQ',
-                    image: comparisonProfiles.length === 1 ? (comparisonProfiles[0].image || null) : null,
+                    image: null,
                     isComparison: comparisonProfiles.length >= 1,
                     comparisonProfiles: comparisonProfiles
                 },
@@ -73981,22 +73981,7 @@
             const name = prompt('Enter deck name:', 'New Presentation');
             if (!name) return;
             
-            // Get the current profile image as the default deck image
             let defaultImage = null;
-            if (currentProfileData?.name) {
-                const cacheKey = currentProfileData.name.toLowerCase().trim();
-                const cachedUrl = profileImageCache[cacheKey];
-                if (cachedUrl && cachedUrl !== 'none') {
-                    defaultImage = cachedUrl;
-                }
-            }
-            // Fallback: try to get from the visible profile image element
-            if (!defaultImage) {
-                const profileImg = document.querySelector('#dashProfileImage img');
-                if (profileImg && profileImg.src && !profileImg.src.endsWith('/')) {
-                    defaultImage = profileImg.src;
-                }
-            }
             
             // Create TOC slide
             const tocSlide = {
@@ -74014,7 +73999,7 @@
                 titleSlide: {
                     title: currentProfileData?.name || 'Audience Profile',
                     subtitle: 'Powered by Crosswalk IQ',
-                    image: defaultImage
+                    image: null
                 },
                 createdBy: currentUsername,
                 createdAt: new Date().toISOString(),
