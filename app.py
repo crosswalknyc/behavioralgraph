@@ -24739,6 +24739,22 @@ def run_sf_lf_conversion(job_id):
                     _p_dup_genpop_init = int(_anchor_for_pm['projected_total'])
                 else:
                     _p_dup_genpop_init = project_to_gen_pop(_p_dup_raw, platform=_pm_plat, is_total_views=True)
+                # Scrape-anchored floor for Total Views even when the anchor
+                # mode is "panel_estimate" (coverage below MIN_COVERAGE). The
+                # per-URL section uses scraped × discount per URL, so the
+                # platform-level row was reading 10000× smaller than the sum
+                # of its own per-URL rows — the dashboard "Short Form Views
+                # (Duplicated)" tile then displays the tiny panel number
+                # while the URL table shows millions, and nothing ladders up.
+                if _anchor_for_pm and _pm_plat:
+                    try:
+                        _scraped_total = int(_anchor_for_pm.get('scraped_total', 0) or 0)
+                        _disc = float(_anchor_for_pm.get('discount', 0.75) or 0.75)
+                        _scrape_proj = int(round(_scraped_total * _disc))
+                        if _scrape_proj > _p_dup_genpop_init:
+                            _p_dup_genpop_init = _scrape_proj
+                    except (TypeError, ValueError):
+                        pass
                 _pm_total_views_genpop[id(pm)] = _p_dup_genpop_init
                 # Plausibility floor: pick max(panel-projected, total/typical_ratio)
                 # capped at platform MAU. For OVERALL rows we DON'T apply the
@@ -24765,6 +24781,17 @@ def run_sf_lf_conversion(job_id):
                 if _max_floor > _pm_floor_unique.get(id(_overall_pm), 0):
                     _pm_floor_unique[id(_overall_pm)] = _max_floor
                     _pm_floor_src[id(_overall_pm)] = 'SCRAPED_ANCHORED'
+                # OVERALL Total Views: events don't dedupe across platforms,
+                # so the OVERALL row = sum across platforms. Without this the
+                # OVERALL row reads as a tiny panel projection while each
+                # individual platform row already shows millions.
+                _sum_plat_total = sum(
+                    _pm_total_views_genpop.get(id(p), 0)
+                    for p in results['platform_metrics']
+                    if not p.get('is_overall')
+                )
+                if _sum_plat_total > _pm_total_views_genpop.get(id(_overall_pm), 0):
+                    _pm_total_views_genpop[id(_overall_pm)] = _sum_plat_total
 
             for pm in results['platform_metrics']:
                 p_unique = add_noise_if_zero(pm['unique_views'])
@@ -25139,8 +25166,24 @@ def run_sf_lf_conversion(job_id):
             _total_viewers_genpop = None
         if not _total_viewers_genpop:
             _total_viewers_genpop = project_to_gen_pop(total_viewers)
+        # OVERALL Total Views (Events) for the "Short Form Views (Duplicated)"
+        # KPI tile. Read the floored value from PLATFORM_METRICS so it equals
+        # the sum of per-URL Total Views, not the panel-projected number
+        # (which is ~10000× smaller when panel under-samples).
+        _total_views_events_panel = 0
+        _total_views_events_genpop = 0
+        try:
+            if _overall_pm_for_summary is not None:
+                _total_views_events_panel = int(_overall_pm_for_summary.get('duplicated_views') or 0)
+                _total_views_events_genpop = int(_pm_total_views_genpop.get(id(_overall_pm_for_summary)) or 0)
+        except NameError:
+            pass
+        if _total_views_events_genpop <= 0:
+            _total_views_events_genpop = project_to_gen_pop(_total_views_events_panel, is_total_views=True)
+
         print(f"[SF-LF] WRITING CSV: OVERALL_CONVERSION Converted Users -> Count={conv_users}, Gen_Pop_Projection={overall_conv_genpop}")
         csv_rows.append({'Column': 'OVERALL_CONVERSION', 'Value': 'Total SF Viewers (All Platforms)', 'Metric': '', 'Count': total_viewers, 'Percentage': '', 'Gen_Pop_Projection': _total_viewers_genpop})
+        csv_rows.append({'Column': 'OVERALL_CONVERSION', 'Value': 'Total SF Views (Duplicated)', 'Metric': '', 'Count': _total_views_events_panel, 'Percentage': '', 'Gen_Pop_Projection': _total_views_events_genpop})
         csv_rows.append({'Column': 'OVERALL_CONVERSION', 'Value': 'Converted Users', 'Metric': '', 'Count': conv_users, 'Percentage': f"{conv_rate:.8f}%", 'Gen_Pop_Projection': overall_conv_genpop})
         csv_rows.append({'Column': 'OVERALL_CONVERSION', 'Value': 'Avg Hours to Conversion', 'Metric': '', 'Count': avg_hours, 'Percentage': '', 'Gen_Pop_Projection': ''})
         
