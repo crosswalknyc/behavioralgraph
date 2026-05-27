@@ -65,9 +65,14 @@ def get_claude_client():
 
     try:
         import anthropic
-        # 600s (10 min) accommodates Opus 4.7 + native web_search calls
-        # that may execute 8-12 searches before composing the response.
-        _claude_client = anthropic.Anthropic(api_key=api_key, timeout=600.0)
+        import httpx
+        # Explicit httpx timeouts so a stalled TCP / TLS read (e.g. Anthropic
+        # API black-hole where headers never arrive) is killed instead of
+        # blocking the worker forever. Field-tuned against UBG hangs that sat
+        # in ssl.recv() for 13+ min with a single 600s wall-timeout that
+        # never actually fired through to the underlying socket.
+        _http_timeout = httpx.Timeout(connect=30.0, read=180.0, write=60.0, pool=30.0)
+        _claude_client = anthropic.Anthropic(api_key=api_key, timeout=_http_timeout)
         return _claude_client
     except Exception as e:
         print(f"⚠️  Claude client init failed: {e}")
