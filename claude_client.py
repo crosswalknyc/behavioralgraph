@@ -196,9 +196,16 @@ def claude_messages(
             )
             if not _omit_temperature:
                 kwargs["temperature"] = temperature
+            # Tool-using calls (web_search, code_execution, ...) legitimately
+            # need 3-8 min for the model to run 8-12 sub-requests then compose.
+            # Per-request override leaves the default 180s read in place for
+            # the fast text-only calls.
             if tools:
                 kwargs["tools"] = tools
-            resp = client.messages.create(**kwargs)
+                _request_client = client.with_options(timeout=600.0)
+            else:
+                _request_client = client
+            resp = _request_client.messages.create(**kwargs)
             # Concatenate all text blocks (web_search responses interleave
             # tool_use, server_tool_use, web_search_tool_result and text).
             blocks = resp.content or []
