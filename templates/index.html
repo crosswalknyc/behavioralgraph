@@ -58819,9 +58819,11 @@
                             <span style="font-size: 0.65rem; color: #000; width: 16px; flex-shrink: 0; text-align: right;">${i + 1}</span>
                             <div style="flex: 1; min-width: 0;">
                                 <div style="font-size: 0.7rem; color: #000; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-bottom: 2px;">${escapeHtml(key)}</div>
-                                <div style="position: relative; height: 14px; background: rgba(0,0,0,0.06); border-radius: 3px; overflow: hidden;">
-                                    <div style="position: absolute; left: 0; top: 0; height: 100%; width: ${barWidth}%; background: linear-gradient(90deg, #6366f1, #818cf8); border-radius: 3px;"></div>
-                                    <span style="position: absolute; right: 4px; top: 50%; transform: translateY(-50%); font-size: 0.65rem; font-weight: 600; color: ${barWidth > 50 ? '#fff' : '#000'};">${pct.toFixed(1)}%</span>
+                                <div style="display: flex; align-items: center; gap: 0.4rem;">
+                                    <div style="position: relative; flex: 1; height: 14px; background: rgba(0,0,0,0.06); border-radius: 3px; overflow: hidden;">
+                                        <div style="position: absolute; left: 0; top: 0; height: 100%; width: ${barWidth}%; background: linear-gradient(90deg, #6366f1, #818cf8); border-radius: 3px;"></div>
+                                    </div>
+                                    <span style="font-size: 0.65rem; font-weight: 600; color: #000; flex-shrink: 0; min-width: 40px; text-align: right;">${pct.toFixed(1)}%</span>
                                 </div>
                             </div>
                         </div>
@@ -77190,9 +77192,11 @@
                                     <span style="font-size: 0.65rem; color: #000; width: 16px; flex-shrink: 0; text-align: right;">${i + 1}</span>
                                     <div style="flex: 1; min-width: 0;">
                                         <div style="font-size: 0.7rem; color: #000; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-bottom: 2px;">${(key || '').replace(/</g, '&lt;')}</div>
-                                        <div style="position: relative; height: 14px; background: rgba(0,0,0,0.06); border-radius: 3px; overflow: hidden;">
-                                            <div style="position: absolute; left: 0; top: 0; height: 100%; width: ${barWidth}%; background: linear-gradient(90deg, #6366f1, #818cf8); border-radius: 3px;"></div>
-                                            <span style="position: absolute; right: 4px; top: 50%; transform: translateY(-50%); font-size: 0.65rem; font-weight: 600; color: ${barWidth > 50 ? '#fff' : '#000'};">${pct.toFixed(1)}%</span>
+                                        <div style="display: flex; align-items: center; gap: 0.4rem;">
+                                            <div style="position: relative; flex: 1; height: 14px; background: rgba(0,0,0,0.06); border-radius: 3px; overflow: hidden;">
+                                                <div style="position: absolute; left: 0; top: 0; height: 100%; width: ${barWidth}%; background: linear-gradient(90deg, #6366f1, #818cf8); border-radius: 3px;"></div>
+                                            </div>
+                                            <span style="font-size: 0.65rem; font-weight: 600; color: #000; flex-shrink: 0; min-width: 40px; text-align: right;">${pct.toFixed(1)}%</span>
                                         </div>
                                     </div>
                                 </div>
