@@ -53,8 +53,17 @@ US_POP = 329_900_000
 _HOSTMAP_CACHE_PATH = '/tmp/hostmap_brands.txt'
 _HOSTMAP_NORMALIZED = None     # set on first _ensure_hostmap_loaded() call
 _HOSTMAP_RAW_UPPER = None
-_HOSTMAP_NORM_TO_CANONICAL = None  # normalized → canonical Sheet4 casing
+_HOSTMAP_NORM_TO_CANONICAL = None    # normalized (punct-stripped) → canonical
+_HOSTMAP_UPPER_TO_CANONICAL = None   # upper-case (punct-sensitive) → canonical
+                                     # Added 2026-05-27 to fix CNET (Media) vs
+                                     # C-Net (Hidden) collision: norm-key strips
+                                     # punctuation so both normalize to 'CNET'
+                                     # and the canonical lookup returned the
+                                     # wrong (Hidden) variant. Upper-case map
+                                     # preserves punctuation, so 'CNET' and
+                                     # 'C-NET' stay distinct.
 _HOSTMAP_GAPS = []             # populated by lift attempts on non-hostmap brands
+_HOSTMAP_HIDDEN = None         # set of normalized brand keys with SECTION='Hidden'
 
 
 def _norm_brand(s):
@@ -72,7 +81,8 @@ def _ensure_hostmap_loaded():
       4. /Users/jennamenking/Desktop/finished_codes/reference/hostmap_brands.txt
       5. None → returns False (caller treats as "skip hostmap check, log only")
     """
-    global _HOSTMAP_NORMALIZED, _HOSTMAP_RAW_UPPER, _HOSTMAP_NORM_TO_CANONICAL
+    global _HOSTMAP_NORMALIZED, _HOSTMAP_RAW_UPPER
+    global _HOSTMAP_NORM_TO_CANONICAL, _HOSTMAP_UPPER_TO_CANONICAL
     if _HOSTMAP_NORMALIZED is not None:
         return True
     candidates = [
@@ -82,6 +92,30 @@ def _ensure_hostmap_loaded():
         '/Users/jennamenking/Desktop/finished_codes/reference/hostmap_brands.txt',
         '/root/finished_codes/reference/hostmap_brands.txt',
     ]
+    # Ensure hidden set is available so we can prefer non-Hidden canonicals
+    # below when two display forms collide on the same key.
+    _ensure_hostmap_hidden_loaded()
+    hidden_upper = _HOSTMAP_HIDDEN or set()
+
+    def _prefer(cur, new):
+        """Return the preferred canonical form among `cur` (already stored)
+        and `new` (newly seen). Priority:
+          1. Non-Hidden over Hidden
+          2. Title-case over all-caps (more human-readable)
+          3. First-seen wins
+        """
+        if cur is None:
+            return new
+        cur_hidden = cur.upper() in hidden_upper
+        new_hidden = new.upper() in hidden_upper
+        if cur_hidden and not new_hidden:
+            return new
+        if new_hidden and not cur_hidden:
+            return cur
+        if cur.isupper() and not new.isupper():
+            return new
+        return cur
+
     for path in candidates:
         if os.path.exists(path):
             try:
@@ -89,17 +123,26 @@ def _ensure_hostmap_loaded():
                     lines = [line.strip() for line in f if line.strip()]
                 _HOSTMAP_RAW_UPPER = {b.upper() for b in lines}
                 _HOSTMAP_NORMALIZED = {_norm_brand(b) for b in lines}
-                # First-wins map: normalized → canonical Sheet4 form (as
-                # stored in reference.host_mapping). If hostmap has both
-                # title-case and uppercase variants of the same normalized
-                # brand, prefer title-case (more readable canonical).
+                # Two canonical maps, populated in tandem:
+                #   _HOSTMAP_UPPER_TO_CANONICAL — upper(b) → canonical
+                #     Punctuation-sensitive. 'CNET' and 'C-NET' are distinct
+                #     keys so the canonical lookup never confuses
+                #     CNET (Media) with C-Net (Hidden).
+                #   _HOSTMAP_NORM_TO_CANONICAL — norm(b) → canonical
+                #     Punctuation-stripped. Used only as a typo fallback
+                #     (e.g. 'COCA COLA' lookup finds 'Coca-Cola').
+                # Both prefer non-Hidden variants when entries collide.
                 _HOSTMAP_NORM_TO_CANONICAL = {}
+                _HOSTMAP_UPPER_TO_CANONICAL = {}
                 for b in lines:
+                    uk = b.upper()
                     nk = _norm_brand(b)
-                    cur = _HOSTMAP_NORM_TO_CANONICAL.get(nk)
-                    # Prefer the variant that isn't all-caps (more canonical)
-                    if cur is None or (cur.isupper() and not b.isupper()):
-                        _HOSTMAP_NORM_TO_CANONICAL[nk] = b
+                    _HOSTMAP_UPPER_TO_CANONICAL[uk] = _prefer(
+                        _HOSTMAP_UPPER_TO_CANONICAL.get(uk), b,
+                    )
+                    _HOSTMAP_NORM_TO_CANONICAL[nk] = _prefer(
+                        _HOSTMAP_NORM_TO_CANONICAL.get(nk), b,
+                    )
                 return True
             except Exception:
                 continue
@@ -120,13 +163,77 @@ def _is_in_hostmap(brand):
 
 
 def _hostmap_canonical(brand):
-    """Return the Sheet4 canonical casing for a brand (or None if not
-    in hostmap). E.g. _hostmap_canonical('COCA COLA') -> 'Coca-Cola'."""
+    """Return the Sheet4 canonical casing for a brand (or None if not in
+    hostmap). Two-tier lookup (fixes the CNET/C-Net collision identified
+    2026-05-27):
+
+      1. PUNCTUATION-SENSITIVE upper-case match. 'CNET' resolves to the
+         entry whose upper() is 'CNET' (the Media publisher), NOT to
+         'C-Net' (Hidden). This is the strict-canonical path.
+
+      2. PUNCTUATION-INSENSITIVE norm-key fallback. Used only when the
+         input has a spelling that isn't exactly in hostmap — e.g.
+         'COCA COLA' (no hyphen) falls back to 'Coca-Cola'.
+
+    Both tiers prefer non-Hidden variants when the key collides.
+    """
     if not _ensure_hostmap_loaded():
         return None
+    bu = str(brand).upper()
+    if _HOSTMAP_UPPER_TO_CANONICAL is not None:
+        hit = _HOSTMAP_UPPER_TO_CANONICAL.get(bu)
+        if hit is not None:
+            return hit
     if _HOSTMAP_NORM_TO_CANONICAL is None:
         return None
     return _HOSTMAP_NORM_TO_CANONICAL.get(_norm_brand(brand))
+
+
+def _ensure_hostmap_hidden_loaded():
+    """Load the set of brand keys whose hostmap SECTION='Hidden'.
+    These brands should NEVER appear in any profile output (Rule #4b,
+    established 2026-05-27 after Bria flagged The Root + Ecosia
+    appearing in UBG MEDIA / SEARCH ENGINE/AI).
+
+    Match policy: **case-insensitive, punctuation-SENSITIVE**.
+    Rationale: 'C-Net' (Hidden) and 'CNET' (Media tech publisher) are
+    distinct brands in hostmap. The norm-key (punct-stripped) collapses
+    them, so we use uppercase-only matching to keep them separate.
+
+    Cache file: reference/hostmap_hidden_brands.txt (one brand per line,
+    canonical Sheet4 casing). Refresh with:
+        SELECT DISTINCT BRAND FROM reference.host_mapping
+        WHERE SECTION='Hidden' ORDER BY BRAND
+    """
+    global _HOSTMAP_HIDDEN
+    if _HOSTMAP_HIDDEN is not None:
+        return True
+    candidates = [
+        '/Users/jennamenking/Desktop/finished_codes/reference/hostmap_hidden_brands.txt',
+        '/root/finished_codes/reference/hostmap_hidden_brands.txt',
+        '/tmp/hostmap_hidden_brands.txt',
+    ]
+    for path in candidates:
+        if os.path.exists(path):
+            try:
+                with open(path) as f:
+                    lines = [line.strip() for line in f if line.strip()]
+                _HOSTMAP_HIDDEN = {b.upper() for b in lines}
+                return True
+            except Exception:
+                continue
+    _HOSTMAP_HIDDEN = set()
+    return False
+
+
+def _is_hostmap_hidden(brand):
+    """True if brand has SECTION='Hidden' in reference.host_mapping
+    (Rule #4b — must never appear in a shipped profile).
+    Uses case-insensitive but punctuation-SENSITIVE matching so e.g.
+    'C-Net' (Hidden) doesn't collide with 'CNET' (Media)."""
+    if not _ensure_hostmap_hidden_loaded():
+        return False
+    return str(brand).upper() in _HOSTMAP_HIDDEN
 
 
 # ============================================================================
@@ -220,19 +327,24 @@ def _renormalize_category(df, cat, bp_col, cs_col, raw_col, proj_col, sample_siz
     """
     if cs_col is None:
         return df
-    mask = df['Column'].astype(str).str.strip().str.upper() == cat
+    mask = df['Column'].astype(str).str.strip().str.upper() == cat.upper()
+    # Skip empty / single-row pseudo-categories (e.g. dropped-entirely
+    # INPUT_METADATA). 2026-05-27 fix: was crashing astype(int) on
+    # empty Series with object dtype.
+    if not mask.any():
+        return df
     bp_floats = df.loc[mask, bp_col].apply(_bp)
     bp_total = bp_floats.sum()
     if bp_total > 0:
         df.loc[mask, cs_col] = (bp_floats / bp_total * 100).round(4)
     if raw_col:
         df.loc[mask, raw_col] = (
-            bp_floats / 100.0 * sample_size
-        ).round(0).astype(int)
+            (bp_floats / 100.0 * sample_size).round(0).astype('int64')
+        )
     if proj_col:
         df.loc[mask, proj_col] = (
-            bp_floats / 100.0 * US_POP
-        ).round(0).astype(int)
+            (bp_floats / 100.0 * US_POP).round(0).astype('int64')
+        )
     return df
 
 
@@ -669,18 +781,56 @@ def _looks_intentional_2dp_disp(v) -> bool:
     return round(f * 100) % 10 in (0, 5)
 
 
-def dejitter_x5x0_displays(df, subject, verbose=True):
-    """D7/D8: re-jitter every BP whose 2dp display lands on X.X5 or X.X0.
+def _looks_x00xx_anchor(v) -> bool:
+    """Within 0.01 of an integer (5.0028, 7.0009, 12.0042)."""
+    try:
+        f = float(v)
+    except (TypeError, ValueError):
+        return False
+    if f < 0.5:
+        return False
+    delta = abs(f - round(f))
+    return 0.00005 < delta < 0.01
 
-    The drift is small (typically ±0.013pp) so the 2dp display moves off
-    the round band but the underlying magnitude is unchanged. Skips demo
-    + meta categories, true zeros, and 100% self-pins."""
+
+def _looks_round_any(v) -> bool:
+    """True if BP looks round to a human reader in ANY of the bands the
+    colleague's audit flags (X.X5, X.X0, X.00xx, exact-integer)."""
+    try:
+        f = float(v)
+    except (TypeError, ValueError):
+        return False
+    if f < 0.5:
+        return False
+    # Exact integer (5.0000) or X.X5/X.X0 in 2dp display
+    if round(f * 100) % 10 in (0, 5):
+        return True
+    # X.00xx (anchored near an integer)
+    if abs(f - round(f)) < 0.01:
+        return True
+    return False
+
+
+def dejitter_x5x0_displays(df, subject, verbose=True, max_attempts=8):
+    """D7/D8: re-jitter every BP that looks round to a human reader so the
+    final value is guaranteed non-round in every dashboard display.
+
+    Iterates up to `max_attempts` times per row with progressively larger
+    drift until `_looks_round_any` returns False. The drift is still small
+    (typically ±0.013pp on the first try, escalating to ±0.04pp by attempt
+    8) so the underlying magnitude is preserved.
+
+    Catches three round bands simultaneously: X.X5, X.X0 (2dp display),
+    and X.00xx (integer anchor + 4dp noise). Skips demo + meta categories,
+    true zeros, and 100% self-pins.
+    """
     if df is None or len(df) == 0:
         return df, 0
     bp_col, cs_col, raw_col, proj_col = _detect_cols(df)
     sample_size = _detect_sample_size(df, bp_col, raw_col)
 
     fixed = 0
+    still_round = 0
     for idx, r in df.iterrows():
         cat = str(r.get('Column', '') or '').strip().upper()
         val = str(r.get('Value', '') or '').strip().upper()
@@ -689,42 +839,58 @@ def dejitter_x5x0_displays(df, subject, verbose=True):
         old_bp = _bp(r.get(bp_col, 0))
         if old_bp <= 0 or old_bp >= 99.99:
             continue
-        if not _looks_intentional_2dp_disp(old_bp):
+        if not _looks_round_any(old_bp):
             continue
-        # Drift just enough to nudge the 2dp display off X.X5/X.X0.
-        # Need at least ±0.005 pp to move the display by one tick.
-        new_v = _jitter_for(subject, val, salt=f'dejitter-x5x0|{cat}',
-                             pct=0.018, base=old_bp)
-        # Paranoia: if the reroll *also* lands on X.X5/X.X0, push by a
-        # fixed half-tick so we definitely move off.
-        if _looks_intentional_2dp_disp(new_v):
-            new_v = round(new_v + 0.0073, 4)
-        if _looks_intentional_2dp_disp(new_v):
-            new_v = round(new_v - 0.0149, 4)
+
+        new_v = old_bp
+        for attempt in range(max_attempts):
+            pct = 0.018 + attempt * 0.005  # grows from 0.018 → 0.053
+            new_v = _jitter_for(subject, val,
+                                  salt=f'dejitter-round|{cat}|try{attempt}',
+                                  pct=pct, base=old_bp)
+            if not _looks_round_any(new_v):
+                break
+        else:
+            # Hard fallback: add a prime-fraction shift so we definitely
+            # land off any round band (1/137 ≈ 0.0073pp is irrational-ish
+            # in 4dp space and never lands on .X0/.X5/.00xx).
+            new_v = round(old_bp + 0.0073 + 0.0011, 4)
+            if _looks_round_any(new_v):
+                new_v = round(old_bp - 0.0073 - 0.0011, 4)
+            if _looks_round_any(new_v):
+                still_round += 1
+                continue
+
         if abs(new_v - old_bp) < 1e-5:
             continue
         df = _set_bp(df, idx, new_v, bp_col, cs_col, raw_col, proj_col,
                      sample_size)
         fixed += 1
 
-    if verbose and fixed:
-        print(f"   🎲 dejitter X.X5/X.X0 displays: {fixed} BP(s) nudged off round")
+    if verbose and (fixed or still_round):
+        msg = f"   🎲 dejitter round displays: {fixed} BP(s) nudged off round"
+        if still_round:
+            msg += f"  ({still_round} could not be de-rounded after {max_attempts} tries)"
+        print(msg)
     return df, fixed
 
 
-def dejitter_cross_cat_4dp_pins(df, subject, verbose=True):
-    """D10: when the same brand has the EXACT same 4dp BP in 3+ categories,
-    re-jitter all but one so the 4dp identity is broken across cats.
+def dejitter_cross_cat_4dp_pins(df, subject, verbose=True,
+                                  min_pin_cats=2, max_attempts=8):
+    """D10: when the same brand has the EXACT same 4dp BP in 2+ categories,
+    re-jitter all but one so the 4dp identity is broken across cats AND
+    the resulting value isn't itself round.
 
-    Doesn't change which category has the canonical value — just adds
-    deterministic ±~0.012pp drift to the 2nd, 3rd, … occurrence so the
-    4dp signature becomes unique per (brand, cat)."""
+    `min_pin_cats=2` means even a 2-category pin gets broken — the
+    colleague's audit wants zero cross-cat 4dp identities, not just 3+.
+    Iterates up to `max_attempts` times per shifted row so the new value
+    is both unique per (brand, cat) AND non-round.
+    """
     if df is None or len(df) == 0:
         return df, 0
     bp_col, cs_col, raw_col, proj_col = _detect_cols(df)
     sample_size = _detect_sample_size(df, bp_col, raw_col)
 
-    # Group by (brand, exact 4dp BP) and find groups with 3+ cats.
     rows_per_pair = {}
     for idx, r in df.iterrows():
         cat = str(r.get('Column', '') or '').strip().upper()
@@ -739,21 +905,21 @@ def dejitter_cross_cat_4dp_pins(df, subject, verbose=True):
 
     fixed = 0
     for (val, bp4), entries in rows_per_pair.items():
-        if len(entries) < 3:
+        if len(entries) < min_pin_cats:
             continue
-        # Keep first, re-jitter rest
+        used_4dp = {round(entries[0][2], 4)}  # first occurrence keeps the value
         for idx, cat, old_bp in entries[1:]:
-            new_v = _jitter_for(subject, val,
-                                  salt=f'dejitter-xcat-4dp|{cat}|{bp4}',
-                                  pct=0.014, base=old_bp)
-            # Make sure we didn't accidentally hit another 4dp twin —
-            # extremely unlikely but cheap to verify.
-            tries = 0
-            while round(new_v, 4) == round(old_bp, 4) and tries < 4:
+            new_v = old_bp
+            for attempt in range(max_attempts):
+                pct = 0.014 + attempt * 0.006
                 new_v = _jitter_for(subject, val,
-                                      salt=f'dejitter-xcat-4dp|{cat}|{bp4}|r{tries}',
-                                      pct=0.025, base=old_bp)
-                tries += 1
+                                      salt=f'dejitter-xcat-4dp|{cat}|{bp4}|t{attempt}',
+                                      pct=pct, base=old_bp)
+                # Must be (a) different 4dp from any prior twin AND
+                # (b) not itself round in any band.
+                if round(new_v, 4) not in used_4dp and not _looks_round_any(new_v):
+                    break
+            used_4dp.add(round(new_v, 4))
             df = _set_bp(df, idx, new_v, bp_col, cs_col, raw_col, proj_col,
                          sample_size)
             fixed += 1
@@ -895,6 +1061,190 @@ def strip_polluted_brand_values(df, subject, verbose=True):
         df, subject,
         lambda c, v: _is_polluted_brand_value(v),
         label='polluted-brand', verbose=verbose,
+    )
+
+
+# ============================================================================
+# 2026-05-27 — Two new enforcers added after Bria flagged that UBG had:
+#   (a) The Root + Ecosia in MEDIA / SEARCH ENGINE/AI despite being
+#       hostmap SECTION='Hidden' (Rule #4b)
+#   (b) An ad-hoc audit script dropped the canonical BRAND INPUT row
+#       because its Value contained '|' (URL-variant seed list). The
+#       shared _strip_rows helper already gates on METADATA_COLS, but
+#       any caller writing its own metadata-strip regex can re-introduce
+#       this bug. We now provide a canonical enforcer.
+# ============================================================================
+
+# Metadata-leakage patterns: things the LLM is echoing from prompt context
+# into the Value column. NEVER strips rows whose Column is in METADATA_COLS
+# (BRAND INPUT, SAMPLE SIZE, INPUT_METADATA, BRAND CATEGORY) — those
+# legitimately contain structured strings like URL-variant seed lists.
+_METADATA_LEAK_PATS = [
+    _re.compile(r'INPUT_METADATA', _re.I),
+    _re.compile(r'SAMPLE_START\s*:', _re.I),
+    _re.compile(r'BEHAVIOR_START\s*:', _re.I),
+    _re.compile(r'\bBEHAVIOR\s+STUDY\b', _re.I),
+    _re.compile(r'\bSEED\s*:\s*\d', _re.I),
+    _re.compile(r'\(\d{4}-\d{2}-\d{2}\s+TO\s+\d{4}-\d{2}-\d{2}\)', _re.I),
+    _re.compile(r'\bBRAND\s*:\s*[A-Z][A-Z0-9_-]*_(?:SAMPLE|BEHAVIOR)_', _re.I),
+]
+
+
+def strip_input_metadata_leakage(df, subject, verbose=True):
+    """Drop rows where the LLM has echoed prompt-context metadata strings
+    into the Value column (e.g. 'BRAND:KRAPOPOLIS_SAMPLE_START:2025-01-01
+    _SAMPLE_END:2025-12-31_BEHAVIOR_START:..._SEED:1238889381').
+
+    Also drops rows whose Column is 'INPUT_METADATA' (an entire pseudo-
+    category the pipeline sometimes emits).
+
+    CRITICAL: NEVER touches rows whose Column is in METADATA_COLS
+    (BRAND INPUT / SAMPLE SIZE / BRAND CATEGORY / SUBJECT). The
+    canonical BRAND INPUT row legitimately contains a URL-variant
+    seed list with pipe characters and the 100% pin must be preserved.
+
+    Added 2026-05-27 after the UBG A+ pass accidentally dropped the
+    BRAND INPUT row when an ad-hoc regex matched on '|'.
+    """
+    if df is None or len(df) == 0:
+        return df, 0
+    bp_col, cs_col, raw_col, proj_col = _detect_cols(df)
+    sample_size = _detect_sample_size(df, bp_col, raw_col)
+
+    drop_idx, affected, examples = [], set(), []
+    for idx, r in df.iterrows():
+        col = str(r.get('Column', '') or '').strip()
+        val = str(r.get('Value', '') or '').strip()
+        if not col or not val:
+            continue
+        col_u = col.upper()
+        # NEVER strip the canonical metadata rows (BRAND INPUT etc.).
+        if col_u in METADATA_COLS and col_u != 'INPUT_METADATA':
+            continue
+        # Drop entire INPUT_METADATA pseudo-column.
+        if col_u == 'INPUT_METADATA':
+            drop_idx.append(idx)
+            affected.add(col)
+            if len(examples) < 3:
+                examples.append((col, val[:60]))
+            continue
+        # Otherwise check Value against metadata leak patterns.
+        for pat in _METADATA_LEAK_PATS:
+            if pat.search(val):
+                drop_idx.append(idx)
+                affected.add(col)
+                if len(examples) < 3:
+                    examples.append((col, val[:60]))
+                break
+
+    if not drop_idx:
+        return df, 0
+    if verbose:
+        ex = ', '.join(f'[{c}]"{v}..."' for c, v in examples)
+        more = f' (+{len(drop_idx)-len(examples)} more)' if len(drop_idx) > len(examples) else ''
+        print(f"   🧹 stripped {len(drop_idx)} metadata-leak row(s): {ex}{more}")
+    df = df.drop(index=drop_idx).reset_index(drop=True)
+    for cat in affected:
+        df = _renormalize_category(df, cat, bp_col, cs_col, raw_col, proj_col,
+                                   sample_size)
+    return df, len(drop_idx)
+
+
+def recompute_raw_and_projection(df, subject, verbose=True):
+    """Recompute Original Raw Numbers + US Gen Pop Projection from BP for
+    every row. Sample size derives from BRAND INPUT row (BP=100 →
+    raw=sample_size by definition); falls back to SAMPLE SIZE row if
+    BRAND INPUT missing.
+
+    Formulas (canonical):
+        Raw  = round(BP / 100 * sample_size)
+        Proj = round(BP / 100 * 329_900_000)
+
+    Added 2026-05-27 after sweep found ALL 230 profiles in S3 had stale
+    Raw/Proj cells (avg 3,261 stale cells per profile; total 750,113).
+    Root cause: ad-hoc BP edits over time didn't always recompute the
+    downstream Raw and Proj. This enforcer canonicalizes the math on
+    every run so drift is impossible.
+
+    Preserves BP and Category Share unchanged.
+    """
+    if df is None or len(df) == 0:
+        return df, 0
+
+    def _num(v):
+        try:
+            return float(str(v).replace(',', '').replace('%', '').strip())
+        except Exception:
+            return None
+
+    bp_col, cs_col, raw_col, proj_col = _detect_cols(df)
+    if raw_col is None and proj_col is None:
+        return df, 0
+
+    # Derive sample size from BRAND INPUT (canonical) or SAMPLE SIZE
+    c_upper = df['Column'].astype(str).str.upper().str.strip()
+    sample_size = None
+    for cat in ('BRAND INPUT', 'SAMPLE SIZE'):
+        cand = df[c_upper == cat]
+        if len(cand) == 0:
+            continue
+        r = cand.iloc[0]
+        bp = _num(r.get(bp_col))
+        raw = _num(r.get(raw_col)) if raw_col else None
+        if raw and bp and bp > 0:
+            sample_size = raw / (bp / 100.0)
+            break
+    if sample_size is None:
+        if verbose:
+            print('   ⚠️ recompute_raw_and_projection: no sample-size source '
+                  '(BRAND INPUT / SAMPLE SIZE missing or BP=0); skipping')
+        return df, 0
+
+    bp_actual = df[bp_col].apply(_num)
+    valid = bp_actual.notna()
+    cells = 0
+
+    if raw_col is not None:
+        raw_actual = df[raw_col].apply(_num)
+        raw_expected = (bp_actual / 100.0 * sample_size).round(0)
+        diff = ((raw_actual - raw_expected).abs() > 1).fillna(False) & valid
+        cells += int(diff.sum())
+        df.loc[valid, raw_col] = raw_expected.loc[valid].astype('int64')
+
+    if proj_col is not None:
+        proj_actual = df[proj_col].apply(_num)
+        proj_expected = (bp_actual / 100.0 * US_POP).round(0)
+        diff = ((proj_actual - proj_expected).abs() > 1).fillna(False) & valid
+        cells += int(diff.sum())
+        df.loc[valid, proj_col] = proj_expected.loc[valid].astype('int64')
+
+    if verbose and cells:
+        print(f'   📐 recomputed {cells} Raw/Proj cells '
+              f'(sample_size={int(round(sample_size))})')
+    return df, cells
+
+
+def strip_hostmap_hidden_brands(df, subject, verbose=True):
+    """Drop every row whose Value is classified as SECTION='Hidden' in
+    reference.host_mapping (Rule #4b — Hidden brands must never appear
+    in shipped profiles).
+
+    Added 2026-05-27 after Bria flagged The Root (MEDIA) and Ecosia
+    (SEARCH ENGINE/AI) in Universal Basic Guys; both are hostmap-Hidden.
+    There are ~8,041 Hidden-classified brands; the canonical list is
+    cached at reference/hostmap_hidden_brands.txt.
+
+    Skips METADATA_COLS (Brand Input / Sample Size / Brand Category)
+    so that subject-row values can't accidentally trip the filter.
+    """
+    if not _ensure_hostmap_hidden_loaded():
+        if verbose:
+            print('   ⚠️ hostmap_hidden_brands.txt not found; skipping Hidden-strip')
+        return df, 0
+    return _strip_rows(
+        df, subject,
+        lambda c, v: _is_hostmap_hidden(v),
+        label='hostmap-Hidden', verbose=verbose,
     )
 
 
@@ -3665,6 +4015,8 @@ def run_all_enforcers(df, subject, brand_category=None, verbose=True):
     """Run every enforcer in order. Returns (df, total_changes)."""
     total = 0
     for fn in (
+        strip_input_metadata_leakage,      # 2026-05-27 (D5) — prompt-context echoes
+        strip_hostmap_hidden_brands,       # 2026-05-27 (Rule #4b) — Hidden never ships
         strip_url_encoded_subject_dupes,
         strip_corporate_parents,
         strip_product_skus,
@@ -3816,4 +4168,22 @@ def run_all_enforcers(df, subject, brand_category=None, verbose=True):
         total += n
     except Exception as e:
         print(f"   ⚠️ enforcer dejitter_cross_cat_4dp_pins failed: {e}")
+    # 2026-05-27 (D8 mop-up): cross-cat dejitter can shift values onto a
+    # round band by coincidence — run dejitter_x5x0 once more to clean.
+    try:
+        df, n = dejitter_x5x0_displays(df, subject, verbose=verbose)
+        total += n
+    except Exception as e:
+        print(f"   ⚠️ enforcer dejitter_x5x0 (mop-up) failed: {e}")
+    # 2026-05-27 (D-Proj): VERY LAST — recompute Raw + Proj from final BP.
+    # Every previous enforcer that touched BP may have left stale Raw/Proj
+    # cells. This pass canonicalizes the math (Raw = BP/100*sample_size,
+    # Proj = BP/100*US_POP) so drift across enforcer hops is impossible.
+    # Sweep on 2026-05-27 found ALL 230 profiles had stale cells (750,113
+    # total). Must run after every other enforcer settles.
+    try:
+        df, n = recompute_raw_and_projection(df, subject, verbose=verbose)
+        total += n
+    except Exception as e:
+        print(f"   ⚠️ enforcer recompute_raw_and_projection failed: {e}")
     return df, total

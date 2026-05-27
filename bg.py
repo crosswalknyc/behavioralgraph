@@ -28539,6 +28539,10 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
                 df_final, _n_xcat4 = _dejitter_xcat4dp(df_final, _subj_for_depin, verbose=True)
             except Exception as _e:
                 print(f"   ⚠️ cross-cat 4dp dejitter skipped: {_e}")
+            try:
+                df_final, _n_x5x0_mop = _dejitter_x5x0(df_final, _subj_for_depin, verbose=True)
+            except Exception as _e:
+                print(f"   ⚠️ X.X5/X.X0 dejitter (mop-up) skipped: {_e}")
         except Exception as _e:
             print(f"   ⚠️ round-BP depinning skipped: {_e}")
 
