@@ -1703,6 +1703,288 @@ def agent_reason_cap_overrides(df,
     return df, decisions
 
 
+# Categories that should always have rows for a US digital-adult profile.
+# If any sit at 0 rows after agent processing, `agent_reason_empty_categories`
+# prompts the persona agent to populate them. The base set covers categories
+# that should appear in EVERY profile regardless of subject type; the
+# content-extras set adds categories relevant for SERIES / ACTOR / TALENT
+# subjects (BROADCAST/CABLE for the airing network, PODCAST/HOST for the
+# host adjacency, etc.).
+MANDATORY_CATEGORIES_BASE = {
+    'SEARCH ENGINE',
+    'AI',
+    'SOCIAL MEDIA',
+    'BANKING',
+    'DIGITAL BANKING',
+    'TELCO',
+    'STREAMING/PLATFORM',
+    'STREAMING/MUSIC',
+    'QSR',
+    'WHERE THEY SHOP',
+    'MEDIA',
+    'APP/PLATFORM USAGE',
+    'AUTOMOBILE',
+    'INSURANCE',
+    'CREDIT PROVIDER',
+}
+MANDATORY_CATEGORIES_CONTENT_EXTRAS = {
+    'BROADCAST/CABLE',
+    'PODCAST',
+    'HOST/PERSONALITY',
+    'MUSICIAN/BAND',
+    'ACTOR',
+    'MOVIE THEATER',
+}
+MANDATORY_CATEGORIES = MANDATORY_CATEGORIES_BASE | MANDATORY_CATEGORIES_CONTENT_EXTRAS
+
+
+def agent_reason_empty_categories(df,
+                                    report: AuditReport,
+                                    openai_client,
+                                    persona_doc=None,
+                                    mandatory_categories=None,
+                                    min_entries: int = 5,
+                                    max_entries: int = 20,
+                                    min_bp: float = 1.0,
+                                    model: str = 'gpt-4o',
+                                    max_tokens: int = 4000,
+                                    verbose: bool = True):
+    """Populate categories that came back empty from the upstream agent pass.
+
+    For every category in `mandatory_categories` (default: MANDATORY_CATEGORIES)
+    sitting at zero rows in `df`, fire a per-category LLM prompt asking the
+    persona agent to enumerate the brands/values THIS audience genuinely
+    engages with, with persona-grounded BPs (NOT consensus-snapping, NOT
+    floor noise). Validate the response and inject the rows.
+
+    Returns (df, decisions) where each decision is:
+      {category, status ('POPULATED' | 'SKIP' | 'ERROR'), n_added,
+       entries (list of dicts), reason}
+
+    No-ops if the OpenAI client is missing. Categories already populated
+    (any rows present) are LEFT ALONE — this pass never touches existing data.
+    """
+    if openai_client is None:
+        if verbose:
+            print("   ⚠️  empty-cat: no OpenAI client; skipping")
+        return df, []
+
+    mandatory = set(mandatory_categories) if mandatory_categories else set(MANDATORY_CATEGORIES)
+    mandatory = {str(c).strip().upper() for c in mandatory}
+
+    bp_col = 'Brand Penetration (Row)'
+    cs_col = 'Category Share'
+    raw_col = 'Original Raw Numbers'
+    proj_col = 'US Gen Pop Projection'
+
+    if bp_col not in df.columns or 'Column' not in df.columns or 'Value' not in df.columns:
+        if verbose:
+            print("   ⚠️  empty-cat: missing required columns; skipping")
+        return df, []
+
+    df = df.copy()
+    for _c in (bp_col, cs_col, raw_col, proj_col):
+        if _c in df.columns and df[_c].dtype != object:
+            df[_c] = df[_c].astype(object)
+
+    col_upper = df['Column'].astype(str).str.strip().str.upper()
+    populated_cats = set(col_upper.unique())
+    empty_cats = sorted(mandatory - populated_cats)
+
+    if not empty_cats:
+        if verbose:
+            print("   🪴 empty-cat: every mandatory category is populated — nothing to do")
+        return df, []
+
+    if verbose:
+        print(f"   🪴 empty-cat: {len(empty_cats)} mandatory categor"
+              f"{'y' if len(empty_cats)==1 else 'ies'} sitting at 0 rows: "
+              f"{', '.join(empty_cats)}")
+
+    raw_per_pct, proj_per_pct = _derive_scale_from_df(df)
+    persona_context = _persona_context_block(
+        persona_doc, report.audience_composition, report.subject,
+    )
+
+    decisions: list[dict] = []
+    new_row_records: list[dict] = []
+    import random as _r
+
+    for cat in empty_cats:
+        # Hints help the agent know what kind of entities belong here without
+        # us pre-naming specific brands (we want persona-driven enumeration,
+        # not consensus-snapping to a hint list).
+        kind_hint = _empty_category_kind_hint(cat)
+
+        prompt = (
+            "You are the persona-reasoning agent for a Crosswalk digital "
+            "audience pull. The category below came back with ZERO rows from "
+            "the upstream agent pass — almost certainly a pipeline gap, NOT a "
+            "real 'this audience has zero engagement' signal. Populate it "
+            "with the brands/values THIS persona genuinely engages with.\n\n"
+            f"=== PERSONA CONTEXT ===\n{persona_context}\n\n"
+            f"=== EMPTY CATEGORY ===\n"
+            f"  CATEGORY: {cat}\n"
+            f"  KIND: {kind_hint}\n\n"
+            "=== TASK ===\n"
+            f"Emit between {min_entries} and {max_entries} entries for this "
+            "category, sorted by BP descending. Each BP is the percentage of "
+            "this persona that genuinely engages with that brand/value.\n\n"
+            "Hard rules:\n"
+            f"  - Every BP >= {min_bp:.1f}% (no floor noise; if you can't "
+            "justify >= 1%, omit the entry).\n"
+            "  - BP <= 99.99% (never exactly 100 unless the brand IS the "
+            "subject's primary platform).\n"
+            "  - Use 4 decimal places for organic look (e.g., 23.4172%, not 23%).\n"
+            "  - Persona-grounded reasoning: use the audience's demographics, "
+            "income, cultural signals, age. NOT mass-American defaults. NOT "
+            "consensus mid-band snapping.\n"
+            "  - Use canonical brand spellings (e.g., 'CHATGPT' not 'Chat-GPT', "
+            "'T-MOBILE' not 'TMobile', 'AT&T' not 'AT and T').\n"
+            "  - 'reason' per entry should reference THIS persona, not generic statements.\n\n"
+            "Return ONLY valid JSON in this exact shape:\n"
+            '{"category": "' + cat + '", "entries": ['
+            '{"value": "BRAND", "bp": 41.8237, "reason": "..."}, ...]}\n'
+            "JSON only, no markdown, no code fences."
+        )
+
+        try:
+            resp = openai_client.chat.completions.create(
+                model=model,
+                messages=[{'role': 'user', 'content': prompt}],
+                temperature=0.25,
+                max_tokens=max_tokens,
+                timeout=120,
+            )
+            raw = resp.choices[0].message.content.strip()
+            raw = re.sub(r'^```(?:json)?\s*|\s*```$', '', raw).strip()
+            parsed = json.loads(raw)
+        except Exception as e:
+            if verbose:
+                print(f"   ⚠️ empty-cat {cat}: agent error: {e}")
+            decisions.append({
+                'category': cat, 'status': 'ERROR', 'n_added': 0,
+                'entries': [], 'reason': f'agent error: {e}',
+            })
+            continue
+
+        entries = parsed.get('entries') or []
+        if not isinstance(entries, list) or not entries:
+            decisions.append({
+                'category': cat, 'status': 'SKIP', 'n_added': 0,
+                'entries': [], 'reason': 'agent returned no entries',
+            })
+            continue
+
+        # Validate + dedupe (within this category)
+        seen_vals: set = set()
+        valid_entries = []
+        for ent in entries:
+            try:
+                v = str(ent.get('value', '')).strip().upper()
+                bp = float(ent.get('bp'))
+            except (TypeError, ValueError):
+                continue
+            if not v or v in seen_vals:
+                continue
+            if bp < min_bp or bp > 99.99:
+                continue
+            # Add 4dp jitter when the agent returned a round number
+            if round(bp, 4) == round(bp, 1):
+                bp = round(bp + _r.uniform(-0.04, 0.04), 4)
+            seen_vals.add(v)
+            valid_entries.append({
+                'value': v, 'bp': round(bp, 4),
+                'reason': str(ent.get('reason', '')).strip(),
+            })
+            if len(valid_entries) >= max_entries:
+                break
+
+        if not valid_entries:
+            decisions.append({
+                'category': cat, 'status': 'SKIP', 'n_added': 0,
+                'entries': [], 'reason': 'all entries failed validation',
+            })
+            continue
+
+        # Inject rows
+        for ent in valid_entries:
+            new_row_records.append({
+                'Column': cat, 'Value': ent['value'],
+                bp_col: f"{ent['bp']:.4f}%",
+                cs_col: '',  # recomputed below
+                raw_col: str(max(1, int(round(ent['bp'] * raw_per_pct)))),
+                proj_col: str(int(round(ent['bp'] * proj_per_pct))),
+            })
+
+        decisions.append({
+            'category': cat, 'status': 'POPULATED',
+            'n_added': len(valid_entries), 'entries': valid_entries,
+            'reason': f'persona-grounded enumeration emitted '
+                      f'{len(valid_entries)} entries',
+        })
+        if verbose:
+            top = valid_entries[0]
+            print(f"   🪴 empty-cat {cat}: +{len(valid_entries)} rows "
+                  f"(top: {top['value']} @ {top['bp']:.2f}%)")
+
+    if new_row_records:
+        df = pd.concat([df, pd.DataFrame(new_row_records)], ignore_index=True)
+        # Recompute Category Share for every touched category (BP / sum(BPs) * 100)
+        touched_cats = {d['category'] for d in decisions if d.get('status') == 'POPULATED'}
+        for cat in touched_cats:
+            m = df['Column'] == cat
+            if not m.any():
+                continue
+            bps_cat = df.loc[m, bp_col].apply(_numbp).fillna(0)
+            total = bps_cat.sum()
+            if total <= 0:
+                continue
+            new_cs = bps_cat / total * 100.0
+            for i, idx in enumerate(df.index[m]):
+                df.at[idx, cs_col] = f"{new_cs.iloc[i]:.4f}"
+
+    n_pop = sum(1 for d in decisions if d['status'] == 'POPULATED')
+    n_skp = sum(1 for d in decisions if d['status'] == 'SKIP')
+    n_err = sum(1 for d in decisions if d['status'] == 'ERROR')
+    total_added = sum(d['n_added'] for d in decisions)
+    if verbose:
+        print(f"   🪴 empty-cat totals: {n_pop} POPULATED ({total_added} rows added), "
+              f"{n_skp} SKIP, {n_err} ERROR")
+
+    return df, decisions
+
+
+def _empty_category_kind_hint(cat: str) -> str:
+    """Short hint to anchor the agent on what kind of entities live here.
+    Deliberately broad — we want persona enumeration, not a brand list."""
+    cat_u = str(cat).strip().upper()
+    hints = {
+        'SEARCH ENGINE':    'web search engines (Google, Bing, DuckDuckGo, Yahoo, Ecosia, etc.)',
+        'AI':               'consumer AI products (ChatGPT, Gemini, Claude, Copilot, Perplexity, Midjourney, etc.)',
+        'SOCIAL MEDIA':     'social platforms (YouTube, Facebook, Instagram, TikTok, X, Snapchat, Pinterest, LinkedIn, Threads, etc. — NOT Reddit, that lives under APP/PLATFORM USAGE)',
+        'BANKING':          'consumer banks (Chase, Bank of America, Wells Fargo, Capital One, US Bank, Citibank, Truist, PNC, etc.)',
+        'DIGITAL BANKING':  'digital wallets + neobanks (PayPal, Venmo, Cash App, Apple Pay, Zelle, Chime, etc.)',
+        'TELCO':            'mobile carriers (Verizon, T-Mobile, AT&T, plus MVNO long tail like Mint, Cricket, Metro, Boost)',
+        'STREAMING/PLATFORM': 'SVOD + vMVPD (Netflix, Hulu, Disney+, HBO Max, Amazon Prime Video, Peacock, Paramount+, etc.)',
+        'STREAMING/MUSIC':  'music streaming services (Spotify, Apple Music, YouTube Music, Amazon Music, Pandora, SoundCloud, Tidal, etc.)',
+        'QSR':              'quick-service restaurants (McDonalds, Chick-fil-A, Chipotle, Taco Bell, Wendy\'s, Dunkin, Subway, Starbucks, etc.)',
+        'WHERE THEY SHOP':  'retailers (Walmart, Amazon, Target, Costco, Home Depot, Lowe\'s, Sephora, Ulta, etc.)',
+        'MEDIA':            'news + publishing brands (CNN, Fox News, NYT, WaPo, Rolling Stone, etc.)',
+        'APP/PLATFORM USAGE': 'consumer apps (Gmail, Google Maps, Wikipedia, Reddit, Zoom, Calm, Tinder, Zillow, etc.)',
+        'AUTOMOBILE':       'auto brands the persona drives or aspires to (Toyota, Honda, Ford, Chevy, BMW, Tesla, etc.)',
+        'INSURANCE':        'insurance brands (State Farm, GEICO, Allstate, Progressive, Liberty Mutual, etc.)',
+        'CREDIT PROVIDER':  'credit/debit networks + issuers (Visa, Mastercard, AmEx, Discover, Capital One)',
+        'BROADCAST/CABLE':  'linear TV networks (NBC, CBS, ABC, Fox, FX, FXX, AMC, Adult Swim, Comedy Central, TBS, TNT, USA, History, etc.)',
+        'PODCAST':          'podcast shows the persona listens to',
+        'HOST/PERSONALITY': 'TV / podcast / media hosts and on-air personalities',
+        'MUSICIAN/BAND':    'musicians and bands the persona engages with',
+        'ACTOR':            'film and TV actors the persona engages with',
+        'MOVIE THEATER':    'movie theater chains (AMC, Regal, Cinemark, etc.)',
+    }
+    return hints.get(cat_u, f'brands or entities classified under {cat}')
+
+
 def apply_default_lock_breaks(df, report: AuditReport):
     """Re-jitter known default-value-lock fingerprints (15.0143, 11.0852, …).
     These are pipeline defaults, not real measurements — always patch them.
