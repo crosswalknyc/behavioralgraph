@@ -1184,6 +1184,14 @@ def run_query(conn, p):
     # Build show filter for engagement check
     show_filter = make_url_and_common_name_filter(p['show_search_terms'], auto_format)
     
+    # NOTE (2026-05-26 fix): two bugs were corrected here:
+    #   1. The CTE previously pulled ALL new platform UIDs in the window, not
+    #      SHOW-ATTRIBUTED signups, which leaked platform-wide totals into the
+    #      MONTHLY PLATFORM SIGNUPS section (e.g. 327k for BritBox). Now
+    #      restricted to TEMP_NEW_PLATFORM_SIGNUPS so this section matches the
+    #      "show-attributed" signup definition used elsewhere in the report.
+    #   2. NULL / epoch-zero VISIT_TS values bucketed into "1970-01" before;
+    #      now filtered explicitly.
     monthly_signups_query = f"""
     WITH first_platform_visits AS (
         SELECT
@@ -1195,7 +1203,11 @@ def run_query(conn, p):
                             AND DATEADD(DAY, {p['attribution_window']}, '{p['campaign_end'].date()}')
           AND LOWER(COMMON_NAME) LIKE '%{platform_filter}%'
           AND UID NOT IN (SELECT UID FROM TEMP_ALL_PRE_PLATFORM_USERS)
+          AND UID IN (SELECT UID FROM TEMP_NEW_PLATFORM_SIGNUPS)
+          AND VISIT_TS IS NOT NULL
+          AND VISIT_TS > toDateTime('1970-01-02 00:00:00')
         GROUP BY UID
+        HAVING MIN(VISIT_TS) > toDateTime('1970-01-02 00:00:00')
     ),
     show_watchers AS (
         SELECT DISTINCT UID
@@ -1230,6 +1242,11 @@ def run_query(conn, p):
         WHERE DELIVERED BETWEEN {churn_start}
                             AND DATEADD(DAY, {p['attribution_window']}, '{p['campaign_end'].date()}')
           AND LOWER(COMMON_NAME) LIKE '%{platform_filter}%'
+          -- (2026-05-26 fix) Drop NULL / epoch-zero VISIT_TS so a stray
+          -- 1970-01 row can't misalign the LEAD()-based month pairing in
+          -- prev_month_active and produce a negative-churn artifact.
+          AND VISIT_TS IS NOT NULL
+          AND VISIT_TS > toDateTime('1970-01-02 00:00:00')
     ),
     campaign_months AS (
         SELECT DISTINCT
@@ -1277,8 +1294,15 @@ def run_query(conn, p):
         p.NEXT_MONTH AS VISIT_MONTH,
         p.NEXT_MONTH_ACTIVE AS ACTIVE_USERS,
         p.ACTIVE_USERS AS PREV_MONTH_ACTIVE,
-        (p.ACTIVE_USERS - COALESCE(c.RETAINED_USERS, 0)) AS CHURNED_USERS,
-        ROUND((p.ACTIVE_USERS - COALESCE(c.RETAINED_USERS, 0)) * 100.0 / NULLIF(p.ACTIVE_USERS, 0), 2) AS CHURN_RATE
+        -- NOTE (2026-05-26 fix): clamp churn to >= 0. Negative churn occurred
+        -- when RETAINED_USERS > PREV_MONTH_ACTIVE, typically from epoch-zero
+        -- VISIT_TS values misaligning the LEAD()-based month pairing or from
+        -- fast-growing niche platforms. Impossible negatives shouldn't ship.
+        GREATEST(0, p.ACTIVE_USERS - COALESCE(c.RETAINED_USERS, 0)) AS CHURNED_USERS,
+        ROUND(
+            GREATEST(0, p.ACTIVE_USERS - COALESCE(c.RETAINED_USERS, 0)) * 100.0
+            / NULLIF(p.ACTIVE_USERS, 0), 2
+        ) AS CHURN_RATE
     FROM prev_month_active p
     LEFT JOIN churn_calc c ON p.NEXT_MONTH = c.VISIT_MONTH
     INNER JOIN campaign_months cm ON p.NEXT_MONTH = cm.VISIT_MONTH
@@ -1717,6 +1741,82 @@ def run_query(conn, p):
         print(f"   📊 Real-world metrics: Total={validated_total:,}, Pre={validated_pre:,}, Clean={validated_clean:,}, Signups={validated_signups:,}")
         print(f"   📊 Conversion rate: {_raw_conv_rate*100:.2f}% (preserved from raw panel data)")
 
+    # =========================================================================
+    # ALWAYS-ON CONVERSION-RATE REVIEW (2026-05-26 fix)
+    # =========================================================================
+    # Previously _reason_conversion_rate ONLY ran inside the watcher-override
+    # block above.  When AI viewership validation said "keep panel" (common
+    # for niche platforms like BritBox where the AI returns no usable estimate),
+    # the conversion review was silently skipped and a 32.5% rate could ship
+    # unchallenged.  Now we run it regardless — using the current df_summary
+    # values, whatever path got us here.  Inside the function, anything in
+    # the plausible band and below the 5% review threshold passes through
+    # untouched, so this is cheap when there's nothing to fix.
+    if not p.get('_ai_real_world'):
+        _cur_total = int(df_summary.loc[0, 'TOTAL_SHOW_WATCHERS']) if not pd.isna(df_summary.loc[0, 'TOTAL_SHOW_WATCHERS']) else 0
+        _cur_clean = int(df_summary.loc[0, 'CLEAN_SAMPLE_SIZE']) if not pd.isna(df_summary.loc[0, 'CLEAN_SAMPLE_SIZE']) else 0
+        _cur_signups = int(df_summary.loc[0, 'NEW_SIGNUPS']) if not pd.isna(df_summary.loc[0, 'NEW_SIGNUPS']) else 0
+        _cur_conv = (_cur_signups / _cur_total) if _cur_total > 0 else 0.0
+
+        _plat_info_aux = _get_platform_info(p.get('platform_name', ''))
+        _aux_rate, _aux_flag = _reason_conversion_rate(
+            show_name=show_name_for_ai,
+            platform_name=p.get('platform_name', ''),
+            genre=p.get('genre', ''),
+            content_cadence=p.get('content_cadence', ''),
+            episode_count=len(p.get('episode_dates', [])),
+            date_range=date_range_for_ai,
+            raw_panel_conv_rate=_cur_conv,
+            ai_total_viewers=_cur_total,
+            platform_info=_plat_info_aux,
+        )
+
+        # Only act if the agent actually corrected the rate (flag is not None).
+        if _aux_flag and _cur_total > 0:
+            p.setdefault('_ai_flags', []).append(_aux_flag)
+            _new_signups = int(round(_cur_total * _aux_rate))
+            _new_signups = add_natural_noise_count(_new_signups, show_name_for_ai,
+                                                   p.get('platform_name', ''), 'aux_signups',
+                                                   spread_pct=0.003)
+            _signup_scale_aux = (_new_signups / _cur_signups) if _cur_signups > 0 else 1.0
+
+            df_summary.loc[0, 'NEW_SIGNUPS'] = _new_signups
+            df_summary.loc[0, 'TOTAL_SHOW_CONVERSION_RATE'] = round(_new_signups * 100.0 / _cur_total, 2)
+            if _cur_clean > 0:
+                df_summary.loc[0, 'CLEAN_CONVERSION_RATE'] = round(_new_signups * 100.0 / _cur_clean, 2)
+
+            print(f"   🧠 Always-on conversion review: signups {_cur_signups:,} → {_new_signups:,} "
+                  f"(scale {_signup_scale_aux:.4f}x); rescaling signup-context dataframes...")
+
+            def _scale_col_aux(df, col, sf):
+                if df is None or df.empty or col not in df.columns:
+                    return
+                for idx in df.index:
+                    val = df.loc[idx, col]
+                    if not pd.isna(val):
+                        try:
+                            df.loc[idx, col] = int(round(float(val) * sf))
+                        except (ValueError, TypeError):
+                            pass
+
+            _scale_col_aux(df_demo, 'COUNT', _signup_scale_aux)
+            _scale_col_aux(df_timing, 'SIGNUP_COUNT', _signup_scale_aux)
+            if not df_episode_attribution.empty:
+                _scale_col_aux(df_episode_attribution, 'SIGNUPS_ATTRIBUTED', _signup_scale_aux)
+            if not df_monthly_signups.empty:
+                _scale_col_aux(df_monthly_signups, 'UNIQUE_SIGNUPS', _signup_scale_aux)
+            if not df_episode_timing.empty:
+                _scale_col_aux(df_episode_timing, 'SIGNUP_COUNT', _signup_scale_aux)
+            if not df_post_signup_touchpoints.empty:
+                _scale_col_aux(df_post_signup_touchpoints, 'USER_COUNT', _signup_scale_aux)
+                if 'PERCENTAGE' in df_post_signup_touchpoints.columns and _new_signups > 0:
+                    for idx in df_post_signup_touchpoints.index:
+                        uc = df_post_signup_touchpoints.loc[idx, 'USER_COUNT']
+                        if not pd.isna(uc):
+                            df_post_signup_touchpoints.loc[idx, 'PERCENTAGE'] = round(
+                                float(uc) * 100.0 / _new_signups, 2
+                            )
+
     # Final invariant check: Total MUST equal Pre + Clean
     _final_total = int(df_summary.loc[0, 'TOTAL_SHOW_WATCHERS']) if not pd.isna(df_summary.loc[0, 'TOTAL_SHOW_WATCHERS']) else 0
     _final_pre = int(df_summary.loc[0, 'PRE_EXISTING_USERS']) if not pd.isna(df_summary.loc[0, 'PRE_EXISTING_USERS']) else 0
@@ -1746,6 +1846,16 @@ PLATFORM_PENETRATION = {
     'apple tv+': {'pct': 10, 'subs_millions': 25, 'tier': 'niche'},
     'discovery+': {'pct': 7, 'subs_millions': 13, 'tier': 'niche'},
     'starz': {'pct': 5, 'subs_millions': 8, 'tier': 'niche'},
+    # Subscribe-for-show / niche US streamers — populated 2026-05-26 so the
+    # conversion-rate agent gets the right tier context instead of defaulting
+    # to {'pct': 15, 'tier': 'unknown'} (which misled the agent for BritBox).
+    'britbox': {'pct': 2, 'subs_millions': 4, 'tier': 'niche'},
+    'acorn tv': {'pct': 2, 'subs_millions': 2, 'tier': 'niche'},
+    'acorn': {'pct': 2, 'subs_millions': 2, 'tier': 'niche'},
+    'crunchyroll': {'pct': 4, 'subs_millions': 12, 'tier': 'niche'},
+    'amc+': {'pct': 3, 'subs_millions': 11, 'tier': 'niche'},
+    'shudder': {'pct': 1, 'subs_millions': 2, 'tier': 'niche'},
+    'mubi': {'pct': 1, 'subs_millions': 1, 'tier': 'niche'},
 }
 
 def _get_platform_info(platform_name):
@@ -2653,6 +2763,63 @@ def apply_ai_adjustments(df_out, validation_result, total_watchers, new_signups,
                 if cat in ("Total Show Conversion Rate", "Clean Conversion Rate"):
                     df_out.loc[idx, "Percentage"] = f"{new_conv:.2f}%"
                     changes.append(f"{cat}: recalculated to {new_conv:.2f}%")
+
+    # ========================================================================
+    # SUBSIDIARY-SECTION RESCALE (2026-05-26 fix)
+    # ========================================================================
+    # Previously this function patched only the KEY METRICS rows (New Platform
+    # Signups + TOTAL SIGNUPS) when validation reduced signups.  That left the
+    # SIGNUP TIMING, POST-SIGNUP TOUCHPOINT, MONTHLY PLATFORM SIGNUPS, and
+    # DEMOGRAPHICS sections sitting at the original inflated counts — which is
+    # why the BritBox "Bennet Sister" report showed 65 in KEY METRICS but 327k
+    # in SIGNUP TIMING.  When signups change here, rescale every signup-context
+    # row in df_out (by Count Label, since those labels mark signup-derived
+    # measurements) so all sections stay internally consistent.
+    if adjusted_signups != new_signups and new_signups > 0:
+        signup_sf = adjusted_signups / new_signups
+        # Labels whose Count column is a count of SIGNUPS (i.e. should scale
+        # with the signup adjustment).  Excludes "days avg"/"min avg view"
+        # (per-episode columns), "churned" (churn is independent), "watched
+        # show" (this is a Secondary Count alongside signups — handled below).
+        signup_labels = {"signups", "accounts activated", "people"}
+
+        rescaled = 0
+        for idx in df_out.index:
+            count_label = str(df_out.loc[idx, "Count Label"] or "").strip().lower()
+            sec_label = str(df_out.loc[idx, "Secondary Label"] or "").strip().lower()
+            cat = str(df_out.loc[idx, "Category"] or "").strip()
+            # Skip the KEY METRICS rows we already explicitly patched above.
+            if cat in ("New Platform Signups", "TOTAL SIGNUPS"):
+                continue
+
+            if count_label in signup_labels:
+                try:
+                    cur = float(str(df_out.loc[idx, "Count"]).replace(",", ""))
+                    if cur > 0:
+                        new_cnt = max(0, int(round(cur * signup_sf)))
+                        df_out.loc[idx, "Count"] = new_cnt
+                        df_out.loc[idx, "Gen Pop Projection"] = format_gen_pop(gen_pop_projection(new_cnt))
+                        rescaled += 1
+                except (ValueError, TypeError):
+                    pass
+
+            # MONTHLY PLATFORM SIGNUPS rows: Secondary Count = "watched show"
+            # which should also scale with attributed signups.
+            if sec_label == "watched show":
+                try:
+                    cur_sec = float(str(df_out.loc[idx, "Secondary Count"]).replace(",", ""))
+                    if cur_sec > 0:
+                        df_out.loc[idx, "Secondary Count"] = max(0, int(round(cur_sec * signup_sf)))
+                        rescaled += 1
+                except (ValueError, TypeError):
+                    pass
+
+        if rescaled > 0:
+            changes.append(
+                f"Rescaled {rescaled} subsidiary-section rows (signup timing, "
+                f"touchpoint, monthly, demographics) by {signup_sf:.4f}x to match "
+                f"the adjusted signup total."
+            )
 
     return df_out, changes
 

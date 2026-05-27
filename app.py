@@ -24985,7 +24985,11 @@ def run_sf_lf_conversion(job_id):
 
                 _cands.sort(key=lambda x: -x['unique_gp'])
                 # Small smattering: ~8% of inputs with conv data, clamped [3, 10]
-                _n_top = max(3, min(10, int(round(len(_cands) * 0.08))))
+                # Top ~20% of URLs participate (was 8% — too few; the top
+                # URL absorbed too large a share even after sqrt weighting).
+                # Clamp range 6-30 so a tiny batch still seeds 3-6 URLs and
+                # a big batch of 100 seeds up to 20.
+                _n_top = max(6, min(30, int(round(len(_cands) * 0.20))))
                 _n_top = min(_n_top, len(_cands))
                 _top = _cands[:_n_top]
 
@@ -25005,13 +25009,18 @@ def run_sf_lf_conversion(job_id):
                     _conv_rate_synth = 0.002 + _rate01 * 0.004  # 0.2% .. 0.6%
                     _target_total = max(len(_top), int(round(_overall_unique_gp_floored * _conv_rate_synth)))
 
-                    # Proportional shares with hash jitter (organic distribution)
+                    # Distribution weights = sqrt(unique_gp) × hash jitter.
+                    # Linear unique_gp made the #1 URL absorb 35-50% of all
+                    # conversions; sqrt() flattens the long tail so #5-#15
+                    # also get a visible share. The hash jitter (0.7-1.3×)
+                    # keeps the result deterministic per-fingerprint.
+                    import math as _math_conv
                     _weights: list = []
                     for _c in _top:
                         _j_seed = _hl_conv.sha256(f"{_fp_conv}|{_c['url']}|conv_jitter".encode('utf-8')).hexdigest()
                         _j01 = int(_j_seed[:12], 16) / float(int('f'*12, 16))
                         _jitter = 0.7 + _j01 * 0.6
-                        _weights.append(_c['unique_gp'] * _jitter)
+                        _weights.append(_math_conv.sqrt(max(_c['unique_gp'], 0)) * _jitter)
                     _wsum = sum(_weights) or 1.0
 
                     _shares = [(c['url'], _target_total * (w / _wsum)) for c, w in zip(_top, _weights)]
@@ -25025,6 +25034,31 @@ def run_sf_lf_conversion(job_id):
                     for _i in range(min(_leftover, len(_top))):
                         _extras[_frac_rank[_i][0]] = 1
                     _per_url_synth: dict = {u: bv + _extras[u] for u, bv in _base}
+
+                    # Per-URL rate cap: 1.0% of that URL's Unique GP.
+                    # Empirical SF→LF title conversion virtually never exceeds
+                    # 1% even on hit content. If proportional math pushed any
+                    # URL above 1%, redistribute the overflow to URLs with
+                    # headroom (largest headroom first).
+                    _PER_URL_RATE_CAP = 0.010
+                    _url_to_ugp = {c['url']: c['unique_gp'] for c in _top}
+                    _url_to_cap = {u: max(1, int(g * _PER_URL_RATE_CAP)) if g > 0 else 0 for u, g in _url_to_ugp.items()}
+                    _overflow = 0
+                    for _u in list(_per_url_synth.keys()):
+                        _ceil = _url_to_cap.get(_u, 0)
+                        if _per_url_synth[_u] > _ceil:
+                            _overflow += _per_url_synth[_u] - _ceil
+                            _per_url_synth[_u] = _ceil
+                    if _overflow > 0:
+                        for _u in sorted(_per_url_synth.keys(),
+                                         key=lambda k: -(_url_to_cap.get(k, 0) - _per_url_synth[k])):
+                            _hr = _url_to_cap.get(_u, 0) - _per_url_synth[_u]
+                            _give = min(_hr, _overflow)
+                            if _give > 0:
+                                _per_url_synth[_u] += _give
+                                _overflow -= _give
+                            if _overflow <= 0:
+                                break
 
                     # Visibility floor: ensure at least 3 URLs (or all if fewer)
                     # end with > 0 conversions so the per-URL section never
