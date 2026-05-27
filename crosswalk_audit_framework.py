@@ -1476,6 +1476,241 @@ def agent_reason_audit_fails(df,
 # signal (every audience has a sliver in every DMA) and should never be
 # stripped to "clean up" low values.
 
+# ─────────────────────────────────────────────────────────────────────────────
+#  Category canonicalization (Rule #0: no redundant columns)
+# ─────────────────────────────────────────────────────────────────────────────
+# The category-emitting agents occasionally produce variant column names for
+# what should be a single canonical category (e.g. 'SEARCH ENGINE' and 'AI'
+# instead of 'SEARCH ENGINE/AI'; 'TELCO' instead of 'TELECOM'; 'BROADCAST/CABLE'
+# split off from 'MEDIA'). These split columns pollute the final CSV, confuse
+# the dashboard, and cause spurious audit FAILs (the same brand can appear in
+# two columns at different BPs). canonicalize_categories() runs as a
+# deterministic pre-audit pass to consolidate every variant back into its
+# canonical column.
+#
+# Add to CATEGORY_CANONICAL_REMAP whenever a new variant shows up in audit
+# reports. The remap is intentionally explicit (no fuzzy matching) so we never
+# accidentally collapse a legitimately-separate category.
+
+CATEGORY_CANONICAL_REMAP = {
+    # variant column → canonical column
+    'SEARCH ENGINE':          'SEARCH ENGINE/AI',
+    'SEARCH':                 'SEARCH ENGINE/AI',
+    'AI':                     'SEARCH ENGINE/AI',
+    'GENERATIVE AI':          'SEARCH ENGINE/AI',
+    'LLM':                    'SEARCH ENGINE/AI',
+    'AI/SEARCH':              'SEARCH ENGINE/AI',
+    'SEARCH/AI':              'SEARCH ENGINE/AI',
+
+    'TELCO':                  'TELECOM',
+    'TELECOMMUNICATIONS':     'TELECOM',
+    'CARRIER':                'TELECOM',
+    'WIRELESS':               'TELECOM',
+    'MOBILE CARRIER':         'TELECOM',
+    'WIRELESS CARRIER':       'TELECOM',
+    'PHONE CARRIER':          'TELECOM',
+
+    'BROADCAST/CABLE':        'MEDIA',
+    'BROADCAST':              'MEDIA',
+    'CABLE':                  'MEDIA',
+    'TV NETWORK':             'MEDIA',
+    'TV NETWORKS':            'MEDIA',
+    'CABLE NETWORK':          'MEDIA',
+    'BROADCAST NETWORK':      'MEDIA',
+    'NEWS NETWORK':           'MEDIA',
+    'NEWS':                   'MEDIA',
+}
+
+# Variants where hostmap membership is REQUIRED for migration (drop instead
+# of move if the value is not in reference.host_mapping). Empty set means
+# "apply the hostmap filter to every consolidated row by default" — set to
+# {<canonical>} to apply only for that canonical column. The user explicitly
+# called this out for MEDIA but it's a sensible default for all consolidations:
+# we shouldn't launder bad data into a canonical column.
+CONSOLIDATION_HOSTMAP_REQUIRED_DEFAULT = True
+
+
+def _norm_value(v) -> str:
+    """Aggressive normalization for dup-detection across Column variants:
+    uppercase + strip + remove all non-alphanumerics so 'AT&T', 'AT and T',
+    'ATT', and 'at-t' all collapse to 'ATT'."""
+    return re.sub(r'[^A-Z0-9]', '', str(v).upper().strip())
+
+
+def canonicalize_categories(df,
+                            remap: dict = None,
+                            require_hostmap: bool = CONSOLIDATION_HOSTMAP_REQUIRED_DEFAULT,
+                            verbose: bool = True):
+    """Consolidate variant Column names into their canonical names.
+
+    For every row whose Column is in `remap` (variant → canonical):
+      • If a row with the same Value already exists in the canonical Column
+        (punctuation/casing-insensitive), the variant row is DROPPED as a dup.
+      • If `require_hostmap` is True and the Value is not in
+        reference.host_mapping, the variant row is DROPPED as a hostmap-fail.
+      • Otherwise the row is MIGRATED: its Column is rewritten to the
+        canonical name, and its Value is normalized to the hostmap canonical
+        casing when available.
+
+    Returns (df, decisions) where each decision is:
+        {variant, canonical, value, action: 'DEDUP'|'HOSTMAP_FAIL'|'MIGRATE',
+         bp (if known), reason}
+
+    Deterministic, no LLM calls. Safe to run multiple times (idempotent —
+    second run produces zero decisions because canonical columns no longer
+    contain any variant rows).
+    """
+    if 'Column' not in df.columns or 'Value' not in df.columns:
+        if verbose:
+            print("   ⚠️  canonicalize: missing Column/Value; skipping")
+        return df, []
+
+    if remap is None:
+        remap = CATEGORY_CANONICAL_REMAP
+    remap_upper = {str(k).upper().strip(): str(v).upper().strip()
+                   for k, v in remap.items()}
+
+    df = df.copy()
+    col_upper = df['Column'].astype(str).str.upper().str.strip()
+    variants_present = sorted({c for c in col_upper.unique() if c in remap_upper})
+    if not variants_present:
+        if verbose:
+            print("   ✅ canonicalize: no variant columns present — nothing to consolidate")
+        return df, []
+
+    # Optional hostmap helpers — defer import so the audit framework still
+    # imports cleanly even when post_generation_enforcers is missing.
+    _is_in_hostmap = None
+    _hostmap_canonical = None
+    if require_hostmap:
+        try:
+            from post_generation_enforcers import (
+                _is_in_hostmap as _ih,
+                _hostmap_canonical as _hc,
+            )
+            _is_in_hostmap = _ih
+            _hostmap_canonical = _hc
+        except Exception:
+            try:
+                from migration.post_generation_enforcers import (
+                    _is_in_hostmap as _ih,
+                    _hostmap_canonical as _hc,
+                )
+                _is_in_hostmap = _ih
+                _hostmap_canonical = _hc
+            except Exception:
+                if verbose:
+                    print("   ⚠️  canonicalize: hostmap helpers unavailable; "
+                          "consolidating without hostmap filter")
+                require_hostmap = False
+
+    bp_col = 'Brand Penetration (Row)' if 'Brand Penetration (Row)' in df.columns else None
+
+    decisions: list[dict] = []
+    drop_idx: list = []
+
+    # Group migrations by canonical so we can refresh the dup-norm set after
+    # each canonical's batch (prevents intra-batch dups when two variants both
+    # try to migrate the same Value into the same canonical column).
+    by_canonical: dict[str, list[str]] = {}
+    for variant in variants_present:
+        canonical = remap_upper[variant]
+        by_canonical.setdefault(canonical, []).append(variant)
+
+    for canonical, variants in by_canonical.items():
+        # Build the dup-detect set ONCE per canonical from existing canonical rows.
+        canonical_mask = col_upper == canonical
+        existing_norms = {
+            _norm_value(v) for v in df.loc[canonical_mask, 'Value'].tolist()
+        }
+        if verbose:
+            print(f"   🧹 canonicalize → [{canonical}] (existing rows: "
+                  f"{int(canonical_mask.sum())}, dup-norms: {len(existing_norms)})")
+
+        for variant in variants:
+            variant_idxs = df.index[col_upper == variant].tolist()
+            if not variant_idxs:
+                continue
+            n_dup = n_hm_fail = n_mig = 0
+            for idx in variant_idxs:
+                val = df.at[idx, 'Value']
+                bp_v = None
+                if bp_col is not None:
+                    try:
+                        bp_v = float(str(df.at[idx, bp_col]).strip().rstrip('%'))
+                    except Exception:
+                        bp_v = None
+                norm = _norm_value(val)
+
+                # 1. Dedupe against canonical column
+                if norm in existing_norms:
+                    drop_idx.append(idx)
+                    n_dup += 1
+                    decisions.append({
+                        'variant': variant, 'canonical': canonical,
+                        'value': str(val), 'action': 'DEDUP', 'bp': bp_v,
+                        'reason': f'duplicate of existing [{canonical}] row',
+                    })
+                    continue
+
+                # 2. Hostmap gate (if enabled)
+                if require_hostmap and _is_in_hostmap is not None:
+                    if not _is_in_hostmap(val):
+                        drop_idx.append(idx)
+                        n_hm_fail += 1
+                        decisions.append({
+                            'variant': variant, 'canonical': canonical,
+                            'value': str(val), 'action': 'HOSTMAP_FAIL', 'bp': bp_v,
+                            'reason': 'value not in reference.host_mapping',
+                        })
+                        continue
+
+                # 3. Migrate — rewrite Column to canonical (preserve original
+                #    case of the canonical column if it already appears in df)
+                canonical_display = canonical
+                if canonical_mask.any():
+                    canonical_display = str(df.loc[canonical_mask, 'Column'].iloc[0])
+                df.at[idx, 'Column'] = canonical_display
+
+                # Normalize Value to hostmap canonical casing if available
+                if _hostmap_canonical is not None:
+                    canon_val = _hostmap_canonical(val)
+                    if canon_val:
+                        df.at[idx, 'Value'] = canon_val
+                        norm = _norm_value(canon_val)
+                existing_norms.add(norm)
+                n_mig += 1
+                decisions.append({
+                    'variant': variant, 'canonical': canonical,
+                    'value': str(df.at[idx, 'Value']), 'action': 'MIGRATE', 'bp': bp_v,
+                    'reason': f'consolidated [{variant}] → [{canonical}]',
+                })
+            if verbose:
+                bits = []
+                if n_mig:     bits.append(f'{n_mig} migrated')
+                if n_dup:     bits.append(f'{n_dup} deduped')
+                if n_hm_fail: bits.append(f'{n_hm_fail} hostmap-failed')
+                print(f"      [{variant}] ({len(variant_idxs)} row"
+                      f"{'s' if len(variant_idxs) != 1 else ''}): "
+                      f"{', '.join(bits) if bits else 'no changes'}")
+
+    if drop_idx:
+        df = df.drop(index=drop_idx).reset_index(drop=True)
+
+    if verbose:
+        n_mig = sum(1 for d in decisions if d['action'] == 'MIGRATE')
+        n_dup = sum(1 for d in decisions if d['action'] == 'DEDUP')
+        n_hm  = sum(1 for d in decisions if d['action'] == 'HOSTMAP_FAIL')
+        if decisions:
+            print(f"   ✅ canonicalize: {n_mig} migrated, {n_dup} deduped, "
+                  f"{n_hm} hostmap-dropped → {len(set(by_canonical.keys()))} "
+                  f"canonical column(s) reconciled")
+        else:
+            print("   ✅ canonicalize: no actionable variant rows")
+
+    return df, decisions
+
+
 # Exhaustive enumerations — every value carries real signal even at the
 # low end. Floor-noise cleanup MUST skip these.
 FLOOR_NOISE_EXEMPT_CATEGORIES = {
