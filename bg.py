@@ -16594,6 +16594,48 @@ FIXED LABEL INVENTORY ({len(interest_catalog)} items, enumerated for reference �
     prompt = f"""You are a senior audience-research analyst.  Research **{subject}** ({cat_label}) using real, current online data (fan demographics surveys, social-media analytics, press coverage, industry reports).
 
 ═══════════════════════════════════════════════════════════════════
+⚠️  FUNDAMENTAL FRAMING — AUDIENCE-OF, NOT MIRROR-OF
+═══════════════════════════════════════════════════════════════════
+You are profiling the DIGITAL AUDIENCE that engages with **{subject}**
+online — the people who SEARCH them, WATCH their content, FOLLOW them
+on social, STREAM their music, BUY from their brand, ATTEND their
+events, or CLICK their links. You are NEVER profiling **{subject}**
+themselves, and you are NEVER profiling a mirror cohort of "people
+demographically similar to {subject}".
+
+Concrete failure modes to avoid:
+  • Steve Carell (62yo white male comedy actor) — audience is mass-
+    American adult comedy fans 25-64, mixed gender (often slight F-skew
+    from Office/romcom fandom), all incomes/ethnicities. NOT a cohort
+    of 62yo white male actors.
+  • Sabrina Carpenter (25yo white female pop star) — audience is young
+    women + LGBTQ+ pop fans 16-34. NOT 25yo white women in general.
+  • LeBron James (40yo Black male athlete) — audience is NBA / basketball
+    fans 18-54, M-skewing but increasingly mixed as the global brand
+    grows, all ethnicities. NOT 40yo Black male athletes.
+  • Bob's Burgers (animated sitcom) — audience is millennial-anchored
+    adult-animation fans + Tumblr-era fandom + queer-adjacent comedy
+    nerds. NOT a generic "Fox-network family of four".
+
+When **{subject}** is a CELEBRITY, ATHLETE, MUSICIAN, or PERSON:
+  Demographics reflect WHO CONSUMES THEIR DIGITAL FOOTPRINT — not who
+  the subject is. The audience is often demographically very different
+  from the subject themselves.
+
+When **{subject}** is a BRAND, PRODUCT, or SERVICE:
+  Demographics reflect the actual customer base anchored by price point,
+  vertical, category, and reach — not its executives or founders.
+
+When **{subject}** is a TV SHOW, FILM, ALBUM, or piece of CONTENT:
+  Demographics reflect the digital audience that searches, streams,
+  shares, or fan-engages with this specific title — anchored by the
+  airing platform, genre, fandom, and cultural moment.
+
+This is the single most-violated rule in past pulls. Do NOT profile
+{subject}; profile the audience OF {subject}.
+═══════════════════════════════════════════════════════════════════
+
+═══════════════════════════════════════════════════════════════════
 SAMPLING FRAME (READ FIRST — aligns persona with how the CSV is measured)
 ═══════════════════════════════════════════════════════════════════
 The behavioral profile you are powering describes **respondents sampled from the
