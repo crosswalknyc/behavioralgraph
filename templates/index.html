@@ -28798,16 +28798,28 @@
             }
 
             // ───── Buyer Attribution sub-card ─────
-            // Answers David's question: of the 8,147 confirmed pre-sales,
-            // what share fall into each cohort (overlapping + disjoint).
+            // Of N confirmed pre-sales, what share fall into each cohort
+            // (overlapping + disjoint). Field names tolerate both the new
+            // *_total_presales_* keys and the legacy *_8147 keys so the
+            // renderer works against either generation of payload.
             var baEl = document.getElementById('jiqAudienceHypBuyerAttribution');
             var ba   = ah.buyer_attribution;
             if (baEl && ba && (ba.per_cohort_overlapping || []).length) {
+                var owPickPct = function(x) {
+                    return (x.estimated_share_of_total_presales_pct != null)
+                        ? x.estimated_share_of_total_presales_pct
+                        : x.estimated_share_of_8147_pct;
+                };
+                var owPickCount = function(x) {
+                    return (x.estimated_count_in_total_presales != null)
+                        ? x.estimated_count_in_total_presales
+                        : x.estimated_count_in_8147;
+                };
                 var ow = ba.per_cohort_overlapping;
                 var maxShare = Math.max.apply(null,
-                    ow.map(function(x){ return x.estimated_share_of_8147_pct || 0; })) || 1;
+                    ow.map(function(x){ return owPickPct(x) || 0; })) || 1;
                 var owRows = ow.map(function(x) {
-                    var pct = +x.estimated_share_of_8147_pct || 0;
+                    var pct = +owPickPct(x) || 0;
                     var w = (pct / Math.max(maxShare, 1)) * 100;
                     var isTriple = (x.cohort_key === 'triple_likely_core');
                     var barColor = isTriple ? '#10b981' : 'var(--accent-primary)';
@@ -28817,17 +28829,27 @@
                          +   '<div style="width:' + w + '%;height:100%;background:' + barColor + ';border-radius:6px;"></div>'
                          + '</div>'
                          + '<div style="text-align:right;font-weight:800;font-variant-numeric:tabular-nums;color:' + (isTriple ? '#10b981' : 'var(--text-primary)') + ';">' + pct.toFixed(1) + '%</div>'
-                         + '<div style="text-align:right;font-weight:600;font-variant-numeric:tabular-nums;color:var(--text-secondary);">≈ ' + _jiqFmt(x.estimated_count_in_8147) + '</div>'
+                         + '<div style="text-align:right;font-weight:600;font-variant-numeric:tabular-nums;color:var(--text-secondary);">≈ ' + _jiqFmt(owPickCount(x)) + '</div>'
                          + '</div>';
                 }).join('');
 
                 var dpRows = '';
                 if (ba.disjoint_partition && (ba.disjoint_partition.buckets || []).length) {
+                    var dpPickPct = function(b) {
+                        return (b.estimated_share_of_total_presales_pct != null)
+                            ? b.estimated_share_of_total_presales_pct
+                            : b.estimated_share_of_8147_pct;
+                    };
+                    var dpPickCount = function(b) {
+                        return (b.estimated_presales_count != null)
+                            ? b.estimated_presales_count
+                            : b.estimated_presales_8147;
+                    };
                     var bks = ba.disjoint_partition.buckets;
                     var maxDp = Math.max.apply(null,
-                        bks.map(function(b){ return b.estimated_share_of_8147_pct || 0; })) || 1;
+                        bks.map(function(b){ return dpPickPct(b) || 0; })) || 1;
                     dpRows = bks.map(function(b) {
-                        var pct = +b.estimated_share_of_8147_pct || 0;
+                        var pct = +dpPickPct(b) || 0;
                         var w = (pct / Math.max(maxDp, 1)) * 100;
                         var isTriple = (b.segment_key === 'triple_overlap');
                         var isOutside = (b.segment_key === 'outside_all_named');
@@ -28838,7 +28860,7 @@
                              +   '<div style="width:' + w + '%;height:100%;background:' + barColor + ';border-radius:6px;"></div>'
                              + '</div>'
                              + '<div style="text-align:right;font-weight:700;font-variant-numeric:tabular-nums;">' + pct.toFixed(1) + '%</div>'
-                             + '<div style="text-align:right;font-weight:600;font-variant-numeric:tabular-nums;color:var(--text-secondary);">≈ ' + _jiqFmt(b.estimated_presales_8147) + '</div>'
+                             + '<div style="text-align:right;font-weight:600;font-variant-numeric:tabular-nums;color:var(--text-secondary);">≈ ' + _jiqFmt(dpPickCount(b)) + '</div>'
                              + '</div>';
                     }).join('');
                 }
@@ -29227,14 +29249,23 @@
             }
 
             // ───── Per-chain presale attribution table (Sony 5/27 ask) ─────
-            // For each chain, show estimated share of the 8,147 pre-sales
+            // For each chain, show estimated share of total pre-sales
             // and the per-cohort (overlapping) breakdown, including the
             // new Triple-Likely Core column.
             var paEl = document.getElementById('jiqExhibitorPresaleAttribution');
             if (paEl && !isTv) {
                 var anyPa = channels.some(function(c) { return c.presale_attribution; });
                 if (anyPa) {
+                    // Pull the live cross-channel pre-sales total so the
+                    // display string isn't hard-coded to 8,147
+                    var liveTotal = ((window._jiqCurrentRun || {}).kpis || {}).confirmed_digital_purchases;
+                    var totalStr  = liveTotal ? _jiqFmt(liveTotal) : '—';
                     var fmtPct = function(v) { return (v == null) ? '—' : (+v).toFixed(1) + '%'; };
+                    var pickShare = function(pa) {
+                        return (pa.estimated_share_of_total_presales_pct != null)
+                            ? pa.estimated_share_of_total_presales_pct
+                            : pa.estimated_share_of_8147_pct;
+                    };
                     var paRows = channels.map(function(c) {
                         var pa = c.presale_attribution || {};
                         var bc = pa.by_cohort_overlapping || {};
@@ -29247,7 +29278,7 @@
                              +   '<span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:' + (c.color || '#5b6cff') + ';margin-right:6px;vertical-align:middle;"></span>'
                              +   '<span style="font-weight:600;">' + _jiqEsc(c.name) + '</span>'
                              + '</td>'
-                             + '<td style="padding:7px 10px;text-align:right;font-weight:700;font-variant-numeric:tabular-nums;border-right:1px solid var(--border-color);">' + fmtPct(pa.estimated_share_of_8147_pct) + '</td>'
+                             + '<td style="padding:7px 10px;text-align:right;font-weight:700;font-variant-numeric:tabular-nums;border-right:1px solid var(--border-color);">' + fmtPct(pickShare(pa)) + '</td>'
                              + '<td style="padding:7px 10px;text-align:right;font-weight:600;font-variant-numeric:tabular-nums;border-right:1px solid var(--border-color);color:var(--text-secondary);">≈ ' + _jiqFmt(pa.estimated_presales_count || 0) + '</td>'
                              + '<td style="padding:7px 10px;text-align:right;font-variant-numeric:tabular-nums;border-right:1px solid var(--border-color);">' + fmtPct(n.share_of_chain_presales_pct) + '<span style="color:var(--text-secondary);font-size:0.65rem;margin-left:4px;">≈' + _jiqFmt(n.estimated_presales_count || 0) + '</span></td>'
                              + '<td style="padding:7px 10px;text-align:right;font-variant-numeric:tabular-nums;border-right:1px solid var(--border-color);">' + fmtPct(p.share_of_chain_presales_pct) + '<span style="color:var(--text-secondary);font-size:0.65rem;margin-left:4px;">≈' + _jiqFmt(p.estimated_presales_count || 0) + '</span></td>'
@@ -29257,12 +29288,12 @@
                     }).join('');
                     paEl.innerHTML = '<div style="margin-top:1rem;background:var(--bg-card);border:1px solid var(--border-color);border-radius:12px;padding:0.9rem;">'
                                   + '<div style="font-weight:700;font-size:0.85rem;margin-bottom:4px;">📊 Per-chain pre-sales attribution by audience cohort</div>'
-                                  + '<div style="font-size:0.68rem;color:var(--text-secondary);margin-bottom:10px;">Per-chain shares of the 8,147 confirmed pre-sales, then within each chain the % of THAT chain\'s pre-sales who belong to each cohort. Cohorts overlap — per-cohort shares do not sum to 100% per chain.</div>'
+                                  + '<div style="font-size:0.68rem;color:var(--text-secondary);margin-bottom:10px;">Per-chain shares of the <strong>' + totalStr + '</strong> confirmed pre-sales, then within each chain the % of THAT chain\'s pre-sales who belong to each cohort. Cohorts overlap — per-cohort shares do not sum to 100% per chain.</div>'
                                   + '<div style="overflow-x:auto;">'
                                   + '<table style="width:100%;border-collapse:collapse;font-size:0.74rem;border:1px solid var(--border-color);border-radius:8px;overflow:hidden;">'
                                   + '<thead><tr style="background:var(--bg-secondary);">'
                                   +   '<th style="padding:7px 10px;text-align:left;border-right:1px solid var(--border-color);">Chain</th>'
-                                  +   '<th style="padding:7px 10px;text-align:right;border-right:1px solid var(--border-color);">Share of 8,147</th>'
+                                  +   '<th style="padding:7px 10px;text-align:right;border-right:1px solid var(--border-color);">Share of ' + totalStr + '</th>'
                                   +   '<th style="padding:7px 10px;text-align:right;border-right:1px solid var(--border-color);">Est. pre-sales</th>'
                                   +   '<th style="padding:7px 10px;text-align:right;border-right:1px solid var(--border-color);">Nate fans</th>'
                                   +   '<th style="padding:7px 10px;text-align:right;border-right:1px solid var(--border-color);">Family parents</th>'
