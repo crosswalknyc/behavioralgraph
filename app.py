@@ -25196,23 +25196,13 @@ def run_sf_lf_conversion(job_id):
         conv_rate = round((conv_users / total_viewers * 100), 8) if total_viewers > 0 else 0.00000001
 
         overall_conv_genpop = project_to_gen_pop(conv_users)
-        # Honor the synthetic title-conversion floor (computed above when the
-        # panel saw 0 conversions): keep panel Count=0 but lift the Gen Pop
-        # projection and recompute the displayed rate against the floored
-        # OVERALL Unique GP so the KPI tile, funnel, and per-URL rows all
-        # ladder up to the same percentage. SCRAPED_ESTIMATE-tagged.
-        try:
-            if _synth_conv_gp_overall and _synth_conv_gp_overall > 0:
-                overall_conv_genpop = _synth_conv_gp_overall
-                _denom = _total_viewers_genpop if _total_viewers_genpop else project_to_gen_pop(total_viewers)
-                if _denom and _denom > 0:
-                    conv_rate = round((_synth_conv_gp_overall / _denom * 100), 8)
-        except NameError:
-            pass
-        # Total SF Viewers Gen Pop: prefer the floored OVERALL platform_metrics
-        # row (so the conversion-summary tile and the per-platform cards/funnel
-        # ladder up consistently when scraped views floor the unique counts
-        # well above panel-projected). Falls back to panel projection.
+        # ── Total SF Viewers Gen Pop (denominator for OVERALL conv rate) ────
+        # Must be resolved BEFORE the synth-conv override below, otherwise the
+        # rate update silently hits NameError on a fresh run and the dashboard
+        # KPI tile shows the stale panel rate while the genpop count shows
+        # the new synthesized value (e.g. 1,630 conv tagged at 0.46% rate).
+        # Prefer the floored OVERALL platform_metrics row so the KPI tile
+        # ladders up with the per-platform cards/funnel.
         _overall_pm_for_summary = next(
             (p for p in (results.get('platform_metrics') or []) if p.get('is_overall')),
             None,
@@ -25226,6 +25216,20 @@ def run_sf_lf_conversion(job_id):
             _total_viewers_genpop = None
         if not _total_viewers_genpop:
             _total_viewers_genpop = project_to_gen_pop(total_viewers)
+
+        # Honor the synthetic title-conversion floor (computed above when the
+        # panel saw 0 conversions): keep panel Count=0 but lift the Gen Pop
+        # projection AND recompute the displayed rate against the floored
+        # OVERALL Unique GP so the KPI tile, funnel, and per-URL rows all
+        # ladder up to the same percentage. SCRAPED_ESTIMATE-tagged.
+        try:
+            if _synth_conv_gp_overall and _synth_conv_gp_overall > 0:
+                overall_conv_genpop = _synth_conv_gp_overall
+                _denom = _total_viewers_genpop if _total_viewers_genpop else project_to_gen_pop(total_viewers)
+                if _denom and _denom > 0:
+                    conv_rate = round((_synth_conv_gp_overall / _denom * 100), 8)
+        except NameError:
+            pass
         # OVERALL Total Views (Events) for the "Short Form Views (Duplicated)"
         # KPI tile. Read the floored value from PLATFORM_METRICS so it equals
         # the sum of per-URL Total Views, not the panel-projected number
