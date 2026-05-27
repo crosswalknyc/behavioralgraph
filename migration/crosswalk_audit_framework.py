@@ -2023,6 +2023,232 @@ def strip_metadata_rows(df, verbose: bool = True):
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+#  D-Demo: enforce demographic VALUES against the canonical CH set
+# ─────────────────────────────────────────────────────────────────────────────
+# Demographic Values (e.g. AGE=25-34, GENDER=Female) must come from the
+# DISTINCT set that actually exists in userdata.user_data_sanitized — the
+# pipeline must never invent new demographic buckets that aren't in the
+# source data. LLM emit + downstream passes can drift away from CH casing
+# (e.g. 'BACHELORS DEGREE' instead of "Bachelor's Degree"), introduce
+# punctuation variants ('18–24' em-dash instead of '18-24'), or fabricate
+# buckets the data doesn't support. This pass canonicalizes.
+#
+# Strategy:
+#   1. Query CH once at module load for distinct values per demographic col.
+#   2. Build a normalized lookup key (uppercase + collapse dashes/apostrophes).
+#   3. For every demographic row in the profile:
+#       a. If norm(value) matches a CH bucket → rewrite to CH canonical casing.
+#       b. If no match → drop the row (or log and drop, configurable).
+#
+# Falls back to a hardcoded snapshot when CH is unreachable.
+
+# Columns that hold demographic Values (mapped from CH column names).
+# The profile uses these as `Column` tags; the CH column name on the
+# user_data_sanitized side is the same string (uppercase).
+DEMO_VALUE_COLUMNS = {
+    'GENDER', 'AGE', 'INCOME', 'EDUCATION', 'ETHNICITY',
+    'SEXUAL_ORIENTATION', 'PARENTAL_STATUS', 'OCCUPATION',
+}
+
+# Hardcoded fallback whitelist — used when ClickHouse is unreachable.
+# Snapshot pulled from userdata.user_data_sanitized on 2026-05-27. Refresh
+# with: SELECT DISTINCT <COL> FROM userdata.user_data_sanitized WHERE
+#       <COL> != '' ORDER BY <COL>;
+_DEMO_VALUE_FALLBACK = {
+    'GENDER': [
+        'Female', 'Male', 'Non-Binary', 'Prefer Not to Say',
+        'Trans Female', 'Trans Male',
+    ],
+    'AGE': [
+        '17 and Under', '18-24', '25-34', '35-44', '45-54', '55-64',
+        '65 or Older', 'Other',
+    ],
+    'INCOME': [
+        'Less than $25,000', '$25,000 - $49,999', '$50,000 - $74,999',
+        '$75,000 - $99,999', '$100,000 - $149,999',
+        '$150,000 - $249,999', '$250,000 or More',
+    ],
+    'EDUCATION': [
+        "Bachelor's Degree", 'Graduate or Professional Degree',
+        'High School or Less', 'Prefer Not to Say',
+        'Some College / Associate Degree',
+    ],
+    'ETHNICITY': [
+        'Another Race/Ethnicity', 'Asian', 'Black or African American',
+        'Black or African American, Hispanic or Latino',
+        'Hispanic or Latino', 'White', 'White, Hispanic or Latino',
+    ],
+    'SEXUAL_ORIENTATION': [
+        'LGBTQ+', 'Other', 'Prefer Not to Say', 'Straight / Heterosexual',
+    ],
+    'PARENTAL_STATUS': [
+        'Has Children', 'No Children', 'Prefer Not to Say',
+    ],
+    'OCCUPATION': [
+        'Agriculture & Outdoor', 'Business and Financial Operations',
+        'Computer and Mathematical', 'Education or Library Services',
+        'Healthcare Practitioners or Support', 'Legal',
+        'Management, Business & Professional', 'Manufacturing & Production',
+        'Other', 'Public Safety & Protective Services', 'Retired',
+        'Sales & Retail', 'Science, Technology & Technical Professions',
+        'Self-Employed', 'Service & Hospitality',
+        'Skilled Trades/Construction or Maintenance', 'Student',
+        'Transportation & Logistics',
+    ],
+}
+
+# Module-level cache so we don't re-query CH on every call.
+_DEMO_WHITELIST_CACHE = None
+
+
+def _norm_demo_value(s) -> str:
+    """Canonical lookup key — uppercase, collapse en/em dashes to hyphen,
+    smart quotes to straight, multiple spaces to single."""
+    if s is None:
+        return ''
+    s = str(s).strip()
+    if not s:
+        return ''
+    s = s.upper()
+    s = s.replace('\u2013', '-').replace('\u2014', '-')  # en/em dash
+    s = s.replace('\u2019', "'").replace('\u2018', "'")  # smart quotes
+    s = re.sub(r'\s+', ' ', s)
+    return s
+
+
+def get_demographic_value_whitelist(force_refresh: bool = False) -> dict:
+    """Return ``{column: {norm_value: canonical_value}}``.
+
+    Tries ClickHouse first; falls back to the hardcoded snapshot. Cached
+    after the first successful fetch so subsequent calls are O(1).
+    """
+    global _DEMO_WHITELIST_CACHE
+    if _DEMO_WHITELIST_CACHE is not None and not force_refresh:
+        return _DEMO_WHITELIST_CACHE
+
+    out = {}
+    try:
+        import clickhouse_connect
+        ch = clickhouse_connect.get_client(
+            host='37.27.140.111', port=8123,
+            username='bgapp',
+            password='4qPllwDG+S3PptBWTRAJPTkpCzkRZ6tZ',
+        )
+        for col in DEMO_VALUE_COLUMNS:
+            try:
+                r = ch.query(
+                    f"SELECT DISTINCT {col} FROM userdata.user_data_sanitized "
+                    f"WHERE {col} != '' ORDER BY {col}"
+                )
+                vals = [row[0] for row in r.result_rows if row[0]]
+                # Dedupe via norm key, keep the first canonical form we see.
+                m = {}
+                for v in vals:
+                    k = _norm_demo_value(v)
+                    if k and k not in m:
+                        m[k] = v
+                out[col] = m
+            except Exception:
+                # Per-column failure → fall back for this column only
+                out[col] = {
+                    _norm_demo_value(v): v
+                    for v in _DEMO_VALUE_FALLBACK.get(col, [])
+                }
+        _DEMO_WHITELIST_CACHE = out
+        return out
+    except Exception:
+        # CH unreachable → full fallback
+        out = {
+            col: {_norm_demo_value(v): v for v in vals}
+            for col, vals in _DEMO_VALUE_FALLBACK.items()
+        }
+        _DEMO_WHITELIST_CACHE = out
+        return out
+
+
+def enforce_demographic_values(df, verbose: bool = True,
+                                  whitelist: dict | None = None):
+    """D-Demo: enforce demographic Values against the canonical CH set.
+
+    For every row whose ``Column`` is a demographic (GENDER, AGE, INCOME,
+    etc.):
+      - Rewrite the ``Value`` to CH canonical casing if a normalized match
+        is found (e.g. "BACHELORS DEGREE" → "Bachelor's Degree").
+      - Drop the row if no match exists (LLM invented a bucket).
+
+    Returns ``(df, decisions)`` where each decision is one of:
+      {action: 'REMAP', column, old_value, new_value}
+      {action: 'DROP', column, value, reason: 'not in CH whitelist'}
+    """
+    if 'Column' not in df.columns or 'Value' not in df.columns:
+        if verbose:
+            print('   ⚠️  enforce-demo: missing Column/Value; skipping')
+        return df, []
+
+    wl = whitelist if whitelist is not None else get_demographic_value_whitelist()
+    if not wl:
+        if verbose:
+            print('   ⚠️  enforce-demo: empty whitelist; skipping')
+        return df, []
+
+    df = df.copy()
+    col_u = df['Column'].astype(str).str.upper().str.strip()
+    drop_idx = []
+    remap_count = 0
+    decisions = []
+
+    for idx in df.index:
+        col_tag = col_u.at[idx]
+        if col_tag not in DEMO_VALUE_COLUMNS:
+            continue
+        col_map = wl.get(col_tag)
+        if not col_map:
+            continue
+        raw_val = df.at[idx, 'Value']
+        if raw_val is None or str(raw_val).strip() == '':
+            continue
+        norm_key = _norm_demo_value(raw_val)
+        if norm_key in col_map:
+            canon = col_map[norm_key]
+            # Only rewrite if differs (avoid unnecessary mutation)
+            if str(raw_val) != canon:
+                df.at[idx, 'Value'] = canon
+                remap_count += 1
+                decisions.append({
+                    'action': 'REMAP',
+                    'column': col_tag,
+                    'old_value': str(raw_val),
+                    'new_value': canon,
+                })
+        else:
+            drop_idx.append(idx)
+            decisions.append({
+                'action': 'DROP',
+                'column': col_tag,
+                'value': str(raw_val),
+                'reason': 'not in ClickHouse demographic whitelist',
+            })
+
+    if drop_idx:
+        df = df.drop(index=drop_idx).reset_index(drop=True)
+
+    if verbose:
+        n_drop = len(drop_idx)
+        if remap_count or n_drop:
+            print(f'   🎂 enforce-demo: {remap_count} remapped to CH canonical '
+                  f'casing, {n_drop} dropped (not in CH whitelist)')
+            for d in decisions[:5]:
+                if d['action'] == 'DROP':
+                    print(f"       DROP   [{d['column']:18s}] {d['value']!r}")
+                else:
+                    print(f"       REMAP  [{d['column']:18s}] {d['old_value']!r} → {d['new_value']!r}")
+        else:
+            print('   ✅ enforce-demo: every demographic value matches CH canonical set')
+
+    return df, decisions
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 #  Generation-time validators (D5/D7/D8/D9/D14) — per-row guards used by the
 #  per-category agent emit path. Cheap, deterministic, single-row decisions.
 # ─────────────────────────────────────────────────────────────────────────────
