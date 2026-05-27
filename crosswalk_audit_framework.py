@@ -2023,6 +2023,338 @@ def strip_metadata_rows(df, verbose: bool = True):
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+#  Generation-time validators (D5/D7/D8/D9/D14) — per-row guards used by the
+#  per-category agent emit path. Cheap, deterministic, single-row decisions.
+# ─────────────────────────────────────────────────────────────────────────────
+# The post-gen audit catches these defects already (strip_metadata_rows for
+# D5, depin_round_brand_bps for D7, scripts/depin_profile.py for D8/D9, etc.),
+# but every fix is a recurring whack-a-mole because the per-cat agent
+# regenerates the same bad values every run. Catching them at emit-time is
+# 100x cheaper than fixing them in post.
+
+def is_metadata_value(value, column=None) -> tuple[bool, str]:
+    """D5: True if `value` matches a prompt-leak signature.
+
+    Returns ``(is_leak, label)``. ``label`` is empty when not a leak.
+    Honours `_METADATA_SCRUB_EXEMPT_COLUMNS` when `column` is provided so
+    INCOME / LOCATION etc. with legitimately-comma-delimited values aren't
+    flagged. Single-value version of `strip_metadata_rows` for the
+    generation-time emit path.
+    """
+    if value is None:
+        return False, ''
+    v = str(value).strip()
+    if not v or v in ('nan', 'None'):
+        return False, ''
+    if column is not None:
+        col_u = str(column).strip().upper()
+        if col_u in _METADATA_SCRUB_EXEMPT_COLUMNS:
+            return False, ''
+    for pat, label in _METADATA_VALUE_PATTERNS:
+        if pat.search(v):
+            return True, label
+    return False, ''
+
+
+def normalize_value_key(value) -> str:
+    """D14: canonical key for case-variant / spelling dedupe.
+
+    Returns the uppercase value stripped of every non-alphanumeric char so
+    "Netflix", "NETFLIX", "net-flix", and "net flix" all collapse to the
+    same key. Use as a dict key when emitting rows; on collision merge
+    into the existing row instead of writing a duplicate.
+
+    Returns ``''`` if value is missing/empty.
+    """
+    if value is None:
+        return ''
+    s = str(value).strip()
+    if not s or s in ('nan', 'None'):
+        return ''
+    return re.sub(r'[^A-Z0-9]', '', s.upper())
+
+
+def _is_intentional_2dp(v) -> bool:
+    """D8: True if `v ≥ 0.5` displays as X.X0 or X.X5 (LLM round-anchor)."""
+    try:
+        f = float(v)
+    except (TypeError, ValueError):
+        return False
+    if f < 0.5:
+        return False
+    return round(f * 100) % 10 in (0, 5)
+
+
+def _is_x00xx_anchor(v) -> bool:
+    """D7: True if `v` looks like a round-integer anchor with 4dp noise
+    bolted on (5.0028, 7.0009, 12.0042)."""
+    try:
+        f = float(v)
+    except (TypeError, ValueError):
+        return False
+    if f < 0.5:
+        return False
+    # Within 0.05 of an integer (excluding the integer itself — that case
+    # is caught by D8's X.X0 detector). The 4dp tail is the bolt-on noise.
+    rounded = round(f)
+    delta = abs(f - rounded)
+    return 0.00005 < delta < 0.05
+
+
+def validate_emitted_bp(bp, subj: str, brand: str, category: str,
+                          seen_4dp: dict = None,
+                          max_collisions: int = 2):
+    """D7+D8+D9 combined emit-time validator.
+
+    Inputs
+    ------
+    bp : float — the BP the agent emitted (in pct, e.g. 5.4321)
+    subj, brand, category : strs used to seed deterministic jitter
+    seen_4dp : optional dict mapping (cat_upper, bp_4dp) -> count for
+        this category; pass the same dict across all calls in one
+        category to enable in-cat 4dp collision detection.
+    max_collisions : reroll on the (max_collisions+1)-th identical 4dp
+        value within the same category. Default 2 means a 3rd brand at
+        the same 4dp gets rerolled.
+
+    Returns (validated_bp, label) where label ∈ {'', 'X.X5/X.X0',
+    'X.00xx', '4dp-collision'}. Caller can log the label.
+    """
+    try:
+        f = float(bp)
+    except (TypeError, ValueError):
+        return bp, 'non-numeric'
+
+    # Lazy-import _jitter_for to avoid module-load circular dep with
+    # post_generation_enforcers (which imports things from BG.py).
+    try:
+        from post_generation_enforcers import _jitter_for  # type: ignore
+    except Exception:
+        try:
+            from migration.post_generation_enforcers import _jitter_for  # type: ignore
+        except Exception:
+            _jitter_for = None  # noqa: N806
+
+    def _reroll(label: str, salt: str) -> float:
+        if _jitter_for is None:
+            # Fallback: deterministic ±0.013pp drift from a hash.
+            import hashlib as _hl
+            h = int(_hl.blake2b(
+                f'{subj}|{brand}|{category}|{salt}'.encode(),
+                digest_size=8,
+            ).hexdigest(), 16)
+            drift = (((h % 2600) - 1300) / 100000.0)
+            new = round(max(0.0001, min(99.9999, f + drift * f)), 4)
+        else:
+            new = _jitter_for(subj, brand, salt=f'{salt}|{category}',
+                                pct=0.022, base=f)
+        return new
+
+    label = ''
+    if _is_intentional_2dp(f):
+        f = _reroll('emit-d8', f'emit-d8-x5x0')
+        label = 'X.X5/X.X0'
+    if _is_x00xx_anchor(f):
+        f = _reroll('emit-d7', f'emit-d7-x00xx')
+        label = label or 'X.00xx'
+
+    # 4dp-collision check (D9). Track exact 4dp value within category.
+    if seen_4dp is not None:
+        key = (str(category).strip().upper(), round(float(f), 4))
+        n = seen_4dp.get(key, 0)
+        if n >= max_collisions:
+            f = _reroll('emit-d9', f'emit-d9-collision-{n}')
+            label = label or '4dp-collision'
+            # Update key for the new value
+            key = (key[0], round(float(f), 4))
+        seen_4dp[key] = seen_4dp.get(key, 0) + 1
+
+    return round(float(f), 4), label
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+#  D3: MPB composer — compose MOST PURCHASED BRANDS as the union of every
+#  branded sub-category instead of running MPB as an independent LLM pass.
+# ─────────────────────────────────────────────────────────────────────────────
+# The colleague's audit consistently catches MPB undersized by 40-90% (UBG
+# 132, Grimsburg 283, Robin Roberts 400, Krapopolis 1074 vs target 1876).
+# Root cause: agent_reason_mpb_floor is "ADD candidates the LLM agrees with"
+# which is choosy. The union-of-sub-cats approach is deterministic and
+# guarantees MPB carries every brand the pipeline already measured.
+
+# Branded sub-cats whose rows should be unioned into MPB. Pulled from
+# _MPB_INHERIT_TARGETS in BG.py + post_generation_enforcers.HOSTMAP_GATED.
+MPB_UNION_SOURCE_CATEGORIES = {
+    'APPAREL/FOOTWEAR', 'BEAUTY/WELLNESS', 'CPG',
+    'TECHNOLOGY BRAND', 'TECHNOLOGY/DEVICE',
+    'HOME/OUTDOOR', 'ACCESSORIES', 'PETS', 'TOYS', 'GAMES',
+    'AUTOMOBILE',
+    'QSR', 'WHERE THEY DINE', 'WHERE THEY SHOP',
+    'BANKING', 'DIGITAL BANKING', 'CREDIT PROVIDER', 'INVESTMENTS',
+    'INSURANCE', 'TELECOM', 'PHARMACY',
+    'STREAMING/PLATFORM', 'STREAMING/MUSIC', 'VIRTUAL MVPD FAST',
+    'SEARCH ENGINE/AI', 'SOCIAL MEDIA',
+    'TRAVEL', 'WORKOUT FACILITY', 'HEALTH & WELLNESS',
+}
+MPB_CATEGORY = 'MOST PURCHASED BRANDS'
+
+
+def compose_mpb_from_subcats(df,
+                              source_categories=None,
+                              subject: str = '',
+                              verbose: bool = True,
+                              jitter_pct: float = 0.012):
+    """D3: union every branded sub-cat into MOST PURCHASED BRANDS.
+
+    For every brand that appears in any source category but is *not*
+    already in MPB, emit a new MPB row carrying the brand's max BP from
+    its sub-cats with a tiny jitter (so it doesn't 4dp-collide with the
+    sub-cat row — see D10). Brands already in MPB are left alone.
+
+    Runs *before* `agent_reason_mpb_floor`, which then only has to top
+    up any remaining hostmap candidates the sub-cats didn't cover.
+
+    Returns (df, decisions) where each decision is:
+        {action: 'COMPOSE_MPB', brand, source_category, bp_used,
+         mpb_bp, reason}
+    """
+    if 'Column' not in df.columns or 'Value' not in df.columns:
+        if verbose:
+            print("   ⚠️  compose-mpb: missing Column/Value; skipping")
+        return df, []
+
+    sources = set(source_categories) if source_categories else set(MPB_UNION_SOURCE_CATEGORIES)
+    sources = {str(c).strip().upper() for c in sources}
+
+    bp_col = 'Brand Penetration (Row)'
+    raw_col = 'Original Raw Numbers'
+    proj_col = 'US Gen Pop Projection'
+    cs_col = 'Category Share'
+
+    if bp_col not in df.columns:
+        if verbose:
+            print("   ⚠️  compose-mpb: missing BP column; skipping")
+        return df, []
+
+    df = df.copy()
+    for _c in (bp_col, raw_col, proj_col, cs_col):
+        if _c in df.columns and df[_c].dtype != object:
+            df[_c] = df[_c].astype(object)
+
+    def _bp_float(s):
+        try:
+            return float(str(s).replace('%', '').strip())
+        except (TypeError, ValueError):
+            return None
+
+    col_upper = df['Column'].astype(str).str.strip().str.upper()
+    val_upper = df['Value'].astype(str).str.strip().str.upper()
+
+    # Build the MPB existing-brand set (by normalized key for case-variant
+    # safety — D14).
+    mpb_mask = (col_upper == MPB_CATEGORY)
+    mpb_keys = set()
+    for v in df.loc[mpb_mask, 'Value']:
+        k = normalize_value_key(v)
+        if k:
+            mpb_keys.add(k)
+
+    # For every source-cat row, collect the brand's max BP across its sources.
+    src_mask = col_upper.isin(sources)
+    src_rows = df.loc[src_mask, ['Column', 'Value', bp_col]].copy()
+    src_rows['_bp_f'] = src_rows[bp_col].apply(_bp_float)
+    src_rows = src_rows[src_rows['_bp_f'].notna() & (src_rows['_bp_f'] >= 0.05)]
+    src_rows['_key'] = src_rows['Value'].apply(normalize_value_key)
+    src_rows = src_rows[src_rows['_key'].astype(bool)]
+
+    # Pick best source row per brand (highest sub-cat BP).
+    if src_rows.empty:
+        if verbose:
+            print(f"   🛒 compose-mpb: no candidate sub-cat rows in {len(sources)} sources")
+        return df, []
+
+    best = (src_rows
+            .sort_values('_bp_f', ascending=False)
+            .drop_duplicates('_key', keep='first'))
+
+    # Filter out brands already in MPB.
+    new_brands = best[~best['_key'].isin(mpb_keys)]
+    if new_brands.empty:
+        if verbose:
+            print(f"   🛒 compose-mpb: every sub-cat brand "
+                  f"({len(best)}) already in MPB — nothing to do")
+        return df, []
+
+    # Try to import _jitter_for so the new MPB row drifts away from the
+    # exact sub-cat 4dp value (D10).
+    try:
+        from post_generation_enforcers import _jitter_for  # type: ignore
+    except Exception:
+        try:
+            from migration.post_generation_enforcers import _jitter_for  # type: ignore
+        except Exception:
+            _jitter_for = None  # noqa: N806
+
+    # Derive RAW + PROJ scale from existing MPB rows so the new rows blend in.
+    raw_per_pct, proj_per_pct = _derive_scale_from_df(df)
+
+    new_records = []
+    decisions = []
+    for _, row in new_brands.iterrows():
+        brand = str(row['Value']).strip()
+        src_cat = str(row['Column']).strip()
+        bp_used = float(row['_bp_f'])
+        if _jitter_for is not None:
+            mpb_bp = _jitter_for(subject, brand,
+                                   salt=f'compose-mpb|{src_cat}',
+                                   pct=jitter_pct, base=bp_used)
+        else:
+            # Deterministic ±jitter_pct drift fallback.
+            import hashlib as _hl
+            h = int(_hl.blake2b(
+                f'{subject}|{brand}|compose-mpb|{src_cat}'.encode(),
+                digest_size=8,
+            ).hexdigest(), 16)
+            drift = (((h % 2400) - 1200) / 100000.0) * jitter_pct
+            mpb_bp = round(max(0.0001, bp_used + drift * bp_used), 4)
+        mpb_bp = round(max(0.0001, min(99.9999, mpb_bp)), 4)
+
+        rec = {c: '' for c in df.columns}
+        rec['Column'] = MPB_CATEGORY
+        rec['Value'] = brand
+        rec[bp_col] = f"{mpb_bp:.4f}%"
+        if raw_col in df.columns and raw_per_pct:
+            rec[raw_col] = int(round(mpb_bp * raw_per_pct))
+        if proj_col in df.columns and proj_per_pct:
+            rec[proj_col] = int(round(mpb_bp * proj_per_pct))
+        new_records.append(rec)
+
+        decisions.append({
+            'action': 'COMPOSE_MPB',
+            'brand': brand,
+            'source_category': src_cat,
+            'bp_used': bp_used,
+            'mpb_bp': mpb_bp,
+            'reason': f'union of branded sub-cats — best source {src_cat} @ {bp_used:.4f}%',
+        })
+
+    if new_records:
+        df = pd.concat([df, pd.DataFrame(new_records)], ignore_index=True)
+
+    if verbose:
+        n_added = len(new_records)
+        n_subj = (mpb_mask).sum()
+        from collections import Counter as _Counter
+        by_src = _Counter(d['source_category'] for d in decisions)
+        top_srcs = ', '.join(f'{c}={n}' for c, n in by_src.most_common(8))
+        print(f"   🛒 compose-mpb: +{n_added} MPB row(s) "
+              f"(MPB before={int(n_subj)}, after={int(n_subj) + n_added}) "
+              f"— top sources: {top_srcs}")
+
+    return df, decisions
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 #  Subject hostmap pre-flight (D11: fail-loud when subject missing)
 # ─────────────────────────────────────────────────────────────────────────────
 # Profiles for subjects that aren't in reference.host_mapping are doomed:
