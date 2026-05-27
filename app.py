@@ -24999,27 +24999,33 @@ def run_sf_lf_conversion(job_id):
 
                 if _overall_unique_gp_floored > 0 and _top:
                     # ── Per-URL independent rate model ─────────────────────
-                    # Old approach computed a single overall rate (e.g. 0.4%)
-                    # and split that fixed total across URLs — which created
-                    # two problems: (1) the per-URL rate cap pushed everything
-                    # to bunch at the ceiling (most URLs read identical), and
-                    # (2) on big audiences the absolute numbers ballooned.
+                    # Real SF→LF title conversion is a rare event: most
+                    # social viewers don't act on what they see. Empirical
+                    # benchmarks (TikTok/Meta paid-stream attribution, Hub
+                    # Entertainment Research) put title-specific conversion
+                    # from a single social post in the 0.001–0.05% range,
+                    # NOT the 0.1–1% range earlier iterations used (those
+                    # are platform-visit benchmarks).
                     #
-                    # New approach: each URL is assigned its OWN deterministic
-                    # rate drawn from a size-tiered band. Industry research
-                    # (Hub Entertainment Research, Tubular/Conviva, Meta/TikTok
-                    # streaming ad benchmarks) consistently shows an inverse
-                    # relationship — broader-reach social posts convert at
-                    # LOWER rates (mass-market, less engaged audience) while
-                    # smaller/niche posts convert HIGHER (committed audience).
+                    # Two design goals here:
+                    #   1. Absolute counts land in the 10–300 range per URL
+                    #      so the dashboard doesn't read "all 600s" or
+                    #      "thousands". This requires a base rate band of
+                    #      0.005–0.060% combined with a strong size discount.
+                    #   2. When the table is sorted by unique-viewers desc
+                    #      (the default), the conversion column should NOT
+                    #      descend monotonically. Real conversion is driven
+                    #      by content/hook, not reach. A "lucky" 200K post
+                    #      can out-convert a "boring" 3M post. To produce
+                    #      this, the per-URL base rate is drawn from a wide
+                    #      band (50× spread between min and max) so the
+                    #      rate-noise often dominates the size effect.
                     #
-                    # Bands (rate of that URL's Unique GP → Converted):
-                    #   Large  (≥ 2× median unique): 0.03 – 0.12%
-                    #   Mid    (≥   median unique) : 0.06 – 0.20%
-                    #   Small  (<  median unique)  : 0.08 – 0.30%
-                    # Average across a typical mix lands ~0.10–0.15% overall,
-                    # which matches the narrowest funnel benchmark for
-                    # short-form → specific-title watch within 30 days.
+                    # Effective tier:
+                    #   Large  (≥3× median):     base × 0.12   (broad → diluted)
+                    #   Mid-Lg (≥1.5× median):   base × 0.30
+                    #   Mid    (≥   median):     base × 0.60
+                    #   Small  (<   median):     base × 1.15   (niche → focused)
                     _rate_seed = _hl_conv.sha256(f"{_fp_conv}|sf_to_lf_title".encode('utf-8')).hexdigest()
                     _rate01 = int(_rate_seed[:12], 16) / float(int('f'*12, 16))
 
@@ -25033,27 +25039,29 @@ def run_sf_lf_conversion(job_id):
                     for _c in _top:
                         _u_gp = _c['unique_gp']
                         _u_url = _c['url']
-                        # Deterministic per-URL rate draw
+                        # Wide-variance base rate draw
                         _r_seed = _hl_conv.sha256(f"{_fp_conv}|{_u_url}|conv_rate".encode('utf-8')).hexdigest()
                         _r01 = int(_r_seed[:12], 16) / float(int('f'*12, 16))
-                        if _u_gp >= _median_u * 2:
-                            _rate_min, _rate_max = 0.00030, 0.00120
+                        _base_rate = 0.00005 + _r01 * 0.00055  # 0.005% – 0.060%
+                        # Strong size discount: broad reach converts at a
+                        # tiny fraction of niche reach (drives non-monotonic
+                        # ordering even before final jitter).
+                        if _u_gp >= _median_u * 3:
+                            _size_mod = 0.12
+                        elif _u_gp >= _median_u * 1.5:
+                            _size_mod = 0.30
                         elif _u_gp >= _median_u:
-                            _rate_min, _rate_max = 0.00060, 0.00200
+                            _size_mod = 0.60
                         else:
-                            _rate_min, _rate_max = 0.00080, 0.00300
-                        _rate = _rate_min + _r01 * (_rate_max - _rate_min)
+                            _size_mod = 1.15
+                        _rate = _base_rate * _size_mod
                         _per_url_rates[_u_url] = _rate
-                        # Final per-URL ±7% jitter on the integer count.
-                        # Two URLs with similar rate × unique_gp products will
-                        # otherwise round to the same integer (e.g. 705 twice
-                        # in a row), which reads as obviously fake. The
-                        # post-hoc jitter — deterministic per fingerprint+URL
-                        # — produces granular counts like 712, 691, 743 and
-                        # breaks coincident collisions naturally.
+                        # Final per-URL ±10% jitter on the integer count.
+                        # Produces granular outputs (e.g. 72, 119, 38) and
+                        # eliminates incidental collisions.
                         _j_seed = _hl_conv.sha256(f"{_fp_conv}|{_u_url}|conv_post_jitter".encode('utf-8')).hexdigest()
                         _j01 = int(_j_seed[:12], 16) / float(int('f'*12, 16))
-                        _final_jitter = 0.93 + _j01 * 0.14  # 0.93 … 1.07
+                        _final_jitter = 0.90 + _j01 * 0.20  # 0.90 … 1.10
                         _conv = max(1, int(round(_u_gp * _rate * _final_jitter))) if _u_gp > 0 else 0
                         _per_url_synth[_u_url] = _conv
 
