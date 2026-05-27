@@ -21688,6 +21688,7 @@
                 }
                 else if (col === 'OVERALL_CONVERSION' && currentSection === 'conversion') {
                     if (val === 'Total SF Viewers (All Platforms)') { conversionSummary.totalViewers = count; conversionSummary.totalViewersGenPop = genPop; }
+                    else if (val === 'Total SF Views (Duplicated)') { conversionSummary.totalShortFormViews = count; conversionSummary.totalShortFormViewsGenPop = genPop; }
                     else if (val === 'Converted Users') { conversionSummary.converted = count; conversionSummary.convRate = pct; conversionSummary.convertedGenPop = genPop; }
                     else if (val === 'Avg Hours to Conversion') conversionSummary.avgHours = count;
                 }
@@ -21801,19 +21802,28 @@
             
             // Update KPIs - Show regular sample values as main
             const totalViewersGenPop = parseInt(conversionSummary.totalViewersGenPop) || 0;
+            // Total Views (Events) — the new "Total SF Views (Duplicated)" row.
+            // Older reports don't have this row; fall back to the Unique row
+            // so the tile keeps rendering something for legacy data.
+            const totalShortFormViewsGenPop = parseInt(conversionSummary.totalShortFormViewsGenPop) || 0;
+            const totalShortFormViewsSample = parseInt(conversionSummary.totalShortFormViews) || 0;
             // Use overall converted (unique users, not sum of per-platform which double-counts overlap)
             const convertedGenPop = parseInt(conversionSummary.convertedGenPop) || 0;
             const convertedSample = parseInt(conversionSummary.converted) || 0;
             const totalViewersSample = parseInt(conversionSummary.totalViewers) || 0;
-            
+
             // Main values - ALWAYS show projected values (with null checks)
             const kpiTotalViewersEl = document.getElementById('sfConvKpiTotalViewers');
             const kpiConvertedEl = document.getElementById('sfConvKpiConverted');
             const kpiRateEl = document.getElementById('sfConvKpiRate');
             const kpiAvgTimeEl = document.getElementById('sfConvKpiAvgTime');
-            if (kpiTotalViewersEl) kpiTotalViewersEl.textContent = totalViewersGenPop > 0 ? formatGenPop(totalViewersGenPop) : totalViewersSample.toLocaleString();
+            // "Short Form Views (Duplicated)" tile = Total Views (events), not Unique.
+            const sfvDisplayGenPop = totalShortFormViewsGenPop > 0 ? totalShortFormViewsGenPop : totalViewersGenPop;
+            const sfvDisplaySample = totalShortFormViewsSample > 0 ? totalShortFormViewsSample : totalViewersSample;
+            if (kpiTotalViewersEl) kpiTotalViewersEl.textContent = sfvDisplayGenPop > 0 ? formatGenPop(sfvDisplayGenPop) : sfvDisplaySample.toLocaleString();
             if (kpiConvertedEl) kpiConvertedEl.textContent = convertedGenPop > 0 ? formatGenPop(convertedGenPop) : convertedSample.toLocaleString();
-            // Calculate conversion rate to 5 decimal places
+            // Conversion Rate stays vs Unique Viewers (proper rate metric),
+            // not vs Total Views — re-watches shouldn't dilute the rate.
             const convRateCalc = totalViewersGenPop > 0 ? (convertedGenPop / totalViewersGenPop * 100) : (totalViewersSample > 0 ? (convertedSample / totalViewersSample * 100) : 0);
             if (kpiRateEl) kpiRateEl.textContent = convRateCalc.toFixed(5) + '%';
             const avgHrs = parseFloat(conversionSummary.avgHours) || 0;
@@ -22181,7 +22191,7 @@
                     <td style="text-align: right; padding: 0.5rem 0.75rem; border-bottom: 1px solid var(--border-color);">${uniqueDisplay}</td>
                     <td style="text-align: right; padding: 0.5rem 0.75rem; border-bottom: 1px solid var(--border-color);">${dupDisplay}</td>
                     <td style="text-align: right; padding: 0.5rem 0.75rem; border-bottom: 1px solid var(--border-color); font-weight: 600; color: var(--accent-lime);">${convDisplay}</td>
-                    <td style="text-align: right; padding: 0.5rem 0.75rem; border-bottom: 1px solid var(--border-color); font-weight: 600; color: var(--accent-primary);">${r.convRate.toFixed(2)}%</td>
+                    <td style="text-align: right; padding: 0.5rem 0.75rem; border-bottom: 1px solid var(--border-color); font-weight: 600; color: var(--accent-primary);">${r.convRate > 0 && r.convRate < 0.01 ? '<0.01%' : r.convRate.toFixed(4) + '%'}</td>
                 </tr>`;
             }).join('');
 
