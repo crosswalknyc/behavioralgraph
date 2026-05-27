@@ -24494,9 +24494,13 @@ def _apply_genpop_anchored_guardrails(df: pd.DataFrame,
     needed. We keep only:
 
       • R0  Universal floor/ceiling: BP ∈ [0.01%, 96.0%]
-      • R5  Young-audience social-media floor (legitimate persona-specific
-            override — TikTok/Instagram/Snapchat for audiences <45)
       • R14 Negative/zero BP floor (safety net for any leftover edge case)
+
+    R5 (Young-audience social-media floor) was REMOVED 2026-05-26 — it was
+    overriding the agent's persona-correct low values for TikTok/Instagram/
+    Snapchat on the archetype assumption "young audience = high social". The
+    audit framework's per-row agent re-reasoning handles under-emissions on
+    a persona-aware basis instead.
     """
     gp = _load_genpop_csv()
     if gp is None or gp.empty:
@@ -24508,7 +24512,7 @@ def _apply_genpop_anchored_guardrails(df: pd.DataFrame,
     if bp_col not in df.columns:
         return df
 
-    # Build fast lookup for R5 (gen_pop baseline next to TikTok/Instagram/etc.)
+    # Build fast lookup so R14 has a gen-pop-aware fallback for sub-floor BPs.
     gp_lookup: dict[tuple[str, str], float] = {}
     cat_col = 'Column' if 'Column' in gp.columns else gp.columns[0]
     val_col = 'Value' if 'Value' in gp.columns else gp.columns[1]
@@ -24523,7 +24527,8 @@ def _apply_genpop_anchored_guardrails(df: pd.DataFrame,
         except (ValueError, TypeError):
             continue
 
-    median_age = _median_age_from_persona(persona_doc)
+    # median_age lookup no longer needed — R5 (its sole consumer) was removed
+    # 2026-05-26 in favor of persona-aware re-reasoning by the audit framework.
     caps_applied = 0
     floors_applied = 0
 
@@ -24567,25 +24572,11 @@ def _apply_genpop_anchored_guardrails(df: pd.DataFrame,
             # See R14 below for the gen-pop-aware version when we have one
             pass
 
-        # ── R5: Young-audience social-media floor ───────────────────────
-        # Legitimate persona-specific override: TikTok / Instagram / Snapchat
-        # are dominant platforms for audiences under 45 — even if the agent
-        # under-scores them, panel reality keeps them near baseline.
-        if gen_pop is not None and median_age is not None:
-            social_floor = None
-            if median_age < 35:
-                if val in ('TIKTOK', 'INSTAGRAM'):
-                    social_floor = gen_pop * 0.9
-                elif val == 'SNAPCHAT':
-                    social_floor = gen_pop * 0.8
-            elif median_age < 45:
-                if val in ('TIKTOK', 'INSTAGRAM'):
-                    social_floor = gen_pop * 0.7
-            if social_floor is not None and bp < social_floor:
-                bp = _organic_4dp(social_floor)
-                print(f"   🔒 R5 social-floor: {cat}/{val} {original_bp:.2f}% → {bp:.2f}% "
-                      f"(young audience, median_age={median_age:.0f})")
-                floors_applied += 1
+        # ── R5 (Young-Audience Social-Media Floor) — REMOVED 2026-05-26.
+        #    Was overriding agent's persona-correct low values for TikTok /
+        #    Instagram / Snapchat on the archetype assumption "young
+        #    audience = high social". Audit framework's per-row agent
+        #    re-reasoning handles persona-aware under-emission decisions.
 
         # ── R14: Negative / zero BP safety floor ────────────────────────
         if bp < 0.01:
@@ -28607,6 +28598,7 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
                     save_to_s3 as _cw_save_s3,
                     insert_structural_gaps as _cw_insert_gaps,
                     agent_reason_audit_fails as _cw_agent_reason,
+                    agent_reason_floor_noise as _cw_floor_noise,
                     apply_default_lock_breaks as _cw_break_locks,
                     apply_audit_corrections as _cw_apply_patches,  # fallback
                 )
@@ -28616,6 +28608,7 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
                     save_to_s3 as _cw_save_s3,
                     insert_structural_gaps as _cw_insert_gaps,
                     agent_reason_audit_fails as _cw_agent_reason,
+                    agent_reason_floor_noise as _cw_floor_noise,
                     apply_default_lock_breaks as _cw_break_locks,
                     apply_audit_corrections as _cw_apply_patches,  # fallback
                 )
@@ -28661,6 +28654,41 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
             else:
                 print("   ⚠️ no OpenAI client; falling back to deterministic mid-band patch")
                 _df_cw, _patches = _cw_apply_patches(_df_cw, _report)
+            # 1b. FLOOR-NOISE RE-REASONING: any non-demographic brand row sitting
+            #     at the panel-floor (bp < 0.5%) is handed to the agent for a
+            #     KEEP / CHANGE / DROP decision. Operator policy: brands are
+            #     never allowed to sit at ~0.001% — they must be either
+            #     persona-defensibly real or removed entirely. LOCATION/DMA
+            #     and demographic enumerations are exempt.
+            _floor_decisions = []
+            if _oa_client is not None:
+                try:
+                    _df_cw, _floor_decisions = _cw_floor_noise(
+                        _df_cw, _report, _oa_client,
+                        persona_doc=_pdoc, verbose=True,
+                    )
+                    if _floor_decisions:
+                        _n_drop   = sum(1 for d in _floor_decisions if d['decision'] == 'DROP')
+                        _n_chg    = sum(1 for d in _floor_decisions if d['decision'] == 'CHANGE')
+                        _n_keep_f = sum(1 for d in _floor_decisions if d['decision'] == 'KEEP')
+                        _n_skp_f  = sum(1 for d in _floor_decisions if d['decision'] == 'SKIP')
+                        print(f"   🧹 floor-noise verdict on {len(_floor_decisions)} flagged row(s): "
+                              f"{_n_drop} DROP, {_n_chg} CHANGE, {_n_keep_f} KEEP, {_n_skp_f} SKIP")
+                        for _d in _floor_decisions[:30]:
+                            _old = f"{_d['old_bp']:.4f}%" if _d['old_bp'] is not None else "—"
+                            if _d['decision'] == 'CHANGE':
+                                arrow = f"{_old:>10s} → {_d['new_bp']:.4f}%"
+                            elif _d['decision'] == 'DROP':
+                                arrow = f"{_old:>10s} → (dropped)"
+                            else:
+                                arrow = f"{_old:>10s} → (kept)"
+                            print(f"       {_d['decision']:6s} {_d['category']:22s} {str(_d['value'])[:22]:22s}  "
+                                  f"{arrow}  {(_d.get('reason') or '')[:120]}")
+                        if len(_floor_decisions) > 30:
+                            print(f"       ... +{len(_floor_decisions)-30} more")
+                except Exception as _fn_err:
+                    print(f"   ⚠️ floor-noise pass skipped: {_fn_err}")
+                    import traceback as _tb; _tb.print_exc()
             # 2. Break default-value-lock fingerprints (pipeline defaults, not real values)
             _df_cw, _lock_patches = _cw_break_locks(_df_cw, _report)
             if _lock_patches:
@@ -28670,8 +28698,13 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
                           f"{_lp['old_bp']:.4f}% → {_lp['new_bp']:.4f}%  (fp={_lp['fingerprint']})")
             # 3. Insert structural-gap rows
             _df_cw2, _n_gaps_inserted = _cw_insert_gaps(_df_cw, _report)
-            # 4. Rewrite CSV if we mutated anything
-            if _patches or _n_gaps_inserted or _lock_patches:
+            # 4. Rewrite CSV if we mutated anything (FAIL patches, structural gaps,
+            #    default-lock breaks, or floor-noise changes/drops).
+            _floor_mutated = any(
+                d.get('decision') in ('CHANGE', 'DROP')
+                for d in (_floor_decisions or [])
+            )
+            if _patches or _n_gaps_inserted or _lock_patches or _floor_mutated:
                 _bp_col = 'Brand Penetration (Row)'
                 if _bp_col in _df_cw2.columns:
                     _df_cw2[_bp_col] = _df_cw2[_bp_col].apply(

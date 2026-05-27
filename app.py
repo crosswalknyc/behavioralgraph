@@ -12535,6 +12535,88 @@ def _append_hf_alpha_sent_log(day_str, email):
         print(f"⚠️ HF Alpha sent-log write error for {day_str}: {e}")
 
 
+def _hf_alpha_recipient_claim_key(day_str, email):
+    """S3 key for a per-recipient, per-day idempotency claim file."""
+    safe = re.sub(r'[^a-z0-9._@+-]', '_', str(email).strip().lower())
+    return f"{HF_ALPHA_IDEAS_PREFIX}sent_log_claims/{day_str}/{safe}.json"
+
+
+def _claim_hf_alpha_recipient(day_str, email):
+    """Atomically claim the (day, email) slot.
+
+    Returns True iff this caller is the first to claim the slot for that
+    recipient on that day. Implemented via an S3 conditional PutObject
+    (`If-None-Match: *`) which only succeeds when the key does not yet
+    exist; concurrent callers receive `PreconditionFailed` and return
+    False. This closes the race window in the previous read-the-summary-
+    then-send pattern, where multiple cron firings could all read an
+    empty summary and all send.
+
+    Falls back to a non-atomic check if the bucket/region rejects
+    conditional writes (older S3 endpoints predating Nov-2024). In that
+    case we still consult the daily summary log as a best-effort gate.
+    """
+    if not s3_client:
+        return True  # nothing we can do; let caller send
+    email_key = str(email).strip().lower()
+    claim_key = _hf_alpha_recipient_claim_key(day_str, email_key)
+    body = json.dumps({
+        'email': email_key,
+        'day': day_str,
+        'claimed_at': datetime.now(HF_ALPHA_TZ).isoformat(),
+    }, indent=2).encode('utf-8')
+    try:
+        s3_client.put_object(
+            Bucket=METADATA_BUCKET,
+            Key=claim_key,
+            Body=body,
+            ContentType='application/json',
+            IfNoneMatch='*',  # only succeeds if the object does NOT exist
+        )
+        return True
+    except Exception as e:
+        err = getattr(e, 'response', {}).get('Error', {}) if hasattr(e, 'response') else {}
+        code = err.get('Code') or ''
+        status = err.get('HTTPStatusCode') or 0
+        if code in ('PreconditionFailed', 'ConditionalRequestConflict') or status == 412:
+            return False
+        # Fallback: conditional writes unsupported. Use a non-atomic check
+        # (HEAD object) — still better than nothing, though theoretically
+        # racy.
+        try:
+            s3_client.head_object(Bucket=METADATA_BUCKET, Key=claim_key)
+            return False  # already exists
+        except Exception:
+            pass
+        # Last resort: write unconditionally and treat as claim.
+        try:
+            s3_client.put_object(
+                Bucket=METADATA_BUCKET,
+                Key=claim_key,
+                Body=body,
+                ContentType='application/json',
+            )
+            return True
+        except Exception as inner:
+            print(f"⚠️ HF Alpha claim error for {email_key} on {day_str}: {inner}")
+            # Fail closed to avoid duplicate sends.
+            return False
+
+
+def _release_hf_alpha_recipient_claim(day_str, email):
+    """Best-effort delete of a claim file (used when the send fails so a
+    later retry can re-claim and try again)."""
+    if not s3_client:
+        return
+    try:
+        s3_client.delete_object(
+            Bucket=METADATA_BUCKET,
+            Key=_hf_alpha_recipient_claim_key(day_str, email),
+        )
+    except Exception:
+        pass
+
+
 def _load_hf_novelty_memory(ticker_slug, weeks_back=4, current_day_str=None):
     """Load past N weeks of Alpha Ideas for a ticker to enable novelty constraints.
 
@@ -13475,13 +13557,27 @@ def send_hf_alpha_ideas_digest(
 
     for rec in recipients:
         rec_email_key = (rec.get('email') or '').strip().lower()
-        if rec_email_key and rec_email_key in already_sent_emails:
-            skipped.append({
-                'username': rec.get('username'),
-                'email': rec.get('email'),
-                'reason': f'Already sent on {run_day} (idempotent skip)',
-            })
-            continue
+        # Atomic per-recipient claim. Closes the race window where multiple
+        # parallel cron firings each read an empty summary log and all
+        # decide to send. With this gate, only the firing whose S3
+        # conditional-put succeeds gets to send; siblings see 412 and skip.
+        if not suppress_idempotency and rec_email_key:
+            if rec_email_key in already_sent_emails:
+                skipped.append({
+                    'username': rec.get('username'),
+                    'email': rec.get('email'),
+                    'reason': f'Already sent on {run_day} (summary log)',
+                })
+                continue
+            if not _claim_hf_alpha_recipient(run_day, rec_email_key):
+                skipped.append({
+                    'username': rec.get('username'),
+                    'email': rec.get('email'),
+                    'reason': f'Already claimed on {run_day} by concurrent run',
+                })
+                already_sent_emails.add(rec_email_key)
+                continue
+            # We now own the claim for (run_day, rec_email_key).
         packets = []
         ticker_rows = list(rec['tickers'] or [])
         if isinstance(limit_tickers_per_recipient, int) and limit_tickers_per_recipient > 0:
@@ -13516,6 +13612,9 @@ def send_hf_alpha_ideas_digest(
 
         if not packets:
             skipped.append({'username': rec['username'], 'reason': 'No entitled ticker ideas'})
+            if not suppress_idempotency and rec_email_key:
+                # Release the claim so a future run can retry once data is ready.
+                _release_hf_alpha_recipient_claim(run_day, rec_email_key)
             continue
         html_content = _build_hf_alpha_email_html(rec['username'], packets, run_day, app_url)
         subject = f"Fin IQ — Alpha Ideas ({run_day})"
@@ -13526,14 +13625,17 @@ def send_hf_alpha_ideas_digest(
         ok, msg = send_email_via_gmail(rec['email'], subject, html_content, text)
         if ok:
             sent.append({'username': rec['username'], 'email': rec['email'], 'ticker_count': len(packets)})
-            # Persist to sent log so subsequent cron firings today are no-ops
-            # (skip in QA modes — test_email rewrites the addressee and
-            # dry_run never actually sent).
+            # Append to the human-readable daily summary log (the per-recipient
+            # claim file written before send is what actually enforces
+            # idempotency; this is just a convenience aggregate).
             if not suppress_idempotency and rec_email_key:
                 _append_hf_alpha_sent_log(run_day, rec['email'])
                 already_sent_emails.add(rec_email_key)
         else:
             skipped.append({'username': rec['username'], 'email': rec['email'], 'reason': msg})
+            # Release the claim so a follow-up run can retry this recipient.
+            if not suppress_idempotency and rec_email_key:
+                _release_hf_alpha_recipient_claim(run_day, rec_email_key)
 
     return {
         'success': True,
@@ -30187,8 +30289,13 @@ def list_journey_iq():
     """Return all Journey IQ runs (newest first). Anyone with Digital Journey
     IQ access — via role (admin/super_admin), the standalone
     has_journey_iq_access flag, or the umbrella Analysis IQ +
-    'journey_iq' module entitlement — sees every run regardless of who
-    created it. Users without the feature are blocked at the door."""
+    'journey_iq' module entitlement — sees every LIVE run regardless of who
+    created it. Users without the feature are blocked at the door.
+
+    Archived runs (under journey-iq/archive/) are hidden by default. Pass
+    ?include_archive=1 to request them — this is admin-only (role admin or
+    super_admin). Non-admins get the live list back even when they pass
+    the flag, so the UI degrades gracefully."""
     try:
         from migration import journey_iq as _jiq
     except Exception:
@@ -30200,15 +30307,34 @@ def list_journey_iq():
                             'error': 'Digital Journey IQ access required',
                             'runs': []}), 403
         all_runs = _jiq.list_runs(s3_client, limit=500)
-        return jsonify({'success': True, 'runs': all_runs[:200]})
+
+        # Optional admin-only archive include
+        include_archive = (request.args.get('include_archive') or '').lower() in ('1', 'true', 'yes')
+        role = (user or {}).get('role')
+        is_admin = role in ('admin', 'super_admin') or bool(session.get('cloaked_from'))
+        archived_runs = []
+        if include_archive and is_admin:
+            archived_runs = _jiq.list_archived_runs(s3_client, limit=200)
+
+        return jsonify({
+            'success':       True,
+            'runs':          all_runs[:200],
+            'archived_runs': archived_runs,
+            'archive_visible': bool(archived_runs) or (include_archive and is_admin),
+            'is_admin':      is_admin,
+        })
     except Exception as e:
-        return jsonify({'success': True, 'runs': [], 'error': str(e)})
+        return jsonify({'success': True, 'runs': [], 'archived_runs': [], 'error': str(e)})
 
 
 @app.route('/api/journey-iq/results/<path:s3_key>', methods=['GET'])
 @requires_auth
 def get_journey_iq_result(s3_key):
-    """Return a previously-persisted Journey IQ run by S3 key."""
+    """Return a previously-persisted Journey IQ run by S3 key.
+
+    Live runs (under journey-iq/admin/) are loadable by any user with
+    Digital Journey IQ access. Archived runs (under journey-iq/archive/)
+    are admin-only — non-admins requesting an archive key get a 403."""
     try:
         from migration import journey_iq as _jiq
     except Exception as e:
@@ -30216,16 +30342,27 @@ def get_journey_iq_result(s3_key):
     try:
         # Allow callers to pass either the bare key suffix or the full key.
         full_key = s3_key if s3_key.startswith(_jiq.S3_PREFIX) else _jiq.S3_PREFIX + s3_key
-        data = _jiq.load_run_from_s3(s3_client, full_key)
-        if data is None:
-            return jsonify({'success': False, 'error': 'Run not found'}), 404
-        # Access guard: anyone with Digital Journey IQ access can load any run.
-        # Users without the feature are blocked at the door.
+
         user = get_current_user()
+        # Access guard #1: anyone with Digital Journey IQ access can load any
+        # live run. Users without the feature are blocked at the door.
         if not user_can_run_analysis_module(user, 'journey_iq'):
             return jsonify({'success': False,
                             'error': 'Digital Journey IQ access required'}), 403
-        return jsonify({'success': True, 'data': data, 's3_key': full_key})
+
+        # Access guard #2: archive keys are admin-only.
+        if _jiq.is_archive_key(full_key):
+            role = (user or {}).get('role')
+            is_admin = role in ('admin', 'super_admin') or bool(session.get('cloaked_from'))
+            if not is_admin:
+                return jsonify({'success': False,
+                                'error': 'Archived runs are admin-only'}), 403
+
+        data = _jiq.load_run_from_s3(s3_client, full_key)
+        if data is None:
+            return jsonify({'success': False, 'error': 'Run not found'}), 404
+        return jsonify({'success': True, 'data': data, 's3_key': full_key,
+                        'archived': _jiq.is_archive_key(full_key)})
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
 

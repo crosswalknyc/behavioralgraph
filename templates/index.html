@@ -11333,9 +11333,9 @@
             width: 960px;
             height: 540px;
             position: relative;
-            background: linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 50%, #1a1a1a 100%);
+            background: #ffffff;
             border-radius: 8px;
-            box-shadow: 0 4px 24px rgba(0,0,0,0.4), 0 0 0 1px rgba(255,255,255,0.08);
+            box-shadow: 0 4px 24px rgba(0,0,0,0.15), 0 0 0 1px rgba(0,0,0,0.08);
             overflow: hidden;
             transform-origin: center center;
             transition: transform 0.2s ease, width 0.2s ease, height 0.2s ease;
@@ -11349,7 +11349,7 @@
             left: 24px;
             right: 24px;
             font-size: 0.55rem;
-            color: rgba(255,255,255,0.4);
+            color: rgba(0,0,0,0.35);
             text-align: left;
             z-index: 5;
         }
@@ -11620,59 +11620,76 @@
         
         /* Slide placeholder for images */
         .slide-image-placeholder {
-            background: linear-gradient(135deg, #3d3d3d 0%, #2a2a2a 100%);
-            border: 2px dashed rgba(255,255,255,0.2);
-            border-radius: 4px;
+            background: linear-gradient(135deg, #2f2f2f 0%, #232323 100%);
+            border: 2px dashed rgba(255,255,255,0.25);
+            border-radius: 8px;
             display: flex;
             flex-direction: column;
             align-items: center;
             justify-content: center;
             cursor: pointer;
             transition: all 0.2s;
-            color: rgba(255,255,255,0.5);
-            font-size: 0.75rem;
+            color: rgba(255,255,255,0.55);
+            font-size: 0.8rem;
+            font-weight: 600;
         }
         
         .slide-image-placeholder:hover {
-            border-color: rgba(200, 230, 0, 0.5);
-            background: linear-gradient(135deg, #4d4d4d 0%, #3a3a3a 100%);
+            border-color: rgba(200, 230, 0, 0.6);
+            background: linear-gradient(135deg, #3a3a3a 0%, #2e2e2e 100%);
+            color: rgba(255,255,255,0.75);
         }
         
         .slide-image-placeholder .placeholder-icon {
-            font-size: 2rem;
-            margin-bottom: 0.5rem;
-            opacity: 0.6;
+            font-size: 2.2rem;
+            margin-bottom: 0.4rem;
+            opacity: 0.7;
         }
         
         .slide-image-placeholder .placeholder-delete-btn {
             position: absolute;
-            top: 4px;
-            right: 4px;
-            width: 20px;
-            height: 20px;
-            border-radius: 50%;
-            background: rgba(239, 68, 68, 0.8);
+            bottom: 6px;
+            right: 6px;
+            padding: 4px 10px;
+            border-radius: 4px;
+            background: rgba(239, 68, 68, 0.85);
             border: none;
             color: #fff;
-            font-size: 12px;
+            font-size: 0.6rem;
+            font-weight: 700;
+            letter-spacing: 0.04em;
             cursor: pointer;
             display: flex;
             align-items: center;
-            justify-content: center;
-            opacity: 0;
-            transition: opacity 0.2s;
-            z-index: 10;
-        }
-        
-        .slide-image-placeholder:hover .placeholder-delete-btn {
+            gap: 4px;
             opacity: 1;
+            transition: background 0.2s, transform 0.15s;
+            z-index: 10;
+            text-transform: uppercase;
         }
         
         .slide-image-placeholder .placeholder-delete-btn:hover {
             background: rgba(239, 68, 68, 1);
-            transform: scale(1.1);
+            transform: scale(1.05);
         }
-        
+
+        .slide-image-placeholder .img-resize-handle {
+            position: absolute;
+            width: 12px;
+            height: 12px;
+            background: rgba(200, 230, 0, 0.8);
+            border: 1px solid rgba(255,255,255,0.5);
+            border-radius: 2px;
+            z-index: 15;
+            opacity: 0;
+            transition: opacity 0.15s;
+        }
+        .slide-image-placeholder:hover .img-resize-handle { opacity: 1; }
+        .slide-image-placeholder .img-resize-handle.nw { top: -6px; left: -6px; cursor: nw-resize; }
+        .slide-image-placeholder .img-resize-handle.ne { top: -6px; right: -6px; cursor: ne-resize; }
+        .slide-image-placeholder .img-resize-handle.sw { bottom: -6px; left: -6px; cursor: sw-resize; }
+        .slide-image-placeholder .img-resize-handle.se { bottom: -6px; right: -6px; cursor: se-resize; }
+
         /* Draggable slide sections */
         .slide-draggable-section {
             cursor: move;
@@ -19082,6 +19099,10 @@
                     <select id="jiqRunPicker" onchange="onJourneyIqRunPicked(this.value)" style="padding: 6px 10px; border-radius: 6px; border: 1px solid var(--border-color); background: var(--bg-primary); color: var(--text-primary); font-size: 13px; min-width: 240px;">
                         <option value="">— pick a past run —</option>
                     </select>
+                    <label id="jiqArchiveToggleWrap" style="display: none; align-items: center; gap: 0.35rem; font-size: 12px; color: var(--text-secondary); cursor: pointer; user-select: none;" title="Admin-only: include archived runs in the dropdown above">
+                        <input type="checkbox" id="jiqShowArchived" onchange="loadJourneyIqRunList()" style="margin: 0;">
+                        Show archived
+                    </label>
                     <button type="button" class="btn btn-small" onclick="loadJourneyIqRunList()" style="padding: 0.35rem 0.5rem; min-width: auto;">↻</button>
                 </div>
             </div>
@@ -19106,11 +19127,11 @@
 
                 <!-- KPI strip -->
                 <div style="display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 0.5rem; margin: 0.5rem 0 0.4rem;">
-                    <h3 style="margin: 0; font-size: 1.0rem;">📊 Headline Funnel</h3>
+                    <h3 id="jiqKpiStripTitle" style="margin: 0; font-size: 1.0rem;">📊 Headline Funnel</h3>
                 </div>
-                <details style="margin: 0 0 0.6rem;">
+                <details id="jiqKpiStripHowto" style="margin: 0 0 0.6rem;">
                     <summary style="cursor:pointer;color:var(--accent-cyan);font-size:0.72rem;font-weight:600;user-select:none;padding:3px 0;">ℹ️ How to read this chart</summary>
-                    <div style="margin-top:6px;padding:0.7rem 0.9rem;background:var(--bg-secondary);border-left:3px solid var(--accent-cyan);border-radius:6px;font-size:0.76rem;line-height:1.55;">
+                    <div id="jiqKpiStripHowtoBody" style="margin-top:6px;padding:0.7rem 0.9rem;background:var(--bg-secondary);border-left:3px solid var(--accent-cyan);border-radius:6px;font-size:0.76rem;line-height:1.55;">
                         <ul style="margin:0;padding-left:1.1rem;">
                             <li><strong>Three-stage funnel</strong> reading left to right: <em>Confirmed Pre-Sales</em> (gray) → <em>Opening Weekend</em> (lime) → <em>Full Run</em> (cyan).</li>
                             <li><strong>Confirmed Pre-Sales</strong> — actual transactions counted across all online ticket channels as of the "as of" date. Sub-text shows Fandango's share of online presales.</li>
@@ -19163,13 +19184,13 @@
                 ═══════════════════════════════════════════════════════ -->
                 <div class="card" id="jiqAudienceHypCard" style="padding: 1rem; margin-bottom: 1rem; display: none;">
                     <div style="display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.25rem;">
-                        <h3 style="margin: 0;">🎯 Audience Hypothesis — proving / disproving the theses</h3>
+                        <h3 id="jiqAudienceHypTitle" style="margin: 0;">🎯 Audience Hypothesis — proving / disproving the theses</h3>
                         <div id="jiqAudienceHypMeta" style="font-size: 0.72rem; color: var(--text-secondary);"></div>
                     </div>
                     <div id="jiqAudienceHypSubtitle" style="font-size: 0.78rem; color: var(--text-secondary); margin-bottom: 0.5rem;"></div>
                     <details style="margin: 0 0 0.85rem;">
                         <summary style="cursor:pointer;color:var(--accent-cyan);font-size:0.72rem;font-weight:600;user-select:none;padding:3px 0;">ℹ️ How to read this chart</summary>
-                        <div style="margin-top:6px;padding:0.7rem 0.9rem;background:var(--bg-secondary);border-left:3px solid var(--accent-cyan);border-radius:6px;font-size:0.76rem;line-height:1.55;">
+                        <div id="jiqAudienceHypHowtoBody" style="margin-top:6px;padding:0.7rem 0.9rem;background:var(--bg-secondary);border-left:3px solid var(--accent-cyan);border-radius:6px;font-size:0.76rem;line-height:1.55;">
                             <ul style="margin:0;padding-left:1.1rem;">
                                 <li><strong>Each card validates one client-stated audience theory.</strong> Same three-row layout on every card so they're directly comparable.</li>
                                 <li><strong>Verdict pill (top-right):</strong> 🟢 Strongly Validated (≥3× lift), 🟡 Validated (1.5×–3×), 🔴 Not Validated (&lt;1.5×).</li>
@@ -19195,13 +19216,13 @@
                 ═══════════════════════════════════════════════════════ -->
                 <div class="card" id="jiqAnchorsCard" style="padding: 1rem; margin-bottom: 1rem; display: none;">
                     <div style="display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.25rem;">
-                        <h3 style="margin: 0;">📐 Audience Sizing</h3>
+                        <h3 id="jiqAnchorsTitle" style="margin: 0;">📐 Audience Sizing</h3>
                         <div id="jiqAnchorsMeta" style="font-size: 0.72rem; color: var(--text-secondary);"></div>
                     </div>
                     <div id="jiqAnchorsSubtitle" style="font-size: 0.78rem; color: var(--text-secondary); margin-bottom: 0.5rem;"></div>
                     <details style="margin: 0 0 0.85rem;">
                         <summary style="cursor:pointer;color:var(--accent-cyan);font-size:0.72rem;font-weight:600;user-select:none;padding:3px 0;">ℹ️ How to read this chart</summary>
-                        <div style="margin-top:6px;padding:0.7rem 0.9rem;background:var(--bg-secondary);border-left:3px solid var(--accent-cyan);border-radius:6px;font-size:0.76rem;line-height:1.55;">
+                        <div id="jiqAnchorsHowtoBody" style="margin-top:6px;padding:0.7rem 0.9rem;background:var(--bg-secondary);border-left:3px solid var(--accent-cyan);border-radius:6px;font-size:0.76rem;line-height:1.55;">
                             <ul style="margin:0;padding-left:1.1rem;">
                                 <li><strong>L1–L6 layer bars:</strong> each layer = one digital touchpoint source (premier Netflix special, Amazon Prime tail, tour purchasers, SNL viral sketch, comp clips, co-lead actor halo). Bar = engager range (low–high).</li>
                                 <li><strong>Gross vs Deduplicated tiles:</strong> gross sums all layers (with overlap); dedup = true addressable audience after removing people who appear in multiple layers. The lime-bordered dedup tile is the answer.</li>
@@ -19214,7 +19235,7 @@
                     </details>
                     <div id="jiqAnchorsLayers" style="margin-bottom: 1rem;"></div>
                     <div id="jiqAnchorsRollup" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 0.75rem; margin-bottom: 1rem;"></div>
-                    <div style="font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-secondary); font-weight: 600; margin-bottom: 0.5rem;">Conversion Funnel to Opening Weekend</div>
+                    <div id="jiqAnchorsFunnelHeading" style="font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-secondary); font-weight: 600; margin-bottom: 0.5rem;">Conversion Funnel to Opening Weekend</div>
                     <div id="jiqAnchorsFunnel" style="margin-bottom: 1rem;"></div>
                     <div style="font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-secondary); font-weight: 600; margin-bottom: 0.5rem;">Public Anchor Inputs</div>
                     <div id="jiqAnchorsInputs" style="margin-bottom: 1rem; overflow-x: auto;"></div>
@@ -19230,13 +19251,13 @@
                 ═══════════════════════════════════════════════════════ -->
                 <div class="card" id="jiqExhibitorCard" style="padding: 1rem; margin-bottom: 1rem; display: none;">
                     <div style="display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.25rem;">
-                        <h3 style="margin: 0;">🎟️ Exhibitor Direct Channel Mix — where the tickets will flow</h3>
+                        <h3 id="jiqExhibitorTitle" style="margin: 0;">🎟️ Exhibitor Direct Channel Mix — where the tickets will flow</h3>
                         <div id="jiqExhibitorMeta" style="font-size: 0.72rem; color: var(--text-secondary);"></div>
                     </div>
                     <div id="jiqExhibitorSubtitle" style="font-size: 0.78rem; color: var(--text-secondary); margin-bottom: 0.5rem;"></div>
                     <details style="margin: 0 0 0.85rem;">
                         <summary style="cursor:pointer;color:var(--accent-cyan);font-size:0.72rem;font-weight:600;user-select:none;padding:3px 0;">ℹ️ How to read this chart</summary>
-                        <div style="margin-top:6px;padding:0.7rem 0.9rem;background:var(--bg-secondary);border-left:3px solid var(--accent-cyan);border-radius:6px;font-size:0.76rem;line-height:1.55;">
+                        <div id="jiqExhibitorHowtoBody" style="margin-top:6px;padding:0.7rem 0.9rem;background:var(--bg-secondary);border-left:3px solid var(--accent-cyan);border-radius:6px;font-size:0.76rem;line-height:1.55;">
                             <ul style="margin:0;padding-left:1.1rem;">
                                 <li><strong>Top horizontal stacked bar:</strong> each color block = one exhibitor (AMC red, Fandango orange, Cinemark blue, etc.); width = share of opening-weekend tickets that chain captures. Hover for est. ticket count.</li>
                                 <li><strong>Audience-tilt heatmap (bottom):</strong> rows = chains, columns = hypothesis cohorts. <strong style="color:#1f9d55;">Green</strong> = chain over-indexes that cohort (e.g., Marcus 1.8× Middle America); <strong style="color:#c81e1e;">red</strong> = under-indexes; gray = neutral. Cell value = the raw tilt index.</li>
@@ -19388,13 +19409,13 @@
                 <!-- Path to Purchase (BSFS-style visual journey) -->
                 <div class="card" id="jiqPathCard" style="padding: 1rem; margin-bottom: 1rem; display: none;">
                     <div style="display: flex; justify-content: space-between; align-items: baseline; flex-wrap: wrap; gap: 0.5rem;">
-                        <h3 style="margin: 0 0 0.5rem;">🛒 Path to Purchase</h3>
+                        <h3 id="jiqPathTitle" style="margin: 0 0 0.5rem;">🛒 Path to Purchase</h3>
                         <div id="jiqPathMeta" style="font-size: 0.72rem; color: var(--text-secondary);"></div>
                     </div>
-                    <div style="font-size: 0.72rem; color: var(--text-secondary); margin-bottom: 0.4rem;">Right-aligned ribbon: each converter's last few events before purchase, collapsed into channel categories. Column height ∝ unique users at that step. Hover for the top hosts.</div>
+                    <div id="jiqPathSubtitle" style="font-size: 0.72rem; color: var(--text-secondary); margin-bottom: 0.4rem;">Right-aligned ribbon: each converter's last few events before purchase, collapsed into channel categories. Column height ∝ unique users at that step. Hover for the top hosts.</div>
                     <details style="margin: 0 0 0.85rem;">
                         <summary style="cursor:pointer;color:var(--accent-cyan);font-size:0.72rem;font-weight:600;user-select:none;padding:3px 0;">ℹ️ How to read this chart</summary>
-                        <div style="margin-top:6px;padding:0.7rem 0.9rem;background:var(--bg-secondary);border-left:3px solid var(--accent-cyan);border-radius:6px;font-size:0.76rem;line-height:1.55;">
+                        <div id="jiqPathHowtoBody" style="margin-top:6px;padding:0.7rem 0.9rem;background:var(--bg-secondary);border-left:3px solid var(--accent-cyan);border-radius:6px;font-size:0.76rem;line-height:1.55;">
                             <ul style="margin:0;padding-left:1.1rem;">
                                 <li><strong>8-step ribbon, right-aligned:</strong> step labels run from <em>-7 (AWARENESS)</em> on the far left to <em>0 (CONVERSION)</em> on the far right. The ribbon is read like a sentence: "first they were made aware, then they watched a trailer, then social/creator hits, then a review, then a showtime lookup, then a fee compare, then checkout, then conversion."</li>
                                 <li><strong>Bar height</strong> = number of converters who hit that step (survivorship curve — every step has fewer people than the prior one).</li>
@@ -27692,10 +27713,31 @@
         function loadJourneyIqRunList(preferredKey) {
             var picker = document.getElementById('jiqRunPicker');
             if (!picker) return;
-            fetch('/api/journey-iq/list', { credentials: 'same-origin' })
+
+            // Reveal the "Show archived" toggle for admins only. We mirror
+            // isAdmin (defined near the top of the page) so the control is
+            // never visible to regular users — and the backend re-checks
+            // role on every list/results call so client-side bypass is
+            // harmless.
+            var archWrap   = document.getElementById('jiqArchiveToggleWrap');
+            var archCheck  = document.getElementById('jiqShowArchived');
+            if (archWrap) archWrap.style.display = (typeof isAdmin !== 'undefined' && isAdmin) ? 'inline-flex' : 'none';
+            var includeArchive = !!(archCheck && archCheck.checked && (typeof isAdmin !== 'undefined' && isAdmin));
+
+            // Allow loadJourneyIqRunList(true/false) for explicit overrides
+            // (preserves existing call sites that pass an s3 key string).
+            if (preferredKey === true || preferredKey === false) {
+                includeArchive = preferredKey;
+                preferredKey = undefined;
+            }
+
+            var url = '/api/journey-iq/list' + (includeArchive ? '?include_archive=1' : '');
+            fetch(url, { credentials: 'same-origin' })
                 .then(function(r) { return r.json(); })
                 .then(function(data) {
-                    var runs = (data && data.runs) || [];
+                    var runs     = (data && data.runs) || [];
+                    var archived = (data && data.archived_runs) || [];
+
                     var opts = ['<option value="">— pick a past run —</option>'];
                     runs.forEach(function(r) {
                         var label = (r.project_name || r.target || 'Journey')
@@ -27703,8 +27745,20 @@
                         var safe = (r.key || '').replace(/"/g, '&quot;');
                         opts.push('<option value="' + safe + '">' + label + '</option>');
                     });
+                    if (archived.length) {
+                        opts.push('<optgroup label="🗄️ Archived (admin only)">');
+                        archived.forEach(function(r) {
+                            var label = '[ARCHIVED] ' + (r.project_name || r.target || 'Journey')
+                                      + ' — ' + (r.start_date || '') + '→' + (r.end_date || '');
+                            var safe = (r.key || '').replace(/"/g, '&quot;');
+                            opts.push('<option value="' + safe + '">' + label + '</option>');
+                        });
+                        opts.push('</optgroup>');
+                    }
                     picker.innerHTML = opts.join('');
-                    var keyToLoad = preferredKey || (runs[0] && runs[0].key);
+
+                    var combined = runs.concat(archived);
+                    var keyToLoad = preferredKey || (combined[0] && combined[0].key);
                     if (keyToLoad) {
                         picker.value = keyToLoad;
                         onJourneyIqRunPicked(keyToLoad);
@@ -27945,7 +27999,37 @@
             // WEBSITE target (Fandango etc.), "Total Users / Converted /
             // Conversion Rate" is misleading: the cohort = visitors, not
             // ticket-buyers, and the on-site CR comes from site_funnel,
-            // not from synth. Show visitor-funnel KPIs instead.
+            // not from synth. Show visitor-funnel KPIs instead. For a
+            // TV-SHOW target (Netflix/streaming), money/tickets don't
+            // apply — render viewers + watch hours + lifecycle anchors.
+
+            // Swap the section title + "How to read" disclosure copy
+            // based on target_type so neither says "Pre-Sales / Opening
+            // Weekend" for TV shows.
+            (function() {
+                var tt = (meta.target_type || '').toLowerCase();
+                var titleEl = document.getElementById('jiqKpiStripTitle');
+                var bodyEl  = document.getElementById('jiqKpiStripHowtoBody');
+                if (tt === 'tv_show' || kpis.tv_show_mode === true) {
+                    if (titleEl) titleEl.innerHTML = '📊 Headline Viewership';
+                    if (bodyEl) bodyEl.innerHTML =
+                        '<ul style="margin:0;padding-left:1.1rem;">'
+                      +   '<li><strong>Three-stage viewership funnel</strong> reading left to right: <em>Confirmed (to date)</em> (gray) → <em>Premiere Week</em> (lime) → <em>30-Day + Lifecycle</em> (cyan).</li>'
+                      +   '<li><strong>Confirmed Viewers</strong> — unique US viewers measured by the streamer / panel as of the "as of" date. Sub-text shows the episode the show is currently on.</li>'
+                      +   '<li><strong>Confirmed Watch Hours</strong> = viewers × avg minutes/viewer ÷ 60. The streaming-era revenue proxy.</li>'
+                      +   '<li><strong>Repeat Viewers</strong> — confirmed viewers who watched 5+ episodes (binge / loyal cohort).</li>'
+                      +   '<li><strong>Premiere-Week Viewers</strong> tile — projected unique viewers in the first 7 days of the show\'s run; sub-text shows the modeled <em>low–high band</em>.</li>'
+                      +   '<li><strong>30-Day Unique Viewers</strong> tile — projected total unique US viewers in the first 30 days post-premiere; the streaming analog of "Opening Weekend Box Office" for a TV show.</li>'
+                      +   '<li><strong>Total Watch Hours (30-day)</strong> — viewers × avg minutes ÷ 60 over the same 30-day window.</li>'
+                      +   '<li><strong>Full Lifecycle Viewers</strong> — 30-day + 90-day post-finale tail. Streaming shows accumulate viewers long after release.</li>'
+                      +   '<li><strong>What to look for:</strong> if confirmed-to-date is materially above pace for the episode count, that\'s upside signal for the 30-day projection; below pace signals weaker tail.</li>'
+                      + '</ul>';
+                } else {
+                    if (titleEl) titleEl.innerHTML = '📊 Headline Funnel';
+                    // Leave the body alone — it's already the movie copy.
+                }
+            })();
+
             var kpiStrip = document.getElementById('jiqKpiStrip');
             if (kpiStrip) {
                 var targetType = (meta.target_type || '').toLowerCase();
@@ -27962,6 +28046,69 @@
                         ['Total Captured (any seller)', (kpis.captured_pct != null ? kpis.captured_pct + '%' : '—')],
                         ['Never Transacted',         (kpis.never_transacted_pct != null ? kpis.never_transacted_pct + '%' : '—')],
                     ];
+                } else if (targetType === 'tv_show' || kpis.tv_show_mode === true) {
+                    // TV/streaming series — no money/tickets, just viewers
+                    // + watch hours + lifecycle bands. Pull tv_show_* fields
+                    // when present; fall back to the legacy ticket fields
+                    // (which the build script overloaded with viewer counts
+                    // for backward compat) when not.
+                    var fmtViewers = function(v) { return v != null ? _jiqFmt(v) : '—'; };
+                    var fmtHours   = function(v) { return v != null ? _jiqFmt(v) + ' hrs' : '—'; };
+                    var asOfTv = kpis.confirmed_as_of_date || '';
+                    var ep = '';
+                    if (kpis.tv_show_episodes_to_date && kpis.tv_show_episodes_total) {
+                        ep = 'ep ' + kpis.tv_show_episodes_to_date + ' of ' + kpis.tv_show_episodes_total;
+                    }
+                    var confSub = [ep, asOfTv ? 'as of ' + asOfTv : ''].filter(Boolean).join(' · ');
+                    var repeatPct = kpis.tv_show_repeat_viewer_rate_pct;
+                    var rangeSubTv = function(lo, hi, suffix) {
+                        if (lo == null || hi == null) return '';
+                        return 'range ' + _jiqFmt(lo) + '–' + _jiqFmt(hi) + (suffix || '');
+                    };
+                    var confirmedHrs = (kpis.confirmed_digital_revenue_usd != null)
+                        ? Math.round(Number(kpis.confirmed_digital_revenue_usd))
+                        : null;
+                    var lifecycleMid = kpis.tv_show_lifecycle_viewers_mid != null
+                        ? kpis.tv_show_lifecycle_viewers_mid
+                        : null;
+                    var totalHrs = (kpis.projected_total_revenue_usd != null)
+                        ? Math.round(Number(kpis.projected_total_revenue_usd))
+                        : null;
+                    var totalHrsLow = (kpis.projected_range_low_revenue_usd != null)
+                        ? Math.round(Number(kpis.projected_range_low_revenue_usd))
+                        : null;
+                    var totalHrsHigh = (kpis.projected_range_high_revenue_usd != null)
+                        ? Math.round(Number(kpis.projected_range_high_revenue_usd))
+                        : null;
+                    k = [
+                        ['Confirmed Viewers (to date)',
+                            fmtViewers(kpis.confirmed_digital_purchases),
+                            confSub],
+                        ['Confirmed Watch Hours',
+                            fmtViewers(confirmedHrs),
+                            (kpis.tv_show_avg_minutes_per_viewer ? '~' + kpis.tv_show_avg_minutes_per_viewer + ' min / viewer' : '')],
+                        ['Repeat Viewers (5+ eps)',
+                            fmtViewers(kpis.confirmed_fandango_purchases),
+                            (repeatPct != null ? repeatPct + '% of confirmed' : '')],
+                        ['Premiere-Week Viewers',
+                            fmtViewers(kpis.projected_opening_weekend_tickets || kpis.projected_total_tickets),
+                            rangeSubTv(kpis.projected_ow_range_low_tickets, kpis.projected_ow_range_high_tickets),
+                            'lime'],
+                        ['30-Day Unique Viewers (mid)',
+                            fmtViewers(kpis.projected_total_tickets),
+                            rangeSubTv(kpis.projected_range_low_tickets, kpis.projected_range_high_tickets),
+                            'cyan'],
+                        ['Total Watch Hours (30-day)',
+                            fmtViewers(totalHrs),
+                            rangeSubTv(totalHrsLow, totalHrsHigh, ' hrs')],
+                    ];
+                    // Optional: full-lifecycle tile if data present and
+                    // different from 30-day projection
+                    if (lifecycleMid != null && lifecycleMid > 0) {
+                        k.push(['Full Lifecycle Viewers',
+                                fmtViewers(lifecycleMid),
+                                rangeSubTv(kpis.tv_show_lifecycle_viewers_low, kpis.tv_show_lifecycle_viewers_high)]);
+                    }
                 } else if (hasConfirmedTicketing) {
                     // Movie with confirmed digital pre-sales + comp-anchored projection.
                     // Layout: Pre-Sales (3 tiles) → Opening Weekend (2 tiles) → Full Run (1 tile)
@@ -28467,10 +28614,39 @@
             if (!ah || !(ah.hypotheses || []).length) { card.style.display = 'none'; return; }
             card.style.display = '';
 
+            // TV-show vs movie copy swap. For a streaming series the
+            // theses are about likely VIEWERS (not ticket buyers), and
+            // the baseline rate is the projected 30-day viewer-conv
+            // rate against US adults — not opening-weekend ticket conv.
+            var runAh = (window._jiqCurrentRun || {});
+            var metaAh = runAh.meta || {};
+            var kpisAh = runAh.kpis || {};
+            var isTvAh = ((metaAh.target_type || '').toLowerCase() === 'tv_show')
+                      || (kpisAh.tv_show_mode === true);
+            var titleAh = document.getElementById('jiqAudienceHypTitle');
+            var howAh   = document.getElementById('jiqAudienceHypHowtoBody');
+            if (titleAh) titleAh.innerHTML = isTvAh
+                ? '🎯 Audience Hypothesis — modeled viewer cohorts'
+                : '🎯 Audience Hypothesis — proving / disproving the theses';
+            if (howAh && isTvAh) howAh.innerHTML =
+                '<ul style="margin:0;padding-left:1.1rem;">'
+              +   '<li><strong>Each card sizes one modeled viewer cohort.</strong> Same three-row layout on every card so they\'re directly comparable. <em>This is the predicted audience composition, not Nielsen-measured;</em> when public measurement becomes available or a Crosswalk panel pull is run, it replaces these estimates.</li>'
+              +   '<li><strong>Verdict pill (top-right):</strong> 🟢 Strongly Predicted (≥3× lift), 🟡 Predicted (1.5×–3×), 🔴 Not Predicted (&lt;1.5×) — based on streaming-comp benchmarks (Netflix daily-strip + unscripted-game).</li>'
+              +   '<li><strong>Intent index (center, big number):</strong> e.g. <em>4.5×</em> = this cohort is projected to convert to viewers at 4.5 times the gen-pop streaming baseline.</li>'
+              +   '<li><strong>First-View / Total Viewers</strong> (lime / cyan): est. unique viewers from this cohort over premiere-week and the full 30-day window.</li>'
+              +   '<li><strong>Top engagement surfaces:</strong> % of cohort touching each platform/property. Mini horizontal bars.</li>'
+              +   '<li><strong>DMA concentration:</strong> top markets where the cohort over-indexes vs national avg.</li>'
+              +   '<li><strong>Streaming vs linear note:</strong> for a Jeopardy! format extension on Netflix, the modeled streaming audience is materially younger and more mobile-skewed than the syndicated TV audience — these cohorts capture that delta explicitly.</li>'
+              + '</ul>';
+
             var subEl  = document.getElementById('jiqAudienceHypSubtitle');
             var metaEl = document.getElementById('jiqAudienceHypMeta');
-            if (subEl) subEl.innerHTML = 'Testing client-stated audience theses against a <strong>' + _jiqFmt(ah.baseline_size) + '</strong> ' + _jiqEsc(ah.baseline_label || 'baseline') + '. Each cohort\'s <strong>intent index</strong> is conversion lift vs. the ~' + (ah.baseline_conversion_pct || 0.5).toFixed(1) + '% gen-pop opening-weekend baseline.';
-            if (metaEl) metaEl.textContent = (ah.hypotheses.length + ' hypotheses · ~' + _jiqFmt(ah.baseline_opening_buyers || 0) + ' baseline opening-weekend buyers');
+            if (subEl) subEl.innerHTML = isTvAh
+                ? 'Modeled viewer cohorts against a <strong>' + _jiqFmt(ah.baseline_size) + '</strong> ' + _jiqEsc(ah.baseline_label || 'baseline') + '. Each cohort\'s <strong>intent index</strong> is projected viewer-conversion lift vs. the ~' + (ah.baseline_conversion_pct || 0.5).toFixed(2) + '% gen-pop 30-day streaming baseline. Predicted, not measured.'
+                : 'Testing client-stated audience theses against a <strong>' + _jiqFmt(ah.baseline_size) + '</strong> ' + _jiqEsc(ah.baseline_label || 'baseline') + '. Each cohort\'s <strong>intent index</strong> is conversion lift vs. the ~' + (ah.baseline_conversion_pct || 0.5).toFixed(1) + '% gen-pop opening-weekend baseline.';
+            if (metaEl) metaEl.textContent = isTvAh
+                ? (ah.hypotheses.length + ' cohorts · ~' + _jiqFmt(ah.baseline_opening_buyers || 0) + ' baseline 30-day viewers')
+                : (ah.hypotheses.length + ' hypotheses · ~' + _jiqFmt(ah.baseline_opening_buyers || 0) + ' baseline opening-weekend buyers');
 
             // Per-hypothesis tiles
             var tilesEl = document.getElementById('jiqAudienceHypTiles');
@@ -28607,6 +28783,32 @@
             }
             card.style.display = '';
 
+            // TV-show vs movie copy swap. For a streaming series this is
+            // a viewer-sizing model — engagers → 30-day unique viewers /
+            // watch hours — not a ticket-buyer funnel.
+            var runAn = (window._jiqCurrentRun || {});
+            var metaAn = runAn.meta || {};
+            var kpisAn = runAn.kpis || {};
+            var isTvAn = ((metaAn.target_type || '').toLowerCase() === 'tv_show')
+                      || (kpisAn.tv_show_mode === true);
+            var titleAn = document.getElementById('jiqAnchorsTitle');
+            var howAn   = document.getElementById('jiqAnchorsHowtoBody');
+            var funHead = document.getElementById('jiqAnchorsFunnelHeading');
+            if (titleAn) titleAn.innerHTML = isTvAn
+                ? '📐 Viewer Sizing — modeled US engagers → unique viewers'
+                : '📐 Audience Sizing';
+            if (funHead) funHead.textContent = isTvAn
+                ? 'Conversion Funnel to 30-Day Unique Viewers'
+                : 'Conversion Funnel to Opening Weekend';
+            if (howAn && isTvAn) howAn.innerHTML =
+                '<ul style="margin:0;padding-left:1.1rem;">'
+              +   '<li><strong>L1–L6 layer bars:</strong> each layer = one digital touchpoint source the modeled audience overlaps with (e.g., syndicated Jeopardy! viewers, SNL/Weekend-Update engagers, Netflix unscripted-game watchers, NYT Games daily players). Bar = engager range (low–high).</li>'
+              +   '<li><strong>Gross vs Deduplicated tiles:</strong> gross sums all layers (with overlap); dedup = true addressable engager base after removing people who appear in multiple layers. The lime-bordered dedup tile is the answer.</li>'
+              +   '<li><strong>Conversion Funnel (stages):</strong> narrows from total engagers → Netflix-subscribing high-intent → game-show / trivia ready → <em>30-day unique viewers</em> (the streaming analog of "opening-weekend tickets") → premiere-week viewers → full-lifecycle viewers (30-day + 90-day tail) → total watch hours.</li>'
+              +   '<li><strong>Methodology note:</strong> follows the same engager-funnel pattern Subscriber IQ uses for streaming viewership — public anchors only, then Crosswalk panel pull replaces with measured numbers.</li>'
+              +   '<li><strong>MODELED TAKE (lime callout):</strong> single-sentence conclusion. Mid-case viewers + watch hours, anchored to the closest streaming comp (e.g., Is It Cake, Cunk on Earth).</li>'
+              + '</ul>';
+
             var fmt = function(n) {
                 if (n == null) return '—';
                 if (n >= 1e6) return (n / 1e6).toFixed(n >= 1e7 ? 0 : 1) + 'M';
@@ -28623,7 +28825,9 @@
             var sub = document.getElementById('jiqAnchorsSubtitle');
             if (sub) sub.textContent = an.methodology || '';
             var meta = document.getElementById('jiqAnchorsMeta');
-            if (meta) meta.textContent = 'trailing 12 months · US digital engagers';
+            if (meta) meta.textContent = isTvAn
+                ? 'trailing 12 months · US digital engagers · modeled (no public Nielsen yet)'
+                : 'trailing 12 months · US digital engagers';
 
             // ── L1-L6 layer bars (each layer = horizontal bar, length = high engager count)
             var maxEng = Math.max.apply(null,
@@ -28779,9 +28983,43 @@
             if (!mix || !(mix.channels || []).length) { card.style.display = 'none'; return; }
             card.style.display = '';
 
+            // TV-show vs movie copy swap. For TV/streaming the card is
+            // "Platform & Device Mix" (Netflix CTV / Mobile / Web /
+            // Console / external clip-discovery) and the unit is
+            // viewers, not tickets.
+            var run    = (window._jiqCurrentRun || {});
+            var meta   = run.meta || {};
+            var kpisRun = run.kpis || {};
+            var isTv   = ((meta.target_type || '').toLowerCase() === 'tv_show')
+                      || (kpisRun.tv_show_mode === true);
+
+            var titleEl = document.getElementById('jiqExhibitorTitle');
+            if (titleEl) titleEl.innerHTML = isTv
+                ? '📺 Platform & Device Mix — where viewers will watch'
+                : '🎟️ Exhibitor Direct Channel Mix — where the tickets will flow';
+
+            var howtoEl = document.getElementById('jiqExhibitorHowtoBody');
+            if (howtoEl && isTv) howtoEl.innerHTML =
+                '<ul style="margin:0;padding-left:1.1rem;">'
+              +   '<li><strong>Top horizontal stacked bar:</strong> each color block = one streaming surface (Smart TV / CTV, Mobile App, Web, Tablet, Console, plus clip-discovery channels like YouTube + TikTok); width = share of total watch hours that surface captures.</li>'
+              +   '<li><strong>Audience-tilt heatmap (bottom):</strong> rows = surfaces, columns = audience archetypes. <strong style="color:#1f9d55;">Green</strong> = surface over-indexes that cohort (e.g., Smart-TV 1.45× franchise loyalists — the living-room pattern); <strong style="color:#c81e1e;">red</strong> = under-indexes; gray = neutral. Cell value = the raw tilt index.</li>'
+              +   '<li><strong>Verdict block (bottom, cyan border):</strong> one-sentence read on which surface drives the most watch hours and which archetype skews where.</li>'
+              +   '<li><strong>Use it for:</strong> push-notification + clip-drop strategy. The discovery surfaces (YouTube/TikTok clips) are typically the highest-ROI marketing spend — they convert at 15-20% next-day episode-view lift even though their watch-hour share is small.</li>'
+              + '</ul>';
+
             var subEl  = document.getElementById('jiqExhibitorSubtitle');
             var metaEl = document.getElementById('jiqExhibitorMeta');
-            if (subEl) subEl.innerHTML = 'Estimated breakdown of where the <strong>~' + _jiqFmt(mix.opening_weekend_tickets_estimate || 0) + '</strong> projected opening-weekend tickets will be purchased, with each chain\'s audience-fit (tilt) vs. its own typical mix.';
+            if (subEl) {
+                if (isTv) {
+                    subEl.innerHTML = 'Estimated breakdown of where the <strong>~'
+                        + _jiqFmt(mix.opening_weekend_tickets_estimate || 0)
+                        + '</strong> projected premiere-week viewers will watch, with each surface\'s audience-fit (tilt) vs. its own typical mix.';
+                } else {
+                    subEl.innerHTML = 'Estimated breakdown of where the <strong>~'
+                        + _jiqFmt(mix.opening_weekend_tickets_estimate || 0)
+                        + '</strong> projected opening-weekend tickets will be purchased, with each chain\'s audience-fit (tilt) vs. its own typical mix.';
+                }
+            }
             if (metaEl && mix.analysis_window) metaEl.textContent = mix.analysis_window.start + ' → ' + mix.analysis_window.end + (mix.analysis_window.release ? '  ·  release ' + mix.analysis_window.release : '');
 
             var channels = (mix.channels || []).slice().sort(function(a, b) { return (b.share_pct || 0) - (a.share_pct || 0); });
@@ -28853,12 +29091,19 @@
                              + _jiqEsc(h.icon || '') + ' ' + _jiqEsc(h.name)
                              + '</th>';
                     }).join('');
-                    heatEl.innerHTML = '<div style="font-weight:600;font-size:0.78rem;margin-bottom:6px;">Audience-fit heatmap — tilt vs. chain\'s overall mix</div>'
-                                     + '<div style="font-size:0.68rem;color:var(--text-secondary);margin-bottom:8px;">Green = over-index (chain attracts more of this cohort than average) · red = under-index · 1.00× = neutral.</div>'
+                    var heatTitle = isTv
+                        ? 'Audience-fit heatmap — tilt vs. surface\'s overall mix'
+                        : 'Audience-fit heatmap — tilt vs. chain\'s overall mix';
+                    var heatSub = isTv
+                        ? 'Green = over-index (surface attracts more of this cohort than average) · red = under-index · 1.00× = neutral.'
+                        : 'Green = over-index (chain attracts more of this cohort than average) · red = under-index · 1.00× = neutral.';
+                    var rowHeader = isTv ? 'Surface' : 'Chain';
+                    heatEl.innerHTML = '<div style="font-weight:600;font-size:0.78rem;margin-bottom:6px;">' + heatTitle + '</div>'
+                                     + '<div style="font-size:0.68rem;color:var(--text-secondary);margin-bottom:8px;">' + heatSub + '</div>'
                                      + '<div style="overflow-x:auto;">'
                                      + '<table style="width:100%;border-collapse:collapse;font-size:0.78rem;border:1px solid var(--border-color);border-radius:8px;overflow:hidden;">'
                                      + '<thead><tr style="background:var(--bg-secondary);">'
-                                     +   '<th style="padding:8px 10px;text-align:left;border-right:1px solid var(--border-color);">Chain</th>'
+                                     +   '<th style="padding:8px 10px;text-align:left;border-right:1px solid var(--border-color);">' + rowHeader + '</th>'
                                      +   headerCells
                                      +   '<th style="padding:8px 10px;text-align:left;">Profile</th>'
                                      + '</tr></thead><tbody>' + rows + '</tbody></table>'
@@ -29909,6 +30154,33 @@
                 return;
             }
             card.style.display = '';
+
+            // TV-show vs movie copy swap. For a streaming series there is
+            // no "purchase" — the ribbon ends at first-episode-play, not
+            // ticket checkout. Swap title, subtitle and how-to to match.
+            (function() {
+                var runP = (window._jiqCurrentRun || {});
+                var metaP = runP.meta || {};
+                var kpisP = runP.kpis || {};
+                var isTvP = ((metaP.target_type || '').toLowerCase() === 'tv_show')
+                          || (kpisP.tv_show_mode === true);
+                var titleP = document.getElementById('jiqPathTitle');
+                var subP   = document.getElementById('jiqPathSubtitle');
+                var howP   = document.getElementById('jiqPathHowtoBody');
+                if (titleP) titleP.innerHTML = isTvP ? '🍿 Path to View' : '🛒 Path to Purchase';
+                if (subP) subP.innerHTML = isTvP
+                    ? 'Right-aligned ribbon: each viewer\'s last few events before first-episode play, collapsed into channel categories. Column height ∝ unique viewers at that step. Hover for the top hosts/platforms.'
+                    : 'Right-aligned ribbon: each converter\'s last few events before purchase, collapsed into channel categories. Column height ∝ unique users at that step. Hover for the top hosts.';
+                if (howP && isTvP) howP.innerHTML =
+                    '<ul style="margin:0;padding-left:1.1rem;">'
+                  +   '<li><strong>Multi-step ribbon, right-aligned:</strong> labels run from <em>-N (AWARENESS)</em> on the far left to <em>0 (FIRST EPISODE PLAY = viewer)</em> on the far right. The ribbon reads like a sentence — "first they saw a clip, then a creator reaction, then a search, then opened Netflix, then pressed play."</li>'
+                  +   '<li><strong>Bar height</strong> = number of viewers who hit that step (survivorship curve — every step has fewer people than the prior one).</li>'
+                  +   '<li><strong>% under each bar</strong> = same value as % of the full projected-viewer cohort.</li>'
+                  +   '<li><strong>Hover any column</strong> for the top hosts/platforms at that step (YouTube + TikTok clip drops, Netflix in-app search, etc.).</li>'
+                  +   '<li><strong>Top observed paths</strong> (below): the 5 most common K-gram sequences. Big viewer counts = sequences that drove the most first-episode plays.</li>'
+                  +   '<li><strong>Note for streaming:</strong> the final step is <em>first-episode play</em>, not a transaction. Subsequent retention (episodes 2+) is tracked in the Headline Viewership tile (avg episodes / viewer).</li>'
+                  + '</ul>';
+            })();
 
             // ── Back-compat patch: legacy modeled runs hard-coded every
             // step at 100% of the cohort. Real funnels narrow at the
@@ -55099,23 +55371,15 @@
                 dateAdded: new Date().toISOString()
             };
             
-            // Create closing slide
-            const closingSlide = {
-                id: 'closing_' + Date.now(),
-                type: 'closing',
-                title: 'Thank You',
-                dateAdded: new Date().toISOString()
-            };
-            
             const newDeck = {
                 id: 'deck_' + Date.now(),
                 name: name,
                 workspaceId: wsId,
-                slides: [tocSlide, closingSlide], // Start with TOC and closing slides
+                slides: [tocSlide],
                 titleSlide: {
                     title: currentProfileData?.name || 'Audience Profile',
                     subtitle: 'Powered by Crosswalk IQ',
-                    image: currentProfileData?.image || null
+                    image: null
                 },
                 createdBy: currentUsername,
                 createdAt: new Date().toISOString(),
@@ -58229,6 +58493,8 @@
             // Allow dragging from the drag handle
             const isDragHandle = event.target.closest('.drag-handle');
             
+            if (event.target.closest('.img-resize-handle')) return;
+
             // Don't drag if clicking on editable content, buttons, or inputs (unless clicking drag handle)
             if (!isDragHandle && (
                 event.target.closest('[contenteditable="true"]') || 
@@ -58318,6 +58584,58 @@
             document.removeEventListener('mouseup', stopDragSlideSection);
         }
         
+        let resizingPlaceholder = null;
+        let resizePlaceholderHandle = '';
+        let resizePlaceholderStartX = 0;
+        let resizePlaceholderStartY = 0;
+        let resizePlaceholderOrigLeft = 0;
+        let resizePlaceholderOrigTop = 0;
+        let resizePlaceholderOrigW = 0;
+        let resizePlaceholderOrigH = 0;
+
+        function startResizePlaceholder(event, handle) {
+            event.stopPropagation();
+            event.preventDefault();
+            const ph = event.target.closest('.slide-image-placeholder');
+            if (!ph) return;
+            resizingPlaceholder = ph;
+            resizePlaceholderHandle = handle;
+            resizePlaceholderStartX = event.clientX;
+            resizePlaceholderStartY = event.clientY;
+            resizePlaceholderOrigLeft = parseFloat(ph.style.left) || 0;
+            resizePlaceholderOrigTop = parseFloat(ph.style.top) || 0;
+            resizePlaceholderOrigW = parseFloat(ph.style.width) || 40;
+            resizePlaceholderOrigH = parseFloat(ph.style.height) || 40;
+            document.addEventListener('mousemove', doResizePlaceholder);
+            document.addEventListener('mouseup', stopResizePlaceholder);
+        }
+
+        function doResizePlaceholder(event) {
+            if (!resizingPlaceholder) return;
+            const canvas = document.getElementById('slideCanvas');
+            if (!canvas) return;
+            const r = canvas.getBoundingClientRect();
+            const dx = ((event.clientX - resizePlaceholderStartX) / r.width) * 100;
+            const dy = ((event.clientY - resizePlaceholderStartY) / r.height) * 100;
+            let l = resizePlaceholderOrigLeft, t = resizePlaceholderOrigTop;
+            let w = resizePlaceholderOrigW, h = resizePlaceholderOrigH;
+            if (resizePlaceholderHandle.includes('e')) w = Math.max(10, resizePlaceholderOrigW + dx);
+            if (resizePlaceholderHandle.includes('w')) { w = Math.max(10, resizePlaceholderOrigW - dx); l = resizePlaceholderOrigLeft + dx; }
+            if (resizePlaceholderHandle.includes('s')) h = Math.max(10, resizePlaceholderOrigH + dy);
+            if (resizePlaceholderHandle.includes('n')) { h = Math.max(10, resizePlaceholderOrigH - dy); t = resizePlaceholderOrigTop + dy; }
+            resizingPlaceholder.style.left = l + '%';
+            resizingPlaceholder.style.top = t + '%';
+            resizingPlaceholder.style.width = w + '%';
+            resizingPlaceholder.style.height = h + '%';
+            event.preventDefault();
+        }
+
+        function stopResizePlaceholder() {
+            resizingPlaceholder = null;
+            document.removeEventListener('mousemove', doResizePlaceholder);
+            document.removeEventListener('mouseup', stopResizePlaceholder);
+        }
+
         // Helper to get saved section position or default
         function getSectionPosition(slide, sectionType, defaults) {
             if (slide?.sectionPositions?.[sectionType]) {
@@ -69997,23 +70315,15 @@
                 dateAdded: new Date().toISOString()
             };
             
-            // Create closing slide
-            const closingSlide = {
-                id: 'closing_' + Date.now(),
-                type: 'closing',
-                title: 'Thank You',
-                dateAdded: new Date().toISOString()
-            };
-            
             const newDeck = {
                 id: 'deck_' + Date.now(),
                 name: name,
                 workspaceId: wsId,
-                slides: [tocSlide, closingSlide],
+                slides: [tocSlide],
                 titleSlide: {
                     title: 'Audience Comparison',
                     subtitle: 'Powered by Crosswalk IQ',
-                    image: comparisonProfiles.length === 1 ? (comparisonProfiles[0].image || null) : null,
+                    image: null,
                     isComparison: comparisonProfiles.length >= 1,
                     comparisonProfiles: comparisonProfiles
                 },
@@ -73742,22 +74052,7 @@
             const name = prompt('Enter deck name:', 'New Presentation');
             if (!name) return;
             
-            // Get the current profile image as the default deck image
             let defaultImage = null;
-            if (currentProfileData?.name) {
-                const cacheKey = currentProfileData.name.toLowerCase().trim();
-                const cachedUrl = profileImageCache[cacheKey];
-                if (cachedUrl && cachedUrl !== 'none') {
-                    defaultImage = cachedUrl;
-                }
-            }
-            // Fallback: try to get from the visible profile image element
-            if (!defaultImage) {
-                const profileImg = document.querySelector('#dashProfileImage img');
-                if (profileImg && profileImg.src && !profileImg.src.endsWith('/')) {
-                    defaultImage = profileImg.src;
-                }
-            }
             
             // Create TOC slide
             const tocSlide = {
@@ -73767,23 +74062,15 @@
                 dateAdded: new Date().toISOString()
             };
             
-            // Create closing slide
-            const closingSlide = {
-                id: 'closing_' + Date.now(),
-                type: 'closing',
-                title: 'Thank You',
-                dateAdded: new Date().toISOString()
-            };
-            
             const newDeck = {
                 id: 'deck_' + Date.now(),
                 name: name,
                 workspaceId: currentWorkspace,
-                slides: [tocSlide, closingSlide], // Start with TOC and closing slides
+                slides: [tocSlide],
                 titleSlide: {
                     title: currentProfileData?.name || 'Audience Profile',
                     subtitle: 'Powered by Crosswalk IQ',
-                    image: defaultImage
+                    image: null
                 },
                 createdBy: currentUsername,
                 createdAt: new Date().toISOString(),
@@ -73812,17 +74099,6 @@
             currentEditingSlide = 0;
             deckUndoStack = [];
             populateDeckSlidesWithProfileImage(deck);
-            // If profile image not in cache yet, fetch by deck's profile name and re-populate when loaded
-            const deckProfileName = deck?.titleSlide?.title || deck?.slides?.[0]?.customHeader?.profileName 
-                || deck?.slides?.find(s => s.customHeader?.profileName)?.customHeader?.profileName;
-            if (deckProfileName && !getProfileImageForDeck(deck)) {
-                fetchProfileImage(deckProfileName, 0, false, (imageUrl) => {
-                    if (currentEditingDeck && imageUrl) {
-                        populateDeckSlidesWithProfileImage(currentEditingDeck);
-                        renderSlideEditor();
-                    }
-                });
-            }
             
             renderWorkspaceDecks();
             renderSlideEditor();
@@ -74081,19 +74357,7 @@
             // Initialize slide elements
             initSlideElements();
             
-            // If title slide has no profile image but we have a profile, fetch it and update when loaded
-            if (currentEditingSlide === 0 && currentEditingDeck && currentProfileData?.name) {
-                const titleSlide = currentEditingDeck.titleSlide || {};
-                if (!titleSlide.image && !getDeckTitleSlideProfileImage({ ...titleSlide, image: null })) {
-                    fetchProfileImage(currentProfileData.name, 0, false, (imageUrl) => {
-                        if (currentEditingDeck && currentEditingSlide === 0 && imageUrl) {
-                            if (!currentEditingDeck.titleSlide) currentEditingDeck.titleSlide = {};
-                            currentEditingDeck.titleSlide.image = imageUrl;
-                            saveDeckChanges();
-                            renderSlideEditor();
-                        }
-                    });
-                }
+            if (false) {
             }
             
             // Focus the panel for keyboard navigation
@@ -74231,30 +74495,7 @@
         }
         
         function populateDeckSlidesWithProfileImage(deck) {
-            if (!deck?.slides) return;
-            const profileSrc = getProfileImageForDeck(deck);
-            if (!profileSrc) return;
-            const slides = deck.slides;
-            for (let i = 0; i < slides.length; i++) {
-                const slide = slides[i];
-                if (slide.type === 'toc' || slide.type === 'closing') continue;
-                if (slide.chartImage) continue; // chart slides have their own image
-                const hasImage = (slide.elements || []).some(el => el.type === 'image');
-                if (hasImage) continue;
-                const layoutIndex = (i % 8) + 1;
-                const cfg = getImageConfigForLayout(layoutIndex);
-                if (!slide.elements) slide.elements = [];
-                slide.elements.push({
-                    id: 'img_' + Date.now() + '_' + i,
-                    type: 'image',
-                    x: cfg.x,
-                    y: cfg.y,
-                    width: cfg.width,
-                    height: cfg.height,
-                    src: profileSrc,
-                    borderRadius: 8
-                });
-            }
+            return;
         }
         
         // Source footer text for all slides (base line; profile/sample/dates appended below)
@@ -74282,7 +74523,7 @@
                 const isComparisonTitle = titleSlide.isComparison && titleSlide.comparisonProfiles && titleSlide.comparisonProfiles.length >= 1;
                 const compProfiles = (titleSlide.comparisonProfiles || []).slice(0, 6);
                 
-                let profileImage = getDeckTitleSlideProfileImage(slide);
+                let profileImage = slide?.image || titleSlide?.image || null;
                 if (isComparisonTitle && compProfiles.length === 1 && compProfiles[0].image) profileImage = compProfiles[0].image;
                 
                 // Use custom values if saved, otherwise use defaults
@@ -74372,42 +74613,56 @@
                         <!-- Large profile name - EDITABLE with dynamic sizing -->
                         <div contenteditable="true" 
                              id="titleSlideProfileName"
-                             style="position: absolute; left: -1%; top: ${titleTop}; font-size: ${titleFontSize}; font-weight: 700; color: #ffffff; line-height: 1; letter-spacing: -0.03em; text-transform: uppercase; cursor: text; padding: 4px 8px; border-radius: 4px; max-width: 95%; word-wrap: break-word;"
-                             onfocus="this.style.background='rgba(255,255,255,0.1)'" 
+                             style="position: absolute; left: -1%; top: ${titleTop}; font-size: ${titleFontSize}; font-weight: 700; color: #1a1a2e; line-height: 1; letter-spacing: -0.03em; text-transform: uppercase; cursor: text; padding: 4px 8px; border-radius: 4px; max-width: 95%; word-wrap: break-word;"
+                             onfocus="this.style.background='rgba(0,0,0,0.05)'" 
                              onblur="this.style.background='transparent'; updateTitleSlideProfileName(this.textContent); renderSlideEditor();">
                             ${escapeHtml(profileName)}.
                         </div>
                         
-                        ${comparisonImagesHtml ? comparisonImagesHtml : `
+                        ${comparisonImagesHtml ? comparisonImagesHtml : (profileImage ? `
                         <!-- Profile image - CLICKABLE TO CHANGE with dynamic positioning -->
-                        <div style="position: absolute; left: 5%; top: ${imageTop}; width: ${imageSize}; height: ${imageSize}; border: 3px solid rgba(255,255,255,0.2); border-radius: 8px; overflow: hidden; box-shadow: 0 8px 24px rgba(0,0,0,0.4); cursor: pointer; transition: border-color 0.2s;"
+                        <div style="position: absolute; left: 5%; top: ${imageTop}; width: ${imageSize}; height: ${imageSize}; border: 3px solid rgba(200,200,200,0.3); border-radius: 8px; overflow: hidden; box-shadow: 0 8px 24px rgba(0,0,0,0.15); cursor: pointer; transition: border-color 0.2s;"
                              onclick="uploadTitleImage()"
-                             onmouseover="this.style.borderColor='var(--accent-lime)'"
-                             onmouseout="this.style.borderColor='rgba(255,255,255,0.2)'"
+                             onmouseover="this.style.borderColor='#c8e600'"
+                             onmouseout="this.style.borderColor='rgba(200,200,200,0.3)'"
                              title="Click to change image">
                             ${profileImageHtml}
-                        </div>`}
+                        </div>` : `
+                        <!-- Add Image placeholder - DRAGGABLE + RESIZABLE -->
+                        <div class="slide-draggable-section slide-image-placeholder" style="position: absolute; left: 5%; top: 40%; width: 28%; height: 45%;"
+                             onmousedown="startDragSlideSection(event, 0, 'image')"
+                             onclick="if(!event.defaultPrevented) uploadTitleImage()"
+                             title="Click to add image">
+                            <div class="drag-handle">⋮⋮ DRAG IMAGE</div>
+                            <div class="img-resize-handle nw" onmousedown="startResizePlaceholder(event,'nw')"></div>
+                            <div class="img-resize-handle ne" onmousedown="startResizePlaceholder(event,'ne')"></div>
+                            <div class="img-resize-handle sw" onmousedown="startResizePlaceholder(event,'sw')"></div>
+                            <div class="img-resize-handle se" onmousedown="startResizePlaceholder(event,'se')"></div>
+                            <span class="placeholder-icon">🖼️</span>
+                            <span>Add Image</span>
+                            <button class="placeholder-delete-btn" onclick="event.stopPropagation(); this.parentElement.style.display='none';" title="No image on this slide">✕ No Image</button>
+                        </div>`)}
                         
                         <!-- Right side info - EDITABLE (date removed from top right per request) -->
-                        <div style="position: absolute; right: 5%; top: 45%; text-align: right; font-size: 0.7rem; color: rgba(255,255,255,0.7);">
+                        <div style="position: absolute; right: 5%; top: 45%; text-align: right; font-size: 0.7rem; color: #6366f1;">
                             <div contenteditable="true" 
                                  style="margin-top: 0.5rem; cursor: text; padding: 2px 4px; border-radius: 3px;"
-                                 onfocus="this.style.background='rgba(255,255,255,0.1)'" 
+                                 onfocus="this.style.background='rgba(0,0,0,0.05)'" 
                                  onblur="this.style.background='transparent'; updateTitleSlideBranding(this.textContent)">${escapeHtml(branding)}</div>
                             <div contenteditable="true" 
-                                 style="margin-top: 0.75rem; font-size: 0.8rem; color: rgba(255,255,255,0.9); font-weight: 500; cursor: text; padding: 2px 4px; border-radius: 3px;"
-                                 onfocus="this.style.background='rgba(255,255,255,0.1)'" 
+                                 style="margin-top: 0.75rem; font-size: 0.8rem; color: #1a1a2e; font-weight: 600; cursor: text; padding: 2px 4px; border-radius: 3px;"
+                                 onfocus="this.style.background='rgba(0,0,0,0.05)'" 
                                  onblur="this.style.background='transparent'; updateTitleSlidePresenterName(this.textContent)">${escapeHtml(presenterName)}</div>
                             <div contenteditable="true" 
-                                 style="margin-top: 0.15rem; font-size: 0.7rem; color: rgba(255,255,255,0.6); cursor: text; padding: 2px 4px; border-radius: 3px;"
-                                 onfocus="this.style.background='rgba(255,255,255,0.1)'" 
+                                 style="margin-top: 0.15rem; font-size: 0.7rem; color: #555; cursor: text; padding: 2px 4px; border-radius: 3px;"
+                                 onfocus="this.style.background='rgba(0,0,0,0.05)'" 
                                  onblur="this.style.background='transparent'; updateTitleSlidePresenterCompany(this.textContent)">${escapeHtml(presenterCompany)}</div>
                         </div>
                         
                         <!-- Bottom description - Date Range - EDITABLE -->
                         <div contenteditable="true" 
-                             style="position: absolute; left: 5%; bottom: 15%; width: 60%; font-size: 0.85rem; color: rgba(255,255,255,0.8); line-height: 1.6; font-weight: 500; cursor: text; padding: 4px 8px; border-radius: 4px;"
-                             onfocus="this.style.background='rgba(255,255,255,0.1)'" 
+                             style="position: absolute; left: 5%; bottom: 15%; width: 60%; font-size: 0.85rem; color: #444; line-height: 1.6; font-weight: 500; cursor: text; padding: 4px 8px; border-radius: 4px;"
+                             onfocus="this.style.background='rgba(0,0,0,0.05)'" 
                              onblur="this.style.background='transparent'; updateTitleSlideDateRange(this.textContent)">
                             ${escapeHtml(dateRangeDisplay)}
                         </div>
@@ -74424,7 +74679,7 @@
             
             // For Table of Contents slide
             if (slide.type === 'toc') {
-                const profileImage = getDeckTitleSlideProfileImage(currentEditingDeck?.titleSlide || {});
+                const profileImage = currentEditingDeck?.titleSlide?.image || null;
                 
                 // Get list of slide titles for TOC (exclude TOC and closing slides)
                 const slides = currentEditingDeck?.slides || [];
@@ -74442,65 +74697,60 @@
                 
                 return `
                     <!-- Header bar (no date in top right per request) -->
-                    <div style="position: absolute; left: 5%; top: 2%; width: 90%; display: flex; justify-content: space-between; align-items: center; font-size: 0.65rem; color: rgba(255,255,255,0.5);">
+                    <div style="position: absolute; left: 5%; top: 2%; width: 90%; display: flex; justify-content: space-between; align-items: center; font-size: 0.65rem; color: rgba(0,0,0,0.4);">
                         <span>Crosswalk Profile IQ</span>
                     </div>
                     
                     <!-- Section title - EDITABLE -->
                     <div contenteditable="true" 
-                         style="position: absolute; left: 5%; top: 8%; font-size: 2.2rem; font-weight: 700; color: #ffffff; text-transform: uppercase; cursor: text; padding: 4px 8px; border-radius: 4px;"
-                         onfocus="this.style.background='rgba(255,255,255,0.1)'" 
+                         style="position: absolute; left: 5%; top: 8%; font-size: 2.2rem; font-weight: 700; color: #1a1a2e; text-transform: uppercase; cursor: text; padding: 4px 8px; border-radius: 4px;"
+                         onfocus="this.style.background='rgba(0,0,0,0.05)'" 
                          onblur="this.style.background='transparent'; updateTocTitle(this.textContent)">
                         ${escapeHtml(slide.customTitle || slide.title || 'TABLE OF CONTENTS')}
                     </div>
                     
                     <!-- Description - EDITABLE -->
                     <div contenteditable="true" 
-                         style="position: absolute; left: 5%; top: 22%; width: 40%; font-size: 0.75rem; color: rgba(255,255,255,0.6); line-height: 1.6; cursor: text; padding: 4px 8px; border-radius: 4px;"
-                         onfocus="this.style.background='rgba(255,255,255,0.1)'" 
+                         style="position: absolute; left: 5%; top: 22%; width: 42%; font-size: 0.75rem; color: #555; line-height: 1.6; cursor: text; padding: 4px 8px; border-radius: 4px;"
+                         onfocus="this.style.background='rgba(0,0,0,0.05)'" 
                          onblur="this.style.background='transparent'; updateTocDescription(this.textContent)">
                         ${escapeHtml(slide.customDescription || `This presentation provides comprehensive audience insights including demographics, behavioral patterns, and strategic recommendations for ${currentProfileData?.name || 'your target audience'}.`)}
                     </div>
                     
                     <!-- TOC Items - Column 1 -->
-                    <div style="position: absolute; left: 52%; top: 22%; width: 20%;">
+                    <div style="position: absolute; left: 52%; top: 22%; width: 22%;">
                         ${col1.map((item) => `
-                            <div style="padding: 0.4rem 0; border-bottom: 1px solid rgba(255,255,255,0.1); font-size: 0.75rem; color: #ffffff; font-weight: 500; display: flex; gap: 0.5rem; align-items: baseline;">
-                                <span style="color: var(--accent-lime); font-size: 0.7rem; flex-shrink: 0;">${item.num}</span>
+                            <div style="padding: 0.4rem 0; border-bottom: 1px solid rgba(0,0,0,0.1); font-size: 0.75rem; color: #1a1a2e; font-weight: 500; display: flex; gap: 0.5rem; align-items: baseline;">
+                                <span style="color: #c8e600; font-size: 0.7rem; flex-shrink: 0;">${item.num}</span>
                                 <span style="flex: 1; line-height: 1.3;">${escapeHtml(item.title)}</span>
                             </div>
                         `).join('')}
                     </div>
                     
                     <!-- TOC Items - Column 2 -->
-                    <div style="position: absolute; left: 75%; top: 22%; width: 20%;">
+                    <div style="position: absolute; left: 76%; top: 22%; width: 22%;">
                         ${col2.map((item) => `
-                            <div style="padding: 0.4rem 0; border-bottom: 1px solid rgba(255,255,255,0.1); font-size: 0.75rem; color: #ffffff; font-weight: 500; display: flex; gap: 0.5rem; align-items: baseline;">
-                                <span style="color: var(--accent-lime); font-size: 0.7rem; flex-shrink: 0;">${item.num}</span>
+                            <div style="padding: 0.4rem 0; border-bottom: 1px solid rgba(0,0,0,0.1); font-size: 0.75rem; color: #1a1a2e; font-weight: 500; display: flex; gap: 0.5rem; align-items: baseline;">
+                                <span style="color: #c8e600; font-size: 0.7rem; flex-shrink: 0;">${item.num}</span>
                                 <span style="flex: 1; line-height: 1.3;">${escapeHtml(item.title)}</span>
                             </div>
                         `).join('')}
                     </div>
-                    
-                    <!-- Left image - Profile image -->
-                    ${profileImage ? `
-                        <div style="position: absolute; left: 0; top: 55%; width: 45%; height: 45%; overflow: hidden;">
-                            <img src="${profileImage}" style="width: 100%; height: 100%; object-fit: cover; object-position: center top; border-radius: 0 8px 0 0;">
-                        </div>
-                    ` : `
-                        <div class="slide-image-placeholder" style="position: absolute; left: 0; top: 55%; width: 45%; height: 45%; border-radius: 0 8px 0 0;" onclick="uploadTocLeftImage()" title="Profile image placeholder">
-                            <span class="placeholder-icon">👤</span>
-                            <span>Profile Image</span>
-                        </div>
-                    `}
-                    
-                    <!-- Right image placeholder -->
-                    <div class="slide-image-placeholder" 
-                         style="position: absolute; right: 0; bottom: 0; width: 45%; height: 45%; border-radius: 8px 0 0 0;"
-                         onclick="uploadTocRightImage()"
-                         title="Click to upload image">
+
+                    <!-- Add Image placeholder - DRAGGABLE + RESIZABLE -->
+                    <div class="slide-draggable-section slide-image-placeholder"
+                         style="position: absolute; left: 5%; top: 55%; width: 40%; height: 38%; z-index: 1;"
+                         onmousedown="startDragSlideSection(event, 0, 'image')"
+                         onclick="if(!event.defaultPrevented) uploadTocRightImage()"
+                         title="Click to add image">
+                        <div class="drag-handle">⋮⋮ DRAG IMAGE</div>
+                        <div class="img-resize-handle nw" onmousedown="startResizePlaceholder(event,'nw')"></div>
+                        <div class="img-resize-handle ne" onmousedown="startResizePlaceholder(event,'ne')"></div>
+                        <div class="img-resize-handle sw" onmousedown="startResizePlaceholder(event,'sw')"></div>
+                        <div class="img-resize-handle se" onmousedown="startResizePlaceholder(event,'se')"></div>
                         <span class="placeholder-icon">🖼️</span>
-                        <span>Click to add image</span>
+                        <span>Add Image</span>
+                        <button class="placeholder-delete-btn" onclick="event.stopPropagation(); this.parentElement.style.display='none';" title="No image on this slide">✕ No Image</button>
                     </div>
                     
                     ${footerHtml}
@@ -74733,8 +74983,8 @@
                         
                         return `
                         <!-- Header bar -->
-                        <div style="position: absolute; left: 5%; top: 2%; width: 90%; display: flex; justify-content: space-between; align-items: center; font-size: 0.65rem; color: rgba(255,255,255,0.5); z-index: 3;">
-                            <span contenteditable="true" style="cursor: text; padding: 2px 4px; border-radius: 3px; font-family: 'Poppins', sans-serif;" onfocus="this.style.background='rgba(255,255,255,0.1)'" onblur="this.style.background='transparent'; updateSlideHeaderText(${idx}, 'profileName', this.textContent)">${escapeHtml(headerProfileName)}</span>
+                        <div style="position: absolute; left: 5%; top: 2%; width: 90%; display: flex; justify-content: space-between; align-items: center; font-size: 0.65rem; color: rgba(0,0,0,0.4); z-index: 3;">
+                            <span contenteditable="true" style="cursor: text; padding: 2px 4px; border-radius: 3px; font-family: 'Poppins', sans-serif;" onfocus="this.style.background='rgba(0,0,0,0.05)'" onblur="this.style.background='transparent'; updateSlideHeaderText(${idx}, 'profileName', this.textContent)">${escapeHtml(headerProfileName)}</span>
                             <span>${dateStr}</span>
                         </div>
                         
@@ -74745,8 +74995,12 @@
                              onmousedown="startDragSlideSection(event, ${idx}, 'image')"
                              onclick="if(!event.defaultPrevented) uploadSlideImage(${idx})"
                              title="Click to upload image or paste URL">
-                            <button class="placeholder-delete-btn" onclick="hideSlideImagePlaceholder(${idx}, event)" title="Remove placeholder">✕</button>
+                            <button class="placeholder-delete-btn" onclick="hideSlideImagePlaceholder(${idx}, event)" title="No image on this slide">✕ No Image</button>
                             <div class="drag-handle">⋮⋮ DRAG IMAGE</div>
+                            <div class="img-resize-handle nw" onmousedown="startResizePlaceholder(event,'nw')"></div>
+                            <div class="img-resize-handle ne" onmousedown="startResizePlaceholder(event,'ne')"></div>
+                            <div class="img-resize-handle sw" onmousedown="startResizePlaceholder(event,'sw')"></div>
+                            <div class="img-resize-handle se" onmousedown="startResizePlaceholder(event,'se')"></div>
                             <span class="placeholder-icon">🖼️</span>
                             <span>Click to add image</span>
                             <span style="font-size: 0.65rem; margin-top: 0.25rem;">or paste URL</span>
@@ -74758,7 +75012,7 @@
                              style="position: absolute; left: ${titlePos.left}; top: ${titlePos.top}; width: 48%; z-index: 5;"
                              onmousedown="startDragSlideSection(event, ${idx}, 'title')">
                             <div class="drag-handle">⋮⋮ DRAG TITLE</div>
-                            <div contenteditable="true" style="font-size: ${titleFontSize}; font-weight: 700; color: #ffffff; text-transform: uppercase; letter-spacing: -0.01em; cursor: text; padding: 4px 8px; border-radius: 4px; line-height: 1.1; word-wrap: break-word; overflow-wrap: break-word;" onfocus="this.style.background='rgba(255,255,255,0.1)'" onblur="this.style.background='transparent'; updateSlideTitle(${idx}, this.textContent.replace(/<br>/g, ' ')); renderSlideEditor();">
+                            <div contenteditable="true" style="font-size: ${titleFontSize}; font-weight: 700; color: #1a1a2e; text-transform: uppercase; letter-spacing: -0.01em; cursor: text; padding: 4px 8px; border-radius: 4px; line-height: 1.1; word-wrap: break-word; overflow-wrap: break-word;" onfocus="this.style.background='rgba(0,0,0,0.05)'" onblur="this.style.background='transparent'; updateSlideTitle(${idx}, this.textContent.replace(/<br>/g, ' ')); renderSlideEditor();">
                                 ${formatTitleWithBreaks(title)}
                             </div>
                         </div>
@@ -74768,7 +75022,7 @@
                              style="position: absolute; left: ${descPos.left}; top: ${descPos.top}; width: 48%; z-index: 4;"
                              onmousedown="startDragSlideSection(event, ${idx}, 'description')">
                             <div class="drag-handle">⋮⋮ DRAG TEXT</div>
-                            <div contenteditable="true" style="font-size: 0.7rem; color: rgba(255,255,255,0.6); line-height: 1.5; cursor: text; padding: 4px 8px; border-radius: 3px; font-family: 'Poppins', sans-serif;" onfocus="this.style.background='rgba(255,255,255,0.1)'" onblur="this.style.background='transparent'; updateSlideDescription(${idx}, this.textContent)">
+                            <div contenteditable="true" style="font-size: 0.7rem; color: #555; line-height: 1.5; cursor: text; padding: 4px 8px; border-radius: 3px; font-family: 'Poppins', sans-serif;" onfocus="this.style.background='rgba(0,0,0,0.05)'" onblur="this.style.background='transparent'; updateSlideDescription(${idx}, this.textContent)">
                                 ${escapeHtml(description)}
                             </div>
                         </div>
@@ -74798,8 +75052,8 @@
                         
                         return `
                         <!-- Header bar -->
-                        <div style="position: absolute; left: 5%; top: 2%; width: 90%; display: flex; justify-content: space-between; align-items: center; font-size: 0.65rem; color: rgba(255,255,255,0.5);">
-                            <span contenteditable="true" style="cursor: text; padding: 2px 4px; border-radius: 3px; font-family: 'Poppins', sans-serif;" onfocus="this.style.background='rgba(255,255,255,0.1)'" onblur="this.style.background='transparent'; updateSlideHeaderText(${idx}, 'profileName', this.textContent)">${escapeHtml(headerProfileName)}</span>
+                        <div style="position: absolute; left: 5%; top: 2%; width: 90%; display: flex; justify-content: space-between; align-items: center; font-size: 0.65rem; color: rgba(0,0,0,0.4);">
+                            <span contenteditable="true" style="cursor: text; padding: 2px 4px; border-radius: 3px; font-family: 'Poppins', sans-serif;" onfocus="this.style.background='rgba(0,0,0,0.05)'" onblur="this.style.background='transparent'; updateSlideHeaderText(${idx}, 'profileName', this.textContent)">${escapeHtml(headerProfileName)}</span>
                             <span>${dateStr}</span>
                         </div>
                         
@@ -74808,7 +75062,7 @@
                              style="position: absolute; left: ${titlePos.left}; top: ${titlePos.top}; width: 40%; z-index: 5;"
                              onmousedown="startDragSlideSection(event, ${idx}, 'title')">
                             <div class="drag-handle">⋮⋮ DRAG TITLE</div>
-                            <div contenteditable="true" style="font-size: 2.2rem; font-weight: 700; color: #ffffff; text-transform: uppercase; letter-spacing: -0.01em; cursor: text; padding: 4px 8px; border-radius: 4px; line-height: 1.1; word-wrap: break-word; overflow-wrap: break-word;" onfocus="this.style.background='rgba(255,255,255,0.1)'" onblur="this.style.background='transparent'; updateSlideTitle(${idx}, this.textContent.replace(/<br>/g, ' '))">
+                            <div contenteditable="true" style="font-size: 2.2rem; font-weight: 700; color: #1a1a2e; text-transform: uppercase; letter-spacing: -0.01em; cursor: text; padding: 4px 8px; border-radius: 4px; line-height: 1.1; word-wrap: break-word; overflow-wrap: break-word;" onfocus="this.style.background='rgba(0,0,0,0.05)'" onblur="this.style.background='transparent'; updateSlideTitle(${idx}, this.textContent.replace(/<br>/g, ' '))">
                                 ${formatTitleWithBreaks(title)}
                             </div>
                         </div>
@@ -74818,7 +75072,7 @@
                              style="position: absolute; left: ${descPos.left}; top: ${descPos.top}; width: 40%; z-index: 4;"
                              onmousedown="startDragSlideSection(event, ${idx}, 'description')">
                             <div class="drag-handle">⋮⋮ DRAG TEXT</div>
-                            <div contenteditable="true" style="font-size: 0.75rem; color: rgba(255,255,255,0.6); line-height: 1.6; cursor: text; padding: 4px 8px; border-radius: 3px; font-family: 'Poppins', sans-serif;" onfocus="this.style.background='rgba(255,255,255,0.1)'" onblur="this.style.background='transparent'; updateSlideDescription(${idx}, this.textContent)">
+                            <div contenteditable="true" style="font-size: 0.75rem; color: rgba(255,255,255,0.6); line-height: 1.6; cursor: text; padding: 4px 8px; border-radius: 3px; font-family: 'Poppins', sans-serif;" onfocus="this.style.background='rgba(0,0,0,0.05)'" onblur="this.style.background='transparent'; updateSlideDescription(${idx}, this.textContent)">
                                 ${escapeHtml(description)}
                             </div>
                         </div>
@@ -74840,8 +75094,12 @@
                              onmousedown="startDragSlideSection(event, ${idx}, 'image')"
                              onclick="if(!event.defaultPrevented) uploadSlideImage(${idx})"
                              title="Click to upload image or paste URL">
-                            <button class="placeholder-delete-btn" onclick="hideSlideImagePlaceholder(${idx}, event)" title="Remove placeholder">✕</button>
+                            <button class="placeholder-delete-btn" onclick="hideSlideImagePlaceholder(${idx}, event)" title="No image on this slide">✕ No Image</button>
                             <div class="drag-handle">⋮⋮ DRAG IMAGE</div>
+                            <div class="img-resize-handle nw" onmousedown="startResizePlaceholder(event,'nw')"></div>
+                            <div class="img-resize-handle ne" onmousedown="startResizePlaceholder(event,'ne')"></div>
+                            <div class="img-resize-handle sw" onmousedown="startResizePlaceholder(event,'sw')"></div>
+                            <div class="img-resize-handle se" onmousedown="startResizePlaceholder(event,'se')"></div>
                             <span class="placeholder-icon">🖼️</span>
                             <span>Click to add image</span>
                             <span style="font-size: 0.65rem; margin-top: 0.25rem;">or paste URL</span>
@@ -74863,8 +75121,8 @@
                         
                         return `
                         <!-- Header bar -->
-                        <div style="position: absolute; left: 5%; top: 2%; width: 90%; display: flex; justify-content: space-between; align-items: center; font-size: 0.65rem; color: rgba(255,255,255,0.5);">
-                            <span contenteditable="true" style="cursor: text; padding: 2px 4px; border-radius: 3px; font-family: 'Poppins', sans-serif;" onfocus="this.style.background='rgba(255,255,255,0.1)'" onblur="this.style.background='transparent'; updateSlideHeaderText(${idx}, 'profileName', this.textContent)">${escapeHtml(headerProfileName)}</span>
+                        <div style="position: absolute; left: 5%; top: 2%; width: 90%; display: flex; justify-content: space-between; align-items: center; font-size: 0.65rem; color: rgba(0,0,0,0.4);">
+                            <span contenteditable="true" style="cursor: text; padding: 2px 4px; border-radius: 3px; font-family: 'Poppins', sans-serif;" onfocus="this.style.background='rgba(0,0,0,0.05)'" onblur="this.style.background='transparent'; updateSlideHeaderText(${idx}, 'profileName', this.textContent)">${escapeHtml(headerProfileName)}</span>
                             <span>${dateStr}</span>
                         </div>
                         
@@ -74875,8 +75133,12 @@
                              onmousedown="startDragSlideSection(event, ${idx}, 'image')"
                              onclick="if(!event.defaultPrevented) uploadSlideImage(${idx})"
                              title="Click to upload image or paste URL">
-                            <button class="placeholder-delete-btn" onclick="hideSlideImagePlaceholder(${idx}, event)" title="Remove placeholder">✕</button>
+                            <button class="placeholder-delete-btn" onclick="hideSlideImagePlaceholder(${idx}, event)" title="No image on this slide">✕ No Image</button>
                             <div class="drag-handle">⋮⋮ DRAG IMAGE</div>
+                            <div class="img-resize-handle nw" onmousedown="startResizePlaceholder(event,'nw')"></div>
+                            <div class="img-resize-handle ne" onmousedown="startResizePlaceholder(event,'ne')"></div>
+                            <div class="img-resize-handle sw" onmousedown="startResizePlaceholder(event,'sw')"></div>
+                            <div class="img-resize-handle se" onmousedown="startResizePlaceholder(event,'se')"></div>
                             <span class="placeholder-icon">🖼️</span>
                             <span>Click to add image</span>
                             <span style="font-size: 0.65rem; margin-top: 0.25rem;">or paste URL</span>
@@ -74888,7 +75150,7 @@
                              style="position: absolute; left: ${titlePos.left}; top: ${titlePos.top}; width: 33%; z-index: 5;"
                              onmousedown="startDragSlideSection(event, ${idx}, 'title')">
                             <div class="drag-handle">⋮⋮ DRAG TITLE</div>
-                            <div contenteditable="true" style="font-size: 2rem; font-weight: 700; color: #ffffff; text-transform: uppercase; letter-spacing: -0.01em; cursor: text; padding: 4px 8px; border-radius: 4px; line-height: 1.1; word-wrap: break-word; overflow-wrap: break-word;" onfocus="this.style.background='rgba(255,255,255,0.1)'" onblur="this.style.background='transparent'; updateSlideTitle(${idx}, this.textContent.replace(/<br>/g, ' '))">
+                            <div contenteditable="true" style="font-size: 2rem; font-weight: 700; color: #1a1a2e; text-transform: uppercase; letter-spacing: -0.01em; cursor: text; padding: 4px 8px; border-radius: 4px; line-height: 1.1; word-wrap: break-word; overflow-wrap: break-word;" onfocus="this.style.background='rgba(0,0,0,0.05)'" onblur="this.style.background='transparent'; updateSlideTitle(${idx}, this.textContent.replace(/<br>/g, ' '))">
                                 ${formatTitleWithBreaks(title)}
                             </div>
                         </div>
@@ -74898,7 +75160,7 @@
                              style="position: absolute; left: ${descPos.left}; top: ${descPos.top}; width: 33%; z-index: 4;"
                              onmousedown="startDragSlideSection(event, ${idx}, 'description')">
                             <div class="drag-handle">⋮⋮ DRAG TEXT</div>
-                            <div contenteditable="true" style="font-size: 0.7rem; color: rgba(255,255,255,0.6); line-height: 1.5; cursor: text; padding: 4px 8px; border-radius: 3px; font-family: 'Poppins', sans-serif;" onfocus="this.style.background='rgba(255,255,255,0.1)'" onblur="this.style.background='transparent'; updateSlideDescription(${idx}, this.textContent)">
+                            <div contenteditable="true" style="font-size: 0.7rem; color: #555; line-height: 1.5; cursor: text; padding: 4px 8px; border-radius: 3px; font-family: 'Poppins', sans-serif;" onfocus="this.style.background='rgba(0,0,0,0.05)'" onblur="this.style.background='transparent'; updateSlideDescription(${idx}, this.textContent)">
                                 ${escapeHtml(description)}
                             </div>
                         </div>
@@ -74928,8 +75190,8 @@
                         
                         return `
                         <!-- Header bar -->
-                        <div style="position: absolute; left: 5%; top: 2%; width: 90%; display: flex; justify-content: space-between; align-items: center; font-size: 0.65rem; color: rgba(255,255,255,0.5);">
-                            <span contenteditable="true" style="cursor: text; padding: 2px 4px; border-radius: 3px; font-family: 'Poppins', sans-serif;" onfocus="this.style.background='rgba(255,255,255,0.1)'" onblur="this.style.background='transparent'; updateSlideHeaderText(${idx}, 'profileName', this.textContent)">${escapeHtml(headerProfileName)}</span>
+                        <div style="position: absolute; left: 5%; top: 2%; width: 90%; display: flex; justify-content: space-between; align-items: center; font-size: 0.65rem; color: rgba(0,0,0,0.4);">
+                            <span contenteditable="true" style="cursor: text; padding: 2px 4px; border-radius: 3px; font-family: 'Poppins', sans-serif;" onfocus="this.style.background='rgba(0,0,0,0.05)'" onblur="this.style.background='transparent'; updateSlideHeaderText(${idx}, 'profileName', this.textContent)">${escapeHtml(headerProfileName)}</span>
                             <span>${dateStr}</span>
                         </div>
                         
@@ -74940,8 +75202,12 @@
                              onmousedown="startDragSlideSection(event, ${idx}, 'image')"
                              onclick="if(!event.defaultPrevented) uploadSlideImage(${idx})"
                              title="Click to upload image or paste URL">
-                            <button class="placeholder-delete-btn" onclick="hideSlideImagePlaceholder(${idx}, event)" title="Remove placeholder">✕</button>
+                            <button class="placeholder-delete-btn" onclick="hideSlideImagePlaceholder(${idx}, event)" title="No image on this slide">✕ No Image</button>
                             <div class="drag-handle">⋮⋮ DRAG IMAGE</div>
+                            <div class="img-resize-handle nw" onmousedown="startResizePlaceholder(event,'nw')"></div>
+                            <div class="img-resize-handle ne" onmousedown="startResizePlaceholder(event,'ne')"></div>
+                            <div class="img-resize-handle sw" onmousedown="startResizePlaceholder(event,'sw')"></div>
+                            <div class="img-resize-handle se" onmousedown="startResizePlaceholder(event,'se')"></div>
                             <span class="placeholder-icon">🖼️</span>
                             <span>Click to add image</span>
                             <span style="font-size: 0.65rem; margin-top: 0.25rem;">or paste URL</span>
@@ -74953,7 +75219,7 @@
                              style="position: absolute; left: ${titlePos.left}; top: ${titlePos.top}; width: 26%; z-index: 5;"
                              onmousedown="startDragSlideSection(event, ${idx}, 'title')">
                             <div class="drag-handle">⋮⋮ DRAG TITLE</div>
-                            <div contenteditable="true" style="font-size: 1.8rem; font-weight: 700; color: #ffffff; text-transform: uppercase; letter-spacing: -0.01em; cursor: text; padding: 4px 8px; border-radius: 4px; line-height: 1.1; word-wrap: break-word; overflow-wrap: break-word;" onfocus="this.style.background='rgba(255,255,255,0.1)'" onblur="this.style.background='transparent'; updateSlideTitle(${idx}, this.textContent.replace(/<br>/g, ' '))">
+                            <div contenteditable="true" style="font-size: 1.8rem; font-weight: 700; color: #1a1a2e; text-transform: uppercase; letter-spacing: -0.01em; cursor: text; padding: 4px 8px; border-radius: 4px; line-height: 1.1; word-wrap: break-word; overflow-wrap: break-word;" onfocus="this.style.background='rgba(0,0,0,0.05)'" onblur="this.style.background='transparent'; updateSlideTitle(${idx}, this.textContent.replace(/<br>/g, ' '))">
                                 ${formatTitleWithBreaks(title)}
                             </div>
                         </div>
@@ -74963,7 +75229,7 @@
                              style="position: absolute; left: ${descPos.left}; top: ${descPos.top}; width: 26%; z-index: 4;"
                              onmousedown="startDragSlideSection(event, ${idx}, 'description')">
                             <div class="drag-handle">⋮⋮ DRAG TEXT</div>
-                            <div contenteditable="true" style="font-size: 0.65rem; color: rgba(255,255,255,0.6); line-height: 1.4; cursor: text; padding: 4px 8px; border-radius: 3px; font-family: 'Poppins', sans-serif;" onfocus="this.style.background='rgba(255,255,255,0.1)'" onblur="this.style.background='transparent'; updateSlideDescription(${idx}, this.textContent)">
+                            <div contenteditable="true" style="font-size: 0.65rem; color: rgba(255,255,255,0.6); line-height: 1.4; cursor: text; padding: 4px 8px; border-radius: 3px; font-family: 'Poppins', sans-serif;" onfocus="this.style.background='rgba(0,0,0,0.05)'" onblur="this.style.background='transparent'; updateSlideDescription(${idx}, this.textContent)">
                                 ${escapeHtml(description)}
                             </div>
                         </div>
@@ -74993,20 +75259,24 @@
                         
                         return `
                         <!-- Header bar -->
-                        <div style="position: absolute; left: 5%; top: 2%; width: 90%; display: flex; justify-content: space-between; align-items: center; font-size: 0.65rem; color: rgba(255,255,255,0.5);">
-                            <span contenteditable="true" style="cursor: text; padding: 2px 4px; border-radius: 3px; font-family: 'Poppins', sans-serif;" onfocus="this.style.background='rgba(255,255,255,0.1)'" onblur="this.style.background='transparent'; updateSlideHeaderText(${idx}, 'profileName', this.textContent)">${escapeHtml(headerProfileName)}</span>
+                        <div style="position: absolute; left: 5%; top: 2%; width: 90%; display: flex; justify-content: space-between; align-items: center; font-size: 0.65rem; color: rgba(0,0,0,0.4);">
+                            <span contenteditable="true" style="cursor: text; padding: 2px 4px; border-radius: 3px; font-family: 'Poppins', sans-serif;" onfocus="this.style.background='rgba(0,0,0,0.05)'" onblur="this.style.background='transparent'; updateSlideHeaderText(${idx}, 'profileName', this.textContent)">${escapeHtml(headerProfileName)}</span>
                             <span>${dateStr}</span>
                         </div>
                         
                         ${!hasImage ? `
-                        <!-- Small image placeholder - DRAGGABLE -->
+                        <!-- Small image placeholder - DRAGGABLE + RESIZABLE -->
                         <div class="slide-draggable-section slide-image-placeholder" 
                              style="position: absolute; left: ${imagePos.left}; top: ${imagePos.top}; width: 25%; height: 25%; z-index: 1;"
                              onmousedown="startDragSlideSection(event, ${idx}, 'image')"
                              onclick="if(!event.defaultPrevented) uploadSlideImage(${idx})"
                              title="Click to upload image or paste URL">
-                            <button class="placeholder-delete-btn" onclick="hideSlideImagePlaceholder(${idx}, event)" title="Remove placeholder">✕</button>
+                            <button class="placeholder-delete-btn" onclick="hideSlideImagePlaceholder(${idx}, event)" title="No image on this slide">✕ No Image</button>
                             <div class="drag-handle">⋮⋮ DRAG IMAGE</div>
+                            <div class="img-resize-handle nw" onmousedown="startResizePlaceholder(event,'nw')"></div>
+                            <div class="img-resize-handle ne" onmousedown="startResizePlaceholder(event,'ne')"></div>
+                            <div class="img-resize-handle sw" onmousedown="startResizePlaceholder(event,'sw')"></div>
+                            <div class="img-resize-handle se" onmousedown="startResizePlaceholder(event,'se')"></div>
                             <span class="placeholder-icon">🖼️</span>
                             <span>Add image</span>
                         </div>
@@ -75017,7 +75287,7 @@
                              style="position: absolute; left: ${titlePos.left}; top: ${titlePos.top}; width: 60%; z-index: 5;"
                              onmousedown="startDragSlideSection(event, ${idx}, 'title')">
                             <div class="drag-handle">⋮⋮ DRAG TITLE</div>
-                            <div contenteditable="true" style="font-size: 2.5rem; font-weight: 700; color: #ffffff; text-transform: uppercase; letter-spacing: -0.02em; cursor: text; padding: 4px 8px; border-radius: 4px; line-height: 1.1; word-wrap: break-word; overflow-wrap: break-word;" onfocus="this.style.background='rgba(255,255,255,0.1)'" onblur="this.style.background='transparent'; updateSlideTitle(${idx}, this.textContent.replace(/<br>/g, ' '))">
+                            <div contenteditable="true" style="font-size: 2.5rem; font-weight: 700; color: #ffffff; text-transform: uppercase; letter-spacing: -0.02em; cursor: text; padding: 4px 8px; border-radius: 4px; line-height: 1.1; word-wrap: break-word; overflow-wrap: break-word;" onfocus="this.style.background='rgba(0,0,0,0.05)'" onblur="this.style.background='transparent'; updateSlideTitle(${idx}, this.textContent.replace(/<br>/g, ' '))">
                                 ${formatTitleWithBreaks(title)}
                             </div>
                         </div>
@@ -75027,7 +75297,7 @@
                              style="position: absolute; left: ${descPos.left}; top: ${descPos.top}; width: 60%; z-index: 4;"
                              onmousedown="startDragSlideSection(event, ${idx}, 'description')">
                             <div class="drag-handle">⋮⋮ DRAG TEXT</div>
-                            <div contenteditable="true" style="font-size: 0.7rem; color: rgba(255,255,255,0.6); line-height: 1.5; cursor: text; padding: 4px 8px; border-radius: 3px; font-family: 'Poppins', sans-serif;" onfocus="this.style.background='rgba(255,255,255,0.1)'" onblur="this.style.background='transparent'; updateSlideDescription(${idx}, this.textContent)">
+                            <div contenteditable="true" style="font-size: 0.7rem; color: #555; line-height: 1.5; cursor: text; padding: 4px 8px; border-radius: 3px; font-family: 'Poppins', sans-serif;" onfocus="this.style.background='rgba(0,0,0,0.05)'" onblur="this.style.background='transparent'; updateSlideDescription(${idx}, this.textContent)">
                                 ${escapeHtml(description)}
                             </div>
                         </div>
@@ -75057,20 +75327,24 @@
                         
                         return `
                         <!-- Header bar -->
-                        <div style="position: absolute; left: 5%; top: 2%; width: 90%; display: flex; justify-content: space-between; align-items: center; font-size: 0.65rem; color: rgba(255,255,255,0.5);">
-                            <span contenteditable="true" style="cursor: text; padding: 2px 4px; border-radius: 3px; font-family: 'Poppins', sans-serif;" onfocus="this.style.background='rgba(255,255,255,0.1)'" onblur="this.style.background='transparent'; updateSlideHeaderText(${idx}, 'profileName', this.textContent)">${escapeHtml(headerProfileName)}</span>
+                        <div style="position: absolute; left: 5%; top: 2%; width: 90%; display: flex; justify-content: space-between; align-items: center; font-size: 0.65rem; color: rgba(0,0,0,0.4);">
+                            <span contenteditable="true" style="cursor: text; padding: 2px 4px; border-radius: 3px; font-family: 'Poppins', sans-serif;" onfocus="this.style.background='rgba(0,0,0,0.05)'" onblur="this.style.background='transparent'; updateSlideHeaderText(${idx}, 'profileName', this.textContent)">${escapeHtml(headerProfileName)}</span>
                             <span>${dateStr}</span>
                         </div>
                         
                         ${!hasImage ? `
-                        <!-- Left image placeholder - DRAGGABLE -->
+                        <!-- Left image placeholder - DRAGGABLE + RESIZABLE -->
                         <div class="slide-draggable-section slide-image-placeholder" 
                              style="position: absolute; left: ${imagePos.left}; top: ${imagePos.top}; width: 22%; height: 70%; z-index: 1;"
                              onmousedown="startDragSlideSection(event, ${idx}, 'image')"
                              onclick="if(!event.defaultPrevented) uploadSlideImage(${idx})"
                              title="Click to upload image or paste URL">
-                            <button class="placeholder-delete-btn" onclick="hideSlideImagePlaceholder(${idx}, event)" title="Remove placeholder">✕</button>
+                            <button class="placeholder-delete-btn" onclick="hideSlideImagePlaceholder(${idx}, event)" title="No image on this slide">✕ No Image</button>
                             <div class="drag-handle">⋮⋮ DRAG IMAGE</div>
+                            <div class="img-resize-handle nw" onmousedown="startResizePlaceholder(event,'nw')"></div>
+                            <div class="img-resize-handle ne" onmousedown="startResizePlaceholder(event,'ne')"></div>
+                            <div class="img-resize-handle sw" onmousedown="startResizePlaceholder(event,'sw')"></div>
+                            <div class="img-resize-handle se" onmousedown="startResizePlaceholder(event,'se')"></div>
                             <span class="placeholder-icon">🖼️</span>
                             <span>Add image</span>
                         </div>
@@ -75081,7 +75355,7 @@
                              style="position: absolute; left: ${titlePos.left}; top: ${titlePos.top}; width: 40%; z-index: 5;"
                              onmousedown="startDragSlideSection(event, ${idx}, 'title')">
                             <div class="drag-handle">⋮⋮ DRAG TITLE</div>
-                            <div contenteditable="true" style="font-size: 2rem; font-weight: 700; color: #ffffff; text-transform: uppercase; letter-spacing: -0.01em; cursor: text; padding: 4px 8px; border-radius: 4px; line-height: 1.2; text-align: center; word-wrap: break-word; overflow-wrap: break-word;" onfocus="this.style.background='rgba(255,255,255,0.1)'" onblur="this.style.background='transparent'; updateSlideTitle(${idx}, this.textContent.replace(/<br>/g, ' '))">
+                            <div contenteditable="true" style="font-size: 2rem; font-weight: 700; color: #1a1a2e; text-transform: uppercase; letter-spacing: -0.01em; cursor: text; padding: 4px 8px; border-radius: 4px; line-height: 1.2; text-align: center; word-wrap: break-word; overflow-wrap: break-word;" onfocus="this.style.background='rgba(0,0,0,0.05)'" onblur="this.style.background='transparent'; updateSlideTitle(${idx}, this.textContent.replace(/<br>/g, ' '))">
                                 ${formatTitleWithBreaks(title)}
                             </div>
                         </div>
@@ -75091,7 +75365,7 @@
                              style="position: absolute; left: ${descPos.left}; top: ${descPos.top}; width: 40%; z-index: 4;"
                              onmousedown="startDragSlideSection(event, ${idx}, 'description')">
                             <div class="drag-handle">⋮⋮ DRAG TEXT</div>
-                            <div contenteditable="true" style="font-size: 0.65rem; color: rgba(255,255,255,0.6); line-height: 1.4; cursor: text; padding: 4px 8px; border-radius: 3px; font-family: 'Poppins', sans-serif; text-align: center;" onfocus="this.style.background='rgba(255,255,255,0.1)'" onblur="this.style.background='transparent'; updateSlideDescription(${idx}, this.textContent)">
+                            <div contenteditable="true" style="font-size: 0.65rem; color: rgba(255,255,255,0.6); line-height: 1.4; cursor: text; padding: 4px 8px; border-radius: 3px; font-family: 'Poppins', sans-serif; text-align: center;" onfocus="this.style.background='rgba(0,0,0,0.05)'" onblur="this.style.background='transparent'; updateSlideDescription(${idx}, this.textContent)">
                                 ${escapeHtml(description)}
                             </div>
                         </div>
@@ -75121,8 +75395,8 @@
                         
                         return `
                         <!-- Header bar -->
-                        <div style="position: absolute; left: 5%; top: 2%; width: 90%; display: flex; justify-content: space-between; align-items: center; font-size: 0.65rem; color: rgba(255,255,255,0.5);">
-                            <span contenteditable="true" style="cursor: text; padding: 2px 4px; border-radius: 3px; font-family: 'Poppins', sans-serif;" onfocus="this.style.background='rgba(255,255,255,0.1)'" onblur="this.style.background='transparent'; updateSlideHeaderText(${idx}, 'profileName', this.textContent)">${escapeHtml(headerProfileName)}</span>
+                        <div style="position: absolute; left: 5%; top: 2%; width: 90%; display: flex; justify-content: space-between; align-items: center; font-size: 0.65rem; color: rgba(0,0,0,0.4);">
+                            <span contenteditable="true" style="cursor: text; padding: 2px 4px; border-radius: 3px; font-family: 'Poppins', sans-serif;" onfocus="this.style.background='rgba(0,0,0,0.05)'" onblur="this.style.background='transparent'; updateSlideHeaderText(${idx}, 'profileName', this.textContent)">${escapeHtml(headerProfileName)}</span>
                             <span>${dateStr}</span>
                         </div>
                         
@@ -75131,20 +75405,24 @@
                              style="position: absolute; left: ${titlePos.left}; top: ${titlePos.top}; width: 45%; z-index: 5;"
                              onmousedown="startDragSlideSection(event, ${idx}, 'title')">
                             <div class="drag-handle">⋮⋮ DRAG TITLE</div>
-                            <div contenteditable="true" style="font-size: 2.2rem; font-weight: 700; color: #ffffff; text-transform: uppercase; letter-spacing: -0.02em; cursor: text; padding: 4px 8px; border-radius: 4px; line-height: 1.1; word-wrap: break-word; overflow-wrap: break-word;" onfocus="this.style.background='rgba(255,255,255,0.1)'" onblur="this.style.background='transparent'; updateSlideTitle(${idx}, this.textContent.replace(/<br>/g, ' '))">
+                            <div contenteditable="true" style="font-size: 2.2rem; font-weight: 700; color: #ffffff; text-transform: uppercase; letter-spacing: -0.02em; cursor: text; padding: 4px 8px; border-radius: 4px; line-height: 1.1; word-wrap: break-word; overflow-wrap: break-word;" onfocus="this.style.background='rgba(0,0,0,0.05)'" onblur="this.style.background='transparent'; updateSlideTitle(${idx}, this.textContent.replace(/<br>/g, ' '))">
                                 ${formatTitleWithBreaks(title)}
                             </div>
                         </div>
                         
                         ${!hasImage ? `
-                        <!-- Image placeholder - DRAGGABLE -->
+                        <!-- Image placeholder - DRAGGABLE + RESIZABLE -->
                         <div class="slide-draggable-section slide-image-placeholder" 
                              style="position: absolute; left: ${imagePos.left}; top: ${imagePos.top}; width: 42%; height: 35%; z-index: 1;"
                              onmousedown="startDragSlideSection(event, ${idx}, 'image')"
                              onclick="if(!event.defaultPrevented) uploadSlideImage(${idx})"
                              title="Click to upload image or paste URL">
-                            <button class="placeholder-delete-btn" onclick="hideSlideImagePlaceholder(${idx}, event)" title="Remove placeholder">✕</button>
+                            <button class="placeholder-delete-btn" onclick="hideSlideImagePlaceholder(${idx}, event)" title="No image on this slide">✕ No Image</button>
                             <div class="drag-handle">⋮⋮ DRAG IMAGE</div>
+                            <div class="img-resize-handle nw" onmousedown="startResizePlaceholder(event,'nw')"></div>
+                            <div class="img-resize-handle ne" onmousedown="startResizePlaceholder(event,'ne')"></div>
+                            <div class="img-resize-handle sw" onmousedown="startResizePlaceholder(event,'sw')"></div>
+                            <div class="img-resize-handle se" onmousedown="startResizePlaceholder(event,'se')"></div>
                             <span class="placeholder-icon">🖼️</span>
                             <span>Click to add image</span>
                         </div>
@@ -75155,7 +75433,7 @@
                              style="position: absolute; left: ${descPos.left}; top: ${descPos.top}; width: 45%; z-index: 4;"
                              onmousedown="startDragSlideSection(event, ${idx}, 'description')">
                             <div class="drag-handle">⋮⋮ DRAG TEXT</div>
-                            <div contenteditable="true" style="font-size: 0.7rem; color: rgba(255,255,255,0.6); line-height: 1.5; cursor: text; padding: 4px 8px; border-radius: 3px; font-family: 'Poppins', sans-serif;" onfocus="this.style.background='rgba(255,255,255,0.1)'" onblur="this.style.background='transparent'; updateSlideDescription(${idx}, this.textContent)">
+                            <div contenteditable="true" style="font-size: 0.7rem; color: #555; line-height: 1.5; cursor: text; padding: 4px 8px; border-radius: 3px; font-family: 'Poppins', sans-serif;" onfocus="this.style.background='rgba(0,0,0,0.05)'" onblur="this.style.background='transparent'; updateSlideDescription(${idx}, this.textContent)">
                                 ${escapeHtml(description)}
                             </div>
                         </div>
@@ -75185,19 +75463,24 @@
                         
                         return `
                         <!-- Header bar -->
-                        <div style="position: absolute; left: 5%; top: 2%; width: 90%; display: flex; justify-content: space-between; align-items: center; font-size: 0.65rem; color: rgba(255,255,255,0.5);">
-                            <span contenteditable="true" style="cursor: text; padding: 2px 4px; border-radius: 3px; font-family: 'Poppins', sans-serif;" onfocus="this.style.background='rgba(255,255,255,0.1)'" onblur="this.style.background='transparent'; updateSlideHeaderText(${idx}, 'profileName', this.textContent)">${escapeHtml(headerProfileName)}</span>
+                        <div style="position: absolute; left: 5%; top: 2%; width: 90%; display: flex; justify-content: space-between; align-items: center; font-size: 0.65rem; color: rgba(0,0,0,0.4);">
+                            <span contenteditable="true" style="cursor: text; padding: 2px 4px; border-radius: 3px; font-family: 'Poppins', sans-serif;" onfocus="this.style.background='rgba(0,0,0,0.05)'" onblur="this.style.background='transparent'; updateSlideHeaderText(${idx}, 'profileName', this.textContent)">${escapeHtml(headerProfileName)}</span>
                             <span>${dateStr}</span>
                         </div>
                         
                         ${!hasImage ? `
-                        <!-- Large image placeholder - DRAGGABLE -->
+                        <!-- Large image placeholder - DRAGGABLE + RESIZABLE -->
                         <div class="slide-draggable-section slide-image-placeholder" 
                              style="position: absolute; left: ${imagePos.left}; top: ${imagePos.top}; width: 55%; height: 79%; z-index: 1;"
                              onmousedown="startDragSlideSection(event, ${idx}, 'image')"
                              onclick="if(!event.defaultPrevented) uploadSlideImage(${idx})"
                              title="Click to upload image or paste URL">
+                            <button class="placeholder-delete-btn" onclick="hideSlideImagePlaceholder(${idx}, event)" title="No image on this slide">✕ No Image</button>
                             <div class="drag-handle">⋮⋮ DRAG IMAGE</div>
+                            <div class="img-resize-handle nw" onmousedown="startResizePlaceholder(event,'nw')"></div>
+                            <div class="img-resize-handle ne" onmousedown="startResizePlaceholder(event,'ne')"></div>
+                            <div class="img-resize-handle sw" onmousedown="startResizePlaceholder(event,'sw')"></div>
+                            <div class="img-resize-handle se" onmousedown="startResizePlaceholder(event,'se')"></div>
                             <span class="placeholder-icon">🖼️</span>
                             <span>Click to add image</span>
                             <span style="font-size: 0.65rem; margin-top: 0.25rem;">or paste URL</span>
@@ -75209,7 +75492,7 @@
                              style="position: absolute; left: ${titlePos.left}; top: ${titlePos.top}; width: 48%; z-index: 5;"
                              onmousedown="startDragSlideSection(event, ${idx}, 'title')">
                             <div class="drag-handle">⋮⋮ DRAG TITLE</div>
-                            <div contenteditable="true" style="font-size: 2rem; font-weight: 700; color: #ffffff; text-transform: uppercase; letter-spacing: -0.01em; cursor: text; padding: 8px 12px; border-radius: 4px; line-height: 1.1; background: linear-gradient(90deg, transparent, rgba(0,0,0,0.7)); word-wrap: break-word; overflow-wrap: break-word;" onfocus="this.style.background='linear-gradient(90deg, transparent, rgba(0,0,0,0.8))'" onblur="this.style.background='linear-gradient(90deg, transparent, rgba(0,0,0,0.7))'; updateSlideTitle(${idx}, this.textContent.replace(/<br>/g, ' '))">
+                            <div contenteditable="true" style="font-size: 2rem; font-weight: 700; color: #1a1a2e; text-transform: uppercase; letter-spacing: -0.01em; cursor: text; padding: 8px 12px; border-radius: 4px; line-height: 1.1; background: linear-gradient(90deg, transparent, rgba(0,0,0,0.7)); word-wrap: break-word; overflow-wrap: break-word;" onfocus="this.style.background='linear-gradient(90deg, transparent, rgba(0,0,0,0.8))'" onblur="this.style.background='linear-gradient(90deg, transparent, rgba(0,0,0,0.7))'; updateSlideTitle(${idx}, this.textContent.replace(/<br>/g, ' '))">
                                 ${formatTitleWithBreaks(title)}
                             </div>
                         </div>
@@ -75219,7 +75502,7 @@
                              style="position: absolute; left: ${descPos.left}; top: ${descPos.top}; width: 32%; z-index: 4;"
                              onmousedown="startDragSlideSection(event, ${idx}, 'description')">
                             <div class="drag-handle">⋮⋮ DRAG TEXT</div>
-                            <div contenteditable="true" style="font-size: 0.65rem; color: rgba(255,255,255,0.6); line-height: 1.4; cursor: text; padding: 4px 8px; border-radius: 3px; font-family: 'Poppins', sans-serif;" onfocus="this.style.background='rgba(255,255,255,0.1)'" onblur="this.style.background='transparent'; updateSlideDescription(${idx}, this.textContent)">
+                            <div contenteditable="true" style="font-size: 0.65rem; color: rgba(255,255,255,0.6); line-height: 1.4; cursor: text; padding: 4px 8px; border-radius: 3px; font-family: 'Poppins', sans-serif;" onfocus="this.style.background='rgba(0,0,0,0.05)'" onblur="this.style.background='transparent'; updateSlideDescription(${idx}, this.textContent)">
                                 ${escapeHtml(description)}
                             </div>
                         </div>
@@ -75254,7 +75537,7 @@
                 const dateStr = today.toLocaleDateString('en-US', { timeZone: 'America/Los_Angeles', day: '2-digit', month: 'short', year: 'numeric' }) + ' PST';
                 return `
                     <!-- Header bar -->
-                    <div style="position: absolute; left: 5%; top: 2%; width: 90%; display: flex; justify-content: space-between; align-items: center; font-size: 0.65rem; color: rgba(255,255,255,0.5);">
+                    <div style="position: absolute; left: 5%; top: 2%; width: 90%; display: flex; justify-content: space-between; align-items: center; font-size: 0.65rem; color: rgba(0,0,0,0.4);">
                         <span>Crosswalk Profile IQ</span>
                         <span>${dateStr}</span>
                     </div>
@@ -76821,9 +77104,9 @@
                             const o = overrides[key] || {};
                             const label = o.label !== undefined ? o.label : key;
                             const value = o.value !== undefined ? o.value : parseFloat(val).toFixed(1) + '%';
-                            const bg = o.bgColor || '#1e1e1e';
-                            const valueColor = o.valueColor || 'var(--accent-lime)';
-                            const labelColor = o.labelColor || 'var(--text-secondary)';
+                            const bg = o.bgColor || '#f0f0f5';
+                            const valueColor = o.valueColor || '#6366f1';
+                            const labelColor = o.labelColor || '#444';
                             const boxStyle = o.width || o.height ? `min-width: ${o.width || 'auto'}; min-height: ${o.height || 'auto'};` : '';
                             return `
                             <div class="editable-demo-box" data-key="${escapeHtml(key)}" data-orig-val="${parseFloat(val).toFixed(1)}" data-label="${escapeHtml(label)}" data-value="${escapeHtml(String(value))}"
