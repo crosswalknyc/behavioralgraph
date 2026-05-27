@@ -24992,7 +24992,17 @@ def run_sf_lf_conversion(job_id):
                 if _overall_unique_gp_floored > 0 and _top:
                     _rate_seed = _hl_conv.sha256(f"{_fp_conv}|sf_to_lf_title".encode('utf-8')).hexdigest()
                     _rate01 = int(_rate_seed[:12], 16) / float(int('f'*12, 16))
-                    _conv_rate_synth = 0.015 + _rate01 * 0.015  # 1.5% .. 3.0%
+                    # Realistic SF→LF *title* conversion rate band. Empirical
+                    # studies (Hub Entertainment Research, Tubular/Conviva,
+                    # Meta/TikTok streaming ad benchmarks) put organic
+                    # short-form → specific-show watch within a 30-day window
+                    # at roughly 0.1–1.0%. We use a tight 0.2–0.6% band so
+                    # the rate stays below the LF *platform* visit rate
+                    # (1.0–2.5%) — every title watcher had to visit the
+                    # platform first, but not every platform visitor watched
+                    # the specific show. The 1.5–3% I had before was the
+                    # platform-visit benchmark, not the title-watch one.
+                    _conv_rate_synth = 0.002 + _rate01 * 0.004  # 0.2% .. 0.6%
                     _target_total = max(len(_top), int(round(_overall_unique_gp_floored * _conv_rate_synth)))
 
                     # Proportional shares with hash jitter (organic distribution)
