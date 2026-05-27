@@ -28519,6 +28519,8 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
                 _sys3.path.insert(0, _migration_dir3)
             from post_generation_enforcers import (
                 depin_round_brand_bps as _depin_round_bp,
+                dejitter_x5x0_displays as _dejitter_x5x0,
+                dejitter_cross_cat_4dp_pins as _dejitter_xcat4dp,
             )
             _subj_for_depin = (
                 locals().get('project_name')
@@ -28529,8 +28531,31 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
             df_final, _n_depin = _depin_round_bp(
                 df_final, _subj_for_depin, verbose=True,
             )
+            try:
+                df_final, _n_x5x0 = _dejitter_x5x0(df_final, _subj_for_depin, verbose=True)
+            except Exception as _e:
+                print(f"   ⚠️ X.X5/X.X0 dejitter skipped: {_e}")
+            try:
+                df_final, _n_xcat4 = _dejitter_xcat4dp(df_final, _subj_for_depin, verbose=True)
+            except Exception as _e:
+                print(f"   ⚠️ cross-cat 4dp dejitter skipped: {_e}")
         except Exception as _e:
             print(f"   ⚠️ round-BP depinning skipped: {_e}")
+
+    # D-Proj (2026-05-27): canonicalize Raw + Gen Pop Projection from BP
+    # right before disk write. Sweep found ALL 230 profiles had stale
+    # Raw/Proj cells. Every BP edit gets reconciled here. Idempotent.
+    try:
+        from post_generation_enforcers import recompute_raw_and_projection as _recompute_rawproj_pre
+        _subj_for_recompute = (
+            locals().get('project_name')
+            or locals().get('_subject_name')
+            or (brands[0] if brands else '')
+            or ''
+        )
+        df_final, _n_rp = _recompute_rawproj_pre(df_final, _subj_for_recompute, verbose=True)
+    except Exception as _e:
+        print(f"   ⚠️ pre-save Raw/Proj recompute skipped: {_e}")
 
     # Save to CSV
     try:
