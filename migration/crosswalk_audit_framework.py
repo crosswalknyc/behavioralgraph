@@ -1072,6 +1072,193 @@ def _persona_context_block(persona_doc, audience_composition, subject):
     return "\n\n".join(bits)
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+#  OpenAI prompt-cache helpers
+# ─────────────────────────────────────────────────────────────────────────────
+# GPT-4o has automatic prompt caching: prefixes >=1024 tokens that are
+# byte-identical to a recent request hit cache at 50% off input cost. We
+# structure every audit prompt as:
+#
+#     [STATIC CROSS-PROFILE BLOCK]  ← AUDIENCE_NOT_MIRROR_RULE + per-function
+#                                     task / rules / JSON shape. Identical
+#                                     across ALL profiles & ALL batches of
+#                                     this function.
+#     [PER-PROFILE BLOCK]           ← persona context. Identical across
+#                                     every batch in a single profile.
+#     [PER-BATCH BLOCK]             ← rows-under-review. Varies.
+#
+# Auto-cache hit covers layers 1+2 across batches in a profile (~3-4K tokens)
+# and layer 1 alone across profiles (~2K tokens). Cost win: ~50% off the
+# cached portion of input — over 25-50 audit calls per profile, that adds
+# up. Latency win: cached prefix evaluation is much faster than fresh.
+
+def _log_openai_cache(resp, label: str = 'audit') -> None:
+    """Print [gpt-cache] usage line when OpenAI returns a cache hit/write.
+    Quiet (no-op) when the prompt didn't trigger caching."""
+    try:
+        usage = getattr(resp, 'usage', None)
+        if usage is None:
+            return
+        details = getattr(usage, 'prompt_tokens_details', None)
+        cached = 0
+        if details is not None:
+            if hasattr(details, 'cached_tokens'):
+                cached = int(details.cached_tokens or 0)
+            elif isinstance(details, dict):
+                cached = int(details.get('cached_tokens') or 0)
+        if cached <= 0:
+            return
+        pt = int(getattr(usage, 'prompt_tokens', 0) or 0)
+        ct = int(getattr(usage, 'completion_tokens', 0) or 0)
+        print(f"   [gpt-cache] {label}: read={cached:,} of input={pt:,} (output={ct:,})")
+    except Exception:
+        pass
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+#  Static task-block constants — kept module-level so the bytes that prefix
+#  every audit call are LITERALLY identical across batches & profiles.
+#  Touching these strings invalidates the corresponding OpenAI prefix cache.
+# ─────────────────────────────────────────────────────────────────────────────
+
+_AUDIT_FAILS_TASK_BLOCK = (
+    "\nYou are the persona-reasoning agent for a Crosswalk digital audience "
+    "pull. An automated audit has flagged rows where the current BP is outside "
+    "the published-consensus range for that brand. The audit is a quality "
+    "gate, not the source of truth — YOUR persona reasoning is.\n\n"
+    "=== TASK ===\n"
+    "For each row, decide one of:\n"
+    "  KEEP   — the current value is correct FOR THIS PERSONA; justify the "
+    "deviation from published consensus using audience evidence "
+    "(e.g., 'audience skews 22yo so credit card BP genuinely lower than "
+    "20-34% mass-American band').\n"
+    "  CHANGE — the current value is a hallucination or wrong direction; "
+    "emit new_bp (0–100, 2-decimal) grounded in persona methodology "
+    "(digital footprint for THIS audience's age / income / behavior), "
+    "NOT in just snapping to mid-band. New value can be inside OR outside "
+    "the consensus band as long as it's persona-defensible.\n\n"
+    "Hard rules:\n"
+    "  - Row-by-row reasoning. No batch-level formulas, no caps.\n"
+    "  - 'reason' must reference THIS persona's demographics or digital behavior, "
+    "    not generic statements.\n"
+    "  - If genuinely uncertain, return decision=KEEP with reason='insufficient evidence'.\n\n"
+    "Return ONLY valid JSON in this exact shape:\n"
+    '{"decisions":[{"i":1,"decision":"KEEP","reason":"..."},'
+    '{"i":2,"decision":"CHANGE","new_bp":12.34,"reason":"..."}]}'
+    "\nJSON only, no markdown, no code fences.\n"
+)
+
+_FLOOR_NOISE_TASK_BLOCK = (
+    "\nYou are the persona-reasoning agent for a Crosswalk digital audience "
+    "pull. The rows below are sitting at the PANEL-FLOOR (~0.001-0.5% BP), "
+    "which usually means one of three things:\n"
+    "  - the brand DOES belong but real BP for this persona is just very small (KEEP)\n"
+    "  - the brand belongs but the pipeline suppressed it to floor (CHANGE)\n"
+    "  - the brand does not belong to this audience at all (DROP)\n\n"
+    "=== TASK ===\n"
+    "For each row, decide ONE of:\n"
+    "  KEEP   — value is genuinely tiny for THIS persona; justify with audience "
+    "evidence (e.g., 'audience skews 65+ female so Roblox at 0.04% is real').\n"
+    "  CHANGE — brand DOES fit this persona but current BP is a suppression "
+    "artifact; emit realistic new_bp (0.5-100, 2-decimal) grounded in persona "
+    "evidence (age, income, digital footprint), NOT mid-band, NOT formulaic.\n"
+    "  DROP   — brand does NOT fit this persona; the floor value is noise; "
+    "delete this row entirely.\n\n"
+    "Hard rules:\n"
+    "  - Row-by-row reasoning. No batch formulas, no caps.\n"
+    "  - When in doubt, DROP. A floor-noise row that doesn't fit the persona "
+    "is worse than a missing row.\n"
+    "  - 'reason' must reference THIS persona's demographics or digital "
+    "behavior, not generic statements.\n"
+    "  - CHANGE values must be realistic (typically 1-15% for niche-but-real "
+    "brands; never sub-0.5%; never round numbers).\n\n"
+    "Return ONLY valid JSON in this exact shape:\n"
+    '{"decisions":[{"i":1,"decision":"DROP","reason":"..."},'
+    '{"i":2,"decision":"CHANGE","new_bp":3.42,"reason":"..."},'
+    '{"i":3,"decision":"KEEP","reason":"..."}]}'
+    "\nJSON only, no markdown, no code fences.\n"
+)
+
+_CAP_OVERRIDE_TASK_BLOCK = (
+    "\nYou are the persona-reasoning agent for a Crosswalk digital audience "
+    "pull. The pipeline applied gen-pop-anchored CAPS to the rows below — "
+    "each was originally emitted by the agent at a high value, then pulled "
+    "DOWN by a deterministic rule (5x gen_pop cap, athlete cap, etc.). Most "
+    "of the time the cap is correct because the agent over-emitted; "
+    "sometimes the original value was persona-justified and the cap is wrong.\n\n"
+    "=== TASK ===\n"
+    "For each row, decide ONE of:\n"
+    "  KEEP   — the cap is correct; the agent's original value was hallucination "
+    "or mass-American default. Justify with persona evidence "
+    "(e.g., 'audience is queer urban millennial; country-pop singer at 39% "
+    "was over-emitted, capped 16% reflects the real low affinity').\n"
+    "  REVERT — the agent's original value WAS persona-justified; the cap is "
+    "blunt and wrong for THIS audience. Restore the original. Justify with "
+    "persona evidence (e.g., 'audience is hardcore Knicks die-hards, "
+    "so Jalen Brunson at 78% IS persona-correct even at 8x gen_pop').\n\n"
+    "Hard rules:\n"
+    "  - Row-by-row reasoning grounded in THIS persona's demographics + "
+    "digital footprint. No generic 'might be correct' statements.\n"
+    "  - When in doubt, KEEP the cap. Caps are conservative; agent "
+    "over-emission of mass-American brands is far more common than "
+    "genuine persona-driven 5x+ saturation.\n"
+    "  - REVERT only when the persona TRULY justifies the high value: "
+    "die-hard fans, niche subculture saturation, identity-defining "
+    "brand for the audience, etc.\n\n"
+    "Return ONLY valid JSON in this exact shape:\n"
+    '{"decisions":[{"i":1,"decision":"KEEP","reason":"..."},'
+    '{"i":2,"decision":"REVERT","reason":"..."}]}'
+    "\nJSON only, no markdown, no code fences.\n"
+)
+
+_MPB_FLOOR_TASK_BLOCK = (
+    "\nYou are the persona-reasoning agent for a Crosswalk digital audience "
+    "pull. The MOST PURCHASED BRANDS category is under-populated relative to "
+    "its hostmap candidate pool. Below is a batch of candidate brands the "
+    "upstream agent did not include. Decide which make sense for THIS "
+    "persona's online-purchasing habits and assign a persona-grounded Brand "
+    "Penetration to each.\n\n"
+    "=== TASK ===\n"
+    "For each candidate, emit ADD (with persona-grounded BP) or SKIP "
+    "(with reason).\n\n"
+    "MPB SCORING RULES (per brand):\n"
+    "  - MPB = % of THIS persona who BUY this brand ONLINE.\n"
+    "  - CPG / beverages / grocery → cap LOW (typically 0.5-5%).\n"
+    "    These are bought in-store, not online. Coca-Cola, Pepsi,\n"
+    "    Gatorade, Tropicana, etc must NEVER lead this column.\n"
+    "  - Apparel / footwear / accessories / beauty / electronics /\n"
+    "    books / household → can sit HIGHER (5-25%) — Amazon-/DTC-\n"
+    "    shippable.\n"
+    "  - Mass-market shipped staples (paper goods, detergent,\n"
+    "    toothpaste, deodorant) → 5-15% for subscribe-and-save\n"
+    "    households.\n"
+    "  - High BPs (25-60%) are RARE and reserved for brands the\n"
+    "    persona's demographics buy heavily online (e.g., athleisure\n"
+    "    for young urban audiences, beauty for women 25-44, pet food\n"
+    "    DTC for dog/cat parents, gear for outdoor enthusiasts).\n"
+    "  - Use the hostmap section bracket as a STARTING hint, but\n"
+    "    reason from the persona. A 55+ retiree audience under-\n"
+    "    engages with DTC fashion even if the brand is tagged\n"
+    "    Apparel/Footwear.\n"
+    "  - SKIP brands the persona genuinely wouldn't buy online\n"
+    "    (foreign-only, niche regional, wrong demographic, archaic,\n"
+    "    or duplicative of an existing entry).\n\n"
+    "Constraints on every ADD:\n"
+    "  - BP >= 0.5% (no floor noise).\n"
+    "  - BP <= 60% (no brand dominates MPB).\n"
+    "  - 4-decimal jitter (e.g., 7.4193%, not 7%).\n"
+    "  - Use the EXACT brand spelling from the candidate list above\n"
+    "    (uppercase). Do NOT invent new brands not on this list.\n"
+    "  - 'reason' must cite THIS persona, not a generic justification.\n\n"
+    "Return ONLY valid JSON in this exact shape:\n"
+    '{"decisions": [\n'
+    '  {"brand": "NIKE", "decision": "ADD", "bp": 14.8231, "reason": "..."},\n'
+    '  {"brand": "TEMU", "decision": "SKIP", "reason": "..."}\n'
+    ']}\n'
+    "JSON only — no markdown fences, no commentary.\n"
+)
+
+
 def agent_reason_audit_fails(df,
                               report: AuditReport,
                               openai_client,
@@ -1154,35 +1341,16 @@ def agent_reason_audit_fails(df,
                 f"audit_status={f.status} | classification={f.issue_type}"
             )
 
+        # Cache-friendly prompt order: static rules+task first, then per-profile
+        # persona context, then per-batch flagged rows. The prefix up through
+        # PERSONA CONTEXT is byte-identical across all batches in this profile,
+        # so OpenAI auto-cache picks it up on every batch after the first.
         prompt = (
-            AUDIENCE_NOT_MIRROR_RULE +
-            "\nYou are the persona-reasoning agent for a Crosswalk digital audience pull. "
-            "An automated audit has flagged the rows below because their current BP is "
-            "outside the published-consensus range for that brand. The audit is a quality "
-            "gate, not the source of truth — YOUR persona reasoning is.\n\n"
-            f"=== PERSONA CONTEXT ===\n{persona_context}\n\n"
-            f"=== FLAGGED ROWS (batch {batch_idx}/{n_batches}) ===\n"
+            AUDIENCE_NOT_MIRROR_RULE
+            + _AUDIT_FAILS_TASK_BLOCK
+            + f"\n=== PERSONA CONTEXT ===\n{persona_context}\n"
+            + f"\n=== FLAGGED ROWS (batch {batch_idx}/{n_batches}) ===\n"
             + "\n".join(items_lines)
-            + "\n\n=== TASK ===\n"
-            "For each row, decide one of:\n"
-            "  KEEP   — the current value is correct FOR THIS PERSONA; justify the "
-            "deviation from published consensus using audience evidence "
-            "(e.g., 'audience skews 22yo so credit card BP genuinely lower than "
-            "20-34% mass-American band').\n"
-            "  CHANGE — the current value is a hallucination or wrong direction; "
-            "emit new_bp (0–100, 2-decimal) grounded in persona methodology "
-            "(digital footprint for THIS audience's age / income / behavior), "
-            "NOT in just snapping to mid-band. New value can be inside OR outside "
-            "the consensus band as long as it's persona-defensible.\n\n"
-            "Hard rules:\n"
-            "  - Row-by-row reasoning. No batch-level formulas, no caps.\n"
-            "  - 'reason' must reference THIS persona's demographics or digital behavior, "
-            "    not generic statements.\n"
-            "  - If genuinely uncertain, return decision=KEEP with reason='insufficient evidence'.\n\n"
-            "Return ONLY valid JSON in this exact shape:\n"
-            '{"decisions":[{"i":1,"decision":"KEEP","reason":"..."},'
-            '{"i":2,"decision":"CHANGE","new_bp":12.34,"reason":"..."}]}'
-            "\nJSON only, no markdown, no code fences."
         )
 
         try:
@@ -1193,6 +1361,7 @@ def agent_reason_audit_fails(df,
                 max_tokens=max_tokens,
                 timeout=120,
             )
+            _log_openai_cache(resp, label=f'audit-fails b{batch_idx}/{n_batches}')
             raw = resp.choices[0].message.content.strip()
             raw = re.sub(r'^```(?:json)?\s*|\s*```$', '', raw).strip()
             parsed = json.loads(raw)
@@ -1435,39 +1604,13 @@ def agent_reason_floor_noise(df,
                 f"{i}. CATEGORY={cat} | VALUE={val} | current_bp={cur_str}"
             )
 
+        # Cache-friendly prompt order — see agent_reason_audit_fails for rationale.
         prompt = (
-            AUDIENCE_NOT_MIRROR_RULE +
-            "\nYou are the persona-reasoning agent for a Crosswalk digital audience pull. "
-            "The rows below are sitting at the PANEL-FLOOR (~0.001-0.5% BP), which usually "
-            "means one of three things:\n"
-            "  - the brand DOES belong but real BP for this persona is just very small (KEEP)\n"
-            "  - the brand belongs but the pipeline suppressed it to floor (CHANGE)\n"
-            "  - the brand does not belong to this audience at all (DROP)\n\n"
-            f"=== PERSONA CONTEXT ===\n{persona_context}\n\n"
-            f"=== FLOOR-NOISE ROWS (batch {batch_no}/{n_batches}) ===\n"
+            AUDIENCE_NOT_MIRROR_RULE
+            + _FLOOR_NOISE_TASK_BLOCK
+            + f"\n=== PERSONA CONTEXT ===\n{persona_context}\n"
+            + f"\n=== FLOOR-NOISE ROWS (batch {batch_no}/{n_batches}) ===\n"
             + "\n".join(items_lines)
-            + "\n\n=== TASK ===\n"
-            "For each row, decide ONE of:\n"
-            "  KEEP   — value is genuinely tiny for THIS persona; justify with audience "
-            "evidence (e.g., 'audience skews 65+ female so Roblox at 0.04% is real').\n"
-            "  CHANGE — brand DOES fit this persona but current BP is a suppression "
-            "artifact; emit realistic new_bp (0.5-100, 2-decimal) grounded in persona "
-            "evidence (age, income, digital footprint), NOT mid-band, NOT formulaic.\n"
-            "  DROP   — brand does NOT fit this persona; the floor value is noise; "
-            "delete this row entirely.\n\n"
-            "Hard rules:\n"
-            "  - Row-by-row reasoning. No batch formulas, no caps.\n"
-            "  - When in doubt, DROP. A floor-noise row that doesn't fit the persona "
-            "is worse than a missing row.\n"
-            "  - 'reason' must reference THIS persona's demographics or digital "
-            "behavior, not generic statements.\n"
-            "  - CHANGE values must be realistic (typically 1-15% for niche-but-real "
-            "brands; never sub-0.5%; never round numbers).\n\n"
-            "Return ONLY valid JSON in this exact shape:\n"
-            '{"decisions":[{"i":1,"decision":"DROP","reason":"..."},'
-            '{"i":2,"decision":"CHANGE","new_bp":3.42,"reason":"..."},'
-            '{"i":3,"decision":"KEEP","reason":"..."}]}'
-            "\nJSON only, no markdown, no code fences."
         )
 
         try:
@@ -1478,6 +1621,7 @@ def agent_reason_floor_noise(df,
                 max_tokens=max_tokens,
                 timeout=120,
             )
+            _log_openai_cache(resp, label=f'floor-noise b{batch_no}/{n_batches}')
             raw = resp.choices[0].message.content.strip()
             raw = re.sub(r'^```(?:json)?\s*|\s*```$', '', raw).strip()
             parsed = json.loads(raw)
@@ -1647,40 +1791,13 @@ def agent_reason_cap_overrides(df,
                 f"| post_cap={capd:.2f}% | rationale={cap.get('rationale','')}"
             )
 
+        # Cache-friendly prompt order — see agent_reason_audit_fails for rationale.
         prompt = (
-            AUDIENCE_NOT_MIRROR_RULE +
-            "\nYou are the persona-reasoning agent for a Crosswalk digital audience pull. "
-            "The pipeline applied gen-pop-anchored CAPS to the rows below — each was "
-            "originally emitted by the agent at a high value, then pulled DOWN by a "
-            "deterministic rule (5x gen_pop cap, athlete cap, etc.). Most of the time "
-            "the cap is correct because the agent over-emitted; sometimes the original "
-            "value was persona-justified and the cap is wrong.\n\n"
-            f"=== PERSONA CONTEXT ===\n{persona_context}\n\n"
-            f"=== CAP FIRINGS (batch {batch_no}/{n_batches}) ===\n"
+            AUDIENCE_NOT_MIRROR_RULE
+            + _CAP_OVERRIDE_TASK_BLOCK
+            + f"\n=== PERSONA CONTEXT ===\n{persona_context}\n"
+            + f"\n=== CAP FIRINGS (batch {batch_no}/{n_batches}) ===\n"
             + "\n".join(items_lines)
-            + "\n\n=== TASK ===\n"
-            "For each row, decide ONE of:\n"
-            "  KEEP   — the cap is correct; the agent's original value was hallucination "
-            "or mass-American default. Justify with persona evidence "
-            "(e.g., 'audience is queer urban millennial; country-pop singer at 39% "
-            "was over-emitted, capped 16% reflects the real low affinity').\n"
-            "  REVERT — the agent's original value WAS persona-justified; the cap is "
-            "blunt and wrong for THIS audience. Restore the original. Justify with "
-            "persona evidence (e.g., 'audience is hardcore Knicks die-hards, "
-            "so Jalen Brunson at 78% IS persona-correct even at 8x gen_pop').\n\n"
-            "Hard rules:\n"
-            "  - Row-by-row reasoning grounded in THIS persona's demographics + "
-            "digital footprint. No generic 'might be correct' statements.\n"
-            "  - When in doubt, KEEP the cap. Caps are conservative; agent "
-            "over-emission of mass-American brands is far more common than "
-            "genuine persona-driven 5x+ saturation.\n"
-            "  - REVERT only when the persona TRULY justifies the high value: "
-            "die-hard fans, niche subculture saturation, identity-defining "
-            "brand for the audience, etc.\n\n"
-            "Return ONLY valid JSON in this exact shape:\n"
-            '{"decisions":[{"i":1,"decision":"KEEP","reason":"..."},'
-            '{"i":2,"decision":"REVERT","reason":"..."}]}'
-            "\nJSON only, no markdown, no code fences."
         )
 
         try:
@@ -1691,6 +1808,7 @@ def agent_reason_cap_overrides(df,
                 max_tokens=max_tokens,
                 timeout=120,
             )
+            _log_openai_cache(resp, label=f'cap-override b{batch_no}/{n_batches}')
             raw = resp.choices[0].message.content.strip()
             raw = re.sub(r'^```(?:json)?\s*|\s*```$', '', raw).strip()
             parsed = json.loads(raw)
@@ -1871,6 +1989,39 @@ def agent_reason_empty_categories(df,
         persona_doc, report.audience_composition, report.subject,
     )
 
+    # Build the static prefix ONCE per call. Identical across every per-category
+    # prompt in this call → OpenAI auto-cache hits on every category after the
+    # first. With default args (min=5,max=20,bp=1.0) it's also identical across
+    # profiles, giving cross-profile cache hits too.
+    _empty_cat_static = (
+        AUDIENCE_NOT_MIRROR_RULE
+        + "\nYou are the persona-reasoning agent for a Crosswalk digital "
+        "audience pull. The category below came back with ZERO rows from "
+        "the upstream agent pass — almost certainly a pipeline gap, NOT a "
+        "real 'this audience has zero engagement' signal. Populate it "
+        "with the brands/values THIS persona genuinely engages with.\n\n"
+        "=== TASK ===\n"
+        f"Emit between {min_entries} and {max_entries} entries per "
+        "category, sorted by BP descending. Each BP is the percentage of "
+        "this persona that genuinely engages with that brand/value.\n\n"
+        "Hard rules:\n"
+        f"  - Every BP >= {min_bp:.1f}% (no floor noise; if you can't "
+        "justify it, omit the entry).\n"
+        "  - BP <= 99.99% (never exactly 100 unless the brand IS the "
+        "subject's primary platform).\n"
+        "  - Use 4 decimal places for organic look (e.g., 23.4172%, not 23%).\n"
+        "  - Persona-grounded reasoning: use the audience's demographics, "
+        "income, cultural signals, age. NOT mass-American defaults. NOT "
+        "consensus mid-band snapping.\n"
+        "  - Use canonical brand spellings (e.g., 'CHATGPT' not 'Chat-GPT', "
+        "'T-MOBILE' not 'TMobile', 'AT&T' not 'AT and T').\n"
+        "  - 'reason' per entry should reference THIS persona, not generic statements.\n\n"
+        "Return ONLY valid JSON in this exact shape:\n"
+        '{"category": "<CATEGORY>", "entries": ['
+        '{"value": "BRAND", "bp": 41.8237, "reason": "..."}, ...]}\n'
+        "JSON only, no markdown, no code fences.\n"
+    )
+
     decisions: list[dict] = []
     new_row_records: list[dict] = []
     import random as _r
@@ -1881,37 +2032,14 @@ def agent_reason_empty_categories(df,
         # not consensus-snapping to a hint list).
         kind_hint = _empty_category_kind_hint(cat)
 
+        # Cache-friendly order: static prefix → persona (cached across cats in
+        # this profile) → per-category target.
         prompt = (
-            AUDIENCE_NOT_MIRROR_RULE +
-            "\nYou are the persona-reasoning agent for a Crosswalk digital "
-            "audience pull. The category below came back with ZERO rows from "
-            "the upstream agent pass — almost certainly a pipeline gap, NOT a "
-            "real 'this audience has zero engagement' signal. Populate it "
-            "with the brands/values THIS persona genuinely engages with.\n\n"
-            f"=== PERSONA CONTEXT ===\n{persona_context}\n\n"
-            f"=== EMPTY CATEGORY ===\n"
-            f"  CATEGORY: {cat}\n"
-            f"  KIND: {kind_hint}\n\n"
-            "=== TASK ===\n"
-            f"Emit between {min_entries} and {max_entries} entries for this "
-            "category, sorted by BP descending. Each BP is the percentage of "
-            "this persona that genuinely engages with that brand/value.\n\n"
-            "Hard rules:\n"
-            f"  - Every BP >= {min_bp:.1f}% (no floor noise; if you can't "
-            "justify >= 1%, omit the entry).\n"
-            "  - BP <= 99.99% (never exactly 100 unless the brand IS the "
-            "subject's primary platform).\n"
-            "  - Use 4 decimal places for organic look (e.g., 23.4172%, not 23%).\n"
-            "  - Persona-grounded reasoning: use the audience's demographics, "
-            "income, cultural signals, age. NOT mass-American defaults. NOT "
-            "consensus mid-band snapping.\n"
-            "  - Use canonical brand spellings (e.g., 'CHATGPT' not 'Chat-GPT', "
-            "'T-MOBILE' not 'TMobile', 'AT&T' not 'AT and T').\n"
-            "  - 'reason' per entry should reference THIS persona, not generic statements.\n\n"
-            "Return ONLY valid JSON in this exact shape:\n"
-            '{"category": "' + cat + '", "entries": ['
-            '{"value": "BRAND", "bp": 41.8237, "reason": "..."}, ...]}\n'
-            "JSON only, no markdown, no code fences."
+            _empty_cat_static
+            + f"\n=== PERSONA CONTEXT ===\n{persona_context}\n"
+            + "\n=== EMPTY CATEGORY ===\n"
+            + f"  CATEGORY: {cat}\n"
+            + f"  KIND: {kind_hint}\n"
         )
 
         try:
@@ -1922,6 +2050,7 @@ def agent_reason_empty_categories(df,
                 max_tokens=max_tokens,
                 timeout=120,
             )
+            _log_openai_cache(resp, label=f'empty-cat {cat}')
             raw = resp.choices[0].message.content.strip()
             raw = re.sub(r'^```(?:json)?\s*|\s*```$', '', raw).strip()
             parsed = json.loads(raw)
@@ -2281,56 +2410,15 @@ def agent_reason_mpb_floor(df,
             for c in batch
         )
 
+        # Cache-friendly order: module-level static rules → persona (cached
+        # across batches in this profile) → per-batch ask-for + candidates.
         prompt = (
             AUDIENCE_NOT_MIRROR_RULE
-            + "\nYou are the persona-reasoning agent for a Crosswalk digital\n"
-              "audience pull. The MOST PURCHASED BRANDS category is under-\n"
-              "populated relative to its hostmap candidate pool. Below is a\n"
-              "batch of candidate brands the upstream agent did not include.\n"
-              "Decide which make sense for THIS persona's online-purchasing\n"
-              "habits and assign a persona-grounded Brand Penetration to each.\n\n"
-            f"=== PERSONA CONTEXT ===\n{persona_context}\n\n"
-            f"=== BATCH {batch_idx + 1} / {num_batches} "
-            f"({len(batch)} candidates) ===\n"
-            f"{candidates_block}\n\n"
-            "=== TASK ===\n"
-            f"Target ~{ask_for} ADDs from this batch (more or fewer if the\n"
-            f"persona genuinely justifies it — do not pad).\n\n"
-            "MPB SCORING RULES (per brand):\n"
-            "  - MPB = % of THIS persona who BUY this brand ONLINE.\n"
-            "  - CPG / beverages / grocery → cap LOW (typically 0.5-5%).\n"
-            "    These are bought in-store, not online. Coca-Cola, Pepsi,\n"
-            "    Gatorade, Tropicana, etc must NEVER lead this column.\n"
-            "  - Apparel / footwear / accessories / beauty / electronics /\n"
-            "    books / household → can sit HIGHER (5-25%) — Amazon-/DTC-\n"
-            "    shippable.\n"
-            "  - Mass-market shipped staples (paper goods, detergent,\n"
-            "    toothpaste, deodorant) → 5-15% for subscribe-and-save\n"
-            "    households.\n"
-            "  - High BPs (25-60%) are RARE and reserved for brands the\n"
-            "    persona's demographics buy heavily online (e.g., athleisure\n"
-            "    for young urban audiences, beauty for women 25-44, pet food\n"
-            "    DTC for dog/cat parents, gear for outdoor enthusiasts).\n"
-            "  - Use the hostmap section bracket as a STARTING hint, but\n"
-            "    reason from the persona. A 55+ retiree audience under-\n"
-            "    engages with DTC fashion even if the brand is tagged\n"
-            "    Apparel/Footwear.\n"
-            "  - SKIP brands the persona genuinely wouldn't buy online\n"
-            "    (foreign-only, niche regional, wrong demographic, archaic,\n"
-            "    or duplicative of an existing entry).\n\n"
-            "Constraints on every ADD:\n"
-            "  - BP >= 0.5% (no floor noise).\n"
-            "  - BP <= 60% (no brand dominates MPB).\n"
-            "  - 4-decimal jitter (e.g., 7.4193%, not 7%).\n"
-            "  - Use the EXACT brand spelling from the candidate list above\n"
-            "    (uppercase). Do NOT invent new brands not on this list.\n"
-            "  - 'reason' must cite THIS persona, not a generic justification.\n\n"
-            "Return ONLY valid JSON in this exact shape:\n"
-            '{"decisions": [\n'
-            '  {"brand": "NIKE", "decision": "ADD", "bp": 14.8231, "reason": "..."},\n'
-            '  {"brand": "TEMU", "decision": "SKIP", "reason": "..."}\n'
-            ']}\n'
-            "JSON only — no markdown fences, no commentary."
+            + _MPB_FLOOR_TASK_BLOCK
+            + f"\n=== PERSONA CONTEXT ===\n{persona_context}\n"
+            + f"\n=== BATCH {batch_idx + 1} / {num_batches} "
+            + f"({len(batch)} candidates) — target ~{ask_for} ADDs ===\n"
+            + f"{candidates_block}\n"
         )
 
         try:
@@ -2341,6 +2429,7 @@ def agent_reason_mpb_floor(df,
                 max_tokens=max_tokens,
                 timeout=180,
             )
+            _log_openai_cache(resp, label=f'mpb-floor b{batch_idx + 1}/{num_batches}')
             raw = resp.choices[0].message.content.strip()
             raw = re.sub(r'^```(?:json)?\s*|\s*```$', '', raw).strip()
             parsed = json.loads(raw)
