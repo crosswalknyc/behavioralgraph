@@ -2093,3 +2093,357 @@ def apply_default_lock_breaks(df, report: AuditReport):
             'fingerprint': lock['fingerprint'],
         })
     return df, patches
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+#  MOST PURCHASED BRANDS hostmap floor
+# ─────────────────────────────────────────────────────────────────────────────
+# Operator policy: every profile should carry ~1500 MOST PURCHASED BRANDS rows
+# (median floor; varies in [1450, 1600] so two profiles never land on the exact
+# same row count). The candidate pool is `reference.host_mapping` rows tagged
+# with SECTION LIKE 'Most Purchased Brands%' (~2,131 unique brands as of
+# 2026-05-27). If the upstream agent pass under-fills MPB, this pass hands the
+# missing hostmap candidates back to the persona agent for ADD-with-BP /
+# SKIP-with-reason decisions. The agent picks which brands genuinely fit THIS
+# persona's online-purchasing habits — no blind fill-to-target, no consensus
+# snap, no archetype pinning.
+
+MPB_FLOOR_MIN = 1450
+MPB_FLOOR_MAX = 1600
+MPB_CATEGORY = 'MOST PURCHASED BRANDS'
+
+
+def agent_reason_mpb_floor(df,
+                           mpb_candidates: list,
+                           openai_client,
+                           persona_doc=None,
+                           audience_composition=None,
+                           subject: str = '',
+                           target_min: int = MPB_FLOOR_MIN,
+                           target_max: int = MPB_FLOOR_MAX,
+                           batch_size: int = 100,
+                           model: str = 'gpt-4o',
+                           max_tokens: int = 8000,
+                           verbose: bool = True):
+    """Ensure MOST PURCHASED BRANDS carries ~1500 hostmap-sourced rows.
+
+    Parameters
+    ----------
+    df : DataFrame
+        Profile dataframe (the standard Column / Value / BP / RAW / PROJ shape).
+    mpb_candidates : list of dict
+        Hostmap candidate pool. Each entry: ``{'brand': 'NIKE',
+        'section': 'Apparel/Footwear'}``. Caller fetches from
+        ``reference.host_mapping`` and hands the list in (keeps this module
+        decoupled from ClickHouse).
+    target_min, target_max : int
+        Random target count is drawn from [target_min, target_max]; never
+        exactly the midpoint, so the row-count fingerprint differs per pull.
+    batch_size : int
+        Candidates per LLM batch. 100 keeps a single batch under ~6k response
+        tokens (one ADD/SKIP decision per brand).
+
+    Behaviour
+    ---------
+    * Picks a random target in [target_min, target_max]. Avoids the literal
+      median to break the "1500.000" fingerprint.
+    * If current MPB count is already at/above target → no-op.
+    * Otherwise: identifies hostmap candidates not yet on the profile, shuffles
+      them, batches to the persona agent. Agent returns ADD (with persona-
+      grounded BP) or SKIP (with reason).
+    * Validates each ADD (BP in [0.5, 60], 4-decimal jitter when round,
+      dedupes against existing rows).
+    * Stops adding once the running total hits the target — agent never
+      "blind-fills" past the persona's genuine purchasing universe.
+    * Recomputes Category Share for MPB after injection.
+
+    Returns
+    -------
+    (df, decisions) where each decision is:
+        {batch, brand, decision ('ADD' | 'SKIP'), bp, reason, status,
+         n_added, n_skipped}
+    Batch-level errors also emit an entry with status='ERROR'.
+    """
+    if openai_client is None:
+        if verbose:
+            print("   🛒 mpb-floor: no OpenAI client; skipping")
+        return df, []
+
+    if not mpb_candidates:
+        if verbose:
+            print("   🛒 mpb-floor: no hostmap candidates supplied; skipping")
+        return df, []
+
+    bp_col = 'Brand Penetration (Row)'
+    cs_col = 'Category Share'
+    raw_col = 'Original Raw Numbers'
+    proj_col = 'US Gen Pop Projection'
+
+    if (bp_col not in df.columns
+            or 'Column' not in df.columns
+            or 'Value' not in df.columns):
+        if verbose:
+            print("   🛒 mpb-floor: missing required columns; skipping")
+        return df, []
+
+    df = df.copy()
+    for _c in (bp_col, cs_col, raw_col, proj_col):
+        if _c in df.columns and df[_c].dtype != object:
+            df[_c] = df[_c].astype(object)
+
+    import random as _r
+
+    # Random target — avoid the literal median so two consecutive runs don't
+    # both land on 1500 exactly.
+    target_count = _r.randint(target_min, target_max)
+    median = (target_min + target_max) // 2
+    if target_count == median:
+        target_count = median + _r.choice([-1, 1])
+
+    col_upper = df['Column'].astype(str).str.strip().str.upper()
+    val_upper = df['Value'].astype(str).str.strip().str.upper()
+
+    mpb_mask = col_upper == MPB_CATEGORY
+    current_count = int(mpb_mask.sum())
+
+    if verbose:
+        print(f"   🛒 mpb-floor: current MPB rows = {current_count:,}, "
+              f"target = {target_count:,} "
+              f"(rand [{target_min}, {target_max}])")
+
+    if current_count >= target_count:
+        if verbose:
+            print(f"   🛒 mpb-floor: already at/above target — nothing to do")
+        return df, []
+
+    existing_brands = set(val_upper[mpb_mask].tolist())
+
+    # Build candidate pool, skip any already present
+    missing = []
+    seen = set()
+    for cand in mpb_candidates:
+        try:
+            b = str(cand.get('brand', '')).strip().upper()
+        except Exception:
+            continue
+        if not b or b in seen or b in existing_brands:
+            continue
+        seen.add(b)
+        missing.append({
+            'brand': b,
+            'section': str(cand.get('section', '')).strip() or 'Misc',
+        })
+
+    if not missing:
+        if verbose:
+            print(f"   🛒 mpb-floor: no missing hostmap candidates "
+                  f"(every hostmap brand already on profile)")
+        return df, []
+
+    need_to_add = target_count - current_count
+    if verbose:
+        print(f"   🛒 mpb-floor: {len(missing):,} hostmap candidates absent; "
+              f"need to add ~{need_to_add:,}")
+
+    # Shuffle so we don't bias toward alphabetical brand names
+    _r.shuffle(missing)
+
+    raw_per_pct, proj_per_pct = _derive_scale_from_df(df)
+    persona_context = _persona_context_block(
+        persona_doc, audience_composition, subject,
+    )
+
+    decisions: list[dict] = []
+    new_row_records: list[dict] = []
+    total_added = 0
+
+    num_batches = (len(missing) + batch_size - 1) // batch_size
+
+    for batch_idx in range(num_batches):
+        if total_added >= need_to_add:
+            break
+
+        batch = missing[batch_idx * batch_size:(batch_idx + 1) * batch_size]
+        batches_remaining = num_batches - batch_idx
+        # Pace ADDs so we don't burn all our target on the first batch nor
+        # leave it all for the last. ~(remaining_target / remaining_batches)
+        # with a small headroom so the agent feels free to push above when
+        # the batch is a great persona fit.
+        target_remaining = need_to_add - total_added
+        ask_for = max(
+            1,
+            min(len(batch),
+                int(target_remaining / batches_remaining) + 10),
+        )
+
+        candidates_block = '\n'.join(
+            f"  - {c['brand']}  [{c['section']}]"
+            for c in batch
+        )
+
+        prompt = (
+            AUDIENCE_NOT_MIRROR_RULE
+            + "\nYou are the persona-reasoning agent for a Crosswalk digital\n"
+              "audience pull. The MOST PURCHASED BRANDS category is under-\n"
+              "populated relative to its hostmap candidate pool. Below is a\n"
+              "batch of candidate brands the upstream agent did not include.\n"
+              "Decide which make sense for THIS persona's online-purchasing\n"
+              "habits and assign a persona-grounded Brand Penetration to each.\n\n"
+            f"=== PERSONA CONTEXT ===\n{persona_context}\n\n"
+            f"=== BATCH {batch_idx + 1} / {num_batches} "
+            f"({len(batch)} candidates) ===\n"
+            f"{candidates_block}\n\n"
+            "=== TASK ===\n"
+            f"Target ~{ask_for} ADDs from this batch (more or fewer if the\n"
+            f"persona genuinely justifies it — do not pad).\n\n"
+            "MPB SCORING RULES (per brand):\n"
+            "  - MPB = % of THIS persona who BUY this brand ONLINE.\n"
+            "  - CPG / beverages / grocery → cap LOW (typically 0.5-5%).\n"
+            "    These are bought in-store, not online. Coca-Cola, Pepsi,\n"
+            "    Gatorade, Tropicana, etc must NEVER lead this column.\n"
+            "  - Apparel / footwear / accessories / beauty / electronics /\n"
+            "    books / household → can sit HIGHER (5-25%) — Amazon-/DTC-\n"
+            "    shippable.\n"
+            "  - Mass-market shipped staples (paper goods, detergent,\n"
+            "    toothpaste, deodorant) → 5-15% for subscribe-and-save\n"
+            "    households.\n"
+            "  - High BPs (25-60%) are RARE and reserved for brands the\n"
+            "    persona's demographics buy heavily online (e.g., athleisure\n"
+            "    for young urban audiences, beauty for women 25-44, pet food\n"
+            "    DTC for dog/cat parents, gear for outdoor enthusiasts).\n"
+            "  - Use the hostmap section bracket as a STARTING hint, but\n"
+            "    reason from the persona. A 55+ retiree audience under-\n"
+            "    engages with DTC fashion even if the brand is tagged\n"
+            "    Apparel/Footwear.\n"
+            "  - SKIP brands the persona genuinely wouldn't buy online\n"
+            "    (foreign-only, niche regional, wrong demographic, archaic,\n"
+            "    or duplicative of an existing entry).\n\n"
+            "Constraints on every ADD:\n"
+            "  - BP >= 0.5% (no floor noise).\n"
+            "  - BP <= 60% (no brand dominates MPB).\n"
+            "  - 4-decimal jitter (e.g., 7.4193%, not 7%).\n"
+            "  - Use the EXACT brand spelling from the candidate list above\n"
+            "    (uppercase). Do NOT invent new brands not on this list.\n"
+            "  - 'reason' must cite THIS persona, not a generic justification.\n\n"
+            "Return ONLY valid JSON in this exact shape:\n"
+            '{"decisions": [\n'
+            '  {"brand": "NIKE", "decision": "ADD", "bp": 14.8231, "reason": "..."},\n'
+            '  {"brand": "TEMU", "decision": "SKIP", "reason": "..."}\n'
+            ']}\n'
+            "JSON only — no markdown fences, no commentary."
+        )
+
+        try:
+            resp = openai_client.chat.completions.create(
+                model=model,
+                messages=[{'role': 'user', 'content': prompt}],
+                temperature=0.25,
+                max_tokens=max_tokens,
+                timeout=180,
+            )
+            raw = resp.choices[0].message.content.strip()
+            raw = re.sub(r'^```(?:json)?\s*|\s*```$', '', raw).strip()
+            parsed = json.loads(raw)
+        except Exception as e:
+            if verbose:
+                print(f"   ⚠️ mpb-floor batch {batch_idx + 1}/{num_batches}: "
+                      f"agent error: {e}")
+            decisions.append({
+                'batch': batch_idx + 1,
+                'brand': None,
+                'decision': None,
+                'bp': None,
+                'reason': f'agent error: {e}',
+                'status': 'ERROR',
+                'n_added': 0,
+                'n_skipped': 0,
+            })
+            continue
+
+        batch_decisions = parsed.get('decisions') or []
+        batch_added = 0
+        batch_skipped = 0
+
+        for d in batch_decisions:
+            if total_added >= need_to_add:
+                break
+            try:
+                b = str(d.get('brand', '')).strip().upper()
+                dec = str(d.get('decision', '')).strip().upper()
+                reason = str(d.get('reason', '')).strip()
+            except (TypeError, ValueError):
+                continue
+            if not b or b in existing_brands:
+                continue
+
+            if dec == 'ADD':
+                try:
+                    bp = float(d.get('bp'))
+                except (TypeError, ValueError):
+                    continue
+                if bp < 0.5 or bp > 60.0:
+                    continue
+                if round(bp, 4) == round(bp, 1):
+                    bp = round(bp + _r.uniform(-0.04, 0.04), 4)
+                bp = round(bp, 4)
+                new_row_records.append({
+                    'Column': MPB_CATEGORY,
+                    'Value': b,
+                    bp_col: f"{bp:.4f}%",
+                    cs_col: '',
+                    raw_col: str(max(1, int(round(bp * raw_per_pct)))),
+                    proj_col: str(int(round(bp * proj_per_pct))),
+                })
+                existing_brands.add(b)
+                total_added += 1
+                batch_added += 1
+                decisions.append({
+                    'batch': batch_idx + 1,
+                    'brand': b,
+                    'decision': 'ADD',
+                    'bp': bp,
+                    'reason': reason,
+                    'status': 'ADDED',
+                    'n_added': 1,
+                    'n_skipped': 0,
+                })
+            elif dec == 'SKIP':
+                batch_skipped += 1
+                decisions.append({
+                    'batch': batch_idx + 1,
+                    'brand': b,
+                    'decision': 'SKIP',
+                    'bp': None,
+                    'reason': reason,
+                    'status': 'SKIPPED',
+                    'n_added': 0,
+                    'n_skipped': 1,
+                })
+
+        if verbose:
+            print(f"   🛒 mpb-floor batch {batch_idx + 1}/{num_batches}: "
+                  f"{batch_added} ADD, {batch_skipped} SKIP "
+                  f"(running: {total_added}/{need_to_add})")
+
+    if new_row_records:
+        df = pd.concat([df, pd.DataFrame(new_row_records)], ignore_index=True)
+        m = df['Column'].astype(str).str.strip().str.upper() == MPB_CATEGORY
+        if m.any() and cs_col in df.columns:
+            bps_cat = df.loc[m, bp_col].apply(_numbp).fillna(0)
+            total = bps_cat.sum()
+            if total > 0:
+                new_cs = bps_cat / total * 100.0
+                for i, idx in enumerate(df.index[m]):
+                    df.at[idx, cs_col] = f"{new_cs.iloc[i]:.4f}"
+
+    final_count = int((df['Column'].astype(str).str.strip().str.upper()
+                       == MPB_CATEGORY).sum())
+    if verbose:
+        n_add = sum(1 for d in decisions if d.get('decision') == 'ADD')
+        n_skip = sum(1 for d in decisions if d.get('decision') == 'SKIP')
+        n_err = sum(1 for d in decisions if d.get('status') == 'ERROR')
+        print(f"   🛒 mpb-floor totals: {n_add} ADDED, {n_skip} SKIPPED, "
+              f"{n_err} ERROR  →  final MPB rows = {final_count:,} "
+              f"(target was {target_count:,})")
+
+    return df, decisions
