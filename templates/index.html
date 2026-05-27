@@ -75565,10 +75565,12 @@
                 event.stopPropagation();
                 event.preventDefault();
             }
-            // Mark the slide as having no image placeholder
-            if (deckSlides[slideIdx]) {
-                deckSlides[slideIdx].hideImagePlaceholder = true;
-                renderDeckSlides();
+            if (!currentEditingDeck?.slides) return;
+            const slide = currentEditingDeck.slides[slideIdx - 1];
+            if (slide) {
+                slide.hideImagePlaceholder = true;
+                saveDeckChanges();
+                renderSlideEditor();
             }
         }
         

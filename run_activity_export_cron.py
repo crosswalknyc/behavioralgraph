@@ -2,8 +2,16 @@
 """Render cron job (daily at 6:00 UTC).
 
 1. Wake up the web service (Render starter plan may sleep after inactivity).
-2. Sync users.json from the deployed repo to S3 so dev changes reach production.
-3. Run scheduled activity-export email jobs.
+2. Run scheduled activity-export email jobs.
+3. Run Fin IQ alpha-ideas + digest.
+
+NOTE: The legacy `sync_users` step (which POSTed the deployed repo's
+users.json to /api/cron/restore-users-from-deployed-file and overwrote
+S3) was REMOVED on 2026-05-27. S3 (s3://dashboard-inputs/system/users.json)
+is now the single source of truth for the user list; the repo copy is
+only a fallback bootstrap. Re-enabling that step will wipe live user
+edits (new accounts, role changes, credit grants, must_reset_password
+flags) made through the admin UI since the last commit.
 """
 import os
 import sys
@@ -72,9 +80,19 @@ def wake_up():
 
 
 def sync_users():
-    """Push deployed users.json to S3 so dev edits reach production."""
-    print("Step 2: Syncing users.json to S3 ...")
-    return _post_with_retry('/api/cron/restore-users-from-deployed-file', 'sync-users')
+    """DISABLED 2026-05-27.
+
+    Previously POSTed /api/cron/restore-users-from-deployed-file, which
+    overwrote the live S3 users.json with whatever stale copy was committed
+    in the repo. That wiped accounts created/edited through the admin UI
+    since the last commit and reset every user's last_inactive_email_sent
+    cooldown (which caused the flood of inactive-user alert emails on
+    2026-05-27 when an admin clicked "Check inactive users" hours later).
+
+    S3 is now the source of truth. Do not re-enable.
+    """
+    print("Step 2: SKIPPED (sync_users disabled — S3 is source of truth).")
+    return True
 
 
 def run_exports():
@@ -97,12 +115,12 @@ def main():
 
     print(f"=== activity-export-cron  target={BASE} ===")
     wake_up()
-    sync_ok = sync_users()
+    sync_ok = sync_users()  # no-op since 2026-05-27, always True
     export_ok = run_exports()
     alpha_ok = run_fin_iq_alpha()
 
     results = {'sync': sync_ok, 'exports': export_ok, 'alpha': alpha_ok}
-    critical = {'sync': sync_ok, 'exports': export_ok}
+    critical = {'exports': export_ok}
     if all(results.values()):
         print("=== ALL STEPS OK ===")
         sys.exit(0)
