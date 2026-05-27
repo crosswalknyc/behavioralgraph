@@ -105,16 +105,43 @@ def claude_reason_json(
         or "claude-sonnet-4-5"
     )
 
+    # Prompt caching: explicit cache_control on the system block so Anthropic
+    # caches the (large, static) system text for 5 min. Cache hit pays ~10%
+    # of base input cost; first write pays 125%. Min cacheable prefix on Opus
+    # is 4096 tokens; shorter prompts are silently skipped. Disable via
+    # CLAUDE_DISABLE_PROMPT_CACHE=1.
+    _cache_disabled = (os.environ.get("CLAUDE_DISABLE_PROMPT_CACHE") or "").strip().lower() in ("1", "true", "yes", "on")
+
     last_err: Optional[Exception] = None
     for attempt in range(max_retries):
         try:
+            if isinstance(system, str) and system and not _cache_disabled:
+                _system_param = [{
+                    "type": "text",
+                    "text": system,
+                    "cache_control": {"type": "ephemeral"},
+                }]
+            else:
+                _system_param = system
             resp = client.messages.create(
                 model=model_id,
                 max_tokens=max_tokens,
                 temperature=temperature,
-                system=system,
+                system=_system_param,
                 messages=[{"role": "user", "content": user}],
             )
+            try:
+                _u = getattr(resp, "usage", None)
+                if _u is not None:
+                    _cr = getattr(_u, "cache_read_input_tokens", 0) or 0
+                    _cw = getattr(_u, "cache_creation_input_tokens", 0) or 0
+                    if _cr or _cw:
+                        _in = getattr(_u, "input_tokens", 0) or 0
+                        _out = getattr(_u, "output_tokens", 0) or 0
+                        print(f"[claude-cache] read={_cr:,} write={_cw:,} "
+                              f"input={_in:,} output={_out:,}")
+            except Exception:
+                pass
             blocks = resp.content or []
             for b in blocks:
                 txt = getattr(b, "text", None)
@@ -185,13 +212,31 @@ def claude_messages(
         or "mythos" in _model_lc
     )
 
+    # Prompt caching: explicit cache_control on the system block caches the
+    # tools+system prefix for 5 min. Hits pay ~10% input cost vs 125% on first
+    # write. Explicit breakpoint (not automatic top-level) because automatic
+    # caching defaults to the last cacheable block — the per-request user
+    # message — which never repeats. Per the Anthropic docs hierarchy
+    # (tools → system → messages), a breakpoint on system caches both tools
+    # and system. Min cacheable prefix on Opus is 4096 tokens. Disable via
+    # CLAUDE_DISABLE_PROMPT_CACHE=1.
+    _cache_disabled = (os.environ.get("CLAUDE_DISABLE_PROMPT_CACHE") or "").strip().lower() in ("1", "true", "yes", "on")
+
     last_err: Optional[Exception] = None
     for attempt in range(max_retries):
         try:
+            if isinstance(system, str) and system and not _cache_disabled:
+                _system_param = [{
+                    "type": "text",
+                    "text": system,
+                    "cache_control": {"type": "ephemeral"},
+                }]
+            else:
+                _system_param = system
             kwargs = dict(
                 model=model_id,
                 max_tokens=max_tokens,
-                system=system,
+                system=_system_param,
                 messages=[{"role": "user", "content": user}],
             )
             if not _omit_temperature:
@@ -206,6 +251,18 @@ def claude_messages(
             else:
                 _request_client = client
             resp = _request_client.messages.create(**kwargs)
+            try:
+                _u = getattr(resp, "usage", None)
+                if _u is not None:
+                    _cr = getattr(_u, "cache_read_input_tokens", 0) or 0
+                    _cw = getattr(_u, "cache_creation_input_tokens", 0) or 0
+                    if _cr or _cw:
+                        _in = getattr(_u, "input_tokens", 0) or 0
+                        _out = getattr(_u, "output_tokens", 0) or 0
+                        print(f"[claude-cache] read={_cr:,} write={_cw:,} "
+                              f"input={_in:,} output={_out:,}")
+            except Exception:
+                pass
             # Concatenate all text blocks (web_search responses interleave
             # tool_use, server_tool_use, web_search_tool_result and text).
             blocks = resp.content or []

@@ -78159,20 +78159,20 @@
             if (currentDashboardData.demographics) {
                 demoHtml = Object.keys(currentDashboardData.demographics).map(key => {
                     const label = demoLabels[key] || key.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
-                    return `<label class="module-select-item" style="display: flex; align-items: center; justify-content: flex-start; gap: 0.5rem; padding: 0.5rem; background: var(--bg-input); border-radius: 4px; margin-bottom: 0.25rem; cursor: pointer; width: 100%; box-sizing: border-box; text-align: left;">
-                        <input type="checkbox" class="module-select-check" data-type="demographic" data-cat="${key}">
-                        <span>📊 ${label}</span>
+                    return `<label class="module-select-item" style="display: flex; align-items: center; gap: 0.75rem; padding: 0.5rem 0.75rem; background: var(--bg-input); border-radius: 4px; margin-bottom: 0.25rem; cursor: pointer; width: 100%; box-sizing: border-box;">
+                        <input type="checkbox" class="module-select-check" data-type="demographic" data-cat="${key}" style="flex-shrink: 0; width: 16px; height: 16px; margin: 0; cursor: pointer;">
+                        <span style="flex: 1; text-align: left;">📊 ${label}</span>
                     </label>`;
                 }).join('');
             }
-            
+
             let behavioralHtml = '';
             if (currentDashboardData.behavioral) {
                 const allBehavioralKeys = Object.keys(currentDashboardData.behavioral);
                 behavioralHtml = allBehavioralKeys.map(key => {
-                    return `<label class="module-select-item" style="display: flex; align-items: center; justify-content: flex-start; gap: 0.5rem; padding: 0.5rem; background: var(--bg-input); border-radius: 4px; margin-bottom: 0.25rem; cursor: pointer; width: 100%; box-sizing: border-box; text-align: left;">
-                        <input type="checkbox" class="module-select-check" data-type="behavioral" data-cat="${escapeHtml(key || '')}">
-                        <span>🎯 ${escapeHtml(key)}</span>
+                    return `<label class="module-select-item" style="display: flex; align-items: center; gap: 0.75rem; padding: 0.5rem 0.75rem; background: var(--bg-input); border-radius: 4px; margin-bottom: 0.25rem; cursor: pointer; width: 100%; box-sizing: border-box;">
+                        <input type="checkbox" class="module-select-check" data-type="behavioral" data-cat="${escapeHtml(key || '')}" style="flex-shrink: 0; width: 16px; height: 16px; margin: 0; cursor: pointer;">
+                        <span style="flex: 1; text-align: left;">🎯 ${escapeHtml(key)}</span>
                     </label>`;
                 }).join('');
             }
