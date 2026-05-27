@@ -58816,19 +58816,19 @@
                         const barWidth = maxVal > 0 ? (pct / maxVal * 100) : 0;
                         return `
                         <div style="display: flex; align-items: center; gap: 0.4rem;">
-                            <span style="font-size: 0.65rem; color: var(--text-secondary); width: 16px; flex-shrink: 0; text-align: right;">${i + 1}</span>
+                            <span style="font-size: 0.65rem; color: #000; width: 16px; flex-shrink: 0; text-align: right;">${i + 1}</span>
                             <div style="flex: 1; min-width: 0;">
-                                <div style="font-size: 0.7rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-bottom: 2px;">${escapeHtml(key)}</div>
-                                <div style="position: relative; height: 14px; background: rgba(255,255,255,0.05); border-radius: 3px; overflow: hidden;">
-                                    <div style="position: absolute; left: 0; top: 0; height: 100%; width: ${barWidth}%; background: linear-gradient(90deg, var(--accent-lime), var(--accent-cyan)); border-radius: 3px;"></div>
-                                    <span style="position: absolute; right: 4px; top: 50%; transform: translateY(-50%); font-size: 0.65rem; font-weight: 600; color: ${barWidth > 50 ? '#000' : 'var(--accent-lime)'};">${pct.toFixed(1)}%</span>
+                                <div style="font-size: 0.7rem; color: #000; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-bottom: 2px;">${escapeHtml(key)}</div>
+                                <div style="position: relative; height: 14px; background: rgba(0,0,0,0.06); border-radius: 3px; overflow: hidden;">
+                                    <div style="position: absolute; left: 0; top: 0; height: 100%; width: ${barWidth}%; background: linear-gradient(90deg, #6366f1, #818cf8); border-radius: 3px;"></div>
+                                    <span style="position: absolute; right: 4px; top: 50%; transform: translateY(-50%); font-size: 0.65rem; font-weight: 600; color: ${barWidth > 50 ? '#fff' : '#000'};">${pct.toFixed(1)}%</span>
                                 </div>
                             </div>
                         </div>
                     `}).join('')}
                     ${entries.length < totalCount ? `
-                        <div style="margin-top: 0.5rem; padding: 0.4rem; text-align: center; font-size: 0.65rem; color: var(--text-secondary); background: rgba(200, 230, 0, 0.1); border-radius: 4px;">
-                            📊 Showing ${entries.length} of ${totalCount} segments
+                        <div style="margin-top: 0.5rem; padding: 0.4rem; text-align: center; font-size: 0.65rem; color: #555; background: rgba(99, 102, 241, 0.1); border-radius: 4px;">
+                            Showing ${entries.length} of ${totalCount} segments
                         </div>
                     ` : ''}
                 </div>
@@ -58840,25 +58840,25 @@
                 <div style="overflow-x: auto;">
                     <table style="width: 100%; border-collapse: collapse; font-size: 0.75rem;">
                         <thead>
-                            <tr style="background: rgba(200, 230, 0, 0.1); border-bottom: 2px solid var(--accent-lime);">
-                                <th style="padding: 0.4rem; text-align: left; color: var(--accent-lime);">#</th>
-                                <th style="padding: 0.4rem; text-align: left; color: var(--accent-lime);">Segment</th>
-                                <th style="padding: 0.4rem; text-align: right; color: var(--accent-lime);">Value</th>
+                            <tr style="background: rgba(99, 102, 241, 0.1); border-bottom: 2px solid #6366f1;">
+                                <th style="padding: 0.4rem; text-align: left; color: #000;">#</th>
+                                <th style="padding: 0.4rem; text-align: left; color: #000;">Segment</th>
+                                <th style="padding: 0.4rem; text-align: right; color: #000;">Value</th>
                             </tr>
                         </thead>
                         <tbody>
                             ${entries.map(([key, val], i) => `
-                                <tr style="border-bottom: 1px solid rgba(255,255,255,0.05);">
-                                    <td style="padding: 0.4rem; color: var(--text-secondary);">${i + 1}</td>
-                                    <td style="padding: 0.4rem; color: var(--text-primary);">${escapeHtml(key)}</td>
-                                    <td style="padding: 0.4rem; text-align: right; font-weight: 600; color: var(--accent-lime);">${parseFloat(val).toFixed(1)}%</td>
+                                <tr style="border-bottom: 1px solid rgba(0,0,0,0.08);">
+                                    <td style="padding: 0.4rem; color: #000;">${i + 1}</td>
+                                    <td style="padding: 0.4rem; color: #000;">${escapeHtml(key)}</td>
+                                    <td style="padding: 0.4rem; text-align: right; font-weight: 600; color: #6366f1;">${parseFloat(val).toFixed(1)}%</td>
                                 </tr>
                             `).join('')}
                         </tbody>
                     </table>
                     ${entries.length < totalCount ? `
-                        <div style="margin-top: 0.5rem; padding: 0.4rem; text-align: center; font-size: 0.65rem; color: var(--text-secondary); background: rgba(200, 230, 0, 0.1); border-radius: 4px;">
-                            📊 Showing ${entries.length} of ${totalCount} segments
+                        <div style="margin-top: 0.5rem; padding: 0.4rem; text-align: center; font-size: 0.65rem; color: #555; background: rgba(99, 102, 241, 0.1); border-radius: 4px;">
+                            Showing ${entries.length} of ${totalCount} segments
                         </div>
                     ` : ''}
                 </div>
@@ -58875,16 +58875,16 @@
                         return `
                         <div style="flex: 1; display: flex; flex-direction: column; align-items: center; gap: 0.2rem; min-width: 0;">
                             <div style="width: 100%; height: 140px; display: flex; align-items: flex-end; justify-content: center;">
-                                <div style="width: 75%; max-width: 40px; height: ${barHeight}%; min-height: 2px; background: linear-gradient(180deg, var(--accent-lime), var(--accent-cyan)); border-radius: 4px 4px 0 0; transition: height 0.3s;"></div>
+                                <div style="width: 75%; max-width: 40px; height: ${barHeight}%; min-height: 2px; background: linear-gradient(180deg, #6366f1, #818cf8); border-radius: 4px 4px 0 0; transition: height 0.3s;"></div>
                             </div>
-                            <div style="font-size: 0.55rem; color: var(--text-secondary); text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%;" title="${escapeHtml(key)}">${escapeHtml((key || '').slice(0, 8))}</div>
-                            <div style="font-size: 0.6rem; font-weight: 600; color: var(--accent-lime);">${pct.toFixed(1)}%</div>
+                            <div style="font-size: 0.55rem; color: #000; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%;" title="${escapeHtml(key)}">${escapeHtml((key || '').slice(0, 8))}</div>
+                            <div style="font-size: 0.6rem; font-weight: 600; color: #000;">${pct.toFixed(1)}%</div>
                         </div>
                     `}).join('')}
                 </div>
                 ${entries.length < totalCount ? `
-                    <div style="margin-top: 0.5rem; padding: 0.4rem; text-align: center; font-size: 0.65rem; color: var(--text-secondary); background: rgba(200, 230, 0, 0.1); border-radius: 4px;">
-                        📊 Showing ${entries.length} of ${totalCount} segments
+                    <div style="margin-top: 0.5rem; padding: 0.4rem; text-align: center; font-size: 0.65rem; color: #555; background: rgba(99, 102, 241, 0.1); border-radius: 4px;">
+                        Showing ${entries.length} of ${totalCount} segments
                     </div>
                 ` : ''}
             `;
@@ -58893,19 +58893,19 @@
         function renderDemographicGauge(entries, totalCount) {
             const topVal = entries.length ? parseFloat(entries[0][1]) : 0;
             const angle = Math.min((topVal / 100) * 180, 180);
-            const colors = ['#c8ff00', '#66d9ef', '#a6e22e'];
+            const colors = ['#6366f1', '#818cf8', '#a5b4fc'];
             return `
                 <div style="display: flex; align-items: center; gap: 1rem;">
                     <div style="position: relative; width: 160px; height: 90px; flex-shrink: 0;">
                         <div style="position: absolute; width: 100%; height: 100%; border-radius: 80px 80px 0 0; background: conic-gradient(from 0.5turn at 50% 100%, ${colors[0]} 0deg, ${colors[1]} 90deg, ${colors[2]} 180deg); opacity: 0.2;"></div>
-                        <div style="position: absolute; width: 100%; height: 100%; border-radius: 80px 80px 0 0; background: conic-gradient(from 0.5turn at 50% 100%, transparent ${angle}deg, var(--accent-lime) ${angle}deg); opacity: 0.95;"></div>
-                        <div style="position: absolute; bottom: -4px; left: 50%; transform: translateX(-50%); font-size: 1.2rem; font-weight: 700; color: var(--accent-lime);">${topVal.toFixed(1)}%</div>
+                        <div style="position: absolute; width: 100%; height: 100%; border-radius: 80px 80px 0 0; background: conic-gradient(from 0.5turn at 50% 100%, transparent ${angle}deg, #6366f1 ${angle}deg); opacity: 0.95;"></div>
+                        <div style="position: absolute; bottom: -4px; left: 50%; transform: translateX(-50%); font-size: 1.2rem; font-weight: 700; color: #000;">${topVal.toFixed(1)}%</div>
                     </div>
-                    <div style="flex: 1; font-size: 0.7rem; color: var(--text-secondary);">Top: ${escapeHtml(entries[0]?.[0] || '')}</div>
+                    <div style="flex: 1; font-size: 0.7rem; color: #000;">Top: ${escapeHtml(entries[0]?.[0] || '')}</div>
                 </div>
                 ${entries.length < totalCount ? `
-                    <div style="margin-top: 0.5rem; padding: 0.4rem; text-align: center; font-size: 0.65rem; color: var(--text-secondary); background: rgba(200, 230, 0, 0.1); border-radius: 4px;">
-                        📊 Showing top of ${totalCount} segments
+                    <div style="margin-top: 0.5rem; padding: 0.4rem; text-align: center; font-size: 0.65rem; color: #555; background: rgba(99, 102, 241, 0.1); border-radius: 4px;">
+                        Showing top of ${totalCount} segments
                     </div>
                 ` : ''}
             `;
@@ -58923,13 +58923,13 @@
             return `
                 <div style="position: relative; height: 160px; padding: 0.5rem 0;">
                     <svg viewBox="0 0 100 100" preserveAspectRatio="xMidYMid meet" style="position: absolute; inset: 0; width: 100%; height: 100%;">
-                        <polyline fill="none" stroke="var(--accent-lime)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" points="${pts.join(' ')}"/>
+                        <polyline fill="none" stroke="#6366f1" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" points="${pts.join(' ')}"/>
                     </svg>
-                    <div style="display: flex; justify-content: space-between; margin-top: 0.5rem; font-size: 0.55rem; color: var(--text-secondary);">
+                    <div style="display: flex; justify-content: space-between; margin-top: 0.5rem; font-size: 0.55rem; color: #000;">
                         ${entries.map(([k]) => '<span style="flex:1; text-align:center; overflow:hidden; text-overflow:ellipsis;">' + escapeHtml((k||'').slice(0,6)) + '</span>').join('')}
                     </div>
                 </div>
-                ${entries.length < totalCount ? `<div style="margin-top: 0.3rem; font-size: 0.65rem; color: var(--text-secondary); text-align: center;">Showing ${entries.length} of ${totalCount}</div>` : ''}
+                ${entries.length < totalCount ? `<div style="margin-top: 0.3rem; font-size: 0.65rem; color: #555; text-align: center;">Showing ${entries.length} of ${totalCount}</div>` : ''}
             `;
         }
 
@@ -58946,13 +58946,13 @@
             return `
                 <div style="position: relative; height: 160px; padding: 0.5rem 0;">
                     <svg viewBox="0 0 100 100" preserveAspectRatio="xMidYMid meet" style="position: absolute; inset: 0; width: 100%; height: 100%;">
-                        <polygon fill="rgba(200, 230, 0, 0.35)" stroke="var(--accent-lime)" stroke-width="1.5" points="${areaPts}"/>
+                        <polygon fill="rgba(99, 102, 241, 0.25)" stroke="#6366f1" stroke-width="1.5" points="${areaPts}"/>
                     </svg>
-                    <div style="display: flex; justify-content: space-between; margin-top: 0.5rem; font-size: 0.55rem; color: var(--text-secondary);">
+                    <div style="display: flex; justify-content: space-between; margin-top: 0.5rem; font-size: 0.55rem; color: #000;">
                         ${entries.map(([k]) => '<span style="flex:1; text-align:center; overflow:hidden; text-overflow:ellipsis;">' + escapeHtml((k||'').slice(0,6)) + '</span>').join('')}
                     </div>
                 </div>
-                ${entries.length < totalCount ? `<div style="margin-top: 0.3rem; font-size: 0.65rem; color: var(--text-secondary); text-align: center;">Showing ${entries.length} of ${totalCount}</div>` : ''}
+                ${entries.length < totalCount ? `<div style="margin-top: 0.3rem; font-size: 0.65rem; color: #555; text-align: center;">Showing ${entries.length} of ${totalCount}</div>` : ''}
             `;
         }
 
@@ -58965,22 +58965,21 @@
                             const pct = parseFloat(v);
                             const x = (i / Math.max(entries.length - 1, 1)) * 90 + 5;
                             const y = 95 - (pct / maxVal * 85);
-                            return `<circle cx="${x}" cy="${y}" r="4" fill="var(--accent-lime)" opacity="0.9"/>`;
+                            return `<circle cx="${x}" cy="${y}" r="4" fill="#6366f1" opacity="0.9"/>`;
                         }).join('')}
                     </svg>
-                    <div style="display: flex; justify-content: space-between; margin-top: 0.5rem; font-size: 0.55rem; color: var(--text-secondary);">
+                    <div style="display: flex; justify-content: space-between; margin-top: 0.5rem; font-size: 0.55rem; color: #000;">
                         ${entries.map(([k]) => '<span style="flex:1; text-align:center; overflow:hidden; text-overflow:ellipsis;">' + escapeHtml((k||'').slice(0,6)) + '</span>').join('')}
                     </div>
                 </div>
-                ${entries.length < totalCount ? `<div style="margin-top: 0.3rem; font-size: 0.65rem; color: var(--text-secondary); text-align: center;">Showing ${entries.length} of ${totalCount}</div>` : ''}
+                ${entries.length < totalCount ? `<div style="margin-top: 0.3rem; font-size: 0.65rem; color: #555; text-align: center;">Showing ${entries.length} of ${totalCount}</div>` : ''}
             `;
         }
 
         function renderDemographicPie(entries, totalCount) {
-            // Simple pie chart using CSS conic-gradient
             const total = entries.reduce((sum, [_, v]) => sum + parseFloat(v), 0);
             let currentAngle = 0;
-            const colors = ['#c8ff00', '#66d9ef', '#a6e22e', '#fd971f', '#f92672', '#ae81ff', '#e6db74', '#66d9ef'];
+            const colors = ['#6366f1', '#818cf8', '#a5b4fc', '#4f46e5', '#7c3aed', '#8b5cf6', '#c4b5fd', '#4338ca'];
             
             const gradientStops = entries.map(([key, val], i) => {
                 const pct = (parseFloat(val) / total) * 100;
@@ -58997,15 +58996,15 @@
                         ${entries.map(([key, val], i) => `
                             <div style="display: flex; align-items: center; gap: 0.4rem;">
                                 <div style="width: 12px; height: 12px; border-radius: 2px; background: ${colors[i % colors.length]}; flex-shrink: 0;"></div>
-                                <span style="flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${escapeHtml(key)}</span>
-                                <span style="font-weight: 600; color: var(--accent-lime); flex-shrink: 0;">${parseFloat(val).toFixed(1)}%</span>
+                                <span style="flex: 1; color: #000; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${escapeHtml(key)}</span>
+                                <span style="font-weight: 600; color: #000; flex-shrink: 0;">${parseFloat(val).toFixed(1)}%</span>
                             </div>
                         `).join('')}
                     </div>
                 </div>
                 ${entries.length < totalCount ? `
-                    <div style="margin-top: 0.5rem; padding: 0.4rem; text-align: center; font-size: 0.65rem; color: var(--text-secondary); background: rgba(200, 230, 0, 0.1); border-radius: 4px;">
-                        📊 Showing ${entries.length} of ${totalCount} segments
+                    <div style="margin-top: 0.5rem; padding: 0.4rem; text-align: center; font-size: 0.65rem; color: #555; background: rgba(99, 102, 241, 0.1); border-radius: 4px;">
+                        Showing ${entries.length} of ${totalCount} segments
                     </div>
                 ` : ''}
             `;
@@ -77188,19 +77187,19 @@
                                 const barWidth = maxVal > 0 ? (pct / maxVal * 100) : 0;
                                 return `
                                 <div style="display: flex; align-items: center; gap: 0.4rem;">
-                                    <span style="font-size: 0.65rem; color: var(--text-secondary); width: 16px; flex-shrink: 0; text-align: right;">${i + 1}</span>
+                                    <span style="font-size: 0.65rem; color: #000; width: 16px; flex-shrink: 0; text-align: right;">${i + 1}</span>
                                     <div style="flex: 1; min-width: 0;">
-                                        <div style="font-size: 0.7rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-bottom: 2px;">${(key || '').replace(/</g, '&lt;')}</div>
-                                        <div style="position: relative; height: 14px; background: rgba(255,255,255,0.05); border-radius: 3px; overflow: hidden;">
-                                            <div style="position: absolute; left: 0; top: 0; height: 100%; width: ${barWidth}%; background: linear-gradient(90deg, var(--accent-lime), var(--accent-cyan)); border-radius: 3px;"></div>
-                                            <span style="position: absolute; right: 4px; top: 50%; transform: translateY(-50%); font-size: 0.65rem; font-weight: 600; color: ${barWidth > 50 ? '#000' : 'var(--accent-lime)'};">${pct.toFixed(1)}%</span>
+                                        <div style="font-size: 0.7rem; color: #000; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-bottom: 2px;">${(key || '').replace(/</g, '&lt;')}</div>
+                                        <div style="position: relative; height: 14px; background: rgba(0,0,0,0.06); border-radius: 3px; overflow: hidden;">
+                                            <div style="position: absolute; left: 0; top: 0; height: 100%; width: ${barWidth}%; background: linear-gradient(90deg, #6366f1, #818cf8); border-radius: 3px;"></div>
+                                            <span style="position: absolute; right: 4px; top: 50%; transform: translateY(-50%); font-size: 0.65rem; font-weight: 600; color: ${barWidth > 50 ? '#fff' : '#000'};">${pct.toFixed(1)}%</span>
                                         </div>
                                     </div>
                                 </div>
                             `}).join('')}
                             ${displayCount < itemCount ? `
-                                <div style="margin-top: 0.5rem; padding: 0.4rem; text-align: center; font-size: 0.65rem; color: var(--text-secondary); background: rgba(200, 230, 0, 0.1); border-radius: 4px;">
-                                    📊 Showing ${displayCount} of ${itemCount} items
+                                <div style="margin-top: 0.5rem; padding: 0.4rem; text-align: center; font-size: 0.65rem; color: #555; background: rgba(99, 102, 241, 0.1); border-radius: 4px;">
+                                    Showing ${displayCount} of ${itemCount} items
                                 </div>
                             ` : ''}
                         </div>
@@ -77219,14 +77218,14 @@
                                 return `
                                 <div style="flex: 1; display: flex; flex-direction: column; align-items: center; gap: 0.2rem; min-width: 0;">
                                     <div style="width: 100%; height: 120px; display: flex; align-items: flex-end; justify-content: center;">
-                                        <div style="width: 70%; max-width: 36px; height: ${barHeight}%; min-height: 2px; background: linear-gradient(180deg, var(--accent-lime), var(--accent-cyan)); border-radius: 4px 4px 0 0;"></div>
+                                        <div style="width: 70%; max-width: 36px; height: ${barHeight}%; min-height: 2px; background: linear-gradient(180deg, #6366f1, #818cf8); border-radius: 4px 4px 0 0;"></div>
                                     </div>
-                                    <div style="font-size: 0.5rem; color: var(--text-secondary); text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%;" title="${(key || '').replace(/"/g, '&quot;')}">${(key || '').slice(0, 6).replace(/</g, '&lt;')}</div>
-                                    <div style="font-size: 0.55rem; font-weight: 600; color: var(--accent-lime);">${pct.toFixed(1)}%</div>
+                                    <div style="font-size: 0.5rem; color: #000; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%;" title="${(key || '').replace(/"/g, '&quot;')}">${(key || '').slice(0, 6).replace(/</g, '&lt;')}</div>
+                                    <div style="font-size: 0.55rem; font-weight: 600; color: #000;">${pct.toFixed(1)}%</div>
                                 </div>
                             `}).join('')}
                         </div>
-                        ${displayCount < itemCount ? `<div style="margin-top: 0.5rem; font-size: 0.65rem; color: var(--text-secondary); text-align: center;">Showing ${displayCount} of ${itemCount}</div>` : ''}
+                        ${displayCount < itemCount ? `<div style="margin-top: 0.5rem; font-size: 0.65rem; color: #555; text-align: center;">Showing ${displayCount} of ${itemCount}</div>` : ''}
                     `;
                 }
                 if (bevVizType === 'gauge') {
@@ -77235,11 +77234,11 @@
                     return `
                         <div style="display: flex; align-items: center; gap: 1rem;">
                             <div style="position: relative; width: 140px; height: 80px; flex-shrink: 0;">
-                                <div style="position: absolute; width: 100%; height: 100%; border-radius: 70px 70px 0 0; background: linear-gradient(90deg, rgba(200,230,0,0.15) 0%, rgba(0,212,255,0.15) 100%);"></div>
-                                <div style="position: absolute; width: 100%; height: 100%; border-radius: 70px 70px 0 0; background: conic-gradient(from 0.5turn at 50% 100%, transparent ${angle}deg, var(--accent-lime) ${angle}deg); opacity: 0.9;"></div>
-                                <div style="position: absolute; bottom: -2px; left: 50%; transform: translateX(-50%); font-size: 1rem; font-weight: 700; color: var(--accent-lime);">${topVal.toFixed(1)}%</div>
+                                <div style="position: absolute; width: 100%; height: 100%; border-radius: 70px 70px 0 0; background: linear-gradient(90deg, rgba(99,102,241,0.15) 0%, rgba(129,140,248,0.15) 100%);"></div>
+                                <div style="position: absolute; width: 100%; height: 100%; border-radius: 70px 70px 0 0; background: conic-gradient(from 0.5turn at 50% 100%, transparent ${angle}deg, #6366f1 ${angle}deg); opacity: 0.9;"></div>
+                                <div style="position: absolute; bottom: -2px; left: 50%; transform: translateX(-50%); font-size: 1rem; font-weight: 700; color: #000;">${topVal.toFixed(1)}%</div>
                             </div>
-                            <div style="flex: 1; font-size: 0.65rem; color: var(--text-secondary);">Top: ${(entries[0]?.[0] || '').slice(0, 40).replace(/</g, '&lt;')}</div>
+                            <div style="flex: 1; font-size: 0.65rem; color: #000;">Top: ${(entries[0]?.[0] || '').slice(0, 40).replace(/</g, '&lt;')}</div>
                         </div>
                     `;
                 }
@@ -77249,18 +77248,18 @@
                     const n = Math.max(values.length - 1, 1);
                     if (bevVizType === 'line') {
                         const pts = values.map((v, i) => ((i / n) * 90 + 5) + ',' + (90 - (v / maxVal * 80)));
-                        return `<div style="position: relative; height: 140px;"><svg viewBox="0 0 100 100" preserveAspectRatio="xMidYMid meet" style="width:100%;height:100%;"><polyline fill="none" stroke="var(--accent-lime)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" points="${pts.join(' ')}"/></svg></div>`;
+                        return `<div style="position: relative; height: 140px;"><svg viewBox="0 0 100 100" preserveAspectRatio="xMidYMid meet" style="width:100%;height:100%;"><polyline fill="none" stroke="#6366f1" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" points="${pts.join(' ')}"/></svg></div>`;
                     }
                     if (bevVizType === 'area') {
                         const pts = values.map((v, i) => ((i / n) * 90 + 5) + ',' + (90 - (v / maxVal * 80)));
                         const areaPts = '5,90 ' + pts.join(' ') + ' 95,90';
-                        return `<div style="position: relative; height: 140px;"><svg viewBox="0 0 100 100" preserveAspectRatio="xMidYMid meet" style="width:100%;height:100%;"><polygon fill="rgba(200, 230, 0, 0.35)" stroke="var(--accent-lime)" stroke-width="1.5" points="${areaPts}"/></svg></div>`;
+                        return `<div style="position: relative; height: 140px;"><svg viewBox="0 0 100 100" preserveAspectRatio="xMidYMid meet" style="width:100%;height:100%;"><polygon fill="rgba(99, 102, 241, 0.25)" stroke="#6366f1" stroke-width="1.5" points="${areaPts}"/></svg></div>`;
                     }
                     if (bevVizType === 'scatter') {
                         const circles = values.map((v, i) => {
                             const x = (i / n) * 90 + 5;
                             const y = 90 - (v / maxVal * 80);
-                            return `<circle cx="${x}" cy="${y}" r="3.5" fill="var(--accent-lime)" opacity="0.9"/>`;
+                            return `<circle cx="${x}" cy="${y}" r="3.5" fill="#6366f1" opacity="0.9"/>`;
                         }).join('');
                         return `<div style="position: relative; height: 140px;"><svg viewBox="0 0 100 100" preserveAspectRatio="xMidYMid meet" style="width:100%;height:100%;">${circles}</svg></div>`;
                     }
@@ -77270,10 +77269,10 @@
                     return `
                         <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.3rem; font-size: 0.7rem;">
                             ${entries.map(([key, val], i) => `
-                                <div style="display: flex; align-items: center; gap: 0.3rem; padding: 0.3rem 0.4rem; background: #1a1f2e; border-radius: 3px; font-family: 'Poppins', sans-serif;">
-                                    <span style="font-size: 0.6rem; color: var(--text-secondary); width: 14px; flex-shrink: 0;">${i + 1}</span>
-                                    <span style="flex: 1; font-size: 0.7rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${(key || '').replace(/</g, '&lt;')}</span>
-                                    <span style="font-weight: 600; color: var(--accent-lime); flex-shrink: 0; font-size: 0.7rem;">${parseFloat(val || 0).toFixed(1)}%</span>
+                                <div style="display: flex; align-items: center; gap: 0.3rem; padding: 0.3rem 0.4rem; background: #f0f0f5; border-radius: 3px; font-family: 'Poppins', sans-serif;">
+                                    <span style="font-size: 0.6rem; color: #000; width: 14px; flex-shrink: 0;">${i + 1}</span>
+                                    <span style="flex: 1; font-size: 0.7rem; color: #000; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${(key || '').replace(/</g, '&lt;')}</span>
+                                    <span style="font-weight: 600; color: #6366f1; flex-shrink: 0; font-size: 0.7rem;">${parseFloat(val || 0).toFixed(1)}%</span>
                                 </div>
                             `).join('')}
                         </div>
@@ -77285,10 +77284,10 @@
                     return `
                         <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 0.35rem; font-size: 0.7rem; max-width: 100%;">
                             ${entries.map(([key, val], i) => `
-                                <div style="display: flex; align-items: center; gap: 0.3rem; padding: 0.35rem 0.4rem; background: #1a1f2e; border-radius: 4px; font-family: 'Poppins', sans-serif; min-width: 0; overflow: hidden;">
-                                    <span style="font-size: 0.6rem; color: var(--text-secondary); width: 14px; flex-shrink: 0;">${i + 1}</span>
-                                    <span style="flex: 1; font-size: 0.7rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0;">${(key || '').replace(/</g, '&lt;')}</span>
-                                    <span style="font-weight: 600; color: var(--accent-lime); flex-shrink: 0; font-size: 0.7rem;">${parseFloat(val || 0).toFixed(1)}%</span>
+                                <div style="display: flex; align-items: center; gap: 0.3rem; padding: 0.35rem 0.4rem; background: #f0f0f5; border-radius: 4px; font-family: 'Poppins', sans-serif; min-width: 0; overflow: hidden;">
+                                    <span style="font-size: 0.6rem; color: #000; width: 14px; flex-shrink: 0;">${i + 1}</span>
+                                    <span style="flex: 1; font-size: 0.7rem; color: #000; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0;">${(key || '').replace(/</g, '&lt;')}</span>
+                                    <span style="font-weight: 600; color: #6366f1; flex-shrink: 0; font-size: 0.7rem;">${parseFloat(val || 0).toFixed(1)}%</span>
                                 </div>
                             `).join('')}
                         </div>
@@ -77299,10 +77298,10 @@
                 return `
                     <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 0.4rem; font-size: 0.75rem; max-width: 100%;">
                         ${entries.map(([key, val], i) => `
-                            <div style="display: flex; align-items: center; gap: 0.4rem; padding: 0.4rem 0.5rem; background: #1a1f2e; border-radius: 4px; font-family: 'Poppins', sans-serif; min-width: 0; overflow: hidden;">
-                                <span style="font-size: 0.65rem; color: var(--text-secondary); width: 16px; flex-shrink: 0;">${i + 1}</span>
-                                <span style="flex: 1; font-size: 0.75rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0;">${(key || '').replace(/</g, '&lt;')}</span>
-                                <span style="font-weight: 600; color: var(--accent-lime); flex-shrink: 0;">${parseFloat(val || 0).toFixed(1)}%</span>
+                            <div style="display: flex; align-items: center; gap: 0.4rem; padding: 0.4rem 0.5rem; background: #f0f0f5; border-radius: 4px; font-family: 'Poppins', sans-serif; min-width: 0; overflow: hidden;">
+                                <span style="font-size: 0.65rem; color: #000; width: 16px; flex-shrink: 0;">${i + 1}</span>
+                                <span style="flex: 1; font-size: 0.75rem; color: #000; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0;">${(key || '').replace(/</g, '&lt;')}</span>
+                                <span style="font-weight: 600; color: #6366f1; flex-shrink: 0;">${parseFloat(val || 0).toFixed(1)}%</span>
                             </div>
                         `).join('')}
                     </div>
@@ -77349,15 +77348,15 @@
                 return `
                     <div style="display: grid; grid-template-columns: repeat(${columns}, 1fr); gap: ${gap};">
                         ${displayLocations.map((loc, i) => `
-                            <div style="padding: ${padding}; background: #1a1f2e; border-radius: 4px; font-size: ${fontSize}; font-family: 'Poppins', sans-serif; display: flex; align-items: center; gap: 0.3rem;">
-                                <span style="font-size: 0.65rem; color: var(--text-secondary); width: 16px; flex-shrink: 0;">${i + 1}</span>
-                                <span style="flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${loc.name || loc.dma || loc.region}</span>
-                                <span style="color: var(--accent-lime); font-weight: 600; flex-shrink: 0;">${loc.value || loc.pct?.toFixed(1) + '%' || ''}</span>
+                            <div style="padding: ${padding}; background: #f0f0f5; border-radius: 4px; font-size: ${fontSize}; font-family: 'Poppins', sans-serif; display: flex; align-items: center; gap: 0.3rem;">
+                                <span style="font-size: 0.65rem; color: #000; width: 16px; flex-shrink: 0;">${i + 1}</span>
+                                <span style="flex: 1; color: #000; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${loc.name || loc.dma || loc.region}</span>
+                                <span style="color: #6366f1; font-weight: 600; flex-shrink: 0;">${loc.value || loc.pct?.toFixed(1) + '%' || ''}</span>
                             </div>
                         `).join('')}
                     </div>
                     ${itemCount > displayLocations.length ? `
-                        <div style="margin-top: 0.5rem; padding: 0.4rem; text-align: center; font-size: 0.65rem; color: var(--text-secondary); background: rgba(200, 230, 0, 0.1); border-radius: 4px;">
+                        <div style="margin-top: 0.5rem; padding: 0.4rem; text-align: center; font-size: 0.65rem; color: #555; background: rgba(99, 102, 241, 0.1); border-radius: 4px;">
                             Showing top ${displayLocations.length} of ${itemCount} locations
                         </div>
                     ` : ''}
@@ -77409,15 +77408,15 @@
                 return `
                     <div style="display: grid; grid-template-columns: repeat(${columns}, 1fr); gap: ${gap};">
                         ${displayItems.map((item, i) => `
-                            <div style="padding: ${padding}; background: var(--bg-input); border-radius: 4px; font-size: ${fontSize}; display: flex; align-items: center; gap: 0.3rem;">
-                                <span style="font-size: 0.65rem; color: var(--text-secondary); width: 16px; flex-shrink: 0;">${i + 1}</span>
-                                <span style="flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${(item.name || '').replace(/</g, '&lt;')}</span>
-                                <span style="color: var(--accent-lime); margin-left: 0.3rem; font-weight: 600; flex-shrink: 0;">${String(item.index || item.pct || '').replace(/</g, '&lt;')}</span>
+                            <div style="padding: ${padding}; background: #f0f0f5; border-radius: 4px; font-size: ${fontSize}; display: flex; align-items: center; gap: 0.3rem;">
+                                <span style="font-size: 0.65rem; color: #000; width: 16px; flex-shrink: 0;">${i + 1}</span>
+                                <span style="flex: 1; color: #000; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${(item.name || '').replace(/</g, '&lt;')}</span>
+                                <span style="color: #6366f1; margin-left: 0.3rem; font-weight: 600; flex-shrink: 0;">${String(item.index || item.pct || '').replace(/</g, '&lt;')}</span>
                             </div>
                         `).join('')}
                     </div>
                     ${itemCount > displayItems.length ? `
-                        <div style="margin-top: 0.5rem; padding: 0.4rem; text-align: center; font-size: 0.65rem; color: var(--text-secondary); background: rgba(200, 230, 0, 0.1); border-radius: 4px;">
+                        <div style="margin-top: 0.5rem; padding: 0.4rem; text-align: center; font-size: 0.65rem; color: #555; background: rgba(99, 102, 241, 0.1); border-radius: 4px;">
                             Showing top ${displayItems.length} of ${itemCount} items
                         </div>
                     ` : ''}
@@ -77434,7 +77433,7 @@
                     const catKey = catName + '_';
                     return `
                         <div style="margin-bottom: 1rem;">
-                            <div style="font-size: 0.9rem; font-weight: 600; color: var(--accent-cyan); margin-bottom: 0.5rem;">${(label || catName).replace(/</g, '&lt;')}</div>
+                            <div style="font-size: 0.9rem; font-weight: 600; color: #6366f1; margin-bottom: 0.5rem;">${(label || catName).replace(/</g, '&lt;')}</div>
                             <div class="editable-boxes-grid" style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 0.5rem;">
                                 ${entries.map(([key, val]) => {
                                     const o = overrides[catKey + key] || {};
