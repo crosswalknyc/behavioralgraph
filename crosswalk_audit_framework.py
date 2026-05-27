@@ -1492,12 +1492,20 @@ def agent_reason_audit_fails(df,
 # Demographics + pipeline-internal columns that are legitimate even though
 # they don't appear as hostmap SECTION tags.
 ALWAYS_ALLOWED_COLUMNS = {
-    'AGE', 'GENDER', 'LOCATION', 'INCOME', 'RACE/ETHNICITY',
-    'REGION', 'EDUCATION', 'LGBTQ+', 'MARRIED', 'PARENT',
-    'METRO', 'HOUSEHOLD SIZE', 'HOUSEHOLD', 'CHILDREN',
+    # demographics emitted by the pipeline (canonical + variant spellings)
+    'AGE', 'GENDER', 'LOCATION', 'INCOME', 'RACE/ETHNICITY', 'ETHNICITY',
+    'REGION', 'EDUCATION', 'LGBTQ+', 'SEXUAL_ORIENTATION', 'SEXUAL ORIENTATION',
+    'MARRIED', 'RELATIONSHIP', 'RELATIONSHIP STATUS',
+    'PARENT', 'PARENTAL_STATUS', 'PARENTAL STATUS', 'CHILDREN',
+    'METRO', 'HOUSEHOLD SIZE', 'HOUSEHOLD',
     'POLITICAL AFFILIATION', 'POLITICAL', 'RELIGION', 'EMPLOYMENT',
     'OCCUPATION', 'COUNTRY', 'STATE', 'CITY',
+    # pipeline summary / metadata columns
     'SAMPLE SIZE', 'BRAND INPUT', 'INPUT_METADATA',
+    'INTEREST', 'INTERESTS',
+    'MOST PURCHASED CATEGORIES', 'MOST PURCHASED CATEGORY',
+    'BRAND CATEGORY',
+    # fan-status columns
     'FAN STATUS', 'AVID FAN', 'CASUAL FAN',
 }
 
@@ -2552,13 +2560,17 @@ def agent_reason_cap_overrides(df,
 # content-extras set adds categories relevant for SERIES / ACTOR / TALENT
 # subjects (BROADCAST/CABLE for the airing network, PODCAST/HOST for the
 # host adjacency, etc.).
+# D2 (2026-05-27): these MUST be canonical hostmap SECTION names. If you
+# use variants like 'SEARCH ENGINE', 'AI', 'TELCO', or 'BROADCAST/CABLE'
+# the empty-cat repopulator will inject them as Column names and bypass
+# canonicalize_categories (which runs once, BEFORE this pass). Always use
+# the canonical names that exist in reference.host_mapping.SECTION.
 MANDATORY_CATEGORIES_BASE = {
-    'SEARCH ENGINE',
-    'AI',
+    'SEARCH ENGINE/AI',
     'SOCIAL MEDIA',
     'BANKING',
     'DIGITAL BANKING',
-    'TELCO',
+    'TELECOM',
     'STREAMING/PLATFORM',
     'STREAMING/MUSIC',
     'QSR',
@@ -2570,7 +2582,6 @@ MANDATORY_CATEGORIES_BASE = {
     'CREDIT PROVIDER',
 }
 MANDATORY_CATEGORIES_CONTENT_EXTRAS = {
-    'BROADCAST/CABLE',
     'PODCAST',
     'HOST/PERSONALITY',
     'MUSICIAN/BAND',
@@ -2813,23 +2824,24 @@ def _empty_category_kind_hint(cat: str) -> str:
     """Short hint to anchor the agent on what kind of entities live here.
     Deliberately broad — we want persona enumeration, not a brand list."""
     cat_u = str(cat).strip().upper()
+    # Keys MUST be canonical hostmap SECTION names (D2). MEDIA covers both
+    # publishing brands and linear-TV networks because that's what the
+    # reference.host_mapping section emits as one column.
     hints = {
-        'SEARCH ENGINE':    'web search engines (Google, Bing, DuckDuckGo, Yahoo, Ecosia, etc.)',
-        'AI':               'consumer AI products (ChatGPT, Gemini, Claude, Copilot, Perplexity, Midjourney, etc.)',
+        'SEARCH ENGINE/AI': 'web search + consumer AI products (Google, Bing, DuckDuckGo, Yahoo, Ecosia, ChatGPT, Gemini, Claude, Copilot, Perplexity, Midjourney, etc.)',
         'SOCIAL MEDIA':     'social platforms (YouTube, Facebook, Instagram, TikTok, X, Snapchat, Pinterest, LinkedIn, Threads, etc. — NOT Reddit, that lives under APP/PLATFORM USAGE)',
         'BANKING':          'consumer banks (Chase, Bank of America, Wells Fargo, Capital One, US Bank, Citibank, Truist, PNC, etc.)',
         'DIGITAL BANKING':  'digital wallets + neobanks (PayPal, Venmo, Cash App, Apple Pay, Zelle, Chime, etc.)',
-        'TELCO':            'mobile carriers (Verizon, T-Mobile, AT&T, plus MVNO long tail like Mint, Cricket, Metro, Boost)',
+        'TELECOM':          'mobile carriers (Verizon, T-Mobile, AT&T, plus MVNO long tail like Mint, Cricket, Metro, Boost)',
         'STREAMING/PLATFORM': 'SVOD + vMVPD (Netflix, Hulu, Disney+, HBO Max, Amazon Prime Video, Peacock, Paramount+, etc.)',
         'STREAMING/MUSIC':  'music streaming services (Spotify, Apple Music, YouTube Music, Amazon Music, Pandora, SoundCloud, Tidal, etc.)',
         'QSR':              'quick-service restaurants (McDonalds, Chick-fil-A, Chipotle, Taco Bell, Wendy\'s, Dunkin, Subway, Starbucks, etc.)',
         'WHERE THEY SHOP':  'retailers (Walmart, Amazon, Target, Costco, Home Depot, Lowe\'s, Sephora, Ulta, etc.)',
-        'MEDIA':            'news + publishing brands (CNN, Fox News, NYT, WaPo, Rolling Stone, etc.)',
+        'MEDIA':            'news + publishing brands AND linear-TV networks (CNN, Fox News, NYT, WaPo, Rolling Stone, NBC, CBS, ABC, Fox, FX, FXX, AMC, Adult Swim, Comedy Central, TBS, TNT, USA, History, etc.)',
         'APP/PLATFORM USAGE': 'consumer apps (Gmail, Google Maps, Wikipedia, Reddit, Zoom, Calm, Tinder, Zillow, etc.)',
         'AUTOMOBILE':       'auto brands the persona drives or aspires to (Toyota, Honda, Ford, Chevy, BMW, Tesla, etc.)',
         'INSURANCE':        'insurance brands (State Farm, GEICO, Allstate, Progressive, Liberty Mutual, etc.)',
         'CREDIT PROVIDER':  'credit/debit networks + issuers (Visa, Mastercard, AmEx, Discover, Capital One)',
-        'BROADCAST/CABLE':  'linear TV networks (NBC, CBS, ABC, Fox, FX, FXX, AMC, Adult Swim, Comedy Central, TBS, TNT, USA, History, etc.)',
         'PODCAST':          'podcast shows the persona listens to',
         'HOST/PERSONALITY': 'TV / podcast / media hosts and on-air personalities',
         'MUSICIAN/BAND':    'musicians and bands the persona engages with',
