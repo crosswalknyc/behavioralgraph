@@ -1477,6 +1477,149 @@ def agent_reason_audit_fails(df,
 # stripped to "clean up" low values.
 
 # ─────────────────────────────────────────────────────────────────────────────
+#  Hostmap-derived canonical Column whitelist (D2: hard-gate column emission)
+# ─────────────────────────────────────────────────────────────────────────────
+# The agent occasionally invents column names (e.g. 'BROADCAST/CABLE' when the
+# hostmap canonical is 'MEDIA'). canonicalize_categories() catches the named
+# variants we know about, but NEW invented columns slip through.
+#
+# The fix: derive the canonical column whitelist from
+#   SELECT DISTINCT SECTION FROM reference.host_mapping
+# split on commas (sections are multi-tag like 'Most Purchased Brands,
+# Apparel/Footwear'), upper-cased. Drop anything outside this set ∪
+# ALWAYS_ALLOWED_COLUMNS (demographics that aren't in hostmap).
+
+# Demographics + pipeline-internal columns that are legitimate even though
+# they don't appear as hostmap SECTION tags.
+ALWAYS_ALLOWED_COLUMNS = {
+    'AGE', 'GENDER', 'LOCATION', 'INCOME', 'RACE/ETHNICITY',
+    'REGION', 'EDUCATION', 'LGBTQ+', 'MARRIED', 'PARENT',
+    'METRO', 'HOUSEHOLD SIZE', 'HOUSEHOLD', 'CHILDREN',
+    'POLITICAL AFFILIATION', 'POLITICAL', 'RELIGION', 'EMPLOYMENT',
+    'OCCUPATION', 'COUNTRY', 'STATE', 'CITY',
+    'SAMPLE SIZE', 'BRAND INPUT', 'INPUT_METADATA',
+    'FAN STATUS', 'AVID FAN', 'CASUAL FAN',
+}
+
+# Fallback whitelist used when ClickHouse is unreachable. Manually curated
+# from a 2026-05 SECTION pull; refresh by running:
+#   SELECT DISTINCT SECTION FROM reference.host_mapping
+# and splitting each value on commas.
+_HOSTMAP_SECTION_FALLBACK = {
+    'TALENT', 'ACTOR', 'MUSICIAN/BAND', 'ATHLETE',
+    'NFL ATHLETE', 'NBA ATHLETE', 'MLB ATHLETE', 'WNBA ATHLETE',
+    'NHL ATHLETE', 'SOCCER ATHLETE', 'MOTORSPORT ATHLETE',
+    'CREATOR/INFLUENCER', 'HOST/PERSONALITY',
+    'WRITER/DIRECTOR/AUTHOR/ARTIST', 'POLITICS/ACTIVIST',
+    'GAMES', 'MOST PURCHASED BRANDS',
+    'APPAREL/FOOTWEAR', 'APPAREL & FOOTWEAR', 'CPG',
+    'HOME/OUTDOOR', 'BEAUTY/WELLNESS', 'ACCESSORIES', 'PETS',
+    'TECHNOLOGY BRAND', 'STREAMING/MUSIC', 'TRAVEL', 'MEDIA',
+    'WHERE THEY SHOP', 'PODCAST', 'PODCAST RANKER',
+    'COLLEGE/UNIVERSITY', 'EVENTS', 'AMUSEMENT PARKS',
+    'APP/PLATFORM USAGE', 'TOYS', 'QSR', 'TV SHOW', 'VENUE',
+    'WHERE THEY DINE', 'STREAMING/PLATFORM',
+    'FRANCHISE', 'AUTOMOBILE', 'AUTOMOTIVE',
+    'GOLF', 'NON PROFIT/CHARITY', 'TECHNOLOGY/DEVICE',
+    'HEAVY MACHINERY', 'WORKOUT FACILITY', 'PORN MEDIA',
+    'SEARCH ENGINE/AI', 'SPORTS ORGANIZATIONS', 'SPORTS ORGANIZATION',
+    'TENNIS', 'GRAND SLAMS', 'MASTERS 1000', 'TICKETING',
+    'SOCIAL MEDIA', 'INSURANCE', 'TELECOM', 'BANKING',
+    'BETTING', 'PHARMACY', 'INVESTMENTS', 'CREDIT PROVIDER',
+    'HEALTH & WELLNESS', 'MOVIE THEATER', 'EDUCATION & LEARNING',
+    'EDUCATION', 'MUSEUM', 'HORSE RACING', 'DIGITAL BANKING',
+    'VIRTUAL MVPD FAST', 'ORGANIZATIONAL MEMBERSHIPS',
+    'SPORTS TEAM',
+    'NBA', 'WNBA', 'NFL', 'MLB', 'NHL', 'MLS', 'NWSL', 'AUSL',
+    'MILB', 'CFL', 'PLL', 'ESPORTS', 'RUGBY', 'VOLLEYBALL',
+    'AFC', 'NFC', 'AL', 'NL',
+    'AFC WEST', 'AFC EAST', 'AFC NORTH', 'AFC SOUTH',
+    'NFC WEST', 'NFC EAST', 'NFC NORTH', 'NFC SOUTH',
+    'AL WEST', 'AL EAST', 'AL CENTRAL',
+    'NL WEST', 'NL EAST', 'NL CENTRAL',
+    'EASTERN CONFERENCE', 'WESTERN CONFERENCE',
+    'METROPOLITAN DIVISION', 'ATLANTIC DIVISION',
+    'CENTRAL DIVISION', 'PACIFIC DIVISION',
+    'PREMIER LEAGUE', 'LA LIGA', 'BUNDESLIGA', 'SERIE A',
+    'LIGUE 1', 'USL CHAMPIONSHIP', 'USL LEAGUE ONE',
+    'LIGA MX', 'SAUDI PRO LEAGUE', 'SOCCER',
+    'MOTORSPORT', 'F1', 'NASCAR', 'FORMULA E',
+    'INDYCAR', 'EXTREME E&H',
+    'MOVIE',
+}
+
+# These hostmap SECTION values are NOT real categories — they're internal/
+# placeholder markers that should NEVER become a CSV Column.
+_HOSTMAP_SECTION_INTERNAL = {'HIDDEN', 'CATEGORY'}
+
+# Module-level cache so we only query ClickHouse once per process.
+_HOSTMAP_SECTION_CACHE: set | None = None
+
+
+def _split_hostmap_section_value(section_val: str) -> list[str]:
+    """A hostmap SECTION cell can be a comma-separated list of tags
+    (e.g. 'Most Purchased Brands, Apparel/Footwear'). Split + uppercase
+    + strip; drop empties and internal markers."""
+    if section_val is None:
+        return []
+    out = []
+    for tag in str(section_val).split(','):
+        t = tag.strip().upper()
+        if t and t not in _HOSTMAP_SECTION_INTERNAL:
+            out.append(t)
+    return out
+
+
+def get_hostmap_section_whitelist(refresh: bool = False,
+                                  verbose: bool = False) -> set[str]:
+    """Return the set of canonical Column names valid for the output CSV.
+
+    Combines:
+      • Distinct SECTION tags from reference.host_mapping (split on commas)
+      • ALWAYS_ALLOWED_COLUMNS (demographics + pipeline-internal columns)
+
+    Lazily queried; cached for the lifetime of the process. Pass refresh=True
+    to force a re-query (e.g. after a hostmap update). Falls back to the
+    hardcoded _HOSTMAP_SECTION_FALLBACK if ClickHouse is unreachable.
+    """
+    global _HOSTMAP_SECTION_CACHE
+    if _HOSTMAP_SECTION_CACHE is not None and not refresh:
+        return _HOSTMAP_SECTION_CACHE
+
+    derived: set[str] = set()
+    queried = False
+    try:
+        import clickhouse_connect
+        import os as _os
+        client = clickhouse_connect.get_client(
+            host=_os.environ.get('CH_HOST', '37.27.140.111'),
+            port=int(_os.environ.get('CH_PORT', '8123')),
+            username=_os.environ.get('CH_USER', 'bgapp'),
+            password=_os.environ.get('CH_PASSWORD',
+                                     '4qPllwDG+S3PptBWTRAJPTkpCzkRZ6tZ'),
+        )
+        rows = client.query(
+            "SELECT DISTINCT SECTION FROM reference.host_mapping "
+            "WHERE SECTION IS NOT NULL AND SECTION != ''"
+        ).result_rows
+        for (sec,) in rows:
+            derived.update(_split_hostmap_section_value(sec))
+        queried = True
+        if verbose:
+            print(f"   📋 hostmap whitelist: loaded {len(derived)} distinct "
+                  f"SECTION tag(s) from ClickHouse")
+    except Exception as e:
+        if verbose:
+            print(f"   ⚠️  hostmap whitelist: ClickHouse unreachable ({e}); "
+                  f"using fallback ({len(_HOSTMAP_SECTION_FALLBACK)} tags)")
+        derived = set(_HOSTMAP_SECTION_FALLBACK)
+
+    whitelist = derived | ALWAYS_ALLOWED_COLUMNS
+    _HOSTMAP_SECTION_CACHE = whitelist
+    return whitelist
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 #  Category canonicalization (Rule #0: no redundant columns)
 # ─────────────────────────────────────────────────────────────────────────────
 # The category-emitting agents occasionally produce variant column names for
@@ -1540,25 +1683,36 @@ def _norm_value(v) -> str:
 def canonicalize_categories(df,
                             remap: dict = None,
                             require_hostmap: bool = CONSOLIDATION_HOSTMAP_REQUIRED_DEFAULT,
+                            enforce_whitelist: bool = True,
+                            whitelist: set = None,
                             verbose: bool = True):
-    """Consolidate variant Column names into their canonical names.
+    """Consolidate variant Column names into their canonical names AND
+    enforce the hostmap-derived Column whitelist (D2).
 
-    For every row whose Column is in `remap` (variant → canonical):
-      • If a row with the same Value already exists in the canonical Column
-        (punctuation/casing-insensitive), the variant row is DROPPED as a dup.
+    Two phases run in order:
+
+    PHASE 1 — Remap variants. For every row whose Column is in `remap`
+    (variant → canonical):
+      • DEDUP against an existing canonical row with the same Value
+        (punctuation/casing-insensitive).
       • If `require_hostmap` is True and the Value is not in
-        reference.host_mapping, the variant row is DROPPED as a hostmap-fail.
-      • Otherwise the row is MIGRATED: its Column is rewritten to the
-        canonical name, and its Value is normalized to the hostmap canonical
-        casing when available.
+        reference.host_mapping, drop as HOSTMAP_FAIL.
+      • Otherwise MIGRATE: rewrite Column to canonical, normalize Value to
+        hostmap canonical casing when available.
+
+    PHASE 2 — Whitelist enforcement. If `enforce_whitelist` is True (default),
+    drop any row whose Column (after phase 1) is not in `whitelist`. Default
+    whitelist = get_hostmap_section_whitelist(), which combines hostmap
+    SECTION tags + ALWAYS_ALLOWED_COLUMNS (demographics + pipeline metadata).
+    Action is recorded as WHITELIST_DROP.
 
     Returns (df, decisions) where each decision is:
-        {variant, canonical, value, action: 'DEDUP'|'HOSTMAP_FAIL'|'MIGRATE',
-         bp (if known), reason}
+        {variant, canonical, value, action: 'DEDUP'|'HOSTMAP_FAIL'|'MIGRATE'|
+         'WHITELIST_DROP', bp (if known), reason}
 
     Deterministic, no LLM calls. Safe to run multiple times (idempotent —
     second run produces zero decisions because canonical columns no longer
-    contain any variant rows).
+    contain any variant rows and unknown columns have been dropped).
     """
     if 'Column' not in df.columns or 'Value' not in df.columns:
         if verbose:
@@ -1697,18 +1851,288 @@ def canonicalize_categories(df,
     if drop_idx:
         df = df.drop(index=drop_idx).reset_index(drop=True)
 
+    # ── PHASE 2: hard whitelist enforcement ────────────────────────────────
+    # Anything whose Column survived phase 1 but isn't on the whitelist gets
+    # dropped here. This catches columns the agent invented that don't appear
+    # in CATEGORY_CANONICAL_REMAP (e.g. a new fabricated 'CRYPTO EXCHANGES'
+    # or 'NEWSLETTER' column that nobody pre-registered as a variant).
+    n_whitelist_drop = 0
+    if enforce_whitelist and 'Column' in df.columns and len(df):
+        if whitelist is None:
+            whitelist = get_hostmap_section_whitelist(verbose=verbose)
+        col_upper2 = df['Column'].astype(str).str.upper().str.strip()
+        bad_mask = ~col_upper2.isin(whitelist)
+        if bad_mask.any():
+            bad_rows = df[bad_mask]
+            # Group by Column so the log is readable
+            from collections import Counter as _Counter
+            bad_counts = _Counter(col_upper2[bad_mask].tolist())
+            if verbose:
+                bits = ', '.join(f'[{c}]={n}' for c, n in
+                                 bad_counts.most_common(10))
+                print(f"   🚫 canonicalize: dropping {int(bad_mask.sum())} "
+                      f"row(s) in {len(bad_counts)} non-whitelist column"
+                      f"{'s' if len(bad_counts) != 1 else ''}: {bits}")
+            for idx in bad_rows.index:
+                bp_v = None
+                if bp_col is not None:
+                    try:
+                        bp_v = float(str(df.at[idx, bp_col])
+                                     .strip().rstrip('%'))
+                    except Exception:
+                        bp_v = None
+                decisions.append({
+                    'variant': str(df.at[idx, 'Column']),
+                    'canonical': None,
+                    'value': str(df.at[idx, 'Value']),
+                    'action': 'WHITELIST_DROP', 'bp': bp_v,
+                    'reason': f'column [{str(df.at[idx, "Column"]).upper()}]'
+                              ' not in hostmap SECTION whitelist + '
+                              'ALWAYS_ALLOWED_COLUMNS',
+                })
+            n_whitelist_drop = int(bad_mask.sum())
+            df = df[~bad_mask].reset_index(drop=True)
+
     if verbose:
         n_mig = sum(1 for d in decisions if d['action'] == 'MIGRATE')
         n_dup = sum(1 for d in decisions if d['action'] == 'DEDUP')
         n_hm  = sum(1 for d in decisions if d['action'] == 'HOSTMAP_FAIL')
+        n_wl  = sum(1 for d in decisions if d['action'] == 'WHITELIST_DROP')
         if decisions:
-            print(f"   ✅ canonicalize: {n_mig} migrated, {n_dup} deduped, "
-                  f"{n_hm} hostmap-dropped → {len(set(by_canonical.keys()))} "
+            bits = [f'{n_mig} migrated', f'{n_dup} deduped',
+                    f'{n_hm} hostmap-dropped']
+            if n_wl:
+                bits.append(f'{n_wl} whitelist-dropped')
+            print(f"   ✅ canonicalize: {', '.join(bits)} → "
+                  f"{len(set(by_canonical.keys()))} "
                   f"canonical column(s) reconciled")
         else:
             print("   ✅ canonicalize: no actionable variant rows")
 
     return df, decisions
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+#  Metadata-string scrubber (D5: prompt context leaking back as data)
+# ─────────────────────────────────────────────────────────────────────────────
+# The per-category LLM occasionally echoes its prompt context back as a row.
+# Symptoms:
+#   • Value = 'SAMPLE SIZE (2025-01-01 TO 2025-12-31) | BEHAVIOR STUDY (...)'
+#   • Value = 'BRAND INPUT: brand-variant-1, brand.variant.2, ...'
+#   • Value = '2025-01-01 TO 2025-12-31'
+#   • Value contains pipes, study markers, N=… sample-size syntax
+# These are NEVER real brands. Drop them at the audit-framework entry point so
+# nothing downstream has to special-case "is this a real brand or prompt echo?"
+
+# Patterns that mean "this Value is leaked prompt context, not a brand".
+# Each entry: (regex, label) — label used in the dropped-row decision log.
+# Patterns are case-insensitive (compiled with re.I).
+_METADATA_VALUE_PATTERNS = [
+    (re.compile(r'\|'),                                  'pipe-char'),
+    (re.compile(r'\d{4}-\d{2}-\d{2}\s+TO\s+\d{4}', re.I), 'date-range'),
+    (re.compile(r'BEHAVIOR\s+STUDY',                re.I), 'behavior-study-marker'),
+    (re.compile(r'\bN\s*=\s*\d',                    re.I), 'sample-size-marker'),
+    (re.compile(r'^\s*BRAND\s+INPUT\s*:',           re.I), 'brand-input-prefix'),
+    (re.compile(r'^\s*SAMPLE\s+SIZE\s*[:\(]',       re.I), 'sample-size-prefix'),
+    (re.compile(r'(?:^|\s)https?://',               re.I), 'embedded-url'),
+    # 5+ comma-separated chunks where each looks like a brand-variant slug
+    # (lots of hyphens, dots, or word-numeric mixes). E.g.
+    # 'tmobile,t-mobile,t_mobile,tmobileus,tmobile.com,t.mobile'
+    (re.compile(r'^[^,]{1,40}(?:\s*,\s*[^,]{1,40}){4,}$'), 'brand-variant-list'),
+]
+
+# Columns where these patterns are LEGITIMATE — don't scrub them. INCOME bands
+# look like 'UNDER $25,000', LOCATION values can contain commas, SAMPLE SIZE
+# / BRAND INPUT columns are the metadata-rows themselves.
+_METADATA_SCRUB_EXEMPT_COLUMNS = {
+    'INCOME', 'AGE', 'LOCATION', 'EDUCATION',
+    'SAMPLE SIZE', 'BRAND INPUT', 'INPUT_METADATA',
+    'POLITICAL AFFILIATION', 'RELIGION', 'OCCUPATION', 'EMPLOYMENT',
+    'COUNTRY', 'STATE', 'CITY', 'METRO',
+}
+
+
+def strip_metadata_rows(df, verbose: bool = True):
+    """Drop rows where Value matches a known prompt-leak pattern (D5).
+
+    Runs across all Columns EXCEPT those in _METADATA_SCRUB_EXEMPT_COLUMNS
+    (demographic categories whose Values legitimately contain commas, dollar
+    signs, etc.).
+
+    Returns (df, decisions) where each decision is:
+        {column, value, pattern_label, action: 'STRIP_METADATA',
+         reason: 'matches <label> pattern'}
+
+    Deterministic, no LLM calls. Idempotent.
+    """
+    if 'Value' not in df.columns or 'Column' not in df.columns:
+        if verbose:
+            print("   ⚠️  strip-metadata: missing Column/Value; skipping")
+        return df, []
+
+    df = df.copy()
+    col_upper = df['Column'].astype(str).str.upper().str.strip()
+    val_str   = df['Value'].astype(str)
+
+    eligible_mask = ~col_upper.isin(_METADATA_SCRUB_EXEMPT_COLUMNS)
+
+    decisions: list[dict] = []
+    drop_idx: list = []
+
+    for idx in df.index[eligible_mask]:
+        v = val_str.at[idx]
+        if not v or v in ('nan', 'None'):
+            continue
+        for pat, label in _METADATA_VALUE_PATTERNS:
+            if pat.search(v):
+                drop_idx.append(idx)
+                decisions.append({
+                    'column': str(df.at[idx, 'Column']),
+                    'value': v,
+                    'pattern_label': label,
+                    'action': 'STRIP_METADATA',
+                    'reason': f'matches {label} pattern (prompt-leak signature)',
+                })
+                break
+
+    if drop_idx:
+        df = df.drop(index=drop_idx).reset_index(drop=True)
+
+    if verbose:
+        if decisions:
+            from collections import Counter as _Counter
+            by_label = _Counter(d['pattern_label'] for d in decisions)
+            bits = ', '.join(f'{n} {lab}' for lab, n in by_label.most_common())
+            print(f"   🧽 strip-metadata: dropped {len(decisions)} prompt-leak "
+                  f"row(s) — {bits}")
+            for d in decisions[:5]:
+                print(f"       [{d['column'][:24]:24s}] {d['value'][:64]:<64s}"
+                      f"  ← {d['pattern_label']}")
+        else:
+            print("   ✅ strip-metadata: no prompt-leak rows detected")
+
+    return df, decisions
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+#  Subject hostmap pre-flight (D11: fail-loud when subject missing)
+# ─────────────────────────────────────────────────────────────────────────────
+# Profiles for subjects that aren't in reference.host_mapping are doomed:
+#   • pin_subject_to_100 no-ops silently (no row to pin)
+#   • the subject's own franchise / show / brand is missing from the output
+#   • we've shipped multiple bad profiles for Bob's Burgers, Universal Basic
+#     Guys, Phyllis Smith, etc. before catching this
+#
+# Solution: at profile-commission time (top of run_full_pipeline), check
+# whether the subject is in hostmap. If not, log + (optionally) raise so the
+# data team gets notified BEFORE we burn an hour of compute.
+
+class SubjectHostmapGap(RuntimeError):
+    """Raised when fail_fast=True and the subject isn't in hostmap."""
+    pass
+
+
+def subject_hostmap_preflight(subject: str,
+                              fail_fast: bool = False,
+                              notify_callback=None,
+                              verbose: bool = True) -> dict:
+    """Check whether `subject` exists in reference.host_mapping.
+
+    Returns a dict with:
+        {'subject': <str>, 'in_hostmap': <bool>, 'canonical': <str|None>,
+         'matched_via': 'exact'|'normalized'|None}
+
+    If the subject is NOT in hostmap:
+      • Always prints a HOSTMAP_GAP warning block.
+      • Calls `notify_callback(subject, gap_record)` if provided (intended
+        for wiring in email/slack/etc. — the data team needs to know
+        BEFORE the profile gets shipped).
+      • If `fail_fast=True`, raises SubjectHostmapGap. Default False
+        (preserves backward-compat for tests + dev runs).
+
+    Degrades gracefully when hostmap helpers aren't importable (returns
+    in_hostmap=True with matched_via=None so we never block profiles when
+    the check itself is broken).
+    """
+    if not subject or str(subject).strip() in ('', 'unknown', 'None'):
+        if verbose:
+            print(f"   ⚠️  preflight: subject is empty/unknown; skipping check")
+        return {'subject': subject, 'in_hostmap': True,
+                'canonical': None, 'matched_via': None}
+
+    _is_in_hostmap = None
+    _hostmap_canonical = None
+    try:
+        from post_generation_enforcers import (
+            _is_in_hostmap as _ih, _hostmap_canonical as _hc,
+            _ensure_hostmap_loaded as _eh,
+        )
+        _is_in_hostmap = _ih
+        _hostmap_canonical = _hc
+        _eh()
+    except Exception:
+        try:
+            from migration.post_generation_enforcers import (
+                _is_in_hostmap as _ih, _hostmap_canonical as _hc,
+                _ensure_hostmap_loaded as _eh,
+            )
+            _is_in_hostmap = _ih
+            _hostmap_canonical = _hc
+            _eh()
+        except Exception as e:
+            if verbose:
+                print(f"   ⚠️  preflight: hostmap helpers unavailable ({e}); "
+                      f"skipping subject check (NOT blocking)")
+            return {'subject': subject, 'in_hostmap': True,
+                    'canonical': None, 'matched_via': None}
+
+    in_hostmap = bool(_is_in_hostmap(subject))
+    canonical = _hostmap_canonical(subject) if in_hostmap else None
+    matched_via = ('exact' if canonical and canonical.upper() == subject.upper()
+                   else ('normalized' if in_hostmap else None))
+
+    if in_hostmap:
+        if verbose:
+            extra = f" → canonical: {canonical}" if canonical else ''
+            print(f"   ✅ preflight: subject '{subject}' is in hostmap{extra}")
+        return {'subject': subject, 'in_hostmap': True,
+                'canonical': canonical, 'matched_via': matched_via}
+
+    # Not in hostmap — fail loud.
+    gap_record = {
+        'subject': subject, 'in_hostmap': False,
+        'canonical': None, 'matched_via': None,
+        'severity': 'BLOCKER',
+        'message': (f"Subject '{subject}' is NOT in reference.host_mapping. "
+                    f"pin_subject_to_100 will silently no-op and the subject "
+                    f"will be missing from its own canonical categories. "
+                    f"Data team must add this subject to hostmap before the "
+                    f"profile can ship cleanly."),
+    }
+    if verbose:
+        print()
+        print("   " + "═" * 72)
+        print(f"   🚨 HOSTMAP_GAP — subject '{subject}' is NOT in "
+              f"reference.host_mapping")
+        print(f"      • pin_subject_to_100 will silently no-op")
+        print(f"      • subject will be missing from its own categories")
+        print(f"      • profile output should NOT ship before data team adds "
+              f"the subject")
+        print(f"      • notify: jessie@ / anastasia@ (hostmap maintenance)")
+        print("   " + "═" * 72)
+        print()
+
+    if notify_callback is not None:
+        try:
+            notify_callback(subject, gap_record)
+        except Exception as e:
+            if verbose:
+                print(f"   ⚠️  preflight: notify_callback raised: {e}")
+
+    if fail_fast:
+        raise SubjectHostmapGap(gap_record['message'])
+
+    return gap_record
 
 
 # Exhaustive enumerations — every value carries real signal even at the
