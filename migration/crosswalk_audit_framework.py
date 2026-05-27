@@ -1511,6 +1511,198 @@ def agent_reason_floor_noise(df,
     return df, decisions
 
 
+def agent_reason_cap_overrides(df,
+                                cap_decisions: list,
+                                openai_client,
+                                persona_doc=None,
+                                subject: str = '',
+                                audience_composition=None,
+                                model: str = 'gpt-4o',
+                                batch_size: int = 25,
+                                max_tokens: int = 6000,
+                                verbose: bool = True):
+    """Per cap firing (R1/R2/R3/R6 in BG.py's `_apply_genpop_anchored_guardrails`),
+    hand the row to the persona-reasoning agent for a final say.
+
+    Decision space (per row):
+      KEEP   — the cap is correct; agent's original value was over-emission.
+               Final BP stays at the post-cap value.
+      REVERT — the agent's original value WAS persona-justified; the cap is
+               blunt and wrong for this audience. Restore the agent_original.
+
+    cap_decisions: list of dicts produced by `_apply_genpop_anchored_guardrails`,
+        each shaped {category, value, original_bp, capped_bp, rule_id, rationale}.
+
+    Returns (df, decisions) where decisions is the per-row verdict log. Caps
+    that the agent skips (parse error / row missing) default to KEEP because
+    caps are the conservative outcome.
+    """
+    if openai_client is None or not cap_decisions:
+        if verbose and not cap_decisions:
+            print("   ⚖️  cap-override: no cap firings to review")
+        elif verbose:
+            print("   ⚠️  cap-override: no OpenAI client; cap firings stay as-is")
+        return df, []
+
+    bp_col = 'Brand Penetration (Row)'
+    raw_col = 'Original Raw Numbers'
+    proj_col = 'US Gen Pop Projection'
+
+    df = df.copy()
+    for _c in (bp_col, raw_col, proj_col):
+        if _c in df.columns and df[_c].dtype != object:
+            df[_c] = df[_c].astype(object)
+
+    col_norm = df['Column'].astype(str).str.strip().str.upper()
+    val_norm = df['Value'].astype(str).str.strip().str.upper()
+    raw_per_pct, proj_per_pct = _derive_scale_from_df(df)
+
+    persona_context = _persona_context_block(persona_doc, audience_composition, subject)
+
+    decisions: list[dict] = []
+    n_keep = n_revert = n_skip = 0
+
+    if verbose:
+        print(f"   ⚖️  cap-override: {len(cap_decisions)} cap firing(s) queued for agent review")
+
+    for batch_start in range(0, len(cap_decisions), batch_size):
+        batch = cap_decisions[batch_start: batch_start + batch_size]
+        batch_no = batch_start // batch_size + 1
+        n_batches = (len(cap_decisions) + batch_size - 1) // batch_size
+
+        items_lines = []
+        for i, cap in enumerate(batch, 1):
+            try:
+                orig = float(cap.get('original_bp', 0))
+                capd = float(cap.get('capped_bp', 0))
+            except (TypeError, ValueError):
+                orig = capd = 0.0
+            items_lines.append(
+                f"{i}. CATEGORY={cap.get('category','')} | VALUE={cap.get('value','')} "
+                f"| rule={cap.get('rule_id','?')} | agent_original={orig:.2f}% "
+                f"| post_cap={capd:.2f}% | rationale={cap.get('rationale','')}"
+            )
+
+        prompt = (
+            "You are the persona-reasoning agent for a Crosswalk digital audience pull. "
+            "The pipeline applied gen-pop-anchored CAPS to the rows below — each was "
+            "originally emitted by the agent at a high value, then pulled DOWN by a "
+            "deterministic rule (5x gen_pop cap, athlete cap, etc.). Most of the time "
+            "the cap is correct because the agent over-emitted; sometimes the original "
+            "value was persona-justified and the cap is wrong.\n\n"
+            f"=== PERSONA CONTEXT ===\n{persona_context}\n\n"
+            f"=== CAP FIRINGS (batch {batch_no}/{n_batches}) ===\n"
+            + "\n".join(items_lines)
+            + "\n\n=== TASK ===\n"
+            "For each row, decide ONE of:\n"
+            "  KEEP   — the cap is correct; the agent's original value was hallucination "
+            "or mass-American default. Justify with persona evidence "
+            "(e.g., 'audience is queer urban millennial; country-pop singer at 39% "
+            "was over-emitted, capped 16% reflects the real low affinity').\n"
+            "  REVERT — the agent's original value WAS persona-justified; the cap is "
+            "blunt and wrong for THIS audience. Restore the original. Justify with "
+            "persona evidence (e.g., 'audience is hardcore Knicks die-hards, "
+            "so Jalen Brunson at 78% IS persona-correct even at 8x gen_pop').\n\n"
+            "Hard rules:\n"
+            "  - Row-by-row reasoning grounded in THIS persona's demographics + "
+            "digital footprint. No generic 'might be correct' statements.\n"
+            "  - When in doubt, KEEP the cap. Caps are conservative; agent "
+            "over-emission of mass-American brands is far more common than "
+            "genuine persona-driven 5x+ saturation.\n"
+            "  - REVERT only when the persona TRULY justifies the high value: "
+            "die-hard fans, niche subculture saturation, identity-defining "
+            "brand for the audience, etc.\n\n"
+            "Return ONLY valid JSON in this exact shape:\n"
+            '{"decisions":[{"i":1,"decision":"KEEP","reason":"..."},'
+            '{"i":2,"decision":"REVERT","reason":"..."}]}'
+            "\nJSON only, no markdown, no code fences."
+        )
+
+        try:
+            resp = openai_client.chat.completions.create(
+                model=model,
+                messages=[{'role': 'user', 'content': prompt}],
+                temperature=0.2,
+                max_tokens=max_tokens,
+                timeout=120,
+            )
+            raw = resp.choices[0].message.content.strip()
+            raw = re.sub(r'^```(?:json)?\s*|\s*```$', '', raw).strip()
+            parsed = json.loads(raw)
+        except Exception as e:
+            if verbose:
+                print(f"   ⚠️ cap-override batch {batch_no}/{n_batches} error: {e}")
+            for cap in batch:
+                n_skip += 1
+                decisions.append({
+                    **cap, 'decision': 'SKIP',
+                    'final_bp': cap.get('capped_bp'),
+                    'reason': f'agent error: {e}',
+                })
+            continue
+
+        decision_map = {int(d.get('i', -1)): d for d in (parsed.get('decisions') or [])}
+        for i, cap in enumerate(batch, 1):
+            d = decision_map.get(i, {})
+            decision = str(d.get('decision', 'KEEP')).upper().strip()
+            reason = str(d.get('reason', '')).strip()
+
+            cat_norm = str(cap.get('category', '')).strip().upper()
+            val_norm_v = str(cap.get('value', '')).strip().upper()
+            mask = (col_norm == cat_norm) & (val_norm == val_norm_v)
+
+            if decision == 'REVERT' and mask.any():
+                idx = df.index[mask][0]
+                try:
+                    new_bp = round(float(cap['original_bp']), 4)
+                except (TypeError, ValueError, KeyError):
+                    new_bp = None
+                if new_bp is None or new_bp <= 0 or new_bp > 100:
+                    n_skip += 1
+                    decisions.append({
+                        **cap, 'decision': 'SKIP',
+                        'final_bp': cap.get('capped_bp'),
+                        'reason': f'cannot REVERT: invalid original_bp {cap.get("original_bp")!r}',
+                    })
+                    continue
+                df.at[idx, bp_col] = f"{new_bp:.4f}%"
+                if raw_col in df.columns:
+                    df.at[idx, raw_col] = str(max(1, int(round(new_bp * raw_per_pct))))
+                if proj_col in df.columns:
+                    df.at[idx, proj_col] = str(int(round(new_bp * proj_per_pct)))
+                n_revert += 1
+                decisions.append({
+                    **cap, 'decision': 'REVERT', 'final_bp': new_bp,
+                    'reason': reason or 'persona justifies original high value',
+                })
+            elif decision == 'REVERT':
+                n_skip += 1
+                decisions.append({
+                    **cap, 'decision': 'SKIP',
+                    'final_bp': cap.get('capped_bp'),
+                    'reason': 'cannot REVERT: row not found in df',
+                })
+            else:
+                n_keep += 1
+                decisions.append({
+                    **cap, 'decision': 'KEEP',
+                    'final_bp': cap.get('capped_bp'),
+                    'reason': reason or 'cap is correct; original was over-emission',
+                })
+
+        if verbose:
+            batch_keep = sum(1 for d in decisions[-len(batch):] if d['decision'] == 'KEEP')
+            batch_rev  = sum(1 for d in decisions[-len(batch):] if d['decision'] == 'REVERT')
+            print(f"   ⚖️  cap-override batch {batch_no}/{n_batches}: "
+                  f"{batch_keep} KEEP, {batch_rev} REVERT")
+
+    if verbose:
+        print(f"   ⚖️  cap-override totals: {n_keep} KEEP, {n_revert} REVERT, "
+              f"{n_skip} SKIP across {len(cap_decisions)} cap firings")
+
+    return df, decisions
+
+
 def apply_default_lock_breaks(df, report: AuditReport):
     """Re-jitter known default-value-lock fingerprints (15.0143, 11.0852, …).
     These are pipeline defaults, not real measurements — always patch them.

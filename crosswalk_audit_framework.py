@@ -1220,6 +1220,489 @@ def agent_reason_audit_fails(df,
     return df, decisions
 
 
+# ───────────────────────────────────────────────────────────────────────────
+# AGENT-DRIVEN FLOOR-NOISE REMOVAL
+# ───────────────────────────────────────────────────────────────────────────
+#
+# Design (2026-05-26): the pipeline must never leave a brand sitting at the
+# panel-floor (~0.001% / 0.011% / 0.05% — typically a single user touching
+# a brand in the entire 12-month panel window). Per operator direction,
+# these rows must either be assigned a realistic value or deleted entirely.
+# Decision-by-decision, row-by-row, the persona agent picks one of:
+#
+#   KEEP   — value is genuinely tiny for THIS persona, justify with audience
+#            evidence (e.g., "audience skews 65+ female so Roblox at 0.04%
+#            is real, not a suppression artifact").
+#   CHANGE — brand DOES fit the persona but current BP is a suppression
+#            artifact; emit realistic new_bp grounded in persona evidence
+#            (NOT mid-band, NOT formulaic).
+#   DROP   — brand does not fit the persona; the floor value is noise;
+#            remove the row entirely.
+#
+# Categories that enumerate exhaustive demographic/geographic distributions
+# (LOCATION/DMA, GENDER, AGE, etc.) are EXEMPT — their long tail is real
+# signal (every audience has a sliver in every DMA) and should never be
+# stripped to "clean up" low values.
+
+# Exhaustive enumerations — every value carries real signal even at the
+# low end. Floor-noise cleanup MUST skip these.
+FLOOR_NOISE_EXEMPT_CATEGORIES = {
+    'LOCATION',           # 210 DMAs — every audience has a tiny share in every market
+    'GENDER',
+    'AGE',
+    'RACE/ETHNICITY',
+    'INCOME',
+    'REGION',
+    'EDUCATION',
+    'LGBTQ+',
+    'MARRIED',
+    'PARENT',
+    'METRO',
+    'SAMPLE SIZE',
+    'INPUT_METADATA',
+    'BRAND INPUT',
+    'FAN STATUS',
+    'AVID FAN',
+    'CASUAL FAN',
+    'COUNTRY',
+    'STATE',
+    'CITY',
+    'HOUSEHOLD SIZE',
+    'HOUSEHOLD',
+    'CHILDREN',
+    'POLITICAL AFFILIATION',
+    'POLITICAL',
+    'RELIGION',
+    'EMPLOYMENT',
+    'OCCUPATION',
+}
+
+# Default cutoff below which a brand value looks like panel-floor noise.
+# (Operator-tunable. 0.5% catches the 0.0011 floor + immediate neighbors.)
+FLOOR_NOISE_BP_THRESHOLD = 0.5
+
+
+def agent_reason_floor_noise(df,
+                              report: AuditReport,
+                              openai_client,
+                              persona_doc=None,
+                              threshold: float = FLOOR_NOISE_BP_THRESHOLD,
+                              exempt_categories=None,
+                              model: str = 'gpt-4o',
+                              batch_size: int = 25,
+                              max_tokens: int = 6000,
+                              verbose: bool = True):
+    """Identify panel-floor noise rows (bp < threshold, non-demographic) and
+    hand each one to the persona-reasoning agent. The agent decides KEEP /
+    CHANGE / DROP per row, using the same persona evidence that drove the
+    original pull. Demographic enumerations (LOCATION, GENDER, AGE, etc.)
+    are EXEMPT — their long tails are real signal.
+
+    Returns (df, decisions) where:
+      df is the dataframe with DROP rows removed and CHANGE rows updated
+      decisions is a list of dicts with category, value, old_bp, decision,
+        new_bp (if CHANGE), reason
+
+    Floor-noise rows that the agent can't decide on default to KEEP (safe).
+    No formulas, no mid-band snapping — every decision is persona-grounded.
+    """
+    if openai_client is None:
+        if verbose:
+            print("   ⚠️ agent_reason_floor_noise: no OpenAI client; skipping")
+        return df, []
+
+    exempt = set(exempt_categories) if exempt_categories else set(FLOOR_NOISE_EXEMPT_CATEGORIES)
+    exempt = {str(c).strip().upper() for c in exempt}
+
+    bp_col = 'Brand Penetration (Row)'
+    raw_col = 'Original Raw Numbers'
+    proj_col = 'US Gen Pop Projection'
+
+    df = df.copy()
+    # pandas 2.x: assigning strings into float64 columns raises.
+    for _c in (bp_col, raw_col, proj_col):
+        if _c in df.columns and df[_c].dtype != object:
+            df[_c] = df[_c].astype(object)
+
+    col_norm = df['Column'].astype(str).str.strip().str.upper()
+    val_norm = df['Value'].astype(str).str.strip().str.upper()
+    bp_numeric = df[bp_col].apply(_numbp)
+
+    # Build the candidate set: bp in (0, threshold), category not exempt
+    floor_idx = []
+    for idx in df.index:
+        cat = col_norm.at[idx]
+        if cat in exempt:
+            continue
+        bp = bp_numeric.at[idx]
+        if bp is None:
+            continue
+        if 0 < bp < threshold:
+            floor_idx.append(idx)
+
+    if not floor_idx:
+        if verbose:
+            print(f"   🧹 floor-noise: no rows with bp<{threshold}% in non-demographic categories")
+        return df, []
+
+    if verbose:
+        print(f"   🧹 floor-noise: {len(floor_idx)} row(s) at bp<{threshold}% queued for agent re-reasoning")
+
+    persona_context = _persona_context_block(persona_doc,
+                                              report.audience_composition,
+                                              report.subject)
+    raw_per_pct, proj_per_pct = _derive_scale_from_df(df)
+
+    decisions: list[dict] = []
+    drop_idx: list = []
+    n_change = n_keep = n_drop = n_skip = 0
+
+    for batch_start in range(0, len(floor_idx), batch_size):
+        batch_idxs = floor_idx[batch_start: batch_start + batch_size]
+        batch_no = batch_start // batch_size + 1
+        n_batches = (len(floor_idx) + batch_size - 1) // batch_size
+
+        items_lines = []
+        for i, idx in enumerate(batch_idxs, 1):
+            cat = str(df.at[idx, 'Column']).strip()
+            val = str(df.at[idx, 'Value']).strip()
+            cur = bp_numeric.at[idx]
+            cur_str = f"{cur:.4f}%" if cur is not None else "—"
+            items_lines.append(
+                f"{i}. CATEGORY={cat} | VALUE={val} | current_bp={cur_str}"
+            )
+
+        prompt = (
+            "You are the persona-reasoning agent for a Crosswalk digital audience pull. "
+            "The rows below are sitting at the PANEL-FLOOR (~0.001-0.5% BP), which usually "
+            "means one of three things:\n"
+            "  - the brand DOES belong but real BP for this persona is just very small (KEEP)\n"
+            "  - the brand belongs but the pipeline suppressed it to floor (CHANGE)\n"
+            "  - the brand does not belong to this audience at all (DROP)\n\n"
+            f"=== PERSONA CONTEXT ===\n{persona_context}\n\n"
+            f"=== FLOOR-NOISE ROWS (batch {batch_no}/{n_batches}) ===\n"
+            + "\n".join(items_lines)
+            + "\n\n=== TASK ===\n"
+            "For each row, decide ONE of:\n"
+            "  KEEP   — value is genuinely tiny for THIS persona; justify with audience "
+            "evidence (e.g., 'audience skews 65+ female so Roblox at 0.04% is real').\n"
+            "  CHANGE — brand DOES fit this persona but current BP is a suppression "
+            "artifact; emit realistic new_bp (0.5-100, 2-decimal) grounded in persona "
+            "evidence (age, income, digital footprint), NOT mid-band, NOT formulaic.\n"
+            "  DROP   — brand does NOT fit this persona; the floor value is noise; "
+            "delete this row entirely.\n\n"
+            "Hard rules:\n"
+            "  - Row-by-row reasoning. No batch formulas, no caps.\n"
+            "  - When in doubt, DROP. A floor-noise row that doesn't fit the persona "
+            "is worse than a missing row.\n"
+            "  - 'reason' must reference THIS persona's demographics or digital "
+            "behavior, not generic statements.\n"
+            "  - CHANGE values must be realistic (typically 1-15% for niche-but-real "
+            "brands; never sub-0.5%; never round numbers).\n\n"
+            "Return ONLY valid JSON in this exact shape:\n"
+            '{"decisions":[{"i":1,"decision":"DROP","reason":"..."},'
+            '{"i":2,"decision":"CHANGE","new_bp":3.42,"reason":"..."},'
+            '{"i":3,"decision":"KEEP","reason":"..."}]}'
+            "\nJSON only, no markdown, no code fences."
+        )
+
+        try:
+            resp = openai_client.chat.completions.create(
+                model=model,
+                messages=[{'role': 'user', 'content': prompt}],
+                temperature=0.2,
+                max_tokens=max_tokens,
+                timeout=120,
+            )
+            raw = resp.choices[0].message.content.strip()
+            raw = re.sub(r'^```(?:json)?\s*|\s*```$', '', raw).strip()
+            parsed = json.loads(raw)
+        except Exception as e:
+            if verbose:
+                print(f"   ⚠️ floor-noise batch {batch_no}/{n_batches} error: {e}")
+            for idx in batch_idxs:
+                n_skip += 1
+                decisions.append({
+                    'category': str(df.at[idx, 'Column']),
+                    'value':    str(df.at[idx, 'Value']),
+                    'old_bp':   bp_numeric.at[idx],
+                    'decision': 'SKIP',
+                    'new_bp':   None,
+                    'reason':   f'agent error: {e}',
+                })
+            continue
+
+        decision_map = {int(d.get('i', -1)): d for d in (parsed.get('decisions') or [])}
+        for i, idx in enumerate(batch_idxs, 1):
+            d = decision_map.get(i, {})
+            cat = str(df.at[idx, 'Column'])
+            val = str(df.at[idx, 'Value'])
+            old_bp = bp_numeric.at[idx]
+            decision = str(d.get('decision', 'KEEP')).upper().strip()
+            reason = str(d.get('reason', '')).strip()
+
+            if decision == 'DROP':
+                drop_idx.append(idx)
+                n_drop += 1
+                decisions.append({
+                    'category': cat, 'value': val, 'old_bp': old_bp,
+                    'decision': 'DROP', 'new_bp': None, 'reason': reason or 'noise',
+                })
+            elif decision == 'CHANGE':
+                try:
+                    new_bp = float(d.get('new_bp'))
+                except Exception:
+                    new_bp = None
+                if new_bp is None or new_bp <= 0 or new_bp > 100:
+                    n_skip += 1
+                    decisions.append({
+                        'category': cat, 'value': val, 'old_bp': old_bp,
+                        'decision': 'SKIP', 'new_bp': None,
+                        'reason': f'invalid new_bp from agent: {d.get("new_bp")!r}',
+                    })
+                    continue
+                # 4-decimal jitter (subject+brand deterministic) to honor
+                # the "no round numbers" rule and prevent same-value pinning.
+                import random as _r
+                _r.seed(hash((report.subject, cat, val, 'floor')) & 0xFFFFFFFF)
+                new_bp = round(new_bp + _r.uniform(-0.05, 0.05), 4)
+                new_bp = max(0.5, min(100.0, new_bp))
+                df.at[idx, bp_col] = f"{new_bp:.4f}%"
+                if raw_col in df.columns:
+                    df.at[idx, raw_col] = str(max(1, int(round(new_bp * raw_per_pct))))
+                if proj_col in df.columns:
+                    df.at[idx, proj_col] = str(int(round(new_bp * proj_per_pct)))
+                n_change += 1
+                decisions.append({
+                    'category': cat, 'value': val, 'old_bp': old_bp,
+                    'decision': 'CHANGE', 'new_bp': new_bp,
+                    'reason': reason or 'persona-defensible reassignment',
+                })
+            elif decision == 'KEEP':
+                n_keep += 1
+                decisions.append({
+                    'category': cat, 'value': val, 'old_bp': old_bp,
+                    'decision': 'KEEP', 'new_bp': None,
+                    'reason': reason or 'genuinely small for this persona',
+                })
+            else:
+                n_skip += 1
+                decisions.append({
+                    'category': cat, 'value': val, 'old_bp': old_bp,
+                    'decision': 'SKIP', 'new_bp': None,
+                    'reason': reason or 'no decision',
+                })
+
+        if verbose:
+            batch_changed = sum(1 for d in decisions[-len(batch_idxs):] if d['decision']=='CHANGE')
+            batch_dropped = sum(1 for d in decisions[-len(batch_idxs):] if d['decision']=='DROP')
+            batch_kept    = sum(1 for d in decisions[-len(batch_idxs):] if d['decision']=='KEEP')
+            print(f"   🧹 floor-noise batch {batch_no}/{n_batches}: "
+                  f"{batch_dropped} DROP, {batch_changed} CHANGE, {batch_kept} KEEP")
+
+    # Drop rows the agent flagged as noise (do this last so indices stay valid).
+    if drop_idx:
+        df = df.drop(index=drop_idx).reset_index(drop=True)
+
+    if verbose:
+        print(f"   🧹 floor-noise totals: {n_drop} DROP, {n_change} CHANGE, "
+              f"{n_keep} KEEP, {n_skip} SKIP across {len(floor_idx)} flagged rows")
+
+    return df, decisions
+
+
+def agent_reason_cap_overrides(df,
+                                cap_decisions: list,
+                                openai_client,
+                                persona_doc=None,
+                                subject: str = '',
+                                audience_composition=None,
+                                model: str = 'gpt-4o',
+                                batch_size: int = 25,
+                                max_tokens: int = 6000,
+                                verbose: bool = True):
+    """Per cap firing (R1/R2/R3/R6 in BG.py's `_apply_genpop_anchored_guardrails`),
+    hand the row to the persona-reasoning agent for a final say.
+
+    Decision space (per row):
+      KEEP   — the cap is correct; agent's original value was over-emission.
+               Final BP stays at the post-cap value.
+      REVERT — the agent's original value WAS persona-justified; the cap is
+               blunt and wrong for this audience. Restore the agent_original.
+
+    cap_decisions: list of dicts produced by `_apply_genpop_anchored_guardrails`,
+        each shaped {category, value, original_bp, capped_bp, rule_id, rationale}.
+
+    Returns (df, decisions) where decisions is the per-row verdict log. Caps
+    that the agent skips (parse error / row missing) default to KEEP because
+    caps are the conservative outcome.
+    """
+    if openai_client is None or not cap_decisions:
+        if verbose and not cap_decisions:
+            print("   ⚖️  cap-override: no cap firings to review")
+        elif verbose:
+            print("   ⚠️  cap-override: no OpenAI client; cap firings stay as-is")
+        return df, []
+
+    bp_col = 'Brand Penetration (Row)'
+    raw_col = 'Original Raw Numbers'
+    proj_col = 'US Gen Pop Projection'
+
+    df = df.copy()
+    for _c in (bp_col, raw_col, proj_col):
+        if _c in df.columns and df[_c].dtype != object:
+            df[_c] = df[_c].astype(object)
+
+    col_norm = df['Column'].astype(str).str.strip().str.upper()
+    val_norm = df['Value'].astype(str).str.strip().str.upper()
+    raw_per_pct, proj_per_pct = _derive_scale_from_df(df)
+
+    persona_context = _persona_context_block(persona_doc, audience_composition, subject)
+
+    decisions: list[dict] = []
+    n_keep = n_revert = n_skip = 0
+
+    if verbose:
+        print(f"   ⚖️  cap-override: {len(cap_decisions)} cap firing(s) queued for agent review")
+
+    for batch_start in range(0, len(cap_decisions), batch_size):
+        batch = cap_decisions[batch_start: batch_start + batch_size]
+        batch_no = batch_start // batch_size + 1
+        n_batches = (len(cap_decisions) + batch_size - 1) // batch_size
+
+        items_lines = []
+        for i, cap in enumerate(batch, 1):
+            try:
+                orig = float(cap.get('original_bp', 0))
+                capd = float(cap.get('capped_bp', 0))
+            except (TypeError, ValueError):
+                orig = capd = 0.0
+            items_lines.append(
+                f"{i}. CATEGORY={cap.get('category','')} | VALUE={cap.get('value','')} "
+                f"| rule={cap.get('rule_id','?')} | agent_original={orig:.2f}% "
+                f"| post_cap={capd:.2f}% | rationale={cap.get('rationale','')}"
+            )
+
+        prompt = (
+            "You are the persona-reasoning agent for a Crosswalk digital audience pull. "
+            "The pipeline applied gen-pop-anchored CAPS to the rows below — each was "
+            "originally emitted by the agent at a high value, then pulled DOWN by a "
+            "deterministic rule (5x gen_pop cap, athlete cap, etc.). Most of the time "
+            "the cap is correct because the agent over-emitted; sometimes the original "
+            "value was persona-justified and the cap is wrong.\n\n"
+            f"=== PERSONA CONTEXT ===\n{persona_context}\n\n"
+            f"=== CAP FIRINGS (batch {batch_no}/{n_batches}) ===\n"
+            + "\n".join(items_lines)
+            + "\n\n=== TASK ===\n"
+            "For each row, decide ONE of:\n"
+            "  KEEP   — the cap is correct; the agent's original value was hallucination "
+            "or mass-American default. Justify with persona evidence "
+            "(e.g., 'audience is queer urban millennial; country-pop singer at 39% "
+            "was over-emitted, capped 16% reflects the real low affinity').\n"
+            "  REVERT — the agent's original value WAS persona-justified; the cap is "
+            "blunt and wrong for THIS audience. Restore the original. Justify with "
+            "persona evidence (e.g., 'audience is hardcore Knicks die-hards, "
+            "so Jalen Brunson at 78% IS persona-correct even at 8x gen_pop').\n\n"
+            "Hard rules:\n"
+            "  - Row-by-row reasoning grounded in THIS persona's demographics + "
+            "digital footprint. No generic 'might be correct' statements.\n"
+            "  - When in doubt, KEEP the cap. Caps are conservative; agent "
+            "over-emission of mass-American brands is far more common than "
+            "genuine persona-driven 5x+ saturation.\n"
+            "  - REVERT only when the persona TRULY justifies the high value: "
+            "die-hard fans, niche subculture saturation, identity-defining "
+            "brand for the audience, etc.\n\n"
+            "Return ONLY valid JSON in this exact shape:\n"
+            '{"decisions":[{"i":1,"decision":"KEEP","reason":"..."},'
+            '{"i":2,"decision":"REVERT","reason":"..."}]}'
+            "\nJSON only, no markdown, no code fences."
+        )
+
+        try:
+            resp = openai_client.chat.completions.create(
+                model=model,
+                messages=[{'role': 'user', 'content': prompt}],
+                temperature=0.2,
+                max_tokens=max_tokens,
+                timeout=120,
+            )
+            raw = resp.choices[0].message.content.strip()
+            raw = re.sub(r'^```(?:json)?\s*|\s*```$', '', raw).strip()
+            parsed = json.loads(raw)
+        except Exception as e:
+            if verbose:
+                print(f"   ⚠️ cap-override batch {batch_no}/{n_batches} error: {e}")
+            for cap in batch:
+                n_skip += 1
+                decisions.append({
+                    **cap, 'decision': 'SKIP',
+                    'final_bp': cap.get('capped_bp'),
+                    'reason': f'agent error: {e}',
+                })
+            continue
+
+        decision_map = {int(d.get('i', -1)): d for d in (parsed.get('decisions') or [])}
+        for i, cap in enumerate(batch, 1):
+            d = decision_map.get(i, {})
+            decision = str(d.get('decision', 'KEEP')).upper().strip()
+            reason = str(d.get('reason', '')).strip()
+
+            cat_norm = str(cap.get('category', '')).strip().upper()
+            val_norm_v = str(cap.get('value', '')).strip().upper()
+            mask = (col_norm == cat_norm) & (val_norm == val_norm_v)
+
+            if decision == 'REVERT' and mask.any():
+                idx = df.index[mask][0]
+                try:
+                    new_bp = round(float(cap['original_bp']), 4)
+                except (TypeError, ValueError, KeyError):
+                    new_bp = None
+                if new_bp is None or new_bp <= 0 or new_bp > 100:
+                    n_skip += 1
+                    decisions.append({
+                        **cap, 'decision': 'SKIP',
+                        'final_bp': cap.get('capped_bp'),
+                        'reason': f'cannot REVERT: invalid original_bp {cap.get("original_bp")!r}',
+                    })
+                    continue
+                df.at[idx, bp_col] = f"{new_bp:.4f}%"
+                if raw_col in df.columns:
+                    df.at[idx, raw_col] = str(max(1, int(round(new_bp * raw_per_pct))))
+                if proj_col in df.columns:
+                    df.at[idx, proj_col] = str(int(round(new_bp * proj_per_pct)))
+                n_revert += 1
+                decisions.append({
+                    **cap, 'decision': 'REVERT', 'final_bp': new_bp,
+                    'reason': reason or 'persona justifies original high value',
+                })
+            elif decision == 'REVERT':
+                n_skip += 1
+                decisions.append({
+                    **cap, 'decision': 'SKIP',
+                    'final_bp': cap.get('capped_bp'),
+                    'reason': 'cannot REVERT: row not found in df',
+                })
+            else:
+                n_keep += 1
+                decisions.append({
+                    **cap, 'decision': 'KEEP',
+                    'final_bp': cap.get('capped_bp'),
+                    'reason': reason or 'cap is correct; original was over-emission',
+                })
+
+        if verbose:
+            batch_keep = sum(1 for d in decisions[-len(batch):] if d['decision'] == 'KEEP')
+            batch_rev  = sum(1 for d in decisions[-len(batch):] if d['decision'] == 'REVERT')
+            print(f"   ⚖️  cap-override batch {batch_no}/{n_batches}: "
+                  f"{batch_keep} KEEP, {batch_rev} REVERT")
+
+    if verbose:
+        print(f"   ⚖️  cap-override totals: {n_keep} KEEP, {n_revert} REVERT, "
+              f"{n_skip} SKIP across {len(cap_decisions)} cap firings")
+
+    return df, decisions
+
+
 def apply_default_lock_breaks(df, report: AuditReport):
     """Re-jitter known default-value-lock fingerprints (15.0143, 11.0852, …).
     These are pipeline defaults, not real measurements — always patch them.
