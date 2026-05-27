@@ -2094,11 +2094,13 @@ def _is_x00xx_anchor(v) -> bool:
         return False
     if f < 0.5:
         return False
-    # Within 0.05 of an integer (excluding the integer itself — that case
-    # is caught by D8's X.X0 detector). The 4dp tail is the bolt-on noise.
+    # Within 0.01 of an integer (excluding the integer itself — that case
+    # is caught by D8's X.X0 detector). Colleague's audit examples:
+    # 5.0028, 7.0009, 12.0042 — all delta < 0.01. Wider bound caused 600+
+    # false positives where the integer part wasn't actually the anchor.
     rounded = round(f)
     delta = abs(f - rounded)
-    return 0.00005 < delta < 0.05
+    return 0.00005 < delta < 0.01
 
 
 def validate_emitted_bp(bp, subj: str, brand: str, category: str,
