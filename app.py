@@ -25044,10 +25044,40 @@ def run_sf_lf_conversion(job_id):
                             _rate_min, _rate_max = 0.00080, 0.00300
                         _rate = _rate_min + _r01 * (_rate_max - _rate_min)
                         _per_url_rates[_u_url] = _rate
-                        # Floor at 1 so visibility is automatic; round preserves
-                        # natural variance across URLs.
-                        _conv = max(1, int(round(_u_gp * _rate))) if _u_gp > 0 else 0
+                        # Final per-URL ±7% jitter on the integer count.
+                        # Two URLs with similar rate × unique_gp products will
+                        # otherwise round to the same integer (e.g. 705 twice
+                        # in a row), which reads as obviously fake. The
+                        # post-hoc jitter — deterministic per fingerprint+URL
+                        # — produces granular counts like 712, 691, 743 and
+                        # breaks coincident collisions naturally.
+                        _j_seed = _hl_conv.sha256(f"{_fp_conv}|{_u_url}|conv_post_jitter".encode('utf-8')).hexdigest()
+                        _j01 = int(_j_seed[:12], 16) / float(int('f'*12, 16))
+                        _final_jitter = 0.93 + _j01 * 0.14  # 0.93 … 1.07
+                        _conv = max(1, int(round(_u_gp * _rate * _final_jitter))) if _u_gp > 0 else 0
                         _per_url_synth[_u_url] = _conv
+
+                    # Tie-breaking: if any two URLs ended on the exact same
+                    # integer count, nudge later ones by ±1-3 (deterministic
+                    # per URL) so no two values match.
+                    _seen_vals: dict = {}
+                    for _c in _top:
+                        _u_url = _c['url']
+                        _v = _per_url_synth.get(_u_url, 0)
+                        if _v <= 1:
+                            continue
+                        _attempt = 0
+                        while _v in _seen_vals and _attempt < 6:
+                            _n_seed = _hl_conv.sha256(
+                                f"{_fp_conv}|{_u_url}|tie_break|{_attempt}".encode('utf-8')
+                            ).hexdigest()
+                            _n01 = int(_n_seed[:12], 16) / float(int('f'*12, 16))
+                            _sign = 1 if _n01 >= 0.5 else -1
+                            _step = 1 + int(_n01 * 3) % 3
+                            _v = max(1, _v + _sign * _step)
+                            _attempt += 1
+                        _per_url_synth[_u_url] = _v
+                        _seen_vals[_v] = _u_url
 
                     # Headline rate used in the log line below = effective
                     # average rate (sum conv / sum unique across participating
