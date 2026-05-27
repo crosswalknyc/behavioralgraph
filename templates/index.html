@@ -19204,6 +19204,7 @@
                     </details>
                     <div id="jiqAudienceHypTiles" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(290px, 1fr)); gap: 0.85rem; margin-bottom: 0.75rem;"></div>
                     <div id="jiqAudienceHypOverlap" style="margin-top: 0.5rem;"></div>
+                    <div id="jiqAudienceHypBuyerAttribution" style="margin-top: 0.5rem;"></div>
                 </div>
 
                 <!-- ════════════════════════════════════════════════════════
@@ -19268,6 +19269,7 @@
                     </details>
                     <div id="jiqExhibitorChart" style="margin-bottom: 0.85rem;"></div>
                     <div id="jiqExhibitorHeatmap" style="margin-bottom: 0.75rem;"></div>
+                    <div id="jiqExhibitorPresaleAttribution" style="margin-bottom: 0.75rem;"></div>
                     <div id="jiqExhibitorVerdict" style="font-size: 0.78rem; color: var(--text-primary); background: var(--bg-secondary); border-left: 4px solid var(--accent-primary); padding: 0.7rem 0.9rem; border-radius: 6px;"></div>
                 </div>
 
@@ -28125,12 +28127,24 @@
                     // Each tile entry: [label, value, optionalSub, optionalAccent]
                     var asOf = kpis.confirmed_as_of_date || '';
                     var fmtUsd = function(v) { return v != null ? '$' + _jiqFmt(v) : '—'; };
-                    var fandangoSub = (kpis.confirmed_fandango_purchases != null)
-                        ? 'Fandango ' + _jiqFmt(kpis.confirmed_fandango_purchases)
-                          + (asOf ? ' · ' + asOf : '')
-                        : (asOf ? 'as of ' + asOf : '');
-                    var avgPrice = (kpis.confirmed_avg_ticket_price_usd || 15);
-                    var tpp      = (kpis.confirmed_avg_tickets_per_purchase || 2);
+                    // Make crystal-clear that confirmed_digital_purchases is
+                    // across ALL tracked online channels - not Fandango only.
+                    // Show Fandango vs Other Online split + as-of date.
+                    var fandangoSub;
+                    if (kpis.confirmed_fandango_purchases != null) {
+                        var other = (kpis.confirmed_other_online_purchases != null)
+                            ? kpis.confirmed_other_online_purchases
+                            : (kpis.confirmed_digital_purchases - kpis.confirmed_fandango_purchases);
+                        fandangoSub = 'all online channels · Fandango '
+                            + _jiqFmt(kpis.confirmed_fandango_purchases)
+                            + ' + Other Online ' + _jiqFmt(other)
+                            + (asOf ? ' · as of ' + asOf : '');
+                    } else {
+                        fandangoSub = (asOf ? 'as of ' + asOf : '');
+                    }
+                    var natlAvg = (kpis.confirmed_avg_ticket_price_usd || 11.50);
+                    var effOw   = (kpis.confirmed_effective_ow_price_usd || 9.00);
+                    var tpp     = (kpis.confirmed_avg_tickets_per_purchase || 2.5);
                     var rangeSub = function(lo, hi, prefix) {
                         prefix = prefix || '';
                         if (lo == null || hi == null) return '';
@@ -28142,20 +28156,23 @@
                             fandangoSub],
                         ['Confirmed Tickets',
                             _jiqFmt(kpis.confirmed_digital_tickets),
-                            tpp + ' tickets / purchase'],
+                            tpp + ' tickets / purchase (family-title benchmark)'],
                         ['Confirmed Revenue',
                             fmtUsd(kpis.confirmed_digital_revenue_usd),
-                            '@ $' + avgPrice.toFixed(2) + ' avg ticket'],
+                            '@ $' + effOw.toFixed(2) + ' effective OW (BOGO blended) · national avg $'
+                                + natlAvg.toFixed(2)],
                         ['Opening Weekend Tickets',
                             _jiqFmt(kpis.projected_opening_weekend_tickets || kpis.projected_total_tickets),
                             rangeSub(kpis.projected_ow_range_low_tickets, kpis.projected_ow_range_high_tickets)],
                         ['Opening Weekend Gross',
                             fmtUsd(kpis.projected_opening_weekend_revenue_usd || kpis.projected_total_revenue_usd),
-                            rangeSub(kpis.projected_ow_range_low_revenue_usd, kpis.projected_ow_range_high_revenue_usd, '$'),
+                            rangeSub(kpis.projected_ow_range_low_revenue_usd, kpis.projected_ow_range_high_revenue_usd, '$')
+                                + ' · @ $' + effOw.toFixed(2) + ' effective',
                             'lime'],
                         ['Domestic Total (full run)',
                             fmtUsd(kpis.projected_total_revenue_usd),
-                            rangeSub(kpis.projected_range_low_revenue_usd, kpis.projected_range_high_revenue_usd, '$'),
+                            rangeSub(kpis.projected_range_low_revenue_usd, kpis.projected_range_high_revenue_usd, '$')
+                                + ' · @ $' + natlAvg.toFixed(2) + ' national avg',
                             'cyan'],
                     ];
                 } else {
@@ -28779,6 +28796,74 @@
                               + '</div>'
                               + '</div>';
             }
+
+            // ───── Buyer Attribution sub-card ─────
+            // Answers David's question: of the 8,147 confirmed pre-sales,
+            // what share fall into each cohort (overlapping + disjoint).
+            var baEl = document.getElementById('jiqAudienceHypBuyerAttribution');
+            var ba   = ah.buyer_attribution;
+            if (baEl && ba && (ba.per_cohort_overlapping || []).length) {
+                var ow = ba.per_cohort_overlapping;
+                var maxShare = Math.max.apply(null,
+                    ow.map(function(x){ return x.estimated_share_of_8147_pct || 0; })) || 1;
+                var owRows = ow.map(function(x) {
+                    var pct = +x.estimated_share_of_8147_pct || 0;
+                    var w = (pct / Math.max(maxShare, 1)) * 100;
+                    var isTriple = (x.cohort_key === 'triple_likely_core');
+                    var barColor = isTriple ? '#10b981' : 'var(--accent-primary)';
+                    return '<div style="display:grid;grid-template-columns:minmax(180px,1.2fr) 1fr 90px 90px;gap:10px;align-items:center;font-size:0.78rem;padding:6px 0;border-bottom:1px solid var(--border-color);">'
+                         + '<div style="font-weight:' + (isTriple ? 700 : 600) + ';color:' + (isTriple ? '#10b981' : 'var(--text-primary)') + ';">' + _jiqEsc(x.cohort_label) + '</div>'
+                         + '<div style="background:var(--bg-secondary);border-radius:6px;height:12px;overflow:hidden;">'
+                         +   '<div style="width:' + w + '%;height:100%;background:' + barColor + ';border-radius:6px;"></div>'
+                         + '</div>'
+                         + '<div style="text-align:right;font-weight:800;font-variant-numeric:tabular-nums;color:' + (isTriple ? '#10b981' : 'var(--text-primary)') + ';">' + pct.toFixed(1) + '%</div>'
+                         + '<div style="text-align:right;font-weight:600;font-variant-numeric:tabular-nums;color:var(--text-secondary);">≈ ' + _jiqFmt(x.estimated_count_in_8147) + '</div>'
+                         + '</div>';
+                }).join('');
+
+                var dpRows = '';
+                if (ba.disjoint_partition && (ba.disjoint_partition.buckets || []).length) {
+                    var bks = ba.disjoint_partition.buckets;
+                    var maxDp = Math.max.apply(null,
+                        bks.map(function(b){ return b.estimated_share_of_8147_pct || 0; })) || 1;
+                    dpRows = bks.map(function(b) {
+                        var pct = +b.estimated_share_of_8147_pct || 0;
+                        var w = (pct / Math.max(maxDp, 1)) * 100;
+                        var isTriple = (b.segment_key === 'triple_overlap');
+                        var isOutside = (b.segment_key === 'outside_all_named');
+                        var barColor = isTriple ? '#10b981' : (isOutside ? '#94a3b8' : 'var(--accent-primary)');
+                        return '<div style="display:grid;grid-template-columns:minmax(280px,1.4fr) 1fr 80px 90px;gap:10px;align-items:center;font-size:0.74rem;padding:5px 0;border-bottom:1px solid var(--border-color);">'
+                             + '<div style="font-weight:' + (isTriple ? 700 : 500) + ';color:' + (isTriple ? '#10b981' : (isOutside ? 'var(--text-secondary)' : 'var(--text-primary)')) + ';">' + _jiqEsc(b.segment_label) + '</div>'
+                             + '<div style="background:var(--bg-secondary);border-radius:6px;height:10px;overflow:hidden;">'
+                             +   '<div style="width:' + w + '%;height:100%;background:' + barColor + ';border-radius:6px;"></div>'
+                             + '</div>'
+                             + '<div style="text-align:right;font-weight:700;font-variant-numeric:tabular-nums;">' + pct.toFixed(1) + '%</div>'
+                             + '<div style="text-align:right;font-weight:600;font-variant-numeric:tabular-nums;color:var(--text-secondary);">≈ ' + _jiqFmt(b.estimated_presales_8147) + '</div>'
+                             + '</div>';
+                    }).join('');
+                }
+
+                baEl.innerHTML = '<div style="background:var(--bg-card);border:1px solid var(--border-color);border-radius:12px;padding:0.9rem;margin-top:0.85rem;">'
+                              + '<div style="font-weight:700;font-size:0.9rem;margin-bottom:4px;">🎯 Pre-Sales Cohort Attribution</div>'
+                              + '<div style="font-size:0.72rem;color:var(--text-secondary);margin-bottom:10px;">' + _jiqEsc(ba.headline || '') + '</div>'
+                              + '<div style="display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.3fr);gap:1rem;">'
+                              +   '<div>'
+                              +     '<div style="font-weight:600;font-size:0.78rem;margin-bottom:6px;">By cohort <span style="color:var(--text-secondary);font-size:0.65rem;font-weight:500;">· cohorts overlap, don\'t sum to 100%</span></div>'
+                              +     owRows
+                              +     '<div style="font-size:0.65rem;color:var(--text-secondary);margin-top:6px;font-style:italic;">' + _jiqEsc(ba.overlapping_note || '') + '</div>'
+                              +   '</div>'
+                              +   '<div>'
+                              +     '<div style="font-weight:600;font-size:0.78rem;margin-bottom:6px;">Disjoint partition <span style="color:var(--text-secondary);font-size:0.65rem;font-weight:500;">· each buyer in exactly 1 bucket, sums to 100%</span></div>'
+                              +     dpRows
+                              +     (ba.disjoint_partition && ba.disjoint_partition.method
+                                    ? '<div style="font-size:0.65rem;color:var(--text-secondary);margin-top:6px;font-style:italic;">' + _jiqEsc(ba.disjoint_partition.method) + '</div>'
+                                    : '')
+                              +   '</div>'
+                              + '</div>'
+                              + '</div>';
+            } else if (baEl) {
+                baEl.innerHTML = '';
+            }
         }
 
         // ───── Audience Sizing — Public Anchors renderer ─────
@@ -29078,6 +29163,12 @@
                         if (v <= 0.95) return 'rgba(239,68,68,0.15)';
                         return 'rgba(255,255,255,0.04)';
                     }
+                    // Triple-Likely Core column (synthetic hyp): only render
+                    // if at least one channel has triple_likely_core tilt
+                    // populated (Sony's 5/27 ask).
+                    var hasTripleTilt = channels.some(function(c) {
+                        return (c.audience_tilt || {}).triple_likely_core != null;
+                    });
                     var rows = channels.map(function(c) {
                         var tilt = c.audience_tilt || {};
                         var cells = hyps.map(function(h) {
@@ -29086,6 +29177,15 @@
                                  + (v == null ? '—' : v.toFixed(2) + '×')
                                  + '</td>';
                         }).join('');
+                        // Append Triple-Likely Core cell when populated
+                        var tripleCell = '';
+                        if (hasTripleTilt) {
+                            var tv = tilt.triple_likely_core;
+                            tripleCell = '<td style="padding:8px 10px;background:' + tiltColor(tv)
+                                + ';text-align:center;font-weight:800;font-variant-numeric:tabular-nums;border-right:2px solid #10b981;color:#10b981;">'
+                                + (tv == null ? '—' : tv.toFixed(2) + '×')
+                                + '</td>';
+                        }
                         return '<tr style="border-bottom:1px solid var(--border-color);">'
                              + '<td style="padding:8px 10px;border-right:1px solid var(--border-color);">'
                              +   '<span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:' + (c.color || '#5b6cff') + ';margin-right:6px;vertical-align:middle;"></span>'
@@ -29093,6 +29193,7 @@
                              +   '<span style="color:var(--text-secondary);font-size:0.7rem;margin-left:6px;">' + (c.share_pct || 0).toFixed(0) + '%</span>'
                              + '</td>'
                              + cells
+                             + tripleCell
                              + '<td style="padding:8px 10px;font-size:0.72rem;color:var(--text-secondary);">' + _jiqEsc(c.profile_notes || '') + '</td>'
                              + '</tr>';
                     }).join('');
@@ -29101,6 +29202,9 @@
                              + _jiqEsc(h.icon || '') + ' ' + _jiqEsc(h.name)
                              + '</th>';
                     }).join('');
+                    var tripleHeaderCell = hasTripleTilt
+                        ? '<th style="padding:8px 10px;background:var(--bg-secondary);text-align:center;font-size:0.72rem;font-weight:800;border-right:2px solid #10b981;white-space:nowrap;color:#10b981;">⭐ Triple-Likely Core</th>'
+                        : '';
                     var heatTitle = isTv
                         ? 'Audience-fit heatmap — tilt vs. surface\'s overall mix'
                         : 'Audience-fit heatmap — tilt vs. chain\'s overall mix';
@@ -29115,9 +29219,63 @@
                                      + '<thead><tr style="background:var(--bg-secondary);">'
                                      +   '<th style="padding:8px 10px;text-align:left;border-right:1px solid var(--border-color);">' + rowHeader + '</th>'
                                      +   headerCells
+                                     +   tripleHeaderCell
                                      +   '<th style="padding:8px 10px;text-align:left;">Profile</th>'
                                      + '</tr></thead><tbody>' + rows + '</tbody></table>'
                                      + '</div>';
+                }
+            }
+
+            // ───── Per-chain presale attribution table (Sony 5/27 ask) ─────
+            // For each chain, show estimated share of the 8,147 pre-sales
+            // and the per-cohort (overlapping) breakdown, including the
+            // new Triple-Likely Core column.
+            var paEl = document.getElementById('jiqExhibitorPresaleAttribution');
+            if (paEl && !isTv) {
+                var anyPa = channels.some(function(c) { return c.presale_attribution; });
+                if (anyPa) {
+                    var fmtPct = function(v) { return (v == null) ? '—' : (+v).toFixed(1) + '%'; };
+                    var paRows = channels.map(function(c) {
+                        var pa = c.presale_attribution || {};
+                        var bc = pa.by_cohort_overlapping || {};
+                        var n = (bc.nate_fans || {});
+                        var p = (bc.family_parents || {});
+                        var m = (bc.middle_america || {});
+                        var t = (bc.triple_likely_core || {});
+                        return '<tr style="border-bottom:1px solid var(--border-color);">'
+                             + '<td style="padding:7px 10px;border-right:1px solid var(--border-color);">'
+                             +   '<span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:' + (c.color || '#5b6cff') + ';margin-right:6px;vertical-align:middle;"></span>'
+                             +   '<span style="font-weight:600;">' + _jiqEsc(c.name) + '</span>'
+                             + '</td>'
+                             + '<td style="padding:7px 10px;text-align:right;font-weight:700;font-variant-numeric:tabular-nums;border-right:1px solid var(--border-color);">' + fmtPct(pa.estimated_share_of_8147_pct) + '</td>'
+                             + '<td style="padding:7px 10px;text-align:right;font-weight:600;font-variant-numeric:tabular-nums;border-right:1px solid var(--border-color);color:var(--text-secondary);">≈ ' + _jiqFmt(pa.estimated_presales_count || 0) + '</td>'
+                             + '<td style="padding:7px 10px;text-align:right;font-variant-numeric:tabular-nums;border-right:1px solid var(--border-color);">' + fmtPct(n.share_of_chain_presales_pct) + '<span style="color:var(--text-secondary);font-size:0.65rem;margin-left:4px;">≈' + _jiqFmt(n.estimated_presales_count || 0) + '</span></td>'
+                             + '<td style="padding:7px 10px;text-align:right;font-variant-numeric:tabular-nums;border-right:1px solid var(--border-color);">' + fmtPct(p.share_of_chain_presales_pct) + '<span style="color:var(--text-secondary);font-size:0.65rem;margin-left:4px;">≈' + _jiqFmt(p.estimated_presales_count || 0) + '</span></td>'
+                             + '<td style="padding:7px 10px;text-align:right;font-variant-numeric:tabular-nums;border-right:1px solid var(--border-color);">' + fmtPct(m.share_of_chain_presales_pct) + '<span style="color:var(--text-secondary);font-size:0.65rem;margin-left:4px;">≈' + _jiqFmt(m.estimated_presales_count || 0) + '</span></td>'
+                             + '<td style="padding:7px 10px;text-align:right;font-variant-numeric:tabular-nums;border-right:2px solid #10b981;color:#10b981;font-weight:700;">' + fmtPct(t.share_of_chain_presales_pct) + '<span style="color:var(--text-secondary);font-size:0.65rem;margin-left:4px;font-weight:500;">≈' + _jiqFmt(t.estimated_presales_count || 0) + '</span></td>'
+                             + '</tr>';
+                    }).join('');
+                    paEl.innerHTML = '<div style="margin-top:1rem;background:var(--bg-card);border:1px solid var(--border-color);border-radius:12px;padding:0.9rem;">'
+                                  + '<div style="font-weight:700;font-size:0.85rem;margin-bottom:4px;">📊 Per-chain pre-sales attribution by audience cohort</div>'
+                                  + '<div style="font-size:0.68rem;color:var(--text-secondary);margin-bottom:10px;">Per-chain shares of the 8,147 confirmed pre-sales, then within each chain the % of THAT chain\'s pre-sales who belong to each cohort. Cohorts overlap — per-cohort shares do not sum to 100% per chain.</div>'
+                                  + '<div style="overflow-x:auto;">'
+                                  + '<table style="width:100%;border-collapse:collapse;font-size:0.74rem;border:1px solid var(--border-color);border-radius:8px;overflow:hidden;">'
+                                  + '<thead><tr style="background:var(--bg-secondary);">'
+                                  +   '<th style="padding:7px 10px;text-align:left;border-right:1px solid var(--border-color);">Chain</th>'
+                                  +   '<th style="padding:7px 10px;text-align:right;border-right:1px solid var(--border-color);">Share of 8,147</th>'
+                                  +   '<th style="padding:7px 10px;text-align:right;border-right:1px solid var(--border-color);">Est. pre-sales</th>'
+                                  +   '<th style="padding:7px 10px;text-align:right;border-right:1px solid var(--border-color);">Nate fans</th>'
+                                  +   '<th style="padding:7px 10px;text-align:right;border-right:1px solid var(--border-color);">Family parents</th>'
+                                  +   '<th style="padding:7px 10px;text-align:right;border-right:1px solid var(--border-color);">Middle America</th>'
+                                  +   '<th style="padding:7px 10px;text-align:right;border-right:2px solid #10b981;color:#10b981;font-weight:800;">⭐ Triple-Likely Core</th>'
+                                  + '</tr></thead><tbody>' + paRows + '</tbody></table>'
+                                  + '</div>'
+                                  + (mix.presale_attribution_method
+                                     ? '<div style="font-size:0.62rem;color:var(--text-secondary);margin-top:8px;font-style:italic;">' + _jiqEsc(mix.presale_attribution_method) + '</div>'
+                                     : '')
+                                  + '</div>';
+                } else {
+                    paEl.innerHTML = '';
                 }
             }
 
