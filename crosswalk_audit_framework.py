@@ -969,9 +969,71 @@ def load_consensus_anchors_from_s3(bucket: str = 'dashboard-inputs',
 # This preserves persona accuracy end-to-end. The audit becomes a quality
 # gate that triggers re-reasoning, not a formulaic corrector.
 
+# ═══════════════════════════════════════════════════════════════════════════
+# CANONICAL AUDIENCE-NOT-MIRROR FRAMING
+# ═══════════════════════════════════════════════════════════════════════════
+# Single source of truth that's prepended to EVERY agent re-reasoning prompt
+# (audit-fails, floor-noise, cap-overrides, empty-categories) and is also
+# inlined into the upstream persona research + dossier prompts. Catches the
+# silent failure mode where the agent profiles people LIKE the subject (a
+# mirror cohort) instead of people who DIGITALLY ENGAGE with the subject.
+# The Steve Carell pull regressed exactly this way: the persona was 60+yo
+# white male comedy-actors rather than the actual digital audience of
+# Steve Carell content (mass-American adult comedy fans 25-64, all
+# demographics, slight F-skew from Office / romcom fandom).
+AUDIENCE_NOT_MIRROR_RULE = """\
+═══════════════════════════════════════════════════════════════════
+⚠️  FUNDAMENTAL FRAMING — AUDIENCE-OF, NOT MIRROR-OF
+═══════════════════════════════════════════════════════════════════
+You are profiling the DIGITAL AUDIENCE that engages with the subject
+online — the people who SEARCH them, WATCH their content, FOLLOW them
+on social, STREAM their music, BUY from their brand, ATTEND their
+events, or CLICK their links. You are NEVER profiling the subject
+themselves, and you are NEVER profiling a mirror cohort of "people
+demographically similar to the subject".
+
+Concrete failure modes to avoid:
+  • Steve Carell (62yo white male comedy actor) — audience is mass-
+    American adult comedy fans 25-64, mixed gender (often slight F-skew
+    from Office/romcom fandom), all incomes/ethnicities. NOT a cohort
+    of 62yo white male actors.
+  • Sabrina Carpenter (25yo white female pop star) — audience is young
+    women + LGBTQ+ pop fans 16-34. NOT 25yo white women in general.
+  • LeBron James (40yo Black male athlete) — audience is NBA / basketball
+    fans 18-54, M-skewing but increasingly mixed as the global brand
+    grows, all ethnicities. NOT 40yo Black male athletes.
+  • Bob's Burgers (animated sitcom) — audience is millennial-anchored
+    adult-animation fans + Tumblr-era fandom + queer-adjacent comedy
+    nerds. NOT a generic "Fox-network family of four".
+  • Grimsburg (Netflix-streamed adult animation) — audience is male-
+    leaning millennial dad-comedy / detective-comedy fans 25-54. NOT
+    "everyone who watches Fox".
+
+When the subject is a CELEBRITY, ATHLETE, MUSICIAN, or PERSON:
+  Demographics reflect WHO CONSUMES THEIR DIGITAL FOOTPRINT — not who
+  the subject is. The audience is often demographically very different
+  from the subject themselves.
+
+When the subject is a BRAND, PRODUCT, or SERVICE:
+  Demographics reflect the actual customer base anchored by the brand's
+  price point, vertical, category, and reach — not its executives or
+  founders, and not just "people who could afford it".
+
+When the subject is a TV SHOW, FILM, ALBUM, or piece of CONTENT:
+  Demographics reflect the digital audience that searches, streams,
+  shares, or fan-engages with this specific title — anchored by the
+  airing platform, genre, fandom, and cultural moment.
+═══════════════════════════════════════════════════════════════════
+"""
+
+
 def _persona_context_block(persona_doc, audience_composition, subject):
     """Compact persona summary for the agent re-reasoning prompt."""
-    bits = [f"SUBJECT: {subject}"]
+    bits = [
+        f"DIGITAL AUDIENCE OF: {subject}  "
+        f"(profile the audience, NOT the subject themselves — see "
+        f"FUNDAMENTAL FRAMING above)"
+    ]
     pd_ = persona_doc or {}
     if isinstance(pd_, dict):
         if pd_.get('subject_archetype'):
@@ -1093,7 +1155,8 @@ def agent_reason_audit_fails(df,
             )
 
         prompt = (
-            "You are the persona-reasoning agent for a Crosswalk digital audience pull. "
+            AUDIENCE_NOT_MIRROR_RULE +
+            "\nYou are the persona-reasoning agent for a Crosswalk digital audience pull. "
             "An automated audit has flagged the rows below because their current BP is "
             "outside the published-consensus range for that brand. The audit is a quality "
             "gate, not the source of truth — YOUR persona reasoning is.\n\n"
@@ -1373,7 +1436,8 @@ def agent_reason_floor_noise(df,
             )
 
         prompt = (
-            "You are the persona-reasoning agent for a Crosswalk digital audience pull. "
+            AUDIENCE_NOT_MIRROR_RULE +
+            "\nYou are the persona-reasoning agent for a Crosswalk digital audience pull. "
             "The rows below are sitting at the PANEL-FLOOR (~0.001-0.5% BP), which usually "
             "means one of three things:\n"
             "  - the brand DOES belong but real BP for this persona is just very small (KEEP)\n"
@@ -1584,7 +1648,8 @@ def agent_reason_cap_overrides(df,
             )
 
         prompt = (
-            "You are the persona-reasoning agent for a Crosswalk digital audience pull. "
+            AUDIENCE_NOT_MIRROR_RULE +
+            "\nYou are the persona-reasoning agent for a Crosswalk digital audience pull. "
             "The pipeline applied gen-pop-anchored CAPS to the rows below — each was "
             "originally emitted by the agent at a high value, then pulled DOWN by a "
             "deterministic rule (5x gen_pop cap, athlete cap, etc.). Most of the time "
@@ -1817,7 +1882,8 @@ def agent_reason_empty_categories(df,
         kind_hint = _empty_category_kind_hint(cat)
 
         prompt = (
-            "You are the persona-reasoning agent for a Crosswalk digital "
+            AUDIENCE_NOT_MIRROR_RULE +
+            "\nYou are the persona-reasoning agent for a Crosswalk digital "
             "audience pull. The category below came back with ZERO rows from "
             "the upstream agent pass — almost certainly a pipeline gap, NOT a "
             "real 'this audience has zero engagement' signal. Populate it "
