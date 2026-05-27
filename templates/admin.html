@@ -1044,7 +1044,6 @@
                         <div style="display: flex; gap: 0.5rem;">
                             <button class="btn btn-small btn-secondary" onclick="loadUsers()">↻ Refresh</button>
                             <button class="btn btn-small btn-secondary" onclick="showExportUserInfoModal()" title="Export full user activity by user or by company">📥 Export User Info</button>
-                            <button class="btn btn-small btn-secondary" onclick="checkInactiveUsersAndSendAlerts()" title="Send email alerts for users inactive 7+ days (to liz, jessie, alexia, jenna)">📧 Check inactive users</button>
                             <button class="btn btn-small btn-success" onclick="showAddUserModal()">+ Add User</button>
                             <button class="btn btn-small btn-primary" onclick="restoreDefaultValuesForAllUsers()" title="Only restores Run Access and Behavioral Category access from Quick Selects. Does not change user roles or delete users.">Restore Default Values For All Users</button>
                         </div>
@@ -7687,21 +7686,9 @@
             document.getElementById('exportUserInfoCompanyWrap').style.display = by === 'company' ? 'block' : 'none';
         }
 
-        async function checkInactiveUsersAndSendAlerts() {
-            try {
-                const response = await fetch('/api/admin/check-inactive-users', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' } });
-                const data = await response.json();
-                if (data.success) {
-                    const msg = data.inactive_users && data.inactive_users.length ? `${data.message} (${data.inactive_users.join(', ')})` : 'No users inactive for 7+ days (or already notified recently).';
-                    if (typeof showToast === 'function') showToast(msg);
-                } else {
-                    if (typeof showToast === 'function') showToast(data.error || 'Check failed', true);
-                }
-            } catch (e) {
-                console.error('checkInactiveUsersAndSendAlerts error:', e);
-                if (typeof showToast === 'function') showToast('Request failed: ' + (e.message || 'Unknown error'), true);
-            }
-        }
+        // checkInactiveUsersAndSendAlerts() removed 2026-05-27 — inactive-user
+        // email alerts feature disabled per user request. Endpoint
+        // /api/admin/check-inactive-users now returns success with emails_sent=0.
 
         function buildUserActivityCSVRows(username, data) {
             const user = data.user;

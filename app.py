@@ -4795,18 +4795,20 @@ def _check_and_send_inactive_user_emails():
 @app.route('/api/admin/check-inactive-users', methods=['POST'])
 @requires_admin
 def check_inactive_users():
-    """Check for users inactive 7+ days and send alert emails to Crosswalk team. Call daily via cron or manually."""
-    try:
-        sent_count, inactive_usernames = _check_and_send_inactive_user_emails()
-        return jsonify({
-            'success': True,
-            'emails_sent': sent_count,
-            'inactive_users': inactive_usernames,
-            'message': f'Emails sent to {len(INACTIVE_ALERT_RECIPIENTS)} recipients for {len(inactive_usernames)} inactive user(s).'
-        })
-    except Exception as e:
-        traceback.print_exc()
-        return jsonify({'success': False, 'error': str(e)}), 500
+    """DISABLED 2026-05-27 (per user request).
+
+    Previously called _check_and_send_inactive_user_emails(), which sent
+    one alert email per inactive user to liz/jessie/alexia/jenna.
+    The feature is now a no-op; the admin-UI button has been removed
+    from templates/admin.html. Hitting this endpoint returns success with
+    emails_sent=0 so any cached client code doesn't error.
+    """
+    return jsonify({
+        'success': True,
+        'emails_sent': 0,
+        'inactive_users': [],
+        'message': 'Inactive-user email alerts are disabled.',
+    })
 
 
 # Activity CSV export: cadence options and scheduling
@@ -5150,22 +5152,24 @@ def run_activity_export_jobs():
 
 @app.route('/api/cron/restore-users-from-deployed-file', methods=['POST'])
 def cron_restore_users_from_deployed_file():
-    """One-time: load users from the deployed repo's users.json and save to S3. Use after restoring users locally so production gets all users. Requires CRON_SECRET."""
-    secret = request.headers.get('X-Cron-Secret') or request.args.get('secret') or ''
-    if not secret or secret != os.environ.get('CRON_SECRET', ''):
-        return jsonify({'success': False, 'error': 'Unauthorized'}), 403
-    try:
-        with open(USERS_FILE, 'r') as f:
-            data = json.load(f)
-        if not data.get('users'):
-            return jsonify({'success': False, 'error': 'No users in file'}), 400
-        save_users(data)
-        count = len(data['users'])
-        return jsonify({'success': True, 'message': f'Restored {count} users to S3. All users are now on production.'})
-    except FileNotFoundError:
-        return jsonify({'success': False, 'error': 'users.json not found in deployment'}), 404
-    except Exception as e:
-        return jsonify({'success': False, 'error': str(e)}), 500
+    """DISABLED 2026-05-27.
+
+    Previously loaded users from the deployed repo's users.json and
+    overwrote s3://dashboard-inputs/system/users.json. The daily
+    activity-export-cron invoked this every morning at 06:00 UTC, which
+    silently wiped accounts created/edited through the admin UI since
+    the last commit (and reset every user's last_inactive_email_sent
+    cooldown, which caused a flood of inactive-user alert emails when
+    an admin clicked "Check inactive users" hours later).
+
+    S3 is now the single source of truth. The repo's users.json is only
+    a bootstrap fallback. To bulk-load users from the repo intentionally,
+    use /api/cron/restore-users-from-body with an explicit JSON body.
+    """
+    return jsonify({
+        'success': False,
+        'error': 'Endpoint disabled 2026-05-27 — was overwriting live S3 users.json with stale repo file. Use /api/cron/restore-users-from-body with explicit body if you really need to bulk-load.',
+    }), 410
 
 
 @app.route('/api/cron/restore-users-from-body', methods=['POST'])
