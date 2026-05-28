@@ -28203,6 +28203,25 @@
                             fmtUsd(kpis.confirmed_digital_revenue_usd),
                             '@ $' + effOw.toFixed(2) + ' effective OW (BOGO blended) · national avg $'
                                 + natlAvg.toFixed(2)],
+                    ];
+                    if (kpis.intent_gap_tickets_mid != null) {
+                        var gapSubParts = [];
+                        if (kpis.intent_gap_tickets_low != null && kpis.intent_gap_tickets_high != null) {
+                            gapSubParts.push('range ' + _jiqFmt(kpis.intent_gap_tickets_low)
+                                             + '–' + _jiqFmt(kpis.intent_gap_tickets_high) + ' tix');
+                        }
+                        if (kpis.intent_gap_addressable_tickets_mid != null) {
+                            gapSubParts.push('~' + _jiqFmt(kpis.intent_gap_addressable_tickets_mid)
+                                             + ' digitally addressable (rest = walk-up)');
+                        } else {
+                            gapSubParts.push('= projected OW tix − confirmed digital tix');
+                        }
+                        k.push(['Not Yet Converted · Strong Intent',
+                                _jiqFmt(kpis.intent_gap_tickets_mid) + ' tix',
+                                gapSubParts.join(' · '),
+                                'amber']);
+                    }
+                    k.push(
                         ['Opening Weekend Tickets',
                             _jiqFmt(kpis.projected_opening_weekend_tickets || kpis.projected_total_tickets),
                             rangeSub(kpis.projected_ow_range_low_tickets, kpis.projected_ow_range_high_tickets)],
@@ -28215,8 +28234,8 @@
                             fmtUsd(kpis.projected_total_revenue_usd),
                             rangeSub(kpis.projected_range_low_revenue_usd, kpis.projected_range_high_revenue_usd, '$')
                                 + ' · @ $' + natlAvg.toFixed(2) + ' national avg',
-                            'cyan'],
-                    ];
+                            'cyan']
+                    );
                 } else {
                     k = [
                         ['Total Users',            _jiqFmt(kpis.total_users)],
@@ -28232,8 +28251,9 @@
                     var value  = pair[1];
                     var sub    = pair[2] || '';
                     var accent = pair[3] || '';
-                    var valueColor = (accent === 'lime') ? 'var(--accent-lime)'
-                                   : (accent === 'cyan') ? 'var(--accent-cyan)'
+                    var valueColor = (accent === 'lime')  ? 'var(--accent-lime)'
+                                   : (accent === 'cyan')  ? 'var(--accent-cyan)'
+                                   : (accent === 'amber') ? '#f59e0b'
                                    : 'var(--text-primary)';
                     var border = accent ? '1px solid ' + valueColor : '1px solid var(--border-color)';
                     return '<div style="background: var(--bg-secondary); border: ' + border + '; border-radius: 8px; padding: 0.6rem 0.8rem;">'
