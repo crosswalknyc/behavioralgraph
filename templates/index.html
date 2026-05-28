@@ -30175,14 +30175,17 @@
         }
         function _jiqRenderCompanionTimeline(comps) {
             if (!comps || !comps.length) return '<div style="font-size:0.8rem;color:var(--text-secondary);padding:0.5rem 0;">No data.</div>';
-            var W = 720, H = 360;
-            var padL = 30, padR = 30, padT = 30, padB = 90;
+            // H bumped from 360 -> 500 + clamp added below so the bubble
+            // stack (which grows upward when several bubbles overlap)
+            // can't clip past the top edge of the SVG viewBox.
+            var W = 720, H = 500;
+            var padL = 30, padR = 30, padT = 50, padB = 90;
             var xMin = -4, xMax = 2.5;  // hours; -4h before .. 2.5h after
             function xFor(h) {
                 var clamped = Math.max(xMin, Math.min(xMax, h));
                 return padL + ((clamped - xMin) / (xMax - xMin)) * (W - padL - padR);
             }
-            var axisY = padT + (H - padT - padB) * 0.55;
+            var axisY = padT + (H - padT - padB) * 0.70;
             var maxPct = Math.max.apply(null, comps.map(function(c) { return +c.share_pct_of_visitors || 0; }));
             if (maxPct <= 0) maxPct = 1;
             // Compute positions
@@ -30201,16 +30204,34 @@
                     typical_window: c.typical_window || '',
                 };
             }).sort(function(a, b) { return a.x - b.x; });
-            // Stagger overlapping bubbles vertically
+            // Stagger overlapping bubbles vertically. Bubbles stack
+            // upward by default; if a stack would clip past the top
+            // padding it instead resets and stacks downward from the
+            // axis (so we never lose the bubble + its label off-canvas).
             enriched.forEach(function(e, i) {
                 e.y = axisY;
+                e.stackDir = -1; // -1 = up, +1 = down
                 for (var j = 0; j < i; j++) {
                     var other = enriched[j];
                     var dx = Math.abs(e.x - other.x);
                     if (dx < (e.r + other.r + 4)) {
-                        e.y = other.y - (other.r + e.r + 6);
+                        var candidateUp   = other.y - (other.r + e.r + 6);
+                        var candidateDown = other.y + (other.r + e.r + 6);
+                        // Prefer up; flip to down if up would clip
+                        // above the top padding (accounting for the
+                        // bubble's own radius + label below it)
+                        if (candidateUp - e.r < padT) {
+                            e.y = candidateDown;
+                            e.stackDir = 1;
+                        } else {
+                            e.y = candidateUp;
+                        }
                     }
                 }
+                // Hard clamp in case the alternating logic still pushes
+                // a bubble out of bounds (very dense data)
+                e.y = Math.max(padT + e.r + 4,
+                       Math.min(H - padB - e.r - 18, e.y));
             });
             // X-axis ticks
             var ticks = [-3, -2, -1, 0, 1, 2];
