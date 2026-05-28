@@ -74951,18 +74951,6 @@
             `;
         }
 
-        function getDeckBarColor(colorIndex = 0) {
-            return (colorIndex % 2 === 0)
-                ? 'var(--deck-accent-lime, #B8D945)'
-                : 'var(--deck-accent-magenta, #C026A3)';
-        }
-
-        function getDeckColorIndexForCategory(category) {
-            const c = (category || '').toLowerCase();
-            if (['education', 'ethnicity', 'relationship', 'sexual', 'parental', 'occupation', 'affinity', 'platform', 'music', 'podcast'].some(x => c.includes(x))) return 1;
-            return 0;
-        }
-
         function getDeckSectionBreadcrumb(slide, profileName) {
             if (slide?.customHeader?.breadcrumb) return slide.customHeader.breadcrumb;
             const section = (slide?.category || slide?.title || slide?.type || 'Data').toUpperCase();
@@ -74977,32 +74965,54 @@
             return num.toFixed(1) + '%';
         }
 
+        function getDeckBarColor() {
+            return 'var(--deck-accent-lime, #B8D945)';
+        }
+
+        function getDeckBarWidth(val, valueFormat = 'percent', maxVal = 100) {
+            const num = parseFloat(val) || 0;
+            if (valueFormat === 'index') {
+                return maxVal > 0 ? (num / maxVal * 100) : 0;
+            }
+            return Math.min(100, Math.max(0, num));
+        }
+
+        function getDeckBarMaxVal(entries, valueFormat = 'percent') {
+            if (valueFormat === 'index') {
+                return Math.max(...entries.map(([_, v]) => parseFloat(v) || 0), 1);
+            }
+            return 100;
+        }
+
+        function renderDeckBarRow(key, val, options = {}) {
+            if (!key) return '<div style="min-height: 16px;"></div>';
+            const { valueFormat = 'percent', maxVal = 100, compact = false } = options;
+            const labelWidth = compact ? '22%' : '26%';
+            const barWidth = getDeckBarWidth(val, valueFormat, maxVal);
+            const displayVal = formatDeckBarValue(val, valueFormat);
+            const barColor = getDeckBarColor();
+            return `
+                <div style="display: flex; align-items: center; gap: 0.45rem; min-height: 16px;">
+                    <span style="flex: 0 0 ${labelWidth}; font-size: 0.58rem; color: var(--deck-text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${escapeHtml(key)}">${escapeHtml(key)}</span>
+                    <div style="flex: 1; height: 9px; background: var(--deck-bar-track); border-radius: 999px; overflow: hidden;">
+                        <div style="height: 100%; width: ${barWidth}%; background: ${barColor}; border-radius: 999px;"></div>
+                    </div>
+                    <span style="flex: 0 0 34px; font-size: 0.58rem; color: var(--deck-text-muted); text-align: right;">${displayVal}</span>
+                </div>`;
+        }
+
         function renderDeckHorizontalBars(entries, options = {}) {
             if (!entries.length) {
                 return '<div style="color: var(--deck-text-muted); font-size: 0.7rem; font-style: italic;">No data</div>';
             }
-            const { sectionTitle = '', colorIndex = 0, compact = false, valueFormat = 'percent' } = options;
-            const barColor = getDeckBarColor(colorIndex);
-            const maxVal = Math.max(...entries.map(([_, v]) => parseFloat(v) || 0), 0.01);
-            const labelWidth = compact ? '22%' : '26%';
+            const { sectionTitle = '', compact = false, valueFormat = 'percent' } = options;
+            const maxVal = getDeckBarMaxVal(entries, valueFormat);
             const gap = compact ? '0.28rem' : '0.38rem';
 
             return `
                 ${sectionTitle ? `<div class="deck-meta-label" style="margin-bottom: 0.45rem;">${escapeHtml(sectionTitle)}</div>` : ''}
                 <div style="display: flex; flex-direction: column; gap: ${gap};">
-                    ${entries.map(([key, val]) => {
-                        const num = parseFloat(val) || 0;
-                        const barWidth = maxVal > 0 ? (num / maxVal * 100) : 0;
-                        const displayVal = formatDeckBarValue(val, valueFormat);
-                        return `
-                        <div style="display: flex; align-items: center; gap: 0.45rem; min-height: 16px;">
-                            <span style="flex: 0 0 ${labelWidth}; font-size: 0.58rem; color: var(--deck-text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${escapeHtml(key)}">${escapeHtml(key)}</span>
-                            <div style="flex: 1; height: 9px; background: var(--deck-bar-track); border-radius: 999px; overflow: hidden;">
-                                <div style="height: 100%; width: ${barWidth}%; background: ${barColor}; border-radius: 999px;"></div>
-                            </div>
-                            <span style="flex: 0 0 34px; font-size: 0.58rem; color: var(--deck-text-muted); text-align: right;">${displayVal}</span>
-                        </div>`;
-                    }).join('')}
+                    ${entries.map(([key, val]) => renderDeckBarRow(key, val, { valueFormat, maxVal, compact })).join('')}
                 </div>
             `;
         }
@@ -75011,17 +75021,31 @@
             const maxPerColumn = options.maxPerColumn || 10;
             const cols = entries.length <= maxPerColumn ? 1 : 2;
             const perCol = Math.ceil(entries.length / cols);
+            const valueFormat = options.valueFormat || 'percent';
+            const maxVal = getDeckBarMaxVal(entries, valueFormat);
+            const rowOpts = { valueFormat, maxVal, compact: cols > 1 };
+
+            if (cols === 1) {
+                return renderDeckHorizontalBars(entries, { ...options, ...rowOpts });
+            }
+
             const columns = [];
             for (let i = 0; i < cols; i++) columns.push(entries.slice(i * perCol, (i + 1) * perCol));
+            const rowCount = Math.max(columns[0].length, columns[1].length);
+            const gap = '0.28rem';
 
             return `
-                <div style="display: grid; grid-template-columns: repeat(${cols}, 1fr); gap: 0.85rem; width: 100%;">
-                    ${columns.map((colEntries, colIdx) => renderDeckHorizontalBars(colEntries, {
-                        sectionTitle: colIdx === 0 ? (options.sectionTitle || '') : '',
-                        colorIndex: (options.colorIndex || 0) + colIdx,
-                        compact: cols > 1,
-                        valueFormat: options.valueFormat || 'percent'
-                    })).join('')}
+                ${options.sectionTitle ? `<div class="deck-meta-label" style="margin-bottom: 0.45rem;">${escapeHtml(options.sectionTitle)}</div>` : ''}
+                <div style="display: flex; flex-direction: column; gap: ${gap};">
+                    ${Array.from({ length: rowCount }, (_, rowIdx) => {
+                        const left = columns[0][rowIdx];
+                        const right = columns[1][rowIdx];
+                        return `
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.85rem; align-items: center;">
+                            ${renderDeckBarRow(left?.[0], left?.[1], rowOpts)}
+                            ${renderDeckBarRow(right?.[0], right?.[1], rowOpts)}
+                        </div>`;
+                    }).join('')}
                 </div>
             `;
         }
@@ -77665,8 +77689,7 @@
                 const rawVizType = vizPrefs.type === 'columns' ? 'columnchart' : (vizPrefs.type || 'bars');
                 const vizType = rawVizType === 'auto' ? 'bars' : rawVizType;
                 const barOptions = {
-                    sectionTitle: (slide.category || slide.title || '').toUpperCase(),
-                    colorIndex: getDeckColorIndexForCategory(slide.category)
+                    sectionTitle: (slide.category || slide.title || '').toUpperCase()
                 };
                 if (vizType === 'bars') {
                     return renderDemographicBars(entries, itemCount, barOptions);
@@ -77727,8 +77750,7 @@
                 const maxItems = getDeckDisplayMaxItems(vizPrefs, itemCount);
                 entries = entries.slice(0, maxItems);
                 const barOptions = {
-                    sectionTitle: (slide.category || slide.title || '').toUpperCase(),
-                    colorIndex: getDeckColorIndexForCategory(slide.category)
+                    sectionTitle: (slide.category || slide.title || '').toUpperCase()
                 };
                 
                 // Default: Keke-style horizontal bar chart
@@ -77822,8 +77844,7 @@
                     return [name, val];
                 }).filter(([name]) => name);
                 return renderDeckBarColumns(barEntries, {
-                    sectionTitle: (slide.category || 'GEOGRAPHY').toUpperCase(),
-                    colorIndex: getDeckColorIndexForCategory(slide.category)
+                    sectionTitle: (slide.category || 'GEOGRAPHY').toUpperCase()
                 });
             }
             
@@ -77845,7 +77866,6 @@
                 }).filter(([name]) => name);
                 return renderDeckBarColumns(barEntries, {
                     sectionTitle: (slide.category || 'AFFINITY').toUpperCase(),
-                    colorIndex: getDeckColorIndexForCategory(slide.category),
                     valueFormat: 'index'
                 });
             }
@@ -77861,7 +77881,6 @@
                             const label = (catName || '').replace(/_/g, ' ').toUpperCase();
                             return renderDeckHorizontalBars(entries, {
                                 sectionTitle: label,
-                                colorIndex: getDeckColorIndexForCategory(catName) + catIdx,
                                 compact: true
                             });
                         }).join('')}
