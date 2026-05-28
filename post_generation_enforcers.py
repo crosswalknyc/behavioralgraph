@@ -1150,38 +1150,23 @@ def strip_input_metadata_leakage(df, subject, verbose=True):
     return df, len(drop_idx)
 
 
-CANONICAL_SAMPLE_SIZE = 10_000_000  # per edit_sample_size.py — the canonical
-                                     # "scaled-to-10M-panel" sample size used
-                                     # in the dashboard math. All Raw numbers
-                                     # are denominated in this unit.
-
-
 def recompute_raw_and_projection(df, subject, verbose=True):
     """Recompute Original Raw Numbers + US Gen Pop Projection from BP for
-    every row, using the CANONICAL formulas from ``edit_sample_size.py``.
+    every row. Sample size derives from BRAND INPUT row (BP=100 →
+    raw=sample_size by definition); falls back to SAMPLE SIZE row if
+    BRAND INPUT missing.
 
-    Canonical formulas (anchored on a 10M-panel sample size):
-        sample_size  = 10_000_000
-        Raw          = round(BP / 100 * sample_size)
-        Proj         = round((Raw / 10_000_000) * 329_900_000)
-
-    The pipeline upstream sometimes records sample_size = 10_000 (i.e.
-    1,000× too small), which makes Raw numbers 1,000× too small and
-    leaves Proj numerically right *only by collapsing math* — but the
-    Raw column is broken. This enforcer:
-
-      1. Forces BRAND INPUT ``Original Raw Numbers`` = 10_000_000
-      2. Forces SAMPLE SIZE ``Category Share`` = 10_000_000 (and
-         ``Percentage`` if present)
-      3. Recomputes every other row's Raw = BP × 10M / 100
-      4. Recomputes every Proj = Raw × 329.9M / 10M = BP × 3.299M
+    Formulas (canonical):
+        Raw  = round(BP / 100 * sample_size)
+        Proj = round(BP / 100 * 329_900_000)
 
     Added 2026-05-27 after sweep found ALL 230 profiles in S3 had stale
     Raw/Proj cells (avg 3,261 stale cells per profile; total 750,113).
-    Hardened 2026-05-27 to enforce the 10M canonical sample size from
-    edit_sample_size.py.
+    Root cause: ad-hoc BP edits over time didn't always recompute the
+    downstream Raw and Proj. This enforcer canonicalizes the math on
+    every run so drift is impossible.
 
-    Preserves BP and Category Share (except SAMPLE SIZE row) unchanged.
+    Preserves BP and Category Share unchanged.
     """
     if df is None or len(df) == 0:
         return df, 0
@@ -1196,39 +1181,30 @@ def recompute_raw_and_projection(df, subject, verbose=True):
     if raw_col is None and proj_col is None:
         return df, 0
 
-    # Enforce canonical sample size on the SAMPLE SIZE / BRAND INPUT rows
+    # Derive sample size from BRAND INPUT (canonical) or SAMPLE SIZE
     c_upper = df['Column'].astype(str).str.upper().str.strip()
-    sample_size = CANONICAL_SAMPLE_SIZE
+    sample_size = None
+    for cat in ('BRAND INPUT', 'SAMPLE SIZE'):
+        cand = df[c_upper == cat]
+        if len(cand) == 0:
+            continue
+        r = cand.iloc[0]
+        bp = _num(r.get(bp_col))
+        raw = _num(r.get(raw_col)) if raw_col else None
+        if raw and bp and bp > 0:
+            sample_size = raw / (bp / 100.0)
+            break
+    if sample_size is None:
+        if verbose:
+            print('   ⚠️ recompute_raw_and_projection: no sample-size source '
+                  '(BRAND INPUT / SAMPLE SIZE missing or BP=0); skipping')
+        return df, 0
 
-    # 1. BRAND INPUT row: Original Raw Numbers = sample_size
-    bi_mask = c_upper == 'BRAND INPUT'
-    if bi_mask.any() and raw_col is not None:
-        # Make sure column can hold an int (cast to object if needed)
-        if df[raw_col].dtype != object:
-            df[raw_col] = df[raw_col].astype(object)
-        df.loc[bi_mask, raw_col] = int(sample_size)
-
-    # 2. SAMPLE SIZE row: Category Share = sample_size (and Percentage if
-    #    present — that's the legacy column the pipeline uses internally)
-    ss_mask = c_upper == 'SAMPLE SIZE'
-    if ss_mask.any():
-        if cs_col is not None and cs_col in df.columns:
-            if df[cs_col].dtype != object:
-                df[cs_col] = df[cs_col].astype(object)
-            df.loc[ss_mask, cs_col] = float(sample_size)
-        if 'Percentage' in df.columns:
-            if df['Percentage'].dtype != object:
-                df['Percentage'] = df['Percentage'].astype(object)
-            df.loc[ss_mask, 'Percentage'] = float(sample_size)
-
-    # 3. Recompute Raw + Proj for every row from BP using canonical formula
     bp_actual = df[bp_col].apply(_num)
     valid = bp_actual.notna()
     cells = 0
 
     if raw_col is not None:
-        if df[raw_col].dtype != object:
-            df[raw_col] = df[raw_col].astype(object)
         raw_actual = df[raw_col].apply(_num)
         raw_expected = (bp_actual / 100.0 * sample_size).round(0)
         diff = ((raw_actual - raw_expected).abs() > 1).fillna(False) & valid
@@ -1236,18 +1212,15 @@ def recompute_raw_and_projection(df, subject, verbose=True):
         df.loc[valid, raw_col] = raw_expected.loc[valid].astype('int64')
 
     if proj_col is not None:
-        if df[proj_col].dtype != object:
-            df[proj_col] = df[proj_col].astype(object)
         proj_actual = df[proj_col].apply(_num)
-        # Canonical: Proj = (Raw / 10M) × 329.9M  ==  BP/100 × 329.9M
         proj_expected = (bp_actual / 100.0 * US_POP).round(0)
         diff = ((proj_actual - proj_expected).abs() > 1).fillna(False) & valid
         cells += int(diff.sum())
         df.loc[valid, proj_col] = proj_expected.loc[valid].astype('int64')
 
-    if verbose:
+    if verbose and cells:
         print(f'   📐 recomputed {cells} Raw/Proj cells '
-              f'(canonical sample_size={int(sample_size):,})')
+              f'(sample_size={int(round(sample_size))})')
     return df, cells
 
 
