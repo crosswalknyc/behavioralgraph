@@ -11388,6 +11388,31 @@
             pointer-events: none;
         }
 
+        .deck-keke-slide {
+            z-index: 1;
+        }
+
+        .deck-keke-why-callout {
+            flex-shrink: 0;
+            max-width: 72%;
+        }
+
+        .slide-module-content.deck-keke-chart {
+            padding-top: 24px;
+            min-height: 140px;
+        }
+
+        .slide-module-content.deck-keke-chart .drag-handle {
+            top: 4px;
+            left: 4px;
+            opacity: 0.85;
+            z-index: 20;
+        }
+
+        .slide-module-content.deck-keke-chart:hover .drag-handle {
+            opacity: 1;
+        }
+
         .deck-meta-label {
             font-size: 0.55rem;
             letter-spacing: 0.14em;
@@ -59229,14 +59254,31 @@
         let slideSectionType = null;
         let slideSectionSlideIdx = null;
         
+        function getSlideSectionPosPercent(section, canvasRect, prop) {
+            const val = section.style[prop];
+            if (val && String(val).includes('%')) return parseFloat(val);
+            if (val && String(val).includes('px')) {
+                const px = parseFloat(val);
+                const dim = (prop === 'left' || prop === 'right') ? canvasRect.width : canvasRect.height;
+                return dim > 0 ? (px / dim) * 100 : 0;
+            }
+            const sectionRect = section.getBoundingClientRect();
+            if (prop === 'left') {
+                return canvasRect.width > 0 ? ((sectionRect.left - canvasRect.left) / canvasRect.width) * 100 : 3.3;
+            }
+            return canvasRect.height > 0 ? ((sectionRect.top - canvasRect.top) / canvasRect.height) * 100 : 38;
+        }
+
         function startDragSlideSection(event, slideIdx, sectionType) {
             // Allow dragging from the drag handle
             const isDragHandle = event.target.closest('.drag-handle');
+            const section = event.currentTarget;
+            const isChartShell = section.classList.contains('deck-keke-chart') && event.target === section;
             
             if (event.target.closest('.img-resize-handle')) return;
 
             // Don't drag if clicking on editable content, buttons, or inputs (unless clicking drag handle)
-            if (!isDragHandle && (
+            if (!isDragHandle && !isChartShell && (
                 event.target.closest('[contenteditable="true"]') || 
                 event.target.closest('button') || 
                 event.target.closest('input') ||
@@ -59245,7 +59287,6 @@
                 return;
             }
             
-            const section = event.currentTarget;
             draggedSlideSection = section;
             slideSectionType = sectionType;
             slideSectionSlideIdx = slideIdx;
@@ -59257,11 +59298,32 @@
             
             slideSectionStartX = event.clientX;
             slideSectionStartY = event.clientY;
-            
-            // Parse current position (handle both % and px)
-            const style = section.style;
-            slideSectionOrigX = parseFloat(style.left) || 5;
-            slideSectionOrigY = parseFloat(style.top) || 8;
+
+            // Keke chart: reparent to slide canvas so drag % matches canvas coordinates
+            if (section.classList.contains('deck-keke-chart') && section.parentElement !== canvas) {
+                const sectionRect = section.getBoundingClientRect();
+                slideSectionOrigX = canvasRect.width > 0 ? ((sectionRect.left - canvasRect.left) / canvasRect.width) * 100 : 3.3;
+                slideSectionOrigY = canvasRect.height > 0 ? ((sectionRect.top - canvasRect.top) / canvasRect.height) * 100 : 52;
+                canvas.appendChild(section);
+            } else if (section.style.position !== 'absolute') {
+                section.style.position = 'absolute';
+                section.style.flex = 'none';
+                section.style.marginTop = '0';
+                slideSectionOrigX = getSlideSectionPosPercent(section, canvasRect, 'left');
+                slideSectionOrigY = getSlideSectionPosPercent(section, canvasRect, 'top');
+            } else {
+                slideSectionOrigX = getSlideSectionPosPercent(section, canvasRect, 'left');
+                slideSectionOrigY = getSlideSectionPosPercent(section, canvasRect, 'top');
+            }
+
+            section.style.position = 'absolute';
+            section.style.left = slideSectionOrigX + '%';
+            section.style.top = slideSectionOrigY + '%';
+            section.style.right = '3.3%';
+            section.style.bottom = '48px';
+            section.style.width = 'auto';
+            section.style.flex = 'none';
+            section.style.marginTop = '0';
             
             section.classList.add('dragging');
             
@@ -75348,6 +75410,11 @@
             const breadcrumb = getDeckSectionBreadcrumb(slide, headerProfileName);
             const whyItMatters = slide.customWhyItMatters || slide.whyItMatters || description;
             const headline = slide.customHeadline || title;
+            const showSubtitle = Boolean(
+                description &&
+                description.trim() &&
+                description.trim() !== (whyItMatters || '').trim()
+            );
             const data = slide.data || {};
             let itemCount = 0;
             if (Array.isArray(data.items)) itemCount = data.items.length;
@@ -75357,55 +75424,70 @@
             else if (data.regions) itemCount = data.regions.length;
             else if (data.categories) itemCount = Object.keys(data.categories).length;
 
-            return `
-                <div style="position: absolute; left: 32px; top: 28px; right: 32px; display: flex; justify-content: space-between; align-items: flex-start;">
-                    ${getCrosswalkDeckLogoHtml(108)}
-                    <div contenteditable="true"
-                         class="deck-meta-label"
-                         style="cursor: text; padding: 4px 6px; border-radius: 3px; margin-top: 4px; text-align: right; max-width: 55%;"
-                         onfocus="this.style.background='rgba(0,0,0,0.04)'"
-                         onblur="this.style.background='transparent'; updateSlideHeaderText(${idx}, 'breadcrumb', this.textContent)">
-                        ${escapeHtml(breadcrumb)}
-                    </div>
-                </div>
+            const contentPos = getSectionPosition(slide, 'content', null);
+            const useSavedChartPos = Boolean(contentPos?.left && contentPos?.top);
+            const chartInner = `
+                        <div class="drag-handle">⋮⋮ DRAG DATA</div>
+                        ${createVizControlPanel(idx, itemCount)}
+                        ${content}
+                        ${analysisBlock}`;
+            const chartStyle = useSavedChartPos
+                ? `position: absolute; left: ${contentPos.left}; top: ${contentPos.top}; right: 3.3%; bottom: 48px; overflow: visible; z-index: 2; pointer-events: auto;`
+                : 'position: relative; flex: 1; min-height: 140px; overflow: visible; z-index: 2; margin-top: 0.2rem; pointer-events: auto;';
+            const chartEl = `
+                    <div class="slide-draggable-section slide-module-content deck-keke-chart" data-slide-idx="${idx}"
+                         style="${chartStyle}"
+                         onmousedown="startDragSlideSection(event, ${idx}, 'content')">
+                        ${chartInner}
+                    </div>`;
 
-                <div style="position: absolute; left: 32px; top: 72px; right: 32px;">
-                    <div contenteditable="true"
-                         style="font-family: var(--deck-serif); font-size: 1.65rem; font-weight: 600; color: var(--deck-text-primary); line-height: 1.15; cursor: text; padding: 4px 6px; border-radius: 4px;"
-                         onfocus="this.style.background='rgba(0,0,0,0.04)'"
-                         onblur="this.style.background='transparent'; updateSlideHeadline(${idx}, this.textContent); renderSlideEditor();">
-                        ${escapeHtml(headline)}
-                    </div>
-                    <div contenteditable="true"
-                         style="margin-top: 0.45rem; font-size: 0.72rem; line-height: 1.55; color: var(--deck-text-muted); font-style: italic; cursor: text; padding: 4px 6px; border-radius: 4px;"
-                         onfocus="this.style.background='rgba(0,0,0,0.04)'"
-                         onblur="this.style.background='transparent'; updateSlideDescription(${idx}, this.textContent)">
-                        ${escapeHtml(description)}
-                    </div>
-                </div>
-
-                <div style="position: absolute; left: 32px; top: 148px; width: 52%; display: flex; gap: 0.65rem;">
-                    <div style="width: 3px; background: var(--deck-accent-magenta); border-radius: 2px; flex-shrink: 0;"></div>
-                    <div style="min-width: 0;">
-                        <div class="deck-meta-label" style="color: var(--deck-accent-magenta); margin-bottom: 0.35rem;">Why It Matters</div>
+            const textBlock = `
+                <div class="deck-keke-slide" style="position: absolute; inset: 28px 32px 48px 32px; display: flex; flex-direction: column; gap: 0.5rem; overflow: visible; pointer-events: none;">
+                    <div style="pointer-events: auto; display: flex; justify-content: space-between; align-items: flex-start; flex-shrink: 0;">
+                        ${getCrosswalkDeckLogoHtml(108)}
                         <div contenteditable="true"
-                             style="font-size: 0.72rem; line-height: 1.55; color: var(--deck-text-primary); font-style: italic; cursor: text; padding: 2px 4px; border-radius: 3px;"
+                             class="deck-meta-label"
+                             style="cursor: text; padding: 4px 6px; border-radius: 3px; margin-top: 4px; text-align: right; max-width: 55%;"
                              onfocus="this.style.background='rgba(0,0,0,0.04)'"
-                             onblur="this.style.background='transparent'; updateSlideWhyItMatters(${idx}, this.textContent)">
-                            ${escapeHtml(whyItMatters)}
+                             onblur="this.style.background='transparent'; updateSlideHeaderText(${idx}, 'breadcrumb', this.textContent)">
+                            ${escapeHtml(breadcrumb)}
                         </div>
                     </div>
-                </div>
 
-                <div class="slide-draggable-section slide-module-content" data-slide-idx="${idx}"
-                     style="position: absolute; left: 32px; right: 32px; top: 38%; bottom: 48px; overflow: visible; z-index: 2;"
-                     onmousedown="startDragSlideSection(event, ${idx}, 'content')">
-                    <div class="drag-handle">⋮⋮ DRAG DATA</div>
-                    ${createVizControlPanel(idx, itemCount)}
-                    ${content}
-                    ${analysisBlock}
-                </div>
+                    <div style="pointer-events: auto; flex-shrink: 0;">
+                        <div contenteditable="true"
+                             style="font-family: var(--deck-serif); font-size: 1.65rem; font-weight: 600; color: var(--deck-text-primary); line-height: 1.15; cursor: text; padding: 4px 6px; border-radius: 4px;"
+                             onfocus="this.style.background='rgba(0,0,0,0.04)'"
+                             onblur="this.style.background='transparent'; updateSlideHeadline(${idx}, this.textContent); renderSlideEditor();">
+                            ${escapeHtml(headline)}
+                        </div>
+                        ${showSubtitle ? `
+                        <div contenteditable="true"
+                             style="margin-top: 0.35rem; font-size: 0.72rem; line-height: 1.55; color: var(--deck-text-muted); font-style: italic; cursor: text; padding: 4px 6px; border-radius: 4px;"
+                             onfocus="this.style.background='rgba(0,0,0,0.04)'"
+                             onblur="this.style.background='transparent'; updateSlideDescription(${idx}, this.textContent)">
+                            ${escapeHtml(description)}
+                        </div>` : ''}
+                    </div>
 
+                    <div class="deck-keke-why-callout" style="pointer-events: auto; display: flex; gap: 0.65rem;">
+                        <div style="width: 3px; background: var(--deck-accent-magenta); border-radius: 2px; flex-shrink: 0;"></div>
+                        <div style="min-width: 0;">
+                            <div class="deck-meta-label" style="color: var(--deck-accent-magenta); margin-bottom: 0.35rem;">Why It Matters</div>
+                            <div contenteditable="true"
+                                 style="font-size: 0.72rem; line-height: 1.55; color: var(--deck-text-primary); font-style: italic; cursor: text; padding: 2px 4px; border-radius: 3px;"
+                                 onfocus="this.style.background='rgba(0,0,0,0.04)'"
+                                 onblur="this.style.background='transparent'; updateSlideWhyItMatters(${idx}, this.textContent)">
+                                ${escapeHtml(whyItMatters)}
+                            </div>
+                        </div>
+                    </div>
+                    ${useSavedChartPos ? '' : chartEl}
+                </div>`;
+
+            return `
+                ${textBlock}
+                ${useSavedChartPos ? chartEl : ''}
                 ${overlayElements}
                 ${getDeckChromeFooter(idx)}
             `;
