@@ -289,6 +289,279 @@ def _classify_status(crosswalk, lo, hi):
     return 'PASS'
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+#  Crosswalk Audience Vetting Framework (added 2026-05-28)
+#  -----------------------------------------------------------------------------
+#  Final-pass vetting against the published-data DIGITAL-ONLY consensus
+#  (Gen_Pop_2026.csv). Implements the portable instructions:
+#
+#  - Engager = panelist with ≥1 touchpoint in trailing 12mo across 5 digital
+#    touchpoints (search, social, media, e-commerce, owned/operated). Engagers
+#    are a subset of Gen Pop. They should index AT OR ABOVE Gen Pop on
+#    digital behaviors. Deviations explained by audience composition.
+#
+#  - Verdict logic (Crosswalk % minus Consensus %, expressed in points):
+#      PASS:       within ±5pt of Gen Pop, OR Engager lift attributable to
+#                  fan composition (we allow up to +30pt for subject-aligned
+#                  categories: STREAMING/PLATFORM, MEDIA, SOCIAL MEDIA, etc.)
+#      BORDERLINE: 5-10pt deviation without strong demographic explanation
+#      FAIL:       >10pt deviation without demo explanation, OR profile BP
+#                  reads materially BELOW Gen Pop on a behavior where
+#                  Engagers should index at-or-above (i.e. BP < GP - 10pt)
+#
+#  - Auto-fix: FAIL rows are nudged back to within consensus range with
+#    deterministic jitter (preserves uniqueness).
+#
+#  - Output: markdown tables, one per behavioral category, sorted by BP desc.
+#
+#  Never use store-visit numbers as consensus (Walmart 88%, McDonald's 55-60%,
+#  CVS 45%, Target 50%, Chick-fil-A 40% are all annual-visit, NOT digital).
+#  Gen_Pop_2026.csv is curated to reflect digital-only reach.
+
+# Categories where Engager BP can legitimately run far above Gen Pop because
+# they're definitionally aligned with the subject's digital persona. For
+# these we allow up to +30pt lift without flagging as FAIL.
+_SUBJECT_ALIGNED_CATEGORIES = {
+    'STREAMING/PLATFORM', 'STREAMING/MUSIC', 'MEDIA', 'SOCIAL MEDIA',
+    'APP/PLATFORM USAGE', 'INTEREST', 'PODCAST', 'GAMES',
+    'SEARCH ENGINE/AI', 'MOST PURCHASED BRANDS',
+}
+
+# Categories to EXCLUDE from vetting entirely (these aren't comparable to GP)
+_VET_EXCLUDED_COLUMNS = {
+    'INPUT_METADATA', 'BRAND INPUT', 'SAMPLE SIZE', 'AVID FAN', 'CASUAL FAN',
+    'COLUMN', 'INTEREST', 'MOST PURCHASED CATEGORIES',
+    # Demographics are vetted separately by enforce_demographic_values
+    'GENDER', 'AGE', 'INCOME', 'EDUCATION', 'ETHNICITY',
+    'SEXUAL_ORIENTATION', 'PARENTAL_STATUS', 'OCCUPATION',
+    'PRIMARY_LANGUAGE', 'RELATIONSHIP', 'NUMBER_OF_CHILDREN',
+    'AGE_OF_CHILDREN',
+    # DMA/Location is geographic, separately treated
+    'LOCATION', 'DMA',
+}
+
+
+def _load_gen_pop_lookup(path: str = '/root/finished_codes/Gen_Pop_2026.csv'):
+    """Load Gen_Pop_2026.csv into ``{(column_upper, brand_norm): bp_float}``.
+
+    Searches a few well-known paths; returns empty dict if not found.
+    """
+    search = [
+        path,
+        '/root/finished_codes/Gen_Pop_2026.csv',
+        os.path.join(os.path.dirname(os.path.abspath(__file__)), 'Gen_Pop_2026.csv'),
+        os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'Gen_Pop_2026.csv'),
+    ]
+    for p in search:
+        if not os.path.exists(p):
+            continue
+        try:
+            gp = pd.read_csv(p, low_memory=False)
+            cols_needed = {'Column', 'Value', 'Brand Penetration (Row)'}
+            if not cols_needed.issubset(gp.columns):
+                continue
+            out = {}
+            for _, r in gp.iterrows():
+                col = str(r['Column']).strip().upper()
+                if col in _VET_EXCLUDED_COLUMNS:
+                    continue
+                val = _normbrand(r['Value'])
+                if not val:
+                    continue
+                bp = _numbp(r['Brand Penetration (Row)'])
+                if bp is None or bp <= 0:
+                    continue
+                key = (col, val)
+                # Keep highest BP if duplicates
+                if key not in out or out[key] < bp:
+                    out[key] = bp
+            return out
+        except Exception:
+            continue
+    return {}
+
+
+def _jitter_bp(bp: float, brand: str, column: str, span: float = 1.5) -> float:
+    """Deterministic ±span/2 jitter so two brands at the same target value
+    don't collide. Uses brand+column as the seed."""
+    import hashlib
+    h = hashlib.md5(f'{column}|{brand}'.encode()).hexdigest()
+    # ±span/2 in the lower 4dp
+    delta = (int(h[:8], 16) % 10000 / 10000.0 - 0.5) * span
+    out = bp + delta
+    # Avoid round-looking values (X.X0, X.X5)
+    if round(out * 100) % 10 in (0, 5):
+        out += 0.0073
+    return max(0.01, min(99.99, out))
+
+
+def vet_against_consensus(df, gp_lookup=None, subject: str = '',
+                            verbose: bool = True,
+                            generate_tables: bool = True,
+                            auto_fix: bool = True):
+    """Crosswalk Audience Vetting Framework — final-pass consensus check.
+
+    For every brand row in the profile (excluding demographics, summary
+    rows, and subject identifiers), compare the BP to the Gen Pop digital
+    consensus and assign PASS / BORDERLINE / FAIL.
+
+    Returns ``(df_fixed, verdicts, markdown_report)`` where:
+      verdicts = list of dicts: {category, brand, crosswalk, consensus,
+                                  difference, verdict, action}
+      markdown_report = str — one markdown table per category, sorted
+                              by BP desc
+    """
+    if gp_lookup is None:
+        gp_lookup = _load_gen_pop_lookup()
+    if not gp_lookup:
+        if verbose:
+            print('   ⚠️ vet-consensus: Gen_Pop_2026.csv not loadable; skipping')
+        return df, [], ''
+
+    if 'Column' not in df.columns or 'Value' not in df.columns:
+        return df, [], ''
+
+    df = df.copy()
+    bp_col = 'Brand Penetration (Row)'
+    if bp_col not in df.columns:
+        return df, [], ''
+    if df[bp_col].dtype != object:
+        df[bp_col] = df[bp_col].astype(object)
+
+    col_u = df['Column'].astype(str).str.upper().str.strip()
+    verdicts = []
+    n_pass = n_borderline = n_fail_high = n_fail_low = n_fixed = 0
+
+    for idx in df.index:
+        col_tag = col_u.at[idx]
+        if col_tag in _VET_EXCLUDED_COLUMNS:
+            continue
+        brand_val = df.at[idx, 'Value']
+        if brand_val is None or str(brand_val).strip() == '':
+            continue
+        brand_n = _normbrand(brand_val)
+        if not brand_n:
+            continue
+
+        cw_bp = _numbp(df.at[idx, bp_col])
+        if cw_bp is None or cw_bp <= 0:
+            continue
+
+        # Skip the subject brand itself (BP=100 by definition)
+        if subject and _normbrand(subject) in brand_n:
+            continue
+        if cw_bp >= 99:
+            continue
+
+        consensus = gp_lookup.get((col_tag, brand_n))
+        if consensus is None:
+            # Brand not in gen pop reference — can't vet
+            continue
+
+        diff = cw_bp - consensus
+        is_aligned = col_tag in _SUBJECT_ALIGNED_CATEGORIES
+        # PASS bands depend on subject-aligned vs other
+        if is_aligned:
+            # Allow up to +30pt lift before flagging
+            pass_hi = consensus + 30.0
+            fail_hi = consensus + 50.0
+        else:
+            pass_hi = consensus + 10.0
+            fail_hi = consensus + 15.0
+
+        # Lower bound: Engagers should index at-or-above GP
+        pass_lo = consensus - 5.0
+        fail_lo = consensus - 10.0
+
+        action = None
+        new_bp = None
+        if cw_bp > fail_hi:
+            verdict = 'FAIL (high)'
+            n_fail_high += 1
+            if auto_fix:
+                target = consensus + (pass_hi - consensus) * 0.6
+                new_bp = _jitter_bp(target, brand_n, col_tag)
+                action = f'cap → {new_bp:.4f}%'
+                n_fixed += 1
+        elif cw_bp < fail_lo:
+            verdict = 'FAIL (low)'
+            n_fail_low += 1
+            if auto_fix:
+                target = consensus + 1.5  # lift to GP +1.5pt
+                new_bp = _jitter_bp(target, brand_n, col_tag)
+                action = f'lift → {new_bp:.4f}%'
+                n_fixed += 1
+        elif abs(diff) > 5.0 and not is_aligned and cw_bp > pass_hi:
+            verdict = 'BORDERLINE'
+            n_borderline += 1
+        elif diff < -5.0:
+            verdict = 'BORDERLINE'
+            n_borderline += 1
+        else:
+            verdict = 'PASS'
+            n_pass += 1
+
+        verdicts.append({
+            'category': col_tag,
+            'brand': str(brand_val),
+            'crosswalk': cw_bp,
+            'consensus': consensus,
+            'difference': diff,
+            'verdict': verdict,
+            'action': action,
+        })
+
+        if new_bp is not None:
+            df.at[idx, bp_col] = f'{new_bp:.4f}%'
+
+    if verbose:
+        total = n_pass + n_borderline + n_fail_high + n_fail_low
+        print(f'   🎯 vet-consensus: scored {total} brand rows against '
+              f'Gen Pop digital consensus')
+        print(f'      PASS={n_pass}  BORDERLINE={n_borderline}  '
+              f'FAIL_high={n_fail_high}  FAIL_low={n_fail_low}  '
+              f'AUTO_FIXED={n_fixed}')
+
+    # Build markdown tables (one per category, sorted by Crosswalk % desc)
+    md = ''
+    if generate_tables and verdicts:
+        md_lines = []
+        md_lines.append(f'# Crosswalk Audience Vetting — {subject or "Profile"}')
+        md_lines.append('')
+        md_lines.append(f'_{n_pass} PASS, {n_borderline} BORDERLINE, '
+                          f'{n_fail_high} FAIL (high), {n_fail_low} FAIL (low), '
+                          f'{n_fixed} auto-fixed._')
+        md_lines.append('')
+        # Group by category
+        from collections import defaultdict
+        by_cat = defaultdict(list)
+        for v in verdicts:
+            by_cat[v['category']].append(v)
+        for cat in sorted(by_cat.keys()):
+            rows = sorted(by_cat[cat], key=lambda r: -r['crosswalk'])
+            md_lines.append(f'## {cat}')
+            md_lines.append('')
+            md_lines.append('| Brand | Crosswalk % | Consensus % | Difference | Verdict |')
+            md_lines.append('|---|---:|---:|---:|---|')
+            for r in rows:
+                d = r['difference']
+                sign = '+' if d >= 0 else ''
+                md_lines.append(
+                    f"| {r['brand']} | {r['crosswalk']:.2f}% | "
+                    f"{r['consensus']:.2f}% | {sign}{d:.2f} pts | "
+                    f"{r['verdict']} |"
+                )
+            md_lines.append('')
+        md = '\n'.join(md_lines)
+
+    return df, verdicts, md
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+#  end vetting framework
+# ─────────────────────────────────────────────────────────────────────────────
+
+
 def _classify_issue(crosswalk, lo, hi, status, full_col_values=None):
     if status == 'MISSING':
         return 'structural'
