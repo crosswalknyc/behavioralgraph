@@ -18039,22 +18039,8 @@
                             <h5>📺 EVC — Engagement vs Viewing Correlation</h5>
                             <div style="margin-bottom: 0.55rem;">Of the panel's digital touchpoints that mentioned this profile in the selected window, the share who engaged with the talent then watched their content on a streaming or VOD platform. Reads as: <i>&ldquo;of all the times the panel touched something about this person/brand, what % of those then watched their content on a streaming destination?&rdquo;</i> A high EVC means the audience is actively consuming this entity's content, not just engaging with it.</div>
                             <div style="margin-bottom: 0.6rem;"><code>EVC = 100 × sum(streaming_hits) / sum(raw_mentions)</code></div>
-                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.4rem 0.85rem; font-size: 0.74rem; margin-top: 0.4rem;">
-                                <div><b style="color: #c8f7d4;">Numerator</b>&nbsp;&mdash; per-day count of mention rows whose lower-cased <code>COMMON_NAME</code> falls in the curated streaming/VOD platform set, summed across the window.</div>
-                                <div><b style="color: #c8f7d4;">Denominator</b>&nbsp;&mdash; raw (panel-level) mention count for that profile in the same window. Both numerator and denominator are panel counts so the ratio is honest at panel scale; gen-pop projection cancels out.</div>
-                            </div>
                             <div style="margin-top: 0.7rem; font-size: 0.74rem;">
                                 <b style="color: #c8f7d4;">Streaming/VOD platforms</b> currently included: Netflix, Hulu, Disney+, HBO Max / Max, Prime Video, Apple TV+, Paramount+, Peacock, YouTube / YouTube TV, Tubi, Pluto TV, Sling, Fubo, Philo, Crunchyroll, Showtime, Starz, Discovery+, AMC+, BritBox, Shudder, Mubi, Kanopy, Vudu, Roku Channel, Plex, Freevee / IMDB TV, DAZN, ESPN+, MLB.tv, NBA League Pass, NFL+, Twitch.
-                            </div>
-                            <ul style="margin: 0.85rem 0 0; padding-left: 1.1rem; font-size: 0.74rem;">
-                                <li><b>0% / blank:</b> the panel engaged with this profile but never converted to a view on streaming destinations.</li>
-                                <li><b>~30%:</b> roughly the global baseline (across the whole panel, ≈30% of all branded clickstream activity is on streaming/VOD).</li>
-                                <li><b>50%+:</b> a clear &ldquo;they're being watched&rdquo; signal &mdash; e.g. an actor whose mention surface clusters on Netflix, or a podcaster whose audience finds them on YouTube.</li>
-                                <li><b>Window aware:</b> when you change the window selector, EVC re-aggregates over the new range &mdash; longer windows smooth out single-day spikes (a Netflix premiere day, etc.).</li>
-                                <li><b>Hover the cell:</b> the underlying <code>streaming_hits / raw_mentions</code> panel counts are shown so you can sanity-check the percentage.</li>
-                            </ul>
-                            <div style="margin-top: 0.6rem; padding-top: 0.55rem; border-top: 1px dashed rgba(132,225,168,0.25); font-size: 0.72rem; color: var(--text-muted);">
-                                Override the platform set at deploy time via the <code>IQ_RANKER_STREAMING_PLATFORMS</code> env var (comma-separated, lowercase). Historical days predating the EVC rollout will show <code>0.0%</code> until backfilled.
                             </div>
                         </div>
 
