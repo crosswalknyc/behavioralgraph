@@ -30163,11 +30163,17 @@
                 return 'other';
             }
 
-            var W = 680;
+            var W = 760;
             var rowH = 46;
             var H = Math.max(360, 30 + rows.length * rowH + 20);
             var padT = 30, padB = 20;
-            var srcX = 130;             // right edge of source labels
+            // srcX bumped 130 -> 270 so source labels (up to ~35 chars at
+            // 11pt ≈ 228px wide, right-anchored) live FULLY inside the
+            // SVG. Previously they extended to negative x and got clipped
+            // off the left edge - "Google organic search" rendered as
+            // "oogle organic search", "Distributor 'Get Tickets'" as
+            // "tributor 'Get Tickets'", etc.
+            var srcX = 270;             // right edge of source labels
             var dstX = W - 80;          // destination bubble center
             var dstR = 56;
             var dstCY = H / 2;
@@ -30265,98 +30271,118 @@
         }
         function _jiqRenderCompanionTimeline(comps) {
             if (!comps || !comps.length) return '<div style="font-size:0.8rem;color:var(--text-secondary);padding:0.5rem 0;">No data.</div>';
-            // H bumped from 360 -> 500 + clamp added below so the bubble
-            // stack (which grows upward when several bubbles overlap)
-            // can't clip past the top edge of the SVG viewBox.
-            var W = 720, H = 500;
-            var padL = 30, padR = 30, padT = 50, padB = 90;
-            var xMin = -4, xMax = 2.5;  // hours; -4h before .. 2.5h after
-            function xFor(h) {
-                var clamped = Math.max(xMin, Math.min(xMax, h));
-                return padL + ((clamped - xMin) / (xMax - xMin)) * (W - padL - padR);
-            }
-            var axisY = padT + (H - padT - padB) * 0.70;
-            var maxPct = Math.max.apply(null, comps.map(function(c) { return +c.share_pct_of_visitors || 0; }));
-            if (maxPct <= 0) maxPct = 1;
-            // Compute positions
-            var enriched = comps.slice(0, 10).map(function(c) {
+            // VERTICAL TIMELINE: Y-axis = time (top = hours before, bottom =
+            // hours after showtime), bubbles sit on a vertical spine with
+            // their full text label to the RIGHT in a dedicated horizontal
+            // row each. Previous horizontal version forced every label to
+            // share the same x-position as its bubble, so dense rows
+            // ("Bar/drinks", "Streaming/VOD research", "Rideshare/transport"
+            // all near showtime) collided and got clipped no matter how
+            // tall the SVG was. Going vertical gives each label its own
+            // unobstructed horizontal row.
+            var rows = comps.slice(0, 10).map(function(c) {
                 var w = _jiqParseCompanionWindow(c.typical_window);
-                var pct = +c.share_pct_of_visitors || 0;
                 return {
                     vertical: c.vertical || '—',
-                    pct: pct,
+                    pct: +c.share_pct_of_visitors || 0,
                     center: w.center,
                     span: w.span,
-                    x: xFor(w.center),
-                    r: Math.max(14, Math.min(46, 14 + (pct / maxPct) * 32)),
                     color: _jiqCompanionCategoryColor(c.vertical),
                     top_sites: (c.top_sites || []).slice(0, 4),
                     typical_window: c.typical_window || '',
                 };
-            }).sort(function(a, b) { return a.x - b.x; });
-            // Stagger overlapping bubbles vertically. Bubbles stack
-            // upward by default; if a stack would clip past the top
-            // padding it instead resets and stacks downward from the
-            // axis (so we never lose the bubble + its label off-canvas).
-            enriched.forEach(function(e, i) {
-                e.y = axisY;
-                e.stackDir = -1; // -1 = up, +1 = down
-                for (var j = 0; j < i; j++) {
-                    var other = enriched[j];
-                    var dx = Math.abs(e.x - other.x);
-                    if (dx < (e.r + other.r + 4)) {
-                        var candidateUp   = other.y - (other.r + e.r + 6);
-                        var candidateDown = other.y + (other.r + e.r + 6);
-                        // Prefer up; flip to down if up would clip
-                        // above the top padding (accounting for the
-                        // bubble's own radius + label below it)
-                        if (candidateUp - e.r < padT) {
-                            e.y = candidateDown;
-                            e.stackDir = 1;
-                        } else {
-                            e.y = candidateUp;
-                        }
+            }).sort(function(a, b) { return a.center - b.center; });
+
+            var maxPct = Math.max.apply(null, rows.map(function(r) { return r.pct; }));
+            if (maxPct <= 0) maxPct = 1;
+
+            var W = 620;
+            var padT = 40, padB = 30, padL = 110, padR = 30;
+            var rowGap = 52;  // vertical spacing per bubble row
+            var H = Math.max(420, padT + padB + rows.length * rowGap);
+            var axisX = padL;             // vertical time-axis x position
+            var labelX0 = axisX + 50;     // start of label column
+
+            var yMin = -4, yMax = 2.5;    // hours
+            function yFor(h) {
+                var clamped = Math.max(yMin, Math.min(yMax, h));
+                return padT + ((clamped - yMin) / (yMax - yMin)) * (H - padT - padB);
+            }
+
+            // Place bubbles on the spine, then stagger any that overlap
+            // vertically by nudging them down so each gets a clean row.
+            rows.forEach(function(e, i) {
+                e.x = axisX;
+                e.r = Math.max(13, Math.min(28, 13 + (e.pct / maxPct) * 16));
+                e.y = yFor(e.center);
+                // Cascade-down: if this bubble's y would crowd the previous
+                // (already-placed) one, push it below that one's row.
+                if (i > 0) {
+                    var prev = rows[i - 1];
+                    var minGap = prev.r + e.r + 10;
+                    if ((e.y - prev.y) < minGap) {
+                        e.y = prev.y + minGap;
                     }
                 }
-                // Hard clamp in case the alternating logic still pushes
-                // a bubble out of bounds (very dense data)
-                e.y = Math.max(padT + e.r + 4,
-                       Math.min(H - padB - e.r - 18, e.y));
             });
-            // X-axis ticks
-            var ticks = [-3, -2, -1, 0, 1, 2];
-            var tickLabels = { '-3':'3h before', '-2':'2h before', '-1':'1h before', '0':'🎬 SHOWTIME', '1':'1h after', '2':'2h after' };
+            // Hard clamp in case dense data pushes the last bubble past the
+            // bottom of the SVG.
+            rows.forEach(function(e) {
+                e.y = Math.max(padT + e.r + 4,
+                       Math.min(H - padB - e.r - 4, e.y));
+            });
+
             var parts = [];
             parts.push('<rect width="' + W + '" height="' + H + '" fill="transparent"/>');
-            // Showtime vertical line
-            parts.push('<line x1="' + xFor(0) + '" y1="' + padT + '" x2="' + xFor(0) + '" y2="' + (H - padB + 10) + '" stroke="var(--accent-primary)" stroke-width="2" stroke-dasharray="4,3" opacity="0.6"/>');
-            // X axis line
-            parts.push('<line x1="' + padL + '" y1="' + (H - padB) + '" x2="' + (W - padR) + '" y2="' + (H - padB) + '" stroke="var(--border-color)" stroke-width="1"/>');
+
+            // Vertical time axis line
+            parts.push('<line x1="' + axisX + '" y1="' + padT + '" x2="' + axisX + '" y2="' + (H - padB) + '" stroke="var(--border-color)" stroke-width="1"/>');
+
+            // Time ticks on the LEFT of the axis (text-anchor: end)
+            var ticks = [-3, -2, -1, 0, 1, 2];
+            var tickLabels = { '-3':'3h before', '-2':'2h before', '-1':'1h before', '0':'🎬 SHOWTIME', '1':'1h after', '2':'2h after' };
             ticks.forEach(function(t) {
-                var x = xFor(t);
-                parts.push('<line x1="' + x + '" y1="' + (H - padB) + '" x2="' + x + '" y2="' + (H - padB + 6) + '" stroke="var(--border-color)" stroke-width="1"/>');
-                parts.push('<text x="' + x + '" y="' + (H - padB + 22) + '" text-anchor="middle" fill="var(--text-secondary)" font-size="11" ' + (t === 0 ? 'font-weight="700"' : '') + '>' + tickLabels[String(t)] + '</text>');
-            });
-            // Bubbles
-            enriched.forEach(function(e) {
-                // span line under bubble showing the range
-                if (e.span > 0) {
-                    var x0 = xFor(e.center - e.span / 2);
-                    var x1 = xFor(e.center + e.span / 2);
-                    parts.push('<line x1="' + x0 + '" y1="' + e.y + '" x2="' + x1 + '" y2="' + e.y + '" stroke="' + e.color + '" stroke-width="2" opacity="0.35"/>');
+                var y = yFor(t);
+                var isShowtime = (t === 0);
+                parts.push('<line x1="' + (axisX - 6) + '" y1="' + y + '" x2="' + (axisX + 6) + '" y2="' + y + '" stroke="var(--border-color)" stroke-width="1"/>');
+                if (isShowtime) {
+                    // Bold horizontal accent line across the chart at SHOWTIME
+                    parts.push('<line x1="' + axisX + '" y1="' + y + '" x2="' + (W - padR) + '" y2="' + y + '" stroke="var(--accent-primary)" stroke-width="2" stroke-dasharray="4,3" opacity="0.55"/>');
+                    parts.push('<text x="' + (axisX - 12) + '" y="' + (y + 4) + '" text-anchor="end" fill="var(--accent-primary)" font-weight="700" font-size="11">' + tickLabels[String(t)] + '</text>');
+                } else {
+                    parts.push('<text x="' + (axisX - 12) + '" y="' + (y + 4) + '" text-anchor="end" fill="var(--text-secondary)" font-size="11">' + tickLabels[String(t)] + '</text>');
                 }
+            });
+
+            // Bubbles + horizontal labels
+            rows.forEach(function(e) {
+                // Span line showing the time-window range (vertical now)
+                if (e.span > 0) {
+                    var y0 = yFor(e.center - e.span / 2);
+                    var y1 = yFor(e.center + e.span / 2);
+                    parts.push('<line x1="' + e.x + '" y1="' + y0 + '" x2="' + e.x + '" y2="' + y1 + '" stroke="' + e.color + '" stroke-width="2" opacity="0.35"/>');
+                }
+                // Connector line from bubble to its label (subtle)
+                parts.push('<line x1="' + (e.x + e.r + 2) + '" y1="' + e.y + '" x2="' + (labelX0 - 4) + '" y2="' + e.y + '" stroke="' + e.color + '" stroke-width="1" opacity="0.4"/>');
+                // Bubble + % inside
                 parts.push('<g>'
-                     + '<circle cx="' + e.x + '" cy="' + e.y + '" r="' + e.r + '" fill="' + e.color + '" opacity="0.85" stroke="' + e.color + '" stroke-width="2"/>'
-                     + '<text x="' + e.x + '" y="' + (e.y + 4) + '" text-anchor="middle" fill="#fff" font-weight="700" font-size="' + Math.max(10, e.r / 2.4) + '">' + e.pct.toFixed(0) + '%</text>'
-                     + '<text x="' + e.x + '" y="' + (e.y + e.r + 13) + '" text-anchor="middle" fill="var(--text-primary)" font-size="11" font-weight="600">' + _jiqEsc(e.vertical.split('(')[0].trim().slice(0, 24)) + '</text>'
+                     + '<circle cx="' + e.x + '" cy="' + e.y + '" r="' + e.r + '" fill="' + e.color + '" opacity="0.9" stroke="' + e.color + '" stroke-width="2"/>'
+                     + '<text x="' + e.x + '" y="' + (e.y + 4) + '" text-anchor="middle" fill="#fff" font-weight="700" font-size="' + Math.max(10, e.r / 2.2) + '">' + e.pct.toFixed(0) + '%</text>'
                      + '<title>' + _jiqEsc(e.vertical + ' — ' + e.pct.toFixed(1) + '% — ' + e.typical_window) + (e.top_sites.length ? ' — ' + _jiqEsc(e.top_sites.join(', ')) : '') + '</title>'
                      + '</g>');
+                // Full label to the right (no truncation needed, plenty of room)
+                var cleanLabel = e.vertical.split('(')[0].trim();
+                parts.push('<text x="' + labelX0 + '" y="' + (e.y - 2) + '" text-anchor="start" fill="var(--text-primary)" font-weight="600" font-size="12">' + _jiqEsc(cleanLabel) + '</text>');
+                if (e.typical_window) {
+                    parts.push('<text x="' + labelX0 + '" y="' + (e.y + 13) + '" text-anchor="start" fill="var(--text-secondary)" font-size="10">' + _jiqEsc(e.typical_window) + '</text>');
+                }
             });
+
             return '<div style="overflow-x:auto;padding:4px 0;">'
                  + '<svg width="' + W + '" height="' + H + '" viewBox="0 0 ' + W + ' ' + H + '" style="display:block;max-width:100%;height:auto;">'
                  + parts.join('')
                  + '</svg>'
-                 + '<div style="font-size:0.68rem;color:var(--text-secondary);margin-top:4px;text-align:center;">Bubble size = share of visitors · placement = typical time relative to showtime · hover for sites</div>'
+                 + '<div style="font-size:0.68rem;color:var(--text-secondary);margin-top:4px;text-align:center;">Bubble size = share of visitors · vertical position = typical time relative to showtime · hover a bubble for top sites</div>'
                  + '</div>';
         }
 
