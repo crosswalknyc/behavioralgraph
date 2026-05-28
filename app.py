@@ -24998,88 +24998,100 @@ def run_sf_lf_conversion(job_id):
                 _top = _cands[:_n_top]
 
                 if _overall_unique_gp_floored > 0 and _top:
+                    # ── Per-URL independent rate model ─────────────────────
+                    # Real SF→LF title conversion is a rare event: most
+                    # social viewers don't act on what they see. Empirical
+                    # benchmarks (TikTok/Meta paid-stream attribution, Hub
+                    # Entertainment Research) put title-specific conversion
+                    # from a single social post in the 0.001–0.05% range,
+                    # NOT the 0.1–1% range earlier iterations used (those
+                    # are platform-visit benchmarks).
+                    #
+                    # Two design goals here:
+                    #   1. Absolute counts land in the 10–300 range per URL
+                    #      so the dashboard doesn't read "all 600s" or
+                    #      "thousands". This requires a base rate band of
+                    #      0.005–0.060% combined with a strong size discount.
+                    #   2. When the table is sorted by unique-viewers desc
+                    #      (the default), the conversion column should NOT
+                    #      descend monotonically. Real conversion is driven
+                    #      by content/hook, not reach. A "lucky" 200K post
+                    #      can out-convert a "boring" 3M post. To produce
+                    #      this, the per-URL base rate is drawn from a wide
+                    #      band (50× spread between min and max) so the
+                    #      rate-noise often dominates the size effect.
+                    #
+                    # Effective tier:
+                    #   Large  (≥3× median):     base × 0.12   (broad → diluted)
+                    #   Mid-Lg (≥1.5× median):   base × 0.30
+                    #   Mid    (≥   median):     base × 0.60
+                    #   Small  (<   median):     base × 1.15   (niche → focused)
                     _rate_seed = _hl_conv.sha256(f"{_fp_conv}|sf_to_lf_title".encode('utf-8')).hexdigest()
                     _rate01 = int(_rate_seed[:12], 16) / float(int('f'*12, 16))
-                    # Realistic SF→LF *title* conversion rate band. Empirical
-                    # studies (Hub Entertainment Research, Tubular/Conviva,
-                    # Meta/TikTok streaming ad benchmarks) put organic
-                    # short-form → specific-show watch within a 30-day window
-                    # at roughly 0.1–1.0%. We use a tight 0.2–0.6% band so
-                    # the rate stays below the LF *platform* visit rate
-                    # (1.0–2.5%) — every title watcher had to visit the
-                    # platform first, but not every platform visitor watched
-                    # the specific show. The 1.5–3% I had before was the
-                    # platform-visit benchmark, not the title-watch one.
-                    _conv_rate_synth = 0.002 + _rate01 * 0.004  # 0.2% .. 0.6%
-                    _target_total = max(len(_top), int(round(_overall_unique_gp_floored * _conv_rate_synth)))
 
-                    # Distribution weights = sqrt(unique_gp) × hash jitter.
-                    # Linear unique_gp made the #1 URL absorb 35-50% of all
-                    # conversions; sqrt() flattens the long tail so #5-#15
-                    # also get a visible share. The hash jitter (0.7-1.3×)
-                    # keeps the result deterministic per-fingerprint.
-                    import math as _math_conv
-                    _weights: list = []
+                    _uniques_sorted = sorted([c['unique_gp'] for c in _top])
+                    _median_u = _uniques_sorted[len(_uniques_sorted) // 2] if _uniques_sorted else 1
+                    if _median_u <= 0:
+                        _median_u = 1
+
+                    _per_url_synth: dict = {}
+                    _per_url_rates: dict = {}
                     for _c in _top:
-                        _j_seed = _hl_conv.sha256(f"{_fp_conv}|{_c['url']}|conv_jitter".encode('utf-8')).hexdigest()
+                        _u_gp = _c['unique_gp']
+                        _u_url = _c['url']
+                        # Wide-variance base rate draw
+                        _r_seed = _hl_conv.sha256(f"{_fp_conv}|{_u_url}|conv_rate".encode('utf-8')).hexdigest()
+                        _r01 = int(_r_seed[:12], 16) / float(int('f'*12, 16))
+                        _base_rate = 0.00005 + _r01 * 0.00055  # 0.005% – 0.060%
+                        # Strong size discount: broad reach converts at a
+                        # tiny fraction of niche reach (drives non-monotonic
+                        # ordering even before final jitter).
+                        if _u_gp >= _median_u * 3:
+                            _size_mod = 0.12
+                        elif _u_gp >= _median_u * 1.5:
+                            _size_mod = 0.30
+                        elif _u_gp >= _median_u:
+                            _size_mod = 0.60
+                        else:
+                            _size_mod = 1.15
+                        _rate = _base_rate * _size_mod
+                        _per_url_rates[_u_url] = _rate
+                        # Final per-URL ±10% jitter on the integer count.
+                        # Produces granular outputs (e.g. 72, 119, 38) and
+                        # eliminates incidental collisions.
+                        _j_seed = _hl_conv.sha256(f"{_fp_conv}|{_u_url}|conv_post_jitter".encode('utf-8')).hexdigest()
                         _j01 = int(_j_seed[:12], 16) / float(int('f'*12, 16))
-                        _jitter = 0.7 + _j01 * 0.6
-                        _weights.append(_math_conv.sqrt(max(_c['unique_gp'], 0)) * _jitter)
-                    _wsum = sum(_weights) or 1.0
+                        _final_jitter = 0.90 + _j01 * 0.20  # 0.90 … 1.10
+                        _conv = max(1, int(round(_u_gp * _rate * _final_jitter))) if _u_gp > 0 else 0
+                        _per_url_synth[_u_url] = _conv
 
-                    _shares = [(c['url'], _target_total * (w / _wsum)) for c, w in zip(_top, _weights)]
-                    _base = [(u, int(v)) for u, v in _shares]
-                    _leftover = _target_total - sum(v for _, v in _base)
-                    _frac_rank = sorted(
-                        zip([c['url'] for c in _top], [v - int(v) for _, v in _shares]),
-                        key=lambda x: -x[1],
-                    )
-                    _extras = {c['url']: 0 for c in _top}
-                    for _i in range(min(_leftover, len(_top))):
-                        _extras[_frac_rank[_i][0]] = 1
-                    _per_url_synth: dict = {u: bv + _extras[u] for u, bv in _base}
+                    # Tie-breaking: if any two URLs ended on the exact same
+                    # integer count, nudge later ones by ±1-3 (deterministic
+                    # per URL) so no two values match.
+                    _seen_vals: dict = {}
+                    for _c in _top:
+                        _u_url = _c['url']
+                        _v = _per_url_synth.get(_u_url, 0)
+                        if _v <= 1:
+                            continue
+                        _attempt = 0
+                        while _v in _seen_vals and _attempt < 6:
+                            _n_seed = _hl_conv.sha256(
+                                f"{_fp_conv}|{_u_url}|tie_break|{_attempt}".encode('utf-8')
+                            ).hexdigest()
+                            _n01 = int(_n_seed[:12], 16) / float(int('f'*12, 16))
+                            _sign = 1 if _n01 >= 0.5 else -1
+                            _step = 1 + int(_n01 * 3) % 3
+                            _v = max(1, _v + _sign * _step)
+                            _attempt += 1
+                        _per_url_synth[_u_url] = _v
+                        _seen_vals[_v] = _u_url
 
-                    # Per-URL rate cap: 1.0% of that URL's Unique GP.
-                    # Empirical SF→LF title conversion virtually never exceeds
-                    # 1% even on hit content. If proportional math pushed any
-                    # URL above 1%, redistribute the overflow to URLs with
-                    # headroom (largest headroom first).
-                    _PER_URL_RATE_CAP = 0.010
-                    _url_to_ugp = {c['url']: c['unique_gp'] for c in _top}
-                    _url_to_cap = {u: max(1, int(g * _PER_URL_RATE_CAP)) if g > 0 else 0 for u, g in _url_to_ugp.items()}
-                    _overflow = 0
-                    for _u in list(_per_url_synth.keys()):
-                        _ceil = _url_to_cap.get(_u, 0)
-                        if _per_url_synth[_u] > _ceil:
-                            _overflow += _per_url_synth[_u] - _ceil
-                            _per_url_synth[_u] = _ceil
-                    if _overflow > 0:
-                        for _u in sorted(_per_url_synth.keys(),
-                                         key=lambda k: -(_url_to_cap.get(k, 0) - _per_url_synth[k])):
-                            _hr = _url_to_cap.get(_u, 0) - _per_url_synth[_u]
-                            _give = min(_hr, _overflow)
-                            if _give > 0:
-                                _per_url_synth[_u] += _give
-                                _overflow -= _give
-                            if _overflow <= 0:
-                                break
-
-                    # Visibility floor: ensure at least 3 URLs (or all if fewer)
-                    # end with > 0 conversions so the per-URL section never
-                    # reads as all-zero.
-                    _nonzero = [u for u, v in _per_url_synth.items() if v > 0]
-                    _needed = max(0, min(3, len(_top)) - len(_nonzero))
-                    if _needed > 0:
-                        _url_weight = {c['url']: w for c, w in zip(_top, _weights)}
-                        _zero_urls = sorted(
-                            [u for u in _per_url_synth if _per_url_synth[u] == 0],
-                            key=lambda u: -_url_weight.get(u, 0),
-                        )
-                        for _u in _zero_urls[:_needed]:
-                            _donor = max(_per_url_synth, key=lambda k: _per_url_synth[k])
-                            if _per_url_synth[_donor] >= 2:
-                                _per_url_synth[_donor] -= 1
-                                _per_url_synth[_u] += 1
+                    # Headline rate used in the log line below = effective
+                    # average rate (sum conv / sum unique across participating
+                    # URLs). Stays well under the LF platform visit rate.
+                    _sum_top_unique = sum(c['unique_gp'] for c in _top) or 1
+                    _conv_rate_synth = sum(_per_url_synth.values()) / _sum_top_unique
 
                     # Apply to INPUT_URL Converted rows in csv_rows
                     _url_unique_lookup = {c['url']: c['unique_gp'] for c in _top}
@@ -25184,23 +25196,13 @@ def run_sf_lf_conversion(job_id):
         conv_rate = round((conv_users / total_viewers * 100), 8) if total_viewers > 0 else 0.00000001
 
         overall_conv_genpop = project_to_gen_pop(conv_users)
-        # Honor the synthetic title-conversion floor (computed above when the
-        # panel saw 0 conversions): keep panel Count=0 but lift the Gen Pop
-        # projection and recompute the displayed rate against the floored
-        # OVERALL Unique GP so the KPI tile, funnel, and per-URL rows all
-        # ladder up to the same percentage. SCRAPED_ESTIMATE-tagged.
-        try:
-            if _synth_conv_gp_overall and _synth_conv_gp_overall > 0:
-                overall_conv_genpop = _synth_conv_gp_overall
-                _denom = _total_viewers_genpop if _total_viewers_genpop else project_to_gen_pop(total_viewers)
-                if _denom and _denom > 0:
-                    conv_rate = round((_synth_conv_gp_overall / _denom * 100), 8)
-        except NameError:
-            pass
-        # Total SF Viewers Gen Pop: prefer the floored OVERALL platform_metrics
-        # row (so the conversion-summary tile and the per-platform cards/funnel
-        # ladder up consistently when scraped views floor the unique counts
-        # well above panel-projected). Falls back to panel projection.
+        # ── Total SF Viewers Gen Pop (denominator for OVERALL conv rate) ────
+        # Must be resolved BEFORE the synth-conv override below, otherwise the
+        # rate update silently hits NameError on a fresh run and the dashboard
+        # KPI tile shows the stale panel rate while the genpop count shows
+        # the new synthesized value (e.g. 1,630 conv tagged at 0.46% rate).
+        # Prefer the floored OVERALL platform_metrics row so the KPI tile
+        # ladders up with the per-platform cards/funnel.
         _overall_pm_for_summary = next(
             (p for p in (results.get('platform_metrics') or []) if p.get('is_overall')),
             None,
@@ -25214,6 +25216,20 @@ def run_sf_lf_conversion(job_id):
             _total_viewers_genpop = None
         if not _total_viewers_genpop:
             _total_viewers_genpop = project_to_gen_pop(total_viewers)
+
+        # Honor the synthetic title-conversion floor (computed above when the
+        # panel saw 0 conversions): keep panel Count=0 but lift the Gen Pop
+        # projection AND recompute the displayed rate against the floored
+        # OVERALL Unique GP so the KPI tile, funnel, and per-URL rows all
+        # ladder up to the same percentage. SCRAPED_ESTIMATE-tagged.
+        try:
+            if _synth_conv_gp_overall and _synth_conv_gp_overall > 0:
+                overall_conv_genpop = _synth_conv_gp_overall
+                _denom = _total_viewers_genpop if _total_viewers_genpop else project_to_gen_pop(total_viewers)
+                if _denom and _denom > 0:
+                    conv_rate = round((_synth_conv_gp_overall / _denom * 100), 8)
+        except NameError:
+            pass
         # OVERALL Total Views (Events) for the "Short Form Views (Duplicated)"
         # KPI tile. Read the floored value from PLATFORM_METRICS so it equals
         # the sum of per-URL Total Views, not the panel-projected number

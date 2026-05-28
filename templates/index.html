@@ -19204,6 +19204,7 @@
                     </details>
                     <div id="jiqAudienceHypTiles" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(290px, 1fr)); gap: 0.85rem; margin-bottom: 0.75rem;"></div>
                     <div id="jiqAudienceHypOverlap" style="margin-top: 0.5rem;"></div>
+                    <div id="jiqAudienceHypBuyerAttribution" style="margin-top: 0.5rem;"></div>
                 </div>
 
                 <!-- ════════════════════════════════════════════════════════
@@ -19268,6 +19269,7 @@
                     </details>
                     <div id="jiqExhibitorChart" style="margin-bottom: 0.85rem;"></div>
                     <div id="jiqExhibitorHeatmap" style="margin-bottom: 0.75rem;"></div>
+                    <div id="jiqExhibitorPresaleAttribution" style="margin-bottom: 0.75rem;"></div>
                     <div id="jiqExhibitorVerdict" style="font-size: 0.78rem; color: var(--text-primary); background: var(--bg-secondary); border-left: 4px solid var(--accent-primary); padding: 0.7rem 0.9rem; border-radius: 6px;"></div>
                 </div>
 
@@ -28125,12 +28127,24 @@
                     // Each tile entry: [label, value, optionalSub, optionalAccent]
                     var asOf = kpis.confirmed_as_of_date || '';
                     var fmtUsd = function(v) { return v != null ? '$' + _jiqFmt(v) : '—'; };
-                    var fandangoSub = (kpis.confirmed_fandango_purchases != null)
-                        ? 'Fandango ' + _jiqFmt(kpis.confirmed_fandango_purchases)
-                          + (asOf ? ' · ' + asOf : '')
-                        : (asOf ? 'as of ' + asOf : '');
-                    var avgPrice = (kpis.confirmed_avg_ticket_price_usd || 15);
-                    var tpp      = (kpis.confirmed_avg_tickets_per_purchase || 2);
+                    // Make crystal-clear that confirmed_digital_purchases is
+                    // across ALL tracked online channels - not Fandango only.
+                    // Show Fandango vs Other Online split + as-of date.
+                    var fandangoSub;
+                    if (kpis.confirmed_fandango_purchases != null) {
+                        var other = (kpis.confirmed_other_online_purchases != null)
+                            ? kpis.confirmed_other_online_purchases
+                            : (kpis.confirmed_digital_purchases - kpis.confirmed_fandango_purchases);
+                        fandangoSub = 'all online channels · Fandango '
+                            + _jiqFmt(kpis.confirmed_fandango_purchases)
+                            + ' + Other Online ' + _jiqFmt(other)
+                            + (asOf ? ' · as of ' + asOf : '');
+                    } else {
+                        fandangoSub = (asOf ? 'as of ' + asOf : '');
+                    }
+                    var natlAvg = (kpis.confirmed_avg_ticket_price_usd || 11.50);
+                    var effOw   = (kpis.confirmed_effective_ow_price_usd || 9.00);
+                    var tpp     = (kpis.confirmed_avg_tickets_per_purchase || 2.5);
                     var rangeSub = function(lo, hi, prefix) {
                         prefix = prefix || '';
                         if (lo == null || hi == null) return '';
@@ -28142,20 +28156,23 @@
                             fandangoSub],
                         ['Confirmed Tickets',
                             _jiqFmt(kpis.confirmed_digital_tickets),
-                            tpp + ' tickets / purchase'],
+                            tpp + ' tickets / purchase (family-title benchmark)'],
                         ['Confirmed Revenue',
                             fmtUsd(kpis.confirmed_digital_revenue_usd),
-                            '@ $' + avgPrice.toFixed(2) + ' avg ticket'],
+                            '@ $' + effOw.toFixed(2) + ' effective OW (BOGO blended) · national avg $'
+                                + natlAvg.toFixed(2)],
                         ['Opening Weekend Tickets',
                             _jiqFmt(kpis.projected_opening_weekend_tickets || kpis.projected_total_tickets),
                             rangeSub(kpis.projected_ow_range_low_tickets, kpis.projected_ow_range_high_tickets)],
                         ['Opening Weekend Gross',
                             fmtUsd(kpis.projected_opening_weekend_revenue_usd || kpis.projected_total_revenue_usd),
-                            rangeSub(kpis.projected_ow_range_low_revenue_usd, kpis.projected_ow_range_high_revenue_usd, '$'),
+                            rangeSub(kpis.projected_ow_range_low_revenue_usd, kpis.projected_ow_range_high_revenue_usd, '$')
+                                + ' · @ $' + effOw.toFixed(2) + ' effective',
                             'lime'],
                         ['Domestic Total (full run)',
                             fmtUsd(kpis.projected_total_revenue_usd),
-                            rangeSub(kpis.projected_range_low_revenue_usd, kpis.projected_range_high_revenue_usd, '$'),
+                            rangeSub(kpis.projected_range_low_revenue_usd, kpis.projected_range_high_revenue_usd, '$')
+                                + ' · @ $' + natlAvg.toFixed(2) + ' national avg',
                             'cyan'],
                     ];
                 } else {
@@ -28779,6 +28796,96 @@
                               + '</div>'
                               + '</div>';
             }
+
+            // ───── Buyer Attribution sub-card ─────
+            // Of N confirmed pre-sales, what share fall into each cohort
+            // (overlapping + disjoint). Field names tolerate both the new
+            // *_total_presales_* keys and the legacy *_8147 keys so the
+            // renderer works against either generation of payload.
+            var baEl = document.getElementById('jiqAudienceHypBuyerAttribution');
+            var ba   = ah.buyer_attribution;
+            if (baEl && ba && (ba.per_cohort_overlapping || []).length) {
+                var owPickPct = function(x) {
+                    return (x.estimated_share_of_total_presales_pct != null)
+                        ? x.estimated_share_of_total_presales_pct
+                        : x.estimated_share_of_8147_pct;
+                };
+                var owPickCount = function(x) {
+                    return (x.estimated_count_in_total_presales != null)
+                        ? x.estimated_count_in_total_presales
+                        : x.estimated_count_in_8147;
+                };
+                var ow = ba.per_cohort_overlapping;
+                var maxShare = Math.max.apply(null,
+                    ow.map(function(x){ return owPickPct(x) || 0; })) || 1;
+                var owRows = ow.map(function(x) {
+                    var pct = +owPickPct(x) || 0;
+                    var w = (pct / Math.max(maxShare, 1)) * 100;
+                    var isTriple = (x.cohort_key === 'triple_likely_core');
+                    var barColor = isTriple ? '#10b981' : 'var(--accent-primary)';
+                    return '<div style="display:grid;grid-template-columns:minmax(180px,1.2fr) 1fr 90px 90px;gap:10px;align-items:center;font-size:0.78rem;padding:6px 0;border-bottom:1px solid var(--border-color);">'
+                         + '<div style="font-weight:' + (isTriple ? 700 : 600) + ';color:' + (isTriple ? '#10b981' : 'var(--text-primary)') + ';">' + _jiqEsc(x.cohort_label) + '</div>'
+                         + '<div style="background:var(--bg-secondary);border-radius:6px;height:12px;overflow:hidden;">'
+                         +   '<div style="width:' + w + '%;height:100%;background:' + barColor + ';border-radius:6px;"></div>'
+                         + '</div>'
+                         + '<div style="text-align:right;font-weight:800;font-variant-numeric:tabular-nums;color:' + (isTriple ? '#10b981' : 'var(--text-primary)') + ';">' + pct.toFixed(1) + '%</div>'
+                         + '<div style="text-align:right;font-weight:600;font-variant-numeric:tabular-nums;color:var(--text-secondary);">≈ ' + _jiqFmt(owPickCount(x)) + '</div>'
+                         + '</div>';
+                }).join('');
+
+                var dpRows = '';
+                if (ba.disjoint_partition && (ba.disjoint_partition.buckets || []).length) {
+                    var dpPickPct = function(b) {
+                        return (b.estimated_share_of_total_presales_pct != null)
+                            ? b.estimated_share_of_total_presales_pct
+                            : b.estimated_share_of_8147_pct;
+                    };
+                    var dpPickCount = function(b) {
+                        return (b.estimated_presales_count != null)
+                            ? b.estimated_presales_count
+                            : b.estimated_presales_8147;
+                    };
+                    var bks = ba.disjoint_partition.buckets;
+                    var maxDp = Math.max.apply(null,
+                        bks.map(function(b){ return dpPickPct(b) || 0; })) || 1;
+                    dpRows = bks.map(function(b) {
+                        var pct = +dpPickPct(b) || 0;
+                        var w = (pct / Math.max(maxDp, 1)) * 100;
+                        var isTriple = (b.segment_key === 'triple_overlap');
+                        var isOutside = (b.segment_key === 'outside_all_named');
+                        var barColor = isTriple ? '#10b981' : (isOutside ? '#94a3b8' : 'var(--accent-primary)');
+                        return '<div style="display:grid;grid-template-columns:minmax(280px,1.4fr) 1fr 80px 90px;gap:10px;align-items:center;font-size:0.74rem;padding:5px 0;border-bottom:1px solid var(--border-color);">'
+                             + '<div style="font-weight:' + (isTriple ? 700 : 500) + ';color:' + (isTriple ? '#10b981' : (isOutside ? 'var(--text-secondary)' : 'var(--text-primary)')) + ';">' + _jiqEsc(b.segment_label) + '</div>'
+                             + '<div style="background:var(--bg-secondary);border-radius:6px;height:10px;overflow:hidden;">'
+                             +   '<div style="width:' + w + '%;height:100%;background:' + barColor + ';border-radius:6px;"></div>'
+                             + '</div>'
+                             + '<div style="text-align:right;font-weight:700;font-variant-numeric:tabular-nums;">' + pct.toFixed(1) + '%</div>'
+                             + '<div style="text-align:right;font-weight:600;font-variant-numeric:tabular-nums;color:var(--text-secondary);">≈ ' + _jiqFmt(dpPickCount(b)) + '</div>'
+                             + '</div>';
+                    }).join('');
+                }
+
+                baEl.innerHTML = '<div style="background:var(--bg-card);border:1px solid var(--border-color);border-radius:12px;padding:0.9rem;margin-top:0.85rem;">'
+                              + '<div style="font-weight:700;font-size:0.9rem;margin-bottom:4px;">🎯 Pre-Sales Cohort Attribution</div>'
+                              + '<div style="font-size:0.72rem;color:var(--text-secondary);margin-bottom:10px;">' + _jiqEsc(ba.headline || '') + '</div>'
+                              + '<div style="display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.3fr);gap:1rem;">'
+                              +   '<div>'
+                              +     '<div style="font-weight:600;font-size:0.78rem;margin-bottom:6px;">By cohort <span style="color:var(--text-secondary);font-size:0.65rem;font-weight:500;">· cohorts overlap, don\'t sum to 100%</span></div>'
+                              +     owRows
+                              +     '<div style="font-size:0.65rem;color:var(--text-secondary);margin-top:6px;font-style:italic;">' + _jiqEsc(ba.overlapping_note || '') + '</div>'
+                              +   '</div>'
+                              +   '<div>'
+                              +     '<div style="font-weight:600;font-size:0.78rem;margin-bottom:6px;">Disjoint partition <span style="color:var(--text-secondary);font-size:0.65rem;font-weight:500;">· each buyer in exactly 1 bucket, sums to 100%</span></div>'
+                              +     dpRows
+                              +     (ba.disjoint_partition && ba.disjoint_partition.method
+                                    ? '<div style="font-size:0.65rem;color:var(--text-secondary);margin-top:6px;font-style:italic;">' + _jiqEsc(ba.disjoint_partition.method) + '</div>'
+                                    : '')
+                              +   '</div>'
+                              + '</div>'
+                              + '</div>';
+            } else if (baEl) {
+                baEl.innerHTML = '';
+            }
         }
 
         // ───── Audience Sizing — Public Anchors renderer ─────
@@ -29078,6 +29185,12 @@
                         if (v <= 0.95) return 'rgba(239,68,68,0.15)';
                         return 'rgba(255,255,255,0.04)';
                     }
+                    // Triple-Likely Core column (synthetic hyp): only render
+                    // if at least one channel has triple_likely_core tilt
+                    // populated (Sony's 5/27 ask).
+                    var hasTripleTilt = channels.some(function(c) {
+                        return (c.audience_tilt || {}).triple_likely_core != null;
+                    });
                     var rows = channels.map(function(c) {
                         var tilt = c.audience_tilt || {};
                         var cells = hyps.map(function(h) {
@@ -29086,6 +29199,15 @@
                                  + (v == null ? '—' : v.toFixed(2) + '×')
                                  + '</td>';
                         }).join('');
+                        // Append Triple-Likely Core cell when populated
+                        var tripleCell = '';
+                        if (hasTripleTilt) {
+                            var tv = tilt.triple_likely_core;
+                            tripleCell = '<td style="padding:8px 10px;background:' + tiltColor(tv)
+                                + ';text-align:center;font-weight:800;font-variant-numeric:tabular-nums;border-right:2px solid #10b981;color:#10b981;">'
+                                + (tv == null ? '—' : tv.toFixed(2) + '×')
+                                + '</td>';
+                        }
                         return '<tr style="border-bottom:1px solid var(--border-color);">'
                              + '<td style="padding:8px 10px;border-right:1px solid var(--border-color);">'
                              +   '<span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:' + (c.color || '#5b6cff') + ';margin-right:6px;vertical-align:middle;"></span>'
@@ -29093,6 +29215,7 @@
                              +   '<span style="color:var(--text-secondary);font-size:0.7rem;margin-left:6px;">' + (c.share_pct || 0).toFixed(0) + '%</span>'
                              + '</td>'
                              + cells
+                             + tripleCell
                              + '<td style="padding:8px 10px;font-size:0.72rem;color:var(--text-secondary);">' + _jiqEsc(c.profile_notes || '') + '</td>'
                              + '</tr>';
                     }).join('');
@@ -29101,6 +29224,9 @@
                              + _jiqEsc(h.icon || '') + ' ' + _jiqEsc(h.name)
                              + '</th>';
                     }).join('');
+                    var tripleHeaderCell = hasTripleTilt
+                        ? '<th style="padding:8px 10px;background:var(--bg-secondary);text-align:center;font-size:0.72rem;font-weight:800;border-right:2px solid #10b981;white-space:nowrap;color:#10b981;">⭐ Triple-Likely Core</th>'
+                        : '';
                     var heatTitle = isTv
                         ? 'Audience-fit heatmap — tilt vs. surface\'s overall mix'
                         : 'Audience-fit heatmap — tilt vs. chain\'s overall mix';
@@ -29115,9 +29241,72 @@
                                      + '<thead><tr style="background:var(--bg-secondary);">'
                                      +   '<th style="padding:8px 10px;text-align:left;border-right:1px solid var(--border-color);">' + rowHeader + '</th>'
                                      +   headerCells
+                                     +   tripleHeaderCell
                                      +   '<th style="padding:8px 10px;text-align:left;">Profile</th>'
                                      + '</tr></thead><tbody>' + rows + '</tbody></table>'
                                      + '</div>';
+                }
+            }
+
+            // ───── Per-chain presale attribution table (Sony 5/27 ask) ─────
+            // For each chain, show estimated share of total pre-sales
+            // and the per-cohort (overlapping) breakdown, including the
+            // new Triple-Likely Core column.
+            var paEl = document.getElementById('jiqExhibitorPresaleAttribution');
+            if (paEl && !isTv) {
+                var anyPa = channels.some(function(c) { return c.presale_attribution; });
+                if (anyPa) {
+                    // Pull the live cross-channel pre-sales total so the
+                    // display string isn't hard-coded to 8,147
+                    var liveTotal = ((window._jiqCurrentRun || {}).kpis || {}).confirmed_digital_purchases;
+                    var totalStr  = liveTotal ? _jiqFmt(liveTotal) : '—';
+                    var fmtPct = function(v) { return (v == null) ? '—' : (+v).toFixed(1) + '%'; };
+                    var pickShare = function(pa) {
+                        return (pa.estimated_share_of_total_presales_pct != null)
+                            ? pa.estimated_share_of_total_presales_pct
+                            : pa.estimated_share_of_8147_pct;
+                    };
+                    var paRows = channels.map(function(c) {
+                        var pa = c.presale_attribution || {};
+                        var bc = pa.by_cohort_overlapping || {};
+                        var n = (bc.nate_fans || {});
+                        var p = (bc.family_parents || {});
+                        var m = (bc.middle_america || {});
+                        var t = (bc.triple_likely_core || {});
+                        return '<tr style="border-bottom:1px solid var(--border-color);">'
+                             + '<td style="padding:7px 10px;border-right:1px solid var(--border-color);">'
+                             +   '<span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:' + (c.color || '#5b6cff') + ';margin-right:6px;vertical-align:middle;"></span>'
+                             +   '<span style="font-weight:600;">' + _jiqEsc(c.name) + '</span>'
+                             + '</td>'
+                             + '<td style="padding:7px 10px;text-align:right;font-weight:700;font-variant-numeric:tabular-nums;border-right:1px solid var(--border-color);">' + fmtPct(pickShare(pa)) + '</td>'
+                             + '<td style="padding:7px 10px;text-align:right;font-weight:600;font-variant-numeric:tabular-nums;border-right:1px solid var(--border-color);color:var(--text-secondary);">≈ ' + _jiqFmt(pa.estimated_presales_count || 0) + '</td>'
+                             + '<td style="padding:7px 10px;text-align:right;font-variant-numeric:tabular-nums;border-right:1px solid var(--border-color);">' + fmtPct(n.share_of_chain_presales_pct) + '<span style="color:var(--text-secondary);font-size:0.65rem;margin-left:4px;">≈' + _jiqFmt(n.estimated_presales_count || 0) + '</span></td>'
+                             + '<td style="padding:7px 10px;text-align:right;font-variant-numeric:tabular-nums;border-right:1px solid var(--border-color);">' + fmtPct(p.share_of_chain_presales_pct) + '<span style="color:var(--text-secondary);font-size:0.65rem;margin-left:4px;">≈' + _jiqFmt(p.estimated_presales_count || 0) + '</span></td>'
+                             + '<td style="padding:7px 10px;text-align:right;font-variant-numeric:tabular-nums;border-right:1px solid var(--border-color);">' + fmtPct(m.share_of_chain_presales_pct) + '<span style="color:var(--text-secondary);font-size:0.65rem;margin-left:4px;">≈' + _jiqFmt(m.estimated_presales_count || 0) + '</span></td>'
+                             + '<td style="padding:7px 10px;text-align:right;font-variant-numeric:tabular-nums;border-right:2px solid #10b981;color:#10b981;font-weight:700;">' + fmtPct(t.share_of_chain_presales_pct) + '<span style="color:var(--text-secondary);font-size:0.65rem;margin-left:4px;font-weight:500;">≈' + _jiqFmt(t.estimated_presales_count || 0) + '</span></td>'
+                             + '</tr>';
+                    }).join('');
+                    paEl.innerHTML = '<div style="margin-top:1rem;background:var(--bg-card);border:1px solid var(--border-color);border-radius:12px;padding:0.9rem;">'
+                                  + '<div style="font-weight:700;font-size:0.85rem;margin-bottom:4px;">📊 Per-chain pre-sales attribution by audience cohort</div>'
+                                  + '<div style="font-size:0.68rem;color:var(--text-secondary);margin-bottom:10px;">Per-chain shares of the <strong>' + totalStr + '</strong> confirmed pre-sales, then within each chain the % of THAT chain\'s pre-sales who belong to each cohort. Cohorts overlap — per-cohort shares do not sum to 100% per chain.</div>'
+                                  + '<div style="overflow-x:auto;">'
+                                  + '<table style="width:100%;border-collapse:collapse;font-size:0.74rem;border:1px solid var(--border-color);border-radius:8px;overflow:hidden;">'
+                                  + '<thead><tr style="background:var(--bg-secondary);">'
+                                  +   '<th style="padding:7px 10px;text-align:left;border-right:1px solid var(--border-color);">Chain</th>'
+                                  +   '<th style="padding:7px 10px;text-align:right;border-right:1px solid var(--border-color);">Share of ' + totalStr + '</th>'
+                                  +   '<th style="padding:7px 10px;text-align:right;border-right:1px solid var(--border-color);">Est. pre-sales</th>'
+                                  +   '<th style="padding:7px 10px;text-align:right;border-right:1px solid var(--border-color);">Nate fans</th>'
+                                  +   '<th style="padding:7px 10px;text-align:right;border-right:1px solid var(--border-color);">Family parents</th>'
+                                  +   '<th style="padding:7px 10px;text-align:right;border-right:1px solid var(--border-color);">Middle America</th>'
+                                  +   '<th style="padding:7px 10px;text-align:right;border-right:2px solid #10b981;color:#10b981;font-weight:800;">⭐ Triple-Likely Core</th>'
+                                  + '</tr></thead><tbody>' + paRows + '</tbody></table>'
+                                  + '</div>'
+                                  + (mix.presale_attribution_method
+                                     ? '<div style="font-size:0.62rem;color:var(--text-secondary);margin-top:8px;font-style:italic;">' + _jiqEsc(mix.presale_attribution_method) + '</div>'
+                                     : '')
+                                  + '</div>';
+                } else {
+                    paEl.innerHTML = '';
                 }
             }
 
@@ -58816,19 +59005,21 @@
                         const barWidth = maxVal > 0 ? (pct / maxVal * 100) : 0;
                         return `
                         <div style="display: flex; align-items: center; gap: 0.4rem;">
-                            <span style="font-size: 0.65rem; color: var(--text-secondary); width: 16px; flex-shrink: 0; text-align: right;">${i + 1}</span>
+                            <span style="font-size: 0.65rem; color: #000; width: 16px; flex-shrink: 0; text-align: right;">${i + 1}</span>
                             <div style="flex: 1; min-width: 0;">
-                                <div style="font-size: 0.7rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-bottom: 2px;">${escapeHtml(key)}</div>
-                                <div style="position: relative; height: 14px; background: rgba(255,255,255,0.05); border-radius: 3px; overflow: hidden;">
-                                    <div style="position: absolute; left: 0; top: 0; height: 100%; width: ${barWidth}%; background: linear-gradient(90deg, var(--accent-lime), var(--accent-cyan)); border-radius: 3px;"></div>
-                                    <span style="position: absolute; right: 4px; top: 50%; transform: translateY(-50%); font-size: 0.65rem; font-weight: 600; color: ${barWidth > 50 ? '#000' : 'var(--accent-lime)'};">${pct.toFixed(1)}%</span>
+                                <div style="font-size: 0.7rem; color: #000; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-bottom: 2px;">${escapeHtml(key)}</div>
+                                <div style="display: flex; align-items: center; gap: 0.4rem;">
+                                    <div style="position: relative; flex: 1; height: 14px; background: rgba(0,0,0,0.06); border-radius: 3px; overflow: hidden;">
+                                        <div style="position: absolute; left: 0; top: 0; height: 100%; width: ${barWidth}%; background: linear-gradient(90deg, #6366f1, #818cf8); border-radius: 3px;"></div>
+                                    </div>
+                                    <span style="font-size: 0.65rem; font-weight: 600; color: #000; flex-shrink: 0; min-width: 40px; text-align: right;">${pct.toFixed(1)}%</span>
                                 </div>
                             </div>
                         </div>
                     `}).join('')}
                     ${entries.length < totalCount ? `
-                        <div style="margin-top: 0.5rem; padding: 0.4rem; text-align: center; font-size: 0.65rem; color: var(--text-secondary); background: rgba(200, 230, 0, 0.1); border-radius: 4px;">
-                            📊 Showing ${entries.length} of ${totalCount} segments
+                        <div style="margin-top: 0.5rem; padding: 0.4rem; text-align: center; font-size: 0.65rem; color: #555; background: rgba(99, 102, 241, 0.1); border-radius: 4px;">
+                            Showing ${entries.length} of ${totalCount} segments
                         </div>
                     ` : ''}
                 </div>
@@ -58840,25 +59031,25 @@
                 <div style="overflow-x: auto;">
                     <table style="width: 100%; border-collapse: collapse; font-size: 0.75rem;">
                         <thead>
-                            <tr style="background: rgba(200, 230, 0, 0.1); border-bottom: 2px solid var(--accent-lime);">
-                                <th style="padding: 0.4rem; text-align: left; color: var(--accent-lime);">#</th>
-                                <th style="padding: 0.4rem; text-align: left; color: var(--accent-lime);">Segment</th>
-                                <th style="padding: 0.4rem; text-align: right; color: var(--accent-lime);">Value</th>
+                            <tr style="background: rgba(99, 102, 241, 0.1); border-bottom: 2px solid #6366f1;">
+                                <th style="padding: 0.4rem; text-align: left; color: #000;">#</th>
+                                <th style="padding: 0.4rem; text-align: left; color: #000;">Segment</th>
+                                <th style="padding: 0.4rem; text-align: right; color: #000;">Value</th>
                             </tr>
                         </thead>
                         <tbody>
                             ${entries.map(([key, val], i) => `
-                                <tr style="border-bottom: 1px solid rgba(255,255,255,0.05);">
-                                    <td style="padding: 0.4rem; color: var(--text-secondary);">${i + 1}</td>
-                                    <td style="padding: 0.4rem; color: var(--text-primary);">${escapeHtml(key)}</td>
-                                    <td style="padding: 0.4rem; text-align: right; font-weight: 600; color: var(--accent-lime);">${parseFloat(val).toFixed(1)}%</td>
+                                <tr style="border-bottom: 1px solid rgba(0,0,0,0.08);">
+                                    <td style="padding: 0.4rem; color: #000;">${i + 1}</td>
+                                    <td style="padding: 0.4rem; color: #000;">${escapeHtml(key)}</td>
+                                    <td style="padding: 0.4rem; text-align: right; font-weight: 600; color: #6366f1;">${parseFloat(val).toFixed(1)}%</td>
                                 </tr>
                             `).join('')}
                         </tbody>
                     </table>
                     ${entries.length < totalCount ? `
-                        <div style="margin-top: 0.5rem; padding: 0.4rem; text-align: center; font-size: 0.65rem; color: var(--text-secondary); background: rgba(200, 230, 0, 0.1); border-radius: 4px;">
-                            📊 Showing ${entries.length} of ${totalCount} segments
+                        <div style="margin-top: 0.5rem; padding: 0.4rem; text-align: center; font-size: 0.65rem; color: #555; background: rgba(99, 102, 241, 0.1); border-radius: 4px;">
+                            Showing ${entries.length} of ${totalCount} segments
                         </div>
                     ` : ''}
                 </div>
@@ -58875,16 +59066,16 @@
                         return `
                         <div style="flex: 1; display: flex; flex-direction: column; align-items: center; gap: 0.2rem; min-width: 0;">
                             <div style="width: 100%; height: 140px; display: flex; align-items: flex-end; justify-content: center;">
-                                <div style="width: 75%; max-width: 40px; height: ${barHeight}%; min-height: 2px; background: linear-gradient(180deg, var(--accent-lime), var(--accent-cyan)); border-radius: 4px 4px 0 0; transition: height 0.3s;"></div>
+                                <div style="width: 75%; max-width: 40px; height: ${barHeight}%; min-height: 2px; background: linear-gradient(180deg, #6366f1, #818cf8); border-radius: 4px 4px 0 0; transition: height 0.3s;"></div>
                             </div>
-                            <div style="font-size: 0.55rem; color: var(--text-secondary); text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%;" title="${escapeHtml(key)}">${escapeHtml((key || '').slice(0, 8))}</div>
-                            <div style="font-size: 0.6rem; font-weight: 600; color: var(--accent-lime);">${pct.toFixed(1)}%</div>
+                            <div style="font-size: 0.55rem; color: #000; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%;" title="${escapeHtml(key)}">${escapeHtml((key || '').slice(0, 8))}</div>
+                            <div style="font-size: 0.6rem; font-weight: 600; color: #000;">${pct.toFixed(1)}%</div>
                         </div>
                     `}).join('')}
                 </div>
                 ${entries.length < totalCount ? `
-                    <div style="margin-top: 0.5rem; padding: 0.4rem; text-align: center; font-size: 0.65rem; color: var(--text-secondary); background: rgba(200, 230, 0, 0.1); border-radius: 4px;">
-                        📊 Showing ${entries.length} of ${totalCount} segments
+                    <div style="margin-top: 0.5rem; padding: 0.4rem; text-align: center; font-size: 0.65rem; color: #555; background: rgba(99, 102, 241, 0.1); border-radius: 4px;">
+                        Showing ${entries.length} of ${totalCount} segments
                     </div>
                 ` : ''}
             `;
@@ -58893,19 +59084,19 @@
         function renderDemographicGauge(entries, totalCount) {
             const topVal = entries.length ? parseFloat(entries[0][1]) : 0;
             const angle = Math.min((topVal / 100) * 180, 180);
-            const colors = ['#c8ff00', '#66d9ef', '#a6e22e'];
+            const colors = ['#6366f1', '#818cf8', '#a5b4fc'];
             return `
                 <div style="display: flex; align-items: center; gap: 1rem;">
                     <div style="position: relative; width: 160px; height: 90px; flex-shrink: 0;">
                         <div style="position: absolute; width: 100%; height: 100%; border-radius: 80px 80px 0 0; background: conic-gradient(from 0.5turn at 50% 100%, ${colors[0]} 0deg, ${colors[1]} 90deg, ${colors[2]} 180deg); opacity: 0.2;"></div>
-                        <div style="position: absolute; width: 100%; height: 100%; border-radius: 80px 80px 0 0; background: conic-gradient(from 0.5turn at 50% 100%, transparent ${angle}deg, var(--accent-lime) ${angle}deg); opacity: 0.95;"></div>
-                        <div style="position: absolute; bottom: -4px; left: 50%; transform: translateX(-50%); font-size: 1.2rem; font-weight: 700; color: var(--accent-lime);">${topVal.toFixed(1)}%</div>
+                        <div style="position: absolute; width: 100%; height: 100%; border-radius: 80px 80px 0 0; background: conic-gradient(from 0.5turn at 50% 100%, transparent ${angle}deg, #6366f1 ${angle}deg); opacity: 0.95;"></div>
+                        <div style="position: absolute; bottom: -4px; left: 50%; transform: translateX(-50%); font-size: 1.2rem; font-weight: 700; color: #000;">${topVal.toFixed(1)}%</div>
                     </div>
-                    <div style="flex: 1; font-size: 0.7rem; color: var(--text-secondary);">Top: ${escapeHtml(entries[0]?.[0] || '')}</div>
+                    <div style="flex: 1; font-size: 0.7rem; color: #000;">Top: ${escapeHtml(entries[0]?.[0] || '')}</div>
                 </div>
                 ${entries.length < totalCount ? `
-                    <div style="margin-top: 0.5rem; padding: 0.4rem; text-align: center; font-size: 0.65rem; color: var(--text-secondary); background: rgba(200, 230, 0, 0.1); border-radius: 4px;">
-                        📊 Showing top of ${totalCount} segments
+                    <div style="margin-top: 0.5rem; padding: 0.4rem; text-align: center; font-size: 0.65rem; color: #555; background: rgba(99, 102, 241, 0.1); border-radius: 4px;">
+                        Showing top of ${totalCount} segments
                     </div>
                 ` : ''}
             `;
@@ -58923,13 +59114,13 @@
             return `
                 <div style="position: relative; height: 160px; padding: 0.5rem 0;">
                     <svg viewBox="0 0 100 100" preserveAspectRatio="xMidYMid meet" style="position: absolute; inset: 0; width: 100%; height: 100%;">
-                        <polyline fill="none" stroke="var(--accent-lime)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" points="${pts.join(' ')}"/>
+                        <polyline fill="none" stroke="#6366f1" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" points="${pts.join(' ')}"/>
                     </svg>
-                    <div style="display: flex; justify-content: space-between; margin-top: 0.5rem; font-size: 0.55rem; color: var(--text-secondary);">
+                    <div style="display: flex; justify-content: space-between; margin-top: 0.5rem; font-size: 0.55rem; color: #000;">
                         ${entries.map(([k]) => '<span style="flex:1; text-align:center; overflow:hidden; text-overflow:ellipsis;">' + escapeHtml((k||'').slice(0,6)) + '</span>').join('')}
                     </div>
                 </div>
-                ${entries.length < totalCount ? `<div style="margin-top: 0.3rem; font-size: 0.65rem; color: var(--text-secondary); text-align: center;">Showing ${entries.length} of ${totalCount}</div>` : ''}
+                ${entries.length < totalCount ? `<div style="margin-top: 0.3rem; font-size: 0.65rem; color: #555; text-align: center;">Showing ${entries.length} of ${totalCount}</div>` : ''}
             `;
         }
 
@@ -58946,13 +59137,13 @@
             return `
                 <div style="position: relative; height: 160px; padding: 0.5rem 0;">
                     <svg viewBox="0 0 100 100" preserveAspectRatio="xMidYMid meet" style="position: absolute; inset: 0; width: 100%; height: 100%;">
-                        <polygon fill="rgba(200, 230, 0, 0.35)" stroke="var(--accent-lime)" stroke-width="1.5" points="${areaPts}"/>
+                        <polygon fill="rgba(99, 102, 241, 0.25)" stroke="#6366f1" stroke-width="1.5" points="${areaPts}"/>
                     </svg>
-                    <div style="display: flex; justify-content: space-between; margin-top: 0.5rem; font-size: 0.55rem; color: var(--text-secondary);">
+                    <div style="display: flex; justify-content: space-between; margin-top: 0.5rem; font-size: 0.55rem; color: #000;">
                         ${entries.map(([k]) => '<span style="flex:1; text-align:center; overflow:hidden; text-overflow:ellipsis;">' + escapeHtml((k||'').slice(0,6)) + '</span>').join('')}
                     </div>
                 </div>
-                ${entries.length < totalCount ? `<div style="margin-top: 0.3rem; font-size: 0.65rem; color: var(--text-secondary); text-align: center;">Showing ${entries.length} of ${totalCount}</div>` : ''}
+                ${entries.length < totalCount ? `<div style="margin-top: 0.3rem; font-size: 0.65rem; color: #555; text-align: center;">Showing ${entries.length} of ${totalCount}</div>` : ''}
             `;
         }
 
@@ -58965,22 +59156,21 @@
                             const pct = parseFloat(v);
                             const x = (i / Math.max(entries.length - 1, 1)) * 90 + 5;
                             const y = 95 - (pct / maxVal * 85);
-                            return `<circle cx="${x}" cy="${y}" r="4" fill="var(--accent-lime)" opacity="0.9"/>`;
+                            return `<circle cx="${x}" cy="${y}" r="4" fill="#6366f1" opacity="0.9"/>`;
                         }).join('')}
                     </svg>
-                    <div style="display: flex; justify-content: space-between; margin-top: 0.5rem; font-size: 0.55rem; color: var(--text-secondary);">
+                    <div style="display: flex; justify-content: space-between; margin-top: 0.5rem; font-size: 0.55rem; color: #000;">
                         ${entries.map(([k]) => '<span style="flex:1; text-align:center; overflow:hidden; text-overflow:ellipsis;">' + escapeHtml((k||'').slice(0,6)) + '</span>').join('')}
                     </div>
                 </div>
-                ${entries.length < totalCount ? `<div style="margin-top: 0.3rem; font-size: 0.65rem; color: var(--text-secondary); text-align: center;">Showing ${entries.length} of ${totalCount}</div>` : ''}
+                ${entries.length < totalCount ? `<div style="margin-top: 0.3rem; font-size: 0.65rem; color: #555; text-align: center;">Showing ${entries.length} of ${totalCount}</div>` : ''}
             `;
         }
 
         function renderDemographicPie(entries, totalCount) {
-            // Simple pie chart using CSS conic-gradient
             const total = entries.reduce((sum, [_, v]) => sum + parseFloat(v), 0);
             let currentAngle = 0;
-            const colors = ['#c8ff00', '#66d9ef', '#a6e22e', '#fd971f', '#f92672', '#ae81ff', '#e6db74', '#66d9ef'];
+            const colors = ['#6366f1', '#818cf8', '#a5b4fc', '#4f46e5', '#7c3aed', '#8b5cf6', '#c4b5fd', '#4338ca'];
             
             const gradientStops = entries.map(([key, val], i) => {
                 const pct = (parseFloat(val) / total) * 100;
@@ -58997,15 +59187,15 @@
                         ${entries.map(([key, val], i) => `
                             <div style="display: flex; align-items: center; gap: 0.4rem;">
                                 <div style="width: 12px; height: 12px; border-radius: 2px; background: ${colors[i % colors.length]}; flex-shrink: 0;"></div>
-                                <span style="flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${escapeHtml(key)}</span>
-                                <span style="font-weight: 600; color: var(--accent-lime); flex-shrink: 0;">${parseFloat(val).toFixed(1)}%</span>
+                                <span style="flex: 1; color: #000; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${escapeHtml(key)}</span>
+                                <span style="font-weight: 600; color: #000; flex-shrink: 0;">${parseFloat(val).toFixed(1)}%</span>
                             </div>
                         `).join('')}
                     </div>
                 </div>
                 ${entries.length < totalCount ? `
-                    <div style="margin-top: 0.5rem; padding: 0.4rem; text-align: center; font-size: 0.65rem; color: var(--text-secondary); background: rgba(200, 230, 0, 0.1); border-radius: 4px;">
-                        📊 Showing ${entries.length} of ${totalCount} segments
+                    <div style="margin-top: 0.5rem; padding: 0.4rem; text-align: center; font-size: 0.65rem; color: #555; background: rgba(99, 102, 241, 0.1); border-radius: 4px;">
+                        Showing ${entries.length} of ${totalCount} segments
                     </div>
                 ` : ''}
             `;
@@ -77188,19 +77378,21 @@
                                 const barWidth = maxVal > 0 ? (pct / maxVal * 100) : 0;
                                 return `
                                 <div style="display: flex; align-items: center; gap: 0.4rem;">
-                                    <span style="font-size: 0.65rem; color: var(--text-secondary); width: 16px; flex-shrink: 0; text-align: right;">${i + 1}</span>
+                                    <span style="font-size: 0.65rem; color: #000; width: 16px; flex-shrink: 0; text-align: right;">${i + 1}</span>
                                     <div style="flex: 1; min-width: 0;">
-                                        <div style="font-size: 0.7rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-bottom: 2px;">${(key || '').replace(/</g, '&lt;')}</div>
-                                        <div style="position: relative; height: 14px; background: rgba(255,255,255,0.05); border-radius: 3px; overflow: hidden;">
-                                            <div style="position: absolute; left: 0; top: 0; height: 100%; width: ${barWidth}%; background: linear-gradient(90deg, var(--accent-lime), var(--accent-cyan)); border-radius: 3px;"></div>
-                                            <span style="position: absolute; right: 4px; top: 50%; transform: translateY(-50%); font-size: 0.65rem; font-weight: 600; color: ${barWidth > 50 ? '#000' : 'var(--accent-lime)'};">${pct.toFixed(1)}%</span>
+                                        <div style="font-size: 0.7rem; color: #000; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-bottom: 2px;">${(key || '').replace(/</g, '&lt;')}</div>
+                                        <div style="display: flex; align-items: center; gap: 0.4rem;">
+                                            <div style="position: relative; flex: 1; height: 14px; background: rgba(0,0,0,0.06); border-radius: 3px; overflow: hidden;">
+                                                <div style="position: absolute; left: 0; top: 0; height: 100%; width: ${barWidth}%; background: linear-gradient(90deg, #6366f1, #818cf8); border-radius: 3px;"></div>
+                                            </div>
+                                            <span style="font-size: 0.65rem; font-weight: 600; color: #000; flex-shrink: 0; min-width: 40px; text-align: right;">${pct.toFixed(1)}%</span>
                                         </div>
                                     </div>
                                 </div>
                             `}).join('')}
                             ${displayCount < itemCount ? `
-                                <div style="margin-top: 0.5rem; padding: 0.4rem; text-align: center; font-size: 0.65rem; color: var(--text-secondary); background: rgba(200, 230, 0, 0.1); border-radius: 4px;">
-                                    📊 Showing ${displayCount} of ${itemCount} items
+                                <div style="margin-top: 0.5rem; padding: 0.4rem; text-align: center; font-size: 0.65rem; color: #555; background: rgba(99, 102, 241, 0.1); border-radius: 4px;">
+                                    Showing ${displayCount} of ${itemCount} items
                                 </div>
                             ` : ''}
                         </div>
@@ -77219,14 +77411,14 @@
                                 return `
                                 <div style="flex: 1; display: flex; flex-direction: column; align-items: center; gap: 0.2rem; min-width: 0;">
                                     <div style="width: 100%; height: 120px; display: flex; align-items: flex-end; justify-content: center;">
-                                        <div style="width: 70%; max-width: 36px; height: ${barHeight}%; min-height: 2px; background: linear-gradient(180deg, var(--accent-lime), var(--accent-cyan)); border-radius: 4px 4px 0 0;"></div>
+                                        <div style="width: 70%; max-width: 36px; height: ${barHeight}%; min-height: 2px; background: linear-gradient(180deg, #6366f1, #818cf8); border-radius: 4px 4px 0 0;"></div>
                                     </div>
-                                    <div style="font-size: 0.5rem; color: var(--text-secondary); text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%;" title="${(key || '').replace(/"/g, '&quot;')}">${(key || '').slice(0, 6).replace(/</g, '&lt;')}</div>
-                                    <div style="font-size: 0.55rem; font-weight: 600; color: var(--accent-lime);">${pct.toFixed(1)}%</div>
+                                    <div style="font-size: 0.5rem; color: #000; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%;" title="${(key || '').replace(/"/g, '&quot;')}">${(key || '').slice(0, 6).replace(/</g, '&lt;')}</div>
+                                    <div style="font-size: 0.55rem; font-weight: 600; color: #000;">${pct.toFixed(1)}%</div>
                                 </div>
                             `}).join('')}
                         </div>
-                        ${displayCount < itemCount ? `<div style="margin-top: 0.5rem; font-size: 0.65rem; color: var(--text-secondary); text-align: center;">Showing ${displayCount} of ${itemCount}</div>` : ''}
+                        ${displayCount < itemCount ? `<div style="margin-top: 0.5rem; font-size: 0.65rem; color: #555; text-align: center;">Showing ${displayCount} of ${itemCount}</div>` : ''}
                     `;
                 }
                 if (bevVizType === 'gauge') {
@@ -77235,11 +77427,11 @@
                     return `
                         <div style="display: flex; align-items: center; gap: 1rem;">
                             <div style="position: relative; width: 140px; height: 80px; flex-shrink: 0;">
-                                <div style="position: absolute; width: 100%; height: 100%; border-radius: 70px 70px 0 0; background: linear-gradient(90deg, rgba(200,230,0,0.15) 0%, rgba(0,212,255,0.15) 100%);"></div>
-                                <div style="position: absolute; width: 100%; height: 100%; border-radius: 70px 70px 0 0; background: conic-gradient(from 0.5turn at 50% 100%, transparent ${angle}deg, var(--accent-lime) ${angle}deg); opacity: 0.9;"></div>
-                                <div style="position: absolute; bottom: -2px; left: 50%; transform: translateX(-50%); font-size: 1rem; font-weight: 700; color: var(--accent-lime);">${topVal.toFixed(1)}%</div>
+                                <div style="position: absolute; width: 100%; height: 100%; border-radius: 70px 70px 0 0; background: linear-gradient(90deg, rgba(99,102,241,0.15) 0%, rgba(129,140,248,0.15) 100%);"></div>
+                                <div style="position: absolute; width: 100%; height: 100%; border-radius: 70px 70px 0 0; background: conic-gradient(from 0.5turn at 50% 100%, transparent ${angle}deg, #6366f1 ${angle}deg); opacity: 0.9;"></div>
+                                <div style="position: absolute; bottom: -2px; left: 50%; transform: translateX(-50%); font-size: 1rem; font-weight: 700; color: #000;">${topVal.toFixed(1)}%</div>
                             </div>
-                            <div style="flex: 1; font-size: 0.65rem; color: var(--text-secondary);">Top: ${(entries[0]?.[0] || '').slice(0, 40).replace(/</g, '&lt;')}</div>
+                            <div style="flex: 1; font-size: 0.65rem; color: #000;">Top: ${(entries[0]?.[0] || '').slice(0, 40).replace(/</g, '&lt;')}</div>
                         </div>
                     `;
                 }
@@ -77249,18 +77441,18 @@
                     const n = Math.max(values.length - 1, 1);
                     if (bevVizType === 'line') {
                         const pts = values.map((v, i) => ((i / n) * 90 + 5) + ',' + (90 - (v / maxVal * 80)));
-                        return `<div style="position: relative; height: 140px;"><svg viewBox="0 0 100 100" preserveAspectRatio="xMidYMid meet" style="width:100%;height:100%;"><polyline fill="none" stroke="var(--accent-lime)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" points="${pts.join(' ')}"/></svg></div>`;
+                        return `<div style="position: relative; height: 140px;"><svg viewBox="0 0 100 100" preserveAspectRatio="xMidYMid meet" style="width:100%;height:100%;"><polyline fill="none" stroke="#6366f1" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" points="${pts.join(' ')}"/></svg></div>`;
                     }
                     if (bevVizType === 'area') {
                         const pts = values.map((v, i) => ((i / n) * 90 + 5) + ',' + (90 - (v / maxVal * 80)));
                         const areaPts = '5,90 ' + pts.join(' ') + ' 95,90';
-                        return `<div style="position: relative; height: 140px;"><svg viewBox="0 0 100 100" preserveAspectRatio="xMidYMid meet" style="width:100%;height:100%;"><polygon fill="rgba(200, 230, 0, 0.35)" stroke="var(--accent-lime)" stroke-width="1.5" points="${areaPts}"/></svg></div>`;
+                        return `<div style="position: relative; height: 140px;"><svg viewBox="0 0 100 100" preserveAspectRatio="xMidYMid meet" style="width:100%;height:100%;"><polygon fill="rgba(99, 102, 241, 0.25)" stroke="#6366f1" stroke-width="1.5" points="${areaPts}"/></svg></div>`;
                     }
                     if (bevVizType === 'scatter') {
                         const circles = values.map((v, i) => {
                             const x = (i / n) * 90 + 5;
                             const y = 90 - (v / maxVal * 80);
-                            return `<circle cx="${x}" cy="${y}" r="3.5" fill="var(--accent-lime)" opacity="0.9"/>`;
+                            return `<circle cx="${x}" cy="${y}" r="3.5" fill="#6366f1" opacity="0.9"/>`;
                         }).join('');
                         return `<div style="position: relative; height: 140px;"><svg viewBox="0 0 100 100" preserveAspectRatio="xMidYMid meet" style="width:100%;height:100%;">${circles}</svg></div>`;
                     }
@@ -77270,10 +77462,10 @@
                     return `
                         <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.3rem; font-size: 0.7rem;">
                             ${entries.map(([key, val], i) => `
-                                <div style="display: flex; align-items: center; gap: 0.3rem; padding: 0.3rem 0.4rem; background: #1a1f2e; border-radius: 3px; font-family: 'Poppins', sans-serif;">
-                                    <span style="font-size: 0.6rem; color: var(--text-secondary); width: 14px; flex-shrink: 0;">${i + 1}</span>
-                                    <span style="flex: 1; font-size: 0.7rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${(key || '').replace(/</g, '&lt;')}</span>
-                                    <span style="font-weight: 600; color: var(--accent-lime); flex-shrink: 0; font-size: 0.7rem;">${parseFloat(val || 0).toFixed(1)}%</span>
+                                <div style="display: flex; align-items: center; gap: 0.3rem; padding: 0.3rem 0.4rem; background: #f0f0f5; border-radius: 3px; font-family: 'Poppins', sans-serif;">
+                                    <span style="font-size: 0.6rem; color: #000; width: 14px; flex-shrink: 0;">${i + 1}</span>
+                                    <span style="flex: 1; font-size: 0.7rem; color: #000; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${(key || '').replace(/</g, '&lt;')}</span>
+                                    <span style="font-weight: 600; color: #6366f1; flex-shrink: 0; font-size: 0.7rem;">${parseFloat(val || 0).toFixed(1)}%</span>
                                 </div>
                             `).join('')}
                         </div>
@@ -77285,10 +77477,10 @@
                     return `
                         <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 0.35rem; font-size: 0.7rem; max-width: 100%;">
                             ${entries.map(([key, val], i) => `
-                                <div style="display: flex; align-items: center; gap: 0.3rem; padding: 0.35rem 0.4rem; background: #1a1f2e; border-radius: 4px; font-family: 'Poppins', sans-serif; min-width: 0; overflow: hidden;">
-                                    <span style="font-size: 0.6rem; color: var(--text-secondary); width: 14px; flex-shrink: 0;">${i + 1}</span>
-                                    <span style="flex: 1; font-size: 0.7rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0;">${(key || '').replace(/</g, '&lt;')}</span>
-                                    <span style="font-weight: 600; color: var(--accent-lime); flex-shrink: 0; font-size: 0.7rem;">${parseFloat(val || 0).toFixed(1)}%</span>
+                                <div style="display: flex; align-items: center; gap: 0.3rem; padding: 0.35rem 0.4rem; background: #f0f0f5; border-radius: 4px; font-family: 'Poppins', sans-serif; min-width: 0; overflow: hidden;">
+                                    <span style="font-size: 0.6rem; color: #000; width: 14px; flex-shrink: 0;">${i + 1}</span>
+                                    <span style="flex: 1; font-size: 0.7rem; color: #000; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0;">${(key || '').replace(/</g, '&lt;')}</span>
+                                    <span style="font-weight: 600; color: #6366f1; flex-shrink: 0; font-size: 0.7rem;">${parseFloat(val || 0).toFixed(1)}%</span>
                                 </div>
                             `).join('')}
                         </div>
@@ -77299,10 +77491,10 @@
                 return `
                     <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 0.4rem; font-size: 0.75rem; max-width: 100%;">
                         ${entries.map(([key, val], i) => `
-                            <div style="display: flex; align-items: center; gap: 0.4rem; padding: 0.4rem 0.5rem; background: #1a1f2e; border-radius: 4px; font-family: 'Poppins', sans-serif; min-width: 0; overflow: hidden;">
-                                <span style="font-size: 0.65rem; color: var(--text-secondary); width: 16px; flex-shrink: 0;">${i + 1}</span>
-                                <span style="flex: 1; font-size: 0.75rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0;">${(key || '').replace(/</g, '&lt;')}</span>
-                                <span style="font-weight: 600; color: var(--accent-lime); flex-shrink: 0;">${parseFloat(val || 0).toFixed(1)}%</span>
+                            <div style="display: flex; align-items: center; gap: 0.4rem; padding: 0.4rem 0.5rem; background: #f0f0f5; border-radius: 4px; font-family: 'Poppins', sans-serif; min-width: 0; overflow: hidden;">
+                                <span style="font-size: 0.65rem; color: #000; width: 16px; flex-shrink: 0;">${i + 1}</span>
+                                <span style="flex: 1; font-size: 0.75rem; color: #000; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0;">${(key || '').replace(/</g, '&lt;')}</span>
+                                <span style="font-weight: 600; color: #6366f1; flex-shrink: 0;">${parseFloat(val || 0).toFixed(1)}%</span>
                             </div>
                         `).join('')}
                     </div>
@@ -77349,15 +77541,15 @@
                 return `
                     <div style="display: grid; grid-template-columns: repeat(${columns}, 1fr); gap: ${gap};">
                         ${displayLocations.map((loc, i) => `
-                            <div style="padding: ${padding}; background: #1a1f2e; border-radius: 4px; font-size: ${fontSize}; font-family: 'Poppins', sans-serif; display: flex; align-items: center; gap: 0.3rem;">
-                                <span style="font-size: 0.65rem; color: var(--text-secondary); width: 16px; flex-shrink: 0;">${i + 1}</span>
-                                <span style="flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${loc.name || loc.dma || loc.region}</span>
-                                <span style="color: var(--accent-lime); font-weight: 600; flex-shrink: 0;">${loc.value || loc.pct?.toFixed(1) + '%' || ''}</span>
+                            <div style="padding: ${padding}; background: #f0f0f5; border-radius: 4px; font-size: ${fontSize}; font-family: 'Poppins', sans-serif; display: flex; align-items: center; gap: 0.3rem;">
+                                <span style="font-size: 0.65rem; color: #000; width: 16px; flex-shrink: 0;">${i + 1}</span>
+                                <span style="flex: 1; color: #000; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${loc.name || loc.dma || loc.region}</span>
+                                <span style="color: #6366f1; font-weight: 600; flex-shrink: 0;">${loc.value || loc.pct?.toFixed(1) + '%' || ''}</span>
                             </div>
                         `).join('')}
                     </div>
                     ${itemCount > displayLocations.length ? `
-                        <div style="margin-top: 0.5rem; padding: 0.4rem; text-align: center; font-size: 0.65rem; color: var(--text-secondary); background: rgba(200, 230, 0, 0.1); border-radius: 4px;">
+                        <div style="margin-top: 0.5rem; padding: 0.4rem; text-align: center; font-size: 0.65rem; color: #555; background: rgba(99, 102, 241, 0.1); border-radius: 4px;">
                             Showing top ${displayLocations.length} of ${itemCount} locations
                         </div>
                     ` : ''}
@@ -77409,15 +77601,15 @@
                 return `
                     <div style="display: grid; grid-template-columns: repeat(${columns}, 1fr); gap: ${gap};">
                         ${displayItems.map((item, i) => `
-                            <div style="padding: ${padding}; background: var(--bg-input); border-radius: 4px; font-size: ${fontSize}; display: flex; align-items: center; gap: 0.3rem;">
-                                <span style="font-size: 0.65rem; color: var(--text-secondary); width: 16px; flex-shrink: 0;">${i + 1}</span>
-                                <span style="flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${(item.name || '').replace(/</g, '&lt;')}</span>
-                                <span style="color: var(--accent-lime); margin-left: 0.3rem; font-weight: 600; flex-shrink: 0;">${String(item.index || item.pct || '').replace(/</g, '&lt;')}</span>
+                            <div style="padding: ${padding}; background: #f0f0f5; border-radius: 4px; font-size: ${fontSize}; display: flex; align-items: center; gap: 0.3rem;">
+                                <span style="font-size: 0.65rem; color: #000; width: 16px; flex-shrink: 0;">${i + 1}</span>
+                                <span style="flex: 1; color: #000; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${(item.name || '').replace(/</g, '&lt;')}</span>
+                                <span style="color: #6366f1; margin-left: 0.3rem; font-weight: 600; flex-shrink: 0;">${String(item.index || item.pct || '').replace(/</g, '&lt;')}</span>
                             </div>
                         `).join('')}
                     </div>
                     ${itemCount > displayItems.length ? `
-                        <div style="margin-top: 0.5rem; padding: 0.4rem; text-align: center; font-size: 0.65rem; color: var(--text-secondary); background: rgba(200, 230, 0, 0.1); border-radius: 4px;">
+                        <div style="margin-top: 0.5rem; padding: 0.4rem; text-align: center; font-size: 0.65rem; color: #555; background: rgba(99, 102, 241, 0.1); border-radius: 4px;">
                             Showing top ${displayItems.length} of ${itemCount} items
                         </div>
                     ` : ''}
@@ -77434,7 +77626,7 @@
                     const catKey = catName + '_';
                     return `
                         <div style="margin-bottom: 1rem;">
-                            <div style="font-size: 0.9rem; font-weight: 600; color: var(--accent-cyan); margin-bottom: 0.5rem;">${(label || catName).replace(/</g, '&lt;')}</div>
+                            <div style="font-size: 0.9rem; font-weight: 600; color: #6366f1; margin-bottom: 0.5rem;">${(label || catName).replace(/</g, '&lt;')}</div>
                             <div class="editable-boxes-grid" style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 0.5rem;">
                                 ${entries.map(([key, val]) => {
                                     const o = overrides[catKey + key] || {};
