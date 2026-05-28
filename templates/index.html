@@ -18137,12 +18137,15 @@
                                     <th data-iq-sort="evc_score"      data-iq-master="{{ m.key }}" style="cursor: pointer; text-align: right;">
                                         <span class="iqr-th-with-info">EVC<button type="button" class="iqr-th-info" title="Show EVC methodology" aria-label="Show EVC methodology" onclick="event.stopPropagation(); toggleIQRankerEVCExplainer('{{ m.key }}')">i</button></span>
                                     </th>
+                                    <th data-iq-sort="delta_evc"      data-iq-master="{{ m.key }}" class="has-tooltip" data-tooltip="EVC change vs the equal-length window immediately before this one. '—' means the prior window has no mention data for this profile (likely a new profile or missing backfill)." style="cursor: pointer; text-align: right;">Δ EVC</th>
                                     <th data-iq-sort="tdl_score"      data-iq-master="{{ m.key }}" style="cursor: pointer; text-align: right;">
                                         <span class="iqr-th-with-info">TDL<button type="button" class="iqr-th-info" title="Show TDL methodology — Talent Driven Lift" aria-label="Show TDL methodology" onclick="event.stopPropagation(); toggleIQRankerTDLExplainer('{{ m.key }}')">i</button></span>
                                     </th>
+                                    <th data-iq-sort="delta_tdl"      data-iq-master="{{ m.key }}" class="has-tooltip" data-tooltip="TDL change vs the equal-length window immediately before this one. '—' means the prior window has no mention data for this profile." style="cursor: pointer; text-align: right;">Δ TDL</th>
                                     <th data-iq-sort="bvp_score"      data-iq-master="{{ m.key }}" style="cursor: pointer; text-align: right;">
                                         <span class="iqr-th-with-info">BVP<button type="button" class="iqr-th-info" title="Show BVP methodology — Pre-release Buzz vs Performance w/o Engagement" aria-label="Show BVP methodology" onclick="event.stopPropagation(); toggleIQRankerBVPExplainer('{{ m.key }}')">i</button></span>
                                     </th>
+                                    <th data-iq-sort="delta_bvp"      data-iq-master="{{ m.key }}" class="has-tooltip" data-tooltip="BVP change vs the equal-length window immediately before this one. '—' means the prior window has no mention data for this profile." style="cursor: pointer; text-align: right;">Δ BVP</th>
                                     <th data-iq-sort="cw_iq_score"    data-iq-master="{{ m.key }}" style="cursor: pointer; text-align: right;">
                                         <span class="iqr-th-with-info">CW IQ<button type="button" class="iqr-th-info" title="Show CW IQ methodology" aria-label="Show CW IQ methodology" onclick="event.stopPropagation(); toggleIQRankerExplainer('{{ m.key }}')">i</button></span>
                                     </th>
@@ -82458,7 +82461,16 @@
                 return;
             }
             const fmtNum = (n) => (n == null ? '' : Number(n).toLocaleString());
-            const fmtDelta = (n, decimals) => {
+            // fmtDelta now takes a third arg `prevRawMentions`. When the
+            // prior window has no mention data for this profile we render
+            // "—" instead of "+full_value", which would otherwise look
+            // like a huge improvement (the false-read pattern flagged on
+            // the leaderboard for newly-onboarded profiles whose backfill
+            // hasn't reached the comparison window).
+            const fmtDelta = (n, decimals, prevRawMentions) => {
+                if (prevRawMentions !== undefined && !Number(prevRawMentions || 0)) {
+                    return `<span class="has-tooltip" data-tooltip="No mention data in the prior window for this profile — nothing meaningful to compare to." style="color: var(--text-secondary);">—</span>`;
+                }
                 if (n == null || isNaN(n)) return '<span style="color: var(--text-secondary);">—</span>';
                 const sign = n > 0 ? '+' : '';
                 const colour = n > 0 ? 'var(--accent-cyan)' : (n < 0 ? 'var(--accent-red)' : 'var(--text-secondary)');
@@ -82522,6 +82534,29 @@
                 const tip = `${bh.toLocaleString()} platform/theater hits / ${rm.toLocaleString()} panel mentions`;
                 return `<span class="has-tooltip" data-tooltip="${tip}" style="color: ${colour};">${v.toFixed(1)}%</span>`;
             };
+            // Δ-percent renderer for EVC / TDL / BVP. The percentages
+            // themselves are already 0..100 floats so a delta is just
+            // (current% - prev%) in percentage points. We surface this
+            // as e.g. "+2.4pp" / "−1.1pp" so it doesn't get confused with
+            // the percentage values it's modifying. Critically, when the
+            // prior window has zero mentions for this profile (i.e. no
+            // data to compare to), we render "—" instead of a possibly-
+            // huge positive delta — that's the false-read pattern the
+            // user flagged: a new profile shows EVC = 25% and Δ EVC =
+            // +25.0pp because prev was 0, which incorrectly reads as a
+            // meaningful improvement.
+            const fmtDeltaPct = (delta, prevRawMentions) => {
+                if (!Number(prevRawMentions || 0)) {
+                    return `<span class="has-tooltip" data-tooltip="No mention data in the prior window for this profile — nothing meaningful to compare to." style="color: var(--text-secondary);">—</span>`;
+                }
+                const n = Number(delta);
+                if (!isFinite(n)) return '<span style="color: var(--text-secondary);">—</span>';
+                const sign = n > 0 ? '+' : (n < 0 ? '−' : '');
+                const colour = n > 0 ? 'var(--accent-cyan)'
+                              : n < 0 ? 'var(--accent-red)'
+                              : 'var(--text-secondary)';
+                return `<span style="color: ${colour};">${sign}${Math.abs(n).toFixed(1)}pp</span>`;
+            };
             const html = rows.map((r, i) => {
                 const subj      = encodeURIComponent(r.profile_subject || '');
                 const subjAttr  = _iqEsc(r.profile_subject || '');
@@ -82548,16 +82583,19 @@
                         <div class="iqr-name-sub">${_iqRenderSubcategory(r)}</div>
                     </td>
                     <td style="text-align: right;">${fmtNum(r.mentions)}</td>
-                    <td style="text-align: right;">${fmtDelta(r.delta_mentions, 0)}</td>
+                    <td style="text-align: right;">${fmtDelta(r.delta_mentions, 0, r.prev_raw_mentions)}</td>
                     <td style="text-align: right; color: var(--accent-cyan);">${fmtNum(r.pos)}</td>
                     <td style="text-align: right;">${fmtNum(r.neu)}</td>
                     <td style="text-align: right; color: var(--accent-red);">${fmtNum(r.neg)}</td>
                     <td style="text-align: right;">${fmtNet(r.net_sentiment)}</td>
                     <td style="text-align: right;">${fmtEVC(r)}</td>
+                    <td style="text-align: right;">${fmtDeltaPct(r.delta_evc, r.prev_raw_mentions)}</td>
                     <td style="text-align: right;">${fmtTDL(r)}</td>
+                    <td style="text-align: right;">${fmtDeltaPct(r.delta_tdl, r.prev_raw_mentions)}</td>
                     <td style="text-align: right;">${fmtBVP(r)}</td>
+                    <td style="text-align: right;">${fmtDeltaPct(r.delta_bvp, r.prev_raw_mentions)}</td>
                     <td style="text-align: right;">${fmtScore(r.cw_iq_score)}</td>
-                    <td style="text-align: right;">${fmtDelta(r.delta_cw_iq, 1)}</td>
+                    <td style="text-align: right;">${fmtDelta(r.delta_cw_iq, 1, r.prev_raw_mentions)}</td>
                 </tr>`;
             }).join('');
             tbody.innerHTML = html;
