@@ -56232,7 +56232,49 @@
             return item;
         }
         
-        const DECK_DEFAULT_VIZ_PREFS = { type: 'bars', count: 'auto', threshold: 30 };
+        const DECK_DEFAULT_VIZ_PREFS = { type: 'bars', count: 20, threshold: 30 };
+        const DECK_DEFAULT_MAX_ITEMS = 20;
+
+        function getDeckDisplayMaxItems(vizPrefs, itemCount) {
+            const prefs = vizPrefs || DECK_DEFAULT_VIZ_PREFS;
+            if (prefs.count === 'threshold') return itemCount;
+            if (prefs.count === 'all') return Math.min(itemCount, 50);
+            if (prefs.count === 'auto') return Math.min(itemCount, DECK_DEFAULT_MAX_ITEMS);
+            return Math.min(itemCount, parseInt(prefs.count, 10) || DECK_DEFAULT_MAX_ITEMS);
+        }
+
+        function trimDeckModuleDataToTopN(data, type, n = DECK_DEFAULT_MAX_ITEMS) {
+            if (!data) return data;
+            const trimmed = { ...data };
+            if (type === 'demographic' && trimmed.values) {
+                const sorted = Object.entries(trimmed.values).sort((a, b) => (parseFloat(b[1]) || 0) - (parseFloat(a[1]) || 0)).slice(0, n);
+                trimmed.values = Object.fromEntries(sorted);
+            } else if (type === 'behavioral' && trimmed.items) {
+                if (Array.isArray(trimmed.items)) {
+                    trimmed.items = [...trimmed.items]
+                        .sort((a, b) => (parseFloat(b.pct) || 0) - (parseFloat(a.pct) || 0))
+                        .slice(0, n);
+                } else if (typeof trimmed.items === 'object') {
+                    const sorted = Object.entries(trimmed.items)
+                        .sort((a, b) => (parseFloat(b[1]) || 0) - (parseFloat(a[1]) || 0))
+                        .slice(0, n);
+                    trimmed.items = Object.fromEntries(sorted);
+                }
+            } else if (type === 'location' && trimmed.locations) {
+                trimmed.locations = [...trimmed.locations]
+                    .sort((a, b) => (parseFloat(b.pct) || 0) - (parseFloat(a.pct) || 0))
+                    .slice(0, n);
+            } else if (type === 'affinity' && trimmed.items && Array.isArray(trimmed.items)) {
+                trimmed.items = [...trimmed.items]
+                    .sort((a, b) => {
+                        const av = parseFloat(String(a.index || a.pct || '0').replace(/[^0-9.]/g, '')) || 0;
+                        const bv = parseFloat(String(b.index || b.pct || '0').replace(/[^0-9.]/g, '')) || 0;
+                        return bv - av;
+                    })
+                    .slice(0, n);
+            }
+            return trimmed;
+        }
 
         async function createModuleItem(type, category, selectedItems = null) {
             const item = {
@@ -56342,6 +56384,7 @@
             }
             
             item.vizPrefs = { ...DECK_DEFAULT_VIZ_PREFS };
+            if (item.data) item.data = trimDeckModuleDataToTopN(item.data, type);
             
             return item;
         }
@@ -58553,8 +58596,9 @@
             const vizPrefs = slide.vizPrefs || { ...DECK_DEFAULT_VIZ_PREFS };
             
             const currentType = (vizPrefs.type === 'columns' ? 'columnchart' : vizPrefs.type) || 'auto';
-            const currentCount = vizPrefs.count || 'auto';
+            const currentCount = vizPrefs.count ?? DECK_DEFAULT_MAX_ITEMS;
             const currentThreshold = vizPrefs.threshold || 30;
+            const normalizedCount = currentCount === 'auto' ? DECK_DEFAULT_MAX_ITEMS : currentCount;
             
             // Determine if overflow warning is needed
             const maxFit = slide.type === 'demographic' ? 20 : 30;
@@ -58617,7 +58661,7 @@
                                     onclick="event.stopPropagation(); updateVizCount(${slideIdx}, 10)">Top 10</button>
                             <button class="viz-count-btn ${currentCount === 15 ? 'active' : ''}" 
                                     onclick="event.stopPropagation(); updateVizCount(${slideIdx}, 15)">Top 15</button>
-                            <button class="viz-count-btn ${currentCount === 20 ? 'active' : ''}" 
+                            <button class="viz-count-btn ${normalizedCount === 20 ? 'active' : ''}" 
                                     onclick="event.stopPropagation(); updateVizCount(${slideIdx}, 20)">Top 20</button>
                             <button class="viz-count-btn ${currentCount === 'all' ? 'active' : ''}" 
                                     onclick="event.stopPropagation(); updateVizCount(${slideIdx}, 'all')">All</button>
@@ -59127,7 +59171,7 @@
             // Set to auto mode with smart count
             if (!slide.vizPrefs) slide.vizPrefs = {};
             slide.vizPrefs.type = 'auto';
-            slide.vizPrefs.count = 'auto';
+            slide.vizPrefs.count = DECK_DEFAULT_MAX_ITEMS;
             
             saveDeckChanges();
             renderSlideEditor();
@@ -59135,7 +59179,7 @@
         }
         
         function renderDemographicBars(entries, totalCount, options = {}) {
-            return renderDeckBarColumns(entries, totalCount, options);
+            return renderDeckBarColumns(entries, options);
         }
         
         function renderDemographicTable(entries, totalCount) {
@@ -74868,7 +74912,7 @@
             return num.toFixed(1) + '%';
         }
 
-        function renderDeckHorizontalBars(entries, totalCount, options = {}) {
+        function renderDeckHorizontalBars(entries, options = {}) {
             if (!entries.length) {
                 return '<div style="color: var(--deck-text-muted); font-size: 0.7rem; font-style: italic;">No data</div>';
             }
@@ -74895,24 +74939,19 @@
                         </div>`;
                     }).join('')}
                 </div>
-                ${entries.length < totalCount ? `
-                    <div style="margin-top: 0.4rem; font-size: 0.55rem; color: var(--deck-text-muted); font-style: italic;">
-                        Showing ${entries.length} of ${totalCount}
-                    </div>
-                ` : ''}
             `;
         }
 
-        function renderDeckBarColumns(entries, totalCount, options = {}) {
-            const maxPerColumn = options.maxPerColumn || 8;
-            const cols = entries.length <= maxPerColumn ? 1 : entries.length <= maxPerColumn * 2 ? 2 : 4;
+        function renderDeckBarColumns(entries, options = {}) {
+            const maxPerColumn = options.maxPerColumn || 10;
+            const cols = entries.length <= maxPerColumn ? 1 : 2;
             const perCol = Math.ceil(entries.length / cols);
             const columns = [];
             for (let i = 0; i < cols; i++) columns.push(entries.slice(i * perCol, (i + 1) * perCol));
 
             return `
                 <div style="display: grid; grid-template-columns: repeat(${cols}, 1fr); gap: 0.85rem; width: 100%;">
-                    ${columns.map((colEntries, colIdx) => renderDeckHorizontalBars(colEntries, totalCount, {
+                    ${columns.map((colEntries, colIdx) => renderDeckHorizontalBars(colEntries, {
                         sectionTitle: colIdx === 0 ? (options.sectionTitle || '') : '',
                         colorIndex: (options.colorIndex || 0) + colIdx,
                         compact: cols > 1,
@@ -77524,64 +77563,37 @@
                 }
                 
                 const itemCount = allEntries.length;
+                const maxItems = getDeckDisplayMaxItems(vizPrefs, itemCount);
+                const entries = allEntries.slice(0, maxItems);
                 
-                // Determine how many items to show based on vizPrefs
-                let maxItems;
-                if (vizPrefs.count === 'auto') {
-                    // Auto mode: use smart defaults
-                    maxItems = itemCount <= 8 ? 8 : itemCount <= 12 ? 12 : itemCount <= 16 ? 16 : 20;
-                } else if (vizPrefs.count === 'all') {
-                    maxItems = Math.min(itemCount, 50); // Cap at 50 for performance
-                } else if (vizPrefs.count === 'threshold') {
-                    maxItems = itemCount; // Already filtered above
-                } else {
-                    maxItems = parseInt(vizPrefs.count) || 20;
-                }
-                
-                // Determine layout based on count
-                let entries, columns, fontSize, valueFontSize, padding, gap;
-                const displayCount = Math.min(maxItems, itemCount);
+                // Legacy box layout vars (used only if viz type === 'boxes')
+                let columns, fontSize, valueFontSize, padding, gap;
+                const displayCount = entries.length;
                 
                 if (displayCount <= 8) {
-                    // Standard 2-column layout
-                    entries = allEntries.slice(0, displayCount);
                     columns = 2;
                     fontSize = '0.8rem';
                     valueFontSize = '1.5rem';
                     padding = '0.75rem';
                     gap = '1rem';
                 } else if (displayCount <= 12) {
-                    // 3-column layout with slightly smaller text
-                    entries = allEntries.slice(0, displayCount);
                     columns = 3;
                     fontSize = '0.75rem';
                     valueFontSize = '1.3rem';
                     padding = '0.6rem';
                     gap = '0.75rem';
                 } else if (displayCount <= 16) {
-                    // 4-column layout with smaller text
-                    entries = allEntries.slice(0, displayCount);
                     columns = 4;
                     fontSize = '0.7rem';
                     valueFontSize = '1.1rem';
                     padding = '0.5rem';
                     gap = '0.6rem';
-                } else if (displayCount <= 24) {
-                    // 4-column layout with smallest text
-                    entries = allEntries.slice(0, displayCount);
+                } else {
                     columns = 4;
                     fontSize = '0.65rem';
                     valueFontSize = '1rem';
                     padding = '0.4rem';
                     gap = '0.5rem';
-                } else {
-                    // 5-column ultra-compact for 25+
-                    entries = allEntries.slice(0, displayCount);
-                    columns = 5;
-                    fontSize = '0.6rem';
-                    valueFontSize = '0.9rem';
-                    padding = '0.3rem';
-                    gap = '0.4rem';
                 }
                 
                 // Override visualization type if specified (default: horizontal bar chart)
@@ -77646,24 +77658,9 @@
                     entries = entries.filter(([k, v]) => parseFloat(v) >= threshold);
                 }
                 
-                // Determine display strategy based on number of items
-                let itemCount = entries.length;
-                
-                // Determine how many items to show based on vizPrefs
-                let maxItems;
-                if (vizPrefs.count === 'auto') {
-                    // Auto mode: use smart defaults based on count
-                    maxItems = itemCount >= 30 ? 20 : itemCount >= 19 ? itemCount : itemCount >= 13 ? itemCount : 12;
-                } else if (vizPrefs.count === 'all') {
-                    maxItems = Math.min(itemCount, 50); // Cap at 50
-                } else if (vizPrefs.count === 'threshold') {
-                    maxItems = itemCount; // Already filtered
-                } else {
-                    maxItems = parseInt(vizPrefs.count) || 20;
-                }
-                
+                const itemCount = entries.length;
+                const maxItems = getDeckDisplayMaxItems(vizPrefs, itemCount);
                 entries = entries.slice(0, maxItems);
-                const displayCount = entries.length;
                 const barOptions = {
                     sectionTitle: (slide.category || slide.title || '').toUpperCase(),
                     colorIndex: getDeckColorIndexForCategory(slide.category)
@@ -77673,7 +77670,7 @@
                 const rawBevVizType = vizPrefs.type === 'columns' ? 'columnchart' : (vizPrefs.type || 'bars');
                 const bevVizType = rawBevVizType === 'auto' ? 'bars' : rawBevVizType;
                 if (bevVizType === 'bars') {
-                    return renderDeckBarColumns(entries, itemCount, barOptions);
+                    return renderDeckBarColumns(entries, barOptions);
                 }
                 
                 // Column Chart (vertical bars) - explicit type
@@ -77694,7 +77691,6 @@
                                 </div>
                             `}).join('')}
                         </div>
-                        ${displayCount < itemCount ? `<div style="margin-top: 0.5rem; font-size: 0.65rem; color: #555; text-align: center;">Showing ${displayCount} of ${itemCount}</div>` : ''}
                     `;
                 }
                 if (bevVizType === 'gauge') {
@@ -77747,19 +77743,20 @@
                     `;
                 }
 
-                return renderDeckBarColumns(entries, itemCount, barOptions);
+                return renderDeckBarColumns(entries, barOptions);
             }
             
             if (slideType === 'location') {
                 const locations = slide.data.locations || slide.data.regions || [];
                 const itemCount = locations.length;
-                let displayLocations = locations.slice(0, Math.min(itemCount, 28));
+                const maxItems = getDeckDisplayMaxItems(vizPrefs, itemCount);
+                const displayLocations = locations.slice(0, maxItems);
                 const barEntries = displayLocations.map(loc => {
                     const name = loc.name || loc.dma || loc.region || '';
                     const val = loc.pct != null ? loc.pct : parseFloat(String(loc.value || '0').replace(/[^0-9.]/g, '')) || 0;
                     return [name, val];
                 }).filter(([name]) => name);
-                return renderDeckBarColumns(barEntries, itemCount, {
+                return renderDeckBarColumns(barEntries, {
                     sectionTitle: (slide.category || 'GEOGRAPHY').toUpperCase(),
                     colorIndex: getDeckColorIndexForCategory(slide.category)
                 });
@@ -77773,14 +77770,15 @@
                 const items = slide.data.items || [];
                 const entries = Array.isArray(items) ? items : [];
                 const itemCount = entries.length;
-                const displayItems = entries.slice(0, Math.min(itemCount, 28));
+                const maxItems = getDeckDisplayMaxItems(vizPrefs, itemCount);
+                const displayItems = entries.slice(0, maxItems);
                 const barEntries = displayItems.map(item => {
                     const name = item.name || '';
                     const raw = String(item.index || item.pct || '0');
                     const val = parseFloat(raw.replace(/[^0-9.]/g, '')) || 0;
                     return [name, val];
                 }).filter(([name]) => name);
-                return renderDeckBarColumns(barEntries, itemCount, {
+                return renderDeckBarColumns(barEntries, {
                     sectionTitle: (slide.category || 'AFFINITY').toUpperCase(),
                     colorIndex: getDeckColorIndexForCategory(slide.category),
                     valueFormat: 'index'
@@ -77794,9 +77792,9 @@
                     <div style="display: grid; grid-template-columns: repeat(${Math.min(4, catEntries.length)}, 1fr); gap: 0.85rem; width: 100%;">
                         ${catEntries.map(([catName, catData], catIdx) => {
                             const values = catData.values || {};
-                            const entries = Object.entries(values).sort((a, b) => b[1] - a[1]).slice(0, 8);
+                            const entries = Object.entries(values).sort((a, b) => b[1] - a[1]).slice(0, 5);
                             const label = (catName || '').replace(/_/g, ' ').toUpperCase();
-                            return renderDeckHorizontalBars(entries, Object.keys(values).length, {
+                            return renderDeckHorizontalBars(entries, {
                                 sectionTitle: label,
                                 colorIndex: getDeckColorIndexForCategory(catName) + catIdx,
                                 compact: true
