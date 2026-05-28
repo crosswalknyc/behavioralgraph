@@ -42757,49 +42757,98 @@
             }
             
             // 7. REVENUE FROM NEW SUBSCRIBERS (monthly & yearly; premium and ad-supported from SVOD pricing)
+            //
+            // Two rows of cards:
+            //   Row 1 — TOTAL Reactivated + Activated Accounts. Uses newSignups
+            //           (= attributed + dormant-reactive) so the figures reflect every
+            //           account whose activity was driven by this show, whether brand-
+            //           new or reawakened from dormancy.
+            //   Row 2 — ACTIVATED ONLY (new acquisitions). Uses attributedSignups so
+            //           the figures count only people whose FIRST platform watch was
+            //           this show — i.e. genuine net-new subscribers.
+            // The two rows let the user see incremental revenue separately from
+            // retention/reactivation revenue.
             const subscriberPlatformName = data.platform || data.metadata?.platform || '';
             const pricing = data.svod_pricing || {};
             const signupsForRevenue = (subscriberGenPopMode && newSignupsGenPop)
                 ? (parse_number(newSignupsGenPop) || newSignups)
                 : newSignups;
+            const activatedForRevenue = (subscriberGenPopMode && attributedSignupsGenPop)
+                ? (parse_number(attributedSignupsGenPop) || attributedSignups)
+                : attributedSignups;
             const hasPricing = (pricing.ad_supported != null && pricing.ad_supported !== '') || (pricing.premium != null && pricing.premium !== '');
             if (subscriptionRevenueContainer) {
                 if (hasPricing && signupsForRevenue > 0) {
                     const ad = Number(pricing.ad_supported) || 0;
                     const prem = Number(pricing.premium) || 0;
                     const fmt = (n) => (n >= 1e9 ? '$' + (n/1e9).toFixed(2) + 'B' : n >= 1e6 ? '$' + (n/1e6).toFixed(2) + 'M' : n >= 1e3 ? '$' + (n/1e3).toFixed(2) + 'K' : '$' + n.toFixed(2));
+                    // Row 1 — total (acquired + reactivated)
                     const monthlyAd = signupsForRevenue * ad;
                     const monthlyPrem = signupsForRevenue * prem;
                     const yearlyAd = monthlyAd * 12;
                     const yearlyPrem = monthlyPrem * 12;
                     const subscriberModelText = `${formatNumber(signupsForRevenue)} subscribers`;
+                    // Row 2 — activated only (new acquisitions, excludes dormant reactivations)
+                    const monthlyAdAct = activatedForRevenue * ad;
+                    const monthlyPremAct = activatedForRevenue * prem;
+                    const yearlyAdAct = monthlyAdAct * 12;
+                    const yearlyPremAct = monthlyPremAct * 12;
+                    const activatedModelText = `${formatNumber(activatedForRevenue)} new subscribers`;
+                    const hasActivatedRow = activatedForRevenue > 0;
                     subscriptionRevenueContainer.innerHTML = `
                         <div class="executive-summary-card">
                             <div class="exec-summary-header">
-                                <h2 class="has-tooltip" data-tooltip="Estimated revenue from subscribers attributed to this show, using platform pricing.">💰 Revenue</h2>
+                                <h2 class="has-tooltip" data-tooltip="Estimated revenue from every account whose activity was driven by this show — both newly acquired subscribers and previously dormant accounts that were reactivated.">💰 Total Reactivated and Activated Accounts</h2>
                             </div>
                             <div class="exec-summary-grid">
-                                <div class="exec-summary-metric has-tooltip" data-tooltip="Monthly revenue from premium-tier subscribers.">
+                                <div class="exec-summary-metric has-tooltip" data-tooltip="Monthly revenue from premium-tier subscribers (acquired + reactivated).">
                                     <div class="exec-metric-label">Premium<br>Monthly</div>
                                     <div class="exec-metric-value">${fmt(monthlyPrem)}</div>
                                     <div class="exec-metric-desc">${subscriberModelText} @ $${prem}/mo</div>
                                 </div>
-                                <div class="exec-summary-metric has-tooltip" data-tooltip="Yearly revenue from premium-tier subscribers.">
+                                <div class="exec-summary-metric has-tooltip" data-tooltip="Yearly revenue from premium-tier subscribers (acquired + reactivated).">
                                     <div class="exec-metric-label">Premium<br>Yearly</div>
                                     <div class="exec-metric-value">${fmt(yearlyPrem)}</div>
                                     <div class="exec-metric-desc">${subscriberModelText} @ $${prem}/mo</div>
                                 </div>
-                                <div class="exec-summary-metric has-tooltip" data-tooltip="Monthly revenue from ad-supported-tier subscribers.">
+                                <div class="exec-summary-metric has-tooltip" data-tooltip="Monthly revenue from ad-supported-tier subscribers (acquired + reactivated).">
                                     <div class="exec-metric-label">Ad-Supported<br>Monthly</div>
                                     <div class="exec-metric-value">${fmt(monthlyAd)}</div>
                                     <div class="exec-metric-desc">${subscriberModelText} @ $${ad}/mo</div>
                                 </div>
-                                <div class="exec-summary-metric has-tooltip" data-tooltip="Yearly revenue from ad-supported-tier subscribers.">
+                                <div class="exec-summary-metric has-tooltip" data-tooltip="Yearly revenue from ad-supported-tier subscribers (acquired + reactivated).">
                                     <div class="exec-metric-label">Ad-Supported<br>Yearly</div>
                                     <div class="exec-metric-value">${fmt(yearlyAd)}</div>
                                     <div class="exec-metric-desc">${subscriberModelText} @ $${ad}/mo</div>
                                 </div>
                             </div>
+                            ${hasActivatedRow ? `
+                            <div class="exec-summary-subheader" style="margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid rgba(255,255,255,0.08);">
+                                <h3 class="has-tooltip" data-tooltip="Same revenue calculation but limited to NEWLY ACQUIRED accounts only (Attributed Signups). Excludes reactivations of previously-dormant accounts." style="font-size: 1rem; margin: 0 0 0.75rem 0; opacity: 0.85;">📈 Activated (Newly Acquired) Accounts Only</h3>
+                            </div>
+                            <div class="exec-summary-grid">
+                                <div class="exec-summary-metric has-tooltip" data-tooltip="Monthly revenue from premium-tier NEWLY ACQUIRED subscribers only (excludes reactivations).">
+                                    <div class="exec-metric-label">Premium<br>Monthly</div>
+                                    <div class="exec-metric-value">${fmt(monthlyPremAct)}</div>
+                                    <div class="exec-metric-desc">${activatedModelText} @ $${prem}/mo</div>
+                                </div>
+                                <div class="exec-summary-metric has-tooltip" data-tooltip="Yearly revenue from premium-tier NEWLY ACQUIRED subscribers only (excludes reactivations).">
+                                    <div class="exec-metric-label">Premium<br>Yearly</div>
+                                    <div class="exec-metric-value">${fmt(yearlyPremAct)}</div>
+                                    <div class="exec-metric-desc">${activatedModelText} @ $${prem}/mo</div>
+                                </div>
+                                <div class="exec-summary-metric has-tooltip" data-tooltip="Monthly revenue from ad-supported-tier NEWLY ACQUIRED subscribers only (excludes reactivations).">
+                                    <div class="exec-metric-label">Ad-Supported<br>Monthly</div>
+                                    <div class="exec-metric-value">${fmt(monthlyAdAct)}</div>
+                                    <div class="exec-metric-desc">${activatedModelText} @ $${ad}/mo</div>
+                                </div>
+                                <div class="exec-summary-metric has-tooltip" data-tooltip="Yearly revenue from ad-supported-tier NEWLY ACQUIRED subscribers only (excludes reactivations).">
+                                    <div class="exec-metric-label">Ad-Supported<br>Yearly</div>
+                                    <div class="exec-metric-value">${fmt(yearlyAdAct)}</div>
+                                    <div class="exec-metric-desc">${activatedModelText} @ $${ad}/mo</div>
+                                </div>
+                            </div>
+                            ` : ''}
                         </div>
                     `;
                 } else {
