@@ -1299,15 +1299,17 @@ def aggregate_leaderboard(
         "evc_formula": {
             "name": "Engagement vs Viewing Correlation",
             "description": (
-                "Of the panel's URL hits that mentioned this profile in "
-                "the selected window, the share whose COMMON_NAME is a "
+                "Of the panel's digital touchpoints that mentioned this "
+                "profile in the selected window, the share who engaged "
+                "with the talent then watched their content on a "
                 "streaming or VOD platform (Netflix, Hulu, Disney+, HBO "
                 "Max, Prime Video, Apple TV+, Paramount+, Peacock, "
                 "YouTube, Tubi, etc). Reads as: 'of all the times the "
                 "panel touched something about this person/brand, what "
-                "% of those touches happened on a streaming destination'. "
-                "A high EVC means the audience is actively consuming "
-                "this entity's content rather than just reading about it."
+                "% of those then watched their content on a streaming "
+                "destination'. A high EVC means the audience is "
+                "actively consuming this entity's content, not just "
+                "engaging with it."
             ),
             "formula": "EVC = 100 * sum(streaming_hits) / sum(raw_mentions)",
             "platforms_count": len(STREAMING_PLATFORMS_LC),
