@@ -19261,6 +19261,10 @@
                     </div>
                 </details>
                 <div id="jiqKpiStrip" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 0.75rem; margin-bottom: 1rem;"></div>
+                <!-- Intent-gap derivation card. Auto-shows when the
+                     payload has kpis.intent_gap_tickets_mid. Built by
+                     the same JS path that builds jiqKpiStrip. -->
+                <div id="jiqIntentGapBreakdown" style="display:none; margin: 0 0 1.1rem;"></div>
 
                 <!-- ════════════════════════════════════════════════════════
                      ECOSYSTEM SPOTLIGHT card — shown only when the run
@@ -28335,6 +28339,105 @@
                 var noteEl = document.getElementById('jiqKpiStripNote');
                 if (noteEl) noteEl.style.display = 'none';
             }
+
+            // Intent-gap derivation card — auto-shows below the KPI
+            // strip when the payload carries intent_gap_tickets_mid.
+            // Mirrors the math from apply_breadwinner_intent_gap.py
+            // so anyone reading the dashboard can trace where the
+            // headline number came from.
+            (function renderIntentGapBreakdown() {
+                var box = document.getElementById('jiqIntentGapBreakdown');
+                if (!box) return;
+                if (!kpis || kpis.intent_gap_tickets_mid == null) {
+                    box.style.display = 'none';
+                    return;
+                }
+                var fmt = _jiqFmt;
+                var amber = '#f59e0b';
+                var purchases = kpis.confirmed_digital_purchases;
+                var tpp       = kpis.confirmed_avg_tickets_per_purchase || 2.5;
+                var confTix   = kpis.confirmed_digital_tickets;
+                var owMid     = kpis.projected_opening_weekend_tickets;
+                var owLow     = kpis.projected_ow_range_low_tickets;
+                var owHigh    = kpis.projected_ow_range_high_tickets;
+                var gapMid    = kpis.intent_gap_tickets_mid;
+                var gapLow    = kpis.intent_gap_tickets_low;
+                var gapHigh   = kpis.intent_gap_tickets_high;
+                var walkup    = kpis.intent_gap_walkup_tickets_mid_est;
+                var addrMid   = kpis.intent_gap_addressable_tickets_mid;
+                var addrLow   = kpis.intent_gap_addressable_tickets_low;
+                var addrHigh  = kpis.intent_gap_addressable_tickets_high;
+                var asof      = kpis.confirmed_as_of_date || '';
+
+                var owMidM   = owMid   != null ? (owMid   / 1e6).toFixed(2) + 'M' : '—';
+                var owLowM   = owLow   != null ? (owLow   / 1e6).toFixed(2) + 'M' : '—';
+                var owHighM  = owHigh  != null ? (owHigh  / 1e6).toFixed(2) + 'M' : '—';
+                var gapLowM  = gapLow  != null ? (gapLow  / 1e6).toFixed(2) + 'M' : '—';
+                var gapHighM = gapHigh != null ? (gapHigh / 1e6).toFixed(2) + 'M' : '—';
+                var walkupPctMid = '32.5%';   // midpoint of Sony's 25-40% benchmark
+
+                var rowStyle  = 'display:flex; justify-content:space-between; align-items:baseline; gap:0.6rem; padding:0.25rem 0;';
+                var lblStyle  = 'font-size:0.78rem; color:var(--text-primary);';
+                var subStyle  = 'font-size:0.66rem; color:var(--text-secondary); margin-top:1px;';
+                var numStyle  = 'font-size:0.95rem; font-weight:700; color:var(--text-primary); font-variant-numeric: tabular-nums;';
+
+                var html = ''
+                  + '<div style="background: var(--bg-secondary); border:1px solid ' + amber + '; border-left:4px solid ' + amber + '; border-radius:8px; padding:0.85rem 1rem;">'
+                  +   '<div style="display:flex; align-items:baseline; gap:0.5rem; margin-bottom:0.55rem;">'
+                  +     '<div style="font-size:0.68rem; text-transform:uppercase; letter-spacing:0.06em; color:' + amber + '; font-weight:700;">🧭 Where “Not Yet Converted · Strong Intent” comes from</div>'
+                  +     (asof ? '<div style="font-size:0.65rem; color:var(--text-secondary); margin-left:auto;">as of ' + _jiqEsc(asof) + '</div>' : '')
+                  +   '</div>'
+
+                  // Two-column derivation: math on left, breakdown on right
+                  +   '<div style="display:grid; grid-template-columns: minmax(280px, 1.1fr) minmax(280px, 1fr); gap:1.2rem;">'
+
+                  // ─────── LEFT: math derivation ───────
+                  +     '<div>'
+                  +       '<div style="font-size:0.68rem; text-transform:uppercase; letter-spacing:0.05em; color:var(--text-secondary); font-weight:600; margin-bottom:0.35rem;">The math (mid-point)</div>'
+                  +       '<div style="' + rowStyle + '">'
+                  +         '<div><div style="' + lblStyle + '">Projected OW tickets</div>'
+                  +           '<div style="' + subStyle + '">comp-anchored sleeper-comedy model · range ' + owLowM + '–' + owHighM + '</div></div>'
+                  +         '<div style="' + numStyle + '">' + (owMid != null ? fmt(owMid) : '—') + '</div>'
+                  +       '</div>'
+                  +       '<div style="' + rowStyle + ' border-top:1px dashed var(--border-color);">'
+                  +         '<div><div style="' + lblStyle + '">− Confirmed digital tickets</div>'
+                  +           '<div style="' + subStyle + '">' + (purchases != null ? fmt(purchases) + ' purchases × ' + tpp + ' tix/purchase' : '') + '</div></div>'
+                  +         '<div style="' + numStyle + '">−' + (confTix != null ? fmt(confTix) : '—') + '</div>'
+                  +       '</div>'
+                  +       '<div style="' + rowStyle + ' border-top:2px solid ' + amber + '; margin-top:2px; padding-top:0.45rem;">'
+                  +         '<div><div style="' + lblStyle + ' font-weight:700;">= Intent Gap (mid)</div>'
+                  +           '<div style="' + subStyle + '">range ' + gapLowM + '–' + gapHighM + ' tix</div></div>'
+                  +         '<div style="' + numStyle + ' color:' + amber + '; font-size:1.15rem;">' + fmt(gapMid) + '</div>'
+                  +       '</div>'
+                  +     '</div>'
+
+                  // ─────── RIGHT: breakdown of the gap ───────
+                  +     '<div>'
+                  +       '<div style="font-size:0.68rem; text-transform:uppercase; letter-spacing:0.05em; color:var(--text-secondary); font-weight:600; margin-bottom:0.35rem;">Of that gap, where it goes</div>'
+                  +       '<div style="' + rowStyle + '">'
+                  +         '<div><div style="' + lblStyle + '">Walk-up at theater</div>'
+                  +           '<div style="' + subStyle + '">' + walkupPctMid + ' of OW · Sony 25–40% benchmark · converts without a digital touch</div></div>'
+                  +         '<div style="' + numStyle + '">' + (walkup != null ? '~' + fmt(walkup) : '—') + '</div>'
+                  +       '</div>'
+                  +       '<div style="' + rowStyle + ' border-top:1px dashed var(--border-color);">'
+                  +         '<div><div style="' + lblStyle + ' color:' + amber + '; font-weight:700;">Digitally addressable</div>'
+                  +           '<div style="' + subStyle + '">pull-forward via promo · paid social · talent amplification · exhibitor co-promo · range ' + (addrLow != null ? fmt(addrLow) : '—') + '–' + (addrHigh != null ? fmt(addrHigh) : '—') + '</div></div>'
+                  +         '<div style="' + numStyle + ' color:' + amber + ';">~' + (addrMid != null ? fmt(addrMid) : '—') + '</div>'
+                  +       '</div>'
+                  +     '</div>'
+                  +   '</div>'  // /grid
+
+                  // Identity reminder + non-additive warning
+                  +   '<div style="margin-top:0.65rem; padding:0.55rem 0.7rem; background:rgba(245,158,11,0.10); border:1px solid rgba(245,158,11,0.35); border-radius:6px; font-size:0.7rem; color:var(--text-primary); line-height:1.45;">'
+                  +     '<strong style="color:' + amber + ';">⚠ Already inside the OW Gross &amp; Domestic Total — not additive.</strong> '
+                  +     'By construction: ' + (confTix != null ? fmt(confTix) : '—') + ' confirmed + ' + fmt(gapMid) + ' gap = ' + (owMid != null ? fmt(owMid) : '—') + ' projected OW tickets. '
+                  +     'Adding the gap on top of the $' + (kpis.projected_opening_weekend_revenue_usd != null ? fmt(Math.round(kpis.projected_opening_weekend_revenue_usd / 1e6 * 10) / 10) + 'M' : '—') + ' OW Gross would double-count.'
+                  +   '</div>'
+                  + '</div>';
+
+                box.innerHTML = html;
+                box.style.display = 'block';
+            })();
 
             // Cluster tabs (driven by active cut axis)
             var tabs = document.getElementById('jiqClusterTabs');
