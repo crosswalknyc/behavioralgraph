@@ -85,6 +85,70 @@ SUBCATEGORY_ALIASES: dict[str, str] = {
 }
 
 
+# ── Streaming / VOD platform set (drives the EVC metric) ───────────────────
+# A curated list of well-known "places where users actually watch content"
+# — streaming services and major VOD platforms. Stored lowercase because
+# clickstream COMMON_NAME is also lowercase. The EVC ("Engagement vs Viewing
+# Correlation") column on the leaderboard is computed as the share of a
+# profile's mention rows whose COMMON_NAME falls in this set, i.e. of all
+# the times the panel touched a URL referencing this person/brand, what %
+# of those impressions happened on a streaming destination. A high EVC
+# indicates the audience is actively consuming this entity's content
+# (e.g. an actor whose mentions cluster around Netflix); a low EVC means
+# the engagement is mostly tangential (news, social, search).
+#
+# We keep this curated rather than driven by host_mapping.CATEGORY because
+# host_mapping conflates show titles ("The Crown") with platforms; we only
+# want the platforms themselves so the metric stays interpretable.
+# Override at deploy time with IQ_RANKER_STREAMING_PLATFORMS (comma-sep).
+_DEFAULT_STREAMING_PLATFORMS = [
+    "netflix",
+    "hulu",
+    "disney+", "disneyplus", "disney plus",
+    "hbo", "hbo max", "max",
+    "prime video", "amazon prime video", "amazon prime",
+    "apple tv", "apple tv+", "apple tv plus", "appletv",
+    "paramount+", "paramount plus", "paramount",
+    "peacock", "peacock tv",
+    "youtube", "youtube tv",
+    "tubi", "tubi tv",
+    "pluto", "pluto tv",
+    "sling", "sling tv",
+    "fubo", "fubotv", "fubo tv",
+    "philo",
+    "crunchyroll",
+    "showtime",
+    "starz",
+    "discovery+", "discovery plus",
+    "amc+", "amc plus",
+    "britbox",
+    "shudder",
+    "mubi",
+    "kanopy",
+    "vudu",
+    "roku channel", "roku",
+    "plex",
+    "freevee", "amazon freevee", "imdb tv",
+    "dazn",
+    "espn+", "espn plus",
+    "mlb tv", "mlb.tv",
+    "nba league pass",
+    "nfl+", "nfl plus",
+    "twitch",
+]
+
+
+def _load_streaming_platforms() -> frozenset[str]:
+    raw = os.environ.get("IQ_RANKER_STREAMING_PLATFORMS", "").strip()
+    if raw:
+        items = [p.strip().lower() for p in raw.split(",") if p.strip()]
+        return frozenset(items)
+    return frozenset(p.lower() for p in _DEFAULT_STREAMING_PLATFORMS)
+
+
+STREAMING_PLATFORMS_LC: frozenset[str] = _load_streaming_platforms()
+
+
 def normalize_subcategory(subcategory: str) -> str:
     """Canonicalize a raw subcategory string.
 
@@ -292,6 +356,7 @@ def compute_layer1_metrics_for_day(
         "pos": 0, "neu": 0, "neg": 0,
         "net_sentiment": 0.0,
         "panel_size": 0,
+        "streaming_hits": 0,
     }
     term_lit = _term_array_literal(brand_terms)
     if not term_lit:
@@ -328,8 +393,12 @@ def compute_layer1_metrics_for_day(
         return out
 
     pos = neg = neu = 0
+    streaming_hits = 0
     uids: set[str] = set()
     for url, uid, common_name, _domain in rows:
+        cn_lc = (common_name or "").strip().lower()
+        if cn_lc and cn_lc in STREAMING_PLATFORMS_LC:
+            streaming_hits += 1
         try:
             scored = sentiment_iq.score_behavioral_event(url or "", common_name or "")
             bucket = scored.get("sentiment", "neutral")
@@ -352,6 +421,7 @@ def compute_layer1_metrics_for_day(
         "neu": neu,
         "neg": neg,
         "net_sentiment": round(100.0 * (pos - neg) / max(total, 1), 2),
+        "streaming_hits": streaming_hits,
     })
     return out
 
@@ -570,7 +640,7 @@ def insert_daily_row(
             (snapshot_date, profile_subject, project_name, category, subcategory,
              s3_key, tracker_id, brand_terms, mentions, unique_uids,
              pos, neu, neg, net_sentiment, cw_iq_score,
-             prev_mentions, prev_cw_iq_score, panel_size, generated_at)
+             prev_mentions, prev_cw_iq_score, panel_size, streaming_hits, generated_at)
         VALUES (
             toDate('{snapshot_date}'),
             '{_esc_str(profile_subject)}',
@@ -590,6 +660,7 @@ def insert_daily_row(
             {int(prev_mentions or 0)},
             {float(prev_cw_iq_score or 0)},
             {int(panel_size or 0)},
+            {int(metrics.get("streaming_hits") or 0)},
             now()
         )
         """
@@ -870,6 +941,8 @@ def aggregate_leaderboard(
         "net_sentiment": "net_sentiment",
         "cw_iq_score": "cw_iq_score",
         "delta_cw_iq": "delta_cw_iq",
+        "evc_score": "evc_score",
+        "evc": "evc_score",
     }
     sort_col = valid_sorts.get((sort or "").lower(), "cw_iq_score")
     direction = "DESC" if (sort_dir or "desc").lower() != "asc" else "ASC"
@@ -931,6 +1004,18 @@ def aggregate_leaderboard(
                sum({p_neg})                       AS neg_sum,
                sum(mentions)                      AS raw_mentions_sum,
                max(panel_size)                    AS max_panel_size,
+               sum(streaming_hits)                AS streaming_hits_sum,
+               -- EVC = Engagement vs Viewing Correlation: % of this
+               -- profile's mention rows whose COMMON_NAME is a streaming
+               -- platform (Netflix, Hulu, YouTube, etc). Reads as "of
+               -- the times the panel touched a URL referencing this
+               -- person/brand, what share of those touches happened on
+               -- a streaming destination". Uses RAW mentions in the
+               -- denominator so the ratio is honest at the panel level.
+               -- Bounded to [0, 100]; falls back to 0 when no mentions.
+               if(sum(mentions) > 0,
+                  round(100.0 * sum(streaming_hits) / sum(mentions), 1),
+                  0.0)                            AS evc_score_calc,
                round(100.0 * (sum({p_pos}) - sum({p_neg}))
                      / greatest(sum({p_pos}) + sum({p_neu}) + sum({p_neg}), 1), 2)
                                                   AS net_sentiment_calc,
@@ -980,7 +1065,9 @@ def aggregate_leaderboard(
                                                       AS delta_cw_iq,
            c.raw_mentions_sum                         AS raw_mentions,
            c.raw_unique_uids_sum                      AS raw_unique_uids,
-           c.max_panel_size                           AS panel_size
+           c.max_panel_size                           AS panel_size,
+           c.streaming_hits_sum                       AS streaming_hits,
+           c.evc_score_calc                           AS evc_score
     FROM curr c
     LEFT JOIN prev p ON p.profile_subject = c.profile_subject
     ORDER BY {sort_col} {direction}, mentions DESC
@@ -1029,6 +1116,8 @@ def aggregate_leaderboard(
             "raw_mentions":     int(r[16] or 0) if len(r) > 16 else 0,
             "raw_unique_uids":  int(r[17] or 0) if len(r) > 17 else 0,
             "panel_size":       int(r[18] or 0) if len(r) > 18 else 0,
+            "streaming_hits":   int(r[19] or 0) if len(r) > 19 else 0,
+            "evc_score":        float(r[20] or 0) if len(r) > 20 else 0.0,
         })
     return {
         "rows": out_rows,
@@ -1051,6 +1140,22 @@ def aggregate_leaderboard(
                     "measures so they're unchanged. raw_mentions and "
                     "raw_unique_uids are also returned for any caller that "
                     "needs the underlying panel counts.",
+        },
+        "evc_formula": {
+            "name": "Engagement vs Viewing Correlation",
+            "description": (
+                "Of the panel's URL hits that mentioned this profile in "
+                "the selected window, the share whose COMMON_NAME is a "
+                "streaming or VOD platform (Netflix, Hulu, Disney+, HBO "
+                "Max, Prime Video, Apple TV+, Paramount+, Peacock, "
+                "YouTube, Tubi, etc). Reads as: 'of all the times the "
+                "panel touched something about this person/brand, what "
+                "% of those touches happened on a streaming destination'. "
+                "A high EVC means the audience is actively consuming "
+                "this entity's content rather than just reading about it."
+            ),
+            "formula": "EVC = 100 * sum(streaming_hits) / sum(raw_mentions)",
+            "platforms_count": len(STREAMING_PLATFORMS_LC),
         },
         "cw_iq_formula": {
             "weights": {

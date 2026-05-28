@@ -18010,6 +18010,31 @@
                             </div>
                         </div>
 
+                        <!-- EVC formula explainer (toggled from the EVC column header ⓘ) -->
+                        <div id="iqRankerEVCExplainer-{{ m.key }}" class="iqr-explain" role="region" aria-label="EVC scoring methodology">
+                            <button type="button" class="iqr-explain-close" aria-label="Close" onclick="toggleIQRankerEVCExplainer('{{ m.key }}')">✕</button>
+                            <h5>📺 EVC — Engagement vs Viewing Correlation</h5>
+                            <div style="margin-bottom: 0.55rem;">Of the panel's URL hits that mentioned this profile in the selected window, the share whose <code>COMMON_NAME</code> is a streaming or VOD platform. Reads as: <i>&ldquo;of all the times the panel touched something about this person/brand, what % of those touches happened on a streaming destination?&rdquo;</i> A high EVC means the audience is actively consuming this entity's content, not just reading about it.</div>
+                            <div style="margin-bottom: 0.6rem;"><code>EVC = 100 × sum(streaming_hits) / sum(raw_mentions)</code></div>
+                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.4rem 0.85rem; font-size: 0.74rem; margin-top: 0.4rem;">
+                                <div><b style="color: #c8f7d4;">Numerator</b>&nbsp;&mdash; per-day count of mention rows whose lower-cased <code>COMMON_NAME</code> falls in the curated streaming/VOD platform set, summed across the window.</div>
+                                <div><b style="color: #c8f7d4;">Denominator</b>&nbsp;&mdash; raw (panel-level) mention count for that profile in the same window. Both numerator and denominator are panel counts so the ratio is honest at panel scale; gen-pop projection cancels out.</div>
+                            </div>
+                            <div style="margin-top: 0.7rem; font-size: 0.74rem;">
+                                <b style="color: #c8f7d4;">Streaming/VOD platforms</b> currently included (case-insensitive match against <code>clickstream_final.COMMON_NAME</code>): Netflix, Hulu, Disney+, HBO Max / Max, Prime Video, Apple TV+, Paramount+, Peacock, YouTube / YouTube TV, Tubi, Pluto TV, Sling, Fubo, Philo, Crunchyroll, Showtime, Starz, Discovery+, AMC+, BritBox, Shudder, Mubi, Kanopy, Vudu, Roku Channel, Plex, Freevee / IMDB TV, DAZN, ESPN+, MLB.tv, NBA League Pass, NFL+, Twitch.
+                            </div>
+                            <ul style="margin: 0.85rem 0 0; padding-left: 1.1rem; font-size: 0.74rem;">
+                                <li><b>0% / blank:</b> the panel touches this profile but never on streaming destinations &mdash; engagement is mostly via news, social, or search.</li>
+                                <li><b>~30%:</b> roughly the global baseline (across the whole panel, ≈30% of all branded clickstream activity is on streaming/VOD).</li>
+                                <li><b>50%+:</b> a clear &ldquo;they're being watched&rdquo; signal &mdash; e.g. an actor whose mention surface clusters on Netflix, or a podcaster whose audience finds them on YouTube.</li>
+                                <li><b>Window aware:</b> when you change the window selector, EVC re-aggregates over the new range &mdash; longer windows smooth out single-day spikes (a Netflix premiere day, etc.).</li>
+                                <li><b>Hover the cell:</b> the underlying <code>streaming_hits / raw_mentions</code> panel counts are shown so you can sanity-check the percentage.</li>
+                            </ul>
+                            <div style="margin-top: 0.6rem; padding-top: 0.55rem; border-top: 1px dashed rgba(132,225,168,0.25); font-size: 0.72rem; color: var(--text-muted);">
+                                Override the platform set at deploy time via the <code>IQ_RANKER_STREAMING_PLATFORMS</code> env var (comma-separated, lowercase). Historical days predating the EVC rollout will show <code>0.0%</code> until backfilled.
+                            </div>
+                        </div>
+
                         <div id="iqRankerSubTabs-{{ m.key }}" class="iqr-subtabs"></div>
                         <div class="iqr-toolbar">
                             <label>Window
@@ -18044,6 +18069,9 @@
                                     <th data-iq-sort="neu"            data-iq-master="{{ m.key }}" class="has-tooltip" data-tooltip="Projected neutral-sentiment events." style="cursor: pointer; text-align: right;">Neu</th>
                                     <th data-iq-sort="neg"            data-iq-master="{{ m.key }}" class="has-tooltip" data-tooltip="Projected negative-sentiment events." style="cursor: pointer; text-align: right;">Neg</th>
                                     <th data-iq-sort="net_sentiment"  data-iq-master="{{ m.key }}" class="has-tooltip" data-tooltip="(Pos − Neg) / (Pos + Neu + Neg) × 100. Range −100..+100." style="cursor: pointer; text-align: right;">Net Sent.</th>
+                                    <th data-iq-sort="evc_score"      data-iq-master="{{ m.key }}" style="cursor: pointer; text-align: right;">
+                                        <span class="iqr-th-with-info">EVC<button type="button" class="iqr-th-info" title="Show EVC methodology" aria-label="Show EVC methodology" onclick="event.stopPropagation(); toggleIQRankerEVCExplainer('{{ m.key }}')">i</button></span>
+                                    </th>
                                     <th data-iq-sort="cw_iq_score"    data-iq-master="{{ m.key }}" style="cursor: pointer; text-align: right;">
                                         <span class="iqr-th-with-info">CW IQ<button type="button" class="iqr-th-info" title="Show CW IQ methodology" aria-label="Show CW IQ methodology" onclick="event.stopPropagation(); toggleIQRankerExplainer('{{ m.key }}')">i</button></span>
                                     </th>
@@ -19562,25 +19590,13 @@
         <!-- SENTIMENT IQ VIEW -->
         <div id="sentimentIQView" style="display: none;">
             <div class="dashboard-layout">
-                <div class="persistent-sidebar">
-                    <div class="sidebar-header-section">
-                        <h3>Sentiment IQ Trackers</h3>
-                        <div style="display: flex; gap: 0.25rem; align-items: center;">
-                            <input type="text" id="sentimentIQSidebarSearch" placeholder="Search trackers..." class="sidebar-search has-tooltip" data-tooltip="Search trackers by name" onkeyup="filterSentimentIQSidebar()" style="flex: 1;">
-                            <button type="button" class="btn btn-small has-tooltip" data-tooltip="Refresh tracker list" onclick="loadSentimentIQSidebar()" style="padding: 0.35rem 0.5rem; min-width: auto;">↻</button>
-                        </div>
-                    </div>
-                    <div id="sentimentIQSidebarTree" class="profile-select-tree subscriber-shows-tree"></div>
-                    <div style="padding: 0.75rem; border-top: 1px solid var(--border-color);">
-                        <button type="button" class="btn btn-primary" style="width: 100%;" onclick="if(typeof showCustomAnalysis==='function'){showCustomAnalysis(); setTimeout(function(){ if(typeof switchCustomAnalysisTab==='function') switchCustomAnalysisTab('sentiment-iq'); }, 100);}">+ New Tracker</button>
-                    </div>
-                </div>
-                <div class="dashboard-tab-content" id="sentimentIQDashboardContent" style="display: flex; flex-direction: column; overflow: hidden;">
+                <div class="dashboard-tab-content" id="sentimentIQDashboardContent" style="display: flex; flex-direction: column; overflow: hidden; flex: 1;">
                     <div id="sentimentIQEmptyState" class="dashboard-empty-state">
                         <div class="empty-state-content">
                             <div class="empty-state-icon">💬</div>
-                            <h2>Select a Tracker</h2>
-                            <p>Choose a Sentiment IQ tracker from the sidebar to view its dashboard, or create a new one to start tracking brand sentiment across search engines, social, news, reviews, and forums.</p>
+                            <h2>Open a Profile from Ranker</h2>
+                            <p>Sentiment IQ dashboards open from the <strong>Sentiment</strong> chip on any row in the CW IQ Ranker. Head back to the Ranker, pick a profile, and click its Sentiment chip.</p>
+                            <button type="button" class="btn btn-primary" onclick="if(typeof showRankerIQ==='function'){showRankerIQ();}" style="margin-top:1rem;">← Back to Ranker</button>
                         </div>
                     </div>
                     <div id="sentimentIQDashboardPanels" style="display: none; overflow-y: auto; flex: 1; padding: 1.25rem;">
@@ -19590,6 +19606,7 @@
                             <span id="sentimentIQDashMeta" style="color: var(--text-secondary); font-size: 0.85rem;"></span>
                             <span id="sentimentIQDashOngoing" style="display:none;padding:2px 8px;border-radius:10px;background:rgba(16,185,129,0.15);color:#10b981;font-size:11px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;">● Ongoing</span>
                             <div style="margin-left:auto; display:flex; gap:0.4rem; flex-wrap:wrap;">
+                                <button type="button" class="btn btn-small" id="sentimentIQBackToRankerBtn" onclick="if(typeof showRankerIQ==='function'){showRankerIQ();}" style="padding:0.35rem 0.65rem;" title="Go back to the CW IQ Ranker">← Back to Ranker</button>
                                 <button type="button" class="btn btn-small" id="sentimentIQProfileIQBtn" onclick="openProfileIQFromSentimentIQ()" style="padding:0.35rem 0.65rem; display:none;" title="Open this profile in Profile IQ">👤 Profile IQ</button>
                                 <button type="button" class="btn btn-small" id="sentimentIQRankerBtn" onclick="openIQRankerSpotlightFromCurrent()" style="padding:0.35rem 0.65rem; display:none;" title="Open the CW IQ Ranker and spotlight this profile">📊 Ranker</button>
                                 <button type="button" class="btn btn-small" id="sentimentIQRefreshBtn" onclick="manualRefreshSentimentIQ()" style="padding:0.35rem 0.65rem;">Refresh Now</button>
@@ -81026,6 +81043,20 @@
             el.classList.toggle('open');
         }
 
+        // EVC explainer — separate card from the CW IQ one so each can be
+        // toggled independently. Closing the other when one opens keeps the
+        // panel from getting visually busy if the user clicks both ⓘ chips.
+        function toggleIQRankerEVCExplainer(master) {
+            const el = document.getElementById('iqRankerEVCExplainer-' + master);
+            if (!el) return;
+            const opening = !el.classList.contains('open');
+            el.classList.toggle('open');
+            if (opening) {
+                const cw = document.getElementById('iqRankerExplainer-' + master);
+                if (cw) cw.classList.remove('open');
+            }
+        }
+
         // ────────────────────────────────────────────────────────────────
         // IQ Rankers — drill-down day-over-day chart (Chart.js)
         // ────────────────────────────────────────────────────────────────
@@ -81903,6 +81934,23 @@
                 const colour = v >= 70 ? 'var(--accent-cyan)' : (v <= 30 ? 'var(--accent-red)' : 'var(--text-primary)');
                 return `<strong style="color: ${colour};">${v.toFixed(1)}</strong>`;
             };
+            // EVC cell — show the percentage with a hover tooltip exposing
+            // the raw streaming_hits / raw_mentions ratio so analysts can
+            // sanity-check the number. Color-codes high-EVC cells (≥40%) in
+            // cyan since those usually correspond to high-streaming
+            // engagement (e.g. an actor whose mentions cluster on
+            // Netflix/Hulu) and low ones (≤10%) in muted grey.
+            const fmtEVC = (r) => {
+                const v = Number(r && r.evc_score);
+                if (!isFinite(v)) return '<span style="color: var(--text-secondary);">—</span>';
+                const sh = Number(r.streaming_hits || 0);
+                const rm = Number(r.raw_mentions   || 0);
+                const colour = v >= 40 ? 'var(--accent-cyan)'
+                              : v <= 10 ? 'var(--text-secondary)'
+                              : 'var(--text-primary)';
+                const tip = `${sh.toLocaleString()} streaming hits / ${rm.toLocaleString()} panel mentions`;
+                return `<span class="has-tooltip" data-tooltip="${tip}" style="color: ${colour};">${v.toFixed(1)}%</span>`;
+            };
             const html = rows.map((r, i) => {
                 const subj      = encodeURIComponent(r.profile_subject || '');
                 const subjAttr  = _iqEsc(r.profile_subject || '');
@@ -81934,6 +81982,7 @@
                     <td style="text-align: right;">${fmtNum(r.neu)}</td>
                     <td style="text-align: right; color: var(--accent-red);">${fmtNum(r.neg)}</td>
                     <td style="text-align: right;">${fmtNet(r.net_sentiment)}</td>
+                    <td style="text-align: right;">${fmtEVC(r)}</td>
                     <td style="text-align: right;">${fmtScore(r.cw_iq_score)}</td>
                     <td style="text-align: right;">${fmtDelta(r.delta_cw_iq, 1)}</td>
                 </tr>`;
