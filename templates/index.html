@@ -43195,7 +43195,7 @@
             const missingCount = episodes.filter(ep => !ep.episode_date || String(ep.episode_date).trim() === '').length;
             if (statusEl) {
                 if (missingCount === 0) {
-                    statusEl.textContent = `All ${episodes.length} episode date(s) populated from the input CSV.`;
+                    statusEl.textContent = '';
                 } else {
                     statusEl.textContent = `${missingCount} of ${episodes.length} episode(s) are missing a release date. Click "Look up missing dates" to have an AI agent search the web for them.`;
                 }
