@@ -149,6 +149,98 @@ def _load_streaming_platforms() -> frozenset[str]:
 STREAMING_PLATFORMS_LC: frozenset[str] = _load_streaming_platforms()
 
 
+# ── MBP (Most Purchased Brands) and BVP (Streaming/Platform + Movie Theater) ──
+# Unlike the streaming platform set above which is a tiny curated list, MBP
+# spans thousands of consumer brands and BVP spans every streaming/cinema
+# operator we've ever seen. Both are derived from `reference.host_mapping`
+# at first use (lazy-loaded so importing this module never side-effects
+# ClickHouse) and cached for the process lifetime — host_mapping changes
+# rarely enough that a worker restart picking up new entries is fine.
+#
+# TDL ("Talent Driven Lift") = % of a profile's mention rows whose
+# COMMON_NAME is a Most-Purchased-Brands SECTION host_mapping entry. Reads
+# as: "of all the times the panel touched a URL referencing this entity,
+# what share of those touches happened on a consumer-purchase brand". A
+# high TDL means audience attention around this entity converts to retail
+# / CPG / apparel / beauty browsing rather than only media consumption.
+#
+# BVP ("Pre-release Buzz vs Performance w/o Engagement") = % of a profile's
+# mention rows whose COMMON_NAME is a Streaming/Platform SECTION OR
+# Movie Theater SECTION entry. Reads as: "of all the times the panel
+# touched something about this entity, what share happened on the
+# distribution rails the title would actually live on (Netflix/Hulu/AMC/
+# etc.)". Useful pre-release: a high BVP relative to overall mention
+# volume signals the audience is already converting from buzz to
+# distribution-channel engagement.
+_MBP_BRANDS_LC: frozenset[str] | None = None
+_BVP_BRANDS_LC: frozenset[str] | None = None
+_BRAND_SETS_LOCK = threading.Lock()
+
+
+def _query_brand_set(ch_connect: Callable, where_sql: str) -> frozenset[str]:
+    """Run `SELECT lower(BRAND) FROM reference.host_mapping WHERE …`
+    and return the distinct lower-cased BRAND values as a frozen set.
+
+    Failures here must not crash the daily compute, so we degrade to an
+    empty set on error — the metric just stays at 0% for that day."""
+    conn = ch_connect()
+    try:
+        cur = conn.cursor()
+        cur.execute(
+            f"SELECT DISTINCT lower(BRAND) AS b FROM reference.host_mapping "
+            f"WHERE {where_sql} AND length(BRAND) > 0"
+        )
+        rows = cur.fetchall() or []
+        return frozenset(str(r[0] or "").strip().lower() for r in rows
+                         if r and (r[0] or "").strip())
+    except Exception as e:
+        print(f"[iq_rankers] host_mapping brand-set load failed ({where_sql!r}): {e}")
+        return frozenset()
+    finally:
+        try:
+            conn.close()
+        except Exception:
+            pass
+
+
+def _ensure_brand_sets_loaded(ch_connect: Callable) -> None:
+    """Lazy-populate MBP / BVP brand sets on first use.
+
+    Both sets stay None until needed so module import has no DB dependency.
+    A single global lock guards the load so concurrent daily-compute
+    workers don't all kick off the same query."""
+    global _MBP_BRANDS_LC, _BVP_BRANDS_LC
+    if _MBP_BRANDS_LC is not None and _BVP_BRANDS_LC is not None:
+        return
+    with _BRAND_SETS_LOCK:
+        if _MBP_BRANDS_LC is None:
+            _MBP_BRANDS_LC = _query_brand_set(
+                ch_connect,
+                "positionCaseInsensitive(SECTION, 'most purchased') > 0",
+            )
+            print(f"[iq_rankers] loaded {len(_MBP_BRANDS_LC)} MBP brands from host_mapping")
+        if _BVP_BRANDS_LC is None:
+            _BVP_BRANDS_LC = _query_brand_set(
+                ch_connect,
+                "SECTION IN ('Streaming/Platform', 'Movie Theater')",
+            )
+            print(f"[iq_rankers] loaded {len(_BVP_BRANDS_LC)} BVP brands from host_mapping")
+
+
+def get_mbp_brands_lc() -> frozenset[str]:
+    """Public accessor — returns the MBP brand set (empty if not loaded yet).
+
+    Callers that need the set populated should invoke
+    `_ensure_brand_sets_loaded(ch_connect)` first; backfill scripts do this
+    once per run rather than per row."""
+    return _MBP_BRANDS_LC or frozenset()
+
+
+def get_bvp_brands_lc() -> frozenset[str]:
+    """Public accessor — returns the BVP brand set (empty if not loaded yet)."""
+    return _BVP_BRANDS_LC or frozenset()
+
+
 def normalize_subcategory(subcategory: str) -> str:
     """Canonicalize a raw subcategory string.
 
@@ -357,10 +449,25 @@ def compute_layer1_metrics_for_day(
         "net_sentiment": 0.0,
         "panel_size": 0,
         "streaming_hits": 0,
+        "mbp_hits": 0,
+        "bvp_hits": 0,
     }
     term_lit = _term_array_literal(brand_terms)
     if not term_lit:
         return out
+
+    # Lazy-load the host_mapping-driven brand sets (TDL / BVP). Cheap on
+    # subsequent calls within the same process — guarded by a lock so the
+    # parallel daily runner workers don't fire the host_mapping query in
+    # parallel.
+    try:
+        _ensure_brand_sets_loaded(ch_connect)
+    except Exception:
+        # Degrade gracefully: TDL / BVP just stay 0 for this day, EVC and
+        # the rest still compute.
+        pass
+    mbp_lc = get_mbp_brands_lc()
+    bvp_lc = get_bvp_brands_lc()
 
     conn = ch_connect(settings={"max_execution_time": 600, "use_skip_indexes": 1})
     try:
@@ -394,11 +501,18 @@ def compute_layer1_metrics_for_day(
 
     pos = neg = neu = 0
     streaming_hits = 0
+    mbp_hits = 0
+    bvp_hits = 0
     uids: set[str] = set()
     for url, uid, common_name, _domain in rows:
         cn_lc = (common_name or "").strip().lower()
-        if cn_lc and cn_lc in STREAMING_PLATFORMS_LC:
-            streaming_hits += 1
+        if cn_lc:
+            if cn_lc in STREAMING_PLATFORMS_LC:
+                streaming_hits += 1
+            if mbp_lc and cn_lc in mbp_lc:
+                mbp_hits += 1
+            if bvp_lc and cn_lc in bvp_lc:
+                bvp_hits += 1
         try:
             scored = sentiment_iq.score_behavioral_event(url or "", common_name or "")
             bucket = scored.get("sentiment", "neutral")
@@ -422,6 +536,8 @@ def compute_layer1_metrics_for_day(
         "neg": neg,
         "net_sentiment": round(100.0 * (pos - neg) / max(total, 1), 2),
         "streaming_hits": streaming_hits,
+        "mbp_hits": mbp_hits,
+        "bvp_hits": bvp_hits,
     })
     return out
 
@@ -640,7 +756,8 @@ def insert_daily_row(
             (snapshot_date, profile_subject, project_name, category, subcategory,
              s3_key, tracker_id, brand_terms, mentions, unique_uids,
              pos, neu, neg, net_sentiment, cw_iq_score,
-             prev_mentions, prev_cw_iq_score, panel_size, streaming_hits, generated_at)
+             prev_mentions, prev_cw_iq_score, panel_size, streaming_hits,
+             mbp_hits, bvp_hits, generated_at)
         VALUES (
             toDate('{snapshot_date}'),
             '{_esc_str(profile_subject)}',
@@ -661,6 +778,8 @@ def insert_daily_row(
             {float(prev_cw_iq_score or 0)},
             {int(panel_size or 0)},
             {int(metrics.get("streaming_hits") or 0)},
+            {int(metrics.get("mbp_hits") or 0)},
+            {int(metrics.get("bvp_hits") or 0)},
             now()
         )
         """
@@ -943,6 +1062,10 @@ def aggregate_leaderboard(
         "delta_cw_iq": "delta_cw_iq",
         "evc_score": "evc_score",
         "evc": "evc_score",
+        "tdl_score": "tdl_score",
+        "tdl": "tdl_score",
+        "bvp_score": "bvp_score",
+        "bvp": "bvp_score",
     }
     sort_col = valid_sorts.get((sort or "").lower(), "cw_iq_score")
     direction = "DESC" if (sort_dir or "desc").lower() != "asc" else "ASC"
@@ -1005,6 +1128,8 @@ def aggregate_leaderboard(
                sum(mentions)                      AS raw_mentions_sum,
                max(panel_size)                    AS max_panel_size,
                sum(streaming_hits)                AS streaming_hits_sum,
+               sum(mbp_hits)                      AS mbp_hits_sum,
+               sum(bvp_hits)                      AS bvp_hits_sum,
                -- EVC = Engagement vs Viewing Correlation: % of this
                -- profile's mention rows whose COMMON_NAME is a streaming
                -- platform (Netflix, Hulu, YouTube, etc). Reads as "of
@@ -1016,6 +1141,28 @@ def aggregate_leaderboard(
                if(sum(mentions) > 0,
                   round(100.0 * sum(streaming_hits) / sum(mentions), 1),
                   0.0)                            AS evc_score_calc,
+               -- TDL = Talent Driven Lift: % of this profile's mention
+               -- rows whose COMMON_NAME maps to a Most-Purchased-Brands
+               -- entry in reference.host_mapping. Reads as "of the times
+               -- the panel touched something about this entity, what
+               -- share happened on a consumer-purchase brand (apparel,
+               -- CPG, beauty, etc.)". A high TDL signals attention
+               -- around this entity is converting to retail browsing.
+               if(sum(mentions) > 0,
+                  round(100.0 * sum(mbp_hits) / sum(mentions), 1),
+                  0.0)                            AS tdl_score_calc,
+               -- BVP = Pre-release Buzz vs Performance w/o engagement:
+               -- % of this profile's mention rows whose COMMON_NAME
+               -- maps to a Streaming/Platform OR Movie Theater entry
+               -- in reference.host_mapping. Reads as "of the times the
+               -- panel touched something about this entity, what share
+               -- happened on a distribution channel (Netflix-style
+               -- platform or AMC-style theater)". Useful pre-release:
+               -- high BVP relative to mention volume signals the
+               -- audience is converting buzz to channel engagement.
+               if(sum(mentions) > 0,
+                  round(100.0 * sum(bvp_hits) / sum(mentions), 1),
+                  0.0)                            AS bvp_score_calc,
                round(100.0 * (sum({p_pos}) - sum({p_neg}))
                      / greatest(sum({p_pos}) + sum({p_neu}) + sum({p_neg}), 1), 2)
                                                   AS net_sentiment_calc,
@@ -1067,7 +1214,11 @@ def aggregate_leaderboard(
            c.raw_unique_uids_sum                      AS raw_unique_uids,
            c.max_panel_size                           AS panel_size,
            c.streaming_hits_sum                       AS streaming_hits,
-           c.evc_score_calc                           AS evc_score
+           c.evc_score_calc                           AS evc_score,
+           c.mbp_hits_sum                             AS mbp_hits,
+           c.tdl_score_calc                           AS tdl_score,
+           c.bvp_hits_sum                             AS bvp_hits,
+           c.bvp_score_calc                           AS bvp_score
     FROM curr c
     LEFT JOIN prev p ON p.profile_subject = c.profile_subject
     ORDER BY {sort_col} {direction}, mentions DESC
@@ -1118,6 +1269,10 @@ def aggregate_leaderboard(
             "panel_size":       int(r[18] or 0) if len(r) > 18 else 0,
             "streaming_hits":   int(r[19] or 0) if len(r) > 19 else 0,
             "evc_score":        float(r[20] or 0) if len(r) > 20 else 0.0,
+            "mbp_hits":         int(r[21] or 0) if len(r) > 21 else 0,
+            "tdl_score":        float(r[22] or 0) if len(r) > 22 else 0.0,
+            "bvp_hits":         int(r[23] or 0) if len(r) > 23 else 0,
+            "bvp_score":        float(r[24] or 0) if len(r) > 24 else 0.0,
         })
     return {
         "rows": out_rows,
@@ -1156,6 +1311,41 @@ def aggregate_leaderboard(
             ),
             "formula": "EVC = 100 * sum(streaming_hits) / sum(raw_mentions)",
             "platforms_count": len(STREAMING_PLATFORMS_LC),
+        },
+        "tdl_formula": {
+            "name": "Talent Driven Lift",
+            "description": (
+                "Of the panel's URL hits that mentioned this profile in "
+                "the selected window, the share whose COMMON_NAME is a "
+                "Most-Purchased-Brands entry in reference.host_mapping "
+                "(apparel, CPG, beauty, accessories, home/outdoor, "
+                "tech, pets, etc.). Reads as: 'of all the times the "
+                "panel touched something about this entity, what % of "
+                "those touches happened on a consumer-purchase brand'. "
+                "A high TDL means audience attention around this entity "
+                "is converting to retail browsing rather than only "
+                "media consumption — a useful proxy for commercial pull."
+            ),
+            "formula": "TDL = 100 * sum(mbp_hits) / sum(raw_mentions)",
+            "brand_set_size": len(get_mbp_brands_lc()),
+        },
+        "bvp_formula": {
+            "name": "Pre-release Buzz vs Performance w/o Engagement",
+            "description": (
+                "Of the panel's URL hits that mentioned this profile in "
+                "the selected window, the share whose COMMON_NAME is a "
+                "Streaming/Platform OR Movie Theater entry in "
+                "reference.host_mapping. Reads as: 'of all the times "
+                "the panel touched something about this entity, what % "
+                "of those touches happened on a distribution channel "
+                "(Netflix-style platform or AMC-style theater)'. Useful "
+                "pre-release: a BVP that's tracking ahead of mention "
+                "volume signals the audience is already converting buzz "
+                "to channel engagement; a low BVP at high mentions is "
+                "the 'all talk, no engagement' pattern."
+            ),
+            "formula": "BVP = 100 * sum(bvp_hits) / sum(raw_mentions)",
+            "brand_set_size": len(get_bvp_brands_lc()),
         },
         "cw_iq_formula": {
             "weights": {

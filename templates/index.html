@@ -18058,6 +18058,48 @@
                             </div>
                         </div>
 
+                        <!-- TDL formula explainer (toggled from the TDL column header ⓘ) -->
+                        <div id="iqRankerTDLExplainer-{{ m.key }}" class="iqr-explain" role="region" aria-label="TDL scoring methodology">
+                            <button type="button" class="iqr-explain-close" aria-label="Close" onclick="toggleIQRankerTDLExplainer('{{ m.key }}')">✕</button>
+                            <h5>🛍️ TDL — Talent Driven Lift</h5>
+                            <div style="margin-bottom: 0.55rem;">Of the panel's URL hits that mentioned this profile in the selected window, the share whose <code>COMMON_NAME</code> maps to a <b>Most Purchased Brands</b> entry in <code>reference.host_mapping</code> (apparel, CPG, beauty, accessories, home/outdoor, technology, pets). Reads as: <i>&ldquo;of all the times the panel touched something about this entity, what % of those touches happened on a consumer-purchase brand?&rdquo;</i> A high TDL means audience attention around this entity is converting to retail browsing &mdash; a useful proxy for commercial pull.</div>
+                            <div style="margin-bottom: 0.6rem;"><code>TDL = 100 × sum(mbp_hits) / sum(raw_mentions)</code></div>
+                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.4rem 0.85rem; font-size: 0.74rem; margin-top: 0.4rem;">
+                                <div><b style="color: #c8f7d4;">Numerator</b>&nbsp;&mdash; per-day count of mention rows whose lower-cased <code>COMMON_NAME</code> equals one of the ~5,500 brand entries in <code>host_mapping</code> with <code>SECTION LIKE 'Most Purchased Brands%'</code>, summed across the window.</div>
+                                <div><b style="color: #c8f7d4;">Denominator</b>&nbsp;&mdash; raw (panel-level) mention count for that profile in the same window. Both numerator and denominator are panel counts so the ratio is honest at panel scale; gen-pop projection cancels out.</div>
+                            </div>
+                            <ul style="margin: 0.85rem 0 0; padding-left: 1.1rem; font-size: 0.74rem;">
+                                <li><b>0% / blank:</b> the panel touches this profile but never on consumer-purchase brand surfaces &mdash; engagement is mostly editorial / streaming / search.</li>
+                                <li><b>5–15%:</b> meaningful retail crossover &mdash; the audience that reads about this entity is also browsing apparel / beauty / CPG brands at the same time.</li>
+                                <li><b>20%+:</b> a clear &ldquo;they sell&rdquo; signal &mdash; characteristic of celebrity endorsements and brand-builder talent (founders, owned-label artists, fitness creators).</li>
+                                <li><b>Hover the cell:</b> the underlying <code>mbp_hits / raw_mentions</code> panel counts are shown so you can sanity-check the percentage.</li>
+                            </ul>
+                            <div style="margin-top: 0.6rem; padding-top: 0.55rem; border-top: 1px dashed rgba(132,225,168,0.25); font-size: 0.72rem; color: var(--text-muted);">
+                                The brand set is loaded from <code>reference.host_mapping</code> at compute time and refreshes whenever the worker process restarts &mdash; new brands added to host_mapping pick up automatically.
+                            </div>
+                        </div>
+
+                        <!-- BVP formula explainer (toggled from the BVP column header ⓘ) -->
+                        <div id="iqRankerBVPExplainer-{{ m.key }}" class="iqr-explain" role="region" aria-label="BVP scoring methodology">
+                            <button type="button" class="iqr-explain-close" aria-label="Close" onclick="toggleIQRankerBVPExplainer('{{ m.key }}')">✕</button>
+                            <h5>🎬 BVP — Pre-release Buzz vs Performance w/o Engagement</h5>
+                            <div style="margin-bottom: 0.55rem;">Of the panel's URL hits that mentioned this profile in the selected window, the share whose <code>COMMON_NAME</code> maps to a <b>Streaming/Platform</b> OR <b>Movie Theater</b> entry in <code>reference.host_mapping</code>. Reads as: <i>&ldquo;of all the times the panel touched something about this entity, what % of those touches happened on a distribution channel (Netflix-style platform or AMC-style theater)?&rdquo;</i> Useful pre-release: a BVP that's tracking ahead of mention volume signals the audience is converting buzz to channel engagement; a low BVP at high mentions is the &ldquo;all talk, no engagement&rdquo; pattern.</div>
+                            <div style="margin-bottom: 0.6rem;"><code>BVP = 100 × sum(bvp_hits) / sum(raw_mentions)</code></div>
+                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.4rem 0.85rem; font-size: 0.74rem; margin-top: 0.4rem;">
+                                <div><b style="color: #c8f7d4;">Numerator</b>&nbsp;&mdash; per-day count of mention rows whose lower-cased <code>COMMON_NAME</code> equals one of the ~177 entries in <code>host_mapping</code> with <code>SECTION IN ('Streaming/Platform', 'Movie Theater')</code>, summed across the window.</div>
+                                <div><b style="color: #c8f7d4;">Denominator</b>&nbsp;&mdash; raw (panel-level) mention count for that profile in the same window. Both are panel counts so the ratio is honest at panel scale.</div>
+                            </div>
+                            <ul style="margin: 0.85rem 0 0; padding-left: 1.1rem; font-size: 0.74rem;">
+                                <li><b>How to read it:</b> if mentions are rising day-over-day but BVP stays flat near 0%, audiences are reading <i>about</i> the title without showing up where it actually lives. If BVP rises in step with mentions, the buzz is converting.</li>
+                                <li><b>EVC vs BVP:</b> EVC uses a <i>curated</i> streaming set (Netflix / Hulu / etc.) intentionally narrow for clean signal. BVP uses the <i>full</i> host_mapping <code>Streaming/Platform</code> SECTION + <code>Movie Theater</code> SECTION, so it captures a wider distribution surface (long-tail platforms and theatrical chains).</li>
+                                <li><b>Movie theater coverage:</b> AMC, Regal, Cinemark, IMAX, Alamo Drafthouse, etc. — anything tagged <code>SECTION = 'Movie Theater'</code> in host_mapping.</li>
+                                <li><b>Hover the cell:</b> the underlying <code>bvp_hits / raw_mentions</code> panel counts are shown so you can sanity-check the percentage.</li>
+                            </ul>
+                            <div style="margin-top: 0.6rem; padding-top: 0.55rem; border-top: 1px dashed rgba(132,225,168,0.25); font-size: 0.72rem; color: var(--text-muted);">
+                                The brand set is loaded from <code>reference.host_mapping</code> at compute time and refreshes whenever the worker process restarts.
+                            </div>
+                        </div>
+
                         <div id="iqRankerSubTabs-{{ m.key }}" class="iqr-subtabs"></div>
                         <div class="iqr-toolbar">
                             <label>Window
@@ -18094,6 +18136,12 @@
                                     <th data-iq-sort="net_sentiment"  data-iq-master="{{ m.key }}" class="has-tooltip" data-tooltip="(Pos − Neg) / (Pos + Neu + Neg) × 100. Range −100..+100." style="cursor: pointer; text-align: right;">Net Sent.</th>
                                     <th data-iq-sort="evc_score"      data-iq-master="{{ m.key }}" style="cursor: pointer; text-align: right;">
                                         <span class="iqr-th-with-info">EVC<button type="button" class="iqr-th-info" title="Show EVC methodology" aria-label="Show EVC methodology" onclick="event.stopPropagation(); toggleIQRankerEVCExplainer('{{ m.key }}')">i</button></span>
+                                    </th>
+                                    <th data-iq-sort="tdl_score"      data-iq-master="{{ m.key }}" style="cursor: pointer; text-align: right;">
+                                        <span class="iqr-th-with-info">TDL<button type="button" class="iqr-th-info" title="Show TDL methodology — Talent Driven Lift" aria-label="Show TDL methodology" onclick="event.stopPropagation(); toggleIQRankerTDLExplainer('{{ m.key }}')">i</button></span>
+                                    </th>
+                                    <th data-iq-sort="bvp_score"      data-iq-master="{{ m.key }}" style="cursor: pointer; text-align: right;">
+                                        <span class="iqr-th-with-info">BVP<button type="button" class="iqr-th-info" title="Show BVP methodology — Pre-release Buzz vs Performance w/o Engagement" aria-label="Show BVP methodology" onclick="event.stopPropagation(); toggleIQRankerBVPExplainer('{{ m.key }}')">i</button></span>
                                     </th>
                                     <th data-iq-sort="cw_iq_score"    data-iq-master="{{ m.key }}" style="cursor: pointer; text-align: right;">
                                         <span class="iqr-th-with-info">CW IQ<button type="button" class="iqr-th-info" title="Show CW IQ methodology" aria-label="Show CW IQ methodology" onclick="event.stopPropagation(); toggleIQRankerExplainer('{{ m.key }}')">i</button></span>
@@ -81478,6 +81526,43 @@
             if (opening) {
                 const cw = document.getElementById('iqRankerExplainer-' + master);
                 if (cw) cw.classList.remove('open');
+                const tdl = document.getElementById('iqRankerTDLExplainer-' + master);
+                if (tdl) tdl.classList.remove('open');
+                const bvp = document.getElementById('iqRankerBVPExplainer-' + master);
+                if (bvp) bvp.classList.remove('open');
+            }
+        }
+
+        // TDL explainer — same closing behavior as EVC so only one
+        // explainer card is open at a time per master tab.
+        function toggleIQRankerTDLExplainer(master) {
+            const el = document.getElementById('iqRankerTDLExplainer-' + master);
+            if (!el) return;
+            const opening = !el.classList.contains('open');
+            el.classList.toggle('open');
+            if (opening) {
+                const cw  = document.getElementById('iqRankerExplainer-' + master);
+                if (cw)  cw.classList.remove('open');
+                const ev  = document.getElementById('iqRankerEVCExplainer-' + master);
+                if (ev)  ev.classList.remove('open');
+                const bvp = document.getElementById('iqRankerBVPExplainer-' + master);
+                if (bvp) bvp.classList.remove('open');
+            }
+        }
+
+        // BVP explainer — same closing behavior.
+        function toggleIQRankerBVPExplainer(master) {
+            const el = document.getElementById('iqRankerBVPExplainer-' + master);
+            if (!el) return;
+            const opening = !el.classList.contains('open');
+            el.classList.toggle('open');
+            if (opening) {
+                const cw  = document.getElementById('iqRankerExplainer-' + master);
+                if (cw)  cw.classList.remove('open');
+                const ev  = document.getElementById('iqRankerEVCExplainer-' + master);
+                if (ev)  ev.classList.remove('open');
+                const tdl = document.getElementById('iqRankerTDLExplainer-' + master);
+                if (tdl) tdl.classList.remove('open');
             }
         }
 
@@ -82375,6 +82460,35 @@
                 const tip = `${sh.toLocaleString()} streaming hits / ${rm.toLocaleString()} panel mentions`;
                 return `<span class="has-tooltip" data-tooltip="${tip}" style="color: ${colour};">${v.toFixed(1)}%</span>`;
             };
+            // TDL cell — Talent Driven Lift, % of mention rows that landed
+            // on a Most-Purchased-Brands host_mapping entry. Cyan ≥15% (a
+            // clear retail crossover signal), muted ≤2% (commerce-inert).
+            const fmtTDL = (r) => {
+                const v = Number(r && r.tdl_score);
+                if (!isFinite(v)) return '<span style="color: var(--text-secondary);">—</span>';
+                const mh = Number(r.mbp_hits      || 0);
+                const rm = Number(r.raw_mentions  || 0);
+                const colour = v >= 15 ? 'var(--accent-cyan)'
+                              : v <= 2  ? 'var(--text-secondary)'
+                              : 'var(--text-primary)';
+                const tip = `${mh.toLocaleString()} consumer-brand hits / ${rm.toLocaleString()} panel mentions`;
+                return `<span class="has-tooltip" data-tooltip="${tip}" style="color: ${colour};">${v.toFixed(1)}%</span>`;
+            };
+            // BVP cell — Pre-release Buzz vs Performance w/o engagement,
+            // % of mention rows on a Streaming/Platform OR Movie Theater
+            // host_mapping entry. Cyan ≥30% (audience converting buzz to
+            // distribution), muted ≤5% (all talk, no channel pull).
+            const fmtBVP = (r) => {
+                const v = Number(r && r.bvp_score);
+                if (!isFinite(v)) return '<span style="color: var(--text-secondary);">—</span>';
+                const bh = Number(r.bvp_hits      || 0);
+                const rm = Number(r.raw_mentions  || 0);
+                const colour = v >= 30 ? 'var(--accent-cyan)'
+                              : v <= 5  ? 'var(--text-secondary)'
+                              : 'var(--text-primary)';
+                const tip = `${bh.toLocaleString()} platform/theater hits / ${rm.toLocaleString()} panel mentions`;
+                return `<span class="has-tooltip" data-tooltip="${tip}" style="color: ${colour};">${v.toFixed(1)}%</span>`;
+            };
             const html = rows.map((r, i) => {
                 const subj      = encodeURIComponent(r.profile_subject || '');
                 const subjAttr  = _iqEsc(r.profile_subject || '');
@@ -82407,6 +82521,8 @@
                     <td style="text-align: right; color: var(--accent-red);">${fmtNum(r.neg)}</td>
                     <td style="text-align: right;">${fmtNet(r.net_sentiment)}</td>
                     <td style="text-align: right;">${fmtEVC(r)}</td>
+                    <td style="text-align: right;">${fmtTDL(r)}</td>
+                    <td style="text-align: right;">${fmtBVP(r)}</td>
                     <td style="text-align: right;">${fmtScore(r.cw_iq_score)}</td>
                     <td style="text-align: right;">${fmtDelta(r.delta_cw_iq, 1)}</td>
                 </tr>`;
