@@ -2963,19 +2963,46 @@ def validate_emitted_bp(bp, subj: str, brand: str, category: str,
 
 # Branded sub-cats whose rows should be unioned into MPB. Pulled from
 # _MPB_INHERIT_TARGETS in BG.py + post_generation_enforcers.HOSTMAP_GATED.
+# Branded sub-cats whose rows are eligible to be unioned into MPB.
+# Narrowed 2026-05-28 (Rule #4c). Every union candidate is also
+# double-checked against the hostmap MPB whitelist + Hidden blocklist.
 MPB_UNION_SOURCE_CATEGORIES = {
-    'APPAREL/FOOTWEAR', 'BEAUTY/WELLNESS', 'CPG',
-    'TECHNOLOGY BRAND', 'TECHNOLOGY/DEVICE',
-    'HOME/OUTDOOR', 'ACCESSORIES', 'PETS', 'TOYS', 'GAMES',
-    'AUTOMOBILE',
-    'QSR', 'WHERE THEY DINE', 'WHERE THEY SHOP',
-    'BANKING', 'DIGITAL BANKING', 'CREDIT PROVIDER', 'INVESTMENTS',
-    'INSURANCE', 'TELECOM', 'PHARMACY',
-    'STREAMING/PLATFORM', 'STREAMING/MUSIC', 'VIRTUAL MVPD FAST',
-    'SEARCH ENGINE/AI', 'SOCIAL MEDIA',
-    'TRAVEL', 'WORKOUT FACILITY', 'HEALTH & WELLNESS',
+    'APPAREL/FOOTWEAR',
+    'BEAUTY/WELLNESS',
+    'CPG',
+    'TECHNOLOGY BRAND',
+    'TECHNOLOGY/DEVICE',
+    'HOME/OUTDOOR',
+    'ACCESSORIES',
+    'PETS',
 }
 MPB_CATEGORY = 'MOST PURCHASED BRANDS'
+
+
+_HOSTMAP_GATES = None
+
+
+def _load_hostmap_gates():
+    """Import and cache the hostmap membership/Hidden gates from
+    post_generation_enforcers."""
+    global _HOSTMAP_GATES
+    if _HOSTMAP_GATES is not None:
+        return _HOSTMAP_GATES
+    mpb_fn = None
+    hidden_fn = None
+    for modpath in ('post_generation_enforcers',
+                    'migration.post_generation_enforcers'):
+        try:
+            import importlib
+            mod = importlib.import_module(modpath)
+            mpb_fn = getattr(mod, '_is_hostmap_mpb', None)
+            hidden_fn = getattr(mod, '_is_hostmap_hidden', None)
+            if mpb_fn is not None and hidden_fn is not None:
+                break
+        except Exception:
+            continue
+    _HOSTMAP_GATES = (mpb_fn, hidden_fn)
+    return _HOSTMAP_GATES
 
 
 def compose_mpb_from_subcats(df,
@@ -3063,6 +3090,29 @@ def compose_mpb_from_subcats(df,
             print(f"   🛒 compose-mpb: every sub-cat brand "
                   f"({len(best)}) already in MPB — nothing to do")
         return df, []
+
+    # Rule #4c gate (2026-05-28): every union candidate must be hostmap-
+    # classified as ``Most Purchased Brands, *`` AND must NOT be hostmap-
+    # Hidden. Per-brand gating catches anything the source-cat filter misses.
+    is_mpb, is_hidden = _load_hostmap_gates()
+    if is_mpb is not None and is_hidden is not None:
+        before_n = len(new_brands)
+        mpb_ok_mask = new_brands['Value'].apply(
+            lambda v: is_mpb(v) and not is_hidden(v)
+        )
+        new_brands = new_brands[mpb_ok_mask]
+        gated_n = before_n - len(new_brands)
+        if verbose and gated_n:
+            print(f"   🚪 compose-mpb gate: dropped {gated_n} candidate(s) "
+                  f"not in hostmap MPB whitelist (or Hidden)")
+        if new_brands.empty:
+            if verbose:
+                print(f"   🛒 compose-mpb: all {before_n} candidates "
+                      f"failed hostmap MPB gate — nothing to add")
+            return df, []
+    elif verbose:
+        print(f"   ⚠️  compose-mpb: hostmap MPB gate unavailable; "
+              f"falling back to source-cat-only filter")
 
     # Try to import _jitter_for so the new MPB row drifts away from the
     # exact sub-cat 4dp value (D10).
