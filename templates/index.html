@@ -26,6 +26,14 @@
             --text-primary: #e6f1ff;
             --text-secondary: #bec8e4;
             --border-color: #1e3a5f;
+            --deck-bg-cream: #F2EFE9;
+            --deck-text-primary: #1a1a2e;
+            --deck-text-muted: #7A8B99;
+            --deck-accent-lime: #B8D945;
+            --deck-accent-purple: #6366f1;
+            --deck-accent-magenta: #C026A3;
+            --deck-serif: 'Playfair Display', Georgia, 'Times New Roman', serif;
+            --deck-bar-track: rgba(122, 139, 153, 0.18);
         }
 
         * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -11340,15 +11348,16 @@
             width: 960px;
             height: 540px;
             position: relative;
-            background: #ffffff;
+            background: var(--deck-bg-cream, #F2EFE9);
             border-radius: 8px;
-            box-shadow: 0 4px 24px rgba(0,0,0,0.15), 0 0 0 1px rgba(0,0,0,0.08);
+            box-shadow: 0 4px 24px rgba(0,0,0,0.12), 0 0 0 1px rgba(0,0,0,0.06);
             overflow: hidden;
             transform-origin: center center;
             transition: transform 0.2s ease, width 0.2s ease, height 0.2s ease;
             flex-shrink: 0;
+            font-family: 'Poppins', 'DM Sans', -apple-system, BlinkMacSystemFont, sans-serif;
         }
-        
+
         /* Slide footer - source attribution */
         .slide-footer {
             position: absolute;
@@ -11356,9 +11365,35 @@
             left: 24px;
             right: 24px;
             font-size: 0.55rem;
-            color: rgba(0,0,0,0.35);
+            color: var(--deck-text-muted);
             text-align: left;
             z-index: 5;
+        }
+
+        .deck-slide-chrome {
+            position: absolute;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            height: 36px;
+            padding: 0 32px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            font-size: 0.55rem;
+            letter-spacing: 0.06em;
+            text-transform: uppercase;
+            color: var(--deck-text-muted);
+            z-index: 6;
+            pointer-events: none;
+        }
+
+        .deck-meta-label {
+            font-size: 0.55rem;
+            letter-spacing: 0.14em;
+            text-transform: uppercase;
+            color: var(--deck-text-muted);
+            line-height: 1.4;
         }
         
         /* Data Visualization Control Panel */
@@ -28322,16 +28357,36 @@
             // ---- Touchpoints panel ----
             renderJourneyIqTouchpoints(touchpoints);
 
-            // Facts
+            // Facts - facts can be plain strings or {label, value} dicts.
+            // Coerce + filter so we never render '[object Object]' or empty
+            // boilerplate (e.g. a lone {label:'Target', value:'Research-anchored ...'}).
             var factsCard = document.getElementById('jiqFactsCard');
             var factsEl = document.getElementById('jiqFacts');
             if (factsCard && factsEl) {
-                if (!facts.length) {
+                var renderable = (facts || []).map(function(f) {
+                    if (f == null) return '';
+                    if (typeof f === 'string') return f.trim();
+                    if (typeof f === 'object') {
+                        var label = (f.label || '').trim();
+                        var value = (f.value || f.text || f.fact || '').trim();
+                        // Skip the boilerplate "Target: Research-anchored
+                        // analysis for X" stub that some research-mode runs
+                        // emit when the agent didn't surface real facts.
+                        if (/^research[- ]anchored analysis/i.test(value)) return '';
+                        if (label && value) return label + ': ' + value;
+                        return label || value;
+                    }
+                    return String(f);
+                }).filter(function(s) { return s && s.length > 0; });
+
+                if (!renderable.length) {
                     factsCard.style.display = 'none';
                 } else {
                     factsCard.style.display = '';
                     factsEl.innerHTML = '<ul style="margin: 0; padding-left: 1.25rem; font-size: 13px; line-height: 1.55;">'
-                        + facts.map(function(f) { return '<li style="margin-bottom: 4px;">' + _jiqEsc(f) + '</li>'; }).join('')
+                        + renderable.map(function(s) {
+                            return '<li style="margin-bottom: 4px;">' + _jiqEsc(s) + '</li>';
+                          }).join('')
                         + '</ul>';
                 }
             }
@@ -28455,12 +28510,8 @@
             var bubbleR = 64;
             var parts = [];
 
-            // Center label — parent company
-            parts.push('<g>'
-                 + '<rect x="' + (cx - 90) + '" y="' + (cy - 22) + '" width="180" height="44" rx="22" fill="rgba(255,255,255,0.04)" stroke="var(--border-color)" stroke-width="1" stroke-dasharray="3,3"/>'
-                 + '<text x="' + cx + '" y="' + (cy - 4) + '" text-anchor="middle" fill="var(--text-secondary)" font-size="9" letter-spacing="0.1em">OWNED BY</text>'
-                 + '<text x="' + cx + '" y="' + (cy + 13) + '" text-anchor="middle" fill="var(--text-primary)" font-weight="700" font-size="13">' + _jiqEsc((eco.parent || '').toUpperCase()) + '</text>'
-                 + '</g>');
+            // (Center "OWNED BY <parent>" label removed per user request -
+            // parent ownership info still surfaced in card subtitle/meta.)
 
             // Ribbons FIRST so bubbles overlay them. Ribbon = filled
             // tapered path (mid-thick at endpoints, narrow in the middle
@@ -29992,8 +30043,16 @@
                 parts.push('<text x="' + x + '" y="' + (spineY + r + 16) + '" text-anchor="middle" fill="var(--text-primary)" font-weight="600" font-size="11">' + _jiqEsc(line1) + '</text>');
                 if (line2) parts.push('<text x="' + x + '" y="' + (spineY + r + 30) + '" text-anchor="middle" fill="var(--text-primary)" font-weight="600" font-size="11">' + _jiqEsc(line2) + '</text>');
                 if (topQ) parts.push('<text x="' + x + '" y="' + (spineY + r + 46) + '" text-anchor="middle" fill="var(--text-secondary)" font-style="italic" font-size="9.5">' + _jiqEsc(topQ.length > 28 ? topQ.slice(0, 27) + '…' : topQ) + '</text>');
-                // Title for tooltip
-                parts.push('<title>' + _jiqEsc(s.step || '') + ' — ' + pct.toFixed(1) + '%' + ((s.typical_queries || []).length ? '\n\nTypical queries:\n' + (s.typical_queries || []).slice(0, 4).map(function(q) { return '• ' + q; }).join('\n') : '') + '</title>');
+                // Title for tooltip. CRITICAL: escape every query before
+                // injecting - typical_queries contain literal "<MOVIE>"
+                // placeholders, which the SVG parser would treat as a
+                // malformed element tag and silently bail on the rest of
+                // the SVG (only station 1 rendered before this fix).
+                parts.push('<title>' + _jiqEsc(s.step || '') + ' — ' + pct.toFixed(1) + '%'
+                    + ((s.typical_queries || []).length
+                        ? '\n\nTypical queries:\n' + (s.typical_queries || []).slice(0, 4).map(function(q) { return _jiqEsc('• ' + q); }).join('\n')
+                        : '')
+                    + '</title>');
             });
 
             return '<div style="overflow-x:auto;padding:4px 0;">'
@@ -30141,14 +30200,17 @@
         }
         function _jiqRenderCompanionTimeline(comps) {
             if (!comps || !comps.length) return '<div style="font-size:0.8rem;color:var(--text-secondary);padding:0.5rem 0;">No data.</div>';
-            var W = 720, H = 360;
-            var padL = 30, padR = 30, padT = 30, padB = 90;
+            // H bumped from 360 -> 500 + clamp added below so the bubble
+            // stack (which grows upward when several bubbles overlap)
+            // can't clip past the top edge of the SVG viewBox.
+            var W = 720, H = 500;
+            var padL = 30, padR = 30, padT = 50, padB = 90;
             var xMin = -4, xMax = 2.5;  // hours; -4h before .. 2.5h after
             function xFor(h) {
                 var clamped = Math.max(xMin, Math.min(xMax, h));
                 return padL + ((clamped - xMin) / (xMax - xMin)) * (W - padL - padR);
             }
-            var axisY = padT + (H - padT - padB) * 0.55;
+            var axisY = padT + (H - padT - padB) * 0.70;
             var maxPct = Math.max.apply(null, comps.map(function(c) { return +c.share_pct_of_visitors || 0; }));
             if (maxPct <= 0) maxPct = 1;
             // Compute positions
@@ -30167,16 +30229,34 @@
                     typical_window: c.typical_window || '',
                 };
             }).sort(function(a, b) { return a.x - b.x; });
-            // Stagger overlapping bubbles vertically
+            // Stagger overlapping bubbles vertically. Bubbles stack
+            // upward by default; if a stack would clip past the top
+            // padding it instead resets and stacks downward from the
+            // axis (so we never lose the bubble + its label off-canvas).
             enriched.forEach(function(e, i) {
                 e.y = axisY;
+                e.stackDir = -1; // -1 = up, +1 = down
                 for (var j = 0; j < i; j++) {
                     var other = enriched[j];
                     var dx = Math.abs(e.x - other.x);
                     if (dx < (e.r + other.r + 4)) {
-                        e.y = other.y - (other.r + e.r + 6);
+                        var candidateUp   = other.y - (other.r + e.r + 6);
+                        var candidateDown = other.y + (other.r + e.r + 6);
+                        // Prefer up; flip to down if up would clip
+                        // above the top padding (accounting for the
+                        // bubble's own radius + label below it)
+                        if (candidateUp - e.r < padT) {
+                            e.y = candidateDown;
+                            e.stackDir = 1;
+                        } else {
+                            e.y = candidateUp;
+                        }
                     }
                 }
+                // Hard clamp in case the alternating logic still pushes
+                // a bubble out of bounds (very dense data)
+                e.y = Math.max(padT + e.r + 4,
+                       Math.min(H - padB - e.r - 18, e.y));
             });
             // X-axis ticks
             var ticks = [-3, -2, -1, 0, 1, 2];
@@ -55623,7 +55703,8 @@
             const tocSlide = {
                 id: 'toc_' + Date.now(),
                 type: 'toc',
-                title: 'Table of Contents',
+                title: TOC_SLIDE_DEFAULT_TITLE,
+                customTitle: TOC_SLIDE_DEFAULT_TITLE,
                 dateAdded: new Date().toISOString()
             };
             
@@ -56151,6 +56232,8 @@
             return item;
         }
         
+        const DECK_DEFAULT_VIZ_PREFS = { type: 'bars', count: 'auto', threshold: 30 };
+
         async function createModuleItem(type, category, selectedItems = null) {
             const item = {
                 id: 'slide_' + Date.now(),
@@ -56257,6 +56340,8 @@
                 }
                 if (!item.data) item.data = { chartImage: null };
             }
+            
+            item.vizPrefs = { ...DECK_DEFAULT_VIZ_PREFS };
             
             return item;
         }
@@ -58465,11 +58550,7 @@
             const slide = currentEditingDeck?.slides?.[slideIdx - 1];
             if (!slide) return '';
             
-            const vizPrefs = slide.vizPrefs || {
-                type: 'auto', // auto, bars, columnchart, table, pie, boxes, gauge, line, area, scatter
-                count: 'auto', // auto, 3, 5, 10, 15, 20, 'all', 'threshold'
-                threshold: 30 // for threshold mode
-            };
+            const vizPrefs = slide.vizPrefs || { ...DECK_DEFAULT_VIZ_PREFS };
             
             const currentType = (vizPrefs.type === 'columns' ? 'columnchart' : vizPrefs.type) || 'auto';
             const currentCount = vizPrefs.count || 'auto';
@@ -59053,34 +59134,8 @@
             showNotification('Auto-optimized layout', 'success');
         }
         
-        function renderDemographicBars(entries, totalCount) {
-            const maxVal = Math.max(...entries.map(([_, v]) => parseFloat(v)));
-            return `
-                <div style="display: flex; flex-direction: column; gap: 0.3rem; font-size: 0.7rem;">
-                    ${entries.map(([key, val], i) => {
-                        const pct = parseFloat(val);
-                        const barWidth = maxVal > 0 ? (pct / maxVal * 100) : 0;
-                        return `
-                        <div style="display: flex; align-items: center; gap: 0.4rem;">
-                            <span style="font-size: 0.65rem; color: #000; width: 16px; flex-shrink: 0; text-align: right;">${i + 1}</span>
-                            <div style="flex: 1; min-width: 0;">
-                                <div style="font-size: 0.7rem; color: #000; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-bottom: 2px;">${escapeHtml(key)}</div>
-                                <div style="display: flex; align-items: center; gap: 0.4rem;">
-                                    <div style="position: relative; flex: 1; height: 14px; background: rgba(0,0,0,0.06); border-radius: 3px; overflow: hidden;">
-                                        <div style="position: absolute; left: 0; top: 0; height: 100%; width: ${barWidth}%; background: linear-gradient(90deg, #6366f1, #818cf8); border-radius: 3px;"></div>
-                                    </div>
-                                    <span style="font-size: 0.65rem; font-weight: 600; color: #000; flex-shrink: 0; min-width: 40px; text-align: right;">${pct.toFixed(1)}%</span>
-                                </div>
-                            </div>
-                        </div>
-                    `}).join('')}
-                    ${entries.length < totalCount ? `
-                        <div style="margin-top: 0.5rem; padding: 0.4rem; text-align: center; font-size: 0.65rem; color: #555; background: rgba(99, 102, 241, 0.1); border-radius: 4px;">
-                            Showing ${entries.length} of ${totalCount} segments
-                        </div>
-                    ` : ''}
-                </div>
-            `;
+        function renderDemographicBars(entries, totalCount, options = {}) {
+            return renderDeckBarColumns(entries, totalCount, options);
         }
         
         function renderDemographicTable(entries, totalCount) {
@@ -70568,7 +70623,8 @@
             const tocSlide = {
                 id: 'toc_' + Date.now(),
                 type: 'toc',
-                title: 'Table of Contents',
+                title: TOC_SLIDE_DEFAULT_TITLE,
+                customTitle: TOC_SLIDE_DEFAULT_TITLE,
                 dateAdded: new Date().toISOString()
             };
             
@@ -73929,7 +73985,7 @@
                          ondragleave="handleSlideThumbDragLeave(event)"
                          ondrop="handleSlideThumbDrop(event, ${idx})">
                         <div class="thumb-number">${idx + 1}</div>
-                        <div class="thumb-title">${idx === 0 ? '📑 Title' : (slide.title || slide.customTitle || slide.category || 'Slide')}</div>
+                        <div class="thumb-title">${idx === 0 ? '📑 Title' : (slide.type === 'toc' ? getTocSlideDisplayTitle(slide) : (slide.title || slide.customTitle || slide.category || 'Slide'))}</div>
                         ${idx > 0 ? `<button class="slide-thumb-delete" onclick="event.stopPropagation(); deleteSlide(${idx})" title="Delete slide">🗑️</button>` : ''}
                     </div>
                 `).join('')}
@@ -74315,7 +74371,8 @@
             const tocSlide = {
                 id: 'toc_' + Date.now(),
                 type: 'toc',
-                title: 'Table of Contents',
+                title: TOC_SLIDE_DEFAULT_TITLE,
+                customTitle: TOC_SLIDE_DEFAULT_TITLE,
                 dateAdded: new Date().toISOString()
             };
             
@@ -74757,6 +74814,180 @@
         
         // Source footer text for all slides (base line; profile/sample/dates appended below)
         const SLIDE_FOOTER_TEXT = 'Source: Crosswalk Profile IQ, Prior 12 Months from a 10M Gen Pop Digital Behavioral Panel';
+        const TOC_SLIDE_DEFAULT_TITLE = "What's inside.";
+
+        function getTocSlideDisplayTitle(slide) {
+            const t = (slide?.customTitle || slide?.title || '').trim();
+            if (!t || /^table of contents$/i.test(t)) return TOC_SLIDE_DEFAULT_TITLE;
+            return t;
+        }
+
+        function getCrosswalkDeckLogoHtml(width = 108) {
+            return `<img src="/static/crosswalk-logo-deck.png" alt="Crosswalk" width="${width}" style="display:block;height:auto;border:0;outline:none;">`;
+        }
+
+        function getDeckProfileLabel() {
+            const titleSlide = currentEditingDeck?.titleSlide || {};
+            const name = titleSlide.title || currentProfileData?.name || 'Profile';
+            return `${name} / Audience profile`;
+        }
+
+        function getDeckChromeFooter(slideIdx) {
+            const pageNum = String(Math.max(1, slideIdx)).padStart(2, '0');
+            return `
+                <div class="deck-slide-chrome">
+                    <span>${escapeHtml(getDeckProfileLabel())}</span>
+                    <span>${pageNum}</span>
+                </div>
+            `;
+        }
+
+        function getDeckBarColor(colorIndex = 0) {
+            return (colorIndex % 2 === 0)
+                ? 'var(--deck-accent-lime, #B8D945)'
+                : 'var(--deck-accent-magenta, #C026A3)';
+        }
+
+        function getDeckColorIndexForCategory(category) {
+            const c = (category || '').toLowerCase();
+            if (['education', 'ethnicity', 'relationship', 'sexual', 'parental', 'occupation', 'affinity', 'platform', 'music', 'podcast'].some(x => c.includes(x))) return 1;
+            return 0;
+        }
+
+        function getDeckSectionBreadcrumb(slide, profileName) {
+            if (slide?.customHeader?.breadcrumb) return slide.customHeader.breadcrumb;
+            const section = (slide?.category || slide?.title || slide?.type || 'Data').toUpperCase();
+            return `THE ${(profileName || 'PROFILE').toUpperCase()} AUDIENCE / ${section}`;
+        }
+
+        function formatDeckBarValue(val, valueFormat = 'percent') {
+            if (valueFormat === 'raw') return String(val ?? '');
+            const num = parseFloat(val);
+            if (isNaN(num)) return String(val ?? '');
+            if (valueFormat === 'index') return Math.round(num).toString();
+            return num.toFixed(1) + '%';
+        }
+
+        function renderDeckHorizontalBars(entries, totalCount, options = {}) {
+            if (!entries.length) {
+                return '<div style="color: var(--deck-text-muted); font-size: 0.7rem; font-style: italic;">No data</div>';
+            }
+            const { sectionTitle = '', colorIndex = 0, compact = false, valueFormat = 'percent' } = options;
+            const barColor = getDeckBarColor(colorIndex);
+            const maxVal = Math.max(...entries.map(([_, v]) => parseFloat(v) || 0), 0.01);
+            const labelWidth = compact ? '22%' : '26%';
+            const gap = compact ? '0.28rem' : '0.38rem';
+
+            return `
+                ${sectionTitle ? `<div class="deck-meta-label" style="margin-bottom: 0.45rem;">${escapeHtml(sectionTitle)}</div>` : ''}
+                <div style="display: flex; flex-direction: column; gap: ${gap};">
+                    ${entries.map(([key, val]) => {
+                        const num = parseFloat(val) || 0;
+                        const barWidth = maxVal > 0 ? (num / maxVal * 100) : 0;
+                        const displayVal = formatDeckBarValue(val, valueFormat);
+                        return `
+                        <div style="display: flex; align-items: center; gap: 0.45rem; min-height: 16px;">
+                            <span style="flex: 0 0 ${labelWidth}; font-size: 0.58rem; color: var(--deck-text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${escapeHtml(key)}">${escapeHtml(key)}</span>
+                            <div style="flex: 1; height: 9px; background: var(--deck-bar-track); border-radius: 999px; overflow: hidden;">
+                                <div style="height: 100%; width: ${barWidth}%; background: ${barColor}; border-radius: 999px;"></div>
+                            </div>
+                            <span style="flex: 0 0 34px; font-size: 0.58rem; color: var(--deck-text-muted); text-align: right;">${displayVal}</span>
+                        </div>`;
+                    }).join('')}
+                </div>
+                ${entries.length < totalCount ? `
+                    <div style="margin-top: 0.4rem; font-size: 0.55rem; color: var(--deck-text-muted); font-style: italic;">
+                        Showing ${entries.length} of ${totalCount}
+                    </div>
+                ` : ''}
+            `;
+        }
+
+        function renderDeckBarColumns(entries, totalCount, options = {}) {
+            const maxPerColumn = options.maxPerColumn || 8;
+            const cols = entries.length <= maxPerColumn ? 1 : entries.length <= maxPerColumn * 2 ? 2 : 4;
+            const perCol = Math.ceil(entries.length / cols);
+            const columns = [];
+            for (let i = 0; i < cols; i++) columns.push(entries.slice(i * perCol, (i + 1) * perCol));
+
+            return `
+                <div style="display: grid; grid-template-columns: repeat(${cols}, 1fr); gap: 0.85rem; width: 100%;">
+                    ${columns.map((colEntries, colIdx) => renderDeckHorizontalBars(colEntries, totalCount, {
+                        sectionTitle: colIdx === 0 ? (options.sectionTitle || '') : '',
+                        colorIndex: (options.colorIndex || 0) + colIdx,
+                        compact: cols > 1,
+                        valueFormat: options.valueFormat || 'percent'
+                    })).join('')}
+                </div>
+            `;
+        }
+
+        function renderKekeModuleSlide({ slide, idx, title, description, headerProfileName, content, overlayElements, analysisBlock }) {
+            const breadcrumb = getDeckSectionBreadcrumb(slide, headerProfileName);
+            const whyItMatters = slide.customWhyItMatters || slide.whyItMatters || description;
+            const headline = slide.customHeadline || title;
+            const data = slide.data || {};
+            let itemCount = 0;
+            if (Array.isArray(data.items)) itemCount = data.items.length;
+            else if (data.items && typeof data.items === 'object') itemCount = Object.keys(data.items).length;
+            else if (data.values) itemCount = Object.keys(data.values).length;
+            else if (data.locations) itemCount = data.locations.length;
+            else if (data.regions) itemCount = data.regions.length;
+            else if (data.categories) itemCount = Object.keys(data.categories).length;
+
+            return `
+                <div style="position: absolute; left: 32px; top: 28px; right: 32px; display: flex; justify-content: space-between; align-items: flex-start;">
+                    ${getCrosswalkDeckLogoHtml(108)}
+                    <div contenteditable="true"
+                         class="deck-meta-label"
+                         style="cursor: text; padding: 4px 6px; border-radius: 3px; margin-top: 4px; text-align: right; max-width: 55%;"
+                         onfocus="this.style.background='rgba(0,0,0,0.04)'"
+                         onblur="this.style.background='transparent'; updateSlideHeaderText(${idx}, 'breadcrumb', this.textContent)">
+                        ${escapeHtml(breadcrumb)}
+                    </div>
+                </div>
+
+                <div style="position: absolute; left: 32px; top: 72px; right: 32px;">
+                    <div contenteditable="true"
+                         style="font-family: var(--deck-serif); font-size: 1.65rem; font-weight: 600; color: var(--deck-text-primary); line-height: 1.15; cursor: text; padding: 4px 6px; border-radius: 4px;"
+                         onfocus="this.style.background='rgba(0,0,0,0.04)'"
+                         onblur="this.style.background='transparent'; updateSlideHeadline(${idx}, this.textContent); renderSlideEditor();">
+                        ${escapeHtml(headline)}
+                    </div>
+                    <div contenteditable="true"
+                         style="margin-top: 0.45rem; font-size: 0.72rem; line-height: 1.55; color: var(--deck-text-muted); font-style: italic; cursor: text; padding: 4px 6px; border-radius: 4px;"
+                         onfocus="this.style.background='rgba(0,0,0,0.04)'"
+                         onblur="this.style.background='transparent'; updateSlideDescription(${idx}, this.textContent)">
+                        ${escapeHtml(description)}
+                    </div>
+                </div>
+
+                <div style="position: absolute; left: 32px; top: 148px; width: 52%; display: flex; gap: 0.65rem;">
+                    <div style="width: 3px; background: var(--deck-accent-magenta); border-radius: 2px; flex-shrink: 0;"></div>
+                    <div style="min-width: 0;">
+                        <div class="deck-meta-label" style="color: var(--deck-accent-magenta); margin-bottom: 0.35rem;">Why It Matters</div>
+                        <div contenteditable="true"
+                             style="font-size: 0.72rem; line-height: 1.55; color: var(--deck-text-primary); font-style: italic; cursor: text; padding: 2px 4px; border-radius: 3px;"
+                             onfocus="this.style.background='rgba(0,0,0,0.04)'"
+                             onblur="this.style.background='transparent'; updateSlideWhyItMatters(${idx}, this.textContent)">
+                            ${escapeHtml(whyItMatters)}
+                        </div>
+                    </div>
+                </div>
+
+                <div class="slide-draggable-section slide-module-content" data-slide-idx="${idx}"
+                     style="position: absolute; left: 32px; right: 32px; top: 38%; bottom: 48px; overflow: visible; z-index: 2;"
+                     onmousedown="startDragSlideSection(event, ${idx}, 'content')">
+                    <div class="drag-handle">⋮⋮ DRAG DATA</div>
+                    ${createVizControlPanel(idx, itemCount)}
+                    ${content}
+                    ${analysisBlock}
+                </div>
+
+                ${overlayElements}
+                ${getDeckChromeFooter(idx)}
+            `;
+        }
         
         function renderSlideElements(slide, idx) {
             // Get elements from slide or create defaults for title slide
@@ -74810,34 +75041,34 @@
                     ? `<img src="${img}" alt="${escapeHtml(alt)}" style="width: 100%; height: 100%; object-fit: cover; object-position: center top; border-radius: 8px;">`
                     : `<div style="width: 100%; height: 100%; background: linear-gradient(135deg, #374151, #1f2937); border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 3rem; color: rgba(255,255,255,0.3);">📊</div>`;
                 
-                // Dynamic sizing based on title length to prevent overlap
+                // Dynamic sizing based on title length (Playfair serif headline)
                 const titleLength = profileName.length;
-                let titleFontSize, titleTop, imageTop, imageSize;
+                let titleFontSize, titleBlockTop, imageTop, imageSize;
                 
                 if (titleLength <= 10) {
-                    titleFontSize = '8rem';
-                    titleTop = '-2%';
-                    imageTop = '35%';
+                    titleFontSize = '4.5rem';
+                    titleBlockTop = '88px';
+                    imageTop = '42%';
                     imageSize = '180px';
                 } else if (titleLength <= 15) {
-                    titleFontSize = '7rem';
-                    titleTop = '0%';
-                    imageTop = '40%';
+                    titleFontSize = '4rem';
+                    titleBlockTop = '92px';
+                    imageTop = '44%';
                     imageSize = '170px';
                 } else if (titleLength <= 20) {
-                    titleFontSize = '6rem';
-                    titleTop = '2%';
-                    imageTop = '45%';
+                    titleFontSize = '3.25rem';
+                    titleBlockTop = '96px';
+                    imageTop = '46%';
                     imageSize = '160px';
                 } else if (titleLength <= 25) {
-                    titleFontSize = '5rem';
-                    titleTop = '3%';
-                    imageTop = '50%';
+                    titleFontSize = '2.85rem';
+                    titleBlockTop = '100px';
+                    imageTop = '48%';
                     imageSize = '150px';
                 } else {
-                    titleFontSize = '4rem';
-                    titleTop = '5%';
-                    imageTop = '55%';
+                    titleFontSize = '2.5rem';
+                    titleBlockTop = '104px';
+                    imageTop = '50%';
                     imageSize = '140px';
                 }
                 
@@ -74850,7 +75081,7 @@
                                 <div style="width: ${size}; height: ${size}; border: 3px solid rgba(255,255,255,0.2); border-radius: 8px; overflow: hidden; box-shadow: 0 8px 24px rgba(0,0,0,0.4); flex-shrink: 0;">
                                     ${singleImageHtml(cp.image, cp.name)}
                                 </div>
-                                <div style="font-size: 0.7rem; color: rgba(255,255,255,0.9); font-weight: 600; text-align: center; max-width: ${size}; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${escapeHtml(cp.name)}</div>
+                                <div style="font-size: 0.7rem; color: var(--deck-text-primary); font-weight: 600; text-align: center; max-width: ${size}; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${escapeHtml(cp.name)}</div>
                             </div>`;
                         }).join('')}
                         </div>`
@@ -74859,7 +75090,7 @@
                             <div style="width: ${imageSize}; height: ${imageSize}; border: 3px solid rgba(255,255,255,0.2); border-radius: 8px; overflow: hidden; box-shadow: 0 8px 24px rgba(0,0,0,0.4);">
                                 ${singleImageHtml(compProfiles[0].image, compProfiles[0].name)}
                             </div>
-                            <div style="font-size: 0.8rem; color: rgba(255,255,255,0.9); font-weight: 600;">${escapeHtml(compProfiles[0].name)}</div>
+                            <div style="font-size: 0.8rem; color: var(--deck-text-primary); font-weight: 600;">${escapeHtml(compProfiles[0].name)}</div>
                             </div>`
                         : null);
                 
@@ -74867,26 +75098,53 @@
                 
                 return `
                     <div style="position: absolute; left: 0; top: 0; width: 100%; height: 100%; display: flex; flex-direction: column;">
-                        <!-- Large profile name - EDITABLE with dynamic sizing -->
-                        <div contenteditable="true" 
-                             id="titleSlideProfileName"
-                             style="position: absolute; left: -1%; top: ${titleTop}; font-size: ${titleFontSize}; font-weight: 700; color: #1a1a2e; line-height: 1; letter-spacing: -0.03em; text-transform: uppercase; cursor: text; padding: 4px 8px; border-radius: 4px; max-width: 95%; word-wrap: break-word;"
-                             onfocus="this.style.background='rgba(0,0,0,0.05)'" 
-                             onblur="this.style.background='transparent'; updateTitleSlideProfileName(this.textContent); renderSlideEditor();">
-                            ${escapeHtml(profileName)}.
+                        <!-- Top bar: logo + presenter meta (matches TOC Overview style) -->
+                        <div style="position: absolute; left: 32px; top: 28px; right: 32px; display: flex; justify-content: space-between; align-items: flex-start;">
+                            ${getCrosswalkDeckLogoHtml(108)}
+                            <div style="text-align: right; display: flex; flex-direction: column; gap: 0.35rem; margin-top: 4px;">
+                                <div contenteditable="true"
+                                     class="deck-meta-label"
+                                     style="cursor: text; padding: 4px 6px; border-radius: 3px;"
+                                     onfocus="this.style.background='rgba(0,0,0,0.04)'"
+                                     onblur="this.style.background='transparent'; updateTitleSlideBranding(this.textContent)">${escapeHtml(branding)}</div>
+                                <div contenteditable="true"
+                                     class="deck-meta-label"
+                                     style="cursor: text; padding: 4px 6px; border-radius: 3px;"
+                                     onfocus="this.style.background='rgba(0,0,0,0.04)'"
+                                     onblur="this.style.background='transparent'; updateTitleSlidePresenterName(this.textContent)">${escapeHtml(presenterName)}</div>
+                                ${presenterCompany ? `<div contenteditable="true"
+                                     class="deck-meta-label"
+                                     style="cursor: text; padding: 4px 6px; border-radius: 3px;"
+                                     onfocus="this.style.background='rgba(0,0,0,0.04)'"
+                                     onblur="this.style.background='transparent'; updateTitleSlidePresenterCompany(this.textContent)">${escapeHtml(presenterCompany)}</div>` : ''}
+                            </div>
+                        </div>
+
+                        <!-- Title block -->
+                        <div style="position: absolute; left: 32px; top: ${titleBlockTop}; width: 58%;">
+                            <div contenteditable="true"
+                                 id="titleSlideProfileName"
+                                 style="font-family: var(--deck-serif); font-size: ${titleFontSize}; font-weight: 600; color: var(--deck-text-primary); line-height: 1.08; letter-spacing: -0.02em; cursor: text; padding: 4px 6px; border-radius: 4px; max-width: 100%; word-wrap: break-word;"
+                                 onfocus="this.style.background='rgba(0,0,0,0.04)'"
+                                 onblur="this.style.background='transparent'; updateTitleSlideProfileName(this.textContent); renderSlideEditor();">
+                                ${escapeHtml(profileName)}
+                            </div>
+                            <div style="margin-top: 0.65rem;" class="deck-meta-label">
+                                Audience profile
+                            </div>
                         </div>
                         
                         ${comparisonImagesHtml ? comparisonImagesHtml : (profileImage ? `
                         <!-- Profile image - CLICKABLE TO CHANGE with dynamic positioning -->
-                        <div style="position: absolute; left: 5%; top: ${imageTop}; width: ${imageSize}; height: ${imageSize}; border: 3px solid rgba(200,200,200,0.3); border-radius: 8px; overflow: hidden; box-shadow: 0 8px 24px rgba(0,0,0,0.15); cursor: pointer; transition: border-color 0.2s;"
+                        <div style="position: absolute; left: 32px; top: ${imageTop}; width: ${imageSize}; height: ${imageSize}; border: 2px solid rgba(26,26,46,0.12); border-radius: 8px; overflow: hidden; box-shadow: 0 8px 24px rgba(0,0,0,0.1); cursor: pointer; transition: border-color 0.2s;"
                              onclick="uploadTitleImage()"
-                             onmouseover="this.style.borderColor='#c8e600'"
-                             onmouseout="this.style.borderColor='rgba(200,200,200,0.3)'"
+                             onmouseover="this.style.borderColor='var(--deck-accent-lime)'"
+                             onmouseout="this.style.borderColor='rgba(26,26,46,0.12)'"
                              title="Click to change image">
                             ${profileImageHtml}
                         </div>` : `
                         <!-- Add Image placeholder - DRAGGABLE + RESIZABLE -->
-                        <div class="slide-draggable-section slide-image-placeholder" style="position: absolute; left: 5%; top: 40%; width: 28%; height: 45%;"
+                        <div class="slide-draggable-section slide-image-placeholder" style="position: absolute; left: 32px; top: 40%; width: 28%; height: 45%;"
                              onmousedown="startDragSlideSection(event, 0, 'image')"
                              onclick="if(!event.defaultPrevented) uploadTitleImage()"
                              title="Click to add image">
@@ -74900,117 +75158,102 @@
                             <button class="placeholder-delete-btn" onclick="event.stopPropagation(); this.parentElement.style.display='none';" title="No image on this slide">✕ No Image</button>
                         </div>`)}
                         
-                        <!-- Right side info - EDITABLE (date removed from top right per request) -->
-                        <div style="position: absolute; right: 5%; top: 45%; text-align: right; font-size: 0.7rem; color: #6366f1;">
-                            <div contenteditable="true" 
-                                 style="margin-top: 0.5rem; cursor: text; padding: 2px 4px; border-radius: 3px;"
-                                 onfocus="this.style.background='rgba(0,0,0,0.05)'" 
-                                 onblur="this.style.background='transparent'; updateTitleSlideBranding(this.textContent)">${escapeHtml(branding)}</div>
-                            <div contenteditable="true" 
-                                 style="margin-top: 0.75rem; font-size: 0.8rem; color: #1a1a2e; font-weight: 600; cursor: text; padding: 2px 4px; border-radius: 3px;"
-                                 onfocus="this.style.background='rgba(0,0,0,0.05)'" 
-                                 onblur="this.style.background='transparent'; updateTitleSlidePresenterName(this.textContent)">${escapeHtml(presenterName)}</div>
-                            <div contenteditable="true" 
-                                 style="margin-top: 0.15rem; font-size: 0.7rem; color: #555; cursor: text; padding: 2px 4px; border-radius: 3px;"
-                                 onfocus="this.style.background='rgba(0,0,0,0.05)'" 
-                                 onblur="this.style.background='transparent'; updateTitleSlidePresenterCompany(this.textContent)">${escapeHtml(presenterCompany)}</div>
-                        </div>
-                        
                         <!-- Bottom description - Date Range - EDITABLE -->
-                        <div contenteditable="true" 
-                             style="position: absolute; left: 5%; bottom: 15%; width: 60%; font-size: 0.85rem; color: #444; line-height: 1.6; font-weight: 500; cursor: text; padding: 4px 8px; border-radius: 4px;"
-                             onfocus="this.style.background='rgba(0,0,0,0.05)'" 
+                        <div contenteditable="true"
+                             style="position: absolute; left: 32px; bottom: 48px; width: 60%; font-size: 0.72rem; color: var(--deck-text-muted); line-height: 1.65; font-style: italic; cursor: text; padding: 4px 6px; border-radius: 4px;"
+                             onfocus="this.style.background='rgba(0,0,0,0.04)'"
                              onblur="this.style.background='transparent'; updateTitleSlideDateRange(this.textContent)">
                             ${escapeHtml(dateRangeDisplay)}
                         </div>
                         ${(titleSlide.companyLogo || currentUserCompanyLogo) ? `
                         <!-- Company logo - bottom right -->
-                        <div style="position: absolute; right: 5%; bottom: 8%; max-width: 140px; max-height: 50px; display: flex; align-items: center; justify-content: flex-end;">
+                        <div style="position: absolute; right: 32px; bottom: 48px; max-width: 140px; max-height: 50px; display: flex; align-items: center; justify-content: flex-end;">
                             <img src="${escapeHtml(titleSlide.companyLogo || currentUserCompanyLogo)}" alt="Company" style="max-width: 100%; max-height: 50px; object-fit: contain; opacity: 0.9;">
                         </div>
                         ` : ''}
                     </div>
-                    ${footerHtml}
+                    ${getDeckChromeFooter(idx || 1)}
                 `;
             }
             
-            // For Table of Contents slide
+            // For Table of Contents slide (Crosswalk audience deck style)
             if (slide.type === 'toc') {
-                const profileImage = currentEditingDeck?.titleSlide?.image || null;
-                
-                // Get list of slide titles for TOC (exclude TOC and closing slides)
                 const slides = currentEditingDeck?.slides || [];
                 const tocItems = slides
                     .filter(s => s.type !== 'toc' && s.type !== 'closing')
                     .map((s, i) => ({
-                        num: i + 1,
-                        title: s.customTitle || s.title || s.category || 'Untitled'
+                        num: String(i + 1).padStart(2, '0'),
+                        title: s.customTitle || s.title || s.category || 'Untitled',
+                        subtitle: s.tocSubtitle || s.customDescription || ''
                     }))
-                    .slice(0, 16); // Max 16 items
-                
-                // Split into two columns
-                const col1 = tocItems.slice(0, 8);
-                const col2 = tocItems.slice(8, 16);
-                
+                    .slice(0, 8);
+
+                const profileName = currentProfileData?.name || currentEditingDeck?.titleSlide?.title || 'your audience';
+                const sampleSize = currentProfileData?.sampleSize ?? 0;
+                const samplePhrase = sampleSize > 0
+                    ? `${formatNumber(sampleSize)} consented panelists`
+                    : 'consented panelists';
+                const defaultIntro = `Over twelve months and ${samplePhrase}, Crosswalk observed how the ${profileName} audience actually behaves — where they shop, what they stream, which podcasts they devote attention to, and which brands they reach for. This brief turns those observations into a portrait you can act on.`;
+                const defaultQuote = 'Behavioral data tells you who someone really is — not who they say they are.';
+
                 return `
-                    <!-- Header bar (no date in top right per request) -->
-                    <div style="position: absolute; left: 5%; top: 2%; width: 90%; display: flex; justify-content: space-between; align-items: center; font-size: 0.65rem; color: rgba(0,0,0,0.4);">
-                        <span>Crosswalk Profile IQ</span>
-                    </div>
-                    
-                    <!-- Section title - EDITABLE -->
-                    <div contenteditable="true" 
-                         style="position: absolute; left: 5%; top: 8%; font-size: 2.2rem; font-weight: 700; color: #1a1a2e; text-transform: uppercase; cursor: text; padding: 4px 8px; border-radius: 4px;"
-                         onfocus="this.style.background='rgba(0,0,0,0.05)'" 
-                         onblur="this.style.background='transparent'; updateTocTitle(this.textContent)">
-                        ${escapeHtml(slide.customTitle || slide.title || 'TABLE OF CONTENTS')}
-                    </div>
-                    
-                    <!-- Description - EDITABLE -->
-                    <div contenteditable="true" 
-                         style="position: absolute; left: 5%; top: 22%; width: 42%; font-size: 0.75rem; color: #555; line-height: 1.6; cursor: text; padding: 4px 8px; border-radius: 4px;"
-                         onfocus="this.style.background='rgba(0,0,0,0.05)'" 
-                         onblur="this.style.background='transparent'; updateTocDescription(this.textContent)">
-                        ${escapeHtml(slide.customDescription || `This presentation provides comprehensive audience insights including demographics, behavioral patterns, and strategic recommendations for ${currentProfileData?.name || 'your target audience'}.`)}
-                    </div>
-                    
-                    <!-- TOC Items - Column 1 -->
-                    <div style="position: absolute; left: 52%; top: 22%; width: 22%;">
-                        ${col1.map((item) => `
-                            <div style="padding: 0.4rem 0; border-bottom: 1px solid rgba(0,0,0,0.1); font-size: 0.75rem; color: #1a1a2e; font-weight: 500; display: flex; gap: 0.5rem; align-items: baseline;">
-                                <span style="color: #c8e600; font-size: 0.7rem; flex-shrink: 0;">${item.num}</span>
-                                <span style="flex: 1; line-height: 1.3;">${escapeHtml(item.title)}</span>
-                            </div>
-                        `).join('')}
-                    </div>
-                    
-                    <!-- TOC Items - Column 2 -->
-                    <div style="position: absolute; left: 76%; top: 22%; width: 22%;">
-                        ${col2.map((item) => `
-                            <div style="padding: 0.4rem 0; border-bottom: 1px solid rgba(0,0,0,0.1); font-size: 0.75rem; color: #1a1a2e; font-weight: 500; display: flex; gap: 0.5rem; align-items: baseline;">
-                                <span style="color: #c8e600; font-size: 0.7rem; flex-shrink: 0;">${item.num}</span>
-                                <span style="flex: 1; line-height: 1.3;">${escapeHtml(item.title)}</span>
-                            </div>
-                        `).join('')}
+                    <!-- Top bar: logo + section label -->
+                    <div style="position: absolute; left: 32px; top: 28px; right: 32px; display: flex; justify-content: space-between; align-items: flex-start;">
+                        ${getCrosswalkDeckLogoHtml(108)}
+                        <div contenteditable="true"
+                             class="deck-meta-label"
+                             style="cursor: text; padding: 4px 6px; border-radius: 3px; margin-top: 4px;"
+                             onfocus="this.style.background='rgba(0,0,0,0.04)'"
+                             onblur="this.style.background='transparent'; updateTocSectionLabel(this.textContent)">
+                            ${escapeHtml(slide.sectionLabel || 'Overview')}
+                        </div>
                     </div>
 
-                    <!-- Add Image placeholder - DRAGGABLE + RESIZABLE -->
-                    <div class="slide-draggable-section slide-image-placeholder"
-                         style="position: absolute; left: 5%; top: 55%; width: 40%; height: 38%; z-index: 1;"
-                         onmousedown="startDragSlideSection(event, 0, 'image')"
-                         onclick="if(!event.defaultPrevented) uploadTocRightImage()"
-                         title="Click to add image">
-                        <div class="drag-handle">⋮⋮ DRAG IMAGE</div>
-                        <div class="img-resize-handle nw" onmousedown="startResizePlaceholder(event,'nw')"></div>
-                        <div class="img-resize-handle ne" onmousedown="startResizePlaceholder(event,'ne')"></div>
-                        <div class="img-resize-handle sw" onmousedown="startResizePlaceholder(event,'sw')"></div>
-                        <div class="img-resize-handle se" onmousedown="startResizePlaceholder(event,'se')"></div>
-                        <span class="placeholder-icon">🖼️</span>
-                        <span>Add Image</span>
-                        <button class="placeholder-delete-btn" onclick="event.stopPropagation(); this.parentElement.style.display='none';" title="No image on this slide">✕ No Image</button>
+                    <!-- Left column -->
+                    <div style="position: absolute; left: 32px; top: 72px; width: 42%; bottom: 48px; display: flex; flex-direction: column;">
+                        <div contenteditable="true"
+                             style="font-family: var(--deck-serif); font-size: 2.35rem; font-weight: 600; color: var(--deck-text-primary); line-height: 1.15; cursor: text; padding: 4px 6px; border-radius: 4px; margin-bottom: 1rem;"
+                             onfocus="this.style.background='rgba(0,0,0,0.04)'"
+                             onblur="this.style.background='transparent'; updateTocTitle(this.textContent)">
+                            ${escapeHtml(getTocSlideDisplayTitle(slide))}
+                        </div>
+
+                        <div contenteditable="true"
+                             style="font-size: 0.72rem; line-height: 1.65; color: var(--deck-text-primary); cursor: text; padding: 4px 6px; border-radius: 4px; flex: 1;"
+                             onfocus="this.style.background='rgba(0,0,0,0.04)'"
+                             onblur="this.style.background='transparent'; updateTocDescription(this.textContent)">
+                            ${escapeHtml(slide.customDescription || defaultIntro)}
+                        </div>
+
+                        <div contenteditable="true"
+                             style="font-family: var(--deck-serif); font-size: 0.95rem; line-height: 1.5; font-style: italic; color: var(--deck-accent-purple); cursor: text; padding: 4px 6px; border-radius: 4px; margin-top: auto;"
+                             onfocus="this.style.background='rgba(0,0,0,0.04)'"
+                             onblur="this.style.background='transparent'; updateTocQuote(this.textContent)">
+                            ${escapeHtml(slide.customQuote || defaultQuote)}
+                        </div>
                     </div>
-                    
-                    ${footerHtml}
+
+                    <!-- Right column: contents list -->
+                    <div style="position: absolute; left: 52%; top: 72px; width: 44%; bottom: 48px;">
+                        <div style="font-size: 0.55rem; letter-spacing: 0.14em; text-transform: uppercase; color: var(--deck-accent-lime); font-weight: 600; margin-bottom: 0.75rem;">
+                            Contents
+                        </div>
+                        <div style="display: flex; flex-direction: column;">
+                            ${tocItems.length ? tocItems.map((item) => `
+                                <div style="display: flex; align-items: baseline; gap: 0.65rem; padding: 0.55rem 0; border-bottom: 1px solid rgba(26,26,46,0.12); font-size: 0.72rem;">
+                                    <span style="font-family: var(--deck-serif); font-size: 0.85rem; color: var(--deck-accent-lime); font-weight: 600; flex-shrink: 0; min-width: 1.5rem;">${item.num}</span>
+                                    <span style="font-weight: 600; color: var(--deck-text-primary); flex: 1; line-height: 1.3;">${escapeHtml(item.title)}</span>
+                                    ${item.subtitle ? `<span style="font-style: italic; color: var(--deck-text-muted); text-align: right; flex: 0 0 38%; line-height: 1.3; font-size: 0.65rem;">${escapeHtml(item.subtitle)}</span>` : ''}
+                                </div>
+                            `).join('') : `
+                                <div style="padding: 1rem 0; color: var(--deck-text-muted); font-size: 0.75rem; font-style: italic;">
+                                    Add slides to populate the contents list.
+                                </div>
+                            `}
+                        </div>
+                    </div>
+
+                    ${getDeckChromeFooter(idx)}
                 `;
             }
             
@@ -75228,9 +75471,13 @@
                     
                     // Check if slide has any image elements or if placeholder is hidden
                     const hasImage = (slide.elements && slide.elements.some(el => el.type === 'image')) || slide.hideImagePlaceholder;
+
+                    return renderKekeModuleSlide({
+                        slide, idx, title, description, headerProfileName, content, overlayElements, analysisBlock
+                    });
                     
-                    // Layout A: Image left, Title + Description + Data right - Default
-                    if (layoutIndex === 1) {
+                    // Legacy layouts below (kept for reference)
+                    if (false && layoutIndex === 1) {
                         const contentHeight = '52%';
                         // Get saved positions or use defaults - Image LEFT, content RIGHT
                         const titlePos = slide.sectionPositions?.title || { left: '48%', top: '8%' };
@@ -76018,7 +76265,7 @@
             modal.innerHTML = `
                 <div class="deck-workspace-content" style="max-width: 500px;">
                     <div class="deck-workspace-header">
-                        <h2>🖼️ Add Image to Table of Contents</h2>
+                        <h2>🖼️ Add Image to What's inside.</h2>
                         <button onclick="document.getElementById('uploadTocImageModal').remove()" style="background: none; border: none; color: var(--text-secondary); cursor: pointer; font-size: 1.5rem;">✕</button>
                     </div>
                     <div style="padding: 1.5rem;">
@@ -77263,7 +77510,7 @@
             const slideType = (slide.type || '').toLowerCase();
             
             // Get visualization preferences
-            const vizPrefs = slide.vizPrefs || { type: 'auto', count: 'auto', threshold: 30 };
+            const vizPrefs = slide.vizPrefs || { ...DECK_DEFAULT_VIZ_PREFS };
             
             if (slideType === 'demographic' || (slide.data.values && typeof slide.data.values === 'object' && !slide.data.categories)) {
                 const values = slide.data.values || {};
@@ -77337,10 +77584,15 @@
                     gap = '0.4rem';
                 }
                 
-                // Override visualization type if specified
-                const vizType = vizPrefs.type === 'columns' ? 'columnchart' : (vizPrefs.type || 'auto');
+                // Override visualization type if specified (default: horizontal bar chart)
+                const rawVizType = vizPrefs.type === 'columns' ? 'columnchart' : (vizPrefs.type || 'bars');
+                const vizType = rawVizType === 'auto' ? 'bars' : rawVizType;
+                const barOptions = {
+                    sectionTitle: (slide.category || slide.title || '').toUpperCase(),
+                    colorIndex: getDeckColorIndexForCategory(slide.category)
+                };
                 if (vizType === 'bars') {
-                    return renderDemographicBars(entries, itemCount);
+                    return renderDemographicBars(entries, itemCount, barOptions);
                 } else if (vizType === 'columnchart') {
                     return renderDemographicColumnChart(entries, itemCount);
                 } else if (vizType === 'table') {
@@ -77355,9 +77607,8 @@
                     return renderDemographicAreaChart(entries, itemCount);
                 } else if (vizType === 'scatter') {
                     return renderDemographicScatterChart(entries, itemCount);
-                }
-                
-                return `
+                } else if (vizType === 'boxes') {
+                    return `
                     <div class="editable-boxes-grid" style="display: grid; grid-template-columns: repeat(${columns}, 1fr); gap: ${gap};">
                         ${entries.map(([key, val]) => {
                             const o = overrides[key] || {};
@@ -77375,21 +77626,12 @@
                                 <span class="demo-box-drag-handle" draggable="true" ondragstart="handleDemoBoxDragStart(event, this.closest('.editable-demo-box'))" onmousedown="event.stopPropagation()" title="Drag to slide or drop zone to add" style="position: absolute; top: 4px; left: 4px; cursor: grab; opacity: 0.6; font-size: 0.65rem; user-select: none;">⋮⋮</span>
                                 <div class="editable-box-label" contenteditable="true" spellcheck="false" style="font-size: ${fontSize}; color: ${labelColor}; padding-left: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" onblur="saveEditableBoxEdit(this)">${escapeHtml(label)}</div>
                                 <div class="editable-box-value" contenteditable="true" spellcheck="false" style="font-size: ${valueFontSize}; font-weight: 700; color: ${valueColor};" onblur="saveEditableBoxEdit(this)">${escapeHtml(String(value))}</div>
-                                <div class="editable-box-toolbar" style="display: none; position: absolute; bottom: -42px; left: 0; background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 6px; padding: 0.35rem; flex-wrap: wrap; gap: 0.35rem; z-index: 50; box-shadow: 0 4px 12px rgba(0,0,0,0.4);" onclick="event.stopPropagation()">
-                                    <input type="color" title="Background color" value="${bg.startsWith('#') ? bg : '#1e293b'}" onchange="updateEditableBoxColor(this, 'bg')" style="width: 24px; height: 24px; border: none; cursor: pointer; padding: 0; border-radius: 4px;">
-                                    <input type="color" title="Value color" value="${valueColor.startsWith('#') ? valueColor : '#c8e600'}" onchange="updateEditableBoxColor(this, 'value')" style="width: 24px; height: 24px; border: none; cursor: pointer; padding: 0; border-radius: 4px;">
-                                    <input type="color" title="Label color" value="${labelColor.startsWith('#') ? labelColor : '#94a3b8'}" onchange="updateEditableBoxColor(this, 'label')" style="width: 24px; height: 24px; border: none; cursor: pointer; padding: 0; border-radius: 4px;">
-                                    <button type="button" onclick="resetEditableBox(this)" title="Reset to original" style="padding: 0.2rem 0.4rem; font-size: 0.65rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-secondary); cursor: pointer;">Reset</button>
-                                </div>
                             </div>
                         `}).join('')}
-                    </div>
-                    ${itemCount > entries.length ? `
-                        <div style="margin-top: 0.5rem; padding: 0.4rem; text-align: center; font-size: 0.65rem; color: var(--text-secondary); background: rgba(200, 230, 0, 0.1); border-radius: 4px;">
-                            Showing top ${entries.length} of ${itemCount} segments
-                        </div>
-                    ` : ''}
-                `;
+                    </div>`;
+                }
+
+                return renderDemographicBars(entries, itemCount, barOptions);
             }
             
             if (slideType === 'behavioral') {
@@ -77422,42 +77664,19 @@
                 
                 entries = entries.slice(0, maxItems);
                 const displayCount = entries.length;
+                const barOptions = {
+                    sectionTitle: (slide.category || slide.title || '').toUpperCase(),
+                    colorIndex: getDeckColorIndexForCategory(slide.category)
+                };
                 
-                // Override visualization type if specified
-                if (vizPrefs.type === 'bars' || (vizPrefs.type === 'auto' && displayCount >= 30)) {
-                    const barItems = entries;
-                    const maxVal = Math.max(...barItems.map(([_, v]) => parseFloat(v || 0)));
-                    
-                    return `
-                        <div style="display: flex; flex-direction: column; gap: 0.3rem; font-size: 0.7rem;">
-                            ${barItems.map(([key, val], i) => {
-                                const pct = parseFloat(val || 0);
-                                const barWidth = maxVal > 0 ? (pct / maxVal * 100) : 0;
-                                return `
-                                <div style="display: flex; align-items: center; gap: 0.4rem;">
-                                    <span style="font-size: 0.65rem; color: #000; width: 16px; flex-shrink: 0; text-align: right;">${i + 1}</span>
-                                    <div style="flex: 1; min-width: 0;">
-                                        <div style="font-size: 0.7rem; color: #000; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-bottom: 2px;">${(key || '').replace(/</g, '&lt;')}</div>
-                                        <div style="display: flex; align-items: center; gap: 0.4rem;">
-                                            <div style="position: relative; flex: 1; height: 14px; background: rgba(0,0,0,0.06); border-radius: 3px; overflow: hidden;">
-                                                <div style="position: absolute; left: 0; top: 0; height: 100%; width: ${barWidth}%; background: linear-gradient(90deg, #6366f1, #818cf8); border-radius: 3px;"></div>
-                                            </div>
-                                            <span style="font-size: 0.65rem; font-weight: 600; color: #000; flex-shrink: 0; min-width: 40px; text-align: right;">${pct.toFixed(1)}%</span>
-                                        </div>
-                                    </div>
-                                </div>
-                            `}).join('')}
-                            ${displayCount < itemCount ? `
-                                <div style="margin-top: 0.5rem; padding: 0.4rem; text-align: center; font-size: 0.65rem; color: #555; background: rgba(99, 102, 241, 0.1); border-radius: 4px;">
-                                    Showing ${displayCount} of ${itemCount} items
-                                </div>
-                            ` : ''}
-                        </div>
-                    `;
+                // Default: Keke-style horizontal bar chart
+                const rawBevVizType = vizPrefs.type === 'columns' ? 'columnchart' : (vizPrefs.type || 'bars');
+                const bevVizType = rawBevVizType === 'auto' ? 'bars' : rawBevVizType;
+                if (bevVizType === 'bars') {
+                    return renderDeckBarColumns(entries, itemCount, barOptions);
                 }
                 
                 // Column Chart (vertical bars) - explicit type
-                const bevVizType = vizPrefs.type === 'columns' ? 'columnchart' : (vizPrefs.type || 'auto');
                 if (bevVizType === 'columnchart') {
                     const maxVal = Math.max(...entries.map(([_, v]) => parseFloat(v || 0)), 1);
                     return `
@@ -77514,23 +77733,7 @@
                         return `<div style="position: relative; height: 140px;"><svg viewBox="0 0 100 100" preserveAspectRatio="xMidYMid meet" style="width:100%;height:100%;">${circles}</svg></div>`;
                     }
                 }
-                // Strategy 2: If 19-29 items, use 3 columns with smaller font (auto mode only)
-                if (bevVizType === 'auto' && displayCount >= 19 && displayCount < 30) {
-                    return `
-                        <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.3rem; font-size: 0.7rem;">
-                            ${entries.map(([key, val], i) => `
-                                <div style="display: flex; align-items: center; gap: 0.3rem; padding: 0.3rem 0.4rem; background: #f0f0f5; border-radius: 3px; font-family: 'Poppins', sans-serif;">
-                                    <span style="font-size: 0.6rem; color: #000; width: 14px; flex-shrink: 0;">${i + 1}</span>
-                                    <span style="flex: 1; font-size: 0.7rem; color: #000; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${(key || '').replace(/</g, '&lt;')}</span>
-                                    <span style="font-weight: 600; color: #6366f1; flex-shrink: 0; font-size: 0.7rem;">${parseFloat(val || 0).toFixed(1)}%</span>
-                                </div>
-                            `).join('')}
-                        </div>
-                    `;
-                }
-                
-                // Strategy 3: If 13-18 items, use 2 columns
-                if (vizPrefs.type === 'table' || (vizPrefs.type === 'auto' && displayCount >= 13 && displayCount < 19)) {
+                if (bevVizType === 'table') {
                     return `
                         <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 0.35rem; font-size: 0.7rem; max-width: 100%;">
                             ${entries.map(([key, val], i) => `
@@ -77543,74 +77746,23 @@
                         </div>
                     `;
                 }
-                
-                // Strategy 4: If 12 or fewer items, use 2 columns for better fit
-                return `
-                    <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 0.4rem; font-size: 0.75rem; max-width: 100%;">
-                        ${entries.map(([key, val], i) => `
-                            <div style="display: flex; align-items: center; gap: 0.4rem; padding: 0.4rem 0.5rem; background: #f0f0f5; border-radius: 4px; font-family: 'Poppins', sans-serif; min-width: 0; overflow: hidden;">
-                                <span style="font-size: 0.65rem; color: #000; width: 16px; flex-shrink: 0;">${i + 1}</span>
-                                <span style="flex: 1; font-size: 0.75rem; color: #000; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0;">${(key || '').replace(/</g, '&lt;')}</span>
-                                <span style="font-weight: 600; color: #6366f1; flex-shrink: 0;">${parseFloat(val || 0).toFixed(1)}%</span>
-                            </div>
-                        `).join('')}
-                    </div>
-                `;
+
+                return renderDeckBarColumns(entries, itemCount, barOptions);
             }
             
             if (slideType === 'location') {
                 const locations = slide.data.locations || slide.data.regions || [];
                 const itemCount = locations.length;
-                
-                // Determine layout based on count
-                let displayLocations, columns, fontSize, padding, gap;
-                
-                if (itemCount <= 12) {
-                    // Standard 2-column layout
-                    displayLocations = locations.slice(0, 12);
-                    columns = 2;
-                    fontSize = '0.8rem';
-                    padding = '0.5rem';
-                    gap = '0.5rem';
-                } else if (itemCount <= 18) {
-                    // 3-column layout
-                    displayLocations = locations.slice(0, 18);
-                    columns = 3;
-                    fontSize = '0.75rem';
-                    padding = '0.45rem';
-                    gap = '0.4rem';
-                } else if (itemCount <= 24) {
-                    // 4-column layout
-                    displayLocations = locations.slice(0, 24);
-                    columns = 4;
-                    fontSize = '0.7rem';
-                    padding = '0.4rem';
-                    gap = '0.35rem';
-                } else {
-                    // 4-column with smallest text, show top 28
-                    displayLocations = locations.slice(0, 28);
-                    columns = 4;
-                    fontSize = '0.65rem';
-                    padding = '0.35rem';
-                    gap = '0.3rem';
-                }
-                
-                return `
-                    <div style="display: grid; grid-template-columns: repeat(${columns}, 1fr); gap: ${gap};">
-                        ${displayLocations.map((loc, i) => `
-                            <div style="padding: ${padding}; background: #f0f0f5; border-radius: 4px; font-size: ${fontSize}; font-family: 'Poppins', sans-serif; display: flex; align-items: center; gap: 0.3rem;">
-                                <span style="font-size: 0.65rem; color: #000; width: 16px; flex-shrink: 0;">${i + 1}</span>
-                                <span style="flex: 1; color: #000; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${loc.name || loc.dma || loc.region}</span>
-                                <span style="color: #6366f1; font-weight: 600; flex-shrink: 0;">${loc.value || loc.pct?.toFixed(1) + '%' || ''}</span>
-                            </div>
-                        `).join('')}
-                    </div>
-                    ${itemCount > displayLocations.length ? `
-                        <div style="margin-top: 0.5rem; padding: 0.4rem; text-align: center; font-size: 0.65rem; color: #555; background: rgba(99, 102, 241, 0.1); border-radius: 4px;">
-                            Showing top ${displayLocations.length} of ${itemCount} locations
-                        </div>
-                    ` : ''}
-                `;
+                let displayLocations = locations.slice(0, Math.min(itemCount, 28));
+                const barEntries = displayLocations.map(loc => {
+                    const name = loc.name || loc.dma || loc.region || '';
+                    const val = loc.pct != null ? loc.pct : parseFloat(String(loc.value || '0').replace(/[^0-9.]/g, '')) || 0;
+                    return [name, val];
+                }).filter(([name]) => name);
+                return renderDeckBarColumns(barEntries, itemCount, {
+                    sectionTitle: (slide.category || 'GEOGRAPHY').toUpperCase(),
+                    colorIndex: getDeckColorIndexForCategory(slide.category)
+                });
             }
             
             if ((slideType === 'chart' || slide.data.chartImage) && slide.data.chartImage) {
@@ -77621,97 +77773,37 @@
                 const items = slide.data.items || [];
                 const entries = Array.isArray(items) ? items : [];
                 const itemCount = entries.length;
-                
-                // Determine layout based on count
-                let displayItems, columns, fontSize, padding, gap;
-                
-                if (itemCount <= 12) {
-                    // Standard 2-column layout
-                    displayItems = entries.slice(0, 12);
-                    columns = 2;
-                    fontSize = '0.85rem';
-                    padding = '0.5rem';
-                    gap = '0.5rem';
-                } else if (itemCount <= 18) {
-                    // 3-column layout
-                    displayItems = entries.slice(0, 18);
-                    columns = 3;
-                    fontSize = '0.75rem';
-                    padding = '0.45rem';
-                    gap = '0.4rem';
-                } else if (itemCount <= 24) {
-                    // 4-column layout
-                    displayItems = entries.slice(0, 24);
-                    columns = 4;
-                    fontSize = '0.7rem';
-                    padding = '0.4rem';
-                    gap = '0.35rem';
-                } else {
-                    // 4-column with smallest text, show top 28
-                    displayItems = entries.slice(0, 28);
-                    columns = 4;
-                    fontSize = '0.65rem';
-                    padding = '0.35rem';
-                    gap = '0.3rem';
-                }
-                
-                return `
-                    <div style="display: grid; grid-template-columns: repeat(${columns}, 1fr); gap: ${gap};">
-                        ${displayItems.map((item, i) => `
-                            <div style="padding: ${padding}; background: #f0f0f5; border-radius: 4px; font-size: ${fontSize}; display: flex; align-items: center; gap: 0.3rem;">
-                                <span style="font-size: 0.65rem; color: #000; width: 16px; flex-shrink: 0;">${i + 1}</span>
-                                <span style="flex: 1; color: #000; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${(item.name || '').replace(/</g, '&lt;')}</span>
-                                <span style="color: #6366f1; margin-left: 0.3rem; font-weight: 600; flex-shrink: 0;">${String(item.index || item.pct || '').replace(/</g, '&lt;')}</span>
-                            </div>
-                        `).join('')}
-                    </div>
-                    ${itemCount > displayItems.length ? `
-                        <div style="margin-top: 0.5rem; padding: 0.4rem; text-align: center; font-size: 0.65rem; color: #555; background: rgba(99, 102, 241, 0.1); border-radius: 4px;">
-                            Showing top ${displayItems.length} of ${itemCount} items
-                        </div>
-                    ` : ''}
-                `;
+                const displayItems = entries.slice(0, Math.min(itemCount, 28));
+                const barEntries = displayItems.map(item => {
+                    const name = item.name || '';
+                    const raw = String(item.index || item.pct || '0');
+                    const val = parseFloat(raw.replace(/[^0-9.]/g, '')) || 0;
+                    return [name, val];
+                }).filter(([name]) => name);
+                return renderDeckBarColumns(barEntries, itemCount, {
+                    sectionTitle: (slide.category || 'AFFINITY').toUpperCase(),
+                    colorIndex: getDeckColorIndexForCategory(slide.category),
+                    valueFormat: 'index'
+                });
             }
             
             if ((slideType === 'demographics' || slide.data.categories) && slide.data && slide.data.categories) {
                 const cats = slide.data.categories || {};
-                const overrides = slide.data.boxOverrides || {};
-                return Object.entries(cats).map(([catName, catData]) => {
-                    const values = catData.values || {};
-                    const entries = Object.entries(values).sort((a, b) => b[1] - a[1]).slice(0, 6);
-                    const label = (catName || '').replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
-                    const catKey = catName + '_';
-                    return `
-                        <div style="margin-bottom: 1rem;">
-                            <div style="font-size: 0.9rem; font-weight: 600; color: #6366f1; margin-bottom: 0.5rem;">${(label || catName).replace(/</g, '&lt;')}</div>
-                            <div class="editable-boxes-grid" style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 0.5rem;">
-                                ${entries.map(([key, val]) => {
-                                    const o = overrides[catKey + key] || {};
-                                    const l = o.label !== undefined ? o.label : (key || '');
-                                    const v = o.value !== undefined ? o.value : parseFloat(val || 0).toFixed(1) + '%';
-                                    const bg = o.bgColor || '#1e1e1e';
-                                    const vc = o.valueColor || 'var(--accent-lime)';
-                                    const lc = o.labelColor || 'var(--text-secondary)';
-                                    return `
-                                    <div class="editable-demo-box" data-key="${escapeHtml(catKey + key)}" data-orig-val="${parseFloat(val || 0).toFixed(1)}" data-label="${escapeHtml(l)}" data-value="${escapeHtml(String(v))}"
-                                         data-bg="${escapeHtml(bg)}" data-value-color="${escapeHtml(vc)}" data-label-color="${escapeHtml(lc)}"
-                                         style="background: ${bg}; padding: 0.5rem; border-radius: 4px; font-size: 0.8rem; cursor: pointer; position: relative;"
-                                         onclick="selectEditableBox(event, this)">
-                                        <span class="demo-box-drag-handle" draggable="true" ondragstart="handleDemoBoxDragStart(event, this.closest('.editable-demo-box'))" onmousedown="event.stopPropagation()" title="Drag to slide or drop zone" style="position: absolute; top: 2px; left: 2px; cursor: grab; opacity: 0.6; font-size: 0.65rem; user-select: none;">⋮⋮</span>
-                                        <div class="editable-box-label" contenteditable="true" spellcheck="false" style="color: ${lc}; padding-left: 12px;" onblur="saveEditableBoxEdit(this)">${escapeHtml(l)}</div>
-                                        <div class="editable-box-value" contenteditable="true" spellcheck="false" style="font-weight: 600; color: ${vc};" onblur="saveEditableBoxEdit(this)">${escapeHtml(String(v))}</div>
-                                        <div class="editable-box-toolbar" style="display: none; position: absolute; bottom: -42px; left: 0; background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 6px; padding: 0.35rem; flex-wrap: wrap; gap: 0.35rem; z-index: 50; box-shadow: 0 4px 12px rgba(0,0,0,0.4);" onclick="event.stopPropagation()">
-                                            <input type="color" title="Background" value="${bg.startsWith('#') ? bg : '#1e293b'}" onchange="updateEditableBoxColor(this, 'bg')" style="width: 24px; height: 24px; border: none; cursor: pointer; border-radius: 4px;">
-                                            <input type="color" title="Value color" value="${vc.startsWith('#') ? vc : '#c8e600'}" onchange="updateEditableBoxColor(this, 'value')" style="width: 24px; height: 24px; border: none; cursor: pointer; border-radius: 4px;">
-                                            <input type="color" title="Label color" value="${lc.startsWith('#') ? lc : '#94a3b8'}" onchange="updateEditableBoxColor(this, 'label')" style="width: 24px; height: 24px; border: none; cursor: pointer; border-radius: 4px;">
-                                            <button type="button" onclick="resetEditableBox(this)" title="Reset" style="padding: 0.2rem 0.4rem; font-size: 0.65rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-secondary); cursor: pointer;">Reset</button>
-                                        </div>
-                                    </div>
-                                `}).join('')}
-                            </div>
-                        </div>
-                    `;
-                }).join('');
+                const catEntries = Object.entries(cats);
+                return `
+                    <div style="display: grid; grid-template-columns: repeat(${Math.min(4, catEntries.length)}, 1fr); gap: 0.85rem; width: 100%;">
+                        ${catEntries.map(([catName, catData], catIdx) => {
+                            const values = catData.values || {};
+                            const entries = Object.entries(values).sort((a, b) => b[1] - a[1]).slice(0, 8);
+                            const label = (catName || '').replace(/_/g, ' ').toUpperCase();
+                            return renderDeckHorizontalBars(entries, Object.keys(values).length, {
+                                sectionTitle: label,
+                                colorIndex: getDeckColorIndexForCategory(catName) + catIdx,
+                                compact: true
+                            });
+                        }).join('')}
+                    </div>
+                `;
             }
             
             if (slideType === 'comparison' && slide.data && slide.data.profiles) {
@@ -78109,6 +78201,26 @@
                 saveDeckChanges();
             }
         }
+
+        function updateTocQuote(value) {
+            if (!currentEditingDeck) return;
+            pushDeckUndoState();
+            const tocSlide = currentEditingDeck.slides.find(s => s.type === 'toc');
+            if (tocSlide) {
+                tocSlide.customQuote = value;
+                saveDeckChanges();
+            }
+        }
+
+        function updateTocSectionLabel(value) {
+            if (!currentEditingDeck) return;
+            pushDeckUndoState();
+            const tocSlide = currentEditingDeck.slides.find(s => s.type === 'toc');
+            if (tocSlide) {
+                tocSlide.sectionLabel = value;
+                saveDeckChanges();
+            }
+        }
         
         function updateClosingTitle(value) {
             if (!currentEditingDeck) return;
@@ -78189,6 +78301,26 @@
             const slideIdx = idx - 1;
             if (currentEditingDeck.slides[slideIdx]) {
                 currentEditingDeck.slides[slideIdx].customDescription = value;
+                saveDeckChanges();
+            }
+        }
+
+        function updateSlideHeadline(idx, value) {
+            if (!currentEditingDeck || idx === 0) return;
+            pushDeckUndoState();
+            const slideIdx = idx - 1;
+            if (currentEditingDeck.slides[slideIdx]) {
+                currentEditingDeck.slides[slideIdx].customHeadline = value;
+                saveDeckChanges();
+            }
+        }
+
+        function updateSlideWhyItMatters(idx, value) {
+            if (!currentEditingDeck || idx === 0) return;
+            pushDeckUndoState();
+            const slideIdx = idx - 1;
+            if (currentEditingDeck.slides[slideIdx]) {
+                currentEditingDeck.slides[slideIdx].customWhyItMatters = value;
                 saveDeckChanges();
             }
         }
@@ -78334,8 +78466,8 @@
                             </div>
                             <div onclick="addTableOfContentsSlide()" style="padding: 1.5rem; background: var(--bg-input); border-radius: 8px; cursor: pointer; text-align: center; border: 2px solid transparent; transition: all 0.2s;" onmouseover="this.style.borderColor='var(--accent-lime)'" onmouseout="this.style.borderColor='transparent'">
                                 <div style="font-size: 2rem; margin-bottom: 0.5rem;">📋</div>
-                                <div style="font-weight: 600;">Table of Contents</div>
-                                <div style="font-size: 0.75rem; color: var(--text-secondary);">Auto-generated TOC</div>
+                                <div style="font-weight: 600;">What's inside.</div>
+                                <div style="font-size: 0.75rem; color: var(--text-secondary);">Overview &amp; contents list</div>
                             </div>
                             <div onclick="addSlideFromModule()" style="padding: 1.5rem; background: var(--bg-input); border-radius: 8px; cursor: pointer; text-align: center; border: 2px solid transparent; transition: all 0.2s;" onmouseover="this.style.borderColor='var(--accent-lime)'" onmouseout="this.style.borderColor='transparent'">
                                 <div style="font-size: 2rem; margin-bottom: 0.5rem;">📊</div>
@@ -78356,8 +78488,8 @@
             const slide = {
                 id: 'slide_' + Date.now(),
                 type: 'toc',
-                title: 'TABLE OF CONTENTS',
-                customTitle: 'TABLE OF CONTENTS',
+                title: TOC_SLIDE_DEFAULT_TITLE,
+                customTitle: TOC_SLIDE_DEFAULT_TITLE,
                 data: null,
                 notes: ''
             };
@@ -78369,7 +78501,7 @@
             
             currentEditingSlide = 1; // TOC is now slide 1
             renderSlideEditor();
-            showNotification('✅ Table of Contents added', 'success');
+            showNotification(`✅ ${TOC_SLIDE_DEFAULT_TITLE} slide added`, 'success');
         }
         
         function addBlankSlide() {
