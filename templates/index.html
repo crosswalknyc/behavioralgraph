@@ -28356,16 +28356,36 @@
             // ---- Touchpoints panel ----
             renderJourneyIqTouchpoints(touchpoints);
 
-            // Facts
+            // Facts - facts can be plain strings or {label, value} dicts.
+            // Coerce + filter so we never render '[object Object]' or empty
+            // boilerplate (e.g. a lone {label:'Target', value:'Research-anchored ...'}).
             var factsCard = document.getElementById('jiqFactsCard');
             var factsEl = document.getElementById('jiqFacts');
             if (factsCard && factsEl) {
-                if (!facts.length) {
+                var renderable = (facts || []).map(function(f) {
+                    if (f == null) return '';
+                    if (typeof f === 'string') return f.trim();
+                    if (typeof f === 'object') {
+                        var label = (f.label || '').trim();
+                        var value = (f.value || f.text || f.fact || '').trim();
+                        // Skip the boilerplate "Target: Research-anchored
+                        // analysis for X" stub that some research-mode runs
+                        // emit when the agent didn't surface real facts.
+                        if (/^research[- ]anchored analysis/i.test(value)) return '';
+                        if (label && value) return label + ': ' + value;
+                        return label || value;
+                    }
+                    return String(f);
+                }).filter(function(s) { return s && s.length > 0; });
+
+                if (!renderable.length) {
                     factsCard.style.display = 'none';
                 } else {
                     factsCard.style.display = '';
                     factsEl.innerHTML = '<ul style="margin: 0; padding-left: 1.25rem; font-size: 13px; line-height: 1.55;">'
-                        + facts.map(function(f) { return '<li style="margin-bottom: 4px;">' + _jiqEsc(f) + '</li>'; }).join('')
+                        + renderable.map(function(s) {
+                            return '<li style="margin-bottom: 4px;">' + _jiqEsc(s) + '</li>';
+                          }).join('')
                         + '</ul>';
                 }
             }
