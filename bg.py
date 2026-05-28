@@ -27015,6 +27015,41 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
                         _df_cw2, _n_dj2 = _dejitter_x5x0_cw(_df_cw2, _subject, verbose=True)
                     except Exception as _de_err:
                         print(f"   ⚠️ post-audit-framework dejitter mop-up skipped: {_de_err}")
+
+                    # Crosswalk Audience Vetting Framework — final consensus
+                    # check against Gen_Pop_2026.csv (digital-only published
+                    # benchmarks). Auto-fixes FAIL rows (capping over-emits,
+                    # lifting under-emits where Engagers should index ≥ GP).
+                    try:
+                        from crosswalk_audit_framework import (
+                            vet_against_consensus as _cw_vet,
+                        )
+                        _df_cw2, _vet_verdicts, _vet_md = _cw_vet(
+                            _df_cw2, gp_lookup=None, subject=_subject,
+                            verbose=True, generate_tables=True, auto_fix=True,
+                        )
+                        # Persist the markdown vet report to S3 alongside the
+                        # main audit report
+                        if _vet_md:
+                            try:
+                                import boto3 as _b3, datetime as _dt
+                                _ts = _dt.datetime.utcnow().strftime('%Y%m%dT%H%M%SZ')
+                                _slug = re.sub(r'[^a-z0-9]+', '_', _subject.lower()).strip('_')
+                                _key = f'audit_logs/v1/vet_consensus_{_slug}_{_ts}.md'
+                                _b3.client('s3', region_name='us-east-2').put_object(
+                                    Bucket='dashboard-inputs',
+                                    Key=_key, Body=_vet_md.encode('utf-8'),
+                                    ContentType='text/markdown',
+                                )
+                                print(f'   💾 Vet-consensus report → '
+                                      f's3://dashboard-inputs/{_key}')
+                            except Exception as _s3e:
+                                print(f'   ⚠️ vet-report S3 upload skipped: {_s3e}')
+                    except Exception as _vet_err:
+                        print(f'   ⚠️ vet-consensus pass skipped: {_vet_err}')
+
+                    # Recompute Raw/Proj AFTER vetting so the canonical
+                    # formulas reflect the auto-fixed BPs.
                     _df_cw2, _n_rp3 = _recompute_rawproj_cw(_df_cw2, _subject, verbose=True)
                 except Exception as _e:
                     print(f"   ⚠️ post-audit-framework Raw/Proj recompute skipped: {_e}")
