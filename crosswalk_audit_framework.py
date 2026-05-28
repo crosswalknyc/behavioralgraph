@@ -32,6 +32,7 @@ from __future__ import annotations
 
 import io
 import json
+import os
 import re
 from dataclasses import dataclass, field
 from typing import Optional
@@ -1600,7 +1601,7 @@ def get_hostmap_section_whitelist(refresh: bool = False,
         import clickhouse_connect
         import os as _os
         client = clickhouse_connect.get_client(
-            host=_os.environ.get('CH_HOST', '37.27.140.111'),
+            host=_os.environ.get('CH_HOST', '168.119.215.48'),
             port=int(_os.environ.get('CH_PORT', '8123')),
             username=_os.environ.get('CH_USER', 'bgapp'),
             password=_os.environ.get('CH_PASSWORD',
@@ -2044,16 +2045,23 @@ def strip_metadata_rows(df, verbose: bool = True):
 
 # Columns that hold demographic Values (mapped from CH column names).
 # The profile uses these as `Column` tags; the CH column name on the
-# user_data_sanitized side is the same string (uppercase).
+# userdata.user_data_sanitized side is the same string (uppercase).
+# Updated 2026-05-27 from demos.csv: added PRIMARY_LANGUAGE, RELATIONSHIP,
+# NUMBER_OF_CHILDREN, AGE_OF_CHILDREN; fixed RELATIONSHIP (was
+# RELATIONSHIP_STATUS).
 DEMO_VALUE_COLUMNS = {
     'GENDER', 'AGE', 'INCOME', 'EDUCATION', 'ETHNICITY',
     'SEXUAL_ORIENTATION', 'PARENTAL_STATUS', 'OCCUPATION',
+    'PRIMARY_LANGUAGE', 'RELATIONSHIP',
+    'NUMBER_OF_CHILDREN', 'AGE_OF_CHILDREN',
 }
 
-# Hardcoded fallback whitelist — used when ClickHouse is unreachable.
-# Snapshot pulled from userdata.user_data_sanitized on 2026-05-27. Refresh
-# with: SELECT DISTINCT <COL> FROM userdata.user_data_sanitized WHERE
-#       <COL> != '' ORDER BY <COL>;
+# Hardcoded fallback whitelist — used when ClickHouse is unreachable AND
+# demos.csv isn't present on the filesystem. Snapshot from demos.csv
+# (2026-05-27, ~36M-row userdata.user_data_sanitized scan).
+# Refresh with:
+#   SELECT Category, Value, count(*) AS Row_Count
+#   FROM userdata.user_data_sanitized ARRAY JOIN ...
 _DEMO_VALUE_FALLBACK = {
     'GENDER': [
         'Female', 'Male', 'Non-Binary', 'Prefer Not to Say',
@@ -2079,10 +2087,14 @@ _DEMO_VALUE_FALLBACK = {
         'Hispanic or Latino', 'White', 'White, Hispanic or Latino',
     ],
     'SEXUAL_ORIENTATION': [
+        'Another Sexual Orientation', 'Asexual', 'Gay or Lesbian',
         'LGBTQ+', 'Other', 'Prefer Not to Say', 'Straight / Heterosexual',
     ],
     'PARENTAL_STATUS': [
         'Has Children', 'No Children', 'Prefer Not to Say',
+        # Legacy artifacts (low row count) — accepted but should be
+        # remapped to canonical buckets upstream
+        'No', 'Yes',
     ],
     'OCCUPATION': [
         'Agriculture & Outdoor', 'Business and Financial Operations',
@@ -2095,10 +2107,69 @@ _DEMO_VALUE_FALLBACK = {
         'Skilled Trades/Construction or Maintenance', 'Student',
         'Transportation & Logistics',
     ],
+    'PRIMARY_LANGUAGE': [
+        'Chinese', 'English', 'Other', 'Spanish',
+    ],
+    'RELATIONSHIP': [
+        'Divorced or Separated', 'In a Relationship', 'Married',
+        'Prefer Not to Say', 'Single', 'Widowed',
+        # Legacy variant kept for completeness
+        'Single (not living with a partner)',
+    ],
+    'NUMBER_OF_CHILDREN': [
+        '0', '1', '2', '3', '4+',
+    ],
+    'AGE_OF_CHILDREN': [
+        '11 to 13', '14 to 17', '3 to 5', '6 to 10',
+        'N/A', 'No Kids', 'Under 3',
+    ],
 }
 
 # Module-level cache so we don't re-query CH on every call.
 _DEMO_WHITELIST_CACHE = None
+
+# Optional override path — if a `demos.csv` exists here, it's used as the
+# authoritative source of canonical demographic values (one source of
+# truth file the operator can drop in and update without code changes).
+_DEMO_CSV_SEARCH_PATHS = [
+    '/root/finished_codes/demos.csv',
+    os.path.join(os.path.dirname(os.path.abspath(__file__)), 'demos.csv'),
+    os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'demos.csv'),
+]
+
+
+def _load_demos_csv() -> dict | None:
+    """Load demos.csv if it exists. Returns ``{col: {norm: canonical}}``
+    where canonical = the variant with the highest Row_Count.
+    Returns None if no demos.csv is found."""
+    import os as _os
+    for path in _DEMO_CSV_SEARCH_PATHS:
+        if not _os.path.exists(path):
+            continue
+        try:
+            import pandas as _pd
+            df = _pd.read_csv(path)
+            if not {'Category', 'Value', 'Row_Count'}.issubset(df.columns):
+                continue
+            df = df[df.Value.notna() & (df.Value.astype(str) != '')]
+            out = {}
+            for cat, grp in df.groupby('Category'):
+                # Build {norm_key: variant_with_highest_row_count}
+                m = {}
+                grp_sorted = grp.sort_values('Row_Count', ascending=False)
+                for _, row in grp_sorted.iterrows():
+                    val = str(row['Value']).strip()
+                    if not val:
+                        continue
+                    nkey = _norm_demo_value(val)
+                    if nkey and nkey not in m:
+                        m[nkey] = val  # first-seen (highest Row_Count) wins
+                if m:
+                    out[str(cat).upper()] = m
+            return out
+        except Exception:
+            continue
+    return None
 
 
 def _norm_demo_value(s) -> str:
@@ -2119,12 +2190,21 @@ def _norm_demo_value(s) -> str:
 def get_demographic_value_whitelist(force_refresh: bool = False) -> dict:
     """Return ``{column: {norm_value: canonical_value}}``.
 
-    Tries ClickHouse first; falls back to the hardcoded snapshot. Cached
-    after the first successful fetch so subsequent calls are O(1).
+    Resolution order:
+      1. demos.csv (operator-curated source-of-truth, includes Row_Count
+         so we pick the variant the data actually uses most often)
+      2. ClickHouse userdata.user_data_sanitized DISTINCT scan
+      3. Hardcoded _DEMO_VALUE_FALLBACK snapshot
     """
     global _DEMO_WHITELIST_CACHE
     if _DEMO_WHITELIST_CACHE is not None and not force_refresh:
         return _DEMO_WHITELIST_CACHE
+
+    # 1. demos.csv (authoritative)
+    csv_wl = _load_demos_csv()
+    if csv_wl:
+        _DEMO_WHITELIST_CACHE = csv_wl
+        return csv_wl
 
     out = {}
     try:

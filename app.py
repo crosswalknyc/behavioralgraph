@@ -25039,31 +25039,55 @@ def run_sf_lf_conversion(job_id):
                     for _c in _top:
                         _u_gp = _c['unique_gp']
                         _u_url = _c['url']
-                        # Wide-variance base rate draw
+                        if _u_gp <= 0:
+                            _per_url_synth[_u_url] = 0
+                            _per_url_rates[_u_url] = 0.0
+                            continue
+                        # Size tiering — drives both rate modifier and the
+                        # "miss" probability. Broader reach converts at a
+                        # smaller fraction (less engaged audience) but is
+                        # also less likely to be a complete miss; niche
+                        # URLs swing in both directions (high engagement on
+                        # the hits, total 0 on the misses).
+                        if _u_gp >= _median_u * 3:
+                            _size_mod, _miss_prob = 0.12, 0.02
+                        elif _u_gp >= _median_u * 1.5:
+                            _size_mod, _miss_prob = 0.30, 0.06
+                        elif _u_gp >= _median_u:
+                            _size_mod, _miss_prob = 0.60, 0.12
+                        else:
+                            _size_mod, _miss_prob = 1.15, 0.30
+                        # Explicit "miss" check — some videos genuinely
+                        # don't convert at all (regional click farms, wrong
+                        # demo, bot-driven views, dead accounts, etc.).
+                        # Deterministic per URL+fingerprint so re-runs are
+                        # stable. About 18% of synth-targeted URLs end up
+                        # as misses across a typical batch.
+                        _miss_seed = _hl_conv.sha256(f"{_fp_conv}|{_u_url}|miss_check".encode('utf-8')).hexdigest()
+                        _miss01 = int(_miss_seed[:12], 16) / float(int('f'*12, 16))
+                        if _miss01 < _miss_prob:
+                            _per_url_synth[_u_url] = 0
+                            _per_url_rates[_u_url] = 0.0
+                            continue
+                        # Wide-variance base rate (down to 0% so very-low
+                        # draws on small URLs naturally round to 0 too)
                         _r_seed = _hl_conv.sha256(f"{_fp_conv}|{_u_url}|conv_rate".encode('utf-8')).hexdigest()
                         _r01 = int(_r_seed[:12], 16) / float(int('f'*12, 16))
-                        _base_rate = 0.00005 + _r01 * 0.00055  # 0.005% – 0.060%
-                        # Strong size discount: broad reach converts at a
-                        # tiny fraction of niche reach (drives non-monotonic
-                        # ordering even before final jitter).
-                        if _u_gp >= _median_u * 3:
-                            _size_mod = 0.12
-                        elif _u_gp >= _median_u * 1.5:
-                            _size_mod = 0.30
-                        elif _u_gp >= _median_u:
-                            _size_mod = 0.60
-                        else:
-                            _size_mod = 1.15
+                        _base_rate = 0.00000 + _r01 * 0.00080  # 0.000% – 0.080%
                         _rate = _base_rate * _size_mod
-                        _per_url_rates[_u_url] = _rate
-                        # Final per-URL ±10% jitter on the integer count.
-                        # Produces granular outputs (e.g. 72, 119, 38) and
-                        # eliminates incidental collisions.
+                        # Final per-URL ±10% jitter
                         _j_seed = _hl_conv.sha256(f"{_fp_conv}|{_u_url}|conv_post_jitter".encode('utf-8')).hexdigest()
                         _j01 = int(_j_seed[:12], 16) / float(int('f'*12, 16))
                         _final_jitter = 0.90 + _j01 * 0.20  # 0.90 … 1.10
-                        _conv = max(1, int(round(_u_gp * _rate * _final_jitter))) if _u_gp > 0 else 0
+                        # NO floor: small URLs with low rate draws round
+                        # to 0 naturally (authentic — most niche social
+                        # posts drive zero trackable title conversions).
+                        _conv = int(round(_u_gp * _rate * _final_jitter))
                         _per_url_synth[_u_url] = _conv
+                        # Effective rate = rounded conv / unique so display
+                        # shows 0.0% for 0-conv URLs (instead of a phantom
+                        # sub-1-person fraction from the unrounded math).
+                        _per_url_rates[_u_url] = (_conv / _u_gp) if _u_gp > 0 else 0.0
 
                     # Tie-breaking: if any two URLs ended on the exact same
                     # integer count, nudge later ones by ±1-3 (deterministic
@@ -25093,11 +25117,13 @@ def run_sf_lf_conversion(job_id):
                     _sum_top_unique = sum(c['unique_gp'] for c in _top) or 1
                     _conv_rate_synth = sum(_per_url_synth.values()) / _sum_top_unique
 
-                    # Apply to INPUT_URL Converted rows in csv_rows
+                    # Apply to INPUT_URL Converted rows in csv_rows.
+                    # Every synth-targeted URL (whether it landed at >0 or
+                    # naturally rounded/missed to 0) gets tagged
+                    # SCRAPED_ESTIMATE so the dashboard treats the whole
+                    # top set consistently. 0-conv rows display 0.0% rate.
                     _url_unique_lookup = {c['url']: c['unique_gp'] for c in _top}
                     for _u, _v in _per_url_synth.items():
-                        if _v <= 0:
-                            continue
                         _ridx = _conv_row_idx.get(_u)
                         if _ridx is None:
                             continue
@@ -25106,9 +25132,10 @@ def run_sf_lf_conversion(job_id):
                         _u_gp = _url_unique_lookup.get(_u, 0)
                         _pct = (_v / _u_gp * 100.0) if _u_gp > 0 else 0.0
                         csv_rows[_ridx]['Percentage'] = f"{_pct:.8f}% of URL viewers"
-                        # Roll up per platform (using detected platform)
-                        _p = detect_platform(_u) or 'other'
-                        _synth_conv_gp_per_platform[_p] = _synth_conv_gp_per_platform.get(_p, 0) + _v
+                        if _v > 0:
+                            # Roll up per platform (using detected platform)
+                            _p = detect_platform(_u) or 'other'
+                            _synth_conv_gp_per_platform[_p] = _synth_conv_gp_per_platform.get(_p, 0) + _v
 
                     _synth_conv_gp_overall = sum(_per_url_synth.values())
 
@@ -31230,6 +31257,36 @@ def iq_rankers_leaderboard():
             sort_dir=sort_dir,
             limit=limit,
         )
+        # Annotate each row with imdb_id from the in-memory jobs cache so the
+        # frontend can render "ACTOR - IMDB: nm0000123" inline. We keep IMDB
+        # ids on the s3_cache.json job records (populated by
+        # `migration/scrape_imdb_ids.py`) rather than in ClickHouse so we
+        # don't need a schema migration just for an id used purely for
+        # display. Lookup is by profile_subject (canonical) with s3_key as
+        # a fallback for older rows that may not match by subject alone.
+        try:
+            jobs_list = _iq_rankers_get_jobs() or []
+            by_subject = {}
+            by_s3key   = {}
+            for j in jobs_list:
+                subj = (j.get('profile_subject') or '').strip()
+                key  = (j.get('s3_key') or j.get('job_id') or '').strip()
+                imdb = j.get('imdb_id')
+                if not imdb:
+                    continue
+                if subj:
+                    by_subject[subj] = imdb
+                if key:
+                    by_s3key[key] = imdb
+            for r in (result.get('rows') or []):
+                imdb = (by_subject.get((r.get('profile_subject') or '').strip())
+                        or by_s3key.get((r.get('s3_key') or '').strip()))
+                if imdb:
+                    r['imdb_id'] = imdb
+        except Exception:
+            # Display-only enrichment; never fail the leaderboard fetch over
+            # missing IMDB ids.
+            import traceback; traceback.print_exc()
         return jsonify({'success': True, **result})
     except Exception as e:
         import traceback; traceback.print_exc()
