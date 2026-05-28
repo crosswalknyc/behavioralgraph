@@ -28510,12 +28510,8 @@
             var bubbleR = 64;
             var parts = [];
 
-            // Center label — parent company
-            parts.push('<g>'
-                 + '<rect x="' + (cx - 90) + '" y="' + (cy - 22) + '" width="180" height="44" rx="22" fill="rgba(255,255,255,0.04)" stroke="var(--border-color)" stroke-width="1" stroke-dasharray="3,3"/>'
-                 + '<text x="' + cx + '" y="' + (cy - 4) + '" text-anchor="middle" fill="var(--text-secondary)" font-size="9" letter-spacing="0.1em">OWNED BY</text>'
-                 + '<text x="' + cx + '" y="' + (cy + 13) + '" text-anchor="middle" fill="var(--text-primary)" font-weight="700" font-size="13">' + _jiqEsc((eco.parent || '').toUpperCase()) + '</text>'
-                 + '</g>');
+            // (Center "OWNED BY <parent>" label removed per user request -
+            // parent ownership info still surfaced in card subtitle/meta.)
 
             // Ribbons FIRST so bubbles overlay them. Ribbon = filled
             // tapered path (mid-thick at endpoints, narrow in the middle
