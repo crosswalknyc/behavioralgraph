@@ -19562,25 +19562,13 @@
         <!-- SENTIMENT IQ VIEW -->
         <div id="sentimentIQView" style="display: none;">
             <div class="dashboard-layout">
-                <div class="persistent-sidebar">
-                    <div class="sidebar-header-section">
-                        <h3>Sentiment IQ Trackers</h3>
-                        <div style="display: flex; gap: 0.25rem; align-items: center;">
-                            <input type="text" id="sentimentIQSidebarSearch" placeholder="Search trackers..." class="sidebar-search has-tooltip" data-tooltip="Search trackers by name" onkeyup="filterSentimentIQSidebar()" style="flex: 1;">
-                            <button type="button" class="btn btn-small has-tooltip" data-tooltip="Refresh tracker list" onclick="loadSentimentIQSidebar()" style="padding: 0.35rem 0.5rem; min-width: auto;">↻</button>
-                        </div>
-                    </div>
-                    <div id="sentimentIQSidebarTree" class="profile-select-tree subscriber-shows-tree"></div>
-                    <div style="padding: 0.75rem; border-top: 1px solid var(--border-color);">
-                        <button type="button" class="btn btn-primary" style="width: 100%;" onclick="if(typeof showCustomAnalysis==='function'){showCustomAnalysis(); setTimeout(function(){ if(typeof switchCustomAnalysisTab==='function') switchCustomAnalysisTab('sentiment-iq'); }, 100);}">+ New Tracker</button>
-                    </div>
-                </div>
-                <div class="dashboard-tab-content" id="sentimentIQDashboardContent" style="display: flex; flex-direction: column; overflow: hidden;">
+                <div class="dashboard-tab-content" id="sentimentIQDashboardContent" style="display: flex; flex-direction: column; overflow: hidden; flex: 1;">
                     <div id="sentimentIQEmptyState" class="dashboard-empty-state">
                         <div class="empty-state-content">
                             <div class="empty-state-icon">💬</div>
-                            <h2>Select a Tracker</h2>
-                            <p>Choose a Sentiment IQ tracker from the sidebar to view its dashboard, or create a new one to start tracking brand sentiment across search engines, social, news, reviews, and forums.</p>
+                            <h2>Open a Profile from Ranker</h2>
+                            <p>Sentiment IQ dashboards open from the <strong>Sentiment</strong> chip on any row in the CW IQ Ranker. Head back to the Ranker, pick a profile, and click its Sentiment chip.</p>
+                            <button type="button" class="btn btn-primary" onclick="if(typeof showRankerIQ==='function'){showRankerIQ();}" style="margin-top:1rem;">← Back to Ranker</button>
                         </div>
                     </div>
                     <div id="sentimentIQDashboardPanels" style="display: none; overflow-y: auto; flex: 1; padding: 1.25rem;">
@@ -19590,6 +19578,7 @@
                             <span id="sentimentIQDashMeta" style="color: var(--text-secondary); font-size: 0.85rem;"></span>
                             <span id="sentimentIQDashOngoing" style="display:none;padding:2px 8px;border-radius:10px;background:rgba(16,185,129,0.15);color:#10b981;font-size:11px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;">● Ongoing</span>
                             <div style="margin-left:auto; display:flex; gap:0.4rem; flex-wrap:wrap;">
+                                <button type="button" class="btn btn-small" id="sentimentIQBackToRankerBtn" onclick="if(typeof showRankerIQ==='function'){showRankerIQ();}" style="padding:0.35rem 0.65rem;" title="Go back to the CW IQ Ranker">← Back to Ranker</button>
                                 <button type="button" class="btn btn-small" id="sentimentIQProfileIQBtn" onclick="openProfileIQFromSentimentIQ()" style="padding:0.35rem 0.65rem; display:none;" title="Open this profile in Profile IQ">👤 Profile IQ</button>
                                 <button type="button" class="btn btn-small" id="sentimentIQRankerBtn" onclick="openIQRankerSpotlightFromCurrent()" style="padding:0.35rem 0.65rem; display:none;" title="Open the CW IQ Ranker and spotlight this profile">📊 Ranker</button>
                                 <button type="button" class="btn btn-small" id="sentimentIQRefreshBtn" onclick="manualRefreshSentimentIQ()" style="padding:0.35rem 0.65rem;">Refresh Now</button>
