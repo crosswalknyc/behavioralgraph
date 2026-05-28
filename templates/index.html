@@ -26,6 +26,13 @@
             --text-primary: #e6f1ff;
             --text-secondary: #bec8e4;
             --border-color: #1e3a5f;
+            --deck-bg-cream: #F2EFE9;
+            --deck-text-primary: #1a1a2e;
+            --deck-text-muted: #7A8B99;
+            --deck-accent-lime: #B8D945;
+            --deck-accent-purple: #6366f1;
+            --deck-accent-magenta: #C026A3;
+            --deck-serif: 'Playfair Display', Georgia, 'Times New Roman', serif;
         }
 
         * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -11340,15 +11347,16 @@
             width: 960px;
             height: 540px;
             position: relative;
-            background: #ffffff;
+            background: var(--deck-bg-cream, #F2EFE9);
             border-radius: 8px;
-            box-shadow: 0 4px 24px rgba(0,0,0,0.15), 0 0 0 1px rgba(0,0,0,0.08);
+            box-shadow: 0 4px 24px rgba(0,0,0,0.12), 0 0 0 1px rgba(0,0,0,0.06);
             overflow: hidden;
             transform-origin: center center;
             transition: transform 0.2s ease, width 0.2s ease, height 0.2s ease;
             flex-shrink: 0;
+            font-family: 'Poppins', 'DM Sans', -apple-system, BlinkMacSystemFont, sans-serif;
         }
-        
+
         /* Slide footer - source attribution */
         .slide-footer {
             position: absolute;
@@ -11356,9 +11364,27 @@
             left: 24px;
             right: 24px;
             font-size: 0.55rem;
-            color: rgba(0,0,0,0.35);
+            color: var(--deck-text-muted);
             text-align: left;
             z-index: 5;
+        }
+
+        .deck-slide-chrome {
+            position: absolute;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            height: 36px;
+            padding: 0 32px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            font-size: 0.55rem;
+            letter-spacing: 0.06em;
+            text-transform: uppercase;
+            color: var(--deck-text-muted);
+            z-index: 6;
+            pointer-events: none;
         }
         
         /* Data Visualization Control Panel */
@@ -74757,6 +74783,26 @@
         
         // Source footer text for all slides (base line; profile/sample/dates appended below)
         const SLIDE_FOOTER_TEXT = 'Source: Crosswalk Profile IQ, Prior 12 Months from a 10M Gen Pop Digital Behavioral Panel';
+
+        function getCrosswalkDeckLogoHtml(width = 108) {
+            return `<img src="/static/crosswalk-logo-deck.png" alt="Crosswalk" width="${width}" style="display:block;height:auto;border:0;outline:none;">`;
+        }
+
+        function getDeckProfileLabel() {
+            const titleSlide = currentEditingDeck?.titleSlide || {};
+            const name = titleSlide.title || currentProfileData?.name || 'Profile';
+            return `${name} / Audience profile`;
+        }
+
+        function getDeckChromeFooter(slideIdx) {
+            const pageNum = String(Math.max(1, slideIdx)).padStart(2, '0');
+            return `
+                <div class="deck-slide-chrome">
+                    <span>${escapeHtml(getDeckProfileLabel())}</span>
+                    <span>${pageNum}</span>
+                </div>
+            `;
+        }
         
         function renderSlideElements(slide, idx) {
             // Get elements from slide or create defaults for title slide
@@ -74934,83 +74980,83 @@
                 `;
             }
             
-            // For Table of Contents slide
+            // For Table of Contents slide (Crosswalk audience deck style)
             if (slide.type === 'toc') {
-                const profileImage = currentEditingDeck?.titleSlide?.image || null;
-                
-                // Get list of slide titles for TOC (exclude TOC and closing slides)
                 const slides = currentEditingDeck?.slides || [];
                 const tocItems = slides
                     .filter(s => s.type !== 'toc' && s.type !== 'closing')
                     .map((s, i) => ({
-                        num: i + 1,
-                        title: s.customTitle || s.title || s.category || 'Untitled'
+                        num: String(i + 1).padStart(2, '0'),
+                        title: s.customTitle || s.title || s.category || 'Untitled',
+                        subtitle: s.tocSubtitle || s.customDescription || ''
                     }))
-                    .slice(0, 16); // Max 16 items
-                
-                // Split into two columns
-                const col1 = tocItems.slice(0, 8);
-                const col2 = tocItems.slice(8, 16);
-                
+                    .slice(0, 8);
+
+                const profileName = currentProfileData?.name || currentEditingDeck?.titleSlide?.title || 'your audience';
+                const sampleSize = currentProfileData?.sampleSize ?? 0;
+                const samplePhrase = sampleSize > 0
+                    ? `${formatNumber(sampleSize)} consented panelists`
+                    : 'consented panelists';
+                const defaultIntro = `Over twelve months and ${samplePhrase}, Crosswalk observed how the ${profileName} audience actually behaves — where they shop, what they stream, which podcasts they devote attention to, and which brands they reach for. This brief turns those observations into a portrait you can act on.`;
+                const defaultQuote = 'Behavioral data tells you who someone really is — not who they say they are.';
+
                 return `
-                    <!-- Header bar (no date in top right per request) -->
-                    <div style="position: absolute; left: 5%; top: 2%; width: 90%; display: flex; justify-content: space-between; align-items: center; font-size: 0.65rem; color: rgba(0,0,0,0.4);">
-                        <span>Crosswalk Profile IQ</span>
-                    </div>
-                    
-                    <!-- Section title - EDITABLE -->
-                    <div contenteditable="true" 
-                         style="position: absolute; left: 5%; top: 8%; font-size: 2.2rem; font-weight: 700; color: #1a1a2e; text-transform: uppercase; cursor: text; padding: 4px 8px; border-radius: 4px;"
-                         onfocus="this.style.background='rgba(0,0,0,0.05)'" 
-                         onblur="this.style.background='transparent'; updateTocTitle(this.textContent)">
-                        ${escapeHtml(slide.customTitle || slide.title || 'TABLE OF CONTENTS')}
-                    </div>
-                    
-                    <!-- Description - EDITABLE -->
-                    <div contenteditable="true" 
-                         style="position: absolute; left: 5%; top: 22%; width: 42%; font-size: 0.75rem; color: #555; line-height: 1.6; cursor: text; padding: 4px 8px; border-radius: 4px;"
-                         onfocus="this.style.background='rgba(0,0,0,0.05)'" 
-                         onblur="this.style.background='transparent'; updateTocDescription(this.textContent)">
-                        ${escapeHtml(slide.customDescription || `This presentation provides comprehensive audience insights including demographics, behavioral patterns, and strategic recommendations for ${currentProfileData?.name || 'your target audience'}.`)}
-                    </div>
-                    
-                    <!-- TOC Items - Column 1 -->
-                    <div style="position: absolute; left: 52%; top: 22%; width: 22%;">
-                        ${col1.map((item) => `
-                            <div style="padding: 0.4rem 0; border-bottom: 1px solid rgba(0,0,0,0.1); font-size: 0.75rem; color: #1a1a2e; font-weight: 500; display: flex; gap: 0.5rem; align-items: baseline;">
-                                <span style="color: #c8e600; font-size: 0.7rem; flex-shrink: 0;">${item.num}</span>
-                                <span style="flex: 1; line-height: 1.3;">${escapeHtml(item.title)}</span>
-                            </div>
-                        `).join('')}
-                    </div>
-                    
-                    <!-- TOC Items - Column 2 -->
-                    <div style="position: absolute; left: 76%; top: 22%; width: 22%;">
-                        ${col2.map((item) => `
-                            <div style="padding: 0.4rem 0; border-bottom: 1px solid rgba(0,0,0,0.1); font-size: 0.75rem; color: #1a1a2e; font-weight: 500; display: flex; gap: 0.5rem; align-items: baseline;">
-                                <span style="color: #c8e600; font-size: 0.7rem; flex-shrink: 0;">${item.num}</span>
-                                <span style="flex: 1; line-height: 1.3;">${escapeHtml(item.title)}</span>
-                            </div>
-                        `).join('')}
+                    <!-- Top bar: logo + section label -->
+                    <div style="position: absolute; left: 32px; top: 28px; right: 32px; display: flex; justify-content: space-between; align-items: flex-start;">
+                        ${getCrosswalkDeckLogoHtml(108)}
+                        <div contenteditable="true"
+                             style="font-size: 0.55rem; letter-spacing: 0.14em; text-transform: uppercase; color: var(--deck-text-muted); cursor: text; padding: 4px 6px; border-radius: 3px; margin-top: 4px;"
+                             onfocus="this.style.background='rgba(0,0,0,0.04)'"
+                             onblur="this.style.background='transparent'; updateTocSectionLabel(this.textContent)">
+                            ${escapeHtml(slide.sectionLabel || 'Overview')}
+                        </div>
                     </div>
 
-                    <!-- Add Image placeholder - DRAGGABLE + RESIZABLE -->
-                    <div class="slide-draggable-section slide-image-placeholder"
-                         style="position: absolute; left: 5%; top: 55%; width: 40%; height: 38%; z-index: 1;"
-                         onmousedown="startDragSlideSection(event, 0, 'image')"
-                         onclick="if(!event.defaultPrevented) uploadTocRightImage()"
-                         title="Click to add image">
-                        <div class="drag-handle">⋮⋮ DRAG IMAGE</div>
-                        <div class="img-resize-handle nw" onmousedown="startResizePlaceholder(event,'nw')"></div>
-                        <div class="img-resize-handle ne" onmousedown="startResizePlaceholder(event,'ne')"></div>
-                        <div class="img-resize-handle sw" onmousedown="startResizePlaceholder(event,'sw')"></div>
-                        <div class="img-resize-handle se" onmousedown="startResizePlaceholder(event,'se')"></div>
-                        <span class="placeholder-icon">🖼️</span>
-                        <span>Add Image</span>
-                        <button class="placeholder-delete-btn" onclick="event.stopPropagation(); this.parentElement.style.display='none';" title="No image on this slide">✕ No Image</button>
+                    <!-- Left column -->
+                    <div style="position: absolute; left: 32px; top: 72px; width: 42%; bottom: 48px; display: flex; flex-direction: column;">
+                        <div contenteditable="true"
+                             style="font-family: var(--deck-serif); font-size: 2.35rem; font-weight: 600; color: var(--deck-text-primary); line-height: 1.15; cursor: text; padding: 4px 6px; border-radius: 4px; margin-bottom: 1rem;"
+                             onfocus="this.style.background='rgba(0,0,0,0.04)'"
+                             onblur="this.style.background='transparent'; updateTocTitle(this.textContent)">
+                            ${escapeHtml(slide.customTitle || slide.title || "What's inside.")}
+                        </div>
+
+                        <div contenteditable="true"
+                             style="font-size: 0.72rem; line-height: 1.65; color: var(--deck-text-primary); cursor: text; padding: 4px 6px; border-radius: 4px; flex: 1;"
+                             onfocus="this.style.background='rgba(0,0,0,0.04)'"
+                             onblur="this.style.background='transparent'; updateTocDescription(this.textContent)">
+                            ${escapeHtml(slide.customDescription || defaultIntro)}
+                        </div>
+
+                        <div contenteditable="true"
+                             style="font-family: var(--deck-serif); font-size: 0.95rem; line-height: 1.5; font-style: italic; color: var(--deck-accent-purple); cursor: text; padding: 4px 6px; border-radius: 4px; margin-top: auto;"
+                             onfocus="this.style.background='rgba(0,0,0,0.04)'"
+                             onblur="this.style.background='transparent'; updateTocQuote(this.textContent)">
+                            ${escapeHtml(slide.customQuote || defaultQuote)}
+                        </div>
                     </div>
-                    
-                    ${footerHtml}
+
+                    <!-- Right column: contents list -->
+                    <div style="position: absolute; left: 52%; top: 72px; width: 44%; bottom: 48px;">
+                        <div style="font-size: 0.55rem; letter-spacing: 0.14em; text-transform: uppercase; color: var(--deck-accent-lime); font-weight: 600; margin-bottom: 0.75rem;">
+                            Contents
+                        </div>
+                        <div style="display: flex; flex-direction: column;">
+                            ${tocItems.length ? tocItems.map((item) => `
+                                <div style="display: flex; align-items: baseline; gap: 0.65rem; padding: 0.55rem 0; border-bottom: 1px solid rgba(26,26,46,0.12); font-size: 0.72rem;">
+                                    <span style="font-family: var(--deck-serif); font-size: 0.85rem; color: var(--deck-accent-lime); font-weight: 600; flex-shrink: 0; min-width: 1.5rem;">${item.num}</span>
+                                    <span style="font-weight: 600; color: var(--deck-text-primary); flex: 1; line-height: 1.3;">${escapeHtml(item.title)}</span>
+                                    ${item.subtitle ? `<span style="font-style: italic; color: var(--deck-text-muted); text-align: right; flex: 0 0 38%; line-height: 1.3; font-size: 0.65rem;">${escapeHtml(item.subtitle)}</span>` : ''}
+                                </div>
+                            `).join('') : `
+                                <div style="padding: 1rem 0; color: var(--deck-text-muted); font-size: 0.75rem; font-style: italic;">
+                                    Add slides to populate the table of contents.
+                                </div>
+                            `}
+                        </div>
+                    </div>
+
+                    ${getDeckChromeFooter(idx)}
                 `;
             }
             
@@ -78106,6 +78152,26 @@
             const tocSlide = currentEditingDeck.slides.find(s => s.type === 'toc');
             if (tocSlide) {
                 tocSlide.customDescription = value;
+                saveDeckChanges();
+            }
+        }
+
+        function updateTocQuote(value) {
+            if (!currentEditingDeck) return;
+            pushDeckUndoState();
+            const tocSlide = currentEditingDeck.slides.find(s => s.type === 'toc');
+            if (tocSlide) {
+                tocSlide.customQuote = value;
+                saveDeckChanges();
+            }
+        }
+
+        function updateTocSectionLabel(value) {
+            if (!currentEditingDeck) return;
+            pushDeckUndoState();
+            const tocSlide = currentEditingDeck.slides.find(s => s.type === 'toc');
+            if (tocSlide) {
+                tocSlide.sectionLabel = value;
                 saveDeckChanges();
             }
         }
