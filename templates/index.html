@@ -56270,6 +56270,252 @@
             }
         }
         
+        const DECK_DEFAULT_VIZ_PREFS = { type: 'bars', count: 20, threshold: 30 };
+        const DECK_DEFAULT_MAX_ITEMS = 20;
+
+        function extractDeckInsightBullets(el) {
+            if (!el) return [];
+            return Array.from(el.querySelectorAll('li')).map(li => li.textContent.trim()).filter(Boolean);
+        }
+
+        function getDeckDemographicSlice(key) {
+            const demo = currentDashboardData?.demographics || {};
+            const idx = currentDashboardData?.demographicsIndex || {};
+            const values = demo[key] || demo[key.charAt(0).toUpperCase() + key.slice(1)] || null;
+            if (!values || !Object.keys(values).length) return null;
+            return {
+                values: { ...values },
+                index: { ...(idx[key] || idx[key.charAt(0).toUpperCase() + key.slice(1)] || {}) }
+            };
+        }
+
+        function buildDeckDemographicCategoriesData() {
+            const categories = {};
+            ['gender', 'age', 'income', 'ethnicity'].forEach(key => {
+                const slice = getDeckDemographicSlice(key);
+                if (slice) categories[key] = slice;
+            });
+            return { categories };
+        }
+
+        function buildDeckDifferentiatorItems() {
+            const demographics = currentDashboardData?.demographics || {};
+            const demographicsIndex = currentDashboardData?.demographicsIndex || {};
+            const demographicsGenPop = currentDashboardData?.demographicsGenPop || {};
+            const items = [];
+            const allIndexes = [];
+
+            ['gender', 'age', 'income', 'ethnicity', 'education', 'relationship'].forEach(cat => {
+                const catIdx = demographicsIndex[cat] || {};
+                const catData = demographics[cat] || {};
+                const catGenPop = demographicsGenPop?.[cat] || {};
+                Object.entries(catIdx).forEach(([key, idxVal]) => {
+                    if (idxVal > 110 && catData[key] > 2) {
+                        allIndexes.push({ category: cat, key, idx: idxVal, pct: catData[key], genPopPct: catGenPop[key] || 0 });
+                    }
+                });
+            });
+
+            allIndexes.filter(d => (d.pct || 0) < 99.99).sort((a, b) => b.idx - a.idx).slice(0, 5).forEach(d => {
+                const displayKey = d.category === 'age' ? getAgeDisplayLabel(d.key) : d.key;
+                items.push({ name: displayKey, pct: d.pct, index: d.idx });
+            });
+
+            const underIndexes = [];
+            ['gender', 'age', 'income', 'ethnicity'].forEach(cat => {
+                const catIdx = demographicsIndex[cat] || {};
+                const catGenPop = demographicsGenPop?.[cat] || {};
+                const catData = demographics[cat] || {};
+                Object.entries(catIdx).forEach(([key, idxVal]) => {
+                    if (idxVal < 80 && catGenPop[key] > 10) {
+                        underIndexes.push({ category: cat, key, idx: idxVal, pct: catData[key] || 0 });
+                    }
+                });
+            });
+
+            underIndexes.filter(u => (u.pct || 0) < 99.99).sort((a, b) => a.idx - b.idx).slice(0, 2).forEach(u => {
+                const displayKey = u.category === 'age' ? getAgeDisplayLabel(u.key) : u.key;
+                items.push({ name: `Under-indexes: ${displayKey}`, pct: u.pct, index: u.idx });
+            });
+
+            return items;
+        }
+
+        function buildDeckAudienceSnapshotItems() {
+            const data = currentDashboardData;
+            if (!data?.demographics) return [];
+            const items = [];
+            const addTop = (catKey, label, formatKey) => {
+                const values = data.demographics[catKey] || data.demographics[catKey.charAt(0).toUpperCase() + catKey.slice(1)] || {};
+                const top = Object.entries(values).sort((a, b) => b[1] - a[1])[0];
+                if (!top) return;
+                const displayVal = formatKey ? formatKey(top[0]) : top[0];
+                items.push({ name: `${label}: ${displayVal}`, pct: top[1], index: data.demographicsIndex?.[catKey]?.[top[0]] || 100 });
+            };
+            addTop('gender', 'Dominant Gender');
+            addTop('age', 'Largest Age Group', getAgeDisplayLabel);
+            addTop('ethnicity', 'Top Ethnicity');
+            addTop('income', 'Top Income');
+            return items;
+        }
+
+        function buildDeckInterestHighlightItems() {
+            const source = window.interestHighlightsData || [];
+            const seen = new Set();
+            return source
+                .filter(item => Number(item.index) !== 0)
+                .filter(item => {
+                    const key = normalizeNameForDedup(item.name);
+                    if (seen.has(key)) return false;
+                    seen.add(key);
+                    return true;
+                })
+                .sort((a, b) => b.index - a.index)
+                .slice(0, DECK_DEFAULT_MAX_ITEMS)
+                .map(item => ({ name: item.name, pct: item.pct || 0, index: item.index || 0 }));
+        }
+
+        function buildDeckTopDifferentiatorGroups() {
+            if (!window.topDifferentiatorsData) return [];
+            return [...window.topDifferentiatorsData]
+                .sort((a, b) => (b.avgIndex || 0) - (a.avgIndex || 0))
+                .slice(0, 4)
+                .map(catGroup => {
+                    const seen = new Set();
+                    const items = (catGroup.items || [])
+                        .filter(item => Number(item.index) !== 0)
+                        .filter(item => {
+                            const key = normalizeNameForDedup(item.name);
+                            if (seen.has(key)) return false;
+                            seen.add(key);
+                            return true;
+                        })
+                        .sort((a, b) => b.index - a.index)
+                        .slice(0, 5)
+                        .map(item => ({ name: item.name, pct: item.pct || 0, index: item.index || 0 }));
+                    return { category: catGroup.category, items };
+                })
+                .filter(group => group.items.length > 0);
+        }
+
+        function buildDeckBehavioralTopItems() {
+            const behavioral = currentDashboardData?.behavioral || {};
+            const allItems = [];
+            Object.values(behavioral).forEach(items => {
+                if (!Array.isArray(items)) return;
+                items.forEach(item => {
+                    const pct = item.pct || item.percentage || 0;
+                    const index = item.index || 100;
+                    if (index > 0 && pct < 99.5) {
+                        allItems.push({ name: item.name || item.brand, pct, index });
+                    }
+                });
+            });
+            return allItems.sort((a, b) => b.index - a.index).slice(0, DECK_DEFAULT_MAX_ITEMS);
+        }
+
+        function buildDeckTargetingRecommendations() {
+            const demographics = currentDashboardData?.demographics || {};
+            const recommendations = [];
+            const genderEntries = Object.entries(demographics.gender || {}).filter(([, v]) => v > 0);
+            const ageEntries = Object.entries(demographics.age || {}).filter(([, v]) => v > 0);
+            const incomeEntries = Object.entries(demographics.income || {}).filter(([, v]) => v > 0);
+
+            if (genderEntries.length > 0) {
+                const dominant = genderEntries.sort((a, b) => b[1] - a[1])[0];
+                if (dominant[1] > 55) {
+                    recommendations.push({ icon: '🎯', text: `Target ${dominant[0].toLowerCase()}-focused channels and messaging` });
+                }
+            }
+            if (ageEntries.length > 0) {
+                const topAges = ageEntries.sort((a, b) => b[1] - a[1]).slice(0, 2);
+                if (topAges.some(a => a[0].includes('16') || a[0].includes('18') || a[0].includes('21'))) {
+                    recommendations.push({ icon: '📱', text: 'Prioritize digital-first, social media channels' });
+                } else if (topAges.some(a => a[0].includes('41') || a[0].includes('60'))) {
+                    recommendations.push({ icon: '📺', text: 'Include traditional media mix (TV, print)' });
+                }
+            }
+            const highIncome = incomeEntries.filter(([k]) => k.includes('100') || k.includes('150') || k.includes('200'));
+            const lowIncome = incomeEntries.filter(([k]) => k.includes('<') || k.includes('25') || k.includes('35'));
+            if (highIncome.reduce((s, [, v]) => s + v, 0) > 30) {
+                recommendations.push({ icon: '💎', text: 'Premium positioning and aspirational messaging work well' });
+            } else if (lowIncome.reduce((s, [, v]) => s + v, 0) > 40) {
+                recommendations.push({ icon: '💵', text: 'Value-focused messaging and promotions recommended' });
+            }
+            const eduData = demographics.education || {};
+            const collegeEdu = Object.entries(eduData).filter(([k]) =>
+                k.toLowerCase().includes('college') || k.toLowerCase().includes('graduate') || k.toLowerCase().includes('bachelor')
+            );
+            if (collegeEdu.reduce((s, [, v]) => s + v, 0) > 50) {
+                recommendations.push({ icon: '📚', text: 'Content can be more sophisticated and detail-rich' });
+            }
+            if (recommendations.length === 0) {
+                recommendations.push({ icon: '📊', text: 'Broad demographic appeal - test multiple approaches' });
+            }
+            return recommendations;
+        }
+
+        function renderDeckInsightRecommendations(recommendations) {
+            return `
+                <div style="display: flex; flex-direction: column; gap: 0.45rem; width: 100%;">
+                    ${recommendations.map(r => `
+                        <div style="display: flex; align-items: flex-start; gap: 0.4rem; font-size: 0.68rem; color: var(--deck-text-primary); line-height: 1.45;">
+                            <span style="flex-shrink: 0;">${r.icon || '•'}</span>
+                            <span>${escapeHtml(r.text || String(r))}</span>
+                        </div>
+                    `).join('')}
+                </div>
+            `;
+        }
+
+        function renderDeckInsightBullets(bullets, takeaways) {
+            let html = `
+                <ul style="margin: 0; padding-left: 1.1rem; color: var(--deck-text-primary); font-size: 0.72rem; line-height: 1.55;">
+                    ${bullets.map(b => `<li style="margin-bottom: 0.35rem;">${escapeHtml(b)}</li>`).join('')}
+                </ul>
+            `;
+            if (takeaways && takeaways.length) {
+                html += `
+                    <div class="deck-meta-label" style="margin-top: 0.75rem; margin-bottom: 0.35rem;">KEY TAKEAWAYS</div>
+                    <ul style="margin: 0; padding-left: 1.1rem; color: var(--deck-text-primary); font-size: 0.72rem; line-height: 1.55;">
+                        ${takeaways.map(b => `<li style="margin-bottom: 0.35rem;">${escapeHtml(b)}</li>`).join('')}
+                    </ul>
+                `;
+            }
+            return html;
+        }
+
+        function renderDeckInsightBarItems(items, options = {}) {
+            const valueFormat = options.valueFormat || 'percent';
+            const sectionTitle = options.sectionTitle || '';
+            const maxItems = getDeckDisplayMaxItems(options.vizPrefs, items.length);
+            const entries = items.slice(0, maxItems).map(item => {
+                const name = item.name || item.text || '';
+                const val = valueFormat === 'index' ? (item.index || 0) : (item.pct || 0);
+                return [name, val];
+            }).filter(([name]) => name);
+            return renderDeckBarColumns(entries, { sectionTitle, valueFormat });
+        }
+
+        function renderDeckInsightGroupedCategories(groups, options = {}) {
+            const valueFormat = options.valueFormat || 'index';
+            if (!groups.length) {
+                return '<div style="color: var(--deck-text-muted); font-size: 0.7rem; font-style: italic;">No data</div>';
+            }
+            return `
+                <div style="display: grid; grid-template-columns: repeat(${Math.min(4, groups.length)}, 1fr); gap: 0.85rem; width: 100%;">
+                    ${groups.map(group => {
+                        const entries = (group.items || []).map(item => [
+                            item.name,
+                            valueFormat === 'index' ? (item.index || 0) : (item.pct || 0)
+                        ]).filter(([name]) => name);
+                        const label = (group.category || '').replace(/_/g, ' ').toUpperCase();
+                        return renderDeckHorizontalBars(entries, { sectionTitle: label, compact: true, valueFormat });
+                    }).join('')}
+                </div>
+            `;
+        }
+
         function createInsightItem(insightType) {
             const item = {
                 id: 'slide_' + Date.now(),
@@ -56280,53 +56526,53 @@
                 dateAdded: new Date().toISOString(),
                 data: null,
                 customTitle: null,
-                customNotes: ''
+                customNotes: '',
+                vizPrefs: { ...DECK_DEFAULT_VIZ_PREFS }
             };
             
-            // Capture content based on insight type
             if (insightType === 'audience-snapshot') {
-                const snapshotEl = document.getElementById('audienceSnapshot');
                 const takeawaysEl = document.getElementById('audienceTakeaways');
                 item.data = {
-                    html: snapshotEl?.innerHTML || '',
-                    takeaways: takeawaysEl?.innerHTML || ''
+                    items: buildDeckAudienceSnapshotItems(),
+                    barValueFormat: 'percent',
+                    takeaways: extractDeckInsightBullets(takeawaysEl)
                 };
                 item.title = `Audience Snapshot`;
             } else if (insightType === 'behavioral-profile') {
                 const profileEl = document.getElementById('behavioralProfileCard');
-                item.data = { html: profileEl?.innerHTML || '' };
+                const bullets = extractDeckInsightBullets(profileEl);
+                item.data = bullets.length
+                    ? { bullets }
+                    : { items: buildDeckBehavioralTopItems(), barValueFormat: 'index' };
                 item.title = `Behavioral Profile`;
             } else if (insightType === 'demographic-summary') {
-                const summaryEl = document.getElementById('demoProfileSummary');
-                item.data = { html: summaryEl?.innerHTML || '' };
+                item.data = buildDeckDemographicCategoriesData();
                 item.title = `Demographic Profile Summary`;
             } else if (insightType === 'key-differentiators') {
-                const diffEl = document.getElementById('demoDifferentiators');
-                item.data = { html: diffEl?.innerHTML || '' };
+                item.data = { items: buildDeckDifferentiatorItems(), barValueFormat: 'index' };
                 item.title = `Key Differentiators`;
             } else if (insightType === 'targeting-recommendations') {
-                const recsEl = document.getElementById('demoTargetingRecs');
-                item.data = { html: recsEl?.innerHTML || '' };
+                item.data = { recommendations: buildDeckTargetingRecommendations() };
                 item.title = `Targeting Recommendations`;
             } else if (insightType === 'interest-highlights') {
-                const highlightsEl = document.getElementById('interestHighlights');
-                item.data = { html: highlightsEl?.innerHTML || '' };
+                item.data = { items: buildDeckInterestHighlightItems(), barValueFormat: 'percent' };
                 item.title = `Interest Highlights`;
             } else if (insightType === 'top-differentiators') {
-                const topDiffEl = document.getElementById('topDifferentiators');
-                item.data = { html: topDiffEl?.innerHTML || '' };
+                item.data = { groupedCategories: buildDeckTopDifferentiatorGroups(), barValueFormat: 'index' };
                 item.title = `Top Differentiators`;
             } else if (insightType === 'behavioral-summary') {
-                const behavioralSummaryEl = document.getElementById('behavioralProfileSummary');
-                item.data = { html: behavioralSummaryEl?.innerHTML || '' };
+                const summaryEl = document.getElementById('behavioralProfileSummary');
+                const bullets = extractDeckInsightBullets(summaryEl);
+                item.data = bullets.length
+                    ? { bullets }
+                    : { items: buildDeckBehavioralTopItems(), barValueFormat: 'index' };
                 item.title = `Behavioral Profile Summary`;
             }
+
+            if (item.data) item.data = trimDeckModuleDataToTopN(item.data, 'insight');
             
             return item;
         }
-        
-        const DECK_DEFAULT_VIZ_PREFS = { type: 'bars', count: 20, threshold: 30 };
-        const DECK_DEFAULT_MAX_ITEMS = 20;
 
         function getDeckDisplayMaxItems(vizPrefs, itemCount) {
             const prefs = vizPrefs || DECK_DEFAULT_VIZ_PREFS;
@@ -56365,6 +56611,26 @@
                         return bv - av;
                     })
                     .slice(0, n);
+            } else if (trimmed.categories && typeof trimmed.categories === 'object') {
+                Object.keys(trimmed.categories).forEach(catKey => {
+                    const catData = trimmed.categories[catKey];
+                    if (!catData?.values) return;
+                    const sorted = Object.entries(catData.values)
+                        .sort((a, b) => (parseFloat(b[1]) || 0) - (parseFloat(a[1]) || 0))
+                        .slice(0, n);
+                    trimmed.categories[catKey] = { ...catData, values: Object.fromEntries(sorted) };
+                });
+            } else if (type === 'insight' && Array.isArray(trimmed.items)) {
+                trimmed.items = [...trimmed.items]
+                    .sort((a, b) => (parseFloat(b.pct || b.index) || 0) - (parseFloat(a.pct || a.index) || 0))
+                    .slice(0, n);
+            } else if (type === 'insight' && Array.isArray(trimmed.groupedCategories)) {
+                trimmed.groupedCategories = trimmed.groupedCategories.map(group => ({
+                    ...group,
+                    items: [...(group.items || [])]
+                        .sort((a, b) => (parseFloat(b.index || b.pct) || 0) - (parseFloat(a.index || a.pct) || 0))
+                        .slice(0, Math.min(5, n))
+                }));
             }
             return trimmed;
         }
@@ -78177,8 +78443,39 @@
                 
                 return '<p style="color: var(--text-secondary);">Comparison data</p>';
             }
+
+            if (slideType === 'insight') {
+                const insightTitle = (slide.title || slide.category || 'Insight').replace(/-/g, ' ').toUpperCase();
+                const valueFormat = slide.data.barValueFormat || 'percent';
+
+                if (slide.data.recommendations && Array.isArray(slide.data.recommendations)) {
+                    return renderDeckInsightRecommendations(slide.data.recommendations);
+                }
+                if (slide.data.bullets && Array.isArray(slide.data.bullets)) {
+                    return renderDeckInsightBullets(slide.data.bullets, slide.data.takeaways);
+                }
+                if (slide.data.groupedCategories && Array.isArray(slide.data.groupedCategories)) {
+                    return renderDeckInsightGroupedCategories(slide.data.groupedCategories, { valueFormat, vizPrefs });
+                }
+                if (slide.data.items && Array.isArray(slide.data.items)) {
+                    let content = renderDeckInsightBarItems(slide.data.items, {
+                        valueFormat,
+                        sectionTitle: insightTitle,
+                        vizPrefs
+                    });
+                    if (slide.data.takeaways && slide.data.takeaways.length) {
+                        content += `
+                            <div class="deck-meta-label" style="margin-top: 0.75rem; margin-bottom: 0.35rem;">KEY TAKEAWAYS</div>
+                            <ul style="margin: 0; padding-left: 1.1rem; color: var(--deck-text-primary); font-size: 0.72rem; line-height: 1.55;">
+                                ${slide.data.takeaways.map(b => `<li style="margin-bottom: 0.35rem;">${escapeHtml(b)}</li>`).join('')}
+                            </ul>
+                        `;
+                    }
+                    return content;
+                }
+            }
             
-            // Handle HTML content (e.g., Audience Snapshot, Behavioral Profile, etc.)
+            // Handle HTML content (legacy insight slides captured before structured export)
             if (slide.data.html) {
                 let htmlContent = slide.data.html;
                 
