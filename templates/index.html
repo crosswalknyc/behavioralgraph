@@ -11386,6 +11386,14 @@
             z-index: 6;
             pointer-events: none;
         }
+
+        .deck-meta-label {
+            font-size: 0.55rem;
+            letter-spacing: 0.14em;
+            text-transform: uppercase;
+            color: var(--deck-text-muted);
+            line-height: 1.4;
+        }
         
         /* Data Visualization Control Panel */
         .viz-control-toggle {
@@ -74923,9 +74931,26 @@
                 
                 return `
                     <div style="position: absolute; left: 0; top: 0; width: 100%; height: 100%; display: flex; flex-direction: column;">
-                        <!-- Top bar: logo -->
-                        <div style="position: absolute; left: 32px; top: 28px;">
+                        <!-- Top bar: logo + presenter meta (matches TOC Overview style) -->
+                        <div style="position: absolute; left: 32px; top: 28px; right: 32px; display: flex; justify-content: space-between; align-items: flex-start;">
                             ${getCrosswalkDeckLogoHtml(108)}
+                            <div style="text-align: right; display: flex; flex-direction: column; gap: 0.35rem; margin-top: 4px;">
+                                <div contenteditable="true"
+                                     class="deck-meta-label"
+                                     style="cursor: text; padding: 4px 6px; border-radius: 3px;"
+                                     onfocus="this.style.background='rgba(0,0,0,0.04)'"
+                                     onblur="this.style.background='transparent'; updateTitleSlideBranding(this.textContent)">${escapeHtml(branding)}</div>
+                                <div contenteditable="true"
+                                     class="deck-meta-label"
+                                     style="cursor: text; padding: 4px 6px; border-radius: 3px;"
+                                     onfocus="this.style.background='rgba(0,0,0,0.04)'"
+                                     onblur="this.style.background='transparent'; updateTitleSlidePresenterName(this.textContent)">${escapeHtml(presenterName)}</div>
+                                ${presenterCompany ? `<div contenteditable="true"
+                                     class="deck-meta-label"
+                                     style="cursor: text; padding: 4px 6px; border-radius: 3px;"
+                                     onfocus="this.style.background='rgba(0,0,0,0.04)'"
+                                     onblur="this.style.background='transparent'; updateTitleSlidePresenterCompany(this.textContent)">${escapeHtml(presenterCompany)}</div>` : ''}
+                            </div>
                         </div>
 
                         <!-- Title block -->
@@ -74937,7 +74962,7 @@
                                  onblur="this.style.background='transparent'; updateTitleSlideProfileName(this.textContent); renderSlideEditor();">
                                 ${escapeHtml(profileName)}
                             </div>
-                            <div style="margin-top: 0.65rem; font-size: 0.55rem; letter-spacing: 0.14em; text-transform: uppercase; color: var(--deck-text-muted); font-weight: 600;">
+                            <div style="margin-top: 0.65rem;" class="deck-meta-label">
                                 Audience profile
                             </div>
                         </div>
@@ -74965,22 +74990,6 @@
                             <span>Add Image</span>
                             <button class="placeholder-delete-btn" onclick="event.stopPropagation(); this.parentElement.style.display='none';" title="No image on this slide">✕ No Image</button>
                         </div>`)}
-                        
-                        <!-- Right side info - EDITABLE -->
-                        <div style="position: absolute; right: 32px; top: 42%; text-align: right; font-size: 0.7rem;">
-                            <div contenteditable="true"
-                                 style="color: var(--deck-accent-purple); cursor: text; padding: 2px 4px; border-radius: 3px;"
-                                 onfocus="this.style.background='rgba(0,0,0,0.04)'"
-                                 onblur="this.style.background='transparent'; updateTitleSlideBranding(this.textContent)">${escapeHtml(branding)}</div>
-                            <div contenteditable="true"
-                                 style="margin-top: 0.75rem; font-size: 0.8rem; color: var(--deck-text-primary); font-weight: 600; cursor: text; padding: 2px 4px; border-radius: 3px;"
-                                 onfocus="this.style.background='rgba(0,0,0,0.04)'"
-                                 onblur="this.style.background='transparent'; updateTitleSlidePresenterName(this.textContent)">${escapeHtml(presenterName)}</div>
-                            <div contenteditable="true"
-                                 style="margin-top: 0.15rem; font-size: 0.7rem; color: var(--deck-text-muted); cursor: text; padding: 2px 4px; border-radius: 3px;"
-                                 onfocus="this.style.background='rgba(0,0,0,0.04)'"
-                                 onblur="this.style.background='transparent'; updateTitleSlidePresenterCompany(this.textContent)">${escapeHtml(presenterCompany)}</div>
-                        </div>
                         
                         <!-- Bottom description - Date Range - EDITABLE -->
                         <div contenteditable="true"
@@ -75025,7 +75034,8 @@
                     <div style="position: absolute; left: 32px; top: 28px; right: 32px; display: flex; justify-content: space-between; align-items: flex-start;">
                         ${getCrosswalkDeckLogoHtml(108)}
                         <div contenteditable="true"
-                             style="font-size: 0.55rem; letter-spacing: 0.14em; text-transform: uppercase; color: var(--deck-text-muted); cursor: text; padding: 4px 6px; border-radius: 3px; margin-top: 4px;"
+                             class="deck-meta-label"
+                             style="cursor: text; padding: 4px 6px; border-radius: 3px; margin-top: 4px;"
                              onfocus="this.style.background='rgba(0,0,0,0.04)'"
                              onblur="this.style.background='transparent'; updateTocSectionLabel(this.textContent)">
                             ${escapeHtml(slide.sectionLabel || 'Overview')}
