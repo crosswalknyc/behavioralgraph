@@ -16898,6 +16898,7 @@
                                 <button class="tab-btn" id="subscriberViewNumbersTabBtn" data-feature="viewNumbers" onclick="showSubscriberTab('viewnumbers')" style="display: none;"><span class="tab-icon">🔢</span><span class="tab-label">VIEW NUMBERS</span></button>
                                 <button class="tab-btn" onclick="showSubscriberTab('platforms')"><span class="tab-icon">📱</span><span class="tab-label">SVOD PLATFORMS</span></button>
                                 <button class="tab-btn" onclick="showSubscriberTab('demographics')"><span class="tab-icon">👥</span><span class="tab-label">DEMOGRAPHICS</span></button>
+                                <button class="tab-btn" id="subscriberEpisodeDatesTabBtn" onclick="showSubscriberTab('epdates')"><span class="tab-icon">📅</span><span class="tab-label">EPISODE DATES</span></button>
                             </div>
                             <!-- Action Buttons (right-aligned) -->
                             <div style="display: flex; align-items: center; gap: 0.5rem; flex-shrink: 0;">
@@ -17006,6 +17007,28 @@
 
                             </div>
                             <p style="color: var(--text-secondary); font-size: 0.8rem; font-style: italic; margin-top: 1.5rem; text-align: left;">*Values represented only show participants who agreed to share demographic data.</p>
+                        </div>
+
+                        <!-- Episode Dates Tab — release/air date for each tracked episode. -->
+                        <!-- Source order: (1) the input CSV's Episode Date column; (2) optional LLM web-search lookup -->
+                        <!-- when the CSV is missing dates (button calls /api/subscriber/lookup_episode_dates). -->
+                        <div id="subscriber-tab-epdates" class="tab-content">
+                            <div class="tab-section" style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 2rem;">
+                                <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 1rem; flex-wrap: wrap; margin-bottom: 1rem;">
+                                    <div>
+                                        <h3 style="margin: 0 0 0.25rem 0;">📅 Episode Release Dates</h3>
+                                        <p class="section-description" style="margin: 0;">Original release / drop date for each tracked episode. Pulled from the input CSV's Episode Date column; missing dates can be filled in by an AI agent that searches the web.</p>
+                                    </div>
+                                    <div style="display: flex; gap: 0.5rem; align-items: center;">
+                                        <button id="subscriberLookupEpDatesBtn" class="display-mode-toggle" onclick="lookupSubscriberEpisodeDates()" title="Use an AI agent with web search to fill in missing episode dates" style="cursor: pointer;">
+                                            <span id="subscriberLookupEpDatesLabel">🔎 LOOK UP MISSING DATES</span>
+                                        </button>
+                                    </div>
+                                </div>
+                                <div id="subscriberEpisodeDatesStatus" style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 0.75rem; min-height: 1.25rem;"></div>
+                                <div id="subscriberEpisodeDatesTable" class="demographics-table-container"></div>
+                                <p id="subscriberEpisodeDatesSourceNote" style="font-size: 0.78rem; color: var(--text-secondary); margin-top: 1rem; font-style: italic;"></p>
+                            </div>
                         </div>
 
                     </div>
@@ -19238,6 +19261,10 @@
                     </div>
                 </details>
                 <div id="jiqKpiStrip" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 0.75rem; margin-bottom: 1rem;"></div>
+                <!-- Intent-gap derivation card. Auto-shows when the
+                     payload has kpis.intent_gap_tickets_mid. Built by
+                     the same JS path that builds jiqKpiStrip. -->
+                <div id="jiqIntentGapBreakdown" style="display:none; margin: 0 0 1.1rem;"></div>
 
                 <!-- ════════════════════════════════════════════════════════
                      ECOSYSTEM SPOTLIGHT card — shown only when the run
@@ -22686,6 +22713,8 @@
             if (roasIQViewEl) roasIQViewEl.style.display = 'none';
             const ecomIQViewEl = document.getElementById('ecommerceIQView');
             if (ecomIQViewEl) ecomIQViewEl.style.display = 'none';
+            const sentimentIQViewEl = document.getElementById('sentimentIQView');
+            if (sentimentIQViewEl) sentimentIQViewEl.style.display = 'none';
             hideLLMOIQView();
 
             // Open Talent by default — initIQRanker populates from
@@ -28310,6 +28339,105 @@
                 var noteEl = document.getElementById('jiqKpiStripNote');
                 if (noteEl) noteEl.style.display = 'none';
             }
+
+            // Intent-gap derivation card — auto-shows below the KPI
+            // strip when the payload carries intent_gap_tickets_mid.
+            // Mirrors the math from apply_breadwinner_intent_gap.py
+            // so anyone reading the dashboard can trace where the
+            // headline number came from.
+            (function renderIntentGapBreakdown() {
+                var box = document.getElementById('jiqIntentGapBreakdown');
+                if (!box) return;
+                if (!kpis || kpis.intent_gap_tickets_mid == null) {
+                    box.style.display = 'none';
+                    return;
+                }
+                var fmt = _jiqFmt;
+                var amber = '#f59e0b';
+                var purchases = kpis.confirmed_digital_purchases;
+                var tpp       = kpis.confirmed_avg_tickets_per_purchase || 2.5;
+                var confTix   = kpis.confirmed_digital_tickets;
+                var owMid     = kpis.projected_opening_weekend_tickets;
+                var owLow     = kpis.projected_ow_range_low_tickets;
+                var owHigh    = kpis.projected_ow_range_high_tickets;
+                var gapMid    = kpis.intent_gap_tickets_mid;
+                var gapLow    = kpis.intent_gap_tickets_low;
+                var gapHigh   = kpis.intent_gap_tickets_high;
+                var walkup    = kpis.intent_gap_walkup_tickets_mid_est;
+                var addrMid   = kpis.intent_gap_addressable_tickets_mid;
+                var addrLow   = kpis.intent_gap_addressable_tickets_low;
+                var addrHigh  = kpis.intent_gap_addressable_tickets_high;
+                var asof      = kpis.confirmed_as_of_date || '';
+
+                var owMidM   = owMid   != null ? (owMid   / 1e6).toFixed(2) + 'M' : '—';
+                var owLowM   = owLow   != null ? (owLow   / 1e6).toFixed(2) + 'M' : '—';
+                var owHighM  = owHigh  != null ? (owHigh  / 1e6).toFixed(2) + 'M' : '—';
+                var gapLowM  = gapLow  != null ? (gapLow  / 1e6).toFixed(2) + 'M' : '—';
+                var gapHighM = gapHigh != null ? (gapHigh / 1e6).toFixed(2) + 'M' : '—';
+                var walkupPctMid = '32.5%';   // midpoint of Sony's 25-40% benchmark
+
+                var rowStyle  = 'display:flex; justify-content:space-between; align-items:baseline; gap:0.6rem; padding:0.25rem 0;';
+                var lblStyle  = 'font-size:0.78rem; color:var(--text-primary);';
+                var subStyle  = 'font-size:0.66rem; color:var(--text-secondary); margin-top:1px;';
+                var numStyle  = 'font-size:0.95rem; font-weight:700; color:var(--text-primary); font-variant-numeric: tabular-nums;';
+
+                var html = ''
+                  + '<div style="background: var(--bg-secondary); border:1px solid ' + amber + '; border-left:4px solid ' + amber + '; border-radius:8px; padding:0.85rem 1rem;">'
+                  +   '<div style="display:flex; align-items:baseline; gap:0.5rem; margin-bottom:0.55rem;">'
+                  +     '<div style="font-size:0.68rem; text-transform:uppercase; letter-spacing:0.06em; color:' + amber + '; font-weight:700;">🧭 Where “Not Yet Converted · Strong Intent” comes from</div>'
+                  +     (asof ? '<div style="font-size:0.65rem; color:var(--text-secondary); margin-left:auto;">as of ' + _jiqEsc(asof) + '</div>' : '')
+                  +   '</div>'
+
+                  // Two-column derivation: math on left, breakdown on right
+                  +   '<div style="display:grid; grid-template-columns: minmax(280px, 1.1fr) minmax(280px, 1fr); gap:1.2rem;">'
+
+                  // ─────── LEFT: math derivation ───────
+                  +     '<div>'
+                  +       '<div style="font-size:0.68rem; text-transform:uppercase; letter-spacing:0.05em; color:var(--text-secondary); font-weight:600; margin-bottom:0.35rem;">The math (mid-point)</div>'
+                  +       '<div style="' + rowStyle + '">'
+                  +         '<div><div style="' + lblStyle + '">Projected OW tickets</div>'
+                  +           '<div style="' + subStyle + '">comp-anchored sleeper-comedy model · range ' + owLowM + '–' + owHighM + '</div></div>'
+                  +         '<div style="' + numStyle + '">' + (owMid != null ? fmt(owMid) : '—') + '</div>'
+                  +       '</div>'
+                  +       '<div style="' + rowStyle + ' border-top:1px dashed var(--border-color);">'
+                  +         '<div><div style="' + lblStyle + '">− Confirmed digital tickets</div>'
+                  +           '<div style="' + subStyle + '">' + (purchases != null ? fmt(purchases) + ' purchases × ' + tpp + ' tix/purchase' : '') + '</div></div>'
+                  +         '<div style="' + numStyle + '">−' + (confTix != null ? fmt(confTix) : '—') + '</div>'
+                  +       '</div>'
+                  +       '<div style="' + rowStyle + ' border-top:2px solid ' + amber + '; margin-top:2px; padding-top:0.45rem;">'
+                  +         '<div><div style="' + lblStyle + ' font-weight:700;">= Intent Gap (mid)</div>'
+                  +           '<div style="' + subStyle + '">range ' + gapLowM + '–' + gapHighM + ' tix</div></div>'
+                  +         '<div style="' + numStyle + ' color:' + amber + '; font-size:1.15rem;">' + fmt(gapMid) + '</div>'
+                  +       '</div>'
+                  +     '</div>'
+
+                  // ─────── RIGHT: breakdown of the gap ───────
+                  +     '<div>'
+                  +       '<div style="font-size:0.68rem; text-transform:uppercase; letter-spacing:0.05em; color:var(--text-secondary); font-weight:600; margin-bottom:0.35rem;">Of that gap, where it goes</div>'
+                  +       '<div style="' + rowStyle + '">'
+                  +         '<div><div style="' + lblStyle + '">Walk-up at theater</div>'
+                  +           '<div style="' + subStyle + '">' + walkupPctMid + ' of OW · Sony 25–40% benchmark · converts without a digital touch</div></div>'
+                  +         '<div style="' + numStyle + '">' + (walkup != null ? '~' + fmt(walkup) : '—') + '</div>'
+                  +       '</div>'
+                  +       '<div style="' + rowStyle + ' border-top:1px dashed var(--border-color);">'
+                  +         '<div><div style="' + lblStyle + ' color:' + amber + '; font-weight:700;">Digitally addressable</div>'
+                  +           '<div style="' + subStyle + '">pull-forward via promo · paid social · talent amplification · exhibitor co-promo · range ' + (addrLow != null ? fmt(addrLow) : '—') + '–' + (addrHigh != null ? fmt(addrHigh) : '—') + '</div></div>'
+                  +         '<div style="' + numStyle + ' color:' + amber + ';">~' + (addrMid != null ? fmt(addrMid) : '—') + '</div>'
+                  +       '</div>'
+                  +     '</div>'
+                  +   '</div>'  // /grid
+
+                  // Identity reminder + non-additive warning
+                  +   '<div style="margin-top:0.65rem; padding:0.55rem 0.7rem; background:rgba(245,158,11,0.10); border:1px solid rgba(245,158,11,0.35); border-radius:6px; font-size:0.7rem; color:var(--text-primary); line-height:1.45;">'
+                  +     '<strong style="color:' + amber + ';">⚠ Already inside the OW Gross &amp; Domestic Total — not additive.</strong> '
+                  +     'By construction: ' + (confTix != null ? fmt(confTix) : '—') + ' confirmed + ' + fmt(gapMid) + ' gap = ' + (owMid != null ? fmt(owMid) : '—') + ' projected OW tickets. '
+                  +     'Adding the gap on top of the $' + (kpis.projected_opening_weekend_revenue_usd != null ? fmt(Math.round(kpis.projected_opening_weekend_revenue_usd / 1e6 * 10) / 10) + 'M' : '—') + ' OW Gross would double-count.'
+                  +   '</div>'
+                  + '</div>';
+
+                box.innerHTML = html;
+                box.style.display = 'block';
+            })();
 
             // Cluster tabs (driven by active cut axis)
             var tabs = document.getElementById('jiqClusterTabs');
@@ -42182,6 +42310,9 @@
                 renderSubscriberEpisodes(data);
             } catch (e) { console.error('Error rendering episodes:', e); }
             try {
+                renderSubscriberEpisodeDates(data);
+            } catch (e) { console.error('Error rendering episode dates:', e); }
+            try {
                 renderSubscriberTiming(data);
             } catch (e) { console.error('Error rendering timing:', e); }
             try {
@@ -42755,49 +42886,98 @@
             }
             
             // 7. REVENUE FROM NEW SUBSCRIBERS (monthly & yearly; premium and ad-supported from SVOD pricing)
+            //
+            // Two rows of cards:
+            //   Row 1 — TOTAL Reactivated + Activated Accounts. Uses newSignups
+            //           (= attributed + dormant-reactive) so the figures reflect every
+            //           account whose activity was driven by this show, whether brand-
+            //           new or reawakened from dormancy.
+            //   Row 2 — ACTIVATED ONLY (new acquisitions). Uses attributedSignups so
+            //           the figures count only people whose FIRST platform watch was
+            //           this show — i.e. genuine net-new subscribers.
+            // The two rows let the user see incremental revenue separately from
+            // retention/reactivation revenue.
             const subscriberPlatformName = data.platform || data.metadata?.platform || '';
             const pricing = data.svod_pricing || {};
             const signupsForRevenue = (subscriberGenPopMode && newSignupsGenPop)
                 ? (parse_number(newSignupsGenPop) || newSignups)
                 : newSignups;
+            const activatedForRevenue = (subscriberGenPopMode && attributedSignupsGenPop)
+                ? (parse_number(attributedSignupsGenPop) || attributedSignups)
+                : attributedSignups;
             const hasPricing = (pricing.ad_supported != null && pricing.ad_supported !== '') || (pricing.premium != null && pricing.premium !== '');
             if (subscriptionRevenueContainer) {
                 if (hasPricing && signupsForRevenue > 0) {
                     const ad = Number(pricing.ad_supported) || 0;
                     const prem = Number(pricing.premium) || 0;
                     const fmt = (n) => (n >= 1e9 ? '$' + (n/1e9).toFixed(2) + 'B' : n >= 1e6 ? '$' + (n/1e6).toFixed(2) + 'M' : n >= 1e3 ? '$' + (n/1e3).toFixed(2) + 'K' : '$' + n.toFixed(2));
+                    // Row 1 — total (acquired + reactivated)
                     const monthlyAd = signupsForRevenue * ad;
                     const monthlyPrem = signupsForRevenue * prem;
                     const yearlyAd = monthlyAd * 12;
                     const yearlyPrem = monthlyPrem * 12;
                     const subscriberModelText = `${formatNumber(signupsForRevenue)} subscribers`;
+                    // Row 2 — activated only (new acquisitions, excludes dormant reactivations)
+                    const monthlyAdAct = activatedForRevenue * ad;
+                    const monthlyPremAct = activatedForRevenue * prem;
+                    const yearlyAdAct = monthlyAdAct * 12;
+                    const yearlyPremAct = monthlyPremAct * 12;
+                    const activatedModelText = `${formatNumber(activatedForRevenue)} new subscribers`;
+                    const hasActivatedRow = activatedForRevenue > 0;
                     subscriptionRevenueContainer.innerHTML = `
                         <div class="executive-summary-card">
                             <div class="exec-summary-header">
-                                <h2 class="has-tooltip" data-tooltip="Estimated revenue from subscribers attributed to this show, using platform pricing.">💰 Revenue</h2>
+                                <h2 class="has-tooltip" data-tooltip="Estimated revenue from every account whose activity was driven by this show — both newly acquired subscribers and previously dormant accounts that were reactivated.">💰 Total Reactivated and Activated Accounts</h2>
                             </div>
                             <div class="exec-summary-grid">
-                                <div class="exec-summary-metric has-tooltip" data-tooltip="Monthly revenue from premium-tier subscribers.">
+                                <div class="exec-summary-metric has-tooltip" data-tooltip="Monthly revenue from premium-tier subscribers (acquired + reactivated).">
                                     <div class="exec-metric-label">Premium<br>Monthly</div>
                                     <div class="exec-metric-value">${fmt(monthlyPrem)}</div>
                                     <div class="exec-metric-desc">${subscriberModelText} @ $${prem}/mo</div>
                                 </div>
-                                <div class="exec-summary-metric has-tooltip" data-tooltip="Yearly revenue from premium-tier subscribers.">
+                                <div class="exec-summary-metric has-tooltip" data-tooltip="Yearly revenue from premium-tier subscribers (acquired + reactivated).">
                                     <div class="exec-metric-label">Premium<br>Yearly</div>
                                     <div class="exec-metric-value">${fmt(yearlyPrem)}</div>
                                     <div class="exec-metric-desc">${subscriberModelText} @ $${prem}/mo</div>
                                 </div>
-                                <div class="exec-summary-metric has-tooltip" data-tooltip="Monthly revenue from ad-supported-tier subscribers.">
+                                <div class="exec-summary-metric has-tooltip" data-tooltip="Monthly revenue from ad-supported-tier subscribers (acquired + reactivated).">
                                     <div class="exec-metric-label">Ad-Supported<br>Monthly</div>
                                     <div class="exec-metric-value">${fmt(monthlyAd)}</div>
                                     <div class="exec-metric-desc">${subscriberModelText} @ $${ad}/mo</div>
                                 </div>
-                                <div class="exec-summary-metric has-tooltip" data-tooltip="Yearly revenue from ad-supported-tier subscribers.">
+                                <div class="exec-summary-metric has-tooltip" data-tooltip="Yearly revenue from ad-supported-tier subscribers (acquired + reactivated).">
                                     <div class="exec-metric-label">Ad-Supported<br>Yearly</div>
                                     <div class="exec-metric-value">${fmt(yearlyAd)}</div>
                                     <div class="exec-metric-desc">${subscriberModelText} @ $${ad}/mo</div>
                                 </div>
                             </div>
+                            ${hasActivatedRow ? `
+                            <div class="exec-summary-subheader" style="margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid rgba(255,255,255,0.08);">
+                                <h3 class="has-tooltip" data-tooltip="Same revenue calculation but limited to NEWLY ACQUIRED accounts only (Attributed Signups). Excludes reactivations of previously-dormant accounts." style="font-size: 1rem; margin: 0 0 0.75rem 0; opacity: 0.85;">📈 Activated (Newly Acquired) Accounts Only</h3>
+                            </div>
+                            <div class="exec-summary-grid">
+                                <div class="exec-summary-metric has-tooltip" data-tooltip="Monthly revenue from premium-tier NEWLY ACQUIRED subscribers only (excludes reactivations).">
+                                    <div class="exec-metric-label">Premium<br>Monthly</div>
+                                    <div class="exec-metric-value">${fmt(monthlyPremAct)}</div>
+                                    <div class="exec-metric-desc">${activatedModelText} @ $${prem}/mo</div>
+                                </div>
+                                <div class="exec-summary-metric has-tooltip" data-tooltip="Yearly revenue from premium-tier NEWLY ACQUIRED subscribers only (excludes reactivations).">
+                                    <div class="exec-metric-label">Premium<br>Yearly</div>
+                                    <div class="exec-metric-value">${fmt(yearlyPremAct)}</div>
+                                    <div class="exec-metric-desc">${activatedModelText} @ $${prem}/mo</div>
+                                </div>
+                                <div class="exec-summary-metric has-tooltip" data-tooltip="Monthly revenue from ad-supported-tier NEWLY ACQUIRED subscribers only (excludes reactivations).">
+                                    <div class="exec-metric-label">Ad-Supported<br>Monthly</div>
+                                    <div class="exec-metric-value">${fmt(monthlyAdAct)}</div>
+                                    <div class="exec-metric-desc">${activatedModelText} @ $${ad}/mo</div>
+                                </div>
+                                <div class="exec-summary-metric has-tooltip" data-tooltip="Yearly revenue from ad-supported-tier NEWLY ACQUIRED subscribers only (excludes reactivations).">
+                                    <div class="exec-metric-label">Ad-Supported<br>Yearly</div>
+                                    <div class="exec-metric-value">${fmt(yearlyAdAct)}</div>
+                                    <div class="exec-metric-desc">${activatedModelText} @ $${ad}/mo</div>
+                                </div>
+                            </div>
+                            ` : ''}
                         </div>
                     `;
                 } else {
@@ -42898,6 +43078,184 @@
             }
         }
         
+        // ============================================================
+        // EPISODE DATES TAB
+        // ============================================================
+        // Renders a simple two-column table of every tracked episode and
+        // its release/air date (sourced from the input CSV). If any dates
+        // are missing, the user can press "🔎 LOOK UP MISSING DATES" to ask
+        // an LLM with web search to fill them in via
+        //   POST /api/subscriber/lookup_episode_dates
+        // The filled dates are written back into the in-memory
+        // currentSubscriberData.episode_attribution so downstream tabs
+        // (Timing, Episodes) immediately see them.
+        // ============================================================
+
+        // Sort helper: numeric episodes first (ascending), then alphabetic
+        // (e.g. "Single Drop Day"). Treats anything that parses as a number
+        // as numeric.
+        function _epdSortKey(ep) {
+            const raw = String(ep.episode || '').trim();
+            const n = parseInt(raw, 10);
+            return [Number.isFinite(n) ? 0 : 1, Number.isFinite(n) ? n : raw];
+        }
+        function _epdSorter(a, b) {
+            const ka = _epdSortKey(a), kb = _epdSortKey(b);
+            if (ka[0] !== kb[0]) return ka[0] - kb[0];
+            if (typeof ka[1] === 'number' && typeof kb[1] === 'number') return ka[1] - kb[1];
+            return String(ka[1]).localeCompare(String(kb[1]));
+        }
+
+        function renderSubscriberEpisodeDates(data) {
+            const tableEl = document.getElementById('subscriberEpisodeDatesTable');
+            const statusEl = document.getElementById('subscriberEpisodeDatesStatus');
+            const sourceEl = document.getElementById('subscriberEpisodeDatesSourceNote');
+            const btn = document.getElementById('subscriberLookupEpDatesBtn');
+            if (!tableEl) return;
+
+            const episodes = (data && data.episode_attribution ? data.episode_attribution : []).slice();
+            // Show ALL tracked episodes, even ones with zero signups, because
+            // this tab is purely a release-calendar view.
+            episodes.sort(_epdSorter);
+
+            if (episodes.length === 0) {
+                tableEl.innerHTML = '<p style="color: var(--text-secondary); padding: 1.5rem; text-align: center;">No episodes available in this report.</p>';
+                if (statusEl) statusEl.textContent = '';
+                if (sourceEl) sourceEl.textContent = '';
+                if (btn) btn.style.display = 'none';
+                return;
+            }
+
+            const missingCount = episodes.filter(ep => !ep.episode_date || String(ep.episode_date).trim() === '').length;
+            if (statusEl) {
+                if (missingCount === 0) {
+                    statusEl.textContent = `All ${episodes.length} episode date(s) populated from the input CSV.`;
+                } else {
+                    statusEl.textContent = `${missingCount} of ${episodes.length} episode(s) are missing a release date. Click "Look up missing dates" to have an AI agent search the web for them.`;
+                }
+            }
+            if (btn) {
+                btn.style.display = missingCount > 0 ? '' : 'none';
+            }
+            if (sourceEl) {
+                // Existing override-flag column on the report carries provenance,
+                // but for this tab we only need to indicate whether the agent has
+                // been used in this session. Cleared on each render and updated
+                // by lookupSubscriberEpisodeDates.
+                sourceEl.textContent = data && data._episode_dates_agent_note ? data._episode_dates_agent_note : '';
+            }
+
+            const rowsHtml = episodes.map(ep => {
+                const epRaw = String(ep.episode || '').trim();
+                const epNum = parseInt(epRaw, 10);
+                const epLabel = Number.isFinite(epNum) ? `Episode ${epNum}` : (epRaw || '—');
+                const dateRaw = ep.episode_date ? String(ep.episode_date).trim() : '';
+                const dateCell = dateRaw
+                    ? `<span style="color: var(--text-primary);">${dateRaw}</span>`
+                    : `<span style="color: var(--accent-orange, #f59e0b); font-style: italic;">— missing —</span>`;
+                return `
+                    <tr>
+                        <td style="padding: 0.6rem 0.9rem; border-bottom: 1px solid rgba(255,255,255,0.06); color: var(--text-secondary); white-space: nowrap;">${epLabel}</td>
+                        <td style="padding: 0.6rem 0.9rem; border-bottom: 1px solid rgba(255,255,255,0.06);">${dateCell}</td>
+                    </tr>
+                `;
+            }).join('');
+
+            tableEl.innerHTML = `
+                <table style="width: 100%; border-collapse: collapse; font-size: 0.92rem;">
+                    <thead>
+                        <tr>
+                            <th style="text-align: left; padding: 0.6rem 0.9rem; border-bottom: 1px solid rgba(255,255,255,0.15); color: var(--text-secondary); font-weight: 600; width: 12rem;">Episode</th>
+                            <th style="text-align: left; padding: 0.6rem 0.9rem; border-bottom: 1px solid rgba(255,255,255,0.15); color: var(--text-secondary); font-weight: 600;">Release Date</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${rowsHtml}
+                    </tbody>
+                </table>
+            `;
+        }
+
+        async function lookupSubscriberEpisodeDates() {
+            const data = currentSubscriberData;
+            const btn = document.getElementById('subscriberLookupEpDatesBtn');
+            const label = document.getElementById('subscriberLookupEpDatesLabel');
+            const statusEl = document.getElementById('subscriberEpisodeDatesStatus');
+            const sourceEl = document.getElementById('subscriberEpisodeDatesSourceNote');
+            if (!data || !Array.isArray(data.episode_attribution) || data.episode_attribution.length === 0) {
+                if (statusEl) statusEl.textContent = 'No episodes loaded yet.';
+                return;
+            }
+
+            // Only ask the agent about numeric episodes that are missing dates.
+            // "Single Drop Day" / date-style rows aren't real episodes for lookup.
+            const missing = data.episode_attribution
+                .filter(ep => {
+                    const epNum = parseInt(String(ep.episode || '').trim(), 10);
+                    const hasDate = ep.episode_date && String(ep.episode_date).trim() !== '';
+                    return Number.isFinite(epNum) && !hasDate;
+                })
+                .map(ep => ({ episode: String(ep.episode).trim() }));
+
+            if (missing.length === 0) {
+                if (statusEl) statusEl.textContent = 'All episodes already have dates — nothing to look up.';
+                return;
+            }
+
+            const show = (data.metadata && data.metadata.show) || '';
+            const platform = (data.metadata && data.metadata.platform) || '';
+            const dateRange = (data.metadata && data.metadata.date_range) || '';
+
+            if (btn) { btn.style.opacity = '0.6'; btn.style.pointerEvents = 'none'; }
+            if (label) label.textContent = '🔎 LOOKING UP…';
+            if (statusEl) statusEl.textContent = `Asking the AI agent to look up ${missing.length} episode date(s) for ${show || 'this show'}…`;
+
+            try {
+                const resp = await fetch('/api/subscriber/lookup_episode_dates', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        show: show,
+                        platform: platform,
+                        date_range: dateRange,
+                        episodes: missing
+                    })
+                });
+                const payload = await resp.json();
+                if (!resp.ok || !payload || payload.ok !== true) {
+                    throw new Error((payload && payload.error) || `HTTP ${resp.status}`);
+                }
+
+                const datesMap = payload.dates || {};
+                let filled = 0;
+                for (const ep of data.episode_attribution) {
+                    const key = String(ep.episode || '').trim();
+                    if ((!ep.episode_date || String(ep.episode_date).trim() === '') && datesMap[key]) {
+                        ep.episode_date = datesMap[key];
+                        filled += 1;
+                    }
+                }
+                const srcNote = `Agent filled ${filled} of ${missing.length} requested date(s) via ${payload.source || 'web search'} at ${new Date().toLocaleString()}.${payload.notes ? ' ' + payload.notes : ''}`;
+                data._episode_dates_agent_note = srcNote;
+                if (sourceEl) sourceEl.textContent = srcNote;
+                if (statusEl) statusEl.textContent = filled > 0
+                    ? `Filled ${filled} date(s). Other tabs (Timing, Episodes) now use these dates too.`
+                    : 'The agent could not confirm any of the missing dates.';
+
+                // Re-render this tab and any downstream tabs that key off
+                // episode_date so the new dates show up everywhere.
+                renderSubscriberEpisodeDates(data);
+                try { renderSubscriberEpisodes(data); } catch (e) { console.warn('Episodes re-render failed:', e); }
+                try { renderSubscriberTiming(data); } catch (e) { console.warn('Timing re-render failed:', e); }
+            } catch (e) {
+                console.error('Episode date lookup failed:', e);
+                if (statusEl) statusEl.textContent = `Lookup failed: ${e && e.message ? e.message : e}`;
+            } finally {
+                if (btn) { btn.style.opacity = ''; btn.style.pointerEvents = ''; }
+                if (label) label.textContent = '🔎 LOOK UP MISSING DATES';
+            }
+        }
+
         function renderSubscriberTiming(data) {
             if (!data) {
                 console.error('❌ No data provided to renderSubscriberTiming');
