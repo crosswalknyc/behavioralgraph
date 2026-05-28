@@ -27016,20 +27016,53 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
                     except Exception as _de_err:
                         print(f"   ⚠️ post-audit-framework dejitter mop-up skipped: {_de_err}")
 
-                    # Crosswalk Audience Vetting Framework — final consensus
-                    # check against Gen_Pop_2026.csv (digital-only published
-                    # benchmarks). Auto-fixes FAIL rows (capping over-emits,
-                    # lifting under-emits where Engagers should index ≥ GP).
+                    # Crosswalk Audience Vetting Framework — score every brand
+                    # row against Gen_Pop_2026.csv (digital-only published
+                    # benchmarks), then hand FAIL/BORDERLINE rows to the
+                    # persona-reasoning agent for row-by-row KEEP vs CHANGE.
+                    # No formulaic auto-fix; no archetype pinning.
                     try:
                         from crosswalk_audit_framework import (
                             vet_against_consensus as _cw_vet,
+                            agent_reason_vet_failures as _cw_vet_reason,
                         )
+                        # Step 1: score (no mutation)
                         _df_cw2, _vet_verdicts, _vet_md = _cw_vet(
                             _df_cw2, gp_lookup=None, subject=_subject,
-                            verbose=True, generate_tables=True, auto_fix=True,
+                            verbose=True, generate_tables=True,
                         )
-                        # Persist the markdown vet report to S3 alongside the
-                        # main audit report
+
+                        # Step 2: per-row persona-reasoning agent on flagged rows
+                        try:
+                            _oai_for_vet = _persona_doc.get('_openai_client') if isinstance(_persona_doc, dict) else None
+                        except Exception:
+                            _oai_for_vet = None
+                        if _oai_for_vet is None:
+                            try:
+                                import openai as _oai_mod
+                                _oai_for_vet = _oai_mod.OpenAI()
+                            except Exception:
+                                _oai_for_vet = None
+                        _audience_comp = None
+                        try:
+                            _audience_comp = (_report.audience_composition
+                                                if '_report' in locals() and _report is not None
+                                                else None)
+                        except Exception:
+                            _audience_comp = None
+                        if _oai_for_vet is not None:
+                            _df_cw2, _vet_decisions = _cw_vet_reason(
+                                _df_cw2, _vet_verdicts, _oai_for_vet,
+                                subject=_subject,
+                                persona_doc=_persona_doc if isinstance(_persona_doc, dict) else None,
+                                audience_composition=_audience_comp,
+                                model='gpt-4o', batch_size=12,
+                                verbose=True,
+                            )
+                        else:
+                            print('   ⚠️ vet-reason skipped: no OpenAI client available')
+
+                        # Persist the markdown vet report to S3
                         if _vet_md:
                             try:
                                 import boto3 as _b3, datetime as _dt
@@ -27047,6 +27080,7 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
                                 print(f'   ⚠️ vet-report S3 upload skipped: {_s3e}')
                     except Exception as _vet_err:
                         print(f'   ⚠️ vet-consensus pass skipped: {_vet_err}')
+                        import traceback as _vetb; _vetb.print_exc()
 
                     # Recompute Raw/Proj AFTER vetting so the canonical
                     # formulas reflect the auto-fixed BPs.
