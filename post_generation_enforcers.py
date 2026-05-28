@@ -64,6 +64,7 @@ _HOSTMAP_UPPER_TO_CANONICAL = None   # upper-case (punct-sensitive) → canonica
                                      # 'C-NET' stay distinct.
 _HOSTMAP_GAPS = []             # populated by lift attempts on non-hostmap brands
 _HOSTMAP_HIDDEN = None         # set of normalized brand keys with SECTION='Hidden'
+_HOSTMAP_MPB = None            # set of upper-cased brand names with SECTION LIKE 'Most Purchased%'
 
 
 def _norm_brand(s):
@@ -234,6 +235,65 @@ def _is_hostmap_hidden(brand):
     if not _ensure_hostmap_hidden_loaded():
         return False
     return str(brand).upper() in _HOSTMAP_HIDDEN
+
+
+def _ensure_hostmap_mpb_loaded():
+    """Load the set of brand keys whose hostmap SECTION starts with
+    'Most Purchased' (Apparel/Footwear, CPG, Home/Outdoor, Beauty/Wellness,
+    Accessories, Technology Brand, Pets, etc.). A brand may only appear
+    in the ``MOST PURCHASED BRANDS`` column if it is in this set.
+
+    Rule #4c (added 2026-05-28 after Stephen A Smith profile shipped with
+    1,146 of 2,137 MPB rows hostmap-classified into OTHER sections —
+    NETFLIX/HULU under Streaming, AMAZON/WALMART/TARGET under Where They
+    Shop, VISA/MASTERCARD under Credit Provider, MCDONALDS under QSR,
+    PAYPAL/VENMO under Digital Banking, etc. Those brands all already
+    exist in their proper category rows on the same profile, so the MPB
+    duplicates are pure pollution).
+
+    Cache file: reference/hostmap_mpb_brands.txt (one canonical brand per
+    line). Refresh with:
+        SELECT DISTINCT BRAND FROM reference.host_mapping
+        WHERE SECTION LIKE 'Most Purchased%' ORDER BY BRAND
+    """
+    global _HOSTMAP_MPB
+    if _HOSTMAP_MPB is not None:
+        return True
+    candidates = [
+        '/Users/jennamenking/Desktop/finished_codes/reference/hostmap_mpb_brands.txt',
+        '/root/finished_codes/reference/hostmap_mpb_brands.txt',
+        os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'reference', 'hostmap_mpb_brands.txt'),
+        os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'reference', 'hostmap_mpb_brands.txt'),
+        '/tmp/hostmap_mpb_brands.txt',
+    ]
+    for path in candidates:
+        try:
+            if not os.path.exists(path):
+                continue
+            with open(path) as f:
+                lines = [line.strip() for line in f if line.strip()]
+            _HOSTMAP_MPB = {b.upper() for b in lines}
+            return True
+        except Exception:
+            continue
+    _HOSTMAP_MPB = set()
+    return False
+
+
+def _is_hostmap_mpb(brand):
+    """True if brand has SECTION LIKE 'Most Purchased%' in
+    reference.host_mapping. Two-tier match: exact upper() first, then
+    a punctuation-insensitive fallback via the canonical-hostmap helper
+    (so 'COCA COLA' resolves to canonical 'Coca-Cola' which IS in MPB)."""
+    if not _ensure_hostmap_mpb_loaded():
+        return False
+    bu = str(brand).upper()
+    if bu in _HOSTMAP_MPB:
+        return True
+    canon = _hostmap_canonical(brand)
+    if canon is not None and canon.upper() in _HOSTMAP_MPB:
+        return True
+    return False
 
 
 # ============================================================================
@@ -1245,6 +1305,35 @@ def strip_hostmap_hidden_brands(df, subject, verbose=True):
         df, subject,
         lambda c, v: _is_hostmap_hidden(v),
         label='hostmap-Hidden', verbose=verbose,
+    )
+
+
+def strip_mpb_non_hostmap_brands(df, subject, verbose=True):
+    """Drop every row in column ``MOST PURCHASED BRANDS`` whose Value is
+    NOT hostmap-classified into a ``Most Purchased Brands, *`` section.
+
+    Rule #4c (added 2026-05-28). Defect signature: Stephen A Smith profile
+    shipped with 1,146 of 2,137 MPB rows being brands hostmap-classified
+    elsewhere (NETFLIX/HULU under Streaming, AMAZON/WALMART/TARGET under
+    Where They Shop, VISA/MASTERCARD under Credit Provider, MCDONALDS
+    under QSR, PAYPAL/VENMO under Digital Banking, GOOGLE under Search,
+    APPLE/SAMSUNG under Technology/Device, etc.). Every one of those
+    brands ALREADY appeared in its proper category row on the same
+    profile, so the MPB duplicates were pure pollution.
+
+    The MPB column is reserved for the ~2,131 brands that hostmap
+    actually labels under one of the Most Purchased sub-sections
+    (Apparel/Footwear, CPG, Home/Outdoor, Beauty/Wellness, Accessories,
+    Technology Brand, Pets). Anything else stays in its native column.
+    """
+    if not _ensure_hostmap_mpb_loaded():
+        if verbose:
+            print('   ⚠️ hostmap_mpb_brands.txt not found; skipping MPB-membership filter')
+        return df, 0
+    return _strip_rows(
+        df, subject,
+        lambda c, v: c == 'MOST PURCHASED BRANDS' and not _is_hostmap_mpb(v),
+        label='non-hostmap-MPB', verbose=verbose,
     )
 
 
@@ -4017,6 +4106,7 @@ def run_all_enforcers(df, subject, brand_category=None, verbose=True):
     for fn in (
         strip_input_metadata_leakage,      # 2026-05-27 (D5) — prompt-context echoes
         strip_hostmap_hidden_brands,       # 2026-05-27 (Rule #4b) — Hidden never ships
+        strip_mpb_non_hostmap_brands,      # 2026-05-28 (Rule #4c) — MPB column must match hostmap MPB sections
         strip_url_encoded_subject_dupes,
         strip_corporate_parents,
         strip_product_skus,
