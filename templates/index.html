@@ -30866,11 +30866,65 @@
                 SEARCH: '#3b82f6',
                 DETOUR: '#cbd5e1'
             };
+            // Canonical brand colors so the SAME brand keeps the SAME color
+            // across every column even when the label has a qualifier
+            // ('youtube.com' vs 'youtube.com (official trailer)' vs
+            // 'youtube.com (reaction videos)' all hash to the same brand
+            // root 'youtube.com' and pick up YouTube red).
+            var BRAND_COLORS = {
+                'youtube.com':         '#ef4444',  // YouTube red
+                'tiktok.com':          '#ec4899',  // TikTok pink
+                'instagram.com':       '#d946ef',  // Instagram magenta
+                'facebook.com':        '#2563eb',
+                'twitter.com':         '#1d4ed8',
+                'x.com':               '#1d4ed8',
+                'reddit.com':          '#f97316',  // Reddit orange
+                'google.com':          '#3b82f6',  // Google blue
+                'fandango.com':        '#f59e0b',  // Fandango orange/yellow
+                'amctheatres.com':     '#dc2626',  // AMC red
+                'regmovies.com':       '#fbbf24',  // Regal Crown gold
+                'cinemark.com':        '#1d4ed8',  // Cinemark blue
+                'atomtickets.com':     '#a855f7',  // Atom purple
+                'marcustheatres.com':  '#0ea5e9',  // Marcus blue
+                'harkins.com':         '#7c3aed',  // Harkins purple
+                'drafthouse.com':      '#84cc16',  // Alamo lime
+                'rottentomatoes.com':  '#fa320a',  // Rotten Tomatoes red
+                'imdb.com':            '#f5c518',  // IMDb yellow
+                'letterboxd.com':      '#10b981',  // Letterboxd green
+                'commonsensemedia.org':'#06b6d4',  // CSM cyan
+                'screenrant.com':      '#5b6cff',
+                'sonypictures.com':    '#0c4a6e',  // Sony deep blue
+                'netflix.com':         '#e50914',
+                'apple.com':           '#94a3b8',
+                'spotify.com':         '#1db954',
+                'paramount.com':       '#0064ff',
+                'disney.com':          '#5b6cff',
+                'warnerbros.com':      '#fbbf24'
+            };
+            // Extract the brand root from a P2P label so qualified variants
+            // ('amctheatres.com /confirmation', 'amctheatres.com (showtimes)')
+            // collapse onto the same color key as 'amctheatres.com'.
+            function _jiqBrandKey(label) {
+                if (!label) return '';
+                var s = String(label).toLowerCase().trim();
+                // First hostname-looking token (word.tld[.tld2])
+                var m = s.match(/([a-z0-9][a-z0-9-]*\.(?:com|org|net|tv|io|co|gov|edu|app))(?:\/[a-z0-9-]+)?/);
+                if (m) return m[1];
+                // Mixed labels like 'fandango.com vs amctheatres.com' picked
+                // up the FIRST hostname above. Anything else (e.g.
+                // 'theatrical billboards / OOH', 'reddit.com/r/movies' has
+                // already matched 'reddit.com' above) falls through to the
+                // raw lowercase string as the key.
+                return s;
+            }
             function colorFor(label) {
-                if (palette[label]) return palette[label];
-                // Fallback: stable hash → HSL.
+                if (palette[label]) return palette[label];     // touchpoint family (legacy)
+                var key = _jiqBrandKey(label);
+                if (BRAND_COLORS[key]) return BRAND_COLORS[key]; // canonical brand
+                // Fallback: stable hash on the BRAND KEY (not the full
+                // label) so qualifier variants share a color.
                 var h = 0;
-                for (var i = 0; i < label.length; i++) h = (h * 31 + label.charCodeAt(i)) % 360;
+                for (var i = 0; i < key.length; i++) h = (h * 31 + key.charCodeAt(i)) % 360;
                 return 'hsl(' + h + ', 55%, 55%)';
             }
 
