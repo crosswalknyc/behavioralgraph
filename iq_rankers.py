@@ -1353,16 +1353,16 @@ def aggregate_leaderboard(
         "tdl_formula": {
             "name": "Talent Driven Lift",
             "description": (
-                "Of the panel's URL hits that mentioned this profile in "
-                "the selected window, the share whose COMMON_NAME is a "
-                "Most-Purchased-Brands entry in reference.host_mapping "
-                "(apparel, CPG, beauty, accessories, home/outdoor, "
-                "tech, pets, etc.). Reads as: 'of all the times the "
-                "panel touched something about this entity, what % of "
-                "those touches happened on a consumer-purchase brand'. "
-                "A high TDL means audience attention around this entity "
-                "is converting to retail browsing rather than only "
-                "media consumption — a useful proxy for commercial pull."
+                "Of the panel's engagers with the profile in the "
+                "selected window, the share who then viewed or "
+                "purchased a product recommended by, affiliated with, "
+                "or featured in a campaign with the profile subject "
+                "after engaging with the talent. Reads as: 'of all "
+                "the digital engagers with the talent, what % of those "
+                "then engaged with a talent-affiliated brand'. A high "
+                "TDL means engaged attention around this entity is "
+                "converting to branded products — a useful proxy for "
+                "commercial pull."
             ),
             "formula": "TDL = 100 * sum(mbp_hits) / sum(raw_mentions)",
             "brand_set_size": len(get_mbp_brands_lc()),

@@ -18048,21 +18048,8 @@
                         <div id="iqRankerTDLExplainer-{{ m.key }}" class="iqr-explain" role="region" aria-label="TDL scoring methodology">
                             <button type="button" class="iqr-explain-close" aria-label="Close" onclick="toggleIQRankerTDLExplainer('{{ m.key }}')">✕</button>
                             <h5>🛍️ TDL — Talent Driven Lift</h5>
-                            <div style="margin-bottom: 0.55rem;">Of the panel's URL hits that mentioned this profile in the selected window, the share whose <code>COMMON_NAME</code> maps to a <b>Most Purchased Brands</b> entry in <code>reference.host_mapping</code> (apparel, CPG, beauty, accessories, home/outdoor, technology, pets). Reads as: <i>&ldquo;of all the times the panel touched something about this entity, what % of those touches happened on a consumer-purchase brand?&rdquo;</i> A high TDL means audience attention around this entity is converting to retail browsing &mdash; a useful proxy for commercial pull.</div>
+                            <div style="margin-bottom: 0.55rem;">Of the panel's engagers with the profile in the selected window, the share who then viewed or purchased a product recommended by, affiliated with, or featured in a campaign with the profile subject after engaging with the talent. Reads as: <i>&ldquo;of all the digital engagers with the talent, what % of those then engaged with a talent-affiliated brand?&rdquo;</i> A high TDL means engaged attention around this entity is converting to branded products &mdash; a useful proxy for commercial pull.</div>
                             <div style="margin-bottom: 0.6rem;"><code>TDL = 100 × sum(mbp_hits) / sum(raw_mentions)</code></div>
-                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.4rem 0.85rem; font-size: 0.74rem; margin-top: 0.4rem;">
-                                <div><b style="color: #c8f7d4;">Numerator</b>&nbsp;&mdash; per-day count of mention rows whose lower-cased <code>COMMON_NAME</code> equals one of the ~5,500 brand entries in <code>host_mapping</code> with <code>SECTION LIKE 'Most Purchased Brands%'</code>, summed across the window.</div>
-                                <div><b style="color: #c8f7d4;">Denominator</b>&nbsp;&mdash; raw (panel-level) mention count for that profile in the same window. Both numerator and denominator are panel counts so the ratio is honest at panel scale; gen-pop projection cancels out.</div>
-                            </div>
-                            <ul style="margin: 0.85rem 0 0; padding-left: 1.1rem; font-size: 0.74rem;">
-                                <li><b>0% / blank:</b> the panel touches this profile but never on consumer-purchase brand surfaces &mdash; engagement is mostly editorial / streaming / search.</li>
-                                <li><b>5–15%:</b> meaningful retail crossover &mdash; the audience that reads about this entity is also browsing apparel / beauty / CPG brands at the same time.</li>
-                                <li><b>20%+:</b> a clear &ldquo;they sell&rdquo; signal &mdash; characteristic of celebrity endorsements and brand-builder talent (founders, owned-label artists, fitness creators).</li>
-                                <li><b>Hover the cell:</b> the underlying <code>mbp_hits / raw_mentions</code> panel counts are shown so you can sanity-check the percentage.</li>
-                            </ul>
-                            <div style="margin-top: 0.6rem; padding-top: 0.55rem; border-top: 1px dashed rgba(132,225,168,0.25); font-size: 0.72rem; color: var(--text-muted);">
-                                The brand set is loaded from <code>reference.host_mapping</code> at compute time and refreshes whenever the worker process restarts &mdash; new brands added to host_mapping pick up automatically.
-                            </div>
                         </div>
 
                         <!-- BVP formula explainer (toggled from the BVP column header ⓘ) -->
