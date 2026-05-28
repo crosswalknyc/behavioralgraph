@@ -19150,6 +19150,17 @@ def list_jobs():
         job_list = [e for e in job_list if not (e.get('s3_key') or '').startswith('purgatory/')]
         job_list = [e for e in job_list if not (e.get('s3_key') or '').startswith(S3_PURGATORY_PREFIX)]
         job_list = [e for e in job_list if e.get('status') != 'pending' and not e.get('in_purgatory')]
+
+        # Profile IQ must only surface files at the root of dashboard-inputs.
+        # Any cached entry whose s3_key contains '/' belongs to a subfolder
+        # (sentiment-iq/, roas-iq/, brand-partnership-iq/, metadata/, reference/,
+        # persona_cache/, _backups/, backups/, system/, etc.) and is filtered
+        # out here as a safety net for stale cache entries — the cache build
+        # paths (smart_cache_update / refresh_s3_cache) already exclude them
+        # at ingest time. SVOD/Ticket entries live in different buckets and
+        # use synthetic prefixes (svod-acquisition/, ticket-sales-iq/, etc.)
+        # — they're stripped above via is_svod_entry / not stored in this cache.
+        job_list = [e for e in job_list if '/' not in (e.get('s3_key') or '')]
         
         # Profile IQ must not show SVOD Acquisition — only Subscriber IQ shows those
         def is_svod_entry(e):
@@ -19518,12 +19529,12 @@ def smart_cache_update():
         for page in paginator.paginate(Bucket=S3_BUCKET):
             for obj in page.get('Contents', []):
                 key = obj['Key']
-                if (not key.endswith('.csv')
-                        or key.startswith('system/')
-                        or key.startswith('historic/')
-                        or key.startswith('backups/')
-                        or key.startswith('_backups/')
-                        or key.startswith(S3_PURGATORY_PREFIX)):
+                # Profile IQ only shows files at the root of dashboard-inputs.
+                # Any key with '/' lives in a subfolder (system/, historic/, backups/,
+                # _backups/, purgatory/, metadata/, sentiment-iq/, roas-iq/,
+                # brand-partnership-iq/, reference/, persona_cache/, etc.) and must
+                # not appear in the profile selector.
+                if not key.endswith('.csv') or '/' in key:
                     continue
                 
                 current_s3_keys.add(key)
@@ -19626,12 +19637,10 @@ def refresh_s3_cache(incremental=True):
         for page in paginator.paginate(Bucket=S3_BUCKET):
             for obj in page.get('Contents', []):
                 key = obj['Key']
-                if (not key.endswith('.csv')
-                        or key.startswith('system/')
-                        or key.startswith('historic/')
-                        or key.startswith('backups/')
-                        or key.startswith('_backups/')
-                        or key.startswith(S3_PURGATORY_PREFIX)):
+                # Profile IQ only shows files at the root of dashboard-inputs —
+                # anything in a subfolder is system/cache/reference data and must
+                # not appear in the profile selector.
+                if not key.endswith('.csv') or '/' in key:
                     continue
                 
                 job_data = process_s3_file_metadata(key, obj)

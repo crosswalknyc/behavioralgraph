@@ -1066,6 +1066,9 @@ def aggregate_leaderboard(
         "tdl": "tdl_score",
         "bvp_score": "bvp_score",
         "bvp": "bvp_score",
+        "delta_evc": "delta_evc",
+        "delta_tdl": "delta_tdl",
+        "delta_bvp": "delta_bvp",
     }
     sort_col = valid_sorts.get((sort or "").lower(), "cw_iq_score")
     direction = "DESC" if (sort_dir or "desc").lower() != "asc" else "ASC"
@@ -1183,9 +1186,24 @@ def aggregate_leaderboard(
     prev AS (
         SELECT profile_subject,
                sum({p_mentions})                  AS prev_mentions_sum,
+               sum(mentions)                      AS prev_raw_mentions_sum,
                if(sum(mentions) > 0,
                   round(sumOrNull(cw_iq_score * mentions) / sum(mentions), 2),
-                  round(avg(cw_iq_score), 2))     AS prev_cw_iq_score_calc
+                  round(avg(cw_iq_score), 2))     AS prev_cw_iq_score_calc,
+               -- Same EVC / TDL / BVC formulas as `curr`, computed over the
+               -- prior period so we can produce honest day-over-day deltas
+               -- on each percentage. Returns 0 when the prev window has no
+               -- mentions; the outer SELECT exposes prev_raw_mentions so
+               -- the UI can distinguish "delta = 0" from "no prior data".
+               if(sum(mentions) > 0,
+                  round(100.0 * sum(streaming_hits) / sum(mentions), 1),
+                  0.0)                            AS prev_evc_score_calc,
+               if(sum(mentions) > 0,
+                  round(100.0 * sum(mbp_hits) / sum(mentions), 1),
+                  0.0)                            AS prev_tdl_score_calc,
+               if(sum(mentions) > 0,
+                  round(100.0 * sum(bvp_hits) / sum(mentions), 1),
+                  0.0)                            AS prev_bvp_score_calc
         FROM reference.v_iq_daily_metrics
         WHERE snapshot_date BETWEEN toDate('{ps}') AND toDate('{pe}')
           AND {where_master}
@@ -1218,7 +1236,14 @@ def aggregate_leaderboard(
            c.mbp_hits_sum                             AS mbp_hits,
            c.tdl_score_calc                           AS tdl_score,
            c.bvp_hits_sum                             AS bvp_hits,
-           c.bvp_score_calc                           AS bvp_score
+           c.bvp_score_calc                           AS bvp_score,
+           coalesce(p.prev_evc_score_calc, 0)         AS prev_evc_score,
+           coalesce(p.prev_tdl_score_calc, 0)         AS prev_tdl_score,
+           coalesce(p.prev_bvp_score_calc, 0)         AS prev_bvp_score,
+           coalesce(p.prev_raw_mentions_sum, 0)       AS prev_raw_mentions,
+           c.evc_score_calc - coalesce(p.prev_evc_score_calc, 0) AS delta_evc,
+           c.tdl_score_calc - coalesce(p.prev_tdl_score_calc, 0) AS delta_tdl,
+           c.bvp_score_calc - coalesce(p.prev_bvp_score_calc, 0) AS delta_bvp
     FROM curr c
     LEFT JOIN prev p ON p.profile_subject = c.profile_subject
     ORDER BY {sort_col} {direction}, mentions DESC
@@ -1273,6 +1298,17 @@ def aggregate_leaderboard(
             "tdl_score":        float(r[22] or 0) if len(r) > 22 else 0.0,
             "bvp_hits":         int(r[23] or 0) if len(r) > 23 else 0,
             "bvp_score":        float(r[24] or 0) if len(r) > 24 else 0.0,
+            # Prior-period scores + raw mentions: the UI uses
+            # prev_raw_mentions to decide whether to render a delta or
+            # show "—" (no prior data) so a fresh profile doesn't get
+            # falsely-large +X.X% deltas.
+            "prev_evc_score":   float(r[25] or 0) if len(r) > 25 else 0.0,
+            "prev_tdl_score":   float(r[26] or 0) if len(r) > 26 else 0.0,
+            "prev_bvp_score":   float(r[27] or 0) if len(r) > 27 else 0.0,
+            "prev_raw_mentions": int(r[28] or 0) if len(r) > 28 else 0,
+            "delta_evc":        round(float(r[29] or 0), 2) if len(r) > 29 else 0.0,
+            "delta_tdl":        round(float(r[30] or 0), 2) if len(r) > 30 else 0.0,
+            "delta_bvp":        round(float(r[31] or 0), 2) if len(r) > 31 else 0.0,
         })
     return {
         "rows": out_rows,
