@@ -28734,6 +28734,31 @@
                          +     '<div style="font-size:0.6rem;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.05em;margin-top:2px;">total domestic run</div>'
                          +   '</div>'
                          + '</div>'
+                         // ── Streaming spillover sub-block (renders when payload carries the fields) ──
+                         + ((h.est_post_theatrical_stream_pct_of_cohort != null) ? (
+                               '<div style="background:linear-gradient(135deg, rgba(168,85,247,0.10) 0%, rgba(168,85,247,0.02) 100%); border:1px solid rgba(168,85,247,0.45); border-radius:8px; padding:8px 10px; margin-bottom:10px;">'
+                             +   '<div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px;margin-bottom:6px;">'
+                             +     '<div style="font-size:0.6rem;font-weight:700;color:#a855f7;letter-spacing:0.06em;text-transform:uppercase;">📺 Streaming spillover (post-theatrical)</div>'
+                             +     '<div style="font-size:1.1rem;font-weight:800;color:#a855f7;line-height:1;font-variant-numeric:tabular-nums;">' + (h.est_post_theatrical_stream_pct_of_cohort || 0).toFixed(0) + '%</div>'
+                             +   '</div>'
+                             +   '<div style="position:relative;height:6px;background:var(--bg-secondary);border-radius:3px;overflow:hidden;margin-bottom:6px;">'
+                             +     '<div style="width:' + Math.min(100, h.est_post_theatrical_stream_pct_of_cohort || 0) + '%;height:100%;background:#a855f7;opacity:0.8;border-radius:3px;"></div>'
+                             +   '</div>'
+                             +   '<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;font-size:0.66rem;">'
+                             +     '<div>'
+                             +       '<div style="font-weight:700;color:var(--text-primary);font-variant-numeric:tabular-nums;font-size:0.82rem;">' + _jiqFmt(h.est_post_theatrical_stream_count || 0) + '</div>'
+                             +       '<div style="color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.04em;font-size:0.58rem;">stream this title</div>'
+                             +     '</div>'
+                             +     '<div>'
+                             +       '<div style="font-weight:700;color:var(--text-primary);font-variant-numeric:tabular-nums;font-size:0.82rem;">+' + _jiqFmt(h.est_additional_streamers_beyond_theatrical || 0) + '</div>'
+                             +       '<div style="color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.04em;font-size:0.58rem;">non-buyers who\'d stream</div>'
+                             +     '</div>'
+                             +   '</div>'
+                             +   (h.stream_to_theatrical_ratio != null
+                                  ? '<div style="font-size:0.62rem;color:var(--text-secondary);margin-top:5px;font-style:italic;">' + h.stream_to_theatrical_ratio.toFixed(1) + '× the theatrical buyer count — streaming reaches the non-converters too</div>'
+                                  : '')
+                             + '</div>'
+                           ) : '')
                          + '<div style="font-size:0.7rem;color:var(--text-secondary);font-style:italic;line-height:1.4;margin-bottom:10px;">' + _jiqEsc(h.proxy_definition || '') + '</div>'
                          + '<div style="font-weight:600;font-size:0.72rem;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.04em;margin-bottom:5px;">Top engagement surfaces</div>'
                          + surfaces
@@ -28791,6 +28816,31 @@
                               +         '<div style="font-size:0.6rem;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.05em;margin-top:2px;">total domestic run</div>'
                               +       '</div>'
                               +     '</div>'
+                              // ── Streaming spillover row (matches per-cohort tile design, purple accent) ──
+                              + ((triple.est_post_theatrical_stream_pct_of_cohort != null) ? (
+                                    '<div style="background:linear-gradient(135deg, rgba(168,85,247,0.14) 0%, rgba(168,85,247,0.03) 100%); border:1px solid rgba(168,85,247,0.55); border-radius:8px; padding:8px 10px; margin-bottom:8px;">'
+                                  +   '<div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px;margin-bottom:6px;">'
+                                  +     '<div style="font-size:0.6rem;font-weight:700;color:#a855f7;letter-spacing:0.06em;text-transform:uppercase;">📺 Streaming spillover (post-theatrical)</div>'
+                                  +     '<div style="font-size:1.1rem;font-weight:800;color:#a855f7;line-height:1;font-variant-numeric:tabular-nums;">' + (triple.est_post_theatrical_stream_pct_of_cohort || 0).toFixed(0) + '%</div>'
+                                  +   '</div>'
+                                  +   '<div style="position:relative;height:6px;background:var(--bg-secondary);border-radius:3px;overflow:hidden;margin-bottom:6px;">'
+                                  +     '<div style="width:' + Math.min(100, triple.est_post_theatrical_stream_pct_of_cohort || 0) + '%;height:100%;background:#a855f7;opacity:0.85;border-radius:3px;"></div>'
+                                  +   '</div>'
+                                  +   '<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;font-size:0.66rem;">'
+                                  +     '<div>'
+                                  +       '<div style="font-weight:800;color:var(--text-primary);font-variant-numeric:tabular-nums;font-size:0.92rem;">' + _jiqFmt(triple.est_post_theatrical_stream_count || 0) + '</div>'
+                                  +       '<div style="color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.04em;font-size:0.58rem;">stream this title</div>'
+                                  +     '</div>'
+                                  +     '<div>'
+                                  +       '<div style="font-weight:800;color:var(--text-primary);font-variant-numeric:tabular-nums;font-size:0.92rem;">+' + _jiqFmt(triple.est_additional_streamers_beyond_theatrical || 0) + '</div>'
+                                  +       '<div style="color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.04em;font-size:0.58rem;">non-buyers who\'d stream</div>'
+                                  +     '</div>'
+                                  +   '</div>'
+                                  +   (triple.stream_to_theatrical_ratio != null
+                                       ? '<div style="font-size:0.62rem;color:var(--text-secondary);margin-top:5px;font-style:italic;">' + triple.stream_to_theatrical_ratio.toFixed(1) + '× the theatrical buyer count for this micro-cohort</div>'
+                                       : '')
+                                  + '</div>'
+                                ) : '')
                               +     '<div style="font-size:0.72rem;color:var(--text-primary);line-height:1.4;">' + _jiqEsc(triple.description || '') + '</div>'
                               +   '</div>' : '')
                               + '</div>'
