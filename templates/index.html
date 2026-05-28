@@ -28206,15 +28206,17 @@
                     ];
                     if (kpis.intent_gap_tickets_mid != null) {
                         var gapSubParts = [];
+                        // ALWAYS lead with the formula so nobody mistakes
+                        // this for additive upside on top of OW. It's the
+                        // unconverted SLICE of the OW projection.
+                        gapSubParts.push('= projected OW − confirmed (already inside OW gross / Domestic Total — not additive)');
                         if (kpis.intent_gap_tickets_low != null && kpis.intent_gap_tickets_high != null) {
                             gapSubParts.push('range ' + _jiqFmt(kpis.intent_gap_tickets_low)
                                              + '–' + _jiqFmt(kpis.intent_gap_tickets_high) + ' tix');
                         }
                         if (kpis.intent_gap_addressable_tickets_mid != null) {
                             gapSubParts.push('~' + _jiqFmt(kpis.intent_gap_addressable_tickets_mid)
-                                             + ' digitally addressable (rest = walk-up)');
-                        } else {
-                            gapSubParts.push('= projected OW tix − confirmed digital tix');
+                                             + ' digitally addressable, rest = walk-up');
                         }
                         k.push(['Not Yet Converted · Strong Intent',
                                 _jiqFmt(kpis.intent_gap_tickets_mid) + ' tix',
