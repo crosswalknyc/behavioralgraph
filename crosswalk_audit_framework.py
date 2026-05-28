@@ -1600,7 +1600,7 @@ def get_hostmap_section_whitelist(refresh: bool = False,
         import clickhouse_connect
         import os as _os
         client = clickhouse_connect.get_client(
-            host=_os.environ.get('CH_HOST', '37.27.140.111'),
+            host=_os.environ.get('CH_HOST', '168.119.215.48'),
             port=int(_os.environ.get('CH_PORT', '8123')),
             username=_os.environ.get('CH_USER', 'bgapp'),
             password=_os.environ.get('CH_PASSWORD',
@@ -2130,7 +2130,7 @@ def get_demographic_value_whitelist(force_refresh: bool = False) -> dict:
     try:
         import clickhouse_connect
         ch = clickhouse_connect.get_client(
-            host='37.27.140.111', port=8123,
+            host='168.119.215.48', port=8123,
             username='bgapp',
             password='4qPllwDG+S3PptBWTRAJPTkpCzkRZ6tZ',
         )
