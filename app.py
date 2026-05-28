@@ -31257,6 +31257,36 @@ def iq_rankers_leaderboard():
             sort_dir=sort_dir,
             limit=limit,
         )
+        # Annotate each row with imdb_id from the in-memory jobs cache so the
+        # frontend can render "ACTOR - IMDB: nm0000123" inline. We keep IMDB
+        # ids on the s3_cache.json job records (populated by
+        # `migration/scrape_imdb_ids.py`) rather than in ClickHouse so we
+        # don't need a schema migration just for an id used purely for
+        # display. Lookup is by profile_subject (canonical) with s3_key as
+        # a fallback for older rows that may not match by subject alone.
+        try:
+            jobs_list = _iq_rankers_get_jobs() or []
+            by_subject = {}
+            by_s3key   = {}
+            for j in jobs_list:
+                subj = (j.get('profile_subject') or '').strip()
+                key  = (j.get('s3_key') or j.get('job_id') or '').strip()
+                imdb = j.get('imdb_id')
+                if not imdb:
+                    continue
+                if subj:
+                    by_subject[subj] = imdb
+                if key:
+                    by_s3key[key] = imdb
+            for r in (result.get('rows') or []):
+                imdb = (by_subject.get((r.get('profile_subject') or '').strip())
+                        or by_s3key.get((r.get('s3_key') or '').strip()))
+                if imdb:
+                    r['imdb_id'] = imdb
+        except Exception:
+            # Display-only enrichment; never fail the leaderboard fetch over
+            # missing IMDB ids.
+            import traceback; traceback.print_exc()
         return jsonify({'success': True, **result})
     except Exception as e:
         import traceback; traceback.print_exc()

@@ -8802,6 +8802,13 @@
         }
         .iqr-name-text { font-weight: 700; color: var(--text-primary); }
         .iqr-name-sub  { font-size: 0.7rem; color: var(--text-secondary); margin-top: 0.1rem; }
+        .iqr-imdb-link {
+            color: #f5c518; /* IMDB yellow */
+            text-decoration: none;
+            font-weight: 600;
+            letter-spacing: 0.01em;
+        }
+        .iqr-imdb-link:hover { text-decoration: underline; color: #f5c518; }
         .iqr-row-chip {
             display: inline-flex; align-items: center; justify-content: center;
             gap: 0.25rem;
@@ -81298,7 +81305,7 @@
                             <button type="button" class="iqr-row-chip iqr-row-chip-sentiment" title="Open this profile in the Sentiment IQ dashboard" onclick="${sentimentClick}">Sentiment</button>
                             <button type="button" class="iqr-row-chip iqr-row-chip-profile" title="Open this profile's dashboard" onclick="${profileClick}">Profile</button>
                         </div>
-                        <div class="iqr-name-sub">${_iqEsc(r.subcategory || '')}</div>
+                        <div class="iqr-name-sub">${_iqRenderSubcategory(r)}</div>
                     </td>
                     <td style="text-align: right;">${fmtNum(r.mentions)}</td>
                     <td style="text-align: right;">${fmtDelta(r.delta_mentions, 0)}</td>
@@ -81324,6 +81331,23 @@
                 .replace(/>/g, '&gt;')
                 .replace(/"/g, '&quot;')
                 .replace(/'/g, '&#39;');
+        }
+
+        // Render the small grey label under a profile name in the leaderboard.
+        // When the row carries an IMDB id (populated server-side from the
+        // s3_cache.json `imdb_id` field that `migration/scrape_imdb_ids.py`
+        // backfills), append " - IMDB: nm0000123" as a clickable imdb.com
+        // link. Profiles without an id (brands, shows, internal jobs) get
+        // just the subcategory.
+        function _iqRenderSubcategory(r) {
+            const sub  = _iqEsc(r && r.subcategory || '');
+            const imdb = String((r && r.imdb_id) || '').trim();
+            if (!/^nm\d+$/i.test(imdb)) return sub;
+            const safeId = _iqEsc(imdb);
+            const href   = 'https://www.imdb.com/name/' + encodeURIComponent(imdb) + '/';
+            const link   = `<a class="iqr-imdb-link" href="${href}" target="_blank" rel="noopener" `
+                         + `onclick="event.stopPropagation();" title="Open ${safeId} on IMDB">${safeId}</a>`;
+            return sub ? `${sub} &mdash; IMDB: ${link}` : `IMDB: ${link}`;
         }
 
         // Header click → sort. Single delegated listener so we don't have to
