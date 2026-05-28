@@ -30990,9 +30990,21 @@
                                 return '<span style="display: inline-block; padding: 2px 8px; border-radius: 99px; background: ' + color + '; color: #fff; font-size: 11px; font-weight: 600;">'
                                      + _jiqEsc(step) + '</span>' + arrow;
                             }).join('');
+                            // Pct field is inconsistent across payload
+                            // versions: newer runs use users_pct, older
+                            // ones use pct. Fall back to computing from
+                            // users / cohort_size so the column never
+                            // collapses to 0% silently.
+                            var pctVal = (p.users_pct != null) ? p.users_pct
+                                       : (p.pct != null)       ? p.pct
+                                       : (cohortN > 0 && p.users != null) ? Math.round(p.users / cohortN * 1000) / 10
+                                       : 0;
+                            var pctDisplay = (pctVal != null && !isNaN(pctVal))
+                                ? (Number(pctVal).toFixed(1).replace(/\.0$/, '')) + '%'
+                                : '—';
                             return '<tr style="border-bottom:1px solid var(--border-color);">'
                                  + '<td style="padding:6px 4px;text-align:right;font-weight:600;">' + _jiqFmt(p.users) + '</td>'
-                                 + '<td style="padding:6px 4px;text-align:right;color:var(--text-secondary);">' + (p.users_pct || 0) + '%</td>'
+                                 + '<td style="padding:6px 4px;text-align:right;color:var(--text-secondary);">' + pctDisplay + '</td>'
                                  + '<td style="padding:6px 4px;">' + pathHtml + '</td>'
                                  + '</tr>';
                         }).join('') + '</tbody></table>';
