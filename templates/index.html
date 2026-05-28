@@ -55649,7 +55649,8 @@
             const tocSlide = {
                 id: 'toc_' + Date.now(),
                 type: 'toc',
-                title: 'Table of Contents',
+                title: TOC_SLIDE_DEFAULT_TITLE,
+                customTitle: TOC_SLIDE_DEFAULT_TITLE,
                 dateAdded: new Date().toISOString()
             };
             
@@ -70594,7 +70595,8 @@
             const tocSlide = {
                 id: 'toc_' + Date.now(),
                 type: 'toc',
-                title: 'Table of Contents',
+                title: TOC_SLIDE_DEFAULT_TITLE,
+                customTitle: TOC_SLIDE_DEFAULT_TITLE,
                 dateAdded: new Date().toISOString()
             };
             
@@ -73955,7 +73957,7 @@
                          ondragleave="handleSlideThumbDragLeave(event)"
                          ondrop="handleSlideThumbDrop(event, ${idx})">
                         <div class="thumb-number">${idx + 1}</div>
-                        <div class="thumb-title">${idx === 0 ? '📑 Title' : (slide.title || slide.customTitle || slide.category || 'Slide')}</div>
+                        <div class="thumb-title">${idx === 0 ? '📑 Title' : (slide.type === 'toc' ? getTocSlideDisplayTitle(slide) : (slide.title || slide.customTitle || slide.category || 'Slide'))}</div>
                         ${idx > 0 ? `<button class="slide-thumb-delete" onclick="event.stopPropagation(); deleteSlide(${idx})" title="Delete slide">🗑️</button>` : ''}
                     </div>
                 `).join('')}
@@ -74341,7 +74343,8 @@
             const tocSlide = {
                 id: 'toc_' + Date.now(),
                 type: 'toc',
-                title: 'Table of Contents',
+                title: TOC_SLIDE_DEFAULT_TITLE,
+                customTitle: TOC_SLIDE_DEFAULT_TITLE,
                 dateAdded: new Date().toISOString()
             };
             
@@ -74783,6 +74786,13 @@
         
         // Source footer text for all slides (base line; profile/sample/dates appended below)
         const SLIDE_FOOTER_TEXT = 'Source: Crosswalk Profile IQ, Prior 12 Months from a 10M Gen Pop Digital Behavioral Panel';
+        const TOC_SLIDE_DEFAULT_TITLE = "What's inside.";
+
+        function getTocSlideDisplayTitle(slide) {
+            const t = (slide?.customTitle || slide?.title || '').trim();
+            if (!t || /^table of contents$/i.test(t)) return TOC_SLIDE_DEFAULT_TITLE;
+            return t;
+        }
 
         function getCrosswalkDeckLogoHtml(width = 108) {
             return `<img src="/static/crosswalk-logo-deck.png" alt="Crosswalk" width="${width}" style="display:block;height:auto;border:0;outline:none;">`;
@@ -74856,34 +74866,34 @@
                     ? `<img src="${img}" alt="${escapeHtml(alt)}" style="width: 100%; height: 100%; object-fit: cover; object-position: center top; border-radius: 8px;">`
                     : `<div style="width: 100%; height: 100%; background: linear-gradient(135deg, #374151, #1f2937); border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 3rem; color: rgba(255,255,255,0.3);">📊</div>`;
                 
-                // Dynamic sizing based on title length to prevent overlap
+                // Dynamic sizing based on title length (Playfair serif headline)
                 const titleLength = profileName.length;
-                let titleFontSize, titleTop, imageTop, imageSize;
+                let titleFontSize, titleBlockTop, imageTop, imageSize;
                 
                 if (titleLength <= 10) {
-                    titleFontSize = '8rem';
-                    titleTop = '-2%';
-                    imageTop = '35%';
+                    titleFontSize = '4.5rem';
+                    titleBlockTop = '88px';
+                    imageTop = '42%';
                     imageSize = '180px';
                 } else if (titleLength <= 15) {
-                    titleFontSize = '7rem';
-                    titleTop = '0%';
-                    imageTop = '40%';
+                    titleFontSize = '4rem';
+                    titleBlockTop = '92px';
+                    imageTop = '44%';
                     imageSize = '170px';
                 } else if (titleLength <= 20) {
-                    titleFontSize = '6rem';
-                    titleTop = '2%';
-                    imageTop = '45%';
+                    titleFontSize = '3.25rem';
+                    titleBlockTop = '96px';
+                    imageTop = '46%';
                     imageSize = '160px';
                 } else if (titleLength <= 25) {
-                    titleFontSize = '5rem';
-                    titleTop = '3%';
-                    imageTop = '50%';
+                    titleFontSize = '2.85rem';
+                    titleBlockTop = '100px';
+                    imageTop = '48%';
                     imageSize = '150px';
                 } else {
-                    titleFontSize = '4rem';
-                    titleTop = '5%';
-                    imageTop = '55%';
+                    titleFontSize = '2.5rem';
+                    titleBlockTop = '104px';
+                    imageTop = '50%';
                     imageSize = '140px';
                 }
                 
@@ -74896,7 +74906,7 @@
                                 <div style="width: ${size}; height: ${size}; border: 3px solid rgba(255,255,255,0.2); border-radius: 8px; overflow: hidden; box-shadow: 0 8px 24px rgba(0,0,0,0.4); flex-shrink: 0;">
                                     ${singleImageHtml(cp.image, cp.name)}
                                 </div>
-                                <div style="font-size: 0.7rem; color: rgba(255,255,255,0.9); font-weight: 600; text-align: center; max-width: ${size}; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${escapeHtml(cp.name)}</div>
+                                <div style="font-size: 0.7rem; color: var(--deck-text-primary); font-weight: 600; text-align: center; max-width: ${size}; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${escapeHtml(cp.name)}</div>
                             </div>`;
                         }).join('')}
                         </div>`
@@ -74905,7 +74915,7 @@
                             <div style="width: ${imageSize}; height: ${imageSize}; border: 3px solid rgba(255,255,255,0.2); border-radius: 8px; overflow: hidden; box-shadow: 0 8px 24px rgba(0,0,0,0.4);">
                                 ${singleImageHtml(compProfiles[0].image, compProfiles[0].name)}
                             </div>
-                            <div style="font-size: 0.8rem; color: rgba(255,255,255,0.9); font-weight: 600;">${escapeHtml(compProfiles[0].name)}</div>
+                            <div style="font-size: 0.8rem; color: var(--deck-text-primary); font-weight: 600;">${escapeHtml(compProfiles[0].name)}</div>
                             </div>`
                         : null);
                 
@@ -74913,26 +74923,36 @@
                 
                 return `
                     <div style="position: absolute; left: 0; top: 0; width: 100%; height: 100%; display: flex; flex-direction: column;">
-                        <!-- Large profile name - EDITABLE with dynamic sizing -->
-                        <div contenteditable="true" 
-                             id="titleSlideProfileName"
-                             style="position: absolute; left: -1%; top: ${titleTop}; font-size: ${titleFontSize}; font-weight: 700; color: #1a1a2e; line-height: 1; letter-spacing: -0.03em; text-transform: uppercase; cursor: text; padding: 4px 8px; border-radius: 4px; max-width: 95%; word-wrap: break-word;"
-                             onfocus="this.style.background='rgba(0,0,0,0.05)'" 
-                             onblur="this.style.background='transparent'; updateTitleSlideProfileName(this.textContent); renderSlideEditor();">
-                            ${escapeHtml(profileName)}.
+                        <!-- Top bar: logo -->
+                        <div style="position: absolute; left: 32px; top: 28px;">
+                            ${getCrosswalkDeckLogoHtml(108)}
+                        </div>
+
+                        <!-- Title block -->
+                        <div style="position: absolute; left: 32px; top: ${titleBlockTop}; width: 58%;">
+                            <div contenteditable="true"
+                                 id="titleSlideProfileName"
+                                 style="font-family: var(--deck-serif); font-size: ${titleFontSize}; font-weight: 600; color: var(--deck-text-primary); line-height: 1.08; letter-spacing: -0.02em; cursor: text; padding: 4px 6px; border-radius: 4px; max-width: 100%; word-wrap: break-word;"
+                                 onfocus="this.style.background='rgba(0,0,0,0.04)'"
+                                 onblur="this.style.background='transparent'; updateTitleSlideProfileName(this.textContent); renderSlideEditor();">
+                                ${escapeHtml(profileName)}
+                            </div>
+                            <div style="margin-top: 0.65rem; font-size: 0.55rem; letter-spacing: 0.14em; text-transform: uppercase; color: var(--deck-text-muted); font-weight: 600;">
+                                Audience profile
+                            </div>
                         </div>
                         
                         ${comparisonImagesHtml ? comparisonImagesHtml : (profileImage ? `
                         <!-- Profile image - CLICKABLE TO CHANGE with dynamic positioning -->
-                        <div style="position: absolute; left: 5%; top: ${imageTop}; width: ${imageSize}; height: ${imageSize}; border: 3px solid rgba(200,200,200,0.3); border-radius: 8px; overflow: hidden; box-shadow: 0 8px 24px rgba(0,0,0,0.15); cursor: pointer; transition: border-color 0.2s;"
+                        <div style="position: absolute; left: 32px; top: ${imageTop}; width: ${imageSize}; height: ${imageSize}; border: 2px solid rgba(26,26,46,0.12); border-radius: 8px; overflow: hidden; box-shadow: 0 8px 24px rgba(0,0,0,0.1); cursor: pointer; transition: border-color 0.2s;"
                              onclick="uploadTitleImage()"
-                             onmouseover="this.style.borderColor='#c8e600'"
-                             onmouseout="this.style.borderColor='rgba(200,200,200,0.3)'"
+                             onmouseover="this.style.borderColor='var(--deck-accent-lime)'"
+                             onmouseout="this.style.borderColor='rgba(26,26,46,0.12)'"
                              title="Click to change image">
                             ${profileImageHtml}
                         </div>` : `
                         <!-- Add Image placeholder - DRAGGABLE + RESIZABLE -->
-                        <div class="slide-draggable-section slide-image-placeholder" style="position: absolute; left: 5%; top: 40%; width: 28%; height: 45%;"
+                        <div class="slide-draggable-section slide-image-placeholder" style="position: absolute; left: 32px; top: 40%; width: 28%; height: 45%;"
                              onmousedown="startDragSlideSection(event, 0, 'image')"
                              onclick="if(!event.defaultPrevented) uploadTitleImage()"
                              title="Click to add image">
@@ -74946,37 +74966,37 @@
                             <button class="placeholder-delete-btn" onclick="event.stopPropagation(); this.parentElement.style.display='none';" title="No image on this slide">✕ No Image</button>
                         </div>`)}
                         
-                        <!-- Right side info - EDITABLE (date removed from top right per request) -->
-                        <div style="position: absolute; right: 5%; top: 45%; text-align: right; font-size: 0.7rem; color: #6366f1;">
-                            <div contenteditable="true" 
-                                 style="margin-top: 0.5rem; cursor: text; padding: 2px 4px; border-radius: 3px;"
-                                 onfocus="this.style.background='rgba(0,0,0,0.05)'" 
+                        <!-- Right side info - EDITABLE -->
+                        <div style="position: absolute; right: 32px; top: 42%; text-align: right; font-size: 0.7rem;">
+                            <div contenteditable="true"
+                                 style="color: var(--deck-accent-purple); cursor: text; padding: 2px 4px; border-radius: 3px;"
+                                 onfocus="this.style.background='rgba(0,0,0,0.04)'"
                                  onblur="this.style.background='transparent'; updateTitleSlideBranding(this.textContent)">${escapeHtml(branding)}</div>
-                            <div contenteditable="true" 
-                                 style="margin-top: 0.75rem; font-size: 0.8rem; color: #1a1a2e; font-weight: 600; cursor: text; padding: 2px 4px; border-radius: 3px;"
-                                 onfocus="this.style.background='rgba(0,0,0,0.05)'" 
+                            <div contenteditable="true"
+                                 style="margin-top: 0.75rem; font-size: 0.8rem; color: var(--deck-text-primary); font-weight: 600; cursor: text; padding: 2px 4px; border-radius: 3px;"
+                                 onfocus="this.style.background='rgba(0,0,0,0.04)'"
                                  onblur="this.style.background='transparent'; updateTitleSlidePresenterName(this.textContent)">${escapeHtml(presenterName)}</div>
-                            <div contenteditable="true" 
-                                 style="margin-top: 0.15rem; font-size: 0.7rem; color: #555; cursor: text; padding: 2px 4px; border-radius: 3px;"
-                                 onfocus="this.style.background='rgba(0,0,0,0.05)'" 
+                            <div contenteditable="true"
+                                 style="margin-top: 0.15rem; font-size: 0.7rem; color: var(--deck-text-muted); cursor: text; padding: 2px 4px; border-radius: 3px;"
+                                 onfocus="this.style.background='rgba(0,0,0,0.04)'"
                                  onblur="this.style.background='transparent'; updateTitleSlidePresenterCompany(this.textContent)">${escapeHtml(presenterCompany)}</div>
                         </div>
                         
                         <!-- Bottom description - Date Range - EDITABLE -->
-                        <div contenteditable="true" 
-                             style="position: absolute; left: 5%; bottom: 15%; width: 60%; font-size: 0.85rem; color: #444; line-height: 1.6; font-weight: 500; cursor: text; padding: 4px 8px; border-radius: 4px;"
-                             onfocus="this.style.background='rgba(0,0,0,0.05)'" 
+                        <div contenteditable="true"
+                             style="position: absolute; left: 32px; bottom: 48px; width: 60%; font-size: 0.72rem; color: var(--deck-text-muted); line-height: 1.65; font-style: italic; cursor: text; padding: 4px 6px; border-radius: 4px;"
+                             onfocus="this.style.background='rgba(0,0,0,0.04)'"
                              onblur="this.style.background='transparent'; updateTitleSlideDateRange(this.textContent)">
                             ${escapeHtml(dateRangeDisplay)}
                         </div>
                         ${(titleSlide.companyLogo || currentUserCompanyLogo) ? `
                         <!-- Company logo - bottom right -->
-                        <div style="position: absolute; right: 5%; bottom: 8%; max-width: 140px; max-height: 50px; display: flex; align-items: center; justify-content: flex-end;">
+                        <div style="position: absolute; right: 32px; bottom: 48px; max-width: 140px; max-height: 50px; display: flex; align-items: center; justify-content: flex-end;">
                             <img src="${escapeHtml(titleSlide.companyLogo || currentUserCompanyLogo)}" alt="Company" style="max-width: 100%; max-height: 50px; object-fit: contain; opacity: 0.9;">
                         </div>
                         ` : ''}
                     </div>
-                    ${footerHtml}
+                    ${getDeckChromeFooter(idx || 1)}
                 `;
             }
             
@@ -75018,7 +75038,7 @@
                              style="font-family: var(--deck-serif); font-size: 2.35rem; font-weight: 600; color: var(--deck-text-primary); line-height: 1.15; cursor: text; padding: 4px 6px; border-radius: 4px; margin-bottom: 1rem;"
                              onfocus="this.style.background='rgba(0,0,0,0.04)'"
                              onblur="this.style.background='transparent'; updateTocTitle(this.textContent)">
-                            ${escapeHtml(slide.customTitle || slide.title || "What's inside.")}
+                            ${escapeHtml(getTocSlideDisplayTitle(slide))}
                         </div>
 
                         <div contenteditable="true"
@@ -75050,7 +75070,7 @@
                                 </div>
                             `).join('') : `
                                 <div style="padding: 1rem 0; color: var(--deck-text-muted); font-size: 0.75rem; font-style: italic;">
-                                    Add slides to populate the table of contents.
+                                    Add slides to populate the contents list.
                                 </div>
                             `}
                         </div>
@@ -76064,7 +76084,7 @@
             modal.innerHTML = `
                 <div class="deck-workspace-content" style="max-width: 500px;">
                     <div class="deck-workspace-header">
-                        <h2>🖼️ Add Image to Table of Contents</h2>
+                        <h2>🖼️ Add Image to What's inside.</h2>
                         <button onclick="document.getElementById('uploadTocImageModal').remove()" style="background: none; border: none; color: var(--text-secondary); cursor: pointer; font-size: 1.5rem;">✕</button>
                     </div>
                     <div style="padding: 1.5rem;">
@@ -78400,8 +78420,8 @@
                             </div>
                             <div onclick="addTableOfContentsSlide()" style="padding: 1.5rem; background: var(--bg-input); border-radius: 8px; cursor: pointer; text-align: center; border: 2px solid transparent; transition: all 0.2s;" onmouseover="this.style.borderColor='var(--accent-lime)'" onmouseout="this.style.borderColor='transparent'">
                                 <div style="font-size: 2rem; margin-bottom: 0.5rem;">📋</div>
-                                <div style="font-weight: 600;">Table of Contents</div>
-                                <div style="font-size: 0.75rem; color: var(--text-secondary);">Auto-generated TOC</div>
+                                <div style="font-weight: 600;">What's inside.</div>
+                                <div style="font-size: 0.75rem; color: var(--text-secondary);">Overview &amp; contents list</div>
                             </div>
                             <div onclick="addSlideFromModule()" style="padding: 1.5rem; background: var(--bg-input); border-radius: 8px; cursor: pointer; text-align: center; border: 2px solid transparent; transition: all 0.2s;" onmouseover="this.style.borderColor='var(--accent-lime)'" onmouseout="this.style.borderColor='transparent'">
                                 <div style="font-size: 2rem; margin-bottom: 0.5rem;">📊</div>
@@ -78422,8 +78442,8 @@
             const slide = {
                 id: 'slide_' + Date.now(),
                 type: 'toc',
-                title: 'TABLE OF CONTENTS',
-                customTitle: 'TABLE OF CONTENTS',
+                title: TOC_SLIDE_DEFAULT_TITLE,
+                customTitle: TOC_SLIDE_DEFAULT_TITLE,
                 data: null,
                 notes: ''
             };
@@ -78435,7 +78455,7 @@
             
             currentEditingSlide = 1; // TOC is now slide 1
             renderSlideEditor();
-            showNotification('✅ Table of Contents added', 'success');
+            showNotification(`✅ ${TOC_SLIDE_DEFAULT_TITLE} slide added`, 'success');
         }
         
         function addBlankSlide() {
