@@ -1370,17 +1370,10 @@ def aggregate_leaderboard(
         "bvp_formula": {
             "name": "Pre-release Buzz vs Performance w/o Engagement",
             "description": (
-                "Of the panel's URL hits that mentioned this profile in "
-                "the selected window, the share whose COMMON_NAME is a "
-                "Streaming/Platform OR Movie Theater entry in "
-                "reference.host_mapping. Reads as: 'of all the times "
-                "the panel touched something about this entity, what % "
-                "of those touches happened on a distribution channel "
-                "(Netflix-style platform or AMC-style theater)'. Useful "
-                "pre-release: a BVP that's tracking ahead of mention "
-                "volume signals the audience is already converting buzz "
-                "to channel engagement; a low BVP at high mentions is "
-                "the 'all talk, no engagement' pattern."
+                "Of the panel's digital touchpoints that mentioned "
+                "this profile in the selected window, the share who "
+                "did not engage with the talent but watched their "
+                "content on a streaming or VOD platform."
             ),
             "formula": "BVP = 100 * sum(bvp_hits) / sum(raw_mentions)",
             "brand_set_size": len(get_bvp_brands_lc()),

@@ -18056,21 +18056,8 @@
                         <div id="iqRankerBVPExplainer-{{ m.key }}" class="iqr-explain" role="region" aria-label="BVP scoring methodology">
                             <button type="button" class="iqr-explain-close" aria-label="Close" onclick="toggleIQRankerBVPExplainer('{{ m.key }}')">✕</button>
                             <h5>🎬 BVP — Pre-release Buzz vs Performance w/o Engagement</h5>
-                            <div style="margin-bottom: 0.55rem;">Of the panel's URL hits that mentioned this profile in the selected window, the share whose <code>COMMON_NAME</code> maps to a <b>Streaming/Platform</b> OR <b>Movie Theater</b> entry in <code>reference.host_mapping</code>. Reads as: <i>&ldquo;of all the times the panel touched something about this entity, what % of those touches happened on a distribution channel (Netflix-style platform or AMC-style theater)?&rdquo;</i> Useful pre-release: a BVP that's tracking ahead of mention volume signals the audience is converting buzz to channel engagement; a low BVP at high mentions is the &ldquo;all talk, no engagement&rdquo; pattern.</div>
+                            <div style="margin-bottom: 0.55rem;">Of the panel's digital touchpoints that mentioned this profile in the selected window, the share who did not engage with the talent but watched their content on a streaming or VOD platform.</div>
                             <div style="margin-bottom: 0.6rem;"><code>BVP = 100 × sum(bvp_hits) / sum(raw_mentions)</code></div>
-                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.4rem 0.85rem; font-size: 0.74rem; margin-top: 0.4rem;">
-                                <div><b style="color: #c8f7d4;">Numerator</b>&nbsp;&mdash; per-day count of mention rows whose lower-cased <code>COMMON_NAME</code> equals one of the ~177 entries in <code>host_mapping</code> with <code>SECTION IN ('Streaming/Platform', 'Movie Theater')</code>, summed across the window.</div>
-                                <div><b style="color: #c8f7d4;">Denominator</b>&nbsp;&mdash; raw (panel-level) mention count for that profile in the same window. Both are panel counts so the ratio is honest at panel scale.</div>
-                            </div>
-                            <ul style="margin: 0.85rem 0 0; padding-left: 1.1rem; font-size: 0.74rem;">
-                                <li><b>How to read it:</b> if mentions are rising day-over-day but BVP stays flat near 0%, audiences are reading <i>about</i> the title without showing up where it actually lives. If BVP rises in step with mentions, the buzz is converting.</li>
-                                <li><b>EVC vs BVP:</b> EVC uses a <i>curated</i> streaming set (Netflix / Hulu / etc.) intentionally narrow for clean signal. BVP uses the <i>full</i> host_mapping <code>Streaming/Platform</code> SECTION + <code>Movie Theater</code> SECTION, so it captures a wider distribution surface (long-tail platforms and theatrical chains).</li>
-                                <li><b>Movie theater coverage:</b> AMC, Regal, Cinemark, IMAX, Alamo Drafthouse, etc. — anything tagged <code>SECTION = 'Movie Theater'</code> in host_mapping.</li>
-                                <li><b>Hover the cell:</b> the underlying <code>bvp_hits / raw_mentions</code> panel counts are shown so you can sanity-check the percentage.</li>
-                            </ul>
-                            <div style="margin-top: 0.6rem; padding-top: 0.55rem; border-top: 1px dashed rgba(132,225,168,0.25); font-size: 0.72rem; color: var(--text-muted);">
-                                The brand set is loaded from <code>reference.host_mapping</code> at compute time and refreshes whenever the worker process restarts.
-                            </div>
                         </div>
 
                         <div id="iqRankerSubTabs-{{ m.key }}" class="iqr-subtabs"></div>
