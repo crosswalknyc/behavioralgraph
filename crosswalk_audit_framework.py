@@ -381,33 +381,27 @@ def _load_gen_pop_lookup(path: str = '/root/finished_codes/Gen_Pop_2026.csv'):
     return {}
 
 
-def _jitter_bp(bp: float, brand: str, column: str, span: float = 1.5) -> float:
-    """Deterministic ±span/2 jitter so two brands at the same target value
-    don't collide. Uses brand+column as the seed."""
-    import hashlib
-    h = hashlib.md5(f'{column}|{brand}'.encode()).hexdigest()
-    # ±span/2 in the lower 4dp
-    delta = (int(h[:8], 16) % 10000 / 10000.0 - 0.5) * span
-    out = bp + delta
-    # Avoid round-looking values (X.X0, X.X5)
-    if round(out * 100) % 10 in (0, 5):
-        out += 0.0073
-    return max(0.01, min(99.99, out))
-
-
 def vet_against_consensus(df, gp_lookup=None, subject: str = '',
                             verbose: bool = True,
-                            generate_tables: bool = True,
-                            auto_fix: bool = True):
-    """Crosswalk Audience Vetting Framework — final-pass consensus check.
+                            generate_tables: bool = True):
+    """Crosswalk Audience Vetting Framework — SCORING ONLY.
 
     For every brand row in the profile (excluding demographics, summary
     rows, and subject identifiers), compare the BP to the Gen Pop digital
-    consensus and assign PASS / BORDERLINE / FAIL.
+    consensus and assign PASS / BORDERLINE / FAIL_high / FAIL_low.
 
-    Returns ``(df_fixed, verdicts, markdown_report)`` where:
+    This pass does NOT mutate values. It only produces verdicts that the
+    persona-reasoning agent (agent_reason_vet_failures) consumes
+    row-by-row to either KEEP (with justification) or CHANGE (with a
+    persona-grounded new value).
+
+    This prevents the "auto-fix pinning" failure mode where 300+ brands
+    all get capped to the same GP+6pt value, creating massive 4dp pin
+    collisions.
+
+    Returns ``(df, verdicts, markdown_report)`` where:
       verdicts = list of dicts: {category, brand, crosswalk, consensus,
-                                  difference, verdict, action}
+                                  difference, verdict}
       markdown_report = str — one markdown table per category, sorted
                               by BP desc
     """
@@ -421,16 +415,13 @@ def vet_against_consensus(df, gp_lookup=None, subject: str = '',
     if 'Column' not in df.columns or 'Value' not in df.columns:
         return df, [], ''
 
-    df = df.copy()
     bp_col = 'Brand Penetration (Row)'
     if bp_col not in df.columns:
         return df, [], ''
-    if df[bp_col].dtype != object:
-        df[bp_col] = df[bp_col].astype(object)
 
     col_u = df['Column'].astype(str).str.upper().str.strip()
     verdicts = []
-    n_pass = n_borderline = n_fail_high = n_fail_low = n_fixed = 0
+    n_pass = n_borderline = n_fail_high = n_fail_low = 0
 
     for idx in df.index:
         col_tag = col_u.at[idx]
@@ -462,7 +453,6 @@ def vet_against_consensus(df, gp_lookup=None, subject: str = '',
         is_aligned = col_tag in _SUBJECT_ALIGNED_CATEGORIES
         # PASS bands depend on subject-aligned vs other
         if is_aligned:
-            # Allow up to +30pt lift before flagging
             pass_hi = consensus + 30.0
             fail_hi = consensus + 50.0
         else:
@@ -470,27 +460,14 @@ def vet_against_consensus(df, gp_lookup=None, subject: str = '',
             fail_hi = consensus + 15.0
 
         # Lower bound: Engagers should index at-or-above GP
-        pass_lo = consensus - 5.0
         fail_lo = consensus - 10.0
 
-        action = None
-        new_bp = None
         if cw_bp > fail_hi:
-            verdict = 'FAIL (high)'
+            verdict = 'FAIL_high'
             n_fail_high += 1
-            if auto_fix:
-                target = consensus + (pass_hi - consensus) * 0.6
-                new_bp = _jitter_bp(target, brand_n, col_tag)
-                action = f'cap → {new_bp:.4f}%'
-                n_fixed += 1
         elif cw_bp < fail_lo:
-            verdict = 'FAIL (low)'
+            verdict = 'FAIL_low'
             n_fail_low += 1
-            if auto_fix:
-                target = consensus + 1.5  # lift to GP +1.5pt
-                new_bp = _jitter_bp(target, brand_n, col_tag)
-                action = f'lift → {new_bp:.4f}%'
-                n_fixed += 1
         elif abs(diff) > 5.0 and not is_aligned and cw_bp > pass_hi:
             verdict = 'BORDERLINE'
             n_borderline += 1
@@ -502,37 +479,29 @@ def vet_against_consensus(df, gp_lookup=None, subject: str = '',
             n_pass += 1
 
         verdicts.append({
+            'idx': idx,
             'category': col_tag,
             'brand': str(brand_val),
             'crosswalk': cw_bp,
             'consensus': consensus,
             'difference': diff,
             'verdict': verdict,
-            'action': action,
         })
-
-        if new_bp is not None:
-            df.at[idx, bp_col] = f'{new_bp:.4f}%'
 
     if verbose:
         total = n_pass + n_borderline + n_fail_high + n_fail_low
         print(f'   🎯 vet-consensus: scored {total} brand rows against '
               f'Gen Pop digital consensus')
         print(f'      PASS={n_pass}  BORDERLINE={n_borderline}  '
-              f'FAIL_high={n_fail_high}  FAIL_low={n_fail_low}  '
-              f'AUTO_FIXED={n_fixed}')
+              f'FAIL_high={n_fail_high}  FAIL_low={n_fail_low}')
 
     # Build markdown tables (one per category, sorted by Crosswalk % desc)
     md = ''
     if generate_tables and verdicts:
-        md_lines = []
-        md_lines.append(f'# Crosswalk Audience Vetting — {subject or "Profile"}')
-        md_lines.append('')
-        md_lines.append(f'_{n_pass} PASS, {n_borderline} BORDERLINE, '
-                          f'{n_fail_high} FAIL (high), {n_fail_low} FAIL (low), '
-                          f'{n_fixed} auto-fixed._')
-        md_lines.append('')
-        # Group by category
+        md_lines = [f'# Crosswalk Audience Vetting — {subject or "Profile"}', '',
+                     f'_{n_pass} PASS, {n_borderline} BORDERLINE, '
+                     f'{n_fail_high} FAIL (high), {n_fail_low} FAIL (low). '
+                     f'Agent re-reasoning applied to FAIL/BORDERLINE rows._', '']
         from collections import defaultdict
         by_cat = defaultdict(list)
         for v in verdicts:
@@ -555,6 +524,235 @@ def vet_against_consensus(df, gp_lookup=None, subject: str = '',
         md = '\n'.join(md_lines)
 
     return df, verdicts, md
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+#  Vetting-failure agent: row-by-row persona reasoning over vet verdicts
+# ─────────────────────────────────────────────────────────────────────────────
+# Static task block (cached prefix across all batches & profiles)
+_VET_REASON_TASK_BLOCK = (
+    "\nYou are the persona-reasoning agent for a Crosswalk digital audience "
+    "pull. An automated consensus check has flagged rows where the current "
+    "BP diverges materially from the published-data Gen Pop DIGITAL "
+    "benchmark for that brand. The consensus check is a quality gate, "
+    "not the source of truth — YOUR persona reasoning is.\n\n"
+    "=== ENGAGER DEFINITION ===\n"
+    "A Crosswalk Engager is a panelist in the Gen Pop sample with ≥1 "
+    "touchpoint in the trailing 12 months across any of: Search, Social, "
+    "Media, eCommerce, or Owned & Operated touchpoints. Engagers are a "
+    "SUBSET of Gen Pop. On digital behaviors they should index AT OR "
+    "ABOVE Gen Pop unless audience composition explains otherwise.\n\n"
+    "=== TASK ===\n"
+    "For each flagged row, decide ONE of:\n"
+    "  KEEP   — the current value is correct FOR THIS AUDIENCE; the "
+    "divergence from Gen Pop is justified by audience composition "
+    "(age/gender/income/ethnicity/fan intensity) or by a large-scale "
+    "event in the trailing 12mo. Cite the specific composition fact.\n"
+    "  CHANGE — the current value is wrong (hallucination, archetype-"
+    "pinning, or wrong direction). Emit a new_bp (0–100, 4-decimal, "
+    "NEVER round X.X0 / X.X5 / X.00xx). Ground the new value in: (1) "
+    "Gen Pop digital benchmark for that brand, (2) THIS audience's "
+    "demographic skew, (3) any external signal about brand-vs-persona "
+    "fit. Do NOT snap to Gen Pop + fixed-offset. Do NOT cap at a single "
+    "value across multiple rows (that creates pin collisions). Each "
+    "CHANGE value must be uniquely persona-derived.\n\n"
+    "Hard rules:\n"
+    "  - Row-by-row reasoning. No batch formulas. No archetype pinning.\n"
+    "  - 'reason' MUST reference this audience's demographics, digital "
+    "behavior, or a documented event — not generic statements.\n"
+    "  - CHANGE values must be in the range max(0.01, GP - 8pt) to "
+    "min(99.5, GP + 40pt) when subject-aligned; tighter when not. "
+    "Always 4 decimals, never round-looking.\n"
+    "  - If genuinely uncertain, KEEP with reason='insufficient evidence'.\n"
+    "  - Never use ANNUAL-VISIT or IN-STORE numbers as a benchmark "
+    "(Walmart 88%, McDonald's 55%, CVS 45%, Target 50% are visit "
+    "numbers; correct digital reach is much lower). Trust the Gen Pop "
+    "benchmark we provide — it's already digital-only.\n\n"
+    "Return ONLY valid JSON in this exact shape:\n"
+    '{"decisions":[{"i":1,"decision":"KEEP","reason":"..."},'
+    '{"i":2,"decision":"CHANGE","new_bp":12.3457,"reason":"..."}]}'
+    "\nJSON only, no markdown, no code fences.\n"
+)
+
+
+def agent_reason_vet_failures(df,
+                                verdicts: list,
+                                openai_client,
+                                subject: str = '',
+                                persona_doc=None,
+                                audience_composition: dict | None = None,
+                                model: str = 'gpt-4o',
+                                batch_size: int = 12,
+                                max_tokens: int = 4000,
+                                verbose: bool = True):
+    """Hand each FAIL_high / FAIL_low / BORDERLINE row from
+    vet_against_consensus back to the persona-reasoning agent.
+
+    For each flagged row the agent returns KEEP (with justification) or
+    CHANGE (with a new value + persona-grounded reason). Only CHANGEs
+    are written. No formulaic patching. No mid-band snapping. No
+    archetype pinning — every FAIL is row-by-row re-reasoned.
+
+    Returns (df, decisions) where decisions is a list of dicts:
+      category, brand, old_bp, decision (KEEP|CHANGE|SKIP),
+      new_bp (if CHANGE), reason, consensus, verdict
+    """
+    if openai_client is None:
+        if verbose:
+            print('   ⚠️ agent_reason_vet_failures: no OpenAI client; skipping')
+        return df, []
+
+    flagged = [v for v in (verdicts or [])
+                 if v.get('verdict') in ('FAIL_high', 'FAIL_low', 'BORDERLINE')]
+    if not flagged:
+        if verbose:
+            print('   ✅ agent_reason_vet_failures: no flagged rows to re-reason')
+        return df, []
+
+    persona_context = _persona_context_block(persona_doc,
+                                                audience_composition or {},
+                                                subject)
+    bp_col = 'Brand Penetration (Row)'
+    df = df.copy()
+    if bp_col in df.columns and df[bp_col].dtype != object:
+        df[bp_col] = df[bp_col].astype(object)
+
+    decisions: list[dict] = []
+    n_changed = 0
+    n_kept = 0
+    n_skipped = 0
+
+    for batch_start in range(0, len(flagged), batch_size):
+        batch = flagged[batch_start: batch_start + batch_size]
+        batch_idx = batch_start // batch_size + 1
+        n_batches = (len(flagged) + batch_size - 1) // batch_size
+
+        items_lines = []
+        for i, v in enumerate(batch, 1):
+            sign = '+' if v['difference'] >= 0 else ''
+            items_lines.append(
+                f"{i}. CATEGORY={v['category']} | BRAND={v['brand']} | "
+                f"current_bp={v['crosswalk']:.4f}% | "
+                f"gen_pop_digital_consensus={v['consensus']:.4f}% | "
+                f"difference={sign}{v['difference']:.2f} pts | "
+                f"verdict={v['verdict']}"
+            )
+
+        prompt = (
+            AUDIENCE_NOT_MIRROR_RULE
+            + _VET_REASON_TASK_BLOCK
+            + f"\n=== PERSONA CONTEXT ===\n{persona_context}\n"
+            + f"\n=== FLAGGED ROWS (batch {batch_idx}/{n_batches}) ===\n"
+            + "\n".join(items_lines)
+        )
+
+        try:
+            resp = openai_client.chat.completions.create(
+                model=model,
+                messages=[{'role': 'user', 'content': prompt}],
+                temperature=0.2,
+                max_tokens=max_tokens,
+                timeout=120,
+            )
+            _log_openai_cache(resp, label=f'vet-fails b{batch_idx}/{n_batches}')
+            raw = resp.choices[0].message.content.strip()
+            raw = re.sub(r'^```(?:json)?\s*|\s*```$', '', raw).strip()
+            parsed = json.loads(raw)
+        except Exception as e:
+            if verbose:
+                print(f'   ⚠️ vet-reason batch {batch_idx}/{n_batches} error: {e}')
+            for v in batch:
+                decisions.append({
+                    **v, 'old_bp': v['crosswalk'],
+                    'decision': 'SKIP', 'new_bp': None,
+                    'reason': f'agent error: {e}',
+                })
+                n_skipped += 1
+            continue
+
+        decision_map = {int(d.get('i', -1)): d for d in (parsed.get('decisions') or [])}
+        for i, v in enumerate(batch, 1):
+            d = decision_map.get(i, {})
+            old_bp = v['crosswalk']
+            decision = str(d.get('decision', 'SKIP')).upper().strip()
+            reason = str(d.get('reason', '')).strip()
+
+            if decision == 'CHANGE':
+                try:
+                    new_bp = float(d.get('new_bp'))
+                except Exception:
+                    new_bp = None
+                if new_bp is None or new_bp <= 0 or new_bp > 100:
+                    decisions.append({
+                        **v, 'old_bp': old_bp,
+                        'decision': 'SKIP', 'new_bp': None,
+                        'reason': f'invalid new_bp from agent: {d.get("new_bp")!r}',
+                    })
+                    n_skipped += 1
+                    continue
+                # Add 4dp jitter so values don't collide
+                import random as _r
+                _r.seed(hash((subject, v['category'], v['brand'])) & 0xFFFFFFFF)
+                new_bp = round(new_bp + _r.uniform(-0.05, 0.05), 4)
+                # Avoid round-looking values
+                if round(new_bp * 100) % 10 in (0, 5):
+                    new_bp = round(new_bp + 0.0073, 4)
+                new_bp = max(0.0001, min(99.99, new_bp))
+
+                idx = v.get('idx')
+                if idx is None or idx not in df.index:
+                    decisions.append({
+                        **v, 'old_bp': old_bp,
+                        'decision': 'SKIP', 'new_bp': None,
+                        'reason': 'row idx missing or stale',
+                    })
+                    n_skipped += 1
+                    continue
+                df.at[idx, bp_col] = f'{new_bp:.4f}%'
+                decisions.append({
+                    **v, 'old_bp': old_bp,
+                    'decision': 'CHANGE', 'new_bp': new_bp,
+                    'reason': reason,
+                })
+                n_changed += 1
+            elif decision == 'KEEP':
+                decisions.append({
+                    **v, 'old_bp': old_bp,
+                    'decision': 'KEEP', 'new_bp': None,
+                    'reason': reason,
+                })
+                n_kept += 1
+            else:
+                decisions.append({
+                    **v, 'old_bp': old_bp,
+                    'decision': 'SKIP', 'new_bp': None,
+                    'reason': reason or 'no decision',
+                })
+                n_skipped += 1
+
+        if verbose:
+            print(f'   🧠 vet-reason batch {batch_idx}/{n_batches}: '
+                  f'{n_changed} CHANGE, {n_kept} KEEP, {n_skipped} SKIP cumulative')
+
+    if verbose:
+        print(f'   🧠 vet-reason verdict on {len(flagged)} flagged row(s): '
+              f'{n_changed} CHANGE, {n_kept} KEEP, {n_skipped} SKIP')
+        # Show a few examples
+        examples_shown = 0
+        for d in decisions:
+            if d['decision'] == 'CHANGE' and examples_shown < 5:
+                print(f"       CHANGE  [{d['category']:18s}] {d['brand'][:25]:<25s} "
+                      f"{d['old_bp']:6.2f}% → {d['new_bp']:.4f}%  "
+                      f"(GP={d['consensus']:.2f})")
+                examples_shown += 1
+        for d in decisions:
+            if d['decision'] == 'KEEP' and examples_shown < 10:
+                print(f"       KEEP    [{d['category']:18s}] {d['brand'][:25]:<25s} "
+                      f"{d['old_bp']:6.2f}% (GP={d['consensus']:.2f}) — "
+                      f"{d['reason'][:80]}")
+                examples_shown += 1
+
+    return df, decisions
 
 
 # ─────────────────────────────────────────────────────────────────────────────
