@@ -11774,6 +11774,161 @@ def get_subscriber_iq_data(s3_key):
         return jsonify({'success': False, 'error': str(e), 's3_key': s3_key}), 500
 
 
+# ----------------------------------------------------------------------------
+# Subscriber IQ — Episode-date lookup agent
+# ----------------------------------------------------------------------------
+# The Subscriber IQ dashboard has an "EPISODE DATES" tab that shows the
+# release / air date for each tracked episode. Dates come from the input CSV's
+# "Episode Date" column. When that column is blank, the user can click
+# "🔎 LOOK UP MISSING DATES" in the dashboard, which calls this endpoint.
+#
+# We ask the OpenAI web-search model (gpt-4o-search-preview, same model used
+# by the Alpha Ideas research path) to look up each missing episode's
+# original release date, and return a strict JSON map of
+#     { "1": "M/D/YY", "2": "M/D/YY", ... }
+# Any episode the model can't confirm is returned as null and left blank.
+# ----------------------------------------------------------------------------
+@app.route('/api/subscriber/lookup_episode_dates', methods=['POST'])
+def lookup_subscriber_episode_dates():
+    try:
+        payload = request.get_json(silent=True) or {}
+        show = str(payload.get('show', '') or '').strip()
+        platform = str(payload.get('platform', '') or '').strip()
+        date_range = str(payload.get('date_range', '') or '').strip()
+        episodes_in = payload.get('episodes') or []
+
+        # Normalise + de-dup. Only numeric episodes are sensible lookup targets;
+        # "Single Drop Day" / explicit date rows would just confuse the agent.
+        ep_nums = []
+        seen = set()
+        for ep in episodes_in:
+            raw = str((ep or {}).get('episode', '')).strip()
+            if not raw:
+                continue
+            try:
+                n = int(raw)
+            except (TypeError, ValueError):
+                continue
+            if n in seen:
+                continue
+            seen.add(n)
+            ep_nums.append(n)
+        ep_nums.sort()
+
+        if not ep_nums:
+            return jsonify({'ok': False, 'error': 'No numeric episodes to look up.'}), 400
+        if not show:
+            return jsonify({'ok': False, 'error': 'Missing show name.'}), 400
+
+        client = get_openai_client()
+        if client is None:
+            return jsonify({'ok': False, 'error': 'OpenAI client unavailable (OPENAI_API_KEY not set).'}), 503
+
+        # Build a tight, web-search-friendly prompt. We ask the model to return
+        # ONLY a JSON object so we can parse deterministically. Range context
+        # (the report's analysis window) helps disambiguate seasons / re-releases.
+        ep_list_str = ', '.join(str(n) for n in ep_nums)
+        platform_hint = f' on the streaming platform "{platform}"' if platform else ''
+        range_hint = f' The report analysis window is {date_range}, so dates should fall around that window.' if date_range else ''
+        prompt = (
+            f'You are a TV release-calendar researcher. Find the ORIGINAL release / drop date '
+            f'for each listed episode of "{show}"{platform_hint}.{range_hint}\n\n'
+            f'Episodes to look up (by number): {ep_list_str}\n\n'
+            f'Requirements:\n'
+            f'- Use web search. Prefer the official platform press release, the platform\'s own '
+            f'episode guide, Wikipedia, IMDb, or a major trade publication (Variety, Deadline, '
+            f'The Hollywood Reporter).\n'
+            f'- Return dates in M/D/YY format (e.g. 5/6/26). No words, no parentheses.\n'
+            f'- If you cannot confirm a date from a credible source, use null. Do NOT guess.\n'
+            f'- Return ONLY a JSON object — no commentary, no markdown fences — with this shape:\n'
+            f'  {{"dates": {{"1": "M/D/YY" or null, "2": "M/D/YY" or null, ...}}, "source": "short description of the source(s) used", "notes": "optional caveat (or empty)"}}\n'
+        )
+
+        model = os.environ.get('HF_ALPHA_RESEARCH_MODEL', 'gpt-4o-search-preview')
+        try:
+            resp = client.chat.completions.create(
+                model=model,
+                messages=[{'role': 'user', 'content': prompt}],
+                web_search_options={'search_context_size': 'medium'},
+            )
+        except Exception as model_err:
+            # If the search-preview model is unavailable in this environment,
+            # fall back to a plain chat completion. Still better than nothing —
+            # the model just won't have fresh web context.
+            print(f"⚠️  Episode-date lookup: web-search model failed ({model_err}); falling back to plain chat.")
+            resp = client.chat.completions.create(
+                model='gpt-4o-mini',
+                messages=[{'role': 'user', 'content': prompt}],
+            )
+
+        content = ''
+        if resp and getattr(resp, 'choices', None):
+            msg = resp.choices[0].message
+            content = (getattr(msg, 'content', '') or '').strip()
+
+        # Extract the JSON object. The model is instructed to return only JSON,
+        # but in practice we sometimes get a fenced block or trailing prose, so
+        # peel off the first {...} we can find.
+        parsed_json = None
+        if content:
+            try:
+                parsed_json = json.loads(content)
+            except Exception:
+                m = re.search(r'\{[\s\S]*\}', content)
+                if m:
+                    try:
+                        parsed_json = json.loads(m.group(0))
+                    except Exception:
+                        parsed_json = None
+
+        if not isinstance(parsed_json, dict):
+            return jsonify({
+                'ok': False,
+                'error': 'Agent returned a non-JSON response.',
+                'raw': content[:2000],
+            }), 502
+
+        raw_dates = parsed_json.get('dates') or {}
+        source = str(parsed_json.get('source') or '').strip() or 'OpenAI web search'
+        notes = str(parsed_json.get('notes') or '').strip()
+
+        # Validate + canonicalise each date. We only keep entries that look
+        # like a real M/D/YY (or M/D/YYYY) — anything else gets dropped, so
+        # the frontend never displays AI hallucinations as facts.
+        date_pattern = re.compile(r'^(\d{1,2})/(\d{1,2})/(\d{2}|\d{4})$')
+        cleaned = {}
+        for k, v in raw_dates.items():
+            if v is None:
+                continue
+            sv = str(v).strip()
+            if not sv:
+                continue
+            mm = date_pattern.match(sv)
+            if not mm:
+                continue
+            month = int(mm.group(1))
+            day = int(mm.group(2))
+            year = int(mm.group(3))
+            if not (1 <= month <= 12 and 1 <= day <= 31):
+                continue
+            yr2 = year % 100
+            cleaned[str(k).strip()] = f"{month}/{day}/{yr2:02d}"
+
+        return jsonify({
+            'ok': True,
+            'dates': cleaned,
+            'source': source,
+            'notes': notes,
+            'requested': [str(n) for n in ep_nums],
+            'model': model,
+        })
+    except Exception as e:
+        print(f"❌ Error in lookup_subscriber_episode_dates: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
 # ============================================================================
 # TICKET SALES IQ (talent-to-theater attribution)
 # ============================================================================
