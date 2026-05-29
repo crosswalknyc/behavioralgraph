@@ -8837,13 +8837,10 @@
         .iqr-row-chip-chart { color: var(--accent-cyan); border-color: rgba(102,217,239,0.35); }
         .iqr-row-chip-chart:hover { background: rgba(102,217,239,0.14); border-color: var(--accent-cyan); color: var(--accent-cyan); }
         .iqr-row-chip-chart .iqr-row-chip-glyph { font-size: 0.85rem; line-height: 1; }
-        .iqr-row-chip-sentiment { color: #e2d6ff; border-color: rgba(177,156,255,0.35); }
-        .iqr-row-chip-sentiment:hover { background: rgba(177,156,255,0.14); border-color: rgba(177,156,255,0.85); color: #efe7ff; }
         .iqr-row-chip-profile { color: #c8f7d4; border-color: rgba(132,225,168,0.35); }
         .iqr-row-chip-profile:hover { background: rgba(132,225,168,0.14); border-color: var(--accent-lime); color: #c8f7d4; }
         .rankers-table tbody tr:hover .iqr-row-chip { border-color: var(--border-color); }
         .rankers-table tbody tr:hover .iqr-row-chip-chart { border-color: rgba(102,217,239,0.5); }
-        .rankers-table tbody tr:hover .iqr-row-chip-sentiment { border-color: rgba(177,156,255,0.55); }
         .rankers-table tbody tr:hover .iqr-row-chip-profile { border-color: rgba(132,225,168,0.5); }
 
         /* ── Drill-down chart modal ───────────────────────────────────────── */
@@ -17813,8 +17810,8 @@
             <div class="rankers-container">
                 <div class="rankers-platform-tabs" style="display: flex; gap: 0.5rem; margin-bottom: 1rem; flex-wrap: wrap;">
                     {%- set IQ_RANKER_MASTERS = [
-                        {'key': 'TALENT',    'slug': 'talent',    'icon': '⭐', 'label': 'Talent',     'desc': 'Daily mentions, sentiment and CW IQ Score across every Talent profile in Profile IQ. Click a row to open the profile.'},
-                        {'key': 'BRAND',     'slug': 'brands',    'icon': '📦', 'label': 'Brands',     'desc': 'Daily mentions, sentiment and CW IQ Score across every Brand profile in Profile IQ.'},
+                        {'key': 'TALENT',    'slug': 'talent',    'icon': '⭐', 'label': 'Talent',     'desc': 'Daily mentions and CW IQ Score across every Talent profile in Profile IQ. Click a row to open the profile.'},
+                        {'key': 'BRAND',     'slug': 'brands',    'icon': '📦', 'label': 'Brands',     'desc': 'Daily mentions and CW IQ Score across every Brand profile in Profile IQ.'},
                         {'key': 'CONTENT',   'slug': 'content',   'icon': '🎬', 'label': 'Content',    'desc': 'Movies, series, podcasts and games tracked across the panel.'},
                         {'key': 'PLATFORMS', 'slug': 'platforms', 'icon': '🛰️', 'label': 'Platforms',  'desc': 'Streaming, social, search, broadcast and other platforms tracked across the panel.'},
                         {'key': 'SPORT',     'slug': 'sport',     'icon': '🏟️', 'label': 'Sport',      'desc': 'Leagues, teams and sports organizations tracked across the panel.'},
@@ -18027,9 +18024,9 @@
                                 <li><b>Multi-day windows:</b> CW IQ across a window is the raw-mention-weighted average of daily scores, so partial-ingest days contribute proportionally less.</li>
                             </ul>
                             <div style="margin-top: 0.6rem; padding-top: 0.55rem; border-top: 1px dashed rgba(132,225,168,0.25); font-size: 0.74rem;">
-                                <b style="color: #c8f7d4;">Mentions / Pos / Neu / Neg</b> are projected to US gen pop using a per-day multiplier:
+                                <b style="color: #c8f7d4;">Mentions</b> are projected to US gen pop using a per-day multiplier:
                                 <code>projected = raw × 329,900,000 / panelists_active_that_day</code>.
-                                Net Sentiment and CW IQ are projection-invariant (panel-relative).
+                                CW IQ is projection-invariant (panel-relative).
                             </div>
                         </div>
 
@@ -18090,10 +18087,6 @@
                                     <th data-iq-sort="name"           data-iq-master="{{ m.key }}" class="has-tooltip" data-tooltip="Profile name (click a row to drill down to the profile dashboard)." style="cursor: pointer;">Profile</th>
                                     <th data-iq-sort="mentions"       data-iq-master="{{ m.key }}" class="has-tooltip" data-tooltip="Total mentions projected to US gen pop (raw × 329.9M / panel size that day, summed across the window)." style="cursor: pointer; text-align: right;">Mentions</th>
                                     <th data-iq-sort="delta_mentions" data-iq-master="{{ m.key }}" class="has-tooltip" data-tooltip="Mentions change vs the equal-length window immediately before this one." style="cursor: pointer; text-align: right;">Δ Mentions</th>
-                                    <th data-iq-sort="pos"            data-iq-master="{{ m.key }}" class="has-tooltip" data-tooltip="Projected positive-sentiment events (Layer-1 behavioral scoring)." style="cursor: pointer; text-align: right;">Pos</th>
-                                    <th data-iq-sort="neu"            data-iq-master="{{ m.key }}" class="has-tooltip" data-tooltip="Projected neutral-sentiment events." style="cursor: pointer; text-align: right;">Neu</th>
-                                    <th data-iq-sort="neg"            data-iq-master="{{ m.key }}" class="has-tooltip" data-tooltip="Projected negative-sentiment events." style="cursor: pointer; text-align: right;">Neg</th>
-                                    <th data-iq-sort="net_sentiment"  data-iq-master="{{ m.key }}" class="has-tooltip" data-tooltip="(Pos − Neg) / (Pos + Neu + Neg) × 100. Range −100..+100." style="cursor: pointer; text-align: right;">Net Sent.</th>
                                     <th data-iq-sort="evc_score"      data-iq-master="{{ m.key }}" style="cursor: pointer; text-align: right;">
                                         <span class="iqr-th-with-info">EVC<button type="button" class="iqr-th-info" title="Show EVC methodology" aria-label="Show EVC methodology" onclick="event.stopPropagation(); toggleIQRankerEVCExplainer('{{ m.key }}')">i</button></span>
                                     </th>
@@ -18156,9 +18149,6 @@
                                 <div class="iqr-modal-toolbar">
                                     <div class="group" role="tablist" aria-label="Metric">
                                         <button type="button" data-iq-cmp-metric="mentions"      class="active" onclick="setIQRankerCompareMetric('mentions')">Mentions</button>
-                                        <button type="button" data-iq-cmp-metric="pos"           onclick="setIQRankerCompareMetric('pos')">Positive</button>
-                                        <button type="button" data-iq-cmp-metric="neg"           onclick="setIQRankerCompareMetric('neg')">Negative</button>
-                                        <button type="button" data-iq-cmp-metric="net_sentiment" onclick="setIQRankerCompareMetric('net_sentiment')">Net Sent.</button>
                                         <button type="button" data-iq-cmp-metric="cw_iq_score"   onclick="setIQRankerCompareMetric('cw_iq_score')">CW IQ</button>
                                     </div>
                                     <div class="group" role="tablist" aria-label="Mode">
@@ -81573,18 +81563,13 @@
             mode: 'value',                  // 'value' | 'delta' | 'pct'
             data: null,                      // raw API payload
             visible: {                       // which series are toggled on
-                mentions: true, pos: true, neu: false, neg: true,
-                net_sentiment: false, cw_iq_score: true,
+                mentions: true, cw_iq_score: true,
             },
             master: null,
             profile: null,
         };
         const IQR_CHART_SERIES = [
             { key: 'mentions',      label: 'Mentions',      color: '#66d9ef', axis: 'y', projected: true },
-            { key: 'pos',           label: 'Positive',      color: '#84e1a8', axis: 'y', projected: true },
-            { key: 'neu',           label: 'Neutral',       color: '#c8b8ff', axis: 'y', projected: true },
-            { key: 'neg',           label: 'Negative',      color: '#ff7a7a', axis: 'y', projected: true },
-            { key: 'net_sentiment', label: 'Net Sentiment', color: '#ffd166', axis: 'y2', projected: false },
             { key: 'cw_iq_score',   label: 'CW IQ',         color: '#ffd166', axis: 'y2', projected: false },
         ];
 
@@ -81829,9 +81814,6 @@
             };
             wrap.innerHTML = [
                 mkStat('Mentions (last day, projected)', last.mentions, first.mentions, false),
-                mkStat('Positive',      last.pos, first.pos, false),
-                mkStat('Negative',      last.neg, first.neg, false),
-                mkStat('Net Sentiment', last.net_sentiment, first.net_sentiment, true),
                 mkStat('CW IQ',         last.cw_iq_score,   first.cw_iq_score,   true),
                 mkStat('Panel size (last day)', last.panel_size, first.panel_size, false),
             ].join('');
@@ -81864,9 +81846,6 @@
 
         const IQR_COMPARE_METRIC_META = {
             mentions:      { label: 'Mentions',      axis: 'count', projected: true  },
-            pos:           { label: 'Positive',      axis: 'count', projected: true  },
-            neg:           { label: 'Negative',      axis: 'count', projected: true  },
-            net_sentiment: { label: 'Net Sentiment', axis: 'score', projected: false },
             cw_iq_score:   { label: 'CW IQ',         axis: 'score', projected: false },
         };
 
@@ -82437,11 +82416,6 @@
                 const v = decimals ? Number(n).toFixed(decimals) : Number(n).toLocaleString();
                 return `<span style="color: ${colour};">${sign}${v}</span>`;
             };
-            const fmtNet = (n) => {
-                if (n == null) return '';
-                const colour = n > 5 ? 'var(--accent-cyan)' : (n < -5 ? 'var(--accent-red)' : 'var(--text-secondary)');
-                return `<span style="color: ${colour};">${Number(n).toFixed(1)}</span>`;
-            };
             const fmtScore = (n) => {
                 if (n == null) return '';
                 const v = Number(n);
@@ -82529,7 +82503,6 @@
                 const trackerId      = _iqrTrackerIdFor(r.profile_subject || '');
                 const trackerIdAttr  = _iqJsAttr(trackerId);
                 const chartClick     = `event.stopPropagation(); openIQRankerChart('${master}', '${subjAttr}', '${nameAttr}')`;
-                const sentimentClick = `event.stopPropagation(); openSentimentIQFromIQRanker('${trackerIdAttr}')`;
                 const profileClick   = `event.stopPropagation(); openProfileFromIQRanker('${subj}', '${s3Key}')`;
                 return `<tr>
                     <td>${i + 1}</td>
@@ -82537,17 +82510,12 @@
                         <div class="iqr-name-row">
                             <span class="iqr-name-text">${_iqEsc(r.project_name || r.profile_subject || '')}</span>
                             <button type="button" class="iqr-row-chip iqr-row-chip-chart" title="Open day-over-day chart" aria-label="Open day-over-day chart" onclick="${chartClick}"><span class="iqr-row-chip-glyph">Δ</span></button>
-                            <button type="button" class="iqr-row-chip iqr-row-chip-sentiment" title="Open this profile in the Sentiment IQ dashboard" onclick="${sentimentClick}">Sentiment</button>
                             <button type="button" class="iqr-row-chip iqr-row-chip-profile" title="Open this profile's dashboard" onclick="${profileClick}">Profile</button>
                         </div>
                         <div class="iqr-name-sub">${_iqRenderSubcategory(r)}</div>
                     </td>
                     <td style="text-align: right;">${fmtNum(r.mentions)}</td>
                     <td style="text-align: right;">${fmtDelta(r.delta_mentions, 0, r.prev_raw_mentions)}</td>
-                    <td style="text-align: right; color: var(--accent-cyan);">${fmtNum(r.pos)}</td>
-                    <td style="text-align: right;">${fmtNum(r.neu)}</td>
-                    <td style="text-align: right; color: var(--accent-red);">${fmtNum(r.neg)}</td>
-                    <td style="text-align: right;">${fmtNet(r.net_sentiment)}</td>
                     <td style="text-align: right;">${fmtEVC(r)}</td>
                     <td style="text-align: right;">${fmtDeltaPct(r.delta_evc, r.prev_raw_mentions)}</td>
                     <td style="text-align: right;">${fmtTDL(r)}</td>
@@ -82635,27 +82603,12 @@
             return safe ? ('iqr_' + safe) : 'iqr_unknown';
         }
 
-        function openSentimentIQFromIQRanker(trackerIdEnc) {
-            let trackerId = '';
-            try { trackerId = decodeURIComponent(trackerIdEnc || ''); } catch(_) { trackerId = String(trackerIdEnc || ''); }
-            if (!trackerId) return;
-            try {
-                if (typeof showSentimentIQ === 'function') {
-                    showSentimentIQ();
-                } else {
-                    const v = document.getElementById('sentimentIQView');
-                    if (v) v.style.display = 'flex';
-                }
-            } catch(_) {}
-            // showSentimentIQ kicks off an async sidebar load; selectSentimentIQTracker
-            // does its own results fetch and sets the active state, so calling them
-            // back-to-back is safe — once the sidebar resolves it'll highlight the
-            // pre-set currentTrackerId.
-            try {
-                if (typeof selectSentimentIQTracker === 'function') {
-                    setTimeout(() => selectSentimentIQTracker(trackerId), 30);
-                }
-            } catch(e) { console.error('openSentimentIQFromIQRanker failed', e); }
+        function openSentimentIQFromIQRanker(_trackerIdEnc) {
+            // Sentiment tracking was removed from the IQ Rankers dashboard;
+            // this stub is kept so any cached HTML that still has a Sentiment
+            // chip on a stale tab won't throw "function is not defined" when
+            // clicked. New rendered rows no longer wire this up at all.
+            return;
         }
         // ============================================================
         
