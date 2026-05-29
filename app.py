@@ -18725,11 +18725,70 @@ def load_persisted_cache():
         return False
 
 def save_persisted_cache():
-    """Save the S3 file cache to S3 storage."""
+    """Save the S3 file cache to S3 storage.
+
+    Merges in any "extension" fields (currently `imdb_id` / `imdb_label`)
+    from the live S3 copy before writing. This is the difference between
+    "this worker's view of jobs" and "the global jobs record": fields
+    populated by side-channel writers (e.g. `migration/scrape_imdb_ids.py`)
+    must survive a save from a worker that hasn't yet seen them.
+
+    Without this read-then-write merge, a worker that loaded the cache at
+    boot — before the IMDB scraper ran — would happily clobber every
+    `imdb_id` the next time *anything* triggered a save (a profile upload,
+    a delete, an admin action, etc.). The new fields then re-disappear from
+    the UI and we'd have to keep re-running the scraper. Merging keeps
+    those fields sticky.
+
+    Cheap because the IMDB merge is keyed by `profile_subject` (~250 jobs)
+    and only touches the in-memory copy — no extra S3 round-trip beyond the
+    one GET we'd usually do at boot anyway.
+    """
     global _persisted_cache_etag, _persisted_cache_last_head_ts
     if not s3_client:
         return
     try:
+        # Read-then-write: pull the latest S3 copy and merge its imdb_id /
+        # imdb_label values onto our in-memory jobs by profile_subject. Any
+        # job we don't have a record of in memory but exists on S3 with an
+        # imdb_id is left alone (other workers may add jobs we haven't seen
+        # yet — but we never WRITE jobs that aren't in our in-memory list,
+        # so they stay on S3 untouched).
+        try:
+            remote = s3_client.get_object(Bucket=S3_BUCKET, Key=S3_CACHE_KEY)
+            remote_cache = json.loads(remote['Body'].read().decode('utf-8'))
+            remote_imdb = {}
+            for j in (remote_cache.get('jobs') or []):
+                subj = (j.get('profile_subject') or '').strip()
+                if not subj:
+                    continue
+                imdb = j.get('imdb_id')
+                label = j.get('imdb_label')
+                if imdb or label:
+                    remote_imdb[subj] = (imdb, label)
+            if remote_imdb:
+                for j in (s3_cache.get('jobs') or []):
+                    subj = (j.get('profile_subject') or '').strip()
+                    if not subj:
+                        continue
+                    pair = remote_imdb.get(subj)
+                    if not pair:
+                        continue
+                    imdb, label = pair
+                    # Only restore from remote if local doesn't already
+                    # have a value — local writes (if any) win, but the
+                    # common case is "local has nothing, remote has the
+                    # scraped id."
+                    if imdb and not j.get('imdb_id'):
+                        j['imdb_id'] = imdb
+                    if label and not j.get('imdb_label'):
+                        j['imdb_label'] = label
+        except s3_client.exceptions.NoSuchKey:
+            pass
+        except Exception as merge_err:
+            # Merge is a soft guarantee; never fail a save on it.
+            print(f"⚠️ persisted-cache imdb merge failed (non-fatal): {merge_err}")
+
         cache_data = {
             'jobs': s3_cache.get('jobs', []),
             'categories': s3_cache.get('categories', []),

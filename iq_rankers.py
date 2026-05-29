@@ -1073,19 +1073,6 @@ def aggregate_leaderboard(
     sort_col = valid_sorts.get((sort or "").lower(), "cw_iq_score")
     direction = "DESC" if (sort_dir or "desc").lower() != "asc" else "ASC"
 
-    # Sorting by any delta column should treat "no prior-window data" as a
-    # missing measurement, not as a giant positive or negative value. Push
-    # those rows to the end of the list regardless of direction so the
-    # screen-real-estate at the top stays useful (real movers, not new
-    # profiles whose delta is structurally undefined).
-    delta_sort_cols = {
-        "delta_cw_iq", "delta_mentions",
-        "delta_evc", "delta_tdl", "delta_bvp",
-    }
-    no_prior_first = (
-        "(prev_raw_mentions = 0) ASC, " if sort_col in delta_sort_cols else ""
-    )
-
     s, e, ps, pe = _resolve_window(window, start, end)
     master_clean = (master or "").replace("'", "''").upper()
     sub_clean = (subcategory or "").replace("'", "''").upper().strip()
@@ -1259,7 +1246,7 @@ def aggregate_leaderboard(
            c.bvp_score_calc - coalesce(p.prev_bvp_score_calc, 0) AS delta_bvp
     FROM curr c
     LEFT JOIN prev p ON p.profile_subject = c.profile_subject
-    ORDER BY {no_prior_first}{sort_col} {direction}, mentions DESC
+    ORDER BY {sort_col} {direction}, mentions DESC
     LIMIT {int(limit)}
     """
 
