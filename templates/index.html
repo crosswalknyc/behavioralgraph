@@ -82357,7 +82357,7 @@
                 if (endEl   && endEl.value)   params.set('end',   endEl.value);
             }
             if (state.search) params.set('search', state.search);
-            params.set('sort', state.sort || 'cw_iq_score');
+            params.set('sort', state.sort || 'delta_cw_iq');
             params.set('sort_dir', state.sortDir || 'desc');
             params.set('limit', '500');
             if (force) params.set('_', String(Date.now()));
