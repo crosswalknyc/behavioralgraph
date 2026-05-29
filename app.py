@@ -31787,14 +31787,122 @@ def _run_iq_rankers_daily(snapshot_date=None, only_subject=None, days=None):
     )
 
 
+# In-process status sentinel for the daily cron. The cron endpoint fires
+# the actual work into a daemon thread and returns 202 immediately, so the
+# Render cron's 4-hour urllib socket-read timeout (and gunicorn's 1-hour
+# per-request timeout) can't cut the job short. Status is queried via
+# /api/cron/iq-rankers-daily/status. Survives a single worker process —
+# if the worker is recycled mid-run, the thread dies with it and the
+# 'state' will read as stale 'running'; that's why we also stamp finished
+# runs into S3 in `_run_iq_rankers_daily_async` for cross-process audit.
+_iq_rankers_daily_status_lock = threading.Lock()
+_iq_rankers_daily_status = {
+    'state': 'idle',         # idle | running | done | error
+    'started_at': None,      # ISO timestamp when the thread kicked off
+    'finished_at': None,     # ISO timestamp when it returned (success or fail)
+    'duration_sec': None,
+    'result': None,          # whatever _run_iq_rankers_daily returns
+    'error': None,            # str message if it failed
+    'snapshot_date': None,
+    'only_subject': None,
+    'days': None,
+}
+
+
+def _iq_rankers_daily_persist_status(snapshot):
+    """Best-effort: stash the latest status as JSON in S3 so we can audit
+    runs across worker restarts. Skipped silently if S3 isn't wired up.
+
+    Stored under `system/iq_rankers_daily_status.json` next to the main
+    persisted cache. Keeps just the latest run; older history can come
+    from the per-day rows in `reference.profile_iq_daily_metrics` itself.
+    """
+    if not s3_client:
+        return
+    try:
+        s3_client.put_object(
+            Bucket=S3_BUCKET,
+            Key='system/iq_rankers_daily_status.json',
+            Body=json.dumps(snapshot, default=str).encode('utf-8'),
+            ContentType='application/json',
+        )
+    except Exception as e:
+        print(f"[iqr-daily] status-persist failed: {e}")
+
+
+def _run_iq_rankers_daily_async(snapshot_date=None, only_subject=None, days=None):
+    """Spawn the daily/backfill compute in a daemon thread.
+
+    Returns the new status dict immediately. If a previous run is still
+    flagged 'running', refuses to start a second one (returns the existing
+    status with `accepted=False` so the caller can decide what to do).
+    """
+    now_iso = datetime.utcnow().isoformat() + 'Z'
+    with _iq_rankers_daily_status_lock:
+        if _iq_rankers_daily_status.get('state') == 'running':
+            return False, dict(_iq_rankers_daily_status)
+        _iq_rankers_daily_status.update({
+            'state': 'running',
+            'started_at': now_iso,
+            'finished_at': None,
+            'duration_sec': None,
+            'result': None,
+            'error': None,
+            'snapshot_date': snapshot_date,
+            'only_subject': only_subject,
+            'days': days,
+        })
+        snapshot = dict(_iq_rankers_daily_status)
+    _iq_rankers_daily_persist_status(snapshot)
+
+    def _runner():
+        t0 = time.time()
+        try:
+            result = _run_iq_rankers_daily(snapshot_date=snapshot_date,
+                                           only_subject=only_subject,
+                                           days=days)
+            with _iq_rankers_daily_status_lock:
+                _iq_rankers_daily_status.update({
+                    'state': 'done',
+                    'finished_at': datetime.utcnow().isoformat() + 'Z',
+                    'duration_sec': round(time.time() - t0, 1),
+                    'result': result,
+                })
+                final_snapshot = dict(_iq_rankers_daily_status)
+        except Exception as e:
+            import traceback; traceback.print_exc()
+            with _iq_rankers_daily_status_lock:
+                _iq_rankers_daily_status.update({
+                    'state': 'error',
+                    'finished_at': datetime.utcnow().isoformat() + 'Z',
+                    'duration_sec': round(time.time() - t0, 1),
+                    'error': str(e)[:500],
+                })
+                final_snapshot = dict(_iq_rankers_daily_status)
+        _iq_rankers_daily_persist_status(final_snapshot)
+
+    threading.Thread(target=_runner, daemon=True, name='iqr-daily-cron').start()
+    return True, snapshot
+
+
 @app.route('/api/cron/iq-rankers-daily', methods=['GET', 'POST'])
 def cron_iq_rankers_daily():
     """Daily cron entry point. Auth via X-Cron-Secret header or ?secret=.
 
+    Default behavior is fire-and-forget: spawns the compute in a daemon
+    thread and returns 202 immediately. The Render cron only has to confirm
+    the kickoff, which removes any cron-side timeout pressure (the actual
+    work used to take >1h, occasionally >4h, which kept tripping the
+    urlopen() read timeout and was incorrectly logged as a cron failure
+    even when the work itself finished). Pass `?sync=1` to wait inline
+    (admin / debug only — request will be subject to gunicorn's
+    --timeout, which is 1h on prod).
+
     Optional query params:
-        date=YYYY-MM-DD      run for a specific date instead of yesterday
-        only=<subject>       only run for one profile_subject
-        days=N               run a backfill of the last N days (oldest first)
+        date=YYYY-MM-DD   run for a specific date instead of yesterday
+        only=<subject>    only run for one profile_subject
+        days=N            run a backfill of the last N days (oldest first)
+        sync=1            block until the run completes (legacy behavior)
     """
     if _iq_rankers is None:
         return jsonify({'success': False, 'error': 'iq_rankers unavailable'}), 500
@@ -31805,18 +31913,58 @@ def cron_iq_rankers_daily():
     snapshot_date = (request.args.get('date') or '').strip() or None
     only_subject  = (request.args.get('only') or '').strip() or None
     days_raw      = (request.args.get('days') or '').strip()
+    sync_mode     = (request.args.get('sync') or '').strip() == '1'
     try:
         days = int(days_raw) if days_raw else None
     except Exception:
         days = None
-    try:
-        result = _run_iq_rankers_daily(snapshot_date=snapshot_date,
-                                       only_subject=only_subject,
-                                       days=days)
-        return jsonify({'success': True, 'result': result})
-    except Exception as e:
-        import traceback; traceback.print_exc()
-        return jsonify({'success': False, 'error': str(e)[:300]}), 500
+
+    if sync_mode:
+        try:
+            result = _run_iq_rankers_daily(snapshot_date=snapshot_date,
+                                           only_subject=only_subject,
+                                           days=days)
+            return jsonify({'success': True, 'mode': 'sync', 'result': result})
+        except Exception as e:
+            import traceback; traceback.print_exc()
+            return jsonify({'success': False, 'error': str(e)[:300]}), 500
+
+    accepted, status = _run_iq_rankers_daily_async(
+        snapshot_date=snapshot_date,
+        only_subject=only_subject,
+        days=days,
+    )
+    if not accepted:
+        # Already running — return 409 so the cron retry doesn't pile up
+        # multiple concurrent runs but the client still gets a meaningful
+        # body back to inspect.
+        return jsonify({
+            'success': False,
+            'error': 'iq-rankers daily already running',
+            'status': status,
+        }), 409
+    return jsonify({
+        'success': True,
+        'mode': 'async',
+        'status': status,
+        'note': 'Background run started; poll /api/cron/iq-rankers-daily/status to see result.',
+    }), 202
+
+
+@app.route('/api/cron/iq-rankers-daily/status', methods=['GET'])
+def cron_iq_rankers_daily_status():
+    """Read the latest in-process status of the daily cron.
+
+    Same auth as the trigger endpoint. Use this to confirm a successful
+    overnight run from the cron UI / curl rather than relying on the cron
+    alert (which can mis-fire when only the urlopen client times out)."""
+    secret = request.headers.get('X-Cron-Secret') or request.args.get('secret') or ''
+    expected = os.environ.get('CRON_SECRET', '')
+    if not expected or secret != expected:
+        return jsonify({'success': False, 'error': 'Unauthorized'}), 403
+    with _iq_rankers_daily_status_lock:
+        snapshot = dict(_iq_rankers_daily_status)
+    return jsonify({'success': True, 'status': snapshot})
 
 
 @app.route('/api/iq-rankers/backfill-30d', methods=['POST'])
