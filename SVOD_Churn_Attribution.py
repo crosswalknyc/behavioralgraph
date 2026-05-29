@@ -2749,6 +2749,32 @@ def _validate_total_watchers_with_ai(show_name, platform_name, inflated_total, i
               f"({platform_info.get('subs_millions','?')}M subs × {platform_info.get('tier','?')} tier). "
               f"Will prefer AI evidence over panel in override decision.")
 
+    # === Suspiciously-low pre-check =========================================
+    # For anchor-tier platforms (Netflix, Prime), a panel projection below a
+    # platform-tier floor is a strong signal that the panel under-sampled the
+    # show (e.g. search-term mismatch, TV-app viewing not captured). When this
+    # fires, we relax the safety net so AI-evidence upward overrides go through
+    # even at low confidence. (This is the symmetric counterpart to the
+    # implausibly-high check above — both failure modes were observed on real
+    # data: Pluribus inflated to 14.85M, The Night Agent S1 deflated to 1.6M
+    # against ~27M expected.)
+    tier = (platform_info or {}).get('tier', 'unknown')
+    tier_floor = {
+        'anchor': 200_000,   # any show that registers on an anchor platform should clear ~200K US viewers
+        'major':  100_000,
+        'mid':     30_000,
+        'niche':    8_000,
+    }.get(tier, 30_000)
+    panel_suspiciously_low = (
+        panel_projection_us > 0
+        and panel_projection_us < tier_floor
+    )
+    if panel_suspiciously_low:
+        print(f"   🚨 Panel projects only {panel_projection_us:,} US viewers — below the "
+              f"~{tier_floor:,} floor for {tier}-tier platforms. Likely panel under-"
+              f"sampling (search-term mismatch or TV-app viewing not captured). Will "
+              f"relax safety net so AI evidence overrides upward even at lower confidence.")
+
     raw_terms = [t.strip() for t in show_name.replace('_', ' ').replace('-', ' ').split(',') if t.strip()]
     season_terms = [t for t in raw_terms if 'season' in t.lower()]
     if season_terms:
@@ -2851,6 +2877,8 @@ def _validate_total_watchers_with_ai(show_name, platform_name, inflated_total, i
         'panel_projection_us': panel_projection_us,
         'max_plausible_us': max_plausible_us,
         'panel_implausibly_high': panel_implausibly_high,
+        'panel_suspiciously_low': panel_suspiciously_low,
+        'tier_floor_us': tier_floor,
     }
 
     print(f"   🔍 AI viewership lookup: confidence={confidence}, "
@@ -2912,6 +2940,25 @@ def _validate_total_watchers_with_ai(show_name, platform_name, inflated_total, i
             metadata['action'] = 'capped_at_half_ceiling_no_ai'
             metadata['flag'] = flag_msg
             metadata['anchor_used'] = 'ceiling_fallback'
+        elif panel_suspiciously_low:
+            # Panel is below the tier floor AND AI returned nothing — bump up
+            # to the tier floor with deterministic jitter rather than ship a
+            # known-undercount number. (Symmetric counterpart to the
+            # capped_at_half_ceiling_no_ai branch above.)
+            import hashlib as _h
+            _seed = _h.md5(f"{show_name}-{platform_name}-floor".encode()).hexdigest()
+            jitter = ((int(_seed[:8], 16) % 2000) - 1000) / 10000.0  # ±10%
+            recommended = max(1, int(tier_floor * (1 + jitter)))
+            flag_msg = (
+                f"Panel projection ({panel_projection_us:,}) was below the {tier}-tier floor "
+                f"of {tier_floor:,} and AI returned no usable evidence. Raised to the tier "
+                f"floor ({recommended:,}) to avoid shipping a known undercount."
+            )
+            print(f"   🧯 {flag_msg}")
+            metadata['action'] = 'raised_to_tier_floor_no_ai'
+            metadata['flag'] = flag_msg
+            metadata['anchor_used'] = 'tier_floor_fallback'
+            metadata['upward_override'] = True
         else:
             print(f"   ℹ️  AI returned no usable viewer estimate (confidence={confidence}) — keeping panel projection")
             metadata['action'] = 'kept_panel_no_ai_estimate'
@@ -2926,22 +2973,28 @@ def _validate_total_watchers_with_ai(show_name, platform_name, inflated_total, i
     # backfired on Pluribus (panel was 14.85M, hard ceiling ~13M, AI returned
     # a low-confidence small number → safety net kicked in and shipped the
     # implausible panel). The fix:
-    #   - When panel is BELOW the platform ceiling (i.e. plausible on its
-    #     face), keep the existing safety net so genuine research misses
-    #     don't undercount.
+    #   - When panel is BELOW the platform ceiling AND not suspiciously low
+    #     (i.e. plausible on its face), keep the existing safety net so
+    #     genuine research misses don't undercount.
     #   - When panel is ABOVE the platform ceiling, SKIP the safety net —
     #     we trust the AI estimate (or the minutes bracket) over an
     #     implausible panel even at low/medium confidence.
+    #   - When panel is SUSPICIOUSLY LOW (below tier floor), SKIP the safety
+    #     net so the AI's upward correction wins even at low confidence. This
+    #     is the symmetric counterpart that catches under-sampled hits like
+    #     The Night Agent S1 (panel 1.6M, real ~27M).
     #   - The minutes-anchor branch ALWAYS skips the safety net because the
     #     bracket math itself is the evidence.
-    if anchor_used != 'minutes_bracket' and not panel_implausibly_high:
+    if (anchor_used != 'minutes_bracket'
+            and not panel_implausibly_high
+            and not panel_suspiciously_low):
         undercount_threshold = {'low': 0.7, 'medium': 0.6}.get(confidence)
         if undercount_threshold and panel_projection_us > 0 and recommended < panel_projection_us * undercount_threshold:
             flag_msg = (
                 f"Viewer research returned {recommended:,} ({confidence} confidence) but panel "
                 f"projects ~{panel_projection_us:,} for this show, which is within the platform "
-                f"max-plausible ceiling of {max_plausible_us:,}. Treating as a research miss; "
-                f"using panel projection instead."
+                f"max-plausible ceiling of {max_plausible_us:,} and above the {tier} tier floor "
+                f"of {tier_floor:,}. Treating as a research miss; using panel projection instead."
             )
             print(f"   ⚠️  {flag_msg}")
             metadata['action'] = 'kept_panel_low_confidence_undercount'
@@ -2958,6 +3011,20 @@ def _validate_total_watchers_with_ai(show_name, platform_name, inflated_total, i
         )
         print(f"   🧯 {flag_msg}")
         metadata['flag'] = flag_msg
+    elif panel_suspiciously_low and recommended > panel_projection_us * 2:
+        # Symmetric counterpart: panel is under-sampling and AI evidence
+        # is a meaningful upward correction. Log it so the override is
+        # auditable in the dashboard.
+        flag_msg = (
+            f"Panel projection ({panel_projection_us:,}) was below the {tier}-tier floor of "
+            f"{tier_floor:,}, suggesting the panel under-sampled this show "
+            f"(search-term mismatch or TV-app viewing not captured). Overriding panel "
+            f"upward with AI evidence ({recommended:,}, {confidence} confidence, "
+            f"anchor={anchor_used})."
+        )
+        print(f"   🧯 {flag_msg}")
+        metadata['flag'] = flag_msg
+        metadata['upward_override'] = True
 
     # Final ceiling clamp — even if the AI returned something above the
     # max-plausible threshold, force it down.
