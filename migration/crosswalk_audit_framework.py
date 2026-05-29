@@ -4771,3 +4771,291 @@ def agent_reason_mpb_floor(df,
               f"(target was {target_count:,})")
 
     return df, decisions
+
+
+# ============================================================================
+# Claude second-opinion arbiter for GPT-4o vet KEEPs
+#
+# Added 2026-05-29 after the Nike profile shipped with NETFLIX=60.26%,
+# DISNEY+=30.87%, HBO MAX=23.06% all flagged by vet as FAIL_low but
+# left low by the GPT-4o re-reasoner (over-fit "active demo less
+# couch-bound" prior). The deterministic enforce_household_streaming_floor
+# enforcer catches the streaming case specifically. This arbiter is a
+# broader safety net: any FAIL_low/FAIL_high row that GPT-4o decided
+# to KEEP is re-pitched to Claude for a fresh-frame second opinion.
+#
+# Claude is asked to weigh competing priors (e.g., "Nike audience is
+# young AND household-mass-market") and override KEEP only when it can
+# articulate a substantive reason. If Claude agrees with KEEP, the
+# original value stands. This is additive — never modifies the GPT-4o
+# decisions list, only mutates the DataFrame for overrides.
+# ============================================================================
+
+_anthropic_client_singleton = None
+
+
+def _get_anthropic_client(timeout: float = 120.0):
+    """Return a cached Anthropic client; None if ANTHROPIC_API_KEY missing."""
+    global _anthropic_client_singleton
+    if _anthropic_client_singleton is not None:
+        return _anthropic_client_singleton
+    api_key = os.environ.get('ANTHROPIC_API_KEY')
+    if not api_key:
+        return None
+    try:
+        from anthropic import Anthropic
+    except ImportError:
+        return None
+    _anthropic_client_singleton = Anthropic(api_key=api_key, timeout=timeout)
+    return _anthropic_client_singleton
+
+
+_CLAUDE_ARBITER_TASK_BLOCK = """You are a SECOND-OPINION arbiter on a digital-audience profile.
+
+The primary reasoner (GPT-4o) reviewed a row that the vetting framework
+flagged as FAIL_low or FAIL_high (more than 7pts from gen-pop digital
+consensus). GPT-4o chose KEEP — meaning it believed the divergence from
+consensus is justified by the subject's persona.
+
+Your job is to weigh competing priors and decide:
+  - KEEP:   GPT-4o was right; the divergence is persona-justified
+  - CHANGE: GPT-4o over-fit a single archetype; lift/lower to a more
+            defensible value (with a substantive persona-grounded reason)
+
+CRITICAL anti-pinning rules:
+  1. NEVER pin to consensus. If you CHANGE, your new_bp must be at
+     least 2pts away from the consensus value.
+  2. Your reason must cite a SPECIFIC persona signal — a demographic
+     fact, a behavioral correlation, a real-world event, a known
+     sponsorship/partnership, etc. Generic phrases like "matches gen
+     pop", "aligns with consensus", "consistent with audience" are
+     FORBIDDEN and will be auto-rejected.
+  3. Brand profiles (Nike, McDonald's, Coca-Cola, Target, Walmart,
+     etc.) have HOUSEHOLD audiences — soccer moms, dads, kids all
+     stream together. Don't apply "active demo, less couch-bound" or
+     similar single-frame archetypes to mass-market brand audiences.
+  4. Talent profiles (actors, athletes, musicians) genuinely DO have
+     skewed media diets — trust GPT-4o's KEEP more in those cases
+     unless there's a clear specific reason to override.
+  5. If you would only lift by <2pt, KEEP instead (not worth the noise).
+
+Output JSON only — no markdown, no code fences:
+{"decisions": [
+  {"i": 1, "decision": "KEEP", "reason": "specific persona reason..."},
+  {"i": 2, "decision": "CHANGE", "new_bp": 67.45, "reason": "Nike household audience..."},
+  ...
+]}
+
+Return EXACTLY one decision per input row, indexed by `i` (1-based).
+"""
+
+
+def claude_arbiter_on_vet_keeps(df,
+                                  decisions: list[dict],
+                                  *,
+                                  anthropic_client=None,
+                                  subject: str = '',
+                                  persona_doc=None,
+                                  audience_composition: dict | None = None,
+                                  brand_category: str | None = None,
+                                  model: str = 'claude-sonnet-4-5-20250929',
+                                  batch_size: int = 8,
+                                  max_tokens: int = 4000,
+                                  verbose: bool = True):
+    """Second-opinion pass on GPT-4o KEEPs of FAIL_low/FAIL_high rows.
+
+    Parameters
+    ----------
+    df : DataFrame
+        The profile being audited (modified in-place for Claude CHANGEs).
+    decisions : list of dict
+        Output of agent_reason_vet_failures — each dict carries category,
+        brand, decision, old_bp, etc.
+    anthropic_client : Anthropic client or None
+        If None, lazily creates one via _get_anthropic_client().
+    subject, persona_doc, audience_composition, brand_category :
+        Context fed to Claude for persona-grounded reasoning.
+    model : str
+        Claude model slug. Defaults to claude-sonnet-4-5 (latest fast
+        thinking-class model — strong reasoning, ~$3/M input).
+    batch_size : int
+        Items per Claude call. Default 8 — smaller than GPT-4o because
+        each item gets more reasoning depth.
+
+    Returns
+    -------
+    (df, arbitration_log) — list of dicts {category, brand, gpt_kept_bp,
+    consensus, claude_decision, claude_new_bp, claude_reason}
+    """
+    if anthropic_client is None:
+        anthropic_client = _get_anthropic_client()
+    if anthropic_client is None:
+        if verbose:
+            print('   ⚠️ claude_arbiter_on_vet_keeps: no Anthropic client '
+                  '(ANTHROPIC_API_KEY missing or SDK missing); skipping')
+        return df, []
+
+    # Candidate set: KEEPs on FAIL_low/FAIL_high rows
+    candidates = [d for d in (decisions or [])
+                  if d.get('decision') == 'KEEP'
+                     and d.get('verdict') in ('FAIL_low', 'FAIL_high')]
+    if not candidates:
+        if verbose:
+            print('   ✅ claude_arbiter_on_vet_keeps: no FAIL KEEPs to arbitrate')
+        return df, []
+
+    if verbose:
+        print(f'   🧠 claude arbiter: {len(candidates)} KEEP(s) on FAIL '
+              f'rows — second-opinion via {model}')
+
+    bp_col = 'Brand Penetration (Row)'
+    df = df.copy()
+    if bp_col in df.columns and df[bp_col].dtype != object:
+        df[bp_col] = df[bp_col].astype(object)
+
+    persona_context = _persona_context_block(persona_doc,
+                                              audience_composition or {},
+                                              subject)
+    if brand_category:
+        persona_context += f'\n\nBRAND_CATEGORY={brand_category}'
+
+    arbitration_log: list[dict] = []
+    n_overrides = 0
+
+    for batch_start in range(0, len(candidates), batch_size):
+        batch = candidates[batch_start: batch_start + batch_size]
+        batch_idx = batch_start // batch_size + 1
+        n_batches = (len(candidates) + batch_size - 1) // batch_size
+
+        items_lines = []
+        for i, v in enumerate(batch, 1):
+            old_bp = v.get('old_bp', v.get('crosswalk', 0.0))
+            consensus = float(v.get('consensus') or 0.0)
+            items_lines.append(
+                f"{i}. CATEGORY={v['category']} | BRAND={v['brand']} | "
+                f"current_bp={old_bp:.4f}% | "
+                f"gen_pop_consensus={consensus:.4f}% | "
+                f"gap={old_bp - consensus:+.2f}pts | "
+                f"verdict={v['verdict']} | "
+                f"gpt_kept_reason={(v.get('reason') or '')[:140]!r}"
+            )
+
+        prompt = (
+            _CLAUDE_ARBITER_TASK_BLOCK
+            + f"\n=== SUBJECT ===\n{subject}\n"
+            + f"\n=== PERSONA CONTEXT ===\n{persona_context}\n"
+            + f"\n=== KEEP DECISIONS TO ARBITRATE (batch {batch_idx}/{n_batches}) ===\n"
+            + "\n".join(items_lines)
+        )
+
+        try:
+            resp = anthropic_client.messages.create(
+                model=model,
+                max_tokens=max_tokens,
+                temperature=0.2,
+                messages=[{'role': 'user', 'content': prompt}],
+            )
+            raw = ''.join(b.text for b in resp.content if getattr(b, 'text', None))
+            raw = re.sub(r'^```(?:json)?\s*|\s*```$', '', raw.strip()).strip()
+            parsed = json.loads(raw)
+        except Exception as e:
+            if verbose:
+                print(f'   ⚠️ claude arbiter batch {batch_idx}/{n_batches} error: {e}')
+            for v in batch:
+                arbitration_log.append({
+                    **v,
+                    'claude_decision': 'ERROR',
+                    'claude_new_bp': None,
+                    'claude_reason': f'claude error: {e}',
+                })
+            continue
+
+        decision_map = {int(d.get('i', -1)): d for d in (parsed.get('decisions') or [])}
+        for i, v in enumerate(batch, 1):
+            d = decision_map.get(i, {})
+            decision = str(d.get('decision', 'KEEP')).upper().strip()
+            reason = str(d.get('reason', '')).strip()
+            old_bp = v.get('old_bp', v.get('crosswalk', 0.0))
+            consensus = float(v.get('consensus') or 0.0)
+
+            entry = {
+                'category': v['category'], 'brand': v['brand'],
+                'verdict': v['verdict'],
+                'gpt_kept_bp': old_bp, 'consensus': consensus,
+                'gpt_reason': (v.get('reason') or '')[:200],
+                'claude_decision': decision,
+                'claude_new_bp': None,
+                'claude_reason': reason[:240],
+            }
+
+            if decision != 'CHANGE':
+                arbitration_log.append(entry)
+                continue
+
+            # Validate Claude's new_bp
+            try:
+                new_bp = float(d.get('new_bp'))
+            except Exception:
+                new_bp = None
+            if new_bp is None or new_bp <= 0 or new_bp > 100:
+                entry['claude_decision'] = 'SKIP'
+                entry['claude_reason'] = (
+                    f'invalid new_bp from claude: {d.get("new_bp")!r}')
+                arbitration_log.append(entry)
+                continue
+
+            # Anti-pinning + anti-trivial-lift checks
+            generic_phrases = (
+                'matches gen pop', 'matches consensus',
+                'aligns with consensus', 'aligns with gen pop',
+                'consistent with consensus', 'consistent with gen pop',
+                'in line with consensus', 'in line with gen pop',
+                'fits the audience profile',
+            )
+            reason_lc = reason.lower()
+            if any(p in reason_lc for p in generic_phrases) or len(reason_lc) < 30:
+                entry['claude_decision'] = 'KEEP'
+                entry['claude_reason'] = (
+                    f'claude reason too generic to justify override; '
+                    f'kept gpt KEEP. (claude said: {reason[:80]})')
+                arbitration_log.append(entry)
+                continue
+            if abs(new_bp - consensus) < 2.0:
+                # Push away from consensus to avoid pinning
+                new_bp = (consensus - 2.0 - 0.07) if old_bp > consensus \
+                          else (consensus + 2.0 + 0.07)
+                new_bp = round(max(0.5, min(99.5, new_bp)), 4)
+            if abs(new_bp - old_bp) < 2.0:
+                entry['claude_decision'] = 'KEEP'
+                entry['claude_reason'] = (
+                    f'claude proposed |Δ|={abs(new_bp-old_bp):.2f}pt < 2pt floor; '
+                    f'not worth noise. kept original {old_bp:.2f}%.')
+                arbitration_log.append(entry)
+                continue
+
+            # Apply the override
+            entry['claude_new_bp'] = round(new_bp, 4)
+            arbitration_log.append(entry)
+
+            col_match = (df['Column'].astype(str).str.upper().str.strip()
+                         == str(v['category']).upper().strip())
+            val_match = (df['Value'].astype(str).str.upper().str.strip()
+                         == str(v['brand']).upper().strip())
+            idx = df.index[col_match & val_match]
+            if len(idx):
+                df.at[idx[0], bp_col] = round(new_bp, 4)
+                n_overrides += 1
+                if verbose:
+                    arrow = '⬆' if new_bp > old_bp else '⬇'
+                    print(f'      {arrow} [{v["category"]}] {v["brand"]}: '
+                          f'{old_bp:.2f}% → {new_bp:.4f}%  '
+                          f'(consensus {consensus:.2f}%) — {reason[:90]}')
+
+    if verbose:
+        n_kept = sum(1 for e in arbitration_log if e['claude_decision'] == 'KEEP')
+        n_change = sum(1 for e in arbitration_log if e['claude_decision'] == 'CHANGE')
+        n_err = sum(1 for e in arbitration_log if e['claude_decision'] == 'ERROR')
+        print(f'   🧠 claude arbiter: {n_change} OVERRIDE, {n_kept} agreed-KEEP, '
+              f'{n_err} ERROR  →  {n_overrides} BP cell(s) actually changed')
+
+    return df, arbitration_log
