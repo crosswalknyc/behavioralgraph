@@ -82731,7 +82731,7 @@
             })();
             document.getElementById('iqRankerContextSubtitle').textContent = `${master} · ${winLabel}`;
 
-            modal.classList.add('show');
+            modal.classList.add('open');
             document.body.style.overflow = 'hidden';
             _iqrLoadContext({ force: false });
         }
@@ -82743,7 +82743,7 @@
 
         function closeIQRankerContext() {
             const modal = document.getElementById('iqRankerContextModal');
-            if (modal) modal.classList.remove('show');
+            if (modal) modal.classList.remove('open');
             document.body.style.overflow = '';
             _IQR_CONTEXT_CURRENT = null;
         }
@@ -82884,7 +82884,7 @@
                 if (e.target === modal) closeIQRankerContext();
             });
             document.addEventListener('keydown', (e) => {
-                if (e.key === 'Escape' && modal.classList.contains('show')) {
+                if (e.key === 'Escape' && modal.classList.contains('open')) {
                     closeIQRankerContext();
                 }
             });
