@@ -2555,6 +2555,191 @@ def _viewers_from_minutes_bracket(viewing_minutes_us, minutes_per_episode, episo
     return {'lower': lower, 'point': point, 'upper': upper}
 
 
+def _reason_viewer_bracket_with_claude(*, show_name, platform_name, genre, date_range,
+                                       episode_count, gpt_search_result, platform_info,
+                                       max_plausible_us):
+    """Hand the GPT search result to Claude and ask it to walk the explicit
+    hours → global views → US share → completion-discount → bracket framework.
+
+    Used as a reasoning layer on top of the gpt-4o-search-preview output so we
+    don't ship a single-point AI guess; instead we get a defensible bracket
+    with named source numbers and step-by-step decomposition.
+
+    The framework is the same one we used to manually anchor The Night Agent
+    S1/S2/S3 against Netflix's "What We Watched" reports:
+
+        1) Find the show's total reported GLOBAL HOURS in the analysis window
+           (Netflix Top 10 / What We Watched, or Apple TV+ press release).
+        2) Convert hours to GLOBAL VIEWS using episode runtime × episode count
+           (this is Netflix's own "view" = total_hours / season_runtime).
+        3) Apply US SHARE — typically 30-40% for US-set English content
+           (lower for ROW-heavy content, higher for US-set thrillers).
+        4) Apply a COMPLETION/REWATCH DISCOUNT (0.85-1.0) to convert
+           views to unique US viewers. Bingers and rewatchers inflate the
+           "views" metric; the discount accounts for that.
+        5) Report a BRACKET — conservative (low US share + discount),
+           mid (typical), aggressive (high US share, no discount) — so the
+           caller can pick the level of conservatism it wants.
+
+    Returns dict { 'lower': int, 'point': int, 'upper': int, 'reasoning': str,
+                   'us_share_used': float, 'sources': list, 'model': str } or
+    None if Claude is unavailable / the call fails / the result is unusable.
+    """
+    try:
+        from claude_client import is_claude_reasoning_enabled, claude_reason_json
+    except Exception:
+        return None
+    if not is_claude_reasoning_enabled():
+        return None
+
+    tier = (platform_info or {}).get('tier', 'unknown')
+    subs_m = (platform_info or {}).get('subs_millions', '?')
+
+    system = (
+        "You are a streaming viewership analyst. Apply the framework below "
+        "literally and show your work. Output JSON only — no prose, no fences.\n\n"
+        "=== THE FRAMEWORK (hours → unique US viewers) ===\n"
+        "Given Netflix-style reported total viewing hours (or minutes) for a show\n"
+        "in a specific window, derive a defensible US unique-viewer BRACKET in\n"
+        "five explicit steps. Show every step's numeric value.\n\n"
+        "  Step 1: global_hours   — total reported viewing hours in the window.\n"
+        "                            For Netflix, this comes from the official\n"
+        "                            'What We Watched' report or the weekly Top 10\n"
+        "                            cumulative tracker. NAME THE SOURCE.\n"
+        "  Step 2: season_runtime = episode_count × minutes_per_episode / 60\n"
+        "  Step 3: global_views   = global_hours / season_runtime\n"
+        "                            (this is Netflix's own 'view' definition)\n"
+        "  Step 4: us_share       — share of global viewing that's US. Defaults:\n"
+        "                              0.30  ROW-heavy / international content\n"
+        "                              0.33  mixed-appeal English content\n"
+        "                              0.37  US-set English drama / thriller\n"
+        "                              0.40  US politics / FBI / first-responder content\n"
+        "                            Pick based on the show's setting and language.\n"
+        "  Step 5: completion_discount — to convert 'views' to UNIQUE viewers,\n"
+        "                            multiply by a completion discount:\n"
+        "                              0.85  binge content (all-at-once drops, lots of rewatching)\n"
+        "                              0.92  weekly drops (less rewatching)\n"
+        "                              1.00  if global_views was already unique-viewer accounting\n\n"
+        "  Then: us_viewers = global_views × us_share × completion_discount\n\n"
+        "  BRACKET (always report all three):\n"
+        "    conservative = us_viewers with us_share = your_pick - 0.05 and discount = 0.85\n"
+        "    mid          = us_viewers with us_share = your_pick       and discount = 0.92\n"
+        "    aggressive   = us_viewers with us_share = your_pick + 0.03 and discount = 1.00\n\n"
+        "=== HARD CONSTRAINTS ===\n"
+        "  - If the source's hours/views figure is GLOBAL, never report a US\n"
+        "    figure above us_share × global_views × 1.05.\n"
+        "  - If unable to find a credible hours figure, set global_hours = null\n"
+        "    and explain. Do NOT fabricate.\n"
+        "  - Never let your aggressive bracket exceed the hard ceiling given\n"
+        "    in the user prompt.\n"
+        "  - Cite specific sources (Variety article from M/D/YYYY, Nielsen\n"
+        "    week of M/D, Netflix Top 10 week N, 'What We Watched' H1 20XX,\n"
+        "    Apple TV+ press release, etc.). Generic 'industry reports'\n"
+        "    is not acceptable.\n"
+    )
+
+    user = (
+        f'Show: "{show_name}"\n'
+        f'Platform: {platform_name} (tier={tier}, US subs ~{subs_m}M)\n'
+        f'Genre: {genre or "unknown"}\n'
+        f'Episode count: {episode_count or "unknown"}\n'
+        f'Analysis window: {date_range or "unknown"}\n'
+        f'Hard ceiling (max plausible single-show US viewers for this platform): '
+        f'{max_plausible_us:,}\n\n'
+        f'Here is the raw web-search result from a prior agent step. Use the\n'
+        f'numbers it found if credible; if it found nothing useful, say so and\n'
+        f'fall back to your own training-data knowledge of public viewership for\n'
+        f'this show in this window. Do NOT fabricate a number — null is OK.\n\n'
+        f'GPT search result (JSON):\n{json.dumps(gpt_search_result, indent=2) if isinstance(gpt_search_result, dict) else str(gpt_search_result)}\n\n'
+        f'Output JSON only (no fences):\n'
+        f'{{\n'
+        f'  "step1_global_hours": <int or null>,\n'
+        f'  "step1_source": "<specific source citation>",\n'
+        f'  "step2_season_runtime_hours": <float>,\n'
+        f'  "step3_global_views": <int>,\n'
+        f'  "step4_us_share": <float between 0.20 and 0.45>,\n'
+        f'  "step4_share_reasoning": "<why this share>",\n'
+        f'  "step5_completion_discount": <float between 0.80 and 1.0>,\n'
+        f'  "step5_discount_reasoning": "<why this discount>",\n'
+        f'  "bracket_conservative_us_viewers": <int>,\n'
+        f'  "bracket_mid_us_viewers": <int>,\n'
+        f'  "bracket_aggressive_us_viewers": <int>,\n'
+        f'  "recommended_point_us_viewers": <int — usually = bracket_mid>,\n'
+        f'  "confidence": "high" | "medium" | "low",\n'
+        f'  "sources_cited": ["<src 1>", "<src 2>", ...]\n'
+        f'}}\n'
+    )
+
+    raw = claude_reason_json(
+        system=system, user=user,
+        max_tokens=1200, temperature=0.15,
+    )
+    if not raw:
+        return None
+
+    try:
+        s = raw.strip()
+        if s.startswith('```'):
+            s = s.split('\n', 1)[-1].rsplit('```', 1)[0].strip()
+        start = s.find('{')
+        if start < 0:
+            return None
+        depth, end = 0, start
+        for i in range(start, len(s)):
+            if s[i] == '{':
+                depth += 1
+            elif s[i] == '}':
+                depth -= 1
+                if depth == 0:
+                    end = i + 1
+                    break
+        result = json.loads(s[start:end])
+    except Exception as e:
+        print(f"   ⚠️  Claude bracket reasoning JSON parse failed: {e}")
+        return None
+
+    def _safe_int(v):
+        try:
+            n = int(float(v))
+            return n if n > 0 else None
+        except (TypeError, ValueError):
+            return None
+
+    lower = _safe_int(result.get('bracket_conservative_us_viewers'))
+    point = _safe_int(result.get('recommended_point_us_viewers')) or _safe_int(result.get('bracket_mid_us_viewers'))
+    upper = _safe_int(result.get('bracket_aggressive_us_viewers'))
+    if not (lower and point and upper):
+        # Claude couldn't or wouldn't produce a bracket — fall through to GPT-only path
+        print(f"   ⚠️  Claude returned no usable bracket: {result}")
+        return None
+
+    # Clamp to platform ceiling
+    upper = min(upper, max_plausible_us)
+    point = min(point, max_plausible_us)
+    lower = min(lower, max_plausible_us)
+    # Ensure ordering
+    lower, point, upper = sorted((lower, point, upper))
+
+    reasoning_lines = [
+        f"Step 1: global_hours={result.get('step1_global_hours')} ({result.get('step1_source','')})",
+        f"Step 2: season_runtime={result.get('step2_season_runtime_hours')}h",
+        f"Step 3: global_views={result.get('step3_global_views')}",
+        f"Step 4: us_share={result.get('step4_us_share')} — {result.get('step4_share_reasoning','')}",
+        f"Step 5: completion_discount={result.get('step5_completion_discount')} — {result.get('step5_discount_reasoning','')}",
+    ]
+    return {
+        'lower': lower,
+        'point': point,
+        'upper': upper,
+        'reasoning': ' | '.join(reasoning_lines),
+        'us_share_used': result.get('step4_us_share'),
+        'completion_discount_used': result.get('step5_completion_discount'),
+        'sources': result.get('sources_cited', []),
+        'confidence': str(result.get('confidence', 'medium')).lower(),
+        'model': os.environ.get('CLAUDE_REASONING_MODEL') or 'claude-sonnet-4-5',
+    }
+
+
 def _validate_episode_concentration(df_episode_attribution, show_name='', platform_name=''):
     """Detect and redistribute last-touch attribution leaks at the episode level.
 
@@ -2886,12 +3071,42 @@ def _validate_total_watchers_with_ai(show_name, platform_name, inflated_total, i
           f"min/ep={minutes_per_episode}, eps={episode_count_known}, "
           f"source={result.get('source','')}")
 
-    # === ANCHOR 1: Nielsen viewing-minutes bracket ===========================
-    # Most-trusted source. If the model returned a credible viewing-minutes
-    # figure with episode length + count, derive the bracket and use the
-    # mid-point. This anchor overrides the peak-viewer estimate when both
-    # are available (minutes-based reasoning is harder for the model to
-    # hallucinate than a single point estimate).
+    # === ANCHOR 1: Claude framework bracket ==================================
+    # Most-trusted reasoning step. Hand the GPT search result to Claude and ask
+    # it to walk the explicit hours → global-views → US-share → completion-
+    # discount → bracket framework with named sources. This is the exact same
+    # framework we used manually to anchor The Night Agent S1/S2/S3 against
+    # Netflix's "What We Watched" reports — encoding it as a Claude reasoning
+    # call so future agent runs apply the same level of diligence.
+    claude_bracket = _reason_viewer_bracket_with_claude(
+        show_name=show_name, platform_name=platform_name, genre=genre,
+        date_range=date_range, episode_count=episode_count_known,
+        gpt_search_result=result, platform_info=platform_info,
+        max_plausible_us=max_plausible_us,
+    )
+    if claude_bracket:
+        metadata['claude_bracket'] = {
+            'lower': claude_bracket['lower'],
+            'point': claude_bracket['point'],
+            'upper': claude_bracket['upper'],
+            'us_share_used': claude_bracket.get('us_share_used'),
+            'completion_discount_used': claude_bracket.get('completion_discount_used'),
+            'sources': claude_bracket.get('sources', []),
+            'confidence': claude_bracket.get('confidence'),
+            'model': claude_bracket.get('model'),
+        }
+        metadata['claude_reasoning'] = claude_bracket.get('reasoning')
+        print(f"   🤖 Claude bracket ({claude_bracket.get('model','claude')}, "
+              f"conf={claude_bracket.get('confidence')}): "
+              f"low={claude_bracket['lower']:,}  "
+              f"point={claude_bracket['point']:,}  "
+              f"high={claude_bracket['upper']:,}")
+        print(f"   🤖 Claude reasoning: {claude_bracket.get('reasoning','')}")
+
+    # === ANCHOR 2: Nielsen viewing-minutes bracket (fallback) ================
+    # If Claude isn't available (no key / disabled), fall back to the heuristic
+    # minutes-bracket math driven by the GPT search result. Same shape as
+    # before so the rest of the function is unchanged.
     minutes_bracket = _viewers_from_minutes_bracket(viewing_minutes_us, minutes_per_episode, episode_count_known)
     if minutes_bracket:
         # Clamp the bracket to the platform's max-plausible ceiling so a
@@ -2906,7 +3121,11 @@ def _validate_total_watchers_with_ai(show_name, platform_name, inflated_total, i
     recommended = None
     anchor_used = None
 
-    if minutes_bracket:
+    if claude_bracket:
+        recommended = claude_bracket['point']
+        anchor_used = 'claude_framework'
+        print(f"   🎯 Using Claude framework point estimate: {recommended:,}")
+    elif minutes_bracket:
         recommended = minutes_bracket['point']
         anchor_used = 'minutes_bracket'
         print(f"   🎯 Using minutes-anchor point estimate: {recommended:,}")
@@ -2983,9 +3202,11 @@ def _validate_total_watchers_with_ai(show_name, platform_name, inflated_total, i
     #     net so the AI's upward correction wins even at low confidence. This
     #     is the symmetric counterpart that catches under-sampled hits like
     #     The Night Agent S1 (panel 1.6M, real ~27M).
-    #   - The minutes-anchor branch ALWAYS skips the safety net because the
-    #     bracket math itself is the evidence.
-    if (anchor_used != 'minutes_bracket'
+    #   - The minutes-anchor and claude-framework branches ALWAYS skip the
+    #     safety net because the bracket math (or Claude's framework
+    #     decomposition) is itself the evidence.
+    trusted_bracket_anchors = ('minutes_bracket', 'claude_framework')
+    if (anchor_used not in trusted_bracket_anchors
             and not panel_implausibly_high
             and not panel_suspiciously_low):
         undercount_threshold = {'low': 0.7, 'medium': 0.6}.get(confidence)
@@ -3001,7 +3222,7 @@ def _validate_total_watchers_with_ai(show_name, platform_name, inflated_total, i
             metadata['ai_estimate_rejected'] = recommended
             metadata['flag'] = flag_msg
             return inflated_total, inflated_pre, inflated_clean, metadata
-    elif panel_implausibly_high and anchor_used != 'minutes_bracket':
+    elif panel_implausibly_high and anchor_used not in trusted_bracket_anchors:
         # Document the override decision in the flag trail so the dashboard
         # surfaces *why* we ignored panel.
         flag_msg = (
