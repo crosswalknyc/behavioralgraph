@@ -27072,6 +27072,25 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
                         else:
                             print('   ⚠️ vet-reason skipped: no OpenAI client available')
 
+                        # Post-vet streaming-floor sweep — vet-reason agent often
+                        # KEEPs streaming services below consensus on brand
+                        # profiles ("less couch-bound" bias). Re-run the
+                        # household-streaming-floor enforcer here so any
+                        # KEEP-on-FAIL streaming row gets the deterministic
+                        # rescue. Idempotent: only lifts when BP < mid - 8pp.
+                        try:
+                            from post_generation_enforcers import (
+                                enforce_household_streaming_floor as _pv_hsf,
+                            )
+                            _df_cw2, _n_hsf_post = _pv_hsf(
+                                _df_cw2, _subject, verbose=True,
+                            )
+                            if _n_hsf_post:
+                                print(f'   📺 post-vet household-streaming floor: '
+                                      f'rescued {_n_hsf_post} row(s)')
+                        except Exception as _hsf_pv_err:
+                            print(f'   ⚠️ post-vet streaming-floor skipped: {_hsf_pv_err}')
+
                         # Persist the markdown vet report to S3
                         if _vet_md:
                             try:

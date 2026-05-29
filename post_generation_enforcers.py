@@ -4357,7 +4357,13 @@ def enforce_household_streaming_floor(df, subject, verbose=True):
         target = mid * HSF_TARGET_PCT + norm * 1.5  # mid ±1.5pp jitter
         target = max(0.5, min(99.5, round(target, 4)))
 
-        df.at[idx, bp_col] = target
+        # Write in the column's existing dtype: string col gets formatted "%"
+        # string, numeric col gets float. Pandas rejects float-into-string
+        # assignment which silently broke the Netflix run.
+        if df[bp_col].dtype == object or str(df[bp_col].dtype).startswith('string'):
+            df.at[idx, bp_col] = f'{target:.4f}%'
+        else:
+            df.at[idx, bp_col] = target
         n_lifts += 1
         cats_renorm.add(cat_u)
         examples.append((cat_u, brand_u, cur_bp, target, mid))
@@ -4375,12 +4381,19 @@ def enforce_household_streaming_floor(df, subject, verbose=True):
     # still sum to 100%. Mirrors the in-place fix logic for Nike.
     if n_lifts and cs_col is not None:
         c_upper = df['Column'].astype(str).str.upper().str.strip()
+        cs_is_str = (df[cs_col].dtype == object or
+                     str(df[cs_col].dtype).startswith('string'))
         for cat_u in cats_renorm:
             idxs = df.index[c_upper == cat_u]
             bps = df.loc[idxs, bp_col].apply(_bp)
             total = bps.sum(skipna=True)
             if total and total > 0:
-                df.loc[idxs, cs_col] = (bps / total * 100).round(4).values
+                shares = (bps / total * 100).round(4)
+                if cs_is_str:
+                    df.loc[idxs, cs_col] = shares.apply(
+                        lambda v: f'{v:.4f}' if pd.notna(v) else v).values
+                else:
+                    df.loc[idxs, cs_col] = shares.values
 
     return df, n_lifts
 
