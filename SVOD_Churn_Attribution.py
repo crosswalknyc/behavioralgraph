@@ -1623,8 +1623,9 @@ def run_query(conn, p):
         validated_clean = _current_clean
         ai_meta = {'skipped': True, 'reason': f'exception: {e}'}
 
-    # Capture any flag the viewer-research safety net produced so it can be surfaced
-    # in the CSV's AI VALIDATION section.
+    # Capture any flag the viewer-research safety net produced so it can be
+    # surfaced in run logs and the validation sidecar JSON (NOT in the CSV,
+    # which the dashboard would otherwise render as bogus demographic rows).
     if ai_meta.get('flag'):
         p.setdefault('_ai_flags', []).append(ai_meta['flag'])
 
@@ -2555,6 +2556,191 @@ def _viewers_from_minutes_bracket(viewing_minutes_us, minutes_per_episode, episo
     return {'lower': lower, 'point': point, 'upper': upper}
 
 
+def _reason_viewer_bracket_with_claude(*, show_name, platform_name, genre, date_range,
+                                       episode_count, gpt_search_result, platform_info,
+                                       max_plausible_us):
+    """Hand the GPT search result to Claude and ask it to walk the explicit
+    hours → global views → US share → completion-discount → bracket framework.
+
+    Used as a reasoning layer on top of the gpt-4o-search-preview output so we
+    don't ship a single-point AI guess; instead we get a defensible bracket
+    with named source numbers and step-by-step decomposition.
+
+    The framework is the same one we used to manually anchor The Night Agent
+    S1/S2/S3 against Netflix's "What We Watched" reports:
+
+        1) Find the show's total reported GLOBAL HOURS in the analysis window
+           (Netflix Top 10 / What We Watched, or Apple TV+ press release).
+        2) Convert hours to GLOBAL VIEWS using episode runtime × episode count
+           (this is Netflix's own "view" = total_hours / season_runtime).
+        3) Apply US SHARE — typically 30-40% for US-set English content
+           (lower for ROW-heavy content, higher for US-set thrillers).
+        4) Apply a COMPLETION/REWATCH DISCOUNT (0.85-1.0) to convert
+           views to unique US viewers. Bingers and rewatchers inflate the
+           "views" metric; the discount accounts for that.
+        5) Report a BRACKET — conservative (low US share + discount),
+           mid (typical), aggressive (high US share, no discount) — so the
+           caller can pick the level of conservatism it wants.
+
+    Returns dict { 'lower': int, 'point': int, 'upper': int, 'reasoning': str,
+                   'us_share_used': float, 'sources': list, 'model': str } or
+    None if Claude is unavailable / the call fails / the result is unusable.
+    """
+    try:
+        from claude_client import is_claude_reasoning_enabled, claude_reason_json
+    except Exception:
+        return None
+    if not is_claude_reasoning_enabled():
+        return None
+
+    tier = (platform_info or {}).get('tier', 'unknown')
+    subs_m = (platform_info or {}).get('subs_millions', '?')
+
+    system = (
+        "You are a streaming viewership analyst. Apply the framework below "
+        "literally and show your work. Output JSON only — no prose, no fences.\n\n"
+        "=== THE FRAMEWORK (hours → unique US viewers) ===\n"
+        "Given Netflix-style reported total viewing hours (or minutes) for a show\n"
+        "in a specific window, derive a defensible US unique-viewer BRACKET in\n"
+        "five explicit steps. Show every step's numeric value.\n\n"
+        "  Step 1: global_hours   — total reported viewing hours in the window.\n"
+        "                            For Netflix, this comes from the official\n"
+        "                            'What We Watched' report or the weekly Top 10\n"
+        "                            cumulative tracker. NAME THE SOURCE.\n"
+        "  Step 2: season_runtime = episode_count × minutes_per_episode / 60\n"
+        "  Step 3: global_views   = global_hours / season_runtime\n"
+        "                            (this is Netflix's own 'view' definition)\n"
+        "  Step 4: us_share       — share of global viewing that's US. Defaults:\n"
+        "                              0.30  ROW-heavy / international content\n"
+        "                              0.33  mixed-appeal English content\n"
+        "                              0.37  US-set English drama / thriller\n"
+        "                              0.40  US politics / FBI / first-responder content\n"
+        "                            Pick based on the show's setting and language.\n"
+        "  Step 5: completion_discount — to convert 'views' to UNIQUE viewers,\n"
+        "                            multiply by a completion discount:\n"
+        "                              0.85  binge content (all-at-once drops, lots of rewatching)\n"
+        "                              0.92  weekly drops (less rewatching)\n"
+        "                              1.00  if global_views was already unique-viewer accounting\n\n"
+        "  Then: us_viewers = global_views × us_share × completion_discount\n\n"
+        "  BRACKET (always report all three):\n"
+        "    conservative = us_viewers with us_share = your_pick - 0.05 and discount = 0.85\n"
+        "    mid          = us_viewers with us_share = your_pick       and discount = 0.92\n"
+        "    aggressive   = us_viewers with us_share = your_pick + 0.03 and discount = 1.00\n\n"
+        "=== HARD CONSTRAINTS ===\n"
+        "  - If the source's hours/views figure is GLOBAL, never report a US\n"
+        "    figure above us_share × global_views × 1.05.\n"
+        "  - If unable to find a credible hours figure, set global_hours = null\n"
+        "    and explain. Do NOT fabricate.\n"
+        "  - Never let your aggressive bracket exceed the hard ceiling given\n"
+        "    in the user prompt.\n"
+        "  - Cite specific sources (Variety article from M/D/YYYY, Nielsen\n"
+        "    week of M/D, Netflix Top 10 week N, 'What We Watched' H1 20XX,\n"
+        "    Apple TV+ press release, etc.). Generic 'industry reports'\n"
+        "    is not acceptable.\n"
+    )
+
+    user = (
+        f'Show: "{show_name}"\n'
+        f'Platform: {platform_name} (tier={tier}, US subs ~{subs_m}M)\n'
+        f'Genre: {genre or "unknown"}\n'
+        f'Episode count: {episode_count or "unknown"}\n'
+        f'Analysis window: {date_range or "unknown"}\n'
+        f'Hard ceiling (max plausible single-show US viewers for this platform): '
+        f'{max_plausible_us:,}\n\n'
+        f'Here is the raw web-search result from a prior agent step. Use the\n'
+        f'numbers it found if credible; if it found nothing useful, say so and\n'
+        f'fall back to your own training-data knowledge of public viewership for\n'
+        f'this show in this window. Do NOT fabricate a number — null is OK.\n\n'
+        f'GPT search result (JSON):\n{json.dumps(gpt_search_result, indent=2) if isinstance(gpt_search_result, dict) else str(gpt_search_result)}\n\n'
+        f'Output JSON only (no fences):\n'
+        f'{{\n'
+        f'  "step1_global_hours": <int or null>,\n'
+        f'  "step1_source": "<specific source citation>",\n'
+        f'  "step2_season_runtime_hours": <float>,\n'
+        f'  "step3_global_views": <int>,\n'
+        f'  "step4_us_share": <float between 0.20 and 0.45>,\n'
+        f'  "step4_share_reasoning": "<why this share>",\n'
+        f'  "step5_completion_discount": <float between 0.80 and 1.0>,\n'
+        f'  "step5_discount_reasoning": "<why this discount>",\n'
+        f'  "bracket_conservative_us_viewers": <int>,\n'
+        f'  "bracket_mid_us_viewers": <int>,\n'
+        f'  "bracket_aggressive_us_viewers": <int>,\n'
+        f'  "recommended_point_us_viewers": <int — usually = bracket_mid>,\n'
+        f'  "confidence": "high" | "medium" | "low",\n'
+        f'  "sources_cited": ["<src 1>", "<src 2>", ...]\n'
+        f'}}\n'
+    )
+
+    raw = claude_reason_json(
+        system=system, user=user,
+        max_tokens=1200, temperature=0.15,
+    )
+    if not raw:
+        return None
+
+    try:
+        s = raw.strip()
+        if s.startswith('```'):
+            s = s.split('\n', 1)[-1].rsplit('```', 1)[0].strip()
+        start = s.find('{')
+        if start < 0:
+            return None
+        depth, end = 0, start
+        for i in range(start, len(s)):
+            if s[i] == '{':
+                depth += 1
+            elif s[i] == '}':
+                depth -= 1
+                if depth == 0:
+                    end = i + 1
+                    break
+        result = json.loads(s[start:end])
+    except Exception as e:
+        print(f"   ⚠️  Claude bracket reasoning JSON parse failed: {e}")
+        return None
+
+    def _safe_int(v):
+        try:
+            n = int(float(v))
+            return n if n > 0 else None
+        except (TypeError, ValueError):
+            return None
+
+    lower = _safe_int(result.get('bracket_conservative_us_viewers'))
+    point = _safe_int(result.get('recommended_point_us_viewers')) or _safe_int(result.get('bracket_mid_us_viewers'))
+    upper = _safe_int(result.get('bracket_aggressive_us_viewers'))
+    if not (lower and point and upper):
+        # Claude couldn't or wouldn't produce a bracket — fall through to GPT-only path
+        print(f"   ⚠️  Claude returned no usable bracket: {result}")
+        return None
+
+    # Clamp to platform ceiling
+    upper = min(upper, max_plausible_us)
+    point = min(point, max_plausible_us)
+    lower = min(lower, max_plausible_us)
+    # Ensure ordering
+    lower, point, upper = sorted((lower, point, upper))
+
+    reasoning_lines = [
+        f"Step 1: global_hours={result.get('step1_global_hours')} ({result.get('step1_source','')})",
+        f"Step 2: season_runtime={result.get('step2_season_runtime_hours')}h",
+        f"Step 3: global_views={result.get('step3_global_views')}",
+        f"Step 4: us_share={result.get('step4_us_share')} — {result.get('step4_share_reasoning','')}",
+        f"Step 5: completion_discount={result.get('step5_completion_discount')} — {result.get('step5_discount_reasoning','')}",
+    ]
+    return {
+        'lower': lower,
+        'point': point,
+        'upper': upper,
+        'reasoning': ' | '.join(reasoning_lines),
+        'us_share_used': result.get('step4_us_share'),
+        'completion_discount_used': result.get('step5_completion_discount'),
+        'sources': result.get('sources_cited', []),
+        'confidence': str(result.get('confidence', 'medium')).lower(),
+        'model': os.environ.get('CLAUDE_REASONING_MODEL') or 'claude-sonnet-4-5',
+    }
+
+
 def _validate_episode_concentration(df_episode_attribution, show_name='', platform_name=''):
     """Detect and redistribute last-touch attribution leaks at the episode level.
 
@@ -2886,12 +3072,42 @@ def _validate_total_watchers_with_ai(show_name, platform_name, inflated_total, i
           f"min/ep={minutes_per_episode}, eps={episode_count_known}, "
           f"source={result.get('source','')}")
 
-    # === ANCHOR 1: Nielsen viewing-minutes bracket ===========================
-    # Most-trusted source. If the model returned a credible viewing-minutes
-    # figure with episode length + count, derive the bracket and use the
-    # mid-point. This anchor overrides the peak-viewer estimate when both
-    # are available (minutes-based reasoning is harder for the model to
-    # hallucinate than a single point estimate).
+    # === ANCHOR 1: Claude framework bracket ==================================
+    # Most-trusted reasoning step. Hand the GPT search result to Claude and ask
+    # it to walk the explicit hours → global-views → US-share → completion-
+    # discount → bracket framework with named sources. This is the exact same
+    # framework we used manually to anchor The Night Agent S1/S2/S3 against
+    # Netflix's "What We Watched" reports — encoding it as a Claude reasoning
+    # call so future agent runs apply the same level of diligence.
+    claude_bracket = _reason_viewer_bracket_with_claude(
+        show_name=show_name, platform_name=platform_name, genre=genre,
+        date_range=date_range, episode_count=episode_count_known,
+        gpt_search_result=result, platform_info=platform_info,
+        max_plausible_us=max_plausible_us,
+    )
+    if claude_bracket:
+        metadata['claude_bracket'] = {
+            'lower': claude_bracket['lower'],
+            'point': claude_bracket['point'],
+            'upper': claude_bracket['upper'],
+            'us_share_used': claude_bracket.get('us_share_used'),
+            'completion_discount_used': claude_bracket.get('completion_discount_used'),
+            'sources': claude_bracket.get('sources', []),
+            'confidence': claude_bracket.get('confidence'),
+            'model': claude_bracket.get('model'),
+        }
+        metadata['claude_reasoning'] = claude_bracket.get('reasoning')
+        print(f"   🤖 Claude bracket ({claude_bracket.get('model','claude')}, "
+              f"conf={claude_bracket.get('confidence')}): "
+              f"low={claude_bracket['lower']:,}  "
+              f"point={claude_bracket['point']:,}  "
+              f"high={claude_bracket['upper']:,}")
+        print(f"   🤖 Claude reasoning: {claude_bracket.get('reasoning','')}")
+
+    # === ANCHOR 2: Nielsen viewing-minutes bracket (fallback) ================
+    # If Claude isn't available (no key / disabled), fall back to the heuristic
+    # minutes-bracket math driven by the GPT search result. Same shape as
+    # before so the rest of the function is unchanged.
     minutes_bracket = _viewers_from_minutes_bracket(viewing_minutes_us, minutes_per_episode, episode_count_known)
     if minutes_bracket:
         # Clamp the bracket to the platform's max-plausible ceiling so a
@@ -2906,7 +3122,11 @@ def _validate_total_watchers_with_ai(show_name, platform_name, inflated_total, i
     recommended = None
     anchor_used = None
 
-    if minutes_bracket:
+    if claude_bracket:
+        recommended = claude_bracket['point']
+        anchor_used = 'claude_framework'
+        print(f"   🎯 Using Claude framework point estimate: {recommended:,}")
+    elif minutes_bracket:
         recommended = minutes_bracket['point']
         anchor_used = 'minutes_bracket'
         print(f"   🎯 Using minutes-anchor point estimate: {recommended:,}")
@@ -2983,9 +3203,11 @@ def _validate_total_watchers_with_ai(show_name, platform_name, inflated_total, i
     #     net so the AI's upward correction wins even at low confidence. This
     #     is the symmetric counterpart that catches under-sampled hits like
     #     The Night Agent S1 (panel 1.6M, real ~27M).
-    #   - The minutes-anchor branch ALWAYS skips the safety net because the
-    #     bracket math itself is the evidence.
-    if (anchor_used != 'minutes_bracket'
+    #   - The minutes-anchor and claude-framework branches ALWAYS skip the
+    #     safety net because the bracket math (or Claude's framework
+    #     decomposition) is itself the evidence.
+    trusted_bracket_anchors = ('minutes_bracket', 'claude_framework')
+    if (anchor_used not in trusted_bracket_anchors
             and not panel_implausibly_high
             and not panel_suspiciously_low):
         undercount_threshold = {'low': 0.7, 'medium': 0.6}.get(confidence)
@@ -3001,7 +3223,7 @@ def _validate_total_watchers_with_ai(show_name, platform_name, inflated_total, i
             metadata['ai_estimate_rejected'] = recommended
             metadata['flag'] = flag_msg
             return inflated_total, inflated_pre, inflated_clean, metadata
-    elif panel_implausibly_high and anchor_used != 'minutes_bracket':
+    elif panel_implausibly_high and anchor_used not in trusted_bracket_anchors:
         # Document the override decision in the flag trail so the dashboard
         # surfaces *why* we ignored panel.
         flag_msg = (
@@ -3493,12 +3715,224 @@ def _enforce_gender_skew_in_plan(gender_plan, labels, skew_hint):
     return gender_plan, changes
 
 
+def _reason_demographics_with_claude(*, show_name, platform_name, age_labels,
+                                     gender_labels, panel_age_rows, panel_gender_rows,
+                                     gpt_research_summary):
+    """Hand the GPT research summary to Claude and ask it to walk an explicit
+    demographic framework with named sources, then return realistic
+    AGE / GENDER percentage plans for "DEMOGRAPHICS - New Signups".
+
+    Same research-and-reason pattern we use for total-watcher validation: GPT
+    does the live web grounding (Claude lacks native web search by default),
+    Claude applies the framework over the result.
+
+    The framework:
+
+        Step 1: Identify content profile (genre, platform tier, setting, tone).
+        Step 2: Extract demographic anchors from the research summary
+                — Nielsen, Samba TV, Luminate, platform press, trade press.
+                Cite specific sources / week / outlet.
+        Step 3: Apply genre/platform PRIORS when sources are sparse:
+                  US FBI/political thriller (Netflix): 50%+ ages 35-64,
+                    20-30% 65+, <8% under-18  (Nielsen Night Agent S2 data).
+                  Apple TV+ prestige drama:  heavy 25-54 adult skew,
+                    Breaking-Bad-style demo, <5% under-18.
+                  Disney+ family:           20-30% under-18, 30%+ 25-44.
+                  HBO/Max prestige drama:   30%+ 35-54, low under-18.
+                  Sci-fi / superhero:       male skew, 25-44 peak.
+                  Romance / dramedy:        female skew, 25-54.
+                  Comedy:                   18-44 balanced.
+                  Reality / lifestyle:      female skew, 25-54.
+        Step 4: Adjust for NEW SIGNUPS specifically (skew ~5pp younger than
+                total-viewer demo — younger people are likelier to be new
+                vs. established subscribers).
+        Step 5: SANITY GUARDRAILS:
+                  - Cap '17 and Under' at 8% for any adult-targeted content
+                  - Floor 35+ share at 45% for adult drama / thriller
+                  - Gender: Male + Female should be 85-95% of total
+                  - Honor researched gender skew (don't invert)
+
+    Returns dict {'age': {...}, 'gender': {...}, 'gender_skew': '...',
+                  'reasoning': '...', 'sources': [...], 'model': '...'}
+    or None on any failure (caller falls back to GPT-only path).
+    """
+    try:
+        from claude_client import is_claude_reasoning_enabled, claude_reason_json
+    except Exception:
+        return None
+    if not is_claude_reasoning_enabled():
+        return None
+
+    system = (
+        "You are a streaming audience analyst. Apply the framework below "
+        "literally, show your work, and output JSON only.\n\n"
+        "=== DEMOGRAPHIC FRAMEWORK (5 steps) ===\n"
+        "Step 1: Classify the show. Pick a content profile:\n"
+        "  • US FBI/political thriller        (Netflix anchor)\n"
+        "  • Prestige drama                   (Apple TV+, HBO, Max)\n"
+        "  • Family / animation                (Disney+, Netflix family)\n"
+        "  • Sci-fi / superhero / fantasy     (any platform)\n"
+        "  • Romance / dramedy                 (any platform)\n"
+        "  • Comedy / sitcom                   (any platform)\n"
+        "  • Reality / lifestyle / docusoap   (any platform)\n"
+        "  • Documentary / true-crime          (any platform)\n"
+        "  • Kids / preschool                  (Disney+, Netflix Kids)\n\n"
+        "Step 2: Extract anchors from the research summary you're given.\n"
+        "  Look for Nielsen / Samba TV / Luminate / YouGov / Morning Consult\n"
+        "  / platform-disclosed age-bracket percentages or 'skews X' phrasing.\n"
+        "  CITE THE SPECIFIC SOURCE in sources_cited for every quoted number.\n\n"
+        "Step 3: When sources are sparse, fall back to these PRIORS for\n"
+        "  'New Signups' demographics (not total viewers — see Step 4):\n"
+        "    US FBI / political thriller:\n"
+        "      17 and Under  4%  | 18-24  8%  | 25-34 16%  | 35-44 18%\n"
+        "      45-54        19%  | 55-64 16%  | 65 or Older 19%\n"
+        "      (Nielsen: '50%+ ages 35-64, 27%+ 65+' — Night Agent S2)\n"
+        "    Apple TV+ prestige drama (Breaking Bad demo):\n"
+        "      17 and Under  3%  | 18-24  7%  | 25-34 17%  | 35-44 22%\n"
+        "      45-54        21%  | 55-64 17%  | 65 or Older 13%\n"
+        "    HBO/Max prestige drama:  similar to Apple TV+, slightly more 65+.\n"
+        "    Sci-fi / superhero:       male 55-60%, 25-44 peak.\n"
+        "    Romance / dramedy:        female 55-65%, 25-54.\n"
+        "    Disney+ family:           17 and Under 25%, balanced gender.\n"
+        "    Kids / preschool:         17 and Under 35-45%.\n\n"
+        "Step 4: 'New signups' skew ~3-5pp YOUNGER than total-viewer demo,\n"
+        "  because younger people are more likely to be new (vs. existing)\n"
+        "  subscribers. Move ~3-5% out of 55+ buckets into 25-44 buckets.\n\n"
+        "Step 5: SANITY GUARDRAILS — apply AFTER the priors:\n"
+        "  • Cap '17 and Under' at 8% for any adult content. For non-family\n"
+        "    content, the panel often over-samples teens — don't trust panel\n"
+        "    if it shows >15%.\n"
+        "  • Floor 35+ share at 45% for adult drama/thriller.\n"
+        "  • Gender: Male + Female should sum to 88-94% of total.\n"
+        "    Trans Male + Trans Female: ~0.5-1.5% each.\n"
+        "    Non-Binary: ~1-2%. Prefer Not to Say: ~0.5-1.5%.\n"
+        "  • Honor researched gender skew — DO NOT invert it.\n"
+        "  • Final age plan must sum to exactly 100.0%.\n"
+        "  • Final gender plan must sum to exactly 100.0%.\n"
+    )
+
+    user = (
+        f'Show: "{show_name}"\n'
+        f'Platform: {platform_name}\n\n'
+        f'EXACT age labels to use (and only these): {age_labels}\n'
+        f'EXACT gender labels to use (and only these): {gender_labels}\n\n'
+        f'Panel-derived AGE rows (likely BIASED — panel skews younger than\n'
+        f'reality on most adult content; treat as input, not ground truth):\n'
+        f'{panel_age_rows}\n\n'
+        f'Panel-derived GENDER rows:\n'
+        f'{panel_gender_rows}\n\n'
+        f'GPT web-search research summary (use as your primary source if it\n'
+        f'contains specific numbers; if it does not, fall back to genre priors):\n'
+        f'---\n{gpt_research_summary}\n---\n\n'
+        f'Output JSON only (no fences):\n'
+        f'{{\n'
+        f'  "step1_content_profile": "<one of the profiles from the framework>",\n'
+        f'  "step2_anchors_found": [\n'
+        f'    {{"source": "<specific source>", "claim": "<exact quoted figure>"}},\n'
+        f'    ...\n'
+        f'  ],\n'
+        f'  "step3_priors_used": <true/false — true if research was sparse>,\n'
+        f'  "step4_new_signups_skew_applied": "<brief description>",\n'
+        f'  "step5_guardrails_applied": ["<list of guardrails that fired>"],\n'
+        f'  "age": {{"<label>": <pct>, ...}},     // sums to 100\n'
+        f'  "gender": {{"<label>": <pct>, ...}},  // sums to 100\n'
+        f'  "gender_skew": "male" | "female" | "balanced",\n'
+        f'  "sources_cited": ["<src 1>", "<src 2>", ...],\n'
+        f'  "confidence": "high" | "medium" | "low",\n'
+        f'  "reasoning": "<2-3 sentence summary of why these numbers>"\n'
+        f'}}\n'
+    )
+
+    raw = claude_reason_json(
+        system=system, user=user,
+        max_tokens=1200, temperature=0.15,
+    )
+    if not raw:
+        return None
+
+    try:
+        s = raw.strip()
+        if s.startswith('```'):
+            s = s.split('\n', 1)[-1].rsplit('```', 1)[0].strip()
+        start = s.find('{')
+        if start < 0:
+            return None
+        depth, end = 0, start
+        for i in range(start, len(s)):
+            if s[i] == '{':
+                depth += 1
+            elif s[i] == '}':
+                depth -= 1
+                if depth == 0:
+                    end = i + 1
+                    break
+        result = json.loads(s[start:end])
+    except Exception as e:
+        print(f"   ⚠️  Claude demographics JSON parse failed: {e}")
+        return None
+
+    age = result.get('age') or {}
+    gender = result.get('gender') or {}
+    if not isinstance(age, dict) or not isinstance(gender, dict):
+        return None
+    if not age and not gender:
+        return None
+
+    # Final sanity guardrails on the structured output (belt-and-suspenders
+    # in case the model didn't apply Step 5 to its own numbers).
+    def _coerce(d):
+        out = {}
+        for k, v in d.items():
+            try:
+                out[k] = max(0.0, float(v))
+            except (TypeError, ValueError):
+                continue
+        return out
+    age = _coerce(age)
+    gender = _coerce(gender)
+
+    # Cap "17 and Under" at 8% if it slipped through above that and the
+    # content profile is not family/kids.
+    profile = (result.get('step1_content_profile') or '').lower()
+    is_kids_content = any(k in profile for k in ('family', 'kids', 'preschool'))
+    if not is_kids_content and age.get('17 and Under', 0) > 8.0:
+        age['17 and Under'] = 8.0
+    # Re-normalize age to 100 if it got nudged
+    age_total = sum(age.values())
+    if age_total > 0 and abs(age_total - 100.0) > 0.5:
+        for k in age:
+            age[k] = age[k] * 100.0 / age_total
+    # Re-normalize gender to 100
+    gender_total = sum(gender.values())
+    if gender_total > 0 and abs(gender_total - 100.0) > 0.5:
+        for k in gender:
+            gender[k] = gender[k] * 100.0 / gender_total
+
+    return {
+        'age': age,
+        'gender': gender,
+        'gender_skew': str(result.get('gender_skew', 'balanced')).lower(),
+        'reasoning': str(result.get('reasoning', '')).strip(),
+        'sources': result.get('sources_cited', []),
+        'confidence': str(result.get('confidence', 'medium')).lower(),
+        'content_profile': result.get('step1_content_profile', ''),
+        'anchors_found': result.get('step2_anchors_found', []),
+        'priors_used': bool(result.get('step3_priors_used', False)),
+        'guardrails_applied': result.get('step5_guardrails_applied', []),
+        'model': os.environ.get('CLAUDE_REASONING_MODEL') or 'claude-sonnet-4-5',
+    }
+
+
 def ai_align_final_demographics_with_research(df_out, platform_name):
     """
-    Final-step demographic alignment agent (GPT-4o):
+    Final-step demographic alignment agent:
     - Reads Show/Content Tracked from output rows
-    - Researches primary audience (web-enabled model)
-    - Uses GPT-4o to align AGE/GENDER rows before file save
+    - Researches primary audience via gpt-4o-search-preview (web grounding)
+    - When USE_CLAUDE_REASONING=1 + ANTHROPIC_API_KEY is set, hands the
+      research summary to Claude with the explicit demographic framework
+      (genre priors, source citation, new-signups skew, sanity guardrails).
+      Otherwise falls back to the original GPT-4o reasoning path.
+    - Applies the resulting AGE/GENDER plan before file save.
     """
     try:
         from openai import OpenAI
@@ -3579,6 +4013,64 @@ def ai_align_final_demographics_with_research(df_out, platform_name):
 
     age_labels = [r["label"] for r in age_rows]
     gender_labels = [r["label"] for r in gender_rows]
+
+    # === Preferred path: Claude with the explicit 5-step framework ==========
+    # GPT did the live web grounding above; hand the summary to Claude for the
+    # structured reasoning (genre profile → anchors → priors → new-signups
+    # skew → sanity guardrails). Same Claude-over-GPT pattern we use for total
+    # watcher validation, so demographics get the same level of diligence.
+    claude_plan = None
+    try:
+        claude_plan = _reason_demographics_with_claude(
+            show_name=show_name,
+            platform_name=platform_name,
+            age_labels=age_labels,
+            gender_labels=gender_labels,
+            panel_age_rows=age_rows,
+            panel_gender_rows=gender_rows,
+            gpt_research_summary=research,
+        )
+    except Exception as e:
+        print(f"   ⚠️  Claude demographic reasoning failed: {e}")
+        claude_plan = None
+
+    if claude_plan and (claude_plan.get('age') or claude_plan.get('gender')):
+        changes = []
+        if section_rows["AGE"] and claude_plan.get('age'):
+            changes.extend(_apply_pct_plan_to_df_out(
+                df_out, section_rows["AGE"], claude_plan['age'], nps_count))
+        if section_rows["GENDER"]:
+            skew_hint = _detect_gender_skew_hint(claude_plan.get('gender_skew'), research)
+            gender_plan = claude_plan.get('gender') or {}
+            gender_plan, skew_changes = _enforce_gender_skew_in_plan(
+                gender_plan, gender_labels, skew_hint)
+            changes.extend(skew_changes)
+            changes.extend(_apply_pct_plan_to_df_out(
+                df_out, section_rows["GENDER"], gender_plan, nps_count))
+        # Surface the framework outputs in the changelog so they reach the
+        # AI VALIDATION footer / UI without further plumbing.
+        profile = claude_plan.get('content_profile')
+        if profile:
+            changes.append(f"Demographic profile (Claude): {profile}")
+        for anchor in (claude_plan.get('anchors_found') or [])[:4]:
+            try:
+                src = anchor.get('source', '')
+                claim = anchor.get('claim', '')
+                if src or claim:
+                    changes.append(f"Demographic source: {src} — {claim}")
+            except Exception:
+                continue
+        if claude_plan.get('priors_used'):
+            changes.append("Demographic priors used (sparse research; genre priors applied).")
+        for g in claude_plan.get('guardrails_applied') or []:
+            changes.append(f"Demographic guardrail: {g}")
+        rationale = claude_plan.get('reasoning')
+        if rationale:
+            changes.append(f"Demographic rationale (Claude {claude_plan.get('confidence','?')}): {rationale}")
+        changes.append(f"Demographic reasoning model: {claude_plan.get('model')}")
+        return df_out, changes
+
+    # === Fallback: original GPT-4o correction path ==========================
     correction_prompt = (
         f'You are aligning final dashboard demographics for subscriber acquisition output.\n\n'
         f'SHOW/CONTENT TRACKED: {show_name}\n'
@@ -3593,6 +4085,11 @@ def ai_align_final_demographics_with_research(df_out, platform_name):
         f'- Infer whether this title is male-skew, female-skew, or balanced from the research.\n'
         f'- Ensure the Male/Female percentages reflect that skew in the final output.\n'
         f'- Do not invert the known audience skew.\n\n'
+        f'SANITY GUARDRAILS:\n'
+        f'- For non-family adult content (drama, thriller, sci-fi, crime, prestige):\n'
+        f'    cap "17 and Under" at ~8% — panels often oversample teens.\n'
+        f'- For adult drama/thriller: ensure 35+ buckets together represent >=45%.\n'
+        f'- Gender: Male + Female should sum to 88-94% of total.\n\n'
         f'Return ONLY JSON with numeric percentages (no % symbol):\n'
         f'{{\n'
         f'  "age": {{"<label>": <pct>, ...}},\n'
@@ -3625,7 +4122,7 @@ def ai_align_final_demographics_with_research(df_out, platform_name):
         changes.extend(_apply_pct_plan_to_df_out(df_out, section_rows["GENDER"], gender_plan, nps_count))
     rationale = str(parsed.get("reasoning") or "").strip()
     if rationale:
-        changes.append(f"Final agent rationale: {rationale}")
+        changes.append(f"Final agent rationale (GPT-4o fallback): {rationale}")
     return df_out, changes
 
 
@@ -4088,29 +4585,70 @@ def write_output(df_summary, df_comp, df_demo, df_timing, df_episode_attribution
         for c in attrib_changes:
             print(f"     → {c}")
 
-    # Append validation metadata rows
-    df_out = pd.concat([df_out, pd.DataFrame([
-        ("", "", "", "", "", "", "", "", "", ""),
-        ("", "", "AI VALIDATION", "", "", "", "", "", "", ""),
-        ("Validation Status", "", "PASS" if validation.get('passed', True) else "FLAGGED", "", "", "", "", "", "", ""),
-        ("Assessment", "", validation.get('overall_assessment', ''), "", "", "", "", "", "", ""),
-    ], columns=df_out.columns)], ignore_index=True)
-
-    if validation.get('flags'):
-        for i, flag in enumerate(validation['flags']):
-            df_out = pd.concat([df_out, pd.DataFrame([
-                (f"Flag {i+1}", "", flag, "", "", "", "", "", "", ""),
-            ], columns=df_out.columns)], ignore_index=True)
-
-    # Surface flags raised earlier in the pipeline (viewer-research safety net,
-    # conversion-rate sanity check) so downstream consumers can see when the
-    # AI overrode or corrected something.
-    pipeline_flags = p.get('_ai_flags', []) or []
-    if pipeline_flags:
-        for i, flag in enumerate(pipeline_flags):
-            df_out = pd.concat([df_out, pd.DataFrame([
-                (f"AI Override Flag {i+1}", "", flag, "", "", "", "", "", "", ""),
-            ], columns=df_out.columns)], ignore_index=True)
+    # AI VALIDATION metadata is intentionally NOT written into the CSV.
+    # The Subscriber IQ dashboard renders any non-empty data row that lives
+    # past the DEMOGRAPHICS section as demographic content, which previously
+    # caused "AI Override Flag 1/2/..." rows to appear as bogus age buckets
+    # with count=0 / 0.00%. Instead we:
+    #   1) Log every flag to stdout so it lands in the pipeline run logs.
+    #   2) Stash the full validation payload on the DataFrame's .attrs so a
+    #      caller can write it to a sidecar file (e.g. <name>.validation.json)
+    #      without polluting the rendered CSV.
+    pipeline_flags = list(p.get('_ai_flags', []) or [])
+    ai_validation_payload = {
+        'status': 'PASS' if validation.get('passed', True) else 'FLAGGED',
+        'assessment': validation.get('overall_assessment', ''),
+        'flags': list(validation.get('flags') or []),
+        'pipeline_flags': pipeline_flags,
+    }
+    try:
+        df_out.attrs['ai_validation'] = ai_validation_payload
+    except Exception:
+        pass
+    print(f"🧾 AI VALIDATION → status={ai_validation_payload['status']}")
+    if ai_validation_payload['assessment']:
+        print(f"   Assessment: {ai_validation_payload['assessment']}")
+    for i, flag in enumerate(ai_validation_payload['flags']):
+        print(f"   Flag {i+1}: {flag}")
+    for i, flag in enumerate(pipeline_flags):
+        print(f"   AI Override Flag {i+1}: {flag}")
+    # Defense in depth: if upstream code (or a legacy code path) ever
+    # appended a row with one of these category labels, scrub it now so
+    # the CSV that ships to the dashboard is always clean.
+    _validation_labels = (
+        'AI VALIDATION',
+        'Validation Status',
+        'Assessment',
+        'Override Timestamp',
+        'Override Source',
+    )
+    def _is_validation_row(cat_val: object) -> bool:
+        s = str(cat_val or '').strip()
+        if not s:
+            return False
+        if s in _validation_labels:
+            return True
+        if s.startswith('AI Override Flag') or s.startswith('Override Flag'):
+            return True
+        if s.startswith('Flag ') and s[5:].split(' ', 1)[0].isdigit():
+            return True
+        return False
+    _cat_col = df_out['Category'] if 'Category' in df_out.columns else df_out.iloc[:, 0]
+    _mask_keep = ~_cat_col.apply(_is_validation_row)
+    # Also drop a row whose col 0 is empty but col 2 is exactly 'AI VALIDATION'
+    # (the section-header row format we used historically).
+    if 'Count' in df_out.columns:
+        _col2 = df_out['Count']
+    else:
+        _col2 = df_out.iloc[:, 2]
+    _mask_header = ~((_cat_col.fillna('').astype(str).str.strip() == '')
+                     & (_col2.fillna('').astype(str).str.strip().str.upper() == 'AI VALIDATION'))
+    _before = len(df_out)
+    df_out = df_out[_mask_keep & _mask_header].reset_index(drop=True)
+    _after = len(df_out)
+    if _after != _before:
+        print(f"🧹 Stripped {_before - _after} AI-validation row(s) from the CSV "
+              "(metadata preserved in df.attrs['ai_validation']).")
 
     # Write to output_dir from params (e.g. server output dir on Render) or default Desktop/attribution
     # Final invariant assertion on output DataFrame
@@ -4177,7 +4715,21 @@ def write_output(df_summary, df_comp, df_demo, df_timing, df_episode_attribution
     safe_project_name = safe_project_name[:100] if len(safe_project_name) > 100 else safe_project_name
     output_path = output_folder / f"{safe_project_name}_{timestamp}.csv"
     df_out.to_csv(output_path, index=False, encoding='utf-8')
-    print(f"✅ Report written to {output_path}\n")
+    print(f"✅ Report written to {output_path}")
+    # Preserve the audit trail in a sidecar JSON next to the CSV so the
+    # dashboard CSV stays clean while we retain full traceability of every
+    # AI override / validation finding for this run.
+    _validation_meta = getattr(df_out, 'attrs', {}).get('ai_validation') if hasattr(df_out, 'attrs') else None
+    if _validation_meta:
+        try:
+            import json as _json
+            sidecar_path = output_path.with_suffix('.validation.json')
+            with open(sidecar_path, 'w', encoding='utf-8') as _f:
+                _json.dump(_validation_meta, _f, indent=2, default=str)
+            print(f"   📎 Validation sidecar: {sidecar_path}")
+        except Exception as _e:
+            print(f"   ⚠️  Could not write validation sidecar: {_e}")
+    print()
 
 
 # =============
