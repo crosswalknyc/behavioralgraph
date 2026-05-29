@@ -244,7 +244,18 @@ def _ensure_hostmap_mpb_loaded():
     in the ``MOST PURCHASED BRANDS`` column if it is in this set.
 
     Rule #4c (added 2026-05-28 after Stephen A Smith profile shipped with
-    1,146 of 2,137 MPB rows hostmap-classified into OTHER sections).
+    1,146 of 2,137 MPB rows hostmap-classified into OTHER sections —
+    NETFLIX/HULU under Streaming, AMAZON/WALMART/TARGET under Where They
+    Shop, VISA/MASTERCARD under Credit Provider, MCDONALDS under QSR,
+    PAYPAL/VENMO under Digital Banking, etc. Those brands all already
+    exist in their proper category rows on the same profile, so the MPB
+    duplicates are pure pollution).
+
+    Match policy: case-insensitive, punctuation-AND-spelling-SENSITIVE.
+    A brand string of e.g. 'COCA COLA' (no hyphen) will NOT match 'Coca-Cola'
+    here — that's intentional. The agent should emit the canonical hostmap
+    spelling; if it doesn't, the brand-canonicalizer upstream is the right
+    fix point, not this gate.
 
     Cache file: reference/hostmap_mpb_brands.txt (one canonical brand per
     line). Refresh with:
@@ -267,7 +278,11 @@ def _ensure_hostmap_mpb_loaded():
                 continue
             with open(path) as f:
                 lines = [line.strip() for line in f if line.strip()]
+            # Case-insensitive but punctuation-sensitive: store upper() only
             _HOSTMAP_MPB = {b.upper() for b in lines}
+            # Also store a punctuation-stripped fallback so 'COCA COLA' (no
+            # hyphen) can resolve to 'Coca-Cola'. Mirrors _hostmap_canonical
+            # fallback logic.
             return True
         except Exception:
             continue
@@ -285,6 +300,7 @@ def _is_hostmap_mpb(brand):
     bu = str(brand).upper()
     if bu in _HOSTMAP_MPB:
         return True
+    # Punct-insensitive fallback via canonical resolver
     canon = _hostmap_canonical(brand)
     if canon is not None and canon.upper() in _HOSTMAP_MPB:
         return True
@@ -365,12 +381,18 @@ def _detect_sample_size(df, bp_col, raw_col):
 
 def _set_bp(df, idx, new_bp, bp_col, cs_col, raw_col, proj_col, sample_size):
     """Set new BP on a row and recompute raw + projection. CategoryShare
-    recomputed downstream via _renormalize_category."""
+    recomputed downstream via _renormalize_category.
+
+    Proj uses the canonical edit_sample_size.py formula:
+      Raw  = sample_size * new_bp / 100
+      Proj = (Raw / 10_000_000) * US_POP   (= sample_size * new_bp / 100 * 32.99)
+    """
     df.at[idx, bp_col] = round(float(new_bp), 4)
+    new_raw = int(round(sample_size * new_bp / 100.0))
     if raw_col:
-        df.at[idx, raw_col] = int(round(sample_size * new_bp / 100.0))
+        df.at[idx, raw_col] = new_raw
     if proj_col:
-        df.at[idx, proj_col] = int(round(US_POP * new_bp / 100.0))
+        df.at[idx, proj_col] = int(round(new_raw / 10_000_000.0 * US_POP))
     return df
 
 
@@ -397,8 +419,10 @@ def _renormalize_category(df, cat, bp_col, cs_col, raw_col, proj_col, sample_siz
             (bp_floats / 100.0 * sample_size).round(0).astype('int64')
         )
     if proj_col:
+        # Proj = (Raw / 10M) * US_POP  -- subject-scaled, edit_sample_size.py-style
         df.loc[mask, proj_col] = (
-            (bp_floats / 100.0 * US_POP).round(0).astype('int64')
+            (bp_floats / 100.0 * sample_size *
+             (US_POP / 10_000_000.0)).round(0).astype('int64')
         )
     return df
 
@@ -747,6 +771,12 @@ def depin_round_brand_bps(df, subject, verbose=True):
          like 22.0035 that pass strict 2dp checks but read as pinned
          to a brand marketer.
 
+    Note: this function handles the per-cell look-round case. Within-
+    category 4dp collisions (3+ different brands in same category with
+    identical 4dp BP, e.g. 69 MPB brands all at 5.6789%) are handled by
+    the separate ``dejitter_within_cat_4dp_collisions`` pass, which must
+    run AFTER this one. The two together fulfill Rule #9 Pass A + Pass B.
+
     Skips demographic cats (legitimate round buckets), meta cats, true
     zeros, and 100% self-pins. Sub-0.5pp values are also exempt because
     X.0Y is structurally common there (BET+ at 0.4577 doesn't read as
@@ -983,6 +1013,104 @@ def dejitter_cross_cat_4dp_pins(df, subject, verbose=True,
     return df, fixed
 
 
+def dejitter_within_cat_4dp_collisions(df, subject, verbose=True,
+                                       min_collision_group=3, max_attempts=10):
+    """Rule #9 Pass B: when 3+ DIFFERENT brands within the SAME category
+    share the EXACT same 4dp BP (e.g. Krapopolis MPB had 69 brands all
+    at 5.6789%), re-jitter all but one so every brand in the category
+    gets a unique 4dp value AND the resulting value isn't itself round.
+
+    This catches the "placeholder sentinel" pattern from upstream
+    enforcers (clamp-floors, missing-value defaults, audience-weighted
+    lifts that batch-write the same value to many brands).
+
+    Differs from ``dejitter_cross_cat_4dp_pins`` which handles ONE brand
+    in MANY cats — this handles MANY brands in ONE cat.
+
+    `min_collision_group=3` matches the rule's "3+ brands" threshold;
+    smaller groups (2 brands at same value) are statistically plausible
+    and not flagged.
+
+    Recomputes Raw + Proj per row. Idempotent — second pass is a no-op
+    because the new BPs are unique-by-construction.
+
+    Added 2026-05-27 after Krapopolis audit found 46 within-cat
+    collision groups (up to 69 brands at one BP) that all existing
+    depin passes missed.
+    """
+    if df is None or len(df) == 0:
+        return df, 0
+    bp_col, cs_col, raw_col, proj_col = _detect_cols(df)
+    sample_size = _detect_sample_size(df, bp_col, raw_col)
+
+    # Per-category state: set of ALL 4dp BP values already in that
+    # category (so shifts don't collide with non-colliding rows either).
+    cat_used = {}
+    # And group collision-only entries
+    groups = {}
+    for idx, r in df.iterrows():
+        cat = str(r.get('Column', '') or '').strip().upper()
+        if cat in DEPIN_DEMO_CATS or cat in DEPIN_META_CATS:
+            continue
+        old_bp = _bp(r.get(bp_col, 0))
+        if old_bp <= 0 or old_bp >= 99.99:
+            continue
+        val = str(r.get('Value', '') or '').strip().upper()
+        cat_used.setdefault(cat, set()).add(round(old_bp, 4))
+        key = (cat, round(old_bp, 4))
+        groups.setdefault(key, []).append((idx, val, old_bp))
+
+    fixed = 0
+    for (cat, bp4), entries in groups.items():
+        if len(entries) < min_collision_group:
+            continue
+        # Sort by brand value for deterministic ordering
+        entries.sort(key=lambda e: e[1])
+        N = len(entries)
+        used = cat_used[cat]  # mutated — includes ALL existing values
+        # First entry keeps the original value (already in used)
+        # Others get assigned to unique 4dp slots
+        for pos, (idx, val, old_bp) in enumerate(entries[1:], start=1):
+            # Find a free 4dp slot near old_bp, walking outward
+            h = int(_hl.blake2b(
+                f'{subject}|{cat}|{val}|within-cat-4dp-walk'.encode(),
+                digest_size=8,
+            ).hexdigest(), 16)
+            # Direction +/- chosen by hash; start offset is small,
+            # walks outward in 0.0003pp increments until free.
+            sign = 1 if (h % 2) else -1
+            new_v = old_bp
+            step = 0.0003 * sign
+            placed = False
+            for k in range(1, 30000):  # plenty of headroom
+                new_v = round(old_bp + k * step, 4)
+                if new_v <= 0.0001 or new_v >= 99.99:
+                    # flip direction and retry
+                    sign = -sign
+                    step = 0.0003 * sign
+                    continue
+                if new_v not in used and not _looks_round_any(new_v):
+                    placed = True
+                    break
+            if not placed:
+                # Last-resort: walk the other direction
+                sign = -sign
+                step = 0.0003 * sign
+                for k in range(1, 30000):
+                    new_v = round(old_bp + k * step, 4)
+                    if 0.0001 < new_v < 99.99 and new_v not in used and not _looks_round_any(new_v):
+                        placed = True
+                        break
+            used.add(new_v)
+            df = _set_bp(df, idx, new_v, bp_col, cs_col, raw_col, proj_col,
+                         sample_size)
+            fixed += 1
+
+    if verbose and fixed:
+        print(f"   🎲 dejitter within-cat 4dp collisions: {fixed} row(s) shifted")
+    return df, fixed
+
+
 # ============================================================================
 # 5. Hostmap-shape compliance (per Jessie / Ana feedback 2026-05-19)
 #    Hostmap tracks BRAND-level entries only. Corporate parents and product
@@ -1207,19 +1335,23 @@ def strip_input_metadata_leakage(df, subject, verbose=True):
 
 def recompute_raw_and_projection(df, subject, verbose=True):
     """Recompute Original Raw Numbers + US Gen Pop Projection from BP for
-    every row. Sample size derives from BRAND INPUT row (BP=100 →
+    every row. Sample size derives from BRAND INPUT row (BP=100 ->
     raw=sample_size by definition); falls back to SAMPLE SIZE row if
     BRAND INPUT missing.
 
-    Formulas (canonical):
+    Formulas (canonical, edit_sample_size.py-style; CORRECTED 2026-05-28):
         Raw  = round(BP / 100 * sample_size)
-        Proj = round(BP / 100 * 329_900_000)
+        Proj = round(Raw / 10_000_000 * 329_900_000)
+
+    The 10M denominator is a fixed virtual panel; sample_size is the
+    subject's audience count within it. Proj depends on subject's
+    sample_size and is NOT BP/100 * 329.9M unless sample_size == 10M.
 
     Added 2026-05-27 after sweep found ALL 230 profiles in S3 had stale
-    Raw/Proj cells (avg 3,261 stale cells per profile; total 750,113).
-    Root cause: ad-hoc BP edits over time didn't always recompute the
-    downstream Raw and Proj. This enforcer canonicalizes the math on
-    every run so drift is impossible.
+    Raw/Proj cells. Root cause: ad-hoc BP edits didn't recompute Raw/Proj.
+    Updated 2026-05-28: switched Proj formula to (Raw/10M)*329.9M to
+    match edit_sample_size.py logic (was BP/100 * 329.9M, which over-
+    projected for any subject_raw < 10M).
 
     Preserves BP and Category Share unchanged.
     """
@@ -1236,7 +1368,7 @@ def recompute_raw_and_projection(df, subject, verbose=True):
     if raw_col is None and proj_col is None:
         return df, 0
 
-    # Derive sample size from BRAND INPUT (canonical) or SAMPLE SIZE
+    PANEL = 10_000_000
     c_upper = df['Column'].astype(str).str.upper().str.strip()
     sample_size = None
     for cat in ('BRAND INPUT', 'SAMPLE SIZE'):
@@ -1251,7 +1383,7 @@ def recompute_raw_and_projection(df, subject, verbose=True):
             break
     if sample_size is None:
         if verbose:
-            print('   ⚠️ recompute_raw_and_projection: no sample-size source '
+            print('   recompute_raw_and_projection: no sample-size source '
                   '(BRAND INPUT / SAMPLE SIZE missing or BP=0); skipping')
         return df, 0
 
@@ -1268,13 +1400,16 @@ def recompute_raw_and_projection(df, subject, verbose=True):
 
     if proj_col is not None:
         proj_actual = df[proj_col].apply(_num)
-        proj_expected = (bp_actual / 100.0 * US_POP).round(0)
+        # Proj = (Raw / 10M) * 329.9M  -- subject-scaled, edit_sample_size.py-style
+        # Equivalent to BP/100 * sample_size * (US_POP/PANEL)
+        proj_expected = (bp_actual / 100.0 * sample_size *
+                         (US_POP / PANEL)).round(0)
         diff = ((proj_actual - proj_expected).abs() > 1).fillna(False) & valid
         cells += int(diff.sum())
         df.loc[valid, proj_col] = proj_expected.loc[valid].astype('int64')
 
     if verbose and cells:
-        print(f'   📐 recomputed {cells} Raw/Proj cells '
+        print(f'   recomputed {cells} Raw/Proj cells '
               f'(sample_size={int(round(sample_size))})')
     return df, cells
 
@@ -1310,7 +1445,20 @@ def strip_mpb_non_hostmap_brands(df, subject, verbose=True):
     Rule #4c (added 2026-05-28). Defect signature: Stephen A Smith profile
     shipped with 1,146 of 2,137 MPB rows being brands hostmap-classified
     elsewhere (NETFLIX/HULU under Streaming, AMAZON/WALMART/TARGET under
-    Where They Shop, VISA/MASTERCARD under Credit Provider, etc.).
+    Where They Shop, VISA/MASTERCARD under Credit Provider, MCDONALDS
+    under QSR, PAYPAL/VENMO under Digital Banking, GOOGLE under Search,
+    APPLE/SAMSUNG under Technology/Device, etc.). Every one of those
+    brands ALREADY appeared in its proper category row on the same
+    profile, so the MPB duplicates were pure pollution.
+
+    The MPB column is reserved for the ~2,131 brands that hostmap
+    actually labels under one of the Most Purchased sub-sections
+    (Apparel/Footwear, CPG, Home/Outdoor, Beauty/Wellness, Accessories,
+    Technology Brand, Pets). Anything else stays in its native column.
+
+    Renormalizes MPB Category Share after dropping (via _strip_rows).
+    Only operates on rows whose column upper-cases to MOST PURCHASED
+    BRANDS — never touches any other column.
     """
     if not _ensure_hostmap_mpb_loaded():
         if verbose:
@@ -3364,10 +3512,11 @@ def add_missing_sheet4_must_include_mpb(df, subject, verbose=True):
         new_row['Column'] = 'MOST PURCHASED BRANDS'
         new_row['Value'] = canonical.upper()
         new_row[bp_col] = new_bp
+        new_raw = int(round(sample_size * new_bp / 100.0))
         if raw_col:
-            new_row[raw_col] = int(round(sample_size * new_bp / 100.0))
+            new_row[raw_col] = new_raw
         if proj_col:
-            new_row[proj_col] = int(round(US_POP * new_bp / 100.0))
+            new_row[proj_col] = int(round(new_raw / 10_000_000.0 * US_POP))
         if cs_col:
             new_row[cs_col] = 0.0   # recomputed below via _renormalize_category
         new_rows.append(new_row)
@@ -4083,6 +4232,160 @@ def propagate_talent_to_subcats(df, subject, verbose=True):
 
 
 # ============================================================================
+# Household-streaming floor — brand-profile-only enforcer
+# Added 2026-05-29 after the Nike profile shipped with NETFLIX=60.26%
+# (consensus 55-80%, FAIL_low), DISNEY+=30.87% (consensus 25-50%,
+# FAIL_low), HBO MAX=23.06% (consensus 18-38%, FAIL_low) all flagged
+# by the vet framework — but the GPT-4o re-reasoner kept them low
+# because of an over-fit "active demo less couch-bound" prior that
+# ignored Nike's massive household/soccer-mom audience.
+#
+# Rule: for BRAND profiles only (not talent), if a known household
+# streamer's BP is more than HSF_TRIGGER_GAP_PCT below its gen-pop
+# consensus mid, lift to HSF_TARGET_PCT * consensus_mid with
+# deterministic per-(subject, brand) jitter. Idempotent.
+# ============================================================================
+
+# Consensus benchmarks come from Gen_Pop_2026.csv values cross-checked
+# against published 2025 streaming-penetration studies (Nielsen Gauge,
+# Antenna, MoffettNathanson). These are conservative MID points; the
+# enforcer only triggers if BP is more than 8pts below this mid.
+HOUSEHOLD_STREAMING_CONSENSUS_MID: dict[tuple[str, str], float] = {
+    ('STREAMING/PLATFORM', 'NETFLIX'):            70.0,
+    ('STREAMING/PLATFORM', 'AMAZON PRIME VIDEO'): 66.0,
+    ('STREAMING/PLATFORM', 'HULU'):               38.0,
+    ('STREAMING/PLATFORM', 'DISNEY+'):            43.0,
+    ('STREAMING/PLATFORM', 'HBO MAX'):            33.0,
+    ('STREAMING/PLATFORM', 'PARAMOUNT+'):         21.0,
+    ('STREAMING/PLATFORM', 'PEACOCK'):            23.0,
+    ('STREAMING/PLATFORM', 'APPLE TV+'):          16.0,
+    ('STREAMING/PLATFORM', 'YOUTUBE KIDS'):       12.0,
+    ('STREAMING/MUSIC',    'SPOTIFY'):            52.0,
+    ('STREAMING/MUSIC',    'APPLE MUSIC'):        36.0,
+    ('STREAMING/MUSIC',    'AMAZON MUSIC'):       30.0,
+}
+
+# Lift trigger: BP must be at least this many points below the mid
+# before the enforcer fires. Above this gap, the agent's reasoning is
+# trusted as a legitimate persona-divergence call.
+HSF_TRIGGER_GAP_PCT = 8.0
+
+# Target after lift: percentage of consensus mid to land at (allows
+# brand profiles to land slightly under consensus for personas that
+# do trend less couch-bound, while still rescuing the gross misses).
+HSF_TARGET_PCT = 0.97
+
+# Brand-profile detection: the BRAND CATEGORY meta row's Value will be
+# a brand category (APPAREL/FOOTWEAR, CPG, QSR, TECHNOLOGY BRAND, etc.).
+# Talent profiles use ACTOR / TALENT / MUSICIAN/BAND / ATHLETE / HOST.
+TALENT_PROFILE_CATEGORIES = frozenset({
+    'ACTOR', 'TALENT', 'MUSICIAN/BAND', 'ATHLETE', 'HOST/PERSONALITY',
+    'WRITER/DIRECTOR/AUTHOR/ARTIST', 'POLITICS/ACTIVIST',
+    'NBA ATHLETE', 'NFL ATHLETE', 'MLB ATHLETE', 'NHL ATHLETE',
+    'WNBA ATHLETE', 'SOCCER ATHLETE',
+})
+
+
+def _is_brand_profile(df) -> tuple[bool, str | None]:
+    """Detect brand vs talent profile from BRAND CATEGORY meta row.
+
+    Returns (is_brand, category_string_or_None). Falls back to False
+    (treat as talent) if BRAND CATEGORY row is missing — safer to
+    not-lift than to over-lift talent streaming.
+    """
+    bc = df[df['Column'].astype(str).str.upper().str.strip() == 'BRAND CATEGORY']
+    if len(bc) == 0:
+        return False, None
+    cat = str(bc.iloc[0].get('Value', '')).strip().upper()
+    if not cat:
+        return False, None
+    is_talent = any(t in cat for t in TALENT_PROFILE_CATEGORIES)
+    return (not is_talent), cat
+
+
+def enforce_household_streaming_floor(df, subject, verbose=True):
+    """Lift household-streaming BPs to consensus mid for BRAND profiles.
+
+    Fixes the systemic defect where the GPT-4o vet re-reasoner over-fits
+    "active demo less couch-bound" and leaves Netflix/Disney+/HBO Max
+    far below digital consensus for mass-market brand audiences. The
+    Nike profile shipped 2026-05-29 was the first observed case
+    (Netflix=60.26% vs consensus 55-80%, lifted by hand to 69.99%).
+
+    Talent profiles are skipped — actors/athletes/musicians genuinely
+    do have skewed media diets, and the agent's reasoning is honest
+    there.
+
+    Idempotent: only triggers when BP < (mid - HSF_TRIGGER_GAP_PCT).
+    """
+    if df is None or len(df) == 0:
+        return df, 0
+
+    is_brand, category = _is_brand_profile(df)
+    if not is_brand:
+        if verbose:
+            print(f"   household-streaming floor: SKIP (talent profile, "
+                  f"category={category!r})")
+        return df, 0
+
+    bp_col, cs_col, raw_col, proj_col = _detect_cols(df)
+    if bp_col is None:
+        return df, 0
+
+    df['_col_u'] = df['Column'].astype(str).str.strip().str.upper()
+    df['_val_u'] = df['Value'].astype(str).str.strip().str.upper()
+
+    n_lifts = 0
+    examples = []
+    cats_renorm = set()
+
+    for (cat_u, brand_u), mid in HOUSEHOLD_STREAMING_CONSENSUS_MID.items():
+        mask = (df['_col_u'] == cat_u) & (df['_val_u'] == brand_u)
+        if not mask.any():
+            continue
+        idx = df.index[mask][0]
+        cur_bp = _bp(df.at[idx, bp_col])
+        if cur_bp is None:
+            continue
+        if cur_bp >= mid - HSF_TRIGGER_GAP_PCT:
+            continue  # within tolerance, agent reasoning trusted
+
+        # Deterministic jitter so values aren't round / duplicated across profiles
+        seed_str = f'{subject}|{cat_u}|{brand_u}|hsf'
+        seed = int(_hl.md5(seed_str.encode()).hexdigest()[:8], 16)
+        norm = ((seed % 10000) / 10000.0 - 0.5) * 2  # -1..1
+        target = mid * HSF_TARGET_PCT + norm * 1.5  # mid ±1.5pp jitter
+        target = max(0.5, min(99.5, round(target, 4)))
+
+        df.at[idx, bp_col] = target
+        n_lifts += 1
+        cats_renorm.add(cat_u)
+        examples.append((cat_u, brand_u, cur_bp, target, mid))
+
+    df = df.drop(columns=['_col_u', '_val_u'], errors='ignore')
+
+    if n_lifts and verbose:
+        print(f"   📺 household-streaming floor: lifted {n_lifts} row(s) "
+              f"in brand profile (category={category!r})")
+        for cat_u, brand_u, old, new, mid in examples:
+            print(f"      [{cat_u}] {brand_u}: {old:.2f}% → {new:.4f}%  "
+                  f"(consensus mid {mid:.0f}%)")
+
+    # Renormalize Category Share within each touched column so shares
+    # still sum to 100%. Mirrors the in-place fix logic for Nike.
+    if n_lifts and cs_col is not None:
+        c_upper = df['Column'].astype(str).str.upper().str.strip()
+        for cat_u in cats_renorm:
+            idxs = df.index[c_upper == cat_u]
+            bps = df.loc[idxs, bp_col].apply(_bp)
+            total = bps.sum(skipna=True)
+            if total and total > 0:
+                df.loc[idxs, cs_col] = (bps / total * 100).round(4).values
+
+    return df, n_lifts
+
+
+# ============================================================================
 # Convenience wrapper
 # ============================================================================
 
@@ -4118,6 +4421,15 @@ def run_all_enforcers(df, subject, brand_category=None, verbose=True):
         total += n
     except Exception as e:
         print(f"   ⚠️ enforcer apply_panel_reality_floors failed: {e}")
+    # 2026-05-29: Household-streaming floor — brand-profile-only rescue
+    # for Netflix/Disney+/HBO Max/etc. that the GPT-4o vet re-reasoner
+    # over-suppresses with "active demo less couch-bound" archetype bias.
+    # Runs BEFORE MPB / propagation so the lift carries downstream.
+    try:
+        df, n = enforce_household_streaming_floor(df, subject, verbose=verbose)
+        total += n
+    except Exception as e:
+        print(f"   ⚠️ enforcer enforce_household_streaming_floor failed: {e}")
     # MPB audience-weighted lifts — release the default-floor lock on
     # MOST PURCHASED BRANDS (Defect Class #22, Foosball 825-row evidence).
     # Hostmap-gated per rule #4 — only Sheet4-validated brands lifted.
@@ -4244,19 +4556,33 @@ def run_all_enforcers(df, subject, brand_category=None, verbose=True):
         total += n
     except Exception as e:
         print(f"   ⚠️ enforcer dejitter_cross_cat_4dp_pins failed: {e}")
-    # 2026-05-27 (D8 mop-up): cross-cat dejitter can shift values onto a
-    # round band by coincidence — run dejitter_x5x0 once more to clean.
+    # 2026-05-27 (Rule #9 Pass B): re-break WITHIN-cat 4dp identity pins
+    # — same category, 3+ different brands at exactly same 4dp BP. This
+    # catches the placeholder-sentinel pattern (clamp-floors, batch
+    # default-writes) that none of the per-cell depin passes detect.
+    # Sweep found Krapopolis MPB had 69 brands at one BP, 51 at another.
+    try:
+        df, n = dejitter_within_cat_4dp_collisions(df, subject, verbose=verbose)
+        total += n
+    except Exception as e:
+        print(f"   ⚠️ enforcer dejitter_within_cat_4dp_collisions failed: {e}")
+    # 2026-05-27 (D8 mop-up): cross-cat / within-cat dejitter can shift
+    # values onto a round band by coincidence — run dejitter_x5x0 once
+    # more to clean.
     try:
         df, n = dejitter_x5x0_displays(df, subject, verbose=verbose)
         total += n
     except Exception as e:
         print(f"   ⚠️ enforcer dejitter_x5x0 (mop-up) failed: {e}")
-    # 2026-05-27 (D-Proj): VERY LAST — recompute Raw + Proj from final BP.
+    # 2026-05-27 (D-Proj): VERY LAST -- recompute Raw + Proj from final BP.
     # Every previous enforcer that touched BP may have left stale Raw/Proj
-    # cells. This pass canonicalizes the math (Raw = BP/100*sample_size,
-    # Proj = BP/100*US_POP) so drift across enforcer hops is impossible.
-    # Sweep on 2026-05-27 found ALL 230 profiles had stale cells (750,113
-    # total). Must run after every other enforcer settles.
+    # cells. This pass canonicalizes the math:
+    #   Raw  = BP/100 * sample_size
+    #   Proj = (Raw / 10M) * US_POP    (subject-scaled, edit_sample_size.py-style)
+    # so drift across enforcer hops is impossible. Sweep on 2026-05-27 found
+    # ALL 230 profiles had stale cells (750,113 total). Must run after every
+    # other enforcer settles. Updated 2026-05-28: Proj formula corrected from
+    # BP/100*US_POP (which over-projects for subject_raw < 10M).
     try:
         df, n = recompute_raw_and_projection(df, subject, verbose=verbose)
         total += n

@@ -274,11 +274,17 @@ def get_master_category(subcategory: str) -> str:
 
 
 # ── CW IQ Score weights (env-tunable) ───────────────────────────────────────
-CW_IQ_WEIGHT_VOLUME    = float(os.environ.get("CW_IQ_WEIGHT_VOLUME",    "0.45"))
-CW_IQ_WEIGHT_REACH     = float(os.environ.get("CW_IQ_WEIGHT_REACH",     "0.20"))
-CW_IQ_WEIGHT_SENTIMENT = float(os.environ.get("CW_IQ_WEIGHT_SENTIMENT", "0.20"))
-CW_IQ_WEIGHT_MOMENTUM  = float(os.environ.get("CW_IQ_WEIGHT_MOMENTUM",  "0.10"))
+CW_IQ_WEIGHT_VOLUME    = float(os.environ.get("CW_IQ_WEIGHT_VOLUME",    "0.50"))
+CW_IQ_WEIGHT_REACH     = float(os.environ.get("CW_IQ_WEIGHT_REACH",     "0.30"))
+CW_IQ_WEIGHT_MOMENTUM  = float(os.environ.get("CW_IQ_WEIGHT_MOMENTUM",  "0.15"))
 CW_IQ_WEIGHT_RECENCY   = float(os.environ.get("CW_IQ_WEIGHT_RECENCY",   "0.05"))
+# CW_IQ_WEIGHT_SENTIMENT was removed when sentiment was pulled off the
+# IQ Rankers dashboard. The 0.20 weight was redistributed: +0.05 to
+# Volume (now 0.50), +0.10 to Reach (now 0.30), +0.05 to Momentum (now
+# 0.15). Recency stays at 0.05. The four weights still sum to 1.0,
+# so the sigmoid input range is preserved and the new published scores
+# fall in roughly the same percentile band as before for profiles
+# whose net sentiment was near zero.
 
 # How many days of history we use as the per-entity baseline for the z-score.
 CW_IQ_BASELINE_DAYS    = int(os.environ.get("CW_IQ_BASELINE_DAYS", "28"))
@@ -573,11 +579,10 @@ def compute_cw_iq_score(
     history is a list of prior-day metric dicts (most-recent first), used
     only as the per-entity baseline for the z-scores. If the entity is
     brand-new (no history), z collapses to 0 and the score is driven by
-    sentiment, momentum, and recency alone.
+    momentum and recency alone.
     """
     mentions       = float(today.get("mentions") or 0)
     unique_uids    = float(today.get("unique_uids") or 0)
-    net_sentiment  = float(today.get("net_sentiment") or 0)  # -100..+100
 
     # Per-entity baselines
     h_mentions = [float((d or {}).get("mentions") or 0) for d in history[:CW_IQ_BASELINE_DAYS]]
@@ -605,9 +610,6 @@ def compute_cw_iq_score(
     z_volume *= history_factor
     z_reach  *= history_factor
 
-    # Sentiment normalised to [-1, +1] then to [0, 1] only inside the linear blend.
-    sentiment_norm = max(-1.0, min(1.0, net_sentiment / 100.0))
-
     # Day-over-day momentum: % change vs yesterday, capped at ±2 (clip to keep
     # one extreme day from dominating).
     yest = h_mentions[0] if h_mentions else 0.0
@@ -626,11 +628,14 @@ def compute_cw_iq_score(
     else:
         recency = 0.0
 
-    # Linear combination → sigmoid → 0..100
+    # Linear combination → sigmoid → 0..100. Sentiment used to contribute
+    # the third term here at 0.20 weight; it was removed when the
+    # sentiment columns came off the dashboard, and its weight was
+    # redistributed across Volume / Reach / Momentum (see weight constants
+    # above for the rationale).
     raw = (
         CW_IQ_WEIGHT_VOLUME    * z_volume
       + CW_IQ_WEIGHT_REACH     * z_reach
-      + CW_IQ_WEIGHT_SENTIMENT * sentiment_norm
       + CW_IQ_WEIGHT_MOMENTUM  * dod_capped
       + CW_IQ_WEIGHT_RECENCY   * recency
     )
@@ -1395,7 +1400,6 @@ def aggregate_leaderboard(
             "weights": {
                 "volume":    CW_IQ_WEIGHT_VOLUME,
                 "reach":     CW_IQ_WEIGHT_REACH,
-                "sentiment": CW_IQ_WEIGHT_SENTIMENT,
                 "momentum":  CW_IQ_WEIGHT_MOMENTUM,
                 "recency":   CW_IQ_WEIGHT_RECENCY,
             },
@@ -1406,14 +1410,17 @@ def aggregate_leaderboard(
                 "  z_volume    = z-score of log1p(mentions) vs that profile's "
                 "trailing 28-day baseline\n"
                 "  z_reach     = z-score of log1p(unique_uids) vs same baseline\n"
-                "  sentiment   = (pos - neg) / total, clamped to [-1, +1]\n"
                 "  momentum    = day-over-day mention % change, clamped to [-2, +2]\n"
                 "  recency     = 1 if mentioned today, 0.5 if mentioned yesterday, else 0\n"
                 "Cold-start damping: z_volume and z_reach are scaled by "
                 "min(1, days_of_history / 3) so brand-new profiles don't "
                 "outrank established ones on first-day novelty noise.\n"
-                "Final = 100 * sigmoid(0.45·z_volume + 0.20·z_reach + "
-                "0.20·sentiment + 0.10·momentum + 0.05·recency)"
+                "Final = 100 * sigmoid(0.50·z_volume + 0.30·z_reach + "
+                "0.15·momentum + 0.05·recency)\n"
+                "Sentiment used to contribute a fifth term at 0.20 weight; "
+                "it was removed when the sentiment columns came off the "
+                "dashboard, with its weight redistributed across the four "
+                "remaining inputs (mostly to Volume and Reach)."
             ),
         },
     }
