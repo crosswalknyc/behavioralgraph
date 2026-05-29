@@ -11016,11 +11016,36 @@ def parse_subscriber_iq_csv(csv_content):
                 continue
         
         elif current_section == 'demographics_age':
+            # Terminate the age section on any new section marker so that
+            # post-demographics rows (e.g. AI VALIDATION, Override Flag N,
+            # Override Timestamp / Source) never get rendered as age buckets.
+            # A "section marker" is any row where col 0 is empty AND col 2
+            # carries non-trivial header text. Also explicitly bail on
+            # AI VALIDATION wherever it appears.
+            if first_col == 'GENDER':
+                current_section = 'demographics_gender'
+                continue
+            if 'AI VALIDATION' in (first_col + ' ' + second_col + ' ' + third_col).upper():
+                current_section = 'ai_validation'
+                continue
             if first_col and first_col not in ['', 'AGE']:
                 # Filter out gender entries that might have been mixed in
                 first_col_upper = first_col.upper().strip()
                 gender_keywords = ['MALE', 'FEMALE', 'GENDER', 'TRANS', 'NON-BINARY', 'NONBINARY', 'NON BINARY', 'PREFER NOT TO SAY']
                 skip_keywords = ['OTHER', 'PREFER NOT TO SAY']
+                # Also skip any leftover validation rows that managed to slip
+                # into the age section in legacy files (e.g. labels that
+                # happen to contain a digit but aren't an age bucket).
+                _looks_like_validation = (
+                    'AI OVERRIDE' in first_col_upper
+                    or 'OVERRIDE FLAG' in first_col_upper
+                    or 'VALIDATION STATUS' in first_col_upper
+                    or 'OVERRIDE TIMESTAMP' in first_col_upper
+                    or 'OVERRIDE SOURCE' in first_col_upper
+                )
+                if _looks_like_validation:
+                    print(f"   ⚠️ Skipping AI-validation row in age section: '{first_col}'")
+                    continue
                 
                 # Count/percentage/gen_pop: CSV format is col C (2) for count, col I (8) for percentage, col J (9) for gen_pop
                 _count = (row[2].strip() if len(row) > 2 else '') or (row[1].strip() if len(row) > 1 else '')
@@ -11030,7 +11055,19 @@ def parse_subscriber_iq_csv(csv_content):
                 if any(keyword == first_col_upper for keyword in skip_keywords):
                     print(f"   ⚠️ Skipping '{first_col}' in age section (excluded category)")
                 elif not any(keyword in first_col_upper for keyword in gender_keywords):
-                    if any(char.isdigit() for char in first_col) or '-' in first_col or '+' in first_col or 'to' in first_col_upper or 'and' in first_col_upper:
+                    # Tighter age-row signature: must look like a bracket
+                    # (digits + '-', '+', '<', 'or Older', or 'and Under').
+                    _looks_like_age = (
+                        bool(re.search(r'\d', first_col)) and (
+                            '-' in first_col
+                            or '+' in first_col
+                            or '<' in first_col
+                            or 'or Older' in first_col
+                            or 'and Under' in first_col
+                            or 'to' in first_col_upper
+                        )
+                    )
+                    if _looks_like_age:
                         parsed['demographics']['age'].append({
                             'age_range': first_col,
                             'count': _count,
@@ -11038,7 +11075,7 @@ def parse_subscriber_iq_csv(csv_content):
                             'gen_pop': _gen
                         })
                     else:
-                        print(f"   ⚠️ Skipping potential gender entry in age section: '{first_col}'")
+                        print(f"   ⚠️ Skipping non-age row in age section: '{first_col}'")
                 else:
                     print(f"   ⚠️ Found gender entry '{first_col}' in age section, moving to gender data")
                     parsed['demographics']['gender'].append({
@@ -11049,10 +11086,30 @@ def parse_subscriber_iq_csv(csv_content):
                     })
         
         elif current_section == 'demographics_gender':
+            # Symmetric guardrail: bail out of gender section on any AI
+            # VALIDATION block or other section marker.
+            if 'AI VALIDATION' in (first_col + ' ' + second_col + ' ' + third_col).upper():
+                current_section = 'ai_validation'
+                continue
             if first_col and first_col not in ['', 'GENDER']:
                 first_col_upper_g = first_col.upper().strip()
                 if first_col_upper_g in ('OTHER', 'PREFER NOT TO SAY'):
                     print(f"   ⚠️ Skipping '{first_col}' in gender section (excluded category)")
+                    continue
+                # Skip any validation rows that slip through.
+                if (
+                    'AI OVERRIDE' in first_col_upper_g
+                    or 'OVERRIDE FLAG' in first_col_upper_g
+                    or 'VALIDATION STATUS' in first_col_upper_g
+                    or 'OVERRIDE TIMESTAMP' in first_col_upper_g
+                    or 'OVERRIDE SOURCE' in first_col_upper_g
+                ):
+                    print(f"   ⚠️ Skipping AI-validation row in gender section: '{first_col}'")
+                    continue
+                # Tighter gender-row signature: must contain a known gender keyword.
+                gender_keywords = ['MALE', 'FEMALE', 'TRANS', 'NON-BINARY', 'NONBINARY', 'NON BINARY']
+                if not any(kw in first_col_upper_g for kw in gender_keywords):
+                    print(f"   ⚠️ Skipping non-gender row in gender section: '{first_col}'")
                     continue
                 _count = (row[2].strip() if len(row) > 2 else '') or (row[1].strip() if len(row) > 1 else '')
                 _pct = (row[8].strip() if len(row) > 8 else '') or (row[7].strip() if len(row) > 7 else '')
@@ -11063,6 +11120,11 @@ def parse_subscriber_iq_csv(csv_content):
                     'percentage': _pct,
                     'gen_pop': _gen
                 })
+
+        # Swallow rows that fall inside the AI VALIDATION footer so they
+        # never get folded back into a data section.
+        elif current_section == 'ai_validation':
+            continue
     
     # Fallback: If date range wasn't found, try to find it anywhere in the CSV
     if not parsed['metadata'].get('date_range'):
