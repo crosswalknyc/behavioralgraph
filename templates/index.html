@@ -17988,29 +17988,23 @@
                             <button type="button" class="iqr-explain-close" aria-label="Close" onclick="toggleIQRankerExplainer('{{ m.key }}')">✕</button>
                             <h5>📐 CW IQ Score — how it's computed</h5>
                             <div style="margin-bottom: 0.55rem;">A per-day &ldquo;zeitgeist&rdquo; composite scored 0–100. Each day we compute a weighted z-score blend per profile, then squash with a sigmoid:</div>
-                            <div style="margin-bottom: 0.6rem;"><code>CW IQ = 100 × σ(0.45·z<sub>volume</sub> + 0.20·z<sub>reach</sub> + 0.20·sentiment + 0.10·momentum + 0.05·recency)</code></div>
+                            <div style="margin-bottom: 0.6rem;"><code>CW IQ = 100 × σ(0.50·z<sub>volume</sub> + 0.30·z<sub>reach</sub> + 0.15·momentum + 0.05·recency)</code></div>
                             <div class="iqr-weight-bar">
                                 <span class="lbl">Volume</span>
-                                <span class="bar"><span style="width: 45%;"></span></span>
-                                <span class="pct">0.45</span>
+                                <span class="bar"><span style="width: 50%;"></span></span>
+                                <span class="pct">0.50</span>
                                 <span class="def"><b>How loud is today?</b> z-score of <code>log1p(mentions)</code> vs the profile's own trailing 28-day baseline. Higher = today's panel mention count is unusually big for this profile.</span>
                             </div>
                             <div class="iqr-weight-bar">
                                 <span class="lbl">Reach</span>
-                                <span class="bar"><span style="width: 20%;"></span></span>
-                                <span class="pct">0.20</span>
+                                <span class="bar"><span style="width: 30%;"></span></span>
+                                <span class="pct">0.30</span>
                                 <span class="def"><b>How wide is today?</b> z-score of <code>log1p(unique panelists)</code> vs the same 28-day baseline. Separates &ldquo;a few people clicked a lot&rdquo; from &ldquo;lots of distinct people engaged.&rdquo;</span>
                             </div>
                             <div class="iqr-weight-bar">
-                                <span class="lbl">Sentiment</span>
-                                <span class="bar"><span style="width: 20%;"></span></span>
-                                <span class="pct">0.20</span>
-                                <span class="def"><b>What was the tone?</b> <code>(Pos − Neg) / (Pos + Neu + Neg)</code>, clamped to [−1, +1]. +1 = entirely positive engagement, −1 = entirely negative, 0 = neutral or balanced.</span>
-                            </div>
-                            <div class="iqr-weight-bar">
                                 <span class="lbl">Momentum</span>
-                                <span class="bar"><span style="width: 10%;"></span></span>
-                                <span class="pct">0.10</span>
+                                <span class="bar"><span style="width: 15%;"></span></span>
+                                <span class="pct">0.15</span>
                                 <span class="def"><b>Are they trending?</b> Day-over-day % change in mentions, clamped to [−2, +2]. Positive = growing vs yesterday, negative = cooling off.</span>
                             </div>
                             <div class="iqr-weight-bar">
