@@ -31578,6 +31578,274 @@ def iq_rankers_leaderboard():
         return jsonify({'success': False, 'error': str(e)[:300]}), 500
 
 
+# ──────────────────────────────────────────────────────────────────────────
+# Profile Context — "what's actually driving today's mentions for X?"
+# ──────────────────────────────────────────────────────────────────────────
+# Two-layer payload:
+#   1. ClickHouse aggregation (top common_names / domains / path clusters
+#      / sample URLs) — always present, computed cheaply per request.
+#   2. LLM narrative bullets — only present if OPENAI_API_KEY is set and
+#      we have enough surface area to summarize. Cached in S3 by
+#      (profile_subject, window-fingerprint) for 24h so repeated clicks
+#      from the dashboard don't re-charge OpenAI on the same data.
+
+_IQR_CONTEXT_LLM_CACHE_PREFIX = 'system/iq_rankers_context_cache/'
+_IQR_CONTEXT_LLM_TTL_SEC = 60 * 60 * 24  # 24h
+
+
+def _iqr_context_cache_key(profile_subject, start, end):
+    """Deterministic S3 key for a profile/window pair. Window-bound so
+    'last 7 days' rolls forward naturally — yesterday's cache won't get
+    served for today's request."""
+    safe_subj = (profile_subject or '').replace('/', '_').replace(' ', '_')[:120]
+    return f"{_IQR_CONTEXT_LLM_CACHE_PREFIX}{safe_subj}__{start}__{end}.json"
+
+
+def _iqr_context_load_cache(profile_subject, start, end):
+    if not s3_client:
+        return None
+    try:
+        key = _iqr_context_cache_key(profile_subject, start, end)
+        head = s3_client.head_object(Bucket=S3_BUCKET, Key=key)
+        # Stale guard: even though the (start,end) is in the key, an old
+        # entry from before a prompt change could be misleading. Pin TTL
+        # to 24h since profile narratives shift fast.
+        last_mod = head.get('LastModified')
+        if last_mod is not None:
+            age = time.time() - last_mod.timestamp()
+            if age > _IQR_CONTEXT_LLM_TTL_SEC:
+                return None
+        obj = s3_client.get_object(Bucket=S3_BUCKET, Key=key)
+        return json.loads(obj['Body'].read().decode('utf-8'))
+    except Exception:
+        return None
+
+
+def _iqr_context_save_cache(profile_subject, start, end, payload):
+    if not s3_client:
+        return
+    try:
+        key = _iqr_context_cache_key(profile_subject, start, end)
+        s3_client.put_object(
+            Bucket=S3_BUCKET, Key=key,
+            Body=json.dumps(payload, default=str).encode('utf-8'),
+            ContentType='application/json',
+        )
+    except Exception as e:
+        print(f"[iqr-context] cache save failed: {e}")
+
+
+def _iqr_context_llm_rollup(*, profile_name, profile_subject, ctx):
+    """Ask the LLM to convert raw URL surface into 3-5 plain-English
+    bullets describing what's driving the mentions. Returns a dict with
+    `bullets: list[str]` and `headline: str`, or `{'error': ...}` on
+    failure (callers fall back to raw aggregation).
+
+    Prompt is grounded on the actual top common_names / domains / sample
+    URLs to keep the model from making things up. We explicitly tell it
+    to refuse if the surface is too thin.
+    """
+    client = get_openai_client()
+    if not client:
+        return {"error": "OPENAI_API_KEY not configured"}
+
+    common_names = ctx.get('top_common_names') or []
+    domains      = ctx.get('top_domains') or []
+    sample_urls  = ctx.get('sample_urls') or []
+    path_clusters = ctx.get('top_path_clusters') or []
+
+    if not common_names and not sample_urls:
+        return {"error": "no clickstream surface to summarize"}
+
+    # Tight, structured input; LLM will hallucinate less if we just hand
+    # it the data it should reason over rather than free-form prose.
+    payload_for_llm = {
+        "profile_name": profile_name,
+        "profile_subject": profile_subject,
+        "window": {"start": ctx.get('start'), "end": ctx.get('end')},
+        "totals": {
+            "mentions": ctx.get('total_mentions'),
+            "panelists": ctx.get('unique_panelists'),
+        },
+        "top_common_names": common_names[:12],
+        "top_domains": domains[:8],
+        "top_path_clusters": path_clusters[:10],
+        "sample_urls": [
+            {"url": (u.get('url') or '')[:200],
+             "common_name": u.get('common_name'),
+             "domain": u.get('domain'),
+             "hits": u.get('hits')}
+            for u in sample_urls[:25]
+        ],
+    }
+
+    prompt = (
+        "You are summarizing what's driving panel mentions of a specific "
+        "person or brand on the open web. Below is a JSON payload of the "
+        "top URL surface — domains, common-names of pages, path clusters, "
+        "and a sample of the highest-traffic URLs — for a single profile "
+        "in a fixed time window.\n\n"
+        "Write a plain-English rollup as 3 to 5 short bullet points "
+        "(max ~14 words each) describing what activity is driving these "
+        "mentions. Examples of good bullets:\n"
+        '  • "Watching Meet the Parents on Netflix"\n'
+        '  • "New show announced on Apple TV+"\n'
+        '  • "Searches spiking around recent SNL appearance"\n'
+        "Bullets should be specific (name the show / event / platform) "
+        "and grounded in the data — never invent a title or platform "
+        "not present in the input. If the surface is genuinely thin or "
+        "ambiguous, say so in one bullet rather than padding.\n\n"
+        "Also write a one-sentence `headline` (≤120 chars) that captures "
+        "the dominant theme.\n\n"
+        "Return ONLY valid JSON of the shape:\n"
+        '{"headline": "…", "bullets": ["…", "…", "…"]}\n\n'
+        f"Profile: {profile_name} (subject: {profile_subject})\n"
+        f"Data:\n{json.dumps(payload_for_llm, default=str)}"
+    )
+
+    try:
+        response = client.chat.completions.create(
+            model=os.environ.get('IQR_CONTEXT_LLM_MODEL', 'gpt-4o-mini'),
+            messages=[
+                {"role": "system",
+                 "content": "You are a behavioural-data analyst. Be concise, "
+                            "grounded, and never invent facts. Return strict JSON."},
+                {"role": "user", "content": prompt},
+            ],
+            max_tokens=400,
+            temperature=0.4,
+        )
+        content = response.choices[0].message.content or ''
+        # Strip optional markdown code fence
+        if "```json" in content:
+            content = content.split("```json", 1)[1].split("```", 1)[0]
+        elif "```" in content:
+            content = content.split("```", 1)[1].split("```", 1)[0]
+        try:
+            parsed = json.loads(content.strip())
+        except Exception:
+            return {"error": "LLM returned non-JSON",
+                    "raw": content[:400]}
+        bullets = parsed.get('bullets') or []
+        if not isinstance(bullets, list):
+            bullets = []
+        bullets = [str(b)[:160] for b in bullets if str(b).strip()][:5]
+        headline = str(parsed.get('headline') or '')[:200].strip()
+        return {
+            "headline": headline,
+            "bullets": bullets,
+            "tokens": getattr(response.usage, 'total_tokens', None),
+            "model": response.model if hasattr(response, 'model') else None,
+        }
+    except Exception as e:
+        import traceback; traceback.print_exc()
+        return {"error": str(e)[:300]}
+
+
+@app.route('/api/iq-rankers/context', methods=['GET'])
+@requires_auth
+def iq_rankers_context():
+    """Per-profile context rollup powering the 'Context' chip on the
+    leaderboard. Aggregates the top URL surface in the requested window
+    and (when OPENAI_API_KEY is set) asks the LLM to summarize.
+
+    Query params:
+        profile_subject  required — the canonical profile_subject
+        window           1d | 7d | 28d | MTD | QTD | YTD | custom (default 7d)
+        start, end       only used when window=custom
+        force_refresh    bypass the LLM cache (default 0)
+    """
+    if _iq_rankers is None:
+        return jsonify({'success': False, 'error': 'iq_rankers unavailable'}), 500
+    profile_subject = (request.args.get('profile_subject') or '').strip()
+    if not profile_subject:
+        return jsonify({'success': False,
+                        'error': 'profile_subject is required'}), 400
+    window = (request.args.get('window') or '7d').strip()
+    start_q = (request.args.get('start') or '').strip() or None
+    end_q   = (request.args.get('end') or '').strip() or None
+    force   = (request.args.get('force_refresh') or '').strip() == '1'
+
+    # Resolve the window to concrete dates. We re-use iq_rankers' helper
+    # so the answer always lines up with whatever the leaderboard would
+    # be showing for the same window.
+    try:
+        start, end, _ps, _pe = _iq_rankers._resolve_window(window, start_q, end_q)
+    except Exception as e:
+        return jsonify({'success': False,
+                        'error': f'bad window: {e}'}), 400
+
+    # Pull this profile's brand_terms straight from the s3_cache jobs
+    # list — that's the same source the daily compute uses, so the
+    # ClickHouse filter shape will match the Mentions column on the
+    # leaderboard exactly.
+    jobs_list = _iq_rankers_get_jobs() or []
+    job = None
+    for j in jobs_list:
+        if (j.get('profile_subject') or '').strip() == profile_subject:
+            job = j
+            break
+    if not job:
+        return jsonify({'success': False,
+                        'error': f'profile not found: {profile_subject}'}), 404
+    project_name = (job.get('display_name') or job.get('project_name')
+                    or profile_subject)
+    s3_key = job.get('s3_key') or job.get('job_id') or ''
+    try:
+        brand_terms = _iq_rankers.read_brand_input_from_csv(s3_client, S3_BUCKET, s3_key)
+    except Exception:
+        brand_terms = []
+    if not brand_terms and project_name:
+        brand_terms = [project_name]
+
+    # 1) Always-fresh ClickHouse rollup (cheap, no LLM).
+    try:
+        ctx = _iq_rankers.compute_profile_context(
+            ch_connect=_ch_connect,
+            profile_subject=profile_subject,
+            brand_terms=brand_terms,
+            start=start, end=end,
+        )
+    except Exception as e:
+        import traceback; traceback.print_exc()
+        return jsonify({'success': False, 'error': str(e)[:300]}), 500
+
+    # 2) LLM narrative — cached unless force_refresh=1.
+    llm_payload = None
+    if not force:
+        cached = _iqr_context_load_cache(profile_subject, start, end)
+        if cached and isinstance(cached, dict) and 'llm' in cached:
+            llm_payload = cached['llm']
+
+    if llm_payload is None:
+        llm_payload = _iqr_context_llm_rollup(
+            profile_name=project_name,
+            profile_subject=profile_subject,
+            ctx=ctx,
+        )
+        # Only persist successful LLM responses — re-trying on errors is
+        # cheap, and we don't want to cache a transient OpenAI 5xx.
+        if llm_payload and not llm_payload.get('error'):
+            _iqr_context_save_cache(
+                profile_subject, start, end,
+                {'llm': llm_payload, 'context_excerpt': {
+                    'total_mentions': ctx.get('total_mentions'),
+                    'unique_panelists': ctx.get('unique_panelists'),
+                    'top_common_names_count': len(ctx.get('top_common_names') or []),
+                }},
+            )
+
+    return jsonify({
+        'success': True,
+        'profile_subject': profile_subject,
+        'project_name': project_name,
+        'window': {'key': window, 'start': start, 'end': end},
+        'context': ctx,
+        'llm': llm_payload,
+        'brand_terms_count': len(brand_terms or []),
+    })
+
+
 @app.route('/api/iq-rankers/categories', methods=['GET'])
 @requires_auth
 def iq_rankers_categories():

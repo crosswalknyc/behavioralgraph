@@ -8837,11 +8837,60 @@
         .iqr-row-chip-chart { color: var(--accent-cyan); border-color: rgba(102,217,239,0.35); }
         .iqr-row-chip-chart:hover { background: rgba(102,217,239,0.14); border-color: var(--accent-cyan); color: var(--accent-cyan); }
         .iqr-row-chip-chart .iqr-row-chip-glyph { font-size: 0.85rem; line-height: 1; }
+        .iqr-row-chip-context { color: #ffd9a8; border-color: rgba(255,176,87,0.35); }
+        .iqr-row-chip-context:hover { background: rgba(255,176,87,0.14); border-color: rgba(255,176,87,0.85); color: #ffe2bd; }
         .iqr-row-chip-profile { color: #c8f7d4; border-color: rgba(132,225,168,0.35); }
         .iqr-row-chip-profile:hover { background: rgba(132,225,168,0.14); border-color: var(--accent-lime); color: #c8f7d4; }
         .rankers-table tbody tr:hover .iqr-row-chip { border-color: var(--border-color); }
         .rankers-table tbody tr:hover .iqr-row-chip-chart { border-color: rgba(102,217,239,0.5); }
+        .rankers-table tbody tr:hover .iqr-row-chip-context { border-color: rgba(255,176,87,0.55); }
         .rankers-table tbody tr:hover .iqr-row-chip-profile { border-color: rgba(132,225,168,0.5); }
+
+        /* Context modal — narrative + raw rollup tables */
+        .iqr-context-modal .iqr-modal-card { width: min(820px, 92vw); max-height: 88vh; }
+        .iqr-context-headline {
+            font-size: 0.95rem; font-weight: 600; color: #ffe2bd;
+            background: linear-gradient(135deg, rgba(255,176,87,0.12), rgba(255,176,87,0.04));
+            border: 1px solid rgba(255,176,87,0.30); border-radius: 10px;
+            padding: 0.7rem 0.9rem; margin-bottom: 0.9rem; line-height: 1.45;
+        }
+        .iqr-context-bullets { list-style: none; padding: 0; margin: 0 0 1.1rem 0; }
+        .iqr-context-bullets li {
+            position: relative; padding: 0.4rem 0 0.4rem 1.5rem;
+            font-size: 0.86rem; color: var(--text-primary); line-height: 1.5;
+            border-bottom: 1px dashed rgba(255,176,87,0.18);
+        }
+        .iqr-context-bullets li:last-child { border-bottom: none; }
+        .iqr-context-bullets li::before {
+            content: "▸"; position: absolute; left: 0.3rem; top: 0.4rem;
+            color: #ffb057; font-weight: 700;
+        }
+        .iqr-context-totals {
+            font-size: 0.7rem; color: var(--text-secondary); margin-bottom: 0.8rem;
+            text-transform: uppercase; letter-spacing: 0.04em;
+        }
+        .iqr-context-totals b { color: var(--text-primary); font-weight: 700; }
+        .iqr-context-section-title {
+            font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.05em;
+            color: var(--text-secondary); margin: 1rem 0 0.4rem 0; font-weight: 700;
+        }
+        .iqr-context-table { width: 100%; border-collapse: collapse; font-size: 0.8rem; }
+        .iqr-context-table th {
+            text-align: left; padding: 0.4rem 0.5rem; font-size: 0.65rem;
+            text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-secondary);
+            border-bottom: 1px solid var(--border-color); font-weight: 600;
+        }
+        .iqr-context-table td {
+            padding: 0.35rem 0.5rem; border-bottom: 1px solid rgba(255,255,255,0.04);
+        }
+        .iqr-context-table td.num { text-align: right; font-variant-numeric: tabular-nums; color: var(--text-secondary); }
+        .iqr-context-table a { color: var(--accent-cyan); text-decoration: none; word-break: break-all; }
+        .iqr-context-table a:hover { text-decoration: underline; }
+        .iqr-context-warn {
+            font-size: 0.78rem; color: #ffb057; padding: 0.6rem 0.8rem;
+            background: rgba(255,176,87,0.08); border: 1px dashed rgba(255,176,87,0.35);
+            border-radius: 8px; margin-bottom: 0.8rem;
+        }
 
         /* ── Drill-down chart modal ───────────────────────────────────────── */
         .iqr-modal-backdrop {
@@ -18189,6 +18238,67 @@
                             <canvas id="iqRankerChartCanvas"></canvas>
                         </div>
                         <div id="iqRankerChartSummary" class="iqr-chart-summary" style="display: none;"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Context modal — LLM rollup of what's driving today's mentions
+                 for a single profile, plus the raw URL/domain/common_name
+                 surface that the rollup was grounded on. Single instance,
+                 re-targeted on every "Context" chip click. -->
+            <div id="iqRankerContextModal" class="iqr-modal-backdrop iqr-context-modal" role="dialog" aria-modal="true" aria-labelledby="iqRankerContextTitle">
+                <div class="iqr-modal">
+                    <div class="iqr-modal-head">
+                        <div class="ttl">
+                            <strong id="iqRankerContextTitle">Profile context</strong>
+                            <small id="iqRankerContextSubtitle"></small>
+                        </div>
+                        <div style="display: flex; gap: 0.5rem; align-items: center;">
+                            <button type="button" class="iqr-btn" id="iqRankerContextRefreshBtn" onclick="refreshIQRankerContext()" title="Re-run the LLM rollup (bypasses the 24h cache)">↻ Refresh</button>
+                            <button type="button" class="iqr-modal-close" onclick="closeIQRankerContext()" aria-label="Close">✕ Close</button>
+                        </div>
+                    </div>
+                    <div class="iqr-modal-body">
+                        <div id="iqRankerContextLoading" class="iqr-modal-loading"><span class="spinner"></span> Pulling URL surface and asking the LLM what's driving the mentions…</div>
+                        <div id="iqRankerContextError" class="iqr-modal-empty" style="display: none;"></div>
+                        <div id="iqRankerContextBody" style="display: none;">
+                            <div id="iqRankerContextTotals" class="iqr-context-totals"></div>
+                            <div id="iqRankerContextHeadline" class="iqr-context-headline" style="display: none;"></div>
+                            <ul id="iqRankerContextBullets" class="iqr-context-bullets"></ul>
+                            <div id="iqRankerContextLLMWarn" class="iqr-context-warn" style="display: none;"></div>
+
+                            <div class="iqr-context-section-title">Top common-name buckets</div>
+                            <div style="overflow-x: auto;">
+                                <table class="iqr-context-table">
+                                    <thead><tr><th>Common name</th><th class="num">Hits</th><th class="num">Panelists</th></tr></thead>
+                                    <tbody id="iqRankerContextCommonBody"></tbody>
+                                </table>
+                            </div>
+
+                            <div class="iqr-context-section-title">Top domains</div>
+                            <div style="overflow-x: auto;">
+                                <table class="iqr-context-table">
+                                    <thead><tr><th>Domain</th><th class="num">Hits</th><th class="num">Panelists</th></tr></thead>
+                                    <tbody id="iqRankerContextDomainBody"></tbody>
+                                </table>
+                            </div>
+
+                            <div class="iqr-context-section-title">Highest-traffic URL paths</div>
+                            <div style="overflow-x: auto;">
+                                <table class="iqr-context-table">
+                                    <thead><tr><th>Domain · Path</th><th class="num">Hits</th><th class="num">Panelists</th></tr></thead>
+                                    <tbody id="iqRankerContextPathBody"></tbody>
+                                </table>
+                            </div>
+
+                            <div class="iqr-context-section-title">Sample URLs</div>
+                            <div style="overflow-x: auto;">
+                                <table class="iqr-context-table">
+                                    <thead><tr><th>URL</th><th class="num">Hits</th></tr></thead>
+                                    <tbody id="iqRankerContextSampleBody"></tbody>
+                                </table>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -82497,6 +82607,7 @@
                 const trackerId      = _iqrTrackerIdFor(r.profile_subject || '');
                 const trackerIdAttr  = _iqJsAttr(trackerId);
                 const chartClick     = `event.stopPropagation(); openIQRankerChart('${master}', '${subjAttr}', '${nameAttr}')`;
+                const contextClick   = `event.stopPropagation(); openIQRankerContext('${master}', '${subjAttr}', '${nameAttr}')`;
                 const profileClick   = `event.stopPropagation(); openProfileFromIQRanker('${subj}', '${s3Key}')`;
                 return `<tr>
                     <td>${i + 1}</td>
@@ -82504,6 +82615,7 @@
                         <div class="iqr-name-row">
                             <span class="iqr-name-text">${_iqEsc(r.project_name || r.profile_subject || '')}</span>
                             <button type="button" class="iqr-row-chip iqr-row-chip-chart" title="Open day-over-day chart" aria-label="Open day-over-day chart" onclick="${chartClick}"><span class="iqr-row-chip-glyph">Δ</span></button>
+                            <button type="button" class="iqr-row-chip iqr-row-chip-context" title="What's driving these mentions? (LLM rollup of the panel's URL surface)" onclick="${contextClick}">Context</button>
                             <button type="button" class="iqr-row-chip iqr-row-chip-profile" title="Open this profile's dashboard" onclick="${profileClick}">Profile</button>
                         </div>
                         <div class="iqr-name-sub">${_iqRenderSubcategory(r)}</div>
@@ -82588,6 +82700,195 @@
                 if (search && sub) { search.value = sub.replace(/_/g, ' '); search.dispatchEvent(new Event('keyup')); }
             } catch(_) {}
         }
+
+        // ──────────────────────────────────────────────────────────────
+        // Context modal — "what's actually driving Ben Stiller's mentions
+        // this week?" Re-uses the active master's window so the answer
+        // matches the leaderboard column the user is staring at.
+        // ──────────────────────────────────────────────────────────────
+        let _IQR_CONTEXT_CURRENT = null;  // { profileSubject, projectName, master }
+
+        function openIQRankerContext(master, profileSubjectEnc, projectNameEnc) {
+            const profileSubject = decodeURIComponent(profileSubjectEnc || '');
+            const projectName    = decodeURIComponent(projectNameEnc || '') || profileSubject;
+            if (!IQ_RANKER_STATE[master]) {
+                // Fallback if the row was rendered before a master was registered.
+                master = Object.keys(IQ_RANKER_STATE)[0] || master;
+            }
+            _IQR_CONTEXT_CURRENT = { profileSubject, projectName, master };
+
+            const modal = document.getElementById('iqRankerContextModal');
+            if (!modal) return;
+            document.getElementById('iqRankerContextTitle').textContent = projectName;
+
+            // Sub-title shows the window we're rolling up so users don't
+            // confuse "last 7 days" with "yesterday".
+            const st = (IQ_RANKER_STATE && IQ_RANKER_STATE[master]) || {};
+            const winLabel = (() => {
+                if (st.window === 'custom' && st.start && st.end) return `${st.start} → ${st.end}`;
+                const labels = { '1d': 'yesterday', '7d': 'last 7 days', '28d': 'last 28 days', 'MTD': 'month to date', 'QTD': 'quarter to date', 'YTD': 'year to date' };
+                return labels[st.window] || st.window || 'last 7 days';
+            })();
+            document.getElementById('iqRankerContextSubtitle').textContent = `${master} · ${winLabel}`;
+
+            modal.classList.add('show');
+            document.body.style.overflow = 'hidden';
+            _iqrLoadContext({ force: false });
+        }
+
+        function refreshIQRankerContext() {
+            if (!_IQR_CONTEXT_CURRENT) return;
+            _iqrLoadContext({ force: true });
+        }
+
+        function closeIQRankerContext() {
+            const modal = document.getElementById('iqRankerContextModal');
+            if (modal) modal.classList.remove('show');
+            document.body.style.overflow = '';
+            _IQR_CONTEXT_CURRENT = null;
+        }
+
+        function _iqrLoadContext({ force }) {
+            if (!_IQR_CONTEXT_CURRENT) return;
+            const { profileSubject, master } = _IQR_CONTEXT_CURRENT;
+            const st = (IQ_RANKER_STATE && IQ_RANKER_STATE[master]) || {};
+
+            const loadingEl = document.getElementById('iqRankerContextLoading');
+            const errEl     = document.getElementById('iqRankerContextError');
+            const bodyEl    = document.getElementById('iqRankerContextBody');
+            const refreshBtn = document.getElementById('iqRankerContextRefreshBtn');
+
+            loadingEl.style.display = '';
+            errEl.style.display = 'none';
+            errEl.textContent = '';
+            bodyEl.style.display = 'none';
+            if (refreshBtn) refreshBtn.disabled = true;
+
+            const params = new URLSearchParams();
+            params.set('profile_subject', profileSubject);
+            params.set('window', st.window || '7d');
+            if (st.window === 'custom' && st.start) params.set('start', st.start);
+            if (st.window === 'custom' && st.end)   params.set('end',   st.end);
+            if (force) params.set('force_refresh', '1');
+
+            fetch(`/api/iq-rankers/context?${params.toString()}`, {
+                headers: { 'Accept': 'application/json' }
+            })
+            .then(r => r.json().then(j => ({ ok: r.ok, body: j })))
+            .then(({ ok, body }) => {
+                if (refreshBtn) refreshBtn.disabled = false;
+                loadingEl.style.display = 'none';
+                if (!ok || !body || body.success === false) {
+                    errEl.style.display = '';
+                    errEl.textContent = (body && body.error) ? `Could not load context: ${body.error}` : 'Could not load context.';
+                    return;
+                }
+                _iqrRenderContext(body);
+            })
+            .catch(err => {
+                if (refreshBtn) refreshBtn.disabled = false;
+                loadingEl.style.display = 'none';
+                errEl.style.display = '';
+                errEl.textContent = `Could not load context: ${err && err.message || err}`;
+            });
+        }
+
+        function _iqrRenderContext(payload) {
+            const ctx = payload.context || {};
+            const llm = payload.llm || {};
+            const totalsEl   = document.getElementById('iqRankerContextTotals');
+            const headlineEl = document.getElementById('iqRankerContextHeadline');
+            const bulletsEl  = document.getElementById('iqRankerContextBullets');
+            const llmWarnEl  = document.getElementById('iqRankerContextLLMWarn');
+            const bodyEl     = document.getElementById('iqRankerContextBody');
+
+            const fmtInt = n => Number(n || 0).toLocaleString();
+            totalsEl.innerHTML =
+                `Window <b>${_iqEsc(payload.window?.start || '')} → ${_iqEsc(payload.window?.end || '')}</b> · ` +
+                `<b>${fmtInt(ctx.total_mentions)}</b> mentions · ` +
+                `<b>${fmtInt(ctx.unique_panelists)}</b> unique panelists`;
+
+            // Narrative bullets (LLM)
+            if (llm && Array.isArray(llm.bullets) && llm.bullets.length) {
+                if (llm.headline) {
+                    headlineEl.textContent = llm.headline;
+                    headlineEl.style.display = '';
+                } else {
+                    headlineEl.style.display = 'none';
+                }
+                bulletsEl.innerHTML = llm.bullets.map(b => `<li>${_iqEsc(b)}</li>`).join('');
+                bulletsEl.style.display = '';
+                llmWarnEl.style.display = 'none';
+            } else {
+                headlineEl.style.display = 'none';
+                bulletsEl.innerHTML = '';
+                bulletsEl.style.display = 'none';
+                if (llm && llm.error) {
+                    llmWarnEl.textContent = `LLM rollup unavailable (${llm.error}). Showing raw aggregation below.`;
+                    llmWarnEl.style.display = '';
+                } else {
+                    llmWarnEl.textContent = 'LLM rollup unavailable. Showing raw aggregation below.';
+                    llmWarnEl.style.display = '';
+                }
+            }
+
+            // Surface the warnings the backend may have attached
+            if (Array.isArray(ctx.warnings) && ctx.warnings.length) {
+                const cur = llmWarnEl.textContent ? llmWarnEl.textContent + ' · ' : '';
+                llmWarnEl.textContent = cur + ctx.warnings.join(' · ');
+                llmWarnEl.style.display = '';
+            }
+
+            // Raw rollup tables
+            const commonRows = (ctx.top_common_names || []).map(c =>
+                `<tr><td>${_iqEsc(c.common_name || '—')}</td>` +
+                `<td class="num">${fmtInt(c.hits)}</td>` +
+                `<td class="num">${fmtInt(c.uniq)}</td></tr>`
+            ).join('');
+            document.getElementById('iqRankerContextCommonBody').innerHTML =
+                commonRows || `<tr><td colspan="3" class="num">No common-name surface.</td></tr>`;
+
+            const domainRows = (ctx.top_domains || []).map(d =>
+                `<tr><td>${_iqEsc(d.domain || '—')}</td>` +
+                `<td class="num">${fmtInt(d.hits)}</td>` +
+                `<td class="num">${fmtInt(d.uniq)}</td></tr>`
+            ).join('');
+            document.getElementById('iqRankerContextDomainBody').innerHTML =
+                domainRows || `<tr><td colspan="3" class="num">No domain surface.</td></tr>`;
+
+            const pathRows = (ctx.top_path_clusters || []).map(p =>
+                `<tr><td><span style="color: var(--text-secondary)">${_iqEsc(p.domain || '')}</span> · ${_iqEsc(p.path || '/')}</td>` +
+                `<td class="num">${fmtInt(p.hits)}</td>` +
+                `<td class="num">${fmtInt(p.uniq)}</td></tr>`
+            ).join('');
+            document.getElementById('iqRankerContextPathBody').innerHTML =
+                pathRows || `<tr><td colspan="3" class="num">No URL-path clusters.</td></tr>`;
+
+            const sampleRows = (ctx.sample_urls || []).map(u => {
+                const urlSafe = _iqEsc(u.url || '');
+                const truncated = urlSafe.length > 110 ? urlSafe.slice(0, 107) + '…' : urlSafe;
+                return `<tr><td><a href="${urlSafe}" target="_blank" rel="noopener" title="${urlSafe}">${truncated}</a></td>` +
+                       `<td class="num">${fmtInt(u.hits)}</td></tr>`;
+            }).join('');
+            document.getElementById('iqRankerContextSampleBody').innerHTML =
+                sampleRows || `<tr><td colspan="2" class="num">No sample URLs.</td></tr>`;
+
+            bodyEl.style.display = '';
+        }
+
+        // Close-on-backdrop and Esc parity with the other IQR modals.
+        (function _iqrContextModalCloseHooks() {
+            const modal = document.getElementById('iqRankerContextModal');
+            if (!modal) return;
+            modal.addEventListener('click', (e) => {
+                if (e.target === modal) closeIQRankerContext();
+            });
+            document.addEventListener('keydown', (e) => {
+                if (e.key === 'Escape' && modal.classList.contains('show')) {
+                    closeIQRankerContext();
+                }
+            });
+        })();
 
         // Mirrors iq_rankers._tracker_id_for_profile() in Python so we can
         // jump straight to the auto-provisioned Sentiment IQ tracker for a
