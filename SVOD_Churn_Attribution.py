@@ -1623,8 +1623,9 @@ def run_query(conn, p):
         validated_clean = _current_clean
         ai_meta = {'skipped': True, 'reason': f'exception: {e}'}
 
-    # Capture any flag the viewer-research safety net produced so it can be surfaced
-    # in the CSV's AI VALIDATION section.
+    # Capture any flag the viewer-research safety net produced so it can be
+    # surfaced in run logs and the validation sidecar JSON (NOT in the CSV,
+    # which the dashboard would otherwise render as bogus demographic rows).
     if ai_meta.get('flag'):
         p.setdefault('_ai_flags', []).append(ai_meta['flag'])
 
@@ -4584,29 +4585,70 @@ def write_output(df_summary, df_comp, df_demo, df_timing, df_episode_attribution
         for c in attrib_changes:
             print(f"     → {c}")
 
-    # Append validation metadata rows
-    df_out = pd.concat([df_out, pd.DataFrame([
-        ("", "", "", "", "", "", "", "", "", ""),
-        ("", "", "AI VALIDATION", "", "", "", "", "", "", ""),
-        ("Validation Status", "", "PASS" if validation.get('passed', True) else "FLAGGED", "", "", "", "", "", "", ""),
-        ("Assessment", "", validation.get('overall_assessment', ''), "", "", "", "", "", "", ""),
-    ], columns=df_out.columns)], ignore_index=True)
-
-    if validation.get('flags'):
-        for i, flag in enumerate(validation['flags']):
-            df_out = pd.concat([df_out, pd.DataFrame([
-                (f"Flag {i+1}", "", flag, "", "", "", "", "", "", ""),
-            ], columns=df_out.columns)], ignore_index=True)
-
-    # Surface flags raised earlier in the pipeline (viewer-research safety net,
-    # conversion-rate sanity check) so downstream consumers can see when the
-    # AI overrode or corrected something.
-    pipeline_flags = p.get('_ai_flags', []) or []
-    if pipeline_flags:
-        for i, flag in enumerate(pipeline_flags):
-            df_out = pd.concat([df_out, pd.DataFrame([
-                (f"AI Override Flag {i+1}", "", flag, "", "", "", "", "", "", ""),
-            ], columns=df_out.columns)], ignore_index=True)
+    # AI VALIDATION metadata is intentionally NOT written into the CSV.
+    # The Subscriber IQ dashboard renders any non-empty data row that lives
+    # past the DEMOGRAPHICS section as demographic content, which previously
+    # caused "AI Override Flag 1/2/..." rows to appear as bogus age buckets
+    # with count=0 / 0.00%. Instead we:
+    #   1) Log every flag to stdout so it lands in the pipeline run logs.
+    #   2) Stash the full validation payload on the DataFrame's .attrs so a
+    #      caller can write it to a sidecar file (e.g. <name>.validation.json)
+    #      without polluting the rendered CSV.
+    pipeline_flags = list(p.get('_ai_flags', []) or [])
+    ai_validation_payload = {
+        'status': 'PASS' if validation.get('passed', True) else 'FLAGGED',
+        'assessment': validation.get('overall_assessment', ''),
+        'flags': list(validation.get('flags') or []),
+        'pipeline_flags': pipeline_flags,
+    }
+    try:
+        df_out.attrs['ai_validation'] = ai_validation_payload
+    except Exception:
+        pass
+    print(f"🧾 AI VALIDATION → status={ai_validation_payload['status']}")
+    if ai_validation_payload['assessment']:
+        print(f"   Assessment: {ai_validation_payload['assessment']}")
+    for i, flag in enumerate(ai_validation_payload['flags']):
+        print(f"   Flag {i+1}: {flag}")
+    for i, flag in enumerate(pipeline_flags):
+        print(f"   AI Override Flag {i+1}: {flag}")
+    # Defense in depth: if upstream code (or a legacy code path) ever
+    # appended a row with one of these category labels, scrub it now so
+    # the CSV that ships to the dashboard is always clean.
+    _validation_labels = (
+        'AI VALIDATION',
+        'Validation Status',
+        'Assessment',
+        'Override Timestamp',
+        'Override Source',
+    )
+    def _is_validation_row(cat_val: object) -> bool:
+        s = str(cat_val or '').strip()
+        if not s:
+            return False
+        if s in _validation_labels:
+            return True
+        if s.startswith('AI Override Flag') or s.startswith('Override Flag'):
+            return True
+        if s.startswith('Flag ') and s[5:].split(' ', 1)[0].isdigit():
+            return True
+        return False
+    _cat_col = df_out['Category'] if 'Category' in df_out.columns else df_out.iloc[:, 0]
+    _mask_keep = ~_cat_col.apply(_is_validation_row)
+    # Also drop a row whose col 0 is empty but col 2 is exactly 'AI VALIDATION'
+    # (the section-header row format we used historically).
+    if 'Count' in df_out.columns:
+        _col2 = df_out['Count']
+    else:
+        _col2 = df_out.iloc[:, 2]
+    _mask_header = ~((_cat_col.fillna('').astype(str).str.strip() == '')
+                     & (_col2.fillna('').astype(str).str.strip().str.upper() == 'AI VALIDATION'))
+    _before = len(df_out)
+    df_out = df_out[_mask_keep & _mask_header].reset_index(drop=True)
+    _after = len(df_out)
+    if _after != _before:
+        print(f"🧹 Stripped {_before - _after} AI-validation row(s) from the CSV "
+              "(metadata preserved in df.attrs['ai_validation']).")
 
     # Write to output_dir from params (e.g. server output dir on Render) or default Desktop/attribution
     # Final invariant assertion on output DataFrame
@@ -4673,7 +4715,21 @@ def write_output(df_summary, df_comp, df_demo, df_timing, df_episode_attribution
     safe_project_name = safe_project_name[:100] if len(safe_project_name) > 100 else safe_project_name
     output_path = output_folder / f"{safe_project_name}_{timestamp}.csv"
     df_out.to_csv(output_path, index=False, encoding='utf-8')
-    print(f"✅ Report written to {output_path}\n")
+    print(f"✅ Report written to {output_path}")
+    # Preserve the audit trail in a sidecar JSON next to the CSV so the
+    # dashboard CSV stays clean while we retain full traceability of every
+    # AI override / validation finding for this run.
+    _validation_meta = getattr(df_out, 'attrs', {}).get('ai_validation') if hasattr(df_out, 'attrs') else None
+    if _validation_meta:
+        try:
+            import json as _json
+            sidecar_path = output_path.with_suffix('.validation.json')
+            with open(sidecar_path, 'w', encoding='utf-8') as _f:
+                _json.dump(_validation_meta, _f, indent=2, default=str)
+            print(f"   📎 Validation sidecar: {sidecar_path}")
+        except Exception as _e:
+            print(f"   ⚠️  Could not write validation sidecar: {_e}")
+    print()
 
 
 # =============
