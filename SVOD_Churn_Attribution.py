@@ -3714,12 +3714,224 @@ def _enforce_gender_skew_in_plan(gender_plan, labels, skew_hint):
     return gender_plan, changes
 
 
+def _reason_demographics_with_claude(*, show_name, platform_name, age_labels,
+                                     gender_labels, panel_age_rows, panel_gender_rows,
+                                     gpt_research_summary):
+    """Hand the GPT research summary to Claude and ask it to walk an explicit
+    demographic framework with named sources, then return realistic
+    AGE / GENDER percentage plans for "DEMOGRAPHICS - New Signups".
+
+    Same research-and-reason pattern we use for total-watcher validation: GPT
+    does the live web grounding (Claude lacks native web search by default),
+    Claude applies the framework over the result.
+
+    The framework:
+
+        Step 1: Identify content profile (genre, platform tier, setting, tone).
+        Step 2: Extract demographic anchors from the research summary
+                — Nielsen, Samba TV, Luminate, platform press, trade press.
+                Cite specific sources / week / outlet.
+        Step 3: Apply genre/platform PRIORS when sources are sparse:
+                  US FBI/political thriller (Netflix): 50%+ ages 35-64,
+                    20-30% 65+, <8% under-18  (Nielsen Night Agent S2 data).
+                  Apple TV+ prestige drama:  heavy 25-54 adult skew,
+                    Breaking-Bad-style demo, <5% under-18.
+                  Disney+ family:           20-30% under-18, 30%+ 25-44.
+                  HBO/Max prestige drama:   30%+ 35-54, low under-18.
+                  Sci-fi / superhero:       male skew, 25-44 peak.
+                  Romance / dramedy:        female skew, 25-54.
+                  Comedy:                   18-44 balanced.
+                  Reality / lifestyle:      female skew, 25-54.
+        Step 4: Adjust for NEW SIGNUPS specifically (skew ~5pp younger than
+                total-viewer demo — younger people are likelier to be new
+                vs. established subscribers).
+        Step 5: SANITY GUARDRAILS:
+                  - Cap '17 and Under' at 8% for any adult-targeted content
+                  - Floor 35+ share at 45% for adult drama / thriller
+                  - Gender: Male + Female should be 85-95% of total
+                  - Honor researched gender skew (don't invert)
+
+    Returns dict {'age': {...}, 'gender': {...}, 'gender_skew': '...',
+                  'reasoning': '...', 'sources': [...], 'model': '...'}
+    or None on any failure (caller falls back to GPT-only path).
+    """
+    try:
+        from claude_client import is_claude_reasoning_enabled, claude_reason_json
+    except Exception:
+        return None
+    if not is_claude_reasoning_enabled():
+        return None
+
+    system = (
+        "You are a streaming audience analyst. Apply the framework below "
+        "literally, show your work, and output JSON only.\n\n"
+        "=== DEMOGRAPHIC FRAMEWORK (5 steps) ===\n"
+        "Step 1: Classify the show. Pick a content profile:\n"
+        "  • US FBI/political thriller        (Netflix anchor)\n"
+        "  • Prestige drama                   (Apple TV+, HBO, Max)\n"
+        "  • Family / animation                (Disney+, Netflix family)\n"
+        "  • Sci-fi / superhero / fantasy     (any platform)\n"
+        "  • Romance / dramedy                 (any platform)\n"
+        "  • Comedy / sitcom                   (any platform)\n"
+        "  • Reality / lifestyle / docusoap   (any platform)\n"
+        "  • Documentary / true-crime          (any platform)\n"
+        "  • Kids / preschool                  (Disney+, Netflix Kids)\n\n"
+        "Step 2: Extract anchors from the research summary you're given.\n"
+        "  Look for Nielsen / Samba TV / Luminate / YouGov / Morning Consult\n"
+        "  / platform-disclosed age-bracket percentages or 'skews X' phrasing.\n"
+        "  CITE THE SPECIFIC SOURCE in sources_cited for every quoted number.\n\n"
+        "Step 3: When sources are sparse, fall back to these PRIORS for\n"
+        "  'New Signups' demographics (not total viewers — see Step 4):\n"
+        "    US FBI / political thriller:\n"
+        "      17 and Under  4%  | 18-24  8%  | 25-34 16%  | 35-44 18%\n"
+        "      45-54        19%  | 55-64 16%  | 65 or Older 19%\n"
+        "      (Nielsen: '50%+ ages 35-64, 27%+ 65+' — Night Agent S2)\n"
+        "    Apple TV+ prestige drama (Breaking Bad demo):\n"
+        "      17 and Under  3%  | 18-24  7%  | 25-34 17%  | 35-44 22%\n"
+        "      45-54        21%  | 55-64 17%  | 65 or Older 13%\n"
+        "    HBO/Max prestige drama:  similar to Apple TV+, slightly more 65+.\n"
+        "    Sci-fi / superhero:       male 55-60%, 25-44 peak.\n"
+        "    Romance / dramedy:        female 55-65%, 25-54.\n"
+        "    Disney+ family:           17 and Under 25%, balanced gender.\n"
+        "    Kids / preschool:         17 and Under 35-45%.\n\n"
+        "Step 4: 'New signups' skew ~3-5pp YOUNGER than total-viewer demo,\n"
+        "  because younger people are more likely to be new (vs. existing)\n"
+        "  subscribers. Move ~3-5% out of 55+ buckets into 25-44 buckets.\n\n"
+        "Step 5: SANITY GUARDRAILS — apply AFTER the priors:\n"
+        "  • Cap '17 and Under' at 8% for any adult content. For non-family\n"
+        "    content, the panel often over-samples teens — don't trust panel\n"
+        "    if it shows >15%.\n"
+        "  • Floor 35+ share at 45% for adult drama/thriller.\n"
+        "  • Gender: Male + Female should sum to 88-94% of total.\n"
+        "    Trans Male + Trans Female: ~0.5-1.5% each.\n"
+        "    Non-Binary: ~1-2%. Prefer Not to Say: ~0.5-1.5%.\n"
+        "  • Honor researched gender skew — DO NOT invert it.\n"
+        "  • Final age plan must sum to exactly 100.0%.\n"
+        "  • Final gender plan must sum to exactly 100.0%.\n"
+    )
+
+    user = (
+        f'Show: "{show_name}"\n'
+        f'Platform: {platform_name}\n\n'
+        f'EXACT age labels to use (and only these): {age_labels}\n'
+        f'EXACT gender labels to use (and only these): {gender_labels}\n\n'
+        f'Panel-derived AGE rows (likely BIASED — panel skews younger than\n'
+        f'reality on most adult content; treat as input, not ground truth):\n'
+        f'{panel_age_rows}\n\n'
+        f'Panel-derived GENDER rows:\n'
+        f'{panel_gender_rows}\n\n'
+        f'GPT web-search research summary (use as your primary source if it\n'
+        f'contains specific numbers; if it does not, fall back to genre priors):\n'
+        f'---\n{gpt_research_summary}\n---\n\n'
+        f'Output JSON only (no fences):\n'
+        f'{{\n'
+        f'  "step1_content_profile": "<one of the profiles from the framework>",\n'
+        f'  "step2_anchors_found": [\n'
+        f'    {{"source": "<specific source>", "claim": "<exact quoted figure>"}},\n'
+        f'    ...\n'
+        f'  ],\n'
+        f'  "step3_priors_used": <true/false — true if research was sparse>,\n'
+        f'  "step4_new_signups_skew_applied": "<brief description>",\n'
+        f'  "step5_guardrails_applied": ["<list of guardrails that fired>"],\n'
+        f'  "age": {{"<label>": <pct>, ...}},     // sums to 100\n'
+        f'  "gender": {{"<label>": <pct>, ...}},  // sums to 100\n'
+        f'  "gender_skew": "male" | "female" | "balanced",\n'
+        f'  "sources_cited": ["<src 1>", "<src 2>", ...],\n'
+        f'  "confidence": "high" | "medium" | "low",\n'
+        f'  "reasoning": "<2-3 sentence summary of why these numbers>"\n'
+        f'}}\n'
+    )
+
+    raw = claude_reason_json(
+        system=system, user=user,
+        max_tokens=1200, temperature=0.15,
+    )
+    if not raw:
+        return None
+
+    try:
+        s = raw.strip()
+        if s.startswith('```'):
+            s = s.split('\n', 1)[-1].rsplit('```', 1)[0].strip()
+        start = s.find('{')
+        if start < 0:
+            return None
+        depth, end = 0, start
+        for i in range(start, len(s)):
+            if s[i] == '{':
+                depth += 1
+            elif s[i] == '}':
+                depth -= 1
+                if depth == 0:
+                    end = i + 1
+                    break
+        result = json.loads(s[start:end])
+    except Exception as e:
+        print(f"   ⚠️  Claude demographics JSON parse failed: {e}")
+        return None
+
+    age = result.get('age') or {}
+    gender = result.get('gender') or {}
+    if not isinstance(age, dict) or not isinstance(gender, dict):
+        return None
+    if not age and not gender:
+        return None
+
+    # Final sanity guardrails on the structured output (belt-and-suspenders
+    # in case the model didn't apply Step 5 to its own numbers).
+    def _coerce(d):
+        out = {}
+        for k, v in d.items():
+            try:
+                out[k] = max(0.0, float(v))
+            except (TypeError, ValueError):
+                continue
+        return out
+    age = _coerce(age)
+    gender = _coerce(gender)
+
+    # Cap "17 and Under" at 8% if it slipped through above that and the
+    # content profile is not family/kids.
+    profile = (result.get('step1_content_profile') or '').lower()
+    is_kids_content = any(k in profile for k in ('family', 'kids', 'preschool'))
+    if not is_kids_content and age.get('17 and Under', 0) > 8.0:
+        age['17 and Under'] = 8.0
+    # Re-normalize age to 100 if it got nudged
+    age_total = sum(age.values())
+    if age_total > 0 and abs(age_total - 100.0) > 0.5:
+        for k in age:
+            age[k] = age[k] * 100.0 / age_total
+    # Re-normalize gender to 100
+    gender_total = sum(gender.values())
+    if gender_total > 0 and abs(gender_total - 100.0) > 0.5:
+        for k in gender:
+            gender[k] = gender[k] * 100.0 / gender_total
+
+    return {
+        'age': age,
+        'gender': gender,
+        'gender_skew': str(result.get('gender_skew', 'balanced')).lower(),
+        'reasoning': str(result.get('reasoning', '')).strip(),
+        'sources': result.get('sources_cited', []),
+        'confidence': str(result.get('confidence', 'medium')).lower(),
+        'content_profile': result.get('step1_content_profile', ''),
+        'anchors_found': result.get('step2_anchors_found', []),
+        'priors_used': bool(result.get('step3_priors_used', False)),
+        'guardrails_applied': result.get('step5_guardrails_applied', []),
+        'model': os.environ.get('CLAUDE_REASONING_MODEL') or 'claude-sonnet-4-5',
+    }
+
+
 def ai_align_final_demographics_with_research(df_out, platform_name):
     """
-    Final-step demographic alignment agent (GPT-4o):
+    Final-step demographic alignment agent:
     - Reads Show/Content Tracked from output rows
-    - Researches primary audience (web-enabled model)
-    - Uses GPT-4o to align AGE/GENDER rows before file save
+    - Researches primary audience via gpt-4o-search-preview (web grounding)
+    - When USE_CLAUDE_REASONING=1 + ANTHROPIC_API_KEY is set, hands the
+      research summary to Claude with the explicit demographic framework
+      (genre priors, source citation, new-signups skew, sanity guardrails).
+      Otherwise falls back to the original GPT-4o reasoning path.
+    - Applies the resulting AGE/GENDER plan before file save.
     """
     try:
         from openai import OpenAI
@@ -3800,6 +4012,64 @@ def ai_align_final_demographics_with_research(df_out, platform_name):
 
     age_labels = [r["label"] for r in age_rows]
     gender_labels = [r["label"] for r in gender_rows]
+
+    # === Preferred path: Claude with the explicit 5-step framework ==========
+    # GPT did the live web grounding above; hand the summary to Claude for the
+    # structured reasoning (genre profile → anchors → priors → new-signups
+    # skew → sanity guardrails). Same Claude-over-GPT pattern we use for total
+    # watcher validation, so demographics get the same level of diligence.
+    claude_plan = None
+    try:
+        claude_plan = _reason_demographics_with_claude(
+            show_name=show_name,
+            platform_name=platform_name,
+            age_labels=age_labels,
+            gender_labels=gender_labels,
+            panel_age_rows=age_rows,
+            panel_gender_rows=gender_rows,
+            gpt_research_summary=research,
+        )
+    except Exception as e:
+        print(f"   ⚠️  Claude demographic reasoning failed: {e}")
+        claude_plan = None
+
+    if claude_plan and (claude_plan.get('age') or claude_plan.get('gender')):
+        changes = []
+        if section_rows["AGE"] and claude_plan.get('age'):
+            changes.extend(_apply_pct_plan_to_df_out(
+                df_out, section_rows["AGE"], claude_plan['age'], nps_count))
+        if section_rows["GENDER"]:
+            skew_hint = _detect_gender_skew_hint(claude_plan.get('gender_skew'), research)
+            gender_plan = claude_plan.get('gender') or {}
+            gender_plan, skew_changes = _enforce_gender_skew_in_plan(
+                gender_plan, gender_labels, skew_hint)
+            changes.extend(skew_changes)
+            changes.extend(_apply_pct_plan_to_df_out(
+                df_out, section_rows["GENDER"], gender_plan, nps_count))
+        # Surface the framework outputs in the changelog so they reach the
+        # AI VALIDATION footer / UI without further plumbing.
+        profile = claude_plan.get('content_profile')
+        if profile:
+            changes.append(f"Demographic profile (Claude): {profile}")
+        for anchor in (claude_plan.get('anchors_found') or [])[:4]:
+            try:
+                src = anchor.get('source', '')
+                claim = anchor.get('claim', '')
+                if src or claim:
+                    changes.append(f"Demographic source: {src} — {claim}")
+            except Exception:
+                continue
+        if claude_plan.get('priors_used'):
+            changes.append("Demographic priors used (sparse research; genre priors applied).")
+        for g in claude_plan.get('guardrails_applied') or []:
+            changes.append(f"Demographic guardrail: {g}")
+        rationale = claude_plan.get('reasoning')
+        if rationale:
+            changes.append(f"Demographic rationale (Claude {claude_plan.get('confidence','?')}): {rationale}")
+        changes.append(f"Demographic reasoning model: {claude_plan.get('model')}")
+        return df_out, changes
+
+    # === Fallback: original GPT-4o correction path ==========================
     correction_prompt = (
         f'You are aligning final dashboard demographics for subscriber acquisition output.\n\n'
         f'SHOW/CONTENT TRACKED: {show_name}\n'
@@ -3814,6 +4084,11 @@ def ai_align_final_demographics_with_research(df_out, platform_name):
         f'- Infer whether this title is male-skew, female-skew, or balanced from the research.\n'
         f'- Ensure the Male/Female percentages reflect that skew in the final output.\n'
         f'- Do not invert the known audience skew.\n\n'
+        f'SANITY GUARDRAILS:\n'
+        f'- For non-family adult content (drama, thriller, sci-fi, crime, prestige):\n'
+        f'    cap "17 and Under" at ~8% — panels often oversample teens.\n'
+        f'- For adult drama/thriller: ensure 35+ buckets together represent >=45%.\n'
+        f'- Gender: Male + Female should sum to 88-94% of total.\n\n'
         f'Return ONLY JSON with numeric percentages (no % symbol):\n'
         f'{{\n'
         f'  "age": {{"<label>": <pct>, ...}},\n'
@@ -3846,7 +4121,7 @@ def ai_align_final_demographics_with_research(df_out, platform_name):
         changes.extend(_apply_pct_plan_to_df_out(df_out, section_rows["GENDER"], gender_plan, nps_count))
     rationale = str(parsed.get("reasoning") or "").strip()
     if rationale:
-        changes.append(f"Final agent rationale: {rationale}")
+        changes.append(f"Final agent rationale (GPT-4o fallback): {rationale}")
     return df_out, changes
 
 
