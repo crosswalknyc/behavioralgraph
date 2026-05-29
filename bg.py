@@ -26878,10 +26878,20 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
                         try:
                             _mpb_cur = conn.cursor()
                             _mpb_cur.execute(
+                            # Rule #4c (2026-05-28): exclude brands that
+                            # are *also* tagged ``Hidden`` anywhere in
+                            # hostmap (Dippin Dots, Klorane, Molton Brown,
+                            # Wildfang, Evolution Fresh).
+                            _mpb_cur.execute(
                                 "SELECT DISTINCT BRAND, SECTION "
                                 "FROM reference.host_mapping "
                                 "WHERE SECTION LIKE 'Most Purchased Brands%' "
-                                "  AND BRAND != ''"
+                                "  AND BRAND != '' "
+                                "  AND upper(BRAND) NOT IN ("
+                                "    SELECT DISTINCT upper(BRAND) "
+                                "    FROM reference.host_mapping "
+                                "    WHERE SECTION='Hidden'"
+                                "  )"
                             )
                             for _r_row in _mpb_cur.fetchall():
                                 _b = (_r_row[0] or '').strip()

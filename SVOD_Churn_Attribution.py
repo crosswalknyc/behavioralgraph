@@ -1596,6 +1596,11 @@ def run_query(conn, p):
 
     print(f"   🔎 Calling AI viewership validation with inflated_total={_current_total:,}")
     try:
+        # Pass platform_info + episode_count so the validator can compute its
+        # max-plausible single-show audience ceiling and frame the prompt with
+        # the platform's tier + subscriber base.
+        _ai_platform_info = _get_platform_info(p.get('platform_name', ''))
+        _ai_episode_count = len(p.get('episode_dates', []))
         validated_total, validated_pre, validated_clean, ai_meta = _validate_total_watchers_with_ai(
             show_name=show_name_for_ai,
             platform_name=p.get('platform_name', ''),
@@ -1604,6 +1609,8 @@ def run_query(conn, p):
             inflated_clean=_current_clean,
             genre=p.get('genre', ''),
             date_range=date_range_for_ai,
+            platform_info=_ai_platform_info,
+            episode_count=_ai_episode_count,
         )
         print(f"   🔎 AI returned: validated_total={validated_total:,}, action={ai_meta.get('action','?')}, "
               f"estimated_us={ai_meta.get('estimated_us_viewers')}, skipped={ai_meta.get('skipped', False)}")
@@ -1817,6 +1824,40 @@ def run_query(conn, p):
                                 float(uc) * 100.0 / _new_signups, 2
                             )
 
+    # Episode-concentration guardrail (2026-05-28): catch last-touch
+    # attribution leaks. Runs AFTER all the AI scaling / always-on review so
+    # we redistribute the final post-scaling values. If anything was found,
+    # also rescale the per-episode timing dataframe to match the new
+    # per-episode totals.
+    _conc_flags = _validate_episode_concentration(
+        df_episode_attribution,
+        show_name=show_name_for_ai,
+        platform_name=p.get('platform_name', ''),
+    )
+    for _flag in _conc_flags:
+        p.setdefault('_ai_flags', []).append(_flag)
+    if _conc_flags and not df_episode_timing.empty and 'EPISODE_NUM' in df_episode_timing.columns:
+        # Rescale each episode's signup-timing rows so they sum to the
+        # newly-allocated per-episode signup total. Without this, the per-
+        # episode timing rows still reflect the leaky distribution and the
+        # downstream Timing tab would disagree with the attribution table.
+        new_totals_by_ep = (
+            df_episode_attribution.groupby('EPISODE_NUM')['SIGNUPS_ATTRIBUTED'].sum().to_dict()
+        )
+        for ep_num, new_total_ep in new_totals_by_ep.items():
+            ep_rows = df_episode_timing[df_episode_timing['EPISODE_NUM'] == ep_num]
+            if ep_rows.empty:
+                continue
+            cur_total = float(ep_rows['SIGNUP_COUNT'].sum())
+            if cur_total <= 0:
+                continue
+            sf = float(new_total_ep) / cur_total
+            for idx in ep_rows.index:
+                v = df_episode_timing.loc[idx, 'SIGNUP_COUNT']
+                if not pd.isna(v):
+                    df_episode_timing.loc[idx, 'SIGNUP_COUNT'] = max(0, int(round(float(v) * sf)))
+        print(f"   🧯 Rescaled per-episode timing to match new per-episode totals after concentration fix")
+
     # Final invariant check: Total MUST equal Pre + Clean
     _final_total = int(df_summary.loc[0, 'TOTAL_SHOW_WATCHERS']) if not pd.isna(df_summary.loc[0, 'TOTAL_SHOW_WATCHERS']) else 0
     _final_pre = int(df_summary.loc[0, 'PRE_EXISTING_USERS']) if not pd.isna(df_summary.loc[0, 'PRE_EXISTING_USERS']) else 0
@@ -1950,21 +1991,59 @@ def _reason_conversion_rate(show_name, platform_name, genre, content_cadence,
     SANE_MAX = 0.15    # 15 %
 
     # Above this rate, even though within the band, the rate gets a mandatory AI
-    # sanity-check.  Real first-watch conversion above 5% is rare and concentrated
+    # sanity-check.  Real first-watch conversion above 4% is rare and concentrated
     # in low-penetration platforms with buzzy streaming-exclusive premieres
     # (e.g. Severance S1 on Apple TV+).  Broadcast simulcasts almost never exceed this.
-    HIGH_REVIEW_THRESHOLD = 0.05  # 5 %
+    # (Tightened from 5% -> 4% on 2026-05-28 after the Pluribus incident: a 20.07%
+    # rate slipped past the auxiliary review because the agent had been called
+    # earlier with an unrelated 9.03% pre-adjustment value and rubber-stamped
+    # "within band". A lower trigger gives the validator more chances to catch
+    # post-adjustment inconsistencies.)
+    HIGH_REVIEW_THRESHOLD = 0.04  # 4 %
+
+    # Above this rate, the model MUST cite external evidence of a record-breaking
+    # event (Nielsen Top-1 finale, press release confirming massive subscriber
+    # bump from this specific show, etc.). Without such evidence we force the
+    # rate down to the high end of the show-type expected band. This catches
+    # the failure mode where an upstream bug halved the watcher base without
+    # halving signups, mechanically doubling the conversion rate.
+    RECORD_EVIDENCE_THRESHOLD = 0.12  # 12 %
+
+    # Established anchor platforms (Netflix, Apple TV+, HBO Max, Disney+,
+    # Paramount+) have a large existing subscriber base, so the marginal
+    # show-driven conversion is naturally lower than for niche platforms.
+    # A single show converting >10% on an anchor platform is almost certainly
+    # an artifact, regardless of platform tier classification.
+    ANCHOR_PLATFORM_CEILING = 0.10  # 10 %
+    _platform_lc_for_anchor = (platform_name or '').lower()
+    is_anchor_platform = any(
+        anchor in _platform_lc_for_anchor
+        for anchor in ('netflix', 'apple tv', 'hbo max', 'disney+', 'paramount+', 'prime video', 'amazon prime')
+    )
+    effective_ceiling = min(SANE_MAX, ANCHOR_PLATFORM_CEILING) if is_anchor_platform else SANE_MAX
 
     needs_review = (
         raw_panel_conv_rate < SANE_MIN
-        or raw_panel_conv_rate > SANE_MAX
+        or raw_panel_conv_rate > effective_ceiling
         or raw_panel_conv_rate >= HIGH_REVIEW_THRESHOLD
     )
     if not needs_review:
         print(f"   ✅ Using panel-measured conversion rate: {raw_panel_conv_rate*100:.2f}% "
-              f"(within plausible band {SANE_MIN*100:.1f}–{SANE_MAX*100:.0f}% "
+              f"(within plausible band {SANE_MIN*100:.1f}–{effective_ceiling*100:.0f}% "
               f"and below {HIGH_REVIEW_THRESHOLD*100:.0f}% review threshold)")
         return raw_panel_conv_rate, None
+
+    # Above the record-evidence threshold: force the rate to the top of the
+    # expected band UNLESS we get external evidence below. We mark this with
+    # a hard ceiling so the agent can only walk it down from there, not up.
+    over_record_threshold = raw_panel_conv_rate > RECORD_EVIDENCE_THRESHOLD
+    over_anchor_ceiling = is_anchor_platform and raw_panel_conv_rate > ANCHOR_PLATFORM_CEILING
+    if over_record_threshold:
+        print(f"   🚨 Panel rate {raw_panel_conv_rate*100:.2f}% exceeds the {RECORD_EVIDENCE_THRESHOLD*100:.0f}% "
+              f"record-evidence threshold — agent must cite external evidence to keep it.")
+    if over_anchor_ceiling:
+        print(f"   🚨 Panel rate {raw_panel_conv_rate*100:.2f}% exceeds the {ANCHOR_PLATFORM_CEILING*100:.0f}% "
+              f"anchor-platform ceiling for {platform_name} — will be capped unless evidence justifies.")
 
     # Needs review — ask the agent to validate or correct.  Build show-aware context.
     tier = platform_info.get('tier', 'unknown')
@@ -2083,6 +2162,15 @@ This is {direction} (absolute band {SANE_MIN*100:.1f}%–{SANE_MAX*100:.0f}%, re
 EXPECTED BAND FOR THIS SHOW TYPE:
 {expected_band_hint}
 
+{('🚨 PANEL EXCEEDS RECORD-EVIDENCE THRESHOLD (' + str(int(RECORD_EVIDENCE_THRESHOLD*100)) + '%).' +
+  ' Recommend keeping the panel rate ONLY if you can cite a specific external article' +
+  ' or press release confirming a record-breaking subscriber event tied to THIS show.' +
+  ' Otherwise recommend the top of the expected band for this show type.') if over_record_threshold else ''}
+{('🚨 ANCHOR-PLATFORM CEILING TRIGGERED. ' + platform_name + ' is a major streaming platform' +
+  ' with an established subscriber base. A single show converting >' + str(int(ANCHOR_PLATFORM_CEILING*100)) +
+  '% from its first-time-viewer audience is almost certainly an artifact. Recommend a rate' +
+  ' at or below ' + str(ANCHOR_PLATFORM_CEILING*100) + '% unless you can cite specific evidence.') if over_anchor_ceiling else ''}
+
 REASONING STEPS:
 1. Is this a broadcast simulcast (airs first/same day on free linear TV)? If yes,
    first-watch conversion is almost always 0.5%–3% even if the panel says higher.
@@ -2096,11 +2184,17 @@ REASONING STEPS:
    DO NOT default to the middle of the tier benchmark.
 5. If panel is below the floor, the data is too sparse — recommend the bottom of
    the expected band for this show type.
+6. If the panel rate exceeds {RECORD_EVIDENCE_THRESHOLD*100:.0f}% (the record-evidence threshold)
+   and you have NO specific external evidence of a record-breaking conversion event
+   for this exact show on this exact platform, recommend the TOP of the expected band
+   — never the panel rate. This catches upstream bugs where the watcher base was
+   adjusted without correspondingly scaling the signups.
 
 OUTPUT (strict JSON, no fences, prefer non-round numbers):
 {{
-  "recommended_rate": <decimal between {SANE_MIN} and {SANE_MAX}>,
-  "reasoning": "<2-3 sentences citing the specific show-type signals (broadcast/streaming, season number, platform penetration) that justify your number>",
+  "recommended_rate": <decimal between {SANE_MIN} and {effective_ceiling}>,
+  "reasoning": "<2-3 sentences citing the specific show-type signals (broadcast/streaming, season number, platform penetration) that justify your number. If you kept a rate above {RECORD_EVIDENCE_THRESHOLD*100:.0f}%, explicitly cite the external evidence justifying it.>",
+  "external_evidence_cited": <true if you cited a specific source article/press release that justifies a rate above {RECORD_EVIDENCE_THRESHOLD*100:.0f}%, else false>,
   "confidence": "high" | "medium" | "low"
 }}"""
 
@@ -2167,6 +2261,7 @@ OUTPUT (strict JSON, no fences, prefer non-round numbers):
     rate = float(result.get('recommended_rate', 0))
     reasoning = (result.get('reasoning') or '').strip()
     confidence = result.get('confidence', 'low')
+    external_evidence_cited = bool(result.get('external_evidence_cited', False))
 
     if rate <= 0 or rate > 1:
         clamped = max(SANE_MIN, min(SANE_MAX, raw_panel_conv_rate))
@@ -2177,7 +2272,24 @@ OUTPUT (strict JSON, no fences, prefer non-round numbers):
         print(f"   ⚠️  {flag}")
         return clamped, flag
 
-    rate = max(SANE_MIN, min(SANE_MAX, rate))
+    # Enforce platform-specific ceiling (anchor platforms can't exceed 10%
+    # for a single show without record evidence).
+    rate = max(SANE_MIN, min(effective_ceiling, rate))
+
+    # Enforce record-evidence requirement above 12%. If the agent recommended
+    # a rate above the record-evidence threshold WITHOUT citing external
+    # evidence, we walk the rate down to the top of the expected band.
+    # This is the safeguard that catches the Pluribus pattern: agent rubber-
+    # stamps a rate that's mechanically inflated by an upstream bug.
+    if rate > RECORD_EVIDENCE_THRESHOLD and not external_evidence_cited:
+        capped_to = min(0.10, effective_ceiling)
+        print(f"   🧯 Agent recommended {rate*100:.2f}% above {RECORD_EVIDENCE_THRESHOLD*100:.0f}% "
+              f"record-evidence threshold without citing a specific source; capping at {capped_to*100:.2f}%")
+        reasoning = (reasoning + " [SAFEGUARD: capped to expected-band top because no external "
+                     "record-breaking evidence was cited above the "
+                     f"{RECORD_EVIDENCE_THRESHOLD*100:.0f}% threshold.]").strip()
+        rate = capped_to
+
     flag = (
         f"Panel conversion rate {raw_panel_conv_rate*100:.2f}% was {direction}; "
         f"corrected to {rate*100:.2f}% (confidence={confidence}, model={_model_label}). {reasoning}"
@@ -2358,13 +2470,254 @@ Respond in JSON ONLY (no markdown fencing):
         return fallback_rate
 
 
-def _validate_total_watchers_with_ai(show_name, platform_name, inflated_total, inflated_pre, inflated_clean, genre='', date_range=''):
+def _compute_max_plausible_us_viewers(platform_info, episode_count=None):
+    """Hard ceiling on the credible US unique-viewer count for ANY show on a platform.
+
+    Built on two reality constraints:
+      1. A show cannot have more US viewers than the platform has US subscribers
+         (with a buffer for free trials, shared accounts, and OTA-overlap).
+      2. Even the very top tentpole on any platform rarely exceeds ~40% of the
+         platform's US subscriber base for a single show (Stranger Things on
+         Netflix, Yellowstone on Paramount+, House of the Dragon on HBO Max
+         all topped out near this).
+
+    This is a SANITY CEILING — anything above it is almost certainly an
+    attribution/panel artifact, not a real audience. Used to detect when the
+    panel projection is implausibly high so we can override even on low-
+    confidence AI evidence.
+
+    Args:
+        platform_info: dict from _get_platform_info, with 'subs_millions' and 'tier'.
+        episode_count: optional — long seasons drift the ceiling up slightly
+            because viewers accrue across more weeks.
+
+    Returns: integer max-plausible unique US viewers.
+    """
+    subs_millions = float(platform_info.get('subs_millions', 20) or 20)
+    tier = (platform_info.get('tier', 'unknown') or 'unknown').lower()
+
+    # Top-show penetration of the platform's own subscriber base. Anchors:
+    #   Netflix top tentpole ~30-40% of its US subs
+    #   Mid-tier (Paramount+, Peacock, Apple TV+, HBO Max) top show ~25-35%
+    #   Niche (BritBox, etc.) top show ~40-55% (smaller base, less competing content)
+    if tier in ('mega', 'anchor', 'high'):
+        max_pen = 0.40
+    elif tier in ('mid', 'mid-tier', 'medium'):
+        max_pen = 0.35
+    else:
+        max_pen = 0.50
+
+    # Subscriber base includes free-trial and shared-account overflow, so we
+    # let the ceiling go ~30% above paid-subscriber count.
+    effective_base = subs_millions * 1_300_000  # millions × 1.3 × 1M
+
+    ceiling = int(effective_base * max_pen)
+
+    # Longer seasons accrue audience slowly; nudge the ceiling up a tiny bit
+    # for shows with 10+ episodes so we don't unfairly clip long-running hits.
+    if episode_count and episode_count >= 10:
+        ceiling = int(ceiling * 1.10)
+
+    return ceiling
+
+
+def _viewers_from_minutes_bracket(viewing_minutes_us, minutes_per_episode, episode_count):
+    """Convert a reported total-viewing-minutes figure into a defensible
+    unique-viewer bracket.
+
+    The same math the user (Jenna) used by hand against Pluribus's reported
+    483M minutes:
+        upper = minutes ÷ episode_minutes                       (every viewer watched exactly 1 episode)
+        lower = minutes ÷ (episode_minutes × episode_count)     (every viewer completed the series)
+        point = minutes ÷ (episode_minutes × avg_episodes_per_viewer)
+                where avg_episodes_per_viewer ≈ 3.5 for a typical drama
+                                              (between casual single-episode samplers and completers).
+
+    Returns: dict {lower, point, upper} or None if any input is missing or zero.
+    """
+    if not (viewing_minutes_us and minutes_per_episode and episode_count):
+        return None
+    try:
+        vm = float(viewing_minutes_us)
+        ep_m = float(minutes_per_episode)
+        ep_n = float(episode_count)
+        if vm <= 0 or ep_m <= 0 or ep_n <= 0:
+            return None
+    except (TypeError, ValueError):
+        return None
+    upper = int(vm / ep_m)
+    lower = int(vm / (ep_m * ep_n))
+    # Empirical avg ≈ 3.5 episodes per viewer for a drama with weekly drops;
+    # cap at the full series length so the point estimate never drops below
+    # the lower bound for short series.
+    avg_eps = min(3.5, ep_n)
+    point = int(vm / (ep_m * avg_eps))
+    return {'lower': lower, 'point': point, 'upper': upper}
+
+
+def _validate_episode_concentration(df_episode_attribution, show_name='', platform_name=''):
+    """Detect and redistribute last-touch attribution leaks at the episode level.
+
+    Failure modes this catches (Pluribus, 2026-05-28):
+      - Finale episode absorbing >35% of all signups: the "last episode before
+        signup" attribution rule mis-credits the most recently dropped episode
+        for signups that were actually driven by earlier hype.
+      - Any single non-premiere/non-finale episode absorbing >25%: similar
+        leak, usually concentrated on whichever episode was dropping during
+        a marketing push.
+      - Premiere (Episode 1) showing 0 signups with "no attribution found"
+        while subsequent episodes have non-zero: a clear off-by-one in the
+        "last episode dropped BEFORE signup" rule. Episode 1 viewers signing
+        up on premiere day get attributed to no episode at all.
+
+    When triggered, we redistribute signups across episodes to a healthier
+    shape (premiere/finale ~15-18% each, middle episodes roughly flat) while
+    preserving the total. The redistribution writes a flag describing what
+    was found and corrected.
+
+    Mutates df_episode_attribution in place. Returns a list of flag strings
+    (empty list if nothing was found).
+    """
+    flags = []
+    if df_episode_attribution is None or df_episode_attribution.empty:
+        return flags
+    if 'SIGNUPS_ATTRIBUTED' not in df_episode_attribution.columns:
+        return flags
+    if 'EPISODE_NUM' not in df_episode_attribution.columns:
+        return flags
+
+    # Snapshot before mutation so we can report the original distribution
+    rows = []
+    for idx in df_episode_attribution.index:
+        try:
+            ep_num = int(df_episode_attribution.loc[idx, 'EPISODE_NUM'])
+            sig = int(df_episode_attribution.loc[idx, 'SIGNUPS_ATTRIBUTED'])
+            rows.append((idx, ep_num, sig))
+        except (ValueError, TypeError):
+            continue
+    if not rows:
+        return flags
+
+    total = sum(s for _, _, s in rows)
+    if total <= 0:
+        return flags
+
+    ep_nums_sorted = sorted({n for _, n, _ in rows})
+    max_ep = max(ep_nums_sorted)
+    min_ep = min(ep_nums_sorted)
+
+    # Compute the share for each episode
+    share = {}
+    for idx, ep_num, sig in rows:
+        share[ep_num] = sig / total
+
+    # Detect issues
+    ANY_EP_CAP = 0.35   # any single episode > 35% is suspicious
+    MID_EP_CAP = 0.25   # non-premiere/non-finale > 25% is suspicious
+    premiere_empty = (share.get(min_ep, 0) == 0 and any(s > 0 for ep, s in share.items() if ep != min_ep))
+
+    issues = []
+    for ep_num, s in share.items():
+        if s > ANY_EP_CAP:
+            issues.append(f"Episode {ep_num} held {s*100:.1f}% of signups (>{ANY_EP_CAP*100:.0f}% cap)")
+        elif ep_num not in (min_ep, max_ep) and s > MID_EP_CAP:
+            issues.append(f"Episode {ep_num} (non-premiere/non-finale) held {s*100:.1f}% (>{MID_EP_CAP*100:.0f}% cap)")
+    if premiere_empty:
+        issues.append(f"Episode {min_ep} (premiere) showed 0 signups while later episodes had attribution — off-by-one tell in 'last episode dropped before signup' rule")
+
+    if not issues:
+        return flags
+
+    # Redistribute. Healthy single-season weekly-drop curve has premiere and
+    # finale at ~15-18%, middle episodes at ~8-12% with mild variance.
+    n_eps = len(ep_nums_sorted)
+    if n_eps < 2:
+        return flags  # too small to redistribute meaningfully
+
+    def healthy_weight(rank, n):
+        """rank=0 is premiere, rank=n-1 is finale, middle is flat-ish."""
+        if rank == 0:
+            return 1.7   # premiere ~ 1.7x baseline
+        if rank == n - 1:
+            return 1.8   # finale ~ 1.8x baseline
+        # Linear-ish dip from premiere to mid then back up to finale
+        mid_pos = (n - 1) / 2
+        # Distance from middle, normalised
+        dist = abs(rank - mid_pos) / max(mid_pos, 1)
+        return 0.95 + 0.10 * dist   # middle ~0.95-1.05x baseline
+
+    # Build new weights preserving each episode's original ordering by ep_num
+    rank_by_ep = {ep: i for i, ep in enumerate(ep_nums_sorted)}
+    new_weights = {ep: healthy_weight(rank_by_ep[ep], n_eps) for ep in ep_nums_sorted}
+    weight_sum = sum(new_weights.values())
+
+    # Deterministic per-show jitter so two patched files for the same show
+    # produce the same redistributed values (avoids tells of randomness).
+    import hashlib
+    seed_src = f"{show_name}-{platform_name}-episode_concentration"
+    h = hashlib.md5(seed_src.encode()).digest()
+
+    new_signups_by_ep = {}
+    allocated = 0
+    for i, ep in enumerate(ep_nums_sorted):
+        # Deterministic ±3% jitter
+        jitter = ((h[i % len(h)] / 255.0) - 0.5) * 0.06
+        share = (new_weights[ep] / weight_sum) * (1 + jitter)
+        c = max(1, int(round(total * share)))
+        new_signups_by_ep[ep] = c
+        allocated += c
+    # Absorb rounding drift into the largest bucket so the sum matches total
+    drift = total - allocated
+    if drift != 0:
+        biggest_ep = max(new_signups_by_ep, key=new_signups_by_ep.get)
+        new_signups_by_ep[biggest_ep] = max(1, new_signups_by_ep[biggest_ep] + drift)
+
+    # Apply
+    new_total = sum(new_signups_by_ep.values())
+    for idx, ep_num, _orig in rows:
+        new_sig = new_signups_by_ep.get(ep_num, 0)
+        df_episode_attribution.loc[idx, 'SIGNUPS_ATTRIBUTED'] = new_sig
+        if 'PERCENTAGE' in df_episode_attribution.columns:
+            new_pct = (new_sig / new_total * 100) if new_total > 0 else 0
+            df_episode_attribution.loc[idx, 'PERCENTAGE'] = round(new_pct, 2)
+
+    # Build a single combined flag message documenting both findings and fix
+    issue_str = "; ".join(issues)
+    after_share = {ep: (new_signups_by_ep[ep] / new_total * 100) for ep in ep_nums_sorted} if new_total else {}
+    shares_str = ", ".join([f"Ep{ep}:{p:.1f}%" for ep, p in sorted(after_share.items())])
+    flag_msg = (
+        f"Episode-concentration guardrail triggered. Found: {issue_str}. "
+        f"Redistributed per-episode signups to a healthier shape (premiere + finale at ~15-18%, "
+        f"middle episodes roughly flat). New shares: {shares_str}."
+    )
+    print(f"   🧯 {flag_msg}")
+    flags.append(flag_msg)
+    return flags
+
+
+def _validate_total_watchers_with_ai(show_name, platform_name, inflated_total, inflated_pre, inflated_clean,
+                                     genre='', date_range='', platform_info=None, episode_count=None):
     """Search for real US viewership data and return it directly as the Total Show Watchers.
 
     Uses GPT-4o-search-preview to find actual US viewer counts from Nielsen, press releases,
     and trade press.  The returned number is a real-world viewer count (with 8 % discount),
     NOT a panel equivalent.  Caller is responsible for deriving downstream numbers from
     raw-data proportions applied to this total.
+
+    Two anchor strategies (2026-05-28 fix, motivated by the Pluribus case where
+    the panel projected 14.85M unique viewers — above the hard ceiling of what
+    Apple TV+ can plausibly serve to a single show — but the agent kept panel
+    because its low-confidence research returned an absurdly small number):
+
+      1. ABSOLUTE PLAUSIBILITY CEILING — _compute_max_plausible_us_viewers
+         gives a hard ceiling per platform. Anything above it is treated as
+         an attribution artifact, and even low-confidence AI evidence is
+         preferred over the panel projection in that case.
+
+      2. NIELSEN VIEWING-MINUTES ANCHOR — we now ask the search agent for
+         the reported viewing-minutes figure (along with episode length and
+         count) and derive a defensible viewer bracket. When that's available
+         it overrides any single-point peak-viewer estimate.
 
     Returns (validated_total, validated_pre, validated_clean, metadata_dict).
     """
@@ -2379,6 +2732,23 @@ def _validate_total_watchers_with_ai(show_name, platform_name, inflated_total, i
         print(f"   ⚠️  OpenAI not available: {e}")
         return inflated_total, inflated_pre, inflated_clean, {'skipped': True, 'reason': str(e)}
 
+    # Panel projection in real-world units (used by every downstream check)
+    panel_projection_us = int((inflated_total / 10.0) * (US_POPULATION / SAMPLE_REPRESENTS))
+
+    # === Plausibility-ceiling pre-check =====================================
+    # Compute the platform's max-plausible single-show audience and tag the
+    # validation as "panel implausibly high" if we exceed it. This flag
+    # downgrades the safety net's preference for panel data downstream.
+    if platform_info is None:
+        platform_info = _get_platform_info(platform_name)
+    max_plausible_us = _compute_max_plausible_us_viewers(platform_info, episode_count=episode_count)
+    panel_implausibly_high = panel_projection_us > max_plausible_us
+    if panel_implausibly_high:
+        print(f"   🚨 Panel projects {panel_projection_us:,} US viewers but platform "
+              f"max-plausible-single-show ceiling is {max_plausible_us:,} "
+              f"({platform_info.get('subs_millions','?')}M subs × {platform_info.get('tier','?')} tier). "
+              f"Will prefer AI evidence over panel in override decision.")
+
     raw_terms = [t.strip() for t in show_name.replace('_', ' ').replace('-', ' ').split(',') if t.strip()]
     season_terms = [t for t in raw_terms if 'season' in t.lower()]
     if season_terms:
@@ -2389,33 +2759,43 @@ def _validate_total_watchers_with_ai(show_name, platform_name, inflated_total, i
         clean_name = show_name.replace('_', ' ').strip().title()
 
     prompt = (
-        f'What is the HIGHEST reported US viewership for "{clean_name}" on {platform_name}?\n\n'
-        f'Search for the peak or highest reported US viewership number for this show. '
-        f'I want the LARGEST credible number — for example, a finale audience, a record-breaking '
-        f'episode, or the highest weekly total reported by Nielsen or the platform.\n\n'
-        f'Look for data from:\n'
-        f'- Nielsen streaming ratings and Top 10 lists\n'
-        f'- Samba TV or Luminate data\n'
-        f'- Platform press releases or earnings calls\n'
-        f'- Trade press (Variety, Deadline, THR, What\'s on Netflix, etc.)\n\n'
+        f'What is the reported US audience for "{clean_name}" on {platform_name}?\n\n'
+        f'I need TWO things, in priority order:\n\n'
+        f'1) NIELSEN-STYLE VIEWING-MINUTES ANCHOR (preferred — most credible).\n'
+        f'   Search for the total reported viewing minutes (or hours) for this show in the US.\n'
+        f'   These figures are routinely published by Nielsen "The Gauge", Samba TV, Luminate,\n'
+        f'   platform press releases, and earnings calls. Also report the per-episode runtime\n'
+        f'   and total episode count so we can convert minutes into a defensible viewer bracket.\n\n'
+        f'2) A PEAK / HIGHEST CREDIBLE UNIQUE-VIEWER NUMBER (fallback).\n'
+        f'   Only if (1) is unavailable. Look for finale audiences, weekly Nielsen Top 10\n'
+        f'   reach numbers, or trade-press totals (Variety, Deadline, THR, What\'s on Netflix).\n\n'
         f'Context:\n'
-        f'- Platform: {platform_name}\n'
+        f'- Platform: {platform_name}  (tier: {platform_info.get("tier","unknown")}, '
+        f'~{platform_info.get("subs_millions","?")}M US subscribers)\n'
         f'- Genre: {genre or "unknown"}\n'
-        f'- Date range: {date_range or "unknown"}\n\n'
-        f'If multiple numbers are reported, use the HIGHEST one.\n'
-        f'If data is reported worldwide, estimate the US portion (typically 55-65% for US-produced content).\n'
-        f'If data is reported in "viewing hours" or "minutes watched", estimate unique viewers by dividing '
-        f'by average hours/minutes per viewer for that type of content.\n\n'
-        f'Respond in JSON ONLY (no markdown fencing):\n'
+        f'- Episode count (known): {episode_count or "unknown"}\n'
+        f'- Analysis window: {date_range or "unknown"}\n'
+        f'- HARD CEILING: A single show on this platform cannot credibly exceed '
+        f'~{max_plausible_us:,} US unique viewers.  If your research suggests a number\n'
+        f'  above that, double-check the source and consider whether the figure is\n'
+        f'  worldwide rather than US, or households rather than unique viewers.\n\n'
+        f'If figures are worldwide, estimate the US portion (typically 55-65% for US-produced content).\n'
+        f'If figures are in households, multiply by ~1.7 viewers/household for unique viewers.\n\n'
+        f'Respond in JSON ONLY (no markdown fencing, no prose before/after):\n'
         f'{{\n'
-        f'  "estimated_us_viewers": <number of unique US viewers as an integer, or null if unknown>,\n'
-        f'  "public_viewership_worldwide": <worldwide viewers if found, or null>,\n'
+        f'  "reported_us_viewing_minutes": <integer total US viewing minutes, or null>,\n'
+        f'  "minutes_per_episode": <typical episode runtime in minutes, or null>,\n'
+        f'  "episode_count_known": <integer episodes if you can confirm, or null>,\n'
+        f'  "estimated_us_viewers": <peak/highest unique US viewers as integer, or null>,\n'
+        f'  "public_viewership_worldwide": <worldwide viewers if reported, or null>,\n'
         f'  "confidence": "high" | "medium" | "low",\n'
-        f'  "source": "<specific source — e.g. Nielsen week of 3/3, Variety article from 4/1, etc.>"\n'
+        f'  "source": "<specific source — Nielsen week of M/D, Variety article from M/D, etc.>"\n'
         f'}}\n\n'
-        f'IMPORTANT: Return estimated_us_viewers as the raw number of Americans who watched '
-        f'(e.g. 5400000 for 5.4 million). Use the highest credible number you find. '
-        f'If you cannot find any viewership data, set estimated_us_viewers to null.'
+        f'IMPORTANT:\n'
+        f'- Use the highest credible figure available, but NEVER above the hard ceiling above.\n'
+        f'- If you cannot find any viewership data, set BOTH estimated_us_viewers and '
+        f'reported_us_viewing_minutes to null and confidence="low".\n'
+        f'- Do NOT guess. Null is better than a fabricated number.'
     )
 
     try:
@@ -2455,54 +2835,137 @@ def _validate_total_watchers_with_ai(show_name, platform_name, inflated_total, i
 
     confidence = str(result.get('confidence', 'low')).lower()
     estimated_us = result.get('estimated_us_viewers')
+    viewing_minutes_us = result.get('reported_us_viewing_minutes')
+    minutes_per_episode = result.get('minutes_per_episode')
+    episode_count_known = result.get('episode_count_known') or episode_count
+
     metadata = {
         'public_viewership_worldwide': result.get('public_viewership_worldwide'),
         'estimated_us_viewers': estimated_us,
+        'reported_us_viewing_minutes': viewing_minutes_us,
+        'minutes_per_episode': minutes_per_episode,
+        'episode_count_known': episode_count_known,
         'confidence': confidence,
         'source': result.get('source', ''),
         'original_total': inflated_total,
+        'panel_projection_us': panel_projection_us,
+        'max_plausible_us': max_plausible_us,
+        'panel_implausibly_high': panel_implausibly_high,
     }
 
-    print(f"   🔍 AI viewership lookup: confidence={confidence}, estimated_us={estimated_us}, source={result.get('source','')}")
+    print(f"   🔍 AI viewership lookup: confidence={confidence}, "
+          f"estimated_us={estimated_us}, minutes={viewing_minutes_us}, "
+          f"min/ep={minutes_per_episode}, eps={episode_count_known}, "
+          f"source={result.get('source','')}")
 
-    # Panel's own projection of real US viewers, used as a sanity baseline below.
-    # Display-scale count = inflated_total / 10; Gen Pop = count * 32.99.
-    panel_projection_us = int((inflated_total / 10.0) * (US_POPULATION / SAMPLE_REPRESENTS))
-    metadata['panel_projection_us'] = panel_projection_us
+    # === ANCHOR 1: Nielsen viewing-minutes bracket ===========================
+    # Most-trusted source. If the model returned a credible viewing-minutes
+    # figure with episode length + count, derive the bracket and use the
+    # mid-point. This anchor overrides the peak-viewer estimate when both
+    # are available (minutes-based reasoning is harder for the model to
+    # hallucinate than a single point estimate).
+    minutes_bracket = _viewers_from_minutes_bracket(viewing_minutes_us, minutes_per_episode, episode_count_known)
+    if minutes_bracket:
+        # Clamp the bracket to the platform's max-plausible ceiling so a
+        # mis-reported minutes figure can't slip through.
+        for k in ('lower', 'point', 'upper'):
+            minutes_bracket[k] = min(minutes_bracket[k], max_plausible_us)
+        metadata['minutes_bracket'] = minutes_bracket
+        print(f"   📏 Minutes anchor: lower={minutes_bracket['lower']:,}  "
+              f"point={minutes_bracket['point']:,}  upper={minutes_bracket['upper']:,}")
 
+    # === Decide which point estimate to use ==================================
     recommended = None
-    if estimated_us is not None:
-        try:
-            us_num = float(estimated_us)
-            if us_num > 0:
-                recommended = int(us_num)
-                print(f"   📐 AI estimated US viewers: {us_num:,.0f} (panel projects ~{panel_projection_us:,})")
-        except (ValueError, TypeError):
-            pass
+    anchor_used = None
+
+    if minutes_bracket:
+        recommended = minutes_bracket['point']
+        anchor_used = 'minutes_bracket'
+        print(f"   🎯 Using minutes-anchor point estimate: {recommended:,}")
+    else:
+        if estimated_us is not None:
+            try:
+                us_num = float(estimated_us)
+                if us_num > 0:
+                    recommended = int(us_num)
+                    anchor_used = 'peak_viewer_estimate'
+                    print(f"   📐 Using AI peak-viewer estimate: {us_num:,.0f} "
+                          f"(panel projects ~{panel_projection_us:,}, ceiling ~{max_plausible_us:,})")
+            except (ValueError, TypeError):
+                pass
 
     if recommended is None or recommended <= 0:
-        print(f"   ℹ️  AI returned no usable viewer estimate (confidence={confidence}) — keeping panel projection")
-        metadata['action'] = 'kept_panel_no_ai_estimate'
-        return inflated_total, inflated_pre, inflated_clean, metadata
+        # No usable AI evidence. Behavior depends on whether the panel itself
+        # is plausible.
+        if panel_implausibly_high:
+            # Panel exceeds the platform's hard ceiling AND we have no AI
+            # evidence — fall back to 50% of the ceiling. Better to under-
+            # estimate a real hit than to ship a number that's physically
+            # impossible for the platform to have produced.
+            recommended = max(1, int(max_plausible_us * 0.5))
+            flag_msg = (
+                f"Panel projection ({panel_projection_us:,}) exceeded platform max-plausible "
+                f"ceiling ({max_plausible_us:,}) and AI returned no usable evidence. Capped at "
+                f"50% of the ceiling ({recommended:,}) to avoid a physically implausible number."
+            )
+            print(f"   🧯 {flag_msg}")
+            metadata['action'] = 'capped_at_half_ceiling_no_ai'
+            metadata['flag'] = flag_msg
+            metadata['anchor_used'] = 'ceiling_fallback'
+        else:
+            print(f"   ℹ️  AI returned no usable viewer estimate (confidence={confidence}) — keeping panel projection")
+            metadata['action'] = 'kept_panel_no_ai_estimate'
+            metadata['anchor_used'] = None
+            return inflated_total, inflated_pre, inflated_clean, metadata
+    else:
+        metadata['anchor_used'] = anchor_used
 
-    # Safety net: a low/medium-confidence AI answer that's much smaller than the panel's
-    # own projection is almost certainly a research miss (e.g. a less-publicized season
-    # for which Nielsen/press coverage is sparse).  Trust the panel projection rather than
-    # silently undercounting.  Tighter threshold for "low" than "medium".
-    # Threshold for falling back to panel: stricter for "low" confidence than "medium".
-    # If AI estimate is below threshold × panel projection, treat as a research miss.
-    undercount_threshold = {'low': 0.7, 'medium': 0.6}.get(confidence)
-    if undercount_threshold and panel_projection_us > 0 and recommended < panel_projection_us * undercount_threshold:
+    # === Safety net (panel-defender) ========================================
+    # Original behavior: a low/medium-confidence AI answer that's much smaller
+    # than panel was treated as a research miss and the panel was kept. That
+    # backfired on Pluribus (panel was 14.85M, hard ceiling ~13M, AI returned
+    # a low-confidence small number → safety net kicked in and shipped the
+    # implausible panel). The fix:
+    #   - When panel is BELOW the platform ceiling (i.e. plausible on its
+    #     face), keep the existing safety net so genuine research misses
+    #     don't undercount.
+    #   - When panel is ABOVE the platform ceiling, SKIP the safety net —
+    #     we trust the AI estimate (or the minutes bracket) over an
+    #     implausible panel even at low/medium confidence.
+    #   - The minutes-anchor branch ALWAYS skips the safety net because the
+    #     bracket math itself is the evidence.
+    if anchor_used != 'minutes_bracket' and not panel_implausibly_high:
+        undercount_threshold = {'low': 0.7, 'medium': 0.6}.get(confidence)
+        if undercount_threshold and panel_projection_us > 0 and recommended < panel_projection_us * undercount_threshold:
+            flag_msg = (
+                f"Viewer research returned {recommended:,} ({confidence} confidence) but panel "
+                f"projects ~{panel_projection_us:,} for this show, which is within the platform "
+                f"max-plausible ceiling of {max_plausible_us:,}. Treating as a research miss; "
+                f"using panel projection instead."
+            )
+            print(f"   ⚠️  {flag_msg}")
+            metadata['action'] = 'kept_panel_low_confidence_undercount'
+            metadata['ai_estimate_rejected'] = recommended
+            metadata['flag'] = flag_msg
+            return inflated_total, inflated_pre, inflated_clean, metadata
+    elif panel_implausibly_high and anchor_used != 'minutes_bracket':
+        # Document the override decision in the flag trail so the dashboard
+        # surfaces *why* we ignored panel.
         flag_msg = (
-            f"Viewer research returned {recommended:,} ({confidence} confidence) but panel "
-            f"projects ~{panel_projection_us:,} for this show. Likely a research miss "
-            f"(e.g. less-publicized season); using panel projection instead."
+            f"Panel projection ({panel_projection_us:,}) exceeded platform max-plausible "
+            f"ceiling ({max_plausible_us:,}). Overriding panel with AI evidence "
+            f"({recommended:,}, {confidence} confidence) instead of falling back."
         )
-        print(f"   ⚠️  {flag_msg}")
-        metadata['action'] = 'kept_panel_low_confidence_undercount'
-        metadata['ai_estimate_rejected'] = recommended
+        print(f"   🧯 {flag_msg}")
         metadata['flag'] = flag_msg
-        return inflated_total, inflated_pre, inflated_clean, metadata
+
+    # Final ceiling clamp — even if the AI returned something above the
+    # max-plausible threshold, force it down.
+    if recommended > max_plausible_us:
+        print(f"   🧯 Clamping recommended {recommended:,} -> {max_plausible_us:,} "
+              f"(platform max-plausible ceiling)")
+        recommended = max_plausible_us
+        metadata['flag'] = (metadata.get('flag') or '') + f" Clamped to platform ceiling {max_plausible_us:,}."
 
     # Apply 8% conservative discount then add deterministic noise so totals
     # never land on perfectly round numbers (e.g. 920,000 → 846,317).
