@@ -4888,11 +4888,33 @@ def enforce_credit_provider_floor(df, subject, verbose=True):
 
 SHELF_CATEGORY_DISTRIBUTION_TARGETS: dict[str, dict] = {
     # category → realistic digital-purchaser distribution targets
+    #
+    # Strategy: piece-wise linear interpolation over the "cluster zone".
+    # If a category's top-10 mean exceeds top10_mean_max, we rescale ONLY
+    # brands above rescale_above_pp using:
+    #   new = anchor_lo + (old - anchor_lo) *
+    #         (target_top - anchor_lo) / (actual_top - anchor_lo)
+    # This compresses the upper cluster while leaving mid/tail brands
+    # untouched (a uniform multiplicative scale crushes the tail and
+    # over-compresses the top).
+    #
+    # Fallback (rank-decay): if after the linear interp the top-10 std is
+    # still below `flat_line_std_pp`, the input was a flat-line cluster
+    # (Jordan Matter CPG: input 18.5-19.7%, post-interp 16.7-17.7%, std
+    # 0.26pp). In that case we re-assign top-N brands by RANK along a
+    # linear gradient from target_top → flat_line_floor_pp, preserving
+    # rank ordering but forcing a healthy spread.
+    #
+    # Tuned against user-patched Netflix CPG (top-1=18.19%, top-10
+    # mean=13.09%, healthy spread across 5-18%).
     'CPG': {
-        'top10_mean_max': 14.0,    # if actual top-10 mean > this, rescale
-        'top10_mean_target': 11.0,  # rescale so top-10 mean lands here
-        'jitter_pp': 0.7,           # ± per-brand deterministic jitter
-        'floor_pp': 0.3,            # minimum BP after scaling
+        'top10_mean_max':      14.0,  # trigger threshold
+        'rescale_above_pp':     8.0,  # leave brands below this untouched
+        'target_top_pp':       18.0,  # where the top brand should land
+        'jitter_pp':            0.4,  # ± per-brand deterministic jitter
+        'flat_line_std_pp':     1.0,  # if post-interp top-10 std < this, rank-decay
+        'flat_line_floor_pp':   9.0,  # where rank-N brand lands on rank gradient
+        'flat_line_rank_n':    15,    # how many ranks to spread
     },
 }
 
@@ -4902,11 +4924,10 @@ def enforce_shelf_category_distribution(df, subject, verbose=True):
     many unrelated brands at a too-high cluster (Jenna's "CPG basis"
     defect, recurring across all profiles).
 
-    Per category, compute:
-      scale = target_top10_mean / actual_top10_mean
-    Apply scale to every brand in the category, add per-brand md5-seeded
-    jitter so values spread naturally, renormalize Category Share.
-    Preserves relative ordering — the top brand stays the top brand.
+    Uses piece-wise linear interpolation over the upper cluster
+    (BP > rescale_above_pp), compressing it to digital-purchaser levels
+    while preserving rank order and leaving low-tier brands untouched.
+    Renormalizes Category Share afterward.
     """
     if df is None or len(df) == 0:
         return df, 0
@@ -4917,14 +4938,12 @@ def enforce_shelf_category_distribution(df, subject, verbose=True):
                   or str(df[bp_col].dtype).startswith('string'))
 
     col_u = df['Column'].astype(str).str.upper().str.strip()
-    n_categories_rescaled = 0
     n_rows_total = 0
 
     for cat, tgt in SHELF_CATEGORY_DISTRIBUTION_TARGETS.items():
         cat_idxs = df.index[col_u == cat]
         if len(cat_idxs) < 10:
             continue
-        # Parse BPs (skip rows with un-parseable values)
         parsed = []
         for idx in cat_idxs:
             v = _bp(df.at[idx, bp_col])
@@ -4932,49 +4951,97 @@ def enforce_shelf_category_distribution(df, subject, verbose=True):
                 parsed.append((idx, v))
         if len(parsed) < 10:
             continue
-        # Compute current top-10 mean
         bps_sorted = sorted([v for _, v in parsed], reverse=True)
-        top10 = bps_sorted[:10]
-        top10_mean = sum(top10) / len(top10)
+        top10_mean = sum(bps_sorted[:10]) / 10
         if top10_mean <= tgt['top10_mean_max']:
-            continue  # already in healthy range
+            continue
 
-        scale = tgt['top10_mean_target'] / top10_mean
+        anchor_lo = float(tgt['rescale_above_pp'])
+        target_top = float(tgt['target_top_pp'])
+        actual_top = bps_sorted[0]
+        # Guard against degenerate inputs (top brand below anchor)
+        denom = actual_top - anchor_lo
+        if denom <= 0.5:
+            continue
+        slope = (target_top - anchor_lo) / denom
+
         if verbose:
             print(f'   📦 shelf-distribution rebase: [{cat}] top-10 mean '
-                  f'{top10_mean:.2f}% > ceiling {tgt["top10_mean_max"]:.0f}% '
-                  f'→ scale by {scale:.4f} to target {tgt["top10_mean_target"]:.0f}%')
+                  f'{top10_mean:.2f}% > ceiling {tgt["top10_mean_max"]:.0f}%; '
+                  f'remapping [{anchor_lo:.0f}, {actual_top:.2f}]% → '
+                  f'[{anchor_lo:.0f}, {target_top:.0f}]% (slope {slope:.3f})')
 
-        # Apply scale + jitter
         n_cat = 0
         for idx, old in parsed:
+            if old <= anchor_lo:
+                continue  # mid/tail untouched
             brand = str(df.at[idx, 'Value']).strip()
             seed = int(_hl.md5(f'{subject}|{cat}|{brand}|shelf'
                                 .encode()).hexdigest()[:8], 16)
             norm = ((seed % 10000) / 10000.0 - 0.5) * 2  # -1..1
             jitter = norm * tgt['jitter_pp']
-            new = old * scale + jitter
-            new = round(max(tgt['floor_pp'], min(99.5, new)), 4)
+            new = anchor_lo + (old - anchor_lo) * slope + jitter
+            # Don't push below the anchor (preserves rank-zone boundary)
+            new = round(max(anchor_lo, min(99.5, new)), 4)
             if is_str_col:
                 df.at[idx, bp_col] = f'{new:.4f}%'
             else:
                 df.at[idx, bp_col] = new
             n_cat += 1
         n_rows_total += n_cat
-        n_categories_rescaled += 1
 
-        # Verbose top-5 before/after
+        # Flat-line fallback: if post-interp top-10 std is still tight,
+        # the input had no rank-differentiation to preserve — apply rank-
+        # based decay to force a healthy spread.
+        if 'flat_line_std_pp' in tgt:
+            post_parsed = sorted(
+                ((_bp(df.at[i, bp_col]), i)
+                 for i, _ in parsed
+                 if _bp(df.at[i, bp_col]) is not None
+                 and _bp(df.at[i, bp_col]) > anchor_lo),
+                reverse=True,
+            )
+            top10_vals = [v for v, _ in post_parsed[:10]]
+            if len(top10_vals) >= 5:
+                m = sum(top10_vals) / len(top10_vals)
+                post_std = (sum((v - m) ** 2 for v in top10_vals)
+                            / len(top10_vals)) ** 0.5
+                if post_std < tgt['flat_line_std_pp']:
+                    fl_floor = float(tgt['flat_line_floor_pp'])
+                    fl_top   = float(tgt['target_top_pp'])
+                    rank_n   = int(min(tgt['flat_line_rank_n'], len(post_parsed)))
+                    step = (fl_top - fl_floor) / max(1, rank_n - 1)
+                    if verbose:
+                        print(f'      ⚠️ flat-line detected (post-interp top-10 std={post_std:.2f}pp); '
+                              f'applying rank-decay over top-{rank_n} brands '
+                              f'[{fl_top:.0f}% → {fl_floor:.0f}%]')
+                    n_rank = 0
+                    for rank, (_old, idx) in enumerate(post_parsed[:rank_n], start=1):
+                        brand = str(df.at[idx, 'Value']).strip()
+                        seed = int(_hl.md5(
+                            f'{subject}|{cat}|{brand}|rankdecay'.encode()
+                        ).hexdigest()[:8], 16)
+                        norm = ((seed % 10000) / 10000.0 - 0.5) * 2
+                        jitter = norm * tgt['jitter_pp']
+                        target = fl_top - (rank - 1) * step + jitter
+                        target = round(max(anchor_lo, min(99.5, target)), 4)
+                        if is_str_col:
+                            df.at[idx, bp_col] = f'{target:.4f}%'
+                        else:
+                            df.at[idx, bp_col] = target
+                        n_rank += 1
+                    n_rows_total += n_rank  # additional fixes
+
         if verbose:
             new_sorted = sorted(
                 ((_bp(df.at[i, bp_col]), str(df.at[i, 'Value']))
                  for i, _ in parsed),
                 reverse=True,
             )[:5]
-            print(f'      rescaled {n_cat} brand(s); new top-5:')
+            print(f'      rescaled {n_cat} brand(s) (above {anchor_lo:.0f}%); new top-5:')
             for v, b in new_sorted:
                 print(f'         {b}: {v:.4f}%')
 
-        # Renormalize Category Share for the affected category
         if cs_col is not None:
             cs_is_str = (df[cs_col].dtype == object
                          or str(df[cs_col].dtype).startswith('string'))
@@ -4988,9 +5055,6 @@ def enforce_shelf_category_distribution(df, subject, verbose=True):
                 else:
                     df.loc[cat_idxs, cs_col] = shares.values
 
-    if verbose and n_categories_rescaled == 0:
-        # Quiet success — keep log tight when nothing to do
-        pass
     return df, n_rows_total
 
 
