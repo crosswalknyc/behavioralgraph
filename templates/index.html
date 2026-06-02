@@ -52126,6 +52126,94 @@
             'ORGANIZATIONAL MEMBERSHIPS', 'PORN MEDIA', 'TELECOM'
         ];
 
+        // Sports slice filters: Gen Pop stores major leagues under SPORTS ORGANIZATIONS
+        // (e.g. NATIONAL FOOTBALL LEAGUE) rather than NFL/NBA/MLB category buckets.
+        const SPORTS_SLICE_CATEGORY_MAP = {
+            'afc': ['AFC'], 'sports team': ['SPORTS TEAM'], 'la liga': ['LA LIGA'],
+            'metropolitan division': ['METROPOLITAN DIVISION'], 'mlb': ['MLB'], 'mls': ['MLS'],
+            'eastern conference': ['EASTERN CONFERENCE'], 'central division': ['CENTRAL DIVISION'],
+            'atlantic division': ['ATLANTIC DIVISION'], 'afc east': ['AFC EAST'], 'nba': ['NBA'],
+            'nfc east': ['NFC EAST'], 'nfc north': ['NFC NORTH'], 'nfc south': ['NFC SOUTH'],
+            'nfc west': ['NFC WEST'], 'nfl': ['NFL'], 'nfc': ['NFC'], 'afc north': ['AFC NORTH'],
+            'nwsl': ['NWSL'], 'premier league': ['PREMIER LEAGUE'], 'rugby': ['RUGBY'],
+            'serie a': ['SERIE A'], 'soccer': ['SOCCER'], 'pacific division': ['PACIFIC DIVISION'],
+            'afc south': ['AFC SOUTH'], 'afc west': ['AFC WEST'], 'al': ['AL'], 'wnba': ['WNBA'],
+            'al central': ['AL CENTRAL'], 'al east': ['AL EAST'], 'al west': ['AL WEST'],
+            'sports organizations': ['SPORTS ORGANIZATIONS', 'SPORTS ORGANIZATION'],
+            'horse racing': ['HORSE RACING']
+        };
+        const SPORTS_SLICE_ORG_NAMES = {
+            'nfl': ['NFL', 'NATIONAL FOOTBALL LEAGUE'],
+            'nba': ['NBA', 'NATIONAL BASKETBALL ASSOCIATION'],
+            'mlb': ['MLB', 'MAJOR LEAGUE BASEBALL'],
+            'wnba': ['WNBA', 'WOMENS NATIONAL BASKETBALL ASSOCIATION', 'WOMEN\'S NATIONAL BASKETBALL ASSOCIATION'],
+            'nhl': ['NHL', 'NATIONAL HOCKEY LEAGUE'],
+            'mls': ['MLS', 'MAJOR LEAGUE SOCCER']
+        };
+        const SPORTS_CORE_LEAGUE_SLICES = ['nfl', 'nba', 'mlb', 'nhl', 'wnba', 'mls'];
+
+        function getSportsItemName(item) {
+            return String(item?.name || item?.value || '').toUpperCase().trim();
+        }
+
+        function sportsNameMatchesLeagueSlice(name, sliceKey) {
+            if (!name) return false;
+            const aliases = SPORTS_SLICE_ORG_NAMES[sliceKey];
+            if (aliases && aliases.some(alias => name === alias)) return true;
+            if (sliceKey === 'nfl') {
+                return name.includes('NATIONAL FOOTBALL LEAGUE')
+                    || (name.includes('FOOTBALL LEAGUE') && !name.includes('CANADIAN') && !name.includes('ARENA'));
+            }
+            if (sliceKey === 'nba') {
+                return name.includes('NATIONAL BASKETBALL ASSOCIATION')
+                    || (name.startsWith('NATIONAL BASKETBALL') && !name.includes('WOMEN'));
+            }
+            if (sliceKey === 'mlb') {
+                return name.includes('MAJOR LEAGUE BASEBALL');
+            }
+            if (sliceKey === 'wnba') {
+                return name.includes('WOMENS NATIONAL BASKETBALL') || name.includes('WOMEN\'S NATIONAL BASKETBALL');
+            }
+            if (sliceKey === 'nhl') {
+                return name.includes('NATIONAL HOCKEY LEAGUE');
+            }
+            if (sliceKey === 'mls') {
+                return name.includes('MAJOR LEAGUE SOCCER');
+            }
+            return false;
+        }
+
+        function sportsItemMatchesSlice(item, sliceOption) {
+            if (!sliceOption || sliceOption === 'all') return true;
+            const key = String(sliceOption).toLowerCase();
+            const categoryKeys = SPORTS_SLICE_CATEGORY_MAP[key] || [String(sliceOption).toUpperCase()];
+            const originalCat = (item.originalCategory || '').toUpperCase();
+            if (categoryKeys.some(k => originalCat === k.toUpperCase())) return true;
+
+            const name = getSportsItemName(item);
+            const subcat = String(item.subcategory || '').toUpperCase().trim();
+            const originalColumn = String(item.originalColumn || '').toUpperCase();
+
+            if (SPORTS_CORE_LEAGUE_SLICES.includes(key)) {
+                if (sportsNameMatchesLeagueSlice(name, key)) return true;
+                if (sportsNameMatchesLeagueSlice(subcat, key)) return true;
+                if (originalColumn.includes(key.toUpperCase())) return true;
+                return false;
+            }
+
+            return false;
+        }
+
+        function filterSportsBySlice(items, sliceValue) {
+            if (!sliceValue || sliceValue === 'all') return items;
+            return items.filter(item => sportsItemMatchesSlice(item, sliceValue));
+        }
+
+        function sportsSliceHasItems(items, sliceOption) {
+            if (!sliceOption || sliceOption === 'all') return false;
+            return items.some(item => sportsItemMatchesSlice(item, sliceOption));
+        }
+
         function renderBehavioralCards(behavioral, highlightCategory = null, skipAggregation = false) {
             let aggregatedBehavioral;
             
@@ -52742,8 +52830,10 @@
                     talentSliceOptions.length = 0; talentSliceOptions.push('all', ..._live);
                 }
                 if (isSports) {
-                    const _sm = {'afc':['AFC'],'sports team':['SPORTS TEAM'],'la liga':['LA LIGA'],'metropolitan division':['METROPOLITAN DIVISION'],'mlb':['MLB'],'mls':['MLS'],'eastern conference':['EASTERN CONFERENCE'],'central division':['CENTRAL DIVISION'],'atlantic division':['ATLANTIC DIVISION'],'afc east':['AFC EAST'],'nba':['NBA'],'nfc east':['NFC EAST'],'nfc north':['NFC NORTH'],'nfc south':['NFC SOUTH'],'nfc west':['NFC WEST'],'nfl':['NFL'],'nfc':['NFC'],'afc north':['AFC NORTH'],'nwsl':['NWSL'],'premier league':['PREMIER LEAGUE'],'rugby':['RUGBY'],'serie a':['SERIE A'],'soccer':['SOCCER'],'pacific division':['PACIFIC DIVISION'],'afc south':['AFC SOUTH'],'afc west':['AFC WEST'],'al':['AL'],'wnba':['WNBA'],'al central':['AL CENTRAL'],'al east':['AL EAST'],'al west':['AL WEST'],'sports organizations':['SPORTS ORGANIZATIONS','SPORTS ORGANIZATION'],'horse racing':['HORSE RACING']};
-                    const _live = _hasOrigCatItems(sportsSliceOptions, o => _sm[o.toLowerCase()] || [o.toUpperCase()]);
+                    const _live = sportsSliceOptions.filter(o => {
+                        if (o === 'all') return false;
+                        return sportsSliceHasItems(items, o);
+                    });
                     sportsSliceOptions.length = 0; sportsSliceOptions.push('all', ..._live);
                 }
                 if (isAppPlatform) { const _live = _hasGenericItems(appPlatformSliceOptions); appPlatformSliceOptions.length = 0; appPlatformSliceOptions.push('all', ..._live); }
@@ -52816,7 +52906,7 @@
                             ${isSports ? `
                                 <select class="behavioral-slice-select" id="slice-${catId}" onchange="sliceSports('${catId}', '${cat}', this.value)" style="flex: 1; min-width: 80px; padding: 0.35rem 0.5rem; font-size: 0.75rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary);">
                                     <option value="all">Show All</option>
-                                    ${sportsSliceOptions.filter(opt => opt !== 'all').map(opt => `<option value="${opt}">${capitalizeWords(opt)}</option>`).join('')}
+                                    ${sportsSliceOptions.filter(opt => opt !== 'all').map(opt => `<option value="${opt}">${formatSliceOption(opt)}</option>`).join('')}
                                 </select>
                             ` : ''}
                             ${isTalent ? `
@@ -53624,24 +53714,7 @@
                         return sliceKeywords.some(keyword => nameUpper.includes(keyword));
                     });
                 } else if (catUpper === 'SPORTS') {
-                    const sliceMap = {
-                        'afc': ['AFC'], 'sports team': ['SPORTS TEAM'], 'la liga': ['LA LIGA'],
-                        'metropolitan division': ['METROPOLITAN DIVISION'], 'mlb': ['MLB'], 'mls': ['MLS'],
-                        'eastern conference': ['EASTERN CONFERENCE'], 'central division': ['CENTRAL DIVISION'],
-                        'atlantic division': ['ATLANTIC DIVISION'], 'afc east': ['AFC EAST'], 'nba': ['NBA'],
-                        'nfc east': ['NFC EAST'], 'nfc north': ['NFC NORTH'], 'nfc south': ['NFC SOUTH'],
-                        'nfc west': ['NFC WEST'], 'nfl': ['NFL'], 'nfc': ['NFC'], 'afc north': ['AFC NORTH'],
-                        'nwsl': ['NWSL'], 'premier league': ['PREMIER LEAGUE'], 'rugby': ['RUGBY'],
-                        'serie a': ['SERIE A'], 'soccer': ['SOCCER'], 'pacific division': ['PACIFIC DIVISION'],
-                        'afc south': ['AFC SOUTH'], 'afc west': ['AFC WEST'], 'al': ['AL'], 'wnba': ['WNBA'],
-                        'al central': ['AL CENTRAL'], 'al east': ['AL EAST'], 'al west': ['AL WEST'],
-                        'sports organizations': ['SPORTS ORGANIZATIONS', 'SPORTS ORGANIZATION'], 'horse racing': ['HORSE RACING']
-                    };
-                    const sliceKeywords = sliceMap[sliceValue.toLowerCase()] || [sliceValue.toUpperCase()];
-                    filtered = items.filter(item => {
-                        const originalCat = item.originalCategory || '';
-                        return sliceKeywords.some(keyword => originalCat.toUpperCase() === keyword.toUpperCase());
-                    });
+                    filtered = filterSportsBySlice(items, sliceValue);
                 } else if (catUpper === 'TALENT') {
                     const sliceMap = {
                         'actor': ['ACTOR'], 'athlete': ['ATHLETE'], 'host/personality': ['HOST/PERSONALITY'],
@@ -53768,24 +53841,7 @@
                         return sliceKeywords.some(keyword => nameUpper.includes(keyword));
                     });
                 } else if (catUpper === 'SPORTS') {
-                    const sliceMap = {
-                        'afc': ['AFC'], 'sports team': ['SPORTS TEAM'], 'la liga': ['LA LIGA'],
-                        'metropolitan division': ['METROPOLITAN DIVISION'], 'mlb': ['MLB'], 'mls': ['MLS'],
-                        'eastern conference': ['EASTERN CONFERENCE'], 'central division': ['CENTRAL DIVISION'],
-                        'atlantic division': ['ATLANTIC DIVISION'], 'afc east': ['AFC EAST'], 'nba': ['NBA'],
-                        'nfc east': ['NFC EAST'], 'nfc north': ['NFC NORTH'], 'nfc south': ['NFC SOUTH'],
-                        'nfc west': ['NFC WEST'], 'nfl': ['NFL'], 'nfc': ['NFC'], 'afc north': ['AFC NORTH'],
-                        'nwsl': ['NWSL'], 'premier league': ['PREMIER LEAGUE'], 'rugby': ['RUGBY'],
-                        'serie a': ['SERIE A'], 'soccer': ['SOCCER'], 'pacific division': ['PACIFIC DIVISION'],
-                        'afc south': ['AFC SOUTH'], 'afc west': ['AFC WEST'], 'al': ['AL'], 'wnba': ['WNBA'],
-                        'al central': ['AL CENTRAL'], 'al east': ['AL EAST'], 'al west': ['AL WEST'],
-                        'sports organizations': ['SPORTS ORGANIZATIONS', 'SPORTS ORGANIZATION'], 'horse racing': ['HORSE RACING']
-                    };
-                    const sliceKeywords = sliceMap[sliceValue.toLowerCase()] || [sliceValue.toUpperCase()];
-                    items = items.filter(item => {
-                        const originalCat = item.originalCategory || '';
-                        return sliceKeywords.some(keyword => originalCat.toUpperCase() === keyword.toUpperCase());
-                    });
+                    items = filterSportsBySlice(items, sliceValue);
                 } else if (catUpper === 'TALENT') {
                     const sliceMap = {
                         'actor': ['ACTOR'], 'athlete': ['ATHLETE'], 'host/personality': ['HOST/PERSONALITY'],
@@ -53846,50 +53902,7 @@
             // Filter items based on slice
             let filtered = items;
             if (sliceValue && sliceValue !== 'all') {
-                // Map slice values to category names (case-insensitive)
-                const sliceMap = {
-                    'afc': ['AFC'],
-                    'sports team': ['SPORTS TEAM'],
-                    'la liga': ['LA LIGA'],
-                    'metropolitan division': ['METROPOLITAN DIVISION'],
-                    'mlb': ['MLB'],
-                    'mls': ['MLS'],
-                    'eastern conference': ['EASTERN CONFERENCE'],
-                    'central division': ['CENTRAL DIVISION'],
-                    'atlantic division': ['ATLANTIC DIVISION'],
-                    'afc east': ['AFC EAST'],
-                    'nba': ['NBA'],
-                    'nfc east': ['NFC EAST'],
-                    'nfc north': ['NFC NORTH'],
-                    'nfc south': ['NFC SOUTH'],
-                    'nfc west': ['NFC WEST'],
-                    'nfl': ['NFL'],
-                    'nfc': ['NFC'],
-                    'afc north': ['AFC NORTH'],
-                    'nwsl': ['NWSL'],
-                    'premier league': ['PREMIER LEAGUE'],
-                    'rugby': ['RUGBY'],
-                    'serie a': ['SERIE A'],
-                    'soccer': ['SOCCER'],
-                    'pacific division': ['PACIFIC DIVISION'],
-                    'afc south': ['AFC SOUTH'],
-                    'afc west': ['AFC WEST'],
-                    'al': ['AL'],
-                    'wnba': ['WNBA'],
-                    'al central': ['AL CENTRAL'],
-                    'al east': ['AL EAST'],
-                    'al west': ['AL WEST'],
-                    'sports organizations': ['SPORTS ORGANIZATIONS', 'SPORTS ORGANIZATION'],
-                    'horse racing': ['HORSE RACING']
-                };
-                
-                const sliceKeywords = sliceMap[sliceValue.toLowerCase()] || [sliceValue.toUpperCase()];
-                
-                // Filter items by original category
-                filtered = items.filter(item => {
-                    const originalCat = item.originalCategory || '';
-                    return sliceKeywords.some(keyword => originalCat.toUpperCase() === keyword.toUpperCase());
-                });
+                filtered = filterSportsBySlice(items, sliceValue);
             }
             
             // Apply current search filter if any
