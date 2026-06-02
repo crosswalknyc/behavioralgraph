@@ -27072,6 +27072,73 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
                         else:
                             print('   ⚠️ vet-reason skipped: no OpenAI client available')
 
+                        # Post-vet streaming-floor sweep — vet-reason agent often
+                        # KEEPs streaming services below consensus on brand
+                        # profiles ("less couch-bound" bias). Re-run the
+                        # household-streaming-floor enforcer here so any
+                        # KEEP-on-FAIL streaming row gets the deterministic
+                        # rescue. Idempotent: only lifts when BP < mid - 8pp.
+                        try:
+                            from post_generation_enforcers import (
+                                enforce_household_streaming_floor as _pv_hsf,
+                            )
+                            _df_cw2, _n_hsf_post = _pv_hsf(
+                                _df_cw2, _subject, verbose=True,
+                            )
+                            if _n_hsf_post:
+                                print(f'   📺 post-vet household-streaming floor: '
+                                      f'rescued {_n_hsf_post} row(s)')
+                        except Exception as _hsf_pv_err:
+                            print(f'   ⚠️ post-vet streaming-floor skipped: {_hsf_pv_err}')
+
+                        # Post-vet safety sweep — catches the 7-defect class
+                        # observed in the Nike shipped CSV (2026-05-29):
+                        #   1. BP > 100% (YouTube 100.34%)
+                        #   2. INPUT_METADATA leak reappearing post-chain
+                        #   3. Apple+Android sum > 100% (108.04% on Nike)
+                        #   4. Mainstream auto suppressed (Toyota/Honda/Ford
+                        #      below digital consensus)
+                        #   5. Mastercard/Visa/AmEx below household consensus
+                        #   6. Walmart/Target/AA/Southwest on round X.00
+                        #      numbers from Claude arbiter / GPT vet-reason
+                        #   7. CPG top-N clustered tightly around 19%
+                        #      (detect-only — log to S3 for review)
+                        try:
+                            from post_generation_enforcers import (
+                                run_post_vet_safety_sweep as _pv_sweep,
+                            )
+                            _df_cw2, _sweep_summary = _pv_sweep(
+                                _df_cw2, _subject, verbose=True,
+                            )
+                            try:
+                                _flags = _sweep_summary.get('cluster_flags') or []
+                                if _flags and not isinstance(_flags, str):
+                                    import json as _json
+                                    import boto3 as _b3, datetime as _dt
+                                    _ts = _dt.datetime.utcnow().strftime('%Y%m%dT%H%M%SZ')
+                                    _slug = re.sub(r'[^a-z0-9]+', '_',
+                                                    _subject.lower()).strip('_')
+                                    _key = (f'audit_logs/v1/cluster_flags_'
+                                             f'{_slug}_{_ts}.json')
+                                    _b3.client('s3', region_name='us-east-2').put_object(
+                                        Bucket='dashboard-inputs', Key=_key,
+                                        Body=_json.dumps({
+                                            'subject': _subject,
+                                            'generated_at': _ts,
+                                            'summary': {k: v for k, v in
+                                                         _sweep_summary.items()
+                                                         if k != 'cluster_flags'},
+                                            'cluster_flags': _flags,
+                                        }, indent=2).encode('utf-8'),
+                                        ContentType='application/json',
+                                    )
+                                    print(f'   💾 Cluster-compression flags → '
+                                          f's3://dashboard-inputs/{_key}')
+                            except Exception as _cf_err:
+                                print(f'   ⚠️ cluster-flag persist skipped: {_cf_err}')
+                        except Exception as _sweep_err:
+                            print(f'   ⚠️ post-vet safety sweep skipped: {_sweep_err}')
+
                         # Persist the markdown vet report to S3
                         if _vet_md:
                             try:

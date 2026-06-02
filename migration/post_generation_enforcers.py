@@ -4357,7 +4357,13 @@ def enforce_household_streaming_floor(df, subject, verbose=True):
         target = mid * HSF_TARGET_PCT + norm * 1.5  # mid ±1.5pp jitter
         target = max(0.5, min(99.5, round(target, 4)))
 
-        df.at[idx, bp_col] = target
+        # Write in the column's existing dtype: string col gets formatted "%"
+        # string, numeric col gets float. Pandas rejects float-into-string
+        # assignment which silently broke the Netflix run.
+        if df[bp_col].dtype == object or str(df[bp_col].dtype).startswith('string'):
+            df.at[idx, bp_col] = f'{target:.4f}%'
+        else:
+            df.at[idx, bp_col] = target
         n_lifts += 1
         cats_renorm.add(cat_u)
         examples.append((cat_u, brand_u, cur_bp, target, mid))
@@ -4375,12 +4381,19 @@ def enforce_household_streaming_floor(df, subject, verbose=True):
     # still sum to 100%. Mirrors the in-place fix logic for Nike.
     if n_lifts and cs_col is not None:
         c_upper = df['Column'].astype(str).str.upper().str.strip()
+        cs_is_str = (df[cs_col].dtype == object or
+                     str(df[cs_col].dtype).startswith('string'))
         for cat_u in cats_renorm:
             idxs = df.index[c_upper == cat_u]
             bps = df.loc[idxs, bp_col].apply(_bp)
             total = bps.sum(skipna=True)
             if total and total > 0:
-                df.loc[idxs, cs_col] = (bps / total * 100).round(4).values
+                shares = (bps / total * 100).round(4)
+                if cs_is_str:
+                    df.loc[idxs, cs_col] = shares.apply(
+                        lambda v: f'{v:.4f}' if pd.notna(v) else v).values
+                else:
+                    df.loc[idxs, cs_col] = shares.values
 
     return df, n_lifts
 
@@ -4589,3 +4602,640 @@ def run_all_enforcers(df, subject, brand_category=None, verbose=True):
     except Exception as e:
         print(f"   ⚠️ enforcer recompute_raw_and_projection failed: {e}")
     return df, total
+
+
+# ============================================================================
+# Post-vet safety sweep — runs AFTER agent_reason_vet_failures has finished
+# Added 2026-05-29 from Nike-output defect list (notes from Jenna):
+#   1. YouTube 100.34%  →  hard-cap >100% non-subject rows
+#   2. INPUT_METADATA leak re-appears post-enforcer-chain  →  late re-strip
+#   3. Apple 76.55% + Android 31.49% sum to 108%  →  mobile-OS balance
+#   4. Tesla 49.8% / Lexus 19.1% / Rivian 13.2% inflated; Ford/Toyota/Honda
+#      /Chevy suppressed  →  mainstream-auto floor for brand profiles
+#   5. Mastercard 25.02% (real ~62%)  →  credit-provider floor
+#   6. Walmart/Target/AA/Southwest landed on X.00 round numbers from the
+#      Claude arbiter / GPT-4o vet-reason agent  →  re-run dejitter
+#   7. CPG top-N clustered tightly around 19% (Coca-Cola=19.74, Doritos=19.72,
+#      Colgate=19.59, Gillette=19.42...)  →  cluster-compression detector
+#      (log only — auto-fix would risk making things worse)
+# ============================================================================
+
+import re as _re_sweep
+
+# ---------------------------------------------------------------------------
+# Bug 1: BP > 100% hard ceiling
+# ---------------------------------------------------------------------------
+
+def enforce_bp_hard_ceiling(df, subject, verbose=True):
+    """Cap any BP at 99.99% EXCEPT the canonical BRAND INPUT subject row,
+    which legitimately sits at exactly 100.0%.
+
+    Nike shipped with SOCIAL MEDIA / YOUTUBE = 100.3406% — mathematically
+    impossible (you can't have more than 100% of a sample doing X).
+    """
+    if df is None or len(df) == 0:
+        return df, 0
+    bp_col, _, _, _ = _detect_cols(df)
+    if bp_col is None:
+        return df, 0
+    is_str_col = (df[bp_col].dtype == object
+                  or str(df[bp_col].dtype).startswith('string'))
+    col_u = df['Column'].astype(str).str.upper().str.strip()
+    n_caps, examples = 0, []
+    for idx, raw in df[bp_col].items():
+        cur = _bp(raw)
+        if cur is None or cur <= 100.0:
+            continue
+        # BRAND INPUT row at exactly 100% is legitimate; anything else
+        # > 100% is a math bug.
+        if col_u.at[idx] == 'BRAND INPUT' and abs(cur - 100.0) < 0.001:
+            continue
+        new = 99.99
+        if is_str_col:
+            df.at[idx, bp_col] = f'{new:.4f}%'
+        else:
+            df.at[idx, bp_col] = new
+        n_caps += 1
+        examples.append((df.at[idx, 'Column'], df.at[idx, 'Value'], cur))
+    if n_caps and verbose:
+        print(f'   🚧 bp-hard-ceiling: capped {n_caps} row(s) at 99.99% '
+              f'(was >100% — math impossible)')
+        for c, v, old in examples[:5]:
+            print(f'      [{c}] {v}: {old:.4f}% → 99.99%')
+    return df, n_caps
+
+
+# ---------------------------------------------------------------------------
+# Bug 3: Mobile-OS balance (Apple vs Android)
+# ---------------------------------------------------------------------------
+
+# US market share 2025: ~57% iOS / ~43% Android. Most adult profiles skew
+# slightly more iOS (62/38) because digital-active audiences over-index iOS.
+# We allow per-profile drift but bound Apple+Android to [95, 105].
+MOBILE_OS_TARGET_SUM_LO = 92.0
+MOBILE_OS_TARGET_SUM_HI = 102.0
+MOBILE_OS_DEFAULT_APPLE_SHARE = 0.62  # of (Apple + Android) sum
+
+
+def enforce_mobile_os_balance(df, subject, verbose=True):
+    """Apple + Android in TECHNOLOGY/DEVICE should sum to ~95-100%
+    (every smartphone owner has one OS). If they over-tilt or under-fill,
+    renormalize while preserving the per-profile iOS-skew direction.
+
+    Nike shipped Apple=76.55% + Android=31.49% = 108.04% — impossible
+    because users have ONE phone OS.
+    """
+    if df is None or len(df) == 0:
+        return df, 0
+    bp_col, _, _, _ = _detect_cols(df)
+    if bp_col is None:
+        return df, 0
+
+    col_u = df['Column'].astype(str).str.upper().str.strip()
+    val_u = df['Value'].astype(str).str.upper().str.strip()
+    tech_mask = col_u == 'TECHNOLOGY/DEVICE'
+    apple_idx = df.index[tech_mask & (val_u == 'APPLE')]
+    android_idx = df.index[tech_mask & (val_u == 'ANDROID')]
+    if len(apple_idx) == 0 or len(android_idx) == 0:
+        return df, 0
+    ai, ndi = apple_idx[0], android_idx[0]
+    apple_bp = _bp(df.at[ai, bp_col])
+    android_bp = _bp(df.at[ndi, bp_col])
+    if apple_bp is None or android_bp is None:
+        return df, 0
+    total = apple_bp + android_bp
+    if MOBILE_OS_TARGET_SUM_LO <= total <= MOBILE_OS_TARGET_SUM_HI:
+        return df, 0
+
+    # Preserve the iOS-skew direction. If Apple was higher, keep iOS skewed;
+    # if Android was higher, keep Android skewed.
+    if apple_bp + android_bp > 0:
+        apple_share = apple_bp / (apple_bp + android_bp)
+    else:
+        apple_share = MOBILE_OS_DEFAULT_APPLE_SHARE
+    # Clamp the iOS share to [0.45, 0.75] — even Android-skewed audiences
+    # rarely fall below 45% iOS in US adult panels.
+    apple_share = max(0.45, min(0.75, apple_share))
+    target_sum = (MOBILE_OS_TARGET_SUM_LO + MOBILE_OS_TARGET_SUM_HI) / 2  # 97
+    new_apple = round(target_sum * apple_share, 4)
+    new_android = round(target_sum * (1 - apple_share), 4)
+    # Deterministic jitter so different profiles don't all land on same value
+    seed = int(_hl.md5(f'{subject}|mobile-os'.encode()).hexdigest()[:8], 16)
+    norm = ((seed % 1000) / 1000.0 - 0.5) * 2  # -1..1
+    new_apple = round(max(40.0, min(85.0, new_apple + norm * 1.2)), 4)
+    new_android = round(max(15.0, min(55.0, new_android - norm * 0.8)), 4)
+
+    is_str_col = (df[bp_col].dtype == object
+                  or str(df[bp_col].dtype).startswith('string'))
+    for idx, new in [(ai, new_apple), (ndi, new_android)]:
+        if is_str_col:
+            df.at[idx, bp_col] = f'{new:.4f}%'
+        else:
+            df.at[idx, bp_col] = new
+
+    if verbose:
+        print(f'   📱 mobile-os balance: Apple+Android was {total:.2f}% '
+              f'(target {MOBILE_OS_TARGET_SUM_LO:.0f}-{MOBILE_OS_TARGET_SUM_HI:.0f}%)')
+        print(f'      APPLE:   {apple_bp:.2f}% → {new_apple:.4f}%')
+        print(f'      ANDROID: {android_bp:.2f}% → {new_android:.4f}%')
+    return df, 2
+
+
+# ---------------------------------------------------------------------------
+# Bugs 4+5: Generic consensus-floor enforcer for mainstream brand categories
+# (auto + credit) — same pattern as HOUSEHOLD_STREAMING_CONSENSUS_MID
+# ---------------------------------------------------------------------------
+
+# Auto: digital-penetration mids for 2025 US mass-market household audiences.
+# These are DIGITAL BP (% of audience that visited brand domains/pages), NOT
+# ownership %. Tesla/Lexus/Rivian aren't suppressed — the LLM was OVER-tilting
+# them. The fix is a FLOOR on mainstream brands, not a CEILING on EV/luxury.
+AUTOMOBILE_CONSENSUS_MID: dict[tuple[str, str], float] = {
+    ('AUTOMOBILE', 'TOYOTA'):     38.0,
+    ('AUTOMOBILE', 'HONDA'):      32.0,
+    ('AUTOMOBILE', 'FORD'):       36.0,
+    ('AUTOMOBILE', 'CHEVROLET'):  29.0,
+    ('AUTOMOBILE', 'NISSAN'):     22.0,
+    ('AUTOMOBILE', 'HYUNDAI'):    20.0,
+    ('AUTOMOBILE', 'KIA'):        18.0,
+    ('AUTOMOBILE', 'SUBARU'):     15.0,
+    ('AUTOMOBILE', 'JEEP'):       24.0,
+    ('AUTOMOBILE', 'DODGE'):      14.0,
+    ('AUTOMOBILE', 'RAM'):        13.0,
+    ('AUTOMOBILE', 'VOLKSWAGEN'): 14.0,
+    ('AUTOMOBILE', 'GMC'):        16.0,
+}
+
+# Credit: digital BPs for major card networks (2025 US adult panels).
+CREDIT_PROVIDER_CONSENSUS_MID: dict[tuple[str, str], float] = {
+    ('CREDIT PROVIDER', 'VISA'):                 64.0,
+    ('CREDIT PROVIDER', 'MASTERCARD'):           52.0,
+    ('CREDIT PROVIDER', 'AMERICAN EXPRESS'):     28.0,
+    ('CREDIT PROVIDER', 'DISCOVER'):             24.0,
+    ('CREDIT PROVIDER', 'DISCOVER CREDIT CARD'): 24.0,
+    ('CREDIT PROVIDER', 'CAPITAL ONE'):          26.0,
+}
+
+CONSENSUS_FLOOR_TRIGGER_GAP_PCT = 8.0
+CONSENSUS_FLOOR_TARGET_PCT = 0.96
+
+
+def _generic_consensus_floor(df, subject, consensus_mid: dict,
+                              floor_name: str, emoji: str = '🎯',
+                              brand_profiles_only: bool = False,
+                              verbose: bool = True):
+    """Generic consensus-floor enforcer, parameterized by a (col,brand)→mid dict."""
+    if df is None or len(df) == 0:
+        return df, 0
+    if brand_profiles_only:
+        is_brand, brand_cat = _is_brand_profile(df)
+        if not is_brand:
+            return df, 0
+    bp_col, cs_col, _, _ = _detect_cols(df)
+    if bp_col is None:
+        return df, 0
+    is_str_col = (df[bp_col].dtype == object
+                  or str(df[bp_col].dtype).startswith('string'))
+    col_u = df['Column'].astype(str).str.upper().str.strip()
+    val_u = df['Value'].astype(str).str.upper().str.strip()
+    n_lifts, examples, cats_renorm = 0, [], set()
+
+    for (cat_u, brand_u), mid in consensus_mid.items():
+        mask = (col_u == cat_u) & (val_u == brand_u)
+        if not mask.any():
+            continue
+        idx = df.index[mask][0]
+        cur = _bp(df.at[idx, bp_col])
+        if cur is None or cur >= mid - CONSENSUS_FLOOR_TRIGGER_GAP_PCT:
+            continue
+        seed = int(_hl.md5(f'{subject}|{cat_u}|{brand_u}|{floor_name}'
+                          .encode()).hexdigest()[:8], 16)
+        norm = ((seed % 10000) / 10000.0 - 0.5) * 2
+        target = mid * CONSENSUS_FLOOR_TARGET_PCT + norm * 1.5
+        target = round(max(0.5, min(99.5, target)), 4)
+        if is_str_col:
+            df.at[idx, bp_col] = f'{target:.4f}%'
+        else:
+            df.at[idx, bp_col] = target
+        n_lifts += 1
+        cats_renorm.add(cat_u)
+        examples.append((cat_u, brand_u, cur, target, mid))
+
+    if n_lifts and verbose:
+        print(f'   {emoji} {floor_name}: lifted {n_lifts} row(s)')
+        for c, b, old, new, mid in examples:
+            print(f'      [{c}] {b}: {old:.2f}% → {new:.4f}% (consensus {mid:.0f}%)')
+
+    if n_lifts and cs_col is not None:
+        cs_is_str = (df[cs_col].dtype == object
+                     or str(df[cs_col].dtype).startswith('string'))
+        for cat_u in cats_renorm:
+            idxs = df.index[col_u == cat_u]
+            bps = df.loc[idxs, bp_col].apply(_bp)
+            total = bps.sum(skipna=True)
+            if total and total > 0:
+                shares = (bps / total * 100).round(4)
+                if cs_is_str:
+                    df.loc[idxs, cs_col] = shares.apply(
+                        lambda v: f'{v:.4f}' if pd.notna(v) else v).values
+                else:
+                    df.loc[idxs, cs_col] = shares.values
+    return df, n_lifts
+
+
+def enforce_household_auto_floor(df, subject, verbose=True):
+    """Lift mainstream auto brands (Toyota/Honda/Ford/Chevy/etc.) on brand
+    profiles when LLM agent suppressed them in favor of Tesla/Lexus/Rivian
+    archetype bias."""
+    return _generic_consensus_floor(
+        df, subject, AUTOMOBILE_CONSENSUS_MID,
+        'household-auto floor', emoji='🚗',
+        brand_profiles_only=True, verbose=verbose,
+    )
+
+
+def enforce_credit_provider_floor(df, subject, verbose=True):
+    """Lift major card networks (Visa/Mastercard/AmEx/Discover) when LLM
+    agent suppressed them below household digital-penetration consensus.
+    Applies to BOTH brand and talent profiles — everyone uses Visa."""
+    return _generic_consensus_floor(
+        df, subject, CREDIT_PROVIDER_CONSENSUS_MID,
+        'credit-provider floor', emoji='💳',
+        brand_profiles_only=False, verbose=verbose,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Shelf-category distribution basis correction (Jenna 2026-05-29 PM note)
+#
+# Defect: category-agent generates flat-line clusters at too-high BP basis
+# for shelf-CPG-style categories. The dashboard reads digital-PURCHASER
+# penetration; the agent has been reading toward a blended shelf/engagement
+# number.
+#
+# Nike pre-Claude CPG: top-10 mean=19.29%, std=0.34pp (Coca-Cola, Doritos,
+#   Colgate, Gillette, Dr Pepper, Gatorade, Bounty, Red Bull all at 19%±0.4)
+# Paramount+ CPG: top-10 mean=20.21% (Pepsi 23.84, Coca-Cola 25.59, then
+#   13 brands cluttered at 18-19%)
+# User's hand-patched Netflix CPG: top-10 mean ~10-12%, brands spread
+#   across 5-18% with proper differentiation
+#
+# Rule: if a shelf category's top-10 mean exceeds its realistic ceiling,
+# rescale ALL brands in that category by (target / actual) with per-brand
+# deterministic jitter to prevent re-clustering, preserving relative
+# ordering. Renormalize Category Share afterward.
+# ---------------------------------------------------------------------------
+
+SHELF_CATEGORY_DISTRIBUTION_TARGETS: dict[str, dict] = {
+    # category → realistic digital-purchaser distribution targets
+    #
+    # Strategy: piece-wise linear interpolation over the "cluster zone".
+    # If a category's top-10 mean exceeds top10_mean_max, we rescale ONLY
+    # brands above rescale_above_pp using:
+    #   new = anchor_lo + (old - anchor_lo) *
+    #         (target_top - anchor_lo) / (actual_top - anchor_lo)
+    # This compresses the upper cluster while leaving mid/tail brands
+    # untouched (a uniform multiplicative scale crushes the tail and
+    # over-compresses the top).
+    #
+    # Fallback (rank-decay): if after the linear interp the top-10 std is
+    # still below `flat_line_std_pp`, the input was a flat-line cluster
+    # (Jordan Matter CPG: input 18.5-19.7%, post-interp 16.7-17.7%, std
+    # 0.26pp). In that case we re-assign top-N brands by RANK along a
+    # linear gradient from target_top → flat_line_floor_pp, preserving
+    # rank ordering but forcing a healthy spread.
+    #
+    # Tuned against user-patched Netflix CPG (top-1=18.19%, top-10
+    # mean=13.09%, healthy spread across 5-18%).
+    'CPG': {
+        'top10_mean_max':      14.0,  # trigger threshold
+        'rescale_above_pp':     8.0,  # leave brands below this untouched
+        'target_top_pp':       18.0,  # where the top brand should land
+        'jitter_pp':            0.4,  # ± per-brand deterministic jitter
+        'flat_line_std_pp':     1.0,  # if post-interp top-10 std < this, rank-decay
+        'flat_line_floor_pp':   9.0,  # where rank-N brand lands on rank gradient
+        'flat_line_rank_n':    15,    # how many ranks to spread
+    },
+}
+
+
+def enforce_shelf_category_distribution(df, subject, verbose=True):
+    """Rebase shelf-category BP basis when the category-agent flat-lines
+    many unrelated brands at a too-high cluster (Jenna's "CPG basis"
+    defect, recurring across all profiles).
+
+    Uses piece-wise linear interpolation over the upper cluster
+    (BP > rescale_above_pp), compressing it to digital-purchaser levels
+    while preserving rank order and leaving low-tier brands untouched.
+    Renormalizes Category Share afterward.
+    """
+    if df is None or len(df) == 0:
+        return df, 0
+    bp_col, cs_col, _, _ = _detect_cols(df)
+    if bp_col is None:
+        return df, 0
+    is_str_col = (df[bp_col].dtype == object
+                  or str(df[bp_col].dtype).startswith('string'))
+
+    col_u = df['Column'].astype(str).str.upper().str.strip()
+    n_rows_total = 0
+
+    for cat, tgt in SHELF_CATEGORY_DISTRIBUTION_TARGETS.items():
+        cat_idxs = df.index[col_u == cat]
+        if len(cat_idxs) < 10:
+            continue
+        parsed = []
+        for idx in cat_idxs:
+            v = _bp(df.at[idx, bp_col])
+            if v is not None:
+                parsed.append((idx, v))
+        if len(parsed) < 10:
+            continue
+        bps_sorted = sorted([v for _, v in parsed], reverse=True)
+        top10_mean = sum(bps_sorted[:10]) / 10
+        if top10_mean <= tgt['top10_mean_max']:
+            continue
+
+        anchor_lo = float(tgt['rescale_above_pp'])
+        target_top = float(tgt['target_top_pp'])
+        actual_top = bps_sorted[0]
+        # Guard against degenerate inputs (top brand below anchor)
+        denom = actual_top - anchor_lo
+        if denom <= 0.5:
+            continue
+        slope = (target_top - anchor_lo) / denom
+
+        if verbose:
+            print(f'   📦 shelf-distribution rebase: [{cat}] top-10 mean '
+                  f'{top10_mean:.2f}% > ceiling {tgt["top10_mean_max"]:.0f}%; '
+                  f'remapping [{anchor_lo:.0f}, {actual_top:.2f}]% → '
+                  f'[{anchor_lo:.0f}, {target_top:.0f}]% (slope {slope:.3f})')
+
+        n_cat = 0
+        for idx, old in parsed:
+            if old <= anchor_lo:
+                continue  # mid/tail untouched
+            brand = str(df.at[idx, 'Value']).strip()
+            seed = int(_hl.md5(f'{subject}|{cat}|{brand}|shelf'
+                                .encode()).hexdigest()[:8], 16)
+            norm = ((seed % 10000) / 10000.0 - 0.5) * 2  # -1..1
+            jitter = norm * tgt['jitter_pp']
+            new = anchor_lo + (old - anchor_lo) * slope + jitter
+            # Don't push below the anchor (preserves rank-zone boundary)
+            new = round(max(anchor_lo, min(99.5, new)), 4)
+            if is_str_col:
+                df.at[idx, bp_col] = f'{new:.4f}%'
+            else:
+                df.at[idx, bp_col] = new
+            n_cat += 1
+        n_rows_total += n_cat
+
+        # Flat-line fallback: if post-interp top-10 std is still tight,
+        # the input had no rank-differentiation to preserve — apply rank-
+        # based decay to force a healthy spread.
+        if 'flat_line_std_pp' in tgt:
+            post_parsed = sorted(
+                ((_bp(df.at[i, bp_col]), i)
+                 for i, _ in parsed
+                 if _bp(df.at[i, bp_col]) is not None
+                 and _bp(df.at[i, bp_col]) > anchor_lo),
+                reverse=True,
+            )
+            top10_vals = [v for v, _ in post_parsed[:10]]
+            if len(top10_vals) >= 5:
+                m = sum(top10_vals) / len(top10_vals)
+                post_std = (sum((v - m) ** 2 for v in top10_vals)
+                            / len(top10_vals)) ** 0.5
+                if post_std < tgt['flat_line_std_pp']:
+                    fl_floor = float(tgt['flat_line_floor_pp'])
+                    fl_top   = float(tgt['target_top_pp'])
+                    rank_n   = int(min(tgt['flat_line_rank_n'], len(post_parsed)))
+                    step = (fl_top - fl_floor) / max(1, rank_n - 1)
+                    if verbose:
+                        print(f'      ⚠️ flat-line detected (post-interp top-10 std={post_std:.2f}pp); '
+                              f'applying rank-decay over top-{rank_n} brands '
+                              f'[{fl_top:.0f}% → {fl_floor:.0f}%]')
+                    n_rank = 0
+                    for rank, (_old, idx) in enumerate(post_parsed[:rank_n], start=1):
+                        brand = str(df.at[idx, 'Value']).strip()
+                        seed = int(_hl.md5(
+                            f'{subject}|{cat}|{brand}|rankdecay'.encode()
+                        ).hexdigest()[:8], 16)
+                        norm = ((seed % 10000) / 10000.0 - 0.5) * 2
+                        jitter = norm * tgt['jitter_pp']
+                        target = fl_top - (rank - 1) * step + jitter
+                        target = round(max(anchor_lo, min(99.5, target)), 4)
+                        if is_str_col:
+                            df.at[idx, bp_col] = f'{target:.4f}%'
+                        else:
+                            df.at[idx, bp_col] = target
+                        n_rank += 1
+                    n_rows_total += n_rank  # additional fixes
+
+        if verbose:
+            new_sorted = sorted(
+                ((_bp(df.at[i, bp_col]), str(df.at[i, 'Value']))
+                 for i, _ in parsed),
+                reverse=True,
+            )[:5]
+            print(f'      rescaled {n_cat} brand(s) (above {anchor_lo:.0f}%); new top-5:')
+            for v, b in new_sorted:
+                print(f'         {b}: {v:.4f}%')
+
+        if cs_col is not None:
+            cs_is_str = (df[cs_col].dtype == object
+                         or str(df[cs_col].dtype).startswith('string'))
+            new_bps = df.loc[cat_idxs, bp_col].apply(_bp)
+            total = new_bps.sum(skipna=True)
+            if total and total > 0:
+                shares = (new_bps / total * 100).round(4)
+                if cs_is_str:
+                    df.loc[cat_idxs, cs_col] = shares.apply(
+                        lambda v: f'{v:.4f}' if pd.notna(v) else v).values
+                else:
+                    df.loc[cat_idxs, cs_col] = shares.values
+
+    return df, n_rows_total
+
+
+# ---------------------------------------------------------------------------
+# Bug 7 (detect-only): in-category cluster compression
+# ---------------------------------------------------------------------------
+
+# Categories where digital-purchase BPs should naturally spread out
+# (different brands index very differently with different audiences).
+# These should NOT have tight clusters in the top-N.
+#
+# Exclusions:
+#   - WHERE THEY SHOP / WHERE THEY DINE: hyper-broad-reach categories
+#     where mid-tier retailers genuinely cluster at 18-20% (Amazon at 82,
+#     then Target/Lowes/Home Depot/Kroger/ALDI/Costco all at ~18-22%).
+#     Flagging these as compression generates false positives.
+CLUSTER_CHECK_CATEGORIES = frozenset({
+    'CPG', 'AUTOMOBILE', 'QSR', 'INSURANCE', 'TELECOM', 'CREDIT PROVIDER',
+    'HEALTH/BEAUTY', 'BEAUTY/WELLNESS',
+    'TECHNOLOGY/DEVICE', 'TECHNOLOGY BRAND',
+})
+CLUSTER_TOP_N = 8
+CLUSTER_STD_THRESHOLD = 1.5  # pp std across top-N
+# Only fire Check A when top-N mean is in the "too-high" zone — after
+# rebase it lands ~11%, which is healthy clustering and should not flag.
+CLUSTER_MIN_MEAN = 13.0
+
+
+def detect_category_cluster_compression(df, subject, verbose=True):
+    """Detect (don't auto-fix) categories where brands cluster too tightly
+    — a signal the category-agent or default-lock is generating templated
+    values rather than persona-grounded ones.
+
+    Uses TWO checks (either triggers a flag):
+      A. Top-N std check: top-8 std < 1.5pp with mean >= 8 (Nike pre-Claude
+         CPG: top-8 std=0.26pp, mean=19.41 — flat-line cluster)
+      B. Densest-window check: find the densest 3pp window of BP values
+         in [10, 30]%; if it contains >= 8 brands, flag (Paramount+ CPG:
+         13 brands clustered in 18-19% band even though top-2 Pepsi/
+         Coca-Cola pull the std up above 1.5).
+    """
+    if df is None or len(df) == 0:
+        return df, []
+    bp_col, _, _, _ = _detect_cols(df)
+    if bp_col is None:
+        return df, []
+    flags = []
+    col_u = df['Column'].astype(str).str.upper().str.strip()
+    for cat in CLUSTER_CHECK_CATEGORIES:
+        idxs = df.index[col_u == cat]
+        if len(idxs) < CLUSTER_TOP_N:
+            continue
+        parsed = sorted(
+            ((float(_bp(df.at[i, bp_col])), str(df.at[i, 'Value']))
+             for i in idxs if _bp(df.at[i, bp_col]) is not None),
+            reverse=True,
+        )
+        if len(parsed) < CLUSTER_TOP_N:
+            continue
+        top_n = parsed[:CLUSTER_TOP_N]
+        vals = [b[0] for b in top_n]
+        mean = sum(vals) / len(vals)
+        std = (sum((v - mean) ** 2 for v in vals) / len(vals)) ** 0.5
+
+        # Check A: top-N std
+        flag_a = (std < CLUSTER_STD_THRESHOLD and mean >= CLUSTER_MIN_MEAN)
+
+        # Check B: densest 3pp window in [13, 28]% — narrow zone so we
+        # don't flag healthy mid-tier shopping/dining categories where
+        # broad-reach brands genuinely cluster around 18-20%. Only fires
+        # on the "too-high CPG basis" pattern: 10+ brands clustered ABOVE
+        # realistic digital-purchaser levels for the category.
+        all_bps_in_zone = sorted(
+            v for v, _ in parsed if 13.0 <= v <= 28.0
+        )
+        best_count, best_lo, best_hi = 0, 0.0, 0.0
+        if all_bps_in_zone:
+            i = 0
+            for j in range(len(all_bps_in_zone)):
+                while all_bps_in_zone[j] - all_bps_in_zone[i] > 3.0:
+                    i += 1
+                cnt = j - i + 1
+                if cnt > best_count:
+                    best_count = cnt
+                    best_lo = all_bps_in_zone[i]
+                    best_hi = all_bps_in_zone[j]
+        flag_b = best_count >= 10
+
+        if not (flag_a or flag_b):
+            continue
+        flags.append({
+            'category': cat, 'top_n': CLUSTER_TOP_N,
+            'mean': round(mean, 3), 'std': round(std, 3),
+            'range': round(max(vals) - min(vals), 3),
+            'top_brands': [(b, round(v, 3)) for v, b in top_n],
+            'densest_3pp_window': {
+                'count': best_count,
+                'lo': round(best_lo, 3),
+                'hi': round(best_hi, 3),
+            },
+            'triggered_by': ('A_topN_std' if flag_a else '') +
+                             ('+' if flag_a and flag_b else '') +
+                             ('B_densest_window' if flag_b else ''),
+        })
+    if flags and verbose:
+        print(f'   🔬 cluster-compression: {len(flags)} suspect categor'
+              f'{"ies" if len(flags) > 1 else "y"}')
+        for f in flags:
+            w = f['densest_3pp_window']
+            print(f'      [{f["category"]}] mean={f["mean"]:.2f}% std={f["std"]:.2f} '
+                  f'densest 3pp window: {w["count"]} brands in [{w["lo"]:.1f}, {w["hi"]:.1f}]% '
+                  f'(triggered by {f["triggered_by"]})')
+            for b, v in f['top_brands'][:5]:
+                print(f'         {b}: {v}%')
+    return df, flags
+
+
+# ---------------------------------------------------------------------------
+# Convenience wrapper — call once from BG.py post-vet
+# ---------------------------------------------------------------------------
+
+def run_post_vet_safety_sweep(df, subject, *, verbose=True):
+    """Run the late-pass safety sweep AFTER the vet-reason agent has finished.
+
+    Order matters:
+      1. enforce_household_streaming_floor  (already wired separately in BG.py)
+      2. Mainstream-brand floors (auto, credit) — lift suppressed brands
+      3. Mobile-OS balance — normalize Apple/Android sum
+      4. Hard cap >100% — last math sanity check
+      5. Re-strip INPUT_METADATA in case anything re-introduced it
+      6. Re-dejitter — Claude/GPT outputs land on X.00 round numbers
+      7. Detector: log cluster compression (no auto-fix)
+
+    Returns (df, summary_dict) — summary contains counts + cluster flags.
+    """
+    if df is None or len(df) == 0:
+        return df, {}
+    summary: dict = {'subject': subject}
+
+    for fn, key in (
+        (enforce_household_auto_floor,        'auto_lifts'),
+        (enforce_credit_provider_floor,       'credit_lifts'),
+        (enforce_shelf_category_distribution, 'shelf_rebase_rows'),
+        (enforce_mobile_os_balance,           'mobile_os_norms'),
+        (enforce_bp_hard_ceiling,             'bp_caps'),
+        (strip_input_metadata_leakage,        'metadata_re_stripped'),
+    ):
+        try:
+            df, n = fn(df, subject, verbose=verbose)
+            summary[key] = n
+        except Exception as e:
+            summary[key] = f'ERROR: {e}'
+            if verbose:
+                print(f'   ⚠️ post-vet safety: {fn.__name__} failed: {e}')
+
+    # Re-dejitter — Claude/GPT vet outputs often land on round X.00 numbers
+    for fn, key in (
+        (dejitter_x5x0_displays,          'dejitter_x5x0'),
+        (dejitter_cross_cat_4dp_pins,     'dejitter_xcat'),
+    ):
+        try:
+            df, n = fn(df, subject, verbose=verbose)
+            summary[key] = n
+        except Exception as e:
+            summary[key] = f'ERROR: {e}'
+            if verbose:
+                print(f'   ⚠️ post-vet safety: {fn.__name__} failed: {e}')
+
+    # Detector — log but don't fix
+    try:
+        _, flags = detect_category_cluster_compression(df, subject, verbose=verbose)
+        summary['cluster_flags'] = flags
+    except Exception as e:
+        summary['cluster_flags'] = f'ERROR: {e}'
+
+    if verbose:
+        head = {k: v for k, v in summary.items()
+                if k != 'cluster_flags' and not isinstance(v, str)}
+        n_total = sum(v for v in head.values() if isinstance(v, int))
+        n_flags = len(summary.get('cluster_flags', []) or [])
+        print(f'   ✅ post-vet safety sweep complete: {n_total} fix(es), '
+              f'{n_flags} cluster flag(s)')
+
+    return df, summary
