@@ -52151,15 +52151,27 @@
             'mls': ['MLS', 'MAJOR LEAGUE SOCCER']
         };
         const SPORTS_CORE_LEAGUE_SLICES = ['nfl', 'nba', 'mlb', 'nhl', 'wnba', 'mls'];
-        // Map CSV category buckets to core league slice keys (teams + divisions).
+        // Only map unambiguous CSV category buckets — Atlantic/Central/Eastern/Pacific
+        // divisions exist in both NBA and NHL and must not inherit a league tag here.
         const SPORTS_CATEGORY_LEAGUE_SLICE = {
             'NBA': 'nba', 'NFL': 'nfl', 'MLB': 'mlb', 'NHL': 'nhl', 'MLS': 'mls', 'WNBA': 'wnba', 'NWSL': 'nwsl',
             'NFC': 'nfl', 'NFC EAST': 'nfl', 'NFC NORTH': 'nfl', 'NFC SOUTH': 'nfl', 'NFC WEST': 'nfl',
             'AFC': 'nfl', 'AFC EAST': 'nfl', 'AFC NORTH': 'nfl', 'AFC SOUTH': 'nfl', 'AFC WEST': 'nfl',
             'AL': 'mlb', 'AL CENTRAL': 'mlb', 'AL EAST': 'mlb', 'AL WEST': 'mlb',
-            'EASTERN CONFERENCE': 'nba', 'CENTRAL DIVISION': 'nba', 'ATLANTIC DIVISION': 'nba',
-            'PACIFIC DIVISION': 'nhl', 'METROPOLITAN DIVISION': 'nhl'
+            'METROPOLITAN DIVISION': 'nhl'
         };
+
+        function sportsOriginalColumnMatchesLeagueSlice(originalColumn, sliceKey) {
+            if (!originalColumn) return false;
+            const col = originalColumn.toUpperCase().trim();
+            const token = sliceKey.toUpperCase();
+            if (sliceKey === 'nba') {
+                return (col === 'NBA' || col.endsWith('_NBA') || col.startsWith('NBA_') || col.includes('_NBA_'))
+                    && !col.includes('WNBA');
+            }
+            if (sliceKey === 'wnba') return col.includes('WNBA');
+            return col === token || col.endsWith('_' + token) || col.startsWith(token + '_') || col.includes('_' + token + '_');
+        }
 
         function getSportsItemName(item) {
             return String(item?.name || item?.value || '').toUpperCase().trim();
@@ -52231,7 +52243,7 @@
                 if (Array.isArray(item.leagueTags) && item.leagueTags.includes(key)) return true;
                 if (sportsNameMatchesLeagueSlice(name, key)) return true;
                 if (sportsNameMatchesLeagueSlice(subcat, key)) return true;
-                if (originalColumn.includes(key.toUpperCase())) return true;
+                if (sportsOriginalColumnMatchesLeagueSlice(originalColumn, key)) return true;
                 return false;
             }
 
