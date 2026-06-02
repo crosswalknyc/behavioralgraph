@@ -52151,9 +52151,42 @@
             'mls': ['MLS', 'MAJOR LEAGUE SOCCER']
         };
         const SPORTS_CORE_LEAGUE_SLICES = ['nfl', 'nba', 'mlb', 'nhl', 'wnba', 'mls'];
+        // Map CSV category buckets to core league slice keys (teams + divisions).
+        const SPORTS_CATEGORY_LEAGUE_SLICE = {
+            'NBA': 'nba', 'NFL': 'nfl', 'MLB': 'mlb', 'NHL': 'nhl', 'MLS': 'mls', 'WNBA': 'wnba', 'NWSL': 'nwsl',
+            'NFC': 'nfl', 'NFC EAST': 'nfl', 'NFC NORTH': 'nfl', 'NFC SOUTH': 'nfl', 'NFC WEST': 'nfl',
+            'AFC': 'nfl', 'AFC EAST': 'nfl', 'AFC NORTH': 'nfl', 'AFC SOUTH': 'nfl', 'AFC WEST': 'nfl',
+            'AL': 'mlb', 'AL CENTRAL': 'mlb', 'AL EAST': 'mlb', 'AL WEST': 'mlb',
+            'EASTERN CONFERENCE': 'nba', 'CENTRAL DIVISION': 'nba', 'ATLANTIC DIVISION': 'nba',
+            'PACIFIC DIVISION': 'nhl', 'METROPOLITAN DIVISION': 'nhl'
+        };
 
         function getSportsItemName(item) {
             return String(item?.name || item?.value || '').toUpperCase().trim();
+        }
+
+        function buildSportsNameLeagueTags(items) {
+            const nameToLeagueTags = new Map();
+            items.forEach(item => {
+                const nameKey = getSportsItemName(item);
+                if (!nameKey) return;
+                const cat = (item.originalCategory || '').toUpperCase();
+                const slice = SPORTS_CATEGORY_LEAGUE_SLICE[cat];
+                if (slice) {
+                    if (!nameToLeagueTags.has(nameKey)) nameToLeagueTags.set(nameKey, new Set());
+                    nameToLeagueTags.get(nameKey).add(slice);
+                }
+            });
+            return nameToLeagueTags;
+        }
+
+        function attachSportsLeagueTags(items, nameToLeagueTags) {
+            return items.map(item => {
+                const tags = nameToLeagueTags.get(getSportsItemName(item));
+                return tags && tags.size
+                    ? { ...item, leagueTags: Array.from(tags) }
+                    : item;
+            });
         }
 
         function sportsNameMatchesLeagueSlice(name, sliceKey) {
@@ -52195,6 +52228,7 @@
             const originalColumn = String(item.originalColumn || '').toUpperCase();
 
             if (SPORTS_CORE_LEAGUE_SLICES.includes(key)) {
+                if (Array.isArray(item.leagueTags) && item.leagueTags.includes(key)) return true;
                 if (sportsNameMatchesLeagueSlice(name, key)) return true;
                 if (sportsNameMatchesLeagueSlice(subcat, key)) return true;
                 if (originalColumn.includes(key.toUpperCase())) return true;
@@ -52276,13 +52310,21 @@
                 ['SPORTS', 'TALENT'].forEach(aggCat => {
                     if (aggregatedBehavioral[aggCat]) {
                         const seen = new Map();
+                        const sportsNameLeagueTags = aggCat === 'SPORTS'
+                            ? buildSportsNameLeagueTags(aggregatedBehavioral[aggCat])
+                            : null;
                         aggregatedBehavioral[aggCat].forEach(item => {
-                            const key = (item.name || '').trim().toUpperCase();
+                            const key = getSportsItemName(item);
+                            if (!key) return;
                             if (!seen.has(key) || item.pct > seen.get(key).pct) {
                                 seen.set(key, item);
                             }
                         });
-                        aggregatedBehavioral[aggCat] = Array.from(seen.values());
+                        let deduped = Array.from(seen.values());
+                        if (sportsNameLeagueTags) {
+                            deduped = attachSportsLeagueTags(deduped, sportsNameLeagueTags);
+                        }
+                        aggregatedBehavioral[aggCat] = deduped;
                     }
                 });
                 
