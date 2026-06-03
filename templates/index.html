@@ -36,6 +36,33 @@
             --deck-bar-track: rgba(122, 139, 153, 0.18);
         }
 
+        /* ===========================================================
+           LIGHT THEME — user-selectable via dropdown (Settings menu).
+           Activated by setting `data-theme="light"` on <body>. Only
+           overrides the CSS custom properties — every component that
+           uses var(--bg-dark) / var(--text-primary) / etc. will re-skin
+           automatically. Hardcoded color values elsewhere keep their
+           dark look (intentional for accent badges, charts, etc.).
+           =========================================================== */
+        body[data-theme="light"] {
+            --bg-dark: #f5f7fa;
+            --bg-card: #ffffff;
+            --bg-input: #ffffff;
+            --accent-blue: #1e40af;
+            --accent-cyan: #0891b2;
+            --accent-green: #16a34a;
+            --accent-orange: #ea580c;
+            --accent-red: #dc2626;
+            --accent-lime: #65a30d;
+            --text-primary: #0a1929;
+            --text-secondary: #475569;
+            --border-color: #d1d9e6;
+        }
+        body[data-theme="light"] *::-webkit-scrollbar-track { background: #e5e9f0; }
+        body[data-theme="light"] *::-webkit-scrollbar-thumb { background: #cbd5e1; }
+        body[data-theme="light"] *::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+        body[data-theme="light"] * { scrollbar-color: #cbd5e1 #e5e9f0; }
+
         * { margin: 0; padding: 0; box-sizing: border-box; }
 
         /* Global Scrollbar Styling - Dark Theme */
@@ -12776,8 +12803,33 @@
             }
         }
     </style>
+    <script>
+        /* Apply persisted theme before render to avoid flash-of-wrong-theme.
+           Stored per-user in localStorage so different users on the same
+           machine get their own preference. Falls back to a global key when
+           we don't yet know the username (rare). */
+        (function() {
+            try {
+                var uname = ("{{ username|default('') }}" || '').trim();
+                var key = uname ? ('crosswalk_theme_' + uname) : 'crosswalk_theme';
+                var saved = localStorage.getItem(key) || localStorage.getItem('crosswalk_theme');
+                if (saved === 'light') {
+                    document.documentElement.setAttribute('data-theme', 'light');
+                }
+            } catch (e) { /* localStorage unavailable — stay on default (dark) */ }
+        })();
+    </script>
 </head>
-<body>
+<body{% if username %} data-username="{{ username }}"{% endif %}>
+    <script>
+        /* Mirror data-theme onto <body> as soon as it exists (CSS overrides
+           are scoped to body[data-theme="light"]). The pre-render script
+           above sets it on <html>; copy it down without waiting for DOMContentLoaded. */
+        (function() {
+            var t = document.documentElement.getAttribute('data-theme');
+            if (t) document.body.setAttribute('data-theme', t);
+        })();
+    </script>
     <!-- DEV ENVIRONMENT BANNER - Shown on dev site (hostname or server flag) -->
     <div id="devEnvBanner" style="display:none; position: fixed; top: 0; left: 0; right: 0; background: linear-gradient(90deg, #e94560, #ff6b6b); color: white; text-align: center; padding: 8px 16px; font-size: 13px; font-weight: 600; z-index: 999999; box-shadow: 0 2px 10px rgba(233, 69, 96, 0.4);">
         🚧 DEVELOPMENT ENVIRONMENT - Changes here won't affect the live site. <a href="https://behavioralgraph.onrender.com" style="color: white; text-decoration: underline; margin-left: 8px;">Go to Live Site →</a>
@@ -13063,6 +13115,10 @@
                                 <div class="user-dropdown-inner">
                                     <button type="button" class="user-dropdown-item" id="btnEditProfile">Edit Profile</button>
                                     <button type="button" class="user-dropdown-item" id="btnChangePassword">Change Password</button>
+                                    <button type="button" class="user-dropdown-item" id="btnToggleTheme" style="display:flex;align-items:center;justify-content:space-between;gap:0.75rem;">
+                                        <span>Appearance</span>
+                                        <span id="themeToggleLabel" style="font-size:0.75rem;color:var(--accent-cyan);font-weight:600;letter-spacing:0.04em;text-transform:uppercase;">Dark</span>
+                                    </button>
                                     <div class="user-dropdown-divider"></div>
                                     <a class="user-dropdown-item" href="/logout">Logout</a>
                                 </div>
@@ -20201,7 +20257,32 @@
                 var dropdown = document.getElementById('userDropdown');
                 var btnEdit = document.getElementById('btnEditProfile');
                 var btnPw = document.getElementById('btnChangePassword');
+                var btnTheme = document.getElementById('btnToggleTheme');
+                var themeLabel = document.getElementById('themeToggleLabel');
                 if (!trigger || !dropdown) return;
+
+                // Theme toggle — persists per-user in localStorage; pre-render
+                // script in <head> applies the saved value before paint.
+                var _themeUser = (document.body.getAttribute('data-username') || '').trim();
+                var _themeKey = _themeUser ? ('crosswalk_theme_' + _themeUser) : 'crosswalk_theme';
+                function _currentTheme() { return document.body.getAttribute('data-theme') === 'light' ? 'light' : 'dark'; }
+                function _syncThemeLabel() { if (themeLabel) themeLabel.textContent = _currentTheme() === 'light' ? 'Light' : 'Dark'; }
+                _syncThemeLabel();
+                if (btnTheme) {
+                    btnTheme.addEventListener('click', function(e) {
+                        e.stopPropagation();
+                        var next = _currentTheme() === 'light' ? 'dark' : 'light';
+                        if (next === 'light') {
+                            document.documentElement.setAttribute('data-theme', 'light');
+                            document.body.setAttribute('data-theme', 'light');
+                        } else {
+                            document.documentElement.removeAttribute('data-theme');
+                            document.body.removeAttribute('data-theme');
+                        }
+                        try { localStorage.setItem(_themeKey, next); } catch (err) {}
+                        _syncThemeLabel();
+                    });
+                }
 
                 trigger.addEventListener('click', function(e) {
                     e.stopPropagation();

@@ -52,7 +52,9 @@ logger = logging.getLogger(__name__)
 S3_CACHE_BUCKET    = os.environ.get('BLUE_IQ_CACHE_BUCKET', 'dashboard-inputs')
 S3_CACHE_PREFIX    = os.environ.get('BLUE_IQ_CACHE_PREFIX', 'blue_iq/cache/')
 S3_PARTY_PREFIX    = os.environ.get('BLUE_IQ_PARTY_PREFIX', 'blue_iq/party_imputed/')
+S3_CUBE_KEY        = os.environ.get('BLUE_IQ_CUBE_KEY', 'blue_iq/aggregates/latest.json')
 CACHE_TTL_S        = int(os.environ.get('BLUE_IQ_CACHE_TTL', '86400'))   # 24h
+CUBE_STALE_S       = int(os.environ.get('BLUE_IQ_CUBE_STALE_S', '172800'))  # 48h before warning
 MIN_CELL_SIZE      = int(os.environ.get('BLUE_IQ_MIN_CELL_SIZE', '100')) # privacy floor
 DEFAULT_LOOKBACK_DAYS = int(os.environ.get('BLUE_IQ_LOOKBACK_DAYS', '30'))
 OPENAI_MODEL       = os.environ.get('BLUE_IQ_OPENAI_MODEL', 'gpt-4o')
@@ -299,38 +301,53 @@ def _normalize_filters(filters: dict | None) -> dict:
 # ── Filter options (states/DMAs/parties) ─────────────────────────────────────
 
 def get_filter_options() -> dict:
-    """Returns the dropdown choices for the filter bar. Cached for 24h in-process."""
-    cache_key = '_filter_options_v1'
+    """Returns the dropdown choices for the filter bar.
+
+    Fast path: read state/DMA list straight from the nightly cube
+    (`all_states` and `all_dmas` keys). Sub-millisecond, no CH hit.
+
+    Fallback: if cube is missing, run two small GROUP BY queries on
+    `userdata.user_data_sanitized` (still fast — that table is small).
+    """
+    cache_key = '_filter_options_v2'
     cached = _FILTER_OPTIONS_CACHE.get(cache_key)
     if cached and (time.time() - cached['ts'] < 3600):
         return cached['data']
 
     states: list[str] = []
-    dmas: list[str]   = []
-    try:
-        rows = _ch_query("""
-            SELECT STATE, count() AS n
-            FROM userdata.user_data_sanitized
-            WHERE STATE IS NOT NULL AND STATE != ''
-            GROUP BY STATE
-            HAVING n >= %(floor)s
-            ORDER BY STATE
-        """, {'floor': MIN_CELL_SIZE})
-        states = [r[0] for r in rows if r and r[0]]
-    except Exception as e:
-        logger.warning("filter_options: state pull failed: %s", e)
-    try:
-        rows = _ch_query("""
-            SELECT DMA, count() AS n
-            FROM userdata.user_data_sanitized
-            WHERE DMA IS NOT NULL AND DMA != ''
-            GROUP BY DMA
-            HAVING n >= %(floor)s
-            ORDER BY DMA
-        """, {'floor': MIN_CELL_SIZE})
-        dmas = [r[0] for r in rows if r and r[0]]
-    except Exception as e:
-        logger.warning("filter_options: dma pull failed: %s", e)
+    dmas:   list[str] = []
+
+    cube = _load_cube()
+    if cube:
+        states = list(cube.get('all_states') or [])
+        dmas   = list(cube.get('all_dmas') or [])
+
+    if not states:
+        try:
+            rows = _ch_query("""
+                SELECT STATE, count() AS n
+                FROM userdata.user_data_sanitized
+                WHERE STATE IS NOT NULL AND STATE != ''
+                GROUP BY STATE
+                HAVING n >= %(floor)s
+                ORDER BY STATE
+            """, {'floor': MIN_CELL_SIZE})
+            states = [r[0] for r in rows if r and r[0]]
+        except Exception as e:
+            logger.warning("filter_options: state pull failed: %s", e)
+    if not dmas:
+        try:
+            rows = _ch_query("""
+                SELECT DMA, count() AS n
+                FROM userdata.user_data_sanitized
+                WHERE DMA IS NOT NULL AND DMA != ''
+                GROUP BY DMA
+                HAVING n >= %(floor)s
+                ORDER BY DMA
+            """, {'floor': MIN_CELL_SIZE})
+            dmas = [r[0] for r in rows if r and r[0]]
+        except Exception as e:
+            logger.warning("filter_options: dma pull failed: %s", e)
 
     data = {
         'parties':       VALID_PARTIES,
@@ -339,6 +356,7 @@ def get_filter_options() -> dict:
         'dmas':          dmas,
         'min_cell_size': MIN_CELL_SIZE,
         'default_lookback_days': DEFAULT_LOOKBACK_DAYS,
+        'cube_built_at': (cube or {}).get('computed_at'),
     }
     _FILTER_OPTIONS_CACHE[cache_key] = {'ts': time.time(), 'data': data}
     return data
@@ -1019,32 +1037,153 @@ def _card_demo_crosstab(uids: set[str]) -> dict:
     return out
 
 
+# ── Aggregate cube loader + slicer (PRIMARY fast path) ──────────────────────
+
+_CUBE_CACHE: dict[str, object] = {'cube': None, 'fetched_at': 0.0}
+_CUBE_INPROC_TTL_S = 300  # re-fetch the cube from S3 at most once every 5 min per worker
+
+
+def _cube_cell_key(party: str, geo_type: str, geo_value: str) -> str:
+    """Cube file uses '{party}|{state}|{dma}'. Empty for the dim we're not slicing."""
+    if geo_type == 'State':
+        return f"{party}|{geo_value}|"
+    if geo_type == 'DMA':
+        return f"{party}||{geo_value}"
+    return f"{party}||"
+
+
+def _load_cube() -> Optional[dict]:
+    """Load the cube from S3 with a short in-process TTL.
+
+    Returns None if cube is missing entirely (frontend then falls through to
+    a degraded "external-only" view). Logs a warning if cube is older than
+    CUBE_STALE_S but still returns it so we never go dark unnecessarily.
+    """
+    now = time.time()
+    if _CUBE_CACHE['cube'] is not None and (now - float(_CUBE_CACHE['fetched_at']) < _CUBE_INPROC_TTL_S):
+        return _CUBE_CACHE['cube']  # type: ignore[return-value]
+    try:
+        s3 = _s3()
+        resp = s3.get_object(Bucket=S3_CACHE_BUCKET, Key=S3_CUBE_KEY)
+        body = resp['Body'].read()
+        cube = json.loads(body.decode('utf-8'))
+        _CUBE_CACHE['cube'] = cube
+        _CUBE_CACHE['fetched_at'] = now
+        # Age warning
+        try:
+            built = datetime.fromisoformat(cube.get('computed_at', '').replace('Z', '+00:00'))
+            age = (datetime.now(timezone.utc) - built).total_seconds()
+            if age > CUBE_STALE_S:
+                logger.warning("Blue IQ cube is %.0fh old — nightly aggregator may be failing.", age / 3600)
+        except Exception:
+            pass
+        return cube
+    except Exception as e:
+        msg = str(e)
+        if 'NoSuchKey' in msg or '404' in msg:
+            logger.warning("Blue IQ cube missing at s3://%s/%s — run blue_iq_aggregator.py.",
+                           S3_CACHE_BUCKET, S3_CUBE_KEY)
+        else:
+            logger.warning("Blue IQ cube load failed: %s", e)
+        _CUBE_CACHE['cube'] = None
+        _CUBE_CACHE['fetched_at'] = now
+        return None
+
+
+def _slice_cube(cube: dict, filters: dict) -> tuple[Optional[dict], int]:
+    """Look up the relevant cell in the cube. Returns (cell_payload_or_None, panel_size)."""
+    if not cube:
+        return None, 0
+    cells = cube.get('cells') or {}
+    key = _cube_cell_key(filters['party'], filters['geo_type'], filters['geo_value'])
+    cell = cells.get(key)
+    if cell:
+        return cell, int(cell.get('uid_count', 0))
+    # If party-specific cell missing, try the 'All' party variant (still useful info)
+    if filters['party'] != 'All':
+        alt = cells.get(_cube_cell_key('All', filters['geo_type'], filters['geo_value']))
+        if alt:
+            return alt, int(alt.get('uid_count', 0))
+    return None, 0
+
+
+def _bucket_search_terms_via_global_map(top_search_queries: list[dict],
+                                          issue_buckets_global: list[dict]) -> list[dict]:
+    """Map a cell's top search queries to political-issue buckets using the
+    GLOBAL bucket assignments from the cube (no fresh OpenAI call needed).
+    """
+    if not top_search_queries or not issue_buckets_global:
+        return []
+    # Build a fast lookup from sample_queries -> bucket. Terms not in the
+    # samples fall through; they're skipped from per-cell rollup (they're
+    # represented in the absolute-national 'issue_buckets_global' card).
+    term_to_bucket: dict[str, str] = {}
+    for b in issue_buckets_global:
+        for q in (b.get('sample_queries') or []):
+            term_to_bucket[q.strip().lower()] = b['bucket']
+
+    counts: dict[str, int] = defaultdict(int)
+    examples: dict[str, list[str]] = defaultdict(list)
+    for row in top_search_queries:
+        term = (row.get('term') or '').strip().lower()
+        c = int(row.get('count') or 0)
+        if not term or c <= 0:
+            continue
+        b = term_to_bucket.get(term)
+        if not b:
+            continue
+        counts[b] += c
+        if len(examples[b]) < 8:
+            examples[b].append(row.get('term'))
+
+    if not counts:
+        # No per-cell mapping found — surface the global buckets instead so
+        # the card isn't blank. This is the "small slice" graceful path.
+        return [dict(b, sample_queries=(b.get('sample_queries') or [])[:8]) for b in issue_buckets_global[:12]]
+
+    total = sum(counts.values()) or 1
+    return [{
+        'bucket': b,
+        'count':  c,
+        'share':  round(c / total, 4),
+        'sample_queries': examples[b][:8],
+        'trend':  0.0,
+    } for b, c in sorted(counts.items(), key=lambda x: -x[1])]
+
+
 # ── Main entry point ────────────────────────────────────────────────────────
 
 def compute_panel_view(filters: dict, *, force_refresh: bool = False) -> dict:
-    """Build a Blue IQ dashboard view for the filter combo. Cache-aware."""
+    """Build a Blue IQ dashboard view for the filter combo.
+
+    Order of operations:
+      1. Try the per-filter S3 result cache (24h TTL).
+      2. Load the nightly aggregate CUBE from S3 (sub-second S3 GetObject).
+      3. Slice the cube for this filter cell.
+      4. In parallel: fetch external signals (Trends + GDELT + Wikipedia).
+      5. Blend cube + external into the card output.
+      6. Cache result and return.
+
+    If the cube is missing entirely (first-day boot, before any nightly run),
+    the response still goes out with external-only cards and a clear
+    `cube_missing=true` flag so the operator knows to run the aggregator.
+    """
     f = _normalize_filters(filters)
 
-    # 1. Try cache
+    # 1. Per-request cache (24h, identical filter combo)
     if not force_refresh:
         cached = _cache_get(f)
         if cached:
             cached['cache_hit'] = True
             return cached
 
-    start_date = (datetime.now(timezone.utc) - timedelta(days=f['lookback_days'])).strftime('%Y-%m-%d')
+    # 2. Cube lookup (sub-second S3 GetObject, then in-process cache for 5 min)
+    cube = _load_cube()
+    cell, panel_size = _slice_cube(cube, f) if cube else (None, 0)
+    suppressed = panel_size < MIN_CELL_SIZE
+    cube_missing = cube is None
 
-    # 2. Resolve the panel slice
-    try:
-        uids = _panel_uids(f['party'], f['geo_type'], f['geo_value'])
-    except Exception as e:
-        logger.warning("panel uid resolution failed: %s", e)
-        uids = set()
-
-    suppressed = len(uids) < MIN_CELL_SIZE
-    panel_size = len(uids)
-
-    # 3. External signals (best-effort, parallel-safe; we just sequentially call them).
+    # 3. External signals — ALWAYS fetched (parallel ThreadPoolExecutor inside).
     try:
         from external_signals import fetch_all_external  # type: ignore
     except ImportError:
@@ -1057,61 +1196,160 @@ def compute_panel_view(filters: dict, *, force_refresh: bool = False) -> dict:
         politician_names=politicians_for_external,
     )
 
-    # 4. Build cards. If suppressed, still let external sources fill where they can —
-    # but mark the suppression and zero out panel-specific stats.
-    if suppressed:
-        cards = {
-            'issue_buckets':   _card_issue_buckets(set(), start_date, external=external),
-            'search_engines':  [],
-            'social_media':    [],
-            'top_politicians': _card_top_politicians(set(), start_date, external=external),
-            'top_articles':    _card_top_articles(set(), start_date, external=external),
-            'turnout_intent':  {'pct': 0.0, 'panelists': 0, 'sample_queries': []},
-            'demo_crosstab':   {},
-        }
-    else:
-        cards = {
-            'issue_buckets':   _card_issue_buckets(uids, start_date, external=external),
-            'search_engines':  _card_search_engines(uids, start_date),
-            'social_media':    _card_social_media(uids, start_date),
-            'top_politicians': _card_top_politicians(uids, start_date, external=external),
-            'top_articles':    _card_top_articles(uids, start_date, external=external),
-            'turnout_intent':  _card_turnout_intent(uids, start_date),
-            'demo_crosstab':   _card_demo_crosstab(uids),
-        }
+    # 4. Build cards from cube (panel-side) + external (Trends/GDELT/Wiki).
+    issue_buckets_global = (cube or {}).get('issue_buckets_global') or []
 
-    # 5. Compare-mode (J) — only when geo is set, so we have a meaningful slice.
+    if cell:
+        panel_top_queries  = cell.get('top_search_queries') or []
+        panel_search       = cell.get('search_engines') or []
+        panel_social       = cell.get('social_media') or []
+        panel_politicians  = cell.get('top_politicians') or []
+        panel_articles     = cell.get('top_articles') or []
+        panel_turnout      = cell.get('turnout') or {'panelists': 0, 'sample_urls': []}
+        panel_demo         = cell.get('demo') or {}
+    else:
+        panel_top_queries = []
+        panel_search = []
+        panel_social = []
+        panel_politicians = []
+        panel_articles = []
+        panel_turnout = {'panelists': 0, 'sample_urls': []}
+        panel_demo = {}
+
+    # Card A — issue buckets: prefer per-cell mapping; fall back to global.
+    issue_buckets = _bucket_search_terms_via_global_map(panel_top_queries, issue_buckets_global)
+    if not issue_buckets and external.get('google_trends_top'):
+        # External-only fallback: bucket Trends terms via the global map too
+        synth = [{'term': r.get('term', ''), 'count': max(1, int(r.get('score', 0)) // 1000)}
+                 for r in external['google_trends_top']]
+        issue_buckets = _bucket_search_terms_via_global_map(synth, issue_buckets_global)
+
+    # Card D — politicians: blend panel + external (Trends + GDELT + Wiki)
+    panel_pol_counts = {r.get('name'): int(r.get('panelists', 0))
+                        for r in panel_politicians if r.get('name')}
+    top_politicians = _blend_politicians(panel_pol_counts, external,
+                                          _load_politicians()[:60])
+
+    # Card E — articles: blend panel URLs with GDELT (GDELT supplies titles + images)
+    top_articles = _blend_articles_cube(panel_articles, external.get('gdelt_articles') or [])
+
+    # Turnout
+    turnout_pct = 0.0
+    if panel_size > 0 and panel_turnout.get('panelists'):
+        turnout_pct = round(panel_turnout['panelists'] / panel_size, 4)
+
+    cards = {
+        'issue_buckets':   issue_buckets,
+        'search_engines':  _attach_share(panel_search),
+        'social_media':    _attach_share(panel_social),
+        'top_politicians': top_politicians,
+        'top_articles':    top_articles,
+        'turnout_intent':  {
+            'pct':            turnout_pct,
+            'panelists':      panel_turnout.get('panelists', 0),
+            'sample_queries': panel_turnout.get('sample_urls', [])[:8],
+        },
+        'demo_crosstab':   panel_demo,
+    }
+
+    # Compare card (only when geo is set)
     compare = {}
-    if f['geo_type'] != 'National' and f['geo_value']:
-        try:
-            compare = _build_compare(f, start_date, external)
-        except Exception as e:
-            logger.debug("compare build failed: %s", e)
-            compare = {}
+    if cube and f['geo_type'] != 'National' and f['geo_value']:
+        compare = _build_compare_from_cube(cube, f)
 
     now = datetime.now(timezone.utc)
     payload = {
-        'success':      True,
-        'filters':      f,
-        'panel_size':   panel_size,
-        'suppressed':   suppressed,
+        'success':       True,
+        'filters':       f,
+        'panel_size':    panel_size,
+        'suppressed':    suppressed,
+        'cube_missing':  cube_missing,
+        'cube_built_at': (cube or {}).get('computed_at'),
         'min_cell_size': MIN_CELL_SIZE,
-        'generated_at': now.isoformat(),
-        'stale_until':  (now + timedelta(seconds=CACHE_TTL_S)).isoformat(),
-        'cards':        cards,
-        'compare':      compare,
-        'cache_hit':    False,
+        'generated_at':  now.isoformat(),
+        'stale_until':   (now + timedelta(seconds=CACHE_TTL_S)).isoformat(),
+        'cards':         cards,
+        'compare':       compare,
+        'cache_hit':     False,
     }
-    if suppressed:
+    if cube_missing:
         payload['message'] = (
-            f'Sample below minimum cell size ({MIN_CELL_SIZE} panelists). '
-            'External signal (Trends, news, Wikipedia) shown where available; '
-            'panel-derived cards are hidden.'
+            'Nightly panel aggregate is missing. Showing external signals only '
+            '(Google Trends, GDELT, Wikipedia). Run blue_iq_aggregator.py to '
+            'populate the cube.'
+        )
+    elif suppressed:
+        payload['message'] = (
+            f'Panel sample for this slice is below minimum cell size ({MIN_CELL_SIZE} panelists). '
+            'External signals shown where available.'
         )
 
-    # 6. Cache and return.
     _cache_put(f, payload)
     return payload
+
+
+def _attach_share(rows: list[dict]) -> list[dict]:
+    """Given [{name, panelists}, ...] add a 'share' field summing to 1.0."""
+    if not rows:
+        return []
+    total = sum(int(r.get('panelists', 0)) for r in rows) or 1
+    return [{**r, 'share': round(int(r.get('panelists', 0)) / total, 4)} for r in rows]
+
+
+def _blend_articles_cube(panel_articles: list[dict], gdelt: list[dict]) -> list[dict]:
+    """Merge cube's panel-URL list with GDELT's title+image-bearing list."""
+    by_url: dict[str, dict] = {}
+    for a in gdelt:
+        u = a.get('url')
+        if not u:
+            continue
+        by_url[u] = {
+            'title':     a.get('title') or _title_from_url(u),
+            'source':    a.get('source') or '',
+            'url':       u,
+            'panelists': 0,
+            'tone':      float(a.get('tone') or 0.0),
+            'image':     a.get('social_image') or '',
+        }
+    for p in panel_articles:
+        u = p.get('url')
+        if not u:
+            continue
+        if u in by_url:
+            by_url[u]['panelists'] = max(by_url[u]['panelists'], int(p.get('panelists', 0)))
+        else:
+            by_url[u] = {
+                'title':     _title_from_url(u),
+                'source':    p.get('source') or '',
+                'url':       u,
+                'panelists': int(p.get('panelists', 0)),
+                'tone':      0.0,
+                'image':     '',
+            }
+    ranked = list(by_url.values())
+    ranked.sort(key=lambda a: (-int(a['panelists']), -abs(a.get('tone', 0.0))))
+    return ranked[:30]
+
+
+def _build_compare_from_cube(cube: dict, filters: dict) -> dict:
+    """Sliced compare card built entirely from cube cells (no fresh CH)."""
+    out = {}
+    for label, party in [('dems', 'Democrat'), ('reps', 'Republican'),
+                          ('indeps', 'Independent'), ('national', 'All')]:
+        key = _cube_cell_key(party, filters['geo_type'], filters['geo_value'])
+        c = (cube.get('cells') or {}).get(key)
+        if not c or int(c.get('uid_count', 0)) < MIN_CELL_SIZE:
+            out[label] = {'panel_size': int(c.get('uid_count', 0)) if c else 0, 'suppressed': True}
+            continue
+        size = int(c.get('uid_count', 0)) or 1
+        out[label] = {
+            'panel_size':     size,
+            'suppressed':     False,
+            'search_engines': _attach_share(c.get('search_engines', []))[:6],
+            'social_media':   _attach_share(c.get('social_media', []))[:6],
+            'turnout_pct':    round((c.get('turnout', {}).get('panelists', 0) or 0) / size, 4),
+        }
+    return out
 
 
 def _build_compare(filters: dict, start_date: str, external: dict) -> dict:
