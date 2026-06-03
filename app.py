@@ -5568,9 +5568,8 @@ def get_admin_content():
         except Exception as tst_err:
             print(f"⚠️ Error loading Ticket Sales Tracker files: {tst_err}")
         
-        # Load profile image cache to check for custom images
-        if not profile_image_cache:
-            load_profile_image_cache()
+        # Load profile image cache to check for custom images (always fresh for admin content view)
+        load_profile_image_cache(force=True)
         
         # Add custom image info to each file (skip ticket sales and ticket sales tracker - they use their own metadata)
         for f in active_files:
@@ -9981,7 +9980,7 @@ def get_profiles_without_images():
     try:
         # Load caches (always load profile image cache from S3 so we see latest uploads
         # across workers; in-memory cache is per-worker and would otherwise be stale)
-        load_profile_image_cache()
+        load_profile_image_cache(force=True)
         
         if not s3_cache.get('loaded'):
             load_persisted_cache()
@@ -16937,6 +16936,68 @@ profile_image_cache = {}
 profile_image_cache_dirty = False  # Track if cache needs saving
 _profile_image_cache_ts = 0  # last time cache was loaded from S3 (epoch seconds)
 _PROFILE_IMAGE_CACHE_TTL = 15  # reload from S3 at most every 15 seconds
+_profile_image_cache_lock = threading.Lock()
+
+
+def _read_profile_image_cache_from_s3():
+    """Read the profile image cache JSON from S3. Returns {} if missing."""
+    if not s3_client:
+        return {}
+    try:
+        response = s3_client.get_object(Bucket=S3_BUCKET, Key=S3_IMAGE_CACHE_KEY)
+        data = json.loads(response['Body'].read().decode('utf-8'))
+        return data if isinstance(data, dict) else {}
+    except Exception:
+        return {}
+
+
+def _merge_profile_image_caches(incoming, existing, deleted_keys=None):
+    """
+    Merge in-memory updates into the S3 cache without dropping admin uploads.
+    Never overwrite is_custom entries with auto-prefetch results.
+    """
+    deleted_keys = set(deleted_keys or [])
+    incoming = incoming or {}
+    existing = existing or {}
+    merged = {}
+    all_keys = (set(existing.keys()) | set(incoming.keys())) - deleted_keys
+
+    for key in all_keys:
+        cur = existing.get(key)
+        inc = incoming.get(key)
+
+        if cur is None:
+            merged[key] = inc
+            continue
+        if inc is None:
+            merged[key] = cur
+            continue
+
+        cur_custom = bool(cur.get('is_custom'))
+        inc_custom = bool(inc.get('is_custom'))
+
+        if cur_custom and not inc_custom:
+            merged[key] = cur
+            continue
+        if inc_custom and not cur_custom:
+            merged[key] = inc
+            continue
+        if cur_custom and inc_custom:
+            cur_at = cur.get('cached_at') or ''
+            inc_at = inc.get('cached_at') or ''
+            merged[key] = inc if inc_at >= cur_at else cur
+            continue
+
+        # Auto-sourced entries: prefer one with an image URL; never replace URL with not_found.
+        if inc.get('image_url') and not cur.get('image_url'):
+            merged[key] = inc
+        elif cur.get('image_url') and not inc.get('image_url'):
+            merged[key] = cur
+        else:
+            merged[key] = inc
+
+    return merged
+
 
 def load_profile_image_cache(force=False):
     """Load profile image cache from S3."""
@@ -16947,68 +17008,60 @@ def load_profile_image_cache(force=False):
     now = _time.time()
     if not force and profile_image_cache and (now - _profile_image_cache_ts) < _PROFILE_IMAGE_CACHE_TTL:
         return True
-    try:
-        response = s3_client.get_object(Bucket=S3_BUCKET, Key=S3_IMAGE_CACHE_KEY)
-        profile_image_cache = json.loads(response['Body'].read().decode('utf-8'))
+    with _profile_image_cache_lock:
+        profile_image_cache = _read_profile_image_cache_from_s3()
         _profile_image_cache_ts = now
+    if profile_image_cache:
         print(f"✅ Loaded profile image cache: {len(profile_image_cache)} images")
         return True
-    except:
-        print("📂 No profile image cache found")
-        return False
+    print("📂 No profile image cache found")
+    return False
 
-def save_profile_image_cache():
-    """Save profile image cache to S3. Retries up to 3 times on failure."""
+def save_profile_image_cache(deleted_keys=None):
+    """Save profile image cache to S3 with read-merge-write so concurrent workers don't clobber uploads."""
     global profile_image_cache, profile_image_cache_dirty, _profile_image_cache_ts
     if not s3_client:
         print("⚠️ Cannot save profile image cache: S3 client not available")
         return False
-    
-    # If cache appears empty, try to load existing cache from S3 and merge with current
-    # This prevents losing entries that were just added
-    if len(profile_image_cache) == 0:
-        print("   📥 Cache appears empty, loading existing cache from S3...")
-        try:
-            response = s3_client.get_object(Bucket=S3_BUCKET, Key=S3_IMAGE_CACHE_KEY)
-            existing_cache = json.loads(response['Body'].read().decode('utf-8'))
-            # Merge: existing takes precedence for keys we don't have, but keep our new entries
-            for key, value in existing_cache.items():
-                if key not in profile_image_cache:
-                    profile_image_cache[key] = value
-            print(f"   ✅ Merged {len(existing_cache)} existing entries from S3")
-            print(f"   📊 Total entries after merge: {len(profile_image_cache)}")
-        except Exception as load_err:
-            print(f"   📂 No existing cache found or error loading: {load_err}")
-            # Keep current cache (might be empty, might have new entries)
-    
+
     import time
-    cache_json = json.dumps(profile_image_cache, indent=2)
-    cache_size = len(cache_json)
-    print(f"   💾 Writing cache to S3: {len(profile_image_cache)} entries, {cache_size} bytes")
-    
-    for attempt in range(3):
-        try:
-            s3_client.put_object(
-                Bucket=S3_BUCKET,
-                Key=S3_IMAGE_CACHE_KEY,
-                Body=cache_json,
-                ContentType='application/json'
-            )
-            profile_image_cache_dirty = False
-            _profile_image_cache_ts = time.time()
-            print(f"   ✅ Successfully wrote cache to S3: {S3_IMAGE_CACHE_KEY} (attempt {attempt + 1})")
-            print(f"💾 Saved profile image cache: {len(profile_image_cache)} images")
-            sample_keys = list(profile_image_cache.keys())[:5]
-            print(f"   📋 Sample keys saved: {sample_keys}")
-            return True
-        except Exception as e:
-            print(f"⚠️ Error saving profile image cache (attempt {attempt + 1}/3): {e}")
-            if attempt < 2:
-                time.sleep(0.5)
-            else:
-                import traceback
-                traceback.print_exc()
-                return False
+
+    with _profile_image_cache_lock:
+        remote = _read_profile_image_cache_from_s3()
+        merged = _merge_profile_image_caches(profile_image_cache, remote, deleted_keys=deleted_keys)
+        profile_image_cache = merged
+        cache_json = json.dumps(profile_image_cache, indent=2)
+        cache_size = len(cache_json)
+        print(f"   💾 Writing cache to S3: {len(profile_image_cache)} entries, {cache_size} bytes")
+
+        for attempt in range(3):
+            try:
+                # Re-read and merge on retry so we never overwrite a concurrent custom upload.
+                if attempt > 0:
+                    remote = _read_profile_image_cache_from_s3()
+                    merged = _merge_profile_image_caches(profile_image_cache, remote, deleted_keys=deleted_keys)
+                    profile_image_cache = merged
+                    cache_json = json.dumps(profile_image_cache, indent=2)
+
+                s3_client.put_object(
+                    Bucket=S3_BUCKET,
+                    Key=S3_IMAGE_CACHE_KEY,
+                    Body=cache_json,
+                    ContentType='application/json'
+                )
+                profile_image_cache_dirty = False
+                _profile_image_cache_ts = time.time()
+                print(f"   ✅ Successfully wrote cache to S3: {S3_IMAGE_CACHE_KEY} (attempt {attempt + 1})")
+                print(f"💾 Saved profile image cache: {len(profile_image_cache)} images")
+                return True
+            except Exception as e:
+                print(f"⚠️ Error saving profile image cache (attempt {attempt + 1}/3): {e}")
+                if attempt < 2:
+                    time.sleep(0.5)
+                else:
+                    import traceback
+                    traceback.print_exc()
+                    return False
     return False
 
 
@@ -17280,7 +17333,7 @@ def remove_profile_image():
         if cache_key in profile_image_cache:
             del profile_image_cache[cache_key]
             profile_image_cache_dirty = True
-            saved = save_profile_image_cache()
+            saved = save_profile_image_cache(deleted_keys={cache_key})
             if not saved:
                 print(f"   ⚠️ Warning: Cache save may have failed after removing {cache_key}")
             print(f"   ✅ Removed from cache: {cache_key}")
@@ -21125,6 +21178,9 @@ def prefetch_profile_images():
     
     print(f"🖼️ Pre-fetching profile images for {len(s3_cache['jobs'])} profiles...")
     
+    # Always start from the latest S3 cache so we never clobber admin uploads on this worker.
+    load_profile_image_cache(force=True)
+    
     fetched = 0
     skipped = 0
     failed = 0
@@ -21136,10 +21192,12 @@ def prefetch_profile_images():
         
         cache_key = profile_name.lower().strip()
         
-        # Skip if already cached
-        if cache_key in profile_image_cache:
-            skipped += 1
-            continue
+        # Skip if already cached (never overwrite admin custom uploads)
+        existing_entry = profile_image_cache.get(cache_key)
+        if existing_entry:
+            if existing_entry.get('is_custom') or existing_entry.get('image_url') or existing_entry.get('not_found'):
+                skipped += 1
+                continue
         
         try:
             # Check for social media handle
@@ -21225,7 +21283,7 @@ def prefetch_profile_images():
             
             profile_image_cache_dirty = True
             
-            # Save every 20 fetches to persist progress
+            # Save every 20 fetches to persist progress (merge-safe write)
             if (fetched + failed) % 20 == 0:
                 save_profile_image_cache()
             
