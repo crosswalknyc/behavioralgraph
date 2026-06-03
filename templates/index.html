@@ -4185,7 +4185,7 @@
         .occupation-chart-container {
             min-height: 520px;
             height: auto;
-            max-height: min(1100px, 82vh);
+            max-height: min(1400px, 85vh);
             overflow-x: auto;
             overflow-y: auto;
             position: relative;
@@ -21187,6 +21187,91 @@
                 'science, technology technical professions': 'science, technology technical professions',
             };
             return CANONICAL[v] || v;
+        }
+
+        function normalizeOccupationLabel(value) {
+            if (value == null || value === '') return value;
+            const raw = String(value).trim();
+            const key = raw.toLowerCase().replace(/[^a-z0-9 ]/g, ' ').replace(/\s+/g, ' ').trim();
+            const ALIASES = {
+                'management business professional': 'Management, Business & Professional',
+                'management': 'Management, Business & Professional',
+                'business and financial operations': 'Management, Business & Professional',
+                'office and administrative support': 'Management, Business & Professional',
+                'sales retail': 'Sales & Retail',
+                'sales or retail': 'Sales & Retail',
+                'sales and related': 'Sales & Retail',
+                'education or library services': 'Education or Library Services',
+                'educational instruction and library': 'Education or Library Services',
+                'healthcare practitioners or support': 'Healthcare Practitioners or Support',
+                'healthcare support': 'Healthcare Practitioners or Support',
+                'healthcare practitioners and technical': 'Healthcare Practitioners or Support',
+                'health care practitioners or support': 'Healthcare Practitioners or Support',
+                'service hospitality': 'Service & Hospitality',
+                'food preparation and serving related': 'Service & Hospitality',
+                'personal care and service': 'Service & Hospitality',
+                'agriculture outdoor': 'Agriculture & Outdoor',
+                'farming fishing and forestry': 'Agriculture & Outdoor',
+                'skilled trades construction or maintenance': 'Skilled Trades/Construction or Maintenance',
+                'skilled trade construction or maintenance': 'Skilled Trades/Construction or Maintenance',
+                'building and grounds cleaning and maintenance': 'Skilled Trades/Construction or Maintenance',
+                'cleaning and maintenance': 'Skilled Trades/Construction or Maintenance',
+                'manufacturing production': 'Manufacturing & Production',
+                'production': 'Manufacturing & Production',
+                'public safety protective services': 'Public Safety & Protective Services',
+                'protective service': 'Public Safety & Protective Services',
+                'transportation logistics': 'Transportation & Logistics',
+                'transportation and material moving': 'Transportation & Logistics',
+                'science technology technical professions': 'Science, Technology & Technical Professions',
+                'computer and mathematical': 'Science, Technology & Technical Professions',
+                'architecture and engineering': 'Science, Technology & Technical Professions',
+                'life physical and social science': 'Science, Technology & Technical Professions',
+                'legal': 'Legal',
+                'other': 'Other',
+                'student': 'Student',
+                'retired': 'Retired',
+                'self employed': 'Self-Employed',
+                'prefer not to say': 'Other',
+                'unemployed': 'Other',
+                'homemaker': 'Other',
+            };
+            if (ALIASES[key]) return ALIASES[key];
+            const u = raw.toLowerCase();
+            if (u.includes('business and financial') || u.includes('office admin') || u === 'management') return 'Management, Business & Professional';
+            if (u.includes('sales and related') || u.includes('sales & related') || u.includes('sales & retail') || u.includes('sales or retail')) return 'Sales & Retail';
+            if (u.includes('educational instruction') || u.includes('library')) return 'Education or Library Services';
+            if (u.includes('health care support') || u.includes('healthcare support') || u.includes('healthcare practitioner') || u.includes('health care practitioner')) return 'Healthcare Practitioners or Support';
+            if (u.includes('personal care and service') || u.includes('food prep') || u.includes('food preparation') || u.includes('service & hospitality') || u.includes('service and hospitality')) return 'Service & Hospitality';
+            if (u.includes('farming') || u.includes('fishing') || u.includes('forestry') || u.includes('agriculture')) return 'Agriculture & Outdoor';
+            if (u.includes('building and grounds') || u.includes('cleaning and maintenance') || u.includes('cleaning & maintenance') || u.includes('skilled trade')) return 'Skilled Trades/Construction or Maintenance';
+            if (u === 'production' || u.includes('manufacturing')) return 'Manufacturing & Production';
+            if (u.includes('protective service') || u.includes('public safety')) return 'Public Safety & Protective Services';
+            if (u.includes('transportation') || u.includes('material moving')) return 'Transportation & Logistics';
+            if (u.includes('computer and mathematical') || u.includes('computer & mathematical') || u.includes('architecture and engineering') || u.includes('architecture & engineering') || u.includes('life, physical') || u.includes('social science') || u.includes('science, technology')) return 'Science, Technology & Technical Professions';
+            return raw;
+        }
+
+        function wrapOccupationLabel(label, maxChars = 22) {
+            const text = String(label || '');
+            if (text.length <= maxChars) return [text];
+            const words = text.split(' ');
+            const lines = [];
+            let currentLine = '';
+            words.forEach(word => {
+                const next = currentLine ? currentLine + ' ' + word : word;
+                if (next.length > maxChars && currentLine.length > 0) {
+                    lines.push(currentLine.trim());
+                    currentLine = word;
+                } else {
+                    currentLine = next.trim();
+                }
+            });
+            if (currentLine) lines.push(currentLine);
+            return lines.length ? lines : [text];
+        }
+
+        function occupationBarHeight(label) {
+            return Math.max(36, wrapOccupationLabel(label).length * 18 + 14);
         }
         
         // Normalize a name for deduplication (handles variations like "Patrick Mahomes" vs "patrick-mahomes")
@@ -46712,21 +46797,7 @@
                     result.demographicsProjection.parental_status[psKey] = usProjection;
                 }
                 if (category === 'OCCUPATION' && value) {
-                    const occKey = ((v) => {
-                        const u = (v || '').trim().toLowerCase();
-                        if (u.includes('business and financial') || u.includes('office admin') || u === 'management') return 'Management, Business & Professional';
-                        if (u.includes('sales and related') || u.includes('sales & related')) return 'Sales or Retail';
-                        if (u.includes('educational instruction') || u.includes('library')) return 'Education or Library Services';
-                        if (u.includes('health care support') || u.includes('healthcare support') || u.includes('healthcare practitioner') || u.includes('health care practitioner')) return 'Healthcare Practitioners or Support';
-                        if (u.includes('personal care and service') || u.includes('food prep') || u.includes('food preparation')) return 'Service & Hospitality';
-                        if (u.includes('farming') || u.includes('fishing') || u.includes('forestry')) return 'Agriculture & Outdoor';
-                        if (u.includes('building and grounds') || u.includes('cleaning and maintenance') || u.includes('cleaning & maintenance')) return 'Skilled Trade/Construction or Maintenance';
-                        if (u === 'production') return 'Manufacturing & Production';
-                        if (u.includes('protective service')) return 'Public Safety & Protective Services';
-                        if (u.includes('transportation') || u.includes('material moving')) return 'Transportation & Logistics';
-                        if (u.includes('computer and mathematical') || u.includes('computer & mathematical') || u.includes('architecture and engineering') || u.includes('architecture & engineering') || u.includes('life, physical') || u.includes('social science')) return 'Science, Technology & Technical Professions';
-                        return v;
-                    })(value);
+                    const occKey = normalizeOccupationLabel(value);
                     result.demographics.occupation[occKey] = (result.demographics.occupation[occKey] || 0) + pct;
                     result.demographicsIndex.occupation[occKey] = index;
                     result.demographicsGenPop.occupation[occKey] = (result.demographicsGenPop.occupation[occKey] || 0) + genPopPct;
@@ -50360,11 +50431,14 @@
                 const occCanvas = document.getElementById('occupationChart');
                 const occContainer = occCanvas ? occCanvas.closest('.occupation-chart-container') : null;
                 if (occChartType === 'bar' && occCanvas) {
-                    const barHeight = 32; // Compact bars
-                    const calculatedHeight = Math.max(occLabels.length * barHeight, 500);
+                    const calculatedHeight = Math.max(
+                        occLabels.reduce((sum, label) => sum + occupationBarHeight(label), 0),
+                        500
+                    );
                     const vh = window.innerHeight || 600;
-                    const maxH = Math.min(1100, Math.floor(vh * 0.8)); // Allow more height so all text fits
+                    const maxH = Math.min(1400, Math.floor(vh * 0.85));
                     occCanvas.style.height = Math.min(calculatedHeight, maxH) + 'px';
+                    if (occContainer) occContainer.style.maxHeight = maxH + 'px';
                 } else if (occCanvas) {
                     occCanvas.style.height = '400px'; // Default height for circular charts
                 }
@@ -50437,35 +50511,15 @@
                                     autoSkip: false,
                                     padding: 14,
                                     maxRotation: 0,
-                                    callback: function(value, index, ticks) {
+                                    callback: function(value) {
                                         const label = this.getLabelForValue(value);
-                                        // Wrap long occupation labels - shorter lines to prevent overlap
-                                        const maxChars = 22;
-                                        if (label && label.length > maxChars) {
-                                            const words = String(label).split(' ');
-                                            const lines = [];
-                                            let currentLine = '';
-                                            words.forEach(word => {
-                                                const next = currentLine ? currentLine + ' ' + word : word;
-                                                if (next.length > maxChars && currentLine.length > 0) {
-                                                    lines.push(currentLine.trim());
-                                                    currentLine = word;
-                                                } else {
-                                                    currentLine = next.trim();
-                                                }
-                                            });
-                                            if (currentLine) lines.push(currentLine);
-                                            return lines.length ? lines : label;
-                                        }
-                                        return label;
+                                        const lines = wrapOccupationLabel(label);
+                                        return lines.length > 1 ? lines : label;
                                     }
                                 },
                                 afterFit: (scale) => {
-                                    // Reserve enough width for wrapped occupation labels so nothing is cut off
-                                    const maxLabelLen = occLabels.reduce((m, l) => Math.max(m, String(l).length), 0);
-                                    const charsPerLine = 22;
-                                    const lines = Math.ceil(maxLabelLen / charsPerLine) || 1;
-                                    const minWidth = Math.max(180, Math.min(280, lines * 90));
+                                    const maxLines = occLabels.reduce((m, l) => Math.max(m, wrapOccupationLabel(l).length), 1);
+                                    const minWidth = Math.max(180, Math.min(300, maxLines * 72));
                                     scale.width = Math.max(scale.width, minWidth);
                                 }
                             }
