@@ -4070,12 +4070,22 @@ def apply_panel_reality_floors(df, subject, verbose=True):
             if target_band in ('segment-weighted', 'christian-friendly', 'ethnicity-weighted', 'gender-weighted'):
                 if cur >= floor - 1.0 and not two_sided:
                     continue  # already at/above floor — trust the LLM
-                if two_sided and abs(cur - floor) <= 3.0:
-                    continue  # in band
-                # tight jitter band ±1.5pp around persona target
+                # 2026-06-03 (Jenna pin-check follow-up): widened acceptance band
+                # from ±3pp to ±5pp so reasoned-high LLM values (target..target+5pp)
+                # are preserved instead of trimmed to a tight 3pp cluster. Only
+                # clearly-defective values (>5pp above target) get overridden.
+                if two_sided and abs(cur - floor) <= 5.0:
+                    continue  # in trust band — LLM reasoning preserved
+                # 2026-06-03: widened jitter band ±1.5pp → ±3pp AND added age
+                # archetype to the salt so within-archetype variance is genuinely
+                # 5-6pp (matches real-world panel variance for these brands)
+                # instead of a 3pp soft-pin cluster. Per-profile target also
+                # varies because segment-weighted target derives from each
+                # profile's own age distribution.
+                _arch = arch  # captured from outer scope
                 target = _jitter_for(
-                    subject, brand_u, salt=f'panel-{target_band}-{cat_u}',
-                    lo=max(0.05, floor - 1.5), hi=floor + 1.5,
+                    subject, brand_u, salt=f'panel-{target_band}-{cat_u}-{_arch}',
+                    lo=max(0.05, floor - 3.0), hi=floor + 3.0,
                 )
             else:
                 if cur >= floor - 0.5:
@@ -4639,10 +4649,16 @@ def enforce_household_streaming_floor(df, subject, verbose=True):
 # ============================================================================
 
 def enforce_search_engine_ai_cohort_ceiling(df, subject, verbose=True):
-    """Cap SEARCH ENGINE/AI brand BPs at segment-weighted target + 5pp.
+    """Cap SEARCH ENGINE/AI brand BPs at segment-weighted target + 7pp.
 
     Runs AFTER apply_panel_reality_floors so we trim anything that path missed.
     Hostmap-gated implicitly: only touches rows that already exist.
+
+    2026-06-03 (Jenna pin-check follow-up): trust threshold raised +5pp → +7pp
+    so reasoned-high LLM values that survived the panel-reality enforcer are
+    KEPT. Replacement jitter widened ±1.5pp → ±3pp with age-archetype in the
+    salt so within-archetype variance is ~5-6pp (panel-realistic) instead of
+    a tight 3pp cluster.
     """
     if df is None or len(df) == 0:
         return df, 0
@@ -4652,6 +4668,7 @@ def enforce_search_engine_ai_cohort_ceiling(df, subject, verbose=True):
     except Exception:
         return df, 0
 
+    arch = _detect_age_archetype(df)
     df['_col_u'] = df['Column'].astype(str).str.strip().str.upper()
     df['_val_u'] = df['Value'].astype(str).str.strip().str.upper()
 
@@ -4666,12 +4683,12 @@ def enforce_search_engine_ai_cohort_ceiling(df, subject, verbose=True):
         mask = (df['_col_u'] == cat_u) & (df['_val_u'] == brand_u)
         for idx in df.index[mask].tolist():
             cur = _bp(df.at[idx, bp_col])
-            # Ceiling = target + 5pp. Anything above gets re-jittered into target ± 1.5pp.
-            if cur <= target + 5.0:
+            # Trust band: target..target+7pp. Anything above re-jitters into target ± 3pp.
+            if cur <= target + 7.0:
                 continue
             new_target = _jitter_for(
-                subject, brand_u, salt=f'search-ai-ceiling-{cat_u}',
-                lo=max(0.05, target - 1.5), hi=target + 1.5,
+                subject, brand_u, salt=f'search-ai-ceiling-{cat_u}-{arch}',
+                lo=max(0.05, target - 3.0), hi=target + 3.0,
             )
             new_target = round(new_target, 4)
             df = _set_bp(df, idx, new_target, bp_col, cs_col, raw_col, proj_col, sample_size)
