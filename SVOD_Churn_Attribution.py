@@ -4347,6 +4347,23 @@ def _reason_demographics_with_claude(*, show_name, platform_name, age_labels,
                 gender['Prefer Not to Say'] = round(max(0.2, pnts - 0.3), 1)
                 break
 
+    # PNTS cap: if Claude over-allocated to "Prefer Not to Say" because
+    # Male+Female didn't sum tight (e.g. M=58%, F=33% leaves 9% for LGBTQ+ and
+    # PNTS absorbed the residual), cap PNTS at 2.0% and redistribute the
+    # excess to Male/Female in proportion to their current shares. Real-world
+    # streaming-audience PNTS is reliably 0.5-2.0% — anything above is a
+    # plan-construction artifact, not a real signal.
+    pnts_after = gender.get('Prefer Not to Say', 0.0)
+    if pnts_after > 2.5:
+        excess = pnts_after - 2.0
+        gender['Prefer Not to Say'] = 2.0
+        male_v   = float(gender.get('Male')   or 0.0)
+        female_v = float(gender.get('Female') or 0.0)
+        mf_tot = male_v + female_v
+        if mf_tot > 0:
+            gender['Male']   = round(male_v   + excess * (male_v   / mf_tot), 1)
+            gender['Female'] = round(female_v + excess * (female_v / mf_tot), 1)
+
     # Re-normalize gender to 100
     gender_total = sum(gender.values())
     if gender_total > 0 and abs(gender_total - 100.0) > 0.5:
