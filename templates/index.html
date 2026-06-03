@@ -29964,12 +29964,6 @@
                     var size = Math.max(60, Math.min(180, 60 + ch.reach_pct_of_genpop * 4));  // px diameter, capped
                     var bg   = _jiqChannelColor(ch.channel);
                     var fg   = (ch.reach_pct_of_genpop >= 20) ? '#fff' : 'var(--text-primary)';
-                    var topEvent = (ch.events && ch.events[0])
-                        ? ((ch.events[0].actor || ch.events[0].publication || ch.events[0].talent
-                            || ch.events[0].creator || ch.events[0].partner || ch.events[0].site
-                            || ch.events[0].forum || ch.events[0].track || ch.events[0].engine
-                            || 'event'))
-                        : '';
                     return ''
                         + '<div onclick="showJiqChannelDetail(\'' + ch.channel + '\')" '
                         + '     style="cursor: pointer; padding: 0.6rem; border: 1px solid var(--border-color); border-radius: 10px; background: var(--bg-primary); display: flex; flex-direction: column; align-items: center; gap: 6px;" '
@@ -29979,9 +29973,6 @@
                         +    ch.reach_pct_of_genpop + '%'
                         + '  </div>'
                         + '  <div style="font-size: 0.82rem; font-weight: 600; text-align: center;">' + _jiqEsc(ch.label) + '</div>'
-                        + '  <div style="font-size: 0.7rem; color: var(--text-secondary); text-align: center;">' + ch.event_count + ' event' + (ch.event_count === 1 ? '' : 's')
-                        +    (topEvent ? '  ·  top: ' + _jiqEsc(String(topEvent)) : '')
-                        + '  </div>'
                         + '</div>';
                 }).join('');
             }
