@@ -28790,21 +28790,44 @@
             var props = eco.properties || [];
             var edges = eco.edges || [];
             if (props.length < 2) return '';
-            var W = 760, H = 380;
-            var cx = W / 2, cy = H / 2 + 10;
-            // Place props in equilateral triangle (apex up if 3)
-            var positions = {};
+
+            // Layout is sized to the property count so labels + role/URL
+            // captions never get clipped against the SVG edges.
+            //   3 props → equilateral triangle (Fandango-style)
+            //   4 props → diamond (A&F-style: 4 owned brands)
+            //   5+      → polygon on a circle
+            var W, H, cx, cy, bubbleR, positions = {};
             if (props.length === 3) {
-                positions[props[0].key] = { x: cx, y: cy - 110 };
-                positions[props[1].key] = { x: cx - 200, y: cy + 80 };
-                positions[props[2].key] = { x: cx + 200, y: cy + 80 };
+                W = 760; H = 380;
+                cx = W / 2; cy = H / 2 + 10;
+                bubbleR = 64;
+                positions[props[0].key] = { x: cx,         y: cy - 110 };
+                positions[props[1].key] = { x: cx - 200,   y: cy + 80  };
+                positions[props[2].key] = { x: cx + 200,   y: cy + 80  };
+            } else if (props.length === 4) {
+                // Diamond: extra vertical room so the bottom bubble's
+                // role + URL caption (bubbleR + 32px) fits inside.
+                W = 920; H = 560;
+                cx = W / 2; cy = H / 2;
+                bubbleR = 60;
+                var dx = 280, dy = 180;
+                positions[props[0].key] = { x: cx,         y: cy - dy };  // top
+                positions[props[1].key] = { x: cx + dx,    y: cy      };  // right
+                positions[props[2].key] = { x: cx,         y: cy + dy };  // bottom
+                positions[props[3].key] = { x: cx - dx,    y: cy      };  // left
             } else {
+                // Generic polygon — enlarge height vs prior fixture so
+                // captions below each bubble stay inside the SVG.
+                W = 820; H = 480;
+                cx = W / 2; cy = H / 2 + 6;
+                bubbleR = 60;
+                var R = Math.min(cx - 100, cy - 100);
                 props.forEach(function(p, i) {
                     var theta = -Math.PI / 2 + (i / props.length) * 2 * Math.PI;
-                    positions[p.key] = { x: cx + 180 * Math.cos(theta), y: cy + 140 * Math.sin(theta) };
+                    positions[p.key] = { x: cx + R * Math.cos(theta),
+                                         y: cy + R * 0.75 * Math.sin(theta) };
                 });
             }
-            var bubbleR = 64;
             var parts = [];
 
             // (Center "OWNED BY <parent>" label removed per user request -
@@ -28813,17 +28836,36 @@
             // Ribbons FIRST so bubbles overlay them. Ribbon = filled
             // tapered path (mid-thick at endpoints, narrow in the middle
             // via a quadratic curve), thickness ∝ overlap_pct.
-            edges.forEach(function(e) {
+            edges.forEach(function(e, ei) {
                 var pA = positions[e.a], pB = positions[e.b];
                 if (!pA || !pB) return;
                 var cA = (props.find(function(p) { return p.key === e.a; }) || {}).color || '#5b6cff';
                 var cB = (props.find(function(p) { return p.key === e.b; }) || {}).color || '#5b6cff';
                 var w  = Math.max(4, Math.min(34, (e.overlap_pct || 0) * 0.9));
-                // Curve through the center for visual interest
+                // Bend each ribbon perpendicular to its A→B axis so opposing
+                // edges (e.g. top↔bottom and left↔right in a diamond layout)
+                // don't pile their midpoints on the same center point — and
+                // so their % badges never overlap each other.
                 var midX = (pA.x + pB.x) / 2;
                 var midY = (pA.y + pB.y) / 2;
-                var ctrlX = midX + (cy - midY) * 0.25;
-                var ctrlY = midY + (midX - cx) * 0.25;
+                var edx = pB.x - pA.x, edy = pB.y - pA.y;
+                var elen = Math.sqrt(edx * edx + edy * edy) || 1;
+                var perpX = -edy / elen, perpY = edx / elen;
+                // Bend AWAY from the geometric centroid. If the midpoint IS
+                // the centroid (through-center edge) fall back to a fixed
+                // perpendicular sign alternating per-edge so opposing
+                // through-center edges arc on opposite sides.
+                var fromCx = midX - cx, fromCy = midY - cy;
+                var dotC = fromCx * perpX + fromCy * perpY;
+                var bendSign;
+                if (Math.abs(dotC) < 1.0) {
+                    bendSign = (ei % 2 === 0) ? 1 : -1;
+                } else {
+                    bendSign = dotC >= 0 ? 1 : -1;
+                }
+                var bendAmt = (props.length >= 4 ? 55 : 35) * bendSign;
+                var ctrlX = midX + perpX * bendAmt;
+                var ctrlY = midY + perpY * bendAmt;
                 // Compute angle from A to ctrl, B to ctrl for endpoint trim
                 var aA = Math.atan2(ctrlY - pA.y, ctrlX - pA.x);
                 var aB = Math.atan2(ctrlY - pB.y, ctrlX - pB.x);
