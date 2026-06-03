@@ -14,6 +14,13 @@ import sys
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'migration'))
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'migration'))
 from clickhouse_connector import connect_clickhouse as _ch_connect
+# Blue IQ — political tracker module (loaded lazily so import failure
+# never blocks the rest of the dashboard from booting).
+try:
+    import blue_iq as _blue_iq  # type: ignore
+except Exception as _blue_iq_err:
+    _blue_iq = None
+    print(f"⚠️ Blue IQ module unavailable at import time: {_blue_iq_err}")
 
 import uuid
 import json
@@ -3159,6 +3166,7 @@ def create_user():
             'has_workspace_access': req_data.get('has_workspace_access', cd.get('has_workspace_access', True) if cd else True),
             'has_share_of_time_access': req_data.get('has_share_of_time_access', cd.get('has_share_of_time_access', True) if cd else True),
             'has_share_of_time_run_access': req_data.get('has_share_of_time_run_access', cd.get('has_share_of_time_run_access', True) if cd else True),
+            'has_blue_iq_access': req_data.get('has_blue_iq_access', cd.get('has_blue_iq_access', False) if cd else False),
             'collab_team': req_data.get('collab_team', []),
             'has_purgatory_approval': False,
             'auto_access_new': req_data.get('auto_access_new', cd.get('auto_access_new', {}) if cd else {}),
@@ -3300,6 +3308,8 @@ def update_user(username):
             user['has_share_of_time_access'] = bool(req_data['has_share_of_time_access'])
         if 'has_share_of_time_run_access' in req_data:
             user['has_share_of_time_run_access'] = bool(req_data['has_share_of_time_run_access'])
+        if 'has_blue_iq_access' in req_data:
+            user['has_blue_iq_access'] = bool(req_data['has_blue_iq_access'])
         if user.get('has_share_of_time_access') is False:
             user['has_share_of_time_run_access'] = False
         if 'auto_access_new' in req_data:
@@ -3701,6 +3711,7 @@ def restore_defaults_all_users():
             user['has_workspace_access'] = True
             user['has_share_of_time_access'] = True
             user['has_share_of_time_run_access'] = True
+            user['has_blue_iq_access'] = False
             count += 1
         save_users(data)
         return jsonify({'success': True, 'message': f'Restored defaults for {count} user(s)', 'count': count})
@@ -4096,6 +4107,7 @@ def api_set_company_defaults(company_name):
             'has_workspace_access': req.get('has_workspace_access', True),
             'has_share_of_time_access': req.get('has_share_of_time_access', True),
             'has_share_of_time_run_access': req.get('has_share_of_time_run_access', True),
+            'has_blue_iq_access': req.get('has_blue_iq_access', False),
             'credits': req.get('credits', 5),
             'auto_access_new': req.get('auto_access_new', {}),
         }
@@ -4158,6 +4170,7 @@ def api_reset_company_users(company_name):
                 user['has_workspace_access'] = cd.get('has_workspace_access', True)
                 user['has_share_of_time_access'] = cd.get('has_share_of_time_access', True)
                 user['has_share_of_time_run_access'] = cd.get('has_share_of_time_run_access', True)
+                user['has_blue_iq_access'] = cd.get('has_blue_iq_access', False)
                 user['credits'] = cd.get('credits', 5)
                 user['auto_access_new'] = dict(cd.get('auto_access_new', {}))
             else:
@@ -4183,6 +4196,7 @@ def api_reset_company_users(company_name):
                 user['has_workspace_access'] = True
                 user['has_share_of_time_access'] = True
                 user['has_share_of_time_run_access'] = True
+                user['has_blue_iq_access'] = False
                 user['credits'] = 5
                 user['auto_access_new'] = {}
             if user.get('has_share_of_time_access') is False:
@@ -6173,6 +6187,7 @@ def compute_product_access_flags(user, role):
             'has_workspace_access': True,
             'has_share_of_time_access': True,
             'has_share_of_time_run_access': True,
+            'has_blue_iq_access': True,
         }
     u = user or {}
     has_sot_view = bool(u.get('has_share_of_time_access', True))
@@ -6204,6 +6219,7 @@ def compute_product_access_flags(user, role):
         'has_workspace_access': bool(u.get('has_workspace_access', True)),
         'has_share_of_time_access': has_sot_view,
         'has_share_of_time_run_access': has_sot_run,
+        'has_blue_iq_access': bool(u.get('has_blue_iq_access', False)),
     }
 
 
@@ -6297,6 +6313,7 @@ def index():
     has_workspace = _acc.get('has_workspace_access', True)
     has_share_of_time = _acc.get('has_share_of_time_access', True)
     has_share_of_time_run = _acc.get('has_share_of_time_run_access', True)
+    has_blue_iq = _acc.get('has_blue_iq_access', False)
     
     # If user only has Fin IQ (no Profile IQ), default to Fin IQ landing page
     default_view_hedge_fund_iq = bool(has_hedge_fund_iq and not has_profile_iq)
@@ -6353,6 +6370,7 @@ def index():
                            has_workspace_access=has_workspace,
                            has_share_of_time_access=has_share_of_time,
                            has_share_of_time_run_access=has_share_of_time_run,
+                           has_blue_iq_access=has_blue_iq,
                            default_view_hedge_fund_iq=default_view_hedge_fund_iq,
                            has_purgatory_access=has_purgatory_access,
                            first_name=first_name,
@@ -11691,6 +11709,60 @@ def normalize_demographics_gen_pop_to_nps(parsed):
             b['gen_pop'] = str(max(0, floors[i]))
 
     return
+
+
+# ============================================================================
+# BLUE IQ — Political tracker
+# ============================================================================
+def _require_blue_iq():
+    """Return (False, error_response) if Blue IQ isn't available for this user."""
+    user = get_current_user()
+    if not user:
+        return False, (jsonify({'success': False, 'error': 'Not authenticated'}), 401)
+    role = _normalize_role(user.get('role', 'user'))
+    acc = apply_cloak_product_access_overrides(compute_product_access_flags(user, role))
+    if not acc.get('has_blue_iq_access'):
+        return False, (jsonify({'success': False, 'error': 'Blue IQ access not enabled'}), 403)
+    if _blue_iq is None:
+        return False, (jsonify({'success': False, 'error': 'Blue IQ module not loaded'}), 500)
+    return True, None
+
+
+@app.route('/api/blue-iq/filter-options', methods=['GET'])
+@requires_auth
+def api_blue_iq_filter_options():
+    """Return the available filter choices (parties + states + DMAs)."""
+    ok, err = _require_blue_iq()
+    if not ok:
+        return err
+    try:
+        return jsonify({'success': True, **_blue_iq.get_filter_options()})
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/blue-iq/data', methods=['POST'])
+@requires_auth
+def api_blue_iq_data():
+    """Compute (or fetch cached) Blue IQ dashboard view for the given filters."""
+    ok, err = _require_blue_iq()
+    if not ok:
+        return err
+    try:
+        req = request.get_json(silent=True) or {}
+        filters = {
+            'party':         req.get('party'),
+            'geo_type':      req.get('geo_type'),
+            'geo_value':     req.get('geo_value'),
+            'lookback_days': req.get('lookback_days'),
+        }
+        force = bool(req.get('force_refresh'))
+        payload = _blue_iq.compute_panel_view(filters, force_refresh=force)
+        return jsonify(payload)
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': str(e)}), 500
 
 
 @app.route('/api/subscriber-iq/list')
