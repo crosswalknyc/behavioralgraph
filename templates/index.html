@@ -45077,7 +45077,8 @@
                 if (col === 'BRAND INPUT' && usPop > 0) projectedUS = usPop;
 
                 if (col === 'MEDIAN AGE' || col.includes('MEDIAN') && col.includes('AGE')) {
-                    medianAge = brandPen || catShare || parseFloat(val) || 0;
+                    // Never fall back to Category Share — only Brand Penetration is displayed.
+                    medianAge = brandPen || parseFloat(val) || 0;
                 }
 
                 if (col.includes('GENDER')) currentSection = 'gender';
@@ -45086,7 +45087,8 @@
                 else if (col.includes('INCOME')) currentSection = 'income';
 
                 if (val && currentSection && !col.includes('SECTION')) {
-                    const pct = brandPen || catShare || 0;
+                    // Never fall back to Category Share — only Brand Penetration is displayed.
+                    const pct = brandPen || 0;
                     if (pct > 0 && pct < 100) {
                         demographics[currentSection][val] = pct;
                     }
@@ -54674,27 +54676,14 @@
                     return b;
                 });
             
-            // Check if this is the Gen Pop profile - if so, skip rebasing and show raw values
-            const isGenPopProfile = (currentS3Key || '').toUpperCase().includes('GEN_POP') || 
-                                   (currentS3Key || '').toUpperCase().includes('GENPOP') ||
-                                   (currentProfileData?.name || '').toUpperCase().includes('GEN POP');
-            
-            // Only rebase non-Gen Pop profiles
-            if (!isGenPopProfile) {
-                const totalPct = arr.reduce((s, l) => s + l.pct, 0);
-                if (totalPct > 0 && Math.abs(totalPct - 100) > 0.01) {
-                    const scale = 100 / totalPct;
-                    arr.forEach(l => {
-                        l.pct *= scale;
-                        l.projection = Math.round(l.projection * scale);
-                    });
-                    const gpTotal = arr.reduce((s, l) => s + l.genPopPct, 0);
-                    if (gpTotal > 0) {
-                        const gpScale = 100 / gpTotal;
-                        arr.forEach(l => { l.genPopPct *= gpScale; });
-                    }
-                }
-            }
+            // DO NOT renormalize loc.pct to sum to 100% — that converts the raw
+            // Brand Penetration values (e.g. NYC = 11.7430% for Kevin Durant) into
+            // Category Share values (NYC = 11.5910%), which is the exact bug Jenna
+            // reported (location tab was displaying Category Share instead of BP).
+            // BPs are pulled straight from the CSV's "Brand Penetration (Row)"
+            // column in parseDashboardCSV — render them as-is. genPopPct and index
+            // are recomputed downstream in renderLocationTable from the loaded
+            // Gen Pop baseline, so no rescaling is needed here.
             return arr;
         }
 
@@ -67356,7 +67345,8 @@
                 const catShare = parseFloat(row['Category Share'] || row[3] || 0);
                 const rawNum = parseFloat(row['Original Raw Numbers'] || row[4] || 0);
                 const usGenPop = parseFloat(String(row['US Gen Pop Projection'] || row['Gen Pop Projection'] || row[5] || '0').replace(/,/g, '')) || 0;
-                const pct = brandPen || catShare || 0;
+                // Never fall back to Category Share — only Brand Penetration is displayed.
+                const pct = brandPen || 0;
                 
                 const genPopPct = usGenPop > 0 ? (usGenPop / US_POPULATION) * 100 : 0;
                 const index = genPopPct > 0 ? Math.round((pct / genPopPct) * 100) : 0;
@@ -67373,7 +67363,8 @@
                     result.projectedUS = usGenPop || 0;
                 }
                 if (category.includes('MEDIAN') && category.includes('AGE')) {
-                    result.medianAge = brandPen || catShare || parseFloat(value) || 0;
+                    // Never fall back to Category Share — only Brand Penetration is displayed.
+                    result.medianAge = brandPen || parseFloat(value) || 0;
                 }
                 if (category === 'BRAND CATEGORY' && value) {
                     result.brandCategory = (value || '').toString().trim();
@@ -67405,12 +67396,11 @@
                 if (!demoCategories.includes(category) && !skipCategories.includes(category) && category !== 'LOCATION' && value && pct > 0) {
                     if (!result.behavioral[category]) result.behavioral[category] = [];
                     if (!result.behavioralProjection[category]) result.behavioralProjection[category] = [];
-                    // Calculate Gen Pop % from US Gen Pop Projection (projection / 329.9M US pop * 100)
-                    // Also check catShare as fallback and normalize if < 1
+                    // Calculate Gen Pop % from US Gen Pop Projection (projection / 329.9M US pop * 100).
+                    // Never fall back to Category Share — only Brand Penetration / projection-derived
+                    // values represent real Gen Pop reach. Falling back to catShare here would silently
+                    // substitute a "share of category" number for "% of US population" — wrong units.
                     let genPopPct = usGenPop > 0 ? (usGenPop / 329900000) * 100 : 0;
-                    if (genPopPct === 0 && catShare > 0) {
-                        genPopPct = catShare;
-                    }
                     // Calculate Index = (brand pct / gen pop pct) * 100
                     const index = genPopPct > 0 ? Math.round((pct / genPopPct) * 100) : 0;
                     result.behavioral[category].push({ 
