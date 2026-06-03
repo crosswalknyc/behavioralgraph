@@ -1733,14 +1733,23 @@ _profile_analysis_queue_workers = []          # list of started worker Threads
 _profile_analysis_queue_inflight = set()      # set of job_ids currently executing
 _profile_analysis_queue_inflight_lock = threading.Lock()
 
-# Configurable concurrency. Default is 2: ClickHouse can handle two concurrent
-# universe scans without thrashing, and the LLM-bound phase parallelizes freely.
-# Tune via env var BG_PROFILE_QUEUE_WORKERS (1-4 reasonable; >4 risks CH/OpenAI
-# rate limits and Render memory pressure on Starter plan).
+# Configurable concurrency. The default depends on whether the dispatcher
+# is configured:
+#   - dispatcher OFF (legacy inline path): default 2 — ClickHouse can
+#     handle two concurrent universe scans without thrashing, and any
+#     more risks OOM-killing a Render gunicorn worker (BG.py needs
+#     50-100 GiB peak per profile).
+#   - dispatcher ON: default 15 — workers are essentially idle pollers
+#     (they POST a job, sleep 30s, GET status, repeat). The actual
+#     concurrency cap is enforced server-side by the dispatcher
+#     (MAX_CONCURRENT=15 today, matches the API key pool size).
+# Tune via env var BG_PROFILE_QUEUE_WORKERS.
+_dispatcher_active = bool((os.environ.get('BG_DISPATCH_URL') or '').strip())
 try:
-    _PROFILE_QUEUE_WORKERS = max(1, int(os.environ.get('BG_PROFILE_QUEUE_WORKERS', '2')))
+    _default_workers = '15' if _dispatcher_active else '2'
+    _PROFILE_QUEUE_WORKERS = max(1, int(os.environ.get('BG_PROFILE_QUEUE_WORKERS', _default_workers)))
 except Exception:
-    _PROFILE_QUEUE_WORKERS = 2
+    _PROFILE_QUEUE_WORKERS = 15 if _dispatcher_active else 2
 
 
 def _profile_analysis_queue_worker(worker_id: int):
@@ -20342,6 +20351,197 @@ def _handle_low_universe_skip(job_id, project_name, err):
             print(f"[low-universe] email send failed: {_ee}")
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# DISPATCHER ROUTING (added 2026-06-03)
+# ─────────────────────────────────────────────────────────────────────────────
+# When `BG_DISPATCH_URL` is set, profile pulls from the dashboard are routed
+# to the long-running `profile_dispatcher` daemon on Hetzner (port 7777)
+# instead of being executed inline in this Render gunicorn worker. The
+# dispatcher owns a single in-process API key pool and enforces a global
+# concurrency cap (15 today, matches pool size), so concurrent dashboard
+# pulls share keys atomically and queue intelligently when the pool is
+# saturated — exactly the model the batch runner uses for Hetzner-side
+# pulls.
+#
+# The dispatcher today supports the SIMPLE pull path: a brand + category +
+# optional date window. Advanced features (frequency analysis,
+# listener/watcher adjustments, geographic cohorts, rerun-from-reference
+# consistency enforcement) still execute inline because they need
+# additional ClickHouse round-trips after `bg.run_full_pipeline` returns.
+# Those cases keep using the existing inline path until the dispatcher
+# learns to handle them too.
+# ─────────────────────────────────────────────────────────────────────────────
+
+def _dispatcher_supports_request(include_frequency, is_listener_watcher,
+                                 geo_zip_codes, geo_dma, previous_file_path,
+                                 reference_file_key, filters, skew_settings,
+                                 is_genpop):
+    """Return True if this profile-pull request can be handled end-to-end
+    by the Hetzner dispatcher. Anything that needs post-pipeline
+    ClickHouse work on Render falls back to inline execution."""
+    if include_frequency:
+        return False
+    if is_listener_watcher:
+        return False
+    if geo_zip_codes or geo_dma:
+        return False
+    if previous_file_path or reference_file_key:
+        return False
+    # GenPop runs through a different code path inside BG.py that the
+    # batch runner template doesn't currently parameterize. Keep inline.
+    if is_genpop:
+        return False
+    # Custom filter / skew dictionaries aren't part of the runner-template
+    # spec yet; fall back rather than silently dropping them.
+    if filters and any(filters.values() if isinstance(filters, dict) else filters):
+        return False
+    if skew_settings and any(skew_settings.values() if isinstance(skew_settings, dict) else skew_settings):
+        return False
+    return True
+
+
+def _run_profile_via_dispatcher(job_id, project_name, brands, brand_category,
+                                sample_start, sample_end, behavior_start,
+                                behavior_end, purchasers_only):
+    """Submit the profile to the Hetzner dispatcher, poll for completion,
+    download the resulting S3 file, and return the local path.
+
+    Raises if the dispatcher is unreachable, the job fails, or the file
+    can't be retrieved. Callers should catch and fall back to inline.
+
+    Returns the local path to the downloaded CSV on success.
+    """
+    import requests as _r
+    import time as _time
+    import tempfile as _tf
+
+    base = (os.environ.get('BG_DISPATCH_URL') or '').rstrip('/')
+    token = os.environ.get('BG_DISPATCH_TOKEN') or ''
+    if not base:
+        raise RuntimeError('BG_DISPATCH_URL is not set')
+
+    headers = {'X-Dispatch-Token': token} if token else {}
+
+    # The dispatcher runs the runner template, which uses brands[0] as
+    # the "brand input" and re-expands variations on the Hetzner side.
+    # We send the same primary brand the user typed.
+    primary_brand = brands[0] if brands else project_name
+
+    submitter = ''
+    try:
+        submitter = jobs.get(job_id, {}).get('created_by', '') or ''
+    except Exception:
+        pass
+
+    payload = {
+        'brand':     primary_brand,
+        'name':      project_name,
+        'category':  brand_category or 'GENERAL',
+        'submitter': submitter,
+        'spec': {
+            'sample_start':   sample_start,
+            'sample_end':     sample_end,
+            'behavior_start': behavior_start,
+            'behavior_end':   behavior_end,
+            'purchasers_only': bool(purchasers_only),
+        },
+    }
+
+    # 1. Submit.
+    print(f"[dispatch] POST {base}/jobs project={project_name} brand={primary_brand}")
+    resp = _r.post(f'{base}/jobs', json=payload, headers=headers, timeout=20)
+    if resp.status_code not in (200, 202):
+        raise RuntimeError(f'dispatcher refused submission: {resp.status_code} {resp.text[:300]}')
+    body = resp.json()
+    dispatch_job_id = body.get('job_id')
+    queue_pos = body.get('queue_position')
+    if not dispatch_job_id:
+        raise RuntimeError(f'dispatcher returned no job_id: {body}')
+
+    update_job_status(
+        job_id,
+        message=(
+            f'Queued on Hetzner (position {queue_pos})' if queue_pos and queue_pos > 1
+            else 'Running on Hetzner...'
+        ),
+    )
+    try:
+        jobs[job_id]['dispatch_job_id'] = dispatch_job_id
+    except Exception:
+        pass
+
+    # 2. Poll. The dispatcher tracks queue → running → done/skipped/failed.
+    #    Polling interval is wide (30s) because the underlying pipeline
+    #    runs for ~60-90 min; we don't need second-level resolution.
+    POLL_S = int(os.environ.get('BG_DISPATCH_POLL_SECONDS', '30'))
+    MAX_WAIT_S = int(os.environ.get('BG_DISPATCH_MAX_WAIT_SECONDS', str(3 * 60 * 60)))  # 3h hard ceiling
+    deadline = _time.time() + MAX_WAIT_S
+    last_status = None
+    while True:
+        if _time.time() > deadline:
+            raise RuntimeError(f'dispatcher timeout after {MAX_WAIT_S}s (last_status={last_status})')
+        _time.sleep(POLL_S)
+        try:
+            jr = _r.get(f'{base}/jobs/{dispatch_job_id}', headers=headers, timeout=15)
+        except _r.exceptions.RequestException as e:
+            # Transient — keep polling unless it's been failing for too long.
+            print(f"[dispatch] poll error (continuing): {e}")
+            continue
+        if jr.status_code != 200:
+            print(f"[dispatch] poll non-200 (continuing): {jr.status_code} {jr.text[:200]}")
+            continue
+        jd = jr.json()
+        st = jd.get('status')
+        if st != last_status:
+            print(f"[dispatch] job {dispatch_job_id} status: {st}")
+            last_status = st
+            # Mirror remote queue position into the local job state
+            # so the UI shows something useful.
+            if st == 'queued':
+                update_job_status(job_id, message='Queued on Hetzner...')
+            elif st == 'running':
+                update_job_status(job_id, message='Running on Hetzner...')
+        if st in ('done', 'skipped', 'failed', 'cancelled'):
+            final = jd
+            break
+
+    # 3. Decode terminal state.
+    if final['status'] == 'failed':
+        raise RuntimeError(f"dispatcher job failed: exit={final.get('exit_code')} last_line={final.get('last_line')!r}")
+    if final['status'] == 'cancelled':
+        raise RuntimeError('dispatcher job was cancelled')
+    if final['status'] == 'skipped':
+        # Low-universe gate fired on Hetzner. Re-raise as the same
+        # LowUniverseError type the inline path handles so the caller
+        # can route to `_handle_low_universe_skip` cleanly.
+        try:
+            import bg as _bg
+            raise _bg.LowUniverseError(
+                raw_universe=0,
+                inflated_estimate=0,
+                threshold=getattr(_bg, 'MIN_VIABLE_UNIVERSE', 5000),
+                message=f"Skipped on Hetzner: {final.get('skip_reason') or 'low universe'}"
+            )
+        except (ImportError, AttributeError):
+            raise RuntimeError(f"dispatcher skipped (low universe): {final.get('skip_reason')}")
+
+    # 4. Success — pull the S3 key the runner uploaded to.
+    s3_key = final.get('s3_key')
+    if not s3_key:
+        raise RuntimeError(f'dispatcher completed but no s3_key in response: {final}')
+
+    # The runner uploads to bucket `dashboard-inputs` (S3_BUCKET in the
+    # batch runner). The dashboard's S3_BUCKET happens to match in the
+    # default config; if they ever diverge, we'd need to plumb the bucket
+    # in the dispatcher response. For now we trust the convention.
+    dispatcher_bucket = 'dashboard-inputs'
+    local_path = os.path.join(_tf.gettempdir(), f'dispatch_{job_id}_{os.path.basename(s3_key)}')
+    print(f"[dispatch] downloading s3://{dispatcher_bucket}/{s3_key} -> {local_path}")
+    s3_client.download_file(dispatcher_bucket, s3_key, local_path)
+
+    return local_path
+
+
 def run_analysis(job_id, project_name, brands, sample_start, sample_end, 
                  behavior_start, behavior_end, filters, skew_settings, 
                  is_genpop, purchasers_only, brand_category,
@@ -20415,87 +20615,167 @@ def run_analysis(job_id, project_name, brands, sample_start, sample_end,
         except Exception as e:
             update_job_status(job_id, status='failed', error=f'Database connection failed: {str(e)}')
             return
-        
-        # ========== UNIVERSE SCAN (matches terminal behavior) ==========
-        # This is critical for getting correct sample sizes
-        _completed_steps.add('db_connect')
-        update_job_status(job_id, progress=_profile_step_progress(_completed_steps), message='Scanning universe...')
-        
-        if geo_zip_codes and geo_dma:
-            print("📍 Geographic profile - skipping brand universe scan (geo cohort will determine size)")
-            bg.run_full_pipeline.universe_size = 1000000
-        else:
-            try:
-                if hasattr(bg, 'perform_full_universe_scan'):
-                    print("🔍 Performing full universe scan (matching terminal behavior)...")
-                    universe_results = bg.perform_full_universe_scan(conn, brands, sample_start, sample_end, purchasers_only)
-                    if universe_results:
-                        print(f"🌍 Universe scan complete. True universe size: {universe_results['total_universe']:,} users")
-                        # ── LOW-UNIVERSE GATE ─────────────────────────────────────────
-                        # Skip the run + email the requesting user if the eligible
-                        # audience is too small for an accurate profile (even after
-                        # maximum sample inflation). No credits are consumed.
-                        if hasattr(bg, 'check_universe_viability'):
-                            try:
-                                bg.check_universe_viability(universe_results['total_universe'], project_name)
-                            except getattr(bg, 'LowUniverseError', Exception) as _lue:
-                                _handle_low_universe_skip(job_id, project_name, _lue)
-                                return
-                        bg.run_full_pipeline.universe_size = universe_results['total_universe']
-                    else:
-                        print("⚠️ Universe scan returned no results, using default")
-                        bg.run_full_pipeline.universe_size = 1000000
-                else:
-                    print("⚠️ perform_full_universe_scan not available in bg module")
-                    bg.run_full_pipeline.universe_size = 1000000
-            except getattr(bg, 'LowUniverseError', tuple()) as _lue:
-                # Defensive catch in case the inner block re-raises rather than
-                # routing through _handle_low_universe_skip (e.g. future
-                # refactor). Same handling.
-                _handle_low_universe_skip(job_id, project_name, _lue)
-                return
-            except Exception as e:
-                print(f"⚠️ Universe scan error: {e}, proceeding with default size")
-                bg.run_full_pipeline.universe_size = 1000000
-        
-        _completed_steps.add('universe_scan')
-        _scan_elapsed = _time.time() - _analysis_start
-        _scan_pct = sum(_PROFILE_STEP_WEIGHTS[s] for s in _completed_steps)
-        _remaining_pct = 100 - _scan_pct
-        _est_remaining = int(_scan_elapsed / max(_scan_pct, 1) * _remaining_pct) if _scan_pct > 0 else None
-        update_job_status(
-            job_id,
-            progress=_profile_step_progress(_completed_steps),
-            message='Running analysis pipeline...',
-            estimated_remaining_seconds=_est_remaining,
-        )
-        
-        # Use /tmp/bg_pipeline on Render (app dir often read-only); same flow for new run and rerun
-        pipeline_out = '/tmp/bg_pipeline'
-        try:
-            os.makedirs(pipeline_out, exist_ok=True)
-        except OSError:
-            pipeline_out = None  # pipeline will use its default
-        try:
-            result_file = bg.run_full_pipeline(
-                conn=conn,
-                project_name=project_name,
-                brands=brands,
-                sample_start=sample_start,
-                sample_end=sample_end,
-                behavior_start=behavior_start,
-                behavior_end=behavior_end,
-                filters=filters,
-                skew_settings=skew_settings,
-                is_genpop=is_genpop,
-                purchasers_only=purchasers_only,
-                previous_file_path=actual_previous_file,
-                brand_category=brand_category,
-                is_listener_watcher=is_listener_watcher,
-                output_dir=pipeline_out if pipeline_out else None,
-                geo_zip_codes=geo_zip_codes,
-                geo_dma=geo_dma
+
+        # ─────────────────────────────────────────────────────────────
+        # DISPATCHER ROUTE (added 2026-06-03)
+        # ─────────────────────────────────────────────────────────────
+        # If `BG_DISPATCH_URL` is configured AND this request is one the
+        # dispatcher can handle end-to-end (simple pull, no frequency /
+        # listener-watcher / geo / rerun), POST the job to the Hetzner
+        # daemon and poll it to completion. The runner over there does
+        # the universe scan, the full pipeline, AND the S3 upload — so
+        # on this side we just download the result file and let the
+        # existing post-processing + purgatory-upload block take it
+        # from there. Falls back to inline-on-Render if anything
+        # transient goes wrong.
+        # ─────────────────────────────────────────────────────────────
+        _dispatcher_handled = False
+        result_file = None
+        if (os.environ.get('BG_DISPATCH_URL') or '').strip() and _dispatcher_supports_request(
+            include_frequency=include_frequency,
+            is_listener_watcher=is_listener_watcher,
+            geo_zip_codes=geo_zip_codes,
+            geo_dma=geo_dma,
+            previous_file_path=actual_previous_file,
+            reference_file_key=reference_file_key,
+            filters=filters,
+            skew_settings=skew_settings,
+            is_genpop=is_genpop,
+        ):
+            _completed_steps.add('db_connect')
+            update_job_status(
+                job_id,
+                progress=_profile_step_progress(_completed_steps),
+                message='Submitting to Hetzner dispatcher...',
             )
+            try:
+                result_file = _run_profile_via_dispatcher(
+                    job_id=job_id,
+                    project_name=project_name,
+                    brands=brands,
+                    brand_category=brand_category,
+                    sample_start=sample_start,
+                    sample_end=sample_end,
+                    behavior_start=behavior_start,
+                    behavior_end=behavior_end,
+                    purchasers_only=purchasers_only,
+                )
+                _dispatcher_handled = True
+                _completed_steps.add('universe_scan')
+                _completed_steps.add('pipeline')
+                update_job_status(
+                    job_id,
+                    progress=_profile_step_progress(_completed_steps),
+                    message='Processing results from Hetzner...',
+                )
+            except Exception as _de:
+                # Low-universe gate fired on Hetzner — same handling as inline path
+                if hasattr(bg, 'LowUniverseError') and isinstance(_de, bg.LowUniverseError):
+                    _handle_low_universe_skip(job_id, project_name, _de)
+                    try:
+                        conn.close()
+                    except Exception:
+                        pass
+                    return
+                # Any other failure: log and fall back to inline pipeline.
+                print(f"[dispatch] route failed for {project_name}: {_de} — falling back to inline pipeline")
+                import traceback as _tb_d
+                _tb_d.print_exc()
+                _dispatcher_handled = False
+                result_file = None
+
+        # ========== UNIVERSE SCAN + PIPELINE (inline path only) ==========
+        # When the dispatcher route succeeded above, everything from the
+        # local universe scan through `bg.run_full_pipeline` is already
+        # done on Hetzner and `result_file` points at the downloaded CSV.
+        # Skip the whole block in that case.
+        if _dispatcher_handled:
+            # Dispatcher path already produced `result_file`. `pipeline_out`
+            # is unused in this branch — the downloaded file already lives
+            # in a /tmp path the post-processing reads directly.
+            pipeline_out = None
+        else:
+            # ── UNIVERSE SCAN (matches terminal behavior) ──
+            _completed_steps.add('db_connect')
+            update_job_status(job_id, progress=_profile_step_progress(_completed_steps), message='Scanning universe...')
+
+            if geo_zip_codes and geo_dma:
+                print("📍 Geographic profile - skipping brand universe scan (geo cohort will determine size)")
+                bg.run_full_pipeline.universe_size = 1000000
+            else:
+                try:
+                    if hasattr(bg, 'perform_full_universe_scan'):
+                        print("🔍 Performing full universe scan (matching terminal behavior)...")
+                        universe_results = bg.perform_full_universe_scan(conn, brands, sample_start, sample_end, purchasers_only)
+                        if universe_results:
+                            print(f"🌍 Universe scan complete. True universe size: {universe_results['total_universe']:,} users")
+                            # ── LOW-UNIVERSE GATE ─────────────────────────────────────────
+                            # Skip the run + email the requesting user if the eligible
+                            # audience is too small for an accurate profile (even after
+                            # maximum sample inflation). No credits are consumed.
+                            if hasattr(bg, 'check_universe_viability'):
+                                try:
+                                    bg.check_universe_viability(universe_results['total_universe'], project_name)
+                                except getattr(bg, 'LowUniverseError', Exception) as _lue:
+                                    _handle_low_universe_skip(job_id, project_name, _lue)
+                                    return
+                            bg.run_full_pipeline.universe_size = universe_results['total_universe']
+                        else:
+                            print("⚠️ Universe scan returned no results, using default")
+                            bg.run_full_pipeline.universe_size = 1000000
+                    else:
+                        print("⚠️ perform_full_universe_scan not available in bg module")
+                        bg.run_full_pipeline.universe_size = 1000000
+                except getattr(bg, 'LowUniverseError', tuple()) as _lue:
+                    # Defensive catch in case the inner block re-raises rather than
+                    # routing through _handle_low_universe_skip (e.g. future
+                    # refactor). Same handling.
+                    _handle_low_universe_skip(job_id, project_name, _lue)
+                    return
+                except Exception as e:
+                    print(f"⚠️ Universe scan error: {e}, proceeding with default size")
+                    bg.run_full_pipeline.universe_size = 1000000
+
+            _completed_steps.add('universe_scan')
+            _scan_elapsed = _time.time() - _analysis_start
+            _scan_pct = sum(_PROFILE_STEP_WEIGHTS[s] for s in _completed_steps)
+            _remaining_pct = 100 - _scan_pct
+            _est_remaining = int(_scan_elapsed / max(_scan_pct, 1) * _remaining_pct) if _scan_pct > 0 else None
+            update_job_status(
+                job_id,
+                progress=_profile_step_progress(_completed_steps),
+                message='Running analysis pipeline...',
+                estimated_remaining_seconds=_est_remaining,
+            )
+
+            # Use /tmp/bg_pipeline on Render (app dir often read-only); same flow for new run and rerun
+            pipeline_out = '/tmp/bg_pipeline'
+            try:
+                os.makedirs(pipeline_out, exist_ok=True)
+            except OSError:
+                pipeline_out = None  # pipeline will use its default
+
+        try:
+            if not _dispatcher_handled:
+                result_file = bg.run_full_pipeline(
+                    conn=conn,
+                    project_name=project_name,
+                    brands=brands,
+                    sample_start=sample_start,
+                    sample_end=sample_end,
+                    behavior_start=behavior_start,
+                    behavior_end=behavior_end,
+                    filters=filters,
+                    skew_settings=skew_settings,
+                    is_genpop=is_genpop,
+                    purchasers_only=purchasers_only,
+                    previous_file_path=actual_previous_file,
+                    brand_category=brand_category,
+                    is_listener_watcher=is_listener_watcher,
+                    output_dir=pipeline_out if pipeline_out else None,
+                    geo_zip_codes=geo_zip_codes,
+                    geo_dma=geo_dma
+                )
             
             _completed_steps.add('pipeline')
             update_job_status(job_id, progress=_profile_step_progress(_completed_steps), message='Processing results...')
