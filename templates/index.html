@@ -30755,12 +30755,14 @@
 
         function _jiqRenderCompanionTimeline(comps) {
             if (!comps || !comps.length) return '<div style="font-size:0.8rem;color:var(--text-secondary);padding:0.5rem 0;">No data.</div>';
-            // HORIZONTAL TIMELINE — bubbles laid out left→right on a
-            // horizontal time axis, anchored at PURCHASE (retail) or
-            // SHOWTIME (movie). The card spans the full row width;
-            // when multiple verticals fall at the same time-point we
-            // stagger them into "lanes" above + below the axis so the
-            // bubbles never overlap.
+            // COMPACT HORIZONTAL TIMELINE — fits in a single screen
+            // viewport without scrolling. Bubbles flow left→right on
+            // the time axis (anchored at PURCHASE for retail / SHOWTIME
+            // for movies); when multiple verticals overlap horizontally
+            // we stagger into compact lanes above + below the axis,
+            // capped at 4 lanes total (2 up / 2 down). Anything that
+            // can't fit in 4 lanes piggybacks into the nearest lane —
+            // rare edge case for normal payloads (≤12 verticals).
 
             // ── Scale detection ──────────────────────────────────────
             var dayMatches = comps.filter(function(c) {
@@ -30768,8 +30770,8 @@
             }).length;
             var scale = (dayMatches >= Math.max(2, comps.length * 0.3)) ? 'days' : 'hours';
 
-            // ── Parse windows in the chosen scale ────────────────────
-            var rows = comps.slice(0, 14).map(function(c) {
+            // ── Parse + sort (cap at top 10 by share for screen fit) ──
+            var rows = comps.slice(0, 10).map(function(c) {
                 var w = _jiqParseCompanionWindow(c.typical_window, scale);
                 return {
                     vertical: c.vertical || '—',
@@ -30791,28 +30793,28 @@
             var axisConfig;
             if (scale === 'days') {
                 axisConfig = {
-                    ticks: [-30, -21, -14, -7, -3, -1, 0, 1, 3, 7, 14, 21, 30],
+                    // Slimmer tick set — drops the every-week ticks
+                    // because the labels overflow on a compact axis.
+                    ticks: [-30, -14, -7, -1, 0, 1, 7, 14, 30],
                     labelFor: function(t) {
                         if (t === 0)   return '🛒 PURCHASE';
-                        if (t === -1)  return '1 day before';
-                        if (t ===  1)  return '1 day after';
-                        if (t === -7)  return '1 week before';
-                        if (t ===  7)  return '1 week after';
-                        if (t === -14) return '2 weeks before';
-                        if (t === 14)  return '2 weeks after';
-                        if (t === -21) return '3 weeks before';
-                        if (t === 21)  return '3 weeks after';
-                        if (t === -30) return '1 month before';
-                        if (t === 30)  return '1 month after';
-                        if (t < 0)     return Math.abs(t) + 'd before';
-                        return t + 'd after';
+                        if (t === -1)  return '1d before';
+                        if (t ===  1)  return '1d after';
+                        if (t === -7)  return '1wk before';
+                        if (t ===  7)  return '1wk after';
+                        if (t === -14) return '2wk before';
+                        if (t === 14)  return '2wk after';
+                        if (t === -30) return '1mo before';
+                        if (t === 30)  return '1mo after';
+                        if (t < 0)     return Math.abs(t) + 'd';
+                        return t + 'd';
                     },
                     xMin: Math.min(-7,  Math.floor(dataMin) - 1),
                     xMax: Math.max( 7,  Math.ceil(dataMax)  + 1),
                 };
             } else {
                 axisConfig = {
-                    ticks: [-6, -4, -3, -2, -1, 0, 1, 2, 4],
+                    ticks: [-6, -4, -2, -1, 0, 1, 2, 4],
                     labelFor: function(t) {
                         if (t === 0) return '🎬 SHOWTIME';
                         if (t < 0)   return Math.abs(t) + 'h before';
@@ -30823,12 +30825,14 @@
                 };
             }
 
-            // ── SVG canvas (full-width: ~1200px viewBox, scales fluidly) ──
-            var W = 1200;
-            var padT = 40, padB = 60, padL = 50, padR = 50;
-            var axisY;  // vertical center where the time axis lives
-            var H = 360;
-            axisY = H / 2 + 4;
+            // ── Compact SVG canvas (target single-screen fit) ────────
+            // Hard-capped H so the chart never grows beyond ~ 360 px.
+            var W    = 1200;
+            var padT = 20, padB = 38, padL = 40, padR = 40;
+            var H    = 360;
+            var axisY = H / 2;
+            var LANE_STEP = 56;     // px between lane centers (was 78)
+            var MAX_LANES = 4;      // 2 above + 2 below
 
             var xMin = axisConfig.xMin, xMax = axisConfig.xMax;
             function xFor(t) {
@@ -30836,32 +30840,32 @@
                 return padL + ((clamped - xMin) / (xMax - xMin)) * (W - padL - padR);
             }
 
-            // ── Bubble sizing ────────────────────────────────────────
+            // ── Bubble sizing (smaller max so lanes pack tighter) ────
             rows.forEach(function(e) {
-                e.r = Math.max(16, Math.min(38, 16 + (e.pct / maxPct) * 24));
+                e.r  = Math.max(13, Math.min(26, 13 + (e.pct / maxPct) * 13));
                 e.cx = xFor(e.center);
             });
 
-            // ── Lane assignment (alternating above/below the axis) ──
-            // For each bubble in time-sorted order, find the first lane
-            // (0=just above, 1=just below, 2=2 above, 3=2 below, …) where
-            // its horizontal extent doesn't collide with anything else in
-            // that lane.
-            var lanes = []; // each lane is an array of {x0, x1}
+            // ── Lane assignment ──────────────────────────────────────
+            // halfW = bubble radius + ~half a label-line of text. The
+            // tighter buffer (50px instead of 100px) gives us room for
+            // 1-line labels and lets neighboring bubbles share a lane
+            // when they're far enough apart on the time axis.
+            var lanes = [];
             function laneOffsetY(laneIdx) {
-                // lane 0 → just above axis, lane 1 → just below, alternating
-                var layer = Math.floor(laneIdx / 2) + 1;
-                var side  = (laneIdx % 2 === 0) ? -1 : 1;
-                return side * layer * 78;  // 78 px between lane centers
+                var capped = Math.min(laneIdx, MAX_LANES - 1);
+                var layer = Math.floor(capped / 2) + 1;
+                var side  = (capped % 2 === 0) ? -1 : 1;
+                return side * layer * LANE_STEP;
             }
             rows.forEach(function(e) {
-                var halfW = e.r + 100;  // label-text room on the right
+                var halfW = e.r + 50;
                 var laneIdx = 0;
-                while (true) {
+                while (laneIdx < MAX_LANES) {
                     var lane = lanes[laneIdx] = lanes[laneIdx] || [];
                     var fits = lane.every(function(occ) {
-                        return (e.cx + halfW < occ.x0 - 8)
-                            || (e.cx - halfW > occ.x1 + 8);
+                        return (e.cx + halfW < occ.x0 - 6)
+                            || (e.cx - halfW > occ.x1 + 6);
                     });
                     if (fits) {
                         lane.push({ x0: e.cx - halfW, x1: e.cx + halfW });
@@ -30869,24 +30873,19 @@
                         break;
                     }
                     laneIdx++;
-                    if (laneIdx > 20) { e.laneIdx = laneIdx; break; }
+                }
+                if (laneIdx >= MAX_LANES) {
+                    // Overflow: place in the least-crowded lane
+                    var bestLane = 0, bestCount = Infinity;
+                    for (var i = 0; i < MAX_LANES; i++) {
+                        var lc = (lanes[i] || []).length;
+                        if (lc < bestCount) { bestCount = lc; bestLane = i; }
+                    }
+                    e.laneIdx = bestLane;
+                    (lanes[bestLane] = lanes[bestLane] || []).push({ x0: e.cx - halfW, x1: e.cx + halfW });
                 }
                 e.cy = axisY + laneOffsetY(e.laneIdx);
             });
-
-            // Grow SVG height if extreme stacking demands it
-            var maxAbsY = rows.reduce(function(m, e) {
-                return Math.max(m, Math.abs(e.cy - axisY) + e.r + 40);
-            }, 0);
-            var neededH = Math.max(360, axisY - padT, (H - axisY) - padB);
-            if (maxAbsY * 2 + 80 > H) {
-                H = maxAbsY * 2 + 100;
-                axisY = H / 2 + 4;
-                // re-compute cy with the new axisY
-                rows.forEach(function(e) {
-                    e.cy = axisY + laneOffsetY(e.laneIdx);
-                });
-            }
 
             var parts = [];
             parts.push('<rect width="' + W + '" height="' + H + '" fill="transparent"/>');
@@ -30894,23 +30893,22 @@
             // Horizontal time axis line
             parts.push('<line x1="' + padL + '" y1="' + axisY + '" x2="' + (W - padR) + '" y2="' + axisY + '" stroke="var(--border-color)" stroke-width="1.5"/>');
 
-            // Time ticks BELOW the axis (so the labels live below)
+            // Time ticks + labels BELOW the axis
             axisConfig.ticks.filter(function(t) { return t >= xMin && t <= xMax; })
                             .forEach(function(t) {
                 var x = xFor(t);
                 var isAnchor = (t === 0);
                 if (isAnchor) {
-                    // Bold vertical accent line at the anchor
-                    parts.push('<line x1="' + x + '" y1="' + (padT - 8) + '" x2="' + x + '" y2="' + (H - padB + 8) + '" stroke="var(--accent-primary)" stroke-width="2" stroke-dasharray="4,3" opacity="0.55"/>');
-                    parts.push('<rect x="' + (x - 56) + '" y="' + (H - padB + 14) + '" width="112" height="22" rx="11" fill="var(--accent-primary)"/>');
-                    parts.push('<text x="' + x + '" y="' + (H - padB + 29) + '" text-anchor="middle" fill="#fff" font-weight="700" font-size="11">' + axisConfig.labelFor(t) + '</text>');
+                    parts.push('<line x1="' + x + '" y1="' + (padT - 4) + '" x2="' + x + '" y2="' + (H - padB + 4) + '" stroke="var(--accent-primary)" stroke-width="2" stroke-dasharray="4,3" opacity="0.55"/>');
+                    parts.push('<rect x="' + (x - 52) + '" y="' + (H - padB + 8) + '" width="104" height="20" rx="10" fill="var(--accent-primary)"/>');
+                    parts.push('<text x="' + x + '" y="' + (H - padB + 22) + '" text-anchor="middle" fill="#fff" font-weight="700" font-size="10.5">' + axisConfig.labelFor(t) + '</text>');
                 } else {
-                    parts.push('<line x1="' + x + '" y1="' + (axisY - 5) + '" x2="' + x + '" y2="' + (axisY + 5) + '" stroke="var(--border-color)" stroke-width="1"/>');
-                    parts.push('<text x="' + x + '" y="' + (H - padB + 22) + '" text-anchor="middle" fill="var(--text-secondary)" font-size="10.5">' + axisConfig.labelFor(t) + '</text>');
+                    parts.push('<line x1="' + x + '" y1="' + (axisY - 4) + '" x2="' + x + '" y2="' + (axisY + 4) + '" stroke="var(--border-color)" stroke-width="1"/>');
+                    parts.push('<text x="' + x + '" y="' + (H - padB + 18) + '" text-anchor="middle" fill="var(--text-secondary)" font-size="10">' + axisConfig.labelFor(t) + '</text>');
                 }
             });
 
-            // Span bars under each bubble (showing the time-window range)
+            // Span bars on the axis (showing each behavior's time-window range)
             rows.forEach(function(e) {
                 if (e.span > 0) {
                     var x0 = xFor(e.center - e.span / 2);
@@ -30919,36 +30917,43 @@
                 }
             });
 
-            // Connectors from axis to each bubble
+            // Connectors from axis to each bubble (thin guide lines)
             rows.forEach(function(e) {
-                parts.push('<line x1="' + e.cx + '" y1="' + axisY + '" x2="' + e.cx + '" y2="' + e.cy + '" stroke="' + e.color + '" stroke-width="1" opacity="0.4"/>');
+                parts.push('<line x1="' + e.cx + '" y1="' + axisY + '" x2="' + e.cx + '" y2="' + e.cy + '" stroke="' + e.color + '" stroke-width="1" opacity="0.35"/>');
             });
+
+            // Truncate long vertical names to keep labels compact
+            function _truncLabel(s) {
+                var t = s.split('(')[0].trim();
+                if (t.length > 26) t = t.slice(0, 25) + '…';
+                return t;
+            }
 
             // Bubbles + labels
             rows.forEach(function(e) {
                 var labelAbove = (e.cy < axisY);
-                var labelY0 = labelAbove ? (e.cy - e.r - 16) : (e.cy + e.r + 14);
-                var labelY1 = labelAbove ? (e.cy - e.r - 4)  : (e.cy + e.r + 26);
-                var cleanLabel = e.vertical.split('(')[0].trim();
+                var labelY0 = labelAbove ? (e.cy - e.r - 14) : (e.cy + e.r + 13);
+                var labelY1 = labelAbove ? (e.cy - e.r - 3)  : (e.cy + e.r + 24);
+                var cleanLabel = _truncLabel(e.vertical);
 
                 parts.push('<g>'
                      + '<circle cx="' + e.cx + '" cy="' + e.cy + '" r="' + e.r + '" fill="' + e.color + '" opacity="0.92" stroke="#fff" stroke-width="2"/>'
-                     + '<text x="' + e.cx + '" y="' + (e.cy + 4) + '" text-anchor="middle" fill="#fff" font-weight="700" font-size="' + Math.max(11, e.r / 2.1) + '">' + e.pct.toFixed(0) + '%</text>'
+                     + '<text x="' + e.cx + '" y="' + (e.cy + 4) + '" text-anchor="middle" fill="#fff" font-weight="700" font-size="' + Math.max(10, e.r / 2.2) + '">' + e.pct.toFixed(0) + '%</text>'
                      + '<title>' + _jiqEsc(e.vertical + ' — ' + e.pct.toFixed(1) + '% — ' + e.typical_window) + (e.top_sites.length ? ' — ' + _jiqEsc(e.top_sites.join(', ')) : '') + '</title>'
                      + '</g>');
 
-                parts.push('<text x="' + e.cx + '" y="' + labelY0 + '" text-anchor="middle" fill="var(--text-primary)" font-weight="600" font-size="11.5">' + _jiqEsc(cleanLabel) + '</text>');
+                parts.push('<text x="' + e.cx + '" y="' + labelY0 + '" text-anchor="middle" fill="var(--text-primary)" font-weight="600" font-size="10.5">' + _jiqEsc(cleanLabel) + '</text>');
                 if (e.typical_window) {
-                    parts.push('<text x="' + e.cx + '" y="' + labelY1 + '" text-anchor="middle" fill="var(--text-secondary)" font-size="10">' + _jiqEsc(e.typical_window) + '</text>');
+                    parts.push('<text x="' + e.cx + '" y="' + labelY1 + '" text-anchor="middle" fill="var(--text-secondary)" font-size="9.5">' + _jiqEsc(e.typical_window) + '</text>');
                 }
             });
 
             var anchorWord = (scale === 'days') ? 'purchase' : 'showtime';
-            return '<div style="overflow-x:auto;padding:4px 0;">'
-                 + '<svg width="' + W + '" height="' + H + '" viewBox="0 0 ' + W + ' ' + H + '" preserveAspectRatio="xMidYMid meet" style="display:block;width:100%;height:auto;min-width:880px;">'
+            return '<div style="overflow-x:auto;padding:2px 0;">'
+                 + '<svg width="' + W + '" height="' + H + '" viewBox="0 0 ' + W + ' ' + H + '" preserveAspectRatio="xMidYMid meet" style="display:block;width:100%;height:auto;max-height:360px;min-width:760px;">'
                  + parts.join('')
                  + '</svg>'
-                 + '<div style="font-size:0.7rem;color:var(--text-secondary);margin-top:6px;text-align:center;">Bubble size = share of visitors · horizontal position = typical time relative to ' + anchorWord + ' · vertical lanes are just to keep labels readable · hover for top sites</div>'
+                 + '<div style="font-size:0.68rem;color:var(--text-secondary);margin-top:4px;text-align:center;">Bubble size = share of visitors · horizontal position = typical time relative to ' + anchorWord + ' · hover for top sites</div>'
                  + '</div>';
         }
 
