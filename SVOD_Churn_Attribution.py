@@ -3060,6 +3060,38 @@ def _validate_total_watchers_with_ai(show_name, platform_name, inflated_total, i
             print(f"   ⚠️  Research anchored the number but only "
                   f"{len(reach_sources)} reach sources / {len(all_sources)} total — "
                   f"running secondary GPT validation as a cross-check.")
+
+    # === Trust gate for "Claude searched and found no specific number" ===
+    # When Claude DID run web_search but returned null reach (e.g. Grimsburg:
+    # primarily a Fox broadcast show, no Hulu-specific viewership data exists
+    # in press), the priors fallback already went through a Claude validation
+    # pass. The legacy GPT validator's 584-char search isn't going to find
+    # anything Claude's 10-search exploration missed — running it just adds
+    # noise. Trust the priors+Claude-validation result.
+    if (reach_source == 'claude_validated_priors'
+            and isinstance(external_research, dict)):
+        searches_performed = external_research.get('searches_performed', 0) or 0
+        validation = external_research.get('priors_validation') or {}
+        panel_projection_us = int((inflated_total / 10.0) * (US_POPULATION / SAMPLE_REPRESENTS))
+        if searches_performed >= 3:
+            print(f"   ✅ Priors+Claude-validation anchor — Claude already "
+                  f"searched {searches_performed}× and found no specific "
+                  f"viewership figure, then validated the priors number "
+                  f"({validation.get('adjustment_ratio',1):.2f}× adjustment, "
+                  f"{validation.get('confidence','?')} confidence). Skipping "
+                  f"legacy GPT plausibility validator (would just duplicate "
+                  f"Claude's exploration with less rigor).")
+            return inflated_total, inflated_pre, inflated_clean, {
+                'action': 'trusted_priors_plus_claude_validation',
+                'anchor_used': 'claude_validated_priors',
+                'panel_projection_us': panel_projection_us,
+                'estimated_us_viewers': panel_projection_us,
+                'confidence': validation.get('confidence'),
+                'buzz_tier': external_research.get('buzz_tier'),
+                'priors_validation': validation,
+                'is_broadcast_originator': validation.get('is_broadcast_originator', False),
+                'searches_performed': searches_performed,
+            }
     try:
         from openai import OpenAI
         api_key = os.environ.get('OPENAI_API_KEY')
@@ -4882,21 +4914,46 @@ def write_output(df_summary, df_comp, df_demo, df_timing, df_episode_attribution
         _legacy_reach_source = df_summary.attrs.get('reach_source') if df_summary is not None else None
     except Exception:
         pass
-    _legacy_skip = (
+    _legacy_skip_research = (
         _legacy_reach_source == 'claude_external_research'
         and isinstance(_legacy_research, dict)
         and _legacy_research.get('reach_confidence') in ('high', 'medium')
         and len(_legacy_research.get('reach_sources') or []) >= 2
     )
+    # Second skip path: Claude searched, found nothing specific, then
+    # validated the priors number. Don't let the legacy GPT validator
+    # second-guess this with its own weaker search.
+    _legacy_skip_priors_validated = (
+        _legacy_reach_source == 'claude_validated_priors'
+        and isinstance(_legacy_research, dict)
+        and (_legacy_research.get('searches_performed') or 0) >= 3
+    )
+    _legacy_skip = _legacy_skip_research or _legacy_skip_priors_validated
     if _legacy_skip:
-        print(f"   ✅ Skipping legacy plausibility check — headline number "
-              f"already anchored to external research "
-              f"({_legacy_research.get('reach_confidence')} confidence, "
-              f"{len(_legacy_research.get('reach_sources') or [])} sources).")
+        if _legacy_skip_research:
+            print(f"   ✅ Skipping legacy plausibility check — headline number "
+                  f"already anchored to external research "
+                  f"({_legacy_research.get('reach_confidence')} confidence, "
+                  f"{len(_legacy_research.get('reach_sources') or [])} sources).")
+            note = 'Trusted external research; legacy plausibility skipped.'
+            assessment = f"Research-anchored ({_legacy_research.get('buzz_tier', 'unknown')} buzz tier)."
+        else:
+            pv = _legacy_research.get('priors_validation') or {}
+            print(f"   ✅ Skipping legacy plausibility check — Claude already "
+                  f"searched {_legacy_research.get('searches_performed')}× "
+                  f"and validated priors "
+                  f"({pv.get('adjustment_ratio',1):.2f}× adjustment, "
+                  f"{pv.get('confidence','?')} confidence). Legacy GPT search "
+                  f"won't find anything Claude missed.")
+            note = 'Trusted Claude priors-validation; legacy plausibility skipped.'
+            buzz = _legacy_research.get('buzz_tier', 'unknown')
+            assessment = (f"Priors+Claude-validation anchored "
+                          f"({buzz} buzz, "
+                          f"{'broadcast-primary' if pv.get('is_broadcast_originator') else 'streaming-primary'}).")
         validation = {
             'passed': True,
-            'note': 'Trusted external research; legacy plausibility skipped.',
-            'overall_assessment': f"Research-anchored ({_legacy_research.get('buzz_tier', 'unknown')} buzz tier).",
+            'note': note,
+            'overall_assessment': assessment,
         }
     else:
         validation = ai_validate_metrics(
@@ -5468,6 +5525,14 @@ def _research_show_externally_with_claude(
         print(f"   Excerpt: {s[start:start+300]!r}")
         return None
 
+    # Stamp metadata so callers can tell when Claude "searched-and-found-
+    # nothing" vs. "wasn't called at all". Critical for the priors fallback
+    # path — when Claude DID look and returned null reach, the legacy
+    # plausibility validator must skip its own redundant downward search.
+    result['_claude_searched'] = True
+    result['_show_name']       = show_name
+    result['_platform_name']   = platform_name
+
     _EXTERNAL_RESEARCH_CACHE[key] = result
 
     # Audit log — print every finding so the run record shows what Claude
@@ -5500,6 +5565,156 @@ def _research_show_externally_with_claude(
     return result
 
 
+def _claude_validate_priors_reach(*, show_name: str, platform_name: str,
+                                  genre: str, content_cadence: str,
+                                  episode_count: int, is_new_show: bool,
+                                  platform_info: dict, priors_reach_us: int,
+                                  research: dict | None) -> dict | None:
+    """Second Claude pass: when external research returned null reach
+    (Claude searched but couldn't find specific US viewership numbers),
+    ask Claude to validate the priors-derived number using its training-
+    data knowledge of the show + platform.
+
+    Returns a dict like:
+        {
+          'validated_reach_us': int,    # could equal priors_reach_us
+          'adjustment_ratio':   float,  # validated / priors
+          'reasoning':          str,
+          'confidence':         'high'|'medium'|'low',
+        }
+    or None on failure.
+
+    This is the Grimsburg-style escape hatch: Grimsburg is a Fox broadcast
+    show where most viewership is OTA. Claude correctly couldn't find
+    Hulu-specific viewership data, so reach_us came back null. The priors
+    landed at ~708K, but the legacy GPT validator (with a 584-char search)
+    then cut it to ~247K. This validator gives Claude a structured chance
+    to weigh in on whether the priors number is reasonable — even without
+    a specific cited figure — using its broader knowledge.
+    """
+    try:
+        from claude_client import is_claude_reasoning_enabled, claude_reason_json
+    except Exception:
+        return None
+    if not is_claude_reasoning_enabled():
+        return None
+
+    tier = (platform_info or {}).get('tier', 'unknown')
+    subs_m = (platform_info or {}).get('subs_millions', '?')
+    buzz_tier   = (research or {}).get('buzz_tier', 'unknown')
+    buzz_signals = (research or {}).get('buzz_signals') or []
+    signup_driver = (research or {}).get('signup_driver_strength', 'unknown')
+
+    system = (
+        "You are a streaming-industry analyst doing a SANITY CHECK on a\n"
+        "priors-derived audience estimate. You don't need to cite specific\n"
+        "viewership numbers — just judge whether the estimate is in the\n"
+        "right order of magnitude given everything you know about the show,\n"
+        "the platform's role in its distribution, and any buzz/awards data\n"
+        "from your training corpus.\n"
+        "\n"
+        "Key questions to consider:\n"
+        "  • Is this show primarily distributed on the platform we're\n"
+        "    measuring, or is the platform a secondary/catch-up window?\n"
+        "    (E.g. Fox broadcast shows on Hulu next-day, ABC primetime on\n"
+        "    Hulu, CBS shows on Paramount+, etc.)\n"
+        "  • Does the buzz tier match a hit, a solid mid-tier, or a quiet\n"
+        "    show? Use awards / press coverage / reviews as proxies.\n"
+        "  • Is the platform a tentpole driver for this show or an\n"
+        "    afterthought?\n"
+        "\n"
+        "If the priors number looks 2x+ too high (overestimate), adjust\n"
+        "DOWN with reasoning. If 2x+ too low, adjust UP. Otherwise leave\n"
+        "it alone (adjustment_ratio ≈ 1.0). Never make corrections > 5x\n"
+        "without explicit reasoning.\n"
+        "\n"
+        "Output JSON only, no fences, no prose outside the object."
+    )
+
+    user = (
+        f'Show: "{show_name}"\n'
+        f'Platform: {platform_name} (tier={tier}, US subs ~{subs_m}M)\n'
+        f'Genre: {genre or "unknown"}\n'
+        f'Cadence: {content_cadence or "unknown"}\n'
+        f'Episode count: {episode_count}\n'
+        f'Status: {"NEW" if is_new_show else "RETURNING"}\n'
+        f'\n'
+        f'Prior web research summary (Claude attempted to find specific\n'
+        f'US viewership data and could not — but did gather these signals):\n'
+        f'  buzz_tier:        {buzz_tier}\n'
+        f'  signup_driver:    {signup_driver}\n'
+        f'  buzz_signals:\n'
+        + ''.join(f'    - {s}\n' for s in buzz_signals[:8])
+        + f'\n'
+        f'Priors-derived US unique-viewer estimate over the season:\n'
+        f'  {priors_reach_us:,}\n'
+        f'\n'
+        f'Question: Is {priors_reach_us:,} US unique viewers a reasonable\n'
+        f'estimate for the audience that watched this show ON {platform_name}\n'
+        f'specifically (i.e. Hulu-streaming viewers if the show is also on\n'
+        f'broadcast Fox; Netflix-streaming viewers if exclusive, etc.)?\n'
+        f'\n'
+        f'Output JSON:\n'
+        f'{{\n'
+        f'  "validated_reach_us":  <int — your final estimate>,\n'
+        f'  "adjustment_ratio":    <float — validated / priors>,\n'
+        f'  "reasoning":           "<2-4 sentences>",\n'
+        f'  "is_broadcast_originator": <bool — primarily broadcast w/ catch-up streaming?>,\n'
+        f'  "confidence":          "high" | "medium" | "low"\n'
+        f'}}\n'
+    )
+
+    raw = claude_reason_json(system=system, user=user,
+                             max_tokens=600, temperature=0.20)
+    if not raw:
+        return None
+
+    s = raw.strip()
+    if s.startswith('```'):
+        s = s.split('\n', 1)[-1].rsplit('```', 1)[0].strip()
+    start = s.find('{')
+    if start < 0:
+        return None
+    depth, end = 0, start
+    for i in range(start, len(s)):
+        if s[i] == '{': depth += 1
+        elif s[i] == '}':
+            depth -= 1
+            if depth == 0:
+                end = i + 1
+                break
+    try:
+        result = json.loads(s[start:end])
+    except Exception:
+        return None
+
+    try:
+        validated_reach_us = int(result['validated_reach_us'])
+        adjustment_ratio = float(result.get('adjustment_ratio', validated_reach_us / max(1, priors_reach_us)))
+    except (KeyError, TypeError, ValueError):
+        return None
+
+    # Hard cap on big swings without high confidence — prevents Claude from
+    # hallucinating a 10× correction with no specific evidence.
+    confidence = str(result.get('confidence', 'low')).lower()
+    if confidence != 'high' and (adjustment_ratio > 3.0 or adjustment_ratio < 0.33):
+        print(f"   ⚠️  Claude priors-validation proposed {adjustment_ratio:.2f}× "
+              f"swing at {confidence} confidence — capping to 3×")
+        if adjustment_ratio > 3.0:
+            adjustment_ratio = 3.0
+        else:
+            adjustment_ratio = 0.33
+        validated_reach_us = int(priors_reach_us * adjustment_ratio)
+
+    return {
+        'validated_reach_us':       validated_reach_us,
+        'adjustment_ratio':         adjustment_ratio,
+        'reasoning':                result.get('reasoning', ''),
+        'is_broadcast_originator':  bool(result.get('is_broadcast_originator', False)),
+        'confidence':               confidence,
+    }
+
+
 def _build_synthetic_panel(config: dict) -> dict:
     """Compute starting panel numbers — research-first, priors-fallback.
 
@@ -5508,6 +5723,11 @@ def _build_synthetic_panel(config: dict) -> dict:
     Step 2: For every metric, use the research finding if Claude reports
             medium-or-higher confidence; fall back to the tier × genre ×
             cadence priors otherwise.
+    Step 2b: When research returned null reach (Claude searched but didn't
+             find specific viewership data), do a SECOND Claude pass asking
+             it to validate the priors-derived number using its training-data
+             knowledge. Prevents the Grimsburg failure mode where priors
+             were correct directionally but legacy GPT validator overrode them.
     Step 3: Build df_summary in pre-divisor units (OUTPUT_DIVISOR=10).
 
     The full research dict is attached to the returned dict under 'research'
@@ -5550,7 +5770,7 @@ def _build_synthetic_panel(config: dict) -> dict:
     ).hexdigest()
     jitter = (int(seed[:8], 16) % 1000 - 500) / 10000.0   # ±5%
 
-    # Reach: research first, priors fallback
+    # Reach: research first, priors fallback (with Claude validation pass on priors)
     reach_source = 'priors'
     if (research
             and research.get('reach_us_estimate')
@@ -5565,11 +5785,39 @@ def _build_synthetic_panel(config: dict) -> dict:
         except (TypeError, ValueError):
             reach_us = int(base_us * genre_mult * cadence_mult * ep_mult * (1 + jitter))
     else:
-        reach_us = int(base_us * genre_mult * cadence_mult * ep_mult * (1 + jitter))
+        priors_reach_us = int(base_us * genre_mult * cadence_mult * ep_mult * (1 + jitter))
         if research and research.get('reach_us_estimate') is None:
-            print(f"   ⚠️  Research returned null reach — falling back to "
-                  f"tier×genre×cadence priors ({reach_us:,} US)")
+            print(f"   ⚠️  Research returned null reach — running Claude "
+                  f"validation pass on priors ({priors_reach_us:,} US)…")
+            validation = _claude_validate_priors_reach(
+                show_name=show_name,
+                platform_name=config.get('platform_name', ''),
+                genre=config.get('genre', ''),
+                content_cadence=config.get('content_cadence', ''),
+                episode_count=ep_count,
+                is_new_show=is_new,
+                platform_info=platform_info,
+                priors_reach_us=priors_reach_us,
+                research=research,
+            )
+            if validation:
+                reach_us = validation['validated_reach_us']
+                reach_source = 'claude_validated_priors'
+                tag = "broadcast originator" if validation.get('is_broadcast_originator') else "streaming primary"
+                print(f"   🎯 Claude priors-validation: {priors_reach_us:,} → "
+                      f"{reach_us:,} US ({validation['adjustment_ratio']:.2f}×, "
+                      f"{validation['confidence']} conf, {tag})")
+                print(f"      Reasoning: {validation.get('reasoning','')}")
+                # Stash validation findings on research so downstream code
+                # can see the broadcast-vs-streaming context.
+                research = dict(research) if isinstance(research, dict) else {}
+                research['priors_validation'] = validation
+            else:
+                reach_us = priors_reach_us
+                print(f"   ⚠️  Claude priors-validation unavailable — using "
+                      f"raw priors ({reach_us:,} US)")
         else:
+            reach_us = priors_reach_us
             print(f"   📐 Reach from priors: {reach_us:,} US "
                   f"(base {base_us:,} × genre {genre_mult} × cadence {cadence_mult} × ep {ep_mult})")
 
