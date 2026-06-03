@@ -30527,43 +30527,76 @@
         }
         // Parse "1-3 hours before showtime" / "30-90 min before" / "immediately after" / etc.
         // Returns { center_hours: signed_float } where negative = before, positive = after, 0 = at.
-        function _jiqParseCompanionWindow(text) {
-            if (!text) return { center: -1, span: 1 };
+        function _jiqParseCompanionWindow(text, scale) {
+            // scale: 'hours' (movie/showtime payloads) or 'days' (retail/
+            // purchase payloads). Output `center` is in the requested unit
+            // so the renderer doesn't have to special-case anything.
+            scale = scale || 'hours';
+            if (!text) return { center: 0, span: 0.5 };
             var s = String(text).toLowerCase();
-            var hasBefore = s.indexOf('before') >= 0;
-            var hasAfter  = s.indexOf('after')  >= 0 && s.indexOf('before') < 0;
-            // Extract first numeric range (e.g. "1-3", "30-90", "60-90")
+            var hasBefore = /\bbefore\b/.test(s);
+            var hasAfter  = /\bafter\b/.test(s) && !hasBefore;
+            // "Concurrent" / "Same session" / "Background" / "Around" =
+            // happens AT the anchor moment (showtime or purchase). Pin to 0.
+            var atAnchor  = /\b(concurrent|same\s*session|same\s*day|around|background|browse[- ]while)\b/.test(s);
+
+            // Extract first numeric range (e.g. "1-3", "30-90", "0-72")
             var m = s.match(/(\d+(?:\.\d+)?)\s*[-–]\s*(\d+(?:\.\d+)?)/);
             var lo, hi;
             if (m) { lo = +m[1]; hi = +m[2]; }
             else {
                 var m2 = s.match(/(\d+(?:\.\d+)?)/);
                 if (m2) { lo = +m2[1]; hi = lo; }
-                else    { lo = 1; hi = 2; }
+                else    { lo = 0; hi = 1; }
             }
-            // Convert minutes -> hours when minute-units appear
-            var inMinutes = s.indexOf('min') >= 0;
-            if (inMinutes) { lo = lo / 60; hi = hi / 60; }
+            // Detect input unit (minutes / hours / days / weeks)
+            var inMinutes = /\b(min|minute|minutes)\b/.test(s);
+            var inWeeks   = /\b(week|weeks|wk|wks)\b/.test(s);
+            var inDays    = /\b(day|days|d)\b/.test(s) && !inWeeks;
+            var inHours   = /\b(hour|hours|hr|hrs|h)\b/.test(s);
+            // Default: assume requested scale's native unit
+            if (!inMinutes && !inWeeks && !inDays && !inHours) {
+                if (scale === 'days') inDays = true; else inHours = true;
+            }
+            // Normalise lo/hi into the requested output scale
+            if (scale === 'days') {
+                if (inMinutes) { lo = lo / 60 / 24; hi = hi / 60 / 24; }
+                else if (inHours) { lo = lo / 24; hi = hi / 24; }
+                else if (inWeeks) { lo = lo * 7;  hi = hi * 7;  }
+                // inDays passes through unchanged
+            } else { // scale === 'hours'
+                if (inMinutes) { lo = lo / 60; hi = hi / 60; }
+                else if (inDays)  { lo = lo * 24; hi = hi * 24; }
+                else if (inWeeks) { lo = lo * 7 * 24; hi = hi * 7 * 24; }
+                // inHours passes through unchanged
+            }
             var center = (lo + hi) / 2;
-            var span = Math.max(0.25, hi - lo);
-            if (hasBefore) center = -center;
-            else if (hasAfter) center = +center;
-            else center = -center;  // default to "before" if ambiguous
+            var span = Math.max(0.1, hi - lo);
+            if (atAnchor)        center = 0;
+            else if (hasBefore)  center = -center;
+            else if (hasAfter)   center = +center;
+            else                 center = -center;  // default "before" if ambiguous
             return { center: center, span: span };
         }
         function _jiqRenderCompanionTimeline(comps) {
             if (!comps || !comps.length) return '<div style="font-size:0.8rem;color:var(--text-secondary);padding:0.5rem 0;">No data.</div>';
-            // VERTICAL TIMELINE: Y-axis = time (top = hours before, bottom =
-            // hours after showtime), bubbles sit on a vertical spine with
-            // their full text label to the RIGHT in a dedicated horizontal
-            // row each. Previous horizontal version forced every label to
-            // share the same x-position as its bubble, so dense rows
-            // ("Bar/drinks", "Streaming/VOD research", "Rideshare/transport"
-            // all near showtime) collided and got clipped no matter how
-            // tall the SVG was. Going vertical gives each label its own
-            // unobstructed horizontal row.
+            // VERTICAL TIMELINE — bubbles on a vertical spine, full text
+            // labels to the right. Y-axis is time relative to either
+            // SHOWTIME (movie payloads, hours) or PURCHASE (retail
+            // payloads, days), auto-detected from the data.
+
+            // ── Scale detection ──────────────────────────────────────
+            // If ≥30% of window strings mention days/weeks, treat the
+            // whole chart as retail (days around purchase). Otherwise
+            // assume movie-style hours around showtime.
+            var dayMatches = comps.filter(function(c) {
+                return /\b(day|days|week|weeks)\b/i.test(c.typical_window || '');
+            }).length;
+            var scale = (dayMatches >= Math.max(2, comps.length * 0.3)) ? 'days' : 'hours';
+
+            // ── Parse windows in the chosen scale ────────────────────
             var rows = comps.slice(0, 10).map(function(c) {
-                var w = _jiqParseCompanionWindow(c.typical_window);
+                var w = _jiqParseCompanionWindow(c.typical_window, scale);
                 return {
                     vertical: c.vertical || '—',
                     pct: +c.share_pct_of_visitors || 0,
@@ -30578,14 +30611,50 @@
             var maxPct = Math.max.apply(null, rows.map(function(r) { return r.pct; }));
             if (maxPct <= 0) maxPct = 1;
 
-            var W = 620;
-            var padT = 40, padB = 30, padL = 110, padR = 30;
-            var rowGap = 52;  // vertical spacing per bubble row
-            var H = Math.max(420, padT + padB + rows.length * rowGap);
-            var axisX = padL;             // vertical time-axis x position
-            var labelX0 = axisX + 50;     // start of label column
+            // ── Axis configuration per scale ─────────────────────────
+            // yMin/yMax are computed from actual data so the bubbles
+            // spread out instead of crashing into the clamp.
+            var dataMin = Math.min.apply(null, rows.map(function(r) { return r.center; }));
+            var dataMax = Math.max.apply(null, rows.map(function(r) { return r.center; }));
+            var axisConfig;
+            if (scale === 'days') {
+                axisConfig = {
+                    ticks: [-30, -14, -7, -3, -1, 0, 1, 3, 7, 14, 30],
+                    labelFor: function(t) {
+                        if (t === 0)  return '🛒 PURCHASE';
+                        if (t === -1) return '1 day before';
+                        if (t ===  1) return '1 day after';
+                        if (t === -7) return '1 week before';
+                        if (t ===  7) return '1 week after';
+                        if (t === -14)return '2 weeks before';
+                        if (t === 14) return '2 weeks after';
+                        if (t < 0)    return Math.abs(t) + ' days before';
+                        return t + ' days after';
+                    },
+                    yMin: Math.min(-7,  Math.floor(dataMin) - 2),
+                    yMax: Math.max( 7,  Math.ceil(dataMax)  + 2),
+                };
+            } else {
+                axisConfig = {
+                    ticks: [-3, -2, -1, 0, 1, 2],
+                    labelFor: function(t) {
+                        if (t === 0) return '🎬 SHOWTIME';
+                        if (t < 0)   return Math.abs(t) + 'h before';
+                        return t + 'h after';
+                    },
+                    yMin: Math.min(-4,  Math.floor(dataMin) - 0.5),
+                    yMax: Math.max(2.5, Math.ceil(dataMax)  + 0.5),
+                };
+            }
 
-            var yMin = -4, yMax = 2.5;    // hours
+            var W = 700;
+            var padT = 40, padB = 30, padL = 130, padR = 40;
+            var rowGap = 56;
+            var H = Math.max(440, padT + padB + rows.length * rowGap);
+            var axisX = padL;
+            var labelX0 = axisX + 56;
+
+            var yMin = axisConfig.yMin, yMax = axisConfig.yMax;
             function yFor(h) {
                 var clamped = Math.max(yMin, Math.min(yMax, h));
                 return padT + ((clamped - yMin) / (yMax - yMin)) * (H - padT - padB);
@@ -30595,20 +30664,20 @@
             // vertically by nudging them down so each gets a clean row.
             rows.forEach(function(e, i) {
                 e.x = axisX;
-                e.r = Math.max(13, Math.min(28, 13 + (e.pct / maxPct) * 16));
+                e.r = Math.max(14, Math.min(30, 14 + (e.pct / maxPct) * 18));
                 e.y = yFor(e.center);
-                // Cascade-down: if this bubble's y would crowd the previous
-                // (already-placed) one, push it below that one's row.
                 if (i > 0) {
                     var prev = rows[i - 1];
-                    var minGap = prev.r + e.r + 10;
+                    var minGap = prev.r + e.r + 12;
                     if ((e.y - prev.y) < minGap) {
                         e.y = prev.y + minGap;
                     }
                 }
             });
             // Hard clamp in case dense data pushes the last bubble past the
-            // bottom of the SVG.
+            // bottom of the SVG; grow H if needed so nothing gets cropped.
+            var lastY = rows.length ? rows[rows.length - 1].y + rows[rows.length - 1].r + 16 : 0;
+            if (lastY > H - padB) H = lastY + padB;
             rows.forEach(function(e) {
                 e.y = Math.max(padT + e.r + 4,
                        Math.min(H - padB - e.r - 4, e.y));
@@ -30620,19 +30689,20 @@
             // Vertical time axis line
             parts.push('<line x1="' + axisX + '" y1="' + padT + '" x2="' + axisX + '" y2="' + (H - padB) + '" stroke="var(--border-color)" stroke-width="1"/>');
 
-            // Time ticks on the LEFT of the axis (text-anchor: end)
-            var ticks = [-3, -2, -1, 0, 1, 2];
-            var tickLabels = { '-3':'3h before', '-2':'2h before', '-1':'1h before', '0':'🎬 SHOWTIME', '1':'1h after', '2':'2h after' };
-            ticks.forEach(function(t) {
+            // Time ticks on the LEFT of the axis (text-anchor: end), filtered
+            // to the visible y-range so labels for off-chart ticks don't
+            // bunch up against the bounds.
+            axisConfig.ticks.filter(function(t) { return t >= yMin && t <= yMax; })
+                            .forEach(function(t) {
                 var y = yFor(t);
-                var isShowtime = (t === 0);
+                var isAnchor = (t === 0);
                 parts.push('<line x1="' + (axisX - 6) + '" y1="' + y + '" x2="' + (axisX + 6) + '" y2="' + y + '" stroke="var(--border-color)" stroke-width="1"/>');
-                if (isShowtime) {
-                    // Bold horizontal accent line across the chart at SHOWTIME
+                if (isAnchor) {
+                    // Bold horizontal accent line across the chart at the anchor
                     parts.push('<line x1="' + axisX + '" y1="' + y + '" x2="' + (W - padR) + '" y2="' + y + '" stroke="var(--accent-primary)" stroke-width="2" stroke-dasharray="4,3" opacity="0.55"/>');
-                    parts.push('<text x="' + (axisX - 12) + '" y="' + (y + 4) + '" text-anchor="end" fill="var(--accent-primary)" font-weight="700" font-size="11">' + tickLabels[String(t)] + '</text>');
+                    parts.push('<text x="' + (axisX - 12) + '" y="' + (y + 4) + '" text-anchor="end" fill="var(--accent-primary)" font-weight="700" font-size="11">' + axisConfig.labelFor(t) + '</text>');
                 } else {
-                    parts.push('<text x="' + (axisX - 12) + '" y="' + (y + 4) + '" text-anchor="end" fill="var(--text-secondary)" font-size="11">' + tickLabels[String(t)] + '</text>');
+                    parts.push('<text x="' + (axisX - 12) + '" y="' + (y + 4) + '" text-anchor="end" fill="var(--text-secondary)" font-size="11">' + axisConfig.labelFor(t) + '</text>');
                 }
             });
 
@@ -30660,11 +30730,12 @@
                 }
             });
 
+            var anchorWord = (scale === 'days') ? 'purchase' : 'showtime';
             return '<div style="overflow-x:auto;padding:4px 0;">'
                  + '<svg width="' + W + '" height="' + H + '" viewBox="0 0 ' + W + ' ' + H + '" style="display:block;max-width:100%;height:auto;">'
                  + parts.join('')
                  + '</svg>'
-                 + '<div style="font-size:0.68rem;color:var(--text-secondary);margin-top:4px;text-align:center;">Bubble size = share of visitors · vertical position = typical time relative to showtime · hover a bubble for top sites</div>'
+                 + '<div style="font-size:0.68rem;color:var(--text-secondary);margin-top:4px;text-align:center;">Bubble size = share of visitors · vertical position = typical time relative to ' + anchorWord + ' · hover a bubble for top sites</div>'
                  + '</div>';
         }
 
