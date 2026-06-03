@@ -19880,7 +19880,7 @@
                 ═══════════════════════════════════════════════════════ -->
                 <div class="card" id="jiqSiteFunnelCard" style="padding: 1rem; margin-bottom: 1rem; display: none;">
                     <div style="display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.25rem;">
-                        <h3 style="margin: 0;">🚪 Visitor Funnel — what happens to people who land here</h3>
+                        <h3 id="jiqSiteFunnelTitle" style="margin: 0;">🚪 Visitor Funnel — what happens to people who land here</h3>
                         <div id="jiqFunnelMetaTop" style="font-size: 0.72rem; color: var(--text-secondary);"></div>
                     </div>
                     <div id="jiqFunnelSplit" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 0.75rem; margin: 0.75rem 0;"></div>
@@ -19891,18 +19891,18 @@
                 <div id="jiqSiteFunnelDetailsTop" style="display: none; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 1rem; margin-bottom: 1rem;">
                     <div class="card" id="jiqInceptionCard" style="padding: 1rem; display: none;">
                         <div style="display:flex;justify-content:space-between;align-items:baseline;gap:0.5rem;">
-                            <h3 style="margin: 0 0 0.25rem;">🚪 Inception — how visitors arrived</h3>
+                            <h3 id="jiqInceptionTitle" style="margin: 0 0 0.25rem;">🚪 Inception — how visitors arrived</h3>
                             <div id="jiqInceptionViewBtns" data-card="inception" class="jiqViewToggle" style="display:flex;gap:4px;"></div>
                         </div>
-                        <div style="font-size: 0.72rem; color: var(--text-secondary); margin-bottom: 0.5rem;">Inbound referrer mix for visitors landing on the target site.</div>
+                        <div id="jiqInceptionSubtitle" style="font-size: 0.72rem; color: var(--text-secondary); margin-bottom: 0.5rem;">Inbound referrer mix for visitors landing on the target site.</div>
                         <div id="jiqInceptionChart" style="overflow:hidden;"></div>
                         <div id="jiqInceptionTable" style="overflow-x: auto; display:none;"></div>
                     </div>
                     <div class="card" id="jiqSearchTermsCard" style="padding: 1rem; display: none;">
                         <div style="display:flex;justify-content:space-between;align-items:baseline;gap:0.5rem;">
-                            <h3 style="margin: 0 0 0.25rem;">🔎 Top Search Terms — what they searched to find the brand</h3>
+                            <h3 id="jiqSearchTermsTitle" style="margin: 0 0 0.25rem;">🔎 Top Search Terms — what they searched to find the brand</h3>
                         </div>
-                        <div style="font-size: 0.72rem; color: var(--text-secondary); margin-bottom: 0.6rem;">Search queries + hashtags driving inbound discovery, by platform.</div>
+                        <div id="jiqSearchTermsSubtitle" style="font-size: 0.72rem; color: var(--text-secondary); margin-bottom: 0.6rem;">Search queries + hashtags driving inbound discovery, by platform.</div>
                         <div id="jiqSearchTermsBody"></div>
                     </div>
                 </div>
@@ -19911,7 +19911,7 @@
                 <div id="jiqSiteFunnelDetailsCompanion" style="display: none; margin-bottom: 1rem;">
                     <div class="card" id="jiqCompanionCard" style="padding: 1rem; display: none;">
                         <div style="display:flex;justify-content:space-between;align-items:baseline;gap:0.5rem;">
-                            <h3 style="margin: 0 0 0.25rem;">🍽️ Companion Behaviors — adjacent verticals timeline</h3>
+                            <h3 id="jiqCompanionTitle" style="margin: 0 0 0.25rem;">🍽️ Companion Behaviors — adjacent verticals timeline</h3>
                             <div id="jiqCompanionViewBtns" data-card="companion" class="jiqViewToggle" style="display:flex;gap:4px;"></div>
                         </div>
                         <div id="jiqCompanionSubtitle" style="font-size: 0.72rem; color: var(--text-secondary); margin-bottom: 0.5rem;">Other verticals the visitor engaged with around their purchase. Bubble size = share of visitors; horizontal position = typical time relative to purchase.</div>
@@ -19924,19 +19924,19 @@
                 <div id="jiqSiteFunnelDetails" style="display: none; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 1rem; margin-bottom: 1rem;">
                     <div class="card" id="jiqSwitchedCard" style="padding: 1rem; display: none;">
                         <div style="display:flex;justify-content:space-between;align-items:baseline;gap:0.5rem;">
-                            <h3 style="margin: 0 0 0.25rem;">🎯 Where Switchers Ultimately Bought</h3>
+                            <h3 id="jiqSwitchedTitle" style="margin: 0 0 0.25rem;">🎯 Where Switchers Ultimately Bought</h3>
                             <div id="jiqSwitchedViewBtns" data-card="switched" class="jiqViewToggle" style="display:flex;gap:4px;"></div>
                         </div>
-                        <div style="font-size: 0.72rem; color: var(--text-secondary); margin-bottom: 0.5rem;">Of visitors who left the site WITHOUT converting but DID transact later — where did they end up?</div>
+                        <div id="jiqSwitchedSubtitle" style="font-size: 0.72rem; color: var(--text-secondary); margin-bottom: 0.5rem;">Of visitors who left the site WITHOUT converting but DID transact later — where did they end up?</div>
                         <div id="jiqSwitchedChart" style="overflow:hidden;"></div>
                         <div id="jiqSwitchedTable" style="overflow-x: auto; display:none;"></div>
                     </div>
                     <div class="card" id="jiqInterstepCard" style="padding: 1rem; display: none;">
                         <div style="display:flex;justify-content:space-between;align-items:baseline;gap:0.5rem;">
-                            <h3 style="margin: 0 0 0.25rem;">🔀 Steps Switchers Take In Between</h3>
+                            <h3 id="jiqInterstepTitle" style="margin: 0 0 0.25rem;">🔀 Steps Switchers Take In Between</h3>
                             <div id="jiqInterstepViewBtns" data-card="interstep" class="jiqViewToggle" style="display:flex;gap:4px;"></div>
                         </div>
-                        <div style="font-size: 0.72rem; color: var(--text-secondary); margin-bottom: 0.5rem;">Typical detours between leaving the site and converting elsewhere (Google reviews, Rotten Tomatoes, price-comparing chains, etc.).</div>
+                        <div id="jiqInterstepSubtitle" style="font-size: 0.72rem; color: var(--text-secondary); margin-bottom: 0.5rem;">Typical detours between leaving the site and converting elsewhere (Google reviews, Rotten Tomatoes, price-comparing chains, etc.).</div>
                         <div id="jiqInterstepChart" style="overflow:hidden;"></div>
                         <div id="jiqInterstepTable" style="overflow-x: auto; display:none;"></div>
                     </div>
@@ -29077,6 +29077,19 @@
                                 fmtViewers(lifecycleMid),
                                 rangeSubTv(kpis.tv_show_lifecycle_viewers_low, kpis.tv_show_lifecycle_viewers_high)]);
                     }
+                    // Marketing-Touched % — surfaces the marketing-exposure
+                    // KPI prominently so viewers know what % of audience
+                    // was reached by pre-launch marketing of any kind.
+                    if (kpis.marketing_touched_pct != null) {
+                        var mtPct = Number(kpis.marketing_touched_pct);
+                        var mtSub = (kpis.marketing_touched_viewers != null)
+                            ? _jiqFmt(kpis.marketing_touched_viewers) + ' viewers reached'
+                            : 'any pre-launch marketing exposure';
+                        k.push(['Marketing-Touched %',
+                                (isNaN(mtPct) ? '—' : mtPct.toFixed(1) + '%'),
+                                mtSub,
+                                'magenta']);
+                    }
                 } else if (hasConfirmedTicketing) {
                     // Movie with confirmed digital pre-sales + comp-anchored projection.
                     // Layout: Pre-Sales (3 tiles) → Opening Weekend (2 tiles) → Full Run (1 tile)
@@ -29167,9 +29180,11 @@
                     var value  = pair[1];
                     var sub    = pair[2] || '';
                     var accent = pair[3] || '';
-                    var valueColor = (accent === 'lime')  ? 'var(--accent-lime)'
-                                   : (accent === 'cyan')  ? 'var(--accent-cyan)'
-                                   : (accent === 'amber') ? '#f59e0b'
+                    var valueColor = (accent === 'lime')    ? 'var(--accent-lime)'
+                                   : (accent === 'cyan')    ? 'var(--accent-cyan)'
+                                   : (accent === 'amber')   ? '#f59e0b'
+                                   : (accent === 'magenta') ? '#ec4899'
+                                   : (accent === 'violet')  ? '#a78bfa'
                                    : 'var(--text-primary)';
                     var border = accent ? '1px solid ' + valueColor : '1px solid var(--border-color)';
                     return '<div style="background: var(--bg-secondary); border: ' + border + '; border-radius: 8px; padding: 0.6rem 0.8rem;">'
@@ -30762,16 +30777,68 @@
             }
             card.style.display = '';
 
+            // ─────────────────────────────────────────────────────────────
+            // TV-SHOW CONTEXT — re-label site_funnel cards for streaming.
+            // The site_funnel block is re-purposed for TV shows:
+            //   funnel_split          → browse-vs-direct-intent vs drop-off
+            //   inception_referrers   → how viewers first heard of the show
+            //   companion_behaviors   → co-viewing / second-screen behaviors
+            //   intermediate_journey  → pre-play discovery steps
+            //   switched_destinations → POST-VIEW destinations
+            //   top_search_terms      → discovery search queries
+            // ─────────────────────────────────────────────────────────────
+            var _metaCtx = (window._jiqCurrentRun && window._jiqCurrentRun.meta) || {};
+            var _kpisCtx = (window._jiqCurrentRun && window._jiqCurrentRun.kpis) || {};
+            var _isTvCtx = ((_metaCtx.target_type || '').toLowerCase() === 'tv_show')
+                        || (_kpisCtx.tv_show_mode === true);
+            var TV_LABELS = {
+                site_title:         '📺 Viewer Funnel — what happens to people who could watch this show',
+                inception_title:    '📡 How Viewers First Heard About the Show',
+                inception_sub:      'First-touch discovery channels for viewers who eventually pressed play.',
+                search_title:       '🔎 Top Search Terms — what they searched to find the show',
+                search_sub:         'Search queries + hashtags driving inbound discovery, by platform.',
+                companion_title:    '📱 Co-Viewing Behaviors — what viewers did WHILE watching',
+                companion_sub:      'Second-screen behaviors during episodes. Bubble size = share of viewers. "Fully engaged" = viewers with no second-screen activity.',
+                switched_title:     '🎬 Post-View Destinations — what they watched / did next',
+                switched_sub:       'What viewers did right after the credits rolled — next Netflix show, off-platform, social, sleep, etc.',
+                interstep_title:    '🪜 Discovery Steps Before Pressing Play',
+                interstep_sub:      'Off-app validation steps viewers took between hearing about the show and pressing play (search, Rotten Tomatoes, IMDb, clips on YouTube/TikTok, etc.).',
+                tile_a_label:       'Browsed → watched',
+                tile_a_sub:         'opened Netflix, discovered the show, pressed play',
+                tile_b_label:       'Direct intent → watched',
+                tile_b_sub:         'searched the show by name / clicked notif / deep link',
+                tile_c_label:       'Browsed → no watch',
+                tile_c_sub:         'saw the tile but never pressed play',
+            };
+            function _setText(id, txt) {
+                var el = document.getElementById(id);
+                if (el && txt) el.innerHTML = txt;
+            }
+            if (_isTvCtx) {
+                _setText('jiqSiteFunnelTitle',     TV_LABELS.site_title);
+                _setText('jiqInceptionTitle',      TV_LABELS.inception_title);
+                _setText('jiqInceptionSubtitle',   TV_LABELS.inception_sub);
+                _setText('jiqSearchTermsTitle',    TV_LABELS.search_title);
+                _setText('jiqSearchTermsSubtitle', TV_LABELS.search_sub);
+                _setText('jiqCompanionTitle',      TV_LABELS.companion_title);
+                _setText('jiqCompanionSubtitle',   TV_LABELS.companion_sub);
+                _setText('jiqSwitchedTitle',       TV_LABELS.switched_title);
+                _setText('jiqSwitchedSubtitle',    TV_LABELS.switched_sub);
+                _setText('jiqInterstepTitle',      TV_LABELS.interstep_title);
+                _setText('jiqInterstepSubtitle',   TV_LABELS.interstep_sub);
+            }
+
             // Meta line: target + vertical + visitors estimate
             var metaEl = document.getElementById('jiqFunnelMetaTop');
             if (metaEl) {
                 var visitors = funnel.visitors_us_in_window || 0;
+                var visitorWord = _isTvCtx ? ' US viewers in window' : ' US visitors in window';
                 metaEl.textContent = (funnel.vertical ? funnel.vertical : '')
-                    + (visitors ? '  ·  ~' + _jiqFmt(visitors) + ' US visitors in window' : '')
+                    + (visitors ? '  ·  ~' + _jiqFmt(visitors) + visitorWord : '')
                     + (funnel.confidence ? '  ·  confidence: ' + funnel.confidence : '');
             }
 
-            // 1) Funnel split — 3 KPI tiles
+            // 1) Funnel split — 3 KPI tiles (labels swap for TV-show context)
             var sp = funnel.funnel_split || {};
             var onSite = +(sp.converted_on_site_pct || 0);
             var sw     = +(sp.switched_and_bought_pct || 0);
@@ -30785,10 +30852,17 @@
                         + '<div style="font-size: 0.7rem; color: var(--text-secondary); margin-top: 2px;">' + sub + '</div>'
                         + '</div>';
                 };
-                split.innerHTML = ''
-                    + tile('Converted on site',     onSite, '#10b981', 'bought ticket here')
-                    + tile('Switched & bought elsewhere', sw, '#fbbf24', 'left without buying, bought later')
-                    + tile('Never transacted',      ab, '#ef4444', 'abandoned entirely');
+                if (_isTvCtx) {
+                    split.innerHTML = ''
+                        + tile(TV_LABELS.tile_a_label, onSite, '#10b981', TV_LABELS.tile_a_sub)
+                        + tile(TV_LABELS.tile_b_label, sw,     '#3b82f6', TV_LABELS.tile_b_sub)
+                        + tile(TV_LABELS.tile_c_label, ab,     '#ef4444', TV_LABELS.tile_c_sub);
+                } else {
+                    split.innerHTML = ''
+                        + tile('Converted on site',     onSite, '#10b981', 'bought ticket here')
+                        + tile('Switched & bought elsewhere', sw, '#fbbf24', 'left without buying, bought later')
+                        + tile('Never transacted',      ab, '#ef4444', 'abandoned entirely');
+                }
             }
             var notesEl = document.getElementById('jiqFunnelNotes');
             if (notesEl) notesEl.style.display = 'none';
