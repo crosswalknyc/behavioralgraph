@@ -63,6 +63,65 @@
         body[data-theme="light"] *::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
         body[data-theme="light"] * { scrollbar-color: #cbd5e1 #e5e9f0; }
 
+        /* Components with hardcoded dark colors that don't use CSS variables —
+           force them to readable values in light mode. Uses !important only
+           where the original rule itself uses a hardcoded color (so a future
+           variableization would override it cleanly). */
+
+        /* Nav tabs (INSIGHTS / DEMOGRAPHICS / BEHAVIORAL / INTERESTS / LOCATION / COMPARE / SEGMENT / EXEC SUMMARY / WORKSPACE) */
+        body[data-theme="light"] .tab-btn { color: var(--text-primary) !important; background: #ffffff; border-color: var(--border-color); }
+        body[data-theme="light"] .tab-btn:hover { background: rgba(30, 64, 175, 0.08); border-color: var(--accent-blue); color: var(--text-primary) !important; }
+        body[data-theme="light"] .tab-btn.active { background: var(--accent-blue); border-color: var(--accent-blue); color: #ffffff !important; }
+        body[data-theme="light"] .tab-btn.tool-tab { background: rgba(139, 92, 246, 0.10); border-color: rgba(139, 92, 246, 0.45); color: var(--text-primary) !important; }
+        body[data-theme="light"] .tab-btn.tool-tab:hover { background: rgba(139, 92, 246, 0.18); border-color: #7c3aed; color: var(--text-primary) !important; }
+        body[data-theme="light"] .tab-btn.tool-tab.active { background: #7c3aed; border-color: #7c3aed; color: #ffffff !important; }
+
+        /* Product selector dropdown (Profile IQ / Subscriber IQ / Blue IQ / ...) */
+        body[data-theme="light"] .view-nav-trigger {
+            background: #ede9fe !important;
+            border-color: #8b5cf6 !important;
+            color: var(--text-primary) !important;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='%230a1929' viewBox='0 0 16 16'%3E%3Cpath d='M8 11L3 6h10l-5 5z'/%3E%3C/svg%3E") !important;
+        }
+        body[data-theme="light"] .view-nav-trigger:hover { background: #ddd6fe !important; border-color: #7c3aed !important; }
+        body[data-theme="light"] .view-nav-panel {
+            background: #ffffff !important;
+            border-color: #d1d9e6 !important;
+            box-shadow: 0 8px 24px rgba(10, 25, 41, 0.15) !important;
+        }
+        body[data-theme="light"] .view-nav-option { color: var(--text-primary) !important; }
+        body[data-theme="light"] .view-nav-option:hover { background: rgba(139, 92, 246, 0.10) !important; }
+        body[data-theme="light"] .view-nav-dropdown {
+            background: rgba(139, 92, 246, 0.08);
+            border-color: rgba(139, 92, 246, 0.4);
+            color: var(--text-primary);
+        }
+
+        /* User-menu dropdown (Edit Profile / Change Password / Appearance / Logout) —
+           .user-dropdown-inner already uses var(--bg-card) / var(--border-color)
+           so the surface re-skins automatically. The hover background was a near-
+           white rgba (invisible on white) — fix it here. */
+        body[data-theme="light"] .user-dropdown-inner { box-shadow: 0 8px 24px rgba(10, 25, 41, 0.15); }
+        body[data-theme="light"] .user-dropdown-item:hover { background: rgba(10, 25, 41, 0.06); }
+
+        /* IQ Rankers tree (ACTOR / ATHLETE / CREATOR-INFLUENCER / HOST/PERSONALITY / ...) —
+           force the label and count to dark text so cyan/teal accents don't reduce contrast. */
+        body[data-theme="light"] .tree-item,
+        body[data-theme="light"] .tree-label,
+        body[data-theme="light"] .tree-count,
+        body[data-theme="light"] .tree-arrow { color: var(--text-primary) !important; }
+        body[data-theme="light"] .tree-item:hover { background: rgba(10, 25, 41, 0.06); }
+        body[data-theme="light"] .tree-item.selected { background: rgba(30, 64, 175, 0.12); }
+
+        /* Catch-all: any element styled `color: white` directly (selected pills,
+           badges, etc.) inside a transparent / light container should still read
+           as dark in light mode. Scoped so it doesn't break elements that have
+           an explicit dark background. */
+        body[data-theme="light"] .ranker-label,
+        body[data-theme="light"] .category-label,
+        body[data-theme="light"] .sub-category-name,
+        body[data-theme="light"] .sidebar-item-name { color: var(--text-primary) !important; }
+
         * { margin: 0; padding: 0; box-sizing: border-box; }
 
         /* Global Scrollbar Styling - Dark Theme */
@@ -17770,6 +17829,7 @@
                 <div>
                     <label for="blueIQLookback">Lookback</label>
                     <select id="blueIQLookback">
+                        <option value="1">Live (latest day)</option>
                         <option value="7">7 days</option>
                         <option value="30" selected>30 days</option>
                         <option value="90">90 days</option>
