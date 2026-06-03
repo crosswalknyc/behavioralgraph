@@ -137,10 +137,18 @@ def _stub_external(state, lookback_days, politician_names):
     }
 
 
-def _patch_s3_with_cube(cube: dict, *, missing: bool = False):
-    """Monkey-patch the in-process cube cache so we never hit S3."""
-    blue_iq._CUBE_CACHE['cube'] = None if missing else cube
-    blue_iq._CUBE_CACHE['fetched_at'] = time.time()
+def _patch_s3_with_cube(cube: dict, *, missing: bool = False,
+                          lookback: int = 30):
+    """Monkey-patch the in-process cube cache so we never hit S3.
+
+    Cache is per-lookback. Setting it for one lookback doesn't affect
+    others (so the Live=1d cube test path stays independent of the 30d).
+    """
+    blue_iq._CUBE_CACHE.clear()
+    blue_iq._CUBE_CACHE[int(lookback)] = {
+        'cube': None if missing else cube,
+        'fetched_at': time.time(),
+    }
 
 
 def _patch_cache_put_get():
@@ -235,8 +243,36 @@ def main():
     _assert(opts['dmas'][0] == 'Los Angeles', 'dmas list from cube')
     _assert(opts['cube_built_at'] == '2026-06-03T08:01:00+00:00', 'cube_built_at exposed')
 
-    # ── Test 7: external_signals.fetch_all_external parallelism (sanity) ─
-    print("\nTest 7: external_signals.fetch_all_external parallel structure")
+    # ── Test 7a: Live (lookback=1) routes to its own cube ────────────────
+    print("\nTest 7a: Live (lookback=1) routes to its own cube")
+    live_cube = _synthetic_cube()
+    live_cube['computed_at'] = '2026-06-03T14:01:00+00:00'
+    live_cube['lookback_days'] = 1
+    # Mark the cube so we can prove we hit it (not the 30d one)
+    for cell in live_cube['cells'].values():
+        cell['uid_count'] = 8500  # different from the 30d's 10000
+    blue_iq._CUBE_CACHE.clear()
+    blue_iq._CUBE_CACHE[1]  = {'cube': live_cube, 'fetched_at': time.time()}
+    blue_iq._CUBE_CACHE[30] = {'cube': cube,      'fetched_at': time.time()}
+    r = blue_iq.compute_panel_view({'party': 'All', 'geo_type': 'National',
+                                      'geo_value': '', 'lookback_days': 1})
+    _assert(r['panel_size'] == 8500, 'lookback=1 hits Live cube (panel_size=8500)')
+    _assert(r['cube_built_at'] == '2026-06-03T14:01:00+00:00', 'cube_built_at = Live cube timestamp')
+    r30 = blue_iq.compute_panel_view({'party': 'All', 'geo_type': 'National',
+                                       'geo_value': '', 'lookback_days': 30})
+    _assert(r30['panel_size'] == 10000, 'lookback=30 hits the 30d cube (panel_size=10000)')
+
+    # ── Test 7b: Live cube missing => no fallback to 30d (independent) ─
+    print("\nTest 7b: Live cube missing => no fallback to 30d")
+    blue_iq._CUBE_CACHE.clear()
+    blue_iq._CUBE_CACHE[1]  = {'cube': None, 'fetched_at': time.time()}
+    blue_iq._CUBE_CACHE[30] = {'cube': cube, 'fetched_at': time.time()}
+    r = blue_iq.compute_panel_view({'party': 'All', 'geo_type': 'National',
+                                     'geo_value': '', 'lookback_days': 1})
+    _assert(r['cube_missing'] is True, 'Live=missing surfaces cube_missing=true')
+
+    # ── Test 8: external_signals.fetch_all_external parallelism (sanity) ─
+    print("\nTest 8: external_signals.fetch_all_external parallel structure")
     # Restore real function reference briefly to verify the new code path is callable.
     import importlib
     importlib.reload(external_signals)
@@ -245,7 +281,7 @@ def main():
     _assert('PARALLEL' in src.upper(), 'docstring documents parallel design')
 
     print("\n" + "=" * 60)
-    print("ALL 7 SMOKE TESTS PASSED. Cube-reader fast path is sound.")
+    print("ALL SMOKE TESTS PASSED. Cube-reader fast path is sound.")
     print("=" * 60)
 
 

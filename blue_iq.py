@@ -53,6 +53,13 @@ S3_CACHE_BUCKET    = os.environ.get('BLUE_IQ_CACHE_BUCKET', 'dashboard-inputs')
 S3_CACHE_PREFIX    = os.environ.get('BLUE_IQ_CACHE_PREFIX', 'blue_iq/cache/')
 S3_PARTY_PREFIX    = os.environ.get('BLUE_IQ_PARTY_PREFIX', 'blue_iq/party_imputed/')
 S3_CUBE_KEY        = os.environ.get('BLUE_IQ_CUBE_KEY', 'blue_iq/aggregates/latest.json')
+# Per-lookback cube keys. These mirror the aggregator's output layout.
+# The reader picks the file whose lookback matches the user's selected
+# window (Live=1d, default=30d). If a per-lookback key is missing, the
+# reader falls back to the legacy `latest.json` (which is always the
+# 30d cube — written by the aggregator's also_write_legacy=True path).
+def _cube_key_for_lookback(lookback_days: int) -> str:
+    return f"blue_iq/aggregates/cube_{int(lookback_days)}d.json"
 CACHE_TTL_S        = int(os.environ.get('BLUE_IQ_CACHE_TTL', '86400'))   # 24h
 CUBE_STALE_S       = int(os.environ.get('BLUE_IQ_CUBE_STALE_S', '172800'))  # 48h before warning
 MIN_CELL_SIZE      = int(os.environ.get('BLUE_IQ_MIN_CELL_SIZE', '100')) # privacy floor
@@ -289,7 +296,8 @@ def _normalize_filters(filters: dict | None) -> dict:
         lookback_days = int(f.get('lookback_days') or DEFAULT_LOOKBACK_DAYS)
     except Exception:
         lookback_days = DEFAULT_LOOKBACK_DAYS
-    lookback_days = max(7, min(180, lookback_days))
+    # Allow 1 ("Live (latest day)") through 180. 7/30/90 are the standard UI options.
+    lookback_days = max(1, min(180, lookback_days))
     return {
         'party':         party,
         'geo_type':      geo_type,
@@ -317,7 +325,10 @@ def get_filter_options() -> dict:
     states: list[str] = []
     dmas:   list[str] = []
 
-    cube = _load_cube()
+    # Filter dropdown reads from the 30d cube (it has the broadest geo
+    # coverage). The Live cube may have fewer states/DMAs if some panel
+    # cells fell below MIN_CELL_SIZE on a single-day window.
+    cube = _load_cube(DEFAULT_LOOKBACK_DAYS)
     if cube:
         states = list(cube.get('all_states') or [])
         dmas   = list(cube.get('all_dmas') or [])
@@ -1039,8 +1050,8 @@ def _card_demo_crosstab(uids: set[str]) -> dict:
 
 # ── Aggregate cube loader + slicer (PRIMARY fast path) ──────────────────────
 
-_CUBE_CACHE: dict[str, object] = {'cube': None, 'fetched_at': 0.0}
-_CUBE_INPROC_TTL_S = 300  # re-fetch the cube from S3 at most once every 5 min per worker
+_CUBE_CACHE: dict[int, dict] = {}        # {lookback_days: {'cube': ..., 'fetched_at': ts}}
+_CUBE_INPROC_TTL_S = 300                  # re-fetch each cube from S3 at most once every 5 min
 
 
 def _cube_cell_key(party: str, geo_type: str, geo_value: str) -> str:
@@ -1052,42 +1063,60 @@ def _cube_cell_key(party: str, geo_type: str, geo_value: str) -> str:
     return f"{party}||"
 
 
-def _load_cube() -> Optional[dict]:
-    """Load the cube from S3 with a short in-process TTL.
+def _load_cube(lookback_days: int = DEFAULT_LOOKBACK_DAYS) -> Optional[dict]:
+    """Load the per-lookback cube from S3 with a short in-process TTL.
 
-    Returns None if cube is missing entirely (frontend then falls through to
-    a degraded "external-only" view). Logs a warning if cube is older than
-    CUBE_STALE_S but still returns it so we never go dark unnecessarily.
+    Lookback resolves to a specific S3 key (`cube_{N}d.json`). If that key
+    is missing AND the user asked for the default 30d window, we fall
+    through to the legacy `latest.json` key for backward compat. For the
+    1d ("Live") cube, no fallback — missing means missing.
+
+    Returns None if the cube is missing entirely (frontend then falls
+    through to a degraded "external-only" view). Logs a warning if the
+    cube is older than CUBE_STALE_S but still returns it so the dashboard
+    never goes dark unnecessarily.
     """
     now = time.time()
-    if _CUBE_CACHE['cube'] is not None and (now - float(_CUBE_CACHE['fetched_at']) < _CUBE_INPROC_TTL_S):
-        return _CUBE_CACHE['cube']  # type: ignore[return-value]
-    try:
+    cached = _CUBE_CACHE.get(int(lookback_days))
+    if cached and (now - float(cached.get('fetched_at', 0)) < _CUBE_INPROC_TTL_S):
+        return cached.get('cube')  # may be None if last fetch confirmed missing
+    primary_key = _cube_key_for_lookback(lookback_days)
+    fallback_key = S3_CUBE_KEY if int(lookback_days) == DEFAULT_LOOKBACK_DAYS else None
+
+    def _try_key(key: str) -> Optional[dict]:
         s3 = _s3()
-        resp = s3.get_object(Bucket=S3_CACHE_BUCKET, Key=S3_CUBE_KEY)
-        body = resp['Body'].read()
-        cube = json.loads(body.decode('utf-8'))
-        _CUBE_CACHE['cube'] = cube
-        _CUBE_CACHE['fetched_at'] = now
-        # Age warning
+        resp = s3.get_object(Bucket=S3_CACHE_BUCKET, Key=key)
+        return json.loads(resp['Body'].read().decode('utf-8'))
+
+    cube: Optional[dict] = None
+    for k in [primary_key, fallback_key]:
+        if not k:
+            continue
+        try:
+            cube = _try_key(k)
+            break
+        except Exception as e:
+            msg = str(e)
+            if 'NoSuchKey' in msg or '404' in msg:
+                continue
+            logger.warning("Blue IQ cube load failed for %s: %s", k, e)
+            continue
+
+    if cube is not None:
         try:
             built = datetime.fromisoformat(cube.get('computed_at', '').replace('Z', '+00:00'))
             age = (datetime.now(timezone.utc) - built).total_seconds()
             if age > CUBE_STALE_S:
-                logger.warning("Blue IQ cube is %.0fh old — nightly aggregator may be failing.", age / 3600)
+                logger.warning("Blue IQ %dd cube is %.0fh old — aggregator may be failing.",
+                               lookback_days, age / 3600)
         except Exception:
             pass
-        return cube
-    except Exception as e:
-        msg = str(e)
-        if 'NoSuchKey' in msg or '404' in msg:
-            logger.warning("Blue IQ cube missing at s3://%s/%s — run blue_iq_aggregator.py.",
-                           S3_CACHE_BUCKET, S3_CUBE_KEY)
-        else:
-            logger.warning("Blue IQ cube load failed: %s", e)
-        _CUBE_CACHE['cube'] = None
-        _CUBE_CACHE['fetched_at'] = now
-        return None
+    else:
+        logger.warning("Blue IQ %dd cube missing at s3://%s/%s — run blue_iq_aggregator.py --lookback %d",
+                       lookback_days, S3_CACHE_BUCKET, primary_key, lookback_days)
+
+    _CUBE_CACHE[int(lookback_days)] = {'cube': cube, 'fetched_at': now}
+    return cube
 
 
 def _slice_cube(cube: dict, filters: dict) -> tuple[Optional[dict], int]:
@@ -1177,8 +1206,10 @@ def compute_panel_view(filters: dict, *, force_refresh: bool = False) -> dict:
             cached['cache_hit'] = True
             return cached
 
-    # 2. Cube lookup (sub-second S3 GetObject, then in-process cache for 5 min)
-    cube = _load_cube()
+    # 2. Cube lookup (sub-second S3 GetObject, then in-process cache for 5 min).
+    # Pick the cube file that matches the user's selected lookback window —
+    # so "Live (1 day)" reads cube_1d.json and "30 days" reads cube_30d.json.
+    cube = _load_cube(int(f.get('lookback_days') or DEFAULT_LOOKBACK_DAYS))
     cell, panel_size = _slice_cube(cube, f) if cube else (None, 0)
     suppressed = panel_size < MIN_CELL_SIZE
     cube_missing = cube is None
