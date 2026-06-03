@@ -417,37 +417,40 @@ def wikipedia_pageviews(titles: list[str], lookback_days: int = 7) -> dict[str, 
 
 def fetch_all_external(state: Optional[str], lookback_days: int,
                         politician_names: Iterable[str]) -> dict:
-    """Pull every external source in one shot. Returns a dict of partial results.
+    """Pull every external source IN PARALLEL via a small ThreadPoolExecutor.
 
-    Caller blends these into the Blue IQ card output. Missing keys mean that
-    source failed.
+    Returns a dict of partial results. Missing keys mean that source failed.
+    Bounded to 8s per source (see `_HTTP_TIMEOUT_S`) so the dashboard never
+    waits more than that on any single source even on the slowest network day.
     """
+    from concurrent.futures import ThreadPoolExecutor, as_completed
     politician_names = list(politician_names or [])
-    out: dict = {}
-    try:
-        out['google_trends_top'] = trends_top_issues(state=state, lookback_days=lookback_days)
-    except Exception as e:
-        logger.debug("trends_top_issues failed: %s", e)
-        out['google_trends_top'] = []
-    try:
-        out['google_trends_politicians'] = trends_politician_interest(politician_names, state=state)
-    except Exception as e:
-        logger.debug("trends_politician_interest failed: %s", e)
-        out['google_trends_politicians'] = {}
-    try:
-        out['gdelt_articles'] = gdelt_political_articles(state=state, lookback_days=lookback_days)
-    except Exception as e:
-        logger.debug("gdelt_political_articles failed: %s", e)
-        out['gdelt_articles'] = []
-    try:
-        out['gdelt_politician_mentions'] = gdelt_politician_mentions(politician_names, state=state,
-                                                                      lookback_days=lookback_days)
-    except Exception as e:
-        logger.debug("gdelt_politician_mentions failed: %s", e)
-        out['gdelt_politician_mentions'] = {}
-    try:
-        out['wiki_pageviews'] = wikipedia_pageviews(politician_names, lookback_days=lookback_days)
-    except Exception as e:
-        logger.debug("wikipedia_pageviews failed: %s", e)
-        out['wiki_pageviews'] = {}
+
+    tasks = {
+        'google_trends_top':         lambda: trends_top_issues(state=state, lookback_days=lookback_days),
+        'google_trends_politicians': lambda: trends_politician_interest(politician_names, state=state),
+        'gdelt_articles':            lambda: gdelt_political_articles(state=state, lookback_days=lookback_days),
+        'gdelt_politician_mentions': lambda: gdelt_politician_mentions(politician_names, state=state, lookback_days=lookback_days),
+        'wiki_pageviews':            lambda: wikipedia_pageviews(politician_names, lookback_days=lookback_days),
+    }
+
+    defaults = {
+        'google_trends_top': [],
+        'google_trends_politicians': {},
+        'gdelt_articles': [],
+        'gdelt_politician_mentions': {},
+        'wiki_pageviews': {},
+    }
+
+    out: dict = dict(defaults)
+    # 5 workers — one per source — so all five run concurrently.
+    with ThreadPoolExecutor(max_workers=5, thread_name_prefix='blueiq-ext') as ex:
+        futures = {ex.submit(fn): key for key, fn in tasks.items()}
+        for fut in as_completed(futures, timeout=30):
+            key = futures[fut]
+            try:
+                out[key] = fut.result(timeout=15)
+            except Exception as e:
+                logger.debug("external source %s failed: %s", key, e)
+                out[key] = defaults[key]
     return out
