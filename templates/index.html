@@ -76,16 +76,21 @@
         body[data-theme="light"] .tab-btn.tool-tab:hover { background: rgba(139, 92, 246, 0.18); border-color: #7c3aed; color: var(--text-primary) !important; }
         body[data-theme="light"] .tab-btn.tool-tab.active { background: #7c3aed; border-color: #7c3aed; color: #ffffff !important; }
 
-        /* Product selector dropdown (Profile IQ / Subscriber IQ / Blue IQ / ...) */
+        /* Product selector dropdown (Profile IQ / Subscriber IQ / Blue IQ / ...)
+           NOTE: must use `background-color` (not `background` shorthand) — the
+           shorthand resets background-repeat/background-position back to defaults
+           and causes the dropdown arrow SVG to tile across the entire pill. */
         body[data-theme="light"] .view-nav-trigger {
-            background: #ede9fe !important;
+            background-color: #ede9fe !important;
             border-color: #8b5cf6 !important;
             color: var(--text-primary) !important;
             background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='%230a1929' viewBox='0 0 16 16'%3E%3Cpath d='M8 11L3 6h10l-5 5z'/%3E%3C/svg%3E") !important;
+            background-repeat: no-repeat !important;
+            background-position: right 0.75rem center !important;
         }
-        body[data-theme="light"] .view-nav-trigger:hover { background: #ddd6fe !important; border-color: #7c3aed !important; }
+        body[data-theme="light"] .view-nav-trigger:hover { background-color: #ddd6fe !important; border-color: #7c3aed !important; }
         body[data-theme="light"] .view-nav-panel {
-            background: #ffffff !important;
+            background-color: #ffffff !important;
             border-color: #d1d9e6 !important;
             box-shadow: 0 8px 24px rgba(10, 25, 41, 0.15) !important;
         }
