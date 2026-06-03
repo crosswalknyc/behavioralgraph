@@ -122,6 +122,14 @@
         body[data-theme="light"] .sub-category-name,
         body[data-theme="light"] .sidebar-item-name { color: var(--text-primary) !important; }
 
+        /* Profile selector sidebar items — base CSS hardcodes color:#ffffff for
+           .profile-select-item:not(.locked), which renders as white-on-white in
+           light mode. Active state keeps its accent-blue fill with white text. */
+        body[data-theme="light"] .profile-select-item:not(.locked) { color: var(--text-primary) !important; }
+        body[data-theme="light"] .profile-select-item:not(.locked):hover { background: rgba(22, 163, 74, 0.10); color: var(--text-primary) !important; }
+        body[data-theme="light"] .profile-select-item.active { background: var(--accent-blue); color: #ffffff !important; }
+        body[data-theme="light"] .profile-select-item.locked { color: var(--text-secondary) !important; opacity: 0.6; }
+
         * { margin: 0; padding: 0; box-sizing: border-box; }
 
         /* Global Scrollbar Styling - Dark Theme */
