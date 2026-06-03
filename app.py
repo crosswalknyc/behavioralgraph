@@ -27610,49 +27610,66 @@ def submit_campaign_roi():
 
 
 def run_svod_acquisition(job_id):
-    """Run the SVOD_Churn_Attribution.py script.
+    """Run the Subscriber-IQ attribution job via the synthetic (AI-curated)
+    pipeline.
 
-    NOTE on the data backend: this job uses the
-    `migration/clickhouse_connector` drop-in (NOT Snowflake) — same backend
-    as SF→LF Conversion. The script's `connect_snowflake()` is now a thin
-    wrapper around `connect_clickhouse()`, so all queries go through the
-    SQL translator (DATEADD/DATEDIFF/TO_CHAR/TO_DATE/||/etc.) and per-query
-    `max_execution_time` + `max_memory_usage` settings configured in
-    `clickhouse_connector.DEFAULT_QUERY_SETTINGS`.
+    Backend change (2026-06-03): the ClickHouse panel-pull is no longer the
+    default for dashboard-initiated runs. We call
+    `SVOD_Churn_Attribution.run_synthetic_attribution()` which derives a
+    starting panel from tier × genre × cadence × episode-count priors and
+    runs the full AI validation framework (Claude bracket → tier floor →
+    demographic alignment → evidence threshold → new-content guard).
+
+    Why we ship synthetic-as-default:
+      • ClickHouse panel-pull has had ongoing infrastructure problems
+        (zombie cron queries, auto-format permutation explosion, multi-
+        minute hangs on common search terms).
+      • The AI validation framework hardened in the E0/E1/E2 fixes now
+        produces dashboard-ready output without needing measured panel
+        data as the starting point.
+      • Synthetic runs complete in ~40s vs. 5+ minutes for the ClickHouse
+        path even on a healthy day.
+
+    See bg-webapp/SYNTHETIC_PIPELINE.md for the full decision rationale,
+    priors-table reference, and guidance on when to fall back to the
+    ClickHouse path (which remains available via the CLI / module
+    function `main()` for use cases that require measured ground truth).
     """
     try:
-        update_job_status(job_id, progress=10, message='Initializing (ClickHouse)...')
-        print(f"[Subscriber IQ] Starting job {job_id}  (backend: ClickHouse)")
-        
-        # Try script in repo root (parent of app dir), then same dir as app (e.g. bg-webapp on Render)
+        update_job_status(job_id, progress=10, message='Initializing synthetic AI pipeline...')
+        print(f"[Subscriber IQ] Starting job {job_id}  (backend: synthetic + AI validation)")
+
         app_dir = os.path.dirname(os.path.abspath(__file__))
         repo_root = os.path.dirname(app_dir)
         script_path = os.path.join(repo_root, 'SVOD_Churn_Attribution.py')
         if not os.path.exists(script_path):
             script_path = os.path.join(app_dir, 'SVOD_Churn_Attribution.py')
         if not os.path.exists(script_path):
-            update_job_status(job_id, status='failed', error=f'Script not found. Tried: {repo_root!r} and {app_dir!r}')
+            update_job_status(job_id, status='failed',
+                              error=f'Script not found. Tried: {repo_root!r} and {app_dir!r}')
             return
-        
-        # Get job parameters
+
         job = jobs[job_id]
         params = job['params']
-        
-        update_job_status(job_id, progress=30, message='Running analysis on ClickHouse...')
-        
-        # Import and run the script
+
+        # Import the SVOD module so we can call run_synthetic_attribution().
+        # The module's load-time hook pins the SVOD-side claude_client into
+        # sys.modules so all subsequent `from claude_client import …` calls
+        # resolve to the right module.
         import importlib.util
         spec = importlib.util.spec_from_file_location("svod_churn_attribution", script_path)
         module = importlib.util.module_from_spec(spec)
         sys.path.insert(0, os.path.dirname(script_path))
         spec.loader.exec_module(module)
-        
-        # Prepare parameters for the script
+
+        # Convert the form's date strings into datetimes
         from datetime import datetime
         campaign_start = datetime.strptime(params['campaign_start'], '%Y-%m-%d')
-        campaign_end = datetime.strptime(params['campaign_end'], '%Y-%m-%d')
-        
-        # Build episode_dates: script expects list of {episode_num, air_date (datetime), date_str, display_label}
+        campaign_end   = datetime.strptime(params['campaign_end'],   '%Y-%m-%d')
+
+        # Build episode_dates list-of-dicts that the synthetic builder expects.
+        # Reuses the same conversion logic the ClickHouse path used so all
+        # existing form payloads work without UI changes.
         episode_dates = []
         for raw in params.get('episode_dates') or []:
             date_str = raw.get('date_str') or raw.get('air_date')
@@ -27660,7 +27677,6 @@ def run_svod_acquisition(job_id):
                 continue
             try:
                 if isinstance(date_str, str) and '-' in date_str:
-                    # Support MM-DD-YYYY from form
                     if len(date_str) == 10 and date_str[2] == '-' and date_str[5] == '-':
                         air_date = datetime.strptime(date_str, '%m-%d-%Y')
                     else:
@@ -27670,113 +27686,118 @@ def run_svod_acquisition(job_id):
             except ValueError:
                 continue
             episode_dates.append({
-                'episode_num': int(raw.get('episode_num', len(episode_dates) + 1)),
-                'air_date': air_date,
-                'date_str': air_date.strftime('%m-%d-%Y'),
-                'display_label': raw.get('display_label') or (f"Episode {raw.get('episode_num', len(episode_dates) + 1)}" if params.get('tracking_mode') == 'episode' else air_date.strftime('%m/%d/%y'))
+                'episode_num':   int(raw.get('episode_num', len(episode_dates) + 1)),
+                'air_date':      air_date,
+                'date_str':      air_date.strftime('%Y-%m-%d'),
+                'display_label': raw.get('display_label')
+                                 or (f"Episode {raw.get('episode_num', len(episode_dates) + 1)}"
+                                     if params.get('tracking_mode') == 'episode'
+                                     else air_date.strftime('%m/%d/%y')),
             })
         if episode_dates and params.get('track_episodes'):
-            # Sort episodes chronologically so date range is correct
             episode_dates.sort(key=lambda ep: ep['air_date'])
             campaign_start = episode_dates[0]['air_date']
             attr_days = int(params.get('attribution_window', 30))
             campaign_end = episode_dates[-1]['air_date'] + timedelta(days=attr_days)
-        
-        # Safety: ensure campaign_start <= campaign_end
+
         if campaign_start > campaign_end:
             campaign_start, campaign_end = campaign_end, campaign_start
-        
-        competitive_brands = module.get_competitive_platforms(params['platform_name']) if hasattr(module, 'get_competitive_platforms') else []
+
         from pathlib import Path
         output_folder = Path(OUTPUT_DIR) / "attribution"
         output_folder.mkdir(parents=True, exist_ok=True)
-        script_params = {
-            'project_name': params['project_name'],
-            'auto_format': True,
-            'campaign_start': campaign_start,
-            'campaign_end': campaign_end,
-            'exclusion_days': int(params['exclusion_days']),
+
+        # Build the synthetic config dict. We disable the function's own
+        # S3 upload because the dashboard wants the file to land in the
+        # purgatory prefix (review-and-release UX), not at the root of the
+        # bucket. We'll do that upload below using the existing
+        # upload_to_s3() helper.
+        synth_config = {
+            'project_name':       params['project_name'],
+            'show_search_terms':  params['show_search_terms'],
+            'platform_name':      params['platform_name'],
+            'campaign_start':     campaign_start,
+            'campaign_end':       campaign_end,
+            'exclusion_days':     int(params['exclusion_days']),
             'attribution_window': int(params['attribution_window']),
-            'show_search_terms': params['show_search_terms'],
-            'is_new_show': params.get('is_new_show', False),
-            'track_episodes': bool(params.get('track_episodes', False)),
-            'tracking_mode': params.get('tracking_mode'),
-            'episode_dates': episode_dates,
-            'platform_name': params['platform_name'],
-            'competitive_brands': competitive_brands,
-            'genre': params.get('genre', '') or '',
-            'content_cadence': params.get('content_cadence', '') or '',
-            'output_dir': str(output_folder),
+            'genre':              params.get('genre', '') or '',
+            'content_cadence':    params.get('content_cadence', '') or '',
+            'is_new_show':        bool(params.get('is_new_show', False)),
+            'episode_dates':      episode_dates,
+            'tracking_mode':      params.get('tracking_mode'),
+            'track_episodes':     bool(params.get('track_episodes', False)),
+            'output_dir':         str(output_folder),
+            'upload_to_s3':       False,   # we do purgatory upload below
+            # No dashboard_category here — purgatory items don't get a
+            # category until the user explicitly releases them, at which
+            # point the existing release UI sets svod_metadata.
         }
-        
-        # Run the analysis function. `module.connect_snowflake()` is just a
-        # named wrapper around `connect_clickhouse()` for backward compat;
-        # the connection has Subscriber-IQ tuned settings (long timeout,
-        # parallel aggregation, generous memory budget) baked in via
-        # `migration/clickhouse_connector.DEFAULT_QUERY_SETTINGS`.
-        conn = module.connect_snowflake()
-        try:
-            update_job_status(job_id, progress=50, message='Executing analysis on ClickHouse...')
-            print(f"[Subscriber IQ] Connected; running analysis (project={params.get('project_name')!r})")
-            
-            # Call run_query directly with our params
-            if hasattr(module, 'run_query'):
-                summary_df, comp_df, demo_df, timing_df, episode_df, monthly_df, episode_timing_df, churn_df, post_signup_touchpoints_df = module.run_query(conn, script_params)
-            else:
-                update_job_status(job_id, status='failed', error='Script does not have run_query function')
-                return
-            
-            update_job_status(job_id, progress=80, message='Writing output...')
-            
-            # Call write_output (writes to script_params['output_dir'] = server output folder)
-            if hasattr(module, 'write_output'):
-                module.write_output(summary_df, comp_df, demo_df, timing_df, episode_df, monthly_df, episode_timing_df, churn_df, post_signup_touchpoints_df, script_params)
-            else:
-                update_job_status(job_id, status='failed', error='Script does not have write_output function')
-                return
-            
-            # Find the output file in the server output folder (same as Talent Theater)
-            if output_folder.exists():
-                safe_name = re.sub(r'[<>:"/\\|?*\']', '', params['project_name']).strip()[:100]
-                csv_files = list(output_folder.glob(f"{safe_name}*.csv"))
-                if csv_files:
-                    csv_files.sort(key=lambda p: p.stat().st_mtime, reverse=True)
-                    output_file = str(csv_files[0])
-                    if os.path.exists(output_file):
-                        jobs[job_id]['result_file'] = output_file
-                        
-                        # Upload to SVOD bucket purgatory
-                        update_job_status(job_id, progress=90, message='Uploading to purgatory...')
-                        created_by = job.get('username', '')
-                        s3_key = upload_to_s3(
-                            output_file, 
-                            params['project_name'], 
-                            params['campaign_start'], 
-                            params['campaign_end'],
-                            created_by=created_by,
-                            use_purgatory=True,
-                            bucket=SUBSCRIBER_S3_BUCKET,
-                            category='SVOD Acquisition',
-                            source_type='svod_acquisition'
-                        )
-                        
-                        if s3_key:
-                            jobs[job_id]['s3_key'] = s3_key
-                            jobs[job_id]['purgatory_id'] = f"{SUBSCRIBER_S3_BUCKET}:{s3_key}"
-                            print(f"✅ Subscriber IQ uploaded to purgatory: {s3_key}")
-                        
-                        update_job_status(job_id, progress=100, status='completed', message='Analysis complete!', s3_key=s3_key)
-                    else:
-                        update_job_status(job_id, status='failed', error='Output file not found')
-                else:
-                    update_job_status(job_id, status='failed', error='No output file created')
-            else:
-                update_job_status(job_id, status='failed', error='Output folder not found')
-        finally:
-            try:
-                conn.close()
-            except:
-                pass
+
+        update_job_status(job_id, progress=30,
+                          message='Deriving panel from tier × genre × cadence priors...')
+        print(f"[Subscriber IQ] Synthetic config built; running AI pipeline "
+              f"(project={params.get('project_name')!r}, "
+              f"platform={params.get('platform_name')!r}, "
+              f"genre={params.get('genre')!r}, "
+              f"cadence={params.get('content_cadence')!r}, "
+              f"episodes={len(episode_dates)})")
+
+        update_job_status(job_id, progress=50,
+                          message='Running AI validation (Claude bracket, tier floor, '
+                                  'demographic alignment, reactivation guard)...')
+
+        if not hasattr(module, 'run_synthetic_attribution'):
+            update_job_status(job_id, status='failed',
+                              error='SVOD_Churn_Attribution.run_synthetic_attribution '
+                                    'not available — module out of date.')
+            return
+        result = module.run_synthetic_attribution(synth_config)
+
+        update_job_status(job_id, progress=80, message='Writing output...')
+
+        output_file = result.get('output_path') if isinstance(result, dict) else None
+        if not output_file or not os.path.exists(output_file):
+            # Fallback: scan output folder for the most recent matching CSV
+            safe_name = re.sub(r'[<>:"/\\|?*\']', '', params['project_name']).strip()[:100]
+            csv_files = list(output_folder.glob(f"{safe_name}*.csv"))
+            csv_files.sort(key=lambda p: p.stat().st_mtime, reverse=True)
+            output_file = str(csv_files[0]) if csv_files else None
+
+        if not output_file or not os.path.exists(output_file):
+            update_job_status(job_id, status='failed',
+                              error='Synthetic pipeline did not produce an output CSV')
+            return
+
+        jobs[job_id]['result_file'] = output_file
+        if isinstance(result, dict):
+            jobs[job_id]['synthetic_reach_us']     = result.get('reach_us')
+            jobs[job_id]['synthetic_new_signups']  = result.get('new_signups_us')
+            jobs[job_id]['validation_status']      = result.get('validation_status')
+            jobs[job_id]['panel_breakdown']        = result.get('panel_breakdown')
+
+        # Upload to SVOD bucket purgatory (same review-and-release flow
+        # as the ClickHouse path used — no UX change for users).
+        update_job_status(job_id, progress=90, message='Uploading to purgatory...')
+        created_by = job.get('username', '')
+        s3_key = upload_to_s3(
+            output_file,
+            params['project_name'],
+            params['campaign_start'],
+            params['campaign_end'],
+            created_by=created_by,
+            use_purgatory=True,
+            bucket=SUBSCRIBER_S3_BUCKET,
+            category='SVOD Acquisition',
+            source_type='svod_acquisition',
+        )
+
+        if s3_key:
+            jobs[job_id]['s3_key'] = s3_key
+            jobs[job_id]['purgatory_id'] = f"{SUBSCRIBER_S3_BUCKET}:{s3_key}"
+            print(f"✅ Subscriber IQ (synthetic) uploaded to purgatory: {s3_key}")
+
+        update_job_status(job_id, progress=100, status='completed',
+                          message='Analysis complete!', s3_key=s3_key)
                 
     except Exception as e:
         import traceback

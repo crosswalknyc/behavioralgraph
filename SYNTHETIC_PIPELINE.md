@@ -2,7 +2,15 @@
 
 **Decision date:** 2026-06-03
 **Default pipeline:** Synthetic (AI-curated)
-**Fallback:** ClickHouse panel pull (now optional)
+**Used by:**
+  • Dashboard UI — "Run Subscriber IQ" button at `/api/attribution/svod-acquisition`
+    routes to `run_svod_acquisition()` in `app.py`, which now calls
+    `run_synthetic_attribution()` and uploads to the SVOD purgatory
+    (review-and-release UX preserved).
+  • CLI — `bg-webapp/run_synthetic_svod.py` for ops / batch generation.
+  • Python API — `from SVOD_Churn_Attribution import run_synthetic_attribution`.
+**Fallback:** ClickHouse panel pull (still available via the module's
+  `main()` entry point — no longer wired into the dashboard).
 
 ## Why we shipped this
 
