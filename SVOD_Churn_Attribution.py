@@ -10,6 +10,50 @@ import json
 import os
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# E1 FIX (2026-06-03): Force-load the SVOD-side `claude_client.py` into
+# sys.modules['claude_client'] BEFORE any of the four call sites below do
+# `from claude_client import is_claude_reasoning_enabled, claude_reason_json`.
+#
+# There are TWO `claude_client.py` modules in the repo:
+#   • bg-webapp/claude_client.py            ← the SVOD one. Exposes
+#                                             is_claude_reasoning_enabled()
+#                                             and claude_reason_json().
+#   • bg-webapp/migration/claude_client.py  ← the BG.py hybrid-reasoning one.
+#                                             Does NOT export
+#                                             is_claude_reasoning_enabled.
+#
+# Because line 2 prepends `bg-webapp/migration/` to sys.path BEFORE
+# `bg-webapp/`, the bare `from claude_client import X` resolves to the
+# migration module, the import raises ImportError, the SVOD-side reasoning
+# functions silently fall back to GPT, and the whole 5/28 Claude framework
+# (symmetric lower-bound guardrail, 5-step viewer bracket, demographic
+# framework) becomes dead code in production.
+#
+# We fix this once, here, at module load time: explicitly load the SVOD
+# claude_client by file path and pin it into sys.modules['claude_client'].
+# All subsequent `from claude_client import ...` lookups hit the cache and
+# get the right module. No call-site changes needed.
+try:
+    import importlib.util as _importlib_util  # noqa: WPS433
+    _svod_cc_path = os.path.join(os.path.dirname(__file__), 'claude_client.py')
+    if os.path.exists(_svod_cc_path):
+        _spec = _importlib_util.spec_from_file_location('claude_client', _svod_cc_path)
+        _cc_mod = _importlib_util.module_from_spec(_spec)
+        _spec.loader.exec_module(_cc_mod)
+        # Verify it's the SVOD one before pinning (defensive)
+        if hasattr(_cc_mod, 'is_claude_reasoning_enabled') and hasattr(_cc_mod, 'claude_reason_json'):
+            _sys.modules['claude_client'] = _cc_mod
+            print(f"   [claude_client] pinned SVOD-side module from {_svod_cc_path}", flush=True)
+        else:
+            print(f"   [claude_client] WARNING: file at {_svod_cc_path} missing expected exports; "
+                  f"falling back to whatever sys.path resolves", flush=True)
+except Exception as _e:
+    # Don't crash module import — fall back to whatever sys.path resolves and
+    # let the per-call try/except handle it (just like before this fix).
+    print(f"   [claude_client] WARNING: could not pre-load SVOD claude_client: {_e}", flush=True)
+
+
 # =========================
 # === Gen Pop Projection ===
 # =========================
@@ -2304,7 +2348,9 @@ OUTPUT (strict JSON, no fences, prefer non-round numbers):
 
 def _reason_reactivation_rate(show_name, platform_name, genre, content_cadence,
                               total_signups, total_watchers, platform_info,
-                              age_breakdown, gender_breakdown):
+                              age_breakdown, gender_breakdown,
+                              is_new_show=False, pre_existing_viewers=0,
+                              episode_count=0):
     """Use GPT-4o to determine what % of signups are reactivations vs truly new.
 
     Considers audience demographics (young viewers on parent accounts),
@@ -2323,6 +2369,55 @@ def _reason_reactivation_rate(show_name, platform_name, genre, content_cadence,
     _jitter_seed = hashlib.md5(f"{show_name}-{platform_name}-{total_signups}-react".encode()).hexdigest()
     _jitter = (int(_jitter_seed[:8], 16) % 600 - 300) / 10000.0
     fallback_rate = max(0.05, min(0.45, base_rate + _jitter))
+
+    # ─────────────────────────────────────────────────────────────────────
+    # E2 fix (2026-06-03): New-content guard.
+    # A reactivation, by definition, requires the show to have caused
+    # someone to come back to a platform they had previously subscribed to.
+    # That mechanic only fires when the show has a prior season / franchise
+    # / cultural footprint on the platform that an ex-subscriber would
+    # recognize and re-engage with. Brand-new one-off content (e.g. a Single
+    # Event Telecast tribute, a brand-new movie premiere, a brand-new
+    # limited series with no franchise tie-in) cannot drive *content-
+    # specific* reactivation — the only reactivations that occur are at
+    # the platform's natural baseline churn-cycle rate (someone happened
+    # to be drifting back to Netflix anyway). Floor that at ~1/3 of the
+    # normal tier rate so we don't double-count.
+    #
+    # Symptom this is fixing: Eddie Murphy AFI tribute (one-off telecast,
+    # pre_existing_viewers=0, is_new_show=True) was returning a 25% reactivation
+    # rate with reasoning that quoted "fans cancelled after S1" patterns
+    # — which makes no sense for a one-off telecast with no S1.
+    is_one_off_telecast = (
+        (content_cadence or '').strip().lower() in (
+            'single event telecast', 'one-off telecast', 'one-off',
+            'special', 'live event', 'awards show',
+        )
+    )
+    no_prior_episodes = (episode_count or 0) <= 1
+    is_genuinely_new_one_off = (
+        is_new_show
+        and (pre_existing_viewers or 0) == 0
+        and (is_one_off_telecast or no_prior_episodes)
+    )
+    if is_genuinely_new_one_off:
+        # Use 1/3 of the normal tier rate as the natural-churn floor and
+        # jitter slightly so it doesn't look hand-set.
+        natural_churn_floor = base_rate / 3.0
+        _floor_jitter_seed = hashlib.md5(
+            f"{show_name}-{platform_name}-{total_signups}-react-new".encode()
+        ).hexdigest()
+        _floor_jitter = (int(_floor_jitter_seed[:8], 16) % 200 - 100) / 10000.0  # ±1%
+        rate = max(0.02, min(0.10, natural_churn_floor + _floor_jitter))
+        print(
+            f"   🆕 New-content reactivation guard: is_new_show={is_new_show}, "
+            f"pre_existing_viewers={pre_existing_viewers}, episode_count={episode_count}, "
+            f"content_cadence={content_cadence!r}. Skipping content-specific "
+            f"reactivation reasoning (no franchise to reactivate against). "
+            f"Using platform natural-churn floor {rate*100:.1f}%."
+        )
+        return rate
+    # ─────────────────────────────────────────────────────────────────────
 
     try:
         from openai import OpenAI
@@ -3248,6 +3343,81 @@ def _validate_total_watchers_with_ai(show_name, platform_name, inflated_total, i
         metadata['flag'] = flag_msg
         metadata['upward_override'] = True
 
+    # === E0 fix (2026-06-03): Minimum-evidence gate for large corrections ===
+    # The Eddie Murphy AFI tribute run on 2026-06-03 showed the AI confidently
+    # crushing an 18,500-panel projection (~610K US) down to 1,000-panel
+    # (~33K US) based on only 648 chars of GPT search — blowing through the
+    # tier_floor of 200K. The framework needs a minimum-evidence gate before
+    # accepting a >2× scaling correction in EITHER direction.
+    if panel_projection_us > 0 and recommended > 0:
+        scale_ratio = max(recommended / panel_projection_us, panel_projection_us / recommended)
+        if scale_ratio >= 2.0:
+            # Count "strong evidence": Claude framework with ≥2 named sources,
+            # OR a Nielsen-style minutes anchor, OR ≥2 specific cited figures
+            # in the GPT research with high confidence.
+            claude_sources = (metadata.get('claude_bracket') or {}).get('sources') or []
+            has_claude_evidence = (
+                anchor_used == 'claude_framework'
+                and len(claude_sources) >= 2
+            )
+            has_minutes_anchor = anchor_used == 'minutes_bracket' and bool(viewing_minutes_us)
+            has_high_conf_peak = (
+                anchor_used == 'peak_viewer_estimate'
+                and confidence == 'high'
+                and bool(result.get('source'))
+            )
+            has_strong_evidence = has_claude_evidence or has_minutes_anchor or has_high_conf_peak
+            if not has_strong_evidence:
+                flag_msg = (
+                    f"AI proposed {scale_ratio:.1f}× correction "
+                    f"(panel {panel_projection_us:,} → AI {recommended:,}) but evidence "
+                    f"is below the strong-evidence threshold "
+                    f"(anchor={anchor_used}, confidence={confidence}, "
+                    f"claude_sources={len(claude_sources)}, "
+                    f"minutes_anchor={'yes' if has_minutes_anchor else 'no'}). "
+                    f"Keeping panel projection to avoid swinging the headline number "
+                    f"on weak evidence."
+                )
+                print(f"   🛑 {flag_msg}")
+                metadata['action'] = 'kept_panel_insufficient_evidence_for_big_swing'
+                metadata['ai_estimate_rejected'] = recommended
+                metadata['proposed_scale_ratio'] = round(scale_ratio, 2)
+                metadata['flag'] = flag_msg
+                return inflated_total, inflated_pre, inflated_clean, metadata
+
+    # === E0 fix: Symmetric lower-bound floor ================================
+    # The existing upper clamp (below) prevents the AI from blowing past the
+    # max-plausible ceiling. We also need the SYMMETRIC floor so the AI can't
+    # blow PAST the tier floor on the downside (the Eddie Murphy failure
+    # mode). If the AI's recommended value is below the tier_floor AND we
+    # don't have rock-solid evidence to justify being that low, raise back
+    # up to the floor.
+    if recommended < tier_floor and tier in ('anchor', 'major'):
+        claude_sources_for_floor = (metadata.get('claude_bracket') or {}).get('sources') or []
+        # We allow sub-floor only if Claude's framework with ≥3 sources says
+        # so AND the upper-bound of Claude's bracket is also below the floor
+        # (i.e. Claude is confident this is genuinely a small audience).
+        claude_upper = (metadata.get('claude_bracket') or {}).get('upper', 0) or 0
+        below_floor_justified = (
+            anchor_used == 'claude_framework'
+            and len(claude_sources_for_floor) >= 3
+            and claude_upper < tier_floor
+            and confidence == 'high'
+        )
+        if not below_floor_justified:
+            old_recommended = recommended
+            recommended = int(tier_floor * 1.01)  # +1% above floor
+            flag_msg = (
+                f"AI recommended {old_recommended:,} US viewers — below the {tier}-tier "
+                f"floor of {tier_floor:,}. Anchor-tier platforms (Netflix, Prime) "
+                f"do not credibly land below {tier_floor:,} US uniques for a paid "
+                f"streaming release. Raised to floor + 1%."
+            )
+            print(f"   🧯 {flag_msg}")
+            metadata['flag'] = (metadata.get('flag') or '') + f" {flag_msg}"
+            metadata['floor_raised'] = True
+            metadata['floor_pre_value'] = old_recommended
+
     # Final ceiling clamp — even if the AI returned something above the
     # max-plausible threshold, force it down.
     if recommended > max_plausible_us:
@@ -3427,6 +3597,119 @@ def apply_ai_adjustments(df_out, validation_result, total_watchers, new_signups,
 
     adjusted_watchers = total_watchers
     adjusted_signups = new_signups
+
+    # =================================================================
+    # E0 FIX (2026-06-03): Symmetric lower-bound floor + min-evidence
+    # threshold on `apply_ai_adjustments`.
+    #
+    # The same defense-in-depth logic that lives inside
+    # `_validate_total_watchers_with_ai` is replicated here because
+    # this legacy `ai_validate_metrics` → `apply_ai_adjustments` path
+    # runs INSIDE `write_output` and can crush a defensible panel
+    # projection through the tier floor on weak GPT evidence (the
+    # Eddie Murphy AFI tribute failure mode: 18,500 panel ≈ 610K US
+    # was scaled to 1,000 panel ≈ 33K US, which is well below the
+    # anchor-tier floor of 200K US).
+    #
+    # Numbers in this function are PANEL units. We convert to US-units
+    # for the floor comparison using the same factor the projection
+    # uses elsewhere in this file (US_POPULATION / SAMPLE_REPRESENTS,
+    # ≈ 33×).
+    # =================================================================
+    _plat_info_for_floor = _get_platform_info(platform_name)
+    _tier_for_floor = (_plat_info_for_floor or {}).get('tier', 'unknown')
+    _tier_floor_us = {
+        'anchor':   200_000,
+        'dominant': 200_000,   # the GPT validator uses 'dominant' for Netflix/Prime
+        'major':    100_000,
+        'mid':       30_000,
+        'emerging':  20_000,
+        'niche':      8_000,
+    }.get(_tier_for_floor, 30_000)
+    _panel_to_us = (US_POPULATION / SAMPLE_REPRESENTS)
+
+    if not validation_result.get('watchers_plausible', True):
+        suggested_w_raw = validation_result.get('suggested_watchers_range_panel', [])
+        if len(suggested_w_raw) == 2 and suggested_w_raw[0] is not None and suggested_w_raw[1] is not None:
+            _proposed_panel = (suggested_w_raw[0] + suggested_w_raw[1]) / 2.0
+            _proposed_us = int(_proposed_panel * _panel_to_us)
+            _current_us = int(total_watchers * _panel_to_us)
+            _scale_ratio = (
+                max(_current_us / max(_proposed_us, 1), _proposed_us / max(_current_us, 1))
+                if _proposed_us > 0 and _current_us > 0 else 1.0
+            )
+
+            # Heuristic strong-evidence test for the legacy GPT path:
+            #   • The GPT validator must NOT itself say "watchers seem low"
+            #     while also proposing a sub-floor or >2× cut — those are
+            #     contradictory signals. (Eddie Murphy: GPT literally said
+            #     "Projected watchers seem low" and then proposed a number
+            #     that was below the tier floor.)
+            #   • Watchers_note should reference a specific number to count
+            #     as evidence (>= 60 chars and at least one digit).
+            _watchers_note = (validation_result.get('watchers_note') or '').strip()
+            _flags_text = ' '.join(validation_result.get('flags', [])).lower()
+            _gpt_said_low = (
+                'low' in _flags_text and 'watcher' in _flags_text
+            ) or (
+                'low' in _watchers_note.lower() and 'watcher' in _watchers_note.lower()
+            )
+            _has_quoted_number = bool(re.search(r'\d', _watchers_note)) and len(_watchers_note) >= 60
+            _strong_evidence = _has_quoted_number and not _gpt_said_low
+
+            # Guard 1: minimum-evidence threshold for >2× corrections
+            if _scale_ratio >= 2.0 and not _strong_evidence:
+                _flag_msg = (
+                    f"AI proposed {_scale_ratio:.1f}× correction "
+                    f"(panel {total_watchers:,} ≈ {_current_us:,} US → "
+                    f"AI {int(_proposed_panel):,} ≈ {_proposed_us:,} US) but evidence "
+                    f"is below the strong-evidence threshold "
+                    f"(note_len={len(_watchers_note)}, gpt_said_low={_gpt_said_low}). "
+                    f"Keeping panel projection."
+                )
+                print(f"   🛑 {_flag_msg}")
+                changes.append(_flag_msg)
+                p.setdefault('_ai_flags', []).append(_flag_msg)
+                validation_result['watchers_plausible'] = True  # neutralize this branch
+
+            # Guard 2: symmetric lower-bound floor for anchor/major tiers
+            elif _proposed_us < _tier_floor_us and _tier_for_floor in ('anchor', 'dominant', 'major'):
+                _floor_panel = int((_tier_floor_us * 1.01) / _panel_to_us)
+                _flag_msg = (
+                    f"AI proposed panel {int(_proposed_panel):,} (≈{_proposed_us:,} US "
+                    f"viewers) but {_tier_for_floor}-tier platforms have a credibility floor "
+                    f"of {_tier_floor_us:,} US uniques. Raising panel to {_floor_panel:,} "
+                    f"(floor + 1%)."
+                )
+                print(f"   🧯 {_flag_msg}")
+                changes.append(_flag_msg)
+                p.setdefault('_ai_flags', []).append(_flag_msg)
+                # Rewrite the suggested range so the rest of the function
+                # uses the floor instead of the sub-floor proposal.
+                validation_result['suggested_watchers_range_panel'] = [
+                    _floor_panel, _floor_panel,
+                ]
+                # CRITICAL companion-fix: when we raise watchers UP via the
+                # floor, the AI's separate signup downscale (computed against
+                # the *original* watchers panel) becomes nonsense — it would
+                # leave the show with floor-raised watchers and a tiny signup
+                # count, then the subsidiary-row rescale would collapse the
+                # demographic / touchpoint counts to zero. Suppress the
+                # signup correction so signups stay panel-derived and
+                # subsidiary rows stay populated. We log it so the override
+                # is auditable.
+                if not validation_result.get('signups_plausible', True):
+                    _supp_msg = (
+                        f"Suppressing AI's signup downscale (panel {new_signups:,} → "
+                        f"{validation_result.get('suggested_signups_range_panel', '?')}) "
+                        f"because we just raised the watchers floor — keeping the "
+                        f"original panel signup count and downstream demographic "
+                        f"distribution intact."
+                    )
+                    print(f"   🛡️  {_supp_msg}")
+                    p.setdefault('_ai_flags', []).append(_supp_msg)
+                    validation_result['signups_plausible'] = True
+                    validation_result['conversion_plausible'] = True
 
     # Watchers: anchor to real-world data
     if not validation_result.get('watchers_plausible', True):
@@ -4252,6 +4535,9 @@ def write_output(df_summary, df_comp, df_demo, df_timing, df_episode_attribution
         platform_info=_plat_info,
         age_breakdown=_age_breakdown,
         gender_breakdown=_gender_breakdown,
+        is_new_show=bool(p.get('is_new_show', False)),
+        pre_existing_viewers=int(p.get('pre_existing_viewers', 0) or 0),
+        episode_count=len(p.get('episode_dates', []) or []),
     )
     _reactivated_count = max(0, int(round(new_signups * _react_pct_final))) if new_signups > 0 else 0
     _new_only_signups = new_signups - _reactivated_count
