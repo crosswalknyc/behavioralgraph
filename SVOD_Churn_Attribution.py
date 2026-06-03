@@ -5389,44 +5389,85 @@ def _research_show_externally_with_claude(
     ce = campaign_end.strftime('%Y-%m-%d')   if hasattr(campaign_end,   'strftime') else str(campaign_end)
 
     system = (
-        "You are a streaming-industry research analyst. Your job is to find\n"
-        "ACTUAL external evidence about a streaming show's audience size,\n"
-        "demographics, competitive overlap, and signup-driver power — then\n"
-        "synthesize it into structured numbers for a Subscriber-IQ tracker.\n"
+        "You are a streaming-industry research analyst. Your PRIMARY MISSION:\n"
+        "find the US unique-viewer count for this show on this platform over\n"
+        "the analysis window. Everything else (demographics, competitive\n"
+        "overlap) is secondary. Do NOT give up and return null for reach\n"
+        "unless every reasonable derivation path is exhausted.\n"
         "\n"
-        "REQUIRED PROCESS — DO NOT SKIP STEPS:\n"
-        "  1. Run AT LEAST 6 web searches. Cross-reference multiple sources;\n"
-        "     don't stop at the first hit. Cover these angles:\n"
-        "       • Nielsen Top 10 streaming originals — which weeks did it chart?\n"
-        "       • Samba TV / Antenna / Whip Media household-watched estimates\n"
-        "       • Parrot Analytics demand rankings & 'travelability'\n"
-        "       • Platform's own press releases ('#1 for N weeks', 'most-\n"
-        "         watched premiere of 20XX', subscriber-add disclosures)\n"
-        "       • Variety / Deadline / Hollywood Reporter / Bloomberg coverage\n"
-        "       • Awards cycle (Emmy noms/wins, Globes, Critics' Choice, RT %)\n"
-        "       • Audience demographics from Comscore / Magna / GfK / platform\n"
-        "         press kits — age cohorts, gender skew, ethnicity if reported\n"
-        "       • Subreddit subscriber count + recent weekly active growth\n"
-        "       • Antenna / BehaviorBuckets cross-platform overlap reports\n"
-        "       • Signup-driver evidence (did this show drive new subs to the\n"
-        "         platform? was it cited in earnings calls or trades?)\n"
-        "  2. CITE SPECIFIC SOURCES (URL or 'Variety, 2025-02-14' style).\n"
-        "     Generic 'industry reports' is NOT acceptable.\n"
-        "  3. CONVERT third-party metrics to UNIQUE US VIEWERS:\n"
-        "       households_watched_one_ep × ~1.6 viewers/household ≈ unique viewers\n"
-        "       (premiere-only numbers must be extrapolated to whole-season\n"
-        "        using typical premiere→season ratio for the cadence)\n"
-        "  4. For demographics, look for actual age/gender skew data. If only\n"
-        "     qualitative ('skews younger', 'older male audience'), translate\n"
-        "     to plausible percentages.\n"
-        "  5. For competitive overlap, prefer real cross-platform studies\n"
-        "     (Antenna 'multiplatform stacking', BehaviorBuckets) when found.\n"
-        "  6. Be HONEST about gaps. Use null for fields with no evidence\n"
-        "     rather than fabricating a number.\n"
+        "=== PRIORITY 1: REACH US (the headline number) ===\n"
+        "Search aggressively until you have a defensible US-viewer count.\n"
+        "Acceptable evidence types, IN ORDER OF PREFERENCE:\n"
+        "\n"
+        "  A. DIRECT STREAMING-PLATFORM UNIQUE VIEWERS\n"
+        "       e.g. 'Apple TV+ reports 25M unique US viewers for Severance S2'\n"
+        "       e.g. 'Hulu reports 8M unique viewers for X' (rare)\n"
+        "     → use as-is.\n"
+        "\n"
+        "  B. THIRD-PARTY PANEL ESTIMATES\n"
+        "       Samba TV / Antenna / Whip Media household counts\n"
+        "       → unique_viewers ≈ households × 1.6\n"
+        "     Parrot Analytics demand rankings → useful for tier, not absolute\n"
+        "     numbers.\n"
+        "\n"
+        "  C. NIELSEN STREAMING MINUTES\n"
+        "       Total minutes ÷ avg minutes per viewer (typically\n"
+        "       episode_runtime × ~4-6 episodes for a 10-episode season)\n"
+        "       = unique viewers.\n"
+        "       e.g. '6.4B minutes ÷ (45 min × 5 eps) = ~28M unique viewers'\n"
+        "\n"
+        "  D. BROADCAST RATINGS → STREAMING DERIVATION (use this for\n"
+        "     Fox/ABC/CBS/NBC shows where Hulu/Paramount+/Peacock is the\n"
+        "     catch-up window):\n"
+        "       1. Find per-episode live+SD viewer counts (Nielsen broadcast\n"
+        "          ratings, Programming Insider, TVSeriesFinale, USTVDB).\n"
+        "       2. Compute typical-episode average (exclude NFL-boosted\n"
+        "          outliers from the typical avg; report them as the peak).\n"
+        "       3. Season-unique broadcast viewers ≈\n"
+        "            typical_avg × episode_count × dedup_factor\n"
+        "          where dedup_factor = 0.45 (lower for stable audience),\n"
+        "          0.55 (typical), 0.70 (growing audience or special-event-\n"
+        "          heavy season).\n"
+        "       4. Streaming-platform uniques ≈\n"
+        "            broadcast_uniques × catch_up_share\n"
+        "          + broadcast_uniques × cord_cutter_only_share\n"
+        "          where:\n"
+        "            catch_up_share = 0.30-0.45 for Fox→Hulu, ABC→Hulu\n"
+        "              (tight sibling-platform integration), 0.20-0.35 for\n"
+        "              CBS→Paramount+, NBC→Peacock.\n"
+        "            cord_cutter_only_share = 0.05-0.15 for older-skewing\n"
+        "              shows, 0.10-0.20 for younger-skewing animated comedies.\n"
+        "\n"
+        "  E. PRIMETIME-COMPARABLES if all else fails\n"
+        "       Compare to similar-genre shows on same platform with known\n"
+        "       numbers, then adjust for relative buzz / awards / press.\n"
+        "\n"
+        "  F. RETURN NULL only if NONE of A-E yields a defensible number\n"
+        "     (truly obscure pre-release titles, missing-from-press shows).\n"
+        "\n"
+        "ALWAYS show the math in `reach_reasoning` when using paths B-E.\n"
+        "\n"
+        "=== SEARCH STRATEGY ===\n"
+        "  • Run AT LEAST 6 web searches (use the full max_uses budget if\n"
+        "    needed). Cross-reference multiple sources.\n"
+        "  • Always try: '[show] season N viewers', '[show] ratings',\n"
+        "    '[show] Hulu/Netflix/Apple TV+ ratings', '[show] Nielsen',\n"
+        "    '[show] Samba TV OR Antenna', '[show] [platform] subscribers'.\n"
+        "  • For broadcast shows, also search Programming Insider,\n"
+        "    TVSeriesFinale.com, USTVDB.com for episode-by-episode\n"
+        "    Nielsen live+SD viewer counts.\n"
+        "  • For streaming-exclusive shows, search the platform's earnings\n"
+        "    calls and quarterly disclosures for cited viewership.\n"
+        "  • Awards cycle (Emmy noms/wins, Globes, RT/MC scores) — useful\n"
+        "    for buzz_tier classification.\n"
+        "  • Demographic breakdowns from Comscore / Magna / GfK / YouGov.\n"
+        "\n"
+        "=== CITATIONS ===\n"
+        "CITE SPECIFIC SOURCES (URL or 'Variety, 2025-02-14' style).\n"
+        "Generic 'industry reports' is NOT acceptable. Every numeric reach\n"
+        "estimate must name at least one source.\n"
         "\n"
         "OUTPUT: JSON only, no fences, no prose outside the object.\n"
-        "Every numeric field MUST be backed by at least one citation in the\n"
-        "associated *_sources array if confidence is medium or high.\n"
     )
 
     user = (
@@ -5438,15 +5479,27 @@ def _research_show_externally_with_claude(
         f'Window: {cs} to {ce}\n'
         f'Status: {"NEW (no prior season)" if is_new_show else "RETURNING (S2+ / sequel / reboot)"}\n'
         f'\n'
-        f'Research this show with at least 6 web searches and output JSON:\n\n'
+        f'Research this show with at least 6 web searches (use the full\n'
+        f'max_uses budget if needed). DO NOT return null for reach_us_estimate\n'
+        f'unless paths A-E in the system prompt have all been exhausted.\n'
+        f'Output JSON:\n\n'
         f'{{\n'
         f'  "searches_performed": <int — count of web_search tool uses>,\n'
-        f'  "reach_us_estimate":  <int unique US viewers for the season, or null>,\n'
+        f'  "reach_method":       "direct_streaming_uniques" | "samba_antenna_households" |\n'
+        f'                        "nielsen_streaming_minutes" | "broadcast_derivation" |\n'
+        f'                        "primetime_comparable" | "null_no_data",\n'
+        f'  "reach_us_estimate":  <int unique US viewers for the season; only null if\n'
+        f'                         reach_method = null_no_data>,\n'
         f'  "reach_us_lower":     <int conservative bound>,\n'
         f'  "reach_us_upper":     <int aggressive bound>,\n'
         f'  "reach_confidence":   "high" | "medium" | "low",\n'
         f'  "reach_sources":      ["<src 1>", "<src 2>", "<src 3+>"],\n'
-        f'  "reach_reasoning":    "<3-5 sentence derivation showing the math>",\n'
+        f'  "reach_reasoning":    "<3-5 sentences SHOWING THE MATH: cite specific\n'
+        f'                         numbers found and how you combined them>",\n'
+        f'  "broadcast_typical_viewers_m": <float per-ep millions if applicable, else null>,\n'
+        f'  "broadcast_peak_viewers_m":    <float per-ep millions if applicable, else null>,\n'
+        f'  "catch_up_share_used":         <float 0-0.5 if broadcast_derivation>,\n'
+        f'  "cord_cutter_share_used":      <float 0-0.25 if broadcast_derivation>,\n'
         f'  "buzz_tier":          "tentpole" | "hit" | "solid" | "modest" | "unknown",\n'
         f'  "buzz_signals":       ["<#1 announcement, Emmy nom, etc.>", ...],\n'
         f'  "pre_existing_pct":   <float 0.0-0.65, SHARE of THIS season\'s viewers\n'
@@ -5606,27 +5659,59 @@ def _claude_validate_priors_reach(*, show_name: str, platform_name: str,
     signup_driver = (research or {}).get('signup_driver_strength', 'unknown')
 
     system = (
-        "You are a streaming-industry analyst doing a SANITY CHECK on a\n"
-        "priors-derived audience estimate. You don't need to cite specific\n"
-        "viewership numbers — just judge whether the estimate is in the\n"
-        "right order of magnitude given everything you know about the show,\n"
-        "the platform's role in its distribution, and any buzz/awards data\n"
-        "from your training corpus.\n"
+        "You are a streaming-industry analyst validating a priors-derived\n"
+        "audience estimate. Use BOTH the quantitative ratings data already\n"
+        "surfaced in the first research pass AND your training-corpus\n"
+        "knowledge — quantitative evidence ALWAYS dominates qualitative.\n"
         "\n"
-        "Key questions to consider:\n"
+        "REQUIRED DERIVATION when buzz_signals contain specific viewer\n"
+        "counts (e.g. 'X.YM viewers', 'N.NM households'):\n"
+        "  1. Extract the cited live/broadcast viewer numbers per episode.\n"
+        "  2. Compute typical-episode average. If outlier-driven (NFL lead-\n"
+        "     in, special airing), report BOTH the typical avg and outlier\n"
+        "     peak.\n"
+        "  3. Estimate season-total unique broadcast viewers:\n"
+        "       typical_avg × episode_count × dedup_factor (0.45-0.70 —\n"
+        "       lower for repeat-heavy audiences, higher for show with\n"
+        "       audience growth).\n"
+        "  4. Convert to streaming-platform uniques:\n"
+        "       broadcast_uniques × catch_up_share (0.25-0.45 — Fox/Hulu\n"
+        "       sibling integration is on the higher end; ABC on Hulu\n"
+        "       slightly lower; CBS on Paramount+ similar to Fox/Hulu)\n"
+        "     + cord_cutter_hulu_only_share (0.05-0.20 of total\n"
+        "       broadcast audience — younger-skewing animated comedies\n"
+        "       are on the higher end)\n"
+        "  5. SHOW THE MATH in your reasoning.\n"
+        "\n"
+        "Qualitative-only signals to consider (do NOT drive >2× swings\n"
+        "without quantitative backing):\n"
+        "  • RT/Metacritic critic scores — measure CRITIC opinion, not\n"
+        "    viewership. Lowest-rated shows can still pull millions.\n"
+        "  • 'No Nielsen Top 10 streaming appearances' — Nielsen's Top 10\n"
+        "    has a ~1B-minutes/week threshold dominated by Netflix/HBO\n"
+        "    originals. Most broadcast catch-up shows never appear; absence\n"
+        "    is NORMAL, not evidence of low viewership.\n"
+        "  • 'Renewed early' — positive signal: platform saw the real\n"
+        "    numbers and committed.\n"
+        "  • 'Variable ratings' — neutral; reflects schedule volatility,\n"
+        "    not audience size.\n"
+        "  • 'Mixed reviews' — neutral; doesn't predict viewership for\n"
+        "    established broadcast shows.\n"
+        "\n"
+        "Platform-role context:\n"
         "  • Is this show primarily distributed on the platform we're\n"
         "    measuring, or is the platform a secondary/catch-up window?\n"
-        "    (E.g. Fox broadcast shows on Hulu next-day, ABC primetime on\n"
-        "    Hulu, CBS shows on Paramount+, etc.)\n"
-        "  • Does the buzz tier match a hit, a solid mid-tier, or a quiet\n"
-        "    show? Use awards / press coverage / reviews as proxies.\n"
-        "  • Is the platform a tentpole driver for this show or an\n"
-        "    afterthought?\n"
+        "  • Fox→Hulu is TIGHTLY integrated (same parent until 2024,\n"
+        "    Hulu is still the de-facto Fox streaming home). Treat Hulu\n"
+        "    catch-up share for Fox primetime at 30-45%, not 15-25%.\n"
+        "  • ABC→Hulu similar (Disney owns both).\n"
+        "  • CBS→Paramount+ similar (CBS-Paramount).\n"
+        "  • NBC→Peacock similar.\n"
         "\n"
-        "If the priors number looks 2x+ too high (overestimate), adjust\n"
-        "DOWN with reasoning. If 2x+ too low, adjust UP. Otherwise leave\n"
-        "it alone (adjustment_ratio ≈ 1.0). Never make corrections > 5x\n"
-        "without explicit reasoning.\n"
+        "If the priors number looks 2× too high (overestimate), adjust\n"
+        "DOWN with reasoning. If 2× too low, adjust UP. Otherwise leave\n"
+        "it alone (adjustment_ratio ≈ 1.0). Never make corrections > 5×\n"
+        "without explicit math.\n"
         "\n"
         "Output JSON only, no fences, no prose outside the object."
     )
@@ -5656,11 +5741,19 @@ def _claude_validate_priors_reach(*, show_name: str, platform_name: str,
         f'\n'
         f'Output JSON:\n'
         f'{{\n'
-        f'  "validated_reach_us":  <int — your final estimate>,\n'
-        f'  "adjustment_ratio":    <float — validated / priors>,\n'
-        f'  "reasoning":           "<2-4 sentences>",\n'
-        f'  "is_broadcast_originator": <bool — primarily broadcast w/ catch-up streaming?>,\n'
-        f'  "confidence":          "high" | "medium" | "low"\n'
+        f'  "extracted_broadcast_viewers_m": [<float per-episode-millions found\n'
+        f'                                     in buzz_signals; [] if none>],\n'
+        f'  "typical_episode_live_viewers":  <float in millions, ex-outliers>,\n'
+        f'  "season_unique_broadcast_us":    <int, derived in step 3>,\n'
+        f'  "catch_up_share_used":           <float 0.0-0.5>,\n'
+        f'  "cord_cutter_share_used":        <float 0.0-0.25>,\n'
+        f'  "validated_reach_us":            <int — your final estimate>,\n'
+        f'  "adjustment_ratio":              <float — validated / priors>,\n'
+        f'  "reasoning":                     "<2-5 sentences SHOWING THE MATH\n'
+        f'                                     when broadcast ratings exist>",\n'
+        f'  "is_broadcast_originator":       <bool — primarily broadcast w/\n'
+        f'                                     catch-up streaming?>,\n'
+        f'  "confidence":                    "high" | "medium" | "low"\n'
         f'}}\n'
     )
 
