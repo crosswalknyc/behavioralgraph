@@ -6631,6 +6631,100 @@ def download_cached(s3_key):
 
 
 # ============================================================================
+# PROFILE DISPATCHER PROXY
+# ----------------------------------------------------------------------------
+# Render's dashboard cannot run BG.py directly — the pipeline needs
+# ClickHouse-local memory (50-100 GiB peak per profile, peaks at ~150 GiB
+# at 15-up), which is only available on Hetzner. These endpoints proxy
+# dashboard "pull profile" requests to the profile_dispatcher daemon
+# running on Hetzner port 7777.
+#
+# Why a daemon and not a per-request subprocess?
+#   The dispatcher owns a SINGLE in-process key pool. Without it, two
+#   simultaneous dashboard users would both grab "key #1" from independent
+#   pool copies, triggering Anthropic per-key rate-limit failures.
+#   The dispatcher also enforces MAX_CONCURRENT (=15 today, matches pool
+#   size) and queues overflow gracefully — no naive 1-by-1 serialization.
+#
+# Environment variables required on Render:
+#   BG_DISPATCH_URL   — e.g. http://168.119.215.48:7777
+#   BG_DISPATCH_TOKEN — shared secret matching Hetzner /root/.bg_dispatch_token
+# ============================================================================
+
+def _dispatch_request(method: str, path: str, json_body=None, timeout=10):
+    """Proxy helper for talking to the Hetzner profile_dispatcher daemon.
+    Returns (status_code, json_dict). Returns (503, {...}) if dispatcher
+    is unreachable so the dashboard can show a friendly degraded-mode
+    message instead of a 500."""
+    import requests as _r
+    base = (os.environ.get('BG_DISPATCH_URL') or '').rstrip('/')
+    token = os.environ.get('BG_DISPATCH_TOKEN') or ''
+    if not base:
+        return 503, {'error': 'dispatcher not configured (BG_DISPATCH_URL unset)'}
+    try:
+        resp = _r.request(
+            method,
+            f'{base}{path}',
+            json=json_body,
+            headers={'X-Dispatch-Token': token} if token else {},
+            timeout=timeout,
+        )
+        try:
+            return resp.status_code, resp.json()
+        except ValueError:
+            return resp.status_code, {'raw': resp.text[:500]}
+    except _r.exceptions.RequestException as e:
+        return 503, {'error': f'dispatcher unreachable: {type(e).__name__}'}
+
+
+@app.route('/api/dispatch/pull', methods=['POST'])
+@requires_auth
+def api_dispatch_pull():
+    """Submit a new profile-pull job to the Hetzner dispatcher.
+
+    Request body:
+      { "brand": "Variety", "name": "Variety", "category": "MEDIA" }
+
+    Returns 202 with { "job_id": "...", "queue_position": N, "status": "..." }.
+    Frontend should poll /api/dispatch/job/<job_id> for progress.
+    """
+    from flask import session
+    body = request.get_json(silent=True) or {}
+    brand = (body.get('brand') or '').strip()
+    category = (body.get('category') or '').strip()
+    if not brand or not category:
+        return jsonify({'error': 'brand and category are required'}), 400
+
+    # Tag the submission so we have an audit trail server-side.
+    user = (session.get('user') or {}).get('email') or 'unknown'
+    payload = {
+        'brand':     brand,
+        'name':      body.get('name') or brand,
+        'category':  category,
+        'submitter': user,
+    }
+    status, data = _dispatch_request('POST', '/jobs', json_body=payload, timeout=15)
+    return jsonify(data), status
+
+
+@app.route('/api/dispatch/job/<job_id>', methods=['GET'])
+@requires_auth
+def api_dispatch_job(job_id):
+    """Poll status of a previously-submitted dispatch job."""
+    status, data = _dispatch_request('GET', f'/jobs/{job_id}', timeout=10)
+    return jsonify(data), status
+
+
+@app.route('/api/dispatch/pool', methods=['GET'])
+@requires_auth
+def api_dispatch_pool():
+    """Show dispatcher pool utilization (useful for displaying queue state to
+    the user: 'You're 3rd in line — current ETA ~2 hr.')."""
+    status, data = _dispatch_request('GET', '/pool', timeout=10)
+    return jsonify(data), status
+
+
+# ============================================================================
 # AI-POWERED API ENDPOINTS
 # ============================================================================
 
