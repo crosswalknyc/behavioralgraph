@@ -19593,6 +19593,40 @@
                     <div id="jiqFunnelNotes" style="font-size: 0.72rem; color: var(--text-secondary); margin-bottom: 0.5rem;"></div>
                 </div>
 
+                <!-- ROW 1: Inception (how visitors arrived) + Top Search Terms (what they searched) -->
+                <div id="jiqSiteFunnelDetailsTop" style="display: none; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 1rem; margin-bottom: 1rem;">
+                    <div class="card" id="jiqInceptionCard" style="padding: 1rem; display: none;">
+                        <div style="display:flex;justify-content:space-between;align-items:baseline;gap:0.5rem;">
+                            <h3 style="margin: 0 0 0.25rem;">🚪 Inception — how visitors arrived</h3>
+                            <div id="jiqInceptionViewBtns" data-card="inception" class="jiqViewToggle" style="display:flex;gap:4px;"></div>
+                        </div>
+                        <div style="font-size: 0.72rem; color: var(--text-secondary); margin-bottom: 0.5rem;">Inbound referrer mix for visitors landing on the target site.</div>
+                        <div id="jiqInceptionChart" style="overflow:hidden;"></div>
+                        <div id="jiqInceptionTable" style="overflow-x: auto; display:none;"></div>
+                    </div>
+                    <div class="card" id="jiqSearchTermsCard" style="padding: 1rem; display: none;">
+                        <div style="display:flex;justify-content:space-between;align-items:baseline;gap:0.5rem;">
+                            <h3 style="margin: 0 0 0.25rem;">🔎 Top Search Terms — what they searched to find the brand</h3>
+                        </div>
+                        <div style="font-size: 0.72rem; color: var(--text-secondary); margin-bottom: 0.6rem;">Search queries + hashtags driving inbound discovery, by platform.</div>
+                        <div id="jiqSearchTermsBody"></div>
+                    </div>
+                </div>
+
+                <!-- ROW 2: Companion Behaviors — full width horizontal timeline -->
+                <div id="jiqSiteFunnelDetailsCompanion" style="display: none; margin-bottom: 1rem;">
+                    <div class="card" id="jiqCompanionCard" style="padding: 1rem; display: none;">
+                        <div style="display:flex;justify-content:space-between;align-items:baseline;gap:0.5rem;">
+                            <h3 style="margin: 0 0 0.25rem;">🍽️ Companion Behaviors — adjacent verticals timeline</h3>
+                            <div id="jiqCompanionViewBtns" data-card="companion" class="jiqViewToggle" style="display:flex;gap:4px;"></div>
+                        </div>
+                        <div id="jiqCompanionSubtitle" style="font-size: 0.72rem; color: var(--text-secondary); margin-bottom: 0.5rem;">Other verticals the visitor engaged with around their purchase. Bubble size = share of visitors; horizontal position = typical time relative to purchase.</div>
+                        <div id="jiqCompanionChart" style="overflow:hidden;"></div>
+                        <div id="jiqCompanionTable" style="overflow-x: auto; display:none;"></div>
+                    </div>
+                </div>
+
+                <!-- ROW 3: Where Switchers Ultimately Bought + Steps Switchers Take In Between -->
                 <div id="jiqSiteFunnelDetails" style="display: none; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 1rem; margin-bottom: 1rem;">
                     <div class="card" id="jiqSwitchedCard" style="padding: 1rem; display: none;">
                         <div style="display:flex;justify-content:space-between;align-items:baseline;gap:0.5rem;">
@@ -19611,27 +19645,6 @@
                         <div style="font-size: 0.72rem; color: var(--text-secondary); margin-bottom: 0.5rem;">Typical detours between leaving the site and converting elsewhere (Google reviews, Rotten Tomatoes, price-comparing chains, etc.).</div>
                         <div id="jiqInterstepChart" style="overflow:hidden;"></div>
                         <div id="jiqInterstepTable" style="overflow-x: auto; display:none;"></div>
-                    </div>
-                </div>
-
-                <div id="jiqSiteFunnelDetails2" style="display: none; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 1rem; margin-bottom: 1rem;">
-                    <div class="card" id="jiqInceptionCard" style="padding: 1rem; display: none;">
-                        <div style="display:flex;justify-content:space-between;align-items:baseline;gap:0.5rem;">
-                            <h3 style="margin: 0 0 0.25rem;">🚪 Inception — how visitors arrived</h3>
-                            <div id="jiqInceptionViewBtns" data-card="inception" class="jiqViewToggle" style="display:flex;gap:4px;"></div>
-                        </div>
-                        <div style="font-size: 0.72rem; color: var(--text-secondary); margin-bottom: 0.5rem;">Inbound referrer mix for visitors landing on the target site.</div>
-                        <div id="jiqInceptionChart" style="overflow:hidden;"></div>
-                        <div id="jiqInceptionTable" style="overflow-x: auto; display:none;"></div>
-                    </div>
-                    <div class="card" id="jiqCompanionCard" style="padding: 1rem; display: none;">
-                        <div style="display:flex;justify-content:space-between;align-items:baseline;gap:0.5rem;">
-                            <h3 style="margin: 0 0 0.25rem;">🍽️ Companion Behaviors — adjacent verticals</h3>
-                            <div id="jiqCompanionViewBtns" data-card="companion" class="jiqViewToggle" style="display:flex;gap:4px;"></div>
-                        </div>
-                        <div style="font-size: 0.72rem; color: var(--text-secondary); margin-bottom: 0.5rem;">Other verticals the visitor planned for around the visit (dinner, parking, hotel, etc.). Bubble size = share of visitors; placement = typical time relative to showtime.</div>
-                        <div id="jiqCompanionChart" style="overflow:hidden;"></div>
-                        <div id="jiqCompanionTable" style="overflow-x: auto; display:none;"></div>
                     </div>
                 </div>
 
@@ -28875,21 +28888,44 @@
             var props = eco.properties || [];
             var edges = eco.edges || [];
             if (props.length < 2) return '';
-            var W = 760, H = 380;
-            var cx = W / 2, cy = H / 2 + 10;
-            // Place props in equilateral triangle (apex up if 3)
-            var positions = {};
+
+            // Layout is sized to the property count so labels + role/URL
+            // captions never get clipped against the SVG edges.
+            //   3 props → equilateral triangle (Fandango-style)
+            //   4 props → diamond (A&F-style: 4 owned brands)
+            //   5+      → polygon on a circle
+            var W, H, cx, cy, bubbleR, positions = {};
             if (props.length === 3) {
-                positions[props[0].key] = { x: cx, y: cy - 110 };
-                positions[props[1].key] = { x: cx - 200, y: cy + 80 };
-                positions[props[2].key] = { x: cx + 200, y: cy + 80 };
+                W = 760; H = 380;
+                cx = W / 2; cy = H / 2 + 10;
+                bubbleR = 64;
+                positions[props[0].key] = { x: cx,         y: cy - 110 };
+                positions[props[1].key] = { x: cx - 200,   y: cy + 80  };
+                positions[props[2].key] = { x: cx + 200,   y: cy + 80  };
+            } else if (props.length === 4) {
+                // Diamond: extra vertical room so the bottom bubble's
+                // role + URL caption (bubbleR + 32px) fits inside.
+                W = 920; H = 560;
+                cx = W / 2; cy = H / 2;
+                bubbleR = 60;
+                var dx = 280, dy = 180;
+                positions[props[0].key] = { x: cx,         y: cy - dy };  // top
+                positions[props[1].key] = { x: cx + dx,    y: cy      };  // right
+                positions[props[2].key] = { x: cx,         y: cy + dy };  // bottom
+                positions[props[3].key] = { x: cx - dx,    y: cy      };  // left
             } else {
+                // Generic polygon — enlarge height vs prior fixture so
+                // captions below each bubble stay inside the SVG.
+                W = 820; H = 480;
+                cx = W / 2; cy = H / 2 + 6;
+                bubbleR = 60;
+                var R = Math.min(cx - 100, cy - 100);
                 props.forEach(function(p, i) {
                     var theta = -Math.PI / 2 + (i / props.length) * 2 * Math.PI;
-                    positions[p.key] = { x: cx + 180 * Math.cos(theta), y: cy + 140 * Math.sin(theta) };
+                    positions[p.key] = { x: cx + R * Math.cos(theta),
+                                         y: cy + R * 0.75 * Math.sin(theta) };
                 });
             }
-            var bubbleR = 64;
             var parts = [];
 
             // (Center "OWNED BY <parent>" label removed per user request -
@@ -28898,17 +28934,36 @@
             // Ribbons FIRST so bubbles overlay them. Ribbon = filled
             // tapered path (mid-thick at endpoints, narrow in the middle
             // via a quadratic curve), thickness ∝ overlap_pct.
-            edges.forEach(function(e) {
+            edges.forEach(function(e, ei) {
                 var pA = positions[e.a], pB = positions[e.b];
                 if (!pA || !pB) return;
                 var cA = (props.find(function(p) { return p.key === e.a; }) || {}).color || '#5b6cff';
                 var cB = (props.find(function(p) { return p.key === e.b; }) || {}).color || '#5b6cff';
                 var w  = Math.max(4, Math.min(34, (e.overlap_pct || 0) * 0.9));
-                // Curve through the center for visual interest
+                // Bend each ribbon perpendicular to its A→B axis so opposing
+                // edges (e.g. top↔bottom and left↔right in a diamond layout)
+                // don't pile their midpoints on the same center point — and
+                // so their % badges never overlap each other.
                 var midX = (pA.x + pB.x) / 2;
                 var midY = (pA.y + pB.y) / 2;
-                var ctrlX = midX + (cy - midY) * 0.25;
-                var ctrlY = midY + (midX - cx) * 0.25;
+                var edx = pB.x - pA.x, edy = pB.y - pA.y;
+                var elen = Math.sqrt(edx * edx + edy * edy) || 1;
+                var perpX = -edy / elen, perpY = edx / elen;
+                // Bend AWAY from the geometric centroid. If the midpoint IS
+                // the centroid (through-center edge) fall back to a fixed
+                // perpendicular sign alternating per-edge so opposing
+                // through-center edges arc on opposite sides.
+                var fromCx = midX - cx, fromCy = midY - cy;
+                var dotC = fromCx * perpX + fromCy * perpY;
+                var bendSign;
+                if (Math.abs(dotC) < 1.0) {
+                    bendSign = (ei % 2 === 0) ? 1 : -1;
+                } else {
+                    bendSign = dotC >= 0 ? 1 : -1;
+                }
+                var bendAmt = (props.length >= 4 ? 55 : 35) * bendSign;
+                var ctrlX = midX + perpX * bendAmt;
+                var ctrlY = midY + perpY * bendAmt;
                 // Compute angle from A to ctrl, B to ctrl for endpoint trim
                 var aA = Math.atan2(ctrlY - pA.y, ctrlX - pA.x);
                 var aB = Math.atan2(ctrlY - pB.y, ctrlX - pB.x);
@@ -30062,14 +30117,16 @@
         // Block is hidden entirely when site_funnel isn't on the payload.
         // ────────────────────────────────────────────────────────────────
         function renderJourneyIqSiteFunnel(funnel) {
-            var card  = document.getElementById('jiqSiteFunnelCard');
-            var det1  = document.getElementById('jiqSiteFunnelDetails');
-            var det2  = document.getElementById('jiqSiteFunnelDetails2');
+            var card    = document.getElementById('jiqSiteFunnelCard');
+            var rowTop  = document.getElementById('jiqSiteFunnelDetailsTop');     // Inception + Search Terms
+            var rowComp = document.getElementById('jiqSiteFunnelDetailsCompanion'); // Companion (full-width)
+            var det1    = document.getElementById('jiqSiteFunnelDetails');        // Switched + Interstep
             if (!card) return;
             if (!funnel || !funnel.funnel_split) {
                 card.style.display = 'none';
-                if (det1) det1.style.display = 'none';
-                if (det2) det2.style.display = 'none';
+                if (rowTop)  rowTop.style.display  = 'none';
+                if (rowComp) rowComp.style.display = 'none';
+                if (det1)    det1.style.display    = 'none';
                 return;
             }
             card.style.display = '';
@@ -30177,7 +30234,7 @@
 
             if (det1) det1.style.display = (dests.length || inters.length) ? 'grid' : 'none';
 
-            // 4) Inception Referrers
+            // 4) Inception Referrers (now in top row)
             var incEl = document.getElementById('jiqInceptionTable');
             var incChartEl = document.getElementById('jiqInceptionChart');
             var incCard = document.getElementById('jiqInceptionCard');
@@ -30193,7 +30250,22 @@
             }
             if (incCard) incCard.style.display = incs.length ? '' : 'none';
 
-            // 5) Companion Behaviors
+            // 4b) Top Search Terms — Google/Bing + TikTok/Instagram queries
+            // that drove inbound. Sits next to Inception in the top row.
+            var stCard = document.getElementById('jiqSearchTermsCard');
+            var stBody = document.getElementById('jiqSearchTermsBody');
+            var searchTerms = funnel.top_search_terms
+                          || (window._jiqCurrentRun || {}).top_search_terms
+                          || null;
+            var hasSearchTerms = searchTerms && Object.keys(searchTerms).some(function(k) {
+                return Array.isArray(searchTerms[k]) && searchTerms[k].length > 0;
+            });
+            if (stBody) stBody.innerHTML = hasSearchTerms ? _jiqRenderSearchTermsCard(searchTerms) : '';
+            if (stCard) stCard.style.display = hasSearchTerms ? '' : 'none';
+
+            if (rowTop) rowTop.style.display = (incs.length || hasSearchTerms) ? 'grid' : 'none';
+
+            // 5) Companion Behaviors (now full-width row of its own)
             var compEl = document.getElementById('jiqCompanionTable');
             var compChartEl = document.getElementById('jiqCompanionChart');
             var compCard = document.getElementById('jiqCompanionCard');
@@ -30217,10 +30289,10 @@
                 ]);
             }
             if (compCard) compCard.style.display = comps.length ? '' : 'none';
+            if (rowComp) rowComp.style.display = comps.length ? '' : 'none';
 
-            if (det2) det2.style.display = (incs.length || comps.length) ? 'grid' : 'none';
-
-            // Sync view toggle buttons + visibility for all 4 cards
+            // Sync view toggle buttons + visibility for all 4 toggleable cards.
+            // (Search Terms card is a single panel, no chart/list toggle.)
             ['switched', 'interstep', 'inception', 'companion'].forEach(_jiqSyncSiteFunnelView);
         }
 
@@ -30367,113 +30439,76 @@
             var max = Math.max.apply(null, rows.map(function(s) { return +s.share_pct_of_switchers || 0; })) || 1;
             var palette = ['#5b6cff','#7a5cff','#9a4cff','#b53ce5','#d12dba','#e02288','#ec3a5b','#f25533','#f57d18','#f5a116','#f0c419','#dbe622'];
 
-            var W = 760;
-            var H = 400;
-            var padL = 70, padR = 70, padT = 60, padB = 90;
-            var spineY = padT + (H - padT - padB) * 0.35;
-            var stepXFor = function(i) {
-                return padL + (i + 0.5) * ((W - padL - padR) / rows.length);
-            };
+            // Horizontal bar chart — much more readable than the prior
+            // subway-line layout. These steps are INDEPENDENT detour
+            // activities ranked by frequency, not a sequential journey,
+            // so a horizontal bar chart with the full label visible
+            // alongside each bar fits the data shape correctly.
+            var rowH      = 44;
+            var labelColW = 360;
+            var barColW   = 320;
+            var pctColW   = 50;
+            var padL = 14, padR = 14, padT = 18, padB = 26;
+            var W = padL + labelColW + 12 + barColW + 8 + pctColW + padR;
+            var H = padT + rows.length * rowH + padB;
 
-            // Unique scope class so multiple charts on the same page don't
-            // share CSS hover state across each other.
             var scopeCls = 'jiqIsc_' + Math.random().toString(36).slice(2, 9);
-
             var parts = [];
 
-            // Hover-reveal CSS for the per-station labels. Labels are
-            // hidden by default (opacity:0) and slide in only when the
-            // surrounding <g.jiq-isc-station> is hovered / focused.
-            // Vertical (rotate 90°) so even long step descriptions fit
-            // in the column width without overlapping neighbours.
             parts.push('<style>'
-                 + '.' + scopeCls + ' svg { overflow: visible; }'
-                 + '.' + scopeCls + ' .jiq-isc-station { cursor: pointer; }'
-                 + '.' + scopeCls + ' .jiq-isc-lbl { opacity: 0; transition: opacity 140ms ease; pointer-events: none; }'
-                 + '.' + scopeCls + ' .jiq-isc-station:hover .jiq-isc-lbl,'
-                 + '.' + scopeCls + ' .jiq-isc-station:focus-within .jiq-isc-lbl { opacity: 1; }'
-                 + '.' + scopeCls + ' .jiq-isc-station:hover .jiq-isc-bubble,'
-                 + '.' + scopeCls + ' .jiq-isc-station:focus-within .jiq-isc-bubble {'
-                 +   'stroke-width: 3.5; filter: brightness(1.18) drop-shadow(0 0 6px rgba(255,255,255,0.35));'
+                 + '.' + scopeCls + ' .jiq-isc-row { cursor: default; }'
+                 + '.' + scopeCls + ' .jiq-isc-row:hover .jiq-isc-bar {'
+                 +   'filter: brightness(1.15) drop-shadow(0 0 6px rgba(255,255,255,0.25));'
                  + '}'
+                 + '.' + scopeCls + ' .jiq-isc-row:hover .jiq-isc-bg {'
+                 +   'fill: rgba(91,108,255,0.06);'
+                 + '}'
+                 + '.' + scopeCls + ' .jiq-isc-query { fill: var(--text-secondary); font-style: italic; font-size: 10.5px; }'
                  + '</style>');
 
-            // Background spine — curvy SVG path through all stations
-            var spinePath = 'M ' + (padL - 30) + ' ' + spineY;
-            rows.forEach(function(_, i) {
-                var x = stepXFor(i);
-                var prevX = i === 0 ? (padL - 30) : stepXFor(i - 1);
-                var cx1 = (prevX + x) / 2;
-                spinePath += ' C ' + cx1 + ' ' + (spineY - 10) + ', ' + cx1 + ' ' + (spineY + 10) + ', ' + x + ' ' + spineY;
-            });
-            spinePath += ' L ' + (W - padR + 30) + ' ' + spineY;
-            parts.push('<path d="' + spinePath + '" fill="none" stroke="url(#jiqJourneyGrad)" stroke-width="6" opacity="0.65" stroke-linecap="round"/>');
-            parts.push('<defs><linearGradient id="jiqJourneyGrad" x1="0%" y1="0%" x2="100%" y2="0%">'
-                     + '<stop offset="0%" stop-color="#fbbf24"/>'
-                     + '<stop offset="100%" stop-color="#10b981"/>'
-                     + '</linearGradient></defs>');
+            var barX0 = padL + labelColW + 12;
 
-            // Endpoints
-            parts.push('<g>'
-                 + '<rect x="' + (padL - 60) + '" y="' + (spineY - 16) + '" width="60" height="32" rx="16" fill="#fbbf24"/>'
-                 + '<text x="' + (padL - 30) + '" y="' + (spineY + 5) + '" text-anchor="middle" fill="#111" font-weight="700" font-size="10">LEFT</text>'
-                 + '</g>');
-            parts.push('<g>'
-                 + '<rect x="' + (W - padR) + '" y="' + (spineY - 16) + '" width="80" height="32" rx="16" fill="#10b981"/>'
-                 + '<text x="' + (W - padR + 40) + '" y="' + (spineY + 5) + '" text-anchor="middle" fill="#fff" font-weight="700" font-size="10">BOUGHT</text>'
-                 + '</g>');
-
-            // Stations
             rows.forEach(function(s, i) {
-                var pct = +s.share_pct_of_switchers || 0;
-                var x = stepXFor(i);
-                var r = Math.max(16, Math.min(36, 16 + (pct / max) * 22));
-                var color = palette[i % palette.length];
+                var pct       = +s.share_pct_of_switchers || 0;
+                var color     = palette[i % palette.length];
                 var stepLabel = String(s.step || '');
                 var topQuery  = (s.typical_queries && s.typical_queries[0]) ? s.typical_queries[0] : '';
-                // Truncate so vertical text doesn't run off the bottom
-                var shortStep  = stepLabel.length > 36 ? stepLabel.slice(0, 34) + '…' : stepLabel;
-                var shortQuery = topQuery.length  > 36 ? topQuery.slice(0, 34)  + '…' : topQuery;
+                var yTop      = padT + i * rowH;
+                var yMid      = yTop + rowH / 2;
+                var barW      = (pct / max) * barColW;
 
-                parts.push('<g class="jiq-isc-station" tabindex="0">');
+                // Two-line label: step (truncated ~46ch) + top query (~52ch)
+                var shortStep  = stepLabel.length > 46 ? stepLabel.slice(0, 44) + '…' : stepLabel;
+                var shortQuery = topQuery.length  > 52 ? topQuery.slice(0, 50)  + '…' : topQuery;
 
-                // Always-on % label above the bubble
-                parts.push('<text x="' + x + '" y="' + (spineY - r - 8) + '" text-anchor="middle" fill="' + color + '" font-weight="700" font-size="13" pointer-events="none">' + pct.toFixed(0) + '%</text>');
+                parts.push('<g class="jiq-isc-row">');
 
-                // Larger transparent hit-target so hover is easy
-                parts.push('<circle cx="' + x + '" cy="' + spineY + '" r="' + (r + 10) + '" fill="transparent"/>');
+                // Subtle row-hover background
+                parts.push('<rect class="jiq-isc-bg" x="' + padL + '" y="' + yTop + '" width="' + (W - padL - padR) + '" height="' + rowH + '" fill="transparent" rx="6"/>');
 
-                // Visible bubble + station number
-                parts.push('<circle class="jiq-isc-bubble" cx="' + x + '" cy="' + spineY + '" r="' + r + '" fill="' + color + '" stroke="#fff" stroke-width="2"/>');
-                parts.push('<text x="' + x + '" y="' + (spineY + 4) + '" text-anchor="middle" fill="#fff" font-weight="700" font-size="11" pointer-events="none">' + (i + 1) + '</text>');
+                // Rank pill
+                parts.push('<circle cx="' + (padL + 12) + '" cy="' + yMid + '" r="11" fill="' + color + '" opacity="0.85"/>');
+                parts.push('<text x="' + (padL + 12) + '" y="' + (yMid + 4) + '" text-anchor="middle" fill="#fff" font-weight="700" font-size="11">' + (i + 1) + '</text>');
 
-                // Hover-only vertical labels: step description in primary
-                // column, top typical query in a parallel column 12px right.
-                // text-anchor="start" + rotate(90,x,y) makes text extend
-                // DOWNWARD from (x,y), reading top-to-bottom (tilt head right).
-                var labelStartY = spineY + r + 14;
-                parts.push('<g class="jiq-isc-lbl">');
-                // Soft halo behind labels for legibility against the spine gradient
-                parts.push('<rect x="' + (x - 4) + '" y="' + (labelStartY - 4) + '" width="28" height="' + Math.min(230, 12 + shortStep.length * 6.5) + '" rx="4" fill="var(--bg-secondary)" opacity="0.92"/>');
-                parts.push('<text x="' + x + '" y="' + labelStartY + '" text-anchor="start" '
-                     + 'transform="rotate(90, ' + x + ', ' + labelStartY + ')" '
-                     + 'dy="0.35em" '
-                     + 'fill="var(--text-primary)" font-weight="600" font-size="10.5">' + _jiqEsc(shortStep) + '</text>');
+                // Step label (line 1) + typical query (line 2)
+                var labelX = padL + 32;
                 if (shortQuery) {
-                    parts.push('<text x="' + (x + 14) + '" y="' + labelStartY + '" text-anchor="start" '
-                         + 'transform="rotate(90, ' + (x + 14) + ', ' + labelStartY + ')" '
-                         + 'dy="0.35em" '
-                         + 'fill="var(--text-secondary)" font-style="italic" font-size="9.5">' + _jiqEsc(shortQuery) + '</text>');
+                    parts.push('<text x="' + labelX + '" y="' + (yMid - 4) + '" fill="var(--text-primary)" font-weight="600" font-size="13">' + _jiqEsc(shortStep) + '</text>');
+                    parts.push('<text class="jiq-isc-query" x="' + labelX + '" y="' + (yMid + 13) + '">"' + _jiqEsc(shortQuery) + '"</text>');
+                } else {
+                    parts.push('<text x="' + labelX + '" y="' + (yMid + 4) + '" fill="var(--text-primary)" font-weight="600" font-size="13">' + _jiqEsc(shortStep) + '</text>');
                 }
-                parts.push('</g>');
 
-                // Native browser tooltip. CRITICAL: escape every query
-                // before injecting - typical_queries contain literal
-                // "<MOVIE>" placeholders, which the SVG parser would
-                // treat as a malformed element tag and silently bail on
-                // the rest of the SVG (only station 1 rendered before
-                // this escape fix).
-                parts.push('<title>' + _jiqEsc(s.step || '') + ' — ' + pct.toFixed(1) + '%'
+                // Bar track
+                parts.push('<rect x="' + barX0 + '" y="' + (yMid - 9) + '" width="' + barColW + '" height="18" rx="9" fill="var(--bg-secondary)" opacity="0.6"/>');
+                // Filled bar
+                parts.push('<rect class="jiq-isc-bar" x="' + barX0 + '" y="' + (yMid - 9) + '" width="' + Math.max(2, barW) + '" height="18" rx="9" fill="' + color + '"/>');
+
+                // % label
+                parts.push('<text x="' + (W - padR - 4) + '" y="' + (yMid + 4) + '" text-anchor="end" fill="' + color + '" font-weight="700" font-size="13">' + pct.toFixed(1) + '%</text>');
+
+                // Tooltip
+                parts.push('<title>' + _jiqEsc(s.step || '') + ' — ' + pct.toFixed(1) + '% of switchers'
                     + ((s.typical_queries || []).length
                         ? '\n\nTypical queries:\n' + (s.typical_queries || []).slice(0, 4).map(function(q) { return _jiqEsc('• ' + q); }).join('\n')
                         : '')
@@ -30482,11 +30517,11 @@
                 parts.push('</g>');
             });
 
-            return '<div class="' + scopeCls + '" style="overflow:visible;padding:4px 0;">'
-                 + '<svg width="' + W + '" height="' + H + '" viewBox="0 0 ' + W + ' ' + H + '" preserveAspectRatio="xMidYMin meet" style="display:block;max-width:100%;height:auto;overflow:visible;">'
+            return '<div class="' + scopeCls + '" style="padding:4px 0;">'
+                 + '<svg width="' + W + '" height="' + H + '" viewBox="0 0 ' + W + ' ' + H + '" preserveAspectRatio="xMidYMin meet" style="display:block;max-width:100%;height:auto;">'
                  + parts.join('')
                  + '</svg>'
-                 + '<div style="font-size:0.68rem;color:var(--text-secondary);margin-top:4px;text-align:center;">Stations sorted by share (most-common detours leftward) · <strong>hover a station</strong> to reveal its step description &amp; top query</div>'
+                 + '<div style="font-size:0.68rem;color:var(--text-secondary);margin-top:6px;text-align:center;">Ranked by share of switchers · italic line shows the most-common typical query for that detour · hover a row for the full query list</div>'
                  + '</div>';
         }
 
@@ -30607,43 +30642,144 @@
         }
         // Parse "1-3 hours before showtime" / "30-90 min before" / "immediately after" / etc.
         // Returns { center_hours: signed_float } where negative = before, positive = after, 0 = at.
-        function _jiqParseCompanionWindow(text) {
-            if (!text) return { center: -1, span: 1 };
+        function _jiqParseCompanionWindow(text, scale) {
+            // scale: 'hours' (movie/showtime payloads) or 'days' (retail/
+            // purchase payloads). Output `center` is in the requested unit
+            // so the renderer doesn't have to special-case anything.
+            scale = scale || 'hours';
+            if (!text) return { center: 0, span: 0.5 };
             var s = String(text).toLowerCase();
-            var hasBefore = s.indexOf('before') >= 0;
-            var hasAfter  = s.indexOf('after')  >= 0 && s.indexOf('before') < 0;
-            // Extract first numeric range (e.g. "1-3", "30-90", "60-90")
+            var hasBefore = /\bbefore\b/.test(s);
+            var hasAfter  = /\bafter\b/.test(s) && !hasBefore;
+            // "Concurrent" / "Same session" / "Background" / "Around" =
+            // happens AT the anchor moment (showtime or purchase). Pin to 0.
+            var atAnchor  = /\b(concurrent|same\s*session|same\s*day|around|background|browse[- ]while)\b/.test(s);
+
+            // Extract first numeric range (e.g. "1-3", "30-90", "0-72")
             var m = s.match(/(\d+(?:\.\d+)?)\s*[-–]\s*(\d+(?:\.\d+)?)/);
             var lo, hi;
             if (m) { lo = +m[1]; hi = +m[2]; }
             else {
                 var m2 = s.match(/(\d+(?:\.\d+)?)/);
                 if (m2) { lo = +m2[1]; hi = lo; }
-                else    { lo = 1; hi = 2; }
+                else    { lo = 0; hi = 1; }
             }
-            // Convert minutes -> hours when minute-units appear
-            var inMinutes = s.indexOf('min') >= 0;
-            if (inMinutes) { lo = lo / 60; hi = hi / 60; }
+            // Detect input unit (minutes / hours / days / weeks)
+            var inMinutes = /\b(min|minute|minutes)\b/.test(s);
+            var inWeeks   = /\b(week|weeks|wk|wks)\b/.test(s);
+            var inDays    = /\b(day|days|d)\b/.test(s) && !inWeeks;
+            var inHours   = /\b(hour|hours|hr|hrs|h)\b/.test(s);
+            // Default: assume requested scale's native unit
+            if (!inMinutes && !inWeeks && !inDays && !inHours) {
+                if (scale === 'days') inDays = true; else inHours = true;
+            }
+            // Normalise lo/hi into the requested output scale
+            if (scale === 'days') {
+                if (inMinutes) { lo = lo / 60 / 24; hi = hi / 60 / 24; }
+                else if (inHours) { lo = lo / 24; hi = hi / 24; }
+                else if (inWeeks) { lo = lo * 7;  hi = hi * 7;  }
+                // inDays passes through unchanged
+            } else { // scale === 'hours'
+                if (inMinutes) { lo = lo / 60; hi = hi / 60; }
+                else if (inDays)  { lo = lo * 24; hi = hi * 24; }
+                else if (inWeeks) { lo = lo * 7 * 24; hi = hi * 7 * 24; }
+                // inHours passes through unchanged
+            }
             var center = (lo + hi) / 2;
-            var span = Math.max(0.25, hi - lo);
-            if (hasBefore) center = -center;
-            else if (hasAfter) center = +center;
-            else center = -center;  // default to "before" if ambiguous
+            var span = Math.max(0.1, hi - lo);
+            if (atAnchor)        center = 0;
+            else if (hasBefore)  center = -center;
+            else if (hasAfter)   center = +center;
+            else                 center = -center;  // default "before" if ambiguous
             return { center: center, span: span };
         }
+        // ───── Top Search Terms card renderer ─────
+        // Renders a 2x2 grid of platform panels (Google + Bing organic /
+        // Google + Bing paid / TikTok / Instagram). Each panel shows the
+        // top 5 search queries or hashtags with a metric (monthly volume,
+        // hashtag view-count, etc.).
+        function _jiqRenderSearchTermsCard(st) {
+            if (!st) return '';
+
+            var PLATFORMS = [
+                {key: 'google_bing_organic', label: 'Google + Bing — Organic search',
+                 icon: '🔵', color: '#3b82f6',
+                 metric: 'volume_monthly_us', metricLabel: 'mo. vol',
+                 metricFmt: function(v) { return v >= 1000 ? (v/1000).toFixed(0)+'K' : v+''; }},
+                {key: 'google_bing_paid', label: 'Google + Bing — Paid search',
+                 icon: '💰', color: '#ef4444',
+                 metric: 'volume_monthly_us', metricLabel: 'mo. vol',
+                 metricFmt: function(v) { return v >= 1000 ? (v/1000).toFixed(0)+'K' : v+''; }},
+                {key: 'tiktok_search', label: 'TikTok — Search + hashtags',
+                 icon: '🎵', color: '#ec4899',
+                 metric: 'view_estimate', metricLabel: 'views',
+                 metricFmt: function(v) {
+                    if (v >= 1e9) return (v/1e9).toFixed(1).replace(/\.0$/,'')+'B';
+                    if (v >= 1e6) return (v/1e6).toFixed(1).replace(/\.0$/,'')+'M';
+                    if (v >= 1e3) return (v/1e3).toFixed(0)+'K';
+                    return v+'';
+                 }},
+                {key: 'instagram_search', label: 'Instagram — Search + hashtags',
+                 icon: '📸', color: '#d946ef',
+                 metric: 'view_estimate', metricLabel: 'posts',
+                 metricFmt: function(v) {
+                    if (v >= 1e6) return (v/1e6).toFixed(1).replace(/\.0$/,'')+'M';
+                    if (v >= 1e3) return (v/1e3).toFixed(0)+'K';
+                    return v+'';
+                 }},
+            ];
+
+            function _renderPanel(plat) {
+                var rows = st[plat.key] || [];
+                if (!rows.length) return '';
+                var rowsHtml = rows.slice(0, 6).map(function(r, i) {
+                    var term = r.term || r.query || r.hashtag || '—';
+                    var metric = r[plat.metric];
+                    var metricStr = (metric != null) ? plat.metricFmt(+metric) : '';
+                    var driver = r.driver || r.intent || r.note || '';
+                    return '<tr style="border-bottom:1px solid var(--border-color);">'
+                         + '<td style="padding:5px 6px;color:var(--text-secondary);font-weight:600;width:18px;text-align:right;">' + (i+1) + '</td>'
+                         + '<td style="padding:5px 6px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11.5px;color:var(--text-primary);">'
+                         +   _jiqEsc(term)
+                         +   (driver ? '<div style="font-family:inherit;font-size:10.5px;color:var(--text-secondary);font-style:italic;margin-top:2px;">' + _jiqEsc(driver) + '</div>' : '')
+                         + '</td>'
+                         + '<td style="padding:5px 6px;text-align:right;font-weight:700;color:' + plat.color + ';white-space:nowrap;font-size:11.5px;">' + metricStr
+                         +   (metricStr ? ' <span style="font-weight:400;color:var(--text-secondary);font-size:10px;">' + plat.metricLabel + '</span>' : '')
+                         + '</td>'
+                         + '</tr>';
+                }).join('');
+                return '<div style="background:var(--bg-secondary);border:1px solid var(--border-color);border-left:3px solid ' + plat.color + ';border-radius:8px;padding:0.55rem 0.65rem;">'
+                     + '<div style="font-size:11px;font-weight:700;color:var(--text-primary);margin-bottom:4px;">'
+                     +   plat.icon + ' ' + plat.label
+                     + '</div>'
+                     + '<table style="width:100%;border-collapse:collapse;">'
+                     +   '<tbody>' + rowsHtml + '</tbody>'
+                     + '</table>'
+                     + '</div>';
+            }
+
+            var panels = PLATFORMS.map(_renderPanel).filter(Boolean).join('');
+            return '<div style="display:grid;grid-template-columns:1fr 1fr;gap:0.55rem;">' + panels + '</div>';
+        }
+
         function _jiqRenderCompanionTimeline(comps) {
             if (!comps || !comps.length) return '<div style="font-size:0.8rem;color:var(--text-secondary);padding:0.5rem 0;">No data.</div>';
-            // VERTICAL TIMELINE: Y-axis = time (top = hours before, bottom =
-            // hours after showtime), bubbles sit on a vertical spine with
-            // their full text label to the RIGHT in a dedicated horizontal
-            // row each. Previous horizontal version forced every label to
-            // share the same x-position as its bubble, so dense rows
-            // ("Bar/drinks", "Streaming/VOD research", "Rideshare/transport"
-            // all near showtime) collided and got clipped no matter how
-            // tall the SVG was. Going vertical gives each label its own
-            // unobstructed horizontal row.
-            var rows = comps.slice(0, 10).map(function(c) {
-                var w = _jiqParseCompanionWindow(c.typical_window);
+            // HORIZONTAL TIMELINE — bubbles laid out left→right on a
+            // horizontal time axis, anchored at PURCHASE (retail) or
+            // SHOWTIME (movie). The card spans the full row width;
+            // when multiple verticals fall at the same time-point we
+            // stagger them into "lanes" above + below the axis so the
+            // bubbles never overlap.
+
+            // ── Scale detection ──────────────────────────────────────
+            var dayMatches = comps.filter(function(c) {
+                return /\b(day|days|week|weeks)\b/i.test(c.typical_window || '');
+            }).length;
+            var scale = (dayMatches >= Math.max(2, comps.length * 0.3)) ? 'days' : 'hours';
+
+            // ── Parse windows in the chosen scale ────────────────────
+            var rows = comps.slice(0, 14).map(function(c) {
+                var w = _jiqParseCompanionWindow(c.typical_window, scale);
                 return {
                     vertical: c.vertical || '—',
                     pct: +c.share_pct_of_visitors || 0,
@@ -30658,93 +30794,170 @@
             var maxPct = Math.max.apply(null, rows.map(function(r) { return r.pct; }));
             if (maxPct <= 0) maxPct = 1;
 
-            var W = 620;
-            var padT = 40, padB = 30, padL = 110, padR = 30;
-            var rowGap = 52;  // vertical spacing per bubble row
-            var H = Math.max(420, padT + padB + rows.length * rowGap);
-            var axisX = padL;             // vertical time-axis x position
-            var labelX0 = axisX + 50;     // start of label column
-
-            var yMin = -4, yMax = 2.5;    // hours
-            function yFor(h) {
-                var clamped = Math.max(yMin, Math.min(yMax, h));
-                return padT + ((clamped - yMin) / (yMax - yMin)) * (H - padT - padB);
+            // ── Axis configuration per scale ─────────────────────────
+            var dataMin = Math.min.apply(null, rows.map(function(r) { return r.center; }));
+            var dataMax = Math.max.apply(null, rows.map(function(r) { return r.center; }));
+            var axisConfig;
+            if (scale === 'days') {
+                axisConfig = {
+                    ticks: [-30, -21, -14, -7, -3, -1, 0, 1, 3, 7, 14, 21, 30],
+                    labelFor: function(t) {
+                        if (t === 0)   return '🛒 PURCHASE';
+                        if (t === -1)  return '1 day before';
+                        if (t ===  1)  return '1 day after';
+                        if (t === -7)  return '1 week before';
+                        if (t ===  7)  return '1 week after';
+                        if (t === -14) return '2 weeks before';
+                        if (t === 14)  return '2 weeks after';
+                        if (t === -21) return '3 weeks before';
+                        if (t === 21)  return '3 weeks after';
+                        if (t === -30) return '1 month before';
+                        if (t === 30)  return '1 month after';
+                        if (t < 0)     return Math.abs(t) + 'd before';
+                        return t + 'd after';
+                    },
+                    xMin: Math.min(-7,  Math.floor(dataMin) - 1),
+                    xMax: Math.max( 7,  Math.ceil(dataMax)  + 1),
+                };
+            } else {
+                axisConfig = {
+                    ticks: [-6, -4, -3, -2, -1, 0, 1, 2, 4],
+                    labelFor: function(t) {
+                        if (t === 0) return '🎬 SHOWTIME';
+                        if (t < 0)   return Math.abs(t) + 'h before';
+                        return t + 'h after';
+                    },
+                    xMin: Math.min(-6, Math.floor(dataMin) - 0.5),
+                    xMax: Math.max( 4, Math.ceil(dataMax)  + 0.5),
+                };
             }
 
-            // Place bubbles on the spine, then stagger any that overlap
-            // vertically by nudging them down so each gets a clean row.
-            rows.forEach(function(e, i) {
-                e.x = axisX;
-                e.r = Math.max(13, Math.min(28, 13 + (e.pct / maxPct) * 16));
-                e.y = yFor(e.center);
-                // Cascade-down: if this bubble's y would crowd the previous
-                // (already-placed) one, push it below that one's row.
-                if (i > 0) {
-                    var prev = rows[i - 1];
-                    var minGap = prev.r + e.r + 10;
-                    if ((e.y - prev.y) < minGap) {
-                        e.y = prev.y + minGap;
-                    }
-                }
-            });
-            // Hard clamp in case dense data pushes the last bubble past the
-            // bottom of the SVG.
+            // ── SVG canvas (full-width: ~1200px viewBox, scales fluidly) ──
+            var W = 1200;
+            var padT = 40, padB = 60, padL = 50, padR = 50;
+            var axisY;  // vertical center where the time axis lives
+            var H = 360;
+            axisY = H / 2 + 4;
+
+            var xMin = axisConfig.xMin, xMax = axisConfig.xMax;
+            function xFor(t) {
+                var clamped = Math.max(xMin, Math.min(xMax, t));
+                return padL + ((clamped - xMin) / (xMax - xMin)) * (W - padL - padR);
+            }
+
+            // ── Bubble sizing ────────────────────────────────────────
             rows.forEach(function(e) {
-                e.y = Math.max(padT + e.r + 4,
-                       Math.min(H - padB - e.r - 4, e.y));
+                e.r = Math.max(16, Math.min(38, 16 + (e.pct / maxPct) * 24));
+                e.cx = xFor(e.center);
             });
+
+            // ── Lane assignment (alternating above/below the axis) ──
+            // For each bubble in time-sorted order, find the first lane
+            // (0=just above, 1=just below, 2=2 above, 3=2 below, …) where
+            // its horizontal extent doesn't collide with anything else in
+            // that lane.
+            var lanes = []; // each lane is an array of {x0, x1}
+            function laneOffsetY(laneIdx) {
+                // lane 0 → just above axis, lane 1 → just below, alternating
+                var layer = Math.floor(laneIdx / 2) + 1;
+                var side  = (laneIdx % 2 === 0) ? -1 : 1;
+                return side * layer * 78;  // 78 px between lane centers
+            }
+            rows.forEach(function(e) {
+                var halfW = e.r + 100;  // label-text room on the right
+                var laneIdx = 0;
+                while (true) {
+                    var lane = lanes[laneIdx] = lanes[laneIdx] || [];
+                    var fits = lane.every(function(occ) {
+                        return (e.cx + halfW < occ.x0 - 8)
+                            || (e.cx - halfW > occ.x1 + 8);
+                    });
+                    if (fits) {
+                        lane.push({ x0: e.cx - halfW, x1: e.cx + halfW });
+                        e.laneIdx = laneIdx;
+                        break;
+                    }
+                    laneIdx++;
+                    if (laneIdx > 20) { e.laneIdx = laneIdx; break; }
+                }
+                e.cy = axisY + laneOffsetY(e.laneIdx);
+            });
+
+            // Grow SVG height if extreme stacking demands it
+            var maxAbsY = rows.reduce(function(m, e) {
+                return Math.max(m, Math.abs(e.cy - axisY) + e.r + 40);
+            }, 0);
+            var neededH = Math.max(360, axisY - padT, (H - axisY) - padB);
+            if (maxAbsY * 2 + 80 > H) {
+                H = maxAbsY * 2 + 100;
+                axisY = H / 2 + 4;
+                // re-compute cy with the new axisY
+                rows.forEach(function(e) {
+                    e.cy = axisY + laneOffsetY(e.laneIdx);
+                });
+            }
 
             var parts = [];
             parts.push('<rect width="' + W + '" height="' + H + '" fill="transparent"/>');
 
-            // Vertical time axis line
-            parts.push('<line x1="' + axisX + '" y1="' + padT + '" x2="' + axisX + '" y2="' + (H - padB) + '" stroke="var(--border-color)" stroke-width="1"/>');
+            // Horizontal time axis line
+            parts.push('<line x1="' + padL + '" y1="' + axisY + '" x2="' + (W - padR) + '" y2="' + axisY + '" stroke="var(--border-color)" stroke-width="1.5"/>');
 
-            // Time ticks on the LEFT of the axis (text-anchor: end)
-            var ticks = [-3, -2, -1, 0, 1, 2];
-            var tickLabels = { '-3':'3h before', '-2':'2h before', '-1':'1h before', '0':'🎬 SHOWTIME', '1':'1h after', '2':'2h after' };
-            ticks.forEach(function(t) {
-                var y = yFor(t);
-                var isShowtime = (t === 0);
-                parts.push('<line x1="' + (axisX - 6) + '" y1="' + y + '" x2="' + (axisX + 6) + '" y2="' + y + '" stroke="var(--border-color)" stroke-width="1"/>');
-                if (isShowtime) {
-                    // Bold horizontal accent line across the chart at SHOWTIME
-                    parts.push('<line x1="' + axisX + '" y1="' + y + '" x2="' + (W - padR) + '" y2="' + y + '" stroke="var(--accent-primary)" stroke-width="2" stroke-dasharray="4,3" opacity="0.55"/>');
-                    parts.push('<text x="' + (axisX - 12) + '" y="' + (y + 4) + '" text-anchor="end" fill="var(--accent-primary)" font-weight="700" font-size="11">' + tickLabels[String(t)] + '</text>');
+            // Time ticks BELOW the axis (so the labels live below)
+            axisConfig.ticks.filter(function(t) { return t >= xMin && t <= xMax; })
+                            .forEach(function(t) {
+                var x = xFor(t);
+                var isAnchor = (t === 0);
+                if (isAnchor) {
+                    // Bold vertical accent line at the anchor
+                    parts.push('<line x1="' + x + '" y1="' + (padT - 8) + '" x2="' + x + '" y2="' + (H - padB + 8) + '" stroke="var(--accent-primary)" stroke-width="2" stroke-dasharray="4,3" opacity="0.55"/>');
+                    parts.push('<rect x="' + (x - 56) + '" y="' + (H - padB + 14) + '" width="112" height="22" rx="11" fill="var(--accent-primary)"/>');
+                    parts.push('<text x="' + x + '" y="' + (H - padB + 29) + '" text-anchor="middle" fill="#fff" font-weight="700" font-size="11">' + axisConfig.labelFor(t) + '</text>');
                 } else {
-                    parts.push('<text x="' + (axisX - 12) + '" y="' + (y + 4) + '" text-anchor="end" fill="var(--text-secondary)" font-size="11">' + tickLabels[String(t)] + '</text>');
+                    parts.push('<line x1="' + x + '" y1="' + (axisY - 5) + '" x2="' + x + '" y2="' + (axisY + 5) + '" stroke="var(--border-color)" stroke-width="1"/>');
+                    parts.push('<text x="' + x + '" y="' + (H - padB + 22) + '" text-anchor="middle" fill="var(--text-secondary)" font-size="10.5">' + axisConfig.labelFor(t) + '</text>');
                 }
             });
 
-            // Bubbles + horizontal labels
+            // Span bars under each bubble (showing the time-window range)
             rows.forEach(function(e) {
-                // Span line showing the time-window range (vertical now)
                 if (e.span > 0) {
-                    var y0 = yFor(e.center - e.span / 2);
-                    var y1 = yFor(e.center + e.span / 2);
-                    parts.push('<line x1="' + e.x + '" y1="' + y0 + '" x2="' + e.x + '" y2="' + y1 + '" stroke="' + e.color + '" stroke-width="2" opacity="0.35"/>');
+                    var x0 = xFor(e.center - e.span / 2);
+                    var x1 = xFor(e.center + e.span / 2);
+                    parts.push('<line x1="' + x0 + '" y1="' + axisY + '" x2="' + x1 + '" y2="' + axisY + '" stroke="' + e.color + '" stroke-width="3" opacity="0.35" stroke-linecap="round"/>');
                 }
-                // Connector line from bubble to its label (subtle)
-                parts.push('<line x1="' + (e.x + e.r + 2) + '" y1="' + e.y + '" x2="' + (labelX0 - 4) + '" y2="' + e.y + '" stroke="' + e.color + '" stroke-width="1" opacity="0.4"/>');
-                // Bubble + % inside
+            });
+
+            // Connectors from axis to each bubble
+            rows.forEach(function(e) {
+                parts.push('<line x1="' + e.cx + '" y1="' + axisY + '" x2="' + e.cx + '" y2="' + e.cy + '" stroke="' + e.color + '" stroke-width="1" opacity="0.4"/>');
+            });
+
+            // Bubbles + labels
+            rows.forEach(function(e) {
+                var labelAbove = (e.cy < axisY);
+                var labelY0 = labelAbove ? (e.cy - e.r - 16) : (e.cy + e.r + 14);
+                var labelY1 = labelAbove ? (e.cy - e.r - 4)  : (e.cy + e.r + 26);
+                var cleanLabel = e.vertical.split('(')[0].trim();
+
                 parts.push('<g>'
-                     + '<circle cx="' + e.x + '" cy="' + e.y + '" r="' + e.r + '" fill="' + e.color + '" opacity="0.9" stroke="' + e.color + '" stroke-width="2"/>'
-                     + '<text x="' + e.x + '" y="' + (e.y + 4) + '" text-anchor="middle" fill="#fff" font-weight="700" font-size="' + Math.max(10, e.r / 2.2) + '">' + e.pct.toFixed(0) + '%</text>'
+                     + '<circle cx="' + e.cx + '" cy="' + e.cy + '" r="' + e.r + '" fill="' + e.color + '" opacity="0.92" stroke="#fff" stroke-width="2"/>'
+                     + '<text x="' + e.cx + '" y="' + (e.cy + 4) + '" text-anchor="middle" fill="#fff" font-weight="700" font-size="' + Math.max(11, e.r / 2.1) + '">' + e.pct.toFixed(0) + '%</text>'
                      + '<title>' + _jiqEsc(e.vertical + ' — ' + e.pct.toFixed(1) + '% — ' + e.typical_window) + (e.top_sites.length ? ' — ' + _jiqEsc(e.top_sites.join(', ')) : '') + '</title>'
                      + '</g>');
-                // Full label to the right (no truncation needed, plenty of room)
-                var cleanLabel = e.vertical.split('(')[0].trim();
-                parts.push('<text x="' + labelX0 + '" y="' + (e.y - 2) + '" text-anchor="start" fill="var(--text-primary)" font-weight="600" font-size="12">' + _jiqEsc(cleanLabel) + '</text>');
+
+                parts.push('<text x="' + e.cx + '" y="' + labelY0 + '" text-anchor="middle" fill="var(--text-primary)" font-weight="600" font-size="11.5">' + _jiqEsc(cleanLabel) + '</text>');
                 if (e.typical_window) {
-                    parts.push('<text x="' + labelX0 + '" y="' + (e.y + 13) + '" text-anchor="start" fill="var(--text-secondary)" font-size="10">' + _jiqEsc(e.typical_window) + '</text>');
+                    parts.push('<text x="' + e.cx + '" y="' + labelY1 + '" text-anchor="middle" fill="var(--text-secondary)" font-size="10">' + _jiqEsc(e.typical_window) + '</text>');
                 }
             });
 
+            var anchorWord = (scale === 'days') ? 'purchase' : 'showtime';
             return '<div style="overflow-x:auto;padding:4px 0;">'
-                 + '<svg width="' + W + '" height="' + H + '" viewBox="0 0 ' + W + ' ' + H + '" style="display:block;max-width:100%;height:auto;">'
+                 + '<svg width="' + W + '" height="' + H + '" viewBox="0 0 ' + W + ' ' + H + '" preserveAspectRatio="xMidYMid meet" style="display:block;width:100%;height:auto;min-width:880px;">'
                  + parts.join('')
                  + '</svg>'
-                 + '<div style="font-size:0.68rem;color:var(--text-secondary);margin-top:4px;text-align:center;">Bubble size = share of visitors · vertical position = typical time relative to showtime · hover a bubble for top sites</div>'
+                 + '<div style="font-size:0.7rem;color:var(--text-secondary);margin-top:6px;text-align:center;">Bubble size = share of visitors · horizontal position = typical time relative to ' + anchorWord + ' · vertical lanes are just to keep labels readable · hover for top sites</div>'
                  + '</div>';
         }
 
@@ -31054,7 +31267,25 @@
                 AI_AGENT: '#14b8a6',
                 SOUNDTRACK: '#a3e635',
                 SEARCH: '#3b82f6',
-                DETOUR: '#cbd5e1'
+                DETOUR: '#cbd5e1',
+                // Retail / digital-marketing journey categories
+                COUPON_HUNT:     '#f59e0b',  // amber — bargain hunting
+                PRICE_COMPARE:   '#a855f7',  // purple — competitor PDP visits
+                REVIEW_RESEARCH: '#0ea5e9',  // sky — Reddit / YouTube review hunt
+                SIZE_FIT:        '#06b6d4',
+                CART_ABANDON:    '#ef4444',  // red — drop-off
+                EMAIL_REENGAGE:  '#22c55e',  // green — Klaviyo win-back triggered
+                SMS_REENGAGE:    '#16a34a',
+                CART_RECLAIM:    '#10b981',  // emerald — recovered
+                CHECKOUT:        '#0c4a6e',
+                PURCHASE:        '#10b981',
+                DISPLAY_RETARGET:'#dc2626',
+                PAID_SEARCH:     '#3b82f6',
+                PAID_SOCIAL:     '#d946ef',
+                AFFILIATE:       '#84cc16',
+                CTV:             '#7c3aed',
+                SEO_CONTENT:     '#0284c7',
+                EMAIL_CRM:       '#22c55e'
             };
             // Canonical brand colors so the SAME brand keeps the SAME color
             // across every column even when the label has a qualifier
@@ -31167,10 +31398,18 @@
                 if (!ptp.top_paths || !ptp.top_paths.length) {
                     topPathsEl.innerHTML = '<div style="font-size:0.8rem;color:var(--text-secondary);">No high-confidence paths emerged (cohort too small or paths too varied). Lower the &quot;Steps before purchase&quot; on the next run or widen the cohort.</div>';
                 } else {
+                    // Opt-in "Days" column — only renders if at least one
+                    // path carries avg_days (newer retail payloads carry
+                    // journey duration; legacy movie runs don't, so the
+                    // column hides for them).
+                    var hasDays = ptp.top_paths.some(function(p) {
+                        return p.avg_days != null || p.days != null;
+                    });
                     topPathsEl.innerHTML = '<table style="width:100%; border-collapse: collapse; font-size: 12.5px;">'
                         + '<thead><tr style="text-align:left;border-bottom:1px solid var(--border-color);">'
                         +   '<th style="padding:6px 4px;width:60px;text-align:right;">Users</th>'
                         +   '<th style="padding:6px 4px;width:60px;text-align:right;">% Cohort</th>'
+                        +   (hasDays ? '<th style="padding:6px 4px;width:80px;text-align:right;">Avg days</th>' : '')
                         +   '<th style="padding:6px 4px;">Path</th>'
                         + '</tr></thead><tbody>'
                         + ptp.top_paths.map(function(p) {
@@ -31192,10 +31431,23 @@
                             var pctDisplay = (pctVal != null && !isNaN(pctVal))
                                 ? (Number(pctVal).toFixed(1).replace(/\.0$/, '')) + '%'
                                 : '—';
-                            return '<tr style="border-bottom:1px solid var(--border-color);">'
-                                 + '<td style="padding:6px 4px;text-align:right;font-weight:600;">' + _jiqFmt(p.users) + '</td>'
-                                 + '<td style="padding:6px 4px;text-align:right;color:var(--text-secondary);">' + pctDisplay + '</td>'
-                                 + '<td style="padding:6px 4px;">' + pathHtml + '</td>'
+                            var daysVal = (p.avg_days != null) ? p.avg_days : p.days;
+                            var daysCell = hasDays
+                                ? '<td style="padding:6px 4px;text-align:right;color:var(--text-secondary);">'
+                                  + (daysVal != null
+                                      ? '<strong style="color:var(--text-primary);">' + Number(daysVal).toFixed(daysVal < 2 ? 1 : 0) + '</strong>d'
+                                      : '—')
+                                  + '</td>'
+                                : '';
+                            // Optional sub-line note (renders under the path pills).
+                            var noteLine = p.note
+                                ? '<div style="font-size:11px;color:var(--text-secondary);margin-top:4px;font-style:italic;">' + _jiqEsc(p.note) + '</div>'
+                                : '';
+                            return '<tr style="border-bottom:1px solid var(--border-color);vertical-align:top;">'
+                                 + '<td style="padding:8px 4px;text-align:right;font-weight:600;">' + _jiqFmt(p.users) + '</td>'
+                                 + '<td style="padding:8px 4px;text-align:right;color:var(--text-secondary);">' + pctDisplay + '</td>'
+                                 + daysCell
+                                 + '<td style="padding:8px 4px;">' + pathHtml + noteLine + '</td>'
                                  + '</tr>';
                         }).join('') + '</tbody></table>';
                 }
@@ -31400,6 +31652,21 @@
                                  + '</tr>';
                         }).join('') + '</tbody></table>';
                 }
+            }
+
+            // If the active cluster carries its own site_funnel (Fandango /
+            // Abercrombie-style per-cohort switcher analysis), swap the
+            // brand-level switcher panels for the cohort's view. Falls back
+            // to the modeled_view.site_funnel (brand-level blend) when the
+            // cluster doesn't have one — so legacy runs keep working.
+            if (typeof renderJourneyIqSiteFunnel === 'function') {
+                var fullRun = _jiqCurrentRun || {};
+                var brandLevel = ((fullRun.modeled_view || {}).site_funnel)
+                                 || fullRun.site_funnel
+                                 || null;
+                renderJourneyIqSiteFunnel(
+                    (cluster && cluster.site_funnel) || brandLevel
+                );
             }
         }
 
@@ -45162,7 +45429,8 @@
                 if (col === 'BRAND INPUT' && usPop > 0) projectedUS = usPop;
 
                 if (col === 'MEDIAN AGE' || col.includes('MEDIAN') && col.includes('AGE')) {
-                    medianAge = brandPen || catShare || parseFloat(val) || 0;
+                    // Never fall back to Category Share — only Brand Penetration is displayed.
+                    medianAge = brandPen || parseFloat(val) || 0;
                 }
 
                 if (col.includes('GENDER')) currentSection = 'gender';
@@ -45171,7 +45439,8 @@
                 else if (col.includes('INCOME')) currentSection = 'income';
 
                 if (val && currentSection && !col.includes('SECTION')) {
-                    const pct = brandPen || catShare || 0;
+                    // Never fall back to Category Share — only Brand Penetration is displayed.
+                    const pct = brandPen || 0;
                     if (pct > 0 && pct < 100) {
                         demographics[currentSection][val] = pct;
                     }
@@ -54728,27 +54997,14 @@
                     return b;
                 });
             
-            // Check if this is the Gen Pop profile - if so, skip rebasing and show raw values
-            const isGenPopProfile = (currentS3Key || '').toUpperCase().includes('GEN_POP') || 
-                                   (currentS3Key || '').toUpperCase().includes('GENPOP') ||
-                                   (currentProfileData?.name || '').toUpperCase().includes('GEN POP');
-            
-            // Only rebase non-Gen Pop profiles
-            if (!isGenPopProfile) {
-                const totalPct = arr.reduce((s, l) => s + l.pct, 0);
-                if (totalPct > 0 && Math.abs(totalPct - 100) > 0.01) {
-                    const scale = 100 / totalPct;
-                    arr.forEach(l => {
-                        l.pct *= scale;
-                        l.projection = Math.round(l.projection * scale);
-                    });
-                    const gpTotal = arr.reduce((s, l) => s + l.genPopPct, 0);
-                    if (gpTotal > 0) {
-                        const gpScale = 100 / gpTotal;
-                        arr.forEach(l => { l.genPopPct *= gpScale; });
-                    }
-                }
-            }
+            // DO NOT renormalize loc.pct to sum to 100% — that converts the raw
+            // Brand Penetration values (e.g. NYC = 11.7430% for Kevin Durant) into
+            // Category Share values (NYC = 11.5910%), which is the exact bug Jenna
+            // reported (location tab was displaying Category Share instead of BP).
+            // BPs are pulled straight from the CSV's "Brand Penetration (Row)"
+            // column in parseDashboardCSV — render them as-is. genPopPct and index
+            // are recomputed downstream in renderLocationTable from the loaded
+            // Gen Pop baseline, so no rescaling is needed here.
             return arr;
         }
 
@@ -67410,7 +67666,8 @@
                 const catShare = parseFloat(row['Category Share'] || row[3] || 0);
                 const rawNum = parseFloat(row['Original Raw Numbers'] || row[4] || 0);
                 const usGenPop = parseFloat(String(row['US Gen Pop Projection'] || row['Gen Pop Projection'] || row[5] || '0').replace(/,/g, '')) || 0;
-                const pct = brandPen || catShare || 0;
+                // Never fall back to Category Share — only Brand Penetration is displayed.
+                const pct = brandPen || 0;
                 
                 const genPopPct = usGenPop > 0 ? (usGenPop / US_POPULATION) * 100 : 0;
                 const index = genPopPct > 0 ? Math.round((pct / genPopPct) * 100) : 0;
@@ -67427,7 +67684,8 @@
                     result.projectedUS = usGenPop || 0;
                 }
                 if (category.includes('MEDIAN') && category.includes('AGE')) {
-                    result.medianAge = brandPen || catShare || parseFloat(value) || 0;
+                    // Never fall back to Category Share — only Brand Penetration is displayed.
+                    result.medianAge = brandPen || parseFloat(value) || 0;
                 }
                 if (category === 'BRAND CATEGORY' && value) {
                     result.brandCategory = (value || '').toString().trim();
@@ -67459,12 +67717,11 @@
                 if (!demoCategories.includes(category) && !skipCategories.includes(category) && category !== 'LOCATION' && value && pct > 0) {
                     if (!result.behavioral[category]) result.behavioral[category] = [];
                     if (!result.behavioralProjection[category]) result.behavioralProjection[category] = [];
-                    // Calculate Gen Pop % from US Gen Pop Projection (projection / 329.9M US pop * 100)
-                    // Also check catShare as fallback and normalize if < 1
+                    // Calculate Gen Pop % from US Gen Pop Projection (projection / 329.9M US pop * 100).
+                    // Never fall back to Category Share — only Brand Penetration / projection-derived
+                    // values represent real Gen Pop reach. Falling back to catShare here would silently
+                    // substitute a "share of category" number for "% of US population" — wrong units.
                     let genPopPct = usGenPop > 0 ? (usGenPop / 329900000) * 100 : 0;
-                    if (genPopPct === 0 && catShare > 0) {
-                        genPopPct = catShare;
-                    }
                     // Calculate Index = (brand pct / gen pop pct) * 100
                     const index = genPopPct > 0 ? Math.round((pct / genPopPct) * 100) : 0;
                     result.behavioral[category].push({ 

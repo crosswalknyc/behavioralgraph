@@ -112,8 +112,26 @@ CROSS_PULL_RANGES = {
         "AMAZON MUSIC":    (8, 22),
     },
     'SEARCH ENGINE/AI': {
-        "GOOGLE":          (78, 96),
-        "CHATGPT":         (28, 60),
+        # 2026-06-01 (Jenna SEARCH-pinning audit, final):
+        # Principle: similar values across profiles OK, identical NOT OK,
+        # always reasoning never pinning. The vet-agent prompt explicitly
+        # says these ranges are reasoning anchors, NOT caps — the agent is
+        # free to over/under-index per persona and justify in its `reason`.
+        #
+        #   - GOOGLE: (85, 97). Jenna: "everyone touches it" — Google
+        #     digital reach is genuinely ~88-95% of US adults across
+        #     virtually every persona (search + maps + YouTube + drive +
+        #     gmail). Natural clustering in the 90s is correct, not a
+        #     defect. Wide band so vet-agent reasons within rather than
+        #     parking at one end.
+        #   - CHATGPT: (30, 55). Pew Feb 2025: ~36-39% of US adults have
+        #     used ChatGPT (varies by age/tech affinity). Tightened from
+        #     (28, 60) so the vet-agent has a realistic anchor rather
+        #     than the templated 70-80% default the LLM produces. No
+        #     post-vet hard cap — values within this band carry persona-
+        #     based variance from the cat-agent's own reasoning.
+        "GOOGLE":          (85, 97),
+        "CHATGPT":         (30, 55),
         "BING":            (10, 22),
     },
     'DIGITAL BANKING': {
@@ -4488,6 +4506,7 @@ def agent_reason_mpb_floor(df,
                            batch_size: int = 100,
                            model: str = 'gpt-4o',
                            max_tokens: int = 8000,
+                           raw_universe: int | None = None,
                            verbose: bool = True):
     """Ensure MOST PURCHASED BRANDS carries ~1500 hostmap-sourced rows.
 
@@ -4557,10 +4576,30 @@ def agent_reason_mpb_floor(df,
 
     import random as _r
 
+    # 2026-05-30 (Jenna May 30 batch fix): scale target DOWN for niche
+    # profiles whose raw universe can't support 1,500 plausible brand rows.
+    # When the universe is e.g. 24 panel users (Adam J Kurtz), asking the
+    # LLM to invent 1,443 brand BPs forces it into a rotating placeholder
+    # pattern (5.6789, 6.7890, 7.8901...). The fix: cap target at
+    #     min(target_max, 50 * raw_universe + 100)
+    # so a 24-user universe targets ~1,300; a 75-user targets ~1,500
+    # (no change); a 200+ universe gets the full target_max.
+    if raw_universe is not None and raw_universe > 0 and raw_universe < 200:
+        adaptive_cap = max(target_min // 4, 50 * int(raw_universe) + 100)
+        scaled_max = min(target_max, adaptive_cap)
+        scaled_min = min(target_min, scaled_max)
+        if scaled_max < target_max and verbose:
+            print(f"   🛒 mpb-floor: ADAPTIVE target scaling for niche universe "
+                  f"({raw_universe} users): [{target_min},{target_max}] → "
+                  f"[{scaled_min},{scaled_max}] to prevent LLM placeholder emission")
+        target_min_eff, target_max_eff = scaled_min, scaled_max
+    else:
+        target_min_eff, target_max_eff = target_min, target_max
+
     # Random target — avoid the literal median so two consecutive runs don't
     # both land on 1500 exactly.
-    target_count = _r.randint(target_min, target_max)
-    median = (target_min + target_max) // 2
+    target_count = _r.randint(target_min_eff, target_max_eff)
+    median = (target_min_eff + target_max_eff) // 2
     if target_count == median:
         target_count = median + _r.choice([-1, 1])
 
