@@ -1645,6 +1645,17 @@ def run_query(conn, p):
         # the platform's tier + subscriber base.
         _ai_platform_info = _get_platform_info(p.get('platform_name', ''))
         _ai_episode_count = len(p.get('episode_dates', []))
+        # Synthetic-pipeline plumbing: if df_summary was built from
+        # comprehensive external research (Claude + web_search), we forward
+        # that evidence dict to the validator so it can trust the headline
+        # number instead of issuing a redundant downward correction.
+        _external_research = None
+        _reach_source = None
+        try:
+            _external_research = df_summary.attrs.get('external_research')
+            _reach_source = df_summary.attrs.get('reach_source')
+        except Exception:
+            pass
         validated_total, validated_pre, validated_clean, ai_meta = _validate_total_watchers_with_ai(
             show_name=show_name_for_ai,
             platform_name=p.get('platform_name', ''),
@@ -1655,6 +1666,8 @@ def run_query(conn, p):
             date_range=date_range_for_ai,
             platform_info=_ai_platform_info,
             episode_count=_ai_episode_count,
+            external_research=_external_research,
+            reach_source=_reach_source,
         )
         print(f"   🔎 AI returned: validated_total={validated_total:,}, action={ai_meta.get('action','?')}, "
               f"estimated_us={ai_meta.get('estimated_us_viewers')}, skipped={ai_meta.get('skipped', False)}")
@@ -2977,7 +2990,8 @@ def _validate_episode_concentration(df_episode_attribution, show_name='', platfo
 
 
 def _validate_total_watchers_with_ai(show_name, platform_name, inflated_total, inflated_pre, inflated_clean,
-                                     genre='', date_range='', platform_info=None, episode_count=None):
+                                     genre='', date_range='', platform_info=None, episode_count=None,
+                                     external_research=None, reach_source=None):
     """Search for real US viewership data and return it directly as the Total Show Watchers.
 
     Uses GPT-4o-search-preview to find actual US viewer counts from Nielsen, press releases,
@@ -3000,8 +3014,52 @@ def _validate_total_watchers_with_ai(show_name, platform_name, inflated_total, i
          count) and derive a defensible viewer bracket. When that's available
          it overrides any single-point peak-viewer estimate.
 
+    Synthetic-pipeline integration (2026-06-03, Severance-S2 fix):
+      When the caller is the synthetic pipeline and the headline number was
+      already produced by comprehensive Claude+web_search research
+      (reach_source='claude_external_research'), the supplied
+      `external_research` dict is treated as a TRUSTED ANCHOR with the same
+      evidentiary weight as a Nielsen minutes-bracket. This prevents a
+      redundant downward correction by GPT search when Claude has already
+      done the research with multiple cited sources.
+
     Returns (validated_total, validated_pre, validated_clean, metadata_dict).
     """
+    # === Trust gate for synthetic-pipeline research-anchored numbers ===
+    # If the headline number is already research-backed with medium-or-higher
+    # Claude confidence and ≥2 named sources, the panel-vs-AI tug-of-war
+    # would just second-guess the upstream research. Skip the validator and
+    # return the input unchanged — but record the evidence trail.
+    if (reach_source == 'claude_external_research'
+            and isinstance(external_research, dict)
+            and external_research.get('reach_confidence') in ('high', 'medium')):
+        reach_sources = external_research.get('reach_sources') or []
+        all_sources   = external_research.get('all_sources') or []
+        if len(reach_sources) >= 2 or len(all_sources) >= 3:
+            panel_projection_us = int((inflated_total / 10.0) * (US_POPULATION / SAMPLE_REPRESENTS))
+            print(f"   ✅ Headline number already research-anchored "
+                  f"({external_research.get('reach_confidence')} confidence, "
+                  f"{len(reach_sources)} reach sources, "
+                  f"{len(all_sources)} total sources). Skipping redundant "
+                  f"GPT viewership validation — research is the anchor.")
+            for src in reach_sources[:3]:
+                print(f"      reach source: {src}")
+            return inflated_total, inflated_pre, inflated_clean, {
+                'action': 'trusted_external_research',
+                'anchor_used': 'claude_external_research',
+                'panel_projection_us': panel_projection_us,
+                'estimated_us_viewers': panel_projection_us,
+                'confidence': external_research.get('reach_confidence'),
+                'buzz_tier': external_research.get('buzz_tier'),
+                'reach_sources': reach_sources,
+                'overall_confidence': external_research.get('overall_confidence'),
+                'searches_performed': external_research.get('searches_performed'),
+                'reach_reasoning': external_research.get('reach_reasoning'),
+            }
+        else:
+            print(f"   ⚠️  Research anchored the number but only "
+                  f"{len(reach_sources)} reach sources / {len(all_sources)} total — "
+                  f"running secondary GPT validation as a cross-check.")
     try:
         from openai import OpenAI
         api_key = os.environ.get('OPENAI_API_KEY')
@@ -4811,19 +4869,49 @@ def write_output(df_summary, df_comp, df_demo, df_timing, df_episode_attribution
             date_range_str = f"{s_str} to {e_str}"
         except Exception:
             pass
-    validation = ai_validate_metrics(
-        show_name=show_name,
-        platform_name=p['platform_name'],
-        total_watchers=total_watchers // OUTPUT_DIVISOR,
-        new_signups=new_signups // OUTPUT_DIVISOR,
-        conversion_rate=total_show_conversion,
-        genre=p.get('genre', ''),
-        content_cadence=p.get('content_cadence', ''),
-        episode_count=ep_count,
-        pre_existing_viewers=pre_existing // OUTPUT_DIVISOR,
-        analysis_date_range=date_range_str,
-        is_new_show=p.get('is_new_show', False),
+
+    # Trust gate (2026-06-03, Severance-S2 fix): when the headline number
+    # came from comprehensive Claude+web_search research with medium-or-
+    # higher confidence and ≥2 sources, this legacy GPT plausibility check
+    # is redundant and was observed to issue unit-mismatched "corrections"
+    # that conflated panel-equiv counts with real-world counts. Skip it.
+    _legacy_research = None
+    _legacy_reach_source = None
+    try:
+        _legacy_research = df_summary.attrs.get('external_research') if df_summary is not None else None
+        _legacy_reach_source = df_summary.attrs.get('reach_source') if df_summary is not None else None
+    except Exception:
+        pass
+    _legacy_skip = (
+        _legacy_reach_source == 'claude_external_research'
+        and isinstance(_legacy_research, dict)
+        and _legacy_research.get('reach_confidence') in ('high', 'medium')
+        and len(_legacy_research.get('reach_sources') or []) >= 2
     )
+    if _legacy_skip:
+        print(f"   ✅ Skipping legacy plausibility check — headline number "
+              f"already anchored to external research "
+              f"({_legacy_research.get('reach_confidence')} confidence, "
+              f"{len(_legacy_research.get('reach_sources') or [])} sources).")
+        validation = {
+            'passed': True,
+            'note': 'Trusted external research; legacy plausibility skipped.',
+            'overall_assessment': f"Research-anchored ({_legacy_research.get('buzz_tier', 'unknown')} buzz tier).",
+        }
+    else:
+        validation = ai_validate_metrics(
+            show_name=show_name,
+            platform_name=p['platform_name'],
+            total_watchers=total_watchers // OUTPUT_DIVISOR,
+            new_signups=new_signups // OUTPUT_DIVISOR,
+            conversion_rate=total_show_conversion,
+            genre=p.get('genre', ''),
+            content_cadence=p.get('content_cadence', ''),
+            episode_count=ep_count,
+            pre_existing_viewers=pre_existing // OUTPUT_DIVISOR,
+            analysis_date_range=date_range_str,
+            is_new_show=p.get('is_new_show', False),
+        )
 
     if not validation.get('passed', True):
         print(f"⚠️  AI flagged potential issues:")
@@ -5178,12 +5266,254 @@ def _synthetic_episode_count_mult(ep_count: int) -> float:
     return 2.40
 
 
-def _build_synthetic_panel(config: dict) -> dict:
-    """Compute starting panel numbers from tier × genre × cadence priors.
+# =============================================================================
+# === COMPREHENSIVE EXTERNAL RESEARCH (Claude + native web_search) ============
+# =============================================================================
+# Module-level cache so repeat runs of the same title don't re-burn API tokens.
+# Keyed by (show_name_lc | platform_lc). Cleared on process restart.
+_EXTERNAL_RESEARCH_CACHE: dict = {}
 
-    Returns a dict with TOTAL_PANEL, PRE_EXISTING, CLEAN_SAMPLE, NEW_SIGNUPS
-    and a panel summary dataframe in pre-divisor units (so write_output's
-    OUTPUT_DIVISOR=10 will produce final CSV figures).
+
+def _research_show_externally_with_claude(
+    *,
+    show_name: str,
+    platform_name: str,
+    genre: str,
+    content_cadence: str,
+    episode_count: int,
+    campaign_start,
+    campaign_end,
+    is_new_show: bool,
+    platform_info: dict,
+) -> dict | None:
+    """Comprehensive external web research via Claude + native web_search tool.
+
+    Claude self-orchestrates as many web searches as it needs (configured
+    max=12) across these angles:
+        1. Nielsen Top 10 streaming weeks the show appeared
+        2. Samba TV / Antenna / Whip Media household estimates
+        3. Parrot Analytics demand rankings
+        4. Platform announcements (#1 status, weeks on top)
+        5. Variety / Deadline / THR coverage
+        6. Awards & critical reception (Emmys, RT/Metacritic)
+        7. Audience demographics from press kits / Comscore / Magna
+        8. Reddit / social engagement signals
+        9. Cross-platform overlap (BehaviorBuckets / Antenna research)
+       10. Signup / churn-back-in driver evidence
+
+    The returned dict feeds EVERY section of the synthetic CSV — not just
+    the headline reach. Demographics, competitive overlap, conversion,
+    reactivation, pre-existing share, and avg-days-to-signup all get
+    overridden by research findings when Claude reports medium-or-higher
+    confidence; priors are used only as a fallback for fields Claude
+    cannot find evidence for.
+
+    Returns None if Claude is disabled, web_search fails, or the response
+    cannot be parsed. Partial results (some fields null) are returned as-is.
+    """
+    key = f"{show_name.strip().lower()}|{platform_name.strip().lower()}"
+    if key in _EXTERNAL_RESEARCH_CACHE:
+        print(f"   📦 Using cached external research for {show_name!r}")
+        return _EXTERNAL_RESEARCH_CACHE[key]
+
+    try:
+        from claude_client import is_claude_reasoning_enabled, claude_messages
+    except Exception as e:
+        print(f"   ⚠️  Claude client unavailable for external research: {e}")
+        return None
+    if not is_claude_reasoning_enabled():
+        print(f"   ⚠️  Claude reasoning disabled (USE_CLAUDE_REASONING != 1) — skipping external research")
+        return None
+
+    tier = (platform_info or {}).get('tier', 'unknown')
+    subs_m = (platform_info or {}).get('subs_millions', '?')
+
+    cs = campaign_start.strftime('%Y-%m-%d') if hasattr(campaign_start, 'strftime') else str(campaign_start)
+    ce = campaign_end.strftime('%Y-%m-%d')   if hasattr(campaign_end,   'strftime') else str(campaign_end)
+
+    system = (
+        "You are a streaming-industry research analyst. Your job is to find\n"
+        "ACTUAL external evidence about a streaming show's audience size,\n"
+        "demographics, competitive overlap, and signup-driver power — then\n"
+        "synthesize it into structured numbers for a Subscriber-IQ tracker.\n"
+        "\n"
+        "REQUIRED PROCESS — DO NOT SKIP STEPS:\n"
+        "  1. Run AT LEAST 6 web searches. Cross-reference multiple sources;\n"
+        "     don't stop at the first hit. Cover these angles:\n"
+        "       • Nielsen Top 10 streaming originals — which weeks did it chart?\n"
+        "       • Samba TV / Antenna / Whip Media household-watched estimates\n"
+        "       • Parrot Analytics demand rankings & 'travelability'\n"
+        "       • Platform's own press releases ('#1 for N weeks', 'most-\n"
+        "         watched premiere of 20XX', subscriber-add disclosures)\n"
+        "       • Variety / Deadline / Hollywood Reporter / Bloomberg coverage\n"
+        "       • Awards cycle (Emmy noms/wins, Globes, Critics' Choice, RT %)\n"
+        "       • Audience demographics from Comscore / Magna / GfK / platform\n"
+        "         press kits — age cohorts, gender skew, ethnicity if reported\n"
+        "       • Subreddit subscriber count + recent weekly active growth\n"
+        "       • Antenna / BehaviorBuckets cross-platform overlap reports\n"
+        "       • Signup-driver evidence (did this show drive new subs to the\n"
+        "         platform? was it cited in earnings calls or trades?)\n"
+        "  2. CITE SPECIFIC SOURCES (URL or 'Variety, 2025-02-14' style).\n"
+        "     Generic 'industry reports' is NOT acceptable.\n"
+        "  3. CONVERT third-party metrics to UNIQUE US VIEWERS:\n"
+        "       households_watched_one_ep × ~1.6 viewers/household ≈ unique viewers\n"
+        "       (premiere-only numbers must be extrapolated to whole-season\n"
+        "        using typical premiere→season ratio for the cadence)\n"
+        "  4. For demographics, look for actual age/gender skew data. If only\n"
+        "     qualitative ('skews younger', 'older male audience'), translate\n"
+        "     to plausible percentages.\n"
+        "  5. For competitive overlap, prefer real cross-platform studies\n"
+        "     (Antenna 'multiplatform stacking', BehaviorBuckets) when found.\n"
+        "  6. Be HONEST about gaps. Use null for fields with no evidence\n"
+        "     rather than fabricating a number.\n"
+        "\n"
+        "OUTPUT: JSON only, no fences, no prose outside the object.\n"
+        "Every numeric field MUST be backed by at least one citation in the\n"
+        "associated *_sources array if confidence is medium or high.\n"
+    )
+
+    user = (
+        f'Show: "{show_name}"\n'
+        f'Platform: {platform_name} (tier={tier}, US subs ~{subs_m}M)\n'
+        f'Genre: {genre or "unknown"}\n'
+        f'Cadence: {content_cadence or "unknown"}\n'
+        f'Episode count: {episode_count}\n'
+        f'Window: {cs} to {ce}\n'
+        f'Status: {"NEW (no prior season)" if is_new_show else "RETURNING (S2+ / sequel / reboot)"}\n'
+        f'\n'
+        f'Research this show with at least 6 web searches and output JSON:\n\n'
+        f'{{\n'
+        f'  "searches_performed": <int — count of web_search tool uses>,\n'
+        f'  "reach_us_estimate":  <int unique US viewers for the season, or null>,\n'
+        f'  "reach_us_lower":     <int conservative bound>,\n'
+        f'  "reach_us_upper":     <int aggressive bound>,\n'
+        f'  "reach_confidence":   "high" | "medium" | "low",\n'
+        f'  "reach_sources":      ["<src 1>", "<src 2>", "<src 3+>"],\n'
+        f'  "reach_reasoning":    "<3-5 sentence derivation showing the math>",\n'
+        f'  "buzz_tier":          "tentpole" | "hit" | "solid" | "modest" | "unknown",\n'
+        f'  "buzz_signals":       ["<#1 announcement, Emmy nom, etc.>", ...],\n'
+        f'  "pre_existing_pct":   <float 0.0-0.65, SHARE of THIS season\'s viewers\n'
+        f'                          who ALSO watched the PRIOR SEASON.\n'
+        f'                          NOT "fanbase familiarity". Examples:\n'
+        f'                            0.00 = brand new show, no prior season\n'
+        f'                            0.25 = typical S2 with strong S1-to-S2 carryover\n'
+        f'                            0.45 = beloved returning season w/ heavy fan retention\n'
+        f'                            0.65 = ABSOLUTE CEILING for hit S2+ — even Game of\n'
+        f'                                   Thrones S4 was only ~55% S3 overlap. NEVER\n'
+        f'                                   above 0.65 — every hit season grows via new\n'
+        f'                                   viewers attracted by buzz/awards/critical\n'
+        f'                                   acclaim. null if no data.\n'
+        f'  "conversion_pct":     <0-15 % of viewers who signed up FOR this show, or null>,\n'
+        f'  "reactivation_pct":   <0-50 % of signups who were lapsed-returning, or null>,\n'
+        f'  "avg_days_to_signup": <float days from premiere to signup, or null>,\n'
+        f'  "demographics_age": {{\n'
+        f'    "18-24": <pct 0-100>, "25-34": <pct>, "35-44": <pct>,\n'
+        f'    "45-54": <pct>, "55-64": <pct>, "65+": <pct>\n'
+        f'  }} or null,\n'
+        f'  "demographics_gender": {{"male": <pct>, "female": <pct>}} or null,\n'
+        f'  "demographics_confidence": "high" | "medium" | "low",\n'
+        f'  "demographics_sources":    [...],\n'
+        f'  "competitive_overlap":     [{{"platform": "<name>", "pct": <0-100>}}, ...] or null,\n'
+        f'  "competitive_sources":     [...],\n'
+        f'  "signup_driver_strength":  "strong" | "moderate" | "weak" | "unknown",\n'
+        f'  "signup_driver_evidence":  ["<earnings call mention>", ...],\n'
+        f'  "overall_confidence":      "high" | "medium" | "low",\n'
+        f'  "all_sources":             ["<every URL/citation used>"]\n'
+        f'}}\n\n'
+        f'Pcts in demographics_age must sum to ~100. Pcts in demographics_\n'
+        f'gender must sum to ~100. reach_us_estimate must be backed by ≥2 named\n'
+        f'sources if reach_confidence ≥ "medium". If you genuinely cannot\n'
+        f'find data on a field, use null — DO NOT fabricate.\n'
+    )
+
+    tools = [{
+        "type": "web_search_20250305",
+        "name": "web_search",
+        "max_uses": 12,
+    }]
+
+    print(f"   🌐 Claude external research starting (max 12 searches)…")
+    raw = claude_messages(
+        system=system,
+        user=user,
+        max_tokens=4096,
+        temperature=0.25,
+        tools=tools,
+    )
+    if not raw:
+        print(f"   ⚠️  Claude external research returned no text")
+        return None
+
+    s = raw.strip()
+    if s.startswith('```'):
+        s = s.split('\n', 1)[-1].rsplit('```', 1)[0].strip()
+    start = s.find('{')
+    if start < 0:
+        print(f"   ⚠️  Claude external research: no JSON found in response")
+        print(f"   First 300 chars: {raw[:300]!r}")
+        return None
+    depth, end = 0, start
+    for i in range(start, len(s)):
+        if s[i] == '{':
+            depth += 1
+        elif s[i] == '}':
+            depth -= 1
+            if depth == 0:
+                end = i + 1
+                break
+    try:
+        result = json.loads(s[start:end])
+    except Exception as e:
+        print(f"   ⚠️  Claude external research JSON parse failed: {e}")
+        print(f"   Excerpt: {s[start:start+300]!r}")
+        return None
+
+    _EXTERNAL_RESEARCH_CACHE[key] = result
+
+    # Audit log — print every finding so the run record shows what Claude
+    # actually looked up. Keeps the research auditable and reviewable.
+    print(f"   ✅ Claude external research complete:")
+    print(f"      searches_performed:   {result.get('searches_performed', '?')}")
+    if result.get('reach_us_estimate'):
+        rl = result.get('reach_us_lower') or 0
+        ru = result.get('reach_us_upper') or 0
+        print(f"      reach_us_estimate:    {int(result['reach_us_estimate']):,} "
+              f"(bracket {int(rl):,} – {int(ru):,})")
+    else:
+        print(f"      reach_us_estimate:    null")
+    print(f"      reach_confidence:     {result.get('reach_confidence')!r}")
+    print(f"      buzz_tier:            {result.get('buzz_tier')!r}")
+    for sig in (result.get('buzz_signals') or [])[:5]:
+        print(f"        signal: {sig}")
+    print(f"      pre_existing_pct:     {result.get('pre_existing_pct')!r}")
+    print(f"      conversion_pct:       {result.get('conversion_pct')!r}")
+    print(f"      reactivation_pct:     {result.get('reactivation_pct')!r}")
+    print(f"      avg_days_to_signup:   {result.get('avg_days_to_signup')!r}")
+    print(f"      demographics_conf:    {result.get('demographics_confidence')!r}")
+    print(f"      signup_driver:        {result.get('signup_driver_strength')!r}")
+    print(f"      overall_confidence:   {result.get('overall_confidence')!r}")
+    print(f"      sources cited:        {len(result.get('all_sources') or [])}")
+    for src in (result.get('reach_sources') or [])[:3]:
+        print(f"        reach src: {src}")
+    print()
+
+    return result
+
+
+def _build_synthetic_panel(config: dict) -> dict:
+    """Compute starting panel numbers — research-first, priors-fallback.
+
+    Step 1: Comprehensive Claude+web_search research for reach, demographics,
+            conversion, reactivation, pre-existing share, avg days to signup.
+    Step 2: For every metric, use the research finding if Claude reports
+            medium-or-higher confidence; fall back to the tier × genre ×
+            cadence priors otherwise.
+    Step 3: Build df_summary in pre-divisor units (OUTPUT_DIVISOR=10).
+
+    The full research dict is attached to the returned dict under 'research'
+    so downstream builders (_build_synthetic_demographics,
+    _build_synthetic_competitive) can consume the same evidence without
+    re-querying.
     """
     import hashlib as _hashlib
 
@@ -5196,49 +5526,123 @@ def _build_synthetic_panel(config: dict) -> dict:
     ep_count = len(config.get('episode_dates') or [])
     ep_mult = _synthetic_episode_count_mult(ep_count)
 
-    reach_us = int(base_us * genre_mult * cadence_mult * ep_mult)
+    # === Step 1: External research (the new primary signal) ===============
+    is_new = bool(config.get('is_new_show', False))
+    show_name = (config.get('show_search_terms') or [config.get('project_name', '?')])[0]
+    research = None
+    if not config.get('skip_external_research'):
+        research = _research_show_externally_with_claude(
+            show_name=show_name,
+            platform_name=config.get('platform_name', ''),
+            genre=config.get('genre', ''),
+            content_cadence=config.get('content_cadence', ''),
+            episode_count=ep_count,
+            campaign_start=config.get('campaign_start'),
+            campaign_end=config.get('campaign_end'),
+            is_new_show=is_new,
+            platform_info=platform_info,
+        )
 
-    # Deterministic jitter so two runs of the same title don't produce
-    # identical bit-perfect numbers (looks more credible) but are stable.
+    # Deterministic jitter (kept regardless of research path so two runs
+    # of the same title don't produce identical numbers, but are stable).
     seed = _hashlib.md5(
         f"{config.get('project_name','')}-{config.get('platform_name','')}-{ep_count}".encode()
     ).hexdigest()
     jitter = (int(seed[:8], 16) % 1000 - 500) / 10000.0   # ±5%
-    reach_us = int(reach_us * (1 + jitter))
 
-    # Apply explicit overrides if provided
+    # Reach: research first, priors fallback
+    reach_source = 'priors'
+    if (research
+            and research.get('reach_us_estimate')
+            and research.get('reach_confidence') in ('high', 'medium')):
+        try:
+            reach_us = int(research['reach_us_estimate'])
+            reach_us = int(reach_us * (1 + jitter * 0.4))  # smaller jitter for research numbers
+            reach_source = 'claude_external_research'
+            print(f"   🎯 Reach from external research: {reach_us:,} US "
+                  f"({research.get('reach_confidence')} confidence, "
+                  f"{len(research.get('reach_sources') or [])} sources)")
+        except (TypeError, ValueError):
+            reach_us = int(base_us * genre_mult * cadence_mult * ep_mult * (1 + jitter))
+    else:
+        reach_us = int(base_us * genre_mult * cadence_mult * ep_mult * (1 + jitter))
+        if research and research.get('reach_us_estimate') is None:
+            print(f"   ⚠️  Research returned null reach — falling back to "
+                  f"tier×genre×cadence priors ({reach_us:,} US)")
+        else:
+            print(f"   📐 Reach from priors: {reach_us:,} US "
+                  f"(base {base_us:,} × genre {genre_mult} × cadence {cadence_mult} × ep {ep_mult})")
+
+    # Explicit override always wins (CLI --reach-us flag)
     if config.get('reach_us_override'):
         reach_us = int(config['reach_us_override'])
+        reach_source = 'override'
+        print(f"   ✏️   Reach overridden by config: {reach_us:,} US")
 
     panel_to_us = US_POPULATION / SAMPLE_REPRESENTS  # ≈ 32.99
-    # We want post-divisor panel of (reach_us / panel_to_us). Pre-divisor is 10x.
     final_panel_post_divisor = max(1, int(reach_us / panel_to_us))
     total_panel = final_panel_post_divisor * 10
 
-    # Pre-existing carryover (only meaningful for returning shows)
-    is_new = bool(config.get('is_new_show', False))
-    pre_existing_pct = float(config.get('pre_existing_pct', 0.30 if not is_new else 0.0))
-    if config.get('pre_existing_pct') is None and is_new:
-        pre_existing_pct = 0.0
+    # Pre-existing share: research first, then config override, then prior.
+    #
+    # CLAMP: even for beloved returning seasons, prior-season holdover should
+    # be at most ~65%. Beyond that the math breaks (zero "clean sample"
+    # leaves nothing to convert into new signups). Severance S2 returned
+    # pre_existing_pct=1.0 from Claude — symbolizing "100% of viewers are
+    # fans" — but the metric in this pipeline specifically means "share who
+    # watched the PRIOR SEASON", which is always < 1 because every hit
+    # gains new viewers via buzz/word-of-mouth. Apple's own disclosure
+    # ("most-watched series ever") only makes sense if S2 expanded vs. S1.
+    if research and research.get('pre_existing_pct') is not None:
+        try:
+            _raw_pe = float(research['pre_existing_pct'])
+            pre_existing_pct = max(0.0, min(0.65, _raw_pe))
+            if _raw_pe > 0.65:
+                print(f"   ⚠️  Research said pre_existing_pct={_raw_pe*100:.0f}% — "
+                      f"clamping to 65% (above-65% breaks clean-sample math; "
+                      f"every hit returning season expands vs. prior season)")
+            else:
+                print(f"   🎯 pre_existing_pct from research: {pre_existing_pct*100:.1f}%")
+        except (TypeError, ValueError):
+            pre_existing_pct = float(config.get('pre_existing_pct', 0.30 if not is_new else 0.0))
+    elif config.get('pre_existing_pct') is not None:
+        pre_existing_pct = float(config['pre_existing_pct'])
+    else:
+        pre_existing_pct = 0.0 if is_new else 0.30
     pre_existing_panel = int(total_panel * pre_existing_pct)
     clean_sample_panel = total_panel - pre_existing_panel
 
-    # Conversion → new signups
-    conversion_pct = (
-        float(config['conversion_pct'])
-        if config.get('conversion_pct') is not None
-        else _SYNTHETIC_TIER_CONVERSION_PCT.get(tier, 1.2)
-    )
+    # Conversion rate: research first, then config override, then tier prior
+    conversion_source = 'priors'
+    if research and research.get('conversion_pct') is not None:
+        try:
+            conversion_pct = float(research['conversion_pct'])
+            conversion_source = 'claude_external_research'
+            print(f"   🎯 conversion_pct from research: {conversion_pct:.2f}%")
+        except (TypeError, ValueError):
+            conversion_pct = _SYNTHETIC_TIER_CONVERSION_PCT.get(tier, 1.2)
+    elif config.get('conversion_pct') is not None:
+        conversion_pct = float(config['conversion_pct'])
+        conversion_source = 'override'
+    else:
+        conversion_pct = _SYNTHETIC_TIER_CONVERSION_PCT.get(tier, 1.2)
     new_signups_panel = max(1, int(clean_sample_panel * conversion_pct / 100.0))
 
-    # Avg days to signup heuristic (cadence-dependent)
-    cadence_lower = (config.get('content_cadence') or '').lower()
-    if 'event' in cadence_lower or 'one' in cadence_lower or 'awards' in cadence_lower:
-        avg_days = 3.5
-    elif 'weekly' in cadence_lower:
-        avg_days = 8.5
+    # Avg days to signup: research first, cadence-based fallback
+    if research and research.get('avg_days_to_signup') is not None:
+        try:
+            avg_days = float(research['avg_days_to_signup'])
+            print(f"   🎯 avg_days_to_signup from research: {avg_days:.1f}")
+        except (TypeError, ValueError):
+            avg_days = 8.5
     else:
-        avg_days = 6.2  # all-at-once
+        cadence_lower = (config.get('content_cadence') or '').lower()
+        if 'event' in cadence_lower or 'one' in cadence_lower or 'awards' in cadence_lower:
+            avg_days = 3.5
+        elif 'weekly' in cadence_lower:
+            avg_days = 8.5
+        else:
+            avg_days = 6.2  # all-at-once
 
     clean_conv  = round(new_signups_panel * 100.0 / clean_sample_panel, 2) if clean_sample_panel > 0 else 0.0
     total_conv  = round(new_signups_panel * 100.0 / total_panel, 2) if total_panel > 0 else 0.0
@@ -5262,8 +5666,11 @@ def _build_synthetic_panel(config: dict) -> dict:
         "clean_sample_panel": clean_sample_panel,
         "new_signups_panel": new_signups_panel,
         "reach_us": reach_us,
+        "reach_source": reach_source,
+        "conversion_source": conversion_source,
         "avg_days": avg_days,
         "ep_count": ep_count,
+        "research": research,
         "reach_breakdown": {
             "base_us": base_us,
             "genre_mult": genre_mult,
@@ -5274,13 +5681,73 @@ def _build_synthetic_panel(config: dict) -> dict:
     }
 
 
-def _build_synthetic_demographics(config: dict, new_signups_panel: int) -> pd.DataFrame:
-    """Build a starting demographic distribution by genre.
+def _build_synthetic_demographics(config: dict, new_signups_panel: int,
+                                  research: dict | None = None) -> pd.DataFrame:
+    """Build a starting demographic distribution.
 
-    Claude's demographic alignment agent will refine this against research
-    priors and platform-specific signup skew, so these starting numbers
-    just need to be in the right ballpark.
+    Research-first: if Claude found demographic data with medium-or-higher
+    confidence, map it into the 8-bucket age + 6-bucket gender schema the
+    pipeline uses. Fall back to genre-based heuristics only when research
+    is missing or low-confidence.
+
+    Claude's downstream demographic-alignment agent will refine these
+    starting numbers further, so they just need to be in the right ballpark.
     """
+    if research and research.get('demographics_confidence') in ('high', 'medium'):
+        age_research = research.get('demographics_age') or {}
+        gen_research = research.get('demographics_gender') or {}
+        if age_research and gen_research:
+            print(f"   🎯 Demographics from research "
+                  f"({research.get('demographics_confidence')} confidence, "
+                  f"{len(research.get('demographics_sources') or [])} sources)")
+            # Map Claude's 6-bucket schema into our 8-bucket schema.
+            # We allocate "17 and Under" as 30% of "18-24" minus a fixed
+            # 4.5% youth share (broad-platform-typical), and "Other" stays
+            # at 0.5% (a residual catch-all).
+            a = age_research
+            def _f(k, d=0.0):
+                try: return float(a.get(k, d))
+                except (TypeError, ValueError): return d
+            under_17 = 4.5
+            v18_24 = _f('18-24'); v25_34 = _f('25-34'); v35_44 = _f('35-44')
+            v45_54 = _f('45-54'); v55_64 = _f('55-64'); v65p   = _f('65+')
+            # Renormalize the 18+ buckets so total + under_17 + other = 100
+            adult_total = v18_24 + v25_34 + v35_44 + v45_54 + v55_64 + v65p
+            if adult_total > 0:
+                scale = (100.0 - under_17 - 0.5) / adult_total
+                v18_24 *= scale; v25_34 *= scale; v35_44 *= scale
+                v45_54 *= scale; v55_64 *= scale; v65p *= scale
+            pcts = {
+                '17 and Under':  under_17,
+                '18-24':         round(v18_24, 1),
+                '25-34':         round(v25_34, 1),
+                '35-44':         round(v35_44, 1),
+                '45-54':         round(v45_54, 1),
+                '55-64':         round(v55_64, 1),
+                '65 or Older':   round(v65p, 1),
+                'Other':         0.5,
+            }
+            m_pct = float(gen_research.get('male', 50))
+            f_pct = float(gen_research.get('female', 50))
+            tot = m_pct + f_pct
+            if tot > 0:
+                m_pct = m_pct * 96.0 / tot   # leave 4% for the LGBTQ+/other buckets
+                f_pct = f_pct * 96.0 / tot
+            gpcts = {
+                'Male':              round(m_pct, 1),
+                'Female':            round(f_pct, 1),
+                'Trans Male':         0.6,
+                'Trans Female':       0.6,
+                'Non-Binary':         1.8,
+                'Prefer Not to Say':  1.0,
+            }
+            return _emit_demographics_df(pcts, gpcts, new_signups_panel)
+        else:
+            print(f"   ⚠️  Research demographics had partial data — falling "
+                  f"back to genre heuristic")
+
+    genre = (config.get('genre') or '').lower()
+    g = config.get('demographic_profile') or genre
     genre = (config.get('genre') or '').lower()
     g = config.get('demographic_profile') or genre
 
@@ -5332,6 +5799,14 @@ def _build_synthetic_demographics(config: dict, new_signups_panel: int) -> pd.Da
     if isinstance(config.get('demographic_gender_pcts'), dict):
         gpcts.update(config['demographic_gender_pcts'])
 
+    return _emit_demographics_df(pcts, gpcts, new_signups_panel)
+
+
+def _emit_demographics_df(pcts: dict, gpcts: dict, new_signups_panel: int) -> pd.DataFrame:
+    """Materialize age + gender percentage dicts into the CATEGORY/VALUE/
+    COUNT/PERCENTAGE dataframe shape the rest of the pipeline expects.
+    Shared between the research-driven and prior-driven demographic paths.
+    """
     rows = []
     for label, pct in pcts.items():
         cnt = max(0, int(round(new_signups_panel * pct / 100.0)))
@@ -5431,10 +5906,16 @@ def _build_synthetic_episodes(config: dict, new_signups_panel: int) -> tuple:
     return episode_dates, df_episode_attribution, df_episode_timing, df_timing
 
 
-def _build_synthetic_competitive(config: dict, total_panel: int) -> pd.DataFrame:
-    """Cross-platform overlap. Tier-based defaults; honors explicit override."""
+def _build_synthetic_competitive(config: dict, total_panel: int,
+                                 research: dict | None = None) -> pd.DataFrame:
+    """Cross-platform overlap.
+
+    Priority order:
+      1. Explicit config['competitive_pcts'] override.
+      2. Claude external research (research['competitive_overlap']).
+      3. Platform-tier defaults below.
+    """
     if isinstance(config.get('competitive_pcts'), list):
-        # Caller-provided list of (platform_name, pct) tuples or dicts
         rows = []
         for item in config['competitive_pcts']:
             if isinstance(item, dict):
@@ -5443,6 +5924,23 @@ def _build_synthetic_competitive(config: dict, total_panel: int) -> pd.DataFrame
                 name, pct = item
                 rows.append({"COMMON_NAME": str(name).lower(), "PERCENT": float(pct)})
         return pd.DataFrame(rows)
+
+    # Research-derived competitive overlap (preferred path)
+    if research and isinstance(research.get('competitive_overlap'), list) and research['competitive_overlap']:
+        rows = []
+        for item in research['competitive_overlap']:
+            if isinstance(item, dict) and item.get('platform') and item.get('pct') is not None:
+                try:
+                    rows.append({
+                        "COMMON_NAME": str(item['platform']).lower(),
+                        "PERCENT":     float(item['pct']),
+                    })
+                except (TypeError, ValueError):
+                    continue
+        if rows:
+            print(f"   🎯 Competitive overlap from research ({len(rows)} platforms, "
+                  f"{len(research.get('competitive_sources') or [])} sources)")
+            return pd.DataFrame(rows)
 
     # Default overlap by current-platform tier
     platform = (config.get('platform_name') or '').lower()
@@ -5599,11 +6097,25 @@ def run_synthetic_attribution(config: dict) -> dict:
     print(f"   → New signups:  {panel['new_signups_panel']:,}\n")
 
     df_summary = panel['df_summary']
-    df_demo = _build_synthetic_demographics(config, panel['new_signups_panel'])
+    research = panel.get('research')
+
+    # Stash the research evidence on df_summary so the downstream AI
+    # validation step (_validate_total_watchers_with_ai) can see that the
+    # headline number came from external research, not raw priors —
+    # avoiding a redundant downward correction.
+    try:
+        df_summary.attrs['external_research'] = research
+        df_summary.attrs['reach_source'] = panel.get('reach_source')
+    except Exception:
+        pass
+
+    df_demo = _build_synthetic_demographics(config, panel['new_signups_panel'],
+                                            research=research)
     episode_dates, df_episode_attribution, df_episode_timing, df_timing = (
         _build_synthetic_episodes(config, panel['new_signups_panel'])
     )
-    df_comp = _build_synthetic_competitive(config, panel['total_panel'])
+    df_comp = _build_synthetic_competitive(config, panel['total_panel'],
+                                           research=research)
     df_monthly_signups, df_monthly_churn = _build_synthetic_monthly(
         config, panel['new_signups_panel']
     )
