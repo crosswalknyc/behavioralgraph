@@ -13076,6 +13076,7 @@
                         <select id="viewNavDropdown" class="view-nav-dropdown" title="Select module to navigate" aria-hidden="true" style="position:absolute;opacity:0;pointer-events:none;width:0;height:0;min-width:0;">
                             <option value="profileIQ" {% if not has_profile_iq_access %}disabled{% endif %} {% if not default_view_hedge_fund_iq %}selected{% endif %}>🎯 Profile IQ</option>
                             <option value="subscriberIQ" {% if not has_subscriber_iq_access %}disabled{% endif %}>👥 Subscriber IQ</option>
+                            <option value="blueIQ" {% if not has_blue_iq_access %}disabled{% endif %}>🟦 Blue IQ</option>
                             <option value="sfConversion" {% if not has_sf_conversion_access and 'sf_lf_conversion' not in analysis_iq_modules and role != 'super_admin' %}disabled{% endif %}>🔄 SF Conversion</option>
                             <option value="llmoIQ" {% if not has_llmo_iq_access %}disabled{% endif %}>🤖 LLMO IQ</option>
                             <option value="rankerIQ" {% if not has_rankers_iq_access %}disabled{% endif %}>📊 Ranker</option>
@@ -17578,6 +17579,170 @@
             </div>
         </div>
 
+        <!-- BLUE IQ VIEW (Political Tracker) -->
+        <style>
+            #blueIQView { display: none; flex-direction: column; flex: 1 1 0%; min-height: 0; overflow: auto; padding: 1.25rem 1.5rem; }
+            #blueIQView .blue-iq-header { display: flex; flex-direction: column; gap: 0.5rem; margin-bottom: 1rem; }
+            #blueIQView .blue-iq-title { font-size: 1.45rem; font-weight: 600; margin: 0; }
+            #blueIQView .blue-iq-subtitle { font-size: 0.85rem; color: var(--text-secondary); margin: 0; }
+            #blueIQView .blue-iq-filter-bar {
+                display: grid;
+                grid-template-columns: 1.1fr 0.9fr 1.6fr 0.7fr 0.6fr;
+                gap: 0.6rem;
+                align-items: end;
+                padding: 0.9rem 1rem;
+                background: var(--bg-secondary, #1e1e2e);
+                border: 1px solid var(--border-color, #2c2c3e);
+                border-radius: 10px;
+                margin-bottom: 1rem;
+            }
+            #blueIQView .blue-iq-filter-bar label { font-size: 0.72rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 0.25rem; display: block; }
+            #blueIQView .blue-iq-filter-bar select,
+            #blueIQView .blue-iq-filter-bar input {
+                width: 100%;
+                padding: 0.5rem 0.65rem;
+                background: var(--bg-primary, #14141f);
+                color: var(--text-primary, #fff);
+                border: 1px solid var(--border-color, #2c2c3e);
+                border-radius: 6px;
+                font-size: 0.9rem;
+            }
+            #blueIQView .blue-iq-apply-btn {
+                padding: 0.55rem 1rem;
+                background: var(--accent-primary, #4f8cff);
+                color: #fff;
+                border: none;
+                border-radius: 6px;
+                font-weight: 600;
+                cursor: pointer;
+            }
+            #blueIQView .blue-iq-apply-btn:hover { background: var(--accent-primary-hover, #3a76e6); }
+            #blueIQView .blue-iq-meta { font-size: 0.78rem; color: var(--text-secondary); margin-bottom: 0.75rem; display: flex; justify-content: space-between; flex-wrap: wrap; gap: 0.5rem; }
+            #blueIQView .blue-iq-cards-grid {
+                display: grid;
+                grid-template-columns: repeat(12, 1fr);
+                gap: 1rem;
+            }
+            #blueIQView .blue-iq-card {
+                background: var(--bg-secondary, #1e1e2e);
+                border: 1px solid var(--border-color, #2c2c3e);
+                border-radius: 10px;
+                padding: 1rem 1.1rem;
+                min-height: 220px;
+                display: flex;
+                flex-direction: column;
+                overflow: hidden;
+            }
+            #blueIQView .blue-iq-card-issues   { grid-column: span 12; min-height: 320px; }
+            #blueIQView .blue-iq-card-search   { grid-column: span 4; }
+            #blueIQView .blue-iq-card-social   { grid-column: span 4; }
+            #blueIQView .blue-iq-card-turnout  { grid-column: span 4; }
+            #blueIQView .blue-iq-card-pols     { grid-column: span 6; min-height: 320px; }
+            #blueIQView .blue-iq-card-articles { grid-column: span 6; min-height: 320px; }
+            #blueIQView .blue-iq-card-demo     { grid-column: span 6; }
+            #blueIQView .blue-iq-card-compare  { grid-column: span 6; }
+            #blueIQView .blue-iq-card-title { font-size: 0.92rem; font-weight: 600; margin: 0 0 0.6rem 0; color: var(--text-primary); display: flex; align-items: center; gap: 0.4rem; }
+            #blueIQView .blue-iq-card-title .blue-iq-badge { font-size: 0.65rem; padding: 0.15rem 0.45rem; background: var(--accent-primary); color: #fff; border-radius: 10px; }
+            #blueIQView .blue-iq-card-body { flex: 1 1 0%; overflow-y: auto; }
+            #blueIQView .blue-iq-row { display: flex; justify-content: space-between; align-items: center; padding: 0.3rem 0; border-bottom: 1px solid rgba(255,255,255,0.04); font-size: 0.85rem; }
+            #blueIQView .blue-iq-row:last-child { border-bottom: none; }
+            #blueIQView .blue-iq-row-bar-wrap { flex: 1 1 60%; margin: 0 0.5rem; height: 6px; background: rgba(255,255,255,0.06); border-radius: 4px; overflow: hidden; }
+            #blueIQView .blue-iq-row-bar { height: 100%; background: var(--accent-primary, #4f8cff); border-radius: 4px; }
+            #blueIQView .blue-iq-row .blue-iq-row-name { flex: 1 1 30%; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+            #blueIQView .blue-iq-row .blue-iq-row-val { flex: 0 0 auto; color: var(--text-secondary); font-variant-numeric: tabular-nums; }
+            #blueIQView .blue-iq-bucket-row { display: flex; flex-direction: column; gap: 0.2rem; padding: 0.45rem 0; border-bottom: 1px solid rgba(255,255,255,0.04); cursor: pointer; }
+            #blueIQView .blue-iq-bucket-row:hover { background: rgba(79,140,255,0.06); }
+            #blueIQView .blue-iq-bucket-head { display: flex; justify-content: space-between; align-items: center; font-size: 0.88rem; }
+            #blueIQView .blue-iq-bucket-samples { font-size: 0.75rem; color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+            #blueIQView .blue-iq-article { display: flex; gap: 0.6rem; padding: 0.45rem 0; border-bottom: 1px solid rgba(255,255,255,0.04); }
+            #blueIQView .blue-iq-article-img { flex: 0 0 64px; width: 64px; height: 48px; background: rgba(255,255,255,0.04); border-radius: 4px; background-size: cover; background-position: center; }
+            #blueIQView .blue-iq-article-body { flex: 1 1 0; min-width: 0; }
+            #blueIQView .blue-iq-article-title { font-size: 0.85rem; line-height: 1.25; margin: 0 0 0.15rem 0; }
+            #blueIQView .blue-iq-article-title a { color: var(--text-primary); text-decoration: none; }
+            #blueIQView .blue-iq-article-title a:hover { text-decoration: underline; }
+            #blueIQView .blue-iq-article-meta { font-size: 0.72rem; color: var(--text-secondary); }
+            #blueIQView .blue-iq-suppressed { padding: 1rem; background: rgba(255, 200, 80, 0.08); border: 1px solid rgba(255,200,80,0.3); border-radius: 8px; font-size: 0.88rem; margin-bottom: 1rem; color: var(--text-primary); }
+            #blueIQView .blue-iq-loading-overlay { position: relative; min-height: 240px; display: flex; align-items: center; justify-content: center; flex-direction: column; gap: 0.6rem; padding: 2rem; color: var(--text-secondary); font-size: 0.9rem; }
+            #blueIQView .blue-iq-spinner { width: 36px; height: 36px; border: 3px solid rgba(255,255,255,0.1); border-top-color: var(--accent-primary, #4f8cff); border-radius: 50%; animation: blueIQSpin 0.9s linear infinite; }
+            @keyframes blueIQSpin { to { transform: rotate(360deg); } }
+            #blueIQView .blue-iq-modal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.65); z-index: 10070; align-items: center; justify-content: center; padding: 2rem; }
+            #blueIQView .blue-iq-modal.open { display: flex; }
+            #blueIQView .blue-iq-modal-inner { background: var(--bg-secondary, #1e1e2e); border: 1px solid var(--border-color, #2c2c3e); border-radius: 12px; max-width: 720px; width: 100%; max-height: 80vh; overflow: auto; padding: 1.25rem 1.5rem; }
+            #blueIQView .blue-iq-modal-close { float: right; background: none; border: none; color: var(--text-secondary); font-size: 1.4rem; cursor: pointer; }
+            #blueIQView .blue-iq-compare-grid { display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 0.6rem; font-size: 0.8rem; }
+            #blueIQView .blue-iq-compare-cell { background: rgba(255,255,255,0.03); padding: 0.55rem; border-radius: 6px; }
+            #blueIQView .blue-iq-compare-cell h5 { margin: 0 0 0.4rem 0; font-size: 0.85rem; }
+            @media (max-width: 1100px) {
+                #blueIQView .blue-iq-filter-bar { grid-template-columns: 1fr 1fr; }
+                #blueIQView .blue-iq-card-search,
+                #blueIQView .blue-iq-card-social,
+                #blueIQView .blue-iq-card-turnout,
+                #blueIQView .blue-iq-card-pols,
+                #blueIQView .blue-iq-card-articles,
+                #blueIQView .blue-iq-card-demo,
+                #blueIQView .blue-iq-card-compare { grid-column: span 12; }
+            }
+        </style>
+        <div id="blueIQView">
+            <div class="blue-iq-header">
+                <h2 class="blue-iq-title">🟦 Blue IQ <span style="font-size: 0.8rem; color: var(--text-secondary); font-weight: 400; margin-left: 0.5rem;">Political-audience tracker</span></h2>
+                <p class="blue-iq-subtitle">Filter the panel by party affiliation (AI-imputed from behavior) and geography to see what constituents are searching, where they engage, and what political content reaches them.</p>
+            </div>
+            <div class="blue-iq-filter-bar">
+                <div>
+                    <label for="blueIQParty">Party</label>
+                    <select id="blueIQParty">
+                        <option value="All" selected>All</option>
+                        <option value="Democrat">Democrat</option>
+                        <option value="Republican">Republican</option>
+                        <option value="Independent">Independent</option>
+                        <option value="Undecided">Undecided</option>
+                    </select>
+                </div>
+                <div>
+                    <label for="blueIQGeoType">Geography</label>
+                    <select id="blueIQGeoType">
+                        <option value="National" selected>National</option>
+                        <option value="State">State</option>
+                        <option value="DMA">DMA</option>
+                    </select>
+                </div>
+                <div>
+                    <label for="blueIQGeoValue">Region</label>
+                    <select id="blueIQGeoValue" disabled><option value="">(National)</option></select>
+                </div>
+                <div>
+                    <label for="blueIQLookback">Lookback</label>
+                    <select id="blueIQLookback">
+                        <option value="7">7 days</option>
+                        <option value="30" selected>30 days</option>
+                        <option value="90">90 days</option>
+                    </select>
+                </div>
+                <div>
+                    <label>&nbsp;</label>
+                    <button type="button" class="blue-iq-apply-btn" onclick="applyBlueIQFilters()">Apply</button>
+                </div>
+            </div>
+            <div class="blue-iq-meta">
+                <span id="blueIQMeta">Set filters and click Apply.</span>
+                <span id="blueIQUpdatedAt"></span>
+            </div>
+            <div id="blueIQSuppressedMsg" class="blue-iq-suppressed" style="display: none;"></div>
+            <div id="blueIQLoading" class="blue-iq-loading-overlay" style="display: none;">
+                <div class="blue-iq-spinner"></div>
+                <div>Crunching panel signal, search trends, and news coverage&hellip;</div>
+            </div>
+            <div id="blueIQCardsGrid" class="blue-iq-cards-grid"></div>
+            <div id="blueIQDrillModal" class="blue-iq-modal" onclick="if(event.target===this) closeBlueIQDrillModal();">
+                <div class="blue-iq-modal-inner">
+                    <button type="button" class="blue-iq-modal-close" onclick="closeBlueIQDrillModal()">×</button>
+                    <h3 id="blueIQDrillTitle" style="margin: 0 0 0.75rem 0;">Issue detail</h3>
+                    <div id="blueIQDrillBody"></div>
+                </div>
+            </div>
+        </div>
+
         <!-- SF CONVERSION VIEW -->
         <div id="sfConversionView" style="display: none; flex: 1; height: 100%; min-height: 0;">
             <div class="dashboard-layout" style="height: 100%; min-height: 0;">
@@ -20763,7 +20928,7 @@
                 // Explicitly apply the selected product view (Profile IQ = dashboard) so the correct view is visible on load
                 var viewDropdownEl = document.getElementById('viewNavDropdown');
                 var initialVal = (viewDropdownEl && viewDropdownEl.value) ? viewDropdownEl.value : 'profileIQ';
-                var initialHandlers = { profileIQ: showProfileIQ, subscriberIQ: showSubscriberIQ, sfConversion: showSFConversion, llmoIQ: showLLMOIQ, rankerIQ: showRankerIQ, ticketSalesIQ: showTicketSalesIQ, ticketSalesTracker: showTicketSalesTracker, hedgeFundIQ: showHedgeFundIQ, roasIQ: showRoasIQ, ecommerceIQ: showEcommerceIQ, brandPartnershipIQ: function() { showEcommerceIQ(); setTimeout(function() { if (typeof setEcomIQMode === 'function') setEcomIQMode('brand_partnership'); if (typeof setViewNavDropdown === 'function') setViewNavDropdown('brandPartnershipIQ'); }, 200); }, journeyIQ: function() { if (typeof showJourneyIQ === 'function') showJourneyIQ(); }, shareOfTimeIQ: showShareOfTimeIQ, customAnalysis: showCustomAnalysis, talentFitIQ: showTalentFitIQ, flywheelConversion: showFlywheelConversionDashboard, workspace: function() { if (typeof showProfileIQ === 'function') showProfileIQ(); if (typeof showTab === 'function') setTimeout(function() { showTab('collaboration'); }, 50); } };
+                var initialHandlers = { profileIQ: showProfileIQ, subscriberIQ: showSubscriberIQ, sfConversion: showSFConversion, llmoIQ: showLLMOIQ, rankerIQ: showRankerIQ, ticketSalesIQ: showTicketSalesIQ, ticketSalesTracker: showTicketSalesTracker, hedgeFundIQ: showHedgeFundIQ, roasIQ: showRoasIQ, ecommerceIQ: showEcommerceIQ, brandPartnershipIQ: function() { showEcommerceIQ(); setTimeout(function() { if (typeof setEcomIQMode === 'function') setEcomIQMode('brand_partnership'); if (typeof setViewNavDropdown === 'function') setViewNavDropdown('brandPartnershipIQ'); }, 200); }, journeyIQ: function() { if (typeof showJourneyIQ === 'function') showJourneyIQ(); }, shareOfTimeIQ: showShareOfTimeIQ, customAnalysis: showCustomAnalysis, talentFitIQ: showTalentFitIQ, flywheelConversion: showFlywheelConversionDashboard, blueIQ: function() { if (typeof showBlueIQ === 'function') showBlueIQ(); }, workspace: function() { if (typeof showProfileIQ === 'function') showProfileIQ(); if (typeof showTab === 'function') setTimeout(function() { showTab('collaboration'); }, 50); } };
                 if (typeof initialHandlers[initialVal] === 'function') initialHandlers[initialVal]();
                 // Ensure dashboard view is visible when Profile IQ is selected (guard against layout/override issues)
                 if (initialVal === 'profileIQ') {
@@ -20818,6 +20983,7 @@
                 },
                 customAnalysis: showCustomAnalysis,
                 talentFitIQ: showTalentFitIQ,
+                blueIQ: function() { if (typeof showBlueIQ === 'function') showBlueIQ(); },
                 admin: function() { window.location.href = '/admin'; },
                 purgatory: function() { window.location.href = '/admin#purgatory'; }
             };
@@ -20842,12 +21008,12 @@
                         console.error('View switch error:', e);
                     }
                     // Ensure selected view is visible (guard against handler not running or layout issues)
-                    var viewIds = { profileIQ: 'dashboardView', subscriberIQ: 'subscriberIQView', llmoIQ: 'llmoIQView', rankerIQ: 'rankerIQView', ticketSalesIQ: 'ticketSalesIQView', ticketSalesTracker: 'ticketSalesTrackerView', hedgeFundIQ: 'hedgeFundIQView', sentimentIQ: 'sentimentIQView', roasIQ: 'roasIQView', ecommerceIQ: 'ecommerceIQView', brandPartnershipIQ: 'ecommerceIQView', journeyIQ: 'journeyIQView', shareOfTimeIQ: 'shareOfTimeIQView', sfConversion: 'sfConversionView', flywheelConversion: 'flywheelConversionView', customAnalysis: 'customAnalysisView', talentSearchIQ: 'talentSearchIQView', talentTheaterIQ: 'talentTheaterIQView', talentFitIQ: 'talentFitIQView' };
+                    var viewIds = { profileIQ: 'dashboardView', subscriberIQ: 'subscriberIQView', llmoIQ: 'llmoIQView', rankerIQ: 'rankerIQView', ticketSalesIQ: 'ticketSalesIQView', ticketSalesTracker: 'ticketSalesTrackerView', hedgeFundIQ: 'hedgeFundIQView', sentimentIQ: 'sentimentIQView', roasIQ: 'roasIQView', ecommerceIQ: 'ecommerceIQView', brandPartnershipIQ: 'ecommerceIQView', journeyIQ: 'journeyIQView', shareOfTimeIQ: 'shareOfTimeIQView', sfConversion: 'sfConversionView', flywheelConversion: 'flywheelConversionView', customAnalysis: 'customAnalysisView', talentSearchIQ: 'talentSearchIQView', talentTheaterIQ: 'talentTheaterIQView', talentFitIQ: 'talentFitIQView', blueIQ: 'blueIQView' };
                     var activeId = viewIds[val];
                     if (activeId) {
                         var activeEl = document.getElementById(activeId);
                         if (activeEl) { activeEl.style.display = 'flex'; activeEl.style.visibility = 'visible'; }
-                        ['formView', 'dashboardView', 'subscriberIQView', 'llmoIQView', 'rankerIQView', 'ticketSalesIQView', 'ticketSalesTrackerView', 'hedgeFundIQView', 'sentimentIQView', 'roasIQView', 'ecommerceIQView', 'shareOfTimeIQView', 'sfConversionView', 'flywheelConversionView', 'customAnalysisView', 'talentSearchIQView', 'talentTheaterIQView', 'talentFitIQView', 'journeyIQView'].forEach(function(id) {
+                        ['formView', 'dashboardView', 'subscriberIQView', 'llmoIQView', 'rankerIQView', 'ticketSalesIQView', 'ticketSalesTrackerView', 'hedgeFundIQView', 'sentimentIQView', 'roasIQView', 'ecommerceIQView', 'shareOfTimeIQView', 'sfConversionView', 'flywheelConversionView', 'customAnalysisView', 'talentSearchIQView', 'talentTheaterIQView', 'talentFitIQView', 'journeyIQView', 'blueIQView'].forEach(function(id) {
                             if (id === activeId) return;
                             var el = document.getElementById(id);
                             if (el) el.style.display = 'none';
@@ -20872,6 +21038,7 @@
                 workspace: 'Workspace: Access saved work, collaboration, and shared projects.',
                 customAnalysis: 'Analysis IQ: Run custom analyses and pull your own profiles (5 credits per analysis).',
                 talentFitIQ: 'Talent Fit IQ: Analyze how well talents resonate with your brand audience using behavioral data and social metrics.',
+                blueIQ: 'Blue IQ: Political-audience tracker. Filter by party (AI-imputed) and state or DMA to see issue searches, search engines, social platforms, top politicians and articles.',
                 admin: 'Admin: Manage users, access, and system settings.',
                 purgatory: 'Purgatory: Review and release items pending admin approval.'
             };
@@ -20895,7 +21062,8 @@
                         ['roasIQ', !!d.has_roas_iq_access],
                         ['ecommerceIQ', !!d.has_ecommerce_iq_access],
                         ['shareOfTimeIQ', d.has_share_of_time_access !== false],
-                        ['workspace', d.has_workspace_access !== false]
+                        ['workspace', d.has_workspace_access !== false],
+                        ['blueIQ', !!d.has_blue_iq_access]
                     ];
                     pairs.forEach(function (pv) {
                         var opt = viewDropdown.querySelector('option[value="' + pv[0] + '"]');
@@ -21732,7 +21900,325 @@
                 restoreSavedSubscriberTabs();
             }
         }
-        
+
+        // ===================== BLUE IQ (Political Tracker) =====================
+        window.__blueIQ = {
+            filterOptions: null,
+            lastData: null,
+            inFlight: null,
+        };
+
+        function _blueIQHideAllOtherViews() {
+            var ids = ['dashboardView','subscriberIQView','sfConversionView','rankerIQView',
+                       'ticketSalesIQView','ticketSalesTrackerView','hedgeFundIQView',
+                       'talentSearchIQView','talentTheaterIQView','formView','customAnalysisView',
+                       'roasIQView','ecommerceIQView','llmoIQView','sentimentIQView',
+                       'shareOfTimeIQView','flywheelConversionView','talentFitIQView','journeyIQView'];
+            ids.forEach(function(id) {
+                var el = document.getElementById(id);
+                if (el) el.style.display = 'none';
+            });
+        }
+
+        window.showBlueIQ = function() {
+            var dd = document.getElementById('viewNavDropdown');
+            var opt = dd && dd.querySelector('option[value="blueIQ"]');
+            if (opt && opt.disabled) return;
+            if (typeof setViewNavDropdown === 'function') setViewNavDropdown('blueIQ');
+            _blueIQHideAllOtherViews();
+            var view = document.getElementById('blueIQView');
+            if (view) { view.style.display = 'flex'; view.style.visibility = 'visible'; }
+            if (!window.__blueIQ.filterOptions) {
+                loadBlueIQFilterOptions().then(function() {
+                    applyBlueIQFilters();
+                });
+            } else if (!window.__blueIQ.lastData) {
+                applyBlueIQFilters();
+            }
+        };
+
+        async function loadBlueIQFilterOptions() {
+            try {
+                var resp = await fetch('/api/blue-iq/filter-options', { credentials: 'same-origin' });
+                var d = await resp.json();
+                if (!d || !d.success) throw new Error(d && d.error ? d.error : 'Failed to load filter options');
+                window.__blueIQ.filterOptions = d;
+                _populateBlueIQGeoValue();
+                document.getElementById('blueIQGeoType').addEventListener('change', _populateBlueIQGeoValue);
+            } catch (e) {
+                console.error('Blue IQ filter-options error:', e);
+                var meta = document.getElementById('blueIQMeta');
+                if (meta) meta.textContent = 'Could not load filter options: ' + (e.message || e);
+            }
+        }
+
+        function _populateBlueIQGeoValue() {
+            var fo = window.__blueIQ.filterOptions || {};
+            var typeEl = document.getElementById('blueIQGeoType');
+            var valEl  = document.getElementById('blueIQGeoValue');
+            if (!typeEl || !valEl) return;
+            var t = typeEl.value;
+            valEl.innerHTML = '';
+            if (t === 'National') {
+                valEl.appendChild(new Option('(National)', ''));
+                valEl.disabled = true;
+                return;
+            }
+            valEl.disabled = false;
+            var list = (t === 'State') ? (fo.states || []) : (fo.dmas || []);
+            if (!list.length) {
+                valEl.appendChild(new Option('(no options)', ''));
+                valEl.disabled = true;
+                return;
+            }
+            valEl.appendChild(new Option('Select ' + t + '...', ''));
+            list.forEach(function(name) {
+                valEl.appendChild(new Option(name, name));
+            });
+        }
+
+        async function applyBlueIQFilters() {
+            var filters = {
+                party:         document.getElementById('blueIQParty').value || 'All',
+                geo_type:      document.getElementById('blueIQGeoType').value || 'National',
+                geo_value:     document.getElementById('blueIQGeoValue').value || '',
+                lookback_days: parseInt(document.getElementById('blueIQLookback').value || '30', 10),
+            };
+            if ((filters.geo_type === 'State' || filters.geo_type === 'DMA') && !filters.geo_value) {
+                document.getElementById('blueIQMeta').textContent = 'Pick a region or switch to National.';
+                return;
+            }
+            document.getElementById('blueIQLoading').style.display = 'flex';
+            document.getElementById('blueIQCardsGrid').innerHTML = '';
+            document.getElementById('blueIQSuppressedMsg').style.display = 'none';
+            document.getElementById('blueIQMeta').textContent = 'Fetching data for ' + (filters.party || 'All') + ' \u2192 ' + (filters.geo_type === 'National' ? 'National' : filters.geo_value) + ' (last ' + filters.lookback_days + 'd)...';
+            try {
+                if (window.__blueIQ.inFlight) {
+                    try { window.__blueIQ.inFlight.abort(); } catch (e) {}
+                }
+                window.__blueIQ.inFlight = (typeof AbortController === 'function') ? new AbortController() : null;
+                var resp = await fetch('/api/blue-iq/data', {
+                    method:  'POST',
+                    credentials: 'same-origin',
+                    headers: { 'Content-Type': 'application/json' },
+                    body:    JSON.stringify(filters),
+                    signal:  window.__blueIQ.inFlight ? window.__blueIQ.inFlight.signal : undefined,
+                });
+                var data = await resp.json();
+                if (!data || !data.success) throw new Error(data && data.error ? data.error : 'Request failed');
+                window.__blueIQ.lastData = data;
+                renderBlueIQCards(data);
+            } catch (e) {
+                if (e && e.name === 'AbortError') return;
+                console.error('Blue IQ data error:', e);
+                document.getElementById('blueIQMeta').textContent = 'Error: ' + (e.message || e);
+            } finally {
+                document.getElementById('blueIQLoading').style.display = 'none';
+                window.__blueIQ.inFlight = null;
+            }
+        }
+
+        function _bqPct(x) {
+            var v = Math.round((+x || 0) * 1000) / 10;
+            return v + '%';
+        }
+
+        function _bqNum(n) {
+            n = +n || 0;
+            if (n >= 1000000) return (n / 1000000).toFixed(1) + 'M';
+            if (n >= 1000) return (n / 1000).toFixed(1) + 'K';
+            return n.toString();
+        }
+
+        function _bqEscape(s) {
+            s = String(s == null ? '' : s);
+            return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+        }
+
+        function _bqRowBars(items, nameKey, valKey) {
+            if (!items || !items.length) {
+                return '<div style="color: var(--text-secondary); font-size: 0.85rem; padding: 0.5rem 0;">No data for this slice.</div>';
+            }
+            var maxV = Math.max.apply(null, items.map(function(r) { return +r[valKey] || 0; })) || 1;
+            return items.slice(0, 10).map(function(r) {
+                var v = +r[valKey] || 0;
+                var pct = Math.round((v / maxV) * 100);
+                var label = (typeof r.share === 'number') ? _bqPct(r.share) : _bqNum(v);
+                return '<div class="blue-iq-row">'
+                     + '<span class="blue-iq-row-name" title="' + _bqEscape(r[nameKey] || '') + '">' + _bqEscape(r[nameKey] || '') + '</span>'
+                     + '<span class="blue-iq-row-bar-wrap"><span class="blue-iq-row-bar" style="width: ' + pct + '%;"></span></span>'
+                     + '<span class="blue-iq-row-val">' + label + '</span>'
+                     + '</div>';
+            }).join('');
+        }
+
+        function renderBlueIQCards(data) {
+            var grid = document.getElementById('blueIQCardsGrid');
+            var meta = document.getElementById('blueIQMeta');
+            var updated = document.getElementById('blueIQUpdatedAt');
+            var supEl = document.getElementById('blueIQSuppressedMsg');
+            var f = data.filters || {};
+            var label = (f.party || 'All') + ' \u2192 ' + (f.geo_type === 'National' ? 'National' : (f.geo_value || ''));
+            var panelTxt = (data.panel_size != null) ? (' \u00b7 ' + _bqNum(data.panel_size) + ' panelists') : '';
+            meta.textContent = label + panelTxt + ' \u00b7 last ' + (f.lookback_days || 30) + 'd' + (data.cache_hit ? ' \u00b7 cached' : '');
+            if (updated && data.generated_at) {
+                var dt = new Date(data.generated_at);
+                updated.textContent = 'Updated ' + dt.toLocaleString();
+            }
+            if (data.suppressed) {
+                supEl.style.display = 'block';
+                supEl.textContent = data.message || ('Sample below minimum cell size of ' + (data.min_cell_size || 100) + ' panelists. External signals shown where available.');
+            } else {
+                supEl.style.display = 'none';
+            }
+
+            var cards = data.cards || {};
+            var html = '';
+
+            // CARD A: Issue buckets (drill-down on click)
+            html += '<div class="blue-iq-card blue-iq-card-issues">'
+                  + '<h3 class="blue-iq-card-title">Political issue searches <span class="blue-iq-badge">AI-bucketed</span></h3>'
+                  + '<div class="blue-iq-card-body" id="blueIQCardIssuesBody"></div>'
+                  + '</div>';
+
+            // CARD B: Search engines
+            html += '<div class="blue-iq-card blue-iq-card-search">'
+                  + '<h3 class="blue-iq-card-title">Search engines</h3>'
+                  + '<div class="blue-iq-card-body">' + _bqRowBars(cards.search_engines, 'name', 'panelists') + '</div>'
+                  + '</div>';
+
+            // CARD C: Social media
+            html += '<div class="blue-iq-card blue-iq-card-social">'
+                  + '<h3 class="blue-iq-card-title">Social platforms</h3>'
+                  + '<div class="blue-iq-card-body">' + _bqRowBars(cards.social_media, 'name', 'panelists') + '</div>'
+                  + '</div>';
+
+            // CARD F: Turnout intent
+            var ti = cards.turnout_intent || {};
+            var tiHtml;
+            if (ti && (ti.pct > 0 || (ti.sample_queries && ti.sample_queries.length))) {
+                tiHtml = '<div style="font-size: 2rem; font-weight: 700; line-height: 1.1;">' + _bqPct(ti.pct || 0) + '</div>'
+                       + '<div style="font-size: 0.78rem; color: var(--text-secondary); margin-bottom: 0.6rem;">searched voter-action terms (register, polling, ballot, early vote)</div>'
+                       + ((ti.sample_queries || []).slice(0, 5).map(function(q) {
+                            return '<div class="blue-iq-bucket-samples" style="margin: 0.15rem 0;">\u2022 ' + _bqEscape(q) + '</div>';
+                          }).join('') || '');
+            } else {
+                tiHtml = '<div style="color: var(--text-secondary); font-size: 0.85rem; padding: 0.5rem 0;">No turnout-intent signal in this slice.</div>';
+            }
+            html += '<div class="blue-iq-card blue-iq-card-turnout">'
+                  + '<h3 class="blue-iq-card-title">Turnout intent</h3>'
+                  + '<div class="blue-iq-card-body">' + tiHtml + '</div>'
+                  + '</div>';
+
+            // CARD D: Top politicians
+            html += '<div class="blue-iq-card blue-iq-card-pols">'
+                  + '<h3 class="blue-iq-card-title">Top politicians engaged</h3>'
+                  + '<div class="blue-iq-card-body">' + _bqRowBars(cards.top_politicians, 'name', 'mention_score') + '</div>'
+                  + '</div>';
+
+            // CARD E: Top articles
+            var articles = cards.top_articles || [];
+            var artHtml = articles.length ? articles.slice(0, 15).map(function(a) {
+                var img = a.image ? ('<div class="blue-iq-article-img" style="background-image: url(' + _bqEscape(a.image) + ');"></div>') : '<div class="blue-iq-article-img"></div>';
+                return '<div class="blue-iq-article">'
+                     + img
+                     + '<div class="blue-iq-article-body">'
+                     + '<p class="blue-iq-article-title"><a href="' + _bqEscape(a.url) + '" target="_blank" rel="noopener">' + _bqEscape(a.title || a.url) + '</a></p>'
+                     + '<div class="blue-iq-article-meta">' + _bqEscape(a.source || '') + (a.panelists ? (' \u00b7 ' + _bqNum(a.panelists) + ' panelists') : '') + '</div>'
+                     + '</div>'
+                     + '</div>';
+            }).join('') : '<div style="color: var(--text-secondary); font-size: 0.85rem; padding: 0.5rem 0;">No political articles surfaced for this slice.</div>';
+            html += '<div class="blue-iq-card blue-iq-card-articles">'
+                  + '<h3 class="blue-iq-card-title">Top political articles</h3>'
+                  + '<div class="blue-iq-card-body">' + artHtml + '</div>'
+                  + '</div>';
+
+            // CARD L: Demographic crosstab (if present)
+            var dc = cards.demo_crosstab || {};
+            if (dc && (dc.age || dc.gender || dc.ethnicity || dc.income)) {
+                var demoHtml = '';
+                [['age','Age'],['gender','Gender'],['ethnicity','Ethnicity'],['income','Income']].forEach(function(pair) {
+                    var rows = dc[pair[0]] || [];
+                    if (!rows.length) return;
+                    demoHtml += '<div style="margin-bottom: 0.7rem;">'
+                              + '<div style="font-size: 0.78rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 0.3rem;">' + pair[1] + '</div>'
+                              + _bqRowBars(rows.slice(0, 6), 'value', 'panelists')
+                              + '</div>';
+                });
+                html += '<div class="blue-iq-card blue-iq-card-demo">'
+                      + '<h3 class="blue-iq-card-title">Audience demographics</h3>'
+                      + '<div class="blue-iq-card-body">' + (demoHtml || 'No demographic data.') + '</div>'
+                      + '</div>';
+            }
+
+            // CARD J: Compare (only when geo is set)
+            var cmp = data.compare || {};
+            if (cmp && (cmp.dems || cmp.reps || cmp.indeps)) {
+                var grp = ['dems','reps','indeps','national'].map(function(k) {
+                    var s = cmp[k] || {};
+                    var label = ({dems:'Democrat',reps:'Republican',indeps:'Indep.',national:'All / National'})[k];
+                    if (s.suppressed) {
+                        return '<div class="blue-iq-compare-cell"><h5>' + label + '</h5><div style="color: var(--text-secondary); font-size: 0.78rem;">Sample too small (' + (s.panel_size || 0) + ')</div></div>';
+                    }
+                    var topSearch = (s.search_engines || [])[0];
+                    var topSocial = (s.social_media || [])[0];
+                    return '<div class="blue-iq-compare-cell">'
+                         + '<h5>' + label + '</h5>'
+                         + '<div>n=' + _bqNum(s.panel_size || 0) + '</div>'
+                         + (topSearch ? ('<div>Top search: <strong>' + _bqEscape(topSearch.name) + '</strong></div>') : '')
+                         + (topSocial ? ('<div>Top social: <strong>' + _bqEscape(topSocial.name) + '</strong></div>') : '')
+                         + ('<div>Turnout: <strong>' + _bqPct(s.turnout_pct || 0) + '</strong></div>')
+                         + '</div>';
+                }).join('');
+                html += '<div class="blue-iq-card blue-iq-card-compare">'
+                      + '<h3 class="blue-iq-card-title">Compare cohorts (same geo)</h3>'
+                      + '<div class="blue-iq-card-body"><div class="blue-iq-compare-grid">' + grp + '</div></div>'
+                      + '</div>';
+            }
+
+            grid.innerHTML = html;
+            _renderBlueIQIssueBuckets(cards.issue_buckets || []);
+        }
+
+        function _renderBlueIQIssueBuckets(buckets) {
+            var body = document.getElementById('blueIQCardIssuesBody');
+            if (!body) return;
+            if (!buckets || !buckets.length) {
+                body.innerHTML = '<div style="color: var(--text-secondary); font-size: 0.85rem; padding: 0.5rem 0;">No political-issue searches surfaced for this slice (or the AI classifier filtered everything as non-policy).</div>';
+                return;
+            }
+            var max = Math.max.apply(null, buckets.map(function(b) { return +b.count || 0; })) || 1;
+            body.innerHTML = buckets.slice(0, 16).map(function(b, idx) {
+                var pct = Math.round((b.count / max) * 100);
+                var samples = (b.sample_queries || []).slice(0, 3).join(' \u00b7 ');
+                return '<div class="blue-iq-bucket-row" onclick="openBlueIQDrillModal(' + idx + ')">'
+                     + '<div class="blue-iq-bucket-head"><strong>' + _bqEscape(b.bucket) + '</strong><span style="color: var(--text-secondary); font-variant-numeric: tabular-nums;">' + _bqPct(b.share || 0) + ' \u00b7 ' + _bqNum(b.count) + '</span></div>'
+                     + '<div class="blue-iq-row-bar-wrap" style="margin: 0;"><span class="blue-iq-row-bar" style="width: ' + pct + '%;"></span></div>'
+                     + '<div class="blue-iq-bucket-samples">' + _bqEscape(samples) + '</div>'
+                     + '</div>';
+            }).join('');
+        }
+
+        window.openBlueIQDrillModal = function(idx) {
+            var data = window.__blueIQ.lastData;
+            if (!data || !data.cards || !data.cards.issue_buckets) return;
+            var b = data.cards.issue_buckets[idx];
+            if (!b) return;
+            document.getElementById('blueIQDrillTitle').textContent = b.bucket;
+            var queries = (b.sample_queries || []).slice(0, 50);
+            var qHtml = queries.length
+                ? '<ol style="margin: 0; padding-left: 1.25rem; font-size: 0.88rem; line-height: 1.5;">' + queries.map(function(q) { return '<li>' + _bqEscape(q) + '</li>'; }).join('') + '</ol>'
+                : '<p style="color: var(--text-secondary);">No sample queries available for this bucket.</p>';
+            document.getElementById('blueIQDrillBody').innerHTML =
+                '<div style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 0.75rem;">'
+                + _bqNum(b.count) + ' weighted search events \u00b7 ' + _bqPct(b.share || 0) + ' of political-policy searches in this slice.'
+                + '</div>' + qHtml;
+            document.getElementById('blueIQDrillModal').classList.add('open');
+        };
+        window.closeBlueIQDrillModal = function() {
+            document.getElementById('blueIQDrillModal').classList.remove('open');
+        };
+
         // ===================== SF CONVERSION VIEW =====================
         let sfConvProfiles = [];
         let openSFConvTabs = [];
