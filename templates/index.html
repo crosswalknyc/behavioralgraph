@@ -19690,10 +19690,33 @@
                         </div>
                     </details>
                     <div id="jiqEcosystemTrinity" style="overflow-x: auto; margin-bottom: 0.75rem;"></div>
-                    <div id="jiqEcosystemLifecycle" style="overflow-x: auto; margin-bottom: 0.75rem;"></div>
-                    <div id="jiqEcosystemKpis" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 0.75rem; margin-top: 0.5rem;"></div>
+                    <!-- Lifecycle ribbon + 4 ecosystem KPI cards side-by-side
+                         so the curves chart and the headline ecosystem metrics
+                         (cross-property co-visitation, theatrical→home capture,
+                         RT certified fresh lift, combined US reach) are all
+                         visible together without scrolling. Lifecycle takes ~62%
+                         on desktop; KPIs render in a 2×2 grid on the right. On
+                         narrower viewports (<900px) they stack vertically. -->
+                    <div id="jiqEcosystemFlywheelRow"
+                         style="display: grid;
+                                grid-template-columns: minmax(0, 1.6fr) minmax(280px, 1fr);
+                                gap: 0.85rem; align-items: stretch;
+                                margin-bottom: 0.75rem;">
+                        <div id="jiqEcosystemLifecycle" style="overflow-x: auto; min-width: 0;"></div>
+                        <div id="jiqEcosystemKpis"
+                             style="display: grid;
+                                    grid-template-columns: 1fr 1fr;
+                                    gap: 0.6rem; align-content: start;"></div>
+                    </div>
                     <div id="jiqEcosystemNotes" style="display: none;"></div>
                 </div>
+                <style>
+                    @media (max-width: 900px) {
+                        #jiqEcosystemFlywheelRow {
+                            grid-template-columns: 1fr !important;
+                        }
+                    }
+                </style>
 
                 <!-- ════════════════════════════════════════════════════════
                      AUDIENCE HYPOTHESIS card — shown only when the run
