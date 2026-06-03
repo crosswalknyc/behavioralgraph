@@ -31045,7 +31045,25 @@
                 AI_AGENT: '#14b8a6',
                 SOUNDTRACK: '#a3e635',
                 SEARCH: '#3b82f6',
-                DETOUR: '#cbd5e1'
+                DETOUR: '#cbd5e1',
+                // Retail / digital-marketing journey categories
+                COUPON_HUNT:     '#f59e0b',  // amber — bargain hunting
+                PRICE_COMPARE:   '#a855f7',  // purple — competitor PDP visits
+                REVIEW_RESEARCH: '#0ea5e9',  // sky — Reddit / YouTube review hunt
+                SIZE_FIT:        '#06b6d4',
+                CART_ABANDON:    '#ef4444',  // red — drop-off
+                EMAIL_REENGAGE:  '#22c55e',  // green — Klaviyo win-back triggered
+                SMS_REENGAGE:    '#16a34a',
+                CART_RECLAIM:    '#10b981',  // emerald — recovered
+                CHECKOUT:        '#0c4a6e',
+                PURCHASE:        '#10b981',
+                DISPLAY_RETARGET:'#dc2626',
+                PAID_SEARCH:     '#3b82f6',
+                PAID_SOCIAL:     '#d946ef',
+                AFFILIATE:       '#84cc16',
+                CTV:             '#7c3aed',
+                SEO_CONTENT:     '#0284c7',
+                EMAIL_CRM:       '#22c55e'
             };
             // Canonical brand colors so the SAME brand keeps the SAME color
             // across every column even when the label has a qualifier
@@ -31158,10 +31176,18 @@
                 if (!ptp.top_paths || !ptp.top_paths.length) {
                     topPathsEl.innerHTML = '<div style="font-size:0.8rem;color:var(--text-secondary);">No high-confidence paths emerged (cohort too small or paths too varied). Lower the &quot;Steps before purchase&quot; on the next run or widen the cohort.</div>';
                 } else {
+                    // Opt-in "Days" column — only renders if at least one
+                    // path carries avg_days (newer retail payloads carry
+                    // journey duration; legacy movie runs don't, so the
+                    // column hides for them).
+                    var hasDays = ptp.top_paths.some(function(p) {
+                        return p.avg_days != null || p.days != null;
+                    });
                     topPathsEl.innerHTML = '<table style="width:100%; border-collapse: collapse; font-size: 12.5px;">'
                         + '<thead><tr style="text-align:left;border-bottom:1px solid var(--border-color);">'
                         +   '<th style="padding:6px 4px;width:60px;text-align:right;">Users</th>'
                         +   '<th style="padding:6px 4px;width:60px;text-align:right;">% Cohort</th>'
+                        +   (hasDays ? '<th style="padding:6px 4px;width:80px;text-align:right;">Avg days</th>' : '')
                         +   '<th style="padding:6px 4px;">Path</th>'
                         + '</tr></thead><tbody>'
                         + ptp.top_paths.map(function(p) {
@@ -31183,10 +31209,23 @@
                             var pctDisplay = (pctVal != null && !isNaN(pctVal))
                                 ? (Number(pctVal).toFixed(1).replace(/\.0$/, '')) + '%'
                                 : '—';
-                            return '<tr style="border-bottom:1px solid var(--border-color);">'
-                                 + '<td style="padding:6px 4px;text-align:right;font-weight:600;">' + _jiqFmt(p.users) + '</td>'
-                                 + '<td style="padding:6px 4px;text-align:right;color:var(--text-secondary);">' + pctDisplay + '</td>'
-                                 + '<td style="padding:6px 4px;">' + pathHtml + '</td>'
+                            var daysVal = (p.avg_days != null) ? p.avg_days : p.days;
+                            var daysCell = hasDays
+                                ? '<td style="padding:6px 4px;text-align:right;color:var(--text-secondary);">'
+                                  + (daysVal != null
+                                      ? '<strong style="color:var(--text-primary);">' + Number(daysVal).toFixed(daysVal < 2 ? 1 : 0) + '</strong>d'
+                                      : '—')
+                                  + '</td>'
+                                : '';
+                            // Optional sub-line note (renders under the path pills).
+                            var noteLine = p.note
+                                ? '<div style="font-size:11px;color:var(--text-secondary);margin-top:4px;font-style:italic;">' + _jiqEsc(p.note) + '</div>'
+                                : '';
+                            return '<tr style="border-bottom:1px solid var(--border-color);vertical-align:top;">'
+                                 + '<td style="padding:8px 4px;text-align:right;font-weight:600;">' + _jiqFmt(p.users) + '</td>'
+                                 + '<td style="padding:8px 4px;text-align:right;color:var(--text-secondary);">' + pctDisplay + '</td>'
+                                 + daysCell
+                                 + '<td style="padding:8px 4px;">' + pathHtml + noteLine + '</td>'
                                  + '</tr>';
                         }).join('') + '</tbody></table>';
                 }
