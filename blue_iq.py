@@ -335,15 +335,23 @@ def get_filter_options() -> dict:
 
     if not states:
         try:
+            # PROVINCE is the 2-letter USPS code column in user_data_sanitized.
+            # Translate to full state name via the canonical _USPS_TO_NAME map
+            # so the dropdown shows "California" instead of "CA".
+            try:
+                from external_signals import _USPS_TO_NAME  # type: ignore
+            except Exception:
+                _USPS_TO_NAME = {}
             rows = _ch_query("""
-                SELECT STATE, count() AS n
+                SELECT PROVINCE, count() AS n
                 FROM userdata.user_data_sanitized
-                WHERE STATE IS NOT NULL AND STATE != ''
-                GROUP BY STATE
+                WHERE PROVINCE IS NOT NULL AND PROVINCE != ''
+                GROUP BY PROVINCE
                 HAVING n >= %(floor)s
-                ORDER BY STATE
+                ORDER BY PROVINCE
             """, {'floor': MIN_CELL_SIZE})
-            states = [r[0] for r in rows if r and r[0]]
+            states = sorted({_USPS_TO_NAME.get(r[0], r[0])
+                              for r in rows if r and r[0]})
         except Exception as e:
             logger.warning("filter_options: state pull failed: %s", e)
     if not dmas:
@@ -678,9 +686,20 @@ def roll_up_political_issues(queries: list[dict], use_external: bool = True
 # ── Card queries (the 5 panel queries) ──────────────────────────────────────
 
 def _geo_filter_clause(geo_type: str, geo_value: str) -> tuple[str, dict]:
-    """Returns (SQL fragment that filters user_data_sanitized U, params)."""
+    """Returns (SQL fragment that filters user_data_sanitized U, params).
+
+    Note: user_data_sanitized's state column is `PROVINCE` (USPS 2-letter
+    code), not `STATE`. Frontend passes full state names ("California"),
+    so we map the incoming value back to its USPS code on the fly.
+    """
     if geo_type == 'State' and geo_value:
-        return ("U.STATE = %(geo_value)s", {'geo_value': geo_value})
+        try:
+            from external_signals import _USPS_TO_NAME  # type: ignore
+            name_to_usps = {v: k for k, v in _USPS_TO_NAME.items()}
+        except Exception:
+            name_to_usps = {}
+        usps = name_to_usps.get(geo_value, geo_value)
+        return ("U.PROVINCE = %(geo_value)s", {'geo_value': usps})
     if geo_type == 'DMA' and geo_value:
         return ("U.DMA = %(geo_value)s", {'geo_value': geo_value})
     return ("1=1", {})

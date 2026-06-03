@@ -87,6 +87,32 @@ def _ch():
     return connect_clickhouse()
 
 
+# USPS code -> full state name. We import lazily so this file stays usable
+# even if external_signals.py changes; the map is used to expand the
+# `PROVINCE` 2-letter codes in user_data_sanitized to the human-readable
+# names the dashboard's filter dropdown uses ("California", not "CA").
+def _usps_to_name_pairs() -> list[tuple[str, str]]:
+    try:
+        from external_signals import _USPS_TO_NAME  # type: ignore
+    except ImportError:
+        from .external_signals import _USPS_TO_NAME  # type: ignore
+    return list(_USPS_TO_NAME.items())
+
+
+def _ch_state_transform_expr(province_col_sql: str) -> str:
+    """Return a CH SQL expression that maps the USPS 2-letter province code
+    in `province_col_sql` to the full state name. We embed the map inline
+    because it's tiny and CH has no scalar dictionary on this column.
+    Falls through to the original value for non-US rows (e.g., 'IN' isn't
+    in the US map; it's Indiana — but a Canadian 'ON' would pass through).
+    Actually all 50+DC are in the map, so unknowns just stay as-is.
+    """
+    pairs = _usps_to_name_pairs()
+    keys = "[" + ",".join(f"'{k}'" for k, _ in pairs) + "]"
+    vals = "[" + ",".join(f"'{v}'" for _, v in pairs) + "]"
+    return f"transform({province_col_sql}, {keys}, {vals}, {province_col_sql})"
+
+
 def _start_date(lookback: int) -> str:
     return (datetime.now(timezone.utc) - timedelta(days=lookback)).strftime('%Y-%m-%d')
 
@@ -208,20 +234,24 @@ def _build_party_temp_table(conn, lookback: int) -> dict[str, str]:
             cur.execute(f"INSERT INTO blue_iq_party (uid, party) VALUES {values_clause}")
     log.info("  party imputer: temp table loaded with %d UIDs", len(party_map))
 
-    # Persist to S3 for the live dashboard's degraded-fallback path.
+    # Persist to S3 for the live dashboard's degraded-fallback path AND so
+    # the next aggregator run can skip the heavy CH scan via the S3-reuse
+    # fast path. Use boto3 directly — `from app import s3_client` requires
+    # Flask which isn't installed in headless cron contexts.
     try:
-        from app import s3_client  # type: ignore
-        if s3_client is not None:
-            payload = {
-                uid: {'party': p, 'computed_at': datetime.now(timezone.utc).isoformat()}
-                for uid, p in party_map.items()
-            }
-            s3_client.put_object(
-                Bucket=S3_BUCKET, Key=PARTY_KEY,
-                Body=json.dumps(payload).encode('utf-8'),
-                ContentType='application/json',
-            )
-            log.info("  party imputer: persisted %d UIDs to s3://%s/%s", len(payload), S3_BUCKET, PARTY_KEY)
+        import boto3
+        s3_client = boto3.client('s3', region_name='us-east-2')
+        payload = {
+            uid: {'party': p, 'computed_at': datetime.now(timezone.utc).isoformat()}
+            for uid, p in party_map.items()
+        }
+        s3_client.put_object(
+            Bucket=S3_BUCKET, Key=PARTY_KEY,
+            Body=json.dumps(payload).encode('utf-8'),
+            ContentType='application/json',
+        )
+        log.info("  party imputer: persisted %d UIDs to s3://%s/%s",
+                 len(payload), S3_BUCKET, PARTY_KEY)
     except Exception as e:
         log.warning("  party imputer: S3 persist failed (non-fatal): %s", e)
 
@@ -236,12 +266,12 @@ def _q_top_by_cat(conn, start: str, category: str, top_k: int) -> dict[str, list
         - (party, state)         — geo = STATE, dma = ''
         - (party, dma)           — geo = '',    dma = DMA
         - (party, '', '')        — national per party
-        - ('All', state, '')     — All-party by state (re-derive below)
 
     Returns: {cell_key: [{name, panelists}, ...]}
     """
     cur = conn.cursor()
-    cur.execute("""
+    state_expr = _ch_state_transform_expr("uds.PROVINCE")
+    cur.execute(f"""
         WITH brands AS (
             SELECT DISTINCT BRAND
             FROM reference.host_mapping
@@ -250,18 +280,18 @@ def _q_top_by_cat(conn, start: str, category: str, top_k: int) -> dict[str, list
         ),
         base AS (
             SELECT
-                p.party                  AS party,
-                U.STATE                  AS state,
-                U.DMA                    AS dma,
-                C.COMMON_NAME            AS cn,
-                C.UID                    AS uid
-            FROM clickstream.clickstream_final AS C
-            INNER JOIN userdata.user_data_sanitized AS U ON U.UID = C.UID
-            INNER JOIN blue_iq_party        AS p ON p.uid = C.UID
-            WHERE C.DELIVERED >= toDate(%(start)s)
-              AND C.COMMON_NAME IN (SELECT BRAND FROM brands)
+                bp.party                 AS party,
+                {state_expr}             AS state,
+                uds.DMA                  AS dma,
+                cs.COMMON_NAME           AS cn,
+                cs.UID                   AS uid
+            FROM clickstream.clickstream_final     AS cs
+            INNER JOIN userdata.user_data_sanitized AS uds ON uds.UID = cs.UID
+            INNER JOIN blue_iq_party                AS bp  ON bp.uid  = cs.UID
+            WHERE cs.DELIVERED >= toDate(%(start)s)
+              AND cs.COMMON_NAME IN (SELECT BRAND FROM brands)
         )
-        SELECT party, state, dma, cn, uniqExact(uid) AS p
+        SELECT party, state, dma, cn, uniqExact(uid) AS panelists
         FROM base
         GROUP BY GROUPING SETS (
             (party, state, cn),
@@ -269,17 +299,16 @@ def _q_top_by_cat(conn, start: str, category: str, top_k: int) -> dict[str, list
             (party, cn),
             (cn)
         )
-        HAVING p > 0
+        HAVING panelists > 0
     """, {'cat': category, 'start': start})
 
     by_cell: dict[str, list[tuple[str, int]]] = defaultdict(list)
-    for party, state, dma, cn, p in cur.fetchall():
+    for party, state, dma, cn, panelists in cur.fetchall():
         party = party or 'All'
         state = state or ''
         dma   = dma   or ''
-        # Convert the "(cn)"-only grouping set (everything else NULL → defaults above) to absolute national
         cell = _cell_key(party, state, dma)
-        by_cell[cell].append((cn, int(p)))
+        by_cell[cell].append((cn, int(panelists)))
 
     out: dict[str, list[dict]] = {}
     for cell, items in by_cell.items():
@@ -291,12 +320,14 @@ def _q_top_by_cat(conn, start: str, category: str, top_k: int) -> dict[str, list
 def _q_cell_sizes(conn) -> dict[str, int]:
     """uniqExact(UID) per cell — used for cell suppression + denominators."""
     cur = conn.cursor()
-    cur.execute("""
-        SELECT party, state, dma, uniqExact(uid) AS p
+    state_expr = _ch_state_transform_expr("uds.PROVINCE")
+    cur.execute(f"""
+        SELECT party, state, dma, uniqExact(uid) AS panelists
         FROM (
-            SELECT p.party AS party, U.STATE AS state, U.DMA AS dma, U.UID AS uid
-            FROM userdata.user_data_sanitized AS U
-            INNER JOIN blue_iq_party AS p ON p.uid = U.UID
+            SELECT bp.party AS party, {state_expr} AS state,
+                   uds.DMA  AS dma,   uds.UID      AS uid
+            FROM userdata.user_data_sanitized AS uds
+            INNER JOIN blue_iq_party AS bp ON bp.uid = uds.UID
         )
         GROUP BY GROUPING SETS (
             (party, state),
@@ -304,11 +335,11 @@ def _q_cell_sizes(conn) -> dict[str, int]:
             (party),
             ()
         )
-        HAVING p > 0
+        HAVING panelists > 0
     """)
     out: dict[str, int] = {}
-    for party, state, dma, p in cur.fetchall():
-        out[_cell_key(party or 'All', state or '', dma or '')] = int(p)
+    for party, state, dma, panelists in cur.fetchall():
+        out[_cell_key(party or 'All', state or '', dma or '')] = int(panelists)
     return out
 
 
@@ -316,15 +347,17 @@ def _q_demos(conn) -> dict[str, dict[str, list[dict]]]:
     """Per-cell demographic breakdown (no clickstream needed — pure user_data_sanitized)."""
     cur = conn.cursor()
     out: dict[str, dict[str, list[dict]]] = defaultdict(lambda: defaultdict(list))
+    state_expr = _ch_state_transform_expr("uds.PROVINCE")
     for col, label in [('AGE', 'age'), ('GENDER', 'gender'),
                        ('ETHNICITY', 'ethnicity'), ('INCOME', 'income')]:
         cur.execute(f"""
             SELECT party, state, dma, val, count() AS n
             FROM (
-                SELECT p.party AS party, U.STATE AS state, U.DMA AS dma, U.{col} AS val
-                FROM userdata.user_data_sanitized AS U
-                INNER JOIN blue_iq_party AS p ON p.uid = U.UID
-                WHERE U.{col} IS NOT NULL AND U.{col} != ''
+                SELECT bp.party AS party, {state_expr} AS state,
+                       uds.DMA  AS dma,   uds.{col}    AS val
+                FROM userdata.user_data_sanitized AS uds
+                INNER JOIN blue_iq_party AS bp ON bp.uid = uds.UID
+                WHERE uds.{col} IS NOT NULL AND uds.{col} != ''
             )
             GROUP BY GROUPING SETS (
                 (party, state, val),
@@ -351,18 +384,19 @@ def _q_demos(conn) -> dict[str, dict[str, list[dict]]]:
 def _q_turnout(conn, start: str) -> dict[str, dict]:
     """Per-cell turnout-intent panelists + a few sample matched URLs."""
     cur = conn.cursor()
-    cur.execute("""
+    state_expr = _ch_state_transform_expr("uds.PROVINCE")
+    cur.execute(f"""
         WITH matched AS (
             SELECT
-                p.party AS party, U.STATE AS state, U.DMA AS dma,
-                C.UID AS uid, lower(C.URL) AS u
-            FROM clickstream.clickstream_final AS C
-            INNER JOIN userdata.user_data_sanitized AS U ON U.UID = C.UID
-            INNER JOIN blue_iq_party AS p ON p.uid = C.UID
-            WHERE C.DELIVERED >= toDate(%(start)s)
-              AND multiMatchAny(lower(C.URL), %(terms)s) > 0
+                bp.party AS party, {state_expr} AS state, uds.DMA AS dma,
+                cs.UID AS uid, lower(cs.URL) AS u
+            FROM clickstream.clickstream_final AS cs
+            INNER JOIN userdata.user_data_sanitized AS uds ON uds.UID = cs.UID
+            INNER JOIN blue_iq_party                AS bp  ON bp.uid  = cs.UID
+            WHERE cs.DELIVERED >= toDate(%(start)s)
+              AND multiMatchAny(lower(cs.URL), %(terms)s) > 0
         )
-        SELECT party, state, dma, uniqExact(uid) AS p, groupUniqArray(20)(u) AS samples
+        SELECT party, state, dma, uniqExact(uid) AS panelists, groupUniqArray(20)(u) AS samples
         FROM matched
         GROUP BY GROUPING SETS (
             (party, state),
@@ -370,14 +404,14 @@ def _q_turnout(conn, start: str) -> dict[str, dict]:
             (party),
             ()
         )
-        HAVING p > 0
+        HAVING panelists > 0
     """, {'start': start, 'terms': blue_iq._TURNOUT_PATTERNS})
 
     out: dict[str, dict] = {}
-    for party, state, dma, p, samples in cur.fetchall():
+    for party, state, dma, panelists, samples in cur.fetchall():
         cell = _cell_key(party or 'All', state or '', dma or '')
         out[cell] = {
-            'panelists':    int(p),
+            'panelists':    int(panelists),
             'sample_urls':  list(samples or [])[:8],
         }
     return out
@@ -393,19 +427,20 @@ def _q_politicians(conn, start: str, top_k: int) -> dict[str, list[dict]]:
     # multiMatchAllIndices over a constant pattern array which gives us the
     # index of each match per row — that's how we know WHICH politician hit.
     patterns = [n.lower() for n in politicians]
-    cur.execute("""
+    state_expr = _ch_state_transform_expr("uds.PROVINCE")
+    cur.execute(f"""
         WITH hits AS (
             SELECT
-                p.party AS party, U.STATE AS state, U.DMA AS dma,
-                C.UID   AS uid,
-                arrayJoin(multiMatchAllIndices(lower(C.URL), %(pats)s)) AS pol_idx
-            FROM clickstream.clickstream_final AS C
-            INNER JOIN userdata.user_data_sanitized AS U ON U.UID = C.UID
-            INNER JOIN blue_iq_party        AS p ON p.uid = C.UID
-            WHERE C.DELIVERED >= toDate(%(start)s)
-              AND multiMatchAny(lower(C.URL), %(pats)s) > 0
+                bp.party AS party, {state_expr} AS state, uds.DMA AS dma,
+                cs.UID   AS uid,
+                arrayJoin(multiMatchAllIndices(lower(cs.URL), %(pats)s)) AS pol_idx
+            FROM clickstream.clickstream_final AS cs
+            INNER JOIN userdata.user_data_sanitized AS uds ON uds.UID = cs.UID
+            INNER JOIN blue_iq_party                AS bp  ON bp.uid  = cs.UID
+            WHERE cs.DELIVERED >= toDate(%(start)s)
+              AND multiMatchAny(lower(cs.URL), %(pats)s) > 0
         )
-        SELECT party, state, dma, pol_idx, uniqExact(uid) AS p
+        SELECT party, state, dma, pol_idx, uniqExact(uid) AS panelists
         FROM hits
         GROUP BY GROUPING SETS (
             (party, state, pol_idx),
@@ -413,17 +448,17 @@ def _q_politicians(conn, start: str, top_k: int) -> dict[str, list[dict]]:
             (party, pol_idx),
             (pol_idx)
         )
-        HAVING p > 0
+        HAVING panelists > 0
     """, {'pats': patterns, 'start': start})
 
     by_cell: dict[str, list[tuple[str, int]]] = defaultdict(list)
-    for party, state, dma, idx, p in cur.fetchall():
+    for party, state, dma, idx, panelists in cur.fetchall():
         try:
             name = politicians[int(idx) - 1]  # CH multiMatchAllIndices is 1-based
         except (IndexError, TypeError, ValueError):
             continue
         cell = _cell_key(party or 'All', state or '', dma or '')
-        by_cell[cell].append((name, int(p)))
+        by_cell[cell].append((name, int(panelists)))
 
     out: dict[str, list[dict]] = {}
     for cell, items in by_cell.items():
@@ -438,18 +473,19 @@ def _q_articles(conn, start: str, top_k: int) -> dict[str, list[dict]]:
     domains_all, _, _ = blue_iq._load_media_domains()
     if not domains_all:
         return {}
-    cur.execute("""
-        SELECT party, state, dma, url, dom, uniqExact(uid) AS p
+    state_expr = _ch_state_transform_expr("uds.PROVINCE")
+    cur.execute(f"""
+        SELECT party, state, dma, url, dom, uniqExact(uid) AS panelists
         FROM (
             SELECT
-                p.party AS party, U.STATE AS state, U.DMA AS dma,
-                C.URL AS url, lower(C.DOMAIN) AS dom, C.UID AS uid
-            FROM clickstream.clickstream_final AS C
-            INNER JOIN userdata.user_data_sanitized AS U ON U.UID = C.UID
-            INNER JOIN blue_iq_party        AS p ON p.uid = C.UID
-            WHERE C.DELIVERED >= toDate(%(start)s)
-              AND lower(C.DOMAIN) IN %(doms)s
-              AND length(C.URL) > 30
+                bp.party AS party, {state_expr} AS state, uds.DMA AS dma,
+                cs.URL AS url, lower(cs.DOMAIN) AS dom, cs.UID AS uid
+            FROM clickstream.clickstream_final AS cs
+            INNER JOIN userdata.user_data_sanitized AS uds ON uds.UID = cs.UID
+            INNER JOIN blue_iq_party                AS bp  ON bp.uid  = cs.UID
+            WHERE cs.DELIVERED >= toDate(%(start)s)
+              AND lower(cs.DOMAIN) IN %(doms)s
+              AND length(cs.URL) > 30
         )
         GROUP BY GROUPING SETS (
             (party, state, url, dom),
@@ -457,13 +493,13 @@ def _q_articles(conn, start: str, top_k: int) -> dict[str, list[dict]]:
             (party, url, dom),
             (url, dom)
         )
-        HAVING p >= 2
+        HAVING panelists >= 2
     """, {'doms': list(domains_all), 'start': start})
 
     by_cell: dict[str, list[tuple[str, str, int]]] = defaultdict(list)
-    for party, state, dma, url, dom, p in cur.fetchall():
+    for party, state, dma, url, dom, panelists in cur.fetchall():
         cell = _cell_key(party or 'All', state or '', dma or '')
-        by_cell[cell].append((url, dom, int(p)))
+        by_cell[cell].append((url, dom, int(panelists)))
 
     out: dict[str, list[dict]] = {}
     for cell, items in by_cell.items():
@@ -478,7 +514,8 @@ def _q_search_queries(conn, start: str, top_k: int) -> tuple[dict[str, list[dict
     plus a GLOBAL (national, all-party) flat list to feed the AI bucketer.
     """
     cur = conn.cursor()
-    cur.execute("""
+    state_expr = _ch_state_transform_expr("uds.PROVINCE")
+    cur.execute(f"""
         WITH q AS (
             SELECT lower(SEARCH_TEXT_NORMALIZED) AS qstr
             FROM reference.search_text_mapping
@@ -488,15 +525,15 @@ def _q_search_queries(conn, start: str, top_k: int) -> tuple[dict[str, list[dict
         ),
         hits AS (
             SELECT
-                p.party AS party, U.STATE AS state, U.DMA AS dma,
-                C.UID AS uid, q.qstr AS term
-            FROM clickstream.clickstream_final AS C
-            INNER JOIN userdata.user_data_sanitized AS U ON U.UID = C.UID
-            INNER JOIN blue_iq_party AS p ON p.uid = C.UID
-            ANY INNER JOIN q ON position(lower(C.URL), q.qstr) > 0
-            WHERE C.DELIVERED >= toDate(%(start)s)
+                bp.party AS party, {state_expr} AS state, uds.DMA AS dma,
+                cs.UID AS uid, q.qstr AS term
+            FROM clickstream.clickstream_final AS cs
+            INNER JOIN userdata.user_data_sanitized AS uds ON uds.UID = cs.UID
+            INNER JOIN blue_iq_party                AS bp  ON bp.uid  = cs.UID
+            ANY INNER JOIN q ON position(lower(cs.URL), q.qstr) > 0
+            WHERE cs.DELIVERED >= toDate(%(start)s)
         )
-        SELECT party, state, dma, term, uniqExact(uid) AS p
+        SELECT party, state, dma, term, uniqExact(uid) AS panelists
         FROM hits
         GROUP BY GROUPING SETS (
             (party, state, term),
@@ -504,17 +541,16 @@ def _q_search_queries(conn, start: str, top_k: int) -> tuple[dict[str, list[dict
             (party, term),
             (term)
         )
-        HAVING p >= 2
+        HAVING panelists >= 2
     """, {'start': start})
 
     by_cell: dict[str, list[tuple[str, int]]] = defaultdict(list)
     global_terms: Counter = Counter()
-    for party, state, dma, term, p in cur.fetchall():
+    for party, state, dma, term, panelists in cur.fetchall():
         cell = _cell_key(party or 'All', state or '', dma or '')
-        by_cell[cell].append((term, int(p)))
-        # The "(term)"-only grouping = absolute national. Feed that into the global classifier.
+        by_cell[cell].append((term, int(panelists)))
         if (party is None or party == '') and not state and not dma:
-            global_terms[term] += int(p)
+            global_terms[term] += int(panelists)
     out: dict[str, list[dict]] = {}
     for cell, items in by_cell.items():
         items.sort(key=lambda x: -x[1])
