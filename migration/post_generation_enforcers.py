@@ -4013,7 +4013,22 @@ def apply_panel_reality_floors(df, subject, verbose=True):
                 # (cat_u, brand_u): brands where LLM tends to over-lift past target
                 ('STREAMING/PLATFORM', 'BET+'),
                 ('STREAMING/PLATFORM', 'ALLBLK'),
+                # SEARCH ENGINE/AI cohort — LLM-adoption survey baselines
+                # (Pew 2024) cap young-cohort adoption at 22% (Gemini),
+                # 55% (ChatGPT), 12% (Perplexity). The vet-reasoner
+                # consistently KEEPs these above the segment-weighted
+                # target for young / creator / tech-savvy audiences,
+                # producing 32-33% Gemini pins on 18-24-heavy profiles
+                # (Zhirelle 32.8069%, Hollywood_Reporter 32.8697%,
+                # ~2x the median across 120 recent files). Two-sided
+                # trim activates so cur > target+3pp recenters into
+                # the persona-aligned band. CLAUDE AI was already
+                # protected here; adding GEMINI / CHAT GPT / PERPLEXITY
+                # 2026-06-03 (Jenna's Zhirelle audit).
                 ('SEARCH ENGINE/AI', 'CLAUDE AI'),
+                ('SEARCH ENGINE/AI', 'GEMINI'),
+                ('SEARCH ENGINE/AI', 'CHAT GPT'),
+                ('SEARCH ENGINE/AI', 'PERPLEXITY'),
                 # 2026-05-25 (Valkyrae audit) — TELECOM Big 3 over-inflated.
                 # Subscriber share is mutually exclusive (1 primary carrier per
                 # household); when Verizon+AT&T+T-Mobile sum to >100% on a profile,
