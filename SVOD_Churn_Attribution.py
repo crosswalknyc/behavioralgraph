@@ -5499,11 +5499,44 @@ def _research_show_externally_with_claude(
         "     Parrot Analytics demand rankings → useful for tier, not absolute\n"
         "     numbers.\n"
         "\n"
-        "  C. NIELSEN STREAMING MINUTES\n"
-        "       Total minutes ÷ avg minutes per viewer (typically\n"
-        "       episode_runtime × ~4-6 episodes for a 10-episode season)\n"
-        "       = unique viewers.\n"
-        "       e.g. '6.4B minutes ÷ (45 min × 5 eps) = ~28M unique viewers'\n"
+        "  C. NIELSEN STREAMING MINUTES (use this DETERMINISTIC formula —\n"
+        "     do NOT improvise the minutes-per-viewer assumption, it drives\n"
+        "     all the variance in the answer):\n"
+        "\n"
+        "       Step 1: Sum the cited Nielsen minutes across ALL reported weeks.\n"
+        "               Do NOT extrapolate past the cited window unless you have\n"
+        "               a specific later-week Nielsen number; if you do, cite it.\n"
+        "\n"
+        "       Step 2: Compute season runtime = episode_count × runtime_per_ep.\n"
+        "               If runtime_per_ep is unknown, use these defaults:\n"
+        "                 • Half-hour adult animation: 22 min\n"
+        "                 • Half-hour live-action sitcom:     22 min\n"
+        "                 • One-hour drama:                    50 min\n"
+        "                 • One-hour reality:                  42 min\n"
+        "                 • Limited-series prestige:           55 min\n"
+        "\n"
+        "       Step 3: Compute avg_minutes_per_viewer using the FIXED\n"
+        "               completion_rate for the cadence:\n"
+        "                 • Binge release (all episodes drop together):\n"
+        "                       completion_rate = 0.85\n"
+        "                       (binge viewers typically finish most of season)\n"
+        "                 • Weekly release:\n"
+        "                       completion_rate = 0.65\n"
+        "                       (more drop-off; later episodes have smaller audience)\n"
+        "                 • Mixed/2x-weekly:\n"
+        "                       completion_rate = 0.75\n"
+        "               Then: avg_min_per_viewer = season_runtime × completion_rate\n"
+        "\n"
+        "       Step 4: reach_us_estimate = total_minutes / avg_min_per_viewer\n"
+        "               reach_us_lower    = total_minutes / (season_runtime × 0.95)\n"
+        "                                   (lower bound assumes near-complete watch)\n"
+        "               reach_us_upper    = total_minutes / (season_runtime × 0.50)\n"
+        "                                   (upper bound assumes light sampling)\n"
+        "\n"
+        "       Example (KoTH reboot, 10 eps × 22 min = 220 min, binge):\n"
+        "         2.913B min ÷ (220 × 0.85 = 187 min) = 15.6M unique viewers\n"
+        "         lower = 2.913B / (220 × 0.95 = 209) = 13.9M\n"
+        "         upper = 2.913B / (220 × 0.50 = 110) = 26.5M\n"
         "\n"
         "  D. BROADCAST RATINGS → STREAMING DERIVATION (use this for\n"
         "     Fox/ABC/CBS/NBC shows where Hulu/Paramount+/Peacock is the\n"
@@ -5579,8 +5612,17 @@ def _research_show_externally_with_claude(
         f'                        "primetime_comparable" | "null_no_data",\n'
         f'  "reach_us_estimate":  <int unique US viewers for the season; only null if\n'
         f'                         reach_method = null_no_data>,\n'
-        f'  "reach_us_lower":     <int conservative bound>,\n'
-        f'  "reach_us_upper":     <int aggressive bound>,\n'
+        f'  "reach_us_lower":     <int defensible CONSERVATIVE bound — this is\n'
+        f'                         the number that will appear as the HEADLINE\n'
+        f'                         reach in our output, so make it a number\n'
+        f'                         you would stand behind under tough questioning.\n'
+        f'                         Should be the LOWER end of what the cited evidence\n'
+        f'                         credibly supports, NOT a fabricated floor. Roughly\n'
+        f'                         70-90% of reach_us_estimate for high-conf shows,\n'
+        f'                         55-75% for medium-conf>,\n'
+        f'  "reach_us_upper":     <int aggressive bound — the highest number a\n'
+        f'                         streaming-industry analyst could justify from\n'
+        f'                         the evidence>,\n'
         f'  "reach_confidence":   "high" | "medium" | "low",\n'
         f'  "reach_sources":      ["<src 1>", "<src 2>", "<src 3+>"],\n'
         f'  "reach_reasoning":    "<3-5 sentences SHOWING THE MATH: cite specific\n'
@@ -5953,17 +5995,41 @@ def _build_synthetic_panel(config: dict) -> dict:
     jitter = (int(seed[:8], 16) % 1000 - 500) / 10000.0   # ±5%
 
     # Reach: research first, priors fallback (with Claude validation pass on priors)
+    #
+    # Conservative-headline policy (per product decision 2026-06-03): the
+    # headline reach is the LOWER bound of Claude's bracket, not the point
+    # estimate. Rationale: Claude's "avg minutes per unique viewer" assumption
+    # is non-deterministic and drives multi-x swings between runs (e.g. KoTH
+    # reboot returned 8.3M one run and 19.4M the next from identical Nielsen
+    # sources). Anchoring on the conservative bound:
+    #   • Reduces run-to-run variance
+    #   • Survives "but Google says 4.4M views" pushback
+    #   • Lower bound is the figure Claude is most defensible on
+    # The full bracket [lower, estimate, upper] is still persisted in the
+    # *.research.json audit file so anyone can see the room above.
     reach_source = 'priors'
     if (research
             and research.get('reach_us_estimate')
             and research.get('reach_confidence') in ('high', 'medium')):
         try:
-            reach_us = int(research['reach_us_estimate'])
-            reach_us = int(reach_us * (1 + jitter * 0.4))  # smaller jitter for research numbers
+            est   = int(research.get('reach_us_estimate') or 0)
+            lower = int(research.get('reach_us_lower') or 0)
+            upper = int(research.get('reach_us_upper') or 0)
+            # Use the lower bound when Claude actually provided one. Fall
+            # back to ~75% of the point estimate (a rough lower-quartile
+            # proxy) when only the estimate is available.
+            if lower > 0 and lower < est:
+                headline = lower
+                anchor_label = 'lower-bound'
+            else:
+                headline = int(est * 0.75)
+                anchor_label = 'estimate×0.75 (no lower bound returned)'
+            reach_us = int(headline * (1 + jitter * 0.4))  # smaller jitter for research numbers
             reach_source = 'claude_external_research'
-            print(f"   🎯 Reach from external research: {reach_us:,} US "
-                  f"({research.get('reach_confidence')} confidence, "
-                  f"{len(research.get('reach_sources') or [])} sources)")
+            print(f"   🎯 Reach (conservative {anchor_label}): {reach_us:,} US")
+            print(f"      Claude bracket:  lower={lower:,}  est={est:,}  upper={upper:,}")
+            print(f"      Confidence:      {research.get('reach_confidence')}  "
+                  f"({len(research.get('reach_sources') or [])} sources cited)")
         except (TypeError, ValueError):
             reach_us = int(base_us * genre_mult * cadence_mult * ep_mult * (1 + jitter))
     else:
@@ -6677,6 +6743,24 @@ def run_synthetic_attribution(config: dict) -> dict:
     if output_path is None:
         print("⚠️  Could not locate output CSV")
         return {"output_path": None}
+
+    # Persist the full external-research dict alongside the CSV so the user
+    # can audit Claude's exact reasoning, sources, and derivation math. This
+    # is the "show your work" trail — the headline reach number in the CSV
+    # is only as defensible as the math in this file.
+    try:
+        if research:
+            research_path = output_path.with_suffix('.research.json')
+            with open(research_path, 'w') as f:
+                json.dump({
+                    'show':       p.get('project_name'),
+                    'platform':   p.get('platform_name'),
+                    'reach_source': panel.get('reach_source'),
+                    'research':   research,
+                }, f, indent=2, default=str)
+            print(f"   📎 Research audit trail: {research_path}")
+    except Exception as e:
+        print(f"   ⚠️  Failed to write research sidecar: {e}")
 
     # Optionally upload to S3 and write metadata
     s3_key = None

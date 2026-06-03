@@ -19593,6 +19593,40 @@
                     <div id="jiqFunnelNotes" style="font-size: 0.72rem; color: var(--text-secondary); margin-bottom: 0.5rem;"></div>
                 </div>
 
+                <!-- ROW 1: Inception (how visitors arrived) + Top Search Terms (what they searched) -->
+                <div id="jiqSiteFunnelDetailsTop" style="display: none; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 1rem; margin-bottom: 1rem;">
+                    <div class="card" id="jiqInceptionCard" style="padding: 1rem; display: none;">
+                        <div style="display:flex;justify-content:space-between;align-items:baseline;gap:0.5rem;">
+                            <h3 style="margin: 0 0 0.25rem;">🚪 Inception — how visitors arrived</h3>
+                            <div id="jiqInceptionViewBtns" data-card="inception" class="jiqViewToggle" style="display:flex;gap:4px;"></div>
+                        </div>
+                        <div style="font-size: 0.72rem; color: var(--text-secondary); margin-bottom: 0.5rem;">Inbound referrer mix for visitors landing on the target site.</div>
+                        <div id="jiqInceptionChart" style="overflow:hidden;"></div>
+                        <div id="jiqInceptionTable" style="overflow-x: auto; display:none;"></div>
+                    </div>
+                    <div class="card" id="jiqSearchTermsCard" style="padding: 1rem; display: none;">
+                        <div style="display:flex;justify-content:space-between;align-items:baseline;gap:0.5rem;">
+                            <h3 style="margin: 0 0 0.25rem;">🔎 Top Search Terms — what they searched to find the brand</h3>
+                        </div>
+                        <div style="font-size: 0.72rem; color: var(--text-secondary); margin-bottom: 0.6rem;">Search queries + hashtags driving inbound discovery, by platform.</div>
+                        <div id="jiqSearchTermsBody"></div>
+                    </div>
+                </div>
+
+                <!-- ROW 2: Companion Behaviors — full width horizontal timeline -->
+                <div id="jiqSiteFunnelDetailsCompanion" style="display: none; margin-bottom: 1rem;">
+                    <div class="card" id="jiqCompanionCard" style="padding: 1rem; display: none;">
+                        <div style="display:flex;justify-content:space-between;align-items:baseline;gap:0.5rem;">
+                            <h3 style="margin: 0 0 0.25rem;">🍽️ Companion Behaviors — adjacent verticals timeline</h3>
+                            <div id="jiqCompanionViewBtns" data-card="companion" class="jiqViewToggle" style="display:flex;gap:4px;"></div>
+                        </div>
+                        <div id="jiqCompanionSubtitle" style="font-size: 0.72rem; color: var(--text-secondary); margin-bottom: 0.5rem;">Other verticals the visitor engaged with around their purchase. Bubble size = share of visitors; horizontal position = typical time relative to purchase.</div>
+                        <div id="jiqCompanionChart" style="overflow:hidden;"></div>
+                        <div id="jiqCompanionTable" style="overflow-x: auto; display:none;"></div>
+                    </div>
+                </div>
+
+                <!-- ROW 3: Where Switchers Ultimately Bought + Steps Switchers Take In Between -->
                 <div id="jiqSiteFunnelDetails" style="display: none; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 1rem; margin-bottom: 1rem;">
                     <div class="card" id="jiqSwitchedCard" style="padding: 1rem; display: none;">
                         <div style="display:flex;justify-content:space-between;align-items:baseline;gap:0.5rem;">
@@ -19611,27 +19645,6 @@
                         <div style="font-size: 0.72rem; color: var(--text-secondary); margin-bottom: 0.5rem;">Typical detours between leaving the site and converting elsewhere (Google reviews, Rotten Tomatoes, price-comparing chains, etc.).</div>
                         <div id="jiqInterstepChart" style="overflow:hidden;"></div>
                         <div id="jiqInterstepTable" style="overflow-x: auto; display:none;"></div>
-                    </div>
-                </div>
-
-                <div id="jiqSiteFunnelDetails2" style="display: none; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 1rem; margin-bottom: 1rem;">
-                    <div class="card" id="jiqInceptionCard" style="padding: 1rem; display: none;">
-                        <div style="display:flex;justify-content:space-between;align-items:baseline;gap:0.5rem;">
-                            <h3 style="margin: 0 0 0.25rem;">🚪 Inception — how visitors arrived</h3>
-                            <div id="jiqInceptionViewBtns" data-card="inception" class="jiqViewToggle" style="display:flex;gap:4px;"></div>
-                        </div>
-                        <div style="font-size: 0.72rem; color: var(--text-secondary); margin-bottom: 0.5rem;">Inbound referrer mix for visitors landing on the target site.</div>
-                        <div id="jiqInceptionChart" style="overflow:hidden;"></div>
-                        <div id="jiqInceptionTable" style="overflow-x: auto; display:none;"></div>
-                    </div>
-                    <div class="card" id="jiqCompanionCard" style="padding: 1rem; display: none;">
-                        <div style="display:flex;justify-content:space-between;align-items:baseline;gap:0.5rem;">
-                            <h3 style="margin: 0 0 0.25rem;">🍽️ Companion Behaviors — adjacent verticals</h3>
-                            <div id="jiqCompanionViewBtns" data-card="companion" class="jiqViewToggle" style="display:flex;gap:4px;"></div>
-                        </div>
-                        <div style="font-size: 0.72rem; color: var(--text-secondary); margin-bottom: 0.5rem;">Other verticals the visitor planned for around the visit (dinner, parking, hotel, etc.). Bubble size = share of visitors; placement = typical time relative to showtime.</div>
-                        <div id="jiqCompanionChart" style="overflow:hidden;"></div>
-                        <div id="jiqCompanionTable" style="overflow-x: auto; display:none;"></div>
                     </div>
                 </div>
 
@@ -30019,14 +30032,16 @@
         // Block is hidden entirely when site_funnel isn't on the payload.
         // ────────────────────────────────────────────────────────────────
         function renderJourneyIqSiteFunnel(funnel) {
-            var card  = document.getElementById('jiqSiteFunnelCard');
-            var det1  = document.getElementById('jiqSiteFunnelDetails');
-            var det2  = document.getElementById('jiqSiteFunnelDetails2');
+            var card    = document.getElementById('jiqSiteFunnelCard');
+            var rowTop  = document.getElementById('jiqSiteFunnelDetailsTop');     // Inception + Search Terms
+            var rowComp = document.getElementById('jiqSiteFunnelDetailsCompanion'); // Companion (full-width)
+            var det1    = document.getElementById('jiqSiteFunnelDetails');        // Switched + Interstep
             if (!card) return;
             if (!funnel || !funnel.funnel_split) {
                 card.style.display = 'none';
-                if (det1) det1.style.display = 'none';
-                if (det2) det2.style.display = 'none';
+                if (rowTop)  rowTop.style.display  = 'none';
+                if (rowComp) rowComp.style.display = 'none';
+                if (det1)    det1.style.display    = 'none';
                 return;
             }
             card.style.display = '';
@@ -30134,7 +30149,7 @@
 
             if (det1) det1.style.display = (dests.length || inters.length) ? 'grid' : 'none';
 
-            // 4) Inception Referrers
+            // 4) Inception Referrers (now in top row)
             var incEl = document.getElementById('jiqInceptionTable');
             var incChartEl = document.getElementById('jiqInceptionChart');
             var incCard = document.getElementById('jiqInceptionCard');
@@ -30150,7 +30165,22 @@
             }
             if (incCard) incCard.style.display = incs.length ? '' : 'none';
 
-            // 5) Companion Behaviors
+            // 4b) Top Search Terms — Google/Bing + TikTok/Instagram queries
+            // that drove inbound. Sits next to Inception in the top row.
+            var stCard = document.getElementById('jiqSearchTermsCard');
+            var stBody = document.getElementById('jiqSearchTermsBody');
+            var searchTerms = funnel.top_search_terms
+                          || (window._jiqCurrentRun || {}).top_search_terms
+                          || null;
+            var hasSearchTerms = searchTerms && Object.keys(searchTerms).some(function(k) {
+                return Array.isArray(searchTerms[k]) && searchTerms[k].length > 0;
+            });
+            if (stBody) stBody.innerHTML = hasSearchTerms ? _jiqRenderSearchTermsCard(searchTerms) : '';
+            if (stCard) stCard.style.display = hasSearchTerms ? '' : 'none';
+
+            if (rowTop) rowTop.style.display = (incs.length || hasSearchTerms) ? 'grid' : 'none';
+
+            // 5) Companion Behaviors (now full-width row of its own)
             var compEl = document.getElementById('jiqCompanionTable');
             var compChartEl = document.getElementById('jiqCompanionChart');
             var compCard = document.getElementById('jiqCompanionCard');
@@ -30174,10 +30204,10 @@
                 ]);
             }
             if (compCard) compCard.style.display = comps.length ? '' : 'none';
+            if (rowComp) rowComp.style.display = comps.length ? '' : 'none';
 
-            if (det2) det2.style.display = (incs.length || comps.length) ? 'grid' : 'none';
-
-            // Sync view toggle buttons + visibility for all 4 cards
+            // Sync view toggle buttons + visibility for all 4 toggleable cards.
+            // (Search Terms card is a single panel, no chart/list toggle.)
             ['switched', 'interstep', 'inception', 'companion'].forEach(_jiqSyncSiteFunnelView);
         }
 
@@ -30578,24 +30608,92 @@
             else                 center = -center;  // default "before" if ambiguous
             return { center: center, span: span };
         }
+        // ───── Top Search Terms card renderer ─────
+        // Renders a 2x2 grid of platform panels (Google + Bing organic /
+        // Google + Bing paid / TikTok / Instagram). Each panel shows the
+        // top 5 search queries or hashtags with a metric (monthly volume,
+        // hashtag view-count, etc.).
+        function _jiqRenderSearchTermsCard(st) {
+            if (!st) return '';
+
+            var PLATFORMS = [
+                {key: 'google_bing_organic', label: 'Google + Bing — Organic search',
+                 icon: '🔵', color: '#3b82f6',
+                 metric: 'volume_monthly_us', metricLabel: 'mo. vol',
+                 metricFmt: function(v) { return v >= 1000 ? (v/1000).toFixed(0)+'K' : v+''; }},
+                {key: 'google_bing_paid', label: 'Google + Bing — Paid search',
+                 icon: '💰', color: '#ef4444',
+                 metric: 'volume_monthly_us', metricLabel: 'mo. vol',
+                 metricFmt: function(v) { return v >= 1000 ? (v/1000).toFixed(0)+'K' : v+''; }},
+                {key: 'tiktok_search', label: 'TikTok — Search + hashtags',
+                 icon: '🎵', color: '#ec4899',
+                 metric: 'view_estimate', metricLabel: 'views',
+                 metricFmt: function(v) {
+                    if (v >= 1e9) return (v/1e9).toFixed(1).replace(/\.0$/,'')+'B';
+                    if (v >= 1e6) return (v/1e6).toFixed(1).replace(/\.0$/,'')+'M';
+                    if (v >= 1e3) return (v/1e3).toFixed(0)+'K';
+                    return v+'';
+                 }},
+                {key: 'instagram_search', label: 'Instagram — Search + hashtags',
+                 icon: '📸', color: '#d946ef',
+                 metric: 'view_estimate', metricLabel: 'posts',
+                 metricFmt: function(v) {
+                    if (v >= 1e6) return (v/1e6).toFixed(1).replace(/\.0$/,'')+'M';
+                    if (v >= 1e3) return (v/1e3).toFixed(0)+'K';
+                    return v+'';
+                 }},
+            ];
+
+            function _renderPanel(plat) {
+                var rows = st[plat.key] || [];
+                if (!rows.length) return '';
+                var rowsHtml = rows.slice(0, 6).map(function(r, i) {
+                    var term = r.term || r.query || r.hashtag || '—';
+                    var metric = r[plat.metric];
+                    var metricStr = (metric != null) ? plat.metricFmt(+metric) : '';
+                    var driver = r.driver || r.intent || r.note || '';
+                    return '<tr style="border-bottom:1px solid var(--border-color);">'
+                         + '<td style="padding:5px 6px;color:var(--text-secondary);font-weight:600;width:18px;text-align:right;">' + (i+1) + '</td>'
+                         + '<td style="padding:5px 6px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11.5px;color:var(--text-primary);">'
+                         +   _jiqEsc(term)
+                         +   (driver ? '<div style="font-family:inherit;font-size:10.5px;color:var(--text-secondary);font-style:italic;margin-top:2px;">' + _jiqEsc(driver) + '</div>' : '')
+                         + '</td>'
+                         + '<td style="padding:5px 6px;text-align:right;font-weight:700;color:' + plat.color + ';white-space:nowrap;font-size:11.5px;">' + metricStr
+                         +   (metricStr ? ' <span style="font-weight:400;color:var(--text-secondary);font-size:10px;">' + plat.metricLabel + '</span>' : '')
+                         + '</td>'
+                         + '</tr>';
+                }).join('');
+                return '<div style="background:var(--bg-secondary);border:1px solid var(--border-color);border-left:3px solid ' + plat.color + ';border-radius:8px;padding:0.55rem 0.65rem;">'
+                     + '<div style="font-size:11px;font-weight:700;color:var(--text-primary);margin-bottom:4px;">'
+                     +   plat.icon + ' ' + plat.label
+                     + '</div>'
+                     + '<table style="width:100%;border-collapse:collapse;">'
+                     +   '<tbody>' + rowsHtml + '</tbody>'
+                     + '</table>'
+                     + '</div>';
+            }
+
+            var panels = PLATFORMS.map(_renderPanel).filter(Boolean).join('');
+            return '<div style="display:grid;grid-template-columns:1fr 1fr;gap:0.55rem;">' + panels + '</div>';
+        }
+
         function _jiqRenderCompanionTimeline(comps) {
             if (!comps || !comps.length) return '<div style="font-size:0.8rem;color:var(--text-secondary);padding:0.5rem 0;">No data.</div>';
-            // VERTICAL TIMELINE — bubbles on a vertical spine, full text
-            // labels to the right. Y-axis is time relative to either
-            // SHOWTIME (movie payloads, hours) or PURCHASE (retail
-            // payloads, days), auto-detected from the data.
+            // HORIZONTAL TIMELINE — bubbles laid out left→right on a
+            // horizontal time axis, anchored at PURCHASE (retail) or
+            // SHOWTIME (movie). The card spans the full row width;
+            // when multiple verticals fall at the same time-point we
+            // stagger them into "lanes" above + below the axis so the
+            // bubbles never overlap.
 
             // ── Scale detection ──────────────────────────────────────
-            // If ≥30% of window strings mention days/weeks, treat the
-            // whole chart as retail (days around purchase). Otherwise
-            // assume movie-style hours around showtime.
             var dayMatches = comps.filter(function(c) {
                 return /\b(day|days|week|weeks)\b/i.test(c.typical_window || '');
             }).length;
             var scale = (dayMatches >= Math.max(2, comps.length * 0.3)) ? 'days' : 'hours';
 
             // ── Parse windows in the chosen scale ────────────────────
-            var rows = comps.slice(0, 10).map(function(c) {
+            var rows = comps.slice(0, 14).map(function(c) {
                 var w = _jiqParseCompanionWindow(c.typical_window, scale);
                 return {
                     vertical: c.vertical || '—',
@@ -30612,130 +30710,169 @@
             if (maxPct <= 0) maxPct = 1;
 
             // ── Axis configuration per scale ─────────────────────────
-            // yMin/yMax are computed from actual data so the bubbles
-            // spread out instead of crashing into the clamp.
             var dataMin = Math.min.apply(null, rows.map(function(r) { return r.center; }));
             var dataMax = Math.max.apply(null, rows.map(function(r) { return r.center; }));
             var axisConfig;
             if (scale === 'days') {
                 axisConfig = {
-                    ticks: [-30, -14, -7, -3, -1, 0, 1, 3, 7, 14, 30],
+                    ticks: [-30, -21, -14, -7, -3, -1, 0, 1, 3, 7, 14, 21, 30],
                     labelFor: function(t) {
-                        if (t === 0)  return '🛒 PURCHASE';
-                        if (t === -1) return '1 day before';
-                        if (t ===  1) return '1 day after';
-                        if (t === -7) return '1 week before';
-                        if (t ===  7) return '1 week after';
-                        if (t === -14)return '2 weeks before';
-                        if (t === 14) return '2 weeks after';
-                        if (t < 0)    return Math.abs(t) + ' days before';
-                        return t + ' days after';
+                        if (t === 0)   return '🛒 PURCHASE';
+                        if (t === -1)  return '1 day before';
+                        if (t ===  1)  return '1 day after';
+                        if (t === -7)  return '1 week before';
+                        if (t ===  7)  return '1 week after';
+                        if (t === -14) return '2 weeks before';
+                        if (t === 14)  return '2 weeks after';
+                        if (t === -21) return '3 weeks before';
+                        if (t === 21)  return '3 weeks after';
+                        if (t === -30) return '1 month before';
+                        if (t === 30)  return '1 month after';
+                        if (t < 0)     return Math.abs(t) + 'd before';
+                        return t + 'd after';
                     },
-                    yMin: Math.min(-7,  Math.floor(dataMin) - 2),
-                    yMax: Math.max( 7,  Math.ceil(dataMax)  + 2),
+                    xMin: Math.min(-7,  Math.floor(dataMin) - 1),
+                    xMax: Math.max( 7,  Math.ceil(dataMax)  + 1),
                 };
             } else {
                 axisConfig = {
-                    ticks: [-3, -2, -1, 0, 1, 2],
+                    ticks: [-6, -4, -3, -2, -1, 0, 1, 2, 4],
                     labelFor: function(t) {
                         if (t === 0) return '🎬 SHOWTIME';
                         if (t < 0)   return Math.abs(t) + 'h before';
                         return t + 'h after';
                     },
-                    yMin: Math.min(-4,  Math.floor(dataMin) - 0.5),
-                    yMax: Math.max(2.5, Math.ceil(dataMax)  + 0.5),
+                    xMin: Math.min(-6, Math.floor(dataMin) - 0.5),
+                    xMax: Math.max( 4, Math.ceil(dataMax)  + 0.5),
                 };
             }
 
-            var W = 700;
-            var padT = 40, padB = 30, padL = 130, padR = 40;
-            var rowGap = 56;
-            var H = Math.max(440, padT + padB + rows.length * rowGap);
-            var axisX = padL;
-            var labelX0 = axisX + 56;
+            // ── SVG canvas (full-width: ~1200px viewBox, scales fluidly) ──
+            var W = 1200;
+            var padT = 40, padB = 60, padL = 50, padR = 50;
+            var axisY;  // vertical center where the time axis lives
+            var H = 360;
+            axisY = H / 2 + 4;
 
-            var yMin = axisConfig.yMin, yMax = axisConfig.yMax;
-            function yFor(h) {
-                var clamped = Math.max(yMin, Math.min(yMax, h));
-                return padT + ((clamped - yMin) / (yMax - yMin)) * (H - padT - padB);
+            var xMin = axisConfig.xMin, xMax = axisConfig.xMax;
+            function xFor(t) {
+                var clamped = Math.max(xMin, Math.min(xMax, t));
+                return padL + ((clamped - xMin) / (xMax - xMin)) * (W - padL - padR);
             }
 
-            // Place bubbles on the spine, then stagger any that overlap
-            // vertically by nudging them down so each gets a clean row.
-            rows.forEach(function(e, i) {
-                e.x = axisX;
-                e.r = Math.max(14, Math.min(30, 14 + (e.pct / maxPct) * 18));
-                e.y = yFor(e.center);
-                if (i > 0) {
-                    var prev = rows[i - 1];
-                    var minGap = prev.r + e.r + 12;
-                    if ((e.y - prev.y) < minGap) {
-                        e.y = prev.y + minGap;
-                    }
-                }
-            });
-            // Hard clamp in case dense data pushes the last bubble past the
-            // bottom of the SVG; grow H if needed so nothing gets cropped.
-            var lastY = rows.length ? rows[rows.length - 1].y + rows[rows.length - 1].r + 16 : 0;
-            if (lastY > H - padB) H = lastY + padB;
+            // ── Bubble sizing ────────────────────────────────────────
             rows.forEach(function(e) {
-                e.y = Math.max(padT + e.r + 4,
-                       Math.min(H - padB - e.r - 4, e.y));
+                e.r = Math.max(16, Math.min(38, 16 + (e.pct / maxPct) * 24));
+                e.cx = xFor(e.center);
             });
+
+            // ── Lane assignment (alternating above/below the axis) ──
+            // For each bubble in time-sorted order, find the first lane
+            // (0=just above, 1=just below, 2=2 above, 3=2 below, …) where
+            // its horizontal extent doesn't collide with anything else in
+            // that lane.
+            var lanes = []; // each lane is an array of {x0, x1}
+            function laneOffsetY(laneIdx) {
+                // lane 0 → just above axis, lane 1 → just below, alternating
+                var layer = Math.floor(laneIdx / 2) + 1;
+                var side  = (laneIdx % 2 === 0) ? -1 : 1;
+                return side * layer * 78;  // 78 px between lane centers
+            }
+            rows.forEach(function(e) {
+                var halfW = e.r + 100;  // label-text room on the right
+                var laneIdx = 0;
+                while (true) {
+                    var lane = lanes[laneIdx] = lanes[laneIdx] || [];
+                    var fits = lane.every(function(occ) {
+                        return (e.cx + halfW < occ.x0 - 8)
+                            || (e.cx - halfW > occ.x1 + 8);
+                    });
+                    if (fits) {
+                        lane.push({ x0: e.cx - halfW, x1: e.cx + halfW });
+                        e.laneIdx = laneIdx;
+                        break;
+                    }
+                    laneIdx++;
+                    if (laneIdx > 20) { e.laneIdx = laneIdx; break; }
+                }
+                e.cy = axisY + laneOffsetY(e.laneIdx);
+            });
+
+            // Grow SVG height if extreme stacking demands it
+            var maxAbsY = rows.reduce(function(m, e) {
+                return Math.max(m, Math.abs(e.cy - axisY) + e.r + 40);
+            }, 0);
+            var neededH = Math.max(360, axisY - padT, (H - axisY) - padB);
+            if (maxAbsY * 2 + 80 > H) {
+                H = maxAbsY * 2 + 100;
+                axisY = H / 2 + 4;
+                // re-compute cy with the new axisY
+                rows.forEach(function(e) {
+                    e.cy = axisY + laneOffsetY(e.laneIdx);
+                });
+            }
 
             var parts = [];
             parts.push('<rect width="' + W + '" height="' + H + '" fill="transparent"/>');
 
-            // Vertical time axis line
-            parts.push('<line x1="' + axisX + '" y1="' + padT + '" x2="' + axisX + '" y2="' + (H - padB) + '" stroke="var(--border-color)" stroke-width="1"/>');
+            // Horizontal time axis line
+            parts.push('<line x1="' + padL + '" y1="' + axisY + '" x2="' + (W - padR) + '" y2="' + axisY + '" stroke="var(--border-color)" stroke-width="1.5"/>');
 
-            // Time ticks on the LEFT of the axis (text-anchor: end), filtered
-            // to the visible y-range so labels for off-chart ticks don't
-            // bunch up against the bounds.
-            axisConfig.ticks.filter(function(t) { return t >= yMin && t <= yMax; })
+            // Time ticks BELOW the axis (so the labels live below)
+            axisConfig.ticks.filter(function(t) { return t >= xMin && t <= xMax; })
                             .forEach(function(t) {
-                var y = yFor(t);
+                var x = xFor(t);
                 var isAnchor = (t === 0);
-                parts.push('<line x1="' + (axisX - 6) + '" y1="' + y + '" x2="' + (axisX + 6) + '" y2="' + y + '" stroke="var(--border-color)" stroke-width="1"/>');
                 if (isAnchor) {
-                    // Bold horizontal accent line across the chart at the anchor
-                    parts.push('<line x1="' + axisX + '" y1="' + y + '" x2="' + (W - padR) + '" y2="' + y + '" stroke="var(--accent-primary)" stroke-width="2" stroke-dasharray="4,3" opacity="0.55"/>');
-                    parts.push('<text x="' + (axisX - 12) + '" y="' + (y + 4) + '" text-anchor="end" fill="var(--accent-primary)" font-weight="700" font-size="11">' + axisConfig.labelFor(t) + '</text>');
+                    // Bold vertical accent line at the anchor
+                    parts.push('<line x1="' + x + '" y1="' + (padT - 8) + '" x2="' + x + '" y2="' + (H - padB + 8) + '" stroke="var(--accent-primary)" stroke-width="2" stroke-dasharray="4,3" opacity="0.55"/>');
+                    parts.push('<rect x="' + (x - 56) + '" y="' + (H - padB + 14) + '" width="112" height="22" rx="11" fill="var(--accent-primary)"/>');
+                    parts.push('<text x="' + x + '" y="' + (H - padB + 29) + '" text-anchor="middle" fill="#fff" font-weight="700" font-size="11">' + axisConfig.labelFor(t) + '</text>');
                 } else {
-                    parts.push('<text x="' + (axisX - 12) + '" y="' + (y + 4) + '" text-anchor="end" fill="var(--text-secondary)" font-size="11">' + axisConfig.labelFor(t) + '</text>');
+                    parts.push('<line x1="' + x + '" y1="' + (axisY - 5) + '" x2="' + x + '" y2="' + (axisY + 5) + '" stroke="var(--border-color)" stroke-width="1"/>');
+                    parts.push('<text x="' + x + '" y="' + (H - padB + 22) + '" text-anchor="middle" fill="var(--text-secondary)" font-size="10.5">' + axisConfig.labelFor(t) + '</text>');
                 }
             });
 
-            // Bubbles + horizontal labels
+            // Span bars under each bubble (showing the time-window range)
             rows.forEach(function(e) {
-                // Span line showing the time-window range (vertical now)
                 if (e.span > 0) {
-                    var y0 = yFor(e.center - e.span / 2);
-                    var y1 = yFor(e.center + e.span / 2);
-                    parts.push('<line x1="' + e.x + '" y1="' + y0 + '" x2="' + e.x + '" y2="' + y1 + '" stroke="' + e.color + '" stroke-width="2" opacity="0.35"/>');
+                    var x0 = xFor(e.center - e.span / 2);
+                    var x1 = xFor(e.center + e.span / 2);
+                    parts.push('<line x1="' + x0 + '" y1="' + axisY + '" x2="' + x1 + '" y2="' + axisY + '" stroke="' + e.color + '" stroke-width="3" opacity="0.35" stroke-linecap="round"/>');
                 }
-                // Connector line from bubble to its label (subtle)
-                parts.push('<line x1="' + (e.x + e.r + 2) + '" y1="' + e.y + '" x2="' + (labelX0 - 4) + '" y2="' + e.y + '" stroke="' + e.color + '" stroke-width="1" opacity="0.4"/>');
-                // Bubble + % inside
+            });
+
+            // Connectors from axis to each bubble
+            rows.forEach(function(e) {
+                parts.push('<line x1="' + e.cx + '" y1="' + axisY + '" x2="' + e.cx + '" y2="' + e.cy + '" stroke="' + e.color + '" stroke-width="1" opacity="0.4"/>');
+            });
+
+            // Bubbles + labels
+            rows.forEach(function(e) {
+                var labelAbove = (e.cy < axisY);
+                var labelY0 = labelAbove ? (e.cy - e.r - 16) : (e.cy + e.r + 14);
+                var labelY1 = labelAbove ? (e.cy - e.r - 4)  : (e.cy + e.r + 26);
+                var cleanLabel = e.vertical.split('(')[0].trim();
+
                 parts.push('<g>'
-                     + '<circle cx="' + e.x + '" cy="' + e.y + '" r="' + e.r + '" fill="' + e.color + '" opacity="0.9" stroke="' + e.color + '" stroke-width="2"/>'
-                     + '<text x="' + e.x + '" y="' + (e.y + 4) + '" text-anchor="middle" fill="#fff" font-weight="700" font-size="' + Math.max(10, e.r / 2.2) + '">' + e.pct.toFixed(0) + '%</text>'
+                     + '<circle cx="' + e.cx + '" cy="' + e.cy + '" r="' + e.r + '" fill="' + e.color + '" opacity="0.92" stroke="#fff" stroke-width="2"/>'
+                     + '<text x="' + e.cx + '" y="' + (e.cy + 4) + '" text-anchor="middle" fill="#fff" font-weight="700" font-size="' + Math.max(11, e.r / 2.1) + '">' + e.pct.toFixed(0) + '%</text>'
                      + '<title>' + _jiqEsc(e.vertical + ' — ' + e.pct.toFixed(1) + '% — ' + e.typical_window) + (e.top_sites.length ? ' — ' + _jiqEsc(e.top_sites.join(', ')) : '') + '</title>'
                      + '</g>');
-                // Full label to the right (no truncation needed, plenty of room)
-                var cleanLabel = e.vertical.split('(')[0].trim();
-                parts.push('<text x="' + labelX0 + '" y="' + (e.y - 2) + '" text-anchor="start" fill="var(--text-primary)" font-weight="600" font-size="12">' + _jiqEsc(cleanLabel) + '</text>');
+
+                parts.push('<text x="' + e.cx + '" y="' + labelY0 + '" text-anchor="middle" fill="var(--text-primary)" font-weight="600" font-size="11.5">' + _jiqEsc(cleanLabel) + '</text>');
                 if (e.typical_window) {
-                    parts.push('<text x="' + labelX0 + '" y="' + (e.y + 13) + '" text-anchor="start" fill="var(--text-secondary)" font-size="10">' + _jiqEsc(e.typical_window) + '</text>');
+                    parts.push('<text x="' + e.cx + '" y="' + labelY1 + '" text-anchor="middle" fill="var(--text-secondary)" font-size="10">' + _jiqEsc(e.typical_window) + '</text>');
                 }
             });
 
             var anchorWord = (scale === 'days') ? 'purchase' : 'showtime';
             return '<div style="overflow-x:auto;padding:4px 0;">'
-                 + '<svg width="' + W + '" height="' + H + '" viewBox="0 0 ' + W + ' ' + H + '" style="display:block;max-width:100%;height:auto;">'
+                 + '<svg width="' + W + '" height="' + H + '" viewBox="0 0 ' + W + ' ' + H + '" preserveAspectRatio="xMidYMid meet" style="display:block;width:100%;height:auto;min-width:880px;">'
                  + parts.join('')
                  + '</svg>'
-                 + '<div style="font-size:0.68rem;color:var(--text-secondary);margin-top:4px;text-align:center;">Bubble size = share of visitors · vertical position = typical time relative to ' + anchorWord + ' · hover a bubble for top sites</div>'
+                 + '<div style="font-size:0.7rem;color:var(--text-secondary);margin-top:6px;text-align:center;">Bubble size = share of visitors · horizontal position = typical time relative to ' + anchorWord + ' · vertical lanes are just to keep labels readable · hover for top sites</div>'
                  + '</div>';
         }
 
