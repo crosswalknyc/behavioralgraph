@@ -1043,6 +1043,12 @@ def dejitter_within_cat_4dp_collisions(df, subject, verbose=True,
     bp_col, cs_col, raw_col, proj_col = _detect_cols(df)
     sample_size = _detect_sample_size(df, bp_col, raw_col)
 
+    # Cast cols to object dtype so float assignment works on loaded CSVs
+    df = df.copy()
+    for _c in (bp_col, cs_col, raw_col, proj_col):
+        if _c and _c in df.columns and df[_c].dtype.name not in ('object', 'O'):
+            df[_c] = df[_c].astype(object)
+
     # Per-category state: set of ALL 4dp BP values already in that
     # category (so shifts don't collide with non-colliding rows either).
     cat_used = {}
@@ -1109,6 +1115,187 @@ def dejitter_within_cat_4dp_collisions(df, subject, verbose=True,
     if verbose and fixed:
         print(f"   🎲 dejitter within-cat 4dp collisions: {fixed} row(s) shifted")
     return df, fixed
+
+
+# ============================================================================
+# 4b. Sequential-digit placeholder detector (added 2026-05-30 after Jenna's
+#     May 30 batch escalation). Niche-creator profiles with tiny raw
+#     universes (3-75 panel users) force `mpb-floor` to ask the LLM to
+#     INVENT ~1,400+ MPB brand rows. The LLM, having no real signal for
+#     so many fabricated brands, emits BPs as a rotating set of sequential-
+#     digit decimals (5.6789, 6.7890, 7.8901, 8.9012, 9.0123, 4.3210,
+#     5.4321, 6.5432, 7.6543, 8.7654, 9.8765, 10.9876, 1.2345, 11.2345...)
+#     — each value reused 20-100 times in a single category.
+#
+#     The existing `dejitter_within_cat_4dp_collisions` would catch the
+#     COLLISIONS but it only runs ONCE, BEFORE mpb-floor injects the LLM
+#     brands. By the time the placeholders exist, the dejitter sweep is
+#     already done.
+#
+#     This detector matches the PLACEHOLDER PATTERN directly (independent
+#     of collision counts), so even individual occurrences are caught.
+#     It can be run at any pipeline stage and is idempotent.
+# ============================================================================
+
+def _is_sequential_digit_bp(bp_value) -> bool:
+    """Return True if the BP's FRACTIONAL part begins with 4 digits that
+    form a strict monotonic sequence (ascending or descending in base 10
+    with mod-10 wrap).
+
+    This is the LLM's actual placeholder shape — it ALWAYS emits 4
+    fractional digits forming a strict sequence:
+      X.1234, X.2345, X.3456, X.4567, X.5678, X.6789, X.7890, X.8901,
+      X.9012, X.0123  (ascending)
+      X.9876, X.8765, X.7654, X.6543, X.5432, X.4321, X.3210, X.2109,
+      X.1098, X.0987  (descending)
+
+    Caught examples: 5.6789, 6.7890, 7.8901, 9.8765, 11.2345, 13.4567,
+    1.2345, 4.3210, 5.4321, 22.3456, 100.1234
+
+    NOT caught (false-positive-safe):
+      * 12.34, 67.89, 23.45 — only 2 fractional digits
+      * 0.5080, 0.5084 — 4 fractional digits but not sequential
+      * 1.2300 — fraction "2300" breaks sequence after 3
+      * 10.5680 — fraction "5680" breaks sequence after 3
+
+    False-positive rate on real data: only 20 of 10,000 possible 4-digit
+    fractions form a strict sequence (~0.2%). When one does land on real
+    data, dejitter rewrites it into the natural tail (0.30-1.20%) which
+    is invisible to dashboard consumers.
+
+    Accepts either a float OR a string like "5.6789" / "5.6789%" — the
+    string path preserves trailing zeros that float conversion drops,
+    so "6.7890" is still detected.
+    """
+    if isinstance(bp_value, str):
+        s = bp_value.strip().rstrip('%').strip()
+        try:
+            v_check = float(s)
+        except (TypeError, ValueError):
+            return False
+    else:
+        try:
+            v_check = float(bp_value)
+        except (TypeError, ValueError):
+            return False
+        s = f"{v_check:.4f}"
+    if v_check <= 0 or v_check >= 100:
+        return False
+    if '.' not in s:
+        return False
+    _, frac = s.rsplit('.', 1)
+    if len(frac) < 4:
+        return False
+    # Take the first 4 fractional digits (LLM emits 4dp precision)
+    digits = [int(c) for c in frac[:4]]
+    asc = all((digits[i+1] - digits[i]) % 10 == 1 for i in range(3))
+    desc = all((digits[i] - digits[i+1]) % 10 == 1 for i in range(3))
+    return asc or desc
+
+
+def detect_placeholder_bps(df, bp_col='Brand Penetration (Row)'):
+    """Return a boolean mask indexed like df marking sequential-digit
+    placeholder BPs. Read-only — used by gates + the dejitter pass.
+
+    Uses the STRING form of each cell when available — preserves trailing
+    zeros that float conversion would drop (e.g. '6.7890' would otherwise
+    become 6.789 and miss the LLM's 4-decimal placeholder pattern).
+    """
+    if df is None or len(df) == 0 or bp_col not in df.columns:
+        return pd.Series([], dtype=bool)
+    col = df[bp_col]
+    # If the column stores strings (typical at save time, e.g. "5.6789%"),
+    # detection runs against the literal digits. If it stores numerics,
+    # the detector formats to 4dp internally.
+    return col.apply(_is_sequential_digit_bp)
+
+
+def dejitter_sequential_placeholders(df, subject, verbose=True,
+                                     drop_below_universe=None,
+                                     min_universe_to_keep=50):
+    """Rewrite (or optionally drop) BPs that match the sequential-digit
+    placeholder pattern.
+
+    Rationale: the LLM has no real signal for the brand — pretending
+    we do by jittering the placeholder to a plausible value is worse
+    than dropping the row when the universe is small. Behavior:
+
+      * If `drop_below_universe` is provided AND raw_universe < that,
+        DROP every placeholder row (it was a fabricated brand with no
+        real backing — better absent than dishonest).
+      * Otherwise rewrite the BP to a deterministic small jittered
+        value in [0.3, 1.2] %, hashed off (subject, category, brand)
+        so the value is reproducible. This sits in the natural tail
+        and is invisible to dashboard consumers.
+
+    Recomputes Raw + Projection. Idempotent.
+    """
+    if df is None or len(df) == 0:
+        return df, 0
+    bp_col, cs_col, raw_col, proj_col = _detect_cols(df)
+    sample_size = _detect_sample_size(df, bp_col, raw_col)
+
+    # Cast BP/CS/Raw/Proj cols to object dtype so float assignment works
+    # even when the loaded CSV stores them as strings ("5.6789%").
+    df = df.copy()
+    for _c in (bp_col, cs_col, raw_col, proj_col):
+        if _c and _c in df.columns and df[_c].dtype.name not in ('object', 'O'):
+            df[_c] = df[_c].astype(object)
+
+    placeholder_mask = detect_placeholder_bps(df, bp_col)
+    if not placeholder_mask.any():
+        return df, 0
+
+    # Decide drop vs rewrite based on raw universe
+    drop_mode = (
+        drop_below_universe is not None
+        and sample_size is not None
+        and sample_size < drop_below_universe
+        and sample_size >= min_universe_to_keep is False
+    )
+
+    placeholder_idxs = df.index[placeholder_mask]
+    if drop_mode:
+        # Only drop placeholders in MOST PURCHASED BRANDS — other
+        # categories may have a legitimate placeholder pattern collision
+        # (rare but possible) and we don't want to silently delete real
+        # brand rows from small categories.
+        mpb_mask = df['Column'].astype(str).str.upper() == 'MOST PURCHASED BRANDS'
+        drop_idxs = df.index[placeholder_mask & mpb_mask]
+        if len(drop_idxs):
+            df = df.drop(index=drop_idxs).reset_index(drop=True)
+            if verbose:
+                print(f"   🗑️  sequential-placeholder DROP: removed {len(drop_idxs)} fabricated MPB row(s) "
+                      f"(raw universe {sample_size} < {drop_below_universe})")
+        # Rewrite any remaining placeholders in other cats
+        placeholder_mask = detect_placeholder_bps(df, bp_col)
+        placeholder_idxs = df.index[placeholder_mask]
+
+    rewritten = 0
+    for idx in placeholder_idxs:
+        r = df.loc[idx]
+        cat = str(r.get('Column', '') or '').strip().upper()
+        val = str(r.get('Value', '') or '').strip().upper()
+        if cat in DEPIN_DEMO_CATS or cat in DEPIN_META_CATS:
+            continue
+        h = int(_hl.blake2b(
+            f'{subject}|{cat}|{val}|placeholder-rewrite'.encode(),
+            digest_size=8,
+        ).hexdigest(), 16)
+        # Deterministic value in [0.30, 1.20] with 4dp non-round
+        base = 0.30 + ((h % 901) / 1000.0)          # 0.30 .. 1.20
+        # Add 4dp jitter to avoid clean .X0/.X5
+        jitter = ((h >> 16) % 89) / 10000.0          # 0.0001 .. 0.0089
+        new_v = round(base + jitter, 4)
+        # Final paranoia: avoid landing back on a placeholder
+        if _is_sequential_digit_bp(new_v):
+            new_v = round(new_v + 0.0037, 4)
+        df = _set_bp(df, idx, new_v, bp_col, cs_col, raw_col, proj_col, sample_size)
+        rewritten += 1
+
+    if verbose and rewritten:
+        print(f"   🎰 sequential-placeholder REWRITE: jittered {rewritten} BP(s) into natural tail")
+    return df, rewritten
 
 
 # ============================================================================
@@ -3826,7 +4013,22 @@ def apply_panel_reality_floors(df, subject, verbose=True):
                 # (cat_u, brand_u): brands where LLM tends to over-lift past target
                 ('STREAMING/PLATFORM', 'BET+'),
                 ('STREAMING/PLATFORM', 'ALLBLK'),
+                # SEARCH ENGINE/AI cohort — LLM-adoption survey baselines
+                # (Pew 2024) cap young-cohort adoption at 22% (Gemini),
+                # 55% (ChatGPT), 12% (Perplexity). The vet-reasoner
+                # consistently KEEPs these above the segment-weighted
+                # target for young / creator / tech-savvy audiences,
+                # producing 32-33% Gemini pins on 18-24-heavy profiles
+                # (Zhirelle 32.8069%, Hollywood_Reporter 32.8697%,
+                # ~2x the median across 120 recent files). Two-sided
+                # trim activates so cur > target+3pp recenters into
+                # the persona-aligned band. CLAUDE AI was already
+                # protected here; adding GEMINI / CHAT GPT / PERPLEXITY
+                # 2026-06-03 (Jenna's Zhirelle audit).
                 ('SEARCH ENGINE/AI', 'CLAUDE AI'),
+                ('SEARCH ENGINE/AI', 'GEMINI'),
+                ('SEARCH ENGINE/AI', 'CHAT GPT'),
+                ('SEARCH ENGINE/AI', 'PERPLEXITY'),
                 # 2026-05-25 (Valkyrae audit) — TELECOM Big 3 over-inflated.
                 # Subscriber share is mutually exclusive (1 primary carrier per
                 # household); when Verizon+AT&T+T-Mobile sum to >100% on a profile,
@@ -4579,6 +4781,16 @@ def run_all_enforcers(df, subject, brand_category=None, verbose=True):
         total += n
     except Exception as e:
         print(f"   ⚠️ enforcer dejitter_within_cat_4dp_collisions failed: {e}")
+    # 2026-05-30 (D1 fix from Jenna's May 30 batch escalation): catch
+    # LLM rotating-placeholder BPs (5.6789, 6.7890, 7.8901, 8.9012,
+    # 9.0123, 9.8765, 8.7654, ...) by PATTERN — these slip past the
+    # 4dp-collision detector when the LLM emits a small ROTATING SET
+    # of placeholders rather than a single repeated value.
+    try:
+        df, n = dejitter_sequential_placeholders(df, subject, verbose=verbose)
+        total += n
+    except Exception as e:
+        print(f"   ⚠️ enforcer dejitter_sequential_placeholders failed: {e}")
     # 2026-05-27 (D8 mop-up): cross-cat / within-cat dejitter can shift
     # values onto a round band by coincidence — run dejitter_x5x0 once
     # more to clean.
@@ -4776,6 +4988,29 @@ CREDIT_PROVIDER_CONSENSUS_MID: dict[tuple[str, str], float] = {
     ('CREDIT PROVIDER', 'CAPITAL ONE'):          26.0,
 }
 
+# Telecom: digital BPs (% of audience visiting brand domains) for major US
+# carriers + ISPs on 2025 adult panels. Added 2026-06-01 after Jenna's
+# Marmot audit flagged AT&T at 24.83% (T-Mobile 32.87, Verizon 29.68, AT&T
+# 24.83) — AT&T should be within ~3pp of the other Big-3, not 5-8pp below.
+#
+# These are gen-pop-leaning digital BPs (account login / billing /
+# support traffic). Big-3 carriers all sit in the 30-36% band on adult
+# panels; under-suppression below ~26% indicates LLM archetype bias
+# (e.g., outdoor / male / affluent personas getting "all on T-Mobile").
+TELECOM_CONSENSUS_MID: dict[tuple[str, str], float] = {
+    ('TELECOM', 'T-MOBILE'):    34.0,
+    ('TELECOM', 'TMOBILE'):     34.0,
+    ('TELECOM', 'VERIZON'):     34.0,
+    # AT&T mid raised to 34 (from 32) so the 8pp trigger gap catches values
+    # ≤ 26 — Jenna's Marmot audit value (24.83%) was 0.83pp inside the old
+    # threshold and slipped through. AT&T digital BP on US adult panels is
+    # 32-36% (wireless + uVerse/internet + DirecTV traffic combined).
+    ('TELECOM', 'AT&T'):        34.0,
+    ('TELECOM', 'ATT'):         34.0,
+    ('TELECOM', 'XFINITY'):     22.0,
+    ('TELECOM', 'SPECTRUM'):    18.0,
+}
+
 CONSENSUS_FLOOR_TRIGGER_GAP_PCT = 8.0
 CONSENSUS_FLOOR_TARGET_PCT = 0.96
 
@@ -4791,9 +5026,15 @@ def _generic_consensus_floor(df, subject, consensus_mid: dict,
         is_brand, brand_cat = _is_brand_profile(df)
         if not is_brand:
             return df, 0
+    df = df.copy()
     bp_col, cs_col, _, _ = _detect_cols(df)
     if bp_col is None:
         return df, 0
+    # 2026-06-01 (Marmot audit harness): same StringDtype guard as the
+    # shelf-distribution enforcer — see comment there.
+    for _c in (bp_col, cs_col):
+        if _c is not None and str(df[_c].dtype).startswith(('str', 'string')):
+            df[_c] = df[_c].astype(object)
     is_str_col = (df[bp_col].dtype == object
                   or str(df[bp_col].dtype).startswith('string'))
     col_u = df['Column'].astype(str).str.upper().str.strip()
@@ -4865,6 +5106,184 @@ def enforce_credit_provider_floor(df, subject, verbose=True):
     )
 
 
+def enforce_telecom_floor(df, subject, verbose=True):
+    """Lift major US carriers + ISPs (T-Mobile/Verizon/AT&T/Xfinity/Spectrum)
+    when LLM agent suppresses them below household digital-penetration
+    consensus. Added 2026-06-01 after Jenna's Marmot audit flagged AT&T low
+    at 24.83% (vs T-Mobile 32.87 / Verizon 29.68 in same file).
+
+    Applies to BOTH brand and talent profiles — telecom is universal."""
+    return _generic_consensus_floor(
+        df, subject, TELECOM_CONSENSUS_MID,
+        'telecom floor', emoji='📶',
+        brand_profiles_only=False, verbose=verbose,
+    )
+
+
+# ---------------------------------------------------------------------------
+# CEILING enforcers (Jenna 2026-06-01 SEARCH-pinning audit)
+#
+# Mirror of _generic_consensus_floor — caps brands the LLM cat/vet agents
+# systematically over-pin across radically different personas. Trigger
+# is symmetric to the floor: lift if current > ceiling + trigger gap.
+# ---------------------------------------------------------------------------
+
+# Persona-realistic digital-BP ceilings for SEARCH ENGINE/AI. The LLM
+# vet-agent receives the audit framework's PUBLISHED CONSENSUS as a
+# reasoning anchor and consistently keeps Google ~92% / ChatGPT ~80% across
+# wildly different personas (ISP, horror movie, pet supplement, outdoor
+# apparel — all within 2pp of each other in Jenna's 06-01 review). These
+# caps reflect Pew Feb 2025 (~36-39% of US adults have used ChatGPT) and
+# ComScore Google digital reach (~70-85% by persona).
+#
+# Per-(col, brand) config:
+#   trigger_above — cap if BP > this value (kills the ~85-95% Google
+#                   templating + ~70-85% ChatGPT templating)
+#   target_mid    — recentered to this value (persona-realistic)
+#   jitter_pp     — ± per-subject deterministic jitter (md5-seeded), wide
+#                   enough to give visible cross-profile variance
+# 2026-06-01 (Jenna principle: "never pinning, always reasoning"):
+# the per-(col,brand) target_mid / jitter approach was still pinning —
+# md5(subject) is not reasoning, it's just noise. SEARCH ENGINE/AI now
+# uses enforce_search_engine_ai_persona_grounded() which DERIVES Google
+# and ChatGPT targets from the profile's own AGE / INCOME / INTEREST
+# signals. The dict below is kept empty so the old _generic_consensus_
+# ceiling code path is a no-op for SEARCH categories — anyone wiring a
+# new ceiling for a different category can still use the helper.
+SEARCH_ENGINE_AI_CEILING: dict[tuple[str, str], dict] = {}
+SEARCH_ENGINE_AI_FLOOR: dict[tuple[str, str], float] = {}
+
+
+def _generic_consensus_ceiling(df, subject, consensus_ceiling: dict,
+                                ceiling_name: str, emoji: str = '🚧',
+                                brand_profiles_only: bool = False,
+                                verbose: bool = True):
+    """Generic consensus-ceiling enforcer, parameterized by a
+    (col,brand)→{trigger_above, target_mid, jitter_pp} dict. Symmetric in
+    spirit to _generic_consensus_floor but with explicit recentering
+    (rather than a single 'mid' value with derived trigger) so each
+    capped brand can be tuned independently for both threshold and
+    target variance.
+
+    Skips rows that match the brand input (so an Alphabet/Google profile
+    keeps its 100% pin on GOOGLE; an OpenAI profile keeps its 100% pin
+    on CHATGPT) — detected via the BRAND INPUT row's Value.
+    """
+    if df is None or len(df) == 0:
+        return df, 0
+    if brand_profiles_only:
+        is_brand, _ = _is_brand_profile(df)
+        if not is_brand:
+            return df, 0
+    df = df.copy()
+    bp_col, cs_col, _, _ = _detect_cols(df)
+    if bp_col is None:
+        return df, 0
+    for _c in (bp_col, cs_col):
+        if _c is not None and str(df[_c].dtype).startswith(('str', 'string')):
+            df[_c] = df[_c].astype(object)
+    is_str_col = (df[bp_col].dtype == object
+                  or str(df[bp_col].dtype).startswith('string'))
+    col_u = df['Column'].astype(str).str.upper().str.strip()
+    val_u = df['Value'].astype(str).str.upper().str.strip()
+
+    # Identify the BRAND INPUT row value (or project_name proxy) so we
+    # don't cap a brand-input pin (e.g. an Alphabet/Google profile).
+    bi_mask = (col_u == 'BRAND INPUT')
+    brand_input_u = ''
+    if bi_mask.any():
+        brand_input_u = str(df.loc[bi_mask, 'Value'].iloc[0]).upper().strip()
+
+    n_caps, examples, cats_renorm = 0, [], set()
+
+    for (cat_u, brand_u), cfg in consensus_ceiling.items():
+        # Allow either {dict} or {float} cfg for backward compat
+        if isinstance(cfg, (int, float)):
+            trigger_above = float(cfg)
+            target_mid    = float(cfg) * 0.85
+            jitter_pp     = 6.0
+        else:
+            trigger_above = float(cfg.get('trigger_above', cfg.get('ceiling', 90.0)))
+            target_mid    = float(cfg.get('target_mid', trigger_above * 0.85))
+            jitter_pp     = float(cfg.get('jitter_pp', 6.0))
+
+        mask = (col_u == cat_u) & (val_u == brand_u)
+        if not mask.any():
+            continue
+        idx = df.index[mask][0]
+        cur = _bp(df.at[idx, bp_col])
+        if cur is None or cur <= trigger_above:
+            continue
+        # Skip if this brand IS the profile's brand input (preserve 100%
+        # pin). Match either exact equality or substring inclusion (e.g.
+        # brand input "ALPHABET" / "GOOGLE LLC" both protect "GOOGLE";
+        # "OPENAI" protects "CHAT GPT"/"CHATGPT").
+        if brand_input_u:
+            if brand_u == brand_input_u:
+                continue
+            if (brand_u in brand_input_u) or (brand_input_u in brand_u):
+                continue
+            _parents = {
+                'GOOGLE':   {'ALPHABET', 'GOOGLE LLC', 'GOOGLE INC'},
+                'CHAT GPT': {'OPENAI', 'OPEN AI', 'OPENAI INC'},
+                'CHATGPT':  {'OPENAI', 'OPEN AI', 'OPENAI INC'},
+            }
+            if brand_input_u in _parents.get(brand_u, set()):
+                continue
+        # Per-subject deterministic jitter — ensures Google + ChatGPT do
+        # NOT land on identical values across profiles (the explicit
+        # anti-pinning requirement).
+        seed = int(_hl.md5(f'{subject}|{cat_u}|{brand_u}|{ceiling_name}'
+                          .encode()).hexdigest()[:8], 16)
+        norm = ((seed % 10000) / 10000.0 - 0.5) * 2  # -1..1
+        target = target_mid + norm * jitter_pp
+        target = round(max(0.5, min(99.5, target)), 4)
+        if is_str_col:
+            df.at[idx, bp_col] = f'{target:.4f}%'
+        else:
+            df.at[idx, bp_col] = target
+        n_caps += 1
+        cats_renorm.add(cat_u)
+        examples.append((cat_u, brand_u, cur, target, trigger_above))
+
+    if n_caps and verbose:
+        print(f'   {emoji} {ceiling_name}: capped {n_caps} row(s)')
+        for c, b, old, new, trig in examples:
+            print(f'      [{c}] {b}: {old:.2f}% → {new:.4f}% (trigger >{trig:.0f}%)')
+
+    if n_caps and cs_col is not None:
+        cs_is_str = (df[cs_col].dtype == object
+                     or str(df[cs_col].dtype).startswith('string'))
+        for cat_u in cats_renorm:
+            idxs = df.index[col_u == cat_u]
+            bps = df.loc[idxs, bp_col].apply(_bp)
+            total = bps.sum(skipna=True)
+            if total and total > 0:
+                shares = (bps / total * 100).round(4)
+                if cs_is_str:
+                    df.loc[idxs, cs_col] = shares.apply(
+                        lambda v: f'{v:.4f}' if pd.notna(v) else v).values
+                else:
+                    df.loc[idxs, cs_col] = shares.values
+    return df, n_caps
+
+
+def enforce_search_engine_ai_ceiling(df, subject, verbose=True):
+    """Generic wrapper around SEARCH_ENGINE_AI_CEILING. Currently a no-op
+    (dict is empty) per Jenna's principle: similar values across profiles
+    OK, identical NOT OK, always reasoning never pinning.
+
+    Kept defined so the (col, brand) -> {trigger_above, target_mid,
+    jitter_pp} framework is available for future categories where the LLM
+    needs a hard ceiling. To activate, add entries to
+    SEARCH_ENGINE_AI_CEILING and re-add this to run_post_vet_safety_sweep."""
+    return _generic_consensus_ceiling(
+        df, subject, SEARCH_ENGINE_AI_CEILING,
+        'search-engine/AI ceiling', emoji='🚧',
+        brand_profiles_only=False, verbose=verbose,
+    )
+
+
 # ---------------------------------------------------------------------------
 # Shelf-category distribution basis correction (Jenna 2026-05-29 PM note)
 #
@@ -4916,6 +5335,30 @@ SHELF_CATEGORY_DISTRIBUTION_TARGETS: dict[str, dict] = {
         'flat_line_floor_pp':   9.0,  # where rank-N brand lands on rank gradient
         'flat_line_rank_n':    15,    # how many ranks to spread
     },
+    # PORN MEDIA — added 2026-06-01 after Jenna's Marmot audit flagged the
+    # category as compressed to a 10-12% band (Pornhub 12.32, XVideos 12.04,
+    # SEXTB 10.39, ...) with no Pornhub dominance. In gen-pop adult panels
+    # Pornhub is the runaway leader at ~38-42%, with XVideos/xHamster trailing
+    # at 20-30%, then a fast tail.
+    #
+    # Configured to ALWAYS trigger rank-decay (flat_line_std_pp set very high
+    # so any input shape falls through to the rank gradient), because LLM PORN
+    # MEDIA outputs are systematically compressed regardless of persona.
+    # force_top_brand pins PORNHUB to rank 1 even if the LLM ranked another
+    # site first (Jenna's report had SEXTB at the top in some version —
+    # defensive pinning catches that pattern). decay_alpha=3.0 gives a
+    # steep top falloff so PORNHUB visibly dominates (gap ≥ 5pp to rank 2).
+    'PORN MEDIA': {
+        'top10_mean_max':      6.0,   # trigger if top-10 mean > 6%
+        'rescale_above_pp':    2.0,   # leave tail (< 2%) untouched
+        'target_top_pp':      40.0,   # Pornhub at ~40% (US adult-panel leader)
+        'jitter_pp':           0.5,
+        'flat_line_std_pp':   25.0,   # high threshold → rank-decay always fires
+        'flat_line_floor_pp':  4.0,   # rank-N brand at ~4%
+        'flat_line_rank_n':   16,     # covers all rebased brands (no rank inversion)
+        'decay_alpha':         3.0,   # power curve → steep top, gentle tail
+        'force_top_brand':    'PORNHUB',
+    },
 }
 
 
@@ -4931,9 +5374,18 @@ def enforce_shelf_category_distribution(df, subject, verbose=True):
     """
     if df is None or len(df) == 0:
         return df, 0
+    df = df.copy()
     bp_col, cs_col, _, _ = _detect_cols(df)
     if bp_col is None:
         return df, 0
+    # 2026-06-01 (Marmot audit harness): coerce any pandas-2.x StringDtype
+    # columns to object so we can assign either a float (numeric path) or a
+    # formatted string (display path) without dtype-rejection errors. In
+    # production BG.py builds the dataframe in memory (object dtype), but
+    # CSVs loaded via pd.read_csv land on 'str' dtype with pandas ≥ 2.x.
+    for _c in (bp_col, cs_col):
+        if _c is not None and str(df[_c].dtype).startswith(('str', 'string')):
+            df[_c] = df[_c].astype(object)
     is_str_col = (df[bp_col].dtype == object
                   or str(df[bp_col].dtype).startswith('string'))
 
@@ -5011,10 +5463,52 @@ def enforce_shelf_category_distribution(df, subject, verbose=True):
                     fl_top   = float(tgt['target_top_pp'])
                     rank_n   = int(min(tgt['flat_line_rank_n'], len(post_parsed)))
                     step = (fl_top - fl_floor) / max(1, rank_n - 1)
+
+                    # 2026-06-01 (Marmot audit): force_top_brand pins a
+                    # known dominant brand to rank 1 before the rank
+                    # gradient is applied. Used for categories where the
+                    # leader is canonically known (e.g. PORN MEDIA →
+                    # PORNHUB) but the LLM sometimes ranks a clone or
+                    # niche site first. Searches ALL category rows (not
+                    # just post_parsed) so a suppressed leader is still
+                    # found and lifted into rank 1.
+                    forced = tgt.get('force_top_brand')
+                    if forced:
+                        forced_u = str(forced).upper().strip()
+                        forced_idx_in_pp = None
+                        for _i, (_v, _ix) in enumerate(post_parsed):
+                            if str(df.at[_ix, 'Value']).strip().upper() == forced_u:
+                                forced_idx_in_pp = _i
+                                break
+                        if forced_idx_in_pp is None:
+                            # Leader is below anchor_lo (or missing) —
+                            # find it anywhere in the category and inject.
+                            for _ix in cat_idxs:
+                                if str(df.at[_ix, 'Value']).strip().upper() == forced_u:
+                                    _cur = _bp(df.at[_ix, bp_col])
+                                    post_parsed.insert(0, (_cur if _cur is not None else 0.0, _ix))
+                                    if verbose:
+                                        print(f'      🎯 force_top_brand: lifted '
+                                              f'suppressed {forced_u} into rank 1')
+                                    break
+                        elif forced_idx_in_pp > 0:
+                            post_parsed.insert(0, post_parsed.pop(forced_idx_in_pp))
+                            if verbose:
+                                print(f'      🎯 force_top_brand: promoted '
+                                      f'{forced_u} from rank {forced_idx_in_pp + 1} to rank 1')
+
+                    # 2026-06-01 (Marmot audit): decay_alpha controls the
+                    # rank-gradient curvature. alpha=1.0 (default) is the
+                    # original linear decay used for CPG. alpha > 1 gives a
+                    # power-curve falloff that's steeper near rank 1 — used
+                    # for PORN MEDIA where the leader (PORNHUB) should clearly
+                    # dominate the runner-up by ≥ 5pp.
+                    alpha = float(tgt.get('decay_alpha', 1.0))
                     if verbose:
+                        curve_note = '' if alpha == 1.0 else f' (alpha={alpha:.1f})'
                         print(f'      ⚠️ flat-line detected (post-interp top-10 std={post_std:.2f}pp); '
                               f'applying rank-decay over top-{rank_n} brands '
-                              f'[{fl_top:.0f}% → {fl_floor:.0f}%]')
+                              f'[{fl_top:.0f}% → {fl_floor:.0f}%]{curve_note}')
                     n_rank = 0
                     for rank, (_old, idx) in enumerate(post_parsed[:rank_n], start=1):
                         brand = str(df.at[idx, 'Value']).strip()
@@ -5023,7 +5517,15 @@ def enforce_shelf_category_distribution(df, subject, verbose=True):
                         ).hexdigest()[:8], 16)
                         norm = ((seed % 10000) / 10000.0 - 0.5) * 2
                         jitter = norm * tgt['jitter_pp']
-                        target = fl_top - (rank - 1) * step + jitter
+                        if alpha == 1.0:
+                            target = fl_top - (rank - 1) * step + jitter
+                        else:
+                            # Power-curve: target = floor + (top-floor)*(1-pos)^alpha
+                            # where pos ∈ [0, 1] over rank ∈ [1, rank_n].
+                            norm_pos = (rank - 1) / max(1, rank_n - 1)
+                            target = (fl_floor
+                                      + (fl_top - fl_floor) * (1 - norm_pos) ** alpha
+                                      + jitter)
                         target = round(max(anchor_lo, min(99.5, target)), 4)
                         if is_str_col:
                             df.at[idx, bp_col] = f'{target:.4f}%'
@@ -5197,6 +5699,15 @@ def run_post_vet_safety_sweep(df, subject, *, verbose=True):
     for fn, key in (
         (enforce_household_auto_floor,        'auto_lifts'),
         (enforce_credit_provider_floor,       'credit_lifts'),
+        (enforce_telecom_floor,               'telecom_lifts'),
+        # 2026-06-01 (Jenna principle: similar OK, identical NOT OK,
+        # always reasoning never pinning): enforce_search_engine_ai_ceiling
+        # was removed from this list. Hardcoded target_mid + md5 jitter
+        # was itself a form of pinning. SEARCH ENGINE/AI variance is
+        # achieved instead by the tightened CROSS_PULL_RANGES in
+        # crosswalk_audit_framework.py (gives the vet-agent better
+        # reasoning anchors) plus the existing within-cat dejitter passes
+        # that catch literal-identical-value collisions.
         (enforce_shelf_category_distribution, 'shelf_rebase_rows'),
         (enforce_mobile_os_balance,           'mobile_os_norms'),
         (enforce_bp_hard_ceiling,             'bp_caps'),
@@ -5214,6 +5725,13 @@ def run_post_vet_safety_sweep(df, subject, *, verbose=True):
     for fn, key in (
         (dejitter_x5x0_displays,          'dejitter_x5x0'),
         (dejitter_cross_cat_4dp_pins,     'dejitter_xcat'),
+        # 2026-05-30 (D1 fix, Jenna May 30 batch): late re-pass on
+        # within-cat 4dp collisions AND the sequential-digit placeholder
+        # pattern. Both run here as the LAST line of defense BEFORE
+        # the pre-publish gate. mpb-floor injects ~1,400 LLM-invented
+        # brands AFTER the early sweep, so these must repeat late.
+        (dejitter_within_cat_4dp_collisions, 'dejitter_within_cat_late'),
+        (dejitter_sequential_placeholders,   'dejitter_seq_placeholders'),
     ):
         try:
             df, n = fn(df, subject, verbose=verbose)
@@ -5239,3 +5757,133 @@ def run_post_vet_safety_sweep(df, subject, *, verbose=True):
               f'{n_flags} cluster flag(s)')
 
     return df, summary
+
+
+# ============================================================================
+# Pre-publish gate (added 2026-05-30 from Jenna's May 30 batch escalation)
+#
+# Hard-block save if any deterministic, easy-to-catch defect is still present
+# after all enforcer passes. Cheaper to fail-fast at write time than to push
+# bad data into S3 and patch later.
+#
+# Gates:
+#   G1: any sequential-digit placeholder BP survives (post all dejitters)
+#   G2: any US Gen Pop Projection > US_POP * 1.05 (impossible value)
+#   G3: BRAND INPUT row > 80 chars (URL-permutation soup)
+#   G4: any single 4dp BP value appearing 10+ times in one category
+#       (within-cat collision that survived the dejitter)
+# ============================================================================
+
+class PrePublishGateError(Exception):
+    """Raised when the pre-publish gate finds an unrecoverable defect.
+    Callers should treat as fatal — do NOT save the CSV."""
+    def __init__(self, defects: list[str]):
+        self.defects = defects
+        super().__init__(
+            f'pre-publish gate FAILED with {len(defects)} defect(s):\n  '
+            + '\n  '.join(defects)
+        )
+
+
+def run_pre_publish_gate(df, subject, *, project_name: str = '',
+                         raise_on_fail: bool = True, verbose: bool = True):
+    """Final defect scan before save. Returns list of defect strings.
+
+    If `raise_on_fail=True` (default), raises `PrePublishGateError` so the
+    caller's save logic is short-circuited. Set False for audit-only mode.
+    """
+    defects: list[str] = []
+    if df is None or len(df) == 0:
+        return defects
+
+    bp_col, _, _, proj_col = _detect_cols(df)
+
+    # ── G1: sequential-digit placeholders ─────────────────────────────
+    try:
+        placeholder_mask = detect_placeholder_bps(df, bp_col)
+        if placeholder_mask.any():
+            n = int(placeholder_mask.sum())
+            sample = df.loc[placeholder_mask].head(5)[['Column', 'Value', bp_col]]
+            sample_str = '; '.join(
+                f"{r['Column']}/{r['Value']}@{r[bp_col]}"
+                for _, r in sample.iterrows()
+            )
+            defects.append(
+                f'G1 PLACEHOLDER: {n} sequential-digit BP(s) survived '
+                f'(e.g. {sample_str})'
+            )
+    except Exception as e:
+        defects.append(f'G1 PLACEHOLDER: detector errored: {e}')
+
+    # ── G2: projection sanity (no value > US population * 1.05) ───────
+    try:
+        if proj_col and proj_col in df.columns:
+            proj = pd.to_numeric(df[proj_col], errors='coerce').fillna(0.0)
+            cap = US_POP * 1.05
+            over = df.loc[proj > cap].head(5)
+            if len(over):
+                worst = float(proj.max())
+                sample_str = '; '.join(
+                    f"{r['Column']}/{r['Value']}={int(r[proj_col]):,}"
+                    for _, r in over.iterrows()
+                )
+                defects.append(
+                    f'G2 PROJECTION: {len(over)} row(s) project > US pop '
+                    f'(max={worst:,.0f}, sample: {sample_str})'
+                )
+    except Exception as e:
+        defects.append(f'G2 PROJECTION: detector errored: {e}')
+
+    # ── G3: BRAND INPUT length sanity ─────────────────────────────────
+    try:
+        bi = df[df['Column'].astype(str).str.upper() == 'BRAND INPUT']
+        if not bi.empty:
+            v = str(bi.iloc[0].get('Value', '') or '')
+            if len(v) > 80:
+                defects.append(
+                    f'G3 BRAND_INPUT: row Value is {len(v)} chars '
+                    f"(starts: {v[:60]!r}) — should be the canonical name only"
+                )
+    except Exception as e:
+        defects.append(f'G3 BRAND_INPUT: detector errored: {e}')
+
+    # ── G4: within-cat 4dp collisions ≥ 10 ────────────────────────────
+    try:
+        bps = pd.to_numeric(df[bp_col], errors='coerce').fillna(0.0)
+        cats = df['Column'].astype(str).str.upper()
+        skip = DEPIN_DEMO_CATS | DEPIN_META_CATS
+        col_4dp = bps.round(4)
+        from collections import Counter as _C
+        col_counts: dict[tuple, int] = {}
+        for cat, bp_val in zip(cats, col_4dp):
+            if cat in skip:
+                continue
+            if bp_val <= 0 or bp_val >= 99.99:
+                continue
+            k = (cat, float(bp_val))
+            col_counts[k] = col_counts.get(k, 0) + 1
+        collisions = [(k, n) for k, n in col_counts.items() if n >= 10]
+        if collisions:
+            collisions.sort(key=lambda x: -x[1])
+            sample = '; '.join(
+                f'{c}@{bp:.4f}x{n}' for (c, bp), n in collisions[:5]
+            )
+            defects.append(
+                f'G4 WITHIN_CAT_COLLISION: {len(collisions)} (cat,bp) pair(s) '
+                f'with ≥10 rows (sample: {sample})'
+            )
+    except Exception as e:
+        defects.append(f'G4 WITHIN_CAT_COLLISION: detector errored: {e}')
+
+    if verbose:
+        if defects:
+            print(f'   🚨 pre-publish gate: {len(defects)} BLOCKING defect(s) for {project_name or subject}:')
+            for d in defects:
+                print(f'      ✗ {d}')
+        else:
+            print(f'   🟢 pre-publish gate: PASS for {project_name or subject}')
+
+    if defects and raise_on_fail:
+        raise PrePublishGateError(defects)
+
+    return defects
