@@ -67703,6 +67703,7 @@
                         else if (lo === 'other') displayVal = 'Other';
                         else { const rm = String(value).trim().match(/^(\d+)\s*[-–]\s*(\d+)$/); if (rm) displayVal = rm[1] + '-' + rm[2]; }
                     }
+                    else if (demoKey === 'occupation') displayVal = normalizeOccupationLabel(value);
                     result.demographics[demoKey][displayVal] = (result.demographics[demoKey][displayVal] || 0) + pct;
                     result.demographicsProjection[demoKey][displayVal] = (result.demographicsProjection[demoKey][displayVal] || 0) + (usGenPop || 0);
                     result.demographicsIndex[demoKey][displayVal] = index;
@@ -68636,6 +68637,7 @@
                     if (rm) return rm[1] + '-' + rm[2];
                     if (lo === 'other') return 'Other';
                 }
+                if (type === 'occupation') return normalizeOccupationLabel(s);
                 return s;
             };
             const countDemoValues = (demoType) => {
@@ -69528,6 +69530,9 @@
                     if (hasNum(75000) && (hasNum(99999) || hasNum(100000))) return '$75,000 - $99,999';
                     if (hasNum(50000) && (hasNum(74999) || hasNum(75000))) return '$50,000 - $74,999';
                     if (hasNum(25000) && (hasNum(49999) || hasNum(50000))) return '$25,000 - $49,999';
+                }
+                if (type === 'occupation') {
+                    return normalizeOccupationLabel(v);
                 }
                 return v;
             };
