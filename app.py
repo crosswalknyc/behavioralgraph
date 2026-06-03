@@ -14,6 +14,13 @@ import sys
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'migration'))
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'migration'))
 from clickhouse_connector import connect_clickhouse as _ch_connect
+# Blue IQ — political tracker module (loaded lazily so import failure
+# never blocks the rest of the dashboard from booting).
+try:
+    import blue_iq as _blue_iq  # type: ignore
+except Exception as _blue_iq_err:
+    _blue_iq = None
+    print(f"⚠️ Blue IQ module unavailable at import time: {_blue_iq_err}")
 
 import uuid
 import json
@@ -3159,6 +3166,7 @@ def create_user():
             'has_workspace_access': req_data.get('has_workspace_access', cd.get('has_workspace_access', True) if cd else True),
             'has_share_of_time_access': req_data.get('has_share_of_time_access', cd.get('has_share_of_time_access', True) if cd else True),
             'has_share_of_time_run_access': req_data.get('has_share_of_time_run_access', cd.get('has_share_of_time_run_access', True) if cd else True),
+            'has_blue_iq_access': req_data.get('has_blue_iq_access', cd.get('has_blue_iq_access', False) if cd else False),
             'collab_team': req_data.get('collab_team', []),
             'has_purgatory_approval': False,
             'auto_access_new': req_data.get('auto_access_new', cd.get('auto_access_new', {}) if cd else {}),
@@ -3300,6 +3308,8 @@ def update_user(username):
             user['has_share_of_time_access'] = bool(req_data['has_share_of_time_access'])
         if 'has_share_of_time_run_access' in req_data:
             user['has_share_of_time_run_access'] = bool(req_data['has_share_of_time_run_access'])
+        if 'has_blue_iq_access' in req_data:
+            user['has_blue_iq_access'] = bool(req_data['has_blue_iq_access'])
         if user.get('has_share_of_time_access') is False:
             user['has_share_of_time_run_access'] = False
         if 'auto_access_new' in req_data:
@@ -3701,6 +3711,7 @@ def restore_defaults_all_users():
             user['has_workspace_access'] = True
             user['has_share_of_time_access'] = True
             user['has_share_of_time_run_access'] = True
+            user['has_blue_iq_access'] = False
             count += 1
         save_users(data)
         return jsonify({'success': True, 'message': f'Restored defaults for {count} user(s)', 'count': count})
@@ -4096,6 +4107,7 @@ def api_set_company_defaults(company_name):
             'has_workspace_access': req.get('has_workspace_access', True),
             'has_share_of_time_access': req.get('has_share_of_time_access', True),
             'has_share_of_time_run_access': req.get('has_share_of_time_run_access', True),
+            'has_blue_iq_access': req.get('has_blue_iq_access', False),
             'credits': req.get('credits', 5),
             'auto_access_new': req.get('auto_access_new', {}),
         }
@@ -4158,6 +4170,7 @@ def api_reset_company_users(company_name):
                 user['has_workspace_access'] = cd.get('has_workspace_access', True)
                 user['has_share_of_time_access'] = cd.get('has_share_of_time_access', True)
                 user['has_share_of_time_run_access'] = cd.get('has_share_of_time_run_access', True)
+                user['has_blue_iq_access'] = cd.get('has_blue_iq_access', False)
                 user['credits'] = cd.get('credits', 5)
                 user['auto_access_new'] = dict(cd.get('auto_access_new', {}))
             else:
@@ -4183,6 +4196,7 @@ def api_reset_company_users(company_name):
                 user['has_workspace_access'] = True
                 user['has_share_of_time_access'] = True
                 user['has_share_of_time_run_access'] = True
+                user['has_blue_iq_access'] = False
                 user['credits'] = 5
                 user['auto_access_new'] = {}
             if user.get('has_share_of_time_access') is False:
@@ -5568,9 +5582,8 @@ def get_admin_content():
         except Exception as tst_err:
             print(f"⚠️ Error loading Ticket Sales Tracker files: {tst_err}")
         
-        # Load profile image cache to check for custom images
-        if not profile_image_cache:
-            load_profile_image_cache()
+        # Load profile image cache to check for custom images (always fresh for admin content view)
+        load_profile_image_cache(force=True)
         
         # Add custom image info to each file (skip ticket sales and ticket sales tracker - they use their own metadata)
         for f in active_files:
@@ -6174,6 +6187,7 @@ def compute_product_access_flags(user, role):
             'has_workspace_access': True,
             'has_share_of_time_access': True,
             'has_share_of_time_run_access': True,
+            'has_blue_iq_access': True,
         }
     u = user or {}
     has_sot_view = bool(u.get('has_share_of_time_access', True))
@@ -6205,6 +6219,7 @@ def compute_product_access_flags(user, role):
         'has_workspace_access': bool(u.get('has_workspace_access', True)),
         'has_share_of_time_access': has_sot_view,
         'has_share_of_time_run_access': has_sot_run,
+        'has_blue_iq_access': bool(u.get('has_blue_iq_access', False)),
     }
 
 
@@ -6298,6 +6313,7 @@ def index():
     has_workspace = _acc.get('has_workspace_access', True)
     has_share_of_time = _acc.get('has_share_of_time_access', True)
     has_share_of_time_run = _acc.get('has_share_of_time_run_access', True)
+    has_blue_iq = _acc.get('has_blue_iq_access', False)
     
     # If user only has Fin IQ (no Profile IQ), default to Fin IQ landing page
     default_view_hedge_fund_iq = bool(has_hedge_fund_iq and not has_profile_iq)
@@ -6354,6 +6370,7 @@ def index():
                            has_workspace_access=has_workspace,
                            has_share_of_time_access=has_share_of_time,
                            has_share_of_time_run_access=has_share_of_time_run,
+                           has_blue_iq_access=has_blue_iq,
                            default_view_hedge_fund_iq=default_view_hedge_fund_iq,
                            has_purgatory_access=has_purgatory_access,
                            first_name=first_name,
@@ -9981,7 +9998,7 @@ def get_profiles_without_images():
     try:
         # Load caches (always load profile image cache from S3 so we see latest uploads
         # across workers; in-memory cache is per-worker and would otherwise be stale)
-        load_profile_image_cache()
+        load_profile_image_cache(force=True)
         
         if not s3_cache.get('loaded'):
             load_persisted_cache()
@@ -11692,6 +11709,60 @@ def normalize_demographics_gen_pop_to_nps(parsed):
             b['gen_pop'] = str(max(0, floors[i]))
 
     return
+
+
+# ============================================================================
+# BLUE IQ — Political tracker
+# ============================================================================
+def _require_blue_iq():
+    """Return (False, error_response) if Blue IQ isn't available for this user."""
+    user = get_current_user()
+    if not user:
+        return False, (jsonify({'success': False, 'error': 'Not authenticated'}), 401)
+    role = _normalize_role(user.get('role', 'user'))
+    acc = apply_cloak_product_access_overrides(compute_product_access_flags(user, role))
+    if not acc.get('has_blue_iq_access'):
+        return False, (jsonify({'success': False, 'error': 'Blue IQ access not enabled'}), 403)
+    if _blue_iq is None:
+        return False, (jsonify({'success': False, 'error': 'Blue IQ module not loaded'}), 500)
+    return True, None
+
+
+@app.route('/api/blue-iq/filter-options', methods=['GET'])
+@requires_auth
+def api_blue_iq_filter_options():
+    """Return the available filter choices (parties + states + DMAs)."""
+    ok, err = _require_blue_iq()
+    if not ok:
+        return err
+    try:
+        return jsonify({'success': True, **_blue_iq.get_filter_options()})
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/blue-iq/data', methods=['POST'])
+@requires_auth
+def api_blue_iq_data():
+    """Compute (or fetch cached) Blue IQ dashboard view for the given filters."""
+    ok, err = _require_blue_iq()
+    if not ok:
+        return err
+    try:
+        req = request.get_json(silent=True) or {}
+        filters = {
+            'party':         req.get('party'),
+            'geo_type':      req.get('geo_type'),
+            'geo_value':     req.get('geo_value'),
+            'lookback_days': req.get('lookback_days'),
+        }
+        force = bool(req.get('force_refresh'))
+        payload = _blue_iq.compute_panel_view(filters, force_refresh=force)
+        return jsonify(payload)
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': str(e)}), 500
 
 
 @app.route('/api/subscriber-iq/list')
@@ -16937,6 +17008,68 @@ profile_image_cache = {}
 profile_image_cache_dirty = False  # Track if cache needs saving
 _profile_image_cache_ts = 0  # last time cache was loaded from S3 (epoch seconds)
 _PROFILE_IMAGE_CACHE_TTL = 15  # reload from S3 at most every 15 seconds
+_profile_image_cache_lock = threading.Lock()
+
+
+def _read_profile_image_cache_from_s3():
+    """Read the profile image cache JSON from S3. Returns {} if missing."""
+    if not s3_client:
+        return {}
+    try:
+        response = s3_client.get_object(Bucket=S3_BUCKET, Key=S3_IMAGE_CACHE_KEY)
+        data = json.loads(response['Body'].read().decode('utf-8'))
+        return data if isinstance(data, dict) else {}
+    except Exception:
+        return {}
+
+
+def _merge_profile_image_caches(incoming, existing, deleted_keys=None):
+    """
+    Merge in-memory updates into the S3 cache without dropping admin uploads.
+    Never overwrite is_custom entries with auto-prefetch results.
+    """
+    deleted_keys = set(deleted_keys or [])
+    incoming = incoming or {}
+    existing = existing or {}
+    merged = {}
+    all_keys = (set(existing.keys()) | set(incoming.keys())) - deleted_keys
+
+    for key in all_keys:
+        cur = existing.get(key)
+        inc = incoming.get(key)
+
+        if cur is None:
+            merged[key] = inc
+            continue
+        if inc is None:
+            merged[key] = cur
+            continue
+
+        cur_custom = bool(cur.get('is_custom'))
+        inc_custom = bool(inc.get('is_custom'))
+
+        if cur_custom and not inc_custom:
+            merged[key] = cur
+            continue
+        if inc_custom and not cur_custom:
+            merged[key] = inc
+            continue
+        if cur_custom and inc_custom:
+            cur_at = cur.get('cached_at') or ''
+            inc_at = inc.get('cached_at') or ''
+            merged[key] = inc if inc_at >= cur_at else cur
+            continue
+
+        # Auto-sourced entries: prefer one with an image URL; never replace URL with not_found.
+        if inc.get('image_url') and not cur.get('image_url'):
+            merged[key] = inc
+        elif cur.get('image_url') and not inc.get('image_url'):
+            merged[key] = cur
+        else:
+            merged[key] = inc
+
+    return merged
+
 
 def load_profile_image_cache(force=False):
     """Load profile image cache from S3."""
@@ -16947,68 +17080,60 @@ def load_profile_image_cache(force=False):
     now = _time.time()
     if not force and profile_image_cache and (now - _profile_image_cache_ts) < _PROFILE_IMAGE_CACHE_TTL:
         return True
-    try:
-        response = s3_client.get_object(Bucket=S3_BUCKET, Key=S3_IMAGE_CACHE_KEY)
-        profile_image_cache = json.loads(response['Body'].read().decode('utf-8'))
+    with _profile_image_cache_lock:
+        profile_image_cache = _read_profile_image_cache_from_s3()
         _profile_image_cache_ts = now
+    if profile_image_cache:
         print(f"✅ Loaded profile image cache: {len(profile_image_cache)} images")
         return True
-    except:
-        print("📂 No profile image cache found")
-        return False
+    print("📂 No profile image cache found")
+    return False
 
-def save_profile_image_cache():
-    """Save profile image cache to S3. Retries up to 3 times on failure."""
+def save_profile_image_cache(deleted_keys=None):
+    """Save profile image cache to S3 with read-merge-write so concurrent workers don't clobber uploads."""
     global profile_image_cache, profile_image_cache_dirty, _profile_image_cache_ts
     if not s3_client:
         print("⚠️ Cannot save profile image cache: S3 client not available")
         return False
-    
-    # If cache appears empty, try to load existing cache from S3 and merge with current
-    # This prevents losing entries that were just added
-    if len(profile_image_cache) == 0:
-        print("   📥 Cache appears empty, loading existing cache from S3...")
-        try:
-            response = s3_client.get_object(Bucket=S3_BUCKET, Key=S3_IMAGE_CACHE_KEY)
-            existing_cache = json.loads(response['Body'].read().decode('utf-8'))
-            # Merge: existing takes precedence for keys we don't have, but keep our new entries
-            for key, value in existing_cache.items():
-                if key not in profile_image_cache:
-                    profile_image_cache[key] = value
-            print(f"   ✅ Merged {len(existing_cache)} existing entries from S3")
-            print(f"   📊 Total entries after merge: {len(profile_image_cache)}")
-        except Exception as load_err:
-            print(f"   📂 No existing cache found or error loading: {load_err}")
-            # Keep current cache (might be empty, might have new entries)
-    
+
     import time
-    cache_json = json.dumps(profile_image_cache, indent=2)
-    cache_size = len(cache_json)
-    print(f"   💾 Writing cache to S3: {len(profile_image_cache)} entries, {cache_size} bytes")
-    
-    for attempt in range(3):
-        try:
-            s3_client.put_object(
-                Bucket=S3_BUCKET,
-                Key=S3_IMAGE_CACHE_KEY,
-                Body=cache_json,
-                ContentType='application/json'
-            )
-            profile_image_cache_dirty = False
-            _profile_image_cache_ts = time.time()
-            print(f"   ✅ Successfully wrote cache to S3: {S3_IMAGE_CACHE_KEY} (attempt {attempt + 1})")
-            print(f"💾 Saved profile image cache: {len(profile_image_cache)} images")
-            sample_keys = list(profile_image_cache.keys())[:5]
-            print(f"   📋 Sample keys saved: {sample_keys}")
-            return True
-        except Exception as e:
-            print(f"⚠️ Error saving profile image cache (attempt {attempt + 1}/3): {e}")
-            if attempt < 2:
-                time.sleep(0.5)
-            else:
-                import traceback
-                traceback.print_exc()
-                return False
+
+    with _profile_image_cache_lock:
+        remote = _read_profile_image_cache_from_s3()
+        merged = _merge_profile_image_caches(profile_image_cache, remote, deleted_keys=deleted_keys)
+        profile_image_cache = merged
+        cache_json = json.dumps(profile_image_cache, indent=2)
+        cache_size = len(cache_json)
+        print(f"   💾 Writing cache to S3: {len(profile_image_cache)} entries, {cache_size} bytes")
+
+        for attempt in range(3):
+            try:
+                # Re-read and merge on retry so we never overwrite a concurrent custom upload.
+                if attempt > 0:
+                    remote = _read_profile_image_cache_from_s3()
+                    merged = _merge_profile_image_caches(profile_image_cache, remote, deleted_keys=deleted_keys)
+                    profile_image_cache = merged
+                    cache_json = json.dumps(profile_image_cache, indent=2)
+
+                s3_client.put_object(
+                    Bucket=S3_BUCKET,
+                    Key=S3_IMAGE_CACHE_KEY,
+                    Body=cache_json,
+                    ContentType='application/json'
+                )
+                profile_image_cache_dirty = False
+                _profile_image_cache_ts = time.time()
+                print(f"   ✅ Successfully wrote cache to S3: {S3_IMAGE_CACHE_KEY} (attempt {attempt + 1})")
+                print(f"💾 Saved profile image cache: {len(profile_image_cache)} images")
+                return True
+            except Exception as e:
+                print(f"⚠️ Error saving profile image cache (attempt {attempt + 1}/3): {e}")
+                if attempt < 2:
+                    time.sleep(0.5)
+                else:
+                    import traceback
+                    traceback.print_exc()
+                    return False
     return False
 
 
@@ -17280,7 +17405,7 @@ def remove_profile_image():
         if cache_key in profile_image_cache:
             del profile_image_cache[cache_key]
             profile_image_cache_dirty = True
-            saved = save_profile_image_cache()
+            saved = save_profile_image_cache(deleted_keys={cache_key})
             if not saved:
                 print(f"   ⚠️ Warning: Cache save may have failed after removing {cache_key}")
             print(f"   ✅ Removed from cache: {cache_key}")
@@ -21125,6 +21250,9 @@ def prefetch_profile_images():
     
     print(f"🖼️ Pre-fetching profile images for {len(s3_cache['jobs'])} profiles...")
     
+    # Always start from the latest S3 cache so we never clobber admin uploads on this worker.
+    load_profile_image_cache(force=True)
+    
     fetched = 0
     skipped = 0
     failed = 0
@@ -21136,10 +21264,12 @@ def prefetch_profile_images():
         
         cache_key = profile_name.lower().strip()
         
-        # Skip if already cached
-        if cache_key in profile_image_cache:
-            skipped += 1
-            continue
+        # Skip if already cached (never overwrite admin custom uploads)
+        existing_entry = profile_image_cache.get(cache_key)
+        if existing_entry:
+            if existing_entry.get('is_custom') or existing_entry.get('image_url') or existing_entry.get('not_found'):
+                skipped += 1
+                continue
         
         try:
             # Check for social media handle
@@ -21225,7 +21355,7 @@ def prefetch_profile_images():
             
             profile_image_cache_dirty = True
             
-            # Save every 20 fetches to persist progress
+            # Save every 20 fetches to persist progress (merge-safe write)
             if (fetched + failed) % 20 == 0:
                 save_profile_image_cache()
             
