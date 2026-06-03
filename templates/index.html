@@ -31316,6 +31316,21 @@
                         }).join('') + '</tbody></table>';
                 }
             }
+
+            // If the active cluster carries its own site_funnel (Fandango /
+            // Abercrombie-style per-cohort switcher analysis), swap the
+            // brand-level switcher panels for the cohort's view. Falls back
+            // to the modeled_view.site_funnel (brand-level blend) when the
+            // cluster doesn't have one — so legacy runs keep working.
+            if (typeof renderJourneyIqSiteFunnel === 'function') {
+                var fullRun = _jiqCurrentRun || {};
+                var brandLevel = ((fullRun.modeled_view || {}).site_funnel)
+                                 || fullRun.site_funnel
+                                 || null;
+                renderJourneyIqSiteFunnel(
+                    (cluster && cluster.site_funnel) || brandLevel
+                );
+            }
         }
 
         // ===================== SHARE OF TIME IQ =====================

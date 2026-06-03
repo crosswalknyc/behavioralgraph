@@ -1877,6 +1877,14 @@ SEGMENT_BENCHMARKS = {
     # (added 2026-05-25 per Sandra/Regina/Olivia/Queen lock-release pass — was at
     #  16.1172 lock on Regina/Queen but emerging audience-aware values should curve.)
     ('SEARCH ENGINE/AI', 'COPILOT'): {'18-24':  6, '25-34':  8, '35-44': 12, '45-54': 14, '55-64': 16, '65+': 14},
+    # GOOGLE — universal search anchor. Real-world penetration peaks at ~92% (Pew
+    # 2024 + ComScore 2024). The LLM tends to write 99.9% as a "saturation pin"
+    # for any tech-positive audience, producing the 99.99% Chicago_Sky artifact
+    # (Jenna 2026-06-03 master Gemini defect ticket). Two-sided trim activates
+    # via KNOWN_OVERSHOOT_BRANDS below; without these benchmarks the trim has
+    # no segment-weighted target and falls through to the older/mid/young
+    # PANEL_REALITY_FLOORS lookup (which is also high and only LIFTS, never trims).
+    ('SEARCH ENGINE/AI', 'GOOGLE'):     {'18-24': 95, '25-34': 94, '35-44': 92, '45-54': 89, '55-64': 86, '65+': 80},
 
     # STREAMING/MUSIC — SiriusXM is age-curved (in-car commercial older). iHeart
     # and Pandora REMOVED from SEGMENT in favor of ETHNICITY (see Black radio
@@ -4029,6 +4037,18 @@ def apply_panel_reality_floors(df, subject, verbose=True):
                 ('SEARCH ENGINE/AI', 'GEMINI'),
                 ('SEARCH ENGINE/AI', 'CHAT GPT'),
                 ('SEARCH ENGINE/AI', 'PERPLEXITY'),
+                # 2026-06-03 (Jenna 7-file Gemini master defect ticket): expand
+                # two-sided trim to the whole SEARCH ENGINE/AI cohort. Chicago_Sky
+                # showed GOOGLE 99.99% (saturation pin), Kaitlyn/Frances showed
+                # CHAT GPT 76-79% (cohort inflation), COPILOT 23.5% pin across
+                # 6+ files. Adding GOOGLE/COPILOT/BING/MSN closes the cohort
+                # so any 5+pp overshoot above persona-aligned bench trims back
+                # into the band — eliminating the "rank-cascade pin" pattern
+                # (100/50/33/23/18/14) the vet-reasoner kept producing.
+                ('SEARCH ENGINE/AI', 'GOOGLE'),
+                ('SEARCH ENGINE/AI', 'COPILOT'),
+                ('SEARCH ENGINE/AI', 'BING'),
+                ('SEARCH ENGINE/AI', 'MSN'),
                 # 2026-05-25 (Valkyrae audit) — TELECOM Big 3 over-inflated.
                 # Subscriber share is mutually exclusive (1 primary carrier per
                 # household); when Verizon+AT&T+T-Mobile sum to >100% on a profile,
@@ -4601,6 +4621,74 @@ def enforce_household_streaming_floor(df, subject, verbose=True):
 
 
 # ============================================================================
+# SEARCH ENGINE/AI cohort ceiling (defense-in-depth)
+# ============================================================================
+#
+# 2026-06-03 (Jenna 7-file Gemini master defect ticket): apply_panel_reality_floors
+# trims brands listed in KNOWN_OVERSHOOT_BRANDS individually, but the vet-reasoner
+# keeps generating a "rank-cascade pin" across the SEARCH ENGINE/AI cohort:
+# GOOGLE ~99%, CHAT GPT ~50/77%, GEMINI ~32.8%, COPILOT ~23.5%, BING ~18%,
+# PERPLEXITY ~14%. The 32.8% Gemini pin alone showed up across 7 unrelated files
+# (Chicago Sky, Kaitlyn Johnson, Frances Tiafoe, Zhirelle, Current, ONE, Revolut).
+#
+# This enforcer is a final safety net: for every SEARCH ENGINE/AI brand that
+# HAS a SEGMENT_BENCHMARKS entry, cap its BP at segment-weighted-target + 5pp
+# regardless of KNOWN_OVERSHOOT membership. Anything above that re-jitters
+# into target ± 1.5pp. Acts as a structural backstop so we never ship a
+# cascade pin again even if KNOWN_OVERSHOOT misses a future brand variant.
+# ============================================================================
+
+def enforce_search_engine_ai_cohort_ceiling(df, subject, verbose=True):
+    """Cap SEARCH ENGINE/AI brand BPs at segment-weighted target + 5pp.
+
+    Runs AFTER apply_panel_reality_floors so we trim anything that path missed.
+    Hostmap-gated implicitly: only touches rows that already exist.
+    """
+    if df is None or len(df) == 0:
+        return df, 0
+    try:
+        bp_col, cs_col, raw_col, proj_col = _detect_cols(df)
+        sample_size = _detect_sample_size(df, bp_col, raw_col)
+    except Exception:
+        return df, 0
+
+    df['_col_u'] = df['Column'].astype(str).str.strip().str.upper()
+    df['_val_u'] = df['Value'].astype(str).str.strip().str.upper()
+
+    n_caps = 0
+    examples = []
+    for (cat_u, brand_u), bench in SEGMENT_BENCHMARKS.items():
+        if cat_u != 'SEARCH ENGINE/AI':
+            continue
+        target = _segment_weighted_target(df, cat_u, brand_u)
+        if target is None:
+            continue
+        mask = (df['_col_u'] == cat_u) & (df['_val_u'] == brand_u)
+        for idx in df.index[mask].tolist():
+            cur = _bp(df.at[idx, bp_col])
+            # Ceiling = target + 5pp. Anything above gets re-jittered into target ± 1.5pp.
+            if cur <= target + 5.0:
+                continue
+            new_target = _jitter_for(
+                subject, brand_u, salt=f'search-ai-ceiling-{cat_u}',
+                lo=max(0.05, target - 1.5), hi=target + 1.5,
+            )
+            new_target = round(new_target, 4)
+            df = _set_bp(df, idx, new_target, bp_col, cs_col, raw_col, proj_col, sample_size)
+            n_caps += 1
+            if len(examples) < 6:
+                examples.append((brand_u, cur, new_target, target))
+
+    df = df.drop(columns=['_col_u', '_val_u'])
+
+    if verbose and n_caps > 0:
+        print(f"   🛡️  SEARCH ENGINE/AI cohort ceiling: {n_caps} brand BP cap(s) applied")
+        for brand_u, cur, new_v, tgt in examples:
+            print(f"      • {brand_u:14s} {cur:6.2f}% → {new_v:6.2f}% (target {tgt:5.2f}%)")
+    return df, n_caps
+
+
+# ============================================================================
 # Convenience wrapper
 # ============================================================================
 
@@ -4636,6 +4724,18 @@ def run_all_enforcers(df, subject, brand_category=None, verbose=True):
         total += n
     except Exception as e:
         print(f"   ⚠️ enforcer apply_panel_reality_floors failed: {e}")
+    # 2026-06-03 (Jenna 7-file Gemini master defect): defense-in-depth ceiling
+    # for SEARCH ENGINE/AI cohort. apply_panel_reality_floors only trims brands
+    # explicitly listed in KNOWN_OVERSHOOT_BRANDS; if the LLM invents a NEW
+    # rank-cascade pin (100/50/33/23/18/14 across Google/ChatGPT/Gemini/Copilot/
+    # Bing/Perplexity) for any other category we haven't whitelisted, this
+    # catches it. Caps any SEARCH ENGINE/AI brand with a segment-weighted
+    # target at target + 5pp; anything above re-jitters into target ± 1.5pp.
+    try:
+        df, n = enforce_search_engine_ai_cohort_ceiling(df, subject, verbose=verbose)
+        total += n
+    except Exception as e:
+        print(f"   ⚠️ enforcer enforce_search_engine_ai_cohort_ceiling failed: {e}")
     # 2026-05-29: Household-streaming floor — brand-profile-only rescue
     # for Netflix/Disney+/HBO Max/etc. that the GPT-4o vet re-reasoner
     # over-suppresses with "active demo less couch-bound" archetype bias.
