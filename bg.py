@@ -14852,6 +14852,31 @@ def enforce_input_brand_100(df_behavior, input_brands, purchasers_only: bool = F
         s = re.sub(r'[^a-z0-9]+', '', s)
         return s
     
+    # ─────────────────────────────────────────────────────────────────────
+    # Hostmap-aware writer dedup (added 2026-06-03 per Jenna's spec).
+    # Build a lookup of (brand_norm) -> (canonical_spelling, allowed_cat_keys).
+    # When pinning a brand to 100%, we ONLY pin in categories that hostmap
+    # marks as canonical for that brand — preventing variants like
+    # `BRANDY~CLARK` or `brandy-clark` from being pinned in categories where
+    # the brand is not hostmap-canonical. Also rewrites the Value to the
+    # canonical hostmap spelling so the dashboard never displays a variant.
+    # Brands NOT in hostmap fall through to the legacy "pin anywhere"
+    # behavior (preserves support for brand-new entities not yet in the
+    # reference table). 
+    # ─────────────────────────────────────────────────────────────────────
+    try:
+        _hg = _load_hostmap_category_gate()
+        _hg_norm_to_canon = _hg.get('norm_to_canon', {}) or {}
+        _hg_norm_to_cat_keys = _hg.get('norm_to_cat_keys', {}) or {}
+    except Exception as _hge:
+        if not SILENCE_VERBOSE_OUTPUT:
+            print(f"   ⚠️ hostmap-aware writer dedup disabled (load failed): {_hge}")
+        _hg_norm_to_canon = {}
+        _hg_norm_to_cat_keys = {}
+
+    def _hg_norm(s: str) -> str:
+        return re.sub(r'[^A-Z0-9]', '', str(s or '').upper())
+
     for input_brand in input_brands:
         # Generate all possible variations of the input brand
         brand_variations = generate_brand_variations(input_brand)
@@ -14863,6 +14888,20 @@ def enforce_input_brand_100(df_behavior, input_brands, purchasers_only: bool = F
         domain_core = _domain_core(input_brand)
         if domain_core:
             brand_variations.append(domain_core)
+
+        # Hostmap canonical + allowed categories for this brand (if known).
+        # `_hg_canonical_value` is the canonical spelling we'll write to the
+        # Value column when pinning. `_hg_allowed_cat_keys` gates which
+        # Column values are allowed to receive the pin. Empty set means
+        # "brand not in hostmap — fall through to legacy pin-anywhere".
+        _hg_canonical_value = None
+        _hg_allowed_cat_keys: set = set()
+        for _v in {input_brand, normalized_brand} | set(brand_variations):
+            _vn = _hg_norm(_v)
+            if _vn and _vn in _hg_norm_to_canon:
+                _hg_canonical_value = _hg_norm_to_canon[_vn]
+                _hg_allowed_cat_keys = set(_hg_norm_to_cat_keys.get(_vn) or set())
+                break
         
         # Create a comprehensive set of variations for matching
         all_variations = set()
@@ -14922,6 +14961,24 @@ def enforce_input_brand_100(df_behavior, input_brands, purchasers_only: bool = F
                     is_match = True
             
             if is_match:
+                row_col = str(row.get('Column', '')).strip().upper()
+
+                # ─────────────────────────────────────────────────────────
+                # Hostmap-aware writer dedup: if this brand is in hostmap
+                # and the row's category is NOT in the brand's hostmap-
+                # canonical category set, do not pin a variant spelling
+                # into the wrong category. (Brands not in hostmap fall
+                # through — _hg_allowed_cat_keys empty means "no gate".)
+                # ─────────────────────────────────────────────────────────
+                if _hg_allowed_cat_keys:
+                    _row_cat_key = re.sub(r'[^A-Z0-9]', '', row_col)
+                    if _row_cat_key not in _hg_allowed_cat_keys:
+                        if not SILENCE_VERBOSE_OUTPUT:
+                            print(f"   ⏭️  Skipping 100% pin for '{input_brand}' "
+                                  f"in {row_col} (not hostmap-canonical; "
+                                  f"canonical cats: {sorted(_hg_allowed_cat_keys)})")
+                        continue
+
                 # MPB FAMILY exemption (unless purchasers_only is on).
                 # The brand-input panel is selected on digital engagement, NOT
                 # actual purchase confirmation, so only a subset truly
@@ -14931,12 +14988,21 @@ def enforce_input_brand_100(df_behavior, input_brands, purchasers_only: bool = F
                 # misrepresent the purchase signal. The cross-category
                 # alignment will later propagate MPB's real purchase rate
                 # (e.g. Old Navy 62%) down into APPAREL/FOOTWEAR etc.
-                row_col = str(row.get('Column', '')).strip().upper()
                 if (not purchasers_only) and row_col in _MPB_FAMILY:
                     skipped_mpb += 1
                     if not SILENCE_VERBOSE_OUTPUT:
                         print(f"   ⏭️  Skipping 100% override for input brand '{input_brand}' in {row_col} (purchasers_only=False; MPB family — will inherit MPB's real purchase rate)")
                     continue
+
+                # Hostmap-aware Value rewrite: replace the matched variant
+                # spelling with the canonical hostmap spelling so the
+                # dashboard never displays `BRANDY~CLARK` or `brandy-clark`.
+                if _hg_canonical_value and value != _hg_canonical_value:
+                    df_behavior.loc[idx, 'Value'] = _hg_canonical_value
+                    if not SILENCE_VERBOSE_OUTPUT:
+                        print(f"   🔤 Rewrote variant '{value}' → canonical "
+                              f"'{_hg_canonical_value}' in {row_col}")
+
                 old_pct = float(row[pct_col])
                 _cur_pct = df_behavior.loc[idx, pct_col]
                 if isinstance(_cur_pct, str):
