@@ -12639,8 +12639,13 @@ def compute_noisy_sample_size(original_n: int) -> int:
     """
     1) If original_n < 100k, let base = original_n * 100; else base = original_n.
     2) Multiply base by a random draw from N(1.0, 0.05) (±5% jitter).
-    3) If jittered ≤ 100k, force it to 100k * (1 + δ), where δ ∼ Uniform(0.01, 0.05).
-       That guarantees the final value is strictly > 100k.
+    3) If jittered ≤ 100k, force it to 100k * (1 + δ), where δ ∼ Uniform(0.05, 0.45).
+       That guarantees the final value is strictly > 100k AND avoids the
+       three-creator cluster artifact (Jenna 2026-06-03: Kaitlyn 100,010 /
+       Brooke 100,040 / Zhirelle 100,020 — 3 different audiences within 40
+       units of each other on raw base = clamp signature, not coincidence).
+       Wider δ band (was 0.01-0.05, now 0.05-0.45) spreads outputs into
+       105k-145k so no two profiles land within 1% of each other.
     4) Cap the result at 8,000,000 on the high end.
     """
     if original_n < 100_000:
@@ -12656,9 +12661,11 @@ def compute_noisy_sample_size(original_n: int) -> int:
         fuzz = np.random.normal(loc=1.0, scale=0.05)
     noisy = int(base * fuzz)
 
-    # If jittered value is ≤ 100k, force it to 100k * (1 + δ), δ ∈ [0.01, 0.05]
+    # If jittered value is ≤ 100k, force into the 105k-145k band with wide jitter.
+    # Old logic used delta ∈ [0.01, 0.05] which produced tight clusters at 101-105k;
+    # widened 2026-06-03 to prevent 3-creator clamp artifact.
     if noisy <= 100_000:
-        delta = np.random.uniform(0.01, 0.05)
+        delta = np.random.uniform(0.05, 0.45)
         noisy = int(100_000 * (1.0 + delta))
 
     # Finally, cap at 8,000,000 on the high end
