@@ -30750,7 +30750,12 @@
             }
 
             var panels = PLATFORMS.map(_renderPanel).filter(Boolean).join('');
-            return '<div style="display:grid;grid-template-columns:1fr 1fr;gap:0.55rem;">' + panels + '</div>';
+            // Scrollable wrapper — caps the card height so the row
+            // doesn't stretch to fit all 4 platform panels at full
+            // height. User scrolls within the card to see the rest.
+            return '<div style="max-height:360px;overflow-y:auto;padding-right:4px;">'
+                 + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:0.55rem;">' + panels + '</div>'
+                 + '</div>';
         }
 
         function _jiqRenderCompanionTimeline(comps) {
