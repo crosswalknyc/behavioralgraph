@@ -46568,11 +46568,14 @@
                 btn.style.display = missingCount > 0 ? '' : 'none';
             }
             if (sourceEl) {
-                // Existing override-flag column on the report carries provenance,
-                // but for this tab we only need to indicate whether the agent has
-                // been used in this session. Cleared on each render and updated
-                // by lookupSubscriberEpisodeDates.
-                sourceEl.textContent = data && data._episode_dates_agent_note ? data._episode_dates_agent_note : '';
+                const notes = [];
+                if (data && data._episode_dates_admin_override) {
+                    notes.push('Episode numbers and release dates were customized in Admin.');
+                }
+                if (data && data._episode_dates_agent_note) {
+                    notes.push(data._episode_dates_agent_note);
+                }
+                sourceEl.textContent = notes.join(' ');
             }
 
             const rowsHtml = episodes.map(ep => {

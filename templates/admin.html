@@ -874,6 +874,11 @@
             color: #fff !important;
         }
 
+        .btn-edit-episodes {
+            background: #ec4899 !important;
+            color: #fff !important;
+        }
+
         .selection-bar {
             display: none;
             background: var(--bg-input);
@@ -3207,6 +3212,40 @@
             <div style="display: flex; gap: 0.75rem;">
                 <button class="btn btn-secondary" onclick="closeEditTitleModal()" style="flex: 1;">Cancel</button>
                 <button class="btn btn-primary" onclick="saveEditTitle()" style="flex: 1;">💾 Save</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Edit Subscriber IQ Episode Dates Modal -->
+    <div class="modal" id="editEpisodeDatesModal">
+        <div class="modal-content" style="max-width: 640px;">
+            <div class="modal-header">
+                <h2>🚦 Edit Episode Dates</h2>
+                <button class="modal-close" onclick="closeEditEpisodeDatesModal()">&times;</button>
+            </div>
+            <input type="hidden" id="editEpisodeDatesFileKey">
+            <div style="margin-bottom: 1rem;">
+                <label style="display: block; margin-bottom: 0.5rem; font-size: 0.85rem; font-weight: 600;">Show</label>
+                <div id="editEpisodeDatesShowName" style="padding: 0.5rem; background: var(--bg-input); border-radius: 6px; font-size: 0.9rem; color: var(--accent-lime); font-weight: 600;"></div>
+                <small style="display: block; color: var(--text-secondary); font-size: 0.75rem; margin-top: 0.5rem;">Updates the Episode Dates tab in Subscriber IQ for this show only.</small>
+            </div>
+            <div id="editEpisodeDatesLoading" style="display: none; padding: 1rem; color: var(--text-secondary); font-size: 0.85rem;">Loading episodes…</div>
+            <div id="editEpisodeDatesBody" style="max-height: 50vh; overflow-y: auto; margin-bottom: 1rem;">
+                <table style="width: 100%; border-collapse: collapse; font-size: 0.85rem;">
+                    <thead>
+                        <tr>
+                            <th style="text-align: left; padding: 0.5rem; color: var(--text-secondary); width: 8rem;">Episode #</th>
+                            <th style="text-align: left; padding: 0.5rem; color: var(--text-secondary);">Release Date</th>
+                            <th style="width: 2.5rem;"></th>
+                        </tr>
+                    </thead>
+                    <tbody id="editEpisodeDatesRows"></tbody>
+                </table>
+            </div>
+            <button type="button" class="btn btn-secondary btn-small" onclick="addEditEpisodeDatesRow()" style="margin-bottom: 1rem;">+ Add Episode</button>
+            <div style="display: flex; gap: 0.75rem;">
+                <button class="btn btn-secondary" onclick="closeEditEpisodeDatesModal()" style="flex: 1;">Cancel</button>
+                <button class="btn btn-primary" onclick="saveEditEpisodeDates()" style="flex: 1; background: #ec4899;">💾 Save</button>
             </div>
         </div>
     </div>
@@ -9273,6 +9312,118 @@
             }
         }
 
+        // ============ EDIT SUBSCRIBER IQ EPISODE DATES ============
+
+        function renderEditEpisodeDatesRows(episodes) {
+            const tbody = document.getElementById('editEpisodeDatesRows');
+            if (!tbody) return;
+            const rows = episodes && episodes.length ? episodes : [{ episode: '1', episode_date: '' }];
+            tbody.innerHTML = rows.map((row, idx) => `
+                <tr data-idx="${idx}">
+                    <td style="padding: 0.35rem 0.5rem 0.35rem 0;">
+                        <input type="text" class="ep-num-input" value="${(row.episode || '').replace(/"/g, '&quot;')}" placeholder="1" style="width: 100%; padding: 0.4rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary); font-size: 0.85rem;">
+                    </td>
+                    <td style="padding: 0.35rem 0.5rem;">
+                        <input type="text" class="ep-date-input" value="${(row.episode_date || '').replace(/"/g, '&quot;')}" placeholder="9/28/25" style="width: 100%; padding: 0.4rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary); font-size: 0.85rem;">
+                    </td>
+                    <td style="padding: 0.35rem 0;">
+                        <button type="button" class="btn btn-small btn-danger btn-icon" onclick="removeEditEpisodeDatesRow(this)" title="Remove row">×</button>
+                    </td>
+                </tr>
+            `).join('');
+        }
+
+        function collectEditEpisodeDatesRows() {
+            const tbody = document.getElementById('editEpisodeDatesRows');
+            if (!tbody) return [];
+            return Array.from(tbody.querySelectorAll('tr')).map(tr => ({
+                episode: (tr.querySelector('.ep-num-input')?.value || '').trim(),
+                episode_date: (tr.querySelector('.ep-date-input')?.value || '').trim()
+            })).filter(r => r.episode);
+        }
+
+        function addEditEpisodeDatesRow() {
+            const rows = collectEditEpisodeDatesRows();
+            const nextNum = rows.length ? String(parseInt(rows[rows.length - 1].episode, 10) + 1 || rows.length + 1) : '1';
+            rows.push({ episode: Number.isFinite(parseInt(nextNum, 10)) ? nextNum : String(rows.length + 1), episode_date: '' });
+            renderEditEpisodeDatesRows(rows);
+        }
+
+        function removeEditEpisodeDatesRow(btn) {
+            const tr = btn && btn.closest ? btn.closest('tr') : null;
+            if (tr) tr.remove();
+            const rows = collectEditEpisodeDatesRows();
+            if (!rows.length) {
+                renderEditEpisodeDatesRows([{ episode: '1', episode_date: '' }]);
+            }
+        }
+
+        async function openEditEpisodeDatesModal(fileKey) {
+            document.getElementById('editEpisodeDatesFileKey').value = fileKey;
+            const file = contentFiles.find(f => f.key === fileKey);
+            document.getElementById('editEpisodeDatesShowName').textContent = file ? (file.project_name || fileKey.split('/').pop()) : fileKey.split('/').pop();
+            document.getElementById('editEpisodeDatesLoading').style.display = 'block';
+            document.getElementById('editEpisodeDatesBody').style.display = 'none';
+            document.getElementById('editEpisodeDatesModal').classList.add('show');
+
+            try {
+                const response = await fetch('/api/admin/subscriber-episode-dates?file_key=' + encodeURIComponent(fileKey), { credentials: 'same-origin' });
+                const data = await response.json();
+                if (!data.success) {
+                    showToast(data.error || 'Failed to load episodes', true);
+                    closeEditEpisodeDatesModal();
+                    return;
+                }
+                const showLabel = data.show_name || (file && file.project_name) || '';
+                if (showLabel) {
+                    document.getElementById('editEpisodeDatesShowName').textContent = showLabel;
+                }
+                renderEditEpisodeDatesRows(data.episodes || []);
+            } catch (e) {
+                console.error('Load episode dates error:', e);
+                showToast('Error loading episodes: ' + e.message, true);
+                closeEditEpisodeDatesModal();
+            } finally {
+                document.getElementById('editEpisodeDatesLoading').style.display = 'none';
+                document.getElementById('editEpisodeDatesBody').style.display = 'block';
+            }
+        }
+
+        function closeEditEpisodeDatesModal() {
+            document.getElementById('editEpisodeDatesModal').classList.remove('show');
+        }
+
+        async function saveEditEpisodeDates() {
+            const fileKey = document.getElementById('editEpisodeDatesFileKey').value;
+            const episodes = collectEditEpisodeDatesRows();
+            if (!fileKey) {
+                showToast('Missing file key', true);
+                return;
+            }
+            if (!episodes.length) {
+                showToast('Add at least one episode with a number', true);
+                return;
+            }
+            try {
+                const response = await fetch('/api/admin/subscriber-episode-dates', {
+                    method: 'POST',
+                    credentials: 'same-origin',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ file_key: fileKey, episodes })
+                });
+                const data = await response.json();
+                if (data.success) {
+                    showToast('Episode dates saved');
+                    closeEditEpisodeDatesModal();
+                } else {
+                    showToast(data.error || 'Failed to save', true);
+                }
+            } catch (e) {
+                console.error('Save episode dates error:', e);
+                showToast('Error saving: ' + e.message, true);
+            }
+        }
+
         async function saveEditTitle() {
             const fileKey = document.getElementById('editTitleFileKey').value;
             const hoverTooltip = document.getElementById('editTitleHoverText').value.trim();
@@ -10173,6 +10324,9 @@
                     + '<button class="btn btn-small btn-danger btn-icon" onclick="deleteFile(\'' + escapedKey + '\')" title="Delete permanently">🗑️</button>';
             }
             const editTitleBtn = '<button class="btn btn-small btn-edit-title btn-icon" onclick="openEditTitleModal(\'' + escapedKey + '\')" title="Edit Title">🤓</button>';
+            const editEpisodesBtn = (isSvodRow || file.is_svod)
+                ? '<button class="btn btn-small btn-edit-episodes btn-icon" onclick="openEditEpisodeDatesModal(\'' + escapedKey + '\')" title="Edit Episode Dates">🚦</button>'
+                : '';
             
             const currentCadence = file.content_cadence || '';
             const cadenceCell = isSvodRow ? `
@@ -10206,6 +10360,7 @@
                             <button class="btn btn-small btn-icon" onclick="openProfileImageModal(${profileImageArgs})" title="Set Image" style="background: ${hasCustomImage ? 'var(--accent-lime)' : 'var(--bg-input)'}; color: ${hasCustomImage ? '#1a1a1a' : 'var(--text-primary)'};">🖼️</button>
                             ${archiveDeleteBtns}
                             ${editTitleBtn}
+                            ${editEpisodesBtn}
                         </div>
                     </td>
                 </tr>

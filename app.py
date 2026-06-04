@@ -11886,6 +11886,7 @@ def get_subscriber_iq_data(s3_key):
         # Parse subscriber IQ CSV
         print(f"📝 CSV content preview (first 500 chars): {csv_content[:500]}")
         parsed = parse_subscriber_iq_csv(csv_content)
+        apply_subscriber_episode_overrides(s3_key, parsed)
         # Subscriber IQ: use raw values from CSV (no scaling at serve time)
         normalize_demographics_gen_pop_to_nps(parsed)
 
@@ -17264,6 +17265,111 @@ def serialize_profile_display_override(s3_key):
     return out or None
 
 
+S3_SUBSCRIBER_EPISODE_OVERRIDES_KEY = 'system/subscriber_episode_overrides.json'
+subscriber_episode_overrides = {}
+_subscriber_episode_overrides_ts = 0
+_SUBSCRIBER_EPISODE_OVERRIDES_TTL = 15
+_subscriber_episode_overrides_lock = threading.Lock()
+
+
+def _read_subscriber_episode_overrides_from_s3():
+    if not s3_client:
+        return {}
+    try:
+        response = s3_client.get_object(Bucket=S3_BUCKET, Key=S3_SUBSCRIBER_EPISODE_OVERRIDES_KEY)
+        data = json.loads(response['Body'].read().decode('utf-8'))
+        return data if isinstance(data, dict) else {}
+    except Exception:
+        return {}
+
+
+def load_subscriber_episode_overrides(force=False):
+    global subscriber_episode_overrides, _subscriber_episode_overrides_ts
+    import time as _time
+    if not s3_client:
+        return False
+    now = _time.time()
+    if not force and subscriber_episode_overrides and (now - _subscriber_episode_overrides_ts) < _SUBSCRIBER_EPISODE_OVERRIDES_TTL:
+        return True
+    with _subscriber_episode_overrides_lock:
+        subscriber_episode_overrides = _read_subscriber_episode_overrides_from_s3()
+        _subscriber_episode_overrides_ts = now
+    return True
+
+
+def save_subscriber_episode_overrides():
+    global subscriber_episode_overrides, _subscriber_episode_overrides_ts
+    if not s3_client:
+        return False
+    import time
+    with _subscriber_episode_overrides_lock:
+        remote = _read_subscriber_episode_overrides_from_s3()
+        merged = dict(remote or {})
+        merged.update(subscriber_episode_overrides or {})
+        cache_json = json.dumps(merged, indent=2)
+        for attempt in range(3):
+            try:
+                if attempt > 0:
+                    remote = _read_subscriber_episode_overrides_from_s3()
+                    merged = dict(remote or {})
+                    merged.update(subscriber_episode_overrides or {})
+                    cache_json = json.dumps(merged, indent=2)
+                s3_client.put_object(
+                    Bucket=S3_BUCKET,
+                    Key=S3_SUBSCRIBER_EPISODE_OVERRIDES_KEY,
+                    Body=cache_json,
+                    ContentType='application/json'
+                )
+                subscriber_episode_overrides = merged
+                _subscriber_episode_overrides_ts = time.time()
+                return True
+            except Exception as e:
+                print(f"⚠️ Error saving subscriber episode overrides (attempt {attempt + 1}/3): {e}")
+                if attempt < 2:
+                    time.sleep(0.5)
+    return False
+
+
+def resolve_subscriber_iq_s3_key(file_key):
+    """Admin content keys use svod-acquisition/ prefix; Subscriber IQ API uses bare S3 key."""
+    key = (file_key or '').strip()
+    if key.startswith('svod-acquisition/'):
+        return key[len('svod-acquisition/'):]
+    return key
+
+
+def _episode_rows_from_parsed(parsed):
+    """Episode # + release date rows for Episode Dates tab (all tracked episodes)."""
+    rows = []
+    for ep in parsed.get('episode_attribution') or []:
+        rows.append({
+            'episode': str(ep.get('episode') or '').strip(),
+            'episode_date': str(ep.get('episode_date') or '').strip(),
+        })
+    return rows
+
+
+def apply_subscriber_episode_overrides(s3_key, parsed):
+    """Apply admin-edited episode numbers and release dates onto parsed Subscriber IQ data."""
+    if not s3_key:
+        return
+    load_subscriber_episode_overrides()
+    entry = subscriber_episode_overrides.get(s3_key)
+    if not entry or not entry.get('episodes'):
+        return
+    csv_eps = list(parsed.get('episode_attribution') or [])
+    merged = []
+    for i, ov in enumerate(entry['episodes']):
+        ep_num = str(ov.get('episode', '')).strip()
+        ep_date = str(ov.get('episode_date', '')).strip()
+        base = dict(csv_eps[i]) if i < len(csv_eps) else {}
+        base['episode'] = ep_num
+        base['episode_date'] = ep_date
+        merged.append(base)
+    parsed['episode_attribution'] = merged
+    parsed['_episode_dates_admin_override'] = True
+
+
 def _csv_data_json_response(data, brand_name, date_range, s3_key):
     """Build get-csv-data JSON with optional display_override."""
     payload = {
@@ -17560,6 +17666,80 @@ def remove_profile_image():
         })
         
     except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+
+@app.route('/api/admin/subscriber-episode-dates', methods=['GET', 'POST'])
+@requires_admin
+def admin_subscriber_episode_dates():
+    """Load or save per-show episode number + release date overrides for Subscriber IQ."""
+    global subscriber_episode_overrides
+    from datetime import datetime
+    try:
+        if request.method == 'GET':
+            file_key = (request.args.get('file_key') or request.args.get('s3_key') or '').strip()
+            if not file_key:
+                return jsonify({'success': False, 'error': 'file_key required'})
+            s3_key = resolve_subscriber_iq_s3_key(file_key)
+            if not s3_client:
+                return jsonify({'success': False, 'error': 'S3 not configured'}), 500
+            try:
+                response = s3_client.get_object(Bucket=SUBSCRIBER_S3_BUCKET, Key=s3_key)
+            except s3_client.exceptions.NoSuchKey:
+                return jsonify({'success': False, 'error': 'Subscriber IQ file not found'}), 404
+            csv_content = response['Body'].read().decode('utf-8')
+            parsed = parse_subscriber_iq_csv(csv_content)
+            apply_subscriber_episode_overrides(s3_key, parsed)
+            episodes = _episode_rows_from_parsed(parsed)
+            load_subscriber_episode_overrides()
+            has_override = bool((subscriber_episode_overrides.get(s3_key) or {}).get('episodes'))
+            return jsonify({
+                'success': True,
+                'file_key': file_key,
+                's3_key': s3_key,
+                'show_name': (parsed.get('metadata') or {}).get('show') or '',
+                'episodes': episodes,
+                'has_override': has_override,
+            })
+
+        data = request.get_json() or {}
+        file_key = (data.get('file_key') or data.get('s3_key') or '').strip()
+        episodes_in = data.get('episodes')
+        if not file_key:
+            return jsonify({'success': False, 'error': 'file_key required'})
+        if not isinstance(episodes_in, list) or len(episodes_in) == 0:
+            return jsonify({'success': False, 'error': 'episodes list required'})
+
+        s3_key = resolve_subscriber_iq_s3_key(file_key)
+        cleaned = []
+        for row in episodes_in:
+            ep = str(row.get('episode', '')).strip()
+            if not ep:
+                continue
+            cleaned.append({
+                'episode': ep,
+                'episode_date': str(row.get('episode_date', '')).strip(),
+            })
+        if not cleaned:
+            return jsonify({'success': False, 'error': 'At least one episode with a number is required'})
+
+        load_subscriber_episode_overrides(force=True)
+        subscriber_episode_overrides[s3_key] = {
+            'episodes': cleaned,
+            'updated_at': datetime.now().isoformat(),
+        }
+        if not save_subscriber_episode_overrides():
+            return jsonify({'success': False, 'error': 'Failed to save overrides to S3'})
+
+        return jsonify({
+            'success': True,
+            'file_key': file_key,
+            's3_key': s3_key,
+            'episodes': cleaned,
+        })
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
         return jsonify({'success': False, 'error': str(e)})
 
 
