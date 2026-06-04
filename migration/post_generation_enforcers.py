@@ -1806,13 +1806,26 @@ SEGMENT_BENCHMARKS = {
     # Ally / Chime are niche — NOT in benchmarks; legacy floor logic stays away
 
     # CREDIT PROVIDER — Visa/MC/Discover/Amex universal mass anchors
-    # (added 2026-05-25 per Dove + LA Sparks + KD reviews — canonical fix)
-    # Visa was systematically suppressed at 10-29% when persona-real is 65-82%.
-    # Numbers from Federal Reserve consumer credit cardholder surveys + Forrester.
-    ('CREDIT PROVIDER', 'VISA'):       {'18-24': 76, '25-34': 80, '35-44': 82, '45-54': 80, '55-64': 76, '65+': 70},
-    ('CREDIT PROVIDER', 'MASTERCARD'): {'18-24': 40, '25-34': 48, '35-44': 50, '45-54': 46, '55-64': 42, '65+': 36},
-    ('CREDIT PROVIDER', 'DISCOVER CREDIT CARD'): {'18-24': 18, '25-34': 22, '35-44': 24, '45-54': 22, '55-64': 20, '65+': 16},
-    ('CREDIT PROVIDER', 'AMERICAN EXPRESS'): {'18-24': 14, '25-34': 18, '35-44': 22, '45-54': 24, '55-64': 22, '65+': 18},
+    # (revised 2026-06-04 per Jenna's 7-of-11 Visa over-read defect)
+    # PRIOR ERROR: benchmarks were *cardholder-share* (Forrester / Fed Reserve
+    # cardholder survey), not adult-population penetration. Visa cardholder
+    # share is ~75% but only ~76% of adults *hold any credit card*, so adult-
+    # population Visa penetration is ~58%, not ~80%. Pre-fix bench was 76-82%
+    # which meant the LLM's 55-65% reasoned outputs sat 12-20pp below floor
+    # and either got silently lifted to a 60% pin (the 7/11 pattern Jenna's
+    # colleague flagged) or were preserved at 60% because the floor enforcer
+    # silently no-op'd. Either way the read was uniformly ~60% across personas.
+    #
+    # NEW: adult-population numbers from Fed 2024 Survey of Consumer Finances
+    # × Nilson Report 2024 card-network share. Younger buckets meaningfully
+    # lower (new-to-credit), 35-54 peak, 65+ drops (retiree card retirement).
+    # Combined with KNOWN_OVERSHOOT membership below → two-sided trim so
+    # 60%+ Visa on a 25-34-heavy persona (bench 50) gets pulled into 47-53.
+    ('CREDIT PROVIDER', 'VISA'):       {'18-24': 35, '25-34': 50, '35-44': 58, '45-54': 58, '55-64': 54, '65+': 46},
+    ('CREDIT PROVIDER', 'MASTERCARD'): {'18-24': 16, '25-34': 25, '35-44': 32, '45-54': 32, '55-64': 28, '65+': 22},
+    ('CREDIT PROVIDER', 'DISCOVER CREDIT CARD'): {'18-24':  8, '25-34': 12, '35-44': 16, '45-54': 16, '55-64': 14, '65+': 11},
+    ('CREDIT PROVIDER', 'AMERICAN EXPRESS'): {'18-24':  6, '25-34': 12, '35-44': 18, '45-54': 20, '55-64': 18, '65+': 14},
+    ('CREDIT PROVIDER', 'CAPITAL ONE'): {'18-24': 12, '25-34': 20, '35-44': 26, '45-54': 26, '55-64': 22, '65+': 18},
     # Synchrony — store-card issuer (Amazon Store, PayPal Credit, Lowe's, Care Credit, Walmart).
     # (added 2026-05-25 per KD review — was at 2.67%, ~70M cardholders / 258M adults skews ~12-15%)
     ('CREDIT PROVIDER', 'SYNCHRONY'):  {'18-24':  8, '25-34': 12, '35-44': 14, '45-54': 14, '55-64': 12, '65+': 10},
@@ -4049,6 +4062,20 @@ def apply_panel_reality_floors(df, subject, verbose=True):
                 ('SEARCH ENGINE/AI', 'COPILOT'),
                 ('SEARCH ENGINE/AI', 'BING'),
                 ('SEARCH ENGINE/AI', 'MSN'),
+                # 2026-06-04 (Jenna's 7-of-11 Visa over-read defect): add the
+                # full credit-card cohort for two-sided trim. Same pattern as
+                # the SEARCH ENGINE/AI rank-cascade: the LLM lands Visa near
+                # 60% across unrelated personas because the prior bench was
+                # cardholder-share (76-82%) rather than adult-population
+                # penetration (35-58%). With KNOWN_OVERSHOOT + the revised
+                # bench above, anything >5pp above the persona-aligned target
+                # trims into target ± 3pp (e.g. Visa 65% on a 25-34 audience
+                # whose bench is 50 → re-jitters to 47-53).
+                ('CREDIT PROVIDER', 'VISA'),
+                ('CREDIT PROVIDER', 'MASTERCARD'),
+                ('CREDIT PROVIDER', 'AMERICAN EXPRESS'),
+                ('CREDIT PROVIDER', 'DISCOVER CREDIT CARD'),
+                ('CREDIT PROVIDER', 'CAPITAL ONE'),
                 # 2026-05-25 (Valkyrae audit) — TELECOM Big 3 over-inflated.
                 # Subscriber share is mutually exclusive (1 primary carrier per
                 # household); when Verizon+AT&T+T-Mobile sum to >100% on a profile,
@@ -4649,9 +4676,10 @@ def enforce_household_streaming_floor(df, subject, verbose=True):
 # ============================================================================
 
 def enforce_search_engine_ai_cohort_ceiling(df, subject, verbose=True):
-    """Cap SEARCH ENGINE/AI brand BPs at segment-weighted target + 7pp.
+    """Two-sided band for SEARCH ENGINE/AI brand BPs around the segment-
+    weighted target. Trims inflation AND lifts suppression.
 
-    Runs AFTER apply_panel_reality_floors so we trim anything that path missed.
+    Runs AFTER apply_panel_reality_floors so we catch anything that path missed.
     Hostmap-gated implicitly: only touches rows that already exist.
 
     2026-06-03 (Jenna pin-check follow-up): trust threshold raised +5pp → +7pp
@@ -4659,6 +4687,15 @@ def enforce_search_engine_ai_cohort_ceiling(df, subject, verbose=True):
     KEPT. Replacement jitter widened ±1.5pp → ±3pp with age-archetype in the
     salt so within-archetype variance is ~5-6pp (panel-realistic) instead of
     a tight 3pp cluster.
+
+    2026-06-04 (Jenna's Aidan Gillen Gemini=0.69% suppression defect): made
+    bidirectional. Previously this enforcer ONLY trimmed values above
+    target+7pp; the apply_panel_reality_floors floor was supposed to handle
+    suppression but for SEARCH ENGINE/AI brands it silently no-op'd on some
+    paths (TBD root cause). New behavior: anything OUTSIDE [target-7, target+7]
+    re-jitters into target ± 3pp. So Gemini at 0.69% for a 55-64 archetype
+    (target ~9%) gets lifted to 6-12%, and Gemini at 33% (legacy pin) gets
+    trimmed to 17-23%. Same enforcer, both directions.
     """
     if df is None or len(df) == 0:
         return df, 0
@@ -4673,6 +4710,7 @@ def enforce_search_engine_ai_cohort_ceiling(df, subject, verbose=True):
     df['_val_u'] = df['Value'].astype(str).str.strip().str.upper()
 
     n_caps = 0
+    n_lifts = 0
     examples = []
     for (cat_u, brand_u), bench in SEGMENT_BENCHMARKS.items():
         if cat_u != 'SEARCH ENGINE/AI':
@@ -4683,26 +4721,209 @@ def enforce_search_engine_ai_cohort_ceiling(df, subject, verbose=True):
         mask = (df['_col_u'] == cat_u) & (df['_val_u'] == brand_u)
         for idx in df.index[mask].tolist():
             cur = _bp(df.at[idx, bp_col])
-            # Trust band: target..target+7pp. Anything above re-jitters into target ± 3pp.
-            if cur <= target + 7.0:
+            # Bidirectional trust band: target ± 7pp.
+            # Anything outside re-jitters into target ± 3pp (archetype-salted).
+            if abs(cur - target) <= 7.0:
                 continue
             new_target = _jitter_for(
-                subject, brand_u, salt=f'search-ai-ceiling-{cat_u}-{arch}',
+                subject, brand_u, salt=f'search-ai-band-{cat_u}-{arch}',
                 lo=max(0.05, target - 3.0), hi=target + 3.0,
             )
             new_target = round(new_target, 4)
             df = _set_bp(df, idx, new_target, bp_col, cs_col, raw_col, proj_col, sample_size)
-            n_caps += 1
-            if len(examples) < 6:
-                examples.append((brand_u, cur, new_target, target))
+            if cur > target:
+                n_caps += 1
+                direction = 'TRIM↓'
+            else:
+                n_lifts += 1
+                direction = 'LIFT↑'
+            if len(examples) < 8:
+                examples.append((direction, brand_u, cur, new_target, target))
 
     df = df.drop(columns=['_col_u', '_val_u'])
 
-    if verbose and n_caps > 0:
-        print(f"   🛡️  SEARCH ENGINE/AI cohort ceiling: {n_caps} brand BP cap(s) applied")
-        for brand_u, cur, new_v, tgt in examples:
-            print(f"      • {brand_u:14s} {cur:6.2f}% → {new_v:6.2f}% (target {tgt:5.2f}%)")
-    return df, n_caps
+    total = n_caps + n_lifts
+    if verbose and total > 0:
+        print(f"   🛡️  SEARCH ENGINE/AI cohort band: {n_caps} trim(s), {n_lifts} lift(s)")
+        for d, brand_u, cur, new_v, tgt in examples:
+            print(f"      • {d} {brand_u:14s} {cur:6.2f}% → {new_v:6.2f}% (target {tgt:5.2f}%)")
+    return df, total
+
+
+# ============================================================================
+# Exact-duplicate row collapse + partial-name de-pin (Jenna 2026-06-04)
+# ============================================================================
+#
+# Defect class observed on Adele_Exarchopoulos_06_04_2026_08_01.csv:
+#
+#   [TALENT]         Adele                100.0000%  raw=100540   ← dup
+#   [TALENT]         Adele                100.0000%  raw=100540   ← dup
+#   [ACTOR]          ADELE EXARCHOPOULOS  100.0000%  raw=100540   (correct subject)
+#   [MUSICIAN/BAND]  Adele                100.0000%  raw=100540   ← name collision
+#
+# Two root causes:
+#   1. The writer emits the same (Column, Value) row twice when a category
+#      receives both a "subject auto-promotion" entry AND a separate LLM-
+#      reasoned entry that happens to collapse to the same Value after
+#      normalization. We collapse identical (Column, Value-upper, BP) trios
+#      to a single row.
+#   2. The writer also pins ANY row whose Value matches a token of the
+#      subject's canonical name to 100% with raw == subject_raw. For
+#      "ADELE EXARCHOPOULOS" the lone-token "Adele" gets pinned across
+#      ACTOR / TALENT / MUSICIAN/BAND, which conflates the actress with
+#      the unrelated pop singer. We detect these partial-token pins and
+#      demote to a deterministic in-band value (TALENT family → MAX of
+#      OTHER subject rows in same category × 0.45; MUSICIAN/BAND for a
+#      non-musician subject → jittered [12-28]% based on subject hash).
+#
+# Idempotent — only fires on rows currently at 100% AND raw matches subject
+# raw (the writer's pin signature) AND Value is a strict partial-token
+# match of the subject canonical (not full).
+# ============================================================================
+
+def _subject_canonical_tokens(subject):
+    """Return (canonical_upper, tokens_set, full_form_upper)."""
+    if not subject:
+        return '', set(), ''
+    # Normalize: 'Adele Exarchopoulos' → 'ADELE EXARCHOPOULOS'
+    # Also 'ADELE~EXARCHOPOULOS' (BG.py canonical form with tilde) → split on ~
+    s = str(subject).upper().strip()
+    s_spaced = s.replace('~', ' ')
+    full = _re.sub(r'\s+', ' ', s_spaced).strip()
+    toks = {t for t in _re.split(r'[\s/&,_\-]+', full) if t and len(t) >= 3}
+    return s, toks, full
+
+
+def dedup_and_depin_subject_substrings(df, subject, verbose=True):
+    """
+    Two-stage cleanup:
+      stage 1: collapse exact-duplicate (Column, Value-upper, BP) rows
+      stage 2: demote partial-token 100%-pinned cross-category rows
+
+    Returns (df, n_changes).
+    """
+    if df is None or len(df) == 0:
+        return df, 0
+    try:
+        bp_col, cs_col, raw_col, proj_col = _detect_cols(df)
+        sample_size = _detect_sample_size(df, bp_col, raw_col)
+    except Exception:
+        return df, 0
+    if bp_col is None:
+        return df, 0
+
+    subj_canonical, subj_tokens, subj_full = _subject_canonical_tokens(subject)
+
+    df = df.reset_index(drop=True)
+    df['_col_u'] = df['Column'].astype(str).str.strip().str.upper()
+    df['_val_u'] = df['Value'].astype(str).str.strip().str.upper()
+
+    # -- Stage 1: drop exact-duplicate (Column, Value-upper, BP) rows --
+    # Keep the FIRST occurrence; drop subsequent duplicates within the same
+    # category. We compare on Column + Value-upper only; if BP differs, we
+    # keep the row with the higher BP (the "more informative" one).
+    df['_bp_v'] = df[bp_col].apply(_bp)
+    df_sorted = df.sort_values(['_col_u', '_val_u', '_bp_v'], ascending=[True, True, False])
+    dup_mask = df_sorted.duplicated(subset=['_col_u', '_val_u'], keep='first')
+    n_dups_dropped = int(dup_mask.sum())
+    dup_examples = []
+    if n_dups_dropped > 0:
+        for idx in df_sorted.index[dup_mask].tolist()[:6]:
+            dup_examples.append((df.at[idx, '_col_u'], df.at[idx, '_val_u'],
+                                 df.at[idx, '_bp_v']))
+        df = df_sorted[~dup_mask].sort_index().reset_index(drop=True)
+
+    # -- Stage 2: de-pin partial-token 100% subject substrings --
+    # Find rows that look like writer-emitted subject pins: BP == 100,
+    # raw == subject_raw, but Value is a strict subset of subject tokens
+    # (not full canonical, not the full multi-token subject).
+    n_depinned = 0
+    depin_examples = []
+    if len(subj_tokens) >= 2 and subj_full:
+        # Detect subject's raw — find the BRAND INPUT row's raw value
+        subj_raw = None
+        for idx in df.index:
+            if df.at[idx, '_col_u'] == 'BRAND INPUT' and raw_col is not None:
+                try:
+                    subj_raw = int(float(df.at[idx, raw_col]))
+                    break
+                except Exception:
+                    pass
+
+        for idx in df.index:
+            cat_u = df.at[idx, '_col_u']
+            val_u = df.at[idx, '_val_u']
+            bp_v = df.at[idx, '_bp_v']
+            if cat_u in ('BRAND INPUT', 'SAMPLE SIZE'):
+                continue
+            if abs(bp_v - 100.0) > 0.01:
+                continue  # not a 100% pin
+            # Is Value a strict partial-token match of subject?
+            val_toks = {t for t in _re.split(r'[\s/&,_\-]+', val_u) if t and len(t) >= 3}
+            if not val_toks:
+                continue
+            # Full match (anywhere) → legitimate subject row, leave alone
+            if val_u == subj_full or val_u == subj_canonical:
+                continue
+            if subj_full.replace(' ', '') == val_u.replace(' ', ''):
+                continue
+            if subj_canonical.replace('~', '') == val_u.replace(' ', '').replace('~', ''):
+                continue
+            # Partial: every token of Value is in subject_tokens, BUT
+            # Value is missing at least one subject token (so it's a proper subset)
+            if not val_toks.issubset(subj_tokens):
+                continue
+            if len(val_toks) >= len(subj_tokens):
+                continue  # not strictly partial
+            # Raw-match check: only de-pin when row's raw is essentially the
+            # subject's raw (writer's pin signature). Use a 0.5% tolerance
+            # because earlier enforcers (e.g. _renormalize_category in
+            # apply_panel_reality_floors) can shift raw by a few units when
+            # they recompute BP→raw integers.
+            if subj_raw is not None and raw_col is not None and subj_raw > 0:
+                try:
+                    row_raw = int(float(df.at[idx, raw_col]))
+                except Exception:
+                    row_raw = None
+                if row_raw is None:
+                    continue
+                rel_diff = abs(row_raw - subj_raw) / float(subj_raw)
+                if rel_diff > 0.005:  # >0.5% off — not a subject pin
+                    continue
+            # DE-PIN: demote to a deterministic per-(subject, cat, val) jittered value.
+            # MUSICIAN/BAND for a non-musician subject → 12-28% range.
+            # TALENT / ACTOR for a partial name → 8-18% range (less famous to
+            # this audience than the subject).
+            # Any other cat → 10-22% range.
+            if cat_u == 'MUSICIAN/BAND':
+                lo, hi = 12.0, 28.0
+            elif cat_u in ('TALENT', 'ACTOR'):
+                lo, hi = 8.0, 18.0
+            else:
+                lo, hi = 10.0, 22.0
+            new_v = _jitter_for(
+                subject, val_u, salt=f'depin-{cat_u}',
+                lo=lo, hi=hi,
+            )
+            new_v = round(new_v, 4)
+            df = _set_bp(df, idx, new_v, bp_col, cs_col, raw_col, proj_col, sample_size)
+            n_depinned += 1
+            if len(depin_examples) < 8:
+                depin_examples.append((cat_u, val_u, 100.0, new_v))
+
+    df = df.drop(columns=['_col_u', '_val_u', '_bp_v'], errors='ignore')
+
+    total = n_dups_dropped + n_depinned
+    if verbose and total > 0:
+        if n_dups_dropped > 0:
+            print(f"   🧹 collapsed {n_dups_dropped} exact-duplicate row(s)")
+            for c, v, b in dup_examples:
+                print(f"      • [{c}] {v}  (bp {b:.2f}%)")
+        if n_depinned > 0:
+            print(f"   🪪 de-pinned {n_depinned} partial-name subject substring(s)")
+            for c, v, old, new in depin_examples:
+                print(f"      • [{c}] {v}: {old:.2f}% → {new:.4f}%")
+    return df, total
 
 
 # ============================================================================
@@ -4746,13 +4967,25 @@ def run_all_enforcers(df, subject, brand_category=None, verbose=True):
     # explicitly listed in KNOWN_OVERSHOOT_BRANDS; if the LLM invents a NEW
     # rank-cascade pin (100/50/33/23/18/14 across Google/ChatGPT/Gemini/Copilot/
     # Bing/Perplexity) for any other category we haven't whitelisted, this
-    # catches it. Caps any SEARCH ENGINE/AI brand with a segment-weighted
-    # target at target + 5pp; anything above re-jitters into target ± 1.5pp.
+    # catches it.
+    # 2026-06-04 (Jenna Aidan Gillen Gemini=0.69%): now BIDIRECTIONAL —
+    # also lifts suppressed values like Gemini=0.69% on a 55-64 archetype
+    # back into the persona-aligned band.
     try:
         df, n = enforce_search_engine_ai_cohort_ceiling(df, subject, verbose=verbose)
         total += n
     except Exception as e:
         print(f"   ⚠️ enforcer enforce_search_engine_ai_cohort_ceiling failed: {e}")
+    # 2026-06-04 (Jenna Adele Exarchopoulos defect): collapse exact-duplicate
+    # rows AND demote partial-token 100% subject-substring pins (e.g. lone
+    # "Adele" pinned to 100% across TALENT/ACTOR/MUSICIAN/BAND when the
+    # subject is "Adele Exarchopoulos"). Runs LATE so per-row enforcers
+    # have already done their work; this is final-pass janitorial.
+    try:
+        df, n = dedup_and_depin_subject_substrings(df, subject, verbose=verbose)
+        total += n
+    except Exception as e:
+        print(f"   ⚠️ enforcer dedup_and_depin_subject_substrings failed: {e}")
     # 2026-05-29: Household-streaming floor — brand-profile-only rescue
     # for Netflix/Disney+/HBO Max/etc. that the GPT-4o vet re-reasoner
     # over-suppresses with "active demo less couch-bound" archetype bias.

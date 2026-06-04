@@ -14,17 +14,13 @@ so every filter combination is sub-second regardless of whether it's
 National, a state, or a DMA.
 
 Hetzner crontab (run after the nightly ETL finishes; ETL typically wraps
-by ~5am UTC, so 8:01am UTC = 12:01am US/Pacific is a clean window).
-Always pass `--all` so the cron builds BOTH the 1d Live cube AND the
-30d default cube in a single CH connection — that's the cheapest pattern
-because the party-imputer S3 cache is shared across lookbacks.
+by ~5am UTC, so 8:01am UTC = 12:01am US/Pacific is a clean window):
 
-    1 8 * * *  cd /root/finished_codes/bg-webapp && /usr/bin/python3 scripts/blue_iq_daily_warm.py --all >> /var/log/blue_iq_daily_warm.log 2>&1
+    1 8 * * *  cd /root/finished_codes/bg-webapp && /usr/bin/python3 scripts/blue_iq_daily_warm.py >> /var/log/blue_iq_daily_warm.log 2>&1
 
 Manual one-shot (after a fresh deploy, before the first cron run):
 
-    python3 bg-webapp/scripts/blue_iq_daily_warm.py --all      # both 1d + 30d
-    python3 bg-webapp/scripts/blue_iq_daily_warm.py --lookback 1   # just Live
+    python3 bg-webapp/scripts/blue_iq_daily_warm.py
 """
 
 from __future__ import annotations
