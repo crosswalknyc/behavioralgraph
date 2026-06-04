@@ -1558,9 +1558,32 @@ def get_genpop_penetration_for_brand(brand_name, brand_category=None, brands=Non
 
 def estimate_sample_size_for_unknown_brand(brand_category, actual_universe_size=None):
     """Estimate a reasonable sample size for a brand not found in Gen Pop.
-    
-    Uses digital panel tier estimates based on BRAND CATEGORY.
-    If actual_universe_size is available, uses it to position within the tier range.
+
+    PRINCIPLE (revised 2026-06-04 per Jenna's 100K-clamp audit):
+        When we have a real signal — the ClickHouse COUNT(DISTINCT UID) from
+        TEMP_UIDS — TRUST IT and apply a small believable boost for
+        statistical reliability (accounts for panel coverage gaps,
+        deduplication, attribution noise). DO NOT multiply by a tier-percent
+        of a fictitious 10M denominator.
+
+    PRIOR BUG: prior version computed sample_size = (tier_lo + ...) * 10M
+        which threw away small real signals. A niche talent with 5,000 real
+        UIDs got inflated to 5000/10M * 11pp_tier_span + 0.01 floor ≈ 1% of
+        10M = 100,600 → produced the tight 99K-110K clamp band that
+        clustered 48 of 314 overnight profiles within 200 units of 100,000.
+
+    NEW BEHAVIOR:
+        actual_universe_size known → use it × tiered boost:
+            < 500       : 5x   (tiny samples need padding for reliability)
+            500 - 2K    : 3x
+            2K - 20K    : 2x   (2,595 UIDs → 5,190 — Jenna's example)
+            20K - 100K  : 1.5x
+            >= 100K     : 1.2x
+        actual_universe_size unknown → fall back to mid-tier estimate
+            (only path that uses DIGITAL_PANEL_TIER_ESTIMATES * 10M)
+
+        No 10K floor. Genuinely small real signals stay small.
+        Hard ceiling at GENPOP_CAP (10M).
     """
     GENPOP_CAP = 10_000_000
     bc_upper = (brand_category or '').strip().upper()
@@ -1568,21 +1591,34 @@ def estimate_sample_size_for_unknown_brand(brand_category, actual_universe_size=
         bc_upper = 'STREAMING/PLATFORM'
     elif bc_upper.startswith('GAMES'):
         bc_upper = 'GAMES'
-    
+
+    if actual_universe_size and actual_universe_size > 0:
+        n = int(actual_universe_size)
+        if n < 500:
+            boost = 5.0
+        elif n < 2_000:
+            boost = 3.0
+        elif n < 20_000:
+            boost = 2.0
+        elif n < 100_000:
+            boost = 1.5
+        else:
+            boost = 1.2
+        sample_size = int(round(n * boost))
+        sample_size = min(sample_size, GENPOP_CAP)
+        sample_size = (sample_size // 10) * 10
+        return max(sample_size, 10)  # absolute floor: never zero
+
+    # No real signal — must guess from category tier. This is the ONLY path
+    # that uses the fictitious tier-percent * 10M formula. It's the
+    # last-known-good guess when ClickHouse couldn't tell us anything.
     tier = DIGITAL_PANEL_TIER_ESTIMATES.get(bc_upper, (0.01, 0.08))
     lo, hi = tier
-    
-    if actual_universe_size and actual_universe_size > 0:
-        ratio = min(actual_universe_size / GENPOP_CAP, 1.0)
-        pct = lo + (hi - lo) * ratio
-    else:
-        pct = (lo + hi) / 2
-    
+    pct = (lo + hi) / 2
     sample_size = round(pct * GENPOP_CAP)
-    sample_size = max(sample_size, 10_000)
     sample_size = min(sample_size, GENPOP_CAP)
     sample_size = (sample_size // 10) * 10
-    return sample_size
+    return max(sample_size, 10)
 
 def _get_profile_genpop_penetration(df, gp_lookup):
     """Determine the profile's Gen Pop Brand Penetration from the BRAND INPUT row.
@@ -24472,13 +24508,22 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
                 bounded = min(int(actual_sample_size or 0), GENPOP_SAMPLE_CAP)
                 if bounded >= GENPOP_SAMPLE_CAP:
                     bounded = GENPOP_SAMPLE_CAP - max(1, int(GENPOP_SAMPLE_CAP * 0.005))
-                INFLATION_OPTIONS = [35, 25, 5, 2.5, 1]
-                INFLATION_FACTOR = 1
-                for mult in INFLATION_OPTIONS:
-                    if bounded * mult <= GENPOP_SAMPLE_CAP:
-                        INFLATION_FACTOR = mult
-                        break
-                final_sample_size = min(int(bounded * INFLATION_FACTOR), GENPOP_SAMPLE_CAP)
+                # Tightened 2026-06-04 (Jenna 100K-clamp audit). Prior values
+                # 35x / 25x took a 5K signal to 175K / 125K → produced the
+                # exact same clamp pattern that the Step 2 estimator did.
+                # New tiered boost matches estimate_sample_size_for_unknown_brand
+                # so Step 2 and Step 3 produce comparable results.
+                if bounded < 500:
+                    INFLATION_FACTOR = 5
+                elif bounded < 2_000:
+                    INFLATION_FACTOR = 3
+                elif bounded < 20_000:
+                    INFLATION_FACTOR = 2
+                elif bounded < 100_000:
+                    INFLATION_FACTOR = 1.5
+                else:
+                    INFLATION_FACTOR = 1.2
+                final_sample_size = min(int(round(bounded * INFLATION_FACTOR)), GENPOP_SAMPLE_CAP)
                 final_sample_size = (final_sample_size // 10) * 10
                 if not SILENCE_VERBOSE_OUTPUT:
                     print(f"📊 Fallback inflation: {actual_sample_size:,} x {INFLATION_FACTOR} = {final_sample_size:,}")
