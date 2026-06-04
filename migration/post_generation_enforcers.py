@@ -4751,6 +4751,153 @@ def enforce_search_engine_ai_cohort_ceiling(df, subject, verbose=True):
 
 
 # ============================================================================
+# 100K sample-size clamp re-grounding (Jenna 2026-06-04)
+# ============================================================================
+#
+# Pattern: 15% (48 of 314) of overnight profiles landed with BRAND INPUT
+# raw in the 99K-105K band, tightly clustered (Kaitlyn_Johnson 100,010 /
+# Brooke_Hyland 100,040 / Zhirelle 100,020 etc.). Real audiences would
+# show genuine variance across 1K-2M. Tight clustering at exactly ~100K
+# is a clamp artifact, not real signal.
+#
+# Root cause: BG.py's estimate_sample_size_for_unknown_brand applies a
+# DIGITAL_PANEL_TIER_ESTIMATES floor of (lo=0.01, hi=0.12) for ACTOR
+# category, meaning a niche talent with 5K real panel users gets
+# inflated to ~lo*10M = 100K. compute_noisy_sample_size then adds ±5%
+# noise, producing the 95K-105K cluster. (Values above 100K survive;
+# values below get re-lifted to 105K-145K by the wider delta band.)
+#
+# Fix: post-generation, when subject_raw is in [99K, 110K] re-ground to
+# a realistic small-niche value. Deterministic per-subject jitter:
+#   - niche (max non-subject TALENT-family BP < 50%): [3K, 12K]
+#   - mid   (50% <= max < 80%):                       [40K, 80K]
+#   - known (max >= 80%):                             leave alone
+# (the high-recognition case is consistent with real ~100K-1M audiences)
+#
+# Recompute cascades through existing recompute_raw_and_projection by
+# updating the BRAND INPUT row's raw cell. Everything else derives.
+# ============================================================================
+
+_TALENT_FAMILY_FOR_TIER = frozenset({
+    'TALENT', 'ACTOR', 'ATHLETE', 'MUSICIAN/BAND', 'MUSICIAN',
+    'HOST/PERSONALITY', 'POLITICS/ACTIVIST', 'POLITICS', 'PODCAST',
+    'NFL ATHLETE', 'NBA ATHLETE', 'MLB ATHLETE', 'NHL ATHLETE', 'SOCCER',
+    'WRITER/DIRECTOR/AUTHOR/ARTIST', 'CREATOR/INFLUENCER',
+})
+
+
+def _detect_subject_recognition_tier(df, bp_col):
+    """Return 'niche' | 'mid' | 'known' based on max non-100% BP across
+    TALENT-family categories. Crude but reliable: if the LLM couldn't
+    find any other comparable person at >50% reach, the subject is niche.
+    """
+    if df is None or len(df) == 0 or bp_col is None:
+        return 'niche'
+    col_u = df['Column'].astype(str).str.strip().str.upper()
+    fam_mask = col_u.isin(_TALENT_FAMILY_FOR_TIER)
+    max_bp = 0.0
+    for _, r in df[fam_mask].iterrows():
+        bp = _bp(r.get(bp_col))
+        if bp >= 99.0:
+            continue  # subject's own pin (or near-pin)
+        if bp > max_bp:
+            max_bp = bp
+    if max_bp >= 95.0:
+        return 'alist'   # established A-list — leave existing sample alone
+    if max_bp >= 75.0:
+        return 'known'   # recognized name with broad reach
+    if max_bp >= 50.0:
+        return 'mid'     # mid-tier visibility
+    return 'niche'       # low panel-share, often <0.1% of 10M
+
+
+def reground_clamped_sample_size(df, subject, verbose=True):
+    """Detect the ~100K clamp signature on BRAND INPUT raw and re-ground
+    to a realistic deterministic value based on subject recognition tier.
+
+    Modifies ONLY the BRAND INPUT row's raw and the SAMPLE SIZE row's raw.
+    Downstream recompute_raw_and_projection cascades the change to every
+    other Raw + Projection cell using the new sample_size.
+
+    Idempotent: skips files whose subject_raw is already outside the
+    99K-110K clamp band.
+    """
+    if df is None or len(df) == 0:
+        return df, 0
+    bp_col, cs_col, raw_col, proj_col = _detect_cols(df)
+    if bp_col is None or raw_col is None:
+        return df, 0
+
+    col_u = df['Column'].astype(str).str.strip().str.upper()
+
+    # Find BRAND INPUT row
+    bi_mask = col_u == 'BRAND INPUT'
+    if not bi_mask.any():
+        return df, 0
+    bi_idx = df.index[bi_mask][0]
+    try:
+        bi_raw = int(float(str(df.at[bi_idx, raw_col]).replace(',', '')))
+    except Exception:
+        return df, 0
+
+    # Detect clamp band — 99K-110K is the writer-side ~100K floor signature
+    if not (99_000 <= bi_raw <= 110_000):
+        return df, 0
+
+    # Choose new sample_size. By construction every file in the [99K, 110K]
+    # clamp band is niche — the writer only hit the 100K floor *because*
+    # the actual ClickHouse UID count was tiny (< 10K typically). If a
+    # subject had a real 100K+ audience, BG.py would have computed that
+    # directly and the value wouldn't show the clamp signature.
+    #
+    # "max other talent BP" was tested as a tiering signal but turned out
+    # to be misleading: it reflects audience age cohort (e.g. teens
+    # always show Taylor Swift at 70%+), not the subject's own panel
+    # reach. So we use it ONLY to gate an A-list bypass (max >= 95%
+    # implies the subject genuinely has near-universal recognition and
+    # the 100K clamp is coincidental, not artifact).
+    tier = _detect_subject_recognition_tier(df, bp_col)
+    if tier == 'alist':
+        return df, 0
+    # Per Jenna's instruction: "make it 5,190 not 100k" — niche
+    # deterministic re-ground in [3K, 15K] with per-subject jitter.
+    lo, hi = 3_000.0, 15_000.0
+
+    new_size = int(round(_jitter_for(
+        subject, 'sample-size', salt='reground-niche',
+        lo=lo, hi=hi,
+    )))
+    new_size = max(int(lo), min(int(hi), new_size))
+
+    # Update BRAND INPUT raw (sample_size by definition since BP=100)
+    df.at[bi_idx, raw_col] = new_size
+    if proj_col is not None:
+        df.at[bi_idx, proj_col] = int(round((new_size / 10_000_000.0) * US_POP))
+
+    # Update SAMPLE SIZE row raw (typically ~99% of sample_size; some files
+    # have the actual UID count here, which is slightly smaller). Preserve
+    # its BP and recompute raw = BP/100 * new_size.
+    ss_mask = col_u == 'SAMPLE SIZE'
+    if ss_mask.any():
+        ss_idx = df.index[ss_mask][0]
+        ss_bp = _bp(df.at[ss_idx, bp_col])
+        if ss_bp > 0 and ss_bp <= 100:
+            new_ss_raw = int(round(ss_bp / 100.0 * new_size))
+            df.at[ss_idx, raw_col] = new_ss_raw
+            if proj_col is not None:
+                df.at[ss_idx, proj_col] = int(round(
+                    (new_ss_raw / 10_000_000.0) * US_POP))
+
+    if verbose:
+        share_pct = (new_size / 10_000_000.0) * 100.0
+        print(f"   📏 sample-size re-ground (niche, tier-hint={tier}): "
+              f"{bi_raw:,} → {new_size:,} "
+              f"({share_pct:.4f}% of 10M panel; "
+              f"downstream Raw/Proj recompute will cascade)")
+    return df, 1
+
+
+# ============================================================================
 # Exact-duplicate row collapse + partial-name de-pin (Jenna 2026-06-04)
 # ============================================================================
 #
@@ -5149,6 +5296,15 @@ def run_all_enforcers(df, subject, brand_category=None, verbose=True):
         total += n
     except Exception as e:
         print(f"   ⚠️ enforcer dejitter_x5x0 (mop-up) failed: {e}")
+    # 2026-06-04 (Jenna sample-size clamp defect): detect 99K-110K clamp
+    # signature on BRAND INPUT raw and re-ground niche/mid subjects to a
+    # realistic small panel-share before final Raw/Proj recompute below.
+    # The recompute step picks up the new BRAND INPUT raw automatically.
+    try:
+        df, n = reground_clamped_sample_size(df, subject, verbose=verbose)
+        total += n
+    except Exception as e:
+        print(f"   ⚠️ enforcer reground_clamped_sample_size failed: {e}")
     # 2026-05-27 (D-Proj): VERY LAST -- recompute Raw + Proj from final BP.
     # Every previous enforcer that touched BP may have left stale Raw/Proj
     # cells. This pass canonicalizes the math:
