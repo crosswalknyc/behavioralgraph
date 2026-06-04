@@ -20284,6 +20284,52 @@
                      Auto-hides when payload.subscriber_iq_summary is
                      missing (e.g. on non-TV-show runs).
                 ═══════════════════════════════════════════════════════ -->
+                <!-- ═══════════════════════════════════════════════════════
+                     CROSS-SHOW VIEWERSHIP — IP audience overlap diagram.
+                     For Pop Culture Jeopardy this surfaces the 3-circle
+                     Venn of Broadcast Jeopardy! × Hulu Jeopardy! × PCJ
+                     so Sony can see how much of PCJ is NET-NEW to the IP
+                     vs already-engaged broadcast / Hulu fans, with
+                     demographic skew per region.
+                     Auto-hides when payload.cross_show_overlap is missing
+                     (e.g. on non-tv-show runs that don't carry IP overlap).
+                ═══════════════════════════════════════════════════════ -->
+                <div class="card" id="jiqCrossShowCard"
+                     style="padding: 1rem; margin-top: 1rem; display: none;
+                            background: linear-gradient(135deg, rgba(244,114,182,0.06) 0%, rgba(168,85,247,0.02) 100%);
+                            border: 1px solid rgba(244,114,182,0.22);">
+                    <div style="display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.25rem;">
+                        <h3 id="jiqCrossShowTitle" style="margin: 0;">🎯 Cross-Show Viewership — IP audience overlap</h3>
+                        <div id="jiqCrossShowMeta" style="font-size: 0.72rem; color: var(--text-secondary);"></div>
+                    </div>
+                    <div id="jiqCrossShowSubtitle" style="font-size: 0.78rem; color: var(--text-secondary); margin-bottom: 0.6rem;"></div>
+
+                    <!-- 3-show audience-strip cards (header) -->
+                    <div id="jiqCrossShowStrip"
+                         style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+                                gap: 0.6rem; margin-bottom: 0.85rem;"></div>
+
+                    <!-- Venn diagram + region table side-by-side -->
+                    <div id="jiqCrossShowGrid"
+                         style="display: grid; grid-template-columns: minmax(360px, 0.9fr) minmax(0, 1.1fr);
+                                gap: 1rem; align-items: start; margin-bottom: 0.85rem;">
+                        <div id="jiqCrossShowVenn" style="overflow:hidden; min-width:0;"></div>
+                        <div id="jiqCrossShowRegions" style="overflow-x: auto; min-width:0;"></div>
+                    </div>
+
+                    <!-- Sony-strategy takeaway tiles -->
+                    <div style="margin-top: 0.4rem;">
+                        <h4 style="font-size: 0.85rem; margin: 0 0 0.45rem; opacity: 0.92;">
+                            🔑 Strategic takeaways for the IP owner
+                        </h4>
+                        <div id="jiqCrossShowTakeaways"
+                             style="display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+                                    gap: 0.6rem;"></div>
+                    </div>
+
+                    <div id="jiqCrossShowNote" style="margin-top: 0.6rem; font-size: 0.7rem; color: var(--text-secondary); font-style: italic;"></div>
+                </div>
+
                 <div class="card" id="jiqSubIqAccountsCard"
                      style="padding: 1rem; margin-top: 1rem; display: none;
                             background: linear-gradient(135deg, rgba(91,108,255,0.06) 0%, rgba(91,108,255,0.02) 100%);
@@ -30474,6 +30520,17 @@
                 );
             }
 
+            // ---- Cross-Show Viewership (IP audience overlap Venn).
+            //      For PCJ: Broadcast Jeopardy! × Hulu Jeopardy! × PCJ.
+            //      Auto-hides when the block is missing.
+            if (typeof renderJourneyIqCrossShowOverlap === 'function') {
+                renderJourneyIqCrossShowOverlap(
+                    d.cross_show_overlap
+                    || ((fullRun || {}).modeled_view || {}).cross_show_overlap
+                    || (fullRun || {}).cross_show_overlap
+                );
+            }
+
             // Facts - facts can be plain strings or {label, value} dicts.
             // Coerce + filter so we never render '[object Object]' or empty
             // boilerplate (e.g. a lone {label:'Target', value:'Research-anchored ...'}).
@@ -34344,6 +34401,309 @@
             }
             html += '</div>';
             return html;
+        }
+
+        // ──────────────────────────────────────────────────────────────
+        // CROSS-SHOW VIEWERSHIP — IP audience overlap renderer.
+        //
+        // Expected payload shape (payload.cross_show_overlap):
+        //   {
+        //     enabled: true,
+        //     title: '...', subtitle: '...',
+        //     shows:   [ {id,name,subtitle,reach_us_adults,median_age,female_pct,color}, ... 3 entries ],
+        //     regions: [ {id,in:[...],label,accounts,median_age,female_pct,note}, ... 7 entries ],
+        //     totals:  { union_total, broadcast_total, hulu_total, pcj_total,
+        //                pcj_net_new_pct, franchise_lift_pct, franchise_lift_accounts,
+        //                franchise_reach_with_pcj, franchise_reach_without_pcj, ... },
+        //     sony_takeaways:   [ {headline, detail, value, tone}, ... ],
+        //     methodology_note: '...'
+        //   }
+        //
+        // Renders into #jiqCrossShowCard:
+        //   • header strip with the 3 shows + reach + demo
+        //   • 3-circle proportional Venn diagram (SVG)
+        //   • region table (7 rows, sorted by accounts desc) with demo cells
+        //   • Sony takeaway tiles (4 cards)
+        // Auto-hides when payload block is missing or disabled.
+        // ──────────────────────────────────────────────────────────────
+        function renderJourneyIqCrossShowOverlap(cso) {
+            var card = document.getElementById('jiqCrossShowCard');
+            if (!card) return;
+            if (!cso || cso.enabled === false || !(cso.shows || []).length || !(cso.regions || []).length) {
+                card.style.display = 'none';
+                return;
+            }
+            card.style.display = '';
+
+            // Title + subtitle + meta
+            var titleEl = document.getElementById('jiqCrossShowTitle');
+            if (titleEl && cso.title) titleEl.textContent = '🎯 ' + cso.title;
+            var subEl = document.getElementById('jiqCrossShowSubtitle');
+            if (subEl) subEl.textContent = cso.subtitle || '';
+            var metaEl = document.getElementById('jiqCrossShowMeta');
+            if (metaEl && cso.totals) {
+                var t = cso.totals;
+                var metaParts = [];
+                if (t.union_total != null) metaParts.push(_jiqFmt(t.union_total) + ' US adults across all 3 properties');
+                if (t.pcj_net_new_pct != null) metaParts.push(t.pcj_net_new_pct + '% of PCJ is net-new to the IP');
+                metaEl.textContent = metaParts.join(' · ');
+            }
+
+            // 3-show audience strip (header tiles)
+            var stripEl = document.getElementById('jiqCrossShowStrip');
+            if (stripEl) {
+                stripEl.innerHTML = (cso.shows || []).map(function(s) {
+                    var color = s.color || '#a78bfa';
+                    var demo = [];
+                    if (s.median_age != null) demo.push('median age ' + s.median_age);
+                    if (s.female_pct != null) demo.push(s.female_pct + '% F');
+                    return ''
+                        + '<div style="padding: 0.7rem 0.85rem; background: var(--bg-secondary);'
+                        +   ' border-radius: 8px; border-left: 3px solid ' + color + ';">'
+                        +   '<div style="font-size: 0.68rem; color: var(--text-secondary);'
+                        +     ' text-transform: uppercase; letter-spacing: 0.04em; font-weight: 600;'
+                        +     ' margin-bottom: 4px; line-height: 1.25;">' + _jiqEsc(s.name || s.id) + '</div>'
+                        +   '<div style="font-size: 1.35rem; font-weight: 700; color: ' + color + ';'
+                        +     ' line-height: 1.1; font-variant-numeric: tabular-nums;">'
+                        +     _jiqFmt(s.reach_us_adults || 0) + '</div>'
+                        +   '<div style="font-size: 0.72rem; color: var(--text-secondary); margin-top: 4px;">'
+                        +     _jiqEsc(s.subtitle || '')
+                        +     (demo.length ? ' · <span style="color: var(--text-primary); opacity:0.85;">' + demo.join(' · ') + '</span>' : '')
+                        +   '</div>'
+                        + '</div>';
+                }).join('');
+            }
+
+            // SVG Venn (proportional 3-circle)
+            var vennEl = document.getElementById('jiqCrossShowVenn');
+            if (vennEl) vennEl.innerHTML = _jiqRenderCrossShowVenn(cso);
+
+            // Region table
+            var regionsEl = document.getElementById('jiqCrossShowRegions');
+            if (regionsEl) regionsEl.innerHTML = _jiqRenderCrossShowRegions(cso);
+
+            // Sony takeaways
+            var takeEl = document.getElementById('jiqCrossShowTakeaways');
+            if (takeEl) {
+                takeEl.innerHTML = (cso.sony_takeaways || []).map(function(tk) {
+                    var tone = tk.tone || 'neutral';
+                    var accent = tone === 'positive' ? '#22c55e'
+                              : tone === 'negative' ? '#ef4444'
+                              : '#a78bfa';
+                    var bg = tone === 'positive' ? 'rgba(34,197,94,0.07)'
+                          : tone === 'negative' ? 'rgba(239,68,68,0.07)'
+                          : 'rgba(168,85,247,0.07)';
+                    return ''
+                        + '<div style="padding: 0.75rem 0.9rem; background: ' + bg + ';'
+                        +   ' border-radius: 8px; border-left: 3px solid ' + accent + ';">'
+                        +   (tk.value
+                              ? '<div style="font-size: 1.45rem; font-weight: 800; color: ' + accent + ';'
+                                + ' line-height: 1.1; font-variant-numeric: tabular-nums; margin-bottom: 4px;">'
+                                + _jiqEsc(tk.value) + '</div>'
+                              : '')
+                        +   '<div style="font-size: 0.86rem; font-weight: 700; color: var(--text-primary);'
+                        +     ' margin-bottom: 4px; line-height: 1.25;">' + _jiqEsc(tk.headline || '') + '</div>'
+                        +   '<div style="font-size: 0.72rem; color: var(--text-secondary); line-height: 1.45;">'
+                        +     _jiqEsc(tk.detail || '') + '</div>'
+                        + '</div>';
+                }).join('');
+            }
+
+            var noteEl = document.getElementById('jiqCrossShowNote');
+            if (noteEl) noteEl.textContent = cso.methodology_note || '';
+        }
+
+        // SVG 3-circle Venn diagram. Circle radius is proportional to
+        // sqrt(reach) so visual area ~ audience size. Circles are placed
+        // at fixed positions (equilateral) and overlap-region labels
+        // sit at geometrically computed centroids.
+        function _jiqRenderCrossShowVenn(cso) {
+            var shows = cso.shows || [];
+            var regions = cso.regions || [];
+            if (shows.length !== 3 || !regions.length) return '';
+
+            var W = 460, H = 380;
+            var cx = W / 2, cy = H / 2 + 6;
+
+            // Radius scaling — sqrt of reach so visual area ~ audience.
+            // Cap to W * 0.32 so the largest circle still fits.
+            var maxReach = 0;
+            shows.forEach(function(s) { if (s.reach_us_adults > maxReach) maxReach = s.reach_us_adults; });
+            var rMax = W * 0.30;
+            var rMin = W * 0.13;
+            var radii = shows.map(function(s) {
+                if (!maxReach) return rMin;
+                var f = Math.sqrt((s.reach_us_adults || 1) / maxReach);
+                return Math.max(rMin, rMax * f);
+            });
+
+            // Tighter equilateral layout so the overlaps are meaningful
+            // even for small circles. Shows ordered: [0]=top (broadcast),
+            // [1]=bottom-left (hulu), [2]=bottom-right (pcj).
+            var spread = 78;
+            var centers = [
+                {x: cx,            y: cy - spread + 12},
+                {x: cx - spread,   y: cy + spread - 18},
+                {x: cx + spread,   y: cy + spread - 18},
+            ];
+
+            var legend = '';
+            var circles = '';
+            shows.forEach(function(s, i) {
+                var c = centers[i];
+                var r = radii[i];
+                var color = s.color || '#a78bfa';
+                circles += ''
+                    + '<circle cx="' + c.x + '" cy="' + c.y + '" r="' + r.toFixed(1) + '"'
+                    +   ' fill="' + color + '" fill-opacity="0.28"'
+                    +   ' stroke="' + color + '" stroke-opacity="0.85" stroke-width="1.6"/>';
+                // External show label — placed away from center so it doesn't collide with overlaps.
+                var lx, ly, anchor;
+                if (i === 0)      { lx = c.x;            ly = c.y - r - 10;  anchor = 'middle'; }
+                else if (i === 1) { lx = c.x - r - 6;    ly = c.y + r + 18;  anchor = 'end'; }
+                else              { lx = c.x + r + 6;    ly = c.y + r + 18;  anchor = 'start'; }
+                circles += ''
+                    + '<text x="' + lx.toFixed(1) + '" y="' + ly.toFixed(1) + '"'
+                    +   ' font-size="11.5" font-weight="700" fill="' + color + '"'
+                    +   ' text-anchor="' + anchor + '">' + _jiqEsc(_shortenShow(s.name || s.id)) + '</text>'
+                    + '<text x="' + lx.toFixed(1) + '" y="' + (ly + 13).toFixed(1) + '"'
+                    +   ' font-size="9.5" fill="var(--text-secondary)" text-anchor="' + anchor + '">'
+                    +     _jiqFmt(s.reach_us_adults || 0) + ' US adults</text>';
+            });
+
+            // Region anchor positions — by region.in[]. We map each
+            // region's "in" set to a known centroid in the layout above.
+            // Helper to find a region by its "in" set (order-independent).
+            function regionKey(arr) {
+                return (arr || []).slice().sort().join('|');
+            }
+            var regionByKey = {};
+            regions.forEach(function(rg) { regionByKey[regionKey(rg.in)] = rg; });
+
+            // Centroid coordinates for each region (visually inside the
+            // matching overlap area of the venn diagram).
+            var regionPositions = {
+                'broadcast':                 {x: centers[0].x,                y: centers[0].y - 18},
+                'hulu':                      {x: centers[1].x - 24,           y: centers[1].y + 14},
+                'pcj':                       {x: centers[2].x + 24,           y: centers[2].y + 14},
+                'broadcast|hulu':            {x: (centers[0].x + centers[1].x) / 2 - 18, y: (centers[0].y + centers[1].y) / 2 + 4},
+                'broadcast|pcj':             {x: (centers[0].x + centers[2].x) / 2 + 18, y: (centers[0].y + centers[2].y) / 2 + 4},
+                'hulu|pcj':                  {x: (centers[1].x + centers[2].x) / 2,      y: (centers[1].y + centers[2].y) / 2 + 16},
+                'broadcast|hulu|pcj':        {x: cx,                                     y: cy + 6},
+            };
+
+            // Build a label per region.
+            var labels = '';
+            Object.keys(regionPositions).forEach(function(k) {
+                var rg = regionByKey[k];
+                if (!rg) return;
+                var pos = regionPositions[k];
+                var pctOfPcj = (cso.totals && cso.totals.pcj_total)
+                    ? (rg.in.indexOf('pcj') >= 0
+                        ? ' (' + Math.round(rg.accounts / cso.totals.pcj_total * 100) + '% of PCJ)'
+                        : '')
+                    : '';
+                // Slightly larger font for triple overlap so the
+                // "super-fans" callout stands out.
+                var isTriple = (rg.in || []).length === 3;
+                var isPcjOnly = k === 'pcj';
+                var fontSize = isTriple ? 11 : 10.5;
+                var fontWeight = isTriple || isPcjOnly ? 800 : 700;
+                var fill = isPcjOnly ? '#a78bfa' : 'var(--text-primary)';
+                labels += ''
+                    + '<g pointer-events="none">'
+                    +   '<text x="' + pos.x.toFixed(1) + '" y="' + pos.y.toFixed(1) + '"'
+                    +     ' font-size="' + fontSize + '" font-weight="' + fontWeight + '" fill="' + fill + '"'
+                    +     ' text-anchor="middle" stroke="rgba(0,0,0,0.55)" stroke-width="0.4" paint-order="stroke fill">'
+                    +     _jiqFmt(rg.accounts) + '</text>'
+                    +   (pctOfPcj
+                          ? '<text x="' + pos.x.toFixed(1) + '" y="' + (pos.y + 12).toFixed(1) + '"'
+                            + ' font-size="9" fill="var(--text-secondary)" text-anchor="middle">'
+                            + pctOfPcj.replace(/[()]/g, '') + '</text>'
+                          : '')
+                    + '</g>';
+            });
+
+            // Title under the diagram
+            var caption = ''
+                + '<text x="' + cx + '" y="' + (H - 8) + '" font-size="10"'
+                +   ' text-anchor="middle" fill="var(--text-secondary)">'
+                +   'Region values = US adults; PCJ % shown for PCJ-touching regions</text>';
+
+            return '<svg viewBox="0 0 ' + W + ' ' + H + '" width="100%" height="' + H + '"'
+                +    ' preserveAspectRatio="xMidYMid meet" style="max-width: 100%; display:block;">'
+                +  circles + labels + caption
+                +  '</svg>';
+        }
+
+        // Region table (right column of the cross-show grid) — sorted
+        // by account count desc. Each row has the region label, account
+        // count, demo cells, and a strategic note.
+        function _jiqRenderCrossShowRegions(cso) {
+            var rows = (cso.regions || []).slice().sort(function(a, b) {
+                return (b.accounts || 0) - (a.accounts || 0);
+            });
+            if (!rows.length) return '';
+
+            var thStyle = 'padding:6px 8px; font-size:0.66rem; text-transform:uppercase; letter-spacing:0.04em; color:var(--text-secondary); font-weight:700; border-bottom:1px solid var(--border-color); text-align:left;';
+            var thNumStyle = thStyle + ' text-align:right; font-variant-numeric:tabular-nums;';
+            var html = ''
+                + '<table style="width:100%; border-collapse:collapse;">'
+                +   '<thead><tr>'
+                +     '<th style="' + thStyle + '">Region</th>'
+                +     '<th style="' + thNumStyle + '">Accounts</th>'
+                +     '<th style="' + thNumStyle + '">Median Age</th>'
+                +     '<th style="' + thNumStyle + '">% Female</th>'
+                +     '<th style="' + thStyle + ' min-width:200px;">Note</th>'
+                +   '</tr></thead><tbody>';
+            rows.forEach(function(rg) {
+                var inSet = (rg.in || []).join(',');
+                // Pill colors per region — show membership.
+                var pills = (rg.in || []).map(function(showId) {
+                    var s = (cso.shows || []).find(function(x) { return x.id === showId; });
+                    var c = (s && s.color) || '#a78bfa';
+                    var label = s ? _shortenShow(s.name || s.id) : showId;
+                    return '<span style="display:inline-block; padding:1px 6px; margin-right:3px;'
+                        +    ' font-size:0.62rem; font-weight:700;'
+                        +    ' background:' + c + '22; color:' + c + ';'
+                        +    ' border-radius:8px; border:1px solid ' + c + '55;">'
+                        +    _jiqEsc(label) + '</span>';
+                }).join('');
+                var rowAccent = inSet === 'pcj' ? '#a78bfa' : 'transparent';
+                html += ''
+                    + '<tr style="border-bottom:1px solid var(--border-color); '
+                    +   (rowAccent !== 'transparent' ? 'background: rgba(168,85,247,0.05);' : '')
+                    +   '">'
+                    +   '<td style="padding:7px 8px; font-size:0.78rem;">'
+                    +     '<div style="font-weight:700; color:var(--text-primary); margin-bottom:2px;">'
+                    +       _jiqEsc(rg.label || rg.id) + '</div>'
+                    +     '<div>' + pills + '</div>'
+                    +   '</td>'
+                    +   '<td style="padding:7px 8px; font-size:0.85rem; font-weight:700; text-align:right; font-variant-numeric:tabular-nums;">'
+                    +     _jiqFmt(rg.accounts || 0) + '</td>'
+                    +   '<td style="padding:7px 8px; font-size:0.78rem; text-align:right; color:var(--text-secondary); font-variant-numeric:tabular-nums;">'
+                    +     (rg.median_age != null ? rg.median_age : '—') + '</td>'
+                    +   '<td style="padding:7px 8px; font-size:0.78rem; text-align:right; color:var(--text-secondary); font-variant-numeric:tabular-nums;">'
+                    +     (rg.female_pct != null ? rg.female_pct + '%' : '—') + '</td>'
+                    +   '<td style="padding:7px 8px; font-size:0.72rem; color:var(--text-secondary); line-height:1.45;">'
+                    +     _jiqEsc(rg.note || '') + '</td>'
+                    + '</tr>';
+            });
+            html += '</tbody></table>';
+            return html;
+        }
+
+        // Compact label for the Venn legend / pills — strips parentheticals.
+        function _shortenShow(name) {
+            if (!name) return '';
+            // "Jeopardy! (Broadcast Syndication)" → "Broadcast"
+            // "Jeopardy! on Hulu" → "Hulu"
+            // "Pop Culture Jeopardy! (Netflix)" → "PCJ"
+            var n = String(name);
+            if (/broadcast/i.test(n))    return 'Broadcast';
+            if (/hulu/i.test(n))         return 'Hulu';
+            if (/pop culture|^pcj/i.test(n)) return 'PCJ';
+            return n.replace(/\s*\([^)]*\)\s*$/, '');
         }
 
         // ---- Touchpoints renderer (table + overlap + touch distribution) ----
