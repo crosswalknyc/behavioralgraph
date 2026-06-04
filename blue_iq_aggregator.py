@@ -797,8 +797,19 @@ def _q_voter_journey(conn, start: str) -> dict[str, list[dict]]:
     # `journey_step` categorizes the NEXT visit. We layer the predicates
     # so candidate-social (e.g. twitter.com/realDonaldTrump) beats raw
     # social. Order matters: first match wins via multiIf().
+    #
+    # MEMORY: the prior implementation ASOF-joined against the full
+    # clickstream_final on the right side. CH OOM'd at 80GiB because the
+    # right-side scan wasn't pruned. We now:
+    #   1. Materialize the unique touchpoint UIDs in a CTE.
+    #   2. Restrict the right side to ONLY those UIDs via `WHERE c2.UID IN`.
+    #      That prunes the scan to a few thousand panelists' rows instead of
+    #      all ~180M-300M rows in the window.
+    #   3. We also sample the touchpoints to the first PER-UID timestamp so
+    #      each panelist contributes one journey row, not N (where N = #
+    #      touchpoint visits they made).
     cur.execute(f"""
-        WITH touchpoints AS (
+        WITH touchpoints_raw AS (
             SELECT
                 coalesce(bp.party, 'Undecided') AS party,
                 cs.UID                          AS uid,
@@ -811,18 +822,34 @@ def _q_voter_journey(conn, start: str) -> dict[str, list[dict]]:
               AND (lower(cs.DOMAIN) IN %(media)s
                    OR multiMatchAny(lower(cs.URL), %(pols)s) > 0)
         ),
-        -- Closest subsequent visit per panelist via ASOF JOIN. CH's ASOF
-        -- requires the inequality on a single column (VISIT_TS).
+        touchpoints AS (
+            -- Earliest touchpoint per UID, so each panelist contributes one row.
+            SELECT party, uid, min(tp_ts) AS tp_ts
+            FROM touchpoints_raw
+            GROUP BY party, uid
+        ),
+        touchpoint_uids AS (
+            SELECT DISTINCT uid FROM touchpoints
+        ),
+        -- Restrict the right side to touchpoint panelists ONLY. Without
+        -- this filter, CH would scan all clickstream rows in the window
+        -- (200M+) and OOM during the ASOF join.
+        c2_filtered AS (
+            SELECT cf.UID AS uid, cf.VISIT_TS AS ts,
+                   lower(cf.DOMAIN) AS dom, lower(cf.URL) AS url
+            FROM clickstream.clickstream_final AS cf
+            WHERE cf.DELIVERED >= toDate(%(start)s)
+              AND cf.UID IN (SELECT uid FROM touchpoint_uids)
+        ),
         next_visits AS (
             SELECT
-                t.party                           AS party,
-                t.uid                             AS uid,
-                lower(c2.DOMAIN)                  AS next_dom,
-                lower(c2.URL)                     AS next_url
+                t.party     AS party,
+                t.uid       AS uid,
+                c2.dom      AS next_dom,
+                c2.url      AS next_url
             FROM touchpoints AS t
-            ASOF LEFT JOIN clickstream.clickstream_final AS c2
-                ON c2.UID = t.uid AND c2.VISIT_TS > t.tp_ts
-            WHERE c2.DELIVERED >= toDate(%(start)s)
+            ASOF LEFT JOIN c2_filtered AS c2
+                ON c2.uid = t.uid AND c2.ts > t.tp_ts
         ),
         categorized AS (
             SELECT
