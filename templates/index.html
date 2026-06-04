@@ -2293,7 +2293,9 @@
         }
         /* IMDB pill under the date range — same shape as .dash-date-box, IMDB
            yellow accent. Hidden by default; updateDashProfileHeaderMeta()
-           reveals it only when the selected profile carries an imdb_id. */
+           reveals it only when the selected profile carries an imdb_id.
+           align-self: flex-start keeps it shrink-wrapped inside the flex
+           column .dash-brand-container instead of stretching full-width. */
         .dash-imdb-box {
             font-size: 0.75rem;
             background: var(--bg-input);
@@ -2301,6 +2303,7 @@
             border-radius: 6px;
             border: 1px solid var(--border-color);
             color: var(--text-secondary);
+            align-self: flex-start;
         }
         .dash-imdb-box a {
             color: #f5c518; /* IMDB yellow — matches .iqr-imdb-link in the ranker */
@@ -21604,6 +21607,46 @@
                 el.textContent = '';
                 el.style.display = 'none';
             }
+            // Render the IMDB pill (if this profile has an imdb_id). Safe to
+            // call even before dashboardProfiles is populated — the function
+            // will silently hide the pill and gets re-invoked once the profile
+            // selector tree loads (see renderDashboardProfileTree).
+            try { updateDashImdbHeader(); } catch (_e) {}
+        }
+
+        // Look up imdb_id for the currently-selected Profile IQ profile from
+        // the cached dashboardProfiles array (populated by /api/jobs and
+        // enriched server-side from the s3_cache.json `imdb_id` field that
+        // migration/scrape_imdb_ids.py backfills). When present, render a
+        // clickable IMDB-yellow pill that opens imdb.com/name/<id>/ in a new
+        // tab. When absent (brands, shows, internal jobs, or talent we haven't
+        // scraped yet), hide the pill entirely so there's no empty box. Mirrors
+        // _iqRenderSubcategory() in the CW IQ Ranker.
+        function updateDashImdbHeader() {
+            const box = document.getElementById('dashImdbHeader');
+            if (!box) return;
+            const key = (typeof currentS3Key === 'string' && currentS3Key) ||
+                        (typeof selectedDashProfile === 'string' && selectedDashProfile) || '';
+            const profiles = (typeof dashboardProfiles !== 'undefined' && Array.isArray(dashboardProfiles))
+                ? dashboardProfiles : [];
+            let imdb = '';
+            if (key && profiles.length) {
+                const match = profiles.find(p =>
+                    p && (p.s3_key === key || p.job_id === key)
+                );
+                if (match) imdb = String(match.imdb_id || '').trim();
+            }
+            if (!/^nm\d+$/i.test(imdb)) {
+                box.style.display = 'none';
+                box.innerHTML = '';
+                return;
+            }
+            const safeId = imdb.replace(/[^a-zA-Z0-9]/g, '');
+            const href = 'https://www.imdb.com/name/' + encodeURIComponent(safeId) + '/';
+            box.innerHTML = 'IMDB: <a href="' + href + '" target="_blank" rel="noopener" ' +
+                'onclick="event.stopPropagation();" title="Open ' + safeId + ' on IMDB">' +
+                safeId + '</a>';
+            box.style.display = 'block';
         }
 
         // Update profile methodology tooltip with profile name
@@ -49390,6 +49433,10 @@
 
         function renderDashboardProfileTree(profiles) {
             dashboardProfiles = profiles;
+            // Now that the profile list (with imdb_id enrichment) is loaded,
+            // re-render the IMDB pill in the header — handles the race where
+            // renderDashboard() fires before /api/jobs returns on first load.
+            try { updateDashImdbHeader(); } catch (_e) {}
             const container = document.getElementById('dashProfileTree');
             if (!container) return;
             
