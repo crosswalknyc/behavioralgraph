@@ -31582,13 +31582,48 @@
                 return padL + ((clamped - xMin) / (xMax - xMin)) * (W - padL - padR);
             }
 
+            // ── CATEGORICAL-SPREAD MODE detection ────────────────────
+            // When behaviors don't have meaningful time variation (e.g.
+            // TV-show co-viewing where everything happens "during the
+            // episode"), all bubbles collapse to the anchor and stack
+            // illegibly. Detect that case (data spread < 20% of axis
+            // range OR ≥ 60% of bubbles parse to center ≈ 0) and fall
+            // back to evenly-spaced categorical layout: sort by % desc
+            // and distribute bubbles uniformly across the canvas width.
+            var dataSpread = Math.max(0.0001, dataMax - dataMin);
+            var axisRange  = Math.max(0.0001, xMax - xMin);
+            var nearZero   = rows.filter(function(r) { return Math.abs(r.center) < 0.25; }).length;
+            var isCategorical =
+                ((dataSpread / axisRange) < 0.20) ||
+                (nearZero >= Math.max(3, rows.length * 0.6));
+
             // ── Bubble sizing (smaller max so lanes pack tighter) ────
             rows.forEach(function(e) {
                 e.r  = Math.max(13, Math.min(26, 13 + (e.pct / maxPct) * 13));
                 e.cx = xFor(e.center);
             });
 
-            // ── Lane assignment ──────────────────────────────────────
+            if (isCategorical) {
+                // Sort by % descending so the biggest behaviors anchor
+                // the left side of the chart (visual hierarchy).
+                rows.sort(function(a, b) { return b.pct - a.pct; });
+                // Evenly distribute across full canvas width, leaving
+                // ~80px buffer on each side so the leftmost / rightmost
+                // bubble labels don't clip.
+                var nCat = rows.length;
+                var xL = padL + 80;
+                var xR = W - padR - 80;
+                var stepX = (nCat > 1) ? (xR - xL) / (nCat - 1) : 0;
+                rows.forEach(function(e, i) {
+                    e.cx = xL + i * stepX;
+                    // Alternate above/below the axis — 2 lanes only,
+                    // because evenly-spaced bubbles never collide
+                    // horizontally so we don't need 4 lanes of stagger.
+                    e.laneIdx = i % 2;
+                });
+            }
+
+            // ── Lane assignment (time-anchored mode only) ────────────
             // halfW = bubble radius + ~half a label-line of text. The
             // tighter buffer (50px instead of 100px) gives us room for
             // 1-line labels and lets neighboring bubbles share a lane
@@ -31600,64 +31635,84 @@
                 var side  = (capped % 2 === 0) ? -1 : 1;
                 return side * layer * LANE_STEP;
             }
+            if (!isCategorical) {
+                rows.forEach(function(e) {
+                    var halfW = e.r + 50;
+                    var laneIdx = 0;
+                    while (laneIdx < MAX_LANES) {
+                        var lane = lanes[laneIdx] = lanes[laneIdx] || [];
+                        var fits = lane.every(function(occ) {
+                            return (e.cx + halfW < occ.x0 - 6)
+                                || (e.cx - halfW > occ.x1 + 6);
+                        });
+                        if (fits) {
+                            lane.push({ x0: e.cx - halfW, x1: e.cx + halfW });
+                            e.laneIdx = laneIdx;
+                            break;
+                        }
+                        laneIdx++;
+                    }
+                    if (laneIdx >= MAX_LANES) {
+                        // Overflow: place in the least-crowded lane
+                        var bestLane = 0, bestCount = Infinity;
+                        for (var i = 0; i < MAX_LANES; i++) {
+                            var lc = (lanes[i] || []).length;
+                            if (lc < bestCount) { bestCount = lc; bestLane = i; }
+                        }
+                        e.laneIdx = bestLane;
+                        (lanes[bestLane] = lanes[bestLane] || []).push({ x0: e.cx - halfW, x1: e.cx + halfW });
+                    }
+                });
+            }
             rows.forEach(function(e) {
-                var halfW = e.r + 50;
-                var laneIdx = 0;
-                while (laneIdx < MAX_LANES) {
-                    var lane = lanes[laneIdx] = lanes[laneIdx] || [];
-                    var fits = lane.every(function(occ) {
-                        return (e.cx + halfW < occ.x0 - 6)
-                            || (e.cx - halfW > occ.x1 + 6);
-                    });
-                    if (fits) {
-                        lane.push({ x0: e.cx - halfW, x1: e.cx + halfW });
-                        e.laneIdx = laneIdx;
-                        break;
-                    }
-                    laneIdx++;
-                }
-                if (laneIdx >= MAX_LANES) {
-                    // Overflow: place in the least-crowded lane
-                    var bestLane = 0, bestCount = Infinity;
-                    for (var i = 0; i < MAX_LANES; i++) {
-                        var lc = (lanes[i] || []).length;
-                        if (lc < bestCount) { bestCount = lc; bestLane = i; }
-                    }
-                    e.laneIdx = bestLane;
-                    (lanes[bestLane] = lanes[bestLane] || []).push({ x0: e.cx - halfW, x1: e.cx + halfW });
-                }
                 e.cy = axisY + laneOffsetY(e.laneIdx);
             });
 
             var parts = [];
             parts.push('<rect width="' + W + '" height="' + H + '" fill="transparent"/>');
 
-            // Horizontal time axis line
+            // Horizontal divider line (time axis in time-anchored mode;
+            // just a visual separator in categorical mode).
             parts.push('<line x1="' + padL + '" y1="' + axisY + '" x2="' + (W - padR) + '" y2="' + axisY + '" stroke="var(--border-color)" stroke-width="1.5"/>');
 
-            // Time ticks + labels BELOW the axis
-            axisConfig.ticks.filter(function(t) { return t >= xMin && t <= xMax; })
-                            .forEach(function(t) {
-                var x = xFor(t);
-                var isAnchor = (t === 0);
-                if (isAnchor) {
-                    parts.push('<line x1="' + x + '" y1="' + (padT - 4) + '" x2="' + x + '" y2="' + (H - padB + 4) + '" stroke="var(--accent-primary)" stroke-width="2" stroke-dasharray="4,3" opacity="0.55"/>');
-                    parts.push('<rect x="' + (x - 52) + '" y="' + (H - padB + 8) + '" width="104" height="20" rx="10" fill="var(--accent-primary)"/>');
-                    parts.push('<text x="' + x + '" y="' + (H - padB + 22) + '" text-anchor="middle" fill="#fff" font-weight="700" font-size="10.5">' + axisConfig.labelFor(t) + '</text>');
-                } else {
-                    parts.push('<line x1="' + x + '" y1="' + (axisY - 4) + '" x2="' + x + '" y2="' + (axisY + 4) + '" stroke="var(--border-color)" stroke-width="1"/>');
-                    parts.push('<text x="' + x + '" y="' + (H - padB + 18) + '" text-anchor="middle" fill="var(--text-secondary)" font-size="10">' + axisConfig.labelFor(t) + '</text>');
-                }
-            });
+            if (isCategorical) {
+                // ── Categorical mode: no time ticks, single anchor pill
+                // at center reading "DURING VIEWING" (or similar) so
+                // viewers know the x-axis isn't a time scale.
+                var anchorLabel = (scale === 'days') ? 'DURING / AROUND PURCHASE' : '🎬 DURING VIEWING';
+                var anchorX = (padL + (W - padR)) / 2;
+                var anchorW = Math.max(140, anchorLabel.length * 7.5);
+                parts.push('<rect x="' + (anchorX - anchorW / 2) + '" y="' + (H - padB + 8) + '" width="' + anchorW + '" height="20" rx="10" fill="var(--accent-primary)"/>');
+                parts.push('<text x="' + anchorX + '" y="' + (H - padB + 22) + '" text-anchor="middle" fill="#fff" font-weight="700" font-size="10.5">' + anchorLabel + '</text>');
+            } else {
+                // ── Time-anchored mode: full tick set ────────────────
+                axisConfig.ticks.filter(function(t) { return t >= xMin && t <= xMax; })
+                                .forEach(function(t) {
+                    var x = xFor(t);
+                    var isAnchor = (t === 0);
+                    if (isAnchor) {
+                        parts.push('<line x1="' + x + '" y1="' + (padT - 4) + '" x2="' + x + '" y2="' + (H - padB + 4) + '" stroke="var(--accent-primary)" stroke-width="2" stroke-dasharray="4,3" opacity="0.55"/>');
+                        parts.push('<rect x="' + (x - 52) + '" y="' + (H - padB + 8) + '" width="104" height="20" rx="10" fill="var(--accent-primary)"/>');
+                        parts.push('<text x="' + x + '" y="' + (H - padB + 22) + '" text-anchor="middle" fill="#fff" font-weight="700" font-size="10.5">' + axisConfig.labelFor(t) + '</text>');
+                    } else {
+                        parts.push('<line x1="' + x + '" y1="' + (axisY - 4) + '" x2="' + x + '" y2="' + (axisY + 4) + '" stroke="var(--border-color)" stroke-width="1"/>');
+                        parts.push('<text x="' + x + '" y="' + (H - padB + 18) + '" text-anchor="middle" fill="var(--text-secondary)" font-size="10">' + axisConfig.labelFor(t) + '</text>');
+                    }
+                });
+            }
 
-            // Span bars on the axis (showing each behavior's time-window range)
-            rows.forEach(function(e) {
-                if (e.span > 0) {
-                    var x0 = xFor(e.center - e.span / 2);
-                    var x1 = xFor(e.center + e.span / 2);
-                    parts.push('<line x1="' + x0 + '" y1="' + axisY + '" x2="' + x1 + '" y2="' + axisY + '" stroke="' + e.color + '" stroke-width="3" opacity="0.35" stroke-linecap="round"/>');
-                }
-            });
+            // Span bars on the axis (only in time-anchored mode — in
+            // categorical mode "span" has no meaning because the x-axis
+            // isn't a time scale).
+            if (!isCategorical) {
+                rows.forEach(function(e) {
+                    if (e.span > 0) {
+                        var x0 = xFor(e.center - e.span / 2);
+                        var x1 = xFor(e.center + e.span / 2);
+                        parts.push('<line x1="' + x0 + '" y1="' + axisY + '" x2="' + x1 + '" y2="' + axisY + '" stroke="' + e.color + '" stroke-width="3" opacity="0.35" stroke-linecap="round"/>');
+                    }
+                });
+            }
 
             // Connectors from axis to each bubble (thin guide lines)
             rows.forEach(function(e) {
@@ -31691,11 +31746,14 @@
             });
 
             var anchorWord = (scale === 'days') ? 'purchase' : 'showtime';
+            var footerSub = isCategorical
+                ? 'Bubble size = share of viewers · bubbles are evenly spaced (no time scale — all behaviors happen during the same window) · sorted by share, biggest on the left · hover for top sites'
+                : 'Bubble size = share of visitors · horizontal position = typical time relative to ' + anchorWord + ' · hover for top sites';
             return '<div style="overflow-x:auto;padding:2px 0;">'
                  + '<svg width="' + W + '" height="' + H + '" viewBox="0 0 ' + W + ' ' + H + '" preserveAspectRatio="xMidYMid meet" style="display:block;width:100%;height:auto;max-height:360px;min-width:760px;">'
                  + parts.join('')
                  + '</svg>'
-                 + '<div style="font-size:0.68rem;color:var(--text-secondary);margin-top:4px;text-align:center;">Bubble size = share of visitors · horizontal position = typical time relative to ' + anchorWord + ' · hover for top sites</div>'
+                 + '<div style="font-size:0.68rem;color:var(--text-secondary);margin-top:4px;text-align:center;">' + footerSub + '</div>'
                  + '</div>';
         }
 
