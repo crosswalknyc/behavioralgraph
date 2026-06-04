@@ -2291,19 +2291,31 @@
             border-radius: 6px;
             border: 1px solid var(--border-color);
         }
-        /* IMDB pill under the date range — same shape as .dash-date-box, IMDB
-           yellow accent. Hidden by default; updateDashProfileHeaderMeta()
-           reveals it only when the selected profile carries an imdb_id.
-           align-self: flex-start keeps it shrink-wrapped inside the flex
-           column .dash-brand-container instead of stretching full-width. */
+        /* Image+IMDB column. Wraps the 100x100 profile avatar plus the small
+           IMDB pill stacked directly beneath it, so the pill never collides
+           with the date range / runs dropdown sitting in the title column. */
+        .dash-profile-image-wrap {
+            display: flex;
+            flex-direction: column;
+            align-items: stretch;
+            gap: 0.4rem;
+            flex-shrink: 0;
+            width: 100px; /* matches .dash-profile-image fixed width */
+        }
+        /* IMDB pill under the profile picture — IMDB yellow accent. Hidden by
+           default; updateDashImdbHeader() reveals it only when the selected
+           profile carries an imdb_id. Sized to match the 100px avatar and
+           centered so the nm-id reads nicely under the headshot. */
         .dash-imdb-box {
-            font-size: 0.75rem;
+            font-size: 0.65rem;
             background: var(--bg-input);
-            padding: 0.35rem 0.6rem;
+            padding: 0.3rem 0.4rem;
             border-radius: 6px;
             border: 1px solid var(--border-color);
             color: var(--text-secondary);
-            align-self: flex-start;
+            text-align: center;
+            line-height: 1.2;
+            word-break: break-all; /* nm-ids never have spaces; allow wrap if needed */
         }
         .dash-imdb-box a {
             color: #f5c518; /* IMDB yellow — matches .iqr-imdb-link in the ranker */
@@ -15749,12 +15761,14 @@
             <div class="profile-and-toolbar-row" id="profileAndToolbarRow">
                 <div class="dash-header-row profile-header-row" id="profileHeaderRow">
                     <div class="dash-profile-info" id="dashProfileInfo" style="display: none;">
-                        <div class="dash-profile-image" id="dashProfileImage"><img src="" alt="Profile"></div>
+                        <div class="dash-profile-image-wrap">
+                            <div class="dash-profile-image" id="dashProfileImage"><img src="" alt="Profile"></div>
+                            <div class="dash-imdb-box" id="dashImdbHeader" style="display: none;"></div>
+                        </div>
                         <div class="profile-title-and-toolbar-wrap">
                             <div class="dash-brand-container has-tooltip" id="dashBrandContainer" data-tooltip="Loading profile methodology...">
                                 <div class="dash-brand-box" id="dashBrandNameHeader"></div>
                                 <div class="dash-date-box" id="dashDateRangeHeader"></div>
-                                <div class="dash-imdb-box" id="dashImdbHeader" style="display: none;"></div>
                                 <div id="dashProfileRunsRow" style="display: none; margin-top: 0.5rem; flex-direction: row; flex-wrap: nowrap; align-items: center; gap: 0.5rem;">
                                     <span style="font-size: 0.8rem; color: var(--text-secondary);">Run:</span>
                                     <select id="dashRunSelect" style="font-size: 0.85rem; padding: 0.25rem 0.5rem; border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-primary); max-width: 12rem;" title="Select a run (dropdown)"></select>
@@ -86448,7 +86462,7 @@
             const fmtInt = n => Number(n || 0).toLocaleString();
             const winLine = `Window <b>${_iqEsc(payload.window?.start || '')} → ${_iqEsc(payload.window?.end || '')}</b>`;
             if (source === 'web_search') {
-                totalsEl.innerHTML = winLine + ' · <span style="color: var(--text-secondary)">summary derived from public web search</span>';
+                totalsEl.innerHTML = winLine;
             } else {
                 totalsEl.innerHTML = winLine + ' · ' +
                     `<b>${fmtInt(ctx.total_mentions)}</b> mentions · ` +
