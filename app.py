@@ -32798,41 +32798,50 @@ def iq_rankers_context():
 
 
 @app.route('/api/iq-rankers/delete-profile', methods=['POST'])
-@requires_auth
 def iq_rankers_delete_profile():
     """Surgically remove a profile from the IQ Ranker dashboard.
 
-    Use cases:
-      - Phantom profiles auto-provisioned from a stale `_backups/...`
-        CSV (e.g. "Mel Gibson 05 20 2026 18 30.Prepatch.Bak").
-      - Mistakenly registered duplicates.
-
-    Steps performed (each is best-effort, individual failures are
-    surfaced in `errors[]` but do not abort the rest):
-      1. Delete the per-profile tracker JSON in
-         `sentiment-iq/trackers/iqr_<slug>.json`.
-      2. Delete any matching rows from `s3_cache.json` (keyed by
-         profile_subject / s3_key / job_id / project_name).
-      3. ALTER TABLE … DELETE the rows from
-         `reference.profile_iq_daily_metrics` (mutation, async on the
-         ClickHouse side — leaderboard updates within seconds).
-      4. Bust the LLM context cache so a re-creation later can't
-         resurrect stale narrative.
-      5. Optionally delete the source CSV (only when
-         `delete_csv=1` is passed — safer default is to leave the
-         file in S3).
-
-    JSON / form params:
-        profile_subject  required — exact profile_subject (e.g.
-                         "Mel_Gibson_05_20_2026_18_30.prepatch.bak").
-        tracker_key      optional — explicit S3 key for the tracker
-                         JSON if it doesn't follow the standard slug.
-        delete_csv       optional, default 0 — when 1 we also delete
-                         the underlying CSV so nightly provisioning
-                         won't recreate the profile.
-        confirm          required — must be "1". A safety pin so a
-                         curl misfire can't nuke a profile.
+    Authentication: either an authenticated dashboard session OR a
+    `CRON_SECRET` query/body param matching the env var. The latter
+    lets a CLI / cron-scheduled cleanup hit this endpoint without
+    spinning up a session.
     """
+    # Two-mode auth gate. Dashboard sessions go through requires_auth's
+    # session check inline; CLI callers pass `secret` (or the legacy
+    # `cron_secret`) which we compare to the CRON_SECRET env var.
+    secret = (request.values.get('secret')
+              or request.values.get('cron_secret')
+              or (request.get_json(silent=True) or {}).get('secret')
+              or '')
+    cron_ok = bool(secret) and secret == os.environ.get('CRON_SECRET', '')
+    if not cron_ok and 'username' not in (session or {}):
+        return jsonify({'success': False,
+                        'error': 'authentication required (session or CRON_SECRET)'}), 401
+
+    # ── End auth gate ──
+    #
+    # Use cases:
+    #   - Phantom profiles auto-provisioned from a stale `_backups/...`
+    #     CSV (e.g. "Mel Gibson 05 20 2026 18 30.Prepatch.Bak").
+    #   - Mistakenly registered duplicates.
+    #
+    # Steps performed (each best-effort, individual failures land in
+    # `summary.errors[]` but do not abort the rest):
+    #   1) Tracker JSON delete (sentiment-iq/trackers/iqr_<slug>.json).
+    #   2) s3_cache.json scrub (haystack match across profile_subject,
+    #      s3_key, job_id, project_name, display_name).
+    #   3) ClickHouse ALTER TABLE … DELETE WHERE profile_subject=…
+    #      on reference.profile_iq_daily_metrics (async mutation).
+    #   4) LLM context cache wipe under
+    #      system/iq_rankers_context_cache/<slug>__*.
+    #   5) Optional CSV delete (delete_csv=1 + csv_key=… required).
+    #
+    # JSON / form params:
+    #   profile_subject  required (exact).
+    #   tracker_key      optional override for weird legacy slugs.
+    #   delete_csv       optional, default 0.
+    #   csv_key          optional, used with delete_csv=1.
+    #   confirm          required, must be "1" — safety pin.
     if _iq_rankers is None:
         return jsonify({'success': False, 'error': 'iq_rankers unavailable'}), 500
 
