@@ -9153,23 +9153,7 @@
             0%   { background-position: 200% 0; }
             100% { background-position: -200% 0; }
         }
-        .iqr-context-cache-meta {
-            margin-top: 1.2rem; padding-top: 0.8rem;
-            border-top: 1px dashed rgba(255,176,87,0.18);
-            font-size: 0.72rem; color: var(--text-secondary);
-            display: flex; justify-content: space-between; gap: 0.8rem;
-            flex-wrap: wrap;
-        }
-        .iqr-context-cache-meta .badge {
-            display: inline-block; padding: 0.12rem 0.5rem; border-radius: 999px;
-            background: rgba(120,200,140,0.14); color: #7bc88c;
-            border: 1px solid rgba(120,200,140,0.28);
-            font-weight: 600; letter-spacing: 0.02em;
-        }
-        .iqr-context-cache-meta .badge.fresh {
-            background: rgba(255,176,87,0.14); color: #ffb057;
-            border-color: rgba(255,176,87,0.28);
-        }
+        /* .iqr-context-cache-meta CSS removed with the footer markup. */
 
         /* ── Compare modal: 2-column layout (picker | chart) ─────────────── */
         .iqr-compare-grid {
@@ -18743,10 +18727,7 @@
                                 </div>
                             </div>
 
-                            <div id="iqRankerContextCacheMeta" class="iqr-context-cache-meta" style="display: none;">
-                                <span><span id="iqRankerContextCacheBadge" class="badge fresh">FRESH</span> <span id="iqRankerContextCacheText"></span></span>
-                                <span id="iqRankerContextCacheKey" style="font-family: var(--font-mono, monospace); opacity: 0.7;"></span>
-                            </div>
+                            <!-- Cache meta footer removed by user request. -->
                         </div>
                     </div>
                 </div>
@@ -86068,10 +86049,6 @@
             const llmWarnEl  = document.getElementById('iqRankerContextLLMWarn');
             const bodyEl     = document.getElementById('iqRankerContextBody');
             const cstreamWrap = document.getElementById('iqRankerContextClickstreamWrap');
-            const cacheMetaEl  = document.getElementById('iqRankerContextCacheMeta');
-            const cacheBadgeEl = document.getElementById('iqRankerContextCacheBadge');
-            const cacheTextEl  = document.getElementById('iqRankerContextCacheText');
-            const cacheKeyEl   = document.getElementById('iqRankerContextCacheKey');
 
             const fmtInt = n => Number(n || 0).toLocaleString();
             const winLine = `Window <b>${_iqEsc(payload.window?.start || '')} → ${_iqEsc(payload.window?.end || '')}</b>`;
@@ -86112,7 +86089,6 @@
             // Web-search path: bullets-only (sources display has been removed).
             if (source === 'web_search') {
                 cstreamWrap.style.display = 'none';
-                _iqrRenderCacheMeta(payload, cacheMetaEl, cacheBadgeEl, cacheTextEl, cacheKeyEl);
                 bodyEl.style.display = '';
                 return;
             }
@@ -86159,49 +86135,11 @@
             document.getElementById('iqRankerContextSampleBody').innerHTML =
                 sampleRows || `<tr><td colspan="2" class="num">No sample URLs.</td></tr>`;
 
-            _iqrRenderCacheMeta(payload, cacheMetaEl, cacheBadgeEl, cacheTextEl, cacheKeyEl);
             bodyEl.style.display = '';
         }
 
-        // Renders the small "Cached at … / Fresh" badge at the bottom of the
-        // context modal so the user can see this exact response is being
-        // shared across clicks instead of getting re-pulled from OpenAI.
-        function _iqrRenderCacheMeta(payload, metaEl, badgeEl, textEl, keyEl) {
-            if (!metaEl) return;
-            const subj = payload.profile_subject || '';
-            const win  = payload.window || {};
-            const src  = payload.source || 'web_search';
-            const cached = payload.cached === true;
-            const cachedAt = payload.cached_at || (payload.llm && payload.llm.cached_at) || null;
-            const generatedAt = payload.generated_at || (payload.llm && payload.llm.generated_at) || null;
-
-            badgeEl.textContent = cached ? 'CACHED' : 'FRESH';
-            badgeEl.classList.toggle('fresh', !cached);
-
-            // Friendly time string. We get UTC from the server; show local.
-            const fmtTs = (iso) => {
-                if (!iso) return '';
-                try {
-                    const d = new Date(iso);
-                    if (isNaN(d.getTime())) return iso;
-                    return d.toLocaleString(undefined, {
-                        month: 'short', day: 'numeric',
-                        hour: 'numeric', minute: '2-digit',
-                    });
-                } catch (e) { return iso; }
-            };
-
-            if (cached) {
-                textEl.textContent = `Reusing cached response from ${fmtTs(cachedAt) || 'earlier'} · 24h TTL.`;
-            } else if (generatedAt) {
-                textEl.textContent = `Just generated at ${fmtTs(generatedAt)} — saved for the next viewer.`;
-            } else {
-                textEl.textContent = 'Saved for the next viewer.';
-            }
-
-            keyEl.textContent = `${_iqEsc(subj)} · ${_iqEsc(win.start || '')} → ${_iqEsc(win.end || '')} · ${_iqEsc(src)}`;
-            metaEl.style.display = '';
-        }
+        // _iqrRenderCacheMeta() removed — the cache footer was pulled at user
+        // request. Cache behavior itself (24h S3 cross-user TTL) is unchanged.
 
         // Close-on-backdrop and Esc parity with the other IQR modals.
         (function _iqrContextModalCloseHooks() {
