@@ -21387,6 +21387,13 @@
             return false;
         }
 
+        function isGamePlayersProfileCategory(brandCategory) {
+            var c = (brandCategory || '').toString().toUpperCase().trim();
+            if (!c) return false;
+            if (c === 'GAMES - PLAYERS' || c === 'GAME PLAYERS') return true;
+            return c.includes('GAMES') && c.includes('PLAYER');
+        }
+
         function getStreamingPlatformFromBehavioral(behavioral) {
             var behav = behavioral || {};
             var streamingKey = Object.keys(behav).find(function(k) {
@@ -21489,6 +21496,12 @@
                     } else {
                         tooltip = 'This profile is of all panelists who are active viewers of ' + showName + '.';
                     }
+                } else if (isGamePlayersProfileCategory(category)) {
+                    var gameName = (typeof currentProfileData !== 'undefined' && currentProfileData && currentProfileData.name) || profileName;
+                    if (gameName && gameName.indexOf(' - ') !== -1) {
+                        gameName = gameName.split(' - ')[0].trim();
+                    }
+                    tooltip = 'This profile is of all panelists who are players of ' + gameName + '.';
                 } else if (category === 'SOCIAL MEDIA' || category === 'STREAMING/PLATFORM' || category === 'STREAMING/MUSIC' || category === 'VIRTUAL MVPD FAST') {
                     tooltip = 'This profile is of all panelists who are actively engaged with ' + profileName + '. Panelists have visited the platform within the date range below.';
                 } else {
