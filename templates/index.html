@@ -19965,12 +19965,19 @@
                         <div id="jiqInceptionChart" style="overflow:hidden;"></div>
                         <div id="jiqInceptionTable" style="overflow-x: auto; display:none;"></div>
                     </div>
-                    <div class="card" id="jiqSearchTermsCard" style="padding: 1rem; display: none;">
+                    <div class="card" id="jiqSearchTermsCard" style="padding: 1rem; display: none; flex-direction: column; height: 100%;">
                         <div style="display:flex;justify-content:space-between;align-items:baseline;gap:0.5rem;">
                             <h3 id="jiqSearchTermsTitle" style="margin: 0 0 0.25rem;">🔎 Top Search Terms — what they searched to find the brand</h3>
                         </div>
                         <div id="jiqSearchTermsSubtitle" style="font-size: 0.72rem; color: var(--text-secondary); margin-bottom: 0.6rem;">Search queries + hashtags driving inbound discovery, by platform.</div>
-                        <div id="jiqSearchTermsBody"></div>
+                        <!-- Body fills the remaining card height (the
+                             grid sibling - Inception card - is usually
+                             taller because of its donut chart, so this
+                             card otherwise had a big empty navy footer
+                             below the scroll wrapper). flex:1 + min-height:0
+                             gives the inner scroll wrapper a definite
+                             height to grow into. -->
+                        <div id="jiqSearchTermsBody" style="flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column;"></div>
                     </div>
                 </div>
 
@@ -31464,7 +31471,11 @@
                 return Array.isArray(searchTerms[k]) && searchTerms[k].length > 0;
             });
             if (stBody) stBody.innerHTML = hasSearchTerms ? _jiqRenderSearchTermsCard(searchTerms) : '';
-            if (stCard) stCard.style.display = hasSearchTerms ? '' : 'none';
+            // Use display:flex (not '') so the card's flex-direction:column
+            // + height:100% takes effect — that's what lets the body fill
+            // the full card height (otherwise we get an empty navy footer
+            // when the grid stretches this card taller than its content).
+            if (stCard) stCard.style.display = hasSearchTerms ? 'flex' : 'none';
 
             if (rowTop) rowTop.style.display = (incs.length || hasSearchTerms) ? 'grid' : 'none';
 
@@ -32008,10 +32019,14 @@
             }
 
             var panels = PLATFORMS.map(_renderPanel).filter(Boolean).join('');
-            // Scrollable wrapper — caps the card height so the row
-            // doesn't stretch to fit all 4 platform panels at full
-            // height. User scrolls within the card to see the rest.
-            return '<div style="max-height:360px;overflow-y:auto;padding-right:4px;">'
+            // Scrollable wrapper — fills the card's body flex region
+            // (jiqSearchTermsBody is flex:1, min-height:0 inside a
+            // flex-column card with height:100%). This lets the scroll
+            // viewport grow with the grid row so we don't leave an empty
+            // navy footer when the sibling card (Inception donut) is
+            // taller. Falls back to a sane minimum height when the row
+            // isn't grid-stretched.
+            return '<div style="flex:1 1 auto; min-height:240px; max-height:100%; overflow-y:auto; padding-right:4px;">'
                  + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:0.55rem;">' + panels + '</div>'
                  + '</div>';
         }
