@@ -45183,6 +45183,17 @@
             }
         }
         
+        /** Legacy SVOD category keys → Subscriber IQ sidebar label */
+        const SUBSCRIBER_IQ_CATEGORY_DISPLAY = {
+            'SERIES - FOX': 'SERIES - 20TH TELEVISION',
+            'SERIES - 20TH CENTURY': 'SERIES - 20TH TELEVISION'
+        };
+
+        function getSubscriberIqCategoryDisplay(category) {
+            const c = (category || 'SVOD Acquisition').trim();
+            return SUBSCRIBER_IQ_CATEGORY_DISPLAY[c] || c;
+        }
+
         async function loadSubscriberProfiles() {
             try {
                 const response = await fetch('/api/subscriber-iq/list', { credentials: 'same-origin' });
@@ -45211,10 +45222,13 @@
             function escAttr(s) { if (s == null) return ''; return String(s).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;'); }
             
             if (searchTerm) {
-                const matches = subscriberProfiles.filter(p => 
-                    (p.show_name || '').toLowerCase().includes(searchTerm) ||
-                    ((p.category || '').toLowerCase().includes(searchTerm))
-                );
+                const matches = subscriberProfiles.filter(p => {
+                    const rawCat = (p.category || '').toLowerCase();
+                    const displayCat = getSubscriberIqCategoryDisplay(p.category).toLowerCase();
+                    return (p.show_name || '').toLowerCase().includes(searchTerm)
+                        || rawCat.includes(searchTerm)
+                        || displayCat.includes(searchTerm);
+                });
                 if (matches.length === 0) {
                     container.innerHTML = '<div style="padding: 1rem; color: var(--text-secondary); font-size: 0.8rem;">No profiles found</div>';
                     return;
@@ -45238,7 +45252,7 @@
             // Hierarchical view: categories as top-level (no SVOD ACQUISITION parent), with counts and expand/collapse
             const byCategory = {};
             subscriberProfiles.forEach(file => {
-                const category = file.category || 'SVOD Acquisition';
+                const category = getSubscriberIqCategoryDisplay(file.category || 'SVOD Acquisition');
                 if (!byCategory[category]) byCategory[category] = {};
                 const showName = file.show_name || 'Unknown';
                 if (!byCategory[category][showName]) byCategory[category][showName] = [];
