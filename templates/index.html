@@ -22212,15 +22212,29 @@
             return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
         }
 
-        function _bqRowBars(items, nameKey, valKey) {
+        function _bqRowBars(items, nameKey, valKey, opts) {
+            opts = opts || {};
             if (!items || !items.length) {
                 return '<div style="color: var(--text-secondary); font-size: 0.85rem; padding: 0.5rem 0;">No data for this slice.</div>';
             }
+            // When projectKey is given (default 'panelists'), multiply raw
+            // panelist counts by the cube's gen_pop_factor so the user sees
+            // US-adult projections instead of raw panel counts. Share % is
+            // unaffected because it's a ratio.
+            var factor = (window.__blueIQ && window.__blueIQ.genPopFactor) || 1.0;
+            var projectKey = (opts.projectKey === undefined) ? 'panelists' : opts.projectKey;
             var maxV = Math.max.apply(null, items.map(function(r) { return +r[valKey] || 0; })) || 1;
             return items.slice(0, 10).map(function(r) {
                 var v = +r[valKey] || 0;
                 var pct = Math.round((v / maxV) * 100);
-                var label = (typeof r.share === 'number') ? _bqPct(r.share) : _bqNum(v);
+                var label;
+                if (typeof r.share === 'number') {
+                    label = _bqPct(r.share);
+                } else if (projectKey && r[projectKey] != null) {
+                    label = _bqNum((+r[projectKey] || 0) * factor);
+                } else {
+                    label = _bqNum(v);
+                }
                 return '<div class="blue-iq-row">'
                      + '<span class="blue-iq-row-name" title="' + _bqEscape(r[nameKey] || '') + '">' + _bqEscape(r[nameKey] || '') + '</span>'
                      + '<span class="blue-iq-row-bar-wrap"><span class="blue-iq-row-bar" style="width: ' + pct + '%;"></span></span>'
@@ -22235,8 +22249,21 @@
             var updated = document.getElementById('blueIQUpdatedAt');
             var supEl = document.getElementById('blueIQSuppressedMsg');
             var f = data.filters || {};
+
+            // Gen Pop projection factor: every panel count in the cards gets
+            // multiplied by this to estimate US-adult population coverage.
+            window.__blueIQ = window.__blueIQ || {};
+            window.__blueIQ.genPopFactor = +data.gen_pop_factor || 1.0;
+            window.__blueIQ.lastData = data;
+
             var label = (f.party || 'All') + ' \u2192 ' + (f.geo_type === 'National' ? 'National' : (f.geo_value || ''));
-            var panelTxt = (data.panel_size != null) ? (' \u00b7 ' + _bqNum(data.panel_size) + ' panelists') : '';
+            var panelTxt = '';
+            if (data.panel_size != null) {
+                panelTxt = ' \u00b7 ' + _bqNum(data.panel_size) + ' panelists';
+                if (data.panel_projected && data.panel_projected > data.panel_size) {
+                    panelTxt += ' (\u2248' + _bqNum(data.panel_projected) + ' US adults)';
+                }
+            }
             meta.textContent = label + panelTxt + ' \u00b7 last ' + (f.lookback_days || 30) + 'd' + (data.cache_hit ? ' \u00b7 cached' : '');
             if (updated && data.generated_at) {
                 var dt = new Date(data.generated_at);
@@ -22310,6 +22337,20 @@
                   + '<div class="blue-iq-card-body">' + artHtml + '</div>'
                   + '</div>';
 
+            // CARD K: Digital voter journey — post-touchpoint destinations
+            var journey = cards.voter_journey || [];
+            html += '<div class="blue-iq-card blue-iq-card-journey" style="grid-column: span 2;">'
+                  + '<h3 class="blue-iq-card-title">Digital voter journey <span class="blue-iq-badge">after political touchpoint</span></h3>'
+                  + '<div class="blue-iq-card-body">'
+                  +   '<div style="font-size: 0.78rem; color: var(--text-secondary); margin-bottom: 0.5rem;">'
+                  +     'What voters do AFTER encountering political news or a politician name in this slice. '
+                  +     'A touchpoint = visit to a political-media site or a URL containing a politician\u2019s name. '
+                  +     'Each row is the share of those panelists whose next clickstream visit was the given destination.'
+                  +   '</div>'
+                  +   _renderBlueIQVoterJourney(journey)
+                  + '</div>'
+                  + '</div>';
+
             // CARD L: Demographic crosstab (if present)
             var dc = cards.demo_crosstab || {};
             if (dc && (dc.age || dc.gender || dc.ethnicity || dc.income)) {
@@ -22364,14 +22405,58 @@
                 body.innerHTML = '<div style="color: var(--text-secondary); font-size: 0.85rem; padding: 0.5rem 0;">No political-issue searches surfaced for this slice (or the AI classifier filtered everything as non-policy).</div>';
                 return;
             }
+            var factor = (window.__blueIQ && window.__blueIQ.genPopFactor) || 1.0;
             var max = Math.max.apply(null, buckets.map(function(b) { return +b.count || 0; })) || 1;
             body.innerHTML = buckets.slice(0, 16).map(function(b, idx) {
                 var pct = Math.round((b.count / max) * 100);
                 var samples = (b.sample_queries || []).slice(0, 3).join(' \u00b7 ');
+                var proj = _bqNum((b.count || 0) * factor);
                 return '<div class="blue-iq-bucket-row" onclick="openBlueIQDrillModal(' + idx + ')">'
-                     + '<div class="blue-iq-bucket-head"><strong>' + _bqEscape(b.bucket) + '</strong><span style="color: var(--text-secondary); font-variant-numeric: tabular-nums;">' + _bqPct(b.share || 0) + ' \u00b7 ' + _bqNum(b.count) + '</span></div>'
+                     + '<div class="blue-iq-bucket-head"><strong>' + _bqEscape(b.bucket) + '</strong><span style="color: var(--text-secondary); font-variant-numeric: tabular-nums;">' + _bqPct(b.share || 0) + ' \u00b7 \u2248' + proj + ' US adults</span></div>'
                      + '<div class="blue-iq-row-bar-wrap" style="margin: 0;"><span class="blue-iq-row-bar" style="width: ' + pct + '%;"></span></div>'
                      + '<div class="blue-iq-bucket-samples">' + _bqEscape(samples) + '</div>'
+                     + '</div>';
+            }).join('');
+        }
+
+        // Map internal journey destination keys to human labels + brief copy.
+        var BLUE_IQ_JOURNEY_LABELS = {
+            candidate_site:     { label: 'Visited a candidate site',   blurb: 'Direct, high-intent visit to a campaign or party domain.' },
+            candidate_social:   { label: 'Followed candidate on social', blurb: 'Went to a candidate\u2019s social profile (X, FB, IG, TikTok).' },
+            candidate_search:   { label: 'Searched the candidate',     blurb: 'Searched for the politician on Google/Bing/ChatGPT.' },
+            search:             { label: 'Searched something else',    blurb: 'Bounced to a search engine to research.' },
+            news_dive:          { label: 'Read more political news',   blurb: 'Continued on a left/right news outlet.' },
+            voting_info:        { label: 'Looked up how to vote',       blurb: 'vote.gov, ballotpedia, registration, polling.' },
+            donation:           { label: 'Hit a donation page',         blurb: 'ActBlue / WinRed / campaign donate page.' },
+            social_discussion:  { label: 'Discussed on social',         blurb: 'Reddit, X, FB, IG, TikTok (non-candidate).' },
+            other:              { label: 'Did something unrelated',     blurb: 'Next visit was non-political (shopping, weather, etc.).' },
+            abandoned:          { label: 'Abandoned the session',       blurb: 'No follow-up clickstream in the window.' },
+        };
+
+        function _renderBlueIQVoterJourney(journey) {
+            if (!journey || !journey.length) {
+                return '<div style="color: var(--text-secondary); font-size: 0.85rem; padding: 0.5rem 0;">'
+                     + 'No post-touchpoint behavior surfaced for this slice. '
+                     + 'Try widening the lookback window.'
+                     + '</div>';
+            }
+            // Sort by share desc (server already sorts but be defensive).
+            journey = journey.slice().sort(function(a, b) { return (+b.share || 0) - (+a.share || 0); });
+            var factor = (window.__blueIQ && window.__blueIQ.genPopFactor) || 1.0;
+            var max = Math.max.apply(null, journey.map(function(s) { return +s.share || 0; })) || 1;
+            return journey.map(function(step) {
+                var meta = BLUE_IQ_JOURNEY_LABELS[step.destination] || { label: step.destination, blurb: '' };
+                var widthPct = Math.round(((+step.share || 0) / max) * 100);
+                var us = _bqNum((+step.panelists || 0) * factor);
+                return '<div class="blue-iq-bucket-row" title="' + _bqEscape(meta.blurb) + '">'
+                     + '<div class="blue-iq-bucket-head">'
+                     +   '<strong>' + _bqEscape(meta.label) + '</strong>'
+                     +   '<span style="color: var(--text-secondary); font-variant-numeric: tabular-nums;">'
+                     +     _bqPct(step.share || 0) + ' \u00b7 \u2248' + us + ' US adults'
+                     +   '</span>'
+                     + '</div>'
+                     + '<div class="blue-iq-row-bar-wrap" style="margin: 0;"><span class="blue-iq-row-bar" style="width: ' + widthPct + '%;"></span></div>'
+                     + (meta.blurb ? ('<div class="blue-iq-bucket-samples">' + _bqEscape(meta.blurb) + '</div>') : '')
                      + '</div>';
             }).join('');
         }
