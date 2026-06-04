@@ -241,6 +241,124 @@ def get_bvp_brands_lc() -> frozenset[str]:
     return _BVP_BRANDS_LC or frozenset()
 
 
+# ── DOMAIN-level host buckets (drive EVC / TDL / BVP via DOMAIN match) ────
+# The brand-enrichment pipeline labels a clickstream row with the most-
+# specific brand it can identify. For talent profiles, that means
+# COMMON_NAME = "<talent name>" almost universally — even on a Netflix URL,
+# COMMON_NAME is the talent, not "Netflix". So matching COMMON_NAME against
+# a list of platform names (the original EVC implementation) systematically
+# misses all the streaming traffic.
+#
+# The reliable signal is DOMAIN. We build three sets of clickstream-style
+# DOMAIN values (e.g. "www.netflix.com", "open.spotify.com") by:
+#   1. Pulling the BRAND set from host_mapping for the relevant SECTION /
+#      CATEGORY filter (CATEGORY-level so social-media-but-also-streaming
+#      brands like YouTube / TikTok / Instagram are included).
+#   2. Joining link_host_brand (the brand-enrichment cache: every host the
+#      pipeline has ever resolved to a brand) on BRAND_NAME, returning the
+#      distinct host strings. link_host_brand has ~50K-100K hosts per
+#      brand bucket, which is the same shape DOMAIN takes in clickstream.
+#
+# Sets are loaded once per process (see `_ensure_host_sets_loaded`). The
+# original BRAND-equality matching against COMMON_NAME is kept as a cheap
+# fallback OR — strictly more permissive, never reduces hit counts.
+_STREAMING_HOSTS_LC: frozenset[str] | None = None
+_BVP_HOSTS_LC:       frozenset[str] | None = None
+_MBP_HOSTS_LC:       frozenset[str] | None = None
+
+
+def _query_host_set(ch_connect: Callable, where_brand_clause: str) -> frozenset[str]:
+    """Build the set of clickstream DOMAINs whose enriched BRAND falls
+    in the host_mapping rows matching `where_brand_clause`.
+
+    Two-step join (host_mapping.BRAND → link_host_brand.raw_host) so we
+    end up with the actual hostnames the clickstream loader writes into
+    the DOMAIN column. Failures degrade to empty: callers fall back to
+    the original COMMON_NAME equality check, so the metric stays at 0%
+    for that day rather than crashing the daily compute.
+    """
+    conn = ch_connect()
+    try:
+        cur = conn.cursor()
+        cur.execute(f"""
+            WITH brands AS (
+                SELECT DISTINCT lower(BRAND) AS b
+                FROM reference.host_mapping
+                WHERE ({where_brand_clause})
+                  AND length(BRAND) > 0
+            )
+            SELECT DISTINCT lower(raw_host)
+            FROM reference.link_host_brand
+            WHERE lower(BRAND_NAME) IN (SELECT b FROM brands)
+              AND length(raw_host) > 3
+        """)
+        rows = cur.fetchall() or []
+        return frozenset(str(r[0] or "").strip().lower() for r in rows
+                         if r and (r[0] or "").strip())
+    except Exception as e:
+        print(f"[iq_rankers] host-set load failed ({where_brand_clause!r}): {e}")
+        return frozenset()
+    finally:
+        try:
+            conn.close()
+        except Exception:
+            pass
+
+
+def _ensure_host_sets_loaded(ch_connect: Callable) -> None:
+    """Lazy-populate the streaming / BVP / MBP DOMAIN sets on first use.
+
+    Loaded once per process — the underlying host_mapping × link_host_brand
+    join is several seconds per set and not worth re-running per profile.
+    Workers under the parallel daily-runner share a single load via the
+    same lock that guards the brand-set loaders.
+    """
+    global _STREAMING_HOSTS_LC, _BVP_HOSTS_LC, _MBP_HOSTS_LC
+    if (_STREAMING_HOSTS_LC is not None
+            and _BVP_HOSTS_LC is not None
+            and _MBP_HOSTS_LC is not None):
+        return
+    with _BRAND_SETS_LOCK:
+        # Streaming = anything with "streaming" in CATEGORY or SECTION.
+        # CATEGORY-level catch is critical: YouTube / TikTok / Instagram
+        # have SECTION='Social Media' but CATEGORY='Streaming, Social Media'.
+        if _STREAMING_HOSTS_LC is None:
+            _STREAMING_HOSTS_LC = _query_host_set(
+                ch_connect,
+                "positionCaseInsensitive(CATEGORY, 'streaming') > 0 "
+                "OR positionCaseInsensitive(SECTION, 'streaming') > 0",
+            )
+            print(f"[iq_rankers] loaded {len(_STREAMING_HOSTS_LC)} streaming hosts")
+        # BVP = streaming ∪ movie-theater.
+        if _BVP_HOSTS_LC is None:
+            _BVP_HOSTS_LC = _query_host_set(
+                ch_connect,
+                "positionCaseInsensitive(CATEGORY, 'streaming') > 0 "
+                "OR positionCaseInsensitive(SECTION, 'streaming') > 0 "
+                "OR positionCaseInsensitive(SECTION, 'movie theater') > 0",
+            )
+            print(f"[iq_rankers] loaded {len(_BVP_HOSTS_LC)} BVP hosts")
+        # MBP = SECTION starts with "Most Purchased".
+        if _MBP_HOSTS_LC is None:
+            _MBP_HOSTS_LC = _query_host_set(
+                ch_connect,
+                "positionCaseInsensitive(SECTION, 'most purchased') > 0",
+            )
+            print(f"[iq_rankers] loaded {len(_MBP_HOSTS_LC)} MBP hosts")
+
+
+def get_streaming_hosts_lc() -> frozenset[str]:
+    return _STREAMING_HOSTS_LC or frozenset()
+
+
+def get_bvp_hosts_lc() -> frozenset[str]:
+    return _BVP_HOSTS_LC or frozenset()
+
+
+def get_mbp_hosts_lc() -> frozenset[str]:
+    return _MBP_HOSTS_LC or frozenset()
+
+
 def normalize_subcategory(subcategory: str) -> str:
     """Canonicalize a raw subcategory string.
 
@@ -468,12 +586,19 @@ def compute_layer1_metrics_for_day(
     # parallel.
     try:
         _ensure_brand_sets_loaded(ch_connect)
+        _ensure_host_sets_loaded(ch_connect)
     except Exception:
         # Degrade gracefully: TDL / BVP just stay 0 for this day, EVC and
         # the rest still compute.
         pass
     mbp_lc = get_mbp_brands_lc()
     bvp_lc = get_bvp_brands_lc()
+    # The DOMAIN-level host buckets are the primary signal for EVC/TDL/BVP
+    # (clickstream COMMON_NAME = talent name for almost all talent rows,
+    # so matching on COMMON_NAME alone yields ~0% across the board).
+    streaming_hosts = get_streaming_hosts_lc()
+    bvp_hosts       = get_bvp_hosts_lc()
+    mbp_hosts       = get_mbp_hosts_lc()
 
     conn = ch_connect(settings={"max_execution_time": 600, "use_skip_indexes": 1})
     try:
@@ -512,13 +637,24 @@ def compute_layer1_metrics_for_day(
     uids: set[str] = set()
     for url, uid, common_name, _domain in rows:
         cn_lc = (common_name or "").strip().lower()
-        if cn_lc:
-            if cn_lc in STREAMING_PLATFORMS_LC:
-                streaming_hits += 1
-            if mbp_lc and cn_lc in mbp_lc:
-                mbp_hits += 1
-            if bvp_lc and cn_lc in bvp_lc:
-                bvp_hits += 1
+        d_lc  = (_domain or "").strip().lower()
+        # Primary signal is DOMAIN: the URL was hosted on a streaming /
+        # MBP / movie-theater destination. Fallback to COMMON_NAME equality
+        # against the curated platform list / host_mapping BRAND set so
+        # we don't lose hits where DOMAIN normalization differs (e.g. an
+        # m.youtube.com row whose enrichment landed COMMON_NAME='youtube').
+        if d_lc and d_lc in streaming_hosts:
+            streaming_hits += 1
+        elif cn_lc and cn_lc in STREAMING_PLATFORMS_LC:
+            streaming_hits += 1
+        if d_lc and d_lc in bvp_hosts:
+            bvp_hits += 1
+        elif cn_lc and bvp_lc and cn_lc in bvp_lc:
+            bvp_hits += 1
+        if d_lc and d_lc in mbp_hosts:
+            mbp_hits += 1
+        elif cn_lc and mbp_lc and cn_lc in mbp_lc:
+            mbp_hits += 1
         try:
             scored = sentiment_iq.score_behavioral_event(url or "", common_name or "")
             bucket = scored.get("sentiment", "neutral")

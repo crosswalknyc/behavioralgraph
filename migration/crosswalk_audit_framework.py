@@ -34,10 +34,77 @@ import io
 import json
 import os
 import re
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from typing import Optional
 
 import pandas as pd
+
+
+# ───────────────────────────────────────────────────────────────────────────
+# Parallel batch helper (added 2026-06-04)
+# ───────────────────────────────────────────────────────────────────────────
+# Several functions in this file process flagged rows in batches and call
+# OpenAI/Anthropic SEQUENTIALLY per batch (~29 batches × ~15s each =
+# ~7-9 min of serial wall time inside one profile run). Network round-trips
+# dominate; the SDK clients are thread-safe; per-key TPM/RPM tier limits
+# easily accommodate 6-10 concurrent calls.
+#
+# `_prefetch_batch_responses_parallel` accepts a list of "request specs"
+# (one per batch), fires them concurrently via a thread pool, and returns
+# results in the SAME ORDER as input. Each call site then iterates the
+# results using its existing per-item logic (untouched), so anti-pinning,
+# jitter, and df.at assignments remain serial and race-free.
+#
+# Tunable via env vars:
+#   CROSSWALK_PARALLEL=6              # default 6 concurrent calls
+#   CROSSWALK_PARALLEL_DISABLE=1      # fall back to serial for debugging
+# ───────────────────────────────────────────────────────────────────────────
+
+
+def _crosswalk_parallel_workers() -> int:
+    """Concurrency cap for in-profile batch API parallelism."""
+    if os.environ.get('CROSSWALK_PARALLEL_DISABLE', '').strip() in ('1', 'true', 'TRUE'):
+        return 1
+    try:
+        n = int(os.environ.get('CROSSWALK_PARALLEL', '6'))
+    except (ValueError, TypeError):
+        n = 6
+    return max(1, min(n, 16))
+
+
+def _prefetch_batch_responses_parallel(call_fns: list) -> list:
+    """Fire each `call_fn()` in a thread pool and return results in input order.
+
+    `call_fn` is a zero-arg callable that performs the network call and
+    returns the parsed JSON dict (or any value). Exceptions are caught
+    and returned as the result for that index so the caller can decide
+    how to handle them. Order is preserved.
+    """
+    n = len(call_fns)
+    if n == 0:
+        return []
+    max_workers = min(_crosswalk_parallel_workers(), n)
+    if max_workers <= 1:
+        # Serial fallback (preserves byte-identical behavior with CROSSWALK_PARALLEL_DISABLE=1)
+        out = []
+        for fn in call_fns:
+            try:
+                out.append(fn())
+            except Exception as e:
+                out.append(e)
+        return out
+
+    results: list = [None] * n
+    with ThreadPoolExecutor(max_workers=max_workers, thread_name_prefix='cw-batch') as pool:
+        future_to_idx = {pool.submit(fn): i for i, fn in enumerate(call_fns)}
+        for fut in future_to_idx:
+            idx = future_to_idx[fut]
+            try:
+                results[idx] = fut.result()
+            except Exception as e:
+                results[idx] = e
+    return results
 
 
 # ───────────────────────────────────────────────────────────────────────────
@@ -707,11 +774,12 @@ def agent_reason_vet_failures(df,
     n_kept = 0
     n_skipped = 0
 
+    # ── PRECOMPUTE BATCHES + PROMPTS (serial, fast, in-memory) ─────────────
+    n_batches = (len(flagged) + batch_size - 1) // batch_size
+    _batches: list = []
     for batch_start in range(0, len(flagged), batch_size):
         batch = flagged[batch_start: batch_start + batch_size]
         batch_idx = batch_start // batch_size + 1
-        n_batches = (len(flagged) + batch_size - 1) // batch_size
-
         items_lines = []
         for i, v in enumerate(batch, 1):
             sign = '+' if v['difference'] >= 0 else ''
@@ -722,7 +790,6 @@ def agent_reason_vet_failures(df,
                 f"difference={sign}{v['difference']:.2f} pts | "
                 f"verdict={v['verdict']}"
             )
-
         prompt = (
             AUDIENCE_NOT_MIRROR_RULE
             + _VET_REASON_TASK_BLOCK
@@ -730,30 +797,46 @@ def agent_reason_vet_failures(df,
             + f"\n=== FLAGGED ROWS (batch {batch_idx}/{n_batches}) ===\n"
             + "\n".join(items_lines)
         )
+        _batches.append((batch_idx, batch, prompt))
 
-        try:
+    # ── PARALLEL API DISPATCH ──────────────────────────────────────────────
+    def _make_caller(batch_idx_local: int, prompt_local: str):
+        def _call():
             resp = openai_client.chat.completions.create(
                 model=model,
-                messages=[{'role': 'user', 'content': prompt}],
+                messages=[{'role': 'user', 'content': prompt_local}],
                 temperature=0.2,
                 max_tokens=max_tokens,
                 timeout=120,
             )
-            _log_openai_cache(resp, label=f'vet-fails b{batch_idx}/{n_batches}')
+            _log_openai_cache(resp, label=f'vet-fails b{batch_idx_local}/{n_batches}')
             raw = resp.choices[0].message.content.strip()
             raw = re.sub(r'^```(?:json)?\s*|\s*```$', '', raw).strip()
-            parsed = json.loads(raw)
-        except Exception as e:
+            return json.loads(raw)
+        return _call
+
+    _call_fns = [_make_caller(bi, pr) for (bi, _b, pr) in _batches]
+    _prefetched = _prefetch_batch_responses_parallel(_call_fns)
+    if verbose:
+        _n_ok = sum(1 for r in _prefetched if not isinstance(r, Exception))
+        print(f'   🧠 vet-reason: dispatched {n_batches} batch(es) in parallel '
+              f'(workers={_crosswalk_parallel_workers()}); '
+              f'{_n_ok}/{n_batches} returned successfully')
+
+    # ── SEQUENTIAL PER-ITEM PROCESSING (df.at writes, anti-pinning) ────────
+    for (batch_idx, batch, _prompt), result in zip(_batches, _prefetched):
+        if isinstance(result, Exception):
             if verbose:
-                print(f'   ⚠️ vet-reason batch {batch_idx}/{n_batches} error: {e}')
+                print(f'   ⚠️ vet-reason batch {batch_idx}/{n_batches} error: {result}')
             for v in batch:
                 decisions.append({
                     **v, 'old_bp': v['crosswalk'],
                     'decision': 'SKIP', 'new_bp': None,
-                    'reason': f'agent error: {e}',
+                    'reason': f'agent error: {result}',
                 })
                 n_skipped += 1
             continue
+        parsed = result
 
         decision_map = {int(d.get('i', -1)): d for d in (parsed.get('decisions') or [])}
         for i, v in enumerate(batch, 1):

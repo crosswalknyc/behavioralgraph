@@ -128,6 +128,13 @@ def build_arg_parser() -> argparse.ArgumentParser:
                    help='Dashboard category for the metadata entry '
                         '(e.g. "MOVIE - NETFLIX", "SERIES - FOX"). '
                         'Required if --upload is set.')
+    p.add_argument('--context-note', default=None,
+                   help='Free-text hint passed to Claude during external '
+                        'research. Use this when the show needs analyst '
+                        'context Claude wont infer from the title alone '
+                        '(e.g. alt-cut subset of a larger release). '
+                        'Participates in the research cache key so different '
+                        'contexts dont collide.')
     return p
 
 
@@ -174,6 +181,8 @@ def main(argv=None) -> int:
         config["reach_us_override"] = args.reach_us
     if args.conversion_pct is not None:
         config["conversion_pct"] = args.conversion_pct
+    if args.context_note:
+        config["context_note"] = args.context_note
 
     Path(args.output_dir).mkdir(parents=True, exist_ok=True)
     result = svod.run_synthetic_attribution(config)

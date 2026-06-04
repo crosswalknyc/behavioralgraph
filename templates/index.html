@@ -17821,6 +17821,71 @@
             #blueIQView .blue-iq-compare-grid { display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 0.6rem; font-size: 0.8rem; }
             #blueIQView .blue-iq-compare-cell { background: rgba(255,255,255,0.03); padding: 0.55rem; border-radius: 6px; }
             #blueIQView .blue-iq-compare-cell h5 { margin: 0 0 0.4rem 0; font-size: 0.85rem; }
+
+            /* ── Voter Journey: JIQ-style funnel ribbon ── */
+            #blueIQView .bq-funnel-ribbon { display: flex; gap: 0.5rem; align-items: stretch; padding: 0.5rem 0 0.25rem 0; overflow-x: auto; }
+            #blueIQView .bq-funnel-col { display: flex; flex-direction: column; align-items: stretch; min-width: 96px; flex: 0 0 auto; cursor: pointer; transition: transform 160ms ease, opacity 160ms ease; }
+            #blueIQView .bq-funnel-col-source { min-width: 140px; cursor: default; }
+            #blueIQView .bq-funnel-col-dest { flex: 1 1 96px; max-width: 140px; }
+            #blueIQView .bq-funnel-col-dest:hover { transform: translateY(-3px); }
+            #blueIQView .bq-funnel-col.dim { opacity: 0.35; }
+            #blueIQView .bq-funnel-col.active .bq-funnel-bar { box-shadow: 0 0 0 2px var(--accent-primary, #4f8cff), 0 6px 16px rgba(79,140,255,0.25); }
+            #blueIQView .bq-funnel-bar { position: relative; height: 200px; display: flex; flex-direction: column; justify-content: flex-end; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06); border-radius: 6px 6px 0 0; overflow: hidden; transition: box-shadow 160ms ease; }
+            #blueIQView .bq-funnel-bar-source { background: rgba(59,130,246,0.06); border-color: rgba(59,130,246,0.25); }
+            #blueIQView .bq-funnel-bar-spacer { flex: 0 0 auto; }
+            #blueIQView .bq-funnel-bar-fill { flex: 0 0 auto; transition: height 220ms ease; border-bottom: 1px solid rgba(255,255,255,0.15); }
+            #blueIQView .bq-funnel-col-source .bq-funnel-bar-fill { height: 100%; }
+            #blueIQView .bq-funnel-bar-label { position: absolute; top: 50%; left: 0; right: 0; transform: translateY(-50%); text-align: center; color: #fff; font-size: 14px; font-weight: 700; text-shadow: 0 1px 3px rgba(0,0,0,0.5); pointer-events: none; }
+            #blueIQView .bq-funnel-bar-pct { position: absolute; top: 6px; left: 0; right: 0; text-align: center; color: var(--text-primary); font-size: 11px; font-weight: 700; text-shadow: 0 1px 2px rgba(0,0,0,0.5); pointer-events: none; }
+            #blueIQView .bq-funnel-col-foot { padding: 6px 4px 0 4px; text-align: center; border: 1px solid rgba(255,255,255,0.06); border-top: 0; border-radius: 0 0 6px 6px; background: rgba(255,255,255,0.02); min-height: 44px; }
+            #blueIQView .bq-funnel-col-name { font-size: 11px; font-weight: 600; color: var(--text-primary); line-height: 1.25; }
+            #blueIQView .bq-funnel-col-sub { font-size: 9.5px; color: var(--text-secondary); margin-top: 2px; font-variant-numeric: tabular-nums; }
+            #blueIQView .bq-funnel-arrow { flex: 0 0 40px; display: flex; align-items: center; opacity: 0.6; pointer-events: none; }
+
+            /* ── Legend chips (clickable filter) ── */
+            #blueIQView .blue-iq-legend { display: flex; flex-wrap: wrap; gap: 0.4rem; margin: 0.7rem 0 0.5rem 0; }
+            #blueIQView .blue-iq-legend-chip { display: inline-flex; align-items: center; gap: 0.35rem; font-size: 0.72rem; padding: 0.25rem 0.55rem; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06); border-radius: 99px; color: var(--text-secondary); cursor: pointer; transition: all 140ms ease; user-select: none; }
+            #blueIQView .blue-iq-legend-chip:hover { background: rgba(255,255,255,0.06); color: var(--text-primary); transform: translateY(-1px); }
+            #blueIQView .blue-iq-legend-chip.active { background: rgba(79,140,255,0.18); border-color: rgba(79,140,255,0.6); color: var(--text-primary); }
+            #blueIQView .blue-iq-legend-swatch { width: 10px; height: 10px; border-radius: 2px; flex: 0 0 10px; }
+
+            /* ── Issue × Journey Sankey flow ── */
+            #blueIQView .bq-cross-header { display: flex; justify-content: space-between; padding: 0 0.5rem 0.35rem 0.5rem; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-secondary); font-weight: 600; }
+            #blueIQView .bq-sankey-wrap { width: 100%; overflow-x: auto; padding: 0.25rem 0 0.5rem 0; }
+            #blueIQView .bq-sankey-svg { width: 100%; min-width: 720px; height: auto; display: block; }
+            #blueIQView .bq-sankey-flow { cursor: pointer; transition: stroke-opacity 200ms ease; }
+            #blueIQView .bq-sankey-flow:hover { stroke-opacity: 0.95 !important; }
+            #blueIQView .bq-sankey-node { cursor: pointer; transition: opacity 200ms ease; }
+            #blueIQView .bq-sankey-node:hover { opacity: 0.85; }
+            #blueIQView .bq-sankey-node.dim { opacity: 0.35; }
+            #blueIQView .bq-sankey-node.active rect { stroke-width: 2; filter: drop-shadow(0 0 6px rgba(79,140,255,0.5)); }
+            #blueIQView .bq-cross-pin-bar { display: flex; justify-content: flex-end; padding: 0.2rem 0.5rem; font-size: 0.72rem; color: var(--text-secondary); }
+            #blueIQView .bq-pin-clear { background: rgba(79,140,255,0.15); border: 1px solid rgba(79,140,255,0.4); color: var(--text-primary); padding: 0.2rem 0.6rem; border-radius: 12px; font-size: 0.72rem; cursor: pointer; transition: all 140ms ease; }
+            #blueIQView .bq-pin-clear:hover { background: rgba(79,140,255,0.25); }
+            #blueIQView .bq-pin-hint { font-style: italic; opacity: 0.7; }
+
+            /* ── Recommendation card under the Sankey ── */
+            #blueIQView .bq-reco-card { background: rgba(255,255,255,0.025); border: 1px solid rgba(255,255,255,0.07); border-radius: 10px; padding: 0.85rem 1rem; margin-top: 0.6rem; }
+            #blueIQView .bq-reco-head { font-size: 0.92rem; margin-bottom: 0.45rem; color: var(--text-primary); }
+            #blueIQView .bq-reco-issue-list { display: flex; flex-direction: column; gap: 0.25rem; margin-bottom: 0.6rem; max-height: 220px; overflow-y: auto; }
+            #blueIQView .bq-reco-issue-row { display: flex; justify-content: space-between; gap: 0.5rem; font-size: 0.82rem; padding: 0.25rem 0.5rem; background: rgba(255,255,255,0.02); border-radius: 4px; }
+            #blueIQView .bq-reco-issue-row:hover { background: rgba(255,255,255,0.05); }
+            #blueIQView .bq-reco-issue-name { color: var(--text-primary); flex: 1 1 0; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+            #blueIQView .bq-reco-issue-stats { color: var(--text-secondary); font-size: 0.76rem; font-variant-numeric: tabular-nums; flex: 0 0 auto; }
+            #blueIQView .bq-reco-terms { font-size: 0.76rem; color: var(--text-secondary); margin: 0.35rem 0; line-height: 1.4; }
+            #blueIQView .bq-reco-play { padding-top: 0.55rem; border-top: 1px dashed rgba(255,255,255,0.08); }
+            #blueIQView .bq-reco-play-row { font-size: 0.82rem; line-height: 1.45; margin-bottom: 0.25rem; }
+            #blueIQView .bq-reco-play-label { font-weight: 600; }
+
+            /* ── Card hover lift + smoother transitions ── */
+            #blueIQView .blue-iq-card { transition: transform 220ms ease, box-shadow 220ms ease; }
+            #blueIQView .blue-iq-card:hover { transform: translateY(-2px); box-shadow: 0 8px 28px rgba(0,0,0,0.25); }
+            #blueIQView .blue-iq-bucket-row { transition: background 140ms ease, transform 140ms ease; border-radius: 6px; padding: 0.5rem 0.5rem; }
+            #blueIQView .blue-iq-bucket-row:hover { background: rgba(79,140,255,0.08); transform: translateX(2px); }
+            #blueIQView .blue-iq-row-bar-wrap { transition: background 140ms ease; }
+            #blueIQView .blue-iq-row { padding: 0.4rem 0.25rem; border-radius: 4px; transition: background 140ms ease; }
+            #blueIQView .blue-iq-row:hover { background: rgba(255,255,255,0.04); }
+
             @media (max-width: 1100px) {
                 #blueIQView .blue-iq-filter-bar { grid-template-columns: 1fr 1fr; }
                 #blueIQView .blue-iq-card-search,
@@ -22497,6 +22562,62 @@
             return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
         }
 
+        // Brand-color map for search engines + social platforms. Same
+        // hue used everywhere a brand row appears (rows here, axis on
+        // future charts) so the user develops a quick color↔brand
+        // muscle memory.
+        var BLUE_IQ_BRAND_COLORS = {
+            'google.com':       '#4285f4',
+            'google':           '#4285f4',
+            'bing.com':         '#008373',
+            'bing':             '#008373',
+            'duckduckgo.com':   '#de5833',
+            'duckduckgo':       '#de5833',
+            'yahoo.com':        '#6001d2',
+            'yahoo':            '#6001d2',
+            'chatgpt.com':      '#10a37f',
+            'chatgpt':          '#10a37f',
+            'openai.com':       '#10a37f',
+            'perplexity.ai':    '#20b8cd',
+            'perplexity':       '#20b8cd',
+            'claude.ai':        '#cc785c',
+            'claude':           '#cc785c',
+            'gemini.google.com':'#1a73e8',
+            'gemini':           '#1a73e8',
+            'facebook.com':     '#1877f2',
+            'facebook':         '#1877f2',
+            'instagram.com':    '#e4405f',
+            'instagram':        '#e4405f',
+            'tiktok.com':       '#ff0050',
+            'tiktok':           '#ff0050',
+            'x.com':            '#000000',
+            'twitter.com':      '#1da1f2',
+            'twitter':          '#1da1f2',
+            'reddit.com':       '#ff4500',
+            'reddit':           '#ff4500',
+            'youtube.com':      '#ff0000',
+            'youtube':          '#ff0000',
+            'linkedin.com':     '#0a66c2',
+            'linkedin':         '#0a66c2',
+            'pinterest.com':    '#e60023',
+            'pinterest':        '#e60023',
+            'snapchat.com':     '#fffc00',
+            'snapchat':         '#fffc00',
+            'threads.net':      '#000000',
+            'threads':          '#000000',
+            'truthsocial.com':  '#5446e8',
+            'truth social':     '#5446e8',
+            'mastodon.social':  '#6364ff',
+            'mastodon':         '#6364ff',
+            'bluesky.app':      '#0085ff',
+            'bluesky':          '#0085ff'
+        };
+        function _bqBrandColor(name) {
+            if (!name) return null;
+            var key = String(name).toLowerCase().trim();
+            return BLUE_IQ_BRAND_COLORS[key] || null;
+        }
+
         function _bqRowBars(items, nameKey, valKey, opts) {
             opts = opts || {};
             if (!items || !items.length) {
@@ -22508,6 +22629,7 @@
             // unaffected because it's a ratio.
             var factor = (window.__blueIQ && window.__blueIQ.genPopFactor) || 1.0;
             var projectKey = (opts.projectKey === undefined) ? 'panelists' : opts.projectKey;
+            var brandColor = opts.brandColor === true;  // colorize bar per brand
             var maxV = Math.max.apply(null, items.map(function(r) { return +r[valKey] || 0; })) || 1;
             return items.slice(0, 10).map(function(r) {
                 var v = +r[valKey] || 0;
@@ -22520,9 +22642,15 @@
                 } else {
                     label = _bqNum(v);
                 }
+                var color = brandColor ? _bqBrandColor(r[nameKey]) : null;
+                var barStyle = 'width: ' + pct + '%;'
+                             + (color ? (' background: ' + color + ';') : '');
+                var dotHtml = brandColor && color
+                    ? '<span style="display:inline-block;width:8px;height:8px;border-radius:2px;background:' + color + ';margin-right:0.45rem;flex:0 0 8px;"></span>'
+                    : '';
                 return '<div class="blue-iq-row">'
-                     + '<span class="blue-iq-row-name" title="' + _bqEscape(r[nameKey] || '') + '">' + _bqEscape(r[nameKey] || '') + '</span>'
-                     + '<span class="blue-iq-row-bar-wrap"><span class="blue-iq-row-bar" style="width: ' + pct + '%;"></span></span>'
+                     + '<span class="blue-iq-row-name" title="' + _bqEscape(r[nameKey] || '') + '">' + dotHtml + _bqEscape(r[nameKey] || '') + '</span>'
+                     + '<span class="blue-iq-row-bar-wrap"><span class="blue-iq-row-bar" style="' + barStyle + '"></span></span>'
                      + '<span class="blue-iq-row-val">' + label + '</span>'
                      + '</div>';
             }).join('');
@@ -22573,13 +22701,13 @@
             // CARD B: Search engines
             html += '<div class="blue-iq-card blue-iq-card-search">'
                   + '<h3 class="blue-iq-card-title">Search engines</h3>'
-                  + '<div class="blue-iq-card-body">' + _bqRowBars(cards.search_engines, 'name', 'panelists') + '</div>'
+                  + '<div class="blue-iq-card-body">' + _bqRowBars(cards.search_engines, 'name', 'panelists', { brandColor: true }) + '</div>'
                   + '</div>';
 
             // CARD C: Social media
             html += '<div class="blue-iq-card blue-iq-card-social">'
                   + '<h3 class="blue-iq-card-title">Social platforms</h3>'
-                  + '<div class="blue-iq-card-body">' + _bqRowBars(cards.social_media, 'name', 'panelists') + '</div>'
+                  + '<div class="blue-iq-card-body">' + _bqRowBars(cards.social_media, 'name', 'panelists', { brandColor: true }) + '</div>'
                   + '</div>';
 
             // CARD F: Turnout intent
@@ -22622,28 +22750,37 @@
                   + '<div class="blue-iq-card-body">' + artHtml + '</div>'
                   + '</div>';
 
-            // CARD K: Digital voter journey — post-touchpoint destinations
+            // CARD K: Digital voter journey — post-touchpoint destinations.
+            // Funnel-ribbon style matches the Digital Journey IQ Path-to-Purchase
+            // card. Full-width (span 12) so the destination columns have room
+            // to breathe. Body has id="blueIQCardJourneyBody" so legend-chip
+            // filters can re-render in place without a server round-trip.
             var journey = cards.voter_journey || [];
-            html += '<div class="blue-iq-card blue-iq-card-journey" style="grid-column: span 2;">'
+            html += '<div class="blue-iq-card blue-iq-card-journey" style="grid-column: span 12;">'
                   + '<h3 class="blue-iq-card-title">Digital voter journey <span class="blue-iq-badge">after political touchpoint</span></h3>'
-                  + '<div class="blue-iq-card-body">'
+                  + '<div class="blue-iq-card-body" id="blueIQCardJourneyBody">'
                   +   '<div style="font-size: 0.78rem; color: var(--text-secondary); margin-bottom: 0.5rem;">'
-                  +     'What voters do AFTER encountering political news or a politician name in this slice. '
-                  +     'A touchpoint = visit to a political-media site or a URL containing a politician\u2019s name. '
-                  +     'Each row is the share of those panelists whose next clickstream visit was the given destination.'
+                  +     'What voters do AFTER encountering political news. Left column = all panelists who hit a political-media site in this slice. '
+                  +     'Each destination column on the right shows the share whose <em>next</em> clickstream visit was that destination. '
+                  +     'Column height \u221d panelists \u00b7 click any destination (or legend chip) to pin it and dim everything else.'
                   +   '</div>'
                   +   _renderBlueIQVoterJourney(journey)
                   + '</div>'
                   + '</div>';
 
-            // CARD M: Marketing creative — Issue × Voter Journey cross
+            // CARD M: Marketing creative — Issue × Voter Journey Sankey flow.
+            // Reads like a left-to-right flow: each issue (left node) →
+            // curved colored ribbon → next-action destination (right node).
+            // Ribbon thickness ∝ panelists in that (issue, dest) cell. Click
+            // any flow / node to pin it; recommendation panel below updates.
             var cross = cards.issue_journey_cross || [];
-            html += '<div class="blue-iq-card blue-iq-card-creative" style="grid-column: span 2;">'
-                  + '<h3 class="blue-iq-card-title">Marketing creative recommendations <span class="blue-iq-badge">issue \u00d7 journey</span></h3>'
-                  + '<div class="blue-iq-card-body">'
+            html += '<div class="blue-iq-card blue-iq-card-creative" style="grid-column: span 12;">'
+                  + '<h3 class="blue-iq-card-title">Issue \u2192 next action flow <span class="blue-iq-badge">where to place creative</span></h3>'
+                  + '<div class="blue-iq-card-body" id="blueIQCardCreativeBody">'
                   +   '<div style="font-size: 0.78rem; color: var(--text-secondary); margin-bottom: 0.5rem;">'
-                  +     'For voters who searched a U.S.-policy topic AND encountered political content, what did they do next? '
-                  +     'Larger destinations on a row = higher-leverage placements for that issue\u2019s creative.'
+                  +     'For voters who searched a U.S.-policy topic AND hit a political-media site, what did they do next? '
+                  +     'Ribbon width \u221d panelists. <strong>Click any flow, issue node, or destination node</strong> to pin a slice — '
+                  +     'the recommendation panel below updates with the matching placement and creative direction.'
                   +   '</div>'
                   +   _renderBlueIQIssueJourneyCross(cross)
                   + '</div>'
@@ -22800,39 +22937,232 @@
                      + '</div>';
             }
             var factor = (window.__blueIQ && window.__blueIQ.genPopFactor) || 1.0;
-            var maxTotal = Math.max.apply(null, cross.map(function(c) { return +c.total_panelists || 0; })) || 1;
-            var rows = cross.slice(0, 12).map(function(row) {
-                var widthPct = Math.round(((+row.total_panelists || 0) / maxTotal) * 100);
-                var us = _bqNum((+row.total_panelists || 0) * factor);
-                // Pick the dominant non-abandoned destination for the recommendation.
-                var dominant = (row.destinations || []).filter(function(d) {
-                    return d.destination !== 'abandoned' && d.destination !== 'other';
-                })[0] || (row.destinations || [])[0] || {};
-                var play = BLUE_IQ_CREATIVE_PLAYS[dominant.destination] || BLUE_IQ_CREATIVE_PLAYS.other;
-                var topTerms = (row.top_terms || []).slice(0, 4).join(' \u00b7 ');
-                return '<div style="margin-bottom: 1rem; padding: 0.75rem; background: rgba(255,255,255,0.02); border-radius: 8px; border: 1px solid rgba(255,255,255,0.04);">'
-                     +   '<div style="display:flex; justify-content:space-between; align-items:baseline; gap:0.5rem; margin-bottom:0.35rem;">'
-                     +     '<strong style="font-size:0.95rem;">' + _bqEscape(row.bucket) + '</strong>'
-                     +     '<span style="color: var(--text-secondary); font-size:0.78rem; font-variant-numeric: tabular-nums;">'
-                     +       '\u2248' + us + ' US adults engaged'
-                     +     '</span>'
-                     +   '</div>'
-                     +   _bqJourneyStackedBar(row.destinations)
-                     +   '<div style="margin-top:0.45rem; font-size:0.78rem; color: var(--text-secondary); display:flex; flex-wrap:wrap; gap:0.4rem 0.85rem;">'
-                     +     (row.destinations || []).slice(0, 4).map(function(d) {
-                            var label = (BLUE_IQ_JOURNEY_LABELS[d.destination] || {}).label || d.destination;
-                            return '<span><strong style="color:var(--text-primary);">' + _bqPct(d.share || 0) + '</strong> ' + _bqEscape(label) + '</span>';
-                          }).join('')
-                     +   '</div>'
-                     +   (topTerms ? '<div style="margin-top:0.4rem; font-size:0.72rem; color: var(--text-secondary); font-style: italic;">Top terms in this issue: ' + _bqEscape(topTerms) + '</div>' : '')
-                     +   '<div style="margin-top:0.55rem; padding-top:0.5rem; border-top:1px dashed rgba(255,255,255,0.07); font-size:0.8rem; line-height:1.45;">'
-                     +     '<div style="margin-bottom:0.2rem;"><strong style="color:#fbbf24;">Where to place:</strong> ' + _bqEscape(play.placement) + '</div>'
-                     +     '<div><strong style="color:#34d399;">Creative direction:</strong> ' + _bqEscape(play.creative) + '</div>'
-                     +   '</div>'
-                     + '</div>';
+            var activeDest = window.__blueIQ && window.__blueIQ.activeDest;
+            var activeIssue = window.__blueIQ && window.__blueIQ.activeIssue;
+
+            // Top 10 issues only — keeps the Sankey readable.
+            var issues = cross.slice(0, 10);
+
+            // ── Build the Sankey geometry ──
+            // Aggregate destination totals across all issues so the right
+            // column heights match what voter-journey shows.
+            var destTotals = {};
+            issues.forEach(function(row) {
+                (row.destinations || []).forEach(function(d) {
+                    destTotals[d.destination] = (destTotals[d.destination] || 0) + (+d.panelists || 0);
+                });
+            });
+            // Stable destination ordering (best engagement → worst).
+            var destKeys = BLUE_IQ_DEST_ORDER.filter(function(k) { return destTotals[k] > 0; });
+
+            var W = 880;          // SVG viewport width
+            var H = Math.max(360, issues.length * 44 + 60);
+            var leftX = 0;
+            var leftW = 220;
+            var rightX = W - 220;
+            var rightW = 220;
+            var nodeGap = 6;
+
+            var totalLeft = issues.reduce(function(acc, r) { return acc + (+r.total_panelists || 0); }, 0) || 1;
+            var totalRight = destKeys.reduce(function(acc, k) { return acc + destTotals[k]; }, 0) || 1;
+
+            // Compute issue node y/height.
+            var leftNodes = [];
+            (function() {
+                var yCur = 30;
+                var avail = H - 60 - issues.length * nodeGap;
+                issues.forEach(function(row) {
+                    var h = Math.max(18, Math.round(avail * ((+row.total_panelists || 0) / totalLeft)));
+                    leftNodes.push({ row: row, y: yCur, h: h });
+                    yCur += h + nodeGap;
+                });
+            })();
+            // Compute destination node y/height.
+            var rightNodes = {};
+            (function() {
+                var yCur = 30;
+                var avail = H - 60 - destKeys.length * nodeGap;
+                destKeys.forEach(function(k) {
+                    var h = Math.max(18, Math.round(avail * (destTotals[k] / totalRight)));
+                    rightNodes[k] = { y: yCur, h: h, used: 0 };
+                    yCur += h + nodeGap;
+                });
+            })();
+
+            // Generate one curved path per (issue, destination) flow.
+            var flows = [];
+            leftNodes.forEach(function(ln, li) {
+                var srcUsed = 0;
+                var totalForRow = ln.row.total_panelists || 1;
+                (ln.row.destinations || [])
+                  .slice()
+                  .sort(function(a, b) {
+                      return BLUE_IQ_DEST_ORDER.indexOf(a.destination) - BLUE_IQ_DEST_ORDER.indexOf(b.destination);
+                  })
+                  .forEach(function(d) {
+                      var dn = rightNodes[d.destination];
+                      if (!dn) return;
+                      var pct = (+d.panelists || 0) / totalForRow;
+                      var srcH = Math.max(1.5, ln.h * pct);
+                      var dstFrac = (+d.panelists || 0) / Math.max(1, destTotals[d.destination]);
+                      var dstH = Math.max(1.5, dn.h * dstFrac);
+                      var y0 = ln.y + srcUsed + srcH / 2;
+                      var y1 = dn.y + dn.used + dstH / 2;
+                      srcUsed += srcH;
+                      dn.used += dstH;
+                      var color = BLUE_IQ_DEST_PALETTE[d.destination] || '#64748b';
+                      var dim = (activeIssue && activeIssue !== ln.row.bucket)
+                             || (activeDest && activeDest !== d.destination);
+                      var hi = (activeIssue && activeIssue === ln.row.bucket)
+                            || (activeDest && activeDest === d.destination);
+                      var thickness = Math.max(srcH, dstH);
+                      flows.push({
+                          x0: leftX + leftW,
+                          x1: rightX,
+                          y0: y0, y1: y1,
+                          t: thickness,
+                          color: color,
+                          dim: dim,
+                          hi: hi,
+                          dest: d.destination,
+                          destLabel: (BLUE_IQ_JOURNEY_LABELS[d.destination] || {}).label || d.destination,
+                          issueLabel: ln.row.bucket,
+                          panelists: d.panelists,
+                          share: d.share
+                      });
+                  });
+            });
+
+            // Build the SVG.
+            var svgFlows = flows.map(function(f) {
+                var dx = (f.x1 - f.x0) * 0.5;
+                var path = 'M' + f.x0 + ',' + f.y0
+                         + ' C' + (f.x0 + dx) + ',' + f.y0
+                         + ' ' + (f.x1 - dx) + ',' + f.y1
+                         + ' ' + f.x1 + ',' + f.y1;
+                var us = _bqNum((+f.panelists || 0) * factor);
+                var tip = f.issueLabel + ' \u2192 ' + f.destLabel
+                        + '\n' + _bqPct(f.share || 0) + ' \u00b7 ' + _bqNum(f.panelists) + ' panelists \u00b7 \u2248' + us + ' US adults';
+                return '<path d="' + path + '" stroke="' + f.color + '" stroke-width="' + f.t + '" fill="none" '
+                     +   'stroke-opacity="' + (f.dim ? 0.08 : (f.hi ? 0.85 : 0.45)) + '" '
+                     +   'stroke-linecap="butt" class="bq-sankey-flow"'
+                     +   ' onclick="bqToggleDest(\'' + f.dest + '\')">'
+                     +   '<title>' + _bqEscape(tip) + '</title></path>';
             }).join('');
-            return _bqJourneyLegend() + rows;
+
+            var svgLeftNodes = leftNodes.map(function(ln, li) {
+                var us = _bqNum((+ln.row.total_panelists || 0) * factor);
+                var isActive = activeIssue === ln.row.bucket;
+                var dim = activeIssue && !isActive;
+                var label = ln.row.bucket;
+                var truncated = label.length > 32 ? label.substring(0, 30) + '\u2026' : label;
+                return '<g class="bq-sankey-node bq-sankey-node-left' + (isActive ? ' active' : '') + (dim ? ' dim' : '') + '"'
+                     +   ' onclick="bqToggleIssue(\'' + _bqEscape(label).replace(/\'/g,"&#39;") + '\')">'
+                     +   '<rect x="' + leftX + '" y="' + ln.y + '" width="' + leftW + '" height="' + ln.h + '" '
+                     +     'rx="4" fill="rgba(59,130,246,0.18)" stroke="rgba(59,130,246,0.5)" stroke-width="1"/>'
+                     +   '<text x="' + (leftX + 10) + '" y="' + (ln.y + Math.min(20, ln.h - 6)) + '" '
+                     +     'fill="var(--text-primary)" font-size="11" font-weight="600">' + _bqEscape(truncated) + '</text>'
+                     +   (ln.h >= 30 ? ('<text x="' + (leftX + 10) + '" y="' + (ln.y + ln.h - 6) + '" '
+                     +     'fill="var(--text-secondary)" font-size="9.5">\u2248' + us + ' US adults</text>') : '')
+                     +   '<title>' + _bqEscape(label) + '\n' + _bqNum(ln.row.total_panelists) + ' panelists \u00b7 \u2248' + us + ' US adults</title>'
+                     +   '</g>';
+            }).join('');
+
+            var svgRightNodes = destKeys.map(function(k) {
+                var dn = rightNodes[k];
+                var meta = BLUE_IQ_JOURNEY_LABELS[k] || { label: k, blurb: '' };
+                var color = BLUE_IQ_DEST_PALETTE[k];
+                var us = _bqNum(destTotals[k] * factor);
+                var isActive = activeDest === k;
+                var dim = activeDest && !isActive;
+                return '<g class="bq-sankey-node bq-sankey-node-right' + (isActive ? ' active' : '') + (dim ? ' dim' : '') + '"'
+                     +   ' onclick="bqToggleDest(\'' + k + '\')">'
+                     +   '<rect x="' + rightX + '" y="' + dn.y + '" width="' + rightW + '" height="' + dn.h + '" '
+                     +     'rx="4" fill="' + color + '33" stroke="' + color + '" stroke-width="1"/>'
+                     +   '<text x="' + (rightX + 10) + '" y="' + (dn.y + Math.min(20, dn.h - 6)) + '" '
+                     +     'fill="var(--text-primary)" font-size="11" font-weight="600">' + _bqEscape(meta.label) + '</text>'
+                     +   (dn.h >= 30 ? ('<text x="' + (rightX + 10) + '" y="' + (dn.y + dn.h - 6) + '" '
+                     +     'fill="var(--text-secondary)" font-size="9.5">\u2248' + us + ' US adults</text>') : '')
+                     +   '<title>' + _bqEscape(meta.label + ': ' + meta.blurb + '\n' + _bqNum(destTotals[k]) + ' panelists \u00b7 \u2248' + us + ' US adults') + '</title>'
+                     +   '</g>';
+            }).join('');
+
+            var svg = '<svg class="bq-sankey-svg" viewBox="0 0 ' + W + ' ' + H + '" preserveAspectRatio="xMidYMid meet">'
+                    +   '<g class="bq-sankey-flows">' + svgFlows + '</g>'
+                    +   svgLeftNodes + svgRightNodes
+                    + '</svg>';
+
+            // Below the Sankey: dynamic creative-recommendation panel.
+            // If user pinned a destination → show ALL issues that flow
+            // there (sorted by share) + the creative play. If pinned an
+            // issue → show that issue's destinations + its dominant play.
+            // If nothing pinned → show the top issue's play (default).
+            var recoTitle, recoBody, recoBucketLabel, recoPlay;
+            if (activeDest) {
+                var meta = BLUE_IQ_JOURNEY_LABELS[activeDest] || {};
+                recoBucketLabel = meta.label || activeDest;
+                recoPlay = BLUE_IQ_CREATIVE_PLAYS[activeDest] || BLUE_IQ_CREATIVE_PLAYS.other;
+                var contributors = issues.map(function(r) {
+                    var d = (r.destinations || []).find(function(x) { return x.destination === activeDest; });
+                    return { bucket: r.bucket, panelists: (d && d.panelists) || 0, share: (d && d.share) || 0 };
+                }).filter(function(c) { return c.panelists > 0; }).sort(function(a,b) { return b.panelists - a.panelists; });
+                recoTitle = 'Voters who took: <strong>' + _bqEscape(recoBucketLabel) + '</strong>';
+                recoBody = '<div class="bq-reco-issue-list">'
+                         + contributors.slice(0, 8).map(function(c) {
+                             var us = _bqNum(c.panelists * factor);
+                             return '<div class="bq-reco-issue-row">'
+                                  +   '<span class="bq-reco-issue-name">' + _bqEscape(c.bucket) + '</span>'
+                                  +   '<span class="bq-reco-issue-stats">' + _bqPct(c.share || 0) + ' \u00b7 \u2248' + us + ' US adults</span>'
+                                  + '</div>';
+                           }).join('') + '</div>';
+            } else {
+                var issue = activeIssue
+                    ? issues.find(function(r) { return r.bucket === activeIssue; }) || issues[0]
+                    : issues[0];
+                var dom = (issue.destinations || []).filter(function(d) {
+                    return d.destination !== 'abandoned' && d.destination !== 'other';
+                })[0] || (issue.destinations || [])[0] || {};
+                recoPlay = BLUE_IQ_CREATIVE_PLAYS[dom.destination] || BLUE_IQ_CREATIVE_PLAYS.other;
+                recoBucketLabel = issue.bucket;
+                var topTerms = (issue.top_terms || []).slice(0, 6).join(' \u00b7 ');
+                recoTitle = (activeIssue ? 'Pinned issue: ' : 'Top issue: ') + '<strong>' + _bqEscape(issue.bucket) + '</strong>';
+                recoBody = '<div class="bq-reco-issue-stats" style="margin-bottom:0.5rem;">'
+                         +   '\u2248' + _bqNum((+issue.total_panelists || 0) * factor) + ' US adults engaged \u00b7 dominant next action: '
+                         +   '<span style="color:' + (BLUE_IQ_DEST_PALETTE[dom.destination] || '#64748b') + ';font-weight:600;">'
+                         +     _bqEscape((BLUE_IQ_JOURNEY_LABELS[dom.destination] || {}).label || dom.destination)
+                         +   '</span>'
+                         + '</div>'
+                         + (topTerms ? '<div class="bq-reco-terms"><em>Top terms in this issue:</em> ' + _bqEscape(topTerms) + '</div>' : '');
+            }
+
+            var pinHint = (activeDest || activeIssue)
+                ? '<button class="bq-pin-clear" onclick="window.__blueIQ.activeDest=null;window.__blueIQ.activeIssue=null;_bqRerenderJourneyCards(window.__blueIQ.lastData);">\u00d7 Clear pin</button>'
+                : '<span class="bq-pin-hint">Click any flow, issue node, or destination to pin a slice</span>';
+
+            return '<div class="bq-cross-header">'
+                 +   '<div class="bq-cross-axis-label bq-cross-axis-left">Issues</div>'
+                 +   '<div class="bq-cross-axis-label bq-cross-axis-right">Next action</div>'
+                 + '</div>'
+                 + '<div class="bq-sankey-wrap">' + svg + '</div>'
+                 + '<div class="bq-cross-pin-bar">' + pinHint + '</div>'
+                 + _bqJourneyLegend(activeDest)
+                 + '<div class="bq-reco-card">'
+                 +   '<div class="bq-reco-head">' + recoTitle + '</div>'
+                 +   recoBody
+                 +   '<div class="bq-reco-play">'
+                 +     '<div class="bq-reco-play-row"><span class="bq-reco-play-label" style="color:#fbbf24;">Where to place:</span> ' + _bqEscape(recoPlay.placement) + '</div>'
+                 +     '<div class="bq-reco-play-row"><span class="bq-reco-play-label" style="color:#34d399;">Creative direction:</span> ' + _bqEscape(recoPlay.creative) + '</div>'
+                 +   '</div>'
+                 + '</div>';
         }
+
+        // Pin an issue (toggle).
+        window.bqToggleIssue = function(bucket) {
+            window.__blueIQ.activeIssue = (window.__blueIQ.activeIssue === bucket) ? null : bucket;
+            if (window.__blueIQ.lastData) {
+                _bqRerenderJourneyCards(window.__blueIQ.lastData);
+            }
+        };
 
         function _renderBlueIQVoterJourney(journey) {
             if (!journey || !journey.length) {
@@ -22841,25 +23171,78 @@
                      + 'Try widening the lookback window.'
                      + '</div>';
             }
-            // Sort by share desc (server already sorts but be defensive).
-            journey = journey.slice().sort(function(a, b) { return (+b.share || 0) - (+a.share || 0); });
+            // Funnel-ribbon style (matches Digital Journey IQ Path-to-Purchase):
+            // a left "Touched political content" column showing the FULL
+            // cohort, then a row of destination columns whose HEIGHT is
+            // proportional to panelists at that destination. Color stack
+            // per destination. Hover for raw count + projected US adults.
+            // Click a column to pin it as the active filter — the
+            // Issue×Journey card re-renders showing only that destination.
+            journey = journey.slice().sort(function(a, b) {
+                var ai = BLUE_IQ_DEST_ORDER.indexOf(a.destination);
+                var bi = BLUE_IQ_DEST_ORDER.indexOf(b.destination);
+                if (ai < 0) ai = 99; if (bi < 0) bi = 99;
+                if (ai !== bi) return ai - bi;
+                return (+b.share || 0) - (+a.share || 0);
+            });
             var factor = (window.__blueIQ && window.__blueIQ.genPopFactor) || 1.0;
-            var max = Math.max.apply(null, journey.map(function(s) { return +s.share || 0; })) || 1;
-            return journey.map(function(step) {
+            var totalPanelists = journey.reduce(function(acc, s) { return acc + (+s.panelists || 0); }, 0) || 1;
+            var maxPanelists = Math.max.apply(null, journey.map(function(s) { return +s.panelists || 0; })) || 1;
+            var activeDest = window.__blueIQ && window.__blueIQ.activeDest;
+
+            // Left column = the cohort (all panelists who hit a political touchpoint).
+            var totalUS = _bqNum(totalPanelists * factor);
+            var leftCol = '<div class="bq-funnel-col bq-funnel-col-source" title="Panelists who visited a political-media site in the window">'
+                        +   '<div class="bq-funnel-bar bq-funnel-bar-source" style="height: 200px;">'
+                        +     '<div class="bq-funnel-bar-fill" style="background: linear-gradient(180deg, #3b82f6 0%, #1e3a8a 100%);"></div>'
+                        +     '<div class="bq-funnel-bar-label">' + _bqNum(totalPanelists) + '</div>'
+                        +   '</div>'
+                        +   '<div class="bq-funnel-col-foot">'
+                        +     '<div class="bq-funnel-col-name">Political touchpoint</div>'
+                        +     '<div class="bq-funnel-col-sub">\u2248' + totalUS + ' US adults</div>'
+                        +   '</div>'
+                        + '</div>';
+
+            // Arrow separator.
+            var arrowSep = '<div class="bq-funnel-arrow">'
+                         +   '<svg viewBox="0 0 40 220" width="40" height="220">'
+                         +     '<defs><linearGradient id="bqFunnelArrowGrad" x1="0" y1="0" x2="1" y2="0">'
+                         +       '<stop offset="0%" stop-color="#3b82f6" stop-opacity="0.7"/>'
+                         +       '<stop offset="100%" stop-color="#3b82f6" stop-opacity="0.1"/>'
+                         +     '</linearGradient></defs>'
+                         +     '<path d="M0,40 C20,40 20,180 40,180 L40,40 Z" fill="url(#bqFunnelArrowGrad)"/>'
+                         +     '<polygon points="32,100 40,110 32,120" fill="#3b82f6" opacity="0.9"/>'
+                         +   '</svg>'
+                         + '</div>';
+
+            // Right side = one column per destination, heights ∝ panelists.
+            var destCols = journey.map(function(step) {
                 var meta = BLUE_IQ_JOURNEY_LABELS[step.destination] || { label: step.destination, blurb: '' };
-                var widthPct = Math.round(((+step.share || 0) / max) * 100);
+                var color = BLUE_IQ_DEST_PALETTE[step.destination] || '#64748b';
+                var heightPx = Math.max(8, Math.round(180 * ((+step.panelists || 0) / maxPanelists)));
                 var us = _bqNum((+step.panelists || 0) * factor);
-                return '<div class="blue-iq-bucket-row" title="' + _bqEscape(meta.blurb) + '">'
-                     + '<div class="blue-iq-bucket-head">'
-                     +   '<strong>' + _bqEscape(meta.label) + '</strong>'
-                     +   '<span style="color: var(--text-secondary); font-variant-numeric: tabular-nums;">'
-                     +     _bqPct(step.share || 0) + ' \u00b7 \u2248' + us + ' US adults'
-                     +   '</span>'
-                     + '</div>'
-                     + '<div class="blue-iq-row-bar-wrap" style="margin: 0;"><span class="blue-iq-row-bar" style="width: ' + widthPct + '%;"></span></div>'
-                     + (meta.blurb ? ('<div class="blue-iq-bucket-samples">' + _bqEscape(meta.blurb) + '</div>') : '')
+                var isActive = activeDest === step.destination;
+                var dim = activeDest && !isActive;
+                return '<div class="bq-funnel-col bq-funnel-col-dest' + (isActive ? ' active' : '') + (dim ? ' dim' : '') + '" '
+                     +     'onclick="bqToggleDest(\'' + step.destination + '\')" '
+                     +     'title="' + _bqEscape(meta.label + ': ' + _bqPct(step.share || 0) + ' \u00b7 ' + _bqNum(step.panelists) + ' panelists \u00b7 \u2248' + us + ' US adults. ' + (meta.blurb || '')) + '">'
+                     +   '<div class="bq-funnel-bar" style="height: 200px;">'
+                     +     '<div class="bq-funnel-bar-spacer" style="height: ' + (200 - heightPx) + 'px;"></div>'
+                     +     '<div class="bq-funnel-bar-fill" style="height: ' + heightPx + 'px; background: linear-gradient(180deg, ' + color + ' 0%, ' + color + 'cc 100%);"></div>'
+                     +     '<div class="bq-funnel-bar-pct">' + _bqPct(step.share || 0) + '</div>'
+                     +   '</div>'
+                     +   '<div class="bq-funnel-col-foot">'
+                     +     '<div class="bq-funnel-col-name">' + _bqEscape(meta.label) + '</div>'
+                     +     '<div class="bq-funnel-col-sub">\u2248' + us + ' US adults</div>'
+                     +   '</div>'
                      + '</div>';
             }).join('');
+
+            return '<div class="bq-funnel-ribbon">'
+                 +   leftCol + arrowSep
+                 +   '<div class="bq-funnel-dest-row">' + destCols + '</div>'
+                 + '</div>'
+                 + _bqJourneyLegend(activeDest);
         }
 
         window.openBlueIQDrillModal = function(idx) {
