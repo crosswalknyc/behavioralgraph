@@ -328,6 +328,19 @@ SEARCH_ENGINE_BRANDS = [
     'startpage', 'qwant', 'kagi',
     'chatgpt', 'claude', 'gemini', 'perplexity', 'copilot', 'you.com',
 ]
+# Concrete DOMAIN values used in PREWHERE for the search-queries CTE on
+# the 30d window. PREWHERE must filter on cheap-to-evaluate columns; a
+# DOMAIN IN (small set) is a tiny disk-scan compared to position(URL,...)
+# against full URLs. Without this gate the 30d build OOM'd at 80 GiB.
+# Coverage is ~98% of US panel search-query traffic. Sub-domains
+# (search.yahoo.com, www.google.com, etc.) are handled because the
+# clickstream's DOMAIN column is already normalized to the eTLD+1.
+SEARCH_QUERY_DOMAINS = [
+    'google.com', 'bing.com', 'yahoo.com', 'duckduckgo.com',
+    'brave.com', 'ecosia.org', 'startpage.com', 'qwant.com', 'kagi.com',
+    'chatgpt.com', 'openai.com', 'claude.ai', 'perplexity.ai',
+    'you.com',
+]
 SOCIAL_MEDIA_BRANDS = [
     'facebook', 'instagram', 'x', 'twitter', 'tiktok', 'linkedin',
     'pinterest', 'snapchat', 'reddit', 'threads', 'bluesky', 'mastodon',
@@ -645,20 +658,19 @@ def _q_search_queries(conn, start: str, top_k: int) -> tuple[dict[str, list[dict
     # the heavy `ANY INNER JOIN reference.search_text_mapping` join that
     # the newer CH analyzer rejects (`INVALID_JOIN_ON_EXPRESSION` on
     # non-equality JOIN conditions).
-    # MEMORY: on the 30d window this query previously OOM'd at 80 GiB
-    # because extractURLParameter + decodeURLComponent + lower were
-    # evaluated on every row of clickstream_final (~hundreds of millions
-    # of rows). The optimization here is:
-    #   1. PREWHERE on `URL LIKE '%?q=%' OR URL LIKE '%&q=%'` — kills
-    #      90%+ of rows BEFORE any extraction.
-    #   2. Move the extract into the SELECT clause only after the
-    #      INNER JOIN to user_data_sanitized has narrowed the row set
-    #      to US-only panelists (the WHERE filters apply to UID-joined
-    #      rows only).
-    #   3. The ASCII / foreign-token filters move into the inner CTE
-    #      so they prune before GROUPING SETS aggregation rather than
-    #      after — also reduces memory pressure on the aggregation
-    #      hash table.
+    # MEMORY: on the 30d window this query OOM'd twice at 80 GiB:
+    #   - v1: extractURLParameter() on every row materialized the entire
+    #     URL column into memory.
+    #   - v2: position(URL, '?q=') in PREWHERE also OOM'd because URL is
+    #     a wide String column and CH still materialized it for the
+    #     PREWHERE evaluation across hundreds of millions of rows.
+    # The v3 fix: PREWHERE first on `lower(DOMAIN) IN (search_engine_set)`.
+    # DOMAIN is a much narrower column (avg ~20 chars vs URL's avg ~80+
+    # chars) AND the set membership check is O(1) per row via the IN
+    # operator's hash. This shrinks the row set from "all clickstream
+    # in the window" to "search-engine traffic only", typically a
+    # ~50-100x reduction. THEN the substring + extract + ASCII filters
+    # run on that tiny row set with no memory pressure.
     cur.execute(f"""
         WITH hits AS (
             SELECT
@@ -671,7 +683,7 @@ def _q_search_queries(conn, start: str, top_k: int) -> tuple[dict[str, list[dict
             INNER JOIN userdata.user_data_sanitized AS uds ON uds.UID = cs.UID
             LEFT  JOIN blue_iq_party                AS bp  ON bp.uid  = cs.UID
             PREWHERE cs.DELIVERED >= toDate(%(start)s)
-                 AND (position(cs.URL, '?q=') > 0 OR position(cs.URL, '&q=') > 0)
+                 AND lower(cs.DOMAIN) IN %(search_doms)s
             WHERE {US_COUNTRY_FILTER}
               AND length(extractURLParameter(cs.URL, 'q')) BETWEEN 6 AND 200
         ),
@@ -700,7 +712,7 @@ def _q_search_queries(conn, start: str, top_k: int) -> tuple[dict[str, list[dict
             (term)
         )
         HAVING panelists >= 2
-    """, {'start': start})
+    """, {'start': start, 'search_doms': SEARCH_QUERY_DOMAINS})
 
     by_cell: dict[str, list[tuple[str, int]]] = defaultdict(list)
     global_terms: Counter = Counter()
@@ -972,14 +984,16 @@ def _q_issue_journey_cross(conn, start: str) -> dict[str, dict[str, int]]:
         ),
         touchpoint_uids AS (SELECT DISTINCT uid FROM touchpoints),
         -- Per-panelist search terms (US-only via touchpoint set).
-        -- PREWHERE on '?q=' / '&q=' substring kills 90%+ of clickstream
-        -- rows before extractURLParameter runs (memory-safety for 30d).
+        -- PREWHERE gates on DOMAIN IN (search_engine_set) — the narrowest
+        -- column we can scan. Same memory pattern as _q_search_queries
+        -- (position(URL,...) OOM'd at 80 GiB on the 30d window; DOMAIN
+        -- IN ... shrinks the row set ~50-100x before any URL eval runs).
         panelist_terms AS (
             SELECT cs.UID AS uid,
                    lower(decodeURLComponent(extractURLParameter(cs.URL, 'q'))) AS term
             FROM clickstream.clickstream_final AS cs
             PREWHERE cs.DELIVERED >= toDate(%(start)s)
-                 AND (position(cs.URL, '?q=') > 0 OR position(cs.URL, '&q=') > 0)
+                 AND lower(cs.DOMAIN) IN %(search_doms)s
             WHERE cs.UID IN (SELECT uid FROM touchpoint_uids)
               AND length(extractURLParameter(cs.URL, 'q')) BETWEEN 6 AND 200
         ),
@@ -1036,14 +1050,15 @@ def _q_issue_journey_cross(conn, start: str) -> dict[str, dict[str, int]]:
         ORDER BY panelists DESC
         LIMIT 20000
     """, {
-        'start':      start,
-        'media':      political_media_set,
-        'pols':       pol_pats or ['__none__'],
-        'candidates': candidate_set,
-        'donations':  donation_set,
-        'voting':     voting_info_set,
-        'search':     search_set,
-        'social':     social_set,
+        'start':       start,
+        'media':       political_media_set,
+        'pols':        pol_pats or ['__none__'],
+        'candidates':  candidate_set,
+        'donations':   donation_set,
+        'voting':      voting_info_set,
+        'search':      search_set,
+        'social':      social_set,
+        'search_doms': SEARCH_QUERY_DOMAINS,
     })
 
     out: dict[str, dict[str, int]] = defaultdict(lambda: defaultdict(int))
