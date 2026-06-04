@@ -5628,6 +5628,7 @@ def get_admin_content():
         
         # Load profile image cache to check for custom images (always fresh for admin content view)
         load_profile_image_cache(force=True)
+        load_profile_display_overrides(force=True)
         
         # Add custom image info to each file (skip ticket sales and ticket sales tracker - they use their own metadata)
         for f in active_files:
@@ -5638,6 +5639,13 @@ def get_admin_content():
                 cached = profile_image_cache[cache_key]
                 if cached.get('is_custom'):
                     f['custom_image'] = cached.get('image_url')
+            lookup_key = f.get('s3_key') or f.get('key')
+            if lookup_key:
+                ov = serialize_profile_display_override(lookup_key)
+                if not ov and f.get('key') and f.get('key') != lookup_key:
+                    ov = serialize_profile_display_override(f.get('key'))
+                if ov:
+                    f['display_override'] = ov
         
         # Get archived files
         archived_files = []
@@ -10241,26 +10249,18 @@ def get_csv_data(s3_key):
         try:
             csv_content, df, brand_name, date_range, data = _fetch_and_return(GEN_POP_CANONICAL_KEY)
             print(f"📂 Served canonical Gen Pop file: {GEN_POP_CANONICAL_KEY}")
-            return _no_cache(jsonify({
-                'success': True,
-                'data': data,
-                'brand': brand_name,
-                'date_range': date_range,
-                's3_key': GEN_POP_CANONICAL_KEY
-            }))
+            return _no_cache(jsonify(_csv_data_json_response(
+                data, brand_name, date_range, GEN_POP_CANONICAL_KEY
+            )))
         except Exception:
             pass  # fall back to requested key
     try:
         print(f"📂 Fetching from S3: {S3_BUCKET}/{effective_key}")
         csv_content, df, brand_name, date_range, data = _fetch_and_return(effective_key)
         print(f"✅ Got CSV content: {len(csv_content)} bytes for brand: {brand_name}")
-        return _no_cache(jsonify({
-            'success': True,
-            'data': data,
-            'brand': brand_name,
-            'date_range': date_range,
-            's3_key': effective_key
-        }))
+        return _no_cache(jsonify(_csv_data_json_response(
+            data, brand_name, date_range, effective_key
+        )))
     except s3_client.exceptions.NoSuchKey:
         # File not in S3 (e.g. released from purgatory — key was purgatory/... and is now at root)
         if s3_key.startswith(S3_PURGATORY_PREFIX):
@@ -10268,13 +10268,9 @@ def get_csv_data(s3_key):
             try:
                 csv_content, df, brand_name, date_range, data = _fetch_and_return(released_key)
                 print(f"✅ Loaded from released location: {released_key}")
-                return _no_cache(jsonify({
-                    'success': True,
-                    'data': data,
-                    'brand': brand_name,
-                    'date_range': date_range,
-                    's3_key': released_key
-                }))
+                return _no_cache(jsonify(_csv_data_json_response(
+                    data, brand_name, date_range, released_key
+                )))
             except Exception:
                 pass
         print(f"❌ Profile not found: {s3_key}")
@@ -17180,6 +17176,107 @@ def save_profile_image_cache(deleted_keys=None):
     return False
 
 
+S3_PROFILE_DISPLAY_OVERRIDES_KEY = 'system/profile_display_overrides.json'
+profile_display_overrides = {}
+_profile_display_overrides_ts = 0
+_PROFILE_DISPLAY_OVERRIDES_TTL = 15
+_profile_display_overrides_lock = threading.Lock()
+
+
+def _read_profile_display_overrides_from_s3():
+    """Read per-profile title/tooltip overrides from S3. Returns {} if missing."""
+    if not s3_client:
+        return {}
+    try:
+        response = s3_client.get_object(Bucket=S3_BUCKET, Key=S3_PROFILE_DISPLAY_OVERRIDES_KEY)
+        data = json.loads(response['Body'].read().decode('utf-8'))
+        return data if isinstance(data, dict) else {}
+    except Exception:
+        return {}
+
+
+def load_profile_display_overrides(force=False):
+    """Load profile display overrides (hover tooltip, platform suffix) from S3."""
+    global profile_display_overrides, _profile_display_overrides_ts
+    import time as _time
+    if not s3_client:
+        return False
+    now = _time.time()
+    if not force and profile_display_overrides and (now - _profile_display_overrides_ts) < _PROFILE_DISPLAY_OVERRIDES_TTL:
+        return True
+    with _profile_display_overrides_lock:
+        profile_display_overrides = _read_profile_display_overrides_from_s3()
+        _profile_display_overrides_ts = now
+    return True
+
+
+def save_profile_display_overrides():
+    """Persist profile display overrides to S3 (read-merge-write)."""
+    global profile_display_overrides, _profile_display_overrides_ts
+    if not s3_client:
+        return False
+    import time
+    with _profile_display_overrides_lock:
+        remote = _read_profile_display_overrides_from_s3()
+        merged = dict(remote or {})
+        merged.update(profile_display_overrides or {})
+        cache_json = json.dumps(merged, indent=2)
+        for attempt in range(3):
+            try:
+                if attempt > 0:
+                    remote = _read_profile_display_overrides_from_s3()
+                    merged = dict(remote or {})
+                    merged.update(profile_display_overrides or {})
+                    cache_json = json.dumps(merged, indent=2)
+                s3_client.put_object(
+                    Bucket=S3_BUCKET,
+                    Key=S3_PROFILE_DISPLAY_OVERRIDES_KEY,
+                    Body=cache_json,
+                    ContentType='application/json'
+                )
+                profile_display_overrides = merged
+                _profile_display_overrides_ts = time.time()
+                return True
+            except Exception as e:
+                print(f"⚠️ Error saving profile display overrides (attempt {attempt + 1}/3): {e}")
+                if attempt < 2:
+                    time.sleep(0.5)
+    return False
+
+
+def serialize_profile_display_override(s3_key):
+    """Return override dict for API responses, or None if none set."""
+    if not s3_key:
+        return None
+    load_profile_display_overrides()
+    entry = profile_display_overrides.get(s3_key)
+    if not entry:
+        return None
+    out = {}
+    if entry.get('hover_tooltip'):
+        out['hover_tooltip'] = entry['hover_tooltip']
+    if entry.get('platform_name'):
+        out['platform_name'] = entry['platform_name']
+    if entry.get('platform_removed'):
+        out['platform_removed'] = True
+    return out or None
+
+
+def _csv_data_json_response(data, brand_name, date_range, s3_key):
+    """Build get-csv-data JSON with optional display_override."""
+    payload = {
+        'success': True,
+        'data': data,
+        'brand': brand_name,
+        'date_range': date_range,
+        's3_key': s3_key,
+    }
+    override = serialize_profile_display_override(s3_key)
+    if override:
+        payload['display_override'] = override
+    return payload
+
+
 @app.route('/api/prefetch-images', methods=['POST'])
 @requires_auth
 def trigger_image_prefetch():
@@ -17461,6 +17558,60 @@ def remove_profile_image():
         })
         
     except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+
+@app.route('/api/admin/profile-display-override', methods=['POST'])
+@requires_admin
+def set_profile_display_override():
+    """Save per-profile hover tooltip and platform title overrides (keyed by S3 file key)."""
+    global profile_display_overrides
+    from datetime import datetime
+    try:
+        data = request.get_json() or {}
+        file_key = (data.get('file_key') or data.get('s3_key') or '').strip()
+        if not file_key:
+            return jsonify({'success': False, 'error': 'file_key required'})
+
+        load_profile_display_overrides(force=True)
+        entry = dict(profile_display_overrides.get(file_key) or {})
+
+        if 'hover_tooltip' in data:
+            hover = (data.get('hover_tooltip') or '').strip()
+            if hover:
+                entry['hover_tooltip'] = hover
+            else:
+                entry.pop('hover_tooltip', None)
+
+        if data.get('remove_platform'):
+            entry['platform_removed'] = True
+            entry.pop('platform_name', None)
+        elif 'platform_name' in data:
+            platform = (data.get('platform_name') or '').strip()
+            if platform:
+                entry['platform_name'] = platform
+                entry['platform_removed'] = False
+            else:
+                entry.pop('platform_name', None)
+                entry.pop('platform_removed', None)
+
+        if entry:
+            entry['updated_at'] = datetime.now().isoformat()
+            profile_display_overrides[file_key] = entry
+        elif file_key in profile_display_overrides:
+            del profile_display_overrides[file_key]
+
+        if not save_profile_display_overrides():
+            return jsonify({'success': False, 'error': 'Failed to save overrides to S3'})
+
+        return jsonify({
+            'success': True,
+            'display_override': serialize_profile_display_override(file_key),
+            'file_key': file_key,
+        })
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
         return jsonify({'success': False, 'error': str(e)})
 
 

@@ -21622,6 +21622,31 @@
             }, items[0]).name.trim();
         }
 
+        /** Per-profile admin overrides (hover tooltip, platform suffix). Set when CSV loads. */
+        var currentProfileDisplayOverride = null;
+
+        function setCurrentProfileDisplayOverride(override) {
+            if (!override) {
+                currentProfileDisplayOverride = null;
+                return;
+            }
+            var hasHover = override.hover_tooltip && String(override.hover_tooltip).trim();
+            var hasPlatform = override.platform_name && String(override.platform_name).trim();
+            var removed = !!override.platform_removed;
+            currentProfileDisplayOverride = (hasHover || hasPlatform || removed) ? override : null;
+        }
+
+        function getEffectivePlatformForTitle(brandCategory, behavioral, override) {
+            var ov = override || currentProfileDisplayOverride;
+            if (ov) {
+                if (ov.platform_removed) return null;
+                if (ov.platform_name && String(ov.platform_name).trim()) {
+                    return String(ov.platform_name).trim();
+                }
+            }
+            return getStreamingPlatformFromBehavioral(behavioral);
+        }
+
         const _profileDateRangeRe = /(\d{4}-\d{2}-\d{2})\s+TO\s+(\d{4}-\d{2}-\d{2})/i;
         const _profileDateIsoRe = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -21715,21 +21740,27 @@
         }
 
         // Update profile methodology tooltip with profile name
-        function updateProfileTooltip(profileName, brandCategory, behavioral) {
+        function updateProfileTooltip(profileName, brandCategory, behavioral, override) {
             var container = document.getElementById('dashBrandContainer');
             if (container && profileName) {
+                var ov = override || currentProfileDisplayOverride;
+                if (ov && ov.hover_tooltip && String(ov.hover_tooltip).trim()) {
+                    container.setAttribute('data-tooltip', String(ov.hover_tooltip).trim());
+                    return;
+                }
                 var tooltip;
                 var category = (brandCategory || '').toString().toUpperCase();
                 var behav = behavioral || (typeof currentDashboardData !== 'undefined' && currentDashboardData && currentDashboardData.behavioral) || {};
 
                 if (isActiveViewerProfileCategory(category)) {
+                    var effPlatform = getEffectivePlatformForTitle(category, behav, ov);
                     var baseName = (typeof currentProfileData !== 'undefined' && currentProfileData && currentProfileData.name) || profileName;
                     var titled = (profileName && profileName.includes(' - '))
                         ? profileName
-                        : getProfileDisplayTitle(baseName, brandCategory, behav);
+                        : getProfileDisplayTitle(baseName, brandCategory, behav, ov);
                     var parts = titled.split(' - ');
                     var showName = parts[0].trim();
-                    var platform = parts.slice(1).join(' - ').trim();
+                    var platform = effPlatform || (parts.slice(1).join(' - ').trim());
                     if (platform) {
                         tooltip = 'This profile is of all panelists who are active viewers of ' + showName + ' on ' + platform + '.';
                     } else {
@@ -48482,7 +48513,7 @@
                     currentCSVData = data.data;
                     currentS3Key = fileKey;
                     selectedDashProfile = fileKey;
-                    renderDashboard(data.data, data.brand, data.date_range);
+                    renderDashboard(data.data, data.brand, data.date_range, data.display_override);
                     showDashboardView();
                     applyGenPopMode();
                 } else {
@@ -48866,10 +48897,10 @@
             } catch (error) { console.error('Failed:', error); }
         }
 
-        function getProfileDisplayTitle(brandName, brandCategory, behavioral) {
+        function getProfileDisplayTitle(brandName, brandCategory, behavioral, override) {
             const name = (brandName || 'Brand').trim();
             if (!isActiveViewerProfileCategory(brandCategory)) return name;
-            const platform = getStreamingPlatformFromBehavioral(behavioral);
+            const platform = getEffectivePlatformForTitle(brandCategory, behavioral, override);
             if (platform) return name + ' - ' + platform;
             return name;
         }
@@ -48888,15 +48919,16 @@
         }
 
         /** Lime header title: platform suffix + IQ Mini when Crosswalk respondents &lt; 100k. */
-        function getProfileHeaderDisplayTitle(brandName, brandCategory, behavioral, sampleSize, s3Key) {
-            let title = getProfileDisplayTitle(brandName, brandCategory, behavioral);
+        function getProfileHeaderDisplayTitle(brandName, brandCategory, behavioral, sampleSize, s3Key, override) {
+            let title = getProfileDisplayTitle(brandName, brandCategory, behavioral, override);
             if (shouldAppendIqMiniTitleSuffix(sampleSize, brandName, s3Key) && !/\s-\sIQ Mini$/i.test(title)) {
                 title += PROFILE_IQ_MINI_SUFFIX;
             }
             return title;
         }
 
-        function renderDashboard(csvData, brandName, dateRange) {
+        function renderDashboard(csvData, brandName, dateRange, displayOverride) {
+            setCurrentProfileDisplayOverride(displayOverride);
             // Hide empty state, show dashboard content
             const emptyState = document.getElementById('dashboardEmptyState');
             const dashContent = document.getElementById('dashboardContent');
@@ -48904,8 +48936,8 @@
             if (dashContent) dashContent.style.display = 'block';
 
             const parsed = parseAllData(csvData);
-            const headerTitle = getProfileHeaderDisplayTitle(brandName, parsed.brandCategory, parsed.behavioral, parsed.sampleSize, currentS3Key);
-            const tooltipTitle = getProfileDisplayTitle(brandName, parsed.brandCategory, parsed.behavioral);
+            const headerTitle = getProfileHeaderDisplayTitle(brandName, parsed.brandCategory, parsed.behavioral, parsed.sampleSize, currentS3Key, displayOverride);
+            const tooltipTitle = getProfileDisplayTitle(brandName, parsed.brandCategory, parsed.behavioral, displayOverride);
             const resolvedDateRange = dateRange || parsed.dateRange || '';
             
             // Update header profile info and show it
@@ -49771,7 +49803,8 @@
                             name: savedTab.name || data.brand || 'Unknown',
                             dateRange: savedTab.dateRange || data.date_range || '',
                             data: data,
-                            parsed: parsed
+                            parsed: parsed,
+                            displayOverride: data.display_override || null
                         });
                     }
                 } catch (e) {
@@ -50401,7 +50434,8 @@
                         name: brandName,
                         dateRange: dateRange,
                         data: data,
-                        parsed: parsed
+                        parsed: parsed,
+                        displayOverride: data.display_override || null
                     };
                     
                     // If this was a forceReload (e.g. Gen Pop after profile refresh), remove any other tab for the same "profile" (other gen_pop key) to avoid duplicates
@@ -50694,12 +50728,14 @@
         function displayProfileTabData(tab) {
             const { id: profileId, name: brandName, parsed } = tab;
             const dateRange = tab.dateRange || parsed.dateRange || '';
+            const displayOverride = tab.displayOverride || (tab.data && tab.data.display_override) || null;
             
             currentS3Key = profileId;
             currentDashboardData = parsed;
+            setCurrentProfileDisplayOverride(displayOverride);
             
-            const headerTitle = getProfileHeaderDisplayTitle(brandName, parsed.brandCategory, parsed.behavioral, parsed.sampleSize, profileId);
-            const tooltipTitle = getProfileDisplayTitle(brandName, parsed.brandCategory, parsed.behavioral);
+            const headerTitle = getProfileHeaderDisplayTitle(brandName, parsed.brandCategory, parsed.behavioral, parsed.sampleSize, profileId, displayOverride);
+            const tooltipTitle = getProfileDisplayTitle(brandName, parsed.brandCategory, parsed.behavioral, displayOverride);
             
             // Update header profile info and show it
             const profileInfo = document.getElementById('dashProfileInfo');
