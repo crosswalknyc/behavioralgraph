@@ -47692,6 +47692,28 @@
             return name;
         }
 
+        const PROFILE_IQ_MINI_SAMPLE_THRESHOLD = 100000;
+        const PROFILE_IQ_MINI_SUFFIX = ' - IQ Mini';
+
+        function shouldAppendIqMiniTitleSuffix(sampleSize, brandName, s3Key) {
+            const key = String(s3Key || (typeof currentS3Key !== 'undefined' ? currentS3Key : '') || '').toLowerCase();
+            const name = String(brandName || '').toUpperCase();
+            if (key.includes('gen_pop') || key.includes('genpop') || name.includes('GEN POP')) {
+                return false;
+            }
+            const n = Number(sampleSize);
+            return n > 0 && n < PROFILE_IQ_MINI_SAMPLE_THRESHOLD;
+        }
+
+        /** Lime header title: platform suffix + IQ Mini when Crosswalk respondents &lt; 100k. */
+        function getProfileHeaderDisplayTitle(brandName, brandCategory, behavioral, sampleSize, s3Key) {
+            let title = getProfileDisplayTitle(brandName, brandCategory, behavioral);
+            if (shouldAppendIqMiniTitleSuffix(sampleSize, brandName, s3Key) && !/\s-\sIQ Mini$/i.test(title)) {
+                title += PROFILE_IQ_MINI_SUFFIX;
+            }
+            return title;
+        }
+
         function renderDashboard(csvData, brandName, dateRange) {
             // Hide empty state, show dashboard content
             const emptyState = document.getElementById('dashboardEmptyState');
@@ -47700,14 +47722,15 @@
             if (dashContent) dashContent.style.display = 'block';
 
             const parsed = parseAllData(csvData);
-            const displayTitle = getProfileDisplayTitle(brandName, parsed.brandCategory, parsed.behavioral);
+            const headerTitle = getProfileHeaderDisplayTitle(brandName, parsed.brandCategory, parsed.behavioral, parsed.sampleSize, currentS3Key);
+            const tooltipTitle = getProfileDisplayTitle(brandName, parsed.brandCategory, parsed.behavioral);
             const resolvedDateRange = dateRange || parsed.dateRange || '';
             
             // Update header profile info and show it
             const profileInfo = document.getElementById('dashProfileInfo');
             if (profileInfo && brandName) {
                 profileInfo.style.display = 'flex';
-                document.getElementById('dashBrandNameHeader').textContent = displayTitle;
+                document.getElementById('dashBrandNameHeader').textContent = headerTitle;
                 updateDashProfileHeaderMeta(resolvedDateRange, parsed);
                 
                 // Fetch profile image (custom uploads only)
@@ -47744,7 +47767,7 @@
             renderDemoInsights(parsed.demographics, parsed.demographicsIndex, parsed.demographicsGenPop);
             
             // Update profile methodology tooltip
-            updateProfileTooltip(displayTitle, parsed.brandCategory, parsed.behavioral);
+            updateProfileTooltip(tooltipTitle, parsed.brandCategory, parsed.behavioral);
             
             // Render behavioral insights
             renderBehavioralInsights(parsed.behavioral, parsed);
@@ -49489,14 +49512,15 @@
             currentS3Key = profileId;
             currentDashboardData = parsed;
             
-            const displayTitle = getProfileDisplayTitle(brandName, parsed.brandCategory, parsed.behavioral);
+            const headerTitle = getProfileHeaderDisplayTitle(brandName, parsed.brandCategory, parsed.behavioral, parsed.sampleSize, profileId);
+            const tooltipTitle = getProfileDisplayTitle(brandName, parsed.brandCategory, parsed.behavioral);
             
             // Update header profile info and show it
             const profileInfo = document.getElementById('dashProfileInfo');
             if (profileInfo && brandName) {
                 profileInfo.style.display = 'flex';
                 const brandNameEl = document.getElementById('dashBrandNameHeader');
-                if (brandNameEl) brandNameEl.textContent = displayTitle;
+                if (brandNameEl) brandNameEl.textContent = headerTitle;
                 updateDashProfileHeaderMeta(dateRange, parsed);
                 const runsRow = document.getElementById('dashProfileRunsRow');
                 const runSelect = document.getElementById('dashRunSelect');
@@ -49567,7 +49591,7 @@
             renderDemoInsights(parsed.demographics, parsed.demographicsIndex, parsed.demographicsGenPop);
             
             // Update profile methodology tooltip
-            updateProfileTooltip(displayTitle, parsed.brandCategory, parsed.behavioral);
+            updateProfileTooltip(tooltipTitle, parsed.brandCategory, parsed.behavioral);
             
             // Render behavioral insights
             renderBehavioralInsights(parsed.behavioral);
