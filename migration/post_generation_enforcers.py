@@ -4859,9 +4859,15 @@ def reground_clamped_sample_size(df, subject, verbose=True):
     tier = _detect_subject_recognition_tier(df, bp_col)
     if tier == 'alist':
         return df, 0
-    # Per Jenna's instruction: "make it 5,190 not 100k" — niche
-    # deterministic re-ground in [3K, 15K] with per-subject jitter.
-    lo, hi = 3_000.0, 15_000.0
+    # Range widened 2026-06-04 (Jenna's follower-count audit). Original
+    # [3K, 15K] was right for niche but undercounted talents with
+    # measurable social presence (Brooke Hyland 6.5M IG followers landed
+    # at 9.8K). [8K, 45K] matches the new BG.py boost output for the
+    # 2K-20K UID-count bucket (which is where 100K-clamp files live).
+    # _jitter_for spreads subjects deterministically across the full
+    # range from the subject hash, so no two profiles collapse to
+    # within ~3% of each other.
+    lo, hi = 8_000.0, 45_000.0
 
     new_size = int(round(_jitter_for(
         subject, 'sample-size', salt='reground-niche',
