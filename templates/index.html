@@ -84254,8 +84254,12 @@
         </div>
     </div>
     
-    <!-- Left-justified footer with data source -->
-    <footer class="app-footer">
+    <!-- Left-justified footer with data source — hidden 2026-06-03 because the
+         fixed-position bar was overlaying the bottom of dashboard views and
+         clipping content (request: "remove this navy bar so I can see more").
+         Kept in DOM (display:none) so we can flip it back on by removing the
+         style if attribution is needed again. -->
+    <footer class="app-footer" style="display: none;">
         <img src="/static/crosswalk-logo-small.png" alt="Crosswalk" class="app-footer-logo" onerror="this.src='/static/crosswalk-logo.png'; this.style.height='24px';">
         <span class="app-footer-text">Data Source: Crosswalk's Intelligence Platform, a 10M Gen Pop Digital Behavioral Panel</span>
     </footer>
