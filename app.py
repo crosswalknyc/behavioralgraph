@@ -32929,15 +32929,17 @@ def iq_rankers_delete_profile():
 
     # 3) ClickHouse — issue an ALTER TABLE … DELETE mutation. This is
     #    async on CH's side; rows disappear from the leaderboard within
-    #    seconds. We use a parameterized identifier-safe predicate to
-    #    avoid SQL injection (profile_subject can contain dots, etc).
+    #    seconds. The bg-webapp wrapper exposes a Snowflake-style
+    #    cursor() rather than clickhouse-connect's `.command()`.
     try:
         cli = _ch_connect()
         # Quote profile_subject as a ClickHouse string literal.
         subj_lit = "'" + profile_subject.replace("\\", "\\\\").replace("'", "\\'") + "'"
         q = (f"ALTER TABLE reference.profile_iq_daily_metrics "
              f"DELETE WHERE profile_subject = {subj_lit}")
-        cli.command(q)
+        cli.cursor().execute(q)
+        try: cli.close()
+        except Exception: pass
         summary['clickhouse_rows_deleted_query_sent'] = True
     except Exception as e:
         summary['errors'].append(f"clickhouse delete failed: {e}")
