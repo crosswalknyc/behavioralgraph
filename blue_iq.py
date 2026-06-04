@@ -610,16 +610,39 @@ def roll_up_political_issues(queries: list[dict], use_external: bool = True
         }]
 
     sys_msg = (
-        'You classify analytics search queries to support a political dashboard.\n'
+        'You classify analytics search queries to support a U.S. political dashboard.\n'
+        'AUDIENCE: U.S. registered voters and constituents that a U.S. politician\n'
+        '(federal, state, or local) could address with policy. Drop everything else.\n'
+        '\n'
         'For each query, decide:\n'
-        '  1. Is it about a POLICY issue a politician could address?\n'
-        '     (Drop sports, celebrity, weather, shopping, dating, recipes, gaming,\n'
-        '      music, movies, TV, generic curiosity. KEEP: cost of living,\n'
-        '      housing affordability, healthcare access, immigration, taxes,\n'
-        '      voting, candidate positions, civil rights, climate policy, etc.)\n'
+        '  1. Is the query (a) U.S.-relevant AND (b) a POLICY issue an elected U.S.\n'
+        '     official could plausibly address?\n'
+        '\n'
+        f'     Return "{NON_POLICY}" if ANY of the following are true:\n'
+        '       - Non-U.S. jurisdiction (UK, India, EU, LATAM, Russia, Canada specifics).\n'
+        '         Examples to REJECT: "aadhar card", "uk financial news", "gilt yields",\n'
+        '         "dolar hoy", "sanitas", "ration card", "annapurna yojana",\n'
+        '         "infonavit", ".gov.in", ".gov.uk", ".co.uk".\n'
+        '       - Non-English-script terms (Cyrillic, Devanagari, CJK, Arabic, etc.).\n'
+        '       - Generic non-policy: shopping, recipes, weather, sports, celebrity,\n'
+        '         dating, gaming, music, movies, TV, technical/coding queries,\n'
+        '         job-search board names without policy context ("zillow", "indeed"\n'
+        '         alone is non-policy).\n'
+        '       - Government services that are pure transactions, not policy debates\n'
+        '         ("renew driver license", "irs login", "social security login").\n'
+        '\n'
+        '     KEEP only U.S. policy debate topics: cost of living, housing affordability,\n'
+        '     healthcare access, immigration, taxes, voting/elections, candidate\n'
+        '     positions, civil rights, gun policy, abortion policy, climate policy,\n'
+        '     student loans, infrastructure, foreign policy positions, etc.\n'
+        '\n'
         '  2. If policy, assign exactly ONE bucket from this list:\n'
         f'{_BUCKETS_LIST_FOR_PROMPT}\n'
-        f'     If non-policy, return "{NON_POLICY}".\n'
+        f'     If non-policy OR non-U.S., return "{NON_POLICY}".\n'
+        '\n'
+        'When in doubt, prefer NON_POLICY. False negatives are cheap; false positives\n'
+        'pollute the dashboard.\n'
+        '\n'
         'INPUT FORMAT: each line is INDEX<TAB>JSON_STRING_QUERY\n'
         'OUTPUT FORMAT: strict JSON: {"items":[{"i":0,"b":"..."},...]}\n'
         'one entry per input line, same indices, no commentary.'
@@ -1302,19 +1325,26 @@ def compute_panel_view(filters: dict, *, force_refresh: bool = False) -> dict:
     if panel_size > 0 and panel_turnout.get('panelists'):
         turnout_pct = round(panel_turnout['panelists'] / panel_size, 4)
 
+    # Issue × Journey cross: national-only (cube top-level), so it doesn't
+    # vary by the user's geo/party filter. Surfaces "for voters worried
+    # about Housing & Rent, what do they DO after political content?" —
+    # answering the marketing-creative placement question directly.
+    issue_journey_cross = (cube or {}).get('issue_journey_cross') or []
+
     cards = {
-        'issue_buckets':   issue_buckets,
-        'search_engines':  _attach_share(panel_search),
-        'social_media':    _attach_share(panel_social),
-        'top_politicians': top_politicians,
-        'top_articles':    top_articles,
-        'turnout_intent':  {
+        'issue_buckets':       issue_buckets,
+        'search_engines':      _attach_share(panel_search),
+        'social_media':        _attach_share(panel_social),
+        'top_politicians':     top_politicians,
+        'top_articles':        top_articles,
+        'turnout_intent':      {
             'pct':            turnout_pct,
             'panelists':      panel_turnout.get('panelists', 0),
             'sample_queries': panel_turnout.get('sample_urls', [])[:8],
         },
-        'demo_crosstab':   panel_demo,
-        'voter_journey':   panel_journey,
+        'demo_crosstab':       panel_demo,
+        'voter_journey':       panel_journey,
+        'issue_journey_cross': issue_journey_cross,
     }
 
     # Compare card (only when geo is set)

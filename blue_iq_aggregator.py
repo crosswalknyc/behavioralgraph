@@ -645,6 +645,20 @@ def _q_search_queries(conn, start: str, top_k: int) -> tuple[dict[str, list[dict
     # the heavy `ANY INNER JOIN reference.search_text_mapping` join that
     # the newer CH analyzer rejects (`INVALID_JOIN_ON_EXPRESSION` on
     # non-equality JOIN conditions).
+    # MEMORY: on the 30d window this query previously OOM'd at 80 GiB
+    # because extractURLParameter + decodeURLComponent + lower were
+    # evaluated on every row of clickstream_final (~hundreds of millions
+    # of rows). The optimization here is:
+    #   1. PREWHERE on `URL LIKE '%?q=%' OR URL LIKE '%&q=%'` — kills
+    #      90%+ of rows BEFORE any extraction.
+    #   2. Move the extract into the SELECT clause only after the
+    #      INNER JOIN to user_data_sanitized has narrowed the row set
+    #      to US-only panelists (the WHERE filters apply to UID-joined
+    #      rows only).
+    #   3. The ASCII / foreign-token filters move into the inner CTE
+    #      so they prune before GROUPING SETS aggregation rather than
+    #      after — also reduces memory pressure on the aggregation
+    #      hash table.
     cur.execute(f"""
         WITH hits AS (
             SELECT
@@ -656,25 +670,29 @@ def _q_search_queries(conn, start: str, top_k: int) -> tuple[dict[str, list[dict
             FROM clickstream.clickstream_final AS cs
             INNER JOIN userdata.user_data_sanitized AS uds ON uds.UID = cs.UID
             LEFT  JOIN blue_iq_party                AS bp  ON bp.uid  = cs.UID
-            WHERE cs.DELIVERED >= toDate(%(start)s)
+            PREWHERE cs.DELIVERED >= toDate(%(start)s)
+                 AND (position(cs.URL, '?q=') > 0 OR position(cs.URL, '&q=') > 0)
+            WHERE {US_COUNTRY_FILTER}
               AND length(extractURLParameter(cs.URL, 'q')) BETWEEN 6 AND 200
-              AND {US_COUNTRY_FILTER}
+        ),
+        hits_filtered AS (
+            SELECT party, state, dma, uid, term FROM hits
+            WHERE term != ''
+              -- ASCII-only: reject Cyrillic, '+uk' UK-localized terms, Devanagari, etc.
+              AND match(term, '^[\\x20-\\x7e]+$')
+              AND positionCaseInsensitive(term, '+uk') = 0
+              AND positionCaseInsensitive(term, '+india') = 0
+              AND positionCaseInsensitive(term, '+canada') = 0
+              AND positionCaseInsensitive(term, '+australia') = 0
+              AND positionCaseInsensitive(term, '.gov.in') = 0
+              AND positionCaseInsensitive(term, '.gov.uk') = 0
+              AND positionCaseInsensitive(term, '.co.uk') = 0
+              AND positionCaseInsensitive(term, 'infonavit') = 0
         )
         SELECT party, state, dma, term,
                grouping(party) AS gp, grouping(state) AS gs, grouping(dma) AS gd,
                uniqExact(uid) AS panelists
-        FROM hits
-        WHERE term != ''
-          -- ASCII-only: reject Cyrillic, '+uk' UK-localized terms, Devanagari, etc.
-          AND match(term, '^[\\x20-\\x7e]+$')
-          AND positionCaseInsensitive(term, '+uk') = 0
-          AND positionCaseInsensitive(term, '+india') = 0
-          AND positionCaseInsensitive(term, '+canada') = 0
-          AND positionCaseInsensitive(term, '+australia') = 0
-          AND positionCaseInsensitive(term, '.gov.in') = 0
-          AND positionCaseInsensitive(term, '.gov.uk') = 0
-          AND positionCaseInsensitive(term, '.co.uk') = 0
-          AND positionCaseInsensitive(term, 'infonavit') = 0
+        FROM hits_filtered
         GROUP BY GROUPING SETS (
             (party, state, term),
             (party, dma, term),
@@ -797,8 +815,19 @@ def _q_voter_journey(conn, start: str) -> dict[str, list[dict]]:
     # `journey_step` categorizes the NEXT visit. We layer the predicates
     # so candidate-social (e.g. twitter.com/realDonaldTrump) beats raw
     # social. Order matters: first match wins via multiIf().
+    #
+    # MEMORY: the prior implementation ASOF-joined against the full
+    # clickstream_final on the right side. CH OOM'd at 80GiB because the
+    # right-side scan wasn't pruned. We now:
+    #   1. Materialize the unique touchpoint UIDs in a CTE.
+    #   2. Restrict the right side to ONLY those UIDs via `WHERE c2.UID IN`.
+    #      That prunes the scan to a few thousand panelists' rows instead of
+    #      all ~180M-300M rows in the window.
+    #   3. We also sample the touchpoints to the first PER-UID timestamp so
+    #      each panelist contributes one journey row, not N (where N = #
+    #      touchpoint visits they made).
     cur.execute(f"""
-        WITH touchpoints AS (
+        WITH touchpoints_raw AS (
             SELECT
                 coalesce(bp.party, 'Undecided') AS party,
                 cs.UID                          AS uid,
@@ -811,18 +840,34 @@ def _q_voter_journey(conn, start: str) -> dict[str, list[dict]]:
               AND (lower(cs.DOMAIN) IN %(media)s
                    OR multiMatchAny(lower(cs.URL), %(pols)s) > 0)
         ),
-        -- Closest subsequent visit per panelist via ASOF JOIN. CH's ASOF
-        -- requires the inequality on a single column (VISIT_TS).
+        touchpoints AS (
+            -- Earliest touchpoint per UID, so each panelist contributes one row.
+            SELECT party, uid, min(tp_ts) AS tp_ts
+            FROM touchpoints_raw
+            GROUP BY party, uid
+        ),
+        touchpoint_uids AS (
+            SELECT DISTINCT uid FROM touchpoints
+        ),
+        -- Restrict the right side to touchpoint panelists ONLY. Without
+        -- this filter, CH would scan all clickstream rows in the window
+        -- (200M+) and OOM during the ASOF join.
+        c2_filtered AS (
+            SELECT cf.UID AS uid, cf.VISIT_TS AS ts,
+                   lower(cf.DOMAIN) AS dom, lower(cf.URL) AS url
+            FROM clickstream.clickstream_final AS cf
+            WHERE cf.DELIVERED >= toDate(%(start)s)
+              AND cf.UID IN (SELECT uid FROM touchpoint_uids)
+        ),
         next_visits AS (
             SELECT
-                t.party                           AS party,
-                t.uid                             AS uid,
-                lower(c2.DOMAIN)                  AS next_dom,
-                lower(c2.URL)                     AS next_url
+                t.party     AS party,
+                t.uid       AS uid,
+                c2.dom      AS next_dom,
+                c2.url      AS next_url
             FROM touchpoints AS t
-            ASOF LEFT JOIN clickstream.clickstream_final AS c2
-                ON c2.UID = t.uid AND c2.VISIT_TS > t.tp_ts
-            WHERE c2.DELIVERED >= toDate(%(start)s)
+            ASOF LEFT JOIN c2_filtered AS c2
+                ON c2.uid = t.uid AND c2.ts > t.tp_ts
         ),
         categorized AS (
             SELECT
@@ -878,6 +923,180 @@ def _q_voter_journey(conn, start: str) -> dict[str, list[dict]]:
             'panelists':   c,
             'share':       round(c / total, 4),
         } for d, c in items]
+    return out
+
+
+# ── Step 3c: Issue × Journey cross (marketing-creative card) ────────────────
+
+def _q_issue_journey_cross(conn, start: str) -> dict[str, dict[str, int]]:
+    """For panelists who hit a political touchpoint AND searched something
+    in the window, return {term: {destination: panelists}}.
+
+    The reader maps each term to its issue bucket (via the global bucket
+    map already in the cube) and aggregates by (bucket, destination). The
+    frontend then renders a per-issue journey breakdown that answers
+    "voters worried about Healthcare/Housing/Inflation end up doing X
+    after political content" — directly informing where to place
+    creative and what message to lead with.
+
+    Memory pattern mirrors _q_voter_journey: prune both sides of the
+    ASOF JOIN to touchpoint UIDs via WHERE c2.UID IN (...) so CH doesn't
+    OOM on the full clickstream scan.
+    """
+    cur = conn.cursor()
+    _, left_media, right_media = blue_iq._load_media_domains()
+    media_domains = list(left_media | right_media)
+    polparties = blue_iq._load_politician_parties()
+    pol_pats = [n.lower() for n in list(polparties.keys())[:60]]
+
+    if not media_domains and not pol_pats:
+        return {}
+
+    candidate_set       = sorted(JOURNEY_CANDIDATE_DOMAINS)
+    donation_set        = sorted(JOURNEY_DONATION_DOMAINS)
+    voting_info_set     = sorted(JOURNEY_VOTING_INFO_DOMAINS)
+    search_set          = sorted(JOURNEY_SEARCH_DOMAINS)
+    social_set          = sorted(JOURNEY_SOCIAL_DOMAINS)
+    political_media_set = sorted({d.lower() for d in media_domains})
+
+    cur.execute(f"""
+        WITH touchpoints AS (
+            SELECT cs.UID AS uid, min(cs.VISIT_TS) AS tp_ts
+            FROM clickstream.clickstream_final     AS cs
+            INNER JOIN userdata.user_data_sanitized AS uds ON uds.UID = cs.UID
+            WHERE cs.DELIVERED >= toDate(%(start)s)
+              AND {US_COUNTRY_FILTER}
+              AND (lower(cs.DOMAIN) IN %(media)s
+                   OR multiMatchAny(lower(cs.URL), %(pols)s) > 0)
+            GROUP BY cs.UID
+        ),
+        touchpoint_uids AS (SELECT DISTINCT uid FROM touchpoints),
+        -- Per-panelist search terms (US-only via touchpoint set).
+        -- PREWHERE on '?q=' / '&q=' substring kills 90%+ of clickstream
+        -- rows before extractURLParameter runs (memory-safety for 30d).
+        panelist_terms AS (
+            SELECT cs.UID AS uid,
+                   lower(decodeURLComponent(extractURLParameter(cs.URL, 'q'))) AS term
+            FROM clickstream.clickstream_final AS cs
+            PREWHERE cs.DELIVERED >= toDate(%(start)s)
+                 AND (position(cs.URL, '?q=') > 0 OR position(cs.URL, '&q=') > 0)
+            WHERE cs.UID IN (SELECT uid FROM touchpoint_uids)
+              AND length(extractURLParameter(cs.URL, 'q')) BETWEEN 6 AND 200
+        ),
+        -- Same destination categorization as _q_voter_journey, scoped to
+        -- the touchpoint panelist set.
+        c2_filtered AS (
+            SELECT cf.UID AS uid, cf.VISIT_TS AS ts,
+                   lower(cf.DOMAIN) AS dom, lower(cf.URL) AS url
+            FROM clickstream.clickstream_final AS cf
+            WHERE cf.DELIVERED >= toDate(%(start)s)
+              AND cf.UID IN (SELECT uid FROM touchpoint_uids)
+        ),
+        next_visits AS (
+            SELECT t.uid AS uid, c2.dom AS next_dom, c2.url AS next_url
+            FROM touchpoints AS t
+            ASOF LEFT JOIN c2_filtered AS c2
+                ON c2.uid = t.uid AND c2.ts > t.tp_ts
+        ),
+        categorized AS (
+            SELECT
+                uid,
+                multiIf(
+                    next_dom = '' OR next_dom IS NULL, 'abandoned',
+                    next_dom IN %(candidates)s, 'candidate_site',
+                    next_dom IN %(donations)s,  'donation',
+                    next_dom IN %(voting)s,     'voting_info',
+                    next_dom IN %(social)s AND multiMatchAny(next_url, %(pols)s) > 0,
+                        'candidate_social',
+                    next_dom IN %(search)s AND multiMatchAny(extractURLParameter(next_url, 'q'), %(pols)s) > 0,
+                        'candidate_search',
+                    next_dom IN %(search)s, 'search',
+                    next_dom IN %(media)s,  'news_dive',
+                    next_dom IN %(social)s, 'social_discussion',
+                    'other'
+                ) AS destination
+            FROM next_visits
+        )
+        SELECT pt.term, cat.destination, uniqExact(pt.uid) AS panelists
+        FROM panelist_terms AS pt
+        INNER JOIN categorized AS cat ON cat.uid = pt.uid
+        WHERE pt.term != ''
+          -- ASCII-only and US-policy filters (same as _q_search_queries).
+          AND match(pt.term, '^[\\x20-\\x7e]+$')
+          AND positionCaseInsensitive(pt.term, '+uk') = 0
+          AND positionCaseInsensitive(pt.term, '+india') = 0
+          AND positionCaseInsensitive(pt.term, '+canada') = 0
+          AND positionCaseInsensitive(pt.term, '+australia') = 0
+          AND positionCaseInsensitive(pt.term, '.gov.in') = 0
+          AND positionCaseInsensitive(pt.term, '.gov.uk') = 0
+          AND positionCaseInsensitive(pt.term, '.co.uk') = 0
+          AND positionCaseInsensitive(pt.term, 'infonavit') = 0
+        GROUP BY pt.term, cat.destination
+        HAVING panelists > 1
+        ORDER BY panelists DESC
+        LIMIT 20000
+    """, {
+        'start':      start,
+        'media':      political_media_set,
+        'pols':       pol_pats or ['__none__'],
+        'candidates': candidate_set,
+        'donations':  donation_set,
+        'voting':     voting_info_set,
+        'search':     search_set,
+        'social':     social_set,
+    })
+
+    out: dict[str, dict[str, int]] = defaultdict(lambda: defaultdict(int))
+    for term, dest, panelists in cur.fetchall():
+        if not term or not dest:
+            continue
+        out[term.strip().lower()][dest] += int(panelists)
+    return out
+
+
+def _rollup_issue_journey(term_dest: dict[str, dict[str, int]],
+                            issue_buckets_global: list[dict]) -> list[dict]:
+    """Map (term, destination) → (issue_bucket, destination) → panelists
+    via the global bucket map (sample_queries → bucket). Returns
+    [{bucket, total_panelists, destinations: [{destination, panelists,
+    share}, ...], top_terms: [...]}], sorted by total panelists desc.
+    """
+    if not term_dest or not issue_buckets_global:
+        return []
+
+    term_to_bucket: dict[str, str] = {}
+    for b in issue_buckets_global:
+        bname = b.get('bucket')
+        for q in (b.get('sample_queries') or []):
+            term_to_bucket[(q or '').strip().lower()] = bname
+
+    bucket_dest: dict[str, dict[str, int]] = defaultdict(lambda: defaultdict(int))
+    bucket_terms: dict[str, dict[str, int]] = defaultdict(lambda: defaultdict(int))
+    for term, dest_map in term_dest.items():
+        b = term_to_bucket.get(term)
+        if not b:
+            continue
+        term_total = sum(dest_map.values())
+        bucket_terms[b][term] = max(bucket_terms[b].get(term, 0), term_total)
+        for dest, n in dest_map.items():
+            bucket_dest[b][dest] += int(n)
+
+    out = []
+    for bucket, dests in bucket_dest.items():
+        total = sum(dests.values()) or 1
+        sorted_dests = sorted(dests.items(), key=lambda x: -x[1])
+        top_terms = sorted(bucket_terms[bucket].items(), key=lambda x: -x[1])[:5]
+        out.append({
+            'bucket':           bucket,
+            'total_panelists':  total,
+            'destinations':     [{
+                'destination': d,
+                'panelists':   c,
+                'share':       round(c / total, 4),
+            } for d, c in sorted_dests],
+            'top_terms':        [t for t, _ in top_terms],
+        })
+    out.sort(key=lambda x: -x['total_panelists'])
     return out
 
 
@@ -944,7 +1163,7 @@ def build_cube(lookback_days: int = LOOKBACK_DAYS) -> dict:
         log.info("  AI rollup done in %.1fs (%d buckets)",
                  time.time() - t0, len(issue_buckets_global))
 
-        log.info("Step 9/9: digital voter journey (post-touchpoint destinations)")
+        log.info("Step 9/10: digital voter journey (post-touchpoint destinations)")
         t0 = time.time()
         try:
             voter_journey = _q_voter_journey(conn, start)
@@ -953,6 +1172,17 @@ def build_cube(lookback_days: int = LOOKBACK_DAYS) -> dict:
         except Exception as e:
             log.warning("  voter journey query failed (non-fatal): %s", e)
             voter_journey = {}
+
+        log.info("Step 10/10: issue \u00d7 journey cross (marketing-creative card)")
+        t0 = time.time()
+        try:
+            term_dest = _q_issue_journey_cross(conn, start)
+            issue_journey_cross = _rollup_issue_journey(term_dest, issue_buckets_global)
+            log.info("  issue\u00d7journey cross done in %.1fs (%d terms \u2192 %d issue buckets)",
+                     time.time() - t0, len(term_dest), len(issue_journey_cross))
+        except Exception as e:
+            log.warning("  issue\u00d7journey cross query failed (non-fatal): %s", e)
+            issue_journey_cross = []
 
         # Assemble cube. We only emit cells whose total-UID count clears MIN_CELL_SIZE.
         log.info("Assembling cube ...")
@@ -998,7 +1228,7 @@ def build_cube(lookback_days: int = LOOKBACK_DAYS) -> dict:
                  f"{us_panel_total:,}", gen_pop_factor)
 
         cube = {
-            'version':            1,
+            'version':            2,  # bumped: adds issue_journey_cross
             'computed_at':        datetime.now(timezone.utc).isoformat(),
             'lookback_days':      lookback_days,
             'min_cell_size':      MIN_CELL_SIZE,
@@ -1010,6 +1240,7 @@ def build_cube(lookback_days: int = LOOKBACK_DAYS) -> dict:
             'all_dmas':           all_dmas,
             'cells':              cells,
             'issue_buckets_global': issue_buckets_global,
+            'issue_journey_cross':  issue_journey_cross,
         }
         return cube
     finally:

@@ -1902,6 +1902,50 @@ def _decode_metadata_value(s):
     return str(s).replace('+', ' ')
 
 
+_PROFILE_DATE_RANGE_RE = re.compile(
+    r'(\d{4}-\d{2}-\d{2})\s+TO\s+(\d{4}-\d{2}-\d{2})',
+    re.IGNORECASE,
+)
+_PROFILE_DATE_ISO_RE = re.compile(r'^\d{4}-\d{2}-\d{2}$')
+
+
+def _parse_date_range_from_cell_value(val):
+    """Parse a date range from any CSV Value using metadata keys and/or embedded dates."""
+    s = str(val or '').strip()
+    if not s:
+        return ''
+    if 'SAMPLE_START:' in s and 'SAMPLE_END:' in s:
+        start = s.split('SAMPLE_START:')[1].split('_')[0].strip()
+        end = s.split('SAMPLE_END:')[1].split('_')[0].strip()
+        if _PROFILE_DATE_ISO_RE.match(start) and _PROFILE_DATE_ISO_RE.match(end):
+            return f"{start} - {end}"
+    match = _PROFILE_DATE_RANGE_RE.search(s)
+    if match:
+        return f"{match.group(1)} - {match.group(2)}"
+    return ''
+
+
+def extract_date_range_from_profile_df(df):
+    """Extract display date range; checks INPUT_METADATA, SAMPLE SIZE, then DATE_RANGE."""
+    try:
+        col_series = df['Column'].astype(str)
+        # Fixed order: legacy metadata row first, then SAMPLE SIZE (new pipeline), then DATE_RANGE.
+        source_columns = [
+            ('INPUT_METADATA', lambda c: col_series == c),
+            ('SAMPLE SIZE', lambda c: col_series.str.upper() == c),
+            ('DATE_RANGE', lambda c: col_series.str.upper() == c),
+        ]
+        for col_name, row_mask in source_columns:
+            rows = df[row_mask(col_name)]
+            for _, row in rows.iterrows():
+                parsed = _parse_date_range_from_cell_value(row.get('Value', ''))
+                if parsed:
+                    return parsed
+    except Exception as e:
+        print(f"extract_date_range_from_profile_df error: {e}")
+    return ''
+
+
 def parse_metadata_from_csv(csv_content):
     """Extract metadata from the INPUT_METADATA row of a CSV."""
     try:
@@ -10171,14 +10215,7 @@ def get_csv_data(s3_key):
                 brand_name = match.group(1).replace('_', ' ')
             else:
                 brand_name = name_without_ext.replace('_', ' ')
-        date_range = ''
-        metadata_rows = df[df['Column'] == 'INPUT_METADATA']
-        if not metadata_rows.empty:
-            metadata_value = str(metadata_rows.iloc[0]['Value'])
-            if 'SAMPLE_START:' in metadata_value and 'SAMPLE_END:' in metadata_value:
-                start = metadata_value.split('SAMPLE_START:')[1].split('_')[0]
-                end = metadata_value.split('SAMPLE_END:')[1].split('_')[0]
-                date_range = f"{start} - {end}"
+        date_range = extract_date_range_from_profile_df(df)
         data = df.to_dict('records')
         for row in data:
             val = row.get('Value')
@@ -10498,6 +10535,17 @@ def get_segment_data():
             behavior_start = sample_start
         if not behavior_end:
             behavior_end = sample_end
+
+        if not sample_start or not sample_end:
+            dr = extract_date_range_from_profile_df(df)
+            if dr and ' - ' in dr:
+                parts = dr.split(' - ', 1)
+                sample_start = sample_start or parts[0].strip()
+                sample_end = sample_end or parts[1].strip()
+                if not behavior_start:
+                    behavior_start = sample_start
+                if not behavior_end:
+                    behavior_end = sample_end
         
         # Default to last 90 days if no dates found
         if not sample_start or not sample_end:
@@ -16472,17 +16520,12 @@ def get_job_data(job_id):
         
         # Extract brand and date range
         brand_name = job['project_name']
-        date_range = ''
-        
+        date_range = extract_date_range_from_profile_df(df)
         metadata_rows = df[df['Column'] == 'INPUT_METADATA']
         if not metadata_rows.empty:
             metadata_value = str(metadata_rows.iloc[0]['Value'])
             if 'BRAND:' in metadata_value:
                 brand_name = metadata_value.split('BRAND:')[1].split('_')[0]
-            if 'SAMPLE_START:' in metadata_value and 'SAMPLE_END:' in metadata_value:
-                start = metadata_value.split('SAMPLE_START:')[1].split('_')[0]
-                end = metadata_value.split('SAMPLE_END:')[1].split('_')[0]
-                date_range = f"{start} - {end}"
         
         data = df.to_dict('records')
         

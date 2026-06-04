@@ -21377,20 +21377,131 @@
             return isNaN(n) ? '0' : Math.round(n).toLocaleString();
         }
         
+        // SERIES, TV SHOW, and MOVIE profiles use the active-viewer definition (not 5 touchpoint).
+        function isActiveViewerProfileCategory(brandCategory) {
+            var c = (brandCategory || '').toString().toUpperCase().trim();
+            if (!c) return false;
+            if (c.includes('SERIES')) return true;
+            if (c.includes('TV SHOW')) return true;
+            if (c.includes('MOVIE') && !c.includes('THEATER')) return true;
+            return false;
+        }
+
+        function isGamePlayersProfileCategory(brandCategory) {
+            var c = (brandCategory || '').toString().toUpperCase().trim();
+            if (!c) return false;
+            if (c === 'GAMES - PLAYERS' || c === 'GAME PLAYERS') return true;
+            return c.includes('GAMES') && c.includes('PLAYER');
+        }
+
+        function getStreamingPlatformFromBehavioral(behavioral) {
+            var behav = behavioral || {};
+            var streamingKey = Object.keys(behav).find(function(k) {
+                var u = k.toUpperCase();
+                return u.includes('STREAMING') && u.includes('PLATFORM');
+            });
+            if (!streamingKey || !behav[streamingKey] || !behav[streamingKey].length) return null;
+            var items = behav[streamingKey];
+            var at100 = items.find(function(item) { return (item.pct || 0) >= 99.5; });
+            if (at100) return (at100.name || '').trim();
+            return items.reduce(function(best, item) {
+                return (item.pct || 0) > (best.pct || 0) ? item : best;
+            }, items[0]).name.trim();
+        }
+
+        const _profileDateRangeRe = /(\d{4}-\d{2}-\d{2})\s+TO\s+(\d{4}-\d{2}-\d{2})/i;
+        const _profileDateIsoRe = /^\d{4}-\d{2}-\d{2}$/;
+
+        function parseDateRangeFromCellValue(val) {
+            const s = String(val || '').trim();
+            if (!s) return '';
+            if (s.includes('SAMPLE_START:') && s.includes('SAMPLE_END:')) {
+                const start = s.split('SAMPLE_START:')[1].split('_')[0].trim();
+                const end = s.split('SAMPLE_END:')[1].split('_')[0].trim();
+                if (_profileDateIsoRe.test(start) && _profileDateIsoRe.test(end)) {
+                    return start + ' - ' + end;
+                }
+            }
+            const m = s.match(_profileDateRangeRe);
+            if (m) return m[1] + ' - ' + m[2];
+            return '';
+        }
+
+        function extractDateRangeFromCsvRows(csvData) {
+            if (!csvData || !csvData.length) return '';
+            const byColumn = { INPUT_METADATA: [], 'SAMPLE SIZE': [], DATE_RANGE: [] };
+            csvData.forEach(function(row) {
+                const col = (row['Column'] || row[0] || '').toString().trim().toUpperCase();
+                const val = row['Value'] || row[1] || '';
+                if (col === 'INPUT_METADATA') byColumn.INPUT_METADATA.push(val);
+                else if (col === 'SAMPLE SIZE') byColumn['SAMPLE SIZE'].push(val);
+                else if (col === 'DATE_RANGE') byColumn.DATE_RANGE.push(val);
+            });
+            const sourceOrder = ['INPUT_METADATA', 'SAMPLE SIZE', 'DATE_RANGE'];
+            for (let i = 0; i < sourceOrder.length; i++) {
+                const values = byColumn[sourceOrder[i]] || [];
+                for (let j = 0; j < values.length; j++) {
+                    const parsed = parseDateRangeFromCellValue(values[j]);
+                    if (parsed) return parsed;
+                }
+            }
+            return '';
+        }
+
+        function getDominantAgeRangeLabel(parsed) {
+            const age = parsed?.demographics?.age || {};
+            const entries = Object.entries(age).filter(([k, v]) => v > 0 && v < 99.99 && k);
+            if (!entries.length) return '';
+            const top = entries.sort((a, b) => b[1] - a[1])[0];
+            return (typeof getAgeDisplayLabel === 'function') ? getAgeDisplayLabel(top[0]) : top[0];
+        }
+
+        function updateDashProfileHeaderMeta(dateRange, parsed) {
+            const el = document.getElementById('dashDateRangeHeader');
+            if (!el) return;
+            const resolvedRange = dateRange || parsed?.dateRange || '';
+            const lines = [];
+            if (resolvedRange) lines.push('Date Range: ' + resolvedRange);
+            const ageLabel = getDominantAgeRangeLabel(parsed);
+            if (ageLabel) lines.push('Age Range: ' + ageLabel);
+            if (lines.length) {
+                el.innerHTML = lines.map(function(line) {
+                    return typeof escapeHtml === 'function' ? escapeHtml(line) : line;
+                }).join('<br>');
+                el.style.display = 'block';
+            } else {
+                el.textContent = '';
+                el.style.display = 'none';
+            }
+        }
+
         // Update profile methodology tooltip with profile name
-        function updateProfileTooltip(profileName, brandCategory) {
+        function updateProfileTooltip(profileName, brandCategory, behavioral) {
             var container = document.getElementById('dashBrandContainer');
             if (container && profileName) {
                 var tooltip;
                 var category = (brandCategory || '').toString().toUpperCase();
-                
-                // Check if this is a SERIES profile (brand category contains SERIES)
-                if (category.includes('SERIES') && profileName.includes(' - ')) {
-                    // Extract show name and platform from "Show Name - Platform" format
-                    var parts = profileName.split(' - ');
+                var behav = behavioral || (typeof currentDashboardData !== 'undefined' && currentDashboardData && currentDashboardData.behavioral) || {};
+
+                if (isActiveViewerProfileCategory(category)) {
+                    var baseName = (typeof currentProfileData !== 'undefined' && currentProfileData && currentProfileData.name) || profileName;
+                    var titled = (profileName && profileName.includes(' - '))
+                        ? profileName
+                        : getProfileDisplayTitle(baseName, brandCategory, behav);
+                    var parts = titled.split(' - ');
                     var showName = parts[0].trim();
-                    var platform = parts.slice(1).join(' - ').trim(); // Handle cases with multiple dashes
-                    tooltip = 'This profile is of all panelists who are active viewers of ' + showName + ' on ' + platform + '.';
+                    var platform = parts.slice(1).join(' - ').trim();
+                    if (platform) {
+                        tooltip = 'This profile is of all panelists who are active viewers of ' + showName + ' on ' + platform + '.';
+                    } else {
+                        tooltip = 'This profile is of all panelists who are active viewers of ' + showName + '.';
+                    }
+                } else if (isGamePlayersProfileCategory(category)) {
+                    var gameName = (typeof currentProfileData !== 'undefined' && currentProfileData && currentProfileData.name) || profileName;
+                    if (gameName && gameName.indexOf(' - ') !== -1) {
+                        gameName = gameName.split(' - ')[0].trim();
+                    }
+                    tooltip = 'This profile is of all panelists who are players of ' + gameName + '.';
                 } else if (category === 'SOCIAL MEDIA' || category === 'STREAMING/PLATFORM' || category === 'STREAMING/MUSIC' || category === 'VIRTUAL MVPD FAST') {
                     tooltip = 'This profile is of all panelists who are actively engaged with ' + profileName + '. Panelists have visited the platform within the date range below.';
                 } else {
@@ -22351,6 +22462,19 @@
                   + '</div>'
                   + '</div>';
 
+            // CARD M: Marketing creative — Issue × Voter Journey cross
+            var cross = cards.issue_journey_cross || [];
+            html += '<div class="blue-iq-card blue-iq-card-creative" style="grid-column: span 2;">'
+                  + '<h3 class="blue-iq-card-title">Marketing creative recommendations <span class="blue-iq-badge">issue \u00d7 journey</span></h3>'
+                  + '<div class="blue-iq-card-body">'
+                  +   '<div style="font-size: 0.78rem; color: var(--text-secondary); margin-bottom: 0.5rem;">'
+                  +     'For voters who searched a U.S.-policy topic AND encountered political content, what did they do next? '
+                  +     'Larger destinations on a row = higher-leverage placements for that issue\u2019s creative.'
+                  +   '</div>'
+                  +   _renderBlueIQIssueJourneyCross(cross)
+                  + '</div>'
+                  + '</div>';
+
             // CARD L: Demographic crosstab (if present)
             var dc = cards.demo_crosstab || {};
             if (dc && (dc.age || dc.gender || dc.ethnicity || dc.income)) {
@@ -22432,6 +22556,109 @@
             other:              { label: 'Did something unrelated',     blurb: 'Next visit was non-political (shopping, weather, etc.).' },
             abandoned:          { label: 'Abandoned the session',       blurb: 'No follow-up clickstream in the window.' },
         };
+
+        // Stacked horizontal bar of journey-step shares for ONE issue
+        // bucket. Used by both the per-issue card and the cross card.
+        function _bqJourneyStackedBar(destinations) {
+            if (!destinations || !destinations.length) return '';
+            // Color scale per destination — keeps the same color used across cards.
+            var palette = {
+                candidate_site:    '#3b82f6',
+                candidate_social:  '#6366f1',
+                candidate_search:  '#8b5cf6',
+                donation:          '#ec4899',
+                voting_info:       '#10b981',
+                search:            '#0ea5e9',
+                news_dive:         '#f59e0b',
+                social_discussion: '#a855f7',
+                other:             '#64748b',
+                abandoned:         '#475569',
+            };
+            return '<div style="display:flex; height:14px; border-radius:6px; overflow:hidden; background:rgba(255,255,255,0.04);">'
+                 + destinations.map(function(d) {
+                     var c = palette[d.destination] || '#64748b';
+                     var label = (BLUE_IQ_JOURNEY_LABELS[d.destination] || {}).label || d.destination;
+                     var pct = Math.round((+d.share || 0) * 100);
+                     if (pct < 1) return '';
+                     return '<div title="' + _bqEscape(label + ': ' + _bqPct(d.share || 0)) + '" '
+                          + 'style="width:' + pct + '%; background:' + c + ';"></div>';
+                 }).join('')
+                 + '</div>';
+        }
+
+        // Compact 3-color legend for the stacked bar.
+        function _bqJourneyLegend() {
+            var keys = ['news_dive','candidate_site','candidate_social','candidate_search','donation','voting_info','search','social_discussion','other','abandoned'];
+            var palette = {
+                candidate_site:'#3b82f6', candidate_social:'#6366f1', candidate_search:'#8b5cf6',
+                donation:'#ec4899', voting_info:'#10b981', search:'#0ea5e9',
+                news_dive:'#f59e0b', social_discussion:'#a855f7', other:'#64748b', abandoned:'#475569',
+            };
+            return '<div style="display:flex; flex-wrap:wrap; gap:0.5rem 0.85rem; font-size:0.72rem; color:var(--text-secondary); margin: 0.4rem 0 0.7rem 0;">'
+                 + keys.map(function(k) {
+                     var label = (BLUE_IQ_JOURNEY_LABELS[k] || {}).label || k;
+                     return '<span style="display:inline-flex; align-items:center; gap:0.3rem;">'
+                          + '<span style="width:10px; height:10px; border-radius:2px; background:' + palette[k] + ';"></span>'
+                          + _bqEscape(label) + '</span>';
+                 }).join('') + '</div>';
+        }
+
+        // Marketing-creative recommendation copy per dominant destination.
+        // Maps the TOP non-abandoned destination of an issue to a concrete
+        // placement + creative direction the user can hand a media team.
+        var BLUE_IQ_CREATIVE_PLAYS = {
+            news_dive:         { placement: 'left/right political news inventory (NYT, Fox, Politico, The Hill, Axios)', creative: 'Issue-anchored explainer creative. Voters who care about this issue STAY in news after exposure \u2014 lead with a credible-source headline and a one-line policy stance.' },
+            candidate_site:    { placement: 'retargeting on candidate site visitors + direct-traffic search-brand campaigns', creative: 'High-intent direct-response creative. Voters bridge from political content STRAIGHT to a candidate page \u2014 use a clear ask (sign up, attend, donate) and a head-shot.' },
+            candidate_social:  { placement: 'paid promotion on the candidate\u2019s X / Instagram / TikTok handle', creative: 'Person-first short-form video. Voters seek the politician\u2019s OWN voice on this issue \u2014 lean on first-person clips, not third-party endorsements.' },
+            candidate_search:  { placement: 'Google / Bing / ChatGPT-Ads bid on the candidate\u2019s name + this issue', creative: 'Q&A landing pages and \u201c<candidate> on <issue>\u201d explainers. Voters are explicitly searching the candidate-issue intersection \u2014 own the answer.' },
+            donation:          { placement: 'ActBlue / WinRed fundraising creatives and small-dollar appeals', creative: 'Urgency-driven copy with a deadline. This issue motivates monetary action \u2014 connect dollars to a concrete policy outcome.' },
+            voting_info:       { placement: 'ballotpedia / vote.gov / state SOS site sponsorships and GOTV ads', creative: 'Logistics-first creative (\u201cwhere\u2019s my polling place,\u201d \u201cregister by X\u201d). Voters convert this issue into intent-to-vote \u2014 remove friction, not opinion.' },
+            search:            { placement: 'broad search + YouTube discovery on this issue\u2019s keywords', creative: 'Long-tail educational content. Voters are still researching \u2014 lead with explainers, not asks.' },
+            social_discussion: { placement: 'Reddit r/politics, X reply ads, FB group placements', creative: 'Conversation-starter creative. Voters want to DISCUSS this issue \u2014 frame around polling, hot takes, or comment-prompting questions.' },
+            other:             { placement: 'broad reach inventory; this issue does NOT trigger political follow-through', creative: 'De-prioritize political creative for this issue \u2014 voters bounce to non-political content. Lifestyle and contextual placements outperform here.' },
+            abandoned:         { placement: 'top-of-funnel awareness only', creative: 'No engagement after touchpoint. Don\u2019t spend on conversion creative \u2014 build name recognition with simple, memorable imagery.' },
+        };
+
+        function _renderBlueIQIssueJourneyCross(cross) {
+            if (!cross || !cross.length) {
+                return '<div style="color: var(--text-secondary); font-size: 0.85rem; padding: 0.5rem 0;">'
+                     + 'No issue\u00d7journey data in this cube. The Live (1d) window is too short to cross-aggregate; rebuild the 30d cube and the recommendations will populate.'
+                     + '</div>';
+            }
+            var factor = (window.__blueIQ && window.__blueIQ.genPopFactor) || 1.0;
+            var maxTotal = Math.max.apply(null, cross.map(function(c) { return +c.total_panelists || 0; })) || 1;
+            var rows = cross.slice(0, 12).map(function(row) {
+                var widthPct = Math.round(((+row.total_panelists || 0) / maxTotal) * 100);
+                var us = _bqNum((+row.total_panelists || 0) * factor);
+                // Pick the dominant non-abandoned destination for the recommendation.
+                var dominant = (row.destinations || []).filter(function(d) {
+                    return d.destination !== 'abandoned' && d.destination !== 'other';
+                })[0] || (row.destinations || [])[0] || {};
+                var play = BLUE_IQ_CREATIVE_PLAYS[dominant.destination] || BLUE_IQ_CREATIVE_PLAYS.other;
+                var topTerms = (row.top_terms || []).slice(0, 4).join(' \u00b7 ');
+                return '<div style="margin-bottom: 1rem; padding: 0.75rem; background: rgba(255,255,255,0.02); border-radius: 8px; border: 1px solid rgba(255,255,255,0.04);">'
+                     +   '<div style="display:flex; justify-content:space-between; align-items:baseline; gap:0.5rem; margin-bottom:0.35rem;">'
+                     +     '<strong style="font-size:0.95rem;">' + _bqEscape(row.bucket) + '</strong>'
+                     +     '<span style="color: var(--text-secondary); font-size:0.78rem; font-variant-numeric: tabular-nums;">'
+                     +       '\u2248' + us + ' US adults engaged'
+                     +     '</span>'
+                     +   '</div>'
+                     +   _bqJourneyStackedBar(row.destinations)
+                     +   '<div style="margin-top:0.45rem; font-size:0.78rem; color: var(--text-secondary); display:flex; flex-wrap:wrap; gap:0.4rem 0.85rem;">'
+                     +     (row.destinations || []).slice(0, 4).map(function(d) {
+                            var label = (BLUE_IQ_JOURNEY_LABELS[d.destination] || {}).label || d.destination;
+                            return '<span><strong style="color:var(--text-primary);">' + _bqPct(d.share || 0) + '</strong> ' + _bqEscape(label) + '</span>';
+                          }).join('')
+                     +   '</div>'
+                     +   (topTerms ? '<div style="margin-top:0.4rem; font-size:0.72rem; color: var(--text-secondary); font-style: italic;">Top terms in this issue: ' + _bqEscape(topTerms) + '</div>' : '')
+                     +   '<div style="margin-top:0.55rem; padding-top:0.5rem; border-top:1px dashed rgba(255,255,255,0.07); font-size:0.8rem; line-height:1.45;">'
+                     +     '<div style="margin-bottom:0.2rem;"><strong style="color:#fbbf24;">Where to place:</strong> ' + _bqEscape(play.placement) + '</div>'
+                     +     '<div><strong style="color:#34d399;">Creative direction:</strong> ' + _bqEscape(play.creative) + '</div>'
+                     +   '</div>'
+                     + '</div>';
+            }).join('');
+            return _bqJourneyLegend() + rows;
+        }
 
         function _renderBlueIQVoterJourney(journey) {
             if (!journey || !journey.length) {
@@ -47030,18 +47257,9 @@
 
         function getProfileDisplayTitle(brandName, brandCategory, behavioral) {
             const name = (brandName || 'Brand').trim();
-            const cat = (brandCategory || '').toString().toUpperCase();
-            if (!cat || !cat.includes('SERIES')) return name;
-            const behav = behavioral || {};
-            const streamingKey = Object.keys(behav).find(k => {
-                const u = k.toUpperCase();
-                return u.includes('STREAMING') && u.includes('PLATFORM');
-            });
-            if (!streamingKey || !behav[streamingKey] || !behav[streamingKey].length) return name;
-            const items = behav[streamingKey];
-            const at100 = items.find(item => (item.pct || 0) >= 99.5);
-            const platform = at100 ? at100.name : (items.length ? items.reduce((best, item) => (item.pct || 0) > (best.pct || 0) ? item : best).name : null);
-            if (platform) return name + ' - ' + platform.trim();
+            if (!isActiveViewerProfileCategory(brandCategory)) return name;
+            const platform = getStreamingPlatformFromBehavioral(behavioral);
+            if (platform) return name + ' - ' + platform;
             return name;
         }
 
@@ -47054,14 +47272,14 @@
 
             const parsed = parseAllData(csvData);
             const displayTitle = getProfileDisplayTitle(brandName, parsed.brandCategory, parsed.behavioral);
+            const resolvedDateRange = dateRange || parsed.dateRange || '';
             
             // Update header profile info and show it
             const profileInfo = document.getElementById('dashProfileInfo');
             if (profileInfo && brandName) {
                 profileInfo.style.display = 'flex';
                 document.getElementById('dashBrandNameHeader').textContent = displayTitle;
-                document.getElementById('dashDateRangeHeader').textContent = dateRange ? 'Date Range: ' + dateRange : '';
-                document.getElementById('dashDateRangeHeader').style.display = dateRange ? 'block' : 'none';
+                updateDashProfileHeaderMeta(resolvedDateRange, parsed);
                 
                 // Fetch profile image (custom uploads only)
                 fetchProfileImage(brandName);
@@ -47082,7 +47300,7 @@
                 behavioral: parsed.behavioral,
                 locations: parsed.locations,
                 s3Key: currentS3Key,
-                dateRange: dateRange || ''
+                dateRange: resolvedDateRange
             };
             applyGenPopMode();
 
@@ -47097,7 +47315,7 @@
             renderDemoInsights(parsed.demographics, parsed.demographicsIndex, parsed.demographicsGenPop);
             
             // Update profile methodology tooltip
-            updateProfileTooltip(displayTitle, parsed.brandCategory);
+            updateProfileTooltip(displayTitle, parsed.brandCategory, parsed.behavioral);
             
             // Render behavioral insights
             renderBehavioralInsights(parsed.behavioral, parsed);
@@ -47834,6 +48052,7 @@
             // Do not rebase demographic percentages in the dashboard parser.
             // The CSV already contains finalized percentages that should be rendered as-is.
 
+            result.dateRange = extractDateRangeFromCsvRows(csvData);
             return result;
         }
 
@@ -48537,11 +48756,12 @@
                     const parsed = parseAllData(data.data);
                     const profile = dashboardProfiles.find(p => (p.s3_key || p.job_id) === effectiveId);
                     const brandName = data.brand || (profile ? getProfileFullName(profile) : 'Unknown');
+                    const dateRange = data.date_range || parsed.dateRange || '';
                     
                     const newTab = {
                         id: effectiveId,
                         name: brandName,
-                        dateRange: data.date_range || '',
+                        dateRange: dateRange,
                         data: data,
                         parsed: parsed
                     };
@@ -48834,7 +49054,8 @@
         }
         
         function displayProfileTabData(tab) {
-            const { id: profileId, name: brandName, dateRange, parsed } = tab;
+            const { id: profileId, name: brandName, parsed } = tab;
+            const dateRange = tab.dateRange || parsed.dateRange || '';
             
             currentS3Key = profileId;
             currentDashboardData = parsed;
@@ -48846,12 +49067,8 @@
             if (profileInfo && brandName) {
                 profileInfo.style.display = 'flex';
                 const brandNameEl = document.getElementById('dashBrandNameHeader');
-                const dateRangeEl = document.getElementById('dashDateRangeHeader');
                 if (brandNameEl) brandNameEl.textContent = displayTitle;
-                if (dateRangeEl) {
-                    dateRangeEl.textContent = dateRange ? `Date Range: ${dateRange}` : '';
-                    dateRangeEl.style.display = dateRange ? 'block' : 'none';
-                }
+                updateDashProfileHeaderMeta(dateRange, parsed);
                 const runsRow = document.getElementById('dashProfileRunsRow');
                 const runSelect = document.getElementById('dashRunSelect');
                 const deltasBtn = document.getElementById('dashViewDeltasBtn');
@@ -48921,7 +49138,7 @@
             renderDemoInsights(parsed.demographics, parsed.demographicsIndex, parsed.demographicsGenPop);
             
             // Update profile methodology tooltip
-            updateProfileTooltip(displayTitle, parsed.brandCategory);
+            updateProfileTooltip(displayTitle, parsed.brandCategory, parsed.behavioral);
             
             // Render behavioral insights
             renderBehavioralInsights(parsed.behavioral);
