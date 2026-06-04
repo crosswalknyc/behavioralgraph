@@ -32367,6 +32367,137 @@ def _iqr_context_save_cache(profile_subject, start, end, payload):
         print(f"[iqr-context] cache save failed: {e}")
 
 
+def _iqr_context_web_search_rollup(*, profile_name, start, end):
+    """Skip the ClickHouse URL-surface scan entirely and just ask the LLM
+    to web-search what's been driving public conversation about this
+    profile in the [start, end] window.
+
+    Why: the original `_iqr_context_llm_rollup` path runs five separate
+    ClickHouse aggregations (top common_names / domains / paths / sample
+    URLs / totals) which take 30-90s on busy days, and the LLM call is
+    only as good as what we hand it. The web-search path returns in
+    5-10s and the model can ground the bullets in actual current news
+    (premieres, awards, viral clips) which is exactly the kind of
+    "Watching Meet the Parents on Netflix" / "New show announced on
+    Apple TV+" rollup the dashboard wants.
+
+    Uses the OpenAI Responses API with the web-search tool. Auth via a
+    dedicated `OPENAI_API_KEY_CONTEXT` env var (so this feature doesn't
+    contend with the existing chat-style `OPENAI_API_KEY`); falls back
+    to `OPENAI_API_KEY` if `_CONTEXT` isn't set, which is what the
+    legacy chat helper already does.
+
+    Returns:
+        {"headline": str, "bullets": [str], "sources": [{title,url}],
+         "model": str, "source": "web_search"}
+    or {"error": "..."} on failure (caller falls back to ClickHouse).
+    """
+    api_key = (os.environ.get('OPENAI_API_KEY_CONTEXT')
+               or os.environ.get('OPENAI_API_KEY'))
+    if not api_key:
+        return {"error": "no OPENAI_API_KEY_CONTEXT / OPENAI_API_KEY configured"}
+
+    try:
+        from openai import OpenAI
+    except Exception as e:
+        return {"error": f"openai sdk unavailable: {e}"}
+
+    # gpt-4o-mini is cheap-and-fast and supports the web_search_preview
+    # tool. gpt-4o gives slightly tighter narrative if cost is OK.
+    model = os.environ.get('IQR_CONTEXT_LLM_MODEL', 'gpt-4o-mini')
+
+    prompt = (
+        f"Search the web for what has been driving public conversation "
+        f"about \"{profile_name}\" between {start} and {end}.\n\n"
+        "Write a concise rollup in this exact JSON shape and nothing "
+        "else (no markdown fences, no commentary):\n"
+        '{"headline": "<one sentence, <=120 chars, dominant theme>", '
+        '"bullets": ["<bullet 1>", "<bullet 2>", ...], '
+        '"sources": [{"title": "...", "url": "https://..."}]}\n\n'
+        "Rules:\n"
+        "- 3 to 5 bullets, max ~14 words each, plain English, specific.\n"
+        "- Examples of good bullets: \"Watching Meet the Parents on "
+        "Netflix\", \"New show announced on Apple TV+\", \"SNL clip "
+        "going viral on TikTok\", \"Oscars best-actress nomination\".\n"
+        "- Bullets must be grounded in actual web results — never "
+        "invent a title, premiere, award, or platform that doesn't "
+        "appear in the sources you found.\n"
+        "- 3-6 sources from your web search, each with the real URL "
+        "you fetched it from.\n"
+        "- If the timeframe is in the future or there is genuinely no "
+        "recent news, say so honestly in one bullet rather than "
+        "padding with stale facts."
+    )
+
+    try:
+        client = OpenAI(api_key=api_key, timeout=45.0)
+        # Use the Responses API with web_search_preview tool. The tool
+        # name has shifted across SDK versions, so try both.
+        resp = None
+        last_err = None
+        for tool_def in ({"type": "web_search_preview"},
+                         {"type": "web_search"}):
+            try:
+                resp = client.responses.create(
+                    model=model,
+                    tools=[tool_def],
+                    input=prompt,
+                )
+                break
+            except Exception as e:
+                last_err = e
+                continue
+        if resp is None:
+            return {"error": f"web_search tool unavailable: {last_err}"}
+
+        content = (getattr(resp, 'output_text', '') or '').strip()
+        if not content:
+            return {"error": "empty model output"}
+
+        # Strip optional markdown fence the model sometimes emits despite
+        # being told not to.
+        if "```json" in content:
+            content = content.split("```json", 1)[1].split("```", 1)[0]
+        elif "```" in content:
+            content = content.split("```", 1)[1].split("```", 1)[0]
+        try:
+            parsed = json.loads(content.strip())
+        except Exception:
+            return {"error": "model returned non-JSON",
+                    "raw": content[:400]}
+
+        bullets_raw = parsed.get('bullets') or []
+        if not isinstance(bullets_raw, list):
+            bullets_raw = []
+        bullets = [str(b)[:160] for b in bullets_raw if str(b).strip()][:5]
+
+        headline = str(parsed.get('headline') or '')[:200].strip()
+
+        sources_raw = parsed.get('sources') or []
+        sources = []
+        if isinstance(sources_raw, list):
+            for s in sources_raw[:6]:
+                if isinstance(s, dict):
+                    url = str(s.get('url') or '').strip()
+                    if not url.lower().startswith(('http://', 'https://')):
+                        continue
+                    title = str(s.get('title') or url)[:200].strip()
+                    sources.append({'title': title, 'url': url[:500]})
+                elif isinstance(s, str) and s.lower().startswith(('http://', 'https://')):
+                    sources.append({'title': s[:200], 'url': s[:500]})
+
+        return {
+            "headline": headline,
+            "bullets": bullets,
+            "sources": sources,
+            "model": getattr(resp, 'model', model),
+            "source": "web_search",
+        }
+    except Exception as e:
+        import traceback; traceback.print_exc()
+        return {"error": str(e)[:300]}
+
+
 def _iqr_context_llm_rollup(*, profile_name, profile_subject, ctx):
     """Ask the LLM to convert raw URL surface into 3-5 plain-English
     bullets describing what's driving the mentions. Returns a dict with
@@ -32478,13 +32609,24 @@ def _iqr_context_llm_rollup(*, profile_name, profile_subject, ctx):
 @requires_auth
 def iq_rankers_context():
     """Per-profile context rollup powering the 'Context' chip on the
-    leaderboard. Aggregates the top URL surface in the requested window
-    and (when OPENAI_API_KEY is set) asks the LLM to summarize.
+    leaderboard.
+
+    Two backends:
+      - source=web_search (default): asks an LLM with the web-search
+        tool what's been driving public conversation about the profile
+        in the window. Fast (~5-10s) and grounded in actual current
+        news / premieres / awards / viral clips.
+      - source=clickstream: runs the full ClickHouse URL-surface
+        aggregation (top common_names / domains / paths / sample URLs)
+        and asks the LLM to summarize. Slower (30-90s) but answers the
+        question "what is OUR panel touching" rather than "what is the
+        public web saying".
 
     Query params:
         profile_subject  required — the canonical profile_subject
         window           1d | 7d | 28d | MTD | QTD | YTD | custom (default 7d)
         start, end       only used when window=custom
+        source           web_search | clickstream (default web_search)
         force_refresh    bypass the LLM cache (default 0)
     """
     if _iq_rankers is None:
@@ -32496,6 +32638,9 @@ def iq_rankers_context():
     window = (request.args.get('window') or '7d').strip()
     start_q = (request.args.get('start') or '').strip() or None
     end_q   = (request.args.get('end') or '').strip() or None
+    source  = (request.args.get('source') or 'web_search').strip().lower()
+    if source not in ('web_search', 'clickstream'):
+        source = 'web_search'
     force   = (request.args.get('force_refresh') or '').strip() == '1'
 
     # Resolve the window to concrete dates. We re-use iq_rankers' helper
@@ -32507,10 +32652,9 @@ def iq_rankers_context():
         return jsonify({'success': False,
                         'error': f'bad window: {e}'}), 400
 
-    # Pull this profile's brand_terms straight from the s3_cache jobs
-    # list — that's the same source the daily compute uses, so the
-    # ClickHouse filter shape will match the Mentions column on the
-    # leaderboard exactly.
+    # Resolve project_name from s3_cache. brand_terms is only needed for
+    # the (slow) ClickHouse path; the web-search path runs purely off
+    # the project_name + window, which is plenty.
     jobs_list = _iq_rankers_get_jobs() or []
     job = None
     for j in jobs_list:
@@ -32522,6 +32666,48 @@ def iq_rankers_context():
                         'error': f'profile not found: {profile_subject}'}), 404
     project_name = (job.get('display_name') or job.get('project_name')
                     or profile_subject)
+
+    # Cache key includes `source` so a switch from clickstream → web
+    # doesn't serve a stale clickstream payload. 24h TTL still applies.
+    def _ckey(start_, end_, source_):
+        return f"{start_}__{end_}__{source_}"
+
+    # ─── Fast path: web search ──────────────────────────────────────────
+    if source == 'web_search':
+        cache_key = _ckey(start, end, 'web_search')
+        if not force:
+            cached = _iqr_context_load_cache(profile_subject, cache_key, '')
+            if cached and isinstance(cached, dict) and 'llm' in cached:
+                return jsonify({
+                    'success': True,
+                    'profile_subject': profile_subject,
+                    'project_name': project_name,
+                    'window': {'key': window, 'start': start, 'end': end},
+                    'source': 'web_search',
+                    'llm': cached['llm'],
+                    'cached': True,
+                })
+
+        llm_payload = _iqr_context_web_search_rollup(
+            profile_name=project_name,
+            start=start, end=end,
+        )
+        if llm_payload and not llm_payload.get('error'):
+            _iqr_context_save_cache(
+                profile_subject, cache_key, '',
+                {'llm': llm_payload},
+            )
+        return jsonify({
+            'success': True,
+            'profile_subject': profile_subject,
+            'project_name': project_name,
+            'window': {'key': window, 'start': start, 'end': end},
+            'source': 'web_search',
+            'llm': llm_payload,
+            'cached': False,
+        })
+
+    # ─── Slow path: ClickHouse URL surface + LLM ────────────────────────
     s3_key = job.get('s3_key') or job.get('job_id') or ''
     try:
         brand_terms = _iq_rankers.read_brand_input_from_csv(s3_client, S3_BUCKET, s3_key)
@@ -32530,7 +32716,6 @@ def iq_rankers_context():
     if not brand_terms and project_name:
         brand_terms = [project_name]
 
-    # 1) Always-fresh ClickHouse rollup (cheap, no LLM).
     try:
         ctx = _iq_rankers.compute_profile_context(
             ch_connect=_ch_connect,
@@ -32542,7 +32727,6 @@ def iq_rankers_context():
         import traceback; traceback.print_exc()
         return jsonify({'success': False, 'error': str(e)[:300]}), 500
 
-    # 2) LLM narrative — cached unless force_refresh=1.
     llm_payload = None
     if not force:
         cached = _iqr_context_load_cache(profile_subject, start, end)
@@ -32555,8 +32739,6 @@ def iq_rankers_context():
             profile_subject=profile_subject,
             ctx=ctx,
         )
-        # Only persist successful LLM responses — re-trying on errors is
-        # cheap, and we don't want to cache a transient OpenAI 5xx.
         if llm_payload and not llm_payload.get('error'):
             _iqr_context_save_cache(
                 profile_subject, start, end,
@@ -32572,6 +32754,7 @@ def iq_rankers_context():
         'profile_subject': profile_subject,
         'project_name': project_name,
         'window': {'key': window, 'start': start, 'end': end},
+        'source': 'clickstream',
         'context': ctx,
         'llm': llm_payload,
         'brand_terms_count': len(brand_terms or []),
