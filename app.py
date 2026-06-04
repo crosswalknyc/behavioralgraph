@@ -32523,9 +32523,17 @@ _IQR_CONTEXT_LLM_TTL_SEC = 60 * 60 * 24  # 24h
 def _iqr_context_cache_key(profile_subject, start, end):
     """Deterministic S3 key for a profile/window pair. Window-bound so
     'last 7 days' rolls forward naturally — yesterday's cache won't get
-    served for today's request."""
+    served for today's request.
+
+    NOTE: the trailing version suffix (`__v2`) is bumped whenever the
+    LLM payload schema changes (e.g. when we added the per-platform
+    `platforms` map alongside the bullets). Old cached responses for
+    the same (profile, window) live under `__v1` keys and are simply
+    ignored by the loader, which is cheaper and safer than scanning &
+    invalidating them.
+    """
     safe_subj = (profile_subject or '').replace('/', '_').replace(' ', '_')[:120]
-    return f"{_IQR_CONTEXT_LLM_CACHE_PREFIX}{safe_subj}__{start}__{end}.json"
+    return f"{_IQR_CONTEXT_LLM_CACHE_PREFIX}{safe_subj}__{start}__{end}__v2.json"
 
 
 def _utc_iso_now():
@@ -32615,7 +32623,13 @@ def _iqr_context_web_search_rollup(*, profile_name, start, end):
         "Write a concise rollup in this exact JSON shape and nothing "
         "else (no markdown fences, no commentary):\n"
         '{"headline": "<one sentence, <=120 chars, dominant theme>", '
-        '"bullets": ["<bullet 1>", "<bullet 2>", ...]}\n\n'
+        '"bullets": ["<bullet 1>", "<bullet 2>", ...], '
+        '"platforms": {'
+        '"web": "<news / blog / press buzz, ~120 chars>", '
+        '"tiktok": "<TikTok trends / clips / sounds, ~120 chars>", '
+        '"x": "<X (Twitter) chatter / viral posts, ~120 chars>", '
+        '"instagram": "<Instagram posts / reels / stories, ~120 chars>"'
+        "}}\n\n"
         "Rules:\n"
         "- 3 to 5 bullets, max ~14 words each, plain English, specific.\n"
         "- Examples of good bullets: \"Watching Meet the Parents on "
@@ -32624,14 +32638,25 @@ def _iqr_context_web_search_rollup(*, profile_name, start, end):
         "- Bullets must be grounded in actual web results — never "
         "invent a title, premiere, award, or platform that doesn't "
         "appear in what you found.\n"
-        "- NEVER write a bullet that says \"no major news\" or \"no "
-        "recent news\" or anything similar. If the exact window is "
-        "quiet, broaden the search to the surrounding weeks or to "
-        "what this person is currently known for / currently working "
-        "on / their recent projects, and put THOSE bullets instead. "
-        "There is always a reason their name surfaces — find it.\n"
+        "- The `platforms` object MUST always include all four keys: "
+        "`web`, `tiktok`, `x`, `instagram`. Each value is a single "
+        "short sentence (no list, no JSON nesting) describing what's "
+        "happening for this person/brand on that platform during the "
+        "window. Examples:\n"
+        "    web:       \"Variety profile, Vulture interview, NYT review of new film.\"\n"
+        "    tiktok:    \"Edits set to 'Ribs' from his SNL monologue trending, 4M+ likes.\"\n"
+        "    x:         \"Trending after his Met Gala carpet look; jokes about the suit.\"\n"
+        "    instagram: \"Behind-the-scenes reels from the Apple TV+ press tour.\"\n"
+        "- If a platform has nothing platform-specific in the exact "
+        "window, give the most relevant adjacent buzz (recent days / "
+        "weeks) for that platform. NEVER write \"no buzz\" or \"no "
+        "activity\" or anything similar. There is always a reason "
+        "their name surfaces — find it.\n"
+        "- Same anti-no-news rule applies to bullets: if the exact "
+        "window is quiet, broaden to surrounding weeks or to what "
+        "this person is currently known for / currently working on.\n"
         "- Do not include a sources field. Do not include URLs in the "
-        "bullets. Just the headline and bullets."
+        "bullets or platforms strings."
     )
 
     try:
@@ -32679,7 +32704,9 @@ def _iqr_context_web_search_rollup(*, profile_name, start, end):
         # surfaces that text. Same for raw URLs sneaking into bullets.
         _NO_NEWS_PAT = re.compile(
             r'\b(no\s+major\s+news|no\s+recent\s+news|nothing\s+notable|'
-            r'no\s+significant\s+news|no\s+notable\s+news|no\s+news\s+found)\b',
+            r'no\s+significant\s+news|no\s+notable\s+news|no\s+news\s+found|'
+            r'no\s+(?:notable\s+)?(?:buzz|activity|chatter|posts?|content)\s+'
+            r'(?:on|in|during|for)?)\b',
             re.IGNORECASE,
         )
         cleaned = []
@@ -32696,9 +32723,33 @@ def _iqr_context_web_search_rollup(*, profile_name, start, end):
         if _NO_NEWS_PAT.search(headline):
             headline = ''
 
+        # Per-platform buzz: required in the schema. Always emit all four
+        # keys so the UI can render a stable layout (`Web / TikTok / X /
+        # Instagram`). Strip the no-news pattern out of each value too —
+        # the prompt forbids it but defense in depth is cheap.
+        platforms_in = parsed.get('platforms') or {}
+        if not isinstance(platforms_in, dict):
+            platforms_in = {}
+        platforms_out = {}
+        for k_canon, k_aliases in (
+            ('web',       ('web', 'news', 'press', 'articles')),
+            ('tiktok',    ('tiktok', 'tik tok', 'tik_tok')),
+            ('x',         ('x', 'twitter', 'x_twitter', 'x/twitter')),
+            ('instagram', ('instagram', 'ig', 'insta')),
+        ):
+            v = ''
+            for alias in k_aliases:
+                if isinstance(platforms_in.get(alias), str) and platforms_in[alias].strip():
+                    v = platforms_in[alias].strip()
+                    break
+            if v and _NO_NEWS_PAT.search(v):
+                v = ''
+            platforms_out[k_canon] = v[:240]
+
         return {
             "headline": headline,
             "bullets": bullets,
+            "platforms": platforms_out,
             "model": getattr(resp, 'model', model),
             "source": "web_search",
         }
