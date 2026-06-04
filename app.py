@@ -32996,8 +32996,8 @@ def iq_rankers_categories():
     """Return the static master → subcategory map used to render the sub-tabs.
 
     Includes every registered master (TALENT, BRAND, CONTENT, PLATFORMS,
-    SPORT, TRENDS, GEN POP) plus a synthetic 'OTHER' bucket the UI uses
-    for profiles whose subcategory doesn't fall into any curated optgroup.
+    SPORT, TRENDS) plus a synthetic 'OTHER' bucket the UI uses for
+    profiles whose subcategory doesn't fall into any curated optgroup.
     """
     if _iq_rankers is None:
         return jsonify({'success': False, 'error': 'IQ Rankers unavailable'}), 500
