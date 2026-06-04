@@ -8981,6 +8981,21 @@
             border-bottom: 1px dashed rgba(255,176,87,0.18);
         }
         .iqr-context-bullets li:last-child { border-bottom: none; }
+        .iqr-context-sources {
+            list-style: none; padding: 0; margin: 0.4rem 0 1.1rem 0;
+            display: flex; flex-direction: column; gap: 0.35rem;
+        }
+        .iqr-context-sources li {
+            font-size: 0.82rem; color: var(--text-secondary);
+            padding: 0.35rem 0.55rem; border-radius: 6px;
+            background: rgba(255,176,87,0.06);
+            border: 1px solid rgba(255,176,87,0.16);
+            overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+        }
+        .iqr-context-sources a {
+            color: var(--accent, #ffb057); text-decoration: none;
+        }
+        .iqr-context-sources a:hover { text-decoration: underline; }
         .iqr-context-bullets li::before {
             content: "▸"; position: absolute; left: 0.3rem; top: 0.4rem;
             color: #ffb057; font-weight: 700;
@@ -18639,7 +18654,7 @@
                         </div>
                     </div>
                     <div class="iqr-modal-body">
-                        <div id="iqRankerContextLoading" class="iqr-modal-loading"><span class="spinner"></span> Pulling URL surface and asking the LLM what's driving the mentions…</div>
+                        <div id="iqRankerContextLoading" class="iqr-modal-loading"><span class="spinner"></span> Searching the web for what's driving conversation about this profile…</div>
                         <div id="iqRankerContextError" class="iqr-modal-empty" style="display: none;"></div>
                         <div id="iqRankerContextBody" style="display: none;">
                             <div id="iqRankerContextTotals" class="iqr-context-totals"></div>
@@ -18647,36 +18662,45 @@
                             <ul id="iqRankerContextBullets" class="iqr-context-bullets"></ul>
                             <div id="iqRankerContextLLMWarn" class="iqr-context-warn" style="display: none;"></div>
 
-                            <div class="iqr-context-section-title">Top common-name buckets</div>
-                            <div style="overflow-x: auto;">
-                                <table class="iqr-context-table">
-                                    <thead><tr><th>Common name</th><th class="num">Hits</th><th class="num">Panelists</th></tr></thead>
-                                    <tbody id="iqRankerContextCommonBody"></tbody>
-                                </table>
+                            <!-- Web-search sources (default fast path) -->
+                            <div id="iqRankerContextSourcesWrap" style="display: none;">
+                                <div class="iqr-context-section-title">Sources</div>
+                                <ul id="iqRankerContextSources" class="iqr-context-sources"></ul>
                             </div>
 
-                            <div class="iqr-context-section-title">Top domains</div>
-                            <div style="overflow-x: auto;">
-                                <table class="iqr-context-table">
-                                    <thead><tr><th>Domain</th><th class="num">Hits</th><th class="num">Panelists</th></tr></thead>
-                                    <tbody id="iqRankerContextDomainBody"></tbody>
-                                </table>
-                            </div>
+                            <!-- ClickHouse URL-surface tables (only shown when source=clickstream) -->
+                            <div id="iqRankerContextClickstreamWrap" style="display: none;">
+                                <div class="iqr-context-section-title">Top common-name buckets</div>
+                                <div style="overflow-x: auto;">
+                                    <table class="iqr-context-table">
+                                        <thead><tr><th>Common name</th><th class="num">Hits</th><th class="num">Panelists</th></tr></thead>
+                                        <tbody id="iqRankerContextCommonBody"></tbody>
+                                    </table>
+                                </div>
 
-                            <div class="iqr-context-section-title">Highest-traffic URL paths</div>
-                            <div style="overflow-x: auto;">
-                                <table class="iqr-context-table">
-                                    <thead><tr><th>Domain · Path</th><th class="num">Hits</th><th class="num">Panelists</th></tr></thead>
-                                    <tbody id="iqRankerContextPathBody"></tbody>
-                                </table>
-                            </div>
+                                <div class="iqr-context-section-title">Top domains</div>
+                                <div style="overflow-x: auto;">
+                                    <table class="iqr-context-table">
+                                        <thead><tr><th>Domain</th><th class="num">Hits</th><th class="num">Panelists</th></tr></thead>
+                                        <tbody id="iqRankerContextDomainBody"></tbody>
+                                    </table>
+                                </div>
 
-                            <div class="iqr-context-section-title">Sample URLs</div>
-                            <div style="overflow-x: auto;">
-                                <table class="iqr-context-table">
-                                    <thead><tr><th>URL</th><th class="num">Hits</th></tr></thead>
-                                    <tbody id="iqRankerContextSampleBody"></tbody>
-                                </table>
+                                <div class="iqr-context-section-title">Highest-traffic URL paths</div>
+                                <div style="overflow-x: auto;">
+                                    <table class="iqr-context-table">
+                                        <thead><tr><th>Domain · Path</th><th class="num">Hits</th><th class="num">Panelists</th></tr></thead>
+                                        <tbody id="iqRankerContextPathBody"></tbody>
+                                    </table>
+                                </div>
+
+                                <div class="iqr-context-section-title">Sample URLs</div>
+                                <div style="overflow-x: auto;">
+                                    <table class="iqr-context-table">
+                                        <thead><tr><th>URL</th><th class="num">Hits</th></tr></thead>
+                                        <tbody id="iqRankerContextSampleBody"></tbody>
+                                    </table>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -86013,17 +86037,25 @@
         function _iqrRenderContext(payload) {
             const ctx = payload.context || {};
             const llm = payload.llm || {};
+            const source = payload.source || (ctx && Object.keys(ctx).length ? 'clickstream' : 'web_search');
             const totalsEl   = document.getElementById('iqRankerContextTotals');
             const headlineEl = document.getElementById('iqRankerContextHeadline');
             const bulletsEl  = document.getElementById('iqRankerContextBullets');
             const llmWarnEl  = document.getElementById('iqRankerContextLLMWarn');
             const bodyEl     = document.getElementById('iqRankerContextBody');
+            const sourcesWrap = document.getElementById('iqRankerContextSourcesWrap');
+            const sourcesList = document.getElementById('iqRankerContextSources');
+            const cstreamWrap = document.getElementById('iqRankerContextClickstreamWrap');
 
             const fmtInt = n => Number(n || 0).toLocaleString();
-            totalsEl.innerHTML =
-                `Window <b>${_iqEsc(payload.window?.start || '')} → ${_iqEsc(payload.window?.end || '')}</b> · ` +
-                `<b>${fmtInt(ctx.total_mentions)}</b> mentions · ` +
-                `<b>${fmtInt(ctx.unique_panelists)}</b> unique panelists`;
+            const winLine = `Window <b>${_iqEsc(payload.window?.start || '')} → ${_iqEsc(payload.window?.end || '')}</b>`;
+            if (source === 'web_search') {
+                totalsEl.innerHTML = winLine + ' · <span style="color: var(--text-secondary)">summary derived from public web search</span>';
+            } else {
+                totalsEl.innerHTML = winLine + ' · ' +
+                    `<b>${fmtInt(ctx.total_mentions)}</b> mentions · ` +
+                    `<b>${fmtInt(ctx.unique_panelists)}</b> unique panelists`;
+            }
 
             // Narrative bullets (LLM)
             if (llm && Array.isArray(llm.bullets) && llm.bullets.length) {
@@ -86041,22 +86073,45 @@
                 bulletsEl.innerHTML = '';
                 bulletsEl.style.display = 'none';
                 if (llm && llm.error) {
-                    llmWarnEl.textContent = `LLM rollup unavailable (${llm.error}). Showing raw aggregation below.`;
+                    llmWarnEl.textContent = `LLM rollup unavailable (${llm.error}).` +
+                        (source === 'web_search' ? '' : ' Showing raw aggregation below.');
                     llmWarnEl.style.display = '';
                 } else {
-                    llmWarnEl.textContent = 'LLM rollup unavailable. Showing raw aggregation below.';
+                    llmWarnEl.textContent = 'LLM rollup unavailable.' +
+                        (source === 'web_search' ? '' : ' Showing raw aggregation below.');
                     llmWarnEl.style.display = '';
                 }
             }
 
-            // Surface the warnings the backend may have attached
+            // Web-search sources (only present on web_search path)
+            if (source === 'web_search') {
+                cstreamWrap.style.display = 'none';
+                const srcs = (llm && Array.isArray(llm.sources)) ? llm.sources : [];
+                if (srcs.length) {
+                    sourcesList.innerHTML = srcs.map(s => {
+                        const url = _iqEsc(s.url || '');
+                        const title = _iqEsc(s.title || s.url || '');
+                        return `<li><a href="${url}" target="_blank" rel="noopener" title="${url}">${title}</a></li>`;
+                    }).join('');
+                    sourcesWrap.style.display = '';
+                } else {
+                    sourcesList.innerHTML = '';
+                    sourcesWrap.style.display = 'none';
+                }
+                bodyEl.style.display = '';
+                return;
+            }
+
+            // ─── ClickHouse path: keep the raw URL-surface tables ───────
+            sourcesWrap.style.display = 'none';
+            cstreamWrap.style.display = '';
+
             if (Array.isArray(ctx.warnings) && ctx.warnings.length) {
                 const cur = llmWarnEl.textContent ? llmWarnEl.textContent + ' · ' : '';
                 llmWarnEl.textContent = cur + ctx.warnings.join(' · ');
                 llmWarnEl.style.display = '';
             }
 
-            // Raw rollup tables
             const commonRows = (ctx.top_common_names || []).map(c =>
                 `<tr><td>${_iqEsc(c.common_name || '—')}</td>` +
                 `<td class="num">${fmtInt(c.hits)}</td>` +
