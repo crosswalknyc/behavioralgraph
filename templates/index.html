@@ -21377,20 +21377,52 @@
             return isNaN(n) ? '0' : Math.round(n).toLocaleString();
         }
         
+        // SERIES, TV SHOW, and MOVIE profiles use the active-viewer definition (not 5 touchpoint).
+        function isActiveViewerProfileCategory(brandCategory) {
+            var c = (brandCategory || '').toString().toUpperCase().trim();
+            if (!c) return false;
+            if (c.includes('SERIES')) return true;
+            if (c.includes('TV SHOW')) return true;
+            if (c.includes('MOVIE') && !c.includes('THEATER')) return true;
+            return false;
+        }
+
+        function getStreamingPlatformFromBehavioral(behavioral) {
+            var behav = behavioral || {};
+            var streamingKey = Object.keys(behav).find(function(k) {
+                var u = k.toUpperCase();
+                return u.includes('STREAMING') && u.includes('PLATFORM');
+            });
+            if (!streamingKey || !behav[streamingKey] || !behav[streamingKey].length) return null;
+            var items = behav[streamingKey];
+            var at100 = items.find(function(item) { return (item.pct || 0) >= 99.5; });
+            if (at100) return (at100.name || '').trim();
+            return items.reduce(function(best, item) {
+                return (item.pct || 0) > (best.pct || 0) ? item : best;
+            }, items[0]).name.trim();
+        }
+
         // Update profile methodology tooltip with profile name
-        function updateProfileTooltip(profileName, brandCategory) {
+        function updateProfileTooltip(profileName, brandCategory, behavioral) {
             var container = document.getElementById('dashBrandContainer');
             if (container && profileName) {
                 var tooltip;
                 var category = (brandCategory || '').toString().toUpperCase();
-                
-                // Check if this is a SERIES profile (brand category contains SERIES)
-                if (category.includes('SERIES') && profileName.includes(' - ')) {
-                    // Extract show name and platform from "Show Name - Platform" format
-                    var parts = profileName.split(' - ');
+                var behav = behavioral || (typeof currentDashboardData !== 'undefined' && currentDashboardData && currentDashboardData.behavioral) || {};
+
+                if (isActiveViewerProfileCategory(category)) {
+                    var baseName = (typeof currentProfileData !== 'undefined' && currentProfileData && currentProfileData.name) || profileName;
+                    var titled = (profileName && profileName.includes(' - '))
+                        ? profileName
+                        : getProfileDisplayTitle(baseName, brandCategory, behav);
+                    var parts = titled.split(' - ');
                     var showName = parts[0].trim();
-                    var platform = parts.slice(1).join(' - ').trim(); // Handle cases with multiple dashes
-                    tooltip = 'This profile is of all panelists who are active viewers of ' + showName + ' on ' + platform + '.';
+                    var platform = parts.slice(1).join(' - ').trim();
+                    if (platform) {
+                        tooltip = 'This profile is of all panelists who are active viewers of ' + showName + ' on ' + platform + '.';
+                    } else {
+                        tooltip = 'This profile is of all panelists who are active viewers of ' + showName + '.';
+                    }
                 } else if (category === 'SOCIAL MEDIA' || category === 'STREAMING/PLATFORM' || category === 'STREAMING/MUSIC' || category === 'VIRTUAL MVPD FAST') {
                     tooltip = 'This profile is of all panelists who are actively engaged with ' + profileName + '. Panelists have visited the platform within the date range below.';
                 } else {
@@ -47030,18 +47062,9 @@
 
         function getProfileDisplayTitle(brandName, brandCategory, behavioral) {
             const name = (brandName || 'Brand').trim();
-            const cat = (brandCategory || '').toString().toUpperCase();
-            if (!cat || !cat.includes('SERIES')) return name;
-            const behav = behavioral || {};
-            const streamingKey = Object.keys(behav).find(k => {
-                const u = k.toUpperCase();
-                return u.includes('STREAMING') && u.includes('PLATFORM');
-            });
-            if (!streamingKey || !behav[streamingKey] || !behav[streamingKey].length) return name;
-            const items = behav[streamingKey];
-            const at100 = items.find(item => (item.pct || 0) >= 99.5);
-            const platform = at100 ? at100.name : (items.length ? items.reduce((best, item) => (item.pct || 0) > (best.pct || 0) ? item : best).name : null);
-            if (platform) return name + ' - ' + platform.trim();
+            if (!isActiveViewerProfileCategory(brandCategory)) return name;
+            const platform = getStreamingPlatformFromBehavioral(behavioral);
+            if (platform) return name + ' - ' + platform;
             return name;
         }
 
@@ -47097,7 +47120,7 @@
             renderDemoInsights(parsed.demographics, parsed.demographicsIndex, parsed.demographicsGenPop);
             
             // Update profile methodology tooltip
-            updateProfileTooltip(displayTitle, parsed.brandCategory);
+            updateProfileTooltip(displayTitle, parsed.brandCategory, parsed.behavioral);
             
             // Render behavioral insights
             renderBehavioralInsights(parsed.behavioral, parsed);
@@ -48921,7 +48944,7 @@
             renderDemoInsights(parsed.demographics, parsed.demographicsIndex, parsed.demographicsGenPop);
             
             // Update profile methodology tooltip
-            updateProfileTooltip(displayTitle, parsed.brandCategory);
+            updateProfileTooltip(displayTitle, parsed.brandCategory, parsed.behavioral);
             
             // Render behavioral insights
             renderBehavioralInsights(parsed.behavioral);
