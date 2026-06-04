@@ -21402,6 +21402,72 @@
             }, items[0]).name.trim();
         }
 
+        const _profileDateRangeRe = /(\d{4}-\d{2}-\d{2})\s+TO\s+(\d{4}-\d{2}-\d{2})/i;
+        const _profileDateIsoRe = /^\d{4}-\d{2}-\d{2}$/;
+
+        function parseDateRangeFromCellValue(val) {
+            const s = String(val || '').trim();
+            if (!s) return '';
+            if (s.includes('SAMPLE_START:') && s.includes('SAMPLE_END:')) {
+                const start = s.split('SAMPLE_START:')[1].split('_')[0].trim();
+                const end = s.split('SAMPLE_END:')[1].split('_')[0].trim();
+                if (_profileDateIsoRe.test(start) && _profileDateIsoRe.test(end)) {
+                    return start + ' - ' + end;
+                }
+            }
+            const m = s.match(_profileDateRangeRe);
+            if (m) return m[1] + ' - ' + m[2];
+            return '';
+        }
+
+        function extractDateRangeFromCsvRows(csvData) {
+            if (!csvData || !csvData.length) return '';
+            const byColumn = { INPUT_METADATA: [], 'SAMPLE SIZE': [], DATE_RANGE: [] };
+            csvData.forEach(function(row) {
+                const col = (row['Column'] || row[0] || '').toString().trim().toUpperCase();
+                const val = row['Value'] || row[1] || '';
+                if (col === 'INPUT_METADATA') byColumn.INPUT_METADATA.push(val);
+                else if (col === 'SAMPLE SIZE') byColumn['SAMPLE SIZE'].push(val);
+                else if (col === 'DATE_RANGE') byColumn.DATE_RANGE.push(val);
+            });
+            const sourceOrder = ['INPUT_METADATA', 'SAMPLE SIZE', 'DATE_RANGE'];
+            for (let i = 0; i < sourceOrder.length; i++) {
+                const values = byColumn[sourceOrder[i]] || [];
+                for (let j = 0; j < values.length; j++) {
+                    const parsed = parseDateRangeFromCellValue(values[j]);
+                    if (parsed) return parsed;
+                }
+            }
+            return '';
+        }
+
+        function getDominantAgeRangeLabel(parsed) {
+            const age = parsed?.demographics?.age || {};
+            const entries = Object.entries(age).filter(([k, v]) => v > 0 && v < 99.99 && k);
+            if (!entries.length) return '';
+            const top = entries.sort((a, b) => b[1] - a[1])[0];
+            return (typeof getAgeDisplayLabel === 'function') ? getAgeDisplayLabel(top[0]) : top[0];
+        }
+
+        function updateDashProfileHeaderMeta(dateRange, parsed) {
+            const el = document.getElementById('dashDateRangeHeader');
+            if (!el) return;
+            const resolvedRange = dateRange || parsed?.dateRange || '';
+            const lines = [];
+            if (resolvedRange) lines.push('Date Range: ' + resolvedRange);
+            const ageLabel = getDominantAgeRangeLabel(parsed);
+            if (ageLabel) lines.push('Age Range: ' + ageLabel);
+            if (lines.length) {
+                el.innerHTML = lines.map(function(line) {
+                    return typeof escapeHtml === 'function' ? escapeHtml(line) : line;
+                }).join('<br>');
+                el.style.display = 'block';
+            } else {
+                el.textContent = '';
+                el.style.display = 'none';
+            }
+        }
+
         // Update profile methodology tooltip with profile name
         function updateProfileTooltip(profileName, brandCategory, behavioral) {
             var container = document.getElementById('dashBrandContainer');
@@ -47077,14 +47143,14 @@
 
             const parsed = parseAllData(csvData);
             const displayTitle = getProfileDisplayTitle(brandName, parsed.brandCategory, parsed.behavioral);
+            const resolvedDateRange = dateRange || parsed.dateRange || '';
             
             // Update header profile info and show it
             const profileInfo = document.getElementById('dashProfileInfo');
             if (profileInfo && brandName) {
                 profileInfo.style.display = 'flex';
                 document.getElementById('dashBrandNameHeader').textContent = displayTitle;
-                document.getElementById('dashDateRangeHeader').textContent = dateRange ? 'Date Range: ' + dateRange : '';
-                document.getElementById('dashDateRangeHeader').style.display = dateRange ? 'block' : 'none';
+                updateDashProfileHeaderMeta(resolvedDateRange, parsed);
                 
                 // Fetch profile image (custom uploads only)
                 fetchProfileImage(brandName);
@@ -47105,7 +47171,7 @@
                 behavioral: parsed.behavioral,
                 locations: parsed.locations,
                 s3Key: currentS3Key,
-                dateRange: dateRange || ''
+                dateRange: resolvedDateRange
             };
             applyGenPopMode();
 
@@ -47857,6 +47923,7 @@
             // Do not rebase demographic percentages in the dashboard parser.
             // The CSV already contains finalized percentages that should be rendered as-is.
 
+            result.dateRange = extractDateRangeFromCsvRows(csvData);
             return result;
         }
 
@@ -48560,11 +48627,12 @@
                     const parsed = parseAllData(data.data);
                     const profile = dashboardProfiles.find(p => (p.s3_key || p.job_id) === effectiveId);
                     const brandName = data.brand || (profile ? getProfileFullName(profile) : 'Unknown');
+                    const dateRange = data.date_range || parsed.dateRange || '';
                     
                     const newTab = {
                         id: effectiveId,
                         name: brandName,
-                        dateRange: data.date_range || '',
+                        dateRange: dateRange,
                         data: data,
                         parsed: parsed
                     };
@@ -48857,7 +48925,8 @@
         }
         
         function displayProfileTabData(tab) {
-            const { id: profileId, name: brandName, dateRange, parsed } = tab;
+            const { id: profileId, name: brandName, parsed } = tab;
+            const dateRange = tab.dateRange || parsed.dateRange || '';
             
             currentS3Key = profileId;
             currentDashboardData = parsed;
@@ -48869,12 +48938,8 @@
             if (profileInfo && brandName) {
                 profileInfo.style.display = 'flex';
                 const brandNameEl = document.getElementById('dashBrandNameHeader');
-                const dateRangeEl = document.getElementById('dashDateRangeHeader');
                 if (brandNameEl) brandNameEl.textContent = displayTitle;
-                if (dateRangeEl) {
-                    dateRangeEl.textContent = dateRange ? `Date Range: ${dateRange}` : '';
-                    dateRangeEl.style.display = dateRange ? 'block' : 'none';
-                }
+                updateDashProfileHeaderMeta(dateRange, parsed);
                 const runsRow = document.getElementById('dashProfileRunsRow');
                 const runSelect = document.getElementById('dashRunSelect');
                 const deltasBtn = document.getElementById('dashViewDeltasBtn');
