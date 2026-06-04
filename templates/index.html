@@ -19695,7 +19695,8 @@
                     </details>
                     <div id="jiqTvTrendsKpis"
                          style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-                                gap: 0.6rem; margin-bottom: 0.85rem;"></div>
+                                gap: 0.6rem; margin-bottom: 0.4rem;"></div>
+                    <div id="jiqTvTrendsPinCtrl" style="display:none; margin: 0 0 0.4rem; text-align: right;"></div>
                     <div id="jiqTvTrendsChart" style="overflow-x: auto; margin-bottom: 0.6rem;"></div>
                     <details style="margin: 0;">
                         <summary style="cursor:pointer;color:var(--accent-cyan);font-size:0.74rem;font-weight:600;user-select:none;padding:3px 0;">📅 Weekly breakdown table</summary>
@@ -32728,6 +32729,12 @@
         //
         // Auto-hides the entire card when no trends block is present.
         // ──────────────────────────────────────────────────────────────
+        // Module-level state for the interactive Viewership Trends card.
+        // Holds the parsed payload + which week / month the KPI tiles
+        // are currently "dialed to" (active), plus an optional pinned
+        // index that overrides hover until the user releases the pin.
+        var _jiqTrendsState = null;
+
         function renderJourneyIqTvTrends(trends) {
             var card = document.getElementById('jiqTvTrendsCard');
             if (!card) return;
@@ -32740,10 +32747,10 @@
             var weekly  = (trends.weekly  || []).slice();
             var monthly = (trends.monthly || []).slice();
 
-            // ---- meta + subtitle ----
-            var metaEl     = document.getElementById('jiqTvTrendsMeta');
-            var subEl      = document.getElementById('jiqTvTrendsSubtitle');
-            var notesEl    = document.getElementById('jiqTvTrendsMethodologyNote');
+            // ---- meta + subtitle (static) ----
+            var metaEl  = document.getElementById('jiqTvTrendsMeta');
+            var subEl   = document.getElementById('jiqTvTrendsSubtitle');
+            var notesEl = document.getElementById('jiqTvTrendsMethodologyNote');
             if (metaEl) {
                 metaEl.textContent = trends.as_of_date
                     ? 'as of ' + trends.as_of_date
@@ -32751,119 +32758,293 @@
             }
             if (subEl) {
                 subEl.textContent = 'Active ' + (trends.unit_label || 'accounts')
-                    + ' and total watch hours by week and by month, with % change vs the prior bucket. '
-                    + 'Active = unique accounts that streamed any episode in the window (MAU/WAU semantic).';
+                    + ' and total watch hours by week and by month. '
+                    + 'Hover or click any dot in the chart below to dial the top tiles to that week.';
             }
             if (notesEl) {
                 notesEl.textContent = trends.methodology_note || '';
             }
 
-            // helper: format a delta as colored arrow + percentage
+            // ---- weekly + monthly drill-down tables (static) ----
+            var tblWEl = document.getElementById('jiqTvTrendsWeeklyTable');
+            if (tblWEl) tblWEl.innerHTML = _jiqRenderTrendsTable(weekly,  'week_label',  'WoW');
+            var tblMEl = document.getElementById('jiqTvTrendsMonthlyTable');
+            if (tblMEl) tblMEl.innerHTML = _jiqRenderTrendsTable(monthly, 'month_label', 'MoM');
+
+            // ---- Week → Month index map so hovering a weekly dot can
+            //      also update the monthly tiles to "the month this
+            //      week falls in". Parsed from week_start (YYYY-MM-DD)
+            //      and month_label ('Mar 2026 (from 3/08)', etc.).
+            var monthAbbrToNum = {
+                Jan:'01', Feb:'02', Mar:'03', Apr:'04', May:'05', Jun:'06',
+                Jul:'07', Aug:'08', Sep:'09', Oct:'10', Nov:'11', Dec:'12'
+            };
+            var monthKeyToIdx = {};
+            for (var mi = 0; mi < monthly.length; mi++) {
+                var labMatch = (monthly[mi].month_label || '').match(/^([A-Za-z]{3})\s+(\d{4})/);
+                if (labMatch) {
+                    var mk = labMatch[2] + '-' + (monthAbbrToNum[labMatch[1]] || '01');
+                    monthKeyToIdx[mk] = mi;
+                }
+            }
+            var weekToMonthIdx = weekly.map(function(w) {
+                var key = (w.week_start || '').slice(0, 7);
+                return (monthKeyToIdx[key] != null) ? monthKeyToIdx[key] : (monthly.length - 1);
+            });
+
+            // ---- Render sparkline once and capture per-dot positions
+            //      so the hover/click handlers can move the overlay
+            //      highlight markers without re-rendering the SVG
+            //      (re-rendering mid-hover loses pointer events).
+            var chartEl = document.getElementById('jiqTvTrendsChart');
+            var rendered = _jiqRenderTrendsSparkline(weekly);
+            if (chartEl) chartEl.innerHTML = rendered.svg;
+
+            // ---- Seed interactive state to "latest week + latest month" ----
+            _jiqTrendsState = {
+                trends:           trends,
+                weekly:           weekly,
+                monthly:          monthly,
+                weekToMonthIdx:   weekToMonthIdx,
+                latestWeekIdx:    weekly.length  - 1,
+                latestMonthIdx:   monthly.length - 1,
+                activeWeekIdx:    weekly.length  - 1,
+                activeMonthIdx:   monthly.length - 1,
+                pinnedWeekIdx:    null,
+                dotPositions:     rendered.positions
+            };
+
+            _jiqTrendsApplySelection();
+        }
+
+        // Re-renders the dynamic parts (4 KPI tiles + overlay markers +
+        // pin-control pill) from current _jiqTrendsState. The static SVG
+        // is NOT touched, so hover events on hit-target rects continue
+        // to fire without interruption.
+        function _jiqTrendsApplySelection() {
+            _jiqTrendsRenderTiles();
+            _jiqTrendsUpdateMarkers();
+            _jiqTrendsUpdatePinControls();
+        }
+
+        function _jiqTrendsRenderTiles() {
+            var s = _jiqTrendsState;
+            if (!s) return;
+            var kpiEl = document.getElementById('jiqTvTrendsKpis');
+            if (!kpiEl) return;
+
             var fmtDelta = function(curr, prev) {
                 if (prev == null || prev === 0 || curr == null) return '';
                 var pct = (curr / prev - 1) * 100;
                 var arrow = pct >= 0 ? '▲' : '▼';
-                var color = pct >= 0 ? 'var(--accent-lime, #22c55e)' : 'var(--accent-red, #ef4444)';
+                var color = pct >= 0 ? '#22c55e' : '#ef4444';
                 return '<span style="color:' + color + ';font-weight:600;">'
                     + arrow + ' ' + Math.abs(pct).toFixed(1) + '%</span>';
             };
 
-            // ---- 4 headline KPI tiles ----
-            // For WoW comparison, compare the latest week vs the prior
-            // CLOSED week (skip partial). Same logic for monthly.
-            var kpiEl = document.getElementById('jiqTvTrendsKpis');
-            if (kpiEl) {
-                var lastW = weekly.length ? weekly[weekly.length - 1] : null;
-                var prevW = null;
-                if (weekly.length >= 2) {
-                    // If last is partial, compare to the most recent FULL
-                    // week for a clean apples-to-apples reading; otherwise
-                    // compare to the second-to-last bucket.
-                    if (lastW && lastW.is_partial && weekly.length >= 2) {
-                        // For partial, "this week" still wins the tile but
-                        // we annotate the prior FULL week below; delta uses
-                        // last full vs prior full so the arrow is meaningful
-                        // rather than misleadingly steep from the partial.
-                        prevW = weekly[weekly.length - 2];
-                    } else {
-                        prevW = weekly[weekly.length - 2];
-                    }
-                }
-                var lastM = monthly.length ? monthly[monthly.length - 1] : null;
-                var prevM = monthly.length >= 2 ? monthly[monthly.length - 2] : null;
+            var wIdx = s.activeWeekIdx;
+            var mIdx = s.activeMonthIdx;
+            var w  = s.weekly[wIdx];
+            var mo = s.monthly[mIdx];
 
-                var tiles = [];
-                if (lastW) {
-                    var wAcct = lastW.active_accounts;
-                    var wHrs  = lastW.watch_hours;
-                    var wDeltaA = (prevW && !lastW.is_partial)
-                        ? fmtDelta(wAcct, prevW.active_accounts)
-                        : (lastW.is_partial ? '<span style="font-size:0.7rem;color:var(--text-secondary);">partial week — delta hidden</span>' : '');
-                    var wDeltaH = (prevW && !lastW.is_partial)
-                        ? fmtDelta(wHrs, prevW.watch_hours)
-                        : (lastW.is_partial ? '<span style="font-size:0.7rem;color:var(--text-secondary);">partial week — delta hidden</span>' : '');
-                    var wLabelSuffix = lastW.is_partial ? ' · partial' : '';
-                    tiles.push(_jiqTvTrendTile(
-                        'This Week — Active Accounts',
-                        _jiqFmt(wAcct),
-                        (lastW.week_label || 'latest week') + wLabelSuffix
-                            + (prevW ? ' · WoW ' + wDeltaA : ''),
-                        '#22c55e'  // green
-                    ));
-                    tiles.push(_jiqTvTrendTile(
-                        'This Week — Watch Hours',
-                        _jiqFmt(wHrs),
-                        (lastW.week_label || 'latest week') + wLabelSuffix
-                            + (prevW ? ' · WoW ' + wDeltaH : ''),
-                        '#22c55e'
-                    ));
-                }
-                if (lastM) {
-                    var mAcct = lastM.active_accounts;
-                    var mHrs  = lastM.watch_hours;
-                    var mDeltaA = (prevM && !lastM.is_partial)
-                        ? fmtDelta(mAcct, prevM.active_accounts)
-                        : (lastM.is_partial ? '<span style="font-size:0.7rem;color:var(--text-secondary);">partial month — delta hidden</span>' : '');
-                    var mDeltaH = (prevM && !lastM.is_partial)
-                        ? fmtDelta(mHrs, prevM.watch_hours)
-                        : (lastM.is_partial ? '<span style="font-size:0.7rem;color:var(--text-secondary);">partial month — delta hidden</span>' : '');
-                    var mLabelSuffix = lastM.is_partial ? ' · partial' : '';
-                    tiles.push(_jiqTvTrendTile(
-                        'This Month — Active Accounts',
-                        _jiqFmt(mAcct),
-                        (lastM.month_label || 'latest month') + mLabelSuffix
-                            + (prevM ? ' · MoM ' + mDeltaA : ''),
-                        '#06b6d4'  // cyan
-                    ));
-                    tiles.push(_jiqTvTrendTile(
-                        'This Month — Watch Hours',
-                        _jiqFmt(mHrs),
-                        (lastM.month_label || 'latest month') + mLabelSuffix
-                            + (prevM ? ' · MoM ' + mDeltaH : ''),
-                        '#06b6d4'
-                    ));
-                }
-                kpiEl.innerHTML = tiles.join('');
+            var isLatestWeek = (wIdx === s.latestWeekIdx);
+            var isPinned     = (s.pinnedWeekIdx != null);
+
+            // Label prefix changes based on whether we're showing the
+            // default (latest) week, a hovered week, or a pinned week.
+            // Same for month tile.
+            var weekPrefix;
+            if (isPinned)         weekPrefix = '📌 PINNED WEEK';
+            else if (isLatestWeek) weekPrefix = 'THIS WEEK';
+            else                   weekPrefix = 'SELECTED WEEK';
+            var monthPrefix;
+            if (isPinned)          monthPrefix = '📌 MONTH OF PIN';
+            else if (isLatestWeek) monthPrefix = 'THIS MONTH';
+            else                   monthPrefix = 'MONTH OF SELECTION';
+
+            // Pinned tiles get an amber accent so the "frozen" state
+            // pops out vs default green/cyan.
+            var weekAccent  = isPinned ? '#f59e0b' : '#22c55e';
+            var monthAccent = isPinned ? '#f59e0b' : '#06b6d4';
+
+            var prevW = (wIdx > 0) ? s.weekly[wIdx - 1]  : null;
+            var prevM = (mIdx > 0) ? s.monthly[mIdx - 1] : null;
+
+            // Sub-text builder: shows the period label + WoW/MoM delta.
+            // Suppresses deltas on partial buckets (apples-to-pears).
+            var weekSub = function(metric) {
+                if (!w) return '';
+                var base = (w.week_label || '') + (w.is_partial ? ' · partial' : '');
+                if (w.is_partial) return base + ' · WoW hidden';
+                if (!prevW)       return base;
+                var deltaHtml = (metric === 'a')
+                    ? fmtDelta(w.active_accounts, prevW.active_accounts)
+                    : fmtDelta(w.watch_hours,    prevW.watch_hours);
+                return base + ' · WoW ' + deltaHtml;
+            };
+            var monthSub = function(metric) {
+                if (!mo) return '';
+                var base = (mo.month_label || '');
+                if (mo.is_partial) return base + ' · MoM hidden';
+                if (!prevM)        return base;
+                var deltaHtml = (metric === 'a')
+                    ? fmtDelta(mo.active_accounts, prevM.active_accounts)
+                    : fmtDelta(mo.watch_hours,    prevM.watch_hours);
+                return base + ' · MoM ' + deltaHtml;
+            };
+
+            var tiles = [];
+            if (w) {
+                tiles.push(_jiqTvTrendTile(weekPrefix + ' — Active Accounts',
+                    _jiqFmt(w.active_accounts), weekSub('a'), weekAccent));
+                tiles.push(_jiqTvTrendTile(weekPrefix + ' — Watch Hours',
+                    _jiqFmt(w.watch_hours),    weekSub('h'), weekAccent));
+            }
+            if (mo) {
+                tiles.push(_jiqTvTrendTile(monthPrefix + ' — Active Accounts',
+                    _jiqFmt(mo.active_accounts), monthSub('a'), monthAccent));
+                tiles.push(_jiqTvTrendTile(monthPrefix + ' — Watch Hours',
+                    _jiqFmt(mo.watch_hours),    monthSub('h'), monthAccent));
+            }
+            kpiEl.innerHTML = tiles.join('');
+        }
+
+        // Reposition + show/hide the active-week and pinned-week ring
+        // overlays in the SVG. These overlays sit ON TOP of the hit-
+        // target rects with pointer-events:none so they never swallow
+        // mouseenter/leave events.
+        function _jiqTrendsUpdateMarkers() {
+            var s = _jiqTrendsState;
+            if (!s) return;
+            var pos = s.dotPositions[s.activeWeekIdx];
+            if (!pos) return;
+
+            var hoverDotA = document.getElementById('jiqTrendsActiveDotA');
+            var hoverDotH = document.getElementById('jiqTrendsActiveDotH');
+            var pinDotA   = document.getElementById('jiqTrendsPinnedDotA');
+            var pinDotH   = document.getElementById('jiqTrendsPinnedDotH');
+            var pinVline  = document.getElementById('jiqTrendsPinnedVline');
+            var hoverVline = document.getElementById('jiqTrendsActiveVline');
+
+            var isPinned   = (s.pinnedWeekIdx != null);
+            var isLatest   = (s.activeWeekIdx === s.latestWeekIdx);
+            var showHover  = !isPinned && !isLatest;
+
+            // Pinned ring (amber, thicker)
+            if (pinDotA) {
+                if (isPinned) {
+                    pinDotA.setAttribute('cx', pos.x);
+                    pinDotA.setAttribute('cy', pos.yA);
+                    pinDotA.style.display = '';
+                } else { pinDotA.style.display = 'none'; }
+            }
+            if (pinDotH) {
+                if (isPinned) {
+                    pinDotH.setAttribute('cx', pos.x);
+                    pinDotH.setAttribute('cy', pos.yH);
+                    pinDotH.style.display = '';
+                } else { pinDotH.style.display = 'none'; }
+            }
+            if (pinVline) {
+                if (isPinned) {
+                    pinVline.setAttribute('x1', pos.x);
+                    pinVline.setAttribute('x2', pos.x);
+                    pinVline.style.display = '';
+                } else { pinVline.style.display = 'none'; }
             }
 
-            // ---- weekly sparkline ----
-            var chartEl = document.getElementById('jiqTvTrendsChart');
-            if (chartEl) {
-                chartEl.innerHTML = _jiqRenderTrendsSparkline(weekly);
+            // Hover ring (green/cyan, thinner) — only when hovering a
+            // non-latest week and nothing is pinned.
+            if (hoverDotA) {
+                if (showHover) {
+                    hoverDotA.setAttribute('cx', pos.x);
+                    hoverDotA.setAttribute('cy', pos.yA);
+                    hoverDotA.style.display = '';
+                } else { hoverDotA.style.display = 'none'; }
             }
-
-            // ---- weekly breakdown table ----
-            var tblWEl = document.getElementById('jiqTvTrendsWeeklyTable');
-            if (tblWEl) {
-                tblWEl.innerHTML = _jiqRenderTrendsTable(weekly, 'week_label', 'WoW');
+            if (hoverDotH) {
+                if (showHover) {
+                    hoverDotH.setAttribute('cx', pos.x);
+                    hoverDotH.setAttribute('cy', pos.yH);
+                    hoverDotH.style.display = '';
+                } else { hoverDotH.style.display = 'none'; }
             }
-
-            // ---- monthly breakdown table ----
-            var tblMEl = document.getElementById('jiqTvTrendsMonthlyTable');
-            if (tblMEl) {
-                tblMEl.innerHTML = _jiqRenderTrendsTable(monthly, 'month_label', 'MoM');
+            if (hoverVline) {
+                if (showHover) {
+                    hoverVline.setAttribute('x1', pos.x);
+                    hoverVline.setAttribute('x2', pos.x);
+                    hoverVline.style.display = '';
+                } else { hoverVline.style.display = 'none'; }
             }
         }
+
+        // Show or hide the "📌 Week of X pinned · click to release" pill
+        // below the chart based on whether a week is currently pinned.
+        function _jiqTrendsUpdatePinControls() {
+            var s = _jiqTrendsState;
+            var ctrl = document.getElementById('jiqTvTrendsPinCtrl');
+            if (!ctrl || !s) return;
+            if (s.pinnedWeekIdx != null) {
+                var w = s.weekly[s.pinnedWeekIdx];
+                ctrl.style.display = '';
+                ctrl.innerHTML = '<button type="button" onclick="window._jiqTrendsUnpin()" '
+                    + 'style="padding: 4px 11px; background: rgba(245,158,11,0.15); '
+                    + 'color: #f59e0b; border: 1px solid rgba(245,158,11,0.5); '
+                    + 'border-radius: 12px; font-size: 0.72rem; cursor: pointer; '
+                    + 'font-weight: 600;">'
+                    + '📌 ' + _jiqEsc(w.week_label || '') + ' pinned · click to release</button>';
+            } else {
+                ctrl.style.display = 'none';
+                ctrl.innerHTML = '';
+            }
+        }
+
+        // ── Window-level dispatchers ─────────────────────────────────
+        // Called from inline onmouseenter / onmouseleave / onclick
+        // attributes on the SVG hit-target rects. Kept on `window` so
+        // attribute-style handlers can find them regardless of scope.
+        window._jiqTrendsHover = function(i) {
+            var s = _jiqTrendsState;
+            if (!s) return;
+            if (s.pinnedWeekIdx != null) return;  // pinned beats hover
+            if (i < 0 || i >= s.weekly.length)  return;
+            s.activeWeekIdx  = i;
+            s.activeMonthIdx = (s.weekToMonthIdx[i] != null)
+                ? s.weekToMonthIdx[i] : s.latestMonthIdx;
+            _jiqTrendsApplySelection();
+        };
+        window._jiqTrendsLeave = function() {
+            var s = _jiqTrendsState;
+            if (!s) return;
+            if (s.pinnedWeekIdx != null) return;  // pinned stays
+            s.activeWeekIdx  = s.latestWeekIdx;
+            s.activeMonthIdx = s.latestMonthIdx;
+            _jiqTrendsApplySelection();
+        };
+        window._jiqTrendsToggle = function(i) {
+            var s = _jiqTrendsState;
+            if (!s) return;
+            if (s.pinnedWeekIdx === i) {
+                // un-pin
+                s.pinnedWeekIdx  = null;
+                s.activeWeekIdx  = s.latestWeekIdx;
+                s.activeMonthIdx = s.latestMonthIdx;
+            } else {
+                s.pinnedWeekIdx  = i;
+                s.activeWeekIdx  = i;
+                s.activeMonthIdx = (s.weekToMonthIdx[i] != null)
+                    ? s.weekToMonthIdx[i] : s.latestMonthIdx;
+            }
+            _jiqTrendsApplySelection();
+        };
+        window._jiqTrendsUnpin = function() {
+            var s = _jiqTrendsState;
+            if (!s) return;
+            s.pinnedWeekIdx  = null;
+            s.activeWeekIdx  = s.latestWeekIdx;
+            s.activeMonthIdx = s.latestMonthIdx;
+            _jiqTrendsApplySelection();
+        };
 
         // Single KPI tile for the Viewership Trends card.
         function _jiqTvTrendTile(label, value, subline, accentColor) {
@@ -32928,8 +33109,20 @@
         // and weekly watch hours (dashed cyan line) on a shared X-axis.
         // Two Y-axes (left: accounts, right: hours). Marks new-episode
         // drop weeks with a small caret on the X-axis.
+        //
+        // Interactivity: emits one transparent <rect> per week spanning
+        // the full plot height as a hit target. Each rect has inline
+        // onmouseenter / onclick handlers that call the window-level
+        // _jiqTrendsHover / _jiqTrendsToggle dispatchers. The outer
+        // <svg> carries onmouseleave to snap-back when the cursor exits.
+        // Overlay highlight markers (active hover ring + pinned ring +
+        // vertical guide-lines) are emitted once, hidden by default, and
+        // repositioned by _jiqTrendsUpdateMarkers — no SVG re-render on
+        // hover, so pointer events stay live mid-motion.
+        //
+        // Returns { svg: <string>, positions: [{x, yA, yH}, ...] }.
         function _jiqRenderTrendsSparkline(weekly) {
-            if (!weekly || !weekly.length) return '';
+            if (!weekly || !weekly.length) return { svg: '', positions: [] };
             var W = 880, H = 220;
             var padL = 60, padR = 60, padT = 18, padB = 44;
             var plotW = W - padL - padR;
@@ -32945,19 +33138,29 @@
             if (maxA === 0) maxA = 1;
             if (maxH === 0) maxH = 1;
 
-            var xFor = function(i) {
+            var xFor = function(idx) {
                 if (n === 1) return padL + plotW / 2;
-                return padL + (i / (n - 1)) * plotW;
+                return padL + (idx / (n - 1)) * plotW;
             };
             var yForA = function(v) { return padT + plotH - (v / maxA) * plotH; };
             var yForH = function(v) { return padT + plotH - (v / maxH) * plotH; };
 
+            // Pre-compute per-dot positions so the caller (renderJourneyIqTvTrends)
+            // can save them in state and re-use for hover-driven marker moves.
+            var positions = [];
+            for (var pp = 0; pp < n; pp++) {
+                positions.push({
+                    x:  xFor(pp),
+                    yA: yForA(weekly[pp].active_accounts),
+                    yH: yForH(weekly[pp].watch_hours)
+                });
+            }
+
             // path strings
             var pathA = '', pathH = '';
             for (var j = 0; j < n; j++) {
-                var x = xFor(j);
-                pathA += (j === 0 ? 'M' : 'L') + x.toFixed(1) + ',' + yForA(weekly[j].active_accounts).toFixed(1);
-                pathH += (j === 0 ? 'M' : 'L') + x.toFixed(1) + ',' + yForH(weekly[j].watch_hours   ).toFixed(1);
+                pathA += (j === 0 ? 'M' : 'L') + positions[j].x.toFixed(1) + ',' + positions[j].yA.toFixed(1);
+                pathH += (j === 0 ? 'M' : 'L') + positions[j].x.toFixed(1) + ',' + positions[j].yH.toFixed(1);
             }
 
             // gridlines (4 horizontal)
@@ -32972,84 +33175,147 @@
             var ticks = '';
             var labelStep = (n <= 8) ? 1 : 2;
             for (var k = 0; k < n; k++) {
-                var tx = xFor(k);
+                var tx = positions[k].x;
                 ticks += '<line x1="' + tx + '" y1="' + (padT + plotH) + '" x2="' + tx + '" y2="' + (padT + plotH + 4)
                       + '" stroke="rgba(255,255,255,0.25)" stroke-width="1"/>';
                 if (k % labelStep === 0 || k === n - 1) {
                     var lab = (weekly[k].week_label || '').replace(/^Week of /, '');
                     ticks += '<text x="' + tx + '" y="' + (padT + plotH + 16) + '" font-size="9"'
-                          + ' text-anchor="middle" fill="var(--text-secondary)">' + _jiqEsc(lab) + '</text>';
+                          + ' text-anchor="middle" fill="var(--text-secondary)" pointer-events="none">'
+                          + _jiqEsc(lab) + '</text>';
                 }
-                // partial marker
                 if (weekly[k].is_partial) {
                     ticks += '<text x="' + tx + '" y="' + (padT + plotH + 28) + '" font-size="8"'
-                          + ' text-anchor="middle" fill="#f59e0b">partial</text>';
+                          + ' text-anchor="middle" fill="#f59e0b" pointer-events="none">partial</text>';
                 }
             }
 
-            // episode-drop markers (caret on top of plot)
+            // episode-drop markers (caret above plot)
             var drops = '';
             for (var d2 = 0; d2 < n; d2++) {
                 var drp = weekly[d2].episode_drop || '';
                 if (drp && drp !== '—' && drp.indexOf('partial') === -1) {
-                    var dx = xFor(d2);
+                    var dx = positions[d2].x;
                     drops += '<text x="' + dx + '" y="' + (padT - 4) + '" font-size="9"'
-                          + ' text-anchor="middle" fill="#a78bfa" font-weight="600">▼</text>';
+                          + ' text-anchor="middle" fill="#a78bfa" font-weight="600" pointer-events="none">▼</text>';
                 }
             }
 
             // y-axis labels
             var leftAxis = ''
-                + '<text x="' + (padL - 6) + '" y="' + (padT + 4) + '" font-size="9" text-anchor="end" fill="#22c55e">'
+                + '<text x="' + (padL - 6) + '" y="' + (padT + 4) + '" font-size="9" text-anchor="end" fill="#22c55e" pointer-events="none">'
                 + _jiqFmt(maxA) + '</text>'
-                + '<text x="' + (padL - 6) + '" y="' + (padT + plotH) + '" font-size="9" text-anchor="end" fill="#22c55e">0</text>';
+                + '<text x="' + (padL - 6) + '" y="' + (padT + plotH) + '" font-size="9" text-anchor="end" fill="#22c55e" pointer-events="none">0</text>';
             var rightAxis = ''
-                + '<text x="' + (W - padR + 6) + '" y="' + (padT + 4) + '" font-size="9" text-anchor="start" fill="#06b6d4">'
+                + '<text x="' + (W - padR + 6) + '" y="' + (padT + 4) + '" font-size="9" text-anchor="start" fill="#06b6d4" pointer-events="none">'
                 + _jiqFmt(maxH) + '</text>'
-                + '<text x="' + (W - padR + 6) + '" y="' + (padT + plotH) + '" font-size="9" text-anchor="start" fill="#06b6d4">0</text>';
+                + '<text x="' + (W - padR + 6) + '" y="' + (padT + plotH) + '" font-size="9" text-anchor="start" fill="#06b6d4" pointer-events="none">0</text>';
 
-            // point markers + hover tooltips (title elements)
+            // visible point markers (slightly bigger now so hover is
+            // discoverable; the actual hit area is the rect below).
             var ptsA = '', ptsH = '';
             for (var p = 0; p < n; p++) {
-                var xp = xFor(p);
-                var yA = yForA(weekly[p].active_accounts);
-                var yH = yForH(weekly[p].watch_hours);
+                var xp = positions[p].x;
+                var yA = positions[p].yA;
+                var yH = positions[p].yH;
                 var titleA = weekly[p].week_label + '\n' + _jiqFmt(weekly[p].active_accounts) + ' active accounts'
                            + (weekly[p].episode_drop && weekly[p].episode_drop !== '—' ? '\n' + weekly[p].episode_drop : '');
                 var titleH = weekly[p].week_label + '\n' + _jiqFmt(weekly[p].watch_hours) + ' watch hours';
-                ptsA += '<circle cx="' + xp + '" cy="' + yA + '" r="3" fill="#22c55e">'
+                ptsA += '<circle cx="' + xp + '" cy="' + yA + '" r="4" fill="#22c55e" pointer-events="none">'
                      +   '<title>' + _jiqEsc(titleA) + '</title>'
                      + '</circle>';
-                ptsH += '<circle cx="' + xp + '" cy="' + yH + '" r="3" fill="#06b6d4">'
+                ptsH += '<circle cx="' + xp + '" cy="' + yH + '" r="4" fill="#06b6d4" pointer-events="none">'
                      +   '<title>' + _jiqEsc(titleH) + '</title>'
                      + '</circle>';
             }
 
-            // legend
+            // Hit-target rects — one per week, transparent fill, spanning
+            // the full plot height plus the gap between neighbor mid-
+            // points so the cursor always lands on a target. Each carries
+            // the inline onmouseenter / onclick that drives interactivity.
+            var hits = '';
+            for (var h = 0; h < n; h++) {
+                var hx, hw;
+                if (n === 1) {
+                    hx = padL;
+                    hw = plotW;
+                } else {
+                    var leftMid  = (h === 0)     ? padL           : (positions[h - 1].x + positions[h].x) / 2;
+                    var rightMid = (h === n - 1) ? (padL + plotW) : (positions[h].x     + positions[h + 1].x) / 2;
+                    hx = leftMid;
+                    hw = Math.max(1, rightMid - leftMid);
+                }
+                hits += '<rect x="' + hx.toFixed(1) + '" y="' + (padT - 6).toFixed(1)
+                     +  '" width="' + hw.toFixed(1) + '" height="' + (plotH + 12).toFixed(1) + '"'
+                     +  ' fill="transparent"'
+                     +  ' onmouseenter="window._jiqTrendsHover(' + h + ')"'
+                     +  ' onclick="window._jiqTrendsToggle(' + h + ')"'
+                     +  ' style="cursor: pointer;">'
+                     +  '<title>' + _jiqEsc((weekly[h].week_label || '') + ' — hover to update tiles, click to pin') + '</title>'
+                     +  '</rect>';
+            }
+
+            // Overlay highlight markers — emitted once, repositioned via
+            // _jiqTrendsUpdateMarkers. Hidden by default. pointer-events:
+            // none so they don't swallow events from the hit-target rects
+            // they sit on top of.
+            var overlay = ''
+                // Vertical guide-line for the currently active week
+                + '<line id="jiqTrendsActiveVline" x1="0" x2="0"'
+                +   ' y1="' + (padT - 6) + '" y2="' + (padT + plotH + 6) + '"'
+                +   ' stroke="#22c55e" stroke-width="1" stroke-dasharray="3 3"'
+                +   ' opacity="0.5" style="display:none; pointer-events:none;"/>'
+                // Vertical guide-line for the pinned week
+                + '<line id="jiqTrendsPinnedVline" x1="0" x2="0"'
+                +   ' y1="' + (padT - 6) + '" y2="' + (padT + plotH + 6) + '"'
+                +   ' stroke="#f59e0b" stroke-width="1.5" stroke-dasharray="4 2"'
+                +   ' opacity="0.85" style="display:none; pointer-events:none;"/>'
+                // Active hover rings (green for accounts axis, cyan for hours)
+                + '<circle id="jiqTrendsActiveDotA" r="7" fill="none"'
+                +   ' stroke="#22c55e" stroke-width="2.5" style="display:none; pointer-events:none;"/>'
+                + '<circle id="jiqTrendsActiveDotH" r="7" fill="none"'
+                +   ' stroke="#06b6d4" stroke-width="2.5" style="display:none; pointer-events:none;"/>'
+                // Pinned rings (amber, thicker)
+                + '<circle id="jiqTrendsPinnedDotA" r="8" fill="none"'
+                +   ' stroke="#f59e0b" stroke-width="3" style="display:none; pointer-events:none;"/>'
+                + '<circle id="jiqTrendsPinnedDotH" r="8" fill="none"'
+                +   ' stroke="#f59e0b" stroke-width="3" style="display:none; pointer-events:none;"/>';
+
+            // legend (extended with hover/click hint)
             var legend = ''
-                + '<g transform="translate(' + padL + ',' + (H - 8) + ')">'
+                + '<g transform="translate(' + padL + ',' + (H - 8) + ')" pointer-events="none">'
                 +   '<rect x="0" y="-10" width="14" height="3" fill="#22c55e"/>'
                 +   '<text x="20" y="-7" font-size="10" fill="var(--text-secondary)">Active accounts (left axis)</text>'
-                +   '<rect x="200" y="-10" width="14" height="3" fill="#06b6d4" stroke-dasharray="2 2"/>'
                 +   '<line x1="200" y1="-8.5" x2="214" y2="-8.5" stroke="#06b6d4" stroke-width="2" stroke-dasharray="3 2"/>'
                 +   '<text x="220" y="-7" font-size="10" fill="var(--text-secondary)">Watch hours (right axis)</text>'
                 +   '<text x="400" y="-7" font-size="10" fill="#a78bfa">▼ = new episode drop</text>'
+                +   '<text x="555" y="-7" font-size="10" fill="var(--accent-cyan, #06b6d4)" font-style="italic">↻ hover / click any column to dial the top tiles</text>'
                 + '</g>';
 
+            // Layering (back-to-front): grid → paths → small dots →
+            // episode-drop carets → axes → legend → hit-targets →
+            // overlay highlight markers. Hit-targets must sit ABOVE
+            // the visible dots so they catch hover events; overlays
+            // sit above hit-targets with pointer-events:none so they
+            // remain visible without blocking interactivity.
             var svg = ''
-                + '<svg viewBox="0 0 ' + W + ' ' + H + '" width="100%" height="' + H + '" preserveAspectRatio="xMidYMid meet" style="max-width: 100%;">'
+                + '<svg viewBox="0 0 ' + W + ' ' + H + '" width="100%" height="' + H + '"'
+                +   ' preserveAspectRatio="xMidYMid meet" style="max-width: 100%;"'
+                +   ' onmouseleave="window._jiqTrendsLeave()">'
                 +   grid
-                +   ticks
-                +   drops
-                +   '<path d="' + pathH + '" stroke="#06b6d4" stroke-width="2" fill="none" stroke-dasharray="5 3" opacity="0.85"/>'
-                +   '<path d="' + pathA + '" stroke="#22c55e" stroke-width="2.5" fill="none"/>'
+                +   '<path d="' + pathH + '" stroke="#06b6d4" stroke-width="2" fill="none" stroke-dasharray="5 3" opacity="0.85" pointer-events="none"/>'
+                +   '<path d="' + pathA + '" stroke="#22c55e" stroke-width="2.5" fill="none" pointer-events="none"/>'
                 +   ptsH
                 +   ptsA
+                +   drops
+                +   ticks
                 +   leftAxis
                 +   rightAxis
+                +   hits
+                +   overlay
                 +   legend
                 + '</svg>';
-            return svg;
+            return { svg: svg, positions: positions };
         }
 
         // ---- Touchpoints renderer (table + overlap + touch distribution) ----
