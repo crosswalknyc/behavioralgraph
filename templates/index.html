@@ -29105,13 +29105,13 @@
                             fmtViewers(totalHrs),
                             ''],
                     ];
-                    // Optional: full-lifecycle tile if data present and
-                    // different from 30-day projection
-                    if (lifecycleMid != null && lifecycleMid > 0) {
-                        k.push(['Full Lifecycle Accounts',
-                                fmtViewers(lifecycleMid),
-                                '']);
-                    }
+                    // Full Lifecycle tile intentionally suppressed — it's
+                    // a forward projection (includes accounts that haven't
+                    // watched yet) and reading larger than Confirmed (which
+                    // is observed-to-date) is confusing in a strip otherwise
+                    // dominated by measured values. The lifecycle figure is
+                    // still in the payload (tv_show_lifecycle_viewers_mid)
+                    // and surfaces in the modeled_view / projections section.
                     // Marketing-Touched % — surfaces the marketing-exposure
                     // KPI prominently so viewers know what % of audience
                     // was reached by pre-launch marketing of any kind.
