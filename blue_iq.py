@@ -1325,19 +1325,26 @@ def compute_panel_view(filters: dict, *, force_refresh: bool = False) -> dict:
     if panel_size > 0 and panel_turnout.get('panelists'):
         turnout_pct = round(panel_turnout['panelists'] / panel_size, 4)
 
+    # Issue × Journey cross: national-only (cube top-level), so it doesn't
+    # vary by the user's geo/party filter. Surfaces "for voters worried
+    # about Housing & Rent, what do they DO after political content?" —
+    # answering the marketing-creative placement question directly.
+    issue_journey_cross = (cube or {}).get('issue_journey_cross') or []
+
     cards = {
-        'issue_buckets':   issue_buckets,
-        'search_engines':  _attach_share(panel_search),
-        'social_media':    _attach_share(panel_social),
-        'top_politicians': top_politicians,
-        'top_articles':    top_articles,
-        'turnout_intent':  {
+        'issue_buckets':       issue_buckets,
+        'search_engines':      _attach_share(panel_search),
+        'social_media':        _attach_share(panel_social),
+        'top_politicians':     top_politicians,
+        'top_articles':        top_articles,
+        'turnout_intent':      {
             'pct':            turnout_pct,
             'panelists':      panel_turnout.get('panelists', 0),
             'sample_queries': panel_turnout.get('sample_urls', [])[:8],
         },
-        'demo_crosstab':   panel_demo,
-        'voter_journey':   panel_journey,
+        'demo_crosstab':       panel_demo,
+        'voter_journey':       panel_journey,
+        'issue_journey_cross': issue_journey_cross,
     }
 
     # Compare card (only when geo is set)
