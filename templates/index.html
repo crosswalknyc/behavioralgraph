@@ -20090,6 +20090,73 @@
                     <div style="font-size: 0.72rem; color: var(--text-secondary); margin-bottom: 0.5rem;">AI-mined from the aggregated journey JSON. Each fact cites a number from the underlying data.</div>
                     <div id="jiqFacts"></div>
                 </div>
+
+                <!-- ════════════════════════════════════════════════════════
+                     SUBSCRIBER IQ SUMMARY cards — mirrors of the same
+                     metrics surfaced inside the Subscriber IQ dashboard
+                     (Performance Metrics, Revenue, Timing, SVOD Platforms
+                     tabs). Pulled into Journey IQ so the platform-level
+                     subscriber impact is visible alongside the discovery
+                     and audience context.
+                     Auto-hides when payload.subscriber_iq_summary is
+                     missing (e.g. on non-TV-show runs).
+                ═══════════════════════════════════════════════════════ -->
+                <div class="card" id="jiqSubIqAccountsCard"
+                     style="padding: 1rem; margin-top: 1rem; display: none;
+                            background: linear-gradient(135deg, rgba(91,108,255,0.06) 0%, rgba(91,108,255,0.02) 100%);
+                            border: 1px solid rgba(91,108,255,0.22);">
+                    <div style="display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.25rem;">
+                        <h3 style="margin: 0;">👥 Subscriber Acquisition — from Subscriber IQ</h3>
+                        <div id="jiqSubIqAccountsMeta" style="font-size: 0.72rem; color: var(--text-secondary);"></div>
+                    </div>
+                    <div id="jiqSubIqAccountsSubtitle" style="font-size: 0.78rem; color: var(--text-secondary); margin-bottom: 0.6rem;"></div>
+                    <div id="jiqSubIqAccountsTiles"
+                         style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+                                gap: 0.6rem; margin-bottom: 0.4rem;"></div>
+                    <div id="jiqSubIqAccountsNote" style="margin-top: 0.5rem; font-size: 0.7rem; color: var(--text-secondary); font-style: italic;"></div>
+                </div>
+
+                <div class="card" id="jiqSubIqRevenueCard"
+                     style="padding: 1rem; margin-top: 1rem; display: none;
+                            background: linear-gradient(135deg, rgba(34,197,94,0.06) 0%, rgba(34,197,94,0.02) 100%);
+                            border: 1px solid rgba(34,197,94,0.22);">
+                    <div style="display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.25rem;">
+                        <h3 style="margin: 0;">💰 Subscription Revenue Impact — from Subscriber IQ</h3>
+                        <div id="jiqSubIqRevenueMeta" style="font-size: 0.72rem; color: var(--text-secondary);"></div>
+                    </div>
+                    <div id="jiqSubIqRevenueSubtitle" style="font-size: 0.78rem; color: var(--text-secondary); margin-bottom: 0.6rem;"></div>
+                    <div id="jiqSubIqRevenueRows"></div>
+                    <div id="jiqSubIqRevenueNote" style="margin-top: 0.6rem; font-size: 0.7rem; color: var(--text-secondary); font-style: italic;"></div>
+                </div>
+
+                <div class="card" id="jiqSubIqTimingCard"
+                     style="padding: 1rem; margin-top: 1rem; display: none;
+                            background: linear-gradient(135deg, rgba(245,158,11,0.06) 0%, rgba(245,158,11,0.02) 100%);
+                            border: 1px solid rgba(245,158,11,0.22);">
+                    <div style="display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.25rem;">
+                        <h3 style="margin: 0;">⏱️ Signup Timing — from Subscriber IQ</h3>
+                        <div id="jiqSubIqTimingMeta" style="font-size: 0.72rem; color: var(--text-secondary);"></div>
+                    </div>
+                    <div id="jiqSubIqTimingSubtitle" style="font-size: 0.78rem; color: var(--text-secondary); margin-bottom: 0.6rem;"></div>
+                    <div id="jiqSubIqTimingBuckets"
+                         style="display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+                                gap: 0.6rem; margin-bottom: 0.8rem;"></div>
+                    <div id="jiqSubIqTimingChart" style="overflow-x: auto;"></div>
+                    <div id="jiqSubIqTimingNote" style="margin-top: 0.6rem; font-size: 0.7rem; color: var(--text-secondary); font-style: italic;"></div>
+                </div>
+
+                <div class="card" id="jiqSubIqPlatformsCard"
+                     style="padding: 1rem; margin-top: 1rem; display: none;
+                            background: linear-gradient(135deg, rgba(168,85,247,0.06) 0%, rgba(168,85,247,0.02) 100%);
+                            border: 1px solid rgba(168,85,247,0.22);">
+                    <div style="display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.25rem;">
+                        <h3 style="margin: 0;">📱 SVOD Platform Overlap — from Subscriber IQ</h3>
+                        <div id="jiqSubIqPlatformsMeta" style="font-size: 0.72rem; color: var(--text-secondary);"></div>
+                    </div>
+                    <div id="jiqSubIqPlatformsSubtitle" style="font-size: 0.78rem; color: var(--text-secondary); margin-bottom: 0.6rem;"></div>
+                    <div id="jiqSubIqPlatformsList"></div>
+                    <div id="jiqSubIqPlatformsNote" style="margin-top: 0.6rem; font-size: 0.7rem; color: var(--text-secondary); font-style: italic;"></div>
+                </div>
             </div>
         </div><!-- End journeyIQView -->
 
@@ -29837,6 +29904,18 @@
                 );
             }
 
+            // ---- Subscriber IQ Summary cards (Accounts / Revenue /
+            //      Timing / SVOD Platforms — mirrors the Subscriber
+            //      IQ dashboard tabs). Auto-hides when the block is
+            //      missing from the payload.
+            if (typeof renderJourneyIqSubscriberSummary === 'function') {
+                renderJourneyIqSubscriberSummary(
+                    d.subscriber_iq_summary
+                    || ((fullRun || {}).modeled_view || {}).subscriber_iq_summary
+                    || (fullRun || {}).subscriber_iq_summary
+                );
+            }
+
             // Facts - facts can be plain strings or {label, value} dicts.
             // Coerce + filter so we never render '[object Object]' or empty
             // boilerplate (e.g. a lone {label:'Target', value:'Research-anchored ...'}).
@@ -33316,6 +33395,388 @@
                 +   legend
                 + '</svg>';
             return { svg: svg, positions: positions };
+        }
+
+        // ──────────────────────────────────────────────────────────────
+        // Subscriber IQ Summary renderer — 4 stacked cards
+        //
+        // Consumes payload.subscriber_iq_summary (built by
+        // _build_subscriber_iq_summary in the PCJ build script).
+        // Shape:
+        //   {
+        //     platform, date_range, attribution_window_days, ...
+        //     accounts: { total_accounts_viewed, accounts_acquired_or_reactivated,
+        //                 new_accounts_acquisition, reactivated_accounts,
+        //                 conversion_rate_pct, methodology_note },
+        //     revenue: {
+        //       pricing: { ad_supported_monthly_usd, premium_monthly_usd, ... },
+        //       totals_acquired_and_reactivated: { subscribers, monthly_ad_usd, ... },
+        //       activated_only:                  { ...same shape... },
+        //       blended_industry_mix: { ad_share, premium_share, blended_rate_usd,
+        //                               subscribers, monthly_usd, yearly_usd },
+        //       methodology_note,
+        //     },
+        //     timing: { avg_days_to_signup, buckets:[{label,pct,signups,days_range}],
+        //               daily:[{day,signups,pct}], methodology_note },
+        //     svod_platform_overlap: [{ platform, pct, short }],
+        //     svod_platform_note,
+        //   }
+        //
+        // Auto-hides any individual card when its block is missing.
+        // ──────────────────────────────────────────────────────────────
+        function renderJourneyIqSubscriberSummary(sub) {
+            var cards = [
+                'jiqSubIqAccountsCard',
+                'jiqSubIqRevenueCard',
+                'jiqSubIqTimingCard',
+                'jiqSubIqPlatformsCard'
+            ];
+            // Default: hide all cards.
+            cards.forEach(function(id) {
+                var el = document.getElementById(id);
+                if (el) el.style.display = 'none';
+            });
+            if (!sub) return;
+
+            var commonMeta = [];
+            if (sub.platform)           commonMeta.push(sub.platform);
+            if (sub.date_range)         commonMeta.push(sub.date_range);
+            if (sub.attribution_window_days != null) {
+                commonMeta.push(sub.attribution_window_days + 'd attribution window');
+            }
+            var metaTxt = commonMeta.join(' · ');
+
+            var fmtUsd = function(n) {
+                if (n == null) return '—';
+                if (n >= 1e9) return '$' + (n / 1e9).toFixed(2) + 'B';
+                if (n >= 1e6) return '$' + (n / 1e6).toFixed(2) + 'M';
+                if (n >= 1e3) return '$' + (n / 1e3).toFixed(1) + 'K';
+                return '$' + n.toFixed(0);
+            };
+
+            // ──────────── Card 1: Accounts (Performance Metrics) ────────────
+            if (sub.accounts) {
+                var a = sub.accounts;
+                var card = document.getElementById('jiqSubIqAccountsCard');
+                if (card) card.style.display = '';
+                var metaEl = document.getElementById('jiqSubIqAccountsMeta');
+                if (metaEl) metaEl.textContent = metaTxt;
+                var subEl = document.getElementById('jiqSubIqAccountsSubtitle');
+                if (subEl) {
+                    subEl.textContent = 'Gen Pop (US-projected) figures from the Subscriber IQ '
+                        + 'attribution panel. The same 5 KPIs that anchor Subscriber IQ\u2019s '
+                        + 'Performance Metrics card.';
+                }
+                var tiles = [];
+                tiles.push(_jiqSubIqTile(
+                    'Total Accounts<br>Viewed',
+                    _jiqFmt(a.total_accounts_viewed),
+                    'Total Show Watchers (Gen Pop)',
+                    '#5b6cff'
+                ));
+                tiles.push(_jiqSubIqTile(
+                    'Accounts Acquired<br>or Reactivated',
+                    _jiqFmt(a.accounts_acquired_or_reactivated),
+                    'New Platform Signups (attributed + reactivated)',
+                    '#22c55e'
+                ));
+                tiles.push(_jiqSubIqTile(
+                    'New Accounts<br>Acquisition',
+                    _jiqFmt(a.new_accounts_acquisition),
+                    'Net-new subscribers — Attributed Signups',
+                    '#06b6d4'
+                ));
+                tiles.push(_jiqSubIqTile(
+                    'Reactivated<br>Accounts',
+                    _jiqFmt(a.reactivated_accounts),
+                    'Previously dormant — Dormant to Reactive',
+                    '#a78bfa'
+                ));
+                tiles.push(_jiqSubIqTile(
+                    'Acquired and<br>Reactivated Rate',
+                    (a.conversion_rate_pct != null ? a.conversion_rate_pct.toFixed(2) + '%' : '—'),
+                    'NPS \u00f7 Total Show Watchers (Gen Pop)',
+                    '#f59e0b'
+                ));
+                var tilesEl = document.getElementById('jiqSubIqAccountsTiles');
+                if (tilesEl) tilesEl.innerHTML = tiles.join('');
+                var noteEl = document.getElementById('jiqSubIqAccountsNote');
+                if (noteEl) noteEl.textContent = a.methodology_note || '';
+            }
+
+            // ──────────── Card 2: Revenue Impact ────────────
+            if (sub.revenue) {
+                var r = sub.revenue;
+                var card2 = document.getElementById('jiqSubIqRevenueCard');
+                if (card2) card2.style.display = '';
+                var metaEl2 = document.getElementById('jiqSubIqRevenueMeta');
+                if (metaEl2 && r.pricing) {
+                    metaEl2.textContent = (r.pricing.platform || sub.platform || 'platform')
+                        + ' \u00b7 Ad-Supported $' + (r.pricing.ad_supported_monthly_usd || 0).toFixed(2) + '/mo'
+                        + ' \u00b7 Premium $' + (r.pricing.premium_monthly_usd || 0).toFixed(2) + '/mo';
+                }
+                var subEl2 = document.getElementById('jiqSubIqRevenueSubtitle');
+                if (subEl2) {
+                    subEl2.textContent = 'Subscriber count \u00d7 Netflix US SVOD list price, '
+                        + 'broken into Total (acquired + reactivated), Activated-only (net-new), '
+                        + 'and Blended (industry-typical 60/40 tier mix).';
+                }
+                var rowsHtml = '';
+                var renderRevenueRow = function(title, tooltip, accent, row) {
+                    if (!row) return '';
+                    var tiles = [
+                        _jiqSubIqTile('Subscribers',
+                            _jiqFmt(row.subscribers || row.subscribers === 0 ? row.subscribers : 0),
+                            'count of accounts', accent),
+                        _jiqSubIqTile('Monthly \u00b7 Ad-Supported',
+                            fmtUsd(row.monthly_ad_usd),
+                            '@ $' + (r.pricing.ad_supported_monthly_usd || 0).toFixed(2) + '/mo', accent),
+                        _jiqSubIqTile('Yearly \u00b7 Ad-Supported',
+                            fmtUsd(row.yearly_ad_usd),
+                            'monthly \u00d7 12', accent),
+                        _jiqSubIqTile('Monthly \u00b7 Premium',
+                            fmtUsd(row.monthly_premium_usd),
+                            '@ $' + (r.pricing.premium_monthly_usd || 0).toFixed(2) + '/mo', accent),
+                        _jiqSubIqTile('Yearly \u00b7 Premium',
+                            fmtUsd(row.yearly_premium_usd),
+                            'monthly \u00d7 12', accent)
+                    ];
+                    return '<div style="margin-bottom: 0.9rem;">'
+                        + '<h4 class="has-tooltip" data-tooltip="' + _jiqEsc(tooltip) + '"'
+                        +    ' style="font-size: 0.85rem; margin: 0 0 0.4rem; opacity: 0.92;">'
+                        +    _jiqEsc(title) + '</h4>'
+                        + '<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(155px, 1fr)); gap: 0.5rem;">'
+                        +    tiles.join('') + '</div></div>';
+                };
+                rowsHtml += renderRevenueRow(
+                    '💰 Total Reactivated and Activated Accounts',
+                    'Revenue from every account whose activity was driven by this show — both newly acquired and previously dormant accounts that were reactivated.',
+                    '#22c55e',
+                    r.totals_acquired_and_reactivated
+                );
+                rowsHtml += renderRevenueRow(
+                    '📈 Activated (Newly Acquired) Accounts Only',
+                    'Same revenue calculation but limited to NEWLY ACQUIRED accounts only. Excludes reactivations of previously-dormant accounts.',
+                    '#06b6d4',
+                    r.activated_only
+                );
+                if (r.blended_industry_mix) {
+                    var b = r.blended_industry_mix;
+                    var adPct = Math.round((b.ad_share || 0) * 100);
+                    var prPct = Math.round((b.premium_share || 0) * 100);
+                    var blendTooltip = 'Blended Rate applies a ' + adPct + '% ad-supported / '
+                        + prPct + '% premium tier mix to the new-acquisition count, reflecting a typical SVOD subscriber tier distribution. Per-subscriber ARPU = '
+                        + (b.ad_share || 0) + ' \u00d7 $' + (r.pricing.ad_supported_monthly_usd || 0).toFixed(2)
+                        + ' + ' + (b.premium_share || 0) + ' \u00d7 $' + (r.pricing.premium_monthly_usd || 0).toFixed(2)
+                        + ' = $' + (b.blended_rate_usd || 0).toFixed(2) + '/mo.';
+                    var blendTiles = [
+                        _jiqSubIqTile('Subscribers',
+                            _jiqFmt(b.subscribers),
+                            'newly acquired only', '#f59e0b'),
+                        _jiqSubIqTile('Blended ARPU',
+                            '$' + (b.blended_rate_usd || 0).toFixed(2) + '/mo',
+                            adPct + '% ad \u00b7 ' + prPct + '% premium', '#f59e0b'),
+                        _jiqSubIqTile('Monthly \u00b7 Blended',
+                            fmtUsd(b.monthly_usd),
+                            'subscribers \u00d7 blended ARPU', '#f59e0b'),
+                        _jiqSubIqTile('Yearly \u00b7 Blended',
+                            fmtUsd(b.yearly_usd),
+                            'monthly \u00d7 12', '#f59e0b')
+                    ];
+                    rowsHtml += '<div>'
+                        + '<h4 class="has-tooltip" data-tooltip="' + _jiqEsc(blendTooltip) + '"'
+                        +    ' style="font-size: 0.85rem; margin: 0 0 0.4rem; opacity: 0.92;">'
+                        +    '💎 Blended Rate (' + adPct + '% Ad-Supported / ' + prPct + '% Premium) — Newly Acquired</h4>'
+                        + '<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 0.5rem;">'
+                        +    blendTiles.join('') + '</div></div>';
+                }
+                var rowsEl = document.getElementById('jiqSubIqRevenueRows');
+                if (rowsEl) rowsEl.innerHTML = rowsHtml;
+                var noteEl2 = document.getElementById('jiqSubIqRevenueNote');
+                if (noteEl2) noteEl2.textContent = r.methodology_note || '';
+            }
+
+            // ──────────── Card 3: Signup Timing ────────────
+            if (sub.timing) {
+                var t = sub.timing;
+                var card3 = document.getElementById('jiqSubIqTimingCard');
+                if (card3) card3.style.display = '';
+                var metaEl3 = document.getElementById('jiqSubIqTimingMeta');
+                if (metaEl3) {
+                    metaEl3.textContent = (t.avg_days_to_signup != null
+                        ? 'avg ' + Number(t.avg_days_to_signup).toFixed(1) + ' days to signup'
+                        : '');
+                }
+                var subEl3 = document.getElementById('jiqSubIqTimingSubtitle');
+                if (subEl3) {
+                    subEl3.textContent = 'Distribution of signups by days after the show became '
+                        + 'available on the platform. Captures immediate-conversion behavior vs '
+                        + 'sustained-consideration windows.';
+                }
+                // Bucket tiles
+                var bucketTiles = [];
+                if (t.avg_days_to_signup != null) {
+                    bucketTiles.push(_jiqSubIqTile(
+                        '⚡ Speed to Conversion',
+                        Number(t.avg_days_to_signup).toFixed(1) + ' days',
+                        'avg days to signup',
+                        '#f59e0b'
+                    ));
+                }
+                (t.buckets || []).forEach(function(b) {
+                    bucketTiles.push(_jiqSubIqTile(
+                        b.label || ('Days ' + (b.days_range || '?')),
+                        (b.pct != null ? b.pct.toFixed(1) + '%' : '—'),
+                        _jiqFmt(b.signups) + ' signups',
+                        '#f59e0b'
+                    ));
+                });
+                var bucketsEl = document.getElementById('jiqSubIqTimingBuckets');
+                if (bucketsEl) bucketsEl.innerHTML = bucketTiles.join('');
+
+                // Daily distribution chart (bar chart of pct by day 0..30)
+                var chartEl = document.getElementById('jiqSubIqTimingChart');
+                if (chartEl) chartEl.innerHTML = _jiqRenderSubIqTimingChart(t.daily || []);
+
+                var noteEl3 = document.getElementById('jiqSubIqTimingNote');
+                if (noteEl3) noteEl3.textContent = t.methodology_note || '';
+            }
+
+            // ──────────── Card 4: SVOD Platform Overlap ────────────
+            if (sub.svod_platform_overlap && sub.svod_platform_overlap.length) {
+                var ov = sub.svod_platform_overlap;
+                var card4 = document.getElementById('jiqSubIqPlatformsCard');
+                if (card4) card4.style.display = '';
+                var metaEl4 = document.getElementById('jiqSubIqPlatformsMeta');
+                if (metaEl4) metaEl4.textContent = ov.length + ' platforms tracked';
+                var subEl4 = document.getElementById('jiqSubIqPlatformsSubtitle');
+                if (subEl4) {
+                    subEl4.textContent = '% of PCJ watchers who also actively use each competing '
+                        + 'US streaming platform. High overlap signals cross-shopping risk and '
+                        + 'partnership / windowing opportunities.';
+                }
+                var listEl = document.getElementById('jiqSubIqPlatformsList');
+                if (listEl) listEl.innerHTML = _jiqRenderSvodOverlapList(ov);
+                var noteEl4 = document.getElementById('jiqSubIqPlatformsNote');
+                if (noteEl4) noteEl4.textContent = sub.svod_platform_note || '';
+            }
+        }
+
+        // KPI tile used across the Subscriber IQ Summary cards.
+        function _jiqSubIqTile(labelHtml, value, subline, accentColor) {
+            return ''
+                + '<div style="padding: 0.7rem 0.85rem; background: var(--bg-secondary);'
+                +   ' border-radius: 8px; border-left: 3px solid ' + accentColor + ';">'
+                +   '<div style="font-size: 0.68rem; color: var(--text-secondary);'
+                +     ' text-transform: uppercase; letter-spacing: 0.04em; font-weight: 600;'
+                +     ' margin-bottom: 4px; line-height: 1.25;">' + labelHtml + '</div>'
+                +   '<div style="font-size: 1.35rem; font-weight: 700; color: var(--text-primary);'
+                +     ' line-height: 1.1;">' + value + '</div>'
+                +   '<div style="font-size: 0.68rem; color: var(--text-secondary);'
+                +     ' margin-top: 4px;">' + (subline || '') + '</div>'
+                + '</div>';
+        }
+
+        // SVG bar chart: % of signups by days-after-show-available (0..30).
+        // Each bar = one day; height proportional to that day's % share.
+        // X-axis labels every 5 days; hover tooltip shows day + pct + count.
+        function _jiqRenderSubIqTimingChart(daily) {
+            if (!daily || !daily.length) return '';
+            var W = 880, H = 200;
+            var padL = 40, padR = 16, padT = 14, padB = 36;
+            var plotW = W - padL - padR;
+            var plotH = H - padT - padB;
+            var n = daily.length;
+            var maxPct = 0;
+            for (var i = 0; i < n; i++) {
+                if (daily[i].pct > maxPct) maxPct = daily[i].pct;
+            }
+            if (maxPct === 0) maxPct = 1;
+            var barW = plotW / n * 0.78;
+            var slotW = plotW / n;
+            var bars = '';
+            var xLabels = '';
+            for (var j = 0; j < n; j++) {
+                var d = daily[j];
+                var x = padL + slotW * j + (slotW - barW) / 2;
+                var h = (d.pct / maxPct) * plotH;
+                var y = padT + plotH - h;
+                // First 2 bars (immediate signups) get amber accent;
+                // days 2-7 lime; days 8+ cooler grey-cyan to visually
+                // separate immediate / early / mid cohorts.
+                var fill;
+                if (d.day <= 1)       fill = '#f59e0b';
+                else if (d.day <= 7)  fill = '#22c55e';
+                else                  fill = '#06b6d4';
+                bars += '<rect x="' + x.toFixed(1) + '" y="' + y.toFixed(1)
+                     +  '" width="' + barW.toFixed(1) + '" height="' + h.toFixed(1) + '"'
+                     +  ' fill="' + fill + '" opacity="0.9" rx="1.5">'
+                     +  '<title>Day ' + d.day + '\n'
+                     +    d.pct.toFixed(2) + '% of signups\n'
+                     +    _jiqFmt(d.signups) + ' signups (Gen Pop)</title>'
+                     +  '</rect>';
+                if (d.day % 5 === 0 || d.day === n - 1) {
+                    xLabels += '<text x="' + (x + barW / 2).toFixed(1) + '"'
+                            +  ' y="' + (padT + plotH + 14) + '"'
+                            +  ' font-size="9" text-anchor="middle" fill="var(--text-secondary)">'
+                            +  'Day ' + d.day + '</text>';
+                }
+            }
+            // y-axis gridlines + labels (0%, 50% max, 100% max)
+            var grid = '';
+            var yLabels = '';
+            [0, 0.5, 1.0].forEach(function(frac) {
+                var gy = padT + plotH - frac * plotH;
+                grid += '<line x1="' + padL + '" y1="' + gy + '" x2="' + (W - padR) + '" y2="' + gy
+                     +  '" stroke="rgba(255,255,255,0.06)" stroke-width="1"/>';
+                yLabels += '<text x="' + (padL - 4) + '" y="' + (gy + 3) + '"'
+                        +  ' font-size="9" text-anchor="end" fill="var(--text-secondary)">'
+                        +  (frac * maxPct).toFixed(1) + '%</text>';
+            });
+            // Legend
+            var legend = ''
+                + '<g transform="translate(' + padL + ',' + (H - 6) + ')" pointer-events="none">'
+                +   '<rect x="0"   y="-10" width="12" height="3" fill="#f59e0b"/>'
+                +   '<text x="16" y="-7" font-size="10" fill="var(--text-secondary)">Same Day / Day 1</text>'
+                +   '<rect x="140" y="-10" width="12" height="3" fill="#22c55e"/>'
+                +   '<text x="156" y="-7" font-size="10" fill="var(--text-secondary)">Days 2-7</text>'
+                +   '<rect x="240" y="-10" width="12" height="3" fill="#06b6d4"/>'
+                +   '<text x="256" y="-7" font-size="10" fill="var(--text-secondary)">Days 8-30</text>'
+                + '</g>';
+            return '<svg viewBox="0 0 ' + W + ' ' + H + '" width="100%" height="' + H + '"'
+                +    ' preserveAspectRatio="xMidYMid meet" style="max-width: 100%;">'
+                +  grid + bars + xLabels + yLabels + legend
+                +  '</svg>';
+        }
+
+        // Horizontal bar list for the SVOD platform overlap card.
+        function _jiqRenderSvodOverlapList(rows) {
+            if (!rows || !rows.length) return '';
+            var maxPct = 0;
+            for (var i = 0; i < rows.length; i++) {
+                if (rows[i].pct > maxPct) maxPct = rows[i].pct;
+            }
+            if (maxPct === 0) maxPct = 1;
+            // 1-row-per-platform layout with a clear platform label,
+            // a colored bar scaled to the max in the list, and the
+            // explicit % at the end.
+            var html = '<div style="display: flex; flex-direction: column; gap: 0.45rem;">';
+            for (var k = 0; k < rows.length; k++) {
+                var p = rows[k];
+                var width = (p.pct / maxPct * 100).toFixed(1);
+                html += ''
+                    + '<div style="display: grid; grid-template-columns: 160px 1fr 70px; align-items: center; gap: 0.6rem;">'
+                    +   '<div style="font-size: 0.82rem; font-weight: 600; color: var(--text-primary);">'
+                    +     _jiqEsc(p.platform || p.short || '—') + '</div>'
+                    +   '<div style="background: rgba(168,85,247,0.12); border-radius: 4px; height: 18px; overflow: hidden;">'
+                    +     '<div style="background: linear-gradient(90deg, #a78bfa, #7c3aed); height: 100%; width: ' + width + '%; border-radius: 4px;"></div>'
+                    +   '</div>'
+                    +   '<div style="font-size: 0.85rem; font-weight: 700; color: var(--text-primary); text-align: right; font-variant-numeric: tabular-nums;">'
+                    +     (p.pct != null ? p.pct.toFixed(1) + '%' : '—') + '</div>'
+                    + '</div>';
+            }
+            html += '</div>';
+            return html;
         }
 
         // ---- Touchpoints renderer (table + overlap + touch distribution) ----
