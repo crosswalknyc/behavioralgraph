@@ -1806,13 +1806,26 @@ SEGMENT_BENCHMARKS = {
     # Ally / Chime are niche — NOT in benchmarks; legacy floor logic stays away
 
     # CREDIT PROVIDER — Visa/MC/Discover/Amex universal mass anchors
-    # (added 2026-05-25 per Dove + LA Sparks + KD reviews — canonical fix)
-    # Visa was systematically suppressed at 10-29% when persona-real is 65-82%.
-    # Numbers from Federal Reserve consumer credit cardholder surveys + Forrester.
-    ('CREDIT PROVIDER', 'VISA'):       {'18-24': 76, '25-34': 80, '35-44': 82, '45-54': 80, '55-64': 76, '65+': 70},
-    ('CREDIT PROVIDER', 'MASTERCARD'): {'18-24': 40, '25-34': 48, '35-44': 50, '45-54': 46, '55-64': 42, '65+': 36},
-    ('CREDIT PROVIDER', 'DISCOVER CREDIT CARD'): {'18-24': 18, '25-34': 22, '35-44': 24, '45-54': 22, '55-64': 20, '65+': 16},
-    ('CREDIT PROVIDER', 'AMERICAN EXPRESS'): {'18-24': 14, '25-34': 18, '35-44': 22, '45-54': 24, '55-64': 22, '65+': 18},
+    # (revised 2026-06-04 per Jenna's 7-of-11 Visa over-read defect)
+    # PRIOR ERROR: benchmarks were *cardholder-share* (Forrester / Fed Reserve
+    # cardholder survey), not adult-population penetration. Visa cardholder
+    # share is ~75% but only ~76% of adults *hold any credit card*, so adult-
+    # population Visa penetration is ~58%, not ~80%. Pre-fix bench was 76-82%
+    # which meant the LLM's 55-65% reasoned outputs sat 12-20pp below floor
+    # and either got silently lifted to a 60% pin (the 7/11 pattern Jenna's
+    # colleague flagged) or were preserved at 60% because the floor enforcer
+    # silently no-op'd. Either way the read was uniformly ~60% across personas.
+    #
+    # NEW: adult-population numbers from Fed 2024 Survey of Consumer Finances
+    # × Nilson Report 2024 card-network share. Younger buckets meaningfully
+    # lower (new-to-credit), 35-54 peak, 65+ drops (retiree card retirement).
+    # Combined with KNOWN_OVERSHOOT membership below → two-sided trim so
+    # 60%+ Visa on a 25-34-heavy persona (bench 50) gets pulled into 47-53.
+    ('CREDIT PROVIDER', 'VISA'):       {'18-24': 35, '25-34': 50, '35-44': 58, '45-54': 58, '55-64': 54, '65+': 46},
+    ('CREDIT PROVIDER', 'MASTERCARD'): {'18-24': 16, '25-34': 25, '35-44': 32, '45-54': 32, '55-64': 28, '65+': 22},
+    ('CREDIT PROVIDER', 'DISCOVER CREDIT CARD'): {'18-24':  8, '25-34': 12, '35-44': 16, '45-54': 16, '55-64': 14, '65+': 11},
+    ('CREDIT PROVIDER', 'AMERICAN EXPRESS'): {'18-24':  6, '25-34': 12, '35-44': 18, '45-54': 20, '55-64': 18, '65+': 14},
+    ('CREDIT PROVIDER', 'CAPITAL ONE'): {'18-24': 12, '25-34': 20, '35-44': 26, '45-54': 26, '55-64': 22, '65+': 18},
     # Synchrony — store-card issuer (Amazon Store, PayPal Credit, Lowe's, Care Credit, Walmart).
     # (added 2026-05-25 per KD review — was at 2.67%, ~70M cardholders / 258M adults skews ~12-15%)
     ('CREDIT PROVIDER', 'SYNCHRONY'):  {'18-24':  8, '25-34': 12, '35-44': 14, '45-54': 14, '55-64': 12, '65+': 10},
@@ -1877,6 +1890,14 @@ SEGMENT_BENCHMARKS = {
     # (added 2026-05-25 per Sandra/Regina/Olivia/Queen lock-release pass — was at
     #  16.1172 lock on Regina/Queen but emerging audience-aware values should curve.)
     ('SEARCH ENGINE/AI', 'COPILOT'): {'18-24':  6, '25-34':  8, '35-44': 12, '45-54': 14, '55-64': 16, '65+': 14},
+    # GOOGLE — universal search anchor. Real-world penetration peaks at ~92% (Pew
+    # 2024 + ComScore 2024). The LLM tends to write 99.9% as a "saturation pin"
+    # for any tech-positive audience, producing the 99.99% Chicago_Sky artifact
+    # (Jenna 2026-06-03 master Gemini defect ticket). Two-sided trim activates
+    # via KNOWN_OVERSHOOT_BRANDS below; without these benchmarks the trim has
+    # no segment-weighted target and falls through to the older/mid/young
+    # PANEL_REALITY_FLOORS lookup (which is also high and only LIFTS, never trims).
+    ('SEARCH ENGINE/AI', 'GOOGLE'):     {'18-24': 95, '25-34': 94, '35-44': 92, '45-54': 89, '55-64': 86, '65+': 80},
 
     # STREAMING/MUSIC — SiriusXM is age-curved (in-car commercial older). iHeart
     # and Pandora REMOVED from SEGMENT in favor of ETHNICITY (see Black radio
@@ -4013,7 +4034,48 @@ def apply_panel_reality_floors(df, subject, verbose=True):
                 # (cat_u, brand_u): brands where LLM tends to over-lift past target
                 ('STREAMING/PLATFORM', 'BET+'),
                 ('STREAMING/PLATFORM', 'ALLBLK'),
+                # SEARCH ENGINE/AI cohort — LLM-adoption survey baselines
+                # (Pew 2024) cap young-cohort adoption at 22% (Gemini),
+                # 55% (ChatGPT), 12% (Perplexity). The vet-reasoner
+                # consistently KEEPs these above the segment-weighted
+                # target for young / creator / tech-savvy audiences,
+                # producing 32-33% Gemini pins on 18-24-heavy profiles
+                # (Zhirelle 32.8069%, Hollywood_Reporter 32.8697%,
+                # ~2x the median across 120 recent files). Two-sided
+                # trim activates so cur > target+3pp recenters into
+                # the persona-aligned band. CLAUDE AI was already
+                # protected here; adding GEMINI / CHAT GPT / PERPLEXITY
+                # 2026-06-03 (Jenna's Zhirelle audit).
                 ('SEARCH ENGINE/AI', 'CLAUDE AI'),
+                ('SEARCH ENGINE/AI', 'GEMINI'),
+                ('SEARCH ENGINE/AI', 'CHAT GPT'),
+                ('SEARCH ENGINE/AI', 'PERPLEXITY'),
+                # 2026-06-03 (Jenna 7-file Gemini master defect ticket): expand
+                # two-sided trim to the whole SEARCH ENGINE/AI cohort. Chicago_Sky
+                # showed GOOGLE 99.99% (saturation pin), Kaitlyn/Frances showed
+                # CHAT GPT 76-79% (cohort inflation), COPILOT 23.5% pin across
+                # 6+ files. Adding GOOGLE/COPILOT/BING/MSN closes the cohort
+                # so any 5+pp overshoot above persona-aligned bench trims back
+                # into the band — eliminating the "rank-cascade pin" pattern
+                # (100/50/33/23/18/14) the vet-reasoner kept producing.
+                ('SEARCH ENGINE/AI', 'GOOGLE'),
+                ('SEARCH ENGINE/AI', 'COPILOT'),
+                ('SEARCH ENGINE/AI', 'BING'),
+                ('SEARCH ENGINE/AI', 'MSN'),
+                # 2026-06-04 (Jenna's 7-of-11 Visa over-read defect): add the
+                # full credit-card cohort for two-sided trim. Same pattern as
+                # the SEARCH ENGINE/AI rank-cascade: the LLM lands Visa near
+                # 60% across unrelated personas because the prior bench was
+                # cardholder-share (76-82%) rather than adult-population
+                # penetration (35-58%). With KNOWN_OVERSHOOT + the revised
+                # bench above, anything >5pp above the persona-aligned target
+                # trims into target ± 3pp (e.g. Visa 65% on a 25-34 audience
+                # whose bench is 50 → re-jitters to 47-53).
+                ('CREDIT PROVIDER', 'VISA'),
+                ('CREDIT PROVIDER', 'MASTERCARD'),
+                ('CREDIT PROVIDER', 'AMERICAN EXPRESS'),
+                ('CREDIT PROVIDER', 'DISCOVER CREDIT CARD'),
+                ('CREDIT PROVIDER', 'CAPITAL ONE'),
                 # 2026-05-25 (Valkyrae audit) — TELECOM Big 3 over-inflated.
                 # Subscriber share is mutually exclusive (1 primary carrier per
                 # household); when Verizon+AT&T+T-Mobile sum to >100% on a profile,
@@ -4035,12 +4097,22 @@ def apply_panel_reality_floors(df, subject, verbose=True):
             if target_band in ('segment-weighted', 'christian-friendly', 'ethnicity-weighted', 'gender-weighted'):
                 if cur >= floor - 1.0 and not two_sided:
                     continue  # already at/above floor — trust the LLM
-                if two_sided and abs(cur - floor) <= 3.0:
-                    continue  # in band
-                # tight jitter band ±1.5pp around persona target
+                # 2026-06-03 (Jenna pin-check follow-up): widened acceptance band
+                # from ±3pp to ±5pp so reasoned-high LLM values (target..target+5pp)
+                # are preserved instead of trimmed to a tight 3pp cluster. Only
+                # clearly-defective values (>5pp above target) get overridden.
+                if two_sided and abs(cur - floor) <= 5.0:
+                    continue  # in trust band — LLM reasoning preserved
+                # 2026-06-03: widened jitter band ±1.5pp → ±3pp AND added age
+                # archetype to the salt so within-archetype variance is genuinely
+                # 5-6pp (matches real-world panel variance for these brands)
+                # instead of a 3pp soft-pin cluster. Per-profile target also
+                # varies because segment-weighted target derives from each
+                # profile's own age distribution.
+                _arch = arch  # captured from outer scope
                 target = _jitter_for(
-                    subject, brand_u, salt=f'panel-{target_band}-{cat_u}',
-                    lo=max(0.05, floor - 1.5), hi=floor + 1.5,
+                    subject, brand_u, salt=f'panel-{target_band}-{cat_u}-{_arch}',
+                    lo=max(0.05, floor - 3.0), hi=floor + 3.0,
                 )
             else:
                 if cur >= floor - 0.5:
@@ -4586,6 +4658,428 @@ def enforce_household_streaming_floor(df, subject, verbose=True):
 
 
 # ============================================================================
+# SEARCH ENGINE/AI cohort ceiling (defense-in-depth)
+# ============================================================================
+#
+# 2026-06-03 (Jenna 7-file Gemini master defect ticket): apply_panel_reality_floors
+# trims brands listed in KNOWN_OVERSHOOT_BRANDS individually, but the vet-reasoner
+# keeps generating a "rank-cascade pin" across the SEARCH ENGINE/AI cohort:
+# GOOGLE ~99%, CHAT GPT ~50/77%, GEMINI ~32.8%, COPILOT ~23.5%, BING ~18%,
+# PERPLEXITY ~14%. The 32.8% Gemini pin alone showed up across 7 unrelated files
+# (Chicago Sky, Kaitlyn Johnson, Frances Tiafoe, Zhirelle, Current, ONE, Revolut).
+#
+# This enforcer is a final safety net: for every SEARCH ENGINE/AI brand that
+# HAS a SEGMENT_BENCHMARKS entry, cap its BP at segment-weighted-target + 5pp
+# regardless of KNOWN_OVERSHOOT membership. Anything above that re-jitters
+# into target ± 1.5pp. Acts as a structural backstop so we never ship a
+# cascade pin again even if KNOWN_OVERSHOOT misses a future brand variant.
+# ============================================================================
+
+def enforce_search_engine_ai_cohort_ceiling(df, subject, verbose=True):
+    """Two-sided band for SEARCH ENGINE/AI brand BPs around the segment-
+    weighted target. Trims inflation AND lifts suppression.
+
+    Runs AFTER apply_panel_reality_floors so we catch anything that path missed.
+    Hostmap-gated implicitly: only touches rows that already exist.
+
+    2026-06-03 (Jenna pin-check follow-up): trust threshold raised +5pp → +7pp
+    so reasoned-high LLM values that survived the panel-reality enforcer are
+    KEPT. Replacement jitter widened ±1.5pp → ±3pp with age-archetype in the
+    salt so within-archetype variance is ~5-6pp (panel-realistic) instead of
+    a tight 3pp cluster.
+
+    2026-06-04 (Jenna's Aidan Gillen Gemini=0.69% suppression defect): made
+    bidirectional. Previously this enforcer ONLY trimmed values above
+    target+7pp; the apply_panel_reality_floors floor was supposed to handle
+    suppression but for SEARCH ENGINE/AI brands it silently no-op'd on some
+    paths (TBD root cause). New behavior: anything OUTSIDE [target-7, target+7]
+    re-jitters into target ± 3pp. So Gemini at 0.69% for a 55-64 archetype
+    (target ~9%) gets lifted to 6-12%, and Gemini at 33% (legacy pin) gets
+    trimmed to 17-23%. Same enforcer, both directions.
+    """
+    if df is None or len(df) == 0:
+        return df, 0
+    try:
+        bp_col, cs_col, raw_col, proj_col = _detect_cols(df)
+        sample_size = _detect_sample_size(df, bp_col, raw_col)
+    except Exception:
+        return df, 0
+
+    arch = _detect_age_archetype(df)
+    df['_col_u'] = df['Column'].astype(str).str.strip().str.upper()
+    df['_val_u'] = df['Value'].astype(str).str.strip().str.upper()
+
+    n_caps = 0
+    n_lifts = 0
+    examples = []
+    for (cat_u, brand_u), bench in SEGMENT_BENCHMARKS.items():
+        if cat_u != 'SEARCH ENGINE/AI':
+            continue
+        target = _segment_weighted_target(df, cat_u, brand_u)
+        if target is None:
+            continue
+        mask = (df['_col_u'] == cat_u) & (df['_val_u'] == brand_u)
+        for idx in df.index[mask].tolist():
+            cur = _bp(df.at[idx, bp_col])
+            # Bidirectional trust band: target ± 7pp.
+            # Anything outside re-jitters into target ± 3pp (archetype-salted).
+            if abs(cur - target) <= 7.0:
+                continue
+            new_target = _jitter_for(
+                subject, brand_u, salt=f'search-ai-band-{cat_u}-{arch}',
+                lo=max(0.05, target - 3.0), hi=target + 3.0,
+            )
+            new_target = round(new_target, 4)
+            df = _set_bp(df, idx, new_target, bp_col, cs_col, raw_col, proj_col, sample_size)
+            if cur > target:
+                n_caps += 1
+                direction = 'TRIM↓'
+            else:
+                n_lifts += 1
+                direction = 'LIFT↑'
+            if len(examples) < 8:
+                examples.append((direction, brand_u, cur, new_target, target))
+
+    df = df.drop(columns=['_col_u', '_val_u'])
+
+    total = n_caps + n_lifts
+    if verbose and total > 0:
+        print(f"   🛡️  SEARCH ENGINE/AI cohort band: {n_caps} trim(s), {n_lifts} lift(s)")
+        for d, brand_u, cur, new_v, tgt in examples:
+            print(f"      • {d} {brand_u:14s} {cur:6.2f}% → {new_v:6.2f}% (target {tgt:5.2f}%)")
+    return df, total
+
+
+# ============================================================================
+# 100K sample-size clamp re-grounding (Jenna 2026-06-04)
+# ============================================================================
+#
+# Pattern: 15% (48 of 314) of overnight profiles landed with BRAND INPUT
+# raw in the 99K-105K band, tightly clustered (Kaitlyn_Johnson 100,010 /
+# Brooke_Hyland 100,040 / Zhirelle 100,020 etc.). Real audiences would
+# show genuine variance across 1K-2M. Tight clustering at exactly ~100K
+# is a clamp artifact, not real signal.
+#
+# Root cause: BG.py's estimate_sample_size_for_unknown_brand applies a
+# DIGITAL_PANEL_TIER_ESTIMATES floor of (lo=0.01, hi=0.12) for ACTOR
+# category, meaning a niche talent with 5K real panel users gets
+# inflated to ~lo*10M = 100K. compute_noisy_sample_size then adds ±5%
+# noise, producing the 95K-105K cluster. (Values above 100K survive;
+# values below get re-lifted to 105K-145K by the wider delta band.)
+#
+# Fix: post-generation, when subject_raw is in [99K, 110K] re-ground to
+# a realistic small-niche value. Deterministic per-subject jitter:
+#   - niche (max non-subject TALENT-family BP < 50%): [3K, 12K]
+#   - mid   (50% <= max < 80%):                       [40K, 80K]
+#   - known (max >= 80%):                             leave alone
+# (the high-recognition case is consistent with real ~100K-1M audiences)
+#
+# Recompute cascades through existing recompute_raw_and_projection by
+# updating the BRAND INPUT row's raw cell. Everything else derives.
+# ============================================================================
+
+_TALENT_FAMILY_FOR_TIER = frozenset({
+    'TALENT', 'ACTOR', 'ATHLETE', 'MUSICIAN/BAND', 'MUSICIAN',
+    'HOST/PERSONALITY', 'POLITICS/ACTIVIST', 'POLITICS', 'PODCAST',
+    'NFL ATHLETE', 'NBA ATHLETE', 'MLB ATHLETE', 'NHL ATHLETE', 'SOCCER',
+    'WRITER/DIRECTOR/AUTHOR/ARTIST', 'CREATOR/INFLUENCER',
+})
+
+
+def _detect_subject_recognition_tier(df, bp_col):
+    """Return 'niche' | 'mid' | 'known' based on max non-100% BP across
+    TALENT-family categories. Crude but reliable: if the LLM couldn't
+    find any other comparable person at >50% reach, the subject is niche.
+    """
+    if df is None or len(df) == 0 or bp_col is None:
+        return 'niche'
+    col_u = df['Column'].astype(str).str.strip().str.upper()
+    fam_mask = col_u.isin(_TALENT_FAMILY_FOR_TIER)
+    max_bp = 0.0
+    for _, r in df[fam_mask].iterrows():
+        bp = _bp(r.get(bp_col))
+        if bp >= 99.0:
+            continue  # subject's own pin (or near-pin)
+        if bp > max_bp:
+            max_bp = bp
+    if max_bp >= 95.0:
+        return 'alist'   # established A-list — leave existing sample alone
+    if max_bp >= 75.0:
+        return 'known'   # recognized name with broad reach
+    if max_bp >= 50.0:
+        return 'mid'     # mid-tier visibility
+    return 'niche'       # low panel-share, often <0.1% of 10M
+
+
+def reground_clamped_sample_size(df, subject, verbose=True):
+    """Detect the ~100K clamp signature on BRAND INPUT raw and re-ground
+    to a realistic deterministic value based on subject recognition tier.
+
+    Modifies ONLY the BRAND INPUT row's raw and the SAMPLE SIZE row's raw.
+    Downstream recompute_raw_and_projection cascades the change to every
+    other Raw + Projection cell using the new sample_size.
+
+    Idempotent: skips files whose subject_raw is already outside the
+    99K-110K clamp band.
+    """
+    if df is None or len(df) == 0:
+        return df, 0
+    bp_col, cs_col, raw_col, proj_col = _detect_cols(df)
+    if bp_col is None or raw_col is None:
+        return df, 0
+
+    col_u = df['Column'].astype(str).str.strip().str.upper()
+
+    # Find BRAND INPUT row
+    bi_mask = col_u == 'BRAND INPUT'
+    if not bi_mask.any():
+        return df, 0
+    bi_idx = df.index[bi_mask][0]
+    try:
+        bi_raw = int(float(str(df.at[bi_idx, raw_col]).replace(',', '')))
+    except Exception:
+        return df, 0
+
+    # Detect clamp band — 99K-110K is the writer-side ~100K floor signature
+    if not (99_000 <= bi_raw <= 110_000):
+        return df, 0
+
+    # Choose new sample_size. By construction every file in the [99K, 110K]
+    # clamp band is niche — the writer only hit the 100K floor *because*
+    # the actual ClickHouse UID count was tiny (< 10K typically). If a
+    # subject had a real 100K+ audience, BG.py would have computed that
+    # directly and the value wouldn't show the clamp signature.
+    #
+    # "max other talent BP" was tested as a tiering signal but turned out
+    # to be misleading: it reflects audience age cohort (e.g. teens
+    # always show Taylor Swift at 70%+), not the subject's own panel
+    # reach. So we use it ONLY to gate an A-list bypass (max >= 95%
+    # implies the subject genuinely has near-universal recognition and
+    # the 100K clamp is coincidental, not artifact).
+    tier = _detect_subject_recognition_tier(df, bp_col)
+    if tier == 'alist':
+        return df, 0
+    # Range widened 2026-06-04 (Jenna's follower-count audit). Original
+    # [3K, 15K] was right for niche but undercounted talents with
+    # measurable social presence (Brooke Hyland 6.5M IG followers landed
+    # at 9.8K). [8K, 45K] matches the new BG.py boost output for the
+    # 2K-20K UID-count bucket (which is where 100K-clamp files live).
+    # _jitter_for spreads subjects deterministically across the full
+    # range from the subject hash, so no two profiles collapse to
+    # within ~3% of each other.
+    lo, hi = 8_000.0, 45_000.0
+
+    new_size = int(round(_jitter_for(
+        subject, 'sample-size', salt='reground-niche',
+        lo=lo, hi=hi,
+    )))
+    new_size = max(int(lo), min(int(hi), new_size))
+
+    # Update BRAND INPUT raw (sample_size by definition since BP=100)
+    df.at[bi_idx, raw_col] = new_size
+    if proj_col is not None:
+        df.at[bi_idx, proj_col] = int(round((new_size / 10_000_000.0) * US_POP))
+
+    # Update SAMPLE SIZE row raw (typically ~99% of sample_size; some files
+    # have the actual UID count here, which is slightly smaller). Preserve
+    # its BP and recompute raw = BP/100 * new_size.
+    ss_mask = col_u == 'SAMPLE SIZE'
+    if ss_mask.any():
+        ss_idx = df.index[ss_mask][0]
+        ss_bp = _bp(df.at[ss_idx, bp_col])
+        if ss_bp > 0 and ss_bp <= 100:
+            new_ss_raw = int(round(ss_bp / 100.0 * new_size))
+            df.at[ss_idx, raw_col] = new_ss_raw
+            if proj_col is not None:
+                df.at[ss_idx, proj_col] = int(round(
+                    (new_ss_raw / 10_000_000.0) * US_POP))
+
+    if verbose:
+        share_pct = (new_size / 10_000_000.0) * 100.0
+        print(f"   📏 sample-size re-ground (niche, tier-hint={tier}): "
+              f"{bi_raw:,} → {new_size:,} "
+              f"({share_pct:.4f}% of 10M panel; "
+              f"downstream Raw/Proj recompute will cascade)")
+    return df, 1
+
+
+# ============================================================================
+# Exact-duplicate row collapse + partial-name de-pin (Jenna 2026-06-04)
+# ============================================================================
+#
+# Defect class observed on Adele_Exarchopoulos_06_04_2026_08_01.csv:
+#
+#   [TALENT]         Adele                100.0000%  raw=100540   ← dup
+#   [TALENT]         Adele                100.0000%  raw=100540   ← dup
+#   [ACTOR]          ADELE EXARCHOPOULOS  100.0000%  raw=100540   (correct subject)
+#   [MUSICIAN/BAND]  Adele                100.0000%  raw=100540   ← name collision
+#
+# Two root causes:
+#   1. The writer emits the same (Column, Value) row twice when a category
+#      receives both a "subject auto-promotion" entry AND a separate LLM-
+#      reasoned entry that happens to collapse to the same Value after
+#      normalization. We collapse identical (Column, Value-upper, BP) trios
+#      to a single row.
+#   2. The writer also pins ANY row whose Value matches a token of the
+#      subject's canonical name to 100% with raw == subject_raw. For
+#      "ADELE EXARCHOPOULOS" the lone-token "Adele" gets pinned across
+#      ACTOR / TALENT / MUSICIAN/BAND, which conflates the actress with
+#      the unrelated pop singer. We detect these partial-token pins and
+#      demote to a deterministic in-band value (TALENT family → MAX of
+#      OTHER subject rows in same category × 0.45; MUSICIAN/BAND for a
+#      non-musician subject → jittered [12-28]% based on subject hash).
+#
+# Idempotent — only fires on rows currently at 100% AND raw matches subject
+# raw (the writer's pin signature) AND Value is a strict partial-token
+# match of the subject canonical (not full).
+# ============================================================================
+
+def _subject_canonical_tokens(subject):
+    """Return (canonical_upper, tokens_set, full_form_upper)."""
+    if not subject:
+        return '', set(), ''
+    # Normalize: 'Adele Exarchopoulos' → 'ADELE EXARCHOPOULOS'
+    # Also 'ADELE~EXARCHOPOULOS' (BG.py canonical form with tilde) → split on ~
+    s = str(subject).upper().strip()
+    s_spaced = s.replace('~', ' ')
+    full = _re.sub(r'\s+', ' ', s_spaced).strip()
+    toks = {t for t in _re.split(r'[\s/&,_\-]+', full) if t and len(t) >= 3}
+    return s, toks, full
+
+
+def dedup_and_depin_subject_substrings(df, subject, verbose=True):
+    """
+    Two-stage cleanup:
+      stage 1: collapse exact-duplicate (Column, Value-upper, BP) rows
+      stage 2: demote partial-token 100%-pinned cross-category rows
+
+    Returns (df, n_changes).
+    """
+    if df is None or len(df) == 0:
+        return df, 0
+    try:
+        bp_col, cs_col, raw_col, proj_col = _detect_cols(df)
+        sample_size = _detect_sample_size(df, bp_col, raw_col)
+    except Exception:
+        return df, 0
+    if bp_col is None:
+        return df, 0
+
+    subj_canonical, subj_tokens, subj_full = _subject_canonical_tokens(subject)
+
+    df = df.reset_index(drop=True)
+    df['_col_u'] = df['Column'].astype(str).str.strip().str.upper()
+    df['_val_u'] = df['Value'].astype(str).str.strip().str.upper()
+
+    # -- Stage 1: drop exact-duplicate (Column, Value-upper, BP) rows --
+    # Keep the FIRST occurrence; drop subsequent duplicates within the same
+    # category. We compare on Column + Value-upper only; if BP differs, we
+    # keep the row with the higher BP (the "more informative" one).
+    df['_bp_v'] = df[bp_col].apply(_bp)
+    df_sorted = df.sort_values(['_col_u', '_val_u', '_bp_v'], ascending=[True, True, False])
+    dup_mask = df_sorted.duplicated(subset=['_col_u', '_val_u'], keep='first')
+    n_dups_dropped = int(dup_mask.sum())
+    dup_examples = []
+    if n_dups_dropped > 0:
+        for idx in df_sorted.index[dup_mask].tolist()[:6]:
+            dup_examples.append((df.at[idx, '_col_u'], df.at[idx, '_val_u'],
+                                 df.at[idx, '_bp_v']))
+        df = df_sorted[~dup_mask].sort_index().reset_index(drop=True)
+
+    # -- Stage 2: de-pin partial-token 100% subject substrings --
+    # Find rows that look like writer-emitted subject pins: BP == 100,
+    # raw == subject_raw, but Value is a strict subset of subject tokens
+    # (not full canonical, not the full multi-token subject).
+    n_depinned = 0
+    depin_examples = []
+    if len(subj_tokens) >= 2 and subj_full:
+        # Detect subject's raw — find the BRAND INPUT row's raw value
+        subj_raw = None
+        for idx in df.index:
+            if df.at[idx, '_col_u'] == 'BRAND INPUT' and raw_col is not None:
+                try:
+                    subj_raw = int(float(df.at[idx, raw_col]))
+                    break
+                except Exception:
+                    pass
+
+        for idx in df.index:
+            cat_u = df.at[idx, '_col_u']
+            val_u = df.at[idx, '_val_u']
+            bp_v = df.at[idx, '_bp_v']
+            if cat_u in ('BRAND INPUT', 'SAMPLE SIZE'):
+                continue
+            if abs(bp_v - 100.0) > 0.01:
+                continue  # not a 100% pin
+            # Is Value a strict partial-token match of subject?
+            val_toks = {t for t in _re.split(r'[\s/&,_\-]+', val_u) if t and len(t) >= 3}
+            if not val_toks:
+                continue
+            # Full match (anywhere) → legitimate subject row, leave alone
+            if val_u == subj_full or val_u == subj_canonical:
+                continue
+            if subj_full.replace(' ', '') == val_u.replace(' ', ''):
+                continue
+            if subj_canonical.replace('~', '') == val_u.replace(' ', '').replace('~', ''):
+                continue
+            # Partial: every token of Value is in subject_tokens, BUT
+            # Value is missing at least one subject token (so it's a proper subset)
+            if not val_toks.issubset(subj_tokens):
+                continue
+            if len(val_toks) >= len(subj_tokens):
+                continue  # not strictly partial
+            # Raw-match check: only de-pin when row's raw is essentially the
+            # subject's raw (writer's pin signature). Use a 0.5% tolerance
+            # because earlier enforcers (e.g. _renormalize_category in
+            # apply_panel_reality_floors) can shift raw by a few units when
+            # they recompute BP→raw integers.
+            if subj_raw is not None and raw_col is not None and subj_raw > 0:
+                try:
+                    row_raw = int(float(df.at[idx, raw_col]))
+                except Exception:
+                    row_raw = None
+                if row_raw is None:
+                    continue
+                rel_diff = abs(row_raw - subj_raw) / float(subj_raw)
+                if rel_diff > 0.005:  # >0.5% off — not a subject pin
+                    continue
+            # DE-PIN: demote to a deterministic per-(subject, cat, val) jittered value.
+            # MUSICIAN/BAND for a non-musician subject → 12-28% range.
+            # TALENT / ACTOR for a partial name → 8-18% range (less famous to
+            # this audience than the subject).
+            # Any other cat → 10-22% range.
+            if cat_u == 'MUSICIAN/BAND':
+                lo, hi = 12.0, 28.0
+            elif cat_u in ('TALENT', 'ACTOR'):
+                lo, hi = 8.0, 18.0
+            else:
+                lo, hi = 10.0, 22.0
+            new_v = _jitter_for(
+                subject, val_u, salt=f'depin-{cat_u}',
+                lo=lo, hi=hi,
+            )
+            new_v = round(new_v, 4)
+            df = _set_bp(df, idx, new_v, bp_col, cs_col, raw_col, proj_col, sample_size)
+            n_depinned += 1
+            if len(depin_examples) < 8:
+                depin_examples.append((cat_u, val_u, 100.0, new_v))
+
+    df = df.drop(columns=['_col_u', '_val_u', '_bp_v'], errors='ignore')
+
+    total = n_dups_dropped + n_depinned
+    if verbose and total > 0:
+        if n_dups_dropped > 0:
+            print(f"   🧹 collapsed {n_dups_dropped} exact-duplicate row(s)")
+            for c, v, b in dup_examples:
+                print(f"      • [{c}] {v}  (bp {b:.2f}%)")
+        if n_depinned > 0:
+            print(f"   🪪 de-pinned {n_depinned} partial-name subject substring(s)")
+            for c, v, old, new in depin_examples:
+                print(f"      • [{c}] {v}: {old:.2f}% → {new:.4f}%")
+    return df, total
+
+
+# ============================================================================
 # Convenience wrapper
 # ============================================================================
 
@@ -4621,6 +5115,30 @@ def run_all_enforcers(df, subject, brand_category=None, verbose=True):
         total += n
     except Exception as e:
         print(f"   ⚠️ enforcer apply_panel_reality_floors failed: {e}")
+    # 2026-06-03 (Jenna 7-file Gemini master defect): defense-in-depth ceiling
+    # for SEARCH ENGINE/AI cohort. apply_panel_reality_floors only trims brands
+    # explicitly listed in KNOWN_OVERSHOOT_BRANDS; if the LLM invents a NEW
+    # rank-cascade pin (100/50/33/23/18/14 across Google/ChatGPT/Gemini/Copilot/
+    # Bing/Perplexity) for any other category we haven't whitelisted, this
+    # catches it.
+    # 2026-06-04 (Jenna Aidan Gillen Gemini=0.69%): now BIDIRECTIONAL —
+    # also lifts suppressed values like Gemini=0.69% on a 55-64 archetype
+    # back into the persona-aligned band.
+    try:
+        df, n = enforce_search_engine_ai_cohort_ceiling(df, subject, verbose=verbose)
+        total += n
+    except Exception as e:
+        print(f"   ⚠️ enforcer enforce_search_engine_ai_cohort_ceiling failed: {e}")
+    # 2026-06-04 (Jenna Adele Exarchopoulos defect): collapse exact-duplicate
+    # rows AND demote partial-token 100% subject-substring pins (e.g. lone
+    # "Adele" pinned to 100% across TALENT/ACTOR/MUSICIAN/BAND when the
+    # subject is "Adele Exarchopoulos"). Runs LATE so per-row enforcers
+    # have already done their work; this is final-pass janitorial.
+    try:
+        df, n = dedup_and_depin_subject_substrings(df, subject, verbose=verbose)
+        total += n
+    except Exception as e:
+        print(f"   ⚠️ enforcer dedup_and_depin_subject_substrings failed: {e}")
     # 2026-05-29: Household-streaming floor — brand-profile-only rescue
     # for Netflix/Disney+/HBO Max/etc. that the GPT-4o vet re-reasoner
     # over-suppresses with "active demo less couch-bound" archetype bias.
@@ -4784,6 +5302,15 @@ def run_all_enforcers(df, subject, brand_category=None, verbose=True):
         total += n
     except Exception as e:
         print(f"   ⚠️ enforcer dejitter_x5x0 (mop-up) failed: {e}")
+    # 2026-06-04 (Jenna sample-size clamp defect): detect 99K-110K clamp
+    # signature on BRAND INPUT raw and re-ground niche/mid subjects to a
+    # realistic small panel-share before final Raw/Proj recompute below.
+    # The recompute step picks up the new BRAND INPUT raw automatically.
+    try:
+        df, n = reground_clamped_sample_size(df, subject, verbose=verbose)
+        total += n
+    except Exception as e:
+        print(f"   ⚠️ enforcer reground_clamped_sample_size failed: {e}")
     # 2026-05-27 (D-Proj): VERY LAST -- recompute Raw + Proj from final BP.
     # Every previous enforcer that touched BP may have left stale Raw/Proj
     # cells. This pass canonicalizes the math:

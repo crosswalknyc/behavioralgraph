@@ -89,10 +89,13 @@ def _synthetic_cube() -> dict:
     suppressed_cell = {**big_cell, 'uid_count': 42}
 
     cube = {
-        'version':       1,
+        'version':       2,
         'computed_at':   '2026-06-03T08:01:00+00:00',
         'lookback_days': 30,
         'min_cell_size': 100,
+        'us_panel_total': 33_115_047,
+        'us_gen_pop':     329_900_000,
+        'gen_pop_factor': 9.9622,
         'all_parties':   blue_iq.VALID_PARTIES,
         'all_states':    ['California', 'Texas', 'New York', 'Florida'],
         'all_dmas':      ['Los Angeles', 'New York', 'Chicago', 'Houston'],
@@ -111,6 +114,27 @@ def _synthetic_cube() -> dict:
              'sample_queries': ['voter registration'], 'trend': 0.0},
             {'bucket': 'Healthcare', 'count': 2200, 'share': 0.11,
              'sample_queries': ['medicare enrollment 2026'], 'trend': 0.0},
+        ],
+        # v2: issue x voter journey cross — what voters do after a touchpoint,
+        # bucketed by which policy issue they were searching for.
+        'issue_journey_cross': [
+            {'bucket': 'Economy & Cost of Living', 'total_panelists': 1800,
+             'destinations': [
+                {'destination': 'news_dive',         'panelists': 1200, 'share': 0.67},
+                {'destination': 'candidate_site',    'panelists': 200,  'share': 0.11},
+                {'destination': 'search',            'panelists': 180,  'share': 0.10},
+                {'destination': 'donation',          'panelists': 60,   'share': 0.03},
+                {'destination': 'other',             'panelists': 160,  'share': 0.09},
+             ],
+             'top_terms': ['gas prices near me', 'gas prices']},
+            {'bucket': 'Elections & Voting', 'total_panelists': 900,
+             'destinations': [
+                {'destination': 'voting_info',       'panelists': 540, 'share': 0.60},
+                {'destination': 'candidate_search',  'panelists': 180, 'share': 0.20},
+                {'destination': 'news_dive',         'panelists': 100, 'share': 0.11},
+                {'destination': 'other',             'panelists': 80,  'share': 0.09},
+             ],
+             'top_terms': ['voter registration']},
         ],
     }
     return cube
@@ -197,6 +221,16 @@ def main():
     _assert(len(r['cards']['top_articles']) > 0, 'articles blended in')
     titles = [a.get('title') for a in r['cards']['top_articles']]
     _assert(any('SNAP' in (t or '') for t in titles), 'GDELT title surfaced')
+    # Gen Pop projection + Issue x Journey cross (cube v2)
+    _assert(r.get('gen_pop_factor', 0) > 0, 'gen_pop_factor present')
+    _assert(r.get('panel_projected', 0) > r['panel_size'], 'panel_projected > raw panel_size')
+    cross = r['cards'].get('issue_journey_cross') or []
+    _assert(len(cross) >= 2, 'issue_journey_cross emitted (>= 2 buckets)')
+    _assert(any(b.get('bucket') == 'Elections & Voting' for b in cross),
+            'Elections & Voting present in cross card')
+    voting = next((b for b in cross if b['bucket'] == 'Elections & Voting'), None)
+    _assert(voting and voting['destinations'][0]['destination'] == 'voting_info',
+            "Elections & Voting's top destination = voting_info (matches creative-play map)")
 
     # ── Test 2: Democrat / California ────────────────────────────────────
     print("\nTest 2: Democrat / California")

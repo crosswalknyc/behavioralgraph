@@ -645,6 +645,20 @@ def _q_search_queries(conn, start: str, top_k: int) -> tuple[dict[str, list[dict
     # the heavy `ANY INNER JOIN reference.search_text_mapping` join that
     # the newer CH analyzer rejects (`INVALID_JOIN_ON_EXPRESSION` on
     # non-equality JOIN conditions).
+    # MEMORY: on the 30d window this query previously OOM'd at 80 GiB
+    # because extractURLParameter + decodeURLComponent + lower were
+    # evaluated on every row of clickstream_final (~hundreds of millions
+    # of rows). The optimization here is:
+    #   1. PREWHERE on `URL LIKE '%?q=%' OR URL LIKE '%&q=%'` — kills
+    #      90%+ of rows BEFORE any extraction.
+    #   2. Move the extract into the SELECT clause only after the
+    #      INNER JOIN to user_data_sanitized has narrowed the row set
+    #      to US-only panelists (the WHERE filters apply to UID-joined
+    #      rows only).
+    #   3. The ASCII / foreign-token filters move into the inner CTE
+    #      so they prune before GROUPING SETS aggregation rather than
+    #      after — also reduces memory pressure on the aggregation
+    #      hash table.
     cur.execute(f"""
         WITH hits AS (
             SELECT
@@ -656,25 +670,29 @@ def _q_search_queries(conn, start: str, top_k: int) -> tuple[dict[str, list[dict
             FROM clickstream.clickstream_final AS cs
             INNER JOIN userdata.user_data_sanitized AS uds ON uds.UID = cs.UID
             LEFT  JOIN blue_iq_party                AS bp  ON bp.uid  = cs.UID
-            WHERE cs.DELIVERED >= toDate(%(start)s)
+            PREWHERE cs.DELIVERED >= toDate(%(start)s)
+                 AND (position(cs.URL, '?q=') > 0 OR position(cs.URL, '&q=') > 0)
+            WHERE {US_COUNTRY_FILTER}
               AND length(extractURLParameter(cs.URL, 'q')) BETWEEN 6 AND 200
-              AND {US_COUNTRY_FILTER}
+        ),
+        hits_filtered AS (
+            SELECT party, state, dma, uid, term FROM hits
+            WHERE term != ''
+              -- ASCII-only: reject Cyrillic, '+uk' UK-localized terms, Devanagari, etc.
+              AND match(term, '^[\\x20-\\x7e]+$')
+              AND positionCaseInsensitive(term, '+uk') = 0
+              AND positionCaseInsensitive(term, '+india') = 0
+              AND positionCaseInsensitive(term, '+canada') = 0
+              AND positionCaseInsensitive(term, '+australia') = 0
+              AND positionCaseInsensitive(term, '.gov.in') = 0
+              AND positionCaseInsensitive(term, '.gov.uk') = 0
+              AND positionCaseInsensitive(term, '.co.uk') = 0
+              AND positionCaseInsensitive(term, 'infonavit') = 0
         )
         SELECT party, state, dma, term,
                grouping(party) AS gp, grouping(state) AS gs, grouping(dma) AS gd,
                uniqExact(uid) AS panelists
-        FROM hits
-        WHERE term != ''
-          -- ASCII-only: reject Cyrillic, '+uk' UK-localized terms, Devanagari, etc.
-          AND match(term, '^[\\x20-\\x7e]+$')
-          AND positionCaseInsensitive(term, '+uk') = 0
-          AND positionCaseInsensitive(term, '+india') = 0
-          AND positionCaseInsensitive(term, '+canada') = 0
-          AND positionCaseInsensitive(term, '+australia') = 0
-          AND positionCaseInsensitive(term, '.gov.in') = 0
-          AND positionCaseInsensitive(term, '.gov.uk') = 0
-          AND positionCaseInsensitive(term, '.co.uk') = 0
-          AND positionCaseInsensitive(term, 'infonavit') = 0
+        FROM hits_filtered
         GROUP BY GROUPING SETS (
             (party, state, term),
             (party, dma, term),
@@ -954,12 +972,15 @@ def _q_issue_journey_cross(conn, start: str) -> dict[str, dict[str, int]]:
         ),
         touchpoint_uids AS (SELECT DISTINCT uid FROM touchpoints),
         -- Per-panelist search terms (US-only via touchpoint set).
+        -- PREWHERE on '?q=' / '&q=' substring kills 90%+ of clickstream
+        -- rows before extractURLParameter runs (memory-safety for 30d).
         panelist_terms AS (
             SELECT cs.UID AS uid,
                    lower(decodeURLComponent(extractURLParameter(cs.URL, 'q'))) AS term
             FROM clickstream.clickstream_final AS cs
-            WHERE cs.DELIVERED >= toDate(%(start)s)
-              AND cs.UID IN (SELECT uid FROM touchpoint_uids)
+            PREWHERE cs.DELIVERED >= toDate(%(start)s)
+                 AND (position(cs.URL, '?q=') > 0 OR position(cs.URL, '&q=') > 0)
+            WHERE cs.UID IN (SELECT uid FROM touchpoint_uids)
               AND length(extractURLParameter(cs.URL, 'q')) BETWEEN 6 AND 200
         ),
         -- Same destination categorization as _q_voter_journey, scoped to
