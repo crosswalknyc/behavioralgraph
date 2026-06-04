@@ -900,21 +900,33 @@ def _q_voter_journey(conn, start: str) -> dict[str, list[dict]]:
 
     # Per-UID: find the earliest visit STRICTLY AFTER that UID's tp_ts.
     # Rows are already sorted by (UID, VISIT_TS) thanks to the ORDER BY.
+    # Stream in 100K-row chunks to bound Python RSS — `fetchall()` would
+    # otherwise hold ALL post-touchpoint rows in memory simultaneously,
+    # which on the 7d × 10K touchpoint UID scale was triggering silent
+    # macOS process termination under memory pressure.
     next_dom_per_uid: dict[str, str] = {}
     current_uid = None
     current_tp_ts = None
-    for row in cur.fetchall():
-        uid = str(row[0])
-        ts = row[1]
-        dom = (row[2] or '').strip().lower()
-        if uid != current_uid:
-            current_uid = uid
-            current_tp_ts = tp_ts_map.get(uid)
-        if uid in next_dom_per_uid:
-            continue  # already found this UID's next visit
-        if current_tp_ts is None or ts <= current_tp_ts:
-            continue
-        next_dom_per_uid[uid] = dom
+    s2_rows = 0
+    while True:
+        chunk = cur.fetchmany(100_000)
+        if not chunk:
+            break
+        for row in chunk:
+            s2_rows += 1
+            uid = str(row[0])
+            ts = row[1]
+            dom = (row[2] or '').strip().lower()
+            if uid != current_uid:
+                current_uid = uid
+                current_tp_ts = tp_ts_map.get(uid)
+            if uid in next_dom_per_uid:
+                continue
+            if current_tp_ts is None or ts <= current_tp_ts:
+                continue
+            next_dom_per_uid[uid] = dom
+    log.info("    voter journey stage 2: %d rows streamed \u2192 %d UIDs with next-visit",
+             s2_rows, len(next_dom_per_uid))
 
     # Bucketize destinations.
     def _destination(dom: str) -> str:
@@ -1007,6 +1019,16 @@ def _q_issue_journey_cross(conn, start: str) -> dict[str, dict[str, int]]:
 
     # STAGE 2: For each panelist, find their next-visit destination
     # (same Python asof-join logic as _q_voter_journey).
+    #
+    # MEMORY: with 10K+ touchpoint UIDs and a 7d window, fetching
+    # ALL post-touchpoint rows × ORDER BY in CH can SIGKILL macOS
+    # under memory pressure (we got silent process termination on
+    # one run). Streaming the cursor with a hard row cap keeps RSS
+    # bounded. The cap is a safety belt; in practice each UID has
+    # <50 events on average, so 500K rows = 10K UIDs × 50 events
+    # is the realistic ceiling.
+    log.info("    cross stage 2: fetching next-visit-per-UID stream ...")
+    t_s2 = time.time()
     cur.execute("""
         SELECT cf.UID AS uid, cf.VISIT_TS AS ts, lower(cf.DOMAIN) AS dom
         FROM clickstream.clickstream_final AS cf
@@ -1017,18 +1039,26 @@ def _q_issue_journey_cross(conn, start: str) -> dict[str, dict[str, int]]:
     next_dom_per_uid: dict[str, str] = {}
     current_uid = None
     current_tp_ts = None
-    for row in cur.fetchall():
-        uid = str(row[0])
-        ts = row[1]
-        dom = (row[2] or '').strip().lower()
-        if uid != current_uid:
-            current_uid = uid
-            current_tp_ts = tp_ts_map.get(uid)
-        if uid in next_dom_per_uid:
-            continue
-        if current_tp_ts is None or ts <= current_tp_ts:
-            continue
-        next_dom_per_uid[uid] = dom
+    s2_rows = 0
+    while True:
+        chunk = cur.fetchmany(100_000)
+        if not chunk:
+            break
+        for row in chunk:
+            s2_rows += 1
+            uid = str(row[0])
+            ts = row[1]
+            dom = (row[2] or '').strip().lower()
+            if uid != current_uid:
+                current_uid = uid
+                current_tp_ts = tp_ts_map.get(uid)
+            if uid in next_dom_per_uid:
+                continue
+            if current_tp_ts is None or ts <= current_tp_ts:
+                continue
+            next_dom_per_uid[uid] = dom
+    log.info("    cross stage 2: %d rows streamed \u2192 %d UIDs with next-visit (%.1fs)",
+             s2_rows, len(next_dom_per_uid), time.time() - t_s2)
 
     def _destination(dom: str) -> str:
         if not dom:                   return 'abandoned'
@@ -1044,6 +1074,8 @@ def _q_issue_journey_cross(conn, start: str) -> dict[str, dict[str, int]]:
     # PREWHERE on DOMAIN IN (search_engine_set) keeps the row set
     # small. Aggregate (term, panelists) where panelist is in tp_uids,
     # then map to destinations via next_dom_per_uid in Python.
+    log.info("    cross stage 3: fetching touchpoint-panelist search terms ...")
+    t_s3 = time.time()
     cur.execute("""
         SELECT cs.UID AS uid,
                lower(decodeURLComponent(extractURLParameter(cs.URL, 'q'))) AS term
@@ -1067,16 +1099,24 @@ def _q_issue_journey_cross(conn, start: str) -> dict[str, dict[str, int]]:
         'tp_uids':     tp_uids,
         'search_doms': SEARCH_QUERY_DOMAINS,
     })
-
-    # Build (term, destination) -> uniqExact(uid) in Python.
+    # Build (term, destination) -> uniqExact(uid) in Python, streaming
+    # the cursor in chunks to bound memory.
     term_uids: dict[tuple[str, str], set[str]] = defaultdict(set)
-    for row in cur.fetchall():
-        uid = str(row[0])
-        term = (row[1] or '').strip().lower()
-        if not term:
-            continue
-        dest = _destination(next_dom_per_uid.get(uid, ''))
-        term_uids[(term, dest)].add(uid)
+    s3_rows = 0
+    while True:
+        chunk = cur.fetchmany(100_000)
+        if not chunk:
+            break
+        for row in chunk:
+            s3_rows += 1
+            uid = str(row[0])
+            term = (row[1] or '').strip().lower()
+            if not term:
+                continue
+            dest = _destination(next_dom_per_uid.get(uid, ''))
+            term_uids[(term, dest)].add(uid)
+    log.info("    cross stage 3: %d search rows streamed \u2192 %d (term,dest) cells (%.1fs)",
+             s3_rows, len(term_uids), time.time() - t_s3)
 
     out: dict[str, dict[str, int]] = defaultdict(lambda: defaultdict(int))
     for (term, dest), uids in term_uids.items():
