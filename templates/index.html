@@ -21559,26 +21559,12 @@
             return '';
         }
 
-        function getDominantAgeRangeLabel(parsed) {
-            const age = parsed?.demographics?.age || {};
-            const entries = Object.entries(age).filter(([k, v]) => v > 0 && v < 99.99 && k);
-            if (!entries.length) return '';
-            const top = entries.sort((a, b) => b[1] - a[1])[0];
-            return (typeof getAgeDisplayLabel === 'function') ? getAgeDisplayLabel(top[0]) : top[0];
-        }
-
         function updateDashProfileHeaderMeta(dateRange, parsed) {
             const el = document.getElementById('dashDateRangeHeader');
             if (!el) return;
             const resolvedRange = dateRange || parsed?.dateRange || '';
-            const lines = [];
-            if (resolvedRange) lines.push('Date Range: ' + resolvedRange);
-            const ageLabel = getDominantAgeRangeLabel(parsed);
-            if (ageLabel) lines.push('Age Range: ' + ageLabel);
-            if (lines.length) {
-                el.innerHTML = lines.map(function(line) {
-                    return typeof escapeHtml === 'function' ? escapeHtml(line) : line;
-                }).join('<br>');
+            if (resolvedRange) {
+                el.textContent = 'Date Range: ' + resolvedRange;
                 el.style.display = 'block';
             } else {
                 el.textContent = '';
