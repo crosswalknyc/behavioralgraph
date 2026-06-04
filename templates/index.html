@@ -29071,21 +29071,28 @@
                     var totalHrsHigh = (kpis.projected_range_high_revenue_usd != null)
                         ? Math.round(Number(kpis.projected_range_high_revenue_usd))
                         : null;
+                    // For streaming platforms, the unit of measurement is the
+                    // ACCOUNT / household, not the individual viewer (Netflix,
+                    // Disney+, Max etc. all track account-level signed-in
+                    // sessions). Label tiles accordingly.
+                    var repeatAccts = (kpis.tv_show_repeat_accounts != null)
+                        ? kpis.tv_show_repeat_accounts
+                        : kpis.confirmed_fandango_purchases;
                     k = [
-                        ['Confirmed Viewers (to date)',
+                        ['Confirmed Accounts (to date)',
                             fmtViewers(kpis.confirmed_digital_purchases),
                             confSub],
                         ['Confirmed Watch Hours',
                             fmtViewers(confirmedHrs),
-                            (kpis.tv_show_avg_minutes_per_viewer ? '~' + kpis.tv_show_avg_minutes_per_viewer + ' min / viewer' : '')],
-                        ['Repeat Viewers (5+ eps)',
-                            fmtViewers(kpis.confirmed_fandango_purchases),
+                            (kpis.tv_show_avg_minutes_per_viewer ? '~' + kpis.tv_show_avg_minutes_per_viewer + ' min / account' : '')],
+                        ['Repeat Accounts (5+ eps)',
+                            fmtViewers(repeatAccts),
                             (repeatPct != null ? repeatPct + '% of confirmed' : '')],
-                        ['Premiere-Week Viewers',
+                        ['Premiere-Week Accounts',
                             fmtViewers(kpis.projected_opening_weekend_tickets || kpis.projected_total_tickets),
                             rangeSubTv(kpis.projected_ow_range_low_tickets, kpis.projected_ow_range_high_tickets),
                             'lime'],
-                        ['30-Day Unique Viewers (mid)',
+                        ['30-Day Unique Accounts (mid)',
                             fmtViewers(kpis.projected_total_tickets),
                             rangeSubTv(kpis.projected_range_low_tickets, kpis.projected_range_high_tickets),
                             'cyan'],
@@ -29096,7 +29103,7 @@
                     // Optional: full-lifecycle tile if data present and
                     // different from 30-day projection
                     if (lifecycleMid != null && lifecycleMid > 0) {
-                        k.push(['Full Lifecycle Viewers',
+                        k.push(['Full Lifecycle Accounts',
                                 fmtViewers(lifecycleMid),
                                 rangeSubTv(kpis.tv_show_lifecycle_viewers_low, kpis.tv_show_lifecycle_viewers_high)]);
                     }
@@ -29106,7 +29113,7 @@
                     if (kpis.marketing_touched_pct != null) {
                         var mtPct = Number(kpis.marketing_touched_pct);
                         var mtSub = (kpis.marketing_touched_viewers != null)
-                            ? _jiqFmt(kpis.marketing_touched_viewers) + ' viewers reached'
+                            ? _jiqFmt(kpis.marketing_touched_viewers) + ' accounts reached'
                             : 'any pre-launch marketing exposure';
                         k.push(['Marketing-Touched %',
                                 (isNaN(mtPct) ? '—' : mtPct.toFixed(1) + '%'),
