@@ -18537,13 +18537,7 @@
                             <div style="margin-bottom: 0.6rem;"><code>TDL = 100 × sum(mbp_hits) / sum(raw_mentions)</code></div>
                         </div>
 
-                        <!-- BVP formula explainer (toggled from the BVP column header ⓘ) -->
-                        <div id="iqRankerBVPExplainer-{{ m.key }}" class="iqr-explain" role="region" aria-label="BVP scoring methodology">
-                            <button type="button" class="iqr-explain-close" aria-label="Close" onclick="toggleIQRankerBVPExplainer('{{ m.key }}')">✕</button>
-                            <h5>🎬 BVP — Pre-release Buzz vs Performance w/o Engagement</h5>
-                            <div style="margin-bottom: 0.55rem;">Of the panel's digital touchpoints that mentioned this profile in the selected window, the share who did not engage with the talent but watched their content on a streaming or VOD platform.</div>
-                            <div style="margin-bottom: 0.6rem;"><code>BVP = 100 × sum(bvp_hits) / sum(raw_mentions)</code></div>
-                        </div>
+                        <!-- BVP removed from the dashboard. -->
 
                         <div id="iqRankerSubTabs-{{ m.key }}" class="iqr-subtabs"></div>
                         <div class="iqr-toolbar">
@@ -18575,18 +18569,12 @@
                                     <th data-iq-sort="name"           data-iq-master="{{ m.key }}" class="has-tooltip" data-tooltip="Profile name (click a row to drill down to the profile dashboard)." style="cursor: pointer;">Profile</th>
                                     <th data-iq-sort="mentions"       data-iq-master="{{ m.key }}" class="has-tooltip" data-tooltip="Total mentions projected to US gen pop (raw × 329.9M / panel size that day, summed across the window)." style="cursor: pointer; text-align: right;">Mentions</th>
                                     <th data-iq-sort="delta_mentions" data-iq-master="{{ m.key }}" class="has-tooltip" data-tooltip="Mentions change vs the equal-length window immediately before this one." style="cursor: pointer; text-align: right;">Δ Mentions</th>
-                                    <th data-iq-sort="evc_score"      data-iq-master="{{ m.key }}" style="cursor: pointer; text-align: right;">
-                                        <span class="iqr-th-with-info">EVC<button type="button" class="iqr-th-info" title="Show EVC methodology" aria-label="Show EVC methodology" onclick="event.stopPropagation(); toggleIQRankerEVCExplainer('{{ m.key }}')">i</button></span>
+                                    <th data-iq-sort="delta_evc"      data-iq-master="{{ m.key }}" style="cursor: pointer; text-align: right;">
+                                        <span class="iqr-th-with-info">Δ EVC<button type="button" class="iqr-th-info" title="Show EVC methodology" aria-label="Show EVC methodology" onclick="event.stopPropagation(); toggleIQRankerEVCExplainer('{{ m.key }}')">i</button></span>
                                     </th>
-                                    <th data-iq-sort="delta_evc"      data-iq-master="{{ m.key }}" class="has-tooltip" data-tooltip="EVC change vs the equal-length window immediately before this one. Measured in percentage points (pp): if EVC was 30.0% last week and 32.5% this week, Δ EVC = +2.5pp. '—' means the prior window has no mention data for this profile (likely a new profile or missing backfill)." style="cursor: pointer; text-align: right;">Δ EVC</th>
-                                    <th data-iq-sort="tdl_score"      data-iq-master="{{ m.key }}" style="cursor: pointer; text-align: right;">
-                                        <span class="iqr-th-with-info">TDL<button type="button" class="iqr-th-info" title="Show TDL methodology — Talent Driven Lift" aria-label="Show TDL methodology" onclick="event.stopPropagation(); toggleIQRankerTDLExplainer('{{ m.key }}')">i</button></span>
+                                    <th data-iq-sort="delta_tdl"      data-iq-master="{{ m.key }}" style="cursor: pointer; text-align: right;">
+                                        <span class="iqr-th-with-info">Δ TDL<button type="button" class="iqr-th-info" title="Show TDL methodology — Talent Driven Lift" aria-label="Show TDL methodology" onclick="event.stopPropagation(); toggleIQRankerTDLExplainer('{{ m.key }}')">i</button></span>
                                     </th>
-                                    <th data-iq-sort="delta_tdl"      data-iq-master="{{ m.key }}" class="has-tooltip" data-tooltip="TDL change vs the equal-length window immediately before this one. Measured in percentage points (pp): if TDL was 4.0% last week and 6.5% this week, Δ TDL = +2.5pp. '—' means the prior window has no mention data for this profile." style="cursor: pointer; text-align: right;">Δ TDL</th>
-                                    <th data-iq-sort="bvp_score"      data-iq-master="{{ m.key }}" style="cursor: pointer; text-align: right;">
-                                        <span class="iqr-th-with-info">BVP<button type="button" class="iqr-th-info" title="Show BVP methodology — Pre-release Buzz vs Performance w/o Engagement" aria-label="Show BVP methodology" onclick="event.stopPropagation(); toggleIQRankerBVPExplainer('{{ m.key }}')">i</button></span>
-                                    </th>
-                                    <th data-iq-sort="delta_bvp"      data-iq-master="{{ m.key }}" class="has-tooltip" data-tooltip="BVP change vs the equal-length window immediately before this one. Measured in percentage points (pp): if BVP was 12.0% last week and 14.5% this week, Δ BVP = +2.5pp. '—' means the prior window has no mention data for this profile." style="cursor: pointer; text-align: right;">Δ BVP</th>
                                     <th data-iq-sort="cw_iq_score"    data-iq-master="{{ m.key }}" style="cursor: pointer; text-align: right;">
                                         <span class="iqr-th-with-info">CW IQ<button type="button" class="iqr-th-info" title="Show CW IQ methodology" aria-label="Show CW IQ methodology" onclick="event.stopPropagation(); toggleIQRankerExplainer('{{ m.key }}')">i</button></span>
                                     </th>
@@ -84916,8 +84904,6 @@
                 if (cw) cw.classList.remove('open');
                 const tdl = document.getElementById('iqRankerTDLExplainer-' + master);
                 if (tdl) tdl.classList.remove('open');
-                const bvp = document.getElementById('iqRankerBVPExplainer-' + master);
-                if (bvp) bvp.classList.remove('open');
             }
         }
 
@@ -84933,26 +84919,10 @@
                 if (cw)  cw.classList.remove('open');
                 const ev  = document.getElementById('iqRankerEVCExplainer-' + master);
                 if (ev)  ev.classList.remove('open');
-                const bvp = document.getElementById('iqRankerBVPExplainer-' + master);
-                if (bvp) bvp.classList.remove('open');
             }
         }
 
-        // BVP explainer — same closing behavior.
-        function toggleIQRankerBVPExplainer(master) {
-            const el = document.getElementById('iqRankerBVPExplainer-' + master);
-            if (!el) return;
-            const opening = !el.classList.contains('open');
-            el.classList.toggle('open');
-            if (opening) {
-                const cw  = document.getElementById('iqRankerExplainer-' + master);
-                if (cw)  cw.classList.remove('open');
-                const ev  = document.getElementById('iqRankerEVCExplainer-' + master);
-                if (ev)  ev.classList.remove('open');
-                const tdl = document.getElementById('iqRankerTDLExplainer-' + master);
-                if (tdl) tdl.classList.remove('open');
-            }
-        }
+        // BVP explainer removed from the dashboard.
 
         // ────────────────────────────────────────────────────────────────
         // IQ Rankers — drill-down day-over-day chart (Chart.js)
@@ -85855,22 +85825,9 @@
                 const tip = `${mh.toLocaleString()} consumer-brand hits / ${rm.toLocaleString()} panel mentions`;
                 return `<span class="has-tooltip" data-tooltip="${tip}" style="color: ${colour};">${v.toFixed(1)}%</span>`;
             };
-            // BVP cell — Pre-release Buzz vs Performance w/o engagement,
-            // % of mention rows on a Streaming/Platform OR Movie Theater
-            // host_mapping entry. Cyan ≥30% (audience converting buzz to
-            // distribution), muted ≤5% (all talk, no channel pull).
-            const fmtBVP = (r) => {
-                const v = Number(r && r.bvp_score);
-                if (!isFinite(v)) return '<span style="color: var(--text-secondary);">—</span>';
-                const bh = Number(r.bvp_hits      || 0);
-                const rm = Number(r.raw_mentions  || 0);
-                const colour = v >= 30 ? 'var(--accent-cyan)'
-                              : v <= 5  ? 'var(--text-secondary)'
-                              : 'var(--text-primary)';
-                const tip = `${bh.toLocaleString()} platform/theater hits / ${rm.toLocaleString()} panel mentions`;
-                return `<span class="has-tooltip" data-tooltip="${tip}" style="color: ${colour};">${v.toFixed(1)}%</span>`;
-            };
-            // Δ-percent renderer for EVC / TDL / BVP. The percentages
+            // BVP cell removed from dashboard (kept comment as a marker so
+            // future grep finds the deletion if BVP is ever brought back).
+            // Δ-percent renderer for EVC / TDL. The percentages
             // themselves are already 0..100 floats so a delta is just
             // (current% - prev%) in percentage points. We surface this
             // as e.g. "+2.4pp" / "−1.1pp" so it doesn't get confused with
@@ -85920,12 +85877,8 @@
                     </td>
                     <td style="text-align: right;">${fmtNum(r.mentions)}</td>
                     <td style="text-align: right;">${fmtDelta(r.delta_mentions, 0, r.prev_raw_mentions)}</td>
-                    <td style="text-align: right;">${fmtEVC(r)}</td>
                     <td style="text-align: right;">${fmtDeltaPct(r.delta_evc, r.prev_raw_mentions)}</td>
-                    <td style="text-align: right;">${fmtTDL(r)}</td>
                     <td style="text-align: right;">${fmtDeltaPct(r.delta_tdl, r.prev_raw_mentions)}</td>
-                    <td style="text-align: right;">${fmtBVP(r)}</td>
-                    <td style="text-align: right;">${fmtDeltaPct(r.delta_bvp, r.prev_raw_mentions)}</td>
                     <td style="text-align: right;">${fmtScore(r.cw_iq_score)}</td>
                     <td style="text-align: right;">${fmtDelta(r.delta_cw_iq, 1, r.prev_raw_mentions)}</td>
                 </tr>`;
