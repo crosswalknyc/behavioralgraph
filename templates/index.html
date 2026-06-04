@@ -29078,6 +29078,11 @@
                     var repeatAccts = (kpis.tv_show_repeat_accounts != null)
                         ? kpis.tv_show_repeat_accounts
                         : kpis.confirmed_fandango_purchases;
+                    // Subtitle ranges (e.g. 'range 4.5M–7.1M') intentionally
+                    // suppressed on TV-show tiles — they cluttered the strip
+                    // without adding decision-grade info. Keep meaningful
+                    // subs (confSub = 'ep N of M as of YYYY-MM-DD', avg min
+                    // per account, repeat % of confirmed) intact.
                     k = [
                         ['Confirmed Accounts (to date)',
                             fmtViewers(kpis.confirmed_digital_purchases),
@@ -29090,22 +29095,22 @@
                             (repeatPct != null ? repeatPct + '% of confirmed' : '')],
                         ['Premiere-Week Accounts',
                             fmtViewers(kpis.projected_opening_weekend_tickets || kpis.projected_total_tickets),
-                            rangeSubTv(kpis.projected_ow_range_low_tickets, kpis.projected_ow_range_high_tickets),
+                            '',
                             'lime'],
-                        ['30-Day Unique Accounts (mid)',
+                        ['30-Day Unique Accounts',
                             fmtViewers(kpis.projected_total_tickets),
-                            rangeSubTv(kpis.projected_range_low_tickets, kpis.projected_range_high_tickets),
+                            '',
                             'cyan'],
                         ['Total Watch Hours (30-day)',
                             fmtViewers(totalHrs),
-                            rangeSubTv(totalHrsLow, totalHrsHigh, ' hrs')],
+                            ''],
                     ];
                     // Optional: full-lifecycle tile if data present and
                     // different from 30-day projection
                     if (lifecycleMid != null && lifecycleMid > 0) {
                         k.push(['Full Lifecycle Accounts',
                                 fmtViewers(lifecycleMid),
-                                rangeSubTv(kpis.tv_show_lifecycle_viewers_low, kpis.tv_show_lifecycle_viewers_high)]);
+                                '']);
                     }
                     // Marketing-Touched % — surfaces the marketing-exposure
                     // KPI prominently so viewers know what % of audience
