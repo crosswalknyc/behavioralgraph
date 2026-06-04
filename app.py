@@ -19528,6 +19528,19 @@ def list_jobs():
                     entry['bucket'] = j['bucket']
                 if 'is_svod' in j:
                     entry['is_svod'] = j['is_svod']
+                # Pass IMDB enrichment through to the frontend so the Profile IQ
+                # dashboard can render a clickable "IMDB: nm0000123" pill under
+                # the date range header. Backfilled by migration/scrape_imdb_ids.py
+                # and merged onto in-memory jobs by load_persisted_cache(). Only
+                # forward when present + truthy (skips both "never scraped" and
+                # "scraped but no person match" cases so the frontend can cleanly
+                # hide the block without a separate null check). Same source the
+                # IQ Ranker uses for its inline IMDB chip.
+                imdb_val = j.get('imdb_id')
+                if imdb_val:
+                    entry['imdb_id'] = imdb_val
+                    if j.get('imdb_label'):
+                        entry['imdb_label'] = j['imdb_label']
                 job_list.append(entry)
                 if sk:
                     seen_s3_keys.add(sk)
