@@ -68,6 +68,9 @@ LOOKBACK_DAYS = int(os.environ.get('BLUE_IQ_AGG_LOOKBACK_DAYS', '30'))
 MIN_CELL_SIZE = int(os.environ.get('BLUE_IQ_MIN_CELL_SIZE', '100'))
 TOP_K         = int(os.environ.get('BLUE_IQ_AGG_TOPK', '20'))     # top-K per card
 TOP_K_LONG    = int(os.environ.get('BLUE_IQ_AGG_TOPK_LONG', '60'))  # for politicians/articles
+# US adult population for gen-pop projection. Single source of truth; the
+# Profile IQ pipeline uses the same constant for Raw/Proj math.
+US_GEN_POP    = int(os.environ.get('BLUE_IQ_US_GEN_POP', '329900000'))
 S3_BUCKET     = os.environ.get('BLUE_IQ_CACHE_BUCKET', 'dashboard-inputs')
 PARTY_KEY     = os.environ.get('BLUE_IQ_PARTY_KEY', 'blue_iq/party_imputed/all.json')
 # Per-lookback cube keys. The legacy `latest.json` key is also written by
@@ -97,6 +100,16 @@ def _usps_to_name_pairs() -> list[tuple[str, str]]:
     except ImportError:
         from .external_signals import _USPS_TO_NAME  # type: ignore
     return list(_USPS_TO_NAME.items())
+
+
+# US-only filter applied to every user_data_sanitized read. COUNTRY is
+# messy too — 'USA', 'United States', 'US' all mean US; everything else
+# (including the leaked education/school strings like
+# 'Complete College/University') gets rejected. Without this filter the
+# search-queries card surfaces UK '+uk' terms, Russian Cyrillic, Indian
+# '.gov.in', and Mexican 'infonavit' results that shouldn't be in a US
+# political dashboard.
+US_COUNTRY_FILTER = "uds.COUNTRY IN ('USA','United States','US','U.S.','U.S.A.')"
 
 
 def _ch_state_transform_expr(province_col_sql: str) -> str:
@@ -353,6 +366,7 @@ def _q_top_by_cat(conn, start: str, category: str, top_k: int) -> dict[str, list
             LEFT  JOIN blue_iq_party                AS bp  ON bp.uid  = cs.UID
             WHERE cs.DELIVERED >= toDate(%(start)s)
               AND lower(cs.COMMON_NAME) IN %(brands)s
+              AND {US_COUNTRY_FILTER}
         )
         SELECT party, state, dma, cn,
                grouping(party) AS gp, grouping(state) AS gs, grouping(dma) AS gd,
@@ -403,6 +417,7 @@ def _q_cell_sizes(conn) -> dict[str, int]:
                    uds.UID                         AS uid
             FROM userdata.user_data_sanitized AS uds
             LEFT JOIN blue_iq_party AS bp ON bp.uid = uds.UID
+            WHERE {US_COUNTRY_FILTER}
         )
         GROUP BY GROUPING SETS (
             (party, state),
@@ -440,6 +455,7 @@ def _q_demos(conn) -> dict[str, dict[str, list[dict]]]:
                 FROM userdata.user_data_sanitized AS uds
                 LEFT JOIN blue_iq_party AS bp ON bp.uid = uds.UID
                 WHERE uds.{col} IS NOT NULL AND uds.{col} != ''
+                  AND {US_COUNTRY_FILTER}
             )
             GROUP BY GROUPING SETS (
                 (party, state, val),
@@ -482,6 +498,7 @@ def _q_turnout(conn, start: str) -> dict[str, dict]:
             LEFT  JOIN blue_iq_party                AS bp  ON bp.uid  = cs.UID
             WHERE cs.DELIVERED >= toDate(%(start)s)
               AND multiMatchAny(lower(cs.URL), %(terms)s) > 0
+              AND {US_COUNTRY_FILTER}
         )
         SELECT party, state, dma,
                grouping(party) AS gp, grouping(state) AS gs, grouping(dma) AS gd,
@@ -532,6 +549,7 @@ def _q_politicians(conn, start: str, top_k: int) -> dict[str, list[dict]]:
             LEFT  JOIN blue_iq_party                AS bp  ON bp.uid  = cs.UID
             WHERE cs.DELIVERED >= toDate(%(start)s)
               AND multiMatchAny(lower(cs.URL), %(pats)s) > 0
+              AND {US_COUNTRY_FILTER}
         )
         SELECT party, state, dma, pol_idx,
                grouping(party) AS gp, grouping(state) AS gs, grouping(dma) AS gd,
@@ -589,6 +607,7 @@ def _q_articles(conn, start: str, top_k: int) -> dict[str, list[dict]]:
             WHERE cs.DELIVERED >= toDate(%(start)s)
               AND lower(cs.DOMAIN) IN %(doms)s
               AND length(cs.URL) > 30
+              AND {US_COUNTRY_FILTER}
         )
         GROUP BY GROUPING SETS (
             (party, state, url, dom),
@@ -639,12 +658,23 @@ def _q_search_queries(conn, start: str, top_k: int) -> tuple[dict[str, list[dict
             LEFT  JOIN blue_iq_party                AS bp  ON bp.uid  = cs.UID
             WHERE cs.DELIVERED >= toDate(%(start)s)
               AND length(extractURLParameter(cs.URL, 'q')) BETWEEN 6 AND 200
+              AND {US_COUNTRY_FILTER}
         )
         SELECT party, state, dma, term,
                grouping(party) AS gp, grouping(state) AS gs, grouping(dma) AS gd,
                uniqExact(uid) AS panelists
         FROM hits
         WHERE term != ''
+          -- ASCII-only: reject Cyrillic, '+uk' UK-localized terms, Devanagari, etc.
+          AND match(term, '^[\\x20-\\x7e]+$')
+          AND positionCaseInsensitive(term, '+uk') = 0
+          AND positionCaseInsensitive(term, '+india') = 0
+          AND positionCaseInsensitive(term, '+canada') = 0
+          AND positionCaseInsensitive(term, '+australia') = 0
+          AND positionCaseInsensitive(term, '.gov.in') = 0
+          AND positionCaseInsensitive(term, '.gov.uk') = 0
+          AND positionCaseInsensitive(term, '.co.uk') = 0
+          AND positionCaseInsensitive(term, 'infonavit') = 0
         GROUP BY GROUPING SETS (
             (party, state, term),
             (party, dma, term),
@@ -696,6 +726,159 @@ def _global_bucket_map(global_terms: list[dict]) -> dict[str, str]:
         for q in b.get('sample_queries', []):
             qmap[q.strip().lower()] = b['bucket']
     return qmap
+
+
+# ── Step 3b: Digital Voter Journey ──────────────────────────────────────────
+
+# Destination categories for the post-touchpoint visit. Each one represents
+# a clear action a voter took after encountering political content.
+JOURNEY_CANDIDATE_DOMAINS = {
+    # Trump ecosystem
+    'donaldjtrump.com', 'trump.com', 'truthsocial.com', 'rnc.org',
+    # Harris/Biden ecosystem
+    'kamalaharris.com', 'joebiden.com', 'whitehouse.gov',
+    'democrats.org', 'dnc.org',
+    # Major candidate / officeholder sites
+    'berniesanders.com', 'aoc.house.gov', 'warren.senate.gov',
+    'cruz.senate.gov', 'rubio.senate.gov', 'tedcruz.org',
+}
+JOURNEY_DONATION_DOMAINS = {
+    'actblue.com', 'winred.com', 'secure.actblue.com', 'secure.winred.com',
+    'givebutter.com', 'classy.org',
+}
+JOURNEY_VOTING_INFO_DOMAINS = {
+    'vote.gov', 'usa.gov', 'ballotpedia.org', 'rockthevote.org', 'rockthevote.com',
+    'iwillvote.com', 'turbovote.org', 'eac.gov', 'votersedge.org',
+    'fec.gov', 'opensecrets.org',
+}
+JOURNEY_SEARCH_DOMAINS = {
+    'google.com', 'bing.com', 'duckduckgo.com', 'yahoo.com',
+    'chatgpt.com', 'chat.openai.com', 'gemini.google.com',
+    'perplexity.ai', 'claude.ai',
+}
+JOURNEY_SOCIAL_DOMAINS = {
+    'reddit.com', 'twitter.com', 'x.com', 'facebook.com', 'instagram.com',
+    'tiktok.com', 'threads.net', 'youtube.com', 'linkedin.com',
+}
+
+
+def _q_voter_journey(conn, start: str) -> dict[str, list[dict]]:
+    """For panelists who encountered a political touchpoint in the window,
+    what did they DO next?
+
+    Touchpoint = visit to a political-media domain OR a URL containing a
+    politician name. We then ASOF-LEFT-JOIN to the same panelist's next
+    clickstream visit (any URL, within the same lookback window), and
+    categorize that next visit into a destination bucket:
+
+        candidate_site, candidate_social, search, news_dive,
+        voting_info, donation, social_discussion, other, abandoned
+
+    Returns cell_key → list of {destination, panelists, share} for the
+    All|| and {party}|| cells only (this card is national / party-level;
+    the per-state/DMA breakouts are too sparse on a 1d window).
+    """
+    cur = conn.cursor()
+    _, left_media, right_media = blue_iq._load_media_domains()
+    media_domains = list(left_media | right_media)
+    polparties = blue_iq._load_politician_parties()
+    pol_pats = [n.lower() for n in list(polparties.keys())[:60]]  # cap at 60 for hyperscan
+
+    if not media_domains and not pol_pats:
+        return {}
+
+    candidate_set       = sorted(JOURNEY_CANDIDATE_DOMAINS)
+    donation_set        = sorted(JOURNEY_DONATION_DOMAINS)
+    voting_info_set     = sorted(JOURNEY_VOTING_INFO_DOMAINS)
+    search_set          = sorted(JOURNEY_SEARCH_DOMAINS)
+    social_set          = sorted(JOURNEY_SOCIAL_DOMAINS)
+    political_media_set = sorted({d.lower() for d in media_domains})
+
+    # `journey_step` categorizes the NEXT visit. We layer the predicates
+    # so candidate-social (e.g. twitter.com/realDonaldTrump) beats raw
+    # social. Order matters: first match wins via multiIf().
+    cur.execute(f"""
+        WITH touchpoints AS (
+            SELECT
+                coalesce(bp.party, 'Undecided') AS party,
+                cs.UID                          AS uid,
+                cs.VISIT_TS                     AS tp_ts
+            FROM clickstream.clickstream_final     AS cs
+            INNER JOIN userdata.user_data_sanitized AS uds ON uds.UID = cs.UID
+            LEFT  JOIN blue_iq_party                AS bp  ON bp.uid  = cs.UID
+            WHERE cs.DELIVERED >= toDate(%(start)s)
+              AND {US_COUNTRY_FILTER}
+              AND (lower(cs.DOMAIN) IN %(media)s
+                   OR multiMatchAny(lower(cs.URL), %(pols)s) > 0)
+        ),
+        -- Closest subsequent visit per panelist via ASOF JOIN. CH's ASOF
+        -- requires the inequality on a single column (VISIT_TS).
+        next_visits AS (
+            SELECT
+                t.party                           AS party,
+                t.uid                             AS uid,
+                lower(c2.DOMAIN)                  AS next_dom,
+                lower(c2.URL)                     AS next_url
+            FROM touchpoints AS t
+            ASOF LEFT JOIN clickstream.clickstream_final AS c2
+                ON c2.UID = t.uid AND c2.VISIT_TS > t.tp_ts
+            WHERE c2.DELIVERED >= toDate(%(start)s)
+        ),
+        categorized AS (
+            SELECT
+                party,
+                uid,
+                multiIf(
+                    next_dom = '' OR next_dom IS NULL, 'abandoned',
+                    next_dom IN %(candidates)s, 'candidate_site',
+                    next_dom IN %(donations)s,  'donation',
+                    next_dom IN %(voting)s,     'voting_info',
+                    -- candidate social (e.g. twitter.com/realDonaldTrump) beats raw social
+                    next_dom IN %(social)s AND multiMatchAny(next_url, %(pols)s) > 0,
+                        'candidate_social',
+                    next_dom IN %(search)s AND multiMatchAny(extractURLParameter(next_url, 'q'), %(pols)s) > 0,
+                        'candidate_search',
+                    next_dom IN %(search)s, 'search',
+                    next_dom IN %(media)s,  'news_dive',
+                    next_dom IN %(social)s, 'social_discussion',
+                    'other'
+                ) AS destination
+            FROM next_visits
+        )
+        SELECT party, destination,
+               grouping(party) AS gp,
+               uniqExact(uid)  AS panelists
+        FROM categorized
+        GROUP BY GROUPING SETS ((party, destination), (destination))
+        HAVING panelists > 0
+    """, {
+        'start':      start,
+        'media':      political_media_set,
+        'pols':       pol_pats or ['__none__'],
+        'candidates': candidate_set,
+        'donations':  donation_set,
+        'voting':     voting_info_set,
+        'search':     search_set,
+        'social':     social_set,
+    })
+
+    by_cell: dict[str, dict[str, int]] = defaultdict(lambda: defaultdict(int))
+    for party, dest, gp, panelists in cur.fetchall():
+        if not dest:
+            continue
+        cell = "All||" if gp == 1 else f"{party or 'All'}||"
+        by_cell[cell][dest] = max(by_cell[cell][dest], int(panelists))
+
+    out: dict[str, list[dict]] = {}
+    for cell, dests in by_cell.items():
+        total = sum(dests.values()) or 1
+        items = sorted(dests.items(), key=lambda x: -x[1])
+        out[cell] = [{
+            'destination': d,
+            'panelists':   c,
+            'share':       round(c / total, 4),
+        } for d, c in items]
+    return out
 
 
 # ── Step 4: Build & ship ─────────────────────────────────────────────────────
@@ -755,11 +938,21 @@ def build_cube(lookback_days: int = LOOKBACK_DAYS) -> dict:
         log.info("  search queries done in %.1fs (%d global terms)",
                  time.time() - t0, len(search_global))
 
-        log.info("Step 8/8: AI issue-bucket rollup (one-shot, national)")
+        log.info("Step 8/9: AI issue-bucket rollup (one-shot, national)")
         t0 = time.time()
         issue_buckets_global = blue_iq.roll_up_political_issues(search_global)
         log.info("  AI rollup done in %.1fs (%d buckets)",
                  time.time() - t0, len(issue_buckets_global))
+
+        log.info("Step 9/9: digital voter journey (post-touchpoint destinations)")
+        t0 = time.time()
+        try:
+            voter_journey = _q_voter_journey(conn, start)
+            log.info("  voter journey done in %.1fs (%d cells)",
+                     time.time() - t0, len(voter_journey))
+        except Exception as e:
+            log.warning("  voter journey query failed (non-fatal): %s", e)
+            voter_journey = {}
 
         # Assemble cube. We only emit cells whose total-UID count clears MIN_CELL_SIZE.
         log.info("Assembling cube ...")
@@ -782,6 +975,7 @@ def build_cube(lookback_days: int = LOOKBACK_DAYS) -> dict:
                 'top_politicians':     politicians.get(k, []),
                 'top_articles':        articles.get(k, []),
                 'top_search_queries':  search_per_cell.get(k, []),
+                'voter_journey':       voter_journey.get(k, []),
             }
         log.info("  %d cells emitted (suppressed: %d)",
                  len(cells), len(all_cell_keys) - len(cells))
@@ -793,11 +987,24 @@ def build_cube(lookback_days: int = LOOKBACK_DAYS) -> dict:
         all_dmas   = sorted({k.split('|')[2] for k in cells if k.split('|')[2] and not k.split('|')[1]})
         log.info("  filter universe: %d states, %d dmas", len(all_states), len(all_dmas))
 
+        # Gen-pop projection factor.
+        # The "All||" cell holds the total US-panel size (uniqExact UIDs in
+        # user_data_sanitized with COUNTRY in the US set). Multiplying any
+        # panelist count in any cell by gen_pop_factor projects it to the
+        # ~329.9M-adult US population.
+        us_panel_total = int((cells.get('All||') or {}).get('uid_count') or 0)
+        gen_pop_factor = (US_GEN_POP / us_panel_total) if us_panel_total > 0 else 1.0
+        log.info("  US panel total: %s  → gen_pop_factor=%.3f×",
+                 f"{us_panel_total:,}", gen_pop_factor)
+
         cube = {
             'version':            1,
             'computed_at':        datetime.now(timezone.utc).isoformat(),
             'lookback_days':      lookback_days,
             'min_cell_size':      MIN_CELL_SIZE,
+            'us_panel_total':     us_panel_total,
+            'us_gen_pop':         US_GEN_POP,
+            'gen_pop_factor':     round(gen_pop_factor, 4),
             'all_parties':        blue_iq.VALID_PARTIES,
             'all_states':         all_states,
             'all_dmas':           all_dmas,

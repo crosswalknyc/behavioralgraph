@@ -44304,22 +44304,6 @@
                     const yearlyPremAct = monthlyPremAct * 12;
                     const activatedModelText = `${formatNumber(activatedForRevenue)} new subscribers`;
                     const hasActivatedRow = activatedForRevenue > 0;
-                    // Row 3 — BLENDED RATE on new acquisitions.
-                    // Assumes the typical SVOD subscriber mix of 60% ad-supported
-                    // tier and 40% premium tier, so the per-subscriber ARPU is
-                    //     blendedRate = 0.6 × ad + 0.4 × prem
-                    // applied to the activated/new-acquisition count only (same
-                    // population as Row 2). Yields a single Monthly + Yearly
-                    // "expected revenue at industry mix" figure to compare
-                    // against the pure-Premium and pure-Ad rows above.
-                    const BLEND_AD_SHARE = 0.6;
-                    const BLEND_PREM_SHARE = 0.4;
-                    const blendedRate = (BLEND_AD_SHARE * ad) + (BLEND_PREM_SHARE * prem);
-                    const monthlyBlend = activatedForRevenue * blendedRate;
-                    const yearlyBlend = monthlyBlend * 12;
-                    const blendedRateLabel = `$${blendedRate.toFixed(2)}/mo blended`;
-                    const blendedModelText = `${formatNumber(activatedForRevenue)} new subscribers @ ${blendedRateLabel}`;
-                    const hasBlendedRow = hasActivatedRow && blendedRate > 0;
                     subscriptionRevenueContainer.innerHTML = `
                         <div class="executive-summary-card">
                             <div class="exec-summary-header">
@@ -44371,23 +44355,6 @@
                                     <div class="exec-metric-label">Ad-Supported<br>Yearly</div>
                                     <div class="exec-metric-value">${fmt(yearlyAdAct)}</div>
                                     <div class="exec-metric-desc">${activatedModelText} @ $${ad}/mo</div>
-                                </div>
-                            </div>
-                            ` : ''}
-                            ${hasBlendedRow ? `
-                            <div class="exec-summary-subheader" style="margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid rgba(255,255,255,0.08);">
-                                <h3 class="has-tooltip" data-tooltip="Blended Rate applies a 60% ad-supported / 40% premium tier mix to the new-acquisition count, reflecting a typical SVOD subscriber tier distribution. Per-subscriber ARPU = 0.6 × $${ad} + 0.4 × $${prem} = $${blendedRate.toFixed(2)}/mo." style="font-size: 1rem; margin: 0 0 0.75rem 0; opacity: 0.85;">💎 Blended Rate (60% Ad-Supported / 40% Premium) — Newly Acquired</h3>
-                            </div>
-                            <div class="exec-summary-grid">
-                                <div class="exec-summary-metric has-tooltip" data-tooltip="Monthly revenue at industry-mix ARPU (60% ad-supported × $${ad} + 40% premium × $${prem} = $${blendedRate.toFixed(2)}/mo) × new acquisitions.">
-                                    <div class="exec-metric-label">Blended<br>Monthly</div>
-                                    <div class="exec-metric-value">${fmt(monthlyBlend)}</div>
-                                    <div class="exec-metric-desc">${blendedModelText}</div>
-                                </div>
-                                <div class="exec-summary-metric has-tooltip" data-tooltip="Yearly revenue at industry-mix ARPU (60% ad-supported × $${ad} + 40% premium × $${prem} = $${blendedRate.toFixed(2)}/mo) × new acquisitions × 12 months.">
-                                    <div class="exec-metric-label">Blended<br>Yearly</div>
-                                    <div class="exec-metric-value">${fmt(yearlyBlend)}</div>
-                                    <div class="exec-metric-desc">${blendedModelText}</div>
                                 </div>
                             </div>
                             ` : ''}
