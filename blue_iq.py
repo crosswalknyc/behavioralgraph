@@ -830,39 +830,51 @@ def _card_top_politicians(uids: set[str], start_date: str,
 
 def _blend_politicians(panel_counts: dict[str, int], external: dict,
                         politicians: list[str]) -> list[dict]:
-    """Blend panel mentions + Google Trends + GDELT + Wikipedia into one score."""
+    """Blend panel mentions + Google Trends + GDELT + Wikipedia into one score.
+
+    Weights are renormalized to the sources that ACTUALLY returned data so a
+    single live source (e.g. just Wikipedia when Trends/GDELT are rate-limited)
+    still produces a meaningful ranking instead of collapsing to ~0.
+    """
     trends = external.get('google_trends_politicians') or {}
     gdelt  = external.get('gdelt_politician_mentions') or {}
     wiki   = external.get('wiki_pageviews') or {}
 
-    # Normalize each source to 0..1 by max for blending.
     def norm(d: dict[str, int | float]) -> dict[str, float]:
-        if not d:
+        # Treat all-zero dicts as empty (Trends often returns 12 zeros).
+        if not d or max(d.values() or [0]) <= 0:
             return {}
         mx = max(d.values()) or 1
-        return {k: (v / mx) for k, v in d.items()}
+        return {k: (float(v) / mx) for k, v in d.items()}
 
-    p = norm(panel_counts)
-    t = norm(trends)
-    g = norm(gdelt)
-    w = norm(wiki)
+    sources = {
+        'panel':  (norm(panel_counts), 0.55),
+        'trends': (norm(trends),       0.20),
+        'gdelt':  (norm(gdelt),        0.15),
+        'wiki':   (norm(wiki),         0.10),
+    }
+    # Renormalize across sources that returned any data.
+    live = {name: w for name, (d, w) in sources.items() if d}
+    wsum = sum(live.values()) or 1.0
+    live_weights = {name: w / wsum for name, w in live.items()}
 
     names = set(politicians) | set(panel_counts) | set(trends) | set(gdelt) | set(wiki)
     out = []
-    for name in names:
-        # Weighted blend. Panel signal dominates when present; external fills in.
-        score = (
-            0.55 * p.get(name, 0.0) +
-            0.20 * t.get(name, 0.0) +
-            0.15 * g.get(name, 0.0) +
-            0.10 * w.get(name, 0.0)
+    for n in names:
+        score = sum(
+            sources[name][0].get(n, 0.0) * live_weights[name]
+            for name in live
         )
         if score <= 0:
             continue
+        # Provenance: which sources contributed (so the card can show a
+        # tiny badge like "external" when panel is empty).
+        contribs = [name for name in live if sources[name][0].get(n, 0.0) > 0]
         out.append({
-            'name':            name,
-            'panelists':       int(panel_counts.get(name, 0)),
-            'mention_score':   round(score, 4),
+            'name':           n,
+            'panelists':      int(panel_counts.get(n, 0)),
+            'mention_score':  round(score, 4),
+            'sources':        contribs,
         })
     out.sort(key=lambda r: -r['mention_score'])
     return out[:25]
@@ -1257,6 +1269,7 @@ def compute_panel_view(filters: dict, *, force_refresh: bool = False) -> dict:
         panel_articles     = cell.get('top_articles') or []
         panel_turnout      = cell.get('turnout') or {'panelists': 0, 'sample_urls': []}
         panel_demo         = cell.get('demo') or {}
+        panel_journey      = cell.get('voter_journey') or []
     else:
         panel_top_queries = []
         panel_search = []
@@ -1265,6 +1278,7 @@ def compute_panel_view(filters: dict, *, force_refresh: bool = False) -> dict:
         panel_articles = []
         panel_turnout = {'panelists': 0, 'sample_urls': []}
         panel_demo = {}
+        panel_journey = []
 
     # Card A — issue buckets: prefer per-cell mapping; fall back to global.
     issue_buckets = _bucket_search_terms_via_global_map(panel_top_queries, issue_buckets_global)
@@ -1300,6 +1314,7 @@ def compute_panel_view(filters: dict, *, force_refresh: bool = False) -> dict:
             'sample_queries': panel_turnout.get('sample_urls', [])[:8],
         },
         'demo_crosstab':   panel_demo,
+        'voter_journey':   panel_journey,
     }
 
     # Compare card (only when geo is set)
@@ -1308,19 +1323,30 @@ def compute_panel_view(filters: dict, *, force_refresh: bool = False) -> dict:
         compare = _build_compare_from_cube(cube, f)
 
     now = datetime.now(timezone.utc)
+    # Pull gen-pop projection metadata from the cube. Frontend uses this to
+    # show every panel count BOTH as raw panelists AND projected to the
+    # US adult population (e.g. 1.78M panel → ~15.9M US adults).
+    gen_pop_factor = float((cube or {}).get('gen_pop_factor') or 1.0)
+    us_gen_pop     = int((cube or {}).get('us_gen_pop') or 329_900_000)
+    us_panel_total = int((cube or {}).get('us_panel_total') or 0)
+
     payload = {
-        'success':       True,
-        'filters':       f,
-        'panel_size':    panel_size,
-        'suppressed':    suppressed,
-        'cube_missing':  cube_missing,
-        'cube_built_at': (cube or {}).get('computed_at'),
-        'min_cell_size': MIN_CELL_SIZE,
-        'generated_at':  now.isoformat(),
-        'stale_until':   (now + timedelta(seconds=CACHE_TTL_S)).isoformat(),
-        'cards':         cards,
-        'compare':       compare,
-        'cache_hit':     False,
+        'success':         True,
+        'filters':         f,
+        'panel_size':      panel_size,
+        'panel_projected': int(round(panel_size * gen_pop_factor)),
+        'gen_pop_factor':  round(gen_pop_factor, 4),
+        'us_gen_pop':      us_gen_pop,
+        'us_panel_total':  us_panel_total,
+        'suppressed':      suppressed,
+        'cube_missing':    cube_missing,
+        'cube_built_at':   (cube or {}).get('computed_at'),
+        'min_cell_size':   MIN_CELL_SIZE,
+        'generated_at':    now.isoformat(),
+        'stale_until':     (now + timedelta(seconds=CACHE_TTL_S)).isoformat(),
+        'cards':           cards,
+        'compare':         compare,
+        'cache_hit':       False,
     }
     if cube_missing:
         payload['message'] = (
