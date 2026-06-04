@@ -32797,6 +32797,188 @@ def iq_rankers_context():
     })
 
 
+@app.route('/api/iq-rankers/delete-profile', methods=['POST'])
+@requires_auth
+def iq_rankers_delete_profile():
+    """Surgically remove a profile from the IQ Ranker dashboard.
+
+    Use cases:
+      - Phantom profiles auto-provisioned from a stale `_backups/...`
+        CSV (e.g. "Mel Gibson 05 20 2026 18 30.Prepatch.Bak").
+      - Mistakenly registered duplicates.
+
+    Steps performed (each is best-effort, individual failures are
+    surfaced in `errors[]` but do not abort the rest):
+      1. Delete the per-profile tracker JSON in
+         `sentiment-iq/trackers/iqr_<slug>.json`.
+      2. Delete any matching rows from `s3_cache.json` (keyed by
+         profile_subject / s3_key / job_id / project_name).
+      3. ALTER TABLE … DELETE the rows from
+         `reference.profile_iq_daily_metrics` (mutation, async on the
+         ClickHouse side — leaderboard updates within seconds).
+      4. Bust the LLM context cache so a re-creation later can't
+         resurrect stale narrative.
+      5. Optionally delete the source CSV (only when
+         `delete_csv=1` is passed — safer default is to leave the
+         file in S3).
+
+    JSON / form params:
+        profile_subject  required — exact profile_subject (e.g.
+                         "Mel_Gibson_05_20_2026_18_30.prepatch.bak").
+        tracker_key      optional — explicit S3 key for the tracker
+                         JSON if it doesn't follow the standard slug.
+        delete_csv       optional, default 0 — when 1 we also delete
+                         the underlying CSV so nightly provisioning
+                         won't recreate the profile.
+        confirm          required — must be "1". A safety pin so a
+                         curl misfire can't nuke a profile.
+    """
+    if _iq_rankers is None:
+        return jsonify({'success': False, 'error': 'iq_rankers unavailable'}), 500
+
+    payload = request.get_json(silent=True) or {}
+    def _arg(name, default=None):
+        return (payload.get(name) if name in payload else request.values.get(name, default))
+
+    profile_subject = (str(_arg('profile_subject') or '')).strip()
+    tracker_key     = (str(_arg('tracker_key')     or '')).strip() or None
+    delete_csv      = str(_arg('delete_csv', '0')).strip() == '1'
+    confirm         = str(_arg('confirm', '0')).strip() == '1'
+
+    if not profile_subject:
+        return jsonify({'success': False,
+                        'error': 'profile_subject is required'}), 400
+    if not confirm:
+        return jsonify({'success': False,
+                        'error': 'confirm=1 required for destructive op'}), 400
+
+    summary = {
+        'profile_subject': profile_subject,
+        'tracker_deleted': False,
+        'tracker_key':     None,
+        's3_cache_jobs_removed': 0,
+        'clickhouse_rows_deleted_query_sent': False,
+        'context_cache_keys_deleted': 0,
+        'csv_deleted': False,
+        'errors': [],
+    }
+
+    # 1) Tracker JSON. Default key is iqr_<slug>.json where slug is
+    #    the lower-cased profile_subject with non-alnum stripped, but
+    #    we accept an explicit override for weird legacy slugs.
+    if not tracker_key:
+        slug = re.sub(r'[^a-z0-9]', '', profile_subject.lower())
+        tracker_key = f"sentiment-iq/trackers/iqr_{slug}.json"
+        # Common legacy variant: underscores preserved.
+        candidates = [
+            tracker_key,
+            f"sentiment-iq/trackers/iqr_{profile_subject.lower()}.json",
+            f"sentiment-iq/trackers/iqr_{profile_subject.lower().replace('.','')}.json",
+        ]
+    else:
+        candidates = [tracker_key]
+    if s3_client:
+        for cand in candidates:
+            try:
+                s3_client.head_object(Bucket=S3_BUCKET, Key=cand)
+            except Exception:
+                continue
+            try:
+                s3_client.delete_object(Bucket=S3_BUCKET, Key=cand)
+                summary['tracker_deleted'] = True
+                summary['tracker_key'] = cand
+                break
+            except Exception as e:
+                summary['errors'].append(f"tracker delete failed ({cand}): {e}")
+
+    # 2) s3_cache.json — match on profile_subject, s3_key, job_id,
+    #    project_name. We rewrite the cache via save_persisted_cache()
+    #    which also handles the imdb-merge logic.
+    try:
+        global s3_cache
+        load_persisted_cache()
+        before = len(s3_cache.get('jobs') or [])
+        kept = []
+        removed = 0
+        for j in (s3_cache.get('jobs') or []):
+            haystack = ' | '.join(str(j.get(k) or '') for k in
+                ('profile_subject', 's3_key', 'job_id', 'key',
+                 'project_name', 'display_name'))
+            if profile_subject.lower() in haystack.lower():
+                removed += 1
+                continue
+            kept.append(j)
+        if removed:
+            s3_cache['jobs'] = kept
+            s3_cache['file_count'] = len(kept)
+            save_persisted_cache()
+        summary['s3_cache_jobs_removed'] = removed
+        summary['s3_cache_jobs_before']  = before
+        summary['s3_cache_jobs_after']   = len(kept)
+    except Exception as e:
+        summary['errors'].append(f"s3_cache update failed: {e}")
+
+    # 3) ClickHouse — issue an ALTER TABLE … DELETE mutation. This is
+    #    async on CH's side; rows disappear from the leaderboard within
+    #    seconds. We use a parameterized identifier-safe predicate to
+    #    avoid SQL injection (profile_subject can contain dots, etc).
+    try:
+        cli = _ch_connect()
+        # Quote profile_subject as a ClickHouse string literal.
+        subj_lit = "'" + profile_subject.replace("\\", "\\\\").replace("'", "\\'") + "'"
+        q = (f"ALTER TABLE reference.profile_iq_daily_metrics "
+             f"DELETE WHERE profile_subject = {subj_lit}")
+        cli.command(q)
+        summary['clickhouse_rows_deleted_query_sent'] = True
+    except Exception as e:
+        summary['errors'].append(f"clickhouse delete failed: {e}")
+
+    # 4) LLM context cache — wipe both clickstream and web_search keys
+    #    for any window. Cheaper than a list-then-delete loop.
+    try:
+        if s3_client:
+            safe_subj = (profile_subject or '').replace('/', '_').replace(' ', '_')[:120]
+            prefix = f"{_IQR_CONTEXT_LLM_CACHE_PREFIX}{safe_subj}__"
+            paginator = s3_client.get_paginator('list_objects_v2')
+            keys_to_delete = []
+            for page in paginator.paginate(Bucket=S3_BUCKET, Prefix=prefix):
+                for obj in page.get('Contents', []) or []:
+                    keys_to_delete.append({'Key': obj['Key']})
+            # delete_objects caps at 1000 per call; we won't get close.
+            if keys_to_delete:
+                s3_client.delete_objects(Bucket=S3_BUCKET,
+                                         Delete={'Objects': keys_to_delete})
+            summary['context_cache_keys_deleted'] = len(keys_to_delete)
+    except Exception as e:
+        summary['errors'].append(f"context cache wipe failed: {e}")
+
+    # 5) Source CSV — only when explicitly requested, since deleting it
+    #    is irreversible from the dashboard side.
+    if delete_csv:
+        try:
+            tracker_payload = None
+            if summary['tracker_key']:
+                # We already deleted the tracker; reconstruct s3_key
+                # from the override / payload if caller passed one.
+                pass
+            # Best-effort CSV delete based on the profile_subject. If
+            # the profile was provisioned from a `_backups/...` path
+            # the caller must pass `csv_key` explicitly.
+            csv_key = (str(_arg('csv_key') or '')).strip()
+            if csv_key and s3_client:
+                s3_client.delete_object(Bucket=S3_BUCKET, Key=csv_key)
+                summary['csv_deleted'] = True
+                summary['csv_key'] = csv_key
+            else:
+                summary['errors'].append(
+                    "delete_csv=1 set but no csv_key provided; skipped")
+        except Exception as e:
+            summary['errors'].append(f"csv delete failed: {e}")
+
+    return jsonify({'success': len(summary['errors']) == 0,
+                    'summary': summary})
+
+
 @app.route('/api/iq-rankers/categories', methods=['GET'])
 @requires_auth
 def iq_rankers_categories():
