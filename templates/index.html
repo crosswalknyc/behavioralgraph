@@ -9122,6 +9122,55 @@
         .iqr-modal-empty { padding: 2.5rem; text-align: center; color: var(--text-secondary); }
         .iqr-modal-loading { padding: 2.5rem; text-align: center; color: var(--text-secondary); }
 
+        /* ── Context modal: skeleton loader (replaces spinner+text) ───── */
+        .iqr-skel-wrap { padding: 1.4rem 1.4rem 1.8rem; }
+        .iqr-skel {
+            background: linear-gradient(
+                90deg,
+                rgba(255,176,87,0.06) 0%,
+                rgba(255,176,87,0.16) 50%,
+                rgba(255,176,87,0.06) 100%
+            );
+            background-size: 200% 100%;
+            animation: iqrSkelShimmer 1.4s ease-in-out infinite;
+            border-radius: 6px;
+        }
+        .iqr-skel-headline { height: 18px; width: 72%; margin-bottom: 1rem; }
+        .iqr-skel-bullet   { height: 14px; margin-bottom: 0.65rem; border-radius: 4px; }
+        .iqr-skel-bullet.b1 { width: 92%; }
+        .iqr-skel-bullet.b2 { width: 78%; }
+        .iqr-skel-bullet.b3 { width: 86%; }
+        .iqr-skel-bullet.b4 { width: 64%; }
+        .iqr-skel-source-title {
+            height: 11px; width: 80px; margin: 1.2rem 0 0.55rem;
+            background: rgba(255,176,87,0.18); border-radius: 3px;
+        }
+        .iqr-skel-source { height: 12px; margin-bottom: 0.4rem; border-radius: 3px; }
+        .iqr-skel-source.s1 { width: 56%; }
+        .iqr-skel-source.s2 { width: 48%; }
+        .iqr-skel-source.s3 { width: 62%; }
+        @keyframes iqrSkelShimmer {
+            0%   { background-position: 200% 0; }
+            100% { background-position: -200% 0; }
+        }
+        .iqr-context-cache-meta {
+            margin-top: 1.2rem; padding-top: 0.8rem;
+            border-top: 1px dashed rgba(255,176,87,0.18);
+            font-size: 0.72rem; color: var(--text-secondary);
+            display: flex; justify-content: space-between; gap: 0.8rem;
+            flex-wrap: wrap;
+        }
+        .iqr-context-cache-meta .badge {
+            display: inline-block; padding: 0.12rem 0.5rem; border-radius: 999px;
+            background: rgba(120,200,140,0.14); color: #7bc88c;
+            border: 1px solid rgba(120,200,140,0.28);
+            font-weight: 600; letter-spacing: 0.02em;
+        }
+        .iqr-context-cache-meta .badge.fresh {
+            background: rgba(255,176,87,0.14); color: #ffb057;
+            border-color: rgba(255,176,87,0.28);
+        }
+
         /* ── Compare modal: 2-column layout (picker | chart) ─────────────── */
         .iqr-compare-grid {
             display: grid;
@@ -18655,7 +18704,13 @@
                         </div>
                     </div>
                     <div class="iqr-modal-body">
-                        <div id="iqRankerContextLoading" class="iqr-modal-loading"><span class="spinner"></span> Searching the web for what's driving conversation about this profile…</div>
+                        <div id="iqRankerContextLoading" class="iqr-skel-wrap">
+                            <div class="iqr-skel iqr-skel-headline"></div>
+                            <div class="iqr-skel iqr-skel-bullet b1"></div>
+                            <div class="iqr-skel iqr-skel-bullet b2"></div>
+                            <div class="iqr-skel iqr-skel-bullet b3"></div>
+                            <div class="iqr-skel iqr-skel-bullet b4"></div>
+                        </div>
                         <div id="iqRankerContextError" class="iqr-modal-empty" style="display: none;"></div>
                         <div id="iqRankerContextBody" style="display: none;">
                             <div id="iqRankerContextTotals" class="iqr-context-totals"></div>
@@ -18663,11 +18718,7 @@
                             <ul id="iqRankerContextBullets" class="iqr-context-bullets"></ul>
                             <div id="iqRankerContextLLMWarn" class="iqr-context-warn" style="display: none;"></div>
 
-                            <!-- Web-search sources (default fast path) -->
-                            <div id="iqRankerContextSourcesWrap" style="display: none;">
-                                <div class="iqr-context-section-title">Sources</div>
-                                <ul id="iqRankerContextSources" class="iqr-context-sources"></ul>
-                            </div>
+                            <!-- Web-search sources removed by request: bullets only. -->
 
                             <!-- ClickHouse URL-surface tables (only shown when source=clickstream) -->
                             <div id="iqRankerContextClickstreamWrap" style="display: none;">
@@ -18702,6 +18753,11 @@
                                         <tbody id="iqRankerContextSampleBody"></tbody>
                                     </table>
                                 </div>
+                            </div>
+
+                            <div id="iqRankerContextCacheMeta" class="iqr-context-cache-meta" style="display: none;">
+                                <span><span id="iqRankerContextCacheBadge" class="badge fresh">FRESH</span> <span id="iqRankerContextCacheText"></span></span>
+                                <span id="iqRankerContextCacheKey" style="font-family: var(--font-mono, monospace); opacity: 0.7;"></span>
                             </div>
                         </div>
                     </div>
@@ -86044,9 +86100,11 @@
             const bulletsEl  = document.getElementById('iqRankerContextBullets');
             const llmWarnEl  = document.getElementById('iqRankerContextLLMWarn');
             const bodyEl     = document.getElementById('iqRankerContextBody');
-            const sourcesWrap = document.getElementById('iqRankerContextSourcesWrap');
-            const sourcesList = document.getElementById('iqRankerContextSources');
             const cstreamWrap = document.getElementById('iqRankerContextClickstreamWrap');
+            const cacheMetaEl  = document.getElementById('iqRankerContextCacheMeta');
+            const cacheBadgeEl = document.getElementById('iqRankerContextCacheBadge');
+            const cacheTextEl  = document.getElementById('iqRankerContextCacheText');
+            const cacheKeyEl   = document.getElementById('iqRankerContextCacheKey');
 
             const fmtInt = n => Number(n || 0).toLocaleString();
             const winLine = `Window <b>${_iqEsc(payload.window?.start || '')} → ${_iqEsc(payload.window?.end || '')}</b>`;
@@ -86084,27 +86142,15 @@
                 }
             }
 
-            // Web-search sources (only present on web_search path)
+            // Web-search path: bullets-only (sources display has been removed).
             if (source === 'web_search') {
                 cstreamWrap.style.display = 'none';
-                const srcs = (llm && Array.isArray(llm.sources)) ? llm.sources : [];
-                if (srcs.length) {
-                    sourcesList.innerHTML = srcs.map(s => {
-                        const url = _iqEsc(s.url || '');
-                        const title = _iqEsc(s.title || s.url || '');
-                        return `<li><a href="${url}" target="_blank" rel="noopener" title="${url}">${title}</a></li>`;
-                    }).join('');
-                    sourcesWrap.style.display = '';
-                } else {
-                    sourcesList.innerHTML = '';
-                    sourcesWrap.style.display = 'none';
-                }
+                _iqrRenderCacheMeta(payload, cacheMetaEl, cacheBadgeEl, cacheTextEl, cacheKeyEl);
                 bodyEl.style.display = '';
                 return;
             }
 
             // ─── ClickHouse path: keep the raw URL-surface tables ───────
-            sourcesWrap.style.display = 'none';
             cstreamWrap.style.display = '';
 
             if (Array.isArray(ctx.warnings) && ctx.warnings.length) {
@@ -86146,7 +86192,48 @@
             document.getElementById('iqRankerContextSampleBody').innerHTML =
                 sampleRows || `<tr><td colspan="2" class="num">No sample URLs.</td></tr>`;
 
+            _iqrRenderCacheMeta(payload, cacheMetaEl, cacheBadgeEl, cacheTextEl, cacheKeyEl);
             bodyEl.style.display = '';
+        }
+
+        // Renders the small "Cached at … / Fresh" badge at the bottom of the
+        // context modal so the user can see this exact response is being
+        // shared across clicks instead of getting re-pulled from OpenAI.
+        function _iqrRenderCacheMeta(payload, metaEl, badgeEl, textEl, keyEl) {
+            if (!metaEl) return;
+            const subj = payload.profile_subject || '';
+            const win  = payload.window || {};
+            const src  = payload.source || 'web_search';
+            const cached = payload.cached === true;
+            const cachedAt = payload.cached_at || (payload.llm && payload.llm.cached_at) || null;
+            const generatedAt = payload.generated_at || (payload.llm && payload.llm.generated_at) || null;
+
+            badgeEl.textContent = cached ? 'CACHED' : 'FRESH';
+            badgeEl.classList.toggle('fresh', !cached);
+
+            // Friendly time string. We get UTC from the server; show local.
+            const fmtTs = (iso) => {
+                if (!iso) return '';
+                try {
+                    const d = new Date(iso);
+                    if (isNaN(d.getTime())) return iso;
+                    return d.toLocaleString(undefined, {
+                        month: 'short', day: 'numeric',
+                        hour: 'numeric', minute: '2-digit',
+                    });
+                } catch (e) { return iso; }
+            };
+
+            if (cached) {
+                textEl.textContent = `Reusing cached response from ${fmtTs(cachedAt) || 'earlier'} · 24h TTL.`;
+            } else if (generatedAt) {
+                textEl.textContent = `Just generated at ${fmtTs(generatedAt)} — saved for the next viewer.`;
+            } else {
+                textEl.textContent = 'Saved for the next viewer.';
+            }
+
+            keyEl.textContent = `${_iqEsc(subj)} · ${_iqEsc(win.start || '')} → ${_iqEsc(win.end || '')} · ${_iqEsc(src)}`;
+            metaEl.style.display = '';
         }
 
         // Close-on-backdrop and Esc parity with the other IQR modals.

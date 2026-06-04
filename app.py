@@ -32333,6 +32333,14 @@ def _iqr_context_cache_key(profile_subject, start, end):
     return f"{_IQR_CONTEXT_LLM_CACHE_PREFIX}{safe_subj}__{start}__{end}.json"
 
 
+def _utc_iso_now():
+    """ISO 8601 UTC timestamp the UI can hand to `new Date()` for local
+    formatting. Used in the context-cache payload so the modal can show
+    'Cached at <time>' / 'Just generated at <time>'."""
+    from datetime import datetime, timezone
+    return datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
+
+
 def _iqr_context_load_cache(profile_subject, start, end):
     if not s3_client:
         return None
@@ -32408,12 +32416,11 @@ def _iqr_context_web_search_rollup(*, profile_name, start, end):
 
     prompt = (
         f"Search the web for what has been driving public conversation "
-        f"about \"{profile_name}\" between {start} and {end}.\n\n"
+        f"about \"{profile_name}\" around the period {start} to {end}.\n\n"
         "Write a concise rollup in this exact JSON shape and nothing "
         "else (no markdown fences, no commentary):\n"
         '{"headline": "<one sentence, <=120 chars, dominant theme>", '
-        '"bullets": ["<bullet 1>", "<bullet 2>", ...], '
-        '"sources": [{"title": "...", "url": "https://..."}]}\n\n'
+        '"bullets": ["<bullet 1>", "<bullet 2>", ...]}\n\n'
         "Rules:\n"
         "- 3 to 5 bullets, max ~14 words each, plain English, specific.\n"
         "- Examples of good bullets: \"Watching Meet the Parents on "
@@ -32421,12 +32428,15 @@ def _iqr_context_web_search_rollup(*, profile_name, start, end):
         "going viral on TikTok\", \"Oscars best-actress nomination\".\n"
         "- Bullets must be grounded in actual web results — never "
         "invent a title, premiere, award, or platform that doesn't "
-        "appear in the sources you found.\n"
-        "- 3-6 sources from your web search, each with the real URL "
-        "you fetched it from.\n"
-        "- If the timeframe is in the future or there is genuinely no "
-        "recent news, say so honestly in one bullet rather than "
-        "padding with stale facts."
+        "appear in what you found.\n"
+        "- NEVER write a bullet that says \"no major news\" or \"no "
+        "recent news\" or anything similar. If the exact window is "
+        "quiet, broaden the search to the surrounding weeks or to "
+        "what this person is currently known for / currently working "
+        "on / their recent projects, and put THOSE bullets instead. "
+        "There is always a reason their name surfaces — find it.\n"
+        "- Do not include a sources field. Do not include URLs in the "
+        "bullets. Just the headline and bullets."
     )
 
     try:
@@ -32469,27 +32479,31 @@ def _iqr_context_web_search_rollup(*, profile_name, start, end):
         bullets_raw = parsed.get('bullets') or []
         if not isinstance(bullets_raw, list):
             bullets_raw = []
-        bullets = [str(b)[:160] for b in bullets_raw if str(b).strip()][:5]
+        # Belt-and-suspenders: even if the model ignored instructions and
+        # emitted a "no major news" bullet, strip it here so the UI never
+        # surfaces that text. Same for raw URLs sneaking into bullets.
+        _NO_NEWS_PAT = re.compile(
+            r'\b(no\s+major\s+news|no\s+recent\s+news|nothing\s+notable|'
+            r'no\s+significant\s+news|no\s+notable\s+news|no\s+news\s+found)\b',
+            re.IGNORECASE,
+        )
+        cleaned = []
+        for b in bullets_raw:
+            s = str(b).strip()
+            if not s:
+                continue
+            if _NO_NEWS_PAT.search(s):
+                continue
+            cleaned.append(s[:160])
+        bullets = cleaned[:5]
 
         headline = str(parsed.get('headline') or '')[:200].strip()
-
-        sources_raw = parsed.get('sources') or []
-        sources = []
-        if isinstance(sources_raw, list):
-            for s in sources_raw[:6]:
-                if isinstance(s, dict):
-                    url = str(s.get('url') or '').strip()
-                    if not url.lower().startswith(('http://', 'https://')):
-                        continue
-                    title = str(s.get('title') or url)[:200].strip()
-                    sources.append({'title': title, 'url': url[:500]})
-                elif isinstance(s, str) and s.lower().startswith(('http://', 'https://')):
-                    sources.append({'title': s[:200], 'url': s[:500]})
+        if _NO_NEWS_PAT.search(headline):
+            headline = ''
 
         return {
             "headline": headline,
             "bullets": bullets,
-            "sources": sources,
             "model": getattr(resp, 'model', model),
             "source": "web_search",
         }
@@ -32686,16 +32700,22 @@ def iq_rankers_context():
                     'source': 'web_search',
                     'llm': cached['llm'],
                     'cached': True,
+                    'cached_at': cached.get('cached_at'),
                 })
 
         llm_payload = _iqr_context_web_search_rollup(
             profile_name=project_name,
             start=start, end=end,
         )
+        generated_at = _utc_iso_now()
         if llm_payload and not llm_payload.get('error'):
             _iqr_context_save_cache(
                 profile_subject, cache_key, '',
-                {'llm': llm_payload},
+                {'llm': llm_payload, 'cached_at': generated_at,
+                 'profile_subject': profile_subject,
+                 'project_name': project_name,
+                 'window': {'start': start, 'end': end},
+                 'source': 'web_search'},
             )
         return jsonify({
             'success': True,
@@ -32705,6 +32725,7 @@ def iq_rankers_context():
             'source': 'web_search',
             'llm': llm_payload,
             'cached': False,
+            'generated_at': generated_at,
         })
 
     # ─── Slow path: ClickHouse URL surface + LLM ────────────────────────
