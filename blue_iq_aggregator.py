@@ -100,17 +100,29 @@ def _usps_to_name_pairs() -> list[tuple[str, str]]:
 
 
 def _ch_state_transform_expr(province_col_sql: str) -> str:
-    """Return a CH SQL expression that maps the USPS 2-letter province code
-    in `province_col_sql` to the full state name. We embed the map inline
-    because it's tiny and CH has no scalar dictionary on this column.
-    Falls through to the original value for non-US rows (e.g., 'IN' isn't
-    in the US map; it's Indiana — but a Canadian 'ON' would pass through).
-    Actually all 50+DC are in the map, so unknowns just stay as-is.
+    """Return a CH SQL expression that NORMALIZES the messy PROVINCE column
+    to a clean US state name, OR an empty string if the value isn't a
+    recognized US state.
+
+    PROVINCE in user_data_sanitized contains a mix of:
+      * USPS 2-letter codes ('CA', 'TX')      → expand to 'California'
+      * Full US state names ('California')    → keep as-is
+      * Canadian provinces ('ON', 'AB')        → reject (return '')
+      * Military codes ('AA', 'AE', 'AP')      → reject
+      * Garbage / empty ('Province', '')        → reject
+
+    Only rows that map to a known US state survive the (party, state)
+    grouping; everything else gets state='' which means "no state cell".
     """
     pairs = _usps_to_name_pairs()
-    keys = "[" + ",".join(f"'{k}'" for k, _ in pairs) + "]"
-    vals = "[" + ",".join(f"'{v}'" for _, v in pairs) + "]"
-    return f"transform({province_col_sql}, {keys}, {vals}, {province_col_sql})"
+    keys     = "[" + ",".join(f"'{k}'" for k, _ in pairs) + "]"   # USPS codes
+    vals     = "[" + ",".join(f"'{v}'" for _, v in pairs) + "]"   # full names
+    full_set = "[" + ",".join(f"'{v}'" for _, v in pairs) + "]"   # set of allowed full names
+    # Step 1: transform USPS -> name, leaving original on miss.
+    # Step 2: if the result is NOT in the full-names allowlist, blank it.
+    return (f"if({province_col_sql} IN {full_set}, {province_col_sql}, "
+            f"if(transform({province_col_sql}, {keys}, {vals}, '') != '', "
+            f"transform({province_col_sql}, {keys}, {vals}, ''), ''))")
 
 
 def _start_date(lookback: int) -> str:
@@ -119,6 +131,40 @@ def _start_date(lookback: int) -> str:
 
 def _cell_key(party: str, state: str, dma: str) -> str:
     return f"{party or ''}|{state or ''}|{dma or ''}"
+
+
+def _route_grouping_row(party, state, dma,
+                         gp: int, gs: int, gd: int) -> Optional[str]:
+    """Given a row from a GROUPING SETS aggregation tagged with CH's
+    `grouping(col)` flags (1 = column rolled up / not in this set,
+    0 = column actively grouped), produce a single cell-key string
+    OR None if the row should be skipped.
+
+    Routing matrix:
+      gp gs gd | meaning                       | cell key
+      ---------|-------------------------------|----------------------
+      1  1  1  | () empty grouping = total     | All||
+      0  1  1  | (party) only                  | {party}||
+      0  0  1  | (party, state)                | {party}|{state}|
+      0  1  0  | (party, dma)                  | {party}||{dma}
+      anything else                            | skip
+
+    For rows where state/dma is grouped but the underlying value is
+    empty (e.g. a non-US province that got blanked by the normalizer),
+    we skip — those would collide with the rolled-up cell otherwise.
+    """
+    if gp == 1 and gs == 1 and gd == 1:
+        return "All||"
+    p = party or 'All'
+    if gp == 0 and gs == 1 and gd == 1:
+        return f"{p}||"
+    if gp == 0 and gs == 0 and gd == 1:
+        s = (state or '').strip()
+        return f"{p}|{s}|" if s else None
+    if gp == 0 and gs == 1 and gd == 0:
+        d = (dma or '').strip()
+        return f"{p}||{d}" if d else None
+    return None
 
 
 # ── Step 1: Party imputer (with bulk INSERT into a per-session temp table) ──
@@ -260,38 +306,57 @@ def _build_party_temp_table(conn, lookback: int) -> dict[str, str]:
 
 # ── Step 2: Per-card GROUP BYs ──────────────────────────────────────────────
 
+# COMMON_NAME values in clickstream are lowercase. These brand sets are
+# curated rather than pulled from reference.host_mapping because the big
+# infrastructure brands (Google, Bing, DuckDuckGo) have empty CATEGORY
+# strings in the hostmap so a category-based lookup misses them entirely.
+SEARCH_ENGINE_BRANDS = [
+    'google', 'bing', 'yahoo', 'duckduckgo', 'brave search', 'ecosia',
+    'startpage', 'qwant', 'kagi',
+    'chatgpt', 'claude', 'gemini', 'perplexity', 'copilot', 'you.com',
+]
+SOCIAL_MEDIA_BRANDS = [
+    'facebook', 'instagram', 'x', 'twitter', 'tiktok', 'linkedin',
+    'pinterest', 'snapchat', 'reddit', 'threads', 'bluesky', 'mastodon',
+    'youtube', 'tumblr', 'discord', 'whatsapp', 'telegram', 'truth social',
+]
+
+_BRAND_SETS = {
+    'Search Engine/AI': SEARCH_ENGINE_BRANDS,
+    'Social Media':     SOCIAL_MEDIA_BRANDS,
+}
+
+
 def _q_top_by_cat(conn, start: str, category: str, top_k: int) -> dict[str, list[dict]]:
     """One query that returns top-K COMMON_NAME by uniqExact(UID), for every
-    (party, geo) cell. Cells are emitted at three granularities at once:
-        - (party, state)         — geo = STATE, dma = ''
-        - (party, dma)           — geo = '',    dma = DMA
-        - (party, '', '')        — national per party
+    (party, geo) cell. Cells are emitted at four granularities at once via
+    GROUPING SETS: (party, state), (party, dma), (party), ().
 
     Returns: {cell_key: [{name, panelists}, ...]}
     """
     cur = conn.cursor()
     state_expr = _ch_state_transform_expr("uds.PROVINCE")
+    brand_list = _BRAND_SETS.get(category) or []
+    if not brand_list:
+        log.warning("  no curated brand list for category=%s — skipping", category)
+        return {}
     cur.execute(f"""
-        WITH brands AS (
-            SELECT DISTINCT BRAND
-            FROM reference.host_mapping
-            WHERE CATEGORY = %(cat)s
-              AND coalesce(SECTION, '') != 'Hidden'
-        ),
-        base AS (
+        WITH base AS (
             SELECT
-                bp.party                 AS party,
-                {state_expr}             AS state,
-                uds.DMA                  AS dma,
-                cs.COMMON_NAME           AS cn,
-                cs.UID                   AS uid
+                coalesce(bp.party, 'Undecided') AS party,
+                {state_expr}                    AS state,
+                uds.DMA                         AS dma,
+                lower(cs.COMMON_NAME)           AS cn,
+                cs.UID                          AS uid
             FROM clickstream.clickstream_final     AS cs
             INNER JOIN userdata.user_data_sanitized AS uds ON uds.UID = cs.UID
-            INNER JOIN blue_iq_party                AS bp  ON bp.uid  = cs.UID
+            LEFT  JOIN blue_iq_party                AS bp  ON bp.uid  = cs.UID
             WHERE cs.DELIVERED >= toDate(%(start)s)
-              AND cs.COMMON_NAME IN (SELECT BRAND FROM brands)
+              AND lower(cs.COMMON_NAME) IN %(brands)s
         )
-        SELECT party, state, dma, cn, uniqExact(uid) AS panelists
+        SELECT party, state, dma, cn,
+               grouping(party) AS gp, grouping(state) AS gs, grouping(dma) AS gd,
+               uniqExact(uid)  AS panelists
         FROM base
         GROUP BY GROUPING SETS (
             (party, state, cn),
@@ -300,19 +365,25 @@ def _q_top_by_cat(conn, start: str, category: str, top_k: int) -> dict[str, list
             (cn)
         )
         HAVING panelists > 0
-    """, {'cat': category, 'start': start})
+    """, {'brands': brand_list, 'start': start})
 
-    by_cell: dict[str, list[tuple[str, int]]] = defaultdict(list)
-    for party, state, dma, cn, panelists in cur.fetchall():
-        party = party or 'All'
-        state = state or ''
-        dma   = dma   or ''
-        cell = _cell_key(party, state, dma)
-        by_cell[cell].append((cn, int(panelists)))
+    # Two-level dedupe: a cell can receive multiple rows for the same brand
+    # if COMMON_NAME has invisible whitespace variants (e.g. 'google' vs
+    # 'google\xa0'). Group by normalized name within each cell and take MAX.
+    by_cell_brand: dict[str, dict[str, int]] = defaultdict(lambda: defaultdict(int))
+    for party, state, dma, cn, gp, gs, gd, panelists in cur.fetchall():
+        if not cn:
+            continue
+        cell = _route_grouping_row(party, state, dma, gp, gs, gd)
+        if cell is None:
+            continue
+        norm = ' '.join(cn.strip().lower().split())  # collapse whitespace
+        display = ' '.join(w.capitalize() for w in norm.split())
+        by_cell_brand[cell][display] = max(by_cell_brand[cell][display], int(panelists))
 
     out: dict[str, list[dict]] = {}
-    for cell, items in by_cell.items():
-        items.sort(key=lambda x: -x[1])
+    for cell, brand_map in by_cell_brand.items():
+        items = sorted(brand_map.items(), key=lambda x: -x[1])
         out[cell] = [{'name': n, 'panelists': p} for n, p in items[:top_k]]
     return out
 
@@ -322,12 +393,16 @@ def _q_cell_sizes(conn) -> dict[str, int]:
     cur = conn.cursor()
     state_expr = _ch_state_transform_expr("uds.PROVINCE")
     cur.execute(f"""
-        SELECT party, state, dma, uniqExact(uid) AS panelists
+        SELECT party, state, dma,
+               grouping(party) AS gp, grouping(state) AS gs, grouping(dma) AS gd,
+               uniqExact(uid) AS panelists
         FROM (
-            SELECT bp.party AS party, {state_expr} AS state,
-                   uds.DMA  AS dma,   uds.UID      AS uid
+            SELECT coalesce(bp.party, 'Undecided') AS party,
+                   {state_expr}                    AS state,
+                   uds.DMA                         AS dma,
+                   uds.UID                         AS uid
             FROM userdata.user_data_sanitized AS uds
-            INNER JOIN blue_iq_party AS bp ON bp.uid = uds.UID
+            LEFT JOIN blue_iq_party AS bp ON bp.uid = uds.UID
         )
         GROUP BY GROUPING SETS (
             (party, state),
@@ -338,8 +413,11 @@ def _q_cell_sizes(conn) -> dict[str, int]:
         HAVING panelists > 0
     """)
     out: dict[str, int] = {}
-    for party, state, dma, panelists in cur.fetchall():
-        out[_cell_key(party or 'All', state or '', dma or '')] = int(panelists)
+    for party, state, dma, gp, gs, gd, panelists in cur.fetchall():
+        cell = _route_grouping_row(party, state, dma, gp, gs, gd)
+        if cell is None:
+            continue
+        out[cell] = int(panelists)
     return out
 
 
@@ -351,12 +429,16 @@ def _q_demos(conn) -> dict[str, dict[str, list[dict]]]:
     for col, label in [('AGE', 'age'), ('GENDER', 'gender'),
                        ('ETHNICITY', 'ethnicity'), ('INCOME', 'income')]:
         cur.execute(f"""
-            SELECT party, state, dma, val, count() AS n
+            SELECT party, state, dma, val,
+                   grouping(party) AS gp, grouping(state) AS gs, grouping(dma) AS gd,
+                   count() AS n
             FROM (
-                SELECT bp.party AS party, {state_expr} AS state,
-                       uds.DMA  AS dma,   uds.{col}    AS val
+                SELECT coalesce(bp.party, 'Undecided') AS party,
+                       {state_expr}                    AS state,
+                       uds.DMA                         AS dma,
+                       uds.{col}                       AS val
                 FROM userdata.user_data_sanitized AS uds
-                INNER JOIN blue_iq_party AS bp ON bp.uid = uds.UID
+                LEFT JOIN blue_iq_party AS bp ON bp.uid = uds.UID
                 WHERE uds.{col} IS NOT NULL AND uds.{col} != ''
             )
             GROUP BY GROUPING SETS (
@@ -367,8 +449,10 @@ def _q_demos(conn) -> dict[str, dict[str, list[dict]]]:
             HAVING n > 0
         """)
         bucket_by_cell: dict[str, list[tuple[str, int]]] = defaultdict(list)
-        for party, state, dma, val, n in cur.fetchall():
-            cell = _cell_key(party or 'All', state or '', dma or '')
+        for party, state, dma, val, gp, gs, gd, n in cur.fetchall():
+            cell = _route_grouping_row(party, state, dma, gp, gs, gd)
+            if cell is None or not val:
+                continue
             bucket_by_cell[cell].append((val, int(n)))
         for cell, items in bucket_by_cell.items():
             items.sort(key=lambda x: -x[1])
@@ -388,15 +472,20 @@ def _q_turnout(conn, start: str) -> dict[str, dict]:
     cur.execute(f"""
         WITH matched AS (
             SELECT
-                bp.party AS party, {state_expr} AS state, uds.DMA AS dma,
-                cs.UID AS uid, lower(cs.URL) AS u
+                coalesce(bp.party, 'Undecided') AS party,
+                {state_expr}                    AS state,
+                uds.DMA                         AS dma,
+                cs.UID                          AS uid,
+                lower(cs.URL)                   AS u
             FROM clickstream.clickstream_final AS cs
             INNER JOIN userdata.user_data_sanitized AS uds ON uds.UID = cs.UID
-            INNER JOIN blue_iq_party                AS bp  ON bp.uid  = cs.UID
+            LEFT  JOIN blue_iq_party                AS bp  ON bp.uid  = cs.UID
             WHERE cs.DELIVERED >= toDate(%(start)s)
               AND multiMatchAny(lower(cs.URL), %(terms)s) > 0
         )
-        SELECT party, state, dma, uniqExact(uid) AS panelists, groupUniqArray(20)(u) AS samples
+        SELECT party, state, dma,
+               grouping(party) AS gp, grouping(state) AS gs, grouping(dma) AS gd,
+               uniqExact(uid) AS panelists, groupUniqArray(20)(u) AS samples
         FROM matched
         GROUP BY GROUPING SETS (
             (party, state),
@@ -408,8 +497,10 @@ def _q_turnout(conn, start: str) -> dict[str, dict]:
     """, {'start': start, 'terms': blue_iq._TURNOUT_PATTERNS})
 
     out: dict[str, dict] = {}
-    for party, state, dma, panelists, samples in cur.fetchall():
-        cell = _cell_key(party or 'All', state or '', dma or '')
+    for party, state, dma, gp, gs, gd, panelists, samples in cur.fetchall():
+        cell = _route_grouping_row(party, state, dma, gp, gs, gd)
+        if cell is None:
+            continue
         out[cell] = {
             'panelists':    int(panelists),
             'sample_urls':  list(samples or [])[:8],
@@ -431,16 +522,20 @@ def _q_politicians(conn, start: str, top_k: int) -> dict[str, list[dict]]:
     cur.execute(f"""
         WITH hits AS (
             SELECT
-                bp.party AS party, {state_expr} AS state, uds.DMA AS dma,
-                cs.UID   AS uid,
+                coalesce(bp.party, 'Undecided') AS party,
+                {state_expr}                    AS state,
+                uds.DMA                         AS dma,
+                cs.UID                          AS uid,
                 arrayJoin(multiMatchAllIndices(lower(cs.URL), %(pats)s)) AS pol_idx
             FROM clickstream.clickstream_final AS cs
             INNER JOIN userdata.user_data_sanitized AS uds ON uds.UID = cs.UID
-            INNER JOIN blue_iq_party                AS bp  ON bp.uid  = cs.UID
+            LEFT  JOIN blue_iq_party                AS bp  ON bp.uid  = cs.UID
             WHERE cs.DELIVERED >= toDate(%(start)s)
               AND multiMatchAny(lower(cs.URL), %(pats)s) > 0
         )
-        SELECT party, state, dma, pol_idx, uniqExact(uid) AS panelists
+        SELECT party, state, dma, pol_idx,
+               grouping(party) AS gp, grouping(state) AS gs, grouping(dma) AS gd,
+               uniqExact(uid) AS panelists
         FROM hits
         GROUP BY GROUPING SETS (
             (party, state, pol_idx),
@@ -452,12 +547,14 @@ def _q_politicians(conn, start: str, top_k: int) -> dict[str, list[dict]]:
     """, {'pats': patterns, 'start': start})
 
     by_cell: dict[str, list[tuple[str, int]]] = defaultdict(list)
-    for party, state, dma, idx, panelists in cur.fetchall():
+    for party, state, dma, idx, gp, gs, gd, panelists in cur.fetchall():
         try:
             name = politicians[int(idx) - 1]  # CH multiMatchAllIndices is 1-based
         except (IndexError, TypeError, ValueError):
             continue
-        cell = _cell_key(party or 'All', state or '', dma or '')
+        cell = _route_grouping_row(party, state, dma, gp, gs, gd)
+        if cell is None:
+            continue
         by_cell[cell].append((name, int(panelists)))
 
     out: dict[str, list[dict]] = {}
@@ -475,14 +572,20 @@ def _q_articles(conn, start: str, top_k: int) -> dict[str, list[dict]]:
         return {}
     state_expr = _ch_state_transform_expr("uds.PROVINCE")
     cur.execute(f"""
-        SELECT party, state, dma, url, dom, uniqExact(uid) AS panelists
+        SELECT party, state, dma, url, dom,
+               grouping(party) AS gp, grouping(state) AS gs, grouping(dma) AS gd,
+               uniqExact(uid) AS panelists
         FROM (
             SELECT
-                bp.party AS party, {state_expr} AS state, uds.DMA AS dma,
-                cs.URL AS url, lower(cs.DOMAIN) AS dom, cs.UID AS uid
+                coalesce(bp.party, 'Undecided') AS party,
+                {state_expr}                    AS state,
+                uds.DMA                         AS dma,
+                cs.URL                          AS url,
+                lower(cs.DOMAIN)                AS dom,
+                cs.UID                          AS uid
             FROM clickstream.clickstream_final AS cs
             INNER JOIN userdata.user_data_sanitized AS uds ON uds.UID = cs.UID
-            INNER JOIN blue_iq_party                AS bp  ON bp.uid  = cs.UID
+            LEFT  JOIN blue_iq_party                AS bp  ON bp.uid  = cs.UID
             WHERE cs.DELIVERED >= toDate(%(start)s)
               AND lower(cs.DOMAIN) IN %(doms)s
               AND length(cs.URL) > 30
@@ -497,8 +600,10 @@ def _q_articles(conn, start: str, top_k: int) -> dict[str, list[dict]]:
     """, {'doms': list(domains_all), 'start': start})
 
     by_cell: dict[str, list[tuple[str, str, int]]] = defaultdict(list)
-    for party, state, dma, url, dom, panelists in cur.fetchall():
-        cell = _cell_key(party or 'All', state or '', dma or '')
+    for party, state, dma, url, dom, gp, gs, gd, panelists in cur.fetchall():
+        cell = _route_grouping_row(party, state, dma, gp, gs, gd)
+        if cell is None:
+            continue
         by_cell[cell].append((url, dom, int(panelists)))
 
     out: dict[str, list[dict]] = {}
@@ -515,26 +620,31 @@ def _q_search_queries(conn, start: str, top_k: int) -> tuple[dict[str, list[dict
     """
     cur = conn.cursor()
     state_expr = _ch_state_transform_expr("uds.PROVINCE")
+    # Extract the search query directly from the URL's standard `q=`
+    # parameter (covers Google, Bing, DuckDuckGo, Yahoo Search, etc.).
+    # Decoded, lowercased, and bounded between 6 and 200 chars. Avoids
+    # the heavy `ANY INNER JOIN reference.search_text_mapping` join that
+    # the newer CH analyzer rejects (`INVALID_JOIN_ON_EXPRESSION` on
+    # non-equality JOIN conditions).
     cur.execute(f"""
-        WITH q AS (
-            SELECT lower(SEARCH_TEXT_NORMALIZED) AS qstr
-            FROM reference.search_text_mapping
-            WHERE TYPE = 'query'
-              AND SEARCH_TEXT_NORMALIZED IS NOT NULL
-              AND length(SEARCH_TEXT_NORMALIZED) BETWEEN 6 AND 200
-        ),
-        hits AS (
+        WITH hits AS (
             SELECT
-                bp.party AS party, {state_expr} AS state, uds.DMA AS dma,
-                cs.UID AS uid, q.qstr AS term
+                coalesce(bp.party, 'Undecided') AS party,
+                {state_expr}                    AS state,
+                uds.DMA                         AS dma,
+                cs.UID                          AS uid,
+                lower(decodeURLComponent(extractURLParameter(cs.URL, 'q'))) AS term
             FROM clickstream.clickstream_final AS cs
             INNER JOIN userdata.user_data_sanitized AS uds ON uds.UID = cs.UID
-            INNER JOIN blue_iq_party                AS bp  ON bp.uid  = cs.UID
-            ANY INNER JOIN q ON position(lower(cs.URL), q.qstr) > 0
+            LEFT  JOIN blue_iq_party                AS bp  ON bp.uid  = cs.UID
             WHERE cs.DELIVERED >= toDate(%(start)s)
+              AND length(extractURLParameter(cs.URL, 'q')) BETWEEN 6 AND 200
         )
-        SELECT party, state, dma, term, uniqExact(uid) AS panelists
+        SELECT party, state, dma, term,
+               grouping(party) AS gp, grouping(state) AS gs, grouping(dma) AS gd,
+               uniqExact(uid) AS panelists
         FROM hits
+        WHERE term != ''
         GROUP BY GROUPING SETS (
             (party, state, term),
             (party, dma, term),
@@ -546,10 +656,15 @@ def _q_search_queries(conn, start: str, top_k: int) -> tuple[dict[str, list[dict
 
     by_cell: dict[str, list[tuple[str, int]]] = defaultdict(list)
     global_terms: Counter = Counter()
-    for party, state, dma, term, panelists in cur.fetchall():
-        cell = _cell_key(party or 'All', state or '', dma or '')
+    for party, state, dma, term, gp, gs, gd, panelists in cur.fetchall():
+        if not term:
+            continue
+        cell = _route_grouping_row(party, state, dma, gp, gs, gd)
+        if cell is None:
+            continue
         by_cell[cell].append((term, int(panelists)))
-        if (party is None or party == '') and not state and not dma:
+        # Absolute-national row = ALL dims rolled up
+        if gp == 1 and gs == 1 and gd == 1:
             global_terms[term] += int(panelists)
     out: dict[str, list[dict]] = {}
     for cell, items in by_cell.items():
@@ -671,9 +786,12 @@ def build_cube(lookback_days: int = LOOKBACK_DAYS) -> dict:
         log.info("  %d cells emitted (suppressed: %d)",
                  len(cells), len(all_cell_keys) - len(cells))
 
-        # Collect all distinct states + dmas for the filter dropdown.
+        # Collect all distinct states + dmas for the filter dropdown. Only
+        # values that survived the state-normalization pipeline appear here
+        # (so no Canadian provinces, no military codes, no garbage).
         all_states = sorted({k.split('|')[1] for k in cells if k.split('|')[1] and not k.split('|')[2]})
         all_dmas   = sorted({k.split('|')[2] for k in cells if k.split('|')[2] and not k.split('|')[1]})
+        log.info("  filter universe: %d states, %d dmas", len(all_states), len(all_dmas))
 
         cube = {
             'version':            1,
