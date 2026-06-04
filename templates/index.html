@@ -31104,21 +31104,60 @@
             var rows = dests.slice(0, 10);
             var total = rows.reduce(function(s, d) { return s + (+d.share_pct_of_switchers || 0); }, 0) || 1;
 
-            var W = 680;
-            var rowH = 50;
-            var padT = 30, padB = 20;
-            var H = Math.max(360, padT + padB + rows.length * rowH);
-            var srcX = 80, srcR = 56;   // source bubble center + radius
-            var destX = W - 140;        // destination bubble center
+            // ── TV-show context detection ────────────────────────────
+            // For streaming TV runs this same chart shows POST-VIEW
+            // destinations (where viewers went after the credits) — the
+            // source bubble + footer copy + label-truncation thresholds
+            // all need to adapt.
+            var _metaSw = (window._jiqCurrentRun && window._jiqCurrentRun.meta) || {};
+            var _kpisSw = (window._jiqCurrentRun && window._jiqCurrentRun.kpis) || {};
+            var isTvSw = ((_metaSw.target_type || '').toLowerCase() === 'tv_show')
+                      || (_kpisSw.tv_show_mode === true);
+            var srcWord1 = isTvSw ? 'ACCOUNTS'         : 'SWITCHERS';
+            var srcWord2 = isTvSw ? 'finished episode' : 'left without buying';
+            var footerWord = isTvSw ? 'share of accounts · bubble size = share · color = next-action category'
+                                    : 'share of switchers · bubble size = share · chain brand colors';
+
+            // ── Canvas sizing — rebalanced to give labels ~55% width ──
+            // Old layout: ribbon 79% / labels 21% → long TV labels clipped.
+            // New layout: ribbon 42% / labels 58% so 40+ char labels fit.
+            // Source bubble is also smaller (44px vs 56px radius) and
+            // shifted further left so the ribbon span is preserved.
+            var W = 720;
+            var rowH = 46;
+            var padT = 24, padB = 18;
+            var H = Math.max(340, padT + padB + rows.length * rowH);
+            var srcX = 62, srcR = 44;       // source bubble (smaller for TV)
+            var destX = Math.round(W * 0.42);  // destination column at 42% of W
             var srcCY = H / 2;
             var bubbleSlot = (H - padT - padB) / rows.length;
+            var labelStartXBase = destX + 38 + 10;   // assume max dest r=38
+            var labelMaxW = W - labelStartXBase - 6; // px available for label text
+
+            // ── Two-line label wrap ──────────────────────────────────
+            // For labels longer than ~28 chars, break at a natural word
+            // boundary into two lines so they fit the label column at
+            // standard 12px font. Returns [line1, line2|''].
+            function _wrapLabel(s, maxChars) {
+                var raw = String(s || '');
+                if (raw.length <= maxChars) return [raw, ''];
+                var cut = raw.lastIndexOf(' ', maxChars);
+                if (cut < maxChars * 0.55) cut = maxChars;  // no good break
+                var l1 = raw.slice(0, cut).trim();
+                var rest = raw.slice(cut).trim();
+                if (rest.length > maxChars + 4) rest = rest.slice(0, maxChars + 3) + '…';
+                return [l1, rest];
+            }
 
             // Enrich rows with positions
             var enriched = rows.map(function(d, i) {
                 var pct  = +d.share_pct_of_switchers || 0;
                 var frac = pct / total;
                 var color = _jiqSwitcherBrandColor(d.destination);
-                var r = Math.max(12, Math.min(38, 12 + frac * 110));
+                // Bubble radius scales with share — cap a bit smaller
+                // than before so the tighter destination column doesn't
+                // get crowded by oversized bubbles for the leading rows.
+                var r = Math.max(11, Math.min(30, 11 + frac * 90));
                 var y = padT + (i + 0.5) * bubbleSlot;
                 return { d: d, pct: pct, frac: frac, color: color, r: r, y: y };
             });
@@ -31130,39 +31169,46 @@
 
             // Ribbons FIRST (so bubbles overlay them)
             enriched.forEach(function(e) {
-                var width = Math.max(2, e.frac * 140);
-                // Ribbon emerges from the right edge of the source bubble at
-                // a stack-fraction offset so ribbons exit at different
-                // y-positions and visually splay.
+                var width = Math.max(2, e.frac * 110);
                 var srcExitY = srcCY + (e.y - H / 2) * 0.32;
                 parts.push(_jiqFlowRibbon(srcX + srcR - 4, srcExitY, destX - e.r - 2, e.y, width, e.color, 0.55));
             });
 
-            // Source bubble
+            // Source bubble (text scales down for the smaller radius)
             parts.push('<g>'
                  + '<circle cx="' + srcX + '" cy="' + srcCY + '" r="' + srcR + '" fill="#1f2547" stroke="#5b6cff" stroke-width="3"/>'
-                 + '<text x="' + srcX + '" y="' + (srcCY - 8) + '" text-anchor="middle" fill="#fff" font-weight="700" font-size="13">SWITCHERS</text>'
-                 + '<text x="' + srcX + '" y="' + (srcCY + 10) + '" text-anchor="middle" fill="#9aa3b2" font-size="10">left without buying</text>'
-                 + '<text x="' + srcX + '" y="' + (srcCY + 26) + '" text-anchor="middle" fill="#5b6cff" font-weight="700" font-size="13">100%</text>'
+                 + '<text x="' + srcX + '" y="' + (srcCY - 6) + '" text-anchor="middle" fill="#fff" font-weight="700" font-size="11">' + srcWord1 + '</text>'
+                 + '<text x="' + srcX + '" y="' + (srcCY + 8) + '" text-anchor="middle" fill="#9aa3b2" font-size="9">' + srcWord2 + '</text>'
+                 + '<text x="' + srcX + '" y="' + (srcCY + 22) + '" text-anchor="middle" fill="#5b6cff" font-weight="700" font-size="12">100%</text>'
                  + '</g>');
 
-            // Destination bubbles + labels
+            // Destination bubbles + labels (2-line wrap when needed)
             enriched.forEach(function(e) {
-                var lbl = (e.d.destination || '').replace(/ direct$/, '').replace(/^Google \/ Apple Pay in-app.*/, 'Google/Apple Pay');
-                var labelText = lbl.length > 32 ? lbl.slice(0, 31) + '…' : lbl;
+                var rawLbl = (e.d.destination || '')
+                    .replace(/ direct$/, '')
+                    .replace(/^Google \/ Apple Pay in-app.*/, 'Google/Apple Pay');
+                var wrap = _wrapLabel(rawLbl, 30);
+                var labelStartX = destX + e.r + 10;
+                var lineHasTwo = !!wrap[1];
+                // For 2-line labels, lift line1 up and place line2 below
+                var lineYTop = lineHasTwo ? (e.y - 4) : (e.y + 4);
+                var lineYBot = e.y + 11;
                 parts.push('<g>'
                      + '<circle cx="' + destX + '" cy="' + e.y + '" r="' + e.r + '" fill="' + e.color + '" opacity="0.92" stroke="' + e.color + '" stroke-width="2"/>'
                      + '<text x="' + destX + '" y="' + (e.y + 4) + '" text-anchor="middle" fill="#fff" font-weight="700" font-size="' + Math.max(10, e.r / 2.4) + '">' + e.pct.toFixed(1) + '%</text>'
-                     + '<text x="' + (destX + e.r + 10) + '" y="' + (e.y + 4) + '" text-anchor="start" fill="var(--text-primary)" font-weight="600" font-size="12">' + _jiqEsc(labelText) + '</text>'
-                     + '<title>' + _jiqEsc(e.d.destination || '') + ' — ' + e.pct.toFixed(1) + '% of switchers</title>'
+                     + '<text x="' + labelStartX + '" y="' + lineYTop + '" text-anchor="start" fill="var(--text-primary)" font-weight="600" font-size="11.5">' + _jiqEsc(wrap[0]) + '</text>'
+                     + (lineHasTwo
+                         ? '<text x="' + labelStartX + '" y="' + lineYBot + '" text-anchor="start" fill="var(--text-secondary)" font-weight="500" font-size="10.5">' + _jiqEsc(wrap[1]) + '</text>'
+                         : '')
+                     + '<title>' + _jiqEsc(e.d.destination || '') + ' — ' + e.pct.toFixed(1) + '%' + (isTvSw ? ' of accounts' : ' of switchers') + '</title>'
                      + '</g>');
             });
 
-            return '<div style="overflow-x:auto;padding:4px 0;">'
-                 + '<svg width="' + W + '" height="' + H + '" viewBox="0 0 ' + W + ' ' + H + '" style="display:block;max-width:100%;height:auto;">'
+            return '<div style="padding:4px 0;">'
+                 + '<svg width="' + W + '" height="' + H + '" viewBox="0 0 ' + W + ' ' + H + '" preserveAspectRatio="xMidYMid meet" style="display:block;width:100%;height:auto;max-width:100%;">'
                  + parts.join('')
                  + '</svg>'
-                 + '<div style="font-size:0.68rem;color:var(--text-secondary);margin-top:4px;text-align:center;">Ribbon thickness = share of switchers · bubble size = share · chain brand colors</div>'
+                 + '<div style="font-size:0.68rem;color:var(--text-secondary);margin-top:4px;text-align:center;">Ribbon thickness = ' + footerWord + '</div>'
                  + '</div>';
         }
 
