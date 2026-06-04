@@ -5431,6 +5431,7 @@ def _research_show_externally_with_claude(
     campaign_end,
     is_new_show: bool,
     platform_info: dict,
+    context_note: str | None = None,
 ) -> dict | None:
     """Comprehensive external web research via Claude + native web_search tool.
 
@@ -5457,7 +5458,11 @@ def _research_show_externally_with_claude(
     Returns None if Claude is disabled, web_search fails, or the response
     cannot be parsed. Partial results (some fields null) are returned as-is.
     """
-    key = f"{show_name.strip().lower()}|{platform_name.strip().lower()}"
+    # context_note participates in the cache key so e.g. "Spider-Noir - Color"
+    # and "Spider-Noir - Black & White" with different context hints don't
+    # collide. A normal run with no context_note keeps the same key as before.
+    note_key = (context_note or '').strip().lower()
+    key = f"{show_name.strip().lower()}|{platform_name.strip().lower()}|{note_key}"
     if key in _EXTERNAL_RESEARCH_CACHE:
         print(f"   📦 Using cached external research for {show_name!r}")
         return _EXTERNAL_RESEARCH_CACHE[key]
@@ -5592,6 +5597,29 @@ def _research_show_externally_with_claude(
         "OUTPUT: JSON only, no fences, no prose outside the object.\n"
     )
 
+    # If the caller passed a context_note (e.g. "this is the B&W alt-cut of a
+    # color release") we render it as a clearly-labeled block so Claude treats
+    # it as a constraint on the answer rather than just background trivia. The
+    # block ALSO gets quoted at the top of the JSON output spec below so the
+    # model is reminded right before it writes the number.
+    note_block = ''
+    if context_note and context_note.strip():
+        note_block = (
+            f'\n'
+            f'### IMPORTANT CONTEXT FROM ANALYST ###\n'
+            f'{context_note.strip()}\n'
+            f'#######################################\n'
+            f'\n'
+            f'You MUST factor this context into your reach_us_estimate,\n'
+            f'reach_us_lower, and reach_us_upper. If the context says this is\n'
+            f'a subset / alt-cut / regional slice of a larger release, your\n'
+            f'reach numbers should reflect THAT SUBSET, not the entire release.\n'
+            f'In your reach_reasoning, explicitly cite how you applied the\n'
+            f'analyst context (e.g. "Treated as ~20% of total Color-cut\n'
+            f'audience because B&W alt-cuts of Logan Noir / Mad Max: Black &\n'
+            f'Chrome historically captured 15-25% of total viewers").\n'
+        )
+
     user = (
         f'Show: "{show_name}"\n'
         f'Platform: {platform_name} (tier={tier}, US subs ~{subs_m}M)\n'
@@ -5600,6 +5628,7 @@ def _research_show_externally_with_claude(
         f'Episode count: {episode_count}\n'
         f'Window: {cs} to {ce}\n'
         f'Status: {"NEW (no prior season)" if is_new_show else "RETURNING (S2+ / sequel / reboot)"}\n'
+        f'{note_block}'
         f'\n'
         f'Research this show with at least 6 web searches (use the full\n'
         f'max_uses budget if needed). DO NOT return null for reach_us_estimate\n'
@@ -5985,6 +6014,7 @@ def _build_synthetic_panel(config: dict) -> dict:
             campaign_end=config.get('campaign_end'),
             is_new_show=is_new,
             platform_info=platform_info,
+            context_note=config.get('context_note'),
         )
 
     # Deterministic jitter (kept regardless of research path so two runs
