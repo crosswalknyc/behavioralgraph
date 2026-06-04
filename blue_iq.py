@@ -572,8 +572,8 @@ def _openai_client():
 _BUCKETS_LIST_FOR_PROMPT = '\n'.join(f'- {b}' for b in ISSUE_BUCKETS)
 
 
-def roll_up_political_issues(queries: list[dict], use_external: bool = True
-                              ) -> list[dict]:
+def roll_up_political_issues(queries: list[dict], use_external: bool = True,
+                              return_assignments: bool = False):
     """Classify search queries into political-issue buckets via OpenAI.
 
     `queries`: [{'term': str, 'count': int}, ...]
@@ -581,6 +581,13 @@ def roll_up_political_issues(queries: list[dict], use_external: bool = True
     Returns:
       [{'bucket': str, 'count': int, 'share': float, 'sample_queries': [str, ...]}, ...]
     Sorted by count desc. Non-policy queries are dropped from the output.
+
+    If `return_assignments=True`, returns a tuple
+      (buckets_list, term_to_bucket_map)
+    where `term_to_bucket_map[norm_term] = bucket_name`. This is what the
+    Issue\u00d7Journey cross step uses: it has hundreds of touchpoint-panelist
+    search terms, and matching by sample_queries (10 per bucket) misses
+    99%+ of them. The full term map lets us bucket every observed term.
     """
     kept = []
     for q in queries or []:
@@ -593,7 +600,7 @@ def roll_up_political_issues(queries: list[dict], use_external: bool = True
             kept.append({'term': term, 'count': cnt})
 
     if not kept:
-        return []
+        return ([], {}) if return_assignments else []
 
     client = _openai_client()
     if client is None:
@@ -601,13 +608,17 @@ def roll_up_political_issues(queries: list[dict], use_external: bool = True
         kept.sort(key=lambda x: -x['count'])
         top = kept[:50]
         total = sum(t['count'] for t in top) or 1
-        return [{
+        buckets = [{
             'bucket': 'Other Policy',
             'count':  total,
             'share':  1.0,
             'sample_queries': [t['term'] for t in top[:10]],
             'trend':  0.0,
         }]
+        if return_assignments:
+            tmap = {t['term'].strip().lower(): 'Other Policy' for t in top}
+            return buckets, tmap
+        return buckets
 
     sys_msg = (
         'You classify analytics search queries to support a U.S. political dashboard.\n'
@@ -703,6 +714,16 @@ def roll_up_political_issues(queries: list[dict], use_external: bool = True
             'sample_queries': bucket_examples[b][:10],
             'trend':  0.0,
         })
+    if return_assignments:
+        # term_to_bucket map keyed by normalized term (lowercase, stripped).
+        # Excludes NON_POLICY assignments — those terms have no policy bucket.
+        tmap: dict[str, str] = {}
+        for i, row in enumerate(kept):
+            b = assignments.get(i) or NON_POLICY
+            if b == NON_POLICY:
+                continue
+            tmap[row['term'].strip().lower()] = b
+        return out, tmap
     return out
 
 

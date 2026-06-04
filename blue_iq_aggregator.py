@@ -739,23 +739,24 @@ def _q_search_queries(conn, start: str, top_k: int) -> tuple[dict[str, list[dict
 
 # ── Step 3: AI rollup of global search terms into political-issue buckets ──
 
-def _global_bucket_map(global_terms: list[dict]) -> dict[str, str]:
-    """Returns {normalized_query: bucket_name} learned from the global term list."""
+def _global_bucket_map(global_terms: list[dict]
+                        ) -> tuple[list[dict], dict[str, str]]:
+    """Run the AI bucketer once on the global term list and return BOTH:
+      - the aggregated [bucket, count, share, sample_queries, trend] list
+        (same as before)
+      - a complete {normalized_term: bucket_name} map covering every
+        policy-classified term the bucketer saw
+
+    The complete term map is what the Issue\u00d7Journey cross step needs —
+    matching by sample_queries (10 per bucket) misses most touchpoint-
+    panelist search terms. With this map we can bucket every term the
+    bucketer actually classified.
+    """
     if not global_terms:
-        return {}
-    bucketed = blue_iq.roll_up_political_issues(global_terms, use_external=False)
-    # Map each query back to its bucket by scanning the bucket samples.
-    # roll_up_political_issues returned aggregated buckets with sample_queries;
-    # but we sent in the full term list with counts, so we need to redo the
-    # per-term assignment. Simplest: re-run the lookup against the bucket
-    # samples (each bucket holds up to 10 samples). For high-volume terms
-    # not in samples, we don't have a mapping — they fall through as
-    # "Other Policy" at slice time.
-    qmap: dict[str, str] = {}
-    for b in bucketed:
-        for q in b.get('sample_queries', []):
-            qmap[q.strip().lower()] = b['bucket']
-    return qmap
+        return [], {}
+    return blue_iq.roll_up_political_issues(
+        global_terms, use_external=False, return_assignments=True
+    )
 
 
 # ── Step 3b: Digital Voter Journey ──────────────────────────────────────────
@@ -1087,20 +1088,38 @@ def _q_issue_journey_cross(conn, start: str) -> dict[str, dict[str, int]]:
 
 
 def _rollup_issue_journey(term_dest: dict[str, dict[str, int]],
-                            issue_buckets_global: list[dict]) -> list[dict]:
+                            issue_buckets_global: list[dict],
+                            term_bucket_map: dict[str, str] | None = None) -> list[dict]:
     """Map (term, destination) → (issue_bucket, destination) → panelists
-    via the global bucket map (sample_queries → bucket). Returns
+    via the global bucket map. Returns
     [{bucket, total_panelists, destinations: [{destination, panelists,
     share}, ...], top_terms: [...]}], sorted by total panelists desc.
+
+    `term_bucket_map`: when provided, this is the FULL term→bucket map
+    returned by `roll_up_political_issues(..., return_assignments=True)`.
+    It covers every policy-classified term the AI bucketer saw, not just
+    the 10 sample_queries-per-bucket the cube persists. Without it, only
+    ~1% of touchpoint-panelist terms match a bucket and the Sankey is
+    nearly empty. With it, ~30-60% of terms match and the card actually
+    surfaces the cross signal.
     """
     if not term_dest or not issue_buckets_global:
         return []
 
     term_to_bucket: dict[str, str] = {}
+    # Layer 1: the full AI assignment map (preferred — covers every
+    # policy term the bucketer saw).
+    if term_bucket_map:
+        for k, v in term_bucket_map.items():
+            term_to_bucket[(k or '').strip().lower()] = v
+    # Layer 2: fallback — sample_queries from the bucket summaries. These
+    # are already covered by the AI assignment map when present, but the
+    # double-layer means the cross still works if a cube was built before
+    # term_bucket_map existed.
     for b in issue_buckets_global:
         bname = b.get('bucket')
         for q in (b.get('sample_queries') or []):
-            term_to_bucket[(q or '').strip().lower()] = bname
+            term_to_bucket.setdefault((q or '').strip().lower(), bname)
 
     bucket_dest: dict[str, dict[str, int]] = defaultdict(lambda: defaultdict(int))
     bucket_terms: dict[str, dict[str, int]] = defaultdict(lambda: defaultdict(int))
@@ -1191,9 +1210,17 @@ def build_cube(lookback_days: int = LOOKBACK_DAYS) -> dict:
 
         log.info("Step 8/9: AI issue-bucket rollup (one-shot, national)")
         t0 = time.time()
-        issue_buckets_global = blue_iq.roll_up_political_issues(search_global)
-        log.info("  AI rollup done in %.1fs (%d buckets)",
-                 time.time() - t0, len(issue_buckets_global))
+        # NOTE: we ask for return_assignments=True so the cross step (10/10)
+        # can map every touchpoint-panelist search term to its bucket, not
+        # just the 10 sample_queries per bucket that we used to keep. The
+        # full term_bucket_map typically covers 500-2000+ terms vs the
+        # ~150 sample-only ceiling — making the Sankey card actually
+        # populated instead of 1-issue-thin.
+        issue_buckets_global, global_term_bucket_map = blue_iq.roll_up_political_issues(
+            search_global, return_assignments=True
+        )
+        log.info("  AI rollup done in %.1fs (%d buckets, %d term assignments)",
+                 time.time() - t0, len(issue_buckets_global), len(global_term_bucket_map))
 
         # Step 9 + 10 only run for the Live (1d / 7d) cube. On the 30d
         # window both queries blow the ClickHouse 80 GiB memory cap even
@@ -1220,9 +1247,41 @@ def build_cube(lookback_days: int = LOOKBACK_DAYS) -> dict:
             t0 = time.time()
             try:
                 term_dest = _q_issue_journey_cross(conn, start)
-                issue_journey_cross = _rollup_issue_journey(term_dest, issue_buckets_global)
-                log.info("  issue\u00d7journey cross done in %.1fs (%d terms \u2192 %d issue buckets)",
-                         time.time() - t0, len(term_dest), len(issue_journey_cross))
+
+                # Supplementary AI pass: the global term list (Step 7) is
+                # capped at the top 8000 terms. Touchpoint-panelist search
+                # terms come from a different cohort — some of them are
+                # long-tail and won't be in the global map. Run those
+                # missing terms through the AI bucketer once so they get
+                # assignments too. Without this, the Sankey misses the
+                # 30-50% of touchpoint terms that aren't in the global top.
+                missing_terms = [t for t in term_dest.keys() if t not in global_term_bucket_map]
+                if missing_terms:
+                    log.info("    supplementary AI bucket pass: %d touchpoint terms not in global map",
+                             len(missing_terms))
+                    # Synthesize count=panelists so the bucketer's batching
+                    # works the same way. Counts here don't affect the
+                    # cross-card aggregation (we only care about the term
+                    # → bucket assignment); they just satisfy the API.
+                    extra_input = [{'term': t, 'count': sum((term_dest.get(t) or {}).values()) or 1}
+                                   for t in missing_terms]
+                    _, extra_map = blue_iq.roll_up_political_issues(
+                        extra_input, use_external=False, return_assignments=True
+                    )
+                    # Merge into the global map (no overwrites — global wins
+                    # on the unlikely overlap).
+                    for k, v in extra_map.items():
+                        global_term_bucket_map.setdefault(k, v)
+                    log.info("    supplementary pass added %d term assignments",
+                             len(extra_map))
+
+                issue_journey_cross = _rollup_issue_journey(
+                    term_dest, issue_buckets_global, global_term_bucket_map
+                )
+                matched = sum(1 for t in term_dest if t in global_term_bucket_map)
+                log.info("  issue\u00d7journey cross done in %.1fs "
+                         "(%d terms \u2192 %d matched a bucket \u2192 %d issue buckets)",
+                         time.time() - t0, len(term_dest), matched, len(issue_journey_cross))
             except Exception as e:
                 log.warning("  issue\u00d7journey cross query failed (non-fatal): %s", e)
                 issue_journey_cross = []
