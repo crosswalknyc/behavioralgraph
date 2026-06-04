@@ -19666,6 +19666,49 @@
                 <div id="jiqIntentGapBreakdown" style="display:none; margin: 0 0 1.1rem;"></div>
 
                 <!-- ════════════════════════════════════════════════════════
+                     VIEWERSHIP TRENDS card — shown only when the run
+                     payload carries viewership_trends (currently TV-show
+                     runs only). Surfaces WoW and MoM active accounts +
+                     watch hours, plus a weekly trend sparkline and a
+                     drill-down weekly table so the audience curve since
+                     premiere is legible at a glance.
+                ═══════════════════════════════════════════════════════ -->
+                <div class="card" id="jiqTvTrendsCard"
+                     style="padding: 1rem; margin-bottom: 1rem; display: none;
+                            background: linear-gradient(135deg, rgba(34,197,94,0.06) 0%, rgba(34,197,94,0.02) 100%);
+                            border: 1px solid rgba(34,197,94,0.22);">
+                    <div style="display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.25rem;">
+                        <h3 style="margin: 0;">📈 Viewership Trends — week-over-week & month-over-month</h3>
+                        <div id="jiqTvTrendsMeta" style="font-size: 0.72rem; color: var(--text-secondary);"></div>
+                    </div>
+                    <div id="jiqTvTrendsSubtitle" style="font-size: 0.78rem; color: var(--text-secondary); margin-bottom: 0.6rem;"></div>
+                    <details style="margin: 0 0 0.85rem;">
+                        <summary style="cursor:pointer;color:var(--accent-cyan);font-size:0.72rem;font-weight:600;user-select:none;padding:3px 0;">ℹ️ How to read this chart</summary>
+                        <div style="margin-top:6px;padding:0.7rem 0.9rem;background:var(--bg-secondary);border-left:3px solid var(--accent-cyan);border-radius:6px;font-size:0.76rem;line-height:1.55;">
+                            <ul style="margin:0;padding-left:1.1rem;">
+                                <li><strong>This Week / This Month tiles</strong> — active accounts + watch hours for the most recent (sometimes partial) bucket, with arrows showing % change vs the prior full bucket.</li>
+                                <li><strong>Active accounts</strong> = unique Netflix accounts that streamed any PCJ episode during the bucket. MAU/WAU semantic: an account active in two consecutive weeks is counted in both — these numbers do NOT sum to total confirmed accounts.</li>
+                                <li><strong>Sparkline</strong> shows weekly active accounts (solid) and weekly watch hours (dashed) across all weeks since premiere. Vertical markers indicate new-episode drop weeks.</li>
+                                <li><strong>What to look for:</strong> a clean step-down curve through the weekly drops, then a steeper tail after the final-aired episode. Bumps mid-tail can flag a viral / press-driven re-spike.</li>
+                            </ul>
+                        </div>
+                    </details>
+                    <div id="jiqTvTrendsKpis"
+                         style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+                                gap: 0.6rem; margin-bottom: 0.85rem;"></div>
+                    <div id="jiqTvTrendsChart" style="overflow-x: auto; margin-bottom: 0.6rem;"></div>
+                    <details style="margin: 0;">
+                        <summary style="cursor:pointer;color:var(--accent-cyan);font-size:0.74rem;font-weight:600;user-select:none;padding:3px 0;">📅 Weekly breakdown table</summary>
+                        <div id="jiqTvTrendsWeeklyTable" style="margin-top: 0.5rem; max-height: 320px; overflow-y: auto;"></div>
+                    </details>
+                    <details style="margin: 0.4rem 0 0;">
+                        <summary style="cursor:pointer;color:var(--accent-cyan);font-size:0.74rem;font-weight:600;user-select:none;padding:3px 0;">📆 Monthly breakdown table</summary>
+                        <div id="jiqTvTrendsMonthlyTable" style="margin-top: 0.5rem;"></div>
+                    </details>
+                    <div id="jiqTvTrendsMethodologyNote" style="margin-top: 0.7rem; font-size: 0.7rem; color: var(--text-secondary); font-style: italic;"></div>
+                </div>
+
+                <!-- ════════════════════════════════════════════════════════
                      ECOSYSTEM SPOTLIGHT card — shown only when the run
                      payload carries modeled_view.ecosystem_spotlight.
                      Visualizes the owned-property family (e.g. Fandango
@@ -29430,12 +29473,39 @@
                     if (kpis.marketing_touched_pct != null) {
                         var mtPct = Number(kpis.marketing_touched_pct);
                         var mtSub = (kpis.marketing_touched_viewers != null)
-                            ? _jiqFmt(kpis.marketing_touched_viewers) + ' accounts reached'
+                            ? _jiqFmt(kpis.marketing_touched_viewers) + ' accounts · all channels'
                             : 'any pre-launch marketing exposure';
                         k.push(['Marketing-Touched %',
                                 (isNaN(mtPct) ? '—' : mtPct.toFixed(1) + '%'),
                                 mtSub,
                                 'magenta']);
+                    }
+                    // Second marketing tile — % of accounts touched by
+                    // OFF-PLATFORM marketing only (strips out Netflix-
+                    // owned channels like homepage rec, Top 10, push,
+                    // Tudum, on-platform trailer, marketing email). The
+                    // delta between the two tiles is the story: how
+                    // dependent the show's reach is on Netflix's own
+                    // discovery surfaces vs paid/earned media off-
+                    // platform.
+                    if (kpis.marketing_touched_ex_netflix_pct != null) {
+                        var mtExPct = Number(kpis.marketing_touched_ex_netflix_pct);
+                        var mtExAcc = kpis.marketing_touched_ex_netflix_accounts;
+                        var mtExSub = (mtExAcc != null)
+                            ? _jiqFmt(mtExAcc) + ' accounts · ex-Netflix-owned'
+                            : 'off-platform marketing only';
+                        // Show delta vs full marketing-touched if both
+                        // present, so the drop-off jumps off the tile.
+                        if (kpis.marketing_touched_pct != null) {
+                            var dropPp = (Number(kpis.marketing_touched_pct) - mtExPct);
+                            if (dropPp > 0) {
+                                mtExSub += ' · -' + dropPp.toFixed(1) + ' pp vs all-channel';
+                            }
+                        }
+                        k.push(['Marketing-Touched % (ex-Netflix)',
+                                (isNaN(mtExPct) ? '—' : mtExPct.toFixed(1) + '%'),
+                                mtExSub,
+                                'amber']);
                     }
                 } else if (hasConfirmedTicketing) {
                     // Movie with confirmed digital pre-sales + comp-anchored projection.
@@ -29753,6 +29823,18 @@
 
             // ---- Touchpoints panel ----
             renderJourneyIqTouchpoints(touchpoints);
+
+            // ---- Viewership Trends card (TV-show payloads carry
+            //      viewership_trends with weekly + monthly active
+            //      accounts and watch hours). Renderer auto-hides
+            //      the card if the block is missing.
+            if (typeof renderJourneyIqTvTrends === 'function') {
+                renderJourneyIqTvTrends(
+                    d.viewership_trends
+                    || ((fullRun || {}).modeled_view || {}).viewership_trends
+                    || (fullRun || {}).viewership_trends
+                );
+            }
 
             // Facts - facts can be plain strings or {label, value} dicts.
             // Coerce + filter so we never render '[object Object]' or empty
@@ -32621,6 +32703,353 @@
                         }).join('') + '</tbody></table>';
                 }
             }
+        }
+
+        // ──────────────────────────────────────────────────────────────
+        // Viewership Trends renderer — TV-show weekly + monthly trends
+        //
+        // Consumes payload.viewership_trends:
+        //   {
+        //     unit_label:  'accounts',
+        //     as_of_date:  'YYYY-MM-DD',
+        //     weekly:      [ { week_start, week_label, active_accounts,
+        //                      watch_hours, episode_drop, is_partial } ],
+        //     monthly:     [ { month_label, active_accounts, watch_hours,
+        //                      days_in_window, is_partial } ],
+        //     methodology_note: '...',
+        //   }
+        //
+        // Renders into:
+        //   #jiqTvTrendsKpis             — 4 headline tiles (this week / month × accounts / hours)
+        //   #jiqTvTrendsChart            — SVG sparkline (weekly accounts + hours)
+        //   #jiqTvTrendsWeeklyTable      — full weekly table in a details/expand
+        //   #jiqTvTrendsMonthlyTable     — full monthly table in a details/expand
+        //   #jiqTvTrendsMethodologyNote  — footnote
+        //
+        // Auto-hides the entire card when no trends block is present.
+        // ──────────────────────────────────────────────────────────────
+        function renderJourneyIqTvTrends(trends) {
+            var card = document.getElementById('jiqTvTrendsCard');
+            if (!card) return;
+            var hasData = trends
+                && ((trends.weekly && trends.weekly.length)
+                 || (trends.monthly && trends.monthly.length));
+            if (!hasData) { card.style.display = 'none'; return; }
+            card.style.display = '';
+
+            var weekly  = (trends.weekly  || []).slice();
+            var monthly = (trends.monthly || []).slice();
+
+            // ---- meta + subtitle ----
+            var metaEl     = document.getElementById('jiqTvTrendsMeta');
+            var subEl      = document.getElementById('jiqTvTrendsSubtitle');
+            var notesEl    = document.getElementById('jiqTvTrendsMethodologyNote');
+            if (metaEl) {
+                metaEl.textContent = trends.as_of_date
+                    ? 'as of ' + trends.as_of_date
+                    : '';
+            }
+            if (subEl) {
+                subEl.textContent = 'Active ' + (trends.unit_label || 'accounts')
+                    + ' and total watch hours by week and by month, with % change vs the prior bucket. '
+                    + 'Active = unique accounts that streamed any episode in the window (MAU/WAU semantic).';
+            }
+            if (notesEl) {
+                notesEl.textContent = trends.methodology_note || '';
+            }
+
+            // helper: format a delta as colored arrow + percentage
+            var fmtDelta = function(curr, prev) {
+                if (prev == null || prev === 0 || curr == null) return '';
+                var pct = (curr / prev - 1) * 100;
+                var arrow = pct >= 0 ? '▲' : '▼';
+                var color = pct >= 0 ? 'var(--accent-lime, #22c55e)' : 'var(--accent-red, #ef4444)';
+                return '<span style="color:' + color + ';font-weight:600;">'
+                    + arrow + ' ' + Math.abs(pct).toFixed(1) + '%</span>';
+            };
+
+            // ---- 4 headline KPI tiles ----
+            // For WoW comparison, compare the latest week vs the prior
+            // CLOSED week (skip partial). Same logic for monthly.
+            var kpiEl = document.getElementById('jiqTvTrendsKpis');
+            if (kpiEl) {
+                var lastW = weekly.length ? weekly[weekly.length - 1] : null;
+                var prevW = null;
+                if (weekly.length >= 2) {
+                    // If last is partial, compare to the most recent FULL
+                    // week for a clean apples-to-apples reading; otherwise
+                    // compare to the second-to-last bucket.
+                    if (lastW && lastW.is_partial && weekly.length >= 2) {
+                        // For partial, "this week" still wins the tile but
+                        // we annotate the prior FULL week below; delta uses
+                        // last full vs prior full so the arrow is meaningful
+                        // rather than misleadingly steep from the partial.
+                        prevW = weekly[weekly.length - 2];
+                    } else {
+                        prevW = weekly[weekly.length - 2];
+                    }
+                }
+                var lastM = monthly.length ? monthly[monthly.length - 1] : null;
+                var prevM = monthly.length >= 2 ? monthly[monthly.length - 2] : null;
+
+                var tiles = [];
+                if (lastW) {
+                    var wAcct = lastW.active_accounts;
+                    var wHrs  = lastW.watch_hours;
+                    var wDeltaA = (prevW && !lastW.is_partial)
+                        ? fmtDelta(wAcct, prevW.active_accounts)
+                        : (lastW.is_partial ? '<span style="font-size:0.7rem;color:var(--text-secondary);">partial week — delta hidden</span>' : '');
+                    var wDeltaH = (prevW && !lastW.is_partial)
+                        ? fmtDelta(wHrs, prevW.watch_hours)
+                        : (lastW.is_partial ? '<span style="font-size:0.7rem;color:var(--text-secondary);">partial week — delta hidden</span>' : '');
+                    var wLabelSuffix = lastW.is_partial ? ' · partial' : '';
+                    tiles.push(_jiqTvTrendTile(
+                        'This Week — Active Accounts',
+                        _jiqFmt(wAcct),
+                        (lastW.week_label || 'latest week') + wLabelSuffix
+                            + (prevW ? ' · WoW ' + wDeltaA : ''),
+                        '#22c55e'  // green
+                    ));
+                    tiles.push(_jiqTvTrendTile(
+                        'This Week — Watch Hours',
+                        _jiqFmt(wHrs),
+                        (lastW.week_label || 'latest week') + wLabelSuffix
+                            + (prevW ? ' · WoW ' + wDeltaH : ''),
+                        '#22c55e'
+                    ));
+                }
+                if (lastM) {
+                    var mAcct = lastM.active_accounts;
+                    var mHrs  = lastM.watch_hours;
+                    var mDeltaA = (prevM && !lastM.is_partial)
+                        ? fmtDelta(mAcct, prevM.active_accounts)
+                        : (lastM.is_partial ? '<span style="font-size:0.7rem;color:var(--text-secondary);">partial month — delta hidden</span>' : '');
+                    var mDeltaH = (prevM && !lastM.is_partial)
+                        ? fmtDelta(mHrs, prevM.watch_hours)
+                        : (lastM.is_partial ? '<span style="font-size:0.7rem;color:var(--text-secondary);">partial month — delta hidden</span>' : '');
+                    var mLabelSuffix = lastM.is_partial ? ' · partial' : '';
+                    tiles.push(_jiqTvTrendTile(
+                        'This Month — Active Accounts',
+                        _jiqFmt(mAcct),
+                        (lastM.month_label || 'latest month') + mLabelSuffix
+                            + (prevM ? ' · MoM ' + mDeltaA : ''),
+                        '#06b6d4'  // cyan
+                    ));
+                    tiles.push(_jiqTvTrendTile(
+                        'This Month — Watch Hours',
+                        _jiqFmt(mHrs),
+                        (lastM.month_label || 'latest month') + mLabelSuffix
+                            + (prevM ? ' · MoM ' + mDeltaH : ''),
+                        '#06b6d4'
+                    ));
+                }
+                kpiEl.innerHTML = tiles.join('');
+            }
+
+            // ---- weekly sparkline ----
+            var chartEl = document.getElementById('jiqTvTrendsChart');
+            if (chartEl) {
+                chartEl.innerHTML = _jiqRenderTrendsSparkline(weekly);
+            }
+
+            // ---- weekly breakdown table ----
+            var tblWEl = document.getElementById('jiqTvTrendsWeeklyTable');
+            if (tblWEl) {
+                tblWEl.innerHTML = _jiqRenderTrendsTable(weekly, 'week_label', 'WoW');
+            }
+
+            // ---- monthly breakdown table ----
+            var tblMEl = document.getElementById('jiqTvTrendsMonthlyTable');
+            if (tblMEl) {
+                tblMEl.innerHTML = _jiqRenderTrendsTable(monthly, 'month_label', 'MoM');
+            }
+        }
+
+        // Single KPI tile for the Viewership Trends card.
+        function _jiqTvTrendTile(label, value, subline, accentColor) {
+            return ''
+                + '<div style="padding:0.75rem 0.85rem; background: var(--bg-secondary);'
+                + ' border-radius: 8px; border-left: 3px solid ' + accentColor + ';">'
+                +   '<div style="font-size: 0.7rem; color: var(--text-secondary);'
+                +     ' text-transform: uppercase; letter-spacing: 0.04em; font-weight: 600;'
+                +     ' margin-bottom: 4px;">' + _jiqEsc(label) + '</div>'
+                +   '<div style="font-size: 1.45rem; font-weight: 700; color: var(--text-primary);'
+                +     ' line-height: 1.1;">' + value + '</div>'
+                +   '<div style="font-size: 0.7rem; color: var(--text-secondary);'
+                +     ' margin-top: 4px;">' + (subline || '') + '</div>'
+                + '</div>';
+        }
+
+        // Generic table renderer used for both weekly + monthly breakdowns.
+        // `labelKey` is the row's display label field ('week_label' / 'month_label').
+        // `deltaLabel` is the column header ('WoW' / 'MoM').
+        function _jiqRenderTrendsTable(rows, labelKey, deltaLabel) {
+            if (!rows || !rows.length) return '<div style="color: var(--text-secondary); font-size: 0.8rem;">No data.</div>';
+            var fmtDeltaCell = function(curr, prev) {
+                if (prev == null || prev === 0 || curr == null) return '<span style="color: var(--text-secondary);">—</span>';
+                var pct = (curr / prev - 1) * 100;
+                var arrow = pct >= 0 ? '▲' : '▼';
+                var color = pct >= 0 ? '#22c55e' : '#ef4444';
+                return '<span style="color:' + color + ';font-weight:600;">'
+                    + arrow + ' ' + Math.abs(pct).toFixed(1) + '%</span>';
+            };
+            var html = ''
+                + '<table style="width:100%; border-collapse: collapse; font-size: 0.78rem;">'
+                +   '<thead><tr style="border-bottom: 1px solid var(--border-color);">'
+                +     '<th style="text-align:left;padding:6px 8px;color:var(--text-secondary);font-weight:600;">Period</th>'
+                +     '<th style="text-align:right;padding:6px 8px;color:var(--text-secondary);font-weight:600;">Active accounts</th>'
+                +     '<th style="text-align:right;padding:6px 8px;color:var(--text-secondary);font-weight:600;">' + deltaLabel + ' Δ acct</th>'
+                +     '<th style="text-align:right;padding:6px 8px;color:var(--text-secondary);font-weight:600;">Watch hours</th>'
+                +     '<th style="text-align:right;padding:6px 8px;color:var(--text-secondary);font-weight:600;">' + deltaLabel + ' Δ hrs</th>'
+                +     '<th style="text-align:left;padding:6px 8px;color:var(--text-secondary);font-weight:600;">Notes</th>'
+                +   '</tr></thead>'
+                +   '<tbody>';
+            for (var i = 0; i < rows.length; i++) {
+                var r = rows[i];
+                var prev = (i > 0) ? rows[i - 1] : null;
+                var noteBits = [];
+                if (r.episode_drop && r.episode_drop !== '—') noteBits.push(_jiqEsc(r.episode_drop));
+                if (r.is_partial) noteBits.push('<em style="color:var(--text-secondary);">partial</em>');
+                var rowBg = (i === rows.length - 1) ? 'background: rgba(34,197,94,0.06);' : '';
+                html += '<tr style="border-bottom: 1px solid var(--border-color); ' + rowBg + '">'
+                    + '<td style="padding:6px 8px;">' + _jiqEsc(r[labelKey] || '') + '</td>'
+                    + '<td style="padding:6px 8px;text-align:right;font-variant-numeric:tabular-nums;">' + _jiqFmt(r.active_accounts) + '</td>'
+                    + '<td style="padding:6px 8px;text-align:right;">' + fmtDeltaCell(r.active_accounts, prev ? prev.active_accounts : null) + '</td>'
+                    + '<td style="padding:6px 8px;text-align:right;font-variant-numeric:tabular-nums;">' + _jiqFmt(r.watch_hours) + '</td>'
+                    + '<td style="padding:6px 8px;text-align:right;">' + fmtDeltaCell(r.watch_hours, prev ? prev.watch_hours : null) + '</td>'
+                    + '<td style="padding:6px 8px;color:var(--text-secondary);font-size:0.74rem;">' + noteBits.join(' · ') + '</td>'
+                    + '</tr>';
+            }
+            html += '</tbody></table>';
+            return html;
+        }
+
+        // SVG sparkline showing weekly active accounts (solid green line)
+        // and weekly watch hours (dashed cyan line) on a shared X-axis.
+        // Two Y-axes (left: accounts, right: hours). Marks new-episode
+        // drop weeks with a small caret on the X-axis.
+        function _jiqRenderTrendsSparkline(weekly) {
+            if (!weekly || !weekly.length) return '';
+            var W = 880, H = 220;
+            var padL = 60, padR = 60, padT = 18, padB = 44;
+            var plotW = W - padL - padR;
+            var plotH = H - padT - padB;
+            var n = weekly.length;
+
+            // domain
+            var maxA = 0, maxH = 0;
+            for (var i = 0; i < n; i++) {
+                if (weekly[i].active_accounts > maxA) maxA = weekly[i].active_accounts;
+                if (weekly[i].watch_hours    > maxH) maxH = weekly[i].watch_hours;
+            }
+            if (maxA === 0) maxA = 1;
+            if (maxH === 0) maxH = 1;
+
+            var xFor = function(i) {
+                if (n === 1) return padL + plotW / 2;
+                return padL + (i / (n - 1)) * plotW;
+            };
+            var yForA = function(v) { return padT + plotH - (v / maxA) * plotH; };
+            var yForH = function(v) { return padT + plotH - (v / maxH) * plotH; };
+
+            // path strings
+            var pathA = '', pathH = '';
+            for (var j = 0; j < n; j++) {
+                var x = xFor(j);
+                pathA += (j === 0 ? 'M' : 'L') + x.toFixed(1) + ',' + yForA(weekly[j].active_accounts).toFixed(1);
+                pathH += (j === 0 ? 'M' : 'L') + x.toFixed(1) + ',' + yForH(weekly[j].watch_hours   ).toFixed(1);
+            }
+
+            // gridlines (4 horizontal)
+            var grid = '';
+            for (var g = 1; g <= 3; g++) {
+                var gy = padT + (plotH * g / 4);
+                grid += '<line x1="' + padL + '" y1="' + gy + '" x2="' + (W - padR) + '" y2="' + gy
+                     + '" stroke="rgba(255,255,255,0.06)" stroke-width="1"/>';
+            }
+
+            // x-axis ticks: show every other label to avoid crowding (or all if n<=8)
+            var ticks = '';
+            var labelStep = (n <= 8) ? 1 : 2;
+            for (var k = 0; k < n; k++) {
+                var tx = xFor(k);
+                ticks += '<line x1="' + tx + '" y1="' + (padT + plotH) + '" x2="' + tx + '" y2="' + (padT + plotH + 4)
+                      + '" stroke="rgba(255,255,255,0.25)" stroke-width="1"/>';
+                if (k % labelStep === 0 || k === n - 1) {
+                    var lab = (weekly[k].week_label || '').replace(/^Week of /, '');
+                    ticks += '<text x="' + tx + '" y="' + (padT + plotH + 16) + '" font-size="9"'
+                          + ' text-anchor="middle" fill="var(--text-secondary)">' + _jiqEsc(lab) + '</text>';
+                }
+                // partial marker
+                if (weekly[k].is_partial) {
+                    ticks += '<text x="' + tx + '" y="' + (padT + plotH + 28) + '" font-size="8"'
+                          + ' text-anchor="middle" fill="#f59e0b">partial</text>';
+                }
+            }
+
+            // episode-drop markers (caret on top of plot)
+            var drops = '';
+            for (var d2 = 0; d2 < n; d2++) {
+                var drp = weekly[d2].episode_drop || '';
+                if (drp && drp !== '—' && drp.indexOf('partial') === -1) {
+                    var dx = xFor(d2);
+                    drops += '<text x="' + dx + '" y="' + (padT - 4) + '" font-size="9"'
+                          + ' text-anchor="middle" fill="#a78bfa" font-weight="600">▼</text>';
+                }
+            }
+
+            // y-axis labels
+            var leftAxis = ''
+                + '<text x="' + (padL - 6) + '" y="' + (padT + 4) + '" font-size="9" text-anchor="end" fill="#22c55e">'
+                + _jiqFmt(maxA) + '</text>'
+                + '<text x="' + (padL - 6) + '" y="' + (padT + plotH) + '" font-size="9" text-anchor="end" fill="#22c55e">0</text>';
+            var rightAxis = ''
+                + '<text x="' + (W - padR + 6) + '" y="' + (padT + 4) + '" font-size="9" text-anchor="start" fill="#06b6d4">'
+                + _jiqFmt(maxH) + '</text>'
+                + '<text x="' + (W - padR + 6) + '" y="' + (padT + plotH) + '" font-size="9" text-anchor="start" fill="#06b6d4">0</text>';
+
+            // point markers + hover tooltips (title elements)
+            var ptsA = '', ptsH = '';
+            for (var p = 0; p < n; p++) {
+                var xp = xFor(p);
+                var yA = yForA(weekly[p].active_accounts);
+                var yH = yForH(weekly[p].watch_hours);
+                var titleA = weekly[p].week_label + '\n' + _jiqFmt(weekly[p].active_accounts) + ' active accounts'
+                           + (weekly[p].episode_drop && weekly[p].episode_drop !== '—' ? '\n' + weekly[p].episode_drop : '');
+                var titleH = weekly[p].week_label + '\n' + _jiqFmt(weekly[p].watch_hours) + ' watch hours';
+                ptsA += '<circle cx="' + xp + '" cy="' + yA + '" r="3" fill="#22c55e">'
+                     +   '<title>' + _jiqEsc(titleA) + '</title>'
+                     + '</circle>';
+                ptsH += '<circle cx="' + xp + '" cy="' + yH + '" r="3" fill="#06b6d4">'
+                     +   '<title>' + _jiqEsc(titleH) + '</title>'
+                     + '</circle>';
+            }
+
+            // legend
+            var legend = ''
+                + '<g transform="translate(' + padL + ',' + (H - 8) + ')">'
+                +   '<rect x="0" y="-10" width="14" height="3" fill="#22c55e"/>'
+                +   '<text x="20" y="-7" font-size="10" fill="var(--text-secondary)">Active accounts (left axis)</text>'
+                +   '<rect x="200" y="-10" width="14" height="3" fill="#06b6d4" stroke-dasharray="2 2"/>'
+                +   '<line x1="200" y1="-8.5" x2="214" y2="-8.5" stroke="#06b6d4" stroke-width="2" stroke-dasharray="3 2"/>'
+                +   '<text x="220" y="-7" font-size="10" fill="var(--text-secondary)">Watch hours (right axis)</text>'
+                +   '<text x="400" y="-7" font-size="10" fill="#a78bfa">▼ = new episode drop</text>'
+                + '</g>';
+
+            var svg = ''
+                + '<svg viewBox="0 0 ' + W + ' ' + H + '" width="100%" height="' + H + '" preserveAspectRatio="xMidYMid meet" style="max-width: 100%;">'
+                +   grid
+                +   ticks
+                +   drops
+                +   '<path d="' + pathH + '" stroke="#06b6d4" stroke-width="2" fill="none" stroke-dasharray="5 3" opacity="0.85"/>'
+                +   '<path d="' + pathA + '" stroke="#22c55e" stroke-width="2.5" fill="none"/>'
+                +   ptsH
+                +   ptsA
+                +   leftAxis
+                +   rightAxis
+                +   legend
+                + '</svg>';
+            return svg;
         }
 
         // ---- Touchpoints renderer (table + overlap + touch distribution) ----
