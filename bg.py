@@ -22676,10 +22676,38 @@ def agent_pipeline_final_sanity_check(df: pd.DataFrame,
     return df
 
 
+def _canonicalize_brand_category(bc):
+    """Map upstream category-label variants to the canonical taxonomy.
+
+    Added 2026-06-04 per Jenna's audit: profiles like Brooke Hyland were
+    being labeled 'CREATOR' or 'INFLUENCER/CREATOR' instead of the
+    canonical 'CREATOR/INFLUENCER'. Dashboard groups profiles by this
+    label, so the variants were creating split buckets.
+    """
+    if not bc:
+        return bc
+    raw = str(bc).strip()
+    u = raw.upper()
+    creator_variants = {
+        'CREATOR', 'INFLUENCER', 'INFLUENCER/CREATOR',
+        'CREATORS', 'INFLUENCERS', 'CREATORS/INFLUENCERS',
+        'INFLUENCERS/CREATORS', 'CREATOR/INFLUENCERS',
+        'INFLUENCERS/CREATOR', 'CONTENT CREATOR',
+        'SOCIAL MEDIA INFLUENCER', 'SOCIAL MEDIA CREATOR',
+    }
+    if u in creator_variants:
+        return 'CREATOR/INFLUENCER'
+    return raw
+
+
 def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, behavior_start, behavior_end, filters, skew_settings, is_genpop, purchasers_only=False, previous_file_path=None, brand_category=None, is_listener_watcher=False, output_dir=None, geo_zip_codes=None, geo_dma=None):
     from datetime import datetime
     import time
-    
+
+    # Normalize category labels at the entry point so any downstream
+    # writer that emits BRAND CATEGORY uses the canonical value.
+    brand_category = _canonicalize_brand_category(brand_category)
+
     # Start timing the entire pipeline
     pipeline_start_time = time.time()
     
@@ -30805,7 +30833,7 @@ def boost_all_behavioral_by_2x(df: pd.DataFrame) -> pd.DataFrame:
         'EASTERN CONFERENCE', 'CENTRAL DIVISION', 'AFC', 'AFC EAST', 'AFC NORTH',
         'AFC SOUTH', 'AFC WEST', 'AL', 'AL CENTRAL', 'AL EAST', 'AL WEST',
         'SERIE A', 'TENNIS', 'UEFA', 'WESTERN CONFERENCE', 'SPORTS', 'LA LIGA',
-        'ACTOR', 'ATHLETE', 'HOST/PERSONALITY', 'INFLUENCER/CREATOR', 'MLB ATHLETE',
+        'ACTOR', 'ATHLETE', 'HOST/PERSONALITY', 'CREATOR/INFLUENCER', 'MLB ATHLETE',
         'MUSICIAN/BAND', 'NBA ATHLETE', 'NFL ATHLETE', 'POLITICS/ACTIVIST',
         'SOCCER ATHLETE', 'WNBA ATHLETE', 'TALENT', 'COLLEGE/UNIVERSITY',
         'ACCESSORIES', 'APPAREL/FOOTWEAR', 'BEAUTY/WELLNESS', 'HOME/OUTDOOR',
@@ -33683,7 +33711,7 @@ def main():
                 "TRAVEL", "QSR", "WHERE THEY DINE", "WHERE THEY SHOP", "SEARCH ENGINE/AI", "SEARCH ENGINE",
                 "SOCIAL MEDIA", "BROADCAST/CABLE", "STREAMING/MUSIC", "STREAMING/PLATFORM", "STREAMING/CHANNEL",
                 "VIRTUAL MVPD FAST", "PORN MEDIA", "TECHNOLOGY/DEVICE", "TELECOM", "WORKOUT FACILITY",
-                "EVENTS", "VENUE", "TICKETING", "ACTOR", "ATHLETE", "HOST/PERSONALITY", "INFLUENCER/CREATOR",
+                "EVENTS", "VENUE", "TICKETING", "ACTOR", "ATHLETE", "HOST/PERSONALITY", "CREATOR/INFLUENCER",
                 "MLB ATHLETE", "MUSICIAN/BAND", "NBA ATHLETE", "NFL ATHLETE", "POLITICS/ACTIVIST",
                 "SOCCER ATHLETE", "WNBA ATHLETE", "TALENT", "SPORTS ORGANIZATIONS", "SPORTS TEAM",
                 "WNBA", "NBA", "NFL", "NFC", "NFC EAST", "NFC NORTH", "NFC SOUTH", "NFC WEST",
