@@ -1334,21 +1334,29 @@ def compute_panel_view(filters: dict, *, force_refresh: bool = False) -> dict:
     # cube doesn't have them, so the user sees a populated card
     # regardless of which lookback they picked.
     issue_journey_cross = (cube or {}).get('issue_journey_cross') or []
-    if (not issue_journey_cross or not panel_journey) and int(f.get('lookback_days') or DEFAULT_LOOKBACK_DAYS) != 1:
-        try:
-            live_cube = _load_cube(1)
-            if live_cube:
+    if (not issue_journey_cross or not panel_journey) and int(f.get('lookback_days') or DEFAULT_LOOKBACK_DAYS) > 14:
+        # Try cubes in order of "closest in size to what was asked, but
+        # still inside the journey-query OOM gate (lookback_days <= 14)".
+        # 7d gives the richest cross data (more search terms per touchpoint
+        # panelist, more issue buckets after AI rollup) while still fitting
+        # in CH's 80 GiB memory cap; 1d is the fallback if 7d isn't built
+        # yet.
+        for _fb_days in (7, 1):
+            try:
+                fb_cube = _load_cube(_fb_days)
+                if not fb_cube:
+                    continue
                 if not issue_journey_cross:
-                    issue_journey_cross = live_cube.get('issue_journey_cross') or []
+                    issue_journey_cross = fb_cube.get('issue_journey_cross') or []
                 if not panel_journey:
-                    # The journey card is per-cell; pull the matching cell
-                    # from the Live cube (or fall back to All||).
-                    live_cells = live_cube.get('cells') or {}
-                    live_key = _cube_cell_key(filters['party'], filters['geo_type'], filters['geo_value'])
-                    live_cell = live_cells.get(live_key) or live_cells.get('All||') or {}
-                    panel_journey = live_cell.get('voter_journey') or []
-        except Exception as _exc:  # pragma: no cover - defensive
-            log.debug("Live-cube fallback for journey cards failed: %s", _exc)
+                    fb_cells = fb_cube.get('cells') or {}
+                    fb_key = _cube_cell_key(filters['party'], filters['geo_type'], filters['geo_value'])
+                    fb_cell = fb_cells.get(fb_key) or fb_cells.get('All||') or {}
+                    panel_journey = fb_cell.get('voter_journey') or []
+                if issue_journey_cross and panel_journey:
+                    break
+            except Exception as _exc:  # pragma: no cover - defensive
+                log.debug("Fallback cube %dd for journey cards failed: %s", _fb_days, _exc)
 
     cards = {
         'issue_buckets':       issue_buckets,
