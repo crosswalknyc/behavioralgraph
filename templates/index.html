@@ -8981,6 +8981,37 @@
             border-bottom: 1px dashed rgba(255,176,87,0.18);
         }
         .iqr-context-bullets li:last-child { border-bottom: none; }
+
+        /* Per-platform buzz block (Web / TikTok / X / Instagram).
+           One row per platform, label-on-left/value-on-right; rows that
+           have no value collapse so the block doesn't look half-empty. */
+        .iqr-context-platforms {
+            display: flex; flex-direction: column; gap: 0.45rem;
+            margin: 0.2rem 0 1.2rem 0;
+            padding: 0.75rem 0.85rem;
+            background: rgba(255,176,87,0.04);
+            border: 1px solid rgba(255,176,87,0.18);
+            border-radius: 10px;
+        }
+        .iqr-context-platforms .iqr-context-platform-row {
+            display: grid; grid-template-columns: 110px 1fr;
+            gap: 0.75rem; align-items: baseline;
+            font-size: 0.84rem; line-height: 1.45;
+        }
+        .iqr-context-platforms .iqr-context-platform-label {
+            color: #ffb057; font-weight: 700; letter-spacing: 0.02em;
+            text-transform: uppercase; font-size: 0.72rem;
+            white-space: nowrap;
+        }
+        .iqr-context-platforms .iqr-context-platform-value {
+            color: var(--text-primary);
+        }
+        @media (max-width: 600px) {
+            .iqr-context-platforms .iqr-context-platform-row {
+                grid-template-columns: 1fr;
+                gap: 0.1rem;
+            }
+        }
         .iqr-context-sources {
             list-style: none; padding: 0; margin: 0.4rem 0 1.1rem 0;
             display: flex; flex-direction: column; gap: 0.35rem;
@@ -18687,6 +18718,7 @@
                             <div id="iqRankerContextTotals" class="iqr-context-totals"></div>
                             <div id="iqRankerContextHeadline" class="iqr-context-headline" style="display: none;"></div>
                             <ul id="iqRankerContextBullets" class="iqr-context-bullets"></ul>
+                            <div id="iqRankerContextPlatforms" class="iqr-context-platforms" style="display: none;"></div>
                             <div id="iqRankerContextLLMWarn" class="iqr-context-warn" style="display: none;"></div>
 
                             <!-- Web-search sources removed by request: bullets only. -->
@@ -86048,6 +86080,7 @@
             const totalsEl   = document.getElementById('iqRankerContextTotals');
             const headlineEl = document.getElementById('iqRankerContextHeadline');
             const bulletsEl  = document.getElementById('iqRankerContextBullets');
+            const platformsEl = document.getElementById('iqRankerContextPlatforms');
             const llmWarnEl  = document.getElementById('iqRankerContextLLMWarn');
             const bodyEl     = document.getElementById('iqRankerContextBody');
             const cstreamWrap = document.getElementById('iqRankerContextClickstreamWrap');
@@ -86086,6 +86119,33 @@
                         (source === 'web_search' ? '' : ' Showing raw aggregation below.');
                     llmWarnEl.style.display = '';
                 }
+            }
+
+            // Per-platform buzz (Web / TikTok / X / Instagram). Backend
+            // always returns all four keys but values can be empty when
+            // the model genuinely had nothing platform-specific to say —
+            // those rows collapse so we don't render dead labels.
+            const platforms = (llm && llm.platforms) || {};
+            const PLATFORM_ROWS = [
+                {key: 'web',       label: 'Web'},
+                {key: 'tiktok',    label: 'TikTok'},
+                {key: 'x',         label: 'X'},
+                {key: 'instagram', label: 'Instagram'},
+            ];
+            const pRows = PLATFORM_ROWS
+                .map(p => ({...p, val: (platforms[p.key] || '').trim()}))
+                .filter(p => p.val);
+            if (pRows.length) {
+                platformsEl.innerHTML = pRows.map(p => (
+                    `<div class="iqr-context-platform-row">` +
+                      `<div class="iqr-context-platform-label">${_iqEsc(p.label)}</div>` +
+                      `<div class="iqr-context-platform-value">${_iqEsc(p.val)}</div>` +
+                    `</div>`
+                )).join('');
+                platformsEl.style.display = '';
+            } else {
+                platformsEl.innerHTML = '';
+                platformsEl.style.display = 'none';
             }
 
             // Web-search path: bullets-only (sources display has been removed).
