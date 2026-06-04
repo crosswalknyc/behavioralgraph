@@ -5531,6 +5531,7 @@ def get_admin_content():
                     category = 'SVOD Acquisition'
                     if key in svod_metadata and svod_metadata[key].get('category'):
                         category = svod_metadata[key]['category']
+                    category = normalize_subscriber_iq_category(category)
                     
                     svod_files.append({
                         'key': f'svod-acquisition/{key}',  # Prefix to identify bucket
@@ -11842,6 +11843,7 @@ def list_subscriber_iq_files():
                 category = 'SVOD Acquisition'
                 if key in svod_metadata and svod_metadata[key].get('category'):
                     category = svod_metadata[key]['category']
+                category = normalize_subscriber_iq_category(category)
                 
                 files.append({
                     's3_key': key,
@@ -18616,6 +18618,19 @@ DEFAULT_TICKER_KPIS = {
     'META': 'WW Daily Active People',
     'DASH': 'Total Orders'
 }
+
+# Legacy SVOD category labels → display name in Subscriber IQ sidebar
+SUBSCRIBER_IQ_CATEGORY_ALIASES = {
+    'SERIES - FOX': 'SERIES - 20TH TELEVISION',
+    'SERIES - 20TH CENTURY': 'SERIES - 20TH TELEVISION',
+}
+
+
+def normalize_subscriber_iq_category(category):
+    """Map legacy series category strings to the current Subscriber IQ label."""
+    c = (category or '').strip() or 'SVOD Acquisition'
+    return SUBSCRIBER_IQ_CATEGORY_ALIASES.get(c, c)
+
 
 def load_svod_metadata():
     """Load SVOD file metadata (categories) from S3."""
