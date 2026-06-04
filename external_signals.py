@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import time
 import urllib.parse
 from datetime import datetime, timedelta, timezone
@@ -415,39 +416,61 @@ def wikipedia_pageviews(titles: list[str], lookback_days: int = 7) -> dict[str, 
 
 # ── 4. Convenience: best-effort fetch-all-in-parallel ───────────────────────
 
+# Hard wall-clock budget per source. Even on slow days the dashboard never
+# waits longer than _EXT_BUDGET_S total on external fetches.
+_EXT_BUDGET_S       = int(os.environ.get('BLUE_IQ_EXT_BUDGET_S', '25'))
+_EXT_MAX_POLS       = int(os.environ.get('BLUE_IQ_EXT_MAX_POLS', '12'))  # cap politicians fanned out per call
+
+
 def fetch_all_external(state: Optional[str], lookback_days: int,
                         politician_names: Iterable[str]) -> dict:
-    """Pull every external source in one shot. Returns a dict of partial results.
+    """Pull every external source IN PARALLEL via a small ThreadPoolExecutor.
 
-    Caller blends these into the Blue IQ card output. Missing keys mean that
-    source failed.
+    Returns a dict of partial results. Missing keys mean that source failed.
+
+    Each source is bounded at the HTTP layer by `_HTTP_TIMEOUT_S` per request,
+    and the WHOLE call is bounded by `_EXT_BUDGET_S` (default 25s). Any source
+    that doesn't finish in time gets canceled and returns its default empty
+    value. We use `cancel_futures=True` on shutdown so the executor doesn't
+    block on stragglers (which was the prior 3-minute hang).
     """
-    politician_names = list(politician_names or [])
-    out: dict = {}
+    from concurrent.futures import ThreadPoolExecutor, as_completed, TimeoutError as FutTimeoutError
+    politician_names = list(politician_names or [])[:_EXT_MAX_POLS]  # cap fan-out
+
+    tasks = {
+        'google_trends_top':         lambda: trends_top_issues(state=state, lookback_days=lookback_days),
+        'google_trends_politicians': lambda: trends_politician_interest(politician_names, state=state),
+        'gdelt_articles':            lambda: gdelt_political_articles(state=state, lookback_days=lookback_days),
+        'gdelt_politician_mentions': lambda: gdelt_politician_mentions(politician_names, state=state, lookback_days=lookback_days),
+        'wiki_pageviews':            lambda: wikipedia_pageviews(politician_names, lookback_days=lookback_days),
+    }
+
+    defaults = {
+        'google_trends_top': [],
+        'google_trends_politicians': {},
+        'gdelt_articles': [],
+        'gdelt_politician_mentions': {},
+        'wiki_pageviews': {},
+    }
+
+    out: dict = dict(defaults)
+    ex = ThreadPoolExecutor(max_workers=5, thread_name_prefix='blueiq-ext')
+    futures = {ex.submit(fn): key for key, fn in tasks.items()}
+    deadline = time.monotonic() + _EXT_BUDGET_S
     try:
-        out['google_trends_top'] = trends_top_issues(state=state, lookback_days=lookback_days)
-    except Exception as e:
-        logger.debug("trends_top_issues failed: %s", e)
-        out['google_trends_top'] = []
-    try:
-        out['google_trends_politicians'] = trends_politician_interest(politician_names, state=state)
-    except Exception as e:
-        logger.debug("trends_politician_interest failed: %s", e)
-        out['google_trends_politicians'] = {}
-    try:
-        out['gdelt_articles'] = gdelt_political_articles(state=state, lookback_days=lookback_days)
-    except Exception as e:
-        logger.debug("gdelt_political_articles failed: %s", e)
-        out['gdelt_articles'] = []
-    try:
-        out['gdelt_politician_mentions'] = gdelt_politician_mentions(politician_names, state=state,
-                                                                      lookback_days=lookback_days)
-    except Exception as e:
-        logger.debug("gdelt_politician_mentions failed: %s", e)
-        out['gdelt_politician_mentions'] = {}
-    try:
-        out['wiki_pageviews'] = wikipedia_pageviews(politician_names, lookback_days=lookback_days)
-    except Exception as e:
-        logger.debug("wikipedia_pageviews failed: %s", e)
-        out['wiki_pageviews'] = {}
+        for fut in as_completed(futures, timeout=_EXT_BUDGET_S):
+            key = futures[fut]
+            remaining = max(0.1, deadline - time.monotonic())
+            try:
+                out[key] = fut.result(timeout=remaining)
+            except Exception as e:
+                logger.debug("external source %s failed: %s", key, e)
+                out[key] = defaults[key]
+    except FutTimeoutError:
+        slow = [futures[f] for f in futures if not f.done()]
+        logger.info("external_signals: %d source(s) exceeded %ds budget: %s",
+                    len(slow), _EXT_BUDGET_S, slow)
+    finally:
+        # Don't wait for slow stragglers; cancel them so the dashboard returns.
+        ex.shutdown(wait=False, cancel_futures=True)
     return out

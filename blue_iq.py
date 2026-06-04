@@ -52,7 +52,16 @@ logger = logging.getLogger(__name__)
 S3_CACHE_BUCKET    = os.environ.get('BLUE_IQ_CACHE_BUCKET', 'dashboard-inputs')
 S3_CACHE_PREFIX    = os.environ.get('BLUE_IQ_CACHE_PREFIX', 'blue_iq/cache/')
 S3_PARTY_PREFIX    = os.environ.get('BLUE_IQ_PARTY_PREFIX', 'blue_iq/party_imputed/')
+S3_CUBE_KEY        = os.environ.get('BLUE_IQ_CUBE_KEY', 'blue_iq/aggregates/latest.json')
+# Per-lookback cube keys. These mirror the aggregator's output layout.
+# The reader picks the file whose lookback matches the user's selected
+# window (Live=1d, default=30d). If a per-lookback key is missing, the
+# reader falls back to the legacy `latest.json` (which is always the
+# 30d cube — written by the aggregator's also_write_legacy=True path).
+def _cube_key_for_lookback(lookback_days: int) -> str:
+    return f"blue_iq/aggregates/cube_{int(lookback_days)}d.json"
 CACHE_TTL_S        = int(os.environ.get('BLUE_IQ_CACHE_TTL', '86400'))   # 24h
+CUBE_STALE_S       = int(os.environ.get('BLUE_IQ_CUBE_STALE_S', '172800'))  # 48h before warning
 MIN_CELL_SIZE      = int(os.environ.get('BLUE_IQ_MIN_CELL_SIZE', '100')) # privacy floor
 DEFAULT_LOOKBACK_DAYS = int(os.environ.get('BLUE_IQ_LOOKBACK_DAYS', '30'))
 OPENAI_MODEL       = os.environ.get('BLUE_IQ_OPENAI_MODEL', 'gpt-4o')
@@ -287,7 +296,8 @@ def _normalize_filters(filters: dict | None) -> dict:
         lookback_days = int(f.get('lookback_days') or DEFAULT_LOOKBACK_DAYS)
     except Exception:
         lookback_days = DEFAULT_LOOKBACK_DAYS
-    lookback_days = max(7, min(180, lookback_days))
+    # Allow 1 ("Live (latest day)") through 180. 7/30/90 are the standard UI options.
+    lookback_days = max(1, min(180, lookback_days))
     return {
         'party':         party,
         'geo_type':      geo_type,
@@ -299,38 +309,64 @@ def _normalize_filters(filters: dict | None) -> dict:
 # ── Filter options (states/DMAs/parties) ─────────────────────────────────────
 
 def get_filter_options() -> dict:
-    """Returns the dropdown choices for the filter bar. Cached for 24h in-process."""
-    cache_key = '_filter_options_v1'
+    """Returns the dropdown choices for the filter bar.
+
+    Fast path: read state/DMA list straight from the nightly cube
+    (`all_states` and `all_dmas` keys). Sub-millisecond, no CH hit.
+
+    Fallback: if cube is missing, run two small GROUP BY queries on
+    `userdata.user_data_sanitized` (still fast — that table is small).
+    """
+    cache_key = '_filter_options_v2'
     cached = _FILTER_OPTIONS_CACHE.get(cache_key)
     if cached and (time.time() - cached['ts'] < 3600):
         return cached['data']
 
     states: list[str] = []
-    dmas: list[str]   = []
-    try:
-        rows = _ch_query("""
-            SELECT STATE, count() AS n
-            FROM userdata.user_data_sanitized
-            WHERE STATE IS NOT NULL AND STATE != ''
-            GROUP BY STATE
-            HAVING n >= %(floor)s
-            ORDER BY STATE
-        """, {'floor': MIN_CELL_SIZE})
-        states = [r[0] for r in rows if r and r[0]]
-    except Exception as e:
-        logger.warning("filter_options: state pull failed: %s", e)
-    try:
-        rows = _ch_query("""
-            SELECT DMA, count() AS n
-            FROM userdata.user_data_sanitized
-            WHERE DMA IS NOT NULL AND DMA != ''
-            GROUP BY DMA
-            HAVING n >= %(floor)s
-            ORDER BY DMA
-        """, {'floor': MIN_CELL_SIZE})
-        dmas = [r[0] for r in rows if r and r[0]]
-    except Exception as e:
-        logger.warning("filter_options: dma pull failed: %s", e)
+    dmas:   list[str] = []
+
+    # Filter dropdown reads from the 30d cube (it has the broadest geo
+    # coverage). The Live cube may have fewer states/DMAs if some panel
+    # cells fell below MIN_CELL_SIZE on a single-day window.
+    cube = _load_cube(DEFAULT_LOOKBACK_DAYS)
+    if cube:
+        states = list(cube.get('all_states') or [])
+        dmas   = list(cube.get('all_dmas') or [])
+
+    if not states:
+        try:
+            # PROVINCE is the 2-letter USPS code column in user_data_sanitized.
+            # Translate to full state name via the canonical _USPS_TO_NAME map
+            # so the dropdown shows "California" instead of "CA".
+            try:
+                from external_signals import _USPS_TO_NAME  # type: ignore
+            except Exception:
+                _USPS_TO_NAME = {}
+            rows = _ch_query("""
+                SELECT PROVINCE, count() AS n
+                FROM userdata.user_data_sanitized
+                WHERE PROVINCE IS NOT NULL AND PROVINCE != ''
+                GROUP BY PROVINCE
+                HAVING n >= %(floor)s
+                ORDER BY PROVINCE
+            """, {'floor': MIN_CELL_SIZE})
+            states = sorted({_USPS_TO_NAME.get(r[0], r[0])
+                              for r in rows if r and r[0]})
+        except Exception as e:
+            logger.warning("filter_options: state pull failed: %s", e)
+    if not dmas:
+        try:
+            rows = _ch_query("""
+                SELECT DMA, count() AS n
+                FROM userdata.user_data_sanitized
+                WHERE DMA IS NOT NULL AND DMA != ''
+                GROUP BY DMA
+                HAVING n >= %(floor)s
+                ORDER BY DMA
+            """, {'floor': MIN_CELL_SIZE})
+            dmas = [r[0] for r in rows if r and r[0]]
+        except Exception as e:
+            logger.warning("filter_options: dma pull failed: %s", e)
 
     data = {
         'parties':       VALID_PARTIES,
@@ -339,6 +375,7 @@ def get_filter_options() -> dict:
         'dmas':          dmas,
         'min_cell_size': MIN_CELL_SIZE,
         'default_lookback_days': DEFAULT_LOOKBACK_DAYS,
+        'cube_built_at': (cube or {}).get('computed_at'),
     }
     _FILTER_OPTIONS_CACHE[cache_key] = {'ts': time.time(), 'data': data}
     return data
@@ -573,16 +610,39 @@ def roll_up_political_issues(queries: list[dict], use_external: bool = True
         }]
 
     sys_msg = (
-        'You classify analytics search queries to support a political dashboard.\n'
+        'You classify analytics search queries to support a U.S. political dashboard.\n'
+        'AUDIENCE: U.S. registered voters and constituents that a U.S. politician\n'
+        '(federal, state, or local) could address with policy. Drop everything else.\n'
+        '\n'
         'For each query, decide:\n'
-        '  1. Is it about a POLICY issue a politician could address?\n'
-        '     (Drop sports, celebrity, weather, shopping, dating, recipes, gaming,\n'
-        '      music, movies, TV, generic curiosity. KEEP: cost of living,\n'
-        '      housing affordability, healthcare access, immigration, taxes,\n'
-        '      voting, candidate positions, civil rights, climate policy, etc.)\n'
+        '  1. Is the query (a) U.S.-relevant AND (b) a POLICY issue an elected U.S.\n'
+        '     official could plausibly address?\n'
+        '\n'
+        f'     Return "{NON_POLICY}" if ANY of the following are true:\n'
+        '       - Non-U.S. jurisdiction (UK, India, EU, LATAM, Russia, Canada specifics).\n'
+        '         Examples to REJECT: "aadhar card", "uk financial news", "gilt yields",\n'
+        '         "dolar hoy", "sanitas", "ration card", "annapurna yojana",\n'
+        '         "infonavit", ".gov.in", ".gov.uk", ".co.uk".\n'
+        '       - Non-English-script terms (Cyrillic, Devanagari, CJK, Arabic, etc.).\n'
+        '       - Generic non-policy: shopping, recipes, weather, sports, celebrity,\n'
+        '         dating, gaming, music, movies, TV, technical/coding queries,\n'
+        '         job-search board names without policy context ("zillow", "indeed"\n'
+        '         alone is non-policy).\n'
+        '       - Government services that are pure transactions, not policy debates\n'
+        '         ("renew driver license", "irs login", "social security login").\n'
+        '\n'
+        '     KEEP only U.S. policy debate topics: cost of living, housing affordability,\n'
+        '     healthcare access, immigration, taxes, voting/elections, candidate\n'
+        '     positions, civil rights, gun policy, abortion policy, climate policy,\n'
+        '     student loans, infrastructure, foreign policy positions, etc.\n'
+        '\n'
         '  2. If policy, assign exactly ONE bucket from this list:\n'
         f'{_BUCKETS_LIST_FOR_PROMPT}\n'
-        f'     If non-policy, return "{NON_POLICY}".\n'
+        f'     If non-policy OR non-U.S., return "{NON_POLICY}".\n'
+        '\n'
+        'When in doubt, prefer NON_POLICY. False negatives are cheap; false positives\n'
+        'pollute the dashboard.\n'
+        '\n'
         'INPUT FORMAT: each line is INDEX<TAB>JSON_STRING_QUERY\n'
         'OUTPUT FORMAT: strict JSON: {"items":[{"i":0,"b":"..."},...]}\n'
         'one entry per input line, same indices, no commentary.'
@@ -649,9 +709,20 @@ def roll_up_political_issues(queries: list[dict], use_external: bool = True
 # ── Card queries (the 5 panel queries) ──────────────────────────────────────
 
 def _geo_filter_clause(geo_type: str, geo_value: str) -> tuple[str, dict]:
-    """Returns (SQL fragment that filters user_data_sanitized U, params)."""
+    """Returns (SQL fragment that filters user_data_sanitized U, params).
+
+    Note: user_data_sanitized's state column is `PROVINCE` (USPS 2-letter
+    code), not `STATE`. Frontend passes full state names ("California"),
+    so we map the incoming value back to its USPS code on the fly.
+    """
     if geo_type == 'State' and geo_value:
-        return ("U.STATE = %(geo_value)s", {'geo_value': geo_value})
+        try:
+            from external_signals import _USPS_TO_NAME  # type: ignore
+            name_to_usps = {v: k for k, v in _USPS_TO_NAME.items()}
+        except Exception:
+            name_to_usps = {}
+        usps = name_to_usps.get(geo_value, geo_value)
+        return ("U.PROVINCE = %(geo_value)s", {'geo_value': usps})
     if geo_type == 'DMA' and geo_value:
         return ("U.DMA = %(geo_value)s", {'geo_value': geo_value})
     return ("1=1", {})
@@ -782,39 +853,51 @@ def _card_top_politicians(uids: set[str], start_date: str,
 
 def _blend_politicians(panel_counts: dict[str, int], external: dict,
                         politicians: list[str]) -> list[dict]:
-    """Blend panel mentions + Google Trends + GDELT + Wikipedia into one score."""
+    """Blend panel mentions + Google Trends + GDELT + Wikipedia into one score.
+
+    Weights are renormalized to the sources that ACTUALLY returned data so a
+    single live source (e.g. just Wikipedia when Trends/GDELT are rate-limited)
+    still produces a meaningful ranking instead of collapsing to ~0.
+    """
     trends = external.get('google_trends_politicians') or {}
     gdelt  = external.get('gdelt_politician_mentions') or {}
     wiki   = external.get('wiki_pageviews') or {}
 
-    # Normalize each source to 0..1 by max for blending.
     def norm(d: dict[str, int | float]) -> dict[str, float]:
-        if not d:
+        # Treat all-zero dicts as empty (Trends often returns 12 zeros).
+        if not d or max(d.values() or [0]) <= 0:
             return {}
         mx = max(d.values()) or 1
-        return {k: (v / mx) for k, v in d.items()}
+        return {k: (float(v) / mx) for k, v in d.items()}
 
-    p = norm(panel_counts)
-    t = norm(trends)
-    g = norm(gdelt)
-    w = norm(wiki)
+    sources = {
+        'panel':  (norm(panel_counts), 0.55),
+        'trends': (norm(trends),       0.20),
+        'gdelt':  (norm(gdelt),        0.15),
+        'wiki':   (norm(wiki),         0.10),
+    }
+    # Renormalize across sources that returned any data.
+    live = {name: w for name, (d, w) in sources.items() if d}
+    wsum = sum(live.values()) or 1.0
+    live_weights = {name: w / wsum for name, w in live.items()}
 
     names = set(politicians) | set(panel_counts) | set(trends) | set(gdelt) | set(wiki)
     out = []
-    for name in names:
-        # Weighted blend. Panel signal dominates when present; external fills in.
-        score = (
-            0.55 * p.get(name, 0.0) +
-            0.20 * t.get(name, 0.0) +
-            0.15 * g.get(name, 0.0) +
-            0.10 * w.get(name, 0.0)
+    for n in names:
+        score = sum(
+            sources[name][0].get(n, 0.0) * live_weights[name]
+            for name in live
         )
         if score <= 0:
             continue
+        # Provenance: which sources contributed (so the card can show a
+        # tiny badge like "external" when panel is empty).
+        contribs = [name for name in live if sources[name][0].get(n, 0.0) > 0]
         out.append({
-            'name':            name,
-            'panelists':       int(panel_counts.get(name, 0)),
-            'mention_score':   round(score, 4),
+            'name':           n,
+            'panelists':      int(panel_counts.get(n, 0)),
+            'mention_score':  round(score, 4),
+            'sources':        contribs,
         })
     out.sort(key=lambda r: -r['mention_score'])
     return out[:25]
@@ -1019,32 +1102,173 @@ def _card_demo_crosstab(uids: set[str]) -> dict:
     return out
 
 
+# ── Aggregate cube loader + slicer (PRIMARY fast path) ──────────────────────
+
+_CUBE_CACHE: dict[int, dict] = {}        # {lookback_days: {'cube': ..., 'fetched_at': ts}}
+_CUBE_INPROC_TTL_S = 300                  # re-fetch each cube from S3 at most once every 5 min
+
+
+def _cube_cell_key(party: str, geo_type: str, geo_value: str) -> str:
+    """Cube file uses '{party}|{state}|{dma}'. Empty for the dim we're not slicing."""
+    if geo_type == 'State':
+        return f"{party}|{geo_value}|"
+    if geo_type == 'DMA':
+        return f"{party}||{geo_value}"
+    return f"{party}||"
+
+
+def _load_cube(lookback_days: int = DEFAULT_LOOKBACK_DAYS) -> Optional[dict]:
+    """Load the per-lookback cube from S3 with a short in-process TTL.
+
+    Lookback resolves to a specific S3 key (`cube_{N}d.json`). If that key
+    is missing AND the user asked for the default 30d window, we fall
+    through to the legacy `latest.json` key for backward compat. For the
+    1d ("Live") cube, no fallback — missing means missing.
+
+    Returns None if the cube is missing entirely (frontend then falls
+    through to a degraded "external-only" view). Logs a warning if the
+    cube is older than CUBE_STALE_S but still returns it so the dashboard
+    never goes dark unnecessarily.
+    """
+    now = time.time()
+    cached = _CUBE_CACHE.get(int(lookback_days))
+    if cached and (now - float(cached.get('fetched_at', 0)) < _CUBE_INPROC_TTL_S):
+        return cached.get('cube')  # may be None if last fetch confirmed missing
+    primary_key = _cube_key_for_lookback(lookback_days)
+    fallback_key = S3_CUBE_KEY if int(lookback_days) == DEFAULT_LOOKBACK_DAYS else None
+
+    def _try_key(key: str) -> Optional[dict]:
+        s3 = _s3()
+        resp = s3.get_object(Bucket=S3_CACHE_BUCKET, Key=key)
+        return json.loads(resp['Body'].read().decode('utf-8'))
+
+    cube: Optional[dict] = None
+    for k in [primary_key, fallback_key]:
+        if not k:
+            continue
+        try:
+            cube = _try_key(k)
+            break
+        except Exception as e:
+            msg = str(e)
+            if 'NoSuchKey' in msg or '404' in msg:
+                continue
+            logger.warning("Blue IQ cube load failed for %s: %s", k, e)
+            continue
+
+    if cube is not None:
+        try:
+            built = datetime.fromisoformat(cube.get('computed_at', '').replace('Z', '+00:00'))
+            age = (datetime.now(timezone.utc) - built).total_seconds()
+            if age > CUBE_STALE_S:
+                logger.warning("Blue IQ %dd cube is %.0fh old — aggregator may be failing.",
+                               lookback_days, age / 3600)
+        except Exception:
+            pass
+    else:
+        logger.warning("Blue IQ %dd cube missing at s3://%s/%s — run blue_iq_aggregator.py --lookback %d",
+                       lookback_days, S3_CACHE_BUCKET, primary_key, lookback_days)
+
+    _CUBE_CACHE[int(lookback_days)] = {'cube': cube, 'fetched_at': now}
+    return cube
+
+
+def _slice_cube(cube: dict, filters: dict) -> tuple[Optional[dict], int]:
+    """Look up the relevant cell in the cube. Returns (cell_payload_or_None, panel_size)."""
+    if not cube:
+        return None, 0
+    cells = cube.get('cells') or {}
+    key = _cube_cell_key(filters['party'], filters['geo_type'], filters['geo_value'])
+    cell = cells.get(key)
+    if cell:
+        return cell, int(cell.get('uid_count', 0))
+    # If party-specific cell missing, try the 'All' party variant (still useful info)
+    if filters['party'] != 'All':
+        alt = cells.get(_cube_cell_key('All', filters['geo_type'], filters['geo_value']))
+        if alt:
+            return alt, int(alt.get('uid_count', 0))
+    return None, 0
+
+
+def _bucket_search_terms_via_global_map(top_search_queries: list[dict],
+                                          issue_buckets_global: list[dict]) -> list[dict]:
+    """Map a cell's top search queries to political-issue buckets using the
+    GLOBAL bucket assignments from the cube (no fresh OpenAI call needed).
+    """
+    if not top_search_queries or not issue_buckets_global:
+        return []
+    # Build a fast lookup from sample_queries -> bucket. Terms not in the
+    # samples fall through; they're skipped from per-cell rollup (they're
+    # represented in the absolute-national 'issue_buckets_global' card).
+    term_to_bucket: dict[str, str] = {}
+    for b in issue_buckets_global:
+        for q in (b.get('sample_queries') or []):
+            term_to_bucket[q.strip().lower()] = b['bucket']
+
+    counts: dict[str, int] = defaultdict(int)
+    examples: dict[str, list[str]] = defaultdict(list)
+    for row in top_search_queries:
+        term = (row.get('term') or '').strip().lower()
+        c = int(row.get('count') or 0)
+        if not term or c <= 0:
+            continue
+        b = term_to_bucket.get(term)
+        if not b:
+            continue
+        counts[b] += c
+        if len(examples[b]) < 8:
+            examples[b].append(row.get('term'))
+
+    if not counts:
+        # No per-cell mapping found — surface the global buckets instead so
+        # the card isn't blank. This is the "small slice" graceful path.
+        return [dict(b, sample_queries=(b.get('sample_queries') or [])[:8]) for b in issue_buckets_global[:12]]
+
+    total = sum(counts.values()) or 1
+    return [{
+        'bucket': b,
+        'count':  c,
+        'share':  round(c / total, 4),
+        'sample_queries': examples[b][:8],
+        'trend':  0.0,
+    } for b, c in sorted(counts.items(), key=lambda x: -x[1])]
+
+
 # ── Main entry point ────────────────────────────────────────────────────────
 
 def compute_panel_view(filters: dict, *, force_refresh: bool = False) -> dict:
-    """Build a Blue IQ dashboard view for the filter combo. Cache-aware."""
+    """Build a Blue IQ dashboard view for the filter combo.
+
+    Order of operations:
+      1. Try the per-filter S3 result cache (24h TTL).
+      2. Load the nightly aggregate CUBE from S3 (sub-second S3 GetObject).
+      3. Slice the cube for this filter cell.
+      4. In parallel: fetch external signals (Trends + GDELT + Wikipedia).
+      5. Blend cube + external into the card output.
+      6. Cache result and return.
+
+    If the cube is missing entirely (first-day boot, before any nightly run),
+    the response still goes out with external-only cards and a clear
+    `cube_missing=true` flag so the operator knows to run the aggregator.
+    """
     f = _normalize_filters(filters)
 
-    # 1. Try cache
+    # 1. Per-request cache (24h, identical filter combo)
     if not force_refresh:
         cached = _cache_get(f)
         if cached:
             cached['cache_hit'] = True
             return cached
 
-    start_date = (datetime.now(timezone.utc) - timedelta(days=f['lookback_days'])).strftime('%Y-%m-%d')
+    # 2. Cube lookup (sub-second S3 GetObject, then in-process cache for 5 min).
+    # Pick the cube file that matches the user's selected lookback window —
+    # so "Live (1 day)" reads cube_1d.json and "30 days" reads cube_30d.json.
+    cube = _load_cube(int(f.get('lookback_days') or DEFAULT_LOOKBACK_DAYS))
+    cell, panel_size = _slice_cube(cube, f) if cube else (None, 0)
+    suppressed = panel_size < MIN_CELL_SIZE
+    cube_missing = cube is None
 
-    # 2. Resolve the panel slice
-    try:
-        uids = _panel_uids(f['party'], f['geo_type'], f['geo_value'])
-    except Exception as e:
-        logger.warning("panel uid resolution failed: %s", e)
-        uids = set()
-
-    suppressed = len(uids) < MIN_CELL_SIZE
-    panel_size = len(uids)
-
-    # 3. External signals (best-effort, parallel-safe; we just sequentially call them).
+    # 3. External signals — ALWAYS fetched (parallel ThreadPoolExecutor inside).
     try:
         from external_signals import fetch_all_external  # type: ignore
     except ImportError:
@@ -1057,61 +1281,174 @@ def compute_panel_view(filters: dict, *, force_refresh: bool = False) -> dict:
         politician_names=politicians_for_external,
     )
 
-    # 4. Build cards. If suppressed, still let external sources fill where they can —
-    # but mark the suppression and zero out panel-specific stats.
-    if suppressed:
-        cards = {
-            'issue_buckets':   _card_issue_buckets(set(), start_date, external=external),
-            'search_engines':  [],
-            'social_media':    [],
-            'top_politicians': _card_top_politicians(set(), start_date, external=external),
-            'top_articles':    _card_top_articles(set(), start_date, external=external),
-            'turnout_intent':  {'pct': 0.0, 'panelists': 0, 'sample_queries': []},
-            'demo_crosstab':   {},
-        }
-    else:
-        cards = {
-            'issue_buckets':   _card_issue_buckets(uids, start_date, external=external),
-            'search_engines':  _card_search_engines(uids, start_date),
-            'social_media':    _card_social_media(uids, start_date),
-            'top_politicians': _card_top_politicians(uids, start_date, external=external),
-            'top_articles':    _card_top_articles(uids, start_date, external=external),
-            'turnout_intent':  _card_turnout_intent(uids, start_date),
-            'demo_crosstab':   _card_demo_crosstab(uids),
-        }
+    # 4. Build cards from cube (panel-side) + external (Trends/GDELT/Wiki).
+    issue_buckets_global = (cube or {}).get('issue_buckets_global') or []
 
-    # 5. Compare-mode (J) — only when geo is set, so we have a meaningful slice.
+    if cell:
+        panel_top_queries  = cell.get('top_search_queries') or []
+        panel_search       = cell.get('search_engines') or []
+        panel_social       = cell.get('social_media') or []
+        panel_politicians  = cell.get('top_politicians') or []
+        panel_articles     = cell.get('top_articles') or []
+        panel_turnout      = cell.get('turnout') or {'panelists': 0, 'sample_urls': []}
+        panel_demo         = cell.get('demo') or {}
+        panel_journey      = cell.get('voter_journey') or []
+    else:
+        panel_top_queries = []
+        panel_search = []
+        panel_social = []
+        panel_politicians = []
+        panel_articles = []
+        panel_turnout = {'panelists': 0, 'sample_urls': []}
+        panel_demo = {}
+        panel_journey = []
+
+    # Card A — issue buckets: prefer per-cell mapping; fall back to global.
+    issue_buckets = _bucket_search_terms_via_global_map(panel_top_queries, issue_buckets_global)
+    if not issue_buckets and external.get('google_trends_top'):
+        # External-only fallback: bucket Trends terms via the global map too
+        synth = [{'term': r.get('term', ''), 'count': max(1, int(r.get('score', 0)) // 1000)}
+                 for r in external['google_trends_top']]
+        issue_buckets = _bucket_search_terms_via_global_map(synth, issue_buckets_global)
+
+    # Card D — politicians: blend panel + external (Trends + GDELT + Wiki)
+    panel_pol_counts = {r.get('name'): int(r.get('panelists', 0))
+                        for r in panel_politicians if r.get('name')}
+    top_politicians = _blend_politicians(panel_pol_counts, external,
+                                          _load_politicians()[:60])
+
+    # Card E — articles: blend panel URLs with GDELT (GDELT supplies titles + images)
+    top_articles = _blend_articles_cube(panel_articles, external.get('gdelt_articles') or [])
+
+    # Turnout
+    turnout_pct = 0.0
+    if panel_size > 0 and panel_turnout.get('panelists'):
+        turnout_pct = round(panel_turnout['panelists'] / panel_size, 4)
+
+    cards = {
+        'issue_buckets':   issue_buckets,
+        'search_engines':  _attach_share(panel_search),
+        'social_media':    _attach_share(panel_social),
+        'top_politicians': top_politicians,
+        'top_articles':    top_articles,
+        'turnout_intent':  {
+            'pct':            turnout_pct,
+            'panelists':      panel_turnout.get('panelists', 0),
+            'sample_queries': panel_turnout.get('sample_urls', [])[:8],
+        },
+        'demo_crosstab':   panel_demo,
+        'voter_journey':   panel_journey,
+    }
+
+    # Compare card (only when geo is set)
     compare = {}
-    if f['geo_type'] != 'National' and f['geo_value']:
-        try:
-            compare = _build_compare(f, start_date, external)
-        except Exception as e:
-            logger.debug("compare build failed: %s", e)
-            compare = {}
+    if cube and f['geo_type'] != 'National' and f['geo_value']:
+        compare = _build_compare_from_cube(cube, f)
 
     now = datetime.now(timezone.utc)
+    # Pull gen-pop projection metadata from the cube. Frontend uses this to
+    # show every panel count BOTH as raw panelists AND projected to the
+    # US adult population (e.g. 1.78M panel → ~15.9M US adults).
+    gen_pop_factor = float((cube or {}).get('gen_pop_factor') or 1.0)
+    us_gen_pop     = int((cube or {}).get('us_gen_pop') or 329_900_000)
+    us_panel_total = int((cube or {}).get('us_panel_total') or 0)
+
     payload = {
-        'success':      True,
-        'filters':      f,
-        'panel_size':   panel_size,
-        'suppressed':   suppressed,
-        'min_cell_size': MIN_CELL_SIZE,
-        'generated_at': now.isoformat(),
-        'stale_until':  (now + timedelta(seconds=CACHE_TTL_S)).isoformat(),
-        'cards':        cards,
-        'compare':      compare,
-        'cache_hit':    False,
+        'success':         True,
+        'filters':         f,
+        'panel_size':      panel_size,
+        'panel_projected': int(round(panel_size * gen_pop_factor)),
+        'gen_pop_factor':  round(gen_pop_factor, 4),
+        'us_gen_pop':      us_gen_pop,
+        'us_panel_total':  us_panel_total,
+        'suppressed':      suppressed,
+        'cube_missing':    cube_missing,
+        'cube_built_at':   (cube or {}).get('computed_at'),
+        'min_cell_size':   MIN_CELL_SIZE,
+        'generated_at':    now.isoformat(),
+        'stale_until':     (now + timedelta(seconds=CACHE_TTL_S)).isoformat(),
+        'cards':           cards,
+        'compare':         compare,
+        'cache_hit':       False,
     }
-    if suppressed:
+    if cube_missing:
         payload['message'] = (
-            f'Sample below minimum cell size ({MIN_CELL_SIZE} panelists). '
-            'External signal (Trends, news, Wikipedia) shown where available; '
-            'panel-derived cards are hidden.'
+            'Nightly panel aggregate is missing. Showing external signals only '
+            '(Google Trends, GDELT, Wikipedia). Run blue_iq_aggregator.py to '
+            'populate the cube.'
+        )
+    elif suppressed:
+        payload['message'] = (
+            f'Panel sample for this slice is below minimum cell size ({MIN_CELL_SIZE} panelists). '
+            'External signals shown where available.'
         )
 
-    # 6. Cache and return.
     _cache_put(f, payload)
     return payload
+
+
+def _attach_share(rows: list[dict]) -> list[dict]:
+    """Given [{name, panelists}, ...] add a 'share' field summing to 1.0."""
+    if not rows:
+        return []
+    total = sum(int(r.get('panelists', 0)) for r in rows) or 1
+    return [{**r, 'share': round(int(r.get('panelists', 0)) / total, 4)} for r in rows]
+
+
+def _blend_articles_cube(panel_articles: list[dict], gdelt: list[dict]) -> list[dict]:
+    """Merge cube's panel-URL list with GDELT's title+image-bearing list."""
+    by_url: dict[str, dict] = {}
+    for a in gdelt:
+        u = a.get('url')
+        if not u:
+            continue
+        by_url[u] = {
+            'title':     a.get('title') or _title_from_url(u),
+            'source':    a.get('source') or '',
+            'url':       u,
+            'panelists': 0,
+            'tone':      float(a.get('tone') or 0.0),
+            'image':     a.get('social_image') or '',
+        }
+    for p in panel_articles:
+        u = p.get('url')
+        if not u:
+            continue
+        if u in by_url:
+            by_url[u]['panelists'] = max(by_url[u]['panelists'], int(p.get('panelists', 0)))
+        else:
+            by_url[u] = {
+                'title':     _title_from_url(u),
+                'source':    p.get('source') or '',
+                'url':       u,
+                'panelists': int(p.get('panelists', 0)),
+                'tone':      0.0,
+                'image':     '',
+            }
+    ranked = list(by_url.values())
+    ranked.sort(key=lambda a: (-int(a['panelists']), -abs(a.get('tone', 0.0))))
+    return ranked[:30]
+
+
+def _build_compare_from_cube(cube: dict, filters: dict) -> dict:
+    """Sliced compare card built entirely from cube cells (no fresh CH)."""
+    out = {}
+    for label, party in [('dems', 'Democrat'), ('reps', 'Republican'),
+                          ('indeps', 'Independent'), ('national', 'All')]:
+        key = _cube_cell_key(party, filters['geo_type'], filters['geo_value'])
+        c = (cube.get('cells') or {}).get(key)
+        if not c or int(c.get('uid_count', 0)) < MIN_CELL_SIZE:
+            out[label] = {'panel_size': int(c.get('uid_count', 0)) if c else 0, 'suppressed': True}
+            continue
+        size = int(c.get('uid_count', 0)) or 1
+        out[label] = {
+            'panel_size':     size,
+            'suppressed':     False,
+            'search_engines': _attach_share(c.get('search_engines', []))[:6],
+            'social_media':   _attach_share(c.get('social_media', []))[:6],
+            'turnout_pct':    round((c.get('turnout', {}).get('panelists', 0) or 0) / size, 4),
+        }
+    return out
 
 
 def _build_compare(filters: dict, start_date: str, external: dict) -> dict:
