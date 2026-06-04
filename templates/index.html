@@ -19965,17 +19965,19 @@
                         <div id="jiqInceptionChart" style="overflow:hidden;"></div>
                         <div id="jiqInceptionTable" style="overflow-x: auto; display:none;"></div>
                     </div>
-                    <!-- align-self:start keeps the card's height equal to
-                         its content (title + subtitle + 360px scroll wrapper
-                         + padding). Without this the grid stretches the
-                         card to match the taller Inception card next to it,
-                         leaving an empty navy "footer" below the scroll. -->
-                    <div class="card" id="jiqSearchTermsCard" style="padding: 1rem; display: none; align-self: start;">
+                    <!-- Card height matches the Inception card next to it
+                         (grid stretches both to row height). To prevent the
+                         empty navy "footer" below the scroll wrapper, the
+                         card is a flex column and the body region fills the
+                         leftover height. The inner scroll wrapper then
+                         consumes 100% of the body so scrolling reveals every
+                         search term and the card has no dead space. -->
+                    <div class="card" id="jiqSearchTermsCard" style="padding: 1rem; display: none; flex-direction: column; height: 100%; min-height: 0;">
                         <div style="display:flex;justify-content:space-between;align-items:baseline;gap:0.5rem;">
                             <h3 id="jiqSearchTermsTitle" style="margin: 0 0 0.25rem;">🔎 Top Search Terms — what they searched to find the brand</h3>
                         </div>
                         <div id="jiqSearchTermsSubtitle" style="font-size: 0.72rem; color: var(--text-secondary); margin-bottom: 0.6rem;">Search queries + hashtags driving inbound discovery, by platform.</div>
-                        <div id="jiqSearchTermsBody"></div>
+                        <div id="jiqSearchTermsBody" style="flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column;"></div>
                     </div>
                 </div>
 
@@ -31469,7 +31471,12 @@
                 return Array.isArray(searchTerms[k]) && searchTerms[k].length > 0;
             });
             if (stBody) stBody.innerHTML = hasSearchTerms ? _jiqRenderSearchTermsCard(searchTerms) : '';
-            if (stCard) stCard.style.display = hasSearchTerms ? '' : 'none';
+            // Use display:flex (not '') so the card's flex-direction:column
+            // + height:100% take effect — that's what lets the body fill the
+            // full card height (otherwise the grid would stretch the card
+            // to match Inception and leave an empty navy block below the
+            // 360px scroll cap).
+            if (stCard) stCard.style.display = hasSearchTerms ? 'flex' : 'none';
 
             if (rowTop) rowTop.style.display = (incs.length || hasSearchTerms) ? 'grid' : 'none';
 
@@ -32013,10 +32020,13 @@
             }
 
             var panels = PLATFORMS.map(_renderPanel).filter(Boolean).join('');
-            // Scrollable wrapper — caps the card height so the row
-            // doesn't stretch to fit all 4 platform panels at full
-            // height. User scrolls within the card to see the rest.
-            return '<div style="max-height:360px;overflow-y:auto;padding-right:4px;">'
+            // Scrollable wrapper — fills the card's body flex region
+            // (jiqSearchTermsBody is flex:1, min-height:0 inside the
+            // flex-column card with height:100%). This lets the scroll
+            // viewport grow to the row's stretched height so we don't
+            // leave an empty navy footer below. min-height:240px keeps
+            // the scroll usable when the row is short (no stretch).
+            return '<div style="flex:1 1 auto; min-height:240px; max-height:100%; overflow-y:auto; padding-right:4px;">'
                  + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:0.55rem;">' + panels + '</div>'
                  + '</div>';
         }
