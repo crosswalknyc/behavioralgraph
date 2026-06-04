@@ -4880,9 +4880,10 @@ def reground_clamped_sample_size(df, subject, verbose=True):
     if proj_col is not None:
         df.at[bi_idx, proj_col] = int(round((new_size / 10_000_000.0) * US_POP))
 
-    # Update SAMPLE SIZE row raw (typically ~99% of sample_size; some files
-    # have the actual UID count here, which is slightly smaller). Preserve
-    # its BP and recompute raw = BP/100 * new_size.
+    # Update SAMPLE SIZE row: BP-derived raw + Category Share (which the
+    # dashboard reads as the displayed sample size — bug found 2026-06-04
+    # when patched files still showed 100K because Category Share alone
+    # was holding the old clamped value).
     ss_mask = col_u == 'SAMPLE SIZE'
     if ss_mask.any():
         ss_idx = df.index[ss_mask][0]
@@ -4893,6 +4894,16 @@ def reground_clamped_sample_size(df, subject, verbose=True):
             if proj_col is not None:
                 df.at[ss_idx, proj_col] = int(round(
                     (new_ss_raw / 10_000_000.0) * US_POP))
+        # Category Share on the SAMPLE SIZE row stores the absolute
+        # sample count (string-typed because BRAND INPUT's value in the
+        # same column is a percentage). Assign as string with .0 suffix
+        # to mirror BG.py's original output format.
+        if cs_col is not None:
+            try:
+                df[cs_col] = df[cs_col].astype(object)
+            except Exception:
+                pass
+            df.at[ss_idx, cs_col] = f"{float(new_size):.1f}"
 
     if verbose:
         share_pct = (new_size / 10_000_000.0) * 100.0
