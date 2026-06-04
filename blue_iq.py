@@ -1325,11 +1325,30 @@ def compute_panel_view(filters: dict, *, force_refresh: bool = False) -> dict:
     if panel_size > 0 and panel_turnout.get('panelists'):
         turnout_pct = round(panel_turnout['panelists'] / panel_size, 4)
 
-    # Issue × Journey cross: national-only (cube top-level), so it doesn't
-    # vary by the user's geo/party filter. Surfaces "for voters worried
-    # about Housing & Rent, what do they DO after political content?" —
-    # answering the marketing-creative placement question directly.
+    # Issue × Journey cross and Voter Journey: national-only (cube
+    # top-level for cross, per-cell for journey). The 30d cube can't
+    # carry these two cards because the touchpoint scan blows the CH
+    # 80 GiB memory cap on the 30d window — see
+    # blue_iq_aggregator.py's "lookback_days <= 14" gate. We fall back
+    # to the Live (1d) cube for these specific fields when the current
+    # cube doesn't have them, so the user sees a populated card
+    # regardless of which lookback they picked.
     issue_journey_cross = (cube or {}).get('issue_journey_cross') or []
+    if (not issue_journey_cross or not panel_journey) and int(f.get('lookback_days') or DEFAULT_LOOKBACK_DAYS) != 1:
+        try:
+            live_cube = _load_cube(1)
+            if live_cube:
+                if not issue_journey_cross:
+                    issue_journey_cross = live_cube.get('issue_journey_cross') or []
+                if not panel_journey:
+                    # The journey card is per-cell; pull the matching cell
+                    # from the Live cube (or fall back to All||).
+                    live_cells = live_cube.get('cells') or {}
+                    live_key = _cube_cell_key(filters['party'], filters['geo_type'], filters['geo_value'])
+                    live_cell = live_cells.get(live_key) or live_cells.get('All||') or {}
+                    panel_journey = live_cell.get('voter_journey') or []
+        except Exception as _exc:  # pragma: no cover - defensive
+            log.debug("Live-cube fallback for journey cards failed: %s", _exc)
 
     cards = {
         'issue_buckets':       issue_buckets,
