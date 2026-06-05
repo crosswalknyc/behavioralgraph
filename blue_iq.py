@@ -1653,35 +1653,91 @@ def compute_panel_view(filters: dict, *, force_refresh: bool = False) -> dict:
     # Card D — politicians: blend panel + external (Trends + GDELT + Wiki)
     panel_pol_counts = {r.get('name'): int(r.get('panelists', 0))
                         for r in panel_politicians if r.get('name')}
-    # Card D2 — candidates: web-search agent discovers DECLARED / ACTIVE
-    # candidates for the current geography, sliced by race type on the
-    # frontend. The agent returns 30-40 entries per geo with party,
-    # race_type, state, status, and an agent_score (0-100 interest
-    # estimate). Results cache to S3 for 24h; cache miss triggers a fresh
-    # agent call (~5-15s, blocking the request that triggers the refresh
-    # but every subsequent request that day is instant).
+    # Cards D + D2 — agent web-search discovery, per geography:
     #
-    # Agent-discovered names ALSO get folded into the politician blend
-    # universe so the existing Trends/GDELT/Wiki signals lift their
-    # mention_score where applicable — gives us the best of both worlds:
-    # the agent finds the right NAMES per geo, the panel + external
-    # signals tell us which of those names are ACTUALLY moving right now.
+    #   D  "Top politicians engaged"      → discover_engaged_politicians
+    #         Current officeholders + national figures the area is
+    #         ACTIVELY ENGAGING WITH right now (Trump, the state's
+    #         Senators, governor, principal-city mayor, etc.)
+    #
+    #   D2 "Top candidates (2026 cycle)"  → discover_candidates
+    #         DECLARED / ACTIVE candidates for upcoming 2026 races + 2028
+    #         presidential prospects.
+    #
+    # Both share the same scaffolding (24h S3 cache, threading lock,
+    # truncation-tolerant parser); separate agent prompts so each card
+    # surfaces the right kind of names. Agent failures fall back open —
+    # we use the existing panel + Trends/GDELT/Wiki blend universe.
     try:
-        from candidate_discovery import discover_candidates
-        agent_cands = discover_candidates(f['geo_type'], f['geo_value']) or []
+        from candidate_discovery import discover_candidates, discover_engaged_politicians
+        agent_cands   = discover_candidates(f['geo_type'], f['geo_value']) or []
+        agent_engaged = discover_engaged_politicians(f['geo_type'], f['geo_value']) or []
     except Exception as _e:  # pragma: no cover - defensive
-        log.warning("candidate agent unavailable; using static fallback: %s", _e)
+        log.warning("candidate/engaged agents unavailable; using fallback: %s", _e)
         agent_cands = []
+        agent_engaged = []
 
-    agent_names = [c['name'] for c in agent_cands]
+    agent_cand_names    = [c['name'] for c in agent_cands]
+    agent_engaged_names = [p['name'] for p in agent_engaged]
     static_2026 = sorted(_load_candidates_2026())
-    # Politician blend universe: top-60 panel/external politicians +
-    # ALL agent-discovered candidates + static 2026-flagged candidates as
-    # a defense-in-depth fallback.
+    # Politician blend universe: agent-discovered ENGAGED names first
+    # (those are who the area is actually talking about), then top-60
+    # panel/external politicians, then agent-discovered CANDIDATES, then
+    # the static 2026-flagged candidates as defense-in-depth.
     _pol_blend = list(dict.fromkeys(
-        _load_politicians()[:60] + agent_names + static_2026
+        agent_engaged_names + _load_politicians()[:60] + agent_cand_names + static_2026
     ))
     top_politicians = _blend_politicians(panel_pol_counts, external, _pol_blend)
+
+    # Re-rank the politicians card by the engaged-agent universe when
+    # available — the agent has already verified these names are driving
+    # current discourse in this geography, so they should sit on top. We
+    # still keep the blended mention_score (panel + Trends + GDELT + Wiki)
+    # because that's the SIGNAL OF INTEREST INTENSITY, but we let the
+    # agent's engagement_score break ties and pull in names the blend
+    # would have missed (e.g. a mayor not in the panel-search index).
+    if agent_engaged:
+        _eng_by_name = {p['name'].lower(): p for p in agent_engaged}
+        _pol_by_name = {r['name'].lower(): r for r in top_politicians}
+        merged: list[dict] = []
+        # First pass: every engaged-agent name gets a row, with the
+        # blended mention_score if any internal signal hit, else the
+        # agent's engagement_score scaled to 0..1.
+        for p in agent_engaged:
+            base = _pol_by_name.get(p['name'].lower(), {})
+            blended_score = float(base.get('mention_score') or 0.0)
+            agent_norm = float(p.get('engagement_score', 0)) / 100.0
+            merged.append({
+                'name':              p['name'],
+                'party_code':        p['party_code'] if p['party_code'] != '?' else base.get('party_code', 'I'),
+                'role':              p.get('role', ''),
+                'scope':             p.get('scope', 'national'),
+                'state':             p.get('state', ''),
+                'engagement_score':  int(p.get('engagement_score') or 0),
+                'engagement_drivers': p.get('engagement_drivers') or [],
+                # Composite: 60% blended internal interest + 40% agent's
+                # engagement estimate (when no internal signal, agent's
+                # estimate is the only thing we have).
+                'mention_score':     round(0.6 * blended_score + 0.4 * agent_norm if blended_score > 0 else agent_norm, 4),
+                'panelists':         int(base.get('panelists', 0)),
+            })
+        # Second pass: catch any internal-blend politicians the agent
+        # didn't return (long tail of panel mentions). De-dupe by lower-
+        # cased name. Cap the appended list so we never balloon the card.
+        existing = {row['name'].lower() for row in merged}
+        for r in top_politicians:
+            if r['name'].lower() in existing:
+                continue
+            if r.get('mention_score', 0) <= 0:
+                continue
+            merged.append({**r, 'role': '', 'scope': 'national', 'state': '',
+                            'engagement_score': 0, 'engagement_drivers': []})
+            existing.add(r['name'].lower())
+            if len(merged) >= 30:
+                break
+        merged.sort(key=lambda r: (-(r.get('mention_score') or 0),
+                                     -(r.get('engagement_score') or 0)))
+        top_politicians = merged[:25]
 
     # Build the candidates card payload. Prefer agent-discovered rows
     # (they carry race / race_type / state / status). Cross-reference with
