@@ -1653,14 +1653,71 @@ def compute_panel_view(filters: dict, *, force_refresh: bool = False) -> dict:
     # Card D — politicians: blend panel + external (Trends + GDELT + Wiki)
     panel_pol_counts = {r.get('name'): int(r.get('panelists', 0))
                         for r in panel_politicians if r.get('name')}
-    # Use top-60 politicians + ALL 2026 candidate names as the blend universe
-    # so a candidate that's outside the top-60 marquee list still ranks if
-    # Trends / GDELT / Wiki picked up signal.
-    _pol_blend = list(dict.fromkeys(_load_politicians()[:60] + sorted(_load_candidates_2026())))
+    # Card D2 — candidates: web-search agent discovers DECLARED / ACTIVE
+    # candidates for the current geography, sliced by race type on the
+    # frontend. The agent returns 30-40 entries per geo with party,
+    # race_type, state, status, and an agent_score (0-100 interest
+    # estimate). Results cache to S3 for 24h; cache miss triggers a fresh
+    # agent call (~5-15s, blocking the request that triggers the refresh
+    # but every subsequent request that day is instant).
+    #
+    # Agent-discovered names ALSO get folded into the politician blend
+    # universe so the existing Trends/GDELT/Wiki signals lift their
+    # mention_score where applicable — gives us the best of both worlds:
+    # the agent finds the right NAMES per geo, the panel + external
+    # signals tell us which of those names are ACTUALLY moving right now.
+    try:
+        from candidate_discovery import discover_candidates
+        agent_cands = discover_candidates(f['geo_type'], f['geo_value']) or []
+    except Exception as _e:  # pragma: no cover - defensive
+        log.warning("candidate agent unavailable; using static fallback: %s", _e)
+        agent_cands = []
+
+    agent_names = [c['name'] for c in agent_cands]
+    static_2026 = sorted(_load_candidates_2026())
+    # Politician blend universe: top-60 panel/external politicians +
+    # ALL agent-discovered candidates + static 2026-flagged candidates as
+    # a defense-in-depth fallback.
+    _pol_blend = list(dict.fromkeys(
+        _load_politicians()[:60] + agent_names + static_2026
+    ))
     top_politicians = _blend_politicians(panel_pol_counts, external, _pol_blend)
-    # Card D2 — candidates: same blend, filtered to 2026 cycle entries.
-    cands_2026 = _load_candidates_2026()
-    top_candidates = [r for r in top_politicians if r.get('name') in cands_2026]
+
+    # Build the candidates card payload. Prefer agent-discovered rows
+    # (they carry race / race_type / state / status). Cross-reference with
+    # top_politicians by name to pull in mention_score, party, sources.
+    if agent_cands:
+        pol_by_name = {r['name'].lower(): r for r in top_politicians}
+        top_candidates = []
+        for c in agent_cands:
+            blended = pol_by_name.get(c['name'].lower(), {})
+            top_candidates.append({
+                'name':          c['name'],
+                'party_code':    c['party_code'] if c['party_code'] != '?' else blended.get('party_code', 'I'),
+                'race':          c.get('race', ''),
+                'race_type':     c.get('race_type', 'other'),
+                'state':         c.get('state', ''),
+                'office_held':   c.get('office_held', ''),
+                'status':        c.get('status', 'declared'),
+                # Score: prefer blended (real interest signal) if non-zero;
+                # else use agent's estimated interest score, scaled to 0..1
+                # for parity with mention_score.
+                'mention_score': (blended.get('mention_score')
+                                   if blended.get('mention_score', 0) > 0
+                                   else round(float(c.get('agent_score', 0)) / 100.0, 4)),
+                'panelists':     int(blended.get('panelists', 0)),
+                'sources':       (list(blended.get('sources', []))
+                                   + (['agent'] if c['name'] not in {p['name'] for p in top_politicians} else [])),
+            })
+        # Sort: by mention_score desc, agent_score as tiebreaker.
+        top_candidates.sort(key=lambda r: (-r.get('mention_score', 0)))
+    else:
+        # Static fallback (no agent / no cache / blank result): use the
+        # pre-existing 2026-flagged file. No race_type / race info, so
+        # the frontend slicer becomes a no-op for these rows.
+        cands_2026 = set(static_2026)
+        top_candidates = [{**r, 'race_type': 'other', 'race': '', 'state': '', 'status': 'declared'}
+                           for r in top_politicians if r.get('name') in cands_2026]
 
     # Card E — articles: blend panel URLs with GDELT (GDELT supplies titles + images)
     top_articles = _blend_articles_cube(panel_articles, external.get('gdelt_articles') or [])
