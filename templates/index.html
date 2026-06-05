@@ -22970,26 +22970,42 @@
             abandoned:          { label: 'Abandoned the session',       blurb: 'No follow-up clickstream in the window.' },
         };
 
+        // Canonical destination palette + order. Shared by the funnel ribbon,
+        // the Sankey, the per-issue card, the legend, and the cross card so
+        // that every Blue IQ surface uses the SAME color for the SAME
+        // destination key.
+        var BLUE_IQ_DEST_PALETTE = {
+            candidate_site:    '#3b82f6',
+            candidate_social:  '#6366f1',
+            candidate_search:  '#8b5cf6',
+            donation:          '#ec4899',
+            voting_info:       '#10b981',
+            search:            '#0ea5e9',
+            news_dive:         '#f59e0b',
+            social_discussion: '#a855f7',
+            other:             '#64748b',
+            abandoned:         '#475569',
+        };
+        var BLUE_IQ_DEST_ORDER = [
+            'news_dive',
+            'candidate_site',
+            'candidate_social',
+            'candidate_search',
+            'donation',
+            'voting_info',
+            'search',
+            'social_discussion',
+            'other',
+            'abandoned',
+        ];
+
         // Stacked horizontal bar of journey-step shares for ONE issue
         // bucket. Used by both the per-issue card and the cross card.
         function _bqJourneyStackedBar(destinations) {
             if (!destinations || !destinations.length) return '';
-            // Color scale per destination — keeps the same color used across cards.
-            var palette = {
-                candidate_site:    '#3b82f6',
-                candidate_social:  '#6366f1',
-                candidate_search:  '#8b5cf6',
-                donation:          '#ec4899',
-                voting_info:       '#10b981',
-                search:            '#0ea5e9',
-                news_dive:         '#f59e0b',
-                social_discussion: '#a855f7',
-                other:             '#64748b',
-                abandoned:         '#475569',
-            };
             return '<div style="display:flex; height:14px; border-radius:6px; overflow:hidden; background:rgba(255,255,255,0.04);">'
                  + destinations.map(function(d) {
-                     var c = palette[d.destination] || '#64748b';
+                     var c = BLUE_IQ_DEST_PALETTE[d.destination] || '#64748b';
                      var label = (BLUE_IQ_JOURNEY_LABELS[d.destination] || {}).label || d.destination;
                      var pct = Math.round((+d.share || 0) * 100);
                      if (pct < 1) return '';
@@ -22999,19 +23015,13 @@
                  + '</div>';
         }
 
-        // Compact 3-color legend for the stacked bar.
+        // Compact legend mirroring the canonical destination ordering.
         function _bqJourneyLegend() {
-            var keys = ['news_dive','candidate_site','candidate_social','candidate_search','donation','voting_info','search','social_discussion','other','abandoned'];
-            var palette = {
-                candidate_site:'#3b82f6', candidate_social:'#6366f1', candidate_search:'#8b5cf6',
-                donation:'#ec4899', voting_info:'#10b981', search:'#0ea5e9',
-                news_dive:'#f59e0b', social_discussion:'#a855f7', other:'#64748b', abandoned:'#475569',
-            };
             return '<div style="display:flex; flex-wrap:wrap; gap:0.5rem 0.85rem; font-size:0.72rem; color:var(--text-secondary); margin: 0.4rem 0 0.7rem 0;">'
-                 + keys.map(function(k) {
+                 + BLUE_IQ_DEST_ORDER.map(function(k) {
                      var label = (BLUE_IQ_JOURNEY_LABELS[k] || {}).label || k;
                      return '<span style="display:inline-flex; align-items:center; gap:0.3rem;">'
-                          + '<span style="width:10px; height:10px; border-radius:2px; background:' + palette[k] + ';"></span>'
+                          + '<span style="width:10px; height:10px; border-radius:2px; background:' + (BLUE_IQ_DEST_PALETTE[k] || '#64748b') + ';"></span>'
                           + _bqEscape(label) + '</span>';
                  }).join('') + '</div>';
         }
@@ -31938,7 +31948,7 @@
                 inception_sub:      'First-touch discovery channels for accounts that eventually pressed play.',
                 search_title:       '🔎 Top Search Terms — what they searched to find the show',
                 search_sub:         'Search queries + hashtags driving inbound discovery, by platform.',
-                companion_title:    '📱 Co-Viewing Behaviors — what accounts did WHILE watching',
+                companion_title:    '📱 Second Screen Behaviors — what accounts did WHILE watching',
                 companion_sub:      'Second-screen behaviors during episodes. Bubble size = share of accounts. "Fully engaged" = no second-screen activity.',
                 switched_title:     '🎬 Post-View Destinations — what they watched / did next',
                 switched_sub:       'What accounts did right after the credits rolled — next Netflix show, off-platform, social, sleep, etc.',
@@ -34696,7 +34706,6 @@
                 +     '<th style="' + thNumStyle + '">Accounts</th>'
                 +     '<th style="' + thNumStyle + '">Median Age</th>'
                 +     '<th style="' + thNumStyle + '">% Female</th>'
-                +     '<th style="' + thStyle + ' min-width:200px;">Note</th>'
                 +   '</tr></thead><tbody>';
             rows.forEach(function(rg) {
                 var inSet = (rg.in || []).join(',');
@@ -34727,8 +34736,6 @@
                     +     (rg.median_age != null ? rg.median_age : '—') + '</td>'
                     +   '<td style="padding:7px 8px; font-size:0.78rem; text-align:right; color:var(--text-secondary); font-variant-numeric:tabular-nums;">'
                     +     (rg.female_pct != null ? rg.female_pct + '%' : '—') + '</td>'
-                    +   '<td style="padding:7px 8px; font-size:0.72rem; color:var(--text-secondary); line-height:1.45;">'
-                    +     _jiqEsc(rg.note || '') + '</td>'
                     + '</tr>';
             });
             html += '</tbody></table>';
