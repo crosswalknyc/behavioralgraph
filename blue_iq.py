@@ -317,13 +317,23 @@ def blue_iq_cache_key(filters: dict) -> str:
             opinion piece" for every issue at 0% share. v5 payloads
             don't carry the new field, so the card would still
             render the old static rows; bump invalidates them.
+      v7 — 2026-06-05: rewrote top_articles to (a) drop non-political
+            junk (sports, Hantavirus, generic homepage stubs) via
+            word-bounded political/junk vocabulary, (b) inject
+            agent-discovered editorial articles via
+            article_discovery.discover_political_articles, (c) strip
+            trailing hex hashes from URL-derived titles, and (d)
+            emit reach_share (0-1) on every row so the UI can render
+            a percentage instead of raw panelist counts. v6 payloads
+            don't carry reach_share and would still show panelist
+            counts; bump invalidates.
     """
     canonical = json.dumps({
         'party':     filters.get('party') or 'All',
         'geo_type':  filters.get('geo_type') or 'National',
         'geo_value': filters.get('geo_value') or '',
         'lookback':  int(filters.get('lookback_days') or DEFAULT_LOOKBACK_DAYS),
-        'version':   6,
+        'version':   7,
     }, sort_keys=True, separators=(',', ':'))
     return hashlib.sha256(canonical.encode('utf-8')).hexdigest()
 
@@ -1178,12 +1188,38 @@ def _card_top_articles(uids: set[str], start_date: str,
     return ranked[:30]
 
 
+_TITLE_HASH_RE      = re.compile(r'(?:[\s\-_])([0-9a-f]{8,})$', re.IGNORECASE)
+_TITLE_MULTI_HASH_RE = re.compile(r'(?:[\s\-_])((?:[0-9a-f]{6,}(?:[\s\-_]|$))+)$', re.IGNORECASE)
+_TITLE_TRAILING_NUM = re.compile(r'(?:[\s\-_])\d{6,}$')
+_TITLE_LEADING_NUM  = re.compile(r'^\d{5,}(?:[\s\-_]+|$)')
+
+
 def _title_from_url(url: str) -> str:
     try:
         path = urllib.parse.urlparse(url).path
         slug = path.rstrip('/').split('/')[-1]
         slug = urllib.parse.unquote(slug).replace('-', ' ').replace('_', ' ')
         slug = re.sub(r'\.[a-z]{2,5}$', '', slug, flags=re.I).strip()
+        # Strip trailing AP-style hex article IDs (e.g.
+        # "Trump Lawsuit IRS Leak 3729de38770b558be01712a143437bf8").
+        # Run the multi-hash strip first (handles tail of two hashes),
+        # then the single-hash strip, then a long-digit trailing strip.
+        for _ in range(3):
+            new = _TITLE_MULTI_HASH_RE.sub('', slug).strip()
+            if new == slug:
+                break
+            slug = new
+        for _ in range(3):
+            new = _TITLE_HASH_RE.sub('', slug).strip()
+            if new == slug:
+                break
+            slug = new
+        slug = _TITLE_TRAILING_NUM.sub('', slug).strip()
+        # Strip leading numeric article IDs (e.g. The Hill URLs that
+        # start with "/566716-biden-pays-homage-to-obama..."). Threshold
+        # at 4+ digits so legitimate year prefixes like "2026 in review"
+        # are preserved.
+        slug = _TITLE_LEADING_NUM.sub('', slug).strip()
         return slug.title()[:140] if slug else url
     except Exception:
         return url
@@ -2174,8 +2210,23 @@ def compute_panel_view(filters: dict, *, force_refresh: bool = False) -> dict:
         top_candidates = [{**r, 'race_type': 'other', 'race': '', 'state': '', 'status': 'declared'}
                            for r in top_politicians if r.get('name') in cands_2026]
 
-    # Card E — articles: blend panel URLs with GDELT (GDELT supplies titles + images)
-    top_articles = _blend_articles_cube(panel_articles, external.get('gdelt_articles') or [])
+    # Card E — articles: blend agent-discovered + panel + GDELT into a
+    # single ranked list. Agent provides editorial titles + topic tags
+    # for genuinely political stories the panel/GDELT side missed
+    # (Hantavirus + College Football were both leaking through pre-filter).
+    # Each row carries reach_share (0-1) so the UI renders a percentage.
+    try:
+        from article_discovery import discover_political_articles
+        agent_articles = discover_political_articles(f['geo_type'], f['geo_value']) or []
+    except Exception as _e:  # pragma: no cover - defensive
+        log.warning("article_discovery unavailable; using panel+GDELT only: %s", _e)
+        agent_articles = []
+    top_articles = _blend_articles_cube(
+        panel_articles,
+        external.get('gdelt_articles') or [],
+        agent_articles=agent_articles,
+        panel_total=panel_size,
+    )
 
     # Card G — issue × geo heatmap: per-state issue panel count, sliced from
     # the cube's per-state cells through the global issue bucket map. Computed
@@ -2356,39 +2407,255 @@ def _attach_share(rows: list[dict]) -> list[dict]:
     return [{**r, 'share': round(int(r.get('panelists', 0)) / total, 4)} for r in rows]
 
 
-def _blend_articles_cube(panel_articles: list[dict], gdelt: list[dict]) -> list[dict]:
-    """Merge cube's panel-URL list with GDELT's title+image-bearing list."""
+# ── Strict political-article filter ──────────────────────────────────────
+# The panel side (raw URLs panelists visited) and GDELT have no editorial
+# filter, so they leak sports (AP Top 25 College Football Poll), human-
+# interest (Hantavirus cruise ship), generic homepages (Main Page,
+# Entertainment), and SEO bait into the "Top political articles" card.
+# We word-bound match against (a) a political vocabulary that must appear
+# in the title and (b) a junk vocabulary that auto-rejects regardless.
+
+_POLITICAL_TITLE_PATTERNS = [re.compile(r'\b' + p + r'\b', re.IGNORECASE) for p in [
+    'trump', 'biden', 'harris', 'newsom', 'desantis', 'pence', 'sanders',
+    'warren', 'pelosi', 'mcconnell', 'schumer', 'johnson', 'jeffries',
+    'aoc', 'ocasio', 'manchin', 'sinema', 'rubio', 'cruz', 'gaetz',
+    'fetterman', 'vance', 'haley', 'ramaswamy',
+    'congress', 'senate', 'senator', 'house', 'representative', 'rep\\.',
+    'governor', 'gubernatorial', 'mayor', 'mayoral', 'council',
+    'attorney general', 'secretary of state',
+    'president', 'presidential', 'white house', 'oval office',
+    'supreme court', 'scotus', 'doj', 'justice department', 'fbi',
+    'irs', 'sec', 'fcc', 'ftc',
+    'democrat', 'democratic', 'republican', 'gop', 'progressive',
+    'liberal', 'conservative', 'libertarian', 'green party',
+    'election', 'campaign', 'primary', 'caucus', 'ballot', 'polling',
+    'voter', 'vote', 'voting', 'registrar',
+    'policy', 'legislation', 'bill', 'amendment', 'law',
+    'immigration', 'border', 'asylum', 'deportation', 'ice',
+    'healthcare', 'medicare', 'medicaid', 'aca', 'affordable care',
+    'tax', 'taxes', 'irs', 'tariff',
+    'housing', 'rent', 'mortgage', 'hud',
+    'gas prices?', 'energy', 'oil', 'opec', 'pipeline',
+    'climate', 'environment', 'epa', 'emissions',
+    'education', 'student loan', 'school board', 'curriculum',
+    'crime', 'police', 'shooting', 'gun', 'firearm', '2nd amendment',
+    'foreign policy', 'ukraine', 'russia', 'china', 'israel',
+    'palestin', 'iran', 'nato',
+    'abortion', 'reproductive', 'roe',
+    'civil rights', 'lgbtq', 'transgender', 'race',
+    'inflation', 'economy', 'jobs', 'unemployment', 'wage', 'minimum wage',
+    'union', 'strike',
+    'reform', 'regulation', 'sanction',
+    'pac', 'super pac', 'donor', 'fundrais',
+    'protest', 'rally', 'march', 'riot',
+    'indict', 'lawsuit', 'plea', 'verdict', 'sentencing', 'impeach',
+    'whistleblow', 'leak',
+    'kamala', 'mike johnson', 'kevin mccarthy', 'liz cheney',
+    'lloyd austin', 'antony blinken', 'pete buttigieg',
+]]
+
+_JUNK_TITLE_PATTERNS = [re.compile(r'\b' + p + r'\b', re.IGNORECASE) for p in [
+    # Sports
+    'nfl', 'nba', 'mlb', 'nhl', 'ncaa', 'college football', 'football poll',
+    'soccer', 'baseball', 'basketball', 'hockey', 'tennis', 'golf',
+    'olympics?', 'fifa', 'super bowl', 'world cup',
+    # Entertainment / celeb
+    'box office', 'oscars?', 'grammys?', 'emmys?', 'golden globe',
+    'taylor swift', 'kardashian', 'kanye', 'kim k', 'beyonce',
+    'movie review', 'film review', 'tv show', 'streaming guide',
+    # Human-interest / weather / disease
+    'hantavirus', 'cruise ship', 'shark attack', 'missing person',
+    'hurricane', 'tornado', 'wildfire',
+    # Generic / homepage
+    'main page', '^entertainment$', '^home$', '^trending$', '^sports$',
+    'breaking news', 'top stories', 'live updates',
+    # Tech reviews
+    'iphone review', 'gadget', 'unboxing',
+    # Listicles / clickbait
+    'you won\\u2019t believe', 'best deals', 'shop now',
+]]
+
+_JUNK_DOMAINS = frozenset([
+    'tmz.com', 'people.com', 'usweekly.com', 'eonline.com', 'espn.com',
+    'sports.yahoo.com', 'bleacherreport.com', 'cbssports.com',
+    'foxsports.com', 'nbcsports.com', 'sbnation.com', 'rotoworld.com',
+    'pagesix.com', 'dailymail.co.uk',
+])
+
+
+def _looks_political(title: str, url: str = '', source: str = '') -> bool:
+    """Title-and-domain political-article filter. True = keep."""
+    if not title:
+        return False
+    src = (source or '').lower()
+    if src in _JUNK_DOMAINS:
+        return False
+    # Auto-reject on obvious junk vocabulary first.
+    for rx in _JUNK_TITLE_PATTERNS:
+        if rx.search(title):
+            return False
+    # Generic stub titles ("Main Page", "Entertainment", single-word
+    # category labels) carry no political signal — drop them.
+    t = title.strip()
+    if len(t) < 12 and t.lower() in {
+        'main page', 'home', 'entertainment', 'sports', 'trending',
+        'news', 'politics', 'top stories', 'breaking news', 'opinion',
+    }:
+        return False
+    # Require at least one political vocabulary hit.
+    for rx in _POLITICAL_TITLE_PATTERNS:
+        if rx.search(title):
+            return True
+    # Ballotpedia / opensecrets / fec / propublica URLs are inherently
+    # political even when the title is generic — let them through.
+    u = (url or '').lower()
+    if any(d in u for d in (
+        'ballotpedia.org', 'opensecrets.org', 'fec.gov', 'propublica.org/elections',
+        'politico.com', 'thehill.com', 'rollcall.com',
+    )):
+        return True
+    return False
+
+
+def _blend_articles_cube(panel_articles: list[dict], gdelt: list[dict],
+                          agent_articles: list[dict] | None = None,
+                          panel_total: int = 0) -> list[dict]:
+    """Merge agent-discovered articles + cube's panel-URL list + GDELT's
+    title+image feed into the single ranked Top Articles list.
+
+    Each output row carries a `reach_share` (0-1) so the UI can render
+    a percentage instead of raw panelist counts. The share is computed
+    against the sum of all surviving rows' "engagement weight" — that's
+    panelist count for panel/GDELT rows and a synthesized weight for
+    agent rows (agent's interest_score scaled so a top agent pick lands
+    at roughly the same magnitude as the top panel-engaged row).
+
+    Filters non-political junk (sports, entertainment, generic
+    homepages) on the panel + GDELT side via _looks_political. Agent
+    articles are assumed already-filtered upstream (the agent prompt
+    is explicit) so we only de-dupe by URL/title against earlier rows.
+    """
     by_url: dict[str, dict] = {}
-    for a in gdelt:
-        u = a.get('url')
+
+    # 1. GDELT first (carries titles, sources, images, tone).
+    for a in (gdelt or []):
+        u = (a.get('url') or '').strip()
         if not u:
             continue
+        title = a.get('title') or _title_from_url(u)
+        source = a.get('source') or ''
+        if not _looks_political(title, u, source):
+            continue
         by_url[u] = {
-            'title':     a.get('title') or _title_from_url(u),
-            'source':    a.get('source') or '',
-            'url':       u,
-            'panelists': 0,
-            'tone':      float(a.get('tone') or 0.0),
-            'image':     a.get('social_image') or '',
+            'title':          title,
+            'source':         source,
+            'url':            u,
+            'panelists':      0,
+            'tone':           float(a.get('tone') or 0.0),
+            'image':          a.get('social_image') or '',
+            'source_kind':    'panel',
+            'interest_score': 0,
+            'topic':          '',
+            'summary':        '',
         }
-    for p in panel_articles:
-        u = p.get('url')
+
+    # 2. Panel URLs (carry panelist counts; title may need synthesis).
+    for p in (panel_articles or []):
+        u = (p.get('url') or '').strip()
         if not u:
+            continue
+        title = _title_from_url(u)
+        source = p.get('source') or ''
+        # Existing GDELT entry was already title-filtered, so re-checking
+        # is cheap; for fresh panel rows we filter here.
+        if u not in by_url and not _looks_political(title, u, source):
             continue
         if u in by_url:
             by_url[u]['panelists'] = max(by_url[u]['panelists'], int(p.get('panelists', 0)))
         else:
             by_url[u] = {
-                'title':     _title_from_url(u),
-                'source':    p.get('source') or '',
-                'url':       u,
-                'panelists': int(p.get('panelists', 0)),
-                'tone':      0.0,
-                'image':     '',
+                'title':          title,
+                'source':         source,
+                'url':            u,
+                'panelists':      int(p.get('panelists', 0)),
+                'tone':           0.0,
+                'image':          '',
+                'source_kind':    'panel',
+                'interest_score': 0,
+                'topic':          '',
+                'summary':        '',
             }
-    ranked = list(by_url.values())
-    ranked.sort(key=lambda a: (-int(a['panelists']), -abs(a.get('tone', 0.0))))
-    return ranked[:30]
+
+    # 3. Agent-discovered articles. These come pre-filtered by the
+    # article_discovery agent prompt. De-dupe by URL (case-insensitive)
+    # AND by title (so a panel URL and an agent URL that point at the
+    # same story collapse into one row, with the agent's title/summary
+    # winning since the agent has clean editorial titles).
+    seen_titles_lc = {row['title'].lower(): u for u, row in by_url.items()}
+    for a in (agent_articles or []):
+        u = (a.get('url') or '').strip()
+        if not u:
+            continue
+        u_lc = u.lower()
+        t_lc = (a.get('title') or '').lower()
+        # Collapse onto existing row if URL or title matches.
+        target_url = None
+        if u in by_url:
+            target_url = u
+        elif u_lc in {k.lower() for k in by_url}:
+            target_url = next(k for k in by_url if k.lower() == u_lc)
+        elif t_lc in seen_titles_lc:
+            target_url = seen_titles_lc[t_lc]
+        if target_url:
+            row = by_url[target_url]
+            row['title']          = a.get('title') or row['title']
+            row['source']         = a.get('source') or row['source']
+            row['topic']          = a.get('topic') or row['topic']
+            row['summary']        = a.get('summary') or row['summary']
+            row['interest_score'] = max(int(row.get('interest_score') or 0),
+                                          int(a.get('interest_score') or 0))
+            row['source_kind']    = 'blended' if row['panelists'] > 0 else 'agent'
+        else:
+            by_url[u] = {
+                'title':          a.get('title') or _title_from_url(u),
+                'source':         a.get('source') or '',
+                'url':            u,
+                'panelists':      0,
+                'tone':           0.0,
+                'image':          '',
+                'source_kind':    'agent',
+                'interest_score': int(a.get('interest_score') or 0),
+                'topic':          a.get('topic') or '',
+                'summary':        a.get('summary') or '',
+            }
+            seen_titles_lc[t_lc] = u
+
+    # 4. Compute engagement weight per row. Panel-engaged rows use
+    # `panelists`. Agent-only rows use a synthesized weight = the median
+    # panel weight × (interest_score / 50). This puts a top agent pick
+    # (score 100) at 2× the median panel row — high enough to compete
+    # for the top of the list, low enough that genuine panel-driven
+    # stories still win when they exist.
+    rows = list(by_url.values())
+    panel_weights = sorted([r['panelists'] for r in rows if r['panelists'] > 0])
+    median_panel = panel_weights[len(panel_weights) // 2] if panel_weights else 0
+    for r in rows:
+        if r['panelists'] > 0:
+            r['_weight'] = float(r['panelists'])
+        else:
+            base = float(median_panel) if median_panel > 0 else 1.0
+            r['_weight'] = base * (float(r['interest_score']) / 50.0)
+
+    # 5. Compute reach_share (0-1 normalized within the slice).
+    total_weight = sum(r['_weight'] for r in rows) or 1.0
+    for r in rows:
+        r['reach_share'] = round(r['_weight'] / total_weight, 4)
+        r.pop('_weight', None)
+
+    rows.sort(key=lambda a: (-float(a.get('reach_share') or 0),
+                              -int(a.get('interest_score') or 0),
+                              -abs(a.get('tone', 0.0))))
+    return rows[:30]
 
 
 def _build_compare_from_cube(cube: dict, filters: dict) -> dict:

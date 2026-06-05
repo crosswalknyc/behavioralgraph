@@ -5672,6 +5672,39 @@
             background: var(--bg-card);
             z-index: 0;
         }
+        /* Profile IQ Behavioral tab only: tighter rows + vertically centered cell content (font unchanged). */
+        #behavioralGrid .behavioral-table .behavioral-item {
+            padding: 0.2rem 0;
+            align-items: stretch;
+        }
+        #behavioralGrid .behavioral-table .behavioral-item > * {
+            display: flex;
+            align-items: center;
+            align-self: stretch;
+            min-height: 0;
+        }
+        #behavioralGrid .behavioral-table .behavioral-item .behavioral-rank {
+            line-height: 1;
+        }
+        #behavioralGrid .behavioral-table .behavioral-item .behavioral-name-wrapper {
+            display: flex;
+            align-items: center;
+        }
+        #behavioralGrid .behavioral-table .behavioral-item .behavioral-name {
+            padding: 0 0.4rem;
+            line-height: 1.2;
+            display: block;
+            width: 100%;
+        }
+        #behavioralGrid .behavioral-table .behavioral-item .behavioral-pct,
+        #behavioralGrid .behavioral-table .behavioral-item .behavioral-index {
+            justify-content: flex-end;
+            line-height: 1;
+            font-variant-numeric: tabular-nums;
+        }
+        #behavioralGrid .behavioral-table .behavioral-item .behavioral-index {
+            padding: 0 0.35rem 0 0.2rem;
+        }
         .behavioral-table .behavioral-item:hover {
             z-index: 1;
         }
@@ -18170,6 +18203,8 @@
             #blueIQView .blue-iq-article-title a { color: var(--text-primary); text-decoration: none; }
             #blueIQView .blue-iq-article-title a:hover { text-decoration: underline; }
             #blueIQView .blue-iq-article-meta { font-size: 0.72rem; color: var(--text-secondary); }
+            #blueIQView .blue-iq-article-summary { font-size: 0.74rem; color: var(--text-secondary); line-height: 1.35; margin-top: 0.25rem; opacity: 0.92; }
+            #blueIQView .bq-article-topic { display: inline-block; font-size: 0.6rem; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; padding: 0.08rem 0.42rem; border-radius: 4px; background: rgba(96,165,250,0.16); color: #93c5fd; border: 1px solid rgba(96,165,250,0.32); vertical-align: middle; margin-left: 0.35rem; white-space: nowrap; }
             #blueIQView .blue-iq-suppressed { padding: 1rem; background: rgba(255, 200, 80, 0.08); border: 1px solid rgba(255,200,80,0.3); border-radius: 8px; font-size: 0.88rem; margin-bottom: 1rem; color: var(--text-primary); }
             #blueIQView .blue-iq-loading-overlay { position: relative; min-height: 240px; display: flex; align-items: center; justify-content: center; flex-direction: column; gap: 0.6rem; padding: 2rem; color: var(--text-secondary); font-size: 0.9rem; }
             #blueIQView .blue-iq-spinner { width: 36px; height: 36px; border: 3px solid rgba(255,255,255,0.1); border-top-color: var(--accent-primary, #4f8cff); border-radius: 50%; animation: blueIQSpin 0.9s linear infinite; }
@@ -24030,15 +24065,34 @@
                   + '<div class="blue-iq-card-body" id="blueIQCardCandidatesBody"></div>'
                   + '</div>';
 
-            // CARD E: Top articles
+            // CARD E: Top articles.
+            // Each row carries reach_share (0-1) computed server-side
+            // across the blended agent + panel + GDELT list. We render
+            // it as a percentage so the meta line reads
+            // "source.com · 12.4%" instead of exposing raw panelist
+            // counts. Topic tag (agent-supplied) renders as a small
+            // chip when present.
             var articles = cards.top_articles || [];
             var artHtml = articles.length ? articles.slice(0, 15).map(function(a) {
-                var img = a.image ? ('<div class="blue-iq-article-img" style="background-image: url(' + _bqEscape(a.image) + ');"></div>') : '<div class="blue-iq-article-img"></div>';
+                var img = a.image
+                    ? ('<div class="blue-iq-article-img" style="background-image: url(' + _bqEscape(a.image) + ');"></div>')
+                    : '<div class="blue-iq-article-img"></div>';
+                var pctLabel = '';
+                if (typeof a.reach_share === 'number' && a.reach_share > 0) {
+                    pctLabel = ' \u00b7 ' + _bqPct(a.reach_share);
+                }
+                var topicChip = a.topic
+                    ? '<span class="bq-article-topic">' + _bqEscape(a.topic) + '</span>'
+                    : '';
+                var summaryHtml = a.summary
+                    ? '<div class="blue-iq-article-summary">' + _bqEscape(a.summary) + '</div>'
+                    : '';
                 return '<div class="blue-iq-article">'
                      + img
                      + '<div class="blue-iq-article-body">'
-                     + '<p class="blue-iq-article-title"><a href="' + _bqEscape(a.url) + '" target="_blank" rel="noopener">' + _bqEscape(a.title || a.url) + '</a></p>'
-                     + '<div class="blue-iq-article-meta">' + _bqEscape(a.source || '') + (a.panelists ? (' \u00b7 ' + _bqNum(a.panelists) + ' panelists') : '') + '</div>'
+                     + '<p class="blue-iq-article-title"><a href="' + _bqEscape(a.url) + '" target="_blank" rel="noopener">' + _bqEscape(a.title || a.url) + '</a>' + (topicChip ? ' ' + topicChip : '') + '</p>'
+                     + '<div class="blue-iq-article-meta">' + _bqEscape(a.source || '') + pctLabel + '</div>'
+                     + summaryHtml
                      + '</div>'
                      + '</div>';
             }).join('') : '<div style="color: var(--text-secondary); font-size: 0.85rem; padding: 0.5rem 0;">No political articles surfaced for this slice.</div>';
@@ -33390,6 +33444,24 @@
                         + '</ul>';
                 }
             }
+
+            // Per-target opt-out: Breadwinner has been repurposed as an
+            // audience-only read. Hide the headline KPI strip, the
+            // intent-gap derivation card, the exhibitor mix card
+            // (which also contains the per-chain pre-sales attribution
+            // table), and the Interesting Facts card. Lives at the end
+            // of the renderer so it overrides anything that earlier
+            // renderers may have un-hidden.
+            (function _jiqHideBreadwinnerCards() {
+                var __meta = (window._jiqCurrentRun || {}).meta || {};
+                var __name = (__meta.target_name || __meta.target || __meta.project_name || '').toLowerCase();
+                if (!/breadwinner/.test(__name)) return;
+                ['jiqKpiStripTitle','jiqKpiStripHowto','jiqKpiStrip','jiqIntentGapBreakdown',
+                 'jiqExhibitorCard','jiqFactsCard'].forEach(function(id) {
+                    var el = document.getElementById(id);
+                    if (el) el.style.display = 'none';
+                });
+            })();
         }
 
         function setJourneyIqCluster(i) {
