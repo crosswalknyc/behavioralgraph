@@ -5672,17 +5672,22 @@
             background: var(--bg-card);
             z-index: 0;
         }
-        /* Profile IQ Behavioral tab only: tighter rows + aligned rank/numeric cells (font unchanged). */
+        /* Profile IQ Behavioral tab only: tighter rows + vertically centered cell content (font unchanged). */
         #behavioralGrid .behavioral-table .behavioral-item {
             padding: 0.2rem 0;
+            align-items: center;
         }
         #behavioralGrid .behavioral-table .behavioral-item .behavioral-rank,
-        #behavioralGrid .behavioral-table .behavioral-item .behavioral-name-wrapper {
+        #behavioralGrid .behavioral-table .behavioral-item .behavioral-name-wrapper,
+        #behavioralGrid .behavioral-table .behavioral-item .behavioral-pct,
+        #behavioralGrid .behavioral-table .behavioral-item .behavioral-index {
             align-self: center;
+            line-height: 1.15;
         }
         #behavioralGrid .behavioral-table .behavioral-item .behavioral-name {
             padding-top: 0;
             padding-bottom: 0;
+            line-height: 1.15;
         }
         #behavioralGrid .behavioral-table .behavioral-item .behavioral-index {
             padding-top: 0;
