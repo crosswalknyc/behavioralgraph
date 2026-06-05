@@ -1726,10 +1726,31 @@ def compute_panel_view(filters: dict, *, force_refresh: bool = False) -> dict:
             except Exception as _exc:  # pragma: no cover - defensive
                 log.debug("Fallback cube %dd for journey cards failed: %s", _fb_days, _exc)
 
+    # Per-row "vs national" baselines for the engagement cards. Pull the
+    # All-National cell's search/social rows once, then attach
+    # `national_share` to each per-cohort row so the frontend can render an
+    # index chip (e.g. "1.4x" when Democrats over-index on YouTube). When
+    # the active filter IS All-National the index is ~1.0x and the frontend
+    # hides the chip.
+    nat_cell = ((cube or {}).get('cells') or {}).get('All||') or {}
+    nat_search_rows = _attach_share(nat_cell.get('search_engines') or [])
+    nat_social_rows = _attach_share(nat_cell.get('social_media') or [])
+    _nat_search_share = {(r.get('name') or '').lower(): float(r.get('share') or 0.0)
+                          for r in nat_search_rows}
+    _nat_social_share = {(r.get('name') or '').lower(): float(r.get('share') or 0.0)
+                          for r in nat_social_rows}
+    def _with_baseline(rows: list[dict], baseline: dict[str, float]) -> list[dict]:
+        out = []
+        for r in rows:
+            r2 = dict(r)
+            r2['national_share'] = baseline.get((r.get('name') or '').lower(), 0.0)
+            out.append(r2)
+        return out
+
     cards = {
         'issue_buckets':       issue_buckets,
-        'search_engines':      _attach_share(panel_search),
-        'social_media':        _attach_share(panel_social),
+        'search_engines':      _with_baseline(_attach_share(panel_search), _nat_search_share),
+        'social_media':        _with_baseline(_attach_share(panel_social), _nat_social_share),
         'top_politicians':     top_politicians,
         'top_candidates':      top_candidates,
         'top_articles':        top_articles,
