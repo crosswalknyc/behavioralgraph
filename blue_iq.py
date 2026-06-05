@@ -295,13 +295,20 @@ def blue_iq_cache_key(filters: dict) -> str:
             actually returning data. Bump invalidates the v2 empty
             payloads so users see real US-wide trending political
             searches when no state filter is set.
+      v4 — 2026-06-05: issue_buckets now carries trend_score,
+            trend_queries, news_count, news_headlines, blended_score,
+            external_only fields (Google Trends + GDELT mixed into
+            each bucket). The card UI shows trending chips + Google
+            Trends sample terms alongside panel samples. v3 payloads
+            don't have these fields and would render with the chips
+            missing, so bump invalidates them.
     """
     canonical = json.dumps({
         'party':     filters.get('party') or 'All',
         'geo_type':  filters.get('geo_type') or 'National',
         'geo_value': filters.get('geo_value') or '',
         'lookback':  int(filters.get('lookback_days') or DEFAULT_LOOKBACK_DAYS),
-        'version':   3,
+        'version':   4,
     }, sort_keys=True, separators=(',', ':'))
     return hashlib.sha256(canonical.encode('utf-8')).hexdigest()
 
@@ -1574,6 +1581,228 @@ def _filter_trends_to_political(trends_top: list[dict],
     return out
 
 
+# ── Per-bucket keyword classifier for EXTERNAL terms (Trends + GDELT) ───────
+#
+# The panel-side bucketing already goes through OpenAI in roll_up_political_issues
+# and that result is baked into the cube as `issue_buckets_global` (with a
+# `sample_queries` exemplar list per bucket). We can't reuse that exact-match
+# lookup for external terms because Google Trends headlines ("arizona prosecution
+# of fake electors") and GDELT article titles will essentially never match a
+# panel sample_query exactly.
+#
+# So: bucket external terms via case-insensitive keyword/substring match against
+# this hand-tuned per-bucket vocabulary. First bucket that matches wins. Terms
+# that match nothing are skipped (they don't get dumped into "Other Policy" —
+# that creates noise). Vocabulary is intentionally narrow on bucket-defining
+# terms so we don't cross-classify (e.g. "border" is Immigration, not Foreign
+# Policy, even though "border crossing" sounds like both).
+
+BUCKET_KEYWORDS: dict[str, list[str]] = {
+    'Economy & Inflation': [
+        'inflation', 'recession', 'cost of living', 'consumer price', 'cpi report',
+        'gdp', 'fed rate', 'federal reserve', 'rate hike', 'rate cut',
+        'stock market', 'wall street', 's&p 500', 'nasdaq', 'dow jones',
+        'jobs report', 'unemployment rate',
+    ],
+    'Gas & Energy': [
+        'gas prices', 'gas price', 'gasoline', 'oil prices', 'crude oil',
+        'opec', 'pipeline', 'energy bill', 'electricity rates', 'utility bill',
+        'fracking',
+    ],
+    'Housing & Rent': [
+        'housing', 'mortgage', 'home prices', 'eviction',
+        'section 8', 'affordable housing', 'homeownership',
+        'real estate market', 'rent control', 'rental market',
+    ],
+    'Healthcare': [
+        'healthcare', 'health care', 'health insurance', 'obamacare',
+        'affordable care act', 'prescription drug', 'drug prices',
+        'medical bill', 'insulin price', 'hospital bill',
+    ],
+    'Immigration': [
+        'immigration', 'immigrant', 'border patrol', 'border crossing',
+        'border wall', 'asylum', 'deport', 'migrant',
+        'ice raid', 'dreamers', 'daca', 'visa policy', 'green card',
+        'sanctuary city',
+    ],
+    'Abortion & Reproductive Rights': [
+        'abortion', 'roe v wade', 'dobbs', 'reproductive rights',
+        'planned parenthood', 'contraception', 'pro-life',
+        'pro-choice', 'abortion ban',
+    ],
+    'Education & Student Loans': [
+        'student loan', 'pell grant', 'tuition',
+        'public school funding', 'school board', 'fafsa', 'student debt',
+        'college costs', 'school choice', 'voucher program',
+    ],
+    'Crime & Safety': [
+        'crime rate', 'violent crime', 'police shooting', 'homicide', 'carjacking',
+        'fentanyl', 'drug bust', 'criminal justice', 'parole', 'sentencing',
+        'shoplifting',
+    ],
+    'Jobs & Wages': [
+        'minimum wage', 'union strike', 'labor strike', 'auto workers',
+        'paid leave', 'overtime pay', 'gig worker',
+    ],
+    'Climate': [
+        'climate change', 'global warming', 'carbon emissions',
+        'wildfire', 'drought', 'green new deal',
+        'paris accord', 'electric vehicle', 'solar tax',
+    ],
+    'Taxes': [
+        'tax cut', 'tax bill', 'tax reform',
+        'tariff', 'property tax', 'sales tax', 'tax refund',
+        'tax credit',
+    ],
+    'Social Security & Medicare': [
+        'social security', 'medicare', 'medicaid', 'retirement age',
+        'cola adjustment', 'pension cut',
+    ],
+    'Foreign Policy': [
+        'gaza', 'israel', 'palestin', 'ukraine', 'nato',
+        'taiwan', 'iran ', 'foreign aid', 'ceasefire',
+        'hamas', 'sanctions on',
+    ],
+    'Election Integrity & Voting': [
+        'voter', 'voting', 'ballot', 'mail-in ballot',
+        'redistricting', 'gerrymander', 'fake elector', 'election fraud',
+        'recount', 'polling place', 'senate vote', 'house vote',
+        'voter integrity', 'consecutive senate', 'senate record',
+    ],
+    'Guns': [
+        'second amendment', 'mass shooting', 'assault weapon',
+        'concealed carry', 'gun control', 'red flag law', 'background check',
+        'gun violence', 'gun reform',
+    ],
+}
+
+
+def _bucket_external_term_to_issue(term: str, related: Optional[list[str]] = None) -> Optional[str]:
+    """Return the first ISSUE_BUCKETS label that matches `term`, or None.
+
+    Case-insensitive substring match against the per-bucket vocabulary.
+    Iterates buckets in dict order; first match wins. Falls through to
+    related-text (Trends RSS news titles / Trends related queries) when
+    the bare term doesn't match — captures cases like the Trends term
+    "arizona prosecution of fake electors" whose related news is about
+    voting and election integrity.
+    """
+    if not term:
+        return None
+    haystack = term.lower()
+    for bucket, kws in BUCKET_KEYWORDS.items():
+        for kw in kws:
+            if kw in haystack:
+                return bucket
+    if related:
+        rel_h = ' '.join(r.lower() for r in related if r)
+        for bucket, kws in BUCKET_KEYWORDS.items():
+            for kw in kws:
+                if kw in rel_h:
+                    return bucket
+    return None
+
+
+def _augment_buckets_with_external(buckets: list[dict],
+                                    trends_political: list[dict],
+                                    gdelt_articles: list[dict]) -> list[dict]:
+    """Add external signal (Google Trends + GDELT) into existing issue buckets.
+
+    For each bucket already in `buckets` we attach:
+      - trend_score:      sum of Google Trends `score` for terms bucketing here
+      - trend_queries:    top Trends terms that mapped to this bucket
+      - news_count:       number of GDELT political articles bucketing here
+      - news_headlines:   top GDELT headlines that mapped to this bucket
+
+    If an issue bucket has zero panel data BUT has external signal, we add
+    a synthesized row with count=0 / share=0 so the user still sees it as
+    a "trending issue with no panel chatter yet". This is the magic of
+    mixing — the card stops being purely retrospective.
+    """
+    # Pre-bucket the external data once.
+    trend_by_bucket: dict[str, list[tuple[str, int]]] = defaultdict(list)
+    for row in (trends_political or []):
+        term = (row.get('term') or '').strip()
+        if not term:
+            continue
+        b = _bucket_external_term_to_issue(term, row.get('related'))
+        if not b:
+            continue
+        trend_by_bucket[b].append((term, int(row.get('score', 0) or 0)))
+
+    news_by_bucket: dict[str, list[str]] = defaultdict(list)
+    for art in (gdelt_articles or []):
+        title = (art.get('title') or '').strip()
+        if not title:
+            continue
+        b = _bucket_external_term_to_issue(title)
+        if not b:
+            continue
+        news_by_bucket[b].append(title)
+
+    # Index existing panel buckets by name for in-place augmentation.
+    by_name = {b['bucket']: b for b in buckets}
+
+    # Augment panel-present buckets with external signal.
+    for name, row in by_name.items():
+        trend_hits = sorted(trend_by_bucket.get(name, []), key=lambda x: -x[1])
+        news_hits  = news_by_bucket.get(name, [])
+        row['trend_score']    = sum(s for _, s in trend_hits)
+        row['trend_queries']  = [t for t, _ in trend_hits[:5]]
+        row['news_count']     = len(news_hits)
+        row['news_headlines'] = news_hits[:3]
+
+    # Add buckets that have external-only signal (no panel chatter).
+    # These get count=0 / share=0 so they sort to the bottom by panel
+    # signal, but a high trend_score will float them up after re-rank.
+    for name in set(list(trend_by_bucket.keys()) + list(news_by_bucket.keys())):
+        if name in by_name:
+            continue
+        if name not in ISSUE_BUCKETS:
+            continue
+        trend_hits = sorted(trend_by_bucket.get(name, []), key=lambda x: -x[1])
+        news_hits  = news_by_bucket.get(name, [])
+        buckets.append({
+            'bucket': name,
+            'count':  0,
+            'share':  0.0,
+            'sample_queries': [],
+            'trend':  0.0,
+            'trend_score':    sum(s for _, s in trend_hits),
+            'trend_queries':  [t for t, _ in trend_hits[:5]],
+            'news_count':     len(news_hits),
+            'news_headlines': news_hits[:3],
+            'external_only':  True,
+        })
+
+    return buckets
+
+
+def _rerank_buckets_blended(buckets: list[dict]) -> list[dict]:
+    """Re-rank buckets by blended panel + external score.
+
+    Panel signal is the BACKBONE (what people in this slice are actually
+    searching). External signal is the OVERLAY (what's hot nationally /
+    in news right now). We weight panel 70% and external 30% so a
+    breaking-news topic with light panel chatter can rise above a
+    steady-state bucket, but the panel still dominates the order for
+    slices with strong first-party signal.
+    """
+    if not buckets:
+        return buckets
+    max_panel = max((b.get('count') or 0)        for b in buckets) or 1
+    max_trend = max((b.get('trend_score') or 0)  for b in buckets) or 1
+    max_news  = max((b.get('news_count')  or 0)  for b in buckets) or 1
+    for b in buckets:
+        panel_n = (b.get('count') or 0)       / max_panel
+        trend_n = (b.get('trend_score') or 0) / max_trend
+        news_n  = (b.get('news_count')  or 0) / max_news
+        # 70% panel, 20% Trends, 10% news. Keep panel dominant.
+        b['blended_score'] = round(0.70 * panel_n + 0.20 * trend_n + 0.10 * news_n, 4)
+    buckets.sort(key=lambda b: -b.get('blended_score', 0))
+    return buckets
+
+
 # ── Main entry point ────────────────────────────────────────────────────────
 
 def compute_panel_view(filters: dict, *, force_refresh: bool = False) -> dict:
@@ -1664,13 +1893,31 @@ def compute_panel_view(filters: dict, *, force_refresh: bool = False) -> dict:
         panel_demo = {}
         panel_journey = []
 
-    # Card A — issue buckets: prefer per-cell mapping; fall back to global.
+    # Card A — issue buckets: prefer per-cell panel mapping; fall back to global.
     issue_buckets = _bucket_search_terms_via_global_map(panel_top_queries, issue_buckets_global)
     if not issue_buckets and external.get('google_trends_top'):
         # External-only fallback: bucket Trends terms via the global map too
         synth = [{'term': r.get('term', ''), 'count': max(1, int(r.get('score', 0)) // 1000)}
                  for r in external['google_trends_top']]
         issue_buckets = _bucket_search_terms_via_global_map(synth, issue_buckets_global)
+
+    # Card A — mix in EXTERNAL search-trend signal (Google Trends + GDELT news).
+    # Panel data tells us what THIS audience is searching; external tells us
+    # what's hot nationally + in news right now. Augment every bucket with
+    # both signals, surface new buckets that exist external-only, then
+    # re-rank by a blended score so a breaking news topic with light panel
+    # chatter floats up. We do this BEFORE the politician/articles section
+    # so re-ranked buckets propagate to journey + heatmap + playbook.
+    raw_trends_for_buckets = (external or {}).get('google_trends_top') or []
+    # Re-use the cheap political filter so non-political Trends headlines
+    # (sports, celebrity) don't pollute the buckets.
+    politicians_for_filter = set(_load_politicians()[:300])
+    trends_political_for_buckets = _filter_trends_to_political(
+        raw_trends_for_buckets, politicians_for_filter)
+    gdelt_for_buckets = (external or {}).get('gdelt_articles') or []
+    issue_buckets = _augment_buckets_with_external(
+        issue_buckets, trends_political_for_buckets, gdelt_for_buckets)
+    issue_buckets = _rerank_buckets_blended(issue_buckets)
 
     # Card D — politicians: blend panel + external (Trends + GDELT + Wiki)
     panel_pol_counts = {r.get('name'): int(r.get('panelists', 0))
