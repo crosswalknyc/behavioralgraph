@@ -17889,12 +17889,35 @@
             #blueIQView .bq-trending-related { margin-top: 0.45rem; font-size: 0.74rem; color: var(--text-secondary); }
             #blueIQView .bq-trending-related-label { font-weight: 600; margin-right: 0.25rem; }
             #blueIQView .bq-trending-related-chip { display: inline-block; padding: 0.1rem 0.45rem; background: rgba(255,255,255,0.05); border-radius: 999px; margin: 0.1rem 0.18rem 0.1rem 0; color: var(--text-primary); font-size: 0.72rem; }
+            /* In-dashboard view tabs. Each hex click on the choropleth
+             * (or any other "drill to geo" action) creates / switches
+             * to a tab. The first tab tracks the filter bar (always
+             * present, non-closeable); subsequent tabs let users
+             * compare states without losing their primary view. */
+            #blueIQView .bq-tabstrip { display: flex; align-items: center; gap: 0.3rem; flex-wrap: wrap; padding: 0.45rem 0 0.55rem 0; margin: 0.2rem 0 0.5rem 0; border-bottom: 1px solid rgba(255,255,255,0.05); min-height: 36px; }
+            #blueIQView .bq-tab { display: inline-flex; align-items: center; gap: 0.4rem; padding: 0.32rem 0.65rem 0.32rem 0.75rem; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.07); border-radius: 6px 6px 0 0; font-size: 0.78rem; color: var(--text-secondary); cursor: pointer; transition: background 0.12s ease, color 0.12s ease, border-color 0.12s ease; user-select: none; }
+            #blueIQView .bq-tab:hover { background: rgba(255,255,255,0.08); color: var(--text-primary); }
+            #blueIQView .bq-tab.active { background: rgba(79,140,255,0.18); border-color: rgba(79,140,255,0.45); color: var(--text-primary); font-weight: 600; }
+            #blueIQView .bq-tab-close { display: inline-flex; align-items: center; justify-content: center; width: 16px; height: 16px; padding: 0; border-radius: 3px; background: transparent; border: 0; color: inherit; opacity: 0.55; cursor: pointer; line-height: 1; font-size: 14px; }
+            #blueIQView .bq-tab-close:hover { background: rgba(255,255,255,0.12); opacity: 1; }
+            #blueIQView .bq-tab-loading { display: inline-block; width: 10px; height: 10px; border: 2px solid rgba(255,255,255,0.18); border-top-color: #4f8cff; border-radius: 50%; animation: bq-tab-spin 0.6s linear infinite; }
+            @keyframes bq-tab-spin { to { transform: rotate(360deg); } }
             #blueIQView .bq-geo-controls { display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap; margin-bottom: 0.7rem; }
             #blueIQView .bq-geo-label { font-size: 0.78rem; color: var(--text-secondary); }
             #blueIQView .bq-geo-select { background: rgba(255,255,255,0.06); color: var(--text-primary); padding: 0.32rem 0.55rem; border-radius: 6px; border: 1px solid rgba(255,255,255,0.08); font-size: 0.82rem; min-width: 240px; }
             #blueIQView .bq-geo-legend { display: inline-flex; gap: 0.2rem; align-items: center; margin-left: auto; }
-            #blueIQView .bq-geo-hex { cursor: pointer; transition: transform 0.12s ease, filter 0.12s ease; transform-origin: 28px 24px; transform-box: fill-box; }
-            #blueIQView .bq-geo-hex:hover { transform: scale(1.08); filter: brightness(1.18); }
+            /* Hover lift without transform-scale — scaling a <g> with a
+             * translate() attribute caused jitter in some browsers
+             * (transform-box: fill-box is inconsistently supported on
+             * group elements, so the hex would snap to the SVG origin
+             * mid-hover). We get the same visual lift via brightness +
+             * a glowing drop-shadow + a bright stroke ring on the
+             * polygon, all of which leave layout untouched.
+             */
+            #blueIQView .bq-geo-hex { cursor: pointer; transition: filter 0.12s ease; }
+            #blueIQView .bq-geo-hex polygon { transition: stroke 0.12s ease, stroke-width 0.12s ease; }
+            #blueIQView .bq-geo-hex:hover { filter: brightness(1.2) drop-shadow(0 0 6px rgba(96,165,250,0.7)); }
+            #blueIQView .bq-geo-hex:hover polygon { stroke: rgba(255,255,255,0.9); stroke-width: 2; }
             #blueIQView .bq-geo-toplist { margin-top: 0.8rem; padding-top: 0.7rem; border-top: 1px solid rgba(255,255,255,0.05); }
             #blueIQView .bq-geo-toplist-title { font-size: 0.82rem; color: var(--text-secondary); margin-bottom: 0.4rem; }
             #blueIQView .bq-geo-toplist-row { display: flex; align-items: center; gap: 0.6rem; padding: 0.18rem 0; font-size: 0.82rem; }
@@ -18413,6 +18436,7 @@
                 <span id="blueIQUpdatedAt"></span>
             </div>
             <div id="blueIQSuppressedMsg" class="blue-iq-suppressed" style="display: none;"></div>
+            <div id="blueIQTabStrip" class="bq-tabstrip" style="display: none;"></div>
             <div id="blueIQLoading" class="blue-iq-loading-overlay" style="display: none;">
                 <div class="blue-iq-spinner"></div>
                 <div>Crunching panel signal, search trends, and news coverage&hellip;</div>
@@ -22992,7 +23016,218 @@
             filterOptions: null,
             lastData: null,
             inFlight: null,
+            // In-dashboard tab system: each entry is
+            //   { id, label, filters, payload, loading, isRoot }
+            // Tab[0] (isRoot=true) is permanent and tracks the filter
+            // bar. Subsequent tabs are spawned by hex-grid drill clicks
+            // (or other "open in new tab" actions) so users can switch
+            // between state views without losing their primary one.
+            tabs: [],
+            activeTabId: null,
+            tabSeq: 0,
         };
+
+        function _bqTabLabel(filters) {
+            var party = filters.party || 'All';
+            var geo;
+            if (filters.geo_type === 'National' || !filters.geo_value) {
+                geo = 'National';
+            } else {
+                geo = filters.geo_value;
+            }
+            return party === 'All' ? geo : (party + ' \u00b7 ' + geo);
+        }
+
+        function _bqFiltersEqual(a, b) {
+            if (!a || !b) return false;
+            return (a.party || 'All') === (b.party || 'All')
+                && (a.geo_type || 'National') === (b.geo_type || 'National')
+                && (a.geo_value || '') === (b.geo_value || '')
+                && (parseInt(a.lookback_days, 10) || 30) === (parseInt(b.lookback_days, 10) || 30);
+        }
+
+        function _bqGetActiveTab() {
+            var bq = window.__blueIQ;
+            if (!bq || !bq.tabs) return null;
+            for (var i = 0; i < bq.tabs.length; i++) {
+                if (bq.tabs[i].id === bq.activeTabId) return bq.tabs[i];
+            }
+            return null;
+        }
+
+        function _bqEnsureRootTab(filters) {
+            var bq = window.__blueIQ;
+            bq.tabs = bq.tabs || [];
+            if (bq.tabs.length === 0) {
+                var root = {
+                    id:      ++bq.tabSeq,
+                    label:   _bqTabLabel(filters),
+                    filters: Object.assign({}, filters),
+                    payload: null,
+                    loading: false,
+                    isRoot:  true,
+                };
+                bq.tabs.push(root);
+                bq.activeTabId = root.id;
+            }
+            return bq.tabs[0];
+        }
+
+        function _bqRenderTabStrip() {
+            var strip = document.getElementById('blueIQTabStrip');
+            if (!strip) return;
+            var bq = window.__blueIQ;
+            if (!bq.tabs || bq.tabs.length === 0) {
+                strip.style.display = 'none';
+                strip.innerHTML = '';
+                return;
+            }
+            // Hide the strip entirely when only the root tab exists so
+            // the dashboard chrome stays clean until the user actually
+            // opens a comparison tab.
+            if (bq.tabs.length === 1) {
+                strip.style.display = 'none';
+                return;
+            }
+            strip.style.display = 'flex';
+            strip.innerHTML = bq.tabs.map(function(t) {
+                var active = t.id === bq.activeTabId ? ' active' : '';
+                var loading = t.loading
+                    ? '<span class="bq-tab-loading" aria-hidden="true"></span>'
+                    : '';
+                var close = t.isRoot
+                    ? ''
+                    : '<button type="button" class="bq-tab-close" title="Close tab" data-close-tab="' + t.id + '">\u00d7</button>';
+                return '<div class="bq-tab' + active + '" data-tab-id="' + t.id + '" title="' + _bqEscape(t.label) + '">'
+                     +   loading + '<span class="bq-tab-label">' + _bqEscape(t.label) + '</span>' + close
+                     + '</div>';
+            }).join('');
+        }
+
+        async function _bqSwitchTab(tabId) {
+            var bq = window.__blueIQ;
+            var target = null;
+            for (var i = 0; i < bq.tabs.length; i++) {
+                if (bq.tabs[i].id === tabId) { target = bq.tabs[i]; break; }
+            }
+            if (!target) return;
+            bq.activeTabId = tabId;
+            // Sync the filter bar dropdowns to the active tab's filters
+            // so subsequent Apply clicks operate on this view.
+            var f = target.filters || {};
+            var pEl = document.getElementById('blueIQParty');
+            var gtEl = document.getElementById('blueIQGeoType');
+            var gvEl = document.getElementById('blueIQGeoValue');
+            var lbEl = document.getElementById('blueIQLookback');
+            if (pEl)  pEl.value  = f.party || 'All';
+            if (gtEl) gtEl.value = f.geo_type || 'National';
+            if (typeof _populateBlueIQGeoValue === 'function') _populateBlueIQGeoValue();
+            if (gvEl) gvEl.value = f.geo_value || '';
+            if (lbEl) lbEl.value = String(f.lookback_days || 30);
+            _bqRenderTabStrip();
+            if (target.payload) {
+                renderBlueIQCards(target.payload);
+            } else if (!target.loading) {
+                // No cached payload yet for this tab — fetch now.
+                await _bqFetchPayloadIntoTab(target);
+            }
+        }
+
+        async function _bqFetchPayloadIntoTab(tab) {
+            tab.loading = true;
+            _bqRenderTabStrip();
+            try {
+                var resp = await fetch('/api/blue-iq/data', {
+                    method:      'POST',
+                    credentials: 'same-origin',
+                    headers:     { 'Content-Type': 'application/json' },
+                    body:        JSON.stringify(tab.filters),
+                });
+                var data = await resp.json();
+                if (!data || !data.success) throw new Error(data && data.error ? data.error : 'Request failed');
+                tab.payload = data;
+                if (window.__blueIQ.activeTabId === tab.id) {
+                    renderBlueIQCards(data);
+                }
+            } catch (e) {
+                console.error('Blue IQ tab fetch failed:', e);
+                if (window.__blueIQ.activeTabId === tab.id) {
+                    var meta = document.getElementById('blueIQMeta');
+                    if (meta) meta.textContent = 'Error loading ' + tab.label + ': ' + (e.message || e);
+                }
+            } finally {
+                tab.loading = false;
+                _bqRenderTabStrip();
+            }
+        }
+
+        async function _bqAddOrSwitchTab(filters, label) {
+            var bq = window.__blueIQ;
+            _bqEnsureRootTab(filters);
+            // Already-open tab matching these filters? Just switch.
+            for (var i = 0; i < bq.tabs.length; i++) {
+                if (_bqFiltersEqual(bq.tabs[i].filters, filters)) {
+                    await _bqSwitchTab(bq.tabs[i].id);
+                    return;
+                }
+            }
+            var tab = {
+                id:      ++bq.tabSeq,
+                label:   label || _bqTabLabel(filters),
+                filters: Object.assign({}, filters),
+                payload: null,
+                loading: false,
+                isRoot:  false,
+            };
+            bq.tabs.push(tab);
+            bq.activeTabId = tab.id;
+            // Sync filter bar to new tab + render strip BEFORE fetch so
+            // the loading spinner is visible on the new tab pill.
+            var f = tab.filters;
+            var pEl = document.getElementById('blueIQParty');
+            var gtEl = document.getElementById('blueIQGeoType');
+            var gvEl = document.getElementById('blueIQGeoValue');
+            var lbEl = document.getElementById('blueIQLookback');
+            if (pEl)  pEl.value  = f.party || 'All';
+            if (gtEl) gtEl.value = f.geo_type || 'National';
+            if (typeof _populateBlueIQGeoValue === 'function') _populateBlueIQGeoValue();
+            if (gvEl) gvEl.value = f.geo_value || '';
+            if (lbEl) lbEl.value = String(f.lookback_days || 30);
+            _bqRenderTabStrip();
+            await _bqFetchPayloadIntoTab(tab);
+        }
+
+        function _bqCloseTab(tabId) {
+            var bq = window.__blueIQ;
+            var idx = -1;
+            for (var i = 0; i < bq.tabs.length; i++) {
+                if (bq.tabs[i].id === tabId) { idx = i; break; }
+            }
+            if (idx < 0) return;
+            var closingActive = bq.tabs[idx].id === bq.activeTabId;
+            bq.tabs.splice(idx, 1);
+            if (closingActive && bq.tabs.length > 0) {
+                var nextIdx = Math.max(0, idx - 1);
+                _bqSwitchTab(bq.tabs[nextIdx].id);
+            } else {
+                _bqRenderTabStrip();
+            }
+        }
+
+        // Delegate clicks on the tab strip (switch / close).
+        document.addEventListener('click', function(ev) {
+            var closeBtn = ev.target && ev.target.closest && ev.target.closest('[data-close-tab]');
+            if (closeBtn) {
+                ev.stopPropagation();
+                _bqCloseTab(parseInt(closeBtn.getAttribute('data-close-tab'), 10));
+                return;
+            }
+            var tabPill = ev.target && ev.target.closest && ev.target.closest('.bq-tab[data-tab-id]');
+            if (tabPill && tabPill.closest && tabPill.closest('#blueIQTabStrip')) {
+                var tid = parseInt(tabPill.getAttribute('data-tab-id'), 10);
+                if (tid && tid !== window.__blueIQ.activeTabId) _bqSwitchTab(tid);
+            }
+        });
 
         function _blueIQHideAllOtherViews() {
             var ids = ['dashboardView','subscriberIQView','sfConversionView','rankerIQView',
@@ -23093,6 +23328,18 @@
                 var data = await resp.json();
                 if (!data || !data.success) throw new Error(data && data.error ? data.error : 'Request failed');
                 window.__blueIQ.lastData = data;
+                // Sync the active tab with this Apply: the filter bar
+                // is the active tab's "edit surface", so an Apply
+                // updates that tab's filters + cached payload + label.
+                // First Apply on a fresh dashboard creates the root tab.
+                _bqEnsureRootTab(filters);
+                var active = _bqGetActiveTab();
+                if (active) {
+                    active.filters = Object.assign({}, filters);
+                    active.payload = data;
+                    active.label   = _bqTabLabel(filters);
+                }
+                _bqRenderTabStrip();
                 renderBlueIQCards(data);
             } catch (e) {
                 if (e && e.name === 'AbortError') return;
@@ -24481,9 +24728,10 @@
                 }
             }
 
-            // Hex-click → drill into that state by mutating the existing
-            // geography dropdown + re-running applyBlueIQFilters (the same
-            // path the filter bar uses).
+            // Hex-click → open that state as a NEW tab within the
+            // dashboard, so the user can switch back to whatever they
+            // were previously viewing. The active tab's filters (party
+            // + lookback) carry over; only geography changes.
             mapEl.onclick = function(ev) {
                 var g = ev.target && ev.target.closest && ev.target.closest('.bq-geo-hex');
                 if (!g) return;
@@ -24493,20 +24741,21 @@
                     return BLUE_IQ_STATE_NAME_TO_USPS[n] === usps;
                 });
                 if (!stateName) return;
-                var geoType = document.getElementById('blueIQGeoType');
-                var geoVal  = document.getElementById('blueIQGeoValue');
-                if (geoType) {
-                    geoType.value = 'State';
-                    if (typeof _populateBlueIQGeoValue === 'function') {
-                        _populateBlueIQGeoValue();
-                    }
-                }
-                if (geoVal) {
-                    geoVal.value = stateName;
-                }
-                if (typeof applyBlueIQFilters === 'function') {
-                    applyBlueIQFilters();
-                }
+                // Inherit non-geo filters (party, lookback) from the
+                // current view so the comparison tab keeps everything
+                // else constant.
+                var cur = _bqGetActiveTab();
+                var base = (cur && cur.filters) ? cur.filters : {
+                    party:         document.getElementById('blueIQParty')   && document.getElementById('blueIQParty').value   || 'All',
+                    lookback_days: parseInt(document.getElementById('blueIQLookback') && document.getElementById('blueIQLookback').value || '30', 10),
+                };
+                var newFilters = {
+                    party:         base.party || 'All',
+                    geo_type:      'State',
+                    geo_value:     stateName,
+                    lookback_days: parseInt(base.lookback_days, 10) || 30,
+                };
+                _bqAddOrSwitchTab(newFilters, stateName);
             };
 
             renderForIssue(issuesSorted[0]);
