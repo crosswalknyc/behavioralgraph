@@ -273,13 +273,28 @@ def _s3():
 
 
 def blue_iq_cache_key(filters: dict) -> str:
-    """Deterministic cache key from a filter dict."""
+    """Deterministic cache key from a filter dict.
+
+    Version bumps invalidate all previously-cached payloads in one move.
+    Bump whenever the payload SCHEMA changes (new card field, renamed
+    field, etc.) so stale payloads written before the schema change
+    don't keep serving for up to CACHE_TTL_S.
+
+    History:
+      v1 — initial release
+      v2 — 2026-06-05: added issue_geo, trending_local, trending_meta,
+            top_candidates, candidate race_type/role fields, engaged-
+            politician role/engagement_drivers fields, national_share
+            on search/social rows. Stale v1 caches were serving an
+            empty Issue × Geo heatmap because issue_geo wasn't in the
+            payload at write time.
+    """
     canonical = json.dumps({
         'party':     filters.get('party') or 'All',
         'geo_type':  filters.get('geo_type') or 'National',
         'geo_value': filters.get('geo_value') or '',
         'lookback':  int(filters.get('lookback_days') or DEFAULT_LOOKBACK_DAYS),
-        'version':   1,
+        'version':   2,
     }, sort_keys=True, separators=(',', ':'))
     return hashlib.sha256(canonical.encode('utf-8')).hexdigest()
 

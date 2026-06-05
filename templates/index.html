@@ -23913,8 +23913,23 @@
             var legEl  = document.getElementById('blueIQGeoLegend');
             if (!mapEl || !sel) return;
             if (!geoRows || !geoRows.length) {
-                mapEl.innerHTML = '<div style="color: var(--text-secondary); font-size: 0.85rem; padding: 1rem 0; text-align:center;">No state-level issue signal in this slice. The cube needs per-state cells with bucketed search queries.</div>';
+                // Two real reasons this lands empty:
+                //   1. The cube hasn't been rebuilt since this card was
+                //      added — old cached payloads don't carry issue_geo.
+                //      Bumping the cache version (blue_iq.py
+                //      blue_iq_cache_key) fixes this within minutes.
+                //   2. The active party slice is so narrow that no
+                //      per-state cell cleared MIN_CELL_SIZE. Try
+                //      switching to "All" / "Democrats" to widen.
+                mapEl.innerHTML = '<div style="color: var(--text-secondary); font-size: 0.85rem; padding: 2rem 0; text-align:center; line-height: 1.6;">'
+                    + 'Building per-state heatmap...'
+                    + '<br><span style="font-size: 0.72rem; opacity: 0.85;">'
+                    + 'If this persists, try widening to <b>All parties</b> or refresh the page \u2014 '
+                    + 'the cube refreshes nightly and stale caches expire within 24h.'
+                    + '</span></div>';
                 if (topEl) topEl.innerHTML = '';
+                if (legEl) legEl.innerHTML = '';
+                if (sel) sel.innerHTML = '<option value="">—</option>';
                 return;
             }
             // Build issue list (deduped, sorted by total panelists desc).
