@@ -2181,6 +2181,9 @@
                                     <label style="display: flex; align-items: center; gap: 0.3rem; font-size: 0.8rem; cursor: pointer;">
                                         <input type="checkbox" id="cdJourneyIQ"> Digital Journey IQ
                                     </label>
+                                    <label style="display: flex; align-items: center; gap: 0.3rem; font-size: 0.8rem; cursor: pointer;">
+                                        <input type="checkbox" id="cdBlueIQ"> Blue IQ
+                                    </label>
                                 </div>
                             </div>
                             <!-- Access to New Releases -->
@@ -2746,6 +2749,16 @@
                             <label class="checkbox-group">
                                 <input type="checkbox" id="hasLLMOIQAccess">
                                 <span style="font-weight: 600;">🤖 LLMO IQ</span>
+                            </label>
+                        </div>
+                    </div>
+
+                    <!-- Blue IQ Access -->
+                    <div class="dashboard-access-item">
+                        <div class="dashboard-access-header">
+                            <label class="checkbox-group">
+                                <input type="checkbox" id="hasBlueIQAccess">
+                                <span style="font-weight: 600;">🗳️ BLUE IQ</span>
                             </label>
                         </div>
                     </div>
@@ -4067,6 +4080,8 @@
                     if (cdBp) cdBp.checked = !!d.has_brand_partnership_iq_access;
                     var cdJiq = document.getElementById('cdJourneyIQ');
                     if (cdJiq) cdJiq.checked = !!d.has_journey_iq_access;
+                    var cdBiq = document.getElementById('cdBlueIQ');
+                    if (cdBiq) cdBiq.checked = !!d.has_blue_iq_access;
                     syncCompanyDefaultsShareOfTime();
                     document.getElementById('cdDefaultCredits').value = d.credits ?? 5;
                     // Access to New Releases
@@ -4128,6 +4143,7 @@
                 has_ticket_sales_tracker_access: document.getElementById('cdTicketTracker').checked,
                 has_brand_partnership_iq_access: !!(document.getElementById('cdBrandPartnership') && document.getElementById('cdBrandPartnership').checked),
                 has_journey_iq_access: !!(document.getElementById('cdJourneyIQ') && document.getElementById('cdJourneyIQ').checked),
+                has_blue_iq_access: !!(document.getElementById('cdBlueIQ') && document.getElementById('cdBlueIQ').checked),
                 credits: parseInt(document.getElementById('cdDefaultCredits').value) || 5,
                 auto_access_new: {
                     profile_iq: document.getElementById('cdAanProfileIQ').checked,
@@ -6982,6 +6998,8 @@
             document.getElementById('hedgeFundIQDataCutoff').value = '';
             document.getElementById('hasAnalysisIQAccess').checked = false;
             document.getElementById('hasLLMOIQAccess').checked = false;
+            var biqAccessReset = document.getElementById('hasBlueIQAccess');
+            if (biqAccessReset) biqAccessReset.checked = false;
             document.getElementById('hasTalentFitAccess').checked = false;
             document.getElementById('hasShareOfTimeAccess').checked = true;
             document.getElementById('hasShareOfTimeRunAccess').checked = true;
@@ -7115,6 +7133,8 @@
             document.getElementById('getsHedgeFundIQEmails').checked = user.gets_hedge_fund_iq_emails === true; // Default false
             document.getElementById('hasAnalysisIQAccess').checked = user.has_analysis_iq_access === true; // Default false
             document.getElementById('hasLLMOIQAccess').checked = user.has_llmo_iq_access === true; // Default false
+            var biqAccess = document.getElementById('hasBlueIQAccess');
+            if (biqAccess) biqAccess.checked = user.has_blue_iq_access === true; // Default false
             document.getElementById('hasTalentFitAccess').checked = user.has_talent_fit_access === true; // Default false
             document.getElementById('hasShareOfTimeAccess').checked = user.has_share_of_time_access !== false;
             document.getElementById('hasShareOfTimeRunAccess').checked = user.has_share_of_time_run_access !== false;
@@ -9041,6 +9061,7 @@
                 has_analysis_iq_access: !!document.getElementById('hasAnalysisIQAccess').checked,
                 analysis_iq_modules: getAnalysisIQModules() || [],
                 has_llmo_iq_access: document.getElementById('hasLLMOIQAccess').checked,
+                has_blue_iq_access: !!(document.getElementById('hasBlueIQAccess') && document.getElementById('hasBlueIQAccess').checked),
                 has_talent_fit_access: document.getElementById('hasTalentFitAccess').checked,
                 has_share_of_time_access: document.getElementById('hasShareOfTimeAccess').checked,
                 has_share_of_time_run_access: document.getElementById('hasShareOfTimeRunAccess').checked && document.getElementById('hasShareOfTimeAccess').checked,
