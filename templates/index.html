@@ -5672,52 +5672,6 @@
             background: var(--bg-card);
             z-index: 0;
         }
-        /* Profile IQ Behavioral tab only: flex rows for true vertical centering (column widths match subgrid header). */
-        #behavioralGrid .behavioral-table .behavioral-item {
-            display: flex;
-            align-items: center;
-            gap: 0.4rem;
-            padding: 0.22rem 0 0.18rem 0;
-        }
-        #behavioralGrid .behavioral-table .behavioral-item > * {
-            min-height: 0;
-        }
-        #behavioralGrid .behavioral-table .behavioral-item .behavioral-rank {
-            flex: 0 0 28px;
-            line-height: 1;
-            display: block;
-            align-self: auto;
-        }
-        #behavioralGrid .behavioral-table .behavioral-item .behavioral-name-wrapper {
-            flex: 1 1 100px;
-            min-width: 0;
-            display: block;
-            align-self: auto;
-        }
-        #behavioralGrid .behavioral-table .behavioral-item .behavioral-name {
-            padding: 0 0.4rem;
-            line-height: 1.2;
-            display: block;
-            width: 100%;
-        }
-        #behavioralGrid .behavioral-table .behavioral-item .behavioral-pct {
-            flex: 0 0 78px;
-            text-align: right !important;
-            line-height: 1;
-            font-variant-numeric: tabular-nums;
-            padding: 0 0.1rem 0 0.2rem;
-            display: block;
-            align-self: auto;
-        }
-        #behavioralGrid .behavioral-table .behavioral-item .behavioral-index {
-            flex: 0 0 64px;
-            text-align: right !important;
-            line-height: 1;
-            font-variant-numeric: tabular-nums;
-            padding: 0 0.35rem 0 0.2rem;
-            display: block;
-            align-self: auto;
-        }
         .behavioral-table .behavioral-item:hover {
             z-index: 1;
         }
@@ -5796,6 +5750,35 @@
             text-align: right !important;
             padding: 3px 6px;
             border-radius: 4px;
+        }
+
+        /* Profile IQ Behavioral tab: center row content (overrides base table rules + index badge padding). */
+        #behavioralGrid .behavioral-table {
+            row-gap: 0;
+            column-gap: 0.4rem;
+        }
+        #behavioralGrid .behavioral-table .behavioral-item {
+            align-items: center;
+            padding: 0.1rem 0 0.28rem 0;
+        }
+        #behavioralGrid .behavioral-table .behavioral-item .behavioral-rank,
+        #behavioralGrid .behavioral-table .behavioral-item .behavioral-name-wrapper,
+        #behavioralGrid .behavioral-table .behavioral-item .behavioral-pct,
+        #behavioralGrid .behavioral-table .behavioral-item .behavioral-index {
+            align-self: center !important;
+            line-height: 1 !important;
+        }
+        #behavioralGrid .behavioral-table .behavioral-item .behavioral-name {
+            padding: 0 0.4rem !important;
+            line-height: 1.15 !important;
+        }
+        #behavioralGrid .behavioral-table .behavioral-item .behavioral-pct {
+            padding: 0 0.1rem 0 0.2rem !important;
+            font-variant-numeric: tabular-nums;
+        }
+        #behavioralGrid .behavioral-table .behavioral-item .behavioral-index {
+            padding: 0 0.35rem 0 0.2rem !important;
+            font-variant-numeric: tabular-nums;
         }
 
         /* AI Panel Styles */
