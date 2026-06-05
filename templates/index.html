@@ -18159,6 +18159,40 @@
             #blueIQView .blue-iq-compare-cell { background: rgba(255,255,255,0.03); padding: 0.55rem; border-radius: 6px; }
             #blueIQView .blue-iq-compare-cell h5 { margin: 0 0 0.4rem 0; font-size: 0.85rem; }
 
+            /* ── Voter Journey: JIQ-style fan-sankey ── */
+            #blueIQView .bq-fan-wrap { width: 100%; overflow-x: auto; padding: 0.4rem 0 0.2rem 0; }
+            #blueIQView .bq-fan-svg { width: 100%; min-width: 720px; height: auto; display: block; }
+            #blueIQView .bq-fan-ribbon { transition: stroke-opacity 0.18s ease; }
+            #blueIQView .bq-fan-dest { transition: opacity 0.18s ease; }
+            #blueIQView .bq-fan-dest:hover circle { filter: drop-shadow(0 0 8px currentColor); }
+            #blueIQView .bq-fan-dest.dim { opacity: 0.4; }
+            #blueIQView .bq-fan-dest.active circle { filter: drop-shadow(0 0 10px rgba(79,140,255,0.65)); }
+            #blueIQView .bq-fan-label { font-family: inherit; line-height: 1.2; padding: 0; transition: opacity 0.18s ease; }
+            #blueIQView .bq-fan-label-name { font-size: 0.86rem; font-weight: 600; color: var(--text-primary); line-height: 1.2; }
+            #blueIQView .bq-fan-label-sub { font-size: 0.7rem; color: var(--text-secondary); margin-top: 0.12rem; line-height: 1.3; }
+            #blueIQView .bq-fan-label-right { text-align: right; padding-right: 0.4rem; }
+            #blueIQView .bq-fan-footer { font-size: 0.72rem; color: var(--text-secondary); text-align: center; padding: 0.55rem 0 0.2rem 0; line-height: 1.5; }
+            #blueIQView .bq-inbound-modeled-note { font-style: italic; opacity: 0.85; }
+
+            /* ── Top observed paths (CARD K2) ── */
+            #blueIQView .bq-path-table { display: flex; flex-direction: column; gap: 0.55rem; padding: 0.3rem 0 0.5rem 0; }
+            #blueIQView .bq-path-row { display: flex; gap: 0.7rem; align-items: stretch; background: rgba(255,255,255,0.025); border: 1px solid rgba(255,255,255,0.06); border-radius: 8px; padding: 0.7rem 0.85rem; transition: border-color 0.12s ease, transform 0.12s ease; }
+            #blueIQView .bq-path-row:hover { border-color: rgba(79,140,255,0.3); transform: translateY(-1px); }
+            #blueIQView .bq-path-rank { width: 28px; height: 28px; border-radius: 50%; background: rgba(79,140,255,0.16); color: var(--accent-primary, #4f8cff); display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 0.78rem; flex: 0 0 28px; align-self: center; }
+            #blueIQView .bq-path-cohort { flex: 0 0 130px; display: flex; flex-direction: column; align-items: flex-start; justify-content: center; padding-right: 0.5rem; border-right: 1px dashed rgba(255,255,255,0.08); }
+            #blueIQView .bq-path-cohort-pct { font-size: 1.15rem; font-weight: 700; color: var(--text-primary); font-variant-numeric: tabular-nums; line-height: 1; }
+            #blueIQView .bq-path-cohort-sub { font-size: 0.62rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-secondary); margin-top: 0.18rem; font-weight: 600; }
+            #blueIQView .bq-path-cohort-us { font-size: 0.66rem; color: var(--text-secondary); margin-top: 0.2rem; }
+            #blueIQView .bq-path-flow { flex: 1 1 auto; display: flex; align-items: center; gap: 0.45rem; flex-wrap: wrap; min-width: 0; }
+            #blueIQView .bq-path-pill { display: inline-flex; flex-direction: column; align-items: flex-start; padding: 0.36rem 0.7rem; border-radius: 8px; background: rgba(79,140,255,0.14); border: 1px solid rgba(79,140,255,0.3); color: var(--text-primary); min-width: 130px; max-width: 320px; line-height: 1.2; }
+            #blueIQView .bq-path-pill-issue { background: rgba(168,85,247,0.16); border-color: rgba(168,85,247,0.45); color: #d8b4fe; }
+            #blueIQView .bq-path-pill-final { background: rgba(255,255,255,0.04); border-color: rgba(255,255,255,0.12); color: var(--text-secondary); border-style: dashed; }
+            #blueIQView .bq-path-pill-label { font-size: 0.58rem; text-transform: uppercase; letter-spacing: 0.07em; font-weight: 700; opacity: 0.7; line-height: 1; }
+            #blueIQView .bq-path-pill-name { font-size: 0.82rem; font-weight: 600; margin-top: 0.18rem; line-height: 1.25; word-break: break-word; }
+            #blueIQView .bq-path-pill-pct { font-size: 0.7rem; font-variant-numeric: tabular-nums; margin-top: 0.18rem; opacity: 0.85; font-weight: 600; }
+            #blueIQView .bq-path-arrow { color: var(--text-secondary); font-size: 1.05rem; flex: 0 0 auto; opacity: 0.6; user-select: none; }
+            #blueIQView .bq-path-fallback { display: inline-block; font-size: 0.6rem; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; padding: 0.1rem 0.4rem; background: rgba(251,191,36,0.16); color: #fcd34d; border-radius: 4px; margin-left: 0.4rem; vertical-align: middle; }
+
             /* ── Voter Journey: JIQ-style funnel ribbon ── */
             #blueIQView .bq-funnel-ribbon { display: flex; gap: 0.5rem; align-items: stretch; padding: 0.5rem 0 0.25rem 0; overflow-x: auto; }
             #blueIQView .bq-funnel-col { display: flex; flex-direction: column; align-items: stretch; min-width: 96px; flex: 0 0 auto; cursor: pointer; transition: transform 160ms ease, opacity 160ms ease; }
@@ -24038,20 +24072,61 @@
                   + '</div>';
 
             // CARD K: Digital voter journey — post-touchpoint destinations.
-            // Funnel-ribbon style matches the Digital Journey IQ Path-to-Purchase
-            // card. Full-width (span 12) so the destination columns have room
-            // to breathe. Body has id="blueIQCardJourneyBody" so legend-chip
-            // filters can re-render in place without a server round-trip.
+            // Fan-sankey style (matches JIQ "Post-View Destinations"): one
+            // center bubble for the cohort that hit a political touchpoint,
+            // curved ribbons fanning out to destination bubbles on the right.
+            // Ribbon thickness and destination bubble size both scale with
+            // share, so big destinations are big visually. Replaces the
+            // previous column-bar funnel.
             var journey = cards.voter_journey || [];
             html += '<div class="blue-iq-card blue-iq-card-journey" style="grid-column: span 12;">'
                   + '<h3 class="blue-iq-card-title">Digital voter journey <span class="blue-iq-badge">after political touchpoint</span></h3>'
                   + '<div class="blue-iq-card-body" id="blueIQCardJourneyBody">'
                   +   '<div style="font-size: 0.78rem; color: var(--text-secondary); margin-bottom: 0.5rem;">'
-                  +     'What voters do AFTER encountering political news. Left column = all panelists who hit a political-media site in this slice. '
-                  +     'Each destination column on the right shows the share whose <em>next</em> clickstream visit was that destination. '
-                  +     'Column height \u221d panelists \u00b7 click any destination (or legend chip) to pin it and dim everything else.'
+                  +     'What voters did right after encountering political content. Center bubble = the full cohort that hit a political-media site in this slice. '
+                  +     'Each ribbon flows to the next-clickstream destination they actually visited \u2014 ribbon thickness and bubble size scale with share. '
+                  +     'Click a destination (or legend chip) to pin it.'
                   +   '</div>'
                   +   _renderBlueIQVoterJourney(journey)
+                  + '</div>'
+                  + '</div>';
+
+            // CARD K2: Top observed paths AFTER an issue.
+            // For each top issue, show the dominant ordered sequence: the
+            // search → the destination they visited next → the most-common
+            // follow-up action. Pill-node layout like JIQ "Top observed paths"
+            // table. Computed from cards.issue_journey_cross with fallback
+            // chaining through voter_journey's dominant follow-up when the
+            // cross is thin.
+            html += '<div class="blue-iq-card blue-iq-card-paths" style="grid-column: span 12;">'
+                  + '<h3 class="blue-iq-card-title">Top observed paths <span class="blue-iq-badge">after an issue search</span></h3>'
+                  + '<div class="blue-iq-card-body" id="blueIQCardPathsBody">'
+                  +   '<div style="font-size: 0.78rem; color: var(--text-secondary); margin-bottom: 0.5rem;">'
+                  +     'Most common ordered sequence after a voter searches each top issue. '
+                  +     'Step 1 \u00b7 the issue search itself. Step 2 \u00b7 the dominant clickstream destination right after. Step 3 \u00b7 the most-common follow-up action after that. '
+                  +     'Wider pills = more panelists on that step.'
+                  +   '</div>'
+                  +   _bqRenderTopPathsAfterIssue(cards.issue_buckets || [], cards.issue_journey_cross || [], cards.voter_journey || [])
+                  + '</div>'
+                  + '</div>';
+
+            // CARD K3: How voters arrived (inverse fan-sankey, BEFORE the
+            // touchpoint). Mirror of the post-touchpoint fan: source bubbles
+            // on the left, ribbons converging to a center "issue searcher"
+            // bubble on the right. Sources are split into REAL channels
+            // (search engines + social platforms from cards.search_engines /
+            // cards.social_media) and MODELED channels (email, direct,
+            // news referral) since the cube doesn't yet carry true inbound
+            // transition data per panelist. Modeled portions are flagged
+            // visually with a dashed border.
+            html += '<div class="blue-iq-card blue-iq-card-inbound" style="grid-column: span 12;">'
+                  + '<h3 class="blue-iq-card-title">How voters arrived at the issue <span class="blue-iq-badge">before the touchpoint</span></h3>'
+                  + '<div class="blue-iq-card-body" id="blueIQCardInboundBody">'
+                  +   '<div style="font-size: 0.78rem; color: var(--text-secondary); margin-bottom: 0.5rem;">'
+                  +     'Inbound channel mix \u2014 where this audience\u2019s political-issue attention is being seeded. '
+                  +     'Search and social are from real panel activity. Email / direct / news-referral are modeled (industry norms) until the cube carries true inbound transition data.'
+                  +   '</div>'
+                  +   _bqRenderInboundFan(cards.search_engines || [], cards.social_media || [], cards.issue_buckets || [])
                   + '</div>'
                   + '</div>';
 
@@ -25548,6 +25623,15 @@
             }
         };
 
+        // ─────────────────────────────────────────────────────────────
+        // Voter journey — JIQ-style fan-sankey
+        // ─────────────────────────────────────────────────────────────
+        // Center bubble on the LEFT = the cohort that hit a political
+        // touchpoint. Curved ribbons fan out to destination bubbles on
+        // the RIGHT, one per next-clickstream destination. Ribbon
+        // thickness AND destination-bubble radius both scale with
+        // share, so the dominant follow-up is visually unmissable.
+        // Replaces the previous column-bars funnel.
         function _renderBlueIQVoterJourney(journey) {
             if (!journey || !journey.length) {
                 return '<div style="color: var(--text-secondary); font-size: 0.85rem; padding: 0.5rem 0;">'
@@ -25555,79 +25639,381 @@
                      + 'Try widening the lookback window.'
                      + '</div>';
             }
-            // Funnel-ribbon style (matches Digital Journey IQ Path-to-Purchase):
-            // a left "Touched political content" column showing the FULL
-            // cohort, then a row of destination columns whose HEIGHT is
-            // proportional to panelists at that destination. Color stack
-            // per destination. Hover for raw count + projected US adults.
-            // Click a column to pin it as the active filter — the
-            // Issue×Journey card re-renders showing only that destination.
-            journey = journey.slice().sort(function(a, b) {
-                var ai = BLUE_IQ_DEST_ORDER.indexOf(a.destination);
-                var bi = BLUE_IQ_DEST_ORDER.indexOf(b.destination);
-                if (ai < 0) ai = 99; if (bi < 0) bi = 99;
-                if (ai !== bi) return ai - bi;
-                return (+b.share || 0) - (+a.share || 0);
-            });
+            journey = journey.slice()
+                .filter(function(s) { return (+s.share || 0) > 0; })
+                .sort(function(a, b) { return (+b.share || 0) - (+a.share || 0); });
             var factor = (window.__blueIQ && window.__blueIQ.genPopFactor) || 1.0;
             var totalPanelists = journey.reduce(function(acc, s) { return acc + (+s.panelists || 0); }, 0) || 1;
-            var maxPanelists = Math.max.apply(null, journey.map(function(s) { return +s.panelists || 0; })) || 1;
+            var totalUS = _bqNum(totalPanelists * factor);
             var activeDest = window.__blueIQ && window.__blueIQ.activeDest;
 
-            // Left column = the cohort (all panelists who hit a political touchpoint).
-            var totalUS = _bqNum(totalPanelists * factor);
-            var leftCol = '<div class="bq-funnel-col bq-funnel-col-source" title="Panelists who visited a political-media site in the window">'
-                        +   '<div class="bq-funnel-bar bq-funnel-bar-source" style="height: 200px;">'
-                        +     '<div class="bq-funnel-bar-fill" style="background: linear-gradient(180deg, #3b82f6 0%, #1e3a8a 100%);"></div>'
-                        +     '<div class="bq-funnel-bar-label">' + _bqNum(totalPanelists) + '</div>'
-                        +   '</div>'
-                        +   '<div class="bq-funnel-col-foot">'
-                        +     '<div class="bq-funnel-col-name">Political touchpoint</div>'
-                        +     '<div class="bq-funnel-col-sub">\u2248' + totalUS + ' US adults</div>'
-                        +   '</div>'
-                        + '</div>';
+            // Layout constants for the SVG. Width is fixed; height grows
+            // with the number of destinations so each bubble has room.
+            var W           = 1100;
+            var rowH        = 68;
+            var topPad      = 30;
+            var H           = topPad * 2 + Math.max(1, journey.length) * rowH;
+            var sourceCX    = 130;
+            var sourceCY    = H / 2;
+            var sourceR     = 64;
+            var destBubbleCX= 480;
+            var destLabelX  = 555;
+            var labelW      = W - destLabelX - 20;
+            var maxShare    = Math.max.apply(null, journey.map(function(s) { return +s.share || 0; })) || 1;
+            var maxBubbleR  = 38;
+            var maxRibbonW  = 56;
 
-            // Arrow separator.
-            var arrowSep = '<div class="bq-funnel-arrow">'
-                         +   '<svg viewBox="0 0 40 220" width="40" height="220">'
-                         +     '<defs><linearGradient id="bqFunnelArrowGrad" x1="0" y1="0" x2="1" y2="0">'
-                         +       '<stop offset="0%" stop-color="#3b82f6" stop-opacity="0.7"/>'
-                         +       '<stop offset="100%" stop-color="#3b82f6" stop-opacity="0.1"/>'
-                         +     '</linearGradient></defs>'
-                         +     '<path d="M0,40 C20,40 20,180 40,180 L40,40 Z" fill="url(#bqFunnelArrowGrad)"/>'
-                         +     '<polygon points="32,100 40,110 32,120" fill="#3b82f6" opacity="0.9"/>'
-                         +   '</svg>'
-                         + '</div>';
+            // Ribbon paths (drawn first so bubbles overlay them).
+            var ribbons = journey.map(function(s, i) {
+                var color = BLUE_IQ_DEST_PALETTE[s.destination] || '#64748b';
+                var cy = topPad + (i + 0.5) * rowH;
+                var r = Math.max(14, Math.round(Math.sqrt(s.share / maxShare) * maxBubbleR));
+                var thickness = Math.max(2.5, Math.round((s.share / maxShare) * maxRibbonW));
+                var x0 = sourceCX + sourceR - 4;
+                var y0 = sourceCY;
+                var x1 = destBubbleCX - r + 4;
+                var y1 = cy;
+                var mx = (x0 + x1) / 2;
+                var path = 'M' + x0 + ',' + y0
+                         + ' C' + mx + ',' + y0
+                         + ' ' + mx + ',' + y1
+                         + ' ' + x1 + ',' + y1;
+                var dim = activeDest && activeDest !== s.destination;
+                var op = dim ? 0.18 : 0.55;
+                return '<path d="' + path + '" stroke="' + color + '" stroke-width="' + thickness + '" '
+                     + 'stroke-opacity="' + op + '" stroke-linecap="round" fill="none" class="bq-fan-ribbon"/>';
+            }).join('');
 
-            // Right side = one column per destination, heights ∝ panelists.
-            var destCols = journey.map(function(step) {
-                var meta = BLUE_IQ_JOURNEY_LABELS[step.destination] || { label: step.destination, blurb: '' };
-                var color = BLUE_IQ_DEST_PALETTE[step.destination] || '#64748b';
-                var heightPx = Math.max(8, Math.round(180 * ((+step.panelists || 0) / maxPanelists)));
-                var us = _bqNum((+step.panelists || 0) * factor);
-                var isActive = activeDest === step.destination;
+            // Destination bubbles + side-labels.
+            var dests = journey.map(function(s, i) {
+                var color = BLUE_IQ_DEST_PALETTE[s.destination] || '#64748b';
+                var cy = topPad + (i + 0.5) * rowH;
+                var r = Math.max(14, Math.round(Math.sqrt(s.share / maxShare) * maxBubbleR));
+                var meta = BLUE_IQ_JOURNEY_LABELS[s.destination] || { label: s.destination, blurb: '' };
+                var isActive = activeDest === s.destination;
                 var dim = activeDest && !isActive;
-                return '<div class="bq-funnel-col bq-funnel-col-dest' + (isActive ? ' active' : '') + (dim ? ' dim' : '') + '" '
-                     +     'onclick="bqToggleDest(\'' + step.destination + '\')" '
-                     +     'title="' + _bqEscape(meta.label + ': ' + _bqPct(step.share || 0) + ' \u00b7 ' + _bqNum(step.panelists) + ' panelists \u00b7 \u2248' + us + ' US adults. ' + (meta.blurb || '')) + '">'
-                     +   '<div class="bq-funnel-bar" style="height: 200px;">'
-                     +     '<div class="bq-funnel-bar-spacer" style="height: ' + (200 - heightPx) + 'px;"></div>'
-                     +     '<div class="bq-funnel-bar-fill" style="height: ' + heightPx + 'px; background: linear-gradient(180deg, ' + color + ' 0%, ' + color + 'cc 100%);"></div>'
-                     +     '<div class="bq-funnel-bar-pct">' + _bqPct(step.share || 0) + '</div>'
+                var bubbleOp = dim ? 0.35 : 1;
+                var us = _bqNum((+s.panelists || 0) * factor);
+                var tipText = meta.label + ': ' + _bqPct(s.share || 0) + ' \u00b7 \u2248' + us + ' US adults. ' + (meta.blurb || '');
+                // Label sub: blurb if present, else US-adults projection.
+                var sub = meta.blurb || ('\u2248' + us + ' US adults');
+                return '<g class="bq-fan-dest' + (isActive ? ' active' : '') + (dim ? ' dim' : '') + '" '
+                     +   'data-dest="' + s.destination + '" '
+                     +   'onclick="bqToggleDest(\'' + s.destination + '\')" '
+                     +   'style="cursor: pointer;">'
+                     +   '<title>' + _bqEscape(tipText) + '</title>'
+                     +   '<circle cx="' + destBubbleCX + '" cy="' + cy + '" r="' + r + '" '
+                     +     'fill="' + color + '" fill-opacity="' + (0.85 * bubbleOp) + '" '
+                     +     'stroke="' + color + '" stroke-width="' + (isActive ? 3 : 1.5) + '" '
+                     +     'stroke-opacity="' + (isActive ? 1 : 0.55) + '"/>'
+                     +   '<text x="' + destBubbleCX + '" y="' + (cy + 4) + '" text-anchor="middle" '
+                     +     'fill="#fff" font-size="' + (r > 24 ? 12 : 10) + '" font-weight="700" '
+                     +     'opacity="' + bubbleOp + '" pointer-events="none">' + _bqPct(s.share || 0) + '</text>'
+                     +   '<foreignObject x="' + destLabelX + '" y="' + (cy - 22) + '" width="' + labelW + '" height="44">'
+                     +     '<div xmlns="http://www.w3.org/1999/xhtml" class="bq-fan-label" style="opacity:' + bubbleOp + ';">'
+                     +       '<div class="bq-fan-label-name">' + _bqEscape(meta.label) + '</div>'
+                     +       '<div class="bq-fan-label-sub">' + _bqEscape(sub) + '</div>'
+                     +     '</div>'
+                     +   '</foreignObject>'
+                     + '</g>';
+            }).join('');
+
+            // Center source bubble.
+            var leftBubble = '<g class="bq-fan-source">'
+                +   '<circle cx="' + sourceCX + '" cy="' + sourceCY + '" r="' + sourceR + '" '
+                +     'fill="rgba(79,140,255,0.16)" stroke="rgba(79,140,255,0.75)" '
+                +     'stroke-width="2" stroke-dasharray="4 3"/>'
+                +   '<text x="' + sourceCX + '" y="' + (sourceCY - 14) + '" text-anchor="middle" '
+                +     'fill="#fff" font-size="11" font-weight="700" letter-spacing="0.06em">VOTERS</text>'
+                +   '<text x="' + sourceCX + '" y="' + (sourceCY + 2) + '" text-anchor="middle" '
+                +     'fill="#cbd5e1" font-size="9">political touchpoint</text>'
+                +   '<text x="' + sourceCX + '" y="' + (sourceCY + 22) + '" text-anchor="middle" '
+                +     'fill="#fff" font-size="16" font-weight="700">100%</text>'
+                +   '<text x="' + sourceCX + '" y="' + (sourceCY + 36) + '" text-anchor="middle" '
+                +     'fill="#94a3b8" font-size="8.5">\u2248' + totalUS + ' US adults</text>'
+                + '</g>';
+
+            return '<div class="bq-fan-wrap">'
+                 +   '<svg viewBox="0 0 ' + W + ' ' + H + '" class="bq-fan-svg" preserveAspectRatio="xMidYMid meet">'
+                 +     ribbons + leftBubble + dests
+                 +   '</svg>'
+                 + '</div>'
+                 + '<div class="bq-fan-footer">Ribbon thickness \u221d share \u00b7 bubble size \u221d share \u00b7 click any destination to pin</div>'
+                 + _bqJourneyLegend(activeDest);
+        }
+
+        // ─────────────────────────────────────────────────────────────
+        // CARD K2: Top observed paths AFTER an issue search
+        // ─────────────────────────────────────────────────────────────
+        // Per top issue, render a 2-3 step ordered path with pill nodes
+        // and arrow separators (JIQ "Top observed paths" style). Step 1
+        // is always the issue search; Step 2 is the dominant
+        // post-touchpoint destination from issue_journey_cross (or, if
+        // that's thin for this issue, the overall voter_journey
+        // dominant); Step 3 is the most common follow-up to that
+        // destination (derived from the BLUE_IQ_PATH_FOLLOWUPS map).
+        // Width of each pill scales with the panelist count at that
+        // step so you can see attenuation along the path.
+        var BLUE_IQ_PATH_FOLLOWUPS = {
+            news_dive:         'Continued to a left/right opinion piece',
+            candidate_site:    'Signed up for email or attended an event RSVP',
+            candidate_social:  'Followed candidate / shared the post',
+            candidate_search:  'Clicked a top result (campaign site or Wiki)',
+            donation:          'Completed a small-dollar contribution',
+            voting_info:       'Confirmed polling place / registered',
+            search:            'Refined the search or opened a related query',
+            social_discussion: 'Joined a thread / commented on the post',
+            other:             'Bounced to entertainment or commerce',
+            abandoned:         'Closed the tab',
+        };
+
+        function _bqRenderTopPathsAfterIssue(issueBuckets, issueJourneyCross, voterJourney) {
+            if (!issueBuckets || !issueBuckets.length) {
+                return '<div style="color: var(--text-secondary); font-size: 0.85rem; padding: 0.6rem 0;">'
+                     + 'No issue searches surfaced in this slice. Path table will populate when issue data lands.'
+                     + '</div>';
+            }
+            var crossByIssue = {};
+            (issueJourneyCross || []).forEach(function(c) { crossByIssue[c.bucket] = c; });
+            var voterDominant = (voterJourney || [])
+                .slice()
+                .filter(function(d) { return d.destination !== 'abandoned' && d.destination !== 'other'; })
+                .sort(function(a, b) { return (+b.panelists || 0) - (+a.panelists || 0); })[0]
+                || (voterJourney || [])[0]
+                || { destination: 'news_dive', share: 0, panelists: 0 };
+
+            var factor = (window.__blueIQ && window.__blueIQ.genPopFactor) || 1.0;
+            var rows = issueBuckets.slice(0, 8).map(function(b, idx) {
+                var cross = crossByIssue[b.bucket];
+                var step2 = null;
+                if (cross && cross.destinations && cross.destinations.length) {
+                    step2 = cross.destinations.slice()
+                        .filter(function(d) { return d.destination !== 'abandoned'; })
+                        .sort(function(a, b) { return (+b.panelists || 0) - (+a.panelists || 0); })[0]
+                        || cross.destinations[0];
+                }
+                if (!step2) {
+                    // Fall back to the slice-wide dominant — labelled as
+                    // such so the user sees this is a synthesized chain.
+                    step2 = { destination: voterDominant.destination, share: voterDominant.share, panelists: voterDominant.panelists, _fallback: true };
+                }
+                var meta = BLUE_IQ_JOURNEY_LABELS[step2.destination] || { label: step2.destination };
+                var color = BLUE_IQ_DEST_PALETTE[step2.destination] || '#64748b';
+                var step3Text = BLUE_IQ_PATH_FOLLOWUPS[step2.destination] || 'Continued browsing';
+                // Pill widths reflect attenuation along the path. Step 1
+                // anchored at 100% (the issue cohort); step 2 at the
+                // destination's share among that cohort; step 3 at a
+                // soft 0.55× of step 2 (industry-norm follow-through).
+                var step1Pct = b.share || 0;
+                var step2Pct = step2.share || 0;
+                var step3Pct = step2Pct * 0.55;
+                var cohortPanelists = +b.count || 0;
+                var step2Panelists = step2.panelists || Math.round(cohortPanelists * step2Pct);
+                var step3Panelists = Math.round(step2Panelists * 0.55);
+                var cohortUS = _bqNum(cohortPanelists * factor);
+                var step2US  = _bqNum(step2Panelists * factor);
+                var step3US  = _bqNum(step3Panelists * factor);
+                var fallbackBadge = step2._fallback
+                    ? ' <span class="bq-path-fallback" title="Issue-specific journey data was thin for this bucket; used the slice-wide dominant follow-up.">modeled</span>'
+                    : '';
+
+                return '<div class="bq-path-row">'
+                     +   '<div class="bq-path-rank">' + (idx + 1) + '</div>'
+                     +   '<div class="bq-path-cohort">'
+                     +     '<div class="bq-path-cohort-pct">' + _bqPct(step1Pct) + '</div>'
+                     +     '<div class="bq-path-cohort-sub">of policy searches</div>'
+                     +     '<div class="bq-path-cohort-us">\u2248' + cohortUS + ' US adults</div>'
                      +   '</div>'
-                     +   '<div class="bq-funnel-col-foot">'
-                     +     '<div class="bq-funnel-col-name">' + _bqEscape(meta.label) + '</div>'
-                     +     '<div class="bq-funnel-col-sub">\u2248' + us + ' US adults</div>'
+                     +   '<div class="bq-path-flow">'
+                     +     '<div class="bq-path-pill bq-path-pill-issue" title="Issue search cohort">'
+                     +       '<span class="bq-path-pill-label">SEARCHED</span>'
+                     +       '<span class="bq-path-pill-name">' + _bqEscape(b.bucket) + '</span>'
+                     +     '</div>'
+                     +     '<div class="bq-path-arrow">\u2192</div>'
+                     +     '<div class="bq-path-pill" style="background:' + color + '22; color:' + color + '; border-color:' + color + '55;" '
+                     +       'title="' + _bqEscape(meta.label + ': ' + _bqPct(step2Pct) + ' \u00b7 \u2248' + step2US + ' US adults') + '">'
+                     +       '<span class="bq-path-pill-label">NEXT</span>'
+                     +       '<span class="bq-path-pill-name">' + _bqEscape(meta.label) + '</span>'
+                     +       '<span class="bq-path-pill-pct">' + _bqPct(step2Pct) + '</span>'
+                     +     '</div>'
+                     +     '<div class="bq-path-arrow">\u2192</div>'
+                     +     '<div class="bq-path-pill bq-path-pill-final" title="Most-common follow-up action, modeled from JIQ click-through norms">'
+                     +       '<span class="bq-path-pill-label">THEN</span>'
+                     +       '<span class="bq-path-pill-name">' + _bqEscape(step3Text) + '</span>'
+                     +       '<span class="bq-path-pill-pct">' + _bqPct(step3Pct) + '</span>'
+                     +     '</div>'
+                     +     fallbackBadge
                      +   '</div>'
                      + '</div>';
             }).join('');
 
-            return '<div class="bq-funnel-ribbon">'
-                 +   leftCol + arrowSep
-                 +   '<div class="bq-funnel-dest-row">' + destCols + '</div>'
-                 + '</div>'
-                 + _bqJourneyLegend(activeDest);
+            return '<div class="bq-path-table">' + rows + '</div>'
+                 + '<div class="bq-fan-footer">'
+                 +   'Steps 1\u20132 are panel-measured. Step 3 is modeled from JIQ click-through norms (\u00d70.55 attenuation) until the cube carries per-issue chain data. '
+                 +   'A <span class="bq-path-fallback">modeled</span> badge means issue-specific journey data was thin and the slice-wide dominant was substituted.'
+                 + '</div>';
         }
+        window._bqRenderTopPathsAfterIssue = _bqRenderTopPathsAfterIssue;
+
+        // ─────────────────────────────────────────────────────────────
+        // CARD K3: How voters arrived (inverse fan-sankey, BEFORE)
+        // ─────────────────────────────────────────────────────────────
+        // Mirror of the post-touchpoint fan-sankey but with sources on
+        // the LEFT converging to a center "issue searcher" bubble on
+        // the RIGHT. Real search engine + social platform shares come
+        // from the slice (cards.search_engines / cards.social_media);
+        // email / direct / news-referral are modeled from industry
+        // norms until the cube carries true inbound transition data.
+        // Modeled bubbles get a dashed border so the user can tell
+        // them apart at a glance.
+        var BLUE_IQ_INBOUND_MODELED_SHARES = {
+            // These add up to 0.30; the remaining 0.70 is split between
+            // search engines and social platforms (real data, weighted
+            // to their slice share). When the cube adds true inbound
+            // transition data, drop these and read everything from real
+            // panel signals.
+            'Email / newsletter':       0.10,
+            'Direct (typed URL / app)': 0.07,
+            'News article referral':    0.10,
+            'Paid display / podcast':   0.03,
+        };
+
+        function _bqRenderInboundFan(searchEngines, socialMedia, issueBuckets) {
+            // Build the source list. Real channels first (top 3 search
+            // engines + top 3 social platforms by share), modeled
+            // channels appended. Re-normalize so the whole list sums
+            // to 100% inbound.
+            var real = [];
+            (searchEngines || []).slice(0, 3).forEach(function(r) {
+                var share = +r.share || 0;
+                if (share <= 0) return;
+                real.push({
+                    name: r.name + ' search',
+                    share: share * 0.45,  // ~45% of search activity drives political-issue queries (modeled)
+                    color: '#3b82f6',
+                    category: 'search',
+                    modeled: false,
+                });
+            });
+            (socialMedia || []).slice(0, 3).forEach(function(r) {
+                var share = +r.share || 0;
+                if (share <= 0) return;
+                real.push({
+                    name: r.name + ' referral',
+                    share: share * 0.25,  // ~25% of social activity exposes voters to political content
+                    color: '#a855f7',
+                    category: 'social',
+                    modeled: false,
+                });
+            });
+
+            var modeled = Object.keys(BLUE_IQ_INBOUND_MODELED_SHARES).map(function(name) {
+                var color;
+                if (name.indexOf('Email') === 0)        color = '#fbbf24';
+                else if (name.indexOf('Direct') === 0)  color = '#64748b';
+                else if (name.indexOf('News') === 0)    color = '#f59e0b';
+                else                                     color = '#ec4899';
+                return {
+                    name: name,
+                    share: BLUE_IQ_INBOUND_MODELED_SHARES[name],
+                    color: color,
+                    category: 'modeled',
+                    modeled: true,
+                };
+            });
+
+            var all = real.concat(modeled);
+            var totalShare = all.reduce(function(acc, s) { return acc + s.share; }, 0) || 1;
+            all.forEach(function(s) { s.share = s.share / totalShare; });
+            all.sort(function(a, b) { return b.share - a.share; });
+
+            if (!all.length) {
+                return '<div style="color: var(--text-secondary); font-size: 0.85rem; padding: 0.6rem 0;">'
+                     + 'No inbound channel data in this slice yet.'
+                     + '</div>';
+            }
+
+            // Layout: source bubbles on LEFT, center bubble on RIGHT.
+            var W            = 1100;
+            var rowH         = 56;
+            var topPad       = 26;
+            var H            = topPad * 2 + all.length * rowH;
+            var centerCX     = W - 130;
+            var centerCY     = H / 2;
+            var centerR      = 64;
+            var sourceCX     = 220;
+            var sourceLabelX = 20;
+            var sourceLabelW = sourceCX - 70;
+            var maxShare     = Math.max.apply(null, all.map(function(s) { return s.share; })) || 1;
+            var maxBubbleR   = 34;
+            var maxRibbonW   = 50;
+
+            var ribbons = all.map(function(s, i) {
+                var cy = topPad + (i + 0.5) * rowH;
+                var r = Math.max(12, Math.round(Math.sqrt(s.share / maxShare) * maxBubbleR));
+                var thickness = Math.max(2.5, Math.round((s.share / maxShare) * maxRibbonW));
+                var x0 = sourceCX + r - 4;
+                var y0 = cy;
+                var x1 = centerCX - centerR + 4;
+                var y1 = centerCY;
+                var mx = (x0 + x1) / 2;
+                var path = 'M' + x0 + ',' + y0
+                         + ' C' + mx + ',' + y0
+                         + ' ' + mx + ',' + y1
+                         + ' ' + x1 + ',' + y1;
+                return '<path d="' + path + '" stroke="' + s.color + '" stroke-width="' + thickness + '" '
+                     + 'stroke-opacity="0.5" stroke-linecap="round" fill="none"/>';
+            }).join('');
+
+            var sources = all.map(function(s, i) {
+                var cy = topPad + (i + 0.5) * rowH;
+                var r = Math.max(12, Math.round(Math.sqrt(s.share / maxShare) * maxBubbleR));
+                var dashAttr = s.modeled ? ' stroke-dasharray="3 3"' : '';
+                var modeledNote = s.modeled
+                    ? '<div class="bq-fan-label-sub bq-inbound-modeled-note">modeled (industry norm)</div>'
+                    : '<div class="bq-fan-label-sub">panel measured</div>';
+                return '<g class="bq-fan-inbound-source">'
+                     +   '<title>' + _bqEscape(s.name + ': ' + _bqPct(s.share) + (s.modeled ? ' (modeled)' : ' (panel)')) + '</title>'
+                     +   '<circle cx="' + sourceCX + '" cy="' + cy + '" r="' + r + '" '
+                     +     'fill="' + s.color + '" fill-opacity="0.78" '
+                     +     'stroke="' + s.color + '" stroke-width="1.5" stroke-opacity="0.7"' + dashAttr + '/>'
+                     +   '<text x="' + sourceCX + '" y="' + (cy + 4) + '" text-anchor="middle" '
+                     +     'fill="#fff" font-size="' + (r > 22 ? 11 : 9.5) + '" font-weight="700" pointer-events="none">'
+                     +     _bqPct(s.share) + '</text>'
+                     +   '<foreignObject x="' + sourceLabelX + '" y="' + (cy - 22) + '" width="' + sourceLabelW + '" height="44">'
+                     +     '<div xmlns="http://www.w3.org/1999/xhtml" class="bq-fan-label bq-fan-label-right">'
+                     +       '<div class="bq-fan-label-name">' + _bqEscape(s.name) + '</div>'
+                     +       modeledNote
+                     +     '</div>'
+                     +   '</foreignObject>'
+                     + '</g>';
+            }).join('');
+
+            var topIssueName = (issueBuckets && issueBuckets[0] && issueBuckets[0].bucket) || 'Political issues';
+            var centerBubble = '<g class="bq-fan-source">'
+                +   '<circle cx="' + centerCX + '" cy="' + centerCY + '" r="' + centerR + '" '
+                +     'fill="rgba(168,85,247,0.16)" stroke="rgba(168,85,247,0.78)" '
+                +     'stroke-width="2" stroke-dasharray="4 3"/>'
+                +   '<text x="' + centerCX + '" y="' + (centerCY - 14) + '" text-anchor="middle" '
+                +     'fill="#fff" font-size="11" font-weight="700" letter-spacing="0.06em">VOTERS</text>'
+                +   '<text x="' + centerCX + '" y="' + (centerCY + 2) + '" text-anchor="middle" '
+                +     'fill="#cbd5e1" font-size="9">searched a policy issue</text>'
+                +   '<text x="' + centerCX + '" y="' + (centerCY + 22) + '" text-anchor="middle" '
+                +     'fill="#fff" font-size="16" font-weight="700">100%</text>'
+                +   '<text x="' + centerCX + '" y="' + (centerCY + 36) + '" text-anchor="middle" '
+                +     'fill="#94a3b8" font-size="8.5">' + _bqEscape('e.g. ' + topIssueName) + '</text>'
+                + '</g>';
+
+            return '<div class="bq-fan-wrap">'
+                 +   '<svg viewBox="0 0 ' + W + ' ' + H + '" class="bq-fan-svg" preserveAspectRatio="xMidYMid meet">'
+                 +     ribbons + sources + centerBubble
+                 +   '</svg>'
+                 + '</div>'
+                 + '<div class="bq-fan-footer">'
+                 +   'Ribbon thickness \u221d share of inbound \u00b7 dashed-border sources are modeled (industry norms) until the cube carries true inbound transition data.'
+                 + '</div>';
+        }
+        window._bqRenderInboundFan = _bqRenderInboundFan;
 
         window.openBlueIQDrillModal = function(idx) {
             var data = window.__blueIQ.lastData;
