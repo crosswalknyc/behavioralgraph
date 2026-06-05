@@ -17853,6 +17853,22 @@
             #blueIQView .blue-iq-card-title .blue-iq-card-subtitle { font-size: 0.68rem; color: var(--text-secondary); font-weight: 400; margin-left: 0.1rem; }
             #blueIQView .bq-party-filter { display: flex; gap: 0.35rem; margin: 0 0 0.55rem 0; flex-wrap: wrap; }
             #blueIQView .bq-party-chip { background: rgba(255,255,255,0.04); color: var(--text-secondary); font-size: 0.72rem; padding: 0.22rem 0.65rem; border: 1px solid rgba(255,255,255,0.06); border-radius: 999px; cursor: pointer; transition: all 0.12s ease; }
+            /* Race-type slicer (Top Candidates card). Same pill aesthetic as
+               the party chips so they read as a paired filter axis. */
+            #blueIQView .bq-race-slicer { display: flex; gap: 0.3rem; margin: 0 0 0.6rem 0; flex-wrap: wrap; padding-top: 0.1rem; border-top: 1px dashed rgba(255,255,255,0.05); padding-top: 0.45rem; }
+            #blueIQView .bq-race-chip { background: rgba(255,255,255,0.03); color: var(--text-secondary); font-size: 0.68rem; padding: 0.18rem 0.55rem; border: 1px solid rgba(255,255,255,0.05); border-radius: 999px; cursor: pointer; transition: all 0.12s ease; letter-spacing: 0.02em; }
+            #blueIQView .bq-race-chip:hover { background: rgba(255,255,255,0.07); color: var(--text-primary); }
+            #blueIQView .bq-race-chip.active { background: rgba(79,140,255,0.16); color: #93c5fd; border-color: rgba(79,140,255,0.45); }
+            /* Per-row race badge — tiny chip showing race_type + state. Hue
+               varies by race_type so a quick scan groups races. */
+            #blueIQView .bq-race-badge { display: inline-block; margin-left: 0.4rem; font-size: 0.6rem; padding: 0.06rem 0.36rem; border-radius: 4px; font-weight: 600; letter-spacing: 0.03em; text-transform: uppercase; vertical-align: middle; background: rgba(148,163,184,0.16); color: #cbd5e1; white-space: nowrap; }
+            #blueIQView .bq-race-badge.bq-race-president { background: rgba(168,85,247,0.18); color: #d8b4fe; }
+            #blueIQView .bq-race-badge.bq-race-senate    { background: rgba(34,197,94,0.18);  color: #86efac; }
+            #blueIQView .bq-race-badge.bq-race-house     { background: rgba(79,140,255,0.18); color: #93c5fd; }
+            #blueIQView .bq-race-badge.bq-race-governor  { background: rgba(245,158,11,0.18); color: #fcd34d; }
+            #blueIQView .bq-race-badge.bq-race-state-leg { background: rgba(20,184,166,0.18); color: #5eead4; }
+            #blueIQView .bq-race-badge.bq-race-mayoral   { background: rgba(244,114,182,0.18); color: #f9a8d4; }
+            #blueIQView .bq-race-badge.bq-race-local     { background: rgba(125,211,252,0.18); color: #bae6fd; }
             #blueIQView .bq-party-chip:hover { background: rgba(255,255,255,0.08); color: var(--text-primary); }
             #blueIQView .bq-party-chip.active { background: rgba(79,140,255,0.18); color: var(--accent-primary, #4f8cff); border-color: rgba(79,140,255,0.4); }
             #blueIQView .bq-party-chip[data-party="D"].active { background: rgba(59,130,246,0.18); color: #93c5fd; border-color: rgba(59,130,246,0.5); }
@@ -22971,8 +22987,22 @@
                     var PARTY_COLOR = {D:'#3b82f6', R:'#ef4444', I:'#a855f7'};
                     partyDot = '<span class="bq-party-dot" style="background:' + (PARTY_COLOR[r.party_code]||'#64748b') + ';" title="' + r.party_code + '"></span>';
                 }
-                return '<div class="blue-iq-row" data-party="' + (r.party_code || '') + '">'
-                     + '<span class="blue-iq-row-name" title="' + _bqEscape(r[nameKey] || '') + '">' + dotHtml + partyDot + _bqEscape(r[nameKey] || '') + srcHtml + '</span>'
+                // Race badge for the candidates card (race_type + race title
+                // shown as a small chip below/inline with the name).
+                var raceBadge = '';
+                if (opts.raceBadge && r.race_type) {
+                    var rt = r.race_type;
+                    var rlbl = (typeof BLUE_IQ_RACE_LABEL !== 'undefined' && BLUE_IQ_RACE_LABEL[rt]) || rt;
+                    if (rlbl) {
+                        var raceTip = r.race ? _bqEscape(r.race) : rlbl;
+                        if (r.office_held) raceTip += ' \u00b7 ' + _bqEscape(r.office_held);
+                        if (r.status && r.status !== 'declared') raceTip += ' \u00b7 ' + r.status;
+                        var stateChip = r.state ? (' ' + _bqEscape(r.state)) : '';
+                        raceBadge = ' <span class="bq-race-badge bq-race-' + rt + '" title="' + raceTip + '">' + _bqEscape(rlbl) + stateChip + '</span>';
+                    }
+                }
+                return '<div class="blue-iq-row" data-party="' + (r.party_code || '') + '" data-race="' + (r.race_type || '') + '">'
+                     + '<span class="blue-iq-row-name" title="' + _bqEscape(r[nameKey] || '') + '">' + dotHtml + partyDot + _bqEscape(r[nameKey] || '') + raceBadge + srcHtml + '</span>'
                      + '<span class="blue-iq-row-bar-wrap"><span class="blue-iq-row-bar" style="' + barStyle + '"></span></span>'
                      + '<span class="blue-iq-row-val">' + label + '</span>'
                      + '</div>';
@@ -23209,38 +23239,113 @@
             }
         }
 
-        // Filter row items by party_code in-place from a cached list. Wired up
-        // by clickable chips above Top Politicians and Top Candidates.
-        function _bqRenderPartyFiltered(targetKey, party) {
+        // Active filter state for the candidates / politicians cards. Both
+        // the party chips and the race-type slicer write here; the
+        // re-renderer reads from both axes.
+        window.__blueIQ = window.__blueIQ || {};
+        window.__blueIQ.partyFilter = window.__blueIQ.partyFilter || {};
+        window.__blueIQ.raceFilter  = window.__blueIQ.raceFilter  || {};
+
+        // Race-type label shown as a small badge next to each candidate
+        // name. Keep terse — the bar already takes most of the row width.
+        var BLUE_IQ_RACE_LABEL = {
+            'president':  'President',
+            'senate':     'Senate',
+            'house':      'House',
+            'governor':   'Governor',
+            'state-leg':  'State',
+            'mayoral':    'Mayor',
+            'local':      'Local',
+            'other':      ''
+        };
+
+        // Filter row items by party_code + race_type from cached data.
+        // Wired up by clickable chips above Top Politicians + Top Candidates,
+        // and (for candidates) by the race-type slicer pills.
+        function _bqRenderPartyFiltered(targetKey, party, raceType) {
             var data = window.__blueIQ && window.__blueIQ.lastData;
             if (!data) return;
             var bodyId = targetKey === 'top_candidates' ? 'blueIQCardCandidatesBody' : 'blueIQCardPoliticiansBody';
             var body = document.getElementById(bodyId);
             if (!body) return;
+            // Persist filter state per-card so subsequent re-renders honor it.
+            if (typeof party === 'string')    window.__blueIQ.partyFilter[targetKey] = party;
+            if (typeof raceType === 'string') window.__blueIQ.raceFilter[targetKey]  = raceType;
+            var activeParty = window.__blueIQ.partyFilter[targetKey] || 'All';
+            var activeRace  = window.__blueIQ.raceFilter[targetKey]  || 'all';
+
             var rows = ((data.cards || {})[targetKey] || []).slice();
-            if (party && party !== 'All') {
-                rows = rows.filter(function(r) { return r.party_code === party; });
+            if (activeParty && activeParty !== 'All') {
+                rows = rows.filter(function(r) { return r.party_code === activeParty; });
+            }
+            if (activeRace && activeRace !== 'all') {
+                rows = rows.filter(function(r) { return (r.race_type || 'other') === activeRace; });
+            }
+
+            // Empty state — distinguishes "no candidates known" from
+            // "filtered out by current chips" so the user knows what to do.
+            if (!rows.length) {
+                var hasAny = ((data.cards || {})[targetKey] || []).length > 0;
+                if (hasAny) {
+                    body.innerHTML = '<div style="color: var(--text-secondary); font-size: 0.85rem; padding: 0.8rem 0;">'
+                        + 'No candidates match this party + race-type combo. '
+                        + '<span style="cursor:pointer;text-decoration:underline;" '
+                        +   'onclick="window._bqClearCandidateFilters(\'' + targetKey + '\')">Clear filters</span>'
+                        + '</div>';
+                } else {
+                    body.innerHTML = '<div style="color: var(--text-secondary); font-size: 0.85rem; padding: 0.8rem 0;">'
+                        + 'Candidate list still loading for this geography '
+                        + '(agent web-search runs once per area per day). Try again in ~15s.'
+                        + '</div>';
+                }
+                return;
             }
             body.innerHTML = _bqRowBars(rows, 'name', 'mention_score', {
                 projectKey: null,
                 labelMode: 'score',
                 sourcesBadge: true,
+                raceBadge:   targetKey === 'top_candidates',
             });
         }
         window._bqRenderPartyFiltered = _bqRenderPartyFiltered;
+
+        // Helper for the empty-state "Clear filters" link.
+        window._bqClearCandidateFilters = function(targetKey) {
+            window.__blueIQ.partyFilter[targetKey] = 'All';
+            window.__blueIQ.raceFilter[targetKey]  = 'all';
+            // Reset visual chip state.
+            document.querySelectorAll('.bq-party-filter[data-target="' + targetKey + '"] .bq-party-chip')
+                .forEach(function(c) { c.classList.toggle('active', c.getAttribute('data-party') === 'All'); });
+            document.querySelectorAll('.bq-race-slicer[data-target="' + targetKey + '"] .bq-race-chip')
+                .forEach(function(c) { c.classList.toggle('active', c.getAttribute('data-race') === 'all'); });
+            _bqRenderPartyFiltered(targetKey);
+        };
 
         // Click delegation for the .bq-party-chip elements. Toggles active
         // chip then re-renders the corresponding card body.
         document.addEventListener('click', function(e) {
             var chip = e.target.closest && e.target.closest('.bq-party-chip');
-            if (!chip) return;
-            var bar = chip.closest('.bq-party-filter');
-            if (!bar) return;
-            var target = bar.getAttribute('data-target');
-            var party = chip.getAttribute('data-party') || 'All';
-            bar.querySelectorAll('.bq-party-chip').forEach(function(c) { c.classList.remove('active'); });
-            chip.classList.add('active');
-            _bqRenderPartyFiltered(target, party);
+            if (chip) {
+                var bar = chip.closest('.bq-party-filter');
+                if (!bar) return;
+                var target = bar.getAttribute('data-target');
+                var party = chip.getAttribute('data-party') || 'All';
+                bar.querySelectorAll('.bq-party-chip').forEach(function(c) { c.classList.remove('active'); });
+                chip.classList.add('active');
+                _bqRenderPartyFiltered(target, party);
+                return;
+            }
+            var rchip = e.target.closest && e.target.closest('.bq-race-chip');
+            if (rchip) {
+                var rbar = rchip.closest('.bq-race-slicer');
+                if (!rbar) return;
+                var rtarget = rbar.getAttribute('data-target');
+                var race = rchip.getAttribute('data-race') || 'all';
+                rbar.querySelectorAll('.bq-race-chip').forEach(function(c) { c.classList.remove('active'); });
+                rchip.classList.add('active');
+                _bqRenderPartyFiltered(rtarget, undefined, race);
+                return;
+            }
         });
 
         function renderBlueIQCards(data) {
@@ -23331,16 +23436,31 @@
                   + '<div class="blue-iq-card-body" id="blueIQCardPoliticiansBody"></div>'
                   + '</div>';
 
-            // CARD D2: Top candidates (active 2026-cycle declared candidates)
+            // CARD D2: Top candidates — agent-discovered DECLARED 2026 cycle
+            // candidates for the active geography (with 2028 presidential
+            // prospects mixed in). Web-search agent runs once per geo per
+            // day; result cached in S3. Two-axis filtering: party chips +
+            // race-type slicer pills.
+            var candsGeoLbl = (f.geo_type === 'National' || !f.geo_value) ? 'across all races nationwide' : ('for ' + (f.geo_value || ''));
             html += '<div class="blue-iq-card blue-iq-card-cands">'
-                  + '<h3 class="blue-iq-card-title">Top candidates (active 2026 cycle)'
-                  +   '<span class="blue-iq-card-subtitle">declared candidates for federal + gubernatorial races, ranked by current interest</span>'
+                  + '<h3 class="blue-iq-card-title">Top candidates (2026 cycle)'
+                  +   '<span class="blue-iq-card-subtitle">agent-discovered declared candidates ' + _bqEscape(candsGeoLbl) + ' \u00b7 click race type to drill in</span>'
                   + '</h3>'
                   + '<div class="bq-party-filter" data-target="top_candidates">'
                   +   '<button class="bq-party-chip active" data-party="All">All</button>'
                   +   '<button class="bq-party-chip" data-party="D">Democrats</button>'
                   +   '<button class="bq-party-chip" data-party="R">Republicans</button>'
                   +   '<button class="bq-party-chip" data-party="I">Independents</button>'
+                  + '</div>'
+                  + '<div class="bq-race-slicer" data-target="top_candidates">'
+                  +   '<button class="bq-race-chip active" data-race="all">All races</button>'
+                  +   '<button class="bq-race-chip" data-race="senate">Senate</button>'
+                  +   '<button class="bq-race-chip" data-race="house">House</button>'
+                  +   '<button class="bq-race-chip" data-race="governor">Governor</button>'
+                  +   '<button class="bq-race-chip" data-race="state-leg">State</button>'
+                  +   '<button class="bq-race-chip" data-race="mayoral">Mayor</button>'
+                  +   '<button class="bq-race-chip" data-race="local">Local</button>'
+                  +   '<button class="bq-race-chip" data-race="president">2028 prospects</button>'
                   + '</div>'
                   + '<div class="blue-iq-card-body" id="blueIQCardCandidatesBody"></div>'
                   + '</div>';
