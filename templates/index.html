@@ -13333,8 +13333,7 @@
                             <option value="ticketSalesTracker" {% if not has_ticket_sales_tracker_access %}disabled{% endif %}>🎟️ Ticket Sales Tracker</option>
                             <option value="hedgeFundIQ" {% if not has_hedge_fund_iq_access %}disabled{% endif %} {% if default_view_hedge_fund_iq %}selected{% endif %}>📈 Fin IQ</option>
                             <option value="roasIQ" {% if not has_roas_iq_access %}disabled{% endif %}>💰 ROAS IQ</option>
-                            <option value="ecommerceIQ" {% if not has_ecommerce_iq_access %}disabled{% endif %}>🛒 E-Commerce IQ</option>
-                            <option value="brandPartnershipIQ" {% if not has_ecommerce_iq_access and 'brand_partnership_iq' not in analysis_iq_modules and role != 'super_admin' and role != 'admin' %}disabled{% endif %}>🤝 Brand Partnership</option>
+                            <option value="brandPartnershipIQ" {% if 'brand_partnership_iq' not in analysis_iq_modules and role != 'super_admin' and role != 'admin' %}disabled{% endif %}>🤝 Brand Partnership</option>
                             <option value="journeyIQ" {% if not has_journey_iq_access and 'journey_iq' not in analysis_iq_modules and role != 'super_admin' and role != 'admin' %}disabled{% endif %}>🗺️ Digital Journey IQ</option>
                             <option value="flywheelConversion" {% if not has_flywheel_conversion_access and 'flywheel_conversion' not in analysis_iq_modules and role != 'super_admin' %}disabled{% endif %}>🔄 Flywheel Conversion</option>
                             <option value="workspace" {% if not has_workspace_access %}disabled{% endif %}>🗂️ Workspace</option>
@@ -13751,9 +13750,6 @@
                     {% if role == 'super_admin' or role == 'admin' %}
                     <button class="custom-analysis-tab" onclick="switchCustomAnalysisTab('roas-iq')" id="customAnalysisTabRoasIQ">
                         📊 ROAS IQ
-                    </button>
-                    <button class="custom-analysis-tab" onclick="switchCustomAnalysisTab('ecommerce-iq')" id="customAnalysisTabEcommerceIQ">
-                        🛒 E-Commerce IQ
                     </button>
                     <button class="custom-analysis-tab" onclick="switchCustomAnalysisTab('brand-partnership')" id="customAnalysisTabBrandPartnership">
                         🤝 Brand Partnership Valuation
@@ -15044,67 +15040,13 @@
                     </div>
                 </div>
 
-                <!-- E-Commerce IQ Tab Content -->
-                <div id="customAnalysisTabContentEcommerceIQ" class="custom-analysis-tab-content">
-                    <div class="main-grid">
-                        <div class="card">
-                            <h2>🛒 E-Commerce IQ</h2>
-                            <p class="section-description">Analyze product page views, cart adds, and purchases from clickstream data for any audience.</p>
-                            <form id="ecomIQForm" onsubmit="event.preventDefault(); submitEcomIQ();">
-                                <div style="margin-bottom: 1rem;">
-                                    <label style="display: block; font-weight: 600; margin-bottom: 4px; font-size: 13px;">Project Name</label>
-                                    <input type="text" id="ecomIQProjectName" placeholder="e.g. Nike Product Funnel" required style="width: 100%; padding: 8px 12px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--bg-primary); color: var(--text-primary); font-size: 14px;">
-                                </div>
-                                <div style="margin-bottom: 1rem;">
-                                    <label style="display: block; font-weight: 600; margin-bottom: 4px; font-size: 13px;">Search Terms <span style="font-weight: 400; color: var(--text-secondary);">(comma-separated, matches COMMON_NAME)</span></label>
-                                    <textarea id="ecomIQSearchTerms" rows="3" placeholder="e.g. nike, adidas, puma" required style="width: 100%; padding: 8px 12px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--bg-primary); color: var(--text-primary); font-size: 14px; resize: vertical;"></textarea>
-                                </div>
-                                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1.5rem;">
-                                    <div>
-                                        <label style="display: block; font-weight: 600; margin-bottom: 4px; font-size: 13px;">Start Date</label>
-                                        <input type="date" id="ecomIQStartDate" required style="width: 100%; padding: 8px 12px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--bg-primary); color: var(--text-primary); font-size: 14px;">
-                                    </div>
-                                    <div>
-                                        <label style="display: block; font-weight: 600; margin-bottom: 4px; font-size: 13px;">End Date</label>
-                                        <input type="date" id="ecomIQEndDate" required style="width: 100%; padding: 8px 12px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--bg-primary); color: var(--text-primary); font-size: 14px;">
-                                    </div>
-                                </div>
-                                <button type="submit" id="ecomIQSubmitBtn" class="btn btn-primary" style="width: 100%;">Run E-Commerce Analysis</button>
-                            </form>
-                            <div id="ecomIQStatus" style="display: none; margin-top: 1rem; padding: 1rem; border-radius: 8px; background: var(--bg-secondary); text-align: center;">
-                                <div id="ecomIQStatusText" style="font-weight: 600; margin-bottom: 4px;"></div>
-                                <div style="background: var(--border-color); border-radius: 4px; height: 6px; overflow: hidden;"><div id="ecomIQProgressBar" style="height: 100%; background: var(--accent-primary); transition: width 0.3s; width: 0%;"></div></div>
-                            </div>
-                        </div>
-                        <div class="card">
-                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">
-                                <h2 style="margin:0;">Past Results</h2>
-                                <button type="button" class="btn btn-small" onclick="refreshEcomIQList()" style="padding: 0.35rem 0.5rem; min-width: auto;">↻</button>
-                            </div>
-                            <div id="ecomIQResultsList" style="max-height: 320px; overflow-y: auto;"><div style="padding: 1rem; font-size: 0.8rem; color: var(--text-secondary);">No results yet. Run an analysis.</div></div>
-                        </div>
-                    </div>
-                    <div id="ecomIQDashboard" style="display: none; margin-top: 1.5rem;">
-                        <div id="ecomIQDashHeader" style="margin-bottom: 1.5rem;"></div>
-                        <div id="ecomIQStats" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 1rem; margin-bottom: 1.5rem;"></div>
-                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; margin-bottom: 1.5rem;">
-                            <div class="card"><h3 style="margin: 0 0 1rem; font-size: 15px;">Top 10 Most Clicked Product Pages</h3><div id="ecomIQTopPdp"></div></div>
-                            <div class="card"><h3 style="margin: 0 0 1rem; font-size: 15px;">Top 10 Least Clicked Product Pages</h3><div id="ecomIQBottomPdp"></div></div>
-                        </div>
-                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem;">
-                            <div class="card"><h3 style="margin: 0 0 1rem; font-size: 15px;">Top 10 Products by Add-to-Cart</h3><div id="ecomIQCart"></div></div>
-                            <div class="card"><h3 style="margin: 0 0 1rem; font-size: 15px;">Top 10 Products by Completed Purchase</h3><div id="ecomIQPurchase"></div></div>
-                        </div>
-                    </div>
-                </div>
-
                 <!-- Brand Partnership Valuation Tab Content -->
                 <div id="customAnalysisTabContentBrandPartnership" class="custom-analysis-tab-content">
                     <div class="main-grid">
                         <div class="card">
                             <h2>🤝 Brand Partnership Valuation</h2>
                             <div style="margin: 0 0 0.75rem 0; font-size: 0.85rem; font-weight: 500; color: var(--text-secondary); font-style: italic;">15 Credits Per Analysis</div>
-                            <p class="section-description">Measure pre/post brand engagement and lift driven by an entertainment partnership (movie, TV show, sporting event, social post, or any other qualifier). Results display under E-Commerce IQ → Brand Partnership.</p>
+                            <p class="section-description">Measure pre/post brand engagement and lift driven by an entertainment partnership (movie, TV show, sporting event, social post, or any other qualifier).</p>
                             <form id="bpiqForm" onsubmit="event.preventDefault(); submitBpiq();">
                                 <div style="margin-bottom: 1rem;">
                                     <label style="display: block; font-weight: 600; margin-bottom: 4px; font-size: 13px;">Project Title</label>
@@ -15160,9 +15102,6 @@
                                 <button type="button" class="btn btn-small" onclick="refreshBpiqList()" style="padding: 0.35rem 0.5rem; min-width: auto;">↻</button>
                             </div>
                             <div id="bpiqResultsList" style="max-height: 320px; overflow-y: auto;"><div style="padding: 1rem; font-size: 0.8rem; color: var(--text-secondary);">No results yet. Run an analysis.</div></div>
-                            <div style="margin-top: 1rem; padding-top: 0.75rem; border-top: 1px solid var(--border-color);">
-                                <button type="button" class="btn" style="width: 100%; background: var(--accent-primary); color: white;" onclick="if(typeof showEcommerceIQ==='function'){showEcommerceIQ(); setTimeout(function(){ if(typeof setEcomIQMode==='function') setEcomIQMode('brand_partnership'); }, 200);}">📊 Open in E-Commerce IQ</button>
-                            </div>
                         </div>
                     </div>
                 </div>
@@ -17451,60 +17390,34 @@
             </div>
         </div><!-- End roasIQView -->
 
-        <!-- E-COMMERCE IQ VIEW -->
+        <!-- BRAND PARTNERSHIP VALUATION VIEW
+             (Container id is `ecommerceIQView` for historical / routing-map
+              reasons — `brandPartnershipIQ` resolves to this id in the
+              view-selector switch. E-Commerce IQ markup has been removed;
+              only BPIQ panels render here now.) -->
         <div id="ecommerceIQView">
             <div class="dashboard-layout">
                 <div class="persistent-sidebar">
                     <div class="sidebar-header-section">
-                        <h3 id="ecomIQSidebarTitle">E-Commerce IQ Results</h3>
-                        <div style="display: flex; gap: 4px; margin-bottom: 0.5rem;">
-                            <button type="button" class="btn btn-small" id="ecomIQModePurchaseBtn" onclick="setEcomIQMode('purchase_funnel')" style="flex: 1; padding: 0.35rem 0.4rem; font-size: 11px;">Purchase Funnel</button>
-                            <button type="button" class="btn btn-small" id="ecomIQModeBpiqBtn" onclick="setEcomIQMode('brand_partnership')" style="flex: 1; padding: 0.35rem 0.4rem; font-size: 11px;">Brand Partnership</button>
-                        </div>
+                        <h3 id="ecomIQSidebarTitle">Brand Partnership Results</h3>
                         <div style="display: flex; gap: 0.25rem; align-items: center;">
                             <input type="text" id="ecomIQSearchInput" placeholder="Search results..." class="sidebar-search has-tooltip" data-tooltip="Search results by name." onkeyup="filterEcomIQResults()" style="flex: 1;">
                             <button type="button" class="btn btn-small has-tooltip" data-tooltip="Refresh result list" onclick="loadEcomIQProfiles()" style="padding: 0.35rem 0.5rem; min-width: auto;">↻</button>
                         </div>
                     </div>
-                    <div id="ecomIQProfileTree" class="profile-select-tree subscriber-shows-tree"></div>
-                    <div id="bpiqProfileTree" class="profile-select-tree subscriber-shows-tree" style="display: none;"></div>
+                    <!-- Stub ecomIQProfileTree kept (hidden) so JS handlers
+                         that target it don't null-deref after E-Commerce IQ
+                         was fully removed from the dashboard. -->
+                    <div id="ecomIQProfileTree" class="profile-select-tree subscriber-shows-tree" style="display: none;"></div>
+                    <div id="bpiqProfileTree" class="profile-select-tree subscriber-shows-tree"></div>
                 </div>
                 <div class="dashboard-tab-content" id="ecomIQDashboardContent" style="display: flex; flex-direction: column; overflow: hidden;">
-                    <div id="ecomIQEmptyState" class="dashboard-empty-state">
-                        <div class="empty-state-content">
-                            <div class="empty-state-icon">🛒</div>
-                            <h2>Select a Result</h2>
-                            <p>Choose an E-Commerce IQ result from the sidebar to view purchase funnel and retailer insights.</p>
-                        </div>
-                    </div>
-                    <div id="ecomIQDashboardPanels" style="display: none; overflow-y: auto; flex: 1; padding: 1.5rem;">
-                        <div style="display: flex; align-items: center; gap: 1rem; margin-bottom: 1.5rem; flex-shrink: 0;">
-                            <h2 id="ecomIQDashTitle" style="margin: 0; font-size: 1.35rem;">E-Commerce IQ</h2>
-                            <span id="ecomIQDashMeta" style="color: var(--text-secondary); font-size: 0.85rem;"></span>
-                        </div>
-                        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 1rem; margin-bottom: 1.5rem;">
-                            <div class="tab-section" style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 1.25rem; text-align: center;">
-                                <div style="font-size: 0.75rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em;">Total UIDs</div>
-                                <div id="ecomIQKpiUids" style="font-size: 1.75rem; font-weight: 700; color: var(--accent-lime);"></div>
-                            </div>
-                            <div class="tab-section" style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 1.25rem; text-align: center;">
-                                <div style="font-size: 0.75rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em;">URLs Analyzed</div>
-                                <div id="ecomIQKpiUrls" style="font-size: 1.75rem; font-weight: 700; color: var(--accent-cyan);"></div>
-                            </div>
-                            <div class="tab-section" style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 1.25rem; text-align: center;">
-                                <div style="font-size: 0.75rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em;">Stages</div>
-                                <div id="ecomIQKpiStages" style="font-size: 1.75rem; font-weight: 700; color: var(--accent-orange);"></div>
-                            </div>
-                        </div>
-                        <div class="tab-section" style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 1.5rem; margin-bottom: 1.5rem;">
-                            <h3>📊 Funnel Overview</h3>
-                            <canvas id="ecomIQFunnelChart" height="260"></canvas>
-                        </div>
-                        <div class="tab-section" style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 1.5rem;">
-                            <h3>📋 E-Commerce Detail</h3>
-                            <div id="ecomIQDetailTable" style="overflow-x: auto;"></div>
-                        </div>
-                    </div>
+                    <!-- E-Commerce IQ empty state + panels removed. Stub
+                         ecomIQEmptyState/ecomIQDashboardPanels kept (hidden)
+                         so legacy JS that toggles their display doesn't
+                         null-deref. -->
+                    <div id="ecomIQEmptyState" class="dashboard-empty-state" style="display: none;"></div>
+                    <div id="ecomIQDashboardPanels" style="display: none;"></div>
                     <!-- Brand Partnership Valuation empty state -->
                     <div id="bpiqEmptyState" class="dashboard-empty-state" style="display: none;">
                         <div class="empty-state-content">
@@ -21583,7 +21496,6 @@
                 hedgeFundIQ: 'Fin IQ: View financial and institutional engagement and exposure.',
                 sentimentIQ: 'Sentiment IQ: Track brand sentiment across search engines, social, news, reviews and forums with AI-powered positive / negative / neutral rollups and demographic breakdowns.',
                 roasIQ: 'ROAS IQ: Analyze return on ad spend by channel, source, and campaign attribution.',
-                ecommerceIQ: 'E-Commerce IQ: Explore purchase funnel activity across retailers and product pages.',
                 shareOfTimeIQ: 'Share of Time: Analyze how audience time is distributed across streaming, music, games, betting, social media, and vMVPD/FAST.',
                 flywheelConversion: 'Flywheel Conversion: Track user journeys through your conversion funnel and measure drop-off at each touchpoint.',
                 workspace: 'Workspace: Access saved work, collaboration, and shared projects.',
@@ -26020,7 +25932,9 @@
             var ev = document.getElementById('ecommerceIQView'); if (ev) ev.style.display = 'flex';
             loadEcomIQProfiles();
             if (typeof setEcomIQMode === 'function' && typeof _ecomIQMode !== 'undefined') {
-                setEcomIQMode(_ecomIQMode || 'purchase_funnel');
+                // E-Commerce IQ removed from the dashboard — always default to
+                // brand_partnership so the shared view renders BPIQ.
+                setEcomIQMode(_ecomIQMode || 'brand_partnership');
             }
         }
 
@@ -26054,6 +25968,11 @@
         }
 
         function renderEcomIQViewDashboard(data) {
+            // E-Commerce IQ was removed from the dashboard. The inner panel
+            // elements (ecomIQDashTitle / KpiUids / FunnelChart / DetailTable)
+            // no longer exist in the DOM, so bail out instead of null-derefing
+            // if this function somehow gets called from a stale code path.
+            if (!document.getElementById('ecomIQDashTitle')) return;
             document.getElementById('ecomIQEmptyState').style.display = 'none';
             document.getElementById('ecomIQDashboardPanels').style.display = '';
             var results = data.results || [];
@@ -26083,9 +26002,12 @@
         }
 
         // ====================================================================
-        // BRAND PARTNERSHIP - lives inside the E-Commerce IQ view via mode toggle
+        // BRAND PARTNERSHIP - lives inside the (legacy-named) ecommerceIQView
+        // container. Default mode is now brand_partnership since E-Commerce IQ
+        // was fully removed from the dashboard; the purchase_funnel branch is
+        // dead code preserved only so legacy session state doesn't crash.
         // ====================================================================
-        var _ecomIQMode = 'purchase_funnel';   // 'purchase_funnel' | 'brand_partnership'
+        var _ecomIQMode = 'brand_partnership';   // 'purchase_funnel' (dead) | 'brand_partnership'
 
         window.setEcomIQMode = function(mode) {
             if (mode !== 'purchase_funnel' && mode !== 'brand_partnership') return;
@@ -29560,7 +29482,7 @@
                         document.getElementById('bpiqSubmitBtn').disabled = false;
                         if (data.status === 'completed') {
                             document.getElementById('bpiqStatusText').textContent =
-                                (data.message || 'Done') + ' — pending admin release. Check E-Commerce IQ → Brand Partnership once released.';
+                                (data.message || 'Done') + ' — pending admin release. Check Brand Partnership once released.';
                             refreshBpiqList();
                         }
                     }
@@ -34611,41 +34533,51 @@
             if (noteEl) noteEl.textContent = cso.methodology_note || '';
         }
 
-        // SVG 3-circle Venn diagram. Circle radius is proportional to
-        // sqrt(reach) so visual area ~ audience size. Circles are placed
-        // at fixed positions (equilateral) and overlap-region labels
-        // sit at geometrically computed centroids.
+        // SVG Venn diagram. Circle radius is proportional to sqrt(reach)
+        // so visual area ~ audience size. Adapts to 2-circle (left/right
+        // with one intersection) or 3-circle (equilateral with all 7
+        // regions) layouts based on the number of shows in payload.
         function _jiqRenderCrossShowVenn(cso) {
             var shows = cso.shows || [];
             var regions = cso.regions || [];
-            if (shows.length !== 3 || !regions.length) return '';
+            if (shows.length < 2 || shows.length > 3 || !regions.length) return '';
 
-            var W = 460, H = 380;
-            var cx = W / 2, cy = H / 2 + 6;
+            var W = 460, H = (shows.length === 2 ? 320 : 380);
+            var cx = W / 2, cy = H / 2 + (shows.length === 2 ? 0 : 6);
 
             // Radius scaling — sqrt of reach so visual area ~ audience.
-            // Cap to W * 0.32 so the largest circle still fits.
             var maxReach = 0;
             shows.forEach(function(s) { if (s.reach_us_adults > maxReach) maxReach = s.reach_us_adults; });
-            var rMax = W * 0.30;
-            var rMin = W * 0.13;
+            var rMax = W * (shows.length === 2 ? 0.27 : 0.30);
+            var rMin = W * (shows.length === 2 ? 0.18 : 0.13);
             var radii = shows.map(function(s) {
                 if (!maxReach) return rMin;
                 var f = Math.sqrt((s.reach_us_adults || 1) / maxReach);
                 return Math.max(rMin, rMax * f);
             });
 
-            // Tighter equilateral layout so the overlaps are meaningful
-            // even for small circles. Shows ordered: [0]=top (broadcast),
-            // [1]=bottom-left (hulu), [2]=bottom-right (pcj).
-            var spread = 78;
-            var centers = [
-                {x: cx,            y: cy - spread + 12},
-                {x: cx - spread,   y: cy + spread - 18},
-                {x: cx + spread,   y: cy + spread - 18},
-            ];
+            // Circle centers — 2-circle (side by side) or 3-circle (equilateral).
+            var centers;
+            if (shows.length === 2) {
+                // Place the two circles so their overlap region is visually
+                // sized to roughly the smaller-circle's overlap fraction.
+                // Pixel-perfect proportionality isn't necessary — the labels
+                // carry exact numbers — just enough that the overlap doesn't
+                // look empty or completely engulfing.
+                var sep = (radii[0] + radii[1]) * 0.78;
+                centers = [
+                    {x: cx - sep / 2, y: cy},
+                    {x: cx + sep / 2, y: cy},
+                ];
+            } else {
+                var spread = 78;
+                centers = [
+                    {x: cx,            y: cy - spread + 12},
+                    {x: cx - spread,   y: cy + spread - 18},
+                    {x: cx + spread,   y: cy + spread - 18},
+                ];
+            }
 
-            var legend = '';
             var circles = '';
             shows.forEach(function(s, i) {
                 var c = centers[i];
@@ -34655,11 +34587,16 @@
                     + '<circle cx="' + c.x + '" cy="' + c.y + '" r="' + r.toFixed(1) + '"'
                     +   ' fill="' + color + '" fill-opacity="0.28"'
                     +   ' stroke="' + color + '" stroke-opacity="0.85" stroke-width="1.6"/>';
-                // External show label — placed away from center so it doesn't collide with overlaps.
+                // External show label, placed away from center to avoid overlap collisions.
                 var lx, ly, anchor;
-                if (i === 0)      { lx = c.x;            ly = c.y - r - 10;  anchor = 'middle'; }
-                else if (i === 1) { lx = c.x - r - 6;    ly = c.y + r + 18;  anchor = 'end'; }
-                else              { lx = c.x + r + 6;    ly = c.y + r + 18;  anchor = 'start'; }
+                if (shows.length === 2) {
+                    if (i === 0) { lx = c.x - r - 4;  ly = c.y - r - 8;  anchor = 'start'; }
+                    else         { lx = c.x + r + 4;  ly = c.y - r - 8;  anchor = 'end'; }
+                } else {
+                    if (i === 0)      { lx = c.x;            ly = c.y - r - 10;  anchor = 'middle'; }
+                    else if (i === 1) { lx = c.x - r - 6;    ly = c.y + r + 18;  anchor = 'end'; }
+                    else              { lx = c.x + r + 6;    ly = c.y + r + 18;  anchor = 'start'; }
+                }
                 circles += ''
                     + '<text x="' + lx.toFixed(1) + '" y="' + ly.toFixed(1) + '"'
                     +   ' font-size="11.5" font-weight="700" fill="' + color + '"'
@@ -34670,27 +34607,40 @@
             });
 
             // Region anchor positions — by region.in[]. We map each
-            // region's "in" set to a known centroid in the layout above.
-            // Helper to find a region by its "in" set (order-independent).
+            // region's "in" set (sorted, joined with "|") to a known
+            // centroid in the layout.
             function regionKey(arr) {
                 return (arr || []).slice().sort().join('|');
             }
             var regionByKey = {};
             regions.forEach(function(rg) { regionByKey[regionKey(rg.in)] = rg; });
 
-            // Centroid coordinates for each region (visually inside the
-            // matching overlap area of the venn diagram).
-            var regionPositions = {
-                'broadcast':                 {x: centers[0].x,                y: centers[0].y - 18},
-                'hulu':                      {x: centers[1].x - 24,           y: centers[1].y + 14},
-                'pcj':                       {x: centers[2].x + 24,           y: centers[2].y + 14},
-                'broadcast|hulu':            {x: (centers[0].x + centers[1].x) / 2 - 18, y: (centers[0].y + centers[1].y) / 2 + 4},
-                'broadcast|pcj':             {x: (centers[0].x + centers[2].x) / 2 + 18, y: (centers[0].y + centers[2].y) / 2 + 4},
-                'hulu|pcj':                  {x: (centers[1].x + centers[2].x) / 2,      y: (centers[1].y + centers[2].y) / 2 + 16},
-                'broadcast|hulu|pcj':        {x: cx,                                     y: cy + 6},
-            };
+            var regionPositions;
+            if (shows.length === 2) {
+                regionPositions = {};
+                regionPositions[shows[0].id] = {
+                    x: centers[0].x - radii[0] * 0.45,
+                    y: centers[0].y,
+                };
+                regionPositions[shows[1].id] = {
+                    x: centers[1].x + radii[1] * 0.45,
+                    y: centers[1].y,
+                };
+                // Intersection sits between the two circles
+                var pairKey = [shows[0].id, shows[1].id].sort().join('|');
+                regionPositions[pairKey] = {x: cx, y: cy};
+            } else {
+                regionPositions = {
+                    'broadcast':                 {x: centers[0].x,                y: centers[0].y - 18},
+                    'hulu':                      {x: centers[1].x - 24,           y: centers[1].y + 14},
+                    'pcj':                       {x: centers[2].x + 24,           y: centers[2].y + 14},
+                    'broadcast|hulu':            {x: (centers[0].x + centers[1].x) / 2 - 18, y: (centers[0].y + centers[1].y) / 2 + 4},
+                    'broadcast|pcj':             {x: (centers[0].x + centers[2].x) / 2 + 18, y: (centers[0].y + centers[2].y) / 2 + 4},
+                    'hulu|pcj':                  {x: (centers[1].x + centers[2].x) / 2,      y: (centers[1].y + centers[2].y) / 2 + 16},
+                    'broadcast|hulu|pcj':        {x: cx,                                     y: cy + 6},
+                };
+            }
 
-            // Build a label per region.
             var labels = '';
             Object.keys(regionPositions).forEach(function(k) {
                 var rg = regionByKey[k];
@@ -34698,15 +34648,13 @@
                 var pos = regionPositions[k];
                 var pctOfPcj = (cso.totals && cso.totals.pcj_total)
                     ? (rg.in.indexOf('pcj') >= 0
-                        ? ' (' + Math.round(rg.accounts / cso.totals.pcj_total * 100) + '% of PCJ)'
+                        ? Math.round(rg.accounts / cso.totals.pcj_total * 100) + '% of PCJ'
                         : '')
                     : '';
-                // Slightly larger font for triple overlap so the
-                // "super-fans" callout stands out.
-                var isTriple = (rg.in || []).length === 3;
+                var isOverlap = (rg.in || []).length >= 2;
                 var isPcjOnly = k === 'pcj';
-                var fontSize = isTriple ? 11 : 10.5;
-                var fontWeight = isTriple || isPcjOnly ? 800 : 700;
+                var fontSize = isOverlap ? 11 : 10.5;
+                var fontWeight = isOverlap || isPcjOnly ? 800 : 700;
                 var fill = isPcjOnly ? '#a78bfa' : 'var(--text-primary)';
                 labels += ''
                     + '<g pointer-events="none">'
@@ -34717,12 +34665,11 @@
                     +   (pctOfPcj
                           ? '<text x="' + pos.x.toFixed(1) + '" y="' + (pos.y + 12).toFixed(1) + '"'
                             + ' font-size="9" fill="var(--text-secondary)" text-anchor="middle">'
-                            + pctOfPcj.replace(/[()]/g, '') + '</text>'
+                            + pctOfPcj + '</text>'
                           : '')
                     + '</g>';
             });
 
-            // Title under the diagram
             var caption = ''
                 + '<text x="' + cx + '" y="' + (H - 8) + '" font-size="10"'
                 +   ' text-anchor="middle" fill="var(--text-secondary)">'
@@ -50791,8 +50738,7 @@
             'flywheel_conversion': { title: 'Flywheel IQ Ready', label: 'Flywheel Conversion report', btnText: 'VIEW IN FLYWHEEL IQ' },
             'talent_fit': { title: 'Talent Fit Ready', label: 'Talent Fit report', btnText: 'VIEW IN TALENT FIT IQ' },
             'roas_iq': { title: 'ROAS IQ Ready', label: 'ROAS IQ report', btnText: 'VIEW IN ROAS IQ' },
-            'ecommerce_iq': { title: 'E-Commerce IQ Ready', label: 'E-Commerce IQ report', btnText: 'VIEW IN E-COMMERCE IQ' },
-            'brand_partnership_iq': { title: 'Brand Partnership IQ Ready', label: 'Brand Partnership Valuation report', btnText: 'VIEW IN E-COMMERCE IQ' }
+            'brand_partnership_iq': { title: 'Brand Partnership IQ Ready', label: 'Brand Partnership Valuation report', btnText: 'VIEW IN BRAND PARTNERSHIP' }
         };
 
         async function checkProfileReleasedNotifications() {

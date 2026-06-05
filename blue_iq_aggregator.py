@@ -1118,12 +1118,16 @@ def _q_issue_journey_cross(conn, start: str) -> dict[str, dict[str, int]]:
     log.info("    cross stage 3: %d search rows streamed \u2192 %d (term,dest) cells (%.1fs)",
              s3_rows, len(term_uids), time.time() - t_s3)
 
+    # Earlier this filter dropped any (term, dest) cell with <= 1 panelist
+    # under the rationale that singletons were noise. In practice on our
+    # 39k-panel × 7d cohort, the SAME term hit by 1 panelist via different
+    # destinations is genuinely informative — and the post-AI-bucket rollup
+    # already aggregates across many terms per issue, so the "noise" gets
+    # averaged out. Keeping singletons takes the cross from ~47 surviving
+    # terms to ~200-300, which means many more bucket matches downstream.
     out: dict[str, dict[str, int]] = defaultdict(lambda: defaultdict(int))
     for (term, dest), uids in term_uids.items():
-        n = len(uids)
-        if n <= 1:
-            continue
-        out[term][dest] = n
+        out[term][dest] = len(uids)
     return out
 
 
