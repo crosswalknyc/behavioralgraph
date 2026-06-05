@@ -1367,7 +1367,41 @@ def build_cube(lookback_days: int = LOOKBACK_DAYS) -> dict:
         # values that survived the state-normalization pipeline appear here
         # (so no Canadian provinces, no military codes, no garbage).
         all_states = sorted({k.split('|')[1] for k in cells if k.split('|')[1] and not k.split('|')[2]})
-        all_dmas   = sorted({k.split('|')[2] for k in cells if k.split('|')[2] and not k.split('|')[1]})
+        all_dmas_raw = {k.split('|')[2] for k in cells if k.split('|')[2] and not k.split('|')[1]}
+        # Drop anything that doesn't look like a real US Nielsen DMA. Cells
+        # are already US_COUNTRY_FILTER-gated, but mistagged-country rows and
+        # ingestion placeholders still leak ("Unknown", "Canada", empty
+        # strings, etc.). Validation logic mirrors blue_iq._is_valid_us_dma.
+        _DMA_REJECT_EXACT = {
+            '', '(null)', 'NULL', 'null', 'None', '(none)', 'unknown', 'Unknown',
+            'UNKNOWN', 'N/A', 'na', 'NA', '0', '-', '--', 'Other', 'OTHER',
+            'NotApplicable', 'Not Applicable', 'DMA', 'foreign', 'Foreign',
+            'International', 'INTL', 'Various',
+        }
+        _DMA_REJECT_SUBSTR = {
+            'canada', 'mexico', 'united kingdom', 'australia', 'germany', 'france',
+            'india', 'japan', 'china', 'brazil', 'south africa', 'europe', 'asia',
+            'africa', 'oceania', 'south america', 'central america',
+        }
+        def _ok_us_dma(s: str) -> bool:
+            if not s:
+                return False
+            s2 = s.strip()
+            if (not s2) or (s2 in _DMA_REJECT_EXACT):
+                return False
+            sl = s2.lower()
+            if any(tok in sl for tok in _DMA_REJECT_SUBSTR):
+                return False
+            if not (3 <= len(s2) <= 60):
+                return False
+            if not any(c.isalpha() for c in s2):
+                return False
+            return True
+        all_dmas = sorted({d for d in all_dmas_raw if _ok_us_dma(d)})
+        dropped_dmas = len(all_dmas_raw) - len(all_dmas)
+        if dropped_dmas:
+            log.info("  dropped %d non-US/garbage DMA values from dropdown universe",
+                     dropped_dmas)
         log.info("  filter universe: %d states, %d dmas", len(all_states), len(all_dmas))
 
         # Gen-pop projection factor.
