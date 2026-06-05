@@ -22726,14 +22726,18 @@
             return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
         }
 
-        // Strip year-style dates from a search query so the dashboard doesn't
-        // surface noisy variants like "government shutdown 2023" vs
-        // "government shutdown" as separate entries in the user's eye.
-        // Matches 4-digit years 1900-2099 as whole tokens; collapses
-        // resulting double spaces and trims.
+        // Clean a search query for display:
+        //   1. URL-encoded "+" separators -> real spaces (so
+        //      "trump+rolled+the+federal+reserve" reads naturally)
+        //   2. Strip whole-token 4-digit years 1900-2099 (de-noises variants
+        //      like "government shutdown 2023" vs "government shutdown")
+        //   3. Collapse doubled whitespace and trim trailing punctuation.
+        // Kept under the original _bqStripDates name since every call site
+        // already imports that symbol.
         function _bqStripDates(s) {
             if (s == null) return '';
             return String(s)
+                .replace(/\+/g, ' ')
                 .replace(/\b(?:19|20)\d{2}\b/g, '')
                 .replace(/\s+/g, ' ')
                 .replace(/\s*([\-\u2013\u2014])\s*$/, '')
@@ -23438,7 +23442,7 @@
 
             body.innerHTML = '<div class="bq-trending-grid">'
                 + rows.map(function(r, idx) {
-                    var rel = (r.related || []).slice(0, 5);
+                    var rel = (r.related || []).map(_bqStripDates).filter(Boolean).slice(0, 5);
                     var relHtml = rel.length
                         ? '<div class="bq-trending-related">'
                             + '<span class="bq-trending-related-label">Related searches:</span> '
@@ -23447,10 +23451,11 @@
                               }).join('')
                           + '</div>'
                         : '';
-                    return '<div class="bq-trending-card" data-term="' + _bqEscape(r.term) + '">'
+                    var cleanTerm = _bqStripDates(r.term);
+                    return '<div class="bq-trending-card" data-term="' + _bqEscape(cleanTerm) + '">'
                          +   '<div class="bq-trending-head">'
                          +     '<div class="bq-trending-rank">#' + (idx + 1) + '</div>'
-                         +     '<div class="bq-trending-term">' + _bqEscape(r.term) + '</div>'
+                         +     '<div class="bq-trending-term">' + _bqEscape(cleanTerm) + '</div>'
                          +     '<div class="bq-trending-traffic" title="Approx. search volume from Google Trends">' + fmtTraffic(r.score) + '</div>'
                          +   '</div>'
                          +   '<div class="bq-trending-meta">'
