@@ -17801,8 +17801,12 @@
             #blueIQView .blue-iq-card-search   { grid-column: span 4; }
             #blueIQView .blue-iq-card-social   { grid-column: span 4; }
             #blueIQView .blue-iq-card-turnout  { grid-column: span 4; }
-            #blueIQView .blue-iq-card-pols     { grid-column: span 6; min-height: 360px; }
-            #blueIQView .blue-iq-card-cands    { grid-column: span 6; min-height: 360px; }
+            /* Pols + Cands cards are paired side-by-side. Lock to identical
+             * height so they always line up; .blue-iq-card-body already has
+             * overflow-y:auto so each body scrolls independently when its
+             * content exceeds the fixed card height. */
+            #blueIQView .blue-iq-card-pols     { grid-column: span 6; height: 560px; }
+            #blueIQView .blue-iq-card-cands    { grid-column: span 6; height: 560px; }
             #blueIQView .blue-iq-card-geo      { grid-column: span 12; min-height: 540px; }
             #blueIQView .blue-iq-card-trending { grid-column: span 12; min-height: 280px; }
             #blueIQView .blue-iq-card-playbook { grid-column: span 12; min-height: 360px; }
@@ -23602,7 +23606,7 @@
                 +   '</div>'
                 + '</div>'
                 + '<div class="bq-cand-score-explain">'
-                +   '<strong>Interest score (0\u2013100):</strong> blended signal combining how often this candidate is searched on Google, how often the panel hits their pages, how much news coverage they\u2019re drawing, and how prominent the discovery agent rates them in this slice. '
+                +   '<strong>Interest score (0\u2013100):</strong> blended signal combining how often this candidate is searched on Google, how often the panel hits their pages, and how much news coverage they\u2019re drawing. '
                 +   '<span style="opacity:0.75;">A 90 means top-tier visibility; a 60 means active but quieter.</span>'
                 + '</div>';
 
