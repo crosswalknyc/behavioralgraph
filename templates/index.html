@@ -24023,22 +24023,11 @@
                   + '<div class="blue-iq-card-body">' + _bqRenderEngagementCard(cards.social_media, { kind: 'social' }) + '</div>'
                   + '</div>';
 
-            // CARD F: Turnout intent
-            var ti = cards.turnout_intent || {};
-            var tiHtml;
-            if (ti && (ti.pct > 0 || (ti.sample_queries && ti.sample_queries.length))) {
-                tiHtml = '<div style="font-size: 2rem; font-weight: 700; line-height: 1.1;">' + _bqPct(ti.pct || 0) + '</div>'
-                       + '<div style="font-size: 0.78rem; color: var(--text-secondary); margin-bottom: 0.6rem;">searched voter-action terms (register, polling, ballot, early vote)</div>'
-                       + ((ti.sample_queries || []).map(_bqStripDates).filter(Boolean).slice(0, 5).map(function(q) {
-                            return '<div class="blue-iq-bucket-samples" style="margin: 0.15rem 0;">\u2022 ' + _bqEscape(q) + '</div>';
-                          }).join('') || '');
-            } else {
-                tiHtml = '<div style="color: var(--text-secondary); font-size: 0.85rem; padding: 0.5rem 0;">No turnout-intent signal in this slice.</div>';
-            }
-            html += '<div class="blue-iq-card blue-iq-card-turnout">'
-                  + '<h3 class="blue-iq-card-title">Turnout intent</h3>'
-                  + '<div class="blue-iq-card-body">' + tiHtml + '</div>'
-                  + '</div>';
+            // CARD F (Turnout intent) intentionally removed — the
+            // searched-voter-action-terms surface wasn't carrying
+            // enough signal across most slices and was rendering as
+            // a near-empty placeholder. Backend cards.turnout_intent
+            // is still emitted for downstream/API consumers.
 
             // CARD D: Top politicians engaged — agent-discovered figures
             // the active geography is driving conversation about right now.
