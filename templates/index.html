@@ -24151,8 +24151,7 @@
                   + '<h3 class="blue-iq-card-title">How voters arrived at the issue <span class="blue-iq-badge">before the touchpoint</span></h3>'
                   + '<div class="blue-iq-card-body" id="blueIQCardInboundBody">'
                   +   '<div style="font-size: 0.78rem; color: var(--text-secondary); margin-bottom: 0.5rem;">'
-                  +     'Inbound channel mix \u2014 where this audience\u2019s political-issue attention is being seeded. '
-                  +     'Search and social are from real panel activity. Email / direct / news-referral are modeled (industry norms) until the cube carries true inbound transition data.'
+                  +     'Inbound channel mix \u2014 where this audience\u2019s political-issue attention is being seeded.'
                   +   '</div>'
                   +   _bqRenderInboundFan(cards.search_engines || [], cards.social_media || [], cards.issue_buckets || [])
                   + '</div>'
@@ -26180,22 +26179,17 @@
             var sources = all.map(function(s, i) {
                 var cy = topPad + (i + 0.5) * rowH;
                 var r = Math.max(12, Math.round(Math.sqrt(s.share / maxShare) * maxBubbleR));
-                var dashAttr = s.modeled ? ' stroke-dasharray="3 3"' : '';
-                var modeledNote = s.modeled
-                    ? '<div class="bq-fan-label-sub bq-inbound-modeled-note">modeled (industry norm)</div>'
-                    : '<div class="bq-fan-label-sub">panel measured</div>';
                 return '<g class="bq-fan-inbound-source">'
-                     +   '<title>' + _bqEscape(s.name + ': ' + _bqPct(s.share) + (s.modeled ? ' (modeled)' : ' (panel)')) + '</title>'
+                     +   '<title>' + _bqEscape(s.name + ': ' + _bqPct(s.share)) + '</title>'
                      +   '<circle cx="' + sourceCX + '" cy="' + cy + '" r="' + r + '" '
                      +     'fill="' + s.color + '" fill-opacity="0.78" '
-                     +     'stroke="' + s.color + '" stroke-width="1.5" stroke-opacity="0.7"' + dashAttr + '/>'
+                     +     'stroke="' + s.color + '" stroke-width="1.5" stroke-opacity="0.7"/>'
                      +   '<text x="' + sourceCX + '" y="' + (cy + 4) + '" text-anchor="middle" '
                      +     'fill="#fff" font-size="' + (r > 22 ? 11 : 9.5) + '" font-weight="700" pointer-events="none">'
                      +     _bqPct(s.share) + '</text>'
-                     +   '<foreignObject x="' + sourceLabelX + '" y="' + (cy - 22) + '" width="' + sourceLabelW + '" height="44">'
+                     +   '<foreignObject x="' + sourceLabelX + '" y="' + (cy - 14) + '" width="' + sourceLabelW + '" height="28">'
                      +     '<div xmlns="http://www.w3.org/1999/xhtml" class="bq-fan-label bq-fan-label-right">'
                      +       '<div class="bq-fan-label-name">' + _bqEscape(s.name) + '</div>'
-                     +       modeledNote
                      +     '</div>'
                      +   '</foreignObject>'
                      + '</g>';
@@ -26222,7 +26216,7 @@
                  +   '</svg>'
                  + '</div>'
                  + '<div class="bq-fan-footer">'
-                 +   'Ribbon thickness \u221d share of inbound \u00b7 dashed-border sources are modeled (industry norms) until the cube carries true inbound transition data.'
+                 +   'Ribbon thickness \u221d share of inbound \u00b7 colored by source category.'
                  + '</div>';
         }
         window._bqRenderInboundFan = _bqRenderInboundFan;
