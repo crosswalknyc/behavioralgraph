@@ -17979,6 +17979,18 @@
             #blueIQView .bq-reco-play-row { font-size: 0.82rem; line-height: 1.45; margin-bottom: 0.25rem; }
             #blueIQView .bq-reco-play-label { font-weight: 600; }
 
+            /* ── Thin-data empty / single-issue states ── */
+            #blueIQView .bq-thin-data-card { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 2rem 1rem; gap: 0.5rem; background: rgba(255,200,80,0.04); border: 1px dashed rgba(255,200,80,0.25); border-radius: 12px; text-align: center; }
+            #blueIQView .bq-thin-data-icon { font-size: 1.6rem; }
+            #blueIQView .bq-thin-data-title { font-weight: 600; font-size: 0.95rem; color: var(--text-primary); }
+            #blueIQView .bq-thin-data-body { font-size: 0.82rem; color: var(--text-secondary); max-width: 540px; line-height: 1.45; }
+            #blueIQView .bq-thin-note { padding: 0.6rem 0.8rem; background: rgba(255,200,80,0.06); border: 1px solid rgba(255,200,80,0.18); border-radius: 8px; font-size: 0.78rem; color: var(--text-secondary); line-height: 1.45; margin-bottom: 0.7rem; }
+            #blueIQView .bq-thin-note strong { color: #fbbf24; }
+            #blueIQView .bq-thin-issue-card { background: rgba(59,130,246,0.06); border: 1px solid rgba(59,130,246,0.18); border-radius: 10px; padding: 0.85rem 1rem; }
+            #blueIQView .bq-thin-issue-head { display: flex; justify-content: space-between; align-items: baseline; gap: 0.5rem; }
+            #blueIQView .bq-thin-issue-name { font-size: 1.05rem; font-weight: 700; color: var(--text-primary); }
+            #blueIQView .bq-thin-issue-stats { font-size: 0.8rem; color: var(--text-secondary); font-variant-numeric: tabular-nums; }
+
             /* ── Card hover lift + smoother transitions ── */
             #blueIQView .blue-iq-card { transition: transform 220ms ease, box-shadow 220ms ease; }
             #blueIQView .blue-iq-card:hover { transform: translateY(-2px); box-shadow: 0 8px 28px rgba(0,0,0,0.25); }
@@ -23113,13 +23125,76 @@
 
         function _renderBlueIQIssueJourneyCross(cross) {
             if (!cross || !cross.length) {
-                return '<div style="color: var(--text-secondary); font-size: 0.85rem; padding: 0.5rem 0;">'
-                     + 'No issue\u00d7journey data in this cube. The Live (1d) window is too short to cross-aggregate; rebuild the 30d cube and the recommendations will populate.'
+                return '<div class="bq-thin-data-card">'
+                     + '<div class="bq-thin-data-icon">\u26a0\ufe0f</div>'
+                     + '<div class="bq-thin-data-title">No issue\u00d7journey signal in this window</div>'
+                     + '<div class="bq-thin-data-body">'
+                     +   'This cube doesn\u2019t carry the cross. The voter journey card above shows the broader pattern of what panelists who hit political-media sites did next.'
+                     + '</div>'
                      + '</div>';
             }
             var factor = (window.__blueIQ && window.__blueIQ.genPopFactor) || 1.0;
             var activeDest = window.__blueIQ && window.__blueIQ.activeDest;
             var activeIssue = window.__blueIQ && window.__blueIQ.activeIssue;
+
+            // Thin-data case: when the cross only has 1 issue bucket, the
+            // Sankey degenerates to a single ribbon and feels broken. Show
+            // a focused single-issue card with the recommendation panel
+            // instead — it tells the user something useful without the
+            // bare-Sankey weirdness.
+            if (cross.length === 1) {
+                var only = cross[0];
+                var dests = (only.destinations || []).slice().sort(function(a, b) {
+                    return (b.panelists || 0) - (a.panelists || 0);
+                });
+                var dom = dests.filter(function(d) {
+                    return d.destination !== 'abandoned' && d.destination !== 'other';
+                })[0] || dests[0] || {};
+                var play = BLUE_IQ_CREATIVE_PLAYS[dom.destination] || BLUE_IQ_CREATIVE_PLAYS.other;
+                var topTerms = (only.top_terms || []).slice(0, 6).join(' \u00b7 ');
+                var totalUS = _bqNum((+only.total_panelists || 0) * factor);
+
+                // Mini funnel ribbon for this one issue.
+                var maxP = Math.max.apply(null, dests.map(function(d) { return +d.panelists || 0; })) || 1;
+                var miniCols = dests.map(function(d) {
+                    var meta = BLUE_IQ_JOURNEY_LABELS[d.destination] || { label: d.destination };
+                    var color = BLUE_IQ_DEST_PALETTE[d.destination] || '#64748b';
+                    var heightPx = Math.max(8, Math.round(140 * ((+d.panelists || 0) / maxP)));
+                    var us = _bqNum((+d.panelists || 0) * factor);
+                    return '<div class="bq-funnel-col bq-funnel-col-dest" title="' + _bqEscape(meta.label + ': ' + _bqPct(d.share || 0) + ' \u00b7 \u2248' + us + ' US adults') + '">'
+                         +   '<div class="bq-funnel-bar" style="height: 160px;">'
+                         +     '<div class="bq-funnel-bar-spacer" style="height: ' + (160 - heightPx) + 'px;"></div>'
+                         +     '<div class="bq-funnel-bar-fill" style="height: ' + heightPx + 'px; background: linear-gradient(180deg, ' + color + ' 0%, ' + color + 'cc 100%);"></div>'
+                         +     '<div class="bq-funnel-bar-pct">' + _bqPct(d.share || 0) + '</div>'
+                         +   '</div>'
+                         +   '<div class="bq-funnel-col-foot">'
+                         +     '<div class="bq-funnel-col-name">' + _bqEscape(meta.label) + '</div>'
+                         +     '<div class="bq-funnel-col-sub">\u2248' + us + ' US adults</div>'
+                         +   '</div>'
+                         + '</div>';
+                }).join('');
+
+                return '<div class="bq-thin-note">'
+                     +   '<strong>Limited cross signal</strong> in this window. '
+                     +   'Of the panelists who hit a political-media site, only a small subset also searched a policy-classified term during the same window. '
+                     +   'This is the one issue we surfaced; the broader voter-journey pattern is in the card above.'
+                     + '</div>'
+                     + '<div class="bq-thin-issue-card">'
+                     +   '<div class="bq-thin-issue-head">'
+                     +     '<div class="bq-thin-issue-name">' + _bqEscape(only.bucket) + '</div>'
+                     +     '<div class="bq-thin-issue-stats">\u2248' + totalUS + ' US adults engaged</div>'
+                     +   '</div>'
+                     +   '<div class="bq-funnel-ribbon" style="margin-top: 0.5rem;">'
+                     +     '<div class="bq-funnel-dest-row">' + miniCols + '</div>'
+                     +   '</div>'
+                     +   (topTerms ? '<div class="bq-reco-terms" style="margin-top:0.6rem;"><em>Top terms in this issue:</em> ' + _bqEscape(topTerms) + '</div>' : '')
+                     +   '<div class="bq-reco-play" style="margin-top:0.55rem;">'
+                     +     '<div class="bq-reco-play-row"><span class="bq-reco-play-label" style="color:#fbbf24;">Where to place:</span> ' + _bqEscape(play.placement) + '</div>'
+                     +     '<div class="bq-reco-play-row"><span class="bq-reco-play-label" style="color:#34d399;">Creative direction:</span> ' + _bqEscape(play.creative) + '</div>'
+                     +   '</div>'
+                     + '</div>'
+                     + _bqJourneyLegend(activeDest);
+            }
 
             // Top 10 issues only — keeps the Sankey readable.
             var issues = cross.slice(0, 10);
