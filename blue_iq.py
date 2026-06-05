@@ -2240,7 +2240,7 @@ def compute_panel_view(filters: dict, *, force_refresh: bool = False) -> dict:
     trends_state_label = trends_state or 'United States'
     raw_trends = (external or {}).get('google_trends_top') or []
     pol_set = set(_load_politicians())
-    trending_local = _filter_trends_to_political(raw_trends, pol_set)[:20]
+    trending_local = _filter_trends_to_political(raw_trends, pol_set)[:25]
     trending_meta = {
         'geo_label':         trends_state_label,
         'geo_type':          f['geo_type'],
