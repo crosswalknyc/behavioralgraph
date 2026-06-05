@@ -2304,26 +2304,34 @@
         }
         /* IMDB pill under the profile picture — IMDB yellow accent. Hidden by
            default; updateDashImdbHeader() reveals it only when the selected
-           profile carries an imdb_id. Sized to match the 100px avatar and
-           centered so the nm-id reads nicely under the headshot. */
+           profile carries an imdb_id. Sized to match the 100px avatar; the
+           "IMDB:" label and the nm-id render on separate left-justified lines
+           so long ids never crowd the label. */
         .dash-imdb-box {
             font-size: 0.65rem;
             background: var(--bg-input);
-            padding: 0.3rem 0.4rem;
+            padding: 0.3rem 0.45rem;
             border-radius: 6px;
             border: 1px solid var(--border-color);
             color: var(--text-secondary);
-            text-align: center;
+            text-align: left;
             line-height: 1.2;
             word-break: break-all; /* nm-ids never have spaces; allow wrap if needed */
         }
-        .dash-imdb-box a {
+        .dash-imdb-box .dash-imdb-label {
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+        }
+        .dash-imdb-box .dash-imdb-id {
+            display: block;
+            margin-top: 0.15rem;
             color: #f5c518; /* IMDB yellow — matches .iqr-imdb-link in the ranker */
             text-decoration: none;
             font-weight: 700;
             letter-spacing: 0.01em;
         }
-        .dash-imdb-box a:hover { text-decoration: underline; color: #f5c518; }
+        .dash-imdb-box .dash-imdb-id:hover { text-decoration: underline; color: #f5c518; }
         .dash-meta-box {
             color: var(--text-primary);
             font-size: 0.75rem;
@@ -21874,7 +21882,8 @@
             }
             const safeId = imdb.replace(/[^a-zA-Z0-9]/g, '');
             const href = 'https://www.imdb.com/name/' + encodeURIComponent(safeId) + '/';
-            box.innerHTML = 'IMDB: <a href="' + href + '" target="_blank" rel="noopener" ' +
+            box.innerHTML = '<div class="dash-imdb-label">IMDB:</div>' +
+                '<a class="dash-imdb-id" href="' + href + '" target="_blank" rel="noopener" ' +
                 'onclick="event.stopPropagation();" title="Open ' + safeId + ' on IMDB">' +
                 safeId + '</a>';
             box.style.display = 'block';
