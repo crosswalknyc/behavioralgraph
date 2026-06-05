@@ -17853,6 +17853,16 @@
             #blueIQView .bq-trending-dma-picker select:focus { outline: none; border-color: rgba(79,140,255,0.6); }
             #blueIQView .blue-iq-card-playbook { grid-column: span 12; min-height: 360px; }
             #blueIQView .bq-trending-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 0.7rem; }
+            /* Scroll container caps the trending card at roughly 2 rows
+             * (~360px) so the dashboard layout stays predictable. The
+             * fade-mask at the bottom + the trailing scroll-hint chip
+             * cue the user that more cards live below. */
+            #blueIQView .bq-trending-scroll { max-height: 360px; overflow-y: auto; padding-right: 0.4rem; mask-image: linear-gradient(180deg, #000 calc(100% - 24px), transparent 100%); -webkit-mask-image: linear-gradient(180deg, #000 calc(100% - 24px), transparent 100%); }
+            #blueIQView .bq-trending-scroll::-webkit-scrollbar { width: 8px; }
+            #blueIQView .bq-trending-scroll::-webkit-scrollbar-track { background: rgba(255,255,255,0.02); border-radius: 4px; }
+            #blueIQView .bq-trending-scroll::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.12); border-radius: 4px; }
+            #blueIQView .bq-trending-scroll::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.22); }
+            #blueIQView .bq-trending-scroll-hint { margin-top: 0.45rem; font-size: 0.68rem; color: var(--text-secondary); letter-spacing: 0.04em; text-transform: uppercase; text-align: right; opacity: 0.75; }
             #blueIQView .bq-trending-card { background: rgba(255,255,255,0.025); border: 1px solid rgba(255,255,255,0.06); border-radius: 10px; padding: 0.7rem 0.85rem; transition: transform 0.12s ease, border-color 0.12s ease; }
             #blueIQView .bq-trending-card:hover { transform: translateY(-2px); border-color: rgba(79,140,255,0.3); }
             #blueIQView .bq-trending-head { display: flex; align-items: baseline; gap: 0.55rem; }
@@ -24110,7 +24120,6 @@
             html += '<div class="blue-iq-card blue-iq-card-trending" style="grid-column: span 12;">'
                   + '<h3 class="blue-iq-card-title" style="display:flex; align-items:center; gap:0.6rem; flex-wrap:wrap;">'
                   +   '<span>Trending political searches \u2014 <span id="blueIQTrendingGeoLabel">United States</span></span>'
-                  +   '<span class="blue-iq-badge">Google Trends \u00b7 live</span>'
                   +   '<span style="flex:1 1 auto;"></span>'
                   +   '<span class="bq-trending-dma-picker">'
                   +     '<label for="blueIQTrendingDma" style="font-size:0.7rem; color:var(--text-secondary); text-transform:uppercase; letter-spacing:0.04em; margin-right:0.35rem;">Drill to DMA</label>'
@@ -24717,7 +24726,7 @@
                 return String(s);
             }
 
-            body.innerHTML = '<div class="bq-trending-grid">'
+            body.innerHTML = '<div class="bq-trending-scroll"><div class="bq-trending-grid">'
                 + rows.map(function(r, idx) {
                     var rel = (r.related || []).map(_bqStripDates).filter(Boolean).slice(0, 5);
                     var relHtml = rel.length
@@ -24742,7 +24751,10 @@
                          +   relHtml
                          + '</div>';
                   }).join('')
-                + '</div>';
+                + '</div></div>'
+                + (rows.length > 6
+                    ? '<div class="bq-trending-scroll-hint">Showing top ' + rows.length + ' \u00b7 scroll for more</div>'
+                    : '');
         }
 
         function _renderBlueIQIssueBuckets(buckets) {
