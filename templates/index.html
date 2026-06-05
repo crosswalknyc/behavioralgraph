@@ -22664,6 +22664,20 @@
             return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
         }
 
+        // Strip year-style dates from a search query so the dashboard doesn't
+        // surface noisy variants like "government shutdown 2023" vs
+        // "government shutdown" as separate entries in the user's eye.
+        // Matches 4-digit years 1900-2099 as whole tokens; collapses
+        // resulting double spaces and trims.
+        function _bqStripDates(s) {
+            if (s == null) return '';
+            return String(s)
+                .replace(/\b(?:19|20)\d{2}\b/g, '')
+                .replace(/\s+/g, ' ')
+                .replace(/\s*([\-\u2013\u2014])\s*$/, '')
+                .trim();
+        }
+
         // Brand-color map for search engines + social platforms. Same
         // hue used everywhere a brand row appears (rows here, axis on
         // future charts) so the user develops a quick color↔brand
@@ -22815,7 +22829,7 @@
             if (ti && (ti.pct > 0 || (ti.sample_queries && ti.sample_queries.length))) {
                 tiHtml = '<div style="font-size: 2rem; font-weight: 700; line-height: 1.1;">' + _bqPct(ti.pct || 0) + '</div>'
                        + '<div style="font-size: 0.78rem; color: var(--text-secondary); margin-bottom: 0.6rem;">searched voter-action terms (register, polling, ballot, early vote)</div>'
-                       + ((ti.sample_queries || []).slice(0, 5).map(function(q) {
+                       + ((ti.sample_queries || []).map(_bqStripDates).filter(Boolean).slice(0, 5).map(function(q) {
                             return '<div class="blue-iq-bucket-samples" style="margin: 0.15rem 0;">\u2022 ' + _bqEscape(q) + '</div>';
                           }).join('') || '');
             } else {
@@ -22942,7 +22956,7 @@
             var max = Math.max.apply(null, buckets.map(function(b) { return +b.count || 0; })) || 1;
             body.innerHTML = buckets.slice(0, 16).map(function(b, idx) {
                 var pct = Math.round((b.count / max) * 100);
-                var samples = (b.sample_queries || []).slice(0, 3).join(' \u00b7 ');
+                var samples = (b.sample_queries || []).map(_bqStripDates).filter(Boolean).slice(0, 3).join(' \u00b7 ');
                 return '<div class="blue-iq-bucket-row" onclick="openBlueIQDrillModal(' + idx + ')">'
                      + '<div class="blue-iq-bucket-head"><strong>' + _bqEscape(b.bucket) + '</strong><span style="color: var(--text-secondary); font-variant-numeric: tabular-nums;">' + _bqPct(b.share || 0) + '</span></div>'
                      + '<div class="blue-iq-row-bar-wrap" style="margin: 0;"><span class="blue-iq-row-bar" style="width: ' + pct + '%;"></span></div>'
@@ -23065,7 +23079,7 @@
                     return d.destination !== 'abandoned' && d.destination !== 'other';
                 })[0] || dests[0] || {};
                 var play = BLUE_IQ_CREATIVE_PLAYS[dom.destination] || BLUE_IQ_CREATIVE_PLAYS.other;
-                var topTerms = (only.top_terms || []).slice(0, 6).join(' \u00b7 ');
+                var topTerms = (only.top_terms || []).map(_bqStripDates).filter(Boolean).slice(0, 6).join(' \u00b7 ');
                 var totalUS = _bqNum((+only.total_panelists || 0) * factor);
 
                 // Mini funnel ribbon for this one issue.
@@ -23294,7 +23308,7 @@
                 })[0] || (issue.destinations || [])[0] || {};
                 recoPlay = BLUE_IQ_CREATIVE_PLAYS[dom.destination] || BLUE_IQ_CREATIVE_PLAYS.other;
                 recoBucketLabel = issue.bucket;
-                var topTerms = (issue.top_terms || []).slice(0, 6).join(' \u00b7 ');
+                var topTerms = (issue.top_terms || []).map(_bqStripDates).filter(Boolean).slice(0, 6).join(' \u00b7 ');
                 recoTitle = (activeIssue ? 'Pinned issue: ' : 'Top issue: ') + '<strong>' + _bqEscape(issue.bucket) + '</strong>';
                 recoBody = '<div class="bq-reco-issue-stats" style="margin-bottom:0.5rem;">'
                          +   '\u2248' + _bqNum((+issue.total_panelists || 0) * factor) + ' US adults engaged \u00b7 dominant next action: '
@@ -23421,7 +23435,17 @@
             var b = data.cards.issue_buckets[idx];
             if (!b) return;
             document.getElementById('blueIQDrillTitle').textContent = b.bucket;
-            var queries = (b.sample_queries || []).slice(0, 50);
+            var seen = {};
+            var queries = (b.sample_queries || [])
+                .map(_bqStripDates)
+                .filter(function(q) {
+                    if (!q) return false;
+                    var k = q.toLowerCase();
+                    if (seen[k]) return false;
+                    seen[k] = 1;
+                    return true;
+                })
+                .slice(0, 50);
             var qHtml = queries.length
                 ? '<ol style="margin: 0; padding-left: 1.25rem; font-size: 0.88rem; line-height: 1.5;">' + queries.map(function(q) { return '<li>' + _bqEscape(q) + '</li>'; }).join('') + '</ol>'
                 : '<p style="color: var(--text-secondary);">No sample queries available for this bucket.</p>';
