@@ -120,69 +120,94 @@ def _get_json(url: str, *, params: dict | None = None, headers: dict | None = No
 # We use the same endpoint Trends UI hits. No key required, but rate-limited.
 # Failures are silent and the caller proceeds with whatever else succeeded.
 
-_TRENDS_DAILY_TRENDS = "https://trends.google.com/trends/api/dailytrends"
+# NOTE: Google retired the /trends/api/dailytrends JSON endpoint
+# (404 in 2026 Q2). Daily trends now use the RSS endpoint instead;
+# see _TRENDS_RSS / _trends_rss_fetch below.
 _TRENDS_REALTIME    = "https://trends.google.com/trends/api/realtimetrends"
 
 # Google's geo codes for daily/realtime trends use country (US) + state (US-XX).
+_TRENDS_RSS = "https://trends.google.com/trending/rss"
+_TRENDS_HT_NS = 'https://trends.google.com/trending/rss'
+
+
+def _trends_rss_fetch(geo: str) -> str:
+    """Raw GET to the Google Trends daily-search RSS endpoint.
+
+    This replaces the old /api/dailytrends JSON endpoint (Google retired
+    that 404 in 2026 Q2). RSS is the documented public replacement and
+    supports both `geo=US` (National) and `geo=US-XX` (state-level).
+    Returns the raw XML body, or '' on any failure.
+    """
+    try:
+        r = requests.get(_TRENDS_RSS, params={'geo': geo},
+                          headers={'User-Agent': _UA},
+                          timeout=_HTTP_TIMEOUT_S)
+        if not r.ok:
+            return ''
+        return r.text or ''
+    except Exception as e:
+        logger.debug("trends RSS fetch failed for geo=%s: %s", geo, e)
+        return ''
+
+
 def trends_top_issues(state: Optional[str] = None, lookback_days: int = 7) -> list[dict]:
     """Top trending search topics in the geo, filtered (downstream) to political.
 
     Returns `[{ 'term': str, 'score': int, 'related': [str, ...] }, ...]` sorted
     by score desc. Empty list on failure or no signal.
 
-    NOTE: Google's daily-trends endpoint returns ALL trending topics — political
-    filtering is the caller's job (Blue IQ's issue-bucket classifier handles it).
+    state=None -> US-wide trends (geo=US). state='California' -> geo=US-CA.
+
+    NOTE: Google's RSS daily-trends endpoint returns ALL trending topics —
+    political filtering is the caller's job (Blue IQ's _filter_trends_to_political
+    handles it via politician-name matches + civic keyword list + related-query
+    political signal).
+
+    lookback_days is accepted for API compatibility but the RSS feed only
+    returns the past ~24h of trends. Callers asking for longer lookbacks
+    just get what's in the current feed.
     """
     name = normalize_state(state)
     geo = US_STATE_TO_ISO.get(name) if name else 'US'
 
-    out: list[dict] = []
-    # daily trends gives a per-day list; we request the last `lookback_days`.
-    # Trends only goes back ~30d on this endpoint.
-    today = datetime.now(timezone.utc).strftime('%Y%m%d')
-    raw = _get_json(_TRENDS_DAILY_TRENDS, params={
-        'hl': 'en-US',
-        'tz': '-300',
-        'geo': geo,
-        'ns': 15,
-        'ed': today,
-    })
-    if not raw:
-        return out
-
-    # Trends prepends ")]}'," to its JSON. Some clients strip it; ours may not.
-    if isinstance(raw, str):
-        try:
-            raw = json.loads(raw.lstrip(")]}',\n "))
-        except Exception:
-            return out
-
-    try:
-        days = raw.get('default', {}).get('trendingSearchesDays', []) or []
-        for day in days[:lookback_days]:
-            for t in day.get('trendingSearches', []) or []:
-                title = (t.get('title', {}) or {}).get('query') or ''
-                if not title:
-                    continue
-                # traffic looks like "200K+" — convert to int loosely
-                traffic_raw = (t.get('formattedTraffic') or '').strip()
-                score = _parse_traffic(traffic_raw)
-                related = [
-                    (a.get('query') or '') for a in (t.get('relatedQueries') or [])
-                    if a.get('query')
-                ]
-                out.append({'term': title, 'score': score, 'related': related})
-    except Exception as e:
-        logger.debug("trends parse failed: %s", e)
+    body = _trends_rss_fetch(geo)
+    if not body:
         return []
-    # de-dupe by term, keep max score
+
+    import xml.etree.ElementTree as ET
+    try:
+        root = ET.fromstring(body)
+    except ET.ParseError as e:
+        logger.debug("trends RSS parse failed for geo=%s: %s", geo, e)
+        return []
+
+    ns = {'ht': _TRENDS_HT_NS}
+    out: list[dict] = []
+    for item in root.iter('item'):
+        title_el = item.find('title')
+        if title_el is None or not (title_el.text or '').strip():
+            continue
+        term = title_el.text.strip()
+        # Approximate traffic looks like "200+", "50K+", "1M+". Parse loosely.
+        traffic_el = item.find('ht:approx_traffic', ns)
+        score = _parse_traffic((traffic_el.text or '').strip()) if traffic_el is not None else 0
+        # Use related-news titles as the `related` array — they're the
+        # closest analog to the old endpoint's relatedQueries and carry
+        # strong topical signal for the political filter downstream.
+        related: list[str] = []
+        for ni in item.findall('ht:news_item', ns):
+            t = ni.find('ht:news_item_title', ns)
+            if t is not None and (t.text or '').strip():
+                related.append(t.text.strip())
+        out.append({'term': term, 'score': score, 'related': related[:6]})
+
+    # De-dupe by lower-cased term, keep max score
     by_term: dict[str, dict] = {}
     for row in out:
         key = row['term'].lower()
         if key not in by_term or by_term[key]['score'] < row['score']:
             by_term[key] = row
-    out = sorted(by_term.values(), key=lambda x: -x['score'])
-    return out
+    return sorted(by_term.values(), key=lambda x: -x['score'])
 
 
 def _parse_traffic(s: str) -> int:
