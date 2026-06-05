@@ -24509,30 +24509,12 @@
                       + '</div>';
             }
 
-            // CARD J: Compare (only when geo is set)
-            var cmp = data.compare || {};
-            if (cmp && (cmp.dems || cmp.reps || cmp.indeps)) {
-                var grp = ['dems','reps','indeps','national'].map(function(k) {
-                    var s = cmp[k] || {};
-                    var label = ({dems:'Democrat',reps:'Republican',indeps:'Indep.',national:'All / National'})[k];
-                    if (s.suppressed) {
-                        return '<div class="blue-iq-compare-cell"><h5>' + label + '</h5><div style="color: var(--text-secondary); font-size: 0.78rem;">Sample too small (' + (s.panel_size || 0) + ')</div></div>';
-                    }
-                    var topSearch = (s.search_engines || [])[0];
-                    var topSocial = (s.social_media || [])[0];
-                    return '<div class="blue-iq-compare-cell">'
-                         + '<h5>' + label + '</h5>'
-                         + '<div>n=' + _bqNum(s.panel_size || 0) + '</div>'
-                         + (topSearch ? ('<div>Top search: <strong>' + _bqEscape(topSearch.name) + '</strong></div>') : '')
-                         + (topSocial ? ('<div>Top social: <strong>' + _bqEscape(topSocial.name) + '</strong></div>') : '')
-                         + ('<div>Turnout: <strong>' + _bqPct(s.turnout_pct || 0) + '</strong></div>')
-                         + '</div>';
-                }).join('');
-                html += '<div class="blue-iq-card blue-iq-card-compare">'
-                      + '<h3 class="blue-iq-card-title">Compare cohorts (same geo)</h3>'
-                      + '<div class="blue-iq-card-body"><div class="blue-iq-compare-grid">' + grp + '</div></div>'
-                      + '</div>';
-            }
+            // CARD J (Compare cohorts) intentionally removed — the
+            // per-party panel cells were almost always sample-too-
+            // small for any sub-national slice and the redundant
+            // "All / National" cell duplicated the dashboard meta
+            // line. Backend data.compare is still emitted for
+            // downstream/API consumers; only the UI tile is gone.
 
             grid.innerHTML = html;
             _renderBlueIQIssueBuckets(cards.issue_buckets || []);
