@@ -302,13 +302,20 @@ def blue_iq_cache_key(filters: dict) -> str:
             Trends sample terms alongside panel samples. v3 payloads
             don't have these fields and would render with the chips
             missing, so bump invalidates them.
+      v5 — 2026-06-05: tightened _filter_trends_to_political to use
+            word-bounded regex (was substring), so 'irs' no longer
+            matches inside 'first' (which let 'Lioness season 3'
+            through via its 'first look' related text). Also dropped
+            keyword-in-related path — only politician-name-in-related
+            qualifies now. Old v4 cached payloads were carrying
+            non-political bleed in trending_local.
     """
     canonical = json.dumps({
         'party':     filters.get('party') or 'All',
         'geo_type':  filters.get('geo_type') or 'National',
         'geo_value': filters.get('geo_value') or '',
         'lookback':  int(filters.get('lookback_days') or DEFAULT_LOOKBACK_DAYS),
-        'version':   4,
+        'version':   5,
     }, sort_keys=True, separators=(',', ':'))
     return hashlib.sha256(canonical.encode('utf-8')).hexdigest()
 
@@ -1512,70 +1519,134 @@ def _filter_trends_to_political(trends_top: list[dict],
                                   politicians: set[str]) -> list[dict]:
     """Keep only Trends terms that look political.
 
-    Uses a cheap keyword + politician-name heuristic instead of an OpenAI
-    call so the per-request cost stays at zero. Politician set is the
-    canonical list; keyword set covers civic/policy verbiage. Lower-bound
-    is intentionally loose; the AI-bucket card handles strict policy
-    classification separately.
+    Uses a cheap keyword + politician-name heuristic with WORD-BOUNDARY
+    matching (re.IGNORECASE + \\b) so short keywords like 'irs' don't
+    substring-match inside non-political words like 'f-IRS-t' (which
+    used to let 'Lioness season 3' through because its related text
+    contained 'first look').
+
+    Politician-name matches use lowercased substring with whitespace
+    flanking — politicians are stored as full multi-word names so the
+    risk of false positives is minimal, but we still require either
+    bounded-edge or full-name presence.
+
+    The related-text fallback ONLY accepts politician-name matches, NOT
+    keyword matches — keyword-in-related is too weak a signal and was
+    the primary source of non-political bleed into this card.
     """
     if not trends_top:
         return []
-    POLITICAL_KEYWORDS = {
+    # Word-bounded keywords. Patterns are compiled once with IGNORECASE.
+    POLITICAL_KEYWORDS = [
         # offices / institutions
         'president', 'senator', 'senate', 'congress', 'house of',
         'governor', 'mayor', 'attorney general', 'secretary of',
-        'supreme court', 'scotus', 'justice', 'court ruling',
+        'supreme court', 'scotus', 'court ruling',
         'white house', 'capitol', 'pentagon', 'state department',
         'cabinet', 'congresswoman', 'congressman',
         # process / mechanics
-        'election', 'campaign', 'primary', 'caucus', 'debate',
-        'vote', 'voter', 'voting', 'voted', 'ballot', 'polls',
-        'poll results', 'turnout', 'redistricting',
-        'impeachment', 'impeach', 'indictment', 'indicted',
-        'subpoena', 'hearing', 'testimony',
+        'election', 'campaign', 'primary election', 'caucus', 'debate stage',
+        'voter', 'voters', 'voting', 'voted', 'ballot', 'ballots',
+        'turnout', 'redistricting',
+        'impeachment', 'impeach', 'impeached', 'indictment', 'indicted',
+        'subpoena', 'testimony',
         # policy
-        'healthcare', 'obamacare', 'medicare', 'medicaid', 'snap',
-        'minimum wage', 'inflation', 'gas prices', 'tariff',
-        'immigration', 'border', 'asylum', 'deportation',
-        'abortion', 'roe', 'dobbs', 'reproductive', 'ivf',
-        'guns', 'gun control', 'second amendment', 'mass shooting',
-        'climate', 'epa', 'fracking', 'pipeline',
+        'healthcare', 'health care', 'obamacare', 'medicare', 'medicaid',
+        'minimum wage', 'inflation', 'gas prices', 'tariff', 'tariffs',
+        'immigration', 'immigrant', 'immigrants', 'border patrol',
+        'asylum', 'deportation', 'deported', 'deport',
+        'abortion', 'roe v wade', 'dobbs', 'reproductive', 'planned parenthood',
+        'gun control', 'second amendment', 'mass shooting', 'assault weapon',
+        'climate change', 'global warming', 'fracking',
         'student loan', 'student loans', 'pell grant',
-        'social security', 'irs', 'federal reserve', 'fed rate',
+        'social security', 'federal reserve', 'fed rate',
         'ceasefire', 'gaza', 'ukraine', 'nato', 'foreign aid',
-        'tax cut', 'tax cuts', 'tax bill',
-        # outcomes
-        'won', 'wins', 'loses', 'concedes', 'concession',
-        'recount', 'recall',
-        # parties
-        'democrat', 'republican', 'gop', 'rnc', 'dnc',
-        'libertarian', 'green party',
+        'tax cut', 'tax cuts', 'tax bill', 'tax reform',
+        # outcomes / processes (bounded variants only — no bare 'won'/'wins')
+        'concedes', 'concession', 'recount', 'recall election',
+        # parties (bounded only — no bare 'gop' since it false-matched)
+        'democrat', 'democrats', 'republican', 'republicans',
+        'rnc ', 'dnc ', 'libertarian party', 'green party',
         # newsworthy
-        'rally', 'protest', 'protests', 'sanctions',
-        'executive order', 'veto',
-    }
+        'political rally', 'campaign rally', 'protest', 'protests',
+        'sanctions on', 'executive order', 'presidential veto',
+        # bounded short tokens that previously substring-bled:
+        # 'gop' was matching 'logo'-like fragments; require word boundaries
+    ]
+    SHORT_BOUNDED_KEYWORDS = [
+        # These are short / English-common-fragment risks. Word-bounded only.
+        'irs', 'gop', 'roe', 'snap', 'epa', 'vote', 'vote',
+    ]
+    import re
+    kw_pattern = re.compile(
+        '(' + '|'.join(re.escape(k) for k in POLITICAL_KEYWORDS + SHORT_BOUNDED_KEYWORDS) + ')',
+        re.IGNORECASE,
+    )
+    # For short bounded keywords we need true \b on both sides. The pattern
+    # below combines all keywords with \b boundaries so 'irs' won't match
+    # 'first', 'vote' won't match 'devoted', etc.
+    bounded_pattern = re.compile(
+        r'\b(' + '|'.join(re.escape(k) for k in POLITICAL_KEYWORDS + SHORT_BOUNDED_KEYWORDS) + r')\b',
+        re.IGNORECASE,
+    )
+
     out = []
-    pol_lower = {p.lower() for p in politicians}
+    pol_lower = {p.lower() for p in politicians if p}
+    # Build a word-bounded politician regex. We need to match BOTH the full
+    # name ('Donald Trump' in 'Donald Trump rally') AND the last name alone
+    # ('Trump' in 'trump freedom 250 rally performers') so Trends headlines
+    # that use just the surname still classify.
+    #
+    # Last-name alternates are gated: we only add the last name when it's
+    # >= 5 chars AND not a common English word. Otherwise we'd false-match
+    # ('Will' from 'Will Hurd' would match 'Will the senator vote', etc.)
+    COMMON_WORDS = {
+        'will', 'gray', 'long', 'rich', 'young', 'green', 'brown', 'wells',
+        'cole', 'crow', 'porter', 'hill', 'love', 'kim', 'price', 'foster',
+        'cooper', 'walker', 'turner', 'roy', 'gold', 'good', 'black', 'house',
+        'bass', 'lee', 'reed', 'rice', 'rose', 'ross', 'webb', 'wood', 'king',
+        'fields', 'kelly', 'mills', 'rivers', 'banks', 'grove', 'lake',
+        'castro', 'banks', 'flores',
+    }
+    if pol_lower:
+        alternates: set[str] = set()
+        for p in pol_lower:
+            alternates.add(p)  # full name
+            parts = p.split()
+            if len(parts) >= 2:
+                last = parts[-1]
+                # Strip trailing punctuation like commas / periods
+                last = re.sub(r'[^a-z]', '', last)
+                if len(last) >= 5 and last not in COMMON_WORDS:
+                    alternates.add(last)
+        # Sort longest-first so 'donald trump' beats 'trump' in the alternation.
+        pol_sorted = sorted(alternates, key=lambda x: -len(x))
+        pol_pattern = re.compile(
+            r'\b(' + '|'.join(re.escape(p) for p in pol_sorted) + r')\b',
+            re.IGNORECASE,
+        )
+    else:
+        pol_pattern = None
+
     for row in trends_top:
         term = (row.get('term') or '').strip()
         if not term:
             continue
-        tl = term.lower()
-        # Check politician name match (substring; politicians are full
-        # names, so e.g. "kamala harris campaign" matches "kamala harris").
-        if any(p in tl for p in pol_lower):
+        # 1. Politician name in TERM (strongest signal).
+        if pol_pattern and pol_pattern.search(term):
             out.append({**row, 'why_political': 'politician_name'})
             continue
-        # Check keyword match.
-        hit_kw = next((kw for kw in POLITICAL_KEYWORDS if kw in tl), None)
-        if hit_kw:
-            out.append({**row, 'why_political': 'keyword:' + hit_kw})
+        # 2. Bounded keyword match in TERM.
+        m = bounded_pattern.search(term)
+        if m:
+            out.append({**row, 'why_political': 'keyword:' + m.group(1).lower()})
             continue
-        # Check related queries — a term whose related queries are political
-        # is itself probably political even if the headline isn't.
-        rel = ' '.join((row.get('related') or [])).lower()
-        if rel and (any(p in rel for p in pol_lower)
-                    or any(kw in rel for kw in POLITICAL_KEYWORDS)):
+        # 3. Politician name in RELATED (medium signal). Keyword-in-related
+        #    is intentionally NOT a path — too many false positives (the
+        #    'irs in first' bug). If the related text only has a generic
+        #    political keyword and no politician, it's probably tangential.
+        rel = ' '.join((row.get('related') or []))
+        if rel and pol_pattern and pol_pattern.search(rel):
             out.append({**row, 'why_political': 'related_query'})
             continue
     return out

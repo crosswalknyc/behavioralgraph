@@ -17809,6 +17809,10 @@
             #blueIQView .blue-iq-card-cands    { grid-column: span 6; height: 560px; }
             #blueIQView .blue-iq-card-geo      { grid-column: span 12; min-height: 540px; }
             #blueIQView .blue-iq-card-trending { grid-column: span 12; min-height: 280px; }
+            #blueIQView .bq-trending-dma-picker { display: inline-flex; align-items: center; }
+            #blueIQView .bq-trending-dma-picker select { background: rgba(255,255,255,0.06); color: var(--text-primary); padding: 0.3rem 0.55rem; border-radius: 6px; border: 1px solid rgba(255,255,255,0.1); font-size: 0.8rem; min-width: 200px; cursor: pointer; }
+            #blueIQView .bq-trending-dma-picker select:hover { border-color: rgba(79,140,255,0.4); }
+            #blueIQView .bq-trending-dma-picker select:focus { outline: none; border-color: rgba(79,140,255,0.6); }
             #blueIQView .blue-iq-card-playbook { grid-column: span 12; min-height: 360px; }
             #blueIQView .bq-trending-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 0.7rem; }
             #blueIQView .bq-trending-card { background: rgba(255,255,255,0.025); border: 1px solid rgba(255,255,255,0.06); border-radius: 10px; padding: 0.7rem 0.85rem; transition: transform 0.12s ease, border-color 0.12s ease; }
@@ -24029,9 +24033,18 @@
             // the cube panel sample wouldn't catch yet. Each term shows score
             // + related queries; click for the full drill.
             html += '<div class="blue-iq-card blue-iq-card-trending" style="grid-column: span 12;">'
-                  + '<h3 class="blue-iq-card-title">Trending political searches \u2014 <span id="blueIQTrendingGeoLabel">United States</span> <span class="blue-iq-badge">Google Trends \u00b7 live</span>'
-                  +   '<span class="blue-iq-card-subtitle">what people in this geography are actually searching <em>right now</em>. Updates per-filter. AI/keyword-filtered to political only.</span>'
+                  + '<h3 class="blue-iq-card-title" style="display:flex; align-items:center; gap:0.6rem; flex-wrap:wrap;">'
+                  +   '<span>Trending political searches \u2014 <span id="blueIQTrendingGeoLabel">United States</span></span>'
+                  +   '<span class="blue-iq-badge">Google Trends \u00b7 live</span>'
+                  +   '<span style="flex:1 1 auto;"></span>'
+                  +   '<span class="bq-trending-dma-picker">'
+                  +     '<label for="blueIQTrendingDma" style="font-size:0.7rem; color:var(--text-secondary); text-transform:uppercase; letter-spacing:0.04em; margin-right:0.35rem;">Drill to DMA</label>'
+                  +     '<select id="blueIQTrendingDma" onchange="onBlueIQTrendingDmaChange(this.value)">'
+                  +       '<option value="">(use current filter)</option>'
+                  +     '</select>'
+                  +   '</span>'
                   + '</h3>'
+                  + '<div class="blue-iq-card-subtitle" style="margin-bottom:0.6rem;">what people in this geography are actually searching <em>right now</em>. Updates per-filter. AI/keyword-filtered to political only.</div>'
                   + '<div class="blue-iq-card-body" id="blueIQTrendingBody"></div>'
                   + '</div>';
 
@@ -24531,11 +24544,59 @@
         // ──────────────────────────────────────────────────────────────────
         // CARD T: Trending in this area right now
         // ──────────────────────────────────────────────────────────────────
+        // Wire up the inline DMA picker on the Trending card. Reads the same
+        // DMA universe used by the top-level filter (window.__blueIQ.filterOptions.dmas).
+        // Picking a DMA here flips the global filter to DMA + that value and
+        // re-runs applyBlueIQFilters so every card scopes to that local market.
+        function _bqPopulateTrendingDmaPicker(currentMeta) {
+            var sel = document.getElementById('blueIQTrendingDma');
+            if (!sel) return;
+            var dmas = ((window.__blueIQ || {}).filterOptions || {}).dmas || [];
+            // Preserve current selection across re-renders.
+            var preserved = sel.value;
+            sel.innerHTML = '';
+            sel.appendChild(new Option('(use current filter)', ''));
+            // Mark the active DMA when the top filter is on DMA mode.
+            var activeDma = (currentMeta && currentMeta.geo_type === 'DMA') ? (currentMeta.geo_value || '') : '';
+            dmas.forEach(function(name) {
+                var opt = new Option(name, name);
+                if (name === activeDma) opt.selected = true;
+                sel.appendChild(opt);
+            });
+            if (preserved && !activeDma) {
+                // Restore prior in-card selection if the user picked one but
+                // hasn't applied it yet (shouldn't happen since we call apply
+                // on change, but defensive).
+                try { sel.value = preserved; } catch(e) {}
+            }
+        }
+
+        function onBlueIQTrendingDmaChange(dmaName) {
+            if (!dmaName) return;  // (use current filter) — no-op
+            var typeEl = document.getElementById('blueIQGeoType');
+            var valEl  = document.getElementById('blueIQGeoValue');
+            if (!typeEl || !valEl) return;
+            // Flip the top filter to DMA mode and select the chosen DMA, then
+            // re-populate the dependent Region dropdown and refresh.
+            typeEl.value = 'DMA';
+            if (typeof _populateBlueIQGeoValue === 'function') {
+                _populateBlueIQGeoValue();
+            }
+            valEl.value = dmaName;
+            if (typeof applyBlueIQFilters === 'function') {
+                applyBlueIQFilters();
+            }
+        }
+
         function _bqRenderTrendingLocal(rows, meta) {
             var labelEl = document.getElementById('blueIQTrendingGeoLabel');
             var body    = document.getElementById('blueIQTrendingBody');
             if (!body) return;
             if (labelEl) labelEl.textContent = (meta && meta.geo_label) || 'United States';
+            // Refresh the inline DMA picker every render so newly-loaded
+            // filterOptions populate the dropdown and the active DMA stays
+            // highlighted.
+            _bqPopulateTrendingDmaPicker(meta || {});
 
             var fineprint = '';
             if (meta && meta.geo_type === 'DMA' && meta.dma_resolved_via) {
