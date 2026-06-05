@@ -17338,13 +17338,56 @@ def resolve_subscriber_iq_s3_key(file_key):
     return key
 
 
+def _episode_is_date_like(value):
+    """True when the string looks like a calendar date, not an episode label."""
+    s = (value or '').strip()
+    if not s:
+        return False
+    if '/' in s:
+        return True
+    return bool(re.match(r'^\d{1,2}-\d{1,2}-\d{2,4}$', s))
+
+
+def _episode_number_for_admin(ep, index):
+    """Match Subscriber IQ Episode Dates tab: Episode 1, not 1/16/26."""
+    raw = str(ep.get('episode') or '').strip()
+    date_raw = str(ep.get('episode_date') or '').strip()
+
+    if raw and raw.replace(' ', '').isdigit():
+        return raw.replace(' ', '')
+
+    if raw:
+        head = raw.split('/')[0].split('-')[0].strip()
+        if head.isdigit():
+            n = int(head)
+            # PER-DATE CSVs store the air date in episode; dashboard uses parseInt → 1
+            if _episode_is_date_like(raw) or (date_raw and date_raw == raw):
+                return str(n)
+
+    if raw and not _episode_is_date_like(raw):
+        return raw
+
+    return str(index + 1)
+
+
+def _episode_release_date_for_admin(ep):
+    """Release date column value for admin editor."""
+    raw = str(ep.get('episode') or '').strip()
+    date_raw = str(ep.get('episode_date') or '').strip()
+    if date_raw:
+        return date_raw
+    if _episode_is_date_like(raw):
+        return raw
+    return ''
+
+
 def _episode_rows_from_parsed(parsed):
     """Episode # + release date rows for Episode Dates tab (all tracked episodes)."""
     rows = []
-    for ep in parsed.get('episode_attribution') or []:
+    for i, ep in enumerate(parsed.get('episode_attribution') or []):
         rows.append({
-            'episode': str(ep.get('episode') or '').strip(),
-            'episode_date': str(ep.get('episode_date') or '').strip(),
+            'episode': _episode_number_for_admin(ep, i),
+            'episode_date': _episode_release_date_for_admin(ep),
         })
     return rows
 
