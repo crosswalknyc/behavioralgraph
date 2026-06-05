@@ -72,20 +72,39 @@ TOP_DMAS = [
 ]
 
 
-def _prewarm_one(geo_type: str, geo_value: str, idx: int, total: int) -> tuple[str, int, float]:
-    from candidate_discovery import discover_candidates    # type: ignore
+def _prewarm_one(geo_type: str, geo_value: str, idx: int, total: int,
+                   what: str = 'both') -> tuple[str, int, int, float]:
+    """Refresh the candidate and/or engaged-politician cache for one geo.
+
+    Returns (cache_id, n_candidates, n_engaged, elapsed_seconds).
+    n_* = -1 when that call failed.
+    """
+    from candidate_discovery import (                            # type: ignore
+        discover_candidates, discover_engaged_politicians,
+    )
     t0 = time.time()
-    try:
-        cands = discover_candidates(geo_type, geo_value, force_refresh=True)
-        dur = time.time() - t0
-        logger.info("[%d/%d] %s|%s -> %d candidates (%.1fs)",
-                     idx, total, geo_type, geo_value or '<empty>', len(cands), dur)
-        return (f"{geo_type}|{geo_value}", len(cands), dur)
-    except Exception as e:
-        dur = time.time() - t0
-        logger.error("[%d/%d] %s|%s FAILED after %.1fs: %s",
-                      idx, total, geo_type, geo_value or '<empty>', dur, e)
-        return (f"{geo_type}|{geo_value}", -1, dur)
+    n_cands = 0
+    n_eng = 0
+    if what in ('both', 'candidates'):
+        try:
+            cands = discover_candidates(geo_type, geo_value, force_refresh=True)
+            n_cands = len(cands)
+        except Exception as e:
+            logger.error("[%d/%d] %s|%s candidates FAILED: %s",
+                          idx, total, geo_type, geo_value or '<empty>', e)
+            n_cands = -1
+    if what in ('both', 'engaged'):
+        try:
+            pols = discover_engaged_politicians(geo_type, geo_value, force_refresh=True)
+            n_eng = len(pols)
+        except Exception as e:
+            logger.error("[%d/%d] %s|%s engaged FAILED: %s",
+                          idx, total, geo_type, geo_value or '<empty>', e)
+            n_eng = -1
+    dur = time.time() - t0
+    logger.info("[%d/%d] %s|%s -> %d candidates + %d engaged (%.1fs)",
+                 idx, total, geo_type, geo_value or '<empty>', n_cands, n_eng, dur)
+    return (f"{geo_type}|{geo_value}", n_cands, n_eng, dur)
 
 
 def main() -> int:
@@ -105,6 +124,9 @@ def main() -> int:
                                 'rate-limit 429s.')
     parser.add_argument('--limit', type=int, default=0,
                           help='Cap total geos (debug). 0 = no cap.')
+    parser.add_argument('--what', choices=['both', 'candidates', 'engaged'],
+                          default='both',
+                          help='Which agent cache to refresh per geo (default both).')
     args = parser.parse_args()
 
     logging.basicConfig(
@@ -134,24 +156,26 @@ def main() -> int:
         geos = geos[:args.limit]
 
     total = len(geos)
-    logger.info("Prewarming %d geos with %d workers", total, args.workers)
+    logger.info("Prewarming %d geos (what=%s) with %d workers", total, args.what, args.workers)
     t_run = time.time()
 
-    results: list[tuple[str, int, float]] = []
+    results: list[tuple[str, int, int, float]] = []
     with ThreadPoolExecutor(max_workers=args.workers) as pool:
-        futs = [pool.submit(_prewarm_one, gt, gv, i + 1, total)
+        futs = [pool.submit(_prewarm_one, gt, gv, i + 1, total, args.what)
                  for i, (gt, gv) in enumerate(geos)]
         for fut in as_completed(futs):
             results.append(fut.result())
 
     total_secs = time.time() - t_run
-    n_ok = sum(1 for _, n, _ in results if n >= 0)
-    n_fail = sum(1 for _, n, _ in results if n < 0)
-    total_cands = sum(n for _, n, _ in results if n >= 0)
-    avg_dur = (sum(d for _, _, d in results) / len(results)) if results else 0
+    n_ok = sum(1 for _, n_c, n_e, _ in results if n_c >= 0 and n_e >= 0)
+    n_fail = sum(1 for _, n_c, n_e, _ in results if n_c < 0 or n_e < 0)
+    total_cands = sum(max(0, n_c) for _, n_c, _, _ in results)
+    total_eng = sum(max(0, n_e) for _, _, n_e, _ in results)
+    avg_dur = (sum(d for _, _, _, d in results) / len(results)) if results else 0
     logger.info("=" * 60)
-    logger.info("DONE: %d ok / %d failed / %d total candidates / %.1fs total "
-                 "/ %.1fs avg per geo", n_ok, n_fail, total_cands, total_secs, avg_dur)
+    logger.info("DONE: %d ok / %d failed / %d total candidates / %d engaged / "
+                 "%.1fs total / %.1fs avg per geo",
+                 n_ok, n_fail, total_cands, total_eng, total_secs, avg_dur)
     return 0 if n_fail == 0 else 1
 
 

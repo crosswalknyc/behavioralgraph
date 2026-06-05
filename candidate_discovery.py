@@ -552,6 +552,409 @@ def discover_candidates(geo_type: str, geo_value: str,
         wait_for.set()
 
 
+# ── Engaged politicians (top-of-mind for the geography, NOT candidates) ──
+#
+# Companion endpoint to discover_candidates. Returns the politicians an
+# area is ACTIVELY ENGAGING WITH (search, news mentions, social discourse)
+# right now — current officeholders plus high-profile national figures
+# whose orbit touches this geography. Used by the "Top politicians
+# engaged" card.
+#
+# This is intentionally a SEPARATE concept from candidates:
+#   - candidates = declared / exploring for an upcoming election
+#   - engaged    = "who's in the public conversation here right now"
+#     (incumbent president, state's senators, governor, AG, major mayoral
+#     figures, plus any other politician trending in the area)
+#
+# Same agent + cache scaffolding, different prompt + cache prefix.
+
+S3_ENGAGED_PREFIX = 'blue_iq/engaged/v1/'
+
+_ENGAGED_SYSTEM = (
+    "You are a U.S. political-engagement research assistant for a\n"
+    "Democratic campaign analytics dashboard. Given a geography, return\n"
+    "the politicians an audience in that area is MOST ACTIVELY ENGAGING\n"
+    "WITH RIGHT NOW — measured by news mentions, social-media discourse,\n"
+    "and Google-search interest in the last ~30 days.\n"
+    "\n"
+    "INCLUDE\n"
+    "  - The sitting U.S. President + Vice President (always relevant)\n"
+    "  - U.S. Senators representing this geography\n"
+    "  - Current Governor of this state (or all states for National view)\n"
+    "  - High-profile U.S. House members from this geography (committee\n"
+    "    chairs, party leadership, viral / breakout figures)\n"
+    "  - Mayor of the principal city in this geography\n"
+    "  - Recent presidents / VPs still active in the discourse\n"
+    "  - National figures (Trump, Biden, Obama, Harris, Vance, Pelosi,\n"
+    "    AOC, etc.) when they're driving conversation in this geography\n"
+    "  - Locally hot political figures (DAs, AGs, secretaries of state)\n"
+    "    if news / social engagement is meaningful\n"
+    "\n"
+    "EXCLUDE\n"
+    "  - Foreign politicians, dead politicians (unless very recent and\n"
+    "    actively shaping discourse, e.g. an obituary cycle)\n"
+    "  - Pure 2026 candidates with no current office and no current\n"
+    "    engagement — those belong in the candidates card, not here\n"
+    "  - Local figures with < ~5% local news share\n"
+    "\n"
+    "Use web search to verify CURRENT engagement levels. Don't just list\n"
+    "famous people — verify each name is actually moving the needle in\n"
+    "news / social right now.\n"
+    "\n"
+    "Return ONLY a JSON object matching this exact schema. No markdown\n"
+    "fences, no commentary, no citation footnotes outside the JSON:\n"
+    "\n"
+    "{\n"
+    '  "politicians": [\n'
+    "    {\n"
+    '      "name":             "Full Name",\n'
+    '      "party_code":       "D" | "R" | "I" | "L" | "G" | "?",\n'
+    '      "role":             "President" | "Vice President" | '
+    '"U.S. Senator (CA)" | "Governor of California" | '
+    '"U.S. Rep (CA-30)" | "Mayor of Los Angeles" | "Former President" | '
+    '"State AG (CA)" | "Other",\n'
+    '      "scope":            "national" | "state" | "local",\n'
+    '      "state":            "Two-letter USPS code or empty",\n'
+    '      "engagement_score": 0-100 integer (your estimate of CURRENT '
+    'engagement intensity in this geography; 100 = top-of-mind for almost '
+    'every politically-aware resident),\n'
+    '      "engagement_drivers": ["Short reason phrase", ...]  // 1-3 '
+    'phrases like "viral hearings clip", "tariff announcement", '
+    '"state-of-the-state speech"\n'
+    "    }\n"
+    "  ]\n"
+    "}\n"
+    "\n"
+    "Hard cap: 20 politicians per response (compactness > completeness).\n"
+    "Sort by engagement_score descending.\n"
+    "\n"
+    "OUTPUT FORMAT REMINDER:\n"
+    "  - First character of your response must be `{`. Last `}`.\n"
+    "  - Keep each entry's strings under 60 chars so the full JSON fits."
+)
+
+
+def _build_engaged_prompt(geo_type: str, geo_value: str) -> str:
+    if geo_type == 'National' or not geo_value:
+        return (
+            "GEOGRAPHY: National (United States)\n"
+            "\n"
+            "List the ~20 politicians U.S. audiences are MOST ACTIVELY\n"
+            "ENGAGING WITH right now. Mix of (a) sitting officeholders\n"
+            "(President, VP, Senate / House leadership, governors of\n"
+            "the biggest states), (b) headline-driving figures (Trump,\n"
+            "AOC, Pelosi, Bernie, etc.), (c) any politician currently\n"
+            "in a viral news cycle.\n"
+            "\n"
+            "Rank by national engagement; cap at 20."
+        )
+    if geo_type == 'State':
+        return (
+            f"GEOGRAPHY: State of {geo_value}\n"
+            "\n"
+            "List the ~20 politicians residents of THIS STATE are most\n"
+            "actively engaging with right now. Required slots:\n"
+            f"  - Both U.S. Senators from {geo_value}\n"
+            f"  - Current Governor of {geo_value}\n"
+            f"  - The state's high-profile U.S. House members (committee\n"
+            "    chairs, leadership, breakout members)\n"
+            f"  - The state's AG / Sec of State if newsworthy\n"
+            f"  - Mayors of the principal cities in {geo_value}\n"
+            "  - Sitting U.S. President + VP (always relevant)\n"
+            "  - National figures currently driving conversation HERE\n"
+            "\n"
+            "Skip pure 2026 challengers without current office unless\n"
+            "they're already driving meaningful local engagement."
+        )
+    if geo_type == 'DMA':
+        return (
+            f"GEOGRAPHY: DMA / Media market: {geo_value}\n"
+            "\n"
+            "List the ~20 politicians residents of THIS MEDIA MARKET are\n"
+            f"most actively engaging with right now. Anchor on the {geo_value}\n"
+            "DMA's principal city/state. Required slots:\n"
+            "  - The state's U.S. Senators\n"
+            "  - The state's Governor\n"
+            "  - The principal city's MAYOR\n"
+            "  - U.S. House reps from districts in this DMA\n"
+            "  - DA, county exec, school board leadership if newsworthy\n"
+            "  - Sitting U.S. President + VP\n"
+            "  - National figures driving conversation in this market\n"
+            "\n"
+            "Rank by local engagement intensity. The Mayor of the\n"
+            "principal city is almost always top-3 in DMA views."
+        )
+    return (
+        f"GEOGRAPHY: {geo_type} = {geo_value}\n\n"
+        "List the ~20 politicians this audience is most actively\n"
+        "engaging with right now."
+    )
+
+
+def _validate_engaged(p: dict) -> Optional[dict]:
+    if not isinstance(p, dict):
+        return None
+    name = (p.get('name') or '').strip()
+    if not name or len(name) > 80:
+        return None
+    party = (p.get('party_code') or '?').strip().upper()
+    if party not in ('D', 'R', 'I', 'L', 'G', '?'):
+        party = '?'
+    scope = (p.get('scope') or 'national').strip().lower()
+    if scope not in ('national', 'state', 'local'):
+        scope = 'national'
+    state = (p.get('state') or '').strip().upper()
+    if state and not re.fullmatch(r'[A-Z]{2}', state):
+        state = ''
+    try:
+        score = int(p.get('engagement_score') or 0)
+    except Exception:
+        score = 0
+    score = max(0, min(100, score))
+    drivers_raw = p.get('engagement_drivers') or []
+    drivers: list[str] = []
+    if isinstance(drivers_raw, list):
+        for d in drivers_raw[:3]:
+            ds = str(d).strip()[:60]
+            if ds:
+                drivers.append(ds)
+    return {
+        'name':               name,
+        'party_code':         party,
+        'role':               (p.get('role') or '').strip()[:60],
+        'scope':              scope,
+        'state':              state,
+        'engagement_score':   score,
+        'engagement_drivers': drivers,
+    }
+
+
+def _call_engaged_agent(geo_type: str, geo_value: str) -> list[dict]:
+    """Issue the engaged-politicians web-search agent call."""
+    client = _openai_client()
+    if client is None:
+        logger.info("engaged agent: no OpenAI client; skipping")
+        return []
+
+    prompt = _build_engaged_prompt(geo_type, geo_value)
+    t0 = time.time()
+
+    text = ''
+    try:
+        resp = client.responses.create(
+            model=AGENT_MODEL,
+            tools=[{'type': 'web_search_preview'}],
+            input=[
+                {'role': 'system', 'content': _ENGAGED_SYSTEM},
+                {'role': 'user',   'content': prompt},
+            ],
+            max_output_tokens=12000,
+        )
+        text = getattr(resp, 'output_text', '') or ''
+        logger.info("engaged agent[ws] %s|%s -> %d chars (%.1fs)",
+                     geo_type, geo_value, len(text), time.time() - t0)
+    except Exception as e:
+        logger.info("engaged agent web_search failed (%s); trying chat-completions",
+                     str(e)[:200])
+        try:
+            chat = client.chat.completions.create(
+                model=AGENT_MODEL,
+                messages=[
+                    {'role': 'system', 'content': _ENGAGED_SYSTEM},
+                    {'role': 'user',   'content': prompt},
+                ],
+                response_format={'type': 'json_object'},
+                temperature=0.2,
+                max_tokens=6000,
+            )
+            text = chat.choices[0].message.content or ''
+        except Exception as e2:
+            logger.warning("engaged agent BOTH paths failed for %s|%s: %s",
+                            geo_type, geo_value, e2)
+            return []
+
+    if not text:
+        return []
+
+    obj = _parse_agent_response_engaged(text)
+    if obj is None:
+        logger.warning("engaged agent: unparseable response for %s|%s",
+                        geo_type, geo_value)
+        return []
+
+    raw_list = obj.get('politicians') if isinstance(obj, dict) else None
+    if not isinstance(raw_list, list):
+        logger.warning("engaged agent: missing 'politicians' array for %s|%s",
+                        geo_type, geo_value)
+        return []
+
+    cleaned: list[dict] = []
+    seen: set[str] = set()
+    for p in raw_list[:30]:
+        row = _validate_engaged(p)
+        if not row:
+            continue
+        key = row['name'].lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        cleaned.append(row)
+    cleaned.sort(key=lambda r: -r['engagement_score'])
+    return cleaned[:20]
+
+
+def _parse_agent_response_engaged(text: str) -> Optional[dict]:
+    """Same parser as _parse_agent_response, but the truncation-salvage
+    looks for a 'politicians' array rather than 'candidates'."""
+    if not text:
+        return None
+    raw = text.strip()
+    raw = re.sub(r'^```(?:json|JSON)?\s*\n?', '', raw)
+    raw = re.sub(r'\n?```\s*$', '', raw)
+    raw = re.sub(r'\u3010\d+[\u2020:\dA-Za-z\-_\.\s\(\)/]*?\u3011', '', raw)
+    raw = re.sub(r'\u3010cite[^\u3011]*\u3011', '', raw)
+    raw = raw.strip()
+    try:
+        return json.loads(raw)
+    except json.JSONDecodeError:
+        pass
+    start = raw.find('{')
+    if start < 0:
+        return None
+    body = raw[start:]
+    try:
+        return json.loads(body)
+    except json.JSONDecodeError:
+        pass
+    arr_start = body.find('"politicians"')
+    if arr_start < 0:
+        return None
+    bracket_at = body.find('[', arr_start)
+    if bracket_at < 0:
+        return None
+    depth = 0
+    last_clean = -1
+    in_str = False
+    esc = False
+    for i in range(bracket_at, len(body)):
+        c = body[i]
+        if in_str:
+            if esc:
+                esc = False
+            elif c == '\\':
+                esc = True
+            elif c == '"':
+                in_str = False
+            continue
+        if c == '"':
+            in_str = True
+        elif c == '{':
+            depth += 1
+        elif c == '}':
+            depth -= 1
+            if depth == 0:
+                last_clean = i
+        elif c == ']' and depth == 0:
+            try:
+                return json.loads(body[:i + 1] + '}')
+            except Exception:
+                pass
+    if last_clean < 0:
+        return None
+    salvaged = body[:last_clean + 1] + ']}'
+    try:
+        return json.loads(salvaged)
+    except Exception:
+        return None
+
+
+_INFLIGHT_ENGAGED: dict[str, threading.Event] = {}
+_INFLIGHT_ENGAGED_LOCK = threading.Lock()
+
+
+def discover_engaged_politicians(geo_type: str, geo_value: str,
+                                   force_refresh: bool = False) -> list[dict]:
+    """Return the cached-or-freshly-discovered list of politicians the
+    given geography is most actively engaging with right now.
+
+    Same lazy-fill + 24h S3 cache pattern as discover_candidates.
+    Returns [] on agent failure (caller falls back to internal blend).
+    """
+    geo_type = (geo_type or 'National').strip()
+    geo_value = (geo_value or '').strip()
+    cache_id = f"engaged|{geo_type}|{geo_value}"
+
+    cache_key = S3_ENGAGED_PREFIX + _slug(geo_type) + '__' + _slug(geo_value) + '.json'
+
+    def _get_cached() -> Optional[dict]:
+        try:
+            resp = _s3().get_object(Bucket=S3_BUCKET, Key=cache_key)
+            last_mod = resp.get('LastModified')
+            if last_mod and (datetime.now(timezone.utc) - last_mod).total_seconds() > CACHE_TTL_S:
+                return None
+            return json.loads(resp['Body'].read().decode('utf-8'))
+        except Exception as e:
+            msg = str(e)
+            if 'NoSuchKey' not in msg and '404' not in msg:
+                logger.debug("engaged cache miss for %s|%s: %s",
+                              geo_type, geo_value, msg)
+            return None
+
+    if not force_refresh:
+        cached = _get_cached()
+        if cached and isinstance(cached.get('politicians'), list):
+            return cached['politicians']
+
+    with _INFLIGHT_ENGAGED_LOCK:
+        ev = _INFLIGHT_ENGAGED.get(cache_id)
+        if ev is not None:
+            wait_for = ev
+            owner = False
+        else:
+            wait_for = threading.Event()
+            _INFLIGHT_ENGAGED[cache_id] = wait_for
+            owner = True
+
+    if not owner:
+        wait_for.wait(timeout=AGENT_TIMEOUT_S)
+        cached = _get_cached()
+        return (cached or {}).get('politicians', []) if cached else []
+
+    try:
+        pols = _call_engaged_agent(geo_type, geo_value)
+        if pols:
+            payload = {
+                'geo_type':      geo_type,
+                'geo_value':     geo_value,
+                'politicians':   pols,
+                'discovered_at': datetime.now(timezone.utc).isoformat(),
+                'count':         len(pols),
+            }
+            try:
+                _s3().put_object(
+                    Bucket=S3_BUCKET, Key=cache_key,
+                    Body=json.dumps(payload, separators=(',', ':')).encode('utf-8'),
+                    ContentType='application/json',
+                    CacheControl=f'max-age={CACHE_TTL_S}',
+                )
+            except Exception as e:
+                logger.warning("engaged cache write failed for %s|%s: %s",
+                                geo_type, geo_value, e)
+            return pols
+        # Stale-cache fallback: serve last-known list if agent returned
+        # nothing this round (e.g. rate-limited).
+        try:
+            resp = _s3().get_object(Bucket=S3_BUCKET, Key=cache_key)
+            stale = json.loads(resp['Body'].read().decode('utf-8'))
+            return stale.get('politicians') or []
+        except Exception:
+            return []
+    finally:
+        with _INFLIGHT_ENGAGED_LOCK:
+            _INFLIGHT_ENGAGED.pop(cache_id, None)
+        wait_for.set()
+
+
 def prewarm_geos(geos: list[tuple[str, str]]) -> dict[str, int]:
     """Refresh the cache for a list of (geo_type, geo_value) pairs.
     Intended for nightly cron use. Returns {cache_id: candidate_count}.

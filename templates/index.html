@@ -17975,6 +17975,81 @@
                 text-decoration: underline;
             }
             #blueIQView .bq-eng-pin-clear:hover { color: var(--text-primary); }
+
+            /* Loading state shown when a card's data hasn't arrived yet
+               (cold-cache geos triggering a fresh agent web-search call). */
+            #blueIQView .bq-eng-loading { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 2.5rem 1rem; gap: 0.7rem; min-height: 240px; color: var(--text-secondary); }
+            #blueIQView .bq-eng-spinner { width: 32px; height: 32px; border: 3px solid rgba(255,255,255,0.08); border-top-color: var(--accent-primary, #4f8cff); border-radius: 50%; animation: blueIQSpin 0.9s linear infinite; }
+            #blueIQView .bq-eng-loading-msg { font-size: 0.85rem; color: var(--text-primary); font-weight: 500; text-align: center; }
+            #blueIQView .bq-eng-loading-sub { font-size: 0.7rem; color: var(--text-secondary); text-align: center; max-width: 320px; line-height: 1.4; }
+
+            /* ── Politician engagement card (Top politicians engaged) ── */
+            #blueIQView .bq-pol-list { display: flex; flex-direction: column; gap: 1px; }
+            #blueIQView .bq-pol-row {
+                display: grid;
+                grid-template-columns: minmax(140px, 2fr) minmax(80px, 2.4fr) auto;
+                gap: 0.65rem;
+                align-items: center;
+                padding: 0.45rem 0.4rem;
+                font-size: 0.85rem;
+                border-radius: 6px;
+                cursor: pointer;
+                transition: background 0.12s ease, transform 0.12s ease, opacity 0.18s ease;
+                position: relative;
+            }
+            #blueIQView .bq-pol-row:hover { background: rgba(79,140,255,0.08); transform: translateX(1px); }
+            #blueIQView .bq-pol-row.bq-pol-dimmed { opacity: 0.32; }
+            #blueIQView .bq-pol-row.bq-pol-pinned { background: rgba(79,140,255,0.15); box-shadow: inset 3px 0 0 0 var(--bq-row-color, #4f8cff); opacity: 1; }
+            #blueIQView .bq-pol-row.bq-pol-pinned .bq-pol-name-text { color: var(--text-primary); font-weight: 600; }
+            #blueIQView .bq-pol-name { display: flex; align-items: center; gap: 0.5rem; min-width: 0; color: var(--text-primary); flex-wrap: wrap; row-gap: 0.15rem; }
+            #blueIQView .bq-pol-name-text { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+            #blueIQView .bq-pol-swatch { flex: 0 0 9px; width: 9px; height: 9px; border-radius: 50%; box-shadow: 0 0 0 1px rgba(255,255,255,0.1) inset; }
+            #blueIQView .bq-pol-role {
+                display: inline-block;
+                font-size: 0.62rem;
+                padding: 0.06rem 0.42rem;
+                border-radius: 4px;
+                font-weight: 500;
+                letter-spacing: 0.02em;
+                background: rgba(148,163,184,0.13);
+                color: #94a3b8;
+                white-space: nowrap;
+            }
+            #blueIQView .bq-pol-track {
+                position: relative;
+                height: 10px;
+                background: rgba(255,255,255,0.05);
+                border-radius: 999px;
+                overflow: hidden;
+                min-width: 60px;
+            }
+            #blueIQView .bq-pol-fill {
+                position: absolute; left: 0; top: 0; height: 100%;
+                border-radius: 999px;
+                background: linear-gradient(90deg, var(--bq-row-color, #4f8cff) 0%, color-mix(in srgb, var(--bq-row-color, #4f8cff) 65%, white) 100%);
+                box-shadow: 0 0 8px -2px var(--bq-row-color, #4f8cff);
+                transition: width 0.55s cubic-bezier(.2,.7,.2,1);
+            }
+            #blueIQView .bq-pol-score { font-variant-numeric: tabular-nums; font-weight: 600; color: var(--text-primary); min-width: 32px; text-align: right; }
+            #blueIQView .bq-pol-row[data-tip]:hover::after {
+                content: attr(data-tip);
+                position: absolute;
+                left: 50%;
+                bottom: calc(100% + 6px);
+                transform: translateX(-50%);
+                background: var(--bg-secondary, #1e1e2e);
+                border: 1px solid rgba(255,255,255,0.12);
+                color: var(--text-primary);
+                padding: 0.5rem 0.7rem;
+                border-radius: 6px;
+                font-size: 0.72rem;
+                line-height: 1.45;
+                white-space: pre;
+                z-index: 6;
+                box-shadow: 0 8px 24px rgba(0,0,0,0.45);
+                pointer-events: none;
+                max-width: 320px;
+            }
             #blueIQView .blue-iq-bucket-row { display: flex; flex-direction: column; gap: 0.2rem; padding: 0.45rem 0; border-bottom: 1px solid rgba(255,255,255,0.04); cursor: pointer; }
             #blueIQView .blue-iq-bucket-row:hover { background: rgba(79,140,255,0.06); }
             #blueIQView .blue-iq-bucket-head { display: flex; justify-content: space-between; align-items: center; font-size: 0.88rem; }
@@ -23161,6 +23236,156 @@
         }
         window._bqRenderEngagementCard = _bqRenderEngagementCard;
 
+        // ── Politician engagement card (Top politicians engaged) ─────────────
+        // Same visual DNA as the Search/Social engagement card: header donut
+        // + share bars + hover/pin. Differences:
+        //   • Bars are PARTY-colored (blue=D, red=R, purple=I), not brand
+        //   • Bar width represents the candidate's mention_score relative
+        //     to the leader (since "share of cohort" doesn't fit here —
+        //     we're comparing engagement intensity across distinct people)
+        //   • Right side shows a 0-100 score (interest intensity), not %
+        //   • Donut shows PARTY MIX of the top 10 (e.g. 6 D / 3 R / 1 I)
+        //     rather than top-3-brand concentration
+        //   • Per-row badge shows ROLE (e.g. "Mayor of LA", "U.S. Senator
+        //     (CA)") instead of brand name
+        //   • No source badges (per user — drop wiki/GDELT/Panel tags
+        //     entirely on this card)
+        //   • Hover shows the agent's engagement_drivers ("viral hearings
+        //     clip", "tariff announcement", etc.) so the user understands
+        //     WHY this person is trending in this geography
+        var BLUE_IQ_PARTY_COLOR = {D:'#3b82f6', R:'#ef4444', I:'#a855f7', L:'#fcd34d', G:'#22c55e'};
+
+        function _bqRenderPoliticianCard(items) {
+            if (!items || !items.length) {
+                return '<div class="bq-eng-loading">'
+                    + '<div class="bq-eng-spinner"></div>'
+                    + '<div class="bq-eng-loading-msg">Agent is discovering who this area is engaging with...</div>'
+                    + '<div class="bq-eng-loading-sub">First load per geography takes 10-15s; subsequent loads are instant.</div>'
+                    + '</div>';
+            }
+            var rows = items.slice(0, 15);
+            var maxScore = Math.max.apply(null, rows.map(function(r) { return +r.mention_score || 0; })) || 1;
+
+            // Party-mix donut for the header. Counts top-10 by party.
+            var partyCount = {D:0, R:0, I:0, L:0, G:0, OTHER:0};
+            rows.slice(0, 10).forEach(function(r) {
+                var p = r.party_code || '?';
+                if (partyCount[p] !== undefined) partyCount[p] += 1;
+                else partyCount.OTHER += 1;
+            });
+            var topTen = Math.max(1, rows.slice(0, 10).length);
+            var donutSegments = [];
+            ['D', 'R', 'I', 'L', 'G'].forEach(function(p) {
+                if (partyCount[p] > 0) {
+                    donutSegments.push({
+                        color: BLUE_IQ_PARTY_COLOR[p],
+                        share: partyCount[p] / topTen,
+                        name: p
+                    });
+                }
+            });
+            if (partyCount.OTHER > 0) {
+                donutSegments.push({
+                    color: 'rgba(148,163,184,0.4)',
+                    share: partyCount.OTHER / topTen,
+                    name: 'Other'
+                });
+            }
+            var donutSvg = _bqBuildDonutSVG(donutSegments, 56);
+
+            // Concentration headline: party mix + leader
+            var leader = rows[0];
+            var mixParts = [];
+            if (partyCount.D > 0) mixParts.push(partyCount.D + ' D');
+            if (partyCount.R > 0) mixParts.push(partyCount.R + ' R');
+            if (partyCount.I > 0) mixParts.push(partyCount.I + ' I');
+            var headline = leader
+                ? (_bqEscape(leader.name) + ' leads engagement')
+                : 'No engagement signal';
+            var subPieces = [];
+            if (mixParts.length) subPieces.push('Top 10 mix: ' + mixParts.join(' / '));
+            if (leader && (leader.engagement_drivers || []).length) {
+                subPieces.push('Driver: ' + _bqEscape(leader.engagement_drivers[0]));
+            }
+            var sub = subPieces.join(' \u00b7 ');
+
+            // Pin state
+            window.__blueIQ = window.__blueIQ || {};
+            var pinnedName = window.__blueIQ.pinnedPolitician || null;
+
+            var rowsHtml = rows.map(function(r) {
+                var pcol = BLUE_IQ_PARTY_COLOR[r.party_code] || '#64748b';
+                var score = +r.mention_score || 0;
+                // Bar width: relative to leader's score. We DON'T normalize
+                // to 1.0 because that flattens the visual hierarchy. Min
+                // 4% so a long-tail row still has a visible nub.
+                var pctOfTrack = Math.max(4, Math.min(100, (score / maxScore) * 100));
+                var displayScore = Math.round(score * 100);
+                // Role badge — small chip showing the agent's role string
+                // (e.g. "Mayor of LA", "U.S. Senator (CA)"). Trim if very
+                // long so it doesn't push the bar off-screen.
+                var roleHtml = '';
+                if (r.role) {
+                    var roleLbl = r.role.length > 28 ? (r.role.slice(0, 26) + '…') : r.role;
+                    roleHtml = ' <span class="bq-pol-role" title="' + _bqEscape(r.role) + '">' + _bqEscape(roleLbl) + '</span>';
+                }
+                // Hover tooltip: engagement drivers + scope info
+                var drivers = (r.engagement_drivers || []).filter(Boolean);
+                var tipParts = [_bqEscape(r.name)];
+                if (r.role) tipParts.push(_bqEscape(r.role));
+                if (drivers.length) {
+                    tipParts.push('');
+                    tipParts.push('Driving engagement:');
+                    drivers.slice(0, 3).forEach(function(d) {
+                        tipParts.push('  \u2022 ' + _bqEscape(d));
+                    });
+                }
+                if (r.engagement_score) {
+                    tipParts.push('');
+                    tipParts.push('Agent engagement score: ' + r.engagement_score + '/100');
+                }
+                var tip = tipParts.join('\n');
+                var pinned = pinnedName && pinnedName.toLowerCase() === String(r.name).toLowerCase();
+                var dimmed = pinnedName && !pinned;
+                var rowCls = 'bq-pol-row'
+                    + (pinned ? ' bq-pol-pinned' : '')
+                    + (dimmed ? ' bq-pol-dimmed' : '');
+                return ''
+                    + '<div class="' + rowCls + '" '
+                    +   'style="--bq-row-color: ' + pcol + ';" '
+                    +   'data-name="' + _bqEscape(r.name) + '" '
+                    +   'data-tip="' + _bqEscape(tip).replace(/\n/g, '&#10;') + '">'
+                    +   '<span class="bq-pol-name">'
+                    +     '<span class="bq-pol-swatch" style="background:' + pcol + ';" title="' + (r.party_code || '?') + '"></span>'
+                    +     '<span class="bq-pol-name-text">' + _bqEscape(r.name) + '</span>'
+                    +     roleHtml
+                    +   '</span>'
+                    +   '<span class="bq-pol-track">'
+                    +     '<span class="bq-pol-fill" style="width: ' + pctOfTrack + '%;"></span>'
+                    +   '</span>'
+                    +   '<span class="bq-pol-score">' + displayScore + '</span>'
+                    + '</div>';
+            }).join('');
+
+            var pinClearHtml = '';
+            if (pinnedName) {
+                pinClearHtml = '<span class="bq-eng-pin-clear" data-bq-pin-clear="politician">clear pin</span>';
+            }
+
+            return ''
+                + '<div class="bq-eng-head">'
+                +   '<div class="bq-eng-donut">' + donutSvg
+                +     '<div class="bq-eng-donut-center">' + topTen + '<br><span style="font-size: 0.55rem;opacity:0.7;">engaged</span></div>'
+                +   '</div>'
+                +   '<div class="bq-eng-head-text">'
+                +     '<div class="bq-eng-headline">' + headline + pinClearHtml + '</div>'
+                +     '<div class="bq-eng-sub">' + sub + '</div>'
+                +   '</div>'
+                + '</div>'
+                + '<div class="bq-pol-list">' + rowsHtml + '</div>';
+        }
+        window._bqRenderPoliticianCard = _bqRenderPoliticianCard;
+
         // Donut SVG builder. Returns an inline <svg> string drawing
         // concentric arcs sized by `share` (0..1). The arcs are stroked, not
         // filled, leaving a hollow donut with an inner radius ≈ 70% of the
@@ -23188,24 +23413,41 @@
             return '<svg viewBox="0 0 ' + size + ' ' + size + '">' + bgRing + arcs + '</svg>';
         }
 
-        // Click delegation: pin / unpin a platform inside an engagement card.
-        // Pinning a row sets window.__blueIQ.pinnedSearch (or pinnedSocial)
-        // and re-renders that card so other rows dim. Future hook: broadcast
-        // the pin to the rest of the dashboard so users can see "what do
-        // Google users care about?" as a one-click cross-tab.
+        // Click delegation: pin / unpin a row inside an engagement card or
+        // the politicians card. Pinning sets the relevant
+        // window.__blueIQ.pinned* slot and re-renders the card so other
+        // rows dim.
         document.addEventListener('click', function(e) {
-            // Clear-pin link
+            // Clear-pin link (works for search / social / politician)
             var clr = e.target.closest && e.target.closest('[data-bq-pin-clear]');
             if (clr) {
                 var ckind = clr.getAttribute('data-bq-pin-clear');
-                var ckey = (ckind === 'search') ? 'pinnedSearch' : (ckind === 'social') ? 'pinnedSocial' : null;
+                var ckey = (ckind === 'search') ? 'pinnedSearch'
+                          : (ckind === 'social') ? 'pinnedSocial'
+                          : (ckind === 'politician') ? 'pinnedPolitician'
+                          : null;
                 if (ckey && window.__blueIQ) {
                     window.__blueIQ[ckey] = null;
-                    _bqRefreshEngagementCard(ckind);
+                    if (ckind === 'politician') {
+                        _bqRenderPartyFiltered('top_politicians');
+                    } else {
+                        _bqRefreshEngagementCard(ckind);
+                    }
                 }
                 e.stopPropagation();
                 return;
             }
+            // Politician row click → pin / unpin
+            var polRow = e.target.closest && e.target.closest('.bq-pol-row');
+            if (polRow) {
+                var polName = polRow.getAttribute('data-name');
+                window.__blueIQ = window.__blueIQ || {};
+                var prevPol = window.__blueIQ.pinnedPolitician;
+                window.__blueIQ.pinnedPolitician = (prevPol && prevPol.toLowerCase() === String(polName).toLowerCase()) ? null : polName;
+                _bqRenderPartyFiltered('top_politicians');
+                return;
+            }
+            // Engagement card (search / social) row click → pin / unpin
             var row = e.target.closest && e.target.closest('.bq-eng-row');
             if (!row) return;
             var name = row.getAttribute('data-name');
@@ -23214,7 +23456,6 @@
             if (!key) return;
             window.__blueIQ = window.__blueIQ || {};
             var prev = window.__blueIQ[key];
-            // Toggle: clicking the already-pinned row un-pins it.
             window.__blueIQ[key] = (prev && prev.toLowerCase() === String(name).toLowerCase()) ? null : name;
             _bqRefreshEngagementCard(kind);
         });
@@ -23300,10 +23541,18 @@
                 }
                 return;
             }
+            // Top politicians card gets the engagement-card visual
+            // treatment (donut + share bars + party color + role badge +
+            // hover/pin). Candidates card stays on _bqRowBars with the
+            // race_type badge. NO source badges on either anymore — the
+            // user explicitly removed the "wiki" / "panel" / "GDELT" tags.
+            if (targetKey === 'top_politicians') {
+                body.innerHTML = _bqRenderPoliticianCard(rows);
+                return;
+            }
             body.innerHTML = _bqRowBars(rows, 'name', 'mention_score', {
                 projectKey: null,
                 labelMode: 'score',
-                sourcesBadge: true,
                 raceBadge:   targetKey === 'top_candidates',
             });
         }
@@ -23422,10 +23671,15 @@
                   + '<div class="blue-iq-card-body">' + tiHtml + '</div>'
                   + '</div>';
 
-            // CARD D: Top politicians (with party filter)
+            // CARD D: Top politicians engaged — agent-discovered figures
+            // the active geography is driving conversation about right now.
+            // Subtitle reads the active geo so users understand the slice.
+            var polsGeoLbl = (f.geo_type === 'National' || !f.geo_value)
+                ? 'nationally'
+                : ('in ' + (f.geo_value || ''));
             html += '<div class="blue-iq-card blue-iq-card-pols">'
                   + '<h3 class="blue-iq-card-title">Top politicians engaged'
-                  +   '<span class="blue-iq-card-subtitle">interest score blends panel mentions, Google Trends, GDELT news, and Wikipedia views</span>'
+                  +   '<span class="blue-iq-card-subtitle">who voters are driving conversation about ' + _bqEscape(polsGeoLbl) + ' \u00b7 click a row to pin</span>'
                   + '</h3>'
                   + '<div class="bq-party-filter" data-target="top_politicians">'
                   +   '<button class="bq-party-chip active" data-party="All">All</button>'
