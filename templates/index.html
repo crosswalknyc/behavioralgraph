@@ -17924,6 +17924,43 @@
             #blueIQView .bq-party-chip[data-party="R"].active { background: rgba(239,68,68,0.18); color: #fca5a5; border-color: rgba(239,68,68,0.5); }
             #blueIQView .bq-party-chip[data-party="I"].active { background: rgba(168,85,247,0.18); color: #d8b4fe; border-color: rgba(168,85,247,0.5); }
             #blueIQView .bq-party-dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; margin: 0 0.45rem 0 0; flex: 0 0 7px; vertical-align: middle; }
+
+            /* ── Top Candidates card (dedicated layout) ── */
+            #blueIQView .bq-cand-summary { display: grid; grid-template-columns: 1fr 1fr 2fr; gap: 0.85rem; padding: 0.6rem 0.85rem; background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.06); border-radius: 8px; margin-bottom: 0.45rem; }
+            #blueIQView .bq-cand-summary-label { font-size: 0.62rem; text-transform: uppercase; letter-spacing: 0.06em; font-weight: 700; color: var(--text-secondary); }
+            #blueIQView .bq-cand-summary-val { font-size: 0.86rem; color: var(--text-primary); margin-top: 0.1rem; }
+            #blueIQView .bq-cand-summary-mix .bq-cand-summary-val { display: flex; flex-wrap: wrap; gap: 0.3rem; }
+            #blueIQView .bq-cand-mix-chip { font-size: 0.7rem; padding: 0.12rem 0.45rem; background: rgba(255,255,255,0.04); color: var(--text-primary); border-radius: 8px; border: 1px solid rgba(255,255,255,0.07); }
+            #blueIQView .bq-cand-score-explain { font-size: 0.74rem; color: var(--text-secondary); padding: 0.35rem 0.85rem 0.65rem 0.85rem; line-height: 1.55; }
+            #blueIQView .bq-cand-list { display: flex; flex-direction: column; gap: 0.55rem; }
+            #blueIQView .bq-cand-row { background: rgba(255,255,255,0.025); border: 1px solid rgba(255,255,255,0.06); border-left: 4px solid var(--accent-primary, #4f8cff); border-radius: 8px; padding: 0.7rem 0.85rem 0.6rem 0.85rem; transition: transform 0.12s ease, border-color 0.12s ease, box-shadow 0.12s ease; cursor: default; }
+            #blueIQView .bq-cand-row:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(0,0,0,0.18); border-top-color: rgba(255,255,255,0.12); border-right-color: rgba(255,255,255,0.12); border-bottom-color: rgba(255,255,255,0.12); }
+            #blueIQView .bq-cand-row-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 0.6rem; }
+            #blueIQView .bq-cand-name-block { flex: 1 1 auto; min-width: 0; }
+            #blueIQView .bq-cand-name { font-size: 0.96rem; font-weight: 600; color: var(--text-primary); line-height: 1.2; }
+            #blueIQView .bq-cand-meta { display: flex; flex-wrap: wrap; gap: 0.35rem; align-items: center; margin-top: 0.3rem; }
+            #blueIQView .bq-cand-party-pill { font-size: 0.66rem; font-weight: 700; padding: 0.14rem 0.5rem; border-radius: 999px; letter-spacing: 0.04em; }
+            #blueIQView .bq-cand-race-chip { font-size: 0.66rem; font-weight: 600; padding: 0.14rem 0.5rem; border-radius: 4px; letter-spacing: 0.03em; text-transform: uppercase; background: rgba(148,163,184,0.16); color: #cbd5e1; }
+            #blueIQView .bq-cand-race-chip.bq-cand-race-president { background: rgba(168,85,247,0.18); color: #d8b4fe; }
+            #blueIQView .bq-cand-race-chip.bq-cand-race-senate    { background: rgba(34,197,94,0.18);  color: #86efac; }
+            #blueIQView .bq-cand-race-chip.bq-cand-race-house     { background: rgba(79,140,255,0.18); color: #93c5fd; }
+            #blueIQView .bq-cand-race-chip.bq-cand-race-governor  { background: rgba(245,158,11,0.18); color: #fcd34d; }
+            #blueIQView .bq-cand-race-chip.bq-cand-race-state-leg { background: rgba(20,184,166,0.18); color: #5eead4; }
+            #blueIQView .bq-cand-race-chip.bq-cand-race-mayoral   { background: rgba(244,114,182,0.18); color: #f9a8d4; }
+            #blueIQView .bq-cand-race-chip.bq-cand-race-local     { background: rgba(125,211,252,0.18); color: #bae6fd; }
+            #blueIQView .bq-cand-race-chip.bq-cand-race-prospect  { background: rgba(168,85,247,0.14); color: #d8b4fe; border: 1px dashed rgba(168,85,247,0.4); }
+            #blueIQView .bq-cand-race-chip.bq-cand-race-other     { background: rgba(255,255,255,0.05); color: var(--text-secondary); }
+            #blueIQView .bq-cand-status { font-size: 0.62rem; font-weight: 700; text-transform: uppercase; padding: 0.1rem 0.42rem; border-radius: 4px; letter-spacing: 0.04em; background: rgba(251,191,36,0.16); color: #fcd34d; }
+            #blueIQView .bq-cand-status-exploring,
+            #blueIQView .bq-cand-status-speculating { background: rgba(168,85,247,0.16); color: #d8b4fe; }
+            #blueIQView .bq-cand-status-2028_prospect { background: rgba(244,114,182,0.16); color: #f9a8d4; }
+            #blueIQView .bq-cand-office { font-size: 0.66rem; color: var(--text-secondary); font-style: italic; }
+            #blueIQView .bq-cand-secondary { font-size: 0.7rem; color: var(--text-secondary); margin-top: 0.25rem; line-height: 1.35; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+            #blueIQView .bq-cand-score-block { display: flex; flex-direction: column; align-items: flex-end; flex: 0 0 auto; line-height: 1; }
+            #blueIQView .bq-cand-score { font-size: 1.6rem; font-weight: 700; color: var(--text-primary); font-variant-numeric: tabular-nums; }
+            #blueIQView .bq-cand-score-cap { font-size: 0.62rem; color: var(--text-secondary); margin-top: 0.05rem; letter-spacing: 0.03em; }
+            #blueIQView .bq-cand-bar-wrap { margin-top: 0.55rem; height: 8px; background: rgba(255,255,255,0.04); border-radius: 4px; overflow: hidden; }
+            #blueIQView .bq-cand-bar-fill { height: 100%; border-radius: 4px; transition: width 0.32s ease; }
             #blueIQView .bq-src-badges { display: inline-flex; gap: 0.18rem; margin-left: 0.35rem; opacity: 0.7; }
             #blueIQView .bq-src-badge { font-size: 0.58rem; padding: 0.05rem 0.32rem; border-radius: 4px; font-weight: 600; letter-spacing: 0.02em; background: rgba(255,255,255,0.06); color: var(--text-secondary); }
             #blueIQView .bq-src-badge.bq-src-trends { background: rgba(66,133,244,0.18); color: #93c5fd; }
@@ -23435,6 +23472,154 @@
         }
         window._bqRenderPoliticianCard = _bqRenderPoliticianCard;
 
+        // ── Candidates card (Top Candidates 2026 cycle) ──────────────────
+        // The generic _bqRowBars layout failed for this card because:
+        //   1. Interest scores cluster tight (75–90), making all bars look
+        //      identical-length next to each other.
+        //   2. The bar fill was a single accent color with no party
+        //      signal, so the rows blurred together visually.
+        //   3. Long names ("Mallory McMorrow", "Raja Krishnamoorthi") got
+        //      ellipsis-truncated because the bar took 60% width.
+        //   4. Race badges only appeared on rows where the agent returned
+        //      race_type, so the card looked half-broken.
+        //   5. The "90 / 85 / 75" trailing number had no defined meaning.
+        //
+        // Fix: dedicated layout per row with party-tinted left rail, full
+        // name, ALWAYS-PRESENT race chip (falls back to "Active candidate"
+        // when race_type is missing), party-tinted bar with score-relative
+        // width, and a header section explaining what the interest score
+        // is. Tooltip on hover gives the full race title + status.
+        function _bqRenderCandidatesCard(items) {
+            if (!items || !items.length) {
+                return '<div class="bq-eng-loading">'
+                    + '<div class="bq-eng-spinner"></div>'
+                    + '<div class="bq-eng-loading-msg">Agent is discovering 2026-cycle candidates for this area...</div>'
+                    + '<div class="bq-eng-loading-sub">First load per geography takes 10-15s; subsequent loads are instant.</div>'
+                    + '</div>';
+            }
+            var rows = items.slice(0, 15);
+            var PARTY_COLOR = {D:'#3b82f6', R:'#ef4444', I:'#a855f7', L:'#fcd34d', G:'#22c55e'};
+            var PARTY_LABEL = {D:'Democrat', R:'Republican', I:'Independent', L:'Libertarian', G:'Green'};
+
+            // Always-present race description. The agent doesn't always
+            // return race_type — fall back through status / state to
+            // build the friendliest accurate label we can.
+            function raceDescriptor(r) {
+                var rt = r.race_type || 'other';
+                var raceLabel = BLUE_IQ_RACE_LABEL[rt] || '';
+                var status = r.status || 'declared';
+                if (raceLabel) {
+                    var parts = [raceLabel];
+                    if (r.state) parts.push(r.state);
+                    return { primary: parts.join(' \u00b7 '), secondary: r.race || '', cls: rt };
+                }
+                // No race_type — derive a sensible chip.
+                if (status === '2028_prospect' || status === 'speculating') {
+                    return { primary: '2028 presidential prospect', secondary: r.state || '', cls: 'prospect' };
+                }
+                if (r.race) {
+                    return { primary: r.race, secondary: r.state || '', cls: 'other' };
+                }
+                return { primary: 'Active candidate', secondary: r.state || '', cls: 'other' };
+            }
+
+            // Score is normalized 0..1 already (mention_score). Convert
+            // for display and for bar width. Use sqrt scaling so the
+            // tightly-clustered 0.75–0.90 range spreads visually.
+            var maxScore = Math.max.apply(null, rows.map(function(r) { return +r.mention_score || 0; })) || 1;
+
+            // Top of the card: how to read the score + cycle counts.
+            var partyCounts = {D: 0, R: 0, I: 0, other: 0};
+            rows.forEach(function(r) {
+                var k = r.party_code || 'other';
+                if (!(k in partyCounts)) k = 'other';
+                partyCounts[k] += 1;
+            });
+            var raceCounts = {};
+            rows.forEach(function(r) {
+                var rt = r.race_type || 'other';
+                raceCounts[rt] = (raceCounts[rt] || 0) + 1;
+            });
+            var raceMix = Object.keys(raceCounts)
+                .map(function(k) {
+                    var lbl = BLUE_IQ_RACE_LABEL[k] || (k === 'other' ? '' : k);
+                    if (!lbl) return null;
+                    return '<span class="bq-cand-mix-chip">' + _bqEscape(lbl) + ' \u00d7 ' + raceCounts[k] + '</span>';
+                })
+                .filter(Boolean)
+                .join('');
+
+            var headerHtml = '<div class="bq-cand-summary">'
+                +   '<div class="bq-cand-summary-cell">'
+                +     '<div class="bq-cand-summary-label">Showing</div>'
+                +     '<div class="bq-cand-summary-val">' + rows.length + ' candidates</div>'
+                +   '</div>'
+                +   '<div class="bq-cand-summary-cell">'
+                +     '<div class="bq-cand-summary-label">Party mix</div>'
+                +     '<div class="bq-cand-summary-val">'
+                +       '<span style="color:' + PARTY_COLOR.D + ';">\u25CF ' + partyCounts.D + ' D</span> '
+                +       '<span style="color:' + PARTY_COLOR.R + '; margin-left:0.5rem;">\u25CF ' + partyCounts.R + ' R</span> '
+                +       (partyCounts.I ? '<span style="color:' + PARTY_COLOR.I + '; margin-left:0.5rem;">\u25CF ' + partyCounts.I + ' I</span>' : '')
+                +     '</div>'
+                +   '</div>'
+                +   '<div class="bq-cand-summary-cell bq-cand-summary-mix">'
+                +     '<div class="bq-cand-summary-label">Race mix</div>'
+                +     '<div class="bq-cand-summary-val">' + (raceMix || '<span style="color:var(--text-secondary);">mixed</span>') + '</div>'
+                +   '</div>'
+                + '</div>'
+                + '<div class="bq-cand-score-explain">'
+                +   '<strong>Interest score (0\u2013100):</strong> blended signal combining how often this candidate is searched on Google, how often the panel hits their pages, how much news coverage they\u2019re drawing, and how prominent the discovery agent rates them in this slice. '
+                +   '<span style="opacity:0.75;">A 90 means top-tier visibility; a 60 means active but quieter.</span>'
+                + '</div>';
+
+            // Per-row card.
+            var rowsHtml = rows.map(function(r) {
+                var pc = r.party_code || 'I';
+                var color = PARTY_COLOR[pc] || '#a855f7';
+                var partyLabel = PARTY_LABEL[pc] || 'Independent';
+                var score = +r.mention_score || 0;
+                // sqrt visual scaling so 0.75..0.90 range opens up.
+                var widthPct = Math.round(Math.sqrt(score / maxScore) * 100);
+                var displayScore = Math.round(score * 100);
+                var race = raceDescriptor(r);
+                var officeChip = r.office_held
+                    ? '<span class="bq-cand-office" title="Current office held">currently: ' + _bqEscape(r.office_held) + '</span>'
+                    : '';
+                var statusChip = (r.status && r.status !== 'declared')
+                    ? '<span class="bq-cand-status bq-cand-status-' + _bqEscape(r.status) + '">' + _bqEscape(r.status.replace(/_/g, ' ')) + '</span>'
+                    : '';
+                var secondaryLine = race.secondary
+                    ? '<div class="bq-cand-secondary" title="' + _bqEscape(race.secondary) + '">' + _bqEscape(race.secondary) + '</div>'
+                    : '';
+                var fullTip = [r.name, race.primary, race.secondary, r.office_held, r.status]
+                                .filter(Boolean).join(' \u00b7 ');
+                return '<div class="bq-cand-row" data-party="' + pc + '" style="border-left-color:' + color + ';" title="' + _bqEscape(fullTip) + '">'
+                     +   '<div class="bq-cand-row-head">'
+                     +     '<div class="bq-cand-name-block">'
+                     +       '<div class="bq-cand-name">' + _bqEscape(r.name) + '</div>'
+                     +       '<div class="bq-cand-meta">'
+                     +         '<span class="bq-cand-party-pill" style="background:' + color + '22; color:' + color + ';">' + partyLabel + '</span>'
+                     +         '<span class="bq-cand-race-chip bq-cand-race-' + race.cls + '">' + _bqEscape(race.primary) + '</span>'
+                     +         statusChip
+                     +         officeChip
+                     +       '</div>'
+                     +       secondaryLine
+                     +     '</div>'
+                     +     '<div class="bq-cand-score-block" title="Interest score 0\u2013100 for this slice">'
+                     +       '<div class="bq-cand-score">' + displayScore + '</div>'
+                     +       '<div class="bq-cand-score-cap">/ 100</div>'
+                     +     '</div>'
+                     +   '</div>'
+                     +   '<div class="bq-cand-bar-wrap">'
+                     +     '<div class="bq-cand-bar-fill" style="width:' + widthPct + '%; background: linear-gradient(90deg, ' + color + ' 0%, ' + color + '99 100%);"></div>'
+                     +   '</div>'
+                     + '</div>';
+            }).join('');
+
+            return headerHtml + '<div class="bq-cand-list">' + rowsHtml + '</div>';
+        }
+        window._bqRenderCandidatesCard = _bqRenderCandidatesCard;
+
         // Donut SVG builder. Returns an inline <svg> string drawing
         // concentric arcs sized by `share` (0..1). The arcs are stroked, not
         // filled, leaving a hollow donut with an inner radius ≈ 70% of the
@@ -23597,6 +23782,10 @@
             // user explicitly removed the "wiki" / "panel" / "GDELT" tags.
             if (targetKey === 'top_politicians') {
                 body.innerHTML = _bqRenderPoliticianCard(rows);
+                return;
+            }
+            if (targetKey === 'top_candidates') {
+                body.innerHTML = _bqRenderCandidatesCard(rows);
                 return;
             }
             body.innerHTML = _bqRowBars(rows, 'name', 'mention_score', {
