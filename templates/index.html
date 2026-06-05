@@ -5672,52 +5672,6 @@
             background: var(--bg-card);
             z-index: 0;
         }
-        /* Profile IQ Behavioral tab only: flex rows for true vertical centering (column widths match subgrid header). */
-        #behavioralGrid .behavioral-table .behavioral-item {
-            display: flex;
-            align-items: center;
-            gap: 0.4rem;
-            padding: 0.22rem 0 0.18rem 0;
-        }
-        #behavioralGrid .behavioral-table .behavioral-item > * {
-            min-height: 0;
-        }
-        #behavioralGrid .behavioral-table .behavioral-item .behavioral-rank {
-            flex: 0 0 28px;
-            line-height: 1;
-            display: block;
-            align-self: auto;
-        }
-        #behavioralGrid .behavioral-table .behavioral-item .behavioral-name-wrapper {
-            flex: 1 1 100px;
-            min-width: 0;
-            display: block;
-            align-self: auto;
-        }
-        #behavioralGrid .behavioral-table .behavioral-item .behavioral-name {
-            padding: 0 0.4rem;
-            line-height: 1.2;
-            display: block;
-            width: 100%;
-        }
-        #behavioralGrid .behavioral-table .behavioral-item .behavioral-pct {
-            flex: 0 0 78px;
-            text-align: right !important;
-            line-height: 1;
-            font-variant-numeric: tabular-nums;
-            padding: 0 0.1rem 0 0.2rem;
-            display: block;
-            align-self: auto;
-        }
-        #behavioralGrid .behavioral-table .behavioral-item .behavioral-index {
-            flex: 0 0 64px;
-            text-align: right !important;
-            line-height: 1;
-            font-variant-numeric: tabular-nums;
-            padding: 0 0.35rem 0 0.2rem;
-            display: block;
-            align-self: auto;
-        }
         .behavioral-table .behavioral-item:hover {
             z-index: 1;
         }
@@ -5796,6 +5750,35 @@
             text-align: right !important;
             padding: 3px 6px;
             border-radius: 4px;
+        }
+
+        /* Profile IQ Behavioral tab: center row content (overrides base table rules + index badge padding). */
+        #behavioralGrid .behavioral-table {
+            row-gap: 0;
+            column-gap: 0.4rem;
+        }
+        #behavioralGrid .behavioral-table .behavioral-item {
+            align-items: center;
+            padding: 0.1rem 0 0.28rem 0;
+        }
+        #behavioralGrid .behavioral-table .behavioral-item .behavioral-rank,
+        #behavioralGrid .behavioral-table .behavioral-item .behavioral-name-wrapper,
+        #behavioralGrid .behavioral-table .behavioral-item .behavioral-pct,
+        #behavioralGrid .behavioral-table .behavioral-item .behavioral-index {
+            align-self: center !important;
+            line-height: 1 !important;
+        }
+        #behavioralGrid .behavioral-table .behavioral-item .behavioral-name {
+            padding: 0 0.4rem !important;
+            line-height: 1.15 !important;
+        }
+        #behavioralGrid .behavioral-table .behavioral-item .behavioral-pct {
+            padding: 0 0.1rem 0 0.2rem !important;
+            font-variant-numeric: tabular-nums;
+        }
+        #behavioralGrid .behavioral-table .behavioral-item .behavioral-index {
+            padding: 0 0.35rem 0 0.2rem !important;
+            font-variant-numeric: tabular-nums;
         }
 
         /* AI Panel Styles */
@@ -17931,8 +17914,9 @@
             #blueIQView .bq-playbook-card:hover { transform: translateY(-2px); border-color: rgba(79,140,255,0.25); box-shadow: 0 8px 24px rgba(0,0,0,0.25); }
             #blueIQView .bq-playbook-head { display: flex; gap: 0.6rem; align-items: center; }
             #blueIQView .bq-playbook-rank { width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 0.78rem; color: var(--accent-primary, #4f8cff); background: rgba(79,140,255,0.16); flex: 0 0 28px; }
-            #blueIQView .bq-playbook-issue-name { font-weight: 600; font-size: 0.92rem; color: var(--text-primary); }
+            #blueIQView .bq-playbook-issue-name { font-weight: 600; font-size: 0.92rem; color: var(--text-primary); display: flex; align-items: center; gap: 0.45rem; flex-wrap: wrap; }
             #blueIQView .bq-playbook-issue-stats { font-size: 0.7rem; color: var(--text-secondary); margin-top: 0.1rem; }
+            #blueIQView .bq-playbook-agent-chip { display: inline-block; padding: 0.05rem 0.45rem; border-radius: 999px; background: rgba(79,140,255,0.16); border: 1px solid rgba(79,140,255,0.35); color: #93c5fd; font-size: 0.62rem; font-weight: 600; letter-spacing: 0.02em; text-transform: uppercase; cursor: help; white-space: nowrap; }
             #blueIQView .bq-playbook-section { font-size: 0.78rem; line-height: 1.4; }
             #blueIQView .bq-playbook-section-label { font-size: 0.65rem; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-secondary); margin-bottom: 0.2rem; }
             #blueIQView .bq-playbook-section-body { color: var(--text-primary); }
@@ -24426,7 +24410,7 @@
             // BLUE_IQ_CREATIVE_PLAYS entry (placement + creative direction).
             html += '<div class="blue-iq-card blue-iq-card-playbook" style="grid-column: span 12;">'
                   + '<h3 class="blue-iq-card-title">Creative playbook'
-                  +   '<span class="blue-iq-card-subtitle">for the top issues in this slice: what creative to ship, what placement to buy. Synthesized from this slice\u2019s Issue \u00d7 Journey behavior.</span>'
+                  +   '<span class="blue-iq-card-subtitle">for the top issues in this slice: what creative to ship, what placement to buy. Researched per-issue with current web sources (Pew, Edison, eMarketer, recent campaign post-mortems) and grounded in this slice\u2019s panel follow-up behavior.</span>'
                   + '</h3>'
                   + '<div class="blue-iq-card-body" id="blueIQCreativePlaybook"></div>'
                   + '</div>';
@@ -24559,7 +24543,8 @@
             _bqRenderDayInLife(cards.issue_buckets || []);
             _bqRenderCreativePlaybook(cards.issue_buckets || [],
                                        cards.issue_journey_cross || [],
-                                       cards.voter_journey || []);
+                                       cards.voter_journey || [],
+                                       cards.playbook_agent || []);
         }
 
         // ──────────────────────────────────────────────────────────────────
@@ -24786,7 +24771,7 @@
         // sponsorships and "first-time homebuyer" Spotify spots; Climate
         // leans on EV/sustainability creator content; etc.
         // ──────────────────────────────────────────────────────────────────
-        function _bqRenderCreativePlaybook(issueBuckets, issueJourneyCross, voterJourney) {
+        function _bqRenderCreativePlaybook(issueBuckets, issueJourneyCross, voterJourney, playbookAgent) {
             var body = document.getElementById('blueIQCreativePlaybook');
             if (!body) return;
             if (!issueBuckets || !issueBuckets.length) {
@@ -24802,25 +24787,53 @@
                 .filter(function(d) { return d.destination !== 'abandoned' && d.destination !== 'other'; })
                 .sort(function(a, b) { return (b.panelists || 0) - (a.panelists || 0); })[0];
 
-            // Default play if an issue isn't in BLUE_IQ_ISSUE_PLAYS (e.g.
-            // "Other Policy" or a new bucket added to ISSUE_BUCKETS that
-            // doesn't have a copy block yet). Falls back to the
-            // destination-keyed table so the card still says something.
+            // Agent-researched plays (one per issue) indexed by bucket
+            // for O(1) lookup. The agent uses OpenAI Responses API with
+            // web_search_preview to research current best-practice
+            // placement + creative recommendations grounded in the
+            // dominant follow-up panelists are taking, the geography,
+            // and recent public research (Pew, Edison, eMarketer,
+            // recent campaign post-mortems). 24h S3-cached server-side.
+            var agentByIssue = {};
+            (playbookAgent || []).forEach(function(p) {
+                if (p && p.bucket) agentByIssue[p.bucket] = p;
+            });
+
+            // Resolve the play for an issue + dominant destination:
+            //   1. Prefer agent-researched recommendation (web-search-
+            //      grounded, distinct per issue + geo).
+            //   2. Fall back to the hardcoded BLUE_IQ_ISSUE_PLAYS map
+            //      keyed by issue name (with optional by_dest override).
+            //   3. Final fallback: destination-keyed
+            //      BLUE_IQ_CREATIVE_PLAYS so the card always says
+            //      something.
             function _resolvePlay(issueBucket, destKey) {
+                var agent = agentByIssue[issueBucket];
+                if (agent && agent.where_to_buy && agent.creative_direction) {
+                    return {
+                        placement: agent.where_to_buy,
+                        creative:  agent.creative_direction,
+                        rationale: agent.rationale || '',
+                        source:    'agent',
+                    };
+                }
                 var issuePlay = BLUE_IQ_ISSUE_PLAYS[issueBucket];
                 if (issuePlay) {
-                    // Some issue plays vary their creative by dominant
-                    // follow-up (e.g. a candidate_site follow-up on
-                    // Healthcare → switch from explainer creative to
-                    // "vote-for-X-on-Medicare" direct response). Where a
-                    // by_dest override exists, blend it in.
                     var byDest = issuePlay.by_dest && issuePlay.by_dest[destKey];
                     return {
                         placement: (byDest && byDest.placement) || issuePlay.placement,
                         creative:  (byDest && byDest.creative)  || issuePlay.creative,
+                        rationale: '',
+                        source:    'static',
                     };
                 }
-                return BLUE_IQ_CREATIVE_PLAYS[destKey] || BLUE_IQ_CREATIVE_PLAYS.other;
+                var fb = BLUE_IQ_CREATIVE_PLAYS[destKey] || BLUE_IQ_CREATIVE_PLAYS.other;
+                return {
+                    placement: fb.placement,
+                    creative:  fb.creative,
+                    rationale: '',
+                    source:    'static',
+                };
             }
 
             body.innerHTML = '<div class="bq-playbook-grid">'
@@ -24847,11 +24860,16 @@
                               return '<span class="bq-playbook-sample-chip">' + _bqEscape(q) + '</span>';
                             }).join('') + '</div>'
                         : '';
+                    var agentBadge = (play.source === 'agent')
+                        ? '<span class="bq-playbook-agent-chip"' +
+                              (play.rationale ? ' title="' + _bqEscape(play.rationale) + '"' : '') +
+                              '>agent-researched</span>'
+                        : '';
                     return '<div class="bq-playbook-card">'
                          +   '<div class="bq-playbook-head">'
                          +     '<div class="bq-playbook-rank">' + (idx + 1) + '</div>'
                          +     '<div class="bq-playbook-issue">'
-                         +       '<div class="bq-playbook-issue-name">' + _bqEscape(b.bucket) + '</div>'
+                         +       '<div class="bq-playbook-issue-name">' + _bqEscape(b.bucket) + agentBadge + '</div>'
                          +       '<div class="bq-playbook-issue-stats">' + _bqPct(b.share || 0) + ' of policy searches in this slice</div>'
                          +     '</div>'
                          +   '</div>'
