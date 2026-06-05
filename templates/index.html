@@ -24703,72 +24703,40 @@
             // external signal is layered on as chips, not as bar width.
             var max = Math.max.apply(null, buckets.map(function(b) { return +b.count || 0; })) || 1;
 
-            // Header strip showing the mix-in summary so the user knows
-            // external data is participating in this card (not just panel).
-            var totalTrend = 0, totalNews = 0, trendBuckets = 0, externalOnly = 0;
-            buckets.forEach(function(b) {
-                if ((+b.trend_score || 0) > 0) { totalTrend += +b.trend_score; trendBuckets++; }
-                if ((+b.news_count  || 0) > 0)   totalNews  += +b.news_count;
-                if (b.external_only) externalOnly++;
-            });
-            var headerStrip = '';
-            if (totalTrend > 0 || totalNews > 0) {
-                var bits = [];
-                if (trendBuckets > 0) bits.push('<span style="color:#fbbf24;">\u25CF</span> Google Trends boosting <strong>' + trendBuckets + '</strong> issue' + (trendBuckets > 1 ? 's' : ''));
-                if (totalNews > 0)    bits.push('<span style="color:#a78bfa;">\u25CF</span> <strong>' + totalNews + '</strong> news article' + (totalNews > 1 ? 's' : '') + ' mapped');
-                if (externalOnly > 0) bits.push('<span style="color:#94a3b8;">\u25CF</span> ' + externalOnly + ' trending-only (no panel chatter yet)');
-                headerStrip = '<div style="font-size:0.74rem; color:var(--text-secondary); padding:0.35rem 0.55rem; margin:0 0 0.55rem 0; background:rgba(255,255,255,0.03); border-radius:6px; border:1px solid rgba(255,255,255,0.05);">'
-                            +   '<strong style="color:var(--text-primary); letter-spacing:0.04em; font-size:0.68rem; text-transform:uppercase; margin-right:0.5rem;">PANEL + EXTERNAL MIX</strong>'
-                            +   bits.join(' &nbsp;&middot;&nbsp; ')
-                            + '</div>';
-            }
-
-            body.innerHTML = headerStrip + buckets.slice(0, 16).map(function(b, idx) {
+            body.innerHTML = buckets.slice(0, 16).map(function(b, idx) {
                 var pct = Math.round((b.count / max) * 100);
                 var panelSamples = (b.sample_queries || []).map(_bqStripDates).filter(Boolean).slice(0, 3);
                 var trendSamples = (b.trend_queries  || []).map(_bqStripDates).filter(Boolean).slice(0, 2);
                 var newsHeads    = (b.news_headlines || []).slice(0, 1);
 
-                // Chip row — only renders chips that have signal.
+                // Per-row provenance chips intentionally removed: the card
+                // now reads as a single blended issue ranking without
+                // exposing whether a signal came from panel chatter,
+                // Google Trends, or news articles. The blended score
+                // (computed in _rerank_buckets_blended) is the single
+                // truth surface.
                 var chips = '';
-                if ((+b.trend_score || 0) > 0) {
-                    chips += '<span class="bq-bucket-chip bq-bucket-chip-trend" title="Google Trends score for terms bucketing into this issue">'
-                          +   '\ud83d\udd25 trending'
-                          + '</span>';
-                }
-                if ((+b.news_count || 0) > 0) {
-                    chips += '<span class="bq-bucket-chip bq-bucket-chip-news" title="GDELT political articles bucketing into this issue">'
-                          +   '\ud83d\udcf0 ' + b.news_count + ' article' + (b.news_count > 1 ? 's' : '')
-                          + '</span>';
-                }
-                if (b.external_only) {
-                    chips += '<span class="bq-bucket-chip bq-bucket-chip-extonly" title="Trending externally but no panel chatter in this slice yet">'
-                          +   'no panel data yet'
-                          + '</span>';
-                }
 
-                // Panel + external sample queries presented inline so the
-                // user sees the actual evidence. Trend / news samples are
-                // clearly badged as such.
-                var sampleHtml = '';
-                if (panelSamples.length) {
-                    sampleHtml += '<div class="blue-iq-bucket-samples">'
-                               +   '<span class="bq-sample-source">panel</span> '
-                               +   _bqEscape(panelSamples.join(' \u00b7 '))
-                               + '</div>';
-                }
-                if (trendSamples.length) {
-                    sampleHtml += '<div class="blue-iq-bucket-samples">'
-                               +   '<span class="bq-sample-source bq-sample-source-trend">Google Trends</span> '
-                               +   _bqEscape(trendSamples.join(' \u00b7 '))
-                               + '</div>';
-                }
-                if (newsHeads.length) {
-                    sampleHtml += '<div class="blue-iq-bucket-samples">'
-                               +   '<span class="bq-sample-source bq-sample-source-news">news</span> '
-                               +   _bqEscape(newsHeads[0])
-                               + '</div>';
-                }
+                // Sample queries presented inline as evidence for the
+                // bucket. Sources (panel / Trends / news) are blended into
+                // a single line without provenance labels so the card
+                // reads as one unified evidence list.
+                var allSamples = panelSamples.concat(trendSamples).concat(newsHeads);
+                // De-dupe case-insensitively while preserving first-seen
+                // order so a term that's both a panel query AND a Trends
+                // term shows up once.
+                var seenSample = {};
+                var dedupedSamples = [];
+                allSamples.forEach(function(s) {
+                    var k = (s || '').toLowerCase().trim();
+                    if (!k || seenSample[k]) return;
+                    seenSample[k] = true;
+                    dedupedSamples.push(s);
+                });
+                dedupedSamples = dedupedSamples.slice(0, 4);
+                var sampleHtml = dedupedSamples.length
+                    ? '<div class="blue-iq-bucket-samples">' + _bqEscape(dedupedSamples.join(' \u00b7 ')) + '</div>'
+                    : '';
 
                 // For external-only buckets we suppress the panel bar
                 // (would be 0px) and show a thin dashed placeholder so
