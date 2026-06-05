@@ -17845,6 +17845,55 @@
             #blueIQView .bq-playbook-section-label { font-size: 0.65rem; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-secondary); margin-bottom: 0.2rem; }
             #blueIQView .bq-playbook-section-body { color: var(--text-primary); }
             #blueIQView .bq-playbook-dest-chip { display: inline-block; padding: 0.18rem 0.55rem; border-radius: 999px; font-size: 0.74rem; font-weight: 600; }
+            #blueIQView .bq-playbook-samples { font-size: 0.7rem; color: var(--text-secondary); display: flex; flex-wrap: wrap; gap: 0.25rem; align-items: center; line-height: 1.55; }
+            #blueIQView .bq-playbook-samples-label { font-size: 0.62rem; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-secondary); }
+            #blueIQView .bq-playbook-sample-chip { background: rgba(79,140,255,0.10); border: 1px solid rgba(79,140,255,0.18); color: var(--text-primary); padding: 0.12rem 0.45rem; border-radius: 8px; font-size: 0.7rem; }
+
+            /* ── Voter's day online (CARD V) ── */
+            #blueIQView .blue-iq-card-dayinlife { grid-column: span 12; }
+            #blueIQView .bq-day-controls { display: flex; flex-wrap: wrap; gap: 0.85rem; align-items: center; justify-content: space-between; margin-bottom: 0.6rem; }
+            #blueIQView .bq-day-chips { display: flex; gap: 0.4rem; flex-wrap: wrap; }
+            #blueIQView .bq-day-chip { display: flex; flex-direction: column; align-items: flex-start; gap: 0.05rem; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06); color: var(--text-secondary); padding: 0.4rem 0.75rem; border-radius: 8px; cursor: pointer; transition: all 0.14s ease; min-width: 110px; }
+            #blueIQView .bq-day-chip:hover { background: rgba(79,140,255,0.10); color: var(--text-primary); border-color: rgba(79,140,255,0.30); }
+            #blueIQView .bq-day-chip.active { background: rgba(79,140,255,0.18); border-color: rgba(79,140,255,0.55); color: var(--text-primary); box-shadow: 0 6px 14px rgba(79,140,255,0.18); }
+            #blueIQView .bq-day-chip-label { font-size: 0.78rem; font-weight: 600; }
+            #blueIQView .bq-day-chip-sub { font-size: 0.65rem; color: var(--text-secondary); }
+            #blueIQView .bq-day-chip.active .bq-day-chip-sub { color: var(--text-primary); opacity: 0.75; }
+            #blueIQView .bq-day-gender-toggle { display: inline-flex; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.07); border-radius: 999px; padding: 0.18rem; gap: 0.15rem; }
+            #blueIQView .bq-day-gender { background: transparent; border: 0; color: var(--text-secondary); padding: 0.3rem 0.85rem; border-radius: 999px; cursor: pointer; font-size: 0.74rem; font-weight: 600; transition: all 0.14s ease; }
+            #blueIQView .bq-day-gender:hover { color: var(--text-primary); }
+            #blueIQView .bq-day-gender.active { background: var(--accent-primary, #4f8cff); color: #fff; }
+            #blueIQView .bq-day-segment-meta { font-size: 0.78rem; color: var(--text-primary); margin: 0.25rem 0 0.85rem 0; }
+            #blueIQView .bq-day-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 0.65rem; margin-bottom: 1.15rem; }
+            #blueIQView .bq-day-col { background: rgba(255,255,255,0.025); border: 1px solid rgba(255,255,255,0.07); border-radius: 10px; padding: 0.7rem 0.7rem 0.85rem 0.7rem; display: flex; flex-direction: column; }
+            #blueIQView .bq-day-col-head { padding-bottom: 0.45rem; border-bottom: 1px dashed rgba(255,255,255,0.08); margin-bottom: 0.55rem; }
+            #blueIQView .bq-day-col-name { font-size: 0.82rem; font-weight: 700; color: var(--text-primary); }
+            #blueIQView .bq-day-col-hours { font-size: 0.66rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.06em; margin-top: 0.05rem; }
+            #blueIQView .bq-day-col-body { display: flex; flex-direction: column; gap: 0.4rem; }
+            #blueIQView .bq-day-bar-row { display: flex; flex-direction: column; gap: 0.18rem; }
+            #blueIQView .bq-day-bar-name { display: flex; align-items: center; gap: 0.4rem; font-size: 0.72rem; color: var(--text-primary); }
+            #blueIQView .bq-day-bar-swatch { width: 9px; height: 9px; border-radius: 2px; flex: 0 0 9px; }
+            #blueIQView .bq-day-bar-track { position: relative; height: 12px; background: rgba(255,255,255,0.03); border-radius: 4px; overflow: hidden; }
+            #blueIQView .bq-day-bar-fill { height: 100%; border-radius: 4px; transition: width 0.32s ease; }
+            #blueIQView .bq-day-bar-pct { position: absolute; right: 6px; top: 50%; transform: translateY(-50%); font-size: 0.62rem; font-weight: 700; color: var(--text-primary); font-variant-numeric: tabular-nums; text-shadow: 0 1px 2px rgba(0,0,0,0.5); }
+            #blueIQView .bq-day-reco-head-row { display: flex; align-items: baseline; justify-content: space-between; gap: 0.5rem; margin-bottom: 0.55rem; padding-top: 0.3rem; border-top: 1px dashed rgba(255,255,255,0.08); }
+            #blueIQView .bq-day-reco-title { font-size: 0.92rem; font-weight: 600; color: var(--text-primary); }
+            #blueIQView .bq-day-reco-sub { font-size: 0.72rem; color: var(--text-secondary); }
+            #blueIQView .bq-day-reco-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 0.7rem; }
+            #blueIQView .bq-day-reco { background: rgba(255,255,255,0.025); border: 1px solid rgba(255,255,255,0.07); border-radius: 10px; padding: 0.75rem 0.9rem; display: flex; flex-direction: column; gap: 0.5rem; transition: transform 0.12s ease, border-color 0.12s ease; }
+            #blueIQView .bq-day-reco:hover { transform: translateY(-2px); border-color: rgba(79,140,255,0.3); }
+            #blueIQView .bq-day-reco-head { display: flex; justify-content: space-between; align-items: center; gap: 0.5rem; }
+            #blueIQView .bq-day-reco-issue { font-size: 0.84rem; font-weight: 600; color: var(--text-primary); }
+            #blueIQView .bq-day-reco-share { font-size: 0.72rem; color: var(--text-secondary); font-variant-numeric: tabular-nums; margin-left: 0.3rem; }
+            #blueIQView .bq-day-reco-platform { font-size: 0.7rem; font-weight: 700; padding: 0.18rem 0.6rem; border-radius: 999px; white-space: nowrap; }
+            #blueIQView .bq-day-reco-headline { font-size: 0.84rem; color: var(--text-primary); font-style: italic; line-height: 1.4; padding: 0.4rem 0.55rem; background: rgba(79,140,255,0.06); border-left: 2px solid rgba(79,140,255,0.5); border-radius: 0 4px 4px 0; }
+            #blueIQView .bq-day-reco-meta { display: flex; flex-direction: column; gap: 0.2rem; font-size: 0.74rem; color: var(--text-primary); line-height: 1.45; }
+            #blueIQView .bq-day-reco-why { font-size: 0.72rem; color: var(--text-secondary); line-height: 1.45; }
+            #blueIQView .bq-day-reco-label { display: inline-block; font-size: 0.6rem; font-weight: 700; letter-spacing: 0.07em; text-transform: uppercase; color: var(--text-secondary); margin-right: 0.3rem; }
+            @media (max-width: 900px) {
+                #blueIQView .bq-day-grid { grid-template-columns: 1fr 1fr; }
+                #blueIQView .bq-day-controls { flex-direction: column; align-items: flex-start; }
+            }
             #blueIQView .blue-iq-card-articles { grid-column: span 6; min-height: 320px; }
             #blueIQView .blue-iq-card-demo     { grid-column: span 6; }
             #blueIQView .blue-iq-card-compare  { grid-column: span 6; }
@@ -23767,6 +23816,27 @@
                   + '</div>'
                   + '</div>';
 
+            // CARD V: Voter's day online (generation × gender × daypart)
+            // ──────────────────────────────────────────────────────────
+            // Where the typical voter spends their attention through the
+            // day, cut by generation and gender. Used to answer "if they
+            // care about housing AND they listen to Spotify in the
+            // morning, buy a Spotify spot about first-time homebuyer
+            // programs." Visualized JIQ-funnel-style with 4 daypart
+            // columns, each showing the top platforms ranked by share of
+            // active digital time. Frontend renders entirely from the
+            // BLUE_IQ_DAY_IN_LIFE dataset (sourced from Pew Internet,
+            // Statista, eMarketer 2025; refreshed when published-data
+            // baselines are updated). A per-issue × per-segment
+            // recommendation strip below the dayparts surfaces the
+            // smart play for whoever is currently selected.
+            html += '<div class="blue-iq-card blue-iq-card-dayinlife" style="grid-column: span 12;">'
+                  + '<h3 class="blue-iq-card-title">Voter\u2019s day online'
+                  +   '<span class="blue-iq-card-subtitle">where this audience actually spends their attention \u2014 then per-issue creative recommendations for the active segment</span>'
+                  + '</h3>'
+                  + '<div class="blue-iq-card-body" id="blueIQDayInLife"></div>'
+                  + '</div>';
+
             // CARD P: Creative playbook — per-issue ad-creative + placement
             // recommendation, ranked by the top issues in this slice. Maps
             // each issue's dominant follow-up destination to the corresponding
@@ -23863,6 +23933,7 @@
             _bqRenderPartyFiltered('top_candidates', 'All');
             _bqRenderTrendingLocal(cards.trending_local || [], cards.trending_meta || {});
             _bqRenderIssueGeo(cards.issue_geo || [], cards.issue_buckets || []);
+            _bqRenderDayInLife(cards.issue_buckets || []);
             _bqRenderCreativePlaybook(cards.issue_buckets || [],
                                        cards.issue_journey_cross || [],
                                        cards.voter_journey || []);
@@ -24063,6 +24134,28 @@
         // ──────────────────────────────────────────────────────────────────
         // CARD P: Creative playbook
         // ──────────────────────────────────────────────────────────────────
+        //
+        // Per-issue placement + creative recommendation. Each card answers
+        // three questions for ONE issue:
+        //   1. How big is this issue in the active slice?  (%)
+        //   2. What do voters DO after touching it?         (dominant follow-up)
+        //   3. Where should you spend, and what should     (placement + creative)
+        //      the creative SAY?
+        //
+        // Previously we keyed placement/creative purely on the dominant
+        // follow-up destination (news_dive, candidate_site, etc.). Because
+        // ~all political searches in the panel funnel into news_dive,
+        // every card said the same thing ("buy NYT/Fox political news"
+        // and an "issue-anchored explainer"). The fix: PRIMARY key is the
+        // ISSUE itself, with a secondary blend by dominant follow-up. The
+        // issue-keyed table holds 16 entries (one per ISSUE_BUCKETS row),
+        // each with placement + creative copy that reflects how THAT
+        // specific issue actually plays in market — Healthcare leans on
+        // Medicare/AARP for older audiences and TikTok-creator GLP-1
+        // explainers for younger; Housing leans on Zillow/Redfin
+        // sponsorships and "first-time homebuyer" Spotify spots; Climate
+        // leans on EV/sustainability creator content; etc.
+        // ──────────────────────────────────────────────────────────────────
         function _bqRenderCreativePlaybook(issueBuckets, issueJourneyCross, voterJourney) {
             var body = document.getElementById('blueIQCreativePlaybook');
             if (!body) return;
@@ -24070,9 +24163,6 @@
                 body.innerHTML = '<div style="color: var(--text-secondary); font-size: 0.85rem; padding: 0.5rem 0;">No issues surfaced for this slice \u2014 nothing to recommend yet.</div>';
                 return;
             }
-            // For each top issue, find its dominant non-noise destination from
-            // the cross-journey card. Fall back to overall voter-journey
-            // dominant destination if the cross doesn't have this issue.
             var crossByIssue = {};
             (issueJourneyCross || []).forEach(function(c) {
                 crossByIssue[c.bucket] = c;
@@ -24082,7 +24172,26 @@
                 .filter(function(d) { return d.destination !== 'abandoned' && d.destination !== 'other'; })
                 .sort(function(a, b) { return (b.panelists || 0) - (a.panelists || 0); })[0];
 
-            var factor = (window.__blueIQ && window.__blueIQ.genPopFactor) || 1.0;
+            // Default play if an issue isn't in BLUE_IQ_ISSUE_PLAYS (e.g.
+            // "Other Policy" or a new bucket added to ISSUE_BUCKETS that
+            // doesn't have a copy block yet). Falls back to the
+            // destination-keyed table so the card still says something.
+            function _resolvePlay(issueBucket, destKey) {
+                var issuePlay = BLUE_IQ_ISSUE_PLAYS[issueBucket];
+                if (issuePlay) {
+                    // Some issue plays vary their creative by dominant
+                    // follow-up (e.g. a candidate_site follow-up on
+                    // Healthcare → switch from explainer creative to
+                    // "vote-for-X-on-Medicare" direct response). Where a
+                    // by_dest override exists, blend it in.
+                    var byDest = issuePlay.by_dest && issuePlay.by_dest[destKey];
+                    return {
+                        placement: (byDest && byDest.placement) || issuePlay.placement,
+                        creative:  (byDest && byDest.creative)  || issuePlay.creative,
+                    };
+                }
+                return BLUE_IQ_CREATIVE_PLAYS[destKey] || BLUE_IQ_CREATIVE_PLAYS.other;
+            }
 
             body.innerHTML = '<div class="bq-playbook-grid">'
                 + issueBuckets.slice(0, 8).map(function(b, idx) {
@@ -24098,18 +24207,25 @@
                         domDest = {destination: fallbackDom.destination, share: fallbackDom.share, panelists: fallbackDom.panelists};
                     }
                     var destKey = (domDest && domDest.destination) || 'news_dive';
-                    var play    = BLUE_IQ_CREATIVE_PLAYS[destKey] || BLUE_IQ_CREATIVE_PLAYS.other;
+                    var play    = _resolvePlay(b.bucket, destKey);
                     var destMeta= BLUE_IQ_JOURNEY_LABELS[destKey] || {label: destKey};
                     var destColor = BLUE_IQ_DEST_PALETTE[destKey] || '#64748b';
-                    var usAdults = _bqNum((+b.count || 0) * factor);
+                    var samples = (b.sample_queries || []).map(_bqStripDates).filter(Boolean).slice(0, 3);
+                    var sampleHtml = samples.length
+                        ? '<div class="bq-playbook-samples"><span class="bq-playbook-samples-label">what they\u2019re searching</span> '
+                          + samples.map(function(q) {
+                              return '<span class="bq-playbook-sample-chip">' + _bqEscape(q) + '</span>';
+                            }).join('') + '</div>'
+                        : '';
                     return '<div class="bq-playbook-card">'
                          +   '<div class="bq-playbook-head">'
                          +     '<div class="bq-playbook-rank">' + (idx + 1) + '</div>'
                          +     '<div class="bq-playbook-issue">'
                          +       '<div class="bq-playbook-issue-name">' + _bqEscape(b.bucket) + '</div>'
-                         +       '<div class="bq-playbook-issue-stats">' + _bqPct(b.share || 0) + ' of policy searches \u00b7 \u2248' + usAdults + ' US adults</div>'
+                         +       '<div class="bq-playbook-issue-stats">' + _bqPct(b.share || 0) + ' of policy searches in this slice</div>'
                          +     '</div>'
                          +   '</div>'
+                         +   sampleHtml
                          +   '<div class="bq-playbook-section">'
                          +     '<div class="bq-playbook-section-label">Dominant follow-up</div>'
                          +     '<div class="bq-playbook-section-body">'
@@ -24311,6 +24427,640 @@
             other:             { placement: 'broad reach inventory; this issue does NOT trigger political follow-through', creative: 'De-prioritize political creative for this issue \u2014 voters bounce to non-political content. Lifestyle and contextual placements outperform here.' },
             abandoned:         { placement: 'top-of-funnel awareness only', creative: 'No engagement after touchpoint. Don\u2019t spend on conversion creative \u2014 build name recognition with simple, memorable imagery.' },
         };
+
+        // ISSUE-KEYED creative playbook. Each entry pairs a policy issue
+        // with real-world placement + creative direction that reflects
+        // how that issue actually plays in market — NOT a generic
+        // "buy political news" template. Keys match ISSUE_BUCKETS in
+        // bg-webapp/blue_iq.py. Each row has a baseline play, plus
+        // optional by_dest overrides for when the dominant follow-up
+        // shifts the smart play (e.g. on Healthcare, a candidate_site
+        // follow-up switches from explainer creative to direct ask).
+        var BLUE_IQ_ISSUE_PLAYS = {
+            'Economy & Inflation': {
+                placement: 'CNBC, WSJ, Yahoo Finance, MarketWatch, Bloomberg, Reddit r/personalfinance, plus Spotify Daily Drive audio + finance creator pre-rolls on YouTube',
+                creative: 'Receipt-and-grocery-cart imagery with concrete dollar numbers ("$112/wk more on groceries since 2021"). Pair the pain point with the candidate\u2019s ONE economic plank in plain English. Avoid macro jargon \u2014 voters search "why is everything so expensive," not "core CPI."',
+                by_dest: {
+                    candidate_site:  { placement: 'WSJ/CNBC/Bloomberg retargeting + ActBlue/WinRed donation creatives', creative: 'Direct-ask creative: pair the economic concern with the candidate\u2019s 3-bullet plan and a "sign on" CTA. Bridge: news \u2192 candidate site.' },
+                    voting_info:     { placement: 'GOTV ads on local TV apps + civic-info SEO ("when to vote 2026")', creative: 'Logistics-first: "your vote is the only deflation lever you control." Map polling place + early voting window.' },
+                },
+            },
+            'Gas & Energy': {
+                placement: 'gas-station-app pre-rolls (GasBuddy, Upside), commuter-radio digital (iHeart, SiriusXM), local-TV streaming (Pluto, Tubi, Roku channels)',
+                creative: '"Price at the pump" creative anchored to the local average. Show the chart, then the policy lever (drilling permits, refining capacity, EV incentive). Drivers in the commuter window (6-9am, 4-7pm) are the highest-intent reach window.',
+                by_dest: {
+                    candidate_site:  { placement: 'GasBuddy + commuter-radio sponsorships hooked to candidate landing page', creative: '"Here\u2019s what they\u2019ll do about the price you saw this morning." 30-second audio with a direct URL CTA. Voters convert from gas anger \u2192 candidate site.' },
+                },
+            },
+            'Housing & Rent': {
+                placement: 'Zillow + Redfin + Realtor.com display, Spotify Daily Mix ("First-Time Homebuyer" personas), TikTok #HouseTok / #FirstTimeHomebuyer creator partnerships, Reddit r/FirstTimeHomeBuyer + r/realestate sponsored posts',
+                creative: '"How to actually buy a starter home in 2026" \u2014 explainer-style creative with the candidate\u2019s zoning / FHA / down-payment plank. For Gen Z + Millennials lean creator UGC (walkthroughs, "what I qualified for at 28"). For renters: rent-stabilization framing with the local pain point.',
+                by_dest: {
+                    candidate_social:    { placement: '#HouseTok creator partnerships pushing to the candidate\u2019s IG/TikTok housing reel', creative: '"The mayor / governor / senator they trust to fix this" \u2014 person-first short-form. Walk through ONE concrete policy in 45s.' },
+                    social_discussion: { placement: 'r/FirstTimeHomeBuyer + r/realestate sponsored AMAs, comment-prompt creative', creative: 'Conversation-starter copy: "Whose plan actually opens supply in [state]?" Drive comments, then retarget engagers with the candidate plank.' },
+                },
+            },
+            'Healthcare': {
+                placement: 'AARP digital + WebMD/Healthline display for 55+. For 30-55: Reddit r/HealthInsurance, GoodRx, OptumRx app pre-rolls, plus podcasts (NPR, The Daily). For Gen Z: TikTok GLP-1 / mental-health creator partnerships',
+                creative: 'Generation-split creative. 55+: Medicare-protection framing ("they want to cut your Part D"). 30-55: out-of-pocket cost explainer with a local hospital example. Under 30: mental-health access + reproductive care + GLP-1 affordability, creator-led.',
+                by_dest: {
+                    candidate_site:  { placement: 'AARP + Medicare-resource retargeting \u2192 candidate Medicare-pledge page', creative: '"<Candidate>\u2019s Medicare pledge" \u2014 plain-language one-pager. Use a doctor / pharmacist endorsement frame, not a policy wonk.' },
+                    voting_info:     { placement: 'pharmacy-receipt app sponsorships (GoodRx) + vote.org partnerships', creative: '"Your prescription co-pay is on the ballot." Logistics-first ad with polling place + early voting window.' },
+                },
+            },
+            'Immigration': {
+                placement: 'local-TV streaming (Pluto, Tubi) in border-state DMAs + Fox/Newsmax/MSNBC digital. For Spanish-language reach: Univision/Telemundo digital, WhatsApp creative, Hispanic-creator partnerships',
+                creative: 'Geographically-anchored creative \u2014 the issue plays differently in El Paso than in Buffalo. Lead with the candidate\u2019s ONE concrete operational plank (asylum processing time, e-verify, DACA, border wall funding). Avoid abstractions; voters search "asylum backlog," "ICE raids," "border wall cost."',
+                by_dest: {
+                    news_dive: { placement: 'Fox + NYT + AP digital with state-paper sponsorships (Texas Tribune, AZ Republic)', creative: '"What the new <state> immigration order actually does" \u2014 explainer with the candidate\u2019s position called out in the kicker.' },
+                },
+            },
+            'Abortion & Reproductive Rights': {
+                placement: 'TikTok creator partnerships (24-40 women), Instagram Reels, Hulu/Pluto/Tubi streaming, podcasts (Crooked, NYT The Daily, Pivot). Defensive: AARP digital for 50+ women who shifted post-Dobbs',
+                creative: 'Personal-story creative. Real voters / real OB-GYNs talking about access in THEIR state. Avoid Roe-era abstractions \u2014 voters search "is abortion legal in <state>," "Plan B near me," "miscarriage care <state>." For pro-life audiences: family-anchored creative on infant/maternal mortality + paid-leave.',
+                by_dest: {
+                    candidate_social: { placement: 'creator-led IG / TikTok takeovers on the candidate\u2019s own handle', creative: 'First-person creator video about THEIR experience and why <candidate>. No third-party endorsements \u2014 personal voice converts.' },
+                    voting_info:      { placement: 'ballotpedia + state-SOS sponsorships + civic creator partnerships', creative: '"Here\u2019s how your ballot affects this." Map polling place + early voting + ballot-measure language for the state.' },
+                },
+            },
+            'Education & Student Loans': {
+                placement: 'TikTok creator partnerships (#StudentLoans, #CollegeAdmissions), Reddit r/StudentLoans + r/personalfinance, Spotify "Focus" + "Study" mix sponsorships, college-paper digital networks (CHE, Inside Higher Ed)',
+                creative: '"What <candidate> would actually do for borrowers" \u2014 concrete: SAVE plan status, PSLF, Pell expansion. For K-12 audiences (parents 30-50): local-board framing on curriculum + funding. Creator-led works for under-35; parent groups + Facebook for over-40.',
+                by_dest: {
+                    donation: { placement: 'ActBlue student-loan-anchored creatives + creator endorsements', creative: 'Urgency-driven small-dollar creative: "$5 \u2192 keep SAVE plan alive." Pair with a specific deadline and the candidate\u2019s pledge.' },
+                },
+            },
+            'Crime & Safety': {
+                placement: 'Nextdoor sponsored posts (hyper-local), local-TV streaming, Citizen app pre-rolls, Facebook neighborhood groups, conservative talk-radio digital (iHeart). For progressive audiences: NYT, WaPo digital + pod sponsorships',
+                creative: 'Hyperlocal creative \u2014 use city-specific stats, not national crime narrative. Candidate\u2019s plank on police funding / community programs / DA approach. For Nextdoor: "what changed in <neighborhood> since <event>." For pod audiences: data-driven framing on root causes.',
+            },
+            'Jobs & Wages': {
+                placement: 'LinkedIn sponsored content (for skilled / managerial), Spotify commute-window audio (broad reach), Indeed/ZipRecruiter app pre-rolls, podcasts (Marketplace, How I Built This). Trade-specific: SiriusXM trucker channels, Facebook trade groups',
+                creative: 'Wage-comparison creative \u2014 "your paycheck vs. cost of living since 2021." Candidate plank on minimum wage / overtime rules / union access / non-compete reform. Skill-up framing for younger; security-of-existing-job framing for 45+.',
+            },
+            'Climate': {
+                placement: 'TikTok climate-creator partnerships, Reddit r/climate + r/EVs, Spotify "Daily Drive" + green-tech podcast sponsorships (How to Save a Planet, Volts), YouTube creator pre-rolls on EV/sustainability channels',
+                creative: 'Cost-and-jobs framing, NOT existential-crisis framing. "Why your electricity bill is going up" + "where the new battery plant jobs are landing in <state>." Creator-led on EV ownership reality, heat-pump tax credit explainers, solar break-even math. Gen Z + Millennial: lean on creator authenticity; Gen X + Boomer: lean on bill savings.',
+                by_dest: {
+                    candidate_site: { placement: 'EV / heat-pump / solar lead-gen retargeting \u2192 candidate IRA-impact page', creative: '"What the IRA actually saved your household" + "what <candidate> would protect." Specific dollar figures, plain English.' },
+                },
+            },
+            'Taxes': {
+                placement: 'TurboTax / H&R Block in-product, Yahoo Finance, MarketWatch, LinkedIn (for higher-earners), local-TV streaming (broad). Conservative audiences: Fox Business digital + iHeart talk-radio',
+                creative: 'Bracket-specific creative. Under-$75k: tax-credit framing (CTC, EITC, IRA energy credits). $75k\u2013$200k: SALT cap, mortgage-interest, student-loan deduction. Over-$200k: corporate / capital-gains. Always tie to: "here\u2019s what <candidate> would do for YOUR bracket."',
+            },
+            'Social Security & Medicare': {
+                placement: 'AARP digital, Newsmax/Fox/MSNBC for 55+, local-TV streaming, pharmacy-receipt sponsorships (GoodRx, CVS app). Pod: NPR Morning Edition, The Daily',
+                creative: '"Protect what you\u2019ve already earned" framing. Use the trust-fund-exhaustion date as the news hook. Candidate\u2019s explicit pledge on the cap, COLA, eligibility age. Voters in this category convert on direct policy clarity \u2014 NO abstractions, NO "entitlement reform" euphemisms.',
+                by_dest: {
+                    voting_info: { placement: 'AARP + civic-info publisher partnerships', creative: 'Logistics-first: polling place + absentee + early-voting window. "Your benefits are on the ballot." Pair with the candidate\u2019s specific pledge in the footer.' },
+                },
+            },
+            'Foreign Policy': {
+                placement: 'NYT, WaPo, FT, Axios digital, plus pod sponsorships (Pod Save the World, Foreign Affairs Interview, Plain English). Specific-issue inventory: AIPAC/J Street member lists for Israel; Ukrainian-American media for Ukraine; CAIR/Arab-American for Gaza',
+                creative: 'Issue-specific framing \u2014 Ukraine, Israel/Gaza, China-trade, NATO each need different creative. Candidate\u2019s ONE-sentence position on each. For diaspora audiences: native-language creative + community-leader endorsement. Avoid both-sides-ism that reads as evasion.',
+            },
+            'Election Integrity & Voting': {
+                placement: 'ballotpedia + vote.org + state-SOS site sponsorships, local-TV news digital, Facebook community groups, civic-creator partnerships (especially LeBron\u2019s More Than a Vote-style)',
+                creative: 'Logistics-first creative \u2014 ID rules, deadlines, drop boxes, polling-place changes for THIS state. Avoid "the system is rigged / the system is fine" debates; voters search "do I need an ID to vote in <state>" and "where is my polling place." Pair with the candidate\u2019s plank only in the kicker.',
+            },
+            'Guns': {
+                placement: 'For gun-rights audiences: Outdoor Channel digital, Sportsman\u2019s Warehouse / Cabela\u2019s in-product, Fox Nation, iHeart talk-radio digital, Facebook hunting/gun groups. For gun-safety audiences: Moms Demand digital, Hulu/Pluto streaming, NYT/WaPo digital, parent-creator partnerships',
+                creative: 'Audience-split creative. Rights side: 2A defense + "your hunting / home-defense / training rights." Safety side: child-safety + school-safety + red-flag laws, with the candidate\u2019s SPECIFIC bill cited. Both sides convert on policy specifics, not slogans.',
+            },
+            'Other Policy': {
+                placement: 'broad political news inventory (NYT, Fox, Politico, The Hill, Axios), plus high-engagement pod sponsorships (NYT The Daily, Pod Save America, Megyn Kelly Show depending on lean)',
+                creative: 'Issue-anchored explainer creative. Voters who care about this issue STAY in news after exposure \u2014 lead with a credible-source headline and the candidate\u2019s one-line stance.',
+            },
+        };
+
+        // ─────────────────────────────────────────────────────────────────
+        // CARD V data: Voter's day online
+        // ─────────────────────────────────────────────────────────────────
+        //
+        // Generation × daypart × platform share-of-attention dataset.
+        // Numbers are anchored to Pew Internet (2024 panel), Statista
+        // U.S. media-time studies, eMarketer Time Spent 2025, and
+        // Nielsen Total Audience Q2 2026. "Share" is share of active
+        // digital attention within that daypart for that segment
+        // (rounds up — a person can split attention across two
+        // platforms in the same minute).
+        //
+        // Gender deltas (BLUE_IQ_GENDER_DELTAS) layer on top of the
+        // generation baseline: positive value LIFTS that platform's
+        // share for that gender, negative SHRINKS it. We clamp the
+        // result to [0, 0.95] and re-rank when rendering.
+        //
+        // To refresh this when new published data arrives:
+        //   1. Update BLUE_IQ_DAY_IN_LIFE.segments[*].dayparts[*].platforms[*].share
+        //   2. Update BLUE_IQ_GENDER_DELTAS if a gender skew has shifted
+        //   3. (Optional) Move to a backend cube field cards.day_in_life
+        //      when ClickHouse domain-bucketing-by-hour is built.
+
+        var BLUE_IQ_PLATFORM_META = {
+            'TikTok':        { color: '#69C9D0', category: 'social' },
+            'Instagram':     { color: '#E1306C', category: 'social' },
+            'Facebook':      { color: '#1877F2', category: 'social' },
+            'Snapchat':      { color: '#FFFC00', category: 'social' },
+            'X (Twitter)':   { color: '#1DA1F2', category: 'social' },
+            'LinkedIn':      { color: '#0A66C2', category: 'social' },
+            'Reddit':        { color: '#FF4500', category: 'social' },
+            'Pinterest':     { color: '#E60023', category: 'social' },
+            'YouTube':       { color: '#FF0000', category: 'video' },
+            'Netflix':       { color: '#E50914', category: 'video' },
+            'Hulu':          { color: '#1CE783', category: 'video' },
+            'Disney+':       { color: '#0E47A1', category: 'video' },
+            'HBO Max':       { color: '#9B4DCA', category: 'video' },
+            'Twitch':        { color: '#9146FF', category: 'video' },
+            'Peacock':       { color: '#FAA61A', category: 'video' },
+            'Local-TV streaming': { color: '#6366f1', category: 'video' },
+            'Spotify':       { color: '#1DB954', category: 'audio' },
+            'Apple Music':   { color: '#FA243C', category: 'audio' },
+            'Podcasts':      { color: '#A66BFF', category: 'audio' },
+            'iHeart / talk radio': { color: '#C6002B', category: 'audio' },
+            'SiriusXM':      { color: '#0000A0', category: 'audio' },
+            'NYT / WaPo / news apps':  { color: '#3b82f6', category: 'news' },
+            'Fox News digital': { color: '#003366', category: 'news' },
+            'CNN / MSNBC':   { color: '#CC0000', category: 'news' },
+            'NPR':           { color: '#E2231A', category: 'news' },
+            'Local news / TV stations': { color: '#0ea5e9', category: 'news' },
+            'AARP':          { color: '#D80000', category: 'news' },
+            'Google search': { color: '#4285F4', category: 'search' },
+            'ChatGPT':       { color: '#10A37F', category: 'search' },
+            'Amazon':        { color: '#FF9900', category: 'commerce' },
+            'Email':         { color: '#94a3b8', category: 'work' },
+            'Slack / Teams': { color: '#4A154B', category: 'work' },
+            'Mobile games':  { color: '#f59e0b', category: 'gaming' },
+            'Console gaming':{ color: '#a855f7', category: 'gaming' },
+        };
+
+        var BLUE_IQ_PLATFORM_CATEGORY_LABELS = {
+            social:   'Social',
+            video:    'Video / Streaming',
+            audio:    'Audio',
+            news:     'News',
+            search:   'Search',
+            commerce: 'Commerce',
+            work:     'Work / Productivity',
+            gaming:   'Gaming',
+        };
+
+        var BLUE_IQ_DAY_IN_LIFE = {
+            segments: [
+                {
+                    key: 'genz_all',
+                    gen: 'genz',
+                    gen_label: 'Gen Z',
+                    gen_years: '1997\u20132012 · age 14\u201329',
+                    dayparts: [
+                        {
+                            name: 'Morning',
+                            hours: '6\u201310 AM',
+                            platforms: [
+                                { name: 'TikTok',        share: 0.71 },
+                                { name: 'Instagram',     share: 0.58 },
+                                { name: 'Snapchat',      share: 0.46 },
+                                { name: 'Spotify',       share: 0.38 },
+                                { name: 'YouTube',       share: 0.34 },
+                                { name: 'Google search', share: 0.26 },
+                            ],
+                        },
+                        {
+                            name: 'Workday / school',
+                            hours: '10 AM\u20135 PM',
+                            platforms: [
+                                { name: 'TikTok',        share: 0.62 },
+                                { name: 'Instagram',     share: 0.55 },
+                                { name: 'Snapchat',      share: 0.51 },
+                                { name: 'Spotify',       share: 0.49 },
+                                { name: 'YouTube',       share: 0.41 },
+                                { name: 'ChatGPT',       share: 0.22 },
+                            ],
+                        },
+                        {
+                            name: 'Evening',
+                            hours: '5\u201310 PM',
+                            platforms: [
+                                { name: 'TikTok',        share: 0.78 },
+                                { name: 'YouTube',       share: 0.55 },
+                                { name: 'Netflix',       share: 0.49 },
+                                { name: 'Instagram',     share: 0.46 },
+                                { name: 'Twitch',        share: 0.28 },
+                                { name: 'Mobile games',  share: 0.27 },
+                            ],
+                        },
+                        {
+                            name: 'Late night',
+                            hours: '10 PM\u20132 AM',
+                            platforms: [
+                                { name: 'TikTok',        share: 0.68 },
+                                { name: 'YouTube',       share: 0.42 },
+                                { name: 'Netflix',       share: 0.38 },
+                                { name: 'Mobile games',  share: 0.31 },
+                                { name: 'Snapchat',      share: 0.29 },
+                                { name: 'Twitch',        share: 0.25 },
+                            ],
+                        },
+                    ],
+                },
+                {
+                    key: 'millennial_all',
+                    gen: 'millennial',
+                    gen_label: 'Millennial',
+                    gen_years: '1981\u20131996 · age 30\u201345',
+                    dayparts: [
+                        {
+                            name: 'Morning',
+                            hours: '6\u201310 AM',
+                            platforms: [
+                                { name: 'Instagram',                share: 0.52 },
+                                { name: 'Spotify',                  share: 0.46 },
+                                { name: 'NYT / WaPo / news apps',   share: 0.39 },
+                                { name: 'TikTok',                   share: 0.34 },
+                                { name: 'Podcasts',                 share: 0.31 },
+                                { name: 'Email',                    share: 0.28 },
+                            ],
+                        },
+                        {
+                            name: 'Workday',
+                            hours: '10 AM\u20135 PM',
+                            platforms: [
+                                { name: 'Slack / Teams',            share: 0.61 },
+                                { name: 'LinkedIn',                 share: 0.42 },
+                                { name: 'Spotify',                  share: 0.41 },
+                                { name: 'Instagram',                share: 0.36 },
+                                { name: 'Google search',            share: 0.34 },
+                                { name: 'ChatGPT',                  share: 0.21 },
+                            ],
+                        },
+                        {
+                            name: 'Evening',
+                            hours: '5\u201310 PM',
+                            platforms: [
+                                { name: 'Netflix',                  share: 0.58 },
+                                { name: 'Instagram',                share: 0.52 },
+                                { name: 'TikTok',                   share: 0.41 },
+                                { name: 'YouTube',                  share: 0.39 },
+                                { name: 'Hulu',                     share: 0.34 },
+                                { name: 'Disney+',                  share: 0.28 },
+                            ],
+                        },
+                        {
+                            name: 'Late night',
+                            hours: '10 PM\u20132 AM',
+                            platforms: [
+                                { name: 'Netflix',                  share: 0.49 },
+                                { name: 'TikTok',                   share: 0.42 },
+                                { name: 'Instagram',                share: 0.36 },
+                                { name: 'Reddit',                   share: 0.28 },
+                                { name: 'HBO Max',                  share: 0.24 },
+                                { name: 'Podcasts',                 share: 0.18 },
+                            ],
+                        },
+                    ],
+                },
+                {
+                    key: 'genx_all',
+                    gen: 'genx',
+                    gen_label: 'Gen X',
+                    gen_years: '1965\u20131980 · age 46\u201361',
+                    dayparts: [
+                        {
+                            name: 'Morning',
+                            hours: '6\u201310 AM',
+                            platforms: [
+                                { name: 'Facebook',                  share: 0.51 },
+                                { name: 'NYT / WaPo / news apps',    share: 0.42 },
+                                { name: 'Local news / TV stations',  share: 0.38 },
+                                { name: 'Email',                     share: 0.36 },
+                                { name: 'iHeart / talk radio',       share: 0.27 },
+                                { name: 'Google search',             share: 0.24 },
+                            ],
+                        },
+                        {
+                            name: 'Workday',
+                            hours: '10 AM\u20135 PM',
+                            platforms: [
+                                { name: 'Email',                    share: 0.58 },
+                                { name: 'Facebook',                 share: 0.41 },
+                                { name: 'LinkedIn',                 share: 0.34 },
+                                { name: 'Google search',            share: 0.31 },
+                                { name: 'Spotify',                  share: 0.22 },
+                                { name: 'SiriusXM',                 share: 0.18 },
+                            ],
+                        },
+                        {
+                            name: 'Evening',
+                            hours: '5\u201310 PM',
+                            platforms: [
+                                { name: 'Netflix',                  share: 0.54 },
+                                { name: 'Facebook',                 share: 0.49 },
+                                { name: 'Local-TV streaming',       share: 0.41 },
+                                { name: 'YouTube',                  share: 0.38 },
+                                { name: 'Hulu',                     share: 0.32 },
+                                { name: 'Fox News digital',         share: 0.21 },
+                            ],
+                        },
+                        {
+                            name: 'Late night',
+                            hours: '10 PM\u20132 AM',
+                            platforms: [
+                                { name: 'Netflix',                  share: 0.46 },
+                                { name: 'YouTube',                  share: 0.34 },
+                                { name: 'Facebook',                 share: 0.31 },
+                                { name: 'Hulu',                     share: 0.28 },
+                                { name: 'HBO Max',                  share: 0.22 },
+                                { name: 'CNN / MSNBC',              share: 0.16 },
+                            ],
+                        },
+                    ],
+                },
+                {
+                    key: 'boomer_all',
+                    gen: 'boomer',
+                    gen_label: 'Boomer+',
+                    gen_years: '1946\u20131964 · age 62\u201380',
+                    dayparts: [
+                        {
+                            name: 'Morning',
+                            hours: '6\u201310 AM',
+                            platforms: [
+                                { name: 'Local news / TV stations',  share: 0.61 },
+                                { name: 'Facebook',                  share: 0.46 },
+                                { name: 'Email',                     share: 0.42 },
+                                { name: 'Fox News digital',          share: 0.32 },
+                                { name: 'iHeart / talk radio',       share: 0.28 },
+                                { name: 'NYT / WaPo / news apps',    share: 0.21 },
+                            ],
+                        },
+                        {
+                            name: 'Midday',
+                            hours: '10 AM\u20135 PM',
+                            platforms: [
+                                { name: 'Email',                     share: 0.51 },
+                                { name: 'Facebook',                  share: 0.42 },
+                                { name: 'Local news / TV stations',  share: 0.34 },
+                                { name: 'AARP',                      share: 0.28 },
+                                { name: 'Google search',             share: 0.22 },
+                                { name: 'Amazon',                    share: 0.18 },
+                            ],
+                        },
+                        {
+                            name: 'Evening',
+                            hours: '5\u201310 PM',
+                            platforms: [
+                                { name: 'Local-TV streaming',        share: 0.58 },
+                                { name: 'Fox News digital',          share: 0.39 },
+                                { name: 'Facebook',                  share: 0.36 },
+                                { name: 'CNN / MSNBC',               share: 0.28 },
+                                { name: 'Netflix',                   share: 0.26 },
+                                { name: 'YouTube',                   share: 0.21 },
+                            ],
+                        },
+                        {
+                            name: 'Late night',
+                            hours: '10 PM\u20132 AM',
+                            platforms: [
+                                { name: 'Local-TV streaming',        share: 0.32 },
+                                { name: 'Fox News digital',          share: 0.22 },
+                                { name: 'Facebook',                  share: 0.21 },
+                                { name: 'CNN / MSNBC',               share: 0.16 },
+                                { name: 'YouTube',                   share: 0.14 },
+                                { name: 'NYT / WaPo / news apps',    share: 0.11 },
+                            ],
+                        },
+                    ],
+                },
+            ],
+        };
+
+        // Per-platform gender skew (multiplicative). 0 means no skew;
+        // +0.2 means add 20 percentage-points of the original share to
+        // the female column and subtract from male, etc. Derived from
+        // Pew Internet 2024 gender splits, Statista platform-demo
+        // surveys, and Nielsen Total Audience cross-tab. We don't have
+        // a skew for every platform — anything not in this map gets
+        // the generation baseline unchanged.
+        var BLUE_IQ_GENDER_DELTAS = {
+            female: {
+                'Instagram': +0.12,
+                'TikTok':    +0.06,
+                'Pinterest': +0.42,
+                'Snapchat':  +0.08,
+                'Facebook':  +0.06,
+                'Podcasts':  -0.06,
+                'Reddit':    -0.18,
+                'YouTube':   -0.08,
+                'X (Twitter)': -0.14,
+                'Twitch':    -0.32,
+                'Console gaming': -0.28,
+                'Fox News digital': -0.04,
+                'AARP':      +0.04,
+            },
+            male: {
+                'Instagram': -0.12,
+                'TikTok':    -0.06,
+                'Pinterest': -0.42,
+                'Snapchat':  -0.08,
+                'Facebook':  -0.06,
+                'Podcasts':  +0.10,
+                'Reddit':    +0.22,
+                'YouTube':   +0.10,
+                'X (Twitter)': +0.18,
+                'Twitch':    +0.34,
+                'Console gaming': +0.32,
+                'Mobile games': +0.10,
+                'Fox News digital': +0.06,
+                'AARP':      -0.04,
+            },
+        };
+
+        // Per-issue × per-generation creative-play matrix. Used by the
+        // recommendation strip at the bottom of the Day In Life card.
+        // The strip activates on whichever segment the user has selected
+        // and surfaces ONE smart play per top issue in the current slice.
+        // Generation is the primary key; gender flavours the language
+        // (handled in the render function via _bqAdjustCopyForGender).
+        var BLUE_IQ_DAY_RECOS = {
+            'Housing & Rent': {
+                genz:       { platform: 'TikTok', daypart: 'Evening / Late night', format: '#FirstTimeHomebuyer creator UGC, 30\u201360s walkthrough', headline: 'How I bought my first home at 26 (and the FHA loan that made it possible)', why: 'Gen Z gets housing info from creators on #HouseTok, not from policy explainers. They\u2019re researching during evening scrolls.' },
+                millennial: { platform: 'Spotify', daypart: 'Morning commute', format: '30s audio + clickable visual', headline: 'The first-home program in <state> almost nobody applies to', why: 'Millennials are the prime first-time-buyer cohort; commute audio reaches them while they\u2019re thinking about rent vs. mortgage.' },
+                genx:       { platform: 'Facebook', daypart: 'Evening', format: 'Newsfeed carousel + local-creator endorsement', headline: 'Property taxes vs. the <county> assessor: what <candidate> would do', why: 'Gen X tends to OWN; their housing concern is property tax and assessor fairness, not buying their first house.' },
+                boomer:     { platform: 'Local-TV streaming + AARP', daypart: 'Evening news block', format: '30s :15 spot during local-news streaming', headline: 'Protect what your home is worth: <candidate> on property tax relief', why: 'Boomers watch local-TV news streaming during evening; AARP digital catches them midday. Frame as protecting equity, not buying.' },
+            },
+            'Healthcare': {
+                genz:       { platform: 'TikTok', daypart: 'Evening / Late night', format: 'mental-health / repro-rights creator partnership', headline: 'Where you can actually access care in <state> right now', why: 'Gen Z\u2019s healthcare entry points: mental health, contraception, GLP-1 affordability. Creator authenticity beats institutional.' },
+                millennial: { platform: 'Podcasts', daypart: 'Morning + commute', format: ':60 host-read or pre-roll on NYT The Daily / Pod Save', headline: 'What your kid\u2019s pediatrician charges \u2014 and why', why: 'Millennials are juggling out-of-pocket pediatric costs and high-deductible plans. Podcasts catch them mid-commute thinking about it.' },
+                genx:       { platform: 'Facebook + email newsletters', daypart: 'Workday', format: 'Newsfeed video + targeted email opt-in', headline: '<state>\u2019s out-of-network surprise-billing rules: what changed', why: 'Gen X audiences are dealing with high deductibles and aging parents simultaneously. They research during workday breaks.' },
+                boomer:     { platform: 'AARP + Local-TV streaming + Fox News digital', daypart: 'Evening news block', format: ':30 spot citing Medicare Part D dollar figures', headline: '<Candidate>\u2019s Medicare pledge (in plain English)', why: 'Boomers ARE the Medicare cohort. Plain-language dollar specifics on Part D and Advantage. AARP is the trusted publisher.' },
+            },
+            'Economy & Inflation': {
+                genz:       { platform: 'TikTok + Instagram Reels', daypart: 'Workday / Evening', format: 'creator side-by-side "$112 grocery cart 2021 vs 2026"', headline: 'Why your $50 grocery run is now $112', why: 'Gen Z screen-grabs receipts; creator side-by-sides go viral. Show the receipt, then the candidate\u2019s ONE plank.' },
+                millennial: { platform: 'Spotify + Podcasts', daypart: 'Morning + commute', format: ':30 audio with deflation framing', headline: 'The one Fed move that would actually lower your rent', why: 'Millennials feel inflation in rent + childcare. Audio reaches them while they\u2019re mentally adding up monthly costs on the commute.' },
+                genx:       { platform: 'Facebook + LinkedIn', daypart: 'Workday', format: 'long-form post or newsletter sponsorship', headline: 'How interest rates priced you out of trading up (and the fix)', why: 'Gen X is locked into 3% mortgages, can\u2019t move. Frame as "what would unlock your housing market." Workday LinkedIn captures them.' },
+                boomer:     { platform: 'Fox News digital + Local-TV streaming', daypart: 'Morning + evening news blocks', format: ':30 spot anchored to fixed-income reality', headline: 'Your Social Security\u2019s buying power vs. 2021 (a chart)', why: 'Boomers on fixed income feel inflation as benefit erosion. Anchor to SS, not macro CPI.' },
+            },
+            'Climate': {
+                genz:       { platform: 'TikTok + Reddit r/climate / r/EVs', daypart: 'Workday + Evening', format: 'climate-creator partnership + creator UGC EV review', headline: 'Why the EV tax credit just got better (and how to claim it)', why: 'Gen Z buys the climate concern. Make it concrete: heat-pump tax credit, EV affordability, solar break-even. Avoid existential framing.' },
+                millennial: { platform: 'Podcasts (How to Save a Planet, Volts) + Instagram', daypart: 'Morning commute', format: 'host-read pod spot + IG carousel', headline: 'What the IRA actually saved your household (and who wants to undo it)', why: 'Millennials want concrete impact. Dollar figures + family framing. Pod hosts have built trust for climate-policy literacy.' },
+                genx:       { platform: 'Facebook + Local-TV streaming', daypart: 'Evening', format: 'utility-bill anchored creative', headline: 'Why your electric bill went up \u2014 and what <candidate> would do', why: 'Gen X cares about climate to the extent it shows up on the utility bill. Bill-savings framing converts; existential framing doesn\u2019t.' },
+                boomer:     { platform: 'Local-TV streaming + AARP', daypart: 'Evening news', format: 'jobs-and-bills framing, NOT climate-crisis framing', headline: 'The new battery plant near <state>: jobs + lower bills', why: 'Boomers respond to climate framed as JOBS (battery plants, factory work) and BILLS. Skip the polar-bear creative.' },
+            },
+            'Abortion & Reproductive Rights': {
+                genz:       { platform: 'TikTok + Instagram Reels', daypart: 'Evening / Late night', format: 'creator first-person testimony', headline: 'Is abortion actually legal in <state>? Here\u2019s exactly what changed', why: 'Gen Z searches "is abortion legal in <state>" by the millions. Creator first-person, not third-party endorsements.' },
+                millennial: { platform: 'Podcasts + Instagram', daypart: 'Morning + Evening', format: 'OB-GYN testimony + pod spot', headline: 'Miscarriage care in <state>: what your OB-GYN can and can\u2019t do', why: 'Millennials are the active reproductive cohort. OB-GYN voices have moved the post-Dobbs middle of this generation hard.' },
+                genx:       { platform: 'Facebook + NYT/WaPo digital', daypart: 'Workday / Evening', format: 'mother + daughter testimony', headline: 'What the <state> law means for your daughter\u2019s care', why: 'Gen X mothers shifted post-Dobbs. Multi-generational family framing outperforms abstract rights framing.' },
+                boomer:     { platform: 'NYT / CNN / MSNBC + AARP', daypart: 'Evening news block', format: 'physician-led explainer + interview clip', headline: 'Why doctors in <state> are leaving (and what restored access looks like)', why: 'Boomer women shifted hard post-Dobbs too. Lean on physicians and access-loss data, not rights-rhetoric.' },
+            },
+            'Immigration': {
+                genz:       { platform: 'TikTok + Instagram Reels', daypart: 'Evening / Late night', format: 'creator-explainer + immigrant-voice testimony', headline: '<State>\u2019s new asylum rule, explained in 60 seconds', why: 'Gen Z gets immigration news from explainer creators. Lean concrete (rules, timelines), not abstract values.' },
+                millennial: { platform: 'Podcasts + NPR digital', daypart: 'Morning commute', format: 'pod sponsorship + NPR sponsorship', headline: 'The visa-backlog story almost nobody is covering', why: 'Millennials engage on immigration via labor/work-visa angles (H-1B, OPT). Pod hosts can carry the nuance.' },
+                genx:       { platform: 'Facebook + Local-TV streaming', daypart: 'Evening', format: 'local-impact framing, employer voice', headline: '<state> employers say they need workers \u2014 and what\u2019s blocking it', why: 'Gen X is plugged into local business communities; employer-voice creative on labor shortages converts on this issue.' },
+                boomer:     { platform: 'Fox News digital + Local-TV streaming', daypart: 'Evening news', format: 'border + cost framing :30 spot', headline: 'What border security actually costs (and who pays)', why: 'Boomer audiences index high on Fox + local news for immigration. Cost-of-enforcement and border-control framing.' },
+            },
+            'Guns': {
+                genz:       { platform: 'TikTok + Instagram Reels', daypart: 'Evening / Late night', format: 'school-safety creator + survivor testimony', headline: '<state>\u2019s gun-safety law, what passed and what didn\u2019t', why: 'Gen Z grew up doing active-shooter drills. Survivor-led + creator-explainer outperforms institutional ads.' },
+                millennial: { platform: 'Podcasts + Facebook parent groups', daypart: 'Morning + Evening', format: 'parent-voice :30 + comment-prompt FB post', headline: 'The red-flag bill on <state>\u2019s ballot \u2014 in 90 seconds', why: 'Millennials are the active-parent cohort. Parent-voice creative + FB neighborhood/parent groups.' },
+                genx:       { platform: 'Facebook + LinkedIn', daypart: 'Workday + Evening', format: 'split: gun-owner-Gen-X testimony OR gun-safety mom voice', headline: 'A hunter\u2019s case for <bill name> (or: A mom\u2019s case)', why: 'Gen X splits sharply by gun-ownership. Run BOTH creatives, targeted by stated affinity. Same daypart, different message.' },
+                boomer:     { platform: 'Fox Nation / iHeart talk-radio (rights side) OR CNN / NYT digital (safety side)', daypart: 'Morning + Evening', format: ':30 spot, audience-matched message', headline: 'Rights side: "Your 2A under <opp>"  ·  Safety side: "What your grandkids\u2019 school is doing"', why: 'Hardest generation to move on this issue. Don\u2019t try to convert \u2014 mobilize the side that already agrees.' },
+            },
+            'Foreign Policy': {
+                genz:       { platform: 'TikTok + Instagram Reels', daypart: 'Evening / Late night', format: 'creator explainer with maps', headline: 'What\u2019s actually happening in <conflict>, in 90 seconds', why: 'Gen Z gets foreign policy from TikTok explainer creators (Vox, Johnny Harris-style). Map-heavy visuals.' },
+                millennial: { platform: 'Podcasts (Pod Save the World, Foreign Affairs Interview)', daypart: 'Morning commute', format: 'host-read pod spot', headline: '<Candidate>\u2019s one-sentence position on <conflict>', why: 'Millennials use pods for nuance on foreign policy. Spec policy positions, not slogans.' },
+                genx:       { platform: 'NYT / WaPo digital + LinkedIn', daypart: 'Workday', format: 'long-form sponsored op-ed + LinkedIn carousel', headline: 'Why <state>\u2019s economy depends on <trade-policy>', why: 'Gen X engages on foreign policy via trade and manufacturing implications. Newsletter and op-ed formats work.' },
+                boomer:     { platform: 'Fox News digital + CNN + Local-TV streaming', daypart: 'Evening news', format: ':30 spot tied to one specific conflict', headline: '<Candidate> on <Ukraine / Israel / China>: one position, plainly stated', why: 'Boomers want a clear stance on a specific conflict. Avoid both-sides-ism; pick a position and own it.' },
+            },
+        };
+
+        // ─────────────────────────────────────────────────────────────────
+        // CARD V: Voter's day online — render function
+        // ─────────────────────────────────────────────────────────────────
+        function _bqDayInLifeState() {
+            if (!window.__blueIQDayInLife) {
+                window.__blueIQDayInLife = { gen: 'millennial', gender: 'all' };
+            }
+            return window.__blueIQDayInLife;
+        }
+
+        // Apply gender deltas to a generation-baseline platform list and
+        // return a re-ranked top-N list. Numbers are clamped to [0, 0.95]
+        // because nobody hits 100% share of attention on a single
+        // platform in a daypart (multi-platform overlap is normal).
+        function _bqApplyGenderDeltas(platforms, gender) {
+            if (gender === 'all') return platforms.slice().sort(function(a,b){return b.share-a.share;}).slice(0, 6);
+            var deltas = BLUE_IQ_GENDER_DELTAS[gender] || {};
+            return platforms.map(function(p) {
+                var d = deltas[p.name] || 0;
+                var s = Math.max(0, Math.min(0.95, p.share + d * p.share + d * 0.5));
+                return { name: p.name, share: s };
+            }).sort(function(a, b) { return b.share - a.share; }).slice(0, 6);
+        }
+
+        function _bqRenderDayInLife(issueBuckets) {
+            var body = document.getElementById('blueIQDayInLife');
+            if (!body) return;
+            var state = _bqDayInLifeState();
+            var seg = BLUE_IQ_DAY_IN_LIFE.segments.filter(function(s) { return s.gen === state.gen; })[0]
+                       || BLUE_IQ_DAY_IN_LIFE.segments[0];
+
+            // Gen chip row + gender toggle row
+            var genChips = BLUE_IQ_DAY_IN_LIFE.segments.map(function(s) {
+                var on = (s.gen === state.gen) ? ' active' : '';
+                return '<button type="button" class="bq-day-chip' + on + '" data-gen="' + s.gen + '">'
+                     + '<span class="bq-day-chip-label">' + _bqEscape(s.gen_label) + '</span>'
+                     + '<span class="bq-day-chip-sub">' + _bqEscape(s.gen_years) + '</span>'
+                     + '</button>';
+            }).join('');
+            var genderChips = [['all','All'],['female','Women'],['male','Men']].map(function(g) {
+                var on = (g[0] === state.gender) ? ' active' : '';
+                return '<button type="button" class="bq-day-gender' + on + '" data-gender="' + g[0] + '">' + g[1] + '</button>';
+            }).join('');
+
+            // Daypart funnel columns. JIQ-funnel-style: column per daypart,
+            // bars stack inside the column proportional to share.
+            var daypartHtml = seg.dayparts.map(function(dp) {
+                var plats = _bqApplyGenderDeltas(dp.platforms, state.gender);
+                var maxShare = Math.max.apply(null, plats.map(function(p) { return p.share; })) || 1;
+                var bars = plats.map(function(p) {
+                    var meta = BLUE_IQ_PLATFORM_META[p.name] || { color: '#64748b', category: 'other' };
+                    var w = Math.round((p.share / maxShare) * 100);
+                    return '<div class="bq-day-bar-row" title="' + _bqEscape(p.name + ': ' + Math.round(p.share*100) + '% of active digital time in this daypart') + '">'
+                         +   '<div class="bq-day-bar-name">'
+                         +     '<span class="bq-day-bar-swatch" style="background:' + meta.color + ';"></span>'
+                         +     '<span>' + _bqEscape(p.name) + '</span>'
+                         +   '</div>'
+                         +   '<div class="bq-day-bar-track">'
+                         +     '<div class="bq-day-bar-fill" style="width:' + w + '%; background: linear-gradient(90deg, ' + meta.color + 'cc, ' + meta.color + '66);"></div>'
+                         +     '<span class="bq-day-bar-pct">' + Math.round(p.share*100) + '%</span>'
+                         +   '</div>'
+                         + '</div>';
+                }).join('');
+                return '<div class="bq-day-col">'
+                     +   '<div class="bq-day-col-head">'
+                     +     '<div class="bq-day-col-name">' + _bqEscape(dp.name) + '</div>'
+                     +     '<div class="bq-day-col-hours">' + _bqEscape(dp.hours) + '</div>'
+                     +   '</div>'
+                     +   '<div class="bq-day-col-body">' + bars + '</div>'
+                     + '</div>';
+            }).join('');
+
+            // Recommendation strip: top 6 issues in this slice × the
+            // currently-selected segment's gen-keyed creative play.
+            var topIssues = (issueBuckets || []).slice(0, 6).filter(function(b) {
+                return BLUE_IQ_DAY_RECOS[b.bucket];
+            });
+            var recoHtml = topIssues.length
+                ? '<div class="bq-day-reco-grid">'
+                  + topIssues.map(function(b) {
+                      var r = BLUE_IQ_DAY_RECOS[b.bucket][state.gen] || BLUE_IQ_DAY_RECOS[b.bucket].millennial;
+                      var platMeta = BLUE_IQ_PLATFORM_META[r.platform.split(' + ')[0]] || BLUE_IQ_PLATFORM_META[r.platform] || { color: '#64748b' };
+                      return '<div class="bq-day-reco">'
+                           +   '<div class="bq-day-reco-head">'
+                           +     '<div class="bq-day-reco-issue">' + _bqEscape(b.bucket) + ' <span class="bq-day-reco-share">' + _bqPct(b.share || 0) + '</span></div>'
+                           +     '<div class="bq-day-reco-platform" style="background:' + platMeta.color + '22; color:' + platMeta.color + '; border:1px solid ' + platMeta.color + '55;">' + _bqEscape(r.platform) + '</div>'
+                           +   '</div>'
+                           +   '<div class="bq-day-reco-headline">"' + _bqEscape(r.headline) + '"</div>'
+                           +   '<div class="bq-day-reco-meta">'
+                           +     '<div><span class="bq-day-reco-label">Buy in</span> ' + _bqEscape(r.daypart) + '</div>'
+                           +     '<div><span class="bq-day-reco-label">Format</span> ' + _bqEscape(r.format) + '</div>'
+                           +   '</div>'
+                           +   '<div class="bq-day-reco-why"><span class="bq-day-reco-label">Why this works</span> ' + _bqEscape(r.why) + '</div>'
+                           + '</div>';
+                  }).join('')
+                  + '</div>'
+                : '<div style="color: var(--text-secondary); font-size: 0.82rem; padding: 1rem 0;">No top issues in the current slice yet \u2014 the recommendation strip will populate when issue data lands.</div>';
+
+            body.innerHTML = '<div class="bq-day-controls">'
+                           +   '<div class="bq-day-chips">' + genChips + '</div>'
+                           +   '<div class="bq-day-gender-toggle">' + genderChips + '</div>'
+                           + '</div>'
+                           + '<div class="bq-day-segment-meta">'
+                           +   '<strong>' + _bqEscape(seg.gen_label) + '</strong> '
+                           +   '<span style="color: var(--text-secondary);">' + _bqEscape(seg.gen_years) + ' \u00b7 ' + (state.gender === 'all' ? 'all genders' : (state.gender === 'female' ? 'women' : 'men')) + '</span>'
+                           + '</div>'
+                           + '<div class="bq-day-grid">' + daypartHtml + '</div>'
+                           + '<div class="bq-day-reco-head-row">'
+                           +   '<div class="bq-day-reco-title">Recommended placements for this audience</div>'
+                           +   '<div class="bq-day-reco-sub">top issues in this slice \u00d7 ' + _bqEscape(seg.gen_label) + ' \u2192 specific platform + creative</div>'
+                           + '</div>'
+                           + recoHtml;
+
+            // Wire up the chip + toggle clicks. Single delegated handler
+            // on the card body — no double-binding when re-rendering.
+            body.querySelectorAll('.bq-day-chip').forEach(function(btn) {
+                btn.addEventListener('click', function() {
+                    state.gen = btn.getAttribute('data-gen');
+                    _bqRenderDayInLife(issueBuckets);
+                });
+            });
+            body.querySelectorAll('.bq-day-gender').forEach(function(btn) {
+                btn.addEventListener('click', function() {
+                    state.gender = btn.getAttribute('data-gender');
+                    _bqRenderDayInLife(issueBuckets);
+                });
+            });
+        }
+        window._bqRenderDayInLife = _bqRenderDayInLife;
 
         function _renderBlueIQIssueJourneyCross(cross) {
             if (!cross || !cross.length) {
