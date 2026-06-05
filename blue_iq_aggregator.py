@@ -1368,36 +1368,13 @@ def build_cube(lookback_days: int = LOOKBACK_DAYS) -> dict:
         # (so no Canadian provinces, no military codes, no garbage).
         all_states = sorted({k.split('|')[1] for k in cells if k.split('|')[1] and not k.split('|')[2]})
         all_dmas_raw = {k.split('|')[2] for k in cells if k.split('|')[2] and not k.split('|')[1]}
-        # Drop anything that doesn't look like a real US Nielsen DMA. Cells
-        # are already US_COUNTRY_FILTER-gated, but mistagged-country rows and
-        # ingestion placeholders still leak ("Unknown", "Canada", empty
-        # strings, etc.). Validation logic mirrors blue_iq._is_valid_us_dma.
-        _DMA_REJECT_EXACT = {
-            '', '(null)', 'NULL', 'null', 'None', '(none)', 'unknown', 'Unknown',
-            'UNKNOWN', 'N/A', 'na', 'NA', '0', '-', '--', 'Other', 'OTHER',
-            'NotApplicable', 'Not Applicable', 'DMA', 'foreign', 'Foreign',
-            'International', 'INTL', 'Various',
-        }
-        _DMA_REJECT_SUBSTR = {
-            'canada', 'mexico', 'united kingdom', 'australia', 'germany', 'france',
-            'india', 'japan', 'china', 'brazil', 'south africa', 'europe', 'asia',
-            'africa', 'oceania', 'south america', 'central america',
-        }
-        def _ok_us_dma(s: str) -> bool:
-            if not s:
-                return False
-            s2 = s.strip()
-            if (not s2) or (s2 in _DMA_REJECT_EXACT):
-                return False
-            sl = s2.lower()
-            if any(tok in sl for tok in _DMA_REJECT_SUBSTR):
-                return False
-            if not (3 <= len(s2) <= 60):
-                return False
-            if not any(c.isalpha() for c in s2):
-                return False
-            return True
-        all_dmas = sorted({d for d in all_dmas_raw if _ok_us_dma(d)})
+        # Drop anything that isn't a real US Nielsen DMA. Cells are already
+        # US_COUNTRY_FILTER-gated, but mis-tagged country rows still leak
+        # foreign cities (Istanbul, Tokyo, Karachi, Kuala Lumpur, etc.) and
+        # no substring filter catches them all. We use blue_iq's canonical
+        # US-DMA allowlist as the single source of truth.
+        from blue_iq import _is_valid_us_dma  # canonical allowlist
+        all_dmas = sorted({d for d in all_dmas_raw if _is_valid_us_dma(d)})
         dropped_dmas = len(all_dmas_raw) - len(all_dmas)
         if dropped_dmas:
             log.info("  dropped %d non-US/garbage DMA values from dropdown universe",

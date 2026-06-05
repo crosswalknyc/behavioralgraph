@@ -392,48 +392,99 @@ _US_COUNTRY_FILTER = "COUNTRY IN ('USA','United States','US','U.S.','U.S.A.')"
 # (mistagged country, null-passthrough placeholders, ingestion glitches)
 # still surface. Reject any DMA value matching this set, or anything that
 # looks like a country / continent / "Unknown".
-_DMA_REJECTS_EXACT = {
-    '', '(null)', 'NULL', 'null', 'None', '(none)', 'unknown', 'Unknown',
-    'UNKNOWN', 'N/A', 'na', 'NA', '0', '-', '--', 'Other', 'OTHER',
-    'NotApplicable', 'Not Applicable', 'DMA', 'foreign', 'Foreign',
-    'International', 'INTL', 'Various',
-}
-_DMA_REJECTS_SUBSTR = {
-    # Country / continent names that occasionally end up in the DMA column
-    'canada', 'mexico', 'united kingdom', 'australia', 'germany', 'france',
-    'india', 'japan', 'china', 'brazil', 'south africa', 'europe', 'asia',
-    'africa', 'oceania', 'south america', 'central america',
-}
+# Canonical US Nielsen DMA allowlist. The substring-based denylist we
+# previously used was leaking foreign cities (Istanbul, Tokyo, Karachi,
+# Kuala Lumpur, etc.) because they don't contain the country tokens we
+# were checking for. Allowlist is the only reliable filter when the
+# upstream ingestion mis-tags non-US geographies as DMAs.
+#
+# Names are the cube's normalized form (no commas, no hyphens, spaces
+# between components) so we can match by exact case-insensitive equality.
+# This is the Nielsen 2024-25 DMA roster + the US territories Nielsen
+# tracks (Puerto Rico DMAs + USVI + Guam).
+US_DMA_ALLOWLIST: frozenset[str] = frozenset(d.lower() for d in [
+    # ── Continental US Nielsen DMAs (Designated Market Areas) ────────────
+    'Abilene Sweetwater', 'Albany', 'Albany Schenectady Troy',
+    'Albuquerque Santa Fe', 'Alexandria', 'Alpena', 'Amarillo', 'Anchorage',
+    'Atlanta', 'Augusta Aiken SC', 'Austin', 'Bakersfield', 'Baltimore',
+    'Bangor', 'Baton Rouge', 'Beaumont Port Arthur', 'Bend', 'Billings',
+    'Biloxi Gulfport', 'Binghamton', 'Birmingham', 'Bismarck Minot Dickinson',
+    'Bluefield Beckley Oak Hill', 'Boise', 'Boston', 'Bowling Green',
+    'Buffalo', 'Burlington Plattsburgh NY', 'Butte Bozeman',
+    'Casper Riverton', 'Cedar Rapids Waterloo Iowa City Dubuque',
+    'Champaign Springfield Decatur', 'Charleston', 'Charleston Huntington',
+    'Charlotte', 'Charlottesville', 'Chattanooga', 'Cheyenne Scottsbluff NE',
+    'Chicago', 'Chico Redding', 'Cincinnati', 'Clarksburg Weston',
+    'Cleveland Akron', 'Colorado Springs Pueblo', 'Columbia',
+    'Columbia Jefferson City', 'Columbus', 'Columbus Opelika AL',
+    'Columbus Tupelo West Point', 'Corpus Christi', 'Dallas Fort Worth',
+    'Davenport Rock Island Moline IL', 'Dayton', 'Denver', 'Des Moines Ames',
+    'Detroit', 'Dothan', 'Duluth Superior WI', 'El Paso', 'Elmira', 'Erie',
+    'Eugene', 'Eureka', 'Evansville', 'Fairbanks', 'Fargo',
+    'Flint Saginaw Bay City', 'Fort Myers Naples',
+    'Fort Smith Fayetteville Springdale Rogers', 'Fort Wayne',
+    'Fresno Visalia', 'Gainesville', 'Glendive', 'Grand Junction Montrose',
+    'Grand Rapids Kalamazoo Battle Creek', 'Great Falls',
+    'Green Bay Appleton', 'Greensboro High Point Winston Salem',
+    'Greenville New Bern Washington',
+    'Greenville Spartanburg Asheville NC Anderson', 'Greenwood Greenville',
+    'Harlingen Weslaco Brownsville McAllen',
+    'Harrisburg Lancaster Lebanon York', 'Harrisonburg',
+    'Hartford New Haven', 'Hattiesburg Laurel', 'Helena', 'Honolulu',
+    'Houston', 'Huntsville Decatur', 'Idaho Falls Pocatello',
+    'Jackson MS', 'Jackson TN', 'Jacksonville',
+    'Johnstown Altoona State College', 'Jonesboro', 'Joplin Pittsburg KS',
+    'Juneau', 'Kansas City', 'Knoxville', 'La Crosse Eau Claire',
+    'Lafayette IN', 'Lafayette LA', 'Lake Charles', 'Lansing', 'Laredo',
+    'Las Vegas', 'Lexington', 'Lincoln Hastings Kearney',
+    'Little Rock Pine Bluff', 'Los Angeles', 'Louisville', 'Lubbock',
+    'Macon', 'Madison', 'Mankato', 'Marquette', 'Medford Klamath Falls',
+    'Memphis', 'Meridian', 'Miami Ft Lauderdale', 'Milwaukee',
+    'Minneapolis St Paul', 'Missoula', 'Mobile Pensacola FL',
+    'Monroe El Dorado AR', 'Monterey Salinas', 'Montgomery Selma',
+    'Myrtle Beach Florence', 'Nashville', 'New Orleans', 'New York',
+    'Norfolk Portsmouth Newport News', 'North Platte', 'Odessa Midland',
+    'Oklahoma City', 'Omaha', 'Orlando Daytona Beach Melbourne',
+    'Ottumwa Kirksville MO', 'Paducah Cape Girardeau MO Harrisburg IL',
+    'Palm Springs', 'Panama City', 'Parkersburg', 'Peoria Bloomington',
+    'Philadelphia', 'Phoenix', 'Pittsburgh', 'Portland', 'Portland Auburn',
+    'Portsmouth', 'Presque Isle', 'Providence New Bedford MA',
+    'Quincy Hannibal MO Keokuk IA', 'Raleigh Durham', 'Rapid City', 'Reno',
+    'Richmond Petersburg', 'Roanoke Lynchburg', 'Rochester',
+    'Rochester Mason City IA Austin', 'Rockford',
+    'Sacramento Stockton Modesto', 'Salisbury', 'Salt Lake City',
+    'San Angelo', 'San Antonio', 'San Diego', 'San Francisco Oakland San Jose',
+    'Santa Barbara Santa Maria San Luis Obispo', 'Savannah',
+    'Seattle Tacoma', 'Sherman Ada OK', 'Shreveport', 'Sioux City',
+    'Sioux Falls', 'South Bend Elkhart', 'Spokane', 'Springfield',
+    'Springfield Holyoke', 'St Joseph', 'St Louis', 'Syracuse',
+    'Tallahassee Thomasville GA', 'Tampa St Petersburg', 'Terre Haute',
+    'Toledo', 'Topeka', 'Traverse City Cadillac', 'Tri Cities TN VA',
+    'Tucson', 'Tulsa', 'Twin Falls', 'Tyler Longview', 'Utica',
+    'Waco Temple Bryan', 'Washington', 'Watertown', 'Wausau Rhinelander',
+    'West Palm Beach Ft Pierce', 'Wheeling Steubenville OH',
+    'Wichita Falls Lawton OK', 'Wichita Hutchinson',
+    'Wilkes Barre Scranton Hazleton', 'Wilmington',
+    'Yakima Pasco Richland Kennewick', 'Youngstown', 'Yuma El Centro CA',
+    'Zanesville',
+    # ── US territories Nielsen tracks (Puerto Rico DMAs, USVI, Guam) ─────
+    'Cabo Rojo', 'Christiansted', 'Corozal', 'Dededo', 'Guayama',
+    'Isabela', 'Moca', 'Ponce', 'San Juan',
+])
 
 
 def _is_valid_us_dma(name: str) -> bool:
-    """Return True if `name` plausibly names a US Nielsen DMA.
+    """Return True if `name` is on the canonical US Nielsen DMA allowlist.
 
-    Used to filter the dropdown universe so non-US / garbage DMA values
-    don't surface. Conservative: rejects an explicit set of placeholder
-    strings, anything containing a country / continent substring, and
-    pathological strings (too short, too long, all-digit, all-punct).
-    Real US DMAs are 8-50 chars, contain at least one letter, and don't
-    match any reject token.
+    Allowlist beats denylist for this column: upstream ingestion sometimes
+    mis-tags foreign cities (Istanbul, Tokyo, Karachi, Kuala Lumpur, etc.)
+    as DMAs, and no substring filter catches all of them. Match is case-
+    insensitive on the normalized form the cube uses (no commas, no
+    hyphens, space-separated components).
     """
     if not name:
         return False
-    s = str(name).strip()
-    if not s:
-        return False
-    if s in _DMA_REJECTS_EXACT:
-        return False
-    sl = s.lower()
-    if any(tok in sl for tok in _DMA_REJECTS_SUBSTR):
-        return False
-    # Length sanity. Real DMAs span "Macon" (5) to long hyphenated ones
-    # ("San Francisco-Oak-San Jose", 28). Allow 3-60 to be generous.
-    if not (3 <= len(s) <= 60):
-        return False
-    # Must contain at least one alpha char (rejects all-digit codes).
-    if not any(c.isalpha() for c in s):
-        return False
-    return True
+    return str(name).strip().lower() in US_DMA_ALLOWLIST
 
 
 def get_filter_options() -> dict:
@@ -448,7 +499,7 @@ def get_filter_options() -> dict:
     is silently dropped, and the fallback DMA query is gated on
     _US_COUNTRY_FILTER for the same reason.
     """
-    cache_key = '_filter_options_v3'  # bumped: US-only DMA filter
+    cache_key = '_filter_options_v4'  # bumped: US Nielsen DMA allowlist (was leaky substring denylist)
     cached = _FILTER_OPTIONS_CACHE.get(cache_key)
     if cached and (time.time() - cached['ts'] < 3600):
         return cached['data']
