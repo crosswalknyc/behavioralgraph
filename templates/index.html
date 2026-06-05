@@ -6469,6 +6469,11 @@
             opacity: 1;
             visibility: visible;
         }
+
+        #globalTooltip.tooltip-rich {
+            width: 340px;
+            max-width: min(340px, calc(100vw - 20px));
+        }
         #globalTooltip::before {
             content: '';
             position: absolute;
@@ -21983,14 +21988,21 @@
             }
             
             function showTooltip(el, e) {
+                const html = (el.getAttribute('data-tooltip-html') || '').trim();
                 const text = (el.getAttribute('data-tooltip') || el.getAttribute('title') || '').trim();
-                if (!text) return;
-                tooltip.textContent = text;
+                if (!text && !html) return;
+                if (html) {
+                    tooltip.innerHTML = html;
+                    tooltip.classList.add('tooltip-rich');
+                } else {
+                    tooltip.textContent = text;
+                    tooltip.classList.remove('tooltip-rich');
+                }
                 let left = e.clientX - 150;
                 let top = e.clientY + 20;
                 if (left < 10) left = 10;
                 if (left > window.innerWidth - 320) left = window.innerWidth - 320;
-                if (top + 100 > window.innerHeight) top = e.clientY - 80;
+                if (top + (html ? 180 : 100) > window.innerHeight) top = e.clientY - (html ? 160 : 80);
                 tooltip.style.left = left + 'px';
                 tooltip.style.top = top + 'px';
                 tooltip.style.opacity = '1';
@@ -22003,6 +22015,8 @@
                 tooltip.style.left = '-9999px';
                 tooltip.style.top = '-9999px';
                 tooltip.classList.remove('visible');
+                tooltip.classList.remove('tooltip-rich');
+                tooltip.textContent = '';
             }
             
             // Use mouseover so tooltips show when cursor is already over element (e.g. after TST panel opens)
@@ -22194,17 +22208,23 @@
             var container = document.getElementById('dashBrandContainer');
             if (container && profileName) {
                 var ov = override || currentProfileDisplayOverride;
+                var parsed = (typeof currentDashboardData !== 'undefined' && currentDashboardData) || {};
+                var profileMeta = (typeof currentProfileData !== 'undefined' && currentProfileData) || {};
+                var sampleSize = parsed.sampleSize != null ? parsed.sampleSize : profileMeta.sampleSize;
+                var brandName = profileMeta.name || profileName;
+                var s3Key = profileMeta.s3Key || (typeof currentS3Key !== 'undefined' ? currentS3Key : '');
+
                 if (ov && ov.hover_tooltip && String(ov.hover_tooltip).trim()) {
-                    container.setAttribute('data-tooltip', String(ov.hover_tooltip).trim());
+                    applyProfileTitleTooltip(container, String(ov.hover_tooltip).trim(), sampleSize, brandName, s3Key);
                     return;
                 }
                 var tooltip;
                 var category = (brandCategory || '').toString().toUpperCase();
-                var behav = behavioral || (typeof currentDashboardData !== 'undefined' && currentDashboardData && currentDashboardData.behavioral) || {};
+                var behav = behavioral || parsed.behavioral || {};
 
                 if (isActiveViewerProfileCategory(category)) {
                     var effPlatform = getEffectivePlatformForTitle(category, behav, ov);
-                    var baseName = (typeof currentProfileData !== 'undefined' && currentProfileData && currentProfileData.name) || profileName;
+                    var baseName = profileMeta.name || profileName;
                     var titled = (profileName && profileName.includes(' - '))
                         ? profileName
                         : getProfileDisplayTitle(baseName, brandCategory, behav, ov);
@@ -22217,7 +22237,7 @@
                         tooltip = 'This profile is of all panelists who are active viewers of ' + showName + '.';
                     }
                 } else if (isGamePlayersProfileCategory(category)) {
-                    var gameName = (typeof currentProfileData !== 'undefined' && currentProfileData && currentProfileData.name) || profileName;
+                    var gameName = profileMeta.name || profileName;
                     if (gameName && gameName.indexOf(' - ') !== -1) {
                         gameName = gameName.split(' - ')[0].trim();
                     }
@@ -22228,7 +22248,7 @@
                     // Default tooltip for non-SERIES profiles
                     tooltip = 'This profile is of all panelists who are actively engaged with ' + profileName + '. It uses our signature 5 touch point accuracy method of capturing panelists who do not just know of ' + profileName + ' but go out of their way to engage with them. This means they have interacted with ' + profileName + ' via social media, retail, owned and operated web sites, read/watched/listened to media about them or searched for them. This is capturing digital behavior only.';
                 }
-                container.setAttribute('data-tooltip', tooltip);
+                applyProfileTitleTooltip(container, tooltip, sampleSize, brandName, s3Key);
             }
         }
         
@@ -24683,72 +24703,40 @@
             // external signal is layered on as chips, not as bar width.
             var max = Math.max.apply(null, buckets.map(function(b) { return +b.count || 0; })) || 1;
 
-            // Header strip showing the mix-in summary so the user knows
-            // external data is participating in this card (not just panel).
-            var totalTrend = 0, totalNews = 0, trendBuckets = 0, externalOnly = 0;
-            buckets.forEach(function(b) {
-                if ((+b.trend_score || 0) > 0) { totalTrend += +b.trend_score; trendBuckets++; }
-                if ((+b.news_count  || 0) > 0)   totalNews  += +b.news_count;
-                if (b.external_only) externalOnly++;
-            });
-            var headerStrip = '';
-            if (totalTrend > 0 || totalNews > 0) {
-                var bits = [];
-                if (trendBuckets > 0) bits.push('<span style="color:#fbbf24;">\u25CF</span> Google Trends boosting <strong>' + trendBuckets + '</strong> issue' + (trendBuckets > 1 ? 's' : ''));
-                if (totalNews > 0)    bits.push('<span style="color:#a78bfa;">\u25CF</span> <strong>' + totalNews + '</strong> news article' + (totalNews > 1 ? 's' : '') + ' mapped');
-                if (externalOnly > 0) bits.push('<span style="color:#94a3b8;">\u25CF</span> ' + externalOnly + ' trending-only (no panel chatter yet)');
-                headerStrip = '<div style="font-size:0.74rem; color:var(--text-secondary); padding:0.35rem 0.55rem; margin:0 0 0.55rem 0; background:rgba(255,255,255,0.03); border-radius:6px; border:1px solid rgba(255,255,255,0.05);">'
-                            +   '<strong style="color:var(--text-primary); letter-spacing:0.04em; font-size:0.68rem; text-transform:uppercase; margin-right:0.5rem;">PANEL + EXTERNAL MIX</strong>'
-                            +   bits.join(' &nbsp;&middot;&nbsp; ')
-                            + '</div>';
-            }
-
-            body.innerHTML = headerStrip + buckets.slice(0, 16).map(function(b, idx) {
+            body.innerHTML = buckets.slice(0, 16).map(function(b, idx) {
                 var pct = Math.round((b.count / max) * 100);
                 var panelSamples = (b.sample_queries || []).map(_bqStripDates).filter(Boolean).slice(0, 3);
                 var trendSamples = (b.trend_queries  || []).map(_bqStripDates).filter(Boolean).slice(0, 2);
                 var newsHeads    = (b.news_headlines || []).slice(0, 1);
 
-                // Chip row — only renders chips that have signal.
+                // Per-row provenance chips intentionally removed: the card
+                // now reads as a single blended issue ranking without
+                // exposing whether a signal came from panel chatter,
+                // Google Trends, or news articles. The blended score
+                // (computed in _rerank_buckets_blended) is the single
+                // truth surface.
                 var chips = '';
-                if ((+b.trend_score || 0) > 0) {
-                    chips += '<span class="bq-bucket-chip bq-bucket-chip-trend" title="Google Trends score for terms bucketing into this issue">'
-                          +   '\ud83d\udd25 trending'
-                          + '</span>';
-                }
-                if ((+b.news_count || 0) > 0) {
-                    chips += '<span class="bq-bucket-chip bq-bucket-chip-news" title="GDELT political articles bucketing into this issue">'
-                          +   '\ud83d\udcf0 ' + b.news_count + ' article' + (b.news_count > 1 ? 's' : '')
-                          + '</span>';
-                }
-                if (b.external_only) {
-                    chips += '<span class="bq-bucket-chip bq-bucket-chip-extonly" title="Trending externally but no panel chatter in this slice yet">'
-                          +   'no panel data yet'
-                          + '</span>';
-                }
 
-                // Panel + external sample queries presented inline so the
-                // user sees the actual evidence. Trend / news samples are
-                // clearly badged as such.
-                var sampleHtml = '';
-                if (panelSamples.length) {
-                    sampleHtml += '<div class="blue-iq-bucket-samples">'
-                               +   '<span class="bq-sample-source">panel</span> '
-                               +   _bqEscape(panelSamples.join(' \u00b7 '))
-                               + '</div>';
-                }
-                if (trendSamples.length) {
-                    sampleHtml += '<div class="blue-iq-bucket-samples">'
-                               +   '<span class="bq-sample-source bq-sample-source-trend">Google Trends</span> '
-                               +   _bqEscape(trendSamples.join(' \u00b7 '))
-                               + '</div>';
-                }
-                if (newsHeads.length) {
-                    sampleHtml += '<div class="blue-iq-bucket-samples">'
-                               +   '<span class="bq-sample-source bq-sample-source-news">news</span> '
-                               +   _bqEscape(newsHeads[0])
-                               + '</div>';
-                }
+                // Sample queries presented inline as evidence for the
+                // bucket. Sources (panel / Trends / news) are blended into
+                // a single line without provenance labels so the card
+                // reads as one unified evidence list.
+                var allSamples = panelSamples.concat(trendSamples).concat(newsHeads);
+                // De-dupe case-insensitively while preserving first-seen
+                // order so a term that's both a panel query AND a Trends
+                // term shows up once.
+                var seenSample = {};
+                var dedupedSamples = [];
+                allSamples.forEach(function(s) {
+                    var k = (s || '').toLowerCase().trim();
+                    if (!k || seenSample[k]) return;
+                    seenSample[k] = true;
+                    dedupedSamples.push(s);
+                });
+                dedupedSamples = dedupedSamples.slice(0, 4);
+                var sampleHtml = dedupedSamples.length
+                    ? '<div class="blue-iq-bucket-samples">' + _bqEscape(dedupedSamples.join(' \u00b7 ')) + '</div>'
+                    : '';
 
                 // For external-only buckets we suppress the panel bar
                 // (would be 0px) and show a thin dashed placeholder so
@@ -52211,6 +52199,13 @@
 
         const PROFILE_IQ_MINI_SAMPLE_THRESHOLD = 100000;
         const PROFILE_IQ_MINI_SUFFIX = ' - IQ Mini';
+        const PROFILE_IQ_MINI_TOOLTIP_LINES = [
+            'Fewer than 100,000 panelists qualified in the study year alone.',
+            'We recruit from earlier years until the behavior sample reaches 100,000.',
+            'Only study-year digital behavior is scored for every panelist.',
+            'The US projection reflects the original study-year cohort—not the 100k sample.',
+            'Crosswalk n may show ≥100k; US scale stays anchored to the study year.'
+        ];
 
         function shouldAppendIqMiniTitleSuffix(sampleSize, brandName, s3Key) {
             const key = String(s3Key || (typeof currentS3Key !== 'undefined' ? currentS3Key : '') || '').toLowerCase();
@@ -52229,6 +52224,46 @@
                 title += PROFILE_IQ_MINI_SUFFIX;
             }
             return title;
+        }
+
+        function _escapeTooltipHtml(text) {
+            if (text == null) return '';
+            return String(text)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;');
+        }
+
+        function buildProfileTitleTooltipPayload(baseTooltip, sampleSize, brandName, s3Key) {
+            var text = String(baseTooltip || '').trim();
+            var header = document.getElementById('dashBrandNameHeader');
+            var hasIqMiniTitle = !!(header && /\s-\sIQ Mini$/i.test(String(header.textContent || '').trim()));
+            if (!hasIqMiniTitle) {
+                return { text: text, html: null };
+            }
+            var plainAddon = 'IQ MINI: ' + PROFILE_IQ_MINI_TOOLTIP_LINES.join(' ');
+            var htmlAddon = '<div style="margin-top:0.65em;color:#5a9ad9;line-height:1.45;">'
+                + '<strong>IQ MINI:</strong> '
+                + PROFILE_IQ_MINI_TOOLTIP_LINES.map(function(line) {
+                    return _escapeTooltipHtml(line);
+                }).join('<br>')
+                + '</div>';
+            return {
+                text: text + '\n\n' + plainAddon,
+                html: _escapeTooltipHtml(text) + htmlAddon
+            };
+        }
+
+        function applyProfileTitleTooltip(container, baseTooltip, sampleSize, brandName, s3Key) {
+            if (!container) return;
+            var payload = buildProfileTitleTooltipPayload(baseTooltip, sampleSize, brandName, s3Key);
+            container.setAttribute('data-tooltip', payload.text);
+            if (payload.html) {
+                container.setAttribute('data-tooltip-html', payload.html);
+            } else {
+                container.removeAttribute('data-tooltip-html');
+            }
         }
 
         function renderDashboard(csvData, brandName, dateRange, displayOverride) {
