@@ -1293,6 +1293,64 @@ def _bucket_search_terms_via_global_map(top_search_queries: list[dict],
     } for b, c in sorted(counts.items(), key=lambda x: -x[1])]
 
 
+def _compute_issue_geo(cube: Optional[dict], issue_buckets_global: list[dict],
+                         *, party_filter: str = 'All') -> list[dict]:
+    """For each (state, issue) pair, return panel-search volume.
+
+    Iterates every state-level cell in the cube (cells where state is set
+    and dma is empty), buckets the cell's top search queries via the global
+    issue-bucket map, and emits one row per (state, issue, panelists) tuple.
+
+    The result powers the Issue × Geo heatmap on the dashboard:
+      [
+        {"state": "California", "issue": "Healthcare",  "panelists": 184,
+         "cell_size": 12480, "share": 0.0147},
+        {"state": "California", "issue": "Gas Prices",  "panelists": 91,
+         "cell_size": 12480, "share": 0.0073},
+        ...
+      ]
+
+    party_filter constrains which cells contribute (e.g. 'D' → only the
+    Democrat-leaning cells per state). Defaults to 'All' which sums across
+    all party imputations.
+    """
+    if not cube:
+        return []
+    cells = cube.get('cells') or {}
+    out: list[dict] = []
+    for cell_key, cell in cells.items():
+        try:
+            party, state, dma = cell_key.split('|', 2)
+        except ValueError:
+            continue
+        # state-level cells only (no DMA-only, no national)
+        if not state or dma:
+            continue
+        # Party slice: 'All' keeps the All-party cells, anything else
+        # restricts to matching party rows. Cube was built with separate
+        # per-party cells, so we just pick the right key.
+        if party != party_filter:
+            continue
+        panel_top_queries = cell.get('top_search_queries') or []
+        if not panel_top_queries:
+            continue
+        cell_size = int(cell.get('uid_count') or 0)
+        buckets = _bucket_search_terms_via_global_map(
+            panel_top_queries, issue_buckets_global)
+        for b in buckets:
+            panel = int(b.get('count') or 0)
+            if panel <= 0:
+                continue
+            out.append({
+                'state':     state,
+                'issue':     b['bucket'],
+                'panelists': panel,
+                'cell_size': cell_size,
+                'share':     round(panel / cell_size, 4) if cell_size else 0.0,
+            })
+    return out
+
+
 # ── Main entry point ────────────────────────────────────────────────────────
 
 def compute_panel_view(filters: dict, *, force_refresh: bool = False) -> dict:
@@ -1397,6 +1455,11 @@ def compute_panel_view(filters: dict, *, force_refresh: bool = False) -> dict:
     # Card E — articles: blend panel URLs with GDELT (GDELT supplies titles + images)
     top_articles = _blend_articles_cube(panel_articles, external.get('gdelt_articles') or [])
 
+    # Card G — issue × geo heatmap: per-state issue panel count, sliced from
+    # the cube's per-state cells through the global issue bucket map. Computed
+    # at request time so the same cube serves every party filter.
+    issue_geo = _compute_issue_geo(cube, issue_buckets_global, party_filter=f['party'])
+
     # Turnout
     turnout_pct = 0.0
     if panel_size > 0 and panel_turnout.get('panelists'):
@@ -1450,6 +1513,7 @@ def compute_panel_view(filters: dict, *, force_refresh: bool = False) -> dict:
         'demo_crosstab':       panel_demo,
         'voter_journey':       panel_journey,
         'issue_journey_cross': issue_journey_cross,
+        'issue_geo':           issue_geo,
     }
 
     # Compare card (only when geo is set)

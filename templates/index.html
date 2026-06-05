@@ -17803,6 +17803,33 @@
             #blueIQView .blue-iq-card-turnout  { grid-column: span 4; }
             #blueIQView .blue-iq-card-pols     { grid-column: span 6; min-height: 360px; }
             #blueIQView .blue-iq-card-cands    { grid-column: span 6; min-height: 360px; }
+            #blueIQView .blue-iq-card-geo      { grid-column: span 12; min-height: 540px; }
+            #blueIQView .blue-iq-card-playbook { grid-column: span 12; min-height: 360px; }
+            #blueIQView .bq-geo-controls { display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap; margin-bottom: 0.7rem; }
+            #blueIQView .bq-geo-label { font-size: 0.78rem; color: var(--text-secondary); }
+            #blueIQView .bq-geo-select { background: rgba(255,255,255,0.06); color: var(--text-primary); padding: 0.32rem 0.55rem; border-radius: 6px; border: 1px solid rgba(255,255,255,0.08); font-size: 0.82rem; min-width: 240px; }
+            #blueIQView .bq-geo-legend { display: inline-flex; gap: 0.2rem; align-items: center; margin-left: auto; }
+            #blueIQView .bq-geo-hex { cursor: pointer; transition: transform 0.12s ease, filter 0.12s ease; transform-origin: 28px 24px; transform-box: fill-box; }
+            #blueIQView .bq-geo-hex:hover { transform: scale(1.08); filter: brightness(1.18); }
+            #blueIQView .bq-geo-toplist { margin-top: 0.8rem; padding-top: 0.7rem; border-top: 1px solid rgba(255,255,255,0.05); }
+            #blueIQView .bq-geo-toplist-title { font-size: 0.82rem; color: var(--text-secondary); margin-bottom: 0.4rem; }
+            #blueIQView .bq-geo-toplist-row { display: flex; align-items: center; gap: 0.6rem; padding: 0.18rem 0; font-size: 0.82rem; }
+            #blueIQView .bq-geo-toplist-rank { flex: 0 0 22px; color: var(--text-secondary); font-variant-numeric: tabular-nums; }
+            #blueIQView .bq-geo-toplist-name { flex: 0 0 180px; }
+            #blueIQView .bq-geo-toplist-bar-wrap { flex: 1 1 50%; height: 6px; background: rgba(255,255,255,0.06); border-radius: 4px; overflow: hidden; }
+            #blueIQView .bq-geo-toplist-bar { display: block; height: 100%; border-radius: 4px; }
+            #blueIQView .bq-geo-toplist-val { flex: 0 0 70px; text-align: right; color: var(--text-secondary); font-variant-numeric: tabular-nums; }
+            #blueIQView .bq-playbook-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 0.85rem; }
+            #blueIQView .bq-playbook-card { background: rgba(255,255,255,0.025); border: 1px solid rgba(255,255,255,0.06); border-radius: 10px; padding: 0.85rem; display: flex; flex-direction: column; gap: 0.6rem; transition: transform 0.12s ease, box-shadow 0.12s ease, border-color 0.12s ease; }
+            #blueIQView .bq-playbook-card:hover { transform: translateY(-2px); border-color: rgba(79,140,255,0.25); box-shadow: 0 8px 24px rgba(0,0,0,0.25); }
+            #blueIQView .bq-playbook-head { display: flex; gap: 0.6rem; align-items: center; }
+            #blueIQView .bq-playbook-rank { width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 0.78rem; color: var(--accent-primary, #4f8cff); background: rgba(79,140,255,0.16); flex: 0 0 28px; }
+            #blueIQView .bq-playbook-issue-name { font-weight: 600; font-size: 0.92rem; color: var(--text-primary); }
+            #blueIQView .bq-playbook-issue-stats { font-size: 0.7rem; color: var(--text-secondary); margin-top: 0.1rem; }
+            #blueIQView .bq-playbook-section { font-size: 0.78rem; line-height: 1.4; }
+            #blueIQView .bq-playbook-section-label { font-size: 0.65rem; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-secondary); margin-bottom: 0.2rem; }
+            #blueIQView .bq-playbook-section-body { color: var(--text-primary); }
+            #blueIQView .bq-playbook-dest-chip { display: inline-block; padding: 0.18rem 0.55rem; border-radius: 999px; font-size: 0.74rem; font-weight: 600; }
             #blueIQView .blue-iq-card-articles { grid-column: span 6; min-height: 320px; }
             #blueIQView .blue-iq-card-demo     { grid-column: span 6; }
             #blueIQView .blue-iq-card-compare  { grid-column: span 6; }
@@ -17936,6 +17963,8 @@
                 #blueIQView .blue-iq-card-turnout,
                 #blueIQView .blue-iq-card-pols,
                 #blueIQView .blue-iq-card-cands,
+                #blueIQView .blue-iq-card-geo,
+                #blueIQView .blue-iq-card-playbook,
                 #blueIQView .blue-iq-card-articles,
                 #blueIQView .blue-iq-card-demo,
                 #blueIQView .blue-iq-card-compare { grid-column: span 12; }
@@ -22963,6 +22992,35 @@
                   + '<div class="blue-iq-card-body">' + artHtml + '</div>'
                   + '</div>';
 
+            // CARD G: Issue × Geo heatmap — US state-hex choropleth showing
+            // where each issue is hot. Issue selector dropdown lets the user
+            // pivot the map by issue. Click a state to drill into that slice.
+            html += '<div class="blue-iq-card blue-iq-card-geo" style="grid-column: span 12;">'
+                  + '<h3 class="blue-iq-card-title">Issue \u00d7 Geo heatmap'
+                  +   '<span class="blue-iq-card-subtitle">where each policy issue is hot, by state. Click a state to drill into that slice.</span>'
+                  + '</h3>'
+                  + '<div class="blue-iq-card-body">'
+                  +   '<div class="bq-geo-controls">'
+                  +     '<label class="bq-geo-label">Pivot map by issue:</label>'
+                  +     '<select id="blueIQGeoIssueSelect" class="bq-geo-select"></select>'
+                  +     '<span class="bq-geo-legend" id="blueIQGeoLegend"></span>'
+                  +   '</div>'
+                  +   '<div id="blueIQGeoMap"></div>'
+                  +   '<div class="bq-geo-toplist" id="blueIQGeoTopList"></div>'
+                  + '</div>'
+                  + '</div>';
+
+            // CARD P: Creative playbook — per-issue ad-creative + placement
+            // recommendation, ranked by the top issues in this slice. Maps
+            // each issue's dominant follow-up destination to the corresponding
+            // BLUE_IQ_CREATIVE_PLAYS entry (placement + creative direction).
+            html += '<div class="blue-iq-card blue-iq-card-playbook" style="grid-column: span 12;">'
+                  + '<h3 class="blue-iq-card-title">Creative playbook'
+                  +   '<span class="blue-iq-card-subtitle">for the top issues in this slice: what creative to ship, what placement to buy. Synthesized from this slice\u2019s Issue \u00d7 Journey behavior.</span>'
+                  + '</h3>'
+                  + '<div class="blue-iq-card-body" id="blueIQCreativePlaybook"></div>'
+                  + '</div>';
+
             // CARD K: Digital voter journey — post-touchpoint destinations.
             // Funnel-ribbon style matches the Digital Journey IQ Path-to-Purchase
             // card. Full-width (span 12) so the destination columns have room
@@ -23046,6 +23104,256 @@
             _renderBlueIQIssueBuckets(cards.issue_buckets || []);
             _bqRenderPartyFiltered('top_politicians', 'All');
             _bqRenderPartyFiltered('top_candidates', 'All');
+            _bqRenderIssueGeo(cards.issue_geo || [], cards.issue_buckets || []);
+            _bqRenderCreativePlaybook(cards.issue_buckets || [],
+                                       cards.issue_journey_cross || [],
+                                       cards.voter_journey || []);
+        }
+
+        // ──────────────────────────────────────────────────────────────────
+        // CARD G: Issue × Geo heatmap
+        // ──────────────────────────────────────────────────────────────────
+        // Hex-grid layout of the 50 states + DC. Each entry: [row, col, abbr].
+        // Approximates US geography (NPR/Bloomberg-style tilegram). Used for
+        // both visual rendering and click handling.
+        var BLUE_IQ_STATE_HEX = {
+            'AK': [0, 0],  'ME': [0, 11],
+            'VT': [1, 10], 'NH': [1, 11],
+            'WA': [2, 1],  'ID': [2, 2],  'MT': [2, 3],  'ND': [2, 4],
+            'MN': [2, 5],  'IL': [2, 6],  'WI': [2, 7],  'MI': [2, 8],
+            'NY': [2, 9],  'MA': [2, 10], 'RI': [2, 11],
+            'OR': [3, 1],  'NV': [3, 2],  'WY': [3, 3],  'SD': [3, 4],
+            'IA': [3, 5],  'IN': [3, 6],  'OH': [3, 7],  'PA': [3, 8],
+            'NJ': [3, 9],  'CT': [3, 10],
+            'CA': [4, 1],  'UT': [4, 2],  'CO': [4, 3],  'NE': [4, 4],
+            'MO': [4, 5],  'KY': [4, 6],  'WV': [4, 7],  'VA': [4, 8],
+            'MD': [4, 9],  'DE': [4, 10],
+            'AZ': [5, 2],  'NM': [5, 3],  'KS': [5, 4],  'AR': [5, 5],
+            'TN': [5, 6],  'NC': [5, 7],  'SC': [5, 8],  'DC': [5, 9],
+            'HI': [6, 0],  'OK': [6, 4],  'LA': [6, 5],  'MS': [6, 6],
+            'AL': [6, 7],  'GA': [6, 8],
+            'TX': [7, 4],  'FL': [7, 8]
+        };
+        // Full state names ↔ USPS codes (the cube payload uses full names).
+        var BLUE_IQ_STATE_NAME_TO_USPS = {
+            'Alabama':'AL','Alaska':'AK','Arizona':'AZ','Arkansas':'AR','California':'CA',
+            'Colorado':'CO','Connecticut':'CT','Delaware':'DE','District of Columbia':'DC','Florida':'FL',
+            'Georgia':'GA','Hawaii':'HI','Idaho':'ID','Illinois':'IL','Indiana':'IN','Iowa':'IA',
+            'Kansas':'KS','Kentucky':'KY','Louisiana':'LA','Maine':'ME','Maryland':'MD','Massachusetts':'MA',
+            'Michigan':'MI','Minnesota':'MN','Mississippi':'MS','Missouri':'MO','Montana':'MT',
+            'Nebraska':'NE','Nevada':'NV','New Hampshire':'NH','New Jersey':'NJ','New Mexico':'NM',
+            'New York':'NY','North Carolina':'NC','North Dakota':'ND','Ohio':'OH','Oklahoma':'OK',
+            'Oregon':'OR','Pennsylvania':'PA','Rhode Island':'RI','South Carolina':'SC','South Dakota':'SD',
+            'Tennessee':'TN','Texas':'TX','Utah':'UT','Vermont':'VT','Virginia':'VA','Washington':'WA',
+            'West Virginia':'WV','Wisconsin':'WI','Wyoming':'WY'
+        };
+
+        function _bqRenderIssueGeo(geoRows, issueBuckets) {
+            var mapEl  = document.getElementById('blueIQGeoMap');
+            var topEl  = document.getElementById('blueIQGeoTopList');
+            var sel    = document.getElementById('blueIQGeoIssueSelect');
+            var legEl  = document.getElementById('blueIQGeoLegend');
+            if (!mapEl || !sel) return;
+            if (!geoRows || !geoRows.length) {
+                mapEl.innerHTML = '<div style="color: var(--text-secondary); font-size: 0.85rem; padding: 1rem 0; text-align:center;">No state-level issue signal in this slice. The cube needs per-state cells with bucketed search queries.</div>';
+                if (topEl) topEl.innerHTML = '';
+                return;
+            }
+            // Build issue list (deduped, sorted by total panelists desc).
+            var issueTotals = {};
+            geoRows.forEach(function(r) {
+                issueTotals[r.issue] = (issueTotals[r.issue] || 0) + (+r.panelists || 0);
+            });
+            var issuesSorted = Object.keys(issueTotals).sort(function(a, b) {
+                return issueTotals[b] - issueTotals[a];
+            });
+            // Populate the issue selector. Default to the top issue in this slice.
+            sel.innerHTML = issuesSorted.map(function(b) {
+                return '<option value="' + _bqEscape(b) + '">'
+                     + _bqEscape(b) + ' (\u2248' + _bqNum(issueTotals[b]) + ' panelists)</option>';
+            }).join('');
+            // Avoid double-binding on re-render.
+            sel.onchange = function() { renderForIssue(sel.value); };
+
+            function renderForIssue(issue) {
+                // Build per-state value map for the chosen issue.
+                var byState = {};  // USPS → {state_name, panelists, share}
+                geoRows.forEach(function(r) {
+                    if (r.issue !== issue) return;
+                    var usps = BLUE_IQ_STATE_NAME_TO_USPS[r.state] || r.state.toUpperCase();
+                    byState[usps] = {
+                        name: r.state,
+                        panelists: +r.panelists || 0,
+                        share: +r.share || 0,
+                    };
+                });
+                var values = Object.keys(byState).map(function(k) { return byState[k].panelists; });
+                var maxV = Math.max.apply(null, values.concat([1]));
+                // Sequential color scale: light → dark blue.
+                function tint(v) {
+                    if (v <= 0) return 'rgba(255,255,255,0.04)';
+                    var t = Math.sqrt(v / maxV);  // sqrt to compress high outliers
+                    var r = Math.round(30 + (59  - 30 ) * t);
+                    var g = Math.round(58 + (130 - 58 ) * t);
+                    var b = Math.round(96 + (246 - 96 ) * t);
+                    return 'rgb(' + r + ',' + g + ',' + b + ')';
+                }
+                // 8 rows, 12 cols grid. Hex shape via clip-path.
+                var maxRow = 7, maxCol = 11;
+                var hexW = 56, hexH = 48;
+                var svgW = (maxCol + 2) * hexW;
+                var svgH = (maxRow + 2) * hexH;
+                var hexHtml = '';
+                Object.keys(BLUE_IQ_STATE_HEX).forEach(function(usps) {
+                    var pos = BLUE_IQ_STATE_HEX[usps];
+                    var row = pos[0], col = pos[1];
+                    var offsetX = (row % 2) * (hexW / 2);
+                    var x = col * hexW + offsetX + 8;
+                    var y = row * (hexH * 0.85) + 8;
+                    var s = byState[usps] || {panelists: 0, share: 0};
+                    var fill = tint(s.panelists);
+                    var stroke = s.panelists > 0 ? 'rgba(255,255,255,0.18)' : 'rgba(255,255,255,0.05)';
+                    var labelColor = s.panelists / maxV > 0.55 ? '#fff' : 'var(--text-secondary)';
+                    var tip = (s.name || usps) + ': '
+                        + _bqNum(s.panelists) + ' panelists \u00b7 '
+                        + _bqPct(s.share) + ' of state cohort searched ' + issue;
+                    hexHtml += '<g class="bq-geo-hex" data-state="' + usps + '" transform="translate(' + x + ',' + y + ')">'
+                            +   '<title>' + _bqEscape(tip) + '</title>'
+                            +   '<polygon points="14,0 42,0 56,24 42,48 14,48 0,24" '
+                            +     'fill="' + fill + '" stroke="' + stroke + '" stroke-width="1.2"/>'
+                            +   '<text x="28" y="28" text-anchor="middle" font-size="11" font-weight="600" '
+                            +     'fill="' + labelColor + '" pointer-events="none">' + usps + '</text>'
+                            + '</g>';
+                });
+                mapEl.innerHTML = '<svg viewBox="0 0 ' + svgW + ' ' + svgH + '" '
+                                + 'preserveAspectRatio="xMidYMid meet" '
+                                + 'style="width:100%; max-width:760px; height:auto; display:block; margin:0 auto;">'
+                                + hexHtml + '</svg>';
+                // Legend ramp.
+                if (legEl) {
+                    var stops = [0, 0.25, 0.5, 0.75, 1].map(function(t) {
+                        return '<span style="background:' + tint(maxV * t * t) + '; width:24px; height:10px; display:inline-block; border-radius:2px;"></span>';
+                    }).join('');
+                    legEl.innerHTML = '<span style="font-size:0.7rem; color:var(--text-secondary);">low</span>'
+                                    + stops
+                                    + '<span style="font-size:0.7rem; color:var(--text-secondary);">high</span>';
+                }
+                // Top-states list under the map.
+                if (topEl) {
+                    var ranked = Object.keys(byState)
+                        .map(function(k) { return {usps: k, name: byState[k].name, n: byState[k].panelists, share: byState[k].share}; })
+                        .sort(function(a, b) { return b.n - a.n; })
+                        .slice(0, 10);
+                    topEl.innerHTML = '<div class="bq-geo-toplist-title">Top 10 states for <strong>' + _bqEscape(issue) + '</strong></div>'
+                                    + ranked.map(function(r, i) {
+                                        return '<div class="bq-geo-toplist-row">'
+                                             + '<span class="bq-geo-toplist-rank">' + (i + 1) + '</span>'
+                                             + '<span class="bq-geo-toplist-name">' + _bqEscape(r.name) + '</span>'
+                                             + '<span class="bq-geo-toplist-bar-wrap"><span class="bq-geo-toplist-bar" style="width:' + Math.round((r.n / ranked[0].n) * 100) + '%; background:' + tint(r.n) + ';"></span></span>'
+                                             + '<span class="bq-geo-toplist-val">' + _bqNum(r.n) + '</span>'
+                                             + '</div>';
+                                    }).join('');
+                }
+            }
+
+            // Hex-click → drill into that state by mutating the existing
+            // geography dropdown + re-running applyBlueIQFilters (the same
+            // path the filter bar uses).
+            mapEl.onclick = function(ev) {
+                var g = ev.target && ev.target.closest && ev.target.closest('.bq-geo-hex');
+                if (!g) return;
+                var usps = g.getAttribute('data-state');
+                if (!usps) return;
+                var stateName = Object.keys(BLUE_IQ_STATE_NAME_TO_USPS).find(function(n) {
+                    return BLUE_IQ_STATE_NAME_TO_USPS[n] === usps;
+                });
+                if (!stateName) return;
+                var geoType = document.getElementById('blueIQGeoType');
+                var geoVal  = document.getElementById('blueIQGeoValue');
+                if (geoType) {
+                    geoType.value = 'State';
+                    if (typeof _populateBlueIQGeoValue === 'function') {
+                        _populateBlueIQGeoValue();
+                    }
+                }
+                if (geoVal) {
+                    geoVal.value = stateName;
+                }
+                if (typeof applyBlueIQFilters === 'function') {
+                    applyBlueIQFilters();
+                }
+            };
+
+            renderForIssue(issuesSorted[0]);
+        }
+
+        // ──────────────────────────────────────────────────────────────────
+        // CARD P: Creative playbook
+        // ──────────────────────────────────────────────────────────────────
+        function _bqRenderCreativePlaybook(issueBuckets, issueJourneyCross, voterJourney) {
+            var body = document.getElementById('blueIQCreativePlaybook');
+            if (!body) return;
+            if (!issueBuckets || !issueBuckets.length) {
+                body.innerHTML = '<div style="color: var(--text-secondary); font-size: 0.85rem; padding: 0.5rem 0;">No issues surfaced for this slice \u2014 nothing to recommend yet.</div>';
+                return;
+            }
+            // For each top issue, find its dominant non-noise destination from
+            // the cross-journey card. Fall back to overall voter-journey
+            // dominant destination if the cross doesn't have this issue.
+            var crossByIssue = {};
+            (issueJourneyCross || []).forEach(function(c) {
+                crossByIssue[c.bucket] = c;
+            });
+            var fallbackDom = (voterJourney || [])
+                .slice()
+                .filter(function(d) { return d.destination !== 'abandoned' && d.destination !== 'other'; })
+                .sort(function(a, b) { return (b.panelists || 0) - (a.panelists || 0); })[0];
+
+            var factor = (window.__blueIQ && window.__blueIQ.genPopFactor) || 1.0;
+
+            body.innerHTML = '<div class="bq-playbook-grid">'
+                + issueBuckets.slice(0, 8).map(function(b, idx) {
+                    var cross = crossByIssue[b.bucket];
+                    var domDest = null;
+                    if (cross && cross.destinations && cross.destinations.length) {
+                        domDest = cross.destinations.slice()
+                            .filter(function(d) { return d.destination !== 'abandoned' && d.destination !== 'other'; })
+                            .sort(function(a, b) { return (b.panelists || 0) - (a.panelists || 0); })[0]
+                            || cross.destinations[0];
+                    }
+                    if (!domDest && fallbackDom) {
+                        domDest = {destination: fallbackDom.destination, share: fallbackDom.share, panelists: fallbackDom.panelists};
+                    }
+                    var destKey = (domDest && domDest.destination) || 'news_dive';
+                    var play    = BLUE_IQ_CREATIVE_PLAYS[destKey] || BLUE_IQ_CREATIVE_PLAYS.other;
+                    var destMeta= BLUE_IQ_JOURNEY_LABELS[destKey] || {label: destKey};
+                    var destColor = BLUE_IQ_DEST_PALETTE[destKey] || '#64748b';
+                    var usAdults = _bqNum((+b.count || 0) * factor);
+                    return '<div class="bq-playbook-card">'
+                         +   '<div class="bq-playbook-head">'
+                         +     '<div class="bq-playbook-rank">' + (idx + 1) + '</div>'
+                         +     '<div class="bq-playbook-issue">'
+                         +       '<div class="bq-playbook-issue-name">' + _bqEscape(b.bucket) + '</div>'
+                         +       '<div class="bq-playbook-issue-stats">' + _bqPct(b.share || 0) + ' of policy searches \u00b7 \u2248' + usAdults + ' US adults</div>'
+                         +     '</div>'
+                         +   '</div>'
+                         +   '<div class="bq-playbook-section">'
+                         +     '<div class="bq-playbook-section-label">Dominant follow-up</div>'
+                         +     '<div class="bq-playbook-section-body">'
+                         +       '<span class="bq-playbook-dest-chip" style="background:' + destColor + '22; color:' + destColor + '; border:1px solid ' + destColor + '55;">' + _bqEscape(destMeta.label) + '</span>'
+                         +     '</div>'
+                         +   '</div>'
+                         +   '<div class="bq-playbook-section">'
+                         +     '<div class="bq-playbook-section-label">Where to buy</div>'
+                         +     '<div class="bq-playbook-section-body">' + _bqEscape(play.placement) + '</div>'
+                         +   '</div>'
+                         +   '<div class="bq-playbook-section">'
+                         +     '<div class="bq-playbook-section-label">Creative direction</div>'
+                         +     '<div class="bq-playbook-section-body">' + _bqEscape(play.creative) + '</div>'
+                         +   '</div>'
+                         + '</div>';
+                  }).join('')
+                + '</div>';
         }
 
         function _renderBlueIQIssueBuckets(buckets) {
