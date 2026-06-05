@@ -17801,12 +17801,28 @@
             #blueIQView .blue-iq-card-search   { grid-column: span 4; }
             #blueIQView .blue-iq-card-social   { grid-column: span 4; }
             #blueIQView .blue-iq-card-turnout  { grid-column: span 4; }
-            #blueIQView .blue-iq-card-pols     { grid-column: span 6; min-height: 320px; }
+            #blueIQView .blue-iq-card-pols     { grid-column: span 6; min-height: 360px; }
+            #blueIQView .blue-iq-card-cands    { grid-column: span 6; min-height: 360px; }
             #blueIQView .blue-iq-card-articles { grid-column: span 6; min-height: 320px; }
             #blueIQView .blue-iq-card-demo     { grid-column: span 6; }
             #blueIQView .blue-iq-card-compare  { grid-column: span 6; }
-            #blueIQView .blue-iq-card-title { font-size: 0.92rem; font-weight: 600; margin: 0 0 0.6rem 0; color: var(--text-primary); display: flex; align-items: center; gap: 0.4rem; }
+            #blueIQView .blue-iq-card-title { font-size: 0.92rem; font-weight: 600; margin: 0 0 0.4rem 0; color: var(--text-primary); display: flex; align-items: baseline; gap: 0.4rem; flex-wrap: wrap; }
             #blueIQView .blue-iq-card-title .blue-iq-badge { font-size: 0.65rem; padding: 0.15rem 0.45rem; background: var(--accent-primary); color: #fff; border-radius: 10px; }
+            #blueIQView .blue-iq-card-title .blue-iq-card-subtitle { font-size: 0.68rem; color: var(--text-secondary); font-weight: 400; margin-left: 0.1rem; }
+            #blueIQView .bq-party-filter { display: flex; gap: 0.35rem; margin: 0 0 0.55rem 0; flex-wrap: wrap; }
+            #blueIQView .bq-party-chip { background: rgba(255,255,255,0.04); color: var(--text-secondary); font-size: 0.72rem; padding: 0.22rem 0.65rem; border: 1px solid rgba(255,255,255,0.06); border-radius: 999px; cursor: pointer; transition: all 0.12s ease; }
+            #blueIQView .bq-party-chip:hover { background: rgba(255,255,255,0.08); color: var(--text-primary); }
+            #blueIQView .bq-party-chip.active { background: rgba(79,140,255,0.18); color: var(--accent-primary, #4f8cff); border-color: rgba(79,140,255,0.4); }
+            #blueIQView .bq-party-chip[data-party="D"].active { background: rgba(59,130,246,0.18); color: #93c5fd; border-color: rgba(59,130,246,0.5); }
+            #blueIQView .bq-party-chip[data-party="R"].active { background: rgba(239,68,68,0.18); color: #fca5a5; border-color: rgba(239,68,68,0.5); }
+            #blueIQView .bq-party-chip[data-party="I"].active { background: rgba(168,85,247,0.18); color: #d8b4fe; border-color: rgba(168,85,247,0.5); }
+            #blueIQView .bq-party-dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; margin: 0 0.45rem 0 0; flex: 0 0 7px; vertical-align: middle; }
+            #blueIQView .bq-src-badges { display: inline-flex; gap: 0.18rem; margin-left: 0.35rem; opacity: 0.7; }
+            #blueIQView .bq-src-badge { font-size: 0.58rem; padding: 0.05rem 0.32rem; border-radius: 4px; font-weight: 600; letter-spacing: 0.02em; background: rgba(255,255,255,0.06); color: var(--text-secondary); }
+            #blueIQView .bq-src-badge.bq-src-trends { background: rgba(66,133,244,0.18); color: #93c5fd; }
+            #blueIQView .bq-src-badge.bq-src-gdelt  { background: rgba(245,158,11,0.18); color: #fcd34d; }
+            #blueIQView .bq-src-badge.bq-src-wiki   { background: rgba(168,85,247,0.18); color: #d8b4fe; }
+            #blueIQView .bq-src-badge.bq-src-panel  { background: rgba(34,197,94,0.18); color: #86efac; }
             #blueIQView .blue-iq-card-body { flex: 1 1 0%; overflow-y: auto; }
             #blueIQView .blue-iq-row { display: flex; justify-content: space-between; align-items: center; padding: 0.3rem 0; border-bottom: 1px solid rgba(255,255,255,0.04); font-size: 0.85rem; }
             #blueIQView .blue-iq-row:last-child { border-bottom: none; }
@@ -17919,6 +17935,7 @@
                 #blueIQView .blue-iq-card-social,
                 #blueIQView .blue-iq-card-turnout,
                 #blueIQView .blue-iq-card-pols,
+                #blueIQView .blue-iq-card-cands,
                 #blueIQView .blue-iq-card-articles,
                 #blueIQView .blue-iq-card-demo,
                 #blueIQView .blue-iq-card-compare { grid-column: span 12; }
@@ -22745,15 +22762,26 @@
             // unaffected because it's a ratio.
             var factor = (window.__blueIQ && window.__blueIQ.genPopFactor) || 1.0;
             var projectKey = (opts.projectKey === undefined) ? 'panelists' : opts.projectKey;
-            var brandColor = opts.brandColor === true;  // colorize bar per brand
+            var brandColor = opts.brandColor === true;
+            // labelMode:
+            //   'score'   → render valKey * 100 (mention_score is already 0..1)
+            //   'percent' → render r.share as %
+            //   'project' → r.panelists * gen_pop_factor (default for panel cards)
+            //   'count'   → raw _bqNum(v)
+            var labelMode = opts.labelMode
+                || (projectKey ? 'project' : 'count');
+            var sourcesBadge = opts.sourcesBadge === true;
             var maxV = Math.max.apply(null, items.map(function(r) { return +r[valKey] || 0; })) || 1;
             return items.slice(0, 10).map(function(r) {
                 var v = +r[valKey] || 0;
                 var pct = Math.round((v / maxV) * 100);
                 var label;
-                if (typeof r.share === 'number') {
+                if (typeof r.share === 'number' && labelMode !== 'score') {
                     label = _bqPct(r.share);
-                } else if (projectKey && r[projectKey] != null) {
+                } else if (labelMode === 'score') {
+                    // mention_score is normalized 0..1 -> show 0-100 "interest score"
+                    label = Math.round(v * 100);
+                } else if (labelMode === 'project' && projectKey && r[projectKey] != null) {
                     label = _bqNum((+r[projectKey] || 0) * factor);
                 } else {
                     label = _bqNum(v);
@@ -22764,13 +22792,63 @@
                 var dotHtml = brandColor && color
                     ? '<span style="display:inline-block;width:8px;height:8px;border-radius:2px;background:' + color + ';margin-right:0.45rem;flex:0 0 8px;"></span>'
                     : '';
-                return '<div class="blue-iq-row">'
-                     + '<span class="blue-iq-row-name" title="' + _bqEscape(r[nameKey] || '') + '">' + dotHtml + _bqEscape(r[nameKey] || '') + '</span>'
+                // Optional source-provenance badge (Trends / Panel / GDELT / Wiki).
+                var srcHtml = '';
+                if (sourcesBadge && r.sources && r.sources.length) {
+                    var SRC_LABEL = {panel:'Panel', trends:'GT', gdelt:'News', wiki:'Wiki'};
+                    srcHtml = ' <span class="bq-src-badges">'
+                        + r.sources.slice(0,3).map(function(s) {
+                            return '<span class="bq-src-badge bq-src-' + s + '">' + (SRC_LABEL[s]||s) + '</span>';
+                          }).join('')
+                        + '</span>';
+                }
+                // Party-tint side dot (D/R/I) when row has party_code.
+                var partyDot = '';
+                if (r.party_code) {
+                    var PARTY_COLOR = {D:'#3b82f6', R:'#ef4444', I:'#a855f7'};
+                    partyDot = '<span class="bq-party-dot" style="background:' + (PARTY_COLOR[r.party_code]||'#64748b') + ';" title="' + r.party_code + '"></span>';
+                }
+                return '<div class="blue-iq-row" data-party="' + (r.party_code || '') + '">'
+                     + '<span class="blue-iq-row-name" title="' + _bqEscape(r[nameKey] || '') + '">' + dotHtml + partyDot + _bqEscape(r[nameKey] || '') + srcHtml + '</span>'
                      + '<span class="blue-iq-row-bar-wrap"><span class="blue-iq-row-bar" style="' + barStyle + '"></span></span>'
                      + '<span class="blue-iq-row-val">' + label + '</span>'
                      + '</div>';
             }).join('');
         }
+
+        // Filter row items by party_code in-place from a cached list. Wired up
+        // by clickable chips above Top Politicians and Top Candidates.
+        function _bqRenderPartyFiltered(targetKey, party) {
+            var data = window.__blueIQ && window.__blueIQ.lastData;
+            if (!data) return;
+            var bodyId = targetKey === 'top_candidates' ? 'blueIQCardCandidatesBody' : 'blueIQCardPoliticiansBody';
+            var body = document.getElementById(bodyId);
+            if (!body) return;
+            var rows = ((data.cards || {})[targetKey] || []).slice();
+            if (party && party !== 'All') {
+                rows = rows.filter(function(r) { return r.party_code === party; });
+            }
+            body.innerHTML = _bqRowBars(rows, 'name', 'mention_score', {
+                projectKey: null,
+                labelMode: 'score',
+                sourcesBadge: true,
+            });
+        }
+        window._bqRenderPartyFiltered = _bqRenderPartyFiltered;
+
+        // Click delegation for the .bq-party-chip elements. Toggles active
+        // chip then re-renders the corresponding card body.
+        document.addEventListener('click', function(e) {
+            var chip = e.target.closest && e.target.closest('.bq-party-chip');
+            if (!chip) return;
+            var bar = chip.closest('.bq-party-filter');
+            if (!bar) return;
+            var target = bar.getAttribute('data-target');
+            var party = chip.getAttribute('data-party') || 'All';
+            bar.querySelectorAll('.bq-party-chip').forEach(function(c) { c.classList.remove('active'); });
+            chip.classList.add('active');
+            _bqRenderPartyFiltered(target, party);
+        });
 
         function renderBlueIQCards(data) {
             var grid = document.getElementById('blueIQCardsGrid');
@@ -22840,10 +22918,32 @@
                   + '<div class="blue-iq-card-body">' + tiHtml + '</div>'
                   + '</div>';
 
-            // CARD D: Top politicians
+            // CARD D: Top politicians (with party filter)
             html += '<div class="blue-iq-card blue-iq-card-pols">'
-                  + '<h3 class="blue-iq-card-title">Top politicians engaged</h3>'
-                  + '<div class="blue-iq-card-body">' + _bqRowBars(cards.top_politicians, 'name', 'mention_score') + '</div>'
+                  + '<h3 class="blue-iq-card-title">Top politicians engaged'
+                  +   '<span class="blue-iq-card-subtitle">interest score blends panel mentions, Google Trends, GDELT news, and Wikipedia views</span>'
+                  + '</h3>'
+                  + '<div class="bq-party-filter" data-target="top_politicians">'
+                  +   '<button class="bq-party-chip active" data-party="All">All</button>'
+                  +   '<button class="bq-party-chip" data-party="D">Democrats</button>'
+                  +   '<button class="bq-party-chip" data-party="R">Republicans</button>'
+                  +   '<button class="bq-party-chip" data-party="I">Independents</button>'
+                  + '</div>'
+                  + '<div class="blue-iq-card-body" id="blueIQCardPoliticiansBody"></div>'
+                  + '</div>';
+
+            // CARD D2: Top candidates (active 2026-cycle declared candidates)
+            html += '<div class="blue-iq-card blue-iq-card-cands">'
+                  + '<h3 class="blue-iq-card-title">Top candidates (active 2026 cycle)'
+                  +   '<span class="blue-iq-card-subtitle">declared candidates for federal + gubernatorial races, ranked by current interest</span>'
+                  + '</h3>'
+                  + '<div class="bq-party-filter" data-target="top_candidates">'
+                  +   '<button class="bq-party-chip active" data-party="All">All</button>'
+                  +   '<button class="bq-party-chip" data-party="D">Democrats</button>'
+                  +   '<button class="bq-party-chip" data-party="R">Republicans</button>'
+                  +   '<button class="bq-party-chip" data-party="I">Independents</button>'
+                  + '</div>'
+                  + '<div class="blue-iq-card-body" id="blueIQCardCandidatesBody"></div>'
                   + '</div>';
 
             // CARD E: Top articles
@@ -22944,6 +23044,8 @@
 
             grid.innerHTML = html;
             _renderBlueIQIssueBuckets(cards.issue_buckets || []);
+            _bqRenderPartyFiltered('top_politicians', 'All');
+            _bqRenderPartyFiltered('top_candidates', 'All');
         }
 
         function _renderBlueIQIssueBuckets(buckets) {
