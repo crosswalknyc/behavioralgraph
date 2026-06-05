@@ -22775,9 +22775,6 @@
             var panelTxt = '';
             if (data.panel_size != null) {
                 panelTxt = ' \u00b7 ' + _bqNum(data.panel_size) + ' panelists';
-                if (data.panel_projected && data.panel_projected > data.panel_size) {
-                    panelTxt += ' (\u2248' + _bqNum(data.panel_projected) + ' US adults)';
-                }
             }
             meta.textContent = label + panelTxt + ' \u00b7 last ' + (f.lookback_days || 30) + 'd' + (data.cache_hit ? ' \u00b7 cached' : '');
             if (updated && data.generated_at) {
