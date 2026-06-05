@@ -327,13 +327,25 @@ def blue_iq_cache_key(filters: dict) -> str:
             a percentage instead of raw panelist counts. v6 payloads
             don't carry reach_share and would still show panelist
             counts; bump invalidates.
+      v8 — 2026-06-05: added playbook_agent — agent-researched per-issue
+            placement + creative recommendations for the Creative
+            Playbook card. Previously the UI used a hardcoded
+            BLUE_IQ_ISSUE_PLAYS map keyed only on the issue name, so
+            the same play rendered for every geography and ignored
+            the actual dominant follow-up panelists were taking.
+            playbook_discovery.discover_creative_playbook now reads
+            (issue, dominant_dest, dom_share) tuples and returns
+            DISTINCT placement + creative copy per issue grounded in
+            current web research. v7 payloads don't carry the field
+            and the card would still show the static copy; bump
+            invalidates them.
     """
     canonical = json.dumps({
         'party':     filters.get('party') or 'All',
         'geo_type':  filters.get('geo_type') or 'National',
         'geo_value': filters.get('geo_value') or '',
         'lookback':  int(filters.get('lookback_days') or DEFAULT_LOOKBACK_DAYS),
-        'version':   7,
+        'version':   8,
     }, sort_keys=True, separators=(',', ':'))
     return hashlib.sha256(canonical.encode('utf-8')).hexdigest()
 
@@ -2331,6 +2343,47 @@ def compute_panel_view(filters: dict, *, force_refresh: bool = False) -> dict:
         log.warning("path_discovery unavailable; UI will use static fallback: %s", _e)
         issue_paths_agent = []
 
+    # Card P "Creative playbook" — per-issue placement + creative
+    # recommendation researched by an OpenAI agent with web search.
+    # Replaces the prior frontend-only BLUE_IQ_ISSUE_PLAYS static dict
+    # that returned the same generic copy ("buy NYT/Fox political news
+    # inventory + issue-anchored explainer creative") for every slice
+    # regardless of geography or panel behavior. Feeds the agent each
+    # bucket + the dominant follow-up destination panelists take after
+    # touching the issue (so e.g. an issue whose voters candidate_site
+    # gets a direct-response recommendation, while news_dive issues
+    # get news-adjacency placements). 24h S3 cache keyed by
+    # (geo, sorted issue+dest hash). Fails open — frontend keeps its
+    # static BLUE_IQ_ISSUE_PLAYS fallback if the agent returns [].
+    try:
+        from playbook_discovery import discover_creative_playbook
+        _cross_by_issue = {(c.get('bucket') or ''): c
+                            for c in (issue_journey_cross or [])}
+        _playbook_ctx: list[dict] = []
+        for _b in (issue_buckets or [])[:12]:
+            _bucket = _b.get('bucket') if _b else None
+            if not _bucket:
+                continue
+            _cross = _cross_by_issue.get(_bucket) or {}
+            _dests = sorted(
+                [d for d in (_cross.get('destinations') or [])
+                  if d.get('destination') not in (None, '', 'abandoned', 'other')],
+                key=lambda d: float(d.get('panelists') or 0),
+                reverse=True,
+            )
+            _dom = _dests[0] if _dests else {}
+            _playbook_ctx.append({
+                'bucket':         _bucket,
+                'dominant_dest':  (_dom.get('destination') or 'news_dive'),
+                'dom_share':      float(_dom.get('share') or 0.0),
+            })
+        playbook_agent = discover_creative_playbook(
+            f['geo_type'], f['geo_value'], _playbook_ctx
+        ) if _playbook_ctx else []
+    except Exception as _e:  # pragma: no cover - defensive
+        log.warning("playbook_discovery unavailable; UI will use static fallback: %s", _e)
+        playbook_agent = []
+
     cards = {
         'issue_buckets':       issue_buckets,
         'search_engines':      _with_baseline(_attach_share(panel_search), _nat_search_share),
@@ -2347,6 +2400,7 @@ def compute_panel_view(filters: dict, *, force_refresh: bool = False) -> dict:
         'voter_journey':       panel_journey,
         'issue_journey_cross': issue_journey_cross,
         'issue_paths_agent':   issue_paths_agent,
+        'playbook_agent':      playbook_agent,
         'issue_geo':           issue_geo,
         'trending_local':      trending_local,
         'trending_meta':       trending_meta,
