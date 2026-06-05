@@ -24310,7 +24310,7 @@
             sel.innerHTML = issuesSorted.map(function(b) {
                 var share = (issueTotals[b] || 0) / grandTotal;
                 return '<option value="' + _bqEscape(b) + '">'
-                     + _bqEscape(b) + ' (' + _bqPct(share) + ' of policy searches)</option>';
+                     + _bqEscape(b) + ' (' + _bqPct(share) + ' of searches)</option>';
             }).join('');
             // Avoid double-binding on re-render.
             sel.onchange = function() { renderForIssue(sel.value); };
