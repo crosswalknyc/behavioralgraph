@@ -17804,7 +17804,22 @@
             #blueIQView .blue-iq-card-pols     { grid-column: span 6; min-height: 360px; }
             #blueIQView .blue-iq-card-cands    { grid-column: span 6; min-height: 360px; }
             #blueIQView .blue-iq-card-geo      { grid-column: span 12; min-height: 540px; }
+            #blueIQView .blue-iq-card-trending { grid-column: span 12; min-height: 280px; }
             #blueIQView .blue-iq-card-playbook { grid-column: span 12; min-height: 360px; }
+            #blueIQView .bq-trending-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 0.7rem; }
+            #blueIQView .bq-trending-card { background: rgba(255,255,255,0.025); border: 1px solid rgba(255,255,255,0.06); border-radius: 10px; padding: 0.7rem 0.85rem; transition: transform 0.12s ease, border-color 0.12s ease; }
+            #blueIQView .bq-trending-card:hover { transform: translateY(-2px); border-color: rgba(79,140,255,0.3); }
+            #blueIQView .bq-trending-head { display: flex; align-items: baseline; gap: 0.55rem; }
+            #blueIQView .bq-trending-rank { color: var(--text-secondary); font-size: 0.72rem; font-weight: 700; font-variant-numeric: tabular-nums; flex: 0 0 auto; }
+            #blueIQView .bq-trending-term { font-weight: 600; font-size: 0.94rem; color: var(--text-primary); flex: 1 1 auto; min-width: 0; word-wrap: break-word; }
+            #blueIQView .bq-trending-traffic { color: var(--text-secondary); font-size: 0.74rem; font-variant-numeric: tabular-nums; white-space: nowrap; flex: 0 0 auto; }
+            #blueIQView .bq-trending-meta { display: flex; align-items: center; gap: 0.5rem; margin: 0.4rem 0 0.3rem 0; }
+            #blueIQView .bq-trending-bar-wrap { flex: 1 1 auto; height: 5px; background: rgba(255,255,255,0.06); border-radius: 3px; overflow: hidden; }
+            #blueIQView .bq-trending-bar { height: 100%; background: linear-gradient(90deg, rgba(79,140,255,0.7), rgba(79,140,255,1)); border-radius: 3px; }
+            #blueIQView .bq-why-chip { font-size: 0.58rem; font-weight: 700; letter-spacing: 0.06em; padding: 0.12rem 0.45rem; border-radius: 4px; flex: 0 0 auto; }
+            #blueIQView .bq-trending-related { margin-top: 0.45rem; font-size: 0.74rem; color: var(--text-secondary); }
+            #blueIQView .bq-trending-related-label { font-weight: 600; margin-right: 0.25rem; }
+            #blueIQView .bq-trending-related-chip { display: inline-block; padding: 0.1rem 0.45rem; background: rgba(255,255,255,0.05); border-radius: 999px; margin: 0.1rem 0.18rem 0.1rem 0; color: var(--text-primary); font-size: 0.72rem; }
             #blueIQView .bq-geo-controls { display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap; margin-bottom: 0.7rem; }
             #blueIQView .bq-geo-label { font-size: 0.78rem; color: var(--text-secondary); }
             #blueIQView .bq-geo-select { background: rgba(255,255,255,0.06); color: var(--text-primary); padding: 0.32rem 0.55rem; border-radius: 6px; border: 1px solid rgba(255,255,255,0.08); font-size: 0.82rem; min-width: 240px; }
@@ -17964,6 +17979,7 @@
                 #blueIQView .blue-iq-card-pols,
                 #blueIQView .blue-iq-card-cands,
                 #blueIQView .blue-iq-card-geo,
+                #blueIQView .blue-iq-card-trending,
                 #blueIQView .blue-iq-card-playbook,
                 #blueIQView .blue-iq-card-articles,
                 #blueIQView .blue-iq-card-demo,
@@ -22992,6 +23008,19 @@
                   + '<div class="blue-iq-card-body">' + artHtml + '</div>'
                   + '</div>';
 
+            // CARD T: "Trending in [Geo] right now" — live Google Trends,
+            // AI/keyword-filtered to political. Geographically scoped: filter
+            // to a state or DMA and this card surfaces local trending searches
+            // (e.g. mayoral races, ballot props, state legislature fights) that
+            // the cube panel sample wouldn't catch yet. Each term shows score
+            // + related queries; click for the full drill.
+            html += '<div class="blue-iq-card blue-iq-card-trending" style="grid-column: span 12;">'
+                  + '<h3 class="blue-iq-card-title">Trending political searches \u2014 <span id="blueIQTrendingGeoLabel">United States</span> <span class="blue-iq-badge">Google Trends \u00b7 live</span>'
+                  +   '<span class="blue-iq-card-subtitle">what people in this geography are actually searching <em>right now</em>. Updates per-filter. AI/keyword-filtered to political only.</span>'
+                  + '</h3>'
+                  + '<div class="blue-iq-card-body" id="blueIQTrendingBody"></div>'
+                  + '</div>';
+
             // CARD G: Issue × Geo heatmap — US state-hex choropleth showing
             // where each issue is hot. Issue selector dropdown lets the user
             // pivot the map by issue. Click a state to drill into that slice.
@@ -23104,6 +23133,7 @@
             _renderBlueIQIssueBuckets(cards.issue_buckets || []);
             _bqRenderPartyFiltered('top_politicians', 'All');
             _bqRenderPartyFiltered('top_candidates', 'All');
+            _bqRenderTrendingLocal(cards.trending_local || [], cards.trending_meta || {});
             _bqRenderIssueGeo(cards.issue_geo || [], cards.issue_buckets || []);
             _bqRenderCreativePlaybook(cards.issue_buckets || [],
                                        cards.issue_journey_cross || [],
@@ -23351,6 +23381,83 @@
                          +     '<div class="bq-playbook-section-label">Creative direction</div>'
                          +     '<div class="bq-playbook-section-body">' + _bqEscape(play.creative) + '</div>'
                          +   '</div>'
+                         + '</div>';
+                  }).join('')
+                + '</div>';
+        }
+
+        // ──────────────────────────────────────────────────────────────────
+        // CARD T: Trending in this area right now
+        // ──────────────────────────────────────────────────────────────────
+        function _bqRenderTrendingLocal(rows, meta) {
+            var labelEl = document.getElementById('blueIQTrendingGeoLabel');
+            var body    = document.getElementById('blueIQTrendingBody');
+            if (!body) return;
+            if (labelEl) labelEl.textContent = (meta && meta.geo_label) || 'United States';
+
+            var fineprint = '';
+            if (meta && meta.geo_type === 'DMA' && meta.dma_resolved_via) {
+                fineprint = ' <span style="font-size:0.7rem; color:var(--text-secondary);">(' + _bqEscape(meta.geo_value) + ' DMA \u2192 state-level Trends for ' + _bqEscape(meta.dma_resolved_via) + ')</span>';
+            } else if (meta && meta.geo_type === 'DMA' && meta.geo_value && !meta.dma_resolved_via) {
+                fineprint = ' <span style="font-size:0.7rem; color:var(--text-secondary);">(' + _bqEscape(meta.geo_value) + ' DMA not in lookup \u2014 showing US-wide Trends)</span>';
+            }
+            if (labelEl && fineprint) {
+                labelEl.insertAdjacentHTML('afterend', fineprint);
+            }
+
+            if (!rows || !rows.length) {
+                var hint = (meta && meta.is_state_local)
+                    ? ('Google Trends returned ' + (meta.raw_trends_count || 0) + ' terms for this geo, but none cleared the political filter (politician-name match, civic keyword, or political related queries). Try a wider geo or a different lookback.')
+                    : 'No state filter applied \u2014 set Geography to a state (or to a DMA whose primary state is in our lookup) to see local trending political searches.';
+                body.innerHTML = '<div style="color: var(--text-secondary); font-size: 0.85rem; padding: 0.7rem 0;">' + hint + '</div>';
+                return;
+            }
+
+            var maxScore = Math.max.apply(null, rows.map(function(r) { return +r.score || 0; })) || 1;
+            // Why-political badge color map.
+            var WHY_COLOR = {
+                politician_name: ['rgba(168,85,247,0.16)', '#d8b4fe', 'PERSON'],
+                related_query:   ['rgba(34,197,94,0.16)',  '#86efac', 'CONTEXT'],
+            };
+            function whyChip(why) {
+                if (!why) return '';
+                if (why.indexOf('keyword:') === 0) {
+                    return '<span class="bq-why-chip" style="background:rgba(245,158,11,0.16); color:#fcd34d;">' + _bqEscape(why.slice(8).toUpperCase()) + '</span>';
+                }
+                var cfg = WHY_COLOR[why];
+                if (!cfg) return '';
+                return '<span class="bq-why-chip" style="background:' + cfg[0] + '; color:' + cfg[1] + ';">' + cfg[2] + '</span>';
+            }
+            function pctOfMax(s) { return Math.round((+s || 0) / maxScore * 100); }
+            function fmtTraffic(s) {
+                s = +s || 0;
+                if (s >= 1e6) return (s / 1e6).toFixed(1).replace(/\.0$/, '') + 'M+';
+                if (s >= 1e3) return Math.round(s / 1e3) + 'K+';
+                return String(s);
+            }
+
+            body.innerHTML = '<div class="bq-trending-grid">'
+                + rows.map(function(r, idx) {
+                    var rel = (r.related || []).slice(0, 5);
+                    var relHtml = rel.length
+                        ? '<div class="bq-trending-related">'
+                            + '<span class="bq-trending-related-label">Related searches:</span> '
+                            + rel.map(function(q) {
+                                return '<span class="bq-trending-related-chip">' + _bqEscape(q) + '</span>';
+                              }).join('')
+                          + '</div>'
+                        : '';
+                    return '<div class="bq-trending-card" data-term="' + _bqEscape(r.term) + '">'
+                         +   '<div class="bq-trending-head">'
+                         +     '<div class="bq-trending-rank">#' + (idx + 1) + '</div>'
+                         +     '<div class="bq-trending-term">' + _bqEscape(r.term) + '</div>'
+                         +     '<div class="bq-trending-traffic" title="Approx. search volume from Google Trends">' + fmtTraffic(r.score) + '</div>'
+                         +   '</div>'
+                         +   '<div class="bq-trending-meta">'
+                         +     whyChip(r.why_political)
+                         +     '<div class="bq-trending-bar-wrap"><div class="bq-trending-bar" style="width:' + pctOfMax(r.score) + '%;"></div></div>'
+                         +   '</div>'
+                         +   relHtml
                          + '</div>';
                   }).join('')
                 + '</div>';
