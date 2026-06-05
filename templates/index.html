@@ -5675,27 +5675,35 @@
         /* Profile IQ Behavioral tab only: tighter rows + vertically centered cell content (font unchanged). */
         #behavioralGrid .behavioral-table .behavioral-item {
             padding: 0.2rem 0;
+            align-items: stretch;
+        }
+        #behavioralGrid .behavioral-table .behavioral-item > * {
+            display: flex;
+            align-items: center;
+            align-self: stretch;
+            min-height: 0;
+        }
+        #behavioralGrid .behavioral-table .behavioral-item .behavioral-rank {
+            line-height: 1;
+        }
+        #behavioralGrid .behavioral-table .behavioral-item .behavioral-name-wrapper {
+            display: flex;
             align-items: center;
         }
-        #behavioralGrid .behavioral-table .behavioral-item .behavioral-rank,
-        #behavioralGrid .behavioral-table .behavioral-item .behavioral-name-wrapper,
-        #behavioralGrid .behavioral-table .behavioral-item .behavioral-pct,
-        #behavioralGrid .behavioral-table .behavioral-item .behavioral-index {
-            align-self: center;
-            line-height: 1.15;
-        }
         #behavioralGrid .behavioral-table .behavioral-item .behavioral-name {
-            padding-top: 0;
-            padding-bottom: 0;
-            line-height: 1.15;
-        }
-        #behavioralGrid .behavioral-table .behavioral-item .behavioral-index {
-            padding-top: 0;
-            padding-bottom: 0;
+            padding: 0 0.4rem;
+            line-height: 1.2;
+            display: block;
+            width: 100%;
         }
         #behavioralGrid .behavioral-table .behavioral-item .behavioral-pct,
         #behavioralGrid .behavioral-table .behavioral-item .behavioral-index {
+            justify-content: flex-end;
+            line-height: 1;
             font-variant-numeric: tabular-nums;
+        }
+        #behavioralGrid .behavioral-table .behavioral-item .behavioral-index {
+            padding: 0 0.35rem 0 0.2rem;
         }
         .behavioral-table .behavioral-item:hover {
             z-index: 1;
