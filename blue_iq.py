@@ -344,6 +344,62 @@ def _normalize_filters(filters: dict | None) -> dict:
 
 # ── Filter options (states/DMAs/parties) ─────────────────────────────────────
 
+# Country filter for filter-option fallback queries. Matches the aggregator's
+# US_COUNTRY_FILTER (blue_iq_aggregator.py:112) so the dropdown universe
+# matches the cube universe exactly. Without this, the fallback DMA query
+# pulled every distinct DMA string in user_data_sanitized regardless of the
+# panelist's country — leaking Canadian / international DMA values.
+_US_COUNTRY_FILTER = "COUNTRY IN ('USA','United States','US','U.S.','U.S.A.')"
+
+# Strings that look like a DMA but aren't real Nielsen markets. The cube
+# theoretically only emits US-country DMA values, but garbage rows
+# (mistagged country, null-passthrough placeholders, ingestion glitches)
+# still surface. Reject any DMA value matching this set, or anything that
+# looks like a country / continent / "Unknown".
+_DMA_REJECTS_EXACT = {
+    '', '(null)', 'NULL', 'null', 'None', '(none)', 'unknown', 'Unknown',
+    'UNKNOWN', 'N/A', 'na', 'NA', '0', '-', '--', 'Other', 'OTHER',
+    'NotApplicable', 'Not Applicable', 'DMA', 'foreign', 'Foreign',
+    'International', 'INTL', 'Various',
+}
+_DMA_REJECTS_SUBSTR = {
+    # Country / continent names that occasionally end up in the DMA column
+    'canada', 'mexico', 'united kingdom', 'australia', 'germany', 'france',
+    'india', 'japan', 'china', 'brazil', 'south africa', 'europe', 'asia',
+    'africa', 'oceania', 'south america', 'central america',
+}
+
+
+def _is_valid_us_dma(name: str) -> bool:
+    """Return True if `name` plausibly names a US Nielsen DMA.
+
+    Used to filter the dropdown universe so non-US / garbage DMA values
+    don't surface. Conservative: rejects an explicit set of placeholder
+    strings, anything containing a country / continent substring, and
+    pathological strings (too short, too long, all-digit, all-punct).
+    Real US DMAs are 8-50 chars, contain at least one letter, and don't
+    match any reject token.
+    """
+    if not name:
+        return False
+    s = str(name).strip()
+    if not s:
+        return False
+    if s in _DMA_REJECTS_EXACT:
+        return False
+    sl = s.lower()
+    if any(tok in sl for tok in _DMA_REJECTS_SUBSTR):
+        return False
+    # Length sanity. Real DMAs span "Macon" (5) to long hyphenated ones
+    # ("San Francisco-Oak-San Jose", 28). Allow 3-60 to be generous.
+    if not (3 <= len(s) <= 60):
+        return False
+    # Must contain at least one alpha char (rejects all-digit codes).
+    if not any(c.isalpha() for c in s):
+        return False
+    return True
+
+
 def get_filter_options() -> dict:
     """Returns the dropdown choices for the filter bar.
 
@@ -352,8 +408,11 @@ def get_filter_options() -> dict:
 
     Fallback: if cube is missing, run two small GROUP BY queries on
     `userdata.user_data_sanitized` (still fast — that table is small).
+    BOTH paths filter DMAs through _is_valid_us_dma so non-US garbage
+    is silently dropped, and the fallback DMA query is gated on
+    _US_COUNTRY_FILTER for the same reason.
     """
-    cache_key = '_filter_options_v2'
+    cache_key = '_filter_options_v3'  # bumped: US-only DMA filter
     cached = _FILTER_OPTIONS_CACHE.get(cache_key)
     if cached and (time.time() - cached['ts'] < 3600):
         return cached['data']
@@ -367,7 +426,7 @@ def get_filter_options() -> dict:
     cube = _load_cube(DEFAULT_LOOKBACK_DAYS)
     if cube:
         states = list(cube.get('all_states') or [])
-        dmas   = list(cube.get('all_dmas') or [])
+        dmas   = [d for d in (cube.get('all_dmas') or []) if _is_valid_us_dma(d)]
 
     if not states:
         try:
@@ -378,10 +437,11 @@ def get_filter_options() -> dict:
                 from external_signals import _USPS_TO_NAME  # type: ignore
             except Exception:
                 _USPS_TO_NAME = {}
-            rows = _ch_query("""
+            rows = _ch_query(f"""
                 SELECT PROVINCE, count() AS n
                 FROM userdata.user_data_sanitized
                 WHERE PROVINCE IS NOT NULL AND PROVINCE != ''
+                  AND {_US_COUNTRY_FILTER}
                 GROUP BY PROVINCE
                 HAVING n >= %(floor)s
                 ORDER BY PROVINCE
@@ -392,15 +452,16 @@ def get_filter_options() -> dict:
             logger.warning("filter_options: state pull failed: %s", e)
     if not dmas:
         try:
-            rows = _ch_query("""
+            rows = _ch_query(f"""
                 SELECT DMA, count() AS n
                 FROM userdata.user_data_sanitized
                 WHERE DMA IS NOT NULL AND DMA != ''
+                  AND {_US_COUNTRY_FILTER}
                 GROUP BY DMA
                 HAVING n >= %(floor)s
                 ORDER BY DMA
             """, {'floor': MIN_CELL_SIZE})
-            dmas = [r[0] for r in rows if r and r[0]]
+            dmas = [r[0] for r in rows if r and r[0] and _is_valid_us_dma(r[0])]
         except Exception as e:
             logger.warning("filter_options: dma pull failed: %s", e)
 
