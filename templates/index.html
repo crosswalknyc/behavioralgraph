@@ -22942,14 +22942,12 @@
                 body.innerHTML = '<div style="color: var(--text-secondary); font-size: 0.85rem; padding: 0.5rem 0;">No political-issue searches surfaced for this slice (or the AI classifier filtered everything as non-policy).</div>';
                 return;
             }
-            var factor = (window.__blueIQ && window.__blueIQ.genPopFactor) || 1.0;
             var max = Math.max.apply(null, buckets.map(function(b) { return +b.count || 0; })) || 1;
             body.innerHTML = buckets.slice(0, 16).map(function(b, idx) {
                 var pct = Math.round((b.count / max) * 100);
                 var samples = (b.sample_queries || []).slice(0, 3).join(' \u00b7 ');
-                var proj = _bqNum((b.count || 0) * factor);
                 return '<div class="blue-iq-bucket-row" onclick="openBlueIQDrillModal(' + idx + ')">'
-                     + '<div class="blue-iq-bucket-head"><strong>' + _bqEscape(b.bucket) + '</strong><span style="color: var(--text-secondary); font-variant-numeric: tabular-nums;">' + _bqPct(b.share || 0) + ' \u00b7 \u2248' + proj + ' US adults</span></div>'
+                     + '<div class="blue-iq-bucket-head"><strong>' + _bqEscape(b.bucket) + '</strong><span style="color: var(--text-secondary); font-variant-numeric: tabular-nums;">' + _bqPct(b.share || 0) + '</span></div>'
                      + '<div class="blue-iq-row-bar-wrap" style="margin: 0;"><span class="blue-iq-row-bar" style="width: ' + pct + '%;"></span></div>'
                      + '<div class="blue-iq-bucket-samples">' + _bqEscape(samples) + '</div>'
                      + '</div>';
