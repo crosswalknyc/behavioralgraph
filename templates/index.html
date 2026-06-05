@@ -24276,9 +24276,14 @@
                 return issueTotals[b] - issueTotals[a];
             });
             // Populate the issue selector. Default to the top issue in this slice.
+            // Label shows each issue's share of total policy-search volume
+            // across all states (so the dropdown is a quick read of which
+            // issues dominate this geo slice).
+            var grandTotal = issuesSorted.reduce(function(acc, b) { return acc + (issueTotals[b] || 0); }, 0) || 1;
             sel.innerHTML = issuesSorted.map(function(b) {
+                var share = (issueTotals[b] || 0) / grandTotal;
                 return '<option value="' + _bqEscape(b) + '">'
-                     + _bqEscape(b) + ' (\u2248' + _bqNum(issueTotals[b]) + ' panelists)</option>';
+                     + _bqEscape(b) + ' (' + _bqPct(share) + ' of policy searches)</option>';
             }).join('');
             // Avoid double-binding on re-render.
             sel.onchange = function() { renderForIssue(sel.value); };
