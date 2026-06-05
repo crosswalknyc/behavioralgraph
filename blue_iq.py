@@ -288,13 +288,20 @@ def blue_iq_cache_key(filters: dict) -> str:
             on search/social rows. Stale v1 caches were serving an
             empty Issue × Geo heatmap because issue_geo wasn't in the
             payload at write time.
+      v3 — 2026-06-05: Google retired /trends/api/dailytrends, so all
+            v2 payloads have raw_trends_count=0 / trending_local=[]
+            (including National). Switched to the RSS endpoint
+            (geo=US for National, geo=US-XX for states) which is now
+            actually returning data. Bump invalidates the v2 empty
+            payloads so users see real US-wide trending political
+            searches when no state filter is set.
     """
     canonical = json.dumps({
         'party':     filters.get('party') or 'All',
         'geo_type':  filters.get('geo_type') or 'National',
         'geo_value': filters.get('geo_value') or '',
         'lookback':  int(filters.get('lookback_days') or DEFAULT_LOOKBACK_DAYS),
-        'version':   2,
+        'version':   3,
     }, sort_keys=True, separators=(',', ':'))
     return hashlib.sha256(canonical.encode('utf-8')).hexdigest()
 

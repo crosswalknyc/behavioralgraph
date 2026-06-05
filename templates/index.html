@@ -24534,9 +24534,13 @@
             }
 
             if (!rows || !rows.length) {
-                var hint = (meta && meta.is_state_local)
-                    ? ('Google Trends returned ' + (meta.raw_trends_count || 0) + ' terms for this geo, but none cleared the political filter (politician-name match, civic keyword, or political related queries). Try a wider geo or a different lookback.')
-                    : 'No state filter applied \u2014 set Geography to a state (or to a DMA whose primary state is in our lookup) to see local trending political searches.';
+                var rawCount = (meta && meta.raw_trends_count) || 0;
+                var hint;
+                if (rawCount > 0) {
+                    hint = 'Google Trends returned ' + rawCount + ' trending searches for this geo, but none cleared the political filter (politician-name match, civic keyword, or political related news). Try a wider geo or a different lookback.';
+                } else {
+                    hint = 'Google Trends returned no data for this geo right now (the endpoint sometimes throttles or comes back empty). The cube refreshes hourly \u2014 try again in a few minutes, or pick a different geography.';
+                }
                 body.innerHTML = '<div style="color: var(--text-secondary); font-size: 0.85rem; padding: 0.7rem 0;">' + hint + '</div>';
                 return;
             }
