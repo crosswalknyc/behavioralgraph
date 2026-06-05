@@ -34696,7 +34696,6 @@
                 +     '<th style="' + thNumStyle + '">Accounts</th>'
                 +     '<th style="' + thNumStyle + '">Median Age</th>'
                 +     '<th style="' + thNumStyle + '">% Female</th>'
-                +     '<th style="' + thStyle + ' min-width:200px;">Note</th>'
                 +   '</tr></thead><tbody>';
             rows.forEach(function(rg) {
                 var inSet = (rg.in || []).join(',');
@@ -34727,8 +34726,6 @@
                     +     (rg.median_age != null ? rg.median_age : '—') + '</td>'
                     +   '<td style="padding:7px 8px; font-size:0.78rem; text-align:right; color:var(--text-secondary); font-variant-numeric:tabular-nums;">'
                     +     (rg.female_pct != null ? rg.female_pct + '%' : '—') + '</td>'
-                    +   '<td style="padding:7px 8px; font-size:0.72rem; color:var(--text-secondary); line-height:1.45;">'
-                    +     _jiqEsc(rg.note || '') + '</td>'
                     + '</tr>';
             });
             html += '</tbody></table>';
