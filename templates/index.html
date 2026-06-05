@@ -6469,6 +6469,11 @@
             opacity: 1;
             visibility: visible;
         }
+
+        #globalTooltip.tooltip-rich {
+            width: 340px;
+            max-width: min(340px, calc(100vw - 20px));
+        }
         #globalTooltip::before {
             content: '';
             position: absolute;
@@ -21983,14 +21988,21 @@
             }
             
             function showTooltip(el, e) {
+                const html = (el.getAttribute('data-tooltip-html') || '').trim();
                 const text = (el.getAttribute('data-tooltip') || el.getAttribute('title') || '').trim();
-                if (!text) return;
-                tooltip.textContent = text;
+                if (!text && !html) return;
+                if (html) {
+                    tooltip.innerHTML = html;
+                    tooltip.classList.add('tooltip-rich');
+                } else {
+                    tooltip.textContent = text;
+                    tooltip.classList.remove('tooltip-rich');
+                }
                 let left = e.clientX - 150;
                 let top = e.clientY + 20;
                 if (left < 10) left = 10;
                 if (left > window.innerWidth - 320) left = window.innerWidth - 320;
-                if (top + 100 > window.innerHeight) top = e.clientY - 80;
+                if (top + (html ? 180 : 100) > window.innerHeight) top = e.clientY - (html ? 160 : 80);
                 tooltip.style.left = left + 'px';
                 tooltip.style.top = top + 'px';
                 tooltip.style.opacity = '1';
@@ -22003,6 +22015,8 @@
                 tooltip.style.left = '-9999px';
                 tooltip.style.top = '-9999px';
                 tooltip.classList.remove('visible');
+                tooltip.classList.remove('tooltip-rich');
+                tooltip.textContent = '';
             }
             
             // Use mouseover so tooltips show when cursor is already over element (e.g. after TST panel opens)
@@ -22194,17 +22208,23 @@
             var container = document.getElementById('dashBrandContainer');
             if (container && profileName) {
                 var ov = override || currentProfileDisplayOverride;
+                var parsed = (typeof currentDashboardData !== 'undefined' && currentDashboardData) || {};
+                var profileMeta = (typeof currentProfileData !== 'undefined' && currentProfileData) || {};
+                var sampleSize = parsed.sampleSize != null ? parsed.sampleSize : profileMeta.sampleSize;
+                var brandName = profileMeta.name || profileName;
+                var s3Key = profileMeta.s3Key || (typeof currentS3Key !== 'undefined' ? currentS3Key : '');
+
                 if (ov && ov.hover_tooltip && String(ov.hover_tooltip).trim()) {
-                    container.setAttribute('data-tooltip', String(ov.hover_tooltip).trim());
+                    applyProfileTitleTooltip(container, String(ov.hover_tooltip).trim(), sampleSize, brandName, s3Key);
                     return;
                 }
                 var tooltip;
                 var category = (brandCategory || '').toString().toUpperCase();
-                var behav = behavioral || (typeof currentDashboardData !== 'undefined' && currentDashboardData && currentDashboardData.behavioral) || {};
+                var behav = behavioral || parsed.behavioral || {};
 
                 if (isActiveViewerProfileCategory(category)) {
                     var effPlatform = getEffectivePlatformForTitle(category, behav, ov);
-                    var baseName = (typeof currentProfileData !== 'undefined' && currentProfileData && currentProfileData.name) || profileName;
+                    var baseName = profileMeta.name || profileName;
                     var titled = (profileName && profileName.includes(' - '))
                         ? profileName
                         : getProfileDisplayTitle(baseName, brandCategory, behav, ov);
@@ -22217,7 +22237,7 @@
                         tooltip = 'This profile is of all panelists who are active viewers of ' + showName + '.';
                     }
                 } else if (isGamePlayersProfileCategory(category)) {
-                    var gameName = (typeof currentProfileData !== 'undefined' && currentProfileData && currentProfileData.name) || profileName;
+                    var gameName = profileMeta.name || profileName;
                     if (gameName && gameName.indexOf(' - ') !== -1) {
                         gameName = gameName.split(' - ')[0].trim();
                     }
@@ -22228,7 +22248,7 @@
                     // Default tooltip for non-SERIES profiles
                     tooltip = 'This profile is of all panelists who are actively engaged with ' + profileName + '. It uses our signature 5 touch point accuracy method of capturing panelists who do not just know of ' + profileName + ' but go out of their way to engage with them. This means they have interacted with ' + profileName + ' via social media, retail, owned and operated web sites, read/watched/listened to media about them or searched for them. This is capturing digital behavior only.';
                 }
-                container.setAttribute('data-tooltip', tooltip);
+                applyProfileTitleTooltip(container, tooltip, sampleSize, brandName, s3Key);
             }
         }
         
@@ -52211,6 +52231,13 @@
 
         const PROFILE_IQ_MINI_SAMPLE_THRESHOLD = 100000;
         const PROFILE_IQ_MINI_SUFFIX = ' - IQ Mini';
+        const PROFILE_IQ_MINI_TOOLTIP_LINES = [
+            'Fewer than 100,000 panelists qualified in the study year alone.',
+            'We recruit from earlier years until the behavior sample reaches 100,000.',
+            'Only study-year digital behavior is scored for every panelist.',
+            'The US projection reflects the original study-year cohort—not the 100k sample.',
+            'Crosswalk n may show ≥100k; US scale stays anchored to the study year.'
+        ];
 
         function shouldAppendIqMiniTitleSuffix(sampleSize, brandName, s3Key) {
             const key = String(s3Key || (typeof currentS3Key !== 'undefined' ? currentS3Key : '') || '').toLowerCase();
@@ -52229,6 +52256,46 @@
                 title += PROFILE_IQ_MINI_SUFFIX;
             }
             return title;
+        }
+
+        function _escapeTooltipHtml(text) {
+            if (text == null) return '';
+            return String(text)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;');
+        }
+
+        function buildProfileTitleTooltipPayload(baseTooltip, sampleSize, brandName, s3Key) {
+            var text = String(baseTooltip || '').trim();
+            var header = document.getElementById('dashBrandNameHeader');
+            var hasIqMiniTitle = !!(header && /\s-\sIQ Mini$/i.test(String(header.textContent || '').trim()));
+            if (!hasIqMiniTitle) {
+                return { text: text, html: null };
+            }
+            var plainAddon = 'IQ MINI: ' + PROFILE_IQ_MINI_TOOLTIP_LINES.join(' ');
+            var htmlAddon = '<div style="margin-top:0.65em;color:#5a9ad9;line-height:1.45;">'
+                + '<strong>IQ MINI:</strong> '
+                + PROFILE_IQ_MINI_TOOLTIP_LINES.map(function(line) {
+                    return _escapeTooltipHtml(line);
+                }).join('<br>')
+                + '</div>';
+            return {
+                text: text + '\n\n' + plainAddon,
+                html: _escapeTooltipHtml(text) + htmlAddon
+            };
+        }
+
+        function applyProfileTitleTooltip(container, baseTooltip, sampleSize, brandName, s3Key) {
+            if (!container) return;
+            var payload = buildProfileTitleTooltipPayload(baseTooltip, sampleSize, brandName, s3Key);
+            container.setAttribute('data-tooltip', payload.text);
+            if (payload.html) {
+                container.setAttribute('data-tooltip-html', payload.html);
+            } else {
+                container.removeAttribute('data-tooltip-html');
+            }
         }
 
         function renderDashboard(csvData, brandName, dateRange, displayOverride) {
