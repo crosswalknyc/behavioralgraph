@@ -138,7 +138,9 @@ def _load_politicians() -> list[str]:
 
 def _load_politician_parties() -> dict[str, str]:
     """Returns {name: 'D' | 'R' | 'I'} from `politicians_canonical.txt`.
-    File format: `Name|party_code` (one per line). Lines without a pipe default to 'I'.
+    File format: `Name|party_code|cycle_flags` (one per line). Lines without a
+    pipe default to 'I'. cycle_flags is optional and consumed by
+    _load_politician_cycle_flags().
     """
     path = _ref_path('politicians_canonical.txt')
     out: dict[str, str] = {}
@@ -157,6 +159,40 @@ def _load_politician_parties() -> dict[str, str]:
     except FileNotFoundError:
         pass
     return out
+
+
+def _load_politician_cycle_flags() -> dict[str, set[str]]:
+    """Returns {name: {'2026', '2028p', ...}} from `politicians_canonical.txt`.
+
+    The 3rd pipe-delimited column on each line is a comma-separated set of
+    cycle/role flags. Empty / missing → no flags. Used to derive the
+    "Top Candidates" card (filter to entries with the '2026' flag) and
+    the optional "2028 Presidential Field" view.
+    """
+    path = _ref_path('politicians_canonical.txt')
+    out: dict[str, set[str]] = {}
+    try:
+        with open(path, 'r', encoding='utf-8') as fh:
+            for line in fh:
+                s = line.strip()
+                if not s or s.startswith('#'):
+                    continue
+                parts = s.split('|')
+                name = parts[0].strip()
+                flags_raw = parts[2].strip() if len(parts) > 2 else ''
+                flags = {t.strip() for t in flags_raw.split(',') if t.strip()}
+                if name in out:
+                    out[name] |= flags
+                else:
+                    out[name] = flags
+    except FileNotFoundError:
+        pass
+    return out
+
+
+def _load_candidates_2026() -> set[str]:
+    """Names flagged as 2026-cycle candidates in `politicians_canonical.txt`."""
+    return {n for n, flags in _load_politician_cycle_flags().items() if '2026' in flags}
 
 
 def _load_media_domains() -> tuple[set[str], set[str], set[str]]:
@@ -883,6 +919,7 @@ def _blend_politicians(panel_counts: dict[str, int], external: dict,
     trends = external.get('google_trends_politicians') or {}
     gdelt  = external.get('gdelt_politician_mentions') or {}
     wiki   = external.get('wiki_pageviews') or {}
+    parties = _load_politician_parties()
 
     def norm(d: dict[str, int | float]) -> dict[str, float]:
         # Treat all-zero dicts as empty (Trends often returns 12 zeros).
@@ -916,12 +953,13 @@ def _blend_politicians(panel_counts: dict[str, int], external: dict,
         contribs = [name for name in live if sources[name][0].get(n, 0.0) > 0]
         out.append({
             'name':           n,
+            'party_code':     parties.get(n, 'I'),
             'panelists':      int(panel_counts.get(n, 0)),
             'mention_score':  round(score, 4),
             'sources':        contribs,
         })
     out.sort(key=lambda r: -r['mention_score'])
-    return out[:25]
+    return out[:60]
 
 
 def _card_top_articles(uids: set[str], start_date: str,
@@ -1295,7 +1333,19 @@ def compute_panel_view(filters: dict, *, force_refresh: bool = False) -> dict:
     except ImportError:
         from .external_signals import fetch_all_external  # type: ignore
 
-    politicians_for_external = _load_politicians()[:20]
+    # Fetch external signal data for the top-20 politicians by file order
+    # PLUS every 2026 candidate (so the Candidates card always has Trends data
+    # for the people the user actually wants to rank, not just the marquee
+    # 20). Dedupe + keep order stable so the Trends batch hashes the same.
+    _pol_all = _load_politicians()
+    _cands = _load_candidates_2026()
+    _seen: set[str] = set()
+    politicians_for_external: list[str] = []
+    for name in (_pol_all[:20] + sorted(_cands)):
+        if name in _seen:
+            continue
+        _seen.add(name)
+        politicians_for_external.append(name)
     external = fetch_all_external(
         state=f['geo_value'] if f['geo_type'] == 'State' else None,
         lookback_days=f['lookback_days'],
@@ -1335,8 +1385,14 @@ def compute_panel_view(filters: dict, *, force_refresh: bool = False) -> dict:
     # Card D — politicians: blend panel + external (Trends + GDELT + Wiki)
     panel_pol_counts = {r.get('name'): int(r.get('panelists', 0))
                         for r in panel_politicians if r.get('name')}
-    top_politicians = _blend_politicians(panel_pol_counts, external,
-                                          _load_politicians()[:60])
+    # Use top-60 politicians + ALL 2026 candidate names as the blend universe
+    # so a candidate that's outside the top-60 marquee list still ranks if
+    # Trends / GDELT / Wiki picked up signal.
+    _pol_blend = list(dict.fromkeys(_load_politicians()[:60] + sorted(_load_candidates_2026())))
+    top_politicians = _blend_politicians(panel_pol_counts, external, _pol_blend)
+    # Card D2 — candidates: same blend, filtered to 2026 cycle entries.
+    cands_2026 = _load_candidates_2026()
+    top_candidates = [r for r in top_politicians if r.get('name') in cands_2026]
 
     # Card E — articles: blend panel URLs with GDELT (GDELT supplies titles + images)
     top_articles = _blend_articles_cube(panel_articles, external.get('gdelt_articles') or [])
@@ -1384,6 +1440,7 @@ def compute_panel_view(filters: dict, *, force_refresh: bool = False) -> dict:
         'search_engines':      _attach_share(panel_search),
         'social_media':        _attach_share(panel_social),
         'top_politicians':     top_politicians,
+        'top_candidates':      top_candidates,
         'top_articles':        top_articles,
         'turnout_intent':      {
             'pct':            turnout_pct,
