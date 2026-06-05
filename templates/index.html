@@ -20185,17 +20185,14 @@
                         <h3 style="margin: 0 0 0.5rem;">📍 Touchpoints — what drove conversation vs conversion</h3>
                         <div id="jiqTpBaselineMeta" style="font-size: 0.72rem; color: var(--text-secondary);"></div>
                     </div>
-                    <div style="font-size: 0.72rem; color: var(--text-secondary); margin-bottom: 0.4rem;">Each row is a marketing surface (trailer, social platform, talent mention, brand partnership, press, ticketing, etc.) the cohort touched. <strong>Lift</strong> = conv-rate-when-reached vs conv-rate-when-not. <strong>Avg days</strong> = cadence from first touch to ticket buy.</div>
+                    <div style="font-size: 0.72rem; color: var(--text-secondary); margin-bottom: 0.4rem;">Each row is a marketing surface (trailer, social platform, talent mention, brand partnership, press, etc.) the cohort touched. <strong>Conv-when-Seen / Conv-when-Not</strong> = conversion rate of users who did vs didn't touch the channel. <strong>Avg Days</strong> = cadence from first touch to conversion.</div>
                     <details style="margin: 0 0 0.85rem;">
                         <summary style="cursor:pointer;color:var(--accent-cyan);font-size:0.72rem;font-weight:600;user-select:none;padding:3px 0;">ℹ️ How to read this chart</summary>
                         <div style="margin-top:6px;padding:0.7rem 0.9rem;background:var(--bg-secondary);border-left:3px solid var(--accent-cyan);border-radius:6px;font-size:0.76rem;line-height:1.55;">
                             <ul style="margin:0;padding-left:1.1rem;">
-                                <li><strong>Reach / Reach %</strong> — number (and share) of US adults reached by that channel during the window.</li>
-                                <li><strong>% of Conv</strong> — share of opening-weekend buyers who touched that channel at least once. The marketing surface buyers are most exposed to.</li>
-                                <li><strong>Conv-when-Seen / Conv-when-Not / Lift</strong> — the causal-attribution trio. Buyers' CR when reached vs not reached; lift = the % difference. <strong style="color:#1f9d55;">Green lift ≥ +25%</strong> = the channel moves the needle; gray = neutral; red = negative or noise.</li>
+                                <li><strong>Conv-when-Seen / Conv-when-Not</strong> — the causal-attribution pair. Buyers' conversion rate when reached vs not reached by that channel. The bigger the gap, the more the channel actually moves the needle.</li>
                                 <li><strong>Avg Days to Conv</strong> — cadence: <em>1–2 days</em> = late-funnel intent surface (search, showtime lookup); <em>14–18 days</em> = early-funnel awareness (trailer, press).</li>
                                 <li><strong>Touches / User</strong> — frequency. High values (e.g. 4.2 for TikTok) = repeat-visit channels; low values (1.1 for press) = one-and-done.</li>
-                                <li><strong>Sort by Lift</strong> to find the most causally important channels; sort by % of Conv to find the most-touched.</li>
                             </ul>
                         </div>
                     </details>
@@ -34809,33 +34806,19 @@
 
             // Touchpoints table
             if (tableEl) {
-                var head = '<table style="width:100%; border-collapse: collapse; font-size: 12.5px; min-width: 720px;">'
+                var head = '<table style="width:100%; border-collapse: collapse; font-size: 12.5px; min-width: 560px;">'
                     + '<thead><tr style="text-align:left;border-bottom:1px solid var(--border-color);">'
                     + '<th style="padding:6px 6px;">Touchpoint</th>'
-                    + '<th style="padding:6px 6px;text-align:right;">Reach</th>'
-                    + '<th style="padding:6px 6px;text-align:right;">Reach %</th>'
-                    + '<th style="padding:6px 6px;text-align:right;">% of Conv</th>'
                     + '<th style="padding:6px 6px;text-align:right;">Conv-when-Seen</th>'
                     + '<th style="padding:6px 6px;text-align:right;">Conv-when-Not</th>'
-                    + '<th style="padding:6px 6px;text-align:right;">Lift</th>'
                     + '<th style="padding:6px 6px;text-align:right;">Avg Days to Conv</th>'
                     + '<th style="padding:6px 6px;text-align:right;">Touches / User</th>'
                     + '</tr></thead><tbody>';
                 var body = tp.rows.map(function(r) {
-                    var liftColor = 'var(--text-primary)';
-                    var liftStr = '—';
-                    if (r.lift_pct != null) {
-                        liftColor = r.lift_pct > 25 ? '#1f9d55' : (r.lift_pct < -25 ? '#c81e1e' : 'var(--text-primary)');
-                        liftStr = (r.lift_pct > 0 ? '+' : '') + r.lift_pct + '%';
-                    }
                     return '<tr style="border-bottom:1px solid var(--border-color);">'
                          + '<td style="padding:6px 6px;font-weight:600;">' + _jiqEsc(r.label) + '</td>'
-                         + '<td style="padding:6px 6px;text-align:right;">' + _jiqFmt(r.reach) + '</td>'
-                         + '<td style="padding:6px 6px;text-align:right;">' + (r.reach_pct != null ? r.reach_pct + '%' : '—') + '</td>'
-                         + '<td style="padding:6px 6px;text-align:right;">' + (r.share_of_converters != null ? r.share_of_converters + '%' : '—') + '</td>'
                          + '<td style="padding:6px 6px;text-align:right;">' + (r.conv_rate_when_reached != null ? r.conv_rate_when_reached + '%' : '—') + '</td>'
                          + '<td style="padding:6px 6px;text-align:right;color:var(--text-secondary);">' + (r.conv_rate_when_not != null ? r.conv_rate_when_not + '%' : '—') + '</td>'
-                         + '<td style="padding:6px 6px;text-align:right;font-weight:600;color:' + liftColor + ';">' + liftStr + '</td>'
                          + '<td style="padding:6px 6px;text-align:right;">' + (r.avg_days_to_conversion != null ? r.avg_days_to_conversion : '—') + '</td>'
                          + '<td style="padding:6px 6px;text-align:right;color:var(--text-secondary);">' + (r.avg_touches_per_user != null ? r.avg_touches_per_user : '—') + '</td>'
                          + '</tr>';
