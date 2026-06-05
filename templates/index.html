@@ -33390,6 +33390,24 @@
                         + '</ul>';
                 }
             }
+
+            // Per-target opt-out: Breadwinner has been repurposed as an
+            // audience-only read. Hide the headline KPI strip, the
+            // intent-gap derivation card, the exhibitor mix card
+            // (which also contains the per-chain pre-sales attribution
+            // table), and the Interesting Facts card. Lives at the end
+            // of the renderer so it overrides anything that earlier
+            // renderers may have un-hidden.
+            (function _jiqHideBreadwinnerCards() {
+                var __meta = (window._jiqCurrentRun || {}).meta || {};
+                var __name = (__meta.target_name || __meta.target || __meta.project_name || '').toLowerCase();
+                if (!/breadwinner/.test(__name)) return;
+                ['jiqKpiStripTitle','jiqKpiStripHowto','jiqKpiStrip','jiqIntentGapBreakdown',
+                 'jiqExhibitorCard','jiqFactsCard'].forEach(function(id) {
+                    var el = document.getElementById(id);
+                    if (el) el.style.display = 'none';
+                });
+            })();
         }
 
         function setJourneyIqCluster(i) {
