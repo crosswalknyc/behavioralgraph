@@ -1351,6 +1351,146 @@ def _compute_issue_geo(cube: Optional[dict], issue_buckets_global: list[dict],
     return out
 
 
+# DMA → primary state lookup. Google Trends only exposes state-level
+# regional data via geo=US-XX, so a DMA filter (e.g. "Los Angeles") needs
+# to fall through to the parent state ("California") to fetch local
+# trending terms. Covers the top ~50 US DMAs which account for >80% of
+# US TV households. DMAs not in this map fall back to US-wide Trends.
+DMA_TO_STATE = {
+    'New York': 'New York',
+    'Los Angeles': 'California',
+    'Chicago': 'Illinois',
+    'Philadelphia': 'Pennsylvania',
+    'Dallas-Ft. Worth': 'Texas',
+    'San Francisco-Oak-San Jose': 'California',
+    'Atlanta': 'Georgia',
+    'Houston': 'Texas',
+    'Washington DC (Hagrstwn)': 'District of Columbia',
+    'Boston (Manchester)': 'Massachusetts',
+    'Phoenix (Prescott)': 'Arizona',
+    'Tampa-St. Pete (Sarasota)': 'Florida',
+    'Seattle-Tacoma': 'Washington',
+    'Detroit': 'Michigan',
+    'Minneapolis-St. Paul': 'Minnesota',
+    'Miami-Ft. Lauderdale': 'Florida',
+    'Denver': 'Colorado',
+    'Orlando-Daytona Bch-Melbrn': 'Florida',
+    'Cleveland-Akron (Canton)': 'Ohio',
+    'Sacramnto-Stkton-Modesto': 'California',
+    'St. Louis': 'Missouri',
+    'Portland, OR': 'Oregon',
+    'Pittsburgh': 'Pennsylvania',
+    'Raleigh-Durham (Fayetvlle)': 'North Carolina',
+    'Charlotte': 'North Carolina',
+    'Indianapolis': 'Indiana',
+    'Baltimore': 'Maryland',
+    'San Diego': 'California',
+    'Nashville': 'Tennessee',
+    'Hartford & New Haven': 'Connecticut',
+    'Kansas City': 'Missouri',
+    'Salt Lake City': 'Utah',
+    'Columbus, OH': 'Ohio',
+    'Milwaukee': 'Wisconsin',
+    'Cincinnati': 'Ohio',
+    'Greenville-Spart-Ashevll-And': 'South Carolina',
+    'San Antonio': 'Texas',
+    'West Palm Beach-Ft. Pierce': 'Florida',
+    'Las Vegas': 'Nevada',
+    'Austin': 'Texas',
+    'Birmingham (Ann and Tusc)': 'Alabama',
+    'Norfolk-Portsmth-Newpt Nws': 'Virginia',
+    'Jacksonville': 'Florida',
+    'New Orleans': 'Louisiana',
+    'Memphis': 'Tennessee',
+    'Greensboro-H.Point-W.Salem': 'North Carolina',
+    'Oklahoma City': 'Oklahoma',
+    'Buffalo': 'New York',
+    'Albuquerque-Santa Fe': 'New Mexico',
+    'Louisville': 'Kentucky',
+    'Providence-New Bedford': 'Rhode Island',
+    'Richmond-Petersburg': 'Virginia',
+    'Wilkes Barre-Scranton-Hztn': 'Pennsylvania',
+    'Fresno-Visalia': 'California',
+    'Tulsa': 'Oklahoma',
+    'Mobile-Pensacola (Ft Walt)': 'Alabama',
+    'Tucson (Sierra Vista)': 'Arizona',
+    'Knoxville': 'Tennessee',
+}
+
+
+def _filter_trends_to_political(trends_top: list[dict],
+                                  politicians: set[str]) -> list[dict]:
+    """Keep only Trends terms that look political.
+
+    Uses a cheap keyword + politician-name heuristic instead of an OpenAI
+    call so the per-request cost stays at zero. Politician set is the
+    canonical list; keyword set covers civic/policy verbiage. Lower-bound
+    is intentionally loose; the AI-bucket card handles strict policy
+    classification separately.
+    """
+    if not trends_top:
+        return []
+    POLITICAL_KEYWORDS = {
+        # offices / institutions
+        'president', 'senator', 'senate', 'congress', 'house of',
+        'governor', 'mayor', 'attorney general', 'secretary of',
+        'supreme court', 'scotus', 'justice', 'court ruling',
+        'white house', 'capitol', 'pentagon', 'state department',
+        'cabinet', 'congresswoman', 'congressman',
+        # process / mechanics
+        'election', 'campaign', 'primary', 'caucus', 'debate',
+        'vote', 'voter', 'voting', 'voted', 'ballot', 'polls',
+        'poll results', 'turnout', 'redistricting',
+        'impeachment', 'impeach', 'indictment', 'indicted',
+        'subpoena', 'hearing', 'testimony',
+        # policy
+        'healthcare', 'obamacare', 'medicare', 'medicaid', 'snap',
+        'minimum wage', 'inflation', 'gas prices', 'tariff',
+        'immigration', 'border', 'asylum', 'deportation',
+        'abortion', 'roe', 'dobbs', 'reproductive', 'ivf',
+        'guns', 'gun control', 'second amendment', 'mass shooting',
+        'climate', 'epa', 'fracking', 'pipeline',
+        'student loan', 'student loans', 'pell grant',
+        'social security', 'irs', 'federal reserve', 'fed rate',
+        'ceasefire', 'gaza', 'ukraine', 'nato', 'foreign aid',
+        'tax cut', 'tax cuts', 'tax bill',
+        # outcomes
+        'won', 'wins', 'loses', 'concedes', 'concession',
+        'recount', 'recall',
+        # parties
+        'democrat', 'republican', 'gop', 'rnc', 'dnc',
+        'libertarian', 'green party',
+        # newsworthy
+        'rally', 'protest', 'protests', 'sanctions',
+        'executive order', 'veto',
+    }
+    out = []
+    pol_lower = {p.lower() for p in politicians}
+    for row in trends_top:
+        term = (row.get('term') or '').strip()
+        if not term:
+            continue
+        tl = term.lower()
+        # Check politician name match (substring; politicians are full
+        # names, so e.g. "kamala harris campaign" matches "kamala harris").
+        if any(p in tl for p in pol_lower):
+            out.append({**row, 'why_political': 'politician_name'})
+            continue
+        # Check keyword match.
+        hit_kw = next((kw for kw in POLITICAL_KEYWORDS if kw in tl), None)
+        if hit_kw:
+            out.append({**row, 'why_political': 'keyword:' + hit_kw})
+            continue
+        # Check related queries — a term whose related queries are political
+        # is itself probably political even if the headline isn't.
+        rel = ' '.join((row.get('related') or [])).lower()
+        if rel and (any(p in rel for p in pol_lower)
+                    or any(kw in rel for kw in POLITICAL_KEYWORDS)):
+            out.append({**row, 'why_political': 'related_query'})
+            continue
+    return out
+
+
 # ── Main entry point ────────────────────────────────────────────────────────
 
 def compute_panel_view(filters: dict, *, force_refresh: bool = False) -> dict:
@@ -1404,8 +1544,17 @@ def compute_panel_view(filters: dict, *, force_refresh: bool = False) -> dict:
             continue
         _seen.add(name)
         politicians_for_external.append(name)
+    # Resolve which state to pass to Google Trends. Trends only exposes
+    # state-level regional data, so a DMA filter (e.g. "Los Angeles")
+    # gets resolved to its primary state ("California") so the user sees
+    # state-local trending terms instead of US-wide.
+    trends_state: Optional[str] = None
+    if f['geo_type'] == 'State':
+        trends_state = f['geo_value']
+    elif f['geo_type'] == 'DMA' and f['geo_value']:
+        trends_state = DMA_TO_STATE.get(f['geo_value'])
     external = fetch_all_external(
-        state=f['geo_value'] if f['geo_type'] == 'State' else None,
+        state=trends_state,
         lookback_days=f['lookback_days'],
         politician_names=politicians_for_external,
     )
@@ -1459,6 +1608,24 @@ def compute_panel_view(filters: dict, *, force_refresh: bool = False) -> dict:
     # the cube's per-state cells through the global issue bucket map. Computed
     # at request time so the same cube serves every party filter.
     issue_geo = _compute_issue_geo(cube, issue_buckets_global, party_filter=f['party'])
+
+    # Card T — "Trending in this area right now" (live Google Trends, AI-filtered
+    # to political). Geographically scoped via trends_state above; falls back to
+    # US-wide when the geo is National or the DMA isn't in our lookup. Surfaces
+    # things the panel won't catch yet (e.g. a hot local mayoral race).
+    trends_state_label = trends_state or 'United States'
+    raw_trends = (external or {}).get('google_trends_top') or []
+    pol_set = set(_load_politicians())
+    trending_local = _filter_trends_to_political(raw_trends, pol_set)[:20]
+    trending_meta = {
+        'geo_label':         trends_state_label,
+        'geo_type':          f['geo_type'],
+        'geo_value':         f['geo_value'],
+        'raw_trends_count':  len(raw_trends),
+        'kept_after_filter': len(trending_local),
+        'is_state_local':    trends_state is not None,
+        'dma_resolved_via':  (DMA_TO_STATE.get(f['geo_value']) if f['geo_type'] == 'DMA' else None),
+    }
 
     # Turnout
     turnout_pct = 0.0
@@ -1514,6 +1681,8 @@ def compute_panel_view(filters: dict, *, force_refresh: bool = False) -> dict:
         'voter_journey':       panel_journey,
         'issue_journey_cross': issue_journey_cross,
         'issue_geo':           issue_geo,
+        'trending_local':      trending_local,
+        'trending_meta':       trending_meta,
     }
 
     # Compare card (only when geo is set)
