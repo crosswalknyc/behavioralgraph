@@ -18142,8 +18142,18 @@
             }
             #blueIQView .blue-iq-bucket-row { display: flex; flex-direction: column; gap: 0.2rem; padding: 0.45rem 0; border-bottom: 1px solid rgba(255,255,255,0.04); cursor: pointer; }
             #blueIQView .blue-iq-bucket-row:hover { background: rgba(79,140,255,0.06); }
-            #blueIQView .blue-iq-bucket-head { display: flex; justify-content: space-between; align-items: center; font-size: 0.88rem; }
+            #blueIQView .blue-iq-bucket-head { display: flex; align-items: center; gap: 0.45rem; font-size: 0.88rem; flex-wrap: wrap; }
             #blueIQView .blue-iq-bucket-samples { font-size: 0.75rem; color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+            /* Panel/Trends/News source-tag pill in front of each sample line */
+            #blueIQView .bq-sample-source { display: inline-block; font-size: 0.58rem; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; padding: 0.06rem 0.4rem; border-radius: 4px; margin-right: 0.4rem; vertical-align: middle; background: rgba(255,255,255,0.08); color: var(--text-secondary); }
+            #blueIQView .bq-sample-source-trend { background: rgba(251,191,36,0.18); color: #fcd34d; }
+            #blueIQView .bq-sample-source-news  { background: rgba(167,139,250,0.18); color: #c4b5fd; }
+            /* Trending / news / external-only chips inside the bucket header */
+            #blueIQView .bq-bucket-chips { display: inline-flex; gap: 0.3rem; flex-wrap: wrap; }
+            #blueIQView .bq-bucket-chip { font-size: 0.62rem; font-weight: 700; letter-spacing: 0.04em; padding: 0.1rem 0.45rem; border-radius: 999px; white-space: nowrap; }
+            #blueIQView .bq-bucket-chip-trend   { background: rgba(251,191,36,0.18); color: #fcd34d; border: 1px solid rgba(251,191,36,0.35); }
+            #blueIQView .bq-bucket-chip-news    { background: rgba(167,139,250,0.18); color: #c4b5fd; border: 1px solid rgba(167,139,250,0.35); }
+            #blueIQView .bq-bucket-chip-extonly { background: rgba(148,163,184,0.14); color: #94a3b8; border: 1px solid rgba(148,163,184,0.35); font-style: italic; font-weight: 600; }
             #blueIQView .blue-iq-article { display: flex; gap: 0.6rem; padding: 0.45rem 0; border-bottom: 1px solid rgba(255,255,255,0.04); }
             #blueIQView .blue-iq-article-img { flex: 0 0 64px; width: 64px; height: 48px; background: rgba(255,255,255,0.04); border-radius: 4px; background-size: cover; background-position: center; }
             #blueIQView .blue-iq-article-body { flex: 1 1 0; min-width: 0; }
@@ -24607,14 +24617,98 @@
                 body.innerHTML = '<div style="color: var(--text-secondary); font-size: 0.85rem; padding: 0.5rem 0;">No political-issue searches surfaced for this slice (or the AI classifier filtered everything as non-policy).</div>';
                 return;
             }
+            // Rolling max for the panel-bar width. We use COUNT (panel events)
+            // so the bar still represents the FIRST-PARTY panel signal —
+            // external signal is layered on as chips, not as bar width.
             var max = Math.max.apply(null, buckets.map(function(b) { return +b.count || 0; })) || 1;
-            body.innerHTML = buckets.slice(0, 16).map(function(b, idx) {
+
+            // Header strip showing the mix-in summary so the user knows
+            // external data is participating in this card (not just panel).
+            var totalTrend = 0, totalNews = 0, trendBuckets = 0, externalOnly = 0;
+            buckets.forEach(function(b) {
+                if ((+b.trend_score || 0) > 0) { totalTrend += +b.trend_score; trendBuckets++; }
+                if ((+b.news_count  || 0) > 0)   totalNews  += +b.news_count;
+                if (b.external_only) externalOnly++;
+            });
+            var headerStrip = '';
+            if (totalTrend > 0 || totalNews > 0) {
+                var bits = [];
+                if (trendBuckets > 0) bits.push('<span style="color:#fbbf24;">\u25CF</span> Google Trends boosting <strong>' + trendBuckets + '</strong> issue' + (trendBuckets > 1 ? 's' : ''));
+                if (totalNews > 0)    bits.push('<span style="color:#a78bfa;">\u25CF</span> <strong>' + totalNews + '</strong> news article' + (totalNews > 1 ? 's' : '') + ' mapped');
+                if (externalOnly > 0) bits.push('<span style="color:#94a3b8;">\u25CF</span> ' + externalOnly + ' trending-only (no panel chatter yet)');
+                headerStrip = '<div style="font-size:0.74rem; color:var(--text-secondary); padding:0.35rem 0.55rem; margin:0 0 0.55rem 0; background:rgba(255,255,255,0.03); border-radius:6px; border:1px solid rgba(255,255,255,0.05);">'
+                            +   '<strong style="color:var(--text-primary); letter-spacing:0.04em; font-size:0.68rem; text-transform:uppercase; margin-right:0.5rem;">PANEL + EXTERNAL MIX</strong>'
+                            +   bits.join(' &nbsp;&middot;&nbsp; ')
+                            + '</div>';
+            }
+
+            body.innerHTML = headerStrip + buckets.slice(0, 16).map(function(b, idx) {
                 var pct = Math.round((b.count / max) * 100);
-                var samples = (b.sample_queries || []).map(_bqStripDates).filter(Boolean).slice(0, 3).join(' \u00b7 ');
+                var panelSamples = (b.sample_queries || []).map(_bqStripDates).filter(Boolean).slice(0, 3);
+                var trendSamples = (b.trend_queries  || []).map(_bqStripDates).filter(Boolean).slice(0, 2);
+                var newsHeads    = (b.news_headlines || []).slice(0, 1);
+
+                // Chip row — only renders chips that have signal.
+                var chips = '';
+                if ((+b.trend_score || 0) > 0) {
+                    chips += '<span class="bq-bucket-chip bq-bucket-chip-trend" title="Google Trends score for terms bucketing into this issue">'
+                          +   '\ud83d\udd25 trending'
+                          + '</span>';
+                }
+                if ((+b.news_count || 0) > 0) {
+                    chips += '<span class="bq-bucket-chip bq-bucket-chip-news" title="GDELT political articles bucketing into this issue">'
+                          +   '\ud83d\udcf0 ' + b.news_count + ' article' + (b.news_count > 1 ? 's' : '')
+                          + '</span>';
+                }
+                if (b.external_only) {
+                    chips += '<span class="bq-bucket-chip bq-bucket-chip-extonly" title="Trending externally but no panel chatter in this slice yet">'
+                          +   'no panel data yet'
+                          + '</span>';
+                }
+
+                // Panel + external sample queries presented inline so the
+                // user sees the actual evidence. Trend / news samples are
+                // clearly badged as such.
+                var sampleHtml = '';
+                if (panelSamples.length) {
+                    sampleHtml += '<div class="blue-iq-bucket-samples">'
+                               +   '<span class="bq-sample-source">panel</span> '
+                               +   _bqEscape(panelSamples.join(' \u00b7 '))
+                               + '</div>';
+                }
+                if (trendSamples.length) {
+                    sampleHtml += '<div class="blue-iq-bucket-samples">'
+                               +   '<span class="bq-sample-source bq-sample-source-trend">Google Trends</span> '
+                               +   _bqEscape(trendSamples.join(' \u00b7 '))
+                               + '</div>';
+                }
+                if (newsHeads.length) {
+                    sampleHtml += '<div class="blue-iq-bucket-samples">'
+                               +   '<span class="bq-sample-source bq-sample-source-news">news</span> '
+                               +   _bqEscape(newsHeads[0])
+                               + '</div>';
+                }
+
+                // For external-only buckets we suppress the panel bar
+                // (would be 0px) and show a thin dashed placeholder so
+                // the row still has visual weight.
+                var barHtml = b.external_only
+                    ? '<div class="blue-iq-row-bar-wrap" style="margin:0; opacity:0.4;"><span class="blue-iq-row-bar" style="width: 100%; background: repeating-linear-gradient(90deg, rgba(255,255,255,0.18) 0 6px, transparent 6px 12px);"></span></div>'
+                    : '<div class="blue-iq-row-bar-wrap" style="margin: 0;"><span class="blue-iq-row-bar" style="width: ' + pct + '%;"></span></div>';
+
+                var shareLabel = b.external_only
+                    ? '<span style="color:#94a3b8; font-size:0.7rem; font-style:italic;">trending only</span>'
+                    : '<span style="color: var(--text-secondary); font-variant-numeric: tabular-nums;">' + _bqPct(b.share || 0) + '</span>';
+
                 return '<div class="blue-iq-bucket-row" onclick="openBlueIQDrillModal(' + idx + ')">'
-                     + '<div class="blue-iq-bucket-head"><strong>' + _bqEscape(b.bucket) + '</strong><span style="color: var(--text-secondary); font-variant-numeric: tabular-nums;">' + _bqPct(b.share || 0) + '</span></div>'
-                     + '<div class="blue-iq-row-bar-wrap" style="margin: 0;"><span class="blue-iq-row-bar" style="width: ' + pct + '%;"></span></div>'
-                     + '<div class="blue-iq-bucket-samples">' + _bqEscape(samples) + '</div>'
+                     +   '<div class="blue-iq-bucket-head">'
+                     +     '<strong>' + _bqEscape(b.bucket) + '</strong>'
+                     +     (chips ? ' <span class="bq-bucket-chips">' + chips + '</span>' : '')
+                     +     '<span style="flex:1 1 auto;"></span>'
+                     +     shareLabel
+                     +   '</div>'
+                     +   barHtml
+                     +   sampleHtml
                      + '</div>';
             }).join('');
         }
