@@ -17872,6 +17872,93 @@
             #blueIQView .blue-iq-row-bar { height: 100%; background: var(--accent-primary, #4f8cff); border-radius: 4px; }
             #blueIQView .blue-iq-row .blue-iq-row-name { flex: 1 1 30%; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
             #blueIQView .blue-iq-row .blue-iq-row-val { flex: 0 0 auto; color: var(--text-secondary); font-variant-numeric: tabular-nums; }
+
+            /* ── Engagement card (Search engines / Social platforms) ── */
+            #blueIQView .bq-eng-head { display: flex; gap: 0.75rem; align-items: center; padding: 0.1rem 0 0.85rem 0; border-bottom: 1px solid rgba(255,255,255,0.05); margin-bottom: 0.55rem; }
+            #blueIQView .bq-eng-donut { flex: 0 0 56px; width: 56px; height: 56px; position: relative; }
+            #blueIQView .bq-eng-donut svg { display: block; width: 100%; height: 100%; transform: rotate(-90deg); }
+            #blueIQView .bq-eng-donut-center { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 0.66rem; color: var(--text-secondary); text-align: center; line-height: 1.05; font-weight: 600; letter-spacing: 0.02em; }
+            #blueIQView .bq-eng-head-text { flex: 1 1 auto; min-width: 0; }
+            #blueIQView .bq-eng-headline { font-size: 0.86rem; color: var(--text-primary); font-weight: 600; line-height: 1.25; }
+            #blueIQView .bq-eng-sub { font-size: 0.7rem; color: var(--text-secondary); margin-top: 0.2rem; line-height: 1.3; }
+            #blueIQView .bq-eng-list { display: flex; flex-direction: column; gap: 1px; }
+            #blueIQView .bq-eng-row {
+                display: grid;
+                grid-template-columns: minmax(100px, 1.4fr) minmax(60px, 2.6fr) auto auto;
+                gap: 0.55rem;
+                align-items: center;
+                padding: 0.4rem 0.4rem;
+                font-size: 0.82rem;
+                border-radius: 6px;
+                cursor: pointer;
+                transition: background 0.12s ease, transform 0.12s ease, opacity 0.18s ease;
+                position: relative;
+            }
+            #blueIQView .bq-eng-row:hover { background: rgba(79,140,255,0.07); transform: translateX(1px); }
+            #blueIQView .bq-eng-row.bq-eng-dimmed { opacity: 0.35; }
+            #blueIQView .bq-eng-row.bq-eng-pinned { background: rgba(79,140,255,0.14); box-shadow: inset 3px 0 0 0 var(--bq-row-color, #4f8cff); opacity: 1; }
+            #blueIQView .bq-eng-row.bq-eng-pinned .bq-eng-name { color: var(--text-primary); font-weight: 600; }
+            #blueIQView .bq-eng-name { display: flex; align-items: center; gap: 0.45rem; min-width: 0; color: var(--text-primary); }
+            #blueIQView .bq-eng-name-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+            #blueIQView .bq-eng-swatch { flex: 0 0 10px; width: 10px; height: 10px; border-radius: 3px; box-shadow: 0 0 0 1px rgba(255,255,255,0.07) inset; }
+            #blueIQView .bq-eng-track {
+                position: relative;
+                height: 9px;
+                background: rgba(255,255,255,0.05);
+                border-radius: 999px;
+                overflow: hidden;
+                min-width: 40px;
+            }
+            #blueIQView .bq-eng-fill {
+                position: absolute; left: 0; top: 0; height: 100%;
+                border-radius: 999px;
+                background: linear-gradient(90deg, var(--bq-row-color, #4f8cff) 0%, color-mix(in srgb, var(--bq-row-color, #4f8cff) 70%, white) 100%);
+                box-shadow: 0 0 8px -2px var(--bq-row-color, #4f8cff);
+                transition: width 0.55s cubic-bezier(.2,.7,.2,1);
+            }
+            #blueIQView .bq-eng-nat-mark {
+                position: absolute; top: -2px; bottom: -2px;
+                width: 2px; background: rgba(255,255,255,0.4);
+                pointer-events: none;
+            }
+            #blueIQView .bq-eng-pct { font-variant-numeric: tabular-nums; font-weight: 600; color: var(--text-primary); min-width: 42px; text-align: right; }
+            #blueIQView .bq-eng-idx {
+                font-size: 0.62rem;
+                padding: 0.08rem 0.38rem;
+                border-radius: 999px;
+                font-weight: 700;
+                letter-spacing: 0.01em;
+                font-variant-numeric: tabular-nums;
+                white-space: nowrap;
+            }
+            #blueIQView .bq-eng-idx-over  { background: rgba(34,197,94,0.18);  color: #86efac; }
+            #blueIQView .bq-eng-idx-under { background: rgba(239,68,68,0.18);  color: #fca5a5; }
+            #blueIQView .bq-eng-idx-neutral { background: rgba(148,163,184,0.16); color: #cbd5e1; }
+            #blueIQView .bq-eng-row[data-tip]:hover::after {
+                content: attr(data-tip);
+                position: absolute;
+                left: 50%;
+                bottom: calc(100% + 6px);
+                transform: translateX(-50%);
+                background: var(--bg-secondary, #1e1e2e);
+                border: 1px solid rgba(255,255,255,0.1);
+                color: var(--text-primary);
+                padding: 0.45rem 0.65rem;
+                border-radius: 6px;
+                font-size: 0.72rem;
+                white-space: pre;
+                z-index: 5;
+                box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+                pointer-events: none;
+            }
+            #blueIQView .bq-eng-pin-clear {
+                margin-left: 0.4rem;
+                font-size: 0.7rem;
+                color: var(--text-secondary);
+                cursor: pointer;
+                text-decoration: underline;
+            }
+            #blueIQView .bq-eng-pin-clear:hover { color: var(--text-primary); }
             #blueIQView .blue-iq-bucket-row { display: flex; flex-direction: column; gap: 0.2rem; padding: 0.45rem 0; border-bottom: 1px solid rgba(255,255,255,0.04); cursor: pointer; }
             #blueIQView .blue-iq-bucket-row:hover { background: rgba(79,140,255,0.06); }
             #blueIQView .blue-iq-bucket-head { display: flex; justify-content: space-between; align-items: center; font-size: 0.88rem; }
@@ -22792,7 +22879,34 @@
             'mastodon.social':  '#6364ff',
             'mastodon':         '#6364ff',
             'bluesky.app':      '#0085ff',
-            'bluesky':          '#0085ff'
+            'bluesky':          '#0085ff',
+            // Long-tail engines + socials that were rendering as colorless rows
+            'brave search':     '#fb542b',
+            'brave':            '#fb542b',
+            'copilot':          '#0078d4',
+            'microsoft copilot':'#0078d4',
+            'startpage':        '#5b8def',
+            'qwant':            '#5c97ff',
+            'ecosia':           '#0d8e3d',
+            'kagi':             '#ffb800',
+            'you.com':          '#574bff',
+            'whatsapp':         '#25d366',
+            'whatsapp.com':     '#25d366',
+            'discord':          '#5865f2',
+            'discord.com':      '#5865f2',
+            // X on dark backgrounds needs a non-black tint so the dot/bar is
+            // visible. Apple/iOS conventionally renders X as a near-white on
+            // dark; here we use a mid-gray that has enough contrast on the
+            // card background without disappearing.
+            'x':                '#cbd5e1',
+            'x (twitter)':      '#cbd5e1',
+            'twitch':           '#9146ff',
+            'twitch.tv':        '#9146ff',
+            'tumblr':           '#36465d',
+            'tumblr.com':       '#36465d',
+            'mastodon.online':  '#6364ff',
+            'telegram':         '#26a5e4',
+            'telegram.org':     '#26a5e4'
         };
         function _bqBrandColor(name) {
             if (!name) return null;
@@ -22863,6 +22977,236 @@
                      + '<span class="blue-iq-row-val">' + label + '</span>'
                      + '</div>';
             }).join('');
+        }
+
+        // ── Engagement card (Search engines / Social platforms) ──────────────
+        // Replaces the generic _bqRowBars treatment for these two cards with a
+        // dedicated layout that's much easier to read at a glance and supports
+        // hover/click interactivity. Layout per card:
+        //
+        //   ┌──────────────────────────────────────────────────────┐
+        //   │  [donut]  Headline: "Top 3 capture 89%"             │
+        //   │           Sub: "Google dominates; long-tail thin"   │
+        //   ├──────────────────────────────────────────────────────┤
+        //   │  [■] Google  ████████░░░░░░░░░░  41.5%  1.1× nat'l │
+        //   │  [■] Yahoo   ███████░░░░░░░░░░░  34.9%  2.3× nat'l │
+        //   │  ...                                                 │
+        //   └──────────────────────────────────────────────────────┘
+        //
+        // Key design choices:
+        //   • Bar width = ACTUAL share-of-cohort (not normalized to leader),
+        //     so a row at 5% renders a short 5%-width bar against the full
+        //     track. Much more intuitive than "everything looks the same".
+        //   • Index chip (vs national) only renders when the active filter is
+        //     not All-National. Green when over-indexing, red when under.
+        //   • Click row pins it. Pinned row gets a side stripe + others dim.
+        //   • Donut shows concentration: top 3 + Other, brand-colored.
+        function _bqRenderEngagementCard(items, opts) {
+            opts = opts || {};
+            if (!items || !items.length) {
+                return '<div style="color: var(--text-secondary); font-size: 0.85rem; padding: 0.5rem 0;">No data for this slice.</div>';
+            }
+            var kind = opts.kind || 'engagement';   // 'search' | 'social' | 'engagement'
+            var factor = (window.__blueIQ && window.__blueIQ.genPopFactor) || 1.0;
+            var filters = (window.__blueIQ && window.__blueIQ.lastData && window.__blueIQ.lastData.filters) || {};
+            var isNational = (filters.party === 'All' && filters.geo_type === 'National');
+
+            var rows = items.slice(0, 10);
+            var totalPanel = rows.reduce(function(a, r) { return a + (+r.panelists || 0); }, 0);
+
+            // Donut: top 3 share + "Other"
+            var top3 = rows.slice(0, 3);
+            var top3Share = top3.reduce(function(a, r) { return a + (+r.share || 0); }, 0);
+            var donutSegments = top3.map(function(r) {
+                return {
+                    color: _bqBrandColor(r.name) || '#64748b',
+                    share: (+r.share || 0),
+                    name: r.name
+                };
+            });
+            // Cap "Other" segment at remaining of the full-cohort sum (which is
+            // 1.0 by construction of _attach_share). When the top 3 already
+            // capture 100% we omit the Other slice.
+            var otherShare = Math.max(0, 1.0 - top3Share);
+            if (otherShare > 0.005) {
+                donutSegments.push({ color: 'rgba(148,163,184,0.35)', share: otherShare, name: 'Other' });
+            }
+
+            var donutSvg = _bqBuildDonutSVG(donutSegments, 56);
+
+            // Concentration headline
+            var leader = rows[0];
+            var headline, sub;
+            if (leader && (+leader.share || 0) >= 0.45) {
+                headline = _bqEscape(leader.name) + ' dominates (' + _bqPct(leader.share) + ')';
+                sub = 'Top 3 capture ' + _bqPct(top3Share) + ' of cohort activity';
+            } else if (top3Share >= 0.75) {
+                headline = 'Concentrated: top 3 capture ' + _bqPct(top3Share);
+                sub = 'Leader is ' + _bqEscape(leader ? leader.name : '') + ' at ' + _bqPct(leader ? leader.share : 0);
+            } else {
+                headline = 'Diverse mix — no clear leader';
+                sub = 'Leader (' + _bqEscape(leader ? leader.name : '') + ') only ' + _bqPct(leader ? leader.share : 0);
+            }
+
+            // Pinned platform state. window.__blueIQ.pinnedSearch / .pinnedSocial.
+            var pinKey = (kind === 'search') ? 'pinnedSearch' : (kind === 'social') ? 'pinnedSocial' : null;
+            window.__blueIQ = window.__blueIQ || {};
+            var pinnedName = pinKey ? (window.__blueIQ[pinKey] || null) : null;
+
+            var rowsHtml = rows.map(function(r) {
+                var color = _bqBrandColor(r.name) || '#64748b';
+                var share = +r.share || 0;
+                var natShare = +r.national_share || 0;
+                // Bar width = actual cohort share, scaled to fit the track.
+                // Cap at 100% in the unlikely event share > 1 (e.g. roll-up
+                // overlaps). Min 1.5% so a 0.1% row still has a visible nub.
+                var pctOfTrack = Math.max(1.5, Math.min(100, share * 100));
+                var idxHtml = '';
+                if (!isNational && natShare > 0) {
+                    var idx = share / natShare;
+                    var idxLbl, idxCls;
+                    if (idx >= 1.20) { idxCls = 'bq-eng-idx-over';  idxLbl = idx.toFixed(idx >= 10 ? 0 : 1) + '\u00d7'; }
+                    else if (idx <= 0.80) { idxCls = 'bq-eng-idx-under'; idxLbl = idx.toFixed(idx <= 0.1 ? 2 : 1) + '\u00d7'; }
+                    else                  { idxCls = 'bq-eng-idx-neutral'; idxLbl = idx.toFixed(2) + '\u00d7'; }
+                    idxHtml = '<span class="bq-eng-idx ' + idxCls + '" title="vs national avg of ' + _bqPct(natShare) + '">' + idxLbl + '</span>';
+                }
+                // Tooltip: panelist count + projection + national share
+                var panelists = (+r.panelists || 0);
+                var proj = Math.round(panelists * factor);
+                var tip = _bqEscape(r.name) + '\n'
+                        + 'Share of cohort: ' + _bqPct(share) + '\n'
+                        + 'Panelists: ' + _bqNum(panelists) + '\n'
+                        + '\u2248 ' + _bqNum(proj) + ' US adults';
+                if (!isNational && natShare > 0) {
+                    tip += '\nNational avg: ' + _bqPct(natShare);
+                }
+                var pinned = pinnedName && pinnedName.toLowerCase() === String(r.name).toLowerCase();
+                var dimmed = pinnedName && !pinned;
+                var rowCls = 'bq-eng-row'
+                    + (pinned ? ' bq-eng-pinned' : '')
+                    + (dimmed ? ' bq-eng-dimmed' : '');
+                // National-share tick mark on the track (small white line) so
+                // users see at a glance whether THIS cohort over- or under-uses
+                // the platform compared to national. Hidden when National view.
+                var natTick = '';
+                if (!isNational && natShare > 0) {
+                    var natPos = Math.max(1, Math.min(99, natShare * 100));
+                    natTick = '<span class="bq-eng-nat-mark" style="left: ' + natPos + '%;" title="National avg: ' + _bqPct(natShare) + '"></span>';
+                }
+                return ''
+                    + '<div class="' + rowCls + '" '
+                    +   'style="--bq-row-color: ' + color + ';" '
+                    +   'data-name="' + _bqEscape(r.name) + '" '
+                    +   'data-kind="' + kind + '" '
+                    +   'data-tip="' + _bqEscape(tip).replace(/\n/g, '&#10;') + '">'
+                    +   '<span class="bq-eng-name">'
+                    +     '<span class="bq-eng-swatch" style="background:' + color + ';"></span>'
+                    +     '<span class="bq-eng-name-text">' + _bqEscape(r.name || '') + '</span>'
+                    +   '</span>'
+                    +   '<span class="bq-eng-track">'
+                    +     '<span class="bq-eng-fill" style="width: ' + pctOfTrack + '%;"></span>'
+                    +     natTick
+                    +   '</span>'
+                    +   '<span class="bq-eng-pct">' + _bqPct(share) + '</span>'
+                    +   idxHtml
+                    + '</div>';
+            }).join('');
+
+            var pinClearHtml = '';
+            if (pinnedName) {
+                pinClearHtml = '<span class="bq-eng-pin-clear" data-bq-pin-clear="' + kind + '">clear pin</span>';
+            }
+
+            return ''
+                + '<div class="bq-eng-head">'
+                +   '<div class="bq-eng-donut">' + donutSvg
+                +     '<div class="bq-eng-donut-center">Top&nbsp;3<br>' + _bqPct(top3Share) + '</div>'
+                +   '</div>'
+                +   '<div class="bq-eng-head-text">'
+                +     '<div class="bq-eng-headline">' + headline + pinClearHtml + '</div>'
+                +     '<div class="bq-eng-sub">' + sub + '</div>'
+                +   '</div>'
+                + '</div>'
+                + '<div class="bq-eng-list">' + rowsHtml + '</div>';
+        }
+        window._bqRenderEngagementCard = _bqRenderEngagementCard;
+
+        // Donut SVG builder. Returns an inline <svg> string drawing
+        // concentric arcs sized by `share` (0..1). The arcs are stroked, not
+        // filled, leaving a hollow donut with an inner radius ≈ 70% of the
+        // outer radius. Visual at-a-glance "where does the cohort spend its
+        // attention?" without taking more vertical space than the header.
+        function _bqBuildDonutSVG(segments, size) {
+            size = size || 56;
+            var r = (size / 2) - 4;
+            var cx = size / 2, cy = size / 2;
+            var circumference = 2 * Math.PI * r;
+            var offset = 0;
+            var arcs = (segments || []).map(function(seg) {
+                var len = Math.max(0, Math.min(1, +seg.share || 0)) * circumference;
+                var arc = '<circle cx="' + cx + '" cy="' + cy + '" r="' + r + '"'
+                    + ' fill="none"'
+                    + ' stroke="' + seg.color + '"'
+                    + ' stroke-width="7"'
+                    + ' stroke-dasharray="' + len + ' ' + circumference + '"'
+                    + ' stroke-dashoffset="' + (-offset) + '" />';
+                offset += len;
+                return arc;
+            }).join('');
+            var bgRing = '<circle cx="' + cx + '" cy="' + cy + '" r="' + r + '"'
+                + ' fill="none" stroke="rgba(255,255,255,0.05)" stroke-width="7" />';
+            return '<svg viewBox="0 0 ' + size + ' ' + size + '">' + bgRing + arcs + '</svg>';
+        }
+
+        // Click delegation: pin / unpin a platform inside an engagement card.
+        // Pinning a row sets window.__blueIQ.pinnedSearch (or pinnedSocial)
+        // and re-renders that card so other rows dim. Future hook: broadcast
+        // the pin to the rest of the dashboard so users can see "what do
+        // Google users care about?" as a one-click cross-tab.
+        document.addEventListener('click', function(e) {
+            // Clear-pin link
+            var clr = e.target.closest && e.target.closest('[data-bq-pin-clear]');
+            if (clr) {
+                var ckind = clr.getAttribute('data-bq-pin-clear');
+                var ckey = (ckind === 'search') ? 'pinnedSearch' : (ckind === 'social') ? 'pinnedSocial' : null;
+                if (ckey && window.__blueIQ) {
+                    window.__blueIQ[ckey] = null;
+                    _bqRefreshEngagementCard(ckind);
+                }
+                e.stopPropagation();
+                return;
+            }
+            var row = e.target.closest && e.target.closest('.bq-eng-row');
+            if (!row) return;
+            var name = row.getAttribute('data-name');
+            var kind = row.getAttribute('data-kind');
+            var key = (kind === 'search') ? 'pinnedSearch' : (kind === 'social') ? 'pinnedSocial' : null;
+            if (!key) return;
+            window.__blueIQ = window.__blueIQ || {};
+            var prev = window.__blueIQ[key];
+            // Toggle: clicking the already-pinned row un-pins it.
+            window.__blueIQ[key] = (prev && prev.toLowerCase() === String(name).toLowerCase()) ? null : name;
+            _bqRefreshEngagementCard(kind);
+        });
+
+        function _bqRefreshEngagementCard(kind) {
+            var data = window.__blueIQ && window.__blueIQ.lastData;
+            if (!data) return;
+            var cards = data.cards || {};
+            var items, bodySel;
+            if (kind === 'search') {
+                items = cards.search_engines || [];
+                bodySel = '.blue-iq-card-search .blue-iq-card-body';
+            } else if (kind === 'social') {
+                items = cards.social_media || [];
+                bodySel = '.blue-iq-card-social .blue-iq-card-body';
+            } else {
+                return;
+            }
+            var body = document.querySelector(bodySel);
+            if (body) {
+                body.innerHTML = _bqRenderEngagementCard(items, { kind: kind });
+            }
         }
 
         // Filter row items by party_code in-place from a cached list. Wired up
@@ -22939,15 +23283,21 @@
                   + '</div>';
 
             // CARD B: Search engines
+            // Subtitle hints at the interactivity: click to pin, tick on the
+            // bar = national average.
             html += '<div class="blue-iq-card blue-iq-card-search">'
-                  + '<h3 class="blue-iq-card-title">Search engines</h3>'
-                  + '<div class="blue-iq-card-body">' + _bqRowBars(cards.search_engines, 'name', 'panelists', { brandColor: true }) + '</div>'
+                  + '<h3 class="blue-iq-card-title">Search engines'
+                  +   '<span class="blue-iq-card-subtitle">click a row to pin \u00b7 tick on bar = national avg</span>'
+                  + '</h3>'
+                  + '<div class="blue-iq-card-body">' + _bqRenderEngagementCard(cards.search_engines, { kind: 'search' }) + '</div>'
                   + '</div>';
 
             // CARD C: Social media
             html += '<div class="blue-iq-card blue-iq-card-social">'
-                  + '<h3 class="blue-iq-card-title">Social platforms</h3>'
-                  + '<div class="blue-iq-card-body">' + _bqRowBars(cards.social_media, 'name', 'panelists', { brandColor: true }) + '</div>'
+                  + '<h3 class="blue-iq-card-title">Social platforms'
+                  +   '<span class="blue-iq-card-subtitle">click a row to pin \u00b7 tick on bar = national avg</span>'
+                  + '</h3>'
+                  + '<div class="blue-iq-card-body">' + _bqRenderEngagementCard(cards.social_media, { kind: 'social' }) + '</div>'
                   + '</div>';
 
             // CARD F: Turnout intent
