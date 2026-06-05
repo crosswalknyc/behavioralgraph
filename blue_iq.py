@@ -309,13 +309,21 @@ def blue_iq_cache_key(filters: dict) -> str:
             keyword-in-related path — only politician-name-in-related
             qualifies now. Old v4 cached payloads were carrying
             non-political bleed in trending_local.
+      v6 — 2026-06-05: added issue_paths_agent — agent-researched
+            per-issue voter journeys for the "Top observed paths"
+            card. Previously the UI used a hardcoded
+            BLUE_IQ_PATH_FOLLOWUPS map that returned identical
+            "Read more political news / Continued to a left/right
+            opinion piece" for every issue at 0% share. v5 payloads
+            don't carry the new field, so the card would still
+            render the old static rows; bump invalidates them.
     """
     canonical = json.dumps({
         'party':     filters.get('party') or 'All',
         'geo_type':  filters.get('geo_type') or 'National',
         'geo_value': filters.get('geo_value') or '',
         'lookback':  int(filters.get('lookback_days') or DEFAULT_LOOKBACK_DAYS),
-        'version':   5,
+        'version':   6,
     }, sort_keys=True, separators=(',', ':'))
     return hashlib.sha256(canonical.encode('utf-8')).hexdigest()
 
@@ -2251,6 +2259,27 @@ def compute_panel_view(filters: dict, *, force_refresh: bool = False) -> dict:
             out.append(r2)
         return out
 
+    # Card E "Top observed paths (after an issue)" — agent-researched
+    # per-issue journeys. Replaces the prior hardcoded
+    # BLUE_IQ_PATH_FOLLOWUPS map that produced identical "Read more
+    # political news -> Continued to a left/right opinion piece" rows
+    # for every bucket. The agent uses web search + reasoning to
+    # produce DISTINCT next-action / follow-up text per issue with
+    # realistic shares grounded in public research (Pew, Knight
+    # Foundation, Brennan Center, eMarketer). 24h S3 cache by
+    # (geo, issue-list hash). Fails open — frontend keeps its old
+    # static fallback if agent returns [].
+    try:
+        from path_discovery import discover_issue_paths
+        _issue_names = [b.get('bucket') for b in (issue_buckets or [])[:12]
+                          if b and b.get('bucket')]
+        issue_paths_agent = discover_issue_paths(
+            f['geo_type'], f['geo_value'], _issue_names
+        ) if _issue_names else []
+    except Exception as _e:  # pragma: no cover - defensive
+        log.warning("path_discovery unavailable; UI will use static fallback: %s", _e)
+        issue_paths_agent = []
+
     cards = {
         'issue_buckets':       issue_buckets,
         'search_engines':      _with_baseline(_attach_share(panel_search), _nat_search_share),
@@ -2266,6 +2295,7 @@ def compute_panel_view(filters: dict, *, force_refresh: bool = False) -> dict:
         'demo_crosstab':       panel_demo,
         'voter_journey':       panel_journey,
         'issue_journey_cross': issue_journey_cross,
+        'issue_paths_agent':   issue_paths_agent,
         'issue_geo':           issue_geo,
         'trending_local':      trending_local,
         'trending_meta':       trending_meta,

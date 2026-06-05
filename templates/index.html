@@ -18210,6 +18210,7 @@
             #blueIQView .bq-path-pill-pct { font-size: 0.7rem; font-variant-numeric: tabular-nums; margin-top: 0.18rem; opacity: 0.85; font-weight: 600; }
             #blueIQView .bq-path-arrow { color: var(--text-secondary); font-size: 1.05rem; flex: 0 0 auto; opacity: 0.6; user-select: none; }
             #blueIQView .bq-path-fallback { display: inline-block; font-size: 0.6rem; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; padding: 0.1rem 0.4rem; background: rgba(251,191,36,0.16); color: #fcd34d; border-radius: 4px; margin-left: 0.4rem; vertical-align: middle; }
+            #blueIQView .bq-path-agent    { display: inline-block; font-size: 0.6rem; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; padding: 0.1rem 0.4rem; background: rgba(96,165,250,0.18); color: #93c5fd; border: 1px solid rgba(96,165,250,0.35); border-radius: 4px; margin-left: 0.4rem; vertical-align: middle; cursor: help; }
 
             /* ── Voter Journey: JIQ-style funnel ribbon ── */
             #blueIQView .bq-funnel-ribbon { display: flex; gap: 0.5rem; align-items: stretch; padding: 0.5rem 0 0.25rem 0; overflow-x: auto; }
@@ -24130,10 +24131,10 @@
                   + '<div class="blue-iq-card-body" id="blueIQCardPathsBody">'
                   +   '<div style="font-size: 0.78rem; color: var(--text-secondary); margin-bottom: 0.5rem;">'
                   +     'Most common ordered sequence after a voter searches each top issue. '
-                  +     'Step 1 \u00b7 the issue search itself. Step 2 \u00b7 the dominant clickstream destination right after. Step 3 \u00b7 the most-common follow-up action after that. '
-                  +     'Wider pills = more panelists on that step.'
+                  +     'Step 1 \u00b7 the issue search itself. Step 2 \u00b7 the next action voters typically take. Step 3 \u00b7 the most-common follow-up to that. '
+                  +     'Rows tagged <span class="bq-path-agent">agent-researched</span> were built per-issue by the discovery agent (gpt-4o + web search) grounded in public research (Pew, Knight Foundation, Brennan Center, eMarketer); hover a row for the rationale.'
                   +   '</div>'
-                  +   _bqRenderTopPathsAfterIssue(cards.issue_buckets || [], cards.issue_journey_cross || [], cards.voter_journey || [])
+                  +   _bqRenderTopPathsAfterIssue(cards.issue_buckets || [], cards.issue_journey_cross || [], cards.voter_journey || [], cards.issue_paths_agent || [])
                   + '</div>'
                   + '</div>';
 
@@ -25935,12 +25936,23 @@
             abandoned:         'Closed the tab',
         };
 
-        function _bqRenderTopPathsAfterIssue(issueBuckets, issueJourneyCross, voterJourney) {
+        function _bqRenderTopPathsAfterIssue(issueBuckets, issueJourneyCross, voterJourney, issuePathsAgent) {
             if (!issueBuckets || !issueBuckets.length) {
                 return '<div style="color: var(--text-secondary); font-size: 0.85rem; padding: 0.6rem 0;">'
                      + 'No issue searches surfaced in this slice. Path table will populate when issue data lands.'
                      + '</div>';
             }
+            // Agent-researched per-issue paths (path_discovery.py). Each
+            // entry: {bucket, next_action, next_share, follow_up_action,
+            // follow_up_share, rationale}. Indexed by lower-cased bucket
+            // name so we can look up per row. When present, it replaces
+            // the destination-label + hardcoded follow-up table with
+            // distinct text and realistic shares per issue.
+            var agentByBucket = {};
+            (issuePathsAgent || []).forEach(function(p) {
+                if (p && p.bucket) agentByBucket[p.bucket.toLowerCase()] = p;
+            });
+
             var crossByIssue = {};
             (issueJourneyCross || []).forEach(function(c) { crossByIssue[c.bucket] = c; });
             var voterDominant = (voterJourney || [])
@@ -25951,41 +25963,67 @@
                 || { destination: 'news_dive', share: 0, panelists: 0 };
 
             var factor = (window.__blueIQ && window.__blueIQ.genPopFactor) || 1.0;
-            var rows = issueBuckets.slice(0, 8).map(function(b, idx) {
-                var cross = crossByIssue[b.bucket];
-                var step2 = null;
-                if (cross && cross.destinations && cross.destinations.length) {
-                    step2 = cross.destinations.slice()
-                        .filter(function(d) { return d.destination !== 'abandoned'; })
-                        .sort(function(a, b) { return (+b.panelists || 0) - (+a.panelists || 0); })[0]
-                        || cross.destinations[0];
-                }
-                if (!step2) {
-                    // Fall back to the slice-wide dominant — labelled as
-                    // such so the user sees this is a synthesized chain.
-                    step2 = { destination: voterDominant.destination, share: voterDominant.share, panelists: voterDominant.panelists, _fallback: true };
-                }
-                var meta = BLUE_IQ_JOURNEY_LABELS[step2.destination] || { label: step2.destination };
-                var color = BLUE_IQ_DEST_PALETTE[step2.destination] || '#64748b';
-                var step3Text = BLUE_IQ_PATH_FOLLOWUPS[step2.destination] || 'Continued browsing';
-                // Pill widths reflect attenuation along the path. Step 1
-                // anchored at 100% (the issue cohort); step 2 at the
-                // destination's share among that cohort; step 3 at a
-                // soft 0.55× of step 2 (industry-norm follow-through).
-                var step1Pct = b.share || 0;
-                var step2Pct = step2.share || 0;
-                var step3Pct = step2Pct * 0.55;
-                var cohortPanelists = +b.count || 0;
-                var step2Panelists = step2.panelists || Math.round(cohortPanelists * step2Pct);
-                var step3Panelists = Math.round(step2Panelists * 0.55);
-                var cohortUS = _bqNum(cohortPanelists * factor);
-                var step2US  = _bqNum(step2Panelists * factor);
-                var step3US  = _bqNum(step3Panelists * factor);
-                var fallbackBadge = step2._fallback
-                    ? ' <span class="bq-path-fallback" title="Issue-specific journey data was thin for this bucket; used the slice-wide dominant follow-up.">modeled</span>'
-                    : '';
+            var agentRowCount = 0;
 
-                return '<div class="bq-path-row">'
+            var rows = issueBuckets.slice(0, 8).map(function(b, idx) {
+                var step1Pct = b.share || 0;
+                var cohortPanelists = +b.count || 0;
+                var cohortUS = _bqNum(cohortPanelists * factor);
+
+                // ── Step 2 + Step 3 resolution ──────────────────────
+                // Priority: agent-researched > panel-cross > slice-wide
+                // dominant fallback. The agent gives DISTINCT text per
+                // issue with realistic shares; if it's missing the
+                // bucket we drop to the prior logic so the card never
+                // shows empty rows.
+                var step2Text, step2Pct, step2Panelists, step2Color;
+                var step3Text, step3Pct, step3Panelists;
+                var sourceBadge = '';
+                var rationaleAttr = '';
+                var agent = agentByBucket[(b.bucket || '').toLowerCase()];
+
+                if (agent) {
+                    step2Text       = agent.next_action;
+                    step2Pct        = +agent.next_share || 0;
+                    step2Panelists  = Math.round(cohortPanelists * step2Pct);
+                    step3Text       = agent.follow_up_action;
+                    step3Pct        = +agent.follow_up_share || 0;
+                    step3Panelists  = Math.round(step2Panelists * (step3Pct / Math.max(step2Pct, 0.01)));
+                    step2Color      = '#60a5fa';   // agent-blue accent
+                    sourceBadge     = ' <span class="bq-path-agent" title="Researched by the discovery agent (public sources)">agent-researched</span>';
+                    if (agent.rationale) {
+                        rationaleAttr = ' title="' + _bqEscape(agent.rationale) + '"';
+                    }
+                    agentRowCount++;
+                } else {
+                    var cross = crossByIssue[b.bucket];
+                    var step2 = null;
+                    if (cross && cross.destinations && cross.destinations.length) {
+                        step2 = cross.destinations.slice()
+                            .filter(function(d) { return d.destination !== 'abandoned'; })
+                            .sort(function(a, b) { return (+b.panelists || 0) - (+a.panelists || 0); })[0]
+                            || cross.destinations[0];
+                    }
+                    if (!step2) {
+                        step2 = { destination: voterDominant.destination, share: voterDominant.share, panelists: voterDominant.panelists, _fallback: true };
+                    }
+                    var meta = BLUE_IQ_JOURNEY_LABELS[step2.destination] || { label: step2.destination };
+                    step2Text       = meta.label;
+                    step2Pct        = step2.share || 0;
+                    step2Panelists  = step2.panelists || Math.round(cohortPanelists * step2Pct);
+                    step3Text       = BLUE_IQ_PATH_FOLLOWUPS[step2.destination] || 'Continued browsing';
+                    step3Pct        = step2Pct * 0.55;
+                    step3Panelists  = Math.round(step2Panelists * 0.55);
+                    step2Color      = BLUE_IQ_DEST_PALETTE[step2.destination] || '#64748b';
+                    sourceBadge = step2._fallback
+                        ? ' <span class="bq-path-fallback" title="Issue-specific journey data was thin and no agent-researched path was returned; used the slice-wide dominant follow-up.">modeled</span>'
+                        : '';
+                }
+
+                var step2US = _bqNum(step2Panelists * factor);
+                var step3US = _bqNum(step3Panelists * factor);
+
+                return '<div class="bq-path-row"' + rationaleAttr + '>'
                      +   '<div class="bq-path-rank">' + (idx + 1) + '</div>'
                      +   '<div class="bq-path-cohort">'
                      +     '<div class="bq-path-cohort-pct">' + _bqPct(step1Pct) + '</div>'
@@ -25998,28 +26036,34 @@
                      +       '<span class="bq-path-pill-name">' + _bqEscape(b.bucket) + '</span>'
                      +     '</div>'
                      +     '<div class="bq-path-arrow">\u2192</div>'
-                     +     '<div class="bq-path-pill" style="background:' + color + '22; color:' + color + '; border-color:' + color + '55;" '
-                     +       'title="' + _bqEscape(meta.label + ': ' + _bqPct(step2Pct) + ' \u00b7 \u2248' + step2US + ' US adults') + '">'
+                     +     '<div class="bq-path-pill" style="background:' + step2Color + '22; color:' + step2Color + '; border-color:' + step2Color + '55;" '
+                     +       'title="' + _bqEscape(step2Text + ': ' + _bqPct(step2Pct) + ' \u00b7 \u2248' + step2US + ' US adults') + '">'
                      +       '<span class="bq-path-pill-label">NEXT</span>'
-                     +       '<span class="bq-path-pill-name">' + _bqEscape(meta.label) + '</span>'
+                     +       '<span class="bq-path-pill-name">' + _bqEscape(step2Text) + '</span>'
                      +       '<span class="bq-path-pill-pct">' + _bqPct(step2Pct) + '</span>'
                      +     '</div>'
                      +     '<div class="bq-path-arrow">\u2192</div>'
-                     +     '<div class="bq-path-pill bq-path-pill-final" title="Most-common follow-up action, modeled from JIQ click-through norms">'
+                     +     '<div class="bq-path-pill bq-path-pill-final" title="' + _bqEscape(step3Text + ': ' + _bqPct(step3Pct) + ' \u00b7 \u2248' + step3US + ' US adults') + '">'
                      +       '<span class="bq-path-pill-label">THEN</span>'
                      +       '<span class="bq-path-pill-name">' + _bqEscape(step3Text) + '</span>'
                      +       '<span class="bq-path-pill-pct">' + _bqPct(step3Pct) + '</span>'
                      +     '</div>'
-                     +     fallbackBadge
+                     +     sourceBadge
                      +   '</div>'
                      + '</div>';
             }).join('');
 
+            var footer;
+            if (agentRowCount > 0 && agentRowCount === Math.min(issueBuckets.length, 8)) {
+                footer = 'All rows are agent-researched: the discovery agent (gpt-4o + web search) modeled each issue\'s typical voter path from public sources (Pew, Knight Foundation, Brennan Center, eMarketer). Hover a row for the rationale.';
+            } else if (agentRowCount > 0) {
+                footer = agentRowCount + ' of ' + Math.min(issueBuckets.length, 8) + ' rows are agent-researched (hover for rationale). The remaining rows fall back to panel-measured destinations + modeled follow-up.';
+            } else {
+                footer = 'Steps 1\u20132 are panel-measured. Step 3 is modeled from JIQ click-through norms (\u00d70.55 attenuation). A <span class="bq-path-fallback">modeled</span> badge means issue-specific journey data was thin.';
+            }
+
             return '<div class="bq-path-table">' + rows + '</div>'
-                 + '<div class="bq-fan-footer">'
-                 +   'Steps 1\u20132 are panel-measured. Step 3 is modeled from JIQ click-through norms (\u00d70.55 attenuation) until the cube carries per-issue chain data. '
-                 +   'A <span class="bq-path-fallback">modeled</span> badge means issue-specific journey data was thin and the slice-wide dominant was substituted.'
-                 + '</div>';
+                 + '<div class="bq-fan-footer">' + footer + '</div>';
         }
         window._bqRenderTopPathsAfterIssue = _bqRenderTopPathsAfterIssue;
 
