@@ -5672,23 +5672,27 @@
             background: var(--bg-card);
             z-index: 0;
         }
-        /* Profile IQ Behavioral tab only: tighter rows + vertically centered cell content (font unchanged). */
+        /* Profile IQ Behavioral tab only: flex rows for true vertical centering (column widths match subgrid header). */
         #behavioralGrid .behavioral-table .behavioral-item {
-            padding: 0.2rem 0;
-            align-items: stretch;
-        }
-        #behavioralGrid .behavioral-table .behavioral-item > * {
             display: flex;
             align-items: center;
-            align-self: stretch;
+            gap: 0.4rem;
+            padding: 0.22rem 0 0.18rem 0;
+        }
+        #behavioralGrid .behavioral-table .behavioral-item > * {
             min-height: 0;
         }
         #behavioralGrid .behavioral-table .behavioral-item .behavioral-rank {
+            flex: 0 0 28px;
             line-height: 1;
+            display: block;
+            align-self: auto;
         }
         #behavioralGrid .behavioral-table .behavioral-item .behavioral-name-wrapper {
-            display: flex;
-            align-items: center;
+            flex: 1 1 100px;
+            min-width: 0;
+            display: block;
+            align-self: auto;
         }
         #behavioralGrid .behavioral-table .behavioral-item .behavioral-name {
             padding: 0 0.4rem;
@@ -5696,14 +5700,23 @@
             display: block;
             width: 100%;
         }
-        #behavioralGrid .behavioral-table .behavioral-item .behavioral-pct,
-        #behavioralGrid .behavioral-table .behavioral-item .behavioral-index {
-            justify-content: flex-end;
+        #behavioralGrid .behavioral-table .behavioral-item .behavioral-pct {
+            flex: 0 0 78px;
+            text-align: right !important;
             line-height: 1;
             font-variant-numeric: tabular-nums;
+            padding: 0 0.1rem 0 0.2rem;
+            display: block;
+            align-self: auto;
         }
         #behavioralGrid .behavioral-table .behavioral-item .behavioral-index {
+            flex: 0 0 64px;
+            text-align: right !important;
+            line-height: 1;
+            font-variant-numeric: tabular-nums;
             padding: 0 0.35rem 0 0.2rem;
+            display: block;
+            align-self: auto;
         }
         .behavioral-table .behavioral-item:hover {
             z-index: 1;
@@ -24054,7 +24067,7 @@
             var candsGeoLbl = (f.geo_type === 'National' || !f.geo_value) ? 'across all races nationwide' : ('for ' + (f.geo_value || ''));
             html += '<div class="blue-iq-card blue-iq-card-cands">'
                   + '<h3 class="blue-iq-card-title">Top candidates (2026 cycle)'
-                  +   '<span class="blue-iq-card-subtitle">agent-discovered declared candidates ' + _bqEscape(candsGeoLbl) + ' \u00b7 click race type to drill in</span>'
+                  +   '<span class="blue-iq-card-subtitle">declared candidates ' + _bqEscape(candsGeoLbl) + ' \u00b7 click race type to drill in</span>'
                   + '</h3>'
                   + '<div class="bq-party-filter" data-target="top_candidates">'
                   +   '<button class="bq-party-chip active" data-party="All">All</button>'
