@@ -5322,6 +5322,22 @@ def run_all_enforcers(df, subject, brand_category=None, verbose=True):
         total += n
     except Exception as e:
         print(f"   ⚠️ enforcer reground_clamped_sample_size failed: {e}")
+    # 2026-06 (Jenna P2 belt-and-suspenders): demographic-renormalize.
+    # Each of the 9 demos (AGE, GENDER, ETHNICITY, INCOME, EDUCATION,
+    # RELATIONSHIP, SEXUAL_ORIENTATION, PARENTAL_STATUS, OCCUPATION) rescaled
+    # to sum=100% in place. Idempotent — no-op when within 0.5pp tolerance.
+    # Closes the gap where enforce_all_demographic_categories only renorm'd
+    # 5 of the 9 demos, allowing OCCUPATION sums of 110-141% to ship.
+    # MUST run BEFORE recompute_raw_and_projection so the recompute sees
+    # the fixed BPs.
+    try:
+        df, n = renormalize_demographics_to_100(
+            df, subject=subject, tolerance=0.5, verbose=verbose,
+        )
+        total += n
+    except Exception as e:
+        print(f"   ⚠️ enforcer renormalize_demographics_to_100 failed: {e}")
+
     # 2026-05-27 (D-Proj): VERY LAST -- recompute Raw + Proj from final BP.
     # Every previous enforcer that touched BP may have left stale Raw/Proj
     # cells. This pass canonicalizes the math:
@@ -5336,6 +5352,25 @@ def run_all_enforcers(df, subject, brand_category=None, verbose=True):
         total += n
     except Exception as e:
         print(f"   ⚠️ enforcer recompute_raw_and_projection failed: {e}")
+
+    # 2026-06 (Jenna P0 validator): validate_demo_sum_100 as the final
+    # check in the chain. By this point renormalize has fixed any drift
+    # and recompute_raw_and_projection has rebuilt Raw/Proj — if a demo
+    # still doesn't sum to 100±0.5 something is structurally wrong (rows
+    # were added/dropped after renorm). Logs loudly; does NOT raise here
+    # (raise=False keeps run_all_enforcers compatible with callers that
+    # expect non-fatal best-effort enforcement). The actual write-time
+    # block lives in run_pre_publish_gate G5 (raise_on_fail=True path).
+    try:
+        viols = validate_demo_sum_100(
+            df, subject=subject, tolerance=0.5,
+            raise_on_fail=False, verbose=verbose,
+        )
+        # Return demo-sum violations as part of total (informational).
+        total += len(viols)
+    except Exception as e:
+        print(f"   ⚠️ enforcer validate_demo_sum_100 failed: {e}")
+
     return df, total
 
 
@@ -6295,7 +6330,169 @@ def run_post_vet_safety_sweep(df, subject, *, verbose=True):
 #   G3: BRAND INPUT row > 80 chars (URL-permutation soup)
 #   G4: any single 4dp BP value appearing 10+ times in one category
 #       (within-cat collision that survived the dejitter)
+#   G5: any of the 9 demos fails sum=100±0.5 (added 2026-06 to catch the
+#       OCCUPATION over-emission + AGE drop family of defects at write time)
 # ============================================================================
+
+# ============================================================================
+# DEMOGRAPHIC SUM-TO-100 ENFORCER + VALIDATOR
+# ============================================================================
+# Each of the 9 demographic categories (AGE, GENDER, ETHNICITY, INCOME,
+# EDUCATION, RELATIONSHIP, SEXUAL_ORIENTATION, PARENTAL_STATUS, OCCUPATION)
+# MUST sum to 100% (within 0.5pp tolerance for rounding). Defects we have
+# seen at write time:
+#   - OCCUPATION sum 110-141% (10 files): structural double-emission.
+#     enforce_all_demographic_categories only renormalizes 5 of 9 demos
+#     (GENDER, INCOME, AGE, EDUCATION, ETHNICITY); OCCUPATION + the other
+#     three have NO sum-to-100 safeguard.
+#   - AGE sum 96.28% (3 files: Kelsey + 2 Home Internet Shopping):
+#     deterministic drop of a single age bucket on certain audience profiles.
+#
+# `renormalize_demographics_to_100` is the FIX (rescales BPs in place +
+# recomputes raw/projection). `validate_demo_sum_100` is the CATCHER (raises
+# DemoSumViolationError if any demo still drifts > tolerance after the fix).
+# Both are wired into BG.py BEFORE to_csv(), so future profile generations
+# self-correct and any survivor surfaces loudly in the run log.
+# ============================================================================
+
+_DEMO_CATS_NINE = (
+    'AGE', 'GENDER', 'ETHNICITY', 'INCOME', 'EDUCATION',
+    'RELATIONSHIP', 'SEXUAL_ORIENTATION', 'PARENTAL_STATUS', 'OCCUPATION',
+)
+
+
+class DemoSumViolationError(Exception):
+    """Raised when one or more demographic categories fail the sum=100±tol
+    check. Callers should treat as fatal — the CSV has a structural defect
+    that no downstream consumer can interpret correctly."""
+    def __init__(self, violations: list[tuple[str, float, int]]):
+        self.violations = violations
+        msg = '; '.join(
+            f'{cat} sum={s:.2f}% (n={n})' for cat, s, n in violations
+        )
+        super().__init__(
+            f'validate_demo_sum_100 FAILED for {len(violations)} demo(s): {msg}'
+        )
+
+
+def renormalize_demographics_to_100(df, *, subject=None, tolerance=0.5,
+                                    verbose=True):
+    """Rescale BPs within each of the 9 demographic categories so each
+    sums to exactly 100% (within rounding). Recomputes Category Share,
+    Original Raw Numbers, and US Gen Pop Projection from the new BPs
+    using the canonical sample-size formula.
+
+    Idempotent: a second pass on an already-renormalized df is a no-op.
+    Safe on string-typed columns (parses via `_bp`). Skips categories
+    with sum=0 (preserves the all-zero state).
+
+    Returns (df, n_categories_adjusted).
+    """
+    if df is None or len(df) == 0:
+        return df, 0
+
+    bp_col, cs_col, raw_col, proj_col = _detect_cols(df)
+    if bp_col not in df.columns or 'Column' not in df.columns:
+        return df, 0
+
+    sample_size = _detect_sample_size(df, bp_col, raw_col)
+    cats_upper = df['Column'].astype(str).str.strip().str.upper()
+    adjusted = 0
+    adj_log: list[tuple[str, float, float, int]] = []
+
+    for cat in _DEMO_CATS_NINE:
+        mask = cats_upper == cat
+        if not mask.any():
+            continue
+        bp_floats = df.loc[mask, bp_col].apply(_bp)
+        bp_sum = float(bp_floats.sum())
+        if bp_sum <= 0:
+            continue
+        deviation = abs(bp_sum - 100.0)
+        if deviation <= tolerance:
+            continue
+
+        scale = 100.0 / bp_sum
+        new_bps = (bp_floats * scale).round(4)
+        # Ensure cell-type compatibility: coerce BP col to object/numeric
+        # before assignment to avoid the str-dtype TypeError we hit in
+        # adjust_platform_to_100_percent.
+        if str(df[bp_col].dtype) == 'string' or str(df[bp_col].dtype).startswith('str'):
+            df[bp_col] = pd.to_numeric(df[bp_col].apply(_bp), errors='coerce')
+        df.loc[mask, bp_col] = new_bps
+
+        # Recompute raw + projection from new BPs
+        if raw_col:
+            if str(df[raw_col].dtype) == 'string' or str(df[raw_col].dtype).startswith('str'):
+                df[raw_col] = pd.to_numeric(df[raw_col].astype(str).str.replace(',', ''), errors='coerce').fillna(0).astype('int64')
+            df.loc[mask, raw_col] = (
+                (new_bps / 100.0 * sample_size).round(0).astype('int64')
+            )
+        if proj_col:
+            if str(df[proj_col].dtype) == 'string' or str(df[proj_col].dtype).startswith('str'):
+                df[proj_col] = pd.to_numeric(df[proj_col].astype(str).str.replace(',', ''), errors='coerce').fillna(0).astype('int64')
+            df.loc[mask, proj_col] = (
+                (new_bps / 100.0 * sample_size *
+                 (US_POP / 10_000_000.0)).round(0).astype('int64')
+            )
+        # Category Share = BP fraction of (newly 100%) category total
+        if cs_col:
+            if str(df[cs_col].dtype) == 'string' or str(df[cs_col].dtype).startswith('str'):
+                df[cs_col] = pd.to_numeric(df[cs_col].apply(_bp), errors='coerce')
+            df.loc[mask, cs_col] = new_bps.round(4)
+
+        adjusted += 1
+        adj_log.append((cat, bp_sum, 100.0, int(mask.sum())))
+
+    if verbose and adj_log:
+        print(f'   🔧 renormalize_demographics_to_100 [{subject or ""}]: '
+              f'{adjusted} demo cat(s) rescaled to sum=100%')
+        for cat, old, new, n in adj_log:
+            print(f'      • {cat}: {old:.2f}% -> {new:.2f}% (n={n} rows)')
+
+    return df, adjusted
+
+
+def validate_demo_sum_100(df, *, subject=None, tolerance=0.5,
+                          raise_on_fail=True, verbose=True):
+    """Hard-fail validator: raises DemoSumViolationError if ANY of the 9
+    demos has |sum - 100| > tolerance. Should be run AFTER
+    `renormalize_demographics_to_100`; if it fires, something else is
+    structurally wrong (rows added/dropped after renorm, or renorm itself
+    failed). Returns the violation list when raise_on_fail=False.
+    """
+    violations: list[tuple[str, float, int]] = []
+    if df is None or len(df) == 0:
+        return violations
+
+    bp_col, _, _, _ = _detect_cols(df)
+    if bp_col not in df.columns or 'Column' not in df.columns:
+        return violations
+
+    cats_upper = df['Column'].astype(str).str.strip().str.upper()
+    for cat in _DEMO_CATS_NINE:
+        mask = cats_upper == cat
+        if not mask.any():
+            continue
+        bp_sum = float(df.loc[mask, bp_col].apply(_bp).sum())
+        if abs(bp_sum - 100.0) > tolerance:
+            violations.append((cat, bp_sum, int(mask.sum())))
+
+    if verbose:
+        tag = subject or ''
+        if violations:
+            print(f'   🚨 validate_demo_sum_100 [{tag}]: '
+                  f'{len(violations)} demo(s) violate sum=100±{tolerance}:')
+            for cat, s, n in violations:
+                print(f'      ✗ {cat} sum={s:.2f}% (n={n})')
+        else:
+            print(f'   🟢 validate_demo_sum_100 [{tag}]: PASS (all 9 demos sum=100±{tolerance})')
+
+    if violations and raise_on_fail:
+        raise DemoSumViolationError(violations)
+
+    return violations
+
 
 class PrePublishGateError(Exception):
     """Raised when the pre-publish gate finds an unrecoverable defect.
@@ -6397,6 +6594,28 @@ def run_pre_publish_gate(df, subject, *, project_name: str = '',
             )
     except Exception as e:
         defects.append(f'G4 WITHIN_CAT_COLLISION: detector errored: {e}')
+
+    # ── G5: demo sum=100 invariant (the 9 demos must each total 100±0.5) ───
+    # This catches structural defects that survived renormalize_demographics_to_100:
+    #   - OCCUPATION over-emission (10 files at 110-141% pre-fix)
+    #   - AGE deterministic drop (3 files at 96.28% pre-fix)
+    # If renormalize ran successfully, this should always pass. If it fires,
+    # rows were added/dropped after renorm OR renorm itself errored.
+    try:
+        demo_viols = validate_demo_sum_100(
+            df, subject=subject, tolerance=0.5,
+            raise_on_fail=False, verbose=False,
+        )
+        if demo_viols:
+            sample = '; '.join(
+                f'{cat}={s:.2f}%' for cat, s, _ in demo_viols
+            )
+            defects.append(
+                f'G5 DEMO_SUM: {len(demo_viols)} of 9 demo(s) fail sum=100±0.5 '
+                f'({sample})'
+            )
+    except Exception as e:
+        defects.append(f'G5 DEMO_SUM: detector errored: {e}')
 
     if verbose:
         if defects:
