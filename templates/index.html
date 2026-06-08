@@ -36691,6 +36691,22 @@
             var weekly  = (trends.weekly  || []).slice();
             var monthly = (trends.monthly || []).slice();
 
+            // Granularity-aware copy. Payloads can set granularity:
+            // 'daily' when the weekly[] array actually holds daily
+            // buckets (e.g. PCJ S2 daily strip); default 'weekly'
+            // preserves backward-compat for older payloads.
+            var isDaily = ((trends.granularity || 'weekly').toLowerCase() === 'daily');
+            var grain   = {
+                period:        isDaily ? 'day'  : 'week',
+                periodCap:     isDaily ? 'Day'  : 'Week',
+                deltaLabel:    isDaily ? 'DoD'  : 'WoW',
+                latestLabel:   isDaily ? 'TODAY'         : 'THIS WEEK',
+                selectedLabel: isDaily ? 'SELECTED DAY'  : 'SELECTED WEEK',
+                pinnedLabel:   isDaily ? '📌 PINNED DAY' : '📌 PINNED WEEK',
+            };
+            // Expose for downstream tile / pin renderers
+            trends._jiq_grain = grain;
+
             // ---- meta + subtitle (static) ----
             var metaEl  = document.getElementById('jiqTvTrendsMeta');
             var subEl   = document.getElementById('jiqTvTrendsSubtitle');
@@ -36702,8 +36718,8 @@
             }
             if (subEl) {
                 subEl.textContent = 'Active ' + (trends.unit_label || 'accounts')
-                    + ' and total watch hours by week and by month. '
-                    + 'Hover or click any dot in the chart below to dial the top tiles to that week.';
+                    + ' and total watch hours by ' + grain.period + ' and by month. '
+                    + 'Hover or click any dot in the chart below to dial the top tiles to that ' + grain.period + '.';
             }
             if (notesEl) {
                 notesEl.textContent = trends.methodology_note || '';
@@ -36711,7 +36727,7 @@
 
             // ---- weekly + monthly drill-down tables (static) ----
             var tblWEl = document.getElementById('jiqTvTrendsWeeklyTable');
-            if (tblWEl) tblWEl.innerHTML = _jiqRenderTrendsTable(weekly,  'week_label',  'WoW');
+            if (tblWEl) tblWEl.innerHTML = _jiqRenderTrendsTable(weekly,  'week_label',  grain.deltaLabel);
             var tblMEl = document.getElementById('jiqTvTrendsMonthlyTable');
             if (tblMEl) tblMEl.innerHTML = _jiqRenderTrendsTable(monthly, 'month_label', 'MoM');
 
@@ -36794,13 +36810,22 @@
             var isLatestWeek = (wIdx === s.latestWeekIdx);
             var isPinned     = (s.pinnedWeekIdx != null);
 
+            // Granularity-aware copy. Falls back to weekly defaults
+            // for older payloads that don't set trends.granularity.
+            var grain = (s.trends && s.trends._jiq_grain) || {
+                deltaLabel:    'WoW',
+                latestLabel:   'THIS WEEK',
+                selectedLabel: 'SELECTED WEEK',
+                pinnedLabel:   '📌 PINNED WEEK',
+            };
+
             // Label prefix changes based on whether we're showing the
             // default (latest) week, a hovered week, or a pinned week.
             // Same for month tile.
             var weekPrefix;
-            if (isPinned)         weekPrefix = '📌 PINNED WEEK';
-            else if (isLatestWeek) weekPrefix = 'THIS WEEK';
-            else                   weekPrefix = 'SELECTED WEEK';
+            if (isPinned)         weekPrefix = grain.pinnedLabel;
+            else if (isLatestWeek) weekPrefix = grain.latestLabel;
+            else                   weekPrefix = grain.selectedLabel;
             var monthPrefix;
             if (isPinned)          monthPrefix = '📌 MONTH OF PIN';
             else if (isLatestWeek) monthPrefix = 'THIS MONTH';
@@ -36814,17 +36839,17 @@
             var prevW = (wIdx > 0) ? s.weekly[wIdx - 1]  : null;
             var prevM = (mIdx > 0) ? s.monthly[mIdx - 1] : null;
 
-            // Sub-text builder: shows the period label + WoW/MoM delta.
+            // Sub-text builder: shows the period label + WoW/DoD/MoM delta.
             // Suppresses deltas on partial buckets (apples-to-pears).
             var weekSub = function(metric) {
                 if (!w) return '';
                 var base = (w.week_label || '') + (w.is_partial ? ' · partial' : '');
-                if (w.is_partial) return base + ' · WoW hidden';
+                if (w.is_partial) return base + ' · ' + grain.deltaLabel + ' hidden';
                 if (!prevW)       return base;
                 var deltaHtml = (metric === 'a')
                     ? fmtDelta(w.active_accounts, prevW.active_accounts)
                     : fmtDelta(w.watch_hours,    prevW.watch_hours);
-                return base + ' · WoW ' + deltaHtml;
+                return base + ' · ' + grain.deltaLabel + ' ' + deltaHtml;
             };
             var monthSub = function(metric) {
                 if (!mo) return '';
