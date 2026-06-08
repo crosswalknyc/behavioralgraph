@@ -35952,8 +35952,9 @@
                  + '</div>';
         }
 
-        function _jiqSpreadCompanionRows(rows, minGapPx, padL, padR, W) {
-            minGapPx = minGapPx || 92;
+        function _jiqSpreadCompanionRows(rows, minGapPx, padL, padR, W, maxLanes) {
+            minGapPx = minGapPx || 140;
+            maxLanes = maxLanes || 8;
             if (!rows || rows.length < 2) return;
             rows.sort(function(a, b) { return a.cx - b.cx; });
             var i = 0;
@@ -35965,17 +35966,36 @@
                     var avgCx = cluster.reduce(function(s, e) { return s + e.cx; }, 0) / cluster.length;
                     var totalW = (cluster.length - 1) * minGapPx;
                     var startX = avgCx - totalW / 2;
-                    var minX = padL + 70;
-                    var maxX = W - padR - 70 - totalW;
+                    var minX = padL + 80;
+                    var maxX = W - padR - 80 - totalW;
                     startX = Math.max(minX, Math.min(startX, maxX));
-                    cluster.forEach(function(e, k) { e.cx = startX + k * minGapPx; });
+                    cluster.forEach(function(e, k) {
+                        e.cx = startX + k * minGapPx;
+                        e.forceLane = k % maxLanes;
+                    });
                 }
                 i = j + 1;
             }
         }
         function _jiqCompanionLabelWidth(text) {
             var t = String(text || '');
-            return Math.max(70, Math.min(160, t.length * 5.2));
+            return Math.max(80, Math.min(190, t.length * 5.4));
+        }
+        function _jiqThinCompanionTicks(ticks, xForFn, xMinVal, xMaxVal, minPx, skipZero) {
+            minPx = minPx || 62;
+            var sorted = ticks.filter(function(t) { return t >= xMinVal && t <= xMaxVal; })
+                .sort(function(a, b) { return a - b; });
+            var out = [];
+            var lastX = -Infinity;
+            sorted.forEach(function(t) {
+                if (skipZero && t === 0) return;
+                var x = xForFn(t);
+                if (!out.length || (x - lastX) >= minPx) {
+                    out.push(t);
+                    lastX = x;
+                }
+            });
+            return out;
         }
         function _jiqRenderCompanionTimeline(comps) {
             if (!comps || !comps.length) return '<div style="font-size:0.8rem;color:var(--text-secondary);padding:0.5rem 0;">No data.</div>';
@@ -36078,13 +36098,13 @@
                 };
             }
 
-            // ── Compact SVG canvas (target single-screen fit) ────────
+            // ── Compact SVG canvas ───────────────────────────────────
             var W    = 1200;
-            var padT = 24, padB = 42, padL = 40, padR = 40;
-            var H    = 440;
-            var axisY = H / 2;
-            var LANE_STEP = 66;
-            var MAX_LANES = 6;
+            var padT = 38, padB = 50, padL = 44, padR = 56;
+            var H    = 500;
+            var axisY = Math.round(H * 0.52);
+            var LANE_STEP = 74;
+            var MAX_LANES = 8;
 
             var xMin = axisConfig.xMin, xMax = axisConfig.xMax;
             function xFor(t) {
@@ -36113,7 +36133,11 @@
             rows.forEach(function(e) {
                 e.r  = Math.max(13, Math.min(26, 13 + (e.pct / maxPct) * 13));
                 e.cx = xFor(e.center);
-                e.labelW = _jiqCompanionLabelWidth(_truncLabel(e.vertical));
+                e.blockW = Math.max(
+                    _jiqCompanionLabelWidth(_truncLabel(e.vertical)),
+                    e.typical_window ? _jiqCompanionLabelWidth(_truncWindow(e.typical_window)) : 0
+                );
+                e.labelW = e.blockW;
             });
 
             if (isCategorical) {
@@ -36129,11 +36153,15 @@
                 var stepX = (nCat > 1) ? (xR - xL) / (nCat - 1) : 0;
                 rows.forEach(function(e, i) {
                     e.cx = xL + i * stepX;
-                    e.laneIdx = i % 4;
-                    e.labelW = _jiqCompanionLabelWidth(_truncLabel(e.vertical));
+                    e.laneIdx = i % MAX_LANES;
+                    e.blockW = Math.max(
+                        _jiqCompanionLabelWidth(_truncLabel(e.vertical)),
+                        e.typical_window ? _jiqCompanionLabelWidth(_truncWindow(e.typical_window)) : 0
+                    );
+                    e.labelW = e.blockW;
                 });
             } else {
-                _jiqSpreadCompanionRows(rows, 92, padL, padR, W);
+                _jiqSpreadCompanionRows(rows, 148, padL, padR, W, MAX_LANES);
             }
 
             // ── Lane assignment (time-anchored mode only) ────────────
@@ -36151,13 +36179,20 @@
             // Reserve horizontal space for label + bubble, not just the circle.
             if (!isCategorical) {
                 rows.forEach(function(e) {
-                    var halfW = Math.max(e.r + 18, (e.labelW || 80) / 2);
+                    if (e.forceLane != null) {
+                        e.laneIdx = e.forceLane;
+                        var forcedHalfW = Math.max(e.r + 22, (e.blockW || e.labelW || 90) / 2 + 10);
+                        var forcedLane = lanes[e.laneIdx] = lanes[e.laneIdx] || [];
+                        forcedLane.push({ x0: e.cx - forcedHalfW, x1: e.cx + forcedHalfW });
+                        return;
+                    }
+                    var halfW = Math.max(e.r + 22, (e.blockW || e.labelW || 90) / 2 + 10);
                     var laneIdx = 0;
                     while (laneIdx < MAX_LANES) {
                         var lane = lanes[laneIdx] = lanes[laneIdx] || [];
                         var fits = lane.every(function(occ) {
-                            return (e.cx + halfW < occ.x0 - 8)
-                                || (e.cx - halfW > occ.x1 + 8);
+                            return (e.cx + halfW < occ.x0 - 10)
+                                || (e.cx - halfW > occ.x1 + 10);
                         });
                         if (fits) {
                             lane.push({ x0: e.cx - halfW, x1: e.cx + halfW });
@@ -36173,7 +36208,7 @@
                             if (lc < bestCount) { bestCount = lc; bestLane = i; }
                         }
                         e.laneIdx = bestLane;
-                        halfW = Math.max(e.r + 18, (e.labelW || 80) / 2);
+                        halfW = Math.max(e.r + 22, (e.blockW || e.labelW || 90) / 2 + 10);
                         (lanes[bestLane] = lanes[bestLane] || []).push({ x0: e.cx - halfW, x1: e.cx + halfW });
                     }
                 });
@@ -36199,21 +36234,18 @@
                 parts.push('<rect x="' + (anchorX - anchorW / 2) + '" y="' + (H - padB + 8) + '" width="' + anchorW + '" height="20" rx="10" fill="var(--accent-primary)"/>');
                 parts.push('<text x="' + anchorX + '" y="' + (H - padB + 22) + '" text-anchor="middle" fill="#fff" font-weight="700" font-size="10.5">' + anchorLabel + '</text>');
             } else {
-                // ── Time-anchored mode: full tick set ────────────────
-                axisConfig.ticks.filter(function(t) { return t >= xMin && t <= xMax; })
-                                .forEach(function(t) {
+                // ── Time-anchored mode: anchor pill at TOP; ticks thinned below ──
+                var anchorX = xFor(0);
+                var anchorText = axisConfig.labelFor(0);
+                var anchorW = Math.max(108, anchorText.length * 7.4);
+                parts.push('<line x1="' + anchorX + '" y1="' + (padT + 24) + '" x2="' + anchorX + '" y2="' + (H - padB + 2) + '" stroke="var(--accent-primary)" stroke-width="2" stroke-dasharray="4,3" opacity="0.55"/>');
+                parts.push('<rect x="' + (anchorX - anchorW / 2) + '" y="6" width="' + anchorW + '" height="22" rx="11" fill="var(--accent-primary)"/>');
+                parts.push('<text x="' + anchorX + '" y="21" text-anchor="middle" fill="#fff" font-weight="700" font-size="10.5">' + anchorText + '</text>');
+
+                _jiqThinCompanionTicks(axisConfig.ticks, xFor, xMin, xMax, 62, true).forEach(function(t) {
                     var x = xFor(t);
-                    var isAnchor = (t === 0);
-                    if (isAnchor) {
-                        var anchorText = axisConfig.labelFor(t);
-                        var anchorW = Math.max(104, anchorText.length * 7.2);
-                        parts.push('<line x1="' + x + '" y1="' + (padT - 4) + '" x2="' + x + '" y2="' + (H - padB + 4) + '" stroke="var(--accent-primary)" stroke-width="2" stroke-dasharray="4,3" opacity="0.55"/>');
-                        parts.push('<rect x="' + (x - anchorW / 2) + '" y="' + (H - padB + 8) + '" width="' + anchorW + '" height="20" rx="10" fill="var(--accent-primary)"/>');
-                        parts.push('<text x="' + x + '" y="' + (H - padB + 22) + '" text-anchor="middle" fill="#fff" font-weight="700" font-size="10.5">' + anchorText + '</text>');
-                    } else {
-                        parts.push('<line x1="' + x + '" y1="' + (axisY - 4) + '" x2="' + x + '" y2="' + (axisY + 4) + '" stroke="var(--border-color)" stroke-width="1"/>');
-                        parts.push('<text x="' + x + '" y="' + (H - padB + 18) + '" text-anchor="middle" fill="var(--text-secondary)" font-size="10">' + axisConfig.labelFor(t) + '</text>');
-                    }
+                    parts.push('<line x1="' + x + '" y1="' + (axisY - 4) + '" x2="' + x + '" y2="' + (axisY + 4) + '" stroke="var(--border-color)" stroke-width="1"/>');
+                    parts.push('<text x="' + x + '" y="' + (H - padB + 16) + '" text-anchor="middle" fill="var(--text-secondary)" font-size="10">' + axisConfig.labelFor(t) + '</text>');
                 });
             }
 
@@ -36235,15 +36267,11 @@
                 parts.push('<line x1="' + e.cx + '" y1="' + axisY + '" x2="' + e.cx + '" y2="' + e.cy + '" stroke="' + e.color + '" stroke-width="1" opacity="0.35"/>');
             });
 
-            // Bubbles + labels
+            // Bubbles + labels (timing text lives in tooltip to avoid subtext collisions)
             rows.forEach(function(e) {
                 var labelAbove = (e.cy < axisY);
-                var labelGap = 16;
-                var labelY0 = labelAbove ? (e.cy - e.r - labelGap) : (e.cy + e.r + 12);
-                var labelY1 = labelAbove ? (e.cy - e.r - 4) : (e.cy + e.r + 26);
+                var labelY0 = labelAbove ? (e.cy - e.r - 14) : (e.cy + e.r + 16);
                 var cleanLabel = _truncLabel(e.vertical);
-                var cleanWindow = _truncWindow(e.typical_window);
-                var showWindow = e.typical_window && e.typical_window.length <= 36;
 
                 parts.push('<g>'
                      + '<circle cx="' + e.cx + '" cy="' + e.cy + '" r="' + e.r + '" fill="' + e.color + '" opacity="0.92" stroke="#fff" stroke-width="2"/>'
@@ -36252,17 +36280,14 @@
                      + '</g>');
 
                 parts.push('<text x="' + e.cx + '" y="' + labelY0 + '" text-anchor="middle" fill="var(--text-primary)" font-weight="600" font-size="10.5">' + _jiqEsc(cleanLabel) + '</text>');
-                if (showWindow) {
-                    parts.push('<text x="' + e.cx + '" y="' + labelY1 + '" text-anchor="middle" fill="var(--text-secondary)" font-size="9">' + _jiqEsc(cleanWindow) + '</text>');
-                }
             });
 
             var anchorWord = anchorIsPurchase ? 'purchase' : 'showtime';
             var footerSub = isCategorical
-                ? 'Bubble size = share of viewers · bubbles are evenly spaced (no time scale — all behaviors happen during the same window) · sorted by share, biggest on the left · hover for top sites'
-                : 'Bubble size = share of visitors · horizontal position = typical time relative to ' + anchorWord + ' · hover for top sites';
+                ? 'Bubble size = share of viewers · bubbles are evenly spaced (no time scale — all behaviors happen during the same window) · sorted by share, biggest on the left · hover for timing + top sites'
+                : 'Bubble size = share of visitors · horizontal position = typical time relative to ' + anchorWord + ' · hover for timing window + top sites';
             return '<div style="overflow-x:auto;padding:2px 0;">'
-                 + '<svg width="' + W + '" height="' + H + '" viewBox="0 0 ' + W + ' ' + H + '" preserveAspectRatio="xMidYMid meet" style="display:block;width:100%;height:auto;max-height:440px;min-width:760px;">'
+                 + '<svg width="' + W + '" height="' + H + '" viewBox="0 0 ' + W + ' ' + H + '" preserveAspectRatio="xMidYMid meet" style="display:block;width:100%;height:auto;max-height:500px;min-width:820px;">'
                  + parts.join('')
                  + '</svg>'
                  + '<div style="font-size:0.68rem;color:var(--text-secondary);margin-top:4px;text-align:center;">' + footerSub + '</div>'
