@@ -17381,6 +17381,17 @@ def _episode_release_date_for_admin(ep):
     return ''
 
 
+def _episode_admin_sort_key(row):
+    """Numeric sort for admin episode editor (Episode 1, 2, 3… not CSV row order)."""
+    ep = str((row or {}).get('episode') or '').strip()
+    if ep.isdigit():
+        return (0, int(ep))
+    head = ep.split('/')[0].split('-')[0].strip()
+    if head.isdigit():
+        return (0, int(head))
+    return (1, ep.lower())
+
+
 def _episode_rows_from_parsed(parsed):
     """Episode # + release date rows for Episode Dates tab (all tracked episodes)."""
     rows = []
@@ -17389,6 +17400,7 @@ def _episode_rows_from_parsed(parsed):
             'episode': _episode_number_for_admin(ep, i),
             'episode_date': _episode_release_date_for_admin(ep),
         })
+    rows.sort(key=_episode_admin_sort_key)
     return rows
 
 
@@ -17765,6 +17777,8 @@ def admin_subscriber_episode_dates():
             })
         if not cleaned:
             return jsonify({'success': False, 'error': 'At least one episode with a number is required'})
+
+        cleaned.sort(key=_episode_admin_sort_key)
 
         load_subscriber_episode_overrides(force=True)
         subscriber_episode_overrides[s3_key] = {
