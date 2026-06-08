@@ -20566,15 +20566,21 @@ def process_s3_file_metadata(key, obj):
     
     project_name = smart_title_case(raw_name)
     
-    # Try to get category from BRAND CATEGORY row in CSV
+    # Try to get category from BRAND CATEGORY row in CSV.
+    #
+    # D112 fix (2026-06-08): BRAND CATEGORY is written at row index 2-3 of
+    # the CSV (right after BRAND INPUT + SAMPLE SIZE) at byte offset ~280.
+    # The previous code read the LAST 200KB of the file, which silently
+    # misses the BRAND CATEGORY row for any profile larger than 200KB
+    # (which is most recent profiles — Ben Affleck 442KB, Ally Bank 629KB,
+    # Bradley Cooper 465KB all had valid BRAND CATEGORY rows but the
+    # cache reader couldn't see them, so they showed as "Uncategorized"
+    # in the dashboard despite the CSV being correct). Read the FIRST 50KB
+    # instead, which is always enough to capture the header rows.
     category = 'UNCATEGORIZED'
     try:
-        head_response = s3_client.head_object(Bucket=S3_BUCKET, Key=key)
-        file_size = head_response['ContentLength']
-        
-        # Read last 200KB where BRAND CATEGORY row usually is (increased for safety)
-        start_byte = max(0, file_size - 200000)
-        response = s3_client.get_object(Bucket=S3_BUCKET, Key=key, Range=f'bytes={start_byte}-{file_size}')
+        # Read first 50KB — BRAND CATEGORY is always within first ~5KB.
+        response = s3_client.get_object(Bucket=S3_BUCKET, Key=key, Range='bytes=0-50000')
         content = response['Body'].read().decode('utf-8', errors='ignore')
         
         for line in content.split('\n'):
