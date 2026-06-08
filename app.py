@@ -28592,8 +28592,14 @@ def run_svod_acquisition(job_id):
         if episode_dates and params.get('track_episodes'):
             episode_dates.sort(key=lambda ep: ep['air_date'])
             campaign_start = episode_dates[0]['air_date']
-            attr_days = int(params.get('attribution_window', 30))
-            campaign_end = episode_dates[-1]['air_date'] + timedelta(days=attr_days)
+            # Analysis Date Range must be first-episode → last-episode (no
+            # +attribution_window padding here). The dashboard adds the
+            # attribution_window when it renders "Attribution Window: 30
+            # days (through …)" — see templates/index.html attrEnd
+            # calculation. If we add it here too, the user sees the
+            # padding twice and "Drop Date / Analysis Date Range / Last
+            # Episode" all end up misaligned.
+            campaign_end = episode_dates[-1]['air_date']
 
         if campaign_start > campaign_end:
             campaign_start, campaign_end = campaign_end, campaign_start
