@@ -26,6 +26,10 @@
             --text-primary: #e6f1ff;
             --text-secondary: #bec8e4;
             --border-color: #1e3a5f;
+            --index-over: #10b981;
+            --index-under: #ef4444;
+            --index-over-bg: rgba(16, 185, 129, 0.2);
+            --index-under-bg: rgba(239, 68, 68, 0.2);
             --deck-bg-cream: #F2EFE9;
             --deck-text-primary: #1a1a2e;
             --deck-text-muted: #7A8B99;
@@ -57,6 +61,10 @@
             --text-primary: #0a1929;
             --text-secondary: #475569;
             --border-color: #d1d9e6;
+            --index-over: #0d9488;
+            --index-under: #c026d3;
+            --index-over-bg: rgba(13, 148, 136, 0.15);
+            --index-under-bg: rgba(192, 38, 211, 0.12);
         }
         body[data-theme="light"] *::-webkit-scrollbar-track { background: #e5e9f0; }
         body[data-theme="light"] *::-webkit-scrollbar-thumb { background: #cbd5e1; }
@@ -6201,8 +6209,8 @@
             min-width: 50px;
             text-align: center;
         }
-        .insight-item .index.high { background: rgba(16, 185, 129, 0.2); color: #10b981; }
-        .insight-item .index.low { background: rgba(239, 68, 68, 0.2); color: #ef4444; }
+        .insight-item .index.high { background: var(--index-over-bg); color: var(--index-over); }
+        .insight-item .index.low { background: var(--index-under-bg); color: var(--index-under); }
         
         /* Enhanced Insights Tab V2 */
         .insights-tabs {
@@ -6725,12 +6733,12 @@
             text-align: left;
         }
         .differentiator-index.high {
-            background: rgba(16, 185, 129, 0.2);
-            color: #10b981;
+            background: var(--index-over-bg);
+            color: var(--index-over);
         }
         .differentiator-index.low {
-            background: rgba(239, 68, 68, 0.2);
-            color: #ef4444;
+            background: var(--index-under-bg);
+            color: var(--index-under);
         }
         
         /* Grouped Differentiators */
@@ -6809,12 +6817,12 @@
             border-radius: 4px;
         }
         .differentiator-grouped-index.high {
-            background: rgba(16, 185, 129, 0.2);
-            color: #10b981;
+            background: var(--index-over-bg);
+            color: var(--index-over);
         }
         .differentiator-grouped-index.low {
-            background: rgba(239, 68, 68, 0.2);
-            color: #ef4444;
+            background: var(--index-under-bg);
+            color: var(--index-under);
         }
         .differentiator-list-grouped .differentiator-column-headers,
         .differentiator-list-grouped .differentiator-column-headers span,
@@ -7003,12 +7011,12 @@
             font-size: 0.8rem;
         }
         .insight-item-v2 .index-badge.high {
-            background: rgba(16, 185, 129, 0.2);
-            color: #10b981;
+            background: var(--index-over-bg);
+            color: var(--index-over);
         }
         .insight-item-v2 .index-badge.low {
-            background: rgba(239, 68, 68, 0.2);
-            color: #ef4444;
+            background: var(--index-under-bg);
+            color: var(--index-under);
         }
         
         /* Champions Grid */
@@ -7702,8 +7710,8 @@
             border-radius: 4px;
             font-size: 0.7rem;
         }
-        .media-detail-item .idx.high { background: rgba(16,185,129,0.2); color: #10b981; }
-        .media-detail-item .idx.low { background: rgba(239,68,68,0.2); color: #ef4444; }
+        .media-detail-item .idx.high { background: var(--index-over-bg); color: var(--index-over); }
+        .media-detail-item .idx.low { background: var(--index-under-bg); color: var(--index-under); }
         
         .media-metrics-row {
             display: grid;
@@ -9387,8 +9395,8 @@
         .rankers-insights-grid .insight-label { font-size: 0.7rem; text-transform: uppercase; color: var(--text-secondary); margin-bottom: 0.25rem; }
         .rankers-insights-grid .insight-value { font-size: 1.1rem; font-weight: 700; color: var(--accent-cyan); }
 
-        .index-high { background: rgba(166, 226, 46, 0.2); color: var(--accent-green); padding: 0.15rem 0.4rem; border-radius: 3px; }
-        .index-low { background: rgba(249, 38, 114, 0.2); color: var(--accent-red); padding: 0.15rem 0.4rem; border-radius: 3px; }
+        .index-high { background: var(--index-over-bg); color: var(--index-over); padding: 0.15rem 0.4rem; border-radius: 3px; }
+        .index-low { background: var(--index-under-bg); color: var(--index-under); padding: 0.15rem 0.4rem; border-radius: 3px; }
 
         /* Comparison Portal */
         .comparison-container {
@@ -22383,6 +22391,28 @@
             const n = Number(index);
             return String(Math.round(n));
         }
+
+        function getIndexOverColor() {
+            const v = getComputedStyle(document.body).getPropertyValue('--index-over').trim();
+            return v || '#10b981';
+        }
+        function getIndexUnderColor() {
+            const v = getComputedStyle(document.body).getPropertyValue('--index-under').trim();
+            return v || '#ef4444';
+        }
+        function getIndexOverBgColor() {
+            const v = getComputedStyle(document.body).getPropertyValue('--index-over-bg').trim();
+            return v || 'rgba(16, 185, 129, 0.2)';
+        }
+        function getIndexUnderBgColor() {
+            const v = getComputedStyle(document.body).getPropertyValue('--index-under-bg').trim();
+            return v || 'rgba(239, 68, 68, 0.2)';
+        }
+        function getIndexColor(index, threshold) {
+            if (threshold == null) threshold = 100;
+            if (typeof index !== 'number' || isNaN(index) || index <= 0) return getIndexUnderColor();
+            return index >= threshold ? getIndexOverColor() : getIndexUnderColor();
+        }
         
         // Format percentage for insights/differentiators. Never show 100% (represents entire sample).
         function formatInsightPct(pct, opts) {
@@ -30918,7 +30948,7 @@
                     var hasShare = item.category_share != null && !isNaN(Number(item.category_share));
                     var catShare = hasShare ? Number(item.category_share) : 0;
                     var index = (genPopPct > 0 && catShare > 0) ? Math.round((catShare / genPopPct) * 100) : 0;
-                    var indexColor = index >= 100 ? '#10b981' : '#ef4444';
+                    var indexColor = getIndexColor(index);
                     var shareStr = hasShare ? catShare.toFixed(2) + '%' : 'N/A';
                     var profileDisplay = isProj
                         ? (!item.unique_users_projected ? 'N/A' : formatNumber(Math.round(item.unique_users_projected)))
@@ -31057,7 +31087,7 @@
                     var genPopPct = (_gpTotal > 0 && rawGP > 0) ? (rawGP / _gpTotal * 100) : 0;
                     var catShare = item.category_share != null ? Number(item.category_share) : 0;
                     var index = (genPopPct > 0 && catShare > 0) ? Math.round((catShare / genPopPct) * 100) : 0;
-                    var indexColor = index >= 100 ? '#10b981' : '#ef4444';
+                    var indexColor = getIndexColor(index);
                     var shareStr = (catShare == null || isNaN(catShare) || catShare === 0) ? 'N/A' : catShare.toFixed(2) + '%';
                     var profileDisplay = isProj
                         ? (!item.unique_users_projected ? 'N/A' : formatNumber(Math.round(item.unique_users_projected)))
@@ -44573,7 +44603,7 @@
                             ${displayItems.map((item, idx) => {
                                 const pct = item.pct || 0;
                                 const index = item.index || 0;
-                                const indexColor = index >= 100 ? '#10b981' : '#ef4444';
+                                const indexColor = getIndexColor(index);
                                 const barWidth = (pct / maxPct) * 100;
                                 const nameEsc = (item.name || '').replace(/</g, '&lt;').replace(/"/g, '&quot;');
                                 return `
@@ -44658,7 +44688,7 @@
                         <div style="background: var(--bg-input); padding: 0.75rem; border-radius: 6px; border-left: 3px solid #10b981;">
                             <div style="font-weight: 600; color: var(--text-primary);">${i + 1}. ${normalizeDmaDisplay(loc.name)}</div>
                             <div style="font-size: 0.85rem; color: var(--text-secondary); margin-top: 0.25rem;">
-                                ${(loc.pct || 0).toFixed(3)}% | Index: <span style="color: #10b981; font-weight: 600;">${formatIndex(loc.index || 0)}</span>
+                                ${(loc.pct || 0).toFixed(3)}% | Index: <span style="color: ${getIndexOverColor()}; font-weight: 600;">${formatIndex(loc.index || 0)}</span>
                             </div>
                         </div>
                     `;
@@ -44676,7 +44706,7 @@
                             <div style="background: var(--bg-input); padding: 0.75rem; border-radius: 6px; border-left: 3px solid #ef4444;">
                                 <div style="font-weight: 600; color: var(--text-primary);">${i + 1}. ${normalizeDmaDisplay(loc.name)}</div>
                                 <div style="font-size: 0.85rem; color: var(--text-secondary); margin-top: 0.25rem;">
-                                    ${(loc.pct || 0).toFixed(3)}% | Index: <span style="color: #ef4444; font-weight: 600;">${formatIndex(loc.index || 0)}</span>
+                                    ${(loc.pct || 0).toFixed(3)}% | Index: <span style="color: ${getIndexUnderColor()}; font-weight: 600;">${formatIndex(loc.index || 0)}</span>
                                 </div>
                             </div>
                         `;
@@ -47897,7 +47927,7 @@
                                 return (ch.data.labels||[]).map((l,i)=>{
                                     const p = pcts[i]||0, gp = genPopVals[i]||0;
                                     const txt = gp>0.05 ? `${l} ${fmtPct(p)} (GP: ${fmtPct(gp)})` : `${l} ${fmtPct(p)}`;
-                                    return { text: txt, fillStyle: ch.data.datasets[0].backgroundColor[i], fontColor: gp>0&&p>=gp?'#10b981':(gp>0?'#ef4444':'#e6f1ff') };
+                                    return { text: txt, fillStyle: ch.data.datasets[0].backgroundColor[i], fontColor: gp>0&&p>=gp?getIndexOverColor():(gp>0?getIndexUnderColor():'#e6f1ff') };
                                 });
                             } } },
                             datalabels: useBar ? { anchor: 'end', align: 'end', color: '#e6f1ff', font: { size: 10 }, formatter: (v,ctx)=>{ const p=pcts[ctx.dataIndex]||0; const gp=genPopVals[ctx.dataIndex]||0; return gp>0.05 ? fmtPct(p)+' (GP: '+fmtPct(gp)+')' : fmtPct(p); } } : { display: true, color: '#fff', formatter: (v,ctx)=>{ const t=ctx.chart.data.datasets[0].data.reduce((a,b)=>a+b,0); return t>0 && (v/t*100)>=5 ? fmtPct(v/t*100) : ''; } }
@@ -48145,7 +48175,7 @@
                                 return (ch.data.labels||[]).map((l,i)=>{
                                     const p = pcts[i]||0, g = genPopVals[i]||0;
                                     const txt = g>0.05 ? `${l} ${fmtPct(p)} (GP: ${fmtPct(g)})` : `${l} ${fmtPct(p)}`;
-                                    return { text: txt, fillStyle: ch.data.datasets[0].backgroundColor[i], fontColor: g>0&&p>=g?'#10b981':(g>0?'#ef4444':'#e6f1ff') };
+                                    return { text: txt, fillStyle: ch.data.datasets[0].backgroundColor[i], fontColor: g>0&&p>=g?getIndexOverColor():(g>0?getIndexUnderColor():'#e6f1ff') };
                                 });
                             } } },
                             datalabels: useBar ? { anchor: 'end', align: 'end', color: '#e6f1ff', font: { size: 10 }, formatter: (v,ctx)=>{ const p=pcts[ctx.dataIndex]||0; const g=genPopVals[ctx.dataIndex]||0; return g>0.05 ? fmtPct(p)+' (GP: '+fmtPct(g)+')' : fmtPct(p); } } : { display: true, color: '#fff', formatter: (v,ctx)=>{ const t=ctx.chart.data.datasets[0].data.reduce((a,b)=>a+b,0); return t>0 && (v/t*100)>=5 ? fmtPct(v/t*100) : ''; } }
@@ -55049,7 +55079,7 @@
                     <span class="cat-stats">
                         <span class="cat-pct" style="color: var(--accent-lime); min-width: 55px; text-align: left;">${profileDisplay}</span>
                         <span class="cat-gp" style="color: var(--text-secondary); min-width: 50px; text-align: left;">${gpDisplay}</span>
-                        <span class="cat-idx" style="color: ${stats.avgIndex >= 100 ? '#10b981' : '#ef4444'}; min-width: 50px; text-align: left;">${formatIndex(stats.avgIndex)}</span>
+                        <span class="cat-idx" style="color: ${getIndexColor(stats.avgIndex)}; min-width: 50px; text-align: left;">${formatIndex(stats.avgIndex)}</span>
                         <span class="cat-high" style="min-width: 40px; text-align: left;">${stats.highCount > 0 ? stats.highCount + '🔥' : '-'}</span>
                     </span>
                 </div>
@@ -56138,7 +56168,7 @@
                                 if (isGenPop) return ct.dataNeutral;
                                 const pct = agePcts[ctx.dataIndex] || 0;
                                 const genPop = ageGenPop[ctx.dataIndex] || 0;
-                                return (genPop > 0 && pct >= genPop) ? '#10b981' : (genPop > 0 ? '#ef4444' : ct.dataNeutral);
+                                return (genPop > 0 && pct >= genPop) ? getIndexOverColor() : (genPop > 0 ? getIndexUnderColor() : ct.dataNeutral);
                             },
                             formatter: (value, ctx) => {
                                 const pct = agePcts[ctx.dataIndex] || 0;
@@ -56210,7 +56240,7 @@
                                         const valStr = isProjection ? formatNumber(Math.round(val)) : formatPct(pct);
                                         const genPopProj = genPop > 0 ? Math.round((genPop / 100) * 329900000) : 0;
                                         const gpStr = (isGenPop || genPop <= 0.05) ? '' : (isProjection ? ` (GP: ${formatNumber(genPopProj)})` : ` (GP: ${formatPct(genPop)})`);
-                                        const indexColor = isGenPop ? ct.axisLabel : ((genPop > 0 && pct >= genPop) ? '#10b981' : (genPop > 0 ? '#ef4444' : ct.axisLabel));
+                                        const indexColor = isGenPop ? ct.axisLabel : ((genPop > 0 && pct >= genPop) ? getIndexOverColor() : (genPop > 0 ? getIndexUnderColor() : ct.axisLabel));
                                         return {
                                             text: `${label} ${valStr}${gpStr}`,
                                             fillStyle: data.datasets[0].backgroundColor[i],
@@ -56227,7 +56257,7 @@
                                 const pct = genderPcts[ctx.dataIndex] || 0;
                                 const genPop = genderGenPop[ctx.dataIndex] || 0;
                                 if (isGenPop) return ct.dataNeutral;
-                                return (genPop > 0 && pct >= genPop) ? '#10b981' : (genPop > 0 ? '#ef4444' : ct.dataNeutral);
+                                return (genPop > 0 && pct >= genPop) ? getIndexOverColor() : (genPop > 0 ? getIndexUnderColor() : ct.dataNeutral);
                             },
                             formatter: (v, ctx) => {
                                 const pct = genderPcts[ctx.dataIndex] || 0;
@@ -56335,7 +56365,7 @@
                                         const valStr = isProjection ? formatNumber(Math.round(val)) : formatPct(pct);
                                         const genPopProj = genPop > 0 ? Math.round((genPop / 100) * 329900000) : 0;
                                         const gpStr = (isGenPop || genPop <= 0.05) ? '' : (isProjection ? ` (GP: ${formatNumber(genPopProj)})` : ` (GP: ${formatPct(genPop)})`);
-                                        const indexColor = isGenPop ? ct.axisLabel : ((genPop > 0 && pct >= genPop) ? '#10b981' : (genPop > 0 ? '#ef4444' : ct.axisLabel));
+                                        const indexColor = isGenPop ? ct.axisLabel : ((genPop > 0 && pct >= genPop) ? getIndexOverColor() : (genPop > 0 ? getIndexUnderColor() : ct.axisLabel));
                                         return {
                                             text: `${label} ${valStr}${gpStr}`,
                                             fillStyle: data.datasets[0].backgroundColor[i],
@@ -56352,7 +56382,7 @@
                                 const pct = ethPcts[ctx.dataIndex] || 0;
                                 const genPop = ethGenPop[ctx.dataIndex] || 0;
                                 if (isGenPop) return ct.dataNeutral;
-                                return (genPop > 0 && pct >= genPop) ? '#10b981' : (genPop > 0 ? '#ef4444' : ct.dataNeutral);
+                                return (genPop > 0 && pct >= genPop) ? getIndexOverColor() : (genPop > 0 ? getIndexUnderColor() : ct.dataNeutral);
                             },
                             formatter: (v, ctx) => {
                                 const pct = ethPcts[ctx.dataIndex] || 0;
@@ -56479,7 +56509,7 @@
                                 const pct = incomePcts[ctx.dataIndex] || 0;
                                 const genPop = incomeGenPop[ctx.dataIndex] || 0;
                                 if (isGenPop) return ct.dataNeutral;
-                                return (genPop > 0 && pct >= genPop) ? '#10b981' : (genPop > 0 ? '#ef4444' : ct.dataNeutral);
+                                return (genPop > 0 && pct >= genPop) ? getIndexOverColor() : (genPop > 0 ? getIndexUnderColor() : ct.dataNeutral);
                             },
                             formatter: (value, ctx) => {
                                 const pct = incomePcts[ctx.dataIndex] || 0;
@@ -56565,7 +56595,7 @@
                                     const pct = eduPcts[ctx.dataIndex] || 0;
                                     const genPop = eduGenPop[ctx.dataIndex] || 0;
                                     if (isGenPop) return ct.dataNeutral;
-                                    return (genPop > 0 && pct >= genPop) ? '#10b981' : (genPop > 0 ? '#ef4444' : ct.dataNeutral);
+                                    return (genPop > 0 && pct >= genPop) ? getIndexOverColor() : (genPop > 0 ? getIndexUnderColor() : ct.dataNeutral);
                                 },
                                 formatter: (v, ctx) => {
                                     const pct = eduPcts[ctx.dataIndex] || 0;
@@ -56677,7 +56707,7 @@
                                             const gpStr = isGenPop ? '' : (isProjection
                                                 ? (genPop > 0 ? ` (GP: ${formatNumber(Math.round((genPop / 100) * 329900000))})` : '')
                                                 : (genPop > 0 ? ` (GP: ${genPop.toFixed(2)}%)` : ''));
-                                            const indexColor = isGenPop ? ct.axisLabel : ((genPop > 0 && pct >= genPop) ? '#10b981' : (genPop > 0 ? '#ef4444' : ct.axisLabel));
+                                            const indexColor = isGenPop ? ct.axisLabel : ((genPop > 0 && pct >= genPop) ? getIndexOverColor() : (genPop > 0 ? getIndexUnderColor() : ct.axisLabel));
                                             return { text: `${label} ${valStr}${gpStr}`, fillStyle: colors[i], fontColor: indexColor, index: i };
                                         });
                                     }
@@ -56691,7 +56721,7 @@
                                     const pct = relPcts[ctx.dataIndex] || 0;
                                     const genPop = relGenPop[ctx.dataIndex] || 0;
                                     if (isGenPop) return ct.dataNeutral;
-                                    return (genPop > 0 && pct >= genPop) ? '#10b981' : (genPop > 0 ? '#ef4444' : ct.dataNeutral);
+                                    return (genPop > 0 && pct >= genPop) ? getIndexOverColor() : (genPop > 0 ? getIndexUnderColor() : ct.dataNeutral);
                                 },
                                 formatter: (value, ctx) => {
                                     const pct = relPcts[ctx.dataIndex] || 0;
@@ -56795,7 +56825,7 @@
                                             const gpStr = isGenPop ? '' : (isProjection
                                                 ? (genPop > 0 ? ` (GP: ${formatNumber(Math.round((genPop / 100) * 329900000))})` : '')
                                                 : (genPop > 0 ? ` (GP: ${genPop.toFixed(2)}%)` : ''));
-                                            const indexColor = isGenPop ? ct.axisLabel : ((genPop > 0 && pct >= genPop) ? '#10b981' : (genPop > 0 ? '#ef4444' : ct.axisLabel));
+                                            const indexColor = isGenPop ? ct.axisLabel : ((genPop > 0 && pct >= genPop) ? getIndexOverColor() : (genPop > 0 ? getIndexUnderColor() : ct.axisLabel));
                                             return { text: `${label} ${valStr}${gpStr}`, fillStyle: colors[i], fontColor: indexColor, index: i };
                                         });
                                     }
@@ -56809,7 +56839,7 @@
                                     const pct = soPcts[ctx.dataIndex] || 0;
                                     const genPop = soGenPop[ctx.dataIndex] || 0;
                                     if (isGenPop) return ct.dataNeutral;
-                                    return (genPop > 0 && pct >= genPop) ? '#10b981' : (genPop > 0 ? '#ef4444' : ct.dataNeutral);
+                                    return (genPop > 0 && pct >= genPop) ? getIndexOverColor() : (genPop > 0 ? getIndexUnderColor() : ct.dataNeutral);
                                 },
                                 formatter: (value, ctx) => {
                                     const pct = soPcts[ctx.dataIndex] || 0;
@@ -56909,7 +56939,7 @@
                                             const gpStr = isGenPop ? '' : (isProjection
                                                 ? (genPop > 0 ? ` (GP: ${formatNumber(Math.round((genPop / 100) * 329900000))})` : '')
                                                 : (genPop > 0 ? ` (GP: ${genPop.toFixed(2)}%)` : ''));
-                                            const indexColor = isGenPop ? ct.axisLabel : ((genPop > 0 && pct >= genPop) ? '#10b981' : (genPop > 0 ? '#ef4444' : ct.axisLabel));
+                                            const indexColor = isGenPop ? ct.axisLabel : ((genPop > 0 && pct >= genPop) ? getIndexOverColor() : (genPop > 0 ? getIndexUnderColor() : ct.axisLabel));
                                             return { text: `${label} ${valStr}${gpStr}`, fillStyle: colors[i], fontColor: indexColor, index: i };
                                         });
                                     }
@@ -56923,7 +56953,7 @@
                                     const pct = psPcts[ctx.dataIndex] || 0;
                                     const genPop = psGenPop[ctx.dataIndex] || 0;
                                     if (isGenPop) return ct.dataNeutral;
-                                    return (genPop > 0 && pct >= genPop) ? '#10b981' : (genPop > 0 ? '#ef4444' : ct.dataNeutral);
+                                    return (genPop > 0 && pct >= genPop) ? getIndexOverColor() : (genPop > 0 ? getIndexUnderColor() : ct.dataNeutral);
                                 },
                                 formatter: (value, ctx) => {
                                     const pct = psPcts[ctx.dataIndex] || 0;
@@ -57036,7 +57066,7 @@
                                             const gpStr = isGenPop ? '' : (isProjection
                                                 ? (genPop > 0 ? ` (GP: ${formatNumber(Math.round((genPop / 100) * 329900000))})` : '')
                                                 : (genPop > 0 ? ` (GP: ${genPop.toFixed(2)}%)` : ''));
-                                            const indexColor = isGenPop ? ct.axisLabel : ((genPop > 0 && pct >= genPop) ? '#10b981' : (genPop > 0 ? '#ef4444' : ct.axisLabel));
+                                            const indexColor = isGenPop ? ct.axisLabel : ((genPop > 0 && pct >= genPop) ? getIndexOverColor() : (genPop > 0 ? getIndexUnderColor() : ct.axisLabel));
                                             return { text: `${label} ${valStr}${gpStr}`, fillStyle: colors[i], fontColor: indexColor, index: i };
                                         });
                                     }
@@ -57050,7 +57080,7 @@
                                     const pct = occPcts[ctx.dataIndex] || 0;
                                     const genPop = occGenPop[ctx.dataIndex] || 0;
                                     if (isGenPop) return ct.dataNeutral;
-                                    return (genPop > 0 && pct >= genPop) ? '#10b981' : (genPop > 0 ? '#ef4444' : ct.dataNeutral);
+                                    return (genPop > 0 && pct >= genPop) ? getIndexOverColor() : (genPop > 0 ? getIndexUnderColor() : ct.dataNeutral);
                                 },
                                 formatter: (value, ctx) => {
                                     const pct = occPcts[ctx.dataIndex] || 0;
@@ -57114,7 +57144,7 @@
                             : genPopPct.toFixed(1) + '%';
                         const gpCensusStr = gpActual != null ? gpActual.toFixed(1) + '%' : '—';
                         const idxVal = Math.round(occIdx);
-                        const idxColor = idxVal > 110 ? '#10b981' : idxVal < 90 ? '#ef4444' : 'var(--text-secondary)';
+                        const idxColor = idxVal > 110 ? getIndexOverColor() : idxVal < 90 ? getIndexUnderColor() : 'var(--text-secondary)';
                         const idxStr = idxVal > 0 ? String(idxVal) : '—';
                         const cwGpCol = showCwGp ? `<span style="color:var(--text-secondary);text-align:right;">${cwGpStr}</span>` : '';
                         return `<div style="display:grid;grid-template-columns:${occGridCols};gap:0.25rem;padding:0.25rem 0.5rem;font-size:0.7rem;align-items:center;border-bottom:1px solid var(--border-color);">
@@ -57421,7 +57451,7 @@
                     <span class="cat-stats">
                         <span class="cat-pct" style="color: var(--accent-lime); min-width: 55px; text-align: left;">${profileDisplay}</span>
                         <span class="cat-gp" style="color: var(--text-secondary); min-width: 50px; text-align: left;">${gpDisplay}</span>
-                        <span class="cat-idx" style="color: ${stats.avgIndex >= 100 ? '#10b981' : '#ef4444'}; min-width: 50px; text-align: left;">${formatIndex(stats.avgIndex)}</span>
+                        <span class="cat-idx" style="color: ${getIndexColor(stats.avgIndex)}; min-width: 50px; text-align: left;">${formatIndex(stats.avgIndex)}</span>
                         <span class="cat-high" style="min-width: 40px; text-align: left;">${stats.highCount > 0 ? stats.highCount + '🔥' : '-'}</span>
                     </span>
                 </div>`;
@@ -58584,7 +58614,7 @@
                 const safeName = (item.name || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
                 const safeCategory = (item.category || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
                 const tooltipSafe = buildItemTooltip(item).replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-                const idxColor = item.index >= 100 ? '#10b981' : '#ef4444';
+                const idxColor = getIndexColor(item.index);
                 const categoryBadge = item.category ? `<span style="font-size: 0.6rem; background: rgba(255,255,255,0.1); padding: 0.15rem 0.4rem; border-radius: 4px; margin-left: 0.5rem; color: var(--text-secondary);">${item.category}</span>` : '';
                 const hasGP = (item.genPopPct ?? 0) > 0;
                 return `<div class="quintile-result-card has-tooltip" data-name="${safeName.toLowerCase()}" data-index="${item.index}" style="border-left: 3px solid ${borderColor};" data-tooltip="${tooltipSafe}" onclick="filterInterestsByCategory('${safeCategory}')">
@@ -58681,7 +58711,7 @@
                         <div class="interest-category-items">
                             ${cat.items.map(item => {
                                 const isOverIndex = item.index >= 100;
-                                const idxColor = isOverIndex ? '#10b981' : '#ef4444';
+                                const idxColor = isOverIndex ? getIndexOverColor() : getIndexUnderColor();
                                 
                                 let genPopPct = item.genPopPct ?? 0;
                                 let genPopProjection = item.genPopProjection ?? 0;
@@ -58757,7 +58787,7 @@
             
             const itemsHtml = sorted.map((item, idx) => {
                 const isOverIndex = item.index >= 100;
-                const indexColor = isOverIndex ? '#10b981' : '#ef4444';
+                const indexColor = isOverIndex ? getIndexOverColor() : getIndexUnderColor();
                 
                 let genPopPct = item.genPopPct ?? 0;
                 
@@ -58952,7 +58982,7 @@
             }));
             
             container.innerHTML = items.map(item => {
-                const indexColor = item.index >= 100 ? '#10b981' : '#ef4444';
+                const indexColor = getIndexColor(item.index);
                 const indexBadge = item.index > 0 ? `<span style="color: ${indexColor}; font-weight: 600;">${formatIndex(item.index)}</span>` : '-';
                 return `<div style="display: flex; justify-content: space-between; padding: 2px 0; font-size: 0.7rem;">
                     <span>${item.label}</span>
@@ -60465,7 +60495,7 @@
                 const genPopPct = item.genPopPct ?? 0;
                 const profilePct = item.pct || 0;
                 // Green if over-indexing (index >= 100), red if under-indexing (index < 100)
-                const indexColor = index >= 100 ? '#10b981' : '#ef4444';
+                const indexColor = getIndexColor(index);
 
                 // Show profile % and gen pop % alongside index - use N/A for 0 (gen pop is actual %, e.g. 0.78 = 0.78%)
                 const profileDisplay = isProjection
@@ -61673,7 +61703,7 @@
             
             // Render over-indexing DMAs (all of them)
             document.getElementById('locationList').innerHTML = sortedOverIndexing.map((loc, i) => {
-                const indexColor = '#10b981'; // Green for over-indexing
+                const indexColor = getIndexOverColor();
                 const displayValue = isProjection 
                     ? formatNumber(Math.round(loc.projection || 0))
                     : loc.pct.toFixed(3) + '%';
@@ -61723,7 +61753,7 @@
             
             // Render under-indexing DMAs (all of them)
             document.getElementById('locationListBottom').innerHTML = sortedUnderIndexing.map((loc, i) => {
-                const indexColor = '#ef4444'; // Red for under-indexing
+                const indexColor = getIndexUnderColor();
                 const displayValue = isProjection 
                     ? formatNumber(Math.round(loc.projection || 0))
                     : loc.pct.toFixed(3) + '%';
@@ -61777,7 +61807,7 @@
             const locContainer = document.getElementById('allLocationsContainer');
             if (locContainer) locContainer.classList.toggle('hide-cw-gp', !_locShowCwGp);
             document.getElementById('locationListAll').innerHTML = sortedAll.map((loc, i) => {
-                const indexColor = loc.index >= 100 ? '#10b981' : '#ef4444';
+                const indexColor = getIndexColor(loc.index);
                 const displayValue = isProjection 
                     ? formatNumber(Math.round(loc.projection || 0))
                     : loc.pct.toFixed(3) + '%';
@@ -62749,7 +62779,7 @@
             
             // Render filtered results
             listEl.innerHTML = sorted.map((loc, i) => {
-                const indexColor = loc.index >= 100 ? '#10b981' : '#ef4444';
+                const indexColor = getIndexColor(loc.index);
                 const displayValue = isProjection 
                     ? formatNumber(Math.round(loc.projection || 0))
                     : loc.pct.toFixed(3) + '%';
@@ -62821,7 +62851,7 @@
             const locContainer2 = document.getElementById('allLocationsContainer');
             if (locContainer2) locContainer2.classList.toggle('hide-cw-gp', !_locShowCwGp2);
             listEl.innerHTML = sorted.map((loc, i) => {
-                const indexColor = loc.index >= 100 ? '#10b981' : '#ef4444';
+                const indexColor = getIndexColor(loc.index);
                 const displayValue = isProjection 
                     ? formatNumber(Math.round(loc.projection || 0))
                     : loc.pct.toFixed(3) + '%';
@@ -67437,7 +67467,7 @@
             const _isGP = isSelectedProfileGenPop();
             if (audienceSnapshotEl2) audienceSnapshotEl2.innerHTML = demoInsights.map(d => {
                 const idxDisplay = String(Math.round(Number(d.index)));
-                const idxColor = d.index >= 100 ? '#10b981' : '#ef4444';
+                const idxColor = getIndexColor(d.index);
                 const indexHtml = _isGP ? '' : `<div class="snapshot-index" style="font-size: 0.75rem; font-weight: 600; color: ${idxColor}; margin-top: 0.25rem;">${idxDisplay}</div>`;
                 const tooltipIdx = _isGP ? '' : ` Index: ${idxDisplay} vs Gen Pop (100 = same as Gen Pop).`;
                 return `
@@ -69428,7 +69458,7 @@
                 
                 
                 // Green if over-indexing (index >= 100), red if under-indexing (index < 100)
-                const indexColor = index >= 100 ? '#10b981' : '#ef4444';
+                const indexColor = getIndexColor(index);
                 
                 // Format displays
                 const profileDisplay = isProjection 
@@ -69448,7 +69478,7 @@
                     <span class="name">${item.name}</span>
                     <span style="color: ${profileColor}; font-weight: 600; font-size: 0.8rem;">${profileDisplay}</span>
                     <span style="color: var(--text-secondary); font-size: 0.8rem;">${genPopDisplay}</span>
-                    <span class="index" style="background: ${index >= 100 ? 'rgba(16,185,129,0.2)' : 'rgba(239,68,68,0.2)'}; color: ${indexColor}; font-weight: 600;">${formatIndex(index)}</span>
+                    <span class="index" style="background: ${index >= 100 ? getIndexOverBgColor() : getIndexUnderBgColor()}; color: ${indexColor}; font-weight: 600;">${formatIndex(index)}</span>
                 </div>
             `;
             }).join('');
@@ -69715,7 +69745,7 @@
             
             // Color profile % based on comparison to gen pop
             const profileColor = profilePct > genPopPct ? '#10b981' : profilePct < genPopPct ? '#ef4444' : 'var(--text-primary)';
-            const indexColor = item.index >= 100 ? '#10b981' : '#ef4444';
+            const indexColor = getIndexColor(item.index);
             
             document.getElementById('detailName').textContent = item.name;
             document.getElementById('detailCategory').textContent = item.category;
@@ -70029,7 +70059,7 @@
             document.getElementById('talentBrandAlignment').innerHTML = topAffinities.map(item => `
                 <div class="talent-item">
                     <span>${item.name}</span>
-                    <span style="color: #10b981;">+${item.index - 100}%</span>
+                    <span style="color: ${getIndexOverColor()};">+${item.index - 100}%</span>
                 </div>
             `).join('') || '<p style="color: var(--text-secondary);">Select a profile</p>';
             
@@ -70334,7 +70364,7 @@
             return items.map(item => `
                 <div class="media-item">
                     <span class="name">${item.name}</span>
-                    <span class="index" style="background: ${item.index >= 100 ? 'rgba(16,185,129,0.2)' : 'rgba(239,68,68,0.2)'}; color: ${item.index >= 100 ? '#10b981' : '#ef4444'};">${item.index}</span>
+                    <span class="index" style="background: ${item.index >= 100 ? getIndexOverBgColor() : getIndexUnderBgColor()}; color: ${getIndexColor(item.index)};">${item.index}</span>
                 </div>
             `).join('');
         }
@@ -72298,7 +72328,7 @@
         .insight-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 20px; }
         .insight-item { display: flex; justify-content: space-between; padding: 15px; background: #f8fafc; border-radius: 8px; margin-bottom: 8px; }
         .insight-name { font-weight: 500; }
-        .insight-index { font-weight: 700; color: #10b981; }
+        .insight-index { font-weight: 700; color: var(--index-over); }
         .sponsor-item { display: inline-block; padding: 10px 20px; background: linear-gradient(135deg, #f59e0b, #d97706); color: white; border-radius: 20px; margin: 5px; font-weight: 500; }
         .footer { position: fixed; bottom: 30px; left: 60px; right: 60px; font-size: 12px; color: #94a3b8; display: flex; justify-content: space-between; }
         @media print { .slide { page-break-after: always; } }
@@ -75804,7 +75834,7 @@
                             ? (proj > 0 ? formatNumber(Math.round(proj)) : '-')
                             : (pct >= NEGLIGIBLE_PCT_CELL ? pct.toFixed(2) + '%' : '-');
                         
-                        const indexColor = (typeof index === 'number' && index >= 100) ? '#10b981' : '#ef4444';
+                        const indexColor = (typeof index === 'number' && index > 0) ? getIndexColor(index) : getIndexUnderColor();
                         let indexDisplay = '';
                         if (!isGenPopCol) {
                             if (index === 'N/A') {
@@ -75982,7 +76012,7 @@
                             ? (proj > 0 ? formatNumber(Math.round(proj)) : '-')
                             : (pct >= NEGLIGIBLE_PCT_CELL ? pct.toFixed(2) + '%' : '-');
                         
-                        const indexColor = (typeof index === 'number' && index >= 100) ? '#10b981' : '#ef4444';
+                        const indexColor = (typeof index === 'number' && index > 0) ? getIndexColor(index) : getIndexUnderColor();
                         let indexDisplay = '';
                         if (!isGenPopCol) {
                             if (index === 'N/A') {
@@ -76264,7 +76294,7 @@
                                 ? (proj > 0 ? formatNumber(Math.round(proj)) : '-')
                                 : (pct >= NEGLIGIBLE_PCT ? pct.toFixed(2) + '%' : '-');
 
-                            const indexColor = (typeof index === 'number' && index >= 100) ? '#10b981' : '#ef4444';
+                            const indexColor = (typeof index === 'number' && index > 0) ? getIndexColor(index) : getIndexUnderColor();
                             let indexBadge = '';
                             if (!isGenPopCol) {
                                 if (index === 'N/A') {
