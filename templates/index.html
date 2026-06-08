@@ -5800,39 +5800,6 @@
             border-radius: 4px;
         }
 
-        /* Profile IQ Behavioral tab: center row content (overrides base table rules + index badge padding). */
-        #behavioralGrid .behavioral-table {
-            row-gap: 0;
-            column-gap: 0.4rem;
-        }
-        #behavioralGrid .behavioral-table .behavioral-item {
-            align-items: center;
-            padding: 0.3rem 0;
-        }
-        #behavioralGrid .behavioral-table .behavioral-item .behavioral-rank,
-        #behavioralGrid .behavioral-table .behavioral-item .behavioral-name-wrapper,
-        #behavioralGrid .behavioral-table .behavioral-item .behavioral-pct,
-        #behavioralGrid .behavioral-table .behavioral-item .behavioral-index {
-            align-self: center !important;
-        }
-        #behavioralGrid .behavioral-table .behavioral-item .behavioral-rank,
-        #behavioralGrid .behavioral-table .behavioral-item .behavioral-pct,
-        #behavioralGrid .behavioral-table .behavioral-item .behavioral-index {
-            line-height: 1 !important;
-        }
-        #behavioralGrid .behavioral-table .behavioral-item .behavioral-name {
-            padding: 0 0.4rem !important;
-            line-height: 1.25 !important;
-        }
-        #behavioralGrid .behavioral-table .behavioral-item .behavioral-pct {
-            padding: 0 0.1rem 0 0.2rem !important;
-            font-variant-numeric: tabular-nums;
-        }
-        #behavioralGrid .behavioral-table .behavioral-item .behavioral-index {
-            padding: 0 0.35rem 0 0.2rem !important;
-            font-variant-numeric: tabular-nums;
-        }
-
         /* AI Panel Styles */
         .ai-panel {
             position: fixed;
@@ -17899,16 +17866,6 @@
             #blueIQView .bq-trending-dma-picker select:focus { outline: none; border-color: rgba(79,140,255,0.6); }
             #blueIQView .blue-iq-card-playbook { grid-column: span 12; min-height: 360px; }
             #blueIQView .bq-trending-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 0.7rem; }
-            /* Scroll container caps the trending card at roughly 2 rows
-             * (~360px) so the dashboard layout stays predictable. The
-             * fade-mask at the bottom + the trailing scroll-hint chip
-             * cue the user that more cards live below. */
-            #blueIQView .bq-trending-scroll { max-height: 360px; overflow-y: auto; padding-right: 0.4rem; mask-image: linear-gradient(180deg, #000 calc(100% - 24px), transparent 100%); -webkit-mask-image: linear-gradient(180deg, #000 calc(100% - 24px), transparent 100%); }
-            #blueIQView .bq-trending-scroll::-webkit-scrollbar { width: 8px; }
-            #blueIQView .bq-trending-scroll::-webkit-scrollbar-track { background: rgba(255,255,255,0.02); border-radius: 4px; }
-            #blueIQView .bq-trending-scroll::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.12); border-radius: 4px; }
-            #blueIQView .bq-trending-scroll::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.22); }
-            #blueIQView .bq-trending-scroll-hint { margin-top: 0.45rem; font-size: 0.68rem; color: var(--text-secondary); letter-spacing: 0.04em; text-transform: uppercase; text-align: right; opacity: 0.75; }
             #blueIQView .bq-trending-card { background: rgba(255,255,255,0.025); border: 1px solid rgba(255,255,255,0.06); border-radius: 10px; padding: 0.7rem 0.85rem; transition: transform 0.12s ease, border-color 0.12s ease; }
             #blueIQView .bq-trending-card:hover { transform: translateY(-2px); border-color: rgba(79,140,255,0.3); }
             #blueIQView .bq-trending-head { display: flex; align-items: baseline; gap: 0.55rem; }
@@ -17922,35 +17879,12 @@
             #blueIQView .bq-trending-related { margin-top: 0.45rem; font-size: 0.74rem; color: var(--text-secondary); }
             #blueIQView .bq-trending-related-label { font-weight: 600; margin-right: 0.25rem; }
             #blueIQView .bq-trending-related-chip { display: inline-block; padding: 0.1rem 0.45rem; background: rgba(255,255,255,0.05); border-radius: 999px; margin: 0.1rem 0.18rem 0.1rem 0; color: var(--text-primary); font-size: 0.72rem; }
-            /* In-dashboard view tabs. Each hex click on the choropleth
-             * (or any other "drill to geo" action) creates / switches
-             * to a tab. The first tab tracks the filter bar (always
-             * present, non-closeable); subsequent tabs let users
-             * compare states without losing their primary view. */
-            #blueIQView .bq-tabstrip { display: flex; align-items: center; gap: 0.3rem; flex-wrap: wrap; padding: 0.45rem 0 0.55rem 0; margin: 0.2rem 0 0.5rem 0; border-bottom: 1px solid rgba(255,255,255,0.05); min-height: 36px; }
-            #blueIQView .bq-tab { display: inline-flex; align-items: center; gap: 0.4rem; padding: 0.32rem 0.65rem 0.32rem 0.75rem; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.07); border-radius: 6px 6px 0 0; font-size: 0.78rem; color: var(--text-secondary); cursor: pointer; transition: background 0.12s ease, color 0.12s ease, border-color 0.12s ease; user-select: none; }
-            #blueIQView .bq-tab:hover { background: rgba(255,255,255,0.08); color: var(--text-primary); }
-            #blueIQView .bq-tab.active { background: rgba(79,140,255,0.18); border-color: rgba(79,140,255,0.45); color: var(--text-primary); font-weight: 600; }
-            #blueIQView .bq-tab-close { display: inline-flex; align-items: center; justify-content: center; width: 16px; height: 16px; padding: 0; border-radius: 3px; background: transparent; border: 0; color: inherit; opacity: 0.55; cursor: pointer; line-height: 1; font-size: 14px; }
-            #blueIQView .bq-tab-close:hover { background: rgba(255,255,255,0.12); opacity: 1; }
-            #blueIQView .bq-tab-loading { display: inline-block; width: 10px; height: 10px; border: 2px solid rgba(255,255,255,0.18); border-top-color: #4f8cff; border-radius: 50%; animation: bq-tab-spin 0.6s linear infinite; }
-            @keyframes bq-tab-spin { to { transform: rotate(360deg); } }
             #blueIQView .bq-geo-controls { display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap; margin-bottom: 0.7rem; }
             #blueIQView .bq-geo-label { font-size: 0.78rem; color: var(--text-secondary); }
             #blueIQView .bq-geo-select { background: rgba(255,255,255,0.06); color: var(--text-primary); padding: 0.32rem 0.55rem; border-radius: 6px; border: 1px solid rgba(255,255,255,0.08); font-size: 0.82rem; min-width: 240px; }
             #blueIQView .bq-geo-legend { display: inline-flex; gap: 0.2rem; align-items: center; margin-left: auto; }
-            /* Hover lift without transform-scale — scaling a <g> with a
-             * translate() attribute caused jitter in some browsers
-             * (transform-box: fill-box is inconsistently supported on
-             * group elements, so the hex would snap to the SVG origin
-             * mid-hover). We get the same visual lift via brightness +
-             * a glowing drop-shadow + a bright stroke ring on the
-             * polygon, all of which leave layout untouched.
-             */
-            #blueIQView .bq-geo-hex { cursor: pointer; transition: filter 0.12s ease; }
-            #blueIQView .bq-geo-hex polygon { transition: stroke 0.12s ease, stroke-width 0.12s ease; }
-            #blueIQView .bq-geo-hex:hover { filter: brightness(1.2) drop-shadow(0 0 6px rgba(96,165,250,0.7)); }
-            #blueIQView .bq-geo-hex:hover polygon { stroke: rgba(255,255,255,0.9); stroke-width: 2; }
+            #blueIQView .bq-geo-hex { cursor: pointer; transition: transform 0.12s ease, filter 0.12s ease; transform-origin: 28px 24px; transform-box: fill-box; }
+            #blueIQView .bq-geo-hex:hover { transform: scale(1.08); filter: brightness(1.18); }
             #blueIQView .bq-geo-toplist { margin-top: 0.8rem; padding-top: 0.7rem; border-top: 1px solid rgba(255,255,255,0.05); }
             #blueIQView .bq-geo-toplist-title { font-size: 0.82rem; color: var(--text-secondary); margin-bottom: 0.4rem; }
             #blueIQView .bq-geo-toplist-row { display: flex; align-items: center; gap: 0.6rem; padding: 0.18rem 0; font-size: 0.82rem; }
@@ -17964,9 +17898,8 @@
             #blueIQView .bq-playbook-card:hover { transform: translateY(-2px); border-color: rgba(79,140,255,0.25); box-shadow: 0 8px 24px rgba(0,0,0,0.25); }
             #blueIQView .bq-playbook-head { display: flex; gap: 0.6rem; align-items: center; }
             #blueIQView .bq-playbook-rank { width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 0.78rem; color: var(--accent-primary, #4f8cff); background: rgba(79,140,255,0.16); flex: 0 0 28px; }
-            #blueIQView .bq-playbook-issue-name { font-weight: 600; font-size: 0.92rem; color: var(--text-primary); display: flex; align-items: center; gap: 0.45rem; flex-wrap: wrap; }
+            #blueIQView .bq-playbook-issue-name { font-weight: 600; font-size: 0.92rem; color: var(--text-primary); }
             #blueIQView .bq-playbook-issue-stats { font-size: 0.7rem; color: var(--text-secondary); margin-top: 0.1rem; }
-            #blueIQView .bq-playbook-agent-chip { display: inline-block; padding: 0.05rem 0.45rem; border-radius: 999px; background: rgba(79,140,255,0.16); border: 1px solid rgba(79,140,255,0.35); color: #93c5fd; font-size: 0.62rem; font-weight: 600; letter-spacing: 0.02em; text-transform: uppercase; cursor: help; white-space: nowrap; }
             #blueIQView .bq-playbook-section { font-size: 0.78rem; line-height: 1.4; }
             #blueIQView .bq-playbook-section-label { font-size: 0.65rem; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-secondary); margin-bottom: 0.2rem; }
             #blueIQView .bq-playbook-section-body { color: var(--text-primary); }
@@ -18283,8 +18216,6 @@
             #blueIQView .blue-iq-article-title a { color: var(--text-primary); text-decoration: none; }
             #blueIQView .blue-iq-article-title a:hover { text-decoration: underline; }
             #blueIQView .blue-iq-article-meta { font-size: 0.72rem; color: var(--text-secondary); }
-            #blueIQView .blue-iq-article-summary { font-size: 0.74rem; color: var(--text-secondary); line-height: 1.35; margin-top: 0.25rem; opacity: 0.92; }
-            #blueIQView .bq-article-topic { display: inline-block; font-size: 0.6rem; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; padding: 0.08rem 0.42rem; border-radius: 4px; background: rgba(96,165,250,0.16); color: #93c5fd; border: 1px solid rgba(96,165,250,0.32); vertical-align: middle; margin-left: 0.35rem; white-space: nowrap; }
             #blueIQView .blue-iq-suppressed { padding: 1rem; background: rgba(255, 200, 80, 0.08); border: 1px solid rgba(255,200,80,0.3); border-radius: 8px; font-size: 0.88rem; margin-bottom: 1rem; color: var(--text-primary); }
             #blueIQView .blue-iq-loading-overlay { position: relative; min-height: 240px; display: flex; align-items: center; justify-content: center; flex-direction: column; gap: 0.6rem; padding: 2rem; color: var(--text-secondary); font-size: 0.9rem; }
             #blueIQView .blue-iq-spinner { width: 36px; height: 36px; border: 3px solid rgba(255,255,255,0.1); border-top-color: var(--accent-primary, #4f8cff); border-radius: 50%; animation: blueIQSpin 0.9s linear infinite; }
@@ -18470,7 +18401,6 @@
                 <span id="blueIQUpdatedAt"></span>
             </div>
             <div id="blueIQSuppressedMsg" class="blue-iq-suppressed" style="display: none;"></div>
-            <div id="blueIQTabStrip" class="bq-tabstrip" style="display: none;"></div>
             <div id="blueIQLoading" class="blue-iq-loading-overlay" style="display: none;">
                 <div class="blue-iq-spinner"></div>
                 <div>Crunching panel signal, search trends, and news coverage&hellip;</div>
@@ -23080,218 +23010,7 @@
             filterOptions: null,
             lastData: null,
             inFlight: null,
-            // In-dashboard tab system: each entry is
-            //   { id, label, filters, payload, loading, isRoot }
-            // Tab[0] (isRoot=true) is permanent and tracks the filter
-            // bar. Subsequent tabs are spawned by hex-grid drill clicks
-            // (or other "open in new tab" actions) so users can switch
-            // between state views without losing their primary one.
-            tabs: [],
-            activeTabId: null,
-            tabSeq: 0,
         };
-
-        function _bqTabLabel(filters) {
-            var party = filters.party || 'All';
-            var geo;
-            if (filters.geo_type === 'National' || !filters.geo_value) {
-                geo = 'National';
-            } else {
-                geo = filters.geo_value;
-            }
-            return party === 'All' ? geo : (party + ' \u00b7 ' + geo);
-        }
-
-        function _bqFiltersEqual(a, b) {
-            if (!a || !b) return false;
-            return (a.party || 'All') === (b.party || 'All')
-                && (a.geo_type || 'National') === (b.geo_type || 'National')
-                && (a.geo_value || '') === (b.geo_value || '')
-                && (parseInt(a.lookback_days, 10) || 30) === (parseInt(b.lookback_days, 10) || 30);
-        }
-
-        function _bqGetActiveTab() {
-            var bq = window.__blueIQ;
-            if (!bq || !bq.tabs) return null;
-            for (var i = 0; i < bq.tabs.length; i++) {
-                if (bq.tabs[i].id === bq.activeTabId) return bq.tabs[i];
-            }
-            return null;
-        }
-
-        function _bqEnsureRootTab(filters) {
-            var bq = window.__blueIQ;
-            bq.tabs = bq.tabs || [];
-            if (bq.tabs.length === 0) {
-                var root = {
-                    id:      ++bq.tabSeq,
-                    label:   _bqTabLabel(filters),
-                    filters: Object.assign({}, filters),
-                    payload: null,
-                    loading: false,
-                    isRoot:  true,
-                };
-                bq.tabs.push(root);
-                bq.activeTabId = root.id;
-            }
-            return bq.tabs[0];
-        }
-
-        function _bqRenderTabStrip() {
-            var strip = document.getElementById('blueIQTabStrip');
-            if (!strip) return;
-            var bq = window.__blueIQ;
-            if (!bq.tabs || bq.tabs.length === 0) {
-                strip.style.display = 'none';
-                strip.innerHTML = '';
-                return;
-            }
-            // Hide the strip entirely when only the root tab exists so
-            // the dashboard chrome stays clean until the user actually
-            // opens a comparison tab.
-            if (bq.tabs.length === 1) {
-                strip.style.display = 'none';
-                return;
-            }
-            strip.style.display = 'flex';
-            strip.innerHTML = bq.tabs.map(function(t) {
-                var active = t.id === bq.activeTabId ? ' active' : '';
-                var loading = t.loading
-                    ? '<span class="bq-tab-loading" aria-hidden="true"></span>'
-                    : '';
-                var close = t.isRoot
-                    ? ''
-                    : '<button type="button" class="bq-tab-close" title="Close tab" data-close-tab="' + t.id + '">\u00d7</button>';
-                return '<div class="bq-tab' + active + '" data-tab-id="' + t.id + '" title="' + _bqEscape(t.label) + '">'
-                     +   loading + '<span class="bq-tab-label">' + _bqEscape(t.label) + '</span>' + close
-                     + '</div>';
-            }).join('');
-        }
-
-        async function _bqSwitchTab(tabId) {
-            var bq = window.__blueIQ;
-            var target = null;
-            for (var i = 0; i < bq.tabs.length; i++) {
-                if (bq.tabs[i].id === tabId) { target = bq.tabs[i]; break; }
-            }
-            if (!target) return;
-            bq.activeTabId = tabId;
-            // Sync the filter bar dropdowns to the active tab's filters
-            // so subsequent Apply clicks operate on this view.
-            var f = target.filters || {};
-            var pEl = document.getElementById('blueIQParty');
-            var gtEl = document.getElementById('blueIQGeoType');
-            var gvEl = document.getElementById('blueIQGeoValue');
-            var lbEl = document.getElementById('blueIQLookback');
-            if (pEl)  pEl.value  = f.party || 'All';
-            if (gtEl) gtEl.value = f.geo_type || 'National';
-            if (typeof _populateBlueIQGeoValue === 'function') _populateBlueIQGeoValue();
-            if (gvEl) gvEl.value = f.geo_value || '';
-            if (lbEl) lbEl.value = String(f.lookback_days || 30);
-            _bqRenderTabStrip();
-            if (target.payload) {
-                renderBlueIQCards(target.payload);
-            } else if (!target.loading) {
-                // No cached payload yet for this tab — fetch now.
-                await _bqFetchPayloadIntoTab(target);
-            }
-        }
-
-        async function _bqFetchPayloadIntoTab(tab) {
-            tab.loading = true;
-            _bqRenderTabStrip();
-            try {
-                var resp = await fetch('/api/blue-iq/data', {
-                    method:      'POST',
-                    credentials: 'same-origin',
-                    headers:     { 'Content-Type': 'application/json' },
-                    body:        JSON.stringify(tab.filters),
-                });
-                var data = await resp.json();
-                if (!data || !data.success) throw new Error(data && data.error ? data.error : 'Request failed');
-                tab.payload = data;
-                if (window.__blueIQ.activeTabId === tab.id) {
-                    renderBlueIQCards(data);
-                }
-            } catch (e) {
-                console.error('Blue IQ tab fetch failed:', e);
-                if (window.__blueIQ.activeTabId === tab.id) {
-                    var meta = document.getElementById('blueIQMeta');
-                    if (meta) meta.textContent = 'Error loading ' + tab.label + ': ' + (e.message || e);
-                }
-            } finally {
-                tab.loading = false;
-                _bqRenderTabStrip();
-            }
-        }
-
-        async function _bqAddOrSwitchTab(filters, label) {
-            var bq = window.__blueIQ;
-            _bqEnsureRootTab(filters);
-            // Already-open tab matching these filters? Just switch.
-            for (var i = 0; i < bq.tabs.length; i++) {
-                if (_bqFiltersEqual(bq.tabs[i].filters, filters)) {
-                    await _bqSwitchTab(bq.tabs[i].id);
-                    return;
-                }
-            }
-            var tab = {
-                id:      ++bq.tabSeq,
-                label:   label || _bqTabLabel(filters),
-                filters: Object.assign({}, filters),
-                payload: null,
-                loading: false,
-                isRoot:  false,
-            };
-            bq.tabs.push(tab);
-            bq.activeTabId = tab.id;
-            // Sync filter bar to new tab + render strip BEFORE fetch so
-            // the loading spinner is visible on the new tab pill.
-            var f = tab.filters;
-            var pEl = document.getElementById('blueIQParty');
-            var gtEl = document.getElementById('blueIQGeoType');
-            var gvEl = document.getElementById('blueIQGeoValue');
-            var lbEl = document.getElementById('blueIQLookback');
-            if (pEl)  pEl.value  = f.party || 'All';
-            if (gtEl) gtEl.value = f.geo_type || 'National';
-            if (typeof _populateBlueIQGeoValue === 'function') _populateBlueIQGeoValue();
-            if (gvEl) gvEl.value = f.geo_value || '';
-            if (lbEl) lbEl.value = String(f.lookback_days || 30);
-            _bqRenderTabStrip();
-            await _bqFetchPayloadIntoTab(tab);
-        }
-
-        function _bqCloseTab(tabId) {
-            var bq = window.__blueIQ;
-            var idx = -1;
-            for (var i = 0; i < bq.tabs.length; i++) {
-                if (bq.tabs[i].id === tabId) { idx = i; break; }
-            }
-            if (idx < 0) return;
-            var closingActive = bq.tabs[idx].id === bq.activeTabId;
-            bq.tabs.splice(idx, 1);
-            if (closingActive && bq.tabs.length > 0) {
-                var nextIdx = Math.max(0, idx - 1);
-                _bqSwitchTab(bq.tabs[nextIdx].id);
-            } else {
-                _bqRenderTabStrip();
-            }
-        }
-
-        // Delegate clicks on the tab strip (switch / close).
-        document.addEventListener('click', function(ev) {
-            var closeBtn = ev.target && ev.target.closest && ev.target.closest('[data-close-tab]');
-            if (closeBtn) {
-                ev.stopPropagation();
-                _bqCloseTab(parseInt(closeBtn.getAttribute('data-close-tab'), 10));
-                return;
-            }
-            var tabPill = ev.target && ev.target.closest && ev.target.closest('.bq-tab[data-tab-id]');
-            if (tabPill && tabPill.closest && tabPill.closest('#blueIQTabStrip')) {
-                var tid = parseInt(tabPill.getAttribute('data-tab-id'), 10);
-                if (tid && tid !== window.__blueIQ.activeTabId) _bqSwitchTab(tid);
-            }
-        });
 
         function _blueIQHideAllOtherViews() {
             var ids = ['dashboardView','subscriberIQView','sfConversionView','rankerIQView',
@@ -23392,18 +23111,6 @@
                 var data = await resp.json();
                 if (!data || !data.success) throw new Error(data && data.error ? data.error : 'Request failed');
                 window.__blueIQ.lastData = data;
-                // Sync the active tab with this Apply: the filter bar
-                // is the active tab's "edit surface", so an Apply
-                // updates that tab's filters + cached payload + label.
-                // First Apply on a fresh dashboard creates the root tab.
-                _bqEnsureRootTab(filters);
-                var active = _bqGetActiveTab();
-                if (active) {
-                    active.filters = Object.assign({}, filters);
-                    active.payload = data;
-                    active.label   = _bqTabLabel(filters);
-                }
-                _bqRenderTabStrip();
                 renderBlueIQCards(data);
             } catch (e) {
                 if (e && e.name === 'AbortError') return;
@@ -24334,11 +24041,22 @@
                   + '<div class="blue-iq-card-body">' + _bqRenderEngagementCard(cards.social_media, { kind: 'social' }) + '</div>'
                   + '</div>';
 
-            // CARD F (Turnout intent) intentionally removed — the
-            // searched-voter-action-terms surface wasn't carrying
-            // enough signal across most slices and was rendering as
-            // a near-empty placeholder. Backend cards.turnout_intent
-            // is still emitted for downstream/API consumers.
+            // CARD F: Turnout intent
+            var ti = cards.turnout_intent || {};
+            var tiHtml;
+            if (ti && (ti.pct > 0 || (ti.sample_queries && ti.sample_queries.length))) {
+                tiHtml = '<div style="font-size: 2rem; font-weight: 700; line-height: 1.1;">' + _bqPct(ti.pct || 0) + '</div>'
+                       + '<div style="font-size: 0.78rem; color: var(--text-secondary); margin-bottom: 0.6rem;">searched voter-action terms (register, polling, ballot, early vote)</div>'
+                       + ((ti.sample_queries || []).map(_bqStripDates).filter(Boolean).slice(0, 5).map(function(q) {
+                            return '<div class="blue-iq-bucket-samples" style="margin: 0.15rem 0;">\u2022 ' + _bqEscape(q) + '</div>';
+                          }).join('') || '');
+            } else {
+                tiHtml = '<div style="color: var(--text-secondary); font-size: 0.85rem; padding: 0.5rem 0;">No turnout-intent signal in this slice.</div>';
+            }
+            html += '<div class="blue-iq-card blue-iq-card-turnout">'
+                  + '<h3 class="blue-iq-card-title">Turnout intent</h3>'
+                  + '<div class="blue-iq-card-body">' + tiHtml + '</div>'
+                  + '</div>';
 
             // CARD D: Top politicians engaged — agent-discovered figures
             // the active geography is driving conversation about right now.
@@ -24367,7 +24085,7 @@
             var candsGeoLbl = (f.geo_type === 'National' || !f.geo_value) ? 'across all races nationwide' : ('for ' + (f.geo_value || ''));
             html += '<div class="blue-iq-card blue-iq-card-cands">'
                   + '<h3 class="blue-iq-card-title">Top candidates (2026 cycle)'
-                  +   '<span class="blue-iq-card-subtitle">declared candidates ' + _bqEscape(candsGeoLbl) + ' \u00b7 click race type to drill in</span>'
+                  +   '<span class="blue-iq-card-subtitle">agent-discovered declared candidates ' + _bqEscape(candsGeoLbl) + ' \u00b7 click race type to drill in</span>'
                   + '</h3>'
                   + '<div class="bq-party-filter" data-target="top_candidates">'
                   +   '<button class="bq-party-chip active" data-party="All">All</button>'
@@ -24388,34 +24106,15 @@
                   + '<div class="blue-iq-card-body" id="blueIQCardCandidatesBody"></div>'
                   + '</div>';
 
-            // CARD E: Top articles.
-            // Each row carries reach_share (0-1) computed server-side
-            // across the blended agent + panel + GDELT list. We render
-            // it as a percentage so the meta line reads
-            // "source.com · 12.4%" instead of exposing raw panelist
-            // counts. Topic tag (agent-supplied) renders as a small
-            // chip when present.
+            // CARD E: Top articles
             var articles = cards.top_articles || [];
             var artHtml = articles.length ? articles.slice(0, 15).map(function(a) {
-                var img = a.image
-                    ? ('<div class="blue-iq-article-img" style="background-image: url(' + _bqEscape(a.image) + ');"></div>')
-                    : '<div class="blue-iq-article-img"></div>';
-                var pctLabel = '';
-                if (typeof a.reach_share === 'number' && a.reach_share > 0) {
-                    pctLabel = ' \u00b7 ' + _bqPct(a.reach_share);
-                }
-                var topicChip = a.topic
-                    ? '<span class="bq-article-topic">' + _bqEscape(a.topic) + '</span>'
-                    : '';
-                var summaryHtml = a.summary
-                    ? '<div class="blue-iq-article-summary">' + _bqEscape(a.summary) + '</div>'
-                    : '';
+                var img = a.image ? ('<div class="blue-iq-article-img" style="background-image: url(' + _bqEscape(a.image) + ');"></div>') : '<div class="blue-iq-article-img"></div>';
                 return '<div class="blue-iq-article">'
                      + img
                      + '<div class="blue-iq-article-body">'
-                     + '<p class="blue-iq-article-title"><a href="' + _bqEscape(a.url) + '" target="_blank" rel="noopener">' + _bqEscape(a.title || a.url) + '</a>' + (topicChip ? ' ' + topicChip : '') + '</p>'
-                     + '<div class="blue-iq-article-meta">' + _bqEscape(a.source || '') + pctLabel + '</div>'
-                     + summaryHtml
+                     + '<p class="blue-iq-article-title"><a href="' + _bqEscape(a.url) + '" target="_blank" rel="noopener">' + _bqEscape(a.title || a.url) + '</a></p>'
+                     + '<div class="blue-iq-article-meta">' + _bqEscape(a.source || '') + (a.panelists ? (' \u00b7 ' + _bqNum(a.panelists) + ' panelists') : '') + '</div>'
                      + '</div>'
                      + '</div>';
             }).join('') : '<div style="color: var(--text-secondary); font-size: 0.85rem; padding: 0.5rem 0;">No political articles surfaced for this slice.</div>';
@@ -24433,6 +24132,7 @@
             html += '<div class="blue-iq-card blue-iq-card-trending" style="grid-column: span 12;">'
                   + '<h3 class="blue-iq-card-title" style="display:flex; align-items:center; gap:0.6rem; flex-wrap:wrap;">'
                   +   '<span>Trending political searches \u2014 <span id="blueIQTrendingGeoLabel">United States</span></span>'
+                  +   '<span class="blue-iq-badge">Google Trends \u00b7 live</span>'
                   +   '<span style="flex:1 1 auto;"></span>'
                   +   '<span class="bq-trending-dma-picker">'
                   +     '<label for="blueIQTrendingDma" style="font-size:0.7rem; color:var(--text-secondary); text-transform:uppercase; letter-spacing:0.04em; margin-right:0.35rem;">Drill to DMA</label>'
@@ -24490,7 +24190,7 @@
             // BLUE_IQ_CREATIVE_PLAYS entry (placement + creative direction).
             html += '<div class="blue-iq-card blue-iq-card-playbook" style="grid-column: span 12;">'
                   + '<h3 class="blue-iq-card-title">Creative playbook'
-                  +   '<span class="blue-iq-card-subtitle">for the top issues in this slice: what creative to ship, what placement to buy. Researched per-issue with current web sources (Pew, Edison, eMarketer, recent campaign post-mortems) and grounded in this slice\u2019s panel follow-up behavior.</span>'
+                  +   '<span class="blue-iq-card-subtitle">for the top issues in this slice: what creative to ship, what placement to buy. Synthesized from this slice\u2019s Issue \u00d7 Journey behavior.</span>'
                   + '</h3>'
                   + '<div class="blue-iq-card-body" id="blueIQCreativePlaybook"></div>'
                   + '</div>';
@@ -24589,12 +24289,30 @@
                       + '</div>';
             }
 
-            // CARD J (Compare cohorts) intentionally removed — the
-            // per-party panel cells were almost always sample-too-
-            // small for any sub-national slice and the redundant
-            // "All / National" cell duplicated the dashboard meta
-            // line. Backend data.compare is still emitted for
-            // downstream/API consumers; only the UI tile is gone.
+            // CARD J: Compare (only when geo is set)
+            var cmp = data.compare || {};
+            if (cmp && (cmp.dems || cmp.reps || cmp.indeps)) {
+                var grp = ['dems','reps','indeps','national'].map(function(k) {
+                    var s = cmp[k] || {};
+                    var label = ({dems:'Democrat',reps:'Republican',indeps:'Indep.',national:'All / National'})[k];
+                    if (s.suppressed) {
+                        return '<div class="blue-iq-compare-cell"><h5>' + label + '</h5><div style="color: var(--text-secondary); font-size: 0.78rem;">Sample too small (' + (s.panel_size || 0) + ')</div></div>';
+                    }
+                    var topSearch = (s.search_engines || [])[0];
+                    var topSocial = (s.social_media || [])[0];
+                    return '<div class="blue-iq-compare-cell">'
+                         + '<h5>' + label + '</h5>'
+                         + '<div>n=' + _bqNum(s.panel_size || 0) + '</div>'
+                         + (topSearch ? ('<div>Top search: <strong>' + _bqEscape(topSearch.name) + '</strong></div>') : '')
+                         + (topSocial ? ('<div>Top social: <strong>' + _bqEscape(topSocial.name) + '</strong></div>') : '')
+                         + ('<div>Turnout: <strong>' + _bqPct(s.turnout_pct || 0) + '</strong></div>')
+                         + '</div>';
+                }).join('');
+                html += '<div class="blue-iq-card blue-iq-card-compare">'
+                      + '<h3 class="blue-iq-card-title">Compare cohorts (same geo)</h3>'
+                      + '<div class="blue-iq-card-body"><div class="blue-iq-compare-grid">' + grp + '</div></div>'
+                      + '</div>';
+            }
 
             grid.innerHTML = html;
             _renderBlueIQIssueBuckets(cards.issue_buckets || []);
@@ -24605,8 +24323,7 @@
             _bqRenderDayInLife(cards.issue_buckets || []);
             _bqRenderCreativePlaybook(cards.issue_buckets || [],
                                        cards.issue_journey_cross || [],
-                                       cards.voter_journey || [],
-                                       cards.playbook_agent || []);
+                                       cards.voter_journey || []);
         }
 
         // ──────────────────────────────────────────────────────────────────
@@ -24775,10 +24492,9 @@
                 }
             }
 
-            // Hex-click → open that state as a NEW tab within the
-            // dashboard, so the user can switch back to whatever they
-            // were previously viewing. The active tab's filters (party
-            // + lookback) carry over; only geography changes.
+            // Hex-click → drill into that state by mutating the existing
+            // geography dropdown + re-running applyBlueIQFilters (the same
+            // path the filter bar uses).
             mapEl.onclick = function(ev) {
                 var g = ev.target && ev.target.closest && ev.target.closest('.bq-geo-hex');
                 if (!g) return;
@@ -24788,21 +24504,20 @@
                     return BLUE_IQ_STATE_NAME_TO_USPS[n] === usps;
                 });
                 if (!stateName) return;
-                // Inherit non-geo filters (party, lookback) from the
-                // current view so the comparison tab keeps everything
-                // else constant.
-                var cur = _bqGetActiveTab();
-                var base = (cur && cur.filters) ? cur.filters : {
-                    party:         document.getElementById('blueIQParty')   && document.getElementById('blueIQParty').value   || 'All',
-                    lookback_days: parseInt(document.getElementById('blueIQLookback') && document.getElementById('blueIQLookback').value || '30', 10),
-                };
-                var newFilters = {
-                    party:         base.party || 'All',
-                    geo_type:      'State',
-                    geo_value:     stateName,
-                    lookback_days: parseInt(base.lookback_days, 10) || 30,
-                };
-                _bqAddOrSwitchTab(newFilters, stateName);
+                var geoType = document.getElementById('blueIQGeoType');
+                var geoVal  = document.getElementById('blueIQGeoValue');
+                if (geoType) {
+                    geoType.value = 'State';
+                    if (typeof _populateBlueIQGeoValue === 'function') {
+                        _populateBlueIQGeoValue();
+                    }
+                }
+                if (geoVal) {
+                    geoVal.value = stateName;
+                }
+                if (typeof applyBlueIQFilters === 'function') {
+                    applyBlueIQFilters();
+                }
             };
 
             renderForIssue(issuesSorted[0]);
@@ -24833,7 +24548,7 @@
         // sponsorships and "first-time homebuyer" Spotify spots; Climate
         // leans on EV/sustainability creator content; etc.
         // ──────────────────────────────────────────────────────────────────
-        function _bqRenderCreativePlaybook(issueBuckets, issueJourneyCross, voterJourney, playbookAgent) {
+        function _bqRenderCreativePlaybook(issueBuckets, issueJourneyCross, voterJourney) {
             var body = document.getElementById('blueIQCreativePlaybook');
             if (!body) return;
             if (!issueBuckets || !issueBuckets.length) {
@@ -24849,53 +24564,25 @@
                 .filter(function(d) { return d.destination !== 'abandoned' && d.destination !== 'other'; })
                 .sort(function(a, b) { return (b.panelists || 0) - (a.panelists || 0); })[0];
 
-            // Agent-researched plays (one per issue) indexed by bucket
-            // for O(1) lookup. The agent uses OpenAI Responses API with
-            // web_search_preview to research current best-practice
-            // placement + creative recommendations grounded in the
-            // dominant follow-up panelists are taking, the geography,
-            // and recent public research (Pew, Edison, eMarketer,
-            // recent campaign post-mortems). 24h S3-cached server-side.
-            var agentByIssue = {};
-            (playbookAgent || []).forEach(function(p) {
-                if (p && p.bucket) agentByIssue[p.bucket] = p;
-            });
-
-            // Resolve the play for an issue + dominant destination:
-            //   1. Prefer agent-researched recommendation (web-search-
-            //      grounded, distinct per issue + geo).
-            //   2. Fall back to the hardcoded BLUE_IQ_ISSUE_PLAYS map
-            //      keyed by issue name (with optional by_dest override).
-            //   3. Final fallback: destination-keyed
-            //      BLUE_IQ_CREATIVE_PLAYS so the card always says
-            //      something.
+            // Default play if an issue isn't in BLUE_IQ_ISSUE_PLAYS (e.g.
+            // "Other Policy" or a new bucket added to ISSUE_BUCKETS that
+            // doesn't have a copy block yet). Falls back to the
+            // destination-keyed table so the card still says something.
             function _resolvePlay(issueBucket, destKey) {
-                var agent = agentByIssue[issueBucket];
-                if (agent && agent.where_to_buy && agent.creative_direction) {
-                    return {
-                        placement: agent.where_to_buy,
-                        creative:  agent.creative_direction,
-                        rationale: agent.rationale || '',
-                        source:    'agent',
-                    };
-                }
                 var issuePlay = BLUE_IQ_ISSUE_PLAYS[issueBucket];
                 if (issuePlay) {
+                    // Some issue plays vary their creative by dominant
+                    // follow-up (e.g. a candidate_site follow-up on
+                    // Healthcare → switch from explainer creative to
+                    // "vote-for-X-on-Medicare" direct response). Where a
+                    // by_dest override exists, blend it in.
                     var byDest = issuePlay.by_dest && issuePlay.by_dest[destKey];
                     return {
                         placement: (byDest && byDest.placement) || issuePlay.placement,
                         creative:  (byDest && byDest.creative)  || issuePlay.creative,
-                        rationale: '',
-                        source:    'static',
                     };
                 }
-                var fb = BLUE_IQ_CREATIVE_PLAYS[destKey] || BLUE_IQ_CREATIVE_PLAYS.other;
-                return {
-                    placement: fb.placement,
-                    creative:  fb.creative,
-                    rationale: '',
-                    source:    'static',
-                };
+                return BLUE_IQ_CREATIVE_PLAYS[destKey] || BLUE_IQ_CREATIVE_PLAYS.other;
             }
 
             body.innerHTML = '<div class="bq-playbook-grid">'
@@ -24922,16 +24609,11 @@
                               return '<span class="bq-playbook-sample-chip">' + _bqEscape(q) + '</span>';
                             }).join('') + '</div>'
                         : '';
-                    var agentBadge = (play.source === 'agent')
-                        ? '<span class="bq-playbook-agent-chip"' +
-                              (play.rationale ? ' title="' + _bqEscape(play.rationale) + '"' : '') +
-                              '>agent-researched</span>'
-                        : '';
                     return '<div class="bq-playbook-card">'
                          +   '<div class="bq-playbook-head">'
                          +     '<div class="bq-playbook-rank">' + (idx + 1) + '</div>'
                          +     '<div class="bq-playbook-issue">'
-                         +       '<div class="bq-playbook-issue-name">' + _bqEscape(b.bucket) + agentBadge + '</div>'
+                         +       '<div class="bq-playbook-issue-name">' + _bqEscape(b.bucket) + '</div>'
                          +       '<div class="bq-playbook-issue-stats">' + _bqPct(b.share || 0) + ' of policy searches in this slice</div>'
                          +     '</div>'
                          +   '</div>'
@@ -25057,7 +24739,7 @@
                 return String(s);
             }
 
-            body.innerHTML = '<div class="bq-trending-scroll"><div class="bq-trending-grid">'
+            body.innerHTML = '<div class="bq-trending-grid">'
                 + rows.map(function(r, idx) {
                     var rel = (r.related || []).map(_bqStripDates).filter(Boolean).slice(0, 5);
                     var relHtml = rel.length
@@ -25082,10 +24764,7 @@
                          +   relHtml
                          + '</div>';
                   }).join('')
-                + '</div></div>'
-                + (rows.length > 6
-                    ? '<div class="bq-trending-scroll-hint">Showing top ' + rows.length + ' \u00b7 scroll for more</div>'
-                    : '');
+                + '</div>';
         }
 
         function _renderBlueIQIssueBuckets(buckets) {
@@ -36691,6 +36370,23 @@
             var weekly  = (trends.weekly  || []).slice();
             var monthly = (trends.monthly || []).slice();
 
+            // Granularity-aware copy. Payloads can set granularity:
+            // 'daily' when the weekly[] array actually holds daily
+            // buckets (e.g. PCJ S2 daily strip); default 'weekly'
+            // preserves backward-compat for older payloads.
+            var isDaily = ((trends.granularity || 'weekly').toLowerCase() === 'daily');
+            var grain   = {
+                period:        isDaily ? 'day'  : 'week',
+                periodCap:     isDaily ? 'Day'  : 'Week',
+                periodUpper:   isDaily ? 'DAY'  : 'WEEK',
+                deltaLabel:    isDaily ? 'DoD'  : 'WoW',
+                latestLabel:   isDaily ? 'TODAY'           : 'THIS WEEK',
+                selectedLabel: isDaily ? 'SELECTED DAY'    : 'SELECTED WEEK',
+                pinnedLabel:   isDaily ? '📌 PINNED DAY'   : '📌 PINNED WEEK',
+            };
+            // Expose for downstream tile / pin renderers
+            trends._jiq_grain = grain;
+
             // ---- meta + subtitle (static) ----
             var metaEl  = document.getElementById('jiqTvTrendsMeta');
             var subEl   = document.getElementById('jiqTvTrendsSubtitle');
@@ -36702,8 +36398,8 @@
             }
             if (subEl) {
                 subEl.textContent = 'Active ' + (trends.unit_label || 'accounts')
-                    + ' and total watch hours by week and by month. '
-                    + 'Hover or click any dot in the chart below to dial the top tiles to that week.';
+                    + ' and total watch hours by ' + grain.period + ' and by month. '
+                    + 'Hover or click any dot in the chart below to dial the top tiles to that ' + grain.period + '.';
             }
             if (notesEl) {
                 notesEl.textContent = trends.methodology_note || '';
@@ -36711,7 +36407,7 @@
 
             // ---- weekly + monthly drill-down tables (static) ----
             var tblWEl = document.getElementById('jiqTvTrendsWeeklyTable');
-            if (tblWEl) tblWEl.innerHTML = _jiqRenderTrendsTable(weekly,  'week_label',  'WoW');
+            if (tblWEl) tblWEl.innerHTML = _jiqRenderTrendsTable(weekly,  'week_label',  grain.deltaLabel);
             var tblMEl = document.getElementById('jiqTvTrendsMonthlyTable');
             if (tblMEl) tblMEl.innerHTML = _jiqRenderTrendsTable(monthly, 'month_label', 'MoM');
 
@@ -36794,13 +36490,23 @@
             var isLatestWeek = (wIdx === s.latestWeekIdx);
             var isPinned     = (s.pinnedWeekIdx != null);
 
+            // Granularity-aware copy. Falls back to weekly defaults
+            // for older payloads that don't set trends.granularity.
+            var grain = (s.trends && s.trends._jiq_grain) || {
+                periodCap:     'Week',
+                deltaLabel:    'WoW',
+                latestLabel:   'THIS WEEK',
+                selectedLabel: 'SELECTED WEEK',
+                pinnedLabel:   '📌 PINNED WEEK',
+            };
+
             // Label prefix changes based on whether we're showing the
             // default (latest) week, a hovered week, or a pinned week.
             // Same for month tile.
             var weekPrefix;
-            if (isPinned)         weekPrefix = '📌 PINNED WEEK';
-            else if (isLatestWeek) weekPrefix = 'THIS WEEK';
-            else                   weekPrefix = 'SELECTED WEEK';
+            if (isPinned)         weekPrefix = grain.pinnedLabel;
+            else if (isLatestWeek) weekPrefix = grain.latestLabel;
+            else                   weekPrefix = grain.selectedLabel;
             var monthPrefix;
             if (isPinned)          monthPrefix = '📌 MONTH OF PIN';
             else if (isLatestWeek) monthPrefix = 'THIS MONTH';
@@ -36814,17 +36520,17 @@
             var prevW = (wIdx > 0) ? s.weekly[wIdx - 1]  : null;
             var prevM = (mIdx > 0) ? s.monthly[mIdx - 1] : null;
 
-            // Sub-text builder: shows the period label + WoW/MoM delta.
+            // Sub-text builder: shows the period label + WoW/DoD/MoM delta.
             // Suppresses deltas on partial buckets (apples-to-pears).
             var weekSub = function(metric) {
                 if (!w) return '';
                 var base = (w.week_label || '') + (w.is_partial ? ' · partial' : '');
-                if (w.is_partial) return base + ' · WoW hidden';
+                if (w.is_partial) return base + ' · ' + grain.deltaLabel + ' hidden';
                 if (!prevW)       return base;
                 var deltaHtml = (metric === 'a')
                     ? fmtDelta(w.active_accounts, prevW.active_accounts)
                     : fmtDelta(w.watch_hours,    prevW.watch_hours);
-                return base + ' · WoW ' + deltaHtml;
+                return base + ' · ' + grain.deltaLabel + ' ' + deltaHtml;
             };
             var monthSub = function(metric) {
                 if (!mo) return '';
