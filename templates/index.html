@@ -30,6 +30,7 @@
             --index-under: #ef4444;
             --index-over-bg: rgba(16, 185, 129, 0.2);
             --index-under-bg: rgba(239, 68, 68, 0.2);
+            --data-tab-active: #5a9ad9;
             --deck-bg-cream: #F2EFE9;
             --deck-text-primary: #1a1a2e;
             --deck-text-muted: #7A8B99;
@@ -65,6 +66,7 @@
             --index-under: #872036;
             --index-over-bg: rgba(10, 117, 82, 0.14);
             --index-under-bg: rgba(135, 32, 54, 0.12);
+            --data-tab-active: #0d9488;
         }
         body[data-theme="light"] *::-webkit-scrollbar-track { background: #e5e9f0; }
         body[data-theme="light"] *::-webkit-scrollbar-thumb { background: #cbd5e1; }
@@ -75222,7 +75224,7 @@
             const exportMenuHtml = (moduleType, sectionId) => `
                 <div class="comp-export-dropdown" style="position: relative; display: inline-block;">
                     <button class="btn btn-small" onclick="toggleComparisonExportMenu('${sectionId}', event)" 
-                            style="font-size: 0.7rem; padding: 0.3rem 0.6rem; background: var(--accent-blue); color: white; border: none; border-radius: 4px; cursor: pointer;">
+                            style="font-size: 0.7rem; padding: 0.3rem 0.6rem; background: var(--data-tab-active); color: white; border: none; border-radius: 4px; cursor: pointer;">
                         📥 Export ▼
                     </button>
                     <div id="comp-export-menu-${sectionId}" class="comp-export-menu" style="display: none; position: absolute; right: 0; top: 100%; background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 6px; min-width: 180px; z-index: 1000; box-shadow: 0 4px 12px rgba(0,0,0,0.3);">
