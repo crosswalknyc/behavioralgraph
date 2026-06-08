@@ -26962,7 +26962,6 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
                     if 'conn' in dir() and conn is not None:
                         try:
                             _mpb_cur = conn.cursor()
-                            _mpb_cur.execute(
                             # Rule #4c (2026-05-28): exclude brands that
                             # are *also* tagged ``Hidden`` anywhere in
                             # hostmap (Dippin Dots, Klorane, Molton Brown,
@@ -27256,6 +27255,25 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
                         else (v if str(v).endswith('%')
                               else f"{float(str(v).replace('%','').strip() or 0):.4f}%")
                     )
+                # D110 (2026-06-08, Dixie D'Amelio leak): final canonical-
+                # column strip. Drops any leaked enforcer working columns
+                # (_col_u, _val_u, bp_num) and legacy short-form duplicates
+                # (Raw, Gen Pop Projection) so the on-disk CSV always has
+                # exactly the 6 canonical columns in canonical order.
+                try:
+                    _CANON_COLS = (
+                        'Column', 'Value', 'Brand Penetration (Row)',
+                        'Category Share', 'Original Raw Numbers',
+                        'US Gen Pop Projection',
+                    )
+                    _present = [c for c in _CANON_COLS if c in _df_cw2.columns]
+                    if len(_present) >= 2:
+                        _extra = [c for c in _df_cw2.columns if c not in _CANON_COLS]
+                        if _extra:
+                            print(f"   \u2713 canonical-column strip: removed {len(_extra)} leaked column(s): {_extra}")
+                        _df_cw2 = _df_cw2[_present]
+                except Exception as _csk_err:
+                    print(f'   ⚠️ canonical-column strip failed (continuing): {_csk_err}')
                 _df_cw2.to_csv(final_file, index=False)
                 if _n_gaps_inserted:
                     print(f"   📋 crosswalk-audit-framework inserted {_n_gaps_inserted} "
