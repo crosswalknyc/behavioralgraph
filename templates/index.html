@@ -20315,7 +20315,7 @@
                          style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
                                 gap: 0.6rem; margin-bottom: 0.4rem;"></div>
                     <div id="jiqTvTrendsPinCtrl" style="display:none; margin: 0 0 0.4rem; text-align: right;"></div>
-                    <div id="jiqTvTrendsChart" style="overflow-x: auto; margin-bottom: 0.6rem;"></div>
+                    <div id="jiqTvTrendsChart" style="width: 100%; margin-bottom: 0.6rem;"></div>
                     <details style="margin: 0;">
                         <summary style="cursor:pointer;color:var(--accent-cyan);font-size:0.74rem;font-weight:600;user-select:none;padding:3px 0;">📅 Weekly breakdown table</summary>
                         <div id="jiqTvTrendsWeeklyTable" style="margin-top: 0.5rem; max-height: 320px; overflow-y: auto;"></div>
@@ -36793,7 +36793,10 @@
             //      highlight markers without re-rendering the SVG
             //      (re-rendering mid-hover loses pointer events).
             var chartEl = document.getElementById('jiqTvTrendsChart');
-            var rendered = _jiqRenderTrendsSparkline(weekly);
+            var _trendsTargetW = function() {
+                return (chartEl && chartEl.clientWidth) || 880;
+            };
+            var rendered = _jiqRenderTrendsSparkline(weekly, _trendsTargetW());
             if (chartEl) chartEl.innerHTML = rendered.svg;
 
             // ---- Seed interactive state to "latest week + latest month" ----
@@ -36811,6 +36814,33 @@
             };
 
             _jiqTrendsApplySelection();
+
+            // ---- Responsive re-render on container resize ----
+            // Wire a ResizeObserver exactly once per chart element. On
+            // every width change we re-render the SVG at the new pixel
+            // width and refresh dotPositions; selection / pin state is
+            // preserved on _jiqTrendsState so the highlight markers
+            // snap back to the right column at the new scale.
+            if (chartEl && !chartEl._jiqResizeWired && typeof ResizeObserver === 'function') {
+                chartEl._jiqResizeWired = true;
+                var _rid = null;
+                var _lastW = chartEl.clientWidth;
+                var _ro = new ResizeObserver(function() {
+                    var cw = chartEl.clientWidth;
+                    if (cw === _lastW) return;   // height-only resize, skip
+                    _lastW = cw;
+                    if (_rid) cancelAnimationFrame(_rid);
+                    _rid = requestAnimationFrame(function() {
+                        var s = _jiqTrendsState;
+                        if (!s || !s.weekly) return;
+                        var rr = _jiqRenderTrendsSparkline(s.weekly, cw);
+                        chartEl.innerHTML = rr.svg;
+                        s.dotPositions = rr.positions;
+                        _jiqTrendsApplySelection();
+                    });
+                });
+                _ro.observe(chartEl);
+            }
         }
 
         // Re-renders the dynamic parts (4 KPI tiles + overlay markers +
@@ -37126,9 +37156,13 @@
         // hover, so pointer events stay live mid-motion.
         //
         // Returns { svg: <string>, positions: [{x, yA, yH}, ...] }.
-        function _jiqRenderTrendsSparkline(weekly) {
+        function _jiqRenderTrendsSparkline(weekly, widthOverride) {
             if (!weekly || !weekly.length) return { svg: '', positions: [] };
-            var W = 880, H = 220;
+            // W is dynamic: matches current container width so the SVG
+            // truly fills the card. Clamped to sane bounds so labels
+            // stay readable on extreme sizes.
+            var W = Math.max(640, Math.min(widthOverride || 880, 2400));
+            var H = 220;
             var padL = 60, padR = 60, padT = 18, padB = 44;
             var plotW = W - padL - padR;
             var plotH = H - padT - padB;
@@ -37305,7 +37339,7 @@
             // remain visible without blocking interactivity.
             var svg = ''
                 + '<svg viewBox="0 0 ' + W + ' ' + H + '" width="100%" height="' + H + '"'
-                +   ' preserveAspectRatio="xMidYMid meet" style="max-width: 100%;"'
+                +   ' preserveAspectRatio="none" style="width: 100%; height: ' + H + 'px; display: block;"'
                 +   ' onmouseleave="window._jiqTrendsLeave()">'
                 +   grid
                 +   '<path d="' + pathH + '" stroke="#06b6d4" stroke-width="2" fill="none" stroke-dasharray="5 3" opacity="0.85" pointer-events="none"/>'
