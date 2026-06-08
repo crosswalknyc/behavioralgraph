@@ -9342,10 +9342,23 @@
 
         // ============ EDIT SUBSCRIBER IQ EPISODE DATES ============
 
+        function sortEditEpisodeDatesRows(episodes) {
+            return [...(episodes || [])].sort((a, b) => {
+                const na = parseInt(String(a.episode || '').trim(), 10);
+                const nb = parseInt(String(b.episode || '').trim(), 10);
+                const aNum = Number.isFinite(na);
+                const bNum = Number.isFinite(nb);
+                if (aNum && bNum) return na - nb;
+                if (aNum) return -1;
+                if (bNum) return 1;
+                return String(a.episode || '').localeCompare(String(b.episode || ''), undefined, { numeric: true });
+            });
+        }
+
         function renderEditEpisodeDatesRows(episodes) {
             const tbody = document.getElementById('editEpisodeDatesRows');
             if (!tbody) return;
-            const rows = episodes && episodes.length ? episodes : [{ episode: '1', episode_date: '' }];
+            const rows = episodes && episodes.length ? sortEditEpisodeDatesRows(episodes) : [{ episode: '1', episode_date: '' }];
             tbody.innerHTML = rows.map((row, idx) => `
                 <tr data-idx="${idx}">
                     <td style="padding: 0.35rem 0.5rem 0.35rem 0;">
