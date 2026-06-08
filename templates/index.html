@@ -61,10 +61,10 @@
             --text-primary: #0a1929;
             --text-secondary: #475569;
             --border-color: #d1d9e6;
-            --index-over: #0d9488;
-            --index-under: #c026d3;
-            --index-over-bg: rgba(13, 148, 136, 0.15);
-            --index-under-bg: rgba(192, 38, 211, 0.12);
+            --index-over: #0a7552;
+            --index-under: #872036;
+            --index-over-bg: rgba(10, 117, 82, 0.14);
+            --index-under-bg: rgba(135, 32, 54, 0.12);
         }
         body[data-theme="light"] *::-webkit-scrollbar-track { background: #e5e9f0; }
         body[data-theme="light"] *::-webkit-scrollbar-thumb { background: #cbd5e1; }
@@ -22402,7 +22402,7 @@
                     const v = getComputedStyle(document.body).getPropertyValue('--index-over').trim();
                     if (v) return v;
                 } catch (e) { /* body not ready */ }
-                return document.body.getAttribute('data-theme') === 'light' ? '#0d9488' : '#10b981';
+                return document.body.getAttribute('data-theme') === 'light' ? '#0a7552' : '#10b981';
             }
             return 'var(--index-over)';
         }
@@ -22412,7 +22412,7 @@
                     const v = getComputedStyle(document.body).getPropertyValue('--index-under').trim();
                     if (v) return v;
                 } catch (e) { /* body not ready */ }
-                return document.body.getAttribute('data-theme') === 'light' ? '#c026d3' : '#ef4444';
+                return document.body.getAttribute('data-theme') === 'light' ? '#872036' : '#ef4444';
             }
             return 'var(--index-under)';
         }
@@ -22423,7 +22423,7 @@
                     if (v) return v;
                 } catch (e) { /* body not ready */ }
                 return document.body.getAttribute('data-theme') === 'light'
-                    ? 'rgba(13, 148, 136, 0.15)'
+                    ? 'rgba(10, 117, 82, 0.14)'
                     : 'rgba(16, 185, 129, 0.2)';
             }
             return 'var(--index-over-bg)';
@@ -22435,7 +22435,7 @@
                     if (v) return v;
                 } catch (e) { /* body not ready */ }
                 return document.body.getAttribute('data-theme') === 'light'
-                    ? 'rgba(192, 38, 211, 0.12)'
+                    ? 'rgba(135, 32, 54, 0.12)'
                     : 'rgba(239, 68, 68, 0.2)';
             }
             return 'var(--index-under-bg)';
