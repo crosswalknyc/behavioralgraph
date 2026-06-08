@@ -5011,8 +5011,6 @@
             min-width: 45px;
             text-align: left;
             padding: 1px 4px;
-            border-radius: 3px;
-            background: rgba(0, 0, 0, 0.3);
             flex-shrink: 0;
         }
         
@@ -21157,6 +21155,14 @@
                         }
                         try { localStorage.setItem(_themeKey, next); } catch (err) {}
                         _syncThemeLabel();
+                        if (typeof renderCharts === 'function' && currentDashboardData && currentDashboardData.demographics && Object.keys(currentDashboardData.demographics).length > 0) {
+                            renderCharts(
+                                currentDashboardData.demographics,
+                                currentDashboardData.demographicsIndex || {},
+                                currentDashboardData.demographicsProjection || {},
+                                currentDashboardData.demographicsGenPop || {}
+                            );
+                        }
                     });
                 }
 
@@ -55996,6 +56002,17 @@
                 return [desc, 'GP = General Population.', gpTip];
             };
 
+        function getProfileIqChartTheme() {
+            const light = document.body.getAttribute('data-theme') === 'light';
+            return {
+                axisLabel: light ? '#0a1929' : '#e6f1ff',
+                axisMuted: light ? '#475569' : '#8892b0',
+                grid: light ? '#d1d9e6' : '#1e3a5f',
+                dataNeutral: light ? '#0a1929' : '#fff',
+                legend: light ? '#0a1929' : '#e6f1ff',
+            };
+        }
+
         function renderCharts(demographics, demographicsIndex = {}, demographicsProjection = {}, demographicsGenPop = {}) {
             lastRenderedDemographics = demographics || {};
             lastRenderedDemographicsIndex = demographicsIndex || {};
@@ -56004,6 +56021,7 @@
             Object.values(charts).forEach(c => c.destroy());
             charts = {};
             currentDemoIndexes = demographicsIndex;
+            const ct = getProfileIqChartTheme();
 
             const colors = ['#5a9ad9', '#66d9ef', '#a6e22e', '#fd971f', '#f92672', '#ae81ff', '#e6db74', '#75715e'];
             const isProjection = dashDisplayMode === 'projection';
@@ -56026,7 +56044,7 @@
                 maxWidth: 400,
                 padding: { top: 10 }, 
                 labels: { 
-                    color: '#e6f1ff', 
+                    color: ct.legend, 
                     font: { size: 11 }, 
                     boxWidth: 12, 
                     padding: 8,
@@ -56039,7 +56057,7 @@
             // Datalabels config for showing values inside donut slices
             const doughnutDataLabels = {
                 display: true,
-                color: '#fff',
+                color: ct.dataNeutral,
                 font: { size: 12, weight: 'bold' },
                 textStrokeColor: 'rgba(0,0,0,0.5)',
                 textStrokeWidth: 2,
@@ -56119,10 +56137,10 @@
                             align: ageChartType === 'column' ? 'top' : 'end',
                             font: { size: dataLabelFontSize, weight: 'bold' },
                             color: (ctx) => {
-                                if (isGenPop) return '#fff';
+                                if (isGenPop) return ct.dataNeutral;
                                 const pct = agePcts[ctx.dataIndex] || 0;
                                 const genPop = ageGenPop[ctx.dataIndex] || 0;
-                                return (genPop > 0 && pct >= genPop) ? '#10b981' : (genPop > 0 ? '#ef4444' : '#fff');
+                                return (genPop > 0 && pct >= genPop) ? '#10b981' : (genPop > 0 ? '#ef4444' : ct.dataNeutral);
                             },
                             formatter: (value, ctx) => {
                                 const pct = agePcts[ctx.dataIndex] || 0;
@@ -56140,11 +56158,11 @@
                         }
                     }, 
                     scales: ageIsCircular ? {} : (ageChartType === 'column' ? { 
-                        x: { grid: { display: false }, ticks: { color: '#e6f1ff', font: { size: axisFontSize } } }, 
-                        y: { grid: { color: '#1e3a5f' }, ticks: { color: '#8892b0', font: { size: axisFontSize } }, suggestedMax: ageMax } 
+                        x: { grid: { display: false }, ticks: { color: ct.axisLabel, font: { size: axisFontSize } } }, 
+                        y: { grid: { color: ct.grid }, ticks: { color: ct.axisMuted, font: { size: axisFontSize } }, suggestedMax: ageMax } 
                     } : { 
-                        x: { grid: { color: '#1e3a5f' }, ticks: { color: '#8892b0', font: { size: axisFontSize } }, suggestedMax: ageMax }, 
-                        y: { grid: { display: false }, ticks: { color: '#e6f1ff', font: { size: axisFontSize } } } 
+                        x: { grid: { color: ct.grid }, ticks: { color: ct.axisMuted, font: { size: axisFontSize } }, suggestedMax: ageMax }, 
+                        y: { grid: { display: false }, ticks: { color: ct.axisLabel, font: { size: axisFontSize } } } 
                     })
                 },
                 plugins: [ChartDataLabels]
@@ -56194,7 +56212,7 @@
                                         const valStr = isProjection ? formatNumber(Math.round(val)) : formatPct(pct);
                                         const genPopProj = genPop > 0 ? Math.round((genPop / 100) * 329900000) : 0;
                                         const gpStr = (isGenPop || genPop <= 0.05) ? '' : (isProjection ? ` (GP: ${formatNumber(genPopProj)})` : ` (GP: ${formatPct(genPop)})`);
-                                        const indexColor = isGenPop ? '#e6f1ff' : ((genPop > 0 && pct >= genPop) ? '#10b981' : (genPop > 0 ? '#ef4444' : '#e6f1ff'));
+                                        const indexColor = isGenPop ? ct.axisLabel : ((genPop > 0 && pct >= genPop) ? '#10b981' : (genPop > 0 ? '#ef4444' : ct.axisLabel));
                                         return {
                                             text: `${label} ${valStr}${gpStr}`,
                                             fillStyle: data.datasets[0].backgroundColor[i],
@@ -56210,8 +56228,8 @@
                             color: (ctx) => {
                                 const pct = genderPcts[ctx.dataIndex] || 0;
                                 const genPop = genderGenPop[ctx.dataIndex] || 0;
-                                if (isGenPop) return '#fff';
-                                return (genPop > 0 && pct >= genPop) ? '#10b981' : (genPop > 0 ? '#ef4444' : '#fff');
+                                if (isGenPop) return ct.dataNeutral;
+                                return (genPop > 0 && pct >= genPop) ? '#10b981' : (genPop > 0 ? '#ef4444' : ct.dataNeutral);
                             },
                             formatter: (v, ctx) => {
                                 const pct = genderPcts[ctx.dataIndex] || 0;
@@ -56230,19 +56248,19 @@
                         scales: genderIsCircular ? {} : (genderChartType === 'column' ? {
                         x: { 
                             grid: { display: false }, 
-                            ticks: { color: '#e6f1ff', font: { size: axisFontSize }, autoSkip: false }
+                            ticks: { color: ct.axisLabel, font: { size: axisFontSize }, autoSkip: false }
                         },
-                        y: { grid: { color: '#1e3a5f' }, ticks: { color: '#8892b0', font: { size: axisFontSize } }, suggestedMax: genderMax }
+                        y: { grid: { color: ct.grid }, ticks: { color: ct.axisMuted, font: { size: axisFontSize } }, suggestedMax: genderMax }
                     } : {
                         x: { 
-                            grid: { color: '#1e3a5f' }, 
-                            ticks: { color: '#8892b0', font: { size: axisFontSize } },
+                            grid: { color: ct.grid }, 
+                            ticks: { color: ct.axisMuted, font: { size: axisFontSize } },
                             suggestedMax: genderMax
                         },
                         y: { 
                             grid: { display: false }, 
                             ticks: { 
-                                color: '#e6f1ff', 
+                                color: ct.axisLabel, 
                                 font: { size: axisFontSize },
                                 autoSkip: false,
                                 callback: function(value, index, ticks) {
@@ -56319,7 +56337,7 @@
                                         const valStr = isProjection ? formatNumber(Math.round(val)) : formatPct(pct);
                                         const genPopProj = genPop > 0 ? Math.round((genPop / 100) * 329900000) : 0;
                                         const gpStr = (isGenPop || genPop <= 0.05) ? '' : (isProjection ? ` (GP: ${formatNumber(genPopProj)})` : ` (GP: ${formatPct(genPop)})`);
-                                        const indexColor = isGenPop ? '#e6f1ff' : ((genPop > 0 && pct >= genPop) ? '#10b981' : (genPop > 0 ? '#ef4444' : '#e6f1ff'));
+                                        const indexColor = isGenPop ? ct.axisLabel : ((genPop > 0 && pct >= genPop) ? '#10b981' : (genPop > 0 ? '#ef4444' : ct.axisLabel));
                                         return {
                                             text: `${label} ${valStr}${gpStr}`,
                                             fillStyle: data.datasets[0].backgroundColor[i],
@@ -56335,8 +56353,8 @@
                             color: (ctx) => {
                                 const pct = ethPcts[ctx.dataIndex] || 0;
                                 const genPop = ethGenPop[ctx.dataIndex] || 0;
-                                if (isGenPop) return '#fff';
-                                return (genPop > 0 && pct >= genPop) ? '#10b981' : (genPop > 0 ? '#ef4444' : '#fff');
+                                if (isGenPop) return ct.dataNeutral;
+                                return (genPop > 0 && pct >= genPop) ? '#10b981' : (genPop > 0 ? '#ef4444' : ct.dataNeutral);
                             },
                             formatter: (v, ctx) => {
                                 const pct = ethPcts[ctx.dataIndex] || 0;
@@ -56354,14 +56372,14 @@
                     },
                     scales: ethnicityIsCircular ? {} : {
                         x: { 
-                            grid: { color: '#1e3a5f' }, 
-                            ticks: { color: '#8892b0', font: { size: axisFontSize } },
+                            grid: { color: ct.grid }, 
+                            ticks: { color: ct.axisMuted, font: { size: axisFontSize } },
                             suggestedMax: ethMax
                         },
                         y: { 
                             grid: { display: false }, 
                             ticks: { 
-                                color: '#e6f1ff', 
+                                color: ct.axisLabel, 
                                 font: { size: axisFontSize },
                                 autoSkip: false,
                                 callback: function(value, index, ticks) {
@@ -56462,8 +56480,8 @@
                             color: (ctx) => {
                                 const pct = incomePcts[ctx.dataIndex] || 0;
                                 const genPop = incomeGenPop[ctx.dataIndex] || 0;
-                                if (isGenPop) return '#fff';
-                                return (genPop > 0 && pct >= genPop) ? '#10b981' : (genPop > 0 ? '#ef4444' : '#fff');
+                                if (isGenPop) return ct.dataNeutral;
+                                return (genPop > 0 && pct >= genPop) ? '#10b981' : (genPop > 0 ? '#ef4444' : ct.dataNeutral);
                             },
                             formatter: (value, ctx) => {
                                 const pct = incomePcts[ctx.dataIndex] || 0;
@@ -56483,7 +56501,7 @@
                         y: { 
                             grid: { display: false }, 
                             ticks: { 
-                                color: '#e6f1ff', 
+                                color: ct.axisLabel, 
                                 font: { size: axisFontSize },
                                 autoSkip: false,
                                 callback: function(value, index, ticks) {
@@ -56510,7 +56528,7 @@
                             },
                             afterFit: (scale) => { scale.width = Math.max(scale.width, 180); }
                         }, 
-                        x: { grid: { color: '#1e3a5f' }, ticks: { color: '#8892b0', font: { size: axisFontSize } }, suggestedMax: incomeMax } 
+                        x: { grid: { color: ct.grid }, ticks: { color: ct.axisMuted, font: { size: axisFontSize } }, suggestedMax: incomeMax } 
                     } 
                 },
                 plugins: [ChartDataLabels]
@@ -56548,8 +56566,8 @@
                                 color: (ctx) => {
                                     const pct = eduPcts[ctx.dataIndex] || 0;
                                     const genPop = eduGenPop[ctx.dataIndex] || 0;
-                                    if (isGenPop) return '#fff';
-                                    return (genPop > 0 && pct >= genPop) ? '#10b981' : (genPop > 0 ? '#ef4444' : '#fff');
+                                    if (isGenPop) return ct.dataNeutral;
+                                    return (genPop > 0 && pct >= genPop) ? '#10b981' : (genPop > 0 ? '#ef4444' : ct.dataNeutral);
                                 },
                                 formatter: (v, ctx) => {
                                     const pct = eduPcts[ctx.dataIndex] || 0;
@@ -56566,11 +56584,11 @@
                             } 
                         }, 
                         scales: educationIsCircular ? {} : { 
-                            x: { grid: { color: '#1e3a5f' }, ticks: { color: '#8892b0', font: { size: axisFontSize } }, suggestedMax: eduMax }, 
+                            x: { grid: { color: ct.grid }, ticks: { color: ct.axisMuted, font: { size: axisFontSize } }, suggestedMax: eduMax }, 
                             y: { 
                                 grid: { display: false }, 
                                 ticks: { 
-                                    color: '#e6f1ff', 
+                                    color: ct.axisLabel, 
                                     font: { size: axisFontSize },
                                     autoSkip: false,
                                     callback: function(value, index, ticks) {
@@ -56661,7 +56679,7 @@
                                             const gpStr = isGenPop ? '' : (isProjection
                                                 ? (genPop > 0 ? ` (GP: ${formatNumber(Math.round((genPop / 100) * 329900000))})` : '')
                                                 : (genPop > 0 ? ` (GP: ${genPop.toFixed(2)}%)` : ''));
-                                            const indexColor = isGenPop ? '#e6f1ff' : ((genPop > 0 && pct >= genPop) ? '#10b981' : (genPop > 0 ? '#ef4444' : '#e6f1ff'));
+                                            const indexColor = isGenPop ? ct.axisLabel : ((genPop > 0 && pct >= genPop) ? '#10b981' : (genPop > 0 ? '#ef4444' : ct.axisLabel));
                                             return { text: `${label} ${valStr}${gpStr}`, fillStyle: colors[i], fontColor: indexColor, index: i };
                                         });
                                     }
@@ -56674,8 +56692,8 @@
                                 color: (ctx) => {
                                     const pct = relPcts[ctx.dataIndex] || 0;
                                     const genPop = relGenPop[ctx.dataIndex] || 0;
-                                    if (isGenPop) return '#fff';
-                                    return (genPop > 0 && pct >= genPop) ? '#10b981' : (genPop > 0 ? '#ef4444' : '#fff');
+                                    if (isGenPop) return ct.dataNeutral;
+                                    return (genPop > 0 && pct >= genPop) ? '#10b981' : (genPop > 0 ? '#ef4444' : ct.dataNeutral);
                                 },
                                 formatter: (value, ctx) => {
                                     const pct = relPcts[ctx.dataIndex] || 0;
@@ -56693,14 +56711,14 @@
                         },
                         scales: relationshipIsCircular ? {} : {
                             x: { 
-                                grid: { color: '#1e3a5f' }, 
-                                ticks: { color: '#8892b0', font: { size: axisFontSize } },
+                                grid: { color: ct.grid }, 
+                                ticks: { color: ct.axisMuted, font: { size: axisFontSize } },
                                 suggestedMax: relMax
                             },
                             y: { 
                                 grid: { display: false }, 
                                 ticks: { 
-                                    color: '#e6f1ff', 
+                                    color: ct.axisLabel, 
                                     font: { size: axisFontSize },
                                     autoSkip: false,
                                     callback: function(value, index, ticks) {
@@ -56779,7 +56797,7 @@
                                             const gpStr = isGenPop ? '' : (isProjection
                                                 ? (genPop > 0 ? ` (GP: ${formatNumber(Math.round((genPop / 100) * 329900000))})` : '')
                                                 : (genPop > 0 ? ` (GP: ${genPop.toFixed(2)}%)` : ''));
-                                            const indexColor = isGenPop ? '#e6f1ff' : ((genPop > 0 && pct >= genPop) ? '#10b981' : (genPop > 0 ? '#ef4444' : '#e6f1ff'));
+                                            const indexColor = isGenPop ? ct.axisLabel : ((genPop > 0 && pct >= genPop) ? '#10b981' : (genPop > 0 ? '#ef4444' : ct.axisLabel));
                                             return { text: `${label} ${valStr}${gpStr}`, fillStyle: colors[i], fontColor: indexColor, index: i };
                                         });
                                     }
@@ -56792,8 +56810,8 @@
                                 color: (ctx) => {
                                     const pct = soPcts[ctx.dataIndex] || 0;
                                     const genPop = soGenPop[ctx.dataIndex] || 0;
-                                    if (isGenPop) return '#fff';
-                                    return (genPop > 0 && pct >= genPop) ? '#10b981' : (genPop > 0 ? '#ef4444' : '#fff');
+                                    if (isGenPop) return ct.dataNeutral;
+                                    return (genPop > 0 && pct >= genPop) ? '#10b981' : (genPop > 0 ? '#ef4444' : ct.dataNeutral);
                                 },
                                 formatter: (value, ctx) => {
                                     const pct = soPcts[ctx.dataIndex] || 0;
@@ -56811,14 +56829,14 @@
                         },
                         scales: soIsCircular ? {} : {
                             x: { 
-                                grid: { color: '#1e3a5f' }, 
-                                ticks: { color: '#8892b0', font: { size: axisFontSize } },
+                                grid: { color: ct.grid }, 
+                                ticks: { color: ct.axisMuted, font: { size: axisFontSize } },
                                 suggestedMax: soMax
                             },
                             y: { 
                                 grid: { display: false }, 
                                 ticks: { 
-                                    color: '#e6f1ff', 
+                                    color: ct.axisLabel, 
                                     font: { size: axisFontSize },
                                     autoSkip: false,
                                     callback: function(value, index, ticks) {
@@ -56893,7 +56911,7 @@
                                             const gpStr = isGenPop ? '' : (isProjection
                                                 ? (genPop > 0 ? ` (GP: ${formatNumber(Math.round((genPop / 100) * 329900000))})` : '')
                                                 : (genPop > 0 ? ` (GP: ${genPop.toFixed(2)}%)` : ''));
-                                            const indexColor = isGenPop ? '#e6f1ff' : ((genPop > 0 && pct >= genPop) ? '#10b981' : (genPop > 0 ? '#ef4444' : '#e6f1ff'));
+                                            const indexColor = isGenPop ? ct.axisLabel : ((genPop > 0 && pct >= genPop) ? '#10b981' : (genPop > 0 ? '#ef4444' : ct.axisLabel));
                                             return { text: `${label} ${valStr}${gpStr}`, fillStyle: colors[i], fontColor: indexColor, index: i };
                                         });
                                     }
@@ -56906,8 +56924,8 @@
                                 color: (ctx) => {
                                     const pct = psPcts[ctx.dataIndex] || 0;
                                     const genPop = psGenPop[ctx.dataIndex] || 0;
-                                    if (isGenPop) return '#fff';
-                                    return (genPop > 0 && pct >= genPop) ? '#10b981' : (genPop > 0 ? '#ef4444' : '#fff');
+                                    if (isGenPop) return ct.dataNeutral;
+                                    return (genPop > 0 && pct >= genPop) ? '#10b981' : (genPop > 0 ? '#ef4444' : ct.dataNeutral);
                                 },
                                 formatter: (value, ctx) => {
                                     const pct = psPcts[ctx.dataIndex] || 0;
@@ -56925,14 +56943,14 @@
                         },
                         scales: psIsCircular ? {} : {
                             x: { 
-                                grid: { color: '#1e3a5f' }, 
-                                ticks: { color: '#8892b0', font: { size: axisFontSize } },
+                                grid: { color: ct.grid }, 
+                                ticks: { color: ct.axisMuted, font: { size: axisFontSize } },
                                 suggestedMax: psMax
                             },
                             y: { 
                                 grid: { display: false }, 
                                 ticks: { 
-                                    color: '#e6f1ff', 
+                                    color: ct.axisLabel, 
                                     font: { size: axisFontSize },
                                     autoSkip: false,
                                     callback: function(value, index, ticks) {
@@ -57020,7 +57038,7 @@
                                             const gpStr = isGenPop ? '' : (isProjection
                                                 ? (genPop > 0 ? ` (GP: ${formatNumber(Math.round((genPop / 100) * 329900000))})` : '')
                                                 : (genPop > 0 ? ` (GP: ${genPop.toFixed(2)}%)` : ''));
-                                            const indexColor = isGenPop ? '#e6f1ff' : ((genPop > 0 && pct >= genPop) ? '#10b981' : (genPop > 0 ? '#ef4444' : '#e6f1ff'));
+                                            const indexColor = isGenPop ? ct.axisLabel : ((genPop > 0 && pct >= genPop) ? '#10b981' : (genPop > 0 ? '#ef4444' : ct.axisLabel));
                                             return { text: `${label} ${valStr}${gpStr}`, fillStyle: colors[i], fontColor: indexColor, index: i };
                                         });
                                     }
@@ -57033,8 +57051,8 @@
                                 color: (ctx) => {
                                     const pct = occPcts[ctx.dataIndex] || 0;
                                     const genPop = occGenPop[ctx.dataIndex] || 0;
-                                    if (isGenPop) return '#fff';
-                                    return (genPop > 0 && pct >= genPop) ? '#10b981' : (genPop > 0 ? '#ef4444' : '#fff');
+                                    if (isGenPop) return ct.dataNeutral;
+                                    return (genPop > 0 && pct >= genPop) ? '#10b981' : (genPop > 0 ? '#ef4444' : ct.dataNeutral);
                                 },
                                 formatter: (value, ctx) => {
                                     const pct = occPcts[ctx.dataIndex] || 0;
@@ -57052,14 +57070,14 @@
                         },
                         scales: occIsCircular ? {} : {
                             x: { 
-                                grid: { color: '#1e3a5f' }, 
-                                ticks: { color: '#8892b0', font: { size: Math.max(10, axisFontSize - 1) } },
+                                grid: { color: ct.grid }, 
+                                ticks: { color: ct.axisMuted, font: { size: Math.max(10, axisFontSize - 1) } },
                                 suggestedMax: occMax
                             },
                             y: { 
                                 grid: { display: false }, 
                                 ticks: { 
-                                    color: '#e6f1ff', 
+                                    color: ct.axisLabel, 
                                     font: { size: 10, weight: '500' },
                                     autoSkip: false,
                                     padding: 14,
