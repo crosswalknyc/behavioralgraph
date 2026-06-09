@@ -10375,7 +10375,7 @@
                         <select class="cadence-select" onchange="changeCadence('${escapedKey}', this.value)" style="padding: 0.25rem 0.4rem; font-size: 0.7rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary); min-width: 90px;">
                             <option value=""${!currentCadence ? ' selected' : ''}>-- None --</option>
                             <option value="Weekly"${currentCadence === 'Weekly' ? ' selected' : ''}>Weekly</option>
-                            <option value="All at Once"${currentCadence === 'All at Once' ? ' selected' : ''}>All at Once</option>
+                            <option value="Binge"${(currentCadence === 'Binge' || currentCadence === 'All at Once') ? ' selected' : ''}>Binge</option>
                         </select>
                     </td>` : '';
             

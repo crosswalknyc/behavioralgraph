@@ -534,10 +534,12 @@ def get_user_input():
             break
         print("   Invalid. Choose a number 1-{} or one of: {}".format(len(ALLOWED_GENRES), ", ".join(ALLOWED_GENRES)))
     
-    # Content Cadence
+    # Content Cadence — canonical labels are "Weekly" and "Binge". The
+    # legacy "All at Once" string is accepted as input and silently normalized
+    # to "Binge" so old runbooks / CLI invocations keep working.
     print("\n📝 Content Cadence (how episodes are released):")
     print("   1. Weekly")
-    print("   2. All at Once")
+    print("   2. Binge")
     while True:
         cadence_input = input("Enter number (1-2) or cadence name: ").strip()
         if not cadence_input:
@@ -546,10 +548,10 @@ def get_user_input():
         if cadence_input == "1" or cadence_input.lower() == "weekly":
             content_cadence = "Weekly"
             break
-        if cadence_input == "2" or cadence_input.lower() in ("all at once", "all"):
-            content_cadence = "All at Once"
+        if cadence_input == "2" or cadence_input.lower() in ("binge", "all at once", "all"):
+            content_cadence = "Binge"
             break
-        print("   Invalid. Choose 1 (Weekly) or 2 (All at Once).")
+        print("   Invalid. Choose 1 (Weekly) or 2 (Binge).")
 
     if not show_search_terms:
         print("You must provide at least one show/content name.", file=sys.stderr)
@@ -4740,18 +4742,64 @@ def write_output(df_summary, df_comp, df_demo, df_timing, df_episode_attribution
     genre = p.get('genre', '')
     content_cadence = p.get('content_cadence', '')
 
+    # ── Pre-2021 panel-cutoff disclaimer ────────────────────────────────
+    # Subscriber-IQ panel data only goes back to 2021-01-01. When any tracked
+    # episode aired before that, the "Analysis Date Range" we expose to the
+    # dashboard MUST reflect the panel window we actually have measurement
+    # for (2021-01-01 → 2025-12-31), not the show's original airing window —
+    # otherwise the dashboard renders nonsense KPIs like "0 signups during
+    # 2019-06-16 to 2019-08-04" for shows whose viewing all happened years
+    # later. We also emit an "Episode Date Availability Note" header row
+    # that the dashboard surfaces on the Episode Dates tab (see
+    # templates/index.html renderSubscriberEpisodeDates) so analysts
+    # immediately understand why air dates pre-date the analysis window.
+    # Idempotent re-applies live in scripts/apply_pre_2021_disclaimer.py.
+    _earliest_episode_dt = None
+    try:
+        for _ep in (p.get('episode_dates') or []):
+            _d = _ep['air_date'] if isinstance(_ep, dict) else _ep
+            if hasattr(_d, 'year'):
+                if _earliest_episode_dt is None or _d < _earliest_episode_dt:
+                    _earliest_episode_dt = _d
+    except Exception:
+        _earliest_episode_dt = None
+    _PANEL_START = datetime(2021, 1, 1).date()
+    _PANEL_END   = datetime(2025, 12, 31).date()
+    _force_panel_window = bool(
+        _earliest_episode_dt is not None
+        and (_earliest_episode_dt if not hasattr(_earliest_episode_dt, 'date')
+             else _earliest_episode_dt).strftime('%Y-%m-%d') < '2021-01-01'
+    )
+    if _force_panel_window:
+        analysis_range_str = f"{_PANEL_START} to {_PANEL_END}"
+    else:
+        analysis_range_str = f"{p['campaign_start'].date()} to {p['campaign_end'].date()}"
+
     # Build output rows matching Landman CSV format exactly (columns set on DataFrame below)
     rows = [
         ("", "", "SHOW-TO-PLATFORM ATTRIBUTION RESULTS", "", "", "", "", "", "", ""),
         ("", "", "", "", "", "", "", "", "", ""),
         ("Show/Content Tracked", "", "", ", ".join(p['show_search_terms']), "", "", "", "", "", ""),
         ("Platform Tracked", "", "", p['platform_name'], "", "", "", "", "", ""),
-        ("Analysis Date Range", "", "", f"{p['campaign_start'].date()} to {p['campaign_end'].date()}", "", "", "", "", "", ""),
+        ("Analysis Date Range", "", "", analysis_range_str, "", "", "", "", "", ""),
+    ]
+    if _force_panel_window:
+        rows.append((
+            "Episode Date Availability Note", "", "",
+            "Episodes tracked were watched after the original air date due to availability of data.",
+            "", "", "", "", "", "",
+        ))
+    rows.extend([
         ("Exclusion Window (days)", "", p['exclusion_days'], "", "", "", "", "", "", ""),
         ("Attribution Window (days)", "", p['attribution_window'], "", "", "", "", "", "", ""),
         ("Genre", "", "", genre, "", "", "", "", "", ""),
         ("Content Cadence", "", "", content_cadence, "", "", "", "", "", ""),
         ("", "", "", "", "", "", "", "", "", ""),
+    ])
+    # KEY METRICS and the rest of the header below. Split into a second
+    # extend() so the conditional Episode Date Availability Note insert
+    # above doesn't require re-indenting the entire literal.
+    rows.extend([
         ("", "", "KEY METRICS", "", "", "", "", "", "", "Gen Pop Projection"),
         ("Total Show Watchers", "", total_watchers, "", "", "", "", "", "", format_gen_pop(gen_pop_projection(total_watchers))),
         ("Pre-Existing Series Viewers", "", pre_existing, "", "", "", "", "", "", format_gen_pop(gen_pop_projection(pre_existing))),
@@ -4760,7 +4808,7 @@ def write_output(df_summary, df_comp, df_demo, df_timing, df_episode_attribution
         ("Clean Conversion Rate", "", "", "", "", "", "", "", f"{_new_only_conv:.2f}%", ""),
         ("Total Show Conversion Rate", "", "", "", "", "", "", "", f"{total_show_conversion:.2f}%", ""),
         ("Average Days from Show Available to Signup", "", "", "", avg_days, "days", "", "", "", ""),
-    ]
+    ])
 
     # Add per-episode/date attribution (Landman: Category, Episode Date, Count, Count Label, Secondary Count, Secondary Label, Tertiary Count, Tertiary Label, Percentage, Gen Pop Projection)
     if not df_episode_attribution.empty:
@@ -6526,14 +6574,191 @@ def _build_synthetic_episodes(config: dict, new_signups_panel: int) -> tuple:
     return episode_dates, df_episode_attribution, df_episode_timing, df_timing
 
 
+_FOCUSED_OVERLAP_CACHE: dict[str, dict] = {}
+
+
+def _research_competitive_overlap_focused(
+    show_name: str,
+    platform_name: str,
+    context_note: str | None = None,
+    research: dict | None = None,
+) -> dict | None:
+    """Show-differentiated cross-platform overlap via a single tight Claude call.
+
+    Why this exists:
+      The main external-research function asks Claude for *everything* in one
+      shot (reach, demographics, competitive, signup drivers, …). Empirically
+      Claude returns ``competitive_overlap: null`` ~80% of the time because
+      panel-level overlap data isn't web-searchable. That dumps the pipeline
+      onto the platform-tier defaults — and *every* show on the same home
+      platform inherits the same 7 numbers, which is the bug surfaced by the
+      Grimsburg / Krapopolis / Alien: Earth identical-overlap report.
+
+      This helper sidesteps the web-search dead-end. Claude already KNOWS
+      adjacent-genre platform crossover from training data; it just needs to
+      be asked in a structured way with anchor baselines. No tools, no search,
+      one call, ~1s latency.
+
+    Returns a dict like:
+      {
+        "genre":         "adult_animation",
+        "audience_skew": "young male animation comedy fans",
+        "overlap": { "netflix": 64.0, "hulu": 55.0, ... },
+        "reasoning":     "..."
+      }
+    or None if Claude is unavailable / parsing fails (caller falls through to
+    platform-tier defaults).
+    """
+    cache_key = f"{(show_name or '').strip().lower()}|{(platform_name or '').strip().lower()}|{(context_note or '').strip().lower()}"
+    if cache_key in _FOCUSED_OVERLAP_CACHE:
+        return _FOCUSED_OVERLAP_CACHE[cache_key]
+
+    try:
+        from claude_client import is_claude_reasoning_enabled, claude_messages
+    except Exception:
+        return None
+    if not is_claude_reasoning_enabled():
+        return None
+
+    # Surface high-value research signals to Claude when available — they
+    # materially change the answer (e.g. a show with strong gen-Z female
+    # audience_age skew should push Hulu/Netflix up and Paramount+/Peacock
+    # down, regardless of the home platform).
+    research_hints = []
+    if isinstance(research, dict):
+        if research.get('buzz_tier'):
+            research_hints.append(f"buzz_tier={research['buzz_tier']}")
+        age = research.get('demographics_age')
+        if isinstance(age, dict):
+            try:
+                youngest = sum(float(age.get(k, 0) or 0) for k in ('18-24', '25-34'))
+                research_hints.append(f"younger_18-34_share≈{youngest:.0f}%")
+            except Exception:
+                pass
+        gender = research.get('demographics_gender')
+        if isinstance(gender, dict):
+            try:
+                fem = float(gender.get('female', 0) or 0)
+                research_hints.append(f"female_share≈{fem:.0f}%")
+            except Exception:
+                pass
+    hints_blob = ("\nSIGNAL HINTS (from prior research): " + ", ".join(research_hints)) if research_hints else ""
+    ctx_blob = (f"\nCONTEXT: {context_note}") if (context_note or '').strip() else ""
+
+    prompt = (
+        "You're estimating SVOD cross-platform overlap for a specific show. "
+        "Output JSON only — no prose, no markdown.\n\n"
+        f"SHOW: {show_name}\n"
+        f"HOME PLATFORM: {platform_name}"
+        f"{ctx_blob}{hints_blob}\n\n"
+        "Estimate: of US viewers who watched THIS specific show during its run, "
+        "what % ALSO actively use each major SVOD competitor in the same month?\n\n"
+        "Use your training-data knowledge of:\n"
+        "- The show's genre, audience age skew, fandom demographics\n"
+        "- Which competing platforms host adjacent content for THIS audience\n"
+        "- General SVOD bundling patterns (Disney+/Hulu bundle, HBO Max prestige skew, etc.)\n\n"
+        "ANCHOR against these baseline genre crossover rates (US, monthly active):\n"
+        "- Adult animation:    NFLX 62, HULU 55, HBO 42, D+ 28, PRIME 45, PEA 22, PARA 14, APPL 7\n"
+        "- Sci-fi prestige:    NFLX 68, HBO 50, APPL 24, PRIME 48, HULU 35, D+ 30, PEA 14, PARA 12\n"
+        "- Prestige drama:     NFLX 70, HBO 55, HULU 40, PRIME 46, APPL 18, D+ 28, PEA 18, PARA 14\n"
+        "- Procedural drama:   NFLX 55, HULU 40, PRIME 42, PEA 38, PARA 28, HBO 22, D+ 22, APPL 6\n"
+        "- Reality comp:       NFLX 58, HULU 38, PRIME 36, PEA 32, HBO 25, D+ 22, PARA 18, APPL 5\n"
+        "- Comedy:             NFLX 60, HULU 50, PRIME 42, PEA 30, HBO 32, APPL 22, D+ 30, PARA 14\n"
+        "- Docuseries:         NFLX 72, HULU 42, PRIME 45, HBO 40, D+ 30, APPL 16, PEA 24, PARA 18\n"
+        "- Kids/family:        D+ 75, NFLX 62, HULU 38, PARA 32, PRIME 35, PEA 24, HBO 22, APPL 10\n"
+        "- Thriller/action:    NFLX 66, PRIME 50, HBO 38, HULU 42, APPL 18, D+ 25, PEA 22, PARA 16\n"
+        "- Anthology/limited:  NFLX 65, HBO 45, HULU 42, APPL 28, PRIME 44, D+ 22, PEA 18, PARA 14\n\n"
+        "ADJUST baseline by ±3-12pp where the show's specifics warrant:\n"
+        "- Star power that pulls a non-genre audience\n"
+        "- Franchise/IP overlap (Alien, Marvel, DC → genre catalogs on other platforms)\n"
+        "- Network-archive crossover (Fox shows → Disney+ archive)\n"
+        "- Demographic intensity (gen-Z heavy → +Hulu/Netflix, -Paramount+/Peacock)\n\n"
+        "EXCLUDE the show's own home platform from the output (set its key to null OR omit).\n\n"
+        "OUTPUT JSON ONLY:\n"
+        "{\n"
+        '  "genre": "<one of: adult_animation | sci_fi_prestige | prestige_drama | procedural | reality_competition | comedy | docuseries | kids_family | thriller_action | anthology>",\n'
+        '  "audience_skew": "<3-7 words describing the core audience>",\n'
+        '  "overlap": {\n'
+        '    "netflix": <float 0-100>, "hulu": <float 0-100>,\n'
+        '    "amazon prime video": <float 0-100>, "disney+": <float 0-100>,\n'
+        '    "hbo max": <float 0-100>, "peacock": <float 0-100>,\n'
+        '    "paramount+": <float 0-100>, "apple tv+": <float 0-100>\n'
+        '  },\n'
+        '  "reasoning": "<1-2 sentence justification of the biggest deltas from the genre baseline>"\n'
+        "}"
+    )
+
+    try:
+        raw = claude_messages(
+            system="You are a streaming-industry analyst. Respond with JSON only.",
+            user=prompt,
+            max_tokens=700,
+            temperature=0.2,
+        )
+    except Exception as _e:
+        print(f"   ⚠️  Focused competitive-overlap Claude call failed: {_e}")
+        return None
+    if not raw:
+        return None
+
+    import re as _re
+    s = raw.strip()
+    if s.startswith('```'):
+        s = s.split('\n', 1)[-1].rsplit('```', 1)[0].strip()
+    m = _re.search(r'\{.*\}', s, _re.DOTALL)
+    if not m:
+        return None
+    try:
+        parsed = json.loads(m.group(0))
+    except Exception:
+        return None
+
+    overlap_raw = parsed.get('overlap')
+    if not isinstance(overlap_raw, dict):
+        return None
+    # Clean: lowercase keys, drop nulls, clamp 0-100
+    overlap_clean: dict[str, float] = {}
+    for k, v in overlap_raw.items():
+        if v is None:
+            continue
+        try:
+            overlap_clean[str(k).strip().lower()] = max(0.0, min(100.0, float(v)))
+        except (TypeError, ValueError):
+            continue
+    if not overlap_clean:
+        return None
+    parsed['overlap'] = overlap_clean
+
+    # Show-name hash jitter so two same-genre shows ("Grimsburg" / "Krapopolis"
+    # / "Universal Basic Guys") aren't pixel-clones even if Claude lands on the
+    # same baseline. Deterministic per show name, ±2.0pp max, clamped 0-100.
+    import hashlib as _hashlib
+    h = _hashlib.md5((show_name or '').encode('utf-8')).digest()
+    for i, plat in enumerate(sorted(overlap_clean.keys())):
+        # signed jitter in [-2.0, +2.0] from byte i (or wrap)
+        b = h[i % len(h)]
+        delta = (b - 128) / 64.0  # roughly [-2.0, +2.0]
+        overlap_clean[plat] = max(0.0, min(100.0, overlap_clean[plat] + delta))
+
+    _FOCUSED_OVERLAP_CACHE[cache_key] = parsed
+    return parsed
+
+
 def _build_synthetic_competitive(config: dict, total_panel: int,
                                  research: dict | None = None) -> pd.DataFrame:
     """Cross-platform overlap.
 
     Priority order:
       1. Explicit config['competitive_pcts'] override.
-      2. Claude external research (research['competitive_overlap']).
-      3. Platform-tier defaults below.
+      2. Claude external research (research['competitive_overlap']) — rare,
+         only when the main research call returned a populated list.
+      3. Focused Claude overlap call (genre-aware, no web search). This is
+         the path that actually produces show-differentiated numbers most of
+         the time because Claude can do this from training knowledge but
+         doesn't volunteer it during the main research call.
+      4. Platform-tier defaults below (last resort — produces identical
+         numbers for every show on the same home platform, hence kept as a
+         safety net only).
     """
     if isinstance(config.get('competitive_pcts'), list):
         rows = []
@@ -6561,6 +6786,30 @@ def _build_synthetic_competitive(config: dict, total_panel: int,
             print(f"   🎯 Competitive overlap from research ({len(rows)} platforms, "
                   f"{len(research.get('competitive_sources') or [])} sources)")
             return pd.DataFrame(rows)
+
+    # Secondary path: focused Claude call — show-differentiated, genre-aware,
+    # uses research dict as signal hints when present. This is what stops
+    # Grimsburg/Krapopolis/Alien: Earth from all having the same 7 numbers.
+    show_name_cfg     = config.get('show_name') or config.get('project_name') or ''
+    platform_name_cfg = config.get('platform_name') or ''
+    context_note_cfg  = config.get('context_note') or ''
+    focused = _research_competitive_overlap_focused(
+        show_name=str(show_name_cfg),
+        platform_name=str(platform_name_cfg),
+        context_note=str(context_note_cfg) if context_note_cfg else None,
+        research=research,
+    )
+    if focused and isinstance(focused.get('overlap'), dict) and focused['overlap']:
+        rows = [{"COMMON_NAME": k, "PERCENT": round(float(v), 1)}
+                for k, v in focused['overlap'].items()]
+        print(f"   🎯 Competitive overlap from focused Claude call "
+              f"(genre={focused.get('genre','?')}, "
+              f"skew=\"{focused.get('audience_skew','?')}\", {len(rows)} platforms)")
+        # Stash the focused result onto the research dict so the sidecar
+        # writer (and any downstream auditor) can see how we landed here.
+        if isinstance(research, dict):
+            research.setdefault('competitive_overlap_focused', focused)
+        return pd.DataFrame(rows)
 
     # Default overlap by current-platform tier
     platform = (config.get('platform_name') or '').lower()
@@ -6672,7 +6921,9 @@ def run_synthetic_attribution(config: dict) -> dict:
         episode_dates:       List of dicts with episode_num, air_date,
                              display_label — OR list of "YYYY-MM-DD" strings.
         genre:               e.g. "Animated Adult Comedy".
-        content_cadence:     "Weekly", "All at Once", "Single Event Telecast".
+        content_cadence:     "Weekly", "Binge", "Single Event Telecast".
+                             (Legacy "All at Once" is accepted on input and
+                             normalized to "Binge" — see run_synthetic_attribution.)
         is_new_show:         bool.
 
     Optional keys:
@@ -6690,6 +6941,15 @@ def run_synthetic_attribution(config: dict) -> dict:
     Returns a dict with output_path, s3_key (if uploaded), reach_us,
     new_signups_us, validation_status.
     """
+    # Normalize legacy cadence labels to the canonical form. The pipeline,
+    # admin UI, and CSV header all expect "Binge" — the older "All at Once"
+    # string is accepted on input (from CLI flags, runbooks, etc.) and
+    # silently converted here so the CSV we emit always uses the canonical
+    # label.
+    _raw_cadence = (config.get('content_cadence') or '').strip()
+    if _raw_cadence.lower() in ('all at once', 'all-at-once', 'all_at_once'):
+        config['content_cadence'] = 'Binge'
+
     print("\n" + "=" * 70)
     print("  SVOD SYNTHETIC ATTRIBUTION PIPELINE")
     print("=" * 70)

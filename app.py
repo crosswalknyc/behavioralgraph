@@ -10902,6 +10902,16 @@ def parse_subscriber_iq_csv(csv_content):
                         date_range_val = parts[1].strip()
                 parsed['metadata']['date_range'] = date_range_val
                 print(f"   📅 Found date range: '{date_range_val}' from row {i}: {row[:4]}")
+            elif 'Episode Date Availability Note' in first_col:
+                # Optional header row that the dashboard surfaces on the
+                # Episode Dates tab when the panel window doesn't cover the
+                # show's original air dates (currently triggered by the
+                # 2021 panel-start cutoff — see scripts/apply_pre_2021_disclaimer.py
+                # and the corresponding emit in run_synthetic_attribution).
+                note_val = (row[3].strip() if len(row) > 3 else '') or (row[2].strip() if len(row) > 2 else '') or (row[1].strip() if len(row) > 1 else '')
+                if note_val:
+                    parsed['metadata']['episode_date_availability_note'] = note_val
+                    print(f"   ℹ️  Found episode-date availability note: {note_val[:80]}…")
             elif 'Exclusion Window' in first_col:
                 parsed['metadata']['exclusion_window'] = (row[2].strip() if len(row) > 2 else '') or (row[1].strip() if len(row) > 1 else '')
             elif 'Attribution Window' in first_col:
@@ -28354,7 +28364,12 @@ def submit_svod_acquisition():
             return jsonify({'error': f'Genre must be one of: {", ".join(SVOD_ALLOWED_GENRES)}'}), 400
         
         content_cadence = (data.get('content_cadence') or '').strip()
-        if content_cadence and content_cadence not in ('Weekly', 'All at Once'):
+        # Canonical labels are "Weekly" and "Binge". The legacy "All at Once"
+        # string is silently rewritten to "Binge" so old admin saves /
+        # dashboard form submissions keep working.
+        if content_cadence.lower() in ('all at once', 'all-at-once', 'all_at_once'):
+            content_cadence = 'Binge'
+        if content_cadence and content_cadence not in ('Weekly', 'Binge'):
             content_cadence = ''
         
         username = session.get('username', 'unknown')
