@@ -20704,7 +20704,7 @@
                             </ul>
                         </div>
                     </details>
-                    <div id="jiqPathRibbon" style="overflow-x: auto;"></div>
+                    <div id="jiqPathRibbon" style="width: 100%;"></div>
                     <div style="margin-top: 1rem; padding-top: 0.75rem; border-top: 1px solid var(--border-color);">
                         <div style="font-size: 0.85rem; font-weight: 600; margin-bottom: 0.4rem;">Top observed paths</div>
                         <div style="font-size: 0.72rem; color: var(--text-secondary); margin-bottom: 0.5rem;">Most common ordered sequences (adjacent dups collapsed). The bigger the user count, the more reliably we can attribute the purchase to that sequence.</div>
@@ -36727,7 +36727,7 @@
             maxUsers = Math.max(1, maxUsers);
 
             ribbonEl.innerHTML =
-                '<div style="display: flex; gap: 6px; align-items: flex-end; min-height: 220px; padding: 0.5rem 0;">'
+                '<div style="display: grid; grid-template-columns: repeat(' + ptp.columns.length + ', minmax(0, 1fr)); gap: 6px; align-items: end; min-height: 220px; padding: 0.5rem 0;">'
                 + ptp.columns.map(function(col) {
                     var heightPx = Math.round(180 * (col.users / maxUsers));
                     if (heightPx < 4 && col.users > 0) heightPx = 4;
@@ -36749,14 +36749,14 @@
                     var headerStyle = (col.index === 0)
                         ? 'background: var(--accent-primary); color: #fff;'
                         : 'background: var(--bg-secondary); color: var(--text-primary);';
-                    return '<div style="flex: 1; min-width: 100px; max-width: 180px; display: flex; flex-direction: column; align-items: stretch;">'
+                    return '<div style="display: flex; flex-direction: column; align-items: stretch; min-width: 0;">'
                          +   '<div style="height: ' + heightPx + 'px; display: flex; flex-direction: column; '
                          +      'border: 1px solid var(--border-color); border-radius: 6px 6px 0 0; overflow: hidden;">'
                          +     stacks
                          +   '</div>'
                          +   '<div style="padding: 6px 4px; ' + headerStyle + ' border: 1px solid var(--border-color); border-top: 0; '
-                         +      'border-radius: 0 0 6px 6px; text-align: center;">'
-                         +     '<div style="font-size: 11px; font-weight: 700;">' + _jiqEsc(col.label) + '</div>'
+                         +      'border-radius: 0 0 6px 6px; text-align: center; min-width: 0; overflow-wrap: anywhere;">'
+                         +     '<div style="font-size: 11px; font-weight: 700; line-height: 1.2;">' + _jiqEsc(col.label) + '</div>'
                          +     '<div style="font-size: 10px; opacity: 0.8;">' + _jiqFmt(col.users) + ' users · ' + (col.users_pct || 0) + '%</div>'
                          +   '</div>'
                          + '</div>';
@@ -57399,6 +57399,7 @@
                     },
                     plugins: [ChartDataLabels]
                 });
+                if (charts.occupation) { charts.occupation._origKeys = occOrigKeys; charts.occupation._origGenPop = occGenPop; charts.occupation._demoCategory = 'occupation'; }
                 // Render GP Actuals reference table for Occupation
                 const gpOccTable = document.getElementById('occupationGpActualsTable');
                 if (gpOccTable) {
@@ -57441,6 +57442,13 @@
             // Render interests if available
             if (currentDashboardData && currentDashboardData.interests) {
                 renderInterests(currentDashboardData.interests);
+            }
+
+            // Re-layer any active "Compare date ranges" selections onto the
+            // freshly-rendered demographic charts. Safe no-op when no runs
+            // are selected. See applyComparisonRunsToDashboardCharts above.
+            if (typeof applyComparisonRunsToDashboardCharts === 'function') {
+                try { applyComparisonRunsToDashboardCharts(); } catch (e) { console.warn('compare re-apply failed', e); }
             }
         }
         
