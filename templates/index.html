@@ -17248,6 +17248,7 @@
                                 <button class="tab-btn" onclick="showSubscriberTab('platforms')"><span class="tab-icon">📱</span><span class="tab-label">SVOD PLATFORMS</span></button>
                                 <button class="tab-btn" onclick="showSubscriberTab('demographics')"><span class="tab-icon">👥</span><span class="tab-label">DEMOGRAPHICS</span></button>
                                 <button class="tab-btn" id="subscriberEpisodeDatesTabBtn" onclick="showSubscriberTab('epdates')"><span class="tab-icon">📅</span><span class="tab-label">EPISODE DATES</span></button>
+                                <button class="tab-btn" onclick="showSubscriberTab('compare')"><span class="tab-icon">⚖️</span><span class="tab-label">COMPARE</span></button>
                             </div>
                             <!-- Action Buttons (right-aligned) -->
                             <div style="display: flex; align-items: center; gap: 0.5rem; flex-shrink: 0;">
@@ -17376,6 +17377,34 @@
                                 <div id="subscriberEpisodeDatesStatus" style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 0.75rem; min-height: 1.25rem;"></div>
                                 <div id="subscriberEpisodeDatesTable" class="demographics-table-container"></div>
                                 <p id="subscriberEpisodeDatesSourceNote" style="font-size: 0.78rem; color: var(--text-secondary); margin-top: 1rem; font-style: italic;"></p>
+                            </div>
+                        </div>
+
+                        <!-- Compare Tab -->
+                        <div id="subscriber-tab-compare" class="tab-content">
+                            <div class="comparison-container" style="display: flex; gap: 1rem; min-height: 600px;">
+                                <div class="comparison-sidebar" style="width: 280px; min-width: 250px; flex-shrink: 0; overflow-y: auto; border-right: 1px solid var(--border-color); padding-right: 1rem;">
+                                    <div style="background: rgba(0,217,255,0.1); border: 1px solid rgba(0,217,255,0.3); border-radius: 6px; padding: 0.5rem; margin-bottom: 0.75rem; font-size: 0.75rem;">
+                                        💡 Select <strong>2 or more profiles</strong> to compare side-by-side
+                                    </div>
+                                    <div style="position: relative; margin-bottom: 0.75rem;">
+                                        <span style="position: absolute; left: 10px; top: 50%; transform: translateY(-50%); color: var(--text-secondary);">🔍</span>
+                                        <input type="text" id="subCompSearchInput" placeholder="Search profiles" oninput="filterSubCompareProfiles()" style="padding-left: 32px; width: 100%; box-sizing: border-box;">
+                                    </div>
+                                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+                                        <span class="sub-comp-selected-count" style="font-size: 0.75rem; color: var(--text-secondary);">0 selected</span>
+                                        <button type="button" class="comp-pill-clear" onclick="clearSubCompare()" style="font-size: 0.72rem; cursor: pointer; padding: 0.2rem 0.5rem;">Clear</button>
+                                    </div>
+                                    <div id="subCompProfileList" style="max-height: 450px; overflow-y: auto;"></div>
+                                </div>
+                                <div class="comparison-main" style="flex: 1; overflow-x: auto;">
+                                    <div id="subCompResults">
+                                        <div class="comparison-empty" style="text-align: center; padding: 3rem 1rem; color: var(--text-secondary);">
+                                            <p style="font-size: 1.1rem;">⚖️ Subscriber IQ Compare</p>
+                                            <p style="font-size: 0.85rem; margin-top: 0.5rem;">Select profiles from the left to compare key metrics, demographics, and platform data side-by-side</p>
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
                         </div>
 
@@ -49431,7 +49460,273 @@
             const modal = document.getElementById('subscriberCompareAllModal');
             if (modal) modal.style.display = 'none';
         }
-        
+
+        // ─── Subscriber IQ Compare Tab ───────────────────────────────────────
+        let _subCompSelected = new Set();
+        let _subCompLoadedData = {};
+
+        function initSubCompareProfileList() {
+            renderSubCompareProfileList();
+        }
+
+        function renderSubCompareProfileList(filter) {
+            const container = document.getElementById('subCompProfileList');
+            if (!container) return;
+            const search = (filter || '').toLowerCase();
+            const profiles = subscriberProfiles || [];
+            const filtered = search
+                ? profiles.filter(p => (p.show_name || '').toLowerCase().includes(search) || (p.category || '').toLowerCase().includes(search))
+                : profiles;
+
+            if (filtered.length === 0) {
+                container.innerHTML = '<div style="padding: 1rem; color: var(--text-secondary); font-size: 0.8rem;">No profiles found</div>';
+                return;
+            }
+
+            // Group by platform (same logic as sidebar)
+            const byPlatform = {};
+            filtered.forEach(file => {
+                const category = getSubscriberIqCategoryDisplay(file.category || 'SVOD Acquisition');
+                let platform = category, type = 'OTHER';
+                const dashIdx = category.indexOf(' - ');
+                if (dashIdx > -1) { type = category.substring(0, dashIdx).trim(); platform = category.substring(dashIdx + 3).trim(); }
+                if (!byPlatform[platform]) byPlatform[platform] = [];
+                byPlatform[platform].push(file);
+            });
+
+            const sortedPlatforms = Object.keys(byPlatform).sort();
+            let html = '';
+            sortedPlatforms.forEach(platform => {
+                html += `<div style="font-size: 0.72rem; font-weight: 700; color: var(--text-secondary); padding: 0.5rem 0 0.2rem 0; text-transform: uppercase; letter-spacing: 0.03em; border-bottom: 1px solid var(--border-color); margin-top: 0.3rem;">${platform}</div>`;
+                byPlatform[platform].sort((a, b) => (a.show_name || '').localeCompare(b.show_name || '')).forEach(file => {
+                    const id = file.s3_key;
+                    const checked = _subCompSelected.has(id);
+                    const name = (file.show_name || 'Unknown').replace(/</g, '&lt;');
+                    html += `
+                        <label style="display: flex; align-items: center; gap: 0.5rem; padding: 0.35rem 0.25rem; cursor: pointer; font-size: 0.82rem; border-radius: 4px;" onmouseenter="this.style.background='rgba(0,217,255,0.06)'" onmouseleave="this.style.background=''">
+                            <input type="checkbox" ${checked ? 'checked' : ''} onchange="toggleSubCompProfile('${id.replace(/'/g, "\\'")}')" style="width: 16px; height: 16px; cursor: pointer; accent-color: var(--accent-cyan);">
+                            <span style="color: var(--text-primary);">${name}</span>
+                        </label>
+                    `;
+                });
+            });
+            container.innerHTML = html;
+        }
+
+        function filterSubCompareProfiles() {
+            const search = (document.getElementById('subCompSearchInput')?.value || '').trim();
+            renderSubCompareProfileList(search);
+        }
+
+        function toggleSubCompProfile(id) {
+            if (_subCompSelected.has(id)) _subCompSelected.delete(id);
+            else _subCompSelected.add(id);
+            updateSubCompCount();
+            runSubComparison();
+        }
+
+        function clearSubCompare() {
+            _subCompSelected.clear();
+            _subCompLoadedData = {};
+            updateSubCompCount();
+            renderSubCompareProfileList((document.getElementById('subCompSearchInput')?.value || '').trim());
+            document.getElementById('subCompResults').innerHTML = '<div class="comparison-empty" style="text-align: center; padding: 3rem 1rem; color: var(--text-secondary);"><p style="font-size: 1.1rem;">⚖️ Subscriber IQ Compare</p><p style="font-size: 0.85rem; margin-top: 0.5rem;">Select profiles from the left to compare key metrics, demographics, and platform data side-by-side</p></div>';
+        }
+
+        function updateSubCompCount() {
+            const el = document.querySelector('.sub-comp-selected-count');
+            if (el) el.textContent = `${_subCompSelected.size} selected`;
+        }
+
+        async function runSubComparison() {
+            const results = document.getElementById('subCompResults');
+            if (_subCompSelected.size < 2) {
+                results.innerHTML = '<div class="comparison-empty" style="text-align: center; padding: 3rem 1rem; color: var(--text-secondary);"><p style="font-size: 1.1rem;">⚖️ Select at least 2 profiles</p><p style="font-size: 0.85rem; margin-top: 0.5rem;">Check profiles from the sidebar to compare them side-by-side</p></div>';
+                return;
+            }
+            results.innerHTML = '<div style="text-align: center; padding: 2rem; color: var(--text-secondary);">Loading comparison data...</div>';
+
+            const ids = Array.from(_subCompSelected);
+            const profilesData = [];
+
+            for (const id of ids) {
+                if (_subCompLoadedData[id]) { profilesData.push(_subCompLoadedData[id]); continue; }
+                // Check open tabs first
+                const openTab = openSubscriberTabs.find(t => t.id === id);
+                if (openTab && openTab.data) {
+                    const entry = { id, name: openTab.name || 'Unknown', data: openTab.data.data || openTab.data };
+                    _subCompLoadedData[id] = entry;
+                    profilesData.push(entry);
+                    continue;
+                }
+                // Fetch from API
+                try {
+                    const resp = await fetch(`/api/subscriber-iq/data/${encodeURIComponent(id)}`, { credentials: 'same-origin' });
+                    if (resp.status === 401) { window.location.href = '/login'; return; }
+                    const json = await resp.json();
+                    if (json.success) {
+                        const entry = { id, name: json.show || 'Unknown', data: json.data || json };
+                        _subCompLoadedData[id] = entry;
+                        profilesData.push(entry);
+                    }
+                } catch (e) { console.warn('Sub compare fetch error:', e); }
+            }
+
+            if (profilesData.length < 2) {
+                results.innerHTML = '<div style="text-align: center; padding: 2rem; color: var(--text-secondary);">Could not load enough profiles for comparison.</div>';
+                return;
+            }
+
+            renderSubComparisonTable(profilesData, results);
+        }
+
+        function renderSubComparisonTable(profilesData, container) {
+            const names = profilesData.map(p => (p.name || 'Unknown').replace(/</g, '&lt;'));
+
+            // Key metrics row definitions
+            const metricRows = [
+                { key: 'totalPlatformImpact', label: 'Total Platform Impact', higherBetter: true, format: v => formatNumber(v) },
+                { key: 'newSubscriberAcquisition', label: 'New Subscriber Acquisition', higherBetter: true, format: v => formatNumber(v) },
+                { key: 'audienceReach', label: 'Audience Reach', higherBetter: true, format: v => formatNumber(v) },
+                { key: 'conversionRate', label: 'Conversion Rate', higherBetter: true, format: v => (v != null ? v.toFixed(2) + '%' : '—') },
+                { key: 'dormantReactive', label: 'Dormant to Reactive', higherBetter: true, format: v => formatNumber(v) },
+                { key: 'avgDaysToSignup', label: 'Avg Days to Signup', higherBetter: false, format: v => (v != null ? Math.round(v) + ' days' : 'N/A') }
+            ];
+
+            // Build metrics per profile using getSubscriberTabMetrics-style extraction
+            const metricsPerProfile = profilesData.map(p => {
+                const d = p.data || {};
+                const km = d.key_metrics || {};
+                const as = d.attribution_summary || {};
+                const tw = Number(km.total_watchers?.count) || 0;
+                const ns = Number(km.new_signups?.count) || 0;
+                const twGP = km.total_watchers?.gen_pop;
+                const nsGP = km.new_signups?.gen_pop;
+                const totalSignups = Number(as.total?.count) || ns;
+                const attributed = Number(as.attributed?.count) || 0;
+                const dormant = Number(as.dormant_reactive?.count) || 0;
+                const tcr = km.total_conversion_rate || '';
+                const twProj = parseNumber(twGP);
+                const npsProj = parseNumber(nsGP);
+                const conv = (tcr && String(tcr).trim()) ? parseFloat(String(tcr).replace('%', ''))
+                    : (twProj && twProj > 0 && npsProj != null) ? (npsProj / twProj) * 100
+                    : (tw > 0 && ns > 0 ? (ns / tw) * 100 : 0);
+                const adRaw = km.avg_days_to_signup;
+                const avgDays = (adRaw != null && String(adRaw).trim() && String(adRaw) !== 'N/A')
+                    ? parseFloat(String(adRaw).replace(/[^0-9.-]/g, '')) : null;
+                return { totalPlatformImpact: totalSignups, newSubscriberAcquisition: attributed, audienceReach: tw, conversionRate: conv, dormantReactive: dormant, avgDaysToSignup: avgDays };
+            });
+
+            // Build table HTML
+            let html = '<h3 style="margin: 0 0 1rem 0; color: var(--accent-cyan);">📊 Key Metrics Comparison</h3>';
+            html += '<table class="rankers-table" style="width: 100%; border-collapse: collapse; font-size: 0.85rem;">';
+            html += '<thead><tr><th style="text-align: left; padding: 0.75rem; border-bottom: 2px solid var(--border-color);">Metric</th>';
+            names.forEach(n => { html += `<th style="text-align: center; padding: 0.75rem; border-bottom: 2px solid var(--border-color); max-width: 180px; word-wrap: break-word;">${n}</th>`; });
+            html += '</tr></thead><tbody>';
+
+            metricRows.forEach(row => {
+                const values = metricsPerProfile.map(m => m[row.key]);
+                const nums = values.map(v => row.key === 'avgDaysToSignup' ? (v != null ? Number(v) : Infinity) : (Number(v) || 0));
+                const finite = row.key === 'avgDaysToSignup' ? nums.filter(x => x !== Infinity && !isNaN(x)) : nums;
+                const best = row.higherBetter ? Math.max(...nums) : (finite.length ? Math.min(...finite) : null);
+                const bestIdx = best == null ? -1 : nums.indexOf(best);
+
+                html += '<tr>';
+                html += `<td style="padding: 0.75rem; border-bottom: 1px solid var(--border-color); font-weight: 500;">${row.label}</td>`;
+                metricsPerProfile.forEach((m, i) => {
+                    const display = row.format(m[row.key]);
+                    const isBest = i === bestIdx;
+                    html += `<td style="text-align: center; padding: 0.75rem; border-bottom: 1px solid var(--border-color); ${isBest ? 'background: rgba(16,185,129,0.15); color: var(--accent-lime); font-weight: 600;' : ''}">${display}</td>`;
+                });
+                html += '</tr>';
+            });
+            html += '</tbody></table>';
+
+            // Demographics comparison (Age)
+            const hasDemoAge = profilesData.some(p => (p.data?.demographics?.age || []).length > 0);
+            if (hasDemoAge) {
+                html += '<h3 style="margin: 2rem 0 1rem 0; color: var(--accent-cyan);">👥 Age Demographics</h3>';
+                const allAgeKeys = new Set();
+                profilesData.forEach(p => { (p.data?.demographics?.age || []).forEach(d => { const k = d.age_range || d.age || ''; if (k && k !== 'GENDER' && k !== 'N/A') allAgeKeys.add(k); }); });
+                const ageKeys = Array.from(allAgeKeys);
+                html += '<table class="rankers-table" style="width: 100%; border-collapse: collapse; font-size: 0.85rem;">';
+                html += '<thead><tr><th style="text-align: left; padding: 0.6rem; border-bottom: 2px solid var(--border-color);">Age Range</th>';
+                names.forEach(n => { html += `<th style="text-align: center; padding: 0.6rem; border-bottom: 2px solid var(--border-color);">${n}</th>`; });
+                html += '</tr></thead><tbody>';
+                ageKeys.forEach(key => {
+                    html += '<tr>';
+                    html += `<td style="padding: 0.6rem; border-bottom: 1px solid var(--border-color); font-weight: 500;">${key}</td>`;
+                    profilesData.forEach(p => {
+                        const match = (p.data?.demographics?.age || []).find(d => (d.age_range || d.age) === key);
+                        const pct = match ? (match.percentage || '—') : '—';
+                        html += `<td style="text-align: center; padding: 0.6rem; border-bottom: 1px solid var(--border-color);">${pct}</td>`;
+                    });
+                    html += '</tr>';
+                });
+                html += '</tbody></table>';
+            }
+
+            // Demographics comparison (Gender)
+            const genderKeywords = ['MALE', 'FEMALE'];
+            const hasDemoGender = profilesData.some(p => {
+                const demos = p.data?.demographics?.gender || p.data?.demographics?.age || [];
+                return demos.some(d => genderKeywords.some(kw => ((d.gender || d.age_range || d.age || '').toUpperCase()).includes(kw)));
+            });
+            if (hasDemoGender) {
+                html += '<h3 style="margin: 2rem 0 1rem 0; color: var(--accent-cyan);">👥 Gender Demographics</h3>';
+                const allGenderKeys = new Set();
+                profilesData.forEach(p => {
+                    const demos = [...(p.data?.demographics?.gender || []), ...(p.data?.demographics?.age || [])];
+                    demos.forEach(d => { const k = (d.gender || d.age_range || d.age || '').toUpperCase(); if (genderKeywords.some(kw => k.includes(kw))) allGenderKeys.add(d.gender || d.age_range || d.age || ''); });
+                });
+                const genderKeys = Array.from(allGenderKeys);
+                html += '<table class="rankers-table" style="width: 100%; border-collapse: collapse; font-size: 0.85rem;">';
+                html += '<thead><tr><th style="text-align: left; padding: 0.6rem; border-bottom: 2px solid var(--border-color);">Gender</th>';
+                names.forEach(n => { html += `<th style="text-align: center; padding: 0.6rem; border-bottom: 2px solid var(--border-color);">${n}</th>`; });
+                html += '</tr></thead><tbody>';
+                genderKeys.forEach(key => {
+                    html += '<tr>';
+                    html += `<td style="padding: 0.6rem; border-bottom: 1px solid var(--border-color); font-weight: 500;">${key}</td>`;
+                    profilesData.forEach(p => {
+                        const demos = [...(p.data?.demographics?.gender || []), ...(p.data?.demographics?.age || [])];
+                        const match = demos.find(d => (d.gender || d.age_range || d.age) === key);
+                        const pct = match ? (match.percentage || '—') : '—';
+                        html += `<td style="text-align: center; padding: 0.6rem; border-bottom: 1px solid var(--border-color);">${pct}</td>`;
+                    });
+                    html += '</tr>';
+                });
+                html += '</tbody></table>';
+            }
+
+            // Platform comparison
+            const hasPlat = profilesData.some(p => (p.data?.platforms || []).length > 0);
+            if (hasPlat) {
+                html += '<h3 style="margin: 2rem 0 1rem 0; color: var(--accent-cyan);">📱 SVOD Platform Overlap</h3>';
+                const allPlats = new Set();
+                profilesData.forEach(p => { (p.data?.platforms || []).forEach(pl => { const n = pl.platform || pl.name || ''; if (n) allPlats.add(n); }); });
+                const platKeys = Array.from(allPlats).sort();
+                html += '<table class="rankers-table" style="width: 100%; border-collapse: collapse; font-size: 0.85rem;">';
+                html += '<thead><tr><th style="text-align: left; padding: 0.6rem; border-bottom: 2px solid var(--border-color);">Platform</th>';
+                names.forEach(n => { html += `<th style="text-align: center; padding: 0.6rem; border-bottom: 2px solid var(--border-color);">${n}</th>`; });
+                html += '</tr></thead><tbody>';
+                platKeys.forEach(key => {
+                    html += '<tr>';
+                    html += `<td style="padding: 0.6rem; border-bottom: 1px solid var(--border-color); font-weight: 500;">${key}</td>`;
+                    profilesData.forEach(p => {
+                        const match = (p.data?.platforms || []).find(pl => (pl.platform || pl.name) === key);
+                        const pct = match ? (match.percentage || match.pct || '—') : '—';
+                        html += `<td style="text-align: center; padding: 0.6rem; border-bottom: 1px solid var(--border-color);">${pct}</td>`;
+                    });
+                    html += '</tr>';
+                });
+                html += '</tbody></table>';
+            }
+
+            container.innerHTML = html;
+        }
+
+        // ─── End Subscriber IQ Compare Tab ───────────────────────────────────
+
         async function selectSubscriberProfile(s3Key) {
             console.log('🔍 Selecting subscriber profile:', s3Key);
             
@@ -49890,6 +50185,11 @@
             });
             if (clickedButton) {
                 clickedButton.classList.add('active');
+            }
+
+            // Init compare sidebar when switching to compare tab
+            if (tabName === 'compare') {
+                initSubCompareProfileList();
             }
             
             // Scroll to top
