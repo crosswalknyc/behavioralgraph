@@ -33103,14 +33103,18 @@
             if (loading) loading.style.display = '';
             var loadingMsg = document.getElementById('jiqDashLoadingMsg');
             if (loadingMsg) loadingMsg.textContent = 'Fetching ' + key;
-            fetch('/api/journey-iq/results/' + encodeURIComponent(key), { credentials: 'same-origin' })
-                .then(function(r) { return r.json(); })
-                .then(function(payload) {
+            Promise.all([
+                fetch('/api/journey-iq/results/' + encodeURIComponent(key), { credentials: 'same-origin' }).then(function(r) { return r.json(); }),
+                fetch('/api/journey-iq/annotations/' + encodeURIComponent(key), { credentials: 'same-origin' }).then(function(r) { return r.json(); }).catch(function() { return { annotations: [] }; })
+            ]).then(function(results) {
+                    var payload = results[0];
+                    var annotData = results[1];
                     if (!payload || !payload.success || !payload.data) {
                         if (loadingMsg) loadingMsg.textContent = 'Failed to load: ' + ((payload || {}).error || 'unknown error');
                         return;
                     }
                     _jiqCurrentRun = payload.data;
+                    window._jiqCurrentAnnotations = (annotData && annotData.annotations) || [];
                     _jiqCurrentClusterIdx = 0;
                     _jiqCurrentCut = 'inception';
                     window._jiqCurrentView = 'blended';
@@ -33805,7 +33809,8 @@
                 renderJourneyIqTvTrends(
                     d.viewership_trends
                     || ((fullRun || {}).modeled_view || {}).viewership_trends
-                    || (fullRun || {}).viewership_trends
+                    || (fullRun || {}).viewership_trends,
+                    window._jiqCurrentAnnotations || []
                 );
             }
 
@@ -36853,7 +36858,8 @@
         // index that overrides hover until the user releases the pin.
         var _jiqTrendsState = null;
 
-        function renderJourneyIqTvTrends(trends) {
+        function renderJourneyIqTvTrends(trends, annotations) {
+            annotations = annotations || [];
             var card = document.getElementById('jiqTvTrendsCard');
             if (!card) return;
             var hasData = trends
@@ -36934,7 +36940,7 @@
             var _trendsTargetW = function() {
                 return (chartEl && chartEl.clientWidth) || 880;
             };
-            var rendered = _jiqRenderTrendsSparkline(weekly, _trendsTargetW());
+            var rendered = _jiqRenderTrendsSparkline(weekly, _trendsTargetW(), annotations);
             if (chartEl) chartEl.innerHTML = rendered.svg;
 
             // ---- Seed interactive state to "latest week + latest month" ----
@@ -36942,6 +36948,7 @@
                 trends:           trends,
                 weekly:           weekly,
                 monthly:          monthly,
+                annotations:      annotations,
                 weekToMonthIdx:   weekToMonthIdx,
                 latestWeekIdx:    weekly.length  - 1,
                 latestMonthIdx:   monthly.length - 1,
@@ -36971,7 +36978,7 @@
                     _rid = requestAnimationFrame(function() {
                         var s = _jiqTrendsState;
                         if (!s || !s.weekly) return;
-                        var rr = _jiqRenderTrendsSparkline(s.weekly, cw);
+                        var rr = _jiqRenderTrendsSparkline(s.weekly, cw, s.annotations || []);
                         chartEl.innerHTML = rr.svg;
                         s.dotPositions = rr.positions;
                         _jiqTrendsApplySelection();
@@ -37294,14 +37301,16 @@
         // hover, so pointer events stay live mid-motion.
         //
         // Returns { svg: <string>, positions: [{x, yA, yH}, ...] }.
-        function _jiqRenderTrendsSparkline(weekly, widthOverride) {
+        function _jiqRenderTrendsSparkline(weekly, widthOverride, annotations) {
+            annotations = annotations || [];
             if (!weekly || !weekly.length) return { svg: '', positions: [] };
             // W is dynamic: matches current container width so the SVG
             // truly fills the card. Clamped to sane bounds so labels
             // stay readable on extreme sizes.
             var W = Math.max(640, Math.min(widthOverride || 880, 2400));
-            var H = 220;
-            var padL = 60, padR = 60, padT = 18, padB = 44;
+            var hasAnnotations = annotations && annotations.length > 0;
+            var H = hasAnnotations ? 236 : 220;
+            var padL = 60, padR = 60, padT = 18, padB = hasAnnotations ? 58 : 44;
             var plotW = W - padL - padR;
             var plotH = H - padT - padB;
             var n = weekly.length;
@@ -37375,6 +37384,31 @@
                     var dx = positions[d2].x;
                     drops += '<text x="' + dx + '" y="' + (padT - 4) + '" font-size="9"'
                           + ' text-anchor="middle" fill="#a78bfa" font-weight="600" pointer-events="none">▼</text>';
+                }
+            }
+
+            // Context annotations (teal labels below the x-axis)
+            var annotSvg = '';
+            if (annotations && annotations.length) {
+                for (var ai = 0; ai < annotations.length; ai++) {
+                    var aDate = annotations[ai].date || '';
+                    var aCtx  = annotations[ai].context || '';
+                    if (!aDate || !aCtx) continue;
+                    // Find closest matching bucket by week_start or date comparison
+                    var bestIdx = -1, bestDist = Infinity;
+                    for (var bi = 0; bi < n; bi++) {
+                        var ws = weekly[bi].week_start || '';
+                        if (!ws) continue;
+                        var dist = Math.abs(new Date(aDate) - new Date(ws));
+                        if (dist < bestDist) { bestDist = dist; bestIdx = bi; }
+                    }
+                    if (bestIdx >= 0) {
+                        var ax = positions[bestIdx].x;
+                        var aLabel = aCtx.length > 20 ? aCtx.slice(0, 19) + '…' : aCtx;
+                        annotSvg += '<text x="' + ax + '" y="' + (padT + plotH + 40) + '" font-size="9"'
+                                  + ' text-anchor="middle" fill="var(--accent-cyan)" font-weight="600" pointer-events="none">'
+                                  + _jiqEsc(aLabel) + '</text>';
+                    }
                 }
             }
 
@@ -37485,6 +37519,7 @@
                 +   ptsH
                 +   ptsA
                 +   drops
+                +   annotSvg
                 +   ticks
                 +   leftAxis
                 +   rightAxis

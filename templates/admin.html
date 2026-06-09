@@ -10027,6 +10027,13 @@
                     // Populate category filter
                     populateCategoryFilter(categories);
                     
+                    // Fetch Journey IQ runs for the content accordion
+                    try {
+                        const jiqResp = await fetch('/api/journey-iq/list?include_archive=1');
+                        const jiqData = await jiqResp.json();
+                        window._jiqAdminRuns = (jiqData.runs || []).concat(jiqData.archived_runs || []);
+                    } catch (e) { window._jiqAdminRuns = []; }
+
                     // Sort and render content
                     sortContentFiles();
                     
@@ -10295,6 +10302,53 @@
                 `;
             }
             
+            // DIGITAL JOURNEY IQ section — fetched separately from /api/journey-iq/list
+            if (window._jiqAdminRuns && window._jiqAdminRuns.length > 0) {
+                const jiqRuns = window._jiqAdminRuns;
+                html += `
+                    <div class="category-accordion" data-category="DIGITAL JOURNEY IQ" data-master-category="true">
+                        <div class="category-accordion-header" onclick="toggleAccordion(this)">
+                            <div class="category-accordion-title">
+                                <span class="category-accordion-arrow">▼</span>
+                                <span>🗺️ DIGITAL JOURNEY IQ</span>
+                                <span class="badge badge-user">${jiqRuns.length} profiles</span>
+                            </div>
+                        </div>
+                        <div class="category-accordion-content">
+                            <table class="content-table">
+                                <thead>
+                                    <tr>
+                                        <th>Profile</th>
+                                        <th>Target</th>
+                                        <th>Created</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    ${jiqRuns.map(run => {
+                                        const name = run.project_name || run.target || '(unnamed)';
+                                        const target = run.target || '—';
+                                        const created = run.created_at ? new Date(run.created_at).toLocaleDateString() : '—';
+                                        const escapedKey = (run.key || '').replace(/'/g, "\\'");
+                                        return `<tr>
+                                            <td style="font-weight: 600;">${name}</td>
+                                            <td>${target}</td>
+                                            <td>${created}</td>
+                                            <td>
+                                                <div class="action-buttons">
+                                                    <button class="btn btn-small btn-danger btn-icon" onclick="deleteJourneyIqRun('${escapedKey}')" title="Delete permanently">🗑️</button>
+                                                    <button class="btn btn-small btn-icon" onclick="openJiqAnnotationsModal('${escapedKey}', '${name.replace(/'/g, "\\'")}')" title="Add context annotations" style="background: #fbbf24; color: #000;">‼️</button>
+                                                </div>
+                                            </td>
+                                        </tr>`;
+                                    }).join('')}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                `;
+            }
+
             // Then render regular files grouped by category
             html += sortedCategories.map(category => {
                 const catFiles = byCategory[category];
@@ -12149,6 +12203,127 @@
                 showToast('Network error: ' + error.message, true);
             }
         }
+        // ── DIGITAL JOURNEY IQ: Delete + Annotations ─────────────────
+
+        async function deleteJourneyIqRun(s3Key) {
+            if (!confirm('⚠️ Permanently delete this Journey IQ profile?\n\nThis cannot be undone.')) return;
+            try {
+                const resp = await fetch('/api/admin/journey-iq/delete', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ s3_key: s3Key })
+                });
+                const data = await resp.json();
+                if (data.success) {
+                    showToast('Journey IQ profile deleted');
+                    loadContentFiles();
+                } else {
+                    showToast('Error: ' + (data.error || 'Delete failed'), true);
+                }
+            } catch (e) {
+                showToast('Network error: ' + e.message, true);
+            }
+        }
+
+        let _jiqAnnotModalKey = '';
+        let _jiqAnnotModalEntries = [];
+
+        async function openJiqAnnotationsModal(s3Key, profileName) {
+            _jiqAnnotModalKey = s3Key;
+            _jiqAnnotModalEntries = [];
+            // Load existing annotations
+            try {
+                const resp = await fetch('/api/journey-iq/annotations/' + encodeURIComponent(s3Key));
+                const data = await resp.json();
+                if (data.success) _jiqAnnotModalEntries = data.annotations || [];
+            } catch (e) {}
+            // Build modal
+            const overlay = document.getElementById('jiqAnnotModalOverlay');
+            document.getElementById('jiqAnnotModalTitle').textContent = 'Context Annotations — ' + profileName;
+            _jiqAnnotRenderList();
+            overlay.style.display = 'flex';
+        }
+
+        function closeJiqAnnotModal() {
+            document.getElementById('jiqAnnotModalOverlay').style.display = 'none';
+        }
+
+        function _jiqAnnotRenderList() {
+            const listEl = document.getElementById('jiqAnnotList');
+            if (_jiqAnnotModalEntries.length === 0) {
+                listEl.innerHTML = '<p style="color: var(--text-secondary); font-size: 0.85rem;">No annotations yet.</p>';
+                return;
+            }
+            listEl.innerHTML = _jiqAnnotModalEntries.map((e, i) => `
+                <div style="display: flex; align-items: center; gap: 0.5rem; padding: 0.4rem 0; border-bottom: 1px solid var(--border-color);">
+                    <span style="font-weight: 600; min-width: 90px;">${e.date}</span>
+                    <span style="flex: 1;">${e.context}</span>
+                    <button class="btn btn-small btn-danger btn-icon" onclick="_jiqAnnotRemove(${i})" title="Remove">✕</button>
+                </div>
+            `).join('');
+        }
+
+        function _jiqAnnotRemove(idx) {
+            _jiqAnnotModalEntries.splice(idx, 1);
+            _jiqAnnotRenderList();
+        }
+
+        function _jiqAnnotAdd() {
+            const dateEl = document.getElementById('jiqAnnotDate');
+            const ctxEl = document.getElementById('jiqAnnotContext');
+            const d = dateEl.value;
+            const c = ctxEl.value.trim();
+            if (!d || !c) { showToast('Please enter both a date and context', true); return; }
+            _jiqAnnotModalEntries.push({ date: d, context: c });
+            dateEl.value = '';
+            ctxEl.value = '';
+            _jiqAnnotRenderList();
+        }
+
+        async function _jiqAnnotSave() {
+            try {
+                const resp = await fetch('/api/admin/journey-iq/annotations/' + encodeURIComponent(_jiqAnnotModalKey), {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ annotations: _jiqAnnotModalEntries })
+                });
+                const data = await resp.json();
+                if (data.success) {
+                    showToast('Annotations saved!');
+                    closeJiqAnnotModal();
+                } else {
+                    showToast('Error: ' + (data.error || 'Save failed'), true);
+                }
+            } catch (e) {
+                showToast('Network error: ' + e.message, true);
+            }
+        }
     </script>
+
+    <!-- Journey IQ Annotations Modal -->
+    <div id="jiqAnnotModalOverlay" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.6); z-index:9999; align-items:center; justify-content:center;">
+        <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 1.5rem; width: 90%; max-width: 520px; max-height: 80vh; overflow-y: auto;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                <h3 id="jiqAnnotModalTitle" style="margin: 0; font-size: 1rem;">Context Annotations</h3>
+                <button onclick="closeJiqAnnotModal()" style="background:none; border:none; font-size:1.2rem; cursor:pointer; color: var(--text-primary);">✕</button>
+            </div>
+            <div id="jiqAnnotList" style="margin-bottom: 1rem;"></div>
+            <div style="display: flex; gap: 0.5rem; align-items: flex-end; margin-bottom: 1rem; flex-wrap: wrap;">
+                <div style="display: flex; flex-direction: column; gap: 0.25rem;">
+                    <label style="font-size: 0.75rem; color: var(--text-secondary);">Date</label>
+                    <input type="date" id="jiqAnnotDate" style="padding: 0.4rem; border-radius: 6px; border: 1px solid var(--border-color); background: var(--bg-input); color: var(--text-primary);">
+                </div>
+                <div style="display: flex; flex-direction: column; gap: 0.25rem; flex: 1;">
+                    <label style="font-size: 0.75rem; color: var(--text-secondary);">Context</label>
+                    <input type="text" id="jiqAnnotContext" placeholder="e.g. Season Finale" style="padding: 0.4rem; border-radius: 6px; border: 1px solid var(--border-color); background: var(--bg-input); color: var(--text-primary); width: 100%;">
+                </div>
+                <button onclick="_jiqAnnotAdd()" class="btn btn-small" style="background: var(--accent-cyan); color: #fff; white-space: nowrap;">+ Add</button>
+            </div>
+            <div style="display: flex; justify-content: flex-end; gap: 0.5rem;">
+                <button onclick="closeJiqAnnotModal()" class="btn btn-small" style="background: var(--bg-input); color: var(--text-primary);">Cancel</button>
+                <button onclick="_jiqAnnotSave()" class="btn btn-small" style="background: var(--accent-primary); color: #fff;">Save Annotations</button>
+            </div>
+        </div>
+    </div>
 </body>
 </html>
