@@ -4740,18 +4740,64 @@ def write_output(df_summary, df_comp, df_demo, df_timing, df_episode_attribution
     genre = p.get('genre', '')
     content_cadence = p.get('content_cadence', '')
 
+    # ── Pre-2021 panel-cutoff disclaimer ────────────────────────────────
+    # Subscriber-IQ panel data only goes back to 2021-01-01. When any tracked
+    # episode aired before that, the "Analysis Date Range" we expose to the
+    # dashboard MUST reflect the panel window we actually have measurement
+    # for (2021-01-01 → 2025-12-31), not the show's original airing window —
+    # otherwise the dashboard renders nonsense KPIs like "0 signups during
+    # 2019-06-16 to 2019-08-04" for shows whose viewing all happened years
+    # later. We also emit an "Episode Date Availability Note" header row
+    # that the dashboard surfaces on the Episode Dates tab (see
+    # templates/index.html renderSubscriberEpisodeDates) so analysts
+    # immediately understand why air dates pre-date the analysis window.
+    # Idempotent re-applies live in scripts/apply_pre_2021_disclaimer.py.
+    _earliest_episode_dt = None
+    try:
+        for _ep in (p.get('episode_dates') or []):
+            _d = _ep['air_date'] if isinstance(_ep, dict) else _ep
+            if hasattr(_d, 'year'):
+                if _earliest_episode_dt is None or _d < _earliest_episode_dt:
+                    _earliest_episode_dt = _d
+    except Exception:
+        _earliest_episode_dt = None
+    _PANEL_START = datetime(2021, 1, 1).date()
+    _PANEL_END   = datetime(2025, 12, 31).date()
+    _force_panel_window = bool(
+        _earliest_episode_dt is not None
+        and (_earliest_episode_dt if not hasattr(_earliest_episode_dt, 'date')
+             else _earliest_episode_dt).strftime('%Y-%m-%d') < '2021-01-01'
+    )
+    if _force_panel_window:
+        analysis_range_str = f"{_PANEL_START} to {_PANEL_END}"
+    else:
+        analysis_range_str = f"{p['campaign_start'].date()} to {p['campaign_end'].date()}"
+
     # Build output rows matching Landman CSV format exactly (columns set on DataFrame below)
     rows = [
         ("", "", "SHOW-TO-PLATFORM ATTRIBUTION RESULTS", "", "", "", "", "", "", ""),
         ("", "", "", "", "", "", "", "", "", ""),
         ("Show/Content Tracked", "", "", ", ".join(p['show_search_terms']), "", "", "", "", "", ""),
         ("Platform Tracked", "", "", p['platform_name'], "", "", "", "", "", ""),
-        ("Analysis Date Range", "", "", f"{p['campaign_start'].date()} to {p['campaign_end'].date()}", "", "", "", "", "", ""),
+        ("Analysis Date Range", "", "", analysis_range_str, "", "", "", "", "", ""),
+    ]
+    if _force_panel_window:
+        rows.append((
+            "Episode Date Availability Note", "", "",
+            "Episodes tracked were watched after the original air date due to availability of data.",
+            "", "", "", "", "", "",
+        ))
+    rows.extend([
         ("Exclusion Window (days)", "", p['exclusion_days'], "", "", "", "", "", "", ""),
         ("Attribution Window (days)", "", p['attribution_window'], "", "", "", "", "", "", ""),
         ("Genre", "", "", genre, "", "", "", "", "", ""),
         ("Content Cadence", "", "", content_cadence, "", "", "", "", "", ""),
         ("", "", "", "", "", "", "", "", "", ""),
+    ])
+    # KEY METRICS and the rest of the header below. Split into a second
+    # extend() so the conditional Episode Date Availability Note insert
+    # above doesn't require re-indenting the entire literal.
+    rows.extend([
         ("", "", "KEY METRICS", "", "", "", "", "", "", "Gen Pop Projection"),
         ("Total Show Watchers", "", total_watchers, "", "", "", "", "", "", format_gen_pop(gen_pop_projection(total_watchers))),
         ("Pre-Existing Series Viewers", "", pre_existing, "", "", "", "", "", "", format_gen_pop(gen_pop_projection(pre_existing))),
@@ -4760,7 +4806,7 @@ def write_output(df_summary, df_comp, df_demo, df_timing, df_episode_attribution
         ("Clean Conversion Rate", "", "", "", "", "", "", "", f"{_new_only_conv:.2f}%", ""),
         ("Total Show Conversion Rate", "", "", "", "", "", "", "", f"{total_show_conversion:.2f}%", ""),
         ("Average Days from Show Available to Signup", "", "", "", avg_days, "days", "", "", "", ""),
-    ]
+    ])
 
     # Add per-episode/date attribution (Landman: Category, Episode Date, Count, Count Label, Secondary Count, Secondary Label, Tertiary Count, Tertiary Label, Percentage, Gen Pop Projection)
     if not df_episode_attribution.empty:

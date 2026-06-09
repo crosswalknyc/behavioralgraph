@@ -50445,7 +50445,20 @@
                 // surfaced — the override flag (_episode_dates_admin_override)
                 // still flows through in the API payload, just not shown in
                 // the UI. The agent-search note is still surfaced.
+                //
+                // Data-availability disclaimer: when the CSV header carries
+                // an "Episode Date Availability Note" row (currently auto-
+                // emitted for any show whose earliest episode aired before
+                // the 2021-01-01 panel cutoff — see
+                // scripts/apply_pre_2021_disclaimer.py and
+                // SVOD_Churn_Attribution.run_synthetic_attribution), we
+                // surface it FIRST so analysts immediately understand why
+                // the listed air dates pre-date the analysis window.
                 const notes = [];
+                const availabilityNote = data && data.metadata && data.metadata.episode_date_availability_note;
+                if (availabilityNote) {
+                    notes.push(availabilityNote);
+                }
                 if (data && data._episode_dates_agent_note) {
                     notes.push(data._episode_dates_agent_note);
                 }
