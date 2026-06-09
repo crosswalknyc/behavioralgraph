@@ -39404,8 +39404,11 @@
         function _sotHeatColor(delta) {
             var abs = Math.min(Math.abs(delta), 15);
             var intensity = abs / 15;
-            if (delta > 0) return 'rgba(52,211,153,' + (0.1 + intensity * 0.55).toFixed(2) + ')';
-            if (delta < 0) return 'rgba(248,113,113,' + (0.1 + intensity * 0.55).toFixed(2) + ')';
+            var isLight = document.body.getAttribute('data-theme') === 'light';
+            var minAlpha = isLight ? 0.35 : 0.1;
+            var alphaRange = isLight ? 0.55 : 0.55;
+            if (delta > 0) return 'rgba(16,185,129,' + (minAlpha + intensity * alphaRange).toFixed(2) + ')';
+            if (delta < 0) return 'rgba(239,68,68,' + (minAlpha + intensity * alphaRange).toFixed(2) + ')';
             return 'transparent';
         }
 
