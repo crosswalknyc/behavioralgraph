@@ -339,13 +339,43 @@ def blue_iq_cache_key(filters: dict) -> str:
             current web research. v7 payloads don't carry the field
             and the card would still show the static copy; bump
             invalidates them.
+      v9 — 2026-06-09: Trending card now falls back to raw Google
+            Trends rows when the political filter empties the list
+            (common for small-DMA / off-cycle geos where Trends is
+            dominated by sports / weather / local human-interest).
+            Added `used_fallback` to trending_meta and a sentinel
+            `why_political = 'unfiltered'` on fallback rows. v8
+            payloads only carry filtered-or-empty trending_local so
+            the card would still render the "none cleared the
+            political filter" placeholder; bump invalidates.
+     v10 — 2026-06-09: fixed Issue × Geo heatmap "every state has
+            identical count" bug. _bucket_search_terms_via_global_map
+            was falling back to the global bucket list (verbatim
+            counts) when a state cell's top queries couldn't be
+            mapped, so every such state inherited the same global
+            count for every bucket (e.g. every state showed 94 for
+            "Other Policy"). Added strict mode and switched per-cell
+            aggregation in _compute_issue_geo to use it. v9 payloads
+            carry the bogus uniform counts; bump invalidates.
+     v11 — 2026-06-09: "Issue → next action flow" thin-cross-signal
+            branch is now agent-built. When the panel cross only
+            surfaces a single issue bucket, the card renders a
+            multi-step funnel (SEARCHED → NEXT → THEN) from
+            path_discovery + agent-supplied where_to_buy /
+            creative_direction from playbook_discovery, instead of
+            a single 100% bar with the generic static copy. Also
+            defensively merges issue_journey_cross buckets into the
+            agent inputs so the thin branch always has a researched
+            path/playbook entry to look up. v10 payloads pre-date
+            both behaviors; bump invalidates so the thin branch
+            picks up the agent payload on next request.
     """
     canonical = json.dumps({
         'party':     filters.get('party') or 'All',
         'geo_type':  filters.get('geo_type') or 'National',
         'geo_value': filters.get('geo_value') or '',
         'lookback':  int(filters.get('lookback_days') or DEFAULT_LOOKBACK_DAYS),
-        'version':   8,
+        'version':   11,
     }, sort_keys=True, separators=(',', ':'))
     return hashlib.sha256(canonical.encode('utf-8')).hexdigest()
 
@@ -1454,9 +1484,21 @@ def _slice_cube(cube: dict, filters: dict) -> tuple[Optional[dict], int]:
 
 
 def _bucket_search_terms_via_global_map(top_search_queries: list[dict],
-                                          issue_buckets_global: list[dict]) -> list[dict]:
+                                          issue_buckets_global: list[dict],
+                                          *, strict: bool = False) -> list[dict]:
     """Map a cell's top search queries to political-issue buckets using the
     GLOBAL bucket assignments from the cube (no fresh OpenAI call needed).
+
+    strict=False (default): when none of the cell's top queries can be
+        mapped to the global bucket map, surface the global buckets
+        verbatim so a card never goes blank. SAFE for the single
+        national rollup card.
+
+    strict=True: when no mapping is found, return an empty list. REQUIRED
+        for per-cell aggregations (e.g. per-state heatmap) — otherwise
+        every cell that misses the map would be credited with the exact
+        same global counts, producing the "every state has identical 94
+        searches for Other Policy" bug.
     """
     if not top_search_queries or not issue_buckets_global:
         return []
@@ -1483,8 +1525,13 @@ def _bucket_search_terms_via_global_map(top_search_queries: list[dict],
             examples[b].append(row.get('term'))
 
     if not counts:
+        if strict:
+            return []
         # No per-cell mapping found — surface the global buckets instead so
-        # the card isn't blank. This is the "small slice" graceful path.
+        # the card isn't blank. This is the "small slice" graceful path
+        # ONLY appropriate for the single national rollup card. Per-cell
+        # aggregations must use strict=True so they don't all inherit the
+        # same global counts.
         return [dict(b, sample_queries=(b.get('sample_queries') or [])[:8]) for b in issue_buckets_global[:12]]
 
     total = sum(counts.values()) or 1
@@ -1539,8 +1586,12 @@ def _compute_issue_geo(cube: Optional[dict], issue_buckets_global: list[dict],
         if not panel_top_queries:
             continue
         cell_size = int(cell.get('uid_count') or 0)
+        # strict=True: don't fall back to global bucket counts for
+        # cells whose top queries miss the map — doing so would credit
+        # every such state with the same global counts (= every state
+        # shows identical "94 for Other Policy" in the heatmap).
         buckets = _bucket_search_terms_via_global_map(
-            panel_top_queries, issue_buckets_global)
+            panel_top_queries, issue_buckets_global, strict=True)
         for b in buckets:
             panel = int(b.get('count') or 0)
             if panel <= 0:
@@ -2252,13 +2303,34 @@ def compute_panel_view(filters: dict, *, force_refresh: bool = False) -> dict:
     trends_state_label = trends_state or 'United States'
     raw_trends = (external or {}).get('google_trends_top') or []
     pol_set = set(_load_politicians())
-    trending_local = _filter_trends_to_political(raw_trends, pol_set)[:25]
+    trending_political = _filter_trends_to_political(raw_trends, pol_set)[:25]
+    # Defensive fallback: when the political filter rejects every
+    # trending term for a slice (common for small-DMA / off-cycle
+    # geos where the trending topics are sports, weather, or local
+    # human-interest), surface the raw Google Trends list instead of
+    # showing an empty "nothing cleared the filter" placeholder.
+    # The card is still labeled "Trending political searches" so we
+    # tag fallback rows with `why_political = 'unfiltered'` —
+    # frontend treats this as a no-chip row but otherwise renders
+    # the term, traffic, and related queries normally.
+    used_fallback = False
+    if trending_political:
+        trending_local = trending_political
+    elif raw_trends:
+        trending_local = [
+            {**row, 'why_political': 'unfiltered'}
+            for row in raw_trends[:25]
+        ]
+        used_fallback = True
+    else:
+        trending_local = []
     trending_meta = {
         'geo_label':         trends_state_label,
         'geo_type':          f['geo_type'],
         'geo_value':         f['geo_value'],
         'raw_trends_count':  len(raw_trends),
-        'kept_after_filter': len(trending_local),
+        'kept_after_filter': len(trending_political),
+        'used_fallback':     used_fallback,
         'is_state_local':    trends_state is not None,
         'dma_resolved_via':  (DMA_TO_STATE.get(f['geo_value']) if f['geo_type'] == 'DMA' else None),
     }
@@ -2336,6 +2408,15 @@ def compute_panel_view(filters: dict, *, force_refresh: bool = False) -> dict:
         from path_discovery import discover_issue_paths
         _issue_names = [b.get('bucket') for b in (issue_buckets or [])[:12]
                           if b and b.get('bucket')]
+        # Defensive merge: any bucket that appears in issue_journey_cross
+        # but NOT in the top-12 issue_buckets (e.g. the single bucket the
+        # thin-cross-signal branch will render) still gets researched, so
+        # the frontend's thin-branch agent lookup never misses.
+        _cross_names = [c.get('bucket') for c in (issue_journey_cross or [])
+                          if c and c.get('bucket')]
+        for _name in _cross_names:
+            if _name and _name not in _issue_names:
+                _issue_names.append(_name)
         issue_paths_agent = discover_issue_paths(
             f['geo_type'], f['geo_value'], _issue_names
         ) if _issue_names else []
@@ -2359,11 +2440,23 @@ def compute_panel_view(filters: dict, *, force_refresh: bool = False) -> dict:
         from playbook_discovery import discover_creative_playbook
         _cross_by_issue = {(c.get('bucket') or ''): c
                             for c in (issue_journey_cross or [])}
-        _playbook_ctx: list[dict] = []
+        # Same defensive merge as the path agent: include any bucket
+        # that appears in the cross but not in the top-12 panel
+        # buckets, so the thin-cross single-issue UI branch always has
+        # an agent-supplied placement + creative recommendation.
+        _seen_buckets: set[str] = set()
+        _ordered_buckets: list[str] = []
         for _b in (issue_buckets or [])[:12]:
-            _bucket = _b.get('bucket') if _b else None
-            if not _bucket:
-                continue
+            _name = _b.get('bucket') if _b else None
+            if _name and _name not in _seen_buckets:
+                _seen_buckets.add(_name)
+                _ordered_buckets.append(_name)
+        for _name in _cross_by_issue.keys():
+            if _name and _name not in _seen_buckets:
+                _seen_buckets.add(_name)
+                _ordered_buckets.append(_name)
+        _playbook_ctx: list[dict] = []
+        for _bucket in _ordered_buckets[:12]:
             _cross = _cross_by_issue.get(_bucket) or {}
             _dests = sorted(
                 [d for d in (_cross.get('destinations') or [])
