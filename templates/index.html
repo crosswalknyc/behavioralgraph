@@ -17619,6 +17619,19 @@
                                         </div>
                                     </div>
                                 </div>
+                                <!-- Δ Target − Control strip: small bordered box centered between
+                                     the two cohort rows. Inner grid columns align with the four
+                                     KPI columns above & below (same minmax(150px, 1fr) + 1rem gap
+                                     and matching 1.5rem horizontal padding). -->
+                                <div id="bpiqDeltaRow" style="display: none; margin: -0.5rem 0; background: linear-gradient(135deg, rgba(200,230,0,0.06), rgba(168,85,247,0.06)); border: 1px dashed rgba(200,230,0,0.45); border-radius: 12px; padding: 0.6rem 1.5rem;">
+                                    <div style="font-size: 0.62rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.12em; text-align: center; margin-bottom: 0.35rem; font-weight: 700;">Δ Target − Control</div>
+                                    <div class="bpiq-kpi-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 1rem;">
+                                        <div id="bpiqKpiDeltaConsumers" style="text-align: center; font-size: 0.95rem; font-weight: 700;">—</div>
+                                        <div id="bpiqKpiDeltaPre"       style="text-align: center; font-size: 0.95rem; font-weight: 700;">—</div>
+                                        <div id="bpiqKpiDeltaPost"      style="text-align: center; font-size: 0.95rem; font-weight: 700;">—</div>
+                                        <div id="bpiqKpiDeltaLift"      style="text-align: center; font-size: 0.95rem; font-weight: 700;">—</div>
+                                    </div>
+                                </div>
                                 <!-- Gen Pop / control-cohort mirror row -->
                                 <div id="bpiqGenPopKpiRow" style="display: none; background: linear-gradient(135deg, rgba(200,230,0,0.04), rgba(168,85,247,0.06)); border: 1px solid var(--border-color); border-radius: 14px; padding: 1.5rem 1.5rem 0.75rem;">
                                     <div style="font-size: 0.95rem; font-weight: 800; color: #c8e600; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 1rem;">CONTROL</div>
@@ -29753,6 +29766,7 @@
             var cg = data.control_group || {};
             var gpRow = document.getElementById('bpiqGenPopKpiRow');
             if (gpRow) gpRow.style.display = cg.enabled ? 'block' : 'none';
+            var deltaRow = document.getElementById('bpiqDeltaRow');
             var netLiftCard = document.getElementById('bpiqNetLiftCard');
             if (cg.enabled) {
                 var gpSize    = cg.projected_control_size || 0;
@@ -29766,6 +29780,35 @@
                 document.getElementById('bpiqKpiGenPopPreUsers').innerHTML  = _bpiqFmtNum(gpPre) + pipe + gpPrePct.toFixed(2) + '%';
                 document.getElementById('bpiqKpiGenPopPostUsers').innerHTML = _bpiqFmtNum(gpPost) + pipe + gpPostPct.toFixed(2) + '%';
                 document.getElementById('bpiqKpiGenPopLift').innerHTML = '<span style="color:#c8e600">' + _bpiqFmtNum(gpLiftUsers) + '</span>' + pipe + _bpiqFmtLift(cg.control_lift_pct_users);
+                // Δ Target − Control strip — populated whenever the gen-pop
+                // mirror row is shown. Each cell sits directly under the
+                // matching TARGET column and over the matching CONTROL one.
+                if (deltaRow) {
+                    deltaRow.style.display = '';
+                    var _bpiqFmtDelta = function(num, suffix, zeroLabel) {
+                        if (num == null || !isFinite(num)) return '<span style="color:var(--text-secondary);">—</span>';
+                        if (num === 0 && zeroLabel) return '<span style="color:var(--text-secondary);font-size:0.8rem;font-weight:500;">' + zeroLabel + '</span>';
+                        var sign = num > 0 ? '+' : (num < 0 ? '−' : '');
+                        var mag  = Math.abs(num);
+                        var color = num > 0 ? '#c8e600' : (num < 0 ? '#ef4444' : 'var(--text-secondary)');
+                        var body  = (suffix === ',count')
+                            ? Math.round(mag).toLocaleString()
+                            : mag.toFixed(2) + (suffix || '');
+                        return '<span style="color:' + color + ';">' + sign + body + '</span>';
+                    };
+                    document.getElementById('bpiqKpiDeltaConsumers').innerHTML =
+                        _bpiqFmtDelta((data.projected_audience_size || 0) - gpSize, ',count', 'size-matched');
+                    document.getElementById('bpiqKpiDeltaPre').innerHTML =
+                        _bpiqFmtDelta(prePct - gpPrePct, ' pp');
+                    document.getElementById('bpiqKpiDeltaPost').innerHTML =
+                        _bpiqFmtDelta(postPct - gpPostPct, ' pp');
+                    var _tLift = (totals.lift_pct_users  != null && isFinite(totals.lift_pct_users))  ? totals.lift_pct_users  : null;
+                    var _cLift = (cg.control_lift_pct_users != null && isFinite(cg.control_lift_pct_users)) ? cg.control_lift_pct_users : null;
+                    document.getElementById('bpiqKpiDeltaLift').innerHTML =
+                        (_tLift == null || _cLift == null)
+                            ? '<span style="color:var(--text-secondary);">—</span>'
+                            : _bpiqFmtDelta(_tLift - _cLift, ' pp');
+                }
                 // Net Brand Lift card
                 var brandLift = totals.lift_pct_users;
                 var gpLift    = cg.control_lift_pct_users;
@@ -29778,6 +29821,7 @@
                     document.getElementById('bpiqNetLiftValue').textContent = sign + netLift.toFixed(2);
                 }
             } else {
+                if (deltaRow) deltaRow.style.display = 'none';
                 if (netLiftCard) netLiftCard.style.display = 'none';
             }
 
