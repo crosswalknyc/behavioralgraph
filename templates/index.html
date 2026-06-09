@@ -24656,23 +24656,12 @@
                   + '</div>'
                   + '</div>';
 
-            // CARD L: Demographic crosstab (if present)
-            var dc = cards.demo_crosstab || {};
-            if (dc && (dc.age || dc.gender || dc.ethnicity || dc.income)) {
-                var demoHtml = '';
-                [['age','Age'],['gender','Gender'],['ethnicity','Ethnicity'],['income','Income']].forEach(function(pair) {
-                    var rows = dc[pair[0]] || [];
-                    if (!rows.length) return;
-                    demoHtml += '<div style="margin-bottom: 0.7rem;">'
-                              + '<div style="font-size: 0.78rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 0.3rem;">' + pair[1] + '</div>'
-                              + _bqRowBars(rows.slice(0, 6), 'value', 'panelists')
-                              + '</div>';
-                });
-                html += '<div class="blue-iq-card blue-iq-card-demo">'
-                      + '<h3 class="blue-iq-card-title">Audience demographics</h3>'
-                      + '<div class="blue-iq-card-body">' + (demoHtml || 'No demographic data.') + '</div>'
-                      + '</div>';
-            }
+            // CARD L (Audience demographics) intentionally removed per
+            // user request 2026-06-09 — the age/gender/ethnicity/income
+            // breakouts were duplicative of the "Voter's day online"
+            // generation+gender chips and added vertical noise. Backend
+            // still emits cards.demo_crosstab for downstream/API
+            // consumers; only the UI tile is gone.
 
             // CARD J (Compare cohorts) intentionally removed — the
             // per-party panel cells were almost always sample-too-
