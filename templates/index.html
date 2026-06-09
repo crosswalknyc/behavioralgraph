@@ -54717,6 +54717,7 @@
             }
             _updateCompareDateRangesButtonBadge();
             applyComparisonRunsToDashboardCharts();
+            try { applyComparisonRunsToCategoryTables(); } catch (e) { console.warn('[compare] category tables re-apply failed', e); }
             return result;
         }
 
@@ -54761,6 +54762,7 @@
             _comparisonRunsState.selectedKeys = [];
             _updateCompareDateRangesButtonBadge();
             applyComparisonRunsToDashboardCharts();
+            try { applyComparisonRunsToCategoryTables(); } catch (e) { console.warn('[compare] category tables re-apply failed', e); }
             const pop = document.getElementById('compareDateRangesPopover');
             if (pop) {
                 pop.querySelectorAll('input[type="checkbox"][data-cmp-key]').forEach(cb => { cb.checked = false; });
@@ -55046,6 +55048,283 @@
                     console.error('[compare] chart.update threw for', chartKey, e);
                 }
             });
+        }
+
+        // ---------------------------------------------------------------
+        // applyComparisonRunsToCategoryTables
+        //
+        // DOM-post-processing helper that injects extra columns into every
+        // category-style table in the dashboard (Behavioral cards, Interests
+        // list, Location regional breakdown). One extra <span> column per
+        // selected comparison run, slotted in BEFORE the Gen Pop column.
+        //
+        // We post-process the DOM rather than re-writing each render
+        // function because the existing render pipelines (renderBehavioralCards,
+        // renderInterestsList, renderLocationTable, etc.) live in deeply
+        // nested logic with sort/slice/search filters and per-category
+        // dropdowns. Patching the DOM after they run is the safest
+        // intervention.
+        //
+        // Re-applies automatically when any of the host containers
+        // mutate (sort, search, slice all trigger innerHTML rewrites).
+        // ---------------------------------------------------------------
+        let _cmpTableObservers = null;
+        function _cmpInstallTableObservers() {
+            if (_cmpTableObservers) return;
+            _cmpTableObservers = [];
+            const targets = [
+                'behavioralGrid',
+                'interestsGrid',
+                'locationsContainer',
+                'locationsList'
+            ];
+            targets.forEach(id => {
+                const el = document.getElementById(id);
+                if (!el) return;
+                const obs = new MutationObserver(() => {
+                    // Debounce: coalesce bursts into a single re-apply.
+                    if (el._cmpReapplyPending) return;
+                    el._cmpReapplyPending = true;
+                    requestAnimationFrame(() => {
+                        el._cmpReapplyPending = false;
+                        applyComparisonRunsToCategoryTables();
+                    });
+                });
+                obs.observe(el, { childList: true, subtree: true, characterData: false });
+                _cmpTableObservers.push(obs);
+            });
+        }
+
+        function _cmpNormName(s) {
+            return String(s == null ? '' : s).trim().toLowerCase().replace(/\s+/g, ' ');
+        }
+
+        // Build a Set/Map of "behavioral items" from a parsed run, keyed
+        // by normalized item name, with the pct as value. We try every
+        // category in `parsed.behavioral` because the same brand can live
+        // under multiple cats (TALENT vs ACTOR, SPORTS vs NFL, etc.).
+        function _cmpBuildBehavioralLookup(parsed) {
+            const out = {};
+            const beh = parsed && parsed.behavioral;
+            if (!beh) return out;
+            for (const [cat, items] of Object.entries(beh)) {
+                if (!Array.isArray(items)) continue;
+                const catMap = {};
+                items.forEach(it => {
+                    if (!it || !it.name) return;
+                    catMap[_cmpNormName(it.name)] = it;
+                });
+                out[cat] = catMap;
+            }
+            return out;
+        }
+
+        // Same idea for the flat interests array.
+        function _cmpBuildInterestsLookup(parsed) {
+            const out = {};
+            const items = (parsed && parsed.interests && Array.isArray(parsed.interests)) ? parsed.interests : [];
+            items.forEach(it => {
+                if (!it || !it.name) return;
+                out[_cmpNormName(it.name)] = it;
+            });
+            return out;
+        }
+
+        // Same idea for locations.
+        function _cmpBuildLocationsLookup(parsed) {
+            const out = {};
+            const items = (parsed && parsed.locations && Array.isArray(parsed.locations)) ? parsed.locations : [];
+            items.forEach(it => {
+                if (!it || !it.name) return;
+                out[_cmpNormName(it.name)] = it;
+            });
+            return out;
+        }
+
+        function _cmpFmtPct(v) {
+            if (v == null || !isFinite(v)) return '—';
+            return Number(v).toFixed(2) + '%';
+        }
+
+        function _cmpClearInjected(root) {
+            if (!root) return;
+            root.querySelectorAll('.cmp-col-cell').forEach(el => el.remove());
+        }
+
+        function applyComparisonRunsToCategoryTables() {
+            const series = (_comparisonRunsState.selectedKeys || [])
+                .map(k => _comparisonRunsState.runsByKey[k])
+                .filter(Boolean);
+            _cmpInstallTableObservers();
+
+            const palette = _COMPARISON_PALETTE;
+
+            // -------- BEHAVIORAL CARDS ----------------------------------
+            // Each card has .behavioral-table > .behavioral-header-row +
+            // .behavioral-list > .behavioral-item rows. The category name
+            // sits on .behavioral-list[data-cat="..."].
+            const behavioralCards = document.querySelectorAll('.behavioral-table');
+            // Pre-build behavioral lookups per run so we don't rescan
+            // for every row.
+            const behLookups = series.map(s => ({
+                label: s.label,
+                map: _cmpBuildBehavioralLookup(s.parsed)
+            }));
+            behavioralCards.forEach(table => {
+                _cmpClearInjected(table);
+                if (series.length === 0) {
+                    table.style.gridTemplateColumns = '';
+                    return;
+                }
+                const list = table.querySelector('.behavioral-list');
+                const cat = list && list.dataset.cat;
+                // Recompute grid: rank | name | profile | [N cmps] | genpop | index.
+                // Width per comparison column kept tight (64px) so multiple
+                // selections don't blow out the card.
+                const cmpCols = series.map(() => '60px').join(' ');
+                table.style.gridTemplateColumns = '28px minmax(80px,1fr) 70px ' + cmpCols + ' 70px 56px';
+
+                // Header row injection
+                const header = table.querySelector('.behavioral-header-row');
+                if (header) {
+                    const gpHeader = header.querySelector('.genpop-col');
+                    series.forEach((entry, idx) => {
+                        const span = document.createElement('span');
+                        span.className = 'cmp-col-cell';
+                        span.textContent = entry.label || ('Run ' + (idx + 1));
+                        span.style.cssText = 'color:' + palette[idx % palette.length] + ';font-size:0.65rem;text-align:right;justify-self:end;font-weight:600;white-space:nowrap;';
+                        if (gpHeader) header.insertBefore(span, gpHeader);
+                        else header.appendChild(span);
+                    });
+                }
+
+                // Data rows
+                const rows = (list && list.querySelectorAll('.behavioral-item')) || [];
+                rows.forEach(row => {
+                    const nameEl = row.querySelector('.behavioral-name');
+                    if (!nameEl) return;
+                    const name = _cmpNormName(nameEl.textContent || '');
+                    const gpCell = row.querySelector('.genpop-col');
+                    series.forEach((entry, idx) => {
+                        const lookup = behLookups[idx].map;
+                        // Try the row's category first, then fall back to
+                        // ANY category in the run that has this brand
+                        // (handles sports/talent aggregation differences).
+                        let match = null;
+                        if (cat && lookup[cat]) match = lookup[cat][name];
+                        if (!match) {
+                            for (const c of Object.keys(lookup)) {
+                                if (lookup[c][name]) { match = lookup[c][name]; break; }
+                            }
+                        }
+                        const span = document.createElement('span');
+                        span.className = 'cmp-col-cell';
+                        span.style.cssText = 'color:' + palette[idx % palette.length] + ';font-size:0.78rem;text-align:right;justify-self:end;font-variant-numeric:tabular-nums;';
+                        span.textContent = match ? _cmpFmtPct(match.pct) : '—';
+                        if (match && match.pct != null) {
+                            span.title = entry.label + ' • ' + name + ' • ' + _cmpFmtPct(match.pct);
+                        }
+                        if (gpCell) row.insertBefore(span, gpCell);
+                        else row.appendChild(span);
+                    });
+                });
+            });
+
+            // -------- INTERESTS LIST ------------------------------------
+            const intGrid = document.getElementById('interestsGrid');
+            if (intGrid) {
+                _cmpClearInjected(intGrid);
+                if (series.length > 0) {
+                    const intLookups = series.map(s => ({
+                        label: s.label,
+                        map: _cmpBuildInterestsLookup(s.parsed)
+                    }));
+                    // The interests grid uses a CSS grid declared in the
+                    // stylesheet. We override grid-template-columns via
+                    // inline style to expand for comparison columns.
+                    const cmpCols = series.map(() => '60px').join(' ');
+                    intGrid.style.gridTemplateColumns = '28px minmax(120px,1fr) 70px ' + cmpCols + ' 70px 56px';
+
+                    const intHeader = intGrid.querySelector('.interest-header-row');
+                    if (intHeader) {
+                        const gpHeader = intHeader.querySelector('.genpop-col');
+                        series.forEach((entry, idx) => {
+                            const span = document.createElement('span');
+                            span.className = 'cmp-col-cell';
+                            span.textContent = entry.label || ('Run ' + (idx + 1));
+                            span.style.cssText = 'color:' + palette[idx % palette.length] + ';font-size:0.65rem;text-align:right;justify-self:end;font-weight:600;white-space:nowrap;';
+                            if (gpHeader) intHeader.insertBefore(span, gpHeader);
+                            else intHeader.appendChild(span);
+                        });
+                    }
+
+                    intGrid.querySelectorAll('.interest-item').forEach(row => {
+                        const nameEl = row.querySelector('.interest-name');
+                        if (!nameEl) return;
+                        const name = _cmpNormName(nameEl.textContent || row.dataset.name || '');
+                        const gpCell = row.querySelector('.genpop-col');
+                        series.forEach((entry, idx) => {
+                            const match = intLookups[idx].map[name];
+                            const span = document.createElement('span');
+                            span.className = 'cmp-col-cell';
+                            span.style.cssText = 'color:' + palette[idx % palette.length] + ';font-size:0.78rem;text-align:right;justify-self:end;font-variant-numeric:tabular-nums;';
+                            span.textContent = match ? _cmpFmtPct(match.pct) : '—';
+                            if (gpCell) row.insertBefore(span, gpCell);
+                            else row.appendChild(span);
+                        });
+                    });
+                } else {
+                    intGrid.style.gridTemplateColumns = '';
+                }
+            }
+
+            // -------- LOCATION (Regional Breakdown table) ---------------
+            // The DMA table uses .location-row elements inside
+            // #locationsContainer / #locationsList. We match by canonical
+            // DMA name when available, fall back to plain name match.
+            const locContainers = [document.getElementById('locationsContainer'), document.getElementById('locationsList')]
+                .filter(Boolean);
+            if (locContainers.length > 0) {
+                locContainers.forEach(c => _cmpClearInjected(c));
+                if (series.length > 0) {
+                    const locLookups = series.map(s => ({
+                        label: s.label,
+                        map: _cmpBuildLocationsLookup(s.parsed)
+                    }));
+                    locContainers.forEach(container => {
+                        // Inject header (location tables often use a
+                        // .location-header-row or first row with column
+                        // titles — try both).
+                        const header = container.querySelector('.location-header-row, .locations-header-row');
+                        if (header) {
+                            const gpHeader = header.querySelector('.genpop-col') || header.querySelector('.location-genpop');
+                            series.forEach((entry, idx) => {
+                                const span = document.createElement('span');
+                                span.className = 'cmp-col-cell';
+                                span.textContent = entry.label || ('Run ' + (idx + 1));
+                                span.style.cssText = 'color:' + palette[idx % palette.length] + ';font-size:0.65rem;text-align:right;justify-self:end;font-weight:600;white-space:nowrap;';
+                                if (gpHeader) header.insertBefore(span, gpHeader);
+                                else header.appendChild(span);
+                            });
+                        }
+                        container.querySelectorAll('.location-row, .location-item').forEach(row => {
+                            const nameEl = row.querySelector('.location-name, .location-dma') || row.firstElementChild;
+                            if (!nameEl) return;
+                            const name = _cmpNormName(nameEl.textContent || '');
+                            const gpCell = row.querySelector('.genpop-col') || row.querySelector('.location-genpop');
+                            series.forEach((entry, idx) => {
+                                const match = locLookups[idx].map[name];
+                                const span = document.createElement('span');
+                                span.className = 'cmp-col-cell';
+                                span.style.cssText = 'color:' + palette[idx % palette.length] + ';font-size:0.78rem;text-align:right;justify-self:end;font-variant-numeric:tabular-nums;';
+                                span.textContent = match ? _cmpFmtPct(match.pct) : '—';
+                                if (gpCell) row.insertBefore(span, gpCell);
+                                else row.appendChild(span);
+                            });
+                        });
+                    });
+                }
+            }
         }
 
         async function showProfileDeltasModal(subject, sameSubjectRuns) {
@@ -58347,6 +58626,7 @@
             // are selected. See applyComparisonRunsToDashboardCharts above.
             if (typeof applyComparisonRunsToDashboardCharts === 'function') {
                 try { applyComparisonRunsToDashboardCharts(); } catch (e) { console.warn('compare re-apply failed', e); }
+                try { applyComparisonRunsToCategoryTables(); } catch (e) { console.warn('compare tables re-apply failed', e); }
             }
         }
         
