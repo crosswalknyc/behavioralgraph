@@ -25101,15 +25101,24 @@
             }
 
             if (!rows || !rows.length) {
-                var rawCount = (meta && meta.raw_trends_count) || 0;
-                var hint;
-                if (rawCount > 0) {
-                    hint = 'Google Trends returned ' + rawCount + ' trending searches for this geo, but none cleared the political filter (politician-name match, civic keyword, or political related news). Try a wider geo or a different lookback.';
-                } else {
-                    hint = 'Google Trends returned no data for this geo right now (the endpoint sometimes throttles or comes back empty). The cube refreshes hourly \u2014 try again in a few minutes, or pick a different geography.';
-                }
-                body.innerHTML = '<div style="color: var(--text-secondary); font-size: 0.85rem; padding: 0.7rem 0;">' + hint + '</div>';
+                // Backend now falls back to raw Google Trends when the
+                // political filter empties the list, so reaching here
+                // means Google Trends itself returned nothing.
+                body.innerHTML = '<div style="color: var(--text-secondary); font-size: 0.85rem; padding: 0.7rem 0;">'
+                    + 'Google Trends returned no data for this geo right now (the endpoint sometimes throttles or comes back empty). The cube refreshes hourly \u2014 try again in a few minutes, or pick a different geography.'
+                    + '</div>';
                 return;
+            }
+            // When the backend fell back to unfiltered Trends (no terms
+            // cleared the political filter for this slice), show a tiny
+            // dim hint so the user knows the list is "what's hot here"
+            // rather than "what's politically hot here" — but still
+            // render the rows so the card never goes empty.
+            var fallbackNote = '';
+            if (meta && meta.used_fallback) {
+                fallbackNote = '<div style="color: var(--text-secondary); font-size: 0.72rem; padding: 0 0 0.5rem 0; opacity: 0.75;">'
+                             + 'No purely political topics trending here right now \u2014 showing top Google Trends for this geo.'
+                             + '</div>';
             }
 
             var maxScore = Math.max.apply(null, rows.map(function(r) { return +r.score || 0; })) || 1;
@@ -25135,7 +25144,8 @@
                 return String(s);
             }
 
-            body.innerHTML = '<div class="bq-trending-scroll"><div class="bq-trending-grid">'
+            body.innerHTML = fallbackNote
+                + '<div class="bq-trending-scroll"><div class="bq-trending-grid">'
                 + rows.map(function(r, idx) {
                     var rel = (r.related || []).map(_bqStripDates).filter(Boolean).slice(0, 5);
                     var relHtml = rel.length
@@ -54172,6 +54182,335 @@
             if (modal) modal.style.display = 'none';
         }
 
+        // ===================================================================
+        // Compare date ranges — inline comparison-series injection
+        // ===================================================================
+        // Replaces the legacy modal: clicking "Compare date ranges" opens a
+        // popover with checkboxes for each other run of the same subject
+        // (prior years + cohort variants). When toggled on, that run's data is
+        // fetched and rendered as an additional bar dataset on every
+        // demographic chart, slotted in BEFORE the Gen Pop bar. Toggling off
+        // removes the dataset. Clearing or switching to a different subject
+        // wipes the state.
+        // -------------------------------------------------------------------
+        const _COMPARISON_PALETTE = ['#fd971f', '#ae81ff', '#f92672', '#66d9ef', '#a6e22e', '#e6db74', '#75715e', '#ff79c6'];
+        const _COMPARISON_GENPOP_COLOR = '#9ca3af';
+        let _comparisonRunsState = {
+            subject: '',
+            selectedKeys: [],
+            runsByKey: {},
+            availableRuns: [],
+            currentKey: '',
+            inFlight: {}
+        };
+
+        function _resetComparisonRunsState(subject, currentKey, availableRuns) {
+            _comparisonRunsState = {
+                subject: subject || '',
+                selectedKeys: [],
+                runsByKey: {},
+                availableRuns: Array.isArray(availableRuns) ? availableRuns.slice() : [],
+                currentKey: currentKey || '',
+                inFlight: {}
+            };
+            _updateCompareDateRangesButtonBadge();
+            _closeCompareDateRangesPopover();
+        }
+
+        function _compactRunLabel(profile) {
+            try {
+                if (typeof getCanonicalChildLabel === 'function') {
+                    const lbl = getCanonicalChildLabel(profile);
+                    if (lbl && lbl !== 'Run') return lbl;
+                }
+            } catch (_) {}
+            try {
+                if (typeof getRunDateLabel === 'function') {
+                    const d = getRunDateLabel(profile && (profile.s3_key || ''));
+                    if (d) return d;
+                }
+            } catch (_) {}
+            return (profile && (profile.display_name || profile.name)) || 'Run';
+        }
+
+        function _setupComparisonForCurrentProfile(subject, currentKey, sameSubjectRuns) {
+            const others = (sameSubjectRuns || []).filter(p => (p.s3_key || p.job_id) !== currentKey);
+            const sorted = typeof sortRunsForGroup === 'function' ? sortRunsForGroup(others) : others;
+            const available = sorted.map(p => ({
+                key: p.s3_key || p.job_id,
+                label: _compactRunLabel(p),
+                profile: p
+            }));
+            const subjectChanged = (subject || '') !== (_comparisonRunsState.subject || '');
+            if (subjectChanged) {
+                _resetComparisonRunsState(subject, currentKey, available);
+            } else {
+                _comparisonRunsState.currentKey = currentKey || '';
+                _comparisonRunsState.availableRuns = available;
+                const validKeys = new Set(available.map(a => a.key));
+                _comparisonRunsState.selectedKeys = (_comparisonRunsState.selectedKeys || []).filter(k => validKeys.has(k));
+                _updateCompareDateRangesButtonBadge();
+            }
+        }
+
+        function _updateCompareDateRangesButtonBadge() {
+            const btn = document.getElementById('dashViewDeltasBtn');
+            if (!btn) return;
+            const n = (_comparisonRunsState.selectedKeys || []).length;
+            const base = 'Compare date ranges';
+            btn.textContent = n > 0 ? `${base} (${n})` : base;
+        }
+
+        async function _fetchComparisonRunData(key, profile) {
+            if (_comparisonRunsState.runsByKey[key]) return _comparisonRunsState.runsByKey[key];
+            if (_comparisonRunsState.inFlight[key]) return _comparisonRunsState.inFlight[key];
+            const p = (async () => {
+                try {
+                    const res = await fetch('/api/get-csv-data/' + encodeURIComponent(key), { credentials: 'same-origin' });
+                    const data = await res.json();
+                    if (!data || !data.success || !data.data) return null;
+                    const parsed = (typeof parseAllData === 'function') ? parseAllData(data.data) : null;
+                    if (!parsed) return null;
+                    const entry = { key, profile, parsed, label: _compactRunLabel(profile) };
+                    _comparisonRunsState.runsByKey[key] = entry;
+                    return entry;
+                } catch (e) {
+                    console.warn('Compare: failed to fetch run', key, e);
+                    return null;
+                } finally {
+                    delete _comparisonRunsState.inFlight[key];
+                }
+            })();
+            _comparisonRunsState.inFlight[key] = p;
+            return p;
+        }
+
+        async function _toggleComparisonRun(key, profile, checked) {
+            if (checked) {
+                if (!_comparisonRunsState.selectedKeys.includes(key)) {
+                    _comparisonRunsState.selectedKeys.push(key);
+                }
+                await _fetchComparisonRunData(key, profile);
+            } else {
+                _comparisonRunsState.selectedKeys = _comparisonRunsState.selectedKeys.filter(k => k !== key);
+            }
+            _updateCompareDateRangesButtonBadge();
+            applyComparisonRunsToDashboardCharts();
+        }
+
+        function _clearAllComparisonRuns() {
+            _comparisonRunsState.selectedKeys = [];
+            _updateCompareDateRangesButtonBadge();
+            applyComparisonRunsToDashboardCharts();
+            const pop = document.getElementById('compareDateRangesPopover');
+            if (pop) {
+                pop.querySelectorAll('input[type="checkbox"][data-cmp-key]').forEach(cb => { cb.checked = false; });
+            }
+        }
+
+        function _closeCompareDateRangesPopover() {
+            const pop = document.getElementById('compareDateRangesPopover');
+            if (pop) pop.remove();
+            document.removeEventListener('mousedown', _compareDateRangesDocHandler, true);
+        }
+
+        function _compareDateRangesDocHandler(e) {
+            const pop = document.getElementById('compareDateRangesPopover');
+            const btn = document.getElementById('dashViewDeltasBtn');
+            if (!pop) return;
+            if (pop.contains(e.target)) return;
+            if (btn && btn.contains(e.target)) return;
+            _closeCompareDateRangesPopover();
+        }
+
+        function _openCompareDateRangesPopover() {
+            const existing = document.getElementById('compareDateRangesPopover');
+            if (existing) { _closeCompareDateRangesPopover(); return; }
+
+            const btn = document.getElementById('dashViewDeltasBtn');
+            if (!btn) return;
+            const available = _comparisonRunsState.availableRuns || [];
+            const pop = document.createElement('div');
+            pop.id = 'compareDateRangesPopover';
+            pop.style.cssText = [
+                'position:absolute',
+                'z-index:10000',
+                'background:var(--bg-secondary, #1f2330)',
+                'border:1px solid var(--border-color, #2c3041)',
+                'border-radius:8px',
+                'box-shadow:0 10px 30px rgba(0,0,0,0.45)',
+                'padding:0.6rem 0.75rem',
+                'min-width:240px',
+                'max-width:320px',
+                'max-height:60vh',
+                'overflow:auto',
+                'font-family:inherit',
+                'color:var(--text-primary, #e6e6e6)'
+            ].join(';');
+
+            const selected = new Set(_comparisonRunsState.selectedKeys || []);
+
+            const header = document.createElement('div');
+            header.style.cssText = 'display:flex;align-items:center;justify-content:space-between;gap:0.5rem;margin-bottom:0.5rem;';
+            const title = document.createElement('div');
+            title.style.cssText = 'font-size:0.78rem;font-weight:600;color:var(--text-secondary, #9ca3af);text-transform:uppercase;letter-spacing:0.04em;';
+            title.textContent = 'Add to dashboard';
+            const clearLink = document.createElement('a');
+            clearLink.href = '#';
+            clearLink.textContent = 'Clear';
+            clearLink.style.cssText = 'font-size:0.75rem;color:var(--accent-purple, #7c3aed);text-decoration:none;';
+            clearLink.onclick = function(e) { e.preventDefault(); _clearAllComparisonRuns(); };
+            header.appendChild(title);
+            header.appendChild(clearLink);
+            pop.appendChild(header);
+
+            if (available.length === 0) {
+                const empty = document.createElement('div');
+                empty.style.cssText = 'font-size:0.8rem;color:var(--text-secondary, #9ca3af);padding:0.5rem 0;';
+                empty.textContent = 'No other runs for this profile yet.';
+                pop.appendChild(empty);
+            } else {
+                const hint = document.createElement('div');
+                hint.style.cssText = 'font-size:0.72rem;color:var(--text-secondary, #9ca3af);margin-bottom:0.4rem;line-height:1.35;';
+                hint.textContent = 'Toggle prior years or cohorts on to see them as extra bars before Gen Pop.';
+                pop.appendChild(hint);
+
+                available.forEach(item => {
+                    const row = document.createElement('label');
+                    row.style.cssText = 'display:flex;align-items:center;gap:0.5rem;padding:0.35rem 0.25rem;border-radius:6px;cursor:pointer;font-size:0.85rem;';
+                    row.onmouseenter = function() { row.style.background = 'rgba(124,58,237,0.10)'; };
+                    row.onmouseleave = function() { row.style.background = 'transparent'; };
+                    const cb = document.createElement('input');
+                    cb.type = 'checkbox';
+                    cb.setAttribute('data-cmp-key', item.key);
+                    cb.checked = selected.has(item.key);
+                    cb.style.cssText = 'accent-color:#7c3aed;cursor:pointer;';
+                    const lbl = document.createElement('span');
+                    lbl.textContent = item.label;
+                    lbl.style.cssText = 'flex:1;color:var(--text-primary, #e6e6e6);';
+                    const status = document.createElement('span');
+                    status.style.cssText = 'font-size:0.7rem;color:var(--text-secondary, #9ca3af);';
+                    row.appendChild(cb);
+                    row.appendChild(lbl);
+                    row.appendChild(status);
+                    cb.addEventListener('change', async function() {
+                        const wasChecked = cb.checked;
+                        status.textContent = wasChecked ? 'Loading…' : '';
+                        try {
+                            await _toggleComparisonRun(item.key, item.profile, wasChecked);
+                            status.textContent = '';
+                        } catch (e) {
+                            status.textContent = 'Failed';
+                            cb.checked = !wasChecked;
+                        }
+                    });
+                    pop.appendChild(row);
+                });
+            }
+
+            document.body.appendChild(pop);
+            const r = btn.getBoundingClientRect();
+            const pad = 6;
+            const popW = Math.min(320, Math.max(240, pop.offsetWidth || 260));
+            let left = r.left + window.scrollX;
+            if (left + popW > window.scrollX + window.innerWidth - 8) {
+                left = Math.max(8, window.scrollX + window.innerWidth - 8 - popW);
+            }
+            const top = r.bottom + window.scrollY + pad;
+            pop.style.left = left + 'px';
+            pop.style.top = top + 'px';
+
+            setTimeout(() => { document.addEventListener('mousedown', _compareDateRangesDocHandler, true); }, 0);
+        }
+
+        // Mutates each demographic Chart.js instance, layering selected runs
+        // (and a Gen Pop bar at the end) onto the existing dataset. Safe to
+        // call repeatedly: previously injected datasets are stripped first.
+        function applyComparisonRunsToDashboardCharts() {
+            if (typeof charts === 'undefined' || !charts) return;
+            const series = (_comparisonRunsState.selectedKeys || [])
+                .map(k => _comparisonRunsState.runsByKey[k])
+                .filter(Boolean);
+            const demoChartKeys = ['age', 'gender', 'ethnicity', 'income', 'education', 'relationship', 'sexualOrientation', 'parentalStatus', 'occupation'];
+            const chartKeyToDataCat = {
+                age: 'age', gender: 'gender', ethnicity: 'ethnicity', income: 'income',
+                education: 'education', relationship: 'relationship',
+                sexualOrientation: 'sexual_orientation', parentalStatus: 'parental_status',
+                occupation: 'occupation'
+            };
+            const mainProfileLabel = (currentProfileData && currentProfileData.name) || 'Profile';
+
+            demoChartKeys.forEach(chartKey => {
+                const chart = charts[chartKey];
+                if (!chart || !chart.data) return;
+                const cfgType = (chart.config && chart.config.type) || (chart.config && chart.config._config && chart.config._config.type);
+                if (cfgType !== 'bar') return;
+                const origKeys = chart._origKeys;
+                const origGP = chart._origGenPop;
+                const dataCat = chart._demoCategory || chartKeyToDataCat[chartKey];
+                if (!Array.isArray(origKeys) || !dataCat) return;
+
+                chart.data.datasets = (chart.data.datasets || []).filter(d => !d._isComparison);
+                if (chart.data.datasets[0]) {
+                    chart.data.datasets[0].label = mainProfileLabel;
+                }
+
+                if (series.length === 0) {
+                    if (chart.options && chart.options.plugins) {
+                        if (chart.options.plugins.legend) chart.options.plugins.legend.display = false;
+                        if (chart.options.plugins.datalabels) {
+                            chart.options.plugins.datalabels.display = true;
+                        }
+                    }
+                    chart.update('none');
+                    return;
+                }
+
+                series.forEach((entry, idx) => {
+                    const demoDict = (entry.parsed && entry.parsed.demographics && entry.parsed.demographics[dataCat]) || {};
+                    const data = origKeys.map(k => {
+                        const v = demoDict[k];
+                        return (typeof v === 'number' && isFinite(v)) ? v : 0;
+                    });
+                    chart.data.datasets.push({
+                        _isComparison: true,
+                        label: entry.label || 'Run',
+                        data,
+                        backgroundColor: _COMPARISON_PALETTE[idx % _COMPARISON_PALETTE.length],
+                        borderRadius: 4,
+                        barPercentage: chart.data.datasets[0] && chart.data.datasets[0].barPercentage ? chart.data.datasets[0].barPercentage : undefined,
+                        categoryPercentage: chart.data.datasets[0] && chart.data.datasets[0].categoryPercentage ? chart.data.datasets[0].categoryPercentage : undefined
+                    });
+                });
+                if (Array.isArray(origGP)) {
+                    chart.data.datasets.push({
+                        _isComparison: true,
+                        label: 'Gen Pop',
+                        data: origGP.map(v => (typeof v === 'number' && isFinite(v)) ? v : 0),
+                        backgroundColor: _COMPARISON_GENPOP_COLOR,
+                        borderRadius: 4,
+                        barPercentage: chart.data.datasets[0] && chart.data.datasets[0].barPercentage ? chart.data.datasets[0].barPercentage : undefined,
+                        categoryPercentage: chart.data.datasets[0] && chart.data.datasets[0].categoryPercentage ? chart.data.datasets[0].categoryPercentage : undefined
+                    });
+                }
+
+                if (chart.options && chart.options.plugins) {
+                    chart.options.plugins.legend = chart.options.plugins.legend || {};
+                    chart.options.plugins.legend.display = true;
+                    chart.options.plugins.legend.position = 'bottom';
+                    chart.options.plugins.legend.labels = Object.assign(
+                        {},
+                        chart.options.plugins.legend.labels || {},
+                        { color: '#a8b2c1', font: { size: 11 }, boxWidth: 12, padding: 8, usePointStyle: true, pointStyle: 'rect' }
+                    );
+                    if (chart.options.plugins.datalabels) {
+                        chart.options.plugins.datalabels.display = false;
+                    }
+                }
+                chart.update('none');
+            });
+        }
+
         async function showProfileDeltasModal(subject, sameSubjectRuns) {
             const modal = document.getElementById('profileDeltasModal');
             const titleEl = document.getElementById('profileDeltasModalTitle');
@@ -54788,11 +55127,25 @@
                         const key = runSelect.value;
                         if (key && key !== profileId) selectDashboardProfile(key);
                     };
+                    // Inline comparison-series popover replaces the legacy
+                    // "Compare date ranges" modal. Selected runs are layered
+                    // into the demographic charts (see applyComparisonRunsToDashboardCharts).
+                    if (typeof _setupComparisonForCurrentProfile === 'function') {
+                        _setupComparisonForCurrentProfile(subject, profileId, sameSubjectRuns);
+                    }
                     if (deltasBtn) {
-                        deltasBtn.onclick = function() { showProfileDeltasModal(subject, sameSubjectRuns); };
+                        deltasBtn.onclick = function(ev) {
+                            if (ev) { ev.preventDefault(); ev.stopPropagation(); }
+                            if (typeof _openCompareDateRangesPopover === 'function') {
+                                _openCompareDateRangesPopover();
+                            }
+                        };
                     }
                 } else if (runsRow) {
                     runsRow.style.display = 'none';
+                    if (typeof _resetComparisonRunsState === 'function') {
+                        _resetComparisonRunsState('', profileId, []);
+                    }
                 }
                 // Fetch profile image (custom uploads only)
                 fetchProfileImage(brandName);
@@ -56468,6 +56821,7 @@
                 },
                 plugins: [ChartDataLabels]
             });
+            if (charts.age) { charts.age._origKeys = ageOriginalKeys; charts.age._origGenPop = ageGenPop; charts.age._demoCategory = 'age'; }
 
             // Gender - with Gen Pop in legend (green/red based on index)
             const genderSorted = getSortedGenderData(demographics.gender, demographicsIndex.gender);
@@ -56590,6 +56944,7 @@
                 },
                 plugins: [ChartDataLabels]
             });
+            if (charts.gender) { charts.gender._origKeys = genderOrigKeys; charts.gender._origGenPop = genderGenPop; charts.gender._demoCategory = 'gender'; }
 
             // Ethnicity - with Gen Pop in legend (green/red based on index). All labels in ALL CAPS.
             // Sort ethnicity data based on current sort mode (default: by percentage descending)
@@ -56711,6 +57066,7 @@
                 },
                 plugins: [ChartDataLabels]
             });
+            if (charts.ethnicity) { charts.ethnicity._origKeys = ethLabels; charts.ethnicity._origGenPop = ethGenPop; charts.ethnicity._demoCategory = 'ethnicity'; }
 
             // Income - horizontal bar with Gen Pop in data labels (green/red based on index)
             // Income - horizontal bar with Gen Pop in data labels (green/red based on index)
@@ -56834,6 +57190,7 @@
                 },
                 plugins: [ChartDataLabels]
             });
+            if (charts.income) { charts.income._origKeys = incomeOriginalKeys; charts.income._origGenPop = incomeGenPop; charts.income._demoCategory = 'income'; }
             
             // Education - horizontal bar with Gen Pop
             if (demographics.education && Object.keys(demographics.education).length > 0) {
@@ -56920,6 +57277,7 @@
                     },
                     plugins: [ChartDataLabels]
                 });
+                if (charts.education) { charts.education._origKeys = eduOrigKeys; charts.education._origGenPop = eduGenPop; charts.education._demoCategory = 'education'; }
             }
             
             // Relationship - doughnut with Gen Pop
@@ -57050,6 +57408,7 @@
                     },
                     plugins: [ChartDataLabels]
                 });
+                if (charts.relationship) { charts.relationship._origKeys = relOrigKeys; charts.relationship._origGenPop = relGenPop; charts.relationship._demoCategory = 'relationship'; }
             }
             
             // Sexual Orientation - doughnut with Gen Pop
@@ -57168,6 +57527,7 @@
                     },
                     plugins: [ChartDataLabels]
                 });
+                if (charts.sexualOrientation) { charts.sexualOrientation._origKeys = soOrigKeys; charts.sexualOrientation._origGenPop = soGenPop; charts.sexualOrientation._demoCategory = 'sexual_orientation'; }
             }
             
             // Parental Status - doughnut with Gen Pop
@@ -57282,6 +57642,7 @@
                     },
                     plugins: [ChartDataLabels]
                 });
+                if (charts.parentalStatus) { charts.parentalStatus._origKeys = psOrigKeys; charts.parentalStatus._origGenPop = psGenPop; charts.parentalStatus._demoCategory = 'parental_status'; }
             }
             
             // Occupation - bar chart with Gen Pop
