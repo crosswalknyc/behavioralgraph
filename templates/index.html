@@ -18327,6 +18327,13 @@
             /* ── Voter Journey: JIQ-style fan-sankey ── */
             #blueIQView .bq-fan-wrap { width: 100%; overflow-x: auto; padding: 0.4rem 0 0.2rem 0; }
             #blueIQView .bq-fan-svg { width: 100%; min-width: 720px; height: auto; display: block; }
+            /* Compact variant for the inbound (How voters arrived)
+             * fan-sankey. Caps rendered height so the full card fits
+             * on one screen even with all 4 modeled-source padding
+             * rows present (up to ~10 ribbons). preserveAspectRatio
+             * scales contents down proportionally. */
+            #blueIQView .bq-fan-svg-compact { max-height: 440px; }
+            #blueIQView .bq-fan-label-compact .bq-fan-label-name { font-size: 0.74rem; line-height: 1.15; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
             #blueIQView .bq-fan-ribbon { transition: stroke-opacity 0.18s ease; }
             #blueIQView .bq-fan-dest { transition: opacity 0.18s ease; }
             #blueIQView .bq-fan-dest:hover circle { filter: drop-shadow(0 0 8px currentColor); }
@@ -20704,7 +20711,7 @@
                             </ul>
                         </div>
                     </details>
-                    <div id="jiqPathRibbon" style="overflow-x: auto;"></div>
+                    <div id="jiqPathRibbon" style="width: 100%;"></div>
                     <div style="margin-top: 1rem; padding-top: 0.75rem; border-top: 1px solid var(--border-color);">
                         <div style="font-size: 0.85rem; font-weight: 600; margin-bottom: 0.4rem;">Top observed paths</div>
                         <div style="font-size: 0.72rem; color: var(--text-secondary); margin-bottom: 0.5rem;">Most common ordered sequences (adjacent dups collapsed). The bigger the user count, the more reliably we can attribute the purchase to that sequence.</div>
@@ -24606,7 +24613,7 @@
                   +   '<div style="font-size: 0.78rem; color: var(--text-secondary); margin-bottom: 0.5rem;">'
                   +     'Most common ordered sequence after a voter searches each top issue. '
                   +     'Step 1 \u00b7 the issue search itself. Step 2 \u00b7 the next action voters typically take. Step 3 \u00b7 the most-common follow-up to that. '
-                  +     'Rows tagged <span class="bq-path-agent">agent-researched</span> were built per-issue by the discovery agent (gpt-4o + web search) grounded in public research (Pew, Knight Foundation, Brennan Center, eMarketer); hover a row for the rationale.'
+                  +     'Per-issue rows are researched by the discovery agent (gpt-4o + web search) grounded in public research (Pew, Knight Foundation, Brennan Center, eMarketer); hover any row for the rationale.'
                   +   '</div>'
                   +   _bqRenderTopPathsAfterIssue(cards.issue_buckets || [], cards.issue_journey_cross || [], cards.voter_journey || [], cards.issue_paths_agent || [])
                   + '</div>'
@@ -24645,27 +24652,16 @@
                   +     'Ribbon width \u221d panelists. <strong>Click any flow, issue node, or destination node</strong> to pin a slice — '
                   +     'the recommendation panel below updates with the matching placement and creative direction.'
                   +   '</div>'
-                  +   _renderBlueIQIssueJourneyCross(cross)
+                  +   _renderBlueIQIssueJourneyCross(cross, cards.issue_paths_agent || [], cards.playbook_agent || [])
                   + '</div>'
                   + '</div>';
 
-            // CARD L: Demographic crosstab (if present)
-            var dc = cards.demo_crosstab || {};
-            if (dc && (dc.age || dc.gender || dc.ethnicity || dc.income)) {
-                var demoHtml = '';
-                [['age','Age'],['gender','Gender'],['ethnicity','Ethnicity'],['income','Income']].forEach(function(pair) {
-                    var rows = dc[pair[0]] || [];
-                    if (!rows.length) return;
-                    demoHtml += '<div style="margin-bottom: 0.7rem;">'
-                              + '<div style="font-size: 0.78rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 0.3rem;">' + pair[1] + '</div>'
-                              + _bqRowBars(rows.slice(0, 6), 'value', 'panelists')
-                              + '</div>';
-                });
-                html += '<div class="blue-iq-card blue-iq-card-demo">'
-                      + '<h3 class="blue-iq-card-title">Audience demographics</h3>'
-                      + '<div class="blue-iq-card-body">' + (demoHtml || 'No demographic data.') + '</div>'
-                      + '</div>';
-            }
+            // CARD L (Audience demographics) intentionally removed per
+            // user request 2026-06-09 — the age/gender/ethnicity/income
+            // breakouts were duplicative of the "Voter's day online"
+            // generation+gender chips and added vertical noise. Backend
+            // still emits cards.demo_crosstab for downstream/API
+            // consumers; only the UI tile is gone.
 
             // CARD J (Compare cohorts) intentionally removed — the
             // per-party panel cells were almost always sample-too-
@@ -25000,16 +24996,19 @@
                               return '<span class="bq-playbook-sample-chip">' + _bqEscape(q) + '</span>';
                             }).join('') + '</div>'
                         : '';
-                    var agentBadge = (play.source === 'agent')
-                        ? '<span class="bq-playbook-agent-chip"' +
-                              (play.rationale ? ' title="' + _bqEscape(play.rationale) + '"' : '') +
-                              '>agent-researched</span>'
+                    // Per user request 2026-06-09: removed the
+                    // visible "AGENT-RESEARCHED" pill. The rationale
+                    // is preserved as a hover-only tooltip on the
+                    // issue name so the "why" is still discoverable
+                    // without the visual noise.
+                    var nameTitleAttr = (play.source === 'agent' && play.rationale)
+                        ? ' title="' + _bqEscape(play.rationale) + '"'
                         : '';
                     return '<div class="bq-playbook-card">'
                          +   '<div class="bq-playbook-head">'
                          +     '<div class="bq-playbook-rank">' + (idx + 1) + '</div>'
                          +     '<div class="bq-playbook-issue">'
-                         +       '<div class="bq-playbook-issue-name">' + _bqEscape(b.bucket) + agentBadge + '</div>'
+                         +       '<div class="bq-playbook-issue-name"' + nameTitleAttr + '>' + _bqEscape(b.bucket) + '</div>'
                          +       '<div class="bq-playbook-issue-stats">' + _bqPct(b.share || 0) + ' of policy searches in this slice</div>'
                          +     '</div>'
                          +   '</div>'
@@ -25101,15 +25100,24 @@
             }
 
             if (!rows || !rows.length) {
-                var rawCount = (meta && meta.raw_trends_count) || 0;
-                var hint;
-                if (rawCount > 0) {
-                    hint = 'Google Trends returned ' + rawCount + ' trending searches for this geo, but none cleared the political filter (politician-name match, civic keyword, or political related news). Try a wider geo or a different lookback.';
-                } else {
-                    hint = 'Google Trends returned no data for this geo right now (the endpoint sometimes throttles or comes back empty). The cube refreshes hourly \u2014 try again in a few minutes, or pick a different geography.';
-                }
-                body.innerHTML = '<div style="color: var(--text-secondary); font-size: 0.85rem; padding: 0.7rem 0;">' + hint + '</div>';
+                // Backend now falls back to raw Google Trends when the
+                // political filter empties the list, so reaching here
+                // means Google Trends itself returned nothing.
+                body.innerHTML = '<div style="color: var(--text-secondary); font-size: 0.85rem; padding: 0.7rem 0;">'
+                    + 'Google Trends returned no data for this geo right now (the endpoint sometimes throttles or comes back empty). The cube refreshes hourly \u2014 try again in a few minutes, or pick a different geography.'
+                    + '</div>';
                 return;
+            }
+            // When the backend fell back to unfiltered Trends (no terms
+            // cleared the political filter for this slice), show a tiny
+            // dim hint so the user knows the list is "what's hot here"
+            // rather than "what's politically hot here" — but still
+            // render the rows so the card never goes empty.
+            var fallbackNote = '';
+            if (meta && meta.used_fallback) {
+                fallbackNote = '<div style="color: var(--text-secondary); font-size: 0.72rem; padding: 0 0 0.5rem 0; opacity: 0.75;">'
+                             + 'No purely political topics trending here right now \u2014 showing top Google Trends for this geo.'
+                             + '</div>';
             }
 
             var maxScore = Math.max.apply(null, rows.map(function(r) { return +r.score || 0; })) || 1;
@@ -25135,7 +25143,8 @@
                 return String(s);
             }
 
-            body.innerHTML = '<div class="bq-trending-scroll"><div class="bq-trending-grid">'
+            body.innerHTML = fallbackNote
+                + '<div class="bq-trending-scroll"><div class="bq-trending-grid">'
                 + rows.map(function(r, idx) {
                     var rel = (r.related || []).map(_bqStripDates).filter(Boolean).slice(0, 5);
                     var relHtml = rel.length
@@ -25957,7 +25966,7 @@
         }
         window._bqRenderDayInLife = _bqRenderDayInLife;
 
-        function _renderBlueIQIssueJourneyCross(cross) {
+        function _renderBlueIQIssueJourneyCross(cross, issuePathsAgent, playbookAgent) {
             if (!cross || !cross.length) {
                 return '<div class="bq-thin-data-card">'
                      + '<div class="bq-thin-data-icon">\u26a0\ufe0f</div>'
@@ -25971,51 +25980,127 @@
             var activeDest = window.__blueIQ && window.__blueIQ.activeDest;
             var activeIssue = window.__blueIQ && window.__blueIQ.activeIssue;
 
+            // Index agent payloads by lowercase bucket name so the thin
+            // branch (and any future branches) can look up the agent-
+            // researched path + playbook for the issue at hand without
+            // re-scanning the arrays.
+            var pathsByBucket = {};
+            (issuePathsAgent || []).forEach(function(p) {
+                if (p && p.bucket) pathsByBucket[p.bucket.toLowerCase()] = p;
+            });
+            var playByBucket = {};
+            (playbookAgent || []).forEach(function(p) {
+                if (p && p.bucket) playByBucket[p.bucket.toLowerCase()] = p;
+            });
+
             // Thin-data case: when the cross only has 1 issue bucket, the
             // Sankey degenerates to a single ribbon and feels broken. Show
-            // a focused single-issue card with the recommendation panel
-            // instead — it tells the user something useful without the
-            // bare-Sankey weirdness.
+            // a focused single-issue card built from agent web-research
+            // (path_discovery + playbook_discovery) instead of the
+            // single panel-derived destination at 100%. Panel-measured
+            // signals (cohort size, top terms) are still surfaced as
+            // grounding context, but the funnel + placement + creative
+            // come from the agent so the card always tells a multi-step
+            // story even when the panel cross is thin.
             if (cross.length === 1) {
                 var only = cross[0];
-                var dests = (only.destinations || []).slice().sort(function(a, b) {
-                    return (b.panelists || 0) - (a.panelists || 0);
-                });
-                var dom = dests.filter(function(d) {
-                    return d.destination !== 'abandoned' && d.destination !== 'other';
-                })[0] || dests[0] || {};
-                var play = BLUE_IQ_CREATIVE_PLAYS[dom.destination] || BLUE_IQ_CREATIVE_PLAYS.other;
+                var bucketKey = (only.bucket || '').toLowerCase();
+                var agentPath = pathsByBucket[bucketKey];
+                var agentPlay = playByBucket[bucketKey];
                 var topTerms = (only.top_terms || []).map(_bqStripDates).filter(Boolean).slice(0, 6).join(' \u00b7 ');
                 var totalUS = _bqNum((+only.total_panelists || 0) * factor);
 
-                // Mini funnel ribbon for this one issue.
-                var maxP = Math.max.apply(null, dests.map(function(d) { return +d.panelists || 0; })) || 1;
-                var miniCols = dests.map(function(d) {
-                    var meta = BLUE_IQ_JOURNEY_LABELS[d.destination] || { label: d.destination };
-                    var color = BLUE_IQ_DEST_PALETTE[d.destination] || '#64748b';
-                    var heightPx = Math.max(8, Math.round(140 * ((+d.panelists || 0) / maxP)));
-                    var us = _bqNum((+d.panelists || 0) * factor);
-                    return '<div class="bq-funnel-col bq-funnel-col-dest" title="' + _bqEscape(meta.label + ': ' + _bqPct(d.share || 0) + ' \u00b7 \u2248' + us + ' US adults') + '">'
-                         +   '<div class="bq-funnel-bar" style="height: 160px;">'
-                         +     '<div class="bq-funnel-bar-spacer" style="height: ' + (160 - heightPx) + 'px;"></div>'
-                         +     '<div class="bq-funnel-bar-fill" style="height: ' + heightPx + 'px; background: linear-gradient(180deg, ' + color + ' 0%, ' + color + 'cc 100%);"></div>'
-                         +     '<div class="bq-funnel-bar-pct">' + _bqPct(d.share || 0) + '</div>'
-                         +   '</div>'
-                         +   '<div class="bq-funnel-col-foot">'
-                         +     '<div class="bq-funnel-col-name">' + _bqEscape(meta.label) + '</div>'
-                         +     '<div class="bq-funnel-col-sub">\u2248' + us + ' US adults</div>'
-                         +   '</div>'
-                         + '</div>';
-                }).join('');
+                // Static-fallback play (used only if the playbook agent
+                // didn't return one for this bucket — e.g. agent
+                // timed out, schema mismatch, or this bucket is new).
+                var fallbackDest = (only.destinations || []).slice()
+                    .sort(function(a, b) { return (+b.panelists || 0) - (+a.panelists || 0); })
+                    .filter(function(d) { return d.destination !== 'abandoned' && d.destination !== 'other'; })[0]
+                    || (only.destinations || [])[0] || {};
+                var staticPlay = BLUE_IQ_CREATIVE_PLAYS[fallbackDest.destination] || BLUE_IQ_CREATIVE_PLAYS.other;
+                var placementText = (agentPlay && agentPlay.where_to_buy)       || staticPlay.placement;
+                var creativeText  = (agentPlay && agentPlay.creative_direction) || staticPlay.creative;
+                var playRationale = (agentPlay && agentPlay.rationale)          || '';
+                var playSource    = (agentPlay && agentPlay.where_to_buy)       ? 'agent' : 'static';
+
+                // Build the multi-step "after the search" mini-funnel.
+                // Agent path: cohort 100% -> next_action (next_share) ->
+                //             follow_up_action (follow_up_share).
+                // Fallback: per-destination panel column funnel (original
+                // behavior) so a missing agent path doesn't blank the card.
+                var miniCols;
+                var funnelSource;
+                if (agentPath && agentPath.next_action) {
+                    var s1Pct = 1.0;
+                    var s2Pct = Math.max(0.05, Math.min(0.95, +agentPath.next_share || 0));
+                    var s3Pct = Math.max(0.02, Math.min(0.95, +agentPath.follow_up_share || 0));
+                    var s1Color = '#a855f7';
+                    var s2Color = '#60a5fa';
+                    var s3Color = '#34d399';
+                    var steps = [
+                        { label: 'SEARCHED ' + only.bucket, sub: 'cohort', pct: s1Pct, color: s1Color, h: 160 },
+                        { label: 'NEXT \u2192 ' + agentPath.next_action,        sub: 'within ' + _bqPct(s2Pct) + ' of cohort',     pct: s2Pct, color: s2Color, h: Math.max(20, Math.round(160 * s2Pct)) },
+                        { label: 'THEN \u2192 ' + agentPath.follow_up_action,   sub: 'within ' + _bqPct(s3Pct) + ' of cohort',     pct: s3Pct, color: s3Color, h: Math.max(14, Math.round(160 * s3Pct)) },
+                    ];
+                    miniCols = steps.map(function(st) {
+                        return '<div class="bq-funnel-col bq-funnel-col-dest" title="' + _bqEscape(st.label + ' \u00b7 ' + _bqPct(st.pct)) + '">'
+                             +   '<div class="bq-funnel-bar" style="height: 160px;">'
+                             +     '<div class="bq-funnel-bar-spacer" style="height: ' + (160 - st.h) + 'px;"></div>'
+                             +     '<div class="bq-funnel-bar-fill" style="height: ' + st.h + 'px; background: linear-gradient(180deg, ' + st.color + ' 0%, ' + st.color + 'cc 100%);"></div>'
+                             +     '<div class="bq-funnel-bar-pct">' + _bqPct(st.pct) + '</div>'
+                             +   '</div>'
+                             +   '<div class="bq-funnel-col-foot">'
+                             +     '<div class="bq-funnel-col-name">' + _bqEscape(st.label) + '</div>'
+                             +     '<div class="bq-funnel-col-sub">' + _bqEscape(st.sub) + '</div>'
+                             +   '</div>'
+                             + '</div>';
+                    }).join('');
+                    funnelSource = 'agent';
+                } else {
+                    var dests = (only.destinations || []).slice().sort(function(a, b) {
+                        return (b.panelists || 0) - (a.panelists || 0);
+                    });
+                    var maxP = Math.max.apply(null, dests.map(function(d) { return +d.panelists || 0; })) || 1;
+                    miniCols = dests.map(function(d) {
+                        var meta = BLUE_IQ_JOURNEY_LABELS[d.destination] || { label: d.destination };
+                        var color = BLUE_IQ_DEST_PALETTE[d.destination] || '#64748b';
+                        var heightPx = Math.max(8, Math.round(140 * ((+d.panelists || 0) / maxP)));
+                        var us = _bqNum((+d.panelists || 0) * factor);
+                        return '<div class="bq-funnel-col bq-funnel-col-dest" title="' + _bqEscape(meta.label + ': ' + _bqPct(d.share || 0) + ' \u00b7 \u2248' + us + ' US adults') + '">'
+                             +   '<div class="bq-funnel-bar" style="height: 160px;">'
+                             +     '<div class="bq-funnel-bar-spacer" style="height: ' + (160 - heightPx) + 'px;"></div>'
+                             +     '<div class="bq-funnel-bar-fill" style="height: ' + heightPx + 'px; background: linear-gradient(180deg, ' + color + ' 0%, ' + color + 'cc 100%);"></div>'
+                             +     '<div class="bq-funnel-bar-pct">' + _bqPct(d.share || 0) + '</div>'
+                             +   '</div>'
+                             +   '<div class="bq-funnel-col-foot">'
+                             +     '<div class="bq-funnel-col-name">' + _bqEscape(meta.label) + '</div>'
+                             +     '<div class="bq-funnel-col-sub">\u2248' + us + ' US adults</div>'
+                             +   '</div>'
+                             + '</div>';
+                    }).join('');
+                    funnelSource = 'panel';
+                }
+
+                // Per user request 2026-06-09: removed the visible
+                // "AGENT-RESEARCHED" pills. Rationales are kept as
+                // hover-only tooltips on the issue-name + the
+                // "Where to place" row so the "why" stays
+                // discoverable without the visual chip.
+                var nameTitleAttr = (funnelSource === 'agent' && agentPath && agentPath.rationale)
+                    ? ' title="' + _bqEscape(agentPath.rationale) + '"'
+                    : '';
+                var placeTitleAttr = (playSource === 'agent' && playRationale)
+                    ? ' title="' + _bqEscape(playRationale) + '"'
+                    : '';
 
                 return '<div class="bq-thin-note">'
                      +   '<strong>Limited cross signal</strong> in this window. '
                      +   'Of the panelists who hit a political-media site, only a small subset also searched a policy-classified term during the same window. '
-                     +   'This is the one issue we surfaced; the broader voter-journey pattern is in the card above.'
+                     +   'The funnel and placement recommendation below are researched by the discovery agent (gpt-4o + web search), grounded in the issue and the cohort\u2019s panel signal.'
                      + '</div>'
                      + '<div class="bq-thin-issue-card">'
                      +   '<div class="bq-thin-issue-head">'
-                     +     '<div class="bq-thin-issue-name">' + _bqEscape(only.bucket) + '</div>'
+                     +     '<div class="bq-thin-issue-name"' + nameTitleAttr + '>' + _bqEscape(only.bucket) + '</div>'
                      +     '<div class="bq-thin-issue-stats">\u2248' + totalUS + ' US adults engaged</div>'
                      +   '</div>'
                      +   '<div class="bq-funnel-ribbon" style="margin-top: 0.5rem;">'
@@ -26023,8 +26108,8 @@
                      +   '</div>'
                      +   (topTerms ? '<div class="bq-reco-terms" style="margin-top:0.6rem;"><em>Top terms in this issue:</em> ' + _bqEscape(topTerms) + '</div>' : '')
                      +   '<div class="bq-reco-play" style="margin-top:0.55rem;">'
-                     +     '<div class="bq-reco-play-row"><span class="bq-reco-play-label" style="color:#fbbf24;">Where to place:</span> ' + _bqEscape(play.placement) + '</div>'
-                     +     '<div class="bq-reco-play-row"><span class="bq-reco-play-label" style="color:#34d399;">Creative direction:</span> ' + _bqEscape(play.creative) + '</div>'
+                     +     '<div class="bq-reco-play-row"' + placeTitleAttr + '><span class="bq-reco-play-label" style="color:#fbbf24;">Where to place:</span> ' + _bqEscape(placementText) + '</div>'
+                     +     '<div class="bq-reco-play-row"><span class="bq-reco-play-label" style="color:#34d399;">Creative direction:</span> ' + _bqEscape(creativeText) + '</div>'
                      +   '</div>'
                      + '</div>'
                      + _bqJourneyLegend(activeDest);
@@ -26452,7 +26537,10 @@
                     step3Pct        = +agent.follow_up_share || 0;
                     step3Panelists  = Math.round(step2Panelists * (step3Pct / Math.max(step2Pct, 0.01)));
                     step2Color      = '#60a5fa';   // agent-blue accent
-                    sourceBadge     = ' <span class="bq-path-agent" title="Researched by the discovery agent (public sources)">agent-researched</span>';
+                    // Per user request 2026-06-09: removed visible
+                    // "AGENT-RESEARCHED" pill. Rationale stays as
+                    // hover-tooltip on the whole row so the "why" is
+                    // discoverable without the visual chip.
                     if (agent.rationale) {
                         rationaleAttr = ' title="' + _bqEscape(agent.rationale) + '"';
                     }
@@ -26608,27 +26696,31 @@
             }
 
             // Layout: source bubbles on LEFT, center bubble on RIGHT.
+            // Geometry tuned so the full card fits on one screen even
+            // with the modeled-source padding (up to ~10 ribbons).
+            // The SVG carries preserveAspectRatio="xMidYMid meet" so
+            // it scales down further on narrow viewports.
             var W            = 1100;
-            var rowH         = 56;
-            var topPad       = 26;
+            var rowH         = 38;
+            var topPad       = 16;
             var H            = topPad * 2 + all.length * rowH;
-            var centerCX     = W - 130;
+            var centerCX     = W - 110;
             var centerCY     = H / 2;
-            var centerR      = 64;
-            var sourceCX     = 220;
-            var sourceLabelX = 20;
-            var sourceLabelW = sourceCX - 70;
+            var centerR      = 50;
+            var sourceCX     = 200;
+            var sourceLabelX = 16;
+            var sourceLabelW = sourceCX - 60;
             var maxShare     = Math.max.apply(null, all.map(function(s) { return s.share; })) || 1;
-            var maxBubbleR   = 34;
-            var maxRibbonW   = 50;
+            var maxBubbleR   = 22;
+            var maxRibbonW   = 32;
 
             var ribbons = all.map(function(s, i) {
                 var cy = topPad + (i + 0.5) * rowH;
-                var r = Math.max(12, Math.round(Math.sqrt(s.share / maxShare) * maxBubbleR));
-                var thickness = Math.max(2.5, Math.round((s.share / maxShare) * maxRibbonW));
-                var x0 = sourceCX + r - 4;
+                var r = Math.max(8, Math.round(Math.sqrt(s.share / maxShare) * maxBubbleR));
+                var thickness = Math.max(2, Math.round((s.share / maxShare) * maxRibbonW));
+                var x0 = sourceCX + r - 3;
                 var y0 = cy;
-                var x1 = centerCX - centerR + 4;
+                var x1 = centerCX - centerR + 3;
                 var y1 = centerCY;
                 var mx = (x0 + x1) / 2;
                 var path = 'M' + x0 + ',' + y0
@@ -26641,17 +26733,17 @@
 
             var sources = all.map(function(s, i) {
                 var cy = topPad + (i + 0.5) * rowH;
-                var r = Math.max(12, Math.round(Math.sqrt(s.share / maxShare) * maxBubbleR));
+                var r = Math.max(8, Math.round(Math.sqrt(s.share / maxShare) * maxBubbleR));
                 return '<g class="bq-fan-inbound-source">'
                      +   '<title>' + _bqEscape(s.name + ': ' + _bqPct(s.share)) + '</title>'
                      +   '<circle cx="' + sourceCX + '" cy="' + cy + '" r="' + r + '" '
                      +     'fill="' + s.color + '" fill-opacity="0.78" '
-                     +     'stroke="' + s.color + '" stroke-width="1.5" stroke-opacity="0.7"/>'
-                     +   '<text x="' + sourceCX + '" y="' + (cy + 4) + '" text-anchor="middle" '
-                     +     'fill="#fff" font-size="' + (r > 22 ? 11 : 9.5) + '" font-weight="700" pointer-events="none">'
+                     +     'stroke="' + s.color + '" stroke-width="1.2" stroke-opacity="0.7"/>'
+                     +   '<text x="' + sourceCX + '" y="' + (cy + 3) + '" text-anchor="middle" '
+                     +     'fill="#fff" font-size="' + (r > 16 ? 9.5 : 8) + '" font-weight="700" pointer-events="none">'
                      +     _bqPct(s.share) + '</text>'
-                     +   '<foreignObject x="' + sourceLabelX + '" y="' + (cy - 14) + '" width="' + sourceLabelW + '" height="28">'
-                     +     '<div xmlns="http://www.w3.org/1999/xhtml" class="bq-fan-label bq-fan-label-right">'
+                     +   '<foreignObject x="' + sourceLabelX + '" y="' + (cy - 10) + '" width="' + sourceLabelW + '" height="22">'
+                     +     '<div xmlns="http://www.w3.org/1999/xhtml" class="bq-fan-label bq-fan-label-right bq-fan-label-compact">'
                      +       '<div class="bq-fan-label-name">' + _bqEscape(s.name) + '</div>'
                      +     '</div>'
                      +   '</foreignObject>'
@@ -26663,18 +26755,18 @@
                 +   '<circle cx="' + centerCX + '" cy="' + centerCY + '" r="' + centerR + '" '
                 +     'fill="rgba(168,85,247,0.16)" stroke="rgba(168,85,247,0.78)" '
                 +     'stroke-width="2" stroke-dasharray="4 3"/>'
-                +   '<text x="' + centerCX + '" y="' + (centerCY - 14) + '" text-anchor="middle" '
-                +     'fill="#fff" font-size="11" font-weight="700" letter-spacing="0.06em">VOTERS</text>'
-                +   '<text x="' + centerCX + '" y="' + (centerCY + 2) + '" text-anchor="middle" '
-                +     'fill="#cbd5e1" font-size="9">searched a policy issue</text>'
-                +   '<text x="' + centerCX + '" y="' + (centerCY + 22) + '" text-anchor="middle" '
-                +     'fill="#fff" font-size="16" font-weight="700">100%</text>'
-                +   '<text x="' + centerCX + '" y="' + (centerCY + 36) + '" text-anchor="middle" '
-                +     'fill="#94a3b8" font-size="8.5">' + _bqEscape('e.g. ' + topIssueName) + '</text>'
+                +   '<text x="' + centerCX + '" y="' + (centerCY - 12) + '" text-anchor="middle" '
+                +     'fill="#fff" font-size="10" font-weight="700" letter-spacing="0.06em">VOTERS</text>'
+                +   '<text x="' + centerCX + '" y="' + (centerCY + 1) + '" text-anchor="middle" '
+                +     'fill="#cbd5e1" font-size="8">searched a policy issue</text>'
+                +   '<text x="' + centerCX + '" y="' + (centerCY + 18) + '" text-anchor="middle" '
+                +     'fill="#fff" font-size="14" font-weight="700">100%</text>'
+                +   '<text x="' + centerCX + '" y="' + (centerCY + 30) + '" text-anchor="middle" '
+                +     'fill="#94a3b8" font-size="7.5">' + _bqEscape('e.g. ' + topIssueName) + '</text>'
                 + '</g>';
 
             return '<div class="bq-fan-wrap">'
-                 +   '<svg viewBox="0 0 ' + W + ' ' + H + '" class="bq-fan-svg" preserveAspectRatio="xMidYMid meet">'
+                 +   '<svg viewBox="0 0 ' + W + ' ' + H + '" class="bq-fan-svg bq-fan-svg-compact" preserveAspectRatio="xMidYMid meet">'
                  +     ribbons + sources + centerBubble
                  +   '</svg>'
                  + '</div>'
@@ -33103,14 +33195,18 @@
             if (loading) loading.style.display = '';
             var loadingMsg = document.getElementById('jiqDashLoadingMsg');
             if (loadingMsg) loadingMsg.textContent = 'Fetching ' + key;
-            fetch('/api/journey-iq/results/' + encodeURIComponent(key), { credentials: 'same-origin' })
-                .then(function(r) { return r.json(); })
-                .then(function(payload) {
+            Promise.all([
+                fetch('/api/journey-iq/results/' + encodeURIComponent(key), { credentials: 'same-origin' }).then(function(r) { return r.json(); }),
+                fetch('/api/journey-iq/annotations/' + encodeURIComponent(key), { credentials: 'same-origin' }).then(function(r) { return r.json(); }).catch(function() { return { annotations: [] }; })
+            ]).then(function(results) {
+                    var payload = results[0];
+                    var annotData = results[1];
                     if (!payload || !payload.success || !payload.data) {
                         if (loadingMsg) loadingMsg.textContent = 'Failed to load: ' + ((payload || {}).error || 'unknown error');
                         return;
                     }
                     _jiqCurrentRun = payload.data;
+                    window._jiqCurrentAnnotations = (annotData && annotData.annotations) || [];
                     _jiqCurrentClusterIdx = 0;
                     _jiqCurrentCut = 'inception';
                     window._jiqCurrentView = 'blended';
@@ -33805,7 +33901,8 @@
                 renderJourneyIqTvTrends(
                     d.viewership_trends
                     || ((fullRun || {}).modeled_view || {}).viewership_trends
-                    || (fullRun || {}).viewership_trends
+                    || (fullRun || {}).viewership_trends,
+                    window._jiqCurrentAnnotations || []
                 );
             }
 
@@ -36727,7 +36824,7 @@
             maxUsers = Math.max(1, maxUsers);
 
             ribbonEl.innerHTML =
-                '<div style="display: flex; gap: 6px; align-items: flex-end; min-height: 220px; padding: 0.5rem 0;">'
+                '<div style="display: grid; grid-template-columns: repeat(' + ptp.columns.length + ', minmax(0, 1fr)); gap: 6px; align-items: end; min-height: 220px; padding: 0.5rem 0;">'
                 + ptp.columns.map(function(col) {
                     var heightPx = Math.round(180 * (col.users / maxUsers));
                     if (heightPx < 4 && col.users > 0) heightPx = 4;
@@ -36749,14 +36846,14 @@
                     var headerStyle = (col.index === 0)
                         ? 'background: var(--accent-primary); color: #fff;'
                         : 'background: var(--bg-secondary); color: var(--text-primary);';
-                    return '<div style="flex: 1; min-width: 100px; max-width: 180px; display: flex; flex-direction: column; align-items: stretch;">'
+                    return '<div style="display: flex; flex-direction: column; align-items: stretch; min-width: 0;">'
                          +   '<div style="height: ' + heightPx + 'px; display: flex; flex-direction: column; '
                          +      'border: 1px solid var(--border-color); border-radius: 6px 6px 0 0; overflow: hidden;">'
                          +     stacks
                          +   '</div>'
                          +   '<div style="padding: 6px 4px; ' + headerStyle + ' border: 1px solid var(--border-color); border-top: 0; '
-                         +      'border-radius: 0 0 6px 6px; text-align: center;">'
-                         +     '<div style="font-size: 11px; font-weight: 700;">' + _jiqEsc(col.label) + '</div>'
+                         +      'border-radius: 0 0 6px 6px; text-align: center; min-width: 0; overflow-wrap: anywhere;">'
+                         +     '<div style="font-size: 11px; font-weight: 700; line-height: 1.2;">' + _jiqEsc(col.label) + '</div>'
                          +     '<div style="font-size: 10px; opacity: 0.8;">' + _jiqFmt(col.users) + ' users · ' + (col.users_pct || 0) + '%</div>'
                          +   '</div>'
                          + '</div>';
@@ -36853,7 +36950,8 @@
         // index that overrides hover until the user releases the pin.
         var _jiqTrendsState = null;
 
-        function renderJourneyIqTvTrends(trends) {
+        function renderJourneyIqTvTrends(trends, annotations) {
+            annotations = annotations || [];
             var card = document.getElementById('jiqTvTrendsCard');
             if (!card) return;
             var hasData = trends
@@ -36934,7 +37032,7 @@
             var _trendsTargetW = function() {
                 return (chartEl && chartEl.clientWidth) || 880;
             };
-            var rendered = _jiqRenderTrendsSparkline(weekly, _trendsTargetW());
+            var rendered = _jiqRenderTrendsSparkline(weekly, _trendsTargetW(), annotations);
             if (chartEl) chartEl.innerHTML = rendered.svg;
 
             // ---- Seed interactive state to "latest week + latest month" ----
@@ -36942,6 +37040,7 @@
                 trends:           trends,
                 weekly:           weekly,
                 monthly:          monthly,
+                annotations:      annotations,
                 weekToMonthIdx:   weekToMonthIdx,
                 latestWeekIdx:    weekly.length  - 1,
                 latestMonthIdx:   monthly.length - 1,
@@ -36971,7 +37070,7 @@
                     _rid = requestAnimationFrame(function() {
                         var s = _jiqTrendsState;
                         if (!s || !s.weekly) return;
-                        var rr = _jiqRenderTrendsSparkline(s.weekly, cw);
+                        var rr = _jiqRenderTrendsSparkline(s.weekly, cw, s.annotations || []);
                         chartEl.innerHTML = rr.svg;
                         s.dotPositions = rr.positions;
                         _jiqTrendsApplySelection();
@@ -37294,14 +37393,16 @@
         // hover, so pointer events stay live mid-motion.
         //
         // Returns { svg: <string>, positions: [{x, yA, yH}, ...] }.
-        function _jiqRenderTrendsSparkline(weekly, widthOverride) {
+        function _jiqRenderTrendsSparkline(weekly, widthOverride, annotations) {
+            annotations = annotations || [];
             if (!weekly || !weekly.length) return { svg: '', positions: [] };
             // W is dynamic: matches current container width so the SVG
             // truly fills the card. Clamped to sane bounds so labels
             // stay readable on extreme sizes.
             var W = Math.max(640, Math.min(widthOverride || 880, 2400));
-            var H = 220;
-            var padL = 60, padR = 60, padT = 18, padB = 44;
+            var hasAnnotations = annotations && annotations.length > 0;
+            var H = hasAnnotations ? 236 : 220;
+            var padL = 60, padR = 60, padT = 18, padB = hasAnnotations ? 58 : 44;
             var plotW = W - padL - padR;
             var plotH = H - padT - padB;
             var n = weekly.length;
@@ -37375,6 +37476,31 @@
                     var dx = positions[d2].x;
                     drops += '<text x="' + dx + '" y="' + (padT - 4) + '" font-size="9"'
                           + ' text-anchor="middle" fill="#a78bfa" font-weight="600" pointer-events="none">▼</text>';
+                }
+            }
+
+            // Context annotations (teal labels below the x-axis)
+            var annotSvg = '';
+            if (annotations && annotations.length) {
+                for (var ai = 0; ai < annotations.length; ai++) {
+                    var aDate = annotations[ai].date || '';
+                    var aCtx  = annotations[ai].context || '';
+                    if (!aDate || !aCtx) continue;
+                    // Find closest matching bucket by week_start or date comparison
+                    var bestIdx = -1, bestDist = Infinity;
+                    for (var bi = 0; bi < n; bi++) {
+                        var ws = weekly[bi].week_start || '';
+                        if (!ws) continue;
+                        var dist = Math.abs(new Date(aDate) - new Date(ws));
+                        if (dist < bestDist) { bestDist = dist; bestIdx = bi; }
+                    }
+                    if (bestIdx >= 0) {
+                        var ax = positions[bestIdx].x;
+                        var aLabel = aCtx.length > 20 ? aCtx.slice(0, 19) + '…' : aCtx;
+                        annotSvg += '<text x="' + ax + '" y="' + (padT + plotH + 40) + '" font-size="9"'
+                                  + ' text-anchor="middle" fill="var(--accent-cyan)" font-weight="600" pointer-events="none">'
+                                  + _jiqEsc(aLabel) + '</text>';
+                    }
                 }
             }
 
@@ -37485,6 +37611,7 @@
                 +   ptsH
                 +   ptsA
                 +   drops
+                +   annotSvg
                 +   ticks
                 +   leftAxis
                 +   rightAxis
@@ -53894,15 +54021,23 @@
                     return;
                 }
                 
-                // Group by canonical name (e.g. "Reba McEntire") so cohort
-                // variants like "Reba McEntire 4Plus" collapse under the same
-                // parent. See getProfileCohortInfo() for the suffix allow-list.
+                // Group by canonical name (e.g. "Reba McEntire") so date +
+                // cohort variants ("Reba 4+", "Reba McEntire 2024", etc.)
+                // collapse under the same parent. See getProfileSuffixInfo()
+                // for the recognised suffix allow-list and
+                // mergeStubGroupsIntoCanonical() for the stub-merge pass
+                // that handles "Reba" -> "Reba McEntire".
                 const bySubject = {};
+                const displayNames = {};
                 matchingProfiles.forEach(p => {
                     const subj = getProfileGroupKey(p) || (getProfileFullName(p) || '').toLowerCase();
-                    if (!bySubject[subj]) bySubject[subj] = [];
+                    if (!bySubject[subj]) {
+                        bySubject[subj] = [];
+                        displayNames[subj] = getProfileSuffixInfo(p).canonicalName || getProfileFullName(p);
+                    }
                     bySubject[subj].push(p);
                 });
+                mergeStubGroupsIntoCanonical(bySubject, displayNames);
                 const subjectKeys = Object.keys(bySubject).sort((a, b) => a.localeCompare(b));
                 
                 let html = '';
@@ -53915,7 +54050,7 @@
                     const isSvod = first.is_svod || (first.key && first.key.startsWith('svod-acquisition/')) || (first.s3_key && first.bucket === 'svod-acquisition');
                     const masterCat = getMasterCategory(cat, isSvod);
                     const icon = MASTER_CATEGORY_ICONS[masterCat] || '📁';
-                    const subjectDisplayName = getProfileCohortInfo(first).canonicalName || getProfileFullName(first);
+                    const subjectDisplayName = displayNames[subj] || getProfileSuffixInfo(first).canonicalName || getProfileFullName(first);
                     
                     if (runs.length === 1) {
                         const fullName = getProfileFullName(first);
@@ -54003,11 +54138,16 @@
                         return nameA.localeCompare(nameB);
                     });
                     const bySubject = {};
+                    const displayNames = {};
                     sortedItems.forEach(p => {
                         const subj = getProfileGroupKey(p) || (getProfileFullName(p) || '').toLowerCase();
-                        if (!bySubject[subj]) bySubject[subj] = [];
+                        if (!bySubject[subj]) {
+                            bySubject[subj] = [];
+                            displayNames[subj] = getProfileSuffixInfo(p).canonicalName || getProfileFullName(p);
+                        }
                         bySubject[subj].push(p);
                     });
+                    mergeStubGroupsIntoCanonical(bySubject, displayNames);
                     Object.keys(bySubject).sort((a, b) => a.localeCompare(b)).forEach(subj => {
                         const runs = bySubject[subj];
                         const first = runs[0];
@@ -54016,7 +54156,7 @@
                         if (runs.length === 1) {
                             html += _profileItemHtml(first, escapeAttr(getProfileFullName(first)));
                         } else {
-                            const displayName = getProfileCohortInfo(first).canonicalName || getProfileFullName(first);
+                            const displayName = displayNames[subj] || getProfileSuffixInfo(first).canonicalName || getProfileFullName(first);
                             html += `<div class="profile-cat-item ${subjectExpanded ? 'open' : ''}" data-dash-subject="${escapeAttr(subj)}" onclick="event.stopPropagation(); toggleDashSubject(this)" style="font-weight: 500;">
                                 <span class="cat-arrow">▸</span>
                                 <span class="profile-cat-label">${escapeAttr(displayName)}</span>
@@ -54041,11 +54181,16 @@
                         return nameA.localeCompare(nameB);
                     });
                     const bySubject = {};
+                    const displayNames = {};
                     sortedItems.forEach(p => {
                         const subj = getProfileGroupKey(p) || (getProfileFullName(p) || '').toLowerCase();
-                        if (!bySubject[subj]) bySubject[subj] = [];
+                        if (!bySubject[subj]) {
+                            bySubject[subj] = [];
+                            displayNames[subj] = getProfileSuffixInfo(p).canonicalName || getProfileFullName(p);
+                        }
                         bySubject[subj].push(p);
                     });
+                    mergeStubGroupsIntoCanonical(bySubject, displayNames);
                     Object.keys(bySubject).sort((a, b) => a.localeCompare(b)).forEach(subj => {
                         const runs = bySubject[subj];
                         const first = runs[0];
@@ -54054,7 +54199,7 @@
                         if (runs.length === 1) {
                             html += _profileItemHtml(first, escapeAttr(getProfileFullName(first)));
                         } else {
-                            const displayName = getProfileCohortInfo(first).canonicalName || getProfileFullName(first);
+                            const displayName = displayNames[subj] || getProfileSuffixInfo(first).canonicalName || getProfileFullName(first);
                             html += `<div class="profile-cat-item ${subjectExpanded ? 'open' : ''}" data-dash-subject="${escapeAttr(subj)}" onclick="event.stopPropagation(); toggleDashSubject(this)" style="font-weight: 500;">
                                 <span class="cat-arrow">▸</span>
                                 <span class="profile-cat-label">${escapeAttr(displayName)}</span>
@@ -54078,11 +54223,16 @@
                             return nameA.localeCompare(nameB);
                         });
                         const bySubject = {};
+                        const displayNames = {};
                         sortedItems.forEach(p => {
                             const subj = getProfileGroupKey(p) || (getProfileFullName(p) || '').toLowerCase();
-                            if (!bySubject[subj]) bySubject[subj] = [];
+                            if (!bySubject[subj]) {
+                                bySubject[subj] = [];
+                                displayNames[subj] = getProfileSuffixInfo(p).canonicalName || getProfileFullName(p);
+                            }
                             bySubject[subj].push(p);
                         });
+                        mergeStubGroupsIntoCanonical(bySubject, displayNames);
                         let itemsHtml = '';
                         Object.keys(bySubject).sort((a, b) => a.localeCompare(b)).forEach(subj => {
                             const runs = bySubject[subj];
@@ -54092,7 +54242,7 @@
                             if (runs.length === 1) {
                                 itemsHtml += _profileItemHtml(first, escapeAttr(getProfileFullName(first)));
                             } else {
-                                const displayNameAttr = escapeAttr(getProfileCohortInfo(first).canonicalName || getProfileFullName(first));
+                                const displayNameAttr = escapeAttr(displayNames[subj] || getProfileSuffixInfo(first).canonicalName || getProfileFullName(first));
                                 itemsHtml += `<div class="profile-cat-item ${subjectExpanded ? 'open' : ''}" data-dash-subject="${escapeAttr(subj)}" onclick="event.stopPropagation(); toggleDashSubject(this)" style="font-weight: 500;">
                                     <span class="cat-arrow">▸</span>
                                     <span class="profile-cat-label">${displayNameAttr}</span>
@@ -54147,6 +54297,419 @@
         function closeProfileDeltasModal() {
             const modal = document.getElementById('profileDeltasModal');
             if (modal) modal.style.display = 'none';
+        }
+
+        // ===================================================================
+        // Compare date ranges — inline comparison-series injection
+        // ===================================================================
+        // Replaces the legacy modal: clicking "Compare date ranges" opens a
+        // popover with checkboxes for each other run of the same subject
+        // (prior years + cohort variants). When toggled on, that run's data is
+        // fetched and rendered as an additional bar dataset on every
+        // demographic chart, slotted in BEFORE the Gen Pop bar. Toggling off
+        // removes the dataset. Clearing or switching to a different subject
+        // wipes the state.
+        // -------------------------------------------------------------------
+        const _COMPARISON_PALETTE = ['#fd971f', '#ae81ff', '#f92672', '#66d9ef', '#a6e22e', '#e6db74', '#75715e', '#ff79c6'];
+        const _COMPARISON_GENPOP_COLOR = '#9ca3af';
+        let _comparisonRunsState = {
+            subject: '',
+            selectedKeys: [],
+            runsByKey: {},
+            availableRuns: [],
+            currentKey: '',
+            inFlight: {}
+        };
+
+        function _resetComparisonRunsState(subject, currentKey, availableRuns) {
+            _comparisonRunsState = {
+                subject: subject || '',
+                selectedKeys: [],
+                runsByKey: {},
+                availableRuns: Array.isArray(availableRuns) ? availableRuns.slice() : [],
+                currentKey: currentKey || '',
+                inFlight: {}
+            };
+            _updateCompareDateRangesButtonBadge();
+            _closeCompareDateRangesPopover();
+        }
+
+        function _compactRunLabel(profile) {
+            try {
+                if (typeof getCanonicalChildLabel === 'function') {
+                    const lbl = getCanonicalChildLabel(profile);
+                    if (lbl && lbl !== 'Run') return lbl;
+                }
+            } catch (_) {}
+            try {
+                if (typeof getRunDateLabel === 'function') {
+                    const d = getRunDateLabel(profile && (profile.s3_key || ''));
+                    if (d) return d;
+                }
+            } catch (_) {}
+            return (profile && (profile.display_name || profile.name)) || 'Run';
+        }
+
+        function _setupComparisonForCurrentProfile(subject, currentKey, sameSubjectRuns) {
+            const others = (sameSubjectRuns || []).filter(p => (p.s3_key || p.job_id) !== currentKey);
+            const sorted = typeof sortRunsForGroup === 'function' ? sortRunsForGroup(others) : others;
+            const available = sorted.map(p => ({
+                key: p.s3_key || p.job_id,
+                label: _compactRunLabel(p),
+                profile: p
+            }));
+            const subjectChanged = (subject || '') !== (_comparisonRunsState.subject || '');
+            if (subjectChanged) {
+                _resetComparisonRunsState(subject, currentKey, available);
+            } else {
+                _comparisonRunsState.currentKey = currentKey || '';
+                _comparisonRunsState.availableRuns = available;
+                const validKeys = new Set(available.map(a => a.key));
+                _comparisonRunsState.selectedKeys = (_comparisonRunsState.selectedKeys || []).filter(k => validKeys.has(k));
+                _updateCompareDateRangesButtonBadge();
+            }
+        }
+
+        function _updateCompareDateRangesButtonBadge() {
+            const btn = document.getElementById('dashViewDeltasBtn');
+            if (!btn) return;
+            const n = (_comparisonRunsState.selectedKeys || []).length;
+            const base = 'Compare date ranges';
+            btn.textContent = n > 0 ? `${base} (${n})` : base;
+        }
+
+        async function _fetchComparisonRunData(key, profile) {
+            if (_comparisonRunsState.runsByKey[key]) return _comparisonRunsState.runsByKey[key];
+            if (_comparisonRunsState.inFlight[key]) return _comparisonRunsState.inFlight[key];
+            const p = (async () => {
+                try {
+                    const res = await fetch('/api/get-csv-data/' + encodeURIComponent(key), { credentials: 'same-origin' });
+                    const data = await res.json();
+                    if (!data || !data.success || !data.data) return null;
+                    const parsed = (typeof parseAllData === 'function') ? parseAllData(data.data) : null;
+                    if (!parsed) return null;
+                    const entry = { key, profile, parsed, label: _compactRunLabel(profile) };
+                    _comparisonRunsState.runsByKey[key] = entry;
+                    return entry;
+                } catch (e) {
+                    console.warn('Compare: failed to fetch run', key, e);
+                    return null;
+                } finally {
+                    delete _comparisonRunsState.inFlight[key];
+                }
+            })();
+            _comparisonRunsState.inFlight[key] = p;
+            return p;
+        }
+
+        async function _toggleComparisonRun(key, profile, checked) {
+            let result = { ok: true };
+            if (checked) {
+                if (!_comparisonRunsState.selectedKeys.includes(key)) {
+                    _comparisonRunsState.selectedKeys.push(key);
+                }
+                const entry = await _fetchComparisonRunData(key, profile);
+                if (!entry) {
+                    // Fetch failed (404, network, bad JSON, etc.). Don't keep
+                    // a dangling selectedKey because applyComparison would
+                    // think the run is "loading" forever.
+                    _comparisonRunsState.selectedKeys = _comparisonRunsState.selectedKeys.filter(k => k !== key);
+                    result = { ok: false, reason: 'fetch' };
+                } else {
+                    // Sanity-check: does this run actually contribute any
+                    // non-zero demographic data once we project it onto the
+                    // current charts' keys? If not, the run is effectively
+                    // empty for comparison purposes (e.g. older CSV with a
+                    // different demographic schema). Keep the selection but
+                    // tell the caller so the popover row can flag it.
+                    const nonZero = _comparisonEntryHasUsableData(entry);
+                    if (!nonZero) result = { ok: false, reason: 'empty' };
+                }
+            } else {
+                _comparisonRunsState.selectedKeys = _comparisonRunsState.selectedKeys.filter(k => k !== key);
+            }
+            _updateCompareDateRangesButtonBadge();
+            applyComparisonRunsToDashboardCharts();
+            return result;
+        }
+
+        // Normalize a demographic-bucket key for fuzzy lookup so the same
+        // bucket resolves across runs even when casing or whitespace differs
+        // (e.g. "Hispanic or Latino" vs "HISPANIC OR LATINO", "65 or Older"
+        // vs "65 OR OLDER"). Used by both the apply helper and the empty-
+        // data sanity check.
+        function _normDemoKey(k) {
+            if (k == null) return '';
+            return String(k).trim().toLowerCase().replace(/\s+/g, ' ');
+        }
+        function _buildDemoLookup(dict) {
+            const out = {};
+            if (!dict || typeof dict !== 'object') return out;
+            for (const [k, v] of Object.entries(dict)) {
+                out[_normDemoKey(k)] = v;
+            }
+            return out;
+        }
+
+        // True if a fetched comparison run yields at least one non-zero
+        // value when projected onto any of the live demographic charts'
+        // current key order. This catches "fetch succeeded but the run has
+        // an incompatible demographic schema" so we can flag it in the UI
+        // instead of silently rendering invisible zero-height bars.
+        function _comparisonEntryHasUsableData(entry) {
+            if (!entry || !entry.parsed || !entry.parsed.demographics) return false;
+            if (typeof charts === 'undefined' || !charts) return true; // be permissive if charts aren't up yet
+            const demoCats = ['age', 'gender', 'ethnicity', 'income', 'education', 'relationship', 'sexual_orientation', 'parental_status', 'occupation'];
+            for (const cat of demoCats) {
+                const dict = entry.parsed.demographics[cat];
+                if (!dict || typeof dict !== 'object') continue;
+                for (const v of Object.values(dict)) {
+                    if (typeof v === 'number' && isFinite(v) && v > 0) return true;
+                }
+            }
+            return false;
+        }
+
+        function _clearAllComparisonRuns() {
+            _comparisonRunsState.selectedKeys = [];
+            _updateCompareDateRangesButtonBadge();
+            applyComparisonRunsToDashboardCharts();
+            const pop = document.getElementById('compareDateRangesPopover');
+            if (pop) {
+                pop.querySelectorAll('input[type="checkbox"][data-cmp-key]').forEach(cb => { cb.checked = false; });
+            }
+        }
+
+        function _closeCompareDateRangesPopover() {
+            const pop = document.getElementById('compareDateRangesPopover');
+            if (pop) pop.remove();
+            document.removeEventListener('mousedown', _compareDateRangesDocHandler, true);
+        }
+
+        function _compareDateRangesDocHandler(e) {
+            const pop = document.getElementById('compareDateRangesPopover');
+            const btn = document.getElementById('dashViewDeltasBtn');
+            if (!pop) return;
+            if (pop.contains(e.target)) return;
+            if (btn && btn.contains(e.target)) return;
+            _closeCompareDateRangesPopover();
+        }
+
+        function _openCompareDateRangesPopover() {
+            const existing = document.getElementById('compareDateRangesPopover');
+            if (existing) { _closeCompareDateRangesPopover(); return; }
+
+            const btn = document.getElementById('dashViewDeltasBtn');
+            if (!btn) return;
+            const available = _comparisonRunsState.availableRuns || [];
+            const pop = document.createElement('div');
+            pop.id = 'compareDateRangesPopover';
+            pop.style.cssText = [
+                'position:absolute',
+                'z-index:10000',
+                'background:var(--bg-secondary, #1f2330)',
+                'border:1px solid var(--border-color, #2c3041)',
+                'border-radius:8px',
+                'box-shadow:0 10px 30px rgba(0,0,0,0.45)',
+                'padding:0.6rem 0.75rem',
+                'min-width:240px',
+                'max-width:320px',
+                'max-height:60vh',
+                'overflow:auto',
+                'font-family:inherit',
+                'color:var(--text-primary, #e6e6e6)'
+            ].join(';');
+
+            const selected = new Set(_comparisonRunsState.selectedKeys || []);
+
+            const header = document.createElement('div');
+            header.style.cssText = 'display:flex;align-items:center;justify-content:space-between;gap:0.5rem;margin-bottom:0.5rem;';
+            const title = document.createElement('div');
+            title.style.cssText = 'font-size:0.78rem;font-weight:600;color:var(--text-secondary, #9ca3af);text-transform:uppercase;letter-spacing:0.04em;';
+            title.textContent = 'Add to dashboard';
+            const clearLink = document.createElement('a');
+            clearLink.href = '#';
+            clearLink.textContent = 'Clear';
+            clearLink.style.cssText = 'font-size:0.75rem;color:var(--accent-purple, #7c3aed);text-decoration:none;';
+            clearLink.onclick = function(e) { e.preventDefault(); _clearAllComparisonRuns(); };
+            header.appendChild(title);
+            header.appendChild(clearLink);
+            pop.appendChild(header);
+
+            if (available.length === 0) {
+                const empty = document.createElement('div');
+                empty.style.cssText = 'font-size:0.8rem;color:var(--text-secondary, #9ca3af);padding:0.5rem 0;';
+                empty.textContent = 'No other runs for this profile yet.';
+                pop.appendChild(empty);
+            } else {
+                const hint = document.createElement('div');
+                hint.style.cssText = 'font-size:0.72rem;color:var(--text-secondary, #9ca3af);margin-bottom:0.4rem;line-height:1.35;';
+                hint.textContent = 'Toggle prior years or cohorts on to see them as extra bars before Gen Pop.';
+                pop.appendChild(hint);
+
+                available.forEach(item => {
+                    const row = document.createElement('label');
+                    row.style.cssText = 'display:grid;grid-template-columns:18px 1fr auto;column-gap:0.55rem;align-items:center;padding:0.32rem 0.4rem;border-radius:6px;cursor:pointer;font-size:0.85rem;line-height:1.2;';
+                    row.onmouseenter = function() { row.style.background = 'rgba(124,58,237,0.10)'; };
+                    row.onmouseleave = function() { row.style.background = 'transparent'; };
+                    const cb = document.createElement('input');
+                    cb.type = 'checkbox';
+                    cb.setAttribute('data-cmp-key', item.key);
+                    cb.checked = selected.has(item.key);
+                    cb.style.cssText = 'accent-color:#7c3aed;cursor:pointer;width:14px;height:14px;margin:0;justify-self:center;';
+                    const lbl = document.createElement('span');
+                    lbl.textContent = item.label;
+                    lbl.style.cssText = 'color:var(--text-primary, #e6e6e6);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;';
+                    const status = document.createElement('span');
+                    status.style.cssText = 'font-size:0.68rem;color:var(--text-secondary, #9ca3af);justify-self:end;min-width:3.5rem;text-align:right;';
+                    row.appendChild(cb);
+                    row.appendChild(lbl);
+                    row.appendChild(status);
+                    cb.addEventListener('change', async function() {
+                        const wasChecked = cb.checked;
+                        status.textContent = wasChecked ? 'Loading…' : '';
+                        status.style.color = 'var(--text-secondary, #9ca3af)';
+                        try {
+                            const result = await _toggleComparisonRun(item.key, item.profile, wasChecked);
+                            if (!wasChecked) {
+                                status.textContent = '';
+                            } else if (result && result.ok) {
+                                status.textContent = '';
+                            } else if (result && result.reason === 'empty') {
+                                status.textContent = 'No data';
+                                status.style.color = '#fd971f';
+                            } else {
+                                status.textContent = 'Failed';
+                                status.style.color = '#f92672';
+                                cb.checked = false;
+                            }
+                        } catch (e) {
+                            status.textContent = 'Failed';
+                            status.style.color = '#f92672';
+                            cb.checked = !wasChecked;
+                        }
+                    });
+                    pop.appendChild(row);
+                });
+            }
+
+            document.body.appendChild(pop);
+            const r = btn.getBoundingClientRect();
+            const pad = 6;
+            const popW = Math.min(320, Math.max(240, pop.offsetWidth || 260));
+            let left = r.left + window.scrollX;
+            if (left + popW > window.scrollX + window.innerWidth - 8) {
+                left = Math.max(8, window.scrollX + window.innerWidth - 8 - popW);
+            }
+            const top = r.bottom + window.scrollY + pad;
+            pop.style.left = left + 'px';
+            pop.style.top = top + 'px';
+
+            setTimeout(() => { document.addEventListener('mousedown', _compareDateRangesDocHandler, true); }, 0);
+        }
+
+        // Mutates each demographic Chart.js instance, layering selected runs
+        // (and a Gen Pop bar at the end) onto the existing dataset. Safe to
+        // call repeatedly: previously injected datasets are stripped first.
+        function applyComparisonRunsToDashboardCharts() {
+            if (typeof charts === 'undefined' || !charts) return;
+            const series = (_comparisonRunsState.selectedKeys || [])
+                .map(k => _comparisonRunsState.runsByKey[k])
+                .filter(Boolean);
+            const demoChartKeys = ['age', 'gender', 'ethnicity', 'income', 'education', 'relationship', 'sexualOrientation', 'parentalStatus', 'occupation'];
+            const chartKeyToDataCat = {
+                age: 'age', gender: 'gender', ethnicity: 'ethnicity', income: 'income',
+                education: 'education', relationship: 'relationship',
+                sexualOrientation: 'sexual_orientation', parentalStatus: 'parental_status',
+                occupation: 'occupation'
+            };
+            const mainProfileLabel = (currentProfileData && currentProfileData.name) || 'Profile';
+
+            demoChartKeys.forEach(chartKey => {
+                const chart = charts[chartKey];
+                if (!chart || !chart.data) return;
+                const cfgType = (chart.config && chart.config.type) || (chart.config && chart.config._config && chart.config._config.type);
+                if (cfgType !== 'bar') return;
+                const origKeys = chart._origKeys;
+                const origGP = chart._origGenPop;
+                const dataCat = chart._demoCategory || chartKeyToDataCat[chartKey];
+                if (!Array.isArray(origKeys) || !dataCat) return;
+
+                chart.data.datasets = (chart.data.datasets || []).filter(d => !d._isComparison);
+                if (chart.data.datasets[0]) {
+                    chart.data.datasets[0].label = mainProfileLabel;
+                }
+
+                if (series.length === 0) {
+                    if (chart.options && chart.options.plugins) {
+                        if (chart.options.plugins.legend) chart.options.plugins.legend.display = false;
+                        if (chart.options.plugins.datalabels) {
+                            chart.options.plugins.datalabels.display = true;
+                        }
+                    }
+                    chart.update('none');
+                    return;
+                }
+
+                series.forEach((entry, idx) => {
+                    const demoDict = (entry.parsed && entry.parsed.demographics && entry.parsed.demographics[dataCat]) || {};
+                    // Case- and whitespace-insensitive fallback so prior-year
+                    // runs with minor key drift (e.g. "Hispanic or Latino"
+                    // vs "HISPANIC OR LATINO", "65 or Older" vs "65 OR OLDER")
+                    // still resolve instead of silently rendering invisible
+                    // zero-height bars.
+                    const demoLookup = _buildDemoLookup(demoDict);
+                    const data = origKeys.map(k => {
+                        let v = demoDict[k];
+                        if (!(typeof v === 'number' && isFinite(v))) {
+                            v = demoLookup[_normDemoKey(k)];
+                        }
+                        return (typeof v === 'number' && isFinite(v)) ? v : 0;
+                    });
+                    chart.data.datasets.push({
+                        _isComparison: true,
+                        label: entry.label || 'Run',
+                        data,
+                        backgroundColor: _COMPARISON_PALETTE[idx % _COMPARISON_PALETTE.length],
+                        borderRadius: 4,
+                        barPercentage: chart.data.datasets[0] && chart.data.datasets[0].barPercentage ? chart.data.datasets[0].barPercentage : undefined,
+                        categoryPercentage: chart.data.datasets[0] && chart.data.datasets[0].categoryPercentage ? chart.data.datasets[0].categoryPercentage : undefined
+                    });
+                });
+                if (Array.isArray(origGP)) {
+                    chart.data.datasets.push({
+                        _isComparison: true,
+                        label: 'Gen Pop',
+                        data: origGP.map(v => (typeof v === 'number' && isFinite(v)) ? v : 0),
+                        backgroundColor: _COMPARISON_GENPOP_COLOR,
+                        borderRadius: 4,
+                        barPercentage: chart.data.datasets[0] && chart.data.datasets[0].barPercentage ? chart.data.datasets[0].barPercentage : undefined,
+                        categoryPercentage: chart.data.datasets[0] && chart.data.datasets[0].categoryPercentage ? chart.data.datasets[0].categoryPercentage : undefined
+                    });
+                }
+
+                if (chart.options && chart.options.plugins) {
+                    chart.options.plugins.legend = chart.options.plugins.legend || {};
+                    chart.options.plugins.legend.display = true;
+                    chart.options.plugins.legend.position = 'bottom';
+                    // Force a per-dataset legend (Profile / 2024 / 2023 / GP)
+                    // by clearing any per-category generateLabels callback
+                    // some charts install. Chart.js's default falls back to
+                    // one entry per dataset, which is what we want.
+                    chart.options.plugins.legend.labels = {
+                        color: '#a8b2c1',
+                        font: { size: 11 },
+                        boxWidth: 12,
+                        padding: 8,
+                        usePointStyle: true,
+                        pointStyle: 'rect'
+                    };
+                    if (chart.options.plugins.datalabels) {
+                        chart.options.plugins.datalabels.display = false;
+                    }
+                }
+                chart.update('none');
+            });
         }
 
         async function showProfileDeltasModal(subject, sameSubjectRuns) {
@@ -54765,11 +55328,25 @@
                         const key = runSelect.value;
                         if (key && key !== profileId) selectDashboardProfile(key);
                     };
+                    // Inline comparison-series popover replaces the legacy
+                    // "Compare date ranges" modal. Selected runs are layered
+                    // into the demographic charts (see applyComparisonRunsToDashboardCharts).
+                    if (typeof _setupComparisonForCurrentProfile === 'function') {
+                        _setupComparisonForCurrentProfile(subject, profileId, sameSubjectRuns);
+                    }
                     if (deltasBtn) {
-                        deltasBtn.onclick = function() { showProfileDeltasModal(subject, sameSubjectRuns); };
+                        deltasBtn.onclick = function(ev) {
+                            if (ev) { ev.preventDefault(); ev.stopPropagation(); }
+                            if (typeof _openCompareDateRangesPopover === 'function') {
+                                _openCompareDateRangesPopover();
+                            }
+                        };
                     }
                 } else if (runsRow) {
                     runsRow.style.display = 'none';
+                    if (typeof _resetComparisonRunsState === 'function') {
+                        _resetComparisonRunsState('', profileId, []);
+                    }
                 }
                 // Fetch profile image (custom uploads only)
                 fetchProfileImage(brandName);
@@ -56445,6 +57022,7 @@
                 },
                 plugins: [ChartDataLabels]
             });
+            if (charts.age) { charts.age._origKeys = ageOriginalKeys; charts.age._origGenPop = ageGenPop; charts.age._demoCategory = 'age'; }
 
             // Gender - with Gen Pop in legend (green/red based on index)
             const genderSorted = getSortedGenderData(demographics.gender, demographicsIndex.gender);
@@ -56567,6 +57145,7 @@
                 },
                 plugins: [ChartDataLabels]
             });
+            if (charts.gender) { charts.gender._origKeys = genderOrigKeys; charts.gender._origGenPop = genderGenPop; charts.gender._demoCategory = 'gender'; }
 
             // Ethnicity - with Gen Pop in legend (green/red based on index). All labels in ALL CAPS.
             // Sort ethnicity data based on current sort mode (default: by percentage descending)
@@ -56688,6 +57267,7 @@
                 },
                 plugins: [ChartDataLabels]
             });
+            if (charts.ethnicity) { charts.ethnicity._origKeys = ethLabels; charts.ethnicity._origGenPop = ethGenPop; charts.ethnicity._demoCategory = 'ethnicity'; }
 
             // Income - horizontal bar with Gen Pop in data labels (green/red based on index)
             // Income - horizontal bar with Gen Pop in data labels (green/red based on index)
@@ -56811,6 +57391,7 @@
                 },
                 plugins: [ChartDataLabels]
             });
+            if (charts.income) { charts.income._origKeys = incomeOriginalKeys; charts.income._origGenPop = incomeGenPop; charts.income._demoCategory = 'income'; }
             
             // Education - horizontal bar with Gen Pop
             if (demographics.education && Object.keys(demographics.education).length > 0) {
@@ -56897,6 +57478,7 @@
                     },
                     plugins: [ChartDataLabels]
                 });
+                if (charts.education) { charts.education._origKeys = eduOrigKeys; charts.education._origGenPop = eduGenPop; charts.education._demoCategory = 'education'; }
             }
             
             // Relationship - doughnut with Gen Pop
@@ -57027,6 +57609,7 @@
                     },
                     plugins: [ChartDataLabels]
                 });
+                if (charts.relationship) { charts.relationship._origKeys = relOrigKeys; charts.relationship._origGenPop = relGenPop; charts.relationship._demoCategory = 'relationship'; }
             }
             
             // Sexual Orientation - doughnut with Gen Pop
@@ -57145,6 +57728,7 @@
                     },
                     plugins: [ChartDataLabels]
                 });
+                if (charts.sexualOrientation) { charts.sexualOrientation._origKeys = soOrigKeys; charts.sexualOrientation._origGenPop = soGenPop; charts.sexualOrientation._demoCategory = 'sexual_orientation'; }
             }
             
             // Parental Status - doughnut with Gen Pop
@@ -57259,6 +57843,7 @@
                     },
                     plugins: [ChartDataLabels]
                 });
+                if (charts.parentalStatus) { charts.parentalStatus._origKeys = psOrigKeys; charts.parentalStatus._origGenPop = psGenPop; charts.parentalStatus._demoCategory = 'parental_status'; }
             }
             
             // Occupation - bar chart with Gen Pop
@@ -57376,6 +57961,7 @@
                     },
                     plugins: [ChartDataLabels]
                 });
+                if (charts.occupation) { charts.occupation._origKeys = occOrigKeys; charts.occupation._origGenPop = occGenPop; charts.occupation._demoCategory = 'occupation'; }
                 // Render GP Actuals reference table for Occupation
                 const gpOccTable = document.getElementById('occupationGpActualsTable');
                 if (gpOccTable) {
@@ -57418,6 +58004,13 @@
             // Render interests if available
             if (currentDashboardData && currentDashboardData.interests) {
                 renderInterests(currentDashboardData.interests);
+            }
+
+            // Re-layer any active "Compare date ranges" selections onto the
+            // freshly-rendered demographic charts. Safe no-op when no runs
+            // are selected. See applyComparisonRunsToDashboardCharts above.
+            if (typeof applyComparisonRunsToDashboardCharts === 'function') {
+                try { applyComparisonRunsToDashboardCharts(); } catch (e) { console.warn('compare re-apply failed', e); }
             }
         }
         
@@ -73694,44 +74287,96 @@
         // ---------------------------------------------------------------
         // Cohort / variant grouping
         // ---------------------------------------------------------------
-        // Some profiles are "delineations" of a base talent/show — e.g.
-        // "Reba McEntire 4Plus" is a 4+ touchpoint cohort of "Reba McEntire",
-        // saved as Reba_4Plus_06_09_2026.csv alongside the base
-        // Reba_McEntire_05_29_2026.csv. The profile tree treats each as a
-        // separate subject by default because their filename stems differ
-        // (Reba_4Plus vs Reba_McEntire) — see getProfileSubject() above.
+        // Profiles like "Dwayne Johnson", "Dwayne Johnson 2023", "Dwayne
+        // Johnson 2024", and "Dwayne Johnson 4+" all describe the SAME
+        // person — they're just different date ranges or audience cohorts.
+        // Same for "Reba McEntire" + "Reba 4+". This block collapses every
+        // such delineation under one parent in the sidebar and labels each
+        // child by the part of the name that distinguishes it ("2024",
+        // "4+", or the file-derived year for the un-suffixed base file).
         //
-        // To collapse these together (the same way sequential date ranges of
-        // a single talent collapse under one parent), we derive a canonical
-        // grouping key from the *display name* (which the backend resolves
-        // to "Reba McEntire 4Plus" / "Reba McEntire" for both files) and
-        // strip a known cohort suffix.
+        // The suffix allow-list is intentionally narrow so that profiles
+        // whose names legitimately end in a number or one of these words
+        // don't get collapsed by accident. Add new tokens here as new
+        // cohort conventions ship (e.g. DMA cuts, age bands).
         //
-        // The suffix allow-list is intentionally narrow to avoid collapsing
-        // distinct profiles whose names happen to share a base word. Add
-        // new tokens here as new cohort conventions ship.
-        const COHORT_SUFFIX_REGEX = /[\s_\-]+(\d+\s*Plus|Avid(?:\s+Fans?)?|Casual(?:\s+Fans?)?|Super\s*Fans?|Heavy(?:\s+Users?)?|Light(?:\s+Users?)?|Premium|Standard)$/i;
+        // Suffix patterns recognised (anchored to the end of the display
+        // name and preceded by whitespace / underscore / hyphen):
+        //   - 4-digit year:        " 2024", " 2023"   (20xx only, so we
+        //                                              don't strip historical
+        //                                              show titles like
+        //                                              "Yellowstone 1923")
+        //   - "<n>+" cohort:       " 4+", " 8+"       (display form from BRAND INPUT)
+        //   - "<n>Plus" cohort:    " 4Plus"           (filename fallback)
+        //   - Fan-intensity:       " Avid", " Casual", " Super Fans"
+        //   - Usage-intensity:     " Heavy", " Light", " Lite"
+        //   - Subscriber tier:     " Premium", " Standard"
+        const PROFILE_SUFFIX_REGEX = /[\s_\-]+(20\d{2}|\d+\+|\d+\s*Plus|Avid(?:\s+Fans?)?|Casual(?:\s+Fans?)?|Super\s*Fans?|Heavy(?:\s+Users?)?|Light(?:\s+Users?)?|Lite|Premium|Standard)$/i;
+        const _YEAR_SUFFIX_TEST = /^20\d{2}$/;
 
-        /** Splits a profile's display name into its canonical base name and
-         *  its cohort-variant label. Cohort label is '' for the base profile. */
-        function getProfileCohortInfo(profile) {
+        /** Splits a profile's display name into a {canonicalName,
+         *  suffixType, suffixLabel} triple. suffixType is 'year' for a
+         *  4-digit calendar year suffix, 'cohort' for an audience-cohort
+         *  token (4+, Avid, Premium, etc.), and 'none' when the name has
+         *  no recognised suffix. */
+        function getProfileSuffixInfo(profile) {
             const name = (getProfileFullName(profile) || '').trim();
-            if (!name) return { canonicalName: '', cohortLabel: '' };
-            const m = name.match(COHORT_SUFFIX_REGEX);
-            if (!m) return { canonicalName: name, cohortLabel: '' };
+            if (!name) return { canonicalName: '', suffixType: 'none', suffixLabel: '' };
+            const m = name.match(PROFILE_SUFFIX_REGEX);
+            if (!m) return { canonicalName: name, suffixType: 'none', suffixLabel: '' };
             const base = name.slice(0, m.index).trim();
-            if (!base) return { canonicalName: name, cohortLabel: '' };
-            return { canonicalName: base, cohortLabel: m[1].trim() };
+            if (!base) return { canonicalName: name, suffixType: 'none', suffixLabel: '' };
+            const suffix = m[1].trim();
+            const type = _YEAR_SUFFIX_TEST.test(suffix) ? 'year' : 'cohort';
+            return { canonicalName: base, suffixType: type, suffixLabel: suffix };
         }
 
-        /** Canonical, case-insensitive grouping key. Cohort variants of the
-         *  same base subject collapse to the same key. Falls back to the raw
-         *  profile-subject when no display name is available. */
+        /** Back-compat shim used by sortRunsForGroup. cohortLabel is '' for
+         *  both un-suffixed base profiles AND year-suffixed profiles (since
+         *  a year is not a cohort) so the sort treats them together. */
+        function getProfileCohortInfo(profile) {
+            const info = getProfileSuffixInfo(profile);
+            return {
+                canonicalName: info.canonicalName,
+                cohortLabel: info.suffixType === 'cohort' ? info.suffixLabel : ''
+            };
+        }
+
+        /** Canonical, case-insensitive grouping key. Year + cohort variants
+         *  of the same base subject collapse to the same key. Falls back to
+         *  the raw profile-subject when no display name is available. */
         function getProfileGroupKey(profile) {
-            const info = getProfileCohortInfo(profile);
+            const info = getProfileSuffixInfo(profile);
             const k = (info.canonicalName || '').toLowerCase();
             if (k) return k;
             return (getProfileSubject(profile) || '').toLowerCase();
+        }
+
+        /** In-place merge pass that collapses single-word "stub" groups
+         *  (e.g. "reba") into a longer multi-word group (e.g. "reba
+         *  mcentire") when exactly one such multi-word candidate exists.
+         *  Handles the common case where a cohort file is keyed by a
+         *  shortened name (Reba_4Plus.csv -> display "Reba 4+" -> stub
+         *  "reba") while the base file uses the full name. Stubs with
+         *  zero matches stay as their own group; stubs with multiple
+         *  matches (e.g. "tom" + "tom hanks" + "tom brady") also stay
+         *  alone since the intent is ambiguous.
+         *
+         *  Mutates `bySubject` and `displayNames` directly. */
+        function mergeStubGroupsIntoCanonical(bySubject, displayNames) {
+            const stubKeys = Object.keys(bySubject).filter(k => k && !k.includes(' '));
+            stubKeys.forEach(stub => {
+                const targets = Object.keys(bySubject).filter(k =>
+                    k !== stub && k.startsWith(stub + ' ')
+                );
+                if (targets.length === 1) {
+                    const target = targets[0];
+                    bySubject[target] = bySubject[target].concat(bySubject[stub]);
+                    delete bySubject[stub];
+                    // displayNames[target] is already the longer canonical
+                    // form; nothing to update.
+                }
+            });
         }
 
         /** Year-only label for a profile run. Prefers a 4-digit year baked
@@ -73758,13 +74403,17 @@
             return '';
         }
 
-        /** Child-row label inside a grouped subject. For cohort variants the
-         *  cohort label is prepended to the year (e.g. "4Plus | 2026") so
-         *  it's obvious which delineation each row represents. */
+        /** Child-row label inside a grouped subject. Strictly one of:
+         *    - the year baked into the display name ("Dwayne Johnson 2024" -> "2024")
+         *    - the cohort token from the display name ("Dwayne Johnson 4+" -> "4+")
+         *    - the run year derived from the filename timestamp ("Dwayne_Johnson_05_14_2026.csv" -> "2026")
+         *  No mixing — the child label is either a clean year OR a clean
+         *  cohort tag so the sidebar stays readable. */
         function getCanonicalChildLabel(profile) {
-            const info = getProfileCohortInfo(profile);
-            const yearLabel = getProfileRunYear(profile) || 'Run';
-            return info.cohortLabel ? (info.cohortLabel + ' · ' + yearLabel) : yearLabel;
+            const info = getProfileSuffixInfo(profile);
+            if (info.suffixType === 'year') return info.suffixLabel;
+            if (info.suffixType === 'cohort') return info.suffixLabel;
+            return getProfileRunYear(profile) || 'Run';
         }
 
         /** Short date label from s3_key timestamp (e.g. "Feb 23, 2026"). */
@@ -73798,26 +74447,31 @@
             });
         }
 
-        /** Sort runs inside a canonical-name group: base (no cohort) first,
-         *  then cohorts alphabetically (numeric-aware so "4Plus" sorts before
-         *  "12Plus"), with date desc inside each cohort. */
+        /** Sort runs inside a canonical-name group:
+         *    1. Non-cohort entries (no suffix or year suffix) first, sorted
+         *       by their effective year DESC (newest year at the top).
+         *    2. Cohort entries (4+, Avid, etc.) at the bottom, sorted by
+         *       cohort label numeric-aware (so "4+" sorts before "12+"). */
         function sortRunsForGroup(runs) {
+            const yearOf = (p) => {
+                const info = getProfileSuffixInfo(p);
+                if (info.suffixType === 'year') return parseInt(info.suffixLabel, 10);
+                const y = getProfileRunYear(p);
+                return /^\d{4}$/.test(y) ? parseInt(y, 10) : 0;
+            };
             return [...runs].sort((a, b) => {
-                const ca = getProfileCohortInfo(a).cohortLabel || '';
-                const cb = getProfileCohortInfo(b).cohortLabel || '';
-                if (ca !== cb) {
-                    if (!ca) return -1;
-                    if (!cb) return 1;
-                    return ca.localeCompare(cb, undefined, { numeric: true, sensitivity: 'base' });
+                const infoA = getProfileSuffixInfo(a);
+                const infoB = getProfileSuffixInfo(b);
+                const isCohortA = infoA.suffixType === 'cohort' ? 1 : 0;
+                const isCohortB = infoB.suffixType === 'cohort' ? 1 : 0;
+                if (isCohortA !== isCohortB) return isCohortA - isCohortB;
+                if (isCohortA) {
+                    return infoA.suffixLabel.localeCompare(infoB.suffixLabel, undefined, { numeric: true, sensitivity: 'base' });
                 }
-                const yA = getProfileYear(a);
-                const yB = getProfileYear(b);
-                const numA = /^\d{4}$/.test(yA) ? parseInt(yA, 10) : null;
-                const numB = /^\d{4}$/.test(yB) ? parseInt(yB, 10) : null;
-                if (numA != null && numB != null) return numB - numA;
-                if (numA != null) return -1;
-                if (numB != null) return 1;
-                return (a.created_at || a.s3_key || '').localeCompare(b.created_at || b.s3_key || '');
+                const yA = yearOf(a);
+                const yB = yearOf(b);
+                if (yA !== yB) return yB - yA;
+                return (b.created_at || b.s3_key || '').localeCompare(a.created_at || a.s3_key || '');
             });
         }
 

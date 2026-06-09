@@ -32013,6 +32013,110 @@ def get_journey_iq_result(s3_key):
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
+# ── Journey IQ: Admin delete + annotations ────────────────────────────
+
+_JIQ_ANNOTATIONS_KEY = 'journey-iq/_annotations.json'
+
+
+def _load_jiq_annotations() -> dict:
+    """Load the global annotations dict from S3. Returns {} on any error."""
+    try:
+        obj = s3_client.get_object(Bucket=S3_BUCKET, Key=_JIQ_ANNOTATIONS_KEY)
+        return json.loads(obj['Body'].read().decode('utf-8')) or {}
+    except Exception:
+        return {}
+
+
+def _save_jiq_annotations(data: dict) -> None:
+    s3_client.put_object(
+        Bucket=S3_BUCKET, Key=_JIQ_ANNOTATIONS_KEY,
+        Body=json.dumps(data, ensure_ascii=False).encode('utf-8'),
+        ContentType='application/json',
+    )
+
+
+@app.route('/api/admin/journey-iq/delete', methods=['POST'])
+@requires_admin
+def admin_delete_journey_iq():
+    """Permanently delete a Journey IQ run from S3 and the index."""
+    try:
+        from migration import journey_iq as _jiq
+    except Exception as e:
+        return jsonify({'success': False, 'error': f'import failed: {e}'}), 500
+    data = request.get_json(force=True) or {}
+    s3_key = data.get('s3_key', '')
+    if not s3_key:
+        return jsonify({'success': False, 'error': 'Missing s3_key'}), 400
+    full_key = s3_key if s3_key.startswith(_jiq.S3_PREFIX) else _jiq.S3_PREFIX + s3_key
+    try:
+        s3_client.delete_object(Bucket=S3_BUCKET, Key=full_key)
+        # Remove from index
+        try:
+            obj = s3_client.get_object(Bucket=S3_BUCKET, Key=_jiq.S3_INDEX_KEY)
+            idx = json.loads(obj['Body'].read().decode('utf-8')) or {'runs': []}
+            idx['runs'] = [r for r in (idx.get('runs') or []) if r.get('key') != full_key]
+            s3_client.put_object(
+                Bucket=S3_BUCKET, Key=_jiq.S3_INDEX_KEY,
+                Body=json.dumps(idx, ensure_ascii=False).encode('utf-8'),
+                ContentType='application/json',
+            )
+        except Exception:
+            pass
+        # Also remove from archive index if applicable
+        if _jiq.is_archive_key(full_key):
+            try:
+                obj = s3_client.get_object(Bucket=S3_BUCKET, Key=_jiq.S3_ARCHIVE_INDEX_KEY)
+                aidx = json.loads(obj['Body'].read().decode('utf-8')) or {'runs': []}
+                aidx['runs'] = [r for r in (aidx.get('runs') or []) if r.get('key') != full_key]
+                s3_client.put_object(
+                    Bucket=S3_BUCKET, Key=_jiq.S3_ARCHIVE_INDEX_KEY,
+                    Body=json.dumps(aidx, ensure_ascii=False).encode('utf-8'),
+                    ContentType='application/json',
+                )
+            except Exception:
+                pass
+        # Remove annotations for this key
+        annots = _load_jiq_annotations()
+        if full_key in annots:
+            del annots[full_key]
+            _save_jiq_annotations(annots)
+        return jsonify({'success': True})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/journey-iq/annotations/<path:s3_key>', methods=['GET'])
+@requires_auth
+def get_journey_iq_annotations(s3_key):
+    """Return annotations for a Journey IQ run (any authed user)."""
+    from migration import journey_iq as _jiq
+    full_key = s3_key if s3_key.startswith(_jiq.S3_PREFIX) else _jiq.S3_PREFIX + s3_key
+    annots = _load_jiq_annotations()
+    return jsonify({'success': True, 'annotations': annots.get(full_key, [])})
+
+
+@app.route('/api/admin/journey-iq/annotations/<path:s3_key>', methods=['POST'])
+@requires_admin
+def save_journey_iq_annotations(s3_key):
+    """Save annotations array for a Journey IQ run (admin-only)."""
+    from migration import journey_iq as _jiq
+    full_key = s3_key if s3_key.startswith(_jiq.S3_PREFIX) else _jiq.S3_PREFIX + s3_key
+    data = request.get_json(force=True) or {}
+    entries = data.get('annotations', [])
+    # Validate entries
+    clean = []
+    for e in entries:
+        if isinstance(e, dict) and e.get('date') and e.get('context'):
+            clean.append({'date': str(e['date']).strip(), 'context': str(e['context']).strip()})
+    annots = _load_jiq_annotations()
+    if clean:
+        annots[full_key] = clean
+    elif full_key in annots:
+        del annots[full_key]
+    _save_jiq_annotations(annots)
+    return jsonify({'success': True, 'annotations': clean})
+
+
 # =====================================================================
 #  SENTIMENT IQ  -  Multi-layer brand sentiment tracker
 # =====================================================================
