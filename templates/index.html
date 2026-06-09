@@ -29948,46 +29948,188 @@
 
         // ----- Brand Partnership: demographics renderer -----
         var _BPIQ_DEMO_LABELS = { gender: 'Gender', age: 'Age', ethnicity: 'Ethnicity', income: 'Income' };
-        function _bpiqDemoRow(label, prePct, postPct) {
-            var delta = (postPct || 0) - (prePct || 0);
-            var deltaSign = delta > 0 ? '+' : '';
-            var deltaColor = delta > 0.5 ? '#10b981' : (delta < -0.5 ? '#ef4444' : 'var(--text-secondary)');
-            return '<tr style="border-bottom:1px solid rgba(255,255,255,0.04);">'
-                + '<td style="padding:6px 10px;font-weight:500;">' + label + '</td>'
-                + '<td style="padding:6px 10px;text-align:right;">' + (prePct || 0).toFixed(1) + '%</td>'
-                + '<td style="padding:6px 10px;text-align:right;">' + (postPct || 0).toFixed(1) + '%</td>'
-                + '<td style="padding:6px 10px;text-align:right;color:' + deltaColor + ';">' + deltaSign + delta.toFixed(1) + ' pp</td>'
-                + '</tr>';
+
+        // Canonical category buckets per field (from the analytics
+        // demographic dictionary in /docs/demos.csv). Order here = the
+        // default display order (and the "canonical" sort).
+        var _BPIQ_DEMO_CANONICAL = {
+            gender: ['Female', 'Male', 'Prefer Not to Say',
+                     'Trans Male', 'Trans Female', 'Non-Binary'],
+            age: ['17 and Under', '18-24', '25-34', '35-44',
+                  '45-54', '55-64', '65 or Older', 'Other'],
+            ethnicity: ['White', 'Hispanic or Latino',
+                        'Black or African American', 'Asian',
+                        'Another Race/Ethnicity'],
+            income: ['Less than $25,000', '$25,000 - $49,999',
+                     '$50,000 - $74,999', '$75,000 - $99,999',
+                     '$100,000 - $149,999', '$150,000 - $249,999',
+                     '$250,000 or More']
+        };
+        // Common label variants mapped to canonical (case-insensitive).
+        // Lets the dashboard show consistent buckets even when older S3
+        // runs (or upstream pipelines) emit shortened / variant labels.
+        var _BPIQ_DEMO_ALIASES = {
+            gender: {
+                'unknown': 'Prefer Not to Say',
+                'm': 'Male', 'f': 'Female',
+                'nonbinary': 'Non-Binary', 'non binary': 'Non-Binary',
+                'other': 'Non-Binary'
+            },
+            ethnicity: {
+                'hispanic': 'Hispanic or Latino',
+                'black': 'Black or African American',
+                'other': 'Another Race/Ethnicity',
+                'unknown': 'Another Race/Ethnicity'
+            },
+            age: {},
+            income: {}
+        };
+        function _bpiqNormalizeDemoLabel(field, raw) {
+            if (raw == null) return raw;
+            // Normalize whitespace, en/em dashes, curly quotes.
+            var s = String(raw).trim()
+                .replace(/[\u2013\u2014]/g, '-')
+                .replace(/[\u2018\u2019]/g, "'")
+                .replace(/\s+/g, ' ');
+            // Income-specific: ensure consistent spacing around the hyphen
+            // so "$100,000-$149,999" (synthetic shorthand) collapses onto
+            // canonical "$100,000 - $149,999".
+            if (field === 'income') {
+                s = s.replace(/(\$[\d,]+)\s*-\s*(\$[\d,]+)/, '$1 - $2');
+            }
+            var lower = s.toLowerCase();
+            var aliases = _BPIQ_DEMO_ALIASES[field] || {};
+            if (Object.prototype.hasOwnProperty.call(aliases, lower)) return aliases[lower];
+            var canon = _BPIQ_DEMO_CANONICAL[field] || [];
+            for (var i = 0; i < canon.length; i++) {
+                if (canon[i].toLowerCase() === lower) return canon[i];
+            }
+            return s;
         }
+        // Apply normalization, then sum percentages across raw labels
+        // that collapse to the same canonical bucket.
+        function _bpiqMergeDemo(field, arr) {
+            var out = {};
+            (arr || []).forEach(function(x) {
+                if (!x || x.value == null) return;
+                var label = _bpiqNormalizeDemoLabel(field, x.value);
+                out[label] = (out[label] || 0) + (Number(x.percentage) || 0);
+            });
+            return out;
+        }
+
+        // Per-field sort state — independent so the user can sort Gender
+        // by Δ, Income by canonical, etc., simultaneously.
+        var _bpiqDemoSort = {};
+        // Held so column-header clicks can re-render in place.
+        var _bpiqDemoData = null;
 
         function _bpiqRenderDemographics(d) {
             var el = document.getElementById('bpiqDemographics');
             if (!el) return;
-            var pre  = d.pre  || { gender: [], age: [], ethnicity: [], income: [] };
-            var post = d.post || { gender: [], age: [], ethnicity: [], income: [] };
-            // Build a value -> percentage lookup for each cohort.
-            function lookup(arr) { var m = {}; (arr || []).forEach(function(x) { m[x.value] = x.percentage; }); return m; }
-
+            _bpiqDemoData = d || {};
+            var pre  = (_bpiqDemoData.pre)  || {};
+            var post = (_bpiqDemoData.post) || {};
             var html = '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:1rem;">';
             ['gender', 'age', 'ethnicity', 'income'].forEach(function(field) {
-                var preMap  = lookup(pre[field]);
-                var postMap = lookup(post[field]);
-                // Union of values present in either cohort, sorted by post% then pre%
-                var values = Object.keys(Object.assign({}, preMap, postMap));
-                values.sort(function(a, b) { return ((postMap[b]||0) - (postMap[a]||0)) || ((preMap[b]||0) - (preMap[a]||0)); });
+                var preMap  = _bpiqMergeDemo(field, pre[field]);
+                var postMap = _bpiqMergeDemo(field, post[field]);
+                // Show a bucket only if it has nonzero share in either window.
+                var union = {};
+                Object.keys(preMap).forEach(function(k)  { if ((preMap[k]||0)  > 0 || (postMap[k]||0) > 0) union[k] = true; });
+                Object.keys(postMap).forEach(function(k) { if ((preMap[k]||0)  > 0 || (postMap[k]||0) > 0) union[k] = true; });
+                var values = Object.keys(union);
                 if (!values.length) {
                     html += '<div><h4 style="margin:0 0 0.5rem;font-size:13px;">' + _BPIQ_DEMO_LABELS[field] + '</h4>'
                          +  '<div style="padding:0.75rem;color:var(--text-secondary);font-size:12px;">No data</div></div>';
                     return;
                 }
+                var sortState = _bpiqDemoSort[field] || { key: 'canonical', dir: 'asc' };
+                var canon = _BPIQ_DEMO_CANONICAL[field] || [];
+                var canonIdx = {}; canon.forEach(function(c, i) { canonIdx[c] = i; });
+                var dirMul = sortState.dir === 'asc' ? 1 : -1;
+                values.sort(function(a, b) {
+                    if (sortState.key === 'canonical') {
+                        // In-canon labels first (CSV order); unknown labels
+                        // alphabetical at the end.
+                        var ai = (canonIdx[a] != null) ? canonIdx[a] : (1000 + a.toLowerCase().charCodeAt(0));
+                        var bi = (canonIdx[b] != null) ? canonIdx[b] : (1000 + b.toLowerCase().charCodeAt(0));
+                        if (ai === bi) return 0;
+                        return (ai < bi ? -1 : 1) * dirMul;
+                    }
+                    if (sortState.key === 'label') {
+                        return a.toLowerCase().localeCompare(b.toLowerCase()) * dirMul;
+                    }
+                    var av, bv;
+                    if (sortState.key === 'pre')  { av = preMap[a]  || 0; bv = preMap[b]  || 0; }
+                    if (sortState.key === 'post') { av = postMap[a] || 0; bv = postMap[b] || 0; }
+                    if (sortState.key === 'delta') {
+                        av = _bpiqBrandLiftPctValue(preMap[a] || 0, postMap[a] || 0);
+                        bv = _bpiqBrandLiftPctValue(preMap[b] || 0, postMap[b] || 0);
+                        if (av == null) av = -Infinity;
+                        if (bv == null) bv = -Infinity;
+                    }
+                    if (av === bv) return 0;
+                    return (av < bv ? -1 : 1) * dirMul;
+                });
+                var arrow = function(key) {
+                    if (sortState.key !== key) return '<span style="opacity:0.3;font-size:10px;margin-left:4px;">⇅</span>';
+                    var glyph = sortState.dir === 'asc' ? '▲' : '▼';
+                    return '<span style="font-size:10px;color:#c8e600;margin-left:4px;">' + glyph + '</span>';
+                };
+                var thBase = 'padding:6px 10px;cursor:pointer;user-select:none;';
                 html += '<div><h4 style="margin:0 0 0.5rem;font-size:13px;">' + _BPIQ_DEMO_LABELS[field] + '</h4>'
-                     +  '<table style="width:100%;border-collapse:collapse;font-size:12px;">'
-                     +  '<thead><tr style="border-bottom:1px solid var(--border-color);"><th style="padding:6px 10px;text-align:left;"></th><th style="padding:6px 10px;text-align:right;">Pre %</th><th style="padding:6px 10px;text-align:right;">Post %</th><th style="padding:6px 10px;text-align:right;">Δ</th></tr></thead><tbody>'
-                     +  values.map(function(v) { return _bpiqDemoRow(v, preMap[v] || 0, postMap[v] || 0); }).join('')
+                     +  '<table style="width:100%;border-collapse:collapse;font-size:12px;" data-bpiq-demo-field="' + field + '">'
+                     +  '<thead><tr style="border-bottom:1px solid var(--border-color);">'
+                     +  '<th data-bpiq-demo-sort="label" style="' + thBase + 'text-align:left;">' + arrow('label') + '</th>'
+                     +  '<th data-bpiq-demo-sort="pre"   style="' + thBase + 'text-align:right;">Pre %'   + arrow('pre')   + '</th>'
+                     +  '<th data-bpiq-demo-sort="post"  style="' + thBase + 'text-align:right;">Post %'  + arrow('post')  + '</th>'
+                     +  '<th data-bpiq-demo-sort="delta" style="' + thBase + 'text-align:right;">Δ'      + arrow('delta') + '</th>'
+                     +  '</tr></thead><tbody>'
+                     +  values.map(function(v) {
+                            var preP  = preMap[v]  || 0;
+                            var postP = postMap[v] || 0;
+                            var dPct  = _bpiqBrandLiftPctValue(preP, postP);
+                            var dTxt, dColor;
+                            if (dPct == null) {
+                                dTxt = '—'; dColor = 'var(--text-secondary)';
+                            } else if (!isFinite(dPct)) {
+                                dTxt = dPct > 0 ? '+∞' : '-∞';
+                                dColor = dPct > 0 ? '#10b981' : '#ef4444';
+                            } else {
+                                var sign = dPct > 0 ? '+' : '';
+                                dTxt = sign + dPct.toFixed(1) + '%';
+                                dColor = dPct > 0.5 ? '#10b981' : (dPct < -0.5 ? '#ef4444' : 'var(--text-secondary)');
+                            }
+                            return '<tr style="border-bottom:1px solid rgba(255,255,255,0.04);">'
+                                + '<td style="padding:6px 10px;font-weight:500;">' + v + '</td>'
+                                + '<td style="padding:6px 10px;text-align:right;">' + preP.toFixed(1) + '%</td>'
+                                + '<td style="padding:6px 10px;text-align:right;">' + postP.toFixed(1) + '%</td>'
+                                + '<td style="padding:6px 10px;text-align:right;color:' + dColor + ';font-weight:600;">' + dTxt + '</td>'
+                                + '</tr>';
+                        }).join('')
                      +  '</tbody></table></div>';
             });
             html += '</div>';
             el.innerHTML = html;
+            // Wire column-header sort, scoped per field-table.
+            el.querySelectorAll('table[data-bpiq-demo-field] th[data-bpiq-demo-sort]').forEach(function(th) {
+                th.addEventListener('click', function() {
+                    var table = th.closest('table');
+                    var field = table.getAttribute('data-bpiq-demo-field');
+                    var key   = th.getAttribute('data-bpiq-demo-sort');
+                    var cur = _bpiqDemoSort[field] || { key: 'canonical', dir: 'asc' };
+                    if (cur.key === key) {
+                        cur.dir = cur.dir === 'asc' ? 'desc' : 'asc';
+                    } else {
+                        cur.key = key;
+                        // Sensible defaults: numeric desc, label asc.
+                        cur.dir = (key === 'label') ? 'asc' : 'desc';
+                    }
+                    _bpiqDemoSort[field] = cur;
+                    _bpiqRenderDemographics(_bpiqDemoData);
+                });
+            });
         }
 
         // ----- Brand Partnership: valuation renderer -----
