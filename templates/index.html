@@ -20336,7 +20336,7 @@
                          style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
                                 gap: 0.6rem; margin-bottom: 0.4rem;"></div>
                     <div id="jiqTvTrendsPinCtrl" style="display:none; margin: 0 0 0.4rem; text-align: right;"></div>
-                    <div id="jiqTvTrendsChart" style="overflow-x: auto; margin-bottom: 0.6rem;"></div>
+                    <div id="jiqTvTrendsChart" style="width: 100%; margin-bottom: 0.6rem;"></div>
                     <details style="margin: 0;">
                         <summary style="cursor:pointer;color:var(--accent-cyan);font-size:0.74rem;font-weight:600;user-select:none;padding:3px 0;">📅 Weekly breakdown table</summary>
                         <div id="jiqTvTrendsWeeklyTable" style="margin-top: 0.5rem; max-height: 320px; overflow-y: auto;"></div>
@@ -36133,11 +36133,12 @@
 
             // ── Compact SVG canvas ───────────────────────────────────
             var W    = 1200;
-            var padT = 38, padB = 50, padL = 44, padR = 56;
+            var padT = 38, padB = 50, padL = 44, padR = 72;
             var H    = 500;
             var axisY = Math.round(H * 0.52);
-            var LANE_STEP = 74;
-            var MAX_LANES = 8;
+            var LANE_STEP = 56;
+            var MAX_LANES = 4;
+            var MAX_LANE_LAYERS = 2;
 
             var xMin = axisConfig.xMin, xMax = axisConfig.xMax;
             function xFor(t) {
@@ -36312,7 +36313,8 @@
                      + '<title>' + _jiqEsc(e.vertical + ' — ' + e.pct.toFixed(1) + '% — ' + e.typical_window) + (e.top_sites.length ? ' — ' + _jiqEsc(e.top_sites.join(', ')) : '') + '</title>'
                      + '</g>');
 
-                parts.push('<text x="' + e.cx + '" y="' + labelY0 + '" text-anchor="middle" fill="var(--text-primary)" font-weight="600" font-size="10.5">' + _jiqEsc(cleanLabel) + '</text>');
+                var labelX = Math.max(padL + 50, Math.min(W - padR - 50, e.cx));
+                parts.push('<text x="' + labelX + '" y="' + labelY0 + '" text-anchor="middle" fill="var(--text-primary)" font-weight="600" font-size="10.5">' + _jiqEsc(cleanLabel) + '</text>');
             });
 
             var anchorWord = anchorIsPurchase ? 'purchase' : 'showtime';
@@ -36861,6 +36863,22 @@
             var weekly  = (trends.weekly  || []).slice();
             var monthly = (trends.monthly || []).slice();
 
+            // Granularity-aware copy. Payloads can set granularity:
+            // 'daily' when the weekly[] array actually holds daily
+            // buckets (e.g. PCJ S2 daily strip); default 'weekly'
+            // preserves backward-compat for older payloads.
+            var isDaily = ((trends.granularity || 'weekly').toLowerCase() === 'daily');
+            var grain   = {
+                period:        isDaily ? 'day'  : 'week',
+                periodCap:     isDaily ? 'Day'  : 'Week',
+                deltaLabel:    isDaily ? 'DoD'  : 'WoW',
+                latestLabel:   isDaily ? 'TODAY'         : 'THIS WEEK',
+                selectedLabel: isDaily ? 'SELECTED DAY'  : 'SELECTED WEEK',
+                pinnedLabel:   isDaily ? '📌 PINNED DAY' : '📌 PINNED WEEK',
+            };
+            // Expose for downstream tile / pin renderers
+            trends._jiq_grain = grain;
+
             // ---- meta + subtitle (static) ----
             var metaEl  = document.getElementById('jiqTvTrendsMeta');
             var subEl   = document.getElementById('jiqTvTrendsSubtitle');
@@ -36872,8 +36890,8 @@
             }
             if (subEl) {
                 subEl.textContent = 'Active ' + (trends.unit_label || 'accounts')
-                    + ' and total watch hours by week and by month. '
-                    + 'Hover or click any dot in the chart below to dial the top tiles to that week.';
+                    + ' and total watch hours by ' + grain.period + ' and by month. '
+                    + 'Hover or click any dot in the chart below to dial the top tiles to that ' + grain.period + '.';
             }
             if (notesEl) {
                 notesEl.textContent = trends.methodology_note || '';
@@ -36881,7 +36899,7 @@
 
             // ---- weekly + monthly drill-down tables (static) ----
             var tblWEl = document.getElementById('jiqTvTrendsWeeklyTable');
-            if (tblWEl) tblWEl.innerHTML = _jiqRenderTrendsTable(weekly,  'week_label',  'WoW');
+            if (tblWEl) tblWEl.innerHTML = _jiqRenderTrendsTable(weekly,  'week_label',  grain.deltaLabel);
             var tblMEl = document.getElementById('jiqTvTrendsMonthlyTable');
             if (tblMEl) tblMEl.innerHTML = _jiqRenderTrendsTable(monthly, 'month_label', 'MoM');
 
@@ -36911,7 +36929,10 @@
             //      highlight markers without re-rendering the SVG
             //      (re-rendering mid-hover loses pointer events).
             var chartEl = document.getElementById('jiqTvTrendsChart');
-            var rendered = _jiqRenderTrendsSparkline(weekly);
+            var _trendsTargetW = function() {
+                return (chartEl && chartEl.clientWidth) || 880;
+            };
+            var rendered = _jiqRenderTrendsSparkline(weekly, _trendsTargetW());
             if (chartEl) chartEl.innerHTML = rendered.svg;
 
             // ---- Seed interactive state to "latest week + latest month" ----
@@ -36929,6 +36950,33 @@
             };
 
             _jiqTrendsApplySelection();
+
+            // ---- Responsive re-render on container resize ----
+            // Wire a ResizeObserver exactly once per chart element. On
+            // every width change we re-render the SVG at the new pixel
+            // width and refresh dotPositions; selection / pin state is
+            // preserved on _jiqTrendsState so the highlight markers
+            // snap back to the right column at the new scale.
+            if (chartEl && !chartEl._jiqResizeWired && typeof ResizeObserver === 'function') {
+                chartEl._jiqResizeWired = true;
+                var _rid = null;
+                var _lastW = chartEl.clientWidth;
+                var _ro = new ResizeObserver(function() {
+                    var cw = chartEl.clientWidth;
+                    if (cw === _lastW) return;   // height-only resize, skip
+                    _lastW = cw;
+                    if (_rid) cancelAnimationFrame(_rid);
+                    _rid = requestAnimationFrame(function() {
+                        var s = _jiqTrendsState;
+                        if (!s || !s.weekly) return;
+                        var rr = _jiqRenderTrendsSparkline(s.weekly, cw);
+                        chartEl.innerHTML = rr.svg;
+                        s.dotPositions = rr.positions;
+                        _jiqTrendsApplySelection();
+                    });
+                });
+                _ro.observe(chartEl);
+            }
         }
 
         // Re-renders the dynamic parts (4 KPI tiles + overlay markers +
@@ -36964,13 +37012,22 @@
             var isLatestWeek = (wIdx === s.latestWeekIdx);
             var isPinned     = (s.pinnedWeekIdx != null);
 
+            // Granularity-aware copy. Falls back to weekly defaults
+            // for older payloads that don't set trends.granularity.
+            var grain = (s.trends && s.trends._jiq_grain) || {
+                deltaLabel:    'WoW',
+                latestLabel:   'THIS WEEK',
+                selectedLabel: 'SELECTED WEEK',
+                pinnedLabel:   '📌 PINNED WEEK',
+            };
+
             // Label prefix changes based on whether we're showing the
             // default (latest) week, a hovered week, or a pinned week.
             // Same for month tile.
             var weekPrefix;
-            if (isPinned)         weekPrefix = '📌 PINNED WEEK';
-            else if (isLatestWeek) weekPrefix = 'THIS WEEK';
-            else                   weekPrefix = 'SELECTED WEEK';
+            if (isPinned)         weekPrefix = grain.pinnedLabel;
+            else if (isLatestWeek) weekPrefix = grain.latestLabel;
+            else                   weekPrefix = grain.selectedLabel;
             var monthPrefix;
             if (isPinned)          monthPrefix = '📌 MONTH OF PIN';
             else if (isLatestWeek) monthPrefix = 'THIS MONTH';
@@ -36984,17 +37041,17 @@
             var prevW = (wIdx > 0) ? s.weekly[wIdx - 1]  : null;
             var prevM = (mIdx > 0) ? s.monthly[mIdx - 1] : null;
 
-            // Sub-text builder: shows the period label + WoW/MoM delta.
+            // Sub-text builder: shows the period label + WoW/DoD/MoM delta.
             // Suppresses deltas on partial buckets (apples-to-pears).
             var weekSub = function(metric) {
                 if (!w) return '';
                 var base = (w.week_label || '') + (w.is_partial ? ' · partial' : '');
-                if (w.is_partial) return base + ' · WoW hidden';
+                if (w.is_partial) return base + ' · ' + grain.deltaLabel + ' hidden';
                 if (!prevW)       return base;
                 var deltaHtml = (metric === 'a')
                     ? fmtDelta(w.active_accounts, prevW.active_accounts)
                     : fmtDelta(w.watch_hours,    prevW.watch_hours);
-                return base + ' · WoW ' + deltaHtml;
+                return base + ' · ' + grain.deltaLabel + ' ' + deltaHtml;
             };
             var monthSub = function(metric) {
                 if (!mo) return '';
@@ -37235,9 +37292,13 @@
         // hover, so pointer events stay live mid-motion.
         //
         // Returns { svg: <string>, positions: [{x, yA, yH}, ...] }.
-        function _jiqRenderTrendsSparkline(weekly) {
+        function _jiqRenderTrendsSparkline(weekly, widthOverride) {
             if (!weekly || !weekly.length) return { svg: '', positions: [] };
-            var W = 880, H = 220;
+            // W is dynamic: matches current container width so the SVG
+            // truly fills the card. Clamped to sane bounds so labels
+            // stay readable on extreme sizes.
+            var W = Math.max(640, Math.min(widthOverride || 880, 2400));
+            var H = 220;
             var padL = 60, padR = 60, padT = 18, padB = 44;
             var plotW = W - padL - padR;
             var plotH = H - padT - padB;
@@ -37414,7 +37475,7 @@
             // remain visible without blocking interactivity.
             var svg = ''
                 + '<svg viewBox="0 0 ' + W + ' ' + H + '" width="100%" height="' + H + '"'
-                +   ' preserveAspectRatio="xMidYMid meet" style="max-width: 100%;"'
+                +   ' preserveAspectRatio="none" style="width: 100%; height: ' + H + 'px; display: block;"'
                 +   ' onmouseleave="window._jiqTrendsLeave()">'
                 +   grid
                 +   '<path d="' + pathH + '" stroke="#06b6d4" stroke-width="2" fill="none" stroke-dasharray="5 3" opacity="0.85" pointer-events="none"/>'

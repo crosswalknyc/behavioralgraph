@@ -2335,6 +2335,26 @@ def upload_to_s3(file_path, brand_name, start_date, end_date, created_by=None, u
         except Exception as _decisions_err:
             print(f"⚠️ Could not upload agent-decision log: {_decisions_err}")
 
+        # Sidecar: Claude external-research audit (.research.json) written by
+        # SVOD_Churn_Attribution.run_synthetic_attribution() next to the CSV.
+        # Contains Claude's full reasoning, sources, search count, reach
+        # bracket (lower/upper), confidence tier, buzz tier, and the
+        # derivation math used to land on the headline number. Uploading
+        # alongside the CSV preserves the audit trail at the exact same S3
+        # path (just `.research.json` instead of `.csv`) so any operator
+        # reviewing a file in purgatory can verify exactly what Claude looked
+        # up and how the number was derived. Mirrors the local synthetic-run
+        # behavior (see SVOD_Churn_Attribution.py write of
+        # `output_path.with_suffix('.research.json')`).
+        try:
+            research_local = file_path.rsplit('.', 1)[0] + '.research.json'
+            if os.path.exists(research_local):
+                research_key = s3_key.rsplit('.', 1)[0] + '.research.json'
+                s3_client.upload_file(research_local, target_bucket, research_key)
+                print(f"✅ Uploaded Claude research sidecar: {research_key}")
+        except Exception as _research_err:
+            print(f"⚠️ Could not upload research sidecar: {_research_err}")
+
         # If using purgatory, add to purgatory metadata for tracking
         if use_purgatory and created_by:
             add_to_purgatory(
@@ -20546,15 +20566,21 @@ def process_s3_file_metadata(key, obj):
     
     project_name = smart_title_case(raw_name)
     
-    # Try to get category from BRAND CATEGORY row in CSV
+    # Try to get category from BRAND CATEGORY row in CSV.
+    #
+    # D112 fix (2026-06-08): BRAND CATEGORY is written at row index 2-3 of
+    # the CSV (right after BRAND INPUT + SAMPLE SIZE) at byte offset ~280.
+    # The previous code read the LAST 200KB of the file, which silently
+    # misses the BRAND CATEGORY row for any profile larger than 200KB
+    # (which is most recent profiles — Ben Affleck 442KB, Ally Bank 629KB,
+    # Bradley Cooper 465KB all had valid BRAND CATEGORY rows but the
+    # cache reader couldn't see them, so they showed as "Uncategorized"
+    # in the dashboard despite the CSV being correct). Read the FIRST 50KB
+    # instead, which is always enough to capture the header rows.
     category = 'UNCATEGORIZED'
     try:
-        head_response = s3_client.head_object(Bucket=S3_BUCKET, Key=key)
-        file_size = head_response['ContentLength']
-        
-        # Read last 200KB where BRAND CATEGORY row usually is (increased for safety)
-        start_byte = max(0, file_size - 200000)
-        response = s3_client.get_object(Bucket=S3_BUCKET, Key=key, Range=f'bytes={start_byte}-{file_size}')
+        # Read first 50KB — BRAND CATEGORY is always within first ~5KB.
+        response = s3_client.get_object(Bucket=S3_BUCKET, Key=key, Range='bytes=0-50000')
         content = response['Body'].read().decode('utf-8', errors='ignore')
         
         for line in content.split('\n'):
@@ -28566,8 +28592,14 @@ def run_svod_acquisition(job_id):
         if episode_dates and params.get('track_episodes'):
             episode_dates.sort(key=lambda ep: ep['air_date'])
             campaign_start = episode_dates[0]['air_date']
-            attr_days = int(params.get('attribution_window', 30))
-            campaign_end = episode_dates[-1]['air_date'] + timedelta(days=attr_days)
+            # Analysis Date Range must be first-episode → last-episode (no
+            # +attribution_window padding here). The dashboard adds the
+            # attribution_window when it renders "Attribution Window: 30
+            # days (through …)" — see templates/index.html attrEnd
+            # calculation. If we add it here too, the user sees the
+            # padding twice and "Drop Date / Analysis Date Range / Last
+            # Episode" all end up misaligned.
+            campaign_end = episode_dates[-1]['air_date']
 
         if campaign_start > campaign_end:
             campaign_start, campaign_end = campaign_end, campaign_start

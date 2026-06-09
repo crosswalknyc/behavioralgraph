@@ -26962,7 +26962,6 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
                     if 'conn' in dir() and conn is not None:
                         try:
                             _mpb_cur = conn.cursor()
-                            _mpb_cur.execute(
                             # Rule #4c (2026-05-28): exclude brands that
                             # are *also* tagged ``Hidden`` anywhere in
                             # hostmap (Dippin Dots, Klorane, Molton Brown,
@@ -27256,6 +27255,61 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
                         else (v if str(v).endswith('%')
                               else f"{float(str(v).replace('%','').strip() or 0):.4f}%")
                     )
+                # D111 (2026-06-08): guarantee BRAND CATEGORY row present
+                # + populated. Early-June actor batch shipped 174 profiles
+                # missing this row entirely, breaking dashboard categorization.
+                try:
+                    _BC_VAL = (str(brand_category).strip().upper()
+                               if brand_category else '')
+                    if _BC_VAL and _BC_VAL not in ('UNKNOWN', 'NAN', 'NONE'):
+                        _col_u_bc = _df_cw2['Column'].astype(str).str.strip().str.upper()
+                        _bc_idx_list = _df_cw2.index[_col_u_bc == 'BRAND CATEGORY'].tolist()
+                        for _c_num in ('Brand Penetration (Row)', 'Category Share',
+                                       'Original Raw Numbers', 'US Gen Pop Projection'):
+                            if _c_num in _df_cw2.columns and _df_cw2[_c_num].dtype != object:
+                                _df_cw2[_c_num] = _df_cw2[_c_num].astype(object)
+                        import numpy as _np_bc
+                        if _bc_idx_list:
+                            _bi = _bc_idx_list[0]
+                            _cur_v = str(_df_cw2.at[_bi, 'Value']).strip().upper()
+                            if _cur_v in ('', 'UNKNOWN', 'NAN', 'NONE'):
+                                _df_cw2.at[_bi, 'Value'] = _BC_VAL
+                                print(f"   \u2713 enforce_brand_category_row: filled blank with {_BC_VAL!r}")
+                        else:
+                            _ss_idx_bc = _df_cw2.index[_col_u_bc == 'SAMPLE SIZE'].tolist()
+                            _ins_at = _ss_idx_bc[0] + 1 if _ss_idx_bc else 2
+                            _new_bc = {c: _np_bc.nan for c in _df_cw2.columns}
+                            _new_bc['Column'] = 'BRAND CATEGORY'
+                            _new_bc['Value'] = _BC_VAL
+                            import pandas as _pd_bc
+                            _top_bc = _df_cw2.iloc[:_ins_at]
+                            _bot_bc = _df_cw2.iloc[_ins_at:]
+                            _df_cw2 = _pd_bc.concat(
+                                [_top_bc, _pd_bc.DataFrame([_new_bc], columns=_df_cw2.columns), _bot_bc],
+                                ignore_index=True,
+                            )
+                            print(f"   \u2713 enforce_brand_category_row: INSERTED {_BC_VAL!r} at index {_ins_at}")
+                except Exception as _bce_err:
+                    print(f'   ⚠️ enforce_brand_category_row failed (continuing): {_bce_err}')
+                # D110 (2026-06-08, Dixie D'Amelio leak): final canonical-
+                # column strip. Drops any leaked enforcer working columns
+                # (_col_u, _val_u, bp_num) and legacy short-form duplicates
+                # (Raw, Gen Pop Projection) so the on-disk CSV always has
+                # exactly the 6 canonical columns in canonical order.
+                try:
+                    _CANON_COLS = (
+                        'Column', 'Value', 'Brand Penetration (Row)',
+                        'Category Share', 'Original Raw Numbers',
+                        'US Gen Pop Projection',
+                    )
+                    _present = [c for c in _CANON_COLS if c in _df_cw2.columns]
+                    if len(_present) >= 2:
+                        _extra = [c for c in _df_cw2.columns if c not in _CANON_COLS]
+                        if _extra:
+                            print(f"   \u2713 canonical-column strip: removed {len(_extra)} leaked column(s): {_extra}")
+                        _df_cw2 = _df_cw2[_present]
+                except Exception as _csk_err:
+                    print(f'   ⚠️ canonical-column strip failed (continuing): {_csk_err}')
                 _df_cw2.to_csv(final_file, index=False)
                 if _n_gaps_inserted:
                     print(f"   📋 crosswalk-audit-framework inserted {_n_gaps_inserted} "

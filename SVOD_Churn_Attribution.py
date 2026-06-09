@@ -6751,6 +6751,31 @@ def run_synthetic_attribution(config: dict) -> dict:
     if 'output_dir' not in p:
         p['output_dir'] = str(Path.cwd())
 
+    # ── Analysis Date Range guarantee ──────────────────────────────────────
+    # The "Analysis Date Range" row in the CSV (written by write_output from
+    # p['campaign_start'] / p['campaign_end']) MUST be first-episode →
+    # last-episode whenever episode_dates are present, regardless of what
+    # `--start` / `--end` the caller passed. The dashboard derives Drop
+    # Date, Exclusion Window display, and "Attribution Window through …"
+    # all from this single string, so the episode bounds need to be the
+    # ground truth — not the user-supplied window which often pads
+    # post-finale tail days into the "Analysis Date Range" by accident.
+    # The attribution_window of 30 days is added downstream in the
+    # dashboard for display (and in the ClickHouse path for measurement),
+    # so it must NOT be folded into campaign_end here.
+    if episode_dates:
+        try:
+            ep_dates = [
+                (e['air_date'] if hasattr(e['air_date'], 'date') else e['air_date'])
+                for e in episode_dates if e.get('air_date')
+            ]
+            if ep_dates:
+                p['campaign_start'] = min(ep_dates)
+                p['campaign_end']   = max(ep_dates)
+        except Exception as _ep_bounds_err:
+            print(f"   ⚠️  Could not derive campaign bounds from episode_dates: "
+                  f"{_ep_bounds_err}")
+
     write_output(
         df_summary=df_summary,
         df_comp=df_comp,
