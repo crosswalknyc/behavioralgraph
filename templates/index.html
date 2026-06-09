@@ -20372,7 +20372,7 @@
                             </ul>
                         </div>
                     </details>
-                    <div id="jiqEcosystemTrinity" style="overflow-x: auto; margin-bottom: 0.75rem;"></div>
+                    <div id="jiqEcosystemTrinity" class="jiq-chart-center-host" style="overflow-x: auto; margin-bottom: 0.75rem;"></div>
                     <!-- Lifecycle ribbon + 4 ecosystem KPI cards side-by-side
                          so the curves chart and the headline ecosystem metrics
                          (cross-property co-visitation, theatrical→home capture,
@@ -20394,6 +20394,25 @@
                     <div id="jiqEcosystemNotes" style="display: none;"></div>
                 </div>
                 <style>
+                    .jiq-chart-center-host {
+                        display: flex;
+                        justify-content: center;
+                        width: 100%;
+                    }
+                    .jiq-chart-center-wrap {
+                        display: flex;
+                        flex-direction: column;
+                        align-items: center;
+                        width: fit-content;
+                        max-width: 100%;
+                        margin: 0 auto;
+                    }
+                    .jiq-chart-center-wrap svg {
+                        display: block;
+                        max-width: 100%;
+                        height: auto;
+                        margin: 0 auto;
+                    }
                     @media (max-width: 900px) {
                         #jiqEcosystemFlywheelRow {
                             grid-template-columns: 1fr !important;
@@ -20601,7 +20620,7 @@
                             <div id="jiqInceptionViewBtns" data-card="inception" class="jiqViewToggle" style="display:flex;gap:4px;"></div>
                         </div>
                         <div id="jiqInceptionSubtitle" style="font-size: 0.72rem; color: var(--text-secondary); margin-bottom: 0.5rem;">Inbound referrer mix for visitors landing on the target site.</div>
-                        <div id="jiqInceptionChart" style="overflow:hidden;"></div>
+                        <div id="jiqInceptionChart" class="jiq-chart-center-host" style="overflow:hidden;"></div>
                         <div id="jiqInceptionTable" style="overflow-x: auto; display:none;"></div>
                     </div>
                     <!-- The Inception card next to this one drives the
@@ -34086,11 +34105,11 @@
                 }
             });
 
-            return '<div style="overflow-x:auto;padding:4px 0;">'
+            return '<div class="jiq-chart-center-wrap" style="overflow-x:auto;padding:4px 0;">'
                  + '<svg width="' + W + '" height="' + H + '" viewBox="0 0 ' + W + ' ' + H + '" style="display:block;max-width:100%;height:auto;">'
                  + parts.join('')
                  + '</svg>'
-                 + '<div style="font-size:0.68rem;color:var(--text-secondary);margin-top:4px;text-align:center;">Ribbon thickness = co-visitation overlap · MAU = monthly active US uniques · hover any node or ribbon for details</div>'
+                 + '<div style="font-size:0.68rem;color:var(--text-secondary);margin-top:4px;text-align:center;max-width:' + W + 'px;">Ribbon thickness = co-visitation overlap · MAU = monthly active US uniques · hover any node or ribbon for details</div>'
                  + '</div>';
         }
 
@@ -35398,7 +35417,21 @@
             // 360px scroll cap).
             if (stCard) stCard.style.display = hasSearchTerms ? 'flex' : 'none';
 
-            if (rowTop) rowTop.style.display = (incs.length || hasSearchTerms) ? 'grid' : 'none';
+            if (rowTop) {
+                if (!incs.length && !hasSearchTerms) {
+                    rowTop.style.display = 'none';
+                } else if (incs.length && hasSearchTerms) {
+                    rowTop.style.display = 'grid';
+                    rowTop.style.gridTemplateColumns = 'minmax(0, 1fr) minmax(0, 1fr)';
+                    rowTop.style.maxWidth = '';
+                    rowTop.style.margin = '';
+                } else {
+                    rowTop.style.display = 'grid';
+                    rowTop.style.gridTemplateColumns = '1fr';
+                    rowTop.style.maxWidth = '920px';
+                    rowTop.style.margin = '0 auto';
+                }
+            }
 
             // 5) Companion Behaviors (now full-width row of its own)
             var compEl = document.getElementById('jiqCompanionTable');
@@ -35797,11 +35830,11 @@
                  + '<text x="' + dstX + '" y="' + (dstCY + 30) + '" text-anchor="middle" fill="#9aa3b2" font-size="10">inbound</text>'
                  + '</g>');
 
-            return '<div style="overflow-x:auto;padding:4px 0;">'
+            return '<div class="jiq-chart-center-wrap" style="overflow-x:auto;padding:4px 0;">'
                  + '<svg width="' + W + '" height="' + H + '" viewBox="0 0 ' + W + ' ' + H + '" style="display:block;max-width:100%;height:auto;">'
                  + parts.join('')
                  + '</svg>'
-                 + '<div style="font-size:0.68rem;color:var(--text-secondary);margin-top:4px;text-align:center;">Ribbon thickness = share of inbound · colored by source category (search · social · paid · email · etc.)</div>'
+                 + '<div style="font-size:0.68rem;color:var(--text-secondary);margin-top:4px;text-align:center;max-width:' + W + 'px;">Ribbon thickness = share of inbound · colored by source category (search · social · paid · email · etc.)</div>'
                  + '</div>';
         }
 
