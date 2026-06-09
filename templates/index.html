@@ -73713,13 +73713,37 @@
             return (getProfileSubject(profile) || '').toLowerCase();
         }
 
+        /** Year-only label for a profile run. Prefers a 4-digit year baked
+         *  into the display name (e.g. "Dwayne Johnson 2024" -> "2024"),
+         *  otherwise extracts the year out of the s3_key timestamp
+         *  (e.g. "Dwayne_Johnson_05_14_2026_..." -> "2026"), falling back
+         *  to the created_at year. The sidebar shows years (not full dates)
+         *  because each profile run analyzes a full calendar-year date
+         *  range, so the file-creation day/month is not meaningful in the
+         *  tree. The "Compare date ranges" modal still uses the full date
+         *  via getRunDateLabel() since deltas care about the exact run. */
+        function getProfileRunYear(profile) {
+            const fromName = getProfileYear(profile);
+            if (fromName) return fromName;
+            const key = profile.s3_key || profile.job_id || '';
+            if (key) {
+                const m = key.match(/_(\d{2})_(\d{2})_(\d{4})(?:_\d{2}_\d{2})?\.csv$/i)
+                       || key.match(/_(\d{2})_(\d{2})_(\d{4})$/);
+                if (m) return m[3];
+            }
+            const created = profile.created_at || '';
+            const ym = created.match(/^(\d{4})/);
+            if (ym) return ym[1];
+            return '';
+        }
+
         /** Child-row label inside a grouped subject. For cohort variants the
-         *  cohort label is prepended to the date (e.g. "4Plus · Jun 9, 2026")
-         *  so it's obvious which delineation each row represents. */
+         *  cohort label is prepended to the year (e.g. "4Plus | 2026") so
+         *  it's obvious which delineation each row represents. */
         function getCanonicalChildLabel(profile) {
             const info = getProfileCohortInfo(profile);
-            const dateLabel = getProfileYear(profile) || getRunDateLabel(profile.s3_key || '') || 'Run';
-            return info.cohortLabel ? (info.cohortLabel + ' · ' + dateLabel) : dateLabel;
+            const yearLabel = getProfileRunYear(profile) || 'Run';
+            return info.cohortLabel ? (info.cohortLabel + ' · ' + yearLabel) : yearLabel;
         }
 
         /** Short date label from s3_key timestamp (e.g. "Feb 23, 2026"). */
