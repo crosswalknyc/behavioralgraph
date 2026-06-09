@@ -48937,8 +48937,8 @@
                     options: {
                         responsive: true,
                         maintainAspectRatio: false,
-                        plugins: { title: { display: true, text: 'Per-Talent: Last Click vs Assisted Conversions', color: '#e2e8f0' }, legend: { labels: { color: '#e2e8f0' } } },
-                        scales: { y: { beginAtZero: true, ticks: { color: '#94a3b8' }, grid: { color: 'rgba(255,255,255,0.1)' } }, x: { ticks: { color: '#94a3b8' }, grid: { color: 'rgba(255,255,255,0.1)' } } }
+                        plugins: { title: { display: true, text: 'Per-Talent: Last Click vs Assisted Conversions', color: document.body.getAttribute('data-theme') === 'light' ? '#374151' : '#e2e8f0' }, legend: { labels: { color: document.body.getAttribute('data-theme') === 'light' ? '#374151' : '#e2e8f0' } } },
+                        scales: { y: { beginAtZero: true, ticks: { color: document.body.getAttribute('data-theme') === 'light' ? '#374151' : '#94a3b8' }, grid: { color: document.body.getAttribute('data-theme') === 'light' ? 'rgba(0,0,0,0.08)' : 'rgba(255,255,255,0.1)' } }, x: { ticks: { color: document.body.getAttribute('data-theme') === 'light' ? '#374151' : '#94a3b8' }, grid: { color: document.body.getAttribute('data-theme') === 'light' ? 'rgba(0,0,0,0.08)' : 'rgba(255,255,255,0.1)' } } }
                     }
                 });
             }
@@ -49046,7 +49046,7 @@
                         responsive: true, maintainAspectRatio: false,
                         interaction: { mode: 'index', intersect: false },
                         plugins: {
-                            legend: { position: 'top', labels: { color: '#94a3b8', font: { size: 11 } } },
+                            legend: { position: 'top', labels: { color: document.body.getAttribute('data-theme') === 'light' ? '#374151' : '#94a3b8', font: { size: 11 } } },
                             tooltip: {
                                 callbacks: {
                                     label: (c) => {
@@ -49060,8 +49060,8 @@
                             }
                         },
                         scales: {
-                            x: { grid: { color: 'rgba(148,163,184,0.15)' }, ticks: { color: '#94a3b8', font: { size: 11 } } },
-                            y: { min: 0, max: 105, grid: { color: 'rgba(148,163,184,0.15)' }, ticks: { color: '#94a3b8', callback: (v) => v + '%' } }
+                            x: { grid: { color: document.body.getAttribute('data-theme') === 'light' ? 'rgba(0,0,0,0.08)' : 'rgba(148,163,184,0.15)' }, ticks: { color: document.body.getAttribute('data-theme') === 'light' ? '#374151' : '#94a3b8', font: { size: 11 } } },
+                            y: { min: 0, max: 105, grid: { color: document.body.getAttribute('data-theme') === 'light' ? 'rgba(0,0,0,0.08)' : 'rgba(148,163,184,0.15)' }, ticks: { color: document.body.getAttribute('data-theme') === 'light' ? '#374151' : '#94a3b8', callback: (v) => v + '%' } }
                         }
                     }
                 });
