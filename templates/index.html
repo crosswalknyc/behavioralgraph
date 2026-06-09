@@ -54676,7 +54676,7 @@
             try {
                 const info = (typeof getProfileSuffixInfo === 'function')
                     ? getProfileSuffixInfo(profile) : { suffixType: 'none', suffixLabel: '' };
-                if (info && info.suffixType === 'cohort' && info.suffixLabel) {
+                if (info && (info.suffixType === 'cohort' || info.suffixType === 'dash') && info.suffixLabel) {
                     return dateRangeYear ? (info.suffixLabel + ' ' + dateRangeYear) : info.suffixLabel;
                 }
             } catch (_) {}
@@ -75077,14 +75077,38 @@
         const PROFILE_SUFFIX_REGEX = /[\s_\-]+(20\d{2}|\d+\+|\d+\s*Plus|Avid(?:\s+Fans?)?|Casual(?:\s+Fans?)?|Super\s*Fans?|Heavy(?:\s+Users?)?|Light(?:\s+Users?)?|Lite|Premium|Standard)$/i;
         const _YEAR_SUFFIX_TEST = /^20\d{2}$/;
 
+        // Dash-separated suffix: anything after the LAST " - " (ASCII
+        // hyphen, en-dash, or em-dash) with spaces on both sides. We
+        // require surrounding whitespace so genuinely hyphenated names
+        // like "Smith-Jones" or "Jay-Z" aren't split. Use a non-greedy
+        // base capture with a $-anchored tail so the match always lands
+        // on the LAST qualifying dash.
+        const PROFILE_DASH_SUFFIX_REGEX = /^(.+)\s[\-\u2013\u2014]\s+(.+)$/;
+
         /** Splits a profile's display name into a {canonicalName,
-         *  suffixType, suffixLabel} triple. suffixType is 'year' for a
-         *  4-digit calendar year suffix, 'cohort' for an audience-cohort
-         *  token (4+, Avid, Premium, etc.), and 'none' when the name has
-         *  no recognised suffix. */
+         *  suffixType, suffixLabel} triple. suffixType is:
+         *    - 'year' for a 4-digit calendar-year suffix
+         *    - 'cohort' for an audience-cohort token (4+, Avid, Premium, etc.)
+         *    - 'dash' for anything after a " - " separator
+         *    - 'none' when the name has no recognised suffix.
+         *  Dash is checked FIRST so multi-word descriptive cohort suffixes
+         *  ("Superfan 4+ Touchpoints") group correctly even though their
+         *  trailing token isn't in the cohort allow-list.
+         */
         function getProfileSuffixInfo(profile) {
             const name = (getProfileFullName(profile) || '').trim();
             if (!name) return { canonicalName: '', suffixType: 'none', suffixLabel: '' };
+            // 1. Dash-separated suffix wins: "Reba McEntire - Superfan 4+ Touchpoints"
+            //    -> canonical "Reba McEntire", label "Superfan 4+ Touchpoints"
+            const dm = name.match(PROFILE_DASH_SUFFIX_REGEX);
+            if (dm) {
+                const base = (dm[1] || '').trim();
+                const suffix = (dm[2] || '').trim();
+                if (base && suffix) {
+                    return { canonicalName: base, suffixType: 'dash', suffixLabel: suffix };
+                }
+            }
+            // 2. Allow-listed single-token cohort/year suffixes.
             const m = name.match(PROFILE_SUFFIX_REGEX);
             if (!m) return { canonicalName: name, suffixType: 'none', suffixLabel: '' };
             const base = name.slice(0, m.index).trim();
@@ -75099,9 +75123,10 @@
          *  a year is not a cohort) so the sort treats them together. */
         function getProfileCohortInfo(profile) {
             const info = getProfileSuffixInfo(profile);
+            const isCohortLike = info.suffixType === 'cohort' || info.suffixType === 'dash';
             return {
                 canonicalName: info.canonicalName,
-                cohortLabel: info.suffixType === 'cohort' ? info.suffixLabel : ''
+                cohortLabel: isCohortLike ? info.suffixLabel : ''
             };
         }
 
@@ -75176,6 +75201,7 @@
             const info = getProfileSuffixInfo(profile);
             if (info.suffixType === 'year') return info.suffixLabel;
             if (info.suffixType === 'cohort') return info.suffixLabel;
+            if (info.suffixType === 'dash') return info.suffixLabel;
             return getProfileRunYear(profile) || 'Run';
         }
 
@@ -75225,8 +75251,8 @@
             return [...runs].sort((a, b) => {
                 const infoA = getProfileSuffixInfo(a);
                 const infoB = getProfileSuffixInfo(b);
-                const isCohortA = infoA.suffixType === 'cohort' ? 1 : 0;
-                const isCohortB = infoB.suffixType === 'cohort' ? 1 : 0;
+                const isCohortA = (infoA.suffixType === 'cohort' || infoA.suffixType === 'dash') ? 1 : 0;
+                const isCohortB = (infoB.suffixType === 'cohort' || infoB.suffixType === 'dash') ? 1 : 0;
                 if (isCohortA !== isCohortB) return isCohortA - isCohortB;
                 if (isCohortA) {
                     return infoA.suffixLabel.localeCompare(infoB.suffixLabel, undefined, { numeric: true, sensitivity: 'base' });
