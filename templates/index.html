@@ -54581,7 +54581,11 @@
             runsByKey: {},
             availableRuns: [],
             currentKey: '',
-            inFlight: {}
+            inFlight: {},
+            // Gen Pop is layered into compare-mode views by default. The
+            // popover exposes a toggle so users can compare old vs new
+            // without Gen Pop crowding the bars / columns.
+            includeGenPop: true
         };
 
         function _resetComparisonRunsState(subject, currentKey, availableRuns) {
@@ -54591,10 +54595,22 @@
                 runsByKey: {},
                 availableRuns: Array.isArray(availableRuns) ? availableRuns.slice() : [],
                 currentKey: currentKey || '',
-                inFlight: {}
+                inFlight: {},
+                includeGenPop: true
             };
             _updateCompareDateRangesButtonBadge();
             _closeCompareDateRangesPopover();
+        }
+
+        // Toggle whether the Gen Pop baseline bar/column is layered into
+        // compare-mode visuals. Re-applies charts + tables so the change is
+        // visible without re-opening the popover. No-op outside comparison
+        // mode (no selectedKeys -> the native single-profile render runs and
+        // Gen Pop comes from the underlying templates, not from here).
+        function _setComparisonIncludeGenPop(val) {
+            _comparisonRunsState.includeGenPop = !!val;
+            try { applyComparisonRunsToDashboardCharts(); } catch (e) { console.warn('[compare] genpop toggle charts failed', e); }
+            try { applyComparisonRunsToCategoryTables(); } catch (e) { console.warn('[compare] genpop toggle tables failed', e); }
         }
 
         // If the profile display name contains a " - " (or en-dash / em-dash)
@@ -54933,6 +54949,28 @@
             header.appendChild(clearLink);
             pop.appendChild(header);
 
+            // ---- Gen Pop baseline toggle ----------------------------------
+            // Always visible: lets the user drop Gen Pop from compare-mode
+            // visuals when they only care about old-vs-new (or run-vs-run).
+            // Has no effect outside compare mode (selectedKeys empty -> the
+            // native render owns the Gen Pop column).
+            const gpRow = document.createElement('label');
+            gpRow.style.cssText = 'display:grid;grid-template-columns:18px 1fr;column-gap:0.55rem;align-items:center;padding:0.4rem 0.5rem;border-radius:6px;cursor:pointer;font-size:0.82rem;line-height:1.25;margin-bottom:0.45rem;background:rgba(156,163,175,0.08);border:1px solid rgba(156,163,175,0.18);';
+            const gpCb = document.createElement('input');
+            gpCb.type = 'checkbox';
+            gpCb.id = 'cmpIncludeGenPopCb';
+            gpCb.checked = _comparisonRunsState.includeGenPop !== false;
+            gpCb.style.cssText = 'accent-color:#9ca3af;cursor:pointer;width:14px;height:14px;margin:0;justify-self:center;';
+            const gpLbl = document.createElement('span');
+            gpLbl.innerHTML = 'Include <strong style="color:#cbd5e1;">Gen Pop</strong> baseline';
+            gpLbl.style.cssText = 'color:var(--text-primary, #e6e6e6);';
+            gpRow.appendChild(gpCb);
+            gpRow.appendChild(gpLbl);
+            gpCb.addEventListener('change', function() {
+                _setComparisonIncludeGenPop(gpCb.checked);
+            });
+            pop.appendChild(gpRow);
+
             if (available.length === 0) {
                 const empty = document.createElement('div');
                 empty.style.cssText = 'font-size:0.8rem;color:var(--text-secondary, #9ca3af);padding:0.5rem 0;';
@@ -55092,7 +55130,8 @@
                         backgroundColor: _COMPARISON_PALETTE[idx % _COMPARISON_PALETTE.length]
                     };
                 });
-                const gpDataset = Array.isArray(origGP) ? [{
+                const includeGenPop = _comparisonRunsState.includeGenPop !== false;
+                const gpDataset = (includeGenPop && Array.isArray(origGP)) ? [{
                     label: 'Gen Pop',
                     data: origGP.map(v => (typeof v === 'number' && isFinite(v)) ? v : 0),
                     backgroundColor: _COMPARISON_GENPOP_COLOR
@@ -55266,7 +55305,21 @@
                 .filter(Boolean);
             _cmpInstallTableObservers();
 
+            // One-time stylesheet so toggling the .cmp-hide-genpop class on a
+            // container collapses its native Gen Pop cells without us having
+            // to touch each row's display directly. Matches the .genpop-col
+            // class used across behavioral / interests rows and the
+            // .location-genpop variant used by the regional breakdown.
+            if (!document.getElementById('cmpHideGenpopStyle')) {
+                const s = document.createElement('style');
+                s.id = 'cmpHideGenpopStyle';
+                s.textContent = '.cmp-hide-genpop .genpop-col, .cmp-hide-genpop .location-genpop { display: none !important; }';
+                document.head.appendChild(s);
+            }
+
             const palette = _COMPARISON_PALETTE;
+            const includeGenPop = _comparisonRunsState.includeGenPop !== false;
+            const hideGP = (series.length > 0 && !includeGenPop);
 
             // -------- BEHAVIORAL CARDS ----------------------------------
             // Each card has .behavioral-table > .behavioral-header-row +
@@ -55283,15 +55336,19 @@
                 _cmpClearInjected(table);
                 if (series.length === 0) {
                     table.style.gridTemplateColumns = '';
+                    table.classList.remove('cmp-hide-genpop');
                     return;
                 }
+                table.classList.toggle('cmp-hide-genpop', hideGP);
                 const list = table.querySelector('.behavioral-list');
                 const cat = list && list.dataset.cat;
-                // Recompute grid: rank | name | profile | [N cmps] | genpop | index.
-                // Width per comparison column kept tight (64px) so multiple
-                // selections don't blow out the card.
+                // Recompute grid: rank | name | profile | [N cmps] | [genpop?] | index.
+                // The "70px " before " 56px" is the Gen Pop column; drop it
+                // when the user has hidden Gen Pop so the row collapses
+                // cleanly instead of leaving a gap.
                 const cmpCols = series.map(() => '60px').join(' ');
-                table.style.gridTemplateColumns = '28px minmax(80px,1fr) 70px ' + cmpCols + ' 70px 56px';
+                const gpCol = hideGP ? '' : ' 70px';
+                table.style.gridTemplateColumns = '28px minmax(80px,1fr) 70px ' + cmpCols + gpCol + ' 56px';
 
                 // Header row injection
                 const header = table.querySelector('.behavioral-header-row');
@@ -55344,15 +55401,18 @@
             if (intGrid) {
                 _cmpClearInjected(intGrid);
                 if (series.length > 0) {
+                    intGrid.classList.toggle('cmp-hide-genpop', hideGP);
                     const intLookups = series.map(s => ({
                         label: s.label,
                         map: _cmpBuildInterestsLookup(s.parsed)
                     }));
                     // The interests grid uses a CSS grid declared in the
                     // stylesheet. We override grid-template-columns via
-                    // inline style to expand for comparison columns.
+                    // inline style to expand for comparison columns and
+                    // optionally drop the Gen Pop column.
                     const cmpCols = series.map(() => '60px').join(' ');
-                    intGrid.style.gridTemplateColumns = '28px minmax(120px,1fr) 70px ' + cmpCols + ' 70px 56px';
+                    const gpCol = hideGP ? '' : ' 70px';
+                    intGrid.style.gridTemplateColumns = '28px minmax(120px,1fr) 70px ' + cmpCols + gpCol + ' 56px';
 
                     const intHeader = intGrid.querySelector('.interest-header-row');
                     if (intHeader) {
@@ -55384,6 +55444,7 @@
                     });
                 } else {
                     intGrid.style.gridTemplateColumns = '';
+                    intGrid.classList.remove('cmp-hide-genpop');
                 }
             }
 
@@ -55394,13 +55455,17 @@
             const locContainers = [document.getElementById('locationsContainer'), document.getElementById('locationsList')]
                 .filter(Boolean);
             if (locContainers.length > 0) {
-                locContainers.forEach(c => _cmpClearInjected(c));
+                locContainers.forEach(c => {
+                    _cmpClearInjected(c);
+                    if (series.length === 0) c.classList.remove('cmp-hide-genpop');
+                });
                 if (series.length > 0) {
                     const locLookups = series.map(s => ({
                         label: s.label,
                         map: _cmpBuildLocationsLookup(s.parsed)
                     }));
                     locContainers.forEach(container => {
+                        container.classList.toggle('cmp-hide-genpop', hideGP);
                         // Inject header (location tables often use a
                         // .location-header-row or first row with column
                         // titles — try both).
