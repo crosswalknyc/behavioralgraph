@@ -14612,7 +14612,7 @@
                                             <select id="customSVODContentCadence" style="padding: 0.5rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-primary); font-size: 0.9rem; min-width: 200px;">
                                                 <option value="">Select cadence...</option>
                                                 <option value="Weekly">Weekly</option>
-                                                <option value="All at Once">All at Once</option>
+                                                <option value="Binge">Binge</option>
                                             </select>
                                             <small>How episodes are released</small>
                                         </div>
@@ -17363,7 +17363,6 @@
                                 <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 1rem; flex-wrap: wrap; margin-bottom: 1rem;">
                                     <div>
                                         <h3 style="margin: 0 0 0.25rem 0;">📅 Episode Release Dates</h3>
-                                        <p class="section-description" style="margin: 0;">Original release / drop date for each tracked episode. Pulled from the input CSV's Episode Date column; missing dates can be filled in by an AI agent that searches the web.</p>
                                     </div>
                                     <div style="display: flex; gap: 0.5rem; align-items: center;">
                                         <button id="subscriberLookupEpDatesBtn" class="display-mode-toggle" onclick="lookupSubscriberEpisodeDates()" title="Use an AI agent with web search to fill in missing episode dates" style="cursor: pointer;">
@@ -50440,9 +50439,24 @@
                 btn.style.display = missingCount > 0 ? '' : 'none';
             }
             if (sourceEl) {
+                // The admin-override caption ("Episode numbers and release
+                // dates were customized in Admin.") is intentionally not
+                // surfaced — the override flag (_episode_dates_admin_override)
+                // still flows through in the API payload, just not shown in
+                // the UI. The agent-search note is still surfaced.
+                //
+                // Data-availability disclaimer: when the CSV header carries
+                // an "Episode Date Availability Note" row (currently auto-
+                // emitted for any show whose earliest episode aired before
+                // the 2021-01-01 panel cutoff — see
+                // scripts/apply_pre_2021_disclaimer.py and
+                // SVOD_Churn_Attribution.run_synthetic_attribution), we
+                // surface it FIRST so analysts immediately understand why
+                // the listed air dates pre-date the analysis window.
                 const notes = [];
-                if (data && data._episode_dates_admin_override) {
-                    notes.push('Episode numbers and release dates were customized in Admin.');
+                const availabilityNote = data && data.metadata && data.metadata.episode_date_availability_note;
+                if (availabilityNote) {
+                    notes.push(availabilityNote);
                 }
                 if (data && data._episode_dates_agent_note) {
                     notes.push(data._episode_dates_agent_note);
@@ -50890,6 +50904,10 @@
                 `;
             }
             
+            // Theme-aware chart colors
+            const _subIqTickColor = document.body.getAttribute('data-theme') === 'light' ? '#4b5563' : '#fff';
+            const _subIqGridColor = document.body.getAttribute('data-theme') === 'light' ? 'rgba(0,0,0,0.08)' : 'rgba(255,255,255,0.1)';
+
             // Distribution Chart
             const chartContainer = document.getElementById('subscriberSignupTimingChart');
             if (chartContainer && timingData.length > 0) {
@@ -50929,7 +50947,7 @@
                                 title: {
                                     display: true,
                                     text: isActualDates ? 'Signups by Date' : 'Signups by Days After Show Available',
-                                    color: '#fff'
+                                    color: _subIqTickColor
                                 },
                                 legend: {
                                     display: false
@@ -50938,12 +50956,12 @@
                             scales: {
                                 y: {
                                     beginAtZero: true,
-                                    ticks: { color: '#fff' },
-                                    grid: { color: 'rgba(255,255,255,0.1)' }
+                                    ticks: { color: _subIqTickColor },
+                                    grid: { color: _subIqGridColor }
                                 },
                                 x: {
-                                    ticks: { color: '#fff', maxRotation: 45, minRotation: 45 },
-                                    grid: { color: 'rgba(255,255,255,0.1)' }
+                                    ticks: { color: _subIqTickColor, maxRotation: 45, minRotation: 45 },
+                                    grid: { color: _subIqGridColor }
                                 }
                             }
                         }
@@ -50991,7 +51009,7 @@
                                 title: {
                                     display: true,
                                     text: isActualDatesTimeline ? 'Signup Volume by Date' : 'Signup Volume Over Time',
-                                    color: '#fff'
+                                    color: _subIqTickColor
                                 },
                                 legend: {
                                     display: false
@@ -51000,12 +51018,12 @@
                             scales: {
                                 y: {
                                     beginAtZero: true,
-                                    ticks: { color: '#fff' },
-                                    grid: { color: 'rgba(255,255,255,0.1)' }
+                                    ticks: { color: _subIqTickColor },
+                                    grid: { color: _subIqGridColor }
                                 },
                                 x: {
-                                    ticks: { color: '#fff', maxRotation: 45, minRotation: 45 },
-                                    grid: { color: 'rgba(255,255,255,0.1)' }
+                                    ticks: { color: _subIqTickColor, maxRotation: 45, minRotation: 45 },
+                                    grid: { color: _subIqGridColor }
                                 }
                             }
                         }
@@ -51064,23 +51082,23 @@
                                 title: {
                                     display: true,
                                     text: 'Cumulative Signup Percentage',
-                                    color: '#fff'
+                                    color: _subIqTickColor
                                 },
                                 legend: {
                                     display: true,
-                                    labels: { color: '#fff' }
+                                    labels: { color: _subIqTickColor }
                                 }
                             },
                             scales: {
                                 y: {
                                     beginAtZero: true,
                                     max: 100,
-                                    ticks: { color: '#fff', callback: function(value) { return value + '%'; } },
-                                    grid: { color: 'rgba(255,255,255,0.1)' }
+                                    ticks: { color: _subIqTickColor, callback: function(value) { return value + '%'; } },
+                                    grid: { color: _subIqGridColor }
                                 },
                                 x: {
-                                    ticks: { color: '#fff', maxRotation: 45, minRotation: 45 },
-                                    grid: { color: 'rgba(255,255,255,0.1)' }
+                                    ticks: { color: _subIqTickColor, maxRotation: 45, minRotation: 45 },
+                                    grid: { color: _subIqGridColor }
                                 }
                             }
                         }
@@ -53873,10 +53891,12 @@
                     return;
                 }
                 
-                // Group by profile_subject (e.g. The_Rock) then sort by subject name
+                // Group by canonical name (e.g. "Reba McEntire") so cohort
+                // variants like "Reba McEntire 4Plus" collapse under the same
+                // parent. See getProfileCohortInfo() for the suffix allow-list.
                 const bySubject = {};
                 matchingProfiles.forEach(p => {
-                    const subj = getProfileSubject(p) || getProfileFullName(p).replace(/\s+/g, '_');
+                    const subj = getProfileGroupKey(p) || (getProfileFullName(p) || '').toLowerCase();
                     if (!bySubject[subj]) bySubject[subj] = [];
                     bySubject[subj].push(p);
                 });
@@ -53892,7 +53912,7 @@
                     const isSvod = first.is_svod || (first.key && first.key.startsWith('svod-acquisition/')) || (first.s3_key && first.bucket === 'svod-acquisition');
                     const masterCat = getMasterCategory(cat, isSvod);
                     const icon = MASTER_CATEGORY_ICONS[masterCat] || '📁';
-                    const subjectDisplayName = subj.replace(/_/g, ' ');
+                    const subjectDisplayName = getProfileCohortInfo(first).canonicalName || getProfileFullName(first);
                     
                     if (runs.length === 1) {
                         const fullName = getProfileFullName(first);
@@ -53905,12 +53925,11 @@
                             <span class="cat-arrow">▸</span>
                             <span style="font-size: 0.9rem; opacity: 0.7;">${icon}</span>
                             <span class="profile-cat-label" style="flex: 1;">${escapeAttr(subjectDisplayName)}</span>
-                            <span class="profile-cat-count" style="font-size: 0.75rem; color: var(--text-secondary);">(${runs.length} date ranges)</span>
+                            <span class="profile-cat-count" style="font-size: 0.75rem; color: var(--text-secondary);">(${runs.length} entries)</span>
                         </div>
                         <div class="profile-cat-children ${subjectExpanded ? 'open' : ''}" id="cat-${subjectId}" style="padding-left: 1.25rem;">
-                            ${sortRunsByYearDesc(runs).map(p => {
-                                const dateLabel = getProfileYear(p) || getRunDateLabel(p.s3_key || '') || 'Run';
-                                return _profileItemHtml(p, escapeAttr(dateLabel));
+                            ${sortRunsForGroup(runs).map(p => {
+                                return _profileItemHtml(p, escapeAttr(getCanonicalChildLabel(p)));
                             }).join('')}
                         </div>`;
                     }
@@ -53982,7 +54001,7 @@
                     });
                     const bySubject = {};
                     sortedItems.forEach(p => {
-                        const subj = getProfileSubject(p) || getProfileFullName(p).replace(/\s+/g, '_');
+                        const subj = getProfileGroupKey(p) || (getProfileFullName(p) || '').toLowerCase();
                         if (!bySubject[subj]) bySubject[subj] = [];
                         bySubject[subj].push(p);
                     });
@@ -53994,16 +54013,15 @@
                         if (runs.length === 1) {
                             html += _profileItemHtml(first, escapeAttr(getProfileFullName(first)));
                         } else {
-                            const displayName = getProfileFullName(first);
+                            const displayName = getProfileCohortInfo(first).canonicalName || getProfileFullName(first);
                             html += `<div class="profile-cat-item ${subjectExpanded ? 'open' : ''}" data-dash-subject="${escapeAttr(subj)}" onclick="event.stopPropagation(); toggleDashSubject(this)" style="font-weight: 500;">
                                 <span class="cat-arrow">▸</span>
                                 <span class="profile-cat-label">${escapeAttr(displayName)}</span>
-                                <span class="profile-cat-count">(${runs.length} date ranges)</span>
+                                <span class="profile-cat-count">(${runs.length} entries)</span>
                             </div>
                             <div class="profile-cat-children ${subjectExpanded ? 'open' : ''}" id="cat-${subjectId}" style="padding-left: 0.75rem;">
-                                ${sortRunsByYearDesc(runs).map(p => {
-                                    const dateLabel = getProfileYear(p) || getRunDateLabel(p.s3_key || '') || 'Run';
-                                    return _profileItemHtml(p, escapeAttr(dateLabel));
+                                ${sortRunsForGroup(runs).map(p => {
+                                    return _profileItemHtml(p, escapeAttr(getCanonicalChildLabel(p)));
                                 }).join('')}
                             </div>`;
                         }
@@ -54021,7 +54039,7 @@
                     });
                     const bySubject = {};
                     sortedItems.forEach(p => {
-                        const subj = getProfileSubject(p) || getProfileFullName(p).replace(/\s+/g, '_');
+                        const subj = getProfileGroupKey(p) || (getProfileFullName(p) || '').toLowerCase();
                         if (!bySubject[subj]) bySubject[subj] = [];
                         bySubject[subj].push(p);
                     });
@@ -54033,16 +54051,15 @@
                         if (runs.length === 1) {
                             html += _profileItemHtml(first, escapeAttr(getProfileFullName(first)));
                         } else {
-                            const displayName = getProfileFullName(first);
+                            const displayName = getProfileCohortInfo(first).canonicalName || getProfileFullName(first);
                             html += `<div class="profile-cat-item ${subjectExpanded ? 'open' : ''}" data-dash-subject="${escapeAttr(subj)}" onclick="event.stopPropagation(); toggleDashSubject(this)" style="font-weight: 500;">
                                 <span class="cat-arrow">▸</span>
                                 <span class="profile-cat-label">${escapeAttr(displayName)}</span>
-                                <span class="profile-cat-count">(${runs.length} date ranges)</span>
+                                <span class="profile-cat-count">(${runs.length} entries)</span>
                             </div>
                             <div class="profile-cat-children ${subjectExpanded ? 'open' : ''}" id="cat-${subjectId}" style="padding-left: 0.75rem;">
-                                ${sortRunsByYearDesc(runs).map(p => {
-                                    const dateLabel = getProfileYear(p) || getRunDateLabel(p.s3_key || '') || 'Run';
-                                    return _profileItemHtml(p, escapeAttr(dateLabel));
+                                ${sortRunsForGroup(runs).map(p => {
+                                    return _profileItemHtml(p, escapeAttr(getCanonicalChildLabel(p)));
                                 }).join('')}
                             </div>`;
                         }
@@ -54059,7 +54076,7 @@
                         });
                         const bySubject = {};
                         sortedItems.forEach(p => {
-                            const subj = getProfileSubject(p) || getProfileFullName(p).replace(/\s+/g, '_');
+                            const subj = getProfileGroupKey(p) || (getProfileFullName(p) || '').toLowerCase();
                             if (!bySubject[subj]) bySubject[subj] = [];
                             bySubject[subj].push(p);
                         });
@@ -54072,16 +54089,15 @@
                             if (runs.length === 1) {
                                 itemsHtml += _profileItemHtml(first, escapeAttr(getProfileFullName(first)));
                             } else {
-                                const displayNameAttr = escapeAttr(getProfileFullName(first));
+                                const displayNameAttr = escapeAttr(getProfileCohortInfo(first).canonicalName || getProfileFullName(first));
                                 itemsHtml += `<div class="profile-cat-item ${subjectExpanded ? 'open' : ''}" data-dash-subject="${escapeAttr(subj)}" onclick="event.stopPropagation(); toggleDashSubject(this)" style="font-weight: 500;">
                                     <span class="cat-arrow">▸</span>
                                     <span class="profile-cat-label">${displayNameAttr}</span>
-                                    <span class="profile-cat-count">(${runs.length} date ranges)</span>
+                                    <span class="profile-cat-count">(${runs.length} entries)</span>
                                 </div>
                                 <div class="profile-cat-children ${subjectExpanded ? 'open' : ''}" id="cat-${subjectId}" style="padding-left: 0.75rem;">
-                                    ${sortRunsByYearDesc(runs).map(p => {
-                                        const dateLabel = getProfileYear(p) || getRunDateLabel(p.s3_key || '') || 'Run';
-                                        return _profileItemHtml(p, escapeAttr(dateLabel));
+                                    ${sortRunsForGroup(runs).map(p => {
+                                        return _profileItemHtml(p, escapeAttr(getCanonicalChildLabel(p)));
                                     }).join('')}
                                 </div>`;
                             }
@@ -73672,6 +73688,82 @@
             return filename.replace(/_\d{2}_\d{2}_\d{4}_\d{2}_\d{2}$/, '').replace(/_\d{2}_\d{2}_\d{4}$/, '');
         }
 
+        // ---------------------------------------------------------------
+        // Cohort / variant grouping
+        // ---------------------------------------------------------------
+        // Some profiles are "delineations" of a base talent/show — e.g.
+        // "Reba McEntire 4Plus" is a 4+ touchpoint cohort of "Reba McEntire",
+        // saved as Reba_4Plus_06_09_2026.csv alongside the base
+        // Reba_McEntire_05_29_2026.csv. The profile tree treats each as a
+        // separate subject by default because their filename stems differ
+        // (Reba_4Plus vs Reba_McEntire) — see getProfileSubject() above.
+        //
+        // To collapse these together (the same way sequential date ranges of
+        // a single talent collapse under one parent), we derive a canonical
+        // grouping key from the *display name* (which the backend resolves
+        // to "Reba McEntire 4Plus" / "Reba McEntire" for both files) and
+        // strip a known cohort suffix.
+        //
+        // The suffix allow-list is intentionally narrow to avoid collapsing
+        // distinct profiles whose names happen to share a base word. Add
+        // new tokens here as new cohort conventions ship.
+        const COHORT_SUFFIX_REGEX = /[\s_\-]+(\d+\s*Plus|Avid(?:\s+Fans?)?|Casual(?:\s+Fans?)?|Super\s*Fans?|Heavy(?:\s+Users?)?|Light(?:\s+Users?)?|Premium|Standard)$/i;
+
+        /** Splits a profile's display name into its canonical base name and
+         *  its cohort-variant label. Cohort label is '' for the base profile. */
+        function getProfileCohortInfo(profile) {
+            const name = (getProfileFullName(profile) || '').trim();
+            if (!name) return { canonicalName: '', cohortLabel: '' };
+            const m = name.match(COHORT_SUFFIX_REGEX);
+            if (!m) return { canonicalName: name, cohortLabel: '' };
+            const base = name.slice(0, m.index).trim();
+            if (!base) return { canonicalName: name, cohortLabel: '' };
+            return { canonicalName: base, cohortLabel: m[1].trim() };
+        }
+
+        /** Canonical, case-insensitive grouping key. Cohort variants of the
+         *  same base subject collapse to the same key. Falls back to the raw
+         *  profile-subject when no display name is available. */
+        function getProfileGroupKey(profile) {
+            const info = getProfileCohortInfo(profile);
+            const k = (info.canonicalName || '').toLowerCase();
+            if (k) return k;
+            return (getProfileSubject(profile) || '').toLowerCase();
+        }
+
+        /** Year-only label for a profile run. Prefers a 4-digit year baked
+         *  into the display name (e.g. "Dwayne Johnson 2024" -> "2024"),
+         *  otherwise extracts the year out of the s3_key timestamp
+         *  (e.g. "Dwayne_Johnson_05_14_2026_..." -> "2026"), falling back
+         *  to the created_at year. The sidebar shows years (not full dates)
+         *  because each profile run analyzes a full calendar-year date
+         *  range, so the file-creation day/month is not meaningful in the
+         *  tree. The "Compare date ranges" modal still uses the full date
+         *  via getRunDateLabel() since deltas care about the exact run. */
+        function getProfileRunYear(profile) {
+            const fromName = getProfileYear(profile);
+            if (fromName) return fromName;
+            const key = profile.s3_key || profile.job_id || '';
+            if (key) {
+                const m = key.match(/_(\d{2})_(\d{2})_(\d{4})(?:_\d{2}_\d{2})?\.csv$/i)
+                       || key.match(/_(\d{2})_(\d{2})_(\d{4})$/);
+                if (m) return m[3];
+            }
+            const created = profile.created_at || '';
+            const ym = created.match(/^(\d{4})/);
+            if (ym) return ym[1];
+            return '';
+        }
+
+        /** Child-row label inside a grouped subject. For cohort variants the
+         *  cohort label is prepended to the year (e.g. "4Plus | 2026") so
+         *  it's obvious which delineation each row represents. */
+        function getCanonicalChildLabel(profile) {
+            const info = getProfileCohortInfo(profile);
+            const yearLabel = getProfileRunYear(profile) || 'Run';
+            return info.cohortLabel ? (info.cohortLabel + ' · ' + yearLabel) : yearLabel;
+        }
+
         /** Short date label from s3_key timestamp (e.g. "Feb 23, 2026"). */
         function getRunDateLabel(s3Key) {
             if (!s3Key) return '';
@@ -73692,6 +73784,29 @@
         /** Sort profile runs by year descending when profile name has a year (2025, 2024, 2023); otherwise by created_at/s3_key. */
         function sortRunsByYearDesc(runs) {
             return [...runs].sort((a, b) => {
+                const yA = getProfileYear(a);
+                const yB = getProfileYear(b);
+                const numA = /^\d{4}$/.test(yA) ? parseInt(yA, 10) : null;
+                const numB = /^\d{4}$/.test(yB) ? parseInt(yB, 10) : null;
+                if (numA != null && numB != null) return numB - numA;
+                if (numA != null) return -1;
+                if (numB != null) return 1;
+                return (a.created_at || a.s3_key || '').localeCompare(b.created_at || b.s3_key || '');
+            });
+        }
+
+        /** Sort runs inside a canonical-name group: base (no cohort) first,
+         *  then cohorts alphabetically (numeric-aware so "4Plus" sorts before
+         *  "12Plus"), with date desc inside each cohort. */
+        function sortRunsForGroup(runs) {
+            return [...runs].sort((a, b) => {
+                const ca = getProfileCohortInfo(a).cohortLabel || '';
+                const cb = getProfileCohortInfo(b).cohortLabel || '';
+                if (ca !== cb) {
+                    if (!ca) return -1;
+                    if (!cb) return 1;
+                    return ca.localeCompare(cb, undefined, { numeric: true, sensitivity: 'base' });
+                }
                 const yA = getProfileYear(a);
                 const yB = getProfileYear(b);
                 const numA = /^\d{4}$/.test(yA) ? parseInt(yA, 10) : null;
