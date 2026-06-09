@@ -534,10 +534,12 @@ def get_user_input():
             break
         print("   Invalid. Choose a number 1-{} or one of: {}".format(len(ALLOWED_GENRES), ", ".join(ALLOWED_GENRES)))
     
-    # Content Cadence
+    # Content Cadence — canonical labels are "Weekly" and "Binge". The
+    # legacy "All at Once" string is accepted as input and silently normalized
+    # to "Binge" so old runbooks / CLI invocations keep working.
     print("\n📝 Content Cadence (how episodes are released):")
     print("   1. Weekly")
-    print("   2. All at Once")
+    print("   2. Binge")
     while True:
         cadence_input = input("Enter number (1-2) or cadence name: ").strip()
         if not cadence_input:
@@ -546,10 +548,10 @@ def get_user_input():
         if cadence_input == "1" or cadence_input.lower() == "weekly":
             content_cadence = "Weekly"
             break
-        if cadence_input == "2" or cadence_input.lower() in ("all at once", "all"):
-            content_cadence = "All at Once"
+        if cadence_input == "2" or cadence_input.lower() in ("binge", "all at once", "all"):
+            content_cadence = "Binge"
             break
-        print("   Invalid. Choose 1 (Weekly) or 2 (All at Once).")
+        print("   Invalid. Choose 1 (Weekly) or 2 (Binge).")
 
     if not show_search_terms:
         print("You must provide at least one show/content name.", file=sys.stderr)
@@ -6919,7 +6921,9 @@ def run_synthetic_attribution(config: dict) -> dict:
         episode_dates:       List of dicts with episode_num, air_date,
                              display_label — OR list of "YYYY-MM-DD" strings.
         genre:               e.g. "Animated Adult Comedy".
-        content_cadence:     "Weekly", "All at Once", "Single Event Telecast".
+        content_cadence:     "Weekly", "Binge", "Single Event Telecast".
+                             (Legacy "All at Once" is accepted on input and
+                             normalized to "Binge" — see run_synthetic_attribution.)
         is_new_show:         bool.
 
     Optional keys:
@@ -6937,6 +6941,15 @@ def run_synthetic_attribution(config: dict) -> dict:
     Returns a dict with output_path, s3_key (if uploaded), reach_us,
     new_signups_us, validation_status.
     """
+    # Normalize legacy cadence labels to the canonical form. The pipeline,
+    # admin UI, and CSV header all expect "Binge" — the older "All at Once"
+    # string is accepted on input (from CLI flags, runbooks, etc.) and
+    # silently converted here so the CSV we emit always uses the canonical
+    # label.
+    _raw_cadence = (config.get('content_cadence') or '').strip()
+    if _raw_cadence.lower() in ('all at once', 'all-at-once', 'all_at_once'):
+        config['content_cadence'] = 'Binge'
+
     print("\n" + "=" * 70)
     print("  SVOD SYNTHETIC ATTRIBUTION PIPELINE")
     print("=" * 70)

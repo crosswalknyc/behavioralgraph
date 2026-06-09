@@ -28364,7 +28364,12 @@ def submit_svod_acquisition():
             return jsonify({'error': f'Genre must be one of: {", ".join(SVOD_ALLOWED_GENRES)}'}), 400
         
         content_cadence = (data.get('content_cadence') or '').strip()
-        if content_cadence and content_cadence not in ('Weekly', 'All at Once'):
+        # Canonical labels are "Weekly" and "Binge". The legacy "All at Once"
+        # string is silently rewritten to "Binge" so old admin saves /
+        # dashboard form submissions keep working.
+        if content_cadence.lower() in ('all at once', 'all-at-once', 'all_at_once'):
+            content_cadence = 'Binge'
+        if content_cadence and content_cadence not in ('Weekly', 'Binge'):
             content_cadence = ''
         
         username = session.get('username', 'unknown')

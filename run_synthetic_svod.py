@@ -100,8 +100,10 @@ def build_arg_parser() -> argparse.ArgumentParser:
                    help='Genre label, e.g. "Serialized Drama", '
                         '"Animated Adult Comedy", "Single Event Telecast".')
     p.add_argument('--cadence',  default='Weekly',
-                   help='Content cadence: Weekly | All at Once | '
-                        'Single Event Telecast (default: Weekly).')
+                   help='Content cadence: Weekly | Binge | '
+                        'Single Event Telecast (default: Weekly). '
+                        'Legacy "All at Once" is accepted and normalized to '
+                        '"Binge" for backward compatibility.')
     p.add_argument('--episodes', default=None,
                    help='Comma-separated episode air dates (YYYY-MM-DD). '
                         'Omit for movies / one-off specials.')
