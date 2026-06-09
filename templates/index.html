@@ -50890,6 +50890,10 @@
                 `;
             }
             
+            // Theme-aware chart colors
+            const _subIqTickColor = document.body.getAttribute('data-theme') === 'light' ? '#4b5563' : '#fff';
+            const _subIqGridColor = document.body.getAttribute('data-theme') === 'light' ? 'rgba(0,0,0,0.08)' : 'rgba(255,255,255,0.1)';
+
             // Distribution Chart
             const chartContainer = document.getElementById('subscriberSignupTimingChart');
             if (chartContainer && timingData.length > 0) {
@@ -50929,7 +50933,7 @@
                                 title: {
                                     display: true,
                                     text: isActualDates ? 'Signups by Date' : 'Signups by Days After Show Available',
-                                    color: '#fff'
+                                    color: _subIqTickColor
                                 },
                                 legend: {
                                     display: false
@@ -50938,12 +50942,12 @@
                             scales: {
                                 y: {
                                     beginAtZero: true,
-                                    ticks: { color: '#fff' },
-                                    grid: { color: 'rgba(255,255,255,0.1)' }
+                                    ticks: { color: _subIqTickColor },
+                                    grid: { color: _subIqGridColor }
                                 },
                                 x: {
-                                    ticks: { color: '#fff', maxRotation: 45, minRotation: 45 },
-                                    grid: { color: 'rgba(255,255,255,0.1)' }
+                                    ticks: { color: _subIqTickColor, maxRotation: 45, minRotation: 45 },
+                                    grid: { color: _subIqGridColor }
                                 }
                             }
                         }
@@ -50991,7 +50995,7 @@
                                 title: {
                                     display: true,
                                     text: isActualDatesTimeline ? 'Signup Volume by Date' : 'Signup Volume Over Time',
-                                    color: '#fff'
+                                    color: _subIqTickColor
                                 },
                                 legend: {
                                     display: false
@@ -51000,12 +51004,12 @@
                             scales: {
                                 y: {
                                     beginAtZero: true,
-                                    ticks: { color: '#fff' },
-                                    grid: { color: 'rgba(255,255,255,0.1)' }
+                                    ticks: { color: _subIqTickColor },
+                                    grid: { color: _subIqGridColor }
                                 },
                                 x: {
-                                    ticks: { color: '#fff', maxRotation: 45, minRotation: 45 },
-                                    grid: { color: 'rgba(255,255,255,0.1)' }
+                                    ticks: { color: _subIqTickColor, maxRotation: 45, minRotation: 45 },
+                                    grid: { color: _subIqGridColor }
                                 }
                             }
                         }
@@ -51064,23 +51068,23 @@
                                 title: {
                                     display: true,
                                     text: 'Cumulative Signup Percentage',
-                                    color: '#fff'
+                                    color: _subIqTickColor
                                 },
                                 legend: {
                                     display: true,
-                                    labels: { color: '#fff' }
+                                    labels: { color: _subIqTickColor }
                                 }
                             },
                             scales: {
                                 y: {
                                     beginAtZero: true,
                                     max: 100,
-                                    ticks: { color: '#fff', callback: function(value) { return value + '%'; } },
-                                    grid: { color: 'rgba(255,255,255,0.1)' }
+                                    ticks: { color: _subIqTickColor, callback: function(value) { return value + '%'; } },
+                                    grid: { color: _subIqGridColor }
                                 },
                                 x: {
-                                    ticks: { color: '#fff', maxRotation: 45, minRotation: 45 },
-                                    grid: { color: 'rgba(255,255,255,0.1)' }
+                                    ticks: { color: _subIqTickColor, maxRotation: 45, minRotation: 45 },
+                                    grid: { color: _subIqGridColor }
                                 }
                             }
                         }
