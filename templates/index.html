@@ -54597,7 +54597,36 @@
             _closeCompareDateRangesPopover();
         }
 
+        // If the profile display name contains a " - " (or en-dash / em-dash)
+        // with whitespace around it, return everything after the LAST such
+        // separator. Examples:
+        //   "Dwayne 'The Rock' Johnson - 4+ Touchpoints Superfan" -> "4+ Touchpoints Superfan"
+        //   "Reba McEntire — 4+ Avid"                              -> "4+ Avid"
+        //   "Beyoncé - Premium Cohort 2024"                        -> "Premium Cohort 2024"
+        //   "Smith-Jones"                                          -> "" (no spaces around the hyphen, treat as name)
+        // The whitespace requirement around the dash prevents accidentally
+        // splitting hyphenated names.
+        function _dashSuffixLabel(profile) {
+            const name = (function() {
+                try {
+                    if (typeof getProfileFullName === 'function') return (getProfileFullName(profile) || '').trim();
+                } catch (_) {}
+                return ((profile && (profile.display_name || profile.name)) || '').trim();
+            })();
+            if (!name) return '';
+            // Greedy + lazy capture: pick the LAST dash that has space on
+            // both sides. Match against U+002D, U+2013 (en-dash), U+2014 (em-dash).
+            const m = name.match(/^(.+)\s[\-\u2013\u2014]\s+(.+)$/);
+            if (m && m[2]) return m[2].trim();
+            return '';
+        }
+
         function _compactRunLabel(profile) {
+            // 1. Anything after " - " in the display name wins. User
+            //    requirement: if there's anything besides the subject's
+            //    name (separated by a dash), show that verbatim.
+            const dashSuffix = _dashSuffixLabel(profile);
+            if (dashSuffix) return dashSuffix;
             try {
                 if (typeof getCanonicalChildLabel === 'function') {
                     const lbl = getCanonicalChildLabel(profile);
@@ -54632,17 +54661,22 @@
             return first + '-' + last.slice(-2);
         }
 
-        // Combine a profile's date-range year with its cohort suffix so
-        // a 2024 run of "Dwayne Johnson 4+" still labels as "4+", while
-        // an un-suffixed 2024 run labels as "2024".
+        // Pick the best label for a comparison run, given both the profile
+        // metadata and the fetched CSV's date_range. Priority order:
+        //
+        //   1. Anything after " - " in the display name (user requirement:
+        //      "if there is anything besides the persons name show that").
+        //   2. Cohort suffix at end of name ("4+", "Avid", "Premium") +
+        //      the date-range year if available ("4+ 2024").
+        //   3. Date-range year by itself ("2025-01-01 - 2025-12-31" -> "2025").
+        //   4. Fall back to _compactRunLabel for the un-fetched case.
         function _preferredRunLabel(profile, dateRangeYear) {
+            const dashSuffix = _dashSuffixLabel(profile);
+            if (dashSuffix) return dashSuffix;
             try {
                 const info = (typeof getProfileSuffixInfo === 'function')
                     ? getProfileSuffixInfo(profile) : { suffixType: 'none', suffixLabel: '' };
                 if (info && info.suffixType === 'cohort' && info.suffixLabel) {
-                    // Cohort cuts (4+, Avid, etc.) carry their own label —
-                    // keep them visible. If the run is ALSO date-bounded
-                    // to a single year, suffix it: "4+ 2024".
                     return dateRangeYear ? (info.suffixLabel + ' ' + dateRangeYear) : info.suffixLabel;
                 }
             } catch (_) {}
