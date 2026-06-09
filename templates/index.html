@@ -54618,8 +54618,17 @@
 
                 series.forEach((entry, idx) => {
                     const demoDict = (entry.parsed && entry.parsed.demographics && entry.parsed.demographics[dataCat]) || {};
+                    // Case- and whitespace-insensitive fallback so prior-year
+                    // runs with minor key drift (e.g. "Hispanic or Latino"
+                    // vs "HISPANIC OR LATINO", "65 or Older" vs "65 OR OLDER")
+                    // still resolve instead of silently rendering invisible
+                    // zero-height bars.
+                    const demoLookup = _buildDemoLookup(demoDict);
                     const data = origKeys.map(k => {
-                        const v = demoDict[k];
+                        let v = demoDict[k];
+                        if (!(typeof v === 'number' && isFinite(v))) {
+                            v = demoLookup[_normDemoKey(k)];
+                        }
                         return (typeof v === 'number' && isFinite(v)) ? v : 0;
                     });
                     chart.data.datasets.push({
