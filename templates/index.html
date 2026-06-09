@@ -54383,16 +54383,54 @@
             if (_comparisonRunsState.inFlight[key]) return _comparisonRunsState.inFlight[key];
             const p = (async () => {
                 try {
-                    const res = await fetch('/api/get-csv-data/' + encodeURIComponent(key), { credentials: 'same-origin' });
+                    if (!key || typeof key !== 'string') {
+                        console.error('[compare] fetch aborted: empty/invalid key', { key, profile });
+                        _comparisonRunsState.lastFetchError = _comparisonRunsState.lastFetchError || {};
+                        _comparisonRunsState.lastFetchError[String(key)] = 'no-key';
+                        return null;
+                    }
+                    // Strategy 1: standard encodeURIComponent (slashes -> %2F).
+                    // Strategy 2: split on '/' and encode each segment, joining
+                    // with literal '/'. Flask's <path:> converter expects raw
+                    // slashes for nested keys (e.g. "purgatory/Foo.csv"), and
+                    // some Render edges normalize %2F differently. Try both.
+                    const url1 = '/api/get-csv-data/' + encodeURIComponent(key);
+                    const url2 = '/api/get-csv-data/' + key.split('/').map(encodeURIComponent).join('/');
+                    let res = await fetch(url1, { credentials: 'same-origin' });
+                    if (!res.ok && url1 !== url2) {
+                        console.warn('[compare] url1 returned', res.status, '— retrying with raw-slash form');
+                        res = await fetch(url2, { credentials: 'same-origin' });
+                    }
+                    if (!res.ok) {
+                        const body = await res.text().catch(() => '');
+                        console.error('[compare] HTTP', res.status, 'for key', key, '\nbody:', body.slice(0, 400));
+                        _comparisonRunsState.lastFetchError = _comparisonRunsState.lastFetchError || {};
+                        _comparisonRunsState.lastFetchError[key] = 'http-' + res.status;
+                        return null;
+                    }
                     const data = await res.json();
-                    if (!data || !data.success || !data.data) return null;
+                    if (!data || !data.success || !data.data) {
+                        console.error('[compare] bad payload for key', key, data);
+                        _comparisonRunsState.lastFetchError = _comparisonRunsState.lastFetchError || {};
+                        _comparisonRunsState.lastFetchError[key] = 'bad-payload';
+                        return null;
+                    }
                     const parsed = (typeof parseAllData === 'function') ? parseAllData(data.data) : null;
-                    if (!parsed) return null;
+                    if (!parsed) {
+                        console.error('[compare] parseAllData returned null for key', key);
+                        _comparisonRunsState.lastFetchError = _comparisonRunsState.lastFetchError || {};
+                        _comparisonRunsState.lastFetchError[key] = 'parse-failed';
+                        return null;
+                    }
+                    if (_comparisonRunsState.lastFetchError) delete _comparisonRunsState.lastFetchError[key];
                     const entry = { key, profile, parsed, label: _compactRunLabel(profile) };
                     _comparisonRunsState.runsByKey[key] = entry;
+                    console.info('[compare] loaded run', key, '— demographic categories:', Object.keys(parsed.demographics || {}));
                     return entry;
                 } catch (e) {
-                    console.warn('Compare: failed to fetch run', key, e);
+                    console.error('[compare] exception fetching run', key, e);
+                    _comparisonRunsState.lastFetchError = _comparisonRunsState.lastFetchError || {};
+                    _comparisonRunsState.lastFetchError[key] = 'exception';
                     return null;
                 } finally {
                     delete _comparisonRunsState.inFlight[key];
@@ -54512,8 +54550,8 @@
                 'border-radius:8px',
                 'box-shadow:0 10px 30px rgba(0,0,0,0.45)',
                 'padding:0.6rem 0.75rem',
-                'min-width:240px',
-                'max-width:320px',
+                'min-width:280px',
+                'max-width:380px',
                 'max-height:60vh',
                 'overflow:auto',
                 'font-family:inherit',
@@ -54549,7 +54587,7 @@
 
                 available.forEach(item => {
                     const row = document.createElement('label');
-                    row.style.cssText = 'display:grid;grid-template-columns:18px 1fr auto;column-gap:0.55rem;align-items:center;padding:0.32rem 0.4rem;border-radius:6px;cursor:pointer;font-size:0.85rem;line-height:1.2;';
+                    row.style.cssText = 'display:grid;grid-template-columns:18px 1fr minmax(80px,auto);column-gap:0.55rem;align-items:center;padding:0.32rem 0.4rem;border-radius:6px;cursor:pointer;font-size:0.85rem;line-height:1.2;';
                     row.onmouseenter = function() { row.style.background = 'rgba(124,58,237,0.10)'; };
                     row.onmouseleave = function() { row.style.background = 'transparent'; };
                     const cb = document.createElement('input');
@@ -54569,8 +54607,10 @@
                         const wasChecked = cb.checked;
                         status.textContent = wasChecked ? 'Loading…' : '';
                         status.style.color = 'var(--text-secondary, #9ca3af)';
+                        status.title = '';
                         try {
                             const result = await _toggleComparisonRun(item.key, item.profile, wasChecked);
+                            const errDetail = (_comparisonRunsState.lastFetchError || {})[item.key] || '';
                             if (!wasChecked) {
                                 status.textContent = '';
                             } else if (result && result.ok) {
@@ -54578,14 +54618,22 @@
                             } else if (result && result.reason === 'empty') {
                                 status.textContent = 'No data';
                                 status.style.color = '#fd971f';
+                                status.title = 'Run loaded but produced 0 usable demographic values';
                             } else {
-                                status.textContent = 'Failed';
+                                // Surface HTTP status / parse failure so we
+                                // know whether it's a 404 (key bad), 500 (S3
+                                // error), parse failure, etc. without having
+                                // to dig in DevTools.
+                                const short = errDetail.replace(/^http-/, '').slice(0, 18) || 'err';
+                                status.textContent = 'Failed (' + short + ')';
                                 status.style.color = '#f92672';
+                                status.title = 'See browser console for the full URL + response body.\nKey: ' + item.key;
                                 cb.checked = false;
                             }
                         } catch (e) {
                             status.textContent = 'Failed';
                             status.style.color = '#f92672';
+                            status.title = String(e && e.message || e);
                             cb.checked = !wasChecked;
                         }
                     });
