@@ -17673,11 +17673,6 @@
                             <div style="font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 0.75rem;" id="bpiqDemoNote">Side-by-side breakdowns of consumers who had a brand touchpoint during the pre-event window vs the event + attribution window. Each demographic field rebases to 100% on rows with non-empty values.</div>
                             <div id="bpiqDemographics"></div>
                         </div>
-                        <div class="tab-section" style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 1.5rem; margin-bottom: 1.5rem;">
-                            <h3 style="margin: 0 0 0.5rem;">💬 Sentiment Around the Brand</h3>
-                            <div style="font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 0.75rem;" id="bpiqSentNote">Top brand-tagged URLs are classified as positive / neutral / negative via a fast keyword pass and refined by an LLM when available. Net sentiment score = (positive − negative) ÷ total, weighted by hits.</div>
-                            <div id="bpiqSentiment"></div>
-                        </div>
                         <div class="tab-section" style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 1.5rem;">
                             <h3 style="margin: 0 0 0.75rem;">🔗 Top 10 Brand Properties</h3>
                             <div id="bpiqTopProps"></div>
@@ -29840,9 +29835,6 @@
             // Demographics (pre vs post brand engagers)
             _bpiqRenderDemographics(data.demographics || {});
 
-            // Sentiment
-            _bpiqRenderSentiment(data.sentiment || {});
-
             // 💰 Total Brand Value (hero) + Valuation Breakdown
             _bpiqRenderValuation(data.valuation || {});
 
@@ -30276,97 +30268,6 @@
                      +  '</tbody></table>';
             }
             body.innerHTML = html;
-        }
-
-        // ----- Brand Partnership: sentiment renderer -----
-        var _bpiqSentChartInst = null;
-        function _bpiqRenderSentiment(s) {
-            var el = document.getElementById('bpiqSentiment');
-            if (!el) return;
-            if (!s.enabled) {
-                el.innerHTML = '<div style="padding:0.75rem;color:var(--text-secondary);font-size:13px;">Not enough brand-tagged URLs to classify sentiment.</div>';
-                return;
-            }
-            var pre  = s.pre  || { positive: 0, neutral: 0, negative: 0 };
-            var post = s.post || { positive: 0, neutral: 0, negative: 0 };
-            var shiftSign = (s.net_shift || 0) > 0 ? '+' : '';
-            var shiftColor = (s.net_shift || 0) > 0 ? '#10b981'
-                            : (s.net_shift || 0) < 0 ? '#ef4444' : 'var(--text-secondary)';
-
-            var html = '';
-            html += '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:0.75rem;margin-bottom:1rem;">';
-            html +=   '<div style="padding:0.85rem;border:1px solid var(--border-color);border-radius:8px;text-align:center;">'
-                    +   '<div style="font-size:0.7rem;color:var(--text-secondary);text-transform:uppercase;">Pre Net Sentiment</div>'
-                    +   '<div style="font-size:1.4rem;font-weight:700;">' + (s.pre_net_score || 0).toFixed(1) + '</div>'
-                    + '</div>';
-            html +=   '<div style="padding:0.85rem;border:1px solid var(--border-color);border-radius:8px;text-align:center;">'
-                    +   '<div style="font-size:0.7rem;color:var(--text-secondary);text-transform:uppercase;">Post Net Sentiment</div>'
-                    +   '<div style="font-size:1.4rem;font-weight:700;">' + (s.post_net_score || 0).toFixed(1) + '</div>'
-                    + '</div>';
-            html +=   '<div style="padding:0.85rem;border:1px solid ' + shiftColor + ';border-radius:8px;text-align:center;">'
-                    +   '<div style="font-size:0.7rem;color:var(--text-secondary);text-transform:uppercase;">Sentiment Shift</div>'
-                    +   '<div style="font-size:1.4rem;font-weight:700;color:' + shiftColor + ';">' + shiftSign + (s.net_shift || 0).toFixed(1) + '</div>'
-                    + '</div>';
-            html += '</div>';
-
-            html += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;align-items:start;">';
-            html += '<div style="position:relative;height:260px;"><canvas id="bpiqSentChart"></canvas></div>';
-            var _renderSentList = function(items) {
-                if (!items || !items.length) {
-                    return '<div style="color:var(--text-secondary);font-size:12px;margin-top:0.4rem;">None detected</div>';
-                }
-                var _esc = function(s) {
-                    return String(s == null ? '' : s)
-                        .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-                };
-                return '<ul style="margin:0.4rem 0 0;padding-left:1.1rem;font-size:12px;">'
-                    + items.slice(0,8).map(function(u) {
-                        var summary = _esc(u.summary || u.common_name || 'Brand page');
-                        return '<li>' + summary + '</li>';
-                      }).join('') + '</ul>';
-            };
-            html += '<div>'
-                  + '<div style="margin-bottom:0.75rem;"><strong style="color:#10b981;">Top Positive URLs</strong>'
-                  + _renderSentList(s.top_positive) + '</div>'
-                  + '<div style="margin-bottom:0.75rem;"><strong style="color:#94a3b8;">Top Neutral URLs</strong>'
-                  + _renderSentList(s.top_neutral) + '</div>'
-                  + '<div><strong style="color:#ef4444;">Top Negative URLs</strong>'
-                  + _renderSentList(s.top_negative) + '</div>'
-                  + '</div>';
-            html += '</div>';
-            el.innerHTML = html;
-
-            // Use US-projected counts for the chart so all dashboard
-            // numbers are reported in gen-pop units. Falls back to raw
-            // panel hits if projection isn't present.
-            var preProj  = s.pre_projected  || pre;
-            var postProj = s.post_projected || post;
-
-            var canvas = document.getElementById('bpiqSentChart');
-            if (canvas && typeof Chart !== 'undefined') {
-                if (_bpiqSentChartInst) _bpiqSentChartInst.destroy();
-                _bpiqSentChartInst = new Chart(canvas.getContext('2d'), {
-                    type: 'bar',
-                    data: {
-                        labels: ['Positive', 'Neutral', 'Negative'],
-                        datasets: [
-                            { label: 'Pre',  data: [preProj.positive  || 0, preProj.neutral  || 0, preProj.negative  || 0], backgroundColor: '#6366f1', borderWidth: 0, borderRadius: 6 },
-                            { label: 'Post', data: [postProj.positive || 0, postProj.neutral || 0, postProj.negative || 0], backgroundColor: '#10b981', borderWidth: 0, borderRadius: 6 }
-                        ]
-                    },
-                    options: {
-                        responsive: true, maintainAspectRatio: false,
-                        scales: {
-                            y: { beginAtZero: true, grid: { color: 'rgba(255,255,255,0.06)' }, ticks: { color: '#aaa', font: { size: 11 }, callback: function(v) { return Number(v).toLocaleString(); } } },
-                            x: { grid: { display: false }, ticks: { color: '#e8e8e8', font: { size: 11 } } }
-                        },
-                        plugins: {
-                            legend:  { position: 'bottom', labels: { color: '#e8e8e8', font: { size: 11 } } },
-                            tooltip: { callbacks: { label: function(ctx) { return ctx.dataset.label + ': ' + Number(ctx.parsed.y).toLocaleString() + ' US users'; } } }
-                        }
-                    }
-                });
-            }
         }
 
         // ====================================================================
