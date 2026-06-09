@@ -357,13 +357,25 @@ def blue_iq_cache_key(filters: dict) -> str:
             "Other Policy"). Added strict mode and switched per-cell
             aggregation in _compute_issue_geo to use it. v9 payloads
             carry the bogus uniform counts; bump invalidates.
+     v11 — 2026-06-09: "Issue → next action flow" thin-cross-signal
+            branch is now agent-built. When the panel cross only
+            surfaces a single issue bucket, the card renders a
+            multi-step funnel (SEARCHED → NEXT → THEN) from
+            path_discovery + agent-supplied where_to_buy /
+            creative_direction from playbook_discovery, instead of
+            a single 100% bar with the generic static copy. Also
+            defensively merges issue_journey_cross buckets into the
+            agent inputs so the thin branch always has a researched
+            path/playbook entry to look up. v10 payloads pre-date
+            both behaviors; bump invalidates so the thin branch
+            picks up the agent payload on next request.
     """
     canonical = json.dumps({
         'party':     filters.get('party') or 'All',
         'geo_type':  filters.get('geo_type') or 'National',
         'geo_value': filters.get('geo_value') or '',
         'lookback':  int(filters.get('lookback_days') or DEFAULT_LOOKBACK_DAYS),
-        'version':   10,
+        'version':   11,
     }, sort_keys=True, separators=(',', ':'))
     return hashlib.sha256(canonical.encode('utf-8')).hexdigest()
 
@@ -2396,6 +2408,15 @@ def compute_panel_view(filters: dict, *, force_refresh: bool = False) -> dict:
         from path_discovery import discover_issue_paths
         _issue_names = [b.get('bucket') for b in (issue_buckets or [])[:12]
                           if b and b.get('bucket')]
+        # Defensive merge: any bucket that appears in issue_journey_cross
+        # but NOT in the top-12 issue_buckets (e.g. the single bucket the
+        # thin-cross-signal branch will render) still gets researched, so
+        # the frontend's thin-branch agent lookup never misses.
+        _cross_names = [c.get('bucket') for c in (issue_journey_cross or [])
+                          if c and c.get('bucket')]
+        for _name in _cross_names:
+            if _name and _name not in _issue_names:
+                _issue_names.append(_name)
         issue_paths_agent = discover_issue_paths(
             f['geo_type'], f['geo_value'], _issue_names
         ) if _issue_names else []
@@ -2419,11 +2440,23 @@ def compute_panel_view(filters: dict, *, force_refresh: bool = False) -> dict:
         from playbook_discovery import discover_creative_playbook
         _cross_by_issue = {(c.get('bucket') or ''): c
                             for c in (issue_journey_cross or [])}
-        _playbook_ctx: list[dict] = []
+        # Same defensive merge as the path agent: include any bucket
+        # that appears in the cross but not in the top-12 panel
+        # buckets, so the thin-cross single-issue UI branch always has
+        # an agent-supplied placement + creative recommendation.
+        _seen_buckets: set[str] = set()
+        _ordered_buckets: list[str] = []
         for _b in (issue_buckets or [])[:12]:
-            _bucket = _b.get('bucket') if _b else None
-            if not _bucket:
-                continue
+            _name = _b.get('bucket') if _b else None
+            if _name and _name not in _seen_buckets:
+                _seen_buckets.add(_name)
+                _ordered_buckets.append(_name)
+        for _name in _cross_by_issue.keys():
+            if _name and _name not in _seen_buckets:
+                _seen_buckets.add(_name)
+                _ordered_buckets.append(_name)
+        _playbook_ctx: list[dict] = []
+        for _bucket in _ordered_buckets[:12]:
             _cross = _cross_by_issue.get(_bucket) or {}
             _dests = sorted(
                 [d for d in (_cross.get('destinations') or [])

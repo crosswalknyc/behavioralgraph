@@ -24652,7 +24652,7 @@
                   +     'Ribbon width \u221d panelists. <strong>Click any flow, issue node, or destination node</strong> to pin a slice — '
                   +     'the recommendation panel below updates with the matching placement and creative direction.'
                   +   '</div>'
-                  +   _renderBlueIQIssueJourneyCross(cross)
+                  +   _renderBlueIQIssueJourneyCross(cross, cards.issue_paths_agent || [], cards.playbook_agent || [])
                   + '</div>'
                   + '</div>';
 
@@ -25974,7 +25974,7 @@
         }
         window._bqRenderDayInLife = _bqRenderDayInLife;
 
-        function _renderBlueIQIssueJourneyCross(cross) {
+        function _renderBlueIQIssueJourneyCross(cross, issuePathsAgent, playbookAgent) {
             if (!cross || !cross.length) {
                 return '<div class="bq-thin-data-card">'
                      + '<div class="bq-thin-data-icon">\u26a0\ufe0f</div>'
@@ -25988,51 +25988,122 @@
             var activeDest = window.__blueIQ && window.__blueIQ.activeDest;
             var activeIssue = window.__blueIQ && window.__blueIQ.activeIssue;
 
+            // Index agent payloads by lowercase bucket name so the thin
+            // branch (and any future branches) can look up the agent-
+            // researched path + playbook for the issue at hand without
+            // re-scanning the arrays.
+            var pathsByBucket = {};
+            (issuePathsAgent || []).forEach(function(p) {
+                if (p && p.bucket) pathsByBucket[p.bucket.toLowerCase()] = p;
+            });
+            var playByBucket = {};
+            (playbookAgent || []).forEach(function(p) {
+                if (p && p.bucket) playByBucket[p.bucket.toLowerCase()] = p;
+            });
+
             // Thin-data case: when the cross only has 1 issue bucket, the
             // Sankey degenerates to a single ribbon and feels broken. Show
-            // a focused single-issue card with the recommendation panel
-            // instead — it tells the user something useful without the
-            // bare-Sankey weirdness.
+            // a focused single-issue card built from agent web-research
+            // (path_discovery + playbook_discovery) instead of the
+            // single panel-derived destination at 100%. Panel-measured
+            // signals (cohort size, top terms) are still surfaced as
+            // grounding context, but the funnel + placement + creative
+            // come from the agent so the card always tells a multi-step
+            // story even when the panel cross is thin.
             if (cross.length === 1) {
                 var only = cross[0];
-                var dests = (only.destinations || []).slice().sort(function(a, b) {
-                    return (b.panelists || 0) - (a.panelists || 0);
-                });
-                var dom = dests.filter(function(d) {
-                    return d.destination !== 'abandoned' && d.destination !== 'other';
-                })[0] || dests[0] || {};
-                var play = BLUE_IQ_CREATIVE_PLAYS[dom.destination] || BLUE_IQ_CREATIVE_PLAYS.other;
+                var bucketKey = (only.bucket || '').toLowerCase();
+                var agentPath = pathsByBucket[bucketKey];
+                var agentPlay = playByBucket[bucketKey];
                 var topTerms = (only.top_terms || []).map(_bqStripDates).filter(Boolean).slice(0, 6).join(' \u00b7 ');
                 var totalUS = _bqNum((+only.total_panelists || 0) * factor);
 
-                // Mini funnel ribbon for this one issue.
-                var maxP = Math.max.apply(null, dests.map(function(d) { return +d.panelists || 0; })) || 1;
-                var miniCols = dests.map(function(d) {
-                    var meta = BLUE_IQ_JOURNEY_LABELS[d.destination] || { label: d.destination };
-                    var color = BLUE_IQ_DEST_PALETTE[d.destination] || '#64748b';
-                    var heightPx = Math.max(8, Math.round(140 * ((+d.panelists || 0) / maxP)));
-                    var us = _bqNum((+d.panelists || 0) * factor);
-                    return '<div class="bq-funnel-col bq-funnel-col-dest" title="' + _bqEscape(meta.label + ': ' + _bqPct(d.share || 0) + ' \u00b7 \u2248' + us + ' US adults') + '">'
-                         +   '<div class="bq-funnel-bar" style="height: 160px;">'
-                         +     '<div class="bq-funnel-bar-spacer" style="height: ' + (160 - heightPx) + 'px;"></div>'
-                         +     '<div class="bq-funnel-bar-fill" style="height: ' + heightPx + 'px; background: linear-gradient(180deg, ' + color + ' 0%, ' + color + 'cc 100%);"></div>'
-                         +     '<div class="bq-funnel-bar-pct">' + _bqPct(d.share || 0) + '</div>'
-                         +   '</div>'
-                         +   '<div class="bq-funnel-col-foot">'
-                         +     '<div class="bq-funnel-col-name">' + _bqEscape(meta.label) + '</div>'
-                         +     '<div class="bq-funnel-col-sub">\u2248' + us + ' US adults</div>'
-                         +   '</div>'
-                         + '</div>';
-                }).join('');
+                // Static-fallback play (used only if the playbook agent
+                // didn't return one for this bucket — e.g. agent
+                // timed out, schema mismatch, or this bucket is new).
+                var fallbackDest = (only.destinations || []).slice()
+                    .sort(function(a, b) { return (+b.panelists || 0) - (+a.panelists || 0); })
+                    .filter(function(d) { return d.destination !== 'abandoned' && d.destination !== 'other'; })[0]
+                    || (only.destinations || [])[0] || {};
+                var staticPlay = BLUE_IQ_CREATIVE_PLAYS[fallbackDest.destination] || BLUE_IQ_CREATIVE_PLAYS.other;
+                var placementText = (agentPlay && agentPlay.where_to_buy)       || staticPlay.placement;
+                var creativeText  = (agentPlay && agentPlay.creative_direction) || staticPlay.creative;
+                var playRationale = (agentPlay && agentPlay.rationale)          || '';
+                var playSource    = (agentPlay && agentPlay.where_to_buy)       ? 'agent' : 'static';
+
+                // Build the multi-step "after the search" mini-funnel.
+                // Agent path: cohort 100% -> next_action (next_share) ->
+                //             follow_up_action (follow_up_share).
+                // Fallback: per-destination panel column funnel (original
+                // behavior) so a missing agent path doesn't blank the card.
+                var miniCols;
+                var funnelSource;
+                if (agentPath && agentPath.next_action) {
+                    var s1Pct = 1.0;
+                    var s2Pct = Math.max(0.05, Math.min(0.95, +agentPath.next_share || 0));
+                    var s3Pct = Math.max(0.02, Math.min(0.95, +agentPath.follow_up_share || 0));
+                    var s1Color = '#a855f7';
+                    var s2Color = '#60a5fa';
+                    var s3Color = '#34d399';
+                    var steps = [
+                        { label: 'SEARCHED ' + only.bucket, sub: 'cohort', pct: s1Pct, color: s1Color, h: 160 },
+                        { label: 'NEXT \u2192 ' + agentPath.next_action,        sub: 'within ' + _bqPct(s2Pct) + ' of cohort',     pct: s2Pct, color: s2Color, h: Math.max(20, Math.round(160 * s2Pct)) },
+                        { label: 'THEN \u2192 ' + agentPath.follow_up_action,   sub: 'within ' + _bqPct(s3Pct) + ' of cohort',     pct: s3Pct, color: s3Color, h: Math.max(14, Math.round(160 * s3Pct)) },
+                    ];
+                    miniCols = steps.map(function(st) {
+                        return '<div class="bq-funnel-col bq-funnel-col-dest" title="' + _bqEscape(st.label + ' \u00b7 ' + _bqPct(st.pct)) + '">'
+                             +   '<div class="bq-funnel-bar" style="height: 160px;">'
+                             +     '<div class="bq-funnel-bar-spacer" style="height: ' + (160 - st.h) + 'px;"></div>'
+                             +     '<div class="bq-funnel-bar-fill" style="height: ' + st.h + 'px; background: linear-gradient(180deg, ' + st.color + ' 0%, ' + st.color + 'cc 100%);"></div>'
+                             +     '<div class="bq-funnel-bar-pct">' + _bqPct(st.pct) + '</div>'
+                             +   '</div>'
+                             +   '<div class="bq-funnel-col-foot">'
+                             +     '<div class="bq-funnel-col-name">' + _bqEscape(st.label) + '</div>'
+                             +     '<div class="bq-funnel-col-sub">' + _bqEscape(st.sub) + '</div>'
+                             +   '</div>'
+                             + '</div>';
+                    }).join('');
+                    funnelSource = 'agent';
+                } else {
+                    var dests = (only.destinations || []).slice().sort(function(a, b) {
+                        return (b.panelists || 0) - (a.panelists || 0);
+                    });
+                    var maxP = Math.max.apply(null, dests.map(function(d) { return +d.panelists || 0; })) || 1;
+                    miniCols = dests.map(function(d) {
+                        var meta = BLUE_IQ_JOURNEY_LABELS[d.destination] || { label: d.destination };
+                        var color = BLUE_IQ_DEST_PALETTE[d.destination] || '#64748b';
+                        var heightPx = Math.max(8, Math.round(140 * ((+d.panelists || 0) / maxP)));
+                        var us = _bqNum((+d.panelists || 0) * factor);
+                        return '<div class="bq-funnel-col bq-funnel-col-dest" title="' + _bqEscape(meta.label + ': ' + _bqPct(d.share || 0) + ' \u00b7 \u2248' + us + ' US adults') + '">'
+                             +   '<div class="bq-funnel-bar" style="height: 160px;">'
+                             +     '<div class="bq-funnel-bar-spacer" style="height: ' + (160 - heightPx) + 'px;"></div>'
+                             +     '<div class="bq-funnel-bar-fill" style="height: ' + heightPx + 'px; background: linear-gradient(180deg, ' + color + ' 0%, ' + color + 'cc 100%);"></div>'
+                             +     '<div class="bq-funnel-bar-pct">' + _bqPct(d.share || 0) + '</div>'
+                             +   '</div>'
+                             +   '<div class="bq-funnel-col-foot">'
+                             +     '<div class="bq-funnel-col-name">' + _bqEscape(meta.label) + '</div>'
+                             +     '<div class="bq-funnel-col-sub">\u2248' + us + ' US adults</div>'
+                             +   '</div>'
+                             + '</div>';
+                    }).join('');
+                    funnelSource = 'panel';
+                }
+
+                var agentBadge = (funnelSource === 'agent')
+                    ? ' <span class="bq-path-agent" title="Researched by the discovery agent (gpt-4o + web search)' + (agentPath.rationale ? ' \u00b7 ' + agentPath.rationale : '') + '">agent-researched</span>'
+                    : '';
+                var playBadge = (playSource === 'agent')
+                    ? ' <span class="bq-path-agent" title="Researched by the discovery agent (gpt-4o + web search)' + (playRationale ? ' \u00b7 ' + playRationale : '') + '">agent-researched</span>'
+                    : '';
 
                 return '<div class="bq-thin-note">'
                      +   '<strong>Limited cross signal</strong> in this window. '
                      +   'Of the panelists who hit a political-media site, only a small subset also searched a policy-classified term during the same window. '
-                     +   'This is the one issue we surfaced; the broader voter-journey pattern is in the card above.'
+                     +   'The funnel and placement recommendation below are researched by the discovery agent (gpt-4o + web search), grounded in the issue and the cohort\u2019s panel signal.'
                      + '</div>'
                      + '<div class="bq-thin-issue-card">'
                      +   '<div class="bq-thin-issue-head">'
-                     +     '<div class="bq-thin-issue-name">' + _bqEscape(only.bucket) + '</div>'
+                     +     '<div class="bq-thin-issue-name">' + _bqEscape(only.bucket) + agentBadge + '</div>'
                      +     '<div class="bq-thin-issue-stats">\u2248' + totalUS + ' US adults engaged</div>'
                      +   '</div>'
                      +   '<div class="bq-funnel-ribbon" style="margin-top: 0.5rem;">'
@@ -26040,8 +26111,8 @@
                      +   '</div>'
                      +   (topTerms ? '<div class="bq-reco-terms" style="margin-top:0.6rem;"><em>Top terms in this issue:</em> ' + _bqEscape(topTerms) + '</div>' : '')
                      +   '<div class="bq-reco-play" style="margin-top:0.55rem;">'
-                     +     '<div class="bq-reco-play-row"><span class="bq-reco-play-label" style="color:#fbbf24;">Where to place:</span> ' + _bqEscape(play.placement) + '</div>'
-                     +     '<div class="bq-reco-play-row"><span class="bq-reco-play-label" style="color:#34d399;">Creative direction:</span> ' + _bqEscape(play.creative) + '</div>'
+                     +     '<div class="bq-reco-play-row"><span class="bq-reco-play-label" style="color:#fbbf24;">Where to place:</span> ' + _bqEscape(placementText) + playBadge + '</div>'
+                     +     '<div class="bq-reco-play-row"><span class="bq-reco-play-label" style="color:#34d399;">Creative direction:</span> ' + _bqEscape(creativeText) + '</div>'
                      +   '</div>'
                      + '</div>'
                      + _bqJourneyLegend(activeDest);
