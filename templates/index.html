@@ -50440,10 +50440,12 @@
                 btn.style.display = missingCount > 0 ? '' : 'none';
             }
             if (sourceEl) {
+                // The admin-override caption ("Episode numbers and release
+                // dates were customized in Admin.") is intentionally not
+                // surfaced — the override flag (_episode_dates_admin_override)
+                // still flows through in the API payload, just not shown in
+                // the UI. The agent-search note is still surfaced.
                 const notes = [];
-                if (data && data._episode_dates_admin_override) {
-                    notes.push('Episode numbers and release dates were customized in Admin.');
-                }
                 if (data && data._episode_dates_agent_note) {
                     notes.push(data._episode_dates_agent_note);
                 }
