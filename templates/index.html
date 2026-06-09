@@ -25101,15 +25101,24 @@
             }
 
             if (!rows || !rows.length) {
-                var rawCount = (meta && meta.raw_trends_count) || 0;
-                var hint;
-                if (rawCount > 0) {
-                    hint = 'Google Trends returned ' + rawCount + ' trending searches for this geo, but none cleared the political filter (politician-name match, civic keyword, or political related news). Try a wider geo or a different lookback.';
-                } else {
-                    hint = 'Google Trends returned no data for this geo right now (the endpoint sometimes throttles or comes back empty). The cube refreshes hourly \u2014 try again in a few minutes, or pick a different geography.';
-                }
-                body.innerHTML = '<div style="color: var(--text-secondary); font-size: 0.85rem; padding: 0.7rem 0;">' + hint + '</div>';
+                // Backend now falls back to raw Google Trends when the
+                // political filter empties the list, so reaching here
+                // means Google Trends itself returned nothing.
+                body.innerHTML = '<div style="color: var(--text-secondary); font-size: 0.85rem; padding: 0.7rem 0;">'
+                    + 'Google Trends returned no data for this geo right now (the endpoint sometimes throttles or comes back empty). The cube refreshes hourly \u2014 try again in a few minutes, or pick a different geography.'
+                    + '</div>';
                 return;
+            }
+            // When the backend fell back to unfiltered Trends (no terms
+            // cleared the political filter for this slice), show a tiny
+            // dim hint so the user knows the list is "what's hot here"
+            // rather than "what's politically hot here" — but still
+            // render the rows so the card never goes empty.
+            var fallbackNote = '';
+            if (meta && meta.used_fallback) {
+                fallbackNote = '<div style="color: var(--text-secondary); font-size: 0.72rem; padding: 0 0 0.5rem 0; opacity: 0.75;">'
+                             + 'No purely political topics trending here right now \u2014 showing top Google Trends for this geo.'
+                             + '</div>';
             }
 
             var maxScore = Math.max.apply(null, rows.map(function(r) { return +r.score || 0; })) || 1;
@@ -25135,7 +25144,8 @@
                 return String(s);
             }
 
-            body.innerHTML = '<div class="bq-trending-scroll"><div class="bq-trending-grid">'
+            body.innerHTML = fallbackNote
+                + '<div class="bq-trending-scroll"><div class="bq-trending-grid">'
                 + rows.map(function(r, idx) {
                     var rel = (r.related || []).map(_bqStripDates).filter(Boolean).slice(0, 5);
                     var relHtml = rel.length

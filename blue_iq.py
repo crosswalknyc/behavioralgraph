@@ -339,13 +339,22 @@ def blue_iq_cache_key(filters: dict) -> str:
             current web research. v7 payloads don't carry the field
             and the card would still show the static copy; bump
             invalidates them.
+      v9 — 2026-06-09: Trending card now falls back to raw Google
+            Trends rows when the political filter empties the list
+            (common for small-DMA / off-cycle geos where Trends is
+            dominated by sports / weather / local human-interest).
+            Added `used_fallback` to trending_meta and a sentinel
+            `why_political = 'unfiltered'` on fallback rows. v8
+            payloads only carry filtered-or-empty trending_local so
+            the card would still render the "none cleared the
+            political filter" placeholder; bump invalidates.
     """
     canonical = json.dumps({
         'party':     filters.get('party') or 'All',
         'geo_type':  filters.get('geo_type') or 'National',
         'geo_value': filters.get('geo_value') or '',
         'lookback':  int(filters.get('lookback_days') or DEFAULT_LOOKBACK_DAYS),
-        'version':   8,
+        'version':   9,
     }, sort_keys=True, separators=(',', ':'))
     return hashlib.sha256(canonical.encode('utf-8')).hexdigest()
 
@@ -2252,13 +2261,34 @@ def compute_panel_view(filters: dict, *, force_refresh: bool = False) -> dict:
     trends_state_label = trends_state or 'United States'
     raw_trends = (external or {}).get('google_trends_top') or []
     pol_set = set(_load_politicians())
-    trending_local = _filter_trends_to_political(raw_trends, pol_set)[:25]
+    trending_political = _filter_trends_to_political(raw_trends, pol_set)[:25]
+    # Defensive fallback: when the political filter rejects every
+    # trending term for a slice (common for small-DMA / off-cycle
+    # geos where the trending topics are sports, weather, or local
+    # human-interest), surface the raw Google Trends list instead of
+    # showing an empty "nothing cleared the filter" placeholder.
+    # The card is still labeled "Trending political searches" so we
+    # tag fallback rows with `why_political = 'unfiltered'` —
+    # frontend treats this as a no-chip row but otherwise renders
+    # the term, traffic, and related queries normally.
+    used_fallback = False
+    if trending_political:
+        trending_local = trending_political
+    elif raw_trends:
+        trending_local = [
+            {**row, 'why_political': 'unfiltered'}
+            for row in raw_trends[:25]
+        ]
+        used_fallback = True
+    else:
+        trending_local = []
     trending_meta = {
         'geo_label':         trends_state_label,
         'geo_type':          f['geo_type'],
         'geo_value':         f['geo_value'],
         'raw_trends_count':  len(raw_trends),
-        'kept_after_filter': len(trending_local),
+        'kept_after_filter': len(trending_political),
+        'used_fallback':     used_fallback,
         'is_state_local':    trends_state is not None,
         'dma_resolved_via':  (DMA_TO_STATE.get(f['geo_value']) if f['geo_type'] == 'DMA' else None),
     }
