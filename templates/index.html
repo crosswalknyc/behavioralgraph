@@ -17599,7 +17599,7 @@
                         <div id="bpiqKpiAndLiftWrap" style="display: flex; gap: 1.5rem; margin-bottom: 1.5rem; align-items: stretch;">
                             <div style="flex: 1; display: flex; flex-direction: column; gap: 1.5rem;">
                                 <div style="background: linear-gradient(135deg, rgba(200,230,0,0.06), rgba(6,182,212,0.06)); border: 1px solid var(--border-color); border-radius: 14px; padding: 1.5rem 1.5rem 0.75rem;">
-                                    <div style="font-size: 0.95rem; font-weight: 800; color: #c8e600; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 1rem;">TICKET PURCHASERS</div>
+                                    <div style="font-size: 0.95rem; font-weight: 800; color: #c8e600; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 1rem;">TARGET</div>
                                     <div class="bpiq-kpi-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 1rem;">
                                         <div class="tab-section" style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 1.25rem; text-align: center;">
                                             <div style="font-size: 0.7rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em;">Users</div>
@@ -17621,7 +17621,7 @@
                                 </div>
                                 <!-- Gen Pop / control-cohort mirror row -->
                                 <div id="bpiqGenPopKpiRow" style="display: none; background: linear-gradient(135deg, rgba(200,230,0,0.04), rgba(168,85,247,0.06)); border: 1px solid var(--border-color); border-radius: 14px; padding: 1.5rem 1.5rem 0.75rem;">
-                                    <div style="font-size: 0.95rem; font-weight: 800; color: #c8e600; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 1rem;">GEN POP CONTROL</div>
+                                    <div style="font-size: 0.95rem; font-weight: 800; color: #c8e600; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 1rem;">CONTROL</div>
                                     <div class="bpiq-kpi-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 1rem;">
                                         <div class="tab-section" style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 1.25rem; text-align: center;">
                                             <div style="font-size: 0.7rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em;">Users</div>
@@ -17648,9 +17648,9 @@
                                     <div style="font-size: 1.2rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.25rem; font-weight: 400;">Brand Lift</div>
                                     <div id="bpiqNetLiftValue" style="font-size: 1.25rem; font-weight: 800; color: #c8e600; margin-bottom: 0.75rem;"></div>
                                     <div style="font-size: 0.55rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em; line-height: 1.6;">
-                                        <div>Ticket Purchasers</div>
+                                        <div>Target</div>
                                         <div style="color: #c8e600; font-weight: 700;">vs.</div>
-                                        <div>Gen Pop Control</div>
+                                        <div>Control</div>
                                     </div>
                                 </div>
                             </div>
@@ -29737,9 +29737,9 @@
                 return;
             }
             // Convert pp deltas to absolute US-user counts so the cards
-            // are directly comparable to the Ticket Purchasers / Brand
-            // Users KPIs above. Event Brand Users cohort = audience
-            // (ticket purchasers). Gen Pop cohort is size-matched.
+            // are directly comparable to the Target / Brand Users KPIs
+            // above. Event Brand Users cohort = audience (target).
+            // Control cohort is size-matched.
             // Incremental lift in people = event-brand-users people -
             // gen-pop people, which is the partnership-driven
             // incremental brand engagers.
