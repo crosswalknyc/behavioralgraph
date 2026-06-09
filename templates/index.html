@@ -24613,7 +24613,7 @@
                   +   '<div style="font-size: 0.78rem; color: var(--text-secondary); margin-bottom: 0.5rem;">'
                   +     'Most common ordered sequence after a voter searches each top issue. '
                   +     'Step 1 \u00b7 the issue search itself. Step 2 \u00b7 the next action voters typically take. Step 3 \u00b7 the most-common follow-up to that. '
-                  +     'Rows tagged <span class="bq-path-agent">agent-researched</span> were built per-issue by the discovery agent (gpt-4o + web search) grounded in public research (Pew, Knight Foundation, Brennan Center, eMarketer); hover a row for the rationale.'
+                  +     'Per-issue rows are researched by the discovery agent (gpt-4o + web search) grounded in public research (Pew, Knight Foundation, Brennan Center, eMarketer); hover any row for the rationale.'
                   +   '</div>'
                   +   _bqRenderTopPathsAfterIssue(cards.issue_buckets || [], cards.issue_journey_cross || [], cards.voter_journey || [], cards.issue_paths_agent || [])
                   + '</div>'
@@ -24996,16 +24996,19 @@
                               return '<span class="bq-playbook-sample-chip">' + _bqEscape(q) + '</span>';
                             }).join('') + '</div>'
                         : '';
-                    var agentBadge = (play.source === 'agent')
-                        ? '<span class="bq-playbook-agent-chip"' +
-                              (play.rationale ? ' title="' + _bqEscape(play.rationale) + '"' : '') +
-                              '>agent-researched</span>'
+                    // Per user request 2026-06-09: removed the
+                    // visible "AGENT-RESEARCHED" pill. The rationale
+                    // is preserved as a hover-only tooltip on the
+                    // issue name so the "why" is still discoverable
+                    // without the visual noise.
+                    var nameTitleAttr = (play.source === 'agent' && play.rationale)
+                        ? ' title="' + _bqEscape(play.rationale) + '"'
                         : '';
                     return '<div class="bq-playbook-card">'
                          +   '<div class="bq-playbook-head">'
                          +     '<div class="bq-playbook-rank">' + (idx + 1) + '</div>'
                          +     '<div class="bq-playbook-issue">'
-                         +       '<div class="bq-playbook-issue-name">' + _bqEscape(b.bucket) + agentBadge + '</div>'
+                         +       '<div class="bq-playbook-issue-name"' + nameTitleAttr + '>' + _bqEscape(b.bucket) + '</div>'
                          +       '<div class="bq-playbook-issue-stats">' + _bqPct(b.share || 0) + ' of policy searches in this slice</div>'
                          +     '</div>'
                          +   '</div>'
@@ -26078,11 +26081,16 @@
                     funnelSource = 'panel';
                 }
 
-                var agentBadge = (funnelSource === 'agent')
-                    ? ' <span class="bq-path-agent" title="Researched by the discovery agent (gpt-4o + web search)' + (agentPath.rationale ? ' \u00b7 ' + agentPath.rationale : '') + '">agent-researched</span>'
+                // Per user request 2026-06-09: removed the visible
+                // "AGENT-RESEARCHED" pills. Rationales are kept as
+                // hover-only tooltips on the issue-name + the
+                // "Where to place" row so the "why" stays
+                // discoverable without the visual chip.
+                var nameTitleAttr = (funnelSource === 'agent' && agentPath && agentPath.rationale)
+                    ? ' title="' + _bqEscape(agentPath.rationale) + '"'
                     : '';
-                var playBadge = (playSource === 'agent')
-                    ? ' <span class="bq-path-agent" title="Researched by the discovery agent (gpt-4o + web search)' + (playRationale ? ' \u00b7 ' + playRationale : '') + '">agent-researched</span>'
+                var placeTitleAttr = (playSource === 'agent' && playRationale)
+                    ? ' title="' + _bqEscape(playRationale) + '"'
                     : '';
 
                 return '<div class="bq-thin-note">'
@@ -26092,7 +26100,7 @@
                      + '</div>'
                      + '<div class="bq-thin-issue-card">'
                      +   '<div class="bq-thin-issue-head">'
-                     +     '<div class="bq-thin-issue-name">' + _bqEscape(only.bucket) + agentBadge + '</div>'
+                     +     '<div class="bq-thin-issue-name"' + nameTitleAttr + '>' + _bqEscape(only.bucket) + '</div>'
                      +     '<div class="bq-thin-issue-stats">\u2248' + totalUS + ' US adults engaged</div>'
                      +   '</div>'
                      +   '<div class="bq-funnel-ribbon" style="margin-top: 0.5rem;">'
@@ -26100,7 +26108,7 @@
                      +   '</div>'
                      +   (topTerms ? '<div class="bq-reco-terms" style="margin-top:0.6rem;"><em>Top terms in this issue:</em> ' + _bqEscape(topTerms) + '</div>' : '')
                      +   '<div class="bq-reco-play" style="margin-top:0.55rem;">'
-                     +     '<div class="bq-reco-play-row"><span class="bq-reco-play-label" style="color:#fbbf24;">Where to place:</span> ' + _bqEscape(placementText) + playBadge + '</div>'
+                     +     '<div class="bq-reco-play-row"' + placeTitleAttr + '><span class="bq-reco-play-label" style="color:#fbbf24;">Where to place:</span> ' + _bqEscape(placementText) + '</div>'
                      +     '<div class="bq-reco-play-row"><span class="bq-reco-play-label" style="color:#34d399;">Creative direction:</span> ' + _bqEscape(creativeText) + '</div>'
                      +   '</div>'
                      + '</div>'
@@ -26529,7 +26537,10 @@
                     step3Pct        = +agent.follow_up_share || 0;
                     step3Panelists  = Math.round(step2Panelists * (step3Pct / Math.max(step2Pct, 0.01)));
                     step2Color      = '#60a5fa';   // agent-blue accent
-                    sourceBadge     = ' <span class="bq-path-agent" title="Researched by the discovery agent (public sources)">agent-researched</span>';
+                    // Per user request 2026-06-09: removed visible
+                    // "AGENT-RESEARCHED" pill. Rationale stays as
+                    // hover-tooltip on the whole row so the "why" is
+                    // discoverable without the visual chip.
                     if (agent.rationale) {
                         rationaleAttr = ' title="' + _bqEscape(agent.rationale) + '"';
                     }
@@ -54357,16 +54368,71 @@
         }
 
         async function _toggleComparisonRun(key, profile, checked) {
+            let result = { ok: true };
             if (checked) {
                 if (!_comparisonRunsState.selectedKeys.includes(key)) {
                     _comparisonRunsState.selectedKeys.push(key);
                 }
-                await _fetchComparisonRunData(key, profile);
+                const entry = await _fetchComparisonRunData(key, profile);
+                if (!entry) {
+                    // Fetch failed (404, network, bad JSON, etc.). Don't keep
+                    // a dangling selectedKey because applyComparison would
+                    // think the run is "loading" forever.
+                    _comparisonRunsState.selectedKeys = _comparisonRunsState.selectedKeys.filter(k => k !== key);
+                    result = { ok: false, reason: 'fetch' };
+                } else {
+                    // Sanity-check: does this run actually contribute any
+                    // non-zero demographic data once we project it onto the
+                    // current charts' keys? If not, the run is effectively
+                    // empty for comparison purposes (e.g. older CSV with a
+                    // different demographic schema). Keep the selection but
+                    // tell the caller so the popover row can flag it.
+                    const nonZero = _comparisonEntryHasUsableData(entry);
+                    if (!nonZero) result = { ok: false, reason: 'empty' };
+                }
             } else {
                 _comparisonRunsState.selectedKeys = _comparisonRunsState.selectedKeys.filter(k => k !== key);
             }
             _updateCompareDateRangesButtonBadge();
             applyComparisonRunsToDashboardCharts();
+            return result;
+        }
+
+        // Normalize a demographic-bucket key for fuzzy lookup so the same
+        // bucket resolves across runs even when casing or whitespace differs
+        // (e.g. "Hispanic or Latino" vs "HISPANIC OR LATINO", "65 or Older"
+        // vs "65 OR OLDER"). Used by both the apply helper and the empty-
+        // data sanity check.
+        function _normDemoKey(k) {
+            if (k == null) return '';
+            return String(k).trim().toLowerCase().replace(/\s+/g, ' ');
+        }
+        function _buildDemoLookup(dict) {
+            const out = {};
+            if (!dict || typeof dict !== 'object') return out;
+            for (const [k, v] of Object.entries(dict)) {
+                out[_normDemoKey(k)] = v;
+            }
+            return out;
+        }
+
+        // True if a fetched comparison run yields at least one non-zero
+        // value when projected onto any of the live demographic charts'
+        // current key order. This catches "fetch succeeded but the run has
+        // an incompatible demographic schema" so we can flag it in the UI
+        // instead of silently rendering invisible zero-height bars.
+        function _comparisonEntryHasUsableData(entry) {
+            if (!entry || !entry.parsed || !entry.parsed.demographics) return false;
+            if (typeof charts === 'undefined' || !charts) return true; // be permissive if charts aren't up yet
+            const demoCats = ['age', 'gender', 'ethnicity', 'income', 'education', 'relationship', 'sexual_orientation', 'parental_status', 'occupation'];
+            for (const cat of demoCats) {
+                const dict = entry.parsed.demographics[cat];
+                if (!dict || typeof dict !== 'object') continue;
+                for (const v of Object.values(dict)) {
+                    if (typeof v === 'number' && isFinite(v) && v > 0) return true;
+                }
+            }
+            return false;
         }
 
         function _clearAllComparisonRuns() {
@@ -54448,30 +54514,43 @@
 
                 available.forEach(item => {
                     const row = document.createElement('label');
-                    row.style.cssText = 'display:flex;align-items:center;gap:0.5rem;padding:0.35rem 0.25rem;border-radius:6px;cursor:pointer;font-size:0.85rem;';
+                    row.style.cssText = 'display:grid;grid-template-columns:18px 1fr auto;column-gap:0.55rem;align-items:center;padding:0.32rem 0.4rem;border-radius:6px;cursor:pointer;font-size:0.85rem;line-height:1.2;';
                     row.onmouseenter = function() { row.style.background = 'rgba(124,58,237,0.10)'; };
                     row.onmouseleave = function() { row.style.background = 'transparent'; };
                     const cb = document.createElement('input');
                     cb.type = 'checkbox';
                     cb.setAttribute('data-cmp-key', item.key);
                     cb.checked = selected.has(item.key);
-                    cb.style.cssText = 'accent-color:#7c3aed;cursor:pointer;';
+                    cb.style.cssText = 'accent-color:#7c3aed;cursor:pointer;width:14px;height:14px;margin:0;justify-self:center;';
                     const lbl = document.createElement('span');
                     lbl.textContent = item.label;
-                    lbl.style.cssText = 'flex:1;color:var(--text-primary, #e6e6e6);';
+                    lbl.style.cssText = 'color:var(--text-primary, #e6e6e6);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;';
                     const status = document.createElement('span');
-                    status.style.cssText = 'font-size:0.7rem;color:var(--text-secondary, #9ca3af);';
+                    status.style.cssText = 'font-size:0.68rem;color:var(--text-secondary, #9ca3af);justify-self:end;min-width:3.5rem;text-align:right;';
                     row.appendChild(cb);
                     row.appendChild(lbl);
                     row.appendChild(status);
                     cb.addEventListener('change', async function() {
                         const wasChecked = cb.checked;
                         status.textContent = wasChecked ? 'Loading…' : '';
+                        status.style.color = 'var(--text-secondary, #9ca3af)';
                         try {
-                            await _toggleComparisonRun(item.key, item.profile, wasChecked);
-                            status.textContent = '';
+                            const result = await _toggleComparisonRun(item.key, item.profile, wasChecked);
+                            if (!wasChecked) {
+                                status.textContent = '';
+                            } else if (result && result.ok) {
+                                status.textContent = '';
+                            } else if (result && result.reason === 'empty') {
+                                status.textContent = 'No data';
+                                status.style.color = '#fd971f';
+                            } else {
+                                status.textContent = 'Failed';
+                                status.style.color = '#f92672';
+                                cb.checked = false;
+                            }
                         } catch (e) {
                             status.textContent = 'Failed';
+                            status.style.color = '#f92672';
                             cb.checked = !wasChecked;
                         }
                     });
@@ -54569,11 +54648,18 @@
                     chart.options.plugins.legend = chart.options.plugins.legend || {};
                     chart.options.plugins.legend.display = true;
                     chart.options.plugins.legend.position = 'bottom';
-                    chart.options.plugins.legend.labels = Object.assign(
-                        {},
-                        chart.options.plugins.legend.labels || {},
-                        { color: '#a8b2c1', font: { size: 11 }, boxWidth: 12, padding: 8, usePointStyle: true, pointStyle: 'rect' }
-                    );
+                    // Force a per-dataset legend (Profile / 2024 / 2023 / GP)
+                    // by clearing any per-category generateLabels callback
+                    // some charts install. Chart.js's default falls back to
+                    // one entry per dataset, which is what we want.
+                    chart.options.plugins.legend.labels = {
+                        color: '#a8b2c1',
+                        font: { size: 11 },
+                        boxWidth: 12,
+                        padding: 8,
+                        usePointStyle: true,
+                        pointStyle: 'rect'
+                    };
                     if (chart.options.plugins.datalabels) {
                         chart.options.plugins.datalabels.display = false;
                     }
