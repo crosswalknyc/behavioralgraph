@@ -54599,6 +54599,43 @@
             return (profile && (profile.display_name || profile.name)) || 'Run';
         }
 
+        // Extract a clean year label from a "YYYY-MM-DD - YYYY-MM-DD" date
+        // range string (the format pipeline emits in BRAND INPUT / Date
+        // Range header). Returns:
+        //   "2025"      when both endpoints sit in the same calendar year
+        //   "2024-25"   when the range straddles two years
+        //   ""          when no year can be parsed
+        // Used to relabel comparison-run entries after we fetch the CSV so
+        // the chip / column / chart legend show the year of the analyzed
+        // data instead of the year the file was generated.
+        function _yearFromDateRange(dateRange) {
+            if (!dateRange) return '';
+            const years = String(dateRange).match(/\b(20\d{2})\b/g);
+            if (!years || years.length === 0) return '';
+            const first = years[0];
+            const last = years[years.length - 1];
+            if (first === last) return first;
+            return first + '-' + last.slice(-2);
+        }
+
+        // Combine a profile's date-range year with its cohort suffix so
+        // a 2024 run of "Dwayne Johnson 4+" still labels as "4+", while
+        // an un-suffixed 2024 run labels as "2024".
+        function _preferredRunLabel(profile, dateRangeYear) {
+            try {
+                const info = (typeof getProfileSuffixInfo === 'function')
+                    ? getProfileSuffixInfo(profile) : { suffixType: 'none', suffixLabel: '' };
+                if (info && info.suffixType === 'cohort' && info.suffixLabel) {
+                    // Cohort cuts (4+, Avid, etc.) carry their own label —
+                    // keep them visible. If the run is ALSO date-bounded
+                    // to a single year, suffix it: "4+ 2024".
+                    return dateRangeYear ? (info.suffixLabel + ' ' + dateRangeYear) : info.suffixLabel;
+                }
+            } catch (_) {}
+            if (dateRangeYear) return dateRangeYear;
+            return _compactRunLabel(profile);
+        }
+
         function _setupComparisonForCurrentProfile(subject, currentKey, sameSubjectRuns) {
             const others = (sameSubjectRuns || []).filter(p => (p.s3_key || p.job_id) !== currentKey);
             const sorted = typeof sortRunsForGroup === 'function' ? sortRunsForGroup(others) : others;
@@ -54672,9 +54709,32 @@
                         return null;
                     }
                     if (_comparisonRunsState.lastFetchError) delete _comparisonRunsState.lastFetchError[key];
-                    const entry = { key, profile, parsed, label: _compactRunLabel(profile) };
+                    // Prefer the year derived from the CSV's date_range
+                    // metadata (e.g. "2025-01-01 - 2025-12-31" -> "2025")
+                    // over the year embedded in the filename, because the
+                    // date range describes the analyzed period while the
+                    // filename year just reflects when the file was
+                    // generated.
+                    const drYear = _yearFromDateRange(data.date_range);
+                    const preferredLabel = _preferredRunLabel(profile, drYear);
+                    const entry = { key, profile, parsed, label: preferredLabel, dateRangeYear: drYear, dateRange: data.date_range || '' };
                     _comparisonRunsState.runsByKey[key] = entry;
-                    console.info('[compare] loaded run', key, '— demographic categories:', Object.keys(parsed.demographics || {}));
+                    // Also patch the availableRuns label so the popover
+                    // shows the date-range year next time it's opened, and
+                    // update any currently-rendered popover row text now.
+                    try {
+                        const avail = (_comparisonRunsState.availableRuns || []).find(a => a.key === key);
+                        if (avail) avail.label = preferredLabel;
+                        const pop = document.getElementById('compareDateRangesPopover');
+                        if (pop) {
+                            const cb = pop.querySelector('input[data-cmp-key="' + (CSS.escape ? CSS.escape(key) : key.replace(/"/g, '\\"')) + '"]');
+                            if (cb && cb.parentElement) {
+                                const labelEl = cb.parentElement.querySelector('span[data-cmp-label]');
+                                if (labelEl) labelEl.textContent = preferredLabel;
+                            }
+                        }
+                    } catch (_) {}
+                    console.info('[compare] loaded run', key, '— label:', preferredLabel, '— date_range:', data.date_range, '— demographic categories:', Object.keys(parsed.demographics || {}));
                     return entry;
                 } catch (e) {
                     console.error('[compare] exception fetching run', key, e);
@@ -54847,6 +54907,7 @@
                     cb.checked = selected.has(item.key);
                     cb.style.cssText = 'accent-color:#7c3aed;cursor:pointer;width:14px;height:14px;margin:0;justify-self:center;';
                     const lbl = document.createElement('span');
+                    lbl.setAttribute('data-cmp-label', '');
                     lbl.textContent = item.label;
                     lbl.style.cssText = 'color:var(--text-primary, #e6e6e6);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;';
                     const status = document.createElement('span');
@@ -55930,7 +55991,39 @@
                 const deltasBtn = document.getElementById('dashViewDeltasBtn');
                 const currentProfile = dashboardProfiles.find(p => (p.s3_key || p.job_id) === profileId);
                 const subject = currentProfile ? getProfileSubject(currentProfile) : '';
-                const sameSubjectRuns = subject ? dashboardProfiles.filter(p => getProfileSubject(p) === subject) : [];
+                // Use the canonical group key (which collapses year + cohort
+                // variants of the same base name) plus the stub-merge pass
+                // so single-word cohort files (e.g. "Reba_4Plus" -> group
+                // key "reba") collapse into the full-name group ("reba
+                // mcentire"). This matches what the sidebar shows under
+                // each parent profile and ensures the Compare popover lists
+                // ALL siblings, not just exact-subject matches.
+                const sameSubjectRuns = (function() {
+                    if (!currentProfile || typeof getProfileGroupKey !== 'function') {
+                        return subject ? dashboardProfiles.filter(p => getProfileSubject(p) === subject) : [];
+                    }
+                    const bySubject = {};
+                    const displayNames = {};
+                    dashboardProfiles.forEach(p => {
+                        const k = getProfileGroupKey(p) || (getProfileFullName(p) || '').toLowerCase();
+                        if (!k) return;
+                        (bySubject[k] = bySubject[k] || []).push(p);
+                        if (!displayNames[k]) {
+                            try {
+                                const info = getProfileSuffixInfo(p);
+                                displayNames[k] = info.canonicalName || getProfileFullName(p) || k;
+                            } catch (_) { displayNames[k] = getProfileFullName(p) || k; }
+                        }
+                    });
+                    if (typeof mergeStubGroupsIntoCanonical === 'function') {
+                        try { mergeStubGroupsIntoCanonical(bySubject, displayNames); } catch (_) {}
+                    }
+                    const currentId = currentProfile.s3_key || currentProfile.job_id;
+                    for (const runs of Object.values(bySubject)) {
+                        if (runs.some(r => (r.s3_key || r.job_id) === currentId)) return runs;
+                    }
+                    return [currentProfile];
+                })();
                 if (runsRow && runSelect && sameSubjectRuns.length > 1) {
                     runsRow.style.display = 'flex';
                     const sortedRuns = sortRunsByYearDesc(sameSubjectRuns);
@@ -55947,7 +56040,13 @@
                     // "Compare date ranges" modal. Selected runs are layered
                     // into the demographic charts (see applyComparisonRunsToDashboardCharts).
                     if (typeof _setupComparisonForCurrentProfile === 'function') {
-                        _setupComparisonForCurrentProfile(subject, profileId, sameSubjectRuns);
+                        // Use the canonical group key as the comparison
+                        // state subject so navigating between sibling runs
+                        // (Dwayne Johnson 2024 -> Dwayne Johnson 4+) doesn't
+                        // reset the user's selected comparisons.
+                        const canonicalSubj = (typeof getProfileGroupKey === 'function' && currentProfile)
+                            ? getProfileGroupKey(currentProfile) : subject;
+                        _setupComparisonForCurrentProfile(canonicalSubj, profileId, sameSubjectRuns);
                     }
                     if (deltasBtn) {
                         deltasBtn.onclick = function(ev) {
