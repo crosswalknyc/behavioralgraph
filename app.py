@@ -31397,11 +31397,12 @@ def _run_brand_partnership_iq(job_id):
             'emv_breakdown': emv_breakdown,
             'methodology': (
                 "Total Brand Value = Brand Engagement Value (post-event US "
-                "users × $/user) + Earned Media Value (per-platform users "
-                "× platform EMV $/engaged user, benchmarked against 2026 "
-                "industry CPM rates) + Brand Lift Value (DiD-adjusted "
-                "incremental brand engagers × $/incremental user) + "
-                "Conversion Value (when statistically significant)."
+                "consumers × $/consumer) + Earned Media Value (per-platform "
+                "consumers × platform EMV $/engaged consumer, benchmarked "
+                "against 2026 industry CPM rates) + Brand Lift Value "
+                "(DiD-adjusted incremental brand engagers × $/incremental "
+                "consumer) + Conversion Value (when statistically "
+                "significant)."
             ),
         }
 
