@@ -53894,15 +53894,23 @@
                     return;
                 }
                 
-                // Group by canonical name (e.g. "Reba McEntire") so cohort
-                // variants like "Reba McEntire 4Plus" collapse under the same
-                // parent. See getProfileCohortInfo() for the suffix allow-list.
+                // Group by canonical name (e.g. "Reba McEntire") so date +
+                // cohort variants ("Reba 4+", "Reba McEntire 2024", etc.)
+                // collapse under the same parent. See getProfileSuffixInfo()
+                // for the recognised suffix allow-list and
+                // mergeStubGroupsIntoCanonical() for the stub-merge pass
+                // that handles "Reba" -> "Reba McEntire".
                 const bySubject = {};
+                const displayNames = {};
                 matchingProfiles.forEach(p => {
                     const subj = getProfileGroupKey(p) || (getProfileFullName(p) || '').toLowerCase();
-                    if (!bySubject[subj]) bySubject[subj] = [];
+                    if (!bySubject[subj]) {
+                        bySubject[subj] = [];
+                        displayNames[subj] = getProfileSuffixInfo(p).canonicalName || getProfileFullName(p);
+                    }
                     bySubject[subj].push(p);
                 });
+                mergeStubGroupsIntoCanonical(bySubject, displayNames);
                 const subjectKeys = Object.keys(bySubject).sort((a, b) => a.localeCompare(b));
                 
                 let html = '';
@@ -53915,7 +53923,7 @@
                     const isSvod = first.is_svod || (first.key && first.key.startsWith('svod-acquisition/')) || (first.s3_key && first.bucket === 'svod-acquisition');
                     const masterCat = getMasterCategory(cat, isSvod);
                     const icon = MASTER_CATEGORY_ICONS[masterCat] || '📁';
-                    const subjectDisplayName = getProfileCohortInfo(first).canonicalName || getProfileFullName(first);
+                    const subjectDisplayName = displayNames[subj] || getProfileSuffixInfo(first).canonicalName || getProfileFullName(first);
                     
                     if (runs.length === 1) {
                         const fullName = getProfileFullName(first);
@@ -54003,11 +54011,16 @@
                         return nameA.localeCompare(nameB);
                     });
                     const bySubject = {};
+                    const displayNames = {};
                     sortedItems.forEach(p => {
                         const subj = getProfileGroupKey(p) || (getProfileFullName(p) || '').toLowerCase();
-                        if (!bySubject[subj]) bySubject[subj] = [];
+                        if (!bySubject[subj]) {
+                            bySubject[subj] = [];
+                            displayNames[subj] = getProfileSuffixInfo(p).canonicalName || getProfileFullName(p);
+                        }
                         bySubject[subj].push(p);
                     });
+                    mergeStubGroupsIntoCanonical(bySubject, displayNames);
                     Object.keys(bySubject).sort((a, b) => a.localeCompare(b)).forEach(subj => {
                         const runs = bySubject[subj];
                         const first = runs[0];
@@ -54016,7 +54029,7 @@
                         if (runs.length === 1) {
                             html += _profileItemHtml(first, escapeAttr(getProfileFullName(first)));
                         } else {
-                            const displayName = getProfileCohortInfo(first).canonicalName || getProfileFullName(first);
+                            const displayName = displayNames[subj] || getProfileSuffixInfo(first).canonicalName || getProfileFullName(first);
                             html += `<div class="profile-cat-item ${subjectExpanded ? 'open' : ''}" data-dash-subject="${escapeAttr(subj)}" onclick="event.stopPropagation(); toggleDashSubject(this)" style="font-weight: 500;">
                                 <span class="cat-arrow">▸</span>
                                 <span class="profile-cat-label">${escapeAttr(displayName)}</span>
@@ -54041,11 +54054,16 @@
                         return nameA.localeCompare(nameB);
                     });
                     const bySubject = {};
+                    const displayNames = {};
                     sortedItems.forEach(p => {
                         const subj = getProfileGroupKey(p) || (getProfileFullName(p) || '').toLowerCase();
-                        if (!bySubject[subj]) bySubject[subj] = [];
+                        if (!bySubject[subj]) {
+                            bySubject[subj] = [];
+                            displayNames[subj] = getProfileSuffixInfo(p).canonicalName || getProfileFullName(p);
+                        }
                         bySubject[subj].push(p);
                     });
+                    mergeStubGroupsIntoCanonical(bySubject, displayNames);
                     Object.keys(bySubject).sort((a, b) => a.localeCompare(b)).forEach(subj => {
                         const runs = bySubject[subj];
                         const first = runs[0];
@@ -54054,7 +54072,7 @@
                         if (runs.length === 1) {
                             html += _profileItemHtml(first, escapeAttr(getProfileFullName(first)));
                         } else {
-                            const displayName = getProfileCohortInfo(first).canonicalName || getProfileFullName(first);
+                            const displayName = displayNames[subj] || getProfileSuffixInfo(first).canonicalName || getProfileFullName(first);
                             html += `<div class="profile-cat-item ${subjectExpanded ? 'open' : ''}" data-dash-subject="${escapeAttr(subj)}" onclick="event.stopPropagation(); toggleDashSubject(this)" style="font-weight: 500;">
                                 <span class="cat-arrow">▸</span>
                                 <span class="profile-cat-label">${escapeAttr(displayName)}</span>
@@ -54078,11 +54096,16 @@
                             return nameA.localeCompare(nameB);
                         });
                         const bySubject = {};
+                        const displayNames = {};
                         sortedItems.forEach(p => {
                             const subj = getProfileGroupKey(p) || (getProfileFullName(p) || '').toLowerCase();
-                            if (!bySubject[subj]) bySubject[subj] = [];
+                            if (!bySubject[subj]) {
+                                bySubject[subj] = [];
+                                displayNames[subj] = getProfileSuffixInfo(p).canonicalName || getProfileFullName(p);
+                            }
                             bySubject[subj].push(p);
                         });
+                        mergeStubGroupsIntoCanonical(bySubject, displayNames);
                         let itemsHtml = '';
                         Object.keys(bySubject).sort((a, b) => a.localeCompare(b)).forEach(subj => {
                             const runs = bySubject[subj];
@@ -54092,7 +54115,7 @@
                             if (runs.length === 1) {
                                 itemsHtml += _profileItemHtml(first, escapeAttr(getProfileFullName(first)));
                             } else {
-                                const displayNameAttr = escapeAttr(getProfileCohortInfo(first).canonicalName || getProfileFullName(first));
+                                const displayNameAttr = escapeAttr(displayNames[subj] || getProfileSuffixInfo(first).canonicalName || getProfileFullName(first));
                                 itemsHtml += `<div class="profile-cat-item ${subjectExpanded ? 'open' : ''}" data-dash-subject="${escapeAttr(subj)}" onclick="event.stopPropagation(); toggleDashSubject(this)" style="font-weight: 500;">
                                     <span class="cat-arrow">▸</span>
                                     <span class="profile-cat-label">${displayNameAttr}</span>
@@ -73694,44 +73717,96 @@
         // ---------------------------------------------------------------
         // Cohort / variant grouping
         // ---------------------------------------------------------------
-        // Some profiles are "delineations" of a base talent/show — e.g.
-        // "Reba McEntire 4Plus" is a 4+ touchpoint cohort of "Reba McEntire",
-        // saved as Reba_4Plus_06_09_2026.csv alongside the base
-        // Reba_McEntire_05_29_2026.csv. The profile tree treats each as a
-        // separate subject by default because their filename stems differ
-        // (Reba_4Plus vs Reba_McEntire) — see getProfileSubject() above.
+        // Profiles like "Dwayne Johnson", "Dwayne Johnson 2023", "Dwayne
+        // Johnson 2024", and "Dwayne Johnson 4+" all describe the SAME
+        // person — they're just different date ranges or audience cohorts.
+        // Same for "Reba McEntire" + "Reba 4+". This block collapses every
+        // such delineation under one parent in the sidebar and labels each
+        // child by the part of the name that distinguishes it ("2024",
+        // "4+", or the file-derived year for the un-suffixed base file).
         //
-        // To collapse these together (the same way sequential date ranges of
-        // a single talent collapse under one parent), we derive a canonical
-        // grouping key from the *display name* (which the backend resolves
-        // to "Reba McEntire 4Plus" / "Reba McEntire" for both files) and
-        // strip a known cohort suffix.
+        // The suffix allow-list is intentionally narrow so that profiles
+        // whose names legitimately end in a number or one of these words
+        // don't get collapsed by accident. Add new tokens here as new
+        // cohort conventions ship (e.g. DMA cuts, age bands).
         //
-        // The suffix allow-list is intentionally narrow to avoid collapsing
-        // distinct profiles whose names happen to share a base word. Add
-        // new tokens here as new cohort conventions ship.
-        const COHORT_SUFFIX_REGEX = /[\s_\-]+(\d+\s*Plus|Avid(?:\s+Fans?)?|Casual(?:\s+Fans?)?|Super\s*Fans?|Heavy(?:\s+Users?)?|Light(?:\s+Users?)?|Premium|Standard)$/i;
+        // Suffix patterns recognised (anchored to the end of the display
+        // name and preceded by whitespace / underscore / hyphen):
+        //   - 4-digit year:        " 2024", " 2023"   (20xx only, so we
+        //                                              don't strip historical
+        //                                              show titles like
+        //                                              "Yellowstone 1923")
+        //   - "<n>+" cohort:       " 4+", " 8+"       (display form from BRAND INPUT)
+        //   - "<n>Plus" cohort:    " 4Plus"           (filename fallback)
+        //   - Fan-intensity:       " Avid", " Casual", " Super Fans"
+        //   - Usage-intensity:     " Heavy", " Light", " Lite"
+        //   - Subscriber tier:     " Premium", " Standard"
+        const PROFILE_SUFFIX_REGEX = /[\s_\-]+(20\d{2}|\d+\+|\d+\s*Plus|Avid(?:\s+Fans?)?|Casual(?:\s+Fans?)?|Super\s*Fans?|Heavy(?:\s+Users?)?|Light(?:\s+Users?)?|Lite|Premium|Standard)$/i;
+        const _YEAR_SUFFIX_TEST = /^20\d{2}$/;
 
-        /** Splits a profile's display name into its canonical base name and
-         *  its cohort-variant label. Cohort label is '' for the base profile. */
-        function getProfileCohortInfo(profile) {
+        /** Splits a profile's display name into a {canonicalName,
+         *  suffixType, suffixLabel} triple. suffixType is 'year' for a
+         *  4-digit calendar year suffix, 'cohort' for an audience-cohort
+         *  token (4+, Avid, Premium, etc.), and 'none' when the name has
+         *  no recognised suffix. */
+        function getProfileSuffixInfo(profile) {
             const name = (getProfileFullName(profile) || '').trim();
-            if (!name) return { canonicalName: '', cohortLabel: '' };
-            const m = name.match(COHORT_SUFFIX_REGEX);
-            if (!m) return { canonicalName: name, cohortLabel: '' };
+            if (!name) return { canonicalName: '', suffixType: 'none', suffixLabel: '' };
+            const m = name.match(PROFILE_SUFFIX_REGEX);
+            if (!m) return { canonicalName: name, suffixType: 'none', suffixLabel: '' };
             const base = name.slice(0, m.index).trim();
-            if (!base) return { canonicalName: name, cohortLabel: '' };
-            return { canonicalName: base, cohortLabel: m[1].trim() };
+            if (!base) return { canonicalName: name, suffixType: 'none', suffixLabel: '' };
+            const suffix = m[1].trim();
+            const type = _YEAR_SUFFIX_TEST.test(suffix) ? 'year' : 'cohort';
+            return { canonicalName: base, suffixType: type, suffixLabel: suffix };
         }
 
-        /** Canonical, case-insensitive grouping key. Cohort variants of the
-         *  same base subject collapse to the same key. Falls back to the raw
-         *  profile-subject when no display name is available. */
+        /** Back-compat shim used by sortRunsForGroup. cohortLabel is '' for
+         *  both un-suffixed base profiles AND year-suffixed profiles (since
+         *  a year is not a cohort) so the sort treats them together. */
+        function getProfileCohortInfo(profile) {
+            const info = getProfileSuffixInfo(profile);
+            return {
+                canonicalName: info.canonicalName,
+                cohortLabel: info.suffixType === 'cohort' ? info.suffixLabel : ''
+            };
+        }
+
+        /** Canonical, case-insensitive grouping key. Year + cohort variants
+         *  of the same base subject collapse to the same key. Falls back to
+         *  the raw profile-subject when no display name is available. */
         function getProfileGroupKey(profile) {
-            const info = getProfileCohortInfo(profile);
+            const info = getProfileSuffixInfo(profile);
             const k = (info.canonicalName || '').toLowerCase();
             if (k) return k;
             return (getProfileSubject(profile) || '').toLowerCase();
+        }
+
+        /** In-place merge pass that collapses single-word "stub" groups
+         *  (e.g. "reba") into a longer multi-word group (e.g. "reba
+         *  mcentire") when exactly one such multi-word candidate exists.
+         *  Handles the common case where a cohort file is keyed by a
+         *  shortened name (Reba_4Plus.csv -> display "Reba 4+" -> stub
+         *  "reba") while the base file uses the full name. Stubs with
+         *  zero matches stay as their own group; stubs with multiple
+         *  matches (e.g. "tom" + "tom hanks" + "tom brady") also stay
+         *  alone since the intent is ambiguous.
+         *
+         *  Mutates `bySubject` and `displayNames` directly. */
+        function mergeStubGroupsIntoCanonical(bySubject, displayNames) {
+            const stubKeys = Object.keys(bySubject).filter(k => k && !k.includes(' '));
+            stubKeys.forEach(stub => {
+                const targets = Object.keys(bySubject).filter(k =>
+                    k !== stub && k.startsWith(stub + ' ')
+                );
+                if (targets.length === 1) {
+                    const target = targets[0];
+                    bySubject[target] = bySubject[target].concat(bySubject[stub]);
+                    delete bySubject[stub];
+                    // displayNames[target] is already the longer canonical
+                    // form; nothing to update.
+                }
+            });
         }
 
         /** Year-only label for a profile run. Prefers a 4-digit year baked
@@ -73758,13 +73833,17 @@
             return '';
         }
 
-        /** Child-row label inside a grouped subject. For cohort variants the
-         *  cohort label is prepended to the year (e.g. "4Plus | 2026") so
-         *  it's obvious which delineation each row represents. */
+        /** Child-row label inside a grouped subject. Strictly one of:
+         *    - the year baked into the display name ("Dwayne Johnson 2024" -> "2024")
+         *    - the cohort token from the display name ("Dwayne Johnson 4+" -> "4+")
+         *    - the run year derived from the filename timestamp ("Dwayne_Johnson_05_14_2026.csv" -> "2026")
+         *  No mixing — the child label is either a clean year OR a clean
+         *  cohort tag so the sidebar stays readable. */
         function getCanonicalChildLabel(profile) {
-            const info = getProfileCohortInfo(profile);
-            const yearLabel = getProfileRunYear(profile) || 'Run';
-            return info.cohortLabel ? (info.cohortLabel + ' · ' + yearLabel) : yearLabel;
+            const info = getProfileSuffixInfo(profile);
+            if (info.suffixType === 'year') return info.suffixLabel;
+            if (info.suffixType === 'cohort') return info.suffixLabel;
+            return getProfileRunYear(profile) || 'Run';
         }
 
         /** Short date label from s3_key timestamp (e.g. "Feb 23, 2026"). */
@@ -73798,26 +73877,31 @@
             });
         }
 
-        /** Sort runs inside a canonical-name group: base (no cohort) first,
-         *  then cohorts alphabetically (numeric-aware so "4Plus" sorts before
-         *  "12Plus"), with date desc inside each cohort. */
+        /** Sort runs inside a canonical-name group:
+         *    1. Non-cohort entries (no suffix or year suffix) first, sorted
+         *       by their effective year DESC (newest year at the top).
+         *    2. Cohort entries (4+, Avid, etc.) at the bottom, sorted by
+         *       cohort label numeric-aware (so "4+" sorts before "12+"). */
         function sortRunsForGroup(runs) {
+            const yearOf = (p) => {
+                const info = getProfileSuffixInfo(p);
+                if (info.suffixType === 'year') return parseInt(info.suffixLabel, 10);
+                const y = getProfileRunYear(p);
+                return /^\d{4}$/.test(y) ? parseInt(y, 10) : 0;
+            };
             return [...runs].sort((a, b) => {
-                const ca = getProfileCohortInfo(a).cohortLabel || '';
-                const cb = getProfileCohortInfo(b).cohortLabel || '';
-                if (ca !== cb) {
-                    if (!ca) return -1;
-                    if (!cb) return 1;
-                    return ca.localeCompare(cb, undefined, { numeric: true, sensitivity: 'base' });
+                const infoA = getProfileSuffixInfo(a);
+                const infoB = getProfileSuffixInfo(b);
+                const isCohortA = infoA.suffixType === 'cohort' ? 1 : 0;
+                const isCohortB = infoB.suffixType === 'cohort' ? 1 : 0;
+                if (isCohortA !== isCohortB) return isCohortA - isCohortB;
+                if (isCohortA) {
+                    return infoA.suffixLabel.localeCompare(infoB.suffixLabel, undefined, { numeric: true, sensitivity: 'base' });
                 }
-                const yA = getProfileYear(a);
-                const yB = getProfileYear(b);
-                const numA = /^\d{4}$/.test(yA) ? parseInt(yA, 10) : null;
-                const numB = /^\d{4}$/.test(yB) ? parseInt(yB, 10) : null;
-                if (numA != null && numB != null) return numB - numA;
-                if (numA != null) return -1;
-                if (numB != null) return 1;
-                return (a.created_at || a.s3_key || '').localeCompare(b.created_at || b.s3_key || '');
+                const yA = yearOf(a);
+                const yB = yearOf(b);
+                if (yA !== yB) return yB - yA;
+                return (b.created_at || b.s3_key || '').localeCompare(a.created_at || a.s3_key || '');
             });
         }
 
