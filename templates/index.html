@@ -17382,22 +17382,22 @@
 
                         <!-- Compare Tab -->
                         <div id="subscriber-tab-compare" class="tab-content">
-                            <div class="comparison-container" style="display: flex; gap: 1rem; min-height: 600px;">
-                                <div class="comparison-sidebar" style="width: 280px; min-width: 250px; flex-shrink: 0; overflow-y: auto; border-right: 1px solid var(--border-color); padding-right: 1rem;">
-                                    <div style="background: rgba(0,217,255,0.1); border: 1px solid rgba(0,217,255,0.3); border-radius: 6px; padding: 0.5rem; margin-bottom: 0.75rem; font-size: 0.75rem;">
+                            <div class="comparison-container" style="display: flex; gap: 1rem; height: calc(100vh - 220px); min-height: 500px;">
+                                <div class="comparison-sidebar" style="width: 280px; min-width: 250px; flex-shrink: 0; display: flex; flex-direction: column; border-right: 1px solid var(--border-color); padding-right: 1rem;">
+                                    <div style="background: rgba(0,217,255,0.1); border: 1px solid rgba(0,217,255,0.3); border-radius: 6px; padding: 0.5rem; margin-bottom: 0.75rem; font-size: 0.75rem; flex-shrink: 0;">
                                         💡 Select <strong>2 or more profiles</strong> to compare side-by-side
                                     </div>
-                                    <div style="position: relative; margin-bottom: 0.75rem;">
+                                    <div style="position: relative; margin-bottom: 0.75rem; flex-shrink: 0;">
                                         <span style="position: absolute; left: 10px; top: 50%; transform: translateY(-50%); color: var(--text-secondary);">🔍</span>
                                         <input type="text" id="subCompSearchInput" placeholder="Search profiles" oninput="filterSubCompareProfiles()" style="padding-left: 32px; width: 100%; box-sizing: border-box;">
                                     </div>
-                                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+                                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem; flex-shrink: 0;">
                                         <span class="sub-comp-selected-count" style="font-size: 0.75rem; color: var(--text-secondary);">0 selected</span>
                                         <button type="button" class="comp-pill-clear" onclick="clearSubCompare()" style="font-size: 0.72rem; cursor: pointer; padding: 0.2rem 0.5rem;">Clear</button>
                                     </div>
-                                    <div id="subCompProfileList" style="max-height: 450px; overflow-y: auto;"></div>
+                                    <div id="subCompProfileList" style="flex: 1; overflow-y: auto;"></div>
                                 </div>
-                                <div class="comparison-main" style="flex: 1; overflow-x: auto;">
+                                <div class="comparison-main" style="flex: 1; overflow: auto;">
                                     <div id="subCompResults">
                                         <div class="comparison-empty" style="text-align: center; padding: 3rem 1rem; color: var(--text-secondary);">
                                             <p style="font-size: 1.1rem;">⚖️ Subscriber IQ Compare</p>
