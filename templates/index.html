@@ -18327,6 +18327,13 @@
             /* ── Voter Journey: JIQ-style fan-sankey ── */
             #blueIQView .bq-fan-wrap { width: 100%; overflow-x: auto; padding: 0.4rem 0 0.2rem 0; }
             #blueIQView .bq-fan-svg { width: 100%; min-width: 720px; height: auto; display: block; }
+            /* Compact variant for the inbound (How voters arrived)
+             * fan-sankey. Caps rendered height so the full card fits
+             * on one screen even with all 4 modeled-source padding
+             * rows present (up to ~10 ribbons). preserveAspectRatio
+             * scales contents down proportionally. */
+            #blueIQView .bq-fan-svg-compact { max-height: 440px; }
+            #blueIQView .bq-fan-label-compact .bq-fan-label-name { font-size: 0.74rem; line-height: 1.15; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
             #blueIQView .bq-fan-ribbon { transition: stroke-opacity 0.18s ease; }
             #blueIQView .bq-fan-dest { transition: opacity 0.18s ease; }
             #blueIQView .bq-fan-dest:hover circle { filter: drop-shadow(0 0 8px currentColor); }
@@ -26618,27 +26625,31 @@
             }
 
             // Layout: source bubbles on LEFT, center bubble on RIGHT.
+            // Geometry tuned so the full card fits on one screen even
+            // with the modeled-source padding (up to ~10 ribbons).
+            // The SVG carries preserveAspectRatio="xMidYMid meet" so
+            // it scales down further on narrow viewports.
             var W            = 1100;
-            var rowH         = 56;
-            var topPad       = 26;
+            var rowH         = 38;
+            var topPad       = 16;
             var H            = topPad * 2 + all.length * rowH;
-            var centerCX     = W - 130;
+            var centerCX     = W - 110;
             var centerCY     = H / 2;
-            var centerR      = 64;
-            var sourceCX     = 220;
-            var sourceLabelX = 20;
-            var sourceLabelW = sourceCX - 70;
+            var centerR      = 50;
+            var sourceCX     = 200;
+            var sourceLabelX = 16;
+            var sourceLabelW = sourceCX - 60;
             var maxShare     = Math.max.apply(null, all.map(function(s) { return s.share; })) || 1;
-            var maxBubbleR   = 34;
-            var maxRibbonW   = 50;
+            var maxBubbleR   = 22;
+            var maxRibbonW   = 32;
 
             var ribbons = all.map(function(s, i) {
                 var cy = topPad + (i + 0.5) * rowH;
-                var r = Math.max(12, Math.round(Math.sqrt(s.share / maxShare) * maxBubbleR));
-                var thickness = Math.max(2.5, Math.round((s.share / maxShare) * maxRibbonW));
-                var x0 = sourceCX + r - 4;
+                var r = Math.max(8, Math.round(Math.sqrt(s.share / maxShare) * maxBubbleR));
+                var thickness = Math.max(2, Math.round((s.share / maxShare) * maxRibbonW));
+                var x0 = sourceCX + r - 3;
                 var y0 = cy;
-                var x1 = centerCX - centerR + 4;
+                var x1 = centerCX - centerR + 3;
                 var y1 = centerCY;
                 var mx = (x0 + x1) / 2;
                 var path = 'M' + x0 + ',' + y0
@@ -26651,17 +26662,17 @@
 
             var sources = all.map(function(s, i) {
                 var cy = topPad + (i + 0.5) * rowH;
-                var r = Math.max(12, Math.round(Math.sqrt(s.share / maxShare) * maxBubbleR));
+                var r = Math.max(8, Math.round(Math.sqrt(s.share / maxShare) * maxBubbleR));
                 return '<g class="bq-fan-inbound-source">'
                      +   '<title>' + _bqEscape(s.name + ': ' + _bqPct(s.share)) + '</title>'
                      +   '<circle cx="' + sourceCX + '" cy="' + cy + '" r="' + r + '" '
                      +     'fill="' + s.color + '" fill-opacity="0.78" '
-                     +     'stroke="' + s.color + '" stroke-width="1.5" stroke-opacity="0.7"/>'
-                     +   '<text x="' + sourceCX + '" y="' + (cy + 4) + '" text-anchor="middle" '
-                     +     'fill="#fff" font-size="' + (r > 22 ? 11 : 9.5) + '" font-weight="700" pointer-events="none">'
+                     +     'stroke="' + s.color + '" stroke-width="1.2" stroke-opacity="0.7"/>'
+                     +   '<text x="' + sourceCX + '" y="' + (cy + 3) + '" text-anchor="middle" '
+                     +     'fill="#fff" font-size="' + (r > 16 ? 9.5 : 8) + '" font-weight="700" pointer-events="none">'
                      +     _bqPct(s.share) + '</text>'
-                     +   '<foreignObject x="' + sourceLabelX + '" y="' + (cy - 14) + '" width="' + sourceLabelW + '" height="28">'
-                     +     '<div xmlns="http://www.w3.org/1999/xhtml" class="bq-fan-label bq-fan-label-right">'
+                     +   '<foreignObject x="' + sourceLabelX + '" y="' + (cy - 10) + '" width="' + sourceLabelW + '" height="22">'
+                     +     '<div xmlns="http://www.w3.org/1999/xhtml" class="bq-fan-label bq-fan-label-right bq-fan-label-compact">'
                      +       '<div class="bq-fan-label-name">' + _bqEscape(s.name) + '</div>'
                      +     '</div>'
                      +   '</foreignObject>'
@@ -26673,18 +26684,18 @@
                 +   '<circle cx="' + centerCX + '" cy="' + centerCY + '" r="' + centerR + '" '
                 +     'fill="rgba(168,85,247,0.16)" stroke="rgba(168,85,247,0.78)" '
                 +     'stroke-width="2" stroke-dasharray="4 3"/>'
-                +   '<text x="' + centerCX + '" y="' + (centerCY - 14) + '" text-anchor="middle" '
-                +     'fill="#fff" font-size="11" font-weight="700" letter-spacing="0.06em">VOTERS</text>'
-                +   '<text x="' + centerCX + '" y="' + (centerCY + 2) + '" text-anchor="middle" '
-                +     'fill="#cbd5e1" font-size="9">searched a policy issue</text>'
-                +   '<text x="' + centerCX + '" y="' + (centerCY + 22) + '" text-anchor="middle" '
-                +     'fill="#fff" font-size="16" font-weight="700">100%</text>'
-                +   '<text x="' + centerCX + '" y="' + (centerCY + 36) + '" text-anchor="middle" '
-                +     'fill="#94a3b8" font-size="8.5">' + _bqEscape('e.g. ' + topIssueName) + '</text>'
+                +   '<text x="' + centerCX + '" y="' + (centerCY - 12) + '" text-anchor="middle" '
+                +     'fill="#fff" font-size="10" font-weight="700" letter-spacing="0.06em">VOTERS</text>'
+                +   '<text x="' + centerCX + '" y="' + (centerCY + 1) + '" text-anchor="middle" '
+                +     'fill="#cbd5e1" font-size="8">searched a policy issue</text>'
+                +   '<text x="' + centerCX + '" y="' + (centerCY + 18) + '" text-anchor="middle" '
+                +     'fill="#fff" font-size="14" font-weight="700">100%</text>'
+                +   '<text x="' + centerCX + '" y="' + (centerCY + 30) + '" text-anchor="middle" '
+                +     'fill="#94a3b8" font-size="7.5">' + _bqEscape('e.g. ' + topIssueName) + '</text>'
                 + '</g>';
 
             return '<div class="bq-fan-wrap">'
-                 +   '<svg viewBox="0 0 ' + W + ' ' + H + '" class="bq-fan-svg" preserveAspectRatio="xMidYMid meet">'
+                 +   '<svg viewBox="0 0 ' + W + ' ' + H + '" class="bq-fan-svg bq-fan-svg-compact" preserveAspectRatio="xMidYMid meet">'
                  +     ribbons + sources + centerBubble
                  +   '</svg>'
                  + '</div>'
