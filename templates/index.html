@@ -3341,7 +3341,7 @@
         }
         
         .explainer-text .highlight-green {
-            color: #10b981;
+            color: var(--index-over);
             font-weight: 500;
         }
         
@@ -3351,7 +3351,7 @@
         }
         
         .explainer-text .highlight-red {
-            color: #ef4444;
+            color: var(--index-under);
             font-weight: 500;
         }
 
@@ -51967,7 +51967,7 @@
         // Tab header titles and descriptions for inline header
         const TAB_HEADERS = {
             insights: { icon: '✨', title: 'Highlights', desc: 'Deep-dive analysis across behavioral patterns, media consumption, and activation opportunities.' },
-            demographics: { icon: '👥', title: 'Demographics', desc: 'Audience breakdown by gender, age, income. <span style="color: #10b981;">Green = over-indexes</span> | <span style="color: #ef4444;">Red = under-indexes</span>. Second % = Gen Pop baseline.' },
+            demographics: { icon: '👥', title: 'Demographics', desc: 'Audience breakdown by gender, age, income. <span style="color: var(--index-over);">Green = over-indexes</span> | <span style="color: var(--index-under);">Red = under-indexes</span>. Second % = Gen Pop baseline.' },
             behavioral: { icon: '📈', title: 'Behavioral', desc: 'Consumer behaviors, brand preferences, purchase patterns, and lifestyle activities.' },
             interests: { icon: '🎯', title: 'Interests', desc: 'Top interests and passions categorized by topic area with index scores.' },
             location: { icon: '📍', title: 'Location', desc: 'Geographic distribution showing where this audience is concentrated.' },
