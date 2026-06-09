@@ -348,13 +348,22 @@ def blue_iq_cache_key(filters: dict) -> str:
             payloads only carry filtered-or-empty trending_local so
             the card would still render the "none cleared the
             political filter" placeholder; bump invalidates.
+     v10 — 2026-06-09: fixed Issue × Geo heatmap "every state has
+            identical count" bug. _bucket_search_terms_via_global_map
+            was falling back to the global bucket list (verbatim
+            counts) when a state cell's top queries couldn't be
+            mapped, so every such state inherited the same global
+            count for every bucket (e.g. every state showed 94 for
+            "Other Policy"). Added strict mode and switched per-cell
+            aggregation in _compute_issue_geo to use it. v9 payloads
+            carry the bogus uniform counts; bump invalidates.
     """
     canonical = json.dumps({
         'party':     filters.get('party') or 'All',
         'geo_type':  filters.get('geo_type') or 'National',
         'geo_value': filters.get('geo_value') or '',
         'lookback':  int(filters.get('lookback_days') or DEFAULT_LOOKBACK_DAYS),
-        'version':   9,
+        'version':   10,
     }, sort_keys=True, separators=(',', ':'))
     return hashlib.sha256(canonical.encode('utf-8')).hexdigest()
 
@@ -1463,9 +1472,21 @@ def _slice_cube(cube: dict, filters: dict) -> tuple[Optional[dict], int]:
 
 
 def _bucket_search_terms_via_global_map(top_search_queries: list[dict],
-                                          issue_buckets_global: list[dict]) -> list[dict]:
+                                          issue_buckets_global: list[dict],
+                                          *, strict: bool = False) -> list[dict]:
     """Map a cell's top search queries to political-issue buckets using the
     GLOBAL bucket assignments from the cube (no fresh OpenAI call needed).
+
+    strict=False (default): when none of the cell's top queries can be
+        mapped to the global bucket map, surface the global buckets
+        verbatim so a card never goes blank. SAFE for the single
+        national rollup card.
+
+    strict=True: when no mapping is found, return an empty list. REQUIRED
+        for per-cell aggregations (e.g. per-state heatmap) — otherwise
+        every cell that misses the map would be credited with the exact
+        same global counts, producing the "every state has identical 94
+        searches for Other Policy" bug.
     """
     if not top_search_queries or not issue_buckets_global:
         return []
@@ -1492,8 +1513,13 @@ def _bucket_search_terms_via_global_map(top_search_queries: list[dict],
             examples[b].append(row.get('term'))
 
     if not counts:
+        if strict:
+            return []
         # No per-cell mapping found — surface the global buckets instead so
-        # the card isn't blank. This is the "small slice" graceful path.
+        # the card isn't blank. This is the "small slice" graceful path
+        # ONLY appropriate for the single national rollup card. Per-cell
+        # aggregations must use strict=True so they don't all inherit the
+        # same global counts.
         return [dict(b, sample_queries=(b.get('sample_queries') or [])[:8]) for b in issue_buckets_global[:12]]
 
     total = sum(counts.values()) or 1
@@ -1548,8 +1574,12 @@ def _compute_issue_geo(cube: Optional[dict], issue_buckets_global: list[dict],
         if not panel_top_queries:
             continue
         cell_size = int(cell.get('uid_count') or 0)
+        # strict=True: don't fall back to global bucket counts for
+        # cells whose top queries miss the map — doing so would credit
+        # every such state with the same global counts (= every state
+        # shows identical "94 for Other Policy" in the heatmap).
         buckets = _bucket_search_terms_via_global_map(
-            panel_top_queries, issue_buckets_global)
+            panel_top_queries, issue_buckets_global, strict=True)
         for b in buckets:
             panel = int(b.get('count') or 0)
             if panel <= 0:
