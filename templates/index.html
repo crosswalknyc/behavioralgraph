@@ -127,6 +127,7 @@
         body[data-theme="light"] .view-nav-option { color: var(--text-primary) !important; }
         body[data-theme="light"] .view-nav-option:hover { background: rgba(139, 92, 246, 0.10) !important; }
         body[data-theme="light"] .view-nav-label { color: var(--accent-cyan); }
+        body[data-theme="light"] .median-highlight { color: var(--accent-cyan) !important; text-shadow: none !important; }
         body[data-theme="light"] .view-nav-dropdown {
             background: rgba(139, 92, 246, 0.08);
             border-color: rgba(139, 92, 246, 0.4);
@@ -48134,14 +48135,14 @@
                     if (field==='AGE') {
                         const profMed = typeof calculateMedianAgeFromDistribution==='function' ? calculateMedianAgeFromDistribution(obj) : 0;
                         const gpMed = typeof calculateMedianAgeFromDistribution==='function' ? calculateMedianAgeFromDistribution(gpObj) : 0;
-                        medianSpan.innerHTML = profMed>0 ? `<span style="color:#f0ff00;">Audience Median: ${profMed.toFixed(2)} yrs</span>${gpMed>0 ? ` | <span class="has-tooltip" data-tooltip="${(medianTip||'').replace(/"/g,'&quot;')}" style="color:var(--text-secondary);">Gen Pop Median: ${gpMed.toFixed(2)} yrs</span>` : ''}` : '';
+                        medianSpan.innerHTML = profMed>0 ? `<span class="median-highlight" style="color:#f0ff00;">Audience Median: ${profMed.toFixed(2)} yrs</span>${gpMed>0 ? ` | <span class="has-tooltip" data-tooltip="${(medianTip||'').replace(/"/g,'&quot;')}" style="color:var(--text-secondary);">Gen Pop Median: ${gpMed.toFixed(2)} yrs</span>` : ''}` : '';
                     } else {
                         // Defensively backfill missing "Under $25,000" bucket on gen-pop side
                         const gpObjForMed = typeof _tstEnsureCompleteGenPopIncome === 'function'
                             ? _tstEnsureCompleteGenPopIncome(gpObj)
                             : gpObj;
                         const med = typeof calculateDemographicMedian==='function' ? calculateDemographicMedian(obj, gpObjForMed, 'income') : {profile:null,genPop:null};
-                        medianSpan.innerHTML = med.profile ? `<span style="color:#f0ff00;">Audience Median: $${med.profile.value}</span>${med.genPop ? ` | <span class="has-tooltip" data-tooltip="${(medianTip||'').replace(/"/g,'&quot;')}" style="color:var(--text-secondary);">Gen Pop Median: $${med.genPop.value}</span>` : ''}` : '';
+                        medianSpan.innerHTML = med.profile ? `<span class="median-highlight" style="color:#f0ff00;">Audience Median: $${med.profile.value}</span>${med.genPop ? ` | <span class="has-tooltip" data-tooltip="${(medianTip||'').replace(/"/g,'&quot;')}" style="color:var(--text-secondary);">Gen Pop Median: $${med.genPop.value}</span>` : ''}` : '';
                     }
                 }
                 tstCharts['demo_' + field] = new Chart(canvas, {
@@ -48383,13 +48384,13 @@
                     if (field==='AGE') {
                         const profMed = typeof calculateMedianAgeFromDistribution==='function' ? calculateMedianAgeFromDistribution(obj) : 0;
                         const gpMed = typeof calculateMedianAgeFromDistribution==='function' ? calculateMedianAgeFromDistribution(gpObj) : 0;
-                        medianSpan.innerHTML = profMed>0 ? `<span style="color:#f0ff00;">Audience Median: ${profMed.toFixed(2)} yrs</span>${gpMed>0 ? ` | <span style="color:var(--text-secondary);">Gen Pop Median: ${gpMed.toFixed(2)} yrs</span>` : ''}` : '';
+                        medianSpan.innerHTML = profMed>0 ? `<span class="median-highlight" style="color:#f0ff00;">Audience Median: ${profMed.toFixed(2)} yrs</span>${gpMed>0 ? ` | <span style="color:var(--text-secondary);">Gen Pop Median: ${gpMed.toFixed(2)} yrs</span>` : ''}` : '';
                     } else {
                         const gpObjForMed = typeof _tstEnsureCompleteGenPopIncome === 'function'
                             ? _tstEnsureCompleteGenPopIncome(gpObj)
                             : gpObj;
                         const med = typeof calculateDemographicMedian==='function' ? calculateDemographicMedian(obj, gpObjForMed, 'income') : {profile:null,genPop:null};
-                        medianSpan.innerHTML = med.profile ? `<span style="color:#f0ff00;">Audience Median: $${med.profile.value}</span>${med.genPop ? ` | <span style="color:var(--text-secondary);">Gen Pop Median: $${med.genPop.value}</span>` : ''}` : '';
+                        medianSpan.innerHTML = med.profile ? `<span class="median-highlight" style="color:#f0ff00;">Audience Median: $${med.profile.value}</span>${med.genPop ? ` | <span style="color:var(--text-secondary);">Gen Pop Median: $${med.genPop.value}</span>` : ''}` : '';
                     }
                 }
                 tstCharts['demo_per_' + field.toLowerCase()] = new Chart(canvas, {
@@ -56376,8 +56377,8 @@
                 const profileVal = profileMedianAge > 0 ? `${profileMedianAge.toFixed(2)} years` : 'N/A';
                 const genPopVal = genPopMedianAge > 0 ? `${genPopMedianAge.toFixed(2)} years` : 'N/A';
                 ageMedianDisplay.innerHTML = isGenPop 
-                    ? `<span style="color: #f0ff00; text-shadow: 0 0 8px rgba(240, 255, 0, 0.5);">${profileName} Median: ${profileVal}</span>`
-                    : `<span style="color: #f0ff00; text-shadow: 0 0 8px rgba(240, 255, 0, 0.5);">${profileName} Median: ${profileVal}</span> | <span style="color: var(--text-secondary);">Gen Pop Median: ${genPopVal}</span>`;
+                    ? `<span class="median-highlight" style="color: #f0ff00; text-shadow: 0 0 8px rgba(240, 255, 0, 0.5);">${profileName} Median: ${profileVal}</span>`
+                    : `<span class="median-highlight" style="color: #f0ff00; text-shadow: 0 0 8px rgba(240, 255, 0, 0.5);">${profileName} Median: ${profileVal}</span> | <span style="color: var(--text-secondary);">Gen Pop Median: ${genPopVal}</span>`;
             }
             
             const ageChartType = chartTypePrefs.age || 'bar';
@@ -56723,8 +56724,8 @@
                 const profileVal = incomeMedian.profile ? `$${incomeMedian.profile.value}` : 'N/A';
                 const genPopVal = incomeMedian.genPop ? `$${incomeMedian.genPop.value}` : 'N/A';
                 incomeMedianDisplay.innerHTML = isGenPop 
-                    ? `<span style="color: #f0ff00; text-shadow: 0 0 8px rgba(240, 255, 0, 0.5);">${profileName} Median: ${profileVal}</span>`
-                    : `<span style="color: #f0ff00; text-shadow: 0 0 8px rgba(240, 255, 0, 0.5);">${profileName} Median: ${profileVal}</span> | <span style="color: var(--text-secondary);">Gen Pop Median: ${genPopVal}</span>`;
+                    ? `<span class="median-highlight" style="color: #f0ff00; text-shadow: 0 0 8px rgba(240, 255, 0, 0.5);">${profileName} Median: ${profileVal}</span>`
+                    : `<span class="median-highlight" style="color: #f0ff00; text-shadow: 0 0 8px rgba(240, 255, 0, 0.5);">${profileName} Median: ${profileVal}</span> | <span style="color: var(--text-secondary);">Gen Pop Median: ${genPopVal}</span>`;
             }
             
             charts.income = new Chart(document.getElementById('incomeChart'), {
