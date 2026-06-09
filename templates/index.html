@@ -133,6 +133,8 @@
         body[data-theme="light"] #blueIQView .blue-iq-filter-bar { background: transparent; border-color: rgba(0,0,0,0.1); }
         body[data-theme="light"] #blueIQView .blue-iq-filter-bar select,
         body[data-theme="light"] #blueIQView .blue-iq-filter-bar input { background: #fff; color: var(--text-primary); border-color: rgba(0,0,0,0.15); }
+        body[data-theme="light"] #shareOfTimeIQView .sot-cohort-chip.active { color: #5b21b6; }
+        body[data-theme="light"] #shareOfTimeIQView .sot-cohort-chip.baseline { color: #0e7490; }
         body[data-theme="light"] .iqr-btn-primary { background: var(--accent-cyan); border-color: var(--accent-cyan); color: #fff; }
         body[data-theme="light"] .iqr-btn-primary:hover { background: var(--accent-cyan); border-color: var(--accent-cyan); color: #fff; filter: brightness(1.1); }
         body[data-theme="light"] .iqr-info-chip { background: #c8e600; color: #1a1a1a; border-color: #a0d911; }
@@ -38804,6 +38806,10 @@
             if (_sotDoughnutInst) _sotDoughnutInst.destroy();
             var dCtx = document.getElementById('sotDoughnutChart');
             if (dCtx && typeof Chart !== 'undefined') {
+                var _sotIsLight = document.body.getAttribute('data-theme') === 'light';
+                var _sotTextColor = _sotIsLight ? '#374151' : '#e8e8e8';
+                var _sotTickColor = _sotIsLight ? '#374151' : '#aaa';
+                var _sotGridColor = _sotIsLight ? 'rgba(0,0,0,0.08)' : 'rgba(255,255,255,0.06)';
                 _sotDoughnutInst = new Chart(dCtx.getContext('2d'), {
                     type: 'doughnut',
                     plugins: [ChartDataLabels],
@@ -38811,7 +38817,7 @@
                     options: {
                         responsive: true, maintainAspectRatio: false, cutout: '52%',
                         plugins: {
-                            legend: { position: 'bottom', labels: { padding: 14, usePointStyle: true, font: { size: 12 }, color: '#e8e8e8' } },
+                            legend: { position: 'bottom', labels: { padding: 14, usePointStyle: true, font: { size: 12 }, color: _sotTextColor } },
                             tooltip: { callbacks: { label: function(ctx) {
                                 var cat = sortedCats[ctx.dataIndex].c;
                                 return ctx.label + ': ' + ctx.parsed.toFixed(1) + '% \u2014 ' + _sotTimeLabel(cat, gran, data.num_days);
@@ -38834,12 +38840,12 @@
                     data: { labels: labels, datasets: [{ label: 'Share %', data: shares, backgroundColor: colors, borderWidth: 0, borderRadius: 5, barPercentage: 0.85 }] },
                     options: {
                         indexAxis: 'y', responsive: true, maintainAspectRatio: false,
-                        scales: { x: { grid: { color: 'rgba(255,255,255,0.06)' }, ticks: { color: '#aaa', font: { size: 11 }, callback: function(v) { return v + '%'; } } }, y: { grid: { display: false }, ticks: { color: '#e8e8e8', font: { size: 12 } } } },
+                        scales: { x: { grid: { color: _sotGridColor }, ticks: { color: _sotTickColor, font: { size: 11 }, callback: function(v) { return v + '%'; } } }, y: { grid: { display: false }, ticks: { color: _sotTextColor, font: { size: 12 } } } },
                         plugins: { legend: { display: false }, tooltip: { callbacks: { label: function(ctx) {
                             var cat = sortedCats[ctx.dataIndex].c;
                             return ctx.parsed.x.toFixed(1) + '% \u2014 ' + _sotTimeLabel(cat, gran, data.num_days);
                         } } },
-                        datalabels: { anchor: 'end', align: 'end', offset: 4, color: '#fff', font: { weight: '700', size: 12 }, formatter: function(v) { return v >= 0.5 ? v.toFixed(1) + '%' : ''; } }
+                        datalabels: { anchor: 'end', align: 'end', offset: 4, color: _sotIsLight ? '#374151' : '#fff', font: { weight: '700', size: 12 }, formatter: function(v) { return v >= 0.5 ? v.toFixed(1) + '%' : ''; } }
                         },
                         onClick: function(e, elements) {
                             if (elements.length) sotDrillDown(sortedCats[elements[0].index].idx);
@@ -38894,6 +38900,7 @@
             if (_sotDrillInst) _sotDrillInst.destroy();
             var canvas = document.getElementById('sotDrillChart');
             canvas.parentElement.style.height = Math.max(280, brands.length * 26) + 'px';
+            var _sotDrillLight = document.body.getAttribute('data-theme') === 'light';
             _sotDrillInst = new Chart(canvas.getContext('2d'), {
                 type: 'bar',
                 plugins: [ChartDataLabels],
@@ -38901,13 +38908,13 @@
                 options: {
                     indexAxis: 'y', responsive: true, maintainAspectRatio: false,
                     scales: {
-                        x: { grid: { color: 'rgba(255,255,255,0.06)' }, ticks: { color: '#aaa', font: { size: 11 }, callback: function(v) { return v + '%'; } } },
-                        y: { grid: { display: false }, ticks: { color: '#e8e8e8', font: { size: 11 } } }
+                        x: { grid: { color: _sotDrillLight ? 'rgba(0,0,0,0.08)' : 'rgba(255,255,255,0.06)' }, ticks: { color: _sotDrillLight ? '#374151' : '#aaa', font: { size: 11 }, callback: function(v) { return v + '%'; } } },
+                        y: { grid: { display: false }, ticks: { color: _sotDrillLight ? '#374151' : '#e8e8e8', font: { size: 11 } } }
                     },
                     plugins: {
                         legend: { display: false },
                         tooltip: { callbacks: { label: function(c) { var b = brands[c.dataIndex]; var ph = (b.projected_hours||0); var phl = ph >= 1000000 ? (ph/1e6).toFixed(1)+'M' : ph.toLocaleString(); var eu = (b.estimated_users || 0); var eul = eu >= 1000000 ? (eu/1e6).toFixed(1)+'M' : eu.toLocaleString(); return c.parsed.x.toFixed(1) + '% of ' + cat.name + ' (' + phl + ' US proj. hrs; ~' + eul + ' users)'; } } },
-                        datalabels: { anchor: 'end', align: 'end', offset: 4, color: '#fff', font: { weight: '700', size: 11 }, formatter: function(v) { return v >= 0.5 ? v.toFixed(1) + '%' : ''; } }
+                        datalabels: { anchor: 'end', align: 'end', offset: 4, color: _sotDrillLight ? '#374151' : '#fff', font: { weight: '700', size: 11 }, formatter: function(v) { return v >= 0.5 ? v.toFixed(1) + '%' : ''; } }
                     }
                 }
             });
@@ -40496,7 +40503,11 @@
                     }
                 };
             };
-            var _pieLegendHtml = '<div style="display:flex;flex-wrap:wrap;justify-content:center;gap:0.3rem 0.9rem;margin-top:0.5rem;font-size:0.65rem;color:#e8e8e8;">';
+            var _sotCmpIsLight = document.body.getAttribute('data-theme') === 'light';
+            var _sotCmpTextColor = _sotCmpIsLight ? '#374151' : '#e8e8e8';
+            var _sotCmpTickColor = _sotCmpIsLight ? '#374151' : '#aaa';
+            var _sotCmpGridColor = _sotCmpIsLight ? 'rgba(0,0,0,0.08)' : 'rgba(255,255,255,0.06)';
+            var _pieLegendHtml = '<div style="display:flex;flex-wrap:wrap;justify-content:center;gap:0.3rem 0.9rem;margin-top:0.5rem;font-size:0.65rem;color:' + _sotCmpTextColor + ';">';
             pieLabels.forEach(function(lbl, i) {
                 _pieLegendHtml += '<div style="display:flex;align-items:center;gap:0.3rem;"><span style="width:8px;height:8px;border-radius:50%;background:' + pieColors[i] + ';display:inline-block;"></span>' + lbl + '</div>';
             });
@@ -40713,13 +40724,13 @@
                     options: {
                         responsive: true, maintainAspectRatio: false,
                         scales: {
-                            x: { grid: { display: false }, ticks: { color: '#e8e8e8', font: { size: 11, weight: '600' } } },
-                            y: { grid: { color: 'rgba(255,255,255,0.06)' }, ticks: { color: '#aaa', callback: function(v) { return v + '%'; } }, beginAtZero: true }
+                            x: { grid: { display: false }, ticks: { color: _sotCmpTextColor, font: { size: 11, weight: '600' } } },
+                            y: { grid: { color: _sotCmpGridColor }, ticks: { color: _sotCmpTickColor, callback: function(v) { return v + '%'; } }, beginAtZero: true }
                         },
                         plugins: {
-                            legend: { position: 'top', labels: { color: '#e8e8e8', font: { size: 11 }, padding: 16, usePointStyle: true } },
+                            legend: { position: 'top', labels: { color: _sotCmpTextColor, font: { size: 11 }, padding: 16, usePointStyle: true } },
                             tooltip: { callbacks: { label: function(ctx) { return ctx.dataset.label + ': ' + ctx.parsed.y.toFixed(1) + '%'; } } },
-                            datalabels: { anchor: 'end', align: 'end', offset: 2, color: '#fff', font: { weight: '700', size: 10 }, formatter: function(v) { return v >= 1 ? v.toFixed(1) + '%' : ''; } }
+                            datalabels: { anchor: 'end', align: 'end', offset: 2, color: _sotCmpIsLight ? '#374151' : '#fff', font: { weight: '700', size: 10 }, formatter: function(v) { return v >= 1 ? v.toFixed(1) + '%' : ''; } }
                         }
                     }
                 });
