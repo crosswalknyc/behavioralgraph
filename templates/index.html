@@ -36133,11 +36133,12 @@
 
             // ── Compact SVG canvas ───────────────────────────────────
             var W    = 1200;
-            var padT = 38, padB = 50, padL = 44, padR = 56;
+            var padT = 38, padB = 50, padL = 44, padR = 72;
             var H    = 500;
             var axisY = Math.round(H * 0.52);
-            var LANE_STEP = 74;
-            var MAX_LANES = 8;
+            var LANE_STEP = 56;
+            var MAX_LANES = 4;
+            var MAX_LANE_LAYERS = 2;
 
             var xMin = axisConfig.xMin, xMax = axisConfig.xMax;
             function xFor(t) {
@@ -36312,7 +36313,8 @@
                      + '<title>' + _jiqEsc(e.vertical + ' — ' + e.pct.toFixed(1) + '% — ' + e.typical_window) + (e.top_sites.length ? ' — ' + _jiqEsc(e.top_sites.join(', ')) : '') + '</title>'
                      + '</g>');
 
-                parts.push('<text x="' + e.cx + '" y="' + labelY0 + '" text-anchor="middle" fill="var(--text-primary)" font-weight="600" font-size="10.5">' + _jiqEsc(cleanLabel) + '</text>');
+                var labelX = Math.max(padL + 50, Math.min(W - padR - 50, e.cx));
+                parts.push('<text x="' + labelX + '" y="' + labelY0 + '" text-anchor="middle" fill="var(--text-primary)" font-weight="600" font-size="10.5">' + _jiqEsc(cleanLabel) + '</text>');
             });
 
             var anchorWord = anchorIsPurchase ? 'purchase' : 'showtime';
