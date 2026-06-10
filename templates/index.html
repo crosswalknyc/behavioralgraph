@@ -17647,15 +17647,15 @@
                                             <div id="bpiqKpiGenPopAudienceProj" style="font-size: 0.7rem; color: var(--text-secondary);"></div>
                                         </div>
                                         <div class="tab-section" style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 1.25rem; text-align: center;">
-                                            <div style="font-size: 0.7rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em;">Pre-Campaign Consumer Engagement<br>(Gen Pop)</div>
+                                            <div style="font-size: 0.7rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em;">Pre-Campaign Consumer Engagement</div>
                                             <div id="bpiqKpiGenPopPreUsers" style="font-size: 1.1rem; font-weight: 700; color: var(--accent-cyan); opacity: 0.85; white-space: nowrap;"></div>
                                         </div>
                                         <div class="tab-section" style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 1.25rem; text-align: center;">
-                                            <div style="font-size: 0.7rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em;">Post-Campaign Consumer Engagement<br>(Gen Pop)</div>
+                                            <div style="font-size: 0.7rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em;">Post-Campaign Consumer Engagement</div>
                                             <div id="bpiqKpiGenPopPostUsers" style="font-size: 1.1rem; font-weight: 700; color: var(--accent-orange); opacity: 0.85; white-space: nowrap;"></div>
                                         </div>
                                         <div class="tab-section" style="background: var(--bg-card); border: 1.5px solid #c8e600; border-radius: 12px; padding: 1.25rem; text-align: center;">
-                                            <div style="font-size: 0.7rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em;">Brand Engagement Lift<br>(Gen Pop)</div>
+                                            <div style="font-size: 0.7rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em;">Brand Engagement Lift</div>
                                             <div id="bpiqKpiGenPopLift" style="font-size: 1.1rem; font-weight: 700; white-space: nowrap;"></div>
                                         </div>
                                     </div>
@@ -30015,7 +30015,7 @@
                 var gpPost    = Math.round(gpSize * gpPostPct / 100);
                 var gpLiftUsers = gpPost - gpPre;
                 document.getElementById('bpiqKpiGenPopAudience').textContent = _bpiqFmtNum(gpSize);
-                document.getElementById('bpiqKpiGenPopAudienceProj').textContent = 'Control (Gen Pop)';
+                document.getElementById('bpiqKpiGenPopAudienceProj').textContent = '';
                 document.getElementById('bpiqKpiGenPopPreUsers').innerHTML  = _bpiqStackedKpi(_bpiqFmtNum(gpPre),  gpPrePct.toFixed(2)  + '%');
                 document.getElementById('bpiqKpiGenPopPostUsers').innerHTML = _bpiqStackedKpi(_bpiqFmtNum(gpPost), gpPostPct.toFixed(2) + '%');
                 document.getElementById('bpiqKpiGenPopLift').innerHTML = _bpiqStackedKpi(
