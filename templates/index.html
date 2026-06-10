@@ -34159,14 +34159,33 @@
                     && Number(kpis.confirmed_digital_purchases) > 0);
                 if (targetType === 'website') {
                     var _isFandango = (meta.target || '').toLowerCase().indexOf('fandango') >= 0;
-                    k = [
-                        [_isFandango ? 'Unique Visitors (US, in window)' : 'Visitors (US, in window)', _jiqFmt(kpis.total_users)],
-                        ['Transacted On Site',       _jiqFmt(kpis.converted_users)],
-                        ['On-Site CR',               (kpis.conversion_pct != null ? kpis.conversion_pct + '%' : '—')],
-                        [_isFandango ? 'Switched & Bought Elsewhere' : 'Switched & Bought', _jiqFmt(kpis.switched_users)],
-                        [_isFandango ? 'Total Captured (Fandango + Other Sellers)' : 'Total Captured (any seller)', (kpis.captured_pct != null ? kpis.captured_pct + '%' : '—')],
-                        [_isFandango ? 'DID NOT TRANSACT ONLINE' : 'Never Transacted', (kpis.never_transacted_pct != null ? kpis.never_transacted_pct + '%' : '—')],
-                    ];
+                    if (_isFandango) {
+                        var _totalU = +(kpis.total_users || 0);
+                        var _convU = +(kpis.converted_users || 0);
+                        var _swU = +(kpis.switched_users || 0);
+                        var _capturedU = _convU + _swU;
+                        var _neverU = _totalU - _capturedU;
+                        var _swPct = _totalU ? ((_swU / _totalU) * 100).toFixed(1) : '—';
+                        var _capturedNum = _jiqFmt(_capturedU);
+                        var _neverNum = _jiqFmt(_neverU > 0 ? _neverU : 0);
+                        k = [
+                            ['Unique Visitors (US, in window)', _jiqFmt(kpis.total_users)],
+                            ['Transacted On Site', _jiqFmt(kpis.converted_users)],
+                            ['On-Site CR', _jiqFmt(_convU) + '  |  ' + (kpis.conversion_pct != null ? kpis.conversion_pct + '%' : '—')],
+                            ['Switched & Bought Elsewhere', _jiqFmt(_swU) + '  |  ' + _swPct + '%'],
+                            ['Total Captured (Fandango + Other Sellers)', _capturedNum + '  |  ' + (kpis.captured_pct != null ? kpis.captured_pct + '%' : '—')],
+                            ['DID NOT TRANSACT ONLINE', _neverNum + '  |  ' + (kpis.never_transacted_pct != null ? kpis.never_transacted_pct + '%' : '—')],
+                        ];
+                    } else {
+                        k = [
+                            ['Visitors (US, in window)', _jiqFmt(kpis.total_users)],
+                            ['Transacted On Site',       _jiqFmt(kpis.converted_users)],
+                            ['On-Site CR',               (kpis.conversion_pct != null ? kpis.conversion_pct + '%' : '—')],
+                            ['Switched & Bought', _jiqFmt(kpis.switched_users)],
+                            ['Total Captured (any seller)', (kpis.captured_pct != null ? kpis.captured_pct + '%' : '—')],
+                            ['Never Transacted', (kpis.never_transacted_pct != null ? kpis.never_transacted_pct + '%' : '—')],
+                        ];
+                    }
                 } else if (targetType === 'tv_show' || kpis.tv_show_mode === true) {
                     // TV/streaming series — no money/tickets, just viewers
                     // + watch hours + lifecycle bands. Pull tv_show_* fields
