@@ -1118,6 +1118,268 @@ def dejitter_within_cat_4dp_collisions(df, subject, verbose=True,
 
 
 # ============================================================================
+# 4a-bis. CROSS-PROFILE 4dp dejitter (added 2026-06-10 after Jenna's
+#         colleague's MPB cross-profile observation + targeted scan).
+#
+# Different problem from `dejitter_within_cat_4dp_collisions`:
+#   - within-cat: ONE category, MANY brands all at exact same 4dp BP
+#                 (LLM batch placeholder, 69 MPB rows at 5.6789%)
+#   - cross-profile: ONE (cat, brand) pair shared across MANY profiles
+#                    at exact same 4dp BP (e.g. Mint Mobile @ 1.9898%
+#                    across 5 unrelated talent profiles, or Visa @
+#                    56.3383% across 4 show-cohort profiles)
+#
+# Root cause: per-category research agent emits deterministic values for
+# (cat, brand) tuples that aren't differentiated enough by persona
+# context (peripheral telecom MVNOs, infrastructure credit cards). With
+# no per-subject jitter pass downstream of the agent, the same value
+# sticks across profiles — even when each profile passes the local
+# `dejitter_within_cat_4dp_collisions` (because the brands are NOT
+# colliding within a single profile, only across profiles).
+#
+# This enforcer loads a (CATEGORY, VALUE, BP_4dp) → set(subject) index
+# from S3 (cached 1h) and re-jitters any row whose 4dp value is held by
+# >= min_collision_count OTHER subjects. Excludes LOCATION (DMA codes
+# legitimately repeat at gen-pop values per Jenna's instruction), demos,
+# and meta categories.
+#
+# Idempotent: after re-jitter, the new BP uses the per-subject hash
+# `_jitter_for(subject|brand|cat|xprof-4dp)` so a second pass (next
+# pipeline run, with a fresh corpus that includes the just-saved file)
+# won't re-trigger.
+# ============================================================================
+
+_CROSS_PROFILE_INDEX_CACHE_PATH = '/tmp/.cross_profile_4dp_index.pkl'
+_CROSS_PROFILE_INDEX_TTL_SECS = 3600
+# Categories explicitly excluded from cross-profile dejitter:
+#   - DEPIN_DEMO_CATS: demos legitimately repeat (gen pop anchored)
+#   - DEPIN_META_CATS: BRAND INPUT, SAMPLE SIZE, etc.
+#   - LOCATION: DMA codes legitimately repeat across profiles at gen-pop
+#               values (Jenna 2026-06-10: "you can ignore location")
+_CROSS_PROFILE_SKIP_CATS = (
+    DEPIN_DEMO_CATS | DEPIN_META_CATS | {'LOCATION'}
+)
+
+
+def _load_cross_profile_4dp_index(*,
+                                    bucket='dashboard-inputs',
+                                    region_name='us-east-2',
+                                    cache_path=_CROSS_PROFILE_INDEX_CACHE_PATH,
+                                    ttl=_CROSS_PROFILE_INDEX_TTL_SECS,
+                                    max_workers=20,
+                                    verbose=True):
+    """Build (CATEGORY, VALUE, BP_4dp) -> set(subject_upper) index from S3.
+
+    Cached as pickle at cache_path with TTL. Each rebuild walks every
+    root-level *.csv in the bucket (excluding _backups/, system/, and
+    the canonical Gen_Pop_2026.csv). Reads with 20 parallel workers;
+    typical wall time ~25s for 838 files.
+
+    Returns the dict, or None if S3 is unreachable / boto3 missing.
+    """
+    import os as _os_x, time as _time_x, pickle as _pickle_x
+    try:
+        if _os_x.path.exists(cache_path):
+            age = _time_x.time() - _os_x.path.getmtime(cache_path)
+            if age < ttl:
+                with open(cache_path, 'rb') as _f:
+                    idx = _pickle_x.load(_f)
+                if verbose:
+                    n_keys = len(idx)
+                    n_subs = len({s for ss in idx.values() for s in ss})
+                    print(f"   📚 cross-profile 4dp index loaded from cache "
+                          f"({n_keys:,} keys / {n_subs:,} subjects / "
+                          f"age {age/60:.0f}min)")
+                return idx
+    except Exception as _e_load:
+        if verbose:
+            print(f"   ⚠ cross-profile cache load failed: {_e_load}")
+
+    try:
+        import io as _io_x
+        import boto3 as _boto3_x
+        import concurrent.futures as _cf_x
+        s3 = _boto3_x.client('s3', region_name=region_name)
+        paginator = s3.get_paginator('list_objects_v2')
+        keys = []
+        for page in paginator.paginate(Bucket=bucket):
+            for obj in page.get('Contents', []) or []:
+                k = obj['Key']
+                if (k.endswith('.csv')
+                        and '/' not in k
+                        and not k.startswith('_')
+                        and k != 'Gen_Pop_2026.csv'):
+                    keys.append(k)
+        if verbose:
+            print(f"   📚 building cross-profile 4dp index from "
+                  f"{len(keys):,} S3 profiles...")
+
+        index = defaultdict(set)
+        bp_col_canon = 'Brand Penetration (Row)'
+
+        def _fetch(k):
+            try:
+                obj = s3.get_object(Bucket=bucket, Key=k)
+                df_x = pd.read_csv(_io_x.BytesIO(obj['Body'].read()),
+                                   low_memory=False)
+                bi = df_x[df_x['Column'].astype(str).str.upper()
+                          == 'BRAND INPUT']
+                subj = (str(bi.iloc[0].get('Value', '')).strip().upper()
+                        if len(bi) else k.upper())
+                rows_local = []
+                for _, r in df_x.iterrows():
+                    cat = str(r.get('Column', '') or '').strip().upper()
+                    if cat in _CROSS_PROFILE_SKIP_CATS:
+                        continue
+                    val = str(r.get('Value', '') or '').strip().upper()
+                    if not val:
+                        continue
+                    bp = _bp(r.get(bp_col_canon, 0))
+                    if bp <= 0 or bp >= 99.99:
+                        continue
+                    rows_local.append((cat, val, round(bp, 4), subj))
+                return rows_local
+            except Exception:
+                return []
+
+        with _cf_x.ThreadPoolExecutor(max_workers=max_workers) as ex:
+            for rows in ex.map(_fetch, keys):
+                for cat, val, bp4, subj in rows:
+                    index[(cat, val, bp4)].add(subj)
+
+        out = dict(index)
+        try:
+            with open(cache_path, 'wb') as _f:
+                _pickle_x.dump(out, _f)
+        except Exception as _e_w:
+            if verbose:
+                print(f"   ⚠ cross-profile cache write failed: {_e_w}")
+
+        if verbose:
+            n_keys = len(out)
+            n_subs = len({s for ss in out.values() for s in ss})
+            print(f"   📚 cross-profile 4dp index built: {n_keys:,} keys / "
+                  f"{n_subs:,} subjects")
+        return out
+    except Exception as _e_build:
+        if verbose:
+            print(f"   ⚠ cross-profile 4dp index build failed: {_e_build}")
+        return None
+
+
+def dejitter_cross_profile_4dp_collisions(df, subject, *,
+                                          verbose=True,
+                                          bucket='dashboard-inputs',
+                                          region_name='us-east-2',
+                                          cache_path=_CROSS_PROFILE_INDEX_CACHE_PATH,
+                                          ttl=_CROSS_PROFILE_INDEX_TTL_SECS,
+                                          min_collision_count=2,
+                                          max_attempts=20,
+                                          corpus_index=None):
+    """Re-jitter rows whose (CATEGORY, VALUE, BP_4dp) tuple is held by
+    `min_collision_count` or more OTHER subjects in the S3 corpus.
+
+    Catches cross-profile pins like:
+      - TELECOM/MINT MOBILE @ 1.9898% across 5 talent profiles
+      - CREDIT PROVIDER/VISA @ 56.3383% across 4 show-cohort profiles
+
+    Excludes LOCATION (DMA codes legitimately repeat per Jenna), demos,
+    meta. Recomputes Raw + Proj. Idempotent.
+
+    `corpus_index` is an optional pre-built dict (cat, val, bp4) -> set
+    of subjects; pass it to avoid the load cost when the caller already
+    has the index in hand (e.g. a backfill loop).
+    """
+    if df is None or len(df) == 0:
+        return df, 0
+    bp_col, cs_col, raw_col, proj_col = _detect_cols(df)
+    sample_size = _detect_sample_size(df, bp_col, raw_col)
+
+    index = corpus_index if corpus_index is not None else \
+        _load_cross_profile_4dp_index(
+            bucket=bucket, region_name=region_name,
+            cache_path=cache_path, ttl=ttl, verbose=verbose,
+        )
+    if not index:
+        if verbose:
+            print(f"   ⚠ cross-profile 4dp dejitter: corpus index "
+                  f"unavailable; skipping")
+        return df, 0
+
+    df = df.copy()
+    for _c in (bp_col, cs_col, raw_col, proj_col):
+        if _c and _c in df.columns and df[_c].dtype.name not in ('object', 'O'):
+            df[_c] = df[_c].astype(object)
+
+    subject_key = str(subject or '').strip().upper()
+    fixed = 0
+
+    for idx, r in df.iterrows():
+        cat = str(r.get('Column', '') or '').strip().upper()
+        if cat in _CROSS_PROFILE_SKIP_CATS:
+            continue
+        val = str(r.get('Value', '') or '').strip().upper()
+        if not val:
+            continue
+        old_bp = _bp(r.get(bp_col, 0))
+        if old_bp <= 0 or old_bp >= 99.99:
+            continue
+        bp4 = round(old_bp, 4)
+        peers = index.get((cat, val, bp4), set())
+        peers_excl = {s for s in peers if s and s != subject_key}
+        if len(peers_excl) < min_collision_count:
+            continue
+
+        h = int(_hl.blake2b(
+            f'{subject_key}|{cat}|{val}|xprof-4dp'.encode(),
+            digest_size=8,
+        ).hexdigest(), 16)
+        # Drift band scales with magnitude so the new 4dp value stays
+        # within reading distance of the original. Hash → uniform real
+        # in [-1, +1] picks the position inside the band; this gives
+        # ~ 2*band*10000 unique 4dp slots. Bands sized so secondary-
+        # collision rate is tiny even for the largest pin we've seen
+        # (~25 subjects on niche-floor 0.5pp brands like AUDEMARS PIGUET).
+        # 400+ slots × 25 colliders → ~7.5% pairwise collision chance,
+        # which the convergence loop catches in 1-2 extra passes.
+        if old_bp < 0.10:
+            max_drift = 0.020
+        elif old_bp < 1.0:
+            max_drift = 0.030
+        elif old_bp < 10.0:
+            max_drift = 0.030
+        else:
+            max_drift = 0.050
+        u = ((h % 200001) - 100000) / 100000.0
+        new_v = round(old_bp + u * max_drift, 4)
+        if new_v == bp4:
+            new_v = round(bp4 + (max_drift / 4.0) * (1 if u >= 0 else -1), 4)
+
+        for k in range(max_attempts):
+            if not (0.0001 < new_v < 99.99):
+                new_v = round(old_bp - u * max_drift, 4)
+                u = -u
+                continue
+            new_peers = index.get((cat, val, new_v), set())
+            new_peers_excl = {s for s in new_peers if s and s != subject_key}
+            if (new_v != bp4
+                    and len(new_peers_excl) < min_collision_count
+                    and not _looks_round_any(new_v)):
+                break
+            step_sign = 1 if u >= 0 else -1
+            new_v = round(new_v + step_sign * 0.0007, 4)
+
+        df = _set_bp(df, idx, new_v, bp_col, cs_col, raw_col, proj_col,
+                     sample_size)
+        fixed += 1
+
+    if verbose and fixed:
+        print(f"   🌐 dejitter cross-profile 4dp collisions: {fixed} "
+              f"row(s) re-jittered (LOCATION + demos excluded)")
+    return df, fixed
+
+
+# ============================================================================
 # 4b. Sequential-digit placeholder detector (added 2026-05-30 after Jenna's
 #     May 30 batch escalation). Niche-creator profiles with tiny raw
 #     universes (3-75 panel users) force `mpb-floor` to ask the LLM to
@@ -5411,6 +5673,20 @@ def run_all_enforcers(df, subject, brand_category=None, verbose=True):
         total += n
     except Exception as e:
         print(f"   ⚠️ enforcer dejitter_within_cat_4dp_collisions failed: {e}")
+    # 2026-06-10 (Jenna's colleague's MPB cross-profile observation):
+    # break CROSS-PROFILE 4dp pins — ONE (cat, brand) shared at exact 4dp
+    # BP across MANY profiles. Caught: TELECOM/MINT MOBILE @ 1.9898%
+    # across 5 talent profiles; CREDIT PROVIDER/VISA @ 56.3383% across
+    # 4 show-cohort profiles (entire CP block pinned). Excludes LOCATION
+    # (DMA codes legitimately repeat at gen-pop). Loads corpus index from
+    # S3 with 1h cache; no-op if S3 unavailable.
+    try:
+        df, n = dejitter_cross_profile_4dp_collisions(
+            df, subject, verbose=verbose,
+        )
+        total += n
+    except Exception as e:
+        print(f"   ⚠️ enforcer dejitter_cross_profile_4dp_collisions failed: {e}")
     # 2026-05-30 (D1 fix from Jenna's May 30 batch escalation): catch
     # LLM rotating-placeholder BPs (5.6789, 6.7890, 7.8901, 8.9012,
     # 9.0123, 9.8765, 8.7654, ...) by PATTERN — these slip past the
