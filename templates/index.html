@@ -29878,7 +29878,7 @@
                 var gpPost    = Math.round(gpSize * gpPostPct / 100);
                 var gpLiftUsers = gpPost - gpPre;
                 document.getElementById('bpiqKpiGenPopAudience').textContent = _bpiqFmtNum(gpSize);
-                document.getElementById('bpiqKpiGenPopAudienceProj').textContent = '';
+                document.getElementById('bpiqKpiGenPopAudienceProj').textContent = 'Control (Gen Pop)';
                 document.getElementById('bpiqKpiGenPopPreUsers').innerHTML  = _bpiqFmtNum(gpPre) + pipe + gpPrePct.toFixed(2) + '%';
                 document.getElementById('bpiqKpiGenPopPostUsers').innerHTML = _bpiqFmtNum(gpPost) + pipe + gpPostPct.toFixed(2) + '%';
                 document.getElementById('bpiqKpiGenPopLift').innerHTML = '<span style="color:#c8e600">' + _bpiqFmtNum(gpLiftUsers) + '</span>' + pipe + _bpiqFmtLift(cg.control_lift_pct_users);
