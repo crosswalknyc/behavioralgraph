@@ -17666,7 +17666,7 @@
                                      minmax(150px, 1fr) + 1rem gap, matching
                                      1.5rem horizontal padding). -->
                                 <div id="bpiqDeltaRow" style="display: none; background: linear-gradient(135deg, rgba(200,230,0,0.06), rgba(168,85,247,0.06)); border: 1px dashed rgba(200,230,0,0.45); border-radius: 12px; padding: 0.6rem 1.5rem;">
-                                    <div style="font-size: 0.62rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.12em; text-align: center; margin-bottom: 0.35rem; font-weight: 700;">Target to Control Delta</div>
+                                    <div style="font-size: 0.62rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.12em; text-align: center; margin-bottom: 0.35rem; font-weight: 700;">How Target outperforms Control — Relative % &amp; Percentage Points</div>
                                     <div class="bpiq-kpi-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 1rem;">
                                         <div id="bpiqKpiDeltaConsumers" style="text-align: center; font-size: 0.95rem; font-weight: 700;">—</div>
                                         <div id="bpiqKpiDeltaPre"       style="text-align: center; font-size: 0.95rem; font-weight: 700;">—</div>
@@ -30047,16 +30047,44 @@
                         if (control == null || !isFinite(control) || control === 0) return null;
                         return (target - control) / Math.abs(control) * 100;
                     };
+                    // Stacked delta cell: tiny per-cell label on top,
+                    // relative-% delta in the middle, optional pp delta on
+                    // the bottom. Each piece is independently optional so
+                    // we can render the Consumers cell label-only when
+                    // both cohorts are sized identically.
+                    var _bpiqDeltaCell = function(label, relativeHtml, ppHtml) {
+                        var out = '<div style="font-size:0.55rem;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.08em;font-weight:600;margin-bottom:0.18rem;">'
+                                + label + '</div>';
+                        if (relativeHtml) {
+                            out += '<div style="line-height:1.15;">' + relativeHtml + '</div>';
+                        }
+                        if (ppHtml) {
+                            out += '<div style="font-size:0.78rem;font-weight:700;margin-top:0.12rem;line-height:1.15;">' + ppHtml + '</div>';
+                        }
+                        return out;
+                    };
                     document.getElementById('bpiqKpiDeltaConsumers').innerHTML =
-                        _bpiqFmtDelta((data.projected_audience_size || 0) - gpSize, ',count', '—');
+                        _bpiqDeltaCell('Consumers', '', '');
                     document.getElementById('bpiqKpiDeltaPre').innerHTML =
-                        _bpiqFmtDelta(_bpiqRelDelta(prePct, gpPrePct), '%');
+                        _bpiqDeltaCell(
+                            'Pre-Engagement Δ',
+                            _bpiqFmtDelta(_bpiqRelDelta(prePct, gpPrePct), '%'),
+                            _bpiqFmtPp(prePct - gpPrePct)
+                        );
                     document.getElementById('bpiqKpiDeltaPost').innerHTML =
-                        _bpiqFmtDelta(_bpiqRelDelta(postPct, gpPostPct), '%');
+                        _bpiqDeltaCell(
+                            'Post-Engagement Δ',
+                            _bpiqFmtDelta(_bpiqRelDelta(postPct, gpPostPct), '%'),
+                            _bpiqFmtPp(postPct - gpPostPct)
+                        );
                     var _tLift = (totals.lift_pct_users  != null && isFinite(totals.lift_pct_users))  ? totals.lift_pct_users  : null;
                     var _cLift = (cg.control_lift_pct_users != null && isFinite(cg.control_lift_pct_users)) ? cg.control_lift_pct_users : null;
                     document.getElementById('bpiqKpiDeltaLift').innerHTML =
-                        _bpiqFmtDelta(_bpiqRelDelta(_tLift, _cLift), '%');
+                        _bpiqDeltaCell(
+                            'Lift Δ',
+                            _bpiqFmtDelta(_bpiqRelDelta(_tLift, _cLift), '%'),
+                            _bpiqFmtPp((postPct - prePct) - (gpPostPct - gpPrePct))
+                        );
                 }
                 // Net Brand Lift card
                 var brandLift = totals.lift_pct_users;
