@@ -29478,13 +29478,71 @@
                         tree.innerHTML = '<div style="padding:1rem;color:var(--text-secondary);font-size:13px;">No released results yet.<br><br>Run one in <strong>Analysis IQ → Brand Partnership Valuation</strong>.</div>';
                         return;
                     }
-                    tree.innerHTML = files.map(function(f) {
-                        return '<div class="profile-tree-item" style="padding:10px 14px;cursor:pointer;border-bottom:1px solid var(--border-color);font-size:13px;" onclick="selectBpiqResult(\'' + f.key.replace(/'/g, "\\'") + '\')" title="' + f.last_modified + '">' + (f.name || f.key) + '</div>';
-                    }).join('');
+                    // Group by admin-managed category (Profile IQ-style tree).
+                    // Files with no category land under "Uncategorized".
+                    var byCat = {};
+                    files.forEach(function(f) {
+                        var cat = (f.category || 'Uncategorized').toString().trim() || 'Uncategorized';
+                        if (!byCat[cat]) byCat[cat] = [];
+                        byCat[cat].push(f);
+                    });
+                    var sortedCats = Object.keys(byCat).sort(function(a, b) {
+                        if (a === 'Uncategorized') return 1;
+                        if (b === 'Uncategorized') return -1;
+                        return a.localeCompare(b);
+                    });
+                    function esc(s) {
+                        return String(s == null ? '' : s)
+                            .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+                            .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+                    }
+                    var html = '';
+                    sortedCats.forEach(function(cat) {
+                        var rows = byCat[cat];
+                        // Skip the wrapping accordion when there's only a
+                        // single Uncategorized bucket — keeps the sidebar
+                        // visually flat for installs that haven't started
+                        // tagging runs yet.
+                        var showHeader = !(sortedCats.length === 1 && cat === 'Uncategorized');
+                        if (showHeader) {
+                            html += '<div class="bpiq-cat-header" onclick="toggleBpiqCategory(this)" style="display:flex;align-items:center;gap:6px;padding:8px 14px;cursor:pointer;background:rgba(255,255,255,0.03);border-bottom:1px solid var(--border-color);font-size:11px;font-weight:700;letter-spacing:0.05em;text-transform:uppercase;color:var(--text-secondary);user-select:none;">'
+                                + '<span class="bpiq-cat-arrow" style="display:inline-block;width:10px;transition:transform 0.15s;">▼</span>'
+                                + '<span>' + esc(cat) + '</span>'
+                                + '<span style="margin-left:auto;font-size:10px;opacity:0.6;font-weight:500;">' + rows.length + '</span>'
+                                + '</div>';
+                        }
+                        html += '<div class="bpiq-cat-body">';
+                        rows.forEach(function(f) {
+                            var img = (f.image_url || '').trim();
+                            var thumb = img
+                                ? '<img src="' + esc(img) + '" style="width:28px;height:28px;border-radius:50%;object-fit:cover;border:2px solid var(--accent-lime);flex-shrink:0;" />'
+                                : '<div style="width:28px;height:28px;border-radius:50%;background:var(--bg-input);border:2px solid var(--border-color);display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0;">🤝</div>';
+                            html += '<div class="profile-tree-item" data-bpiq-key="' + esc(f.key) + '" onclick="selectBpiqResult(\'' + String(f.key).replace(/\\/g, '\\\\').replace(/'/g, "\\'") + '\')" title="' + esc(f.last_modified || '') + '" style="display:flex;align-items:center;gap:10px;padding:10px 14px;cursor:pointer;border-bottom:1px solid var(--border-color);font-size:13px;">'
+                                + thumb
+                                + '<span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + esc(f.name || f.key) + '</span>'
+                                + '</div>';
+                        });
+                        html += '</div>';
+                    });
+                    tree.innerHTML = html;
                 }).catch(function() {
                     tree.innerHTML = '<div style="padding:1rem;color:var(--text-secondary);font-size:13px;">Failed to load results.</div>';
                 });
         }
+
+        // Collapse / expand a BPIQ sidebar category section. Mirrors the
+        // simple toggle used by other dashboard trees — no animation, just
+        // toggling the immediately following body's display.
+        window.toggleBpiqCategory = function(headerEl) {
+            try {
+                var body = headerEl.nextElementSibling;
+                if (!body) return;
+                var arrow = headerEl.querySelector('.bpiq-cat-arrow');
+                var collapsed = body.style.display === 'none';
+                body.style.display = collapsed ? '' : 'none';
+                if (arrow) arrow.style.transform = collapsed ? '' : 'rotate(-90deg)';
+            } catch (e) { /* ignore */ }
+        };
 
         window.selectBpiqResult = function(key) {
             document.querySelectorAll('#bpiqProfileTree .profile-tree-item').forEach(function(el) {

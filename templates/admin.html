@@ -9559,14 +9559,39 @@
         
         // ============ CATEGORY CHANGE ============
         
-        function openCategoryModal(fileKey, currentCategory, isTicketSales = false) {
+        function openCategoryModal(fileKey, currentCategory, isTicketSales = false, isBrandPartnership = false) {
             document.getElementById('categoryFileKey').value = fileKey;
             document.getElementById('currentCategory').textContent = currentCategory || 'Uncategorized';
             document.getElementById('newCategory').value = currentCategory || '';
             document.getElementById('customCategory').value = '';
             
             const isSvod = fileKey.startsWith('svod-acquisition/');
+            const isBpiq = isBrandPartnership || fileKey.startsWith('brand-partnership-iq/');
             const select = document.getElementById('newCategory');
+            
+            if (isBpiq) {
+                // Brand Partnership IQ: starter taxonomy aligned with the
+                // most common partnership verticals. Admins can extend this
+                // by typing into the "Custom Category" field below — any
+                // previously-used custom value will also be folded back into
+                // the dropdown for quick reselection on the next run.
+                const bpiqStarter = ['BEAUTY', 'AUTOMOTIVE', 'FASHION', 'CPG', 'TECHNOLOGY', 'DINING'];
+                const bpiqCategories = new Set(bpiqStarter);
+                contentFiles.forEach(f => {
+                    if (f.is_brand_partnership_iq || (f.key && f.key.startsWith('brand-partnership-iq/'))) {
+                        if (f.category && f.category !== 'Uncategorized') bpiqCategories.add(String(f.category).toUpperCase());
+                    }
+                });
+                select.innerHTML = '<option value="">Select category...</option>';
+                Array.from(bpiqCategories).sort().forEach(cat => {
+                    const sel = (currentCategory || '').toUpperCase() === cat ? ' selected' : '';
+                    select.innerHTML += `<option value="${cat}"${sel}>${cat}</option>`;
+                });
+                const label = select.previousElementSibling;
+                if (label) label.innerHTML = 'Select Brand Partnership Category';
+                document.getElementById('categoryModal').classList.add('show');
+                return;
+            }
             
             if (isTicketSales || fileKey.startsWith('ticket-sales-iq/')) {
                 // Ticket Sales: show category options (CMS-managed, not in output files)
@@ -9790,10 +9815,11 @@
             const urlInput = document.getElementById('profileImageUrl').value.trim();
             const isTicketSales = fileKey && fileKey.startsWith('ticket-sales-iq/');
             const isTicketSalesTracker = fileKey && fileKey.startsWith('ticket-sales-tracker/');
+            const isBpiq = fileKey && fileKey.startsWith('brand-partnership-iq/');
             
-            console.log('Saving profile image:', { profileName, fileKey, isTicketSales, isTicketSalesTracker, hasFile: !!(fileInput.files && fileInput.files[0]), urlInput });
+            console.log('Saving profile image:', { profileName, fileKey, isTicketSales, isTicketSalesTracker, isBpiq, hasFile: !!(fileInput.files && fileInput.files[0]), urlInput });
             
-            if (!profileName && !isTicketSales && !isTicketSalesTracker) {
+            if (!profileName && !isTicketSales && !isTicketSalesTracker && !isBpiq) {
                 showToast('No profile selected', true);
                 return;
             }
@@ -9850,6 +9876,28 @@
                             })
                         });
                     }
+                } else if (isBpiq) {
+                    // Brand Partnership IQ: use the dedicated BPIQ image API
+                    if (fileInput.files && fileInput.files[0]) {
+                        const formData = new FormData();
+                        formData.append('file', fileInput.files[0]);
+                        formData.append('bpiq_s3_key', fileKey);
+                        response = await fetch('/api/admin/brand-partnership-iq-image', {
+                            method: 'POST',
+                            credentials: 'same-origin',
+                            body: formData
+                        });
+                    } else {
+                        response = await fetch('/api/admin/brand-partnership-iq-image', {
+                            method: 'POST',
+                            credentials: 'same-origin',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                bpiq_s3_key: fileKey,
+                                image_url: urlInput
+                            })
+                        });
+                    }
                 } else if (fileInput.files && fileInput.files[0]) {
                     // Upload file (profile/image); retry once on server error so upload reliably saves
                     const file = fileInput.files[0];
@@ -9895,9 +9943,13 @@
                 
                 if (data.success) {
                     console.log('✅ Image saved successfully!', data);
-                    showToast(isTicketSales ? 'Ticket Sales image saved!' : 'Profile image saved!');
+                    let toastLabel = 'Profile image saved!';
+                    if (isTicketSales) toastLabel = 'Ticket Sales image saved!';
+                    else if (isTicketSalesTracker) toastLabel = 'Ticket Sales Tracker image saved!';
+                    else if (isBpiq) toastLabel = 'Brand Partnership image saved!';
+                    showToast(toastLabel);
                     
-                    if (!isTicketSales) {
+                    if (!isTicketSales && !isTicketSalesTracker && !isBpiq) {
                         const purgatoryId = document.getElementById('profileImagePurgatoryId').value;
                         if (purgatoryId && data.image_url) {
                             try {
@@ -9934,7 +9986,7 @@
                         updateFileRowInPlace(fileKey, fileKey, { custom_image: imageUrl });
                     }
                     // Only refresh profile images list if needed (not content files)
-                    if (!isTicketSales && !isTicketSalesTracker) {
+                    if (!isTicketSales && !isTicketSalesTracker && !isBpiq) {
                         // Update the profile images section without full refresh
                         setTimeout(() => loadProfileImages(), 500);
                     }
@@ -9950,32 +10002,49 @@
         
         async function removeProfileImage() {
             const profileName = document.getElementById('profileImageName').value;
+            const fileKey = document.getElementById('profileImageKey').value;
+            const isBpiq = fileKey && fileKey.startsWith('brand-partnership-iq/');
             
-            if (!profileName) return;
+            if (!profileName && !isBpiq) return;
             
-            if (!confirm(`Remove custom image for "${profileName}"? Auto-sourced images will be used instead.`)) {
+            const promptLabel = isBpiq ? `this Brand Partnership run` : `"${profileName}"`;
+            if (!confirm(`Remove custom image for ${promptLabel}? Auto-sourced images will be used instead.`)) {
                 return;
             }
             
             try {
-                const response = await fetch('/api/admin/profile-image', {
-                    method: 'DELETE',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ profile_name: profileName })
-                });
+                let response;
+                if (isBpiq) {
+                    response = await fetch('/api/admin/brand-partnership-iq-image', {
+                        method: 'DELETE',
+                        credentials: 'same-origin',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ bpiq_s3_key: fileKey })
+                    });
+                } else {
+                    response = await fetch('/api/admin/profile-image', {
+                        method: 'DELETE',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ profile_name: profileName })
+                    });
+                }
                 
                 const data = await response.json();
                 
                 if (data.success) {
                     showToast('Custom image removed');
                     closeProfileImageModal();
-                    // Update in place - find the file by profile name and clear its custom_image
-                    const file = contentFiles.find(f => f.project_name === profileName);
-                    if (file) {
-                        updateFileRowInPlace(file.key, file.key, { custom_image: null });
+                    if (isBpiq && fileKey) {
+                        updateFileRowInPlace(fileKey, fileKey, { custom_image: null });
+                    } else {
+                        // Update in place - find the file by profile name and clear its custom_image
+                        const file = contentFiles.find(f => f.project_name === profileName);
+                        if (file) {
+                            updateFileRowInPlace(file.key, file.key, { custom_image: null });
+                        }
+                        // Refresh profile images list
+                        setTimeout(() => loadProfileImages(), 500);
                     }
-                    // Refresh profile images list
-                    setTimeout(() => loadProfileImages(), 500);
                 } else {
                     showToast(data.error || 'Failed to remove image', true);
                 }
@@ -10115,10 +10184,11 @@
         function renderContentAccordions(files) {
             const container = document.getElementById('contentAccordions');
             
-            // Separate SVOD, Ticket Sales, and regular files
+            // Separate SVOD, Ticket Sales, BPIQ, and regular files
             const svodFiles = [];
             const ticketSalesFiles = [];
             const ticketSalesTrackerFiles = [];
+            const bpiqFiles = [];
             const regularFiles = [];
             
             files.forEach(file => {
@@ -10128,6 +10198,8 @@
                     ticketSalesTrackerFiles.push(file);
                 } else if (file.is_ticket_sales || (file.key && file.key.startsWith('ticket-sales-iq/'))) {
                     ticketSalesFiles.push(file);
+                } else if (file.is_brand_partnership_iq || (file.key && file.key.startsWith('brand-partnership-iq/'))) {
+                    bpiqFiles.push(file);
                 } else {
                     regularFiles.push(file);
                 }
@@ -10158,11 +10230,20 @@
             });
             const sortedTicketSalesSubcategories = Object.keys(ticketSalesBySubcategory).sort();
 
+            // Group Brand Partnership IQ files by subcategory
+            const bpiqBySubcategory = {};
+            bpiqFiles.forEach(file => {
+                const subcat = file.category || 'Uncategorized';
+                if (!bpiqBySubcategory[subcat]) bpiqBySubcategory[subcat] = [];
+                bpiqBySubcategory[subcat].push(file);
+            });
+            const sortedBpiqSubcategories = Object.keys(bpiqBySubcategory).sort();
+
             // Sort categories
             const sortedCategories = Object.keys(byCategory).sort();
             const sortedSvodSubcategories = Object.keys(svodBySubcategory).sort();
 
-            if (sortedCategories.length === 0 && sortedSvodSubcategories.length === 0 && sortedTicketSalesSubcategories.length === 0 && ticketSalesTrackerFiles.length === 0) {
+            if (sortedCategories.length === 0 && sortedSvodSubcategories.length === 0 && sortedTicketSalesSubcategories.length === 0 && sortedBpiqSubcategories.length === 0 && ticketSalesTrackerFiles.length === 0) {
                 container.innerHTML = `<p style="color: var(--text-secondary); font-size: 0.85rem; padding: 2rem; text-align: center;">
                     ${showingArchived ? 'No archived files found.' : 'No content files found.'}
                 </p>`;
@@ -10270,6 +10351,55 @@
                 `;
             }
             
+            // Brand Partnership IQ master category with subcategories
+            if (sortedBpiqSubcategories.length > 0) {
+                const totalBpiqFiles = bpiqFiles.length;
+                html += `
+                    <div class="category-accordion" data-category="BRAND PARTNERSHIP IQ" data-master-category="true">
+                        <div class="category-accordion-header" onclick="toggleAccordion(this)">
+                            <div class="category-accordion-title">
+                                <span class="category-accordion-arrow">▼</span>
+                                <span>🤝 BRAND PARTNERSHIP IQ</span>
+                                <span class="badge badge-user">${totalBpiqFiles} files</span>
+                            </div>
+                        </div>
+                        <div class="category-accordion-content">
+                            ${sortedBpiqSubcategories.map(subcat => {
+                                const subcatFiles = bpiqBySubcategory[subcat];
+                                return `
+                                    <div class="subcategory-accordion" data-subcategory="${subcat}" style="margin-bottom: 1rem; border-left: 3px solid var(--accent-lime); padding-left: 1rem;">
+                                        <div class="category-accordion-header" onclick="toggleAccordion(this)">
+                                            <div class="category-accordion-title">
+                                                <span class="category-accordion-arrow">▼</span>
+                                                <span>${getCategoryIcon(subcat)} ${subcat}</span>
+                                                <span class="badge badge-user">${subcatFiles.length} files</span>
+                                            </div>
+                                        </div>
+                                        <div class="category-accordion-content">
+                                            <table class="content-table">
+                                                <thead>
+                                                    <tr>
+                                                        <th style="width: 40px;"><input type="checkbox" onchange="toggleCategorySelection('${subcat}', this.checked)"></th>
+                                                        <th>File Name</th>
+                                                        <th>Project</th>
+                                                        <th>Date</th>
+                                                        <th>Size</th>
+                                                        <th>Actions</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    ${subcatFiles.map(file => renderFileRow(file, false, false, false, true)).join('')}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    </div>
+                                `;
+                            }).join('')}
+                        </div>
+                    </div>
+                `;
+            }
+
             // Ticket Sales Tracker section
             if (ticketSalesTrackerFiles.length > 0) {
                 html += `
@@ -10400,7 +10530,7 @@
             return icons[category.toUpperCase()] || icons[category] || '📁';
         }
 
-        function renderFileRow(file, isTicketSales = false, isTicketSalesTracker = false, isSvodRow = false) {
+        function renderFileRow(file, isTicketSales = false, isTicketSalesTracker = false, isSvodRow = false, isBpiq = false) {
             const isSelected = selectedFiles.has(file.key);
             const dateStr = file.last_modified ? formatDateTimePST(file.last_modified) : '--';
             const hasCustomImage = file.custom_image ? true : false;
@@ -10408,17 +10538,26 @@
             const escapedName = (file.project_name || '').replace(/'/g, "\\'").replace(/`/g, '\\`');
             const escapedCategory = (file.category || 'Uncategorized').replace(/'/g, "\\'").replace(/`/g, '\\`');
             const escapedImage = (file.custom_image || '').replace(/"/g, '&quot;').replace(/'/g, "\\'").replace(/`/g, '\\`');
-            const profileImageArgs = isTicketSales
+            // Both Ticket Sales and Brand Partnership IQ pass the existing
+            // image (4-arg form) so the modal can preview it before upload.
+            const profileImageArgs = (isTicketSales || isBpiq)
                 ? "'" + (escapedName || escapedKey) + "', '" + escapedKey + "', '', '" + escapedImage + "'"
                 : "'" + (escapedName || escapedKey) + "', '" + escapedKey + "'";
             let archiveDeleteBtns = '';
+            // Ticket Sales rows historically didn't expose archive/delete in
+            // the CMS; BPIQ rows DO get a delete button so admins can prune.
             if (!isTicketSales) {
                 archiveDeleteBtns = (showingArchived
                     ? '<button class="btn btn-small btn-success btn-icon" onclick="restoreFile(\'' + escapedKey + '\')" title="Restore">↩️</button>'
                     : '<button class="btn btn-small btn-archive btn-icon" onclick="archiveFile(\'' + escapedKey + '\')" title="Archive">📦</button>')
                     + '<button class="btn btn-small btn-danger btn-icon" onclick="deleteFile(\'' + escapedKey + '\')" title="Delete permanently">🗑️</button>';
             }
-            const editTitleBtn = '<button class="btn btn-small btn-edit-title btn-icon" onclick="openEditTitleModal(\'' + escapedKey + '\')" title="Edit Title">🤓</button>';
+            // BPIQ doesn't use the hover-tooltip / platform-name override
+            // flow (those fields don't render anywhere on the dashboard for
+            // BPIQ), so suppress the 🤓 button there.
+            const editTitleBtn = isBpiq
+                ? ''
+                : '<button class="btn btn-small btn-edit-title btn-icon" onclick="openEditTitleModal(\'' + escapedKey + '\')" title="Edit Title">🤓</button>';
             const editEpisodesBtn = (isSvodRow || file.is_svod)
                 ? '<button class="btn btn-small btn-edit-episodes btn-icon" onclick="openEditEpisodeDatesModal(\'' + escapedKey + '\')" title="Edit Episode Dates">🚦</button>'
                 : '';
@@ -10450,7 +10589,7 @@
                     <td style="font-size: 0.75rem;">${formatBytes(file.size)}</td>
                     <td>
                         <div class="action-buttons">
-                            ${!isTicketSalesTracker ? '<button class="btn btn-small btn-icon" onclick="openCategoryModal(\'' + escapedKey + '\', \'' + escapedCategory + '\', ' + isTicketSales + ')" title="Change Category">🏷️</button>' : ''}
+                            ${!isTicketSalesTracker ? '<button class="btn btn-small btn-icon" onclick="openCategoryModal(\'' + escapedKey + '\', \'' + escapedCategory + '\', ' + isTicketSales + ', ' + isBpiq + ')" title="Change Category">🏷️</button>' : ''}
                             <button class="btn btn-small btn-icon" onclick="openRenameModal('${escapedKey}', '${escapedName}')" title="Edit Display Name">✏️</button>
                             <button class="btn btn-small btn-icon" onclick="openProfileImageModal(${profileImageArgs})" title="Set Image" style="background: ${hasCustomImage ? 'var(--accent-lime)' : 'var(--bg-input)'}; color: ${hasCustomImage ? '#1a1a1a' : 'var(--text-primary)'};">🖼️</button>
                             ${archiveDeleteBtns}
