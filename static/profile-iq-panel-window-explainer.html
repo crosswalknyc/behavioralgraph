@@ -1,0 +1,802 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Profile IQ — Sample &amp; behavior windows</title>
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #0a1929;
+      --card: #0d2137;
+      --input: #132f4c;
+      --lime: #c8ff00;
+      --cyan: #66d9ef;
+      --text: #e6f1ff;
+      --muted: #bec8e4;
+      --border: #1e3a5f;
+      --purple: #a78bfa;
+      --orange: #fd971f;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Poppins', 'DM Sans', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.55;
+      min-height: 100vh;
+    }
+
+    .toolbar {
+      position: sticky;
+      top: 0;
+      z-index: 10;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 1rem;
+      padding: 0.75rem 1.5rem;
+      background: rgba(10, 25, 41, 0.92);
+      border-bottom: 1px solid var(--border);
+      backdrop-filter: blur(8px);
+    }
+
+    .toolbar .brand {
+      font-weight: 700;
+      font-size: 0.95rem;
+      color: var(--lime);
+      letter-spacing: 0.02em;
+    }
+
+    .toolbar .brand span { color: var(--muted); font-weight: 500; }
+
+    .toolbar button {
+      background: rgba(200, 255, 0, 0.12);
+      border: 1px solid rgba(200, 255, 0, 0.45);
+      color: var(--lime);
+      padding: 0.45rem 1rem;
+      border-radius: 6px;
+      font-size: 0.8rem;
+      font-weight: 600;
+      cursor: pointer;
+      font-family: inherit;
+    }
+
+    .toolbar button:hover { background: rgba(200, 255, 0, 0.22); }
+
+    main {
+      max-width: 920px;
+      margin: 0 auto;
+      padding: 2rem 1.5rem 4rem;
+    }
+
+    .hero {
+      margin-bottom: 2.5rem;
+    }
+
+    .hero h1 {
+      font-size: 1.75rem;
+      font-weight: 700;
+      margin-bottom: 0.5rem;
+      line-height: 1.25;
+    }
+
+    .hero p {
+      color: var(--muted);
+      font-size: 1rem;
+      max-width: 52rem;
+    }
+
+    .pill-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+      margin-top: 1rem;
+    }
+
+    .pill {
+      font-size: 0.72rem;
+      font-weight: 600;
+      padding: 0.3rem 0.65rem;
+      border-radius: 999px;
+      border: 1px solid var(--border);
+      background: var(--card);
+      color: var(--cyan);
+    }
+
+    .section {
+      margin-bottom: 2.5rem;
+    }
+
+    .section h2 {
+      font-size: 1.15rem;
+      font-weight: 600;
+      margin-bottom: 0.35rem;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .section .lead {
+      color: var(--muted);
+      font-size: 0.9rem;
+      margin-bottom: 1.25rem;
+      max-width: 48rem;
+    }
+
+    .path-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1.25rem;
+    }
+
+    @media (max-width: 720px) {
+      .path-grid { grid-template-columns: 1fr; }
+    }
+
+    .path-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 1.25rem 1.35rem;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .path-card.usual { border-color: rgba(200, 255, 0, 0.35); }
+    .path-card.extended { border-color: rgba(167, 139, 250, 0.4); }
+
+    .path-badge {
+      display: inline-block;
+      font-size: 0.68rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      padding: 0.25rem 0.55rem;
+      border-radius: 4px;
+      margin-bottom: 0.75rem;
+    }
+
+    .path-card.usual .path-badge {
+      background: rgba(200, 255, 0, 0.15);
+      color: var(--lime);
+    }
+
+    .path-card.extended .path-badge {
+      background: rgba(167, 139, 250, 0.18);
+      color: var(--purple);
+    }
+
+    .path-card h3 {
+      font-size: 1.05rem;
+      margin-bottom: 0.5rem;
+    }
+
+    .path-card p {
+      font-size: 0.85rem;
+      color: var(--muted);
+    }
+
+    .path-card ul {
+      margin-top: 0.75rem;
+      padding-left: 1.1rem;
+      font-size: 0.82rem;
+      color: var(--text);
+    }
+
+    .path-card li { margin-bottom: 0.35rem; }
+
+    /* Timeline */
+    .timeline-wrap {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 1.5rem 1.25rem 1.75rem;
+      margin-bottom: 1.5rem;
+    }
+
+    .timeline-title {
+      font-size: 0.8rem;
+      font-weight: 600;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 1rem;
+    }
+
+    .timeline {
+      position: relative;
+      height: 88px;
+      margin: 0 0.5rem;
+    }
+
+    .timeline-track {
+      position: absolute;
+      left: 0;
+      right: 0;
+      top: 42px;
+      height: 8px;
+      background: var(--input);
+      border-radius: 4px;
+    }
+
+    .timeline-zone {
+      position: absolute;
+      top: 34px;
+      height: 24px;
+      border-radius: 6px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.65rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+
+    .zone-sample {
+      background: rgba(102, 217, 239, 0.25);
+      border: 2px solid var(--cyan);
+      color: var(--cyan);
+    }
+
+    .zone-behavior {
+      background: rgba(200, 255, 0, 0.2);
+      border: 2px solid var(--lime);
+      color: var(--lime);
+    }
+
+    .zone-lookback {
+      background: rgba(167, 139, 250, 0.15);
+      border: 2px dashed var(--purple);
+      color: var(--purple);
+    }
+
+    .zone-inactive {
+      background: rgba(30, 58, 95, 0.5);
+      border: 1px dashed var(--border);
+      color: var(--muted);
+      font-weight: 500;
+    }
+
+    .timeline-labels {
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.7rem;
+      color: var(--muted);
+      margin-top: 0.5rem;
+      padding: 0 0.25rem;
+    }
+
+    .timeline-legend {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 1rem 1.5rem;
+      margin-top: 1.25rem;
+      padding-top: 1rem;
+      border-top: 1px solid var(--border);
+    }
+
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 0.45rem;
+      font-size: 0.78rem;
+      color: var(--muted);
+    }
+
+    .legend-swatch {
+      width: 14px;
+      height: 14px;
+      border-radius: 3px;
+      flex-shrink: 0;
+    }
+
+    .swatch-cyan { background: rgba(102, 217, 239, 0.4); border: 2px solid var(--cyan); }
+    .swatch-lime { background: rgba(200, 255, 0, 0.35); border: 2px solid var(--lime); }
+    .swatch-purple { background: rgba(167, 139, 250, 0.25); border: 2px dashed var(--purple); }
+
+    .arrow-note {
+      display: flex;
+      align-items: flex-start;
+      gap: 0.75rem;
+      background: var(--input);
+      border-radius: 8px;
+      padding: 1rem 1.1rem;
+      margin-top: 1rem;
+      font-size: 0.85rem;
+    }
+
+    .arrow-note .icon {
+      font-size: 1.4rem;
+      line-height: 1;
+      flex-shrink: 0;
+    }
+
+    .arrow-note strong { color: var(--lime); }
+
+    .flow-diagram {
+      display: flex;
+      flex-direction: column;
+      gap: 0;
+      margin: 1.5rem 0;
+    }
+
+    .flow-step {
+      display: grid;
+      grid-template-columns: 36px 1fr;
+      gap: 1rem;
+      align-items: start;
+    }
+
+    .flow-num {
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      background: var(--lime);
+      color: var(--bg);
+      font-weight: 700;
+      font-size: 0.9rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+
+    .flow-step.extended .flow-num {
+      background: var(--purple);
+      color: #fff;
+    }
+
+    .flow-body {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 1rem 1.15rem;
+      margin-bottom: 0.5rem;
+    }
+
+    .flow-body h4 {
+      font-size: 0.95rem;
+      margin-bottom: 0.35rem;
+    }
+
+    .flow-body p {
+      font-size: 0.82rem;
+      color: var(--muted);
+    }
+
+    .flow-connector {
+      width: 2px;
+      height: 12px;
+      background: var(--border);
+      margin-left: 17px;
+    }
+
+    .callout {
+      background: linear-gradient(135deg, rgba(200, 255, 0, 0.08) 0%, rgba(102, 217, 239, 0.06) 100%);
+      border: 1px solid rgba(200, 255, 0, 0.35);
+      border-radius: 12px;
+      padding: 1.35rem 1.5rem;
+      margin-top: 2rem;
+    }
+
+    .callout h3 {
+      font-size: 1rem;
+      color: var(--lime);
+      margin-bottom: 0.65rem;
+    }
+
+    .callout p, .callout li {
+      font-size: 0.88rem;
+      color: var(--text);
+    }
+
+    .callout ul {
+      margin-top: 0.5rem;
+      padding-left: 1.2rem;
+    }
+
+    .callout li { margin-bottom: 0.4rem; color: var(--muted); }
+
+    .one-liner {
+      margin-top: 1rem;
+      padding: 1rem;
+      background: var(--bg);
+      border-radius: 8px;
+      font-size: 0.9rem;
+      font-style: italic;
+      color: var(--cyan);
+      border-left: 3px solid var(--cyan);
+    }
+
+    .threshold {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.35rem;
+      background: rgba(253, 151, 31, 0.15);
+      border: 1px solid rgba(253, 151, 31, 0.5);
+      color: var(--orange);
+      font-weight: 700;
+      font-size: 0.85rem;
+      padding: 0.2rem 0.55rem;
+      border-radius: 6px;
+      margin: 0 0.15rem;
+    }
+
+    .metrics-split {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1rem;
+      margin-top: 1.25rem;
+    }
+
+    @media (max-width: 640px) {
+      .metrics-split { grid-template-columns: 1fr; }
+    }
+
+    .metric-box {
+      background: var(--input);
+      border-radius: 10px;
+      padding: 1rem 1.1rem;
+      border: 1px solid var(--border);
+    }
+
+    .metric-box.highlight-us {
+      border-color: rgba(102, 217, 239, 0.5);
+      background: rgba(102, 217, 239, 0.08);
+    }
+
+    .metric-box.highlight-n {
+      border-color: rgba(200, 255, 0, 0.35);
+      background: rgba(200, 255, 0, 0.06);
+    }
+
+    .metric-box .label {
+      font-size: 0.68rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--muted);
+      margin-bottom: 0.35rem;
+    }
+
+    .metric-box .value {
+      font-size: 1.35rem;
+      font-weight: 700;
+      margin-bottom: 0.25rem;
+    }
+
+    .metric-box.highlight-us .value { color: var(--cyan); }
+    .metric-box.highlight-n .value { color: var(--lime); }
+
+    .metric-box .note {
+      font-size: 0.78rem;
+      color: var(--muted);
+      line-height: 1.45;
+    }
+
+    .metric-box .strikethrough {
+      text-decoration: line-through;
+      opacity: 0.55;
+      font-size: 0.85rem;
+    }
+
+    /* High-contrast palette for print / headless PDF (Chrome uses print media) */
+    @media print {
+      * {
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
+      }
+
+      .toolbar { display: none !important; }
+
+      body, main {
+        background: #fff !important;
+        color: #1a1a1a !important;
+      }
+
+      h1, h2, h3, h4, .path-card h3, .flow-body h4, .callout h3 {
+        color: #111 !important;
+      }
+
+      p, li, .hero p, .section .lead, .path-card p, .path-card li,
+      .flow-body p, .callout p, .callout li, .arrow-note,
+      .legend-item, .timeline-labels, .timeline-title, .metric-box .label,
+      .metric-box .note {
+        color: #333 !important;
+      }
+
+      .pill {
+        background: #f0f0f0 !important;
+        border-color: #666 !important;
+        color: #222 !important;
+      }
+
+      .path-card, .timeline-wrap, .flow-body, .callout, .arrow-note, .metric-box {
+        background: #fff !important;
+        border: 1px solid #444 !important;
+        box-shadow: none !important;
+      }
+
+      .path-card.usual { border-color: #5d6b1f !important; }
+      .path-card.extended { border-color: #5b21b6 !important; }
+
+      .path-card.usual .path-badge {
+        background: #eef5d4 !important;
+        color: #3d4f0f !important;
+        border: 1px solid #5d6b1f !important;
+      }
+
+      .path-card.extended .path-badge {
+        background: #ede9fe !important;
+        color: #4c1d95 !important;
+        border: 1px solid #5b21b6 !important;
+      }
+
+      .timeline-track {
+        background: #bbb !important;
+      }
+
+      .zone-sample {
+        background: #dbeafe !important;
+        border: 2px solid #1d4ed8 !important;
+        color: #1e3a8a !important;
+      }
+
+      .zone-behavior {
+        background: #ecfccb !important;
+        border: 2px solid #4d7c0f !important;
+        color: #365314 !important;
+      }
+
+      .zone-lookback {
+        background: #ede9fe !important;
+        border: 2px dashed #6d28d9 !important;
+        color: #4c1d95 !important;
+      }
+
+      .zone-inactive {
+        background: #f3f4f6 !important;
+        border: 1px dashed #6b7280 !important;
+        color: #374151 !important;
+      }
+
+      .arrow-note strong, .callout h3 {
+        color: #1e3a8a !important;
+      }
+
+      .flow-num {
+        background: #4d7c0f !important;
+        color: #fff !important;
+      }
+
+      .flow-step.extended .flow-num {
+        background: #6d28d9 !important;
+        color: #fff !important;
+      }
+
+      .flow-connector {
+        background: #888 !important;
+      }
+
+      .metric-box.highlight-us {
+        border-color: #1d4ed8 !important;
+        background: #eff6ff !important;
+      }
+
+      .metric-box.highlight-n {
+        border-color: #4d7c0f !important;
+        background: #f7fee7 !important;
+      }
+
+      .metric-box.highlight-us .value {
+        color: #1d4ed8 !important;
+      }
+
+      .metric-box.highlight-n .value {
+        color: #365314 !important;
+      }
+
+      .threshold {
+        background: #fff7ed !important;
+        border-color: #c2410c !important;
+        color: #9a3412 !important;
+      }
+
+      .one-liner {
+        background: #f0f9ff !important;
+        border-left-color: #0369a1 !important;
+        color: #0c4a6e !important;
+      }
+
+      .swatch-cyan { background: #dbeafe !important; border-color: #1d4ed8 !important; }
+      .swatch-lime { background: #ecfccb !important; border-color: #4d7c0f !important; }
+      .swatch-purple { background: #ede9fe !important; border-color: #6d28d9 !important; }
+    }
+  </style>
+</head>
+<body>
+  <div class="toolbar">
+    <div class="brand">Crosswalk <span>Profile IQ</span></div>
+    <button type="button" onclick="window.print()">Print / Save as PDF</button>
+  </div>
+
+  <main>
+    <header class="hero">
+      <h1>How we define the sample &amp; behavior windows</h1>
+      <p>
+        How Profile IQ usually builds audiences in <strong>2025</strong>,
+        and what changes when we need more panelists to reach our minimum sample size.
+      </p>
+      <div class="pill-row">
+        <span class="pill">Internal reference</span>
+        <span class="pill">Typical study year: 2025</span>
+        <span class="pill">Minimum Crosswalk respondents: <span class="threshold">100,000</span></span>
+      </div>
+    </header>
+
+    <section class="section">
+      <h2>Two paths, one rule for behavior</h2>
+      <p class="lead">
+        <strong>Who</strong> we include in the profile (the sample) can widen backward in time if needed.
+        <strong>What</strong> we count as engagement (behavior) stays inside the study year unless your run specifies otherwise.
+        When we extend the panel to reach <span class="threshold">100,000</span> for behavior, the <strong>US projection</strong> on the dashboard still reflects the <strong>original study year</strong>—not that larger behavioral sample.
+      </p>
+
+      <div class="path-grid">
+        <article class="path-card usual">
+          <span class="path-badge">Most profiles</span>
+          <h3>Standard window</h3>
+          <p>Enough people were active in 2025 on their own.</p>
+          <ul>
+            <li><strong>Sample:</strong> panelists active in <strong>2025</strong></li>
+            <li><strong>Behavior:</strong> only their digital activity in <strong>2025</strong></li>
+            <li>Sample and behavior use the <strong>same calendar window</strong></li>
+          </ul>
+        </article>
+        <article class="path-card extended">
+          <span class="path-badge">When 2025 alone is too small</span>
+          <h3>Extended recruitment</h3>
+          <p>2025 might only yield e.g. 40k people—but we still need 100k for stable behavior modeling.</p>
+          <ul>
+            <li><strong>Behavior sample:</strong> keep adding earlier cohorts (2024, 2023, …) until we reach <strong>≥ 100,000</strong> panelists (2025 behaviors only)</li>
+            <li><strong>US projection:</strong> uses the <strong>2025-only</strong> audience size—the real count from the original year, <em>not</em> the 100k used for behavior</li>
+            <li>Older panelists count for <em>membership</em>, not for pre-2025 behavior</li>
+          </ul>
+        </article>
+      </div>
+    </section>
+
+    <section class="section">
+      <h2>📅 Timeline view</h2>
+      <p class="lead">The behavior window does not slide backward—only the pool of eligible panelists can.</p>
+
+      <div class="timeline-wrap">
+        <div class="timeline-title">Standard — sample &amp; behavior both in 2025</div>
+        <div class="timeline" aria-hidden="true">
+          <div class="timeline-track"></div>
+          <div class="timeline-zone zone-inactive" style="left: 0%; width: 18%; top: 34px; font-size: 0.6rem;">Earlier years</div>
+          <div class="timeline-zone zone-sample" style="left: 20%; width: 58%; top: 28px;">2025 — Sample</div>
+          <div class="timeline-zone zone-behavior" style="left: 22%; width: 54%; top: 52px; height: 20px; font-size: 0.58rem;">2025 — Behavior</div>
+        </div>
+        <div class="timeline-labels">
+          <span>← Past</span>
+          <span>Jan 2025</span>
+          <span>Dec 2025</span>
+          <span>Future →</span>
+        </div>
+      </div>
+
+      <div class="timeline-wrap">
+        <div class="timeline-title">Extended recruitment — wider sample, behavior still 2025 only</div>
+        <div class="timeline" style="height: 110px;" aria-hidden="true">
+          <div class="timeline-track"></div>
+          <div class="timeline-zone zone-lookback" style="left: 2%; width: 22%; top: 24px; font-size: 0.55rem; line-height: 1.2; padding: 2px;">2023–2024<br>added to sample</div>
+          <div class="timeline-zone zone-sample" style="left: 26%; width: 48%; top: 24px;">2025 cohort (sample)</div>
+          <div class="timeline-zone zone-behavior" style="left: 28%; width: 44%; top: 58px; height: 22px;">2025 only — behavior counted</div>
+          <div class="timeline-zone zone-inactive" style="left: 2%; width: 22%; top: 58px; height: 22px; font-size: 0.55rem; opacity: 0.85;">Pre-2025 behavior not used</div>
+        </div>
+        <div class="timeline-labels">
+          <span>2023</span>
+          <span>2024</span>
+          <span>2025 (study year)</span>
+          <span>→</span>
+        </div>
+        <div class="arrow-note">
+          <span class="icon">↩</span>
+          <span>
+            We walk backward in time <strong>only to find more people</strong> until the behavioral sample hits
+            <span class="threshold">100,000</span> respondents. Their <strong>qualifying behaviors</strong> are still measured inside <strong>2025</strong>.
+            The <strong>US</strong> number on the profile stays tied to how many people qualified in <strong>2025 alone</strong>.
+          </span>
+        </div>
+
+        <div class="metrics-split" aria-label="Example when 2025 cohort is under 100k">
+          <div class="metric-box highlight-n">
+            <div class="label">Crosswalk respondents (dashboard)</div>
+            <div class="value">≥ 100,000</div>
+            <p class="note">After extended recruitment—includes earlier-year panelists, but <strong>2025 behavior only</strong>. Used for stable % and index calculations.</p>
+          </div>
+          <div class="metric-box highlight-us">
+            <div class="label">US projection (dashboard)</div>
+            <div class="value">~48,000</div>
+            <p class="note">Example: projected US audience from the <strong>original 2025 cohort</strong> (e.g. 45k panelists × weighting)—<span class="strikethrough">not</span> scaled to 100k.</p>
+          </div>
+        </div>
+        <div class="timeline-legend">
+          <div class="legend-item"><span class="legend-swatch swatch-cyan"></span> Who is in the profile (sample window)</div>
+          <div class="legend-item"><span class="legend-swatch swatch-lime"></span> What engagement we count (behavior window)</div>
+          <div class="legend-item"><span class="legend-swatch swatch-purple"></span> Extra years used only to reach sample size</div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section">
+      <h2>🔁 Decision flow</h2>
+      <p class="lead">What the pipeline is doing conceptually—not every profile uses extended lookback.</p>
+
+      <div class="flow-diagram">
+        <div class="flow-step">
+          <div class="flow-num">1</div>
+          <div class="flow-body">
+            <h4>Start with 2025</h4>
+            <p>Look for panelists who meet the profile definition with sample and behavior both anchored to the study year (typically full-year 2025).</p>
+          </div>
+        </div>
+        <div class="flow-connector"></div>
+        <div class="flow-step">
+          <div class="flow-num">2</div>
+          <div class="flow-body">
+            <h4>Count 2025 Crosswalk respondents</h4>
+            <p>How many matched panelists qualified in the <strong>study year alone</strong>? If already ≥ <span class="threshold">100,000</span> → <strong>standard</strong> path. If under → extended path (but note the original 2025 count for US projection).</p>
+          </div>
+        </div>
+        <div class="flow-connector"></div>
+        <div class="flow-step extended">
+          <div class="flow-num">3</div>
+          <div class="flow-body">
+            <h4>If not, extend recruitment backward</h4>
+            <p>Include panelists from earlier years who still qualify for the profile, until cumulative respondents ≥ 100,000.</p>
+          </div>
+        </div>
+        <div class="flow-connector"></div>
+        <div class="flow-step extended">
+          <div class="flow-num">4</div>
+          <div class="flow-body">
+            <h4>Behavior filter unchanged</h4>
+            <p>For every person in the behavioral sample—whether they joined in 2025 or were recruited from an earlier year—<strong>only 2025 behaviors</strong> are used for engagement and insights.</p>
+          </div>
+        </div>
+        <div class="flow-connector"></div>
+        <div class="flow-step extended">
+          <div class="flow-num">5</div>
+          <div class="flow-body">
+            <h4>US projection = original year only</h4>
+            <p>If 2025 started below <span class="threshold">100,000</span>, the dashboard <strong>US</strong> figure is projected from that <strong>original 2025 cohort</strong>—not from the 100k behavioral sample. Crosswalk <em>n</em> may show ≥ 100k; <em>US</em> reflects real-world scale for the study year.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <aside class="callout">
+      <h3>Summary</h3>
+      <p>
+        Profile IQ profiles are usually built from panelists active in <strong>2025</strong>, using only their <strong>2025</strong> digital behavior.
+        When a niche audience cannot reach <strong>100,000</strong> people in 2025 alone, we widen <em>who</em> we recruit by pulling in qualified panelists from earlier years until the behavioral sample hits 100k—but we still only score their <strong>2025</strong> activity. The <strong>US projection</strong> on the profile stays anchored to the <strong>original 2025 cohort</strong> (however many that was), not to the 100k we use for behavior.
+      </p>
+      <ul>
+        <li>Date range on the dashboard reflects the <strong>behavior / study window</strong> (e.g. 2025-01-01 – 2025-12-31).</li>
+        <li><strong>Crosswalk respondents</strong> can show ≥ 100k after extended recruitment (for modeling stability).</li>
+        <li><strong>US projection</strong> reflects the study-year audience when the profile initially had &lt; 100k—not the enlarged behavioral sample.</li>
+        <li>Extended lookback is a <strong>sample-size fix for behavior</strong>, not a change to study year or US scale.</li>
+      </ul>
+      <p class="one-liner">
+        “We go back in time to get 100k for behavior, but US scale is always what 2025 alone actually represents—not the 100k headcount.”
+      </p>
+    </aside>
+  </main>
+</body>
+</html>

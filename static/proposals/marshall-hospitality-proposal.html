@@ -1,0 +1,801 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>A. Marshall Hospitality × Crosswalk — Partnership Proposal</title>
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&family=Playfair+Display:wght@400;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --deck-bg: #01535D;
+      --deck-text-primary: #F5F8F9;
+      --deck-text-muted: #A8C4C8;
+      --deck-accent-lime: #B8D945;
+      --deck-accent-purple: #A5B4FC;
+      --deck-accent-magenta: #C026A3;
+      --deck-serif: 'Playfair Display', Georgia, serif;
+      --deck-bar-track: rgba(255, 255, 255, 0.15);
+      --slide-w: 960px;
+      --slide-h: 540px;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Poppins', 'DM Sans', sans-serif;
+      background: #0a1929;
+      color: var(--deck-text-primary);
+      min-height: 100vh;
+    }
+
+    .toolbar {
+      position: fixed;
+      top: 0; left: 0; right: 0;
+      z-index: 100;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 1rem;
+      padding: 0.65rem 1.25rem;
+      background: rgba(13, 33, 55, 0.95);
+      border-bottom: 1px solid rgba(102, 217, 239, 0.15);
+      backdrop-filter: blur(8px);
+    }
+
+    .toolbar span { color: #bec8e4; font-size: 0.8rem; }
+    .toolbar-btns { display: flex; gap: 0.5rem; }
+
+    .toolbar button {
+      background: rgba(184, 217, 69, 0.15);
+      border: 1px solid rgba(184, 217, 69, 0.4);
+      color: var(--deck-accent-magenta);
+      padding: 0.4rem 0.85rem;
+      border-radius: 6px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      cursor: pointer;
+    }
+
+    .toolbar button:hover { background: rgba(184, 217, 69, 0.28); }
+
+    .deck-viewport {
+      padding: 5rem 1rem 2rem;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 2rem;
+    }
+
+    .slide {
+      width: var(--slide-w);
+      height: var(--slide-h);
+      background: var(--deck-bg);
+      color: var(--deck-text-primary);
+      border-radius: 8px;
+      box-shadow: 0 4px 24px rgba(0,0,0,0.35);
+      position: relative;
+      overflow: hidden;
+      flex-shrink: 0;
+    }
+
+    .deck-meta-label {
+      font-size: 0.55rem;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: var(--deck-text-muted);
+      font-weight: 600;
+    }
+
+    .deck-slide-chrome {
+      position: absolute;
+      left: 0; right: 0; bottom: 0;
+      height: 36px;
+      padding: 0 32px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 0.55rem;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--deck-text-muted);
+    }
+
+    .slide-header {
+      position: absolute;
+      left: 32px; top: 28px; right: 32px;
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+    }
+
+    .slide-header .deck-meta-label { text-align: right; max-width: 55%; margin-top: 4px; }
+
+    .serif-headline {
+      font-family: var(--deck-serif);
+      font-weight: 600;
+      color: var(--deck-text-primary);
+      line-height: 1.12;
+    }
+
+    .why-callout {
+      display: flex;
+      gap: 0.65rem;
+      max-width: 72%;
+    }
+
+    .why-bar {
+      width: 3px;
+      background: var(--deck-accent-magenta);
+      border-radius: 2px;
+      flex-shrink: 0;
+    }
+
+    .why-label { color: var(--deck-accent-magenta); margin-bottom: 0.35rem; }
+
+    .why-text {
+      font-size: 0.72rem;
+      line-height: 1.55;
+      color: var(--deck-text-primary);
+      font-style: italic;
+    }
+
+    .bar-row {
+      display: flex;
+      align-items: center;
+      gap: 0.45rem;
+      min-height: 16px;
+    }
+
+    .bar-label {
+      flex: 0 0 26%;
+      font-size: 0.58rem;
+      color: var(--deck-text-primary);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .bar-track {
+      flex: 1;
+      height: 9px;
+      background: var(--deck-bar-track);
+      border-radius: 999px;
+      overflow: hidden;
+    }
+
+    .bar-fill {
+      height: 100%;
+      background: var(--deck-accent-lime);
+      border-radius: 999px;
+    }
+
+    .bar-val {
+      flex: 0 0 72px;
+      font-size: 0.58rem;
+      color: var(--deck-text-muted);
+      text-align: right;
+    }
+
+    .tier-card {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 0.5rem 1rem;
+      align-items: center;
+      padding: 0.65rem 0;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+    }
+
+    .tier-card:last-child { border-bottom: none; }
+
+    .tier-price {
+      font-family: var(--deck-serif);
+      font-size: 1.35rem;
+      font-weight: 600;
+      color: var(--deck-text-primary);
+      text-align: right;
+    }
+
+    .tier-price.highlight { color: var(--deck-accent-magenta); }
+
+    .tier-desc { font-size: 0.68rem; line-height: 1.5; color: var(--deck-text-primary); }
+    .tier-note { font-size: 0.6rem; color: var(--deck-text-muted); margin-top: 0.15rem; }
+
+    .brand-pill {
+      padding: 0.55rem 0.75rem;
+      border-left: 3px solid var(--deck-accent-lime);
+      background: rgba(184, 217, 69, 0.08);
+      font-size: 0.72rem;
+      font-weight: 600;
+      letter-spacing: 0.04em;
+    }
+
+    .toc-item {
+      display: flex;
+      align-items: baseline;
+      gap: 0.65rem;
+      padding: 0.55rem 0;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+      font-size: 0.72rem;
+    }
+
+    .toc-num {
+      font-family: var(--deck-serif);
+      font-size: 0.85rem;
+      color: var(--deck-accent-magenta);
+      font-weight: 600;
+      min-width: 1.5rem;
+    }
+
+    .purple-quote {
+      font-family: var(--deck-serif);
+      font-size: 0.95rem;
+      line-height: 1.5;
+      font-style: italic;
+      color: var(--deck-accent-purple);
+    }
+
+    .slide-hero {
+      background: var(--deck-bg);
+      overflow: hidden;
+    }
+
+    .slide-hero .hero-photo-wrap {
+      position: absolute;
+      top: 0;
+      right: 0;
+      width: 58%;
+      height: 100%;
+      pointer-events: none;
+    }
+
+    .slide-hero .hero-photo {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      object-position: center 42%;
+      -webkit-mask-image: linear-gradient(to right, transparent 0%, rgba(0,0,0,0.15) 18%, rgba(0,0,0,0.65) 38%, black 52%);
+      mask-image: linear-gradient(to right, transparent 0%, rgba(0,0,0,0.15) 18%, rgba(0,0,0,0.65) 38%, black 52%);
+    }
+
+    .slide-hero .hero-content {
+      position: absolute;
+      inset: 28px 32px 48px 32px;
+      z-index: 2;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .slide-hero .hero-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+    }
+
+    .slide-hero .hero-headline {
+      font-family: var(--deck-serif);
+      font-size: 2.65rem;
+      font-weight: 600;
+      color: var(--deck-text-primary);
+      line-height: 1.08;
+      letter-spacing: -0.02em;
+      margin-top: 1.25rem;
+      max-width: 52%;
+    }
+
+    .slide-hero .hero-sub {
+      margin-top: 0.75rem;
+      font-size: 0.82rem;
+      line-height: 1.55;
+      color: var(--deck-text-muted);
+      font-style: italic;
+      max-width: 48%;
+    }
+
+    .slide-hero .hero-tag {
+      margin-top: 0.45rem;
+      font-size: 0.55rem;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: var(--deck-text-muted);
+      font-weight: 600;
+    }
+
+    .slide-hero .brand-logos {
+      position: absolute;
+      right: 5%;
+      top: 11%;
+      display: flex;
+      align-items: center;
+      gap: 1.1rem;
+      z-index: 3;
+    }
+
+    .slide-hero .brand-logos img {
+      width: auto;
+      object-fit: contain;
+      display: block;
+      filter: drop-shadow(0 2px 8px rgba(26, 26, 46, 0.12));
+    }
+
+    .slide-hero .brand-logos img.logo-pucketts { height: 34px; }
+    .slide-hero .brand-logos img.logo-deacons { height: 30px; }
+    .slide-hero .brand-logos img.logo-scouts { height: 32px; }
+
+    .slide-hero .hero-presenter {
+      margin-top: auto;
+      font-size: 0.55rem;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--deck-text-muted);
+      font-weight: 600;
+    }
+
+    .slide-hero .deck-meta-label.lime { color: var(--deck-accent-magenta); }
+
+    .slide-bg-hero {
+      overflow: hidden;
+    }
+
+    .slide-bg-hero .hero-photo-wrap {
+      position: absolute;
+      top: 0;
+      right: 0;
+      width: 58%;
+      height: 100%;
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    .slide-bg-hero .hero-photo {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      -webkit-mask-image: linear-gradient(to right, transparent 0%, rgba(0,0,0,0.15) 18%, rgba(0,0,0,0.65) 38%, black 52%);
+      mask-image: linear-gradient(to right, transparent 0%, rgba(0,0,0,0.15) 18%, rgba(0,0,0,0.65) 38%, black 52%);
+    }
+
+    .slide-bg-hero > *:not(.hero-photo-wrap) {
+      z-index: 2;
+    }
+
+    .proposal-list {
+      display: flex;
+      flex-direction: column;
+      gap: 0.32rem;
+      font-size: 0.68rem;
+      line-height: 1.45;
+      color: var(--deck-text-primary);
+      padding-left: 0.15rem;
+    }
+
+    .photo-grid {
+      position: absolute;
+      right: 32px;
+      top: 72px;
+      width: 42%;
+      bottom: 48px;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      grid-template-rows: auto 1fr 1fr;
+      gap: 0.45rem;
+    }
+
+    .photo-grid img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      border-radius: 4px;
+    }
+
+    .photo-grid .logo-span {
+      grid-column: 1 / -1;
+      height: 52px;
+      object-fit: contain;
+      object-position: left center;
+      background: #111;
+      padding: 6px 10px;
+      border-radius: 4px;
+    }
+
+    .photo-grid .hero-span {
+      grid-column: 1 / -1;
+    }
+
+    .platform-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0.35rem 1.25rem;
+    }
+
+    .platform-item {
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+      font-size: 0.68rem;
+    }
+
+    .platform-dot {
+      width: 6px; height: 6px;
+      border-radius: 50%;
+      background: var(--deck-accent-lime);
+      flex-shrink: 0;
+    }
+
+    [contenteditable="true"]:focus {
+      outline: 1px dashed rgba(192, 38, 163, 0.35);
+      outline-offset: 2px;
+      border-radius: 3px;
+    }
+
+    @media print {
+      body { background: white; }
+      .toolbar { display: none; }
+      .deck-viewport { padding: 0; gap: 0; }
+      .slide {
+        box-shadow: none;
+        border-radius: 0;
+        page-break-after: always;
+        break-after: page;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="toolbar">
+    <span>A. Marshall Hospitality × Crosswalk — Partnership Proposal</span>
+    <div class="toolbar-btns">
+      <button type="button" onclick="window.print()">Export PDF</button>
+      <button type="button" id="prevBtn">← Prev</button>
+      <button type="button" id="nextBtn">Next →</button>
+    </div>
+  </div>
+
+  <div class="deck-viewport" id="deck">
+
+    <!-- SLIDE 1: Title (grey + organic blend) -->
+    <section class="slide slide-hero" data-slide="1">
+      <div class="hero-photo-wrap">
+        <img class="hero-photo" src="images/pgr-mule-room_jpg.jpg" alt="" style="object-position: center 50%;">
+      </div>
+      <div class="hero-content">
+        <div class="hero-top">
+          <img src="images/crosswalk-logo-white.png" alt="Crosswalk" width="108" style="display:block;height:auto;">
+          <div class="deck-meta-label lime" style="text-align:right;margin-top:4px;">A Partnership Proposal / 2026</div>
+        </div>
+        <div class="hero-headline" contenteditable="true">A. Marshall Hospitality.</div>
+        <div class="hero-sub" contenteditable="true">Location intelligence for every table you serve.</div>
+        <div class="hero-tag">Profile IQ · Digital Journeys · Media Conversion</div>
+        <div class="hero-presenter">Presented by Crosswalk Profile IQ</div>
+      </div>
+      <div class="brand-logos">
+        <img class="logo-pucketts" src="images/pucketts-logo-ppt.png" alt="Puckett's Restaurant">
+        <img class="logo-scouts" src="images/scouts-pub-logo-ppt.png" alt="Scout's Pub">
+        <img class="logo-deacons" src="images/deacons-logo-ppt.png" alt="Deacon's New South">
+      </div>
+      <div class="deck-slide-chrome">
+        <span>A. Marshall Hospitality / Partnership Proposal</span>
+        <span>01</span>
+      </div>
+    </section>
+
+    <!-- SLIDE 2: What's inside -->
+    <section class="slide" data-slide="2">
+      <div class="slide-header">
+        <img src="images/crosswalk-logo-white.png" alt="Crosswalk" width="108">
+        <div class="deck-meta-label">Overview</div>
+      </div>
+      <div style="position:absolute;left:32px;top:72px;width:42%;bottom:48px;display:flex;flex-direction:column;">
+        <div class="serif-headline" style="font-size:2.35rem;margin-bottom:1rem;">What's inside.</div>
+        <div style="font-size:0.72rem;line-height:1.65;flex:1;" contenteditable="true">
+          A. Marshall Hospitality operates distinctive brands across multiple markets — Puckett's, Deacon's, and Scout's Pub. Crosswalk proposes a twelve-month partnership to deliver location-level Profile IQ, competitive benchmarking, and digital journey intelligence so each restaurant can act on how guests actually behave, not just what they say.
+        </div>
+        <div class="purple-quote" style="margin-top:auto;" contenteditable="true">
+          Behavioral data tells you who someone really is — not who they say they are.
+        </div>
+      </div>
+      <div style="position:absolute;left:52%;top:72px;width:44%;bottom:48px;">
+        <div class="deck-meta-label" style="color:var(--deck-accent-magenta);margin-bottom:0.75rem;">Contents</div>
+        <div class="toc-item"><span class="toc-num">01</span><span style="font-weight:600;">Profile IQ by Location</span></div>
+        <div class="toc-item"><span class="toc-num">02</span><span style="font-weight:600;">Competitive Benchmarking</span></div>
+        <div class="toc-item"><span class="toc-num">03</span><span style="font-weight:600;">Digital Journeys &amp; Media Conversion</span></div>
+        <div class="toc-item"><span class="toc-num">04</span><span style="font-weight:600;">Your Restaurant Portfolio</span></div>
+        <div class="toc-item"><span class="toc-num">05</span><span style="font-weight:600;">Investment Options</span></div>
+        <div class="toc-item"><span class="toc-num">06</span><span style="font-weight:600;">Next Steps</span></div>
+      </div>
+      <div class="deck-slide-chrome">
+        <span>A. Marshall Hospitality / Partnership Proposal</span>
+        <span>02</span>
+      </div>
+    </section>
+
+    <!-- SLIDE 3: Profile IQ -->
+    <section class="slide slide-bg-hero" data-slide="3">
+      <div class="hero-photo-wrap">
+        <img class="hero-photo" src="images/pucketts-cullman-exterior_jpg.jpg" alt="" style="object-position: 55% 35%;">
+      </div>
+      <div class="slide-header">
+        <img src="images/crosswalk-logo-white.png" alt="Crosswalk" width="108">
+        <div class="deck-meta-label">A. MARSHALL HOSPITALITY / PROFILE IQ</div>
+      </div>
+      <div style="position:absolute;left:32px;top:72px;right:32px;">
+        <div class="serif-headline" style="font-size:1.65rem;margin-bottom:0.35rem;" contenteditable="true">Profile IQ for Every Location</div>
+        <div style="font-size:0.72rem;color:var(--deck-text-muted);font-style:italic;margin-bottom:0.75rem;" contenteditable="true">
+          A dedicated audience portrait for each restaurant location — refreshed on your cadence.
+        </div>
+      </div>
+      <div style="position:absolute;left:32px;top:148px;width:52%;">
+        <div class="why-callout">
+          <div class="why-bar"></div>
+          <div>
+            <div class="deck-meta-label why-label">Why It Matters</div>
+            <div class="why-text" contenteditable="true">
+              Each Puckett's, Deacon's, and Scout's Pub location draws a different guest — different ages, incomes, dining occasions, and media habits. Location-level Profile IQ turns that variance into actionable strategy for menus, marketing, and staffing.
+            </div>
+          </div>
+        </div>
+      </div>
+      <div style="position:absolute;left:32px;right:32px;top:248px;bottom:48px;">
+        <div class="deck-meta-label" style="margin-bottom:0.45rem;">DELIVERABLES PER LOCATION</div>
+        <div class="proposal-list">
+          <div>• Demographic profile (age, gender, income, ethnicity, and more)</div>
+          <div>• Behavioral affinities and interest index scores</div>
+          <div>• Geographic concentration and DMA view</div>
+          <div>• Crosswalk dashboard access for your team</div>
+          <div>• Deck-ready exports for internal and external sharing</div>
+        </div>
+      </div>
+      <div class="deck-slide-chrome">
+        <span>A. Marshall Hospitality / Partnership Proposal</span>
+        <span>03</span>
+      </div>
+    </section>
+
+    <!-- SLIDE 4: Competitors -->
+    <section class="slide slide-bg-hero" data-slide="4">
+      <div class="hero-photo-wrap">
+        <img class="hero-photo" src="images/deacons-ribeye_jpg.jpg" alt="" style="object-position: 45% 50%;">
+      </div>
+      <div class="slide-header">
+        <img src="images/crosswalk-logo-white.png" alt="Crosswalk" width="108">
+        <div class="deck-meta-label">A. MARSHALL HOSPITALITY / COMPETITIVE INTEL</div>
+      </div>
+      <div style="position:absolute;left:32px;top:72px;right:32px;">
+        <div class="serif-headline" style="font-size:1.65rem;margin-bottom:0.35rem;" contenteditable="true">Competitors Loaded by Location</div>
+        <div style="font-size:0.72rem;color:var(--deck-text-muted);font-style:italic;margin-bottom:0.75rem;" contenteditable="true">
+          You identify the competitive set; we benchmark each location against them in the Crosswalk dashboard.
+        </div>
+      </div>
+      <div style="position:absolute;left:32px;top:148px;width:52%;">
+        <div class="why-callout">
+          <div class="why-bar"></div>
+          <div>
+            <div class="deck-meta-label why-label">Why It Matters</div>
+            <div class="why-text" contenteditable="true">
+              Nashville Puckett's competes with a different set than Franklin. We upload your named competitors per location so index scores, over-indexing, and gap analysis reflect real market dynamics — not generic category averages.
+            </div>
+          </div>
+        </div>
+      </div>
+      <div style="position:absolute;left:32px;right:32px;top:255px;bottom:48px;display:grid;grid-template-columns:1fr 1fr;gap:1rem;">
+        <div>
+          <div class="deck-meta-label" style="margin-bottom:0.4rem;">WE HANDLE</div>
+          <div style="display:flex;flex-direction:column;gap:0.35rem;font-size:0.68rem;line-height:1.45;">
+            <div>→ Competitor profile upload per location</div>
+            <div>→ Side-by-side index &amp; share comparison</div>
+            <div>→ Over- / under-indexing alerts</div>
+            <div>→ Gap analysis vs. comp set</div>
+          </div>
+        </div>
+        <div>
+          <div class="deck-meta-label" style="margin-bottom:0.4rem;">YOU PROVIDE</div>
+          <div style="display:flex;flex-direction:column;gap:0.35rem;font-size:0.68rem;line-height:1.45;">
+            <div>→ Location list by brand</div>
+            <div>→ 3–5 named competitors per site</div>
+            <div>→ Optional priority markets</div>
+            <div>→ Quarterly refresh of comp lists</div>
+          </div>
+        </div>
+      </div>
+      <div class="deck-slide-chrome">
+        <span>A. Marshall Hospitality / Partnership Proposal</span>
+        <span>04</span>
+      </div>
+    </section>
+
+    <!-- SLIDE 5: Digital Journeys -->
+    <section class="slide slide-bg-hero" data-slide="5">
+      <div class="hero-photo-wrap">
+        <img class="hero-photo" src="images/pucketts-whole-farm_jpg.jpg" alt="" style="object-position: 50% 45%;">
+      </div>
+      <div class="slide-header">
+        <img src="images/crosswalk-logo-white.png" alt="Crosswalk" width="108">
+        <div class="deck-meta-label">A. MARSHALL HOSPITALITY / DIGITAL JOURNEYS</div>
+      </div>
+      <div style="position:absolute;left:32px;top:72px;right:32px;">
+        <div class="serif-headline" style="font-size:1.65rem;margin-bottom:0.35rem;" contenteditable="true">Digital Journeys &amp; Media Conversion</div>
+        <div style="font-size:0.72rem;color:var(--deck-text-muted);font-style:italic;margin-bottom:0.75rem;" contenteditable="true">
+          Per-location path-to-plate intelligence — from discovery to reservation to delivery.
+        </div>
+      </div>
+      <div style="position:absolute;left:32px;top:148px;width:52%;">
+        <div class="why-callout">
+          <div class="why-bar"></div>
+          <div>
+            <div class="deck-meta-label why-label">Why It Matters</div>
+            <div class="why-text" contenteditable="true">
+              Guests discover you on Yelp, book on OpenTable, and order on DoorDash or Uber Eats — often before they ever walk through the door. Digital journey maps show where each location wins, leaks, and converts across the platforms that drive covers and checks.
+            </div>
+          </div>
+        </div>
+      </div>
+      <div style="position:absolute;left:32px;right:32px;top:255px;bottom:48px;">
+        <div class="deck-meta-label" style="margin-bottom:0.45rem;">PLATFORMS IN SCOPE (PER LOCATION)</div>
+        <div class="platform-grid" style="margin-bottom:0.85rem;">
+          <div class="platform-item"><span class="platform-dot"></span>OpenTable</div>
+          <div class="platform-item"><span class="platform-dot"></span>Yelp</div>
+          <div class="platform-item"><span class="platform-dot"></span>DoorDash</div>
+          <div class="platform-item"><span class="platform-dot"></span>Uber Eats</div>
+          <div class="platform-item"><span class="platform-dot"></span>Google / Maps</div>
+          <div class="platform-item"><span class="platform-dot"></span>Meta &amp; Programmatic</div>
+        </div>
+        <div class="deck-meta-label" style="margin-bottom:0.35rem;">INCLUDED WITH EACH DIGITAL JOURNEY</div>
+        <div class="proposal-list">
+          <div>• Media conversion analysis per location</div>
+          <div>• Platform affinity index scores</div>
+          <div>• Full journey stage mapping (discover → book → order → visit)</div>
+        </div>
+      </div>
+      <div class="deck-slide-chrome">
+        <span>A. Marshall Hospitality / Partnership Proposal</span>
+        <span>05</span>
+      </div>
+    </section>
+
+    <!-- SLIDE 6: Portfolio -->
+    <section class="slide slide-bg-hero" data-slide="6">
+      <div class="hero-photo-wrap">
+        <img class="hero-photo" src="images/pucketts-pigeon-forge-dusk_jpg.jpg" alt="" style="object-position: 60% 40%;">
+      </div>
+      <div class="slide-header">
+        <img src="images/crosswalk-logo-white.png" alt="Crosswalk" width="108">
+        <div class="deck-meta-label">A. MARSHALL HOSPITALITY / PORTFOLIO</div>
+      </div>
+      <div style="position:absolute;left:32px;top:72px;width:48%;">
+        <div class="serif-headline" style="font-size:1.65rem;margin-bottom:0.35rem;" contenteditable="true">Your Restaurant Portfolio</div>
+        <div style="font-size:0.72rem;color:var(--deck-text-muted);font-style:italic;margin-bottom:0.75rem;" contenteditable="true">
+          One partnership covering every location across Puckett's, Deacon's, and Scout's Pub.
+        </div>
+        <div class="deck-meta-label" style="color:var(--deck-accent-magenta);margin-bottom:0.4rem;">WHAT'S INCLUDED AT EVERY LOCATION</div>
+        <div class="proposal-list" style="font-size:0.72rem;gap:0.38rem;">
+          <div>• Profile IQ — full demographic and behavioral portrait</div>
+          <div>• Competitive benchmarking with your named comp set</div>
+          <div>• Digital journey mapping across reservation, delivery, and discovery platforms</div>
+          <div>• Media conversion analysis tied to each journey</div>
+          <div>• Crosswalk dashboard access and deck-ready exports</div>
+        </div>
+      </div>
+      <div class="deck-slide-chrome">
+        <span>A. Marshall Hospitality / Partnership Proposal</span>
+        <span>06</span>
+      </div>
+    </section>
+
+    <!-- SLIDE 7: Pricing -->
+    <section class="slide slide-bg-hero" data-slide="7">
+      <div class="hero-photo-wrap">
+        <img class="hero-photo" src="images/deacons-ribeye_jpg.jpg" alt="" style="object-position: 35% 55%;">
+      </div>
+      <div class="slide-header">
+        <img src="images/crosswalk-logo-white.png" alt="Crosswalk" width="108">
+        <div class="deck-meta-label">A. MARSHALL HOSPITALITY / INVESTMENT</div>
+      </div>
+      <div style="position:absolute;left:32px;top:72px;right:32px;">
+        <div class="serif-headline" style="font-size:1.65rem;margin-bottom:0.35rem;" contenteditable="true">Investment Options</div>
+        <div style="font-size:0.72rem;color:var(--deck-text-muted);font-style:italic;" contenteditable="true">
+          Twelve-month contract · All tiers include full Profile IQ, competitive uploads, digital journeys &amp; media conversion per location.
+        </div>
+      </div>
+      <div style="position:absolute;left:32px;top:148px;width:52%;">
+        <div class="why-callout">
+          <div class="why-bar"></div>
+          <div>
+            <div class="deck-meta-label why-label">Why It Matters</div>
+            <div class="why-text" contenteditable="true">
+              Panel participation lowers your cash investment while enriching the behavioral dataset that powers sharper profiles. The more locations participate, the better the intelligence — and the lower your cost.
+            </div>
+          </div>
+        </div>
+      </div>
+      <div style="position:absolute;left:32px;right:32px;top:240px;bottom:48px;">
+        <div class="tier-card">
+          <div>
+            <div class="deck-meta-label" style="margin-bottom:0.2rem;">OPTION A — ALL CASH</div>
+            <div class="tier-desc">Full service, no panel obligations.</div>
+          </div>
+          <div class="tier-price" contenteditable="true">$10,000<span style="font-size:0.55rem;font-family:Poppins,sans-serif;font-weight:500;">/mo</span></div>
+        </div>
+        <div class="tier-card">
+          <div>
+            <div class="deck-meta-label" style="margin-bottom:0.2rem;">OPTION B — PANEL INCENTIVE</div>
+            <div class="tier-desc">One panel ingestion incentive per location per month.</div>
+            <div class="tier-note">Requires active participation across your location portfolio.</div>
+          </div>
+          <div class="tier-price" contenteditable="true">$5,000<span style="font-size:0.55rem;font-family:Poppins,sans-serif;font-weight:500;">/mo</span></div>
+        </div>
+        <div class="tier-card">
+          <div>
+            <div class="deck-meta-label" style="margin-bottom:0.2rem;color:var(--deck-accent-magenta);">OPTION C — FULL PANEL PARTNERSHIP</div>
+            <div class="tier-desc">Weekly incentives per location per month.</div>
+            <div class="tier-note">Best data fidelity · Zero cash retainer.</div>
+          </div>
+          <div class="tier-price highlight" contenteditable="true">Free</div>
+        </div>
+        <div style="margin-top:0.65rem;font-size:0.62rem;color:var(--deck-text-muted);font-style:italic;" contenteditable="true">
+          All options: 12-month initial term · Pricing applies to the full A. Marshall Hospitality portfolio (Puckett's, Deacon's, Scout's Pub).
+        </div>
+      </div>
+      <div class="deck-slide-chrome">
+        <span>A. Marshall Hospitality / Partnership Proposal</span>
+        <span>07</span>
+      </div>
+    </section>
+
+    <!-- SLIDE 8: Next Steps -->
+    <section class="slide" data-slide="8">
+      <div class="slide-header">
+        <img src="images/crosswalk-logo-white.png" alt="Crosswalk" width="108">
+        <div class="deck-meta-label">A. MARSHALL HOSPITALITY / NEXT STEPS</div>
+      </div>
+      <div style="position:absolute;left:32px;top:88px;width:55%;">
+        <div class="serif-headline" style="font-size:2.2rem;margin-bottom:1rem;" contenteditable="true">Let's get started.</div>
+        <div style="font-size:0.72rem;line-height:1.65;margin-bottom:1.25rem;" contenteditable="true">
+          We're ready to scope locations, load your competitive sets, and stand up your first Profile IQ dashboards within weeks of contract execution.
+        </div>
+        <div style="display:flex;flex-direction:column;gap:0.5rem;font-size:0.68rem;">
+          <div><strong style="color:var(--deck-accent-magenta);">01</strong> &nbsp; Confirm location list by brand</div>
+          <div><strong style="color:var(--deck-accent-magenta);">02</strong> &nbsp; Select investment tier &amp; panel cadence</div>
+          <div><strong style="color:var(--deck-accent-magenta);">03</strong> &nbsp; Kickoff: competitor uploads + journey mapping</div>
+          <div><strong style="color:var(--deck-accent-magenta);">04</strong> &nbsp; First location profiles delivered to dashboard</div>
+        </div>
+      </div>
+      <div style="position:absolute;right:32px;bottom:48px;text-align:right;">
+        <img src="amarshall-hospitality-logo.svg" alt="A. Marshall Hospitality" style="height:28px;width:auto;margin-bottom:1rem;opacity:0.85;">
+        <div class="deck-meta-label">Crosswalk Profile IQ</div>
+        <div style="font-size:0.72rem;margin-top:0.35rem;color:var(--deck-text-primary);" contenteditable="true">hello@crosswalknyc.com</div>
+      </div>
+      <div class="deck-slide-chrome">
+        <span>A. Marshall Hospitality / Partnership Proposal</span>
+        <span>08</span>
+      </div>
+    </section>
+
+  </div>
+
+  <script>
+    const slides = Array.from(document.querySelectorAll('.slide'));
+    let current = 0;
+
+    function showSlide(n) {
+      current = Math.max(0, Math.min(n, slides.length - 1));
+      slides[current].scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+
+    document.getElementById('prevBtn').addEventListener('click', () => showSlide(current - 1));
+    document.getElementById('nextBtn').addEventListener('click', () => showSlide(current + 1));
+
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'ArrowRight' || e.key === 'ArrowDown') showSlide(current + 1);
+      if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') showSlide(current - 1);
+    });
+
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach(entry => {
+        if (entry.isIntersecting) {
+          current = slides.indexOf(entry.target);
+        }
+      });
+    }, { threshold: 0.55 });
+    slides.forEach(s => observer.observe(s));
+  </script>
+</body>
+</html>
