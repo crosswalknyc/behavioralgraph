@@ -30118,8 +30118,18 @@
                 'other': 'Another Race/Ethnicity',
                 'unknown': 'Another Race/Ethnicity'
             },
-            age: {},
-            income: {}
+            age: {
+                '65+': '65 or Older',
+                '65 or older': '65 or Older'
+            },
+            income: {
+                // Synthetic / legacy runs collapse the top bracket into a
+                // single "$150,000+" bucket. Map to the lower of the two
+                // canonical splits so the dollar values land in *some*
+                // canonical row instead of orphaning a non-canonical row.
+                '$150,000+': '$150,000 - $249,999',
+                'under $25,000': 'Less than $25,000'
+            }
         };
         function _bpiqNormalizeDemoLabel(field, raw) {
             if (raw == null) return raw;
@@ -30171,8 +30181,14 @@
             ['gender', 'age', 'ethnicity', 'income'].forEach(function(field) {
                 var preMap  = _bpiqMergeDemo(field, pre[field]);
                 var postMap = _bpiqMergeDemo(field, post[field]);
-                // Show a bucket only if it has nonzero share in either window.
+                var canon = _BPIQ_DEMO_CANONICAL[field] || [];
+                // Always render every canonical bucket from demos.csv — even
+                // when the run carries 0% in both windows — so the section is
+                // a complete, predictable taxonomy. Non-canonical labels that
+                // *do* have data are still surfaced so we never silently drop
+                // observed signal.
                 var union = {};
+                canon.forEach(function(k) { union[k] = true; });
                 Object.keys(preMap).forEach(function(k)  { if ((preMap[k]||0)  > 0 || (postMap[k]||0) > 0) union[k] = true; });
                 Object.keys(postMap).forEach(function(k) { if ((preMap[k]||0)  > 0 || (postMap[k]||0) > 0) union[k] = true; });
                 var values = Object.keys(union);
@@ -30182,7 +30198,6 @@
                     return;
                 }
                 var sortState = _bpiqDemoSort[field] || { key: 'canonical', dir: 'asc' };
-                var canon = _BPIQ_DEMO_CANONICAL[field] || [];
                 var canonIdx = {}; canon.forEach(function(c, i) { canonIdx[c] = i; });
                 var dirMul = sortState.dir === 'asc' ? 1 : -1;
                 values.sort(function(a, b) {
