@@ -34593,7 +34593,13 @@
             );
 
             // ---- Path to Purchase panel (BSFS-style ribbon) ----
-            renderJourneyIqPathToPurchase(d.path_to_purchase);
+            // Hidden for Fandango profile per product request
+            if ((meta.target || '').toLowerCase().indexOf('fandango') < 0) {
+                renderJourneyIqPathToPurchase(d.path_to_purchase);
+            } else {
+                var _ptpPanel = document.getElementById('jiqPathCard');
+                if (_ptpPanel) _ptpPanel.style.display = 'none';
+            }
 
             // ---- Touchpoints panel ----
             renderJourneyIqTouchpoints(touchpoints);
