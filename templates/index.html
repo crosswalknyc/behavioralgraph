@@ -29637,6 +29637,24 @@
             return ((postPct - prePct) / prePct) * 100;
         }
 
+        // Percentage-points delta — the absolute subtraction (post − pre)
+        // displayed alongside every relative-% delta column. Two-decimal
+        // " pp" suffix matches industry convention; sign + color cues
+        // mirror _bpiqFmtBrandLiftPct so the two columns scan the same.
+        function _bpiqFmtPpDelta(prePct, postPct) {
+            if (prePct == null || postPct == null) return '<span style="color:var(--text-secondary);">—</span>';
+            var d = postPct - prePct;
+            if (!isFinite(d)) return '<span style="color:var(--text-secondary);">—</span>';
+            var sign  = d > 0 ? '+' : '';
+            var color = d > 0.05 ? '#10b981' : (d < -0.05 ? '#ef4444' : 'var(--text-secondary)');
+            return '<span style="color:' + color + ';font-weight:600;">' + sign + d.toFixed(2) + ' pp</span>';
+        }
+        function _bpiqPpDeltaValue(prePct, postPct) {
+            if (prePct == null || postPct == null) return null;
+            var d = postPct - prePct;
+            return isFinite(d) ? d : null;
+        }
+
         // Live state for the per-platform table: holds the loaded data,
         // editable per-platform $/engaged-user (CPM) overrides, and the
         // current sort. Edits to CPM trigger _bpiqRecomputeAndRerender(),
@@ -29692,6 +29710,7 @@
                     pre_pen:      p.pre_pen_pct,
                     post_pen:     p.post_pen_pct,
                     lift_rel_pct: _bpiqBrandLiftPctValue(p.pre_pen_pct, p.post_pen_pct),
+                    lift_pp:      _bpiqPpDeltaValue(p.pre_pen_pct, p.post_pen_pct),
                     cpm:          rate,
                     bench_cpm:    benchByPlat[p.platform] || 0,
                     emv:          look.emv[p.platform] || 0,
@@ -29726,6 +29745,7 @@
                 + '<th data-bpiq-sort="pre_pen"      style="' + thBase + 'text-align:right;">Pre %'                    + arrow('pre_pen')      + '</th>'
                 + '<th data-bpiq-sort="post_pen"     style="' + thBase + 'text-align:right;">Post %'                   + arrow('post_pen')     + '</th>'
                 + '<th data-bpiq-sort="lift_rel_pct" style="' + thBase + 'text-align:right;">Brand Lift'               + arrow('lift_rel_pct') + '</th>'
+                + '<th data-bpiq-sort="lift_pp"      style="' + thBase + 'text-align:right;">Brand Lift (pp)'         + arrow('lift_pp')      + '</th>'
                 + '<th data-bpiq-sort="bench_cpm"    style="' + thBase + 'text-align:right;color:var(--text-secondary);" title="Industry-benchmarked CPM. Display only — does not enter any calculation.">Benchmark CPM' + arrow('bench_cpm') + '</th>'
                 + '<th data-bpiq-sort="cpm"          style="' + thBase + 'text-align:right;">CPM'                      + arrow('cpm')          + '</th>'
                 + '<th data-bpiq-sort="emv"          style="' + thBase + 'text-align:right;">Earned Media Value'       + arrow('emv')          + '</th>'
@@ -29750,6 +29770,7 @@
                         + '<td style="padding:8px 10px;text-align:right;color:var(--text-secondary);">' + prePen + '</td>'
                         + '<td style="padding:8px 10px;text-align:right;color:var(--text-secondary);">' + postPen + '</td>'
                         + '<td style="padding:8px 10px;text-align:right;">' + _bpiqFmtBrandLiftPct(r.pre_pen, r.post_pen) + '</td>'
+                        + '<td style="padding:8px 10px;text-align:right;">' + _bpiqFmtPpDelta(r.pre_pen, r.post_pen) + '</td>'
                         + '<td style="padding:8px 10px;text-align:right;color:var(--text-secondary);font-style:italic;">$' + (r.bench_cpm || 0).toFixed(2) + '</td>'
                         + '<td style="padding:8px 10px;text-align:right;">' + cpmInput + '</td>'
                         + '<td style="padding:8px 10px;text-align:right;">' + emvCell + '</td>'
@@ -30276,6 +30297,10 @@
                         if (av == null) av = -Infinity;
                         if (bv == null) bv = -Infinity;
                     }
+                    if (sortState.key === 'delta_pp') {
+                        av = (postMap[a] || 0) - (preMap[a] || 0);
+                        bv = (postMap[b] || 0) - (preMap[b] || 0);
+                    }
                     if (av === bv) return 0;
                     return (av < bv ? -1 : 1) * dirMul;
                 });
@@ -30288,10 +30313,11 @@
                 html += '<div><h4 style="margin:0 0 0.5rem;font-size:13px;">' + _BPIQ_DEMO_LABELS[field] + '</h4>'
                      +  '<table style="width:100%;border-collapse:collapse;font-size:12px;" data-bpiq-demo-field="' + field + '">'
                      +  '<thead><tr style="border-bottom:1px solid var(--border-color);">'
-                     +  '<th data-bpiq-demo-sort="label" style="' + thBase + 'text-align:left;">' + arrow('label') + '</th>'
-                     +  '<th data-bpiq-demo-sort="pre"   style="' + thBase + 'text-align:right;">Pre %'   + arrow('pre')   + '</th>'
-                     +  '<th data-bpiq-demo-sort="post"  style="' + thBase + 'text-align:right;">Post %'  + arrow('post')  + '</th>'
-                     +  '<th data-bpiq-demo-sort="delta" style="' + thBase + 'text-align:right;">Δ'      + arrow('delta') + '</th>'
+                     +  '<th data-bpiq-demo-sort="label"    style="' + thBase + 'text-align:left;">'  + arrow('label')    + '</th>'
+                     +  '<th data-bpiq-demo-sort="pre"      style="' + thBase + 'text-align:right;">Pre %'   + arrow('pre')      + '</th>'
+                     +  '<th data-bpiq-demo-sort="post"     style="' + thBase + 'text-align:right;">Post %'  + arrow('post')     + '</th>'
+                     +  '<th data-bpiq-demo-sort="delta"    style="' + thBase + 'text-align:right;">Δ'       + arrow('delta')    + '</th>'
+                     +  '<th data-bpiq-demo-sort="delta_pp" style="' + thBase + 'text-align:right;">Δ (pp)'  + arrow('delta_pp') + '</th>'
                      +  '</tr></thead><tbody>'
                      +  values.map(function(v) {
                             var preP  = preMap[v]  || 0;
@@ -30313,6 +30339,7 @@
                                 + '<td style="padding:6px 10px;text-align:right;">' + preP.toFixed(1) + '%</td>'
                                 + '<td style="padding:6px 10px;text-align:right;">' + postP.toFixed(1) + '%</td>'
                                 + '<td style="padding:6px 10px;text-align:right;color:' + dColor + ';font-weight:600;">' + dTxt + '</td>'
+                                + '<td style="padding:6px 10px;text-align:right;">' + _bpiqFmtPpDelta(preP, postP) + '</td>'
                                 + '</tr>';
                         }).join('')
                      +  '</tbody></table></div>';
