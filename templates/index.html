@@ -17619,6 +17619,19 @@
                                         </div>
                                     </div>
                                 </div>
+                                <!-- Δ Target − Control strip: small bordered box centered between
+                                     the two cohort rows. Inner grid columns align with the four
+                                     KPI columns above & below (same minmax(150px, 1fr) + 1rem gap
+                                     and matching 1.5rem horizontal padding). -->
+                                <div id="bpiqDeltaRow" style="display: none; margin: -0.5rem 0; background: linear-gradient(135deg, rgba(200,230,0,0.06), rgba(168,85,247,0.06)); border: 1px dashed rgba(200,230,0,0.45); border-radius: 12px; padding: 0.6rem 1.5rem;">
+                                    <div style="font-size: 0.62rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.12em; text-align: center; margin-bottom: 0.35rem; font-weight: 700;">Δ Target − Control</div>
+                                    <div class="bpiq-kpi-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 1rem;">
+                                        <div id="bpiqKpiDeltaConsumers" style="text-align: center; font-size: 0.95rem; font-weight: 700;">—</div>
+                                        <div id="bpiqKpiDeltaPre"       style="text-align: center; font-size: 0.95rem; font-weight: 700;">—</div>
+                                        <div id="bpiqKpiDeltaPost"      style="text-align: center; font-size: 0.95rem; font-weight: 700;">—</div>
+                                        <div id="bpiqKpiDeltaLift"      style="text-align: center; font-size: 0.95rem; font-weight: 700;">—</div>
+                                    </div>
+                                </div>
                                 <!-- Gen Pop / control-cohort mirror row -->
                                 <div id="bpiqGenPopKpiRow" style="display: none; background: linear-gradient(135deg, rgba(200,230,0,0.04), rgba(168,85,247,0.06)); border: 1px solid var(--border-color); border-radius: 14px; padding: 1.5rem 1.5rem 0.75rem;">
                                     <div style="font-size: 0.95rem; font-weight: 800; color: #c8e600; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 1rem;">CONTROL</div>
@@ -17673,13 +17686,8 @@
                             <div style="font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 0.75rem;" id="bpiqDemoNote">Side-by-side breakdowns of consumers who had a brand touchpoint during the pre-event window vs the event + attribution window. Each demographic field rebases to 100% on rows with non-empty values.</div>
                             <div id="bpiqDemographics"></div>
                         </div>
-                        <div class="tab-section" style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 1.5rem; margin-bottom: 1.5rem;">
-                            <h3 style="margin: 0 0 0.5rem;">💬 Sentiment Around the Brand</h3>
-                            <div style="font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 0.75rem;" id="bpiqSentNote">Top brand-tagged URLs are classified as positive / neutral / negative via a fast keyword pass and refined by an LLM when available. Net sentiment score = (positive − negative) ÷ total, weighted by hits.</div>
-                            <div id="bpiqSentiment"></div>
-                        </div>
                         <div class="tab-section" style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 1.5rem;">
-                            <h3 style="margin: 0 0 0.75rem;">🔗 Top 10 Brand Properties</h3>
+                            <h3 style="margin: 0 0 0.75rem;">🔗 Most Engaged With Brand Touchpoints</h3>
                             <div id="bpiqTopProps"></div>
                         </div>
                     </div>
@@ -29470,13 +29478,71 @@
                         tree.innerHTML = '<div style="padding:1rem;color:var(--text-secondary);font-size:13px;">No released results yet.<br><br>Run one in <strong>Analysis IQ → Brand Partnership Valuation</strong>.</div>';
                         return;
                     }
-                    tree.innerHTML = files.map(function(f) {
-                        return '<div class="profile-tree-item" style="padding:10px 14px;cursor:pointer;border-bottom:1px solid var(--border-color);font-size:13px;" onclick="selectBpiqResult(\'' + f.key.replace(/'/g, "\\'") + '\')" title="' + f.last_modified + '">' + (f.name || f.key) + '</div>';
-                    }).join('');
+                    // Group by admin-managed category (Profile IQ-style tree).
+                    // Files with no category land under "Uncategorized".
+                    var byCat = {};
+                    files.forEach(function(f) {
+                        var cat = (f.category || 'Uncategorized').toString().trim() || 'Uncategorized';
+                        if (!byCat[cat]) byCat[cat] = [];
+                        byCat[cat].push(f);
+                    });
+                    var sortedCats = Object.keys(byCat).sort(function(a, b) {
+                        if (a === 'Uncategorized') return 1;
+                        if (b === 'Uncategorized') return -1;
+                        return a.localeCompare(b);
+                    });
+                    function esc(s) {
+                        return String(s == null ? '' : s)
+                            .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+                            .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+                    }
+                    var html = '';
+                    sortedCats.forEach(function(cat) {
+                        var rows = byCat[cat];
+                        // Skip the wrapping accordion when there's only a
+                        // single Uncategorized bucket — keeps the sidebar
+                        // visually flat for installs that haven't started
+                        // tagging runs yet.
+                        var showHeader = !(sortedCats.length === 1 && cat === 'Uncategorized');
+                        if (showHeader) {
+                            html += '<div class="bpiq-cat-header" onclick="toggleBpiqCategory(this)" style="display:flex;align-items:center;gap:6px;padding:8px 14px;cursor:pointer;background:rgba(255,255,255,0.03);border-bottom:1px solid var(--border-color);font-size:11px;font-weight:700;letter-spacing:0.05em;text-transform:uppercase;color:var(--text-secondary);user-select:none;">'
+                                + '<span class="bpiq-cat-arrow" style="display:inline-block;width:10px;transition:transform 0.15s;">▼</span>'
+                                + '<span>' + esc(cat) + '</span>'
+                                + '<span style="margin-left:auto;font-size:10px;opacity:0.6;font-weight:500;">' + rows.length + '</span>'
+                                + '</div>';
+                        }
+                        html += '<div class="bpiq-cat-body">';
+                        rows.forEach(function(f) {
+                            var img = (f.image_url || '').trim();
+                            var thumb = img
+                                ? '<img src="' + esc(img) + '" style="width:28px;height:28px;border-radius:50%;object-fit:cover;border:2px solid var(--accent-lime);flex-shrink:0;" />'
+                                : '<div style="width:28px;height:28px;border-radius:50%;background:var(--bg-input);border:2px solid var(--border-color);display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0;">🤝</div>';
+                            html += '<div class="profile-tree-item" data-bpiq-key="' + esc(f.key) + '" onclick="selectBpiqResult(\'' + String(f.key).replace(/\\/g, '\\\\').replace(/'/g, "\\'") + '\')" title="' + esc(f.last_modified || '') + '" style="display:flex;align-items:center;gap:10px;padding:10px 14px;cursor:pointer;border-bottom:1px solid var(--border-color);font-size:13px;">'
+                                + thumb
+                                + '<span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + esc(f.name || f.key) + '</span>'
+                                + '</div>';
+                        });
+                        html += '</div>';
+                    });
+                    tree.innerHTML = html;
                 }).catch(function() {
                     tree.innerHTML = '<div style="padding:1rem;color:var(--text-secondary);font-size:13px;">Failed to load results.</div>';
                 });
         }
+
+        // Collapse / expand a BPIQ sidebar category section. Mirrors the
+        // simple toggle used by other dashboard trees — no animation, just
+        // toggling the immediately following body's display.
+        window.toggleBpiqCategory = function(headerEl) {
+            try {
+                var body = headerEl.nextElementSibling;
+                if (!body) return;
+                var arrow = headerEl.querySelector('.bpiq-cat-arrow');
+                var collapsed = body.style.display === 'none';
+                body.style.display = collapsed ? '' : 'none';
+                if (arrow) arrow.style.transform = collapsed ? '' : 'rotate(-90deg)';
+            } catch (e) { /* ignore */ }
+        };
 
         window.selectBpiqResult = function(key) {
             document.querySelectorAll('#bpiqProfileTree .profile-tree-item').forEach(function(el) {
@@ -29616,7 +29682,7 @@
             };
             var thBase = 'padding:8px 10px;cursor:pointer;user-select:none;';
             var html = '<div style="font-size:11px;color:var(--text-secondary);margin-bottom:0.5rem;">'
-                + 'A user is counted on a platform when they had at least 1 visit to that platform\'s domain in the window. <strong>Pre %</strong> / <strong>Post %</strong> = share of that platform by consumers that ALSO had a brand touchpoint anywhere on the platform during the same window. <strong>Brand Lift</strong> = percentage change between Post % and Pre % — the actual lift in brand engagement on that platform. <strong>EMV</strong> values the post-campaign reach on each platform at a 2026 industry-benchmarked $/engaged-user rate. The "Direct (Brand Site)" row counts brand touchpoints that did not occur on a social platform (e.g. direct visits to the brand\'s own site or to the brand via a wholesale distributor).'
+                + 'A consumer is counted on a platform when they had at least 1 visit to that platform\'s domain in the window. <strong>Pre %</strong> / <strong>Post %</strong> = share of that platform by consumers that ALSO had a brand touchpoint anywhere on the platform during the same window. <strong>Brand Lift</strong> = percentage change between Post % and Pre % — the actual lift in brand engagement on that platform. <strong>EMV</strong> values the post-campaign reach on each platform at a 2026 industry-benchmarked $/engaged-consumer rate. The "Direct (Brand Site)" row counts brand touchpoints that did not occur on a social platform (e.g. direct visits to the brand\'s own site or to the brand via a wholesale distributor).'
                 + ' <span style="color:var(--text-secondary);font-style:italic;">Click any column header to sort. Click a CPM cell to edit the rate — every downstream value (EMV, Earned Media Value, Total Brand Value) recalculates instantly.</span>'
                 + '</div>'
                 + '<table style="width:100%;border-collapse:collapse;font-size:13px;">'
@@ -29642,7 +29708,7 @@
                         + 'class="bpiq-cpm-input" '
                         + 'value="' + (r.cpm || 0).toFixed(2) + '" '
                         + 'style="width:64px;background:rgba(255,255,255,0.04);border:1px solid var(--border-color);border-radius:6px;padding:2px 6px;color:inherit;font-size:13px;text-align:right;font-family:inherit;" '
-                        + 'title="Edit $/engaged-user — recalculates EMV instantly" />';
+                        + 'title="Edit $/engaged-consumer — recalculates EMV instantly" />';
                     return '<tr style="border-bottom:1px solid rgba(255,255,255,0.04);' + rowDim + '">'
                         + '<td style="padding:8px 10px;font-weight:600;">' + r.platform + '</td>'
                         + '<td style="padding:8px 10px;text-align:right;color:var(--text-secondary);">' + prePen + '</td>'
@@ -29697,6 +29763,9 @@
             if (!_bpiqState.data) return;
             var v = _bpiqState.data.valuation;
             if (!v) { _bpiqRenderPerPlatformTable(); return; }
+            // Per-platform EMV — uses _bpiqState.rateByPlatform overrides
+            // (set both by the per-platform CPM column and by the
+            // editable $/Consumer column in the breakdown table below).
             var newTotalEMV = 0;
             (v.emv_breakdown || []).forEach(function(r) {
                 var incr = r.incremental_users_projected;
@@ -29707,11 +29776,20 @@
                 r.emv_value = (incr > 0 ? incr : 0) * rate;
                 if (r.emv_value > 0) newTotalEMV += r.emv_value;
             });
-            v.earned_media_value = newTotalEMV;
-            v.total_brand_value  = (v.earned_media_value      || 0)
-                                 + (v.brand_engagement_value || 0)
-                                 + (v.brand_lift_value        || 0)
-                                 + (v.conversion_value        || 0);
+            v.earned_media_value = Math.round(newTotalEMV * 100) / 100;
+            // Scalar valuation rates — recomputed off the stable base
+            // counts captured at initial render. Editing any of these
+            // cascades through to the hero card, the four component
+            // cards, and Total Brand Value.
+            var bases = _bpiqState.valBases || {};
+            var rates = v.rates || (v.rates = {});
+            v.brand_engagement_value = Math.round((bases.bev  || 0) * (rates.bev_per_user        || 0) * 100) / 100;
+            v.brand_lift_value       = Math.round((bases.blv  || 0) * (rates.blv_per_incr_user   || 0) * 100) / 100;
+            v.conversion_value       = Math.round((bases.conv || 0) * (rates.conv_value_per_user || 0) * 100) / 100;
+            v.total_brand_value      = Math.round(((v.earned_media_value      || 0)
+                                                 + (v.brand_engagement_value || 0)
+                                                 + (v.brand_lift_value        || 0)
+                                                 + (v.conversion_value        || 0)) * 100) / 100;
             _bpiqRenderPerPlatformTable();
             _bpiqRenderValuation(v);
         }
@@ -29758,6 +29836,7 @@
             var cg = data.control_group || {};
             var gpRow = document.getElementById('bpiqGenPopKpiRow');
             if (gpRow) gpRow.style.display = cg.enabled ? 'block' : 'none';
+            var deltaRow = document.getElementById('bpiqDeltaRow');
             var netLiftCard = document.getElementById('bpiqNetLiftCard');
             if (cg.enabled) {
                 var gpSize    = cg.projected_control_size || 0;
@@ -29771,6 +29850,35 @@
                 document.getElementById('bpiqKpiGenPopPreUsers').innerHTML  = _bpiqFmtNum(gpPre) + pipe + gpPrePct.toFixed(2) + '%';
                 document.getElementById('bpiqKpiGenPopPostUsers').innerHTML = _bpiqFmtNum(gpPost) + pipe + gpPostPct.toFixed(2) + '%';
                 document.getElementById('bpiqKpiGenPopLift').innerHTML = '<span style="color:#c8e600">' + _bpiqFmtNum(gpLiftUsers) + '</span>' + pipe + _bpiqFmtLift(cg.control_lift_pct_users);
+                // Δ Target − Control strip — populated whenever the gen-pop
+                // mirror row is shown. Each cell sits directly under the
+                // matching TARGET column and over the matching CONTROL one.
+                if (deltaRow) {
+                    deltaRow.style.display = '';
+                    var _bpiqFmtDelta = function(num, suffix, zeroLabel) {
+                        if (num == null || !isFinite(num)) return '<span style="color:var(--text-secondary);">—</span>';
+                        if (num === 0 && zeroLabel) return '<span style="color:var(--text-secondary);font-size:0.8rem;font-weight:500;">' + zeroLabel + '</span>';
+                        var sign = num > 0 ? '+' : (num < 0 ? '−' : '');
+                        var mag  = Math.abs(num);
+                        var color = num > 0 ? '#c8e600' : (num < 0 ? '#ef4444' : 'var(--text-secondary)');
+                        var body  = (suffix === ',count')
+                            ? Math.round(mag).toLocaleString()
+                            : mag.toFixed(2) + (suffix || '');
+                        return '<span style="color:' + color + ';">' + sign + body + '</span>';
+                    };
+                    document.getElementById('bpiqKpiDeltaConsumers').innerHTML =
+                        _bpiqFmtDelta((data.projected_audience_size || 0) - gpSize, ',count', 'size-matched');
+                    document.getElementById('bpiqKpiDeltaPre').innerHTML =
+                        _bpiqFmtDelta(prePct - gpPrePct, ' pp');
+                    document.getElementById('bpiqKpiDeltaPost').innerHTML =
+                        _bpiqFmtDelta(postPct - gpPostPct, ' pp');
+                    var _tLift = (totals.lift_pct_users  != null && isFinite(totals.lift_pct_users))  ? totals.lift_pct_users  : null;
+                    var _cLift = (cg.control_lift_pct_users != null && isFinite(cg.control_lift_pct_users)) ? cg.control_lift_pct_users : null;
+                    document.getElementById('bpiqKpiDeltaLift').innerHTML =
+                        (_tLift == null || _cLift == null)
+                            ? '<span style="color:var(--text-secondary);">—</span>'
+                            : _bpiqFmtDelta(_tLift - _cLift, ' pp');
+                }
                 // Net Brand Lift card
                 var brandLift = totals.lift_pct_users;
                 var gpLift    = cg.control_lift_pct_users;
@@ -29783,6 +29891,7 @@
                     document.getElementById('bpiqNetLiftValue').textContent = sign + netLift.toFixed(2);
                 }
             } else {
+                if (deltaRow) deltaRow.style.display = 'none';
                 if (netLiftCard) netLiftCard.style.display = 'none';
             }
 
@@ -29795,6 +29904,31 @@
             ((data.valuation && data.valuation.emv_breakdown) || []).forEach(function(row) {
                 _bpiqState.rateByPlatform[row.platform] = row.emv_per_user_rate || 0;
             });
+            // Capture the *base* count each scalar rate multiplies into
+            // (BEV = post-event engaged consumers; BLV = incremental
+            // consumers; Conversion = post conversions). We back these
+            // out from the original pre-edit values so subsequent rate
+            // edits cascade off a stable count even after many round
+            // trips through _bpiqRecomputeAndRerender (which mutates the
+            // dollar values in place).
+            (function _bpiqCaptureValBases() {
+                var vv = data.valuation || {};
+                var rr = vv.rates || {};
+                var bevRate  = rr.bev_per_user || 0;
+                var blvRate  = rr.blv_per_incr_user || 0;
+                var convRate = rr.conv_value_per_user || 0;
+                var tot      = data.totals || {};
+                var bevBase = bevRate > 0
+                    ? Math.round((vv.brand_engagement_value || 0) / bevRate)
+                    : (tot.post_users_projected || 0);
+                var blvBase = (vv.incremental_users != null)
+                    ? vv.incremental_users
+                    : (blvRate > 0 ? Math.round((vv.brand_lift_value || 0) / blvRate) : 0);
+                var convBase = convRate > 0
+                    ? Math.round((vv.conversion_value || 0) / convRate)
+                    : 0;
+                _bpiqState.valBases = { bev: bevBase, blv: blvBase, conv: convBase };
+            })();
             // Default sort: EMV descending (matches previous behavior in
             // the EMV breakdown table — biggest contributors at top).
             if (!_bpiqState.sortKey) { _bpiqState.sortKey = 'emv'; _bpiqState.sortDir = 'desc'; }
@@ -29839,9 +29973,6 @@
 
             // Demographics (pre vs post brand engagers)
             _bpiqRenderDemographics(data.demographics || {});
-
-            // Sentiment
-            _bpiqRenderSentiment(data.sentiment || {});
 
             // 💰 Total Brand Value (hero) + Valuation Breakdown
             _bpiqRenderValuation(data.valuation || {});
@@ -29948,46 +30079,188 @@
 
         // ----- Brand Partnership: demographics renderer -----
         var _BPIQ_DEMO_LABELS = { gender: 'Gender', age: 'Age', ethnicity: 'Ethnicity', income: 'Income' };
-        function _bpiqDemoRow(label, prePct, postPct) {
-            var delta = (postPct || 0) - (prePct || 0);
-            var deltaSign = delta > 0 ? '+' : '';
-            var deltaColor = delta > 0.5 ? '#10b981' : (delta < -0.5 ? '#ef4444' : 'var(--text-secondary)');
-            return '<tr style="border-bottom:1px solid rgba(255,255,255,0.04);">'
-                + '<td style="padding:6px 10px;font-weight:500;">' + label + '</td>'
-                + '<td style="padding:6px 10px;text-align:right;">' + (prePct || 0).toFixed(1) + '%</td>'
-                + '<td style="padding:6px 10px;text-align:right;">' + (postPct || 0).toFixed(1) + '%</td>'
-                + '<td style="padding:6px 10px;text-align:right;color:' + deltaColor + ';">' + deltaSign + delta.toFixed(1) + ' pp</td>'
-                + '</tr>';
+
+        // Canonical category buckets per field (from the analytics
+        // demographic dictionary in /docs/demos.csv). Order here = the
+        // default display order (and the "canonical" sort).
+        var _BPIQ_DEMO_CANONICAL = {
+            gender: ['Female', 'Male', 'Prefer Not to Say',
+                     'Trans Male', 'Trans Female', 'Non-Binary'],
+            age: ['17 and Under', '18-24', '25-34', '35-44',
+                  '45-54', '55-64', '65 or Older', 'Other'],
+            ethnicity: ['White', 'Hispanic or Latino',
+                        'Black or African American', 'Asian',
+                        'Another Race/Ethnicity'],
+            income: ['Less than $25,000', '$25,000 - $49,999',
+                     '$50,000 - $74,999', '$75,000 - $99,999',
+                     '$100,000 - $149,999', '$150,000 - $249,999',
+                     '$250,000 or More']
+        };
+        // Common label variants mapped to canonical (case-insensitive).
+        // Lets the dashboard show consistent buckets even when older S3
+        // runs (or upstream pipelines) emit shortened / variant labels.
+        var _BPIQ_DEMO_ALIASES = {
+            gender: {
+                'unknown': 'Prefer Not to Say',
+                'm': 'Male', 'f': 'Female',
+                'nonbinary': 'Non-Binary', 'non binary': 'Non-Binary',
+                'other': 'Non-Binary'
+            },
+            ethnicity: {
+                'hispanic': 'Hispanic or Latino',
+                'black': 'Black or African American',
+                'other': 'Another Race/Ethnicity',
+                'unknown': 'Another Race/Ethnicity'
+            },
+            age: {},
+            income: {}
+        };
+        function _bpiqNormalizeDemoLabel(field, raw) {
+            if (raw == null) return raw;
+            // Normalize whitespace, en/em dashes, curly quotes.
+            var s = String(raw).trim()
+                .replace(/[\u2013\u2014]/g, '-')
+                .replace(/[\u2018\u2019]/g, "'")
+                .replace(/\s+/g, ' ');
+            // Income-specific: ensure consistent spacing around the hyphen
+            // so "$100,000-$149,999" (synthetic shorthand) collapses onto
+            // canonical "$100,000 - $149,999".
+            if (field === 'income') {
+                s = s.replace(/(\$[\d,]+)\s*-\s*(\$[\d,]+)/, '$1 - $2');
+            }
+            var lower = s.toLowerCase();
+            var aliases = _BPIQ_DEMO_ALIASES[field] || {};
+            if (Object.prototype.hasOwnProperty.call(aliases, lower)) return aliases[lower];
+            var canon = _BPIQ_DEMO_CANONICAL[field] || [];
+            for (var i = 0; i < canon.length; i++) {
+                if (canon[i].toLowerCase() === lower) return canon[i];
+            }
+            return s;
         }
+        // Apply normalization, then sum percentages across raw labels
+        // that collapse to the same canonical bucket.
+        function _bpiqMergeDemo(field, arr) {
+            var out = {};
+            (arr || []).forEach(function(x) {
+                if (!x || x.value == null) return;
+                var label = _bpiqNormalizeDemoLabel(field, x.value);
+                out[label] = (out[label] || 0) + (Number(x.percentage) || 0);
+            });
+            return out;
+        }
+
+        // Per-field sort state — independent so the user can sort Gender
+        // by Δ, Income by canonical, etc., simultaneously.
+        var _bpiqDemoSort = {};
+        // Held so column-header clicks can re-render in place.
+        var _bpiqDemoData = null;
 
         function _bpiqRenderDemographics(d) {
             var el = document.getElementById('bpiqDemographics');
             if (!el) return;
-            var pre  = d.pre  || { gender: [], age: [], ethnicity: [], income: [] };
-            var post = d.post || { gender: [], age: [], ethnicity: [], income: [] };
-            // Build a value -> percentage lookup for each cohort.
-            function lookup(arr) { var m = {}; (arr || []).forEach(function(x) { m[x.value] = x.percentage; }); return m; }
-
+            _bpiqDemoData = d || {};
+            var pre  = (_bpiqDemoData.pre)  || {};
+            var post = (_bpiqDemoData.post) || {};
             var html = '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:1rem;">';
             ['gender', 'age', 'ethnicity', 'income'].forEach(function(field) {
-                var preMap  = lookup(pre[field]);
-                var postMap = lookup(post[field]);
-                // Union of values present in either cohort, sorted by post% then pre%
-                var values = Object.keys(Object.assign({}, preMap, postMap));
-                values.sort(function(a, b) { return ((postMap[b]||0) - (postMap[a]||0)) || ((preMap[b]||0) - (preMap[a]||0)); });
+                var preMap  = _bpiqMergeDemo(field, pre[field]);
+                var postMap = _bpiqMergeDemo(field, post[field]);
+                // Show a bucket only if it has nonzero share in either window.
+                var union = {};
+                Object.keys(preMap).forEach(function(k)  { if ((preMap[k]||0)  > 0 || (postMap[k]||0) > 0) union[k] = true; });
+                Object.keys(postMap).forEach(function(k) { if ((preMap[k]||0)  > 0 || (postMap[k]||0) > 0) union[k] = true; });
+                var values = Object.keys(union);
                 if (!values.length) {
                     html += '<div><h4 style="margin:0 0 0.5rem;font-size:13px;">' + _BPIQ_DEMO_LABELS[field] + '</h4>'
                          +  '<div style="padding:0.75rem;color:var(--text-secondary);font-size:12px;">No data</div></div>';
                     return;
                 }
+                var sortState = _bpiqDemoSort[field] || { key: 'canonical', dir: 'asc' };
+                var canon = _BPIQ_DEMO_CANONICAL[field] || [];
+                var canonIdx = {}; canon.forEach(function(c, i) { canonIdx[c] = i; });
+                var dirMul = sortState.dir === 'asc' ? 1 : -1;
+                values.sort(function(a, b) {
+                    if (sortState.key === 'canonical') {
+                        // In-canon labels first (CSV order); unknown labels
+                        // alphabetical at the end.
+                        var ai = (canonIdx[a] != null) ? canonIdx[a] : (1000 + a.toLowerCase().charCodeAt(0));
+                        var bi = (canonIdx[b] != null) ? canonIdx[b] : (1000 + b.toLowerCase().charCodeAt(0));
+                        if (ai === bi) return 0;
+                        return (ai < bi ? -1 : 1) * dirMul;
+                    }
+                    if (sortState.key === 'label') {
+                        return a.toLowerCase().localeCompare(b.toLowerCase()) * dirMul;
+                    }
+                    var av, bv;
+                    if (sortState.key === 'pre')  { av = preMap[a]  || 0; bv = preMap[b]  || 0; }
+                    if (sortState.key === 'post') { av = postMap[a] || 0; bv = postMap[b] || 0; }
+                    if (sortState.key === 'delta') {
+                        av = _bpiqBrandLiftPctValue(preMap[a] || 0, postMap[a] || 0);
+                        bv = _bpiqBrandLiftPctValue(preMap[b] || 0, postMap[b] || 0);
+                        if (av == null) av = -Infinity;
+                        if (bv == null) bv = -Infinity;
+                    }
+                    if (av === bv) return 0;
+                    return (av < bv ? -1 : 1) * dirMul;
+                });
+                var arrow = function(key) {
+                    if (sortState.key !== key) return '<span style="opacity:0.3;font-size:10px;margin-left:4px;">⇅</span>';
+                    var glyph = sortState.dir === 'asc' ? '▲' : '▼';
+                    return '<span style="font-size:10px;color:#c8e600;margin-left:4px;">' + glyph + '</span>';
+                };
+                var thBase = 'padding:6px 10px;cursor:pointer;user-select:none;';
                 html += '<div><h4 style="margin:0 0 0.5rem;font-size:13px;">' + _BPIQ_DEMO_LABELS[field] + '</h4>'
-                     +  '<table style="width:100%;border-collapse:collapse;font-size:12px;">'
-                     +  '<thead><tr style="border-bottom:1px solid var(--border-color);"><th style="padding:6px 10px;text-align:left;"></th><th style="padding:6px 10px;text-align:right;">Pre %</th><th style="padding:6px 10px;text-align:right;">Post %</th><th style="padding:6px 10px;text-align:right;">Δ</th></tr></thead><tbody>'
-                     +  values.map(function(v) { return _bpiqDemoRow(v, preMap[v] || 0, postMap[v] || 0); }).join('')
+                     +  '<table style="width:100%;border-collapse:collapse;font-size:12px;" data-bpiq-demo-field="' + field + '">'
+                     +  '<thead><tr style="border-bottom:1px solid var(--border-color);">'
+                     +  '<th data-bpiq-demo-sort="label" style="' + thBase + 'text-align:left;">' + arrow('label') + '</th>'
+                     +  '<th data-bpiq-demo-sort="pre"   style="' + thBase + 'text-align:right;">Pre %'   + arrow('pre')   + '</th>'
+                     +  '<th data-bpiq-demo-sort="post"  style="' + thBase + 'text-align:right;">Post %'  + arrow('post')  + '</th>'
+                     +  '<th data-bpiq-demo-sort="delta" style="' + thBase + 'text-align:right;">Δ'      + arrow('delta') + '</th>'
+                     +  '</tr></thead><tbody>'
+                     +  values.map(function(v) {
+                            var preP  = preMap[v]  || 0;
+                            var postP = postMap[v] || 0;
+                            var dPct  = _bpiqBrandLiftPctValue(preP, postP);
+                            var dTxt, dColor;
+                            if (dPct == null) {
+                                dTxt = '—'; dColor = 'var(--text-secondary)';
+                            } else if (!isFinite(dPct)) {
+                                dTxt = dPct > 0 ? '+∞' : '-∞';
+                                dColor = dPct > 0 ? '#10b981' : '#ef4444';
+                            } else {
+                                var sign = dPct > 0 ? '+' : '';
+                                dTxt = sign + dPct.toFixed(1) + '%';
+                                dColor = dPct > 0.5 ? '#10b981' : (dPct < -0.5 ? '#ef4444' : 'var(--text-secondary)');
+                            }
+                            return '<tr style="border-bottom:1px solid rgba(255,255,255,0.04);">'
+                                + '<td style="padding:6px 10px;font-weight:500;">' + v + '</td>'
+                                + '<td style="padding:6px 10px;text-align:right;">' + preP.toFixed(1) + '%</td>'
+                                + '<td style="padding:6px 10px;text-align:right;">' + postP.toFixed(1) + '%</td>'
+                                + '<td style="padding:6px 10px;text-align:right;color:' + dColor + ';font-weight:600;">' + dTxt + '</td>'
+                                + '</tr>';
+                        }).join('')
                      +  '</tbody></table></div>';
             });
             html += '</div>';
             el.innerHTML = html;
+            // Wire column-header sort, scoped per field-table.
+            el.querySelectorAll('table[data-bpiq-demo-field] th[data-bpiq-demo-sort]').forEach(function(th) {
+                th.addEventListener('click', function() {
+                    var table = th.closest('table');
+                    var field = table.getAttribute('data-bpiq-demo-field');
+                    var key   = th.getAttribute('data-bpiq-demo-sort');
+                    var cur = _bpiqDemoSort[field] || { key: 'canonical', dir: 'asc' };
+                    if (cur.key === key) {
+                        cur.dir = cur.dir === 'asc' ? 'desc' : 'asc';
+                    } else {
+                        cur.key = key;
+                        // Sensible defaults: numeric desc, label asc.
+                        cur.dir = (key === 'label') ? 'asc' : 'desc';
+                    }
+                    _bpiqDemoSort[field] = cur;
+                    _bpiqRenderDemographics(_bpiqDemoData);
+                });
+            });
         }
 
         // ----- Brand Partnership: valuation renderer -----
@@ -30048,7 +30321,18 @@
                 if (hasConv) {
                     rateBits += ', Conversion $' + (v.rates && v.rates.conv_value_per_user || 0).toFixed(2) + '/order';
                 }
-                note.innerHTML = (v.methodology || '') + ' ' + rateBits + '. Per-platform EMV rates are 2026 industry-benchmarked.';
+                note.innerHTML = (v.methodology || '') + ' ' + rateBits + '. Per-platform EMV rates are 2026 industry-benchmarked. <span style="font-style:italic;">Click any $-rate below to edit; everything recalculates instantly.</span>';
+            }
+            // Inline editable rate input (BEV / BLV / Conversion). Same
+            // visual treatment as the per-platform CPM column so the UX
+            // is consistent across the whole BPIQ surface.
+            function _bpiqRateInput(key, val, title) {
+                return '<input type="number" step="0.01" min="0" '
+                     + 'data-bpiq-rate="' + key + '" '
+                     + 'class="bpiq-rate-input" '
+                     + 'value="' + (Number(val) || 0).toFixed(2) + '" '
+                     + 'style="width:60px;background:rgba(255,255,255,0.04);border:1px solid var(--border-color);border-radius:6px;padding:1px 5px;color:inherit;font-size:11px;text-align:right;font-family:inherit;" '
+                     + 'title="' + (title || '') + '" />';
             }
             if (!body) return;
             // Compute a concise subtitle for the EMV card that mirrors
@@ -30085,18 +30369,33 @@
                 + '<div style="padding:0.85rem;border:1px solid var(--border-color);border-radius:8px;">'
                 +   '<div style="font-size:0.65rem;color:var(--text-secondary);text-transform:uppercase;">Brand Engagement Value</div>'
                 +   '<div style="font-size:1.3rem;font-weight:700;color:#6366f1;">' + _bpiqFmtMoney(v.brand_engagement_value || 0) + '</div>'
-                +   '<div style="font-size:11px;color:var(--text-secondary);">post-event engaged consumers × $' + (v.rates && v.rates.bev_per_user || 0).toFixed(2) + '</div>'
+                +   '<div style="font-size:11px;color:var(--text-secondary);display:flex;align-items:center;gap:4px;flex-wrap:wrap;">'
+                +     _bpiqFmtNum(_bpiqState.valBases && _bpiqState.valBases.bev || 0)
+                +     ' post-event engaged consumers × $'
+                +     _bpiqRateInput('bev', v.rates && v.rates.bev_per_user, 'Edit $/consumer — recalculates Brand Engagement Value & Total Brand Value')
+                +     '<span>/consumer</span>'
+                +   '</div>'
                 + '</div>'
                 + '<div style="padding:0.85rem;border:1px solid var(--border-color);border-radius:8px;">'
                 +   '<div style="font-size:0.65rem;color:var(--text-secondary);text-transform:uppercase;">Brand Lift Value</div>'
                 +   '<div style="font-size:1.3rem;font-weight:700;color:#f59e0b;">' + _bpiqFmtMoney(v.brand_lift_value || 0) + '</div>'
-                +   '<div style="font-size:11px;color:var(--text-secondary);">' + _bpiqFmtNum(v.incremental_users || 0) + ' incremental consumers × $' + (v.rates && v.rates.blv_per_incr_user || 0).toFixed(2) + '</div>'
+                +   '<div style="font-size:11px;color:var(--text-secondary);display:flex;align-items:center;gap:4px;flex-wrap:wrap;">'
+                +     _bpiqFmtNum(v.incremental_users || (_bpiqState.valBases && _bpiqState.valBases.blv) || 0)
+                +     ' incremental consumers × $'
+                +     _bpiqRateInput('blv', v.rates && v.rates.blv_per_incr_user, 'Edit $/incremental consumer — recalculates Brand Lift Value & Total Brand Value')
+                +     '<span>/incremental consumer</span>'
+                +   '</div>'
                 + '</div>'
                 + (hasConv
                     ? ('<div style="padding:0.85rem;border:1px solid var(--border-color);border-radius:8px;">'
                         +   '<div style="font-size:0.65rem;color:var(--text-secondary);text-transform:uppercase;">Conversion Value</div>'
                         +   '<div style="font-size:1.3rem;font-weight:700;color:#ef4444;">' + _bpiqFmtMoney(v.conversion_value || 0) + '</div>'
-                        +   '<div style="font-size:11px;color:var(--text-secondary);">post conversions × $' + (v.rates && v.rates.conv_value_per_user || 0).toFixed(2) + '</div>'
+                        +   '<div style="font-size:11px;color:var(--text-secondary);display:flex;align-items:center;gap:4px;flex-wrap:wrap;">'
+                        +     _bpiqFmtNum(_bpiqState.valBases && _bpiqState.valBases.conv || 0)
+                        +     ' post conversions × $'
+                        +     _bpiqRateInput('conv', v.rates && v.rates.conv_value_per_user, 'Edit $/conversion — recalculates Conversion Value & Total Brand Value')
+                        +     '<span>/order</span>'
+                        +   '</div>'
                         + '</div>')
                     : '')
                 + '</div>';
@@ -30113,7 +30412,7 @@
             });
             if (emv.length) {
                 emv.sort(function(a, b) { return (b.emv_value||0) - (a.emv_value||0); });
-                html += '<div style="font-size:12px;color:var(--text-secondary);margin:0.5rem 0 0.4rem;">Earned Media Value by platform — values only the <strong>incremental</strong> brand engagers (post − pre) attributable to each platform, so consumers appearing on multiple platforms aren\'t double-counted:</div>'
+                html += '<div style="font-size:12px;color:var(--text-secondary);margin:0.5rem 0 0.4rem;">Earned Media Value by platform — values only the <strong>incremental</strong> brand engagers (post − pre) attributable to each platform, so consumers appearing on multiple platforms aren\'t double-counted. <span style="font-style:italic;">Click any <strong>$/Consumer</strong> cell to edit; the per-platform CPM column above and Total Brand Value update in lock-step.</span></div>'
                      +  '<table style="width:100%;border-collapse:collapse;font-size:13px;">'
                      +  '<thead><tr style="border-bottom:2px solid var(--border-color);">'
                      +  '<th style="padding:6px 10px;text-align:left;">Platform</th>'
@@ -30124,107 +30423,69 @@
                      +  emv.map(function(r) {
                             var incr = r.incremental_users_projected;
                             if (incr == null) incr = (r.post_users_projected || 0) - (r.pre_users_projected || 0);
+                            var safePlat = (r.platform || '').replace(/"/g, '&quot;');
+                            var rateInput = '<span style="color:var(--text-secondary);margin-right:2px;">$</span>'
+                                + '<input type="number" step="0.01" min="0" '
+                                + 'data-bpiq-emv-platform="' + safePlat + '" '
+                                + 'class="bpiq-cpm-input" '
+                                + 'value="' + (r.emv_per_user_rate || 0).toFixed(2) + '" '
+                                + 'style="width:64px;background:rgba(255,255,255,0.04);border:1px solid var(--border-color);border-radius:6px;padding:2px 6px;color:inherit;font-size:13px;text-align:right;font-family:inherit;" '
+                                + 'title="Edit $/engaged-consumer for ' + safePlat + ' — recalculates EMV everywhere" />';
                             return '<tr style="border-bottom:1px solid rgba(255,255,255,0.04);">'
                                 +    '<td style="padding:6px 10px;font-weight:500;">' + r.platform + '</td>'
                                 +    '<td style="padding:6px 10px;text-align:right;">' + _bpiqFmtNum(incr) + '</td>'
-                                +    '<td style="padding:6px 10px;text-align:right;color:var(--text-secondary);">$' + (r.emv_per_user_rate || 0).toFixed(2) + '</td>'
+                                +    '<td style="padding:6px 10px;text-align:right;">' + rateInput + '</td>'
                                 +    '<td style="padding:6px 10px;text-align:right;color:#10b981;font-weight:600;">' + _bpiqFmtMoney(r.emv_value || 0) + '</td>'
                                 +  '</tr>';
                         }).join('')
                      +  '</tbody></table>';
             }
             body.innerHTML = html;
-        }
 
-        // ----- Brand Partnership: sentiment renderer -----
-        var _bpiqSentChartInst = null;
-        function _bpiqRenderSentiment(s) {
-            var el = document.getElementById('bpiqSentiment');
-            if (!el) return;
-            if (!s.enabled) {
-                el.innerHTML = '<div style="padding:0.75rem;color:var(--text-secondary);font-size:13px;">Not enough brand-tagged URLs to classify sentiment.</div>';
-                return;
-            }
-            var pre  = s.pre  || { positive: 0, neutral: 0, negative: 0 };
-            var post = s.post || { positive: 0, neutral: 0, negative: 0 };
-            var shiftSign = (s.net_shift || 0) > 0 ? '+' : '';
-            var shiftColor = (s.net_shift || 0) > 0 ? '#10b981'
-                            : (s.net_shift || 0) < 0 ? '#ef4444' : 'var(--text-secondary)';
-
-            var html = '';
-            html += '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:0.75rem;margin-bottom:1rem;">';
-            html +=   '<div style="padding:0.85rem;border:1px solid var(--border-color);border-radius:8px;text-align:center;">'
-                    +   '<div style="font-size:0.7rem;color:var(--text-secondary);text-transform:uppercase;">Pre Net Sentiment</div>'
-                    +   '<div style="font-size:1.4rem;font-weight:700;">' + (s.pre_net_score || 0).toFixed(1) + '</div>'
-                    + '</div>';
-            html +=   '<div style="padding:0.85rem;border:1px solid var(--border-color);border-radius:8px;text-align:center;">'
-                    +   '<div style="font-size:0.7rem;color:var(--text-secondary);text-transform:uppercase;">Post Net Sentiment</div>'
-                    +   '<div style="font-size:1.4rem;font-weight:700;">' + (s.post_net_score || 0).toFixed(1) + '</div>'
-                    + '</div>';
-            html +=   '<div style="padding:0.85rem;border:1px solid ' + shiftColor + ';border-radius:8px;text-align:center;">'
-                    +   '<div style="font-size:0.7rem;color:var(--text-secondary);text-transform:uppercase;">Sentiment Shift</div>'
-                    +   '<div style="font-size:1.4rem;font-weight:700;color:' + shiftColor + ';">' + shiftSign + (s.net_shift || 0).toFixed(1) + '</div>'
-                    + '</div>';
-            html += '</div>';
-
-            html += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;align-items:start;">';
-            html += '<div style="position:relative;height:260px;"><canvas id="bpiqSentChart"></canvas></div>';
-            var _renderSentList = function(items) {
-                if (!items || !items.length) {
-                    return '<div style="color:var(--text-secondary);font-size:12px;margin-top:0.4rem;">None detected</div>';
-                }
-                var _esc = function(s) {
-                    return String(s == null ? '' : s)
-                        .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+            // ----- Wire up editable rates -----
+            // Scalar rate inputs (BEV / BLV / Conversion). Same commit
+            // pattern as the per-platform CPM column: change/blur fire
+            // the recompute, Enter blurs to commit.
+            body.querySelectorAll('input[data-bpiq-rate]').forEach(function(inp) {
+                inp.addEventListener('click', function(e) { e.stopPropagation(); });
+                var commit = function() {
+                    var key = inp.getAttribute('data-bpiq-rate');
+                    var val = parseFloat(inp.value);
+                    if (!isFinite(val) || val < 0) val = 0;
+                    if (!_bpiqState.data) return;
+                    var rates = (_bpiqState.data.valuation && _bpiqState.data.valuation.rates) || {};
+                    if (key === 'bev')  rates.bev_per_user        = val;
+                    if (key === 'blv')  rates.blv_per_incr_user   = val;
+                    if (key === 'conv') rates.conv_value_per_user = val;
+                    if (_bpiqState.data.valuation) _bpiqState.data.valuation.rates = rates;
+                    _bpiqRecomputeAndRerender();
                 };
-                return '<ul style="margin:0.4rem 0 0;padding-left:1.1rem;font-size:12px;">'
-                    + items.slice(0,8).map(function(u) {
-                        var summary = _esc(u.summary || u.common_name || 'Brand page');
-                        return '<li>' + summary + '</li>';
-                      }).join('') + '</ul>';
-            };
-            html += '<div>'
-                  + '<div style="margin-bottom:0.75rem;"><strong style="color:#10b981;">Top Positive URLs</strong>'
-                  + _renderSentList(s.top_positive) + '</div>'
-                  + '<div style="margin-bottom:0.75rem;"><strong style="color:#94a3b8;">Top Neutral URLs</strong>'
-                  + _renderSentList(s.top_neutral) + '</div>'
-                  + '<div><strong style="color:#ef4444;">Top Negative URLs</strong>'
-                  + _renderSentList(s.top_negative) + '</div>'
-                  + '</div>';
-            html += '</div>';
-            el.innerHTML = html;
-
-            // Use US-projected counts for the chart so all dashboard
-            // numbers are reported in gen-pop units. Falls back to raw
-            // panel hits if projection isn't present.
-            var preProj  = s.pre_projected  || pre;
-            var postProj = s.post_projected || post;
-
-            var canvas = document.getElementById('bpiqSentChart');
-            if (canvas && typeof Chart !== 'undefined') {
-                if (_bpiqSentChartInst) _bpiqSentChartInst.destroy();
-                _bpiqSentChartInst = new Chart(canvas.getContext('2d'), {
-                    type: 'bar',
-                    data: {
-                        labels: ['Positive', 'Neutral', 'Negative'],
-                        datasets: [
-                            { label: 'Pre',  data: [preProj.positive  || 0, preProj.neutral  || 0, preProj.negative  || 0], backgroundColor: '#6366f1', borderWidth: 0, borderRadius: 6 },
-                            { label: 'Post', data: [postProj.positive || 0, postProj.neutral || 0, postProj.negative || 0], backgroundColor: '#10b981', borderWidth: 0, borderRadius: 6 }
-                        ]
-                    },
-                    options: {
-                        responsive: true, maintainAspectRatio: false,
-                        scales: {
-                            y: { beginAtZero: true, grid: { color: 'rgba(255,255,255,0.06)' }, ticks: { color: '#aaa', font: { size: 11 }, callback: function(v) { return Number(v).toLocaleString(); } } },
-                            x: { grid: { display: false }, ticks: { color: '#e8e8e8', font: { size: 11 } } }
-                        },
-                        plugins: {
-                            legend:  { position: 'bottom', labels: { color: '#e8e8e8', font: { size: 11 } } },
-                            tooltip: { callbacks: { label: function(ctx) { return ctx.dataset.label + ': ' + Number(ctx.parsed.y).toLocaleString() + ' US users'; } } }
-                        }
-                    }
+                inp.addEventListener('change', commit);
+                inp.addEventListener('blur',   commit);
+                inp.addEventListener('keydown', function(e) {
+                    if (e.key === 'Enter') { e.preventDefault(); inp.blur(); }
                 });
-            }
+            });
+            // Per-platform $/Consumer inputs in the breakdown table.
+            // Edits cascade through _bpiqState.rateByPlatform — the same
+            // channel the per-platform table CPM column writes to, so
+            // changing one place updates the other automatically on the
+            // next re-render.
+            body.querySelectorAll('input[data-bpiq-emv-platform]').forEach(function(inp) {
+                inp.addEventListener('click', function(e) { e.stopPropagation(); });
+                var commit = function() {
+                    var plat = inp.getAttribute('data-bpiq-emv-platform');
+                    var val = parseFloat(inp.value);
+                    if (!isFinite(val) || val < 0) val = 0;
+                    _bpiqState.rateByPlatform[plat] = val;
+                    _bpiqRecomputeAndRerender();
+                };
+                inp.addEventListener('change', commit);
+                inp.addEventListener('blur',   commit);
+                inp.addEventListener('keydown', function(e) {
+                    if (e.key === 'Enter') { e.preventDefault(); inp.blur(); }
+                });
+            });
         }
 
         // ====================================================================
