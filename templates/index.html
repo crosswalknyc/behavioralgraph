@@ -17675,18 +17675,82 @@
                                 </div>
                             </div>
                         </div>
-                        <div class="tab-section" style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 1.5rem; margin-bottom: 1.5rem;">
-                            <h3 style="margin: 0 0 0.75rem;">📱 Per-Platform Brand Engagement & Lift</h3>
+                        <!-- 📡 Earned Media Value — subsumes the legacy
+                             "Per-Platform Brand Engagement & Lift" card.
+                             The per-platform table IS the EMV math — every
+                             row contributes (Incremental Consumers × CPM)
+                             to the total displayed in the header. -->
+                        <div id="bpiqEmvCard" class="tab-section" style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 1.5rem; margin-bottom: 1.5rem; display: none;">
+                            <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:1rem; flex-wrap:wrap; margin-bottom:0.65rem;">
+                                <div style="flex:1; min-width:260px;">
+                                    <h3 style="margin: 0 0 0.2rem;">📡 Earned Media Value</h3>
+                                    <div style="font-size: 0.78rem; color: var(--text-secondary); line-height: 1.55;">
+                                        <strong>EMV = Σ<sub>platforms</sub> (Incremental Consumers × $/Consumer CPM)</strong> — each platform's post-campaign incremental brand engagement is valued at that platform's industry-standard CPM, then summed. Click any CPM cell in the table below to retune; the total on the right and Total Brand Value at the top recalculate instantly.
+                                    </div>
+                                </div>
+                                <div style="text-align:right; min-width:170px;">
+                                    <div style="font-size:0.65rem; color:var(--text-secondary); text-transform:uppercase; letter-spacing:0.05em;">Total Earned Media Value</div>
+                                    <div id="bpiqEmvTotal" style="font-size:1.8rem; font-weight:700; color:#10b981;">—</div>
+                                    <div id="bpiqEmvFormula" style="font-size:11px; color:var(--text-secondary);"></div>
+                                </div>
+                            </div>
                             <div id="bpiqPlatformTable" style="overflow-x: auto;"></div>
                         </div>
-                        <div id="bpiqConversionsSection" class="tab-section" style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 1.5rem; margin-bottom: 1.5rem;">
-                            <h3 style="margin: 0 0 0.75rem;">💳 Conversions (Order / Signup Confirmations)</h3>
-                            <div id="bpiqConversions"></div>
+
+                        <!-- 🤝 Brand Engagement Value -->
+                        <div id="bpiqBevCard" class="tab-section" style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 1.5rem; margin-bottom: 1.5rem; display: none;">
+                            <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:1rem; flex-wrap:wrap; margin-bottom:0.5rem;">
+                                <div style="flex:1; min-width:260px;">
+                                    <h3 style="margin: 0 0 0.2rem;">🤝 Brand Engagement Value</h3>
+                                    <div style="font-size: 0.78rem; color: var(--text-secondary); line-height: 1.55;">
+                                        Values every <strong>post-campaign engaged consumer</strong> at a flat $/consumer rate — capturing the value of brand mindshare itself, separate from the social-media amplification valued in EMV.
+                                    </div>
+                                </div>
+                                <div style="text-align:right; min-width:170px;">
+                                    <div style="font-size:0.65rem; color:var(--text-secondary); text-transform:uppercase; letter-spacing:0.05em;">Brand Engagement Value</div>
+                                    <div id="bpiqBevTotal" style="font-size:1.8rem; font-weight:700; color:#6366f1;">—</div>
+                                </div>
+                            </div>
+                            <div id="bpiqBevBody"></div>
                         </div>
-                        <div id="bpiqValuationSection" class="tab-section" style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 1.5rem; margin-bottom: 1.5rem; display: none;">
-                            <h3 style="margin: 0 0 0.5rem;">💰 Valuation Breakdown</h3>
-                            <div style="font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 0.75rem;" id="bpiqValuationNote"></div>
-                            <div id="bpiqValuation"></div>
+
+                        <!-- 📈 Brand Lift Value -->
+                        <div id="bpiqBlvCard" class="tab-section" style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 1.5rem; margin-bottom: 1.5rem; display: none;">
+                            <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:1rem; flex-wrap:wrap; margin-bottom:0.5rem;">
+                                <div style="flex:1; min-width:260px;">
+                                    <h3 style="margin: 0 0 0.2rem;">📈 Brand Lift Value</h3>
+                                    <div style="font-size: 0.78rem; color: var(--text-secondary); line-height: 1.55;">
+                                        Values only the <strong>incremental consumers</strong> (DiD lift over Gen Pop) at a higher rate than BEV — these are the partnership-attributable brand engagers who would not have engaged without the campaign.
+                                    </div>
+                                </div>
+                                <div style="text-align:right; min-width:170px;">
+                                    <div style="font-size:0.65rem; color:var(--text-secondary); text-transform:uppercase; letter-spacing:0.05em;">Brand Lift Value</div>
+                                    <div id="bpiqBlvTotal" style="font-size:1.8rem; font-weight:700; color:#f59e0b;">—</div>
+                                </div>
+                            </div>
+                            <div id="bpiqBlvBody"></div>
+                        </div>
+
+                        <!-- 💳 Conversion Value — absorbs the legacy
+                             "💳 Conversions" card so the value math
+                             ('Post Conversions × $/order') sits next to
+                             the inputs that drive it. Hidden when no
+                             conversion signal is detected. -->
+                        <div id="bpiqConvValCard" class="tab-section" style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 1.5rem; margin-bottom: 1.5rem; display: none;">
+                            <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:1rem; flex-wrap:wrap; margin-bottom:0.5rem;">
+                                <div style="flex:1; min-width:260px;">
+                                    <h3 style="margin: 0 0 0.2rem;">💳 Conversion Value</h3>
+                                    <div style="font-size: 0.78rem; color: var(--text-secondary); line-height: 1.55;">
+                                        Values every measured <strong>post-campaign order / sign-up confirmation</strong> at the brand's average order value (AOV).
+                                    </div>
+                                </div>
+                                <div style="text-align:right; min-width:170px;">
+                                    <div style="font-size:0.65rem; color:var(--text-secondary); text-transform:uppercase; letter-spacing:0.05em;">Conversion Value</div>
+                                    <div id="bpiqConvValTotal" style="font-size:1.8rem; font-weight:700; color:#ef4444;">—</div>
+                                </div>
+                            </div>
+                            <div id="bpiqConversions" style="margin-bottom:1rem;"></div>
+                            <div id="bpiqConvValBody"></div>
                         </div>
                         <div class="tab-section" style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 1.5rem; margin-bottom: 1.5rem;">
                             <h3 style="margin: 0 0 0.5rem;">👥 Demographics: Pre vs Post Brand Engagers</h3>
@@ -29711,6 +29775,7 @@
                     post_pen:     p.post_pen_pct,
                     lift_rel_pct: _bpiqBrandLiftPctValue(p.pre_pen_pct, p.post_pen_pct),
                     lift_pp:      _bpiqPpDeltaValue(p.pre_pen_pct, p.post_pen_pct),
+                    incr_users:   look.incr[p.platform] || 0,
                     cpm:          rate,
                     bench_cpm:    benchByPlat[p.platform] || 0,
                     emv:          look.emv[p.platform] || 0,
@@ -29736,19 +29801,20 @@
             };
             var thBase = 'padding:8px 10px;cursor:pointer;user-select:none;';
             var html = '<div style="font-size:11px;color:var(--text-secondary);margin-bottom:0.5rem;">'
-                + 'A consumer is counted on a platform when they had at least 1 visit to that platform\'s domain in the window. <strong>Pre %</strong> / <strong>Post %</strong> = share of that platform by consumers that ALSO had a brand touchpoint anywhere on the platform during the same window. <strong>Brand Lift</strong> = percentage change between Post % and Pre % — the actual lift in brand engagement on that platform. <strong>EMV</strong> values the post-campaign reach on each platform at a 2026 industry-benchmarked $/engaged-consumer rate. The "Direct (Brand Site)" row counts brand touchpoints that did not occur on a social platform (e.g. direct visits to the brand\'s own site or to the brand via a wholesale distributor).'
-                + ' <span style="color:var(--text-secondary);font-style:italic;">Click any column header to sort. Click a CPM cell to edit the rate — every downstream value (EMV, Earned Media Value, Total Brand Value) recalculates instantly.</span>'
+                + 'A consumer is counted on a platform when they had at least 1 visit to that platform\'s domain in the window. <strong>Pre %</strong> / <strong>Post %</strong> = share of that platform\'s consumers that ALSO had a brand touchpoint anywhere on the platform during the same window. <strong>Brand Lift</strong> = percentage change between Post % and Pre %. <strong>Incremental Consumers</strong> = the post-campaign incremental brand engagers attributable to that platform, projected to US gen pop. <strong>EMV</strong> = Incremental Consumers × CPM. The "Direct (Brand Site)" row counts brand touchpoints that did not occur on a social platform (e.g. direct visits to the brand\'s own site or via a wholesale distributor).'
+                + ' <span style="color:var(--text-secondary);font-style:italic;">Click any column header to sort. Click a CPM cell to edit the rate — every downstream value (per-row EMV, Total Earned Media Value, Total Brand Value) recalculates instantly.</span>'
                 + '</div>'
                 + '<table style="width:100%;border-collapse:collapse;font-size:13px;">'
                 + '<thead><tr style="border-bottom:2px solid var(--border-color);">'
-                + '<th data-bpiq-sort="platform"     style="' + thBase + 'text-align:left;">Platform'                  + arrow('platform')     + '</th>'
-                + '<th data-bpiq-sort="pre_pen"      style="' + thBase + 'text-align:right;">Pre %'                    + arrow('pre_pen')      + '</th>'
-                + '<th data-bpiq-sort="post_pen"     style="' + thBase + 'text-align:right;">Post %'                   + arrow('post_pen')     + '</th>'
-                + '<th data-bpiq-sort="lift_rel_pct" style="' + thBase + 'text-align:right;">Brand Lift'               + arrow('lift_rel_pct') + '</th>'
-                + '<th data-bpiq-sort="lift_pp"      style="' + thBase + 'text-align:right;">Brand Lift (pp)'         + arrow('lift_pp')      + '</th>'
+                + '<th data-bpiq-sort="platform"     style="' + thBase + 'text-align:left;">Platform'                                    + arrow('platform')     + '</th>'
+                + '<th data-bpiq-sort="pre_pen"      style="' + thBase + 'text-align:right;">Pre %'                                      + arrow('pre_pen')      + '</th>'
+                + '<th data-bpiq-sort="post_pen"     style="' + thBase + 'text-align:right;">Post %'                                     + arrow('post_pen')     + '</th>'
+                + '<th data-bpiq-sort="lift_rel_pct" style="' + thBase + 'text-align:right;">Brand Lift'                                 + arrow('lift_rel_pct') + '</th>'
+                + '<th data-bpiq-sort="lift_pp"      style="' + thBase + 'text-align:right;">Brand Lift (pp)'                            + arrow('lift_pp')      + '</th>'
+                + '<th data-bpiq-sort="incr_users"   style="' + thBase + 'text-align:right;" title="Post-campaign incremental brand engagers attributable to this platform (post − pre, projected to US gen pop).">Incremental Consumers' + arrow('incr_users')   + '</th>'
                 + '<th data-bpiq-sort="bench_cpm"    style="' + thBase + 'text-align:right;color:var(--text-secondary);" title="Industry-benchmarked CPM. Display only — does not enter any calculation.">Benchmark CPM' + arrow('bench_cpm') + '</th>'
-                + '<th data-bpiq-sort="cpm"          style="' + thBase + 'text-align:right;">CPM'                      + arrow('cpm')          + '</th>'
-                + '<th data-bpiq-sort="emv"          style="' + thBase + 'text-align:right;">Earned Media Value'       + arrow('emv')          + '</th>'
+                + '<th data-bpiq-sort="cpm"          style="' + thBase + 'text-align:right;">CPM'                                        + arrow('cpm')          + '</th>'
+                + '<th data-bpiq-sort="emv"          style="' + thBase + 'text-align:right;" title="Incremental Consumers × CPM = EMV.">EMV (Incr × CPM)' + arrow('emv') + '</th>'
                 + '</tr></thead><tbody>'
                 + rows.map(function(r) {
                     var rowDim = r._dim ? 'opacity:0.45;' : '';
@@ -29765,12 +29831,16 @@
                         + 'value="' + (r.cpm || 0).toFixed(2) + '" '
                         + 'style="width:64px;background:rgba(255,255,255,0.04);border:1px solid var(--border-color);border-radius:6px;padding:2px 6px;color:inherit;font-size:13px;text-align:right;font-family:inherit;" '
                         + 'title="Edit $/engaged-consumer — recalculates EMV instantly" />';
+                    var incrCell = (r.incr_users > 0)
+                        ? _bpiqFmtNum(r.incr_users)
+                        : '<span style="color:var(--text-secondary);">' + (r.incr_users === 0 ? '0' : '—') + '</span>';
                     return '<tr style="border-bottom:1px solid rgba(255,255,255,0.04);' + rowDim + '">'
                         + '<td style="padding:8px 10px;font-weight:600;">' + r.platform + '</td>'
                         + '<td style="padding:8px 10px;text-align:right;color:var(--text-secondary);">' + prePen + '</td>'
                         + '<td style="padding:8px 10px;text-align:right;color:var(--text-secondary);">' + postPen + '</td>'
                         + '<td style="padding:8px 10px;text-align:right;">' + _bpiqFmtBrandLiftPct(r.pre_pen, r.post_pen) + '</td>'
                         + '<td style="padding:8px 10px;text-align:right;">' + _bpiqFmtPpDelta(r.pre_pen, r.post_pen) + '</td>'
+                        + '<td style="padding:8px 10px;text-align:right;">' + incrCell + '</td>'
                         + '<td style="padding:8px 10px;text-align:right;color:var(--text-secondary);font-style:italic;">$' + (r.bench_cpm || 0).toFixed(2) + '</td>'
                         + '<td style="padding:8px 10px;text-align:right;">' + cpmInput + '</td>'
                         + '<td style="padding:8px 10px;text-align:right;">' + emvCell + '</td>'
@@ -30024,7 +30094,11 @@
             // in web panel data).
             var conv = data.conversions || {};
             var convEl       = document.getElementById('bpiqConversions');
-            var convSection  = document.getElementById('bpiqConversionsSection');
+            // The conversion pre/post counts and the conversion-value math
+            // now both live inside #bpiqConvValCard. Toggling the card
+            // visibility is what suppresses the entire Conversion Value
+            // section for app-driven brands with no panel-visible orders.
+            var convSection  = document.getElementById('bpiqConvValCard');
             var convPreProj  = conv.pre_users_projected  || 0;
             var convPostProj = conv.post_users_projected || 0;
             var hideConv = !conv.enabled
@@ -30367,35 +30441,47 @@
         }
 
         // ----- Brand Partnership: valuation renderer -----
-        // Renders both the 💰 Total Brand Value hero card up top
-        // and the detailed Valuation Breakdown section. Hides both
-        // gracefully when the valuation block is absent (old runs).
+        // Renders the 💰 Total Brand Value hero card AND populates the
+        // four standalone valuation cards (📡 Earned Media, 🤝 Brand
+        // Engagement, 📈 Brand Lift, 💳 Conversion). Each card carries
+        // its own visible math row(s) showing exactly which numbers
+        // multiply into its $-value, with the editable rate inline.
         function _bpiqRenderValuation(v) {
             var hero    = document.getElementById('bpiqHeroValue');
             var heroTot = document.getElementById('bpiqHeroTotal');
             var heroSub = document.getElementById('bpiqHeroSub');
             var heroBrk = document.getElementById('bpiqHeroBreak');
-            var section = document.getElementById('bpiqValuationSection');
-            var note    = document.getElementById('bpiqValuationNote');
-            var body    = document.getElementById('bpiqValuation');
+            var emvCard      = document.getElementById('bpiqEmvCard');
+            var emvTotalEl   = document.getElementById('bpiqEmvTotal');
+            var emvFormulaEl = document.getElementById('bpiqEmvFormula');
+            var bevCard      = document.getElementById('bpiqBevCard');
+            var bevTotalEl   = document.getElementById('bpiqBevTotal');
+            var bevBody      = document.getElementById('bpiqBevBody');
+            var blvCard      = document.getElementById('bpiqBlvCard');
+            var blvTotalEl   = document.getElementById('bpiqBlvTotal');
+            var blvBody      = document.getElementById('bpiqBlvBody');
+            var convValCard  = document.getElementById('bpiqConvValCard');
+            var convValTotEl = document.getElementById('bpiqConvValTotal');
+            var convValBody  = document.getElementById('bpiqConvValBody');
             var hasData = v && (v.total_brand_value || v.brand_engagement_value
                               || v.earned_media_value || v.brand_lift_value
                               || v.conversion_value);
             if (!hasData) {
-                if (hero)    hero.style.display    = 'none';
-                if (section) section.style.display = 'none';
+                if (hero)       hero.style.display       = 'none';
+                if (emvCard)    emvCard.style.display    = 'none';
+                if (bevCard)    bevCard.style.display    = 'none';
+                if (blvCard)    blvCard.style.display    = 'none';
+                // Conv card visibility is owned by the conversions
+                // pre/post block above; leave it alone here.
                 return;
             }
             // Hero card
             if (hero)    hero.style.display = '';
             if (heroTot) heroTot.textContent = _bpiqFmtMoney(v.total_brand_value || 0);
-            // Conversion bucket is dropped from BOTH the hero chip row
-            // AND the breakdown component row when its value is 0 (the
-            // 💳 Conversions section already hides itself for low/zero
-            // signal — this keeps the rest of the dashboard consistent
-            // so we don't show empty $0 boxes anywhere). Same logic
-            // also strips the conversion-rate sentence from the
-            // methodology subtitle.
+            // Conversion bucket is dropped from the hero chip row when
+            // its value is 0 (the 💳 Conversion Value card already
+            // hides itself for low/zero signal — this keeps the hero
+            // consistent so we don't show an empty $0 chip).
             var hasConv = (v.conversion_value || 0) > 0;
             if (heroSub) heroSub.textContent = hasConv
                 ? 'Earned Media + Brand Engagement + Brand Lift + Conversions'
@@ -30416,42 +30502,60 @@
                         +  '</div>';
                 }).join('');
             }
-            // Detailed breakdown section
-            if (section) section.style.display = '';
-            if (note) {
-                var rateBits = 'Rates are tunable: BEV $' + (v.rates && v.rates.bev_per_user || 0).toFixed(2) + '/consumer, '
-                             + 'BLV $' + (v.rates && v.rates.blv_per_incr_user || 0).toFixed(2) + '/incremental consumer';
-                if (hasConv) {
-                    rateBits += ', Conversion $' + (v.rates && v.rates.conv_value_per_user || 0).toFixed(2) + '/order';
-                }
-                note.innerHTML = (v.methodology || '') + ' ' + rateBits + '. Per-platform EMV rates are 2026 industry-benchmarked. <span style="font-style:italic;">Click any $-rate below to edit; everything recalculates instantly.</span>';
-            }
-            // Inline editable rate input (BEV / BLV / Conversion). Same
-            // visual treatment as the per-platform CPM column so the UX
-            // is consistent across the whole BPIQ surface.
+            // ---------- shared helpers for the math rows ----------
+            // Inline editable rate input (BEV / BLV / Conversion).
             function _bpiqRateInput(key, val, title) {
                 return '<input type="number" step="0.01" min="0" '
                      + 'data-bpiq-rate="' + key + '" '
                      + 'class="bpiq-rate-input" '
                      + 'value="' + (Number(val) || 0).toFixed(2) + '" '
-                     + 'style="width:60px;background:rgba(255,255,255,0.04);border:1px solid var(--border-color);border-radius:6px;padding:1px 5px;color:inherit;font-size:11px;text-align:right;font-family:inherit;" '
+                     + 'style="width:78px;background:rgba(255,255,255,0.04);border:1px solid var(--border-color);border-radius:6px;padding:3px 7px;color:inherit;font-size:14px;text-align:right;font-family:inherit;font-weight:600;" '
                      + 'title="' + (title || '') + '" />';
             }
             // Muted "benchmark $X.XX" hint shown immediately before each
-            // editable rate. The benchmark itself is captured once at
-            // load time (_bpiqState.benchmarks) and never participates
-            // in any downstream calculation — it's purely a reference
-            // for the editor.
+            // editable rate. Captured once at load time
+            // (_bpiqState.benchmarks); never participates in any
+            // downstream calculation — pure reference for the editor.
             var _bm = _bpiqState.benchmarks || {};
             function _bpiqBenchHint(val) {
-                return '<span style="color:var(--text-secondary);font-style:italic;opacity:0.75;" title="Industry-benchmark rate. Display only — does not enter any calculation.">benchmark $' + (Number(val) || 0).toFixed(2) + '</span>';
+                return '<span style="color:var(--text-secondary);font-style:italic;opacity:0.75;font-size:12px;" title="Industry-benchmark rate. Display only — does not enter any calculation.">benchmark $' + (Number(val) || 0).toFixed(2) + '</span>';
             }
-            if (!body) return;
-            // Compute a concise subtitle for the EMV card that mirrors
-            // BEV / BLV's style ("N users × $rate"). Rates vary by
-            // platform, so we surface a hits-weighted blended average
-            // and the per-platform range. Only contributing platforms
-            // (emv_value > 0, i.e. positive incremental lift) count.
+            // Build a 3-row "calculator" table for the math:
+            //   N units                         | <count>
+            //   × $/unit (benchmark $X.XX)      | $rate [editable]
+            //   --------------------------------|----------------
+            //   = total                         | <$value>
+            // Used by BEV / BLV / Conversion cards. Visually mirrors
+            // a hand-written calculation so the math is unmistakable.
+            function _bpiqMathRow(rows, totalLabel, totalValue, totalColor) {
+                var html = '<table style="width:100%;border-collapse:collapse;font-size:14px;line-height:1.7;">';
+                rows.forEach(function(r, i) {
+                    html += '<tr style="' + (i === 0 ? '' : 'border-top:1px dashed rgba(255,255,255,0.08);') + '">'
+                         +    '<td style="padding:8px 12px;color:var(--text-secondary);">' + r.label + '</td>'
+                         +    '<td style="padding:8px 12px;text-align:right;font-weight:600;">' + r.value + '</td>'
+                         +  '</tr>';
+                });
+                html += '<tr style="border-top:2px solid rgba(200,230,0,0.5);">'
+                     +    '<td style="padding:10px 12px;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;font-size:12px;color:var(--text-secondary);">' + totalLabel + '</td>'
+                     +    '<td style="padding:10px 12px;text-align:right;font-weight:700;font-size:1.15rem;color:' + (totalColor || 'inherit') + ';">' + totalValue + '</td>'
+                     +  '</tr>';
+                html += '</table>';
+                return html;
+            }
+
+            // ---------- 📡 Earned Media Value ----------
+            // The card body (per-platform table) is owned by the
+            // per-platform table renderer. Here we populate the header
+            // total + the formula footnote so it always reflects the
+            // current sum after CPM edits.
+            if (emvCard) emvCard.style.display = '';
+            if (emvTotalEl) emvTotalEl.textContent = _bpiqFmtMoney(v.earned_media_value || 0);
+            // Compose a concise "Σ over N platforms" hint with the
+            // hits-weighted blended rate and the per-platform range
+            // (only contributing platforms — i.e. positive incremental
+            // lift — are counted). Falls back to the generic formula
+            // when no platform contributed, so the EMV card never
+            // appears mathematically silent.
             var _emvContrib = (v.emv_breakdown || []).filter(function(r) {
                 return (r.emv_value || 0) > 0 && (r.incremental_users_projected || 0) > 0;
             });
@@ -30466,106 +30570,92 @@
                     ? ''
                     : ' (varies $' + minR.toFixed(2) + '–$' + maxR.toFixed(2) + ' by platform)';
             }
-            var _emvSub = _emvIncrTotal > 0
-                ? (_bpiqFmtNum(_emvIncrTotal) + ' incremental consumers × $' + _emvBlended.toFixed(2) + ' blended' + _emvRangeStr)
-                : 'Σ per-platform incremental consumers × platform EMV $/consumer';
-
-            // Top: component cards mirroring the hero (drops the
-            // Conversion Value card entirely when conversion_value = 0).
-            var html = '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:0.75rem;margin-bottom:1rem;">'
-                + '<div style="padding:0.85rem;border:1px solid var(--border-color);border-radius:8px;">'
-                +   '<div style="font-size:0.65rem;color:var(--text-secondary);text-transform:uppercase;">Earned Media Value</div>'
-                +   '<div style="font-size:1.3rem;font-weight:700;color:#10b981;">' + _bpiqFmtMoney(v.earned_media_value || 0) + '</div>'
-                +   '<div style="font-size:11px;color:var(--text-secondary);">' + _emvSub + '</div>'
-                + '</div>'
-                + '<div style="padding:0.85rem;border:1px solid var(--border-color);border-radius:8px;">'
-                +   '<div style="font-size:0.65rem;color:var(--text-secondary);text-transform:uppercase;">Brand Engagement Value</div>'
-                +   '<div style="font-size:1.3rem;font-weight:700;color:#6366f1;">' + _bpiqFmtMoney(v.brand_engagement_value || 0) + '</div>'
-                +   '<div style="font-size:11px;color:var(--text-secondary);display:flex;align-items:center;gap:4px;flex-wrap:wrap;">'
-                +     _bpiqFmtNum(_bpiqState.valBases && _bpiqState.valBases.bev || 0)
-                +     ' post-event engaged consumers × '
-                +     _bpiqBenchHint(_bm.bev_per_user) + ' → $'
-                +     _bpiqRateInput('bev', v.rates && v.rates.bev_per_user, 'Edit $/consumer — recalculates Brand Engagement Value & Total Brand Value')
-                +     '<span>/consumer</span>'
-                +   '</div>'
-                + '</div>'
-                + '<div style="padding:0.85rem;border:1px solid var(--border-color);border-radius:8px;">'
-                +   '<div style="font-size:0.65rem;color:var(--text-secondary);text-transform:uppercase;">Brand Lift Value</div>'
-                +   '<div style="font-size:1.3rem;font-weight:700;color:#f59e0b;">' + _bpiqFmtMoney(v.brand_lift_value || 0) + '</div>'
-                +   '<div style="font-size:11px;color:var(--text-secondary);display:flex;align-items:center;gap:4px;flex-wrap:wrap;">'
-                +     _bpiqFmtNum(v.incremental_users || (_bpiqState.valBases && _bpiqState.valBases.blv) || 0)
-                +     ' incremental consumers × '
-                +     _bpiqBenchHint(_bm.blv_per_incr_user) + ' → $'
-                +     _bpiqRateInput('blv', v.rates && v.rates.blv_per_incr_user, 'Edit $/incremental consumer — recalculates Brand Lift Value & Total Brand Value')
-                +     '<span>/incremental consumer</span>'
-                +   '</div>'
-                + '</div>'
-                + (hasConv
-                    ? ('<div style="padding:0.85rem;border:1px solid var(--border-color);border-radius:8px;">'
-                        +   '<div style="font-size:0.65rem;color:var(--text-secondary);text-transform:uppercase;">Conversion Value</div>'
-                        +   '<div style="font-size:1.3rem;font-weight:700;color:#ef4444;">' + _bpiqFmtMoney(v.conversion_value || 0) + '</div>'
-                        +   '<div style="font-size:11px;color:var(--text-secondary);display:flex;align-items:center;gap:4px;flex-wrap:wrap;">'
-                        +     _bpiqFmtNum(_bpiqState.valBases && _bpiqState.valBases.conv || 0)
-                        +     ' post conversions × '
-                        +     _bpiqBenchHint(_bm.conv_value_per_user) + ' → $'
-                        +     _bpiqRateInput('conv', v.rates && v.rates.conv_value_per_user, 'Edit $/conversion — recalculates Conversion Value & Total Brand Value')
-                        +     '<span>/order</span>'
-                        +   '</div>'
-                        + '</div>')
-                    : '')
-                + '</div>';
-            // Per-platform EMV table (only platforms that actually
-            // contributed positive earned-media reach).
-            var emv = (v.emv_breakdown || []).filter(function(r) {
-                var incr = r.incremental_users_projected;
-                if (incr == null) {
-                    // Backwards-compat for older S3 files that didn't
-                    // store the incremental field.
-                    incr = (r.post_users_projected || 0) - (r.pre_users_projected || 0);
-                }
-                return incr > 0 && (r.emv_value || 0) > 0;
-            });
-            if (emv.length) {
-                emv.sort(function(a, b) { return (b.emv_value||0) - (a.emv_value||0); });
-                var _benchByPlat = (_bpiqState.benchmarks && _bpiqState.benchmarks.rateByPlatform) || {};
-                html += '<div style="font-size:12px;color:var(--text-secondary);margin:0.5rem 0 0.4rem;">Earned Media Value by platform — values only the <strong>incremental</strong> brand engagers (post − pre) attributable to each platform, so consumers appearing on multiple platforms aren\'t double-counted. <span style="font-style:italic;">Click any <strong>$/Consumer</strong> cell to edit; the per-platform CPM column above and Total Brand Value update in lock-step. The <strong>Benchmark</strong> column is reference-only and never enters any calculation.</span></div>'
-                     +  '<table style="width:100%;border-collapse:collapse;font-size:13px;">'
-                     +  '<thead><tr style="border-bottom:2px solid var(--border-color);">'
-                     +  '<th style="padding:6px 10px;text-align:left;">Platform</th>'
-                     +  '<th style="padding:6px 10px;text-align:right;">Incremental Consumers</th>'
-                     +  '<th style="padding:6px 10px;text-align:right;color:var(--text-secondary);" title="Industry-benchmarked $/Consumer. Display only — does not enter any calculation.">Benchmark $/Consumer</th>'
-                     +  '<th style="padding:6px 10px;text-align:right;">$/Consumer</th>'
-                     +  '<th style="padding:6px 10px;text-align:right;">EMV</th>'
-                     +  '</tr></thead><tbody>'
-                     +  emv.map(function(r) {
-                            var incr = r.incremental_users_projected;
-                            if (incr == null) incr = (r.post_users_projected || 0) - (r.pre_users_projected || 0);
-                            var safePlat = (r.platform || '').replace(/"/g, '&quot;');
-                            var benchRate = _benchByPlat[r.platform] || 0;
-                            var rateInput = '<span style="color:var(--text-secondary);margin-right:2px;">$</span>'
-                                + '<input type="number" step="0.01" min="0" '
-                                + 'data-bpiq-emv-platform="' + safePlat + '" '
-                                + 'class="bpiq-cpm-input" '
-                                + 'value="' + (r.emv_per_user_rate || 0).toFixed(2) + '" '
-                                + 'style="width:64px;background:rgba(255,255,255,0.04);border:1px solid var(--border-color);border-radius:6px;padding:2px 6px;color:inherit;font-size:13px;text-align:right;font-family:inherit;" '
-                                + 'title="Edit $/engaged-consumer for ' + safePlat + ' — recalculates EMV everywhere" />';
-                            return '<tr style="border-bottom:1px solid rgba(255,255,255,0.04);">'
-                                +    '<td style="padding:6px 10px;font-weight:500;">' + r.platform + '</td>'
-                                +    '<td style="padding:6px 10px;text-align:right;">' + _bpiqFmtNum(incr) + '</td>'
-                                +    '<td style="padding:6px 10px;text-align:right;color:var(--text-secondary);font-style:italic;">$' + benchRate.toFixed(2) + '</td>'
-                                +    '<td style="padding:6px 10px;text-align:right;">' + rateInput + '</td>'
-                                +    '<td style="padding:6px 10px;text-align:right;color:#10b981;font-weight:600;">' + _bpiqFmtMoney(r.emv_value || 0) + '</td>'
-                                +  '</tr>';
-                        }).join('')
-                     +  '</tbody></table>';
+            if (emvFormulaEl) {
+                emvFormulaEl.innerHTML = _emvIncrTotal > 0
+                    ? (_bpiqFmtNum(_emvIncrTotal) + ' incr. consumers × $' + _emvBlended.toFixed(2) + ' blended' + _emvRangeStr)
+                    : 'Σ per-platform incremental consumers × platform CPM';
             }
-            body.innerHTML = html;
 
-            // ----- Wire up editable rates -----
-            // Scalar rate inputs (BEV / BLV / Conversion). Same commit
-            // pattern as the per-platform CPM column: change/blur fire
-            // the recompute, Enter blurs to commit.
-            body.querySelectorAll('input[data-bpiq-rate]').forEach(function(inp) {
+            // ---------- 🤝 Brand Engagement Value ----------
+            if (bevCard)   bevCard.style.display = '';
+            if (bevTotalEl) bevTotalEl.textContent = _bpiqFmtMoney(v.brand_engagement_value || 0);
+            if (bevBody) {
+                var bevCount = (_bpiqState.valBases && _bpiqState.valBases.bev) || 0;
+                var bevRateValue = (v.rates && v.rates.bev_per_user) || 0;
+                bevBody.innerHTML = _bpiqMathRow(
+                    [
+                        { label: 'Post-Campaign Engaged Consumers',
+                          value: _bpiqFmtNum(bevCount) },
+                        { label: '× $/consumer rate &nbsp;'
+                                 + _bpiqBenchHint(_bm.bev_per_user),
+                          value: '$ ' + _bpiqRateInput('bev', bevRateValue, 'Edit $/consumer — recalculates Brand Engagement Value & Total Brand Value')
+                                 + ' <span style="color:var(--text-secondary);font-size:13px;">/consumer</span>' }
+                    ],
+                    '= Brand Engagement Value',
+                    _bpiqFmtMoney(v.brand_engagement_value || 0),
+                    '#6366f1'
+                );
+            }
+
+            // ---------- 📈 Brand Lift Value ----------
+            if (blvCard)   blvCard.style.display = '';
+            if (blvTotalEl) blvTotalEl.textContent = _bpiqFmtMoney(v.brand_lift_value || 0);
+            if (blvBody) {
+                var blvCount = (v.incremental_users != null)
+                    ? v.incremental_users
+                    : ((_bpiqState.valBases && _bpiqState.valBases.blv) || 0);
+                var blvRateValue = (v.rates && v.rates.blv_per_incr_user) || 0;
+                blvBody.innerHTML = _bpiqMathRow(
+                    [
+                        { label: 'Incremental Consumers (post − pre · DiD vs Gen Pop)',
+                          value: _bpiqFmtNum(blvCount) },
+                        { label: '× $/incremental-consumer rate &nbsp;'
+                                 + _bpiqBenchHint(_bm.blv_per_incr_user),
+                          value: '$ ' + _bpiqRateInput('blv', blvRateValue, 'Edit $/incremental consumer — recalculates Brand Lift Value & Total Brand Value')
+                                 + ' <span style="color:var(--text-secondary);font-size:13px;">/incr. consumer</span>' }
+                    ],
+                    '= Brand Lift Value',
+                    _bpiqFmtMoney(v.brand_lift_value || 0),
+                    '#f59e0b'
+                );
+            }
+
+            // ---------- 💳 Conversion Value ----------
+            // Card visibility is driven by the conversions block above
+            // (which hides the whole card for low/zero signal). Here
+            // we populate the math + total *only when the card is
+            // already visible*, so the value math stays in sync with
+            // the post-conversions count.
+            if (convValCard && convValCard.style.display !== 'none') {
+                if (convValTotEl) convValTotEl.textContent = _bpiqFmtMoney(v.conversion_value || 0);
+                if (convValBody) {
+                    var convCount = (_bpiqState.valBases && _bpiqState.valBases.conv) || 0;
+                    var convRateValue = (v.rates && v.rates.conv_value_per_user) || 0;
+                    convValBody.innerHTML = _bpiqMathRow(
+                        [
+                            { label: 'Post-Campaign Conversions',
+                              value: _bpiqFmtNum(convCount) },
+                            { label: '× Average Order Value (AOV) &nbsp;'
+                                     + _bpiqBenchHint(_bm.conv_value_per_user),
+                              value: '$ ' + _bpiqRateInput('conv', convRateValue, 'Edit $/conversion (AOV) — recalculates Conversion Value & Total Brand Value')
+                                     + ' <span style="color:var(--text-secondary);font-size:13px;">/order</span>' }
+                        ],
+                        '= Conversion Value',
+                        _bpiqFmtMoney(v.conversion_value || 0),
+                        '#ef4444'
+                    );
+                }
+            } else if (convValBody) {
+                convValBody.innerHTML = '';
+            }
+
+            // ----- Wire up editable rate inputs across all 3 cards -----
+            // All BEV/BLV/Conv inputs share data-bpiq-rate; query the
+            // document so we catch every card's input regardless of
+            // which body container they live in.
+            document.querySelectorAll('input[data-bpiq-rate]').forEach(function(inp) {
+                if (inp.dataset.bpiqRateWired === '1') return;
+                inp.dataset.bpiqRateWired = '1';
                 inp.addEventListener('click', function(e) { e.stopPropagation(); });
                 var commit = function() {
                     var key = inp.getAttribute('data-bpiq-rate');
@@ -30577,26 +30667,6 @@
                     if (key === 'blv')  rates.blv_per_incr_user   = val;
                     if (key === 'conv') rates.conv_value_per_user = val;
                     if (_bpiqState.data.valuation) _bpiqState.data.valuation.rates = rates;
-                    _bpiqRecomputeAndRerender();
-                };
-                inp.addEventListener('change', commit);
-                inp.addEventListener('blur',   commit);
-                inp.addEventListener('keydown', function(e) {
-                    if (e.key === 'Enter') { e.preventDefault(); inp.blur(); }
-                });
-            });
-            // Per-platform $/Consumer inputs in the breakdown table.
-            // Edits cascade through _bpiqState.rateByPlatform — the same
-            // channel the per-platform table CPM column writes to, so
-            // changing one place updates the other automatically on the
-            // next re-render.
-            body.querySelectorAll('input[data-bpiq-emv-platform]').forEach(function(inp) {
-                inp.addEventListener('click', function(e) { e.stopPropagation(); });
-                var commit = function() {
-                    var plat = inp.getAttribute('data-bpiq-emv-platform');
-                    var val = parseFloat(inp.value);
-                    if (!isFinite(val) || val < 0) val = 0;
-                    _bpiqState.rateByPlatform[plat] = val;
                     _bpiqRecomputeAndRerender();
                 };
                 inp.addEventListener('change', commit);
