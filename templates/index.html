@@ -20716,7 +20716,7 @@
 
                     <!-- View 2: Spider/network SVG -->
                     <div id="jiqSpiderWrap" style="display: none;">
-                        <svg id="jiqSpiderSvg" viewBox="0 0 1100 720" preserveAspectRatio="xMidYMid meet" style="width: 100%; height: auto; max-height: 720px;"></svg>
+                        <svg id="jiqSpiderSvg" viewBox="0 0 1100 420" preserveAspectRatio="xMidYMid meet" style="width: 100%; height: auto; max-height: 420px;"></svg>
                     </div>
 
                     <!-- View 3: Events flat list -->
@@ -37251,26 +37251,19 @@
         }
 
         function _jiqRenderSpiderSvg(spider) {
-            // Layout: TARGET center-top -> channels in upper arc ->
-            // events as leaves on outer arc -> COHORT center -> endpoints
-            // bottom arc -> CONVERSION center-bottom. Uses plain SVG so
-            // we don't need to pull in D3.
-            var chs = (spider.channels || []).slice(0, 8);  // cap visible channels
-            var endpoints = (spider.endpoints || []).slice(0, 6);
-            var W = 1100, H = 720;
+            // Layout (flipped): Leaves at top -> Channels -> TARGET at bottom.
+            // Converter Cohort / Endpoints / Conversion removed per request.
+            var chs = (spider.channels || []).slice(0, 8);
+            var W = 1100, H = 420;
             var cx = W / 2;
-            var tgtY  = 40;
-            var chY   = 180;
-            var leafY = 340;
-            var cohortY = 460;
-            var epY    = 580;
-            var convY  = 700;
+            var leafY = 60;
+            var chY   = 200;
+            var tgtY  = 380;
 
             var parts = [];
-            // background
             parts.push('<rect width="' + W + '" height="' + H + '" fill="transparent"/>');
 
-            // TARGET node
+            // TARGET node at bottom
             parts.push('<g><circle cx="' + cx + '" cy="' + tgtY + '" r="32" fill="#111" stroke="var(--accent-primary)" stroke-width="3"/>'
                 + '<text x="' + cx + '" y="' + (tgtY + 5) + '" text-anchor="middle" fill="#fff" font-weight="700" font-size="13">' + _jiqEsc((spider.target || 'Target').slice(0, 14)) + '</text></g>');
 
@@ -37280,56 +37273,28 @@
             chs.forEach(function(ch, i) {
                 var x = 60 + chSpacing * (i + 0.5);
                 var color = _jiqChannelColor(ch.channel);
-                // target -> channel edge
-                parts.push('<line x1="' + cx + '" y1="' + (tgtY + 32) + '" x2="' + x + '" y2="' + (chY - 22) + '" stroke="' + color + '" stroke-width="' + Math.max(1, Math.min(6, ch.reach_pct_of_genpop / 4)) + '" opacity="0.5"/>');
+                // channel -> target edge (downward)
+                parts.push('<line x1="' + x + '" y1="' + (chY + 22) + '" x2="' + cx + '" y2="' + (tgtY - 32) + '" stroke="' + color + '" stroke-width="' + Math.max(1, Math.min(6, ch.reach_pct_of_genpop / 4)) + '" opacity="0.5"/>');
                 var r = Math.max(18, Math.min(36, 18 + ch.reach_pct_of_genpop * 0.8));
                 parts.push('<g><circle cx="' + x + '" cy="' + chY + '" r="' + r + '" fill="' + color + '" opacity="0.85"/>'
                     + '<text x="' + x + '" y="' + (chY + 4) + '" text-anchor="middle" fill="#fff" font-weight="700" font-size="' + Math.max(10, r/2.4) + '">' + ch.reach_pct_of_genpop + '%</text>'
                     + '<text x="' + x + '" y="' + (chY + r + 12) + '" text-anchor="middle" fill="var(--text-primary)" font-size="10">' + _jiqEsc(ch.label) + '</text></g>');
-                // Top 3 events as leaves under each channel
+                // Top 3 events as leaves ABOVE each channel
                 var evs = (ch.events || []).slice(0, 3);
                 var leafSpacing = Math.min(70, chSpacing - 10);
                 evs.forEach(function(e, j) {
                     var lx = x + (j - (evs.length - 1) / 2) * (leafSpacing / Math.max(1, evs.length));
                     var ly = leafY + (j % 2) * 18;
-                    parts.push('<line x1="' + x + '" y1="' + (chY + r) + '" x2="' + lx + '" y2="' + (ly - 6) + '" stroke="' + color + '" stroke-width="1" opacity="0.35"/>');
+                    parts.push('<line x1="' + x + '" y1="' + (chY - r) + '" x2="' + lx + '" y2="' + (ly + 6) + '" stroke="' + color + '" stroke-width="1" opacity="0.35"/>');
                     var actor = e.platform || e.network || e.advertiser || e.brand
                               || e.actor || e.publication || e.talent || e.creator
                               || e.partner || e.site || e.forum || e.track || e.engine
                               || e.channel || e.medium || e.query || '?';
                     actor = String(actor); if (actor.length > 18) actor = actor.slice(0, 17) + '…';
                     parts.push('<g><circle cx="' + lx + '" cy="' + ly + '" r="5" fill="' + color + '"/>'
-                        + '<text x="' + lx + '" y="' + (ly + 14) + '" text-anchor="middle" fill="var(--text-secondary)" font-size="9">' + _jiqEsc(actor) + '</text></g>');
-                    // event -> cohort edge (faint)
-                    parts.push('<line x1="' + lx + '" y1="' + (ly + 5) + '" x2="' + cx + '" y2="' + (cohortY - 22) + '" stroke="' + color + '" stroke-width="0.5" opacity="0.25"/>');
+                        + '<text x="' + lx + '" y="' + (ly - 8) + '" text-anchor="middle" fill="var(--text-secondary)" font-size="9">' + _jiqEsc(actor) + '</text></g>');
                 });
             });
-
-            // COHORT node (rectangle)
-            parts.push('<g><rect x="' + (cx - 90) + '" y="' + (cohortY - 22) + '" width="180" height="44" rx="22" fill="var(--accent-primary)"/>'
-                + '<text x="' + cx + '" y="' + (cohortY + 5) + '" text-anchor="middle" fill="#fff" font-weight="700" font-size="13">CONVERTER COHORT</text></g>');
-
-            // Endpoints (movies) — bottom arc
-            if (endpoints.length) {
-                var epSpacing = (W - 160) / Math.max(1, endpoints.length);
-                endpoints.forEach(function(ep, i) {
-                    var x = 80 + epSpacing * (i + 0.5);
-                    // cohort -> endpoint
-                    var w = Math.max(1, Math.min(10, (ep.share_pct || 0) / 5));
-                    parts.push('<line x1="' + cx + '" y1="' + (cohortY + 22) + '" x2="' + x + '" y2="' + (epY - 16) + '" stroke="#00a86b" stroke-width="' + w + '" opacity="0.55"/>');
-                    parts.push('<g><rect x="' + (x - 60) + '" y="' + (epY - 16) + '" width="120" height="32" rx="6" fill="#00a86b"/>'
-                        + '<text x="' + x + '" y="' + (epY + 4) + '" text-anchor="middle" fill="#fff" font-weight="700" font-size="11">' + _jiqEsc(ep.endpoint || '') + ' ' + (ep.share_pct || 0) + '%</text></g>');
-                    // endpoint -> conversion
-                    parts.push('<line x1="' + x + '" y1="' + (epY + 16) + '" x2="' + cx + '" y2="' + (convY - 16) + '" stroke="#00a86b" stroke-width="' + w + '" opacity="0.55"/>');
-                });
-            } else {
-                // No endpoint breakdown — direct cohort -> conversion edge
-                parts.push('<line x1="' + cx + '" y1="' + (cohortY + 22) + '" x2="' + cx + '" y2="' + (convY - 16) + '" stroke="var(--accent-primary)" stroke-width="6" opacity="0.6"/>');
-            }
-
-            // CONVERSION node
-            parts.push('<g><rect x="' + (cx - 70) + '" y="' + (convY - 16) + '" width="140" height="32" rx="6" fill="#111" stroke="var(--accent-primary)" stroke-width="2"/>'
-                + '<text x="' + cx + '" y="' + (convY + 4) + '" text-anchor="middle" fill="#fff" font-weight="700" font-size="13">CONVERSION</text></g>');
 
             return parts.join('');
         }
