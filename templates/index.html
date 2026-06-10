@@ -40032,8 +40032,14 @@
             var isLight = document.body.getAttribute('data-theme') === 'light';
             var minAlpha = isLight ? 0.35 : 0.1;
             var alphaRange = isLight ? 0.55 : 0.55;
-            if (delta > 0) return 'rgba(16,185,129,' + (minAlpha + intensity * alphaRange).toFixed(2) + ')';
-            if (delta < 0) return 'rgba(239,68,68,' + (minAlpha + intensity * alphaRange).toFixed(2) + ')';
+            if (delta > 0) {
+                if (isLight) return 'rgba(13,148,136,' + (minAlpha + intensity * alphaRange).toFixed(2) + ')';
+                return 'rgba(16,185,129,' + (minAlpha + intensity * alphaRange).toFixed(2) + ')';
+            }
+            if (delta < 0) {
+                if (isLight) return 'rgba(112,26,117,' + (minAlpha + intensity * alphaRange).toFixed(2) + ')';
+                return 'rgba(239,68,68,' + (minAlpha + intensity * alphaRange).toFixed(2) + ')';
+            }
             return 'transparent';
         }
 
@@ -41667,12 +41673,13 @@
 
                 var legendDiv = document.getElementById('sotSunburstLegend');
                 if (legendDiv) {
+                    var _sbLegText = _sotCmpIsLight ? '#374151' : '#e8e8e8';
                     var lh = '<div style="display:flex;flex-wrap:wrap;gap:0.3rem 0.8rem;margin-bottom:0.4rem;">';
                     lh += '<span style="font-weight:700;color:var(--text-secondary);font-size:0.6rem;text-transform:uppercase;letter-spacing:0.05em;width:100%;">Inner Ring — Categories</span>';
                     catNames.forEach(function(cn, ci) {
                         lh += '<span style="display:inline-flex;align-items:center;gap:0.25rem;">';
                         lh += '<span style="width:10px;height:10px;border-radius:50%;background:' + innerColors[ci] + ';display:inline-block;"></span>';
-                        lh += '<span style="color:#e8e8e8;font-weight:600;">' + cn + '</span>';
+                        lh += '<span style="color:' + _sbLegText + ';font-weight:600;">' + cn + '</span>';
                         lh += '<span style="color:var(--text-secondary);">' + innerVals[ci].toFixed(1) + '%</span></span>';
                     });
                     lh += '</div>';
@@ -41682,7 +41689,7 @@
                         var col = 'hsla(' + g.hue + ',55%,45%,1)';
                         lh += '<span style="display:inline-flex;align-items:center;gap:0.25rem;">';
                         lh += '<span style="width:10px;height:10px;border-radius:50%;background:' + col + ';display:inline-block;"></span>';
-                        lh += '<span style="color:#e8e8e8;font-weight:600;">' + g.name + '</span>';
+                        lh += '<span style="color:' + _sbLegText + ';font-weight:600;">' + g.name + '</span>';
                         lh += '<span style="color:var(--text-secondary);font-size:0.6rem;">(' + g.ages.join(', ') + ')</span></span>';
                     });
                     lh += '</div>';
