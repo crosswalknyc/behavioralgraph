@@ -29949,16 +29949,27 @@
             meta += ' · Post-window: ' + (evP.start || '') + ' → ' + (poP.end || '') + ' (' + ((evP.days || 0) + (poP.days || 0)) + 'd)';
             document.getElementById('bpiqDashMeta').innerHTML = meta;
 
-            var pipe = ' <span style="display:inline-block;width:1px;height:1.3em;background:var(--text-secondary);vertical-align:middle;margin:0 0.6rem;opacity:0.6;"></span> ';
+            // Each KPI card's value cell stacks the absolute count on top
+            // and the matching penetration % directly underneath, on its
+            // own line. Mirrors the visual rhythm of the CONSUMERS card
+            // (single primary value) — two readable, evenly-weighted
+            // numbers instead of a pipe-separated pair.
+            var _bpiqStackedKpi = function(countHtml, pctHtml) {
+                return '<div>' + countHtml + '</div>'
+                     + '<div style="font-size:0.95rem;font-weight:600;opacity:0.85;margin-top:0.15rem;">' + pctHtml + '</div>';
+            };
             document.getElementById('bpiqKpiAudience').textContent = _bpiqFmtNum(data.projected_audience_size);
             var postProj = totals.post_users_projected || 0;
             var preProj  = totals.pre_users_projected  || 0;
             var prePct   = (totals.audience_pen_pre_pct || 0);
             var postPct  = (totals.audience_pen_post_pct || 0);
             var liftUsers = postProj - preProj;
-            document.getElementById('bpiqKpiPreUsers').innerHTML  = _bpiqFmtNum(preProj) + pipe + prePct.toFixed(2) + '%';
-            document.getElementById('bpiqKpiPostUsers').innerHTML = _bpiqFmtNum(postProj) + pipe + postPct.toFixed(2) + '%';
-            document.getElementById('bpiqKpiLift').innerHTML = '<span style="color:#c8e600">' + _bpiqFmtNum(liftUsers) + '</span>' + pipe + _bpiqFmtLift(totals.lift_pct_users);
+            document.getElementById('bpiqKpiPreUsers').innerHTML  = _bpiqStackedKpi(_bpiqFmtNum(preProj),  prePct.toFixed(2)  + '%');
+            document.getElementById('bpiqKpiPostUsers').innerHTML = _bpiqStackedKpi(_bpiqFmtNum(postProj), postPct.toFixed(2) + '%');
+            document.getElementById('bpiqKpiLift').innerHTML = _bpiqStackedKpi(
+                '<span style="color:#c8e600">' + _bpiqFmtNum(liftUsers) + '</span>',
+                _bpiqFmtLift(totals.lift_pct_users)
+            );
 
             // Gen Pop mirror row
             var cg = data.control_group || {};
@@ -29975,9 +29986,12 @@
                 var gpLiftUsers = gpPost - gpPre;
                 document.getElementById('bpiqKpiGenPopAudience').textContent = _bpiqFmtNum(gpSize);
                 document.getElementById('bpiqKpiGenPopAudienceProj').textContent = 'Control (Gen Pop)';
-                document.getElementById('bpiqKpiGenPopPreUsers').innerHTML  = _bpiqFmtNum(gpPre) + pipe + gpPrePct.toFixed(2) + '%';
-                document.getElementById('bpiqKpiGenPopPostUsers').innerHTML = _bpiqFmtNum(gpPost) + pipe + gpPostPct.toFixed(2) + '%';
-                document.getElementById('bpiqKpiGenPopLift').innerHTML = '<span style="color:#c8e600">' + _bpiqFmtNum(gpLiftUsers) + '</span>' + pipe + _bpiqFmtLift(cg.control_lift_pct_users);
+                document.getElementById('bpiqKpiGenPopPreUsers').innerHTML  = _bpiqStackedKpi(_bpiqFmtNum(gpPre),  gpPrePct.toFixed(2)  + '%');
+                document.getElementById('bpiqKpiGenPopPostUsers').innerHTML = _bpiqStackedKpi(_bpiqFmtNum(gpPost), gpPostPct.toFixed(2) + '%');
+                document.getElementById('bpiqKpiGenPopLift').innerHTML = _bpiqStackedKpi(
+                    '<span style="color:#c8e600">' + _bpiqFmtNum(gpLiftUsers) + '</span>',
+                    _bpiqFmtLift(cg.control_lift_pct_users)
+                );
                 // Δ Target − Control strip — populated whenever the gen-pop
                 // mirror row is shown. Each cell sits directly under the
                 // matching TARGET column and over the matching CONTROL one.
