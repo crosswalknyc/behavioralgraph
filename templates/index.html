@@ -29763,6 +29763,9 @@
             if (!_bpiqState.data) return;
             var v = _bpiqState.data.valuation;
             if (!v) { _bpiqRenderPerPlatformTable(); return; }
+            // Per-platform EMV — uses _bpiqState.rateByPlatform overrides
+            // (set both by the per-platform CPM column and by the
+            // editable $/Consumer column in the breakdown table below).
             var newTotalEMV = 0;
             (v.emv_breakdown || []).forEach(function(r) {
                 var incr = r.incremental_users_projected;
@@ -29773,11 +29776,20 @@
                 r.emv_value = (incr > 0 ? incr : 0) * rate;
                 if (r.emv_value > 0) newTotalEMV += r.emv_value;
             });
-            v.earned_media_value = newTotalEMV;
-            v.total_brand_value  = (v.earned_media_value      || 0)
-                                 + (v.brand_engagement_value || 0)
-                                 + (v.brand_lift_value        || 0)
-                                 + (v.conversion_value        || 0);
+            v.earned_media_value = Math.round(newTotalEMV * 100) / 100;
+            // Scalar valuation rates — recomputed off the stable base
+            // counts captured at initial render. Editing any of these
+            // cascades through to the hero card, the four component
+            // cards, and Total Brand Value.
+            var bases = _bpiqState.valBases || {};
+            var rates = v.rates || (v.rates = {});
+            v.brand_engagement_value = Math.round((bases.bev  || 0) * (rates.bev_per_user        || 0) * 100) / 100;
+            v.brand_lift_value       = Math.round((bases.blv  || 0) * (rates.blv_per_incr_user   || 0) * 100) / 100;
+            v.conversion_value       = Math.round((bases.conv || 0) * (rates.conv_value_per_user || 0) * 100) / 100;
+            v.total_brand_value      = Math.round(((v.earned_media_value      || 0)
+                                                 + (v.brand_engagement_value || 0)
+                                                 + (v.brand_lift_value        || 0)
+                                                 + (v.conversion_value        || 0)) * 100) / 100;
             _bpiqRenderPerPlatformTable();
             _bpiqRenderValuation(v);
         }
@@ -29892,6 +29904,31 @@
             ((data.valuation && data.valuation.emv_breakdown) || []).forEach(function(row) {
                 _bpiqState.rateByPlatform[row.platform] = row.emv_per_user_rate || 0;
             });
+            // Capture the *base* count each scalar rate multiplies into
+            // (BEV = post-event engaged consumers; BLV = incremental
+            // consumers; Conversion = post conversions). We back these
+            // out from the original pre-edit values so subsequent rate
+            // edits cascade off a stable count even after many round
+            // trips through _bpiqRecomputeAndRerender (which mutates the
+            // dollar values in place).
+            (function _bpiqCaptureValBases() {
+                var vv = data.valuation || {};
+                var rr = vv.rates || {};
+                var bevRate  = rr.bev_per_user || 0;
+                var blvRate  = rr.blv_per_incr_user || 0;
+                var convRate = rr.conv_value_per_user || 0;
+                var tot      = data.totals || {};
+                var bevBase = bevRate > 0
+                    ? Math.round((vv.brand_engagement_value || 0) / bevRate)
+                    : (tot.post_users_projected || 0);
+                var blvBase = (vv.incremental_users != null)
+                    ? vv.incremental_users
+                    : (blvRate > 0 ? Math.round((vv.brand_lift_value || 0) / blvRate) : 0);
+                var convBase = convRate > 0
+                    ? Math.round((vv.conversion_value || 0) / convRate)
+                    : 0;
+                _bpiqState.valBases = { bev: bevBase, blv: blvBase, conv: convBase };
+            })();
             // Default sort: EMV descending (matches previous behavior in
             // the EMV breakdown table — biggest contributors at top).
             if (!_bpiqState.sortKey) { _bpiqState.sortKey = 'emv'; _bpiqState.sortDir = 'desc'; }
@@ -30284,7 +30321,18 @@
                 if (hasConv) {
                     rateBits += ', Conversion $' + (v.rates && v.rates.conv_value_per_user || 0).toFixed(2) + '/order';
                 }
-                note.innerHTML = (v.methodology || '') + ' ' + rateBits + '. Per-platform EMV rates are 2026 industry-benchmarked.';
+                note.innerHTML = (v.methodology || '') + ' ' + rateBits + '. Per-platform EMV rates are 2026 industry-benchmarked. <span style="font-style:italic;">Click any $-rate below to edit; everything recalculates instantly.</span>';
+            }
+            // Inline editable rate input (BEV / BLV / Conversion). Same
+            // visual treatment as the per-platform CPM column so the UX
+            // is consistent across the whole BPIQ surface.
+            function _bpiqRateInput(key, val, title) {
+                return '<input type="number" step="0.01" min="0" '
+                     + 'data-bpiq-rate="' + key + '" '
+                     + 'class="bpiq-rate-input" '
+                     + 'value="' + (Number(val) || 0).toFixed(2) + '" '
+                     + 'style="width:60px;background:rgba(255,255,255,0.04);border:1px solid var(--border-color);border-radius:6px;padding:1px 5px;color:inherit;font-size:11px;text-align:right;font-family:inherit;" '
+                     + 'title="' + (title || '') + '" />';
             }
             if (!body) return;
             // Compute a concise subtitle for the EMV card that mirrors
@@ -30321,18 +30369,33 @@
                 + '<div style="padding:0.85rem;border:1px solid var(--border-color);border-radius:8px;">'
                 +   '<div style="font-size:0.65rem;color:var(--text-secondary);text-transform:uppercase;">Brand Engagement Value</div>'
                 +   '<div style="font-size:1.3rem;font-weight:700;color:#6366f1;">' + _bpiqFmtMoney(v.brand_engagement_value || 0) + '</div>'
-                +   '<div style="font-size:11px;color:var(--text-secondary);">post-event engaged consumers × $' + (v.rates && v.rates.bev_per_user || 0).toFixed(2) + '</div>'
+                +   '<div style="font-size:11px;color:var(--text-secondary);display:flex;align-items:center;gap:4px;flex-wrap:wrap;">'
+                +     _bpiqFmtNum(_bpiqState.valBases && _bpiqState.valBases.bev || 0)
+                +     ' post-event engaged consumers × $'
+                +     _bpiqRateInput('bev', v.rates && v.rates.bev_per_user, 'Edit $/consumer — recalculates Brand Engagement Value & Total Brand Value')
+                +     '<span>/consumer</span>'
+                +   '</div>'
                 + '</div>'
                 + '<div style="padding:0.85rem;border:1px solid var(--border-color);border-radius:8px;">'
                 +   '<div style="font-size:0.65rem;color:var(--text-secondary);text-transform:uppercase;">Brand Lift Value</div>'
                 +   '<div style="font-size:1.3rem;font-weight:700;color:#f59e0b;">' + _bpiqFmtMoney(v.brand_lift_value || 0) + '</div>'
-                +   '<div style="font-size:11px;color:var(--text-secondary);">' + _bpiqFmtNum(v.incremental_users || 0) + ' incremental consumers × $' + (v.rates && v.rates.blv_per_incr_user || 0).toFixed(2) + '</div>'
+                +   '<div style="font-size:11px;color:var(--text-secondary);display:flex;align-items:center;gap:4px;flex-wrap:wrap;">'
+                +     _bpiqFmtNum(v.incremental_users || (_bpiqState.valBases && _bpiqState.valBases.blv) || 0)
+                +     ' incremental consumers × $'
+                +     _bpiqRateInput('blv', v.rates && v.rates.blv_per_incr_user, 'Edit $/incremental consumer — recalculates Brand Lift Value & Total Brand Value')
+                +     '<span>/incremental consumer</span>'
+                +   '</div>'
                 + '</div>'
                 + (hasConv
                     ? ('<div style="padding:0.85rem;border:1px solid var(--border-color);border-radius:8px;">'
                         +   '<div style="font-size:0.65rem;color:var(--text-secondary);text-transform:uppercase;">Conversion Value</div>'
                         +   '<div style="font-size:1.3rem;font-weight:700;color:#ef4444;">' + _bpiqFmtMoney(v.conversion_value || 0) + '</div>'
-                        +   '<div style="font-size:11px;color:var(--text-secondary);">post conversions × $' + (v.rates && v.rates.conv_value_per_user || 0).toFixed(2) + '</div>'
+                        +   '<div style="font-size:11px;color:var(--text-secondary);display:flex;align-items:center;gap:4px;flex-wrap:wrap;">'
+                        +     _bpiqFmtNum(_bpiqState.valBases && _bpiqState.valBases.conv || 0)
+                        +     ' post conversions × $'
+                        +     _bpiqRateInput('conv', v.rates && v.rates.conv_value_per_user, 'Edit $/conversion — recalculates Conversion Value & Total Brand Value')
+                        +     '<span>/order</span>'
+                        +   '</div>'
                         + '</div>')
                     : '')
                 + '</div>';
@@ -30349,7 +30412,7 @@
             });
             if (emv.length) {
                 emv.sort(function(a, b) { return (b.emv_value||0) - (a.emv_value||0); });
-                html += '<div style="font-size:12px;color:var(--text-secondary);margin:0.5rem 0 0.4rem;">Earned Media Value by platform — values only the <strong>incremental</strong> brand engagers (post − pre) attributable to each platform, so consumers appearing on multiple platforms aren\'t double-counted:</div>'
+                html += '<div style="font-size:12px;color:var(--text-secondary);margin:0.5rem 0 0.4rem;">Earned Media Value by platform — values only the <strong>incremental</strong> brand engagers (post − pre) attributable to each platform, so consumers appearing on multiple platforms aren\'t double-counted. <span style="font-style:italic;">Click any <strong>$/Consumer</strong> cell to edit; the per-platform CPM column above and Total Brand Value update in lock-step.</span></div>'
                      +  '<table style="width:100%;border-collapse:collapse;font-size:13px;">'
                      +  '<thead><tr style="border-bottom:2px solid var(--border-color);">'
                      +  '<th style="padding:6px 10px;text-align:left;">Platform</th>'
@@ -30360,16 +30423,69 @@
                      +  emv.map(function(r) {
                             var incr = r.incremental_users_projected;
                             if (incr == null) incr = (r.post_users_projected || 0) - (r.pre_users_projected || 0);
+                            var safePlat = (r.platform || '').replace(/"/g, '&quot;');
+                            var rateInput = '<span style="color:var(--text-secondary);margin-right:2px;">$</span>'
+                                + '<input type="number" step="0.01" min="0" '
+                                + 'data-bpiq-emv-platform="' + safePlat + '" '
+                                + 'class="bpiq-cpm-input" '
+                                + 'value="' + (r.emv_per_user_rate || 0).toFixed(2) + '" '
+                                + 'style="width:64px;background:rgba(255,255,255,0.04);border:1px solid var(--border-color);border-radius:6px;padding:2px 6px;color:inherit;font-size:13px;text-align:right;font-family:inherit;" '
+                                + 'title="Edit $/engaged-consumer for ' + safePlat + ' — recalculates EMV everywhere" />';
                             return '<tr style="border-bottom:1px solid rgba(255,255,255,0.04);">'
                                 +    '<td style="padding:6px 10px;font-weight:500;">' + r.platform + '</td>'
                                 +    '<td style="padding:6px 10px;text-align:right;">' + _bpiqFmtNum(incr) + '</td>'
-                                +    '<td style="padding:6px 10px;text-align:right;color:var(--text-secondary);">$' + (r.emv_per_user_rate || 0).toFixed(2) + '</td>'
+                                +    '<td style="padding:6px 10px;text-align:right;">' + rateInput + '</td>'
                                 +    '<td style="padding:6px 10px;text-align:right;color:#10b981;font-weight:600;">' + _bpiqFmtMoney(r.emv_value || 0) + '</td>'
                                 +  '</tr>';
                         }).join('')
                      +  '</tbody></table>';
             }
             body.innerHTML = html;
+
+            // ----- Wire up editable rates -----
+            // Scalar rate inputs (BEV / BLV / Conversion). Same commit
+            // pattern as the per-platform CPM column: change/blur fire
+            // the recompute, Enter blurs to commit.
+            body.querySelectorAll('input[data-bpiq-rate]').forEach(function(inp) {
+                inp.addEventListener('click', function(e) { e.stopPropagation(); });
+                var commit = function() {
+                    var key = inp.getAttribute('data-bpiq-rate');
+                    var val = parseFloat(inp.value);
+                    if (!isFinite(val) || val < 0) val = 0;
+                    if (!_bpiqState.data) return;
+                    var rates = (_bpiqState.data.valuation && _bpiqState.data.valuation.rates) || {};
+                    if (key === 'bev')  rates.bev_per_user        = val;
+                    if (key === 'blv')  rates.blv_per_incr_user   = val;
+                    if (key === 'conv') rates.conv_value_per_user = val;
+                    if (_bpiqState.data.valuation) _bpiqState.data.valuation.rates = rates;
+                    _bpiqRecomputeAndRerender();
+                };
+                inp.addEventListener('change', commit);
+                inp.addEventListener('blur',   commit);
+                inp.addEventListener('keydown', function(e) {
+                    if (e.key === 'Enter') { e.preventDefault(); inp.blur(); }
+                });
+            });
+            // Per-platform $/Consumer inputs in the breakdown table.
+            // Edits cascade through _bpiqState.rateByPlatform — the same
+            // channel the per-platform table CPM column writes to, so
+            // changing one place updates the other automatically on the
+            // next re-render.
+            body.querySelectorAll('input[data-bpiq-emv-platform]').forEach(function(inp) {
+                inp.addEventListener('click', function(e) { e.stopPropagation(); });
+                var commit = function() {
+                    var plat = inp.getAttribute('data-bpiq-emv-platform');
+                    var val = parseFloat(inp.value);
+                    if (!isFinite(val) || val < 0) val = 0;
+                    _bpiqState.rateByPlatform[plat] = val;
+                    _bpiqRecomputeAndRerender();
+                };
+                inp.addEventListener('change', commit);
+                inp.addEventListener('blur',   commit);
+                inp.addEventListener('keydown', function(e) {
+                    if (e.key === 'Enter') { e.preventDefault(); inp.blur(); }
+                });
+            });
         }
 
         // ====================================================================
