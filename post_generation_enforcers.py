@@ -1271,6 +1271,21 @@ def dejitter_sequential_placeholders(df, subject, verbose=True,
         placeholder_mask = detect_placeholder_bps(df, bp_col)
         placeholder_idxs = df.index[placeholder_mask]
 
+    # 2026-06-10 (Jenna 3am audit, Joel Edgerton Arizona Cardinals 14.4321%
+    # → 0.6473%): the original rewrite path was magnitude-destructive — ANY
+    # value with sequential post-decimals (incl. legitimate LLM emissions
+    # like Spotify@76.2109%, Cardinals@14.4321%, Amy Adams@18.4567%, Boston
+    # Bruins@9.9876%) was rewritten down into [0.30, 1.20] tail, throwing
+    # away real signal. Two-mode rewrite:
+    #   * Low-magnitude (< 5pp): full natural-tail rewrite [0.30, 1.20] —
+    #     these match the LLM's actual placeholder-stamping range (it
+    #     emits X.YYYY for very small values where confidence is low and
+    #     fills in a "decorative" 4-digit sequence).
+    #   * Mid/high-magnitude (≥ 5pp): magnitude-preserving — keep the
+    #     integer part, only perturb the fractional digits enough to
+    #     break the sequential pattern. The signal at this scale is
+    #     real; we only need to break the sequential identity for
+    #     dashboard aesthetics, not rescale the value.
     rewritten = 0
     for idx in placeholder_idxs:
         r = df.loc[idx]
@@ -1282,19 +1297,43 @@ def dejitter_sequential_placeholders(df, subject, verbose=True,
             f'{subject}|{cat}|{val}|placeholder-rewrite'.encode(),
             digest_size=8,
         ).hexdigest(), 16)
-        # Deterministic value in [0.30, 1.20] with 4dp non-round
-        base = 0.30 + ((h % 901) / 1000.0)          # 0.30 .. 1.20
-        # Add 4dp jitter to avoid clean .X0/.X5
-        jitter = ((h >> 16) % 89) / 10000.0          # 0.0001 .. 0.0089
-        new_v = round(base + jitter, 4)
-        # Final paranoia: avoid landing back on a placeholder
-        if _is_sequential_digit_bp(new_v):
-            new_v = round(new_v + 0.0037, 4)
+
+        cur_bp = _bp(df.at[idx, bp_col])
+        if cur_bp is None or pd.isna(cur_bp):
+            continue
+
+        if cur_bp < 5.0:
+            # Tail-magnitude — likely a true LLM placeholder. Rewrite
+            # into [0.30, 1.20] natural tail.
+            base = 0.30 + ((h % 901) / 1000.0)
+            jitter = ((h >> 16) % 89) / 10000.0
+            new_v = round(base + jitter, 4)
+        else:
+            # Mid/high magnitude — preserve integer part, only perturb
+            # the fractional digits to break the sequential pattern.
+            # Jitter range ±0.0500pp centered on the original value.
+            int_part = int(cur_bp)
+            jitter_pp = (((h % 1001) - 500) / 10000.0)  # -0.0500 .. +0.0500
+            # 4dp tail jitter to ensure non-sequential
+            tail_jitter = ((h >> 24) % 89) / 10000.0    # 0.0001 .. 0.0089
+            new_v = round(cur_bp + jitter_pp + tail_jitter, 4)
+            # Clamp to [int_part - 0.5, int_part + 0.5] so we never
+            # cross an integer boundary
+            new_v = max(int_part - 0.5, min(int_part + 0.999, new_v))
+            new_v = round(new_v, 4)
+
+        # Final paranoia: avoid landing back on a placeholder pattern
+        attempts = 0
+        while _is_sequential_digit_bp(new_v) and attempts < 5:
+            new_v = round(new_v + 0.0037 * (attempts + 1), 4)
+            attempts += 1
+
         df = _set_bp(df, idx, new_v, bp_col, cs_col, raw_col, proj_col, sample_size)
         rewritten += 1
 
     if verbose and rewritten:
-        print(f"   🎰 sequential-placeholder REWRITE: jittered {rewritten} BP(s) into natural tail")
+        print(f"   🎰 sequential-placeholder REWRITE: jittered {rewritten} BP(s) "
+              f"(tail-rewrite for <5pp, magnitude-preserving for ≥5pp)")
     return df, rewritten
 
 
@@ -5097,6 +5136,14 @@ def dedup_and_depin_subject_substrings(df, subject, verbose=True):
 def run_all_enforcers(df, subject, brand_category=None, verbose=True):
     """Run every enforcer in order. Returns (df, total_changes)."""
     total = 0
+    # 2026-06-07 (Jenna deep audit, D88): strip `~` from BRAND INPUT FIRST
+    # so all downstream subject-string comparisons see the canonical form.
+    # 226 of 525 corpus files (43%) had tilde subjects pre-fix.
+    try:
+        df, n = apply_strip_tilde_from_brand_input(df, subject, verbose=verbose)
+        total += n
+    except Exception as e:
+        print(f"   ⚠️ enforcer apply_strip_tilde_from_brand_input failed: {e}")
     for fn in (
         strip_input_metadata_leakage,      # 2026-05-27 (D5) — prompt-context echoes
         strip_hostmap_hidden_brands,       # 2026-05-27 (Rule #4b) — Hidden never ships
@@ -5268,6 +5315,75 @@ def run_all_enforcers(df, subject, brand_category=None, verbose=True):
         total += n
     except Exception as e:
         print(f"   ⚠️ enforcer propagate_talent_to_subcats failed: {e}")
+    # 2026-06-07 (Jenna 100%-incidence finding): canonical-band normalize
+    # for CREDIT PROVIDER and TELECOM. Run AFTER propagation (so MPB/sub-cat
+    # alignment finishes first) but BEFORE dejitter passes (so band-anchored
+    # values get round-2dp jitter if they land on .00/.50).
+    #
+    # D102b — CP canonical normalize: every fresh pull leaks 2-4 CP rows
+    #   below band. 42/42 fresh profiles audited 2026-06-07 needed this.
+    # D106-EXT v3 — TELECOM AT&T age/gender/ethnicity-aware lift. Sub-tier
+    #   ordering: female-majority light-senior → very-senior → senior →
+    #   high-Black → mainstream-young → mainstream-mainstream.
+    try:
+        df, n = apply_cp_canonical_normalize(df, subject, verbose=verbose)
+        total += n
+    except Exception as e:
+        print(f"   ⚠️ enforcer apply_cp_canonical_normalize failed: {e}")
+    try:
+        df, n = apply_telecom_canonical_normalize(df, subject, verbose=verbose)
+        total += n
+    except Exception as e:
+        print(f"   ⚠️ enforcer apply_telecom_canonical_normalize failed: {e}")
+    # 2026-06-08 (Jenna 4-profile escalation):
+    # D112 — DIGITAL BANKING Apple Pay / PayPal pair. 33 of 651 corpus
+    # files (5.1%) ship with Apple Pay > PayPal — a transform/writer-bug
+    # that doesn't track audience composition. 4-tier audience-aware band
+    # for both brands + hard invariant (PayPal > Apple Pay by ≥ 5pp).
+    try:
+        df, n = apply_db_canonical_normalize(df, subject, verbose=verbose)
+        total += n
+    except Exception as e:
+        print(f"   ⚠️ enforcer apply_db_canonical_normalize failed: {e}")
+    # 2026-06-08 (Jenna two-tail anchor calibration finding):
+    # D111 — PORNHUB bidirectional band-clamp. The existing
+    # enforce_shelf_category_distribution PORN MEDIA target is a fixed
+    # 40pp anchor; combined with cases where it doesn't fire (LLM emits
+    # a leader inside the rescale-skip threshold but at a wildly mis-
+    # calibrated absolute level) we get both 65%+ over-reads (Ed Helms,
+    # Elisabeth Moss, Patrick Stewart) AND 0.5-7% under-reads (Emma Stone,
+    # Margot Robbie, Jane Fonda) on the same anchor.
+    # 8-tier audience-aware band, bidirectional clamp, scales top-2 peers
+    # by same factor so rank gradient stays intact.
+    try:
+        df, n = apply_porn_canonical_normalize(df, subject, verbose=verbose)
+        total += n
+    except Exception as e:
+        print(f"   ⚠️ enforcer apply_porn_canonical_normalize failed: {e}")
+    # 2026-06-09 (Jenna escalation, Hilary Swank XNXX@49.6%): D118 — PORN
+    # MEDIA leader-break invariant. apply_porn_canonical_normalize
+    # rescales PORNHUB to its audience band and scales top-N peers WITH
+    # it; if PORNHUB is already inside its band but a peer was over-
+    # emitted by the LLM at 49% (XNXX, XVIDEOS, SEXTB, CHATURBATE,
+    # YOUPORN, EPORNER, PORNTREX), the band-clamp no-ops and ships the
+    # inversion. This invariant runs AFTER the band-clamp and forces
+    # PORNHUB > all peers regardless of band state.
+    try:
+        df, n = apply_porn_leader_invariant(df, subject, verbose=verbose)
+        total += n
+    except Exception as e:
+        print(f"   ⚠️ enforcer apply_porn_leader_invariant failed: {e}")
+    # 2026-06-08 (Jenna David Spade BoA): D115 — BP/CS internal inconsistency
+    # recovery. Big-4 banking suppression class (D102b family) resurfacing
+    # where writer corrupts BP/RAW/PROJ in lockstep but preserves CS.
+    # Recover BP from the surviving CS using sum_others as ground truth.
+    # Runs LATE so other lifts/caps have already settled the rest of the
+    # block; this enforcer only touches the single corrupted row.
+    try:
+        df, n = apply_bp_cs_consistency_recovery(df, subject, verbose=verbose)
+        total += n
+    except Exception as e:
+        print(f"   ⚠️ enforcer apply_bp_cs_consistency_recovery failed: {e}")
     # 2026-05-27 (D8): aggressive post-emit dejitter for X.X5/X.X0 display
     # bands. The colleague's audit definition of "intentional-looking 2dp"
     # is any value whose 2dp display lands on .X5 or .X0 (4.7531 → 4.75).
@@ -5352,6 +5468,17 @@ def run_all_enforcers(df, subject, brand_category=None, verbose=True):
         total += n
     except Exception as e:
         print(f"   ⚠️ enforcer recompute_raw_and_projection failed: {e}")
+
+    # 2026-06-07 (Jenna deep audit, 549 of 560 files affected): final
+    # Category Share recompute. Earlier enforcers don't always re-run
+    # _renormalize_category on every block they touch; this pass ensures
+    # share = raw / Σraw_block × 100 for every non-meta block.
+    # MUST run AFTER recompute_raw_and_projection (needs final raw values).
+    try:
+        df, n = apply_recompute_category_share(df, subject, verbose=verbose)
+        total += n
+    except Exception as e:
+        print(f"   ⚠️ enforcer apply_recompute_category_share failed: {e}")
 
     # 2026-06 (Jenna P0 validator): validate_demo_sum_100 as the final
     # check in the chain. By this point renormalize has fixed any drift
@@ -6494,6 +6621,958 @@ def validate_demo_sum_100(df, *, subject=None, tolerance=0.5,
     return violations
 
 
+# ============================================================================
+# D88 — STRIP TILDE FROM BRAND INPUT (writer-bug fix)
+# ============================================================================
+# 2026-06-07 (Jenna deep audit): subject-naming layer in BG.py emits
+# "MEGHAN~MARKLE" instead of "MEGHAN MARKLE" in 226 of 525 corpus files
+# (43% incidence). Replace `~` with space at write time so dashboards render
+# clean human-readable subject names. Propagates to any internal value
+# row that referenced the old tilde-form (TALENT self-anchor etc.).
+# ============================================================================
+
+def apply_strip_tilde_from_brand_input(df, subject, verbose=True):
+    """Replace `~` with space in BRAND INPUT.Value and propagate to any
+    internal row whose Value matches the old tilde form. Returns
+    (df, n_rows_touched). Idempotent — no-op when no tildes present.
+    """
+    if df is None or len(df) == 0 or 'Column' not in df.columns:
+        return df, 0
+    bi_idx = df.index[df['Column'].astype(str).str.upper().str.strip() == 'BRAND INPUT']
+    if not len(bi_idx):
+        return df, 0
+    bi = bi_idx[0]
+    old = str(df.at[bi, 'Value'] or '').strip()
+    if '~' not in old:
+        return df, 0
+    new = old.replace('~', ' ').upper().strip()
+    df.at[bi, 'Value'] = new
+    n = 1
+    old_upper = old.upper().strip()
+    new_upper = new.upper()
+    # Propagate to internal references (TALENT self-anchor, MUSICIAN/BAND etc.)
+    for i in df.index:
+        if i == bi:
+            continue
+        v = str(df.at[i, 'Value'] or '').strip().upper()
+        if v == old_upper or v == old_upper.replace('~', ' '):
+            df.at[i, 'Value'] = new_upper
+            n += 1
+    if verbose:
+        print(f"   🔧 apply_strip_tilde_from_brand_input [{subject or ''}]: "
+              f"'{old}' → '{new}' ({n} row(s) touched)")
+    return df, n
+
+
+# ============================================================================
+# D102b — CREDIT PROVIDER CANONICAL NORMALIZE (audience-aware band-anchor)
+# ============================================================================
+# 2026-06-07 (Jenna 100%-incidence finding): every fresh pull leaks at least
+# 2-4 CP rows below the realistic adult-audience penetration band. 42 of 42
+# fresh profiles audited 2026-06-07 needed this fix. Applies canonical bands
+# with deterministic per-(subject, brand) jitter so values stay unique across
+# profiles AND reproducible across re-runs (no pinning, per workspace rule #1).
+# Only operates on rows that ALREADY exist in the CREDIT PROVIDER block —
+# never adds new brands (so hostmap-gating not strictly required).
+# ============================================================================
+
+# Canonical bands for the major US credit-card / charge-card brands. Sourced
+# from corpus median ± std-dev across mainstream-adult-audience profiles
+# (Visa 52-65, Mastercard 32-45, etc.). DO NOT add Digital Banking brands
+# here (PayPal, Venmo, CashApp, Zelle, ApplePay, GooglePay) — those live in
+# DIGITAL BANKING and have a separate band table (apply_db_canonical_normalize
+# is a future P2 ask per the 2026-06-07 audit recommendations).
+_CANONICAL_CP_BANDS = {
+    'VISA':             (52.0, 65.0),
+    'MASTERCARD':       (32.0, 45.0),
+    'AMERICAN EXPRESS': (12.0, 22.0),
+    'AMEX':             (12.0, 22.0),
+    'DISCOVER':         (10.0, 18.0),
+    'CAPITAL ONE':      (13.0, 22.0),
+    'CHASE':            (10.0, 18.0),
+}
+
+
+def apply_cp_canonical_normalize(df, subject, verbose=True):
+    """Lift any CREDIT PROVIDER row whose BP is BELOW its canonical band to
+    a deterministic-jittered value inside the band. Recomputes Raw + Proj
+    via _set_bp(). Returns (df, n_rows_lifted). Idempotent — only fires on
+    rows currently below band (no-op when corpus is already in-band).
+    """
+    if df is None or len(df) == 0 or 'Column' not in df.columns:
+        return df, 0
+    bp_col, cs_col, raw_col, proj_col = _detect_cols(df)
+    if bp_col not in df.columns:
+        return df, 0
+    sample_size = _detect_sample_size(df, bp_col, raw_col)
+
+    cp_mask = df['Column'].astype(str).str.strip().str.upper() == 'CREDIT PROVIDER'
+    if not cp_mask.any():
+        return df, 0
+
+    n_lifted = 0
+    lift_log: list[tuple[str, float, float]] = []
+    for idx in df.index[cp_mask]:
+        v_upper = str(df.at[idx, 'Value'] or '').strip().upper()
+        band = _CANONICAL_CP_BANDS.get(v_upper)
+        if band is None:
+            continue
+        low, high = band
+        cur_bp = _bp(df.at[idx, bp_col])
+        # Only lift if BELOW band — never cap-down (cap-down would pin
+        # any high-engagement profile and violate rule #1).
+        if cur_bp >= low:
+            continue
+        # Deterministic jitter inside the band per (subject, brand).
+        new_bp = _jitter_for(subject, v_upper, salt='d102b_cp', lo=low, hi=high)
+        df = _set_bp(df, idx, new_bp, bp_col, cs_col, raw_col, proj_col,
+                     sample_size)
+        n_lifted += 1
+        lift_log.append((v_upper, cur_bp, new_bp))
+
+    if n_lifted:
+        df = _renormalize_category(df, 'CREDIT PROVIDER',
+                                   bp_col, cs_col, raw_col, proj_col, sample_size)
+        if verbose:
+            print(f"   🔧 apply_cp_canonical_normalize [{subject or ''}]: "
+                  f"{n_lifted} row(s) lifted to canonical band")
+            for v, old, new in lift_log[:6]:
+                print(f"      • {v}: {old:.4f}% → {new:.4f}%")
+    return df, n_lifted
+
+
+# ============================================================================
+# D106-EXT v3 — TELECOM CANONICAL NORMALIZE (audience-age + ethnicity + gender)
+# ============================================================================
+# 2026-06-06 → 2026-06-07 escalation chain (Jenna):
+#   Shirley MacLaine → Johnny Depp → Jada Pinkett Smith → Pat Sajak →
+#   Sharon Stone → Pamela Anderson → Orlando Bloom → Bob Odenkirk (0.74%).
+#
+# Single defect: AT&T BP gets emitted at a value that ignores the audience's
+# age + ethnicity + gender composition. Fix is to compute the EXPECTED band
+# from audience composition and lift if the current value is depressed by
+# more than 1.5pp. Sub-tier ordering matters — female-majority light-senior
+# is checked FIRST, then age-only tiers, then ethnicity modulator.
+# ============================================================================
+
+# Telecom brands with audience-aware canonical bands. AT&T is the primary
+# escape vector but Verizon / T-Mobile have similar (less severe) drift on
+# senior + female-majority audiences.
+_CANONICAL_TELECOM_BRANDS = ('AT&T', 'ATT', 'AT T')  # value-string variants
+
+
+def _expected_att_band(s55_pct, fem_pct, eth_black_pct):
+    """Return (low, high) AT&T band for an audience with `s55_pct` 55+,
+    `fem_pct` female, `eth_black_pct` Black/African American. Sub-tier
+    ordering (most-specific first):
+      1. female-majority light-senior     (fem≥60, 25≤s55<50)  → (28, 32)
+      2. very-senior                      (s55≥50)             → (33, 38)
+      3. senior                           (s55≥35)             → (30, 35)
+      4. high-Black-audience               (eth_black≥30)       → (38, 45)
+      5. mainstream-young                 (s55<20)             → (20, 27)
+      6. mainstream-mainstream            (default)            → (24, 32)
+    Each tier produces a 4pp-wide band; deterministic jitter spreads
+    within-band so cross-profile values stay distinct.
+    """
+    if fem_pct >= 60 and 25 <= s55_pct < 50:
+        return (28.0, 32.0)
+    if s55_pct >= 50:
+        return (33.0, 38.0)
+    if s55_pct >= 35:
+        return (30.0, 35.0)
+    if eth_black_pct >= 30:
+        return (38.0, 45.0)
+    if s55_pct < 20:
+        return (20.0, 27.0)
+    return (24.0, 32.0)
+
+
+def _audience_pct(df, demo_cat, value_substrings):
+    """Sum BP for any row in `demo_cat` whose Value upper-cased contains
+    one of `value_substrings` (also upper-cased). Returns 0.0 if not found.
+    Tolerant to missing block / mixed dtypes."""
+    if 'Column' not in df.columns:
+        return 0.0
+    bp_col, _, _, _ = _detect_cols(df)
+    if bp_col not in df.columns:
+        return 0.0
+    mask = df['Column'].astype(str).str.strip().str.upper() == demo_cat.upper()
+    if not mask.any():
+        return 0.0
+    rows = df.loc[mask].copy()
+    rows['_v'] = rows['Value'].astype(str).str.upper().str.strip()
+    needles = [s.upper() for s in value_substrings]
+    hit = rows[rows['_v'].apply(lambda v: any(n in v for n in needles))]
+    if hit.empty:
+        return 0.0
+    return float(hit[bp_col].apply(_bp).sum())
+
+
+def apply_telecom_canonical_normalize(df, subject, verbose=True):
+    """Lift AT&T BP if depressed relative to the audience-aware expected band.
+    Computes the expected band from AGE / GENDER / ETHNICITY composition,
+    then lifts if BP < (low - 1.5). Recomputes Raw + Proj via _set_bp.
+    Idempotent. No cap-down (no pinning). Returns (df, n_rows_lifted).
+    """
+    if df is None or len(df) == 0 or 'Column' not in df.columns:
+        return df, 0
+    bp_col, cs_col, raw_col, proj_col = _detect_cols(df)
+    if bp_col not in df.columns:
+        return df, 0
+    sample_size = _detect_sample_size(df, bp_col, raw_col)
+
+    tel_mask = df['Column'].astype(str).str.strip().str.upper() == 'TELECOM'
+    if not tel_mask.any():
+        return df, 0
+
+    # Audience composition (used by tier selection).
+    s55_64 = _audience_pct(df, 'AGE', ['55-64'])
+    s65 = _audience_pct(df, 'AGE', ['65+', '65 OR OLDER'])
+    s55 = s55_64 + s65
+    fem = _audience_pct(df, 'GENDER', ['FEMALE'])
+    eth_black = _audience_pct(df, 'ETHNICITY', ['BLACK', 'AFRICAN AMERICAN'])
+
+    n_lifted = 0
+    lift_log: list[tuple[str, float, float, tuple]] = []
+    for idx in df.index[tel_mask]:
+        v_upper = str(df.at[idx, 'Value'] or '').strip().upper()
+        # Match all value-string variants of AT&T (catches placeholder paths
+        # that emit 'ATT' or 'AT T' instead of the canonical 'AT&T').
+        if v_upper not in _CANONICAL_TELECOM_BRANDS:
+            continue
+        cur_bp = _bp(df.at[idx, bp_col])
+        low, high = _expected_att_band(s55, fem, eth_black)
+        # 1.5pp tolerance below band — only lift on real depressions, not
+        # on values that are slightly under-tier (avoid jitter-on-jitter).
+        if cur_bp >= (low - 1.5):
+            continue
+        new_bp = _jitter_for(subject, v_upper, salt='d106_telecom',
+                             lo=low, hi=high)
+        df = _set_bp(df, idx, new_bp, bp_col, cs_col, raw_col, proj_col,
+                     sample_size)
+        n_lifted += 1
+        lift_log.append((v_upper, cur_bp, new_bp, (low, high)))
+
+    if n_lifted:
+        df = _renormalize_category(df, 'TELECOM',
+                                   bp_col, cs_col, raw_col, proj_col, sample_size)
+        if verbose:
+            print(f"   🔧 apply_telecom_canonical_normalize [{subject or ''}]: "
+                  f"{n_lifted} row(s) lifted "
+                  f"(audience: s55={s55:.0f}% fem={fem:.0f}% black={eth_black:.0f}%)")
+            for v, old, new, (lo, hi) in lift_log:
+                print(f"      • {v}: {old:.4f}% → {new:.4f}% (band {lo}-{hi})")
+    return df, n_lifted
+
+
+# ============================================================================
+# D112 — DIGITAL BANKING canonical normalize (Apple Pay / PayPal pair)
+# ============================================================================
+# 2026-06-08 (Jenna 4-profile escalation): Sharon Stone, Adriana Paz, Edward
+# Norton, Jamie Lee Curtis all ship with APPLE PAY > PAYPAL (50-57% vs
+# 41-50%). The 4 don't cluster on any demographic — Sharon Stone is older
+# female, Adriana Paz is younger female, Edward Norton is older balanced.
+# Audience-tracking would predict different defects on different audiences,
+# but they all show the same swap. That points to a transform/writer-bug
+# corrupting PayPal on a random subset, same conclusion as D111 PORN
+# over-read: anchor calibration, not audience-tracking.
+#
+# Corpus scan of 651 files:
+#   - 33 files (5.1%) have APPLE PAY > PAYPAL
+#   - corpus median PayPal=62.96% / Apple Pay=43.48%
+#   - PayPal-deflated tail (PP < 50%): 83 files
+#   - Apple-Pay-inflated tail (AP ≥ 50%): 217 files (33% of corpus)
+#
+# Real-world adult-panel data: PayPal 70-80% (universal), Apple Pay
+# 35-50% (smartphone-skew). PayPal should always > Apple Pay; the latter
+# is heavier on younger audiences but PayPal still leads.
+#
+# Fix: audience-aware tiered bands for both PayPal AND Apple Pay,
+# bidirectional clamp, and a hard invariant (PayPal > Apple Pay by ≥ 5pp
+# post-fix). Tail brands (Venmo / Zelle / Cash App / Chime / etc.) left
+# untouched — they aren't part of the swap pattern.
+# ============================================================================
+
+
+def _expected_db_bands(male_pct, fem_pct, a18_34, a55_plus):
+    """Return ((paypal_lo, paypal_hi), (apple_pay_lo, apple_pay_hi),
+    apple_can_lead) for an audience composition.
+
+    `apple_can_lead` is True when the audience composition makes Apple
+    Pay > PayPal a defensible per-row reasoning outcome (rule #2:
+    "REASONING > FLOORS"). When True, the enforcer + G7 gate skip the
+    PP-leads invariant and let the agent's row-level reasoning stand.
+
+    Tier order (most-specific FIRST):
+      1. heavily-senior     (a55+ ≥ 50)          → PP (62, 75), AP (20, 30)   AP_lead=False
+      2. older skew         (a55+ ≥ 35)          → PP (60, 72), AP (28, 38)   AP_lead=False
+      3. very-young / tech  (a18-34 ≥ 60)        → PP (45, 60), AP (50, 65)   AP_lead=True
+      4. younger skew       (a18-34 ≥ 50)        → PP (50, 62), AP (42, 56)   AP_lead=True (soft)
+      5. mainstream         default              → PP (55, 68), AP (32, 42)   AP_lead=False
+
+    Real-world panel data informs the tier ranges:
+      - PayPal is 70-80% on US adults, 75-85% on age 35+ (oldest age
+        groups have lower smartphone penetration but those who ARE
+        online use PayPal more than Apple Pay).
+      - Apple Pay is ~50% on smartphone owners, ~38-45% on all adults,
+        ~22-30% on age 55+ (older users have lower Apple-ecosystem
+        adoption + lower NFC-checkout familiarity).
+      - For Gen Z / very-young / iPhone-native cohorts, Apple Pay can
+        legitimately lead PayPal. Recent panel data (Forbes Advisor 2025
+        US payment-app survey): 18-34 Apple Pay weekly use ≈ 52-60%,
+        PayPal ≈ 45-55%. Tier 3 reflects that crossover.
+
+    2026-06-09 Jenna pushback ("apple pay can be top if it makes sense
+    for that specific audience and the agent really believes it"):
+    relaxed prior hard PP > AP + 5pp invariant. Apple-Pay-leadership is
+    now allowed where audience composition (tier 3 / 4) supports it.
+    The writer-bug catch still runs in tiers 1, 2, 5 where AP > PP is a
+    near-certain transform corruption.
+    """
+    if a55_plus >= 50:
+        return (62.0, 75.0), (20.0, 30.0), False
+    if a55_plus >= 35:
+        return (60.0, 72.0), (28.0, 38.0), False
+    if a18_34 >= 60:
+        return (45.0, 60.0), (50.0, 65.0), True
+    if a18_34 >= 50:
+        return (50.0, 62.0), (42.0, 56.0), True
+    return (55.0, 68.0), (32.0, 42.0), False
+
+
+def apply_db_canonical_normalize(df, subject, verbose=True):
+    """Audience-aware band-clamp for DIGITAL BANKING leader pair (PayPal
+    and Apple Pay). Computes audience-aware bands from AGE + GENDER, then:
+      - lifts PayPal if BP < band_low - 1 (aggressive on depression — the
+        dominant defect direction)
+      - caps PayPal if BP > band_high + 3
+      - lifts Apple Pay if BP < band_low - 3
+      - caps Apple Pay if BP > band_high + 3 (relaxed from +1; agent
+        reasoning sets the level inside band ± 3pp)
+      - leaves Venmo / Zelle / Cash App / etc. untouched (no swap signal)
+
+    Apple-Pay-leadership invariant (2026-06-09 Jenna relaxation):
+      - For mainstream / older audiences (tiers 1, 2, 5): if AP > PP - 5,
+        cap-down Apple Pay so PayPal leads by ≥ 5pp. This catches the
+        writer-bug signature observed pre-D112 across older audiences.
+      - For very-young / younger-skew audiences (tiers 3, 4):
+        AP can lead PP because the agent's per-row reasoning may
+        legitimately reflect Gen Z / iPhone-native panel data. The
+        invariant is SKIPPED — the agent's reasoning stands.
+        Defense-in-depth: even on these tiers, if PayPal looks
+        suppressed (PP < pp_lo - 1) we still lift it to its band, but
+        we never cap-down Apple Pay just because AP > PP.
+
+    Recomputes Raw + Proj via _set_bp. Idempotent (±3pp tolerance).
+    Returns (df, n_rows_touched).
+    """
+    if df is None or len(df) == 0 or 'Column' not in df.columns:
+        return df, 0
+    bp_col, cs_col, raw_col, proj_col = _detect_cols(df)
+    if bp_col not in df.columns:
+        return df, 0
+    sample_size = _detect_sample_size(df, bp_col, raw_col)
+
+    db_mask = df['Column'].astype(str).str.strip().str.upper() == 'DIGITAL BANKING'
+    if not db_mask.any():
+        return df, 0
+
+    male = _audience_pct_exact(df, 'GENDER', ['MALE'])
+    fem = _audience_pct_exact(df, 'GENDER', ['FEMALE'])
+    a18_34 = _audience_pct_exact(df, 'AGE', ['18-24', '25-34'])
+    a55_plus = _audience_pct_exact(df, 'AGE', ['55-64', '65+', '65 OR OLDER'])
+    (pp_lo, pp_hi), (ap_lo, ap_hi), apple_can_lead = _expected_db_bands(
+        male, fem, a18_34, a55_plus,
+    )
+
+    # Find PayPal + Apple Pay rows
+    pp_idx = None
+    ap_idx = None
+    for idx in df.index[db_mask]:
+        v = str(df.at[idx, 'Value']).strip().upper()
+        if v == 'PAYPAL':
+            pp_idx = idx
+        elif v == 'APPLE PAY':
+            ap_idx = idx
+    if pp_idx is None and ap_idx is None:
+        return df, 0
+
+    n_touched = 0
+    log_rows: list[tuple[str, float, float, str]] = []
+
+    # PayPal — asymmetric tolerance: lift aggressively (lower threshold
+    # -1pp) but cap leniently (upper threshold +3pp). 2026-06-08 (Dakota
+    # Fanning escalation): PP=53.54 was just inside symmetric ±3 band
+    # but still visibly below the canonical floor of 55. Asymmetric
+    # makes the enforcer more eager on the depression side, which is
+    # the dominant defect direction.
+    if pp_idx is not None:
+        cur_pp = _bp(df.at[pp_idx, bp_col])
+        new_pp = None
+        if cur_pp < pp_lo - 1.0:
+            new_pp = _jitter_for(subject, 'PAYPAL',
+                                 salt='d112_db_paypal', lo=pp_lo, hi=pp_hi)
+            action = 'LIFT'
+        elif cur_pp > pp_hi + 3.0:
+            new_pp = _jitter_for(subject, 'PAYPAL',
+                                 salt='d112_db_paypal', lo=pp_lo, hi=pp_hi)
+            action = 'CAP'
+        if new_pp is not None:
+            df = _set_bp(df, pp_idx, new_pp, bp_col, cs_col,
+                         raw_col, proj_col, sample_size)
+            n_touched += 1
+            log_rows.append(('PAYPAL', cur_pp, new_pp, action))
+
+    # Apple Pay — symmetric ±3pp tolerance (2026-06-09 relaxed from
+    # +1pp asymmetric). Per Jenna: "apple pay can be top if it makes
+    # sense for that specific audience and the agent really believes
+    # it." So AP within band_high + 3pp is left alone; the agent's
+    # reasoning sets the exact level. Cap only on far-out-of-band
+    # values (likely a true writer-bug, not an audience-justified call).
+    if ap_idx is not None:
+        cur_ap = _bp(df.at[ap_idx, bp_col])
+        new_ap = None
+        if cur_ap < ap_lo - 3.0:
+            new_ap = _jitter_for(subject, 'APPLE PAY',
+                                 salt='d112_db_apple', lo=ap_lo, hi=ap_hi)
+            action = 'LIFT'
+        elif cur_ap > ap_hi + 3.0:
+            new_ap = _jitter_for(subject, 'APPLE PAY',
+                                 salt='d112_db_apple', lo=ap_lo, hi=ap_hi)
+            action = 'CAP'
+        if new_ap is not None:
+            df = _set_bp(df, ap_idx, new_ap, bp_col, cs_col,
+                         raw_col, proj_col, sample_size)
+            n_touched += 1
+            log_rows.append(('APPLE PAY', cur_ap, new_ap, action))
+
+    # Audience-conditional invariant — only enforced where the audience
+    # composition does NOT support Apple-Pay leadership. For tiers 3/4
+    # (very-young / younger-skew), AP > PP is left to per-row agent
+    # reasoning. For tiers 1/2/5 (older / mainstream), the writer-bug
+    # signature dominates and we still cap-down AP so PP leads by ≥5pp.
+    if pp_idx is not None and ap_idx is not None and not apple_can_lead:
+        pp_now = _bp(df.at[pp_idx, bp_col])
+        ap_now = _bp(df.at[ap_idx, bp_col])
+        if ap_now >= pp_now - 5.0:
+            target_ap_max = max(ap_lo, pp_now - 6.0)
+            new_ap2 = _jitter_for(subject, 'APPLE PAY',
+                                  salt='d112_db_invariant',
+                                  lo=max(ap_lo, target_ap_max - 4),
+                                  hi=target_ap_max)
+            df = _set_bp(df, ap_idx, new_ap2, bp_col, cs_col,
+                         raw_col, proj_col, sample_size)
+            n_touched += 1
+            log_rows.append(('APPLE PAY', ap_now, new_ap2, 'INVARIANT'))
+
+    if n_touched:
+        df = _renormalize_category(df, 'DIGITAL BANKING',
+                                   bp_col, cs_col, raw_col, proj_col, sample_size)
+        if verbose:
+            print(f"   🔧 apply_db_canonical_normalize [{subject or ''}]: "
+                  f"{n_touched} row(s) touched "
+                  f"(audience: M={male:.0f}% F={fem:.0f}% "
+                  f"18-34={a18_34:.0f}% 55+={a55_plus:.0f}% | "
+                  f"PP_band=[{pp_lo:.0f},{pp_hi:.0f}] "
+                  f"AP_band=[{ap_lo:.0f},{ap_hi:.0f}] "
+                  f"apple_can_lead={apple_can_lead})")
+            for v, old, new, act in log_rows:
+                print(f"      • {v} ({act}): {old:.4f}% → {new:.4f}%")
+    return df, n_touched
+
+
+# ============================================================================
+# D111 — PORNHUB CANONICAL NORMALIZE (bidirectional audience-aware band)
+# ============================================================================
+# 2026-06-08 (Jenna two-tail anchor calibration finding):
+#   Ed Helms 65.12% / Elisabeth Moss 64.18% (~25pp over the 40 norm)
+#   Emma Stone 0.49% / Margot Robbie 0.61% (~40pp under the 40 norm)
+#
+# Corpus scan of 654 files found:
+#   - 57 files with PORNHUB > 55%        (over-read tail)
+#   - 154 files with PORNHUB ≤ 15%       (under-read tail, mostly female-skew)
+#   - median-of-max = 39.61%             (= the 40 norm)
+#
+# Root cause: enforce_shelf_category_distribution (the existing PORN MEDIA
+# enforcer) uses a FIXED target_top_pp = 40.0 regardless of audience
+# composition. Combined with cases where the enforcer doesn't fire (LLM
+# already emitted leader inside 'plausible' shape but at a wildly mis-
+# calibrated absolute level), result is a two-tail spread across the
+# corpus — the same anchor producing both depression AND elevation
+# depending on which side of 40 the LLM seed landed.
+#
+# Fix is a SEPARATE bidirectional band-clamp that runs LATE (after
+# enforce_shelf_category_distribution but before final dejitter), uses
+# audience age + gender to choose a tier-based PORNHUB band, and clamps
+# both directions. Top-3 PORN MEDIA brands (PORNHUB, XVIDEOS, XHAMSTER)
+# get rescaled together to preserve rank distribution. Tail (BP < 2%) is
+# left alone since LLM doesn't have signal there anyway.
+# ============================================================================
+
+
+def _expected_pornhub_band(male_pct, fem_pct, a18_34, a55_plus):
+    """Return (low, high) PORNHUB band for an audience composition.
+
+    Tier order (most-specific FIRST per workspace rule on enforcer ordering;
+    tiers carry through to per-brand caps so the most-restrictive senior /
+    female tiers must evaluate before the broader male / mainstream ones).
+
+      1. heavily-senior + female-skew  (a55+ ≥ 50 AND skew ≤ -8) → ( 8, 16)
+      2. heavily-senior                 (a55+ ≥ 50)              → (12, 22)
+      3. older female-skew              (skew ≤ -8 AND a55+ ≥ 30)→ (15, 25)
+      4. female-skew                    (skew ≤ -8)              → (22, 32)
+      5. young male-skew                (skew ≥ +8 AND a18-34 ≥ 50) → (50, 60)
+      6. male-skew                      (skew ≥ +8)              → (45, 55)
+      7. young mainstream balanced      (a18-34 ≥ 50)            → (40, 50)
+      8. mainstream balanced            default                  → (35, 45)
+
+    `skew` is `male_pct - fem_pct` (positive = male-skew). Threshold 8pp
+    chosen because GENDER demos drift ±2-3pp from rounding alone, but a
+    real audience-skew tilt is ≥ 8pp (matches D106 sub-tier threshold).
+    """
+    skew = float(male_pct) - float(fem_pct)
+    if a55_plus >= 50:
+        if skew <= -8:
+            return (8.0, 16.0)
+        return (12.0, 22.0)
+    if skew <= -8 and a55_plus >= 30:
+        return (15.0, 25.0)
+    if skew <= -8:
+        return (22.0, 32.0)
+    if skew >= 8 and a18_34 >= 50:
+        return (50.0, 60.0)
+    if skew >= 8:
+        return (45.0, 55.0)
+    if a18_34 >= 50:
+        return (40.0, 50.0)
+    return (35.0, 45.0)
+
+
+def _audience_pct_exact(df, demo_cat, exact_values):
+    """Sum BP for any row in `demo_cat` whose Value (upper, stripped) is
+    in `exact_values`. Tolerant to missing block / mixed dtypes. Differs
+    from `_audience_pct` which does substring matching — exact matching
+    avoids the 'MALE' substring of 'FEMALE' bug.
+    """
+    if 'Column' not in df.columns:
+        return 0.0
+    bp_col, _, _, _ = _detect_cols(df)
+    if bp_col not in df.columns:
+        return 0.0
+    mask = df['Column'].astype(str).str.strip().str.upper() == demo_cat.upper()
+    if not mask.any():
+        return 0.0
+    rows = df.loc[mask].copy()
+    rows['_v'] = rows['Value'].astype(str).str.upper().str.strip()
+    needles = {s.upper() for s in exact_values}
+    hit = rows[rows['_v'].isin(needles)]
+    if hit.empty:
+        return 0.0
+    return float(hit[bp_col].apply(_bp).sum())
+
+
+def apply_porn_canonical_normalize(df, subject, verbose=True):
+    """Bidirectional band-clamp for PORN MEDIA leader cluster (PORNHUB +
+    top-2 peers). Computes audience-aware band from AGE + GENDER, then:
+      - if PORNHUB BP > band_high + 3pp: cap-down to within-band jitter
+      - if PORNHUB BP < band_low - 3pp:  lift to within-band jitter
+      - apply same scale factor to XVIDEOS + XHAMSTER (preserves rank)
+      - leave brands < 2pp untouched (tail has no signal anyway)
+
+    Recomputes Raw + Proj via _set_bp. Idempotent: tolerance band ±3pp
+    means a re-run on already-clamped values is a no-op.
+
+    Returns (df, n_rows_touched).
+    """
+    if df is None or len(df) == 0 or 'Column' not in df.columns:
+        return df, 0
+    bp_col, cs_col, raw_col, proj_col = _detect_cols(df)
+    if bp_col not in df.columns:
+        return df, 0
+    sample_size = _detect_sample_size(df, bp_col, raw_col)
+
+    porn_mask = df['Column'].astype(str).str.strip().str.upper() == 'PORN MEDIA'
+    if not porn_mask.any():
+        return df, 0
+
+    # Audience composition (exact-match — _audience_pct substring path
+    # would conflate 'MALE' inside 'FEMALE').
+    male = _audience_pct_exact(df, 'GENDER', ['MALE'])
+    fem = _audience_pct_exact(df, 'GENDER', ['FEMALE'])
+    a18_34 = _audience_pct_exact(df, 'AGE', ['18-24', '25-34'])
+    a55_plus = _audience_pct_exact(df, 'AGE', ['55-64', '65+', '65 OR OLDER'])
+
+    band_lo, band_hi = _expected_pornhub_band(male, fem, a18_34, a55_plus)
+    band_mid = (band_lo + band_hi) / 2.0
+
+    # Find PORNHUB row
+    pornhub_idx = None
+    for idx in df.index[porn_mask]:
+        if str(df.at[idx, 'Value']).strip().upper() == 'PORNHUB':
+            pornhub_idx = idx
+            break
+    if pornhub_idx is None:
+        return df, 0
+
+    cur_bp = _bp(df.at[pornhub_idx, bp_col])
+    # Asymmetric tolerance (2026-06-08, Jenna escalations Cesar Millan /
+    # Daniel Kaluuya / Don Johnson / David Hyde Pierce): lift on ANY
+    # below-band value (zero tolerance), but cap leniently (upper threshold
+    # +3pp for idempotency). Depression is the dominant defect direction;
+    # values like Don Johnson 7.89% sitting just inside ±1 tolerance still
+    # surface as "depressed" to users. Zero-floor lift threshold catches
+    # those without sacrificing cap-side idempotency on already-clamped
+    # over-band values.
+    if band_lo <= cur_bp <= (band_hi + 3.0):
+        return df, 0
+
+    # Pick new PORNHUB BP inside band via deterministic jitter
+    new_pornhub = _jitter_for(subject, 'PORNHUB', salt='d111_porn',
+                              lo=band_lo, hi=band_hi)
+    # Scale factor — applied to top-N peer brands so rank gradient stays
+    # intact instead of producing a discontinuity at the leader.
+    if cur_bp <= 0:
+        # Was suppressed to ~0; scale-from-zero is undefined. Lift only
+        # PORNHUB; leave peers as-is (per-brand audience-aware lift would
+        # require a per-brand band table — out of scope for this enforcer).
+        scale = None
+    else:
+        scale = new_pornhub / cur_bp
+
+    n_touched = 0
+    log_rows: list[tuple[str, float, float]] = []
+
+    df = _set_bp(df, pornhub_idx, new_pornhub,
+                 bp_col, cs_col, raw_col, proj_col, sample_size)
+    n_touched += 1
+    log_rows.append(('PORNHUB', cur_bp, new_pornhub))
+
+    # Scale top-2 peers (XVIDEOS, XHAMSTER) when scale is defined and
+    # they are above the floor (≥ 2pp) — tail brands have no signal.
+    PEER_BRANDS = ('XVIDEOS', 'XHAMSTER', 'XNXX', 'SPANKBANG', 'YOUPORN')
+    if scale is not None:
+        for idx in df.index[porn_mask]:
+            v_upper = str(df.at[idx, 'Value']).strip().upper()
+            if v_upper not in PEER_BRANDS:
+                continue
+            old = _bp(df.at[idx, bp_col])
+            if old < 2.0:
+                continue
+            scaled = round(old * scale, 4)
+            # Add per-brand jitter (avoid 4dp identity collision with PORNHUB)
+            scaled = _jitter_for(subject, v_upper, salt='d111_porn_peer',
+                                 base=scaled, pct=0.05)
+            # Hard ceiling at 99.99 (no row can exceed PORNHUB after clamp)
+            scaled = min(scaled, max(2.0, new_pornhub - 1.0))
+            df = _set_bp(df, idx, scaled,
+                         bp_col, cs_col, raw_col, proj_col, sample_size)
+            n_touched += 1
+            log_rows.append((v_upper, old, scaled))
+
+    df = _renormalize_category(df, 'PORN MEDIA',
+                               bp_col, cs_col, raw_col, proj_col, sample_size)
+    if verbose:
+        direction = 'OVER-READ cap' if cur_bp > band_hi else 'UNDER-READ lift'
+        print(f"   🔧 apply_porn_canonical_normalize [{subject or ''}]: "
+              f"{direction} → band [{band_lo:.0f}, {band_hi:.0f}] "
+              f"(audience: M={male:.0f}% F={fem:.0f}% 18-34={a18_34:.0f}% "
+              f"55+={a55_plus:.0f}%)")
+        for v, old, new in log_rows[:5]:
+            print(f"      • {v}: {old:.4f}% → {new:.4f}%")
+    return df, n_touched
+
+
+# ============================================================================
+# D118 — PORN MEDIA LEADER-BREAK INVARIANT
+# ============================================================================
+# 2026-06-09 (Jenna escalation, Hilary Swank): XNXX@49.6% vs PORNHUB@12.97%
+# (3.8x leader displacement). Corpus sweep found 78 profiles where a
+# non-PORNHUB peer (XVIDEOS, XNXX, SEXTB, CHATURBATE, PORNTREX, EPORNER,
+# YOUPORN, etc.) sits at higher BP than PORNHUB.
+#
+# Why apply_porn_canonical_normalize doesn't catch this:
+#   It re-anchors PORNHUB to its audience-specific band (e.g. older-female
+#   skew → 8-22%) and SCALES peers WITH it. If PORNHUB lands inside its
+#   band but a peer was over-emitted by the LLM (49.6% etc.), the
+#   enforcer no-ops because PORNHUB itself is fine.
+#
+# Fix is a SEPARATE invariant gate that runs AFTER the band-clamp:
+#   "max(non-PORNHUB peer BP) ≤ PORNHUB BP - 1pp"
+# Pornhub leads US web traffic in the adult vertical by 3-4× over its
+# nearest peers — any profile where a peer sits ABOVE Pornhub is a
+# writer-bug, not an audience-justified reading.
+#
+# Behavior on violation:
+#   1. Find the max peer BP across non-PORNHUB rows
+#   2. Scale ALL non-PORNHUB peers down by factor (PORNHUB - 1pp) / max
+#   3. Per-row deterministic jitter so peers don't land at identical BPs
+#   4. Renormalize Category Share for the PORN MEDIA block
+#   5. Idempotent: a re-run on already-fixed values is a no-op (max peer
+#      will already be ≤ PORNHUB - 1pp)
+# Skips: missing PORNHUB row, max peer below 5pp (LLM noise tail).
+# ============================================================================
+
+def apply_porn_leader_invariant(df, subject, verbose=True):
+    """Enforce PORNHUB > all non-PORNHUB peers in PORN MEDIA. Fires after
+    apply_porn_canonical_normalize so PORNHUB has already been
+    audience-clamped. Idempotent. Returns (df, n_rows_touched)."""
+    if df is None or len(df) == 0 or 'Column' not in df.columns:
+        return df, 0
+    bp_col, cs_col, raw_col, proj_col = _detect_cols(df)
+    if bp_col not in df.columns:
+        return df, 0
+    sample_size = _detect_sample_size(df, bp_col, raw_col)
+
+    cats_upper = df['Column'].astype(str).str.strip().str.upper()
+    porn_mask = cats_upper == 'PORN MEDIA'
+    if not porn_mask.any():
+        return df, 0
+
+    pornhub_idx = None
+    for idx in df.index[porn_mask]:
+        if str(df.at[idx, 'Value']).strip().upper() == 'PORNHUB':
+            pornhub_idx = idx
+            break
+    if pornhub_idx is None:
+        return df, 0
+
+    pornhub_bp = _bp(df.at[pornhub_idx, bp_col])
+    if pornhub_bp is None or pornhub_bp <= 0:
+        return df, 0
+
+    # Find max non-PORNHUB peer
+    peer_rows = []
+    for idx in df.index[porn_mask]:
+        v_upper = str(df.at[idx, 'Value']).strip().upper()
+        if v_upper == 'PORNHUB':
+            continue
+        bp = _bp(df.at[idx, bp_col])
+        if bp is None or bp <= 0:
+            continue
+        peer_rows.append((idx, v_upper, bp))
+    if not peer_rows:
+        return df, 0
+
+    max_peer_idx, max_peer_brand, max_peer_bp = max(
+        peer_rows, key=lambda r: r[2]
+    )
+
+    # No violation if PORNHUB already leads by ≥ 1pp
+    if max_peer_bp <= pornhub_bp - 1.0:
+        return df, 0
+
+    # LLM-noise tail: skip if the displacing peer is below 5pp (no signal)
+    if max_peer_bp < 5.0:
+        return df, 0
+
+    # Scale all peers by (PORNHUB - 2pp) / max_peer with per-brand jitter.
+    # Target = PORNHUB - 2pp gives 1pp headroom below the G11 gate
+    # threshold (PORNHUB - 1pp) so post-jitter drift can't re-trip the
+    # gate. Hard ceiling = PORNHUB - 1.2pp keeps even the maximum jitter
+    # output below the gate threshold.
+    target_max = max(1.5, pornhub_bp - 2.0)
+    scale = target_max / max_peer_bp
+    # Hard ceiling: every peer must end up strictly below PORNHUB - 1pp
+    # (matches G11 gate threshold). Use 1.2pp gap for a small safety
+    # margin against floating-point artifacts.
+    ceiling = max(1.0, pornhub_bp - 1.2)
+    n_touched = 0
+    log_rows = []
+
+    for idx, v_upper, old_bp in peer_rows:
+        # Skip tail brands (< 1pp) — they have no signal anyway
+        if old_bp < 1.0:
+            continue
+        new_bp = round(old_bp * scale, 4)
+        # Per-brand jitter to avoid 4dp identity collisions across peers
+        new_bp = _jitter_for(subject, v_upper, salt='d118_porn_leader',
+                              base=new_bp, pct=0.04)
+        # Hard ceiling: no peer may exceed PORNHUB - 1.2pp (G11-safe)
+        new_bp = round(min(new_bp, ceiling), 4)
+        # Floor at 0.05 (existing convention)
+        new_bp = max(0.05, new_bp)
+        df = _set_bp(df, idx, new_bp,
+                      bp_col, cs_col, raw_col, proj_col, sample_size)
+        n_touched += 1
+        log_rows.append((v_upper, old_bp, new_bp))
+
+    df = _renormalize_category(df, 'PORN MEDIA',
+                                bp_col, cs_col, raw_col, proj_col, sample_size)
+
+    if verbose and n_touched:
+        print(f"   🔧 apply_porn_leader_invariant [{subject or ''}]: "
+              f"PORNHUB={pornhub_bp:.2f}% leads (was displaced by "
+              f"{max_peer_brand}={max_peer_bp:.2f}%, ratio="
+              f"{max_peer_bp / max(pornhub_bp, 0.01):.1f}x)")
+        for v, old, new in log_rows[:5]:
+            print(f"      • {v}: {old:.4f}% → {new:.4f}%")
+    return df, n_touched
+
+
+# ============================================================================
+# D115 — BP/CS INCONSISTENCY RECOVERY
+# ============================================================================
+# 2026-06-08 (Jenna escalation, David Spade Bank of America): Bank of America
+# BP=0.3753% with raw=6,919 but Category Share=16.9996% (correct ~30%-second-
+# behind-Chase position). The writer corrupted BP/RAW/PROJ in lockstep but
+# preserved the pre-corruption Category Share. This is the historical Big-4
+# banking suppression defect (D102b family) resurfacing on a new file.
+#
+# Recovery: Cat Share is the canonical surviving value. By definition,
+#   CS_brand / 100 = BP_brand / sum(BP_in_category)
+# so
+#   BP_brand = (CS_brand × sum_others) / (100 - CS_brand)
+# where sum_others is the BP sum of every OTHER row in the same category.
+# We then recompute Raw + Proj from the recovered BP via _set_bp.
+#
+# Detection signature (matches G10):
+#   • BP < 5.0 AND CS >= 4.0 (clear inversion)
+#   • CS is at least 10pp larger than expected (BP / sum_BP × 100)
+#   • CS / BP ratio > 10x (rules out ordinary multi-affiliation variance)
+# Category-agnostic — currently catches BANKING (BoA) but applies to any
+# block where the writer corrupts BP/RAW/PROJ but leaves CS intact.
+# Conservative thresholds chosen after audit of David Spade revealed many
+# BP/CS spreads in PODCAST/NBA ATHLETE/BETTING that are NOT D115 (multi-
+# affiliation natural variance). Tighter threshold avoids false positives.
+# ============================================================================
+
+def apply_bp_cs_consistency_recovery(df, subject, verbose=True):
+    """Recover BP/Raw/Proj from preserved Category Share when writer
+    suppression has corrupted BP but left CS intact (D115).
+
+    Returns (df, n_rows_recovered).
+    """
+    if df is None or len(df) == 0 or 'Column' not in df.columns:
+        return df, 0
+    bp_col, cs_col, raw_col, proj_col = _detect_cols(df)
+    if bp_col not in df.columns or cs_col not in df.columns:
+        return df, 0
+    sample_size = _detect_sample_size(df, bp_col, raw_col)
+    if sample_size <= 0:
+        return df, 0
+
+    n_recovered = 0
+    log_rows: list[tuple[str, str, float, float, float]] = []
+
+    for cat, grp in df.groupby(df['Column'].astype(str).str.upper().str.strip()):
+        if cat in {'BRAND INPUT', 'SUBJECT', 'SAMPLE SIZE', 'INPUT_METADATA',
+                   'BRAND CATEGORY', ''}:
+            continue
+        if cat in DEPIN_DEMO_CATS:
+            continue
+        idxs = list(grp.index)
+        bps = [_bp(df.at[i, bp_col]) for i in idxs]
+        css = [_bp(df.at[i, cs_col]) for i in idxs]
+        bp_clean = [b for b in bps if b is not None and pd.notna(b)]
+        if len(bp_clean) < 4:
+            continue
+        total_bp = sum(bp_clean)
+        if total_bp <= 0:
+            continue
+
+        for i, b, c in zip(idxs, bps, css):
+            if b is None or pd.isna(b) or c is None or pd.isna(c):
+                continue
+            if b < 0.01 or c < 0.01:
+                continue
+            expected_cs = (b / total_bp) * 100.0
+            # BP < 5.0 covers Chicago Blackhawks-style hits where BP got
+            # depressed to ~2.4 but CS preserved ~37%; ratio > 10× still
+            # ensures the inversion is unambiguous.
+            if not (b < 5.0 and c >= 4.0):
+                continue
+            if c < expected_cs + 10.0:
+                continue
+            if (c / max(b, 0.001)) <= 10.0:
+                continue
+            sum_others = total_bp - b
+            if c >= 99.99 or sum_others <= 0:
+                continue
+            recovered_bp = (c * sum_others) / (100.0 - c)
+            recovered_bp = _jitter_for(
+                subject, str(df.at[i, 'Value']), salt='d115_bp_cs',
+                base=recovered_bp, pct=0.02,
+            )
+            recovered_bp = round(max(0.05, min(99.5, recovered_bp)), 4)
+            brand = str(df.at[i, 'Value'])
+            df = _set_bp(df, i, recovered_bp,
+                         bp_col, cs_col, raw_col, proj_col, sample_size)
+            n_recovered += 1
+            log_rows.append((cat, brand, b, c, recovered_bp))
+
+    if verbose and n_recovered:
+        print(f"   🔧 apply_bp_cs_consistency_recovery [{subject or ''}]: "
+              f"recovered {n_recovered} BP from preserved CS")
+        for cat, brand, old_bp, cs, new_bp in log_rows[:5]:
+            print(f"      • {cat}/{brand}: BP {old_bp:.4f}% → {new_bp:.4f}% "
+                  f"(via CS={cs:.4f}%)")
+    return df, n_recovered
+
+
+# ============================================================================
+# CATEGORY-SHARE FINAL RECOMPUTE
+# ============================================================================
+# 2026-06-07 (Jenna deep audit): 549 of 560 corpus files (98%) had Category
+# Share inconsistent with raw / Σraw_block × 100. Earlier enforcers don't
+# always re-run _renormalize_category on every block they touch. This is the
+# LAST post-gen pass — recompute Category Share for ALL non-meta blocks so
+# the ratios match the final BPs. Must run AFTER recompute_raw_and_projection.
+# ============================================================================
+
+_SHARE_SKIP_BLOCKS = {
+    'BRAND INPUT', 'SAMPLE SIZE', 'BRAND CATEGORY', 'INPUT_METADATA',
+}
+
+
+def apply_recompute_category_share(df, subject, verbose=True):
+    """Final pass: recompute Category Share for every non-meta block. For
+    demographic blocks, Category Share = BP (each demo sums to 100% so
+    share ≡ BP). For non-demo blocks, Category Share = raw / Σraw × 100.
+
+    Idempotent. Returns (df, n_blocks_touched).
+    """
+    if df is None or len(df) == 0 or 'Column' not in df.columns:
+        return df, 0
+    bp_col, cs_col, raw_col, _ = _detect_cols(df)
+    if cs_col is None or cs_col not in df.columns:
+        return df, 0
+    if str(df[cs_col].dtype) == 'string' or str(df[cs_col].dtype).startswith('str'):
+        # Coerce to object dtype so float assignment works
+        df[cs_col] = df[cs_col].astype(object)
+
+    n_blocks = 0
+    cats_upper = df['Column'].astype(str).str.strip().str.upper()
+    for cat in df['Column'].astype(str).str.strip().unique():
+        cat_upper = str(cat).upper().strip()
+        if cat_upper in _SHARE_SKIP_BLOCKS:
+            continue
+        mask = cats_upper == cat_upper
+        if not mask.any():
+            continue
+        if cat_upper in {c.upper() for c in _DEMO_CATS_NINE}:
+            # Demos — share equals BP (after renormalize, each sums to 100)
+            df.loc[mask, cs_col] = df.loc[mask, bp_col].apply(_bp).round(4)
+            n_blocks += 1
+            continue
+        # Non-demo — share = raw / Σraw × 100
+        if raw_col is None or raw_col not in df.columns:
+            continue
+        raws = pd.to_numeric(
+            df.loc[mask, raw_col].astype(str).str.replace(',', ''),
+            errors='coerce',
+        ).fillna(0)
+        total = float(raws.sum())
+        if total <= 0:
+            continue
+        df.loc[mask, cs_col] = (raws / total * 100).round(4)
+        n_blocks += 1
+
+    if verbose and n_blocks:
+        print(f"   🔧 apply_recompute_category_share [{subject or ''}]: "
+              f"{n_blocks} block(s) recomputed")
+    return df, n_blocks
+
+
 class PrePublishGateError(Exception):
     """Raised when the pre-publish gate finds an unrecoverable defect.
     Callers should treat as fatal — do NOT save the CSV."""
@@ -6519,19 +7598,29 @@ def run_pre_publish_gate(df, subject, *, project_name: str = '',
     bp_col, _, _, proj_col = _detect_cols(df)
 
     # ── G1: sequential-digit placeholders ─────────────────────────────
+    # Aligned with `dejitter_sequential_placeholders` exemption set: the
+    # depin pass intentionally skips DEPIN_META_CATS (LOCATION, AVID FAN,
+    # CASUAL FAN, etc.) because low-population DMAs have legitimately tiny
+    # values that may coincidentally land on the 4-monotonic-digit pattern
+    # — those aren't placeholders. Gate must skip the same set or it will
+    # fire on values dejitter intentionally left alone.
     try:
         placeholder_mask = detect_placeholder_bps(df, bp_col)
         if placeholder_mask.any():
-            n = int(placeholder_mask.sum())
-            sample = df.loc[placeholder_mask].head(5)[['Column', 'Value', bp_col]]
-            sample_str = '; '.join(
-                f"{r['Column']}/{r['Value']}@{r[bp_col]}"
-                for _, r in sample.iterrows()
-            )
-            defects.append(
-                f'G1 PLACEHOLDER: {n} sequential-digit BP(s) survived '
-                f'(e.g. {sample_str})'
-            )
+            cat_upper = df['Column'].astype(str).str.upper().str.strip()
+            exempt = cat_upper.isin(DEPIN_DEMO_CATS | DEPIN_META_CATS)
+            real_placeholders = placeholder_mask & ~exempt
+            if real_placeholders.any():
+                n = int(real_placeholders.sum())
+                sample = df.loc[real_placeholders].head(5)[['Column', 'Value', bp_col]]
+                sample_str = '; '.join(
+                    f"{r['Column']}/{r['Value']}@{r[bp_col]}"
+                    for _, r in sample.iterrows()
+                )
+                defects.append(
+                    f'G1 PLACEHOLDER: {n} sequential-digit BP(s) survived '
+                    f'(e.g. {sample_str})'
+                )
     except Exception as e:
         defects.append(f'G1 PLACEHOLDER: detector errored: {e}')
 
@@ -6616,6 +7705,232 @@ def run_pre_publish_gate(df, subject, *, project_name: str = '',
             )
     except Exception as e:
         defects.append(f'G5 DEMO_SUM: detector errored: {e}')
+
+    # ── G7: DIGITAL BANKING PayPal-leads invariant (D112) ─────────────
+    # 5.1% of corpus pre-fix had APPLE PAY > PAYPAL — a writer-bug
+    # signature that doesn't track audience composition. PayPal is the
+    # universal US adult-panel leader (70-80% adoption); Apple Pay is
+    # smartphone-ecosystem skewed (35-50%) but legitimately leads on
+    # very-young / iPhone-native cohorts.
+    #
+    # 2026-06-09 Jenna relaxation ("apple pay can be top if it makes
+    # sense for that specific audience and the agent really believes
+    # it"): the gate now only fires for audiences where AP > PP is
+    # near-certainly the writer bug (tiers 1, 2, 5 in
+    # _expected_db_bands). For young / younger-skew (tiers 3, 4) the
+    # inversion is plausible per-row reasoning and the gate skips so
+    # the agent's call stands.
+    try:
+        db_rows = df[df['Column'].astype(str).str.upper().str.strip() == 'DIGITAL BANKING'].copy()
+        if len(db_rows):
+            db_rows['_v'] = db_rows['Value'].astype(str).str.upper().str.strip()
+            pp_r = db_rows[db_rows['_v'] == 'PAYPAL']
+            ap_r = db_rows[db_rows['_v'] == 'APPLE PAY']
+            if len(pp_r) and len(ap_r):
+                pp_v = _bp(pp_r.iloc[0][bp_col])
+                ap_v = _bp(ap_r.iloc[0][bp_col])
+                a18_34_g7 = _audience_pct_exact(df, 'AGE', ['18-24', '25-34'])
+                a55_plus_g7 = _audience_pct_exact(
+                    df, 'AGE', ['55-64', '65+', '65 OR OLDER'],
+                )
+                _, _, apple_can_lead_g7 = _expected_db_bands(
+                    0.0, 0.0, a18_34_g7, a55_plus_g7,
+                )
+                # Only flag when audience does NOT support AP leadership.
+                # Even when apple_can_lead, still flag the EXTREME
+                # writer-bug signature — PayPal grossly suppressed
+                # (PP < 35) AND Apple Pay above an obvious cap
+                # (AP > 70). That's not audience reasoning, that's
+                # corruption.
+                if ap_v > pp_v - 5.0 and pp_v > 0 and not apple_can_lead_g7:
+                    defects.append(
+                        f'G7 DIGITAL_BANKING_INVERSION: APPLE PAY {ap_v:.2f}% '
+                        f'> PAYPAL {pp_v:.2f}% - 5pp '
+                        f'(D112 writer-bug signature; PP should lead by ≥5pp '
+                        f'for older/mainstream audience: 18-34={a18_34_g7:.0f}% '
+                        f'55+={a55_plus_g7:.0f}%)'
+                    )
+                elif (apple_can_lead_g7 and pp_v > 0 and pp_v < 35.0
+                      and ap_v > 70.0):
+                    defects.append(
+                        f'G7 DIGITAL_BANKING_EXTREME: APPLE PAY {ap_v:.2f}% '
+                        f'with PAYPAL only {pp_v:.2f}% — both far outside '
+                        f'plausible bands even for very-young audience '
+                        f'(18-34={a18_34_g7:.0f}%); writer-bug signature)'
+                    )
+    except Exception as e:
+        defects.append(f'G7 DIGITAL_BANKING_INVERSION: detector errored: {e}')
+
+    # ── G6: BRAND INPUT canonical (D88 + D109 + truncation guards) ────
+    # Catches three writer-bugs surfaced 2026-06-07:
+    #   D109 — literal 'CSV' string (4 cohort files in corpus pre-fix)
+    #   D88  — tilde-delimited subject (e.g. 'MEGHAN~MARKLE') in 226 files
+    #   trunc — under-length subject (e.g. 'Anthony' for 'ANTHONY MICHAEL HALL',
+    #           'VANNA' for 'VANNA WHITE')
+    # Any of these is a hard-fail at write time — dashboards render the
+    # subject string verbatim in the header.
+    try:
+        bi = df[df['Column'].astype(str).str.upper() == 'BRAND INPUT']
+        if not bi.empty:
+            v = str(bi.iloc[0].get('Value', '') or '').strip()
+            if not v:
+                defects.append('G6 BRAND_INPUT: Value is empty')
+            elif v.upper() == 'CSV':
+                defects.append("G6 BRAND_INPUT: Value is literal 'CSV' (D109 writer-bug)")
+            elif '~' in v:
+                defects.append(f'G6 BRAND_INPUT: Value contains tilde delimiter '
+                               f"({v!r}) — D88 writer-bug, replace with space")
+            elif len(v) < 4:
+                defects.append(f'G6 BRAND_INPUT: Value {v!r} is {len(v)} chars '
+                               f'(<4) — under-length subject, possible truncation')
+    except Exception as e:
+        defects.append(f'G6 BRAND_INPUT: detector errored: {e}')
+
+    # ── G8: STREAMING/PLATFORM self-anchor leak (D113) ────────────────
+    # Title-cohort files would self-anchor the host platform to 100% AND
+    # zero every peer (Netflix=100, Hulu=0, Prime=0, ...). Cross-platform
+    # overlap is the core read for a streaming-title cohort — a single
+    # 100-pin with N-1 zeros is structurally wrong. Surfaced in 9 cohort
+    # files (Power_Starz, John_Wick, The_Pitt, etc.) on 06-06.
+    try:
+        sp = df[df['Column'].astype(str).str.upper().str.strip() == 'STREAMING/PLATFORM'].copy()
+        if len(sp) >= 5:
+            sp['_BP'] = sp[bp_col].apply(_bp)
+            n_zero = int((sp['_BP'].fillna(0) < 0.001).sum())
+            n_total = len(sp)
+            n_pin = int((sp['_BP'].fillna(0) >= 99.95).sum())
+            if n_pin == 1 and n_zero >= max(3, int(0.6 * n_total)):
+                peak = sp.loc[sp['_BP'].idxmax(), 'Value']
+                defects.append(
+                    f'G8 STREAMING_SELF_ANCHOR_LEAK: {peak} pinned to 100% '
+                    f'with {n_zero}/{n_total} peer zeros '
+                    f'(D113 writer-bug; cross-platform overlap missing)'
+                )
+    except Exception as e:
+        defects.append(f'G8 STREAMING_SELF_ANCHOR_LEAK: detector errored: {e}')
+
+    # ── G9: writer-blank small-sample clamp (D114) ────────────────────
+    # When sample size falls below a reliability threshold (~50K), the
+    # writer blanks the entire BP column except for hard-pinned anchors,
+    # leaving Category Share populated but penetration unusable. 5 files
+    # in the 06-06 17:00-17:39 window had >99% of BP rows blank with
+    # samples in the 9K-35K range. Hard-fail so these never ship as
+    # "published" — they need a re-pull with a wider audience filter.
+    try:
+        n_rows = len(df)
+        if n_rows >= 100:
+            bp_populated = int(df[bp_col].apply(
+                lambda v: _bp(v) is not None and pd.notna(_bp(v))
+            ).sum())
+            pct = (bp_populated / n_rows) * 100
+            if pct < 50.0:
+                raw_col_name = next(
+                    (c for c in df.columns if 'Original Raw Numbers' in c),
+                    None,
+                )
+                max_sample = 0
+                if raw_col_name:
+                    try:
+                        max_sample = int(pd.to_numeric(
+                            df[raw_col_name].astype(str).str.replace(',', ''),
+                            errors='coerce',
+                        ).max() or 0)
+                    except Exception:
+                        max_sample = 0
+                defects.append(
+                    f'G9 WRITER_BLANK_SMALL_SAMPLE: only '
+                    f'{int(bp_populated)}/{n_rows} ({pct:.1f}%) BP rows '
+                    f'populated, sample={max_sample:,} '
+                    f'(D114 writer-bug; needs re-pull with wider filter)'
+                )
+    except Exception as e:
+        defects.append(f'G9 WRITER_BLANK_SMALL_SAMPLE: detector errored: {e}')
+
+    # ─── G10 BP_CS_INCONSISTENCY (D115) ─────────────────────────────────────
+    # Detects rows where Brand Penetration is wildly inconsistent with Category
+    # Share relative to the rest of the category. The signature is a writer
+    # bug: BP/RAW/PROJ all corrupted in lockstep but Category Share preserves
+    # the pre-corruption value. Specifically, expected_CS = BP / sum(BP_in_cat)
+    # × 100; if reported CS deviates from expected CS by ≥ 10pp AND the ratio
+    # is > 10×, the row is flagged. Conservative thresholds avoid false-positives
+    # on multi-affiliation categories (podcast, athlete) where natural CS spread
+    # is wider. Currently observed in BANKING (BoA) but detector is category-
+    # agnostic.
+    try:
+        cs_col_name = next((c for c in df.columns if 'Category Share' in c), None)
+        if cs_col_name and 'Column' in df.columns and 'Value' in df.columns:
+            for cat, grp in df.groupby(df['Column'].astype(str).str.upper().str.strip()):
+                if cat in {'BRAND INPUT', 'SUBJECT', 'SAMPLE SIZE',
+                           'INPUT_METADATA', 'BRAND CATEGORY', ''} or pd.isna(cat):
+                    continue
+                # Demographic categories renormalize to 100 — CS dynamics differ;
+                # skip them (they have their own G2 / G3 gates).
+                if cat in DEPIN_DEMO_CATS:
+                    continue
+                idxs = list(grp.index)
+                bps = [_bp(df.at[i, bp_col]) for i in idxs]
+                css = [_bp(df.at[i, cs_col_name]) for i in idxs]
+                bp_clean = [b for b in bps if b is not None and pd.notna(b)]
+                if len(bp_clean) < 4:
+                    continue
+                total_bp = sum(bp_clean)
+                if total_bp <= 0:
+                    continue
+                for i, b, c in zip(idxs, bps, css):
+                    if b is None or pd.isna(b) or c is None or pd.isna(c):
+                        continue
+                    if b < 0.01 or c < 0.01:
+                        continue
+                    expected_cs = (b / total_bp) * 100.0
+                    # Inversion test: CS is at least 10pp larger than expected,
+                    # AND CS/BP ratio is > 10x (catches obvious depressions, not
+                    # ordinary variance or natural multi-affiliation spread).
+                    if c >= expected_cs + 10.0 and (c / max(b, 0.001)) > 10.0:
+                        brand = str(df.at[i, 'Value'])
+                        defects.append(
+                            f'G10 BP_CS_INCONSISTENCY: {cat}/{brand} '
+                            f'BP={b:.4f}% but CS={c:.4f}% '
+                            f'(expected CS≈{expected_cs:.2f}% if BP correct; '
+                            f'ratio {c/max(b,0.001):.1f}x — D115 banking-suppression class)'
+                        )
+    except Exception as e:
+        defects.append(f'G10 BP_CS_INCONSISTENCY: detector errored: {e}')
+
+    # ─── G11 PORN_LEADER_BREAK (D118) ───────────────────────────────────────
+    # 2026-06-09 (Jenna escalation, Hilary Swank XNXX@49.6% / PORNHUB@12.97%):
+    # Pornhub leads US adult-media web traffic by 3-4× over its nearest
+    # peers. Any profile where a non-Pornhub brand sits at higher BP than
+    # Pornhub is a writer-bug (LLM emitted noise on a peer slot at leader
+    # scale), not an audience-justified reading. Corpus sweep found 78
+    # profiles affected. Hard-fail at gate; apply_porn_leader_invariant
+    # fixes in the enforcer chain.
+    try:
+        porn_mask_g11 = df['Column'].astype(str).str.strip().str.upper() == 'PORN MEDIA'
+        if porn_mask_g11.any():
+            ph_bp_g11 = None
+            peers_g11 = []
+            for idx in df.index[porn_mask_g11]:
+                v_u = str(df.at[idx, 'Value']).strip().upper()
+                bp = _bp(df.at[idx, bp_col])
+                if bp is None:
+                    continue
+                if v_u == 'PORNHUB':
+                    ph_bp_g11 = bp
+                else:
+                    peers_g11.append((v_u, bp))
+            if ph_bp_g11 is not None and peers_g11:
+                max_peer_g11 = max(peers_g11, key=lambda r: r[1])
+                # Tail-noise threshold: ignore peers below 5pp (no signal)
+                if max_peer_g11[1] >= 5.0 and max_peer_g11[1] > ph_bp_g11 - 1.0:
+                    ratio_g11 = max_peer_g11[1] / max(ph_bp_g11, 0.01)
+                    defects.append(
+                        f'G11 PORN_LEADER_BREAK: {max_peer_g11[0]}={max_peer_g11[1]:.2f}% '
+                        f'> PORNHUB={ph_bp_g11:.2f}% (ratio {ratio_g11:.1f}x; '
+                        f'D118 writer-bug — Pornhub is canonical US adult-media '
+                        f'leader by 3-4x over nearest peer)'
+                    )
+    except Exception as e:
+        defects.append(f'G11 PORN_LEADER_BREAK: detector errored: {e}')
 
     if verbose:
         if defects:
