@@ -7088,6 +7088,23 @@ def run_synthetic_attribution(config: dict) -> dict:
             s3.upload_file(str(output_path), bucket, s3_key)
             print(f"☁️  Uploaded → s3://{bucket}/{s3_key}")
 
+            # Also push the .research.json sidecar alongside the CSV so the
+            # full Claude reasoning + sources audit trail is preserved on
+            # S3 next to the tracker. The dashboard-side upload in app.py
+            # already does this; mirroring the behavior here means CLI
+            # runs (run_synthetic_svod.py) don't silently drop the audit
+            # file.
+            try:
+                sidecar_local = str(output_path).rsplit('.', 1)[0] + '.research.json'
+                if os.path.exists(sidecar_local):
+                    sidecar_key = s3_key.rsplit('.', 1)[0] + '.research.json'
+                    s3.upload_file(sidecar_local, bucket, sidecar_key,
+                                   ExtraArgs={'ContentType': 'application/json'})
+                    print(f"☁️  Uploaded sidecar → s3://{bucket}/{sidecar_key}")
+            except Exception as _sidecar_err:
+                print(f"⚠️  Could not upload research sidecar: "
+                      f"{type(_sidecar_err).__name__}: {_sidecar_err}")
+
             if config.get('dashboard_category'):
                 meta_bucket = 'dashboard-inputs'
                 meta_key = 'system/svod_metadata.json'

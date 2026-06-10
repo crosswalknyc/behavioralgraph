@@ -7944,3 +7944,129 @@ def run_pre_publish_gate(df, subject, *, project_name: str = '',
         raise PrePublishGateError(defects)
 
     return defects
+
+
+# ─────────────────────────────────────────────────────────────────────
+# G12 — SOFT WARNING: profile_raw should not exceed Gen Pop raw.
+# 2026-06-10 (Jenna): per "Sandler Coca-Cola 1,629,493 / 5.4M vs Gen
+# Pop 821,820 / 10M" reproducer, raw-count in a profile (= subset of
+# US adults) must never exceed gp_raw (the universe). Per user
+# directive, the fix is in Gen Pop, not in the profile — so this is
+# a soft warning that LOGS violations and surfaces brands that need a
+# Gen Pop bump. The companion `scripts/reconcile_gen_pop.py` script
+# applies the bumps in batch.
+#
+# Returned tuple: (warnings_list, brands_needing_bump)
+# - warnings_list: human-readable strings for log/email
+# - brands_needing_bump: dict {(cat,val): {p_raw, gp_raw, p_bp, gp_bp}}
+#   used by the reconcile script
+# ─────────────────────────────────────────────────────────────────────
+_GP_RAW_CACHE: dict = {}  # populated lazily; key = bucket/key path
+
+
+def _load_gp_raw_map(bucket: str = 'dashboard-inputs',
+                     key: str = 'Gen_Pop_2026.csv',
+                     ttl_seconds: int = 600):
+    """Load Gen Pop {(cat,val): (gp_bp, gp_raw)} with simple TTL cache."""
+    import time
+    cache_key = f'{bucket}/{key}'
+    entry = _GP_RAW_CACHE.get(cache_key)
+    if entry and (time.time() - entry['t']) < ttl_seconds:
+        return entry['data']
+    try:
+        import boto3, io as _io
+        _s3 = boto3.client('s3', region_name='us-east-2')
+        obj = _s3.get_object(Bucket=bucket, Key=key)
+        gp_df = pd.read_csv(_io.BytesIO(obj['Body'].read()), low_memory=False)
+    except Exception:
+        return {}
+    _bp_c, _, _raw_c, _ = _detect_cols(gp_df)
+    _SKIP = {
+        'INPUT_METADATA', 'BRAND INPUT', 'BRAND CATEGORY', 'SAMPLE SIZE',
+        'SUBJECT', 'AVID FAN', 'CASUAL FAN', 'AL/NL', 'AFC/NFC',
+        'AGE', 'EDUCATION', 'ETHNICITY', 'GENDER', 'INCOME',
+        'OCCUPATION', 'PARENTAL_STATUS', 'RELATIONSHIP', 'SEXUAL_ORIENTATION',
+    }
+    out: dict = {}
+    for _, r in gp_df.iterrows():
+        cat = str(r['Column']).strip().upper()
+        if cat in _SKIP:
+            continue
+        val = str(r['Value']).strip().upper()
+        bp_v = _bp(r[_bp_c])
+        try:
+            raw_v = float(str(r[_raw_c]).replace(',', ''))
+        except Exception:
+            raw_v = None
+        if bp_v is None or raw_v is None:
+            continue
+        out[(cat, val)] = (bp_v, raw_v)
+    _GP_RAW_CACHE[cache_key] = {'t': time.time(), 'data': out}
+    return out
+
+
+def validate_profile_raw_le_gp_raw(df, subject='', verbose=True,
+                                     bucket='dashboard-inputs',
+                                     key='Gen_Pop_2026.csv',
+                                     headroom: float = 1.05):
+    """G12 soft-validator: warn when profile_raw > gp_raw × headroom.
+
+    Returns: (warnings: list[str], bumps: dict)
+    Never raises; never modifies df.
+    """
+    warnings: list[str] = []
+    bumps: dict = {}
+    if df is None or len(df) == 0:
+        return warnings, bumps
+    bp_col, _, raw_col, _ = _detect_cols(df)
+    if not raw_col or raw_col not in df.columns:
+        return warnings, bumps
+    gp_map = _load_gp_raw_map(bucket=bucket, key=key)
+    if not gp_map:
+        if verbose:
+            print('   ⚠ G12: gp raw map empty — skipping (no Gen_Pop access)')
+        return warnings, bumps
+    SKIP_CATS = {
+        'INPUT_METADATA', 'BRAND INPUT', 'BRAND CATEGORY', 'SAMPLE SIZE',
+        'SUBJECT', 'AVID FAN', 'CASUAL FAN', 'AL/NL', 'AFC/NFC',
+        'AGE', 'EDUCATION', 'ETHNICITY', 'GENDER', 'INCOME',
+        'OCCUPATION', 'PARENTAL_STATUS', 'RELATIONSHIP', 'SEXUAL_ORIENTATION',
+    }
+    for _, r in df.iterrows():
+        cat = str(r['Column']).strip().upper()
+        if cat in SKIP_CATS:
+            continue
+        val = str(r['Value']).strip().upper()
+        gp_entry = gp_map.get((cat, val))
+        if gp_entry is None:
+            continue
+        gp_bp, gp_raw = gp_entry
+        try:
+            p_raw = float(str(r[raw_col]).replace(',', ''))
+        except Exception:
+            continue
+        if p_raw <= gp_raw * headroom:
+            continue
+        # Violation
+        p_bp = _bp(r[bp_col])
+        bumps[(cat, val)] = {
+            'p_raw': p_raw, 'gp_raw': gp_raw,
+            'p_bp': p_bp, 'gp_bp': gp_bp,
+        }
+        warnings.append(
+            f'G12 RAW>GP_RAW: {cat}/{val} profile_raw={p_raw:,.0f} '
+            f'> gp_raw={gp_raw:,.0f} (gp_bp={gp_bp:.4f}%, '
+            f'p_bp={p_bp if p_bp is not None else "?"}) — Gen Pop bp needs bump'
+        )
+    if verbose and warnings:
+        print(f'   🟡 G12 raw>gp_raw soft-warning: {len(warnings)} brand(s) '
+              f'in {subject or "profile"} exceed Gen Pop raw — '
+              f'Gen Pop will need a reconcile bump for these brands. '
+              f'(Profile is NOT modified.) Sample:')
+        for w in warnings[:5]:
+            print(f'      ⚠ {w}')
+        if len(warnings) > 5:
+            print(f'      ⚠ ... and {len(warnings) - 5} more')
+    elif verbose:
+        print(f'   🟢 G12 raw>gp_raw: clean ({subject or "profile"})')
+    return warnings, bumps
