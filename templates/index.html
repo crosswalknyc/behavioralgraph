@@ -36117,6 +36117,16 @@
                 _setText('jiqInterstepSubtitle', 'Off-app validation steps accounts took before visiting Fandango.');
                 var _cutByRow = document.getElementById('jiqCutByRow');
                 if (_cutByRow) _cutByRow.style.display = 'none';
+            } else {
+                var _tpMainTitle = document.getElementById('jiqTopPathsMainTitle');
+                if (_tpMainTitle) { _tpMainTitle.textContent = ''; _tpMainTitle.style.display = 'none'; }
+                _setText('jiqTopPathsSubtitle', 'Top observed paths');
+                var _incSub = document.getElementById('jiqInceptionSubtitle');
+                if (_incSub) _incSub.style.display = '';
+                var _compSub = document.getElementById('jiqCompanionSubtitle');
+                if (_compSub) _compSub.style.display = '';
+                var _cutByRow = document.getElementById('jiqCutByRow');
+                if (_cutByRow) _cutByRow.style.display = '';
             }
 
             // Meta line: target + vertical + visitors estimate
