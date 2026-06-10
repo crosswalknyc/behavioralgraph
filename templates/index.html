@@ -41033,7 +41033,7 @@
                 var brandNames = Object.keys(allBrands).sort(function(a, b) { return allBrands[b] - allBrands[a]; }).slice(0, 20);
                 if (!brandNames.length) return;
 
-                var chartH = Math.max(250, brandNames.length * 28 + 60);
+                var chartH = Math.max(350, brandNames.length * 56 + 80);
                 var col = _sotCatColors[catName] || '#888';
                 var catId = catName.replace(/[^a-zA-Z]/g, '');
                 html += '<div class="sot-chart-card" id="sotCmpBrandSection_' + catId + '" data-sot-cat="' + catName + '" style="margin-bottom:1rem;border-left:3px solid ' + col + ';">';
@@ -41714,22 +41714,26 @@
                         label: lbl, data: bNames.map(function(bn) { var b = bm[bn]; return b ? (b.category_share_pct || 0) : 0; }),
                         backgroundColor: i === 0 ? 'rgba(6,182,212,0.55)' : 'hsla(' + _sotTabHue(i) + ',70%,60%,0.65)',
                         borderWidth: i === 0 ? 2 : 0, borderColor: i === 0 ? 'rgba(6,182,212,0.9)' : 'transparent',
-                        borderRadius: 3, barPercentage: 0.9
+                        borderRadius: 3, barPercentage: 0.7, categoryPercentage: 0.75
                     });
                 });
+                var _sotBdIsLight = document.body.getAttribute('data-theme') === 'light';
+                var _sotBdText = _sotBdIsLight ? '#374151' : '#e8e8e8';
+                var _sotBdTick = _sotBdIsLight ? '#374151' : '#aaa';
+                var _sotBdGrid = _sotBdIsLight ? 'rgba(0,0,0,0.08)' : 'rgba(255,255,255,0.06)';
                 _sotCompareCharts.push(new Chart(canvas.getContext('2d'), {
                     type: 'bar', plugins: [ChartDataLabels],
                     data: { labels: bNames, datasets: catDS },
                     options: {
                         indexAxis: 'y', responsive: true, maintainAspectRatio: false,
                         scales: {
-                            x: { grid: { color: 'rgba(255,255,255,0.06)' }, ticks: { color: '#aaa', callback: function(v) { return v + '%'; } } },
-                            y: { grid: { display: false }, ticks: { color: '#e8e8e8', font: { size: 11 } } }
+                            x: { grid: { color: _sotBdGrid }, ticks: { color: _sotBdTick, callback: function(v) { return v + '%'; } } },
+                            y: { grid: { display: false }, ticks: { color: _sotBdText, font: { size: 11 } } }
                         },
                         plugins: {
-                            legend: { position: 'top', labels: { color: '#e8e8e8', font: { size: 10 }, padding: 12, usePointStyle: true } },
+                            legend: { position: 'top', labels: { color: _sotBdText, font: { size: 10 }, padding: 12, usePointStyle: true } },
                             tooltip: { callbacks: { label: function(ctx) { return ctx.dataset.label + ': ' + ctx.parsed.x.toFixed(1) + '% of ' + catName; } } },
-                            datalabels: { anchor: 'end', align: 'end', offset: 4, color: '#fff', font: { weight: '600', size: 10 }, formatter: function(v) { return v >= 0.5 ? v.toFixed(1) + '%' : ''; } }
+                            datalabels: { anchor: 'end', align: 'end', offset: 4, color: _sotBdIsLight ? '#374151' : '#fff', font: { weight: '600', size: 10 }, formatter: function(v) { return v >= 0.5 ? v.toFixed(1) + '%' : ''; } }
                         }
                     }
                 }));
@@ -41878,7 +41882,7 @@
                 var brandNames = Object.keys(allBrands).sort(function(a, b) { return allBrands[b] - allBrands[a]; }).slice(0, 20);
                 if (!brandNames.length) return;
                 var col = _sotCatColors[catName] || '#888'; var catId = catName.replace(/[^a-zA-Z]/g, '');
-                html += '<div class="sot-chart-card" id="sotCmpBrandSection_' + catId + '" data-sot-cat="' + catName + '" style="margin-bottom:1rem;border-left:3px solid ' + col + ';"><h3 class="sot-chart-title" style="color:' + col + ';">' + catName + ' — Brand Breakdown</h3><div style="position:relative;height:' + Math.max(250, brandNames.length * 28 + 60) + 'px;"><canvas id="sotCmpCat_' + catId + '"></canvas></div>';
+                html += '<div class="sot-chart-card" id="sotCmpBrandSection_' + catId + '" data-sot-cat="' + catName + '" style="margin-bottom:1rem;border-left:3px solid ' + col + ';"><h3 class="sot-chart-title" style="color:' + col + ';">' + catName + ' — Brand Breakdown</h3><div style="position:relative;height:' + Math.max(350, brandNames.length * 56 + 80) + 'px;"><canvas id="sotCmpCat_' + catId + '"></canvas></div>';
                 var btid = 'sotCmpBrandTbl_' + catId;
                 html += '<div style="margin-top:0.75rem;overflow-x:auto;"><table class="sot-cmp-table" id="' + btid + '"><thead><tr><th class="sortable" data-sort-col="name" onclick="sotSortTable(\'' + btid + '\',\'name\')">Brand <span class="sort-arrow">▼</span></th>';
                 tabs.forEach(function(t, ti) { var short = _sotQuarterLabel(t.data.start_date, t.data.end_date) || (_sotFmtDateShort(t.data.start_date).replace(/, \d{4}$/, '')); html += '<th class="num sortable" data-sort-col="v' + ti + '" onclick="sotSortTable(\'' + btid + '\',\'v' + ti + '\')">' + short + ' <span class="sort-arrow">▼</span></th>'; });
@@ -41914,8 +41918,8 @@
                 var cid='sotCmpCat_'+catName.replace(/[^a-zA-Z]/g,''); var cv=document.getElementById(cid); if (!cv||typeof Chart==='undefined') return;
                 var ab={},tcs=[]; tabs.forEach(function(t){var cat=(t.data.categories||[]).find(function(c){return c.name===catName;});var cs=cat?(cat[shareKey]||0):0;tcs.push(cs);if(cat&&cat.brands&&cs>=0.5)cat.brands.forEach(function(b){if(!ab[b.name])ab[b.name]=0;ab[b.name]=Math.max(ab[b.name],b.category_share_pct||0);});});
                 var bn=Object.keys(ab).sort(function(a,b){return ab[b]-ab[a];}).slice(0,20); if(!bn.length) return;
-                var ds=[]; tabs.forEach(function(t,i){var lbl=_sotTabLabel(t.data);var neg=tcs[i]<0.5;var cat=(t.data.categories||[]).find(function(c){return c.name===catName;});var bm={};if(cat&&cat.brands&&!neg)cat.brands.forEach(function(b){bm[b.name]=b;});ds.push({label:lbl,data:bn.map(function(n){var b=bm[n];return b?(b.category_share_pct||0):0;}),backgroundColor:'hsla('+_sotTabHue(i)+',70%,60%,0.75)',borderWidth:0,borderRadius:3,barPercentage:0.9});});
-                _sotCompareCharts.push(new Chart(cv.getContext('2d'),{type:'bar',plugins:[ChartDataLabels],data:{labels:bn,datasets:ds},options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,scales:{x:{grid:{color:'rgba(255,255,255,0.06)'},ticks:{color:'#aaa',callback:function(v){return v+'%';}}},y:{grid:{display:false},ticks:{color:'#e8e8e8',font:{size:11}}}},plugins:{legend:{position:'top',labels:{color:'#e8e8e8',font:{size:10},padding:12,usePointStyle:true}},tooltip:{callbacks:{label:function(ctx){return ctx.dataset.label+': '+ctx.parsed.x.toFixed(1)+'% of '+catName;}}},datalabels:{anchor:'end',align:'end',offset:4,color:'#fff',font:{weight:'600',size:10},formatter:function(v){return v>=0.5?v.toFixed(1)+'%':'';}}}}})
+                var ds=[]; tabs.forEach(function(t,i){var lbl=_sotTabLabel(t.data);var neg=tcs[i]<0.5;var cat=(t.data.categories||[]).find(function(c){return c.name===catName;});var bm={};if(cat&&cat.brands&&!neg)cat.brands.forEach(function(b){bm[b.name]=b;});ds.push({label:lbl,data:bn.map(function(n){var b=bm[n];return b?(b.category_share_pct||0):0;}),backgroundColor:'hsla('+_sotTabHue(i)+',70%,60%,0.75)',borderWidth:0,borderRadius:3,barPercentage:0.7,categoryPercentage:0.75});});
+                _sotCompareCharts.push(new Chart(cv.getContext('2d'),{type:'bar',plugins:[ChartDataLabels],data:{labels:bn,datasets:ds},options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,scales:{x:{grid:{color:_sotMainGrid},ticks:{color:_sotMainTick,callback:function(v){return v+'%';}}},y:{grid:{display:false},ticks:{color:_sotMainText,font:{size:11}}}},plugins:{legend:{position:'top',labels:{color:_sotMainText,font:{size:10},padding:12,usePointStyle:true}},tooltip:{callbacks:{label:function(ctx){return ctx.dataset.label+': '+ctx.parsed.x.toFixed(1)+'% of '+catName;}}},datalabels:{anchor:'end',align:'end',offset:4,color:_sotMainIsLight?'#374151':'#fff',font:{weight:'600',size:10},formatter:function(v){return v>=0.5?v.toFixed(1)+'%':'';}}}}})
                 );
             });
         }
