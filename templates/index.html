@@ -39042,6 +39042,14 @@
             if (card)    card.style.display    = hasRows ? '' : 'none';
             if (ovCard)  ovCard.style.display  = (tp && tp.overlap && tp.overlap.length) ? '' : 'none';
             if (tdCard)  tdCard.style.display  = (tp && tp.touch_distribution && tp.touch_distribution.length) ? '' : 'none';
+            // Fandango: hide Touchpoint Overlap, move Touches Before Purchase to full-width left
+            var _tpMeta = (window._jiqCurrentRun || {}).meta || {};
+            if ((_tpMeta.target || '').toLowerCase().indexOf('fandango') >= 0) {
+                if (ovCard) ovCard.style.display = 'none';
+                if (ovCard && ovCard.parentElement) {
+                    ovCard.parentElement.style.gridTemplateColumns = '1fr';
+                }
+            }
             if (!hasRows) return;
 
             // ── Back-compat patch: legacy modeled runs hard-coded
