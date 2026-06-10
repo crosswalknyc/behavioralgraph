@@ -20892,7 +20892,7 @@
                     </div>
                     <div class="card" style="padding: 1rem;" id="jiqTouchDistCard">
                         <h3 style="margin: 0 0 0.5rem;">📊 Touches Before Purchase</h3>
-                        <div style="font-size: 0.72rem; color: var(--text-secondary); margin-bottom: 0.5rem;">How many touches did each cohort receive? Converters vs non-converters by touch count.</div>
+                        <div id="jiqTouchDistSub" style="font-size: 0.72rem; color: var(--text-secondary); margin-bottom: 0.5rem;">How many touches did each cohort receive? Converters vs non-converters by touch count.</div>
                         <div id="jiqTouchDist"></div>
                     </div>
                 </div>
@@ -36107,6 +36107,11 @@
                 _setText('jiqCompanionTitle', '📱 Adjacent Behaviors');
                 var _compSub = document.getElementById('jiqCompanionSubtitle');
                 if (_compSub) _compSub.style.display = 'none';
+                _setText('jiqSwitchedTitle', '🎬 Post-Visit Destinations — where they went next');
+                _setText('jiqSwitchedSubtitle', 'What accounts did after visiting Fandango');
+                _setText('jiqTouchDistSub', 'How many touches did each cohort receive?');
+                _setText('jiqInterstepTitle', '🪜 Discovery Steps Before Visiting Fandango');
+                _setText('jiqInterstepSubtitle', 'Off-app validation steps accounts took before visiting Fandango.');
             }
 
             // Meta line: target + vertical + visitors estimate
