@@ -139,6 +139,18 @@
         body[data-theme="light"] .iqr-btn-primary:hover { background: var(--accent-cyan); border-color: var(--accent-cyan); color: #fff; filter: brightness(1.1); }
         body[data-theme="light"] .iqr-info-chip { background: #c8e600; color: #1a1a1a; border-color: #a0d911; }
         body[data-theme="light"] .iqr-info-chip:hover { background: #a0d911; color: #1a1a1a; }
+        body[data-theme="light"] #compareDateRangesPopover {
+            background: #fff !important;
+            border-color: rgba(0,0,0,0.12) !important;
+            color: var(--text-primary) !important;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.12) !important;
+        }
+        body[data-theme="light"] #compareDateRangesPopover label {
+            color: var(--text-primary);
+        }
+        body[data-theme="light"] #compareDateRangesPopover label:hover {
+            background: rgba(139,92,246,0.06) !important;
+        }
         body[data-theme="light"] .view-nav-dropdown {
             background: rgba(139, 92, 246, 0.08);
             border-color: rgba(139, 92, 246, 0.4);
@@ -55614,7 +55626,7 @@
             gpCb.checked = _comparisonRunsState.includeGenPop !== false;
             gpCb.style.cssText = 'accent-color:#9ca3af;cursor:pointer;width:14px;height:14px;margin:0;justify-self:center;';
             const gpLbl = document.createElement('span');
-            gpLbl.innerHTML = 'Include <strong style="color:#cbd5e1;">Gen Pop</strong> baseline';
+            gpLbl.innerHTML = 'Include <strong style="color:var(--text-primary, #cbd5e1);">Gen Pop</strong> baseline';
             gpLbl.style.cssText = 'color:var(--text-primary, #e6e6e6);';
             gpRow.appendChild(gpCb);
             gpRow.appendChild(gpLbl);
