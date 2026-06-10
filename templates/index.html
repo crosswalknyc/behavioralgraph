@@ -17624,7 +17624,7 @@
                                      KPI columns above & below (same minmax(150px, 1fr) + 1rem gap
                                      and matching 1.5rem horizontal padding). -->
                                 <div id="bpiqDeltaRow" style="display: none; margin: -0.5rem 0; background: linear-gradient(135deg, rgba(200,230,0,0.06), rgba(168,85,247,0.06)); border: 1px dashed rgba(200,230,0,0.45); border-radius: 12px; padding: 0.6rem 1.5rem;">
-                                    <div style="font-size: 0.62rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.12em; text-align: center; margin-bottom: 0.35rem; font-weight: 700;">Δ Target − Control</div>
+                                    <div style="font-size: 0.62rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.12em; text-align: center; margin-bottom: 0.35rem; font-weight: 700;">Target to Control Delta</div>
                                     <div class="bpiq-kpi-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 1rem;">
                                         <div id="bpiqKpiDeltaConsumers" style="text-align: center; font-size: 0.95rem; font-weight: 700;">—</div>
                                         <div id="bpiqKpiDeltaPre"       style="text-align: center; font-size: 0.95rem; font-weight: 700;">—</div>
@@ -29866,18 +29866,24 @@
                             : mag.toFixed(2) + (suffix || '');
                         return '<span style="color:' + color + ';">' + sign + body + '</span>';
                     };
+                    // Relative-% delta: (target - control) / |control| × 100.
+                    // Returns null when control is 0/missing so _bpiqFmtDelta
+                    // renders the em-dash placeholder instead of Infinity / NaN.
+                    var _bpiqRelDelta = function(target, control) {
+                        if (target  == null || !isFinite(target))  return null;
+                        if (control == null || !isFinite(control) || control === 0) return null;
+                        return (target - control) / Math.abs(control) * 100;
+                    };
                     document.getElementById('bpiqKpiDeltaConsumers').innerHTML =
                         _bpiqFmtDelta((data.projected_audience_size || 0) - gpSize, ',count', 'size-matched');
                     document.getElementById('bpiqKpiDeltaPre').innerHTML =
-                        _bpiqFmtDelta(prePct - gpPrePct, ' pp');
+                        _bpiqFmtDelta(_bpiqRelDelta(prePct, gpPrePct), '%');
                     document.getElementById('bpiqKpiDeltaPost').innerHTML =
-                        _bpiqFmtDelta(postPct - gpPostPct, ' pp');
+                        _bpiqFmtDelta(_bpiqRelDelta(postPct, gpPostPct), '%');
                     var _tLift = (totals.lift_pct_users  != null && isFinite(totals.lift_pct_users))  ? totals.lift_pct_users  : null;
                     var _cLift = (cg.control_lift_pct_users != null && isFinite(cg.control_lift_pct_users)) ? cg.control_lift_pct_users : null;
                     document.getElementById('bpiqKpiDeltaLift').innerHTML =
-                        (_tLift == null || _cLift == null)
-                            ? '<span style="color:var(--text-secondary);">—</span>'
-                            : _bpiqFmtDelta(_tLift - _cLift, ' pp');
+                        _bpiqFmtDelta(_bpiqRelDelta(_tLift, _cLift), '%');
                 }
                 // Net Brand Lift card
                 var brandLift = totals.lift_pct_users;
