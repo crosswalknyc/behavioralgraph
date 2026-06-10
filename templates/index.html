@@ -34163,7 +34163,7 @@
                         [_isFandango ? 'Unique Visitors (US, in window)' : 'Visitors (US, in window)', _jiqFmt(kpis.total_users)],
                         ['Transacted On Site',       _jiqFmt(kpis.converted_users)],
                         ['On-Site CR',               (kpis.conversion_pct != null ? kpis.conversion_pct + '%' : '—')],
-                        ['Switched & Bought',        _jiqFmt(kpis.switched_users)],
+                        [_isFandango ? 'Switched & Bought Elsewhere' : 'Switched & Bought', _jiqFmt(kpis.switched_users)],
                         [_isFandango ? 'Total Captured (Fandango + Other Sellers)' : 'Total Captured (any seller)', (kpis.captured_pct != null ? kpis.captured_pct + '%' : '—')],
                         [_isFandango ? 'DID NOT TRANSACT ONLINE' : 'Never Transacted', (kpis.never_transacted_pct != null ? kpis.never_transacted_pct + '%' : '—')],
                     ];
@@ -36389,7 +36389,9 @@
             var _kpisSw = (window._jiqCurrentRun && window._jiqCurrentRun.kpis) || {};
             var isTvSw = ((_metaSw.target_type || '').toLowerCase() === 'tv_show')
                       || (_kpisSw.tv_show_mode === true);
-            var srcWord1 = isTvSw ? 'ACCOUNTS'         : 'SWITCHERS';
+            var _isFandangoSw = (_metaSw.target || '').toLowerCase().indexOf('fandango') >= 0;
+            var srcWord1 = isTvSw ? 'ACCOUNTS' : (_isFandangoSw ? 'SWITCHED &' : 'SWITCHERS');
+            var srcWord1b = _isFandangoSw ? 'BOUGHT ELSEWHERE' : '';
             var srcWord2 = isTvSw ? 'finished episode' : 'left without buying';
             var footerWord = isTvSw ? 'share of accounts · bubble size = share · color = next-action category'
                                     : 'share of switchers · bubble size = share · chain brand colors';
@@ -36403,7 +36405,7 @@
             var rowH = 46;
             var padT = 24, padB = 18;
             var H = Math.max(340, padT + padB + rows.length * rowH);
-            var srcX = 62, srcR = 44;       // source bubble (smaller for TV)
+            var srcX = _isFandangoSw ? 72 : 62, srcR = _isFandangoSw ? 60 : 44;
             var destX = Math.round(W * 0.42);  // destination column at 42% of W
             var srcCY = H / 2;
             var bubbleSlot = (H - padT - padB) / rows.length;
@@ -36453,9 +36455,10 @@
             // Source bubble (text scales down for the smaller radius)
             parts.push('<g>'
                  + '<circle cx="' + srcX + '" cy="' + srcCY + '" r="' + srcR + '" fill="#1f2547" stroke="#5b6cff" stroke-width="3"/>'
-                 + '<text x="' + srcX + '" y="' + (srcCY - 6) + '" text-anchor="middle" fill="#fff" font-weight="700" font-size="11">' + srcWord1 + '</text>'
-                 + '<text x="' + srcX + '" y="' + (srcCY + 8) + '" text-anchor="middle" fill="#9aa3b2" font-size="9">' + srcWord2 + '</text>'
-                 + '<text x="' + srcX + '" y="' + (srcCY + 22) + '" text-anchor="middle" fill="#5b6cff" font-weight="700" font-size="12">100%</text>'
+                 + '<text x="' + srcX + '" y="' + (srcCY - (srcWord1b ? 14 : 6)) + '" text-anchor="middle" fill="#fff" font-weight="700" font-size="' + (srcWord1b ? '9' : '11') + '">' + srcWord1 + '</text>'
+                 + (srcWord1b ? '<text x="' + srcX + '" y="' + (srcCY - 2) + '" text-anchor="middle" fill="#fff" font-weight="700" font-size="9">' + srcWord1b + '</text>' : '')
+                 + '<text x="' + srcX + '" y="' + (srcCY + (srcWord1b ? 12 : 8)) + '" text-anchor="middle" fill="#9aa3b2" font-size="9">' + srcWord2 + '</text>'
+                 + '<text x="' + srcX + '" y="' + (srcCY + (srcWord1b ? 26 : 22)) + '" text-anchor="middle" fill="#5b6cff" font-weight="700" font-size="12">100%</text>'
                  + '</g>');
 
             // Destination bubbles + labels (2-line wrap when needed)
