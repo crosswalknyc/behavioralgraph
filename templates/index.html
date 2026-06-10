@@ -17625,19 +17625,6 @@
                                         </div>
                                     </div>
                                 </div>
-                                <!-- Δ Target − Control strip: small bordered box centered between
-                                     the two cohort rows. Inner grid columns align with the four
-                                     KPI columns above & below (same minmax(150px, 1fr) + 1rem gap
-                                     and matching 1.5rem horizontal padding). -->
-                                <div id="bpiqDeltaRow" style="display: none; margin: -0.5rem 0; background: linear-gradient(135deg, rgba(200,230,0,0.06), rgba(168,85,247,0.06)); border: 1px dashed rgba(200,230,0,0.45); border-radius: 12px; padding: 0.6rem 1.5rem;">
-                                    <div style="font-size: 0.62rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.12em; text-align: center; margin-bottom: 0.35rem; font-weight: 700;">Target to Control Delta</div>
-                                    <div class="bpiq-kpi-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 1rem;">
-                                        <div id="bpiqKpiDeltaConsumers" style="text-align: center; font-size: 0.95rem; font-weight: 700;">—</div>
-                                        <div id="bpiqKpiDeltaPre"       style="text-align: center; font-size: 0.95rem; font-weight: 700;">—</div>
-                                        <div id="bpiqKpiDeltaPost"      style="text-align: center; font-size: 0.95rem; font-weight: 700;">—</div>
-                                        <div id="bpiqKpiDeltaLift"      style="text-align: center; font-size: 0.95rem; font-weight: 700;">—</div>
-                                    </div>
-                                </div>
                                 <!-- Gen Pop / control-cohort mirror row -->
                                 <div id="bpiqGenPopKpiRow" style="display: none; background: linear-gradient(135deg, rgba(200,230,0,0.04), rgba(168,85,247,0.06)); border: 1px solid var(--border-color); border-radius: 14px; padding: 1.5rem 1.5rem 0.75rem;">
                                     <div style="font-size: 0.95rem; font-weight: 800; color: #c8e600; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 1rem;">CONTROL</div>
@@ -17659,6 +17646,20 @@
                                             <div style="font-size: 0.7rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em;">Brand Engagement Lift<br>(Gen Pop)</div>
                                             <div id="bpiqKpiGenPopLift" style="font-size: 1.1rem; font-weight: 700; white-space: nowrap;"></div>
                                         </div>
+                                    </div>
+                                </div>
+                                <!-- Target ↔ Control delta strip, anchored below
+                                     the CONTROL row. Inner grid columns align
+                                     with the four KPI columns above (same
+                                     minmax(150px, 1fr) + 1rem gap, matching
+                                     1.5rem horizontal padding). -->
+                                <div id="bpiqDeltaRow" style="display: none; background: linear-gradient(135deg, rgba(200,230,0,0.06), rgba(168,85,247,0.06)); border: 1px dashed rgba(200,230,0,0.45); border-radius: 12px; padding: 0.6rem 1.5rem;">
+                                    <div style="font-size: 0.62rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.12em; text-align: center; margin-bottom: 0.35rem; font-weight: 700;">Target to Control Delta</div>
+                                    <div class="bpiq-kpi-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 1rem;">
+                                        <div id="bpiqKpiDeltaConsumers" style="text-align: center; font-size: 0.95rem; font-weight: 700;">—</div>
+                                        <div id="bpiqKpiDeltaPre"       style="text-align: center; font-size: 0.95rem; font-weight: 700;">—</div>
+                                        <div id="bpiqKpiDeltaPost"      style="text-align: center; font-size: 0.95rem; font-weight: 700;">—</div>
+                                        <div id="bpiqKpiDeltaLift"      style="text-align: center; font-size: 0.95rem; font-weight: 700;">—</div>
                                     </div>
                                 </div>
                             </div>
@@ -29911,7 +29912,7 @@
                         return (target - control) / Math.abs(control) * 100;
                     };
                     document.getElementById('bpiqKpiDeltaConsumers').innerHTML =
-                        _bpiqFmtDelta((data.projected_audience_size || 0) - gpSize, ',count', 'size-matched');
+                        _bpiqFmtDelta((data.projected_audience_size || 0) - gpSize, ',count');
                     document.getElementById('bpiqKpiDeltaPre').innerHTML =
                         _bpiqFmtDelta(_bpiqRelDelta(prePct, gpPrePct), '%');
                     document.getElementById('bpiqKpiDeltaPost').innerHTML =
