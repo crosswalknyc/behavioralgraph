@@ -30035,7 +30035,7 @@
                         return (target - control) / Math.abs(control) * 100;
                     };
                     document.getElementById('bpiqKpiDeltaConsumers').innerHTML =
-                        _bpiqFmtDelta((data.projected_audience_size || 0) - gpSize, ',count');
+                        _bpiqFmtDelta((data.projected_audience_size || 0) - gpSize, ',count', '—');
                     document.getElementById('bpiqKpiDeltaPre').innerHTML =
                         _bpiqFmtDelta(_bpiqRelDelta(prePct, gpPrePct), '%');
                     document.getElementById('bpiqKpiDeltaPost').innerHTML =
