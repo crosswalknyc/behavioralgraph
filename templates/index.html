@@ -37573,17 +37573,18 @@
                     });
                     topPathsEl.innerHTML = '<table style="width:100%; border-collapse: collapse; font-size: 12.5px;">'
                         + '<thead><tr style="text-align:left;border-bottom:1px solid var(--border-color);">'
-                        +   '<th style="padding:6px 4px;width:60px;text-align:right;">Users</th>'
-                        +   '<th style="padding:6px 4px;width:60px;text-align:right;">% Cohort</th>'
-                        +   (hasDays ? '<th style="padding:6px 4px;width:80px;text-align:right;">Avg days</th>' : '')
-                        +   '<th style="padding:6px 4px;">Path</th>'
+                        +   '<th style="padding:6px 4px;width:70px;text-align:right;white-space:nowrap;">Users</th>'
+                        +   '<th style="padding:6px 4px;width:70px;text-align:right;white-space:nowrap;">% Cohort</th>'
+                        +   (hasDays ? '<th style="padding:6px 4px;width:80px;text-align:right;white-space:nowrap;">Avg days</th>' : '')
+                        +   '<th style="padding:6px 4px 6px 16px;">Path</th>'
                         + '</tr></thead><tbody>'
                         + ptp.top_paths.map(function(p) {
                             var pathHtml = p.path.map(function(step, i) {
+                                var label = (step === 'CHATBOT') ? 'AI SEARCH' : step;
                                 var color = colorFor(step);
                                 var arrow = (i < p.path.length - 1) ? ' <span style="color: var(--text-secondary); margin: 0 4px;">→</span> ' : '';
                                 return '<span style="display: inline-block; padding: 2px 8px; border-radius: 99px; background: ' + color + '; color: #fff; font-size: 11px; font-weight: 600;">'
-                                     + _jiqEsc(step) + '</span>' + arrow;
+                                     + _jiqEsc(label) + '</span>' + arrow;
                             }).join('');
                             // Pct field is inconsistent across payload
                             // versions: newer runs use users_pct, older
@@ -37610,10 +37611,10 @@
                                 ? '<div style="font-size:11px;color:var(--text-secondary);margin-top:4px;font-style:italic;">' + _jiqEsc(p.note) + '</div>'
                                 : '';
                             return '<tr style="border-bottom:1px solid var(--border-color);vertical-align:top;">'
-                                 + '<td style="padding:8px 4px;text-align:right;font-weight:600;">' + _jiqFmt(p.users) + '</td>'
-                                 + '<td style="padding:8px 4px;text-align:right;color:var(--text-secondary);">' + pctDisplay + '</td>'
+                                 + '<td style="padding:8px 4px;text-align:right;font-weight:600;white-space:nowrap;">' + _jiqFmt(p.users) + '</td>'
+                                 + '<td style="padding:8px 4px;text-align:right;color:var(--text-secondary);white-space:nowrap;">' + pctDisplay + '</td>'
                                  + daysCell
-                                 + '<td style="padding:8px 4px;">' + pathHtml + noteLine + '</td>'
+                                 + '<td style="padding:8px 4px 8px 16px;">' + pathHtml + noteLine + '</td>'
                                  + '</tr>';
                         }).join('') + '</tbody></table>';
                 }
