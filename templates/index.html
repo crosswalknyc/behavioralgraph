@@ -40151,6 +40151,10 @@
 
                             var yLabel = isShare ? 'Category Share %' : (metric === 'interactions' ? 'Interactions' : 'US Hours');
 
+                            var _sotTrendIsLight = document.body.getAttribute('data-theme') === 'light';
+                            var _sotTrendText = _sotTrendIsLight ? '#374151' : '#e8e8e8';
+                            var _sotTrendTick = _sotTrendIsLight ? '#374151' : '#aaa';
+                            var _sotTrendGrid = _sotTrendIsLight ? 'rgba(0,0,0,0.08)' : 'rgba(255,255,255,0.06)';
                             _sotTrendChart = new Chart(canvas.getContext('2d'), {
                                 type: 'line', plugins: [ChartDataLabels],
                                 data: { labels: forecastLabels, datasets: allDS },
@@ -40159,9 +40163,9 @@
                                     interaction: { mode: 'index', intersect: false },
                                     scales: {
                                         y: {
-                                            title: { display: true, text: yLabel, color: '#aaa', font: { size: 11 } },
-                                            grid: { color: 'rgba(255,255,255,0.06)' },
-                                            ticks: { color: '#aaa', callback: function(v) {
+                                            title: { display: true, text: yLabel, color: _sotTrendTick, font: { size: 11 } },
+                                            grid: { color: _sotTrendGrid },
+                                            ticks: { color: _sotTrendTick, callback: function(v) {
                                                 if (isShare) return v.toFixed(1) + '%';
                                                 if (v >= 1e9) return (v/1e9).toFixed(1)+'B';
                                                 if (v >= 1e6) return (v/1e6).toFixed(1)+'M';
@@ -40170,10 +40174,10 @@
                                             }},
                                             beginAtZero: isShare
                                         },
-                                        x: { grid: { color: 'rgba(255,255,255,0.04)' }, ticks: { color: '#e8e8e8', font: { size: 11, weight: '600' } } }
+                                        x: { grid: { color: _sotTrendIsLight ? 'rgba(0,0,0,0.04)' : 'rgba(255,255,255,0.04)' }, ticks: { color: _sotTrendText, font: { size: 11, weight: '600' } } }
                                     },
                                     plugins: {
-                                        legend: { position: 'top', labels: { color: '#e8e8e8', font: { size: 11 }, padding: 14, usePointStyle: true,
+                                        legend: { position: 'top', labels: { color: _sotTrendText, font: { size: 11 }, padding: 14, usePointStyle: true,
                                             filter: function(item) { return item.text.indexOf('(forecast)')===-1 && item.text.indexOf('(high)')===-1 && item.text.indexOf('(low)')===-1; }
                                         }},
                                         tooltip: {
@@ -40626,9 +40630,9 @@
                         maintainAspectRatio: false,
                         scales: {
                             y: {
-                                title: { display: true, text: '% Share', color: '#aaa', font: { size: 11 } },
-                                grid: { color: 'rgba(255,255,255,0.06)' },
-                                ticks: { color: '#aaa', callback: function(v) { return v + '%'; } },
+                                title: { display: true, text: '% Share', color: _sotCmpTickColor, font: { size: 11 } },
+                                grid: { color: _sotCmpGridColor },
+                                ticks: { color: _sotCmpTickColor, callback: function(v) { return v + '%'; } },
                                 beginAtZero: true
                             },
                             ySpread: {
@@ -40640,13 +40644,13 @@
                             },
                             x: {
                                 grid: { display: false },
-                                ticks: { color: '#e8e8e8', font: { size: 11, weight: '600' } }
+                                ticks: { color: _sotCmpTextColor, font: { size: 11, weight: '600' } }
                             }
                         },
                         plugins: {
                             legend: {
                                 position: 'top',
-                                labels: { color: '#e8e8e8', font: { size: 11 }, padding: 16, usePointStyle: true }
+                                labels: { color: _sotCmpTextColor, font: { size: 11 }, padding: 16, usePointStyle: true }
                             },
                             tooltip: {
                                 callbacks: {
@@ -41273,9 +41277,13 @@
 
             var mainCanvas = document.getElementById('sotCmpMain');
             if (mainCanvas && typeof Chart !== 'undefined') {
+                var _sotMainIsLight = document.body.getAttribute('data-theme') === 'light';
+                var _sotMainText = _sotMainIsLight ? '#374151' : '#e8e8e8';
+                var _sotMainTick = _sotMainIsLight ? '#374151' : '#aaa';
+                var _sotMainGrid = _sotMainIsLight ? 'rgba(0,0,0,0.08)' : 'rgba(255,255,255,0.06)';
                 var mainDS = [];
                 tabs.forEach(function(t, i) { var lbl=_sotTabLabel(t.data); var cats=t.data.categories||[]; var vals=catNames.map(function(cn){var f=cats.find(function(c){return c.name===cn;});return f?(f[shareKey]||0):0;}); mainDS.push({label:lbl,data:vals,backgroundColor:'hsla('+_sotTabHue(i)+',70%,60%,0.75)',borderWidth:0,borderRadius:4,barPercentage:0.9}); });
-                _sotCompareCharts.push(new Chart(mainCanvas.getContext('2d'),{type:'bar',plugins:[ChartDataLabels],data:{labels:catNames,datasets:mainDS},options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,scales:{x:{grid:{color:'rgba(255,255,255,0.06)'},ticks:{color:'#aaa',callback:function(v){return v+'%';}}},y:{grid:{display:false},ticks:{color:'#e8e8e8',font:{size:12,weight:'600'}}}},plugins:{legend:{position:'top',labels:{color:'#e8e8e8',font:{size:11},padding:16,usePointStyle:true}},tooltip:{callbacks:{label:function(ctx){return ctx.dataset.label+': '+ctx.parsed.x.toFixed(1)+'%';}}},datalabels:{anchor:'end',align:'end',offset:4,color:'#fff',font:{weight:'700',size:11},formatter:function(v){return v>=0.5?v.toFixed(1)+'%':'';}}}}}));
+                _sotCompareCharts.push(new Chart(mainCanvas.getContext('2d'),{type:'bar',plugins:[ChartDataLabels],data:{labels:catNames,datasets:mainDS},options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,scales:{x:{grid:{color:_sotMainGrid},ticks:{color:_sotMainTick,callback:function(v){return v+'%';}}},y:{grid:{display:false},ticks:{color:_sotMainText,font:{size:12,weight:'600'}}}},plugins:{legend:{position:'top',labels:{color:_sotMainText,font:{size:11},padding:16,usePointStyle:true}},tooltip:{callbacks:{label:function(ctx){return ctx.dataset.label+': '+ctx.parsed.x.toFixed(1)+'%';}}},datalabels:{anchor:'end',align:'end',offset:4,color:_sotMainIsLight?'#374151':'#fff',font:{weight:'700',size:11},formatter:function(v){return v>=0.5?v.toFixed(1)+'%':'';}}}}}));
             }
             catNames.forEach(function(catName) {
                 var cid='sotCmpCat_'+catName.replace(/[^a-zA-Z]/g,''); var cv=document.getElementById(cid); if (!cv||typeof Chart==='undefined') return;
