@@ -17678,7 +17678,8 @@
                             <div id="bpiqNetLiftCard" style="display: none; flex: 0 0 16%; background: linear-gradient(135deg, rgba(200,230,0,0.06), rgba(6,182,212,0.06)); border: 1px solid var(--border-color); border-radius: 14px; padding: 1rem; align-self: center; margin: -25% 0;">
                                 <div style="background: var(--bg-card); border: 1.5px solid #c8e600; border-radius: 12px; padding: 2rem 0.8rem; text-align: center; display: flex; flex-direction: column; align-items: center; justify-content: center;">
                                     <div style="font-size: 1.2rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.25rem; font-weight: 400;">Brand Lift</div>
-                                    <div id="bpiqNetLiftValue" style="font-size: 1.25rem; font-weight: 800; color: #c8e600; margin-bottom: 0.75rem;"></div>
+                                    <div id="bpiqNetLiftValue" style="font-size: 1.25rem; font-weight: 800; color: #c8e600; margin-bottom: 0.25rem;"></div>
+                                    <div id="bpiqNetLiftPp" style="font-size: 0.95rem; font-weight: 700; color: #c8e600; opacity: 0.85; margin-bottom: 0.75rem;"></div>
                                     <div style="font-size: 0.55rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em; line-height: 1.6;">
                                         <div>Target</div>
                                         <div style="color: #c8e600; font-weight: 700;">vs.</div>
@@ -29965,10 +29966,25 @@
             // and the matching penetration % directly underneath, on its
             // own line. Mirrors the visual rhythm of the CONSUMERS card
             // (single primary value) — two readable, evenly-weighted
-            // numbers instead of a pipe-separated pair.
-            var _bpiqStackedKpi = function(countHtml, pctHtml) {
-                return '<div>' + countHtml + '</div>'
-                     + '<div style="font-size:0.95rem;font-weight:600;opacity:0.85;margin-top:0.15rem;">' + pctHtml + '</div>';
+            // numbers instead of a pipe-separated pair. Optional third
+            // line for percentage-point delta (e.g. "+4.71 pp").
+            var _bpiqStackedKpi = function(countHtml, pctHtml, ppHtml) {
+                var out = '<div>' + countHtml + '</div>'
+                        + '<div style="font-size:0.95rem;font-weight:600;opacity:0.85;margin-top:0.15rem;">' + pctHtml + '</div>';
+                if (ppHtml) {
+                    out += '<div style="font-size:0.78rem;font-weight:600;margin-top:0.15rem;">' + ppHtml + '</div>';
+                }
+                return out;
+            };
+            // Percentage-point delta formatter: green for +, red for −,
+            // em-dash for null/non-finite. Returns an inline HTML span so
+            // it slots cleanly into the third row of _bpiqStackedKpi.
+            var _bpiqFmtPp = function(deltaPct) {
+                if (deltaPct == null || !isFinite(deltaPct)) return '';
+                var sign  = deltaPct > 0 ? '+' : (deltaPct < 0 ? '−' : '');
+                var mag   = Math.abs(deltaPct);
+                var color = deltaPct > 0 ? '#c8e600' : (deltaPct < 0 ? '#ef4444' : 'var(--text-secondary)');
+                return '<span style="color:' + color + ';">' + sign + mag.toFixed(2) + ' pp</span>';
             };
             document.getElementById('bpiqKpiAudience').textContent = _bpiqFmtNum(data.projected_audience_size);
             var postProj = totals.post_users_projected || 0;
@@ -29980,7 +29996,8 @@
             document.getElementById('bpiqKpiPostUsers').innerHTML = _bpiqStackedKpi(_bpiqFmtNum(postProj), postPct.toFixed(2) + '%');
             document.getElementById('bpiqKpiLift').innerHTML = _bpiqStackedKpi(
                 '<span style="color:#c8e600">' + _bpiqFmtNum(liftUsers) + '</span>',
-                _bpiqFmtLift(totals.lift_pct_users)
+                _bpiqFmtLift(totals.lift_pct_users),
+                _bpiqFmtPp(postPct - prePct)
             );
 
             // Gen Pop mirror row
@@ -30002,7 +30019,8 @@
                 document.getElementById('bpiqKpiGenPopPostUsers').innerHTML = _bpiqStackedKpi(_bpiqFmtNum(gpPost), gpPostPct.toFixed(2) + '%');
                 document.getElementById('bpiqKpiGenPopLift').innerHTML = _bpiqStackedKpi(
                     '<span style="color:#c8e600">' + _bpiqFmtNum(gpLiftUsers) + '</span>',
-                    _bpiqFmtLift(cg.control_lift_pct_users)
+                    _bpiqFmtLift(cg.control_lift_pct_users),
+                    _bpiqFmtPp(gpPostPct - gpPrePct)
                 );
                 // Δ Target − Control strip — populated whenever the gen-pop
                 // mirror row is shown. Each cell sits directly under the
@@ -30029,7 +30047,7 @@
                         return (target - control) / Math.abs(control) * 100;
                     };
                     document.getElementById('bpiqKpiDeltaConsumers').innerHTML =
-                        _bpiqFmtDelta((data.projected_audience_size || 0) - gpSize, ',count');
+                        _bpiqFmtDelta((data.projected_audience_size || 0) - gpSize, ',count', '—');
                     document.getElementById('bpiqKpiDeltaPre').innerHTML =
                         _bpiqFmtDelta(_bpiqRelDelta(prePct, gpPrePct), '%');
                     document.getElementById('bpiqKpiDeltaPost').innerHTML =
@@ -30049,10 +30067,20 @@
                     netLiftCard.style.flexDirection = 'column';
                     netLiftCard.style.justifyContent = 'center';
                     document.getElementById('bpiqNetLiftValue').textContent = sign + netLift.toFixed(2);
+                    // Incremental engagement-rate lift in percentage points:
+                    // (target post − target pre) − (control post − control pre).
+                    // This is the cleanest single-number read of campaign-driven
+                    // lift — it's additive in real-world engagement-rate units,
+                    // unlike the relative-% delta above.
+                    var ppNet  = (postPct - prePct) - (gpPostPct - gpPrePct);
+                    var ppSign = ppNet >= 0 ? '+' : '−';
+                    document.getElementById('bpiqNetLiftPp').textContent = ppSign + Math.abs(ppNet).toFixed(2) + ' pp';
                 }
             } else {
                 if (deltaRow) deltaRow.style.display = 'none';
                 if (netLiftCard) netLiftCard.style.display = 'none';
+                var npp = document.getElementById('bpiqNetLiftPp');
+                if (npp) npp.textContent = '';
             }
 
             // Per-platform table — extracted into _bpiqRenderPerPlatformTable
