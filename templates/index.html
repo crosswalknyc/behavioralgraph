@@ -29682,7 +29682,7 @@
             };
             var thBase = 'padding:8px 10px;cursor:pointer;user-select:none;';
             var html = '<div style="font-size:11px;color:var(--text-secondary);margin-bottom:0.5rem;">'
-                + 'A user is counted on a platform when they had at least 1 visit to that platform\'s domain in the window. <strong>Pre %</strong> / <strong>Post %</strong> = share of that platform by consumers that ALSO had a brand touchpoint anywhere on the platform during the same window. <strong>Brand Lift</strong> = percentage change between Post % and Pre % — the actual lift in brand engagement on that platform. <strong>EMV</strong> values the post-campaign reach on each platform at a 2026 industry-benchmarked $/engaged-user rate. The "Direct (Brand Site)" row counts brand touchpoints that did not occur on a social platform (e.g. direct visits to the brand\'s own site or to the brand via a wholesale distributor).'
+                + 'A consumer is counted on a platform when they had at least 1 visit to that platform\'s domain in the window. <strong>Pre %</strong> / <strong>Post %</strong> = share of that platform by consumers that ALSO had a brand touchpoint anywhere on the platform during the same window. <strong>Brand Lift</strong> = percentage change between Post % and Pre % — the actual lift in brand engagement on that platform. <strong>EMV</strong> values the post-campaign reach on each platform at a 2026 industry-benchmarked $/engaged-consumer rate. The "Direct (Brand Site)" row counts brand touchpoints that did not occur on a social platform (e.g. direct visits to the brand\'s own site or to the brand via a wholesale distributor).'
                 + ' <span style="color:var(--text-secondary);font-style:italic;">Click any column header to sort. Click a CPM cell to edit the rate — every downstream value (EMV, Earned Media Value, Total Brand Value) recalculates instantly.</span>'
                 + '</div>'
                 + '<table style="width:100%;border-collapse:collapse;font-size:13px;">'
@@ -29708,7 +29708,7 @@
                         + 'class="bpiq-cpm-input" '
                         + 'value="' + (r.cpm || 0).toFixed(2) + '" '
                         + 'style="width:64px;background:rgba(255,255,255,0.04);border:1px solid var(--border-color);border-radius:6px;padding:2px 6px;color:inherit;font-size:13px;text-align:right;font-family:inherit;" '
-                        + 'title="Edit $/engaged-user — recalculates EMV instantly" />';
+                        + 'title="Edit $/engaged-consumer — recalculates EMV instantly" />';
                     return '<tr style="border-bottom:1px solid rgba(255,255,255,0.04);' + rowDim + '">'
                         + '<td style="padding:8px 10px;font-weight:600;">' + r.platform + '</td>'
                         + '<td style="padding:8px 10px;text-align:right;color:var(--text-secondary);">' + prePen + '</td>'
