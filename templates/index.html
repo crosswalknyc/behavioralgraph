@@ -34902,7 +34902,19 @@
                 if (!pA || !pB) return;
                 var cA = (props.find(function(p) { return p.key === e.a; }) || {}).color || '#5b6cff';
                 var cB = (props.find(function(p) { return p.key === e.b; }) || {}).color || '#5b6cff';
-                var w  = Math.max(4, Math.min(34, (e.overlap_pct || 0) * 0.9));
+                // Directional flow data: edges may carry a_to_b_pct +
+                // b_to_a_pct (newer payloads) instead of (or in addition
+                // to) the legacy symmetric overlap_pct. When directional
+                // data is present we draw two small arrowheads — one at
+                // each endpoint, pointing INTO that node — each with its
+                // own percentage badge. The ribbon's stroke-width then
+                // scales to the larger of the two directional flows so
+                // the overall edge weight still reads correctly.
+                var aToB = (e.a_to_b_pct != null && isFinite(e.a_to_b_pct)) ? +e.a_to_b_pct : null;
+                var bToA = (e.b_to_a_pct != null && isFinite(e.b_to_a_pct)) ? +e.b_to_a_pct : null;
+                var hasDirectional = (aToB != null && bToA != null);
+                var weightPct = hasDirectional ? Math.max(aToB, bToA) : (e.overlap_pct || 0);
+                var w  = Math.max(4, Math.min(34, weightPct * 0.9));
                 // Bend each ribbon perpendicular to its A→B axis so opposing
                 // edges (e.g. top↔bottom and left↔right in a diamond layout)
                 // don't pile their midpoints on the same center point — and
@@ -34943,13 +34955,70 @@
                 parts.push('<path d="M ' + x0 + ' ' + y0 + ' Q ' + ctrlX + ' ' + ctrlY + ' ' + x1 + ' ' + y1
                          + '" fill="none" stroke="url(#' + gradId + ')" stroke-width="' + w
                          + '" stroke-linecap="round" opacity="0.55">'
-                         + '<title>' + _jiqEsc(e.label || (e.overlap_pct + '% overlap')) + '</title></path>');
-                // Centered % label on the ribbon
-                parts.push('<g>'
-                         + '<rect x="' + (ctrlX - 22) + '" y="' + (ctrlY - 11) + '" width="44" height="22" rx="11" fill="var(--bg-card)" stroke="' + cA + '" stroke-width="1.5"/>'
-                         + '<text x="' + ctrlX + '" y="' + (ctrlY + 4) + '" text-anchor="middle" fill="var(--text-primary)" font-weight="700" font-size="11">' + (e.overlap_pct || 0).toFixed(0) + '%</text>'
-                         + '<title>' + _jiqEsc(e.label || '') + '</title>'
-                         + '</g>');
+                         + '<title>' + _jiqEsc(e.label || (weightPct + '% overlap')) + '</title></path>');
+
+                if (hasDirectional) {
+                    // Tangent unit vectors INWARD (from each endpoint toward
+                    // the ribbon's control point). Used to size arrowheads
+                    // and place per-direction badges along the ribbon.
+                    var dxA = ctrlX - x0, dyA = ctrlY - y0;
+                    var lenA = Math.sqrt(dxA * dxA + dyA * dyA) || 1;
+                    var uxA = dxA / lenA, uyA = dyA / lenA;
+                    var dxB = ctrlX - x1, dyB = ctrlY - y1;
+                    var lenB = Math.sqrt(dxB * dxB + dyB * dyB) || 1;
+                    var uxB = dxB / lenB, uyB = dyB / lenB;
+
+                    // Filled-triangle arrowhead pointing INTO an endpoint
+                    // (tip at the bubble's surface, base further along the
+                    // ribbon toward the control point).
+                    var _arrow = function(tipX, tipY, ux, uy, color) {
+                        var L = 14, Wd = 9;
+                        var bX = tipX + ux * L, bY = tipY + uy * L;
+                        var p1x = bX + (-uy) * (Wd / 2), p1y = bY + ux * (Wd / 2);
+                        var p2x = bX -  (-uy) * (Wd / 2), p2y = bY -  ux * (Wd / 2);
+                        return '<polygon points="'
+                             + tipX + ',' + tipY + ' '
+                             + p1x  + ',' + p1y  + ' '
+                             + p2x  + ',' + p2y  + '" fill="' + color + '" opacity="0.95"/>';
+                    };
+                    // Each badge sits along the ribbon tangent, just past the
+                    // arrow base. tipColor matches the destination bubble's
+                    // brand color so the eye reads "flow → that color".
+                    var _badge = function(cxLabel, cyLabel, pct, ringColor) {
+                        var txt = (Math.round(pct * 10) / 10).toString() + '%';
+                        var halfW = 22;
+                        return '<g>'
+                             + '<rect x="' + (cxLabel - halfW) + '" y="' + (cyLabel - 11)
+                             +   '" width="' + (halfW * 2) + '" height="22" rx="11"'
+                             +   ' fill="var(--bg-card)" stroke="' + ringColor + '" stroke-width="1.5"/>'
+                             + '<text x="' + cxLabel + '" y="' + (cyLabel + 4)
+                             +   '" text-anchor="middle" fill="var(--text-primary)"'
+                             +   ' font-weight="700" font-size="11">' + txt + '</text>'
+                             + '</g>';
+                    };
+                    // Arrow → A means flow B→A (uses cA color, reads pct b_to_a_pct).
+                    parts.push(_arrow(x0, y0, uxA, uyA, cA));
+                    parts.push(_arrow(x1, y1, uxB, uyB, cB));
+                    // Place each badge ~30px past the arrow base toward the
+                    // control point. That keeps the two badges visually
+                    // separated from each other and from the bubbles.
+                    var labelOff = 38;
+                    parts.push('<g>'
+                             + _badge(x0 + uxA * labelOff, y0 + uyA * labelOff, bToA, cA)
+                             + '<title>' + _jiqEsc(bToA.toFixed(1) + '% of ' + e.b + ' visitors → ' + e.a) + '</title>'
+                             + '</g>');
+                    parts.push('<g>'
+                             + _badge(x1 + uxB * labelOff, y1 + uyB * labelOff, aToB, cB)
+                             + '<title>' + _jiqEsc(aToB.toFixed(1) + '% of ' + e.a + ' visitors → ' + e.b) + '</title>'
+                             + '</g>');
+                } else {
+                    // Legacy single centered % badge (symmetric overlap)
+                    parts.push('<g>'
+                             + '<rect x="' + (ctrlX - 22) + '" y="' + (ctrlY - 11) + '" width="44" height="22" rx="11" fill="var(--bg-card)" stroke="' + cA + '" stroke-width="1.5"/>'
+                             + '<text x="' + ctrlX + '" y="' + (ctrlY + 4) + '" text-anchor="middle" fill="var(--text-primary)" font-weight="700" font-size="11">' + (e.overlap_pct || 0).toFixed(0) + '%</text>'
+                             + '<title>' + _jiqEsc(e.label || '') + '</title>'
+                             + '</g>');
+                }
             });
 
             // Property bubbles
@@ -34976,7 +35045,7 @@
                  + '<svg width="' + W + '" height="' + H + '" viewBox="0 0 ' + W + ' ' + H + '" style="display:block;max-width:100%;height:auto;">'
                  + parts.join('')
                  + '</svg>'
-                 + '<div style="font-size:0.68rem;color:var(--text-secondary);margin-top:4px;text-align:center;max-width:' + W + 'px;">Ribbon thickness = co-visitation overlap · MAU = monthly active US uniques · hover any node or ribbon for details</div>'
+                 + '<div style="font-size:0.68rem;color:var(--text-secondary);margin-top:4px;text-align:center;max-width:' + W + 'px;">Arrows = direction of audience flow · % near each arrow = share of source visitors who also visit destination · ribbon thickness ∝ larger of the two flows · MAU = monthly active US uniques</div>'
                  + '</div>';
         }
 
