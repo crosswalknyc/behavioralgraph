@@ -39539,7 +39539,7 @@
                     plugins: {
                         legend: { display: false },
                         tooltip: { callbacks: { label: function(c) { var b = brands[c.dataIndex]; var ph = (b.projected_hours||0); var phl = ph >= 1000000 ? (ph/1e6).toFixed(1)+'M' : ph.toLocaleString(); var eu = (b.estimated_users || 0); var eul = eu >= 1000000 ? (eu/1e6).toFixed(1)+'M' : eu.toLocaleString(); return c.parsed.x.toFixed(1) + '% of ' + cat.name + ' (' + phl + ' US proj. hrs; ~' + eul + ' users)'; } } },
-                        datalabels: { anchor: 'end', align: 'end', offset: 4, color: _sotDrillLight ? '#374151' : '#fff', font: { weight: '700', size: 11 }, formatter: function(v) { return v >= 0.5 ? v.toFixed(1) + '%' : ''; } }
+                        datalabels: { anchor: 'end', align: 'end', offset: 4, color: _sotDrillLight ? '#374151' : '#fff', font: { weight: '700', size: 10 }, formatter: function(v) { return v >= 0.5 ? v.toFixed(1) + '%' : ''; } }
                     }
                 }
             });
@@ -41733,7 +41733,7 @@
                         plugins: {
                             legend: { position: 'top', labels: { color: _sotBdText, font: { size: 10 }, padding: 12, usePointStyle: true } },
                             tooltip: { callbacks: { label: function(ctx) { return ctx.dataset.label + ': ' + ctx.parsed.x.toFixed(1) + '% of ' + catName; } } },
-                            datalabels: { anchor: 'end', align: 'end', offset: 4, color: _sotBdIsLight ? '#374151' : '#fff', font: { weight: '600', size: 10 }, formatter: function(v) { return v >= 0.5 ? v.toFixed(1) + '%' : ''; } }
+                            datalabels: { anchor: 'end', align: 'end', offset: 4, color: _sotBdIsLight ? '#374151' : '#fff', font: { weight: '600', size: 9 }, formatter: function(v) { return v >= 0.5 ? v.toFixed(1) + '%' : ''; } }
                         }
                     }
                 }));
@@ -41919,7 +41919,7 @@
                 var ab={},tcs=[]; tabs.forEach(function(t){var cat=(t.data.categories||[]).find(function(c){return c.name===catName;});var cs=cat?(cat[shareKey]||0):0;tcs.push(cs);if(cat&&cat.brands&&cs>=0.5)cat.brands.forEach(function(b){if(!ab[b.name])ab[b.name]=0;ab[b.name]=Math.max(ab[b.name],b.category_share_pct||0);});});
                 var bn=Object.keys(ab).sort(function(a,b){return ab[b]-ab[a];}).slice(0,20); if(!bn.length) return;
                 var ds=[]; tabs.forEach(function(t,i){var lbl=_sotTabLabel(t.data);var neg=tcs[i]<0.5;var cat=(t.data.categories||[]).find(function(c){return c.name===catName;});var bm={};if(cat&&cat.brands&&!neg)cat.brands.forEach(function(b){bm[b.name]=b;});ds.push({label:lbl,data:bn.map(function(n){var b=bm[n];return b?(b.category_share_pct||0):0;}),backgroundColor:'hsla('+_sotTabHue(i)+',70%,60%,0.75)',borderWidth:0,borderRadius:3,barPercentage:0.55,categoryPercentage:0.6});});
-                _sotCompareCharts.push(new Chart(cv.getContext('2d'),{type:'bar',plugins:[ChartDataLabels],data:{labels:bn,datasets:ds},options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,scales:{x:{grid:{color:_sotMainGrid},ticks:{color:_sotMainTick,callback:function(v){return v+'%';}}},y:{grid:{display:false},ticks:{color:_sotMainText,font:{size:11}}}},plugins:{legend:{position:'top',labels:{color:_sotMainText,font:{size:10},padding:12,usePointStyle:true}},tooltip:{callbacks:{label:function(ctx){return ctx.dataset.label+': '+ctx.parsed.x.toFixed(1)+'% of '+catName;}}},datalabels:{anchor:'end',align:'end',offset:4,color:_sotMainIsLight?'#374151':'#fff',font:{weight:'600',size:10},formatter:function(v){return v>=0.5?v.toFixed(1)+'%':'';}}}}})
+                _sotCompareCharts.push(new Chart(cv.getContext('2d'),{type:'bar',plugins:[ChartDataLabels],data:{labels:bn,datasets:ds},options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,scales:{x:{grid:{color:_sotMainGrid},ticks:{color:_sotMainTick,callback:function(v){return v+'%';}}},y:{grid:{display:false},ticks:{color:_sotMainText,font:{size:11}}}},plugins:{legend:{position:'top',labels:{color:_sotMainText,font:{size:10},padding:12,usePointStyle:true}},tooltip:{callbacks:{label:function(ctx){return ctx.dataset.label+': '+ctx.parsed.x.toFixed(1)+'% of '+catName;}}},datalabels:{anchor:'end',align:'end',offset:4,color:_sotMainIsLight?'#374151':'#fff',font:{weight:'600',size:9},formatter:function(v){return v>=0.5?v.toFixed(1)+'%':'';}}}}})
                 );
             });
         }
