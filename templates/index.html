@@ -34157,12 +34157,13 @@
                     && kpis.confirmed_digital_purchases != null
                     && Number(kpis.confirmed_digital_purchases) > 0);
                 if (targetType === 'website') {
+                    var _isFandango = (meta.target || '').toLowerCase().indexOf('fandango') >= 0;
                     k = [
-                        ['Visitors (US, in window)', _jiqFmt(kpis.total_users)],
+                        [_isFandango ? 'Unique Visitors (US, in window)' : 'Visitors (US, in window)', _jiqFmt(kpis.total_users)],
                         ['Transacted On Site',       _jiqFmt(kpis.converted_users)],
                         ['On-Site CR',               (kpis.conversion_pct != null ? kpis.conversion_pct + '%' : '—')],
                         ['Switched & Bought',        _jiqFmt(kpis.switched_users)],
-                        ['Total Captured (any seller)', (kpis.captured_pct != null ? kpis.captured_pct + '%' : '—')],
+                        [_isFandango ? 'Total Captured (Fandango + Other Sellers)' : 'Total Captured (any seller)', (kpis.captured_pct != null ? kpis.captured_pct + '%' : '—')],
                         ['Never Transacted',         (kpis.never_transacted_pct != null ? kpis.never_transacted_pct + '%' : '—')],
                     ];
                 } else if (targetType === 'tv_show' || kpis.tv_show_mode === true) {
