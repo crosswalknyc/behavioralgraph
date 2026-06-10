@@ -20864,7 +20864,7 @@
                 </div>
 
                 <!-- Cut-by dropdown + cluster switcher -->
-                <div style="display: flex; gap: 0.6rem; flex-wrap: wrap; margin-bottom: 1rem; padding-bottom: 0.6rem; border-bottom: 1px solid var(--border-color); align-items: center;">
+                <div id="jiqCutByRow" style="display: flex; gap: 0.6rem; flex-wrap: wrap; margin-bottom: 1rem; padding-bottom: 0.6rem; border-bottom: 1px solid var(--border-color); align-items: center;">
                     <div style="font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-secondary); font-weight: 600;">Cut by:</div>
                     <select id="jiqCutPicker" onchange="setJourneyIqCut(this.value)" style="padding: 5px 10px; border-radius: 6px; border: 1px solid var(--border-color); background: var(--bg-primary); color: var(--text-primary); font-size: 13px; min-width: 200px;">
                         <option value="inception">Inception channel</option>
@@ -36124,6 +36124,8 @@
                 _setText('jiqTouchDistSub', 'How many touches did each cohort receive?');
                 _setText('jiqInterstepTitle', '🪜 Discovery Steps Before Visiting Fandango');
                 _setText('jiqInterstepSubtitle', 'Off-app validation steps accounts took before visiting Fandango.');
+                var _cutByRow = document.getElementById('jiqCutByRow');
+                if (_cutByRow) _cutByRow.style.display = 'none';
             }
 
             // Meta line: target + vertical + visitors estimate
