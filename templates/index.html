@@ -39106,11 +39106,12 @@
 
             // Touchpoints table
             if (tableEl) {
+                var _tpIsFandango = ((meta.target || '').toLowerCase().indexOf('fandango') >= 0);
                 var head = '<table style="width:100%; border-collapse: collapse; font-size: 12.5px; min-width: 560px;">'
                     + '<thead><tr style="text-align:left;border-bottom:1px solid var(--border-color);">'
                     + '<th style="padding:6px 6px;">Touchpoint</th>'
                     + '<th style="padding:6px 6px;text-align:right;">Conv-when-Seen</th>'
-                    + '<th style="padding:6px 6px;text-align:right;">Conv-when-Not</th>'
+                    + (_tpIsFandango ? '' : '<th style="padding:6px 6px;text-align:right;">Conv-when-Not</th>')
                     + '<th style="padding:6px 6px;text-align:right;">Avg Days to Conv</th>'
                     + '<th style="padding:6px 6px;text-align:right;">Touches / User</th>'
                     + '</tr></thead><tbody>';
@@ -39118,7 +39119,7 @@
                     return '<tr style="border-bottom:1px solid var(--border-color);">'
                          + '<td style="padding:6px 6px;font-weight:600;">' + _jiqEsc(r.label) + '</td>'
                          + '<td style="padding:6px 6px;text-align:right;">' + (r.conv_rate_when_reached != null ? r.conv_rate_when_reached + '%' : '—') + '</td>'
-                         + '<td style="padding:6px 6px;text-align:right;color:var(--text-secondary);">' + (r.conv_rate_when_not != null ? r.conv_rate_when_not + '%' : '—') + '</td>'
+                         + (_tpIsFandango ? '' : '<td style="padding:6px 6px;text-align:right;color:var(--text-secondary);">' + (r.conv_rate_when_not != null ? r.conv_rate_when_not + '%' : '—') + '</td>')
                          + '<td style="padding:6px 6px;text-align:right;">' + (r.avg_days_to_conversion != null ? r.avg_days_to_conversion : '—') + '</td>'
                          + '<td style="padding:6px 6px;text-align:right;color:var(--text-secondary);">' + (r.avg_touches_per_user != null ? r.avg_touches_per_user : '—') + '</td>'
                          + '</tr>';
@@ -39147,18 +39148,19 @@
 
             // Touch-count distribution
             if (tdEl) {
+                var _tdIsFandango = ((meta.target || '').toLowerCase().indexOf('fandango') >= 0);
                 tdEl.innerHTML = '<table style="width:100%; border-collapse: collapse; font-size: 12.5px;">'
                     + '<thead><tr style="text-align:left;border-bottom:1px solid var(--border-color);">'
                     + '<th style="padding:5px 4px;">Touches</th>'
                     + '<th style="padding:5px 4px;text-align:right;">Converters</th>'
-                    + '<th style="padding:5px 4px;text-align:right;">Non-Conv</th>'
+                    + (_tdIsFandango ? '' : '<th style="padding:5px 4px;text-align:right;">Non-Conv</th>')
                     + '<th style="padding:5px 4px;text-align:right;">Conv %</th>'
                     + '</tr></thead><tbody>'
                     + (tp.touch_distribution || []).map(function(b) {
                         return '<tr style="border-bottom:1px solid var(--border-color);">'
                              + '<td style="padding:5px 4px;font-weight:600;">' + _jiqEsc(b.bucket) + '</td>'
                              + '<td style="padding:5px 4px;text-align:right;">' + _jiqFmt(b.converters) + '</td>'
-                             + '<td style="padding:5px 4px;text-align:right;color:var(--text-secondary);">' + _jiqFmt(b.non_converters) + '</td>'
+                             + (_tdIsFandango ? '' : '<td style="padding:5px 4px;text-align:right;color:var(--text-secondary);">' + _jiqFmt(b.non_converters) + '</td>')
                              + '<td style="padding:5px 4px;text-align:right;font-weight:600;">' + (b.conv_pct != null ? b.conv_pct + '%' : '—') + '</td>'
                              + '</tr>';
                     }).join('') + '</tbody></table>';
