@@ -34593,12 +34593,19 @@
             );
 
             // ---- Path to Purchase panel (BSFS-style ribbon) ----
-            // Hidden for Fandango profile per product request
+            // For Fandango: hide only the stacked bar ribbon, keep pill journeys
             if ((meta.target || '').toLowerCase().indexOf('fandango') < 0) {
                 renderJourneyIqPathToPurchase(d.path_to_purchase);
             } else {
-                var _ptpPanel = document.getElementById('jiqPathCard');
-                if (_ptpPanel) _ptpPanel.style.display = 'none';
+                renderJourneyIqPathToPurchase(d.path_to_purchase);
+                var _ptpRibbon = document.getElementById('jiqPathRibbon');
+                if (_ptpRibbon) _ptpRibbon.style.display = 'none';
+                var _ptpTitle = document.getElementById('jiqPathTitle');
+                if (_ptpTitle) _ptpTitle.style.display = 'none';
+                var _ptpMeta = document.getElementById('jiqPathMeta');
+                if (_ptpMeta) _ptpMeta.style.display = 'none';
+                var _ptpSub = document.getElementById('jiqPathSubtitle');
+                if (_ptpSub) _ptpSub.style.display = 'none';
             }
 
             // ---- Touchpoints panel ----
