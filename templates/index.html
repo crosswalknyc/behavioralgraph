@@ -29681,6 +29681,7 @@
                 return;
             }
             var look = _bpiqEmvLookup();
+            var benchByPlat = (_bpiqState.benchmarks && _bpiqState.benchmarks.rateByPlatform) || {};
             // Project rows into a flat shape that's easy to sort.
             var rows = per.map(function(p) {
                 var rate = _bpiqState.rateByPlatform[p.platform];
@@ -29691,6 +29692,7 @@
                     post_pen:     p.post_pen_pct,
                     lift_rel_pct: _bpiqBrandLiftPctValue(p.pre_pen_pct, p.post_pen_pct),
                     cpm:          rate,
+                    bench_cpm:    benchByPlat[p.platform] || 0,
                     emv:          look.emv[p.platform] || 0,
                     _dim:         ((p.pre_users_on_platform || 0) + (p.post_users_on_platform || 0)) === 0
                 };
@@ -29723,6 +29725,7 @@
                 + '<th data-bpiq-sort="pre_pen"      style="' + thBase + 'text-align:right;">Pre %'                    + arrow('pre_pen')      + '</th>'
                 + '<th data-bpiq-sort="post_pen"     style="' + thBase + 'text-align:right;">Post %'                   + arrow('post_pen')     + '</th>'
                 + '<th data-bpiq-sort="lift_rel_pct" style="' + thBase + 'text-align:right;">Brand Lift'               + arrow('lift_rel_pct') + '</th>'
+                + '<th data-bpiq-sort="bench_cpm"    style="' + thBase + 'text-align:right;color:var(--text-secondary);" title="Industry-benchmarked CPM. Display only — does not enter any calculation.">Benchmark CPM' + arrow('bench_cpm') + '</th>'
                 + '<th data-bpiq-sort="cpm"          style="' + thBase + 'text-align:right;">CPM'                      + arrow('cpm')          + '</th>'
                 + '<th data-bpiq-sort="emv"          style="' + thBase + 'text-align:right;">Earned Media Value'       + arrow('emv')          + '</th>'
                 + '</tr></thead><tbody>'
@@ -29746,6 +29749,7 @@
                         + '<td style="padding:8px 10px;text-align:right;color:var(--text-secondary);">' + prePen + '</td>'
                         + '<td style="padding:8px 10px;text-align:right;color:var(--text-secondary);">' + postPen + '</td>'
                         + '<td style="padding:8px 10px;text-align:right;">' + _bpiqFmtBrandLiftPct(r.pre_pen, r.post_pen) + '</td>'
+                        + '<td style="padding:8px 10px;text-align:right;color:var(--text-secondary);font-style:italic;">$' + (r.bench_cpm || 0).toFixed(2) + '</td>'
                         + '<td style="padding:8px 10px;text-align:right;">' + cpmInput + '</td>'
                         + '<td style="padding:8px 10px;text-align:right;">' + emvCell + '</td>'
                         + '</tr>';
@@ -29942,6 +29946,24 @@
             ((data.valuation && data.valuation.emv_breakdown) || []).forEach(function(row) {
                 _bpiqState.rateByPlatform[row.platform] = row.emv_per_user_rate || 0;
             });
+            // Capture the *initial* benchmark rates BEFORE any user edit
+            // can mutate them. These are display-only (rendered in the
+            // "Benchmark" column / muted hint next to each editable
+            // input) and never enter any downstream calculation.
+            (function _bpiqCaptureBenchmarks() {
+                var vv = (data.valuation || {});
+                var rr = vv.rates || {};
+                var byPlat = {};
+                (vv.emv_breakdown || []).forEach(function(r) {
+                    byPlat[r.platform] = r.emv_per_user_rate || 0;
+                });
+                _bpiqState.benchmarks = {
+                    bev_per_user:        Number(rr.bev_per_user)        || 0,
+                    blv_per_incr_user:   Number(rr.blv_per_incr_user)   || 0,
+                    conv_value_per_user: Number(rr.conv_value_per_user) || 0,
+                    rateByPlatform:      byPlat
+                };
+            })();
             // Capture the *base* count each scalar rate multiplies into
             // (BEV = post-event engaged consumers; BLV = incremental
             // consumers; Conversion = post conversions). We back these
@@ -30387,6 +30409,15 @@
                      + 'style="width:60px;background:rgba(255,255,255,0.04);border:1px solid var(--border-color);border-radius:6px;padding:1px 5px;color:inherit;font-size:11px;text-align:right;font-family:inherit;" '
                      + 'title="' + (title || '') + '" />';
             }
+            // Muted "benchmark $X.XX" hint shown immediately before each
+            // editable rate. The benchmark itself is captured once at
+            // load time (_bpiqState.benchmarks) and never participates
+            // in any downstream calculation — it's purely a reference
+            // for the editor.
+            var _bm = _bpiqState.benchmarks || {};
+            function _bpiqBenchHint(val) {
+                return '<span style="color:var(--text-secondary);font-style:italic;opacity:0.75;" title="Industry-benchmark rate. Display only — does not enter any calculation.">benchmark $' + (Number(val) || 0).toFixed(2) + '</span>';
+            }
             if (!body) return;
             // Compute a concise subtitle for the EMV card that mirrors
             // BEV / BLV's style ("N users × $rate"). Rates vary by
@@ -30424,7 +30455,8 @@
                 +   '<div style="font-size:1.3rem;font-weight:700;color:#6366f1;">' + _bpiqFmtMoney(v.brand_engagement_value || 0) + '</div>'
                 +   '<div style="font-size:11px;color:var(--text-secondary);display:flex;align-items:center;gap:4px;flex-wrap:wrap;">'
                 +     _bpiqFmtNum(_bpiqState.valBases && _bpiqState.valBases.bev || 0)
-                +     ' post-event engaged consumers × $'
+                +     ' post-event engaged consumers × '
+                +     _bpiqBenchHint(_bm.bev_per_user) + ' → $'
                 +     _bpiqRateInput('bev', v.rates && v.rates.bev_per_user, 'Edit $/consumer — recalculates Brand Engagement Value & Total Brand Value')
                 +     '<span>/consumer</span>'
                 +   '</div>'
@@ -30434,7 +30466,8 @@
                 +   '<div style="font-size:1.3rem;font-weight:700;color:#f59e0b;">' + _bpiqFmtMoney(v.brand_lift_value || 0) + '</div>'
                 +   '<div style="font-size:11px;color:var(--text-secondary);display:flex;align-items:center;gap:4px;flex-wrap:wrap;">'
                 +     _bpiqFmtNum(v.incremental_users || (_bpiqState.valBases && _bpiqState.valBases.blv) || 0)
-                +     ' incremental consumers × $'
+                +     ' incremental consumers × '
+                +     _bpiqBenchHint(_bm.blv_per_incr_user) + ' → $'
                 +     _bpiqRateInput('blv', v.rates && v.rates.blv_per_incr_user, 'Edit $/incremental consumer — recalculates Brand Lift Value & Total Brand Value')
                 +     '<span>/incremental consumer</span>'
                 +   '</div>'
@@ -30445,7 +30478,8 @@
                         +   '<div style="font-size:1.3rem;font-weight:700;color:#ef4444;">' + _bpiqFmtMoney(v.conversion_value || 0) + '</div>'
                         +   '<div style="font-size:11px;color:var(--text-secondary);display:flex;align-items:center;gap:4px;flex-wrap:wrap;">'
                         +     _bpiqFmtNum(_bpiqState.valBases && _bpiqState.valBases.conv || 0)
-                        +     ' post conversions × $'
+                        +     ' post conversions × '
+                        +     _bpiqBenchHint(_bm.conv_value_per_user) + ' → $'
                         +     _bpiqRateInput('conv', v.rates && v.rates.conv_value_per_user, 'Edit $/conversion — recalculates Conversion Value & Total Brand Value')
                         +     '<span>/order</span>'
                         +   '</div>'
@@ -30465,11 +30499,13 @@
             });
             if (emv.length) {
                 emv.sort(function(a, b) { return (b.emv_value||0) - (a.emv_value||0); });
-                html += '<div style="font-size:12px;color:var(--text-secondary);margin:0.5rem 0 0.4rem;">Earned Media Value by platform — values only the <strong>incremental</strong> brand engagers (post − pre) attributable to each platform, so consumers appearing on multiple platforms aren\'t double-counted. <span style="font-style:italic;">Click any <strong>$/Consumer</strong> cell to edit; the per-platform CPM column above and Total Brand Value update in lock-step.</span></div>'
+                var _benchByPlat = (_bpiqState.benchmarks && _bpiqState.benchmarks.rateByPlatform) || {};
+                html += '<div style="font-size:12px;color:var(--text-secondary);margin:0.5rem 0 0.4rem;">Earned Media Value by platform — values only the <strong>incremental</strong> brand engagers (post − pre) attributable to each platform, so consumers appearing on multiple platforms aren\'t double-counted. <span style="font-style:italic;">Click any <strong>$/Consumer</strong> cell to edit; the per-platform CPM column above and Total Brand Value update in lock-step. The <strong>Benchmark</strong> column is reference-only and never enters any calculation.</span></div>'
                      +  '<table style="width:100%;border-collapse:collapse;font-size:13px;">'
                      +  '<thead><tr style="border-bottom:2px solid var(--border-color);">'
                      +  '<th style="padding:6px 10px;text-align:left;">Platform</th>'
                      +  '<th style="padding:6px 10px;text-align:right;">Incremental Consumers</th>'
+                     +  '<th style="padding:6px 10px;text-align:right;color:var(--text-secondary);" title="Industry-benchmarked $/Consumer. Display only — does not enter any calculation.">Benchmark $/Consumer</th>'
                      +  '<th style="padding:6px 10px;text-align:right;">$/Consumer</th>'
                      +  '<th style="padding:6px 10px;text-align:right;">EMV</th>'
                      +  '</tr></thead><tbody>'
@@ -30477,6 +30513,7 @@
                             var incr = r.incremental_users_projected;
                             if (incr == null) incr = (r.post_users_projected || 0) - (r.pre_users_projected || 0);
                             var safePlat = (r.platform || '').replace(/"/g, '&quot;');
+                            var benchRate = _benchByPlat[r.platform] || 0;
                             var rateInput = '<span style="color:var(--text-secondary);margin-right:2px;">$</span>'
                                 + '<input type="number" step="0.01" min="0" '
                                 + 'data-bpiq-emv-platform="' + safePlat + '" '
@@ -30487,6 +30524,7 @@
                             return '<tr style="border-bottom:1px solid rgba(255,255,255,0.04);">'
                                 +    '<td style="padding:6px 10px;font-weight:500;">' + r.platform + '</td>'
                                 +    '<td style="padding:6px 10px;text-align:right;">' + _bpiqFmtNum(incr) + '</td>'
+                                +    '<td style="padding:6px 10px;text-align:right;color:var(--text-secondary);font-style:italic;">$' + benchRate.toFixed(2) + '</td>'
                                 +    '<td style="padding:6px 10px;text-align:right;">' + rateInput + '</td>'
                                 +    '<td style="padding:6px 10px;text-align:right;color:#10b981;font-weight:600;">' + _bpiqFmtMoney(r.emv_value || 0) + '</td>'
                                 +  '</tr>';
