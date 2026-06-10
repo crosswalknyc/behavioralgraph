@@ -34737,9 +34737,9 @@
                 var _isLightFp = document.body.getAttribute('data-theme') === 'light';
                 btns.querySelectorAll('button').forEach(function(btn) {
                     var active = (btn.getAttribute('data-view') === v);
-                    btn.style.background = active ? 'var(--accent-primary)' : (_isLightFp ? '#f3f4f6' : 'var(--bg-secondary)');
+                    btn.style.background = active ? '#6366f1' : (_isLightFp ? '#f3f4f6' : 'var(--bg-secondary)');
                     btn.style.color      = active ? '#fff' : (_isLightFp ? '#374151' : 'var(--text-primary)');
-                    btn.style.borderColor = active ? 'var(--accent-primary)' : (_isLightFp ? 'rgba(0,0,0,0.15)' : 'var(--border-color)');
+                    btn.style.borderColor = active ? '#6366f1' : (_isLightFp ? 'rgba(0,0,0,0.15)' : 'var(--border-color)');
                 });
             }
         }
@@ -36338,9 +36338,9 @@
                 btnsEl.innerHTML = ['chart','list'].map(function(v) {
                     var lbl = v === 'chart' ? '📊 Chart' : '📋 List';
                     var active = (v === view);
-                    var bg = active ? 'var(--accent-primary)' : (_isLightCL ? '#f3f4f6' : 'var(--bg-secondary)');
+                    var bg = active ? '#6366f1' : (_isLightCL ? '#f3f4f6' : 'var(--bg-secondary)');
                     var col = active ? '#fff' : (_isLightCL ? '#374151' : 'var(--text-primary)');
-                    var bdr = active ? 'var(--accent-primary)' : (_isLightCL ? 'rgba(0,0,0,0.15)' : 'var(--border-color)');
+                    var bdr = active ? '#6366f1' : (_isLightCL ? 'rgba(0,0,0,0.15)' : 'var(--border-color)');
                     return '<button type="button" onclick="setJiqSiteFunnelView(\'' + cardKey + '\',\'' + v + '\')" '
                          + 'style="padding:3px 9px;border-radius:6px;border:1px solid ' + bdr + ';'
                          + 'background:' + bg + ';'
