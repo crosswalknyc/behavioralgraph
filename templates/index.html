@@ -17579,8 +17579,14 @@
                     </div>
                     <!-- Brand Partnership Valuation panels -->
                     <div id="bpiqDashboardPanels" style="display: none; overflow-y: auto; flex: 1; padding: 1.5rem;">
-                        <div style="display: flex; align-items: flex-start; gap: 1rem; margin-bottom: 1.5rem; flex-wrap: wrap; flex-shrink: 0;">
-                            <div>
+                        <div style="display: flex; align-items: stretch; gap: 1rem; margin-bottom: 1.5rem; flex-wrap: wrap; flex-shrink: 0;">
+                            <!-- Admin-uploaded thumbnail (set in the Content
+                                 Management page). Falls back to a 🤝 emoji
+                                 placeholder when no photo has been linked,
+                                 matching the Ticket Sales / Profile IQ
+                                 header pattern. -->
+                            <div id="bpiqProfileImage" class="dash-profile-image" style="min-width: 80px; width: 120px; min-height: 100px; height: auto; align-self: stretch; flex-shrink: 0; background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 2.5rem; overflow: hidden;"><span id="bpiqProfileImagePlaceholder">🤝</span></div>
+                            <div style="display: flex; flex-direction: column; justify-content: center;">
                                 <h2 id="bpiqDashTitle" style="margin: 0; font-size: 1.35rem;">Brand Partnership Valuation</h2>
                                 <div id="bpiqDashMeta" style="color: var(--text-secondary); font-size: 0.85rem; margin-top: 4px;"></div>
                             </div>
@@ -17599,47 +17605,61 @@
                         <div id="bpiqKpiAndLiftWrap" style="display: flex; gap: 1.5rem; margin-bottom: 1.5rem; align-items: stretch;">
                             <div style="flex: 1; display: flex; flex-direction: column; gap: 1.5rem;">
                                 <div style="background: linear-gradient(135deg, rgba(200,230,0,0.06), rgba(6,182,212,0.06)); border: 1px solid var(--border-color); border-radius: 14px; padding: 1.5rem 1.5rem 0.75rem;">
-                                    <div style="font-size: 0.95rem; font-weight: 800; color: #c8e600; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 1rem;">TICKET PURCHASERS</div>
+                                    <div style="font-size: 0.95rem; font-weight: 800; color: #c8e600; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 1rem;">TARGET</div>
                                     <div class="bpiq-kpi-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 1rem;">
                                         <div class="tab-section" style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 1.25rem; text-align: center;">
-                                            <div style="font-size: 0.7rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em;">Users</div>
+                                            <div style="font-size: 0.7rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em;">Consumers</div>
                                             <div id="bpiqKpiAudience" style="font-size: 1.5rem; font-weight: 700; color: #10b981;"></div>
                                         </div>
                                         <div class="tab-section" style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 1.25rem; text-align: center; display: flex; flex-direction: column; justify-content: center;">
-                                            <div style="font-size: 0.7rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em;">Pre-Event Brand Users</div>
+                                            <div style="font-size: 0.7rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em;">Pre-Campaign Consumer Engagement</div>
                                             <div id="bpiqKpiPreUsers" style="font-size: 1.1rem; font-weight: 700; color: var(--accent-cyan); white-space: nowrap;"></div>
                                         </div>
                                         <div class="tab-section" style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 1.25rem; text-align: center; display: flex; flex-direction: column; justify-content: center;">
-                                            <div style="font-size: 0.7rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em;">Post-Event Brand Users</div>
+                                            <div style="font-size: 0.7rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em;">Post-Campaign Consumer Engagement</div>
                                             <div id="bpiqKpiPostUsers" style="font-size: 1.1rem; font-weight: 700; color: var(--accent-orange); white-space: nowrap;"></div>
                                         </div>
                                         <div class="tab-section" style="background: var(--bg-card); border: 1.5px solid #c8e600; border-radius: 12px; padding: 1.25rem; text-align: center; display: flex; flex-direction: column; justify-content: center;">
-                                            <div style="font-size: 0.7rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em;">Brand Lift Users</div>
+                                            <div style="font-size: 0.7rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em;">Brand Engagement Lift</div>
                                             <div id="bpiqKpiLift" style="font-size: 1.1rem; font-weight: 700; white-space: nowrap;"></div>
                                         </div>
                                     </div>
                                 </div>
                                 <!-- Gen Pop / control-cohort mirror row -->
                                 <div id="bpiqGenPopKpiRow" style="display: none; background: linear-gradient(135deg, rgba(200,230,0,0.04), rgba(168,85,247,0.06)); border: 1px solid var(--border-color); border-radius: 14px; padding: 1.5rem 1.5rem 0.75rem;">
-                                    <div style="font-size: 0.95rem; font-weight: 800; color: #c8e600; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 1rem;">GEN POP CONTROL</div>
+                                    <div style="font-size: 0.95rem; font-weight: 800; color: #c8e600; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 1rem;">CONTROL</div>
                                     <div class="bpiq-kpi-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 1rem;">
                                         <div class="tab-section" style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 1.25rem; text-align: center;">
-                                            <div style="font-size: 0.7rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em;">Users</div>
+                                            <div style="font-size: 0.7rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em;">Consumers</div>
                                             <div id="bpiqKpiGenPopAudience" style="font-size: 1.5rem; font-weight: 700; color: #10b981;"></div>
                                             <div id="bpiqKpiGenPopAudienceProj" style="font-size: 0.7rem; color: var(--text-secondary);"></div>
                                         </div>
                                         <div class="tab-section" style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 1.25rem; text-align: center;">
-                                            <div style="font-size: 0.7rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em;">Pre-Event Brand Users<br>(Gen Pop)</div>
+                                            <div style="font-size: 0.7rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em;">Pre-Campaign Consumer Engagement<br>(Gen Pop)</div>
                                             <div id="bpiqKpiGenPopPreUsers" style="font-size: 1.1rem; font-weight: 700; color: var(--accent-cyan); opacity: 0.85; white-space: nowrap;"></div>
                                         </div>
                                         <div class="tab-section" style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 1.25rem; text-align: center;">
-                                            <div style="font-size: 0.7rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em;">Post-Event Brand Users<br>(Gen Pop)</div>
+                                            <div style="font-size: 0.7rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em;">Post-Campaign Consumer Engagement<br>(Gen Pop)</div>
                                             <div id="bpiqKpiGenPopPostUsers" style="font-size: 1.1rem; font-weight: 700; color: var(--accent-orange); opacity: 0.85; white-space: nowrap;"></div>
                                         </div>
                                         <div class="tab-section" style="background: var(--bg-card); border: 1.5px solid #c8e600; border-radius: 12px; padding: 1.25rem; text-align: center;">
-                                            <div style="font-size: 0.7rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em;">Brand Lift Users<br>(Gen Pop)</div>
+                                            <div style="font-size: 0.7rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em;">Brand Engagement Lift<br>(Gen Pop)</div>
                                             <div id="bpiqKpiGenPopLift" style="font-size: 1.1rem; font-weight: 700; white-space: nowrap;"></div>
                                         </div>
+                                    </div>
+                                </div>
+                                <!-- Target ↔ Control delta strip, anchored below
+                                     the CONTROL row. Inner grid columns align
+                                     with the four KPI columns above (same
+                                     minmax(150px, 1fr) + 1rem gap, matching
+                                     1.5rem horizontal padding). -->
+                                <div id="bpiqDeltaRow" style="display: none; background: linear-gradient(135deg, rgba(200,230,0,0.06), rgba(168,85,247,0.06)); border: 1px dashed rgba(200,230,0,0.45); border-radius: 12px; padding: 0.6rem 1.5rem;">
+                                    <div style="font-size: 0.62rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.12em; text-align: center; margin-bottom: 0.35rem; font-weight: 700;">Target to Control Delta</div>
+                                    <div class="bpiq-kpi-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 1rem;">
+                                        <div id="bpiqKpiDeltaConsumers" style="text-align: center; font-size: 0.95rem; font-weight: 700;">—</div>
+                                        <div id="bpiqKpiDeltaPre"       style="text-align: center; font-size: 0.95rem; font-weight: 700;">—</div>
+                                        <div id="bpiqKpiDeltaPost"      style="text-align: center; font-size: 0.95rem; font-weight: 700;">—</div>
+                                        <div id="bpiqKpiDeltaLift"      style="text-align: center; font-size: 0.95rem; font-weight: 700;">—</div>
                                     </div>
                                 </div>
                             </div>
@@ -17648,38 +17668,97 @@
                                     <div style="font-size: 1.2rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.25rem; font-weight: 400;">Brand Lift</div>
                                     <div id="bpiqNetLiftValue" style="font-size: 1.25rem; font-weight: 800; color: #c8e600; margin-bottom: 0.75rem;"></div>
                                     <div style="font-size: 0.55rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em; line-height: 1.6;">
-                                        <div>Ticket Purchasers</div>
+                                        <div>Target</div>
                                         <div style="color: #c8e600; font-weight: 700;">vs.</div>
-                                        <div>Gen Pop Control</div>
+                                        <div>Control</div>
                                     </div>
                                 </div>
                             </div>
                         </div>
-                        <div class="tab-section" style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 1.5rem; margin-bottom: 1.5rem;">
-                            <h3 style="margin: 0 0 0.75rem;">📱 Per-Platform Brand Engagement & Lift</h3>
+                        <!-- 📡 Earned Media Value — subsumes the legacy
+                             "Per-Platform Brand Engagement & Lift" card.
+                             The per-platform table IS the EMV math — every
+                             row contributes (Incremental Consumers × CPM)
+                             to the total displayed in the header. -->
+                        <div id="bpiqEmvCard" class="tab-section" style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 1.5rem; margin-bottom: 1.5rem; display: none;">
+                            <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:1rem; flex-wrap:wrap; margin-bottom:0.65rem;">
+                                <div style="flex:1; min-width:260px;">
+                                    <h3 style="margin: 0 0 0.2rem;">📡 Earned Media Value</h3>
+                                    <div style="font-size: 0.78rem; color: var(--text-secondary); line-height: 1.55;">
+                                        <strong>EMV = Σ<sub>platforms</sub> (Incremental Consumers × $/Consumer CPM)</strong> — each platform's post-campaign incremental brand engagement is valued at that platform's industry-standard CPM, then summed. Click any CPM cell in the table below to retune; the total on the right and Total Brand Value at the top recalculate instantly.
+                                    </div>
+                                </div>
+                                <div style="text-align:right; min-width:170px;">
+                                    <div style="font-size:0.65rem; color:var(--text-secondary); text-transform:uppercase; letter-spacing:0.05em;">Total Earned Media Value</div>
+                                    <div id="bpiqEmvTotal" style="font-size:1.8rem; font-weight:700; color:#10b981;">—</div>
+                                    <div id="bpiqEmvFormula" style="font-size:11px; color:var(--text-secondary);"></div>
+                                </div>
+                            </div>
                             <div id="bpiqPlatformTable" style="overflow-x: auto;"></div>
                         </div>
-                        <div id="bpiqConversionsSection" class="tab-section" style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 1.5rem; margin-bottom: 1.5rem;">
-                            <h3 style="margin: 0 0 0.75rem;">💳 Conversions (Order / Signup Confirmations)</h3>
-                            <div id="bpiqConversions"></div>
+
+                        <!-- 🤝 Brand Engagement Value -->
+                        <div id="bpiqBevCard" class="tab-section" style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 1.5rem; margin-bottom: 1.5rem; display: none;">
+                            <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:1rem; flex-wrap:wrap; margin-bottom:0.5rem;">
+                                <div style="flex:1; min-width:260px;">
+                                    <h3 style="margin: 0 0 0.2rem;">🤝 Brand Engagement Value</h3>
+                                    <div style="font-size: 0.78rem; color: var(--text-secondary); line-height: 1.55;">
+                                        Values every <strong>post-campaign engaged consumer</strong> at a flat $/consumer rate — capturing the value of brand mindshare itself, separate from the social-media amplification valued in EMV.
+                                    </div>
+                                </div>
+                                <div style="text-align:right; min-width:170px;">
+                                    <div style="font-size:0.65rem; color:var(--text-secondary); text-transform:uppercase; letter-spacing:0.05em;">Brand Engagement Value</div>
+                                    <div id="bpiqBevTotal" style="font-size:1.8rem; font-weight:700; color:#6366f1;">—</div>
+                                </div>
+                            </div>
+                            <div id="bpiqBevBody"></div>
                         </div>
-                        <div id="bpiqValuationSection" class="tab-section" style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 1.5rem; margin-bottom: 1.5rem; display: none;">
-                            <h3 style="margin: 0 0 0.5rem;">💰 Valuation Breakdown</h3>
-                            <div style="font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 0.75rem;" id="bpiqValuationNote"></div>
-                            <div id="bpiqValuation"></div>
+
+                        <!-- 📈 Brand Lift Value -->
+                        <div id="bpiqBlvCard" class="tab-section" style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 1.5rem; margin-bottom: 1.5rem; display: none;">
+                            <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:1rem; flex-wrap:wrap; margin-bottom:0.5rem;">
+                                <div style="flex:1; min-width:260px;">
+                                    <h3 style="margin: 0 0 0.2rem;">📈 Brand Lift Value</h3>
+                                    <div style="font-size: 0.78rem; color: var(--text-secondary); line-height: 1.55;">
+                                        Values only the <strong>incremental consumers</strong> (DiD lift over Gen Pop) at a higher rate than BEV — these are the partnership-attributable brand engagers who would not have engaged without the campaign.
+                                    </div>
+                                </div>
+                                <div style="text-align:right; min-width:170px;">
+                                    <div style="font-size:0.65rem; color:var(--text-secondary); text-transform:uppercase; letter-spacing:0.05em;">Brand Lift Value</div>
+                                    <div id="bpiqBlvTotal" style="font-size:1.8rem; font-weight:700; color:#f59e0b;">—</div>
+                                </div>
+                            </div>
+                            <div id="bpiqBlvBody"></div>
+                        </div>
+
+                        <!-- 💳 Conversion Value — absorbs the legacy
+                             "💳 Conversions" card so the value math
+                             ('Post Conversions × $/order') sits next to
+                             the inputs that drive it. Hidden when no
+                             conversion signal is detected. -->
+                        <div id="bpiqConvValCard" class="tab-section" style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 1.5rem; margin-bottom: 1.5rem; display: none;">
+                            <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:1rem; flex-wrap:wrap; margin-bottom:0.5rem;">
+                                <div style="flex:1; min-width:260px;">
+                                    <h3 style="margin: 0 0 0.2rem;">💳 Conversion Value</h3>
+                                    <div style="font-size: 0.78rem; color: var(--text-secondary); line-height: 1.55;">
+                                        Values every measured <strong>post-campaign order / sign-up confirmation</strong> at the brand's average order value (AOV).
+                                    </div>
+                                </div>
+                                <div style="text-align:right; min-width:170px;">
+                                    <div style="font-size:0.65rem; color:var(--text-secondary); text-transform:uppercase; letter-spacing:0.05em;">Conversion Value</div>
+                                    <div id="bpiqConvValTotal" style="font-size:1.8rem; font-weight:700; color:#ef4444;">—</div>
+                                </div>
+                            </div>
+                            <div id="bpiqConversions" style="margin-bottom:1rem;"></div>
+                            <div id="bpiqConvValBody"></div>
                         </div>
                         <div class="tab-section" style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 1.5rem; margin-bottom: 1.5rem;">
                             <h3 style="margin: 0 0 0.5rem;">👥 Demographics: Pre vs Post Brand Engagers</h3>
-                            <div style="font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 0.75rem;" id="bpiqDemoNote">Side-by-side breakdowns of users who had a brand touchpoint during the pre-event window vs the event + attribution window. Each demographic field rebases to 100% on rows with non-empty values.</div>
+                            <div style="font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 0.75rem;" id="bpiqDemoNote">Side-by-side breakdowns of consumers who had a brand touchpoint during the pre-event window vs the event + attribution window. Each demographic field rebases to 100% on rows with non-empty values.</div>
                             <div id="bpiqDemographics"></div>
                         </div>
-                        <div class="tab-section" style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 1.5rem; margin-bottom: 1.5rem;">
-                            <h3 style="margin: 0 0 0.5rem;">💬 Sentiment Around the Brand</h3>
-                            <div style="font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 0.75rem;" id="bpiqSentNote">Top brand-tagged URLs are classified as positive / neutral / negative via a fast keyword pass and refined by an LLM when available. Net sentiment score = (positive − negative) ÷ total, weighted by hits.</div>
-                            <div id="bpiqSentiment"></div>
-                        </div>
                         <div class="tab-section" style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 1.5rem;">
-                            <h3 style="margin: 0 0 0.75rem;">🔗 Top 10 Brand Properties</h3>
+                            <h3 style="margin: 0 0 0.75rem;">🔗 Most Engaged With Brand Touchpoints</h3>
                             <div id="bpiqTopProps"></div>
                         </div>
                     </div>
@@ -29470,12 +29549,95 @@
                         tree.innerHTML = '<div style="padding:1rem;color:var(--text-secondary);font-size:13px;">No released results yet.<br><br>Run one in <strong>Analysis IQ → Brand Partnership Valuation</strong>.</div>';
                         return;
                     }
-                    tree.innerHTML = files.map(function(f) {
-                        return '<div class="profile-tree-item" style="padding:10px 14px;cursor:pointer;border-bottom:1px solid var(--border-color);font-size:13px;" onclick="selectBpiqResult(\'' + f.key.replace(/'/g, "\\'") + '\')" title="' + f.last_modified + '">' + (f.name || f.key) + '</div>';
-                    }).join('');
+                    // Group by admin-managed category (Profile IQ-style tree).
+                    // Files with no category land under "Uncategorized".
+                    var byCat = {};
+                    files.forEach(function(f) {
+                        var cat = (f.category || 'Uncategorized').toString().trim() || 'Uncategorized';
+                        if (!byCat[cat]) byCat[cat] = [];
+                        byCat[cat].push(f);
+                    });
+                    var sortedCats = Object.keys(byCat).sort(function(a, b) {
+                        if (a === 'Uncategorized') return 1;
+                        if (b === 'Uncategorized') return -1;
+                        return a.localeCompare(b);
+                    });
+                    function esc(s) {
+                        return String(s == null ? '' : s)
+                            .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+                            .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+                    }
+                    var html = '';
+                    sortedCats.forEach(function(cat) {
+                        var rows = byCat[cat];
+                        // Skip the wrapping accordion when there's only a
+                        // single Uncategorized bucket — keeps the sidebar
+                        // visually flat for installs that haven't started
+                        // tagging runs yet.
+                        var showHeader = !(sortedCats.length === 1 && cat === 'Uncategorized');
+                        if (showHeader) {
+                            html += '<div class="bpiq-cat-header" onclick="toggleBpiqCategory(this)" style="display:flex;align-items:center;gap:6px;padding:8px 14px;cursor:pointer;background:rgba(255,255,255,0.03);border-bottom:1px solid var(--border-color);font-size:11px;font-weight:700;letter-spacing:0.05em;text-transform:uppercase;color:var(--text-secondary);user-select:none;">'
+                                + '<span class="bpiq-cat-arrow" style="display:inline-block;width:10px;transition:transform 0.15s;">▼</span>'
+                                + '<span>' + esc(cat) + '</span>'
+                                + '<span style="margin-left:auto;font-size:10px;opacity:0.6;font-weight:500;">' + rows.length + '</span>'
+                                + '</div>';
+                        }
+                        html += '<div class="bpiq-cat-body">';
+                        rows.forEach(function(f) {
+                            var img = (f.image_url || '').trim();
+                            var thumb = img
+                                ? '<img src="' + esc(img) + '" style="width:28px;height:28px;border-radius:50%;object-fit:cover;border:2px solid var(--accent-lime);flex-shrink:0;" />'
+                                : '<div style="width:28px;height:28px;border-radius:50%;background:var(--bg-input);border:2px solid var(--border-color);display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0;">🤝</div>';
+                            html += '<div class="profile-tree-item" data-bpiq-key="' + esc(f.key) + '" onclick="selectBpiqResult(\'' + String(f.key).replace(/\\/g, '\\\\').replace(/'/g, "\\'") + '\')" title="' + esc(f.last_modified || '') + '" style="display:flex;align-items:center;gap:10px;padding:10px 14px;cursor:pointer;border-bottom:1px solid var(--border-color);font-size:13px;">'
+                                + thumb
+                                + '<span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + esc(f.name || f.key) + '</span>'
+                                + '</div>';
+                        });
+                        html += '</div>';
+                    });
+                    tree.innerHTML = html;
                 }).catch(function() {
                     tree.innerHTML = '<div style="padding:1rem;color:var(--text-secondary);font-size:13px;">Failed to load results.</div>';
                 });
+        }
+
+        // Collapse / expand a BPIQ sidebar category section. Mirrors the
+        // simple toggle used by other dashboard trees — no animation, just
+        // toggling the immediately following body's display.
+        window.toggleBpiqCategory = function(headerEl) {
+            try {
+                var body = headerEl.nextElementSibling;
+                if (!body) return;
+                var arrow = headerEl.querySelector('.bpiq-cat-arrow');
+                var collapsed = body.style.display === 'none';
+                body.style.display = collapsed ? '' : 'none';
+                if (arrow) arrow.style.transform = collapsed ? '' : 'rotate(-90deg)';
+            } catch (e) { /* ignore */ }
+        };
+
+        // Render the admin-uploaded BPIQ thumbnail (or restore the 🤝
+        // placeholder when none is set). Mirrors renderTSTDashboard's
+        // image-swap logic so behavior matches Ticket Sales / Profile IQ.
+        function _bpiqRenderHeaderImage(imageUrl) {
+            var holder      = document.getElementById('bpiqProfileImage');
+            var placeholder = document.getElementById('bpiqProfileImagePlaceholder');
+            if (!holder) return;
+            var url = (imageUrl || '').trim();
+            if (url) {
+                if (placeholder) placeholder.style.display = 'none';
+                var img = holder.querySelector('img');
+                if (!img) {
+                    img = document.createElement('img');
+                    img.style.cssText = 'width:100%;height:100%;object-fit:cover;border-radius:8px;';
+                    holder.appendChild(img);
+                }
+                img.src = url;
+                img.style.display = 'block';
+            } else {
+                if (placeholder) { placeholder.style.display = ''; placeholder.textContent = '🤝'; }
+                var existing = holder.querySelector('img');
+                if (existing) existing.style.display = 'none';
+            }
         }
 
         window.selectBpiqResult = function(key) {
@@ -29486,6 +29648,7 @@
                 .then(function(r) { return r.json(); })
                 .then(function(resp) {
                     if (!resp.success || !resp.data) return;
+                    _bpiqRenderHeaderImage(resp.image_url);
                     renderBpiqDashboard(resp.data);
                 }).catch(function() {});
         };
@@ -29509,6 +29672,254 @@
             if (Math.abs(num) >= 1e6) return '$' + (num / 1e6).toFixed(2) + 'M';
             if (Math.abs(num) >= 1e4) return '$' + Math.round(num).toLocaleString();
             return '$' + num.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+        }
+
+        // Brand Lift = relative % change from Pre% to Post%. Replaces the
+        // old percentage-point delta formatter. Handles pre=0 specially:
+        // post>0 with pre=0 is "∞" (positive growth), post=0 with pre=0
+        // is "—".
+        function _bpiqFmtBrandLiftPct(prePct, postPct) {
+            if (prePct == null || postPct == null) return '<span style="color:var(--text-secondary);">—</span>';
+            if (prePct === 0) {
+                if (postPct === 0) return '<span style="color:var(--text-secondary);">—</span>';
+                var c = postPct > 0 ? '#10b981' : '#ef4444';
+                return '<span style="color:' + c + ';font-weight:600;">' + (postPct > 0 ? '+∞' : '-∞') + '</span>';
+            }
+            var d = ((postPct - prePct) / prePct) * 100;
+            if (!isFinite(d)) return '<span style="color:var(--text-secondary);">—</span>';
+            var color = d > 0 ? '#10b981' : (d < 0 ? '#ef4444' : 'var(--text-secondary)');
+            var sign  = d > 0 ? '+' : '';
+            return '<span style="color:' + color + ';font-weight:600;">' + sign + d.toFixed(1) + '%</span>';
+        }
+        // Numeric form of the same metric — used for sorting.
+        function _bpiqBrandLiftPctValue(prePct, postPct) {
+            if (prePct == null || postPct == null) return null;
+            if (prePct === 0) {
+                if (postPct === 0) return 0;
+                return postPct > 0 ? Infinity : -Infinity;
+            }
+            return ((postPct - prePct) / prePct) * 100;
+        }
+
+        // Percentage-points delta — the absolute subtraction (post − pre)
+        // displayed alongside every relative-% delta column. Two-decimal
+        // " pp" suffix matches industry convention; sign + color cues
+        // mirror _bpiqFmtBrandLiftPct so the two columns scan the same.
+        function _bpiqFmtPpDelta(prePct, postPct) {
+            if (prePct == null || postPct == null) return '<span style="color:var(--text-secondary);">—</span>';
+            var d = postPct - prePct;
+            if (!isFinite(d)) return '<span style="color:var(--text-secondary);">—</span>';
+            var sign  = d > 0 ? '+' : '';
+            var color = d > 0.05 ? '#10b981' : (d < -0.05 ? '#ef4444' : 'var(--text-secondary)');
+            return '<span style="color:' + color + ';font-weight:600;">' + sign + d.toFixed(2) + ' pp</span>';
+        }
+        function _bpiqPpDeltaValue(prePct, postPct) {
+            if (prePct == null || postPct == null) return null;
+            var d = postPct - prePct;
+            return isFinite(d) ? d : null;
+        }
+
+        // Live state for the per-platform table: holds the loaded data,
+        // editable per-platform $/engaged-user (CPM) overrides, and the
+        // current sort. Edits to CPM trigger _bpiqRecomputeAndRerender(),
+        // which refreshes the per-platform table, the Earned Media Value
+        // KPI, the Total Brand Value hero, and the Valuation Breakdown
+        // section in place.
+        var _bpiqState = {
+            data: null,
+            rateByPlatform: {},   // platform -> $/user override (numeric)
+            sortKey: 'emv',       // 'platform'|'pre_pen'|'post_pen'|'lift_rel_pct'|'cpm'|'emv'
+            sortDir: 'desc'       // 'asc' | 'desc'
+        };
+
+        // Build {platform -> {incr, emv_value}} from the live emv_breakdown
+        // (whose emv_per_user_rate / emv_value get mutated in place by the
+        // recompute function). Returns *current* values so the per-platform
+        // table reflects whatever the user typed last.
+        function _bpiqEmvLookup() {
+            var inc = {}, emv = {};
+            var v = (_bpiqState.data && _bpiqState.data.valuation) || {};
+            (v.emv_breakdown || []).forEach(function(r) {
+                var i = r.incremental_users_projected;
+                if (i == null) i = (r.post_users_projected || 0) - (r.pre_users_projected || 0);
+                inc[r.platform] = i;
+                emv[r.platform] = r.emv_value || 0;
+            });
+            return { incr: inc, emv: emv };
+        }
+
+        // Render the 📱 Per-Platform Brand Engagement & Lift table from
+        // _bpiqState. Called both on initial dashboard render and after
+        // any CPM edit / header-click sort.
+        function _bpiqRenderPerPlatformTable() {
+            var host = document.getElementById('bpiqPlatformTable');
+            if (!host || !_bpiqState.data) return;
+            var per = (_bpiqState.data.per_platform || []);
+            var hasAny = per.some(function(p) {
+                return (p.pre_users_on_platform || 0) + (p.post_users_on_platform || 0)
+                     + (p.pre_users || 0) + (p.post_users || 0) > 0;
+            });
+            if (!hasAny) {
+                host.innerHTML = '<div style="padding:1rem;color:var(--text-secondary);font-size:13px;">No per-platform brand engagement detected. Try a broader brand search term.</div>';
+                return;
+            }
+            var look = _bpiqEmvLookup();
+            var benchByPlat = (_bpiqState.benchmarks && _bpiqState.benchmarks.rateByPlatform) || {};
+            // Project rows into a flat shape that's easy to sort.
+            var rows = per.map(function(p) {
+                var rate = _bpiqState.rateByPlatform[p.platform];
+                if (rate == null) rate = 0;
+                return {
+                    platform:     p.platform,
+                    pre_pen:      p.pre_pen_pct,
+                    post_pen:     p.post_pen_pct,
+                    lift_rel_pct: _bpiqBrandLiftPctValue(p.pre_pen_pct, p.post_pen_pct),
+                    lift_pp:      _bpiqPpDeltaValue(p.pre_pen_pct, p.post_pen_pct),
+                    incr_users:   look.incr[p.platform] || 0,
+                    cpm:          rate,
+                    bench_cpm:    benchByPlat[p.platform] || 0,
+                    emv:          look.emv[p.platform] || 0,
+                    _dim:         ((p.pre_users_on_platform || 0) + (p.post_users_on_platform || 0)) === 0
+                };
+            });
+            var sk = _bpiqState.sortKey;
+            var dirMul = (_bpiqState.sortDir === 'asc') ? 1 : -1;
+            if (sk) {
+                rows.sort(function(a, b) {
+                    if (sk === 'platform') return (a.platform || '').localeCompare(b.platform || '') * dirMul;
+                    var av = a[sk], bv = b[sk];
+                    if (av == null) av = -Infinity;
+                    if (bv == null) bv = -Infinity;
+                    if (av === bv) return 0;
+                    return (av < bv ? -1 : 1) * dirMul;
+                });
+            }
+            var arrow = function(key) {
+                if (_bpiqState.sortKey !== key) return '<span style="opacity:0.3;font-size:10px;margin-left:4px;">⇅</span>';
+                var glyph = _bpiqState.sortDir === 'asc' ? '▲' : '▼';
+                return '<span style="font-size:10px;color:#c8e600;margin-left:4px;">' + glyph + '</span>';
+            };
+            var thBase = 'padding:8px 10px;cursor:pointer;user-select:none;';
+            var html = '<div style="font-size:11px;color:var(--text-secondary);margin-bottom:0.5rem;">'
+                + 'A consumer is counted on a platform when they had at least 1 visit to that platform\'s domain in the window. <strong>Pre %</strong> / <strong>Post %</strong> = share of that platform\'s consumers that ALSO had a brand touchpoint anywhere on the platform during the same window. <strong>Brand Lift</strong> = percentage change between Post % and Pre %. <strong>Incremental Consumers</strong> = the post-campaign incremental brand engagers attributable to that platform, projected to US gen pop. <strong>EMV</strong> = Incremental Consumers × CPM. The "Direct (Brand Site)" row counts brand touchpoints that did not occur on a social platform (e.g. direct visits to the brand\'s own site or via a wholesale distributor).'
+                + ' <span style="color:var(--text-secondary);font-style:italic;">Click any column header to sort. Click a CPM cell to edit the rate — every downstream value (per-row EMV, Total Earned Media Value, Total Brand Value) recalculates instantly.</span>'
+                + '</div>'
+                + '<table style="width:100%;border-collapse:collapse;font-size:13px;">'
+                + '<thead><tr style="border-bottom:2px solid var(--border-color);">'
+                + '<th data-bpiq-sort="platform"     style="' + thBase + 'text-align:left;">Platform'                                    + arrow('platform')     + '</th>'
+                + '<th data-bpiq-sort="pre_pen"      style="' + thBase + 'text-align:right;">Pre %'                                      + arrow('pre_pen')      + '</th>'
+                + '<th data-bpiq-sort="post_pen"     style="' + thBase + 'text-align:right;">Post %'                                     + arrow('post_pen')     + '</th>'
+                + '<th data-bpiq-sort="lift_rel_pct" style="' + thBase + 'text-align:right;">Brand Lift'                                 + arrow('lift_rel_pct') + '</th>'
+                + '<th data-bpiq-sort="lift_pp"      style="' + thBase + 'text-align:right;">Brand Lift (pp)'                            + arrow('lift_pp')      + '</th>'
+                + '<th data-bpiq-sort="incr_users"   style="' + thBase + 'text-align:right;" title="Post-campaign incremental brand engagers attributable to this platform (post − pre, projected to US gen pop).">Incremental Consumers' + arrow('incr_users')   + '</th>'
+                + '<th data-bpiq-sort="bench_cpm"    style="' + thBase + 'text-align:right;color:var(--text-secondary);" title="Industry-benchmarked CPM. Display only — does not enter any calculation.">Benchmark CPM' + arrow('bench_cpm') + '</th>'
+                + '<th data-bpiq-sort="cpm"          style="' + thBase + 'text-align:right;">CPM'                                        + arrow('cpm')          + '</th>'
+                + '<th data-bpiq-sort="emv"          style="' + thBase + 'text-align:right;" title="Incremental Consumers × CPM = EMV.">EMV (Incr × CPM)' + arrow('emv') + '</th>'
+                + '</tr></thead><tbody>'
+                + rows.map(function(r) {
+                    var rowDim = r._dim ? 'opacity:0.45;' : '';
+                    var prePen  = (r.pre_pen  == null) ? '—' : r.pre_pen.toFixed(1)  + '%';
+                    var postPen = (r.post_pen == null) ? '—' : r.post_pen.toFixed(1) + '%';
+                    var emvCell = r.emv > 0
+                        ? '<span style="color:#10b981;font-weight:600;">' + _bpiqFmtMoney(r.emv) + '</span>'
+                        : '<span style="color:var(--text-secondary);">—</span>';
+                    var safePlat = (r.platform || '').replace(/"/g, '&quot;');
+                    var cpmInput = '<span style="color:var(--text-secondary);margin-right:2px;">$</span>'
+                        + '<input type="number" step="0.01" min="0" '
+                        + 'data-bpiq-cpm-platform="' + safePlat + '" '
+                        + 'class="bpiq-cpm-input" '
+                        + 'value="' + (r.cpm || 0).toFixed(2) + '" '
+                        + 'style="width:64px;background:rgba(255,255,255,0.04);border:1px solid var(--border-color);border-radius:6px;padding:2px 6px;color:inherit;font-size:13px;text-align:right;font-family:inherit;" '
+                        + 'title="Edit $/engaged-consumer — recalculates EMV instantly" />';
+                    var incrCell = (r.incr_users > 0)
+                        ? _bpiqFmtNum(r.incr_users)
+                        : '<span style="color:var(--text-secondary);">' + (r.incr_users === 0 ? '0' : '—') + '</span>';
+                    return '<tr style="border-bottom:1px solid rgba(255,255,255,0.04);' + rowDim + '">'
+                        + '<td style="padding:8px 10px;font-weight:600;">' + r.platform + '</td>'
+                        + '<td style="padding:8px 10px;text-align:right;color:var(--text-secondary);">' + prePen + '</td>'
+                        + '<td style="padding:8px 10px;text-align:right;color:var(--text-secondary);">' + postPen + '</td>'
+                        + '<td style="padding:8px 10px;text-align:right;">' + _bpiqFmtBrandLiftPct(r.pre_pen, r.post_pen) + '</td>'
+                        + '<td style="padding:8px 10px;text-align:right;">' + _bpiqFmtPpDelta(r.pre_pen, r.post_pen) + '</td>'
+                        + '<td style="padding:8px 10px;text-align:right;">' + incrCell + '</td>'
+                        + '<td style="padding:8px 10px;text-align:right;color:var(--text-secondary);font-style:italic;">$' + (r.bench_cpm || 0).toFixed(2) + '</td>'
+                        + '<td style="padding:8px 10px;text-align:right;">' + cpmInput + '</td>'
+                        + '<td style="padding:8px 10px;text-align:right;">' + emvCell + '</td>'
+                        + '</tr>';
+                }).join('')
+                + '</tbody></table>';
+            host.innerHTML = html;
+            // Wire up: header-click sort.
+            host.querySelectorAll('th[data-bpiq-sort]').forEach(function(th) {
+                th.addEventListener('click', function() {
+                    var k = th.getAttribute('data-bpiq-sort');
+                    if (_bpiqState.sortKey === k) {
+                        _bpiqState.sortDir = (_bpiqState.sortDir === 'asc') ? 'desc' : 'asc';
+                    } else {
+                        _bpiqState.sortKey = k;
+                        // Sensible default direction per column type.
+                        _bpiqState.sortDir = (k === 'platform') ? 'asc' : 'desc';
+                    }
+                    _bpiqRenderPerPlatformTable();
+                });
+            });
+            // Wire up: CPM cell edits.
+            host.querySelectorAll('input.bpiq-cpm-input').forEach(function(inp) {
+                // Stop click on the input from triggering the parent <th>'s
+                // sort listener (the input lives in <td>, but defensive).
+                inp.addEventListener('click', function(e) { e.stopPropagation(); });
+                var commit = function() {
+                    var plat = inp.getAttribute('data-bpiq-cpm-platform');
+                    var v = parseFloat(inp.value);
+                    if (!isFinite(v) || v < 0) v = 0;
+                    _bpiqState.rateByPlatform[plat] = v;
+                    _bpiqRecomputeAndRerender();
+                };
+                inp.addEventListener('change', commit);
+                inp.addEventListener('blur',   commit);
+                inp.addEventListener('keydown', function(e) {
+                    if (e.key === 'Enter') { e.preventDefault(); inp.blur(); }
+                });
+            });
+        }
+
+        // Recompute every EMV-derived figure (per-row EMV, total Earned
+        // Media Value, Total Brand Value) from _bpiqState.rateByPlatform,
+        // mutating data.valuation in place, then re-render the affected
+        // surfaces: per-platform table, Valuation Breakdown section, and
+        // the 💰 Total Brand Value hero card.
+        function _bpiqRecomputeAndRerender() {
+            if (!_bpiqState.data) return;
+            var v = _bpiqState.data.valuation;
+            if (!v) { _bpiqRenderPerPlatformTable(); return; }
+            // Per-platform EMV — uses _bpiqState.rateByPlatform overrides
+            // (set both by the per-platform CPM column and by the
+            // editable $/Consumer column in the breakdown table below).
+            var newTotalEMV = 0;
+            (v.emv_breakdown || []).forEach(function(r) {
+                var incr = r.incremental_users_projected;
+                if (incr == null) incr = (r.post_users_projected || 0) - (r.pre_users_projected || 0);
+                var override = _bpiqState.rateByPlatform[r.platform];
+                var rate = (override != null) ? override : (r.emv_per_user_rate || 0);
+                r.emv_per_user_rate = rate;
+                r.emv_value = (incr > 0 ? incr : 0) * rate;
+                if (r.emv_value > 0) newTotalEMV += r.emv_value;
+            });
+            v.earned_media_value = Math.round(newTotalEMV * 100) / 100;
+            // Scalar valuation rates — recomputed off the stable base
+            // counts captured at initial render. Editing any of these
+            // cascades through to the hero card, the four component
+            // cards, and Total Brand Value.
+            var bases = _bpiqState.valBases || {};
+            var rates = v.rates || (v.rates = {});
+            v.brand_engagement_value = Math.round((bases.bev  || 0) * (rates.bev_per_user        || 0) * 100) / 100;
+            v.brand_lift_value       = Math.round((bases.blv  || 0) * (rates.blv_per_incr_user   || 0) * 100) / 100;
+            v.conversion_value       = Math.round((bases.conv || 0) * (rates.conv_value_per_user || 0) * 100) / 100;
+            v.total_brand_value      = Math.round(((v.earned_media_value      || 0)
+                                                 + (v.brand_engagement_value || 0)
+                                                 + (v.brand_lift_value        || 0)
+                                                 + (v.conversion_value        || 0)) * 100) / 100;
+            _bpiqRenderPerPlatformTable();
+            _bpiqRenderValuation(v);
         }
 
         function renderBpiqDashboard(data) {
@@ -29538,21 +29949,33 @@
             meta += ' · Post-window: ' + (evP.start || '') + ' → ' + (poP.end || '') + ' (' + ((evP.days || 0) + (poP.days || 0)) + 'd)';
             document.getElementById('bpiqDashMeta').innerHTML = meta;
 
-            var pipe = ' <span style="display:inline-block;width:1px;height:1.3em;background:var(--text-secondary);vertical-align:middle;margin:0 0.6rem;opacity:0.6;"></span> ';
+            // Each KPI card's value cell stacks the absolute count on top
+            // and the matching penetration % directly underneath, on its
+            // own line. Mirrors the visual rhythm of the CONSUMERS card
+            // (single primary value) — two readable, evenly-weighted
+            // numbers instead of a pipe-separated pair.
+            var _bpiqStackedKpi = function(countHtml, pctHtml) {
+                return '<div>' + countHtml + '</div>'
+                     + '<div style="font-size:0.95rem;font-weight:600;opacity:0.85;margin-top:0.15rem;">' + pctHtml + '</div>';
+            };
             document.getElementById('bpiqKpiAudience').textContent = _bpiqFmtNum(data.projected_audience_size);
             var postProj = totals.post_users_projected || 0;
             var preProj  = totals.pre_users_projected  || 0;
             var prePct   = (totals.audience_pen_pre_pct || 0);
             var postPct  = (totals.audience_pen_post_pct || 0);
             var liftUsers = postProj - preProj;
-            document.getElementById('bpiqKpiPreUsers').innerHTML  = _bpiqFmtNum(preProj) + pipe + prePct.toFixed(2) + '%';
-            document.getElementById('bpiqKpiPostUsers').innerHTML = _bpiqFmtNum(postProj) + pipe + postPct.toFixed(2) + '%';
-            document.getElementById('bpiqKpiLift').innerHTML = '<span style="color:#c8e600">' + _bpiqFmtNum(liftUsers) + '</span>' + pipe + _bpiqFmtLift(totals.lift_pct_users);
+            document.getElementById('bpiqKpiPreUsers').innerHTML  = _bpiqStackedKpi(_bpiqFmtNum(preProj),  prePct.toFixed(2)  + '%');
+            document.getElementById('bpiqKpiPostUsers').innerHTML = _bpiqStackedKpi(_bpiqFmtNum(postProj), postPct.toFixed(2) + '%');
+            document.getElementById('bpiqKpiLift').innerHTML = _bpiqStackedKpi(
+                '<span style="color:#c8e600">' + _bpiqFmtNum(liftUsers) + '</span>',
+                _bpiqFmtLift(totals.lift_pct_users)
+            );
 
             // Gen Pop mirror row
             var cg = data.control_group || {};
             var gpRow = document.getElementById('bpiqGenPopKpiRow');
             if (gpRow) gpRow.style.display = cg.enabled ? 'block' : 'none';
+            var deltaRow = document.getElementById('bpiqDeltaRow');
             var netLiftCard = document.getElementById('bpiqNetLiftCard');
             if (cg.enabled) {
                 var gpSize    = cg.projected_control_size || 0;
@@ -29562,10 +29985,48 @@
                 var gpPost    = Math.round(gpSize * gpPostPct / 100);
                 var gpLiftUsers = gpPost - gpPre;
                 document.getElementById('bpiqKpiGenPopAudience').textContent = _bpiqFmtNum(gpSize);
-                document.getElementById('bpiqKpiGenPopAudienceProj').textContent = 'US users (size-matched)';
-                document.getElementById('bpiqKpiGenPopPreUsers').innerHTML  = _bpiqFmtNum(gpPre) + pipe + gpPrePct.toFixed(2) + '%';
-                document.getElementById('bpiqKpiGenPopPostUsers').innerHTML = _bpiqFmtNum(gpPost) + pipe + gpPostPct.toFixed(2) + '%';
-                document.getElementById('bpiqKpiGenPopLift').innerHTML = '<span style="color:#c8e600">' + _bpiqFmtNum(gpLiftUsers) + '</span>' + pipe + _bpiqFmtLift(cg.control_lift_pct_users);
+                document.getElementById('bpiqKpiGenPopAudienceProj').textContent = 'Control (Gen Pop)';
+                document.getElementById('bpiqKpiGenPopPreUsers').innerHTML  = _bpiqStackedKpi(_bpiqFmtNum(gpPre),  gpPrePct.toFixed(2)  + '%');
+                document.getElementById('bpiqKpiGenPopPostUsers').innerHTML = _bpiqStackedKpi(_bpiqFmtNum(gpPost), gpPostPct.toFixed(2) + '%');
+                document.getElementById('bpiqKpiGenPopLift').innerHTML = _bpiqStackedKpi(
+                    '<span style="color:#c8e600">' + _bpiqFmtNum(gpLiftUsers) + '</span>',
+                    _bpiqFmtLift(cg.control_lift_pct_users)
+                );
+                // Δ Target − Control strip — populated whenever the gen-pop
+                // mirror row is shown. Each cell sits directly under the
+                // matching TARGET column and over the matching CONTROL one.
+                if (deltaRow) {
+                    deltaRow.style.display = '';
+                    var _bpiqFmtDelta = function(num, suffix, zeroLabel) {
+                        if (num == null || !isFinite(num)) return '<span style="color:var(--text-secondary);">—</span>';
+                        if (num === 0 && zeroLabel) return '<span style="color:var(--text-secondary);font-size:0.8rem;font-weight:500;">' + zeroLabel + '</span>';
+                        var sign = num > 0 ? '+' : (num < 0 ? '−' : '');
+                        var mag  = Math.abs(num);
+                        var color = num > 0 ? '#c8e600' : (num < 0 ? '#ef4444' : 'var(--text-secondary)');
+                        var body  = (suffix === ',count')
+                            ? Math.round(mag).toLocaleString()
+                            : mag.toFixed(2) + (suffix || '');
+                        return '<span style="color:' + color + ';">' + sign + body + '</span>';
+                    };
+                    // Relative-% delta: (target - control) / |control| × 100.
+                    // Returns null when control is 0/missing so _bpiqFmtDelta
+                    // renders the em-dash placeholder instead of Infinity / NaN.
+                    var _bpiqRelDelta = function(target, control) {
+                        if (target  == null || !isFinite(target))  return null;
+                        if (control == null || !isFinite(control) || control === 0) return null;
+                        return (target - control) / Math.abs(control) * 100;
+                    };
+                    document.getElementById('bpiqKpiDeltaConsumers').innerHTML =
+                        _bpiqFmtDelta((data.projected_audience_size || 0) - gpSize, ',count');
+                    document.getElementById('bpiqKpiDeltaPre').innerHTML =
+                        _bpiqFmtDelta(_bpiqRelDelta(prePct, gpPrePct), '%');
+                    document.getElementById('bpiqKpiDeltaPost').innerHTML =
+                        _bpiqFmtDelta(_bpiqRelDelta(postPct, gpPostPct), '%');
+                    var _tLift = (totals.lift_pct_users  != null && isFinite(totals.lift_pct_users))  ? totals.lift_pct_users  : null;
+                    var _cLift = (cg.control_lift_pct_users != null && isFinite(cg.control_lift_pct_users)) ? cg.control_lift_pct_users : null;
+                    document.getElementById('bpiqKpiDeltaLift').innerHTML =
+                        _bpiqFmtDelta(_bpiqRelDelta(_tLift, _cLift), '%');
+                }
                 // Net Brand Lift card
                 var brandLift = totals.lift_pct_users;
                 var gpLift    = cg.control_lift_pct_users;
@@ -29578,66 +30039,66 @@
                     document.getElementById('bpiqNetLiftValue').textContent = sign + netLift.toFixed(2);
                 }
             } else {
+                if (deltaRow) deltaRow.style.display = 'none';
                 if (netLiftCard) netLiftCard.style.display = 'none';
             }
 
-            // Per-platform table (cross-platform brand reach: audience users
-            // who were active on the platform AND had a brand touchpoint
-            // anywhere in the same window).
-            var per = (data.per_platform || []);
-            var hasAny = per.some(function(p) {
-                return (p.pre_users_on_platform || 0) + (p.post_users_on_platform || 0)
-                     + (p.pre_users || 0) + (p.post_users || 0) > 0;
-            });
-            // Brand Lift = percentage-point delta in the platform cohort's
-            // brand-engagement penetration (post_pen% − pre_pen%). This is
-            // the apples-to-apples lift the partnership drove on that
-            // platform's audience, independent of how the cohort size
-            // changed pre→post. Format: "+X.Xpp" / "-X.Xpp".
-            var _fmtBrandLift = function(prePct, postPct) {
-                if (prePct == null || postPct == null) return '<span style="color:var(--text-secondary);">—</span>';
-                var d = postPct - prePct;
-                var color = d > 0 ? '#10b981' : (d < 0 ? '#ef4444' : 'var(--text-secondary)');
-                var sign  = d > 0 ? '+' : '';
-                return '<span style="color:' + color + ';font-weight:600;">' + sign + d.toFixed(1) + 'pp</span>';
-            };
-            // Build a fast lookup of {platform -> emv_value} from the
-            // server-computed valuation block so we can paint a $ column
-            // alongside Brand Lift in the per-platform table.
-            var _emvByPlatform = {};
+            // Per-platform table — extracted into _bpiqRenderPerPlatformTable
+            // so we can re-render in place when the user edits a CPM cell
+            // or clicks a column header to sort. The table row data
+            // structure & EMV math live there too.
+            _bpiqState.data = data;
+            _bpiqState.rateByPlatform = {};
             ((data.valuation && data.valuation.emv_breakdown) || []).forEach(function(row) {
-                _emvByPlatform[row.platform] = row.emv_value || 0;
+                _bpiqState.rateByPlatform[row.platform] = row.emv_per_user_rate || 0;
             });
-            var pTbl = '<div style="font-size:11px;color:var(--text-secondary);margin-bottom:0.5rem;">'
-                + 'A user is counted on a platform when they had at least 3 visits to that platform\'s domain in the window. <strong>Pre %</strong> / <strong>Post %</strong> = share of that platform-cohort that ALSO had a brand touchpoint anywhere on the web in the same window. <strong>Brand Lift</strong> = percentage-point change between Post % and Pre % — the actual lift in brand engagement among that platform\'s audience. <strong>EMV</strong> values the post-event reach on each platform at a 2026 industry-benchmarked $/engaged-user rate. The "Direct (Brand Site)" row counts brand touchpoints that did not occur on a social platform (e.g. direct visits to the brand\'s own site).'
-                + '</div>'
-                + '<table style="width:100%;border-collapse:collapse;font-size:13px;">'
-                + '<thead><tr style="border-bottom:2px solid var(--border-color);">'
-                + '<th style="padding:8px 10px;text-align:left;">Platform</th>'
-                + '<th style="padding:8px 10px;text-align:right;">Pre %</th>'
-                + '<th style="padding:8px 10px;text-align:right;">Post %</th>'
-                + '<th style="padding:8px 10px;text-align:right;">Brand Lift</th>'
-                + '<th style="padding:8px 10px;text-align:right;">Earned Media Value</th>'
-                + '</tr></thead><tbody>'
-                + per.map(function(p) {
-                    var rowDim = ((p.pre_users_on_platform || 0) + (p.post_users_on_platform || 0)) === 0 ? 'opacity:0.45;' : '';
-                    var prePen  = (p.pre_pen_pct  == null) ? '—' : p.pre_pen_pct.toFixed(1)  + '%';
-                    var postPen = (p.post_pen_pct == null) ? '—' : p.post_pen_pct.toFixed(1) + '%';
-                    var emv     = _emvByPlatform[p.platform] || 0;
-                    var emvCell = emv > 0
-                        ? '<span style="color:#10b981;font-weight:600;">' + _bpiqFmtMoney(emv) + '</span>'
-                        : '<span style="color:var(--text-secondary);">—</span>';
-                    return '<tr style="border-bottom:1px solid rgba(255,255,255,0.04);' + rowDim + '">'
-                        + '<td style="padding:8px 10px;font-weight:600;">' + p.platform + '</td>'
-                        + '<td style="padding:8px 10px;text-align:right;color:var(--text-secondary);">' + prePen + '</td>'
-                        + '<td style="padding:8px 10px;text-align:right;color:var(--text-secondary);">' + postPen + '</td>'
-                        + '<td style="padding:8px 10px;text-align:right;">' + _fmtBrandLift(p.pre_pen_pct, p.post_pen_pct) + '</td>'
-                        + '<td style="padding:8px 10px;text-align:right;">' + emvCell + '</td>'
-                        + '</tr>';
-                }).join('')
-                + '</tbody></table>';
-            if (!hasAny) pTbl = '<div style="padding:1rem;color:var(--text-secondary);font-size:13px;">No per-platform brand engagement detected. Try a broader brand search term.</div>';
-            document.getElementById('bpiqPlatformTable').innerHTML = pTbl;
+            // Capture the *initial* benchmark rates BEFORE any user edit
+            // can mutate them. These are display-only (rendered in the
+            // "Benchmark" column / muted hint next to each editable
+            // input) and never enter any downstream calculation.
+            (function _bpiqCaptureBenchmarks() {
+                var vv = (data.valuation || {});
+                var rr = vv.rates || {};
+                var byPlat = {};
+                (vv.emv_breakdown || []).forEach(function(r) {
+                    byPlat[r.platform] = r.emv_per_user_rate || 0;
+                });
+                _bpiqState.benchmarks = {
+                    bev_per_user:        Number(rr.bev_per_user)        || 0,
+                    blv_per_incr_user:   Number(rr.blv_per_incr_user)   || 0,
+                    conv_value_per_user: Number(rr.conv_value_per_user) || 0,
+                    rateByPlatform:      byPlat
+                };
+            })();
+            // Capture the *base* count each scalar rate multiplies into
+            // (BEV = post-event engaged consumers; BLV = incremental
+            // consumers; Conversion = post conversions). We back these
+            // out from the original pre-edit values so subsequent rate
+            // edits cascade off a stable count even after many round
+            // trips through _bpiqRecomputeAndRerender (which mutates the
+            // dollar values in place).
+            (function _bpiqCaptureValBases() {
+                var vv = data.valuation || {};
+                var rr = vv.rates || {};
+                var bevRate  = rr.bev_per_user || 0;
+                var blvRate  = rr.blv_per_incr_user || 0;
+                var convRate = rr.conv_value_per_user || 0;
+                var tot      = data.totals || {};
+                var bevBase = bevRate > 0
+                    ? Math.round((vv.brand_engagement_value || 0) / bevRate)
+                    : (tot.post_users_projected || 0);
+                var blvBase = (vv.incremental_users != null)
+                    ? vv.incremental_users
+                    : (blvRate > 0 ? Math.round((vv.brand_lift_value || 0) / blvRate) : 0);
+                var convBase = convRate > 0
+                    ? Math.round((vv.conversion_value || 0) / convRate)
+                    : 0;
+                _bpiqState.valBases = { bev: bevBase, blv: blvBase, conv: convBase };
+            })();
+            // Default sort: EMV descending (matches previous behavior in
+            // the EMV breakdown table — biggest contributors at top).
+            if (!_bpiqState.sortKey) { _bpiqState.sortKey = 'emv'; _bpiqState.sortDir = 'desc'; }
+            _bpiqRenderPerPlatformTable();
 
             // Conversions — only render the section when we have a real
             // signal. Hide entirely when disabled, low_signal, or both
@@ -29647,7 +30108,11 @@
             // in web panel data).
             var conv = data.conversions || {};
             var convEl       = document.getElementById('bpiqConversions');
-            var convSection  = document.getElementById('bpiqConversionsSection');
+            // The conversion pre/post counts and the conversion-value math
+            // now both live inside #bpiqConvValCard. Toggling the card
+            // visibility is what suppresses the entire Conversion Value
+            // section for app-driven brands with no panel-visible orders.
+            var convSection  = document.getElementById('bpiqConvValCard');
             var convPreProj  = conv.pre_users_projected  || 0;
             var convPostProj = conv.post_users_projected || 0;
             var hideConv = !conv.enabled
@@ -29659,15 +30124,15 @@
                     + '<div style="padding:1rem;border:1px solid var(--border-color);border-radius:8px;text-align:center;">'
                     +   '<div style="font-size:0.7rem;color:var(--text-secondary);text-transform:uppercase;">Pre Conversions</div>'
                     +   '<div style="font-size:1.5rem;font-weight:700;">' + _bpiqFmtNum(convPreProj) + '</div>'
-                    +   '<div style="font-size:0.7rem;color:var(--text-secondary);">US users</div>'
+                    +   '<div style="font-size:0.7rem;color:var(--text-secondary);">US consumers</div>'
                     + '</div>'
                     + '<div style="padding:1rem;border:1px solid var(--border-color);border-radius:8px;text-align:center;">'
                     +   '<div style="font-size:0.7rem;color:var(--text-secondary);text-transform:uppercase;">Post Conversions</div>'
                     +   '<div style="font-size:1.5rem;font-weight:700;">' + _bpiqFmtNum(convPostProj) + '</div>'
-                    +   '<div style="font-size:0.7rem;color:var(--text-secondary);">US users</div>'
+                    +   '<div style="font-size:0.7rem;color:var(--text-secondary);">US consumers</div>'
                     + '</div>'
                     + '<div style="padding:1rem;border:1px solid var(--border-color);border-radius:8px;text-align:center;">'
-                    +   '<div style="font-size:0.7rem;color:var(--text-secondary);text-transform:uppercase;">User Lift</div>'
+                    +   '<div style="font-size:0.7rem;color:var(--text-secondary);text-transform:uppercase;">Consumer Lift</div>'
                     +   '<div style="font-size:1.5rem;font-weight:700;">' + _bpiqFmtLift(conv.lift_pct_users) + '</div>'
                     + '</div>'
                     + '</div>';
@@ -29678,9 +30143,6 @@
 
             // Demographics (pre vs post brand engagers)
             _bpiqRenderDemographics(data.demographics || {});
-
-            // Sentiment
-            _bpiqRenderSentiment(data.sentiment || {});
 
             // 💰 Total Brand Value (hero) + Valuation Breakdown
             _bpiqRenderValuation(data.valuation || {});
@@ -29737,9 +30199,9 @@
                 return;
             }
             // Convert pp deltas to absolute US-user counts so the cards
-            // are directly comparable to the Ticket Purchasers / Brand
-            // Users KPIs above. Event Brand Users cohort = audience
-            // (ticket purchasers). Gen Pop cohort is size-matched.
+            // are directly comparable to the Target / Brand Users KPIs
+            // above. Event Brand Users cohort = audience (target).
+            // Control cohort is size-matched.
             // Incremental lift in people = event-brand-users people -
             // gen-pop people, which is the partnership-driven
             // incremental brand engagers.
@@ -29757,7 +30219,7 @@
                 + '<div style="padding:1rem;border:1px solid var(--border-color);border-radius:8px;">'
                 +   '<div style="font-size:0.7rem;color:var(--text-secondary);text-transform:uppercase;">Gen Pop Cohort Size</div>'
                 +   '<div style="font-size:1.4rem;font-weight:700;">' + _bpiqFmtNum(controlSize) + '</div>'
-                +   '<div style="font-size:11px;color:var(--text-secondary);">US users</div>'
+                +   '<div style="font-size:11px;color:var(--text-secondary);">US consumers</div>'
                 + '</div>'
                 + '<div style="padding:1rem;border:1px solid var(--border-color);border-radius:8px;">'
                 +   '<div style="font-size:0.7rem;color:var(--text-secondary);text-transform:uppercase;">Gen Pop Δ</div>'
@@ -29765,7 +30227,7 @@
                 +   '<div style="font-size:11px;color:var(--text-secondary);">' + ctrlDeltaPp.toFixed(2) + ' pp · pre ' + (c.control_pre_pen_pct||0).toFixed(2) + '% → post ' + (c.control_post_pen_pct||0).toFixed(2) + '%</div>'
                 + '</div>'
                 + '<div style="padding:1rem;border:1px solid var(--border-color);border-radius:8px;">'
-                +   '<div style="font-size:0.7rem;color:var(--text-secondary);text-transform:uppercase;">Event Brand Users Δ</div>'
+                +   '<div style="font-size:0.7rem;color:var(--text-secondary);text-transform:uppercase;">Event Brand Consumers Δ</div>'
                 +   '<div style="font-size:1.4rem;font-weight:700;">' + _bpiqFmtNum(treatPeople) + '</div>'
                 +   '<div style="font-size:11px;color:var(--text-secondary);">' + treatDeltaPp.toFixed(2) + ' pp · pre ' + (c.treat_pre_pen_pct||0).toFixed(2) + '% → post ' + (c.treat_post_pen_pct||0).toFixed(2) + '%</div>'
                 + '</div>'
@@ -29779,7 +30241,7 @@
                 +   '<div style="font-size:11px;color:var(--text-secondary);">'
                 +     (c.incremental_lift_rel_pct === null || c.incremental_lift_rel_pct === undefined
                           ? 'Gen Pop had no movement'
-                          : (sign + _bpiqFmtNum(incPeople) + ' US users vs Gen Pop'))
+                          : (sign + _bpiqFmtNum(incPeople) + ' US consumers vs Gen Pop'))
                 +   '</div>'
                 + '</div>'
                 + '</div>';
@@ -29787,78 +30249,253 @@
 
         // ----- Brand Partnership: demographics renderer -----
         var _BPIQ_DEMO_LABELS = { gender: 'Gender', age: 'Age', ethnicity: 'Ethnicity', income: 'Income' };
-        function _bpiqDemoRow(label, prePct, postPct) {
-            var delta = (postPct || 0) - (prePct || 0);
-            var deltaSign = delta > 0 ? '+' : '';
-            var deltaColor = delta > 0.5 ? '#10b981' : (delta < -0.5 ? '#ef4444' : 'var(--text-secondary)');
-            return '<tr style="border-bottom:1px solid rgba(255,255,255,0.04);">'
-                + '<td style="padding:6px 10px;font-weight:500;">' + label + '</td>'
-                + '<td style="padding:6px 10px;text-align:right;">' + (prePct || 0).toFixed(1) + '%</td>'
-                + '<td style="padding:6px 10px;text-align:right;">' + (postPct || 0).toFixed(1) + '%</td>'
-                + '<td style="padding:6px 10px;text-align:right;color:' + deltaColor + ';">' + deltaSign + delta.toFixed(1) + ' pp</td>'
-                + '</tr>';
+
+        // Canonical category buckets per field (from the analytics
+        // demographic dictionary in /docs/demos.csv). Order here = the
+        // default display order (and the "canonical" sort).
+        var _BPIQ_DEMO_CANONICAL = {
+            gender: ['Female', 'Male', 'Prefer Not to Say',
+                     'Trans Male', 'Trans Female', 'Non-Binary'],
+            age: ['17 and Under', '18-24', '25-34', '35-44',
+                  '45-54', '55-64', '65 or Older', 'Other'],
+            ethnicity: ['White', 'Hispanic or Latino',
+                        'Black or African American', 'Asian',
+                        'Another Race/Ethnicity'],
+            income: ['Less than $25,000', '$25,000 - $49,999',
+                     '$50,000 - $74,999', '$75,000 - $99,999',
+                     '$100,000 - $149,999', '$150,000 - $249,999',
+                     '$250,000 or More']
+        };
+        // Common label variants mapped to canonical (case-insensitive).
+        // Lets the dashboard show consistent buckets even when older S3
+        // runs (or upstream pipelines) emit shortened / variant labels.
+        var _BPIQ_DEMO_ALIASES = {
+            gender: {
+                'unknown': 'Prefer Not to Say',
+                'm': 'Male', 'f': 'Female',
+                'nonbinary': 'Non-Binary', 'non binary': 'Non-Binary',
+                'other': 'Non-Binary'
+            },
+            ethnicity: {
+                'hispanic': 'Hispanic or Latino',
+                'black': 'Black or African American',
+                'other': 'Another Race/Ethnicity',
+                'unknown': 'Another Race/Ethnicity'
+            },
+            age: {
+                '65+': '65 or Older',
+                '65 or older': '65 or Older'
+            },
+            income: {
+                // Synthetic / legacy runs collapse the top bracket into a
+                // single "$150,000+" bucket. Map to the lower of the two
+                // canonical splits so the dollar values land in *some*
+                // canonical row instead of orphaning a non-canonical row.
+                '$150,000+': '$150,000 - $249,999',
+                'under $25,000': 'Less than $25,000'
+            }
+        };
+        function _bpiqNormalizeDemoLabel(field, raw) {
+            if (raw == null) return raw;
+            // Normalize whitespace, en/em dashes, curly quotes.
+            var s = String(raw).trim()
+                .replace(/[\u2013\u2014]/g, '-')
+                .replace(/[\u2018\u2019]/g, "'")
+                .replace(/\s+/g, ' ');
+            // Income-specific: ensure consistent spacing around the hyphen
+            // so "$100,000-$149,999" (synthetic shorthand) collapses onto
+            // canonical "$100,000 - $149,999".
+            if (field === 'income') {
+                s = s.replace(/(\$[\d,]+)\s*-\s*(\$[\d,]+)/, '$1 - $2');
+            }
+            var lower = s.toLowerCase();
+            var aliases = _BPIQ_DEMO_ALIASES[field] || {};
+            if (Object.prototype.hasOwnProperty.call(aliases, lower)) return aliases[lower];
+            var canon = _BPIQ_DEMO_CANONICAL[field] || [];
+            for (var i = 0; i < canon.length; i++) {
+                if (canon[i].toLowerCase() === lower) return canon[i];
+            }
+            return s;
         }
+        // Apply normalization, then sum percentages across raw labels
+        // that collapse to the same canonical bucket.
+        function _bpiqMergeDemo(field, arr) {
+            var out = {};
+            (arr || []).forEach(function(x) {
+                if (!x || x.value == null) return;
+                var label = _bpiqNormalizeDemoLabel(field, x.value);
+                out[label] = (out[label] || 0) + (Number(x.percentage) || 0);
+            });
+            return out;
+        }
+
+        // Per-field sort state — independent so the user can sort Gender
+        // by Δ, Income by canonical, etc., simultaneously.
+        var _bpiqDemoSort = {};
+        // Held so column-header clicks can re-render in place.
+        var _bpiqDemoData = null;
 
         function _bpiqRenderDemographics(d) {
             var el = document.getElementById('bpiqDemographics');
             if (!el) return;
-            var pre  = d.pre  || { gender: [], age: [], ethnicity: [], income: [] };
-            var post = d.post || { gender: [], age: [], ethnicity: [], income: [] };
-            // Build a value -> percentage lookup for each cohort.
-            function lookup(arr) { var m = {}; (arr || []).forEach(function(x) { m[x.value] = x.percentage; }); return m; }
-
+            _bpiqDemoData = d || {};
+            var pre  = (_bpiqDemoData.pre)  || {};
+            var post = (_bpiqDemoData.post) || {};
             var html = '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:1rem;">';
             ['gender', 'age', 'ethnicity', 'income'].forEach(function(field) {
-                var preMap  = lookup(pre[field]);
-                var postMap = lookup(post[field]);
-                // Union of values present in either cohort, sorted by post% then pre%
-                var values = Object.keys(Object.assign({}, preMap, postMap));
-                values.sort(function(a, b) { return ((postMap[b]||0) - (postMap[a]||0)) || ((preMap[b]||0) - (preMap[a]||0)); });
+                var preMap  = _bpiqMergeDemo(field, pre[field]);
+                var postMap = _bpiqMergeDemo(field, post[field]);
+                var canon = _BPIQ_DEMO_CANONICAL[field] || [];
+                // Always render every canonical bucket from demos.csv — even
+                // when the run carries 0% in both windows — so the section is
+                // a complete, predictable taxonomy. Non-canonical labels that
+                // *do* have data are still surfaced so we never silently drop
+                // observed signal.
+                var union = {};
+                canon.forEach(function(k) { union[k] = true; });
+                Object.keys(preMap).forEach(function(k)  { if ((preMap[k]||0)  > 0 || (postMap[k]||0) > 0) union[k] = true; });
+                Object.keys(postMap).forEach(function(k) { if ((preMap[k]||0)  > 0 || (postMap[k]||0) > 0) union[k] = true; });
+                var values = Object.keys(union);
                 if (!values.length) {
                     html += '<div><h4 style="margin:0 0 0.5rem;font-size:13px;">' + _BPIQ_DEMO_LABELS[field] + '</h4>'
                          +  '<div style="padding:0.75rem;color:var(--text-secondary);font-size:12px;">No data</div></div>';
                     return;
                 }
+                var sortState = _bpiqDemoSort[field] || { key: 'canonical', dir: 'asc' };
+                var canonIdx = {}; canon.forEach(function(c, i) { canonIdx[c] = i; });
+                var dirMul = sortState.dir === 'asc' ? 1 : -1;
+                values.sort(function(a, b) {
+                    if (sortState.key === 'canonical') {
+                        // In-canon labels first (CSV order); unknown labels
+                        // alphabetical at the end.
+                        var ai = (canonIdx[a] != null) ? canonIdx[a] : (1000 + a.toLowerCase().charCodeAt(0));
+                        var bi = (canonIdx[b] != null) ? canonIdx[b] : (1000 + b.toLowerCase().charCodeAt(0));
+                        if (ai === bi) return 0;
+                        return (ai < bi ? -1 : 1) * dirMul;
+                    }
+                    if (sortState.key === 'label') {
+                        return a.toLowerCase().localeCompare(b.toLowerCase()) * dirMul;
+                    }
+                    var av, bv;
+                    if (sortState.key === 'pre')  { av = preMap[a]  || 0; bv = preMap[b]  || 0; }
+                    if (sortState.key === 'post') { av = postMap[a] || 0; bv = postMap[b] || 0; }
+                    if (sortState.key === 'delta') {
+                        av = _bpiqBrandLiftPctValue(preMap[a] || 0, postMap[a] || 0);
+                        bv = _bpiqBrandLiftPctValue(preMap[b] || 0, postMap[b] || 0);
+                        if (av == null) av = -Infinity;
+                        if (bv == null) bv = -Infinity;
+                    }
+                    if (sortState.key === 'delta_pp') {
+                        av = (postMap[a] || 0) - (preMap[a] || 0);
+                        bv = (postMap[b] || 0) - (preMap[b] || 0);
+                    }
+                    if (av === bv) return 0;
+                    return (av < bv ? -1 : 1) * dirMul;
+                });
+                var arrow = function(key) {
+                    if (sortState.key !== key) return '<span style="opacity:0.3;font-size:10px;margin-left:4px;">⇅</span>';
+                    var glyph = sortState.dir === 'asc' ? '▲' : '▼';
+                    return '<span style="font-size:10px;color:#c8e600;margin-left:4px;">' + glyph + '</span>';
+                };
+                var thBase = 'padding:6px 10px;cursor:pointer;user-select:none;';
                 html += '<div><h4 style="margin:0 0 0.5rem;font-size:13px;">' + _BPIQ_DEMO_LABELS[field] + '</h4>'
-                     +  '<table style="width:100%;border-collapse:collapse;font-size:12px;">'
-                     +  '<thead><tr style="border-bottom:1px solid var(--border-color);"><th style="padding:6px 10px;text-align:left;"></th><th style="padding:6px 10px;text-align:right;">Pre %</th><th style="padding:6px 10px;text-align:right;">Post %</th><th style="padding:6px 10px;text-align:right;">Δ</th></tr></thead><tbody>'
-                     +  values.map(function(v) { return _bpiqDemoRow(v, preMap[v] || 0, postMap[v] || 0); }).join('')
+                     +  '<table style="width:100%;border-collapse:collapse;font-size:12px;" data-bpiq-demo-field="' + field + '">'
+                     +  '<thead><tr style="border-bottom:1px solid var(--border-color);">'
+                     +  '<th data-bpiq-demo-sort="label"    style="' + thBase + 'text-align:left;">'  + arrow('label')    + '</th>'
+                     +  '<th data-bpiq-demo-sort="pre"      style="' + thBase + 'text-align:right;">Pre %'   + arrow('pre')      + '</th>'
+                     +  '<th data-bpiq-demo-sort="post"     style="' + thBase + 'text-align:right;">Post %'  + arrow('post')     + '</th>'
+                     +  '<th data-bpiq-demo-sort="delta"    style="' + thBase + 'text-align:right;">Δ'       + arrow('delta')    + '</th>'
+                     +  '<th data-bpiq-demo-sort="delta_pp" style="' + thBase + 'text-align:right;">Δ (pp)'  + arrow('delta_pp') + '</th>'
+                     +  '</tr></thead><tbody>'
+                     +  values.map(function(v) {
+                            var preP  = preMap[v]  || 0;
+                            var postP = postMap[v] || 0;
+                            var dPct  = _bpiqBrandLiftPctValue(preP, postP);
+                            var dTxt, dColor;
+                            if (dPct == null) {
+                                dTxt = '—'; dColor = 'var(--text-secondary)';
+                            } else if (!isFinite(dPct)) {
+                                dTxt = dPct > 0 ? '+∞' : '-∞';
+                                dColor = dPct > 0 ? '#10b981' : '#ef4444';
+                            } else {
+                                var sign = dPct > 0 ? '+' : '';
+                                dTxt = sign + dPct.toFixed(1) + '%';
+                                dColor = dPct > 0.5 ? '#10b981' : (dPct < -0.5 ? '#ef4444' : 'var(--text-secondary)');
+                            }
+                            return '<tr style="border-bottom:1px solid rgba(255,255,255,0.04);">'
+                                + '<td style="padding:6px 10px;font-weight:500;">' + v + '</td>'
+                                + '<td style="padding:6px 10px;text-align:right;">' + preP.toFixed(1) + '%</td>'
+                                + '<td style="padding:6px 10px;text-align:right;">' + postP.toFixed(1) + '%</td>'
+                                + '<td style="padding:6px 10px;text-align:right;color:' + dColor + ';font-weight:600;">' + dTxt + '</td>'
+                                + '<td style="padding:6px 10px;text-align:right;">' + _bpiqFmtPpDelta(preP, postP) + '</td>'
+                                + '</tr>';
+                        }).join('')
                      +  '</tbody></table></div>';
             });
             html += '</div>';
             el.innerHTML = html;
+            // Wire column-header sort, scoped per field-table.
+            el.querySelectorAll('table[data-bpiq-demo-field] th[data-bpiq-demo-sort]').forEach(function(th) {
+                th.addEventListener('click', function() {
+                    var table = th.closest('table');
+                    var field = table.getAttribute('data-bpiq-demo-field');
+                    var key   = th.getAttribute('data-bpiq-demo-sort');
+                    var cur = _bpiqDemoSort[field] || { key: 'canonical', dir: 'asc' };
+                    if (cur.key === key) {
+                        cur.dir = cur.dir === 'asc' ? 'desc' : 'asc';
+                    } else {
+                        cur.key = key;
+                        // Sensible defaults: numeric desc, label asc.
+                        cur.dir = (key === 'label') ? 'asc' : 'desc';
+                    }
+                    _bpiqDemoSort[field] = cur;
+                    _bpiqRenderDemographics(_bpiqDemoData);
+                });
+            });
         }
 
         // ----- Brand Partnership: valuation renderer -----
-        // Renders both the 💰 Total Brand Value hero card up top
-        // and the detailed Valuation Breakdown section. Hides both
-        // gracefully when the valuation block is absent (old runs).
+        // Renders the 💰 Total Brand Value hero card AND populates the
+        // four standalone valuation cards (📡 Earned Media, 🤝 Brand
+        // Engagement, 📈 Brand Lift, 💳 Conversion). Each card carries
+        // its own visible math row(s) showing exactly which numbers
+        // multiply into its $-value, with the editable rate inline.
         function _bpiqRenderValuation(v) {
             var hero    = document.getElementById('bpiqHeroValue');
             var heroTot = document.getElementById('bpiqHeroTotal');
             var heroSub = document.getElementById('bpiqHeroSub');
             var heroBrk = document.getElementById('bpiqHeroBreak');
-            var section = document.getElementById('bpiqValuationSection');
-            var note    = document.getElementById('bpiqValuationNote');
-            var body    = document.getElementById('bpiqValuation');
+            var emvCard      = document.getElementById('bpiqEmvCard');
+            var emvTotalEl   = document.getElementById('bpiqEmvTotal');
+            var emvFormulaEl = document.getElementById('bpiqEmvFormula');
+            var bevCard      = document.getElementById('bpiqBevCard');
+            var bevTotalEl   = document.getElementById('bpiqBevTotal');
+            var bevBody      = document.getElementById('bpiqBevBody');
+            var blvCard      = document.getElementById('bpiqBlvCard');
+            var blvTotalEl   = document.getElementById('bpiqBlvTotal');
+            var blvBody      = document.getElementById('bpiqBlvBody');
+            var convValCard  = document.getElementById('bpiqConvValCard');
+            var convValTotEl = document.getElementById('bpiqConvValTotal');
+            var convValBody  = document.getElementById('bpiqConvValBody');
             var hasData = v && (v.total_brand_value || v.brand_engagement_value
                               || v.earned_media_value || v.brand_lift_value
                               || v.conversion_value);
             if (!hasData) {
-                if (hero)    hero.style.display    = 'none';
-                if (section) section.style.display = 'none';
+                if (hero)       hero.style.display       = 'none';
+                if (emvCard)    emvCard.style.display    = 'none';
+                if (bevCard)    bevCard.style.display    = 'none';
+                if (blvCard)    blvCard.style.display    = 'none';
+                // Conv card visibility is owned by the conversions
+                // pre/post block above; leave it alone here.
                 return;
             }
             // Hero card
             if (hero)    hero.style.display = '';
             if (heroTot) heroTot.textContent = _bpiqFmtMoney(v.total_brand_value || 0);
-            // Conversion bucket is dropped from BOTH the hero chip row
-            // AND the breakdown component row when its value is 0 (the
-            // 💳 Conversions section already hides itself for low/zero
-            // signal — this keeps the rest of the dashboard consistent
-            // so we don't show empty $0 boxes anywhere). Same logic
-            // also strips the conversion-rate sentence from the
-            // methodology subtitle.
+            // Conversion bucket is dropped from the hero chip row when
+            // its value is 0 (the 💳 Conversion Value card already
+            // hides itself for low/zero signal — this keeps the hero
+            // consistent so we don't show an empty $0 chip).
             var hasConv = (v.conversion_value || 0) > 0;
             if (heroSub) heroSub.textContent = hasConv
                 ? 'Earned Media + Brand Engagement + Brand Lift + Conversions'
@@ -29869,7 +30506,7 @@
                 {label: 'Brand Lift',       value: v.brand_lift_value        || 0, color: '#6366f1'}
             ];
             if (hasConv) {
-                heroParts.push({label: 'Conversions', value: v.conversion_value, color: '#ef4444'});
+                heroParts.push({label: 'Conversions', value: v.conversion_value, color: '#6366f1'});
             }
             if (heroBrk) {
                 heroBrk.innerHTML = heroParts.map(function(p) {
@@ -29879,22 +30516,60 @@
                         +  '</div>';
                 }).join('');
             }
-            // Detailed breakdown section
-            if (section) section.style.display = '';
-            if (note) {
-                var rateBits = 'Rates are tunable: BEV $' + (v.rates && v.rates.bev_per_user || 0).toFixed(2) + '/user, '
-                             + 'BLV $' + (v.rates && v.rates.blv_per_incr_user || 0).toFixed(2) + '/incremental user';
-                if (hasConv) {
-                    rateBits += ', Conversion $' + (v.rates && v.rates.conv_value_per_user || 0).toFixed(2) + '/order';
-                }
-                note.innerHTML = (v.methodology || '') + ' ' + rateBits + '. Per-platform EMV rates are 2026 industry-benchmarked.';
+            // ---------- shared helpers for the math rows ----------
+            // Inline editable rate input (BEV / BLV / Conversion).
+            function _bpiqRateInput(key, val, title) {
+                return '<input type="number" step="0.01" min="0" '
+                     + 'data-bpiq-rate="' + key + '" '
+                     + 'class="bpiq-rate-input" '
+                     + 'value="' + (Number(val) || 0).toFixed(2) + '" '
+                     + 'style="width:78px;background:rgba(255,255,255,0.04);border:1px solid var(--border-color);border-radius:6px;padding:3px 7px;color:inherit;font-size:14px;text-align:right;font-family:inherit;font-weight:600;" '
+                     + 'title="' + (title || '') + '" />';
             }
-            if (!body) return;
-            // Compute a concise subtitle for the EMV card that mirrors
-            // BEV / BLV's style ("N users × $rate"). Rates vary by
-            // platform, so we surface a hits-weighted blended average
-            // and the per-platform range. Only contributing platforms
-            // (emv_value > 0, i.e. positive incremental lift) count.
+            // Muted "benchmark $X.XX" hint shown immediately before each
+            // editable rate. Captured once at load time
+            // (_bpiqState.benchmarks); never participates in any
+            // downstream calculation — pure reference for the editor.
+            var _bm = _bpiqState.benchmarks || {};
+            function _bpiqBenchHint(val) {
+                return '<span style="color:var(--text-secondary);font-style:italic;opacity:0.75;font-size:12px;" title="Industry-benchmark rate. Display only — does not enter any calculation.">benchmark $' + (Number(val) || 0).toFixed(2) + '</span>';
+            }
+            // Build a 3-row "calculator" table for the math:
+            //   N units                         | <count>
+            //   × $/unit (benchmark $X.XX)      | $rate [editable]
+            //   --------------------------------|----------------
+            //   = total                         | <$value>
+            // Used by BEV / BLV / Conversion cards. Visually mirrors
+            // a hand-written calculation so the math is unmistakable.
+            function _bpiqMathRow(rows, totalLabel, totalValue, totalColor) {
+                var html = '<table style="width:100%;border-collapse:collapse;font-size:14px;line-height:1.7;">';
+                rows.forEach(function(r, i) {
+                    html += '<tr style="' + (i === 0 ? '' : 'border-top:1px dashed rgba(255,255,255,0.08);') + '">'
+                         +    '<td style="padding:8px 12px;color:var(--text-secondary);">' + r.label + '</td>'
+                         +    '<td style="padding:8px 12px;text-align:right;font-weight:600;">' + r.value + '</td>'
+                         +  '</tr>';
+                });
+                html += '<tr style="border-top:2px solid rgba(200,230,0,0.5);">'
+                     +    '<td style="padding:10px 12px;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;font-size:12px;color:var(--text-secondary);">' + totalLabel + '</td>'
+                     +    '<td style="padding:10px 12px;text-align:right;font-weight:700;font-size:1.15rem;color:' + (totalColor || 'inherit') + ';">' + totalValue + '</td>'
+                     +  '</tr>';
+                html += '</table>';
+                return html;
+            }
+
+            // ---------- 📡 Earned Media Value ----------
+            // The card body (per-platform table) is owned by the
+            // per-platform table renderer. Here we populate the header
+            // total + the formula footnote so it always reflects the
+            // current sum after CPM edits.
+            if (emvCard) emvCard.style.display = '';
+            if (emvTotalEl) emvTotalEl.textContent = _bpiqFmtMoney(v.earned_media_value || 0);
+            // Compose a concise "Σ over N platforms" hint with the
+            // hits-weighted blended rate and the per-platform range
+            // (only contributing platforms — i.e. positive incremental
+            // lift — are counted). Falls back to the generic formula
+            // when no platform contributed, so the EMV card never
+            // appears mathematically silent.
             var _emvContrib = (v.emv_breakdown || []).filter(function(r) {
                 return (r.emv_value || 0) > 0 && (r.incremental_users_projected || 0) > 0;
             });
@@ -29909,161 +30584,111 @@
                     ? ''
                     : ' (varies $' + minR.toFixed(2) + '–$' + maxR.toFixed(2) + ' by platform)';
             }
-            var _emvSub = _emvIncrTotal > 0
-                ? (_bpiqFmtNum(_emvIncrTotal) + ' incremental users × $' + _emvBlended.toFixed(2) + ' blended' + _emvRangeStr)
-                : 'Σ per-platform incremental users × platform EMV $/user';
-
-            // Top: component cards mirroring the hero (drops the
-            // Conversion Value card entirely when conversion_value = 0).
-            var html = '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:0.75rem;margin-bottom:1rem;">'
-                + '<div style="padding:0.85rem;border:1px solid var(--border-color);border-radius:8px;">'
-                +   '<div style="font-size:0.65rem;color:var(--text-secondary);text-transform:uppercase;">Earned Media Value</div>'
-                +   '<div style="font-size:1.3rem;font-weight:700;color:#10b981;">' + _bpiqFmtMoney(v.earned_media_value || 0) + '</div>'
-                +   '<div style="font-size:11px;color:var(--text-secondary);">' + _emvSub + '</div>'
-                + '</div>'
-                + '<div style="padding:0.85rem;border:1px solid var(--border-color);border-radius:8px;">'
-                +   '<div style="font-size:0.65rem;color:var(--text-secondary);text-transform:uppercase;">Brand Engagement Value</div>'
-                +   '<div style="font-size:1.3rem;font-weight:700;color:#6366f1;">' + _bpiqFmtMoney(v.brand_engagement_value || 0) + '</div>'
-                +   '<div style="font-size:11px;color:var(--text-secondary);">post-event engaged users × $' + (v.rates && v.rates.bev_per_user || 0).toFixed(2) + '</div>'
-                + '</div>'
-                + '<div style="padding:0.85rem;border:1px solid var(--border-color);border-radius:8px;">'
-                +   '<div style="font-size:0.65rem;color:var(--text-secondary);text-transform:uppercase;">Brand Lift Value</div>'
-                +   '<div style="font-size:1.3rem;font-weight:700;color:#f59e0b;">' + _bpiqFmtMoney(v.brand_lift_value || 0) + '</div>'
-                +   '<div style="font-size:11px;color:var(--text-secondary);">' + _bpiqFmtNum(v.incremental_users || 0) + ' incremental users × $' + (v.rates && v.rates.blv_per_incr_user || 0).toFixed(2) + '</div>'
-                + '</div>'
-                + (hasConv
-                    ? ('<div style="padding:0.85rem;border:1px solid var(--border-color);border-radius:8px;">'
-                        +   '<div style="font-size:0.65rem;color:var(--text-secondary);text-transform:uppercase;">Conversion Value</div>'
-                        +   '<div style="font-size:1.3rem;font-weight:700;color:#ef4444;">' + _bpiqFmtMoney(v.conversion_value || 0) + '</div>'
-                        +   '<div style="font-size:11px;color:var(--text-secondary);">post conversions × $' + (v.rates && v.rates.conv_value_per_user || 0).toFixed(2) + '</div>'
-                        + '</div>')
-                    : '')
-                + '</div>';
-            // Per-platform EMV table (only platforms that actually
-            // contributed positive earned-media reach).
-            var emv = (v.emv_breakdown || []).filter(function(r) {
-                var incr = r.incremental_users_projected;
-                if (incr == null) {
-                    // Backwards-compat for older S3 files that didn't
-                    // store the incremental field.
-                    incr = (r.post_users_projected || 0) - (r.pre_users_projected || 0);
-                }
-                return incr > 0 && (r.emv_value || 0) > 0;
-            });
-            if (emv.length) {
-                emv.sort(function(a, b) { return (b.emv_value||0) - (a.emv_value||0); });
-                html += '<div style="font-size:12px;color:var(--text-secondary);margin:0.5rem 0 0.4rem;">Earned Media Value by platform — values only the <strong>incremental</strong> brand engagers (post − pre) attributable to each platform, so users appearing on multiple platforms aren\'t double-counted:</div>'
-                     +  '<table style="width:100%;border-collapse:collapse;font-size:13px;">'
-                     +  '<thead><tr style="border-bottom:2px solid var(--border-color);">'
-                     +  '<th style="padding:6px 10px;text-align:left;">Platform</th>'
-                     +  '<th style="padding:6px 10px;text-align:right;">Incremental Users</th>'
-                     +  '<th style="padding:6px 10px;text-align:right;">$/User</th>'
-                     +  '<th style="padding:6px 10px;text-align:right;">EMV</th>'
-                     +  '</tr></thead><tbody>'
-                     +  emv.map(function(r) {
-                            var incr = r.incremental_users_projected;
-                            if (incr == null) incr = (r.post_users_projected || 0) - (r.pre_users_projected || 0);
-                            return '<tr style="border-bottom:1px solid rgba(255,255,255,0.04);">'
-                                +    '<td style="padding:6px 10px;font-weight:500;">' + r.platform + '</td>'
-                                +    '<td style="padding:6px 10px;text-align:right;">' + _bpiqFmtNum(incr) + '</td>'
-                                +    '<td style="padding:6px 10px;text-align:right;color:var(--text-secondary);">$' + (r.emv_per_user_rate || 0).toFixed(2) + '</td>'
-                                +    '<td style="padding:6px 10px;text-align:right;color:#10b981;font-weight:600;">' + _bpiqFmtMoney(r.emv_value || 0) + '</td>'
-                                +  '</tr>';
-                        }).join('')
-                     +  '</tbody></table>';
+            if (emvFormulaEl) {
+                emvFormulaEl.innerHTML = _emvIncrTotal > 0
+                    ? (_bpiqFmtNum(_emvIncrTotal) + ' incr. consumers × $' + _emvBlended.toFixed(2) + ' blended' + _emvRangeStr)
+                    : 'Σ per-platform incremental consumers × platform CPM';
             }
-            body.innerHTML = html;
-        }
 
-        // ----- Brand Partnership: sentiment renderer -----
-        var _bpiqSentChartInst = null;
-        function _bpiqRenderSentiment(s) {
-            var el = document.getElementById('bpiqSentiment');
-            if (!el) return;
-            if (!s.enabled) {
-                el.innerHTML = '<div style="padding:0.75rem;color:var(--text-secondary);font-size:13px;">Not enough brand-tagged URLs to classify sentiment.</div>';
-                return;
+            // ---------- 🤝 Brand Engagement Value ----------
+            if (bevCard)   bevCard.style.display = '';
+            if (bevTotalEl) bevTotalEl.textContent = _bpiqFmtMoney(v.brand_engagement_value || 0);
+            if (bevBody) {
+                var bevCount = (_bpiqState.valBases && _bpiqState.valBases.bev) || 0;
+                var bevRateValue = (v.rates && v.rates.bev_per_user) || 0;
+                bevBody.innerHTML = _bpiqMathRow(
+                    [
+                        { label: 'Post-Campaign Engaged Consumers',
+                          value: _bpiqFmtNum(bevCount) },
+                        { label: '× $/consumer rate &nbsp;'
+                                 + _bpiqBenchHint(_bm.bev_per_user),
+                          value: '$ ' + _bpiqRateInput('bev', bevRateValue, 'Edit $/consumer — recalculates Brand Engagement Value & Total Brand Value')
+                                 + ' <span style="color:var(--text-secondary);font-size:13px;">/consumer</span>' }
+                    ],
+                    '= Brand Engagement Value',
+                    _bpiqFmtMoney(v.brand_engagement_value || 0),
+                    '#6366f1'
+                );
             }
-            var pre  = s.pre  || { positive: 0, neutral: 0, negative: 0 };
-            var post = s.post || { positive: 0, neutral: 0, negative: 0 };
-            var shiftSign = (s.net_shift || 0) > 0 ? '+' : '';
-            var shiftColor = (s.net_shift || 0) > 0 ? '#10b981'
-                            : (s.net_shift || 0) < 0 ? '#ef4444' : 'var(--text-secondary)';
 
-            var html = '';
-            html += '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:0.75rem;margin-bottom:1rem;">';
-            html +=   '<div style="padding:0.85rem;border:1px solid var(--border-color);border-radius:8px;text-align:center;">'
-                    +   '<div style="font-size:0.7rem;color:var(--text-secondary);text-transform:uppercase;">Pre Net Sentiment</div>'
-                    +   '<div style="font-size:1.4rem;font-weight:700;">' + (s.pre_net_score || 0).toFixed(1) + '</div>'
-                    + '</div>';
-            html +=   '<div style="padding:0.85rem;border:1px solid var(--border-color);border-radius:8px;text-align:center;">'
-                    +   '<div style="font-size:0.7rem;color:var(--text-secondary);text-transform:uppercase;">Post Net Sentiment</div>'
-                    +   '<div style="font-size:1.4rem;font-weight:700;">' + (s.post_net_score || 0).toFixed(1) + '</div>'
-                    + '</div>';
-            html +=   '<div style="padding:0.85rem;border:1px solid ' + shiftColor + ';border-radius:8px;text-align:center;">'
-                    +   '<div style="font-size:0.7rem;color:var(--text-secondary);text-transform:uppercase;">Sentiment Shift</div>'
-                    +   '<div style="font-size:1.4rem;font-weight:700;color:' + shiftColor + ';">' + shiftSign + (s.net_shift || 0).toFixed(1) + '</div>'
-                    + '</div>';
-            html += '</div>';
+            // ---------- 📈 Brand Lift Value ----------
+            if (blvCard)   blvCard.style.display = '';
+            if (blvTotalEl) blvTotalEl.textContent = _bpiqFmtMoney(v.brand_lift_value || 0);
+            if (blvBody) {
+                var blvCount = (v.incremental_users != null)
+                    ? v.incremental_users
+                    : ((_bpiqState.valBases && _bpiqState.valBases.blv) || 0);
+                var blvRateValue = (v.rates && v.rates.blv_per_incr_user) || 0;
+                blvBody.innerHTML = _bpiqMathRow(
+                    [
+                        { label: 'Incremental Consumers (post − pre · DiD vs Gen Pop)',
+                          value: _bpiqFmtNum(blvCount) },
+                        { label: '× $/incremental-consumer rate &nbsp;'
+                                 + _bpiqBenchHint(_bm.blv_per_incr_user),
+                          value: '$ ' + _bpiqRateInput('blv', blvRateValue, 'Edit $/incremental consumer — recalculates Brand Lift Value & Total Brand Value')
+                                 + ' <span style="color:var(--text-secondary);font-size:13px;">/incr. consumer</span>' }
+                    ],
+                    '= Brand Lift Value',
+                    _bpiqFmtMoney(v.brand_lift_value || 0),
+                    '#f59e0b'
+                );
+            }
 
-            html += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;align-items:start;">';
-            html += '<div style="position:relative;height:260px;"><canvas id="bpiqSentChart"></canvas></div>';
-            var _renderSentList = function(items) {
-                if (!items || !items.length) {
-                    return '<div style="color:var(--text-secondary);font-size:12px;margin-top:0.4rem;">None detected</div>';
+            // ---------- 💳 Conversion Value ----------
+            // Card visibility is driven by the conversions block above
+            // (which hides the whole card for low/zero signal). Here
+            // we populate the math + total *only when the card is
+            // already visible*, so the value math stays in sync with
+            // the post-conversions count.
+            if (convValCard && convValCard.style.display !== 'none') {
+                if (convValTotEl) convValTotEl.textContent = _bpiqFmtMoney(v.conversion_value || 0);
+                if (convValBody) {
+                    var convCount = (_bpiqState.valBases && _bpiqState.valBases.conv) || 0;
+                    var convRateValue = (v.rates && v.rates.conv_value_per_user) || 0;
+                    convValBody.innerHTML = _bpiqMathRow(
+                        [
+                            { label: 'Post-Campaign Conversions',
+                              value: _bpiqFmtNum(convCount) },
+                            { label: '× Average Order Value (AOV) &nbsp;'
+                                     + _bpiqBenchHint(_bm.conv_value_per_user),
+                              value: '$ ' + _bpiqRateInput('conv', convRateValue, 'Edit $/conversion (AOV) — recalculates Conversion Value & Total Brand Value')
+                                     + ' <span style="color:var(--text-secondary);font-size:13px;">/order</span>' }
+                        ],
+                        '= Conversion Value',
+                        _bpiqFmtMoney(v.conversion_value || 0),
+                        '#ef4444'
+                    );
                 }
-                var _esc = function(s) {
-                    return String(s == null ? '' : s)
-                        .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+            } else if (convValBody) {
+                convValBody.innerHTML = '';
+            }
+
+            // ----- Wire up editable rate inputs across all 3 cards -----
+            // All BEV/BLV/Conv inputs share data-bpiq-rate; query the
+            // document so we catch every card's input regardless of
+            // which body container they live in.
+            document.querySelectorAll('input[data-bpiq-rate]').forEach(function(inp) {
+                if (inp.dataset.bpiqRateWired === '1') return;
+                inp.dataset.bpiqRateWired = '1';
+                inp.addEventListener('click', function(e) { e.stopPropagation(); });
+                var commit = function() {
+                    var key = inp.getAttribute('data-bpiq-rate');
+                    var val = parseFloat(inp.value);
+                    if (!isFinite(val) || val < 0) val = 0;
+                    if (!_bpiqState.data) return;
+                    var rates = (_bpiqState.data.valuation && _bpiqState.data.valuation.rates) || {};
+                    if (key === 'bev')  rates.bev_per_user        = val;
+                    if (key === 'blv')  rates.blv_per_incr_user   = val;
+                    if (key === 'conv') rates.conv_value_per_user = val;
+                    if (_bpiqState.data.valuation) _bpiqState.data.valuation.rates = rates;
+                    _bpiqRecomputeAndRerender();
                 };
-                return '<ul style="margin:0.4rem 0 0;padding-left:1.1rem;font-size:12px;">'
-                    + items.slice(0,8).map(function(u) {
-                        var summary = _esc(u.summary || u.common_name || 'Brand page');
-                        return '<li>' + summary + '</li>';
-                      }).join('') + '</ul>';
-            };
-            html += '<div>'
-                  + '<div style="margin-bottom:0.75rem;"><strong style="color:#10b981;">Top Positive URLs</strong>'
-                  + _renderSentList(s.top_positive) + '</div>'
-                  + '<div style="margin-bottom:0.75rem;"><strong style="color:#94a3b8;">Top Neutral URLs</strong>'
-                  + _renderSentList(s.top_neutral) + '</div>'
-                  + '<div><strong style="color:#ef4444;">Top Negative URLs</strong>'
-                  + _renderSentList(s.top_negative) + '</div>'
-                  + '</div>';
-            html += '</div>';
-            el.innerHTML = html;
-
-            // Use US-projected counts for the chart so all dashboard
-            // numbers are reported in gen-pop units. Falls back to raw
-            // panel hits if projection isn't present.
-            var preProj  = s.pre_projected  || pre;
-            var postProj = s.post_projected || post;
-
-            var canvas = document.getElementById('bpiqSentChart');
-            if (canvas && typeof Chart !== 'undefined') {
-                if (_bpiqSentChartInst) _bpiqSentChartInst.destroy();
-                _bpiqSentChartInst = new Chart(canvas.getContext('2d'), {
-                    type: 'bar',
-                    data: {
-                        labels: ['Positive', 'Neutral', 'Negative'],
-                        datasets: [
-                            { label: 'Pre',  data: [preProj.positive  || 0, preProj.neutral  || 0, preProj.negative  || 0], backgroundColor: '#6366f1', borderWidth: 0, borderRadius: 6 },
-                            { label: 'Post', data: [postProj.positive || 0, postProj.neutral || 0, postProj.negative || 0], backgroundColor: '#10b981', borderWidth: 0, borderRadius: 6 }
-                        ]
-                    },
-                    options: {
-                        responsive: true, maintainAspectRatio: false,
-                        scales: {
-                            y: { beginAtZero: true, grid: { color: 'rgba(255,255,255,0.06)' }, ticks: { color: '#aaa', font: { size: 11 }, callback: function(v) { return Number(v).toLocaleString(); } } },
-                            x: { grid: { display: false }, ticks: { color: '#e8e8e8', font: { size: 11 } } }
-                        },
-                        plugins: {
-                            legend:  { position: 'bottom', labels: { color: '#e8e8e8', font: { size: 11 } } },
-                            tooltip: { callbacks: { label: function(ctx) { return ctx.dataset.label + ': ' + Number(ctx.parsed.y).toLocaleString() + ' US users'; } } }
-                        }
-                    }
+                inp.addEventListener('change', commit);
+                inp.addEventListener('blur',   commit);
+                inp.addEventListener('keydown', function(e) {
+                    if (e.key === 'Enter') { e.preventDefault(); inp.blur(); }
                 });
-            }
+            });
         }
 
         // ====================================================================
@@ -54589,7 +55214,11 @@
             runsByKey: {},
             availableRuns: [],
             currentKey: '',
-            inFlight: {}
+            inFlight: {},
+            // Gen Pop is layered into compare-mode views by default. The
+            // popover exposes a toggle so users can compare old vs new
+            // without Gen Pop crowding the bars / columns.
+            includeGenPop: true
         };
 
         function _resetComparisonRunsState(subject, currentKey, availableRuns) {
@@ -54599,10 +55228,22 @@
                 runsByKey: {},
                 availableRuns: Array.isArray(availableRuns) ? availableRuns.slice() : [],
                 currentKey: currentKey || '',
-                inFlight: {}
+                inFlight: {},
+                includeGenPop: true
             };
             _updateCompareDateRangesButtonBadge();
             _closeCompareDateRangesPopover();
+        }
+
+        // Toggle whether the Gen Pop baseline bar/column is layered into
+        // compare-mode visuals. Re-applies charts + tables so the change is
+        // visible without re-opening the popover. No-op outside comparison
+        // mode (no selectedKeys -> the native single-profile render runs and
+        // Gen Pop comes from the underlying templates, not from here).
+        function _setComparisonIncludeGenPop(val) {
+            _comparisonRunsState.includeGenPop = !!val;
+            try { applyComparisonRunsToDashboardCharts(); } catch (e) { console.warn('[compare] genpop toggle charts failed', e); }
+            try { applyComparisonRunsToCategoryTables(); } catch (e) { console.warn('[compare] genpop toggle tables failed', e); }
         }
 
         // If the profile display name contains a " - " (or en-dash / em-dash)
@@ -54684,7 +55325,7 @@
             try {
                 const info = (typeof getProfileSuffixInfo === 'function')
                     ? getProfileSuffixInfo(profile) : { suffixType: 'none', suffixLabel: '' };
-                if (info && info.suffixType === 'cohort' && info.suffixLabel) {
+                if (info && (info.suffixType === 'cohort' || info.suffixType === 'dash') && info.suffixLabel) {
                     return dateRangeYear ? (info.suffixLabel + ' ' + dateRangeYear) : info.suffixLabel;
                 }
             } catch (_) {}
@@ -54941,6 +55582,28 @@
             header.appendChild(clearLink);
             pop.appendChild(header);
 
+            // ---- Gen Pop baseline toggle ----------------------------------
+            // Always visible: lets the user drop Gen Pop from compare-mode
+            // visuals when they only care about old-vs-new (or run-vs-run).
+            // Has no effect outside compare mode (selectedKeys empty -> the
+            // native render owns the Gen Pop column).
+            const gpRow = document.createElement('label');
+            gpRow.style.cssText = 'display:grid;grid-template-columns:18px 1fr;column-gap:0.55rem;align-items:center;padding:0.4rem 0.5rem;border-radius:6px;cursor:pointer;font-size:0.82rem;line-height:1.25;margin-bottom:0.45rem;background:rgba(156,163,175,0.08);border:1px solid rgba(156,163,175,0.18);';
+            const gpCb = document.createElement('input');
+            gpCb.type = 'checkbox';
+            gpCb.id = 'cmpIncludeGenPopCb';
+            gpCb.checked = _comparisonRunsState.includeGenPop !== false;
+            gpCb.style.cssText = 'accent-color:#9ca3af;cursor:pointer;width:14px;height:14px;margin:0;justify-self:center;';
+            const gpLbl = document.createElement('span');
+            gpLbl.innerHTML = 'Include <strong style="color:#cbd5e1;">Gen Pop</strong> baseline';
+            gpLbl.style.cssText = 'color:var(--text-primary, #e6e6e6);';
+            gpRow.appendChild(gpCb);
+            gpRow.appendChild(gpLbl);
+            gpCb.addEventListener('change', function() {
+                _setComparisonIncludeGenPop(gpCb.checked);
+            });
+            pop.appendChild(gpRow);
+
             if (available.length === 0) {
                 const empty = document.createElement('div');
                 empty.style.cssText = 'font-size:0.8rem;color:var(--text-secondary, #9ca3af);padding:0.5rem 0;';
@@ -55100,7 +55763,8 @@
                         backgroundColor: _COMPARISON_PALETTE[idx % _COMPARISON_PALETTE.length]
                     };
                 });
-                const gpDataset = Array.isArray(origGP) ? [{
+                const includeGenPop = _comparisonRunsState.includeGenPop !== false;
+                const gpDataset = (includeGenPop && Array.isArray(origGP)) ? [{
                     label: 'Gen Pop',
                     data: origGP.map(v => (typeof v === 'number' && isFinite(v)) ? v : 0),
                     backgroundColor: _COMPARISON_GENPOP_COLOR
@@ -55274,7 +55938,21 @@
                 .filter(Boolean);
             _cmpInstallTableObservers();
 
+            // One-time stylesheet so toggling the .cmp-hide-genpop class on a
+            // container collapses its native Gen Pop cells without us having
+            // to touch each row's display directly. Matches the .genpop-col
+            // class used across behavioral / interests rows and the
+            // .location-genpop variant used by the regional breakdown.
+            if (!document.getElementById('cmpHideGenpopStyle')) {
+                const s = document.createElement('style');
+                s.id = 'cmpHideGenpopStyle';
+                s.textContent = '.cmp-hide-genpop .genpop-col, .cmp-hide-genpop .location-genpop { display: none !important; }';
+                document.head.appendChild(s);
+            }
+
             const palette = _COMPARISON_PALETTE;
+            const includeGenPop = _comparisonRunsState.includeGenPop !== false;
+            const hideGP = (series.length > 0 && !includeGenPop);
 
             // -------- BEHAVIORAL CARDS ----------------------------------
             // Each card has .behavioral-table > .behavioral-header-row +
@@ -55291,15 +55969,19 @@
                 _cmpClearInjected(table);
                 if (series.length === 0) {
                     table.style.gridTemplateColumns = '';
+                    table.classList.remove('cmp-hide-genpop');
                     return;
                 }
+                table.classList.toggle('cmp-hide-genpop', hideGP);
                 const list = table.querySelector('.behavioral-list');
                 const cat = list && list.dataset.cat;
-                // Recompute grid: rank | name | profile | [N cmps] | genpop | index.
-                // Width per comparison column kept tight (64px) so multiple
-                // selections don't blow out the card.
+                // Recompute grid: rank | name | profile | [N cmps] | [genpop?] | index.
+                // The "70px " before " 56px" is the Gen Pop column; drop it
+                // when the user has hidden Gen Pop so the row collapses
+                // cleanly instead of leaving a gap.
                 const cmpCols = series.map(() => '60px').join(' ');
-                table.style.gridTemplateColumns = '28px minmax(80px,1fr) 70px ' + cmpCols + ' 70px 56px';
+                const gpCol = hideGP ? '' : ' 70px';
+                table.style.gridTemplateColumns = '28px minmax(80px,1fr) 70px ' + cmpCols + gpCol + ' 56px';
 
                 // Header row injection
                 const header = table.querySelector('.behavioral-header-row');
@@ -55352,15 +56034,18 @@
             if (intGrid) {
                 _cmpClearInjected(intGrid);
                 if (series.length > 0) {
+                    intGrid.classList.toggle('cmp-hide-genpop', hideGP);
                     const intLookups = series.map(s => ({
                         label: s.label,
                         map: _cmpBuildInterestsLookup(s.parsed)
                     }));
                     // The interests grid uses a CSS grid declared in the
                     // stylesheet. We override grid-template-columns via
-                    // inline style to expand for comparison columns.
+                    // inline style to expand for comparison columns and
+                    // optionally drop the Gen Pop column.
                     const cmpCols = series.map(() => '60px').join(' ');
-                    intGrid.style.gridTemplateColumns = '28px minmax(120px,1fr) 70px ' + cmpCols + ' 70px 56px';
+                    const gpCol = hideGP ? '' : ' 70px';
+                    intGrid.style.gridTemplateColumns = '28px minmax(120px,1fr) 70px ' + cmpCols + gpCol + ' 56px';
 
                     const intHeader = intGrid.querySelector('.interest-header-row');
                     if (intHeader) {
@@ -55392,6 +56077,7 @@
                     });
                 } else {
                     intGrid.style.gridTemplateColumns = '';
+                    intGrid.classList.remove('cmp-hide-genpop');
                 }
             }
 
@@ -55402,13 +56088,17 @@
             const locContainers = [document.getElementById('locationsContainer'), document.getElementById('locationsList')]
                 .filter(Boolean);
             if (locContainers.length > 0) {
-                locContainers.forEach(c => _cmpClearInjected(c));
+                locContainers.forEach(c => {
+                    _cmpClearInjected(c);
+                    if (series.length === 0) c.classList.remove('cmp-hide-genpop');
+                });
                 if (series.length > 0) {
                     const locLookups = series.map(s => ({
                         label: s.label,
                         map: _cmpBuildLocationsLookup(s.parsed)
                     }));
                     locContainers.forEach(container => {
+                        container.classList.toggle('cmp-hide-genpop', hideGP);
                         // Inject header (location tables often use a
                         // .location-header-row or first row with column
                         // titles — try both).
@@ -75085,14 +75775,38 @@
         const PROFILE_SUFFIX_REGEX = /[\s_\-]+(20\d{2}|\d+\+|\d+\s*Plus|Avid(?:\s+Fans?)?|Casual(?:\s+Fans?)?|Super\s*Fans?|Heavy(?:\s+Users?)?|Light(?:\s+Users?)?|Lite|Premium|Standard)$/i;
         const _YEAR_SUFFIX_TEST = /^20\d{2}$/;
 
+        // Dash-separated suffix: anything after the LAST " - " (ASCII
+        // hyphen, en-dash, or em-dash) with spaces on both sides. We
+        // require surrounding whitespace so genuinely hyphenated names
+        // like "Smith-Jones" or "Jay-Z" aren't split. Use a non-greedy
+        // base capture with a $-anchored tail so the match always lands
+        // on the LAST qualifying dash.
+        const PROFILE_DASH_SUFFIX_REGEX = /^(.+)\s[\-\u2013\u2014]\s+(.+)$/;
+
         /** Splits a profile's display name into a {canonicalName,
-         *  suffixType, suffixLabel} triple. suffixType is 'year' for a
-         *  4-digit calendar year suffix, 'cohort' for an audience-cohort
-         *  token (4+, Avid, Premium, etc.), and 'none' when the name has
-         *  no recognised suffix. */
+         *  suffixType, suffixLabel} triple. suffixType is:
+         *    - 'year' for a 4-digit calendar-year suffix
+         *    - 'cohort' for an audience-cohort token (4+, Avid, Premium, etc.)
+         *    - 'dash' for anything after a " - " separator
+         *    - 'none' when the name has no recognised suffix.
+         *  Dash is checked FIRST so multi-word descriptive cohort suffixes
+         *  ("Superfan 4+ Touchpoints") group correctly even though their
+         *  trailing token isn't in the cohort allow-list.
+         */
         function getProfileSuffixInfo(profile) {
             const name = (getProfileFullName(profile) || '').trim();
             if (!name) return { canonicalName: '', suffixType: 'none', suffixLabel: '' };
+            // 1. Dash-separated suffix wins: "Reba McEntire - Superfan 4+ Touchpoints"
+            //    -> canonical "Reba McEntire", label "Superfan 4+ Touchpoints"
+            const dm = name.match(PROFILE_DASH_SUFFIX_REGEX);
+            if (dm) {
+                const base = (dm[1] || '').trim();
+                const suffix = (dm[2] || '').trim();
+                if (base && suffix) {
+                    return { canonicalName: base, suffixType: 'dash', suffixLabel: suffix };
+                }
+            }
+            // 2. Allow-listed single-token cohort/year suffixes.
             const m = name.match(PROFILE_SUFFIX_REGEX);
             if (!m) return { canonicalName: name, suffixType: 'none', suffixLabel: '' };
             const base = name.slice(0, m.index).trim();
@@ -75107,9 +75821,10 @@
          *  a year is not a cohort) so the sort treats them together. */
         function getProfileCohortInfo(profile) {
             const info = getProfileSuffixInfo(profile);
+            const isCohortLike = info.suffixType === 'cohort' || info.suffixType === 'dash';
             return {
                 canonicalName: info.canonicalName,
-                cohortLabel: info.suffixType === 'cohort' ? info.suffixLabel : ''
+                cohortLabel: isCohortLike ? info.suffixLabel : ''
             };
         }
 
@@ -75184,6 +75899,7 @@
             const info = getProfileSuffixInfo(profile);
             if (info.suffixType === 'year') return info.suffixLabel;
             if (info.suffixType === 'cohort') return info.suffixLabel;
+            if (info.suffixType === 'dash') return info.suffixLabel;
             return getProfileRunYear(profile) || 'Run';
         }
 
@@ -75233,8 +75949,8 @@
             return [...runs].sort((a, b) => {
                 const infoA = getProfileSuffixInfo(a);
                 const infoB = getProfileSuffixInfo(b);
-                const isCohortA = infoA.suffixType === 'cohort' ? 1 : 0;
-                const isCohortB = infoB.suffixType === 'cohort' ? 1 : 0;
+                const isCohortA = (infoA.suffixType === 'cohort' || infoA.suffixType === 'dash') ? 1 : 0;
+                const isCohortB = (infoB.suffixType === 'cohort' || infoB.suffixType === 'dash') ? 1 : 0;
                 if (isCohortA !== isCohortB) return isCohortA - isCohortB;
                 if (isCohortA) {
                     return infoA.suffixLabel.localeCompare(infoB.suffixLabel, undefined, { numeric: true, sensitivity: 'base' });

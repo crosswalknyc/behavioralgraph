@@ -5610,6 +5610,49 @@ def get_admin_content():
         except Exception as ts_err:
             print(f"⚠️ Error loading Ticket Sales files: {ts_err}")
         
+        # Get Brand Partnership IQ result files. Each released JSON file
+        # is enriched with display_name / category / image_url from the
+        # bpiq_metadata sidecar so admins can edit them in the same CMS
+        # surface that handles Profile IQ and Ticket Sales.
+        bpiq_files = []
+        try:
+            bpiq_metadata = load_bpiq_metadata()
+            bpiq_paginator = s3.get_paginator('list_objects_v2')
+            for page in bpiq_paginator.paginate(Bucket=S3_BUCKET, Prefix=BRAND_PARTNERSHIP_IQ_S3_PREFIX):
+                for obj in page.get('Contents', []):
+                    key = obj['Key']
+                    if not key.endswith('.json') or key.startswith(S3_PURGATORY_PREFIX):
+                        continue
+                    bare_key = key.replace(BRAND_PARTNERSHIP_IQ_S3_PREFIX, '')
+                    name_without_ext = bare_key.replace('.json', '')
+                    match = re.match(r'^(.+)_(\d{2}_\d{2}_\d{4}_\d{2}_\d{2})$', name_without_ext)
+                    if match:
+                        default_display = match.group(1).replace('_', ' ')
+                    else:
+                        default_display = name_without_ext.replace('_', ' ')
+                    meta = bpiq_metadata.get(bare_key, {})
+                    project_name = (meta.get('display_name') or default_display).strip()
+                    category = (meta.get('category') or 'Uncategorized').strip() or 'Uncategorized'
+                    image_url = meta.get('image_url') or ''
+                    last_modified = obj['LastModified'].isoformat() if obj.get('LastModified') else None
+                    bpiq_files.append({
+                        'key': key,                # full key with prefix — admin row uses this
+                        'filename': bare_key,
+                        'project_name': project_name,
+                        'category': category,
+                        'size': obj.get('Size', 0),
+                        'last_modified': last_modified,
+                        'created_at': last_modified,
+                        'bucket': S3_BUCKET,
+                        's3_key': bare_key,
+                        'is_brand_partnership_iq': True,
+                        'custom_image': image_url if image_url else None
+                    })
+            print(f"✅ Found {len(bpiq_files)} Brand Partnership IQ files")
+            active_files.extend(bpiq_files)
+        except Exception as bpiq_err:
+            print(f"⚠️ Error loading Brand Partnership IQ files: {bpiq_err}")
+
         # Get Ticket Sales Tracker files from ticket-sales-tracker bucket
         ticket_sales_tracker_files = []
         try:
@@ -5651,9 +5694,11 @@ def get_admin_content():
         load_profile_image_cache(force=True)
         load_profile_display_overrides(force=True)
         
-        # Add custom image info to each file (skip ticket sales and ticket sales tracker - they use their own metadata)
+        # Add custom image info to each file (skip ticket sales, ticket
+        # sales tracker, and brand partnership IQ — they each carry their
+        # own metadata sidecar already merged above).
         for f in active_files:
-            if f.get('is_ticket_sales') or f.get('is_ticket_sales_tracker'):
+            if f.get('is_ticket_sales') or f.get('is_ticket_sales_tracker') or f.get('is_brand_partnership_iq'):
                 continue
             cache_key = f.get('project_name', '').lower().strip()
             if cache_key in profile_image_cache:
@@ -17913,6 +17958,22 @@ def rename_file():
                 'new_key': old_key,
                 'message': 'Display name updated successfully'
             })
+
+        # Brand Partnership IQ: metadata-only rename. The result JSON
+        # itself is never copied/rewritten — admins only override the
+        # display name via system/brand_partnership_iq_metadata.json.
+        if old_key.startswith(BRAND_PARTNERSHIP_IQ_S3_PREFIX):
+            actual_key = old_key.replace(BRAND_PARTNERSHIP_IQ_S3_PREFIX, '')
+            meta = load_bpiq_metadata()
+            if actual_key not in meta:
+                meta[actual_key] = {}
+            meta[actual_key]['display_name'] = (display_name or new_name.replace('_', ' ')).strip()
+            save_bpiq_metadata(meta)
+            return jsonify({
+                'success': True,
+                'new_key': old_key,
+                'message': 'Display name updated successfully'
+            })
         
         # Get the folder path and extension from old key
         folder = '/'.join(old_key.split('/')[:-1])
@@ -18022,6 +18083,13 @@ SVOD_METADATA_KEY = 'system/svod_metadata.json'
 # Ticket Sales IQ metadata storage key (display_name, category, image_url per s3_key)
 TICKET_SALES_METADATA_KEY = 'system/ticket_sales_metadata.json'
 TICKET_SALES_TRACKER_METADATA_KEY = 'system/ticket_sales_tracker_metadata.json'
+
+# Brand Partnership IQ metadata: per-result {display_name, category, image_url}
+# keyed by the bare S3 key inside `brand-partnership-iq/` (e.g.
+# "DoorDash_The_Goat_05_11_2026_21_22.json"). Same shape as Ticket Sales —
+# kept separate so renames are metadata-only (the underlying JSON is never
+# moved/rewritten).
+BPIQ_METADATA_KEY = 'system/brand_partnership_iq_metadata.json'
 
 # SVOD pricing per platform (admin-configured): { "paramount+": { "ad_supported": 5.99, "premium": 11.99 }, ... }
 SVOD_PRICING_KEY = 'system/svod_pricing.json'
@@ -18556,6 +18624,30 @@ def release_purgatory_item():
                     print(f"✅ Saved SVOD category for {result} -> {svod_meta[result]['category']}")
                 except Exception as e:
                     print(f"⚠️ Failed to save SVOD category: {e}")
+            # For Brand Partnership IQ: persist title / category / image to
+            # the BPIQ metadata sidecar so the released JSON inherits whatever
+            # was set during purgatory review without needing a second pass
+            # in Content Management.
+            if source_type == 'brand_partnership_iq' and result:
+                try:
+                    bare_key = result
+                    if bare_key.startswith(BRAND_PARTNERSHIP_IQ_S3_PREFIX):
+                        bare_key = bare_key.replace(BRAND_PARTNERSHIP_IQ_S3_PREFIX, '')
+                    bpiq_meta_release = load_bpiq_metadata()
+                    if bare_key not in bpiq_meta_release:
+                        bpiq_meta_release[bare_key] = {}
+                    title_val = (item.get('title') or item.get('project_name') or '').strip()
+                    if title_val:
+                        bpiq_meta_release[bare_key]['display_name'] = title_val
+                    cat_val = (item.get('category') or '').strip()
+                    if cat_val and cat_val.lower() != 'brand partnership iq':
+                        bpiq_meta_release[bare_key]['category'] = cat_val.upper()
+                    if item.get('image_url'):
+                        bpiq_meta_release[bare_key]['image_url'] = item['image_url']
+                    save_bpiq_metadata(bpiq_meta_release)
+                    print(f"✅ Saved BPIQ metadata for {bare_key}")
+                except Exception as e:
+                    print(f"⚠️ Failed to save BPIQ metadata: {e}")
             if source_type in ('roas_iq', 'ecommerce_iq') and result:
                 print(f"✅ Released {source_type} result: {result}")
             
@@ -18974,6 +19066,33 @@ def save_ticket_sales_tracker_metadata(metadata):
     except:
         return False
 
+def load_bpiq_metadata():
+    """Load Brand Partnership IQ per-result metadata (display_name, category,
+    image_url) from S3. Keys are bare S3 keys inside the BPIQ prefix (no
+    leading 'brand-partnership-iq/')."""
+    if not s3_client:
+        return {}
+    try:
+        response = s3_client.get_object(Bucket=S3_BUCKET, Key=BPIQ_METADATA_KEY)
+        return json.loads(response['Body'].read().decode('utf-8'))
+    except Exception:
+        return {}
+
+def save_bpiq_metadata(metadata):
+    """Save Brand Partnership IQ metadata to S3."""
+    if not s3_client:
+        return False
+    try:
+        s3_client.put_object(
+            Bucket=S3_BUCKET,
+            Key=BPIQ_METADATA_KEY,
+            Body=json.dumps(metadata, indent=2),
+            ContentType='application/json'
+        )
+        return True
+    except Exception:
+        return False
+
 def load_svod_pricing():
     """Load SVOD pricing (ad_supported, premium per platform) from S3."""
     if not s3_client:
@@ -19198,6 +19317,104 @@ def set_ticket_sales_tracker_image():
         return jsonify({'success': False, 'error': str(e)})
 
 
+@app.route('/api/admin/brand-partnership-iq-image', methods=['POST', 'DELETE'])
+@requires_admin
+def set_brand_partnership_iq_image():
+    """Upload, link, or remove the thumbnail image attached to a Brand
+    Partnership IQ result. Mirrors the Ticket Sales image flow:
+      - POST multipart with `file` + `bpiq_s3_key`  → uploads under
+        `brand-partnership-iq-images/{uuid}.{ext}`, max 2 MB, JPEG/PNG/
+        WEBP/GIF allowed.
+      - POST JSON with `bpiq_s3_key` + `image_url`  → stores an external
+        URL without uploading.
+      - DELETE JSON with `bpiq_s3_key`              → clears the field.
+    The S3 key may be sent with or without the `brand-partnership-iq/`
+    prefix; both are normalized to the bare key.
+    """
+    import uuid
+    try:
+        if request.method == 'DELETE':
+            data = request.get_json() or {}
+            s3_key = (data.get('bpiq_s3_key') or data.get('s3_key') or '').strip()
+            if not s3_key:
+                return jsonify({'success': False, 'error': 'bpiq_s3_key required'})
+            if s3_key.startswith(BRAND_PARTNERSHIP_IQ_S3_PREFIX):
+                s3_key = s3_key.replace(BRAND_PARTNERSHIP_IQ_S3_PREFIX, '')
+            meta = load_bpiq_metadata()
+            if s3_key in meta and 'image_url' in meta[s3_key]:
+                meta[s3_key].pop('image_url', None)
+                save_bpiq_metadata(meta)
+            return jsonify({'success': True, 'message': 'Image removed'})
+
+        # POST: either multipart upload or JSON URL link.
+        s3_key = None
+        image_url = None
+        if 'file' in request.files and request.files['file'].filename:
+            file = request.files['file']
+            s3_key = (request.form.get('bpiq_s3_key') or request.form.get('s3_key') or '').strip()
+            if not s3_key:
+                return jsonify({'success': False, 'error': 'bpiq_s3_key required'})
+            if s3_key.startswith(BRAND_PARTNERSHIP_IQ_S3_PREFIX):
+                s3_key = s3_key.replace(BRAND_PARTNERSHIP_IQ_S3_PREFIX, '')
+            file_data = file.read()
+            if len(file_data) > 2 * 1024 * 1024:
+                return jsonify({'success': False, 'error': 'File too large (max 2MB)'}), 400
+            ext = file.filename.rsplit('.', 1)[-1].lower() if '.' in file.filename else 'jpg'
+            if ext not in ['jpg', 'jpeg', 'png', 'webp', 'gif']:
+                ext = 'jpg'
+            content_type = f'image/{ext}'
+            if ext == 'jpg':
+                content_type = 'image/jpeg'
+            upload_key = f"brand-partnership-iq-images/{uuid.uuid4().hex}.{ext}"
+            s3_client.put_object(Bucket=S3_BUCKET, Key=upload_key, Body=file_data, ContentType=content_type)
+            image_url = f"/api/profile-image-file/{upload_key}"
+        else:
+            data = request.get_json() or {}
+            s3_key = (data.get('bpiq_s3_key') or data.get('s3_key') or '').strip()
+            image_url = (data.get('image_url') or '').strip()
+            if not s3_key or not image_url:
+                return jsonify({'success': False, 'error': 'bpiq_s3_key and image_url required'})
+            if s3_key.startswith(BRAND_PARTNERSHIP_IQ_S3_PREFIX):
+                s3_key = s3_key.replace(BRAND_PARTNERSHIP_IQ_S3_PREFIX, '')
+        meta = load_bpiq_metadata()
+        if s3_key not in meta:
+            meta[s3_key] = {}
+        meta[s3_key]['image_url'] = image_url
+        save_bpiq_metadata(meta)
+        return jsonify({'success': True, 'image_url': image_url, 'message': 'Image saved'})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+
+@app.route('/api/admin/brand-partnership-iq-metadata', methods=['POST'])
+@requires_admin
+def update_brand_partnership_iq_metadata():
+    """Bulk update display_name / category / image_url for a single BPIQ
+    result. Use this for direct field edits; the dedicated rename and
+    change-category endpoints already cover their slices via the shared
+    admin UI."""
+    try:
+        data = request.get_json() or {}
+        s3_key = (data.get('s3_key') or data.get('bpiq_s3_key') or '').strip()
+        if not s3_key:
+            return jsonify({'success': False, 'error': 's3_key required'})
+        if s3_key.startswith(BRAND_PARTNERSHIP_IQ_S3_PREFIX):
+            s3_key = s3_key.replace(BRAND_PARTNERSHIP_IQ_S3_PREFIX, '')
+        meta = load_bpiq_metadata()
+        if s3_key not in meta:
+            meta[s3_key] = {}
+        if 'display_name' in data:
+            meta[s3_key]['display_name'] = (data.get('display_name') or '').strip()
+        if 'category' in data:
+            meta[s3_key]['category'] = (data.get('category') or '').strip().upper()
+        if 'image_url' in data:
+            meta[s3_key]['image_url'] = (data.get('image_url') or '').strip()
+        save_bpiq_metadata(meta)
+        return jsonify({'success': True, 'message': 'Metadata updated'})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+
 @app.route('/api/admin/ticket-sales-metadata', methods=['POST'])
 @requires_admin
 def update_ticket_sales_metadata():
@@ -19249,6 +19466,22 @@ def change_file_category():
             metadata[actual_key]['category'] = new_category
             save_ticket_sales_metadata(metadata)
             print(f"🏷️ Changed Ticket Sales category for {actual_key} to {new_category}")
+            return jsonify({
+                'success': True,
+                'new_category': new_category,
+                'message': f'Category updated to {new_category}'
+            })
+
+        # Brand Partnership IQ: store the category in the BPIQ metadata
+        # sidecar. The JSON result itself is left untouched.
+        if file_key.startswith(BRAND_PARTNERSHIP_IQ_S3_PREFIX):
+            actual_key = file_key.replace(BRAND_PARTNERSHIP_IQ_S3_PREFIX, '')
+            metadata = load_bpiq_metadata()
+            if actual_key not in metadata:
+                metadata[actual_key] = {}
+            metadata[actual_key]['category'] = new_category
+            save_bpiq_metadata(metadata)
+            print(f"🏷️ Changed BPIQ category for {actual_key} to {new_category}")
             return jsonify({
                 'success': True,
                 'new_category': new_category,
@@ -31397,11 +31630,12 @@ def _run_brand_partnership_iq(job_id):
             'emv_breakdown': emv_breakdown,
             'methodology': (
                 "Total Brand Value = Brand Engagement Value (post-event US "
-                "users × $/user) + Earned Media Value (per-platform users "
-                "× platform EMV $/engaged user, benchmarked against 2026 "
-                "industry CPM rates) + Brand Lift Value (DiD-adjusted "
-                "incremental brand engagers × $/incremental user) + "
-                "Conversion Value (when statistically significant)."
+                "consumers × $/consumer) + Earned Media Value (per-platform "
+                "consumers × platform EMV $/engaged consumer, benchmarked "
+                "against 2026 industry CPM rates) + Brand Lift Value "
+                "(DiD-adjusted incremental brand engagers × $/incremental "
+                "consumer) + Conversion Value (when statistically "
+                "significant)."
             ),
         }
 
@@ -31601,13 +31835,27 @@ def submit_brand_partnership_iq():
 @app.route('/api/brand-partnership-iq/results/<path:s3_key>')
 @requires_auth
 def get_brand_partnership_iq_result(s3_key):
-    """Return a Brand Partnership IQ result JSON from S3."""
+    """Return a Brand Partnership IQ result JSON from S3.
+
+    Also surfaces the metadata sidecar's `image_url` and `display_name`
+    so the dashboard can render the admin-uploaded photo + override
+    title alongside the result, matching the Ticket Sales / Profile IQ
+    pattern.
+    """
     try:
         full_key = s3_key if s3_key.startswith(BRAND_PARTNERSHIP_IQ_S3_PREFIX) \
                    else BRAND_PARTNERSHIP_IQ_S3_PREFIX + s3_key
+        bare_key = full_key.replace(BRAND_PARTNERSHIP_IQ_S3_PREFIX, '')
         obj = s3_client.get_object(Bucket=S3_BUCKET, Key=full_key)
         data = json.loads(obj['Body'].read().decode('utf-8'))
-        return jsonify({'success': True, 'data': data})
+        meta = (load_bpiq_metadata() or {}).get(bare_key, {}) or {}
+        return jsonify({
+            'success': True,
+            'data': data,
+            'image_url':    (meta.get('image_url') or '').strip() or None,
+            'display_name': (meta.get('display_name') or '').strip() or None,
+            'category':     (meta.get('category') or '').strip() or None,
+        })
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 404
 
@@ -31615,8 +31863,12 @@ def get_brand_partnership_iq_result(s3_key):
 @app.route('/api/brand-partnership-iq/list')
 @requires_auth
 def list_brand_partnership_iq():
-    """List released (non-purgatory) Brand Partnership IQ result files."""
+    """List released (non-purgatory) Brand Partnership IQ result files,
+    merging admin-managed metadata (display_name, category, image_url)
+    from system/brand_partnership_iq_metadata.json so the user dashboard
+    can render thumbnails + category groupings to match Profile IQ."""
     try:
+        bpiq_metadata = load_bpiq_metadata()
         paginator = s3_client.get_paginator('list_objects_v2')
         files = []
         for page in paginator.paginate(Bucket=S3_BUCKET,
@@ -31625,13 +31877,19 @@ def list_brand_partnership_iq():
                 key = obj['Key']
                 if not key.endswith('.json') or key.startswith(S3_PURGATORY_PREFIX):
                     continue
-                name_part = (key.replace(BRAND_PARTNERSHIP_IQ_S3_PREFIX, '')
-                                .replace('.json', ''))
-                display_name = re.sub(r'_(\d{2}_\d{2}_\d{4}_\d{2}_\d{2})$',
+                bare_key = key.replace(BRAND_PARTNERSHIP_IQ_S3_PREFIX, '')
+                name_part = bare_key.replace('.json', '')
+                default_name = re.sub(r'_(\d{2}_\d{2}_\d{4}_\d{2}_\d{2})$',
                                       '', name_part).replace('_', ' ')
+                meta = bpiq_metadata.get(bare_key, {})
+                display_name = (meta.get('display_name') or default_name).strip()
+                category = (meta.get('category') or '').strip() or 'Uncategorized'
+                image_url = meta.get('image_url') or ''
                 files.append({
                     'key': key,
                     'name': display_name,
+                    'category': category,
+                    'image_url': image_url,
                     'last_modified': obj['LastModified'].isoformat(),
                     'size': obj['Size'],
                 })
