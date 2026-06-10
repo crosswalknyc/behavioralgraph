@@ -31835,13 +31835,27 @@ def submit_brand_partnership_iq():
 @app.route('/api/brand-partnership-iq/results/<path:s3_key>')
 @requires_auth
 def get_brand_partnership_iq_result(s3_key):
-    """Return a Brand Partnership IQ result JSON from S3."""
+    """Return a Brand Partnership IQ result JSON from S3.
+
+    Also surfaces the metadata sidecar's `image_url` and `display_name`
+    so the dashboard can render the admin-uploaded photo + override
+    title alongside the result, matching the Ticket Sales / Profile IQ
+    pattern.
+    """
     try:
         full_key = s3_key if s3_key.startswith(BRAND_PARTNERSHIP_IQ_S3_PREFIX) \
                    else BRAND_PARTNERSHIP_IQ_S3_PREFIX + s3_key
+        bare_key = full_key.replace(BRAND_PARTNERSHIP_IQ_S3_PREFIX, '')
         obj = s3_client.get_object(Bucket=S3_BUCKET, Key=full_key)
         data = json.loads(obj['Body'].read().decode('utf-8'))
-        return jsonify({'success': True, 'data': data})
+        meta = (load_bpiq_metadata() or {}).get(bare_key, {}) or {}
+        return jsonify({
+            'success': True,
+            'data': data,
+            'image_url':    (meta.get('image_url') or '').strip() or None,
+            'display_name': (meta.get('display_name') or '').strip() or None,
+            'category':     (meta.get('category') or '').strip() or None,
+        })
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 404
 
