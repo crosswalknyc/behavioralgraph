@@ -20844,8 +20844,9 @@
                     </details>
                     <div id="jiqPathRibbon" style="width: 100%;"></div>
                     <div style="margin-top: 1rem; padding-top: 0.75rem; border-top: 1px solid var(--border-color);">
-                        <div style="font-size: 0.85rem; font-weight: 600; margin-bottom: 0.4rem;">Top observed paths</div>
-                        <div style="font-size: 0.72rem; color: var(--text-secondary); margin-bottom: 0.5rem;">Most common ordered sequences (adjacent dups collapsed). The bigger the user count, the more reliably we can attribute the purchase to that sequence.</div>
+                        <h3 id="jiqTopPathsMainTitle" style="margin: 0 0 0.3rem; display: none;"></h3>
+                        <div id="jiqTopPathsSubtitle" style="font-size: 0.85rem; font-weight: 600; margin-bottom: 0.4rem;">Top observed paths</div>
+                        <div id="jiqTopPathsDesc" style="font-size: 0.72rem; color: var(--text-secondary); margin-bottom: 0.5rem;">Most common ordered sequences (adjacent dups collapsed). The bigger the user count, the more reliably we can attribute the purchase to that sequence.</div>
                         <div id="jiqPathTopPaths" style="overflow-x: auto;"></div>
                     </div>
                 </div>
@@ -36092,6 +36093,20 @@
                 _setText('jiqSwitchedSubtitle',    TV_LABELS.switched_sub);
                 _setText('jiqInterstepTitle',      TV_LABELS.interstep_title);
                 _setText('jiqInterstepSubtitle',   TV_LABELS.interstep_sub);
+            }
+            // Fandango-specific title overrides
+            var _isFandangoCtx = (_metaCtx.target || '').toLowerCase().indexOf('fandango') >= 0;
+            if (_isFandangoCtx) {
+                var _tpMainTitle = document.getElementById('jiqTopPathsMainTitle');
+                if (_tpMainTitle) { _tpMainTitle.textContent = 'Fandango Path to Purchase'; _tpMainTitle.style.display = ''; }
+                _setText('jiqTopPathsSubtitle', 'Top observed paths - Fandango purchase');
+                _setText('jiqSiteFunnelTitle', '📺 Entry Paths');
+                _setText('jiqInceptionTitle', '📡 How Accounts Came to Fandango');
+                var _incSub = document.getElementById('jiqInceptionSubtitle');
+                if (_incSub) _incSub.style.display = 'none';
+                _setText('jiqCompanionTitle', '📱 Adjacent Behaviors');
+                var _compSub = document.getElementById('jiqCompanionSubtitle');
+                if (_compSub) _compSub.style.display = 'none';
             }
 
             // Meta line: target + vertical + visitors estimate
