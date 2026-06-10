@@ -20716,7 +20716,7 @@
 
                     <!-- View 2: Spider/network SVG -->
                     <div id="jiqSpiderWrap" style="display: none;">
-                        <svg id="jiqSpiderSvg" viewBox="0 0 1100 420" preserveAspectRatio="xMidYMid meet" style="width: 100%; height: auto; max-height: 420px;"></svg>
+                        <svg id="jiqSpiderSvg" viewBox="0 0 1100 460" preserveAspectRatio="xMidYMid meet" style="width: 100%; height: auto; max-height: 460px;"></svg>
                     </div>
 
                     <!-- View 3: Events flat list -->
@@ -37252,20 +37252,18 @@
 
         function _jiqRenderSpiderSvg(spider) {
             // Layout (flipped): Leaves at top -> Channels -> TARGET at bottom.
-            // Converter Cohort / Endpoints / Conversion removed per request.
             var chs = (spider.channels || []).slice(0, 8);
-            var W = 1100, H = 420;
+            var W = 1100, H = 460;
             var cx = W / 2;
-            var leafY = 60;
-            var chY   = 200;
-            var tgtY  = 380;
+            var chY   = 220;
+            var tgtY  = 410;
 
             var parts = [];
             parts.push('<rect width="' + W + '" height="' + H + '" fill="transparent"/>');
 
-            // TARGET node at bottom
-            parts.push('<g><circle cx="' + cx + '" cy="' + tgtY + '" r="32" fill="#111" stroke="var(--accent-primary)" stroke-width="3"/>'
-                + '<text x="' + cx + '" y="' + (tgtY + 5) + '" text-anchor="middle" fill="#fff" font-weight="700" font-size="13">' + _jiqEsc((spider.target || 'Target').slice(0, 14)) + '</text></g>');
+            // TARGET node at bottom — larger circle so name fits
+            parts.push('<g><circle cx="' + cx + '" cy="' + tgtY + '" r="44" fill="#111" stroke="var(--accent-primary)" stroke-width="3"/>'
+                + '<text x="' + cx + '" y="' + (tgtY + 6) + '" text-anchor="middle" fill="#fff" font-weight="700" font-size="15">' + _jiqEsc((spider.target || 'Target').slice(0, 14)) + '</text></g>');
 
             // Channels along a horizontal line
             var nCh = chs.length || 1;
@@ -37274,17 +37272,27 @@
                 var x = 60 + chSpacing * (i + 0.5);
                 var color = _jiqChannelColor(ch.channel);
                 // channel -> target edge (downward)
-                parts.push('<line x1="' + x + '" y1="' + (chY + 22) + '" x2="' + cx + '" y2="' + (tgtY - 32) + '" stroke="' + color + '" stroke-width="' + Math.max(1, Math.min(6, ch.reach_pct_of_genpop / 4)) + '" opacity="0.5"/>');
+                parts.push('<line x1="' + x + '" y1="' + (chY + 22) + '" x2="' + cx + '" y2="' + (tgtY - 44) + '" stroke="' + color + '" stroke-width="' + Math.max(1, Math.min(6, ch.reach_pct_of_genpop / 4)) + '" opacity="0.5"/>');
                 var r = Math.max(18, Math.min(36, 18 + ch.reach_pct_of_genpop * 0.8));
                 parts.push('<g><circle cx="' + x + '" cy="' + chY + '" r="' + r + '" fill="' + color + '" opacity="0.85"/>'
                     + '<text x="' + x + '" y="' + (chY + 4) + '" text-anchor="middle" fill="#fff" font-weight="700" font-size="' + Math.max(10, r/2.4) + '">' + ch.reach_pct_of_genpop + '%</text>'
                     + '<text x="' + x + '" y="' + (chY + r + 12) + '" text-anchor="middle" fill="var(--text-primary)" font-size="10">' + _jiqEsc(ch.label) + '</text></g>');
-                // Top 3 events as leaves ABOVE each channel
+                // Top 3 events as leaves ABOVE each channel — staggered heights
                 var evs = (ch.events || []).slice(0, 3);
-                var leafSpacing = Math.min(70, chSpacing - 10);
+                var leafSpacing = Math.min(80, chSpacing - 6);
                 evs.forEach(function(e, j) {
                     var lx = x + (j - (evs.length - 1) / 2) * (leafSpacing / Math.max(1, evs.length));
-                    var ly = leafY + (j % 2) * 18;
+                    var ly;
+                    if (evs.length === 1) {
+                        ly = 100;
+                    } else if (evs.length === 2) {
+                        ly = j === 0 ? 60 : 90;
+                    } else {
+                        // 3 leaves: outside ones high/staggered, middle one lower (shorter tentacle)
+                        if (j === 0) ly = 50;
+                        else if (j === 2) ly = 70;
+                        else ly = 110;
+                    }
                     parts.push('<line x1="' + x + '" y1="' + (chY - r) + '" x2="' + lx + '" y2="' + (ly + 6) + '" stroke="' + color + '" stroke-width="1" opacity="0.35"/>');
                     var actor = e.platform || e.network || e.advertiser || e.brand
                               || e.actor || e.publication || e.talent || e.creator
@@ -37292,7 +37300,7 @@
                               || e.channel || e.medium || e.query || '?';
                     actor = String(actor); if (actor.length > 18) actor = actor.slice(0, 17) + '…';
                     parts.push('<g><circle cx="' + lx + '" cy="' + ly + '" r="5" fill="' + color + '"/>'
-                        + '<text x="' + lx + '" y="' + (ly - 8) + '" text-anchor="middle" fill="var(--text-secondary)" font-size="9">' + _jiqEsc(actor) + '</text></g>');
+                        + '<text x="' + lx + '" y="' + (ly + 16) + '" text-anchor="middle" fill="var(--text-secondary)" font-size="9">' + _jiqEsc(actor) + '</text></g>');
                 });
             });
 
