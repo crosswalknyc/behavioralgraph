@@ -63,6 +63,7 @@ MASTER_CATEGORIES: dict[str, list[str]] = {
     ],
     "CONTENT": [
         "GAME PLAYERS", "GAMES", "GAMES - PLAYERS", "MOVIE", "PODCAST",
+        "VERTICAL SHORTS",
         # SERIES variants are handled by startswith("SERIES") below.
     ],
     "PLATFORMS": [

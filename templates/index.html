@@ -726,6 +726,141 @@
             margin: 0.3rem 0;
         }
 
+        /* Methodology modal */
+        .methodology-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            padding: 1.1rem 1.5rem 0.85rem 1.5rem;
+            border-bottom: 1px solid var(--border-color);
+            flex-shrink: 0;
+        }
+        .methodology-body {
+            display: flex;
+            flex: 1 1 auto;
+            min-height: 0;
+            overflow: hidden;
+        }
+        .methodology-sidebar {
+            width: 260px;
+            flex: 0 0 260px;
+            border-right: 1px solid var(--border-color);
+            overflow-y: auto;
+            background: var(--bg-secondary, rgba(255,255,255,0.02));
+            padding: 0.85rem 0;
+        }
+        body[data-theme="light"] .methodology-sidebar {
+            background: rgba(10, 25, 41, 0.03);
+        }
+        .methodology-nav-section {
+            margin-bottom: 0.35rem;
+        }
+        .methodology-nav-link {
+            display: block;
+            width: 100%;
+            background: transparent;
+            border: none;
+            text-align: left;
+            color: var(--text-secondary);
+            padding: 0.55rem 1.1rem;
+            font-size: 0.86rem;
+            cursor: pointer;
+            border-left: 2px solid transparent;
+            font-family: inherit;
+            line-height: 1.35;
+            transition: background 0.12s ease, color 0.12s ease, border-color 0.12s ease;
+        }
+        .methodology-nav-link:hover {
+            background: rgba(255,255,255,0.04);
+            color: var(--text-primary);
+        }
+        body[data-theme="light"] .methodology-nav-link:hover {
+            background: rgba(10, 25, 41, 0.05);
+        }
+        .methodology-nav-link.is-section {
+            font-weight: 700;
+            text-transform: uppercase;
+            font-size: 0.74rem;
+            letter-spacing: 0.06em;
+            color: var(--text-primary);
+            padding-top: 0.7rem;
+        }
+        .methodology-nav-link.is-sub {
+            padding-left: 1.75rem;
+            font-size: 0.82rem;
+        }
+        .methodology-nav-link.active {
+            color: var(--accent-cyan, #4cc9f0);
+            border-left-color: var(--accent-cyan, #4cc9f0);
+            background: rgba(76, 201, 240, 0.08);
+        }
+        .methodology-content {
+            flex: 1 1 auto;
+            overflow-y: auto;
+            padding: 1.5rem 2rem 2.5rem 2rem;
+            color: var(--text-primary);
+            line-height: 1.6;
+            scroll-behavior: smooth;
+        }
+        .methodology-content h2.methodology-section-title {
+            font-size: 1.35rem;
+            margin: 0 0 0.75rem 0;
+            color: var(--text-primary);
+            letter-spacing: 0.02em;
+            text-transform: uppercase;
+            border-bottom: 1px solid var(--border-color);
+            padding-bottom: 0.6rem;
+        }
+        .methodology-content h3.methodology-sub-title {
+            font-size: 1.05rem;
+            margin: 1.5rem 0 0.5rem 0;
+            color: var(--accent-cyan, #4cc9f0);
+        }
+        .methodology-content p {
+            margin: 0 0 0.75rem 0;
+            color: var(--text-primary);
+        }
+        .methodology-content ul.methodology-list {
+            margin: 0.25rem 0 0.85rem 1.2rem;
+            padding: 0;
+            list-style: disc;
+        }
+        .methodology-content ul.methodology-list li {
+            margin-bottom: 0.3rem;
+            color: var(--text-primary);
+        }
+        .methodology-content .methodology-defn {
+            margin: 0 0 0.85rem 0;
+        }
+        .methodology-content .methodology-defn-term {
+            font-weight: 700;
+            color: var(--text-primary);
+            display: block;
+            margin-bottom: 0.15rem;
+        }
+        .methodology-content .methodology-preamble {
+            font-size: 0.95rem;
+            color: var(--text-secondary);
+            border-left: 3px solid var(--accent-cyan, #4cc9f0);
+            padding: 0.5rem 0 0.5rem 0.9rem;
+            margin: 0 0 1.5rem 0;
+        }
+        .methodology-section-wrapper {
+            margin-bottom: 2rem;
+            scroll-margin-top: 1rem;
+        }
+        @media (max-width: 720px) {
+            .methodology-body { flex-direction: column; }
+            .methodology-sidebar {
+                width: 100%;
+                flex: 0 0 auto;
+                max-height: 30vh;
+                border-right: none;
+                border-bottom: 1px solid var(--border-color);
+            }
+            .methodology-content { padding: 1.1rem 1.1rem 1.5rem 1.1rem; }
+        }
+
         .avatar-upload-modal {
             position: fixed;
             top: 0;
@@ -13128,6 +13263,65 @@
                 width: 100% !important;
             }
         }
+        /* ── Brand Partnership IQ collapsible methodology blurbs ─────
+           Used by the four valuation cards (EMV / BEV / BLV / Conv)
+           and the per-platform table column-definitions blurb.
+           Default-collapsed so the cards lead with their math; click
+           the summary row to read the explanation. */
+        details.bpiq-methodology { margin: 0; }
+        details.bpiq-methodology > summary.bpiq-method-summary {
+            cursor: pointer;
+            user-select: none;
+            font-size: 0.7rem;
+            color: var(--text-secondary);
+            display: inline-flex;
+            align-items: center;
+            gap: 0.4rem;
+            padding: 0.15rem 0;
+            list-style: none;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            font-weight: 600;
+            transition: color 120ms ease;
+        }
+        details.bpiq-methodology > summary.bpiq-method-summary:hover {
+            color: var(--text-primary);
+        }
+        /* Hide the default disclosure triangle in WebKit/Chromium. */
+        details.bpiq-methodology > summary.bpiq-method-summary::-webkit-details-marker { display: none; }
+        details.bpiq-methodology > summary.bpiq-method-summary::marker { content: ''; }
+        details.bpiq-methodology > summary.bpiq-method-summary::before {
+            content: 'i';
+            display: inline-block;
+            width: 13px;
+            height: 13px;
+            border: 1px solid currentColor;
+            border-radius: 50%;
+            text-align: center;
+            line-height: 11px;
+            font-size: 9px;
+            font-style: italic;
+            font-weight: 700;
+            text-transform: none;
+        }
+        details.bpiq-methodology > summary.bpiq-method-summary::after {
+            content: '▾';
+            font-size: 0.7rem;
+            line-height: 1;
+            transition: transform 150ms ease;
+        }
+        details.bpiq-methodology[open] > summary.bpiq-method-summary { color: var(--text-primary); }
+        details.bpiq-methodology[open] > summary.bpiq-method-summary::after { transform: rotate(180deg); }
+        details.bpiq-methodology > .bpiq-method-body {
+            margin-top: 0.45rem;
+            padding: 0.55rem 0.75rem;
+            border-left: 2px solid rgba(200, 230, 0, 0.35);
+            background: rgba(255, 255, 255, 0.02);
+            border-radius: 0 6px 6px 0;
+            font-size: 0.78rem;
+            color: var(--text-secondary);
+            line-height: 1.55;
+        }
     </style>
     <script>
         /* Apply persisted theme before render to avoid flash-of-wrong-theme.
@@ -13394,11 +13588,32 @@
         </div>
     </div>
 
+    <!-- Methodology modal -->
+    <div id="methodologyModal" class="modal-overlay" style="display: none;" onclick="if(event.target === this) closeMethodologyModal()">
+        <div class="modal-content methodology-modal-content" style="max-width: 1100px; width: 92vw; max-height: 88vh; overflow: hidden; display: flex; flex-direction: column; padding: 0;">
+            <div class="methodology-header">
+                <div>
+                    <h2 style="margin: 0; color: var(--text-primary); font-size: 1.25rem;">Crosswalk Product Methodologies</h2>
+                    <div id="methodologyVersionLabel" style="color: var(--text-secondary); font-size: 0.78rem; margin-top: 0.25rem;">Version 1.0 &middot; June 2026</div>
+                </div>
+                <button type="button" onclick="closeMethodologyModal()" aria-label="Close" style="background: transparent; border: none; color: var(--text-secondary); font-size: 1.6rem; cursor: pointer; line-height: 1; padding: 0 0.25rem;">&times;</button>
+            </div>
+            <div class="methodology-body">
+                <aside class="methodology-sidebar" id="methodologySidebar">
+                    <div class="loading-placeholder" style="padding: 1rem;">Loading...</div>
+                </aside>
+                <main class="methodology-content" id="methodologyContent">
+                    <div class="loading-placeholder" style="padding: 1.5rem;">Loading methodology...</div>
+                </main>
+            </div>
+        </div>
+    </div>
+
     <!-- Profile date ranges comparison (deltas) modal -->
     <div id="profileDeltasModal" class="modal-overlay" style="display: none;" onclick="if(event.target === this) closeProfileDeltasModal()">
         <div class="modal-content" style="max-width: 90vw; max-height: 85vh; overflow: hidden; display: flex; flex-direction: column;">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
-                <h2 id="profileDeltasModalTitle" style="margin: 0; color: var(--text-primary);">Compare date ranges</h2>
+                <h2 id="profileDeltasModalTitle" style="margin: 0; color: var(--text-primary);">Data Cuts</h2>
                 <button type="button" onclick="closeProfileDeltasModal()" style="background: transparent; border: none; color: var(--text-secondary); font-size: 1.5rem; cursor: pointer;">×</button>
             </div>
             <div id="profileDeltasModalContent" style="overflow: auto; flex: 1; min-height: 0;">
@@ -13445,6 +13660,8 @@
                                         <span>Appearance</span>
                                         <span id="themeToggleLabel" style="font-size:0.75rem;color:var(--accent-cyan);font-weight:600;letter-spacing:0.04em;text-transform:uppercase;">Dark</span>
                                     </button>
+                                    <div class="user-dropdown-divider"></div>
+                                    <button type="button" class="user-dropdown-item" id="btnOpenMethodology">Methodology</button>
                                     <div class="user-dropdown-divider"></div>
                                     <a class="user-dropdown-item" href="/logout">Logout</a>
                                 </div>
@@ -13550,6 +13767,7 @@
                                             <option value="MOVIE">Movie</option>
                                             <option value="MOVIE - NETFLIX">Movie - Netflix</option>
                                             <option value="PODCAST">Podcast</option>
+                                            <option value="VERTICAL SHORTS">Vertical Shorts</option>
                                             <option value="SERIES - AMAZON / MGM STUDIOS">Series - Amazon / MGM Studios</option>
                                             <option value="SERIES - APPLE">Series - Apple</option>
                                             <option value="SERIES - CBS STUDIOS">Series - CBS Studios</option>
@@ -14008,6 +14226,7 @@
                                                     <option value="MOVIE">Movie</option>
                                                     <option value="MOVIE - NETFLIX">Movie - Netflix</option>
                                                     <option value="PODCAST">Podcast</option>
+                                                    <option value="VERTICAL SHORTS">Vertical Shorts</option>
                                                     <option value="SERIES - AMAZON / MGM STUDIOS">Series - Amazon / MGM Studios</option>
                                                     <option value="SERIES - APPLE">Series - Apple</option>
                                                     <option value="SERIES - 20TH CENTURY">SERIES - 20TH CENTURY</option>
@@ -15851,9 +16070,7 @@
                                 <div class="dash-brand-box" id="dashBrandNameHeader"></div>
                                 <div class="dash-date-box" id="dashDateRangeHeader"></div>
                                 <div id="dashProfileRunsRow" style="display: none; margin-top: 0.5rem; flex-direction: row; flex-wrap: nowrap; align-items: center; gap: 0.5rem;">
-                                    <span style="font-size: 0.8rem; color: var(--text-secondary);">Run:</span>
-                                    <select id="dashRunSelect" style="font-size: 0.85rem; padding: 0.25rem 0.5rem; border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-primary); max-width: 12rem;" title="Select a run (dropdown)"></select>
-                                    <button type="button" class="btn btn-small" id="dashViewDeltasBtn" style="font-size: 0.8rem;">Compare date ranges</button>
+                                    <button type="button" class="btn btn-small" id="dashViewDeltasBtn" style="font-size: 0.8rem;">Data Cuts</button>
                                 </div>
                             </div>
                         </div>
@@ -17647,31 +17864,45 @@
                                             <div id="bpiqKpiGenPopAudienceProj" style="font-size: 0.7rem; color: var(--text-secondary);"></div>
                                         </div>
                                         <div class="tab-section" style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 1.25rem; text-align: center;">
-                                            <div style="font-size: 0.7rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em;">Pre-Campaign Consumer Engagement<br>(Gen Pop)</div>
+                                            <div style="font-size: 0.7rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em;">Pre-Campaign Consumer Engagement</div>
                                             <div id="bpiqKpiGenPopPreUsers" style="font-size: 1.1rem; font-weight: 700; color: var(--accent-cyan); opacity: 0.85; white-space: nowrap;"></div>
                                         </div>
                                         <div class="tab-section" style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 1.25rem; text-align: center;">
-                                            <div style="font-size: 0.7rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em;">Post-Campaign Consumer Engagement<br>(Gen Pop)</div>
+                                            <div style="font-size: 0.7rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em;">Post-Campaign Consumer Engagement</div>
                                             <div id="bpiqKpiGenPopPostUsers" style="font-size: 1.1rem; font-weight: 700; color: var(--accent-orange); opacity: 0.85; white-space: nowrap;"></div>
                                         </div>
                                         <div class="tab-section" style="background: var(--bg-card); border: 1.5px solid #c8e600; border-radius: 12px; padding: 1.25rem; text-align: center;">
-                                            <div style="font-size: 0.7rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em;">Brand Engagement Lift<br>(Gen Pop)</div>
+                                            <div style="font-size: 0.7rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em;">Brand Engagement Lift</div>
                                             <div id="bpiqKpiGenPopLift" style="font-size: 1.1rem; font-weight: 700; white-space: nowrap;"></div>
                                         </div>
                                     </div>
                                 </div>
                                 <!-- Target ↔ Control delta strip, anchored below
-                                     the CONTROL row. Inner grid columns align
-                                     with the four KPI columns above (same
-                                     minmax(150px, 1fr) + 1rem gap, matching
-                                     1.5rem horizontal padding). -->
-                                <div id="bpiqDeltaRow" style="display: none; background: linear-gradient(135deg, rgba(200,230,0,0.06), rgba(168,85,247,0.06)); border: 1px dashed rgba(200,230,0,0.45); border-radius: 12px; padding: 0.6rem 1.5rem;">
-                                    <div style="font-size: 0.62rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.12em; text-align: center; margin-bottom: 0.35rem; font-weight: 700;">Target to Control Delta</div>
-                                    <div class="bpiq-kpi-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 1rem;">
-                                        <div id="bpiqKpiDeltaConsumers" style="text-align: center; font-size: 0.95rem; font-weight: 700;">—</div>
-                                        <div id="bpiqKpiDeltaPre"       style="text-align: center; font-size: 0.95rem; font-weight: 700;">—</div>
-                                        <div id="bpiqKpiDeltaPost"      style="text-align: center; font-size: 0.95rem; font-weight: 700;">—</div>
-                                        <div id="bpiqKpiDeltaLift"      style="text-align: center; font-size: 0.95rem; font-weight: 700;">—</div>
+                                     the CONTROL row. Tabular layout: row
+                                     labels on the left (Relative % / Pp)
+                                     × three metric columns. Drops the
+                                     empty Consumers column entirely
+                                     (cohorts are size-matched, so its
+                                     delta is always 0 and the cell
+                                     looked broken). -->
+                                <div id="bpiqDeltaRow" style="display: none; background: linear-gradient(135deg, rgba(200,230,0,0.06), rgba(168,85,247,0.06)); border: 1px dashed rgba(200,230,0,0.45); border-radius: 12px; padding: 0.85rem 1.5rem 0.95rem;">
+                                    <div style="font-size: 0.66rem; color: #c8e600; text-transform: uppercase; letter-spacing: 0.12em; text-align: center; margin-bottom: 0.55rem; font-weight: 700;">Target vs. Control — Incremental Outperformance</div>
+                                    <div style="display: grid; grid-template-columns: minmax(110px, auto) repeat(3, minmax(120px, 1fr)); gap: 0.35rem 1rem; align-items: center;">
+                                        <!-- Column header row -->
+                                        <div></div>
+                                        <div style="text-align: center; font-size: 0.6rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.08em; font-weight: 700;">Pre-Engagement</div>
+                                        <div style="text-align: center; font-size: 0.6rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.08em; font-weight: 700;">Post-Engagement</div>
+                                        <div style="text-align: center; font-size: 0.6rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.08em; font-weight: 700;">Brand Lift</div>
+                                        <!-- Relative % row -->
+                                        <div style="font-size: 0.65rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.06em; font-weight: 700; text-align: right; padding-right: 0.25rem;" title="Relative lift over Control: (target − control) ÷ |control| × 100">Relative %</div>
+                                        <div id="bpiqKpiDeltaPreRel"  style="text-align: center; font-size: 1.1rem; font-weight: 800;">—</div>
+                                        <div id="bpiqKpiDeltaPostRel" style="text-align: center; font-size: 1.1rem; font-weight: 800;">—</div>
+                                        <div id="bpiqKpiDeltaLiftRel" style="text-align: center; font-size: 1.1rem; font-weight: 800;">—</div>
+                                        <!-- Percentage-points row -->
+                                        <div style="font-size: 0.65rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.06em; font-weight: 700; text-align: right; padding-right: 0.25rem;" title="Absolute lift over Control in percentage points: target − control">Percentage Points</div>
+                                        <div id="bpiqKpiDeltaPrePp"  style="text-align: center; font-size: 0.92rem; font-weight: 700; opacity: 0.88;">—</div>
+                                        <div id="bpiqKpiDeltaPostPp" style="text-align: center; font-size: 0.92rem; font-weight: 700; opacity: 0.88;">—</div>
+                                        <div id="bpiqKpiDeltaLiftPp" style="text-align: center; font-size: 0.92rem; font-weight: 700; opacity: 0.88;">—</div>
                                     </div>
                                 </div>
                             </div>
@@ -17696,10 +17927,13 @@
                         <div id="bpiqEmvCard" class="tab-section" style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 1.5rem; margin-bottom: 1.5rem; display: none;">
                             <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:1rem; flex-wrap:wrap; margin-bottom:0.65rem;">
                                 <div style="flex:1; min-width:260px;">
-                                    <h3 style="margin: 0 0 0.2rem;">📡 Earned Media Value</h3>
-                                    <div style="font-size: 0.78rem; color: var(--text-secondary); line-height: 1.55;">
-                                        <strong>EMV = Σ<sub>platforms</sub> (Incremental Consumers × $/Consumer CPM)</strong> — each platform's post-campaign incremental brand engagement is valued at that platform's industry-standard CPM, then summed. Click any CPM cell in the table below to retune; the total on the right and Total Brand Value at the top recalculate instantly.
-                                    </div>
+                                    <h3 style="margin: 0 0 0.35rem;">📡 Earned Media Value</h3>
+                                    <details class="bpiq-methodology">
+                                        <summary class="bpiq-method-summary">How this is calculated</summary>
+                                        <div class="bpiq-method-body">
+                                            <strong>EMV = Σ<sub>platforms</sub> (Incremental Consumers × $/Consumer CPM)</strong> — each platform's post-campaign incremental brand engagement is valued at that platform's industry-standard CPM, then summed. Click any CPM cell in the table below to retune; the total on the right and Total Brand Value at the top recalculate instantly.
+                                        </div>
+                                    </details>
                                 </div>
                                 <div style="text-align:right; min-width:170px;">
                                     <div style="font-size:0.65rem; color:var(--text-secondary); text-transform:uppercase; letter-spacing:0.05em;">Total Earned Media Value</div>
@@ -17714,10 +17948,13 @@
                         <div id="bpiqBevCard" class="tab-section" style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 1.5rem; margin-bottom: 1.5rem; display: none;">
                             <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:1rem; flex-wrap:wrap; margin-bottom:0.5rem;">
                                 <div style="flex:1; min-width:260px;">
-                                    <h3 style="margin: 0 0 0.2rem;">🤝 Brand Engagement Value</h3>
-                                    <div style="font-size: 0.78rem; color: var(--text-secondary); line-height: 1.55;">
-                                        Values every <strong>post-campaign engaged consumer</strong> at a flat $/consumer rate — capturing the value of brand mindshare itself, separate from the social-media amplification valued in EMV.
-                                    </div>
+                                    <h3 style="margin: 0 0 0.35rem;">🤝 Brand Engagement Value</h3>
+                                    <details class="bpiq-methodology">
+                                        <summary class="bpiq-method-summary">How this is calculated</summary>
+                                        <div class="bpiq-method-body">
+                                            Values every <strong>post-campaign engaged consumer</strong> at a flat $/consumer rate — capturing the value of brand mindshare itself, separate from the social-media amplification valued in EMV.
+                                        </div>
+                                    </details>
                                 </div>
                                 <div style="text-align:right; min-width:170px;">
                                     <div style="font-size:0.65rem; color:var(--text-secondary); text-transform:uppercase; letter-spacing:0.05em;">Brand Engagement Value</div>
@@ -17731,10 +17968,13 @@
                         <div id="bpiqBlvCard" class="tab-section" style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 1.5rem; margin-bottom: 1.5rem; display: none;">
                             <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:1rem; flex-wrap:wrap; margin-bottom:0.5rem;">
                                 <div style="flex:1; min-width:260px;">
-                                    <h3 style="margin: 0 0 0.2rem;">📈 Brand Lift Value</h3>
-                                    <div style="font-size: 0.78rem; color: var(--text-secondary); line-height: 1.55;">
-                                        Values only the <strong>incremental consumers</strong> (DiD lift over Gen Pop) at a higher rate than BEV — these are the partnership-attributable brand engagers who would not have engaged without the campaign.
-                                    </div>
+                                    <h3 style="margin: 0 0 0.35rem;">📈 Brand Lift Value</h3>
+                                    <details class="bpiq-methodology">
+                                        <summary class="bpiq-method-summary">How this is calculated</summary>
+                                        <div class="bpiq-method-body">
+                                            Values only the <strong>incremental consumers</strong> (DiD lift over Gen Pop) at a higher rate than BEV — these are the partnership-attributable brand engagers who would not have engaged without the campaign.
+                                        </div>
+                                    </details>
                                 </div>
                                 <div style="text-align:right; min-width:170px;">
                                     <div style="font-size:0.65rem; color:var(--text-secondary); text-transform:uppercase; letter-spacing:0.05em;">Brand Lift Value</div>
@@ -17752,10 +17992,13 @@
                         <div id="bpiqConvValCard" class="tab-section" style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 1.5rem; margin-bottom: 1.5rem; display: none;">
                             <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:1rem; flex-wrap:wrap; margin-bottom:0.5rem;">
                                 <div style="flex:1; min-width:260px;">
-                                    <h3 style="margin: 0 0 0.2rem;">💳 Conversion Value</h3>
-                                    <div style="font-size: 0.78rem; color: var(--text-secondary); line-height: 1.55;">
-                                        Values every measured <strong>post-campaign order / sign-up confirmation</strong> at the brand's average order value (AOV).
-                                    </div>
+                                    <h3 style="margin: 0 0 0.35rem;">💳 Conversion Value</h3>
+                                    <details class="bpiq-methodology">
+                                        <summary class="bpiq-method-summary">How this is calculated</summary>
+                                        <div class="bpiq-method-body">
+                                            Values every measured <strong>post-campaign order / sign-up confirmation</strong> at the brand's average order value (AOV).
+                                        </div>
+                                    </details>
                                 </div>
                                 <div style="text-align:right; min-width:170px;">
                                     <div style="font-size:0.65rem; color:var(--text-secondary); text-transform:uppercase; letter-spacing:0.05em;">Conversion Value</div>
@@ -21382,6 +21625,289 @@
                         if (typeof window.openChangePasswordModal === 'function') window.openChangePasswordModal();
                     });
                 }
+                var btnMethod = document.getElementById('btnOpenMethodology');
+                if (btnMethod) {
+                    btnMethod.addEventListener('click', function(e) {
+                        e.stopPropagation();
+                        dropdown.classList.remove('open');
+                        if (typeof window.openMethodologyModal === 'function') window.openMethodologyModal();
+                    });
+                }
+            });
+        })();
+
+        // ============================================================================
+        // METHODOLOGY MODAL
+        // ============================================================================
+        (function() {
+            var _methodologyData = null;
+            var _methodologyLoading = false;
+
+            function _slugify(s) {
+                return String(s || '')
+                    .toLowerCase()
+                    .replace(/[^a-z0-9]+/g, '-')
+                    .replace(/^-+|-+$/g, '') || 'section';
+            }
+
+            // Many bullet paragraphs in the source doc embed multiple bullets on one
+            // line as " • A • B • C". Split those back out into discrete list items.
+            function _splitBulletText(t) {
+                if (!t) return [];
+                var s = String(t).trim();
+                // Strip a leading bullet marker if present
+                s = s.replace(/^[•·\u2022]\s*/, '');
+                var parts = s.split(/\s*[•·\u2022]\s*/).map(function(x){ return x.trim(); }).filter(Boolean);
+                return parts.length ? parts : [s];
+            }
+
+            // Heuristic: detect "Term + body" definition paragraphs where the run
+            // metadata distinguishes a bold term from following body text.
+            function _splitDefinitionFromRuns(runs) {
+                if (!runs || !runs.length) return null;
+                // Concatenate the leading bold run(s) as the term.
+                var i = 0;
+                var term = '';
+                while (i < runs.length && runs[i].bold) {
+                    term += runs[i].text;
+                    i++;
+                }
+                term = term.trim();
+                if (!term) return null;
+                var rest = '';
+                for (; i < runs.length; i++) rest += runs[i].text;
+                rest = rest.trim();
+                if (!rest) return null;
+                // Only treat as a definition if the term is reasonably short.
+                if (term.length > 80) return null;
+                return { term: term, body: rest };
+            }
+
+            function _appendListItems(container, items) {
+                if (!items || !items.length) return;
+                var ul = container.querySelector(':scope > ul.methodology-list:last-child');
+                if (!ul) {
+                    ul = document.createElement('ul');
+                    ul.className = 'methodology-list';
+                    container.appendChild(ul);
+                }
+                items.forEach(function(it) {
+                    var li = document.createElement('li');
+                    li.textContent = it;
+                    ul.appendChild(li);
+                });
+            }
+
+            function _renderParagraph(p, container) {
+                var text = (p.text || '').trim();
+                if (!text) return;
+
+                // List items (either flagged is_list or starts with bullet)
+                var startsWithBullet = /^[•·\u2022]/.test(text);
+                if (p.is_list || startsWithBullet) {
+                    _appendListItems(container, _splitBulletText(text));
+                    return;
+                }
+
+                // Intro sentence followed by inline bullets: "Lead-in text: • A • B • C"
+                // Split at the first bullet; render the prefix as a paragraph and the rest as a list.
+                var firstBullet = text.search(/[•·\u2022]/);
+                if (firstBullet > 0) {
+                    var prefix = text.slice(0, firstBullet).trim();
+                    var rest = text.slice(firstBullet);
+                    if (prefix) {
+                        var lead = document.createElement('p');
+                        lead.textContent = prefix;
+                        container.appendChild(lead);
+                    }
+                    _appendListItems(container, _splitBulletText(rest));
+                    return;
+                }
+
+                // Definition-style paragraph (bold term followed by description)
+                var defn = _splitDefinitionFromRuns(p.runs);
+                if (defn) {
+                    var d = document.createElement('div');
+                    d.className = 'methodology-defn';
+                    var t = document.createElement('span');
+                    t.className = 'methodology-defn-term';
+                    t.textContent = defn.term;
+                    var b = document.createElement('span');
+                    b.textContent = defn.body;
+                    d.appendChild(t);
+                    d.appendChild(b);
+                    container.appendChild(d);
+                    return;
+                }
+
+                var para = document.createElement('p');
+                para.textContent = text;
+                container.appendChild(para);
+            }
+
+            function _renderMethodology(data) {
+                var sidebar = document.getElementById('methodologySidebar');
+                var content = document.getElementById('methodologyContent');
+                if (!sidebar || !content) return;
+                sidebar.innerHTML = '';
+                content.innerHTML = '';
+
+                data.forEach(function(section) {
+                    var rawTitle = section.title || '';
+                    var isPreamble = rawTitle === '_preamble_';
+                    var displayTitle = isPreamble ? 'Overview' : rawTitle;
+                    var sectionId = 'methsec-' + _slugify(displayTitle);
+
+                    // Sidebar entry for section
+                    var navWrap = document.createElement('div');
+                    navWrap.className = 'methodology-nav-section';
+                    var sectionLink = document.createElement('button');
+                    sectionLink.type = 'button';
+                    sectionLink.className = 'methodology-nav-link is-section';
+                    sectionLink.textContent = displayTitle;
+                    sectionLink.dataset.target = sectionId;
+                    navWrap.appendChild(sectionLink);
+
+                    // Section block in content
+                    var sectionBlock = document.createElement('div');
+                    sectionBlock.className = 'methodology-section-wrapper';
+                    sectionBlock.id = sectionId;
+
+                    if (!isPreamble) {
+                        var h2 = document.createElement('h2');
+                        h2.className = 'methodology-section-title';
+                        h2.textContent = displayTitle;
+                        sectionBlock.appendChild(h2);
+                    }
+
+                    // Intro paragraphs (the very first preamble gets a distinctive style).
+                    // Skip the raw "Product Methodologies" doc title — the modal header
+                    // already shows it.
+                    (section.intro || []).forEach(function(p) {
+                        var t = (p.text || '').trim();
+                        if (isPreamble && /^product methodologies$/i.test(t)) return;
+                        if (isPreamble) {
+                            var box = document.createElement('div');
+                            box.className = 'methodology-preamble';
+                            box.textContent = t;
+                            sectionBlock.appendChild(box);
+                        } else {
+                            _renderParagraph(p, sectionBlock);
+                        }
+                    });
+
+                    // Subsections
+                    (section.subs || []).forEach(function(sub) {
+                        var subId = sectionId + '--' + _slugify(sub.title);
+                        var subLink = document.createElement('button');
+                        subLink.type = 'button';
+                        subLink.className = 'methodology-nav-link is-sub';
+                        subLink.textContent = sub.title;
+                        subLink.dataset.target = subId;
+                        navWrap.appendChild(subLink);
+
+                        var subWrap = document.createElement('div');
+                        subWrap.id = subId;
+                        subWrap.style.scrollMarginTop = '0.5rem';
+                        var h3 = document.createElement('h3');
+                        h3.className = 'methodology-sub-title';
+                        h3.textContent = sub.title;
+                        subWrap.appendChild(h3);
+                        (sub.paragraphs || []).forEach(function(p) {
+                            _renderParagraph(p, subWrap);
+                        });
+                        sectionBlock.appendChild(subWrap);
+                    });
+
+                    sidebar.appendChild(navWrap);
+                    content.appendChild(sectionBlock);
+                });
+
+                // Wire nav clicks: smooth-scroll into the content panel and mark active.
+                var allLinks = sidebar.querySelectorAll('.methodology-nav-link');
+                allLinks.forEach(function(lnk) {
+                    lnk.addEventListener('click', function() {
+                        var tgt = document.getElementById(lnk.dataset.target);
+                        if (tgt && content) {
+                            content.scrollTo({ top: tgt.offsetTop - 8, behavior: 'smooth' });
+                        }
+                        allLinks.forEach(function(x) { x.classList.remove('active'); });
+                        lnk.classList.add('active');
+                    });
+                });
+
+                // Highlight first non-preamble section by default.
+                var firstReal = sidebar.querySelector('.methodology-nav-link.is-section:not(:first-child)') || sidebar.querySelector('.methodology-nav-link');
+                if (firstReal) firstReal.classList.add('active');
+
+                // Active-section tracking on scroll.
+                if (content && !content._methScrollWired) {
+                    content._methScrollWired = true;
+                    content.addEventListener('scroll', function() {
+                        var headings = content.querySelectorAll('.methodology-section-wrapper, [id^="methsec-"][id*="--"]');
+                        var top = content.scrollTop + 24;
+                        var current = null;
+                        headings.forEach(function(h) {
+                            if (h.offsetTop <= top) current = h;
+                        });
+                        if (!current) return;
+                        var link = sidebar.querySelector('.methodology-nav-link[data-target="' + current.id + '"]');
+                        if (link && !link.classList.contains('active')) {
+                            allLinks.forEach(function(x) { x.classList.remove('active'); });
+                            link.classList.add('active');
+                        }
+                    });
+                }
+            }
+
+            function _loadAndRender() {
+                if (_methodologyData) {
+                    _renderMethodology(_methodologyData);
+                    return;
+                }
+                if (_methodologyLoading) return;
+                _methodologyLoading = true;
+                fetch('/static/cw_methodologies.json', { cache: 'no-cache' })
+                    .then(function(r) {
+                        if (!r.ok) throw new Error('HTTP ' + r.status);
+                        return r.json();
+                    })
+                    .then(function(data) {
+                        _methodologyData = data;
+                        _renderMethodology(data);
+                    })
+                    .catch(function(err) {
+                        var content = document.getElementById('methodologyContent');
+                        if (content) {
+                            content.innerHTML = '<div style="padding:1.5rem;color:var(--text-secondary);">Unable to load methodology document. ' +
+                                '(' + (err && err.message ? err.message : 'unknown error') + ')</div>';
+                        }
+                    })
+                    .finally(function() {
+                        _methodologyLoading = false;
+                    });
+            }
+
+            window.openMethodologyModal = function openMethodologyModal() {
+                var modal = document.getElementById('methodologyModal');
+                if (!modal) return;
+                modal.style.display = 'flex';
+                document.body.style.overflow = 'hidden';
+                _loadAndRender();
+            };
+            window.closeMethodologyModal = function closeMethodologyModal() {
+                var modal = document.getElementById('methodologyModal');
+                if (!modal) return;
+                modal.style.display = 'none';
+                document.body.style.overflow = '';
+            };
+            // Esc-to-close
+            document.addEventListener('keydown', function(e) {
+                if (e.key !== 'Escape') return;
+                var modal = document.getElementById('methodologyModal');
+                if (modal && modal.style.display !== 'none') {
+                    window.closeMethodologyModal();
+                }
             });
         })();
 
@@ -22492,11 +23018,52 @@
             const profiles = (typeof dashboardProfiles !== 'undefined' && Array.isArray(dashboardProfiles))
                 ? dashboardProfiles : [];
             let imdb = '';
+            let match = null;
             if (key && profiles.length) {
-                const match = profiles.find(p =>
+                match = profiles.find(p =>
                     p && (p.s3_key === key || p.job_id === key)
                 );
                 if (match) imdb = String(match.imdb_id || '').trim();
+            }
+            // Fallback: variant profiles ("Reba McEntire - Avid Fan",
+            // "Dwayne Johnson 4+") often lack their own imdb_id because the
+            // scraper only populates the base subject row. Borrow the IMDB
+            // id from any sibling in the same canonical group. Uses the
+            // same getProfileGroupKey() + mergeStubGroupsIntoCanonical()
+            // pair the sidebar uses for grouping, so the fallback respects
+            // the same dash/cohort rules.
+            if (!/^nm\d+$/i.test(imdb) && match
+                && typeof getProfileGroupKey === 'function' && profiles.length) {
+                try {
+                    const targetKey = getProfileGroupKey(match);
+                    if (targetKey) {
+                        const bySubject = {};
+                        const displayNames = {};
+                        profiles.forEach(p => {
+                            const k = getProfileGroupKey(p) || (typeof getProfileFullName === 'function' && (getProfileFullName(p) || '').toLowerCase());
+                            if (!k) return;
+                            (bySubject[k] = bySubject[k] || []).push(p);
+                            if (!displayNames[k]) displayNames[k] = k;
+                        });
+                        if (typeof mergeStubGroupsIntoCanonical === 'function') {
+                            try { mergeStubGroupsIntoCanonical(bySubject, displayNames); } catch (_) {}
+                        }
+                        // The merged group containing `match` may live under
+                        // either the variant's key or the canonical parent's
+                        // key — find whichever bucket actually contains it.
+                        const matchId = match.s3_key || match.job_id;
+                        let siblings = bySubject[targetKey];
+                        if (!siblings || !siblings.some(p => (p.s3_key || p.job_id) === matchId)) {
+                            for (const arr of Object.values(bySubject)) {
+                                if (arr.some(p => (p.s3_key || p.job_id) === matchId)) { siblings = arr; break; }
+                            }
+                        }
+                        if (Array.isArray(siblings)) {
+                            const donor = siblings.find(p => /^nm\d+$/i.test(String((p && p.imdb_id) || '').trim()));
+                            if (donor) imdb = String(donor.imdb_id || '').trim();
+                        }
+                    }
+                } catch (_) {}
             }
             if (!/^nm\d+$/i.test(imdb)) {
                 box.style.display = 'none';
@@ -29814,10 +30381,17 @@
                 return '<span style="font-size:10px;color:#c8e600;margin-left:4px;">' + glyph + '</span>';
             };
             var thBase = 'padding:8px 10px;cursor:pointer;user-select:none;';
-            var html = '<div style="font-size:11px;color:var(--text-secondary);margin-bottom:0.5rem;">'
-                + 'A consumer is counted on a platform when they had at least 1 visit to that platform\'s domain in the window. <strong>Pre %</strong> / <strong>Post %</strong> = share of that platform\'s consumers that ALSO had a brand touchpoint anywhere on the platform during the same window. <strong>Brand Lift</strong> = percentage change between Post % and Pre %. <strong>Incremental Consumers</strong> = the post-campaign incremental brand engagers attributable to that platform, projected to US gen pop. <strong>EMV</strong> = Incremental Consumers × CPM. The "Direct (Brand Site)" row counts brand touchpoints that did not occur on a social platform (e.g. direct visits to the brand\'s own site or via a wholesale distributor).'
-                + ' <span style="color:var(--text-secondary);font-style:italic;">Click any column header to sort. Click a CPM cell to edit the rate — every downstream value (per-row EMV, Total Earned Media Value, Total Brand Value) recalculates instantly.</span>'
-                + '</div>'
+            // Per-platform table methodology: collapsed by default
+            // (matches the card-header methodology pattern). The
+            // table is the headline — readers can expand the
+            // explainer when they want the column definitions.
+            var html = '<details class="bpiq-methodology" style="margin-bottom:0.5rem;">'
+                +    '<summary class="bpiq-method-summary">Column definitions &amp; how to use this table</summary>'
+                +    '<div class="bpiq-method-body" style="font-size:11px;">'
+                +      'A consumer is counted on a platform when they had at least 1 visit to that platform\'s domain in the window. <strong>Pre %</strong> / <strong>Post %</strong> = share of that platform\'s consumers that ALSO had a brand touchpoint anywhere on the platform during the same window. <strong>Brand Lift</strong> = percentage change between Post % and Pre %. <strong>Incremental Consumers</strong> = the post-campaign incremental brand engagers attributable to that platform, projected to US gen pop. <strong>EMV</strong> = Incremental Consumers × CPM. The "Direct (Brand Site)" row counts brand touchpoints that did not occur on a social platform (e.g. direct visits to the brand\'s own site or via a wholesale distributor).'
+                +      ' <span style="font-style:italic;">Click any column header to sort. Click a CPM cell to edit the rate — every downstream value (per-row EMV, Total Earned Media Value, Total Brand Value) recalculates instantly.</span>'
+                +    '</div>'
+                + '</details>'
                 + '<table style="width:100%;border-collapse:collapse;font-size:13px;">'
                 + '<thead><tr style="border-bottom:2px solid var(--border-color);">'
                 + '<th data-bpiq-sort="platform"     style="' + thBase + 'text-align:left;">Platform'                                    + arrow('platform')     + '</th>'
@@ -30015,7 +30589,7 @@
                 var gpPost    = Math.round(gpSize * gpPostPct / 100);
                 var gpLiftUsers = gpPost - gpPre;
                 document.getElementById('bpiqKpiGenPopAudience').textContent = _bpiqFmtNum(gpSize);
-                document.getElementById('bpiqKpiGenPopAudienceProj').textContent = 'Control (Gen Pop)';
+                document.getElementById('bpiqKpiGenPopAudienceProj').textContent = '';
                 document.getElementById('bpiqKpiGenPopPreUsers').innerHTML  = _bpiqStackedKpi(_bpiqFmtNum(gpPre),  gpPrePct.toFixed(2)  + '%');
                 document.getElementById('bpiqKpiGenPopPostUsers').innerHTML = _bpiqStackedKpi(_bpiqFmtNum(gpPost), gpPostPct.toFixed(2) + '%');
                 document.getElementById('bpiqKpiGenPopLift').innerHTML = _bpiqStackedKpi(
@@ -30047,16 +30621,26 @@
                         if (control == null || !isFinite(control) || control === 0) return null;
                         return (target - control) / Math.abs(control) * 100;
                     };
-                    document.getElementById('bpiqKpiDeltaConsumers').innerHTML =
-                        _bpiqFmtDelta((data.projected_audience_size || 0) - gpSize, ',count', '—');
-                    document.getElementById('bpiqKpiDeltaPre').innerHTML =
+                    // Pre-engagement delta — Target − Control (rel & pp)
+                    document.getElementById('bpiqKpiDeltaPreRel').innerHTML =
                         _bpiqFmtDelta(_bpiqRelDelta(prePct, gpPrePct), '%');
-                    document.getElementById('bpiqKpiDeltaPost').innerHTML =
+                    document.getElementById('bpiqKpiDeltaPrePp').innerHTML =
+                        _bpiqFmtPp(prePct - gpPrePct);
+                    // Post-engagement delta
+                    document.getElementById('bpiqKpiDeltaPostRel').innerHTML =
                         _bpiqFmtDelta(_bpiqRelDelta(postPct, gpPostPct), '%');
+                    document.getElementById('bpiqKpiDeltaPostPp').innerHTML =
+                        _bpiqFmtPp(postPct - gpPostPct);
+                    // Brand lift delta — Target's lift % minus Control's
+                    // lift %, plus the absolute pp difference of the
+                    // pre→post delta on each side (additive in
+                    // engagement-rate units, the cleanest single read).
                     var _tLift = (totals.lift_pct_users  != null && isFinite(totals.lift_pct_users))  ? totals.lift_pct_users  : null;
                     var _cLift = (cg.control_lift_pct_users != null && isFinite(cg.control_lift_pct_users)) ? cg.control_lift_pct_users : null;
-                    document.getElementById('bpiqKpiDeltaLift').innerHTML =
+                    document.getElementById('bpiqKpiDeltaLiftRel').innerHTML =
                         _bpiqFmtDelta(_bpiqRelDelta(_tLift, _cLift), '%');
+                    document.getElementById('bpiqKpiDeltaLiftPp').innerHTML =
+                        _bpiqFmtPp((postPct - prePct) - (gpPostPct - gpPrePct));
                 }
                 // Net Brand Lift card
                 var brandLift = totals.lift_pct_users;
@@ -30541,13 +31125,21 @@
             if (heroSub) heroSub.textContent = hasConv
                 ? 'Earned Media + Brand Engagement + Brand Lift + Conversions'
                 : 'Earned Media + Brand Engagement + Brand Lift';
+            // Each hero chip uses the same accent color as its
+            // detailed card lower on the page, so the eye can travel
+            // from the headline number to the matching breakdown
+            // without re-anchoring:
+            //   📡 Earned Media   → #10b981 (green, EMV total)
+            //   🤝 Brand Eng.     → #6366f1 (indigo, BEV total)
+            //   📈 Brand Lift     → #f59e0b (amber,  BLV total)
+            //   💳 Conversions    → #ef4444 (red,    Conv Value total)
             var heroParts = [
-                {label: 'Earned Media',     value: v.earned_media_value      || 0, color: '#6366f1'},
+                {label: 'Earned Media',     value: v.earned_media_value      || 0, color: '#10b981'},
                 {label: 'Brand Engagement', value: v.brand_engagement_value || 0, color: '#6366f1'},
-                {label: 'Brand Lift',       value: v.brand_lift_value        || 0, color: '#6366f1'}
+                {label: 'Brand Lift',       value: v.brand_lift_value        || 0, color: '#f59e0b'}
             ];
             if (hasConv) {
-                heroParts.push({label: 'Conversions', value: v.conversion_value, color: '#6366f1'});
+                heroParts.push({label: 'Conversions', value: v.conversion_value, color: '#ef4444'});
             }
             if (heroBrk) {
                 heroBrk.innerHTML = heroParts.map(function(p) {
@@ -34874,7 +35466,19 @@
                 if (!pA || !pB) return;
                 var cA = (props.find(function(p) { return p.key === e.a; }) || {}).color || '#5b6cff';
                 var cB = (props.find(function(p) { return p.key === e.b; }) || {}).color || '#5b6cff';
-                var w  = Math.max(4, Math.min(34, (e.overlap_pct || 0) * 0.9));
+                // Directional flow data: edges may carry a_to_b_pct +
+                // b_to_a_pct (newer payloads) instead of (or in addition
+                // to) the legacy symmetric overlap_pct. When directional
+                // data is present we draw two small arrowheads — one at
+                // each endpoint, pointing INTO that node — each with its
+                // own percentage badge. The ribbon's stroke-width then
+                // scales to the larger of the two directional flows so
+                // the overall edge weight still reads correctly.
+                var aToB = (e.a_to_b_pct != null && isFinite(e.a_to_b_pct)) ? +e.a_to_b_pct : null;
+                var bToA = (e.b_to_a_pct != null && isFinite(e.b_to_a_pct)) ? +e.b_to_a_pct : null;
+                var hasDirectional = (aToB != null && bToA != null);
+                var weightPct = hasDirectional ? Math.max(aToB, bToA) : (e.overlap_pct || 0);
+                var w  = Math.max(4, Math.min(34, weightPct * 0.9));
                 // Bend each ribbon perpendicular to its A→B axis so opposing
                 // edges (e.g. top↔bottom and left↔right in a diamond layout)
                 // don't pile their midpoints on the same center point — and
@@ -34915,13 +35519,70 @@
                 parts.push('<path d="M ' + x0 + ' ' + y0 + ' Q ' + ctrlX + ' ' + ctrlY + ' ' + x1 + ' ' + y1
                          + '" fill="none" stroke="url(#' + gradId + ')" stroke-width="' + w
                          + '" stroke-linecap="round" opacity="0.55">'
-                         + '<title>' + _jiqEsc(e.label || (e.overlap_pct + '% overlap')) + '</title></path>');
-                // Centered % label on the ribbon
-                parts.push('<g>'
-                         + '<rect x="' + (ctrlX - 22) + '" y="' + (ctrlY - 11) + '" width="44" height="22" rx="11" fill="var(--bg-card)" stroke="' + cA + '" stroke-width="1.5"/>'
-                         + '<text x="' + ctrlX + '" y="' + (ctrlY + 4) + '" text-anchor="middle" fill="var(--text-primary)" font-weight="700" font-size="11">' + (e.overlap_pct || 0).toFixed(0) + '%</text>'
-                         + '<title>' + _jiqEsc(e.label || '') + '</title>'
-                         + '</g>');
+                         + '<title>' + _jiqEsc(e.label || (weightPct + '% overlap')) + '</title></path>');
+
+                if (hasDirectional) {
+                    // Tangent unit vectors INWARD (from each endpoint toward
+                    // the ribbon's control point). Used to size arrowheads
+                    // and place per-direction badges along the ribbon.
+                    var dxA = ctrlX - x0, dyA = ctrlY - y0;
+                    var lenA = Math.sqrt(dxA * dxA + dyA * dyA) || 1;
+                    var uxA = dxA / lenA, uyA = dyA / lenA;
+                    var dxB = ctrlX - x1, dyB = ctrlY - y1;
+                    var lenB = Math.sqrt(dxB * dxB + dyB * dyB) || 1;
+                    var uxB = dxB / lenB, uyB = dyB / lenB;
+
+                    // Filled-triangle arrowhead pointing INTO an endpoint
+                    // (tip at the bubble's surface, base further along the
+                    // ribbon toward the control point).
+                    var _arrow = function(tipX, tipY, ux, uy, color) {
+                        var L = 14, Wd = 9;
+                        var bX = tipX + ux * L, bY = tipY + uy * L;
+                        var p1x = bX + (-uy) * (Wd / 2), p1y = bY + ux * (Wd / 2);
+                        var p2x = bX -  (-uy) * (Wd / 2), p2y = bY -  ux * (Wd / 2);
+                        return '<polygon points="'
+                             + tipX + ',' + tipY + ' '
+                             + p1x  + ',' + p1y  + ' '
+                             + p2x  + ',' + p2y  + '" fill="' + color + '" opacity="0.95"/>';
+                    };
+                    // Each badge sits along the ribbon tangent, just past the
+                    // arrow base. tipColor matches the destination bubble's
+                    // brand color so the eye reads "flow → that color".
+                    var _badge = function(cxLabel, cyLabel, pct, ringColor) {
+                        var txt = (Math.round(pct * 10) / 10).toString() + '%';
+                        var halfW = 22;
+                        return '<g>'
+                             + '<rect x="' + (cxLabel - halfW) + '" y="' + (cyLabel - 11)
+                             +   '" width="' + (halfW * 2) + '" height="22" rx="11"'
+                             +   ' fill="var(--bg-card)" stroke="' + ringColor + '" stroke-width="1.5"/>'
+                             + '<text x="' + cxLabel + '" y="' + (cyLabel + 4)
+                             +   '" text-anchor="middle" fill="var(--text-primary)"'
+                             +   ' font-weight="700" font-size="11">' + txt + '</text>'
+                             + '</g>';
+                    };
+                    // Arrow → A means flow B→A (uses cA color, reads pct b_to_a_pct).
+                    parts.push(_arrow(x0, y0, uxA, uyA, cA));
+                    parts.push(_arrow(x1, y1, uxB, uyB, cB));
+                    // Place each badge ~30px past the arrow base toward the
+                    // control point. That keeps the two badges visually
+                    // separated from each other and from the bubbles.
+                    var labelOff = 38;
+                    parts.push('<g>'
+                             + _badge(x0 + uxA * labelOff, y0 + uyA * labelOff, bToA, cA)
+                             + '<title>' + _jiqEsc(bToA.toFixed(1) + '% of ' + e.b + ' visitors → ' + e.a) + '</title>'
+                             + '</g>');
+                    parts.push('<g>'
+                             + _badge(x1 + uxB * labelOff, y1 + uyB * labelOff, aToB, cB)
+                             + '<title>' + _jiqEsc(aToB.toFixed(1) + '% of ' + e.a + ' visitors → ' + e.b) + '</title>'
+                             + '</g>');
+                } else {
+                    // Legacy single centered % badge (symmetric overlap)
+                    parts.push('<g>'
+                             + '<rect x="' + (ctrlX - 22) + '" y="' + (ctrlY - 11) + '" width="44" height="22" rx="11" fill="var(--bg-card)" stroke="' + cA + '" stroke-width="1.5"/>'
+                             + '<text x="' + ctrlX + '" y="' + (ctrlY + 4) + '" text-anchor="middle" fill="var(--text-primary)" font-weight="700" font-size="11">' + (e.overlap_pct || 0).toFixed(0) + '%</text>'
+                             + '<title>' + _jiqEsc(e.label || '') + '</title>'
+                             + '</g>');
+                }
             });
 
             // Property bubbles
@@ -34948,7 +35609,7 @@
                  + '<svg width="' + W + '" height="' + H + '" viewBox="0 0 ' + W + ' ' + H + '" style="display:block;max-width:100%;height:auto;">'
                  + parts.join('')
                  + '</svg>'
-                 + '<div style="font-size:0.68rem;color:var(--text-secondary);margin-top:4px;text-align:center;max-width:' + W + 'px;">Ribbon thickness = co-visitation overlap · MAU = monthly active US uniques · hover any node or ribbon for details</div>'
+                 + '<div style="font-size:0.68rem;color:var(--text-secondary);margin-top:4px;text-align:center;max-width:' + W + 'px;">Arrows = direction of audience flow · % near each arrow = share of source visitors who also visit destination · ribbon thickness ∝ larger of the two flows · MAU = monthly active US uniques</div>'
                  + '</div>';
         }
 
@@ -55476,7 +56137,7 @@
             const btn = document.getElementById('dashViewDeltasBtn');
             if (!btn) return;
             const n = (_comparisonRunsState.selectedKeys || []).length;
-            const base = 'Compare date ranges';
+            const base = 'Data Cuts';
             btn.textContent = n > 0 ? `${base} (${n})` : base;
         }
 
@@ -55532,6 +56193,16 @@
                     // filename year just reflects when the file was
                     // generated.
                     const drYear = _yearFromDateRange(data.date_range);
+                    // Cache it so the sidebar tree, Run dropdown, and any
+                    // future re-render of this profile shows the analyzed-
+                    // period year too, not just the compare popover.
+                    try {
+                        if (typeof setRunDateRangeYear === 'function' && setRunDateRangeYear(key, data.date_range)) {
+                            if (typeof renderDashboardProfileTree === 'function' && Array.isArray(dashboardProfiles)) {
+                                renderDashboardProfileTree(dashboardProfiles);
+                            }
+                        }
+                    } catch (_) {}
                     const preferredLabel = _preferredRunLabel(profile, drYear);
                     const entry = { key, profile, parsed, label: preferredLabel, dateRangeYear: drYear, dateRange: data.date_range || '' };
                     _comparisonRunsState.runsByKey[key] = entry;
@@ -55731,7 +56402,7 @@
             } else {
                 const hint = document.createElement('div');
                 hint.style.cssText = 'font-size:0.72rem;color:var(--text-secondary, #9ca3af);margin-bottom:0.4rem;line-height:1.35;';
-                hint.textContent = 'Toggle prior years or cohorts on to see them as extra bars before Gen Pop.';
+                hint.textContent = 'Toggle prior data cuts on to add them as extra bars and columns alongside this profile.';
                 pop.appendChild(hint);
 
                 available.forEach(item => {
@@ -56259,7 +56930,7 @@
             const contentEl = document.getElementById('profileDeltasModalContent');
             if (!modal || !titleEl || !contentEl) return;
             const profileName = sameSubjectRuns.length ? getProfileFullName(sameSubjectRuns[0]) : subject.replace(/_/g, ' ');
-            titleEl.textContent = 'Compare date ranges: ' + profileName;
+            titleEl.textContent = 'Data Cuts: ' + profileName;
             contentEl.innerHTML = '<div class="loading-placeholder">Loading runs...</div>';
             modal.style.display = 'flex';
             const runs = sortRunsByYearDesc(sameSubjectRuns);
@@ -56851,8 +57522,18 @@
                 const brandNameEl = document.getElementById('dashBrandNameHeader');
                 if (brandNameEl) brandNameEl.textContent = headerTitle;
                 updateDashProfileHeaderMeta(dateRange, parsed);
+                // Cache this run's analyzed-period year so the sidebar tree
+                // and Run dropdown display 2025 (the analyzed period) rather
+                // than 2026 (when the file was generated). The cache is
+                // keyed by s3_key and persists across re-renders.
+                try {
+                    if (typeof setRunDateRangeYear === 'function' && setRunDateRangeYear(profileId, dateRange)) {
+                        if (typeof renderDashboardProfileTree === 'function' && Array.isArray(dashboardProfiles)) {
+                            renderDashboardProfileTree(dashboardProfiles);
+                        }
+                    }
+                } catch (_) {}
                 const runsRow = document.getElementById('dashProfileRunsRow');
-                const runSelect = document.getElementById('dashRunSelect');
                 const deltasBtn = document.getElementById('dashViewDeltasBtn');
                 const currentProfile = dashboardProfiles.find(p => (p.s3_key || p.job_id) === profileId);
                 const subject = currentProfile ? getProfileSubject(currentProfile) : '';
@@ -56889,18 +57570,13 @@
                     }
                     return [currentProfile];
                 })();
-                if (runsRow && runSelect && sameSubjectRuns.length > 1) {
+                if (runsRow && sameSubjectRuns.length > 1) {
                     runsRow.style.display = 'flex';
-                    const sortedRuns = sortRunsByYearDesc(sameSubjectRuns);
-                    runSelect.innerHTML = sortedRuns.map(p => {
-                        const id = p.s3_key || p.job_id;
-                        const label = getProfileYear(p) || getRunDateLabel(p.s3_key || '') || id;
-                        return `<option value="${escapeAttr(id).replace(/"/g, '&quot;')}" ${id === profileId ? 'selected' : ''}>${escapeAttr(label)}</option>`;
-                    }).join('');
-                    runSelect.onchange = function() {
-                        const key = runSelect.value;
-                        if (key && key !== profileId) selectDashboardProfile(key);
-                    };
+                    // The Run dropdown was removed; users navigate between
+                    // sibling runs from the sidebar tree. The Data Cuts
+                    // button is the only control left on this row and only
+                    // shows when there's more than one sibling to compare
+                    // against.
                     // Inline comparison-series popover replaces the legacy
                     // "Compare date ranges" modal. Selected runs are layered
                     // into the demographic charts (see applyComparisonRunsToDashboardCharts).
@@ -56989,7 +57665,12 @@
         // Load profiles when dashboard tab is shown
         let dashboardProfilePolling = null;
         
-        const SESSION_JOBS_CACHE_KEY = 'bg_jobs_session_cache';
+        // v2 bump (2026-06-10): forces the cached /api/jobs payload to be
+        // refetched after the IMDB-id backfill so variant profiles
+        // ("Reba McEntire - Avid Fan", "Dwayne Johnson - Avid Fan", etc.)
+        // pick up the new imdb_id field instead of serving a 60s-old payload
+        // that predates the enrichment.
+        const SESSION_JOBS_CACHE_KEY = 'bg_jobs_session_cache_v2';
         const SESSION_JOBS_CACHE_TTL = 60000; // 60s — ensures admin changes appear after page refresh
         function getSessionJobsCache() {
             try {
@@ -75035,7 +75716,7 @@
         // Master category mapping for organized display
         const MASTER_CATEGORIES = {
             'BRAND': ['ACCESSORIES', 'ACTIVEWEAR', 'AMUSEMENT PARKS', 'APPAREL', 'AUTOMOBILE', 'B2B', 'BANKS', 'BEAUTY', 'BETTING', 'BEVERAGE', 'CASUAL DINING', 'CPG', 'CREDIT PROVIDERS', 'CREDIT PROVIDER', 'DIGITAL BANKING', 'EVENTS', 'FOOTWEAR', 'FRANCHISE', 'GROCERY', 'INTIMATES', 'JEWELRY', 'LOYALTY PROGRAMS', 'MEMBERSHIP', 'NON PROFIT/CHARITY', 'PHARMA', 'QSR', 'RETAILERS', 'SECURITY', 'TELECOM', 'TICKETING', 'TOY', 'TRAVEL', 'VENUE', 'WORKOUT FACILITY'],
-            'CONTENT': ['GAME PLAYERS', 'GAMES', 'GAMES - PLAYERS', 'MOVIE', 'PODCAST', 'SERIES - AMAZON / MGM STUDIOS', 'SERIES - APPLE', 'SERIES - CBS STUDIOS', 'SERIES - 20TH CENTURY', 'SERIES - FXP', 'SERIES - HBO ENTERTAINMENT', 'SERIES - HBO MAX', 'SERIES - HULU', 'SERIES - LIONSGATE TELEVISION', 'SERIES - NETFLIX', 'SERIES - PARAMOUNT TV STUDIOS', 'SERIES - SONY', 'SERIES - UNIVERSAL TV', 'SERIES - WBD'],
+            'CONTENT': ['GAME PLAYERS', 'GAMES', 'GAMES - PLAYERS', 'MOVIE', 'PODCAST', 'VERTICAL SHORTS', 'VERTICAL SHORT', 'SERIES - AMAZON / MGM STUDIOS', 'SERIES - APPLE', 'SERIES - CBS STUDIOS', 'SERIES - 20TH CENTURY', 'SERIES - FXP', 'SERIES - HBO ENTERTAINMENT', 'SERIES - HBO MAX', 'SERIES - HULU', 'SERIES - LIONSGATE TELEVISION', 'SERIES - NETFLIX', 'SERIES - PARAMOUNT TV STUDIOS', 'SERIES - SONY', 'SERIES - UNIVERSAL TV', 'SERIES - WBD'],
             'GEN POP': ['GEN POP'],
             'PLATFORMS': ['APP/PLATFORM', 'BROADCAST/CABLE', 'MEDIA', 'MOVIE THEATER', 'PLATFORMS', 'SEARCH ENGINE/AI', 'SOCIAL MEDIA', 'STREAMING MUSIC', 'STREAMING VIDEO', 'VIRTUAL MVPD/FAST', 'VIRTUAL MVPD FAST', 'VMVPD/FAST', 'VMVPD'],
             'SPORT': ['MILB', 'MLB', 'NBA', 'NFL', 'SPORTS ORGANIZATIONS', 'SPORTS ORGANIZATION', 'WNBA'],
@@ -75984,16 +76665,51 @@
             });
         }
 
-        /** Year-only label for a profile run. Prefers a 4-digit year baked
-         *  into the display name (e.g. "Dwayne Johnson 2024" -> "2024"),
-         *  otherwise extracts the year out of the s3_key timestamp
-         *  (e.g. "Dwayne_Johnson_05_14_2026_..." -> "2026"), falling back
-         *  to the created_at year. The sidebar shows years (not full dates)
-         *  because each profile run analyzes a full calendar-year date
-         *  range, so the file-creation day/month is not meaningful in the
-         *  tree. The "Compare date ranges" modal still uses the full date
-         *  via getRunDateLabel() since deltas care about the exact run. */
+        // Per-s3_key cache of the run's analyzed-period year, derived from
+        // the CSV's date_range metadata at the moment the profile is loaded
+        // (or fetched via the Data Cuts compare popover). The filename
+        // timestamp reflects when the run was GENERATED, not the period it
+        // analyzes — these two often disagree (e.g. a 2025-01-01 to
+        // 2025-12-31 run generated in May 2026). When the cache has a hit
+        // for an s3_key, every consumer (sidebar tree child label, Run
+        // dropdown, compare popover) shows the analyzed-period year so the
+        // UI matches the Date Range row at the top of the dashboard.
+        const _runDateRangeYearByKey = {};
+
+        /** Record the analyzed-period year for a run, keyed by s3_key.
+         *  Safe no-op when either input is missing. Returns true if the
+         *  cache mutated so callers can decide whether to re-render. */
+        function setRunDateRangeYear(s3Key, dateRange) {
+            if (!s3Key) return false;
+            const yr = (typeof _yearFromDateRange === 'function')
+                ? _yearFromDateRange(dateRange) : '';
+            if (!yr) return false;
+            if (_runDateRangeYearByKey[s3Key] === yr) return false;
+            _runDateRangeYearByKey[s3Key] = yr;
+            return true;
+        }
+
+        /** Lookup helper. Returns the cached date-range year for a profile
+         *  (resolves either an s3_key string or a profile object). */
+        function getCachedRunDateRangeYear(profileOrKey) {
+            const key = (typeof profileOrKey === 'string')
+                ? profileOrKey
+                : (profileOrKey && (profileOrKey.s3_key || profileOrKey.job_id)) || '';
+            return key ? (_runDateRangeYearByKey[key] || '') : '';
+        }
+
+        /** Year-only label for a profile run. Resolution order:
+         *   1. Cached year from the CSV's date_range (most accurate — this
+         *      is the period the run analyzes).
+         *   2. A 4-digit year baked into the display name ("Dwayne Johnson 2024").
+         *   3. The s3_key timestamp year ("Dwayne_Johnson_05_14_2026.csv" -> "2026")
+         *      — this is the GENERATION year and only used as a fallback.
+         *   4. The created_at year.
+         *  Used by the sidebar tree child labels and the Run dropdown so
+         *  they show the same year as the "Date Range:" header. */
         function getProfileRunYear(profile) {
+            const cached = getCachedRunDateRangeYear(profile);
+            if (cached) return cached;
             const fromName = getProfileYear(profile);
             if (fromName) return fromName;
             const key = profile.s3_key || profile.job_id || '';
