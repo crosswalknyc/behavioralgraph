@@ -3208,6 +3208,115 @@ def admin_category_norms_status():
         return jsonify({"success": True, "status": dict(_category_norms_status)})
 
 
+# ---------------------------------------------------------------------------
+# Profile-selector cache rebuild (admin Settings → Rebuild Profile Cache)
+# ---------------------------------------------------------------------------
+#
+# The dashboard's profile selector reads from `s3_cache` (built by
+# `process_s3_file_metadata` for every CSV at the root of s3://dashboard-inputs).
+# Incremental refresh fires on demand (`/api/refresh-cache`), but new files
+# uploaded out-of-band sometimes don't show up promptly. This endpoint kicks
+# off a FULL re-scan in a background thread so the admin can force a sync
+# without waiting for the request to return.
+
+_profile_cache_rebuild_status: dict = {
+    "running": False,
+    "started_at": None,
+    "finished_at": None,
+    "files_total": 0,
+    "last_message": None,
+    "error": None,
+}
+_profile_cache_rebuild_lock = threading.Lock()
+
+
+def _run_profile_cache_rebuild() -> None:
+    """Worker: full S3 scan + persisted-cache rewrite. Updates the
+    status dict as it goes so the admin UI can poll for progress."""
+    from datetime import timezone  # local import: not at module top
+    try:
+        if not s3_client:
+            with _profile_cache_rebuild_lock:
+                _profile_cache_rebuild_status.update({
+                    "running": False,
+                    "finished_at": datetime.now(timezone.utc).isoformat(),
+                    "error": "S3 not configured",
+                    "last_message": "S3 not configured",
+                })
+            return
+        with _profile_cache_rebuild_lock:
+            _profile_cache_rebuild_status["last_message"] = "Scanning s3://dashboard-inputs/ …"
+
+        result = refresh_s3_cache(incremental=False)
+        if isinstance(result, dict) and result.get("error"):
+            with _profile_cache_rebuild_lock:
+                _profile_cache_rebuild_status.update({
+                    "running": False,
+                    "finished_at": datetime.now(timezone.utc).isoformat(),
+                    "error": result["error"],
+                    "last_message": "Failed: " + str(result["error"]),
+                })
+            return
+        total = (result or {}).get("total", 0)
+        with _profile_cache_rebuild_lock:
+            _profile_cache_rebuild_status.update({
+                "running": False,
+                "finished_at": datetime.now(timezone.utc).isoformat(),
+                "files_total": int(total),
+                "last_message": f"Rebuilt cache: {total} profiles scanned.",
+                "error": None,
+            })
+    except Exception as e:
+        traceback.print_exc()
+        with _profile_cache_rebuild_lock:
+            _profile_cache_rebuild_status.update({
+                "running": False,
+                "finished_at": datetime.now(timezone.utc).isoformat(),
+                "error": str(e),
+                "last_message": f"Fatal error: {e}",
+            })
+
+
+@app.route('/api/admin/rebuild-profile-cache', methods=['POST'])
+@requires_admin
+def admin_rebuild_profile_cache():
+    """Kick off a full S3 re-scan of the profile-selector cache.
+    Returns immediately; poll `/api/admin/rebuild-profile-cache-status`
+    for progress. Use this when newly-uploaded CSVs aren't appearing in
+    the profile selector promptly."""
+    from datetime import timezone  # local import: not at module top
+    with _profile_cache_rebuild_lock:
+        if _profile_cache_rebuild_status.get("running"):
+            return jsonify({
+                "success": False,
+                "error": "A profile-cache rebuild is already running.",
+                "status": dict(_profile_cache_rebuild_status),
+            }), 409
+        _profile_cache_rebuild_status.update({
+            "running": True,
+            "started_at": datetime.now(timezone.utc).isoformat(),
+            "finished_at": None,
+            "files_total": 0,
+            "last_message": "Starting full S3 scan…",
+            "error": None,
+        })
+    t = threading.Thread(
+        target=_run_profile_cache_rebuild,
+        daemon=True,
+        name="rebuild-profile-cache",
+    )
+    t.start()
+    return jsonify({"success": True, "message": "Rebuild started.", "status": dict(_profile_cache_rebuild_status)})
+
+
+@app.route('/api/admin/rebuild-profile-cache-status')
+@requires_admin
+def admin_rebuild_profile_cache_status():
+    """Return the current background-rebuild status."""
+    with _profile_cache_rebuild_lock:
+        return jsonify({"success": True, "status": dict(_profile_cache_rebuild_status)})
+
+
 @app.route('/api/admin/gmail/status')
 @requires_admin
 def gmail_status():
