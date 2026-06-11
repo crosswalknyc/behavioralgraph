@@ -726,6 +726,141 @@
             margin: 0.3rem 0;
         }
 
+        /* Methodology modal */
+        .methodology-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            padding: 1.1rem 1.5rem 0.85rem 1.5rem;
+            border-bottom: 1px solid var(--border-color);
+            flex-shrink: 0;
+        }
+        .methodology-body {
+            display: flex;
+            flex: 1 1 auto;
+            min-height: 0;
+            overflow: hidden;
+        }
+        .methodology-sidebar {
+            width: 260px;
+            flex: 0 0 260px;
+            border-right: 1px solid var(--border-color);
+            overflow-y: auto;
+            background: var(--bg-secondary, rgba(255,255,255,0.02));
+            padding: 0.85rem 0;
+        }
+        body[data-theme="light"] .methodology-sidebar {
+            background: rgba(10, 25, 41, 0.03);
+        }
+        .methodology-nav-section {
+            margin-bottom: 0.35rem;
+        }
+        .methodology-nav-link {
+            display: block;
+            width: 100%;
+            background: transparent;
+            border: none;
+            text-align: left;
+            color: var(--text-secondary);
+            padding: 0.55rem 1.1rem;
+            font-size: 0.86rem;
+            cursor: pointer;
+            border-left: 2px solid transparent;
+            font-family: inherit;
+            line-height: 1.35;
+            transition: background 0.12s ease, color 0.12s ease, border-color 0.12s ease;
+        }
+        .methodology-nav-link:hover {
+            background: rgba(255,255,255,0.04);
+            color: var(--text-primary);
+        }
+        body[data-theme="light"] .methodology-nav-link:hover {
+            background: rgba(10, 25, 41, 0.05);
+        }
+        .methodology-nav-link.is-section {
+            font-weight: 700;
+            text-transform: uppercase;
+            font-size: 0.74rem;
+            letter-spacing: 0.06em;
+            color: var(--text-primary);
+            padding-top: 0.7rem;
+        }
+        .methodology-nav-link.is-sub {
+            padding-left: 1.75rem;
+            font-size: 0.82rem;
+        }
+        .methodology-nav-link.active {
+            color: var(--accent-cyan, #4cc9f0);
+            border-left-color: var(--accent-cyan, #4cc9f0);
+            background: rgba(76, 201, 240, 0.08);
+        }
+        .methodology-content {
+            flex: 1 1 auto;
+            overflow-y: auto;
+            padding: 1.5rem 2rem 2.5rem 2rem;
+            color: var(--text-primary);
+            line-height: 1.6;
+            scroll-behavior: smooth;
+        }
+        .methodology-content h2.methodology-section-title {
+            font-size: 1.35rem;
+            margin: 0 0 0.75rem 0;
+            color: var(--text-primary);
+            letter-spacing: 0.02em;
+            text-transform: uppercase;
+            border-bottom: 1px solid var(--border-color);
+            padding-bottom: 0.6rem;
+        }
+        .methodology-content h3.methodology-sub-title {
+            font-size: 1.05rem;
+            margin: 1.5rem 0 0.5rem 0;
+            color: var(--accent-cyan, #4cc9f0);
+        }
+        .methodology-content p {
+            margin: 0 0 0.75rem 0;
+            color: var(--text-primary);
+        }
+        .methodology-content ul.methodology-list {
+            margin: 0.25rem 0 0.85rem 1.2rem;
+            padding: 0;
+            list-style: disc;
+        }
+        .methodology-content ul.methodology-list li {
+            margin-bottom: 0.3rem;
+            color: var(--text-primary);
+        }
+        .methodology-content .methodology-defn {
+            margin: 0 0 0.85rem 0;
+        }
+        .methodology-content .methodology-defn-term {
+            font-weight: 700;
+            color: var(--text-primary);
+            display: block;
+            margin-bottom: 0.15rem;
+        }
+        .methodology-content .methodology-preamble {
+            font-size: 0.95rem;
+            color: var(--text-secondary);
+            border-left: 3px solid var(--accent-cyan, #4cc9f0);
+            padding: 0.5rem 0 0.5rem 0.9rem;
+            margin: 0 0 1.5rem 0;
+        }
+        .methodology-section-wrapper {
+            margin-bottom: 2rem;
+            scroll-margin-top: 1rem;
+        }
+        @media (max-width: 720px) {
+            .methodology-body { flex-direction: column; }
+            .methodology-sidebar {
+                width: 100%;
+                flex: 0 0 auto;
+                max-height: 30vh;
+                border-right: none;
+                border-bottom: 1px solid var(--border-color);
+            }
+            .methodology-content { padding: 1.1rem 1.1rem 1.5rem 1.1rem; }
+        }
+
         .avatar-upload-modal {
             position: fixed;
             top: 0;
@@ -13453,6 +13588,27 @@
         </div>
     </div>
 
+    <!-- Methodology modal -->
+    <div id="methodologyModal" class="modal-overlay" style="display: none;" onclick="if(event.target === this) closeMethodologyModal()">
+        <div class="modal-content methodology-modal-content" style="max-width: 1100px; width: 92vw; max-height: 88vh; overflow: hidden; display: flex; flex-direction: column; padding: 0;">
+            <div class="methodology-header">
+                <div>
+                    <h2 style="margin: 0; color: var(--text-primary); font-size: 1.25rem;">Crosswalk Product Methodologies</h2>
+                    <div id="methodologyVersionLabel" style="color: var(--text-secondary); font-size: 0.78rem; margin-top: 0.25rem;">Version 1.0 &middot; June 2026</div>
+                </div>
+                <button type="button" onclick="closeMethodologyModal()" aria-label="Close" style="background: transparent; border: none; color: var(--text-secondary); font-size: 1.6rem; cursor: pointer; line-height: 1; padding: 0 0.25rem;">&times;</button>
+            </div>
+            <div class="methodology-body">
+                <aside class="methodology-sidebar" id="methodologySidebar">
+                    <div class="loading-placeholder" style="padding: 1rem;">Loading...</div>
+                </aside>
+                <main class="methodology-content" id="methodologyContent">
+                    <div class="loading-placeholder" style="padding: 1.5rem;">Loading methodology...</div>
+                </main>
+            </div>
+        </div>
+    </div>
+
     <!-- Profile date ranges comparison (deltas) modal -->
     <div id="profileDeltasModal" class="modal-overlay" style="display: none;" onclick="if(event.target === this) closeProfileDeltasModal()">
         <div class="modal-content" style="max-width: 90vw; max-height: 85vh; overflow: hidden; display: flex; flex-direction: column;">
@@ -13504,6 +13660,8 @@
                                         <span>Appearance</span>
                                         <span id="themeToggleLabel" style="font-size:0.75rem;color:var(--accent-cyan);font-weight:600;letter-spacing:0.04em;text-transform:uppercase;">Dark</span>
                                     </button>
+                                    <div class="user-dropdown-divider"></div>
+                                    <button type="button" class="user-dropdown-item" id="btnOpenMethodology">Methodology</button>
                                     <div class="user-dropdown-divider"></div>
                                     <a class="user-dropdown-item" href="/logout">Logout</a>
                                 </div>
@@ -21466,6 +21624,289 @@
                         dropdown.classList.remove('open');
                         if (typeof window.openChangePasswordModal === 'function') window.openChangePasswordModal();
                     });
+                }
+                var btnMethod = document.getElementById('btnOpenMethodology');
+                if (btnMethod) {
+                    btnMethod.addEventListener('click', function(e) {
+                        e.stopPropagation();
+                        dropdown.classList.remove('open');
+                        if (typeof window.openMethodologyModal === 'function') window.openMethodologyModal();
+                    });
+                }
+            });
+        })();
+
+        // ============================================================================
+        // METHODOLOGY MODAL
+        // ============================================================================
+        (function() {
+            var _methodologyData = null;
+            var _methodologyLoading = false;
+
+            function _slugify(s) {
+                return String(s || '')
+                    .toLowerCase()
+                    .replace(/[^a-z0-9]+/g, '-')
+                    .replace(/^-+|-+$/g, '') || 'section';
+            }
+
+            // Many bullet paragraphs in the source doc embed multiple bullets on one
+            // line as " • A • B • C". Split those back out into discrete list items.
+            function _splitBulletText(t) {
+                if (!t) return [];
+                var s = String(t).trim();
+                // Strip a leading bullet marker if present
+                s = s.replace(/^[•·\u2022]\s*/, '');
+                var parts = s.split(/\s*[•·\u2022]\s*/).map(function(x){ return x.trim(); }).filter(Boolean);
+                return parts.length ? parts : [s];
+            }
+
+            // Heuristic: detect "Term + body" definition paragraphs where the run
+            // metadata distinguishes a bold term from following body text.
+            function _splitDefinitionFromRuns(runs) {
+                if (!runs || !runs.length) return null;
+                // Concatenate the leading bold run(s) as the term.
+                var i = 0;
+                var term = '';
+                while (i < runs.length && runs[i].bold) {
+                    term += runs[i].text;
+                    i++;
+                }
+                term = term.trim();
+                if (!term) return null;
+                var rest = '';
+                for (; i < runs.length; i++) rest += runs[i].text;
+                rest = rest.trim();
+                if (!rest) return null;
+                // Only treat as a definition if the term is reasonably short.
+                if (term.length > 80) return null;
+                return { term: term, body: rest };
+            }
+
+            function _appendListItems(container, items) {
+                if (!items || !items.length) return;
+                var ul = container.querySelector(':scope > ul.methodology-list:last-child');
+                if (!ul) {
+                    ul = document.createElement('ul');
+                    ul.className = 'methodology-list';
+                    container.appendChild(ul);
+                }
+                items.forEach(function(it) {
+                    var li = document.createElement('li');
+                    li.textContent = it;
+                    ul.appendChild(li);
+                });
+            }
+
+            function _renderParagraph(p, container) {
+                var text = (p.text || '').trim();
+                if (!text) return;
+
+                // List items (either flagged is_list or starts with bullet)
+                var startsWithBullet = /^[•·\u2022]/.test(text);
+                if (p.is_list || startsWithBullet) {
+                    _appendListItems(container, _splitBulletText(text));
+                    return;
+                }
+
+                // Intro sentence followed by inline bullets: "Lead-in text: • A • B • C"
+                // Split at the first bullet; render the prefix as a paragraph and the rest as a list.
+                var firstBullet = text.search(/[•·\u2022]/);
+                if (firstBullet > 0) {
+                    var prefix = text.slice(0, firstBullet).trim();
+                    var rest = text.slice(firstBullet);
+                    if (prefix) {
+                        var lead = document.createElement('p');
+                        lead.textContent = prefix;
+                        container.appendChild(lead);
+                    }
+                    _appendListItems(container, _splitBulletText(rest));
+                    return;
+                }
+
+                // Definition-style paragraph (bold term followed by description)
+                var defn = _splitDefinitionFromRuns(p.runs);
+                if (defn) {
+                    var d = document.createElement('div');
+                    d.className = 'methodology-defn';
+                    var t = document.createElement('span');
+                    t.className = 'methodology-defn-term';
+                    t.textContent = defn.term;
+                    var b = document.createElement('span');
+                    b.textContent = defn.body;
+                    d.appendChild(t);
+                    d.appendChild(b);
+                    container.appendChild(d);
+                    return;
+                }
+
+                var para = document.createElement('p');
+                para.textContent = text;
+                container.appendChild(para);
+            }
+
+            function _renderMethodology(data) {
+                var sidebar = document.getElementById('methodologySidebar');
+                var content = document.getElementById('methodologyContent');
+                if (!sidebar || !content) return;
+                sidebar.innerHTML = '';
+                content.innerHTML = '';
+
+                data.forEach(function(section) {
+                    var rawTitle = section.title || '';
+                    var isPreamble = rawTitle === '_preamble_';
+                    var displayTitle = isPreamble ? 'Overview' : rawTitle;
+                    var sectionId = 'methsec-' + _slugify(displayTitle);
+
+                    // Sidebar entry for section
+                    var navWrap = document.createElement('div');
+                    navWrap.className = 'methodology-nav-section';
+                    var sectionLink = document.createElement('button');
+                    sectionLink.type = 'button';
+                    sectionLink.className = 'methodology-nav-link is-section';
+                    sectionLink.textContent = displayTitle;
+                    sectionLink.dataset.target = sectionId;
+                    navWrap.appendChild(sectionLink);
+
+                    // Section block in content
+                    var sectionBlock = document.createElement('div');
+                    sectionBlock.className = 'methodology-section-wrapper';
+                    sectionBlock.id = sectionId;
+
+                    if (!isPreamble) {
+                        var h2 = document.createElement('h2');
+                        h2.className = 'methodology-section-title';
+                        h2.textContent = displayTitle;
+                        sectionBlock.appendChild(h2);
+                    }
+
+                    // Intro paragraphs (the very first preamble gets a distinctive style).
+                    // Skip the raw "Product Methodologies" doc title — the modal header
+                    // already shows it.
+                    (section.intro || []).forEach(function(p) {
+                        var t = (p.text || '').trim();
+                        if (isPreamble && /^product methodologies$/i.test(t)) return;
+                        if (isPreamble) {
+                            var box = document.createElement('div');
+                            box.className = 'methodology-preamble';
+                            box.textContent = t;
+                            sectionBlock.appendChild(box);
+                        } else {
+                            _renderParagraph(p, sectionBlock);
+                        }
+                    });
+
+                    // Subsections
+                    (section.subs || []).forEach(function(sub) {
+                        var subId = sectionId + '--' + _slugify(sub.title);
+                        var subLink = document.createElement('button');
+                        subLink.type = 'button';
+                        subLink.className = 'methodology-nav-link is-sub';
+                        subLink.textContent = sub.title;
+                        subLink.dataset.target = subId;
+                        navWrap.appendChild(subLink);
+
+                        var subWrap = document.createElement('div');
+                        subWrap.id = subId;
+                        subWrap.style.scrollMarginTop = '0.5rem';
+                        var h3 = document.createElement('h3');
+                        h3.className = 'methodology-sub-title';
+                        h3.textContent = sub.title;
+                        subWrap.appendChild(h3);
+                        (sub.paragraphs || []).forEach(function(p) {
+                            _renderParagraph(p, subWrap);
+                        });
+                        sectionBlock.appendChild(subWrap);
+                    });
+
+                    sidebar.appendChild(navWrap);
+                    content.appendChild(sectionBlock);
+                });
+
+                // Wire nav clicks: smooth-scroll into the content panel and mark active.
+                var allLinks = sidebar.querySelectorAll('.methodology-nav-link');
+                allLinks.forEach(function(lnk) {
+                    lnk.addEventListener('click', function() {
+                        var tgt = document.getElementById(lnk.dataset.target);
+                        if (tgt && content) {
+                            content.scrollTo({ top: tgt.offsetTop - 8, behavior: 'smooth' });
+                        }
+                        allLinks.forEach(function(x) { x.classList.remove('active'); });
+                        lnk.classList.add('active');
+                    });
+                });
+
+                // Highlight first non-preamble section by default.
+                var firstReal = sidebar.querySelector('.methodology-nav-link.is-section:not(:first-child)') || sidebar.querySelector('.methodology-nav-link');
+                if (firstReal) firstReal.classList.add('active');
+
+                // Active-section tracking on scroll.
+                if (content && !content._methScrollWired) {
+                    content._methScrollWired = true;
+                    content.addEventListener('scroll', function() {
+                        var headings = content.querySelectorAll('.methodology-section-wrapper, [id^="methsec-"][id*="--"]');
+                        var top = content.scrollTop + 24;
+                        var current = null;
+                        headings.forEach(function(h) {
+                            if (h.offsetTop <= top) current = h;
+                        });
+                        if (!current) return;
+                        var link = sidebar.querySelector('.methodology-nav-link[data-target="' + current.id + '"]');
+                        if (link && !link.classList.contains('active')) {
+                            allLinks.forEach(function(x) { x.classList.remove('active'); });
+                            link.classList.add('active');
+                        }
+                    });
+                }
+            }
+
+            function _loadAndRender() {
+                if (_methodologyData) {
+                    _renderMethodology(_methodologyData);
+                    return;
+                }
+                if (_methodologyLoading) return;
+                _methodologyLoading = true;
+                fetch('/static/cw_methodologies.json', { cache: 'no-cache' })
+                    .then(function(r) {
+                        if (!r.ok) throw new Error('HTTP ' + r.status);
+                        return r.json();
+                    })
+                    .then(function(data) {
+                        _methodologyData = data;
+                        _renderMethodology(data);
+                    })
+                    .catch(function(err) {
+                        var content = document.getElementById('methodologyContent');
+                        if (content) {
+                            content.innerHTML = '<div style="padding:1.5rem;color:var(--text-secondary);">Unable to load methodology document. ' +
+                                '(' + (err && err.message ? err.message : 'unknown error') + ')</div>';
+                        }
+                    })
+                    .finally(function() {
+                        _methodologyLoading = false;
+                    });
+            }
+
+            window.openMethodologyModal = function openMethodologyModal() {
+                var modal = document.getElementById('methodologyModal');
+                if (!modal) return;
+                modal.style.display = 'flex';
+                document.body.style.overflow = 'hidden';
+                _loadAndRender();
+            };
+            window.closeMethodologyModal = function closeMethodologyModal() {
+                var modal = document.getElementById('methodologyModal');
+                if (!modal) return;
+                modal.style.display = 'none';
+                document.body.style.overflow = '';
+            };
+            // Esc-to-close
+            document.addEventListener('keydown', function(e) {
+                if (e.key !== 'Escape') return;
+                var modal = document.getElementById('methodologyModal');
+                if (modal && modal.style.display !== 'none') {
+                    window.closeMethodologyModal();
                 }
             });
         })();

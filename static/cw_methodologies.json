@@ -1,0 +1,2148 @@
+[
+  {
+    "title": "_preamble_",
+    "intro": [
+      {
+        "text": "Product Methodologies",
+        "is_list": false,
+        "runs": [
+          {
+            "text": "Product Methodologies",
+            "bold": true
+          }
+        ]
+      },
+      {
+        "text": "Crosswalk is the world’s largest ethically sourced behavioral intelligence platform, powered by 30 million U.S. consumers who opted in through trusted consumer brand partnerships. This collection model is classified as Zero Party Data because consumers knowingly and explicitly opt in, choose what information they share, and authorize the categories of behavioral data collected. By capturing real digital behavior every day, every URL, every session, every signal, Crosswalk provides a living view of audience discovery, engagement, shopping, streaming, search, and fandom, powering Wall Street, Hollywood, brands, and the next generation of AI.",
+        "is_list": false,
+        "runs": [
+          {
+            "text": "Crosswalk is the world’s largest ethically sourced behavioral intelligence platform, powered by 30 million ",
+            "bold": false
+          },
+          {
+            "text": "U.S. ",
+            "bold": false
+          },
+          {
+            "text": "consumers who opted in through trusted consumer brand partnerships. This collection model is classified as Zero Party Data because consumers knowingly and explicitly opt in, choose what information they share, and authorize the categories of behavioral data collected. By capturing real digital behavior every day, every URL, every session, every signal, Crosswalk provides a living view of audience discovery, engagement, shopping, streaming, search, and fandom, powering Wall Street, Hollywood, brands, and the next generation of AI.",
+            "bold": false
+          }
+        ]
+      }
+    ],
+    "subs": []
+  },
+  {
+    "title": "Key Metric Definitions",
+    "intro": [
+      {
+        "text": "To ensure consistency across Crosswalk products, the following definitions apply throughout this methodology document.",
+        "is_list": false,
+        "runs": [
+          {
+            "text": "To ensure consistency across Crosswalk products, the following definitions apply throughout this methodology document.",
+            "bold": false
+          }
+        ]
+      },
+      {
+        "text": "Panel MemberAn individual U.S. consumer who has opted in to Crosswalk’s behavioral data panel through a trusted consumer brand partnership. Panelists' ages range from 2 to 85 and over. Panelists under 18 are enrolled only with verifiable parental consent.",
+        "is_list": false,
+        "runs": [
+          {
+            "text": "Panel Member",
+            "bold": true
+          },
+          {
+            "text": "An individual U.S. consumer who has opted in to Crosswalk’s behavioral data panel through a trusted consumer brand partnership. Panelists' ages range from 2 to 85 and over. Panelists under 18 are enrolled only with verifiable parental consent. ",
+            "bold": false
+          }
+        ]
+      },
+      {
+        "text": "Daily DataCrosswalk captures and reports observed digital behavior daily, creating a continuously refreshed view of audience activity, engagement, intent, and conversion.",
+        "is_list": false,
+        "runs": [
+          {
+            "text": "Daily Data",
+            "bold": true
+          },
+          {
+            "text": "Crosswalk captures ",
+            "bold": false
+          },
+          {
+            "text": "and reports ",
+            "bold": false
+          },
+          {
+            "text": "observed digital behavior ",
+            "bold": false
+          },
+          {
+            "text": "daily",
+            "bold": false
+          },
+          {
+            "text": ", creating a continuously refreshed view of audience activity, engagement, intent, and conversion.",
+            "bold": false
+          }
+        ]
+      },
+      {
+        "text": "U.S. Projection MethodologyBehaviors observed in the panel are projected to a U.S. national estimate based on their incidence within Crosswalk's Gen Pop panel, a sample of 10 million members balanced to U.S. Census data on age, gender, ethnicity, and income.",
+        "is_list": false,
+        "runs": [
+          {
+            "text": "U.S. Projection Methodology",
+            "bold": true
+          },
+          {
+            "text": "Behaviors observed in the panel are projected to a U",
+            "bold": false
+          },
+          {
+            "text": ".S.",
+            "bold": false
+          },
+          {
+            "text": " national estimate based on their incidence within Crosswalk's Gen Pop panel, a sample of 10 million members balanced to U",
+            "bold": false
+          },
+          {
+            "text": ".S.",
+            "bold": false
+          },
+          {
+            "text": " Census data on age, gender, ",
+            "bold": false
+          },
+          {
+            "text": "ethnicity",
+            "bold": false
+          },
+          {
+            "text": ", and income.",
+            "bold": false
+          }
+        ]
+      },
+      {
+        "text": "Profile IQ Fan SegmentsProfile IQ audience definitions are based on observed panel member behavior over a twelve-month measurement period unless otherwise stated.",
+        "is_list": false,
+        "runs": [
+          {
+            "text": "Profile IQ Fan Segments",
+            "bold": true
+          },
+          {
+            "text": "Profile IQ audience definitions are based on observed panel member behavior over a ",
+            "bold": false
+          },
+          {
+            "text": "twelve-month",
+            "bold": false
+          },
+          {
+            "text": " measurement period",
+            "bold": false
+          },
+          {
+            "text": " unless otherwise stated",
+            "bold": false
+          },
+          {
+            "text": ".",
+            "bold": false
+          }
+        ]
+      },
+      {
+        "text": "Qualified TouchpointAn active engagement with one of five behavioral signals: Search (the user is searching), Social (visiting social pages), Owned & Operated (using owned and operated sites), Media (reading or consuming content), or eCommerce (a confirmed purchase).",
+        "is_list": false,
+        "runs": [
+          {
+            "text": "Qualified Touchpoint",
+            "bold": true
+          },
+          {
+            "text": "An active engagement with one of five behavioral signals: Search (the user is searching), Social (visiting social pages), Owned & Operated (using owned and operated sites), Media (reading or consuming content), or eCommerce (a confirmed purchase).",
+            "bold": false
+          }
+        ]
+      },
+      {
+        "text": "Casual FanA panel member with at least one qualified touchpoint across the relevant behavioral signal set (Search, Social, Owned & Operated, Media, eCommerce) during the measurement period.",
+        "is_list": false,
+        "runs": [
+          {
+            "text": "Casual Fan",
+            "bold": true
+          },
+          {
+            "text": "A panel member with at least one qualified touchpoint across the relevant behavioral signal set ",
+            "bold": false
+          },
+          {
+            "text": "(Search, Social, Owned & Operated, Media, eCommerce)",
+            "bold": false
+          },
+          {
+            "text": " ",
+            "bold": false
+          },
+          {
+            "text": "during ",
+            "bold": false
+          },
+          {
+            "text": "the ",
+            "bold": false
+          },
+          {
+            "text": "measurement period.",
+            "bold": false
+          }
+        ]
+      },
+      {
+        "text": "Avid FanA panel member with four or more qualified touchpoints across the relevant behavioral signal set (Search, Social, Owned & Operated, Media, eCommerce) during the measurement period.",
+        "is_list": false,
+        "runs": [
+          {
+            "text": "Avid Fan",
+            "bold": true
+          },
+          {
+            "text": "A panel member with four or more qualified touchpoints across the relevant behavioral signal set ",
+            "bold": false
+          },
+          {
+            "text": "(Search, Social, Owned & Operated, Media, eCommerce) ",
+            "bold": false
+          },
+          {
+            "text": "during ",
+            "bold": false
+          },
+          {
+            "text": "the",
+            "bold": false
+          },
+          {
+            "text": " measurement period.",
+            "bold": false
+          }
+        ]
+      },
+      {
+        "text": "Subscriber IQ Account MeasurementSubscriber IQ is measured at the account level, rather than the individual panel member level, to reflect how streaming subscriptions are purchased, activated, and used.",
+        "is_list": false,
+        "runs": [
+          {
+            "text": "Subscriber IQ Account Measurement",
+            "bold": true
+          },
+          {
+            "text": "Subscriber IQ is measured at the account level, rather than the individual panel member level, to reflect how streaming subscriptions are purchased, activated, and used.",
+            "bold": false
+          }
+        ]
+      },
+      {
+        "text": "ViewA view is counted when a panel member is actively viewing the content, beginning at the one second mark.",
+        "is_list": false,
+        "runs": [
+          {
+            "text": "View",
+            "bold": true
+          },
+          {
+            "text": "A view ",
+            "bold": false
+          },
+          {
+            "text": "is counted when a panel member is actively viewing the content, beginning at the one second mark",
+            "bold": false
+          },
+          {
+            "text": ".",
+            "bold": false
+          }
+        ]
+      },
+      {
+        "text": "Time SpentThe total amount of time a panel member spends actively viewing content, measured in total seconds viewed.",
+        "is_list": false,
+        "runs": [
+          {
+            "text": "Time Spent",
+            "bold": true
+          },
+          {
+            "text": "The total amount of time a panel member spends actively viewing content, measured in total seconds viewed.",
+            "bold": false
+          }
+        ]
+      },
+      {
+        "text": "AcquisitionAn acquisition is counted when an account has a confirmed purchase event for a subscription during the attribution window.",
+        "is_list": false,
+        "runs": [
+          {
+            "text": "Acquisition",
+            "bold": true
+          },
+          {
+            "text": "An acquisition is counted when an account has a confirmed purchase event for a subscription during the attribution window.",
+            "bold": false
+          }
+        ]
+      },
+      {
+        "text": "ConversionMeasures the observed path from exposure or engagement to a deeper outcome. For entertainment content, this may include a panelist or account engaging with content, advertising, social content, search, or another qualifying touchpoint, and subsequently moving to long form consumption, such as viewing a full episode, season, film, or purchase path within the defined attribution window.",
+        "is_list": false,
+        "runs": [
+          {
+            "text": "Conversion",
+            "bold": true
+          },
+          {
+            "text": "M",
+            "bold": false
+          },
+          {
+            "text": "easures the observed path from exposure or engagement to a deeper outcome. For entertainment content, this may include a panelist or account engaging with content, advertising, social content, search, or another qualifying touchpoint, and subsequently moving to long form consumption, such as viewing a full episode, season, film, or purchase path within the defined attribution window.",
+            "bold": false
+          }
+        ]
+      }
+    ],
+    "subs": []
+  },
+  {
+    "title": "PROFILE IQ",
+    "intro": [],
+    "subs": [
+      {
+        "title": "Methodology Overview",
+        "paragraphs": [
+          {
+            "text": "Profile IQ is Crosswalk’s audience intelligence platform. It combines large-scale behavioral data and demographic insights to help brands understand who their audiences are, what they care about and how they behave across categories such as retail, dining, streaming, travel, digital platforms and more (30+ behavioral categories).",
+            "is_list": false,
+            "runs": [
+              {
+                "text": "Profile IQ is Crosswalk’s audience intelligence platform. It combines large-scale behavioral data and demographic insights to help brands understand who their audiences are, what they care about and how they behave across categories such as retail, dining, streaming, travel",
+                "bold": false
+              },
+              {
+                "text": ",",
+                "bold": false
+              },
+              {
+                "text": " digital platforms",
+                "bold": false
+              },
+              {
+                "text": " and more ",
+                "bold": false
+              },
+              {
+                "text": "(30+ behavioral categories)",
+                "bold": false
+              },
+              {
+                "text": ".",
+                "bold": false
+              }
+            ]
+          },
+          {
+            "text": "Profile IQ identifies behaviorally relevant audiences; measures observed behaviors and presents the results through a consistent and validated methodology.",
+            "is_list": false,
+            "runs": [
+              {
+                "text": "Profile IQ identifies behaviorally relevant ",
+                "bold": false
+              },
+              {
+                "text": "audiences;",
+                "bold": false
+              },
+              {
+                "text": " measures observed behaviors and presents the results through a consistent and validated methodology.",
+                "bold": false
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "title": "Audience Construction",
+        "paragraphs": [
+          {
+            "text": "Profile IQ begins with Crosswalk's panel of 30 million opted-in U.S. consumers. From this panel, a representative Gen Pop sample of 10 million members is created and balanced to U.S. Census data on age, gender, ethnicity, and income.",
+            "is_list": false,
+            "runs": [
+              {
+                "text": "Profile IQ begins with Crosswalk's panel of 30 million opted-in U.S. consumers. From this panel, a representative Gen Pop sample of 10 million members is created and balanced to U.S. Census data on age, gender, ethnicity, and income.",
+                "bold": false
+              }
+            ]
+          },
+          {
+            "text": "For a specific brand, title or audience, qualified users are identified by at least one qualified touchpoint to one or more of the following behavioral signals during the twelve-month measurement period:",
+            "is_list": false,
+            "runs": [
+              {
+                "text": "For a specific brand, title or audience, qualified users are identified by at least one qualified touchpoint to one or more of the following behavioral signals during the twelve-month measurement period:",
+                "bold": false
+              }
+            ]
+          },
+          {
+            "text": "• Search• Social• Owned & Operated• Media• eCommerce, requiring confirmed purchase activity",
+            "is_list": false,
+            "runs": [
+              {
+                "text": "• Search",
+                "bold": false
+              },
+              {
+                "text": "• Social",
+                "bold": false
+              },
+              {
+                "text": "• Owned & Operated",
+                "bold": false
+              },
+              {
+                "text": "• Media",
+                "bold": false
+              },
+              {
+                "text": "• eCommerce, ",
+                "bold": false
+              },
+              {
+                "text": "requiring",
+                "bold": false
+              },
+              {
+                "text": " confirmed purchase activity",
+                "bold": false
+              }
+            ]
+          },
+          {
+            "text": "The result is a behaviorally defined audience that can be analyzed and compared to the broader U.S. population.",
+            "is_list": false,
+            "runs": [
+              {
+                "text": "The result is a behaviorally defined audience that can be analyzed and compared to the broader U.S. population.",
+                "bold": false
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "title": "Data Sources",
+        "paragraphs": [
+          {
+            "text": "Profile IQ combines multiple sources of behavioral and demographic data, including:",
+            "is_list": false,
+            "runs": [
+              {
+                "text": "Profile IQ combines multiple sources of behavioral and demographic data, including:",
+                "bold": false
+              }
+            ]
+          },
+          {
+            "text": "• Clickstream• Search• Social• Owned & Operated• Media• eCommerce• Survey-based demographic attributes",
+            "is_list": false,
+            "runs": [
+              {
+                "text": "• ",
+                "bold": false
+              },
+              {
+                "text": "Clickstream",
+                "bold": false
+              },
+              {
+                "text": "• ",
+                "bold": false
+              },
+              {
+                "text": "Search",
+                "bold": false
+              },
+              {
+                "text": "• ",
+                "bold": false
+              },
+              {
+                "text": "Social",
+                "bold": false
+              },
+              {
+                "text": "• Owned & Operated",
+                "bold": false
+              },
+              {
+                "text": "• Media",
+                "bold": false
+              },
+              {
+                "text": "• eCommerce",
+                "bold": false
+              },
+              {
+                "text": "• Survey-based demographic attributes",
+                "bold": false
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "title": "Core Metrics",
+        "paragraphs": [
+          {
+            "text": "Profile IQ produces several standardized metrics:",
+            "is_list": false,
+            "runs": [
+              {
+                "text": "Profile IQ produces several standardized metrics:",
+                "bold": false
+              }
+            ]
+          },
+          {
+            "text": "Raw ActivityObserved volume of behavioral activity associated with a brand, behavior or category.",
+            "is_list": false,
+            "runs": [
+              {
+                "text": "Raw Activity",
+                "bold": true
+              },
+              {
+                "text": "Observed volume of behavioral activity associated with a brand, behavior or category.",
+                "bold": false
+              }
+            ]
+          },
+          {
+            "text": "Audience PenetrationPercentage of the audience engaging with a given brand, behavior or activity.",
+            "is_list": false,
+            "runs": [
+              {
+                "text": "Audience Penetration",
+                "bold": true
+              },
+              {
+                "text": "Percentage of the audience engaging with a given brand, behavior or activity.",
+                "bold": false
+              }
+            ]
+          },
+          {
+            "text": "Projected AudienceObserved activity projected to a national estimate.",
+            "is_list": false,
+            "runs": [
+              {
+                "text": "Projected Audience",
+                "bold": true
+              },
+              {
+                "text": "Observed activity projected to a national estimate.",
+                "bold": false
+              }
+            ]
+          },
+          {
+            "text": "U.S. Census Population ComparisonObserved activity indexed to U.S. population.",
+            "is_list": false,
+            "runs": [
+              {
+                "text": "U.S. Census Population Comparison",
+                "bold": true
+              },
+              {
+                "text": "Observed activity ",
+                "bold": false
+              },
+              {
+                "text": "indexed",
+                "bold": false
+              },
+              {
+                "text": " to U",
+                "bold": false
+              },
+              {
+                "text": ".S.",
+                "bold": false
+              },
+              {
+                "text": " ",
+                "bold": false
+              },
+              {
+                "text": "population",
+                "bold": false
+              },
+              {
+                "text": ".",
+                "bold": false
+              }
+            ]
+          },
+          {
+            "text": "Metric definitions are applied consistently across profiles to ensure comparability.",
+            "is_list": false,
+            "runs": [
+              {
+                "text": "Metric definitions are applied consistently across profiles to ensure comparability.",
+                "bold": false
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "title": "Quality Assurance",
+        "paragraphs": [
+          {
+            "text": "All Profile IQ outputs undergo validation and quality-control review prior to publication.",
+            "is_list": false,
+            "runs": [
+              {
+                "text": "All Profile IQ outputs undergo validation and quality-control review prior to publication.",
+                "bold": false
+              }
+            ]
+          },
+          {
+            "text": "Validation processes are designed to identify anomalies, ensure consistency and confirm that reported insights accurately reflect observed audience behavior.",
+            "is_list": false,
+            "runs": [
+              {
+                "text": "Validation processes are designed to identify anomalies, ensure consistency and confirm that reported insights accurately reflect observed audience behavior.",
+                "bold": false
+              }
+            ]
+          },
+          {
+            "text": "Quality-control processes support the interpretation and presentation of results but do not create or alter the underlying behavioral observations.",
+            "is_list": false,
+            "runs": [
+              {
+                "text": "Quality-control processes support the interpretation and presentation of results but do not create or alter the underlying behavioral observations.",
+                "bold": false
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "title": "Digital Content Measurement",
+        "paragraphs": [
+          {
+            "text": "For digital entertainment content including streaming, gaming and podcasts, Profile IQ focuses on observed consumption activity.",
+            "is_list": false,
+            "runs": [
+              {
+                "text": "For digital entertainment content including streaming, gaming and podcasts, Profile IQ focuses on observed consumption activity.",
+                "bold": false
+              }
+            ]
+          },
+          {
+            "text": "Discovery behavior, social discussion and earned media activity are excluded where appropriate to help ensure that measured audiences reflect actual content consumption rather than awareness or conversation.",
+            "is_list": false,
+            "runs": [
+              {
+                "text": "Discovery behavior, social discussion and earned media activity are excluded where appropriate to help ensure that measured audiences reflect actual content consumption rather than awareness or conversation.",
+                "bold": false
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "title": "Survey-Based Demographics",
+        "paragraphs": [
+          {
+            "text": "Profile IQ incorporates anonymized, opt-in survey data to enrich audience profiles with demographic information including age, gender, ethnicity, income, education, household composition and other audience characteristics.",
+            "is_list": false,
+            "runs": [
+              {
+                "text": "Profile IQ incorporates anonymized, opt-in survey data to enrich audience profiles with demographic information including age, gender, ethnicity, income, education, household composition and other audience characteristics.",
+                "bold": false
+              }
+            ]
+          },
+          {
+            "text": "All survey data is aggregated and reported at the audience level.",
+            "is_list": false,
+            "runs": [
+              {
+                "text": "All survey data is aggregated and reported at the audience level.",
+                "bold": false
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "title": "Notes on Interpretation",
+        "paragraphs": [
+          {
+            "text": "• Profile IQ measures behaviorally qualified audiences.• Metrics are based on observed activity and standardized calculation methods.• Results reflect the audience and data available at the time of analysis.• Audience composition and values may change over time as behaviors evolve.• Methodology is continuously reviewed and refined to maintain accuracy and consistency.",
+            "is_list": false,
+            "runs": [
+              {
+                "text": "• Profile IQ measures behaviorally qualified audiences.",
+                "bold": false
+              },
+              {
+                "text": "• Metrics are based on observed activity and standardized calculation methods.",
+                "bold": false
+              },
+              {
+                "text": "• Results reflect the audience and data available at the time of analysis.",
+                "bold": false
+              },
+              {
+                "text": "• Audience composition and values may change over time as behaviors evolve.",
+                "bold": false
+              },
+              {
+                "text": "• Methodology is continuously reviewed and refined to maintain accuracy and consistency.",
+                "bold": false
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "title": "SUBSCRIBER IQ",
+    "intro": [
+      {
+        "text": "Subscriber IQ measures how streaming content contributes to subscriber acquisition, reactivation and estimated subscription revenue.",
+        "is_list": false,
+        "runs": [
+          {
+            "text": "Subscriber IQ measures how streaming content contributes to subscriber acquisition, reactivation and estimated subscription revenue.",
+            "bold": false
+          }
+        ]
+      },
+      {
+        "text": "For a given title, Subscriber IQ helps answer:",
+        "is_list": false,
+        "runs": [
+          {
+            "text": "For a given title, Subscriber IQ helps answer:",
+            "bold": false
+          }
+        ]
+      },
+      {
+        "text": "• How many accounts watched• How many accounts were acquired or reactivated• How quickly accounts converted to subscribers• The estimated value of those subscribers• Which competing streaming services they also use• Episode release timing versus subscription• The demographic profile of the acquired audience",
+        "is_list": false,
+        "runs": [
+          {
+            "text": "• How many accounts watched",
+            "bold": false
+          },
+          {
+            "text": "• How many accounts were acquired or reactivated",
+            "bold": false
+          },
+          {
+            "text": "• How quickly accounts converted to subscribers",
+            "bold": false
+          },
+          {
+            "text": "• The estimated value of those subscribers",
+            "bold": false
+          },
+          {
+            "text": "• Which competing streaming services they also use",
+            "bold": false
+          },
+          {
+            "text": "• Episode release timing versus subscription",
+            "bold": false
+          },
+          {
+            "text": "• The demographic profile of the acquired audience",
+            "bold": false
+          }
+        ]
+      },
+      {
+        "text": "All metrics are projected to the U.S. population.",
+        "is_list": false,
+        "runs": [
+          {
+            "text": "All metrics are projected to the U.S. population.",
+            "bold": false
+          }
+        ]
+      }
+    ],
+    "subs": [
+      {
+        "title": "Audience Measurement",
+        "paragraphs": [
+          {
+            "text": "Subscriber IQ analyzes audience behavior associated with a specific title during a defined analysis period.",
+            "is_list": false,
+            "runs": [
+              {
+                "text": "Subscriber IQ analyzes audience behavior associated with a specific title during a defined analysis period.",
+                "bold": false
+              }
+            ]
+          },
+          {
+            "text": "Viewership, subscriber acquisition and audience characteristics are measured using Crosswalk’s representative U.S. panel and standardized attribution methodology. The attribution window runs from 180 days (six months) before a title's launch through 30 days after its final episode airs; the exact window depends on each title's release schedule.",
+            "is_list": false,
+            "runs": [
+              {
+                "text": "Viewership, subscriber acquisition and audience characteristics are measured using Crosswalk’s representative U.S. panel and standardized attribution methodology.",
+                "bold": false
+              },
+              {
+                "text": " The attribution window runs from 180 days (six months) before a title's launch through 30 days after its final episode airs; the exact window depends on each title's release schedule.",
+                "bold": false
+              }
+            ]
+          },
+          {
+            "text": "For most streaming platforms, audience measurement is based on deterministic consumption signals.",
+            "is_list": false,
+            "runs": [
+              {
+                "text": "For most streaming platforms, audience measurement is based on deterministic consumption signals.",
+                "bold": false
+              }
+            ]
+          },
+          {
+            "text": "Apple TV+ is unique because show content may be encapsulated under a single title shell rather than distinct episode-level attribution links, which can limit available behavioral signals. In those cases, viewership is modeled based on observed account visits to the content’s shell page.",
+            "is_list": false,
+            "runs": [
+              {
+                "text": "Apple TV+ is unique because show content may be encapsulated under a single title shell rather than distinct episode-level attribution links, which can limit available behavioral signals. In those cases, viewership is modeled based on observed account visits to the content’s shell page.",
+                "bold": false
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "title": "Core Metrics",
+        "paragraphs": [
+          {
+            "text": "Total Accounts: The total audience observed engaging with the title during the analysis period.",
+            "is_list": false,
+            "runs": [
+              {
+                "text": "Total ",
+                "bold": true
+              },
+              {
+                "text": "Accounts",
+                "bold": true
+              },
+              {
+                "text": ": ",
+                "bold": false
+              },
+              {
+                "text": "The total audience observed engaging with the title during the analysis period.",
+                "bold": false
+              }
+            ]
+          },
+          {
+            "text": "Acquired Accounts: Accounts that joined the platform during the attribution window and whose first view was the specified title; they were not active subscribers for the past six months, based on purchase confirmation.",
+            "is_list": false,
+            "runs": [
+              {
+                "text": "Acquired ",
+                "bold": true
+              },
+              {
+                "text": "Accounts",
+                "bold": true
+              },
+              {
+                "text": ": ",
+                "bold": false
+              },
+              {
+                "text": "Accounts that",
+                "bold": false
+              },
+              {
+                "text": " joined the platform during the attribution window and whose first view was the specified ",
+                "bold": false
+              },
+              {
+                "text": "title;",
+                "bold": false
+              },
+              {
+                "text": " they were not active subscribers for the past six months",
+                "bold": false
+              },
+              {
+                "text": ", based",
+                "bold": false
+              },
+              {
+                "text": " on ",
+                "bold": false
+              },
+              {
+                "text": "purchase",
+                "bold": false
+              },
+              {
+                "text": " confirmation. ",
+                "bold": false
+              }
+            ]
+          },
+          {
+            "text": "Reactivated Accounts: Accounts that returned to the platform after a period of inactivity of six months or more and their first view back was the specified title.",
+            "is_list": false,
+            "runs": [
+              {
+                "text": "Reactivated ",
+                "bold": true
+              },
+              {
+                "text": "Accounts",
+                "bold": true
+              },
+              {
+                "text": ": ",
+                "bold": false
+              },
+              {
+                "text": "Accounts that",
+                "bold": false
+              },
+              {
+                "text": " returned to the platform after a period of inactivity of ",
+                "bold": false
+              },
+              {
+                "text": "six",
+                "bold": false
+              },
+              {
+                "text": " months or more and their first view back was the specified title.",
+                "bold": false
+              }
+            ]
+          },
+          {
+            "text": "Acquisition Rate: The percentage of accounts that became acquired or reactivated subscribers.",
+            "is_list": false,
+            "runs": [
+              {
+                "text": "Acquisition Rate",
+                "bold": true
+              },
+              {
+                "text": ": ",
+                "bold": false
+              },
+              {
+                "text": "The percentage of ",
+                "bold": false
+              },
+              {
+                "text": "accounts that",
+                "bold": false
+              },
+              {
+                "text": " became acquired or reactivated subscribers.",
+                "bold": false
+              }
+            ]
+          },
+          {
+            "text": "Speed to Conversion: The average time between content engagement and subscriber acquisition.",
+            "is_list": false,
+            "runs": [
+              {
+                "text": "Speed to Conversion",
+                "bold": true
+              },
+              {
+                "text": ": ",
+                "bold": false
+              },
+              {
+                "text": "The average time between content engagement and subscriber acquisition.",
+                "bold": false
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "title": "Revenue Estimates",
+        "paragraphs": [
+          {
+            "text": "Subscriber IQ estimates the potential subscription revenue associated with acquired and reactivated accounts.",
+            "is_list": false,
+            "runs": [
+              {
+                "text": "Subscriber IQ estimates the potential subscription revenue associated with acquired and reactivated ",
+                "bold": false
+              },
+              {
+                "text": "accounts",
+                "bold": false
+              },
+              {
+                "text": ".",
+                "bold": false
+              }
+            ]
+          },
+          {
+            "text": "Revenue estimates are based on publicly available subscription pricing and represent modeled revenue potential rather than reported financial results.",
+            "is_list": false,
+            "runs": [
+              {
+                "text": "Revenue estimates are based on publicly available subscription pricing and represent modeled revenue potential rather than reported financial results.",
+                "bold": false
+              }
+            ]
+          },
+          {
+            "text": "Multiple subscription tiers are presented when applicable to illustrate different revenue scenarios (premium vs ad supported).",
+            "is_list": false,
+            "runs": [
+              {
+                "text": "Multiple subscription tiers ",
+                "bold": false
+              },
+              {
+                "text": "are ",
+                "bold": false
+              },
+              {
+                "text": "presented ",
+                "bold": false
+              },
+              {
+                "text": "when applicable ",
+                "bold": false
+              },
+              {
+                "text": "to illustrate different revenue scenarios",
+                "bold": false
+              },
+              {
+                "text": " (premium vs ad supported)",
+                "bold": false
+              },
+              {
+                "text": ".",
+                "bold": false
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "title": "Audience Overlap",
+        "paragraphs": [
+          {
+            "text": "Subscriber IQ measures overlap between a title’s audience and other streaming platforms.",
+            "is_list": false,
+            "runs": [
+              {
+                "text": "Subscriber IQ measures overlap between a title’s audience and other streaming platforms.",
+                "bold": false
+              }
+            ]
+          },
+          {
+            "text": "These percentages represent audience overlap rather than market share. Because viewers often subscribe to multiple services, overlap percentages do not total 100%.",
+            "is_list": false,
+            "runs": [
+              {
+                "text": "These percentages represent audience overlap rather than market share. Because viewers often subscribe to multiple services, overlap percentages do not total 100%.",
+                "bold": false
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "title": "Audience Demographics",
+        "paragraphs": [
+          {
+            "text": "Subscriber IQ profiles acquired and reactivated subscribers across demographic dimensions including age and gender.",
+            "is_list": false,
+            "runs": [
+              {
+                "text": "Subscriber IQ profiles acquired and reactivated subscribers across demographic dimensions including age and gender.",
+                "bold": false
+              }
+            ]
+          },
+          {
+            "text": "Demographic outputs describe the audience that was brought to the platform through the title.",
+            "is_list": false,
+            "runs": [
+              {
+                "text": "Demographic outputs describe the audience that was brought to the platform through the title.",
+                "bold": false
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "title": "Release Timing Analysis",
+        "paragraphs": [
+          {
+            "text": "Subscriber IQ evaluates subscriber acquisition relative to a title’s release schedule.",
+            "is_list": false,
+            "runs": [
+              {
+                "text": "Subscriber IQ evaluates subscriber acquisition relative to a title’s release schedule.",
+                "bold": false
+              }
+            ]
+          },
+          {
+            "text": "This helps identify whether acquisition is concentrated around launch periods or sustained throughout a title’s release cycle.",
+            "is_list": false,
+            "runs": [
+              {
+                "text": "This helps identify whether acquisition is concentrated around launch periods or sustained throughout a title’s release cycle.",
+                "bold": false
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "title": "Notes on Interpretation",
+        "paragraphs": [
+          {
+            "text": "• Subscriber IQ measures audience behavior and subscriber acquisition associated with a title.• Revenue estimates are modeled.• Audience overlap reflects shared usage across platforms and is not market share.• Metrics are calculated using standardized methodology.• Certain platform-specific measurements may rely on documented estimation methodologies where deterministic signals are unavailable.",
+            "is_list": false,
+            "runs": [
+              {
+                "text": "• ",
+                "bold": true
+              },
+              {
+                "text": "Subscriber IQ measures audience behavior and subscriber acquisition associated with a title.",
+                "bold": false
+              },
+              {
+                "text": "• Revenue estimates are modeled.",
+                "bold": false
+              },
+              {
+                "text": "• Audience overlap reflects shared usage across platforms and is not market share.",
+                "bold": false
+              },
+              {
+                "text": "• Metrics are calculated using standardized methodology",
+                "bold": false
+              },
+              {
+                "text": ".",
+                "bold": false
+              },
+              {
+                "text": "• Certain platform-specific measurements may rely on documented estimation methodologies where deterministic signals are unavailable.",
+                "bold": false
+              }
+            ]
+          },
+          {
+            "text": "For questions regarding a specific title, audience or methodology, please contact your Crosswalk representative.",
+            "is_list": false,
+            "runs": [
+              {
+                "text": "For questions regarding a specific title, audience or methodology, please contact your Crosswalk representative.",
+                "bold": false
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "title": "SHORT FORM CONVERSION",
+    "intro": [
+      {
+        "text": "Short Form Conversion is Crosswalk's content-to-content attribution platform. It measures how short-form content (TikTok, Instagram Reels, YouTube Shorts, Facebook, X) drives audiences to consume the corresponding long-form title, including theatrical tickets, full episodes, full seasons, full films and official streaming pages. Short Form Conversion identifies panelists who first engage with a short-form post and later visit, watch or purchase the long-form destination, then projects that behavior to the U.S. population using a consistent and validated methodology.",
+        "is_list": false,
+        "runs": [
+          {
+            "text": "Short Form Conversion is Crosswalk's content-to-content attribution platform. It measures how short-form content (TikTok, Instagram Reels, YouTube Shorts, Facebook, X) drives audiences to consume the corresponding long-form title, including theatrical tickets, full episodes, full seasons, full films and official streaming pages. Short Form Conversion identifies panelists who first engage with a short-form post and later visit, watch or purchase the long-form destination, then projects that behavior to the U.S. population using a consistent and validated methodology.",
+            "bold": false
+          }
+        ]
+      }
+    ],
+    "subs": [
+      {
+        "title": "Audience Construction",
+        "paragraphs": [
+          {
+            "text": "Short Form Conversion begins with two defined sets of URLs: a Short Form (SF) set and a Long Form (LF) set. The SF set is a curated list of public posts across supported platforms that promote, reference or feature the title. The LF set is a curated list of official destinations for the title, such as: • Streaming title pages • Episode and season pages • Trailer pages on official channels • Ticketing pages (Fandango, AMC, Regal and similar) • Studio and network owned-and-operated pages",
+            "is_list": false,
+            "runs": [
+              {
+                "text": "Short Form Conversion begins with two defined sets of URLs: a Short Form (SF) set and a Long Form (LF) set. The SF set is a curated list of public posts across supported platforms that promote, reference or feature the title. The LF set is a curated list of official destinations for the title, such as: ",
+                "bold": false
+              },
+              {
+                "text": "• Streaming title pages ",
+                "bold": false
+              },
+              {
+                "text": "• Episode and season pages ",
+                "bold": false
+              },
+              {
+                "text": "• Trailer pages on official channels ",
+                "bold": false
+              },
+              {
+                "text": "• Ticketing pages (Fandango, AMC, Regal and similar) ",
+                "bold": false
+              },
+              {
+                "text": "• Studio and network owned-and-operated pages ",
+                "bold": false
+              }
+            ]
+          },
+          {
+            "text": "A panelist is counted as a converter when their first observed title-specific SF interaction with a post in the SF set is followed by an observed LF interaction with a destination in the LF set within a defined Attribution Window. The default Attribution Window is thirty days. Custom windows up to ninety days are supported.",
+            "is_list": false,
+            "runs": [
+              {
+                "text": "A panelist is counted as a converter when their first observed ",
+                "bold": false
+              },
+              {
+                "text": "title-",
+                "bold": false
+              },
+              {
+                "text": "specific ",
+                "bold": false
+              },
+              {
+                "text": "SF interaction with a post in the SF set is followed by an observed LF interaction with a destination in the LF set within a defined Attribution Window. The default Attribution Window is thirty days. Custom windows up to ninety days are supported.",
+                "bold": false
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "title": "Attribution Logic",
+        "paragraphs": [
+          {
+            "text": "Conversion is measured on a per-panelist basis using observed behavior, not modeled inference. • A panelist is credited as a converter only once per title, on the first qualifying LF interaction. • Conversion is attributed to the platform of the panelist's first qualifying SF interaction during the window. • Multiple SF posts within the window do not duplicate the conversion. • LF interactions that occur before any SF interaction are excluded. • LF interactions that occur after the Attribution Window expires are excluded.",
+            "is_list": false,
+            "runs": [
+              {
+                "text": "Conversion is measured on a per-panelist basis using observed behavior, not modeled inference. ",
+                "bold": false
+              },
+              {
+                "text": "• A panelist is credited as a converter only once per title, on the first qualifying LF interaction. ",
+                "bold": false
+              },
+              {
+                "text": "• Conversion is attributed to the platform of the panelist's first qualifying SF interaction during the window. ",
+                "bold": false
+              },
+              {
+                "text": "• Multiple SF posts within the window do not duplicate the conversion. ",
+                "bold": false
+              },
+              {
+                "text": "• LF interactions that occur before any SF interaction are excluded. ",
+                "bold": false
+              },
+              {
+                "text": "• LF interactions that occur after the Attribution Window expires are excluded. ",
+                "bold": false
+              }
+            ]
+          },
+          {
+            "text": "This produces a clean, deduplicated map of which platform delivered each converter.",
+            "is_list": false,
+            "runs": [
+              {
+                "text": "This produces a clean, deduplicated map of which platform delivered each converter.",
+                "bold": false
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "title": "Data Sources",
+        "paragraphs": [
+          {
+            "text": "Short Form Conversion combines multiple sources of behavioral and external reference data, including: • Panel observed visits to short-form post URLs • Panel observed visits to long-form destination URLs • Title information from long-form platforms in URLs• Survey-based demographic attributes (when available)",
+            "is_list": false,
+            "runs": [
+              {
+                "text": "Short Form Conversion combines multiple sources of behavioral and external reference data, including: ",
+                "bold": false
+              },
+              {
+                "text": "• Panel observed visits to short-form post URLs ",
+                "bold": false
+              },
+              {
+                "text": "• Panel observed visits to long-form destination URLs ",
+                "bold": false
+              },
+              {
+                "text": "• Title information from long-form platforms in URLs",
+                "bold": false
+              },
+              {
+                "text": "• Survey-based demographic attributes (when available)",
+                "bold": false
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "title": "Core Metrics",
+        "paragraphs": [
+          {
+            "text": "Short Form Conversion produces several standardized metrics: • Unique Views: The count of distinct panelists who view at least one SF post on a given platform during the date range. Deduplicated across posts within the platform. • Duplicated Views: The total volume of SF post views on a given platform during the date range, including repeat views. • Converted to Title: The count of distinct panelists on a given platform who completed a qualifying LF interaction within the Attribution Window after their SF view. • Conversion Rate: Converted to Title divided by Unique Views, expressed as a percentage. Reported per platform and overall. • Cross-Platform Overlap: The share of converters who engaged with SF content on more than one platform during the window. Metric definitions are applied consistently across projects to ensure comparability.",
+            "is_list": false,
+            "runs": [
+              {
+                "text": "Short Form Conversion produces several standardized metrics: ",
+                "bold": false
+              },
+              {
+                "text": "• ",
+                "bold": false
+              },
+              {
+                "text": "Unique Views",
+                "bold": false
+              },
+              {
+                "text": ":",
+                "bold": false
+              },
+              {
+                "text": " ",
+                "bold": false
+              },
+              {
+                "text": "The count of distinct panelists who ",
+                "bold": false
+              },
+              {
+                "text": "view",
+                "bold": false
+              },
+              {
+                "text": " at least one SF post on a given platform during the date range. Deduplicated across posts within the platform. ",
+                "bold": false
+              },
+              {
+                "text": "• ",
+                "bold": false
+              },
+              {
+                "text": "Duplicated Views",
+                "bold": false
+              },
+              {
+                "text": ":",
+                "bold": false
+              },
+              {
+                "text": " ",
+                "bold": false
+              },
+              {
+                "text": "The total volume of SF post views on a given platform during the date range, including repeat views. ",
+                "bold": false
+              },
+              {
+                "text": "• ",
+                "bold": false
+              },
+              {
+                "text": "Converted to Title",
+                "bold": false
+              },
+              {
+                "text": ":",
+                "bold": false
+              },
+              {
+                "text": " ",
+                "bold": false
+              },
+              {
+                "text": "The count of distinct panelists on a given platform who completed a qualifying LF interaction within the Attribution Window after their SF view. ",
+                "bold": false
+              },
+              {
+                "text": "•",
+                "bold": false
+              },
+              {
+                "text": " ",
+                "bold": false
+              },
+              {
+                "text": "Conversion Rate",
+                "bold": false
+              },
+              {
+                "text": ":",
+                "bold": false
+              },
+              {
+                "text": " ",
+                "bold": false
+              },
+              {
+                "text": "Converted to Title divided by Unique Views, expressed as a percentage. Reported per platform and overall. ",
+                "bold": false
+              },
+              {
+                "text": "• ",
+                "bold": false
+              },
+              {
+                "text": "Cross-Platform Overlap",
+                "bold": false
+              },
+              {
+                "text": ":",
+                "bold": false
+              },
+              {
+                "text": " The share of converters who engaged with SF content on more than one platform during the window. Metric definitions are applied consistently across projects to ensure comparability.",
+                "bold": false
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "title": "Projection to U.S. Population",
+        "paragraphs": [
+          {
+            "text": "Panel-observed counts are projected to a U.S. national estimate.",
+            "is_list": false,
+            "runs": [
+              {
+                "text": "Panel-observed counts are projected ",
+                "bold": false
+              },
+              {
+                "text": "to ",
+                "bold": false
+              },
+              {
+                "text": "a ",
+                "bold": false
+              },
+              {
+                "text": "U",
+                "bold": false
+              },
+              {
+                "text": ".S.",
+                "bold": false
+              },
+              {
+                "text": " ",
+                "bold": false
+              },
+              {
+                "text": "national estimate. ",
+                "bold": false
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "title": "Quality Assurance",
+        "paragraphs": [
+          {
+            "text": "All Short Form Conversion outputs undergo validation and quality-control review prior to publication. Validation processes confirm URL classification, attribution window enforcement, deduplication of converters, anchor coverage by platform and the integrity of the per-platform content. Quality-control processes support the interpretation and presentation of results but do not create or alter the underlying behavioral observations.",
+            "is_list": false,
+            "runs": [
+              {
+                "text": "All Short Form Conversion outputs undergo validation and quality-control review prior to publication. Validation processes confirm URL classification, attribution window enforcement, deduplication of converters, anchor coverage by platform and the integrity of the per-platform ",
+                "bold": false
+              },
+              {
+                "text": "content",
+                "bold": false
+              },
+              {
+                "text": ". Quality-control processes support the interpretation and presentation of results but do not create or alter the underlying behavioral observations.",
+                "bold": false
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "title": "Survey-Based Demographics",
+        "paragraphs": [
+          {
+            "text": "Short Form Conversion incorporates anonymized, opt-in survey data to enrich converter profiles with demographic information including age, gender, ethnicity, income, education, household composition and other audience characteristics. All survey data is aggregated and reported at the audience level.",
+            "is_list": false,
+            "runs": [
+              {
+                "text": "Short Form Conversion incorporates anonymized, opt-in survey data to enrich converter profiles with demographic information including age, gender, ethnicity, income, education, household composition and other audience characteristics. All survey data is aggregated and reported at the audience level. ",
+                "bold": false
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "title": "Notes on Interpretation",
+        "paragraphs": [
+          {
+            "text": "• Short Form Conversion measures observed SF-to-LF behavior within a defined Attribution Window. • Projections are anchored to the U.S. population. • Conversion is credited once per title and attributed to the platform of qualifying SF view. • Results reflect the URL sets, date range and Attribution Window selected at the time of analysis.",
+            "is_list": false,
+            "runs": [
+              {
+                "text": "• Short Form Conversion measures observed SF-to-LF behavior within a defined Attribution Window. ",
+                "bold": false
+              },
+              {
+                "text": "• Projections are anchored to ",
+                "bold": false
+              },
+              {
+                "text": "the ",
+                "bold": false
+              },
+              {
+                "text": "U.S. population. ",
+                "bold": false
+              },
+              {
+                "text": "• Conversion is credited once per title and attributed to the platform of qualifying SF view. ",
+                "bold": false
+              },
+              {
+                "text": "• Results reflect the URL sets, date range and Attribution Window selected at the time of analysis. ",
+                "bold": false
+              }
+            ]
+          },
+          {
+            "text": "For questions regarding specific projects, platform anchors or attribution settings, please contact your Crosswalk representative.",
+            "is_list": false,
+            "runs": [
+              {
+                "text": "For questions regarding specific projects, platform anchors or attribution settings, please contact your Crosswalk representative.",
+                "bold": false
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "title": "CW IQ RANKER",
+    "intro": [
+      {
+        "text": "CW IQ Ranker is Crosswalk's daily zeitgeist ranking system. It quantifies the cultural and digital momentum of every entity in the Profile IQ universe (talent, brands, titles, platforms, sports teams and trends) on a 0 to 100 scale, refreshed every twenty-four hours. CW IQ Ranker turns observed panel behavior into a single comparable score so that subjects across categories can be ranked, sorted and tracked side by side. It also produces directional companion indices that explain why a score is moving.",
+        "is_list": false,
+        "runs": [
+          {
+            "text": "CW IQ Ranker is Crosswalk's daily zeitgeist ",
+            "bold": false
+          },
+          {
+            "text": "ranking",
+            "bold": false
+          },
+          {
+            "text": " system. It quantifies the cultural and digital momentum of every entity in the Profile IQ universe (talent, brands, titles, platforms, sports teams and trends) on a 0 to 100 scale, refreshed every twenty-four hours. CW IQ Ranker turns observed panel behavior into a single comparable score so that subjects across categories can be ranked, sorted and tracked side by side. It also produces ",
+            "bold": false
+          },
+          {
+            "text": "directional companion indices that explain",
+            "bold": false
+          },
+          {
+            "text": " why a score is moving.",
+            "bold": false
+          }
+        ]
+      }
+    ],
+    "subs": [
+      {
+        "title": "Entity Coverage",
+        "paragraphs": [
+          {
+            "text": "CW IQ Ranker scores every entity that has an active Profile IQ profile. The roster is derived directly from the Profile IQ catalog and refreshed automatically when new profiles are published or retired. Entities are organized into master categories including Talent, Brand, Content, Platforms, Sport, Trends and more, with a finer-grained subcategory inherited from the underlying profile (for example, ACTOR, QSR, SERIES: NETFLIX, RETAIL, etc). Each entity carries a brand-terms list that defines the canonical names, aliases and URL patterns used to match clickstream activity back to the subject.",
+            "is_list": false,
+            "runs": [
+              {
+                "text": "CW IQ Ranker scores every entity that has an active Profile IQ profile. The roster is derived directly from the Profile IQ catalog and refreshed automatically when new profiles are published or retired. Entities are organized into master categories including Talent, Brand, Content, Platforms, Sport, Trends and more, with a finer-grained subcategory inherited from the underlying profile (for example, ACTOR, QSR, SERIES: NETFLIX, RETAIL, etc). Each entity ",
+                "bold": false
+              },
+              {
+                "text": "carries a brand-terms list that defines the canonical names, aliases and URL patterns used to match clickstream activity back to the subject.",
+                "bold": false
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "title": "Daily Measurement",
+        "paragraphs": [
+          {
+            "text": "Every night, CW IQ Ranker walks the Profile IQ catalog and runs a Layer-1 scoring job against the Crosswalk panel for the prior calendar day. For each (subject, day) pair the system records: • Mentions: total clickstream events matching the subject's brand terms • Unique UIDs: the count of distinct panelists who generated a mention • Panel size: distinct panelists active that day, used as the projection denominator • Companion sub-counts: streaming, most-purchased-brand and viewing-platform hits Days are processed oldest first so that each entity's twenty-eight-day rolling baseline is fully populated before the next day's score is computed.",
+            "is_list": false,
+            "runs": [
+              {
+                "text": "Every night, CW IQ Ranker walks the Profile IQ catalog and runs a Layer-1 scoring job against the Crosswalk panel for the prior calendar day. For each (subject, day) pair the system records: ",
+                "bold": false
+              },
+              {
+                "text": "• Mentions: total clickstream events matching the subject's brand terms ",
+                "bold": false
+              },
+              {
+                "text": "• Unique UIDs: the count of distinct panelists who generated a mention ",
+                "bold": false
+              },
+              {
+                "text": "• Panel size: distinct panelists active that day, used as the projection denominator ",
+                "bold": false
+              },
+              {
+                "text": "• Companion sub-counts: streaming, most-purchased-brand and viewing-platform hits Days are processed oldest first so that each entity's twenty-eight-day rolling baseline is fully populated before the next day's score is computed.",
+                "bold": false
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "title": "Core Metrics",
+        "paragraphs": [
+          {
+            "text": "CW IQ Ranker produces several standardized daily metrics: • Mentions: Total observed clickstream events associated with the subject on the snapshot date. • Unique Reach: Distinct panelists who engaged with the subject on the snapshot date. • Day-Over-Day: Change in mentions and CW IQ Score versus the prior snapshot, used for fast movers and trending lists.",
+            "is_list": false,
+            "runs": [
+              {
+                "text": "CW IQ Ranker produces several standardized daily metrics: ",
+                "bold": false
+              },
+              {
+                "text": "• Mentions: Total observed clickstream events associated with the subject on the snapshot date. ",
+                "bold": false
+              },
+              {
+                "text": "• Unique Reach: Distinct panelists who engaged with the subject on the snapshot date. ",
+                "bold": false
+              },
+              {
+                "text": "• Day-Over-Day: Change in mentions and CW IQ Score versus the prior snapshot, used for fast movers and trending lists. ",
+                "bold": false
+              }
+            ]
+          },
+          {
+            "text": "Metric definitions are applied consistently across categories so that talent, brands, titles and trends remain directly comparable.",
+            "is_list": false,
+            "runs": [
+              {
+                "text": "Metric definitions are applied consistently across categories so that talent, brands, titles and trends remain directly comparable.",
+                "bold": false
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "title": "The CW IQ Score",
+        "paragraphs": [
+          {
+            "text": "The headline CW IQ Score is a 0 to 100 composite that summarizes a subject's daily presence in the panel. It blends four components:",
+            "is_list": false,
+            "runs": [
+              {
+                "text": "The headline CW IQ Score is a 0 to 100 composite that summarizes a subject's daily presence in the panel. It blends f",
+                "bold": false
+              },
+              {
+                "text": "our",
+                "bold": false
+              },
+              {
+                "text": " components: ",
+                "bold": false
+              }
+            ]
+          },
+          {
+            "text": "• Volume: today's mention count relative to the subject's twenty-eight-day baseline. • Reach: today's unique UIDs relative to the subject's twenty-eight-day baseline. • Momentum: the slope of mentions and reach over the recent trailing window, capturing acceleration above or below trend. • Recency: weighting that emphasizes the most recent days within the window so that breakouts surface quickly and stale activity decays.",
+            "is_list": false,
+            "runs": [
+              {
+                "text": "• Volume: today's mention count relative to the subject's twenty-eight-day baseline. ",
+                "bold": false
+              },
+              {
+                "text": "• Reach: today's unique UIDs relative to the subject's twenty-eight-day baseline. ",
+                "bold": false
+              },
+              {
+                "text": "• Momentum: the slope of mentions and reach over the recent trailing window, capturing acceleration above or below trend. ",
+                "bold": false
+              },
+              {
+                "text": "• Recency: weighting that emphasizes the most recent days within the window so that breakouts surface quickly and stale activity decays. ",
+                "bold": false
+              }
+            ]
+          },
+          {
+            "text": "The composite is computed once per subject per day. Each component is bounded so that no single signal can dominate, and the final score is calibrated so that a reading of 50 represents the subject's own steady-state baseline.",
+            "is_list": false,
+            "runs": [
+              {
+                "text": "The composite is computed once per subject per day. Each component is bounded so that no single signal can dominate, and the final score is calibrated so that a reading of 50 represents the subject's own steady-state baseline.",
+                "bold": false
+              }
+            ]
+          },
+          {
+            "text": "Readings above 50 indicate the subject is over-indexing against its own recent history. Readings below 50 indicate it is under-indexing. Because the baseline is per-subject, the CW IQ Score measures movement relative to the subject itself rather than absolute scale. A small entity having a breakout day can register a higher CW IQ Score than a large entity sitting flat, which is the intended behavior for a zeitgeist ranker.",
+            "is_list": false,
+            "runs": [
+              {
+                "text": "Readings above 50 indicate the subject is over-indexing against its own recent history. Readings below 50 indicate it is under-indexing. Because the baseline is per-subject, the CW IQ Score ",
+                "bold": false
+              },
+              {
+                "text": "measures movement relative to the subject itself rather than absolute scale. A small entity having a breakout day can register a higher CW IQ Score than a large entity sitting flat, which is the intended behavior for a zeitgeist ranker.",
+                "bold": false
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "title": "Companion Indices",
+        "paragraphs": [
+          {
+            "text": "CW IQ Ranker publishes three companion indices that explain the composition of a subject's mentions on a given day:",
+            "is_list": false,
+            "runs": [
+              {
+                "text": "CW IQ Ranker publishes three companion indices that explain the composition of a subject's mentions on a given day: ",
+                "bold": false
+              }
+            ]
+          },
+          {
+            "text": "• EVC (Engagement Velocity to Streaming Content) Share of mentions whose destination is a streaming or video-on-demand platform. Indicates the degree to which the subject's daily activity is being consumed as long-form streaming content.",
+            "is_list": false,
+            "runs": [
+              {
+                "text": "• ",
+                "bold": false
+              },
+              {
+                "text": "EVC (Engagement Velocity to Streaming Content) Share of mentions whose destination is a streaming or video-on-demand platform. Indicates the degree to which the subject's daily activity is being consumed as long-form streaming content. ",
+                "bold": false
+              }
+            ]
+          },
+          {
+            "text": "• TDL (Tangible Demand Lift) Share of mentions whose destination is an externally promoted brand. Indicates the degree to which the subject's daily activity is converting into commerce-adjacent panel behavior.",
+            "is_list": false,
+            "runs": [
+              {
+                "text": "• ",
+                "bold": false
+              },
+              {
+                "text": "TDL (Tangible Demand Lift) Share of mentions whose destination is ",
+                "bold": false
+              },
+              {
+                "text": "an externally promoted brand",
+                "bold": false
+              },
+              {
+                "text": ". Indicates the degree to which the subject's daily activity is converting into commerce-adjacent panel behavior. ",
+                "bold": false
+              }
+            ]
+          },
+          {
+            "text": "• BVP (Broadcast and Viewing Pull) Share of mentions whose destination is a streaming platform or movie theater host. Indicates the degree to which the subject's daily activity is pulling audiences toward viewing destinations, including theatrical.",
+            "is_list": false,
+            "runs": [
+              {
+                "text": "• ",
+                "bold": false
+              },
+              {
+                "text": "BVP (Broadcast and Viewing Pull) Share of mentions whose destination is a streaming platform or movie theater host. Indicates the degree to which the subject's daily activity is pulling audiences toward viewing destinations, including theatrical. ",
+                "bold": false
+              }
+            ]
+          },
+          {
+            "text": "The companion indices are reported alongside the CW IQ Score so that two subjects with the same headline number can still be distinguished by what is driving them.",
+            "is_list": false,
+            "runs": [
+              {
+                "text": "The companion indices are reported alongside the CW IQ Score so that two subjects with the same headline number can still be distinguished by what is driving them.",
+                "bold": false
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "title": "Quality Assurance",
+        "paragraphs": [
+          {
+            "text": "All CW IQ Ranker outputs undergo validation and quality-control review before publication. Validation processes verify that naming-term matching is precise, that classification is stable across the version of the rule set in use, that the twenty-eight-day baseline is complete, that panel-size denominators are reasonable, and that the daily job has produced one row per active subject. Quality-control processes support the interpretation and presentation of results but do not create or alter the underlying behavioral observations. Daily snapshots are immutable once published. If an upstream correction is required, the affected days are recomputed end to end and republished with a new generation timestamp.",
+            "is_list": false,
+            "runs": [
+              {
+                "text": "All CW IQ Ranker outputs undergo validation and quality-control review before publication. Validation processes verify that ",
+                "bold": false
+              },
+              {
+                "text": "naming",
+                "bold": false
+              },
+              {
+                "text": "-term matching is precise, that classification is stable across the version of the rule set in use, that the twenty-eight-day baseline is complete, that panel-size denominators are reasonable, and that the daily job has produced one row per active subject. Quality-control processes support the interpretation and presentation of results but do not create or alter the underlying behavioral observations. Daily snapshots are immutable once published. If an upstream correction is required, the affected days are recomputed end to end and republished with a new generation timestamp.",
+                "bold": false
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "title": "Notes on Interpretation",
+        "paragraphs": [
+          {
+            "text": "• CW IQ Ranker measures observed panel behavior, not social media listening, news volume or claimed survey data.",
+            "is_list": false,
+            "runs": [
+              {
+                "text": "•",
+                "bold": false
+              },
+              {
+                "text": " CW IQ Ranker measures observed panel behavior, not social media listening, news volume or claimed survey data. ",
+                "bold": false
+              }
+            ]
+          },
+          {
+            "text": "• The CW IQ Score is a relative measure: 50 is the subject's own baseline, not an absolute benchmark.",
+            "is_list": false,
+            "runs": [
+              {
+                "text": "• The CW IQ Score is a relative measure: 50 is the subject's own baseline, not an absolute benchmark. ",
+                "bold": false
+              }
+            ]
+          },
+          {
+            "text": "• Companion indices (EVC, TDL, BVP) explain the composition of mentions and should be read alongside the headline score.",
+            "is_list": false,
+            "runs": [
+              {
+                "text": "• Companion indices (EVC, TDL, BVP) explain the composition of mentions and should be read alongside the headline score. ",
+                "bold": false
+              }
+            ]
+          },
+          {
+            "text": "• Subject lists, brand terms and rule sets are continuously reviewed and refined to maintain accuracy and consistency.",
+            "is_list": false,
+            "runs": [
+              {
+                "text": "• Subject lists, brand terms and rule sets are continuously reviewed and refined to maintain accuracy and consistency. ",
+                "bold": false
+              }
+            ]
+          },
+          {
+            "text": "For questions regarding specific subjects, scores or companion indices, please contact your Crosswalk representative.",
+            "is_list": false,
+            "runs": [
+              {
+                "text": "For questions regarding specific subjects, scores or companion indices, please contact your Crosswalk representative.",
+                "bold": false
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "title": "Compliance and Consent",
+    "intro": [
+      {
+        "text": "Crosswalk's products are built on ethically sourced Zero Party Data from a fully consented, opt-in consumer panel. All panelists are acquired through transparent retail partner integrations that disclose what is being collected, how it is used, and how participation can be ended at any time. Crosswalk does not purchase email lists, scrape personal data, or ingest data without user authorization.",
+        "is_list": false,
+        "runs": [
+          {
+            "text": "Crosswalk's products are built on ethically sourced Zero Party Data from a fully consented, opt-in consumer panel. All panelists are acquired through transparent retail partner integrations that disclose what is being collected, how it is used, and how participation can be ended at any time. Crosswalk does not purchase email lists, scrape personal data, or ingest data without user authorization.",
+            "bold": false
+          }
+        ]
+      },
+      {
+        "text": "Panelists are acquired through a single, disclosed flow:",
+        "is_list": false,
+        "runs": [
+          {
+            "text": "Panelists are acquired through a single, disclosed flow:",
+            "bold": false
+          }
+        ]
+      },
+      {
+        "text": "• A user encounters a retail partner offer (typically an incentive or discount code). • The user reviews the disclosure and provides explicit consent to participate. • The user installs a desktop application white-labeled under the retail partner. • The user self-identifies the demographics they choose to share and selects which categories of behavioral data are tracked. • Consent can be revoked at any time, which terminates collection and triggers deletion under Crosswalk's retention policy.",
+        "is_list": false,
+        "runs": [
+          {
+            "text": "• A user encounters a retail partner offer (typically an incentive or discount code). ",
+            "bold": false
+          },
+          {
+            "text": "• The user reviews the disclosure and provides explicit consent to participate. ",
+            "bold": false
+          },
+          {
+            "text": "• The user installs a desktop application white-labeled under the retail partner. ",
+            "bold": false
+          },
+          {
+            "text": "• The user self-identifies the demographics they choose to share and selects which categories of behavioral data are tracked. ",
+            "bold": false
+          },
+          {
+            "text": "• Consent can be revoked at any time, which terminates collection and triggers deletion under Crosswalk's retention policy.",
+            "bold": false
+          }
+        ]
+      },
+      {
+        "text": "This collection model is classified as Zero Party Data: information a user knowingly and intentionally shares with a brand.",
+        "is_list": false,
+        "runs": [
+          {
+            "text": "This collection model is classified as Zero Party Data: information a user knowingly and intentionally shares with a brand.",
+            "bold": false
+          }
+        ]
+      }
+    ],
+    "subs": [
+      {
+        "title": "Privacy and Regulatory Alignment",
+        "paragraphs": [
+          {
+            "text": "Crosswalk's products are operated in alignment with applicable U.S. and international privacy frameworks, including the California Consumer Privacy Act (CCPA) and California Privacy Rights Act (CPRA), comparable state privacy laws (Virginia, Colorado, Connecticut, Utah, Texas, Oregon), the Children's Online Privacy Protection Act (COPPA), and General Data Protection Regulation (GDPR) standards where applicable. The panel includes both adults and minors, with ages ranging from 2 to 85 and over. Panelists under 18 are enrolled only with verifiable parental consent, consistent with COPPA and applicable children's privacy requirements. Panelist rights to access, correct, delete, and opt out of sale or sharing are honored through a documented request process.",
+            "is_list": false,
+            "runs": [
+              {
+                "text": "Crosswalk's products are",
+                "bold": false
+              },
+              {
+                "text": " operated in alignment with applicable U.S. and international privacy frameworks, including the California Consumer Privacy Act (CCPA) and California Privacy Rights Act (CPRA), comparable state privacy laws (Virginia, Colorado, Connecticut, Utah, Texas, Oregon), the Children's Online Privacy Protection Act (COPPA), and General Data Protection Regulation (GDPR) standards where applicable. The panel ",
+                "bold": false
+              },
+              {
+                "text": "includes both adults and minors, with ages ranging from 2 to 85 and over. Panelists under 18 are enrolled only with verifiable parental consent, consistent with COPPA and applicable children's privacy requirements",
+                "bold": false
+              },
+              {
+                "text": ". Panelist rights to access, correct, delete, and opt out of sale or sharing are honored through a documented request process.",
+                "bold": false
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "title": "Identity Handling and De-Identification",
+        "paragraphs": [
+          {
+            "text": "Panelists are assigned pseudonymous identifiers. No name, email address, phone number, postal address, government identifier, or payment information is used in audience profiling or returned to clients. URL and event streams pass through a PII redaction layer at ingestion that removes emails, phone numbers, government identifiers, payment numbers, addresses, session tokens, and API keys before storage.",
+            "is_list": false,
+            "runs": [
+              {
+                "text": "Panelists are assigned pseudonymous identifiers. No name, email address, phone number, postal address, government identifier, or payment information is used in audience profiling or returned to clients. URL and event streams pass through a PII redaction layer at ingestion that removes emails, phone numbers, government identifiers, payment numbers, addresses, session tokens, and API keys before storage.",
+                "bold": false
+              }
+            ]
+          },
+          {
+            "text": "Crosswalk product outputs are aggregate, projected, and statistically modeled. Clients receive audience-level percentages and national projections only. No row-level panelist data, household-level data, or directly identifying attributes are exposed in any deliverable.",
+            "is_list": false,
+            "runs": [
+              {
+                "text": "Crosswalk product",
+                "bold": false
+              },
+              {
+                "text": " outputs are aggregate, projected, and statistically modeled. Clients receive audience-level percentages and national projections only. No row-level panelist data, household-level data, or directly identifying attributes are exposed in any deliverable.",
+                "bold": false
+              }
+            ]
+          },
+          {
+            "text": "For questions regarding specific audiences, metrics or profile definitions, please contact your Crosswalk representative.",
+            "is_list": false,
+            "runs": [
+              {
+                "text": "For questions regarding specific audiences, metrics or profile definitions, please contact your Crosswalk representative.",
+                "bold": false
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "title": "Contacts",
+    "intro": [
+      {
+        "text": "For questions about the methodologies in this document, please contact the appropriate team:",
+        "is_list": false,
+        "runs": [
+          {
+            "text": "For questions about the methodologies in this document, please contact the appropriate team:",
+            "bold": false
+          }
+        ]
+      },
+      {
+        "text": "Technology: Jenna@crosswalknyc.com, jessie@crosswalknyc.com",
+        "is_list": false,
+        "runs": [
+          {
+            "text": "Technology:",
+            "bold": true
+          },
+          {
+            "text": " ",
+            "bold": false
+          },
+          {
+            "text": "Jenna@crosswalknyc.com",
+            "bold": false
+          },
+          {
+            "text": ", ",
+            "bold": false
+          },
+          {
+            "text": "jessie@crosswalknyc.com",
+            "bold": false
+          }
+        ]
+      },
+      {
+        "text": "Methodology: Alexia@crosswalknyc.com, Bria@crosswalknyc.com",
+        "is_list": false,
+        "runs": [
+          {
+            "text": "Methodology:",
+            "bold": true
+          },
+          {
+            "text": " ",
+            "bold": false
+          },
+          {
+            "text": "Alexia@crosswalknyc.com",
+            "bold": false
+          },
+          {
+            "text": ", ",
+            "bold": false
+          },
+          {
+            "text": "Bria@crosswalknyc.com",
+            "bold": false
+          }
+        ]
+      },
+      {
+        "text": "Version 1.0 · Last updated June 2026",
+        "is_list": false,
+        "runs": [
+          {
+            "text": "Version 1.0 · Last updated June 2026",
+            "bold": true
+          }
+        ]
+      }
+    ],
+    "subs": []
+  }
+]
