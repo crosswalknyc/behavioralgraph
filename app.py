@@ -10081,29 +10081,80 @@ def remove_favorite(profile_key):
 
 shared_links = {}  # In production, store in database/S3
 
+_PROFILE_NAME_DASH_RE = re.compile(r'^(.+)\s[\-\u2013\u2014]\s+.+$')
+_PROFILE_NAME_COHORT_RE = re.compile(
+    r'[\s_\-]+(?:20\d{2}|\d+\+|\d+\s*plus|avid(?:\s+fans?)?|casual(?:\s+fans?)?|'
+    r'super\s*fans?|heavy(?:\s+users?)?|light(?:\s+users?)?|lite|premium|standard)$',
+    re.IGNORECASE
+)
+
+
+def _profile_image_lookup_keys(name):
+    """Return ordered list of cache keys to try for a profile image lookup.
+    
+    Mirrors the dash-suffix / cohort-suffix grouping rules used by the
+    sidebar tree (see getProfileSuffixInfo in templates/index.html). So a
+    request for "Reba McEntire - Avid Fan" falls back to "Reba McEntire"
+    when no image is uploaded for the variant. Each entry is the
+    lower-stripped form used as a profile_image_cache key.
+    """
+    keys = []
+    seen = set()
+    
+    def _push(s):
+        k = (s or '').lower().strip()
+        if k and k not in seen:
+            seen.add(k)
+            keys.append(k)
+    
+    _push(name)
+    
+    # 1. Strip dash-separated suffix: "Reba McEntire - Avid Fan" -> "Reba McEntire".
+    #    Requires whitespace around the dash so "Jay-Z" and "Smith-Jones" don't split.
+    m = _PROFILE_NAME_DASH_RE.match((name or '').strip())
+    if m and m.group(1):
+        _push(m.group(1))
+    
+    # 2. Strip a trailing single-token cohort/year suffix from the dash-stripped
+    #    form (handles "Reba McEntire 4+" -> "Reba McEntire", or
+    #    "Reba McEntire - Avid Fan" -> "Reba McEntire - Avid" -> nothing useful,
+    #    but also "Dwayne Johnson 2024" -> "Dwayne Johnson").
+    for base in list(keys):
+        stripped = _PROFILE_NAME_COHORT_RE.sub('', base).strip()
+        if stripped and stripped != base:
+            _push(stripped)
+    
+    return keys
+
+
 @app.route('/api/profile-image/<path:name>')
 @app.route('/api/wiki-image/<path:name>')
 def get_profile_image(name):
-    """Get profile image - only returns admin-uploaded custom images."""
+    """Get profile image - only returns admin-uploaded custom images.
+    
+    Falls back through dash-suffix / cohort-suffix variants so that
+    "Reba McEntire - Avid Fan" inherits "Reba McEntire"'s uploaded image
+    when no Avid-Fan-specific image was uploaded.
+    """
     global profile_image_cache
     
     # Reload cache periodically so uploads from other workers are visible
     load_profile_image_cache()
     
-    # Normalize the cache key
-    cache_key = name.lower().strip()
-    
-    # Only return custom images that admin has uploaded
-    if cache_key in profile_image_cache:
-        cached = profile_image_cache[cache_key]
-        if cached.get('image_url') and cached.get('is_custom'):
-            return jsonify({
-                'success': True,
-                'image_url': cached['image_url'],
-                'title': cached.get('title', name),
-                'source': 'custom',
-                'cached': True
-            })
+    # Try the exact name first, then fall back through canonicalized variants.
+    # See _profile_image_lookup_keys() for the rules.
+    for cache_key in _profile_image_lookup_keys(name):
+        if cache_key in profile_image_cache:
+            cached = profile_image_cache[cache_key]
+            if cached.get('image_url') and cached.get('is_custom'):
+                return jsonify({
+                    'success': True,
+                    'image_url': cached['image_url'],
+                    'title': cached.get('title', name),
+                    'source': 'custom',
+                    'cached': True,
+                    'matched_key': cache_key
+                })
     
     # No custom image - return not found (don't search external sources)
     return jsonify({'success': False, 'error': 'No custom image uploaded'})
