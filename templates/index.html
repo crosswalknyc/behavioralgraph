@@ -15910,7 +15910,6 @@
                                 <div class="dash-brand-box" id="dashBrandNameHeader"></div>
                                 <div class="dash-date-box" id="dashDateRangeHeader"></div>
                                 <div id="dashProfileRunsRow" style="display: none; margin-top: 0.5rem; flex-direction: row; flex-wrap: nowrap; align-items: center; gap: 0.5rem;">
-                                    <select id="dashRunSelect" style="font-size: 0.85rem; padding: 0.25rem 0.5rem; border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-primary); max-width: 12rem;" title="Switch to a different analyzed period or cohort"></select>
                                     <button type="button" class="btn btn-small" id="dashViewDeltasBtn" style="font-size: 0.8rem;">Data Cuts</button>
                                 </div>
                             </div>
@@ -57043,7 +57042,6 @@
                     }
                 } catch (_) {}
                 const runsRow = document.getElementById('dashProfileRunsRow');
-                const runSelect = document.getElementById('dashRunSelect');
                 const deltasBtn = document.getElementById('dashViewDeltasBtn');
                 const currentProfile = dashboardProfiles.find(p => (p.s3_key || p.job_id) === profileId);
                 const subject = currentProfile ? getProfileSubject(currentProfile) : '';
@@ -57080,27 +57078,13 @@
                     }
                     return [currentProfile];
                 })();
-                if (runsRow && runSelect && sameSubjectRuns.length > 1) {
+                if (runsRow && sameSubjectRuns.length > 1) {
                     runsRow.style.display = 'flex';
-                    const sortedRuns = sortRunsByYearDesc(sameSubjectRuns);
-                    runSelect.innerHTML = sortedRuns.map(p => {
-                        const id = p.s3_key || p.job_id;
-                        // Prefer cached analyzed-period year > name-baked
-                        // year > generation-date label. The cached year is
-                        // populated when the run loads (or when the compare
-                        // popover fetches it). On a cold first render the
-                        // OTHER runs in the dropdown still show their
-                        // filename date until the user selects them; the
-                        // currently-loaded run always shows the right year.
-                        const cachedYr = (typeof getCachedRunDateRangeYear === 'function')
-                            ? getCachedRunDateRangeYear(p) : '';
-                        const label = cachedYr || getProfileYear(p) || getRunDateLabel(p.s3_key || '') || id;
-                        return `<option value="${escapeAttr(id).replace(/"/g, '&quot;')}" ${id === profileId ? 'selected' : ''}>${escapeAttr(label)}</option>`;
-                    }).join('');
-                    runSelect.onchange = function() {
-                        const key = runSelect.value;
-                        if (key && key !== profileId) selectDashboardProfile(key);
-                    };
+                    // The Run dropdown was removed; users navigate between
+                    // sibling runs from the sidebar tree. The Data Cuts
+                    // button is the only control left on this row and only
+                    // shows when there's more than one sibling to compare
+                    // against.
                     // Inline comparison-series popover replaces the legacy
                     // "Compare date ranges" modal. Selected runs are layered
                     // into the demographic charts (see applyComparisonRunsToDashboardCharts).
