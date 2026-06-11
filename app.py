@@ -17186,15 +17186,23 @@ _profile_image_cache_lock = threading.Lock()
 
 
 def _read_profile_image_cache_from_s3():
-    """Read the profile image cache JSON from S3. Returns {} if missing."""
+    """Read the profile image cache JSON from S3.
+
+    Returns the parsed dict on success, {} if the file does not exist yet,
+    or None on transient errors (network, throttling, timeout) so callers
+    can distinguish 'empty cache' from 'failed to read'.
+    """
     if not s3_client:
-        return {}
+        return None
     try:
         response = s3_client.get_object(Bucket=S3_BUCKET, Key=S3_IMAGE_CACHE_KEY)
         data = json.loads(response['Body'].read().decode('utf-8'))
         return data if isinstance(data, dict) else {}
-    except Exception:
+    except s3_client.exceptions.NoSuchKey:
         return {}
+    except Exception as e:
+        print(f"⚠️ _read_profile_image_cache_from_s3 error (transient): {e}")
+        return None
 
 
 def _merge_profile_image_caches(incoming, existing, deleted_keys=None):
@@ -17246,7 +17254,13 @@ def _merge_profile_image_caches(incoming, existing, deleted_keys=None):
 
 
 def load_profile_image_cache(force=False):
-    """Load profile image cache from S3."""
+    """Load profile image cache from S3.
+
+    Returns True if cache is usable (loaded from S3 or still valid in memory).
+    Never replaces an existing in-memory cache with an empty result from a
+    transient S3 error — this prevents the cascade where a single read failure
+    leads to custom images being permanently overwritten by auto-sourced entries.
+    """
     global profile_image_cache, _profile_image_cache_ts
     import time as _time
     if not s3_client:
@@ -17255,7 +17269,12 @@ def load_profile_image_cache(force=False):
     if not force and profile_image_cache and (now - _profile_image_cache_ts) < _PROFILE_IMAGE_CACHE_TTL:
         return True
     with _profile_image_cache_lock:
-        profile_image_cache = _read_profile_image_cache_from_s3()
+        result = _read_profile_image_cache_from_s3()
+        if result is None:
+            # Transient S3 error — keep existing in-memory cache to avoid data loss
+            print(f"⚠️ S3 read failed for image cache; keeping {len(profile_image_cache)} in-memory entries")
+            return bool(profile_image_cache)
+        profile_image_cache = result
         _profile_image_cache_ts = now
     if profile_image_cache:
         print(f"✅ Loaded profile image cache: {len(profile_image_cache)} images")
@@ -17264,7 +17283,13 @@ def load_profile_image_cache(force=False):
     return False
 
 def save_profile_image_cache(deleted_keys=None):
-    """Save profile image cache to S3 with read-merge-write so concurrent workers don't clobber uploads."""
+    """Save profile image cache to S3 with read-merge-write so concurrent workers don't clobber uploads.
+
+    Anti-corruption guard: refuses to write if the merged result would lose
+    a significant number of is_custom entries compared to what's currently on
+    S3. This prevents transient read failures from cascading into permanent
+    data loss of admin-uploaded images.
+    """
     global profile_image_cache, profile_image_cache_dirty, _profile_image_cache_ts
     if not s3_client:
         print("⚠️ Cannot save profile image cache: S3 client not available")
@@ -17274,7 +17299,21 @@ def save_profile_image_cache(deleted_keys=None):
 
     with _profile_image_cache_lock:
         remote = _read_profile_image_cache_from_s3()
+        if remote is None:
+            # S3 read failed — cannot safely merge, abort save to prevent data loss
+            print("⚠️ Cannot save image cache: S3 read failed (transient). Aborting to protect custom entries.")
+            return False
         merged = _merge_profile_image_caches(profile_image_cache, remote, deleted_keys=deleted_keys)
+
+        # Anti-corruption check: count is_custom entries in remote vs merged
+        remote_custom_count = sum(1 for v in remote.values() if v.get('is_custom'))
+        merged_custom_count = sum(1 for v in merged.values() if v.get('is_custom'))
+        if remote_custom_count > 0 and merged_custom_count < remote_custom_count:
+            lost = remote_custom_count - merged_custom_count
+            print(f"⚠️ ABORT SAVE: would lose {lost} custom image entries ({remote_custom_count} → {merged_custom_count}). Restoring from S3.")
+            profile_image_cache = remote
+            return False
+
         profile_image_cache = merged
         cache_json = json.dumps(profile_image_cache, indent=2)
         cache_size = len(cache_json)
@@ -17285,6 +17324,9 @@ def save_profile_image_cache(deleted_keys=None):
                 # Re-read and merge on retry so we never overwrite a concurrent custom upload.
                 if attempt > 0:
                     remote = _read_profile_image_cache_from_s3()
+                    if remote is None:
+                        print(f"⚠️ S3 re-read failed on retry {attempt + 1}, aborting save")
+                        return False
                     merged = _merge_profile_image_caches(profile_image_cache, remote, deleted_keys=deleted_keys)
                     profile_image_cache = merged
                     cache_json = json.dumps(profile_image_cache, indent=2)
@@ -17760,11 +17802,31 @@ def set_profile_image():
             profile_image_cache[cache_key] = new_entry
             saved = save_profile_image_cache()
         if not saved:
-            print(f"   ⚠️ Warning: Cache save may have failed for {cache_key}")
-            return jsonify({
-                'success': False,
-                'error': 'Failed to save image cache. Please try again.'
-            }), 500
+            # Fallback: direct write of just our entry merged into whatever is on S3
+            # This ensures custom uploads always persist even during transient S3 issues
+            print(f"   ⚠️ Regular save failed — attempting direct fallback write for {cache_key}")
+            try:
+                try:
+                    resp = s3_client.get_object(Bucket=S3_BUCKET, Key=S3_IMAGE_CACHE_KEY)
+                    fallback_cache = json.loads(resp['Body'].read().decode('utf-8'))
+                except Exception:
+                    fallback_cache = {}
+                fallback_cache[cache_key] = new_entry
+                s3_client.put_object(
+                    Bucket=S3_BUCKET,
+                    Key=S3_IMAGE_CACHE_KEY,
+                    Body=json.dumps(fallback_cache, indent=2),
+                    ContentType='application/json'
+                )
+                profile_image_cache = fallback_cache
+                saved = True
+                print(f"   ✅ Fallback write succeeded for {cache_key}")
+            except Exception as fb_err:
+                print(f"   ❌ Fallback write also failed: {fb_err}")
+                return jsonify({
+                    'success': False,
+                    'error': 'Failed to save image cache. Please try again.'
+                }), 500
         
         # Verify the save by reading back from S3 (with retry for eventual consistency)
         import time
@@ -22047,7 +22109,11 @@ def prefetch_profile_images():
     print(f"🖼️ Pre-fetching profile images for {len(s3_cache['jobs'])} profiles...")
     
     # Always start from the latest S3 cache so we never clobber admin uploads on this worker.
-    load_profile_image_cache(force=True)
+    # If the load fails (transient S3 error), abort entirely — we cannot safely determine
+    # which entries are custom vs auto-sourced, and proceeding would risk overwriting them.
+    if not load_profile_image_cache(force=True):
+        print("   ⚠️ Aborting image prefetch: could not load image cache from S3 (would risk overwriting custom entries)")
+        return
     
     fetched = 0
     skipped = 0
