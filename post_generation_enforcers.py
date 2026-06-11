@@ -1014,11 +1014,12 @@ def dejitter_cross_cat_4dp_pins(df, subject, verbose=True,
 
 
 def dejitter_within_cat_4dp_collisions(df, subject, verbose=True,
-                                       min_collision_group=3, max_attempts=10):
-    """Rule #9 Pass B: when 3+ DIFFERENT brands within the SAME category
-    share the EXACT same 4dp BP (e.g. Krapopolis MPB had 69 brands all
-    at 5.6789%), re-jitter all but one so every brand in the category
-    gets a unique 4dp value AND the resulting value isn't itself round.
+                                       min_collision_group=2, max_attempts=10):
+    """Rule #9 Pass B: when 2+ DIFFERENT brands within the SAME category
+    share the EXACT same 4dp BP (e.g. Bronny James and Draymond Green
+    both at 8.1149% in Kit Harington's ATHLETE), re-jitter all but one
+    so every brand in the category gets a unique 4dp value AND the
+    resulting value isn't itself round.
 
     This catches the "placeholder sentinel" pattern from upstream
     enforcers (clamp-floors, missing-value defaults, audience-weighted
@@ -1027,16 +1028,21 @@ def dejitter_within_cat_4dp_collisions(df, subject, verbose=True,
     Differs from ``dejitter_cross_cat_4dp_pins`` which handles ONE brand
     in MANY cats — this handles MANY brands in ONE cat.
 
-    `min_collision_group=3` matches the rule's "3+ brands" threshold;
-    smaller groups (2 brands at same value) are statistically plausible
-    and not flagged.
+    `min_collision_group=2` (default since 2026-06-11): even 2-brand
+    exact-4dp pins are statistically implausible across a 100+ row
+    category (probability ~0.01% per pair, observed at 32 pairs/file in
+    Kit Harington's 06_11 pull) and indicate engineered values, not
+    organic variance. The original threshold of 3 missed the
+    Bronny/Draymond, Soto/Jokic, Eileen Fisher/Halara class of pairs
+    that triggered Jenna's 06_11 batch-QC defect report.
 
     Recomputes Raw + Proj per row. Idempotent — second pass is a no-op
     because the new BPs are unique-by-construction.
 
     Added 2026-05-27 after Krapopolis audit found 46 within-cat
     collision groups (up to 69 brands at one BP) that all existing
-    depin passes missed.
+    depin passes missed. Threshold lowered to 2 on 2026-06-11 after
+    13-talent batch QC found pervasive 2-brand pairs.
     """
     if df is None or len(df) == 0:
         return df, 0
@@ -1115,6 +1121,141 @@ def dejitter_within_cat_4dp_collisions(df, subject, verbose=True,
     if verbose and fixed:
         print(f"   🎲 dejitter within-cat 4dp collisions: {fixed} row(s) shifted")
     return df, fixed
+
+
+def dejitter_within_cat_tight_clusters(df, subject, *, verbose=True,
+                                       min_cluster=2):
+    """Within-category 2dp deduplication: ensures NO two rows in the
+    same category share the same BP at 2-decimal precision (which is
+    what analysts see in the CSV display). When 2+ rows share a 2dp
+    bucket (e.g. 8.1149 and 8.1141 both display as "8.11"), the
+    cluster is spread across distinct 2dp buckets centered on the
+    cluster's original centroid, with subject-salted jitter so values
+    aren't pinned at 4dp either.
+
+    Different from ``dejitter_within_cat_4dp_collisions`` which only
+    catches EXACT 4dp duplicates. This catches the wider 2dp display
+    cluster — the perceptual pinning Jenna's analysts flag.
+
+    Strategy:
+      1. Group non-demo, non-meta rows in each category by ``round(bp, 2)``.
+      2. For any 2dp bucket with ``min_cluster`` (default 2) or more
+         rows, redistribute them across distinct 2dp buckets:
+         ``[centroid - K/2, ..., centroid + K/2]`` where K = bucket size.
+      3. Each row is placed near the integer-cent of its assigned
+         bucket plus subject-salted jitter (±0.003pp) so 4dp values
+         remain unique and don't sit on round-cents.
+      4. Preserves rank order (lowest BP -> lowest assigned cent).
+      5. Avoids colliding with values in OTHER 2dp buckets in the same
+         category (collision-walk to next free 4dp slot).
+
+    Idempotent: once each 2dp bucket holds <= 1 row in the cat, second
+    pass detects no clusters and is a no-op.
+
+    Skips:
+      - Demographic + meta categories (handled by zero-sum dejitter).
+      - Rows where BP is exactly 0 or 100 (self-pin / floor).
+      - Rows where BP < 0.05 (the long-tail floor where small
+        absolute differences are statistically real).
+
+    Added 2026-06-11 after Jenna's batch-QC of 13 talent profiles
+    flagged tight 2dp clusters as "pervasive pinning" (Kit Harington
+    ATHLETE 8.11 x5, Kristen Bell TALENT 2.58 x6, etc.).
+    """
+    if df is None or len(df) == 0:
+        return df, 0
+    bp_col, cs_col, raw_col, proj_col = _detect_cols(df)
+    sample_size = _detect_sample_size(df, bp_col, raw_col)
+
+    df = df.copy()
+    for _c in (bp_col, cs_col, raw_col, proj_col):
+        if _c and _c in df.columns and df[_c].dtype.name not in ('object', 'O'):
+            df[_c] = df[_c].astype(object)
+
+    # Hard-cap on how far ANY single row can move from its original BP.
+    # This protects analysts from data drift — the enforcer breaks
+    # visual ties without changing the brand's relative position.
+    MAX_MOVE_PP = 0.03
+
+    fixed_total = 0
+    cat_rows = {}
+    for idx, r in df.iterrows():
+        cat = str(r.get('Column', '') or '').strip().upper()
+        if cat in DEPIN_DEMO_CATS or cat in DEPIN_META_CATS:
+            continue
+        old_bp = _bp(r.get(bp_col, 0))
+        if old_bp < 0.05 or old_bp >= 99.99:
+            continue
+        val = str(r.get('Value', '') or '').strip().upper()
+        cat_rows.setdefault(cat, []).append((idx, val, old_bp))
+
+    for cat, rows in cat_rows.items():
+        # Group by 2dp bucket
+        from collections import defaultdict as _dd
+        bucket_members = _dd(list)
+        for entry in rows:
+            bucket_members[round(entry[2], 2)].append(entry)
+        # Sort each bucket's members by old_bp asc
+        for b2 in bucket_members:
+            bucket_members[b2].sort(key=lambda e: e[2])
+        # All currently-occupied 2dp buckets in this category
+        occupied = set(bucket_members.keys())
+        # Process each over-stuffed bucket
+        for b2, members in bucket_members.items():
+            K = len(members)
+            if K < min_cluster:
+                continue
+            # Move all but the median member to nearby unoccupied buckets
+            # within ±MAX_MOVE_PP. Median stays in original bucket.
+            median_idx = K // 2
+            stayer = members[median_idx]
+            movers = members[:median_idx] + members[median_idx+1:]
+            # Build candidate adjacent 2dp slots within MAX_MOVE_PP
+            # of each mover's original BP.
+            for mover in movers:
+                idx_m, val_m, old_bp_m = mover
+                # Search free slots in {b2 ±0.01, ±0.02, ±0.03}
+                cand_offsets = [-1, +1, -2, +2, -3, +3]
+                target_b2 = None
+                for off in cand_offsets:
+                    cand = round(b2 + off * 0.01, 2)
+                    if cand < 0.05 or cand >= 99.99:
+                        continue
+                    if abs(cand - old_bp_m) > MAX_MOVE_PP + 0.005:
+                        continue
+                    if cand not in occupied:
+                        target_b2 = cand
+                        occupied.add(cand)
+                        break
+                if target_b2 is None:
+                    # No free adjacent slot — leave row alone
+                    continue
+                # Compute new 4dp value inside the target bucket with
+                # subject-salted jitter, avoiding round-cent boundaries
+                h = int(_hl.blake2b(
+                    f'{subject}|{cat}|{val_m}|tight-cluster-2026-06-11'.encode(),
+                    digest_size=8,
+                ).hexdigest(), 16)
+                u = ((h % 200001) - 100000) / 100000.0
+                new_v = round(target_b2 + u * 0.004, 4)
+                if round(new_v, 2) != target_b2:
+                    new_v = round(target_b2 + 0.003 * (1 if u >= 0 else -1), 4)
+                if _looks_round_any(new_v):
+                    new_v = round(new_v + 0.0007, 4)
+                    if round(new_v, 2) != target_b2:
+                        new_v = round(target_b2 + 0.0023, 4)
+                if (0.05 <= new_v < 99.99
+                        and round(new_v, 4) != round(old_bp_m, 4)
+                        and abs(new_v - old_bp_m) <= MAX_MOVE_PP + 0.005):
+                    df = _set_bp(df, idx_m, new_v, bp_col, cs_col, raw_col,
+                                 proj_col, sample_size)
+                    fixed_total += 1
+
+    if verbose and fixed_total:
+        print(f"   🎯 dejitter within-cat 2dp clusters: {fixed_total} row(s) "
+              f"moved to adjacent unoccupied 2dp slots (max move "
+              f"{MAX_MOVE_PP:.2f}pp)")
+    return df, fixed_total
 
 
 # ============================================================================
@@ -5673,6 +5814,17 @@ def run_all_enforcers(df, subject, brand_category=None, verbose=True):
         total += n
     except Exception as e:
         print(f"   ⚠️ enforcer dejitter_within_cat_4dp_collisions failed: {e}")
+    # 2026-06-11 (Jenna's 13-talent batch QC): same category, 3+ brands
+    # within ±0.005pp window — exact-4dp dejitter doesn't catch these
+    # but they read as "pinned" at 2dp/3dp resolution to analysts. Spreads
+    # the cluster across a wider window (default 0.008pp/row) using
+    # subject-salted hash so values aren't pinned. Idempotent — once
+    # spread, the cluster's window exceeds the trigger threshold.
+    try:
+        df, n = dejitter_within_cat_tight_clusters(df, subject, verbose=verbose)
+        total += n
+    except Exception as e:
+        print(f"   ⚠️ enforcer dejitter_within_cat_tight_clusters failed: {e}")
     # 2026-06-10 (Jenna's colleague's MPB cross-profile observation):
     # break CROSS-PROFILE 4dp pins — ONE (cat, brand) shared at exact 4dp
     # BP across MANY profiles. Caught: TELECOM/MINT MOBILE @ 1.9898%
