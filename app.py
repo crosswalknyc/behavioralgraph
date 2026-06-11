@@ -3164,9 +3164,13 @@ def admin_recompute_category_norms():
 
         payload = request.get_json(silent=True) or {}
         try:
-            min_profiles = int(payload.get("min_profiles", 3))
+            # Default min_profiles=1 so EVERY category gets a norm — even
+            # single-profile ones. The dashboard surfaces the sample count
+            # in the popover label ("Category Norm — ACTOR (737)") so
+            # users can see when a norm is thin.
+            min_profiles = int(payload.get("min_profiles", 1))
         except Exception:
-            min_profiles = 3
+            min_profiles = 1
         try:
             workers = int(payload.get("workers", 12))
         except Exception:

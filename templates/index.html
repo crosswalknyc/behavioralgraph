@@ -56217,14 +56217,26 @@
             return parsed;
         }
 
+        // The "category" we want here is the JOB's category (what groups
+        // profiles in the sidebar selector — ACTOR / SPORTS TEAM /
+        // MUSICIAN-BAND / etc.), NOT the per-profile BRAND CATEGORY row
+        // from the CSV (which is free-text and brand-specific). Look it
+        // up on the dashboardProfiles entry that matches the active S3
+        // key. Falls back to currentProfileData.category if a caller
+        // stamped one, and finally to parsed.brandCategory as a last
+        // resort so the toggle isn't completely dead for unusual paths.
         function _currentProfileCategory() {
             try {
-                if (typeof currentProfileData !== 'undefined' && currentProfileData) {
-                    const c = currentProfileData.category || (currentProfileData.parsed && currentProfileData.parsed.brandCategory);
-                    if (c) return String(c).toUpperCase();
+                const key = (typeof currentS3Key !== 'undefined' && currentS3Key) ? String(currentS3Key) : '';
+                if (key && typeof dashboardProfiles !== 'undefined' && Array.isArray(dashboardProfiles)) {
+                    const hit = dashboardProfiles.find(p => (p && (p.s3_key === key || p.job_id === key)));
+                    if (hit && hit.category) return String(hit.category).toUpperCase();
                 }
-                if (typeof currentProfile !== 'undefined' && currentProfile) {
-                    if (currentProfile.category) return String(currentProfile.category).toUpperCase();
+                if (typeof currentProfileData !== 'undefined' && currentProfileData && currentProfileData.category) {
+                    return String(currentProfileData.category).toUpperCase();
+                }
+                if (typeof currentDashboardData !== 'undefined' && currentDashboardData && currentDashboardData.brandCategory) {
+                    return String(currentDashboardData.brandCategory).toUpperCase();
                 }
             } catch (_) {}
             return '';
