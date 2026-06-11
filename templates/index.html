@@ -34666,8 +34666,9 @@
             }
             var jiqDateBox = document.getElementById('jiqDateRangeBox');
             if (jiqDateBox) {
-                jiqDateBox.textContent = 'Date Range: ' + (meta.start_date || '') + ' → ' + (meta.end_date || '') + ' · ' + windowStr;
-                jiqDateBox.style.display = (meta.start_date || meta.end_date) ? '' : 'none';
+                var _dateStr = (meta.start_date || '') + ' → ' + (meta.end_date || '') + ' · ' + windowStr;
+                jiqDateBox.textContent = 'Date Range: ' + _dateStr;
+                jiqDateBox.style.display = 'block';
             }
 
             // Cohort-mode banner: explains how the cohort was built and whether
