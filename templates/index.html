@@ -13128,6 +13128,65 @@
                 width: 100% !important;
             }
         }
+        /* ── Brand Partnership IQ collapsible methodology blurbs ─────
+           Used by the four valuation cards (EMV / BEV / BLV / Conv)
+           and the per-platform table column-definitions blurb.
+           Default-collapsed so the cards lead with their math; click
+           the summary row to read the explanation. */
+        details.bpiq-methodology { margin: 0; }
+        details.bpiq-methodology > summary.bpiq-method-summary {
+            cursor: pointer;
+            user-select: none;
+            font-size: 0.7rem;
+            color: var(--text-secondary);
+            display: inline-flex;
+            align-items: center;
+            gap: 0.4rem;
+            padding: 0.15rem 0;
+            list-style: none;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            font-weight: 600;
+            transition: color 120ms ease;
+        }
+        details.bpiq-methodology > summary.bpiq-method-summary:hover {
+            color: var(--text-primary);
+        }
+        /* Hide the default disclosure triangle in WebKit/Chromium. */
+        details.bpiq-methodology > summary.bpiq-method-summary::-webkit-details-marker { display: none; }
+        details.bpiq-methodology > summary.bpiq-method-summary::marker { content: ''; }
+        details.bpiq-methodology > summary.bpiq-method-summary::before {
+            content: 'i';
+            display: inline-block;
+            width: 13px;
+            height: 13px;
+            border: 1px solid currentColor;
+            border-radius: 50%;
+            text-align: center;
+            line-height: 11px;
+            font-size: 9px;
+            font-style: italic;
+            font-weight: 700;
+            text-transform: none;
+        }
+        details.bpiq-methodology > summary.bpiq-method-summary::after {
+            content: '▾';
+            font-size: 0.7rem;
+            line-height: 1;
+            transition: transform 150ms ease;
+        }
+        details.bpiq-methodology[open] > summary.bpiq-method-summary { color: var(--text-primary); }
+        details.bpiq-methodology[open] > summary.bpiq-method-summary::after { transform: rotate(180deg); }
+        details.bpiq-methodology > .bpiq-method-body {
+            margin-top: 0.45rem;
+            padding: 0.55rem 0.75rem;
+            border-left: 2px solid rgba(200, 230, 0, 0.35);
+            background: rgba(255, 255, 255, 0.02);
+            border-radius: 0 6px 6px 0;
+            font-size: 0.78rem;
+            color: var(--text-secondary);
+            line-height: 1.55;
+        }
     </style>
     <script>
         /* Apply persisted theme before render to avoid flash-of-wrong-theme.
@@ -17710,10 +17769,13 @@
                         <div id="bpiqEmvCard" class="tab-section" style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 1.5rem; margin-bottom: 1.5rem; display: none;">
                             <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:1rem; flex-wrap:wrap; margin-bottom:0.65rem;">
                                 <div style="flex:1; min-width:260px;">
-                                    <h3 style="margin: 0 0 0.2rem;">📡 Earned Media Value</h3>
-                                    <div style="font-size: 0.78rem; color: var(--text-secondary); line-height: 1.55;">
-                                        <strong>EMV = Σ<sub>platforms</sub> (Incremental Consumers × $/Consumer CPM)</strong> — each platform's post-campaign incremental brand engagement is valued at that platform's industry-standard CPM, then summed. Click any CPM cell in the table below to retune; the total on the right and Total Brand Value at the top recalculate instantly.
-                                    </div>
+                                    <h3 style="margin: 0 0 0.35rem;">📡 Earned Media Value</h3>
+                                    <details class="bpiq-methodology">
+                                        <summary class="bpiq-method-summary">How this is calculated</summary>
+                                        <div class="bpiq-method-body">
+                                            <strong>EMV = Σ<sub>platforms</sub> (Incremental Consumers × $/Consumer CPM)</strong> — each platform's post-campaign incremental brand engagement is valued at that platform's industry-standard CPM, then summed. Click any CPM cell in the table below to retune; the total on the right and Total Brand Value at the top recalculate instantly.
+                                        </div>
+                                    </details>
                                 </div>
                                 <div style="text-align:right; min-width:170px;">
                                     <div style="font-size:0.65rem; color:var(--text-secondary); text-transform:uppercase; letter-spacing:0.05em;">Total Earned Media Value</div>
@@ -17728,10 +17790,13 @@
                         <div id="bpiqBevCard" class="tab-section" style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 1.5rem; margin-bottom: 1.5rem; display: none;">
                             <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:1rem; flex-wrap:wrap; margin-bottom:0.5rem;">
                                 <div style="flex:1; min-width:260px;">
-                                    <h3 style="margin: 0 0 0.2rem;">🤝 Brand Engagement Value</h3>
-                                    <div style="font-size: 0.78rem; color: var(--text-secondary); line-height: 1.55;">
-                                        Values every <strong>post-campaign engaged consumer</strong> at a flat $/consumer rate — capturing the value of brand mindshare itself, separate from the social-media amplification valued in EMV.
-                                    </div>
+                                    <h3 style="margin: 0 0 0.35rem;">🤝 Brand Engagement Value</h3>
+                                    <details class="bpiq-methodology">
+                                        <summary class="bpiq-method-summary">How this is calculated</summary>
+                                        <div class="bpiq-method-body">
+                                            Values every <strong>post-campaign engaged consumer</strong> at a flat $/consumer rate — capturing the value of brand mindshare itself, separate from the social-media amplification valued in EMV.
+                                        </div>
+                                    </details>
                                 </div>
                                 <div style="text-align:right; min-width:170px;">
                                     <div style="font-size:0.65rem; color:var(--text-secondary); text-transform:uppercase; letter-spacing:0.05em;">Brand Engagement Value</div>
@@ -17745,10 +17810,13 @@
                         <div id="bpiqBlvCard" class="tab-section" style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 1.5rem; margin-bottom: 1.5rem; display: none;">
                             <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:1rem; flex-wrap:wrap; margin-bottom:0.5rem;">
                                 <div style="flex:1; min-width:260px;">
-                                    <h3 style="margin: 0 0 0.2rem;">📈 Brand Lift Value</h3>
-                                    <div style="font-size: 0.78rem; color: var(--text-secondary); line-height: 1.55;">
-                                        Values only the <strong>incremental consumers</strong> (DiD lift over Gen Pop) at a higher rate than BEV — these are the partnership-attributable brand engagers who would not have engaged without the campaign.
-                                    </div>
+                                    <h3 style="margin: 0 0 0.35rem;">📈 Brand Lift Value</h3>
+                                    <details class="bpiq-methodology">
+                                        <summary class="bpiq-method-summary">How this is calculated</summary>
+                                        <div class="bpiq-method-body">
+                                            Values only the <strong>incremental consumers</strong> (DiD lift over Gen Pop) at a higher rate than BEV — these are the partnership-attributable brand engagers who would not have engaged without the campaign.
+                                        </div>
+                                    </details>
                                 </div>
                                 <div style="text-align:right; min-width:170px;">
                                     <div style="font-size:0.65rem; color:var(--text-secondary); text-transform:uppercase; letter-spacing:0.05em;">Brand Lift Value</div>
@@ -17766,10 +17834,13 @@
                         <div id="bpiqConvValCard" class="tab-section" style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 1.5rem; margin-bottom: 1.5rem; display: none;">
                             <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:1rem; flex-wrap:wrap; margin-bottom:0.5rem;">
                                 <div style="flex:1; min-width:260px;">
-                                    <h3 style="margin: 0 0 0.2rem;">💳 Conversion Value</h3>
-                                    <div style="font-size: 0.78rem; color: var(--text-secondary); line-height: 1.55;">
-                                        Values every measured <strong>post-campaign order / sign-up confirmation</strong> at the brand's average order value (AOV).
-                                    </div>
+                                    <h3 style="margin: 0 0 0.35rem;">💳 Conversion Value</h3>
+                                    <details class="bpiq-methodology">
+                                        <summary class="bpiq-method-summary">How this is calculated</summary>
+                                        <div class="bpiq-method-body">
+                                            Values every measured <strong>post-campaign order / sign-up confirmation</strong> at the brand's average order value (AOV).
+                                        </div>
+                                    </details>
                                 </div>
                                 <div style="text-align:right; min-width:170px;">
                                     <div style="font-size:0.65rem; color:var(--text-secondary); text-transform:uppercase; letter-spacing:0.05em;">Conversion Value</div>
@@ -29828,10 +29899,17 @@
                 return '<span style="font-size:10px;color:#c8e600;margin-left:4px;">' + glyph + '</span>';
             };
             var thBase = 'padding:8px 10px;cursor:pointer;user-select:none;';
-            var html = '<div style="font-size:11px;color:var(--text-secondary);margin-bottom:0.5rem;">'
-                + 'A consumer is counted on a platform when they had at least 1 visit to that platform\'s domain in the window. <strong>Pre %</strong> / <strong>Post %</strong> = share of that platform\'s consumers that ALSO had a brand touchpoint anywhere on the platform during the same window. <strong>Brand Lift</strong> = percentage change between Post % and Pre %. <strong>Incremental Consumers</strong> = the post-campaign incremental brand engagers attributable to that platform, projected to US gen pop. <strong>EMV</strong> = Incremental Consumers × CPM. The "Direct (Brand Site)" row counts brand touchpoints that did not occur on a social platform (e.g. direct visits to the brand\'s own site or via a wholesale distributor).'
-                + ' <span style="color:var(--text-secondary);font-style:italic;">Click any column header to sort. Click a CPM cell to edit the rate — every downstream value (per-row EMV, Total Earned Media Value, Total Brand Value) recalculates instantly.</span>'
-                + '</div>'
+            // Per-platform table methodology: collapsed by default
+            // (matches the card-header methodology pattern). The
+            // table is the headline — readers can expand the
+            // explainer when they want the column definitions.
+            var html = '<details class="bpiq-methodology" style="margin-bottom:0.5rem;">'
+                +    '<summary class="bpiq-method-summary">Column definitions &amp; how to use this table</summary>'
+                +    '<div class="bpiq-method-body" style="font-size:11px;">'
+                +      'A consumer is counted on a platform when they had at least 1 visit to that platform\'s domain in the window. <strong>Pre %</strong> / <strong>Post %</strong> = share of that platform\'s consumers that ALSO had a brand touchpoint anywhere on the platform during the same window. <strong>Brand Lift</strong> = percentage change between Post % and Pre %. <strong>Incremental Consumers</strong> = the post-campaign incremental brand engagers attributable to that platform, projected to US gen pop. <strong>EMV</strong> = Incremental Consumers × CPM. The "Direct (Brand Site)" row counts brand touchpoints that did not occur on a social platform (e.g. direct visits to the brand\'s own site or via a wholesale distributor).'
+                +      ' <span style="font-style:italic;">Click any column header to sort. Click a CPM cell to edit the rate — every downstream value (per-row EMV, Total Earned Media Value, Total Brand Value) recalculates instantly.</span>'
+                +    '</div>'
+                + '</details>'
                 + '<table style="width:100%;border-collapse:collapse;font-size:13px;">'
                 + '<thead><tr style="border-bottom:2px solid var(--border-color);">'
                 + '<th data-bpiq-sort="platform"     style="' + thBase + 'text-align:left;">Platform'                                    + arrow('platform')     + '</th>'
