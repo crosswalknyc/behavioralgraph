@@ -20633,6 +20633,7 @@
                     <div style="font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.07em; color: var(--text-secondary); font-weight: 600;">Digital Journey IQ</div>
                     <div id="jiqDashTitle" style="font-size: 1.15rem; font-weight: 700;">Select a run</div>
                     <div id="jiqDashSubtitle" style="font-size: 0.75rem; color: var(--text-secondary);"></div>
+                    <div id="jiqDateRangeBox" style="display: none; margin-top: 0.4rem; padding: 0.25rem 0.75rem; background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 8px; font-size: 0.75rem; font-weight: 700; color: var(--accent-lime); white-space: nowrap; width: fit-content;"></div>
                 </div>
                 <div style="display: flex; gap: 0.5rem; align-items: center;">
                     <select id="jiqRunPicker" onchange="onJourneyIqRunPicked(this.value)" style="padding: 6px 10px; border-radius: 6px; border: 1px solid var(--border-color); background: var(--bg-primary); color: var(--text-primary); font-size: 13px; min-width: 240px;">
@@ -34650,18 +34651,23 @@
             var sub = document.getElementById('jiqDashSubtitle');
             if (title) title.textContent = (meta.project_name || meta.target || 'Digital Journey');
             var cohortModeLbl = meta.cohort_mode || 'mention';
+            var windowStr;
+            if (cohortModeLbl === 'conversion') {
+                windowStr = (meta.days_before_conversion || 90) + 'd before purchase / last '
+                          + (meta.steps_before_conversion || 10) + ' steps';
+            } else {
+                windowStr = 'lookback ' + (meta.lookback_days != null ? meta.lookback_days : '?') + 'd'
+                          + ' / forward ' + (meta.forward_days != null ? meta.forward_days : '?') + 'd';
+            }
             if (sub) {
-                var windowStr;
-                if (cohortModeLbl === 'conversion') {
-                    windowStr = (meta.days_before_conversion || 90) + 'd before purchase / last '
-                              + (meta.steps_before_conversion || 10) + ' steps';
-                } else {
-                    windowStr = 'lookback ' + (meta.lookback_days != null ? meta.lookback_days : '?') + 'd'
-                              + ' / forward ' + (meta.forward_days != null ? meta.forward_days : '?') + 'd';
-                }
                 sub.textContent = 'Target: ' + (meta.target || '—')
                     + '  ·  ' + (meta.start_date || '') + ' → ' + (meta.end_date || '')
                     + '  ·  ' + windowStr;
+            }
+            var jiqDateBox = document.getElementById('jiqDateRangeBox');
+            if (jiqDateBox) {
+                jiqDateBox.textContent = 'Date Range: ' + (meta.start_date || '') + ' → ' + (meta.end_date || '') + ' · ' + windowStr;
+                jiqDateBox.style.display = (meta.start_date || meta.end_date) ? '' : 'none';
             }
 
             // Cohort-mode banner: explains how the cohort was built and whether
