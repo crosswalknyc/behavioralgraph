@@ -13767,7 +13767,7 @@
                                             <option value="MOVIE">Movie</option>
                                             <option value="MOVIE - NETFLIX">Movie - Netflix</option>
                                             <option value="PODCAST">Podcast</option>
-                                            <option value="VERTICAL SHORT">Vertical Short</option>
+                                            <option value="VERTICAL SHORTS">Vertical Shorts</option>
                                             <option value="SERIES - AMAZON / MGM STUDIOS">Series - Amazon / MGM Studios</option>
                                             <option value="SERIES - APPLE">Series - Apple</option>
                                             <option value="SERIES - CBS STUDIOS">Series - CBS Studios</option>
@@ -14226,7 +14226,7 @@
                                                     <option value="MOVIE">Movie</option>
                                                     <option value="MOVIE - NETFLIX">Movie - Netflix</option>
                                                     <option value="PODCAST">Podcast</option>
-                                                    <option value="VERTICAL SHORT">Vertical Short</option>
+                                                    <option value="VERTICAL SHORTS">Vertical Shorts</option>
                                                     <option value="SERIES - AMAZON / MGM STUDIOS">Series - Amazon / MGM Studios</option>
                                                     <option value="SERIES - APPLE">Series - Apple</option>
                                                     <option value="SERIES - 20TH CENTURY">SERIES - 20TH CENTURY</option>
@@ -57665,7 +57665,12 @@
         // Load profiles when dashboard tab is shown
         let dashboardProfilePolling = null;
         
-        const SESSION_JOBS_CACHE_KEY = 'bg_jobs_session_cache';
+        // v2 bump (2026-06-10): forces the cached /api/jobs payload to be
+        // refetched after the IMDB-id backfill so variant profiles
+        // ("Reba McEntire - Avid Fan", "Dwayne Johnson - Avid Fan", etc.)
+        // pick up the new imdb_id field instead of serving a 60s-old payload
+        // that predates the enrichment.
+        const SESSION_JOBS_CACHE_KEY = 'bg_jobs_session_cache_v2';
         const SESSION_JOBS_CACHE_TTL = 60000; // 60s — ensures admin changes appear after page refresh
         function getSessionJobsCache() {
             try {
@@ -75711,7 +75716,7 @@
         // Master category mapping for organized display
         const MASTER_CATEGORIES = {
             'BRAND': ['ACCESSORIES', 'ACTIVEWEAR', 'AMUSEMENT PARKS', 'APPAREL', 'AUTOMOBILE', 'B2B', 'BANKS', 'BEAUTY', 'BETTING', 'BEVERAGE', 'CASUAL DINING', 'CPG', 'CREDIT PROVIDERS', 'CREDIT PROVIDER', 'DIGITAL BANKING', 'EVENTS', 'FOOTWEAR', 'FRANCHISE', 'GROCERY', 'INTIMATES', 'JEWELRY', 'LOYALTY PROGRAMS', 'MEMBERSHIP', 'NON PROFIT/CHARITY', 'PHARMA', 'QSR', 'RETAILERS', 'SECURITY', 'TELECOM', 'TICKETING', 'TOY', 'TRAVEL', 'VENUE', 'WORKOUT FACILITY'],
-            'CONTENT': ['GAME PLAYERS', 'GAMES', 'GAMES - PLAYERS', 'MOVIE', 'PODCAST', 'VERTICAL SHORT', 'SERIES - AMAZON / MGM STUDIOS', 'SERIES - APPLE', 'SERIES - CBS STUDIOS', 'SERIES - 20TH CENTURY', 'SERIES - FXP', 'SERIES - HBO ENTERTAINMENT', 'SERIES - HBO MAX', 'SERIES - HULU', 'SERIES - LIONSGATE TELEVISION', 'SERIES - NETFLIX', 'SERIES - PARAMOUNT TV STUDIOS', 'SERIES - SONY', 'SERIES - UNIVERSAL TV', 'SERIES - WBD'],
+            'CONTENT': ['GAME PLAYERS', 'GAMES', 'GAMES - PLAYERS', 'MOVIE', 'PODCAST', 'VERTICAL SHORTS', 'VERTICAL SHORT', 'SERIES - AMAZON / MGM STUDIOS', 'SERIES - APPLE', 'SERIES - CBS STUDIOS', 'SERIES - 20TH CENTURY', 'SERIES - FXP', 'SERIES - HBO ENTERTAINMENT', 'SERIES - HBO MAX', 'SERIES - HULU', 'SERIES - LIONSGATE TELEVISION', 'SERIES - NETFLIX', 'SERIES - PARAMOUNT TV STUDIOS', 'SERIES - SONY', 'SERIES - UNIVERSAL TV', 'SERIES - WBD'],
             'GEN POP': ['GEN POP'],
             'PLATFORMS': ['APP/PLATFORM', 'BROADCAST/CABLE', 'MEDIA', 'MOVIE THEATER', 'PLATFORMS', 'SEARCH ENGINE/AI', 'SOCIAL MEDIA', 'STREAMING MUSIC', 'STREAMING VIDEO', 'VIRTUAL MVPD/FAST', 'VIRTUAL MVPD FAST', 'VMVPD/FAST', 'VMVPD'],
             'SPORT': ['MILB', 'MLB', 'NBA', 'NFL', 'SPORTS ORGANIZATIONS', 'SPORTS ORGANIZATION', 'WNBA'],
