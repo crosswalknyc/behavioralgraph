@@ -36797,6 +36797,8 @@
                 _setText('jiqInterstepSubtitle', 'Off-app validation steps accounts took before visiting Fandango.');
                 var _cutByRow = document.getElementById('jiqCutByRow');
                 if (_cutByRow) _cutByRow.style.display = 'none';
+                var _howtoEl = document.getElementById('jiqKpiStripHowto');
+                if (_howtoEl) _howtoEl.style.display = 'none';
             } else {
                 var _tpMainTitle = document.getElementById('jiqTopPathsMainTitle');
                 if (_tpMainTitle) { _tpMainTitle.textContent = ''; _tpMainTitle.style.display = 'none'; }
@@ -36807,6 +36809,8 @@
                 if (_compSub) _compSub.style.display = '';
                 var _cutByRow = document.getElementById('jiqCutByRow');
                 if (_cutByRow) _cutByRow.style.display = '';
+                var _howtoEl = document.getElementById('jiqKpiStripHowto');
+                if (_howtoEl) _howtoEl.style.display = '';
             }
 
             // Meta line: target + vertical + visitors estimate
