@@ -56018,7 +56018,15 @@
             // Gen Pop is layered into compare-mode views by default. The
             // popover exposes a toggle so users can compare old vs new
             // without Gen Pop crowding the bars / columns.
-            includeGenPop: true
+            includeGenPop: true,
+            // When data cuts are selected the popover surfaces a
+            // numerator / denominator picker so users can index e.g.
+            // "Avid vs Casual" or "Casual vs Gen Pop" instead of the
+            // default profile-vs-genpop. Values are either 'profile',
+            // 'genpop', or one of the selected run keys. Null = default
+            // behavior (Profile / Gen Pop).
+            indexNumKey: null,
+            indexDenKey: null
         };
 
         function _resetComparisonRunsState(subject, currentKey, availableRuns) {
@@ -56029,7 +56037,9 @@
                 availableRuns: Array.isArray(availableRuns) ? availableRuns.slice() : [],
                 currentKey: currentKey || '',
                 inFlight: {},
-                includeGenPop: true
+                includeGenPop: true,
+                indexNumKey: null,
+                indexDenKey: null
             };
             _updateCompareDateRangesButtonBadge();
             _closeCompareDateRangesPopover();
@@ -56044,6 +56054,200 @@
             _comparisonRunsState.includeGenPop = !!val;
             try { applyComparisonRunsToDashboardCharts(); } catch (e) { console.warn('[compare] genpop toggle charts failed', e); }
             try { applyComparisonRunsToCategoryTables(); } catch (e) { console.warn('[compare] genpop toggle tables failed', e); }
+        }
+
+        // ---------------------------------------------------------------
+        // INDEX SOURCE PICKER
+        //
+        // Build the dropdown choices for "what should the Index column
+        // compare?". Always includes Current Profile, Gen Pop, and any
+        // currently-selected data cut. The picker lives inside the Data
+        // Cuts popover (#cmpIndexNumSel / #cmpIndexDenSel) and is
+        // re-populated whenever the selection changes.
+        // ---------------------------------------------------------------
+        function _cmpIndexSourceOptions() {
+            const series = (_comparisonRunsState.selectedKeys || [])
+                .map(k => _comparisonRunsState.runsByKey[k])
+                .filter(Boolean);
+            const opts = [{ key: 'profile', label: 'Current Profile' }];
+            series.forEach(s => {
+                opts.push({ key: s.key, label: s.label || 'Run' });
+            });
+            opts.push({ key: 'genpop', label: 'Gen Pop' });
+            return opts;
+        }
+
+        function _refreshIndexSourcePickerOptions() {
+            const numSel = document.getElementById('cmpIndexNumSel');
+            const denSel = document.getElementById('cmpIndexDenSel');
+            const helpEl = document.getElementById('cmpIndexSourceHelp');
+            const wrap = document.getElementById('cmpIndexSourceWrap');
+            if (!numSel || !denSel) return;
+            const opts = _cmpIndexSourceOptions();
+            const num = _comparisonRunsState.indexNumKey || 'profile';
+            const den = _comparisonRunsState.indexDenKey || 'genpop';
+            const validKeys = new Set(opts.map(o => o.key));
+            const finalNum = validKeys.has(num) ? num : 'profile';
+            const finalDen = validKeys.has(den) ? den : 'genpop';
+            _comparisonRunsState.indexNumKey = (finalNum === 'profile') ? null : finalNum;
+            _comparisonRunsState.indexDenKey = (finalDen === 'genpop') ? null : finalDen;
+            const renderOpts = (sel, currentKey) => {
+                sel.innerHTML = '';
+                opts.forEach(o => {
+                    const opt = document.createElement('option');
+                    opt.value = o.key;
+                    opt.textContent = o.label;
+                    if (o.key === currentKey) opt.selected = true;
+                    sel.appendChild(opt);
+                });
+            };
+            renderOpts(numSel, finalNum);
+            renderOpts(denSel, finalDen);
+            // Wrapper visibility / help copy. Only meaningful when at
+            // least one data cut is selected (otherwise there's nothing
+            // besides the default to pick between).
+            const series = (_comparisonRunsState.selectedKeys || [])
+                .map(k => _comparisonRunsState.runsByKey[k])
+                .filter(Boolean);
+            if (wrap) wrap.style.display = (series.length > 0) ? '' : 'none';
+            if (helpEl) {
+                if (series.length === 0) {
+                    helpEl.textContent = 'Default: Profile vs Gen Pop. Select runs above to add them as options.';
+                } else if (finalNum === finalDen) {
+                    helpEl.textContent = 'Numerator and denominator are the same — Index will be 100 for every row.';
+                } else {
+                    const labelOf = (k) => (opts.find(o => o.key === k) || {}).label || k;
+                    helpEl.textContent = 'Index = (' + labelOf(finalNum) + ' ÷ ' + labelOf(finalDen) + ') × 100 across every table.';
+                }
+            }
+        }
+
+        // Walk every dashboard table that exposes an .index-col cell and
+        // rewrite its text using the picker's chosen numerator and
+        // denominator. Each row carries data attributes (data-cmp-pct-*)
+        // written by _cmpStampRowPcts() during column injection.
+        function _cmpApplyIndexSourcePicker() {
+            const numKey = _comparisonRunsState.indexNumKey;
+            const denKey = _comparisonRunsState.indexDenKey;
+            // Picker is active when EITHER side is non-default.
+            const active = !!(numKey || denKey);
+            const effNum = numKey || 'profile';
+            const effDen = denKey || 'genpop';
+
+            const pctFor = (row, which) => {
+                if (which === 'profile') {
+                    const v = parseFloat(row.getAttribute('data-cmp-pct-profile'));
+                    return isFinite(v) ? v : null;
+                }
+                if (which === 'genpop') {
+                    const v = parseFloat(row.getAttribute('data-cmp-pct-genpop'));
+                    return isFinite(v) ? v : null;
+                }
+                const v = parseFloat(row.getAttribute('data-cmp-pct-run-' + which));
+                return isFinite(v) ? v : null;
+            };
+
+            const rows = document.querySelectorAll('.behavioral-item, .interest-item, .location-row');
+            rows.forEach(row => {
+                const idxCell = row.querySelector('.index-col');
+                if (!idxCell) return;
+                if (!active) {
+                    // Restore the original index text we snapshotted at
+                    // injection time. If no snapshot exists this is a
+                    // no-op (initial render hasn't run yet).
+                    if (row._cmpOrigIndexHtml != null) {
+                        idxCell.innerHTML = row._cmpOrigIndexHtml;
+                        if (row._cmpOrigIndexColor != null) idxCell.style.color = row._cmpOrigIndexColor;
+                    }
+                    return;
+                }
+                // First time the picker is applied to this row in this
+                // session: snapshot the default index cell so a Reset
+                // can restore it.
+                if (row._cmpOrigIndexHtml == null) {
+                    row._cmpOrigIndexHtml = idxCell.innerHTML;
+                    row._cmpOrigIndexColor = idxCell.style.color || '';
+                }
+                const numPct = pctFor(row, effNum);
+                const denPct = pctFor(row, effDen);
+                if (numPct == null || denPct == null || denPct === 0) {
+                    idxCell.textContent = '—';
+                    idxCell.style.color = 'var(--text-secondary, #9ca3af)';
+                    return;
+                }
+                const idxVal = (numPct / denPct) * 100;
+                // Round to nearest int the way the native renderer does
+                // (formatIndex shows e.g. "112" or "0.87x" depending on
+                // context — keep it integer here to match the rest of
+                // the Index column visually).
+                const txt = Math.round(idxVal).toLocaleString();
+                idxCell.textContent = txt;
+                idxCell.style.color = (idxVal >= 100) ? 'var(--accent-green, #66d9ef)' : 'var(--accent-red, #f92672)';
+                idxCell.style.fontWeight = '700';
+            });
+        }
+
+        // Write per-row pct attributes the picker reads. Called at the
+        // tail end of applyComparisonRunsToCategoryTables, after every
+        // table is rendered with its native columns + comparison cells.
+        // Profile pct comes from the row's native .behavioral-pct /
+        // .interest-pct / 4th span on .location-row. Gen Pop comes from
+        // .genpop-col. Per-run pcts come from each .cmp-col-cell we
+        // injected (one per series.entry, in selectedKeys order).
+        function _cmpStampRowPcts(series) {
+            const parsePct = (txt) => {
+                if (!txt) return null;
+                const m = String(txt).match(/-?\d+(?:\.\d+)?/);
+                return m ? parseFloat(m[0]) : null;
+            };
+
+            // Behavioral cards.
+            document.querySelectorAll('.behavioral-item').forEach(row => {
+                const cells = row.querySelectorAll('.behavioral-pct');
+                // [0] = profile, [1] = (genpop) — we set the genpop attr from .genpop-col below.
+                if (cells[0]) row.setAttribute('data-cmp-pct-profile', parsePct(cells[0].textContent) ?? '');
+                const gp = row.querySelector('.genpop-col');
+                if (gp) row.setAttribute('data-cmp-pct-genpop', parsePct(gp.textContent) ?? '');
+                const cmpCells = row.querySelectorAll('.cmp-col-cell');
+                cmpCells.forEach((c, i) => {
+                    const k = series[i] && series[i].key;
+                    if (k) row.setAttribute('data-cmp-pct-run-' + k, parsePct(c.textContent) ?? '');
+                });
+            });
+
+            // Interests list.
+            document.querySelectorAll('.interest-item').forEach(row => {
+                const pctEl = row.querySelector('.interest-pct');
+                if (pctEl) row.setAttribute('data-cmp-pct-profile', parsePct(pctEl.textContent) ?? '');
+                const gp = row.querySelector('.genpop-col') || row.querySelector('.interest-genpop');
+                if (gp) row.setAttribute('data-cmp-pct-genpop', parsePct(gp.textContent) ?? '');
+                const cmpCells = row.querySelectorAll('.cmp-col-cell');
+                cmpCells.forEach((c, i) => {
+                    const k = series[i] && series[i].key;
+                    if (k) row.setAttribute('data-cmp-pct-run-' + k, parsePct(c.textContent) ?? '');
+                });
+            });
+
+            // Location rows. Profile pct is the 4th child <span>. Gen Pop
+            // only exists on the "all" table (CW Gen Pop column, 5th
+            // child) — for over/under tables we leave data-cmp-pct-genpop
+            // unset, so picking Gen Pop falls back to "—".
+            document.querySelectorAll('.location-row').forEach(row => {
+                const spans = row.children;
+                if (spans && spans[3]) row.setAttribute('data-cmp-pct-profile', parsePct(spans[3].textContent) ?? '');
+                // CW Gen Pop is 5th child in the All-table only — detect
+                // via the .cw-gp-col class on its header (which we don't
+                // tag rows with directly), so probe by sibling count.
+                const allParent = row.closest('#allLocationsContainer');
+                if (allParent && spans[4]) {
+                    row.setAttribute('data-cmp-pct-genpop', parsePct(spans[4].textContent) ?? '');
+                }
+                const cmpCells = row.querySelectorAll('.cmp-col-cell');
+                cmpCells.forEach((c, i) => {
+                    const k = series[i] && series[i].key;
+                    if (k) row.setAttribute('data-cmp-pct-run-' + k, parsePct(c.textContent) ?? '');
+                });
+            });
         }
 
         // If the profile display name contains a " - " (or en-dash / em-dash)
@@ -56414,6 +56618,65 @@
             });
             pop.appendChild(gpRow);
 
+            // ---- Index source picker --------------------------------------
+            // Shown whenever the user has 1+ data cuts selected. Lets them
+            // override what the Index column compares against — instead of
+            // the default "Profile vs Gen Pop", they can pick any two of
+            // {Current Profile, <each selected run>, Gen Pop} as numerator
+            // and denominator. E.g. "Avid vs Casual" or "Casual vs Gen Pop".
+            const idxWrap = document.createElement('div');
+            idxWrap.id = 'cmpIndexSourceWrap';
+            idxWrap.style.cssText = 'border:1px solid rgba(124,58,237,0.25);background:rgba(124,58,237,0.06);border-radius:6px;padding:0.45rem 0.55rem 0.55rem;margin-bottom:0.5rem;';
+            const idxTitle = document.createElement('div');
+            idxTitle.style.cssText = 'font-size:0.72rem;font-weight:600;text-transform:uppercase;letter-spacing:0.04em;color:var(--text-secondary, #9ca3af);margin-bottom:0.4rem;display:flex;align-items:center;justify-content:space-between;gap:0.5rem;';
+            const idxTitleLeft = document.createElement('span');
+            idxTitleLeft.textContent = 'Index against';
+            const idxResetLink = document.createElement('a');
+            idxResetLink.href = '#';
+            idxResetLink.textContent = 'Reset';
+            idxResetLink.style.cssText = 'font-size:0.7rem;color:var(--accent-purple, #7c3aed);text-decoration:none;text-transform:none;letter-spacing:0;font-weight:500;';
+            idxResetLink.onclick = function(e) {
+                e.preventDefault();
+                _comparisonRunsState.indexNumKey = null;
+                _comparisonRunsState.indexDenKey = null;
+                _refreshIndexSourcePickerOptions();
+                try { _cmpApplyIndexSourcePicker(); } catch (_) {}
+            };
+            idxTitle.appendChild(idxTitleLeft);
+            idxTitle.appendChild(idxResetLink);
+            idxWrap.appendChild(idxTitle);
+
+            const idxRow = document.createElement('div');
+            idxRow.style.cssText = 'display:grid;grid-template-columns:1fr 18px 1fr;gap:0.35rem;align-items:center;';
+            const numSel = document.createElement('select');
+            numSel.id = 'cmpIndexNumSel';
+            numSel.style.cssText = 'background:var(--bg-input, #15171f);color:var(--text-primary, #e6e6e6);border:1px solid var(--border-color, #2c3041);border-radius:4px;padding:0.3rem 0.4rem;font-size:0.76rem;font-family:inherit;min-width:0;';
+            const versus = document.createElement('div');
+            versus.textContent = 'vs';
+            versus.style.cssText = 'font-size:0.72rem;color:var(--text-secondary, #9ca3af);text-align:center;';
+            const denSel = document.createElement('select');
+            denSel.id = 'cmpIndexDenSel';
+            denSel.style.cssText = numSel.style.cssText;
+            idxRow.appendChild(numSel);
+            idxRow.appendChild(versus);
+            idxRow.appendChild(denSel);
+            idxWrap.appendChild(idxRow);
+
+            const idxHelp = document.createElement('div');
+            idxHelp.id = 'cmpIndexSourceHelp';
+            idxHelp.style.cssText = 'font-size:0.68rem;color:var(--text-secondary, #9ca3af);margin-top:0.35rem;line-height:1.3;';
+            idxHelp.textContent = 'Default: Profile vs Gen Pop. Select runs above to add them as options.';
+            idxWrap.appendChild(idxHelp);
+
+            const onPickerChange = function() {
+                _comparisonRunsState.indexNumKey = numSel.value || null;
+                _comparisonRunsState.indexDenKey = denSel.value || null;
+                try { _cmpApplyIndexSourcePicker(); } catch (e) { console.warn('[compare] picker change failed', e); }
+            };
+            numSel.addEventListener('change', onPickerChange);
+            denSel.addEventListener('change', onPickerChange);
+            pop.appendChild(idxWrap);
+
             if (available.length === 0) {
                 const empty = document.createElement('div');
                 empty.style.cssText = 'font-size:0.8rem;color:var(--text-secondary, #9ca3af);padding:0.5rem 0;';
@@ -56495,6 +56758,10 @@
             pop.style.top = top + 'px';
 
             setTimeout(() => { document.addEventListener('mousedown', _compareDateRangesDocHandler, true); }, 0);
+
+            // Populate the index-source picker now that the <select>s
+            // are in the DOM and the current selectedKeys are known.
+            try { _refreshIndexSourcePickerOptions(); } catch (e) { console.warn('[compare] open picker refresh failed', e); }
         }
 
         // Mutates each demographic Chart.js instance, layering selected runs
@@ -56663,11 +56930,18 @@
         function _cmpInstallTableObservers() {
             if (_cmpTableObservers) return;
             _cmpTableObservers = [];
+            // The Location tab has three independent list containers
+            // (`locationList` over-indexing, `locationListBottom`
+            // under-indexing, `locationListAll` complete list). The
+            // earlier `locationsContainer`/`locationsList` IDs don't
+            // exist anywhere in the DOM, which is why comparison
+            // columns never showed up on Location.
             const targets = [
                 'behavioralGrid',
                 'interestsGrid',
-                'locationsContainer',
-                'locationsList'
+                'locationList',
+                'locationListBottom',
+                'locationListAll'
             ];
             targets.forEach(id => {
                 const el = document.getElementById(id);
@@ -56710,24 +56984,58 @@
             return out;
         }
 
-        // Same idea for the flat interests array.
+        // parsed.interests from parseAllData() is an OBJECT keyed by
+        // interest name -> { pct, index, genPopPct }. Convert to a flat
+        // lookup keyed by normalized name. Older callers may pass an
+        // array; handle both shapes.
         function _cmpBuildInterestsLookup(parsed) {
             const out = {};
-            const items = (parsed && parsed.interests && Array.isArray(parsed.interests)) ? parsed.interests : [];
-            items.forEach(it => {
-                if (!it || !it.name) return;
-                out[_cmpNormName(it.name)] = it;
-            });
+            const src = parsed && parsed.interests;
+            if (!src) return out;
+            if (Array.isArray(src)) {
+                src.forEach(it => {
+                    if (!it || !it.name) return;
+                    out[_cmpNormName(it.name)] = {
+                        name: it.name,
+                        pct: it.pct || 0,
+                        index: it.index || 0,
+                        genPopPct: it.genPopPct || 0,
+                        projection: it.projection || 0
+                    };
+                });
+            } else if (typeof src === 'object') {
+                for (const [name, data] of Object.entries(src)) {
+                    if (!name || !data) continue;
+                    out[_cmpNormName(name)] = {
+                        name: name,
+                        pct: data.pct || 0,
+                        index: data.index || 0,
+                        genPopPct: data.genPopPct || 0,
+                        projection: data.projection || 0
+                    };
+                }
+            }
             return out;
         }
 
-        // Same idea for locations.
+        // parsed.locations is an array of { name, pct, index, genPopPct,
+        // projection } produced by parseAllData(). Canonicalize the DMA
+        // name (via matchCanonicalDMA when present) so "Phoenix" and
+        // "Phoenix (Prescott), AZ" land in the same bucket the way the
+        // live renderer does.
         function _cmpBuildLocationsLookup(parsed) {
             const out = {};
             const items = (parsed && parsed.locations && Array.isArray(parsed.locations)) ? parsed.locations : [];
             items.forEach(it => {
                 if (!it || !it.name) return;
-                out[_cmpNormName(it.name)] = it;
+                const norm = _cmpNormName(it.name);
+                out[norm] = it;
+                try {
+                    if (typeof matchCanonicalDMA === 'function') {
+                        const canon = matchCanonicalDMA(it.name);
+                        if (canon) out[_cmpNormName(canon)] = it;
+                    }
+                } catch (_) {}
             });
             return out;
         }
@@ -56756,7 +57064,7 @@
             if (!document.getElementById('cmpHideGenpopStyle')) {
                 const s = document.createElement('style');
                 s.id = 'cmpHideGenpopStyle';
-                s.textContent = '.cmp-hide-genpop .genpop-col, .cmp-hide-genpop .location-genpop { display: none !important; }';
+                s.textContent = '.cmp-hide-genpop .genpop-col, .cmp-hide-genpop .location-genpop, .cmp-hide-genpop .cw-gp-col { display: none !important; }';
                 document.head.appendChild(s);
             }
 
@@ -56891,57 +57199,125 @@
                 }
             }
 
-            // -------- LOCATION (Regional Breakdown table) ---------------
-            // The DMA table uses .location-row elements inside
-            // #locationsContainer / #locationsList. We match by canonical
-            // DMA name when available, fall back to plain name match.
-            const locContainers = [document.getElementById('locationsContainer'), document.getElementById('locationsList')]
-                .filter(Boolean);
-            if (locContainers.length > 0) {
-                locContainers.forEach(c => {
-                    _cmpClearInjected(c);
-                    if (series.length === 0) c.classList.remove('cmp-hide-genpop');
-                });
-                if (series.length > 0) {
-                    const locLookups = series.map(s => ({
-                        label: s.label,
-                        map: _cmpBuildLocationsLookup(s.parsed)
-                    }));
-                    locContainers.forEach(container => {
-                        container.classList.toggle('cmp-hide-genpop', hideGP);
-                        // Inject header (location tables often use a
-                        // .location-header-row or first row with column
-                        // titles — try both).
-                        const header = container.querySelector('.location-header-row, .locations-header-row');
-                        if (header) {
-                            const gpHeader = header.querySelector('.genpop-col') || header.querySelector('.location-genpop');
-                            series.forEach((entry, idx) => {
-                                const span = document.createElement('span');
-                                span.className = 'cmp-col-cell';
-                                span.textContent = entry.label || ('Run ' + (idx + 1));
-                                span.style.cssText = 'color:' + palette[idx % palette.length] + ';font-size:0.65rem;text-align:right;justify-self:end;font-weight:600;white-space:nowrap;';
-                                if (gpHeader) header.insertBefore(span, gpHeader);
-                                else header.appendChild(span);
-                            });
-                        }
-                        container.querySelectorAll('.location-row, .location-item').forEach(row => {
-                            const nameEl = row.querySelector('.location-name, .location-dma') || row.firstElementChild;
-                            if (!nameEl) return;
-                            const name = _cmpNormName(nameEl.textContent || '');
-                            const gpCell = row.querySelector('.genpop-col') || row.querySelector('.location-genpop');
-                            series.forEach((entry, idx) => {
-                                const match = locLookups[idx].map[name];
-                                const span = document.createElement('span');
-                                span.className = 'cmp-col-cell';
-                                span.style.cssText = 'color:' + palette[idx % palette.length] + ';font-size:0.78rem;text-align:right;justify-self:end;font-variant-numeric:tabular-nums;';
-                                span.textContent = match ? _cmpFmtPct(match.pct) : '—';
-                                if (gpCell) row.insertBefore(span, gpCell);
-                                else row.appendChild(span);
-                            });
-                        });
+            // -------- LOCATION (Over-/Under-Indexing + All DMAs) --------
+            // Each Location table is a flat <div id="..."> populated by
+            // renderLocationTable() with .location-row elements (5-col
+            // CSS grid for over/under, 7-col for "all"). The header is a
+            // sibling .location-row.header element ABOVE the list, not a
+            // child of it. We inject comparison columns into both, and
+            // override grid-template-columns so the new cells get sized
+            // correctly instead of overflowing.
+            const locSections = [
+                // id          headerSelector                       baseGrid (no cmp)          isAll
+                { listId: 'locationList',       baseGrid: '58px minmax(0, 1fr) 44px 80px 58px', isAll: false },
+                { listId: 'locationListBottom', baseGrid: '58px minmax(0, 1fr) 44px 80px 58px', isAll: false },
+                { listId: 'locationListAll',    baseGrid: '58px minmax(0, 1fr) 44px 80px 72px 72px 58px', isAll: true }
+            ];
+            locSections.forEach(sec => {
+                const list = document.getElementById(sec.listId);
+                if (!list) return;
+                // Find the matching header row: walk up from the list to
+                // its parent (a .location-table div), then find the
+                // .location-row.header sibling. Falls back to a query
+                // over the whole document scoped to the same parent.
+                const parent = list.parentElement;
+                const header = parent
+                    ? parent.querySelector('.location-row.header')
+                    : null;
+
+                // Clear any prior injection before re-applying.
+                if (header) _cmpClearInjected(header);
+                _cmpClearInjected(list);
+
+                if (series.length === 0) {
+                    // Reset any inline grid override back to defaults so
+                    // the CSS rule wins again.
+                    if (header) header.style.gridTemplateColumns = '';
+                    list.querySelectorAll('.location-row').forEach(r => { r.style.gridTemplateColumns = ''; });
+                    if (parent) parent.classList.remove('cmp-hide-genpop');
+                    return;
+                }
+
+                // Build new grid: insert N×60px before the index column.
+                // For the "All" table we ALSO honor the Gen Pop hide toggle
+                // by dropping the two GP columns when requested.
+                const cmpColsCss = series.map(() => '60px').join(' ');
+                let newGrid;
+                if (sec.isAll) {
+                    const gpCols = hideGP ? '' : ' 72px 72px';
+                    newGrid = '58px minmax(0, 1fr) 44px 80px' + gpCols + ' ' + cmpColsCss + ' 58px';
+                } else {
+                    // Over/under tables have no native Gen Pop column,
+                    // so the hideGP toggle has nothing to hide here.
+                    newGrid = '58px minmax(0, 1fr) 44px 80px ' + cmpColsCss + ' 58px';
+                }
+                if (parent) parent.classList.toggle('cmp-hide-genpop', hideGP);
+
+                // Per-run lookups already built earlier? Rebuild here
+                // scoped to this iteration to keep it self-contained.
+                const locLookups = series.map(s => ({
+                    label: s.label,
+                    map: _cmpBuildLocationsLookup(s.parsed)
+                }));
+
+                // Header injection — the index column lives at the end,
+                // so we insert comparison header cells just before the
+                // .index-col span. If no .index-col is found, append.
+                if (header) {
+                    header.style.gridTemplateColumns = newGrid;
+                    const idxHeader = header.querySelector('.index-col');
+                    series.forEach((entry, idx) => {
+                        const span = document.createElement('span');
+                        span.className = 'cmp-col-cell';
+                        span.textContent = entry.label || ('Run ' + (idx + 1));
+                        span.style.cssText = 'color:' + palette[idx % palette.length] + ';font-size:0.65rem;text-align:right;justify-self:end;font-weight:600;white-space:nowrap;';
+                        if (idxHeader) header.insertBefore(span, idxHeader);
+                        else header.appendChild(span);
                     });
                 }
-            }
+
+                // Data row injection.
+                list.querySelectorAll('.location-row').forEach(row => {
+                    row.style.gridTemplateColumns = newGrid;
+                    // Row name lives in data-name attribute (lowercased
+                    // by renderLocationTable) OR the 2nd <span>.
+                    const dataName = row.dataset && row.dataset.name;
+                    const fallbackName = (row.children && row.children[1] && row.children[1].textContent) || '';
+                    const rawName = (dataName || fallbackName || '').trim();
+                    const norm = _cmpNormName(rawName);
+                    // Try canonical DMA fold as well so "Phoenix" still
+                    // matches "Phoenix (Prescott), AZ" in a prior run.
+                    let canonNorm = '';
+                    try {
+                        if (typeof matchCanonicalDMA === 'function') {
+                            const c = matchCanonicalDMA(rawName);
+                            if (c) canonNorm = _cmpNormName(c);
+                        }
+                    } catch (_) {}
+                    const idxCell = row.querySelector('.index-col');
+                    series.forEach((entry, idx) => {
+                        const lookup = locLookups[idx].map;
+                        const match = lookup[norm] || (canonNorm && lookup[canonNorm]);
+                        const span = document.createElement('span');
+                        span.className = 'cmp-col-cell';
+                        span.style.cssText = 'color:' + palette[idx % palette.length] + ';font-size:0.78rem;text-align:right;justify-self:end;font-variant-numeric:tabular-nums;';
+                        span.textContent = match ? _cmpFmtPct(match.pct) : '—';
+                        if (match && match.pct != null) {
+                            span.title = entry.label + ' • ' + rawName + ' • ' + _cmpFmtPct(match.pct);
+                        }
+                        if (idxCell) row.insertBefore(span, idxCell);
+                        else row.appendChild(span);
+                    });
+                });
+            });
+
+            // After all column injection is done:
+            //   1. Stamp per-row pct attributes so the picker can read them
+            //   2. Refresh the popover picker options (in case it's open)
+            //   3. Apply the picker to recompute Index cells
+            try { _cmpStampRowPcts(series); } catch (e) { console.warn('[compare] stamp pcts failed', e); }
+            try { _refreshIndexSourcePickerOptions(); } catch (e) { console.warn('[compare] picker refresh failed', e); }
+            try { _cmpApplyIndexSourcePicker(); } catch (e) { console.warn('[compare] index picker apply failed', e); }
         }
 
         async function showProfileDeltasModal(subject, sameSubjectRuns) {
