@@ -35663,7 +35663,19 @@
 
             // Curves — render as filled area paths using monotone-cubic
             // approximation via the smooth-path helper.
+            // Track peak labels as bounding-box rectangles so collision
+            // detection can use real text width + height (not just a
+            // single x,y point like the prior heuristic).
             var _jiqPeakLabels = [];
+            // Reserve the "🎬 THEATRICAL RELEASE" badge area at the top
+            // of the chart so peak labels never overlap it.
+            var releaseBadgeHalfW = 70;
+            _jiqPeakLabels.push({
+                l: relX - releaseBadgeHalfW,
+                t: padT - 18,
+                r: relX + releaseBadgeHalfW,
+                b: padT + 4,
+            });
             curves.forEach(function(c) {
                 var prop = props[c.property] || {};
                 var color = c.color || prop.color || '#5b6cff';
@@ -35694,19 +35706,80 @@
                 parts.push('<path d="' + areaD + '" fill="url(#' + gradId + ')" stroke="none"/>');
                 parts.push('<path d="' + d + '" fill="none" stroke="' + color + '" stroke-width="2.5" stroke-linecap="round"/>');
 
-                // Peak label — find the max-y point, then offset to avoid overlap
+                // Peak label placement — find the max-y point on the curve
+                // and pick the first non-overlapping candidate position
+                // (above / below / left / right / further offsets) so
+                // multiple curves whose peaks land near each other don't
+                // stack their labels into a pile or run off-chart.
                 var peak = pts.reduce(function(best, p) {
                     return (p.y < best.y) ? p : best;
                 }, pts[0]);
-                var labelY = peak.y - 14;
-                _jiqPeakLabels.forEach(function(prev) {
-                    if (Math.abs(peak.x - prev.x) < 120 && Math.abs(labelY - prev.y) < 16) {
-                        labelY = prev.y - 16;
+                var labelText = (prop.icon || '◆') + ' ' + (prop.name || c.property);
+                var labelW    = labelText.length * 6.0 + 6;
+                var labelH    = 14;
+                var pad       = 4;     // breathing room between adjacent labels
+                var minTop    = padT + 4; // never let label cross the chart top
+                var maxBot    = H - padB - 4; // or the baseline
+                // Candidate positions, ordered by editorial preference.
+                // Each `y` is the text BASELINE; bounding box uses (y-12, y+2).
+                var cands = [
+                    { x: peak.x,                y: peak.y - 14, anchor: 'middle' },
+                    { x: peak.x,                y: peak.y + 22, anchor: 'middle' },
+                    { x: peak.x - 10,           y: peak.y - 2,  anchor: 'end'    },
+                    { x: peak.x + 10,           y: peak.y - 2,  anchor: 'start'  },
+                    { x: peak.x,                y: peak.y - 30, anchor: 'middle' },
+                    { x: peak.x,                y: peak.y + 38, anchor: 'middle' },
+                    { x: peak.x - 10,           y: peak.y + 14, anchor: 'end'    },
+                    { x: peak.x + 10,           y: peak.y + 14, anchor: 'start'  },
+                ];
+                function _bbox(c) {
+                    var l = c.anchor === 'middle' ? c.x - labelW / 2
+                          : c.anchor === 'end'    ? c.x - labelW
+                          : c.x;
+                    var r = l + labelW;
+                    return { l: l - pad, r: r + pad, t: c.y - labelH + 2, b: c.y + 2 };
+                }
+                function _overlap(a, b) {
+                    return !(a.r < b.l || a.l > b.r || a.b < b.t || a.t > b.b);
+                }
+                function _inBounds(bb) {
+                    return bb.t >= minTop && bb.b <= maxBot && bb.l >= 4 && bb.r <= W - 4;
+                }
+                var chosen = null;
+                for (var ci = 0; ci < cands.length; ci++) {
+                    var bb = _bbox(cands[ci]);
+                    if (!_inBounds(bb)) continue;
+                    var clash = false;
+                    for (var pi = 0; pi < _jiqPeakLabels.length; pi++) {
+                        if (_overlap(bb, _jiqPeakLabels[pi])) { clash = true; break; }
                     }
-                });
-                _jiqPeakLabels.push({ x: peak.x, y: labelY });
+                    if (!clash) { chosen = cands[ci]; break; }
+                }
+                if (!chosen) {
+                    // Fallback: force the first candidate, then nudge it up
+                    // in 14-px steps until it clears all reservations OR
+                    // hits the top guard. Worst-case label sits flush at
+                    // the chart top — still visible, just very close.
+                    chosen = cands[0];
+                    var bb2 = _bbox(chosen);
+                    var guard = 0;
+                    while (guard++ < 8) {
+                        var clash2 = false;
+                        for (var pj = 0; pj < _jiqPeakLabels.length; pj++) {
+                            if (_overlap(bb2, _jiqPeakLabels[pj])) { clash2 = true; break; }
+                        }
+                        if (!clash2 || bb2.t <= minTop) break;
+                        chosen = { x: chosen.x, y: chosen.y - 14, anchor: chosen.anchor };
+                        bb2 = _bbox(chosen);
+                    }
+                }
+                _jiqPeakLabels.push(_bbox(chosen));
                 parts.push('<circle cx="' + peak.x + '" cy="' + peak.y + '" r="4" fill="' + color + '" stroke="#fff" stroke-width="2"/>');
-                parts.push('<text x="' + peak.x + '" y="' + labelY + '" text-anchor="middle" fill="' + color + '" font-weight="700" font-size="10">' + _jiqEsc(prop.icon || '◆') + ' ' + _jiqEsc(prop.name || c.property) + '</text>');
+                parts.push('<text x="' + chosen.x + '" y="' + chosen.y + '"'
+                         +   ' text-anchor="' + chosen.anchor + '"'
+                         +   ' fill="' + color + '" font-weight="700" font-size="10"'
+                         +   ' paint-order="stroke" stroke="var(--bg-card)" stroke-width="3" stroke-linejoin="round">'
+                         +   _jiqEsc(labelText) + '</text>');
             });
 
             // Legend — bottom-left
@@ -56924,6 +56997,14 @@
         // mutate (sort, search, slice all trigger innerHTML rewrites).
         // ---------------------------------------------------------------
         let _cmpTableObservers = null;
+        // Set to true while applyComparisonRunsToCategoryTables is
+        // mutating the DOM, so the MutationObserver callbacks ignore
+        // their own self-induced churn. Without this, every apply
+        // queues a follow-up apply on the next animation frame, and
+        // the resulting infinite re-render loop steals focus from any
+        // open native <select> (e.g. the Index Against pickers) which
+        // looks like the dropdown is "spazzing out".
+        let _cmpApplyInProgress = false;
         function _cmpInstallTableObservers() {
             if (_cmpTableObservers) return;
             _cmpTableObservers = [];
@@ -56943,7 +57024,28 @@
             targets.forEach(id => {
                 const el = document.getElementById(id);
                 if (!el) return;
-                const obs = new MutationObserver(() => {
+                const obs = new MutationObserver((records) => {
+                    // Ignore self-induced mutations. Without this we'd
+                    // get an infinite apply loop because every apply
+                    // mutates the DOM (childList changes via
+                    // _cmpClearInjected + appendChild).
+                    if (_cmpApplyInProgress) return;
+                    // Extra guard: if every record only added/removed
+                    // .cmp-col-cell nodes, this mutation came from our
+                    // own code (probably a stale event left in the
+                    // queue after the in-progress flag was cleared).
+                    if (records && records.every(r => {
+                        const isCmpOnly = (nodeList) => {
+                            for (let i = 0; i < nodeList.length; i++) {
+                                const n = nodeList[i];
+                                if (n.nodeType === 1 && !n.classList.contains('cmp-col-cell')) return false;
+                            }
+                            return true;
+                        };
+                        return isCmpOnly(r.addedNodes) && isCmpOnly(r.removedNodes);
+                    })) {
+                        return;
+                    }
                     // Debounce: coalesce bursts into a single re-apply.
                     if (el._cmpReapplyPending) return;
                     el._cmpReapplyPending = true;
@@ -57048,6 +57150,13 @@
         }
 
         function applyComparisonRunsToCategoryTables() {
+            // Re-entrancy guard: if we're already inside an apply (an
+            // observer fired despite the in-progress flag, or a chained
+            // requestAnimationFrame raced), short-circuit. The pending
+            // observer would re-call us anyway once it clears.
+            if (_cmpApplyInProgress) return;
+            _cmpApplyInProgress = true;
+            try {
             const series = (_comparisonRunsState.selectedKeys || [])
                 .map(k => _comparisonRunsState.runsByKey[k])
                 .filter(Boolean);
@@ -57315,6 +57424,22 @@
             try { _cmpStampRowPcts(series); } catch (e) { console.warn('[compare] stamp pcts failed', e); }
             try { _refreshIndexSourcePickerOptions(); } catch (e) { console.warn('[compare] picker refresh failed', e); }
             try { _cmpApplyIndexSourcePicker(); } catch (e) { console.warn('[compare] index picker apply failed', e); }
+            } finally {
+                // Drain any mutation records that piled up during the
+                // apply so the observer doesn't fire AFTER we clear
+                // the flag and re-enter the loop. Defer the actual
+                // flag clear to the next frame so observers (which
+                // queue asynchronously) see the flag during drain.
+                requestAnimationFrame(() => {
+                    try {
+                        if (Array.isArray(_cmpTableObservers)) {
+                            _cmpTableObservers.forEach(o => { try { o.takeRecords(); } catch (_) {} });
+                        }
+                    } finally {
+                        _cmpApplyInProgress = false;
+                    }
+                });
+            }
         }
 
         async function showProfileDeltasModal(subject, sameSubjectRuns) {
