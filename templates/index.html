@@ -17661,17 +17661,31 @@
                                     </div>
                                 </div>
                                 <!-- Target ↔ Control delta strip, anchored below
-                                     the CONTROL row. Inner grid columns align
-                                     with the four KPI columns above (same
-                                     minmax(150px, 1fr) + 1rem gap, matching
-                                     1.5rem horizontal padding). -->
-                                <div id="bpiqDeltaRow" style="display: none; background: linear-gradient(135deg, rgba(200,230,0,0.06), rgba(168,85,247,0.06)); border: 1px dashed rgba(200,230,0,0.45); border-radius: 12px; padding: 0.6rem 1.5rem;">
-                                    <div style="font-size: 0.62rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.12em; text-align: center; margin-bottom: 0.35rem; font-weight: 700;">How Target outperforms Control — Relative % &amp; Percentage Points</div>
-                                    <div class="bpiq-kpi-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 1rem;">
-                                        <div id="bpiqKpiDeltaConsumers" style="text-align: center; font-size: 0.95rem; font-weight: 700;">—</div>
-                                        <div id="bpiqKpiDeltaPre"       style="text-align: center; font-size: 0.95rem; font-weight: 700;">—</div>
-                                        <div id="bpiqKpiDeltaPost"      style="text-align: center; font-size: 0.95rem; font-weight: 700;">—</div>
-                                        <div id="bpiqKpiDeltaLift"      style="text-align: center; font-size: 0.95rem; font-weight: 700;">—</div>
+                                     the CONTROL row. Tabular layout: row
+                                     labels on the left (Relative % / Pp)
+                                     × three metric columns. Drops the
+                                     empty Consumers column entirely
+                                     (cohorts are size-matched, so its
+                                     delta is always 0 and the cell
+                                     looked broken). -->
+                                <div id="bpiqDeltaRow" style="display: none; background: linear-gradient(135deg, rgba(200,230,0,0.06), rgba(168,85,247,0.06)); border: 1px dashed rgba(200,230,0,0.45); border-radius: 12px; padding: 0.85rem 1.5rem 0.95rem;">
+                                    <div style="font-size: 0.66rem; color: #c8e600; text-transform: uppercase; letter-spacing: 0.12em; text-align: center; margin-bottom: 0.55rem; font-weight: 700;">Target vs. Control — Incremental Outperformance</div>
+                                    <div style="display: grid; grid-template-columns: minmax(110px, auto) repeat(3, minmax(120px, 1fr)); gap: 0.35rem 1rem; align-items: center;">
+                                        <!-- Column header row -->
+                                        <div></div>
+                                        <div style="text-align: center; font-size: 0.6rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.08em; font-weight: 700;">Pre-Engagement</div>
+                                        <div style="text-align: center; font-size: 0.6rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.08em; font-weight: 700;">Post-Engagement</div>
+                                        <div style="text-align: center; font-size: 0.6rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.08em; font-weight: 700;">Brand Lift</div>
+                                        <!-- Relative % row -->
+                                        <div style="font-size: 0.65rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.06em; font-weight: 700; text-align: right; padding-right: 0.25rem;" title="Relative lift over Control: (target − control) ÷ |control| × 100">Relative %</div>
+                                        <div id="bpiqKpiDeltaPreRel"  style="text-align: center; font-size: 1.1rem; font-weight: 800;">—</div>
+                                        <div id="bpiqKpiDeltaPostRel" style="text-align: center; font-size: 1.1rem; font-weight: 800;">—</div>
+                                        <div id="bpiqKpiDeltaLiftRel" style="text-align: center; font-size: 1.1rem; font-weight: 800;">—</div>
+                                        <!-- Percentage-points row -->
+                                        <div style="font-size: 0.65rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.06em; font-weight: 700; text-align: right; padding-right: 0.25rem;" title="Absolute lift over Control in percentage points: target − control">Percentage Points</div>
+                                        <div id="bpiqKpiDeltaPrePp"  style="text-align: center; font-size: 0.92rem; font-weight: 700; opacity: 0.88;">—</div>
+                                        <div id="bpiqKpiDeltaPostPp" style="text-align: center; font-size: 0.92rem; font-weight: 700; opacity: 0.88;">—</div>
+                                        <div id="bpiqKpiDeltaLiftPp" style="text-align: center; font-size: 0.92rem; font-weight: 700; opacity: 0.88;">—</div>
                                     </div>
                                 </div>
                             </div>
@@ -30047,44 +30061,26 @@
                         if (control == null || !isFinite(control) || control === 0) return null;
                         return (target - control) / Math.abs(control) * 100;
                     };
-                    // Stacked delta cell: tiny per-cell label on top,
-                    // relative-% delta in the middle, optional pp delta on
-                    // the bottom. Each piece is independently optional so
-                    // we can render the Consumers cell label-only when
-                    // both cohorts are sized identically.
-                    var _bpiqDeltaCell = function(label, relativeHtml, ppHtml) {
-                        var out = '<div style="font-size:0.55rem;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.08em;font-weight:600;margin-bottom:0.18rem;">'
-                                + label + '</div>';
-                        if (relativeHtml) {
-                            out += '<div style="line-height:1.15;">' + relativeHtml + '</div>';
-                        }
-                        if (ppHtml) {
-                            out += '<div style="font-size:0.78rem;font-weight:700;margin-top:0.12rem;line-height:1.15;">' + ppHtml + '</div>';
-                        }
-                        return out;
-                    };
-                    document.getElementById('bpiqKpiDeltaConsumers').innerHTML =
-                        _bpiqDeltaCell('Consumers', '', '');
-                    document.getElementById('bpiqKpiDeltaPre').innerHTML =
-                        _bpiqDeltaCell(
-                            'Pre-Engagement Δ',
-                            _bpiqFmtDelta(_bpiqRelDelta(prePct, gpPrePct), '%'),
-                            _bpiqFmtPp(prePct - gpPrePct)
-                        );
-                    document.getElementById('bpiqKpiDeltaPost').innerHTML =
-                        _bpiqDeltaCell(
-                            'Post-Engagement Δ',
-                            _bpiqFmtDelta(_bpiqRelDelta(postPct, gpPostPct), '%'),
-                            _bpiqFmtPp(postPct - gpPostPct)
-                        );
+                    // Pre-engagement delta — Target − Control (rel & pp)
+                    document.getElementById('bpiqKpiDeltaPreRel').innerHTML =
+                        _bpiqFmtDelta(_bpiqRelDelta(prePct, gpPrePct), '%');
+                    document.getElementById('bpiqKpiDeltaPrePp').innerHTML =
+                        _bpiqFmtPp(prePct - gpPrePct);
+                    // Post-engagement delta
+                    document.getElementById('bpiqKpiDeltaPostRel').innerHTML =
+                        _bpiqFmtDelta(_bpiqRelDelta(postPct, gpPostPct), '%');
+                    document.getElementById('bpiqKpiDeltaPostPp').innerHTML =
+                        _bpiqFmtPp(postPct - gpPostPct);
+                    // Brand lift delta — Target's lift % minus Control's
+                    // lift %, plus the absolute pp difference of the
+                    // pre→post delta on each side (additive in
+                    // engagement-rate units, the cleanest single read).
                     var _tLift = (totals.lift_pct_users  != null && isFinite(totals.lift_pct_users))  ? totals.lift_pct_users  : null;
                     var _cLift = (cg.control_lift_pct_users != null && isFinite(cg.control_lift_pct_users)) ? cg.control_lift_pct_users : null;
-                    document.getElementById('bpiqKpiDeltaLift').innerHTML =
-                        _bpiqDeltaCell(
-                            'Lift Δ',
-                            _bpiqFmtDelta(_bpiqRelDelta(_tLift, _cLift), '%'),
-                            _bpiqFmtPp((postPct - prePct) - (gpPostPct - gpPrePct))
-                        );
+                    document.getElementById('bpiqKpiDeltaLiftRel').innerHTML =
+                        _bpiqFmtDelta(_bpiqRelDelta(_tLift, _cLift), '%');
+                    document.getElementById('bpiqKpiDeltaLiftPp').innerHTML =
+                        _bpiqFmtPp((postPct - prePct) - (gpPostPct - gpPrePct));
                 }
                 // Net Brand Lift card
                 var brandLift = totals.lift_pct_users;
