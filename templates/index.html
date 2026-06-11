@@ -56127,6 +56127,15 @@
             };
             _updateCompareDateRangesButtonBadge();
             _closeCompareDateRangesPopover();
+            // Switching profiles wipes the comparison state; also wipe
+            // any injected sample-size / projection sub-lines so the
+            // header stat cards on the new profile aren't stuck with
+            // the previous profile's data-cut blocks below them.
+            try {
+                if (typeof applyComparisonRunsToHeaderStats === 'function') {
+                    applyComparisonRunsToHeaderStats();
+                }
+            } catch (_) {}
         }
 
         // Toggle whether the Gen Pop baseline bar/column is layered into
@@ -57405,6 +57414,78 @@
             root.querySelectorAll('.cmp-col-cell').forEach(el => el.remove());
         }
 
+        // Sample-size + US-projection comparison block injected under the
+        // two header stat cards on the Demographics tab AND the two
+        // metric cards on the Insights tab. When data cuts are active,
+        // each selected run's sampleSize / projectedUS appears as a
+        // colored sub-line beneath the primary number so users can see
+        // cohort scale differences (e.g. Avid Fan = 300K vs Profile =
+        // 10M) without having to do mental math.
+        //
+        // Behavior:
+        //   - No data cuts selected -> remove every .cmp-stat-list block
+        //     so the cards return to their single-value state.
+        //   - 1+ data cuts selected -> render one row per cut under each
+        //     stat card, colored to match its bar / column color.
+        //   - Category Norm is treated as just another data cut: its
+        //     sampleSize is the total panel observations behind the
+        //     norm (sum of every profile in the category), so it tells
+        //     you the cohort weight backing the average.
+        function applyComparisonRunsToHeaderStats() {
+            const series = (_comparisonRunsState.selectedKeys || [])
+                .map(k => _comparisonRunsState.runsByKey[k])
+                .filter(Boolean);
+
+            const targets = [
+                { sampleId: 'dashSampleSize',     projId: 'dashProjectedUS',     cardSel: '.stat-card' },
+                { sampleId: 'insightsSampleSize', projId: 'insightsProjectedUS', cardSel: '.metric-card' }
+            ];
+
+            const _fmt = (n) => {
+                if (n == null || !isFinite(n)) return '—';
+                if (typeof formatNumber === 'function') return formatNumber(n);
+                return Number(n).toLocaleString();
+            };
+
+            const buildList = (which) => {
+                const wrap = document.createElement('div');
+                wrap.className = 'cmp-stat-list';
+                wrap.style.cssText = 'margin-top:0.5rem;display:flex;flex-direction:column;gap:0.18rem;padding-top:0.4rem;border-top:1px dashed var(--border-color, rgba(255,255,255,0.08));';
+                series.forEach((entry, idx) => {
+                    const color = _COMPARISON_PALETTE[idx % _COMPARISON_PALETTE.length];
+                    const row = document.createElement('div');
+                    row.style.cssText = 'display:flex;justify-content:space-between;align-items:baseline;gap:0.5rem;font-size:0.72rem;line-height:1.25;';
+                    const lbl = document.createElement('span');
+                    lbl.textContent = entry.label || 'Run';
+                    lbl.title = entry.label || '';
+                    lbl.style.cssText = 'color:' + color + ';font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:60%;';
+                    const raw = which === 'sample'
+                        ? (entry.parsed && entry.parsed.sampleSize)
+                        : (entry.parsed && entry.parsed.projectedUS);
+                    const n = (typeof raw === 'number' && isFinite(raw)) ? raw : 0;
+                    const val = document.createElement('span');
+                    val.textContent = (which === 'sample' ? 'n=' : '') + _fmt(n);
+                    val.style.cssText = 'color:var(--text-primary, #e6e6e6);font-variant-numeric:tabular-nums;font-weight:500;';
+                    row.appendChild(lbl);
+                    row.appendChild(val);
+                    wrap.appendChild(row);
+                });
+                return wrap;
+            };
+
+            targets.forEach(t => {
+                const sampleEl = document.getElementById(t.sampleId);
+                const projEl = document.getElementById(t.projId);
+                const sampleCard = sampleEl && sampleEl.closest(t.cardSel);
+                const projCard = projEl && projEl.closest(t.cardSel);
+                if (sampleCard) sampleCard.querySelectorAll(':scope > .cmp-stat-list').forEach(n => n.remove());
+                if (projCard) projCard.querySelectorAll(':scope > .cmp-stat-list').forEach(n => n.remove());
+                if (series.length === 0) return;
+                if (sampleCard) sampleCard.appendChild(buildList('sample'));
+                if (projCard) projCard.appendChild(buildList('proj'));
+            });
+        }
+
         function applyComparisonRunsToCategoryTables() {
             // Re-entrancy guard: if we're already inside an apply (an
             // observer fired despite the in-progress flag, or a chained
@@ -57693,9 +57774,13 @@
             //   1. Stamp per-row pct attributes so the picker can read them
             //   2. Refresh the popover picker options (in case it's open)
             //   3. Apply the picker to recompute Index cells
+            //   4. Update the header / insights sample-size + projection
+            //      stat cards so users can see how each data cut's
+            //      cohort compares to the primary profile at a glance.
             try { _cmpStampRowPcts(series); } catch (e) { console.warn('[compare] stamp pcts failed', e); }
             try { _refreshIndexSourcePickerOptions(); } catch (e) { console.warn('[compare] picker refresh failed', e); }
             try { _cmpApplyIndexSourcePicker(); } catch (e) { console.warn('[compare] index picker apply failed', e); }
+            try { applyComparisonRunsToHeaderStats(); } catch (e) { console.warn('[compare] header stats failed', e); }
             } finally {
                 // Drain any mutation records that piled up during the
                 // apply so the observer doesn't fire AFTER we clear
@@ -71380,6 +71465,18 @@
             document.getElementById('insightsProjectedUS').textContent = formatNumber(data.projectedUS || 0);
             document.getElementById('insightsDateRange').textContent = currentProfileData?.dateRange || data.dateRange || 'Not specified';
             document.getElementById('totalDataPoints').textContent = allItems.length.toLocaleString();
+
+            // If data cuts are active, layer their sample-size +
+            // projection sub-lines under the metric cards so the
+            // Insights tab matches the Demographics tab. Re-rendering
+            // insights wipes any prior injected blocks (the textContent
+            // assignments above don't remove siblings, but new ones may
+            // shadow), so always re-apply here.
+            try {
+                if (typeof applyComparisonRunsToHeaderStats === 'function') {
+                    applyComparisonRunsToHeaderStats();
+                }
+            } catch (_) {}
             
             // Demographic highlights - top over/under indexing demographics
             const demoHighlightsData = [];
