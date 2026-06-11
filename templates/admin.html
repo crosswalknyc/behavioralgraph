@@ -1497,6 +1497,33 @@
                 </div>
             </div>
 
+            <!-- Profile Selector Cache (full S3 re-scan) -->
+            <div class="card" style="margin-top: 1rem;">
+                <div class="card-header">
+                    <h2>🗂️ Profile Selector Cache</h2>
+                </div>
+                <div style="padding: 1rem; background: var(--bg-input); border-radius: 8px;">
+                    <p style="margin: 0 0 0.75rem 0; color: var(--text-secondary); font-size: 0.85rem;">
+                        Rebuilds the profile-selector cache from a full scan of every CSV at the root
+                        of <code>s3://dashboard-inputs/</code>. Use this when a newly uploaded profile
+                        isn't showing up in the sidebar selector. Typically takes 30 seconds to a few
+                        minutes depending on how many profiles are in the bucket.
+                    </p>
+                    <div style="display: flex; gap: 0.6rem; align-items: center; flex-wrap: wrap;">
+                        <button id="rebuildProfileCacheBtn" class="btn btn-secondary" onclick="rebuildProfileCache()">
+                            🗂️ Rebuild Profile Selector Cache
+                        </button>
+                        <span id="profileCacheRebuildStatus" style="font-size: 0.8rem; color: var(--text-secondary);"></span>
+                    </div>
+                    <div id="profileCacheRebuildProgressWrap" style="display: none; margin-top: 0.75rem;">
+                        <div style="background: var(--bg-secondary, #1f2937); border-radius: 6px; overflow: hidden; height: 8px;">
+                            <div id="profileCacheRebuildProgressBar" style="background: var(--accent, #3b82f6); height: 100%; width: 0%; transition: width 0.3s ease;"></div>
+                        </div>
+                        <div id="profileCacheRebuildProgressDetail" style="margin-top: 0.4rem; font-size: 0.78rem; color: var(--text-secondary);"></div>
+                    </div>
+                </div>
+            </div>
+
             <!-- Category Norms (weighted-avg BP across all profiles per category) -->
             <div class="card" style="margin-top: 1rem;">
                 <div class="card-header">
@@ -6531,6 +6558,143 @@
                 if (btn) btn.disabled = false;
             }
         }
+
+        // --- Profile Selector Cache (admin button + progress poll) ----------
+        let _profileCacheRebuildPollTimer = null;
+
+        function _setProfileCacheRebuildBusy(busy) {
+            const btn = document.getElementById('rebuildProfileCacheBtn');
+            if (btn) btn.disabled = !!busy;
+            const wrap = document.getElementById('profileCacheRebuildProgressWrap');
+            if (wrap) wrap.style.display = busy ? 'block' : 'none';
+        }
+
+        function _renderProfileCacheRebuildStatus(status) {
+            const statusEl = document.getElementById('profileCacheRebuildStatus');
+            const bar = document.getElementById('profileCacheRebuildProgressBar');
+            const detail = document.getElementById('profileCacheRebuildProgressDetail');
+            if (!status) return;
+            if (status.running) {
+                // No file-level progress from the underlying scan, so show
+                // an indeterminate-style pulse by sliding the bar back and
+                // forth via timestamp modulo.
+                if (bar) {
+                    const t = (Date.now() / 30) % 200;
+                    const w = t > 100 ? (200 - t) : t;
+                    bar.style.width = Math.max(15, w) + '%';
+                }
+                if (statusEl) statusEl.textContent = status.last_message || 'Running…';
+            } else {
+                if (bar) bar.style.width = status.error ? '100%' : '100%';
+                if (statusEl) {
+                    if (status.error) {
+                        statusEl.textContent = 'Failed: ' + status.error;
+                        statusEl.style.color = '#f92672';
+                    } else {
+                        statusEl.textContent = status.last_message || 'Idle';
+                        statusEl.style.color = '';
+                    }
+                }
+            }
+            if (detail) {
+                const parts = [];
+                if (status.files_total) parts.push(status.files_total.toLocaleString() + ' profiles');
+                if (status.started_at) {
+                    const dt = new Date(status.started_at);
+                    if (!isNaN(dt)) parts.push('started ' + dt.toLocaleTimeString());
+                }
+                detail.textContent = parts.join(' · ');
+            }
+        }
+
+        async function _pollProfileCacheRebuildStatus() {
+            try {
+                const r = await fetch('/api/admin/rebuild-profile-cache-status', { credentials: 'same-origin' });
+                const j = await r.json();
+                if (!j.success) return;
+                const status = j.status || {};
+                _renderProfileCacheRebuildStatus(status);
+                if (status.running) {
+                    _profileCacheRebuildPollTimer = setTimeout(_pollProfileCacheRebuildStatus, 1500);
+                } else {
+                    _setProfileCacheRebuildBusy(false);
+                    setTimeout(() => {
+                        const wrap = document.getElementById('profileCacheRebuildProgressWrap');
+                        if (wrap && !status.running) wrap.style.display = 'none';
+                    }, 5000);
+                    if (status.error) {
+                        showToast('❌ Profile cache rebuild failed: ' + status.error, true);
+                    } else if (status.last_message) {
+                        showToast('✅ ' + status.last_message);
+                        // Bust the session/storage cache for /api/jobs so
+                        // the sidebar selector picks up the new state on
+                        // next render without a hard reload.
+                        try {
+                            sessionStorage.removeItem('bg_jobs_session_cache_v2');
+                            sessionStorage.removeItem('bg_jobs_session_cache');
+                        } catch (_) {}
+                    }
+                }
+            } catch (e) {
+                _profileCacheRebuildPollTimer = setTimeout(_pollProfileCacheRebuildStatus, 3000);
+            }
+        }
+
+        async function rebuildProfileCache() {
+            const ok = confirm(
+                'Rebuild profile selector cache?\n\n' +
+                'Walks every CSV at the root of s3://dashboard-inputs/ and rebuilds the profile-' +
+                'selector entries from scratch. Takes 30 seconds to a few minutes depending on how ' +
+                'many profiles are in the bucket. Newly uploaded profiles will appear in the sidebar ' +
+                'as soon as this completes.'
+            );
+            if (!ok) return;
+            if (_profileCacheRebuildPollTimer) {
+                clearTimeout(_profileCacheRebuildPollTimer);
+                _profileCacheRebuildPollTimer = null;
+            }
+            _setProfileCacheRebuildBusy(true);
+            const statusEl = document.getElementById('profileCacheRebuildStatus');
+            if (statusEl) {
+                statusEl.textContent = 'Starting…';
+                statusEl.style.color = '';
+            }
+            try {
+                const r = await fetch('/api/admin/rebuild-profile-cache', {
+                    method: 'POST',
+                    credentials: 'same-origin',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({})
+                });
+                const j = await r.json();
+                if (!r.ok || !j.success) {
+                    throw new Error(j.error || 'Failed to start rebuild');
+                }
+                _renderProfileCacheRebuildStatus(j.status || {});
+                _profileCacheRebuildPollTimer = setTimeout(_pollProfileCacheRebuildStatus, 1200);
+            } catch (e) {
+                _setProfileCacheRebuildBusy(false);
+                if (statusEl) {
+                    statusEl.textContent = 'Failed to start: ' + e.message;
+                    statusEl.style.color = '#f92672';
+                }
+                showToast('❌ ' + e.message, true);
+            }
+        }
+
+        // Resume any in-flight rebuild on page load.
+        document.addEventListener('DOMContentLoaded', () => {
+            fetch('/api/admin/rebuild-profile-cache-status', { credentials: 'same-origin' })
+                .then(r => r.ok ? r.json() : null)
+                .then(j => {
+                    if (j && j.success && j.status && j.status.running) {
+                        _setProfileCacheRebuildBusy(true);
+                        _renderProfileCacheRebuildStatus(j.status);
+                        _profileCacheRebuildPollTimer = setTimeout(_pollProfileCacheRebuildStatus, 1500);
+                    }
+                })
+                .catch(() => {});
+        });
 
         // --- Category Norms (admin button + progress poll) -----------------
         let _categoryNormsPollTimer = null;
