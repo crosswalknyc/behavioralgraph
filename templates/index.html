@@ -55746,13 +55746,12 @@
                         html += _profileItemHtml(first, searchLabel, { skipLockIcon: true });
                     } else {
                         html += `
-                        <div class="profile-cat-item ${subjectExpanded ? 'open' : ''}" data-dash-subject="${escapeAttr(subj)}" onclick="event.stopPropagation(); toggleDashSubject(this)" style="font-weight: 500; display: flex; align-items: center; gap: 0.5rem;">
-                            <span class="cat-arrow">▸</span>
+                        <div class="profile-cat-item ${subjectExpanded ? 'open' : ''}" data-dash-subject="${escapeAttr(subj)}" onclick="event.stopPropagation(); toggleDashSubject(this)" style="font-size: 0.7rem; display: flex; align-items: center; gap: 0.5rem;">
                             <span style="font-size: 0.9rem; opacity: 0.7;">${icon}</span>
                             <span class="profile-cat-label" style="flex: 1;">${escapeAttr(subjectDisplayName)}</span>
                             <span class="profile-cat-count" style="font-size: 0.75rem; color: var(--text-secondary);">(${runs.length} entries)</span>
                         </div>
-                        <div class="profile-cat-children ${subjectExpanded ? 'open' : ''}" id="cat-${subjectId}" style="padding-left: 1.25rem;">
+                        <div class="profile-cat-children ${subjectExpanded ? 'open' : ''}" id="cat-${subjectId}" style="padding-left: 0;">
                             ${sortRunsForGroup(runs).map(p => {
                                 return _profileItemHtml(p, escapeAttr(getCanonicalChildLabel(p)));
                             }).join('')}
@@ -55854,12 +55853,11 @@
                             html += _profileItemHtml(first, escapeAttr(getProfileFullName(first)));
                         } else {
                             const displayName = displayNames[subj] || getProfileSuffixInfo(first).canonicalName || getProfileFullName(first);
-                            html += `<div class="profile-cat-item ${subjectExpanded ? 'open' : ''}" data-dash-subject="${escapeAttr(subj)}" onclick="event.stopPropagation(); toggleDashSubject(this)" style="font-weight: 500;">
-                                <span class="cat-arrow">▸</span>
+                            html += `<div class="profile-cat-item ${subjectExpanded ? 'open' : ''}" data-dash-subject="${escapeAttr(subj)}" onclick="event.stopPropagation(); toggleDashSubject(this)" style="font-size: 0.7rem;">
                                 <span class="profile-cat-label">${escapeAttr(displayName)}</span>
                                 <span class="profile-cat-count">(${runs.length} entries)</span>
                             </div>
-                            <div class="profile-cat-children ${subjectExpanded ? 'open' : ''}" id="cat-${subjectId}" style="padding-left: 0.75rem;">
+                            <div class="profile-cat-children ${subjectExpanded ? 'open' : ''}" id="cat-${subjectId}" style="padding-left: 0;">
                                 ${sortRunsForGroup(runs).map(p => {
                                     return _profileItemHtml(p, escapeAttr(getCanonicalChildLabel(p)));
                                 }).join('')}
@@ -55897,12 +55895,11 @@
                             html += _profileItemHtml(first, escapeAttr(getProfileFullName(first)));
                         } else {
                             const displayName = displayNames[subj] || getProfileSuffixInfo(first).canonicalName || getProfileFullName(first);
-                            html += `<div class="profile-cat-item ${subjectExpanded ? 'open' : ''}" data-dash-subject="${escapeAttr(subj)}" onclick="event.stopPropagation(); toggleDashSubject(this)" style="font-weight: 500;">
-                                <span class="cat-arrow">▸</span>
+                            html += `<div class="profile-cat-item ${subjectExpanded ? 'open' : ''}" data-dash-subject="${escapeAttr(subj)}" onclick="event.stopPropagation(); toggleDashSubject(this)" style="font-size: 0.7rem;">
                                 <span class="profile-cat-label">${escapeAttr(displayName)}</span>
                                 <span class="profile-cat-count">(${runs.length} entries)</span>
                             </div>
-                            <div class="profile-cat-children ${subjectExpanded ? 'open' : ''}" id="cat-${subjectId}" style="padding-left: 0.75rem;">
+                            <div class="profile-cat-children ${subjectExpanded ? 'open' : ''}" id="cat-${subjectId}" style="padding-left: 0;">
                                 ${sortRunsForGroup(runs).map(p => {
                                     return _profileItemHtml(p, escapeAttr(getCanonicalChildLabel(p)));
                                 }).join('')}
@@ -55940,12 +55937,11 @@
                                 itemsHtml += _profileItemHtml(first, escapeAttr(getProfileFullName(first)));
                             } else {
                                 const displayNameAttr = escapeAttr(displayNames[subj] || getProfileSuffixInfo(first).canonicalName || getProfileFullName(first));
-                                itemsHtml += `<div class="profile-cat-item ${subjectExpanded ? 'open' : ''}" data-dash-subject="${escapeAttr(subj)}" onclick="event.stopPropagation(); toggleDashSubject(this)" style="font-weight: 500;">
-                                    <span class="cat-arrow">▸</span>
+                                itemsHtml += `<div class="profile-cat-item ${subjectExpanded ? 'open' : ''}" data-dash-subject="${escapeAttr(subj)}" onclick="event.stopPropagation(); toggleDashSubject(this)" style="font-size: 0.7rem;">
                                     <span class="profile-cat-label">${displayNameAttr}</span>
                                     <span class="profile-cat-count">(${runs.length} entries)</span>
                                 </div>
-                                <div class="profile-cat-children ${subjectExpanded ? 'open' : ''}" id="cat-${subjectId}" style="padding-left: 0.75rem;">
+                                <div class="profile-cat-children ${subjectExpanded ? 'open' : ''}" id="cat-${subjectId}" style="padding-left: 0;">
                                     ${sortRunsForGroup(runs).map(p => {
                                         return _profileItemHtml(p, escapeAttr(getCanonicalChildLabel(p)));
                                     }).join('')}
